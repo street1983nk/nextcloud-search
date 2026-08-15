@@ -1,8 +1,8 @@
-# Zero-Config-Suche für Nextcloud (Arbeitstitel)
+# Findling (Nextcloud Zero-Config-Suche)
 
 ## What This Is
 
-Eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Container mit OCR, klassischer Volltextsuche und semantischer Suche, per Klick aus dem Nextcloud App Store installierbar, ohne Elasticsearch-Gebastel. Ergebnisse erscheinen in der normalen Unified Search (via schlanker PHP-Companion-App). Zielgruppe: Selfhoster und kleine Organisationen auf typischer Hardware (4-8 GB RAM, oft ARM), denen das offizielle fulltextsearch-Framework weggestorben ist.
+Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Container mit OCR, klassischer Volltextsuche und semantischer Suche, per Klick aus dem Nextcloud App Store installierbar, ohne Elasticsearch-Gebastel. Ergebnisse erscheinen in der normalen Unified Search (via schlanker PHP-Companion-App). Zielgruppe: Selfhoster und kleine Organisationen auf typischer Hardware (4-8 GB RAM, oft ARM), für die das offizielle fulltextsearch-Framework (jahrelang verwaist, weiterhin Elasticsearch-gekoppelt) keine Option ist.
 
 ## Core Value
 
@@ -42,10 +42,13 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 - Kandidaten-Bausteine: Tantivy oder SQLite FTS5 (+ sqlite-vec) im ExApp-Prozess statt Suchserver-Sidecar; OCRmyPDF/Tesseract; fastembed (ONNX, CPU-only). Meilisearch als Fallback, wenn eine Engine-Alternative nötig wird.
 - Wiederverwendung aus dem Schwesterprojekt nextcloud-mcp-connector (läuft parallel, Phase 1): ExApp-Skeleton (nc_py_api + FastAPI + AppAPI-Handshake), Store-/CSR-Pipeline, Docker-Multi-Arch, Test-Nextcloud-Setups (nextcloud-docker-dev, CI-Rezept), alle Lehren (App-ID früh einfrieren, CSR-Lead-Time, HaRP statt DSP).
 - Owner-Entscheide 15.08.2026: Alles in v1 (Volltext + OCR + Semantik); AGPL-3.0; public auf GitHub street1983nk; Setup heute, Bau startet erst nach der MCP-Connector-Store-Einreichung (September).
+- WICHTIG, Lageänderung 12.08.2026 (Features-Research): Nextcloud GmbH hat fulltextsearch/files_fulltextsearch/fulltextsearch_elasticsearch mit 35.0.0beta1 wiederbelebt (aktive Commits, WIP-PRs "new sync service" und "files content provider"). Die Positionierung "einzige lebende Suche" trägt nicht mehr; es tragen: kein Elasticsearch, OCR eingebaut, Semantik, kleines RAM-Budget, sichtbarer Indexstatus, Pro-Datei-Diagnose.
+- Stack-Research 15.08.: Tantivy 0.26 als Engine gesetzt (deutsches Stemming + Stopwörter + Komposita-Zerlegung nativ in den Python-Bindings, SnippetGenerator); FTS5 raus (kein deutsches Stemming), Meilisearch raus (zweiter Serverprozess). Embeddings: multilingual-e5-small (MIT), selbst int8-quantisiert, ins Image gebacken (HF_HUB_OFFLINE=1). OCR: pypdfium2-Rendering + tesseract-Subprozess direkt (OCRmyPDF nicht im Indexpfad). Debian-slim-Basis (keine musl-Wheels für tantivy/onnxruntime/sqlite-vec). Versionsfenster NC 32-34 (max 35). nc_py_api nur async (Sync-API fällt in 0.31 weg). Zwei Store-Apps = zwei CSR-Vorgänge.
+- Pitfalls-Research 15.08.: fulltextsearch starb an Betriebsrobustheit, nicht an Features. Nicht verhandelbar: Fortschritt in der DB statt Prozessspeicher (Resume nach docker kill), Deckungsgrad als Statusmaß, failed/skipped sichtbar, Nur-Lesen-Invariante auf Nutzerdateien (die alte Tesseract-App hat PDFs GELÖSCHT), Events nur als Beschleuniger + periodischer ETag-Abgleich als Garantie, Rechteprüfung VOR Snippet-Erzeugung, INDEX_WORKERS=1 (OCR- und Embedding-Spitzen nie gleichzeitig auf 4-GB-Boxen).
 
 ## Constraints
 
-- **Timeline**: Bau beginnt nach der MCP-Connector-Einreichung (Sept. 2026); kein harter Endtermin, aber Nextclouds eigene Context-Chat-Spur ist ein Zeitrisiko , zügig liefern
+- **Timeline**: Bau beginnt nach der MCP-Connector-Einreichung (Sept. 2026); HARTES ZIEL: v1.0-Store-Einreichung (Volltext+OCR) vor Jahresende 2026, v1.1 (Semantik) 4-6 Wochen danach; Scope-Kürzung schlägt Termin
 - **Kapazität**: Solo-Entwickler; Aufwandsschätzung 10-14 Personenwochen für v1 mit allem
 - **Hardware-Ziel**: 4-8 GB RAM, ARM-tauglich , alles CPU-only, kein GPU-Zwang, RAM-Budget hart einplanen
 - **Tech stack**: Python 3.13 + uv (lokales System-Python defekt), ExApp via AppAPI/nc_py_api, plus kleine PHP-Companion-App; Docker/WSL2 für Test-Nextcloud
@@ -59,7 +62,20 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Alles in v1 (Volltext + OCR + Semantik) | Owner-Entscheid 15.08.: stärkeres Launch-Argument schlägt schnellere Einreichung | , Pending |
+| Alles in v1, aber gestaffelt released: v1.0 Volltext+OCR in den Store, v1.1 Semantik 4-6 Wochen später | Grilling 15.08.: früher sichtbar + Feedback vor Nextcloud-Reaktion; Architektur ab Tag 1 embedding-ready, kein Umbau | , Pending |
+| Name/App-ID: **Findling** (ExApp-ID `findling`, Companion-ID beim Bau nach Konvention) | Verfügbarkeits-Check 15.08.: Store/PyPI/GitHub frei, keine Markenkollision gefunden; ID VOR erstem Bau-Commit einfrieren, zwei CSRs früh | , Pending |
+| Kill-Kriterium: Nextcloud kündigt ES-freie Volltextsuche mit OCR an -> Stopp/Pivot-Neubewertung | fulltextsearch am 12.08.26 von NC GmbH wiederbelebt; Nextcloud Conference Sept. beobachten | , Pending |
+| Ziel: Reputation/Portfolio; Pro-Schiene bewusst offen ab v2 | Store hat kein Bezahlmodell; Monetarisierung jetzt wuerde v1 verlangsamen | , Pending |
+| v1 nur ExApp; Architektur standalone-faehig geschnitten (Provider-Interface wie MCP Connector) | Deploy-Daemon fehlt auf Managed Hosting; Option offenhalten kostet wenig | , Pending |
+| Validierung: Test-Korpus (eigene Dokumente + Ratsvorlagen-PDFs, deutsch/gescannt) + Docker-NC mit Testnutzern | Ranking/OCR-Qualitaet vor Fremdinstallationen real pruefen | , Pending |
+| Findling verdraengt Crawlwerk (rutscht auf 2027) | belegter Schmerz + Zeitfenster + ExApp-Stack-Synergie | , Pending |
+| OCR strikt index-only, Nutzerdateien nie anfassen | "nie destruktiv"-Linie; Alt-Tesseract-App hat PDFs geloescht | , Pending |
+| Keine Index-Verschluesselung at rest in v1, transparent dokumentiert | Schutzniveau identisch zum Host der NC-Daten; Disk-Encryption ist Host-Sache | , Pending |
+| Sprachen v1: Deutsch + Englisch voll (Stemming, Komposita, OCR-Packs) | DACH-Zielgruppe; deutsche Komposita-Suche als Differenzierer | , Pending |
+| Hartes Ziel: v1.0-Store-Einreichung vor Jahresende 2026, Scope-Kuerzung schlaegt Termin | Termindruck-Muster vom MCP Connector; NC-Eigenbau-Risiko bestraft Troedeln | , Pending |
+| Pro-Datei-Diagnose + Vorab-Schaetzung in v1.0 | billig (Zustandsmaschine fuehrt die Daten ohnehin), IST das Anti-Silent-Failure-Versprechen | , Pending |
+| Engine: Tantivy + SQLite-ACL-Vorfilter auf Kandidaten + finaler PHP-Recheck | Sprachqualitaet ist das Produktversprechen; Sicherheitsgrenze ist der PHP-Recheck, nicht der SQL-Join | , Pending |
+| Team Folders default AN, External Storage default AUS | Mount-Crawl macht Team Folders billig; External Storage unkalkulierbar | , Pending |
 | Embedded Engine (Tantivy/FTS5) statt Suchserver-Sidecar | Zero-Config + RAM-Budget kleiner Boxen; kein zweiter Serverprozess | , Pending (Research Phase validiert) |
 | PHP-Companion-App für Unified Search | AppAPI kann keine Search-Provider registrieren; context_chat-Muster ist etabliert | , Pending |
 | AGPL-3.0 + public street1983nk | Ökosystem-Kultur, CSR braucht public Repo, OCR-Stack ist AGPL | , Pending |
