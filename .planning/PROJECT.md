@@ -1,0 +1,87 @@
+# Zero-Config-Suche für Nextcloud (Arbeitstitel)
+
+## What This Is
+
+Eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Container mit OCR, klassischer Volltextsuche und semantischer Suche, per Klick aus dem Nextcloud App Store installierbar, ohne Elasticsearch-Gebastel. Ergebnisse erscheinen in der normalen Unified Search (via schlanker PHP-Companion-App). Zielgruppe: Selfhoster und kleine Organisationen auf typischer Hardware (4-8 GB RAM, oft ARM), denen das offizielle fulltextsearch-Framework weggestorben ist.
+
+## Core Value
+
+Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
+
+## Requirements
+
+### Validated
+
+(None yet , ship to validate)
+
+### Active
+
+- [ ] Volltextsuche über Dateiinhalte (PDF, Office, Text, Mail-Anhänge später), Ergebnisse in der Unified Search
+- [ ] OCR für gescannte PDFs und Bilder (Tesseract/OCRmyPDF-Pfad), automatisch beim Indexieren
+- [ ] Semantische Suche (lokale Embeddings, CPU-only, z.B. fastembed/ONNX) mit Hybrid-Ranking Volltext+Vektor
+- [ ] Zero-Config: Installation aus dem App Store, Indexierung startet selbst, sinnvolle Defaults, keine Pflicht-Einstellungen
+- [ ] Inkrementelle Indexierung über Datei-Events (AppAPI Events Listener / webhook_listeners), robust gegen Abbrüche (Resume, Backpressure)
+- [ ] Berechtigungs-Durchgriff: Nutzer finden nur, was sie sehen dürfen
+- [ ] PHP-Companion-App registriert den Unified-Search-Provider und proxied an die ExApp (Muster context_chat)
+- [ ] Admin-Sichtbarkeit: Indexstatus, Fortschritt, Fehler (einfache Statusseite)
+- [ ] Multi-Arch-Image (amd64 + arm64), lauffähig auf 4-8-GB-Boxen (Quantisierung/Chunk-Limits)
+- [ ] App-Store-Einreichung (Zertifikat/CSR, info.xml, signiertes Release)
+
+### Out of Scope
+
+- Elasticsearch/OpenSearch-Backends , genau die Setup-Qual, die das Produkt beseitigt
+- RAG/Chat-Antworten über Dokumente , das ist Context Chat/Assistant-Terrain; wir liefern Suche, keine Antworten
+- Externe Cloud-Embeddings/APIs , Privacy-Versprechen: alles lokal im Container
+- Indexierung fremder Quellen (Mail-Server, S3 extern, Websites) , v1 ist Nextcloud-Files; Erweiterung später
+- Typesense als Engine , GPLv3 und Index komplett im RAM, passt nicht zu kleinen Boxen
+
+## Context
+
+- Recherche vom 15.08.2026 (Memory `project_nextcloud_exapp_ideen.md` + Session-Reports mit Quell-URLs): Das offizielle fulltextsearch-Framework ist faktisch verwaist (kein NC-34-Release, AIO-Ausfall 01/2026, unbeantwortete Issues seit 2025); Context Chat braucht 12 GB RAM, kann kein OCR und keine Keyword-Suche; der Thread "OCR in Nextcloud, giving up after a month" (02/2026) belegt den Schmerz. Niemand kombiniert OCR + Volltext + semantisch zero-config.
+- Technischer Kernbefund: AppAPI kann KEINE Search-Provider registrieren; etabliertes Muster ist eine kleine PHP-App, die den `IProvider` registriert und an die ExApp proxied (so macht es context_chat).
+- Kandidaten-Bausteine: Tantivy oder SQLite FTS5 (+ sqlite-vec) im ExApp-Prozess statt Suchserver-Sidecar; OCRmyPDF/Tesseract; fastembed (ONNX, CPU-only). Meilisearch als Fallback, wenn eine Engine-Alternative nötig wird.
+- Wiederverwendung aus dem Schwesterprojekt nextcloud-mcp-connector (läuft parallel, Phase 1): ExApp-Skeleton (nc_py_api + FastAPI + AppAPI-Handshake), Store-/CSR-Pipeline, Docker-Multi-Arch, Test-Nextcloud-Setups (nextcloud-docker-dev, CI-Rezept), alle Lehren (App-ID früh einfrieren, CSR-Lead-Time, HaRP statt DSP).
+- Owner-Entscheide 15.08.2026: Alles in v1 (Volltext + OCR + Semantik); AGPL-3.0; public auf GitHub street1983nk; Setup heute, Bau startet erst nach der MCP-Connector-Store-Einreichung (September).
+
+## Constraints
+
+- **Timeline**: Bau beginnt nach der MCP-Connector-Einreichung (Sept. 2026); kein harter Endtermin, aber Nextclouds eigene Context-Chat-Spur ist ein Zeitrisiko , zügig liefern
+- **Kapazität**: Solo-Entwickler; Aufwandsschätzung 10-14 Personenwochen für v1 mit allem
+- **Hardware-Ziel**: 4-8 GB RAM, ARM-tauglich , alles CPU-only, kein GPU-Zwang, RAM-Budget hart einplanen
+- **Tech stack**: Python 3.13 + uv (lokales System-Python defekt), ExApp via AppAPI/nc_py_api, plus kleine PHP-Companion-App; Docker/WSL2 für Test-Nextcloud
+- **Lizenz**: AGPL-3.0 (Ghostscript/OCRmyPDF-AGPL im Container damit kompatibel)
+- **Repo**: public auf GitHub street1983nk (privates Konto, NICHT Akara-GitLab)
+- **Sprache**: Code/README Englisch, Projektkommunikation Deutsch; keine Em-Dashes; echte Umlaute nur in deutscher Prosa, nie in Code
+- **Qualitätsgates**: globale Python-Regel (ruff-Vollregelsatz, pyright basic, vulture, CI-Gates, lokal grün vor Commit)
+- **Security/Privacy**: Berechtigungs-Durchgriff strikt; keine Inhalte verlassen den Server; kein Telemetrie-Phoning
+
+## Key Decisions
+
+| Decision | Rationale | Outcome |
+|----------|-----------|---------|
+| Alles in v1 (Volltext + OCR + Semantik) | Owner-Entscheid 15.08.: stärkeres Launch-Argument schlägt schnellere Einreichung | , Pending |
+| Embedded Engine (Tantivy/FTS5) statt Suchserver-Sidecar | Zero-Config + RAM-Budget kleiner Boxen; kein zweiter Serverprozess | , Pending (Research Phase validiert) |
+| PHP-Companion-App für Unified Search | AppAPI kann keine Search-Provider registrieren; context_chat-Muster ist etabliert | , Pending |
+| AGPL-3.0 + public street1983nk | Ökosystem-Kultur, CSR braucht public Repo, OCR-Stack ist AGPL | , Pending |
+| Baustart nach MCP-Connector-Abgabe | Solo-Kapazität, September-Deadline des Schwesterprojekts hat Vorrang | , Pending |
+| App-ID und Name VOR dem ersten Bau-Commit einfrieren | Zertifikat ist ID-gebunden (Lehre aus MCP-Connector-Research) | , Pending (Naming-Task in Phase 1) |
+
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd:complete-milestone`):
+1. Full review of all sections
+2. Core Value check , still the right priority?
+3. Audit Out of Scope , reasons still valid?
+4. Update Context with current state
+
+---
+*Last updated: 2026-08-15 after initialization*
