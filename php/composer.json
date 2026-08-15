@@ -1,0 +1,18 @@
+{
+	"name": "street1983nk/findling",
+	"description": "Zero-config full text search companion app, registers the search provider and proxies into the ExApp container",
+	"license": "AGPL-3.0-or-later",
+	"type": "project",
+	"require": {
+		"php": ">=8.2"
+	},
+	"autoload": {
+		"psr-4": {
+			"OCA\\Findling\\": "lib/"
+		}
+	},
+	"config": {
+		"optimize-autoloader": true,
+		"sort-packages": true
+	}
+}
