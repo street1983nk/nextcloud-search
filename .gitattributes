@@ -11,3 +11,11 @@
 *.conf text eol=lf
 Dockerfile text eol=lf
 .dockerignore text eol=lf
+
+# The reference corpus is byte exact test data. Its checksums are the evidence
+# of the read only invariant, so no checkout may ever rewrite a byte in it. Two
+# of the files would not merely change their hash: a carriage return inside a
+# PDF shifts every offset in the cross reference table and turns a valid
+# document into a broken one. Git's own binary heuristic does not protect them,
+# because these PDFs contain no NUL byte and would be treated as text.
+testdata/corpus/** -text
