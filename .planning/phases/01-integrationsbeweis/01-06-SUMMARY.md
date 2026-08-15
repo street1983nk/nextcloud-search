@@ -220,5 +220,5 @@ None - keine externe Dienstkonfiguration. Fuer die Sichtprobe muss Docker Deskto
 
 ---
 *Phase: 01-integrationsbeweis*
-*Status: Task 1 und 2 abgeschlossen, Task 3 wartet auf die Sichtprobe des Owners*
+*Status: Alle 3 Tasks abgeschlossen. Sichtprobe vom Owner am 15.08.2026 bestanden (Findling-canary-Eintrag in der Unified Search gesehen; lokale Instanz auf Port 8090 via FINDLING_PORT, weil 8080 von der parallelen MCP-Session belegt war). Gegenprobe live verifiziert: nach app_api:app:unregister antwortet dieselbe Suche mit 200 und leeren entries, kein Fehler. CI-Kriterium erfuellt: integration.yml success (walking-skeleton + readonly-gate) auf dem Wave-Merge-Commit; Tamper-Probe macht readonly-gate nachweislich rot.*
 *Completed: 2026-08-15*
