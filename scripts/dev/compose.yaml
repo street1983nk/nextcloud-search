@@ -16,9 +16,10 @@ services:
     container_name: findling-nextcloud
     restart: unless-stopped
     ports:
-      # Host 8080 is the address the browser and the ExApp both use. Changing it
-      # means changing NEXTCLOUD_URL in scripts/dev/register-exapp.sh as well.
-      - "8080:80"
+      # FINDLING_PORT is the address the browser and the ExApp both use. It
+      # defaults to 8080 and can be overridden when another local Nextcloud
+      # already holds that port; register-exapp.sh reads the same variable.
+      - "${FINDLING_PORT:-8080}:80"
     environment:
       SQLITE_DATABASE: nextcloud
       NEXTCLOUD_ADMIN_USER: admin

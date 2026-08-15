@@ -19,7 +19,7 @@ DAEMON_NAME=manual_install
 BACKEND_SECRET=12345
 BACKEND_PORT=10035
 BACKEND_VERSION=0.1.0
-NEXTCLOUD_URL=http://localhost:8080
+NEXTCLOUD_URL=http://localhost:${FINDLING_PORT:-8080}
 # The container reaches the host process under this name, never under localhost:
 # localhost inside the container is the container itself.
 HOST_FROM_CONTAINER=host.docker.internal
