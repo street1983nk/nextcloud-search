@@ -1,0 +1,10 @@
+# Shell scripts must keep unix line endings in the working tree, on every
+# platform. A checkout with core.autocrlf=true would otherwise hand the shell a
+# carriage return at the end of the shebang, and every invocation would fail with
+# a "command not found" that names an invisible character.
+*.sh text eol=lf
+
+# The same holds for anything a container or a runner reads as a shell script or
+# as a strict text format.
+*.yml text eol=lf
+*.yaml text eol=lf
