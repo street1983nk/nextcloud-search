@@ -66,3 +66,55 @@ Any proposal to rename must be treated as a schedule change, not as a cosmetic o
 The owner froze both ids on 2026-08-15. The decision is recorded in
 `.planning/phases/01-integrationsbeweis/01-CONTEXT.md`, section "Identity and store",
 and in `.planning/PROJECT.md` under key decisions.
+
+## Certificate status
+
+Both signing requests were generated on 2026-08-15, the day of the freeze, and prepared
+as two separate branches in the fork `street1983nk/app-certificate-requests`. Two
+separate pull requests against `nextcloud/app-certificate-requests`, one per app id, so
+a question about one app does not hold up the other. Key handling, fingerprints and the
+signing path are documented in `docs/certificates.md`.
+
+| App id | Fork branch | Pull request title | Status | Pull request | Submitted | Merged |
+|--------|-------------|--------------------|--------|--------------|-----------|--------|
+| `findling` | `findling-csr` | Add certificate request for findling | prepared, not submitted | _pending_ | _pending_ | _pending_ |
+| `findling_backend` | `findling-backend-csr` | Add certificate request for findling_backend | prepared, not submitted | _pending_ | _pending_ | _pending_ |
+
+Verified on both branches before submission: each branch adds exactly one file, the
+signing request itself, and changes nothing else. No key material is contained in either
+branch. Expect a median of three to four days until merge, with an observed outlier of
+eleven days. Nothing in phase 1 is blocked while the requests are pending.
+
+Opening the pull requests is an owner step. The branches are ready and the commands
+below only need to be executed.
+
+### Pull request body for findling
+
+> findling is the PHP companion app of a Nextcloud search integration. It registers a
+> search provider so that document search results appear in the normal unified search,
+> and forwards every query to its ExApp counterpart findling_backend, which is submitted
+> in a separate request. Source code: https://github.com/street1983nk/nextcloud-search,
+> licensed AGPL-3.0-or-later.
+
+### Pull request body for findling_backend
+
+> findling_backend is the ExApp container behind the findling search app. It extracts
+> text, runs OCR and maintains the search index inside the instance, so no file content
+> ever leaves the server. It is only reachable through the companion app findling, which
+> is submitted in a separate request. Source code:
+> https://github.com/street1983nk/nextcloud-search, licensed AGPL-3.0-or-later.
+
+Nobody is mentioned in either description. The maintainers are subscribed to the
+repository, so a mention only creates noise.
+
+### Commands that open the two pull requests
+
+```bash
+gh pr create --repo nextcloud/app-certificate-requests --base master --head street1983nk:findling-csr --title "Add certificate request for findling" --body "findling is the PHP companion app of a Nextcloud search integration. It registers a search provider so that document search results appear in the normal unified search, and forwards every query to its ExApp counterpart findling_backend, which is submitted in a separate request. Source code: https://github.com/street1983nk/nextcloud-search, licensed AGPL-3.0-or-later."
+gh pr create --repo nextcloud/app-certificate-requests --base master --head street1983nk:findling-backend-csr --title "Add certificate request for findling_backend" --body "findling_backend is the ExApp container behind the findling search app. It extracts text, runs OCR and maintains the search index inside the instance, so no file content ever leaves the server. It is only reachable through the companion app findling, which is submitted in a separate request. Source code: https://github.com/street1983nk/nextcloud-search, licensed AGPL-3.0-or-later."
+```
+
+After both are open, record the two links, the submission date and later the merge date
+in the table above. Once a request is merged, the signed certificate appears in the same
+directory of the upstream repository and is fetched by the release workflow as described
+in `docs/certificates.md`.
