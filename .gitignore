@@ -1,0 +1,31 @@
+# Key material and secrets. The app certificate is bound to the app id, and a leaked
+# private key means a revoke and replace round in nextcloud/app-certificate-requests.
+*.key
+*.pem
+*.crt
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+
+# PHP
+vendor/
+
+# Runtime and build output
+data/
+*.tar.gz
+dist/
+build/
+
+# Agent scratch state, must never reach the public repository
+.claude-active
+.claude/worktrees/
