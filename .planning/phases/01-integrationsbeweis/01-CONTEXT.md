@@ -15,7 +15,7 @@ Phase 1 beweist die einzige präzedenzlose Kombination des Projekts und friert d
 ## Implementation Decisions
 
 ### Identität und Store
-- App-IDs eingefroren: ExApp = `findling`, PHP-Companion-ID beim Bau nach Store-Konvention festlegen (z.B. `findling` im Apps-Bereich analog context_chat/context_chat_backend-Muster) und dann NIE mehr ändern (Zertifikat ist ID-gebunden)
+- App-IDs eingefroren (OWNER-ENTSCHEID 15.08., nach CSR irreversibel): PHP-Companion = `findling` (sichtbare Store-App), ExApp-Container = `findling_backend` (External Apps); exakt das context_chat/context_chat_backend-Muster; NIE mehr ändern (Zertifikat ist ID-gebunden)
 - Zwei Store-Einträge = zwei CSR-Vorgänge (nextcloud/app-certificate-requests), BEIDE sofort in dieser Phase einreichen (Lead-Time 1-5 Tage + Rückfragen); CSR-PR-Einreichung selbst ist Owner-Schritt (autonomous: false)
 - Public GitHub-Repo street1983nk (Konto-Trennung: Commits NUR als street1983nk <k.cherif@outlook.de>, NIE Akara-Adresse, KEINE Co-Authored-By-Trailer); AGPL-3.0
 

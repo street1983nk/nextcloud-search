@@ -63,7 +63,7 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Alles in v1, aber gestaffelt released: v1.0 Volltext+OCR in den Store, v1.1 Semantik 4-6 Wochen später | Grilling 15.08.: früher sichtbar + Feedback vor Nextcloud-Reaktion; Architektur ab Tag 1 embedding-ready, kein Umbau | , Pending |
-| Name/App-ID: **Findling** (ExApp-ID `findling`, Companion-ID beim Bau nach Konvention) | Verfügbarkeits-Check 15.08.: Store/PyPI/GitHub frei, keine Markenkollision gefunden; ID VOR erstem Bau-Commit einfrieren, zwei CSRs früh | , Pending |
+| Name: **Findling**; App-IDs: Companion = `findling`, ExApp = `findling_backend` | Verfügbarkeits-Check 15.08. (Store beide frei, keine Markenkollision); context_chat-Muster: sichtbare Store-App trägt den kurzen Namen; nach CSR irreversibel | , Pending |
 | Kill-Kriterium: Nextcloud kündigt ES-freie Volltextsuche mit OCR an -> Stopp/Pivot-Neubewertung | fulltextsearch am 12.08.26 von NC GmbH wiederbelebt; Nextcloud Conference Sept. beobachten | , Pending |
 | Ziel: Reputation/Portfolio; Pro-Schiene bewusst offen ab v2 | Store hat kein Bezahlmodell; Monetarisierung jetzt wuerde v1 verlangsamen | , Pending |
 | v1 nur ExApp; Architektur standalone-faehig geschnitten (Provider-Interface wie MCP Connector) | Deploy-Daemon fehlt auf Managed Hosting; Option offenhalten kostet wenig | , Pending |
