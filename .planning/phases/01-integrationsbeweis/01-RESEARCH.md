@@ -1170,7 +1170,7 @@ done
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED: 1 per Owner-Entscheid 15.08. + Plan 01-01, 2 in Plan 01-04 umgesetzt, 3 und 4 bewusst auf Phase 5 verschoben)
 
 1. **App-ID-Konflikt zwischen CONTEXT.md und der Store-Konvention**
    - Was wir wissen: App-IDs sind ueber beide Store-Bereiche eindeutig; `findling` und `findling_backend` sind beide frei; das genannte Vorbild vergibt die kurze ID an die PHP-App.
