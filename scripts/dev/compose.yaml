@@ -1,0 +1,42 @@
+# Local test Nextcloud for the visual proof of the walking skeleton.
+#
+# SQLite on purpose: phase 1 owns no table, so a database container would only
+# add start up time. Phase 2 introduces queue tables, and dialect specific query
+# builder errors, so a second compose profile with MariaDB or Postgres belongs
+# there, not here.
+#
+# The version is pinned to the same server line the integration workflow uses
+# (stable34). A floating tag would let a background image update change what the
+# proof means.
+name: findling-dev
+
+services:
+  app:
+    image: nextcloud:34.0.3-apache
+    container_name: findling-nextcloud
+    restart: unless-stopped
+    ports:
+      # Host 8080 is the address the browser and the ExApp both use. Changing it
+      # means changing NEXTCLOUD_URL in scripts/dev/register-exapp.sh as well.
+      - "8080:80"
+    environment:
+      SQLITE_DATABASE: nextcloud
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: findling-dev-admin
+      # host.docker.internal is trusted as well, because the AppAPI handshake
+      # addresses the instance under that name from inside the container network.
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost host.docker.internal"
+    extra_hosts:
+      # Docker Desktop provides this name by itself, a plain Linux daemon does
+      # not. The entry makes the file behave the same on both, which matters
+      # because the ExApp runs on the host while Nextcloud runs in here.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - nextcloud:/var/www/html
+      # The directory name has to be exactly the app id, otherwise the class
+      # autoloader never finds the provider and the app stays invisible without
+      # any error message. custom_apps is the writable app path of this image.
+      - ../../php:/var/www/html/custom_apps/findling
+
+volumes:
+  nextcloud:
