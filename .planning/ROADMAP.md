@@ -14,7 +14,7 @@ Der Schnitt ist vertikal: jede Phase liefert eine end-to-end nutzbare Fähigkeit
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Integrationsbeweis** - Ein Treffer aus dem Container erscheint in der Unified Search, App-IDs eingefroren, beide CSRs eingereicht
+- [x] **Phase 1: Integrationsbeweis** - Ein Treffer aus dem Container erscheint in der Unified Search, App-IDs eingefroren, beide CSRs eingereicht (completed 2026-08-15)
 - [ ] **Phase 2: Indexkern und Volltextsuche** - Dateien werden vollständig, wiederaufsetzbar und rechtekorrekt durchsuchbar
 - [ ] **Phase 3: Aktualität und OCR** - Neue, geänderte und gescannte Dokumente sind kurz darauf auffindbar, ohne dass eine Datei angefasst wird
 - [ ] **Phase 4: Admin-Sichtbarkeit und Diagnose** - Admin sieht Deckungsgrad, Fehler und den Grund pro Datei, bevor Nutzer etwas vermissen
@@ -44,7 +44,7 @@ Plans:
 - [x] 01-05-PLAN.md , PHP-Companion: IProvider, Proxy-Guard, Content-Gateway
 - [x] 01-06-PLAN.md , Durchstich gruen und Sichtprobe des Owners
 - [x] 01-07-PLAN.md , Multi-Arch-Image, HaRP und Store-Metadaten
-- [ ] 01-08-PLAN.md , Content-Gateway-Beweis und Pruefsummen-Gate B
+- [x] 01-08-PLAN.md , Content-Gateway-Beweis und Pruefsummen-Gate B
 
 ### Phase 2: Indexkern und Volltextsuche
 **Goal**: Der Nutzer findet den Inhalt seiner Dokumente per Volltextsuche mit deutscher Sprachqualität, und der Erstindex überlebt jeden Abbruch.
@@ -119,7 +119,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Integrationsbeweis | 7/8 | In Progress|  |
+| 1. Integrationsbeweis | 8/8 | Complete   | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 0/TBD | Not started | - |
 | 3. Aktualität und OCR | 0/TBD | Not started | - |
 | 4. Admin-Sichtbarkeit und Diagnose | 0/TBD | Not started | - |
