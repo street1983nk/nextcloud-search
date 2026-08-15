@@ -79,7 +79,8 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 | Embedded Engine (Tantivy/FTS5) statt Suchserver-Sidecar | Zero-Config + RAM-Budget kleiner Boxen; kein zweiter Serverprozess | , Pending (Research Phase validiert) |
 | PHP-Companion-App für Unified Search | AppAPI kann keine Search-Provider registrieren; context_chat-Muster ist etabliert | , Pending |
 | AGPL-3.0 + public street1983nk | Ökosystem-Kultur, CSR braucht public Repo, OCR-Stack ist AGPL | , Pending |
-| Baustart nach MCP-Connector-Abgabe | Solo-Kapazität, September-Deadline des Schwesterprojekts hat Vorrang | , Pending |
+| Baustart SOFORT (Owner-Entscheid 15.08. abends, ersetzt "nach MCP-Abgabe") | Arbeit liegt bei Claude, Sessions laufen unabhängig; Phasen werden am Stück durchgezogen, Releases ggf. zusammen eingereicht; fertig zur Nextcloud Conference = bester Launch | , Pending |
+| Release-Staffelung v1.0/v1.1 wird zur Einreichungs-Option | Wenn beim Einreichen alles fertig ist, gemeinsame oder direkt aufeinanderfolgende Abgabe; Entscheid bei Store-Einreichung | , Pending |
 | App-ID und Name VOR dem ersten Bau-Commit einfrieren | Zertifikat ist ID-gebunden (Lehre aus MCP-Connector-Research) | , Pending (Naming-Task in Phase 1) |
 
 ## Evolution
