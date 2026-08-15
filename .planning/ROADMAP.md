@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 8 plans
 
 Plans:
-- [ ] 01-01-PLAN.md , Identitaets-Freeze und Repo-Grundgeruest
+- [x] 01-01-PLAN.md , Identitaets-Freeze und Repo-Grundgeruest
 - [ ] 01-02-PLAN.md , Qualitaetsgates, Nur-Lesen-Gate A und rote Kanarienprobe
 - [ ] 01-03-PLAN.md , CSR-Vorgaenge fuer beide App-IDs
 - [ ] 01-04-PLAN.md , ExApp-Kanarienvogel: POST /search mit Container-Beweis
@@ -119,7 +119,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Integrationsbeweis | 0/8 | Not started | - |
+| 1. Integrationsbeweis | 1/8 | In Progress|  |
 | 2. Indexkern und Volltextsuche | 0/TBD | Not started | - |
 | 3. Aktualität und OCR | 0/TBD | Not started | - |
 | 4. Admin-Sichtbarkeit und Diagnose | 0/TBD | Not started | - |
