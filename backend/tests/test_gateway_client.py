@@ -19,13 +19,6 @@ from pathlib import Path
 from typing import IO, Any, cast
 
 import pytest
-from findling.tools.read_corpus import (
-    STATUS_ERROR,
-    STATUS_NOT_ACCESSIBLE,
-    STATUS_READ,
-    format_report,
-    read_files,
-)
 
 from findling.nc.client import (
     CHUNK_SIZE,
@@ -33,6 +26,13 @@ from findling.nc.client import (
     AsyncNextcloudApp,
     NextcloudException,
     fetch_file_stream,
+)
+from findling.tools.read_corpus import (
+    STATUS_ERROR,
+    STATUS_NOT_ACCESSIBLE,
+    STATUS_READ,
+    format_report,
+    read_files,
 )
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
