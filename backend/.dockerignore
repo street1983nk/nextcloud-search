@@ -1,0 +1,13 @@
+# Everything that must never reach the build context. A smaller context is the
+# smaller half of the reason; the larger half is that a local .venv copied into
+# the image would shadow the one built from the lock file.
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+tests/
+.pytest_cache/
+.ruff_cache/
+.planning/
+.git/
+.gitignore

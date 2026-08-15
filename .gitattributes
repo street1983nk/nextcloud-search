@@ -1,0 +1,11 @@
+# The shell scripts and the supervisord configuration are copied into a Linux
+# container image. A CRLF line ending survives the copy, and the kernel then
+# looks for an interpreter whose name ends in a carriage return, which fails
+# with an error message that names the right file and the wrong reason.
+#
+# The development machine checks out with autocrlf enabled, so without these
+# rules the next checkout would quietly produce an image that cannot start.
+*.sh text eol=lf
+*.conf text eol=lf
+Dockerfile text eol=lf
+.dockerignore text eol=lf
