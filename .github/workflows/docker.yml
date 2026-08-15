@@ -1,0 +1,188 @@
+name: Multi-arch image
+
+# The target hardware for this app is a small ARM box. An image that is first
+# built for arm64 shortly before the store submission is a schedule risk, so
+# both architectures are built on every backend change from the very first
+# phase.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/docker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Pushing to ghcr needs nothing but the token this workflow already gets. A
+  # separate personal access token would be one more long lived secret with
+  # write access to the registry, for no gain.
+  packages: write
+
+env:
+  IMAGE: ghcr.io/street1983nk/findling_backend
+
+jobs:
+  build:
+    name: Build and smoke test ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # One architecture failing should not hide the state of the other one.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      # Actions are pinned to commit SHAs, never to tags: a tag can be moved and
+      # would hand a third party arbitrary code execution in this build.
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+
+      # Each architecture is built on a runner of that architecture. No
+      # emulation layer is installed anywhere in this workflow: emulating arm64
+      # on an x86 runner turns a build of a few minutes into one of well over an
+      # hour and produces failures that are painful to read.
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # First a local image, so the smoke test runs before anything is pushed.
+      # A broken image that nobody ever pulled is a red build; a broken image in
+      # the registry is an incident.
+      - name: Build the image for this architecture
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ./backend
+          platforms: ${{ matrix.platform }}
+          load: true
+          tags: findling_backend:smoke
+          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-${{ matrix.arch }}
+
+      # The environment is the one from the local probe, deliberately. Without
+      # HP_SHARED_KEY the app binds APP_PORT, frpc logs one line and exits, and
+      # the published port is what the heartbeat is asked on.
+      - name: Smoke test the image on this architecture
+        run: |
+          docker run -d --name findling_smoke \
+            -e APP_ID=findling_backend \
+            -e APP_SECRET=12345 \
+            -e APP_PORT=10035 \
+            -e APP_VERSION=0.1.0 \
+            -e NEXTCLOUD_URL=http://127.0.0.1:8080 \
+            -e APP_PERSISTENT_STORAGE=/tmp/fs \
+            -p 10035:10035 \
+            findling_backend:smoke
+          answer=""
+          for _ in $(seq 30); do
+            answer=$(curl -sf http://127.0.0.1:10035/heartbeat || true)
+            if [ -n "$answer" ]; then
+              break
+            fi
+            sleep 1
+          done
+          echo "::group::container log"
+          docker logs findling_smoke
+          echo "::endgroup::"
+          docker rm -f findling_smoke
+          if [ "$answer" != '{"status":"ok"}' ]; then
+            echo "heartbeat on ${{ matrix.platform }} answered '${answer}'"
+            exit 1
+          fi
+          echo "heartbeat on ${{ matrix.platform }}: ${answer}"
+
+      # Only now the push, and by digest rather than by tag: two runners pushing
+      # the same tag would overwrite each other, and the merge job below is what
+      # turns the two digests into one manifest.
+      - name: Push the image by digest
+        id: push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ./backend
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-${{ matrix.arch }}
+          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache-${{ matrix.arch }},mode=max
+
+      # The digest travels as a file name, so nothing has to be parsed later.
+      - name: Write the digest to a file
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests"
+          digest="${{ steps.push.outputs.digest }}"
+          touch "${RUNNER_TEMP}/digests/${digest#sha256:}"
+
+      - name: Hand the digest to the merge job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Merge both digests into one manifest
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Collect the digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # imagetools rather than a hand built manifest: assembling the index by
+      # hand drops the attestations that say where the image came from, and
+      # provenance is the only thing a user can check us against.
+      #
+      # The version tag belongs to the release phase. Until then dev is the
+      # moving pointer and the commit SHA is the one that stays addressable.
+      - name: Create the manifest
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          # The word splitting on the next line is the point: every digest file
+          # in this directory becomes one more source reference for the manifest.
+          # shellcheck disable=SC2046
+          docker buildx imagetools create \
+            -t "${IMAGE}:dev" \
+            -t "${IMAGE}:${GITHUB_SHA}" \
+            $(printf "${IMAGE}@sha256:%s " *)
+
+      # A manifest that lists only one platform still pulls and still runs, on
+      # exactly the machines that are not the target hardware. So the job asks
+      # for both entries by name instead of trusting that the matrix ran.
+      - name: Verify the manifest carries both platforms
+        run: |
+          docker buildx imagetools inspect "${IMAGE}:dev" | tee manifest.txt
+          grep -q 'linux/amd64' manifest.txt
+          grep -q 'linux/arm64' manifest.txt
+          echo "manifest ${IMAGE}:dev carries linux/amd64 and linux/arm64"
+
+      # The first push creates the package, and a newly created package is
+      # private. The store cannot pull a private image, so the package has to be
+      # switched to public once, by hand, in the repository package settings.
+      - name: Say what still needs a human
+        run: |
+          echo "If this is the first push, set the ghcr package findling_backend to public:"
+          echo "https://github.com/users/street1983nk/packages/container/findling_backend/settings"

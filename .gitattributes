@@ -1,10 +1,13 @@
-# Shell scripts must keep unix line endings in the working tree, on every
-# platform. A checkout with core.autocrlf=true would otherwise hand the shell a
-# carriage return at the end of the shebang, and every invocation would fail with
-# a "command not found" that names an invisible character.
+# Shell scripts, container configuration, and strict text formats are read by
+# Linux shells, containers, and CI runners. A checkout with core.autocrlf=true
+# would hand them a carriage return at the end of the shebang or key lines, and
+# every invocation would fail with an error that names an invisible character.
+# The development machine checks out with autocrlf enabled, so without these
+# rules the next checkout would quietly produce scripts and images that cannot
+# start.
 *.sh text eol=lf
-
-# The same holds for anything a container or a runner reads as a shell script or
-# as a strict text format.
 *.yml text eol=lf
 *.yaml text eol=lf
+*.conf text eol=lf
+Dockerfile text eol=lf
+.dockerignore text eol=lf

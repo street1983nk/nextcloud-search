@@ -1,19 +1,30 @@
-name: PHP gates
+name: PHP and store metadata gates
 
 # Path filtered on purpose, mirroring python.yml: a backend or documentation
-# commit must not spend runner minutes on the companion app.
+# commit must not spend runner minutes on the companion app. backend/appinfo is
+# in the list because the store metadata job below validates both info.xml
+# files, and the ExApp one lives on the backend side.
 on:
   push:
     paths:
       - 'php/**'
+      - 'backend/appinfo/**'
       - '.github/workflows/php.yml'
   pull_request:
     paths:
       - 'php/**'
+      - 'backend/appinfo/**'
       - '.github/workflows/php.yml'
 
 permissions:
   contents: read
+
+env:
+  # Pinned commit in nextcloud/appstore, deliberately not master. The two files
+  # fetched below decide whether this gate is green, so pulling them from a
+  # moving branch would mean an unrelated commit upstream can turn our build red
+  # or, worse, silently stop catching what it used to catch.
+  APPSTORE_SHA: 5c4373d7d026a8f7c7838cc9990fecaf19e8e682
 
 jobs:
   lint:
@@ -39,7 +50,55 @@ jobs:
       - name: Syntax check every PHP file
         run: find php/lib php/appinfo -name '*.php' -print0 | xargs -0 -n1 php -l
 
-      # The info.xml validation against the app store schema arrives in plan 07,
-      # together with the second info.xml of the ExApp. Validating one file with
-      # the full xsltproc plus xmllint recipe would only have to be rewritten
-      # there.
+  app-metadata:
+    name: info.xml on the store validation path
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+
+      - name: Install xsltproc and xmllint
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xsltproc libxml2-utils
+
+      - name: Fetch the pinned store transform and schema
+        run: |
+          base="https://raw.githubusercontent.com/nextcloud/appstore/${APPSTORE_SHA}/nextcloudappstore/api/v1/release"
+          curl -fsSL "${base}/pre-info.xslt" -o "${RUNNER_TEMP}/pre-info.xslt"
+          curl -fsSL "${base}/info.xsd" -o "${RUNNER_TEMP}/info.xsd"
+
+      # This is the store path, not an approximation of it. The store transforms
+      # the file first and validates the result, so validating info.xml directly
+      # against info.xsd would check a document that is never submitted: it
+      # rejects the routes block that the store accepts, and it misses whatever
+      # the transform changes.
+      - name: Validate both info.xml the way the store does
+        run: |
+          for f in php/appinfo/info.xml backend/appinfo/info.xml; do
+            echo "::group::${f}"
+            xsltproc "${RUNNER_TEMP}/pre-info.xslt" "$f" | xmllint --noout --schema "${RUNNER_TEMP}/info.xsd" -
+            echo "::endgroup::"
+          done
+
+      # The normalised document is printed on purpose. It is the shortest proof
+      # that pre-info.xslt drops the routes block without complaining, and that
+      # is not a defect: it is the reason AppAPI reads the routes out of the
+      # release archive instead, which in turn is the reason the tarball has to
+      # ship this info.xml unchanged.
+      - name: Show what the store actually validates
+        run: |
+          for f in php/appinfo/info.xml backend/appinfo/info.xml; do
+            echo "::group::normalised ${f}"
+            xsltproc "${RUNNER_TEMP}/pre-info.xslt" "$f"
+            echo "::endgroup::"
+          done
+
+      - name: State the routes finding explicitly
+        run: |
+          normalised=$(xsltproc "${RUNNER_TEMP}/pre-info.xslt" backend/appinfo/info.xml)
+          if echo "$normalised" | grep -q '<routes>'; then
+            echo "pre-info.xslt kept the routes block; the assumption behind the packaging step changed"
+            exit 1
+          fi
+          echo "pre-info.xslt dropped the routes block as expected, so the release archive must carry info.xml unchanged"

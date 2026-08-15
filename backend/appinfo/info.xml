@@ -1,0 +1,82 @@
+<?xml version="1.0"?>
+<!--
+	Store metadata of the External App half of Findling.
+
+	The store does not validate this file as it stands. It first runs it through
+	pre-info.xslt, which rebuilds the document and copies only the elements it
+	knows; inside external-app that is docker-install, scopes, system and
+	environment-variables. The routes block below is therefore dropped silently,
+	not rejected, and the result is what gets validated against info.xsd.
+
+	That has one consequence worth stating here, next to the block it concerns:
+	because the store database never sees the routes, AppAPI reads them back out
+	of the release archive at installation time. The tarball has to carry this
+	file unchanged. Filtering or rewriting it during packaging would leave the
+	installed app without its search route and without an error message.
+
+	The version is kept identical to php/appinfo/info.xml. Both halves are
+	released together, so a user cannot end up with two versions that disagree
+	about the protocol between them.
+-->
+<info>
+	<id>findling_backend</id>
+	<name>Findling Backend</name>
+	<summary>Search backend for Findling: text extraction, OCR and the index</summary>
+	<description><![CDATA[This is the External App behind the Findling search app.
+
+It extracts text from documents, runs OCR on scanned pages and maintains the
+search index. All of that happens inside your own instance: no file content
+ever leaves the server, and nothing is ever written back to your files.
+
+This app does nothing on its own. Install the app "Findling", which puts the
+results into the normal search bar and is the only caller of this backend.]]></description>
+	<version>0.1.0</version>
+	<licence>agpl</licence>
+	<author>street1983nk</author>
+	<category>files</category>
+	<website>https://github.com/street1983nk/nextcloud-search</website>
+	<bugs>https://github.com/street1983nk/nextcloud-search/issues</bugs>
+	<repository type="git">https://github.com/street1983nk/nextcloud-search.git</repository>
+	<dependencies>
+		<nextcloud min-version="32" max-version="35"/>
+	</dependencies>
+	<external-app>
+		<docker-install>
+			<registry>ghcr.io</registry>
+			<image>street1983nk/findling_backend</image>
+			<!--
+				The deploy daemon pulls registry/image:tag at installation time,
+				so this exact tag has to exist in the registry before a release
+				is published, not after.
+			-->
+			<image-tag>0.1.0</image-tag>
+		</docker-install>
+		<routes>
+			<!--
+				Exactly one route. /enabled, /heartbeat and /init need no entry:
+				AppAPI addresses those directly instead of going through the
+				proxy, so declaring them would only widen the surface.
+
+				Brute force protection is limited to 401 and nothing else.
+				Adding 500 would mean that a backend defect blocks the instance
+				address at the Nextcloud end, turning a bug into an outage for
+				every user behind that address.
+			-->
+			<route>
+				<url>search</url>
+				<verb>POST</verb>
+				<access_level>USER</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+		</routes>
+		<environment-variables>
+			<variable>
+				<name>FINDLING_LOG_LEVEL</name>
+				<display-name>Log level</display-name>
+				<description>One of debug, info, warning, error. Anything else falls back to info.</description>
+				<default>info</default>
+			</variable>
+		</environment-variables>
+	</external-app>
+</info>
