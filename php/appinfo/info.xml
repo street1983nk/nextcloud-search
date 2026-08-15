@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!--
+	The element order follows the app store schema. The store does not validate
+	this file directly, it first runs it through pre-info.xslt and validates the
+	result, so unknown elements are dropped silently instead of being rejected.
+	There is no element for an app to app dependency, which is why app_api is
+	checked at runtime in ExAppService instead of being declared here.
+-->
+<info>
+	<id>findling</id>
+	<name>Findling</name>
+	<summary>Zero-config full text search for your files</summary>
+	<description><![CDATA[Findling finds the contents of your documents from the normal search bar.
+
+This app never modifies your files, and no content ever leaves your server.
+
+Findling needs two more things to be installed: the app "AppAPI" and the
+External App "Findling Backend", which does the reading and the indexing inside
+your own instance.]]></description>
+	<version>0.1.0</version>
+	<licence>agpl</licence>
+	<author>street1983nk</author>
+	<namespace>Findling</namespace>
+	<category>files</category>
+	<website>https://github.com/street1983nk/nextcloud-search</website>
+	<bugs>https://github.com/street1983nk/nextcloud-search/issues</bugs>
+	<repository type="git">https://github.com/street1983nk/nextcloud-search.git</repository>
+	<dependencies>
+		<php min-version="8.2"/>
+		<nextcloud min-version="32" max-version="35"/>
+	</dependencies>
+</info>
