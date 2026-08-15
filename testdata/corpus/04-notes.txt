@@ -1,0 +1,6 @@
+Findling reference corpus, plain text part.
+
+Deutscher Absatz mit echten Umlauten: Grundstück, Ausschuss, Maßnahme.
+Zweite Zeile für die Zeichensatzerkennung: Straßenbaubeitragssatzung.
+
+This file exists so the read path meets something that is not a container format.

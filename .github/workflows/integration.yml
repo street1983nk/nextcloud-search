@@ -6,17 +6,36 @@ name: Integration
 # string that can only have been produced inside the running backend. The last
 # step stops the backend again and proves that its absence costs a result group
 # and nothing else.
+#
+# The second job in this file proves the read only invariant (IDX-07) on the
+# same setup: the container reads every file of the reference corpus once, and
+# checksums, modification times, sizes and the file count have to be identical
+# afterwards. A user without access to the corpus runs the very same list and
+# has to come back with nothing, which is the negative half of COMP-02.
 on:
   push:
     paths:
       - 'php/**'
       - 'backend/**'
+      - 'testdata/corpus/**'
+      - 'scripts/dev/build_corpus.py'
       - '.github/workflows/integration.yml'
   pull_request:
     paths:
       - 'php/**'
       - 'backend/**'
+      - 'testdata/corpus/**'
+      - 'scripts/dev/build_corpus.py'
       - '.github/workflows/integration.yml'
+  workflow_dispatch:
+    inputs:
+      tamper_probe:
+        description: >-
+          Modify one corpus file on purpose before the second checksum run. A
+          gate that has never been seen failing is not known to work, so this
+          switch exists to make it fail on demand. The run must end red.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -228,6 +247,275 @@ jobs:
           ./occ app:list || true
           ./occ app_api:app:list || true
           echo "--- exapp ---"
+          tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+
+      - name: Stop the ExApp
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/exapp.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          fi
+
+  # Gate B of the read only invariant. Gate A is the AST test in the python
+  # workflow and stops anyone from writing a write path; this job catches a write
+  # that happens through a road gate A does not know, for instance inside a
+  # library. Deliberately a job of its own and not a few steps appended to the
+  # walking skeleton: a red read only gate is the most serious verdict this
+  # project can produce, and it must never be confusable with a broken search.
+  readonly-gate:
+    name: readonly-gate
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        server-version: ['stable34']
+        php-version: ['8.2']
+
+    env:
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+      # The corpus lives in the admin account, because the installer owns a data
+      # directory from the first second. The second account deliberately owns
+      # nothing and is the negative case.
+      CORPUS_USER: 'admin'
+      CORPUS_PASS: 'password'
+      STRANGER_USER: 'stranger'
+      STRANGER_PASS: 'findling-ci-stranger-2026'
+
+    steps:
+      - name: Check out nextcloud/server
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          repository: nextcloud/server
+          ref: ${{ matrix.server-version }}
+          submodules: recursive
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, gd, zip
+          coverage: none
+
+      - name: Check out nextcloud/app_api
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          repository: nextcloud/app_api
+          ref: ${{ matrix.server-version }}
+          path: apps/app_api
+
+      - name: Check out findling
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          path: findling-src
+
+      - name: Move the PHP companion to apps/findling
+        run: mv findling-src/php apps/findling
+
+      - name: Install Nextcloud
+        run: |
+          mkdir data
+          ./occ maintenance:install --database=sqlite --admin-user "${CORPUS_USER}" --admin-pass "${CORPUS_PASS}"
+
+      - name: Start the PHP builtin server
+        run: composer run serve &
+
+      - name: Wait for the server
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:8080/status.php > /dev/null; then
+              echo "server is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "server did not answer on http://localhost:8080/status.php"
+          exit 1
+
+      - name: Enable app_api
+        run: ./occ app:enable -vvv -f app_api
+
+      - name: Enable findling
+        run: ./occ app:enable -vvv -f findling
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: '0.11.7'
+          enable-cache: true
+          cache-dependency-glob: findling-src/backend/uv.lock
+
+      - name: Install the locked backend environment
+        working-directory: findling-src/backend
+        run: uv sync --frozen
+
+      # The backend process is not what reads the corpus, the command line tool
+      # is. It has to run anyway, because AppAPI only completes the registration
+      # handshake against a live heartbeat, and without a registration the
+      # gateway would refuse every call.
+      - name: Start the ExApp
+        working-directory: findling-src/backend
+        run: |
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_PORT="${EXAPP_PORT}"
+          export APP_VERSION=0.1.0
+          export APP_HOST=127.0.0.1
+          export NEXTCLOUD_URL=http://localhost:8080
+          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+          mkdir -p "${APP_PERSISTENT_STORAGE}"
+          uv run python -m findling.main > "${{ runner.temp }}/exapp.log" 2>&1 &
+          echo $! > "${{ runner.temp }}/exapp.pid"
+
+      - name: Wait for the ExApp heartbeat
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+              echo "exapp is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "exapp did not answer on http://127.0.0.1:${EXAPP_PORT}/heartbeat"
+          cat "${{ runner.temp }}/exapp.log" || true
+          exit 1
+
+      - name: Register the manual install daemon
+        run: |
+          timeout 10 ./occ app_api:daemon:register --net host \
+            manual_install "Manual Install" manual-install http localhost http://localhost:8080
+
+      - name: Register the ExApp
+        run: |
+          timeout 120 ./occ app_api:app:register findling_backend manual_install --json-info \
+            "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"0.1.0\",\"secret\":\"${EXAPP_SECRET}\",\"port\":${EXAPP_PORT},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\".*\",\"verb\":\"GET,POST,PUT,DELETE\",\"access_level\":1,\"headers_to_exclude\":[]}]}" \
+            --force-scopes --wait-finish
+
+      - name: Put the reference corpus into the account of the corpus user
+        run: |
+          cp -r findling-src/testdata/corpus "data/${CORPUS_USER}/files/corpus"
+          ./occ files:scan --all
+
+      # The list is frozen exactly once and both checksum runs use this very
+      # list. Hashing a freshly globbed set instead would let a deleted file
+      # disappear from both sides of the diff and look like nothing happened.
+      - name: Freeze the file list, the checksums and the metadata
+        run: |
+          find "data/${CORPUS_USER}/files/corpus" -type f | sort > filelist.txt
+          test -s filelist.txt
+          xargs -a filelist.txt sha256sum > before.txt
+          xargs -a filelist.txt stat -c '%n %Y %s' > before-meta.txt
+          echo "corpus files: $(wc -l < filelist.txt)"
+          cat before.txt
+
+      # One PROPFIND per file instead of a single Depth 1 call on the folder: a
+      # Depth 1 answer also carries the folder itself, and dropping the right
+      # entry from an XML blob with shell tools is exactly the kind of cleverness
+      # that fails silently when the order changes.
+      - name: Resolve the file ids over WebDAV
+        run: |
+          : > ids.txt
+          while read -r path; do
+            curl -sf -u "${CORPUS_USER}:${CORPUS_PASS}" -X PROPFIND \
+              -H 'Depth: 0' -H 'Content-Type: application/xml' \
+              --data '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop><oc:fileid/></d:prop></d:propfind>' \
+              "http://localhost:8080/remote.php/dav/files/${CORPUS_USER}/corpus/$(basename "${path}")" \
+              | grep -o '<oc:fileid>[0-9]\+</oc:fileid>' | grep -o '[0-9]\+' >> ids.txt
+          done < filelist.txt
+          cat ids.txt
+          test "$(wc -l < ids.txt)" -eq "$(wc -l < filelist.txt)"
+
+      - name: Read every file through the content gateway
+        working-directory: findling-src/backend
+        run: |
+          set -o pipefail
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_VERSION=0.1.0
+          export NEXTCLOUD_URL=http://localhost:8080
+          uv run python -m findling.tools.read_corpus \
+            --user-id "${CORPUS_USER}" \
+            --ids-file "${{ github.workspace }}/ids.txt" \
+            | tee "${{ github.workspace }}/read-report.txt"
+
+      - name: The authorised run has to see every single file
+        run: |
+          count=$(wc -l < filelist.txt)
+          grep -q "summary files=${count} read=${count} not-accessible=0 error=0 bytes=" read-report.txt
+          # One file of the corpus is empty on purpose, so the sum is what proves
+          # that content actually crossed the wire.
+          read_bytes=$(sed -n 's/^summary .*bytes=\([0-9]\+\)$/\1/p' read-report.txt)
+          test "${read_bytes}" -gt 0
+          echo "bytes read: ${read_bytes}"
+
+      - name: Add a user who owns nothing
+        run: OC_PASS="${STRANGER_PASS}" ./occ user:add --password-from-env "${STRANGER_USER}"
+
+      # COMP-02, the half that a functional test never covers: the gateway does
+      # not only deliver, it also refuses. Same file ids, same code path, only
+      # the user id differs.
+      - name: Read the same file ids as a user without access
+        working-directory: findling-src/backend
+        run: |
+          set -o pipefail
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_VERSION=0.1.0
+          export NEXTCLOUD_URL=http://localhost:8080
+          uv run python -m findling.tools.read_corpus \
+            --user-id "${STRANGER_USER}" \
+            --ids-file "${{ github.workspace }}/ids.txt" \
+            | tee "${{ github.workspace }}/denied-report.txt"
+
+      - name: The unauthorised run must come back empty
+        run: |
+          count=$(wc -l < filelist.txt)
+          grep -q "summary files=${count} read=0 not-accessible=${count} error=0 bytes=0" denied-report.txt
+          # Not a single line may claim a successful read.
+          ! grep -q ' read bytes=' denied-report.txt
+
+      # Off by default, switched on through workflow_dispatch. A gate nobody has
+      # ever seen turn red is a gate nobody knows to work, so the falsification
+      # is a step in the job rather than a note in a document.
+      - name: Manipulation probe, tamper with the corpus on purpose
+        if: ${{ inputs.tamper_probe }}
+        run: |
+          echo x >> "data/${CORPUS_USER}/files/corpus/04-notes.txt"
+          # The second half: a touch leaves every checksum intact and still
+          # breaks the invariant, which is why metadata is compared as well.
+          touch "data/${CORPUS_USER}/files/corpus/05-picture.png"
+
+      - name: Checksums and metadata after the read run
+        run: |
+          xargs -a filelist.txt sha256sum > after.txt
+          xargs -a filelist.txt stat -c '%n %Y %s' > after-meta.txt
+
+      - name: Gate B, not one byte and not one timestamp has moved
+        run: |
+          diff before.txt after.txt
+          diff before-meta.txt after-meta.txt
+          # Deletions and additions: the frozen list cannot show them by itself,
+          # so the directory is enumerated a second time and compared.
+          find "data/${CORPUS_USER}/files/corpus" -type f | sort > filelist-after.txt
+          diff filelist.txt filelist-after.txt
+          echo "read only invariant holds for $(wc -l < filelist.txt) files"
+
+      - name: Everything the diff had to say
+        if: failure()
+        run: |
+          echo "--- checksums ---"
+          diff -u before.txt after.txt || true
+          echo "--- metadata (name mtime size) ---"
+          diff -u before-meta.txt after-meta.txt || true
+          echo "--- file list ---"
+          diff -u filelist.txt filelist-after.txt || true
+          echo "--- authorised read report ---"
+          cat read-report.txt || true
+          echo "--- unauthorised read report ---"
+          cat denied-report.txt || true
+          echo "--- nextcloud log ---"
+          tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
+          echo "--- exapp log ---"
           tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
 
       - name: Stop the ExApp
