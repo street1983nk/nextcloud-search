@@ -119,7 +119,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Integrationsbeweis | 8/8 | Complete   | 2026-08-15 |
+| 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 0/TBD | Not started | - |
 | 3. Aktualität und OCR | 0/TBD | Not started | - |
 | 4. Admin-Sichtbarkeit und Diagnose | 0/TBD | Not started | - |

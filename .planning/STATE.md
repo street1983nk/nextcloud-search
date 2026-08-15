@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
-status: executing
-stopped_at: ROADMAP.md, STATE.md und Traceability in REQUIREMENTS.md geschrieben
-last_updated: "2026-08-15T10:36:38.670Z"
+status: ready_to_plan
+stopped_at: Phase 1 complete (8/8) — ready to discuss Phase 2
+last_updated: 2026-08-15T14:23:01.514Z
 last_activity: 2026-08-15 -- Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 8
-  completed_plans: 0
+  completed_plans: 8
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 01 — integrationsbeweis
+**Current focus:** Phase 2 — indexkern und volltextsuche
 
 ## Current Position
 
-Phase: 01 (integrationsbeweis) — EXECUTING
-Plan: 1 of 8
-Status: Executing Phase 01
-Last activity: 2026-08-15 -- Phase 01 execution started
+Phase: 2
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-15
 
 Progress: [..........] 0%
 
@@ -36,7 +36,7 @@ Progress: [..........] 0%
 
 **Velocity:**
 
-- Total plans completed: 0
+- Total plans completed: 8
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -44,7 +44,7 @@ Progress: [..........] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 1 | 8 | - | - |
 
 **Recent Trend:**
 
