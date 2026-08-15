@@ -1,9 +1,11 @@
 name: Integration
 
-# The walking skeleton: a real Nextcloud is installed, both apps are enabled and
-# the search provider list is asked whether findling is there. In phase 1 this
-# workflow is red on purpose, because php/ is still empty. It is the measuring
-# stick for the phase, hung up before the work starts instead of afterwards.
+# The walking skeleton, end to end: a real Nextcloud is installed, both apps are
+# enabled, the ExApp runs as a native process, it is registered through AppAPI
+# and the unified search API is asked for a term. The answer has to carry a
+# string that can only have been produced inside the running backend. The last
+# step stops the backend again and proves that its absence costs a result group
+# and nothing else.
 on:
   push:
     paths:
@@ -31,6 +33,14 @@ jobs:
         # gets slow.
         server-version: ['stable34']
         php-version: ['8.2']
+
+    env:
+      # Test-only credentials of a throwaway instance that is destroyed with the
+      # runner. Nothing here is reused anywhere else, and no real secret is ever
+      # needed by this workflow.
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+      TESTUSER_PASS: 'findling-ci-canary-2026'
 
     steps:
       # Actions are pinned to commit SHAs, never to tags: a moved tag would be
@@ -63,7 +73,8 @@ jobs:
 
       # The directory name must be exactly the app id. If it is not, the
       # autoloader never finds the classes and the provider stays invisible with
-      # no error message at all (pitfall 3, third cause).
+      # no error message at all (pitfall 3, third cause). The backend stays in
+      # findling-src, it is not part of the server tree.
       - name: Move the PHP companion to apps/findling
         run: mv findling-src/php apps/findling
 
@@ -90,9 +101,6 @@ jobs:
       - name: Enable app_api
         run: ./occ app:enable -vvv -f app_api
 
-      # Expected to fail in phase 1: there is no PHP companion yet. When this
-      # step turns green, the companion exists and the canary below becomes the
-      # meaningful assertion.
       - name: Enable findling
         run: ./occ app:enable -vvv -f findling
 
@@ -108,6 +116,107 @@ jobs:
             'http://localhost:8080/ocs/v2.php/search/providers' | tee providers.json
           jq -e '[.ocs.data[] | select(.id == "findling")] | length == 1' providers.json
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          # Same uv release that produced backend/uv.lock, so --frozen resolves
+          # identically here and on a developer machine.
+          version: '0.11.7'
+          enable-cache: true
+          cache-dependency-glob: findling-src/backend/uv.lock
+
+      - name: Install the locked backend environment
+        working-directory: findling-src/backend
+        run: uv sync --frozen
+
+      # The backend runs as a plain process, not as a container: phase 1 proves
+      # the integration path, the image is a later plan. The HaRP shared key is
+      # deliberately absent from this environment, because setting it would make
+      # the server bind a unix socket instead of the TCP port, and nothing in
+      # this job speaks to that socket (pitfall 5).
+      - name: Start the ExApp
+        working-directory: findling-src/backend
+        run: |
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_PORT="${EXAPP_PORT}"
+          export APP_VERSION=0.1.0
+          export APP_HOST=127.0.0.1
+          export NEXTCLOUD_URL=http://localhost:8080
+          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+          mkdir -p "${APP_PERSISTENT_STORAGE}"
+          uv run python -m findling.main > "${{ runner.temp }}/exapp.log" 2>&1 &
+          echo $! > "${{ runner.temp }}/exapp.pid"
+
+      - name: Wait for the ExApp heartbeat
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+              echo "exapp is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "exapp did not answer on http://127.0.0.1:${EXAPP_PORT}/heartbeat"
+          cat "${{ runner.temp }}/exapp.log" || true
+          exit 1
+
+      - name: Register the manual install daemon
+        run: |
+          timeout 10 ./occ app_api:daemon:register --net host \
+            manual_install "Manual Install" manual-install http localhost http://localhost:8080
+
+      # The registration blocks until the handshake is through, which is what
+      # turns a race into a verdict. access_level is numeric on the JSON path
+      # (1 is USER), symbolic only in info.xml.
+      - name: Register the ExApp
+        run: |
+          timeout 120 ./occ app_api:app:register findling_backend manual_install --json-info \
+            "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"0.1.0\",\"secret\":\"${EXAPP_SECRET}\",\"port\":${EXAPP_PORT},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\".*\",\"verb\":\"GET,POST,PUT,DELETE\",\"access_level\":1,\"headers_to_exclude\":[]}]}" \
+            --force-scopes --wait-finish
+
+      # The proof has to run as an ordinary user. The admin would work too, but
+      # the user id in the answer is the load bearing part, and a second account
+      # makes it impossible to confuse it with the installer.
+      - name: Add a test user
+        run: OC_PASS="${TESTUSER_PASS}" ./occ user:add --password-from-env testuser
+
+      # The three assertions in order of what they rule out. First: the provider
+      # answered at all. Second, and this is the actual proof of the phase: the
+      # subline carries the user id that only the signed AppAPI header could have
+      # carried into the backend, next to the host name and the timestamp of the
+      # process that produced it. A hard coded hit in PHP cannot pass this.
+      # Third: the snippet is plain text, so the search dialog has nothing to
+      # interpolate as markup.
+      - name: Search as the test user
+        run: |
+          curl -sf -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary' | tee out.json
+          jq -e '.ocs.data.entries | length > 0' out.json
+          jq -e '.ocs.data.entries[0].subline | contains("produced inside container")' out.json
+          jq -e '.ocs.data.entries[0].subline | contains("testuser")' out.json
+          jq -e '.ocs.data.entries[0].subline | contains("<") | not' out.json
+
+      - name: Unregister the ExApp
+        run: ./occ app_api:app:unregister findling_backend
+
+      # Pitfall 1 as a test instead of a warning: with the backend gone the proxy
+      # gets an array back, and the whole unified search of that user would die
+      # if anyone treated it as a response object. The search must still answer
+      # 200, only without our result group.
+      - name: Search again with the backend gone
+        run: |
+          status=$(curl -s -o negative.json -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary')
+          cat negative.json
+          test "${status}" = "200"
+          jq -e '.ocs.data.entries | length == 0' negative.json
+
       - name: Nextcloud log
         if: failure()
         run: |
@@ -117,3 +226,13 @@ jobs:
             echo "no data/nextcloud.log written"
           fi
           ./occ app:list || true
+          ./occ app_api:app:list || true
+          echo "--- exapp ---"
+          tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+
+      - name: Stop the ExApp
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/exapp.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          fi
