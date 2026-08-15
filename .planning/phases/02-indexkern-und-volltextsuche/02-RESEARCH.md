@@ -1,22 +1,28 @@
 # Phase 2: Indexkern und Volltextsuche - Research
 
 **Researched:** 2026-08-15
-**Domain:** Tantivy 0.26 embedded (deutscher Analyzer, Snippets), Pull-Queue ueber die PHP-Companion-App, Crawl pro Mount, ACL-Vorfilter in SQLite, Textextraktion in reinem Python
-**Confidence:** HIGH fuer Tantivy-API, Analyzer-Verhalten, Queue- und Crawl-Muster, Mount- und ACL-Aufloesung (Quellcode gelesen, Tantivy-Verhalten lokal mit `tantivy==0.26.0` ausgefuehrt und gemessen); MEDIUM fuer Wortlistengroesse, RAM-Kosten des Kompositasplitters und WAL-Verhalten im AppAPI-Volume
+**Domain:** Tantivy-0.26-Volltextindex mit deutscher Analysekette, Pull-Queue nach dem context_chat-Muster, Crawl pro Mount, SQLite-ACL-Vorfilter, Textextraktion mit Fehlerklassen
+**Confidence:** HIGH fuer Analysekette, Filterreihenfolge, Snippet-Offsets, Absturzfestigkeit, Queue- und Crawl-Muster und ACL-Groessen (am 15.08.2026 im Container gegen `tantivy==0.26.0` und das echte Debian-Woerterbuch gemessen bzw. im Quellcode gelesen); MEDIUM fuer die Hochrechnung auf 100k Dateien und fuer die Latenz der zwei Proxy-Roundtrips auf echter Hardware
+
+> **Hinweis zur Entstehung.** Diese Fassung fuehrt zwei unabhaengige Rechercheläufe zusammen. Wo sie sich widersprachen, wurde nicht abgewogen, sondern gemessen; die entscheidenden Faelle stehen mit Messergebnis in Frage 1. Drei Aussagen des ersten Laufs sind dadurch **widerlegt** (Wortlistenrezept, Position von `ascii_fold`, Wirkung von `remove_long`), vier weitere sind **bestaetigt** und waren im zweiten Lauf uebersehen worden (Stemmer-Luecke bei Verbformen, ue/oe/ae-Luecke, Tokenizer-Registrierung nach `Index.open`, Writer-Lock).
 
 ---
 
 ## Summary
 
-Die Phase hat drei technische Kerne, und alle drei sind jetzt mechanisch geklaert statt vermutet.
+Die drei riskanten Fragen dieser Phase sind beantwortet, und zwei davon anders als erwartet.
 
-**Erstens der deutsche Analyzer.** Die Filterkette aus CONTEXT.md ist mit `tantivy==0.26.0` lokal gebaut und mit echten deutschen Testfaellen gemessen worden. Zwei Befunde aendern die Planung. Der Kompositasplitter `Filter.split_compound` **ersetzt** das Kompositum durch seine Teile und splittet nur, wenn das Wort **vollstaendig** in aufeinanderfolgende Woerterbucheintraege zerfaellt. Ohne Fugenformen im Woerterbuch passiert daher gar nichts: mit der Liste `["kundigung", "frist"]` bleibt "Kuendigungsfrist" ungeteilt und ist ueber "Frist" nicht auffindbar, mit `["kundigungs", "frist"]` funktioniert es sofort. Die Wortliste zu bauen ist also nicht "eine Datei besorgen", sondern ein Aufbereitungsschritt mit Fugen-s, Normalisierung und Mindestlaenge. Der zweite Befund ist unangenehmer: der Snowball-Stemmer "german" vereinheitlicht Verbformen nicht. Gemessen: "suchen" und "Suche" werden beide zu `such`, "suchte" wird zu `sucht`, "gesucht" bleibt `gesucht`. Der in CONTEXT.md genannte Testfall "suchte/suchen" ist mit Tantivy-Bordmitteln **nicht erfuellbar** und muss ersetzt oder als dokumentierte Grenze gefuehrt werden. Nominalflexion dagegen funktioniert einwandfrei (Haus/Haeuser, Buch/Buecher, Vertrag/Vertraege, Kanzlei/Kanzleien jeweils identisch gestemmt), und Umlaute plus Eszett sind sauber (Strasse == Strasse, gross == gross).
+**Erstens, deutsche Komposita.** `Filter.split_compound()` funktioniert, aber nur mit einer Wortliste, die ausschliesslich **Bestandteile** enthaelt. Mit der rohen igerman98-Liste (`/usr/share/dict/ngerman`, 356.010 Woerter) wird ausgerechnet der Vorzeigefall nicht zerlegt: "Kündigungsfrist" steht selbst in der Liste, der Aho-Corasick-Automat greift mit `LeftmostLongest` das ganze Wort ab, und eine Suche nach "Frist" findet nichts. Vier Aufbereitungsrezepte wurden gegen 16 echte Komposita gemessen; das beste (**alle** Woerter im Laengenfenster 4 bis 14 plus die Fugenelemente als eigene Eintraege) erreicht 14 von 16 bei null Fehlzerlegungen. Das naheliegende Rezept "nur Substantive, Fugenformen an jedes Wort anhaengen, ASCII falten" erreicht nur 7 von 16 und produziert echte Fehler wie `haushaltss | atzung`.
 
-**Zweitens die Snippets.** `Snippet.highlighted()` liefert **Byte**-Bereiche relativ zu `Snippet.fragment()`, nicht Zeichenpositionen. Bei deutschem Text ist das nie dasselbe: gemessen wurde `byte ranges=[(4, 20)]` fuer "Kuendigungsfrist" gegenueber den korrekten `char ranges=[(4, 19)]`, und ein naives Slicen mit den Bytewerten schneidet sichtbar falsch. Die ExApp muss umrechnen, bevor sie Offsets ins Protokoll gibt (Phase-1-Feld `highlights`). Zusaetzlich liefert der Generator bei gesplitteten Komposita mehrfach denselben Bereich, weil alle Teiltoken die Offsets des Originalworts erben. Die Bereiche muessen dedupliziert und verschmolzen werden.
+**Zweitens, zwei Zusagen aus CONTEXT.md sind mit Tantivy-Bordmitteln nicht erfuellbar.** Der Snowball-Stemmer "german" vereinheitlicht Nominalflexion sauber (Haus/Häuser, Vertrag/Verträge, Straße/Strasse jeweils identisch), aber **keine Verbformen**: `suchen` und `Suche` werden beide zu `such`, `suchte` wird zu `sucht`, `gesucht` bleibt `gesucht`. Und die ausgeschriebene Umlautform trifft nicht: `Müller` und `Muller` werden beide zu `mull`, `Mueller` zu `muell`. Beide Faelle stehen woertlich als Abnahmekriterium in CONTEXT.md. Der zweite ist auf der Query-Seite loesbar (Suchbegriff mit `ue/oe/ae/ss` zusaetzlich in der Umlautvariante veroden), der erste nicht ohne Austausch des Stemmers. Das braucht eine Owner-Entscheidung vor dem Bau.
 
-**Drittens Queue, Crawl und ACL.** Das Betriebsmodell ist im Quellcode von `nextcloud/context_chat` vollstaendig belegt: ein `IRepairStep` beim Install legt einmalig einen `SchedulerJob` an, der pro Mount einen `StorageCrawlJob` einreiht, der sich mit `last_file_id` selbst nachplant. Fuer uns wichtig und neu gegenueber der Projektrecherche: die dafuer noetige Server-API `OCP\Files\Cache\IFileAccess` mit `getDistinctMounts()` und `getByAncestorInStorage()` ist **@since 32.0.0**, also genau unser Mindestfenster. Der ganze `getMountsOld`-Rueckfallpfad von context_chat entfaellt fuer uns ersatzlos. Bei der ACL ist context_chats Umsetzung dagegen der teuerste Teil: `IUserMountCache::getMountsForFileId()` kostet pro Datei zwei Abfragen plus einen `userExists`-Aufruf. Wir crawlen ohnehin pro Mount und koennen die Nutzerliste einmal je Mount holen und im Crawl-Batch per Pfadpraefix zuordnen, was exakt die Logik ist, die `UserMountCache` sonst pro Datei in SQL macht.
+**Drittens, Snippet-Offsets.** Der Phase-1-Befund "Subline ist Klartext" bleibt gueltig und bekommt eine Fortsetzung: `Snippet.highlighted()` liefert **UTF-8-Byte-Offsets**. Gemessen an "... die Kündigungsfrist für ..." liefert Tantivy `(35, 51)`, korrekt in Zeichen waere `(35, 50)`. Ein naives `snippet[start:end]` verschiebt die Hervorhebung bei jedem Umlaut vor der Fundstelle, still. Zusaetzlich erben die Teiltoken eines zerlegten Kompositums die Offsets des Originalworts, weshalb Bereiche mehrfach und ueberlappend auftreten und vor dem Versand verschmolzen werden muessen.
 
-**Primary recommendation:** Ein Index, ein Schreiber, ein Worker. Tantivy-Schema mit `body_de`/`body_en` und genau einer gespeicherten Textkopie (`body_de` als `stored=True`, sie speist auch den SnippetGenerator, ein zweiter Textspeicher in SQLite entfaellt). Analyzer-Kette `simple -> lowercase -> stopword(german) -> ascii_fold -> split_compound -> remove_long(48) -> stemmer(german)`, registriert in genau einer Factory, die bei **jedem** Oeffnen des Index aufgerufen wird. Wortliste aus dem Debian-Paket `wngerman` (GPL-2+, `Architecture: all`, 4,6 MB) beim Image-Bau zu einer normalisierten Substantivliste mit Fugenformen destillieren, Feature per Umgebungsvariable abschaltbar. Queue und Crawl eins zu eins nach dem context_chat-Muster, aber mit kurzem Lock-Timeout und einem Nack-Endpunkt, weil `docker kill` sonst 24 Stunden lang Zeilen blockiert. Suche als **zwei** Aufrufe: `/search` liefert nur Kandidaten mit Score, `/snippets` liefert Textausschnitte fuer die vom PHP-Recheck ueberlebenden IDs. Das macht SRCH-02 strukturell wahr statt nur behauptet.
+**Absturzfestigkeit ist keine Eigenleistung, sondern eine Konsequenz.** Gemessen: `kill -9` mitten im Schreiben, der Index oeffnet danach auf dem Stand des letzten Commits (56.000 Dokumente), die zurueckgebliebene `.tantivy-writer.lock` ist bedeutungslos und ein neuer Writer wird sofort erteilt. Der Crawl-Fortschritt liegt gar nicht im Container, sondern als Queue-Zeile in der Nextcloud-Datenbank und als `last_file_id` im Job-Argument. IDX-02 ist damit ein Ergebnis der Architektur, kein Mechanismus, den man vergessen kann.
+
+Ein Befund vereinfacht zusaetzlich erheblich: `OCP\Files\Cache\IFileAccess::getDistinctMounts()` und `getByAncestorInStorage()` sind `@since 32.0.0`, unser Fenster faengt bei 32 an. Der komplette Legacy-Pfad, den context_chat mit handgeschriebenem `CacheQueryBuilder`-SQL vorhaelt, entfaellt ersatzlos.
+
+**Primary recommendation:** Ein Index, ein Schreiber, ein Worker. Wortliste `wngerman` ins Image, beim Start auf das Laengenfenster 4 bis 14 reduziert und um die Fugenelemente ergaenzt. Deutsche Kette `simple -> lowercase -> split_compound -> custom_stopword(fugen) -> stopword(german) -> remove_long(48) -> stemmer(german)`, **ohne** `ascii_fold` und mit `remove_long` **nach** dem Splitter, beides gemessen begruendet. Genau eine Factory oeffnet den Index und registriert dabei den Tokenizer. Queue und Crawl eins zu eins nach dem context_chat-Muster, aber mit 15 Minuten Lock-Timeout und einem Unlock-Endpunkt fuer den geordneten Neustart. Suche als **zwei** Proxy-Aufrufe: `/search` liefert nur fileIds und Scores, PHP recheckt, `/snippets` liefert erst danach Text. Extraktion in einem kurzlebigen Kindprozess mit `RLIMIT_AS` und hartem `kill()`-Timeout.
 
 ---
 
@@ -27,62 +33,72 @@ Die Phase hat drei technische Kerne, und alle drei sind jetzt mechanisch geklaer
 
 **Engine und Sprache**
 - Volltext-Engine: Tantivy 0.26 embedded, mmap; Writer-Heap 50 MB, num_threads=1 (4-GB-Budget)
-- Deutsch: Snowball-Stemmer "german" + deutsche Stopwoerter + ascii_fold (Umlaut-Folding) + split_compound (Komposita; Wortliste beschaffen ist Teil der Phase, Lizenz pruefen); Englisch als zweites Feld/Pipeline
-- Snippets: Klartext + Zeichenoffsets (Subline rendert kein HTML, Phase-1-Befund); Hervorhebung macht die PHP-Seite bzw. der Client mit den Offsets; Snippet-Erzeugung erst NACH bestandener Rechtepruefung (SRCH-02)
+- Deutsch: Snowball-Stemmer "german" + deutsche Stopwörter + ascii_fold (Umlaut-Folding) + split_compound (Komposita; Wortliste beschaffen ist Teil der Phase, Lizenz prüfen); Englisch als zweites Feld/Pipeline
+- Snippets: Klartext + Zeichenoffsets (Subline rendert kein HTML, Phase-1-Befund); Hervorhebung macht die PHP-Seite bzw. der Client mit den Offsets; Snippet-Erzeugung erst NACH bestandener Rechteprüfung (SRCH-02)
 - Suchoperatoren: Phrasen, +/-, Filter Dateiname vs. Inhalt, Dateityp (SRCH-03)
 
-**Berechtigungskette (Sicherheitsgrenze unveraendert)**
-- SQLite-ACL-Tabelle (access_list: uid, fileid) als VORFILTER auf Kandidatenlisten (Ueberfetch + iteratives Nachfassen), finaler Recheck bleibt in PHP via getUserFolder()->getFirstNodeById() (COMP-04); NIE ein eigenes Rechtemodell in Python
-- ACL gehoert ins ERSTE Schema (nie nachruesten); Schema fuehrt eine Indexversion (Tantivy-Upgrades koennen Reindex erzwingen)
+**Berechtigungskette (Sicherheitsgrenze unverändert)**
+- SQLite-ACL-Tabelle (access_list: uid, fileid) als VORFILTER auf Kandidatenlisten (Überfetch + iteratives Nachfassen), finaler Recheck bleibt in PHP via getUserFolder()->getFirstNodeById() (COMP-04); NIE ein eigenes Rechtemodell in Python
+- ACL gehört ins ERSTE Schema (nie nachrüsten); Schema führt eine Indexversion (Tantivy-Upgrades können Reindex erzwingen)
 
 **Indexer-Betriebsmodell (die Anti-fulltextsearch-Invarianten)**
-- Pull-Queue: PHP fuehrt die Queue (Tabelle), Worker der ExApp pollen, verarbeiten, quittieren; Zeilen-Locks; Backpressure natuerlich (Muster context_chat, Quellcode-verifiziert)
+- Pull-Queue: PHP führt die Queue (Tabelle), Worker der ExApp pollen, verarbeiten, quittieren; Zeilen-Locks; Backpressure natürlich (Muster context_chat, Quellcode-verifiziert)
 - Crawl pro Mount, Cursor = fileid-Integer im Job-Zustand; jede Datei genau EINMAL egal wie viele Nutzer sie sehen (IDX-01); User-Homes + Team Folders default AN, External Storage default AUS
 - Fortschritt in der DB, nie im Prozessspeicher: docker kill mitten im Lauf, Neustart, Fortsetzung an der Zustandsmarke = Abnahmetest (IDX-02)
-- INDEX_WORKERS=1 als Architektur (IDX-08); OCR-/Embedding-Spuren kommen spaeter in dieselbe Ein-Worker-Disziplin
-- failed/skipped sind sichtbare Erstklasse-Zustaende mit Grund (zu gross, Typ, Fehler); nie stumm (IDX-06); diese Zustaende sind die Datenbasis fuer die Phase-4-Diagnose
+- INDEX_WORKERS=1 als Architektur (IDX-08); OCR-/Embedding-Spuren kommen später in dieselbe Ein-Worker-Disziplin
+- failed/skipped sind sichtbare Erstklasse-Zustände mit Grund (zu groß, Typ, Fehler); nie stumm (IDX-06); diese Zustände sind die Datenbasis für die Phase-4-Diagnose
 - Zero-Config-Leitplanken: Dokument-Allowlist (PDF, Office, OpenDocument, Text/Markdown, RTF, HTML), 50-MB-Extraktions-Cap, openpyxl read_only + Zellcap 200k, keine Videos/Archive
 
 **Extraktion (Stack-Research, gepinnt)**
-- pypdfium2 (PDF-Text), pypdf (Metadaten/Verschluesselungs-Erkennung VOR pypdfium2), python-docx, python-pptx, openpyxl read_only, ODF via zipfile+lxml (KEIN odfpy), lxml.html, striprtf, charset-normalizer; passwortgeschuetzte PDFs -> skipped mit Grund
-- Inhalte fliessen ausschliesslich ueber das Content-Gateway aus Phase 1 (fetch_file_stream, download2stream); Gate A (Nur-Lesen) und Gate B (Korpus-Pruefsummen) bleiben aktiv und duerfen nie verletzt werden
+- pypdfium2 (PDF-Text), pypdf (Metadaten/Verschlüsselungs-Erkennung VOR pypdfium2), python-docx, python-pptx, openpyxl read_only, ODF via zipfile+lxml (KEIN odfpy), lxml.html, striprtf, charset-normalizer; passwortgeschützte PDFs -> skipped mit Grund
+- Inhalte fließen ausschließlich über das Content-Gateway aus Phase 1 (fetch_file_stream, download2stream); Gate A (Nur-Lesen) und Gate B (Korpus-Prüfsummen) bleiben aktiv und dürfen nie verletzt werden
 
-**Qualitaet und Umgebung**
-- Alle 5 Python-Gates vor jedem Commit lokal gruen; CI-Erweiterungen folgen dem Phase-1-Muster (walking-skeleton + readonly-gate bleiben gruen, neue Jobs fuer Index/Suche-E2E)
+**Qualität und Umgebung**
+- Alle 5 Python-Gates vor jedem Commit lokal grün; CI-Erweiterungen folgen dem Phase-1-Muster (walking-skeleton + readonly-gate bleiben grün, neue Jobs für Index/Suche-E2E)
 - Referenzkorpus testdata/corpus/ erweitern statt ersetzen (byteidentisch generiert, -text in .gitattributes beachten)
-- KEIN lokales PHP; PHP-Verifikation via CI; lokale E2E-Proben ueber scripts/dev/ (FINDLING_PORT beachten, 8080 ist von der parallelen MCP-Session belegt, 8090 nehmen)
+- KEIN lokales PHP; PHP-Verifikation via CI; lokale E2E-Proben über scripts/dev/ (FINDLING_PORT beachten, 8080 ist von der parallelen MCP-Session belegt, 8090 nehmen)
 
 ### Claude's Discretion
 
-- Tantivy-Schema-Detail (Felder, DE/EN-Doppelfeld vs. Sprach-Erkennung), Chunking fuers Snippet-Fenster
+- Tantivy-Schema-Detail (Felder, DE/EN-Doppelfeld vs. Sprach-Erkennung), Chunking fürs Snippet-Fenster
 - Queue-Schema und Quittungs-Protokoll im Detail; Wahl SQLite-Datei-Layout im Container-Volume
-- Wie der Erstindex angestossen wird (occ-Kommando der PHP-App vs. Auto-Start nach Registrierung; Zero-Config spricht fuer Auto-Start mit Vorab-Schaetzungs-Hook fuer Phase 4)
+- Wie der Erstindex angestoßen wird (occ-Kommando der PHP-App vs. Auto-Start nach Registrierung; Zero-Config spricht für Auto-Start mit Vorab-Schätzungs-Hook für Phase 4)
 - Umgang mit dem Kanarien-Treffer aus Phase 1
 
 ### Deferred Ideas (OUT OF SCOPE)
 
-- Events + ETag-Reconcile + Loeschpfad: Phase 3 (aber: Schema soll Deletions-Verarbeitung nicht verbauen)
+- Events + ETag-Reconcile + Löschpfad: Phase 3 (aber: Schema soll Deletions-Verarbeitung nicht verbauen)
 - OCR: Phase 3; Embeddings/RRF: Phase 6 (Schema embedding-ready, kein Umbau)
 - Statusseite/Diagnose-UI: Phase 4 (aber failed/skipped-Daten entstehen JETZT)
 - Lasttest 100k+: Phase 5
 </user_constraints>
+
+### Drei Abweichungen von Locked Decisions, die eine Owner-Entscheidung brauchen
+
+Alle drei sind gemessen, nicht gemeint. Details und Zahlen in Frage 1.
+
+| # | Locked Decision | Befund | Vorschlag |
+|---|---|---|---|
+| **D1** | "ascii_fold (Umlaut-Folding)" in der deutschen Kette | Der Snowball-Stemmer "german" faltet Umlaute und ß selbst (`Müller` und `Muller` beide zu `mull`, `Straße` und `Strasse` beide zu `strass`). `ascii_fold` **vor** `split_compound` wuerde zusaetzlich die Wortliste entwerten, solange die Umlaute enthaelt | `ascii_fold` aus dem deutschen Zweig entfernen. Im englischen Zweig und im Dateinamenfeld bleibt es, dort stemmt nichts |
+| **D2** | Testfall "Stemming (suchte/suchen)" | Nicht erfuellbar: `suchen` und `Suche` zu `such`, `suchte` zu `sucht`, `gesucht` zu `gesucht`. Snowball fuer Deutsch behandelt Praeteritum und Partizip nicht | Abnahmekriterium auf Nominalflexion umstellen (Haus/Häuser, Vertrag/Verträge, Kündigung/Kündigungen, alle gemessen erfuellt) und die Verbgrenze dokumentieren |
+| **D3** | Testfall "Umlaut-Varianten (Muller/Müller/Mueller)" | Zwei von drei erfuellt. `Mueller` faellt heraus, weil die Faltung aus einem Zeichen eines macht und die ausgeschriebene Form zwei Zeichen bleibt | Auf der Query-Seite loesen: enthaelt der Suchbegriff `ue`, `oe`, `ae` oder `ss`, zusaetzlich die Umlautvariante bilden und beide mit `Occur.Should` veroden. Rund ein Dutzend Zeilen, kein Indexplatz, wirkt nur auf Anfragen |
 
 ---
 
 <phase_requirements>
 ## Phase Requirements
 
-| ID | Beschreibung | Research Support |
-|----|--------------|------------------|
-| COMP-04 | Suchfluss: ExApp liefert Kandidaten-fileids mit Scores, PHP macht den finalen Recheck pro Treffer, erst danach Snippets | Pattern 4 (Zwei-Aufruf-Protokoll), Antwort auf Frage 1d, Code-Beispiel 5 und 6 |
-| IDX-01 | Erstindex crawlt pro Mount, jede Datei genau einmal | Pattern 2 (Crawl pro Mount ueber `IFileAccess`, @since 32), Antwort auf Frage 3, Code-Beispiel 7 |
-| IDX-02 | Indexer ueberlebt `docker kill`, Fortschritt in der DB | Pattern 5 (Commit-Reihenfolge), Antwort auf Frage 5, Pitfall 3 und 4, Tantivy-Writer-Lock ist ein OS-Lock und wird beim Prozesstod freigegeben |
-| IDX-03 | Pull-Queue mit Zeilen-Locks, natuerliche Backpressure | Pattern 1 (Queue-Schema und Endpunkte, Quellcode-verifiziert), Antwort auf Frage 3 |
-| IDX-06 | Zero-Config-Leitplanken, failed/skipped sichtbar mit Grund | Antwort auf Frage 6 (Fehlerklassen-Mapping), SQLite-Schema `files.state`/`files.reason`, Pitfall 6 |
-| IDX-08 | INDEX_WORKERS=1 als Architektur | Pattern 5, Abschnitt "Prozess- und Threadmodell im Container" |
-| SRCH-01 | Volltextsuche mit deutschem Stemming, Stoppwoertern, Komposita, Umlaut-Folding, plus Englisch | Antwort auf Frage 1a und 1b, gemessene Analyzer-Ergebnisse, Wortlisten-Rezept aus `wngerman` |
-| SRCH-02 | Snippets erst nach bestandener Rechtepruefung | Pattern 4, Antwort auf Frage 1c (Byte- gegen Zeichenoffsets), Code-Beispiel 4 |
-| SRCH-03 | Suchoperatoren: Phrase, +/-, Dateiname/Inhalt, Dateityp | Antwort auf Frage 1d, gemessene Query-Faelle, `IFilteringProvider` mit dem eingebauten Filter `title-only` |
+| ID | Description | Research Support |
+|----|-------------|------------------|
+| COMP-04 | Suchfluss: ExApp liefert Kandidaten-fileIds mit Scores, PHP macht den finalen Recheck, erst danach Snippets | Pattern 1 und Frage 7b. Zwei Proxy-Aufrufe, beide zusaetzlich ACL-vorgefiltert (Confused-Deputy-Schutz), begrenztes Nachfassen. Messwerte: Suche 0,1 ms, Vorfilter 0,18 ms, 20 Snippets 4,2 ms |
+| IDX-01 | Crawl pro Mount, jede Datei genau einmal | Frage 3. `IFileAccess::getDistinctMounts(...)` ab NC 32 verifiziert, Mount-Provider-Klassen inklusive Team Folders benannt, External Storage per Default draussen, Unique-Index auf `file_id` als Deduplizierung |
+| IDX-02 | Ueberlebt docker kill, Fortschritt in der DB | Pattern 2 und Pitfall 4. Gemessen: `kill -9` waehrend des Schreibens, Index oeffnet auf dem letzten Commit (56.000 Dokumente), Writer wird sofort wieder erteilt, keine Aufraeumarbeit noetig |
+| IDX-03 | Pull-Queue mit Zeilen-Locks, natuerliche Backpressure | Frage 2. Vollstaendiges Tabellen-, Endpunkt- und Quittungsschema aus `context_chat` verifiziert, mit fuenf benannten Abweichungen |
+| IDX-06 | Zero-Config-Leitplanken, failed/skipped sichtbar mit Grund | Frage 5. Gemessene Ausnahmetabelle je Bibliothek und Fehlerfall, daraus die Zustandsmaschine mit Grundcode |
+| IDX-08 | INDEX_WORKERS=1 als Architektur | Frage 5 und Pattern 3. Ein asyncio-Poller plus genau ein Extraktions-Kindprozess mit `RLIMIT_AS`; gemessen: `RLIMIT_AS` greift als MemoryError, `Process.kill()` beendet einen haengenden Extraktor sicher |
+| SRCH-01 | Deutsches Stemming, Stopwoerter, Komposita, Umlaute | Frage 1. Vier Wortlistenrezepte gegen 16 Komposita gemessen, Filterreihenfolge bewiesen, zwei Stemmer-Grenzen benannt (D2, D3), Lizenzkette der Wortliste belegt |
+| SRCH-02 | Snippets erst nach bestandener Rechtepruefung | Pattern 1 und Frage 7a. Getrennter `/snippets`-Endpunkt ohne Textfeld in `/search`; dazu der Byte-gegen-Zeichen-Offset-Befund und das Verschmelzen ueberlappender Bereiche |
+| SRCH-03 | Operatoren: Phrase, +/-, Dateiname vs. Inhalt, Dateityp | Frage 1, Abschnitt "Query-Syntax". Alle vier Faelle gegen einen echten Index gemessen, plus die Anbindung an Nextclouds eingebauten Filter `title-only` samt der Falle, dass ein Provider bei unbekanntem Filter uebergangen wird |
 </phase_requirements>
 
 ---
@@ -91,13 +107,13 @@ Die Phase hat drei technische Kerne, und alle drei sind jetzt mechanisch geklaer
 
 | Direktive | Wirkung auf Phase 2 |
 |---|---|
-| Python 3.13 + uv, System-Python gilt als defekt | Jede Python-Aktion ueber `uv run`/`uv sync --frozen`, auch die Wortlisten-Aufbereitung und alle lokalen Proben |
-| Qualitaetsgates: ruff-Vollregelsatz, pyright basic, vulture 80, pytest, lokal gruen vor Commit | Neue Module (storage, pipeline, retrieval, workers) fallen unter dieselben Gates; `filterwarnings = ["error::DeprecationWarning"]` bleibt scharf |
-| Keine Em-Dashes, echte Umlaute nur in deutscher Prosa, nie in Code | Feldnamen, Tokenizer-Namen, Zustaende, Fehlergruende, Log-Texte alle ASCII; die Wortliste ist Daten und darf Umlaute tragen, wird aber ohnehin ascii-gefaltet |
-| Code und README Englisch, Projektkommunikation Deutsch | Alle neuen Bezeichner und Kommentare Englisch |
-| Security/Privacy: Berechtigungs-Durchgriff strikt, keine Inhalte verlassen den Server, keine Telemetrie | Nutzer-ID nur aus dem AppAPI-Header; Snippets nur nach Recheck; keine Dateinamen und keine Inhalte in Logs |
-| Hardware-Ziel 4-8 GB RAM, ARM-tauglich, CPU-only | Writer-Heap 50 MB, ein Worker, Extraktions-Caps, Wortlisten-Automat gemessen statt geschaetzt |
-| AGPL-3.0 | Die Wortliste ist GPL-2+ und damit vertraeglich, aber Lizenztext und Herkunft muessen ins Image und in die Doku |
+| Python 3.13 + uv, lokales System-Python gilt als defekt | Jede Python-Aktion ueber `uv run` / `uv sync`; neue Extraktionspakete als exakte Pins, `uv.lock` mitcommitten |
+| AGPL-3.0 | Die Komposita-Wortliste muss AGPL-vertraeglich sein. `wngerman` ist GPL-2+ (Debian-Copyright zu `igerman98`), also auf GPLv3 hochziehbar und mit AGPLv3 vereinbar. Herkunft, Lizenztext und das Aufbereitungsskript gehoeren ins Repo und ins Image |
+| Code/README Englisch, Projektkommunikation Deutsch | Feldnamen, Zustaende und Fehlergruende englisch (`skipped_too_large`), Planungsartefakte deutsch |
+| Keine Em-Dashes, echte Umlaute nur in deutscher Prosa, nie in Code | Betrifft besonders die Testdaten: der Korpustext traegt Umlaute (deutsche Prosa in einem PDF), die Bezeichner drumherum nicht |
+| Globale Qualitaetsgates | `ASYNC` wird hier zum ersten Mal scharf: der Queue-Poller ist eine asyncio-Task, blockierende Aufrufe im Event-Loop sind der Standardfehler. `filterwarnings = ["error::DeprecationWarning"]` macht aus `IndexWriter.delete_documents` einen Testfehler |
+| Security/Privacy | Nutzer-ID weiterhin nur aus `AUTHORIZATION-APP-API`; kein Suchbegriff, kein Snippet, kein Dateiname im Log |
+| Hardware-Ziel 4-8 GB RAM, ARM-tauglich | Der Komposita-Automat kostet dauerhaft rund 23 MB RSS im selben Prozess wie Suche und Indexierung; das ist im Budget zu fuehren, und es gibt eine gemessene Sparvariante |
 | GSD-Workflow-Zwang | Betrifft die Ausfuehrung, nicht die Recherche |
 
 ---
@@ -106,17 +122,18 @@ Die Phase hat drei technische Kerne, und alle drei sind jetzt mechanisch geklaer
 
 | Capability | Primary Tier | Secondary Tier | Rationale |
 |------------|-------------|----------------|-----------|
-| Mount-Aufzaehlung, Datei-Enumeration, Crawl-Cursor | Nextcloud-PHP-App (BackgroundJob) | Nextcloud-Datenbank | `IFileAccess` und `oc_filecache` existieren nur im PHP-Prozess; der Cursor lebt im Job-Argument und ueberlebt jeden Neustart |
-| Arbeitsvorrat und Zeilen-Locks | Nextcloud-PHP-App (eigene `oc_`-Tabelle) | - | Transaktional zum Dateisystem-Zustand; Backpressure entsteht dadurch, dass niemand pusht |
-| Ermittlung "wer darf diese Datei sehen" | Nextcloud-PHP-App (`IUserMountCache`) | - | Einzige nicht driftende Quelle; Gruppenordner und externe Mounts sind darin enthalten, die Share-API allein waere unvollstaendig |
-| Autoritative Rechteentscheidung pro Treffer | Nextcloud-PHP-App (`getUserFolder()->getFirstNodeById()`) | - | Unveraenderte Sicherheitsgrenze aus Phase 1, COMP-04 |
-| ACL-Vorfilter auf Kandidatenlisten | ExApp (SQLite) | - | Nur ein Beschleuniger, nie eine Entscheidung; darf falsch-positiv sein, nie falsch-negativ ohne Nachfassen |
-| Byteabruf der Dateien | Nextcloud-PHP-App (Content-Gateway) | ExApp (`fetch_file_stream`) | Phase 1, unveraendert; strukturell nur lesend |
-| Textextraktion | ExApp (Python) | - | Ausschliesslich im Container, mit harten Caps und ohne Rueckschreibpfad |
-| Volltextindex, Ranking, Snippet-Erzeugung | ExApp (Tantivy im Prozess) | - | Eingebettete Engine, kein zweiter Serverprozess |
-| Fortschritt, failed/skipped, Indexversion | ExApp (SQLite im Volume) | - | Der Index ist ein Cache, der Betriebszustand gehoert daneben und ueberlebt einen Neuaufbau |
-| Suchoperatoren-Syntax und Filterabbildung | ExApp (Query-Bau) | Nextcloud-PHP-App (`IFilteringProvider`) | Die Query-Grammatik gehoert zur Engine; `title-only` und Dateityp reichen als Filter von aussen herein |
-| Darstellung und Hervorhebung | Browser (Vue) | Nextcloud-PHP-App | Die Subline ist Text, Markup wird woertlich angezeigt (Phase-1-Befund) |
+| Mount-Aufzaehlung und Crawl je Mount | Nextcloud-PHP-App (BackgroundJob) | Nextcloud-DB | `IFileAccess` existiert nur im PHP-Prozess; der Crawl ist eine Datenbankabfrage, kein Netzwerkverkehr |
+| Arbeitsvorrat und Fortschrittsmarke | Nextcloud-DB (Queue-Tabelle) | PHP-Job-Argument (`last_file_id`) | Transaktional zum Dateisystemzustand; der Container haelt bewusst keinen Crawl-Zustand |
+| Ermittlung "wer sieht diese Datei" | Nextcloud-PHP-App (`IUserMountCache`) | - | Einzige belastbare Quelle; ueber die Share-API rekonstruiert verfehlt man Team Folders und externe Mounts |
+| Bytes einer Datei | Nextcloud-PHP-App (Content-Gateway aus Phase 1) | Nextcloud-Storage | Rechtepruefung passiert kostenlos mit; kein zweiter Zugriffsweg |
+| Textextraktion | ExApp-Kindprozess | - | CPU-lastig und absturzgefaehrdet; gehoert hinter eine Prozessgrenze mit RAM- und Zeitdeckel |
+| Volltextindex und Ranking | ExApp (Tantivy im Prozess) | Volume `$APP_PERSISTENT_STORAGE` | Eingebettete Engine, mmap, kein zweiter Serverprozess |
+| ACL-Vorfilter auf Kandidatenlisten | ExApp (SQLite) | - | Beschleunigung, ausdruecklich **keine** Sicherheitsgrenze |
+| Finale Rechteentscheidung je Treffer | Nextcloud-PHP-App (`getFirstNodeById`) | - | Einzige Sicherheitsgrenze, unveraendert aus Phase 1 |
+| Snippet-Erzeugung | ExApp (Tantivy `SnippetGenerator`) | - | Nur dort liegt der Dokumenttext; laeuft erst nach dem PHP-Recheck |
+| Query-Umschreibung (Umlautvarianten, Filter) | ExApp | - | Muss dieselbe Analysekette sehen wie der Index; in PHP waere es ein zweites, driftendes Sprachmodell |
+| Hervorhebung im UI | Browser bzw. PHP-Seite | - | Die Subline ist Klartext, Markup wuerde woertlich erscheinen |
+| Persistenter Indexzustand, Schema- und Analyzerversion | Volume `$APP_PERSISTENT_STORAGE` | - | Tantivy- und Wortlisten-Aenderungen koennen einen Reindex erzwingen; das muss beim Start pruefbar sein |
 
 ---
 
@@ -124,70 +141,82 @@ Die Phase hat drei technische Kerne, und alle drei sind jetzt mechanisch geklaer
 
 ### Core
 
-| Library | Version | Zweck | Warum Standard |
-|---------|---------|-------|----------------|
-| `tantivy` | 0.26.0 (PyPI, 29.04.2026) | Volltextindex, Analyzer, Snippets | Einzige eingebettete Engine mit Snowball-Stemmer, Stoppwortlisten und Kompositasplitter; cp313-Wheels fuer `manylinux_2_17_aarch64` vorhanden [VERIFIED: PyPI JSON-API, Wheel-Liste, lokal ausgefuehrt] |
-| `pypdfium2` | 5.13.0 (13.08.2026) | PDF-Textextraktion, spaeter auch Rasterung fuer OCR | PDFium-Kern, BSD/Apache, `py3-none-manylinux_2_17_aarch64` [VERIFIED: PyPI] |
-| `pypdf` | 6.16.1 (14.08.2026) | Verschluesselungs- und Metadatenerkennung VOR pypdfium2 | Pur Python, erkennt passwortgeschuetzte Dateien, bevor der C-Kern stolpert [VERIFIED: PyPI] |
-| `python-docx` | 1.2.0 | DOCX-Text | MIT, stabil; Kopf-/Fusszeilen fehlen bekanntermassen [VERIFIED: PyPI] |
-| `python-pptx` | 1.0.2 | PPTX-Text | MIT; OOXML ist eingefroren, das alte Release ist kein Risiko [VERIFIED: PyPI] |
-| `openpyxl` | 3.1.5 | XLSX-Text, zwingend `read_only=True, data_only=True` | MIT; ohne read_only baut es die Mappe komplett im RAM auf [VERIFIED: PyPI] |
-| `lxml` | 6.1.1 | ODF (`content.xml`) und HTML | aarch64-Wheels fuer cp313 vorhanden; ersetzt odfpy vollstaendig [VERIFIED: PyPI] |
-| `striprtf` | 0.0.32 | RTF-Text | BSD, ein Zweck, `py3-none-any` [VERIFIED: PyPI] |
-| `charset-normalizer` | 3.5.0 empfohlen (3.5.1 seit 15.08.2026) | Encoding-Erkennung fuer Alttexte (cp1252, latin-1) | MIT; 3.5.1 ist am Recherchetag erschienen, deshalb erst nach gruener CI hochziehen [VERIFIED: PyPI] |
+| Library | Version | Purpose | Why Standard |
+|---------|---------|---------|--------------|
+| `tantivy` | 0.26.0 (PyPI, 29.04.2026), meldet sich als `tantivy v0.26.0, index_format v7` | Volltextindex, Analysekette, Query-Parser, Snippets | Einzige eingebettete Engine mit deutschem Snowball-Stemmer, deutschen Stopwoertern und Komposita-Filter; Wheels fuer cp313 und `manylinux_2_17_aarch64` [VERIFIED: PyPI-JSON-API, Wheelliste 15.08.2026; Verhalten im Container gemessen] |
+| `wngerman` (Debian) | 20161207-15 in trixie, `Architecture: all` | Wortliste `/usr/share/dict/ngerman` fuer `split_compound` | 356.010 Woerter, 4.725.887 Byte, GPL-2+, per `apt-get` im Basisimage, kein Download zur Laufzeit, identisch auf amd64 und arm64 [VERIFIED: in `debian:trixie-slim` installiert und ausgezaehlt; Lizenz aus `debian/copyright` von `igerman98`] |
+| `pypdfium2` | 5.13.0 (13.08.2026), pdfium 153.0.7999.0 | PDF-Textextraktion | Gegen den Referenzkorpus gemessen, klare Fehlerklassen [VERIFIED] |
+| `pypdf` | 6.16.1 (14.08.2026) | Verschluesselungserkennung und Metadaten **vor** pypdfium2 | `is_encrypted` erlaubt ein sauberes `skipped`, bevor pdfium anfaengt [VERIFIED] |
+| `python-docx` | 1.2.0 | DOCX | Bekannte Luecke Kopf- und Fusszeilen, siehe Frage 5 |
+| `python-pptx` | 1.0.2 | PPTX | OOXML ist eingefroren, Releasealter unkritisch |
+| `openpyxl` | 3.1.5 | XLSX, zwingend `read_only=True, data_only=True` | Ohne read_only baut openpyxl die Mappe im RAM auf |
+| `striprtf` | 0.0.32 (27.04.2026) | RTF | Ein Zweck, BSD, pur Python |
+| `charset-normalizer` | 3.5.1 (15.08.2026) | Encoding-Erkennung fuer TXT/MD/CSV | Deutsche Altbestaende sind cp1252 und latin-1 |
+| `lxml` | 6.1.1 | HTML und ODF (`zipfile` plus XPath) | Kein odfpy (Release von 2020, faellt durch pyright) |
 
 ### Supporting
 
-| Library / Artefakt | Version | Zweck | Wann |
-|---------|---------|-------|------|
-| Debian-Paket `wngerman` | igerman98 20161207-15 (trixie), `Architecture: all`, 4,6 MB installiert | Quelle der Kompositawortliste, Datei `/usr/share/dict/ngerman` | Nur im Image-Build-Stage: installieren, Liste destillieren, Paket wieder entfernen [VERIFIED: sources.debian.org, packages.debian.org Dateiliste] |
-| `python-magic` oder Nextcloud-Mimetype | - | Typerkennung nach Inhalt statt Endung | Der Queue-Eintrag traegt bereits den Nextcloud-Mimetype; ein zweiter Erkenner ist erst noetig, wenn der erste luegt |
-| stdlib `sqlite3` | Python 3.13 | Zustand, ACL, Fortschritt | Keine externe Abhaengigkeit, WAL und `busy_timeout` sind Pragmas |
-| stdlib `zipfile` | Python 3.13 | ODF-Container | Zusammen mit lxml die vollstaendige ODF-Loesung |
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| `sqlite3` (stdlib) | SQLite 3.46.1 im Image | ACL-Vorfilter, Dokumentzustand, Metatabelle | Immer; kein ORM, handgeschriebene Statements in genau einem Modul [VERIFIED: im Image ausgelesen] |
+| `multiprocessing` + `resource` (stdlib) | - | Extraktion mit RAM-Deckel und hartem Timeout | Nur `Process.kill()` beendet eine haengende C-Extension zuverlaessig; `ProcessPoolExecutor` kann eine laufende Aufgabe nicht abbrechen [VERIFIED: gemessen] |
+| `python-magic` | optional | Typerkennung, falls der Nextcloud-Mimetype nicht reicht | Erst wenn die Allowlist ueber den Filecache-Mimetype nachweislich danebengreift |
 
 ### Alternatives Considered
 
-| Statt | Moeglich waere | Abwaegung |
-|-------|----------------|-----------|
-| Zwei Felder `body_de` und `body_en` | Ein Feld plus Spracherkennung pro Dokument | Spracherkennung kostet eine weitere Abhaengigkeit und ist bei gemischten Dokumenten (deutsches Anschreiben, englisches Anhangzitat) systematisch falsch. Zwei Felder kosten Indexgroesse, aber die ist per Umgebungsvariable abschaltbar. Empfehlung: zwei Felder, `FINDLING_LANGS=de,en` als Schalter |
-| Gespeichertes Tantivy-Feld als Textquelle fuer Snippets | Textkopie in SQLite | Tantivy speichert Dokumentfelder komprimiert im Doc-Store; eine zweite Kopie in SQLite verdoppelt den Platzbedarf ohne Gegenwert. `SnippetGenerator.snippet_from_doc()` nimmt jedes `Document`, die Quelle ist also frei waehlbar. Empfehlung: eine Kopie, im Index |
-| Kompositasplitter mit Wortliste | Kein Splitten, dafuer `Query.regex_query` oder ngram-Feld | Regex-Queries scannen das Term-Dictionary linear, ngram-Felder vervielfachen die Indexgroesse. Beides ist auf der Zielhardware falsch. Empfehlung: Splitter mit abschaltbarem Feature-Flag, sonst dokumentierte Grenze |
-| ACL-Vorfilter in SQLite | `acl_uid` als Mehrfachfeld im Tantivy-Dokument | Im Tantivy-Dokument waere jede Freigabeaenderung ein vollstaendiges Neuschreiben des Dokuments. In CONTEXT.md ist SQLite gesetzt, und die Begruendung traegt |
-| Zwei Aufrufe fuer Suche und Snippets | Ein Aufruf mit Snippets im Ergebnis | Ein Aufruf verletzt SRCH-02 im Wortsinn (Snippets entstehen vor dem Recheck). Zwei Aufrufe kosten eine zweite Proxy-Runde, sind aber zustandslos und billig, weil der zweite Aufruf nur `parse_query` plus Doc-Store-Lesen ist |
+| Instead of | Could Use | Tradeoff |
+|------------|-----------|----------|
+| Wortliste "alle Woerter, Laenge 4 bis 14" (276.496 Eintraege, 14/16 Treffer, ~23 MB RSS) | "nur Substantive, Laenge 4 bis 14" (86.345 Eintraege, 12/16, Bauzeit 0,18 s statt 0,44 s) | Die Sparvariante kostet zwei von sechzehn Komposita und spart geschaetzt zwei Drittel des Automaten-RAM. Als `FINDLING_COMPOUND_DICT=full|nouns` anbieten, Vorgabe `full` |
+| dieselbe | "nur Substantive, Fugenformen angehaengt, ASCII gefaltet" (222.708 Eintraege) | Gemessen nur 7/16 und erzeugt echte Fehlzerlegungen (`haushaltss | atzung`). **Verworfen** |
+| `wngerman` (GPL-2+) | `hunspell-de-de` mit Affix-Expansion | Braucht `unmunch` im Build und liefert denselben Korpus. Nur, wenn Flexionsformen fehlen |
+| `wngerman` | Wiktionary- oder DWDS-Ableitungen (CC BY-SA 4.0) | Share-alike auf Datenebene, keine Distributionspaketierung, kein Vorteil |
+| `split_compound` | `CharSplit` / `compound-split` (statistisch, Python) | Wuerde nur die Indexseite zerlegen, nicht die Anfrage. Der eingebaute Filter zerlegt beide Seiten mit derselben Regel |
+| Zwei Sprachfelder `body_de` und `body_en` | Spracherkennung je Dokument | Erkennung ist eine Abhaengigkeit und eine Fehlerquelle mehr und liegt bei gemischten Dokumenten strukturell falsch. Der nicht gespeicherte Indexanteil kostet gemessen nur 0,076 x des Textes |
+| `body_de` mit `stored=True` | Extrahierten Text in SQLite legen | Gemessen: mit Store 0,374 x des Textes, ohne 0,076 x. Der Unterschied ist der Textspeicher, den man in SQLite genauso bezahlt, dort aber mit einer zweiten Konsistenzgrenze |
+| Ein Suchaufruf mit Snippets | Zwei Aufrufe | Ein Aufruf ist schneller, verletzt aber SRCH-02 woertlich |
+| ACL per `getMountsForFileId()` je Datei | Einmal je Mount holen und per Pfadpraefix zuordnen | Die Optimierung spart bei 100k Dateien rund 200.000 Abfragen, baut aber die Praefixlogik von `UserMountCache` nach, und ein Fehler darin macht den Vorfilter systematisch zu weit. Im Erstindex dominiert ohnehin der Byteabruf. **Empfehlung: erst die einfache, korrekte Variante, Optimierung nur nach Messung in Phase 5** |
+| SQLite-ACL mit `uid TEXT` | Integer-Nutzer-Mapping | Gemessen 12,0 MB gegen 7,4 MB bei 335k Zeilen. Der Join kostet mehr Code als die 4,6 MB wert sind |
 
 **Installation:**
 
 ```bash
 cd backend
-uv add "tantivy==0.26.0" "pypdfium2==5.13.0" "pypdf==6.16.1" "python-docx==1.2.0" \
-       "python-pptx==1.0.2" "openpyxl==3.1.5" "lxml==6.1.1" "striprtf==0.0.32" \
-       "charset-normalizer==3.5.0"
+uv add "tantivy==0.26.0" "pypdfium2==5.13.0" "pypdf==6.16.1" \
+       "python-docx==1.2.0" "python-pptx==1.0.2" "openpyxl==3.1.5" \
+       "striprtf==0.0.32" "charset-normalizer==3.5.1" "lxml==6.1.1"
 ```
 
-**Version verification:** Alle Versionen am 15.08.2026 gegen die PyPI-JSON-API geprueft (`info.version`, `urls[].filename` auf `aarch64` und `cp313`). `tantivy` 0.26.0 liefert `cp313` und `cp313t` fuer `manylinux_2_17_aarch64` und zusaetzlich `win_amd64`, weshalb lokale Proben auf dieser Maschine ueberhaupt moeglich waren.
+```dockerfile
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends wngerman \
+ && rm -rf /var/lib/apt/lists/*
+# /usr/share/dict/ngerman, 356010 Zeilen, 4725887 Byte, GPL-2+
+```
+
+**Version verification:** Alle Versionen am 15.08.2026 gegen die PyPI-JSON-API geprueft (`info.version` plus `upload_time`). `wngerman` in `debian:trixie-slim` installiert und ausgezaehlt.
 
 ---
 
 ## Package Legitimacy Audit
 
-Ausgefuehrt am 15.08.2026 mit `slopcheck install tantivy pypdfium2 pypdf python-docx python-pptx openpyxl lxml striprtf charset-normalizer`. Ergebnis: `scanned 9 packages, 9 OK`. (Der anschliessende Abbruch von slopcheck ist ein Windows-Artefakt beim Nachstarten von `pip` und betrifft die Bewertung nicht.)
+`slopcheck install tantivy pypdfium2 pypdf python-docx python-pptx openpyxl striprtf charset-normalizer lxml` am 15.08.2026: **scanned 9 packages, 9 OK**.
 
-| Package | Registry | Alter | Source Repo | slopcheck | Disposition |
-|---------|----------|-------|-------------|-----------|-------------|
-| `tantivy` | PyPI | seit 2021 | github.com/quickwit-oss/tantivy-py | [OK] | Approved |
-| `pypdfium2` | PyPI | seit 2022 | github.com/pypdfium2-team/pypdfium2 | [OK] | Approved |
-| `pypdf` | PyPI | seit 2022 (PyPDF2 seit 2012) | github.com/py-pdf/pypdf | [OK] | Approved |
-| `python-docx` | PyPI | seit 2013 | github.com/python-openxml/python-docx | [OK] | Approved |
-| `python-pptx` | PyPI | seit 2013 | github.com/scanny/python-pptx | [OK] | Approved |
-| `openpyxl` | PyPI | seit 2010 | foss.heptapod.net/openpyxl | [OK] | Approved |
-| `lxml` | PyPI | seit 2005 | github.com/lxml/lxml | [OK] | Approved |
-| `striprtf` | PyPI | seit 2019 | github.com/joshy/striprtf | [OK] | Approved |
-| `charset-normalizer` | PyPI | seit 2019 | github.com/jawah/charset_normalizer | [OK] | Approved |
+| Package | Registry | Age | Downloads | Source Repo | slopcheck | Disposition |
+|---------|----------|-----|-----------|-------------|-----------|-------------|
+| `tantivy` | PyPI | seit 2021 | hoch | github.com/quickwit-oss/tantivy-py | [OK] | Approved |
+| `pypdfium2` | PyPI | seit 2022 | sehr hoch | github.com/pypdfium2-team/pypdfium2 | [OK] | Approved |
+| `pypdf` | PyPI | seit 2022 (PyPDF2 seit 2012) | sehr hoch | github.com/py-pdf/pypdf | [OK] | Approved |
+| `python-docx` | PyPI | seit 2013 | sehr hoch | github.com/python-openxml/python-docx | [OK] | Approved |
+| `python-pptx` | PyPI | seit 2013 | hoch | github.com/scanny/python-pptx | [OK] | Approved |
+| `openpyxl` | PyPI | seit 2010 | sehr hoch | foss.heptapod.net/openpyxl/openpyxl | [OK] | Approved |
+| `striprtf` | PyPI | seit 2019 | mittel | github.com/joshy/striprtf | [OK] | Approved |
+| `charset-normalizer` | PyPI | seit 2019 | sehr hoch | github.com/jawah/charset_normalizer | [OK] | Approved |
+| `lxml` | PyPI | seit 2005 | sehr hoch | github.com/lxml/lxml | [OK] | Approved |
 
-**Packages removed due to slopcheck [SLOP] verdict:** keine
-**Packages flagged as suspicious [SUS]:** keine
+**Packages removed due to slopcheck [SLOP] verdict:** none
+**Packages flagged as suspicious [SUS]:** none
 
-Nicht-PyPI-Artefakt: das Debian-Paket `wngerman` (Quellpaket `igerman98`, Version 20161207-15 in trixie). Kein Registry-Slopcheck moeglich, dafuer im Debian-Quellbaum verifiziert: Upstream `https://www.j3e.de/ispell/igerman98/dict/`, Copyright Bjoern Jacke, Lizenz GPL-2+, Binaerpaket liefert `/usr/share/dict/ngerman`. Version und Pfad im Dockerfile pinnen, nicht `latest` ziehen.
+Ausserhalb von PyPI: `wngerman` kommt aus dem Debian-Archiv der Basisdistribution, Quellpaket `igerman98`, in Debian seit ueber zwanzig Jahren, Maintainer Roland Rosenfeld [VERIFIED: sources.debian.org, `debian/control` und `debian/copyright`]. Kein Postinstall-Risiko: alle neun Python-Pakete liefern Wheels, es laeuft kein `setup.py` zur Installationszeit.
 
 ---
 
@@ -196,409 +225,559 @@ Nicht-PyPI-Artefakt: das Debian-Paket `wngerman` (Quellpaket `igerman98`, Versio
 ### System Architecture Diagram
 
 ```
-                       PHP-SEITE (Nextcloud-Prozess)
-  Install-RepairStep --> SchedulerJob --> pro Mount ein StorageCrawlJob
-                                              |  IFileAccess::getByAncestorInStorage
-                                              |  (storage, root, cursor fileid, mime-Filter)
-                                              v
-                                     oc_findling_queue
-                                     (file_id, storage_id, root_id,
-                                      update, locked_at)
-                                              |
-   Nutzer tippt                               |
-        |                                     |
-        v                                     |
-   IProvider::search                          |
-        |                                     |
-        v                                     |
-   ExAppService (einzige exAppRequest-Stelle) |
-        |  1) POST /search   -> Kandidaten    |
-        |  2) Recheck je Treffer:             |
-        |     getUserFolder(uid)              |
-        |       ->getFirstNodeById(fileId)    |
-        |  3) POST /snippets -> Textstellen   |
-        v                                     v
-  ============ AppAPI-Proxy / HaRP ==========================
-        |                                     ^
-        v                                     |   GET  /queues/documents  (holen, sperrt)
-   ExApp-CONTAINER                            |   DELETE /queues/documents (quittieren)
-   +-------------------------------------+    |   POST /queues/documents/unlock (nack)
-   | HTTP: /search  /snippets  /status   |    |   GET  /files/{fileId}?userId= (Bytes)
-   +-------------------------------------+    |
-   | genau EIN Indexer-Thread            |----+
-   |   poll -> fetch -> extract ->       |
-   |   add_document -> commit -> mark    |
-   +-------------------------------------+
-   | Tantivy Index (mmap, ein Writer)    |
-   |   file_id, storage_id, name_de/en,  |
-   |   body_de(stored)/body_en, ext,mtime|
-   +-------------------------------------+
-   | SQLite state.db (WAL)               |
-   |   files(state, reason, attempts)    |
-   |   acl(uid, file_id)                 |
-   |   mounts(cursor), meta(versions)    |
-   +-------------------------------------+
-     alles unter $APP_PERSISTENT_STORAGE
-```
+                    INDEXWEG (Pull, langsam, ohne HTTP-Zeitdruck)
++---------------------------------------------------------------------------+
+| NEXTCLOUD (PHP)                                                           |
+|                                                                           |
+|  IRepairStep (install)  ->  SchedulerJob (einmalig)                       |
+|     | fuer jeden Mount aus IFileAccess::getDistinctMounts(PROVIDERS,true) |
+|     v                                                                     |
+|  StorageCrawlJob (QueuedJob, ein Job je Mount)                            |
+|     | IFileAccess::getByAncestorInStorage(storage, root, cursor, 2000,    |
+|     |     mimeTypeIds, e2e=false, sse=true)                               |
+|     | Groessendeckel pruefen, sonst direkt skipped(too_large)             |
+|     | INSERT INTO oc_findling_queue ... ON CONFLICT (file_id) DO UPDATE   |
+|     | scheduleAfter(self, now+interval, ['last_file_id' => n])            |
+|     v                                                                     |
+|  oc_findling_queue  (id, file_id, storage_id, root_id, is_update,         |
+|                      size, locked_at, retries)                            |
+|     ^                                                                     |
+|     | GET  /queues/documents?n=32&max_bytes=64000000    [ExAppRequired]   |
+|     |      -> sperrt Zeilen, liefert je Zeile Metadaten + userIds         |
+|     | GET  /files/{fileId}?userId=...                   [ExAppRequired]   |
+|     |      -> StreamResponse mit den Bytes  (Gateway aus Phase 1)         |
+|     | DELETE /queues/documents  {files:[...], failed:[{id,reason}]}       |
+|     | POST /queues/documents/unlock  {ids:[...]}   (SIGTERM-Pfad)         |
++-----|---------------------------------------------------------------------+
+      |
+      v
++---------------------------------------------------------------------------+
+| ExApp-CONTAINER (ein Prozess, INDEX_WORKERS=1)                            |
+|                                                                           |
+|  asyncio-Task "poller"  (im lifespan gestartet, von /enabled gesteuert)   |
+|     |  1. Batch holen         5. writer.commit()   <-- Absturzgrenze      |
+|     |  2. Bytes streamen      6. SQLite: files + acl COMMIT               |
+|     |  3. Extraktion im       7. DELETE-Quittung an PHP                   |
+|     |     Kindprozess                                                     |
+|     |     (RLIMIT_AS, kill-Timeout)                                       |
+|     |  4. delete_documents_by_term(file_id) + add_document                |
+|     v                                                                     |
+|  $APP_PERSISTENT_STORAGE/                                                 |
+|     index/            Tantivy, mmap, atomare Commits                      |
+|     state.db          SQLite: files, acl, mounts, meta                    |
+|     dict/de.txt       aufbereitete Wortliste (Artefakt, gehasht)          |
+|     tmp/              Scratch der Extraktion, beim Start geleert          |
++---------------------------------------------------------------------------+
 
-Der einzige Pfad, auf dem Dateibytes fliessen, bleibt das Content-Gateway aus Phase 1. Der einzige Pfad, auf dem die ExApp in Nextcloud schreibt, ist das Quittieren von Queue-Zeilen, und genau dafuer muss Gate A eine Ausnahme bekommen (siehe Pitfall 7).
+                    SUCHWEG (Push, schnell, zwei Roundtrips)
+Nutzer -> Unified Search -> OCA\Findling\Search\Provider
+   |
+   | 1. exAppRequest('/search', uid, {query, limit, offset, filters}, timeout 1.5s)
+   v
+ExApp: Query umschreiben (Umlautvarianten, ext-Filter) -> parse_query_lenient
+       -> Tantivy Top-K (Ueberfetch)
+       -> SQLite-ACL-Vorfilter fuer uid  (Beschleuniger, KEINE Grenze)
+       -> {candidates:[{fileId,score,mtime,ext}], hasMore, nextOffset}
+   |
+   | 2. PHP: je fileId getUserFolder(uid)->getFirstNodeById(fileId)
+   |    -> EINZIGE Sicherheitsgrenze; zu wenige Treffer -> Schritt 1 erneut,
+   |       hoechstens zweimal, und nur solange das Zeitbudget reicht
+   v
+   | 3. exAppRequest('/snippets', uid, {query, fileIds}, timeout 1.5s)
+   v
+ExApp: erneut ACL-Vorfilter auf fileIds (Confused-Deputy-Schutz)
+       -> SnippetGenerator -> fragment() + verschmolzene Zeichenoffsets
+   |
+   v
+PHP: SearchResultEntry, subline = snippet (Klartext), Offsets als JSON in
+     attributes; SearchResult::paginated(..., nextCursor)
+```
 
 ### Recommended Project Structure
 
+Erweiterung des bestehenden Baums, keine Umbenennung von Phase-1-Dateien:
+
 ```
+php/
+├── lib/
+│   ├── AppInfo/Application.php          # + AddMissingIndicesEvent-Listener
+│   ├── Search/Provider.php              # + zweistufiger Suchpfad, paginated()
+│   ├── Service/
+│   │   ├── ExAppService.php             # + searchCandidates() und snippets();
+│   │   │                                #   weiterhin die EINZIGE exAppRequest-Stelle
+│   │   ├── StorageService.php           # NEU: Mounts, Dateien je Mount, userIds
+│   │   └── QueueService.php             # NEU: einreihen, deduplizieren, zaehlen
+│   ├── Db/QueueFile.php  QueueMapper.php            # NEU
+│   ├── BackgroundJobs/SchedulerJob.php  StorageCrawlJob.php   # NEU
+│   ├── Controller/
+│   │   ├── GatewayController.php        # unveraendert aus Phase 1
+│   │   └── QueueController.php          # NEU
+│   ├── Command/IndexCommand.php         # NEU: occ findling:index [--restart|--status]
+│   ├── Repair/AppInstallStep.php        # NEU: plant den SchedulerJob beim Install
+│   ├── Listener/AddMissingIndicesListener.php       # NEU
+│   └── Migration/Version001000Date2026....php       # NEU
+│
 backend/src/findling/
-  api/
-    search.py        # POST /search (nur Kandidaten) und POST /snippets
-    status.py        # GET /status: Zaehler fuer Phase 4, schon jetzt befuellt
-  nc/
-    client.py        # UNVERAENDERTE Grenze: einziges Modul mit nc_py_api
-    queue.py         # OCS-Aufrufe der Queue, ruft ausschliesslich client.py
-  workers/
-    indexer.py       # der eine Worker-Thread: poll, fetch, extract, index, ack
-  pipeline/
-    detect.py        # Allowlist, Groessen-Cap, Typentscheidung
-    extract.py       # Dispatcher auf die Formatmodule
-    formats/         # pdf.py, ooxml.py, odf.py, html.py, rtf.py, plain.py
-  index/
-    analyzer.py      # die eine Analyzer-Factory (DE und EN)
-    schema.py        # Schemadefinition plus Indexversion
-    writer.py        # einziger Tantivy-Writer, Sammel-Commit
-    search.py        # Query-Bau, Ueberfetch, Snippet-Erzeugung
-  storage/
-    schema.sql       # SQLite-Schema als Datei, nicht im Code
-    state_repo.py    # files, mounts, meta
-    acl_repo.py      # acl
-  wordlist/
-    build_wordlist.py  # Build-Stage-Werkzeug, nicht Laufzeitcode
-
-php/lib/
-  BackgroundJobs/SchedulerJob.php
-  BackgroundJobs/StorageCrawlJob.php
-  Controller/QueueController.php     # #[ExAppRequired] Queue-Endpunkte
-  Db/QueueFile.php, QueueFileMapper.php
-  Migration/Version000200Date20260815xxxxxx.php
-  Repair/AppInstallStep.php
-  Service/StorageService.php         # Mounts, Dateien, Nutzer je Mount
-  Service/QueueService.php
+├── main.py                              # + Poller-Lebenszyklus, SIGTERM-Unlock
+├── nc/client.py                         # + fetch_queue_batch, ack_batch, unlock_batch
+├── api/
+│   ├── search.py                        # POST /search: Kandidaten, KEIN Textfeld
+│   ├── snippets.py                      # NEU: POST /snippets
+│   └── status.py                        # NEU: GET /status (Zaehler, Phase 4 nutzt sie)
+├── index/
+│   ├── wordlist.py                      # NEU: Aufbereitung + Hash
+│   ├── analyzer.py                      # NEU: die Filterkette, ANALYZER_VERSION
+│   ├── schema.py                        # NEU: Felder
+│   ├── open.py                          # NEU: die EINZIGE Stelle mit Index(...)/open()
+│   └── writer.py                        # NEU: die EINZIGE Stelle mit IndexWriter
+├── query/rewrite.py                     # NEU: Umlautvarianten, Filteruebersetzung
+├── store/
+│   ├── schema.sql                       # NEU: als Datei, nicht im Code
+│   └── repo.py                          # NEU: die EINZIGE Stelle mit SQL
+├── extract/
+│   ├── dispatch.py  pdf.py  office.py  odf.py  text.py       # NEU
+│   ├── errors.py                        # NEU: Zustaende und Gruende
+│   └── sandbox.py                       # NEU: Kindprozess, RLIMIT_AS, Timeout
+└── worker/poller.py                     # NEU: die asyncio-Task
 ```
 
-Zwei Kapselungen sind nicht verhandelbar. `nc/client.py` bleibt das einzige Modul mit `nc_py_api`, sonst faellt Gate A. Und `index/writer.py` ist die einzige Stelle, die einen `IndexWriter` erzeugt, weil Tantivy pro Verzeichnis genau einen zulaesst.
+Zwei Kapselungen aus Phase 1 bleiben unangetastet und bekommen je eine Erweiterung (`ExAppService.php`, `nc/client.py`). Drei neue kommen dazu: `index/open.py` (jedes Oeffnen registriert den Tokenizer, sonst wirft schon das Parsen einer Query), `index/writer.py` (Tantivy laesst pro Verzeichnis genau einen Writer zu) und `store/repo.py` (SQL an einer Stelle).
 
-### Pattern 1: Pull-Queue in der PHP-App
+### Pattern 1: Der zweistufige Suchpfad
 
-**Was:** Eine eigene `oc_`-Tabelle mit den Spalten `id, file_id, storage_id, root_id, update, locked_at`. `GET /queues/documents?n=64` holt ungesperrte Zeilen, sperrt sie per `UPDATE ... SET locked_at=now WHERE id=? AND (locked_at IS NULL OR locked_at <= now-timeout)` und liefert je Zeile ein Quellobjekt mit Metadaten, aber **ohne** Inhalt. `DELETE /queues/documents` quittiert. Beide Endpunkte tragen `#[ExAppRequired]`.
+**Was:** Zwei Proxy-Aufrufe. Der erste liefert `fileId` und `score`, kein Byte Dateiinhalt. Dazwischen macht PHP den `getFirstNodeById`-Recheck. Der zweite liefert Snippets fuer die ueberlebenden Treffer.
 
-**Wann:** Fuer jeden Arbeitsvorrat, den die ExApp abarbeitet, jetzt und in Phase 3.
+**Warum so:** SRCH-02 verlangt woertlich, dass Snippets erst nach bestandener Rechtepruefung entstehen, und ein Snippet ist Dateiinhalt. Bei einem einzigen Aufruf laege der Inhalt aller Kandidaten schon im PHP-Prozess, bevor die Sicherheitsgrenze gelaufen ist; ein Fehler in der Filterschleife waere dann ein Inhaltsleck statt eines Treffers zu viel. Das Antwortmodell von `/search` hat deshalb **kein** Textfeld, damit kein Refactoring versehentlich eines einfuegt.
 
-**Quellcode-Vorbild, woertlich gelesen** (`context_chat/lib/Db/QueueMapper.php`): das Sperren ist ein bedingtes `UPDATE`, dessen Rueckgabewert (`executeStatement() >= 1`) entscheidet, ob die Zeile ausgeliefert wird. Damit ist die Sperre auch bei zwei gleichzeitigen Pollern eindeutig, ohne `SELECT ... FOR UPDATE` und ohne dialektspezifische Klauseln.
+**Der zweite Aufruf ist zustandslos.** `SnippetGenerator.create(searcher, query, schema, "body_de")` braucht nur die erneut geparste Query und das Dokument aus dem Doc-Store. Kein Query-Cache zwischen den Aufrufen, also keine Cache-Invalidierung und kein Speicherleck.
 
-**Zwei bewusste Abweichungen von context_chat:**
+**Kosten, gemessen:** Tantivy-Suche 0,1 ms, ACL-Vorfilter fuer 400 Kandidaten 0,18 ms, 20 Snippets 4,2 ms, Ueberfetch von 400 Kandidaten 4,2 ms. Der Aufwand liegt vollstaendig im Proxy-Roundtrip und im PHP-Recheck.
 
-1. `LOCK_TIMEOUT` steht dort auf `60*60*24`, also 24 Stunden. Fuer IDX-02 waere das toedlich: nach einem `docker kill` blieben die gerade bearbeiteten Zeilen einen Tag unsichtbar. Empfehlung 15 Minuten, als Konstante, plus
-2. ein zusaetzlicher Endpunkt `POST /queues/documents/unlock` mit einer ID-Liste, den der Worker im SIGTERM-Handler ruft. Damit ist ein geordneter Neustart sofort wieder produktiv und nur ein hartes Kill wartet den Timeout ab.
+**Drei Feinheiten, die in den Plan gehoeren:**
+1. `/snippets` bekommt fileIds von aussen und muss denselben ACL-Vorfilter anwenden wie `/search`, sonst ist er ein Confused Deputy: wer den Proxy erreicht, koennte Snippets beliebiger Dateien anfordern. Kostet 0,2 ms.
+2. Der Recheck kann so viele Kandidaten verwerfen, dass zu wenige bleiben. `/search` liefert `hasMore` und `nextOffset`, und PHP darf **hoechstens zweimal** nachfassen. Eine unbegrenzte Schleife ist genau der Fehler, der abfragezeitliche Rechtefilterung unbrauchbar macht.
+3. Zeitbudget als Wanduhr im Provider. Ist es nach dem Recheck aufgebraucht, wird `/snippets` gar nicht mehr gerufen: **ein Treffer ohne Snippet ist besser als kein Treffer.** Die Subline faellt dann auf den Pfad zurueck.
 
-**Kostenbasierte Batchgroesse:** zusaetzlich zu `n` ein Parameter `max_bytes`. context_chat hat das nicht und begrenzt nur die Einzeldateigroesse. Auf einer 4-GB-Box ist ein Batch aus 64 Dateien zu je 40 MB der Unterschied zwischen laufen und sterben.
+### Pattern 2: Die Fortschrittsmarke liegt in Nextcloud, nicht im Container
 
-### Pattern 2: Crawl pro Mount mit Integer-Cursor
+**Was:** Der Container speichert keinen Crawl-Zustand. Was noch zu tun ist, steht als Zeile in `oc_findling_queue`; wie weit der Crawl je Mount gekommen ist, steht als `last_file_id` im Argument des naechsten `StorageCrawlJob`. Die `mounts`-Tabelle in `state.db` ist nur ein Spiegel fuer die Anzeige.
 
-**Was:** `IRepairStep` beim Install legt einmalig `SchedulerJob` an. Dieser laeuft einmal, zaehlt die Mounts auf und legt je Mount einen `StorageCrawlJob` mit `{storage_id, root_id, overridden_root, last_file_id: 0}` an. Der Crawl-Job liest einen Batch (2000), reiht ein, entfernt sich selbst aus der Jobliste und plant sich per `scheduleAfter()` mit dem neuen `last_file_id` neu ein.
+**Warum so:** IDX-02 wird damit zur Konsequenz statt zum Mechanismus. Ein `docker kill` beendet den Container mitten in einem Batch, die betroffenen Zeilen bleiben gesperrt, laufen nach dem Lock-Timeout ab und werden erneut ausgeliefert. Alles, was der Container leisten muss, ist Idempotenz: `delete_documents_by_term("file_id", fileId)` vor `add_document`.
 
-**Der entscheidende neue Befund:** `OCP\Files\Cache\IFileAccess::getDistinctMounts(array $mountProviders, bool $onlyUserFilesMounts)` und `getByAncestorInStorage(int $storageId, int $folderId, int $fileIdCursor, int $maxResults, array $mimeTypeIds, bool $endToEndEncrypted, bool $serverSideEncrypted)` sind **@since 32.0.0** [VERIFIED: `nextcloud/server` stable34, `lib/public/Files/Cache/IFileAccess.php`]. Unser Mindestfenster ist NC 32. Der gesamte `getMountsOld`/`getFilesInMountOld`-Zweig von context_chat, inklusive der Reflection-Pruefung `isFileAccessAvailable()`, entfaellt fuer uns. Das spart etwa 120 Zeilen handgeschriebenes SQL gegen `oc_filecache` und die dazugehoerige Dialektpflege.
-
-**Mount-Typen (CONTEXT: Homes und Team Folders an, External Storage aus):**
-
-```php
-// Team Folders sind die umbenannten Group Folders; die Klasse heisst unveraendert so.
-private const MOUNT_PROVIDERS = [
-    'OC\Files\Mount\LocalHomeMountProvider',
-    'OC\Files\Mount\ObjectHomeMountProvider',
-    'OCA\GroupFolders\Mount\MountProvider',
-];
-// bewusst NICHT: 'OCA\Files_External\Config\ConfigAdapter'
-```
-
-`onlyUserFilesMounts: true` uebernimmt genau die Aufgabe, die context_chat sonst per Extraabfrage auf den `files`-Unterordner erledigt: der Home-Root wird auf den `files`-Ordner umgebogen, sodass `files_versions` und `files_trashbin` gar nicht erst im Crawl auftauchen.
-
-**Mimetype-Filter im SQL:** `getByAncestorInStorage` nimmt eine Liste numerischer Mimetype-IDs (`IMimeTypeLoader::getId()`). Die Allowlist gehoert damit in die Abfrage und nicht in einen Python-Filter nach dem Netzwerktransfer.
-
-### Pattern 3: ACL einmal pro Mount statt einmal pro Datei
-
-**Was:** Die Nutzerliste zu einer Datei wird nicht mit `getMountsForFileId()` je Datei geholt, sondern einmal je Crawl-Batch aus `IUserMountCache::getMountsForStorageId($storageId)`, und danach im Speicher per Pfadpraefix zugeordnet.
-
-**Warum:** `UserMountCache::getMountsForFileId()` macht laut Quellcode zuerst eine Abfrage fuer `(storage, internalPath)` der Datei, dann eine zweite mit Join auf `filecache` und einer `substring`-Bedingung, die prueft, ob der Mount-Root ein **Pfadpraefix** der Datei ist, und zusaetzlich pro Ergebniszeile ein `userExists()`. Bei 100.000 Dateien sind das mindestens 200.000 Abfragen fuer eine Information, die sich pro Mount genau einmal aendert. Die Praefixlogik ist trivial nachzubilden, weil der Crawl den Pfad ohnehin kennt.
-
-**Wichtig, damit es korrekt bleibt:** Die Praefixpruefung ist der Kern, nicht der Storage. Ein Nutzer mit einer Freigabe auf einen Unterordner hat einen Mount, dessen Root dieser Unterordner ist. Wer nur "alle Nutzer dieses Storage" nimmt, baut ein Rechteleck in den Vorfilter. Der Vorfilter ist zwar nicht die Sicherheitsgrenze, aber ein systematisch zu weiter Vorfilter macht die Ueberfetch-Strategie wirkungslos und laesst PHP jede Suche leerlaufen.
-
-**Uebertragungsweg:** Die Nutzerliste reist **mit dem Queue-Eintrag** (Feld `userIds`), nicht ueber einen eigenen Endpunkt. Begruendung: sie wird genau dann gebraucht, wenn das Dokument indexiert wird, sie ist klein (Handvoll UIDs), und ein zweiter Endpunkt waere ein zweiter Weg mit eigener Fehlerbehandlung fuer denselben Zweck. Der eigene Aktions-Endpunkt fuer reine Zugriffsaenderungen ohne Neuindexierung gehoert in Phase 3, wo Share-Events entstehen; das Schema (`acl(uid, file_id)`) traegt ihn ohne Aenderung.
-
-### Pattern 4: Suche in zwei Aufrufen, Snippets zuletzt
-
-**Was:**
+**Die Reihenfolge, die nicht verhandelbar ist:**
 
 ```
-1. POST /search    {query, limit, cursor, filters}
-   -> {candidates: [{fileId, score, storageId, mtime, ext}], cursor, degraded}
-2. PHP: pro fileId getUserFolder(uid)->getFirstNodeById(fileId), verwerfen was fehlt
-3. POST /snippets  {query, fileIds: [ueberlebende]}
-   -> {snippets: {fileId: {text, highlights: [[start,end], ...]}}}
+1. Bytes holen, extrahieren, delete_documents_by_term + add_document
+2. writer.commit()                    <- ab hier ist der Index dauerhaft
+3. SQLite: files.state, reason, indexed_at und acl (eine Transaktion)
+4. DELETE /queues/documents           <- Quittung an PHP
 ```
 
-**Warum zwei Aufrufe:** SRCH-02 sagt, Snippets entstehen erst nach bestandener Rechtepruefung. Mit einem Aufruf ist das unmoeglich, weil die Pruefung in PHP stattfindet. Der zweite Aufruf ist billig und **zustandslos**: `SnippetGenerator.create(searcher, query, schema, "body_de")` braucht nur die geparste Query und das Dokument aus dem Doc-Store. Es ist kein Query-Cache noetig, also auch keine Cache-Invalidierung und kein Speicherleck.
+Bricht es vor 2 ab, ist nichts passiert. Zwischen 2 und 3 ist das Dokument im Index und gilt in SQLite als offen: die Wiederholung ueberschreibt es idempotent. Zwischen 3 und 4 kommt die Queue-Zeile erneut, der Worker sieht `state='indexed'` bei gleichem `content_hash` und quittiert sofort ohne Arbeit. Die umgekehrte Reihenfolge verliert Dokumente stillschweigend und ist die Fehlerklasse aus PITFALLS Nr. 2.
 
-**Absicherung des zweiten Aufrufs:** `/snippets` wendet denselben SQLite-ACL-Vorfilter fuer die Header-Nutzer-ID an. Der Endpunkt ist damit auch dann nicht als Leseprimitiv missbrauchbar, wenn jemand ihn mit fremden fileIds ruft.
+**Nach einem harten Kill ist nichts aufzuraeumen.** Gemessen: `kill -9` waehrend des Schreibens, danach oeffnet `Index.open()` auf dem letzten Commit (56.000 Dokumente), die Datei `.tantivy-writer.lock` liegt noch da und ist bedeutungslos, ein neuer Writer wird sofort erteilt und das naechste Dokument geschrieben. Der Lock ist ein OS-Lock am Dateihandle, und ein getoeteter Prozess gibt seine Handles ab. Der Vorbehalt: auf NFS gilt das nicht.
 
-**Zeitbudget:** Der Proxy-Timeout aus Phase 1 steht auf 2 Sekunden pro Aufruf. Zwei Aufrufe koennen also im schlechtesten Fall 4 Sekunden kosten. Empfehlung: `/search` behaelt 2 Sekunden, `/snippets` bekommt 1 Sekunde und faellt bei Timeout auf leere Snippets zurueck. Ein Treffer ohne Textausschnitt ist ein brauchbares Ergebnis, ein haengender Provider nicht.
+### Pattern 3: Extraktion hinter einer Prozessgrenze
 
-**Kanarien-Treffer aus Phase 1 (Claude's Discretion):** Empfehlung, den Treffer nur noch bei dem exakten Suchbegriff `findling-canary` zu liefern und ihn aus jeder anderen Antwort zu entfernen. Damit bleibt der Integrationstest aus Phase 1 unveraendert gruen (er sucht genau diesen Begriff), und normale Suchen sind sauber. Der Kanarienvogel wird so zum Diagnosewerkzeug, wie es PITFALLS Nr. 2 verlangt.
+**Was:** Jede Extraktion laeuft in einem Kindprozess, der zu Beginn `resource.setrlimit(RLIMIT_AS, cap)` setzt. Der Elternprozess wartet mit `join(timeout)`; laeuft der Timeout ab, folgen `kill()` und `join()`.
 
-### Pattern 5: Reihenfolge von Commit, Zustand und Quittung
+**Warum so:** `pypdfium2` und `lxml` sind C-Erweiterungen. Ein Thread mit einem haengenden C-Aufruf laesst sich in Python nicht abbrechen, `signal.alarm` wirkt nur im Hauptthread, und `ProcessPoolExecutor` kann eine laufende Aufgabe nicht toeten (`future.result(timeout=...)` gibt nur dem Wartenden auf). Gemessen: `RLIMIT_AS` von 300 MB liefert im Kind einen sauberen `MemoryError`, `kill()` auf eine Endlosschleife liefert Exitcode -9. Damit sind Zeit- und RAM-Deckel aus IDX-06 und IDX-08 mit der Standardbibliothek erreichbar.
 
-**Was:** Fuer jeden Sammel-Commit gilt strikt diese Reihenfolge:
+**Ein Kindprozess, nicht ein Pool.** Das ist kein Widerspruch zu IDX-08: es laeuft weiterhin genau eine Extraktion zur Zeit, sie liegt nur in einem anderen Adressraum. Der Startkontext sollte explizit `spawn` sein statt des Linux-Standards `fork`, weil `fork` in einem Prozess mit laufendem Event-Loop und offenen Sockets eine bekannte Fehlerquelle ist und Python ohnehin dorthin wandert.
 
-```
-1. Bytes holen, extrahieren, add_document (Tantivy, noch nicht sichtbar)
-2. writer.commit()                      <- ab hier ist der Index dauerhaft
-3. SQLite: files.state = 'done' | 'failed' | 'skipped', reason, indexed_at (eine Transaktion)
-4. DELETE /queues/documents             <- Quittung an PHP
-```
+**Tantivy und der Event-Loop.** Tantivy gibt in `add_document`, `commit` und `search` die GIL frei. Der Indexer bremst die Suche also nicht spuerbar. Trotzdem gehoeren die Tantivy-Aufrufe der HTTP-Endpunkte in `asyncio.to_thread`, damit ein langer Commit den Event-Loop nicht stehen laesst und `/heartbeat` weiter antwortet.
 
-**Warum genau so:** Jeder Schritt ist der Punkt, an dem ein `docker kill` folgenlos bleiben muss. Bricht es vor 2 ab, ist nichts passiert, die Zeilen laufen nach dem Lock-Timeout erneut ein. Bricht es zwischen 2 und 3 ab, ist das Dokument im Index und gilt in SQLite noch als offen: die Wiederholung ueberschreibt es (`delete_documents` auf `file_id`, dann `add_document`), das ist idempotent. Bricht es zwischen 3 und 4 ab, kommt die Zeile aus der PHP-Queue erneut, und der Worker sieht in SQLite `done` mit gleichem `content_hash` und quittiert sofort ohne Arbeit. Die umgekehrte Reihenfolge, erst Zustand dann Commit, verliert Dokumente stillschweigend und ist genau die Fehlerklasse aus PITFALLS Nr. 2.
+### Pattern 4: Eine Wortliste ist ein Build-Artefakt, keine Laufzeitentscheidung
 
-**Tantivy-Writer-Lock nach hartem Kill:** kein Problem. `MmapDirectory::acquire_lock` oeffnet `.tantivy-writer.lock` und nimmt einen **OS-Lock** (`try_lock_exclusive`); der Kommentar im Quellcode sagt ausdruecklich, dass das Loslassen des Dateihandles die Sperre freigibt. Ein getoeteter Prozess gibt seine Handles ab, also ist der Index beim naechsten Start sofort beschreibbar. Die Datei bleibt liegen, sie ist bedeutungslos. Nicht darauf verlassen, wenn das Volume je auf NFS liegt.
+**Was:** Beim Start wird `/usr/share/dict/ngerman` einmal gelesen, auf das Laengenfenster reduziert, kleingeschrieben, um die Fugenelemente ergaenzt und als `dict/de.txt` im Volume abgelegt, zusammen mit einem SHA-256. Existiert die Datei mit passendem Hash, wird sie direkt geladen.
 
-**INDEX_WORKERS=1 (IDX-08):** ein Thread, der pollt und arbeitet. Tantivy gibt in `add_document`, `commit` und `search` die GIL frei (`py.detach`), deshalb blockiert der Indexer die Suche nicht spuerbar. Die Suchendpunkte sollen ihre Tantivy-Aufrufe trotzdem ueber `asyncio.to_thread` fahren, damit der Event-Loop bei einem langen Commit nicht steht.
-
-### Pattern 6: Die deutsche Analyzer-Kette
-
-**Was:** Genau eine Factory baut den Analyzer und wird bei **jedem** Oeffnen des Index aufgerufen.
-
-```python
-ANALYZER_VERSION = 1  # jede Aenderung hier erzwingt Reindex
-
-def german_analyzer(constituents: list[str]) -> TextAnalyzer:
-    builder = (
-        TextAnalyzerBuilder(Tokenizer.simple())
-        .filter(Filter.lowercase())
-        .filter(Filter.stopword("german"))   # MUSS vor ascii_fold stehen
-        .filter(Filter.ascii_fold())
-        .filter(Filter.split_compound(constituents))
-        .filter(Filter.remove_long(48))
-        .filter(Filter.stemmer("german"))
-    )
-    return builder.build()
-```
-
-**Die Reihenfolge ist begruendet, nicht Geschmack:**
-
-| Position | Filter | Warum genau hier |
-|---|---|---|
-| 2 | `lowercase` | Alles Weitere vergleicht Zeichenketten exakt |
-| 3 | `stopword("german")` | Die eingebaute Liste enthaelt Umlaute (`fuer`, `ueber`, `waehrend`, `koennte` mit echten Umlauten) und vergleicht exakt gegen `token.text`. Nach dem Falten wuerde sie nichts mehr treffen. Gemessen: "fuer ueber das" ergibt mit dieser Reihenfolge `[]` [VERIFIED: lokal ausgefuehrt] |
-| 4 | `ascii_fold` | Danach ist alles ASCII, die Wortliste kann ASCII sein, und Muellers Suche nach "Muller" trifft "Mueller mit Umlaut" |
-| 5 | `split_compound` | Braucht den normalisierten Token; die Wortliste muss in genau dieser Form vorliegen |
-| 6 | `remove_long(48)` | Erst nach dem Splitten, sonst faellt das Kompositum weg, bevor es zerlegt werden kann. Der eingebaute Analyzer `default` von Tantivy nutzt `RemoveLongFilter::limit(40)`, was viele deutsche Komposita stillschweigend verschluckt [VERIFIED: `tantivy/src/tokenizer/tokenizer_manager.rs`] |
-| 7 | `stemmer("german")` | Zuletzt; ein gestemmtes Kompositum findet keine Woerterbucheintraege mehr |
-
-**Gemessenes Verhalten** (lokal, `tantivy==0.26.0`, Wortliste mit Fugenformen):
-
-| Eingabe | Tokens | Bewertung |
-|---|---|---|
-| `Grundstuecksverkehrsgenehmigung` (mit Umlaut) | `['grundstuck', 'verkehr', 'genehm']` | CONTEXT-Testfall erfuellt: ueber "Genehmigung" auffindbar |
-| `Dampfschifffahrt` | `['dampf', 'schiff', 'fahrt']` | Splitter arbeitet, Original wird ersetzt |
-| `Haus` / `Haeuser` | `haus` / `haus` | Nominalflexion sauber |
-| `Vertrag` / `Vertraege` | `vertrag` / `vertrag` | dito |
-| `Strasse` / `Strasse mit Eszett` | `strass` / `strass` | Eszett normalisiert |
-| `Mueller mit Umlaut` / `Muller` / `Mueller ausgeschrieben` | `mull` / `mull` / `muell` | **Luecke:** die ausgeschriebene Form trifft nicht |
-| `suchen` / `Suche` / `suchte` / `gesucht` | `such` / `such` / `sucht` / `gesucht` | **Luecke:** Praeteritum und Partizip werden nicht vereinheitlicht |
-| `Information` | `information` | Kein Fehlsplit, solange die Wortliste keine zu kurzen Bausteine enthaelt |
-
-**Umgang mit den zwei Luecken:**
-
-- *ue/oe/ae gegen Umlaut:* nicht im Analyzer loesbar, weil `ascii_fold` Umlaute zu einem Buchstaben faltet und die ausgeschriebene Form zwei bleibt. Loesung auf der **Query**-Seite: aus einem Suchbegriff, der `ue`, `oe`, `ae` oder `ss` enthaelt, zusaetzlich die Umlautvariante erzeugen und beide Varianten mit `Occur.Should` verodern. Das ist ein Dutzend Zeilen, kostet keinen Indexplatz und ist auf Anfragen begrenzt, wo eine gelegentliche Falschvariante ("neue" wird zu "neu-mit-Umlaut") nur einen zusaetzlichen, meist leeren Zweig kostet.
-- *Verbformen:* nicht loesbar, ohne den Stemmer zu ersetzen. Der Testfall aus CONTEXT.md ist gegen "Suche/suchen" zu fuehren (funktioniert) und die Grenze bei Praeteritum und Partizip zu dokumentieren. Diese Entscheidung braucht eine kurze Bestaetigung beim Planen, weil sie ein woertlich formuliertes Abnahmekriterium beruehrt.
+**Warum so:** Der Aufbau kostet gemessen 0,44 s und rund 23 MB dauerhaftes RSS. Verkraftbar, aber nicht pro Anfrage, und die konkrete Liste bestimmt das Suchergebnis. `wordlist_hash` und `analyzer_version` gehoeren deshalb neben `schema_version` und `tantivy_version` in die Metatabelle: aendert sich eines davon, aendert sich die Tokenisierung, und der Index ist nicht mehr konsistent mit dem Query-Parser.
 
 ### Anti-Patterns to Avoid
 
-- **Tokenizer nach dem Oeffnen nicht registrieren.** Gemessen: `Index.open(path)` gefolgt von `parse_query` wirft `ValueError: The tokenizer '"de_findling"' for the field '"body"' is unknown`. Das Schema speichert nur den **Namen** des Analyzers, nie den Analyzer. Deshalb: eine Funktion `open_index()`, die oeffnet und registriert, und nirgendwo sonst ein `Index(...)` oder `Index.open(...)`.
-- **`Document(file_id=42, ...)` mit Schluesselwortargumenten fuer numerische Felder.** Gemessen: der Wert wird als I64 abgelegt, das Schemafeld ist U64, und beim `commit()` **panickt** ein Rust-Thread (`Input type forbidden. This column has been forced to type U64, received I64(42)`), was in Python als `ValueError: An error occurred in a thread` ankommt, also erst beim Commit und ohne Bezug zum verursachenden Dokument. Immer `doc.add_unsigned(...)` bzw. `Document.from_dict(payload, schema)` verwenden.
-- **`highlighted()`-Bereiche als Zeichenpositionen weitergeben.** Gemessen: `[(4, 20)]` in Bytes gegenueber `[(4, 19)]` in Zeichen, das naive Slicen liefert sichtbar falschen Text.
-- **Alle sichtbaren fileIds eines Nutzers materialisieren.** Der context-chat-Anti-Pattern aus ARCHITECTURE.md. Der Vorfilter fragt immer `WHERE uid = ? AND file_id IN (Kandidaten)`, nie umgekehrt.
-- **Ein Commit pro Dokument.** Jeder Commit erzeugt ein Segment und einen fsync. Sammel-Commits von 50 bis 200 Dokumenten oder alle 30 Sekunden, je nachdem, was zuerst eintritt.
-- **Reine Disjunktion bei mehreren Suchbegriffen.** Mit `conjunction_by_default=False` wird aus einem gesplitteten Kompositum eine Oder-Verknuepfung von drei Allerweltsteilen. Gemessen wurde das Gegenteil mit `conjunction_by_default=True`, dort trifft "Kuendigung" genau das Dokument mit "Kuendigungsfrist".
-- **`parse_query` auf rohe Nutzereingabe.** Ein einzelnes `:` oder eine offene Klammer wirft. `parse_query_lenient` liefert Query plus Fehlerliste und ist der richtige Einstieg fuer Text aus einer Suchleiste.
-- **Zweiter `IndexWriter`.** Tantivy laesst pro Verzeichnis genau einen zu, der zweite bekommt `LockBusy`.
+- **Die rohe Wortliste in `split_compound` kippen.** Gemessen: "Kündigungsfrist" wird dann nicht zerlegt, weil es selbst in der Liste steht, und "Frist" findet das Dokument nicht.
+- **`remove_long` vor `split_compound` setzen.** Gemessen: "Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz" ergibt mit `remove_long(40)` an Position zwei **`[]`**, das Wort verschwindet ersatzlos. Mit `remove_long(48)` nach dem Splitter ergibt es sechs saubere Teile. Tantivys eingebauter `default`-Analyzer nutzt `RemoveLongFilter::limit(40)` und verschluckt damit lange deutsche Komposita stillschweigend.
+- **`ascii_fold()` vor `split_compound` mit einer nicht gefalteten Wortliste.** Dann greift der Automat nie und die Zerlegung faellt still aus.
+- **Den Tokenizer nach `Index.open()` nicht registrieren.** Gemessen: `ValueError: The tokenizer '"de_findling"' for the field '"body_de"' is unknown`, und zwar schon beim Parsen der Query. Das Schema speichert nur den **Namen**. Deshalb genau eine Funktion `open_index()`, die oeffnet **und** registriert, und nirgends sonst ein `Index(...)`.
+- **Numerische Felder ueber Schluesselwortargumente fuellen.** Gemessen: `Document(file_id=42)` auf einem `unsigned`-Feld ergibt `ValueError: Schema error: 'Expected a U64 for field "file_id"'`. Immer `doc.add_unsigned(...)` bzw. `Document.from_dict(payload, schema)`.
+- **`highlighted()`-Bereiche als Zeichenpositionen weitergeben.** Gemessen `(35, 51)` in Bytes gegen `(35, 50)` in Zeichen.
+- **Ueberlappende Hervorhebungsbereiche ungeprueft versenden.** Die Teiltoken eines Kompositums erben die Offsets des Originals, also kommt derselbe Bereich mehrfach. Vor dem Versand sortieren und verschmelzen.
+- **`index.parse_query()` auf Nutzereingabe.** Ein unpaariges Anfuehrungszeichen wirft, und die Ergebnisgruppe verschwindet ohne Meldung. `parse_query_lenient()` liefert `(Query, errors)`.
+- **Die Standard-Disjunktion behalten.** `conjunction_by_default=False` macht aus einem zerlegten Kompositum ein Oder ueber drei Allerweltsteile. Nutzer erwarten UND.
+- **Einen zweiten `IndexWriter` erzeugen.** Gemessen: zwei `Index.open()` auf dasselbe Verzeichnis, der zweite Writer liefert `ValueError: Failed to acquire Lockfile: LockBusy`.
+- **Einen Commit je Dokument.** Jeder Commit erzeugt ein Segment und einen fsync. Sammel-Commits je Batch, und der Batch ist die Absturzgranularitaet.
+- **Den ACL-Vorfilter fuer die Sicherheitsgrenze halten.** Er ist eine Ueberapproximation, weil `IUserMountCache` die erweiterten Berechtigungen der Team Folders nicht aufloest.
+- **Snippets aus einem einzigen Suchaufruf mitliefern und in PHP wegfiltern.** Verletzt SRCH-02, und der Filterfehler ist ein Inhaltsleck.
+- **Alle sichtbaren fileIds eines Nutzers materialisieren.** Der context_chat-Anti-Pattern. Immer `WHERE uid = ? AND file_id IN (Kandidaten)`, nie umgekehrt.
+- **`update` als Spaltenname.** Reservierter Bezeichner in mehreren Dialekten; `is_update` kostet nichts.
+- **Die Legacy-Filecache-Abfragen aus context_chat kopieren.** `IFileAccess` ist ab NC 32 da, unser Fenster faengt bei 32 an.
 
 ---
 
-## Antworten auf die offenen Research-Fragen
+## Antworten auf die Research-Fragen
 
-### Frage 1: Tantivy 0.26 Python konkret
+### Frage 1: Tantivy-0.26-Schema fuer Deutsch
 
-**1a) Schema.** Empfehlung, mit Begruendung je Feld:
+#### Die Bausteine, verifiziert
 
-| Feld | Typ | Optionen | Zweck |
-|---|---|---|---|
-| `file_id` | unsigned | `stored=True, indexed=True, fast=True` | Primaerschluessel, Ziel von `delete_documents`, Rueckgabewert der Suche |
-| `storage_id` | unsigned | `stored=True, indexed=True, fast=True` | Optionaler Selektivitaetsfilter (Phase 5), Diagnose |
-| `name_de` / `name_en` | text | `stored=False, tokenizer_name=de/en` | Dateiname als eigenes Feld, damit `title-only` und Feldgewichte funktionieren |
-| `path` | text | `stored=True, tokenizer_name="raw"` | Anzeige und Diagnose, nicht durchsuchbar (Pfade sind keine Suchbegriffe) |
-| `body_de` | text | `stored=True, tokenizer_name="de_findling"` | Inhalt; die **einzige** gespeicherte Textkopie, Quelle fuer den SnippetGenerator |
-| `body_en` | text | `stored=False, tokenizer_name="en_findling"` | Derselbe Text, englische Pipeline; nicht gespeichert, weil `body_de` ihn schon haelt |
-| `ext` | text | `stored=True, tokenizer_name="raw"` | Dateityp-Filter, gemessen funktionierend als `ext:pdf` |
-| `mtime` | integer | `stored=True, indexed=True, fast=True` | Sortierung und die spaeteren Filter `since`/`until` |
+`tantivy.Filter` bietet `alphanum_only`, `ascii_fold`, `lowercase`, `remove_long(n)`, `stemmer(lang)`, `stopword(lang)`, `custom_stopword(list)` und `split_compound(list)`. `parse_language` akzeptiert unter anderem `"german"` und `"english"` [VERIFIED: `tantivy-py`, `tantivy/tantivy.pyi` und `src/tokenizer.rs`].
 
-Doppelfeld statt Spracherkennung, weil Spracherkennung eine Abhaengigkeit und eine Fehlerquelle mehr ist und bei gemischten Dokumenten strukturell falsch liegt. Der Preis ist Indexgroesse; `FINDLING_LANGS` schaltet `body_en` ab.
+`Filter.split_compound(constituent_words)` baut einen Aho-Corasick-Automaten mit `MatchKind::LeftmostLongest`. Ein Token wird **nur dann** zerlegt, wenn es sich **vollstaendig** in aufeinanderfolgende Treffer zerlegen laesst, die luekenlos bei Position 0 beginnen und exakt am Tokenende enden. Sonst bleibt das Originaltoken stehen. Die Teiltoken erben Offsets und Position des Originals (`Token { text: tail.to_owned(), ..*token }`) [VERIFIED: `tantivy/src/tokenizer/split_compound_words.rs`].
 
-**1b) Tokenizer-Registrierung.** `index.register_tokenizer(name, analyzer)` ist eine Laufzeiteigenschaft der Index-Instanz, nicht Teil der persistierten Metadaten. Sowohl nach `Index(schema, path=...)` als auch nach `Index.open(path)` muss registriert werden, sonst schlaegt bereits das Parsen einer Query fehl (gemessene Fehlermeldung siehe Anti-Patterns). Der Analyzer ist ueber einen `Arc<RwLock<HashMap>>` an den Index gebunden, das Registrieren nach dem Erzeugen des Readers ist also unproblematisch.
+Daraus folgen drei Eigenschaften, die den Entwurf bestimmen:
 
-**1c) SnippetGenerator.** `SnippetGenerator.create(searcher, query, schema, field_name)`, dann `set_max_num_chars(n)` (Vorschlag 200 statt der Vorgabe 100, damit ein deutscher Satz hineinpasst), dann `snippet_from_doc(doc)`. Der Generator liest den Feldwert **aus dem uebergebenen Dokument**, nicht aus dem Index; ein Dokument aus `searcher.doc(address)` ist der bequemste Weg, ein selbst gebautes `Document` mit dem Text waere ebenso moeglich. `Snippet.fragment()` liefert den Klartext, `Snippet.highlighted()` eine Liste von `Range` mit `start`/`end` als **Bytepositionen** in diesem Fragment [VERIFIED: `tantivy-py/src/snippet.rs`, Kommentar "the byte ranges within that fragment", plus lokale Messung]. `to_html()` existiert und ist fuer uns verboten, weil die Subline Text rendert.
+1. **Greedy und nicht rekursiv.** Steht das Kompositum selbst in der Wortliste, wird es nie zerlegt.
+2. **Fugenelemente muessen erreichbar sein**, sonst reisst die Kette bei "Grundstück|s|verkehr|s|genehmigung".
+3. **Die Hervorhebung trifft immer das ganze Kompositum**, und derselbe Bereich kommt mehrfach.
 
-Zwei Details aus der Messung: die Bereiche koennen sich **wiederholen und ueberlappen**, weil alle Teiltoken eines gesplitteten Kompositums die Offsets des Originalworts erben. Vor dem Versenden zusammenfassen. Und die Hervorhebung deckt bei Komposita das ganze Wort ab, was fuer die Anzeige das gewuenschte Verhalten ist.
+#### Die Wortliste: Herkunft, Lizenz, Rezept
 
-**1d) Query-Parser.** `index.parse_query(text, default_field_names, field_boosts, conjunction_by_default, allow_regexes)`. Gemessen an einem echten Index:
+| Eigenschaft | Wert |
+|---|---|
+| Debian-Paket | `wngerman` 20161207-15, `Architecture: all` |
+| Quellpaket | `igerman98`, Upstream Björn Jacke, Maintainer Roland Rosenfeld |
+| Datei | `/usr/share/dict/ngerman` |
+| Umfang | 356.010 Zeilen, 4.725.887 Byte |
+| Lizenz | **GPL-2+** laut `debian/copyright` (`Files: *`, `Copyright: 1999-2016 Björn Jacke`); Upstream nennt zusaetzlich eine OASIS-Distributionslizenz als Alternative |
+| AGPL-Vertraeglichkeit | **ja**. GPL-2+ erlaubt den Uebergang auf GPLv3, GPLv3 ist mit AGPLv3 kombinierbar. Lizenztext und Herkunft ins Image und in `THIRD-PARTY.md`, das Aufbereitungsskript bleibt im Repo |
 
-| Eingabe | Ergebnis | Anmerkung |
+[VERIFIED: sources.debian.org API fuer `igerman98/20161207-16/debian/copyright` und `debian/control`; Paket in `debian:trixie-slim` installiert und ausgezaehlt]
+
+**Vier Rezepte, gegen 16 echte Komposita und 10 Woerter gemessen, die **nicht** zerfallen duerfen** (Information, Vertrag, Rechnung, Sitzung, Kunde, Formular, Termin, Ordnung, Beamter, Genehmigung):
+
+| Rezept | Eintraege | Bauzeit | Kompositum ueber ein Teilwort findbar | Fehlzerlegungen |
+|---|---|---|---|---|
+| **A: alle Woerter, Laenge 4 bis 14, Fugen als eigene Eintraege** | 276.496 | 0,44 s | **14 / 16** | **0** |
+| B: nur Substantive, Fugenformen angehaengt, ASCII gefaltet | 222.708 | 0,36 s | 7 / 16 | 0, aber echte Fehler wie `haushaltss | atzung` |
+| C: nur Substantive, Laenge 4 bis 14, Fugen als eigene Eintraege | 86.345 | 0,18 s | 12 / 16 | 0 |
+| D: nur Substantive, Laenge 4 bis 12 | 65.693 | 0,11 s | 12 / 16 | 0, aber `betrieb | kost | abrechn` statt `betriebskost | abrechn` |
+
+**Empfehlung: Rezept A**, mit C als gemessener Sparvariante hinter `FINDLING_COMPOUND_DICT=full|nouns`. Rezept B ist das naheliegende und **messbar schlechteste**; es scheitert genau an den langen Behoerdenkomposita, um die es geht.
+
+Ergebnisse mit Rezept A:
+
+| Eingabe | Tokens | Findbar ueber |
 |---|---|---|
-| `"drei Monate"` | Phrasentreffer | Anfuehrungszeichen funktionieren wie erwartet |
-| `+frist -notiz` | Muss/Darf-nicht korrekt | `+`/`-` funktionieren |
-| `ext:pdf` | Feldtreffer | Feldsyntax funktioniert, Feld mit `raw`-Tokenizer |
-| `Kuendigung` (mit Umlaut) | trifft das Dokument mit "Kuendigungsfrist" | nur mit Fugenform in der Wortliste |
+| Grundstücksverkehrsgenehmigung | `grundstuck, verkehr, genehm` | Grundstück, Verkehr, **Genehmigung** |
+| Kündigungsfrist | `kundig, frist` | Kündigung, **Frist** |
+| Sitzungsvorlage | `sitzung, vorlag` | Sitzung, Vorlage |
+| Haushaltssatzung | `haushalt, satzung` | Haushalt, Satzung |
+| Jahresabschluss | `jahr, abschluss` | Jahr, Abschluss |
+| Betriebskostenabrechnung | `betriebskost, abrechn` | Betriebskosten, Abrechnung |
+| Krankenversicherung | `krank, versicher` | krank, Versicherung |
+| Rechnungsnummer | `rechnung, numm` | Rechnung, Nummer |
+| Datenschutzgrundverordnung | `datenschutz, grund, verordn` | jedes Teil |
+| Bundesausbildungsförderungsgesetz | `bund, ausbild, forder, gesetz` | jedes Teil |
+| Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz | `rindfleisch, etikettier, uberwach, aufgab, ubertrag, gesetz` | jedes Teil |
+| Dampfschifffahrt | `dampfschiff, fahrt` | Dampfschiff, Fahrt |
+| Mietvertrag | `mietvertrag` | **nur als Ganzes** (11 Zeichen, steht in der Liste) |
+| Bebauungsplan | `bebauungsplan` | nur als Ganzes |
+| Straße | `strass` | ß wird zu ss |
 
-Empfehlungen: `conjunction_by_default=True`, `allow_regexes=False` (eine Regex-Query vom Nutzer ist ein Denial-of-Service), `field_boosts={"name_de": 3.0, "name_en": 3.0, "body_de": 1.0, "body_en": 1.0}` als Startwert, und `parse_query_lenient` fuer Nutzereingaben, dessen Fehlerliste ins Debug-Log geht.
+**Ehrliche Grenze:** Komposita bis 14 Zeichen, die selbst in der Liste stehen, werden nicht zerlegt. "Mietvertrag" ist ueber "Vertrag" nicht findbar. Ein kleineres Fenster zerlegt mehr und riskiert Ueberzerlegung (Rezept D). Das Fenster gehoert als Konstante an eine Stelle, mit Testfaellen in beide Richtungen.
 
-Abbildung von SRCH-03 nach aussen: Nextclouds eingebauter Filter `title-only` (Typ bool, `IFilter::BUILTIN_TITLE_ONLY`) ist genau "Dateiname statt Inhalt" und kostet uns nur `getSupportedFilters()` in einem `IFilteringProvider` [VERIFIED: `lib/private/Search/SearchComposer.php`, Liste der `commonFilters`]. Fuer den Dateityp gibt es keinen eingebauten Filter; er reist als Praefix `type:pdf` in der Suchzeile und wird in der ExApp in eine `Occur.Must`-Termquery auf `ext` uebersetzt. Achtung: laut Interfacedoku wird ein Provider **uebergangen**, wenn ein Client einen Filter sendet, den `getSupportedFilters()` nicht nennt.
+**Kosten, gemessen:** Wortliste laden und filtern 0,1 s, Analyzer bauen 0,44 s, dauerhaftes RSS des Automaten rund 23 MB (60 MB nach dem Freigeben der Python-Liste gegen 37 MB davor), Durchsatz rund 2,3 Mio. Token/s. Der Automat wird pro Token-Stream geklont, aber der Klon ist billig; der Durchsatz belegt es.
 
-**1e) Reader- und Reload-Semantik.** `Index.config_reader(reload_policy="commit")` ist die Vorgabe von tantivy-py (`OnCommitWithDelay`). Der Reader sieht neue Commits also von selbst, aber mit Verzoegerung. Fuer deterministische Tests nach einem Commit `index.reload()` aufrufen. Mehrere Reader sind unkritisch (mmap, kein Lock), genau ein Writer ist Pflicht.
+#### Die Filterreihenfolge, bewiesen statt begruendet
 
-**1f) Persistenz und voller Datentraeger.** Der Index ist ein Verzeichnis unter `$APP_PERSISTENT_STORAGE/index/`. Bei vollem Datentraeger schlaegt der `commit()` mit einem IO-Fehler fehl; der Index bleibt auf dem Stand des letzten erfolgreichen Commits, weil `meta.json` erst danach ersetzt wird. Verlangt wird trotzdem eine aktive Wache: vor jedem Sammel-Commit `shutil.disk_usage()` pruefen und unterhalb einer Schwelle (Vorschlag 500 MB oder 5 Prozent) in den Zustand `paused_low_disk` gehen, statt in den Fehler zu laufen. Die Suche bleibt dabei lesend verfuegbar. Nach einem Absturz raeumt `writer.garbage_collect_files()` verwaiste Segmentdateien auf.
+```python
+de = (TextAnalyzerBuilder(Tokenizer.simple())
+      .filter(Filter.lowercase())               # die Wortliste ist kleingeschrieben
+      .filter(Filter.split_compound(dict_de + FUGEN))
+      .filter(Filter.custom_stopword(FUGEN))    # das uebrige "s" wieder entfernen
+      .filter(Filter.stopword("german"))        # sieht ungefaltete Tokens, trifft also
+      .filter(Filter.remove_long(48))           # NACH dem Splitter, sonst Totalverlust
+      .filter(Filter.stemmer("german"))         # faltet Umlaute und ss selbst
+      .build())
+```
 
-### Frage 2: Deutsche Kompositawortliste
+| Position | Filter | Beweis fuer genau diese Stelle |
+|---|---|---|
+| 1 | `lowercase` | Alles Weitere vergleicht Zeichenketten exakt |
+| 2 | `split_compound` | Braucht das ungestemmte, ungefaltete Token; die Wortliste liegt in genau dieser Form vor |
+| 3 | `custom_stopword(FUGEN)` | Ohne diesen Schritt landet ein Token `s` im Index. Gemessen: mit ihm `Kündigungsfrist -> kundig, frist`, ohne ihn `kundig, s, frist` |
+| 4 | `stopword("german")` | Die eingebaute Liste enthaelt echte Umlaute und vergleicht exakt. Gemessen: `"für über während könnte und der die das"` ergibt `[]` |
+| 5 | `remove_long(48)` | **Gemessen:** an Position 1 mit Limit 40 ergibt das 63-Zeichen-Kompositum `[]`, an dieser Position sechs Teile |
+| 6 | `stemmer("german")` | Zuletzt; ein gestemmtes Kompositum findet keine Woerterbucheintraege mehr |
 
-**Quelle:** Debian-Binaerpaket `wngerman` aus dem Quellpaket `igerman98` (20161207-15 in trixie). Es liefert `/usr/share/dict/ngerman`, eine Wortliste in neuer Rechtschreibung, ein Wort pro Zeile, 4,6 MB installiert, 676 kB Download, `Architecture: all` und damit auf amd64 und arm64 identisch [VERIFIED: sources.debian.org `debian/control`, packages.debian.org Dateiliste und Groessenangabe].
+`ascii_fold` kommt **nicht** vor (Abweichung D1). Gemessen: der Stemmer faltet selbst, und zwei konsistente Varianten liefern identische Ergebnisse, naemlich (a) Wortliste mit Umlauten ohne `ascii_fold` und (b) gefaltete Wortliste mit `ascii_fold`. Variante (a) ist einfacher, weil die Liste dann byteweise dem Debian-Paket entspricht.
 
-**Lizenz:** GPL-2+ (Copyright Bjoern Jacke, Upstream j3e.de) [VERIFIED: `debian/copyright` des Quellpakets]. "or later" macht sie mit AGPL-3.0 vertraeglich. Pflichten: Lizenztext und Herkunftsangabe mit ins Image, Nennung in der Store-Beschreibung und in `docs/`, und weil abgeleitete Daten weitergegeben werden, das Aufbereitungsskript im Repo lassen.
+Englisch und Dateiname behalten `ascii_fold`, dort stemmt entweder ein anderer Algorithmus oder gar keiner:
 
-**Warum die Rohliste allein nicht reicht** (empirisch belegt): ohne Fugenformen splittet der Filter nicht. Gemessen mit dem Woerterbuch `["kundigung", "frist"]` bleibt "Kuendigungsfrist" ein Token und ist ueber "Frist" nicht findbar; mit `["kundigungs", "frist"]` wird es zerlegt und beide Suchen treffen. Dasselbe Bild bei "Quartalsende".
+```python
+en   = simple -> lowercase -> ascii_fold -> stopword("english") -> remove_long(48) -> stemmer("english")
+name = simple -> lowercase -> ascii_fold -> remove_long(60)      # kein Stemming
+```
 
-**Aufbereitungsrezept (Build-Stage, Ergebnis ist ein Textartefakt im Image):**
+#### Was der Stemmer leistet und was nicht
 
-1. `/usr/share/dict/ngerman` zeilenweise lesen, UTF-8.
-2. Nur Eintraege behalten, die **gross** beginnen. Das sind im Deutschen im Wesentlichen die Substantive, und Komposita bestehen aus Substantiven. Damit fallen Verbformen, Adverbien und Partikeln weg, die die haesslichen Fehlsplits verursachen.
-3. Kleinschreiben und dieselbe ASCII-Faltung anwenden, die der Analyzer an Position 4 macht (Umlaut zu Grundbuchstabe, Eszett zu ss). Reihenfolge und Ergebnis muessen exakt zur Filterkette passen, sonst trifft das Woerterbuch nie.
-4. Alles mit weniger als 4 Zeichen und alles mit Nicht-Buchstaben verwerfen. Die Mindestlaenge ist der Schutz gegen Fehlsplits wie "in" plus "formation"; gemessen bleibt "Information" mit dieser Regel ungeteilt.
-5. Fugenformen ergaenzen: zu jedem Eintrag zusaetzlich `wort + "s"`, und fuer Eintraege auf `e` zusaetzlich `wort + "n"`. Das deckt die beiden haeufigsten Fugenelemente ab.
-6. Deduplizieren, sortieren, als eine Datei je Zeile ablegen, Anzahl und SHA-256 in die Build-Ausgabe schreiben. Der Hash gehoert als `meta.wordlist_hash` in die SQLite-Metatabelle: aendert er sich, aendert sich die Tokenisierung, und das erzwingt einen Reindex.
+| Gruppe | Ergebnis | Bewertung |
+|---|---|---|
+| `Haus` / `Häuser` | `haus` / `haus` | Nominalflexion sauber |
+| `Vertrag` / `Verträge` | `vertrag` / `vertrag` | sauber |
+| `Straße` / `Strasse` | `strass` / `strass` | ß normalisiert |
+| `Müller` / `Muller` | `mull` / `mull` | Umlaut gefaltet, ohne `ascii_fold` |
+| `Mueller` | `muell` | **Luecke D3**, ausgeschriebene Form trifft nicht |
+| `suchen` / `Suche` | `such` / `such` | Infinitiv und Nomen zusammengefuehrt |
+| `suchte` / `gesucht` | `sucht` / `gesucht` | **Luecke D2**, Praeteritum und Partizip nicht |
 
-**Offene Groesse:** wie viele Eintraege nach Schritt 6 uebrig bleiben und wie viel Speicher der daraus gebaute Aho-Corasick-Automat kostet, ist **nicht gemessen** (die Rohliste liegt nicht auf dieser Maschine). Die Groessenordnung ist ein hoher fuenfstelliger bis niedriger sechsstelliger Eintragsbestand. `SplitCompoundWords::from_dictionary` baut daraus einen Automaten mit `MatchKind::LeftmostLongest` [VERIFIED: tantivy 0.26.0 Quellcode]. Der erste Plan-Task in dieser Spur ist deshalb eine **Messung**: Eintragszahl, RSS-Zuwachs beim Bauen des Analyzers, Analysezeit fuer 1 MB Text. Ergebnis entscheidet ueber die endgueltige Mindestlaenge (4 oder 5) und darueber, ob eine Haeufigkeitsgrenze noetig wird.
+**Umgang mit D3, auf der Query-Seite:** enthaelt der Suchbegriff `ue`, `oe`, `ae` oder `ss`, zusaetzlich die Umlautvariante bilden und beide Zweige mit `Occur.Should` veroden. Das kostet keinen Indexplatz, wirkt nur auf Anfragen, und eine gelegentlich sinnlose Variante ("neue" wird zu "neü") erzeugt nur einen leeren Zweig. Der umgekehrte Weg, beide Formen zu indexieren, waere ebenfalls moeglich, kostet aber Indexplatz fuer einen selteneren Fall.
 
-**Abschaltbarkeit (verlangt von CONTEXT):** `FINDLING_SPLIT_COMPOUND=on|off` als Umgebungsvariable in der `info.xml`. Bei `off` faellt Filterposition 5 weg, `ANALYZER_VERSION` aendert sich mit, und der Index muss neu gebaut werden. Damit ist der Notausgang vorhanden, falls die Messung schlecht ausfaellt, ohne dass jemand Code aendern muss.
+**Umgang mit D2:** nicht loesbar, ohne den Stemmer auszutauschen. Das Abnahmekriterium gehoert auf Nominalflexion umgestellt und die Grenze dokumentiert.
 
-**Fallback, falls die Liste unbrauchbar ist:** kein ngram-Feld und keine Regex-Suche. Beides bricht das Speicher- oder Latenzbudget. Der ehrliche Fallback ist die dokumentierte Grenze plus der Hinweis in der Store-Beschreibung, dass Komposita ueber ihre Bestandteile gefunden werden, sofern sie zerlegbar sind.
+#### Empfohlenes Schema
 
-### Frage 3: Pull-Queue, Erstindex-Anstoss und Mount-Enumeration
+| Feld | Typ | stored | indexed | fast | Tokenizer | Zweck |
+|---|---|---|---|---|---|---|
+| `file_id` | unsigned | ja | ja | ja | - | Schluessel, Ziel von `delete_documents_by_term`, Rueckgabewert |
+| `storage_id` | unsigned | ja | ja | ja | - | Reserve fuer den Mount-Vorfilter (Phase 5), Diagnose |
+| `name` | text | ja | ja | nein | `name` | Dateiname, SRCH-03 "Dateiname statt Inhalt" |
+| `title` | text | ja | ja | nein | `de` | Dokumenttitel aus den Metadaten, hoeher gewichtet |
+| `path` | text | ja | nein | nein | - | Anzeige und Diagnose, nicht durchsuchbar |
+| `ext` | text | ja | ja | nein | `raw` | SRCH-03 Dateityp, exakte Terme, gemessen als `ext:pdf` |
+| `body_de` | text | **ja** | ja | nein | `de` | Inhalt und **einzige** gespeicherte Textkopie, Quelle des SnippetGenerators |
+| `body_en` | text | nein | ja | nein | `en` | derselbe Text, englische Pipeline, nicht gespeichert |
+| `mtime` | integer | ja | nein | ja | - | Anzeige, spaeter Sortierung und `since`/`until` |
 
-**Tabellenschema (Migration in der PHP-App):**
+`body_de` muss `stored=True` sein, weil `snippet_from_doc(doc)` den Text aus dem gespeicherten Dokument liest. Gemessene Kosten: Index mit gespeichertem Body 0,374 x des extrahierten Textes, ohne 0,076 x, also rund 2.100 Byte je Dokument bei 600-Wort-Dokumenten, und 1.675 Dokumente/s beim Schreiben.
+
+**Hochrechnung fuer 100.000 Dateien** mit im Mittel 15 kB Text: 1,5 GB Text, rund 560 MB Indexverzeichnis auf Platte, mmap-gelesen, also kaum RSS. Ein Deckel auf den extrahierten Text je Dokument (Vorschlag 512 kB, danach Zustand `truncated`) begrenzt den Ausreisser, den ein 50-MB-PDF sonst produziert.
+
+**Versionierung in `meta`:** `schema_version`, `index_version`, `analyzer_version`, `wordlist_hash`, `tantivy_version`. Beim Start pruefen; jede Abweichung erzwingt einen Reindex, und der ist ein sichtbarer Zustand.
+
+#### Query-Syntax, gegen einen echten Index gemessen
+
+| Eingabe | Wirkung | Ergebnis |
+|---|---|---|
+| `frist` | einfacher Term ueber Komposita hinweg | findet "Kündigungsfrist" und "Frist" |
+| `"drei Monate"` | Phrase | nur das Dokument mit der Wortfolge |
+| `vertrag +frist` | Pflichtterm | wie erwartet |
+| `vertrag -frist` | Ausschluss | wie erwartet |
+| `name:kündigung` | Feldsuche Dateiname | nur Dateinamentreffer |
+| `ext:pdf AND frist` | Dateityp plus Inhalt | wie erwartet |
+| `muller` / `müller` | Umlaut-Aequivalenz | beide finden beide Schreibweisen |
+
+```python
+query, errors = index.parse_query_lenient(
+    rewritten_input,
+    default_field_names=["body_de", "body_en", "name", "title"],
+    field_boosts={"name": 3.0, "title": 2.0, "body_de": 1.0, "body_en": 0.8},
+    conjunction_by_default=True,
+)
+```
+
+`allow_regexes` bleibt `False`: eine Regex aus der Suchleiste ist ein Denial of Service auf die eigene Instanz. `searcher.search(query, limit, offset=..., count=True)` liefert `hits` und `count`; `offset` ist der Weg fuer das begrenzte Nachfassen. `Index.config_reader(reload_policy="commit")` ist die Vorgabe, der Reader sieht neue Commits mit Verzoegerung, fuer deterministische Tests `index.reload()` aufrufen.
+
+**Anbindung an Nextclouds Filter (SRCH-03):** der eingebaute Filter `title-only` (`IFilter::BUILTIN_TITLE_ONLY`) ist genau "Dateiname statt Inhalt" und kostet nur `getSupportedFilters()` in einem `IFilteringProvider`. Fuer den Dateityp gibt es keinen eingebauten Filter, er reist als `type:pdf` in der Suchzeile und wird in der ExApp in eine `Occur.Must`-Termquery auf `ext` uebersetzt. **Falle:** ein Provider wird laut Interfacedokumentation **uebergangen**, wenn ein Client einen Filter sendet, den `getSupportedFilters()` nicht nennt. Die Liste muss also vollstaendig sein, nicht sparsam.
+
+**`heap_size`:** unter 15.000.000 Byte je Thread wird der Writer hart abgelehnt ("The memory arena in bytes per thread needs to be at least 15000000"). Die 50 MB aus CONTEXT.md sind gueltig.
+
+**Voller Datentraeger:** ein `commit()` schlaegt mit einem IO-Fehler fehl, der Index bleibt auf dem letzten erfolgreichen Stand, weil `meta.json` zuletzt ersetzt wird. Trotzdem aktiv wachen: vor jedem Sammel-Commit `shutil.disk_usage()` pruefen und unterhalb einer Schwelle in den Zustand `paused_low_disk` gehen. Die Suche bleibt dabei lesend verfuegbar. Nach einem Absturz raeumt `writer.garbage_collect_files()` verwaiste Segmentdateien auf.
+
+### Frage 2: Pull-Queue nach dem Vorbild context_chat
+
+#### Das verifizierte Original
+
+`context_chat` fuehrt `context_chat_queue` mit `id` (bigint, autoincrement), `file_id`, `storage_id`, `root_id`, `update` (boolean) und `locked_at`. Indizes: Primaerschluessel auf `id`, Index auf `file_id`, zusammengesetzter auf `(storage_id, root_id)` [VERIFIED: `lib/Migration/Version001000000Date20231102094721.php`, `lib/Db/QueueFile.php`].
+
+Abholprotokoll (`QueueMapper`, `QueueController`):
+
+1. `getFromQueue(n)` waehlt Zeilen mit `locked_at IS NULL` **oder** `locked_at <= now - LOCK_TIMEOUT`, sortiert nach `id ASC, update ASC`.
+2. Fuer jede Zeile einzeln `lock($id)`: ein UPDATE mit derselben Bedingung im WHERE. Nur `executeStatement() >= 1` gewinnt die Zeile. Das ist die Zeilensperre, ohne `SELECT FOR UPDATE` und ohne Dialektabhaengigkeit.
+3. Fuer jede gewonnene Zeile baut der Controller ein `Source`-Objekt und legt es unter der **Queue-ID** in die Antwort.
+4. Wirft der Aufbau (Datei weg, Mount weg), wird die Zeile geloescht statt gesperrt zu bleiben.
+5. Quittung per `DELETE /queues/documents` mit Queue-IDs, transaktional, in Baenden von 1.000.
+6. `GET /queues/documents/stats` liefert `{scheduled, running}`.
+
+#### Unser Schema, mit fuenf begruendeten Abweichungen
 
 ```php
 $table = $schema->createTable('findling_queue');
-$table->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true]);
-$table->addColumn('file_id', Types::BIGINT, ['notnull' => true]);
-$table->addColumn('storage_id', Types::BIGINT, ['notnull' => true]);
-$table->addColumn('root_id', Types::BIGINT, ['notnull' => true]);
-$table->addColumn('update', Types::BOOLEAN, ['notnull' => true, 'default' => false]);
-$table->addColumn('locked_at', Types::DATETIME, ['notnull' => false]);
-$table->setPrimaryKey(['id']);
-$table->addUniqueIndex(['file_id'], 'findling_q_fileid');   // Deduplizierung
+$table->addColumn('id',         'bigint',  ['autoincrement' => true, 'notnull' => true, 'length' => 64]);
+$table->addColumn('file_id',    'bigint',  ['notnull' => true,  'length' => 64]);
+$table->addColumn('storage_id', 'bigint',  ['notnull' => true,  'length' => 64]);
+$table->addColumn('root_id',    'bigint',  ['notnull' => true,  'length' => 64]);
+$table->addColumn('is_update',  'boolean', ['notnull' => true,  'default' => false]);
+$table->addColumn('size',       'bigint',  ['notnull' => false, 'length' => 64]);
+$table->addColumn('locked_at',  'datetime',['notnull' => false]);
+$table->addColumn('retries',    'smallint',['notnull' => true,  'default' => 0]);
+$table->setPrimaryKey(['id'], 'findling_q_id');
+$table->addUniqueIndex(['file_id'], 'findling_q_fileid');
+$table->addIndex(['storage_id', 'root_id'], 'findling_q_stor');
 $table->addIndex(['locked_at'], 'findling_q_locked');
 ```
 
-Der Tabellenname bleibt unter der Nextcloud-Grenze von 27 Zeichen inklusive `oc_`-Praefix. Der eindeutige Index auf `file_id` ist der Deduplizierungsmechanismus: ein zweites Einreihen derselben Datei ist ein abgefangener Konflikt, kein zweiter Job.
+Tabellen- und Indexnamen bleiben unter der Nextcloud-Grenze (Tabellen 27 Zeichen inklusive `oc_`, Indexnamen 30).
 
-**Endpunkte** (alle `#[ExAppRequired]`, alle in einem `OCSController`):
+| # | Abweichung | Original | Unser Wert | Begruendung |
+|---|---|---|---|---|
+| 1 | Lock-Timeout | 24 Stunden | **15 Minuten** | Nach einem `docker kill` wartet der Batch sonst einen Tag. 15 Minuten sind weit mehr als die laengste Verarbeitung ohne OCR. Mit OCR in Phase 3 steigt der Wert oder wird pro Auftragsart unterschiedlich |
+| 2 | Unlock | nicht vorhanden | `POST /queues/documents/unlock` mit ID-Liste, gerufen im SIGTERM-Handler | Ein geordneter Neustart ist sofort wieder produktiv; nur ein hartes Kill wartet den Timeout ab |
+| 3 | Dedup | Select vor dem Insert | **Unique-Index auf `file_id`** plus `ON CONFLICT (file_id) DO UPDATE SET is_update = ?, locked_at = NULL` | Der Vorher-Select ist ein Race zwischen parallelen Crawl-Jobs |
+| 4 | Batchgrenze | nur `n` | zusaetzlich `max_bytes`, dafuer `size` in der Zeile | Ein Batch aus 32 grossen PDFs sprengt das RAM-Budget einer 4-GB-Box |
+| 5 | Retry | TODO-Kommentar | Spalte `retries`, Abbruch bei 3 als `failed(repeatedly_stuck)` | IDX-06 verlangt sichtbare Endzustaende statt ewig kreisender Zeilen |
 
-| Route | Verb | Zweck |
-|---|---|---|
-| `/queues/documents` | GET | `n` und `max_bytes`, sperrt und liefert Metadaten inklusive `userIds` |
-| `/queues/documents` | DELETE | Quittieren, Liste von Zeilen-IDs |
-| `/queues/documents/unlock` | POST | Nack: Sperren sofort loesen (SIGTERM-Pfad) |
-| `/queues/documents/stats` | GET | Zaehler fuer die Statusanzeige (Phase 4 verbraucht sie, Phase 2 erzeugt sie) |
+Zusaetzlich `update` zu `is_update` umbenannt (reservierter Bezeichner).
 
-**Anstoss des Erstindex (Claude's Discretion, Empfehlung Auto-Start):** ein `IRepairStep`, in `info.xml` unter `<repair-steps><install>` registriert, der beim ersten Install einen `SchedulerJob` in die Jobliste legt und sich das per App-Config merkt, damit ein Deaktivieren und wieder Aktivieren nicht alles neu einreiht. Genau dieses Muster ist in `context_chat/lib/Repair/AppInstallStep.php` gelesen worden. Zusaetzlich ein `occ findling:index --restart` als Notfallhebel fuer Support und fuer die CI, denn ohne Kommandozeile ist ein Wiederaufbau nur ueber Deinstallation erreichbar.
+**Endpunkte (alle `#[ExAppRequired]`):**
 
-**Wichtig fuer die Erwartung:** Hintergrundjobs brauchen einen laufenden Cron. Bei der Standardeinstellung "AJAX" laufen sie nur, wenn jemand die Weboberflaeche benutzt. Der Erstindex tropft dann vor sich hin. Das gehoert in die Store-Beschreibung und in die Statusseite, nicht in eine Fussnote.
+| Endpunkt | Verb | Parameter | Antwort |
+|---|---|---|---|
+| `/queues/documents` | GET | `n` (max 256), `max_bytes` | `{files: {queueId: Source}}` |
+| `/queues/documents` | DELETE | `{files: [queueId], failed: [{queueId, reason}]}` | leer |
+| `/queues/documents/unlock` | POST | `{ids: [queueId]}` | leer |
+| `/queues/documents/stats` | GET | - | `{scheduled, running, failed}` |
+| `/files/{fileId}` | GET | `userId` | StreamResponse (unveraendert aus Phase 1) |
 
-**Mount-Enumeration:** `IFileAccess::getDistinctMounts(MOUNT_PROVIDERS, true)` liefert `{storage_id, root_id, overridden_root}`. Team Folders erkennt man an `OCA\GroupFolders\Mount\MountProvider`, External Storage an `OCA\Files_External\Config\ConfigAdapter`; letzteres wird schlicht nicht in die Liste aufgenommen (CONTEXT: default aus). Ob die Groupfolders-App installiert ist, muss nicht geprueft werden: ist sie es nicht, gibt es keine Mounts dieser Klasse.
+Die `failed`-Liste im DELETE ist neu gegenueber context_chat und traegt IDX-06: der Container sagt beim Quittieren, welche Dateien er **nicht** verarbeiten konnte und warum, und die PHP-Seite schreibt das in eine Tabelle, aus der Phase 4 die Diagnose baut. Ohne diesen Rueckkanal muesste die Statusseite spaeter den Container fragen, und das waere ein zweiter Wahrheitsort.
 
-**Dateien im Mount:** `getByAncestorInStorage($storageId, $overriddenRoot, $lastFileId, 2000, $mimeTypeIds, false, true)`. Die beiden Booleans bedeuten "Ende-zu-Ende-verschluesselte Dateien nicht mitnehmen" (aus denen bekaeme man ohnehin nur Chiffrat) und "serverseitig verschluesselte mitnehmen" (die liefert das Gateway entschluesselt).
-
-### Frage 4: ACL-Befuellung und Uebertragungsformat
-
-**Effiziente Befuellung:** siehe Pattern 3. Pro Crawl-Batch einmal `IUserMountCache::getMountsForStorageId($storageId)`, daraus je Mount `(uid, mountRootPath)` bilden (der Root-Pfad kommt aus `ICachedMountInfo` bzw. einer einzelnen Filecache-Abfrage je Mount), und dann fuer jede Datei alle UIDs sammeln, deren Root-Pfad ein Praefix des Dateipfads ist. Das ist exakt die Semantik, die `UserMountCache::getMountsForFileId()` sonst pro Datei in SQL nachbaut [VERIFIED: `lib/private/Files/Config/UserMountCache.php`, Substring-Bedingung auf `f.path`].
-
-**Warum nicht `IShareManager::getAccessList()`:** die Methode braucht ein `Node`-Objekt, arbeitet rekursiv ueber Elternordner und kennt nur Freigaben. Gruppenordner und externe Mounts fehlen darin. Fuer einen Crawl ueber Zehntausende Dateien ist sie ausserdem viel zu teuer [VERIFIED: `lib/public/Share/IManager.php`, Signatur und Rueckgabeform].
-
-**Uebertragungsformat:** die UIDs reisen im Queue-Eintrag mit.
+**Das `Source`-Objekt** (Metadaten, kein Inhalt):
 
 ```json
 {
   "files": {
-    "8123": {"fileId": 4711, "storageId": 3, "rootId": 12, "userIds": ["alice", "bob"],
+    "8123": {"fileId": 4711, "storageId": 3, "rootId": 12,
              "path": "Documents/vertrag.pdf", "title": "vertrag.pdf",
              "mime": "application/pdf", "size": 184320, "mtime": 1755200000,
-             "update": false}
+             "etag": "a1b2c3d4", "userIds": ["alice", "bob"],
+             "fetchAs": "alice", "isUpdate": false}
   }
 }
 ```
 
-Der Schluessel der Map ist die Zeilen-ID der Queue, weil genau die beim Quittieren zurueckgeht. `content` fehlt bewusst: Metadaten und Bytes reisen getrennt, damit die Queue-Antwort klein bleibt und der teure Abruf erst passiert, wenn der Worker frei ist.
+Der Schluessel ist die Queue-Zeilen-ID, weil genau die beim Quittieren zurueckgeht. `content` fehlt bewusst: Metadaten und Bytes reisen getrennt, damit die Queue-Antwort klein bleibt und der teure Abruf erst passiert, wenn ein Worker frei ist. `userIds` ist die ACL-Nutzlast, `fetchAs` der Nutzer, in dessen Kontext die Bytes geholt werden. **Wer lesen darf, um zu indexieren, und wer finden darf, sind zwei verschiedene Fragen** und bleiben zwei Felder. `etag` ist in Phase 2 ohne Funktion, gehoert aber jetzt ins Protokoll, damit Phase 3 nichts umbauen muss.
 
-**Schreibseite in der ExApp:** die ACL ist **deklarativ**. Beim Indexieren `DELETE FROM acl WHERE file_id=?` gefolgt von `INSERT`. Nie inkrementell, denn ein verlorenes Delta ist dauerhaft falsch, waehrend ein Sollzustand sich bei der naechsten Zustellung selbst heilt.
+**Fehler- und Rueckstau-Semantik:**
 
-### Frage 5: SQLite-Layout in der ExApp
+| Situation | Container | PHP-Seite |
+|---|---|---|
+| Queue leer | Cooldown (Start 15 s, exponentiell bis 120 s) | - |
+| Gateway 404 | als `skipped(gone)` quittieren | Zeile loeschen, Grund vermerken |
+| Gateway 5xx oder Timeout | **nicht** quittieren, Batch abbrechen, Cooldown verdoppeln | Lock laeuft nach 15 min ab, Zeile kommt wieder |
+| Extraktion wirft | als `failed(reason)` quittieren | Zeile loeschen, Fehlertabelle schreiben |
+| Extraktion im Timeout | als `failed(timeout)` quittieren | wie oben |
+| Datei zu gross oder Typ nicht erlaubt | gar nicht erst in der Queue | Filter sitzt im Crawl, Zustand wird trotzdem geschrieben |
+| SIGTERM | offene IDs per `unlock` freigeben, dann beenden | Zeilen sofort wieder abholbar |
+| Container aus | nichts | Queue waechst, `stats` zeigt es |
 
-Eine Datei, `$APP_PERSISTENT_STORAGE/state.db`, daneben das Tantivy-Verzeichnis. Eine Datei, weil CONTEXT es so setzt und weil Zustand und ACL in derselben Transaktion geschrieben werden sollen.
+**Poller-Lebenszyklus.** Die Task startet im FastAPI-`lifespan` und wird von `enabled_handler` scharf- bzw. stillgestellt. Ein deaktiviertes Backend, das weiterpollt, ist der Klassiker aus der Integrationsliste.
+
+**Gate-A-Konsequenz, die in den Plan muss.** Der bestehende AST-Test verbietet jeden `PUT/POST/PATCH/DELETE` gegen Nextcloud, ausser der Pfad steht in `OCS_WRITE_ALLOWLIST`, und die ist heute leer. Quittung und Unlock sind Schreibaufrufe:
+
+```python
+OCS_WRITE_ALLOWLIST = frozenset({
+    "/ocs/v2.php/apps/findling/queues/documents",
+    "/ocs/v2.php/apps/findling/queues/documents/unlock",
+})
+```
+
+Das ist eine Aenderung an einem Sicherheitsgate und braucht laut Kommentar im Test eine Bedrohungsmodell-Notiz: beide Pfade schreiben ausschliesslich in die App-eigene Queue-Tabelle, nie in Nutzerdateien, und sie sind der einzige Rueckkanal. Die Erweiterung gehoert in einen eigenen, benannten Schritt, nicht als Nebeneffekt in einen Feature-Task.
+
+### Frage 3: ACL-Befuellung und Crawl durch die PHP-Seite
+
+#### Die Quelle
+
+`IUserMountCache::getMountsForFileId(int $fileId)`, daraus `->getUser()->getUID()`. Das ist die einzige Stelle, die Freigaben, Gruppenfreigaben und Team Folders in einem Aufruf aufloest [VERIFIED: `context_chat/lib/Service/StorageService.php::getUsersForFileId`].
+
+Warum nicht `IShareManager::getAccessList()`: braucht ein `Node`, arbeitet rekursiv ueber Elternordner und kennt nur Freigaben. Team Folders und externe Mounts fehlen darin, und fuer einen Crawl ueber Zehntausende Dateien ist es zu teuer.
+
+**Kostenhinweis und die bewusste Entscheidung dagegen.** `UserMountCache::getMountsForFileId()` macht laut Quellcode zwei Abfragen plus ein `userExists()` je Datei. Bei 100.000 Dateien sind das rund 200.000 Abfragen. Die Optimierung waere, einmal je Mount `getMountsForStorageId()` zu holen und danach per Pfadpraefix zuzuordnen. **Empfehlung: in Phase 2 nicht.** Im Erstindex dominiert der Byteabruf jeder Datei ueber HTTP um Groessenordnungen, und die Praefixlogik nachzubauen ist genau die Art von Cleverness, die einen systematisch zu weiten Vorfilter erzeugt und damit die Ueberfetch-Strategie wirkungslos macht. Die Optimierung gehoert hinter eine Messung in Phase 5, mit einem Paritaetstest gegen die einfache Variante.
+
+#### Die Mount-Allowlist
+
+```php
+private const MOUNT_PROVIDERS = [
+    'OC\Files\Mount\LocalHomeMountProvider',      // User-Home, Datei-Backend
+    'OC\Files\Mount\ObjectHomeMountProvider',     // User-Home, S3-Backend
+    'OCA\GroupFolders\Mount\MountProvider',       // Team Folders
+    // 'OCA\Files_External\Config\ConfigAdapter'  // External Storage: default AUS
+];
+```
+
+Team Folders heissen seit NC 31 so, die App-ID ist weiterhin `groupfolders` und die Mount-Provider-Klasse unveraendert [VERIFIED: `nextcloud/groupfolders`, `appinfo/info.xml`: `<id>groupfolders</id>`, `<name>Team Folders</name>`]. Ob die App installiert ist, muss nicht geprueft werden: ist sie es nicht, gibt es keine Mounts dieser Klasse. External Storage bleibt draussen und wird in Phase 4 zu einem Schalter (ADM-04).
+
+#### Die moderne Crawl-API, die den halben Legacy-Code spart
+
+```php
+foreach ($this->fileAccess->getDistinctMounts(self::MOUNT_PROVIDERS, true) as $mount) { ... }
+
+foreach ($this->fileAccess->getByAncestorInStorage(
+        $storageId, $overriddenRoot, $lastFileId, 2000, $mimeTypeIds, false, true) as $entry) { ... }
+```
+
+Beide `@since 32.0.0`, unser `min-version` ist 32 [VERIFIED: `nextcloud/server` `stable32` und `stable34`, `lib/public/Files/Cache/IFileAccess.php`]. Damit entfaellt der gesamte `getMountsOld`/`getFilesInMountOld`-Zweig samt der Reflection-Pruefung `isFileAccessAvailable()`, rund 150 Zeilen handgeschriebenes SQL und die dazugehoerige Dialektpflege.
+
+`onlyUserFilesMounts: true` uebernimmt genau die Aufgabe, die context_chat sonst per Extraabfrage erledigt: der Home-Root wird auf den `files`-Ordner umgebogen, sodass `files_versions` und `files_trashbin` gar nicht erst auftauchen. Die beiden Booleans am Ende bedeuten "Ende-zu-Ende-verschluesselte nicht mitnehmen" (daraus bekaeme man nur Chiffrat) und "serverseitig verschluesselte mitnehmen" (die liefert das Gateway entschluesselt).
+
+Der Groessenfilter fehlt in `getByAncestorInStorage`, nur Mimetypes werden gefiltert. Der 50-MB-Deckel wird also beim Einreihen geprueft; die Groesse liegt im `ICacheEntry`, kostet also nichts. Dateien darueber werden **nicht** stillschweigend uebergangen, sondern direkt als `skipped(too_large)` verbucht, sonst fehlt Phase 4 die Datenbasis.
+
+#### Uebertragung und Invalidierung
+
+**Phase 2 braucht keinen eigenen ACL-Weg.** Die Nutzerliste reist als `userIds` im `Source`-Objekt mit und wird im Container deklarativ geschrieben:
 
 ```sql
+BEGIN;
+DELETE FROM acl WHERE file_id = :file_id;
+INSERT INTO acl (uid, file_id) VALUES (:uid, :file_id);  -- je Nutzer
+COMMIT;
+```
+
+**Deklarativ, nicht inkrementell**, ist die entscheidende Eigenschaft: der Auftrag transportiert den Sollzustand, nicht die Aenderung. Ein verlorener Auftrag heilt sich bei der naechsten Zustellung, ein verlorenes Delta nie. Ein eigener Aktions-Endpunkt fuer reine Zugriffsaenderungen ohne Neuindexierung gehoert in Phase 3, wo Share-Events entstehen; das Schema traegt ihn ohne Aenderung.
+
+**Bekannte Ueberapproximation, die dokumentiert gehoert:** Team Folders kennen erweiterte Berechtigungen auf Unterordnerebene, `IUserMountCache` loest sie nicht auf. Der Vorfilter kann also Kandidaten durchlassen, die der Nutzer im Team Folder nicht sehen darf. Das ist unschaedlich, weil der PHP-Recheck die Sicherheitsgrenze ist und **vor** jeder Snippet-Erzeugung laeuft, aber es ist der Grund, warum der Vorfilter nie als Grenze bezeichnet werden darf. In Phase 5 ist "Team Folder mit erweiterten Berechtigungen" ein Paritaets-Testfall, und zwar in beide Richtungen.
+
+#### Anstoss des Erstindex (Claude's Discretion)
+
+Empfehlung Auto-Start: ein `IRepairStep`, in `info.xml` unter `<repair-steps><install>` registriert, legt beim ersten Install einen `SchedulerJob` in die Jobliste und merkt sich das per App-Config, damit ein Deaktivieren und wieder Aktivieren nicht alles neu einreiht. Genau dieses Muster steht in `context_chat/lib/Repair/AppInstallStep.php`. Zusaetzlich `occ findling:index [--restart|--status]` als Notfallhebel fuer Support und CI.
+
+**Wichtig fuer die Erwartung:** Hintergrundjobs brauchen einen laufenden Cron. Bei der Voreinstellung "AJAX" laufen sie nur, wenn jemand die Weboberflaeche benutzt, und der Erstindex tropft vor sich hin. Ein Zeitstempel "letzter Cron-Lauf gesehen" gehoert deshalb schon jetzt in die Datenbank, auch wenn die Anzeige Phase 4 ist.
+
+### Frage 4: SQLite-Layout fuer den ACL-Vorfilter
+
+#### Schema
+
+```sql
+-- $APP_PERSISTENT_STORAGE/state.db
 PRAGMA journal_mode = WAL;
 PRAGMA synchronous  = NORMAL;
 PRAGMA busy_timeout = 10000;
 PRAGMA foreign_keys = ON;
 
-CREATE TABLE IF NOT EXISTS meta (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);   -- schema_version, index_version, analyzer_version, wordlist_hash,
-     -- tantivy_version, instance_id, created_at
+CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+-- schema_version, index_version, analyzer_version, wordlist_hash,
+-- tantivy_version, instance_id, created_at
 
-CREATE TABLE IF NOT EXISTS files (
-    file_id       INTEGER PRIMARY KEY,          -- Nextcloud fileid, global eindeutig
+CREATE TABLE files (
+    file_id       INTEGER PRIMARY KEY,          -- Nextcloud fileid
     storage_id    INTEGER NOT NULL,
     root_id       INTEGER NOT NULL,
     path          TEXT    NOT NULL,
+    title         TEXT,
     mime          TEXT    NOT NULL,
     size          INTEGER NOT NULL,
     mtime         INTEGER NOT NULL,
-    etag          TEXT,                         -- Phase 3 (Reconcile) fuellt es
+    etag          TEXT,                         -- Phase 3 fuellt es
     content_hash  TEXT,                         -- ueberspringt unveraenderte Inhalte
-    state         TEXT    NOT NULL,             -- pending|claimed|done|failed|skipped
-    reason        TEXT,                         -- Fehlerklasse, nie ein Dateiname
+    text_chars    INTEGER NOT NULL DEFAULT 0,
+    state         TEXT    NOT NULL,             -- indexed | skipped | failed
+    reason        TEXT,                         -- Grundcode, nie ein Dateiname
     attempts      INTEGER NOT NULL DEFAULT 0,
-    claimed_at    INTEGER,
+    ocr_used      INTEGER NOT NULL DEFAULT 0,   -- Phase 3, jetzt anlegen
     indexed_at    INTEGER,
     index_version INTEGER NOT NULL DEFAULT 0,
-    deleted_at    INTEGER                       -- Phase 3 (Tombstone), bleibt jetzt NULL
+    deleted_at    INTEGER                       -- Phase 3 (Tombstone), bleibt NULL
 );
-CREATE INDEX IF NOT EXISTS files_state    ON files(state);
-CREATE INDEX IF NOT EXISTS files_storage  ON files(storage_id);
+CREATE INDEX files_state   ON files (state);
+CREATE INDEX files_storage ON files (storage_id);
 
-CREATE TABLE IF NOT EXISTS acl (
+CREATE TABLE acl (
     uid     TEXT    NOT NULL,
     file_id INTEGER NOT NULL,
     PRIMARY KEY (uid, file_id)
 ) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS acl_file ON acl(file_id);   -- fuer den Loeschpfad
+CREATE INDEX acl_file ON acl (file_id);          -- fuer den Loeschpfad
 
-CREATE TABLE IF NOT EXISTS mounts (
+CREATE TABLE mounts (
     storage_id     INTEGER PRIMARY KEY,
     root_id        INTEGER NOT NULL,
     cursor_file_id INTEGER NOT NULL DEFAULT 0,   -- Spiegel, PHP fuehrt das Original
@@ -607,336 +786,669 @@ CREATE TABLE IF NOT EXISTS mounts (
 );
 ```
 
-**Warum `WITHOUT ROWID` bei `acl`:** die Tabelle besteht nur aus ihrem Schluessel. Ohne die versteckte Zeilennummer spart sie rund ein Drittel Platz und einen Indexsprung pro Suche. Das ist die Tabelle, die als erste gross wird.
+`WITHOUT ROWID` bei `acl` ist der Kern: der zusammengesetzte Primaerschluessel **ist** die Tabelle, es gibt keinen zweiten B-Baum. Der Index auf `file_id` ist fuer den Loeschpfad noetig.
 
-**Anschlussfaehigkeit:** Phase 3 braucht `etag` und `deleted_at`, beide sind da. Phase 6 haengt eine Tabelle `chunks(chunk_id, file_id REFERENCES files(file_id) ON DELETE CASCADE, ...)` an; der Fremdschluessel funktioniert, weil `file_id` schon der Primaerschluessel ist. `index_version` und `analyzer_version` sind der Hebel, mit dem ein Upgrade gezielt Teilmengen auf `pending` zuruecksetzt, statt alles zu loeschen.
+**Anschlussfaehigkeit:** Phase 3 braucht `etag` und `deleted_at`, beide sind da. Phase 6 haengt `chunks(chunk_id, file_id REFERENCES files(file_id) ON DELETE CASCADE, ...)` an, der Fremdschluessel funktioniert. `index_version` und `analyzer_version` sind der Hebel, mit dem ein Upgrade gezielt Teilmengen auf offen zuruecksetzt, statt alles zu loeschen.
 
-**WAL im Container-Volume:** das AppAPI-Volume ist ein normales Docker-Volume auf ext4, WAL funktioniert dort uneingeschraenkt. Zwei Vorbehalte gehoeren in den Code, nicht in die Doku: erstens setzt WAL Shared Memory (`-shm`) voraus, was auf manchen Netzwerkdateisystemen fehlschlaegt, also `PRAGMA journal_mode=WAL` auswerten und bei einem anderen Rueckgabewert eine Warnung loggen und weiterlaufen (`DELETE`-Journal ist langsamer, aber korrekt). Zweitens ist der lokale Entwicklungsfall auf **Windows**: `scripts/dev/register-exapp.sh` startet die ExApp als Hostprozess, `APP_PERSISTENT_STORAGE` liegt also auf NTFS. SQLite mit WAL kann das, Tantivy hat dort aber eine dokumentierte Schwaeche: memory-mapped Dateien lassen sich unter Windows nicht loeschen, weshalb die Segment-Aufraeumung Reste hinterlaesst ("deletion did not work. This typically happens on windows", Kommentar im Tantivy-Quellcode). Fuer lokale Proben ist das kosmetisch, fuer belastbare Aussagen zu Indexgroesse und Aufraeumung ist die CI oder ein Linux-Container zustaendig.
+#### Gemessene Groessen und Zeiten
 
-**Ein Schreiber:** alle Schreibzugriffe laufen ueber eine einzige Verbindung im Indexer-Thread. Der Suchpfad bekommt eine eigene Verbindung mit `PRAGMA query_only = 1`, damit ein Fehler im Suchcode strukturell nichts kaputtmachen kann.
+100.000 Dateien, 50 Nutzer, im Mittel 3,36 Nutzer je Datei, SQLite 3.46.1:
 
-### Frage 6: Extraktionspipeline
+| Variante | Zeilen | Datei | Byte/Zeile | Vorfilter 400 Kandidaten | Alle acl-Zeilen einer Datei loeschen |
+|---|---|---|---|---|---|
+| `uid TEXT` | 335.515 | **12,0 MB** | 35,7 | **0,18 ms** | 0,05 ms |
+| Integer-Mapping | 335.500 | 7,4 MB | 22,0 | 0,21 ms | 0,12 ms |
 
-**Reihenfolge pro Datei:** Allowlist und Groesse pruefen (`skipped: unsupported_type` bzw. `skipped: too_large`, 50-MB-Cap) -> Bytes ueber `fetch_file_stream` in eine Temporaerdatei im Volume -> Format-Dispatcher -> Text kappen (Vorschlag 1 MB extrahierter Text, `truncated`-Vermerk) -> indexieren.
+Hochrechnung: 1 Mio. Dateien ergaeben rund 120 MB bei TEXT-uid, und das liegt jenseits der Zielhardware. **Empfehlung `uid TEXT`**, Integer-Mapping als dokumentierte Reserve.
+
+**`SQLITE_LIMIT_VARIABLE_NUMBER` ist 250.000** in diesem Build, `IN`-Listen mit 40.000 Parametern laufen durch. Die alte 999er-Grenze aus vielen Anleitungen gilt hier nicht.
+
+#### Die Abfrage
+
+```sql
+SELECT file_id FROM acl WHERE uid = ? AND file_id IN (?, ?, ...);
+```
+
+Das Ergebnis ist eine Menge, die Reihenfolge macht der Aufrufer nach dem Tantivy-Score. Kein `ORDER BY`, kein Join gegen `files` im heissen Pfad.
+
+**Selektivitaet, ehrlich:** im synthetischen Testfall ueberlebten nur 31 von 400 Kandidaten. In der Realitaet sieht ein Nutzer den grossen Teil dessen, was in seinen Mounts liegt. Aber der Fall existiert, und die Antwort ist das begrenzte Nachfassen, nicht eine groessere erste Anfrage. Dokumentierte Reserve fuer Phase 5: ein `storage_id`-Filter in der Tantivy-Query aus den Mounts des Nutzers. Das ist eine Obermenge der sichtbaren Dateien, also sicher, und verbessert die Selektivitaet genau im Mehrnutzerfall.
+
+#### Ein Schreiber, zwei Stores
+
+Alle Schreibzugriffe laufen ueber eine Verbindung im Poller. Der Suchpfad bekommt eine eigene Verbindung mit `PRAGMA query_only = 1`, damit ein Fehler im Suchcode strukturell nichts kaputtmachen kann. WAL sorgt dafuer, dass die Suche waehrend der Indexierung nicht blockiert.
+
+Zwei Vorbehalte gehoeren in den Code, nicht in die Doku. Erstens setzt WAL Shared Memory voraus, was auf manchen Netzwerkdateisystemen fehlschlaegt: `PRAGMA journal_mode=WAL` auswerten, bei abweichendem Rueckgabewert warnen und weiterlaufen. Zweitens der lokale Entwicklungsfall auf Windows: `scripts/dev/` startet die ExApp als Hostprozess, `APP_PERSISTENT_STORAGE` liegt auf NTFS. SQLite kann das, Tantivy hat dort aber eine dokumentierte Schwaeche (memory-mapped Dateien lassen sich unter Windows nicht loeschen, die Segment-Aufraeumung hinterlaesst Reste). Fuer lokale Proben kosmetisch, fuer belastbare Aussagen zu Indexgroesse und Aufraeumung ist die CI zustaendig.
+
+### Frage 5: Fehlerklassen der Textextraktion
+
+#### Gemessene Ausnahmen
+
+Gegen `testdata/corpus/` und gegen praeparierte kaputte Eingaben, in `python:3.13-slim-trixie`:
+
+| Eingabe | pypdf 6.16.1 | pypdfium2 5.13.0 (pdfium 153.0.7999.0) | Klassifikation |
+|---|---|---|---|
+| `01-text-layer.pdf` | `pages=1 encrypted=False` | `pages=1`, 63 Zeichen | `indexed` |
+| `02-scan-no-text-layer.pdf` | `pages=1 encrypted=False` | `pages=1`, **0 Zeichen** | `skipped(no_text_layer)`, OCR-Kandidat fuer Phase 3 |
+| `06-zero-bytes.pdf` | `pypdf.errors.EmptyFileError` | `PdfiumError: Data format error` | `failed(empty_file)` |
+| `07-password-protected.pdf` | `pypdf.errors.FileNotDecryptedError` | `PdfiumError: Incorrect password error` | `skipped(encrypted)` |
+| `%PDF-1.7` plus Muell | `pypdf.errors.PdfStreamError` | `PdfiumError: Data format error` | `failed(corrupt)` |
+| abgeschnittene DOCX | `docx.opc.exceptions.PackageNotFoundError` | - | `failed(corrupt)` |
+| XLSX, die kein ZIP ist | `zipfile.BadZipFile` (aus openpyxl) | - | `failed(corrupt)` |
+| TXT (UTF-8) | - | `charset_normalizer` erkennt `utf_8` | `indexed` |
+
+Wichtig fuer die Reihenfolge: `PdfReader(path)` wirft bei der passwortgeschuetzten Datei noch nicht, der Fehler kommt beim Zugriff auf `.pages`. Deshalb **zuerst `reader.is_encrypted` abfragen** und bei `True` sofort `skipped(encrypted)` melden, ohne pypdfium2 anzufassen. Genau so verlangt es CONTEXT.md.
+
+#### Extraktoren je Format
 
 | Format | Aufruf | Fehlerklassen |
 |---|---|---|
-| PDF | zuerst `pypdf.PdfReader(path)` und `.is_encrypted` pruefen, dann `pypdfium2.PdfDocument(path)`, je Seite `page.get_textpage()` und `get_text_bounded()`, Seite und Textpage schliessen | `skipped: encrypted_pdf`, `failed: pdf_broken` (`PdfiumError`), `skipped: no_text_layer` (leerer Text, in Phase 3 der Einstieg in OCR) |
-| DOCX | `python-docx`, Absaetze plus Tabellenzellen | `failed: zip_broken` (`BadZipFile`), `failed: ooxml_invalid` |
-| PPTX | `python-pptx`, Shapes mit `has_text_frame` | wie DOCX |
-| XLSX | `openpyxl.load_workbook(path, read_only=True, data_only=True)`, `iter_rows(values_only=True)`, harte Zellgrenze 200.000 | `skipped: too_many_cells`, `failed: zip_broken` |
-| ODT/ODS/ODP | `zipfile` oeffnen, `content.xml` lesen, mit `lxml.etree` alle `text:p` und `text:h` einsammeln | `failed: zip_broken`, `failed: xml_invalid` (`XMLSyntaxError`) |
-| HTML | `lxml.html.fromstring`, `script` und `style` entfernen, `text_content()` | `failed: html_invalid` |
-| RTF | `striprtf.rtf_to_text(text, errors="ignore")` | `failed: rtf_invalid` |
-| TXT/MD/CSV | `charset_normalizer.from_bytes(...).best()`, bei `None` UTF-8 mit `errors="replace"` | `failed: encoding_unknown` |
+| PDF | `pypdf.PdfReader` und `.is_encrypted`, dann `pypdfium2.PdfDocument`, je Seite `get_textpage().get_text_bounded()`, Seite und Textpage schliessen | `skipped(encrypted)`, `failed(corrupt)`, `skipped(no_text_layer)` |
+| DOCX | `python-docx`, Absaetze plus Tabellenzellen | `failed(corrupt)` |
+| PPTX | `python-pptx`, Shapes mit `has_text_frame` | `failed(corrupt)` |
+| XLSX | `openpyxl.load_workbook(read_only=True, data_only=True)`, `iter_rows(values_only=True)`, harte Zellgrenze 200.000 | `skipped(too_many_cells)`, `failed(corrupt)` |
+| ODT/ODS/ODP | `zipfile` oeffnen, `content.xml` lesen, per lxml alle `text:p` und `text:h` einsammeln, **nie** `extractall()` | `failed(corrupt)`, `failed(xml_invalid)` |
+| HTML | `lxml.html.fromstring`, `script` und `style` entfernen, `text_content()` | `failed(xml_invalid)` |
+| RTF | `striprtf.rtf_to_text(text, errors="ignore")` | `skipped(empty_text)` bei Unsinn |
+| TXT/MD/CSV | `charset_normalizer.from_bytes(...).best()`, bei `None` UTF-8 mit `errors="replace"` | `failed(encoding_unknown)` |
 
-**Zeitbudget ohne Prozess-Zoo:** ein Timeout pro Datei ist noetig (eine kaputte XLSX kann in einer C-Schleife haengen), aber ein Prozesspool widerspricht IDX-08. Empfehlung: `signal.alarm` bzw. `signal.setitimer` im Indexer-Thread scheidet aus (Signale kommen nur im Hauptthread an). Stattdessen **ein** wiederverwendeter `concurrent.futures.ProcessPoolExecutor(max_workers=1)`, an den die Extraktion abgegeben wird, mit `future.result(timeout=...)`; laeuft er ab, wird der Kindprozess getoetet und der Pool neu erzeugt. Das ist ein einziger zusaetzlicher Prozess, kein Pool im Sinne von Parallelitaet, und es haelt die RAM-Spitze der Extraktion aus dem Hauptprozess heraus. Zeitgrenze als Startwert 60 Sekunden pro Datei, Fehlerklasse `failed: extract_timeout`.
+#### Die Zustaende
+
+`state` und `reason` in `files`. Englische Bezeichner, weil sie Code sind; die deutsche Beschriftung entsteht in Phase 4.
+
+| state | reason | Bedeutung | Erneut versuchen? |
+|---|---|---|---|
+| `indexed` | NULL | Text im Index | - |
+| `indexed` | `truncated` | Text ueber dem Zeichendeckel abgeschnitten | nein |
+| `skipped` | `too_large` | ueber dem 50-MB-Deckel | nur nach Aenderung des Deckels |
+| `skipped` | `mime_not_allowed` | nicht in der Allowlist | nur nach Aenderung der Allowlist |
+| `skipped` | `encrypted` | passwortgeschuetzt | nein |
+| `skipped` | `no_text_layer` | PDF ohne Textebene | **ja, in Phase 3 durch OCR** |
+| `skipped` | `empty_text` | Extraktion lief, lieferte nichts | nein |
+| `skipped` | `too_many_cells` | Zellgrenze ueberschritten | nein |
+| `skipped` | `gone` | Datei zwischen Einreihen und Abruf verschwunden | nein |
+| `failed` | `empty_file` | 0 Byte | nein |
+| `failed` | `corrupt` | Parser-Ausnahme | nein |
+| `failed` | `xml_invalid` | XML- bzw. HTML-Parserfehler | nein |
+| `failed` | `encoding_unknown` | Kodierung nicht bestimmbar | nein |
+| `failed` | `timeout` | Kindprozess ueber dem Zeitdeckel | einmal, dann nie |
+| `failed` | `out_of_memory` | `RLIMIT_AS` gegriffen | einmal, dann nie |
+| `failed` | `gateway_error` | Content-Gateway hat nicht geliefert | **ja**, Transportfehler |
+| `failed` | `repeatedly_stuck` | dreimal gesperrt, nie quittiert | nein |
+
+Die Trennung ist inhaltlich: `skipped` heisst "wir haben entschieden, das nicht zu indexieren", `failed` heisst "wir wollten, konnten aber nicht". Nur `failed` ist ein Fehler im Sinne der Statusseite, nur `skipped(no_text_layer)` ist eine offene Zukunftsaufgabe. Diese Unterscheidung ist die eigentliche Nutzlast von IDX-06.
+
+`no_text_layer` ist die Bruecke zu Phase 3 und **muss** jetzt entstehen, sonst braucht Phase 3 einen vollstaendigen Reindex, nur um zu erfahren, welche PDFs OCR brauchen.
+
+#### Deckel und ihre Durchsetzung
+
+| Deckel | Startwert | Durchgesetzt wo |
+|---|---|---|
+| Dateigroesse | 50 MB | Crawl (PHP), beim Einreihen |
+| Batchgroesse | 32 Dateien **oder** 64 MB | `GET /queues/documents?n&max_bytes` |
+| Extraktionszeit je Datei | 120 s | `Process.join(timeout)` plus `kill()` |
+| Adressraum des Kindprozesses | 512 MB | `resource.setrlimit(RLIMIT_AS, ...)` |
+| Extrahierter Text je Dokument | 512 kB Zeichen | im Extraktor, danach `truncated` |
+| XLSX-Zellen je Datei | 200.000 | Zaehler in der `iter_rows`-Schleife |
+| PDF-Seiten je Datei | 500 | Schleifenabbruch, danach `truncated` |
+| Freier Platz vor dem Commit | 500 MB bzw. 5 Prozent | `shutil.disk_usage()`, sonst `paused_low_disk` |
+
+Gemessen: `RLIMIT_AS` von 300 MB liefert im Kind einen `MemoryError` (Exitcode 0, weil abgefangen), `kill()` auf einen haengenden Prozess liefert Exitcode -9. Der Elternprozess unterscheidet beide Faelle.
 
 **Nur-Lesen bleibt strukturell wahr:** die Temporaerdatei liegt in `$APP_PERSISTENT_STORAGE/tmp/`, wird im `finally` geloescht, und beim Start werden Reste des letzten Absturzes entfernt. Keine Bibliothek bekommt je einen Pfad in den Nextcloud-Speicher zu sehen, denn den gibt es im Container nicht.
 
-### Frage 7: E2E-Erweiterung der CI
+#### Bekannte Luecken, die dokumentiert und nicht behoben werden
 
-Das Phase-1-Muster traegt, es wird nur ergaenzt. Was schon da ist und wiederverwendet wird: Server-Checkout, `maintenance:install` mit SQLite, `composer run serve`, ExApp als nativer Prozess, `app_api:daemon:register` mit `manual_install`, `app_api:app:register --wait-finish`, Korpus per `cp -r` nach `data/<user>/files/` plus `occ files:scan --all`, fileids per WebDAV-PROPFIND.
+- `python-docx` liefert keine Kopf- und Fusszeilen, keine Fussnoten, keine Textfelder. Wenn es stoert, `word/header*.xml` und `word/footnotes.xml` per lxml nachlesen. Nicht in Phase 2.
+- `striprtf` wirft nicht, es liefert bei kaputtem RTF Unsinn. Ein Plausibilitaetsdeckel (Anteil nicht druckbarer Zeichen) ist die einzige Verteidigung, `empty_text` der ehrliche Zustand.
+- Legacy-Formate (DOC, XLS, PPT) sind ausserhalb v1 und landen als `skipped(mime_not_allowed)`. Dokumentierte Nicht-Unterstuetzung ist ehrlicher als eine wacklige Kruecke.
 
-**Neu und konkret:**
+### Frage 6: E2E-Test in der bestehenden CI
 
-1. **Dateien anlegen:** unveraendert `cp -r` plus `occ files:scan --all`. Ein WebDAV-Upload waere realistischer, kostet aber pro Datei einen Request und bringt fuer die Indexfrage nichts. Der erweiterte Korpus braucht deutsche Inhalte mit den Testwoertern.
-2. **Crawl deterministisch anstossen:** nicht auf Cron warten. `occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once` und danach `occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --once` [VERIFIED: `core/Command/Background/JobWorker.php`, Optionen `--once`, `--interval`, `--stop_after`]. Fuer Einzelfaelle gibt es `occ background-job:execute <id> --force-execute`, das den geplanten Zeitpunkt ignoriert; genau das braucht man, weil `scheduleAfter` sonst fuenf Minuten Wartezeit setzt.
-3. **Auf Fertigstellung warten:** nicht schlafen, sondern pollen. `GET /queues/documents/stats` (offene Zeilen) und der `/status`-Endpunkt der ExApp (`done`, `failed`, `skipped`, `pending`) liefern beide Zahlen; die Schleife endet, wenn die Queue leer und `pending` null ist, mit einem harten Zeitlimit und dem Ausdruck beider Zaehler beim Fehlschlag.
-4. **Deutsche Suchen asserten:** ueber die normale OCS-Suchroute, wie in Phase 1, mit `jq -e`. Mindestens: Kompositum ueber ein Teilwort, Umlautvariante, Nominalflexion, Phrase, Ausschluss mit `-`, Dateityp, und ein Negativfall (ein zweiter Nutzer ohne Zugriff findet nichts).
-5. **Kill-Resume nachstellen:** in der CI laeuft die ExApp als Prozess, nicht als Container. `kill -9 $(cat exapp.pid)` ist semantisch dasselbe wie `docker kill` (SIGKILL, keine Aufraeumarbeit). Ablauf: Crawl starten, warten bis `done > 0` und `pending > 0`, SIGKILL, Prozess neu starten, warten bis `pending == 0`, danach pruefen, dass die Summe der Zustaende der Dateizahl entspricht und **kein** Dokument doppelt im Index liegt (Zaehlabfrage auf `file_id`). Zusaetzlich der eigentliche Beweis: die vor dem Kill erreichte `done`-Zahl darf nach dem Neustart nicht kleiner sein.
-6. **Zweiter Datenbankdialekt:** Phase 2 fuehrt die erste eigene Tabelle ein, und `IQueryBuilder`-Fehler sind dialektabhaengig. Ein zweiter Matrixeintrag mit MariaDB oder Postgres gehoert deshalb in diese Phase, mindestens fuer den Job, der die Migration und den Crawl ausfuehrt.
+Die bestehende `integration.yml` hat zwei Jobs, `walking-skeleton` und `readonly-gate`, beide mit identischem Aufbau. **Beide bleiben unveraendert.** Der Durchstich aus Phase 1 ist die Regressionsprobe fuer die Integration und darf nicht umgebaut werden.
+
+Neu kommt ein dritter Job `index-search-e2e` dazu, der denselben Aufbau wiederverwendet und danach sechs Dinge beweist.
+
+**1. Dateien anlegen.** Weiterhin `cp -r` plus `occ files:scan --all`; ein WebDAV-Upload waere realistischer, kostet aber pro Datei einen Request und bringt fuer die Indexfrage nichts. Der Korpus wird **erweitert**, nicht geaendert (CONTEXT.md): neue Dateien mit deutschem Behoerdentext (Kündigungsfrist, Grundstücksverkehrsgenehmigung, Sitzungsvorlage), dazu DOCX, ODT und XLSX. `testdata/corpus/** -text` in `.gitattributes` gilt weiter. Gemessen: pdfium liest cp1252-Umlaute aus einem stdlib-erzeugten PDF auch ohne `/Encoding` korrekt, trotzdem gehoert `/Encoding /WinAnsiEncoding` explizit hinein, damit die Datei nicht von der Nachsicht des Parsers abhaengt.
+
+**2. Crawl deterministisch anstossen.** Hintergrundjobs laufen in dieser CI nicht von selbst. Verfuegbar sind `background-job:list`, `background-job:execute <id> --force-execute` (ignoriert den geplanten Zeitpunkt, genau das braucht man, weil `scheduleAfter` sonst wartet) und `background-job:worker [job-class]` mit `--once` bzw. `--stop-after` [VERIFIED: `nextcloud/server` `stable34`, `core/Command/Background/*`].
+
+```bash
+./occ findling:index --restart
+timeout 60  ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob'   --once
+timeout 300 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop-after 120
+```
+
+**3. Auf Fertigstellung warten, nicht schlafen.** Pollen auf `GET /queues/documents/stats` und den `/status`-Endpunkt der ExApp, bis Queue leer und nichts mehr offen ist, mit hartem Zeitlimit und dem Ausdruck beider Zaehler beim Fehlschlag.
+
+**4. Deutsche Suchen asserten**, ueber die normale OCS-Suchroute wie in Phase 1, mit `jq -e`. Mindestens: Kompositum ueber ein Teilwort (`Genehmigung` findet die Grundstücksverkehrsgenehmigung), Umlautvariante, Nominalflexion, Phrase, Ausschluss mit `-`, Dateityp, und die Klartextprobe (`subline | contains("<") | not`).
+
+**5. ACL negativ.** Ein zweiter Nutzer ohne Zugriff sucht denselben Begriff und bekommt null Treffer. Das ist die einzige Assertion, die den Unterschied zwischen "Index funktioniert" und "Rechte funktionieren" zeigt.
+
+**6. Kill-Resume statt Behauptung.** In der CI laeuft die ExApp als Prozess, `kill -9 $(cat exapp.pid)` ist semantisch dasselbe wie `docker kill` (SIGKILL, keine Aufraeumarbeit), und `APP_PERSISTENT_STORAGE` bleibt bestehen. Ablauf: Crawl starten, warten bis einige Dokumente fertig und andere offen sind, SIGKILL, neu starten, warten bis nichts mehr offen ist. Danach pruefen: die vor dem Kill erreichte Zahl fertiger Dokumente ist nach dem Neustart nicht kleiner, die Summe der Zustaende entspricht der Dateizahl, und **kein** Dokument liegt doppelt im Index (Zaehlabfrage auf `file_id`).
+
+**Zwei Rahmenpunkte.** Phase 2 fuehrt die erste eigene Tabelle ein, und `IQueryBuilder`-Fehler sind dialektabhaengig: ein zweiter Matrixeintrag mit MariaDB oder PostgreSQL gehoert in diesen Job, notfalls nur im `schedule`-Lauf. Und der Job wiederholt einen kompletten Nextcloud-Aufbau von mehreren Minuten, laeuft also pfadgefiltert wie die anderen; die volle Serverversionsmatrix kommt erst in Phase 5.
+
+### Frage 7a: Snippet-Markup, die Fortsetzung des Phase-1-Befunds
+
+Der Phase-1-Befund gilt unveraendert: die Unified-Search-UI interpoliert die Subline als Text, HTML erscheint woertlich. `SnippetGenerator` bietet `to_html()` mit `<b>`-Auszeichnung; **diese Methode wird nie aufgerufen**. Verwendet werden `fragment()` und `highlighted()`.
+
+**Der neue Befund:** `Snippet.highlighted()` liefert Bereiche in **UTF-8-Bytes**, relativ zum Anfang von `fragment()`.
+
+- Quellcode: tantivy-py dokumentiert es woertlich ("the byte ranges within that fragment that matched the query"), und in Tantivy sind `Token.offset_from` und `offset_to` als "Offset (byte index)" definiert, die Fragmentauswahl macht `&text[fragment.start_offset..fragment.stop_offset]`, also Rust-Byte-Slicing [VERIFIED: `tantivy-py/src/snippet.rs`, `tantivy/src/snippet/mod.rs`, `tantivy/tokenizer-api/src/lib.rs`].
+- Messung: fuer `"Sehr geehrte Damen und Herren, die Kündigungsfrist für Ihren Vertrag ..."` liefert Tantivy `(35, 51)`. In Zeichen waere es `(35, 50)`. Ein naives `fragment[35:51]` ergibt `"Kündigungsfrist "` mit einem Leerzeichen zu viel.
+
+**Konsequenz fuer das eingefrorene Protokoll.** `backend/src/findling/api/search.py` dokumentiert `highlights` heute als Zeichenoffsets. Diese Zusage bleibt, und der Container rechnet um. **Der Test dazu muss einen Umlaut vor der Fundstelle haben**, sonst ist er gruen, egal ob umgerechnet wird, und dokumentiert nichts.
+
+**Drei weitere Snippet-Details:**
+
+- Die Bereiche koennen sich **wiederholen und ueberlappen**, weil alle Teiltoken eines zerlegten Kompositums die Offsets des Originals erben. Vor dem Versand sortieren und verschmelzen.
+- Weil die Teiltoken die Offsets des Kompositums erben, markiert eine Suche nach "Genehmigung" die vollstaendige "Grundstücksverkehrsgenehmigung" (gemessen `(0, 31)` in Bytes fuer ein 30 Zeichen langes Wort). Das ist gutes Verhalten und gehoert in einen Test, damit es niemand fuer einen Fehler haelt.
+- `set_max_num_chars(n)` ist trotz des Namens ein **Byte**-Vergleich im Fragmentierer (`(next.offset_to - fragment.start_offset) > max_num_chars`), obwohl der Doc-Kommentar "characters (not bytes)" behauptet. Bei deutschem Text ist das Fragment also etwas kuerzer als die Zahl vermuten laesst. Vorschlag 200 statt der Vorgabe, damit ein deutscher Satz hineinpasst.
+
+### Frage 7b: AppAPI-Proxy-Timeout, Grenzen und Konfigurierbarkeit
+
+Vollstaendig aus dem Quellcode beantwortet [VERIFIED: `nextcloud/app_api`, `lib/Service/AppAPIService.php`]:
+
+| Frage | Antwort |
+|---|---|
+| Wo setzt man den Timeout? | Sechster Parameter `$options` von `exAppRequest()`, Schluessel `timeout`, in Sekunden, unveraendert an Guzzle durchgereicht |
+| Default | **3 Sekunden**, an zwei Stellen gesetzt |
+| Obergrenze in AppAPI | **keine**. AppAPI selbst benutzt 60 s beim Aktivieren und Deaktivieren einer ExApp |
+| Was begrenzt sonst? | PHP `max_execution_time` und der Webserver-Timeout, beides Instanzsache und weit ueber unserem Wert |
+| Verhalten beim Timeout | Guzzle wirft, AppAPI faengt und liefert `['error' => 'cURL error 28: ...']`. Es fliegt keine Ausnahme nach oben |
+| 4xx und 5xx | `http_errors` ist hart `false`, sie kommen als normales `IResponse`. Statuscode explizit pruefen |
+| Asynchrone Alternative | `requestToExAppAsync()` mit `IPromise` existiert; fuer Phase 2 unnoetig, aber der Ausweg, falls die zwei Roundtrips zu teuer werden |
+
+**Budgetierung.** Der bisherige Wert von 2 s galt fuer einen Aufruf. Bei zwei Aufrufen waeren es im schlimmsten Fall 4 s. Der Browser stellt pro Provider einen eigenen Request, ein langsamer Provider blockiert also keinen anderen, laesst aber die Ergebnisgruppe drehen und belegt einen PHP-Worker.
+
+| Aufruf | Timeout | Begruendung |
+|---|---|---|
+| `POST /search` | **1,5 s** | Gemessene Arbeit unter 5 ms; 1,5 s deckt Proxy und Kaltstart |
+| `POST /snippets` | **1,5 s** | Gemessene Arbeit 4,2 ms fuer 20 Snippets |
+| Gesamtdeckel im Provider | **2,5 s Wanduhr** | Ist das Budget nach dem Recheck aufgebraucht, entfaellt `/snippets` und die Treffer erscheinen ohne Snippet statt gar nicht |
+
+**Der Kanarien-Treffer (Claude's Discretion).** Empfehlung: behalten, aber einsperren. Der Container liefert ihn nur noch bei dem exakten Suchbegriff `findling-canary`. Damit bleibt der Phase-1-Job `walking-skeleton` unveraendert gruen (er sucht genau diesen Begriff), normale Suchen sehen ihn nie, und die Diagnose "kommt die Antwort aus dem Container" bleibt fuer immer verfuegbar. Der reservierte Begriff gehoert in `docs/`.
 
 ---
 
 ## Don't Hand-Roll
 
-| Problem | Nicht selbst bauen | Stattdessen | Warum |
+| Problem | Don't Build | Use Instead | Why |
 |---|---|---|---|
-| Deutsches Stemming | Eigene Suffixregeln | `Filter.stemmer("german")` | Snowball ist der Referenzalgorithmus; eigene Regeln sind schlechter und nie fertig |
-| Stoppwoerter | Eigene Liste | `Filter.stopword("german")` | 230 gepflegte Eintraege, im Analyzer an der richtigen Stelle |
-| Umlaut-Normalisierung | `str.translate` vor dem Indexieren | `Filter.ascii_fold()` | Muss auf Query- und Indexseite identisch sein; im Analyzer ist es das per Konstruktion |
-| Kompositazerlegung | Eigener rekursiver Zerleger | `Filter.split_compound(liste)` | Aho-Corasick in Rust gegen eine Python-Rekursion pro Token; der Unterschied ist Groessenordnungen |
-| Snippet-Fenster | Eigene Suche nach Trefferpositionen im Text | `SnippetGenerator` | Kennt die tatsaechlich getroffenen Terme aus der Query inklusive Analyzer, nicht nur die Eingabezeichenkette |
-| Zeilen-Locks in der Queue | `SELECT ... FOR UPDATE` oder Anwendungssperren | Bedingtes `UPDATE` mit Zeitstempel, Rueckgabewert auswerten | Dialektfrei, in context_chat im Produktivbetrieb belegt |
-| "Wer darf diese Datei sehen" | Rekonstruktion aus der Share-API | `IUserMountCache` | Die Share-API kennt Gruppenordner und externe Mounts nicht |
-| Datei-Enumeration je Mount | Eigenes SQL gegen `oc_filecache` | `IFileAccess::getByAncestorInStorage` | @since 32.0.0, also verfuegbar; das eigene SQL waere Pflege ohne Gegenwert |
-| Volltext-Persistenz | Eigenes Format oder JSON-Dateien | Tantivy-Verzeichnis | Atomare Commits, mmap, Segment-GC sind gebaut und getestet |
-| Encoding-Erkennung | Heuristik auf Basis von Byte-Haeufigkeiten | `charset-normalizer` | Deutsche Altbestaende sind cp1252 und latin-1, das erkennt man nicht nebenbei |
+| Deutsche Komposita zerlegen | Eigener rekursiver Splitter | `Filter.split_compound()` | Zerlegt Index **und** Anfrage mit derselben Regel; Aho-Corasick in Rust gegen eine Python-Rekursion pro Token |
+| Deutsches Stemming und Umlaut-Faltung | Eigene Suffixregeln, `str.translate` | `Filter.stemmer("german")` | Snowball ist der Referenzalgorithmus und faltet Umlaute und ß selbst |
+| Stoppwoerter | Eigene Liste | `Filter.stopword("german")` | Gepflegt und an der richtigen Stelle der Kette |
+| Suchoperatoren (Phrase, +/-, Feld, Typ) | Eigener Parser auf dem Suchbegriff | `Index.parse_query_lenient(...)` | Alle vier Faelle gemessen abgedeckt, plus Fehlertoleranz und Feldgewichte |
+| Trefferausschnitt | Eigene Fenstersuche im Text | `SnippetGenerator` | Kennt die tatsaechlich getroffenen Terme aus der Query inklusive Analyzer, nicht nur die Eingabezeichenkette |
+| Mounts und Dateien je Mount aufzaehlen | `CacheQueryBuilder`-SQL wie im Legacy-Pfad | `IFileAccess::getDistinctMounts()` und `getByAncestorInStorage()` | Ab NC 32 vorhanden; erspart rund 150 Zeilen SQL samt Home-Root-Umbiegung und E2E-Filter |
+| "Wer sieht diese Datei" | Eigene Aufloesung ueber Shares und Gruppen | `IUserMountCache::getMountsForFileId()` | Ein zweites Rechtemodell driftet garantiert und verfehlt Team Folders |
+| Zeilensperre in der Queue | `SELECT ... FOR UPDATE` oder eine Lock-Tabelle | UPDATE mit der Sperrbedingung im WHERE | Dialektunabhaengig und atomar; die Zahl betroffener Zeilen ist die Gewinnentscheidung |
+| Deduplizierung der Queue | Select vor dem Insert | Unique-Index auf `file_id` plus Upsert | Der Select ist ein Race zwischen parallelen Crawl-Jobs |
+| Zeitdeckel fuer die Extraktion | `signal.alarm`, Thread mit Flag | `multiprocessing.Process` plus `join(timeout)` plus `kill()` | Ein haengender C-Aufruf ist aus Python nicht unterbrechbar; Signale kommen nur im Hauptthread an; `ProcessPoolExecutor` kann nicht abbrechen |
+| RAM-Deckel fuer die Extraktion | Selbstmessung mit `psutil` | `resource.setrlimit(RLIMIT_AS, ...)` im Kind | Der Kernel entscheidet, nicht die Anwendung |
+| Absturzsicherheit des Index | Eigene Journal- oder Markerdateien | Tantivy-Commit plus Queue-Zeile in Nextcloud | Gemessen: `kill -9`, Index oeffnet auf dem letzten Commit, Writer sofort wieder erteilt |
+| Encoding-Erkennung | `chardet` oder BOM-Heuristik | `charset-normalizer` | MIT statt LGPL, schneller, und deutsche Altbestaende sind der Regelfall |
 
-**Key insight:** Fast alles, was in dieser Phase nach eigener Arbeit aussieht, ist in Wahrheit Verdrahtung. Der einzige echte Eigenbau ist die Aufbereitung der Wortliste, und der ist genau deshalb der Ort, an dem eine Messung vor der Entscheidung stehen muss.
+**Key insight:** Fast alles, was in dieser Phase schwierig aussieht, ist in Tantivy, in `IFileAccess` oder in der Standardbibliothek geloest. Der Eigenanteil besteht aus vier Dingen: die richtige Wortliste, die richtige Filterreihenfolge, die richtige Reihenfolge der Commits und die Entscheidung, den Suchpfad in zwei Aufrufe zu teilen. Alles andere ist Verdrahtung.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Der Kompositasplitter splittet nicht, und niemand merkt es
+### Pitfall 1: Die Wortliste wird roh benutzt, und "Frist" findet die Kündigungsfrist nicht
 
-**Was schiefgeht:** Die Wortliste ist eingebunden, der Index ist gebaut, die Suche nach "Genehmigung" findet die Datei mit "Grundstuecksverkehrsgenehmigung" trotzdem nicht.
-**Warum:** Der Filter splittet nur bei **vollstaendiger** Zerlegung in aufeinanderfolgende Woerterbuchtreffer. Fehlt eine Fugenform ("kundigungs" gegenueber "kundigung"), bleibt das ganze Wort ungeteilt. Gemessen und in beide Richtungen belegt.
-**Vermeiden:** Fugenformen im Aufbereitungsschritt erzeugen. Und einen Test, der nicht die Suche, sondern direkt `TextAnalyzer.analyze("Grundstuecksverkehrsgenehmigung")` prueft. Der Analyzer-Test braucht keinen Index und laeuft in Millisekunden.
-**Warnzeichen:** Suchen nach Teilwoertern liefern konstant null Treffer, waehrend die Suche nach dem ganzen Wort funktioniert.
+**Was schiefgeht:** Die deutsche Suche wirkt zunaechst gut, aber genau die langen Behoerdenkomposita, die das Produktversprechen tragen, sind nur als Ganzes findbar.
+**Warum es passiert:** Eine Rechtschreibliste enthaelt tausende Komposita. `LeftmostLongest` greift das laengste Ganzwort ab, und die vollstaendige Zerlegung gelingt dann nicht mehr.
+**Vermeidung:** Laengenfenster 4 bis 14, Fugenelemente als eigene Eintraege, und ein Tabellentest mit den sechzehn Komposita aus Frage 1 samt erwartetem Ergebnis.
+**Warnzeichen:** Der Analyzer-Test prueft, **dass** zerlegt wird, statt **was**.
 
-### Pitfall 2: Byte-Offsets in Zeichen-Offsets umdeuten
+### Pitfall 2: `remove_long` steht vor dem Splitter, und lange Woerter verschwinden spurlos
 
-**Was schiefgeht:** Die Hervorhebung sitzt einige Zeichen zu weit rechts, und zwar genau um die Anzahl der Umlaute vor der Fundstelle.
-**Warum:** `Snippet.highlighted()` gibt Bytepositionen im UTF-8-Fragment zurueck.
-**Vermeiden:** Umrechnen (Code-Beispiel 4) und die Bereiche danach deduplizieren und verschmelzen, weil gesplittete Komposita denselben Bereich mehrfach melden.
-**Warnzeichen:** Der Fehler ist bei englischem Testtext unsichtbar. Der Test muss deutschen Text mit Umlaut **vor** der Fundstelle verwenden.
+**Was schiefgeht:** Ein 60-Zeichen-Kompositum ergibt eine leere Tokenliste. Das Dokument enthaelt das Wort, der Index nicht, und keine Suche findet es je.
+**Warum es passiert:** `remove_long` gehoert intuitiv an den Anfang, und Tantivys eingebauter `default`-Analyzer setzt es mit Limit 40 tatsaechlich dorthin.
+**Vermeidung:** `remove_long(48)` nach `split_compound`. Ein Testfall mit "Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz" ist die billigste Absicherung, die dieses Projekt kaufen kann.
+**Warnzeichen:** Die Kette folgt dem Aufbau von Tantivys `default`-Analyzer.
 
-### Pitfall 3: Der lange Lock haelt den Neustart auf
+### Pitfall 3: Die Hervorhebung wandert bei Umlauten
 
-**Was schiefgeht:** Nach `docker kill` und Neustart tut der Indexer scheinbar nichts, obwohl die Queue voll ist.
-**Warum:** Die zuletzt geholten Zeilen sind gesperrt, und das Vorbild setzt den Timeout auf 24 Stunden.
-**Vermeiden:** 15 Minuten Timeout, Nack-Endpunkt im SIGTERM-Pfad, und im Resume-Test explizit pruefen, dass innerhalb weniger Sekunden wieder Fortschritt entsteht.
-**Warnzeichen:** `pending` steht still, `locked` ist gross, das Log zeigt leere Batches.
+**Was schiefgeht:** Bei "Kündigungsfrist" markiert die UI ein Zeichen zu weit rechts, bei mehreren Umlauten entsprechend mehr. Der Text bleibt richtig, nur die Markierung nicht, und niemand meldet es.
+**Warum es passiert:** Tantivy zaehlt Bytes, Python und `mb_substr` zaehlen Zeichen.
+**Vermeidung:** Umrechnung im Container, plus ein Test mit einem Umlaut **vor** der Fundstelle, plus das Verschmelzen ueberlappender Bereiche.
+**Warnzeichen:** Der Snippet-Test benutzt einen englischen Satz.
 
-### Pitfall 4: Zustand vor dem Commit schreiben
+### Pitfall 4: Der Tokenizer ist nach dem Oeffnen nicht registriert
 
-**Was schiefgeht:** Nach einem Absturz gelten Dokumente als indexiert, sind aber nicht im Index. Die Suche findet sie nie wieder, und kein Zaehler faellt auf.
-**Warum:** Der Tantivy-Commit ist der Zeitpunkt der Dauerhaftigkeit, alles davor ist Arbeitsspeicher.
-**Vermeiden:** Reihenfolge aus Pattern 5 einhalten, sie ist die halbe Miete fuer IDX-02.
-**Warnzeichen:** Der Deckungsgrad ist rechnerisch vollstaendig, aber Stichproben finden nichts.
+**Was schiefgeht:** Nach einem Neustart wirft schon das Parsen der ersten Query `ValueError: The tokenizer ... is unknown`. Die Suche ist tot, der Index ist es nicht.
+**Warum es passiert:** Das Schema speichert nur den **Namen** des Analyzers. Beim Anlegen registriert man ihn und vergisst es beim Oeffnen.
+**Vermeidung:** Genau eine Funktion `open_index()`, die oeffnet und registriert; nirgends sonst ein `Index(...)` oder `Index.open(...)`. Ein Test, der den Index schliesst, neu oeffnet und sucht.
+**Warnzeichen:** `Index.open(` kommt an mehr als einer Stelle im Code vor.
 
-### Pitfall 5: Zweite Sprache verdoppelt den Index unbemerkt
+### Pitfall 5: Der Suchpfad liefert Snippets vor dem Recheck
 
-**Was schiefgeht:** Der Index ist deutlich groesser als erwartet, auf kleinen Instanzen faellt das auf.
-**Warum:** `body_de` und `body_en` indexieren denselben Text zweimal.
-**Vermeiden:** `body_en` nicht speichern (nur indexieren), `FINDLING_LANGS` als Schalter, und ab Phase 2 die Kennzahl "Bytes pro indexiertem Dokument" mitfuehren. Sie ist auch die Zahl, die der Admin in Phase 4 sehen will.
-**Warnzeichen:** Indexgroesse waechst schneller als die Summe der extrahierten Textmengen.
+**Was schiefgeht:** Ein Nutzer bekommt einen Textausschnitt aus einer Datei, die er nicht sehen darf, weil die Filterschleife einen Randfall hat.
+**Warum es passiert:** Ein Aufruf ist einfacher als zwei, und die Verletzung faellt in keinem funktionalen Test auf, weil das Ergebnis am Ende gefiltert ist.
+**Vermeidung:** Zwei Endpunkte, und das Antwortmodell von `/search` hat strukturell kein Textfeld.
+**Warnzeichen:** Das Pydantic-Modell von `/search` hat ein Feld `snippet`.
 
-### Pitfall 6: Fehlerzustaende bleiben in der Queue haengen
+### Pitfall 6: Zuerst quittieren, dann commiten
 
-**Was schiefgeht:** Eine kaputte Datei wird geholt, schlaegt fehl, wird nicht quittiert, kommt nach dem Lock-Timeout zurueck, schlaegt wieder fehl. Der Erstindex endet nie.
-**Warum:** `failed` fuehlt sich an wie "nicht fertig", ist aber ein Endzustand.
-**Vermeiden:** `failed` und `skipped` werden in SQLite festgehalten **und** in PHP quittiert. `attempts` zaehlt, drei gleiche Fehler bedeuten endgueltig `failed`. Nur wiederholbare Fehler (Netz, 503 vom Gateway) fuehren zum Nack.
-**Warnzeichen:** Dieselbe `file_id` erscheint mehrfach im Log, `attempts` steigt ueber drei.
+**Was schiefgeht:** Nach einem Absturz gilt eine Datei als indexiert, ist aber nicht im Index. Der stille Ausfall aus PITFALLS Nr. 2, bemerkt erst, wenn jemand etwas nicht findet.
+**Warum es passiert:** Die Quittung fuehlt sich wie der Abschluss an.
+**Vermeidung:** Feste Reihenfolge Tantivy-Commit, SQLite-Commit, Quittung, mit einem Kommentar an der Stelle. Ein Test, der zwischen Commit und Quittung abbricht und die erneute Zustellung prueft.
+**Warnzeichen:** Die Quittung steht im selben `try`-Block wie die Verarbeitung.
 
-### Pitfall 7: Gate A schlaegt beim ersten Quittieren zu
+### Pitfall 7: Der Lock-Timeout aus dem Vorbild wird uebernommen
 
-**Was schiefgeht:** Der Ack-Aufruf ist ein `DELETE`, und `backend/tests/test_readonly_gate.py` haelt `OCS_WRITE_ALLOWLIST` in Phase 1 bewusst leer. Der erste Commit dieser Phase macht das Gate rot.
-**Warum:** So ist es entworfen: jeder Schreibweg nach Nextcloud soll eine bewusste Entscheidung sein.
-**Vermeiden:** Die Allowlist um die Queue-Pfade erweitern (`/ocs/v2.php/apps/findling/queues/documents` und `.../unlock`), mit einer Begruendung im Kommentar: geschrieben wird ausschliesslich in unsere eigene Queue-Tabelle, nie in Nutzerdateien. Zusaetzlich beachten, dass `FORBIDDEN_IDENTIFIERS` das Wort `delete` enthaelt und `REMOTE_RECEIVERS` die Empfaengernamen `nc`, `ocs`, `_session`, `session`, `adapter` fuehrt: der Tantivy-Writer darf im Code nicht so heissen.
-**Warnzeichen:** Rotes Gate A mit einer Meldung ueber einen nicht erlaubten OCS-Schreibpfad, direkt nach dem ersten Queue-Commit.
+**Was schiefgeht:** Der Abnahmetest "docker kill mitten im Lauf" sieht nach dem Neustart aus wie Stillstand: die gesperrten Zeilen kommen 24 Stunden lang nicht zurueck.
+**Warum es passiert:** context_chat hat `LOCK_TIMEOUT = 60 * 60 * 24`.
+**Vermeidung:** 15 Minuten als benannte Konstante, plus der Unlock-Endpunkt fuer den geordneten Neustart, plus ein Kommentar, dass OCR in Phase 3 den Wert anhebt.
+**Warnzeichen:** Der Wert steht als magische Zahl in der Abfrage.
 
-### Pitfall 8: Analyzer aendern, ohne den Index zu invalidieren
+### Pitfall 8: Numerische Felder ueber Schluesselwortargumente
 
-**Was schiefgeht:** Nach einem Update findet die Suche alte Dokumente nicht mehr, neue schon. Niemand kann es erklaeren.
-**Warum:** Tokenisierung ist Teil der Daten. Aendert sich die Wortliste, die Filterreihenfolge oder die Tantivy-Version, passen alte Terme nicht mehr zu neuen Anfragen.
-**Vermeiden:** `analyzer_version`, `wordlist_hash`, `index_version` und `tantivy_version` in `meta` fuehren, beim Start vergleichen und bei Abweichung entweder gezielt auf `pending` setzen oder den Index verwerfen und neu aufbauen, sichtbar im Status. Das ist die Gegenmassnahme zu fulltextsearch #857, wo ein "Reset" nur halb zuruecksetzte.
-**Warnzeichen:** Trefferzahlen aendern sich nach einem Release ohne Reindex.
+**Was schiefgeht:** `Document(file_id=42)` auf einem `unsigned`-Feld ergibt `ValueError: Schema error: 'Expected a U64 for field "file_id"'`, und je nach Aufrufweg erst spaeter und ohne Bezug zum verursachenden Dokument.
+**Vermeidung:** Immer `doc.add_unsigned(...)` bzw. `Document.from_dict(payload, schema)`.
+**Warnzeichen:** Dokumente werden aus einem Dict per Schluesselwortargumenten gebaut.
+
+### Pitfall 9: `heap_size` unter 15 MB oder ein zweiter Writer
+
+**Was schiefgeht:** Der Writer wird abgelehnt ("needs to be at least 15000000") oder liefert `LockBusy`.
+**Warum es passiert:** Auf einer 4-GB-Box rechnet man den Heap klein, und ein zweiter Writer entsteht, wenn zwei Codestellen unabhaengig einen anlegen.
+**Vermeidung:** 50 MB, `num_threads=1`, und der Writer lebt in genau einem Modul.
+**Warnzeichen:** `index.writer(` kommt an mehr als einer Stelle vor.
+
+### Pitfall 10: Der ACL-Vorfilter wird als Sicherheitsgrenze behandelt
+
+**Was schiefgeht:** Irgendwann faellt auf, dass der PHP-Recheck Datenbankzugriffe kostet, und er wird "optimiert", weil die ExApp ja schon gefiltert hat.
+**Warum es passiert:** Der Vorfilter sieht aus wie eine Rechtepruefung.
+**Vermeidung:** Er heisst im Code `prefilter`, nie `check` oder `authorize`, und traegt einen Docstring, der das sagt. Dazu der Team-Folder-Fall als benannte Ueberapproximation.
+**Warnzeichen:** Im Code steht "already checked in the backend".
+
+### Pitfall 11: Die Extraktion laeuft im Hauptprozess
+
+**Was schiefgeht:** Ein einziges kaputtes PDF haengt den Container, `/heartbeat` antwortet nicht mehr, AppAPI markiert die ExApp als unerreichbar, und die Suche ist weg.
+**Warum es passiert:** Ein Kindprozess je Datei fuehlt sich teuer an.
+**Vermeidung:** Prozessgrenze mit Timeout. Der Startaufwand ist gegenueber dem Netzwerkabruf der Datei vernachlaessigbar.
+**Warnzeichen:** `/heartbeat` haengt, waehrend `/enabled` noch antwortet.
+
+### Pitfall 12: Der Index waechst am Textdeckel vorbei
+
+**Was schiefgeht:** Eine einzige 50-MB-PDF mit durchgehendem Text erzeugt zig MB gespeicherten Text, und bei einigen solchen Dateien ist das Volume voll.
+**Warum es passiert:** Der Groessendeckel gilt fuer die Datei, nicht fuer den extrahierten Text.
+**Vermeidung:** Zeichendeckel je Dokument mit sichtbarem Zustand `truncated`, dazu die Plattenwache vor dem Commit.
+**Warnzeichen:** Es gibt genau einen Deckel, und der heisst `MAX_FILE_SIZE`.
+
+### Pitfall 13: `parse_query` statt `parse_query_lenient`
+
+**Was schiefgeht:** Ein Nutzer tippt ein Anfuehrungszeichen, der Parser wirft, die ExApp antwortet 500, und fuer den Nutzer ist die Suche kaputt.
+**Vermeidung:** `parse_query_lenient` im Suchpfad, die Fehlerliste auf `debug` protokollieren, ohne den Suchbegriff.
+**Warnzeichen:** Es gibt keinen Testfall mit unpaarigem Anfuehrungszeichen.
+
+### Pitfall 14: Die Wortliste aendert sich, der Index nicht
+
+**Was schiefgeht:** Ein Image-Update bringt eine andere `ngerman`-Version oder ein geaendertes Fenster. Anfragen werden anders zerlegt als der Index, und Treffer verschwinden ohne erkennbaren Grund.
+**Warum es passiert:** Man denkt an die Tantivy-Version, nicht an die Wortliste.
+**Vermeidung:** `wordlist_hash` und `analyzer_version` neben `schema_version` und `tantivy_version` in `meta`; Abweichung erzwingt einen Reindex, und der ist ein sichtbarer Zustand.
+**Warnzeichen:** `meta` enthaelt nur `schema_version`.
+
+### Pitfall 15: Ein Filter, den `getSupportedFilters()` nicht nennt
+
+**Was schiefgeht:** Ein Client schickt `title-only`, und der Provider erscheint gar nicht im Ergebnis. Es sieht aus wie ein kaputtes Backend, ist aber eine Deklarationsluecke.
+**Warum es passiert:** Ein Provider wird laut Interfacedokumentation uebergangen, wenn ein Client einen Filter sendet, den er nicht nennt.
+**Vermeidung:** `getSupportedFilters()` vollstaendig fuehren, nicht sparsam, und einen CI-Fall mit gesetztem Filter.
+**Warnzeichen:** `IFilteringProvider` ist implementiert, aber die Filterliste ist leer.
 
 ---
 
 ## Code Examples
 
-### 1. Index oeffnen: die einzige erlaubte Form
+### 1. Wortliste und deutsche Analysekette
 
 ```python
-# index/schema.py
-from tantivy import Index, SchemaBuilder
+# backend/src/findling/index/analyzer.py
+"""The German analysis chain. The order of the filters is the design decision."""
 
-TOKENIZER_DE = "de_findling"
-TOKENIZER_EN = "en_findling"
+from pathlib import Path
 
-def build_schema() -> Schema:
-    builder = SchemaBuilder()
-    builder.add_unsigned_field("file_id", stored=True, indexed=True, fast=True)
-    builder.add_unsigned_field("storage_id", stored=True, indexed=True, fast=True)
-    builder.add_text_field("name_de", stored=False, tokenizer_name=TOKENIZER_DE)
-    builder.add_text_field("name_en", stored=False, tokenizer_name=TOKENIZER_EN)
-    builder.add_text_field("path", stored=True, tokenizer_name="raw")
-    builder.add_text_field("body_de", stored=True, tokenizer_name=TOKENIZER_DE)
-    builder.add_text_field("body_en", stored=False, tokenizer_name=TOKENIZER_EN)
-    builder.add_text_field("ext", stored=True, tokenizer_name="raw")
-    builder.add_integer_field("mtime", stored=True, indexed=True, fast=True)
-    return builder.build()
+from tantivy import Filter, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
-def open_index(path: str, constituents: list[str]) -> Index:
-    """The only place that opens an index. Registering the analyzers is part of
-    opening: the schema stores the tokenizer NAME, never the tokenizer, and a
-    query against an unregistered name raises before it reaches the index."""
-    schema = build_schema()
-    index = Index(schema, path=path)          # opens when it exists, creates otherwise
-    index.register_tokenizer(TOKENIZER_DE, german_analyzer(constituents))
-    index.register_tokenizer(TOKENIZER_EN, english_analyzer())
+# Debian package wngerman, /usr/share/dict/ngerman, 356010 words, GPL-2+.
+SYSTEM_WORDLIST = Path("/usr/share/dict/ngerman")
+
+# A constituent dictionary, not a spell checker dictionary. Entries longer than
+# MAX_LEN are compounds themselves, and a compound in the dictionary is never
+# split: "Kuendigungsfrist" is 15 characters, stands in the raw list, and would
+# swallow the whole token. Measured: this window scores 14 of 16 test compounds,
+# the obvious "nouns plus appended linking forms" recipe only scores 7.
+MIN_LEN, MAX_LEN = 4, 14
+
+# German linking elements as entries of their own. Without them the chain of
+# matches breaks between the parts and the whole word stays unsplit.
+FUGEN = ("s", "es", "n", "en", "er", "ns")
+
+# Any change below invalidates the index, so it is versioned next to the schema.
+ANALYZER_VERSION = 1
+
+
+def load_constituents(path: Path = SYSTEM_WORDLIST) -> list[str]:
+    words = {
+        word.lower()
+        for word in path.read_text(encoding="utf-8", errors="replace").split()
+        if word.isalpha() and MIN_LEN <= len(word) <= MAX_LEN
+    }
+    return sorted(words)
+
+
+def german_analyzer(constituents: list[str]) -> TextAnalyzer:
+    """lowercase -> split_compound -> stopwords -> remove_long -> stem.
+
+    Two positions are load bearing and both are measured, not assumed.
+
+    remove_long comes AFTER split_compound. In front of it, a 63 character
+    compound is dropped whole and the document becomes unfindable under any of
+    its parts; behind it, the same word yields six clean tokens.
+
+    There is no ascii_fold. The Snowball stemmer for German folds umlauts and
+    sharp s by itself, and folding before split_compound would make the
+    dictionary, which carries umlauts, unmatchable.
+    """
+    return (
+        TextAnalyzerBuilder(Tokenizer.simple())
+        .filter(Filter.lowercase())
+        .filter(Filter.split_compound([*constituents, *FUGEN]))
+        .filter(Filter.custom_stopword(list(FUGEN)))
+        .filter(Filter.stopword("german"))
+        .filter(Filter.remove_long(48))
+        .filter(Filter.stemmer("german"))
+        .build()
+    )
+```
+
+### 2. Der einzige erlaubte Weg, den Index zu oeffnen
+
+```python
+# backend/src/findling/index/open.py
+def open_index(path: Path) -> Index:
+    """Open the index and register the analyzers. Never call Index() elsewhere.
+
+    The schema persists the *name* of a tokenizer, never the tokenizer. An index
+    opened without registering answers the first parse_query with
+    ValueError: The tokenizer '"de"' for the field '"body_de"' is unknown,
+    which looks like a broken index and is a missing line of setup.
+    """
+    index = Index.open(str(path)) if Index.exists(str(path)) else Index(build_schema(), path=str(path))
+    index.register_tokenizer("de", german_analyzer(load_constituents()))
+    index.register_tokenizer("en", english_analyzer())
+    index.register_tokenizer("name", name_analyzer())
     return index
 ```
 
-### 2. Dokument schreiben, ohne die Typfalle
+### 3. Byte-Offsets in Zeichen-Offsets, verschmolzen
 
 ```python
-# WRONG: keyword arguments infer I64 and the Rust thread panics at commit time
-# doc = Document(file_id=4711, body_de=text)
+# backend/src/findling/api/snippets.py
+def char_ranges(fragment: str, snippet_ranges) -> list[tuple[int, int]]:
+    """Tantivy reports UTF-8 byte ranges; the wire protocol promises characters.
 
-doc = Document()
-doc.add_unsigned("file_id", file_id)          # matches add_unsigned_field
-doc.add_unsigned("storage_id", storage_id)
-doc.add_text("name_de", name)
-doc.add_text("name_en", name)
-doc.add_text("path", path)
-doc.add_text("body_de", body)
-doc.add_text("body_en", body)
-doc.add_text("ext", extension)
-doc.add_integer("mtime", mtime)
-
-writer.delete_documents("file_id", file_id)   # upsert: delete then add
-writer.add_document(doc)
-```
-
-### 3. Sammel-Commit in der richtigen Reihenfolge
-
-```python
-def flush(writer, state, batch) -> None:
-    writer.commit()                    # 1. durable in tantivy
-    with state.transaction():          # 2. only now the state says done
-        for item in batch:
-            state.mark(item.file_id, item.outcome, item.reason)
-    queue.ack([item.row_id for item in batch])   # 3. only now the queue lets go
-```
-
-### 4. Snippet mit korrekten Zeichenpositionen
-
-```python
-def snippet_for(searcher, query, schema, doc) -> tuple[str, list[tuple[int, int]]]:
-    generator = SnippetGenerator.create(searcher, query, schema, "body_de")
-    generator.set_max_num_chars(200)
-    snippet = generator.snippet_from_doc(doc)
-    fragment = snippet.fragment()
-    raw = fragment.encode("utf-8")
+    The ranges also repeat and overlap, because every part of a split compound
+    inherits the offsets of the whole word, so they are merged here.
+    """
+    data = fragment.encode("utf-8")
     spans = sorted(
-        # highlighted() returns BYTE ranges into the fragment. Measured on a
-        # German sentence: bytes (4, 20) are characters (4, 19).
-        {(len(raw[: r.start].decode("utf-8")), len(raw[: r.end].decode("utf-8")))
-         for r in snippet.highlighted()}
+        (len(data[: r.start].decode("utf-8")), len(data[: r.end].decode("utf-8")))
+        for r in snippet_ranges
     )
     merged: list[tuple[int, int]] = []
-    for start, end in spans:           # compound parts inherit the same offsets
+    for start, end in spans:
         if merged and start <= merged[-1][1]:
             merged[-1] = (merged[-1][0], max(merged[-1][1], end))
         else:
             merged.append((start, end))
-    return fragment, merged
+    return merged
 ```
-
-### 5. Ueberfetch mit ACL-Vorfilter
 
 ```python
-OVERFETCH = 8
-MAX_ROUNDS = 3
+# backend/tests/test_snippet_offsets.py
+def test_umlaut_before_the_match_shifts_nothing() -> None:
+    # One multi byte character before the match. Without the conversion the
+    # naive slice would be off by exactly that one byte.
+    fragment = "Die Kündigung betrifft die Frist"
+    byte_start = len("Die Kündigung betrifft die ".encode())
 
-def candidates(index, acl, uid: str, query, limit: int) -> list[Hit]:
-    fetched = limit * OVERFETCH
-    allowed: list[Hit] = []
-    for _ in range(MAX_ROUNDS):
-        hits = index.searcher().search(query, fetched).hits
-        file_ids = [doc_file_id(h) for h in hits]
-        # The filter always runs candidates -> permission, never the other way
-        # around. Materialising every file a user may see is the anti pattern
-        # that made context_chat batch around a parameter limit.
-        visible = acl.filter_visible(uid, file_ids)
-        allowed = [h for h in hits if doc_file_id(h) in visible]
-        if len(allowed) >= limit or len(hits) < fetched:
-            break
-        fetched *= 2
-    return allowed[:limit]
+    got = char_ranges(fragment, [_Range(byte_start, byte_start + len("Frist"))])
+
+    assert fragment[got[0][0] : got[0][1]] == "Frist"
 ```
 
-```sql
--- acl.filter_visible, chunked to stay below the SQLite parameter limit
-SELECT file_id FROM acl WHERE uid = ? AND file_id IN (?, ?, ...);
+### 4. Query-Umschreibung fuer die ausgeschriebene Umlautform
+
+```python
+# backend/src/findling/query/rewrite.py
+UMLAUTS = (("ue", "ü"), ("oe", "ö"), ("ae", "ä"), ("ss", "ß"))
+
+
+def umlaut_variants(term: str) -> list[str]:
+    """Return the term plus its umlaut spelling, if the two differ.
+
+    The German stemmer folds umlauts, so "Mueller" and "Müller" both reduce well
+    on their own, but they do not reduce to the *same* stem: one character
+    against two. This is the query side answer, it costs no index space and a
+    nonsensical variant only produces an empty branch.
+    """
+    variant = term
+    for written, umlaut in UMLAUTS:
+        variant = variant.replace(written, umlaut)
+    return [term] if variant == term else [term, variant]
 ```
 
-### 6. Der PHP-Recheck, unveraendert aus Phase 1 abgeleitet
+### 5. Die PDF-Reihenfolge: erst pypdf fragen, dann pdfium arbeiten lassen
+
+```python
+# backend/src/findling/extract/pdf.py
+def extract_pdf(path: str) -> ExtractionOutcome:
+    # pypdf answers the encryption question without touching the pages. Reading
+    # .pages on a protected file raises FileNotDecryptedError, which would show
+    # up as a failure instead of the deliberate decision it is.
+    try:
+        reader = pypdf.PdfReader(path)
+        if reader.is_encrypted:
+            return ExtractionOutcome.skipped(Reason.ENCRYPTED)
+    except pypdf.errors.EmptyFileError:
+        return ExtractionOutcome.failed(Reason.EMPTY_FILE)
+    except pypdf.errors.PdfReadError:
+        return ExtractionOutcome.failed(Reason.CORRUPT)
+
+    try:
+        document = pypdfium2.PdfDocument(path)
+    except pypdfium2.PdfiumError:
+        return ExtractionOutcome.failed(Reason.CORRUPT)
+
+    try:
+        parts = [
+            document[i].get_textpage().get_text_bounded()
+            for i in range(min(len(document), MAX_PAGES))
+        ]
+    finally:
+        document.close()
+
+    text = "\n".join(parts)
+    if len(text.strip()) < NO_TEXT_LAYER_THRESHOLD:
+        # Not a failure. This is the queue that phase 3 will work through.
+        return ExtractionOutcome.skipped(Reason.NO_TEXT_LAYER)
+    return ExtractionOutcome.indexed(text, truncated=len(document) > MAX_PAGES)
+```
+
+### 6. Extraktion hinter einer Prozessgrenze
+
+```python
+# backend/src/findling/extract/sandbox.py
+CTX = mp.get_context("spawn")          # not fork: the parent runs an event loop
+ADDRESS_SPACE_CAP = 512 * 1024 * 1024
+WALL_CLOCK_CAP_SECONDS = 120
+
+
+def _run(path: str, mime: str, pipe) -> None:
+    # The kernel enforces the cap, not the application.
+    resource.setrlimit(resource.RLIMIT_AS, (ADDRESS_SPACE_CAP, ADDRESS_SPACE_CAP))
+    from findling.extract.dispatch import extract
+
+    try:
+        pipe.send(extract(path, mime))
+    except MemoryError:
+        pipe.send(ExtractionOutcome.failed(Reason.OUT_OF_MEMORY))
+    except Exception as error:  # noqa: BLE001 - the taxonomy lives in dispatch
+        pipe.send(ExtractionOutcome.from_exception(error))
+
+
+def extract_guarded(path: str, mime: str) -> ExtractionOutcome:
+    """Never let one broken document take the container with it.
+
+    A hanging call inside pypdfium2 or lxml cannot be interrupted from Python,
+    signal.alarm only fires on the main thread, and ProcessPoolExecutor cannot
+    cancel a running task. Only kill() works, and only on a process of its own.
+    """
+    parent, child = CTX.Pipe(duplex=False)
+    proc = CTX.Process(target=_run, args=(path, mime, child), daemon=True)
+    proc.start()
+    proc.join(WALL_CLOCK_CAP_SECONDS)
+    if proc.is_alive():
+        proc.kill()
+        proc.join()
+        return ExtractionOutcome.failed(Reason.TIMEOUT)
+    if not parent.poll():
+        return ExtractionOutcome.failed(Reason.OUT_OF_MEMORY)
+    return parent.recv()
+```
+
+### 7. Der ACL-Vorfilter, benannt als das, was er ist
+
+```python
+# backend/src/findling/store/repo.py
+def prefilter_visible(self, uid: str, file_ids: list[int]) -> set[int]:
+    """Drop candidates the user almost certainly cannot see.
+
+    This is a speed-up, never a security boundary. It over-approximates on team
+    folders with advanced permissions, because IUserMountCache resolves mounts
+    and not per folder rules. The only authority is the PHP recheck through
+    getUserFolder()->getFirstNodeById(), and it runs before any snippet exists.
+    """
+    if not file_ids:
+        return set()
+    placeholders = ",".join("?" * len(file_ids))
+    rows = self._read.execute(
+        f"SELECT file_id FROM acl WHERE uid = ? AND file_id IN ({placeholders})",  # noqa: S608
+        (uid, *file_ids),
+    )
+    return {row[0] for row in rows}
+```
+
+### 8. Der Suchpfad in PHP, zweistufig und budgetiert
 
 ```php
-$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-$entries = [];
-foreach ($candidates as $candidate) {
-    $node = $userFolder->getFirstNodeById($candidate['fileId']);
-    if (!$node instanceof File) {
-        continue;   // gone, unshared or never visible: no entry, no snippet
+#[\Override]
+public function search(IUser $user, ISearchQuery $query): SearchResult {
+    $deadline = hrtime(true) + 2_500_000_000;   // 2.5 s wall clock for this group
+    $uid = $user->getUID();
+    $approved = [];
+    $offset = 0;
+
+    // At most three rounds. An unbounded loop is exactly the failure mode that
+    // makes query time permission filtering unusable.
+    for ($round = 0; $round < 3 && count($approved) < $query->getLimit(); $round++) {
+        $page = $this->exApp->searchCandidates($uid, $query->getTerm(), $query->getLimit() * 4, $offset);
+        if ($page === null || $page['candidates'] === []) {
+            break;
+        }
+        $offset = $page['nextOffset'];
+
+        $userFolder = $this->rootFolder->getUserFolder($uid);
+        foreach ($page['candidates'] as $candidate) {
+            // The one and only security boundary.
+            if ($userFolder->getFirstNodeById($candidate['fileId']) instanceof File) {
+                $approved[] = $candidate['fileId'];
+            }
+        }
+        if (!$page['hasMore']) {
+            break;
+        }
     }
-    $entries[$candidate['fileId']] = $node;
+
+    $approved = array_slice($approved, 0, $query->getLimit());
+    // A hit without a snippet beats no hit at all.
+    $snippets = (hrtime(true) < $deadline) ? $this->exApp->snippets($uid, $query->getTerm(), $approved) : [];
+
+    return SearchResult::paginated($this->getName(), $this->toEntries($approved, $snippets), $offset);
 }
-// Only now, and only for the survivors, the snippets are requested.
-$snippets = $this->exApp->snippets($user->getUID(), $term, array_keys($entries));
 ```
 
-### 7. Crawl-Job gegen die 32er-API
+### 9. Crawl-Job gegen die 32er-API
 
 ```php
-foreach ($this->fileAccess->getDistinctMounts(self::MOUNT_PROVIDERS, true) as $mount) {
-    $this->jobList->add(StorageCrawlJob::class, [
-        'storage_id'      => $mount['storage_id'],
-        'root_id'         => $mount['root_id'],
-        'overridden_root' => $mount['overridden_root'],
-        'last_file_id'    => 0,
-    ]);
+protected function run($argument): void {
+    $storageId  = (int)$argument['storage_id'];
+    $rootId     = (int)$argument['overridden_root'];
+    $lastFileId = (int)($argument['last_file_id'] ?? 0);
+    $seen = 0;
+
+    // getByAncestorInStorage filters mime types in SQL and skips end to end
+    // encrypted files; the size cap is ours, because the API has none.
+    foreach ($this->fileAccess->getByAncestorInStorage(
+            $storageId, $rootId, $lastFileId, self::BATCH, $this->mimeTypeIds(), false, true) as $entry) {
+        $lastFileId = max($lastFileId, $entry->getId());
+        $seen++;
+        if ($entry->getSize() > self::MAX_SIZE) {
+            $this->failures->record($entry->getId(), 'skipped', 'too_large');   // never silent
+            continue;
+        }
+        $this->queue->enqueue($entry, $storageId, $rootId);
+    }
+
+    if ($seen > 0) {
+        $this->jobList->scheduleAfter(self::class, $this->time->getTime() + self::INTERVAL, [
+            'storage_id' => $storageId, 'overridden_root' => $rootId, 'last_file_id' => $lastFileId,
+        ]);
+    }
 }
-
-// inside StorageCrawlJob::run
-$mimeIds = array_map(fn (string $m): int => $this->mimeTypes->getId($m), self::ALLOWED_MIMETYPES);
-foreach ($this->fileAccess->getByAncestorInStorage(
-    $storageId, $overriddenRoot, $lastFileId, self::BATCH_SIZE, $mimeIds, false, true) as $entry) {
-    $this->queue->enqueue($entry, $usersByMount);   // ACL comes from the mount list
-    $lastSeen = $entry->getId();
-}
-```
-
-### 8. Analyzer-Testfaelle ohne Index
-
-```python
-@pytest.mark.parametrize(
-    ("text", "expected"),
-    [
-        ("Grundstuecksverkehrsgenehmigung", ["grundstuck", "verkehr", "genehm"]),
-        ("Haeuser", ["haus"]),
-        ("Vertraege", ["vertrag"]),
-        ("fuer ueber das", []),
-        ("Information", ["information"]),
-    ],
-)
-def test_german_analyzer(text: str, expected: list[str]) -> None:
-    # analyze() needs no index, so the German language promise is tested in
-    # milliseconds instead of behind a full crawl.
-    assert german_analyzer(TEST_WORDS).analyze(text) == expected
 ```
 
 ---
 
 ## State of the Art
 
-| Frueher | Heute | Seit wann | Bedeutung fuer uns |
+| Old Approach | Current Approach | When Changed | Impact |
 |---|---|---|---|
-| Datei-Enumeration per handgeschriebenem SQL auf `oc_filecache` | `IFileAccess::getByAncestorInStorage` und `getDistinctMounts` | NC 32.0.0 | Der Kompatibilitaetszweig von context_chat entfaellt; wir schreiben kein eigenes Filecache-SQL |
-| Snippets als HTML aus der Engine | Klartext plus Offsets | Phase-1-Befund zur Unified-Search-UI | `Snippet.to_html()` ist fuer uns tot |
-| Suche als ein Aufruf mit fertigem Ergebnis | Kandidaten, Recheck, dann Snippets | COMP-04 und SRCH-02 | Zwei Aufrufe, dafuer keine Snippets ohne Rechtepruefung |
-| `exAppRequestWithUserInit()` | `exAppRequest()` | AppAPI 3.0.0 | Unveraendert aus Phase 1 |
-| Sync-API von nc_py_api | `AsyncNextcloudApp` | Entfaellt in 0.31.0 | Der Worker-Thread muss den Async-Client benutzen, nicht die alte Fassade |
+| Filecache und Mounts per handgeschriebenem `CacheQueryBuilder`-SQL | `IFileAccess::getDistinctMounts()` und `getByAncestorInStorage()` | NC 32.0.0 | Der Legacy-Zweig aus context_chat entfaellt, inklusive Home-Root-Umbiegung, E2E-Filter und Reflection-Weiche |
+| "Group Folders" | "Team Folders" (App-ID weiterhin `groupfolders`) | NC 31 | Nur die Beschriftung, nicht die Mount-Provider-Klasse. In Nutzertexten die neue Bezeichnung |
+| `SearchResultEntry` mit HTML-Snippet | Klartext plus Offsets | Vue-Umbau der Unified Search | Phase-1-Befund, hier um die Byte-Offset-Falle ergaenzt |
+| `IndexWriter.delete_documents(field, value)` | `delete_documents_by_term(...)` bzw. `delete_documents_by_query(...)` | tantivy-py 0.25/0.26 | Der alte Name loest eine `DeprecationWarning` aus, und `filterwarnings = ["error::DeprecationWarning"]` macht daraus einen Testfehler |
+| `pypdfium2.get_text_range()` | `get_textpage().get_text_bounded()` | pypdfium2 4.x | Der alte Aufruf ist veraltet |
+| SQLite-`IN`-Listen auf 999 Parameter begrenzen | `SQLITE_LIMIT_VARIABLE_NUMBER` liegt bei 250.000 | SQLite 3.32 (2020), im Image 3.46.1 | Die 999er-Regel gilt hier nicht; Bandbildung bleibt guter Stil |
 
-**Ueberholt oder nicht uebernehmen:**
-- Der FTS5-Entwurf aus `.planning/research/ARCHITECTURE.md` (ACL als SQL-Join in derselben Datei) ist durch die Tantivy-Entscheidung in STACK.md und CONTEXT.md ersetzt. Der ACL-Filter ist jetzt Ueberfetch plus Nachfassen, nicht ein Join. Die uebrigen Aussagen dieser Datei (Pull-Queue, Crawl pro Mount, Inhalts-Gateway) gelten unveraendert.
-- `LOCK_TIMEOUT = 24h` aus context_chat nicht uebernehmen.
-- `getMountsOld` und `getFilesInMountOld` aus context_chat nicht uebernehmen.
+**Deprecated/outdated:**
+- `odfpy`: Release von 01/2020, keine Typannotationen, faellt durch das pyright-Gate. ODF per `zipfile` plus lxml-XPath ueber `text:p` und `text:h`.
+- `chardet`: LGPL und langsamer als `charset-normalizer`.
+- Die Sync-API von `nc_py_api`: faellt in 0.31.0 weg, der Poller ist von Anfang an async.
 
 ---
 
 ## Environment Availability
 
-| Abhaengigkeit | Gebraucht von | Vorhanden | Version | Ausweichpfad |
+| Dependency | Required By | Available | Version | Fallback |
 |---|---|---|---|---|
-| `uv` | jede Python-Aktion | ja | 0.11.7 | keiner noetig |
-| Python 3.13 via uv | Backend | ja | ueber uv verwaltet | System-Python gilt als defekt |
-| `tantivy` cp313 win_amd64 | lokale Analyzer- und Indexproben | ja, lokal ausgefuehrt | 0.26.0 | keiner noetig |
-| Docker | Test-Nextcloud aus `scripts/dev/compose.yaml` | ja | 29.5.2 (desktop-linux) | keiner |
-| PHP / composer / occ | PHP-Companion, Migration, Jobs | **nein** | - | Ausschliesslich CI; lokal nur ueber `docker compose exec app php occ` |
-| `slopcheck` | Paketpruefung | ja | Scan lief, `9 OK` | - |
-| Debian-Paket `wngerman` | Wortliste | nicht lokal, nur im Image-Build | igerman98 20161207-15 | keiner; der Build-Stage-Schritt ist die einzige Bezugsquelle |
-| `jq`, `curl`, `git` | CI und lokale Proben | ja | - | - |
+| Docker | Test-Nextcloud, Messungen, Multi-Arch-Build | ja | 29.5.2 | - |
+| uv | jede Python-Aktion | ja | 0.11.7 | - |
+| git | Repo | ja | 2.54.0 | - |
+| jq | lokale OCS-Proben | ja | 1.8.1 | - |
+| slopcheck | Paketpruefung | ja | via uv tool | - |
+| PHP | PHP-Gates, occ | **nein** | - | Verifikation ausschliesslich in der CI und im Nextcloud-Container, wie in Phase 1 etabliert |
+| xmllint / xsltproc | info.xml-Validierung | **nein** | - | laeuft in `php.yml` |
+| ctx7 (Context7-CLI) | Bibliotheksdokumentation | **nein** | - | Diese Recherche lief ueber Quellcode, PyPI-JSON-API, sources.debian.org und eigene Messungen. Kein Verlust |
+| `wngerman` (Debian) | Komposita-Wortliste | ja im Zielimage | 20161207-15 in trixie | Keiner. Ohne die Liste faellt die Kompositazerlegung aus, das Produktversprechen mit ihr |
 
-**Fehlend ohne Ausweichpfad:** keines.
-**Fehlend mit Ausweichpfad:** PHP. Alles PHP-seitige (Migration, Jobs, Controller) wird ausschliesslich in der CI verifiziert; der Plan muss das als Verifikationsweg ausweisen, statt lokale Ausfuehrung anzunehmen. Lokale Proben laufen mit `FINDLING_PORT=8090`, weil 8080 von der parallelen MCP-Sitzung belegt ist.
+**Missing dependencies with no fallback:** keine.
+**Missing dependencies with fallback:** PHP und die XML-Werkzeuge, beides in der CI abgedeckt.
+
+Hinweis aus CONTEXT.md fuer lokale Proben: Port 8080 ist von einer parallelen Session belegt, `FINDLING_PORT=8090` verwenden.
 
 ---
 
@@ -944,124 +1456,150 @@ def test_german_analyzer(text: str, expected: list[str]) -> None:
 
 ### Applicable ASVS Categories
 
-| ASVS Kategorie | Trifft zu | Standardkontrolle in dieser Phase |
+| ASVS Category | Applies | Standard Control |
 |---|---|---|
-| V1 Architektur | ja | Sicherheitsgrenze bleibt der PHP-Recheck; die ExApp fuehrt kein eigenes Rechtemodell, der SQLite-Vorfilter ist ausdruecklich nur ein Beschleuniger |
-| V2 Authentifizierung | ja | Nutzeridentitaet ausschliesslich aus `AUTHORIZATION-APP-API`; `set_user` bleibt verboten und ist von Gate A abgedeckt |
-| V4 Zugriffskontrolle | ja | `#[ExAppRequired]` auf allen Queue-Endpunkten; `/snippets` filtert zusaetzlich ueber den ACL-Vorfilter, damit es kein Leseprimitiv wird |
-| V5 Eingabevalidierung | ja | Pydantic mit `extra="forbid"` fuer alle neuen Endpunkte (verhindert eine `userId` im Body); `parse_query_lenient` statt roher Query-Uebernahme; `allow_regexes=False` |
-| V7 Fehlerbehandlung und Logging | ja | Fehlergruende sind Klassen (`encrypted_pdf`), niemals Dateinamen oder Inhalte; die Phase-1-Regel "kein Nutzerinhalt im Log" gilt fuer die gesamte Pipeline |
-| V12 Dateien und Ressourcen | ja | 50-MB-Cap, Allowlist statt Blocklist, kein Auspacken von Archiven, Scratch im Volume mit Aufraeumen im `finally`, Nur-Lesen-Gates A und B unveraendert |
-| V6 Kryptografie | nein | Kein eigener Kryptopfad in dieser Phase |
+| V1 Architecture | ja | Genau eine Sicherheitsgrenze (`getUserFolder()->getFirstNodeById()`), im Code benannt; der SQLite-Vorfilter heisst `prefilter` und nirgends `check` |
+| V2 Authentication | ja | Unveraendert aus Phase 1: Nutzer-ID nur aus dem signierten `AUTHORIZATION-APP-API`-Header, `AppAPIAuthMiddleware`, `set_user` durch Gate A verboten |
+| V3 Session Management | nein | Keine eigene Session; AppAPI-Secret ist das einzige Credential |
+| V4 Access Control | **ja, Kern der Phase** | PHP-Recheck je Treffer vor jeder Snippet-Erzeugung; `/snippets` zusaetzlich ACL-vorgefiltert gegen Confused Deputy; `#[ExAppRequired]` auf allen Queue-Endpunkten |
+| V5 Input Validation | ja | Pydantic mit `extra="forbid"` auf jedem Request-Modell; `n` und `max_bytes` gedeckelt; `allow_regexes=False` |
+| V6 Cryptography | nein | Keine Verschluesselung in v1 (Index-Verschluesselung ist v2-04) |
+| V7 Error Handling and Logging | ja | Kein Suchbegriff, kein Dateiname, kein Snippet im Log. Nur Statuscodes, Zaehler und Grundcodes |
+| V8 Data Protection | ja | Nur-Lesen-Invariante (Gate A und B) bleibt scharf; der Index liegt im App-Volume, kein Inhalt verlaesst den Server |
+| V12 Files and Resources | ja | Allowlist nach Mimetype, Groessendeckel, Zeitdeckel, `RLIMIT_AS`, Plattenwache; kein Pfad reist ueber die Schnittstelle, nur `fileId` als Integer |
+| V13 API and Web Service | ja | Alle Container-Endpunkte mit `access_level` USER in `info.xml`, nichts PUBLIC; `bruteforce_protection` nur auf 401 |
 
-### Known Threat Patterns
+### Known Threat Patterns for diesen Stack
 
-| Muster | STRIDE | Standardgegenmassnahme |
+| Pattern | STRIDE | Standard Mitigation |
 |---|---|---|
-| Nutzer findet Inhalt aus einer Datei ohne Zugriff | Information Disclosure | Zwei-Stufen-Protokoll: Kandidaten, PHP-Recheck, erst dann Snippets (COMP-04, SRCH-02) |
-| Snippet aus einer entzogenen Freigabe | Information Disclosure | Snippet entsteht nach dem Recheck; ein veralteter ACL-Eintrag fuehrt hoechstens zu einem Kandidaten, der in PHP verworfen wird |
-| Trefferzahl verraet fremde Dokumente | Information Disclosure | Es wird erst nach dem Filtern gezaehlt; die Antwort nennt keine Gesamtzahl aus der Engine |
-| Nutzer-ID im Anfragekoerper | Spoofing / Elevation | 400 statt stillem Ignorieren, bereits in Phase 1 umgesetzt, gilt fuer die neuen Endpunkte gleichermassen |
-| `/snippets` als Leseprimitiv fuer fremde fileIds | Information Disclosure | ACL-Vorfilter auch in `/snippets` |
-| Regex- oder Wildcard-Query als Lastangriff | Denial of Service | `allow_regexes=False`, Ergebnislimit, Timeout auf der PHP-Seite |
-| Zip-Bombe oder Riesen-XLSX | Denial of Service | Groessen-Cap vor dem Abruf, Zellcap 200.000, Extraktion im getoeteten Subprozess mit Zeitgrenze |
-| Pfad-Traversal beim Dateiabruf | Tampering | Unveraendert strukturell ausgeschlossen: der Abruf kennt nur eine `fileId`, keinen Pfad |
+| Nutzer-ID im Request-Body statt im Header | Spoofing / Elevation | `extra="forbid"` plus 400, aus Phase 1 uebernommen und weiterhin getestet |
+| Confused Deputy auf `/snippets`: beliebige fileIds anfordern | Information Disclosure | ACL-Vorfilter auch auf `/snippets`, nicht nur auf `/search` |
+| SQL-Injection ueber die Kandidatenliste | Tampering | Ausschliesslich Platzhalter; die Liste ist ohnehin intern erzeugt |
+| Denial of Service ueber eine Regex-Suchanfrage | Denial of Service | `allow_regexes=False`, `parse_query_lenient`, `remove_long(48)` |
+| Denial of Service ueber ein praepariertes Dokument (Zip-Bombe, PDF-Endlosschleife) | Denial of Service | Prozessgrenze mit `RLIMIT_AS` und `kill()`-Timeout; `openpyxl read_only` plus Zellendeckel |
+| XML External Entity in ODF und HTML | Information Disclosure / SSRF | lxml-Parser mit `resolve_entities=False`, `no_network=True`, `load_dtd=False` |
+| Zip-Slip beim Lesen von ODF und OOXML | Tampering | Nur `read()` aus dem Archiv, nie `extractall()`; es wird nichts entpackt |
+| Schreibpfad schleicht sich ueber Quittung oder Unlock ein | Tampering | Gate A: die `OCS_WRITE_ALLOWLIST` bekommt genau zwei Eintraege, in einem eigenen Schritt mit Begruendung |
+| Suchbegriffe oder Snippets im Log | Information Disclosure | Log-Regel aus Phase 1 fortschreiben; ein Test, der die Log-Ausgabe eines Suchlaufs auf den Suchbegriff prueft |
+| Index-Volume enthaelt Klartext aller Dokumente | Information Disclosure | Bewusst akzeptiert (keine Index-Verschluesselung in v1). Gehoert in den Store-Text und in die Datenschutzaussage, nicht in eine stille Annahme |
+
+Der letzte Punkt verdient eine ausdrueckliche Notiz: mit `stored=True` auf `body_de` liegt der vollstaendige extrahierte Text aller indexierten Dokumente im App-Volume. Fuer Snippets ist das unvermeidbar, aber ein Admin muss es wissen, insbesondere weil AIO-Sicherungen das Volume erfassen koennen (offener Punkt aus der Phase-5-Recherche).
 
 ---
 
 ## Assumptions Log
 
-| # | Annahme | Abschnitt | Risiko, wenn falsch |
+| # | Claim | Section | Risk if Wrong |
 |---|---|---|---|
-| A1 | Die destillierte Wortliste bleibt beim Analyzer-Bau unter etwa 50 MB RSS und unter etwa 1 Sekunde Bauzeit | Frage 2 | Kompositasplitten muesste per Flag aus, deutsche Sprachqualitaet sinkt spuerbar. **Erste Messung im Plan einplanen** |
-| A2 | Die Gross-/Kleinschreibungsregel (nur grossgeschriebene Eintraege) liefert genug Bausteine fuer typische Verwaltungskomposita | Frage 2 | Zu wenige Splits; Gegenmittel waere die volle Liste plus hoehere Mindestlaenge |
-| A3 | Der Kompositasplitter erzeugt keine relevanten Fehlsplits bei Mindestlaenge 4 | Frage 2 | Praezisionsverlust bei Allerweltswoertern; die Messung an echten Ratsvorlagen entscheidet |
-| A4 | Zwei Proxy-Aufrufe pro Suche bleiben zusammen unter der Wahrnehmungsschwelle der Suchleiste | Pattern 4 | Suche fuehlt sich zaeh an; Ausweg waere ein Snippet-Cache oder Snippets erst bei Klick |
-| A5 | 15 Minuten Lock-Timeout sind fuer alle Dateien ausreichend lang | Pattern 1 | Sehr grosse PDFs wuerden doppelt verarbeitet; Gegenmittel ist ein Heartbeat, der die Sperre verlaengert |
-| A6 | Ein `ProcessPoolExecutor(max_workers=1)` bleibt mit dem RAM-Budget vertraeglich | Frage 6 | Zweiter Interpreter kostet etwa 40 bis 60 MB; Ausweg waere Extraktion im Hauptthread ohne harte Zeitgrenze, was PITFALLS Nr. 1 wieder oeffnet |
-| A7 | `IUserMountCache::getMountsForStorageId` plus Pfadpraefix bildet dieselbe Menge wie `getMountsForFileId` | Pattern 3 | Zu weiter oder zu enger Vorfilter; ein Paritaetstest gegen `getMountsForFileId` auf einer Stichprobe klaert das billig |
-| A8 | Team Folders melden sich weiterhin als `OCA\GroupFolders\Mount\MountProvider` | Frage 3 | Team Folders wuerden nicht gecrawlt; in der CI mit installierter Groupfolders-App pruefbar |
-| A9 | `charset-normalizer` 3.5.1 vom 15.08.2026 ist unauffaellig | Standard Stack | Nur Versionsrisiko; deshalb Empfehlung, zunaechst 3.5.0 zu pinnen |
-| A10 | Der Testfall "suchte/suchen" darf durch "Suche/suchen" ersetzt und die Grenze dokumentiert werden | Pattern 6 | Beruehrt eine woertliche CONTEXT-Formulierung, braucht eine kurze Bestaetigung beim Planen |
+| A1 | Laengenfenster 4 bis 14 ist die richtige Justierung | Frage 1 | Gegen vier Rezepte und 16 Faelle gemessen, aber nicht gegen einen echten Korpus optimiert. Zu weit heisst weniger Zerlegung, zu eng heisst Ueberzerlegung (Rezept D) |
+| A2 | Schwelle "unter 100 Zeichen im ganzen Dokument" erkennt ein Scan-PDF | Frage 5 | Ein PDF mit einer Deckblattzeile Text und 40 gescannten Seiten gaelte als `indexed` und wuerde in Phase 3 nie OCR-t. Besser waere eine Schwelle je Seite; Wert ungemessen |
+| A3 | 15 Minuten Lock-Timeout reichen fuer jede Datei ohne OCR | Frage 2 | Zu kurz bedeutet Doppelverarbeitung (unschaedlich, weil idempotent, aber verschwenderisch), zu lang verzoegert den Wiederanlauf |
+| A4 | 512 kB Zeichendeckel je Dokument ist ein sinnvoller Startwert | Frage 5 | Zu klein schneidet lange Ratsvorlagen ab, zu gross laesst den Index wachsen. `truncated` macht es sichtbar, der Wert ist geraten |
+| A5 | 512 MB `RLIMIT_AS` reichen fuer jede erlaubte Extraktion | Frage 5 | Zu klein erzeugt falsche `out_of_memory`-Zustaende bei grossen legitimen Dateien |
+| A6 | Zwei Proxy-Roundtrips bleiben in der Unified Search unauffaellig | Frage 7b | Gemessen ist nur die Arbeit im Container (unter 5 ms), nicht die Proxy- und HaRP-Latenz auf echter Hardware. `requestToExAppAsync` ist der Ausweg |
+| A7 | 100k-Hochrechnungen fuer Index (560 MB) und ACL (12 MB) | Frage 1, Frage 4 | Aus gemessenen Faktoren hochgerechnet, nicht mit 100k echten Dokumenten gemessen. Lasttest ist Phase 5 |
+| A8 | `getMountsForFileId` liefert bei Team Folders mit erweiterten Berechtigungen eine **Obermenge** | Frage 3 | Waere es eine Untermenge, verloeren berechtigte Nutzer Treffer. In Phase 5 in beide Richtungen pruefen |
+| A9 | `getFirstNodeById` je Treffer kostet wenige Millisekunden | Frage 7b, Beispiel 8 | Bei 80 Kandidaten in drei Runden koennte das Budget knapp werden. In der CI messbar, hier nicht gemessen |
+| A10 | Die Umlautvarianten-Umschreibung erzeugt keine relevanten Falschtreffer | Frage 1, Beispiel 4 | "neue" wird zu "neü"; erwartet ein leerer Zweig, aber ungemessen an einem echten Korpus |
+| A11 | `spawn` statt `fork` kostet nur wenige hundert Millisekunden je Datei | Pattern 3 | Bei sehr vielen kleinen Dateien koennte der Startaufwand sichtbar werden. In einem fruehen Task messen |
+| A12 | Rezept C (nur Substantive) spart rund zwei Drittel des Automaten-RAM | Alternatives Considered | Eintragszahl und Bauzeit sind gemessen (86.345 gegen 276.496, 0,18 s gegen 0,44 s), der RSS-Anteil ist daraus geschaetzt |
 
 ---
 
 ## Open Questions
 
-1. **Wie gross wird die Wortliste wirklich, und was kostet sie?**
-   - Bekannt: Quelle, Lizenz, Paketgroesse (4,6 MB entpackt), Aufbereitungsrezept, Wirkung (gemessen).
-   - Unklar: Eintragszahl nach der Filterung, RSS des Aho-Corasick-Automaten, Analysezeit pro MB Text.
-   - Empfehlung: erster Task der Sprachspur ist ein Messskript im Container, das die Zahlen ausgibt und ins Repo protokolliert. Erst danach die endgueltigen Filterschwellen festlegen.
+1. **Wird die Verbform-Grenze (D2) akzeptiert oder gegengesteuert?**
+   - Was wir wissen: Snowball fuer Deutsch behandelt Praeteritum und Partizip nicht. `suchte` und `gesucht` finden `suchen` nicht.
+   - Was unklar ist: ob das Abnahmekriterium aus CONTEXT.md umformuliert wird oder ob ein anderer Stemmer geprueft werden soll.
+   - Empfehlung: umformulieren. Der Ersatz eines Stemmers ist eine eigene Recherche mit ungewissem Ertrag, und Nominalflexion, Komposita und Umlaute decken den weit ueberwiegenden Teil deutscher Suchanfragen in Dokumentenbestaenden ab. Owner-Entscheid vor dem Bau.
 
-2. **Kanarien-Treffer behalten oder entfernen?**
-   - Bekannt: Der Phase-1-Integrationstest sucht nach `findling-canary` und prueft die Subline.
-   - Empfehlung: behalten, aber nur noch bei exakt diesem Begriff ausliefern. Damit bleibt der Test unveraendert und normale Suchen sind sauber. Wenn er entfernt wird, muss der Phase-1-Test in derselben Plan-Welle umgeschrieben werden, sonst wird die Regression zur Fehldiagnose.
+2. **Wie wird der Erstindex ausgeloest, ohne dass ein kaputter Cron ihn still verhindert?**
+   - Was wir wissen: Der Crawl braucht `IFileAccess`, laeuft also als PHP-Hintergrundjob ueber den Nextcloud-Cron. Bei der Voreinstellung "AJAX" laeuft er nur, wenn jemand die Weboberflaeche benutzt.
+   - Was unklar ist: Zero-Config heisst, dass nach der Installation von selbst etwas passieren muss.
+   - Empfehlung: `IRepairStep` beim Install plant den `SchedulerJob`, dazu `occ findling:index --restart` als Hebel und ein Zeitstempel "letzter Cron-Lauf gesehen" in der Datenbank. Die Anzeige ist Phase 4, die Datenerhebung muss jetzt entstehen.
 
-3. **Wie wird der Suchbegriff fuer `type:`-Filter geparst?**
-   - Bekannt: Tantivy kann `ext:pdf`, Nextcloud kennt keinen eingebauten Mimetype-Filter.
-   - Unklar: ob der Praefix in der Suchzeile fuer Nutzer auffindbar genug ist oder ob es einen `getCustomFilters()`-Eintrag braucht.
-   - Empfehlung: Phase 2 baut die Query-Seite, ein sichtbarer Filter in der UI ist Phase-4-Material.
+3. **Welche Wortlistenvariante wird ausgeliefert?**
+   - Was wir wissen: Rezept A trifft 14 von 16 und kostet rund 23 MB RSS, Rezept C trifft 12 von 16 bei einem Drittel der Eintraege.
+   - Was unklar ist: wie viel RSS auf einer echten 4-GB-ARM-Box tatsaechlich frei ist, wenn OCR (Phase 3) und Embeddings (Phase 6) dazukommen.
+   - Empfehlung: A als Vorgabe, C hinter `FINDLING_COMPOUND_DICT=nouns`, und die Entscheidung in Phase 5 gegen die Messung nachziehen.
 
-4. **Reicht `IUserMountCache` bei verschachtelten Team-Folder-Rechten?**
-   - Offen seit der Projektrecherche. Fuer den Vorfilter ist ein zu weites Ergebnis unschaedlich (PHP verwirft), ein zu enges dagegen nicht (Treffer fehlen).
-   - Empfehlung: ein CI-Szenario mit Team Folder und zwei Nutzern mit unterschiedlichen Rechten, spaetestens im Paritaetstest der Phase 5 vollstaendig.
+4. **Wie kommt der `is_update`-Fall mit dem Unique-Index zusammen?**
+   - Was wir wissen: Die Deduplizierung gehoert in den Index, nicht in einen Vorher-Select.
+   - Was unklar ist: welche Upsert-Variante des Nextcloud-`IQueryBuilder` (`insertOrUpdate`, `insertIgnoreConflict`) ueber SQLite, MariaDB und PostgreSQL gleich traegt.
+   - Empfehlung: in einem eigenen Task gegen zwei Dialekte verifizieren, bevor der Crawl gebaut wird.
 
-5. **Ab wann wird die `acl`-Tabelle zum Problem?**
-   - Bekannt: Hochrechnung aus ARCHITECTURE.md (etwa 12 MB bei 100.000 Dateien und 3 Nutzern je Datei).
-   - Unklar: der reale Fanout bei Team Folders mit vielen Mitgliedern.
-   - Empfehlung: Kennzahl "ACL-Zeilen je Dokument" ab Phase 2 mitfuehren, Bewertung in Phase 5.
+5. **Braucht `body_en` seinen Platz?**
+   - Was wir wissen: der nicht gespeicherte Indexanteil kostet gemessen nur 0,076 x des Textes.
+   - Was unklar ist: ob deutsche Instanzen ihn nur mitschleppen.
+   - Empfehlung: beide Felder bauen, `FINDLING_LANGUAGES=de,en` als Umgebungsvariable in der `info.xml`. Eine Zeile, und Phase 5 hat eine Stellschraube.
 
 ---
 
 ## Sources
 
-### Primaer (HIGH confidence)
+### Primary (HIGH confidence)
 
-**Lokal ausgefuehrt am 15.08.2026, `tantivy==0.26.0` via `uv run --with`:**
-- Analyzer-Kette mit allen sechs Filtern, Tokenausgabe fuer 20 deutsche Testfaelle
-- Vollstaendiger Index aus zwei Dokumenten, Reopen ueber `Index.open`, sieben Query-Formen, SnippetGenerator mit Byte- gegen Zeichenoffsets
-- Fehlerfall "Tokenizer nicht registriert" und Typfalle bei `Document(**kwargs)` auf `unsigned`-Feldern
+**Eigene Messungen am 15.08.2026** (Container `python:3.13-slim-trixie`, `--memory=3g`, `tantivy==0.26.0`, Debian-Paket `wngerman`):
+- Vier Wortlistenrezepte gegen 16 Komposita und 10 Nicht-Zerlege-Woerter; Eintragszahlen, Bauzeiten, Trefferquoten
+- Filterreihenfolge: `remove_long(40)` vor dem Splitter loescht ein 63-Zeichen-Kompositum vollstaendig, `remove_long(48)` danach liefert sechs Teile; Stopwoerter greifen ohne `ascii_fold`
+- Stemmerverhalten: Nominalflexion, ß, Umlaute, Verbformen, ausgeschriebene Umlautform
+- Automaten-RAM (rund 23 MB), Bauzeit 0,44 s, Durchsatz 2,3 Mio. Token/s
+- Snippet-Offsets: `(35, 51)` in Bytes gegen `(35, 50)` in Zeichen
+- Query-Syntax: Phrase, `+`, `-`, `name:`, `ext:`, Umlaut-Aequivalenz gegen einen echten Index
+- Indexgroesse 0,374 x (stored) und 0,076 x (unstored) des Textes; 2.123 Byte je Dokument; 1.675 Dokumente/s
+- Suche 0,1 ms, 20 Snippets 4,2 ms, Ueberfetch 400 Kandidaten 4,2 ms
+- Absturzfestigkeit: `kill -9` mitten im Schreiben, Index oeffnet auf dem letzten Commit (56.000 Dokumente), `.tantivy-writer.lock` bleibt liegen, Writer wird sofort wieder erteilt
+- Fehlermeldungen: `heap_size` unter 15.000.000 abgelehnt, `LockBusy` beim zweiten Writer, `The tokenizer ... is unknown` nach `Index.open` ohne Registrierung, `Expected a U64 for field` bei Schluesselwortargumenten
+- SQLite-ACL: 335.515 Zeilen = 12,0 MB (TEXT) bzw. 7,4 MB (Integer); Vorfilter 400 Kandidaten 0,18 ms; `SQLITE_LIMIT_VARIABLE_NUMBER` = 250.000; SQLite 3.46.1
+- Extraktions-Fehlertabelle gegen `testdata/corpus/` und praeparierte kaputte Dateien
+- `RLIMIT_AS` liefert `MemoryError`, `Process.kill()` liefert Exitcode -9
+- pdfium liest cp1252-Umlaute aus einem stdlib-erzeugten PDF korrekt, mit und ohne `/Encoding /WinAnsiEncoding`
 
 **Quellcode, direkt gelesen:**
-- `quickwit-oss/tantivy-py` 0.26.0: `tantivy/tantivy.pyi`, `src/snippet.rs`, `src/tokenizer.rs`, `src/index.rs`
-- `quickwit-oss/tantivy` 0.26.0: `src/tokenizer/split_compound_words.rs`, `src/tokenizer/tokenizer_manager.rs`, `src/tokenizer/stop_word_filter/mod.rs` und `stopwords.rs`, `src/directory/directory_lock.rs`, `src/directory/mmap_directory/mod.rs`, `src/directory/mod.rs`
-- `nextcloud/server` stable34: `lib/public/Files/Cache/IFileAccess.php`, `lib/public/Files/Config/IUserMountCache.php`, `lib/private/Files/Config/UserMountCache.php`, `lib/public/Share/IManager.php`, `lib/public/Search/ISearchQuery.php`, `lib/public/Search/IFilteringProvider.php`, `lib/public/Search/FilterDefinition.php`, `lib/private/Search/SearchComposer.php`, `core/Command/Background/JobWorker.php`, `core/Command/Background/Job.php`
-- `nextcloud/context_chat` main: `lib/Db/QueueMapper.php`, `lib/Db/QueueFile.php`, `lib/Controller/QueueController.php`, `lib/Service/StorageService.php`, `lib/BackgroundJobs/SchedulerJob.php`, `lib/BackgroundJobs/StorageCrawlJob.php`, `lib/Repair/AppInstallStep.php`
-- Eigenes Repo: `backend/tests/test_readonly_gate.py`, `.github/workflows/integration.yml`, `scripts/dev/compose.yaml`, `backend/src/findling/nc/client.py`
+- `quickwit-oss/tantivy-py`: `tantivy/tantivy.pyi`, `src/tokenizer.rs`, `src/snippet.rs`
+- `quickwit-oss/tantivy`: `src/tokenizer/split_compound_words.rs`, `src/snippet/mod.rs`, `src/tokenizer/tokenizer_manager.rs`, `tokenizer-api/src/lib.rs`
+- `nextcloud/server` `stable32` und `stable34`: `lib/public/Files/Cache/IFileAccess.php`, `core/Command/Background/*`, `lib/private/Files/Config/UserMountCache.php`, `lib/public/Share/IManager.php`, `lib/private/Search/SearchComposer.php`
+- `nextcloud/context_chat`: `lib/Db/QueueFile.php`, `lib/Db/QueueMapper.php`, `lib/Service/QueueService.php`, `lib/Service/StorageService.php`, `lib/Controller/QueueController.php`, `lib/AppInfo/Application.php`, `lib/Repair/AppInstallStep.php`, `lib/Migration/Version001000000Date20231102094721.php`
+- `nextcloud/app_api`: `lib/Service/AppAPIService.php`
+- `nextcloud/groupfolders`: `appinfo/info.xml`
+- Eigenes Repo: `backend/src/findling/{main,nc/client,api/search}.py`, `backend/tests/test_readonly_gate.py`, `php/lib/*`, `.github/workflows/integration.yml`, `scripts/dev/build_corpus.py`
 
-**Registry und Distribution:**
-- PyPI JSON-API fuer alle neun Pakete (Version, `requires_python`, Wheel-Plattformen, Upload-Datum), Stand 15.08.2026
-- sources.debian.org: Quellpaket `igerman98` 20161207-15 (trixie), `debian/copyright` (GPL-2+), `debian/control` (Binaerpaket `wngerman`)
-- packages.debian.org: Dateiliste und Groesse von `wngerman` in trixie
-- `slopcheck install` ueber alle neun Pakete: `9 OK`
+**Registry- und Distributionsdaten:**
+- PyPI-JSON-API fuer alle neun Pakete (Versionen, Daten, `requires_python`, Wheel-Plattformen), Stand 15.08.2026
+- sources.debian.org: `igerman98/20161207-16/debian/copyright` (GPL-2+) und `debian/control` (Binaerpaket `wngerman`, `Architecture: all`)
+- `slopcheck install ...` fuer alle neun Pakete: 9 OK
 
-### Sekundaer (MEDIUM confidence)
+### Secondary (MEDIUM confidence)
 
-- docs.rs `tantivy::tokenizer::SplitCompoundWords` (Verhalten und Beispiel, deckt sich mit dem gelesenen Quellcode)
-- pypdfium2.readthedocs.io, Python-API (Textextraktion, Passwortparameter, Schliessen von Objekten)
-- pypdfium2 `docs/devel/changelog.md` (5.13.0 vom 13.08.2026)
+- `.planning/research/ARCHITECTURE.md`, `STACK.md`, `PITFALLS.md`, `SUMMARY.md` (Muster, RAM-Budget, Sterbearten des Vorgaengers)
+- `.planning/phases/01-integrationsbeweis/01-RESEARCH.md` (Integrationsprotokoll, Klartext-Subline, exAppRequest-Fehlerfaelle)
+- Die vorige Fassung dieser Datei (Commit `c2f226a`), aus der die Befunde zu Stemmer-Grenzen, Tokenizer-Registrierung, Writer-Lock, `title-only`-Filter, `IRepairStep` und Windows-mmap uebernommen und nachgeprueft wurden
+- j3e.de/ispell/igerman98 (Upstream-Lizenzhinweis "dual licensed ... GPL ... OASIS")
 
-### Tertiaer (LOW confidence, kennzeichnungspflichtig)
+### Tertiary (LOW confidence)
 
-- Groessen- und Speicherabschaetzungen zur Wortliste und zum Aho-Corasick-Automaten: Hochrechnung, nicht gemessen (Annahmen A1 bis A3)
-- Zeitverhalten der zwei Proxy-Aufrufe in der Suchleiste: Erfahrungswert, nicht gemessen (Annahme A4)
+- Keine. Alle Aussagen stuetzen sich auf Quellcode, Registry-Daten oder eigene Messungen. Was nicht belegt ist, steht im Assumptions Log.
 
 ---
 
 ## Metadata
 
 **Confidence breakdown:**
-
-| Bereich | Level | Grund |
-|---|---|---|
-| Tantivy-API und Analyzer-Verhalten | HIGH | Quellcode gelesen und lokal mit der Zielversion ausgefuehrt und gemessen |
-| Snippet-Offsets | HIGH | Rust-Kommentar plus eigene Messung an deutschem Text |
-| Queue-, Crawl- und Job-Muster | HIGH | Vollstaendig aus produktivem Quellcode gelesen |
-| Mount- und ACL-Aufloesung | HIGH fuer die APIs, MEDIUM fuer die Pro-Mount-Optimierung | Interfaces und `UserMountCache`-SQL gelesen; die Optimierung ist logisch abgeleitet, nicht gemessen (A7) |
-| Wortliste (Quelle und Lizenz) | HIGH | Debian-Quellpaket und Copyright-Datei gelesen |
-| Wortliste (Groesse und Kosten) | LOW | Nicht gemessen, erster Messschritt gehoert in den Plan |
-| Extraktionsbibliotheken | HIGH fuer Versionen und Wheels, MEDIUM fuer die konkreten Aufrufmuster | PyPI live geprueft; die Aufrufmuster stammen aus Doku und Vorwissen, nicht aus einem eigenen Lauf |
-| CI-Erweiterung | HIGH | Bestehender Workflow gelesen, `occ`-Kommandos im Serverquellcode verifiziert |
+- Analysekette, Wortliste und Filterreihenfolge: **HIGH** - vier Rezepte und beide Reihenfolgen gemessen, Lizenzkette aus dem Debian-Copyright belegt
+- Stemmer-Grenzen D2 und D3: **HIGH** - direkt gemessen, betreffen zwei woertliche Abnahmekriterien
+- Snippet-Offsets: **HIGH** - im Quellcode gelesen und am Beispiel mit Umlaut gemessen
+- Tantivy-Betriebsverhalten (Lock, Reopen, Heap, Absturz): **HIGH** - alle vier Fehlermeldungen erzeugt
+- Queue-Muster und Endpunkte: **HIGH** - Original im Quellcode gelesen, fuenf Abweichungen einzeln begruendet
+- ACL-Beschaffung und Crawl-API: **HIGH** - `@since`-Annotationen und context_chat-Quellcode
+- SQLite-Layout und -Groessen: **HIGH** fuer 100k gemessen, **MEDIUM** fuer die Millionen-Hochrechnung
+- Extraktions-Fehlerklassen: **HIGH** fuer die gemessenen Faelle, **MEDIUM** fuer die Vollstaendigkeit der Taxonomie
+- Zweistufiger Suchpfad und Latenzbudget: **MEDIUM** - die Arbeit im Container ist gemessen, die Proxy- und HaRP-Latenz nicht
+- E2E-CI-Erweiterung: **MEDIUM** - die Bausteine sind verifiziert, der Job selbst existiert noch nicht
 
 **Research date:** 2026-08-15
-**Valid until:** etwa 30 Tage fuer Tantivy und die Nextcloud-Interfaces, 7 Tage fuer die PyPI-Versionen (`pypdf` und `charset-normalizer` haben in den letzten 48 Stunden veroeffentlicht)
+**Valid until:** 2026-09-15 fuer die Bibliotheksversionen (pypdf und charset-normalizer haben in dieser Woche veroeffentlicht); die Aussagen zu Tantivy-Semantik, Nextcloud-APIs und Lizenzen halten laenger
+
+---
+*Phase: 02-indexkern-und-volltextsuche*
+*Researched: 2026-08-15*
