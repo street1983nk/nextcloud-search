@@ -19,6 +19,7 @@ and would not catch a later breach.
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
@@ -59,9 +60,101 @@ REMOTE_RECEIVERS = frozenset({"nc", "ocs", "_session", "session", "adapter"})
 OCS_WRITE_ALLOWLIST: frozenset[str] = frozenset()
 
 
+def _imports_nc_py_api(module: str | None) -> bool:
+    return module is not None and (module == NC_MODULE or module.startswith(f"{NC_MODULE}."))
+
+
+def _string_argument(call: ast.Call, position: int, *keywords: str) -> str | None:
+    """Return a literal string argument by position or by keyword name."""
+    if len(call.args) > position:
+        candidate = call.args[position]
+        if isinstance(candidate, ast.Constant) and isinstance(candidate.value, str):
+            return candidate.value
+    for keyword in call.keywords:
+        if keyword.arg in keywords and isinstance(keyword.value, ast.Constant):
+            value = keyword.value.value
+            if isinstance(value, str):
+                return value
+    return None
+
+
+def _receiver_names(node: ast.expr) -> set[str]:
+    """Collect the identifiers of the receiver chain, e.g. nc._session -> {nc, _session}."""
+    names: set[str] = set()
+    current: ast.expr | None = node
+    while current is not None:
+        if isinstance(current, ast.Attribute):
+            names.add(current.attr)
+            current = current.value
+        elif isinstance(current, ast.Name):
+            names.add(current.id)
+            current = None
+        elif isinstance(current, ast.Call):
+            current = current.func
+        else:
+            current = None
+    return names
+
+
+def _writing_request(call: ast.Call) -> tuple[str, str | None] | None:
+    """Return (http method, path) when the call writes to Nextcloud, else None."""
+    func = call.func
+    if not isinstance(func, ast.Attribute):
+        return None
+
+    if func.attr in OCS_ENTRY_POINTS:
+        method = _string_argument(call, 0, "method")
+        if method is None or method.upper() not in WRITING_HTTP_METHODS:
+            return None
+        return method.upper(), _string_argument(call, 1, "path", "url", "path_and_query")
+
+    if func.attr.upper() in WRITING_HTTP_METHODS and _receiver_names(func.value) & REMOTE_RECEIVERS:
+        return func.attr.upper(), _string_argument(call, 0, "path", "url")
+
+    return None
+
+
 def scan_source(relative_path: str, source: str) -> list[str]:
     """Return one message per violated invariant, empty list when clean."""
-    raise NotImplementedError(f"scan_source is not implemented yet: {relative_path} ({len(source)} bytes)")
+    normalized = relative_path.replace("\\", "/")
+    is_client = normalized == CLIENT_MODULE or normalized.endswith(f"/{CLIENT_MODULE}")
+    tree = ast.parse(source, filename=relative_path)
+    violations: list[str] = []
+
+    for node in ast.walk(tree):
+        if not is_client:
+            if isinstance(node, ast.Import):
+                violations += [
+                    f"{normalized}:{node.lineno}: invariant 1, {alias.name} may only be imported by {CLIENT_MODULE}"
+                    for alias in node.names
+                    if _imports_nc_py_api(alias.name)
+                ]
+            elif isinstance(node, ast.ImportFrom) and _imports_nc_py_api(node.module):
+                violations.append(
+                    f"{normalized}:{node.lineno}: invariant 1, {node.module} may only be imported by {CLIENT_MODULE}"
+                )
+
+        if is_client:
+            identifier: str | None = None
+            lineno = 0
+            if isinstance(node, ast.Attribute):
+                identifier, lineno = node.attr, node.lineno
+            elif isinstance(node, ast.Name):
+                identifier, lineno = node.id, node.lineno
+            elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                identifier, lineno = node.name, node.lineno
+            if identifier in FORBIDDEN_IDENTIFIERS:
+                violations.append(f"{normalized}:{lineno}: invariant 2, writing identifier {identifier}")
+
+        if isinstance(node, ast.Call):
+            request = _writing_request(node)
+            if request is not None:
+                method, path = request
+                if path is None or path not in OCS_WRITE_ALLOWLIST:
+                    target = path if path is not None else "an unknown path"
+                    violations.append(f"{normalized}:{node.lineno}: invariant 3, {method} on {target}")
+
+    return violations
 
 
 def _package_modules() -> list[tuple[str, str]]:
