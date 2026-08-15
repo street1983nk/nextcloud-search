@@ -1,0 +1,119 @@
+name: Integration
+
+# The walking skeleton: a real Nextcloud is installed, both apps are enabled and
+# the search provider list is asked whether findling is there. In phase 1 this
+# workflow is red on purpose, because php/ is still empty. It is the measuring
+# stick for the phase, hung up before the work starts instead of afterwards.
+on:
+  push:
+    paths:
+      - 'php/**'
+      - 'backend/**'
+      - '.github/workflows/integration.yml'
+  pull_request:
+    paths:
+      - 'php/**'
+      - 'backend/**'
+      - '.github/workflows/integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  walking-skeleton:
+    name: walking-skeleton
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # One server version only. The full stable32 / stable33 / stable34 matrix
+        # becomes a scheduled run in phase 5, otherwise pull request feedback
+        # gets slow.
+        server-version: ['stable34']
+        php-version: ['8.2']
+
+    steps:
+      # Actions are pinned to commit SHAs, never to tags: a moved tag would be
+      # arbitrary code execution inside a job that holds a Nextcloud instance.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          repository: nextcloud/server
+          ref: ${{ matrix.server-version }}
+          submodules: recursive
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, gd, zip
+          coverage: none
+
+      - name: Check out nextcloud/app_api
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          repository: nextcloud/app_api
+          ref: ${{ matrix.server-version }}
+          path: apps/app_api
+
+      - name: Check out findling
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          path: findling-src
+
+      # The directory name must be exactly the app id. If it is not, the
+      # autoloader never finds the classes and the provider stays invisible with
+      # no error message at all (pitfall 3, third cause).
+      - name: Move the PHP companion to apps/findling
+        run: mv findling-src/php apps/findling
+
+      - name: Install Nextcloud
+        run: |
+          mkdir data
+          ./occ maintenance:install --database=sqlite --admin-user admin --admin-pass password
+
+      - name: Start the PHP builtin server
+        run: composer run serve &
+
+      - name: Wait for the server
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:8080/status.php > /dev/null; then
+              echo "server is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "server did not answer on http://localhost:8080/status.php"
+          exit 1
+
+      - name: Enable app_api
+        run: ./occ app:enable -vvv -f app_api
+
+      # Expected to fail in phase 1: there is no PHP companion yet. When this
+      # step turns green, the companion exists and the canary below becomes the
+      # meaningful assertion.
+      - name: Enable findling
+        run: ./occ app:enable -vvv -f findling
+
+      # The canary is the diagnostic question from pitfall 3: if findling shows
+      # up in the provider list, a later failure sits in the container. If it
+      # does not, the failure sits in the PHP app.
+      - name: Canary, findling in the search provider list
+        id: canary
+        run: |
+          curl -sf -u admin:password \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers' | tee providers.json
+          jq -e '[.ocs.data[] | select(.id == "findling")] | length == 1' providers.json
+
+      - name: Nextcloud log
+        if: failure()
+        run: |
+          if [ -f data/nextcloud.log ]; then
+            tail -n 200 data/nextcloud.log
+          else
+            echo "no data/nextcloud.log written"
+          fi
+          ./occ app:list || true

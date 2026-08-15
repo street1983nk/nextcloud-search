@@ -1,0 +1,67 @@
+[project]
+name = "findling"
+version = "0.1.0"
+description = "Findling ExApp backend: zero-config search for Nextcloud"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+license = "AGPL-3.0-or-later"
+authors = [{ name = "street1983nk" }]
+dependencies = [
+    "nc-py-api[app]==0.30.3",
+    "fastapi==0.141.1",
+    "httpx==0.28.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff==0.16.3",
+    "pyright==1.1.411",
+    "vulture==2.16",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "findling"
+module-root = "src"
+
+# starlette is not pinned directly because nc-py-api owns the dependency edge.
+# The floor stays above CVE-2026-48710 (BadHost, path desync defeating path based
+# authorization), so the resolver may never fall below 1.0.1.
+[tool.uv]
+constraint-dependencies = ["starlette>=1.0.1"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "SIM", "C4", "RUF", "PT", "RET", "A", "ISC"]
+
+[tool.ruff.lint.per-file-ignores]
+# S101 flags every plain assert. Tests are the one place where assert is the
+# intended construct, so the bandit rule is muted there and nowhere else.
+"tests/*" = ["S101"]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+pythonVersion = "3.13"
+include = ["src", "tests"]
+
+[tool.vulture]
+min_confidence = 80
+paths = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# A synchronous enabled_handler still works with nc-py-api 0.30.x but only emits a
+# DeprecationWarning, and it breaks hard in 0.31.0. Turning that warning into an
+# error is the only way the mistake surfaces before the release that removes it.
+filterwarnings = ["error::DeprecationWarning"]
