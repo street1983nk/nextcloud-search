@@ -21,9 +21,21 @@ The two private keys and the two signing requests live **outside this repository
 ~/.findling-secrets/
 ```
 
-with `0700` on the directory and `0600` on the two `.key` files. The directory holds
-exactly four files: `findling.key`, `findling.csr`, `findling_backend.key` and
-`findling_backend.csr`.
+The directory holds exactly four files: `findling.key`, `findling.csr`,
+`findling_backend.key` and `findling_backend.csr`.
+
+Access is restricted to the owner. On a POSIX host that is `0700` on the directory and
+`0600` on the two `.key` files. On the Windows workstation where the keys were generated
+`chmod` is a no-op against NTFS: it reports success and leaves the file at `0644`. The
+restriction there has to be an access control list, and it was applied as one:
+
+```
+icacls "%USERPROFILE%\.findling-secrets" /inheritance:r /grant:r "%USERNAME%:(OI)(CI)F"
+```
+
+Verify with `icacls "%USERPROFILE%\.findling-secrets\findling.key"`. The output must list
+the owner account and nothing else. Do not trust `ls -l` on Windows for this check, it
+shows the emulated mode, not the real permissions.
 
 Nothing in that directory is ever copied into this repository. Only the text of a
 `.csr` leaves it, and only into the certificate request pull request, where it is
