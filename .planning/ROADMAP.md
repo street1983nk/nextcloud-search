@@ -34,7 +34,17 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Das Multi-Arch-Image (amd64 + arm64, Debian-slim-Basis) baut in der CI durch und startet auf beiden Architekturen bis zum erfolgreichen AppAPI-Handshake
   4. Beide App-IDs (`findling` ExApp + Companion) sind eingefroren und beide CSR-Vorgänge sind eingereicht, bevor der erste Bau-Commit der Folgephase entsteht
   5. Das CI-Gate für die Nur-Lesen-Invariante ist aktiv: ein Testlauf über ein Referenzkorpus belegt per Prüfsumme, dass keine Nutzerdatei verändert wurde
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+- [ ] 01-01-PLAN.md , Identitaets-Freeze und Repo-Grundgeruest
+- [ ] 01-02-PLAN.md , Qualitaetsgates, Nur-Lesen-Gate A und rote Kanarienprobe
+- [ ] 01-03-PLAN.md , CSR-Vorgaenge fuer beide App-IDs
+- [ ] 01-04-PLAN.md , ExApp-Kanarienvogel: POST /search mit Container-Beweis
+- [ ] 01-05-PLAN.md , PHP-Companion: IProvider, Proxy-Guard, Content-Gateway
+- [ ] 01-06-PLAN.md , Durchstich gruen und Sichtprobe des Owners
+- [ ] 01-07-PLAN.md , Multi-Arch-Image, HaRP und Store-Metadaten
+- [ ] 01-08-PLAN.md , Content-Gateway-Beweis und Pruefsummen-Gate B
 
 ### Phase 2: Indexkern und Volltextsuche
 **Goal**: Der Nutzer findet den Inhalt seiner Dokumente per Volltextsuche mit deutscher Sprachqualität, und der Erstindex überlebt jeden Abbruch.
@@ -109,7 +119,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Integrationsbeweis | 0/TBD | Not started | - |
+| 1. Integrationsbeweis | 0/8 | Not started | - |
 | 2. Indexkern und Volltextsuche | 0/TBD | Not started | - |
 | 3. Aktualität und OCR | 0/TBD | Not started | - |
 | 4. Admin-Sichtbarkeit und Diagnose | 0/TBD | Not started | - |
