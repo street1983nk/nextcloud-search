@@ -18,13 +18,22 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
+from findling.api.search import ROUTER
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp, run_app, set_handlers
 
 LOGGER = logging.getLogger("findling")
 
 KNOWN_LOG_LEVELS = frozenset({"debug", "info", "warning", "error"})
+
+# The AppAPI header is the only trusted source of identity, so a body that names
+# a user is refused rather than ignored. Dropping the field silently would leave
+# the caller believing the request ran as somebody else.
+BODY_IDENTITY_REJECTED = "user identity is taken from the AppAPI header only"
 
 
 def log_level() -> str:
@@ -68,9 +77,24 @@ APP = FastAPI(lifespan=lifespan)
 # /heartbeat is always exempt from this middleware, which is what lets AppAPI
 # probe the container before any request is signed.
 APP.add_middleware(AppAPIAuthMiddleware)
+# The router is mounted behind the middleware, so no search route can ever be
+# reached without a verified AppAPI header.
+APP.include_router(ROUTER)
 
-# The search router of task 2 is included right here, after the middleware, so
-# that no route can ever be reachable without a verified AppAPI header.
+
+@APP.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Turn a forbidden extra body field into 400 and keep 422 for the rest.
+
+    ``SearchRequest`` forbids extra fields, so a body carrying ``userId`` fails
+    validation instead of reaching the handler. The default answer would be 422,
+    which reads like a typo. 400 with an explicit message states what actually
+    happened: the request tried to choose its own identity.
+    """
+    del request
+    if any(error.get("type") == "extra_forbidden" for error in exc.errors()):
+        return JSONResponse(status_code=400, content={"detail": BODY_IDENTITY_REJECTED})
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
 
 
 if __name__ == "__main__":
