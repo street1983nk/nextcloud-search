@@ -1,0 +1,57 @@
+name: Python gates
+
+# Path filtered on purpose: a documentation commit must not spend runner minutes
+# on the backend gates.
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/python.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/python.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  gates:
+    name: ruff, format, pyright, vulture, pytest
+    runs-on: ubuntu-24.04
+    steps:
+      # Actions are pinned to commit SHAs, never to tags: a tag can be moved and
+      # would hand a third party arbitrary code execution in this build.
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          # Same uv release that produced backend/uv.lock, so --frozen means the
+          # same resolution locally and in CI.
+          version: '0.11.7'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install the locked environment
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run pyright
+
+      - name: Dead code
+        run: uv run vulture src tests --min-confidence 80
+
+      - name: Tests
+        run: uv run pytest -q
