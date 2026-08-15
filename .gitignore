@@ -22,6 +22,9 @@ vendor/
 
 # Runtime and build output
 data/
+# Local development state written by scripts/dev/register-exapp.sh: backend log,
+# process id and the persistent storage of the locally started ExApp.
+.dev/
 *.tar.gz
 dist/
 build/
