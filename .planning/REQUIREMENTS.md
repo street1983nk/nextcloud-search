@@ -82,7 +82,53 @@ Deferred. Nicht in v1 bauen.
 
 ## Traceability
 
-Wird von der Roadmap gefüllt.
+Jedes v1-Requirement ist genau einer Phase zugeordnet. Abdeckung: 30 von 30, keine Waisen, keine Doppelungen.
+Release-Schnitt: Phasen 1 bis 5 = v1.0 (Volltext + OCR), Phase 6 = v1.1 (Semantik).
+
+| Requirement | Kurzbeschreibung | Phase | Release | Status |
+|---|---|---|---|---|
+| COMP-01 | Treffer in der Unified Search via IProvider | Phase 1 (Integrationsbeweis) | v1.0 | Pending |
+| COMP-02 | Content-Gateway: ExApp holt Dateiinhalte per ExAppRequired-Endpunkt | Phase 1 (Integrationsbeweis) | v1.0 | Pending |
+| COMP-03 | Alle indexrelevanten Ereignisse in die Pull-Queue, ein einziger Weg | Phase 3 (Aktualität und OCR) | v1.0 | Pending |
+| COMP-04 | Suchfluss: Kandidaten aus der ExApp, finaler PHP-Recheck vor Snippets | Phase 2 (Indexkern und Volltextsuche) | v1.0 | Pending |
+| IDX-01 | Erstindex crawlt pro Mount, jede Datei genau einmal | Phase 2 (Indexkern und Volltextsuche) | v1.0 | Pending |
+| IDX-02 | Indexer überlebt docker kill, Fortschritt in der Datenbank | Phase 2 (Indexkern und Volltextsuche) | v1.0 | Pending |
+| IDX-03 | Pull-Queue mit Zeilen-Locks und natürlicher Backpressure | Phase 2 (Indexkern und Volltextsuche) | v1.0 | Pending |
+| IDX-04 | Periodischer ETag-Abgleich garantiert Konsistenz ohne Events | Phase 3 (Aktualität und OCR) | v1.0 | Pending |
+| IDX-05 | Löschungen und Unshares räumen Inhalte und ACL-Einträge | Phase 3 (Aktualität und OCR) | v1.0 | Pending |
+| IDX-06 | Zero-Config-Defaults mit Leitplanken, failed/skipped sichtbar | Phase 2 (Indexkern und Volltextsuche) | v1.0 | Pending |
+| IDX-07 | Nur-Lesen-Invariante mit CI-Prüfsummen-Gate | Phase 1 (Integrationsbeweis) | v1.0 | Pending |
+| IDX-08 | INDEX_WORKERS=1, OCR- und Embedding-Spitze nie gleichzeitig | Phase 2 (Indexkern und Volltextsuche) | v1.0 | Pending |
+| SRCH-01 | Volltextsuche mit deutschem Stemming, Stoppwörtern, Umlaut-Folding | Phase 2 (Indexkern und Volltextsuche) | v1.0 | Pending |
+| SRCH-02 | Snippets erst nach bestandener Rechteprüfung | Phase 2 (Indexkern und Volltextsuche) | v1.0 | Pending |
+| SRCH-03 | Suchoperatoren: Phrase, +/-, Dateiname/Inhalt, Dateityp | Phase 2 (Indexkern und Volltextsuche) | v1.0 | Pending |
+| SRCH-04 | Berechtigungs-Paritätstest über 6 Rechteszenarien | Phase 5 (Härtung und Store-Einreichung v1.0) | v1.0 | Pending |
+| OCR-01 | OCR für gescannte PDFs und Bilder, automatisch, index-seitig | Phase 3 (Aktualität und OCR) | v1.0 | Pending |
+| OCR-02 | Text-Layer-Erkennung, Seiten-Timeouts, RAM-Deckel pro Job | Phase 3 (Aktualität und OCR) | v1.0 | Pending |
+| SEM-01 | Lokale Embeddings mit RRF-Hybrid-Ranking | Phase 6 (Semantische Suche, Release v1.1) | v1.1 | Pending |
+| SEM-02 | Vektor-Suche durch dieselbe ACL-Kette | Phase 6 (Semantische Suche, Release v1.1) | v1.1 | Pending |
+| SEM-03 | Vektor-Schema erst nach Lasttest festgezurrt | Phase 6 (Semantische Suche, Release v1.1) | v1.1 | Pending |
+| ADM-01 | Statusseite: Fortschritt, Deckungsgrad, Fehlerliste | Phase 4 (Admin-Sichtbarkeit und Diagnose) | v1.0 | Pending |
+| ADM-02 | Pro-Datei-Diagnose mit Grund | Phase 4 (Admin-Sichtbarkeit und Diagnose) | v1.0 | Pending |
+| ADM-03 | Vorab-Schätzung vor dem Erstindex | Phase 4 (Admin-Sichtbarkeit und Diagnose) | v1.0 | Pending |
+| ADM-04 | Ausschluss-Regeln und Toggles | Phase 4 (Admin-Sichtbarkeit und Diagnose) | v1.0 | Pending |
+| PKG-01 | Multi-Arch-Image auf Debian-slim, Modell eingebacken | Phase 1 (Integrationsbeweis) | v1.0 | Pending |
+| PKG-02 | Beide App-IDs eingefroren, beide CSRs eingereicht | Phase 1 (Integrationsbeweis) | v1.0 | Pending |
+| PKG-03 | Lauffähig auf 4-GB-ARM, NC 32-34, HaRP auf compose und AIO | Phase 5 (Härtung und Store-Einreichung v1.0) | v1.0 | Pending |
+| PKG-04 | Uninstall-Cleanup | Phase 5 (Härtung und Store-Einreichung v1.0) | v1.0 | Pending |
+| PKG-05 | v1.0-Store-Einreichung vor Jahresende 2026 | Phase 5 (Härtung und Store-Einreichung v1.0) | v1.0 | Pending |
+
+### Abdeckung pro Phase
+
+| Phase | Requirements | Anzahl |
+|---|---|---|
+| 1 | COMP-01, COMP-02, IDX-07, PKG-01, PKG-02 | 5 |
+| 2 | COMP-04, IDX-01, IDX-02, IDX-03, IDX-06, IDX-08, SRCH-01, SRCH-02, SRCH-03 | 9 |
+| 3 | COMP-03, IDX-04, IDX-05, OCR-01, OCR-02 | 5 |
+| 4 | ADM-01, ADM-02, ADM-03, ADM-04 | 4 |
+| 5 | SRCH-04, PKG-03, PKG-04, PKG-05 | 4 |
+| 6 | SEM-01, SEM-02, SEM-03 | 3 |
+| **Summe** | | **30** |
 
 ---
-*Last updated: 2026-08-15 after initial definition*
+*Last updated: 2026-08-15 after roadmap traceability mapping*
