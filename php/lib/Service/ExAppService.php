@@ -66,6 +66,16 @@ final class ExAppService {
 	private const MAX_TITLE_LENGTH = 255;
 	private const MAX_SNIPPET_LENGTH = 1000;
 
+	/**
+	 * The range the backend accepts, see SearchRequest in
+	 * backend/src/findling/api/search.py. Outside of it the request fails
+	 * validation with a 422, which arrives here as an empty result group and
+	 * looks exactly like "nothing found". Clamping instead means the user gets
+	 * the first hits of a too large request rather than silence.
+	 */
+	private const MIN_LIMIT = 1;
+	private const MAX_LIMIT = 100;
+
 	public function __construct(
 		private IAppManager $appManager,
 		private IUserManager $userManager,
@@ -78,6 +88,17 @@ final class ExAppService {
 	 * @return list<array{fileId:int,path:string,title:string,snippet:string}>
 	 */
 	public function search(string $userId, string $term, int $limit): array {
+		// Both bounds of the backend are enforced before the request is built. An
+		// empty term is not an error, it is what the unified search sends while
+		// the user is still typing, and it can only ever produce a 422 over
+		// there. A round trip per keystroke for a request that cannot succeed is
+		// the expensive half of that.
+		$term = trim($term);
+		if ($term === '') {
+			return [];
+		}
+		$limit = max(self::MIN_LIMIT, min(self::MAX_LIMIT, $limit));
+
 		$user = $this->userManager->get($userId);
 		if ($user === null) {
 			// Without a user object the app check below would silently fall
