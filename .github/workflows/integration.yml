@@ -19,14 +19,26 @@ on:
       - 'backend/**'
       - 'testdata/corpus/**'
       - 'scripts/dev/build_corpus.py'
+      - 'scripts/ci/**'
       - '.github/workflows/integration.yml'
+      # The setup of both jobs lives in a composite action, so a change there is a
+      # change to this workflow. Without this line the two most expensive jobs in
+      # the repository would silently not run on exactly the commits that rewrite
+      # how they are set up.
+      - '.github/actions/setup-test-nc/**'
   pull_request:
     paths:
       - 'php/**'
       - 'backend/**'
       - 'testdata/corpus/**'
       - 'scripts/dev/build_corpus.py'
+      - 'scripts/ci/**'
       - '.github/workflows/integration.yml'
+      # The setup of both jobs lives in a composite action, so a change there is a
+      # change to this workflow. Without this line the two most expensive jobs in
+      # the repository would silently not run on exactly the commits that rewrite
+      # how they are set up.
+      - '.github/actions/setup-test-nc/**'
   workflow_dispatch:
     inputs:
       tamper_probe:
@@ -114,23 +126,80 @@ jobs:
       - name: Add a test user
         run: OC_PASS="${TESTUSER_PASS}" ./occ user:add --password-from-env testuser
 
-      # The three assertions in order of what they rule out. First: the provider
-      # answered at all. Second, and this is the actual proof of the phase: the
-      # subline carries the user id that only the signed AppAPI header could have
-      # carried into the backend, next to the host name and the timestamp of the
-      # process that produced it. A hard coded hit in PHP cannot pass this.
-      # Third: the snippet is plain text, so the search dialog has nothing to
-      # interpolate as markup.
+      # The assertions in order of what they rule out. First: exactly one entry,
+      # not "at least one", so a provider that answers twice or leaks a second
+      # backend's hit is a red run. Second: the title is the one string the PHP
+      # side accepts without a file behind it, which is also what proves the
+      # permission recheck let the canary through rather than everything through.
+      # Third, and this is the actual proof of the phase: the subline carries the
+      # host name and the timestamp of the process that produced it and ends with
+      # the user id that only the signed AppAPI header could have carried into the
+      # backend. A hard coded hit in PHP cannot pass this. Fourth: the snippet is
+      # plain text, so the search dialog has nothing to interpolate as markup.
       - name: Search as the test user
         run: |
           curl -sf -u "testuser:${TESTUSER_PASS}" \
             -H 'OCS-APIRequest: true' \
             -H 'Accept: application/json' \
             'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary' | tee out.json
-          jq -e '.ocs.data.entries | length > 0' out.json
-          jq -e '.ocs.data.entries[0].subline | contains("produced inside container")' out.json
-          jq -e '.ocs.data.entries[0].subline | contains("testuser")' out.json
+          jq -e '.ocs.data.entries | length == 1' out.json
+          jq -e '.ocs.data.entries[0].title == "findling-canary"' out.json
+          jq -e '.ocs.data.entries[0].subline | startswith("produced inside container ")' out.json
+          jq -e '.ocs.data.entries[0].subline | endswith("for user testuser")' out.json
           jq -e '.ocs.data.entries[0].subline | contains("<") | not' out.json
+
+      # T2, the timeout path, and the reason it is a step rather than a note: the
+      # unified search waits for every provider, so a slow backend does not cost
+      # its own result group, it costs the whole search. ExAppService passes two
+      # seconds to AppAPI for exactly that reason, and a timeout nobody has seen
+      # work is a timeout nobody knows to work.
+      #
+      # The registration stays untouched. Only the process behind the port is
+      # exchanged for one that answers /search after ten seconds.
+      - name: Replace the backend with one that hangs
+        run: |
+          kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          for _ in $(seq 1 20); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null || break
+            sleep 1
+          done
+          python3 findling-src/scripts/ci/slow_backend.py > "${{ runner.temp }}/slow.log" 2>&1 &
+          echo $! > "${{ runner.temp }}/slow.pid"
+          for _ in $(seq 1 20); do
+            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+              echo "the slow stub answers on the ExApp port"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "the slow stub did not come up"
+          cat "${{ runner.temp }}/slow.log" || true
+          exit 1
+
+      - name: A hanging backend costs a result group, not the search
+        run: |
+          start=$(date +%s)
+          status=$(curl -s -o slow.json -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary')
+          elapsed=$(( $(date +%s) - start ))
+          cat slow.json
+          echo "the search answered after ${elapsed}s with status ${status}"
+          test "${status}" = "200"
+          jq -e '.ocs.data.entries | length == 0' slow.json
+          # Two seconds is the configured timeout. Six is the ceiling: high enough
+          # for PHP start up on a slow runner, far below the ten seconds the stub
+          # takes, so removing the timeout turns this step red.
+          test "${elapsed}" -lt 6
+
+      - name: Stop the hanging backend
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/slow.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/slow.pid")" 2>/dev/null || true
+          fi
 
       - name: Unregister the ExApp
         run: ./occ app_api:app:unregister findling_backend
@@ -162,6 +231,8 @@ jobs:
           ./occ app_api:app:list || true
           echo "--- exapp ---"
           tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+          echo "--- slow stub ---"
+          tail -n 40 "${{ runner.temp }}/slow.log" || echo "no slow stub log written"
 
       - name: Stop the ExApp
         if: always()
