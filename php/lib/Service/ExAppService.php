@@ -49,6 +49,23 @@ final class ExAppService {
 	 */
 	private const CANARY_TITLE = 'findling-canary';
 
+	/**
+	 * Hard ceiling on the answer before it is parsed. One megabyte is orders of
+	 * magnitude above the largest legitimate answer (100 hits, a snippet each),
+	 * and json_decode() on an unbounded string is the cheapest way to turn a
+	 * broken backend into an out of memory of the whole PHP request.
+	 */
+	private const MAX_BODY_BYTES = 1048576;
+
+	/**
+	 * Ceilings in characters, not bytes. Both are defense in depth: the search
+	 * dialog renders the two fields as text, and the backend is expected to send
+	 * short strings anyway. A backend that sends a megabyte long title is a
+	 * defect, and this is where the defect stops being the user's problem.
+	 */
+	private const MAX_TITLE_LENGTH = 255;
+	private const MAX_SNIPPET_LENGTH = 1000;
+
 	public function __construct(
 		private IAppManager $appManager,
 		private IUserManager $userManager,
@@ -110,9 +127,19 @@ final class ExAppService {
 			return [];
 		}
 
-		// Case 3. A 2xx does not promise a body that parses.
+		// Case 3. A 2xx does not promise a body that parses, and it does not
+		// promise a body that fits into memory either. The length is checked
+		// before the parser sees it, because json_decode() builds the whole tree.
 		$body = $response->getBody();
-		$decoded = is_string($body) ? json_decode($body, true) : null;
+		if (!is_string($body) || strlen($body) > self::MAX_BODY_BYTES) {
+			$this->logger->warning(
+				'Findling: backend answer is not a bounded string body',
+				['bytes' => is_string($body) ? strlen($body) : -1],
+			);
+			return [];
+		}
+
+		$decoded = json_decode($body, true);
 		if (!is_array($decoded) || !isset($decoded['results']) || !is_array($decoded['results'])) {
 			$this->logger->warning('Findling: malformed backend response');
 			return [];
@@ -157,6 +184,11 @@ final class ExAppService {
 			}
 
 			$fileId = $result['fileId'];
+			$snippet = $this->plainText($result['snippet'], self::MAX_SNIPPET_LENGTH);
+			if ($snippet === null) {
+				$dropped++;
+				continue;
+			}
 
 			if ($fileId <= 0) {
 				// A file id that cannot point at a file is only accepted for the
@@ -171,7 +203,7 @@ final class ExAppService {
 					'fileId' => 0,
 					'path' => '',
 					'title' => self::CANARY_TITLE,
-					'snippet' => $result['snippet'],
+					'snippet' => $snippet,
 				];
 				continue;
 			}
@@ -194,11 +226,22 @@ final class ExAppService {
 				continue;
 			}
 
+			// The node name and the path come from the file system, not from the
+			// container, and they still go through the same cleaning: a file name
+			// out of an external storage can carry anything.
+			$relativePath = ltrim((string)$userFolder->getRelativePath($node->getPath()), '/');
+			$title = $this->plainText($node->getName(), self::MAX_TITLE_LENGTH);
+			$path = $this->plainText($relativePath, self::MAX_TITLE_LENGTH);
+			if ($title === null || $path === null) {
+				$dropped++;
+				continue;
+			}
+
 			$hits[] = [
 				'fileId' => $fileId,
-				'path' => ltrim((string)$userFolder->getRelativePath($node->getPath()), '/'),
-				'title' => $node->getName(),
-				'snippet' => $result['snippet'],
+				'path' => $path,
+				'title' => $title,
+				'snippet' => $snippet,
 			];
 		}
 
@@ -214,6 +257,38 @@ final class ExAppService {
 		}
 
 		return $hits;
+	}
+
+	/**
+	 * Bounded plain text, or null when the input is not valid UTF-8.
+	 *
+	 * Defense in depth, not the primary control. The primary control is that the
+	 * search dialog interpolates title and subline as text, so markup reaches the
+	 * user verbatim instead of being rendered. What is left over are the two
+	 * things text interpolation does not help against: control characters, which
+	 * can reorder a line (bidi overrides), fake a second line in the Nextcloud
+	 * log or cut a string short in a terminal, and length, which is a rendering
+	 * problem in the dialog and a memory problem in the answer.
+	 *
+	 * The tab survives, everything else in that range does not. A snippet from
+	 * the container is a single line by construction, so nothing legitimate is
+	 * lost; should phase 2 ever want to keep newlines, they belong folded into
+	 * spaces here rather than passed through.
+	 *
+	 * Invalid UTF-8 is a null and the caller drops the hit. Passing it on would
+	 * break the JSON and the XML rendering of the OCS answer, which costs the
+	 * whole unified search instead of one result.
+	 */
+	private function plainText(string $value, int $maxLength): ?string {
+		$clean = preg_replace('/(?!\t)[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u', '', $value);
+		if ($clean === null) {
+			return null;
+		}
+
+		// Characters, not bytes: cutting a UTF-8 string at a byte offset produces
+		// half a character, which is exactly the invalid input this method exists
+		// to keep out.
+		return mb_substr($clean, 0, $maxLength, 'UTF-8');
 	}
 
 	/**
