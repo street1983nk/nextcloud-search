@@ -156,9 +156,21 @@ runs:
     # The registration blocks until the handshake is through, which is what turns a
     # race into a verdict. access_level is numeric on the JSON path (1 is USER),
     # symbolic only in info.xml.
+    #
+    # The route list is exactly the productive one from backend/appinfo/info.xml:
+    # one entry, POST on search, USER level. It used to be url ".*" with all four
+    # writing verbs, which registered an instance no user will ever have and left
+    # the route restriction itself untested. If a later phase adds a route to
+    # info.xml and forgets it here, the integration job is what says so.
+    #
+    # /enabled, /heartbeat and /init are absent on purpose and the registration
+    # still completes: AppAPI addresses those three directly instead of going
+    # through the proxy, which is the assumption info.xml states and this run
+    # verifies. bruteforce_protection is left out here, unlike in info.xml,
+    # because it changes what happens after a 401 and not which routes exist.
     - name: Register the ExApp
       shell: bash
       run: |
         timeout 120 ./occ app_api:app:register findling_backend manual_install --json-info \
-          "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"${{ inputs.exapp-version }}\",\"secret\":\"${{ inputs.exapp-secret }}\",\"port\":${{ inputs.exapp-port }},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\".*\",\"verb\":\"GET,POST,PUT,DELETE\",\"access_level\":1,\"headers_to_exclude\":[]}]}" \
+          "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"${{ inputs.exapp-version }}\",\"secret\":\"${{ inputs.exapp-secret }}\",\"port\":${{ inputs.exapp-port }},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\"search\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]}]}" \
           --force-scopes --wait-finish

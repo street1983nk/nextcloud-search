@@ -103,8 +103,12 @@ nextcloud_occ app_api:daemon:register --net host \
 	|| printf 'daemon %s exists already\n' "${DAEMON_NAME}"
 
 printf 'registering the ExApp, this blocks until the handshake is done\n'
+# The route list mirrors backend/appinfo/info.xml exactly: one route, POST on
+# search, USER level. A catch all ".*" with the writing verbs would give the local
+# instance a surface no released installation has, and the first thing that breaks
+# in CI but works here would be exactly that difference.
 nextcloud_occ app_api:app:register "${BACKEND_ID}" "${DAEMON_NAME}" --json-info \
-	"{\"id\":\"${BACKEND_ID}\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"${DAEMON_NAME}\",\"version\":\"${BACKEND_VERSION}\",\"secret\":\"${BACKEND_SECRET}\",\"port\":${BACKEND_PORT},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\".*\",\"verb\":\"GET,POST,PUT,DELETE\",\"access_level\":1,\"headers_to_exclude\":[]}]}" \
+	"{\"id\":\"${BACKEND_ID}\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"${DAEMON_NAME}\",\"version\":\"${BACKEND_VERSION}\",\"secret\":\"${BACKEND_SECRET}\",\"port\":${BACKEND_PORT},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\"search\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]}]}" \
 	--force-scopes --wait-finish
 
 printf 'registered\n'
