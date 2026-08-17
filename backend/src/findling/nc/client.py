@@ -10,13 +10,22 @@ nc_py_api itself. Two reasons, both load bearing:
    "nobody writes anywhere" is not. Gate A enforces invariant 1 against this
    module path and invariant 2 against the identifiers inside it.
 
+The same seam holds for ``httpx``, which this module uses for the content gateway
+and which no other module may import. A module with its own HTTP client could
+write to Nextcloud without naming the client library once, so the gate treats both
+imports the same way.
+
 Consequently the writing entry points of ``nc_py_api.files`` and the
 impersonation entry point of ``AsyncNextcloudApp`` are deliberately absent from
 the re-export list: a caller cannot reach what the boundary does not hand out.
 """
 
+import asyncio
+import os
+from base64 import b64encode
 from typing import IO
 
+import httpx
 from nc_py_api import AsyncNextcloudApp, NextcloudException
 from nc_py_api.ex_app import AppAPIAuthMiddleware, anc_app, run_app, set_handlers
 
@@ -26,17 +35,27 @@ __all__ = [
     "NC_PY_API_VERIFIED_VERSION",
     "AppAPIAuthMiddleware",
     "AsyncNextcloudApp",
+    "GatewayClient",
     "NextcloudException",
     "anc_app",
+    "app_api_headers",
     "create_app_client",
     "current_user_id",
     "fetch_file_stream",
+    "gateway_url",
+    "new_gateway_client",
     "run_app",
     "set_handlers",
 ]
 
-# The release the private call inside fetch_file_stream was read against. It is
-# named here so that an upgrade has one obvious place to be re-verified.
+# The transport type of the content gateway. Exported so that a caller can
+# annotate a pooled client without importing httpx: the read-only gate allows that
+# import in this module only, and this alias is how the restriction stays cheap to
+# obey rather than something to work around.
+GatewayClient = httpx.AsyncClient
+
+# The release the header layout below was read against. It is named here so that
+# an upgrade has one obvious place to be re-verified.
 NC_PY_API_VERIFIED_VERSION = "0.30.3"
 
 # The content gateway of the PHP companion. The file id is the only variable
@@ -52,6 +71,15 @@ CHUNK_SIZE = 65536
 # returns for both "does not exist" and "not yours", deliberately indistinguishable.
 # 998 is the OCS specific variant of the same verdict.
 _NOT_ACCESSIBLE_STATUS = frozenset({404, 998})
+
+_FIRST_ERROR_STATUS = 400
+
+# Fallbacks for the two environment variables the client library uses to
+# configure transport. Mirrored rather than invented, so an admin who sets
+# NPA_NC_CERT for a private CA or NPA_TIMEOUT_DAV for a slow disk keeps both
+# working on this path as well.
+_DEFAULT_TIMEOUT_SECONDS = 90.0
+_DEFAULT_AA_VERSION = "2.2.0"
 
 
 async def current_user_id(nc: AsyncNextcloudApp) -> str | None:
@@ -78,55 +106,136 @@ def create_app_client() -> AsyncNextcloudApp:
     return AsyncNextcloudApp()
 
 
-class _CountingSink:
-    """Passes bytes through to the caller's file object and counts them.
+def gateway_url(file_id: int) -> str:
+    """Absolute URL of the content gateway for one file id."""
+    # The same normalisation the client library applies to NEXTCLOUD_URL, so a
+    # value with a trailing slash or an index.php in it behaves identically here.
+    base = os.environ.get("NEXTCLOUD_URL", "").removesuffix("/").removesuffix("/index.php").removesuffix("/")
+    return base + GATEWAY_PATH.format(file_id=file_id)
 
-    Counting here instead of asking the file object afterwards keeps the helper
-    usable with sinks that cannot be seeked, and it is the reason the byte count
-    in the report is the number that actually crossed the wire.
+
+def app_api_headers(header_user: str) -> dict[str, str]:
+    """The headers AppAPI authenticates a call from an ExApp with.
+
+    Deliberately the same set the client library puts on its own adapter: app id
+    and version identify the caller, the base64 of ``user:secret`` is the
+    credential, and ``OCS-APIRequest`` is what makes Nextcloud accept a call on
+    an ``/ocs/`` route at all. ``AA-VERSION`` is informational and carries the
+    library's own default when the environment does not name one.
+
+    Built from the process environment, not read off the session object. The
+    environment is the documented interface AppAPI hands the container, while the
+    attribute that used to carry these headers is private API.
     """
+    secret = os.environ.get("APP_SECRET", "")
+    return {
+        "AA-VERSION": os.environ.get("AA_VERSION", _DEFAULT_AA_VERSION),
+        "EX-APP-ID": os.environ.get("APP_ID", ""),
+        "EX-APP-VERSION": os.environ.get("APP_VERSION", ""),
+        "AUTHORIZATION-APP-API": b64encode(f"{header_user}:{secret}".encode()).decode(),
+        "OCS-APIRequest": "true",
+    }
 
-    def __init__(self, target: IO[bytes]) -> None:
-        self._target = target
-        self.written = 0
 
-    def write(self, data: bytes) -> int:
-        self.written += len(data)
-        return self._target.write(data)
+def _certificate_setting() -> bool | str:
+    """Mirror NPA_NC_CERT: True, False, or a path to a CA bundle."""
+    value = os.environ.get("NPA_NC_CERT", "True")
+    if value.lower() in {"false", "0"}:
+        return False
+    if value.lower() in {"true", "1"}:
+        return True
+    return value
 
 
-async def fetch_file_stream(nc: AsyncNextcloudApp, file_id: int, user_id: str, fp: IO[bytes]) -> int | None:
+def _timeout() -> httpx.Timeout:
+    """Mirror NPA_TIMEOUT_DAV, the file transfer timeout of the client library."""
+    try:
+        return httpx.Timeout(float(os.environ.get("NPA_TIMEOUT_DAV", _DEFAULT_TIMEOUT_SECONDS)))
+    except ValueError:
+        # An unparsable value disables timeouts in the client library too. Keeping
+        # the same meaning is better than a surprise here.
+        return httpx.Timeout(None)
+
+
+def new_gateway_client() -> httpx.AsyncClient:
+    """A client for the content gateway, transport configured like the library's.
+
+    Redirects are not followed on purpose. A redirect that leaves the instance
+    would carry the AppAPI credential to wherever it points.
+    """
+    return httpx.AsyncClient(verify=_certificate_setting(), timeout=_timeout(), follow_redirects=False)
+
+
+async def _stream_file(
+    client: httpx.AsyncClient,
+    header_user: str,
+    file_id: int,
+    user_id: str,
+    fp: IO[bytes],
+) -> int | None:
+    """Stream one gateway answer into the sink, return the byte count."""
+    written = 0
+    async with client.stream(
+        "GET",
+        gateway_url(file_id),
+        params={"userId": user_id},
+        headers=app_api_headers(header_user),
+    ) as response:
+        if response.status_code in _NOT_ACCESSIBLE_STATUS:
+            return None
+        if response.status_code >= _FIRST_ERROR_STATUS:
+            # The body is deliberately not read. It may be an OCS error document,
+            # it may be a page of HTML from a reverse proxy, and the status code
+            # is the entire verdict either way.
+            raise NextcloudException(response.status_code, reason=f"content gateway refused file id {file_id}")
+
+        async for chunk in response.aiter_bytes(CHUNK_SIZE):
+            written += len(chunk)
+            # The sink is an ordinary file object, so this is blocking disk IO in
+            # the middle of an async request. On a 4 GB box one large PDF would
+            # otherwise stall every other request in the process, indexing and
+            # search alike.
+            await asyncio.to_thread(fp.write, chunk)
+    return written
+
+
+async def fetch_file_stream(
+    nc: AsyncNextcloudApp,
+    file_id: int,
+    user_id: str,
+    fp: IO[bytes],
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> int | None:
     """Read one file through the content gateway, return the number of bytes.
 
     Returns ``None`` when the gateway refuses the file for this user. That is a
-    normal outcome, not an error: a run over a whole corpus must not stop
-    because one file belongs to somebody else. Every other failure is raised, so
-    a broken gateway can never be mistaken for a permission verdict.
+    normal outcome, not an error: a run over a whole corpus must not stop because
+    one file belongs to somebody else. Every other failure is raised, so a broken
+    gateway can never be mistaken for a permission verdict.
 
-    Two implementation notes, both load bearing.
+    Three implementation notes, all load bearing.
 
-    First, this does not go through ``ocs``. ``AsyncNcSessionBasic.ocs`` parses
-    every answer with ``loads(response.text)``, unconditionally and with no
-    switch for raw data, so the first real PDF would end in a JSONDecodeError.
-    The streaming entry point below writes the body block by block instead.
+    First, this does not go through the ``ocs`` entry point of the client library.
+    That one parses every answer as JSON, unconditionally and with no switch for
+    raw data, so the first real PDF would end in a decode error.
 
-    Second, ``nc._session`` is private API of nc_py_api, read against
-    :data:`NC_PY_API_VERIFIED_VERSION`. The dependency is deliberate and
-    documented (assumptions log A4); keeping it inside this one function is what
-    limits an nc_py_api upgrade to a single place. The fallback, should the call
-    ever disappear, is an own httpx client with a self built AppAPI auth header.
+    Second, the request is an own streamed httpx call inside ``async with``, and
+    not the library's ``download2stream``. Two reasons. The library holds the
+    response open without a context manager, so an exception in the middle of a
+    file, a cancelled request or a shutdown leaves the connection dangling in the
+    pool. And it writes every block to the sink from the event loop, which turns
+    a large file into a stall for everything else in the process; the write goes
+    to a worker thread here. As a side effect this module no longer touches any
+    private attribute of the library, only its documented environment.
+
+    Third, ``client`` exists so that a caller with many files can hand in one
+    pooled client instead of paying for a connection per file. Phase 2 does that
+    from the indexing loop; a single call may leave it out and gets its own.
     """
-    sink = _CountingSink(fp)
-    try:
-        await nc._session.download2stream(
-            GATEWAY_PATH.format(file_id=file_id),
-            sink,
-            dav=False,
-            params={"userId": user_id},
-            chunk_size=CHUNK_SIZE,
-        )
-    except NextcloudException as error:
-        if error.status_code in _NOT_ACCESSIBLE_STATUS:
-            return None
-        raise
-    return sink.written
+    header_user = await nc.user
+    if client is not None:
+        return await _stream_file(client, header_user, file_id, user_id, fp)
+
+    async with new_gateway_client() as owned_client:
+        return await _stream_file(owned_client, header_user, file_id, user_id, fp)

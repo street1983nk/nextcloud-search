@@ -25,7 +25,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from findling.nc.client import AsyncNextcloudApp, create_app_client, fetch_file_stream
+from findling.nc.client import (
+    AsyncNextcloudApp,
+    GatewayClient,
+    create_app_client,
+    fetch_file_stream,
+    new_gateway_client,
+)
 
 STATUS_READ = "read"
 STATUS_NOT_ACCESSIBLE = "not-accessible"
@@ -42,11 +48,17 @@ class FileReadResult:
     detail: str = ""
 
 
-async def read_one(nc: AsyncNextcloudApp, user_id: str, file_id: int) -> FileReadResult:
+async def read_one(
+    nc: AsyncNextcloudApp,
+    user_id: str,
+    file_id: int,
+    *,
+    client: GatewayClient | None = None,
+) -> FileReadResult:
     """Read a single file into scratch space and classify the outcome."""
     with tempfile.TemporaryFile() as scratch:
         try:
-            written = await fetch_file_stream(nc, file_id, user_id, scratch)
+            written = await fetch_file_stream(nc, file_id, user_id, scratch, client=client)
         except Exception as error:
             # One unreadable file must not end the run: the whole point of the
             # gate is to see every file of the corpus, including the two that
@@ -57,13 +69,27 @@ async def read_one(nc: AsyncNextcloudApp, user_id: str, file_id: int) -> FileRea
         return FileReadResult(file_id, STATUS_READ, written)
 
 
-async def read_files(nc: AsyncNextcloudApp, user_id: str, file_ids: Sequence[int]) -> list[FileReadResult]:
+async def read_files(
+    nc: AsyncNextcloudApp,
+    user_id: str,
+    file_ids: Sequence[int],
+    *,
+    client: GatewayClient | None = None,
+) -> list[FileReadResult]:
     """Read the given files one after another, in order.
 
     Sequential on purpose. The target hardware is a 4 GB box, and a gate that
     hides a memory problem behind concurrency would be worth less than none.
+
+    One client for the whole run, not one per file: the corpus is read over a
+    single keep alive connection, which is also the shape phase 2 needs when it
+    walks tens of thousands of files.
     """
-    return [await read_one(nc, user_id, file_id) for file_id in file_ids]
+    if client is not None:
+        return [await read_one(nc, user_id, file_id, client=client) for file_id in file_ids]
+
+    async with new_gateway_client() as owned_client:
+        return [await read_one(nc, user_id, file_id, client=owned_client) for file_id in file_ids]
 
 
 def format_report(results: Sequence[FileReadResult]) -> str:
