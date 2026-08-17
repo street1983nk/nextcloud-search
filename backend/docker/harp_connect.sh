@@ -13,7 +13,8 @@ FRPC_CONFIG="/frpc.toml"
 
 if [ -z "${HP_SHARED_KEY:-}" ]; then
 	# manual-install and plain "docker run" both land here. Exit code 0 tells
-	# supervisord this was expected, so it does not restart the script forever.
+	# docker/init.sh that this was expected, so it keeps watching the application
+	# alone instead of stopping the container over a missing tunnel.
 	echo "harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT"
 	exit 0
 fi
