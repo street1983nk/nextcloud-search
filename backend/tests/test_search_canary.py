@@ -131,6 +131,27 @@ def test_missing_user_id_is_unauthorized(client: TestClient) -> None:
     assert response.status_code == 401
 
 
+def test_a_request_without_any_appapi_header_is_unauthorized(client: TestClient) -> None:
+    # The case a browser, a port scan or a curl by hand produces. The middleware
+    # has to refuse it before the router is reached; a 422 would mean the body was
+    # validated first and the route answers without a credential being present at
+    # all.
+    response = client.post("/search", json={"query": "contract"})
+
+    assert response.status_code == 401
+
+
+def test_a_request_with_the_wrong_secret_is_unauthorized(client: TestClient) -> None:
+    # Right shape, wrong credential. Proves the middleware compares the secret
+    # instead of merely looking for the presence of the header.
+    headers = appapi_headers("alice")
+    headers["AUTHORIZATION-APP-API"] = b64encode(b"alice:not-the-secret").decode()
+
+    response = client.post("/search", json={"query": "contract"}, headers=headers)
+
+    assert response.status_code == 401
+
+
 def test_response_carries_the_frozen_protocol_fields(client: TestClient) -> None:
     response = client.post("/search", json={"query": "contract"}, headers=appapi_headers("alice"))
 
