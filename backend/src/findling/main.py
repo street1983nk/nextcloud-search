@@ -68,13 +68,21 @@ async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Register the AppAPI routes and announce the binding mode."""
+    """Register the AppAPI routes once and announce the binding mode."""
     logging.basicConfig(level=log_level().upper())
-    # The upstream parameter type still admits the synchronous client class,
-    # which disappears in the next minor release. Narrowing our handler to the
-    # async one is deliberate, and the resulting contravariance complaint is the
-    # price for not carrying the deprecated type into our own signatures.
-    set_handlers(app, enabled_handler)  # pyright: ignore[reportArgumentType]
+    # set_handlers adds routes to the application object, and the application
+    # object outlives the lifespan: one process can start it once, a test suite
+    # enters and leaves it many times on the same global APP. Without this guard
+    # every entry adds a second /enabled, /heartbeat and /init, which is a
+    # growing router that resolves by whichever copy happens to be first.
+    if not getattr(app.state, "findling_handlers_registered", False):
+        # The upstream parameter type still admits the synchronous client class,
+        # which disappears in the next minor release. Narrowing our handler to
+        # the async one is deliberate, and the resulting contravariance complaint
+        # is the price for not carrying the deprecated type into our own
+        # signatures.
+        set_handlers(app, enabled_handler)  # pyright: ignore[reportArgumentType]
+        app.state.findling_handlers_registered = True
     LOGGER.info("findling backend starting, binding mode: %s", binding_mode())
     yield
 

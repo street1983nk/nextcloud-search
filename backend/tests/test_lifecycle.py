@@ -11,6 +11,7 @@ same property Gate A proves through the AST.
 """
 
 import asyncio
+from collections.abc import Iterator
 from pathlib import Path
 from typing import cast
 
@@ -24,10 +25,16 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 
 
 @pytest.fixture
-def client() -> TestClient:
-    """A client that runs the lifespan, so ``set_handlers`` registers its routes."""
+def client() -> Iterator[TestClient]:
+    """A client that runs the lifespan for as long as the test uses it.
+
+    The yield has to sit inside the with block. Returning the client from inside
+    it hands the test a client whose lifespan has already been shut down, so the
+    test would prove that the routes survive their own shutdown rather than that
+    the lifespan registers them.
+    """
     with TestClient(APP) as running_client:
-        return running_client
+        yield running_client
 
 
 def test_enabled_handler_is_a_coroutine_function() -> None:
@@ -53,6 +60,23 @@ def test_heartbeat_answers_without_an_auth_header(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_the_lifespan_registers_the_appapi_routes_exactly_once() -> None:
+    # APP is a module level object, so it outlives every single lifespan run. Each
+    # run used to call set_handlers again, which added a second /enabled,
+    # /heartbeat and /init to the router. The first run below may still register,
+    # the second one must change nothing.
+    with TestClient(APP):
+        pass
+    after_first = [getattr(route, "path", "") for route in APP.routes]
+
+    with TestClient(APP):
+        pass
+    after_second = [getattr(route, "path", "") for route in APP.routes]
+
+    assert after_first == after_second
+    assert after_first.count("/heartbeat") == 1
 
 
 def test_only_the_client_module_imports_nc_py_api() -> None:
