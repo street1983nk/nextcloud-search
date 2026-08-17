@@ -136,7 +136,17 @@ final class ExAppService {
 		// arrives here. Calling a method on that array would be a fatal error
 		// and would destroy the entire search request.
 		if (is_array($response)) {
-			$this->logger->info('Findling: backend unreachable', ['error' => $response['error'] ?? 'unknown']);
+			// warning, not info, and deliberately the same level as the malformed
+			// answer below: an unreachable backend is the one failure mode that
+			// costs the user a whole result group without anything on screen
+			// saying so. An info line is not what an admin looks at when a user
+			// reports that the search finds nothing.
+			//
+			// The unified search asks once per keystroke, so this line can repeat.
+			// Damping it needs state that outlives the request (ICacheFactory),
+			// which is not worth a dependency here: phase 4 builds the status page
+			// out of exactly this signal and owns the aggregation then.
+			$this->logger->warning('Findling: backend unreachable', ['error' => $response['error'] ?? 'unknown']);
 			return [];
 		}
 
