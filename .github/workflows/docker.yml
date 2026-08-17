@@ -29,6 +29,15 @@ permissions:
   # write access to the registry, for no gain.
   packages: write
 
+# Serialised per branch, but deliberately never cancelled. This workflow pushes:
+# a cancelled run can leave one architecture in the registry without the other,
+# and the merge job that turns two digests into one manifest would then publish a
+# manifest with a single platform, which still pulls and still runs, on exactly
+# the machines that are not the target hardware.
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   IMAGE: ghcr.io/street1983nk/findling_backend
 

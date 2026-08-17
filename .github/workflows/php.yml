@@ -19,6 +19,12 @@ on:
 permissions:
   contents: read
 
+# One run per branch, same reasoning as in python.yml: the older run's verdict is
+# worthless the moment a newer commit exists.
+concurrency:
+  group: php-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   # Pinned commit in nextcloud/appstore, deliberately not master. The two files
   # fetched below decide whether this gate is green, so pulling them from a

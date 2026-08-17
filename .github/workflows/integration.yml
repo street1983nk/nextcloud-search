@@ -40,6 +40,13 @@ on:
 permissions:
   contents: read
 
+# One run per branch. This is the most expensive workflow in the repository, two
+# jobs that each install a whole Nextcloud, so a superseded run is the most
+# expensive thing to keep alive.
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   walking-skeleton:
     name: walking-skeleton
