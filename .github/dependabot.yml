@@ -1,0 +1,88 @@
+# Update automation for the three dependency surfaces of this repository.
+#
+# Everything in here is pinned somewhere: actions by commit SHA, the base image
+# and uv by digest, Python packages exactly in uv.lock. Pinning without an update
+# path is how a project ends up two years behind with a known CVE in the runtime,
+# which is precisely the state the predecessor app of this project was in. So the
+# pins stay and this file moves them.
+#
+# Weekly, grouped by minor and patch, so a normal week is one pull request per
+# ecosystem instead of nine. Major updates arrive as separate pull requests on
+# purpose: they need a human to read a changelog.
+version: 2
+
+updates:
+  # Workflows and composite actions. Every uses: in this repository names a commit
+  # SHA, never a tag, because a moved tag is arbitrary code execution inside a job
+  # that holds a Nextcloud instance and a registry token. Dependabot rewrites the
+  # SHA and the trailing version comment together.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # The container image. This one has a documented limit: dependabot rewrites
+  # FROM lines, and the base image of this Dockerfile is a digest in an ARG so
+  # that all three stages share it. Whether that ARG default is picked up depends
+  # on the dependabot release, and the uv binary arrives through
+  # COPY --from=ghcr.io/astral-sh/uv:...@sha256:..., which is not parsed at all.
+  # Both digests therefore stay a manual review point; the entry exists so the
+  # part that can be automated is, and so the gap is visible in one place instead
+  # of being folklore.
+  - package-ecosystem: docker
+    directory: "/backend"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(docker)"
+    groups:
+      image-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # Python. The uv ecosystem understands pyproject.toml together with uv.lock,
+  # which is what --frozen resolves against in every gate; the pip ecosystem would
+  # read the pyproject and leave the lock file untouched, so the lock and the
+  # declaration would drift apart.
+  #
+  # The starlette floor from the constraint block (CVE-2026-48710) is not a
+  # dependency here and cannot be raised by this file. It is a security floor, so
+  # it only ever moves up, and only by hand.
+  - package-ecosystem: uv
+    directory: "/backend"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    groups:
+      python-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

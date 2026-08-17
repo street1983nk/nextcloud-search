@@ -11,6 +11,15 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/docker.yml'
+  # Monthly rebuild. What it does and what it does not do, so nobody reads more
+  # into it than is there: it re-runs the build and the smoke test on both
+  # architectures, which catches a build that has rotted (the frpc tarball is
+  # fetched from a pinned commit of an upstream repository, and that can vanish)
+  # and a heartbeat that has stopped answering. It does not pick up base image
+  # security updates: the base image is pinned by digest, so a rebuild produces the
+  # same layers. Moving that digest is dependabot's job, see .github/dependabot.yml.
+  schedule:
+    - cron: '17 4 1 * *'
   workflow_dispatch:
 
 permissions:
