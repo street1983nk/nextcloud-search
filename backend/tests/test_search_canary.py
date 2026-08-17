@@ -98,6 +98,20 @@ def test_user_id_in_the_body_is_rejected(client: TestClient) -> None:
     assert response.json()["detail"] == "user identity is taken from the AppAPI header only"
 
 
+def test_an_unknown_field_that_is_not_an_identity_stays_a_422(client: TestClient) -> None:
+    # A misspelled field is a typo, not an attack. Answering it with the identity
+    # message would send whoever made the typo hunting for a security problem,
+    # and the field name is what they actually need.
+    response = client.post(
+        "/search",
+        json={"query": "contract", "limitt": 5},
+        headers=appapi_headers("alice"),
+    )
+
+    assert response.status_code == 422
+    assert "limitt" in str(response.json()["detail"])
+
+
 @pytest.mark.parametrize("limit", [0, 101])
 def test_limit_out_of_range_is_rejected(client: TestClient, limit: int) -> None:
     response = client.post(
