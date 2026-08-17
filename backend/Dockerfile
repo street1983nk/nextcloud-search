@@ -72,6 +72,38 @@ COPY --from=frpc /usr/local/bin/frpc /usr/local/bin/frpc
 COPY docker/init.sh docker/entrypoint.sh docker/harp_connect.sh /app/docker/
 RUN chmod 0755 /app/docker/init.sh /app/docker/entrypoint.sh /app/docker/harp_connect.sh
 
+# Everything below runs as an unprivileged user. root inside a container is one
+# escape away from root on the host, and this process needs exactly two writable
+# places: a small runtime directory and, from phase 2 on, its index.
+#
+# The uid and gid are fixed instead of "whatever the tool picks". A named volume
+# keeps the ownership it was created with, so a uid that moves with a base image
+# update would lock the app out of its own index on the next upgrade.
+#
+# Which paths need a chown, and why exactly these:
+#   /app/run  the frpc configuration is written here at start up, mode 600,
+#             because it carries the HaRP shared key. It used to be /frpc.toml,
+#             which only root can create.
+#   /nc_app_findling_backend_data  the mount point of the persistent volume that
+#             AppAPI creates for this app id. Docker initialises a fresh named
+#             volume from the image directory it is mounted over, ownership
+#             included, so pre-creating it here is what makes the volume land
+#             owned by the app user instead of by root. If AppAPI ever mounts
+#             somewhere else, the volume arrives root owned; entrypoint.sh checks
+#             for exactly that and says so in one line.
+#   /app itself stays owned by root and world readable. The process reads its
+#             virtual environment and its scripts, it must not be able to
+#             rewrite them.
+#   /tmp      is 1777 in the base image already, which is where the HaRP unix
+#             socket goes.
+RUN groupadd --gid 1000 findling \
+    && useradd --uid 1000 --gid 1000 --no-create-home --home-dir /app --shell /usr/sbin/nologin findling \
+    && mkdir -p /app/run /nc_app_findling_backend_data \
+    && chown findling:findling /app/run /nc_app_findling_backend_data \
+    && chmod 0700 /app/run
+
+USER findling
+
 # Inside a container the client library's default of 127.0.0.1 means "reachable
 # from nobody", so the published port would answer nothing. Under HaRP this
 # value is ignored, because the app binds a unix socket there instead.

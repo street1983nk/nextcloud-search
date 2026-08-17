@@ -9,7 +9,11 @@
 set -eu
 
 EXAPP_SOCK="${HP_EXAPP_SOCK:-/tmp/exapp.sock}"
-FRPC_CONFIG="/frpc.toml"
+# Not / any more: the container runs as an unprivileged user and only root can
+# create a file in the root directory. /app/run is created for this in the image,
+# owned by that user and mode 700, which matters because this file carries the
+# HaRP shared key.
+FRPC_CONFIG="${FINDLING_RUN_DIR:-/app/run}/frpc.toml"
 
 if [ -z "${HP_SHARED_KEY:-}" ]; then
 	# manual-install and plain "docker run" both land here. Exit code 0 tells
