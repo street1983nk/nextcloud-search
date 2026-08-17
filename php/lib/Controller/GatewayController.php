@@ -91,6 +91,19 @@ class GatewayController extends OCSController {
 			}
 
 			return new StreamResponse($stream);
+		} catch (\OC\User\NoUserException) {
+			// Word for word the answer of the not-found branch above, on purpose.
+			// A 500 for "no such user" next to a 404 for "not your file" is
+			// exactly the difference a script needs to enumerate the user names of
+			// an instance through this route.
+			//
+			// getUserFolder() throws this from the private namespace of the server
+			// and there is no OCP alias for it. If it is ever renamed upstream,
+			// this catch stops matching and the answer falls back to the generic
+			// 500 below, which is the behaviour before this commit rather than a
+			// new failure.
+			$this->logger->debug('Findling: content gateway asked for a user that does not exist');
+			return new DataResponse(['error' => 'Node is not a file or could not be found.'], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			// The message of the exception only, never any file content.
 			$this->logger->error('Findling: unknown error reading a file: ' . $e->getMessage(), ['exception' => $e]);
