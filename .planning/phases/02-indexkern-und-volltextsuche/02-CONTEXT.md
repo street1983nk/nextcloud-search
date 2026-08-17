@@ -16,7 +16,7 @@ Phase 2 macht aus dem Walking Skeleton ein benutzbares Produkt: echte Inhalte au
 
 ### Engine und Sprache
 - Volltext-Engine: Tantivy 0.26 embedded, mmap; Writer-Heap 50 MB, num_threads=1 (4-GB-Budget)
-- Deutsch: Snowball-Stemmer "german" + deutsche Stopwörter + ascii_fold (Umlaut-Folding) + split_compound (Komposita; Wortliste beschaffen ist Teil der Phase, Lizenz prüfen); Englisch als zweites Feld/Pipeline
+- Deutsch: Snowball-Stemmer "german" + deutsche Stopwörter + split_compound (Komposita; Wortliste beschaffen ist Teil der Phase, Lizenz prüfen); Englisch als zweites Feld/Pipeline. KORREKTUR 17.08. (Research, gemessen): ascii_fold gehört NICHT in die deutsche Kette, der Stemmer faltet Umlaute selbst; ausgeschriebene Umlautformen ("Mueller") löst die Query-Umschreibung (Plan 02-09). ascii_fold bleibt nur im Englisch- und Dateiname-Zweig.
 - Snippets: Klartext + Zeichenoffsets (Subline rendert kein HTML, Phase-1-Befund); Hervorhebung macht die PHP-Seite bzw. der Client mit den Offsets; Snippet-Erzeugung erst NACH bestandener Rechteprüfung (SRCH-02)
 - Suchoperatoren: Phrasen, +/-, Filter Dateiname vs. Inhalt, Dateityp (SRCH-03)
 
@@ -80,6 +80,13 @@ Phase 2 macht aus dem Walking Skeleton ein benutzbares Produkt: echte Inhalte au
 - Lasttest 100k+: Phase 5
 
 </deferred>
+
+## Owner-Entscheidungen nach dem Research (17.08., ergänzt)
+
+- D1 (ascii_fold): aus der deutschen Kette entfernt, siehe Korrektur oben. Gemessen: Stopwörter greifen ohne ascii_fold, der Stemmer faltet selbst.
+- D2 (Verbformen): Snowball vereinheitlicht keine Verbformen ("suchte" findet "suchen" nicht). Abnahmekriterium auf Nominalflexion umgestellt, Verbformen sind eine dokumentierte Grenze (docs/german-analyzer.md); v1.1-Semantik fängt solche Fälle ab.
+- D3 (ausgeschriebene Umlautformen): per Query-Umschreibung gelöst (Plan 02-09), nicht im Index.
+- Wortliste: Rezept A (alle Wörter, Längenfenster 4 bis 14, Fugenelemente als eigene Einträge), Rezept C hinter FINDLING_COMPOUND_DICT=nouns.
 
 ---
 

@@ -1507,29 +1507,29 @@ Der letzte Punkt verdient eine ausdrueckliche Notiz: mit `stored=True` auf `body
 
 ---
 
-## Open Questions
+## Open Questions (alle 5 RESOLVED, Stand 17.08., umgesetzt in den Plaenen)
 
-1. **Wird die Verbform-Grenze (D2) akzeptiert oder gegengesteuert?**
+1. **Wird die Verbform-Grenze (D2) akzeptiert oder gegengesteuert?** RESOLVED: umformuliert auf Nominalflexion, dokumentierte Grenze (Plan 02-01, 02-14).
    - Was wir wissen: Snowball fuer Deutsch behandelt Praeteritum und Partizip nicht. `suchte` und `gesucht` finden `suchen` nicht.
    - Was unklar ist: ob das Abnahmekriterium aus CONTEXT.md umformuliert wird oder ob ein anderer Stemmer geprueft werden soll.
    - Empfehlung: umformulieren. Der Ersatz eines Stemmers ist eine eigene Recherche mit ungewissem Ertrag, und Nominalflexion, Komposita und Umlaute decken den weit ueberwiegenden Teil deutscher Suchanfragen in Dokumentenbestaenden ab. Owner-Entscheid vor dem Bau.
 
-2. **Wie wird der Erstindex ausgeloest, ohne dass ein kaputter Cron ihn still verhindert?**
+2. **Wie wird der Erstindex ausgeloest, ohne dass ein kaputter Cron ihn still verhindert?** RESOLVED: IRepairStep + occ findling:index + Cron-Zeitstempel (Plan 02-04).
    - Was wir wissen: Der Crawl braucht `IFileAccess`, laeuft also als PHP-Hintergrundjob ueber den Nextcloud-Cron. Bei der Voreinstellung "AJAX" laeuft er nur, wenn jemand die Weboberflaeche benutzt.
    - Was unklar ist: Zero-Config heisst, dass nach der Installation von selbst etwas passieren muss.
    - Empfehlung: `IRepairStep` beim Install plant den `SchedulerJob`, dazu `occ findling:index --restart` als Hebel und ein Zeitstempel "letzter Cron-Lauf gesehen" in der Datenbank. Die Anzeige ist Phase 4, die Datenerhebung muss jetzt entstehen.
 
-3. **Welche Wortlistenvariante wird ausgeliefert?**
+3. **Welche Wortlistenvariante wird ausgeliefert?** RESOLVED: Rezept A als Vorgabe, C hinter FINDLING_COMPOUND_DICT=nouns (Plan 02-01).
    - Was wir wissen: Rezept A trifft 14 von 16 und kostet rund 23 MB RSS, Rezept C trifft 12 von 16 bei einem Drittel der Eintraege.
    - Was unklar ist: wie viel RSS auf einer echten 4-GB-ARM-Box tatsaechlich frei ist, wenn OCR (Phase 3) und Embeddings (Phase 6) dazukommen.
    - Empfehlung: A als Vorgabe, C hinter `FINDLING_COMPOUND_DICT=nouns`, und die Entscheidung in Phase 5 gegen die Messung nachziehen.
 
-4. **Wie kommt der `is_update`-Fall mit dem Unique-Index zusammen?**
+4. **Wie kommt der `is_update`-Fall mit dem Unique-Index zusammen?** RESOLVED: Upsert-Dialektnachweis sqlite+mysql in der CI-Matrix (Plan 02-14).
    - Was wir wissen: Die Deduplizierung gehoert in den Index, nicht in einen Vorher-Select.
    - Was unklar ist: welche Upsert-Variante des Nextcloud-`IQueryBuilder` (`insertOrUpdate`, `insertIgnoreConflict`) ueber SQLite, MariaDB und PostgreSQL gleich traegt.
    - Empfehlung: in einem eigenen Task gegen zwei Dialekte verifizieren, bevor der Crawl gebaut wird.
 
-5. **Braucht `body_en` seinen Platz?**
+5. **Braucht `body_en` seinen Platz?** RESOLVED: beide Felder, FINDLING_LANGUAGES=de,en als Stellschraube (Plan 02-01, 02-06, 02-07).
    - Was wir wissen: der nicht gespeicherte Indexanteil kostet gemessen nur 0,076 x des Textes.
    - Was unklar ist: ob deutsche Instanzen ihn nur mitschleppen.
    - Empfehlung: beide Felder bauen, `FINDLING_LANGUAGES=de,en` als Umgebungsvariable in der `info.xml`. Eine Zeile, und Phase 5 hat eine Stellschraube.
