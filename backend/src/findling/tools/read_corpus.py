@@ -111,11 +111,38 @@ def format_report(results: Sequence[FileReadResult]) -> str:
     return "\n".join(lines)
 
 
+def _parse_ids_file(ids_file: Path) -> list[int]:
+    """Read whitespace separated positive file ids, or say which entry is wrong.
+
+    The ids file in the workflow is produced by a shell pipeline over PROPFIND
+    answers. When that pipeline breaks it does not produce an empty file, it
+    produces a file with an error message or a stray zero in it, and the unchecked
+    version turned that into a ValueError traceback out of a list comprehension.
+    A zero would have been worse than a crash: the gateway answers 404 for it, so
+    a broken pipeline would have read as "the user may not see this file".
+    """
+    try:
+        text = ids_file.read_text(encoding="utf-8")
+    except OSError as error:
+        message = f"cannot read --ids-file {ids_file}: {error.strerror or type(error).__name__}"
+        raise ValueError(message) from error
+
+    file_ids: list[int] = []
+    for position, token in enumerate(text.split(), start=1):
+        if not token.isdigit() or int(token) <= 0:
+            message = (
+                f"--ids-file {ids_file}: entry {position} is {token!r}, expected whitespace separated positive integers"
+            )
+            raise ValueError(message)
+        file_ids.append(int(token))
+    return file_ids
+
+
 def _collect_file_ids(inline: Sequence[int], ids_file: Path | None) -> list[int]:
     """Merge the ids given on the command line with those from a file."""
     file_ids = list(inline)
     if ids_file is not None:
-        file_ids += [int(token) for token in ids_file.read_text(encoding="utf-8").split()]
+        file_ids += _parse_ids_file(ids_file)
     return file_ids
 
 
@@ -132,7 +159,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("file_ids", nargs="*", type=int, help="file ids given directly")
     args = parser.parse_args(argv)
 
-    file_ids = _collect_file_ids(args.file_ids, args.ids_file)
+    try:
+        file_ids = _collect_file_ids(args.file_ids, args.ids_file)
+    except ValueError as error:
+        # parser.error prints usage and exits with 2, which is what a command line
+        # tool owes its caller. A traceback here would read like a defect in the
+        # gate itself instead of a broken input file.
+        parser.error(str(error))
+
     if not file_ids:
         parser.error("no file ids given, pass them as arguments or through --ids-file")
 

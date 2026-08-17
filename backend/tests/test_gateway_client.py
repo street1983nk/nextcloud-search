@@ -41,6 +41,7 @@ from findling.tools.read_corpus import (
     format_report,
     read_files,
 )
+from findling.tools.read_corpus import main as read_corpus_main
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 
@@ -272,6 +273,44 @@ async def test_read_corpus_keeps_going_after_an_unexpected_error() -> None:
         results = await read_files(_app(), "testuser", [11, 12], client=client)
 
     assert [result.status for result in results] == [STATUS_ERROR, STATUS_ERROR]
+
+
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        # A shell pipeline that breaks does not write an empty file, it writes its
+        # error into the file.
+        ("11 not-a-number 13\n", "entry 2"),
+        # A zero would be worse than a crash: the gateway answers 404 for it, so a
+        # broken pipeline would read as "the user may not see this file".
+        ("11 0 13\n", "entry 2"),
+        ("-5\n", "entry 1"),
+    ],
+)
+def test_a_broken_ids_file_ends_in_a_usage_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    content: str,
+    expected: str,
+) -> None:
+    ids_file = tmp_path / "ids.txt"
+    ids_file.write_text(content, encoding="utf-8")
+
+    with pytest.raises(SystemExit) as exit_info:
+        read_corpus_main(["--user-id", "admin", "--ids-file", str(ids_file)])
+
+    # 2 is the argparse usage code. Anything else means the tool ran and its exit
+    # code would be read as a verdict about the corpus.
+    assert exit_info.value.code == 2
+    assert expected in capsys.readouterr().err
+
+
+def test_a_missing_ids_file_ends_in_a_usage_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        read_corpus_main(["--user-id", "admin", "--ids-file", str(tmp_path / "nope.txt")])
+
+    assert exit_info.value.code == 2
+    assert "cannot read --ids-file" in capsys.readouterr().err
 
 
 def test_nc_py_api_is_named_in_the_client_module_only() -> None:
