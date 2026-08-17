@@ -48,6 +48,24 @@ def log_level() -> str:
     return level if level in KNOWN_LOG_LEVELS else "info"
 
 
+def unusable_startup_variables() -> list[str]:
+    """Return the environment variables that keep this process from starting.
+
+    Only APP_PORT can be checked here, and only when there is no HaRP: the client
+    library reads it while the server is still binding, with ``int(environ[...])``
+    and no default, so a missing or non numeric value ends as a bare KeyError or
+    ValueError several frames inside the library without naming the variable.
+    Under HaRP the server binds HP_EXAPP_SOCK and never looks at the port at all.
+
+    APP_ID, APP_SECRET, APP_VERSION and NEXTCLOUD_URL are deliberately not in
+    here. They are read per request, so a missing one of those is a failing
+    request with a clear message rather than a container that will not start.
+    """
+    if os.environ.get("HP_SHARED_KEY"):
+        return []
+    return [] if os.environ.get("APP_PORT", "").isdigit() else ["APP_PORT"]
+
+
 def binding_mode() -> str:
     """Describe where the server will listen, without secrets."""
     if os.environ.get("HP_SHARED_KEY"):
@@ -132,4 +150,11 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 
 
 if __name__ == "__main__":
+    _unusable = unusable_startup_variables()
+    if _unusable:
+        raise SystemExit(
+            "findling: cannot start, missing or not a number in the environment: "
+            + ", ".join(_unusable)
+            + ". AppAPI sets these when it deploys the container; a manual run has to set them by hand."
+        )
     run_app("findling.main:APP", log_level=log_level())
