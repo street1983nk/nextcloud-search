@@ -66,6 +66,18 @@ def test_canary_hit_carries_host_time_and_user() -> None:
     assert datetime.fromisoformat(stamp).tzinfo is not None
 
 
+def test_canary_hit_carries_the_title_the_php_companion_accepts() -> None:
+    # The companion resolves every hit through the user's own folder and drops
+    # whatever does not resolve. A hit with file id 0 never resolves, so this
+    # exact title is the only reason the phase 1 proof reaches the user at all.
+    # Spelled out as a literal on purpose: a test that reads the constant it
+    # guards would follow a rename instead of catching it.
+    hit = build_canary_hits("alice")[0]
+
+    assert hit.fileId == 0
+    assert hit.title == "findling-canary"
+
+
 def test_snippet_has_no_markup() -> None:
     snippet = build_canary_hits("alice")[0].snippet
 

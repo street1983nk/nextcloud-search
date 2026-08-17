@@ -29,7 +29,12 @@ from findling.nc.client import AsyncNextcloudApp, anc_app, current_user_id
 
 ROUTER = APIRouter()
 
-CANARY_TITLE = "Findling canary"
+# The exact title the PHP companion accepts for a hit without a file behind it.
+# Every other hit is resolved through the user's own folder over there and is
+# dropped when that resolution fails, which a hit with file id 0 always would.
+# Frozen on both sides, see CANARY_TITLE in php/lib/Service/ExAppService.php, and
+# both disappear together once phase 2 answers with real files.
+CANARY_TITLE = "findling-canary"
 
 
 class SearchRequest(BaseModel):
