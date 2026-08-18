@@ -201,6 +201,32 @@ jobs:
             kill "$(cat "${{ runner.temp }}/slow.pid")" 2>/dev/null || true
           fi
 
+      # Unregistering disables the ExApp first, and that call needs a living
+      # backend on the port. The timeout probe above killed the real one, so it
+      # comes back here, otherwise the teardown fails on its own test setup.
+      - name: Restart the real backend for the teardown
+        working-directory: findling-src/backend
+        run: |
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_PORT="${EXAPP_PORT}"
+          export APP_VERSION=0.1.0
+          export APP_HOST=127.0.0.1
+          export NEXTCLOUD_URL=http://localhost:8080
+          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+          uv run python -m findling.main >> "${{ runner.temp }}/exapp.log" 2>&1 &
+          echo $! > "${{ runner.temp }}/exapp.pid"
+          for _ in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+              echo "exapp is back up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "exapp did not come back before the teardown"
+          tail -50 "${{ runner.temp }}/exapp.log" || true
+          exit 1
+
       - name: Unregister the ExApp
         run: ./occ app_api:app:unregister findling_backend
 
