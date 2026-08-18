@@ -8,6 +8,20 @@ on:
   push:
     branches:
       - main
+    # The release path. backend/appinfo/info.xml names the image tag AppAPI pulls
+    # at installation time, and until this trigger existed the workflow published
+    # only :dev and the commit SHA, so an installation that followed the metadata
+    # would have failed on the pull. A tag vMAJOR.MINOR.PATCH publishes exactly the
+    # tag the metadata names, and the build job refuses to go on if the two
+    # disagree.
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+    # One caveat, because GitHub applies one paths filter to every push event in
+    # this block, tag pushes included: a release tag has to sit on a commit that
+    # touches backend/**. Every release commit does, because it bumps the version
+    # and the image tag in backend/appinfo/info.xml. For a tag placed elsewhere,
+    # workflow_dispatch on that tag ref is the way in, and it takes the same
+    # release path.
     paths:
       - 'backend/**'
       - '.github/workflows/docker.yml'
@@ -61,6 +75,32 @@ jobs:
       # would hand a third party arbitrary code execution in this build.
       - name: Check out the repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+
+      # A release that publishes a tag the metadata does not name is worse than no
+      # release: AppAPI pulls registry/image:<image-tag> at installation time, and
+      # nobody finds out until a user installs the app. Both halves have to carry
+      # the same version as well, which is a project rule, so that a user cannot
+      # end up with two versions that disagree about the protocol between them.
+      #
+      # Deliberately a step in this job and not a job of its own: a separate job
+      # would have to be a "needs" dependency, and a skipped dependency skips
+      # everything behind it, which would turn every ordinary push into a no-op.
+      - name: The git tag, both info.xml versions and the image tag have to agree
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          image_tag=$(sed -n 's:.*<image-tag>\(.*\)</image-tag>.*:\1:p' backend/appinfo/info.xml)
+          backend_version=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' backend/appinfo/info.xml)
+          php_version=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' php/appinfo/info.xml)
+          echo "git tag        ${tag}"
+          echo "image-tag      ${image_tag}   (backend/appinfo/info.xml)"
+          echo "backend version ${backend_version}  (backend/appinfo/info.xml)"
+          echo "php version     ${php_version}  (php/appinfo/info.xml)"
+          fail=0
+          [ "${image_tag}" = "${tag}" ] || { echo "image-tag does not match the git tag"; fail=1; }
+          [ "${backend_version}" = "${tag}" ] || { echo "backend version does not match the git tag"; fail=1; }
+          [ "${php_version}" = "${tag}" ] || { echo "php version does not match the git tag"; fail=1; }
+          exit "${fail}"
 
       # Each architecture is built on a runner of that architecture. No
       # emulation layer is installed anywhere in this workflow: emulating arm64
@@ -210,18 +250,31 @@ jobs:
       # hand drops the attestations that say where the image came from, and
       # provenance is the only thing a user can check us against.
       #
-      # The version tag belongs to the release phase. Until then dev is the
-      # moving pointer and the commit SHA is the one that stays addressable.
+      # dev is the moving pointer, the commit SHA is the one that stays
+      # addressable, and on a tag run the version from the tag is added. That
+      # third tag is the one backend/appinfo/info.xml names, so it is the one an
+      # installation actually pulls.
       - name: Create the manifest
         working-directory: ${{ runner.temp }}/digests
         run: |
-          # The word splitting on the next line is the point: every digest file
+          tags=(-t "${IMAGE}:dev" -t "${IMAGE}:${GITHUB_SHA}")
+          # The version is read out of the ref inside the shell instead of being
+          # interpolated by the workflow expression syntax: a ref is attacker
+          # supplied text in the general case, and it must not reach a command line
+          # unchecked. The pattern below is the same one the trigger filters on.
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+            if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "the tag ${GITHUB_REF} is not vMAJOR.MINOR.PATCH, refusing to tag the manifest"
+              exit 1
+            fi
+            tags+=(-t "${IMAGE}:${version}")
+            echo "release run, the manifest also gets the tag ${version}"
+          fi
+          # The word splitting on the last line is the point: every digest file
           # in this directory becomes one more source reference for the manifest.
           # shellcheck disable=SC2046
-          docker buildx imagetools create \
-            -t "${IMAGE}:dev" \
-            -t "${IMAGE}:${GITHUB_SHA}" \
-            $(printf "${IMAGE}@sha256:%s " *)
+          docker buildx imagetools create "${tags[@]}" $(printf "${IMAGE}@sha256:%s " *)
 
       # A manifest that lists only one platform still pulls and still runs, on
       # exactly the machines that are not the target hardware. So the job asks
@@ -232,6 +285,16 @@ jobs:
           grep -q 'linux/amd64' manifest.txt
           grep -q 'linux/arm64' manifest.txt
           echo "manifest ${IMAGE}:dev carries linux/amd64 and linux/arm64"
+          # On a release run the tag from info.xml is the one that matters, so it
+          # is asked for by name as well. An image nobody can pull under the tag
+          # the metadata names is a broken release, not a broken build.
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+            docker buildx imagetools inspect "${IMAGE}:${version}" | tee release-manifest.txt
+            grep -q 'linux/amd64' release-manifest.txt
+            grep -q 'linux/arm64' release-manifest.txt
+            echo "manifest ${IMAGE}:${version} carries both platforms"
+          fi
 
       # The first push creates the package, and a newly created package is
       # private. The store cannot pull a private image, so the package has to be
