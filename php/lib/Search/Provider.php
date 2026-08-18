@@ -47,6 +47,11 @@ final class Provider implements IProvider {
 		return str_starts_with($route, 'files.') ? -5 : 25;
 	}
 
+	/**
+	 * Every hit that arrives here has already been resolved against this user's
+	 * own folder in ExAppService, so title and path come from the node and not
+	 * from the container. This method therefore renders, it does not decide.
+	 */
 	#[\Override]
 	public function search(IUser $user, ISearchQuery $query): SearchResult {
 		$hits = $this->exApp->search($user->getUID(), $query->getTerm(), $query->getLimit());

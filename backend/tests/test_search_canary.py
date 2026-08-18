@@ -66,6 +66,18 @@ def test_canary_hit_carries_host_time_and_user() -> None:
     assert datetime.fromisoformat(stamp).tzinfo is not None
 
 
+def test_canary_hit_carries_the_title_the_php_companion_accepts() -> None:
+    # The companion resolves every hit through the user's own folder and drops
+    # whatever does not resolve. A hit with file id 0 never resolves, so this
+    # exact title is the only reason the phase 1 proof reaches the user at all.
+    # Spelled out as a literal on purpose: a test that reads the constant it
+    # guards would follow a rename instead of catching it.
+    hit = build_canary_hits("alice")[0]
+
+    assert hit.fileId == 0
+    assert hit.title == "findling-canary"
+
+
 def test_snippet_has_no_markup() -> None:
     snippet = build_canary_hits("alice")[0].snippet
 
@@ -86,6 +98,20 @@ def test_user_id_in_the_body_is_rejected(client: TestClient) -> None:
     assert response.json()["detail"] == "user identity is taken from the AppAPI header only"
 
 
+def test_an_unknown_field_that_is_not_an_identity_stays_a_422(client: TestClient) -> None:
+    # A misspelled field is a typo, not an attack. Answering it with the identity
+    # message would send whoever made the typo hunting for a security problem,
+    # and the field name is what they actually need.
+    response = client.post(
+        "/search",
+        json={"query": "contract", "limitt": 5},
+        headers=appapi_headers("alice"),
+    )
+
+    assert response.status_code == 422
+    assert "limitt" in str(response.json()["detail"])
+
+
 @pytest.mark.parametrize("limit", [0, 101])
 def test_limit_out_of_range_is_rejected(client: TestClient, limit: int) -> None:
     response = client.post(
@@ -101,6 +127,27 @@ def test_missing_user_id_is_unauthorized(client: TestClient) -> None:
     # A signed header without a user name: the signature checks out, the identity
     # does not exist. Answering with results here would be the actual bug.
     response = client.post("/search", json={"query": "contract"}, headers=appapi_headers(""))
+
+    assert response.status_code == 401
+
+
+def test_a_request_without_any_appapi_header_is_unauthorized(client: TestClient) -> None:
+    # The case a browser, a port scan or a curl by hand produces. The middleware
+    # has to refuse it before the router is reached; a 422 would mean the body was
+    # validated first and the route answers without a credential being present at
+    # all.
+    response = client.post("/search", json={"query": "contract"})
+
+    assert response.status_code == 401
+
+
+def test_a_request_with_the_wrong_secret_is_unauthorized(client: TestClient) -> None:
+    # Right shape, wrong credential. Proves the middleware compares the secret
+    # instead of merely looking for the presence of the header.
+    headers = appapi_headers("alice")
+    headers["AUTHORIZATION-APP-API"] = b64encode(b"alice:not-the-secret").decode()
+
+    response = client.post("/search", json={"query": "contract"}, headers=headers)
 
     assert response.status_code == 401
 

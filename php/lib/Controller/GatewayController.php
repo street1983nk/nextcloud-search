@@ -51,6 +51,29 @@ class GatewayController extends OCSController {
 	#[NoCSRFRequired]
 	#[ApiRoute(verb: 'GET', url: '/files/{fileId}')]
 	public function getFileContents(int $fileId, string $userId): DataResponse|StreamResponse {
+		// ExAppRequired answers "is this a registered ExApp", not "is this our
+		// ExApp". Every external app on the instance passes that test, so without
+		// the comparison below any other backend, for instance an AI assistant a
+		// user installed last week, could read any file of any user through this
+		// route. AppAPI puts the calling app id into this header.
+		//
+		// Threat model note, and a deliberate residual risk: this trusts AppAPI to
+		// have authenticated the caller before the request arrives, exactly as the
+		// attribute above already does. Whoever can forge that header has broken
+		// the AppAPI trust model itself and then owns the gateway of every other
+		// ExApp on the instance too. The alternative would be a second
+		// implementation of AppAPI's shared secret handling inside this app, with
+		// a second copy of the secret store. Not worth it, so it is written down
+		// instead of pretended away.
+		$callerAppId = $this->request->getHeader('EX-APP-ID');
+		if ($callerAppId !== Application::BACKEND_APP_ID) {
+			$this->logger->warning('Findling: content gateway called by a foreign ExApp', ['app' => $callerAppId]);
+			return new DataResponse(
+				['error' => 'This route is reserved for the Findling backend.'],
+				Http::STATUS_FORBIDDEN,
+			);
+		}
+
 		try {
 			$file = $this->rootFolder->getUserFolder($userId)->getFirstNodeById($fileId);
 			// Not visible to this user and not existing at all deliberately give
@@ -68,6 +91,19 @@ class GatewayController extends OCSController {
 			}
 
 			return new StreamResponse($stream);
+		} catch (\OC\User\NoUserException) {
+			// Word for word the answer of the not-found branch above, on purpose.
+			// A 500 for "no such user" next to a 404 for "not your file" is
+			// exactly the difference a script needs to enumerate the user names of
+			// an instance through this route.
+			//
+			// getUserFolder() throws this from the private namespace of the server
+			// and there is no OCP alias for it. If it is ever renamed upstream,
+			// this catch stops matching and the answer falls back to the generic
+			// 500 below, which is the behaviour before this commit rather than a
+			// new failure.
+			$this->logger->debug('Findling: content gateway asked for a user that does not exist');
+			return new DataResponse(['error' => 'Node is not a file or could not be found.'], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			// The message of the exception only, never any file content.
 			$this->logger->error('Findling: unknown error reading a file: ' . $e->getMessage(), ['exception' => $e]);

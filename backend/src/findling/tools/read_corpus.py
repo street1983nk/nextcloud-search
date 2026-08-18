@@ -25,7 +25,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from findling.nc.client import AsyncNextcloudApp, create_app_client, fetch_file_stream
+from findling.nc.client import (
+    AsyncNextcloudApp,
+    GatewayClient,
+    create_app_client,
+    fetch_file_stream,
+    new_gateway_client,
+)
 
 STATUS_READ = "read"
 STATUS_NOT_ACCESSIBLE = "not-accessible"
@@ -42,11 +48,17 @@ class FileReadResult:
     detail: str = ""
 
 
-async def read_one(nc: AsyncNextcloudApp, user_id: str, file_id: int) -> FileReadResult:
+async def read_one(
+    nc: AsyncNextcloudApp,
+    user_id: str,
+    file_id: int,
+    *,
+    client: GatewayClient | None = None,
+) -> FileReadResult:
     """Read a single file into scratch space and classify the outcome."""
     with tempfile.TemporaryFile() as scratch:
         try:
-            written = await fetch_file_stream(nc, file_id, user_id, scratch)
+            written = await fetch_file_stream(nc, file_id, user_id, scratch, client=client)
         except Exception as error:
             # One unreadable file must not end the run: the whole point of the
             # gate is to see every file of the corpus, including the two that
@@ -57,13 +69,27 @@ async def read_one(nc: AsyncNextcloudApp, user_id: str, file_id: int) -> FileRea
         return FileReadResult(file_id, STATUS_READ, written)
 
 
-async def read_files(nc: AsyncNextcloudApp, user_id: str, file_ids: Sequence[int]) -> list[FileReadResult]:
+async def read_files(
+    nc: AsyncNextcloudApp,
+    user_id: str,
+    file_ids: Sequence[int],
+    *,
+    client: GatewayClient | None = None,
+) -> list[FileReadResult]:
     """Read the given files one after another, in order.
 
     Sequential on purpose. The target hardware is a 4 GB box, and a gate that
     hides a memory problem behind concurrency would be worth less than none.
+
+    One client for the whole run, not one per file: the corpus is read over a
+    single keep alive connection, which is also the shape phase 2 needs when it
+    walks tens of thousands of files.
     """
-    return [await read_one(nc, user_id, file_id) for file_id in file_ids]
+    if client is not None:
+        return [await read_one(nc, user_id, file_id, client=client) for file_id in file_ids]
+
+    async with new_gateway_client() as owned_client:
+        return [await read_one(nc, user_id, file_id, client=owned_client) for file_id in file_ids]
 
 
 def format_report(results: Sequence[FileReadResult]) -> str:
@@ -85,11 +111,38 @@ def format_report(results: Sequence[FileReadResult]) -> str:
     return "\n".join(lines)
 
 
+def _parse_ids_file(ids_file: Path) -> list[int]:
+    """Read whitespace separated positive file ids, or say which entry is wrong.
+
+    The ids file in the workflow is produced by a shell pipeline over PROPFIND
+    answers. When that pipeline breaks it does not produce an empty file, it
+    produces a file with an error message or a stray zero in it, and the unchecked
+    version turned that into a ValueError traceback out of a list comprehension.
+    A zero would have been worse than a crash: the gateway answers 404 for it, so
+    a broken pipeline would have read as "the user may not see this file".
+    """
+    try:
+        text = ids_file.read_text(encoding="utf-8")
+    except OSError as error:
+        message = f"cannot read --ids-file {ids_file}: {error.strerror or type(error).__name__}"
+        raise ValueError(message) from error
+
+    file_ids: list[int] = []
+    for position, token in enumerate(text.split(), start=1):
+        if not token.isdigit() or int(token) <= 0:
+            message = (
+                f"--ids-file {ids_file}: entry {position} is {token!r}, expected whitespace separated positive integers"
+            )
+            raise ValueError(message)
+        file_ids.append(int(token))
+    return file_ids
+
+
 def _collect_file_ids(inline: Sequence[int], ids_file: Path | None) -> list[int]:
     """Merge the ids given on the command line with those from a file."""
     file_ids = list(inline)
     if ids_file is not None:
-        file_ids += [int(token) for token in ids_file.read_text(encoding="utf-8").split()]
+        file_ids += _parse_ids_file(ids_file)
     return file_ids
 
 
@@ -106,7 +159,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("file_ids", nargs="*", type=int, help="file ids given directly")
     args = parser.parse_args(argv)
 
-    file_ids = _collect_file_ids(args.file_ids, args.ids_file)
+    try:
+        file_ids = _collect_file_ids(args.file_ids, args.ids_file)
+    except ValueError as error:
+        # parser.error prints usage and exits with 2, which is what a command line
+        # tool owes its caller. A traceback here would read like a defect in the
+        # gate itself instead of a broken input file.
+        parser.error(str(error))
+
     if not file_ids:
         parser.error("no file ids given, pass them as arguments or through --ids-file")
 

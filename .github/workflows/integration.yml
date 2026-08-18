@@ -19,14 +19,26 @@ on:
       - 'backend/**'
       - 'testdata/corpus/**'
       - 'scripts/dev/build_corpus.py'
+      - 'scripts/ci/**'
       - '.github/workflows/integration.yml'
+      # The setup of both jobs lives in a composite action, so a change there is a
+      # change to this workflow. Without this line the two most expensive jobs in
+      # the repository would silently not run on exactly the commits that rewrite
+      # how they are set up.
+      - '.github/actions/setup-test-nc/**'
   pull_request:
     paths:
       - 'php/**'
       - 'backend/**'
       - 'testdata/corpus/**'
       - 'scripts/dev/build_corpus.py'
+      - 'scripts/ci/**'
       - '.github/workflows/integration.yml'
+      # The setup of both jobs lives in a composite action, so a change there is a
+      # change to this workflow. Without this line the two most expensive jobs in
+      # the repository would silently not run on exactly the commits that rewrite
+      # how they are set up.
+      - '.github/actions/setup-test-nc/**'
   workflow_dispatch:
     inputs:
       tamper_probe:
@@ -39,6 +51,13 @@ on:
 
 permissions:
   contents: read
+
+# One run per branch. This is the most expensive workflow in the repository, two
+# jobs that each install a whole Nextcloud, so a superseded run is the most
+# expensive thing to keep alive.
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   walking-skeleton:
@@ -64,6 +83,11 @@ jobs:
     steps:
       # Actions are pinned to commit SHAs, never to tags: a moved tag would be
       # arbitrary code execution inside a job that holds a Nextcloud instance.
+      #
+      # These two checkouts stay in the job and stay in this order. actions/checkout
+      # empties its target directory, so the server checkout at the workspace root
+      # has to come first, and the second one is what puts the composite action
+      # below into the workspace at all.
       - name: Check out nextcloud/server
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
         with:
@@ -71,57 +95,18 @@ jobs:
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
-      - name: Set up PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
-        with:
-          php-version: ${{ matrix.php-version }}
-          extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, gd, zip
-          coverage: none
-
-      - name: Check out nextcloud/app_api
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
-        with:
-          repository: nextcloud/app_api
-          ref: ${{ matrix.server-version }}
-          path: apps/app_api
-
       - name: Check out findling
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
         with:
           path: findling-src
 
-      # The directory name must be exactly the app id. If it is not, the
-      # autoloader never finds the classes and the provider stays invisible with
-      # no error message at all (pitfall 3, third cause). The backend stays in
-      # findling-src, it is not part of the server tree.
-      - name: Move the PHP companion to apps/findling
-        run: mv findling-src/php apps/findling
-
-      - name: Install Nextcloud
-        run: |
-          mkdir data
-          ./occ maintenance:install --database=sqlite --admin-user admin --admin-pass password
-
-      - name: Start the PHP builtin server
-        run: composer run serve &
-
-      - name: Wait for the server
-        run: |
-          for _ in $(seq 1 30); do
-            if curl -sf http://localhost:8080/status.php > /dev/null; then
-              echo "server is up"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "server did not answer on http://localhost:8080/status.php"
-          exit 1
-
-      - name: Enable app_api
-        run: ./occ app:enable -vvv -f app_api
-
-      - name: Enable findling
-        run: ./occ app:enable -vvv -f findling
+      - name: Set up the test Nextcloud with both halves and register the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: ${{ matrix.server-version }}
+          php-version: ${{ matrix.php-version }}
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
 
       # The canary is the diagnostic question from pitfall 3: if findling shows
       # up in the provider list, a later failure sits in the container. If it
@@ -135,88 +120,86 @@ jobs:
             'http://localhost:8080/ocs/v2.php/search/providers' | tee providers.json
           jq -e '[.ocs.data[] | select(.id == "findling")] | length == 1' providers.json
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
-        with:
-          # Same uv release that produced backend/uv.lock, so --frozen resolves
-          # identically here and on a developer machine.
-          version: '0.11.7'
-          enable-cache: true
-          cache-dependency-glob: findling-src/backend/uv.lock
-
-      - name: Install the locked backend environment
-        working-directory: findling-src/backend
-        run: uv sync --frozen
-
-      # The backend runs as a plain process, not as a container: phase 1 proves
-      # the integration path, the image is a later plan. The HaRP shared key is
-      # deliberately absent from this environment, because setting it would make
-      # the server bind a unix socket instead of the TCP port, and nothing in
-      # this job speaks to that socket (pitfall 5).
-      - name: Start the ExApp
-        working-directory: findling-src/backend
-        run: |
-          export APP_ID=findling_backend
-          export APP_SECRET="${EXAPP_SECRET}"
-          export APP_PORT="${EXAPP_PORT}"
-          export APP_VERSION=0.1.0
-          export APP_HOST=127.0.0.1
-          export NEXTCLOUD_URL=http://localhost:8080
-          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
-          mkdir -p "${APP_PERSISTENT_STORAGE}"
-          uv run python -m findling.main > "${{ runner.temp }}/exapp.log" 2>&1 &
-          echo $! > "${{ runner.temp }}/exapp.pid"
-
-      - name: Wait for the ExApp heartbeat
-        run: |
-          for _ in $(seq 1 30); do
-            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
-              echo "exapp is up"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "exapp did not answer on http://127.0.0.1:${EXAPP_PORT}/heartbeat"
-          cat "${{ runner.temp }}/exapp.log" || true
-          exit 1
-
-      - name: Register the manual install daemon
-        run: |
-          timeout 10 ./occ app_api:daemon:register --net host \
-            manual_install "Manual Install" manual-install http localhost http://localhost:8080
-
-      # The registration blocks until the handshake is through, which is what
-      # turns a race into a verdict. access_level is numeric on the JSON path
-      # (1 is USER), symbolic only in info.xml.
-      - name: Register the ExApp
-        run: |
-          timeout 120 ./occ app_api:app:register findling_backend manual_install --json-info \
-            "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"0.1.0\",\"secret\":\"${EXAPP_SECRET}\",\"port\":${EXAPP_PORT},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\".*\",\"verb\":\"GET,POST,PUT,DELETE\",\"access_level\":1,\"headers_to_exclude\":[]}]}" \
-            --force-scopes --wait-finish
-
       # The proof has to run as an ordinary user. The admin would work too, but
       # the user id in the answer is the load bearing part, and a second account
       # makes it impossible to confuse it with the installer.
       - name: Add a test user
         run: OC_PASS="${TESTUSER_PASS}" ./occ user:add --password-from-env testuser
 
-      # The three assertions in order of what they rule out. First: the provider
-      # answered at all. Second, and this is the actual proof of the phase: the
-      # subline carries the user id that only the signed AppAPI header could have
-      # carried into the backend, next to the host name and the timestamp of the
-      # process that produced it. A hard coded hit in PHP cannot pass this.
-      # Third: the snippet is plain text, so the search dialog has nothing to
-      # interpolate as markup.
+      # The assertions in order of what they rule out. First: exactly one entry,
+      # not "at least one", so a provider that answers twice or leaks a second
+      # backend's hit is a red run. Second: the title is the one string the PHP
+      # side accepts without a file behind it, which is also what proves the
+      # permission recheck let the canary through rather than everything through.
+      # Third, and this is the actual proof of the phase: the subline carries the
+      # host name and the timestamp of the process that produced it and ends with
+      # the user id that only the signed AppAPI header could have carried into the
+      # backend. A hard coded hit in PHP cannot pass this. Fourth: the snippet is
+      # plain text, so the search dialog has nothing to interpolate as markup.
       - name: Search as the test user
         run: |
           curl -sf -u "testuser:${TESTUSER_PASS}" \
             -H 'OCS-APIRequest: true' \
             -H 'Accept: application/json' \
             'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary' | tee out.json
-          jq -e '.ocs.data.entries | length > 0' out.json
-          jq -e '.ocs.data.entries[0].subline | contains("produced inside container")' out.json
-          jq -e '.ocs.data.entries[0].subline | contains("testuser")' out.json
+          jq -e '.ocs.data.entries | length == 1' out.json
+          jq -e '.ocs.data.entries[0].title == "findling-canary"' out.json
+          jq -e '.ocs.data.entries[0].subline | startswith("produced inside container ")' out.json
+          jq -e '.ocs.data.entries[0].subline | endswith("for user testuser")' out.json
           jq -e '.ocs.data.entries[0].subline | contains("<") | not' out.json
+
+      # T2, the timeout path, and the reason it is a step rather than a note: the
+      # unified search waits for every provider, so a slow backend does not cost
+      # its own result group, it costs the whole search. ExAppService passes two
+      # seconds to AppAPI for exactly that reason, and a timeout nobody has seen
+      # work is a timeout nobody knows to work.
+      #
+      # The registration stays untouched. Only the process behind the port is
+      # exchanged for one that answers /search after ten seconds.
+      - name: Replace the backend with one that hangs
+        run: |
+          kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          for _ in $(seq 1 20); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null || break
+            sleep 1
+          done
+          python3 findling-src/scripts/ci/slow_backend.py > "${{ runner.temp }}/slow.log" 2>&1 &
+          echo $! > "${{ runner.temp }}/slow.pid"
+          for _ in $(seq 1 20); do
+            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+              echo "the slow stub answers on the ExApp port"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "the slow stub did not come up"
+          cat "${{ runner.temp }}/slow.log" || true
+          exit 1
+
+      - name: A hanging backend costs a result group, not the search
+        run: |
+          start=$(date +%s)
+          status=$(curl -s -o slow.json -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary')
+          elapsed=$(( $(date +%s) - start ))
+          cat slow.json
+          echo "the search answered after ${elapsed}s with status ${status}"
+          test "${status}" = "200"
+          jq -e '.ocs.data.entries | length == 0' slow.json
+          # Two seconds is the configured timeout. Six is the ceiling: high enough
+          # for PHP start up on a slow runner, far below the ten seconds the stub
+          # takes, so removing the timeout turns this step red.
+          test "${elapsed}" -lt 6
+
+      - name: Stop the hanging backend
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/slow.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/slow.pid")" 2>/dev/null || true
+          fi
 
       - name: Unregister the ExApp
         run: ./occ app_api:app:unregister findling_backend
@@ -248,6 +231,8 @@ jobs:
           ./occ app_api:app:list || true
           echo "--- exapp ---"
           tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+          echo "--- slow stub ---"
+          tail -n 40 "${{ runner.temp }}/slow.log" || echo "no slow stub log written"
 
       - name: Stop the ExApp
         if: always()
@@ -283,6 +268,9 @@ jobs:
       STRANGER_PASS: 'findling-ci-stranger-2026'
 
     steps:
+      # Same order and the same reason as in the job above: the server checkout
+      # empties the workspace root, and the second checkout is what brings the
+      # composite action into the workspace.
       - name: Check out nextcloud/server
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
         with:
@@ -290,106 +278,24 @@ jobs:
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
-      - name: Set up PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
-        with:
-          php-version: ${{ matrix.php-version }}
-          extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, gd, zip
-          coverage: none
-
-      - name: Check out nextcloud/app_api
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
-        with:
-          repository: nextcloud/app_api
-          ref: ${{ matrix.server-version }}
-          path: apps/app_api
-
       - name: Check out findling
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
         with:
           path: findling-src
 
-      - name: Move the PHP companion to apps/findling
-        run: mv findling-src/php apps/findling
-
-      - name: Install Nextcloud
-        run: |
-          mkdir data
-          ./occ maintenance:install --database=sqlite --admin-user "${CORPUS_USER}" --admin-pass "${CORPUS_PASS}"
-
-      - name: Start the PHP builtin server
-        run: composer run serve &
-
-      - name: Wait for the server
-        run: |
-          for _ in $(seq 1 30); do
-            if curl -sf http://localhost:8080/status.php > /dev/null; then
-              echo "server is up"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "server did not answer on http://localhost:8080/status.php"
-          exit 1
-
-      - name: Enable app_api
-        run: ./occ app:enable -vvv -f app_api
-
-      - name: Enable findling
-        run: ./occ app:enable -vvv -f findling
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
-        with:
-          version: '0.11.7'
-          enable-cache: true
-          cache-dependency-glob: findling-src/backend/uv.lock
-
-      - name: Install the locked backend environment
-        working-directory: findling-src/backend
-        run: uv sync --frozen
-
       # The backend process is not what reads the corpus, the command line tool
       # is. It has to run anyway, because AppAPI only completes the registration
       # handshake against a live heartbeat, and without a registration the
       # gateway would refuse every call.
-      - name: Start the ExApp
-        working-directory: findling-src/backend
-        run: |
-          export APP_ID=findling_backend
-          export APP_SECRET="${EXAPP_SECRET}"
-          export APP_PORT="${EXAPP_PORT}"
-          export APP_VERSION=0.1.0
-          export APP_HOST=127.0.0.1
-          export NEXTCLOUD_URL=http://localhost:8080
-          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
-          mkdir -p "${APP_PERSISTENT_STORAGE}"
-          uv run python -m findling.main > "${{ runner.temp }}/exapp.log" 2>&1 &
-          echo $! > "${{ runner.temp }}/exapp.pid"
-
-      - name: Wait for the ExApp heartbeat
-        run: |
-          for _ in $(seq 1 30); do
-            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
-              echo "exapp is up"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "exapp did not answer on http://127.0.0.1:${EXAPP_PORT}/heartbeat"
-          cat "${{ runner.temp }}/exapp.log" || true
-          exit 1
-
-      - name: Register the manual install daemon
-        run: |
-          timeout 10 ./occ app_api:daemon:register --net host \
-            manual_install "Manual Install" manual-install http localhost http://localhost:8080
-
-      - name: Register the ExApp
-        run: |
-          timeout 120 ./occ app_api:app:register findling_backend manual_install --json-info \
-            "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"0.1.0\",\"secret\":\"${EXAPP_SECRET}\",\"port\":${EXAPP_PORT},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\".*\",\"verb\":\"GET,POST,PUT,DELETE\",\"access_level\":1,\"headers_to_exclude\":[]}]}" \
-            --force-scopes --wait-finish
+      - name: Set up the test Nextcloud with both halves and register the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: ${{ matrix.server-version }}
+          php-version: ${{ matrix.php-version }}
+          admin-user: ${{ env.CORPUS_USER }}
+          admin-pass: ${{ env.CORPUS_PASS }}
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
 
       - name: Put the reference corpus into the account of the corpus user
         run: |
@@ -474,6 +380,31 @@ jobs:
           # Not a single line may claim a successful read.
           ! grep -q ' read bytes=' denied-report.txt
 
+      # The third case, and the only one of the three that used to answer 500: a
+      # user id that does not exist at all. getUserFolder() throws for it, and the
+      # difference between 500 here and 404 for "not your file" is a user name
+      # oracle. The report has to look exactly like the one of the stranger, so
+      # not-accessible for every file and error=0. An error line would mean the
+      # gateway answered 500 and told the caller which accounts exist.
+      - name: Read the same file ids as a user that does not exist
+        working-directory: findling-src/backend
+        run: |
+          set -o pipefail
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_VERSION=0.1.0
+          export NEXTCLOUD_URL=http://localhost:8080
+          uv run python -m findling.tools.read_corpus \
+            --user-id "no-such-user-findling-ci" \
+            --ids-file "${{ github.workspace }}/ids.txt" \
+            | tee "${{ github.workspace }}/unknown-user-report.txt"
+
+      - name: An unknown user is indistinguishable from a user without access
+        run: |
+          count=$(wc -l < filelist.txt)
+          grep -q "summary files=${count} read=0 not-accessible=${count} error=0 bytes=0" unknown-user-report.txt
+          ! grep -q ' error bytes=' unknown-user-report.txt
+
       # Off by default, switched on through workflow_dispatch. A gate nobody has
       # ever seen turn red is a gate nobody knows to work, so the falsification
       # is a step in the job rather than a note in a document.
@@ -513,6 +444,8 @@ jobs:
           cat read-report.txt || true
           echo "--- unauthorised read report ---"
           cat denied-report.txt || true
+          echo "--- unknown user read report ---"
+          cat unknown-user-report.txt || true
           echo "--- nextcloud log ---"
           tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
           echo "--- exapp log ---"

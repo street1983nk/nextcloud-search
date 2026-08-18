@@ -8,9 +8,32 @@ on:
   push:
     branches:
       - main
+    # The release path. backend/appinfo/info.xml names the image tag AppAPI pulls
+    # at installation time, and until this trigger existed the workflow published
+    # only :dev and the commit SHA, so an installation that followed the metadata
+    # would have failed on the pull. A tag vMAJOR.MINOR.PATCH publishes exactly the
+    # tag the metadata names, and the build job refuses to go on if the two
+    # disagree.
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+    # One caveat, because GitHub applies one paths filter to every push event in
+    # this block, tag pushes included: a release tag has to sit on a commit that
+    # touches backend/**. Every release commit does, because it bumps the version
+    # and the image tag in backend/appinfo/info.xml. For a tag placed elsewhere,
+    # workflow_dispatch on that tag ref is the way in, and it takes the same
+    # release path.
     paths:
       - 'backend/**'
       - '.github/workflows/docker.yml'
+  # Monthly rebuild. What it does and what it does not do, so nobody reads more
+  # into it than is there: it re-runs the build and the smoke test on both
+  # architectures, which catches a build that has rotted (the frpc tarball is
+  # fetched from a pinned commit of an upstream repository, and that can vanish)
+  # and a heartbeat that has stopped answering. It does not pick up base image
+  # security updates: the base image is pinned by digest, so a rebuild produces the
+  # same layers. Moving that digest is dependabot's job, see .github/dependabot.yml.
+  schedule:
+    - cron: '17 4 1 * *'
   workflow_dispatch:
 
 permissions:
@@ -19,6 +42,15 @@ permissions:
   # separate personal access token would be one more long lived secret with
   # write access to the registry, for no gain.
   packages: write
+
+# Serialised per branch, but deliberately never cancelled. This workflow pushes:
+# a cancelled run can leave one architecture in the registry without the other,
+# and the merge job that turns two digests into one manifest would then publish a
+# manifest with a single platform, which still pulls and still runs, on exactly
+# the machines that are not the target hardware.
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   IMAGE: ghcr.io/street1983nk/findling_backend
@@ -43,6 +75,32 @@ jobs:
       # would hand a third party arbitrary code execution in this build.
       - name: Check out the repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+
+      # A release that publishes a tag the metadata does not name is worse than no
+      # release: AppAPI pulls registry/image:<image-tag> at installation time, and
+      # nobody finds out until a user installs the app. Both halves have to carry
+      # the same version as well, which is a project rule, so that a user cannot
+      # end up with two versions that disagree about the protocol between them.
+      #
+      # Deliberately a step in this job and not a job of its own: a separate job
+      # would have to be a "needs" dependency, and a skipped dependency skips
+      # everything behind it, which would turn every ordinary push into a no-op.
+      - name: The git tag, both info.xml versions and the image tag have to agree
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          image_tag=$(sed -n 's:.*<image-tag>\(.*\)</image-tag>.*:\1:p' backend/appinfo/info.xml)
+          backend_version=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' backend/appinfo/info.xml)
+          php_version=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' php/appinfo/info.xml)
+          echo "git tag        ${tag}"
+          echo "image-tag      ${image_tag}   (backend/appinfo/info.xml)"
+          echo "backend version ${backend_version}  (backend/appinfo/info.xml)"
+          echo "php version     ${php_version}  (php/appinfo/info.xml)"
+          fail=0
+          [ "${image_tag}" = "${tag}" ] || { echo "image-tag does not match the git tag"; fail=1; }
+          [ "${backend_version}" = "${tag}" ] || { echo "backend version does not match the git tag"; fail=1; }
+          [ "${php_version}" = "${tag}" ] || { echo "php version does not match the git tag"; fail=1; }
+          exit "${fail}"
 
       # Each architecture is built on a runner of that architecture. No
       # emulation layer is installed anywhere in this workflow: emulating arm64
@@ -73,6 +131,13 @@ jobs:
       # The environment is the one from the local probe, deliberately. Without
       # HP_SHARED_KEY the app binds APP_PORT, frpc logs one line and exits, and
       # the published port is what the heartbeat is asked on.
+      #
+      # Three things are checked, not one. The heartbeat says the process came up.
+      # A signed /search says the middleware, the route and the answer work inside
+      # the image, which the heartbeat cannot show: it is the one route that is
+      # exempt from authentication. An unsigned /search has to be refused, because
+      # a container that answers without a credential is worse than one that does
+      # not answer at all. And the uid says the image does not run as root.
       - name: Smoke test the image on this architecture
         run: |
           docker run -d --name findling_smoke \
@@ -92,15 +157,44 @@ jobs:
             fi
             sleep 1
           done
+
+          # Collected while the container is still alive, asserted afterwards, so
+          # the log below is always the log of everything that was tried.
+          auth=$(printf 'smoketest:12345' | base64 -w0)
+          signed=$(curl -sf -X POST http://127.0.0.1:10035/search \
+            -H 'Content-Type: application/json' \
+            -H 'EX-APP-ID: findling_backend' \
+            -H 'EX-APP-VERSION: 0.1.0' \
+            -H "AUTHORIZATION-APP-API: ${auth}" \
+            -d '{"query":"findling-canary"}' || true)
+          unsigned=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:10035/search \
+            -H 'Content-Type: application/json' \
+            -d '{"query":"findling-canary"}')
+          uid=$(docker exec findling_smoke id -u || echo unknown)
+
           echo "::group::container log"
           docker logs findling_smoke
           echo "::endgroup::"
           docker rm -f findling_smoke
+
           if [ "$answer" != '{"status":"ok"}' ]; then
             echo "heartbeat on ${{ matrix.platform }} answered '${answer}'"
             exit 1
           fi
           echo "heartbeat on ${{ matrix.platform }}: ${answer}"
+
+          echo "signed search answered: ${signed}"
+          echo "${signed}" | jq -e '.results | length == 1'
+          echo "${signed}" | jq -e '.results[0].title == "findling-canary"'
+          # The user name arrives in the signed header only, so this is the proof
+          # that the header, and not the body, decides who asked.
+          echo "${signed}" | jq -e '.results[0].snippet | endswith("for user smoketest")'
+
+          echo "unsigned search answered ${unsigned}"
+          test "${unsigned}" = "401"
+
+          echo "the container runs as uid ${uid}"
+          test "${uid}" = "1000"
 
       # Only now the push, and by digest rather than by tag: two runners pushing
       # the same tag would overwrite each other, and the merge job below is what
@@ -156,18 +250,31 @@ jobs:
       # hand drops the attestations that say where the image came from, and
       # provenance is the only thing a user can check us against.
       #
-      # The version tag belongs to the release phase. Until then dev is the
-      # moving pointer and the commit SHA is the one that stays addressable.
+      # dev is the moving pointer, the commit SHA is the one that stays
+      # addressable, and on a tag run the version from the tag is added. That
+      # third tag is the one backend/appinfo/info.xml names, so it is the one an
+      # installation actually pulls.
       - name: Create the manifest
         working-directory: ${{ runner.temp }}/digests
         run: |
-          # The word splitting on the next line is the point: every digest file
+          tags=(-t "${IMAGE}:dev" -t "${IMAGE}:${GITHUB_SHA}")
+          # The version is read out of the ref inside the shell instead of being
+          # interpolated by the workflow expression syntax: a ref is attacker
+          # supplied text in the general case, and it must not reach a command line
+          # unchecked. The pattern below is the same one the trigger filters on.
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+            if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "the tag ${GITHUB_REF} is not vMAJOR.MINOR.PATCH, refusing to tag the manifest"
+              exit 1
+            fi
+            tags+=(-t "${IMAGE}:${version}")
+            echo "release run, the manifest also gets the tag ${version}"
+          fi
+          # The word splitting on the last line is the point: every digest file
           # in this directory becomes one more source reference for the manifest.
           # shellcheck disable=SC2046
-          docker buildx imagetools create \
-            -t "${IMAGE}:dev" \
-            -t "${IMAGE}:${GITHUB_SHA}" \
-            $(printf "${IMAGE}@sha256:%s " *)
+          docker buildx imagetools create "${tags[@]}" $(printf "${IMAGE}@sha256:%s " *)
 
       # A manifest that lists only one platform still pulls and still runs, on
       # exactly the machines that are not the target hardware. So the job asks
@@ -178,6 +285,16 @@ jobs:
           grep -q 'linux/amd64' manifest.txt
           grep -q 'linux/arm64' manifest.txt
           echo "manifest ${IMAGE}:dev carries linux/amd64 and linux/arm64"
+          # On a release run the tag from info.xml is the one that matters, so it
+          # is asked for by name as well. An image nobody can pull under the tag
+          # the metadata names is a broken release, not a broken build.
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+            docker buildx imagetools inspect "${IMAGE}:${version}" | tee release-manifest.txt
+            grep -q 'linux/amd64' release-manifest.txt
+            grep -q 'linux/arm64' release-manifest.txt
+            echo "manifest ${IMAGE}:${version} carries both platforms"
+          fi
 
       # The first push creates the package, and a newly created package is
       # private. The store cannot pull a private image, so the package has to be

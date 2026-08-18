@@ -1,0 +1,176 @@
+name: Set up the test Nextcloud with both Findling halves
+description: >-
+  Installs a throwaway Nextcloud with app_api, puts the PHP companion into
+  apps/findling, starts the backend as a native process and registers it through
+  AppAPI. This is everything both integration jobs need before they can assert
+  anything, and it lived twice in integration.yml before this action existed.
+  Phase 2 adds a third job, which is why the duplication is removed now.
+
+  Two steps are deliberately not in here: the checkout of nextcloud/server and
+  the checkout of this repository. actions/checkout empties its target directory,
+  so the server checkout at the workspace root has to happen before the checkout
+  that provides this very action file, and both belong in the job for that reason.
+
+inputs:
+  server-version:
+    description: Branch of nextcloud/server and nextcloud/app_api, for instance stable34.
+    required: true
+  php-version:
+    description: PHP version to install, has to match the lower bound of appinfo/info.xml.
+    required: true
+  admin-user:
+    description: Administrator of the throwaway instance.
+    required: false
+    default: admin
+  admin-pass:
+    description: Password of that administrator. Test only, thrown away with the runner.
+    required: false
+    default: password
+  exapp-secret:
+    description: Shared secret of the ExApp registration. Test only.
+    required: true
+  exapp-port:
+    description: TCP port the backend binds while the tests run.
+    required: true
+  exapp-version:
+    description: Version the registration announces, has to match backend/appinfo/info.xml.
+    required: false
+    default: '0.1.0'
+
+runs:
+  using: composite
+  steps:
+    # Actions are pinned to commit SHAs, never to tags: a moved tag would be
+    # arbitrary code execution inside a job that holds a Nextcloud instance.
+    - name: Set up PHP
+      uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+      with:
+        # Linting and running against the oldest supported runtime is what catches
+        # syntax and behaviour that only newer PHP accepts.
+        php-version: ${{ inputs.php-version }}
+        extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, gd, zip
+        coverage: none
+
+    - name: Check out nextcloud/app_api
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+      with:
+        repository: nextcloud/app_api
+        ref: ${{ inputs.server-version }}
+        path: apps/app_api
+
+    # The directory name must be exactly the app id. If it is not, the autoloader
+    # never finds the classes and the provider stays invisible with no error
+    # message at all (pitfall 3, third cause). The backend stays in findling-src,
+    # it is not part of the server tree.
+    - name: Move the PHP companion to apps/findling
+      shell: bash
+      run: mv findling-src/php apps/findling
+
+    - name: Install Nextcloud
+      shell: bash
+      run: |
+        mkdir data
+        ./occ maintenance:install --database=sqlite \
+          --admin-user "${{ inputs.admin-user }}" \
+          --admin-pass "${{ inputs.admin-pass }}"
+
+    - name: Start the PHP builtin server
+      shell: bash
+      run: composer run serve &
+
+    - name: Wait for the server
+      shell: bash
+      run: |
+        for _ in $(seq 1 30); do
+          if curl -sf http://localhost:8080/status.php > /dev/null; then
+            echo "server is up"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "server did not answer on http://localhost:8080/status.php"
+        exit 1
+
+    - name: Enable app_api
+      shell: bash
+      run: ./occ app:enable -vvv -f app_api
+
+    - name: Enable findling
+      shell: bash
+      run: ./occ app:enable -vvv -f findling
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      with:
+        # Same uv release that produced backend/uv.lock, so --frozen resolves
+        # identically here and on a developer machine.
+        version: '0.11.7'
+        enable-cache: true
+        cache-dependency-glob: findling-src/backend/uv.lock
+
+    - name: Install the locked backend environment
+      shell: bash
+      working-directory: findling-src/backend
+      run: uv sync --frozen
+
+    # The backend runs as a plain process, not as a container: phase 1 proves the
+    # integration path, the image is a separate workflow. The HaRP shared key is
+    # deliberately absent, because setting it would make the server bind a unix
+    # socket instead of the TCP port, and nothing here speaks to that socket
+    # (pitfall 5).
+    - name: Start the ExApp
+      shell: bash
+      working-directory: findling-src/backend
+      run: |
+        export APP_ID=findling_backend
+        export APP_SECRET="${{ inputs.exapp-secret }}"
+        export APP_PORT="${{ inputs.exapp-port }}"
+        export APP_VERSION="${{ inputs.exapp-version }}"
+        export APP_HOST=127.0.0.1
+        export NEXTCLOUD_URL=http://localhost:8080
+        export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+        mkdir -p "${APP_PERSISTENT_STORAGE}"
+        uv run python -m findling.main > "${{ runner.temp }}/exapp.log" 2>&1 &
+        echo $! > "${{ runner.temp }}/exapp.pid"
+
+    - name: Wait for the ExApp heartbeat
+      shell: bash
+      run: |
+        for _ in $(seq 1 30); do
+          if curl -sf "http://127.0.0.1:${{ inputs.exapp-port }}/heartbeat" > /dev/null; then
+            echo "exapp is up"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "exapp did not answer on http://127.0.0.1:${{ inputs.exapp-port }}/heartbeat"
+        cat "${{ runner.temp }}/exapp.log" || true
+        exit 1
+
+    - name: Register the manual install daemon
+      shell: bash
+      run: |
+        timeout 10 ./occ app_api:daemon:register --net host \
+          manual_install "Manual Install" manual-install http localhost http://localhost:8080
+
+    # The registration blocks until the handshake is through, which is what turns a
+    # race into a verdict. access_level is numeric on the JSON path (1 is USER),
+    # symbolic only in info.xml.
+    #
+    # The route list is exactly the productive one from backend/appinfo/info.xml:
+    # one entry, POST on search, USER level. It used to be url ".*" with all four
+    # writing verbs, which registered an instance no user will ever have and left
+    # the route restriction itself untested. If a later phase adds a route to
+    # info.xml and forgets it here, the integration job is what says so.
+    #
+    # /enabled, /heartbeat and /init are absent on purpose and the registration
+    # still completes: AppAPI addresses those three directly instead of going
+    # through the proxy, which is the assumption info.xml states and this run
+    # verifies. bruteforce_protection is left out here, unlike in info.xml,
+    # because it changes what happens after a 401 and not which routes exist.
+    - name: Register the ExApp
+      shell: bash
+      run: |
+        timeout 120 ./occ app_api:app:register findling_backend manual_install --json-info \
+          "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"${{ inputs.exapp-version }}\",\"secret\":\"${{ inputs.exapp-secret }}\",\"port\":${{ inputs.exapp-port }},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\"search\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]}]}" \
+          --force-scopes --wait-finish

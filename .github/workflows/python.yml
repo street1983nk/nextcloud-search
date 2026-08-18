@@ -15,6 +15,13 @@ on:
 permissions:
   contents: read
 
+# One run per branch. A push on top of a push makes the older run's verdict
+# worthless, and on a repository with a runner budget worthless minutes are the
+# ones that make the next pull request wait.
+concurrency:
+  group: python-${{ github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     working-directory: backend
