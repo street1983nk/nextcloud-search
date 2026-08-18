@@ -180,7 +180,11 @@ def build_docx() -> bytes:
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
             "<w:p><w:r><w:t>Findling reference corpus, office document part.</w:t></w:r></w:p>"
-            "<w:p><w:r><w:t>Umlaute im Text: Grundstueck, Ausschuss, Massnahme.</w:t></w:r></w:p>"
+            # Real umlauts and a sharp s, because that is what the extractor will
+            # meet. The ASCII spelling that stood here tested the one case that
+            # cannot go wrong. The part is written as UTF-8 into the ZIP, exactly
+            # as OOXML prescribes.
+            "<w:p><w:r><w:t>Umlaute im Text: Grundstück, Ausschuss, Maßnahme.</w:t></w:r></w:p>"
             "</w:body></w:document>"
         ),
     }
@@ -228,6 +232,29 @@ def build_txt() -> bytes:
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
+def build_cp1252_txt() -> bytes:
+    """The same kind of text as build_txt, but in a German legacy encoding.
+
+    Windows-1252 is what a decade of Windows tooling wrote, and a Nextcloud that
+    has grown for years is full of it. Every umlaut here is a single byte, and
+    that byte is invalid UTF-8, so a reader that assumes UTF-8 either raises or
+    silently produces replacement characters. Both are indexing defects that a
+    corpus of UTF-8 only files can never surface.
+
+    Deliberately without a byte order mark: cp1252 has none, which is exactly why
+    the encoding has to be detected rather than read off the first bytes.
+    """
+    lines = [
+        "Findling reference corpus, legacy encoding part.",
+        "",
+        "Dieser Absatz ist Windows-1252 kodiert: Grundstück, Ausschuss, Maßnahme.",
+        "Behördendeutsch für die Zeichensatzerkennung: Straßenbaubeitragssatzung.",
+        "",
+        "Every umlaut above is one single byte, and not one of them is valid UTF-8.",
+    ]
+    return ("\n".join(lines) + "\n").encode("cp1252")
+
+
 FILES: dict[str, bytes] = {
     "01-text-layer.pdf": build_text_layer_pdf(),
     "02-scan-no-text-layer.pdf": build_scan_pdf(),
@@ -237,6 +264,7 @@ FILES: dict[str, bytes] = {
     # Zero bytes on purpose. Every extractor has to survive this one.
     "06-zero-bytes.pdf": b"",
     "07-password-protected.pdf": build_encrypted_pdf(),
+    "08-legacy-encoding.txt": build_cp1252_txt(),
 }
 
 

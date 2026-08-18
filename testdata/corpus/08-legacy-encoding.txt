@@ -1,0 +1,6 @@
+Findling reference corpus, legacy encoding part.
+
+Dieser Absatz ist Windows-1252 kodiert: Grundstück, Ausschuss, Maßnahme.
+Behördendeutsch für die Zeichensatzerkennung: Straßenbaubeitragssatzung.
+
+Every umlaut above is one single byte, and not one of them is valid UTF-8.
