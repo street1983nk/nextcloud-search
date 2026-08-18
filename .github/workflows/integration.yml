@@ -380,6 +380,31 @@ jobs:
           # Not a single line may claim a successful read.
           ! grep -q ' read bytes=' denied-report.txt
 
+      # The third case, and the only one of the three that used to answer 500: a
+      # user id that does not exist at all. getUserFolder() throws for it, and the
+      # difference between 500 here and 404 for "not your file" is a user name
+      # oracle. The report has to look exactly like the one of the stranger, so
+      # not-accessible for every file and error=0. An error line would mean the
+      # gateway answered 500 and told the caller which accounts exist.
+      - name: Read the same file ids as a user that does not exist
+        working-directory: findling-src/backend
+        run: |
+          set -o pipefail
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_VERSION=0.1.0
+          export NEXTCLOUD_URL=http://localhost:8080
+          uv run python -m findling.tools.read_corpus \
+            --user-id "no-such-user-findling-ci" \
+            --ids-file "${{ github.workspace }}/ids.txt" \
+            | tee "${{ github.workspace }}/unknown-user-report.txt"
+
+      - name: An unknown user is indistinguishable from a user without access
+        run: |
+          count=$(wc -l < filelist.txt)
+          grep -q "summary files=${count} read=0 not-accessible=${count} error=0 bytes=0" unknown-user-report.txt
+          ! grep -q ' error bytes=' unknown-user-report.txt
+
       # Off by default, switched on through workflow_dispatch. A gate nobody has
       # ever seen turn red is a gate nobody knows to work, so the falsification
       # is a step in the job rather than a note in a document.
@@ -419,6 +444,8 @@ jobs:
           cat read-report.txt || true
           echo "--- unauthorised read report ---"
           cat denied-report.txt || true
+          echo "--- unknown user read report ---"
+          cat unknown-user-report.txt || true
           echo "--- nextcloud log ---"
           tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
           echo "--- exapp log ---"

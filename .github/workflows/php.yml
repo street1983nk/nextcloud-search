@@ -53,6 +53,13 @@ jobs:
 
       # xargs returns a non zero exit code as soon as one php -l fails, so a
       # single broken file turns the gate red.
+      #
+      # This is a syntax check and not a test, and the PHP half has no unit test
+      # yet. That gap is written down in docs/testing.md, including the nine
+      # behaviours a PHPUnit suite has to cover and the reason the suite is not in
+      # this workflow: there is no PHP on the development machine, so it could not
+      # be run once before being committed. What does cover the PHP half today is
+      # both jobs of integration.yml, end to end against a real Nextcloud.
       - name: Syntax check every PHP file
         run: find php/lib php/appinfo -name '*.php' -print0 | xargs -0 -n1 php -l
 
