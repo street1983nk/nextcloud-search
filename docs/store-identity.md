@@ -77,8 +77,8 @@ signing path are documented in `docs/certificates.md`.
 
 | App id | Fork branch | Pull request title | Status | Pull request | Submitted | Merged |
 |--------|-------------|--------------------|--------|--------------|-----------|--------|
-| `findling` | `findling-csr` | Add certificate request for findling | submitted, awaiting review | [#1165](https://github.com/nextcloud/app-certificate-requests/pull/1165) | 2026-08-15 | _pending_ |
-| `findling_backend` | `findling-backend-csr` | Add certificate request for findling_backend | submitted, awaiting review | [#1166](https://github.com/nextcloud/app-certificate-requests/pull/1166) | 2026-08-15 | _pending_ |
+| `findling` | `findling-csr` | Add certificate request for findling | merged, certificate signed | [#1165](https://github.com/nextcloud/app-certificate-requests/pull/1165) | 2026-08-15 | 2026-08-19 |
+| `findling_backend` | `findling-backend-csr` | Add certificate request for findling_backend | merged, certificate signed | [#1166](https://github.com/nextcloud/app-certificate-requests/pull/1166) | 2026-08-15 | 2026-08-19 |
 
 Verified on both branches before submission: each branch adds exactly one file, the
 signing request itself, and changes nothing else. No key material is contained in either
