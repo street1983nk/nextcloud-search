@@ -327,3 +327,164 @@ jobs:
           if [ -f "${{ runner.temp }}/exapp.pid" ]; then
             kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
           fi
+
+  # The two operating figures of this phase that were estimates until now: what a
+  # search costs while the indexer writes on a slow disk, and what the German
+  # language quality costs in resident memory. Both decide default values before
+  # phase 5, so they are measured rather than assumed.
+  #
+  # This job deliberately does not fail on an inconvenient number. A measurement
+  # job that turns red when a figure comes out badly gets switched off, and then
+  # there are no figures at all. It fails when a measurement does not happen: no
+  # throttle, no answer, no output.
+  measurements:
+    name: measurements
+    # Not on push. It produces numbers and guards no regression, and it would add
+    # an image build to every backend change for nothing.
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+
+    env:
+      # The rate the device carrying the container filesystem is throttled to
+      # while the search is measured. Two megabytes per second is roughly a slow
+      # USB disk or a tired SD card, which is the hardware this app promises to
+      # work on. It stands here rather than inside a command line so that the
+      # number can be found without reading the shell.
+      WRITE_BPS: '2mb'
+      # Every figure of this job goes out under this prefix, so a run can be read
+      # with a single grep months later.
+      MEASURE_PREFIX: 'findling-measurement'
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+
+    steps:
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+
+      # A plain docker build, not the buildx action the release workflow uses:
+      # this job measures one architecture, the one the runner has, and every
+      # further moving part between the Dockerfile and the number would be one
+      # more thing to explain when the number looks odd.
+      - name: Build the backend image
+        run: docker build --tag findling_backend:measure ./backend
+
+      # The device the container filesystem is written to. Throttling asks for
+      # the whole disk rather than the partition, which is what PKNAME resolves.
+      - name: Find the device the container writes to, and prove the throttle bites
+        run: |
+          source=$(findmnt -no SOURCE --target /var/lib/docker)
+          parent=$(lsblk -no PKNAME "${source}" | head -n1)
+          if [ -n "${parent}" ]; then
+            device="/dev/${parent}"
+          else
+            device="${source}"
+          fi
+          echo "the container filesystem sits on ${device} (mounted from ${source})"
+          echo "MEASURE_DEVICE=${device}" >> "${GITHUB_ENV}"
+
+          # A throttle that silently does nothing would turn the whole
+          # measurement below into a second idle run reported as a loaded one.
+          # Eight megabytes at two megabytes per second cannot be done in under
+          # two seconds; an unthrottled runner does it in a few hundredths.
+          started=$(date +%s)
+          docker run --rm --device-write-bps "${device}:${WRITE_BPS}" \
+            --entrypoint dd findling_backend:measure \
+            if=/dev/zero of=/tmp/throttle-probe bs=1M count=8 conv=fsync
+          elapsed=$(( $(date +%s) - started ))
+          echo "${MEASURE_PREFIX} throttle-probe seconds=${elapsed} rate=${WRITE_BPS} device=${device}"
+          if [ "${elapsed}" -lt 2 ]; then
+            echo "the write throttle had no effect, so nothing below would be a measurement"
+            exit 1
+          fi
+
+      # Part one. Both modes in the same throttled container, so the write load is
+      # the only difference between the two numbers. If the p95 under load is far
+      # worse than the idle one, the knob is batch_max_bytes in
+      # backend/src/findling/config.py: smaller batches mean shorter, more
+      # frequent commits.
+      - name: Search latency on a throttled disk, idle and under write load
+        run: |
+          docker run --rm --device-write-bps "${MEASURE_DEVICE}:${WRITE_BPS}" \
+            --entrypoint python findling_backend:measure \
+            -m findling.index.bench --mode idle --queries 200 \
+            | sed "s/^/${MEASURE_PREFIX} search-latency-idle /"
+
+          docker run --rm --device-write-bps "${MEASURE_DEVICE}:${WRITE_BPS}" \
+            --entrypoint python findling_backend:measure \
+            -m findling.index.bench --mode under-write --queries 200 \
+            | sed "s/^/${MEASURE_PREFIX} search-latency-under-write /"
+
+      # Part two. The compound automaton is built on first use and never freed,
+      # so the difference between the first two figures is the price of the
+      # German language quality, and the third one is the runtime proof that the
+      # cached factory really builds it once: it has to sit on the second.
+      - name: Resident memory around the first search
+        run: |
+          docker run -d --name findling_measure \
+            -e APP_ID=findling_backend \
+            -e APP_SECRET="${EXAPP_SECRET}" \
+            -e APP_PORT="${EXAPP_PORT}" \
+            -e APP_VERSION=0.1.0 \
+            -e NEXTCLOUD_URL=http://127.0.0.1:8080 \
+            -e APP_PERSISTENT_STORAGE=/tmp/fs \
+            -p "${EXAPP_PORT}:${EXAPP_PORT}" \
+            findling_backend:measure
+          for _ in $(seq 30); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null && break
+            sleep 1
+          done
+
+          # The user arrives in the signed header and nowhere else, which is why
+          # a search can be triggered here without a Nextcloud behind it.
+          auth=$(printf 'measure:%s' "${EXAPP_SECRET}" | base64 -w0)
+          search() {
+            curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:${EXAPP_PORT}/search" \
+              -H 'Content-Type: application/json' \
+              -H 'EX-APP-ID: findling_backend' \
+              -H 'EX-APP-VERSION: 0.1.0' \
+              -H "AUTHORIZATION-APP-API: ${auth}" \
+              -d '{"query":"vertrag"}'
+          }
+
+          before=$(docker stats --no-stream --format '{{.MemUsage}}' findling_measure)
+          echo "${MEASURE_PREFIX} rss before-first-search ${before}"
+
+          first=$(search)
+          sleep 2
+          after_first=$(docker stats --no-stream --format '{{.MemUsage}}' findling_measure)
+          echo "${MEASURE_PREFIX} rss after-first-search ${after_first} http=${first}"
+
+          second=$(search)
+          sleep 2
+          after_second=$(docker stats --no-stream --format '{{.MemUsage}}' findling_measure)
+          echo "${MEASURE_PREFIX} rss after-second-search ${after_second} http=${second}"
+
+          # The direct measurement of what the difference above is expected to
+          # be, taken in the very same image with the very same word list. Two
+          # numbers that are supposed to explain each other are worth more than
+          # one, and this one also states the price of the frugal variant.
+          docker run --rm --entrypoint python findling_backend:measure \
+            -m findling.index.analyzer \
+            | sed "s/^/${MEASURE_PREFIX} automaton-full /"
+          docker run --rm -e FINDLING_COMPOUND_DICT=nouns \
+            --entrypoint python findling_backend:measure \
+            -m findling.index.analyzer \
+            | sed "s/^/${MEASURE_PREFIX} automaton-nouns /"
+
+          docker logs findling_measure
+          docker rm -f findling_measure
+
+          # The only failure this part knows: a measurement that did not happen.
+          # A bad number is a result, an absent one is a broken job.
+          if [ "${first}" != "200" ] || [ "${second}" != "200" ]; then
+            echo "the container did not answer both searches (${first}, ${second}), so there is nothing to compare"
+            exit 1
+          fi
+          if [ -z "${before}" ] || [ -z "${after_first}" ] || [ -z "${after_second}" ]; then
+            echo "docker stats returned nothing, so the memory figures do not exist"
+            exit 1
+          fi
+
+      - name: Remove the measurement container
+        if: always()
+        run: docker rm -f findling_measure 2>/dev/null || true

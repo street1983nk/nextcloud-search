@@ -79,6 +79,21 @@ MAX_FILE_BYTES = 52_428_800
 # One pull from the queue: at most 32 files or 64 MB, whichever comes first. The
 # byte cap is the one that matters; 32 scanned PDFs are a different workload from
 # 32 text files.
+#
+# The byte cap is also the knob for "the search hangs while the indexer commits",
+# because it decides how much a single commit has to fsync. Plan 02-13 measured
+# whether it has to be turned, in the shipping image on a disk throttled to
+# 2 MB/s with docker run --device-write-bps, 200 searches per run:
+#
+#     p95 idle          0.196 ms
+#     p95 under write   0.166 to 0.216 ms over three runs
+#
+# The two are indistinguishable, so the value stays at 64 MB. What the throttle
+# does slow down is the writer, not the reader: the same measurement window holds
+# 12 commits instead of 19. Smaller batches would buy nothing here and would cost
+# more segments and more merges. The measurement job in .github/workflows/
+# resilience.yml keeps producing both numbers, so the day this stops being true
+# is a day somebody can see.
 BATCH_FILES = 32
 BATCH_MAX_BYTES = 67_108_864
 
