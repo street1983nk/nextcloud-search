@@ -10,7 +10,9 @@ write path that nobody reviewed. The gate parses every module under
    contains ``set_user``.
 3. No call on a receiver that goes out to Nextcloud uses PUT, POST, PATCH or
    DELETE, or a method this gate cannot read, on a path outside an explicit
-   allowlist. The allowlist is empty in phase 1.
+   allowlist. The allowlist was empty throughout phase 1 and holds exactly the
+   two queue paths of the return channel since plan 02-10; the reasoning sits at
+   :data:`OCS_WRITE_ALLOWLIST`.
 
 All three are worded fail closed, and the three self tests named "bypass" below
 are the reason. The first version of this gate could be walked past in three
@@ -115,9 +117,45 @@ OCS_ENTRY_POINTS = frozenset({"ocs", "request", "request_json"})
 # local data structure. Keeps `index_writer.delete(...)` out of invariant 3.
 REMOTE_RECEIVERS = frozenset({"nc", "ocs", "_session", "session", "adapter"})
 
-# Paths the backend may write to over OCS. Empty in phase 1: the container writes
-# nothing back into Nextcloud. Every future entry needs a threat model note.
-OCS_WRITE_ALLOWLIST: frozenset[str] = frozenset()
+# Paths the backend may write to over OCS. Empty throughout phase 1; extended on
+# 2026-08-31 by plan 02-10 with exactly two entries, in a step of its own rather
+# than as a side effect of the feature that needs them, so that the weakening of
+# a security gate is one readable commit in the history instead of three lines in
+# a large diff.
+#
+# Why these two, and only these two. The indexing worker pulls its work from a
+# queue that Nextcloud owns, and it has to say what it did with a batch. That
+# return channel is the whole reason a write exists at all:
+#
+#   DELETE .../queues/documents         acknowledges a batch and records the
+#                                       reason for everything that could not be
+#                                       processed
+#   POST   .../queues/documents/unlock  hands rows back unprocessed on shutdown,
+#                                       so a restart is productive at once
+#
+# Both land in OCA\Findling\Controller\QueueController, both write into the two
+# database tables this app owns, and neither has a code path into the file system
+# of Nextcloud. No user file is reachable from either of them, which is the
+# property that makes the exception defensible: IDX-07 promises that Findling
+# never modifies user data, not that it never speaks.
+#
+# The threat register of plan 02-10 carries this as T-02-101 (Tampering, "widening
+# of the OCS write allowlist"), with the disposition mitigate and three
+# mitigations: the list is exactly two literal paths, the widening is its own
+# step, and two of the three self tests below exist to show that the list is
+# narrow rather than merely present. T-02-102 covers the other half, that no user
+# file sits in the write path of the worker, and gate B keeps proving that from
+# the outside through checksums of the reference corpus.
+#
+# Every further entry carries the same duty: a named threat, a statement of which
+# tables it can reach, and a negative test. An entry without those three is not a
+# reviewed exception, it is the hole this gate was written to prevent.
+OCS_WRITE_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "/ocs/v2.php/apps/findling/queues/documents",
+        "/ocs/v2.php/apps/findling/queues/documents/unlock",
+    }
+)
 
 
 def _restricted_import(module: str | None) -> bool:
