@@ -16,8 +16,20 @@ This app never modifies your files, and no content ever leaves your server.
 
 Findling needs two more things to be installed: the app "AppAPI" and the
 External App "Findling Backend", which does the reading and the indexing inside
-your own instance.]]></description>
-	<version>0.1.0</version>
+your own instance.
+
+The first index starts on its own and runs as a background job. If this server
+still uses the default AJAX cron, background jobs only run while somebody is
+using the web interface, and the first index will trickle along accordingly.
+Switching this instance to the system cron is the difference between hours and
+weeks. "occ findling:index --status" shows how far it has come.]]></description>
+	<!--
+		Both halves of Findling carry the same major and minor version, so that
+		nobody ends up with a companion app and a backend that disagree about
+		the protocol between them. This bump to 0.2.0 is the pull queue and the
+		crawl; the ExApp info.xml follows in plan 02-07.
+	-->
+	<version>0.2.0</version>
 	<licence>agpl</licence>
 	<author>street1983nk</author>
 	<namespace>Findling</namespace>
@@ -29,4 +41,18 @@ your own instance.]]></description>
 		<php min-version="8.2"/>
 		<nextcloud min-version="32" max-version="35"/>
 	</dependencies>
+	<!--
+		The two blocks below sit in the order the store schema prescribes, which
+		is: dependencies, background jobs, the repair block, two factor
+		providers, commands. Each of them is written on one line on purpose. The
+		schema pattern for a PHP class name allows no surrounding whitespace, so
+		an indented class name on its own line fails the validation.
+
+		The install step is what makes the first index start without an admin
+		doing anything, which is the whole zero config promise of this app. The
+		command is the way back out: it is the only way to rebuild the index
+		short of uninstalling the app.
+	-->
+	<repair-steps><install><step>OCA\Findling\Repair\AppInstallStep</step></install></repair-steps>
+	<commands><command>OCA\Findling\Command\IndexCommand</command></commands>
 </info>
