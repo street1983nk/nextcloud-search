@@ -18,11 +18,18 @@ imports the same way.
 Consequently the writing entry points of ``nc_py_api.files`` and the
 impersonation entry point of ``AsyncNextcloudApp`` are deliberately absent from
 the re-export list: a caller cannot reach what the boundary does not hand out.
+
+Since plan 02-10 this module holds the one writing channel the container has: two
+of the four queue calls at the bottom of the file acknowledge and release rows of
+the work stock. They reach the two database tables the companion app owns and
+nothing else, and the gate carries them as a named, tested exception rather than
+as a general permission to write.
 """
 
 import asyncio
 import os
 from base64 import b64encode
+from collections.abc import Mapping, Sequence
 from typing import IO
 
 import httpx
@@ -37,15 +44,19 @@ __all__ = [
     "AsyncNextcloudApp",
     "GatewayClient",
     "NextcloudException",
+    "ack_documents",
     "anc_app",
     "app_api_headers",
+    "claim_documents",
     "create_app_client",
     "current_user_id",
     "fetch_file_stream",
     "gateway_url",
     "new_gateway_client",
+    "queue_stats",
     "run_app",
     "set_handlers",
+    "unlock_documents",
 ]
 
 # The transport type of the content gateway. Exported so that a caller can
@@ -239,3 +250,96 @@ async def fetch_file_stream(
 
     async with new_gateway_client() as owned_client:
         return await _stream_file(owned_client, header_user, file_id, user_id, fp)
+
+
+# ---------------------------------------------------------------------------
+# The work queue: take work, acknowledge it, hand it back, count it.
+# ---------------------------------------------------------------------------
+#
+# Two properties of the four functions below are load bearing and neither of them
+# is obvious from the code, so both are stated here once instead of four times.
+#
+# **The client is an argument and is never built here.** ``AsyncNextcloudApp``
+# owns a connection pool, and the pool is the point: an initial index walks a
+# hundred thousand files, and a client per file would pay a TCP and TLS setup per
+# file plus, on the PHP side, a Nextcloud bootstrap including the AppAPI signature
+# check. The shape is already in the repository: ``tools/read_corpus.py`` calls
+# ``create_app_client`` exactly once and carries the client through the whole loop
+# over all file ids. The poller of plan 02-10 does the same.
+#
+# **The path is a string literal inside the call, and it has to stay one.** The
+# read-only gate (``tests/test_readonly_gate.py``) reads the path as an
+# ``ast.Constant`` at the call site and compares it against its allowlist. Lifting
+# these four paths into module constants would look tidier and would leave the
+# gate with "an unknown path": a violation for the two writing calls, and a blind
+# spot for all four. The duplication is deliberate and a test pins it.
+#
+# The two writing calls are the only writes this container performs against
+# Nextcloud. They reach the two database tables the companion app owns and have no
+# code path into the file system; the reasoning and the threat ids sit at
+# OCS_WRITE_ALLOWLIST in the gate.
+
+
+async def claim_documents(nc: AsyncNextcloudApp, *, limit: int, max_bytes: int) -> object:
+    """Take a batch of queued files, at most ``limit`` of them and ``max_bytes`` big.
+
+    Answers with a map of queue row id to source object. The row id is what has to
+    come back on acknowledgement, and the source carries metadata only: the bytes
+    of a file are a separate request through the content gateway, so this answer
+    stays small even for a batch of large scans.
+
+    Returned untyped on purpose. Turning the answer into work is the job of
+    :mod:`findling.nc.queue`, which validates every field; a convenient type
+    annotation here would claim a guarantee this boundary cannot give.
+    """
+    return await nc._session.ocs(
+        "GET",
+        "/ocs/v2.php/apps/findling/queues/documents",
+        params={"n": limit, "max_bytes": max_bytes},
+    )
+
+
+async def ack_documents(
+    nc: AsyncNextcloudApp,
+    *,
+    files: Sequence[int],
+    failed: Sequence[Mapping[str, object]],
+) -> object:
+    """Acknowledge a batch: what is done, and what could not be processed and why.
+
+    The second list is the return channel. Without it the status page would have
+    to ask the container which files it could not process, which would be a second
+    place holding the truth about the same fact, and the copy on the Nextcloud side
+    is the one an admin can still read while the container is down.
+
+    Nextcloud binds OCS parameters from the query string and from the request body
+    alike, so this goes out as a DELETE with a JSON body and needs no POST
+    override.
+    """
+    return await nc._session.ocs(
+        "DELETE",
+        "/ocs/v2.php/apps/findling/queues/documents",
+        json={"files": list(files), "failed": [dict(entry) for entry in failed]},
+    )
+
+
+async def unlock_documents(nc: AsyncNextcloudApp, *, ids: Sequence[int]) -> object:
+    """Hand rows back unprocessed, the graceful half of a shutdown.
+
+    A container that is asked to stop returns what it holds, so a restart is
+    productive at once instead of waiting out the lock timeout. Only a hard kill
+    pays that timeout, which is the price of not losing anything after one.
+    """
+    return await nc._session.ocs(
+        "POST",
+        "/ocs/v2.php/apps/findling/queues/documents/unlock",
+        json={"ids": list(ids)},
+    )
+
+
+async def queue_stats(nc: AsyncNextcloudApp) -> object:
+    """Waiting, held right now, and how many files ended as failed."""
+    return await nc._session.ocs(
+        "GET",
+        "/ocs/v2.php/apps/findling/queues/documents/stats",
+    )
