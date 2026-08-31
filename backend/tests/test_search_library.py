@@ -17,7 +17,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tantivy import Document, Index
+from tantivy import Document, Index, Query
 
 from findling.index.open import open_index
 from findling.index.schema import (
@@ -49,7 +49,8 @@ CAROL = "carol"
 
 def _body(file_id: int) -> str:
     """Bodies of different length, so that the ranking is not a coin toss."""
-    return "Die Kündigungsfrist im Vertrag Nummer %d. %s" % (file_id, "Weitere Absätze folgen. " * (file_id % 4))
+    tail = "Weitere Absätze folgen. " * (file_id % 4)
+    return f"Die Kündigungsfrist im Vertrag Nummer {file_id}. {tail}"
 
 
 @pytest.fixture(scope="module")
@@ -84,7 +85,7 @@ def store(tmp_path: Path) -> Iterator[Store]:
     opened.close()
 
 
-def _query(index: Index, text: str = "Kündigungsfrist"):  # noqa: ANN202 - tantivy Query, not exported for annotation
+def _query(index: Index, text: str = "Kündigungsfrist") -> Query:
     rewritten = build_query(index, text)
     assert rewritten.query is not None
     return rewritten.query
