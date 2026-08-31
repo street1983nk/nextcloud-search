@@ -343,6 +343,54 @@ def test_reading_ocs_call_is_allowed() -> None:
     assert scan_source("nc/other.py", source) == []
 
 
+def test_writing_ocs_call_to_an_allowed_path_is_not_a_violation() -> None:
+    # The two paths of the queue return channel, the only write the container has.
+    acknowledge = (
+        'async def f(nc):\n    await nc._session.ocs("DELETE", "/ocs/v2.php/apps/findling/queues/documents")\n'
+    )
+    unlock = (
+        'async def f(nc):\n    await nc._session.ocs("POST", "/ocs/v2.php/apps/findling/queues/documents/unlock")\n'
+    )
+
+    assert scan_source(CLIENT_MODULE, acknowledge) == []
+    assert scan_source(CLIENT_MODULE, unlock) == []
+
+
+def test_writing_ocs_call_to_another_path_is_still_a_violation() -> None:
+    # Without this one the allowlist would be proven to exist but not to be
+    # narrow. A neighbouring path, and a writing method on an allowed path's
+    # parent, both have to stay violations.
+    for path in (
+        "/ocs/v2.php/apps/findling/queues/documents/other",
+        "/ocs/v2.php/apps/findling/files/42",
+        "/ocs/v2.php/apps/files/api/v1/files",
+    ):
+        source = f'async def f(nc):\n    await nc._session.ocs("DELETE", "{path}")\n'
+
+        violations = scan_source(CLIENT_MODULE, source)
+
+        assert len(violations) == 1, path
+        assert "invariant 3" in violations[0]
+
+
+def test_a_writing_call_whose_path_is_not_a_literal_is_a_violation() -> None:
+    # The mechanics the allowlist rests on: the gate reads the path as a literal
+    # at the call site. Tidying the two allowed calls into a module constant
+    # would leave the gate with "an unknown path" and no way to judge it, so this
+    # test pins the reason the calls in nc/client.py look the way they do.
+    source = (
+        'QUEUE = "/ocs/v2.php/apps/findling/queues/documents"\n'
+        "\n"
+        "async def f(nc):\n"
+        '    await nc._session.ocs("DELETE", QUEUE)\n'
+    )
+
+    violations = scan_source(CLIENT_MODULE, source)
+
+    assert len(violations) == 1
+    assert "an unknown path" in violations[0]
+
+
 def test_the_real_package_has_no_violations() -> None:
     violations: list[str] = []
     for relative, source in _package_modules():
