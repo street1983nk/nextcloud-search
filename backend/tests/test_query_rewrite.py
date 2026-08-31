@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from tantivy import Document, Index
+from tantivy import Document, Index, Query
 
 from findling.index.open import open_index
 from findling.index.schema import (
@@ -103,20 +103,26 @@ def index(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Index]:
     writer.wait_merging_threads()
 
 
+def _file_ids(index: Index, query: Query) -> list[int]:
+    searcher = index.searcher()
+    found: list[int] = []
+    for _, address in searcher.search(query, 10).hits:
+        value = searcher.doc(address).get_first(FIELD_FILE_ID)
+        assert value is not None
+        found.append(int(value))
+    return sorted(found)
+
+
 def _found(index: Index, rewritten: RewrittenQuery) -> list[int]:
     """Run the rewritten query and return the file ids it matches, sorted."""
     assert rewritten.query is not None
-    searcher = index.searcher()
-    result = searcher.search(rewritten.query, 10)
-    return sorted(int(searcher.doc(address).get_first(FIELD_FILE_ID)) for _, address in result.hits)
+    return _file_ids(index, rewritten.query)
 
 
 def _raw(index: Index, text: str) -> list[int]:
     """Run the text through the engine untouched, for the before and after pairs."""
     parsed, _ = index.parse_query_lenient(text, [FIELD_BODY_DE, FIELD_NAME, FIELD_TITLE])
-    searcher = index.searcher()
-    result = searcher.search(parsed, 10)
-    return sorted(int(searcher.doc(address).get_first(FIELD_FILE_ID)) for _, address in result.hits)
+    return _file_ids(index, parsed)
 
 
 def test_a_written_umlaut_form_finds_the_umlaut_spelling(index: Index) -> None:
