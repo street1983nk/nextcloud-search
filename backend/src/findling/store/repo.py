@@ -32,9 +32,11 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 from uuid import uuid4
 
 _LOG = logging.getLogger(__name__)
@@ -67,6 +69,108 @@ _DEFAULT_META: Final[Mapping[str, str]] = {
 # Ten seconds. The writer holds its transactions for milliseconds, so a reader
 # that waits longer than this is not contending, it is looking at a stuck writer.
 _BUSY_TIMEOUT_MS: Final = 10_000
+
+# The closed list, taken from the measured taxonomy in the phase research. A file
+# is judged exactly once and carries one of these pairs; there is no fourth state,
+# because a file that is still to be done has no row at all.
+#
+# The split between skipped and failed is about meaning, not about severity:
+# skipped is "we decided not to index this", failed is "we wanted to and could
+# not". Only failed is an error on the status page, and only skipped/no_text_layer
+# is the list phase 3 reads to learn which PDFs need OCR. Getting a file into the
+# wrong bucket makes both numbers lie, which is why record refuses to guess.
+#
+# Adding a reason is a deliberate act: it shows up in the admin UI and needs a
+# German label there. Reasons are never composed at runtime and never carry a
+# path, a file name or an exception message.
+STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
+    "indexed": frozenset({None, "truncated"}),
+    "skipped": frozenset(
+        {
+            "too_large",
+            "mime_not_allowed",
+            "encrypted",
+            "no_text_layer",  # the bridge to phase 3: these are the OCR candidates
+            "empty_text",
+            "too_many_cells",
+            "gone",
+        }
+    ),
+    "failed": frozenset(
+        {
+            "empty_file",
+            "corrupt",
+            "xml_invalid",
+            "encoding_unknown",
+            "timeout",
+            "out_of_memory",
+            "gateway_error",
+            "repeatedly_stuck",
+        }
+    ),
+}
+
+
+# One upsert for both cases. A second attempt on the same file overwrites the
+# verdict and the metadata, because the crawl may have handed over a moved or
+# renamed file, and raises attempts, which is the only counter that must survive
+# the overwrite.
+_RECORD_SQL: Final = """
+INSERT INTO files (file_id, storage_id, root_id, path, title, mime, size, mtime,
+                   content_hash, text_chars, state, reason, attempts, indexed_at, index_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+ON CONFLICT(file_id) DO UPDATE SET
+    storage_id    = excluded.storage_id,
+    root_id       = excluded.root_id,
+    path          = excluded.path,
+    title         = excluded.title,
+    mime          = excluded.mime,
+    size          = excluded.size,
+    mtime         = excluded.mtime,
+    content_hash  = excluded.content_hash,
+    text_chars    = excluded.text_chars,
+    state         = excluded.state,
+    reason        = excluded.reason,
+    attempts      = files.attempts + 1,
+    indexed_at    = excluded.indexed_at,
+    index_version = excluded.index_version
+"""
+
+# deleted_at is NULL throughout phase 2. The condition is here so that the phase 3
+# tombstone cannot make a deleted file look unchanged and therefore untouchable.
+_IS_UNCHANGED_SQL: Final = """
+SELECT 1 FROM files
+ WHERE file_id = ? AND content_hash = ? AND state = 'indexed'
+   AND index_version = ? AND deleted_at IS NULL
+"""
+
+_RECORD_MOUNT_SQL: Final = """
+INSERT INTO mounts (storage_id, root_id, cursor_file_id, files_seen, updated_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(storage_id) DO UPDATE SET
+    root_id        = excluded.root_id,
+    cursor_file_id = excluded.cursor_file_id,
+    files_seen     = excluded.files_seen,
+    updated_at     = excluded.updated_at
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class FileMeta:
+    """What the crawl knows about a file before anybody looked inside it.
+
+    Carried separately from the verdict because it comes from a different source:
+    these values are what Nextcloud handed over with the queue entry, while state
+    and reason are what this container concluded.
+    """
+
+    storage_id: int
+    root_id: int
+    path: str
+    title: str | None
+    mime: str
+    size: int
+    mtime: int
 
 
 def enable_wal(connection: sqlite3.Connection) -> str:
@@ -151,6 +255,161 @@ class Store:
         """
         stored = self.read_meta()
         return [key for key, value in expected.items() if stored.get(key) != value]
+
+    @property
+    def index_version(self) -> int:
+        """The index generation new verdicts are stamped with.
+
+        Read through rather than cached, so a caller that raises the version at
+        runtime does not have to reopen the store for the change to take effect.
+        """
+        row = self._conn.execute("SELECT value FROM meta WHERE key = 'index_version'").fetchone()
+        return int(row[0]) if row else 0
+
+    @contextmanager
+    def _transaction(self) -> Iterator[None]:
+        """One explicit transaction. Validation belongs before it, never inside."""
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield
+        except BaseException:
+            self._conn.execute("ROLLBACK")
+            raise
+        self._conn.execute("COMMIT")
+
+    def record(
+        self,
+        file_id: int,
+        meta: FileMeta,
+        state: str,
+        reason: str | None = None,
+        *,
+        content_hash: str | None = None,
+        text_chars: int = 0,
+    ) -> None:
+        """Write the verdict for one file, rejecting anything outside the list.
+
+        The pair of state and reason is checked against :data:`STATE_REASONS`
+        before a transaction is opened, so a rejected write leaves no trace and no
+        open transaction behind. A free text reason is refused on purpose: these
+        strings reach an admin page, and the cheapest way for a file name to end
+        up there is a caller that passes an exception message.
+
+        ``attempts`` counts every write, which is the data the give-up rule after
+        three tries runs on. There is no state transition to manage: a file is
+        judged once per attempt, and a file that is still to be done has no row
+        here at all.
+        """
+        allowed = STATE_REASONS.get(state)
+        if allowed is None:
+            raise ValueError(f"unknown state {state!r}, expected one of {sorted(STATE_REASONS)}")
+        if reason not in allowed:
+            raise ValueError(f"reason {reason!r} does not belong to state {state!r}")
+
+        with self._transaction():
+            self._conn.execute(
+                _RECORD_SQL,
+                (
+                    file_id,
+                    meta.storage_id,
+                    meta.root_id,
+                    meta.path,
+                    meta.title,
+                    meta.mime,
+                    meta.size,
+                    meta.mtime,
+                    content_hash,
+                    text_chars,
+                    state,
+                    reason,
+                    int(time.time()),
+                    self.index_version,
+                ),
+            )
+
+    def file_row(self, file_id: int) -> dict[str, Any] | None:
+        """The whole row for one file, or None when it has never been judged."""
+        cursor = self._conn.execute("SELECT * FROM files WHERE file_id = ?", (file_id,))
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return {column[0]: value for column, value in zip(cursor.description, row, strict=True)}
+
+    def counts(self) -> dict[str, int]:
+        """Files per state, always all three keys, zeros included.
+
+        The zeros are the point. A status output that omits an empty state makes
+        "no failures" and "the counter is broken" look identical, and telling
+        those two apart is the entire promise this app makes.
+        """
+        counters = dict.fromkeys(STATE_REASONS, 0)
+        for state, total in self._conn.execute("SELECT state, COUNT(*) FROM files GROUP BY state"):
+            counters[str(state)] = int(total)
+        return counters
+
+    def reasons_by_state(self) -> dict[str, dict[str | None, int]]:
+        """The breakdown phase 4 builds its error list from.
+
+        Same rule as :meth:`counts`: every state appears, an empty one as an empty
+        mapping.
+        """
+        breakdown: dict[str, dict[str | None, int]] = {state: {} for state in STATE_REASONS}
+        for state, reason, total in self._conn.execute(
+            "SELECT state, reason, COUNT(*) FROM files GROUP BY state, reason"
+        ):
+            breakdown.setdefault(str(state), {})[reason] = int(total)
+        return breakdown
+
+    def is_unchanged(self, file_id: int, content_hash: str | None) -> bool:
+        """True when this file is already indexed with this content and generation.
+
+        The cheap exit of the indexing loop: same bytes, nothing to do, acknowledge
+        the queue entry and move on. An unknown hash answers False, because "we
+        cannot tell" has to cost work rather than silently skip a document.
+
+        The generation is part of the question on purpose. Without it, raising
+        ``index_version`` after an analyzer change would skip every single file
+        the bump was made to rebuild.
+        """
+        if not content_hash:
+            return False
+        row = self._conn.execute(_IS_UNCHANGED_SQL, (file_id, content_hash, self.index_version)).fetchone()
+        return row is not None
+
+    def reset_for_reindex(self, index_version: int) -> int:
+        """Forget every verdict older than this generation, return how many.
+
+        Forgetting is the reset: absence means "not judged yet", and the queue
+        that hands the file back lives in Nextcloud, so the next crawl picks it up
+        without a state in this database standing in for it.
+
+        Rows of a newer generation are left alone. A downgrade is not a stale
+        index but an incompatible one, and that decision belongs to the caller
+        holding the answer of :meth:`version_mismatch`, not here.
+        """
+        with self._transaction():
+            cursor = self._conn.execute("DELETE FROM files WHERE index_version < ?", (index_version,))
+        return cursor.rowcount
+
+    def record_mount(self, storage_id: int, root_id: int, cursor: int, files_seen: int) -> None:
+        """Mirror the crawl progress of one mount for the status display.
+
+        A mirror and nothing more. The original of the cursor is the last file id
+        in the argument of the next crawl job in Nextcloud, so losing this table
+        loses a number on a page and not a single document.
+        """
+        with self._transaction():
+            self._conn.execute(_RECORD_MOUNT_SQL, (storage_id, root_id, cursor, files_seen, int(time.time())))
+
+    def mount_rows(self) -> list[dict[str, Any]]:
+        """The mirrored crawl progress of every known mount."""
+        rows = self._conn.execute(
+            "SELECT storage_id, root_id, cursor_file_id, files_seen FROM mounts ORDER BY storage_id"
+        )
+        return [
+            {"storage_id": storage_id, "root_id": root_id, "cursor_file_id": cursor_file_id, "files_seen": files_seen}
+            for storage_id, root_id, cursor_file_id, files_seen in rows
+        ]
 
 
 def open_store(path: Path | str, *, meta: Mapping[str, str] | None = None) -> Store:
