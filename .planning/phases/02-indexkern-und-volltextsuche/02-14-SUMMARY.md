@@ -302,12 +302,12 @@ Offen, das ist der Checkpoint.
 
 ## Die Zahlen, die noch fehlen
 
-Der Plan verlangt die gemessene Gesamtzeit der Suche mit und ohne kuenstliche Verzoegerung im SUMMARY. Beide Werte entstehen im ersten Lauf des Jobs nach dem Push und stehen dann im Joblog, ohne dass jemand den Job dafuer aendern muss:
+Der Plan verlangt die gemessene Gesamtzeit der Suche mit und ohne kuenstliche Verzoegerung im SUMMARY. Nachgetragen aus dem ersten gruenen Lauf (Commit 8048940, beide Matrixeintraege gruen):
 
-- `an ordinary search answered after ...ms` im Schritt mit den sieben Sprachfaellen,
-- `the search answered after ...ms with status ..., while the backend delayed every excerpt by 3000ms` im Schritt der Budgetprobe.
+- Gewoehnliche Suche end-to-end: **278 ms** (sqlite) bzw. **363 ms** (mysql).
+- Budgetprobe mit 3000 ms kuenstlicher Verzoegerung je Excerpt: **1957 ms** (sqlite) bzw. **2049 ms** (mysql), also unter dem Provider-Budget; die 1,5-s-Grenze je Aufruf griff, die Suche selbst blieb antwortfaehig.
 
-Diese Zeilen gehoeren nach dem ersten gruenen Lauf hier hinein.
+Erstlauf-Befund desselben Laufs (behoben in 8048940): die Korpus-Beschreibung `testdata/corpus/README.md` nannte alle Suchbegriffe im Klartext, wurde mitindexiert und machte jeden exakten Trefferzaehler zum Off-by-one. Sie liegt jetzt als `testdata/CORPUS.md` ausserhalb des Korpus, `EXPECTED_INDEXED` ist 8.
 
 ## Threat Flags
 
