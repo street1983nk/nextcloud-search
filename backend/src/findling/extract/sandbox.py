@@ -1,0 +1,289 @@
+"""One long lived extraction child, bounded by the kernel and by a deadline.
+
+**What was measured and taken over.** A hanging call inside a C extension such as
+pypdfium2 or lxml cannot be interrupted from Python: the interpreter never gets
+the chance to look at a flag. The alarm of the signal module only fires on the
+main thread of the main process, so it is useless for a worker. A pool executor
+of the futures module cannot cancel a running task either, because waiting on a
+future with a deadline gives up on behalf of the waiter and leaves the work
+running. Neither name appears in this file, and a grep gate keeps it that way.
+What does work, measured, is a process of its own: ``RLIMIT_AS`` produces a clean
+``MemoryError`` inside the child, and ``kill()`` on a hung process produces exit
+code -9. The start method is spawn rather than the Linux default fork, because
+the parent holds an event loop and open sockets, and forking such a process is a
+documented way to deadlock.
+
+**Where this deviates from the phase research, and why.** The research sketch
+starts one interpreter per file. That was an assumption, never measured on the
+target hardware (assumption A11), and it is the expensive half of the design: an
+interpreter start plus imports on a Raspberry class ARM board is realistically
+half a second to two seconds. At 100.000 files that is 14 to 55 hours of pure
+process start time, which is the difference between an initial index that takes
+hours and one that takes days. So the child stays alive across jobs and is
+replaced on schedule instead. IDX-08 is untouched: exactly one extraction runs at
+a time, it simply lives in another address space, and that address space is used
+more than once.
+
+**The four recycling rules** appear as comments at the code that implements them.
+The one that is easy to overlook is the count: with a shared address space,
+``RLIMIT_AS`` now bounds the sum of the leaks over many files instead of the peak
+of a single one, which makes ``extract_worker_max_files`` a safety parameter and
+not a performance knob.
+
+**Import hygiene.** The child imports the dispatcher inside the child function and
+nothing from the analysis half of the package, whose automaton costs roughly
+23 MB and a third of a second to build (plan 02-01). Paying that on every recycle
+would turn a start cost optimisation into a start cost doubling. A test asks a
+running child which modules it holds, because that invariant is one convenient
+import away from being false.
+"""
+
+from __future__ import annotations
+
+import multiprocessing as mp
+import os
+import sys
+import time
+from multiprocessing.context import SpawnProcess
+from typing import Final
+
+from findling import config
+from findling.extract.errors import ExtractionOutcome, Reason
+
+if sys.platform == "win32":  # the two platforms name the same thing differently
+    from multiprocessing.connection import PipeConnection as PipeEnd
+else:
+    from multiprocessing.connection import Connection as PipeEnd
+
+# Not fork: the parent runs an event loop and open sockets.
+SPAWN_CONTEXT: Final = mp.get_context("spawn")
+
+# The job protocol on the pipe. Small on purpose: everything that crosses the
+# boundary has to be picklable, and a rich object graph between two address
+# spaces is a source of surprises nobody needs at this depth of the stack.
+_JOB_EXTRACT: Final = "extract"
+_JOB_MODULES: Final = "modules"
+_JOB_PROBE: Final = "probe"
+_JOB_STOP: Final = "stop"
+
+# How long a kill is given to take effect before the parent stops waiting. The
+# kernel does not negotiate, so this is a formality; it exists so that a wedged
+# join can never become the hang that the whole module is here to prevent.
+_JOIN_GRACE_SECONDS: Final = 5.0
+
+
+def _limit_address_space(cap: int) -> None:
+    """Hand the address space cap to the kernel, which is the only enforcer that counts.
+
+    An application level check would have to run inside the allocation it is
+    trying to prevent. RLIMIT_AS is POSIX, and the container this ships in is
+    Linux; on Windows, where the tests also run, there is no equivalent that could
+    be set from here, so the limit is absent and the deadline plus the process
+    boundary carry the guard alone.
+    """
+    if sys.platform == "win32":
+        return
+    import resource
+
+    resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
+
+
+def _run_probe(kind: str, amount: float) -> ExtractionOutcome:
+    """Drive the guard into one of its three failure situations, on request.
+
+    This exists because the guard cannot be tested with a document. A file that
+    hangs for two minutes or allocates half a gigabyte is not in the reference
+    corpus, and writing one would test the file rather than the guard. The three
+    kinds are reached only through an explicit probe job, never from the
+    extraction path, and they never touch user data.
+    """
+    if kind == "sleep":
+        time.sleep(amount)
+    elif kind == "allocate":
+        # Freed immediately on success. Under RLIMIT_AS this raises MemoryError,
+        # which the loop below turns into failed(out_of_memory).
+        blob = bytearray(int(amount))
+        del blob
+    elif kind == "die":
+        # No unwinding, no answer on the pipe: the parent sees the boundary break.
+        os._exit(70)
+    else:
+        raise ValueError(f"unknown probe kind {kind!r}")
+    return ExtractionOutcome.indexed(kind)
+
+
+def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
+    """The child: cap first, then answer jobs until told to stop.
+
+    The dispatcher is imported here rather than at module level so that the cap is
+    already in place while the extraction libraries are being loaded, and so that
+    the parent, which imports this module too, never pays for them.
+    """
+    _limit_address_space(address_space_bytes)
+
+    from findling.extract.dispatch import extract
+
+    while True:
+        try:
+            job = pipe.recv()
+        except EOFError:
+            return
+        kind = job[0]
+        if kind == _JOB_STOP:
+            return
+        if kind == _JOB_MODULES:
+            answer: object = tuple(sorted(name for name in sys.modules if name.startswith("findling")))
+        else:
+            try:
+                answer = _run_probe(job[1], job[2]) if kind == _JOB_PROBE else extract(job[1], job[2], job[3])
+            except MemoryError:
+                # Reported rather than raised: the parent has to tell an exhausted
+                # address space apart from a hang, and it can only do that if the
+                # child still manages to say which one it was.
+                answer = ExtractionOutcome.failed(Reason.OUT_OF_MEMORY)
+            except Exception as error:
+                answer = ExtractionOutcome.from_exception(error)
+        try:
+            pipe.send(answer)
+        except (BrokenPipeError, OSError):
+            return
+
+
+class ExtractionWorker:
+    """Holds exactly one extraction child and the rules for replacing it."""
+
+    def __init__(self, *, max_files: int | None = None, timeout_seconds: float | None = None) -> None:
+        resolved = config.settings()
+        self._max_files = resolved.extract_worker_max_files if max_files is None else max_files
+        self._timeout_seconds = (
+            float(resolved.extract_timeout_seconds) if timeout_seconds is None else float(timeout_seconds)
+        )
+        self.address_space_bytes = resolved.extract_address_space_bytes
+        self._process: SpawnProcess | None = None
+        self._pipe: PipeEnd | None = None
+        self._files_handled = 0
+
+    @property
+    def pid(self) -> int | None:
+        """The process id of the current child, or None while there is none."""
+        return None if self._process is None else self._process.pid
+
+    def run(self, path: str, mime: str, size: int) -> ExtractionOutcome:
+        """Extract one file behind the boundary and return its verdict."""
+        outcome = self._ask((_JOB_EXTRACT, path, mime, size))
+        if not isinstance(outcome, ExtractionOutcome):
+            outcome = ExtractionOutcome.failed(Reason.CORRUPT)
+        self._files_handled += 1
+        return self._recycle_if_needed(outcome)
+
+    def probe(self, kind: str, amount: float) -> ExtractionOutcome:
+        """Run a diagnostic job. See :func:`_run_probe` for why this is here."""
+        outcome = self._ask((_JOB_PROBE, kind, amount))
+        if not isinstance(outcome, ExtractionOutcome):
+            outcome = ExtractionOutcome.failed(Reason.CORRUPT)
+        return self._recycle_if_needed(outcome)
+
+    def loaded_modules(self) -> tuple[str, ...]:
+        """Every module of this package the child holds, for the import hygiene test."""
+        answer = self._ask((_JOB_MODULES,))
+        return answer if isinstance(answer, tuple) else ()
+
+    def stop(self) -> None:
+        """End the child politely, then make sure it is gone either way."""
+        if self._process is not None and self._pipe is not None and self._process.is_alive():
+            try:
+                self._pipe.send((_JOB_STOP,))
+                self._process.join(_JOIN_GRACE_SECONDS)
+            except (BrokenPipeError, OSError):
+                pass
+        self._recycle()
+
+    def _ask(self, job: tuple[object, ...]) -> object:
+        """Send one job, wait for the answer with a deadline, judge what comes back."""
+        self._start_child()
+        process, pipe = self._process, self._pipe
+        if process is None or pipe is None:  # pragma: no cover - _start_child sets both
+            return ExtractionOutcome.failed(Reason.CORRUPT)
+
+        try:
+            pipe.send(job)
+        except (BrokenPipeError, OSError):
+            # Recycling rule 4: an unexpected child death leaves an unknown state.
+            self._recycle()
+            return ExtractionOutcome.failed(Reason.CORRUPT)
+
+        if not pipe.poll(self._timeout_seconds):
+            # Recycling rule 2: over the deadline. Only kill() ends a hung C
+            # extension, and after it the process is gone by definition.
+            process.kill()
+            process.join(_JOIN_GRACE_SECONDS)
+            self._recycle()
+            return ExtractionOutcome.failed(Reason.TIMEOUT)
+
+        try:
+            return pipe.recv()
+        except (EOFError, OSError):
+            # Recycling rule 4 again, from the other side: the child died between
+            # accepting the job and answering it.
+            self._recycle()
+            return ExtractionOutcome.failed(Reason.CORRUPT)
+
+    def _recycle_if_needed(self, outcome: ExtractionOutcome) -> ExtractionOutcome:
+        if outcome.reason is Reason.OUT_OF_MEMORY:
+            # Recycling rule 3: the address space of that child is spent, and the
+            # next file would inherit whatever is left of it.
+            self._recycle()
+        elif self._files_handled >= self._max_files:
+            # Recycling rule 1: leak prevention. Because one address space now
+            # serves many files, RLIMIT_AS bounds the sum of the leaks rather than
+            # a single outlier, which makes this count part of the guard.
+            self._recycle()
+        return outcome
+
+    def _start_child(self) -> None:
+        if self._process is not None and self._process.is_alive():
+            return
+        self._recycle()
+        parent_end, child_end = SPAWN_CONTEXT.Pipe(duplex=True)
+        process = SPAWN_CONTEXT.Process(
+            target=_child_main,
+            args=(child_end, self.address_space_bytes),
+            daemon=True,
+        )
+        process.start()
+        # The parent keeps no handle on the child's end. Left open here, the pipe
+        # would never report an end of file, and a dead child would look like a
+        # slow one until the deadline expired.
+        child_end.close()
+        self._process = process
+        self._pipe = parent_end
+        self._files_handled = 0
+
+    def _recycle(self) -> None:
+        """Leave no child and no pipe behind, whatever state either of them is in."""
+        if self._process is not None:
+            if self._process.is_alive():
+                self._process.kill()
+            self._process.join(_JOIN_GRACE_SECONDS)
+            self._process.close()
+            self._process = None
+        if self._pipe is not None:
+            self._pipe.close()
+            self._pipe = None
+        self._files_handled = 0
+
+
+_WORKER: ExtractionWorker | None = None
+
+
+def extract_guarded(path: str, mime: str, size: int) -> ExtractionOutcome:
+    """Extract one file without ever letting it take the container with it.
+
+    The facade the indexing worker calls. One worker per process, because IDX-08
+    allows exactly one extraction at a time and a second worker would quietly
+    double both the memory peak and the number of children to supervise.
+    """
+    global _WORKER
+    if _WORKER is None:
+        _WORKER = ExtractionWorker()
+    return _WORKER.run(path, mime, size)

@@ -11,6 +11,12 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/python.yml'
+  # The measurement job below runs on these two only. It costs minutes and it
+  # guards no regression, it produces a number, so it has no business in the loop
+  # that has to answer a pull request quickly.
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
 
 permissions:
   contents: read
@@ -62,3 +68,33 @@ jobs:
 
       - name: Tests
         run: uv run pytest -q
+
+  # The only job in this repository that runs on arm64. The target hardware of
+  # this app is a 4 GB ARM board, and the decision it feeds is whether the
+  # extraction child lives across files or is started per file: at 100.000 files
+  # a start cost of half a second is 14 hours, and one of two seconds is 55. That
+  # was an assumption in the phase research (A11), and an assumption about the
+  # slowest machine in the fleet, measured on the fastest, is not evidence.
+  extract-bench-arm:
+    name: extraction start cost on arm64
+    runs-on: ubuntu-24.04-arm
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: '0.11.7'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install the locked environment
+        run: uv sync --frozen
+
+      # 1000 cycles because the figure that matters is p95, and a p95 over a
+      # handful of samples is a rumour. The job prints numbers only, never a path
+      # and never a document.
+      - name: Measure the process start cost
+        run: uv run python -m findling.extract.bench --spawns 1000

@@ -86,7 +86,10 @@ def test_child_is_recycled_after_max_files() -> None:
 
 
 def test_a_job_over_the_deadline_is_a_timeout_and_costs_the_child() -> None:
-    impatient = sandbox.ExtractionWorker(max_files=200, timeout_seconds=1)
+    # The deadline covers the start of the child as well, so it has to stay above
+    # the cost of a spawn. Three seconds is far below the 120 s of production and
+    # far above the roughly one second an interpreter start costs here.
+    impatient = sandbox.ExtractionWorker(max_files=200, timeout_seconds=3)
     try:
         before = impatient.probe("sleep", 0.0)
         doomed_pid = impatient.pid
