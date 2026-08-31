@@ -1,0 +1,292 @@
+"""The one writer: idempotent writing, batched commits and the disk guard.
+
+Three of the tests below are static, and that is deliberate. Whether a document
+is built field by field, whether the upsert uses the current deletion API and
+whether a second writer is recognised are properties of the code rather than of
+one run: the wrong version of the first two does not fail, it produces a panic in
+a background thread of tantivy after the Python call has already returned, and a
+test that waits for an exception waits forever.
+
+Measured on tantivy 0.26.0 while writing this file:
+
+* ``Document(file_id=42)`` and ``document.add_integer("file_id", 42)`` both put an
+  I64 into the U64 column of a fast unsigned field. The indexing thread panics
+  with "Input type forbidden. This column has been forced to type U64, received
+  I64(42)" and the Python call returns success.
+* ``Document.from_dict`` silently drops a field the schema does not know, so a
+  misspelled field name loses the value without an error anywhere.
+* The old deletion name still exists in 0.26.0 and emits no DeprecationWarning on
+  this build, contrary to the note in the phase research. It stays out of this
+  module all the same: it is the name the bindings deprecated, and the suite
+  turns that warning into an error the moment it starts being raised.
+"""
+
+import ast
+import shutil
+import warnings
+from collections.abc import Iterator
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from tantivy import Index
+
+from findling.config import settings
+from findling.index.open import open_index
+from findling.index.schema import FIELD_BODY_DE, FIELD_BODY_EN, FIELD_FILE_ID, FIELD_STORAGE_ID
+from findling.index.writer import (
+    FLUSH_COMMITTED,
+    FLUSH_NOTHING_PENDING,
+    FLUSH_PAUSED_LOW_DISK,
+    IndexBatchWriter,
+    IndexLockedError,
+    IndexRecord,
+)
+
+WRITER_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "index" / "writer.py"
+
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt"
+CONSTITUENTS = FIXTURE.read_text(encoding="utf-8").split()
+
+GERMAN_BODY = "Die Kündigungsfrist beträgt drei Monate."
+ENGLISH_BODY = "The notice period is three months."
+
+
+def _record(file_id: int = 1, *, body: str = GERMAN_BODY, name: str = "Kündigung.pdf") -> IndexRecord:
+    return IndexRecord(
+        file_id=file_id,
+        storage_id=7,
+        name=name,
+        title="Kündigung",
+        path="/Verträge/Kündigung.pdf",
+        ext="pdf",
+        body=body,
+        mtime=1_700_000_000,
+    )
+
+
+def _hits(index: Index, query: str, fields: list[str] | None = None) -> int:
+    index.reload()
+    searcher = index.searcher()
+    parsed = index.parse_query(query, fields if fields is not None else [FIELD_BODY_DE])
+    return len(searcher.search(parsed, 10).hits)
+
+
+def _low_disk(_: object) -> SimpleNamespace:
+    """One kilobyte free: far below every configured floor."""
+    return SimpleNamespace(total=1_000_000, used=999_000, free=1_024)
+
+
+@pytest.fixture
+def index_dir(tmp_path: Path) -> Path:
+    return tmp_path / "index"
+
+
+@pytest.fixture
+def index(index_dir: Path) -> Index:
+    return open_index(index_dir, CONSTITUENTS)
+
+
+@pytest.fixture
+def batch_writer(index: Index, index_dir: Path) -> Iterator[IndexBatchWriter]:
+    writer = IndexBatchWriter(index, directory=index_dir)
+    yield writer
+    writer.close()
+
+
+def test_a_committed_document_is_findable_on_body_de(index: Index, batch_writer: IndexBatchWriter) -> None:
+    batch_writer.add(_record())
+
+    result = batch_writer.flush()
+
+    assert result.state == FLUSH_COMMITTED
+    assert result.documents == 1
+    assert _hits(index, "frist") == 1
+
+
+def test_the_same_file_id_written_twice_leaves_exactly_one_document(
+    index: Index, batch_writer: IndexBatchWriter
+) -> None:
+    batch_writer.add(_record(42, body="Die alte Kündigungsfrist beträgt drei Monate."))
+    batch_writer.flush()
+
+    batch_writer.add(_record(42, body="Die neue Kündigungsfrist beträgt sechs Monate."))
+    batch_writer.flush()
+
+    index.reload()
+    assert index.searcher().num_docs == 1
+    assert _hits(index, "sechs") == 1
+    assert _hits(index, "alte") == 0
+
+
+def test_the_identifiers_come_back_as_unsigned_values(index: Index, batch_writer: IndexBatchWriter) -> None:
+    # The runtime half of pitfall 8: a signed value in these columns kills the
+    # indexing thread instead of raising, so the round trip is the assertion.
+    batch_writer.add(_record(42))
+    batch_writer.flush()
+    index.reload()
+    searcher = index.searcher()
+    address = searcher.search(index.parse_query("frist", [FIELD_BODY_DE]), 10).hits[0][1]
+
+    assert searcher.fast_field_values(FIELD_FILE_ID, [address]) == [42]
+    assert searcher.fast_field_values(FIELD_STORAGE_ID, [address]) == [7]
+
+
+def test_the_writer_never_builds_a_document_from_keyword_arguments() -> None:
+    offenders = [
+        f"line {node.lineno}"
+        for node in ast.walk(ast.parse(WRITER_SOURCE.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "Document"
+        and node.keywords
+    ]
+
+    assert offenders == [], "documents are built field by field, never from keyword arguments: " + ", ".join(offenders)
+
+
+def test_the_upsert_uses_the_current_deletion_api() -> None:
+    calls = {
+        node.func.attr
+        for node in ast.walk(ast.parse(WRITER_SOURCE.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+
+    assert "delete_documents_by_term" in calls
+    assert "delete_documents" not in calls
+
+
+def test_writing_and_committing_raises_no_warning(batch_writer: IndexBatchWriter) -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+
+        batch_writer.add(_record())
+        batch_writer.flush()
+
+
+def test_flush_below_the_free_disk_floor_pauses_and_writes_nothing(
+    monkeypatch: pytest.MonkeyPatch, index: Index, batch_writer: IndexBatchWriter
+) -> None:
+    monkeypatch.setattr(shutil, "disk_usage", _low_disk)
+    batch_writer.add(_record())
+
+    result = batch_writer.flush()
+
+    assert result.state == FLUSH_PAUSED_LOW_DISK
+    assert result.free_bytes == 1_024
+    index.reload()
+    assert index.searcher().num_docs == 0
+
+
+def test_a_paused_flush_leaves_the_search_answering(
+    monkeypatch: pytest.MonkeyPatch, index: Index, batch_writer: IndexBatchWriter
+) -> None:
+    # A full volume is a state, not an outage: what is already committed stays
+    # readable while the indexer waits.
+    batch_writer.add(_record(1))
+    batch_writer.flush()
+    monkeypatch.setattr(shutil, "disk_usage", _low_disk)
+    batch_writer.add(_record(2))
+
+    assert batch_writer.flush().state == FLUSH_PAUSED_LOW_DISK
+    assert _hits(index, "frist") == 1
+
+
+def test_the_pending_batch_is_committed_once_the_disk_is_free_again(
+    monkeypatch: pytest.MonkeyPatch, index: Index, batch_writer: IndexBatchWriter
+) -> None:
+    monkeypatch.setattr(shutil, "disk_usage", _low_disk)
+    batch_writer.add(_record())
+    batch_writer.flush()
+
+    monkeypatch.undo()
+
+    assert batch_writer.flush().state == FLUSH_COMMITTED
+    assert _hits(index, "frist") == 1
+
+
+def test_documents_survive_closing_and_reopening(index: Index, index_dir: Path) -> None:
+    writer = IndexBatchWriter(index, directory=index_dir)
+    writer.add(_record())
+    writer.flush()
+    writer.close()
+
+    reopened = open_index(index_dir, CONSTITUENTS)
+
+    assert _hits(reopened, "frist") == 1
+
+
+def test_a_second_writer_on_the_same_directory_is_reported_as_locked(
+    index: Index, index_dir: Path, batch_writer: IndexBatchWriter
+) -> None:
+    # Measured: the second writer answers "Failed to acquire Lockfile: LockBusy".
+    # Unwrapped it reads like a corrupt index instead of like two writers. The
+    # first writer is the fixture; it is still open while this one is refused.
+    assert batch_writer.should_flush is False
+
+    with pytest.raises(IndexLockedError):
+        IndexBatchWriter(index, directory=index_dir)
+
+
+def test_the_lock_is_released_when_the_writer_is_closed(index: Index, index_dir: Path) -> None:
+    first = IndexBatchWriter(index, directory=index_dir)
+    first.close()
+
+    second = IndexBatchWriter(index, directory=index_dir)
+    second.close()
+
+
+def test_body_en_stays_empty_when_only_german_is_configured(
+    monkeypatch: pytest.MonkeyPatch, index: Index, index_dir: Path
+) -> None:
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de")
+    settings.cache_clear()
+    try:
+        writer = IndexBatchWriter(index, directory=index_dir)
+        writer.add(_record(body=ENGLISH_BODY))
+        writer.flush()
+        writer.close()
+
+        assert _hits(index, "notice", [FIELD_BODY_EN]) == 0
+        assert _hits(index, "notice", [FIELD_BODY_DE]) == 1
+    finally:
+        settings.cache_clear()
+
+
+def test_flush_without_pending_documents_commits_nothing(batch_writer: IndexBatchWriter) -> None:
+    result = batch_writer.flush()
+
+    assert result.state == FLUSH_NOTHING_PENDING
+    assert result.documents == 0
+
+
+def test_collect_garbage_keeps_the_committed_documents(index: Index, batch_writer: IndexBatchWriter) -> None:
+    # Cleaning up orphaned segment files is housekeeping, never recovery: after a
+    # hard kill the index opens on the last commit all by itself.
+    batch_writer.add(_record())
+    batch_writer.flush()
+
+    batch_writer.collect_garbage()
+
+    assert _hits(index, "frist") == 1
+
+
+def test_should_flush_follows_the_configured_batch_caps(index: Index, index_dir: Path) -> None:
+    writer = IndexBatchWriter(index, directory=index_dir, batch_files=2)
+    try:
+        writer.add(_record(1))
+        assert writer.should_flush is False
+
+        writer.add(_record(2))
+
+        assert writer.should_flush is True
+    finally:
+        writer.close()
+
+
+def test_a_closed_writer_refuses_further_work(index: Index, index_dir: Path) -> None:
+    writer = IndexBatchWriter(index, directory=index_dir)
+    writer.close()
+
+    with pytest.raises(RuntimeError, match="closed"):
+        writer.add(_record())
