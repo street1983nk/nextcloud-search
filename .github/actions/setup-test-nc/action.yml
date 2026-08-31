@@ -18,6 +18,31 @@ inputs:
   php-version:
     description: PHP version to install, has to match the lower bound of appinfo/info.xml.
     required: true
+  database:
+    description: >-
+      Dialect handed to maintenance:install, sqlite or mysql. Phase 2 introduces
+      the first table of this app, and IQueryBuilder defects are dialect
+      dependent: green on SQLite and red on MariaDB is the normal case, not the
+      exception. mysql expects a reachable server, which is a service container
+      of the calling job.
+    required: false
+    default: sqlite
+  database-host:
+    description: Host of the database server, ignored for sqlite. Never localhost, see the install step.
+    required: false
+    default: 127.0.0.1
+  database-name:
+    description: Database name, ignored for sqlite.
+    required: false
+    default: nextcloud
+  database-user:
+    description: Database user, ignored for sqlite. Test only.
+    required: false
+    default: nextcloud
+  database-pass:
+    description: Password of that user, ignored for sqlite. Test only, thrown away with the runner.
+    required: false
+    default: nextcloud
   admin-user:
     description: Administrator of the throwaway instance.
     required: false
@@ -48,7 +73,11 @@ runs:
         # Linting and running against the oldest supported runtime is what catches
         # syntax and behaviour that only newer PHP accepts.
         php-version: ${{ inputs.php-version }}
-        extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, gd, zip
+        # pdo_mysql and mysqli are installed unconditionally although a sqlite
+        # run never touches them: an extension list that depends on an input is
+        # a second place where the dialect is decided, and the two extensions
+        # cost seconds, not minutes.
+        extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, mysqli, pdo_mysql, gd, zip
         coverage: none
 
     - name: Check out nextcloud/app_api
@@ -66,13 +95,30 @@ runs:
       shell: bash
       run: mv findling-src/php apps/findling
 
+    # 127.0.0.1 rather than localhost for the server address, and it is not a
+    # matter of taste: the PHP mysql driver reads "localhost" as an instruction
+    # to use a unix socket, and a service container of a workflow answers on a
+    # forwarded TCP port and on no socket at all.
     - name: Install Nextcloud
       shell: bash
       run: |
         mkdir data
-        ./occ maintenance:install --database=sqlite \
-          --admin-user "${{ inputs.admin-user }}" \
-          --admin-pass "${{ inputs.admin-pass }}"
+        if [ "${{ inputs.database }}" = "sqlite" ]; then
+          ./occ maintenance:install --database=sqlite \
+            --admin-user "${{ inputs.admin-user }}" \
+            --admin-pass "${{ inputs.admin-pass }}"
+        else
+          ./occ maintenance:install --database="${{ inputs.database }}" \
+            --database-host "${{ inputs.database-host }}" \
+            --database-name "${{ inputs.database-name }}" \
+            --database-user "${{ inputs.database-user }}" \
+            --database-pass "${{ inputs.database-pass }}" \
+            --admin-user "${{ inputs.admin-user }}" \
+            --admin-pass "${{ inputs.admin-pass }}"
+        fi
+        # Printed rather than assumed: a run that quietly fell back to sqlite
+        # would prove the dialect question with the dialect it was asked about.
+        ./occ config:system:get dbtype
 
     - name: Start the PHP builtin server
       shell: bash

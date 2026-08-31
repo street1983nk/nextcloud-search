@@ -12,6 +12,12 @@ name: Integration
 # checksums, modification times, sizes and the file count have to be identical
 # afterwards. A user without access to the corpus runs the very same list and
 # has to come back with nothing, which is the negative half of COMP-02.
+#
+# The third job, added in phase 2, is the product promise itself: the same corpus
+# is indexed and then searched through the ordinary Nextcloud search route, with
+# seven German language cases, a second user who sees exactly the one file that
+# was shared with him, a probe of the time budget against an artificially slow
+# backend, and all of it on two database dialects.
 on:
   push:
     paths:
@@ -517,6 +523,465 @@ jobs:
           tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
           echo "--- exapp log ---"
           tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+
+      - name: Stop the ExApp
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/exapp.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          fi
+
+  # The product promise as a gate: a word out of a real German document, typed
+  # into the ordinary search bar, brings back the document with an excerpt from
+  # its text, and only to somebody who is allowed to see the file.
+  #
+  # Two matrix entries, and the second one is not thoroughness for its own sake.
+  # This phase introduces the first table of this app, IQueryBuilder defects are
+  # dialect dependent, and the upsert of the queue is open question 4 of the
+  # phase research: which upsert variant carries over both dialects. Green on
+  # SQLite and red on MariaDB is the normal case for that class of defect, so
+  # the answer is a run rather than a decision.
+  #
+  # Two limits of the German analysis chain are measured, documented in
+  # docs/german-analyzer.md under "Known limits" and deliberately NOT asserted
+  # here: "suchte" does not find "suchen", because the Snowball stemmer unifies
+  # the infinitive and the noun but not the past tense, and "Mietvertrag" is not
+  # findable through "Vertrag", because it stands in the constituent list itself
+  # and the splitter matches leftmost-longest. Neither is a defect and neither
+  # should be turned into one by a future assertion.
+  index-search-e2e:
+    name: index-search-e2e (${{ matrix.database }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # The value travels into the composite action and ends up as the
+        # --database=sqlite or --database=mysql of occ maintenance:install. The
+        # installed dialect is printed there rather than assumed, because a run
+        # that quietly fell back would answer the dialect question with the
+        # dialect it was asked about.
+        database: ['sqlite', 'mysql']
+        server-version: ['stable34']
+        php-version: ['8.2']
+
+    # Service containers cannot be made conditional on a matrix entry, so the
+    # database server also starts for the sqlite run, which then ignores it. The
+    # alternative would be a second, nearly identical job definition, and one
+    # idle container for a few minutes is the cheaper of the two.
+    #
+    # The image is pinned to the 11.4 series and not to latest. A patch release
+    # inside that series is wanted here: what this job asks is whether the query
+    # builder speaks MariaDB, not whether it speaks one particular build.
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: findling-ci-root-2026
+          MARIADB_DATABASE: nextcloud
+          MARIADB_USER: nextcloud
+          MARIADB_PASSWORD: nextcloud
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+      # Two ordinary accounts. The corpus lives in the first one and exactly one
+      # file of it is shared with the second, which is the whole permission case.
+      OWNER_USER: 'owner'
+      OWNER_PASS: 'findling-ci-owner-2026'
+      COLLEAGUE_USER: 'colleague'
+      COLLEAGUE_PASS: 'findling-ci-colleague-2026'
+      # The one file that is shared, and the three titles the language cases
+      # have to bring back. Named here so a rename of a corpus file breaks in one
+      # place instead of in seven.
+      SHARED_FILE: '09-bescheid.pdf'
+      NOTICE_FILE: '10-kuendigung.docx'
+      OVERVIEW_FILE: '11-uebersicht.odt'
+      MEMO_FILE: '12-aktenvermerk.txt'
+      # What the container has to end up with, measured against the corpus and
+      # not guessed. Thirteen entries lie in the directory, twelve of them reach
+      # the container: the png is kept out by the mimetype allowlist of the crawl
+      # and therefore never gets a verdict at all.
+      #
+      # failed is one and not zero, and that is the corpus doing its job:
+      # 06-zero-bytes.pdf is an empty file on purpose. skipped is two, the scan
+      # without a text layer (OCR is phase 3) and the encrypted PDF. Asserting
+      # the exact numbers is the point; "failed is small" would hide the day a
+      # working document starts failing.
+      EXPECTED_INDEXED: '9'
+      EXPECTED_SKIPPED: '2'
+      EXPECTED_FAILED: '1'
+      # Ceiling of the wait for an empty queue. Thirteen small files, so this is
+      # a generous bound whose only job is to end a broken run with counters
+      # instead of with a reaped runner.
+      DRAIN_TIMEOUT: '420'
+      # The delay the container is restarted with for the time budget probe.
+      # It acts in /snippets only (test hook of plan 02-11), so the first call
+      # answers normally and the second one runs into its 1.5 second limit.
+      DELAY_MS: '3000'
+
+    steps:
+      # Same order and the same reason as in the two jobs above: the server
+      # checkout empties the workspace root, and the second checkout is what
+      # brings the composite action into the workspace.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          repository: nextcloud/server
+          ref: ${{ matrix.server-version }}
+          submodules: recursive
+
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          path: findling-src
+
+      - name: Set up the test Nextcloud with both halves and register the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: ${{ matrix.server-version }}
+          php-version: ${{ matrix.php-version }}
+          database: ${{ matrix.database }}
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+
+      # Every file on the instance is crawled, so every file on the instance is
+      # part of the arithmetic below. The skeleton would put a manual, a picture
+      # and a folder of templates into each of the three accounts, and the
+      # counter assertions would then be about documents nobody chose.
+      - name: Empty the instance of everything that is not the corpus
+        run: |
+          ./occ config:system:set skeletondirectory --value=''
+          # The installer created its own account before the setting existed.
+          rm -rf data/admin/files/* data/admin/files/.[!.]* 2>/dev/null || true
+          OC_PASS="${OWNER_PASS}" ./occ user:add --password-from-env "${OWNER_USER}"
+          OC_PASS="${COLLEAGUE_PASS}" ./occ user:add --password-from-env "${COLLEAGUE_USER}"
+          ./occ files:scan --all
+          echo "files on the instance before the corpus: $(find data/*/files -type f 2>/dev/null | wc -l)"
+
+      - name: Put the reference corpus into the account of the owner
+        run: |
+          # The scan of the step before created both home directories; the mkdir
+          # is there so a change in that order fails on the mkdir instead of on a
+          # cp whose message is about a missing parent.
+          mkdir -p "data/${OWNER_USER}/files"
+          cp -r findling-src/testdata/corpus "data/${OWNER_USER}/files/corpus"
+          ./occ files:scan --all
+          echo "corpus entries: $(find "data/${OWNER_USER}/files/corpus" -type f | wc -l)"
+
+      # The order of this step and the crawl below is the whole point, and it is
+      # not an implementation detail: the access list is written while a file is
+      # indexed. A share granted afterwards, or revoked afterwards, is not seen
+      # by this phase at all; events and reconciliation are phase 3. A later
+      # failure here therefore means the crawl did not see the share, not that
+      # the permission chain leaks.
+      #
+      # permissions=1 is read only, shareType=0 is a share with a single user.
+      - name: Share exactly one file with the second user, before the crawl
+        run: |
+          # Without -f on purpose: a refused share answers with a body that says
+          # why, and -f would throw exactly that body away.
+          curl -s -u "${OWNER_USER}:${OWNER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            -d "path=/corpus/${SHARED_FILE}" \
+            -d 'shareType=0' \
+            -d "shareWith=${COLLEAGUE_USER}" \
+            -d 'permissions=1' \
+            'http://localhost:8080/ocs/v2.php/apps/files_sharing/api/v1/shares' | tee share.json
+          jq -e '.ocs.meta.statuscode == 200' share.json > /dev/null \
+            || { echo "::error::the share was not created, so the permission case would prove nothing"; cat share.json; exit 1; }
+          # The recipient's mount only exists in the mount cache after a scan,
+          # and the crawl reads the access list out of that cache.
+          ./occ files:scan --all
+
+      - name: Queue and run the crawl
+        run: |
+          # --no-interaction: occ treats this shell as interactive, so the
+          # restart confirmation would default to No and the queue would stay
+          # empty (first run finding of the resilience gate).
+          ./occ findling:index --restart --no-interaction
+          timeout 60 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once
+          # stop_after with an underscore. The dashed spelling does not exist on
+          # background-job:worker, Symfony rejects it and the crawl never runs.
+          timeout 120 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 60
+          ./occ findling:index
+
+      - name: Wait until the queue is empty and everything has a verdict
+        run: |
+          status() {
+            ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+                --db "${{ runner.temp }}/findling/state.db" )
+          }
+          # scheduled plus the rows a worker holds, both out of the queue table
+          # of Nextcloud, so "still open" is a fact rather than a guess.
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+
+          expected=$(( EXPECTED_INDEXED + EXPECTED_SKIPPED + EXPECTED_FAILED ))
+          deadline=$(( $(date +%s) + DRAIN_TIMEOUT ))
+          while :; do
+            report=$(status)
+            indexed=$(echo "${report}" | jq -r '.indexed')
+            skipped=$(echo "${report}" | jq -r '.skipped')
+            failed=$(echo "${report}" | jq -r '.failed')
+            open=$(open_rows)
+            judged=$(( indexed + skipped + failed ))
+            echo "draining: open=${open} indexed=${indexed} skipped=${skipped} failed=${failed}"
+            if [ "${open}" -eq 0 ] && [ "${judged}" -ge "${expected}" ]; then
+              echo "the queue is empty and ${judged} files have a verdict"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "::error::the crawl did not finish within ${DRAIN_TIMEOUT} seconds"
+              echo "${report}"
+              ./occ findling:index
+              exit 1
+            fi
+            sleep 5
+          done
+
+      # The seven language cases. Each one has its own message, because the seven
+      # failures mean seven different things, and each one asserts a count and a
+      # title: a search that finds "something" proves that the index is not
+      # empty, and nothing else.
+      - name: The seven German language cases, as the owner
+        run: |
+          search() {
+            curl -sfS -G -u "${OWNER_USER}:${OWNER_PASS}" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              --data-urlencode "term=$1" \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "$2"
+          }
+          fail() { echo "::error::$1"; cat "$2"; exit 1; }
+
+          # 1. The compound through one of its constituents. The file says
+          # Grundstuecksverkehrsgenehmigung, the search says Genehmigung, and the
+          # splitter is what closes the gap.
+          start=$(date +%s%N)
+          search 'Genehmigung' compound.json
+          echo "an ordinary search answered after $(( ( $(date +%s%N) - start ) / 1000000 ))ms"
+          jq -e '.ocs.data.entries | length == 1' compound.json > /dev/null \
+            || fail "a compound searched through one constituent did not bring back exactly one file" compound.json
+          jq -e --arg name "${SHARED_FILE}" '.ocs.data.entries[0].title == $name' compound.json > /dev/null \
+            || fail "the compound hit is not the German PDF of the corpus" compound.json
+          # The excerpt, and this is the assertion that separates a hit from a
+          # hit with content: the subline has to carry the compound out of the
+          # document. The fallback subline is the path, and the path does not
+          # contain the word, so a broken excerpt path cannot pass this line.
+          jq -e '.ocs.data.entries[0].subline | ascii_downcase | contains("genehmigung")' compound.json > /dev/null \
+            || fail "the subline carries no excerpt from the document" compound.json
+          jq -e '.ocs.data.entries[0].subline | contains("<") | not' compound.json > /dev/null \
+            || fail "the excerpt carries markup, which the search dialog would show verbatim" compound.json
+
+          # 2. The second compound, in a different file and a different format.
+          search 'Frist' frist.json
+          jq -e '.ocs.data.entries | length == 1' frist.json > /dev/null \
+            || fail "Frist did not bring back exactly the notice of termination" frist.json
+          jq -e --arg name "${NOTICE_FILE}" '.ocs.data.entries[0].title == $name' frist.json > /dev/null \
+            || fail "the Frist hit is not the DOCX of the corpus" frist.json
+
+          # 3. The written out umlaut. The file says Mueller with the character,
+          # the search says it with the two letters, and the query side variant
+          # of plan 02-09 is what joins them.
+          search 'Mueller' umlaut.json
+          jq -e '.ocs.data.entries | length == 1' umlaut.json > /dev/null \
+            || fail "the written out umlaut did not find the file that spells it with the character" umlaut.json
+          jq -e --arg name "${MEMO_FILE}" '.ocs.data.entries[0].title == $name' umlaut.json > /dev/null \
+            || fail "the umlaut hit is not the file note of the corpus" umlaut.json
+
+          # 4. Nominal inflection. The file says Vertraege, the search says
+          # Vertrag, and the stemmer is what closes that gap.
+          search 'Vertrag' flexion.json
+          jq -e '.ocs.data.entries | length == 1' flexion.json > /dev/null \
+            || fail "the singular did not find the plural" flexion.json
+          jq -e --arg name "${OVERVIEW_FILE}" '.ocs.data.entries[0].title == $name' flexion.json > /dev/null \
+            || fail "the inflection hit is not the ODT of the corpus" flexion.json
+
+          # 5. The phrase. Only the file with the two words in that order.
+          search '"drei Monate"' phrase.json
+          jq -e '.ocs.data.entries | length == 1' phrase.json > /dev/null \
+            || fail "the phrase did not bring back exactly one file" phrase.json
+          jq -e --arg name "${NOTICE_FILE}" '.ocs.data.entries[0].title == $name' phrase.json > /dev/null \
+            || fail "the phrase hit is not the DOCX of the corpus" phrase.json
+
+          # 6. The exclusion, and the control that gives it meaning. Bescheid
+          # stands in two files on purpose; without the control an exclusion that
+          # does nothing would look exactly like one that works.
+          search 'bescheid' both.json
+          jq -e '.ocs.data.entries | length == 2' both.json > /dev/null \
+            || fail "the word that stands in two files did not bring back two files" both.json
+          search 'bescheid -frist' excluded.json
+          jq -e '.ocs.data.entries | length == 1' excluded.json > /dev/null \
+            || fail "the minus did not remove the second file" excluded.json
+          jq -e --arg name "${SHARED_FILE}" '.ocs.data.entries[0].title == $name' excluded.json > /dev/null \
+            || fail "the exclusion removed the wrong file" excluded.json
+
+          # 7. The file type. There is no built in Nextcloud filter for it, so it
+          # travels inside the search line and becomes a required term on ext.
+          search 'type:pdf bescheid' filetype.json
+          jq -e '.ocs.data.entries | length == 1' filetype.json > /dev/null \
+            || fail "the file type filter did not narrow the two hits down to the PDF" filetype.json
+          jq -e --arg name "${SHARED_FILE}" '.ocs.data.entries[0].title == $name' filetype.json > /dev/null \
+            || fail "the file type filter kept the wrong file" filetype.json
+
+      # The counter proof, and the only one of the whole workflow that says
+      # something about a user who was never meant to see a file. Both directions
+      # are checked: the negative half alone would be green even if the search
+      # returned nothing to anybody.
+      - name: The second user sees the shared file and nothing else
+        run: |
+          search() {
+            curl -sfS -G -u "${COLLEAGUE_USER}:${COLLEAGUE_PASS}" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              --data-urlencode "term=$1" \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "$2"
+          }
+          fail() { echo "::error::$1"; cat "$2"; exit 1; }
+
+          search 'Genehmigung' colleague-shared.json
+          jq -e '.ocs.data.entries | length == 1' colleague-shared.json > /dev/null \
+            || fail "the second user does not find the file that was shared with him" colleague-shared.json
+          jq -e --arg name "${SHARED_FILE}" '.ocs.data.entries[0].title == $name' colleague-shared.json > /dev/null \
+            || fail "the second user found something other than the shared file" colleague-shared.json
+
+          # Deliberately without "bescheid": that word stands in the shared file
+          # as well, and a term the second user is allowed to find has no place
+          # in the list of terms he must not find.
+          for term in 'Frist' 'Vertrag' 'Mueller'; do
+            search "${term}" colleague-denied.json
+            jq -e '.ocs.data.entries | length == 0' colleague-denied.json > /dev/null \
+              || fail "the second user found a file that was never shared with him, searching for ${term}" colleague-denied.json
+          done
+          echo "the second user sees one file out of thirteen, and it is the shared one"
+
+      # The time budget, measured instead of claimed. The container is restarted
+      # with FINDLING_ARTIFICIAL_DELAY_MS, which acts in /snippets and nowhere
+      # else, so the candidate call answers normally and only the excerpt call
+      # runs into its limit. What has to survive is the hit; what may fall away
+      # is the excerpt.
+      - name: Restart the backend with an artificial delay
+        working-directory: findling-src/backend
+        run: |
+          kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          for _ in $(seq 1 20); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null || break
+            sleep 1
+          done
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_PORT="${EXAPP_PORT}"
+          export APP_VERSION=0.1.0
+          export APP_HOST=127.0.0.1
+          export NEXTCLOUD_URL=http://localhost:8080
+          # The same volume as before, so the index built above is the one that
+          # is searched.
+          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+          export FINDLING_ARTIFICIAL_DELAY_MS="${DELAY_MS}"
+          uv run python -m findling.main >> "${{ runner.temp }}/exapp.log" 2>&1 &
+          echo $! > "${{ runner.temp }}/exapp.pid"
+          for _ in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+              echo "the delayed backend answers on the ExApp port"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the delayed backend did not come up"
+          tail -50 "${{ runner.temp }}/exapp.log" || true
+          exit 1
+
+      - name: A slow backend costs the excerpt, not the hit and not the budget
+        run: |
+          read -r seconds status <<< "$(curl -s -G -u "${OWNER_USER}:${OWNER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            --data-urlencode 'term=Genehmigung' \
+            -o delayed.json -w '%{time_total} %{http_code}' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search')"
+          elapsed_ms=$(awk -v value="${seconds}" 'BEGIN { printf "%d", value * 1000 }')
+          cat delayed.json
+          echo "the search answered after ${elapsed_ms}ms with status ${status}, while the backend delayed every excerpt by ${DELAY_MS}ms"
+
+          test "${status}" = "200"
+          jq -e '.ocs.data.entries | length == 1' delayed.json > /dev/null \
+            || { echo "::error::a slow excerpt call cost the hit itself"; cat delayed.json; exit 1; }
+          # The excerpt is gone and the subline fell back to the path. That is
+          # the designed behaviour: a hit without an excerpt beats no hit.
+          jq -e '.ocs.data.entries[0].subline | startswith("corpus/")' delayed.json > /dev/null \
+            || { echo "::error::the subline is not the path, so the excerpt call did not run into its limit"; cat delayed.json; exit 1; }
+          # The falsifying bound. The backend delays every excerpt by three
+          # seconds, so a run that waited for it cannot come back below that;
+          # 2900 milliseconds is therefore a ceiling that a missing timeout
+          # cannot pass, and it sits far above the roughly 1.5 seconds the
+          # limited call costs.
+          if [ "${elapsed_ms}" -ge 2900 ]; then
+            echo "::error::the search waited for the delayed backend instead of giving up on the excerpt"
+            exit 1
+          fi
+
+      - name: The verdicts of the whole corpus, counted
+        run: |
+          report=$( cd findling-src/backend && uv run python -m findling.tools.index_status \
+            --db "${{ runner.temp }}/findling/state.db" )
+          echo "::group::counters after the run"
+          echo "${report}"
+          ./occ findling:index
+          echo "::endgroup::"
+
+          indexed=$(echo "${report}" | jq -r '.indexed')
+          skipped=$(echo "${report}" | jq -r '.skipped')
+          failed=$(echo "${report}" | jq -r '.failed')
+          docs=$(echo "${report}" | jq -r '.docs')
+
+          if [ "${indexed}" -ne "${EXPECTED_INDEXED}" ]; then
+            echo "::error::${indexed} files were indexed, ${EXPECTED_INDEXED} were expected"
+            exit 1
+          fi
+          if [ "${skipped}" -ne "${EXPECTED_SKIPPED}" ]; then
+            echo "::error::${skipped} files were skipped, ${EXPECTED_SKIPPED} were expected: the scan without a text layer and the encrypted PDF"
+            exit 1
+          fi
+          if [ "${failed}" -ne "${EXPECTED_FAILED}" ]; then
+            echo "::error::${failed} files failed, ${EXPECTED_FAILED} was expected: the zero byte PDF and nothing else"
+            exit 1
+          fi
+          if [ "${docs}" -ne "${indexed}" ]; then
+            echo "::error::a document lies twice in the index: ${docs} documents against ${indexed} indexed files"
+            exit 1
+          fi
+          echo "the corpus ended as ${indexed} indexed, ${skipped} skipped, ${failed} failed, ${docs} documents in the index"
+
+      - name: Everything the failure had to say
+        if: failure()
+        run: |
+          echo "--- dialect ---"
+          ./occ config:system:get dbtype || true
+          echo "--- counters ---"
+          ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+            --db "${{ runner.temp }}/findling/state.db" ) || true
+          ./occ findling:index || true
+          echo "--- the last search answers ---"
+          for answer in compound.json frist.json umlaut.json flexion.json phrase.json both.json \
+                        excluded.json filetype.json colleague-shared.json colleague-denied.json delayed.json; do
+            if [ -f "${answer}" ]; then
+              echo "== ${answer} =="
+              cat "${answer}"
+              echo
+            fi
+          done
+          echo "--- exapp ---"
+          tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+          echo "--- nextcloud ---"
+          tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
 
       - name: Stop the ExApp
         if: always()
