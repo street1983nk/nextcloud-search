@@ -124,7 +124,11 @@ jobs:
       # worker runs with --stop-after instead of --once.
       - name: Queue the crawl
         run: |
-          ./occ findling:index --restart
+          # --no-interaction: occ treats this shell as interactive (no TTY check
+          # in this image), so the restart confirmation would default to No and
+          # the whole run would wait on an empty queue, which is exactly what
+          # happened on the first run of this gate.
+          ./occ findling:index --restart --no-interaction
           timeout 60 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once
           ./occ findling:index
 

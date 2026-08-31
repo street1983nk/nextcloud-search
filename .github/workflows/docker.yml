@@ -184,11 +184,13 @@ jobs:
           echo "heartbeat on ${{ matrix.platform }}: ${answer}"
 
           echo "signed search answered: ${signed}"
-          echo "${signed}" | jq -e '.results | length == 1'
-          echo "${signed}" | jq -e '.results[0].title == "findling-canary"'
+          # The wire format is the candidates envelope of the two stage protocol
+          # (02-11); the canary is the one candidate that may carry a text.
+          echo "${signed}" | jq -e '.candidates | length == 1'
+          echo "${signed}" | jq -e '.candidates[0].title == "findling-canary"'
           # The user name arrives in the signed header only, so this is the proof
           # that the header, and not the body, decides who asked.
-          echo "${signed}" | jq -e '.results[0].snippet | endswith("for user smoketest")'
+          echo "${signed}" | jq -e '.candidates[0].snippet | endswith("for user smoketest")'
 
           echo "unsigned search answered ${unsigned}"
           test "${unsigned}" = "401"
