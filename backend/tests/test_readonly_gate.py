@@ -73,13 +73,25 @@ FORBIDDEN_IDENTIFIERS = frozenset(
 # anticipates. One entry is one (module, identifier) pair, and the pair is the
 # whole point: waving "mkdir" through everywhere would hide a real
 # nc_py_api.files.mkdir one file over, which is exactly the class of breach this
-# gate exists for. Adding an entry is a review decision.
+# gate exists for. Adding an entry is a review decision, and it is only
+# defensible when invariant 1 already proves that the module cannot reach
+# Nextcloud at all.
 #
 # index/wordlist.py creates the dictionary directory of the container's own
 # persistent volume. That path is never a Nextcloud node: the container has no
 # access to the Nextcloud storage at all, and invariant 1 keeps nc_py_api out of
 # that module, so the only object a mkdir there can reach is a local one.
-INVARIANT_2_EXCEPTIONS = frozenset({("index/wordlist.py", "mkdir")})
+#
+# store/repo.py creates the directory of the state database under
+# APP_PERSISTENT_STORAGE. Same reasoning: the module may not import nc_py_api
+# or httpx, so the collision with the writing entry point of nc_py_api.files
+# is one of names only.
+INVARIANT_2_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("index/wordlist.py", "mkdir"),
+        ("store/repo.py", "mkdir"),
+    }
+)
 
 WRITING_HTTP_METHODS = frozenset({"PUT", "POST", "PATCH", "DELETE"})
 
@@ -264,18 +276,20 @@ def test_set_user_is_a_violation() -> None:
     assert "invariant 2" in violations[0]
 
 
-def test_the_reviewed_exception_covers_exactly_one_module() -> None:
-    # The volume layout of the container is created in one place, and only there.
+def test_the_reviewed_exception_covers_exactly_the_named_modules() -> None:
+    # The volume layout of the container is created in these places, and only there.
     assert scan_source("index/wordlist.py", "target.mkdir(parents=True, exist_ok=True)\n") == []
+    assert scan_source("store/repo.py", "database.parent.mkdir(parents=True, exist_ok=True)\n") == []
 
 
 def test_the_reviewed_exception_does_not_leak_into_other_modules() -> None:
     # Same line, one file over. An exception that spreads by itself is not an
-    # exception, it is a hole.
-    violations = scan_source("index/schema.py", "target.mkdir(parents=True, exist_ok=True)\n")
+    # exception, it is a hole, and moving code must not launder it.
+    for module in ("index/schema.py", "api/search.py"):
+        violations = scan_source(module, "target.mkdir(parents=True, exist_ok=True)\n")
 
-    assert len(violations) == 1
-    assert "invariant 2" in violations[0]
+        assert len(violations) == 1
+        assert "invariant 2" in violations[0]
 
 
 def test_the_reviewed_exception_covers_only_the_identifier_it_names() -> None:
