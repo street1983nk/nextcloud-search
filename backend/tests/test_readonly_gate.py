@@ -86,10 +86,18 @@ FORBIDDEN_IDENTIFIERS = frozenset(
 # APP_PERSISTENT_STORAGE. Same reasoning: the module may not import nc_py_api
 # or httpx, so the collision with the writing entry point of nc_py_api.files
 # is one of names only.
+#
+# index/open.py creates the index directory under APP_PERSISTENT_STORAGE. It is
+# the only module that opens a tantivy index, tantivy refuses a directory that
+# does not exist ("Directory does not exist"), and the standard library offers no
+# way to create one without naming mkdir or makedirs. Invariant 1 keeps nc_py_api
+# and httpx out of that module as well, so the only directory it can reach is a
+# local one.
 INVARIANT_2_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset(
     {
         ("index/wordlist.py", "mkdir"),
         ("store/repo.py", "mkdir"),
+        ("index/open.py", "mkdir"),
     }
 )
 
@@ -280,6 +288,7 @@ def test_the_reviewed_exception_covers_exactly_the_named_modules() -> None:
     # The volume layout of the container is created in these places, and only there.
     assert scan_source("index/wordlist.py", "target.mkdir(parents=True, exist_ok=True)\n") == []
     assert scan_source("store/repo.py", "database.parent.mkdir(parents=True, exist_ok=True)\n") == []
+    assert scan_source("index/open.py", "path.mkdir(parents=True, exist_ok=True)\n") == []
 
 
 def test_the_reviewed_exception_does_not_leak_into_other_modules() -> None:
