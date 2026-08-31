@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -69,6 +69,14 @@ _DEFAULT_META: Final[Mapping[str, str]] = {
 # Ten seconds. The writer holds its transactions for milliseconds, so a reader
 # that waits longer than this is not contending, it is looking at a stuck writer.
 _BUSY_TIMEOUT_MS: Final = 10_000
+
+# Candidates per prefilter query. SQLITE_LIMIT_VARIABLE_NUMBER is 250000 in the
+# build this was measured against, so the old 999 rule does not apply and a band
+# of 1000 is not needed to stay legal. It is here so that the function does not
+# depend on a build option at all: the limit is compile time, our candidate lists
+# are not, and splitting costs nothing measurable next to the Tantivy query that
+# produced them.
+_ACL_BAND: Final = 1000
 
 # The closed list, taken from the measured taxonomy in the phase research. A file
 # is judged exactly once and carries one of these pairs; there is no fourth state,
@@ -400,6 +408,91 @@ class Store:
         """
         with self._transaction():
             self._conn.execute(_RECORD_MOUNT_SQL, (storage_id, root_id, cursor, files_seen, int(time.time())))
+
+    def replace_acl(self, file_id: int, uids: Iterable[str]) -> None:
+        """Write the permissions of one file as a whole, never as a change.
+
+        DELETE followed by INSERT in one transaction. The crawl and the events
+        both transport the target state, so a delivery that gets lost costs one
+        round of staleness and repairs itself with the next one. An incremental
+        variant would be wrong forever after the first lost message, and nothing
+        in the system would ever notice.
+        """
+        rows = [(uid, file_id) for uid in dict.fromkeys(uids)]
+        with self._transaction():
+            self._conn.execute("DELETE FROM acl WHERE file_id = ?", (file_id,))
+            self._conn.executemany("INSERT INTO acl (uid, file_id) VALUES (?, ?)", rows)
+
+    def prefilter_visible(self, uid: str, file_ids: Sequence[int]) -> set[int]:
+        """Drop candidates the user almost certainly cannot see.
+
+        This is a speed-up, never a security boundary. It over-approximates on
+        team folders with advanced permissions, because IUserMountCache resolves
+        mounts and not per folder rules. The only authority is the PHP recheck
+        through getUserFolder()->getFirstNodeById(), and it runs before any
+        snippet exists.
+
+        The direction is fixed: given candidates, which of them are permitted.
+        Materialising every file a user may see is the inverse, and it is the
+        documented anti-pattern of the app this one replaces, because its cost
+        grows with the instance rather than with the query.
+
+        The result is a set. Ordering is the caller's business and comes from the
+        Tantivy score, which is why there is no ORDER BY and no join against
+        ``files`` on this path.
+        """
+        if not file_ids:
+            # No candidates, no question. Worth its own branch: an empty IN list
+            # is a syntax error in SQL, and the search path hits this case on
+            # every query that Tantivy answers with nothing.
+            return set()
+
+        visible: set[int] = set()
+        for start in range(0, len(file_ids), _ACL_BAND):
+            band = file_ids[start : start + _ACL_BAND]
+            placeholders = ",".join("?" * len(band))
+            rows = self._conn.execute(
+                # The parameters are placeholders, all of them. Only their number
+                # is interpolated, and it is a count this function computed.
+                f"SELECT file_id FROM acl WHERE uid = ? AND file_id IN ({placeholders})",  # noqa: S608
+                (uid, *band),
+            )
+            visible.update(int(row[0]) for row in rows)
+        return visible
+
+    def forget_acl(self, file_id: int) -> int:
+        """Drop every permission row of one file, return how many there were.
+
+        Goes through the acl_file index. The composite primary key leads with the
+        uid and cannot answer this question, so without that index a single
+        deleted file would scan the whole table.
+        """
+        with self._transaction():
+            cursor = self._conn.execute("DELETE FROM acl WHERE file_id = ?", (file_id,))
+        return cursor.rowcount
+
+    def acl_rows_per_document(self) -> float:
+        """Average permission rows per document, 0.0 while the table is empty.
+
+        The figure the status page uses to make the size of this table
+        understandable: measured at 3.36 on a hundred thousand files and fifty
+        users, which is where the 12 MB estimate comes from. A value that grows
+        far beyond it means the crawl is writing deltas instead of target states.
+        """
+        row = self._conn.execute("SELECT COUNT(*), COUNT(DISTINCT file_id) FROM acl").fetchone()
+        total, documents = int(row[0]), int(row[1])
+        return total / documents if documents else 0.0
+
+    def trace(self, callback: Callable[[str], object] | None) -> None:
+        """Report every statement this connection runs, or stop reporting.
+
+        The prefilter has two properties that cannot be seen in its result: an
+        empty candidate list never reaches the database, and a long one is split
+        into bands instead of relying on the parameter limit of this SQLite
+        build. Both are properties of the call pattern, so the tests observe the
+        calls.
+        """
+        self._conn.set_trace_callback(callback)
 
     def mount_rows(self) -> list[dict[str, Any]]:
         """The mirrored crawl progress of every known mount."""
