@@ -211,6 +211,22 @@ def test_an_empty_search_term_never_reaches_the_engine(index: Index) -> None:
     assert counting.parse_calls == 0
 
 
+def test_no_module_of_the_request_path_uses_the_throwing_parser() -> None:
+    # The strict parser raises on a stray quotation mark, and on the request path
+    # that is an HTTP 500 for a user who typed one character too many. One module
+    # is exempt and named here rather than in a document: index/bench.py is the
+    # measurement tool, it is never reached by a request, and its query text is a
+    # constant inside the file rather than user input.
+    package = Path(__file__).resolve().parents[1] / "src" / "findling"
+    users = {
+        module.relative_to(package).as_posix()
+        for module in package.rglob("*.py")
+        if "parse_query(" in module.read_text(encoding="utf-8")
+    }
+
+    assert users == {"index/bench.py"}
+
+
 def test_a_filter_alone_still_reports_the_extension_it_recognised(index: Index) -> None:
     # No term, so no engine call, but the caller still learns what was asked for
     # and does not have to parse the search line a second time.
