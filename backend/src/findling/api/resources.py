@@ -56,7 +56,7 @@ class ReadSide:
 
 
 _OPEN: ReadSide | None = None
-_MARKS: dict[str, str] | None = None
+_MARKS: tuple[Path, dict[str, str]] | None = None
 
 
 def expected_marks() -> dict[str, str] | None:
@@ -66,15 +66,23 @@ def expected_marks() -> dict[str, str] | None:
     container that cannot index either. A copy is handed out rather than the
     cached mapping itself: a caller that edited it would silently move the
     comparison this whole mechanism exists for.
+
+    Cached under the directory the list was read from, for the same reason the
+    handles below are: one process has one volume, but a suite has one per test,
+    and a digest carried over from the previous volume would report a drift that
+    does not exist.
     """
     global _MARKS
-    if _MARKS is None:
-        try:
-            _MARKS = expected_versions(build_artifact().digest)
-        except OSError:
-            LOGGER.warning("the constituent list is unavailable, version marks cannot be compared")
-            return None
-    return dict(_MARKS)
+    dictionary = settings().dict_dir
+    if _MARKS is not None and _MARKS[0] == dictionary:
+        return dict(_MARKS[1])
+    try:
+        marks = expected_versions(build_artifact().digest)
+    except OSError:
+        LOGGER.warning("the constituent list is unavailable, version marks cannot be compared")
+        return None
+    _MARKS = (dictionary, marks)
+    return dict(marks)
 
 
 def version_drift(store: Store) -> list[str]:

@@ -484,16 +484,27 @@ class Store:
             cursor = self._conn.execute("DELETE FROM acl WHERE file_id = ?", (file_id,))
         return cursor.rowcount
 
+    def acl_totals(self) -> tuple[int, int]:
+        """Permission rows, and how many documents they belong to.
+
+        One query for two numbers that only mean something together. The row
+        count alone says nothing about whether this table is the size it should
+        be, and the count of documents alone says nothing about the cost of the
+        prefilter; the status page shows both so that the ratio is visible
+        without anybody computing it.
+        """
+        row = self._conn.execute("SELECT COUNT(*), COUNT(DISTINCT file_id) FROM acl").fetchone()
+        return int(row[0]), int(row[1])
+
     def acl_rows_per_document(self) -> float:
         """Average permission rows per document, 0.0 while the table is empty.
 
-        The figure the status page uses to make the size of this table
-        understandable: measured at 3.36 on a hundred thousand files and fifty
-        users, which is where the 12 MB estimate comes from. A value that grows
-        far beyond it means the crawl is writing deltas instead of target states.
+        The figure that makes the size of this table understandable: measured at
+        3.36 on a hundred thousand files and fifty users, which is where the
+        12 MB estimate comes from. A value that grows far beyond it means the
+        crawl is writing deltas instead of target states.
         """
-        row = self._conn.execute("SELECT COUNT(*), COUNT(DISTINCT file_id) FROM acl").fetchone()
-        total, documents = int(row[0]), int(row[1])
+        total, documents = self.acl_totals()
         return total / documents if documents else 0.0
 
     def trace(self, callback: Callable[[str], object] | None) -> None:

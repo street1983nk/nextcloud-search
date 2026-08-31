@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from conftest import Corpus
@@ -162,7 +161,12 @@ def test_a_request_without_any_appapi_header_is_unauthorized(client: TestClient)
 
 
 def test_all_three_routes_are_mounted() -> None:
-    paths = {route.path for route in APP.routes if isinstance(route, APIRoute)}
+    # Asked through the OpenAPI description rather than by walking APP.routes.
+    # Measured on fastapi 0.141.1: an included router sits in the route list as a
+    # private wrapper object with no path of its own, so a test that walked the
+    # list would have to unwrap a private type and would be green for the wrong
+    # reason on the release that renames it.
+    paths = set(APP.openapi()["paths"])
 
     assert {"/search", "/snippets", "/status"} <= paths
 
