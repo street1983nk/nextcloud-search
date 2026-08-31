@@ -97,7 +97,9 @@ def german(constituents: list[str]) -> TextAnalyzer:
 
 
 @pytest.mark.parametrize(("text", "expected"), COMPOUNDS, ids=[text for text, _ in COMPOUNDS])
-def test_the_sixteen_compounds_produce_the_measured_tokens(german: TextAnalyzer, text: str, expected: list[str]) -> None:
+def test_the_sixteen_compounds_produce_the_measured_tokens(
+    german: TextAnalyzer, text: str, expected: list[str]
+) -> None:
     assert german.analyze(text) == expected
 
 
