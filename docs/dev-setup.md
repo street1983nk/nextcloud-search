@@ -90,11 +90,30 @@ the backend log and still be invisible to the container.
 
 7. Type `findling-canary` into the search bar at the top.
 
-   Expected: a result group **File contents** with the entry **Findling canary**.
+   Expected: a result group **File contents** with the entry **findling-canary**.
    The second line reads `produced inside container <host> at <timestamp> for user
    testuser`. That line is the proof: the host name and the timestamp come from
    the running backend process, and the user id comes from the signed AppAPI
    header, so no hard coded string in PHP can produce it.
+
+### `findling-canary` is a reserved search term
+
+The backend answers with that entry for this one term and for no other. The
+comparison is exact: leading and trailing spaces are ignored, everything else is
+an ordinary search, so `findling-canary contract` finds documents and not the
+canary. A file whose name or content contains the word is found the normal way
+and is not affected by any of this.
+
+The entry has file id 0, which is the only file id the PHP side accepts without
+resolving it against the user's own folder, and it accepts it only under this
+exact title. There is no document behind it, it appears in no other search, and
+nothing about it depends on the index existing: it answers on a container that
+was deployed a minute ago and has not indexed anything yet, which is exactly the
+situation somebody asks it in.
+
+Do not reuse the word for anything else, and do not use "contains" anywhere in
+the comparison. A diagnostic that shows up uninvited stops being evidence of
+anything.
 
 ## Counter check: the backend goes away
 
