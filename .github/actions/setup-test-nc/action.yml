@@ -113,6 +113,20 @@ runs:
       working-directory: findling-src/backend
       run: uv sync --frozen
 
+    # The runtime image installs wngerman; the backend on this runner is a plain
+    # process, so the same dictionary has to come from apt. Without it every
+    # indexing pass of the armed poller dies in a FileNotFoundError on
+    # /usr/share/dict/ngerman before it ever claims a queue row (first run of
+    # the resilience gate).
+    - name: Install the German dictionary the analyzer reads
+      shell: bash
+      run: |
+        if [ ! -f /usr/share/dict/ngerman ]; then
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wngerman
+        fi
+        wc -l /usr/share/dict/ngerman
+
     # The backend runs as a plain process, not as a container: phase 1 proves the
     # integration path, the image is a separate workflow. The HaRP shared key is
     # deliberately absent, because setting it would make the server bind a unix
