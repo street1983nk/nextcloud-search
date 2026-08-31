@@ -16,7 +16,12 @@ import zipfile
 
 import pytest
 from docx.opc.exceptions import PackageNotFoundError
-from lxml import etree
+
+# lxml ships no type information for its C extension, so pyright cannot see the
+# submodule. Importing the real class is the point of this test file: the mapping
+# in errors.py matches class names as strings, and only the genuine exception
+# object proves that those strings still describe reality.
+from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
 
 from findling import config
 from findling.extract.dispatch import (
@@ -103,7 +108,10 @@ def test_the_taxonomy_is_identical_to_the_one_the_state_store_enforces() -> None
     # Two lists that drift apart break the return channel to Nextcloud silently:
     # the extractor produces a pair the store refuses to write, and the file ends
     # up with no verdict at all.
-    ours = {state.value: {reason.value if reason else None for reason in reasons} for state, reasons in STATE_REASONS.items()}
+    ours = {
+        state.value: {reason.value if reason is not None else None for reason in reasons}
+        for state, reasons in STATE_REASONS.items()
+    }
     theirs = {state: set(reasons) for state, reasons in repo.STATE_REASONS.items()}
 
     assert ours == theirs
