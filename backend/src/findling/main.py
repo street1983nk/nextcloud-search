@@ -26,7 +26,10 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from findling.api.search import ROUTER
+from findling.api import resources
+from findling.api.search import ROUTER as SEARCH_ROUTER
+from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
+from findling.api.status import ROUTER as STATUS_ROUTER
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp, run_app, set_handlers
 from findling.worker.poller import POLLER_STOP_SECONDS, Poller, default_poller
 
@@ -131,6 +134,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.findling_handlers_registered = True
     LOGGER.info("findling backend starting, binding mode: %s", binding_mode())
 
+    # Stated once at startup, and decided nowhere. An existing index whose
+    # version marks differ from the ones this build produces answers queries with
+    # a different tokenisation than it was written with, so hits disappear
+    # without anything saying why. What follows from that, resetting one storage
+    # or rebuilding everything, is the poller's decision; the only unacceptable
+    # outcome is nobody hearing about it. In a worker thread because it opens a
+    # database and may read the constituent list, neither of which belongs on the
+    # event loop while the server is still coming up.
+    await asyncio.to_thread(resources.report_version_drift)
+
     # Exactly one indexing task, started silenced. It opens neither the index nor
     # the state database before it is armed, so a container that is deployed but
     # not yet enabled holds no tantivy lock and touches no volume.
@@ -161,9 +174,11 @@ APP = FastAPI(lifespan=lifespan)
 # /heartbeat is always exempt from this middleware, which is what lets AppAPI
 # probe the container before any request is signed.
 APP.add_middleware(AppAPIAuthMiddleware)
-# The router is mounted behind the middleware, so no search route can ever be
-# reached without a verified AppAPI header.
-APP.include_router(ROUTER)
+# The routers are mounted behind the middleware, so no route of this app can
+# ever be reached without a verified AppAPI header.
+APP.include_router(SEARCH_ROUTER)
+APP.include_router(SNIPPETS_ROUTER)
+APP.include_router(STATUS_ROUTER)
 
 
 def smuggles_identity(errors: Sequence[Mapping[str, Any]]) -> bool:
