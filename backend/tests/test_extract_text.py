@@ -89,25 +89,28 @@ def test_html_yields_the_visible_text_only(tmp_path: Path) -> None:
 
 
 def test_the_parser_resolves_no_external_entity_and_reaches_no_network(tmp_path: Path) -> None:
-    secret = _write(tmp_path, "secret.txt", b"TOPSECRET-PASSPHRASE")
+    # The entity points at a real file through an absolute URI, which is what makes
+    # this test load bearing: measured against a parser built without the three
+    # switches, the same document comes back as "Anlage TOPSECRET-PASSPHRASE".
+    secret = tmp_path / "secret.txt"
+    secret.write_bytes(b"TOPSECRET-PASSPHRASE")
     document = (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         "<!DOCTYPE html [\n"
-        f'  <!ENTITY leak SYSTEM "file://{secret}">\n'
+        f'  <!ENTITY leak SYSTEM "{secret.as_uri()}">\n'
         '  <!ENTITY call SYSTEM "http://127.0.0.1:9/collect">\n'
         "]>\n"
         '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Anlage &leak; &call;</p></body></html>'
     )
     path = _write(tmp_path, "xxe.xhtml", document.encode("utf-8"))
 
-    try:
-        outcome = extract_html(path)
-    except Exception as error:  # noqa: BLE001 - refusing the document is a valid answer
-        assert "TOPSECRET" not in str(error)
-        return
+    outcome = extract_html(path)
 
     assert "TOPSECRET" not in outcome.text
     assert "PASSPHRASE" not in outcome.text
+    # The reference survives as text, which is the proof that the parser saw an
+    # entity and declined to follow it rather than never noticing one.
+    assert "&leak;" in outcome.text
 
 
 def test_rtf_yields_its_text(tmp_path: Path) -> None:

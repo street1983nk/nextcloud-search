@@ -74,6 +74,11 @@ ALLOWED_MIMETYPES: Final[Mapping[str, Route]] = {
 }
 
 
+# The routes this plan implements. The other five arrive in plan 02-08, and until
+# then they raise rather than pretend.
+_TEXT_ROUTES: Final = frozenset({Route.PLAIN, Route.HTML, Route.RTF})
+
+
 def judge(mime: str, size: int) -> Route | ExtractionOutcome:
     """Decide before the first byte: a route to follow, or a finished verdict.
 
@@ -139,14 +144,28 @@ def extract(path: str, mime: str, size: int) -> ExtractionOutcome:
 def _run_route(route: Route, path: str) -> ExtractionOutcome:
     """Hand the file to its extractor.
 
-    The five document formats arrive in plan 02-08. They raise instead of
-    returning a verdict, because a missing extractor is a hole in this container
-    and not a property of the document: reporting them as skipped would bury the
-    gap in a counter nobody reads twice.
+    The format module is imported here rather than at the top of this file, and
+    that is deliberate: a plain text file then never pays for loading lxml and
+    striprtf, and the five document formats of plan 02-08 will never be loaded by
+    a child that only ever sees text. In a process that is recycled every 200
+    files, an import that is not needed is an import paid over and over.
 
-    The message names the route and never the file. A verdict carries a code, not
-    a path, and an exception text is the easiest way to smuggle a file name into a
-    log (T-02-56).
+    The five document formats raise instead of returning a verdict, because a
+    missing extractor is a hole in this container and not a property of the
+    document: reporting them as skipped would bury the gap in a counter nobody
+    reads twice. The message names the route and never the file, since an
+    exception text is the easiest way to smuggle a file name into a log
+    (T-02-56).
     """
-    _ = path
-    raise NotImplementedError(f"the {route.value} extractor arrives in plan 02-08")
+    if route not in _TEXT_ROUTES:
+        raise NotImplementedError(f"the {route.value} extractor arrives in plan 02-08")
+
+    from findling.extract import text
+
+    match route:
+        case Route.PLAIN:
+            return text.extract_plain(path)
+        case Route.HTML:
+            return text.extract_html(path)
+        case _:
+            return text.extract_rtf(path)
