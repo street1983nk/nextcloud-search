@@ -47,11 +47,11 @@ from findling.nc.client import AsyncNextcloudApp, NextcloudException
 from findling.nc.queue import CallResult, ClaimResult, QueueJob, QueueStats
 from findling.store.repo import Store, open_store
 from findling.worker.poller import (
-    PASS_EMPTY,
-    PASS_GATEWAY_UNAVAILABLE,
-    PASS_PAUSED_LOW_DISK,
-    PASS_QUEUE_UNAVAILABLE,
-    PASS_WORKED,
+    ROUND_EMPTY,
+    ROUND_GATEWAY_UNAVAILABLE,
+    ROUND_PAUSED_LOW_DISK,
+    ROUND_QUEUE_UNAVAILABLE,
+    ROUND_WORKED,
     Poller,
 )
 
@@ -198,7 +198,7 @@ def _poller(
 def _documents(index: Index) -> int:
     index.reload()
     searcher = index.searcher()
-    return searcher.search(index.parse_query("frist", [FIELD_BODY_DE]), 10).count
+    return len(searcher.search(index.parse_query("frist", [FIELD_BODY_DE]), 10).hits)
 
 
 def _stored_ids(index: Index) -> list[int]:
@@ -216,7 +216,7 @@ async def test_a_job_is_indexed_committed_recorded_and_only_then_acknowledged(
 
     result = await poller.run_once()
 
-    assert result.state == PASS_WORKED
+    assert result.state == ROUND_WORKED
     assert result.indexed == 1
     assert _documents(index) == 1
     row = store.file_row(4711)
@@ -269,13 +269,13 @@ async def test_a_job_the_judge_rejects_is_acknowledged_without_reading_bytes(
     reads: list[int] = []
 
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
-    fetch = poller._fetch_file  # noqa: SLF001
+    fetch = poller._fetch_file
 
     async def counting_fetch(*args: Any, **kwargs: Any) -> Any:
         reads.append(1)
         return await fetch(*args, **kwargs)
 
-    poller._fetch_file = counting_fetch  # type: ignore[method-assign]  # noqa: SLF001
+    poller._fetch_file = counting_fetch
 
     result = await poller.run_once()
 
@@ -318,7 +318,7 @@ async def test_a_gateway_error_aborts_the_batch_and_acknowledges_nothing(
 
     result = await poller.run_once()
 
-    assert result.state == PASS_GATEWAY_UNAVAILABLE
+    assert result.state == ROUND_GATEWAY_UNAVAILABLE
     assert queue.acknowledged == []
     assert store.file_row(4711) is None
     assert queue.unlocked == [[91, 92]]
@@ -369,6 +369,27 @@ async def test_crash_between_commit_and_state(
     assert _documents(index) == 1
 
 
+async def test_a_file_that_cannot_be_processed_is_acknowledged_with_its_reason(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # A file the parser cannot open must leave the queue with a reason attached,
+    # otherwise it circles until the give-up rule ends it three attempts later and
+    # the status page names no cause. The reason travels to Nextcloud, where an
+    # admin can still read it while the container is down.
+    broken = b"PK not really a package at all"
+    job = _job(mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", size=len(broken))
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: broken})
+
+    result = await poller.run_once()
+
+    assert result.failed == 1
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("failed", "corrupt")
+    assert queue.acknowledged == [([], {91: "corrupt"})]
+
+
 async def test_the_acl_of_a_job_is_written_declaratively(
     store: Store, writer: IndexBatchWriter, tmp_path: Path
 ) -> None:
@@ -414,7 +435,7 @@ async def test_an_empty_queue_grows_the_cooldown_from_fifteen_to_at_most_one_hun
 
     for _ in range(6):
         result = await poller.run_once()
-        assert result.state == PASS_EMPTY
+        assert result.state == ROUND_EMPTY
         seen.append(poller.cooldown)
 
     assert seen == [15, 30, 60, 120, 120, 120]
@@ -435,7 +456,7 @@ async def test_a_full_volume_ends_the_pass_and_hands_the_rows_back(
     finally:
         guarded.close()
 
-    assert result.state == PASS_PAUSED_LOW_DISK
+    assert result.state == ROUND_PAUSED_LOW_DISK
     assert queue.acknowledged == []
     assert queue.unlocked == [[91]]
     assert store.file_row(4711) is None
@@ -449,7 +470,7 @@ async def test_an_unreachable_queue_is_a_state_and_not_a_crash(
 
     result = await poller.run_once()
 
-    assert result.state == PASS_QUEUE_UNAVAILABLE
+    assert result.state == ROUND_QUEUE_UNAVAILABLE
     assert poller.cooldown == 15
 
 
@@ -473,9 +494,7 @@ async def test_shutdown_releases_the_held_ids(
     assert queue.unlocked == [[91, 92]]
 
 
-async def test_the_scratch_file_is_gone_after_every_job(
-    store: Store, writer: IndexBatchWriter, tmp_path: Path
-) -> None:
+async def test_the_scratch_file_is_gone_after_every_job(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
     # The scratch files hold user content. Leaving one behind after a crash is a
     # disclosure, and leaving one behind on every job fills the volume.
     queue = _FakeQueue(ClaimResult(jobs=(_job(), _job(92, 4712))))
@@ -535,9 +554,9 @@ def test_the_source_shows_commit_before_record_before_acknowledge() -> None:
     """
     source = POLLER_SOURCE.read_text(encoding="utf-8")
 
-    commit = source.index("self._writer.flush")
-    record = source.index("self._store.record")
-    acknowledge = source.index("queue.acknowledge")
+    commit = source.index("self._writer_or_die().flush")
+    record = source.index("self._record_verdicts")
+    acknowledge = source.index("queue.acknowledge(")
 
     assert commit < record < acknowledge
 
@@ -551,10 +570,10 @@ def test_the_blocking_work_runs_off_the_event_loop() -> None:
     source = POLLER_SOURCE.read_text(encoding="utf-8")
 
     assert source.count("to_thread") >= 2
-    for blocking in ("self._writer.flush", "self._writer.add", "self._record_batch"):
-        line = next(text for text in source.splitlines() if blocking in text and "to_thread" in text)
+    for blocking in ("_writer_or_die().flush", "_writer_or_die().add", "_record_verdicts", "self._extract"):
+        lines = [line for line in source.splitlines() if blocking in line and "to_thread" in line]
 
-        assert "to_thread" in line, blocking
+        assert lines, blocking
 
 
 def test_no_log_call_names_a_path_a_title_or_a_piece_of_text() -> None:
@@ -573,8 +592,17 @@ def test_no_log_call_names_a_path_a_title_or_a_piece_of_text() -> None:
 
 
 def test_the_poller_builds_exactly_one_client() -> None:
-    """One creation in the file, so a second one is a visible change."""
-    assert POLLER_SOURCE.read_text(encoding="utf-8").count("create_app_client") == 1
+    """One creation in the file, so a second one is a visible change.
+
+    Counted as code lines, with comments taken out first: the reason for this
+    gate is written down next to it and names the factory, and a rule that
+    punishes its own explanation gets deleted rather than obeyed.
+    """
+    code = [
+        line for line in POLLER_SOURCE.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
+    ]
+
+    assert sum("create_app_client" in line for line in code) == 1
 
 
 def test_the_shutdown_path_releases_what_the_container_holds() -> None:
