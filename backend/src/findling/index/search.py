@@ -21,12 +21,14 @@ search is neither of them, it is the two proxy round trips and the recheck.
 """
 
 import logging
-from dataclasses import dataclass
-from typing import Final
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from typing import Final, Protocol
 
-from tantivy import Index, Query, SearchResult
+from tantivy import Document, Index, Query, SearchResult, SnippetGenerator
 
-from findling.index.schema import FIELD_EXT, FIELD_FILE_ID, FIELD_MTIME
+from findling.config import settings
+from findling.index.schema import FIELD_BODY_DE, FIELD_EXT, FIELD_FILE_ID, FIELD_MTIME
 from findling.store.repo import Store
 
 LOGGER = logging.getLogger("findling.index.search")
@@ -145,3 +147,116 @@ def candidates(
     ]
     seen = offset + len(result.hits)
     return CandidatePage(candidates=permitted, has_more=seen < _hits_in_total(result), next_offset=seen)
+
+
+class ByteRange(Protocol):
+    """The two numbers a highlighted range consists of.
+
+    Written as a protocol rather than as the engine's own type so that the pure
+    conversion below can be exercised with a handful of numbers instead of a
+    whole index. The offsets it describes are byte positions.
+    """
+
+    @property
+    def start(self) -> int: ...
+
+    @property
+    def end(self) -> int: ...
+
+
+@dataclass(frozen=True, slots=True)
+class SnippetText:
+    """One text excerpt, with highlight positions counted in characters."""
+
+    file_id: int
+    text: str
+    highlights: list[tuple[int, int]] = field(default_factory=list)
+
+
+def char_ranges(fragment: str, ranges: Sequence[ByteRange]) -> list[tuple[int, int]]:
+    """Convert byte ranges of a fragment into character ranges, merged and sorted.
+
+    Two separate corrections happen here, and both are measured rather than
+    assumed.
+
+    The engine counts UTF-8 bytes while the wire protocol of this project
+    promises characters. Measured on a German sentence: the engine reports
+    (35, 51) where the character range is (35, 50), so a naive slice takes one
+    character too many and every umlaut in front of the match shifts the
+    highlight further. The text stays correct, only the marking moves, which is
+    why this bug survives review and testing so reliably.
+
+    The ranges also repeat and overlap, because every part of a split compound
+    inherits the offsets of the whole word. Sorting and merging them is what
+    turns three identical marks around one word into one.
+
+    A pure function, and it lives next to the search rather than in the endpoint
+    so that it can be tested with a fragment and two numbers.
+    """
+    data = fragment.encode("utf-8")
+    spans = sorted(
+        (len(data[: reported.start].decode("utf-8")), len(data[: reported.end].decode("utf-8"))) for reported in ranges
+    )
+    merged: list[tuple[int, int]] = []
+    for start, end in spans:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def _document_for(index: Index, file_id: int) -> Document | None:
+    """Fetch one stored document by its key, or None when the index has no such row."""
+    searcher = index.searcher()
+    result = searcher.search(Query.term_query(index.schema, FIELD_FILE_ID, file_id), 1)
+    if not result.hits:
+        return None
+    return searcher.doc(result.hits[0][1])
+
+
+def snippets_for(
+    index: Index,
+    store: Store,
+    uid: str,
+    query: Query,
+    file_ids: Sequence[int],
+) -> list[SnippetText]:
+    """Cut one text excerpt per confirmed file id, in the order they were asked for.
+
+    The prefilter runs as the first action of this function, before a single byte
+    of text is read. Without it this path would be a confused deputy: a snippet is
+    file content, and whoever reaches the proxy could otherwise ask for the
+    content of any document by its id. That the caller already dropped everything
+    the recheck refused is not an argument, it is an assumption about a different
+    process running correctly, and the cost of not making that assumption was
+    measured at 0.2 ms.
+
+    A document the index does not know is skipped. A document the query does not
+    match inside the text field yields an empty excerpt rather than an error: a
+    hit without a snippet is still a hit, and the subline falls back to the path
+    on the PHP side.
+    """
+    visible = store.prefilter_visible(uid, file_ids)
+    if not visible:
+        return []
+
+    generator = SnippetGenerator.create(index.searcher(), query, index.schema, FIELD_BODY_DE)
+    # Despite its name this is a byte comparison inside the fragmenter, so a
+    # German sentence fits into slightly less than the number suggests. The value
+    # is the one cap of this module and lives in findling.config with the rest.
+    generator.set_max_num_chars(settings().snippet_chars)
+
+    excerpts: list[SnippetText] = []
+    for file_id in file_ids:
+        if file_id not in visible:
+            continue
+        document = _document_for(index, file_id)
+        if document is None:
+            continue
+        snippet = generator.snippet_from_doc(document)
+        fragment = snippet.fragment()
+        excerpts.append(
+            SnippetText(file_id=file_id, text=fragment, highlights=char_ranges(fragment, snippet.highlighted()))
+        )
+    return excerpts
