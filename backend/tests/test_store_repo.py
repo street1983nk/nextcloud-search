@@ -25,6 +25,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
 from findling.store.repo import SCHEMA_VERSION, UNKNOWN_VERSION, Store, enable_wal, open_read_only, open_store
 
 

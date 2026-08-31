@@ -69,6 +69,18 @@ FORBIDDEN_IDENTIFIERS = frozenset(
     }
 )
 
+# Reviewed exceptions to invariant 2, as (module path, identifier) pairs. Not a
+# general escape hatch: an entry allows one name in one module and nowhere else,
+# and it is only defensible when invariant 1 already proves that the module
+# cannot reach Nextcloud at all.
+#
+# store/repo.py creates the directory of the state database under
+# APP_PERSISTENT_STORAGE. That is the container's own volume; no path into the
+# Nextcloud storage exists inside the container, and the module may not import
+# nc_py_api or httpx, so the collision with the writing entry point of
+# nc_py_api.files is one of names only.
+LOCAL_IDENTIFIER_ALLOWLIST: frozenset[tuple[str, str]] = frozenset({("store/repo.py", "mkdir")})
+
 WRITING_HTTP_METHODS = frozenset({"PUT", "POST", "PATCH", "DELETE"})
 
 # Stands in for the HTTP method when the gate cannot read it, for instance because
@@ -184,7 +196,7 @@ def scan_source(relative_path: str, source: str) -> list[str]:
             identifier, lineno = node.id, node.lineno
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             identifier, lineno = node.name, node.lineno
-        if identifier in FORBIDDEN_IDENTIFIERS:
+        if identifier in FORBIDDEN_IDENTIFIERS and (normalized, identifier) not in LOCAL_IDENTIFIER_ALLOWLIST:
             violations.append(f"{normalized}:{lineno}: invariant 2, writing identifier {identifier}")
 
         if isinstance(node, ast.Call):
@@ -247,6 +259,19 @@ def test_bypass_writing_identifier_outside_the_client_is_a_violation() -> None:
 
 def test_set_user_is_a_violation() -> None:
     violations = scan_source(CLIENT_MODULE, 'nc.set_user("bob")\n')
+
+    assert len(violations) == 1
+    assert "invariant 2" in violations[0]
+
+
+def test_an_allowlisted_identifier_is_allowed_in_its_own_module() -> None:
+    assert scan_source("store/repo.py", "database.parent.mkdir(parents=True, exist_ok=True)\n") == []
+
+
+def test_an_allowlisted_identifier_stays_a_violation_everywhere_else() -> None:
+    # The allowlist is a pair, not a name. The same call one module over is the
+    # case the gate exists for, and moving code must not launder it.
+    violations = scan_source("api/search.py", "database.parent.mkdir(parents=True, exist_ok=True)\n")
 
     assert len(violations) == 1
     assert "invariant 2" in violations[0]
