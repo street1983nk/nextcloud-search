@@ -211,6 +211,10 @@ Kein Blocker.
 
 Keine neue Angriffsflaeche ausserhalb des Threat Models des Plans. Der Vollstaendigkeit halber vermerkt: das Kind kennt drei Diagnoseauftraege, die schlafen, Speicher anfordern oder den Prozess beenden. Sie sind nur ueber die Pipe erreichbar, die ausschliesslich der Elternprozess haelt, sie nehmen keine Eingabe aus einem Dokument entgegen, und sie beruehren keinen Pfad im Dateisystem.
 
+## Self-Check: PASSED
+
+Alle zehn angelegten beziehungsweise geaenderten Dateien liegen im Worktree, alle sieben Commit-Hashes stehen im Log von `gsd/agent-02-05`. Keine Loeschung in irgendeinem Commit dieses Plans (`git diff --diff-filter=D dd98d8a HEAD` ist leer).
+
 ---
 *Phase: 02-indexkern-und-volltextsuche*
 *Completed: 2026-08-31*
