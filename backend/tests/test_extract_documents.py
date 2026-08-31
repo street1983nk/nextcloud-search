@@ -488,9 +488,23 @@ def test_the_content_parser_follows_neither_an_entity_nor_a_url(tmp_path: Path) 
     assert "PASSPHRASE" not in outcome.text
 
     # The counter measurement, so the test proves the switches rather than the
-    # fixture: the same bytes through a parser built without them do leak.
+    # fixture: the same file entity through a parser built without the switches
+    # does leak. The network entity stays out of this parse on purpose: with
+    # no_network=True lxml on Linux raises XMLSyntaxError at the load attempt
+    # instead of parsing on (Windows parses on), and this measurement is about
+    # the leak, not about the refusal.
+    file_only_content = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<!DOCTYPE office:document-content [\n"
+        f'  <!ENTITY leak SYSTEM "{secret.as_uri()}">\n'
+        "]>"
+        '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+        ' xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">'
+        "<office:body><office:text><text:p>Anlage &leak;</text:p></office:text></office:body>"
+        "</office:document-content>"
+    )
     greedy = etree.XMLParser(resolve_entities=True, no_network=True, load_dtd=True)
-    leaked = etree.fromstring(content.encode("utf-8"), parser=greedy)
+    leaked = etree.fromstring(file_only_content.encode("utf-8"), parser=greedy)
 
     assert "TOPSECRET-PASSPHRASE" in "".join(leaked.itertext())
 
