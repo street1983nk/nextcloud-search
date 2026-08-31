@@ -29,7 +29,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from tantivy import Index
+from tantivy import Document, Index, IndexWriter
 
 from findling.config import settings
 from findling.index.open import open_index
@@ -63,6 +63,15 @@ def _record(file_id: int = 1, *, body: str = GERMAN_BODY, name: str = "Kündigun
         body=body,
         mtime=1_700_000_000,
     )
+
+
+def _write_raw(writer: IndexWriter, record: IndexRecord) -> None:
+    """Write past IndexBatchWriter, for the tests that measure the binding itself."""
+    document = Document()
+    document.add_unsigned(FIELD_FILE_ID, record.file_id)
+    document.add_unsigned(FIELD_STORAGE_ID, record.storage_id)
+    document.add_text(FIELD_BODY_DE, record.body)
+    writer.add_document(document)
 
 
 def _hits(index: Index, query: str, fields: list[str] | None = None) -> int:
@@ -145,15 +154,39 @@ def test_the_writer_never_builds_a_document_from_keyword_arguments() -> None:
     assert offenders == [], "documents are built field by field, never from keyword arguments: " + ", ".join(offenders)
 
 
-def test_the_upsert_uses_the_current_deletion_api() -> None:
+def test_the_upsert_deletes_through_the_schema_and_not_by_a_raw_term() -> None:
+    source = WRITER_SOURCE.read_text(encoding="utf-8")
     calls = {
         node.func.attr
-        for node in ast.walk(ast.parse(WRITER_SOURCE.read_text(encoding="utf-8")))
+        for node in ast.walk(ast.parse(source))
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
     }
 
-    assert "delete_documents_by_term" in calls
+    assert "delete_documents_by_query" in calls
+    # Neither the deprecated name nor the one that quietly deletes nothing on an
+    # unsigned key; the test below measures why.
     assert "delete_documents" not in calls
+    assert "delete_documents_by_term" not in calls
+
+
+def test_deleting_by_term_does_not_reach_the_unsigned_key(index: Index, index_dir: Path) -> None:
+    # A tripwire on the binding, not on our code. Deleting by term builds an I64
+    # term from a Python integer, and the U64 column of file_id holds no such
+    # term: nothing is raised and nothing is deleted. The day tantivy fixes that,
+    # this test turns red and the upsert may take the shorter route again.
+    raw_writer = index.writer(heap_size=15_000_000, num_threads=1)
+    first = _record(42, body="Die alte Kündigungsfrist beträgt drei Monate.")
+    second = _record(42, body="Die neue Kündigungsfrist beträgt sechs Monate.")
+    _write_raw(raw_writer, first)
+    raw_writer.commit()
+
+    raw_writer.delete_documents_by_term(FIELD_FILE_ID, 42)
+    _write_raw(raw_writer, second)
+    raw_writer.commit()
+    raw_writer.wait_merging_threads()
+    index.reload()
+
+    assert index.searcher().num_docs == 2
 
 
 def test_writing_and_committing_raises_no_warning(batch_writer: IndexBatchWriter) -> None:
