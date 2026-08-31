@@ -148,11 +148,50 @@ jobs:
           jq -e '.ocs.data.entries[0].subline | endswith("for user testuser")' out.json
           jq -e '.ocs.data.entries[0].subline | contains("<") | not' out.json
 
+      # The counter probe, and the reason the canary is allowed to stay at all.
+      # It is produced inside the container for one single search term, so every
+      # other term has to come back empty as long as nothing is indexed. Without
+      # this step the canary could colour every search a user ever runs and
+      # nobody would notice, because the step above only ever asks for the one
+      # term that is supposed to show it.
+      #
+      # The elapsed time is printed rather than asserted. The wall clock of the
+      # provider is two and a half seconds and this is the run that shows what a
+      # search actually costs end to end, including the round that finds nothing.
+      - name: Another term does not see the canary
+        run: |
+          start=$(date +%s%N)
+          status=$(curl -s -o other.json -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=vertrag')
+          elapsed_ms=$(( ( $(date +%s%N) - start ) / 1000000 ))
+          cat other.json
+          echo "the search for an ordinary term answered after ${elapsed_ms}ms with status ${status}"
+          test "${status}" = "200"
+          jq -e '.ocs.data.entries | length == 0' other.json
+
+      # A provider is skipped without a word when a client sends a filter it
+      # does not declare, and a skipped provider looks exactly like a broken
+      # backend: no error, no entry, no hint in any log. The dialog sends
+      # title-only for "file name instead of content", so the reported list has
+      # to name it, and it has to name the search term itself as well.
+      - name: The reported filters name term and title-only
+        run: |
+          curl -sf -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers' | tee filters.json
+          jq -e '[.ocs.data[] | select(.id == "findling")] | length == 1' filters.json
+          jq -e '.ocs.data[] | select(.id == "findling") | .filters | has("term")' filters.json
+          jq -e '.ocs.data[] | select(.id == "findling") | .filters | has("title-only")' filters.json
+
       # T2, the timeout path, and the reason it is a step rather than a note: the
       # unified search waits for every provider, so a slow backend does not cost
-      # its own result group, it costs the whole search. ExAppService passes two
-      # seconds to AppAPI for exactly that reason, and a timeout nobody has seen
-      # work is a timeout nobody knows to work.
+      # its own result group, it costs the whole search. ExAppService passes one
+      # and a half seconds per call to AppAPI for exactly that reason, and a
+      # timeout nobody has seen work is a timeout nobody knows to work.
       #
       # The registration stays untouched. Only the process behind the port is
       # exchanged for one that answers /search after ten seconds.
@@ -189,9 +228,11 @@ jobs:
           echo "the search answered after ${elapsed}s with status ${status}"
           test "${status}" = "200"
           jq -e '.ocs.data.entries | length == 0' slow.json
-          # Two seconds is the configured timeout. Six is the ceiling: high enough
-          # for PHP start up on a slow runner, far below the ten seconds the stub
-          # takes, so removing the timeout turns this step red.
+          # One and a half seconds is the configured timeout of the first call,
+          # and the second one is never made because the first one failed. Six is
+          # the ceiling: high enough for PHP start up on a slow runner, far below
+          # the ten seconds the stub takes, so removing the timeout turns this
+          # step red.
           test "${elapsed}" -lt 6
 
       - name: Stop the hanging backend
