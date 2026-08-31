@@ -7,11 +7,14 @@
 # stage gets the finished virtual environment plus that one binary and nothing
 # else from either of them.
 #
-# The runtime stage installs no package at all, on purpose. It used to apt-get
-# supervisor, curl and ca-certificates, which is 58 MB of apt layer measured, most
-# of it a second complete python3 underneath supervisor. Two processes are watched
-# by docker/init.sh instead, and the two build time tools now live in the stage
-# that needs them. On the 4 GB ARM box this app targets, that is not cosmetic.
+# The runtime stage installs exactly one package, and it is data, not a tool. It
+# used to apt-get supervisor, curl and ca-certificates, which is 58 MB of apt
+# layer measured, most of it a second complete python3 underneath supervisor. Two
+# processes are watched by docker/init.sh instead, and the two build time tools
+# now live in the stage that needs them. On the 4 GB ARM box this app targets,
+# that is not cosmetic. The one exception is the German word list below: it has
+# no executable part, it is what makes the search work without a download at
+# first start, and it is argued for at the line that installs it.
 #
 # The base image is pinned by digest, not by tag: the tag moves, and every image
 # we publish would move with it. The digest below is the multi platform index,
@@ -66,6 +69,45 @@ LABEL org.opencontainers.image.source="https://github.com/street1983nk/nextcloud
       org.opencontainers.image.description="Zero-config search backend for Nextcloud, running as an External App"
 
 WORKDIR /app
+
+# The German word list, installed in the runtime stage and staying there.
+#
+# Measured in this very base image: /usr/share/dict/ngerman has 356010 lines and
+# 4725887 bytes, and the package is Architecture: all, so amd64 and arm64 read
+# byte identical data and no compound is split differently on the ARM box than on
+# the x86 one.
+#
+# The version is pinned instead of taking whatever the archive currently holds.
+# The list decides how a compound falls apart, so a silent change of it is a
+# silent change of every search result of every German document. When trixie
+# moves the package, this build fails loudly and somebody records the new
+# numbers, which is the cheap moment to notice.
+#
+# Why it is not distilled in a build stage and thrown away: preparing the list is
+# a start up step, not a build decision. findling.index.wordlist reduces it once
+# to the length window, writes $APP_PERSISTENT_STORAGE/dict/de.txt and records
+# its SHA-256 in the meta table, so the tokenisation hangs on an artifact whose
+# digest can be checked against the index that was built with it. A file baked in
+# at build time would hang on a build nobody can inspect afterwards (T-02-71).
+#
+# Nothing here is fetched at run time. The word list is the reason zero-config
+# survives a firewall, a proxy and an offline installation, and it would be a
+# poor one if the first start had to download it. curl and wget stay in the frpc
+# stage where they belong.
+#
+# GPL-2+ obligation: the licence text has to travel with the image, not only with
+# the repository, because the image is what is distributed. slim images drop most
+# of /usr/share/doc (path-exclude in /etc/dpkg/dpkg.cfg.d), so the file is copied
+# to a stable place of ours. Both tests below are the fail closed half: an image
+# without the data or without its licence must not be built at all. THIRD-PARTY.md
+# carries the same statement for readers of the repository.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends wngerman=20161207-15 \
+    && rm -rf /var/lib/apt/lists/* \
+    && test -s /usr/share/dict/ngerman \
+    && test -s /usr/share/doc/wngerman/copyright \
+    && install -D -m 0444 /usr/share/doc/wngerman/copyright \
+        /usr/local/share/findling/COPYING.wngerman
 
 COPY --from=build /app/.venv /app/.venv
 COPY --from=frpc /usr/local/bin/frpc /usr/local/bin/frpc
