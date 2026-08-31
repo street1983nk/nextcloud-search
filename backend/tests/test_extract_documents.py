@@ -218,7 +218,7 @@ def test_the_dispatcher_reaches_the_pdf_route() -> None:
 # OOXML: DOCX, PPTX and XLSX
 # ---------------------------------------------------------------------------
 
-NOT_A_ZIP = "Dies ist kein Archiv, sondern schlichter Text mit falscher Endung.".encode("utf-8")
+NOT_A_ZIP = b"Dies ist kein Archiv, sondern schlichter Text mit falscher Endung."
 
 
 def _docx_with_a_table(directory: Path) -> str:
@@ -316,6 +316,9 @@ def test_a_spreadsheet_is_opened_read_only_and_data_only_and_never_otherwise(
 def test_a_spreadsheet_over_the_cell_limit_is_skipped_instead_of_half_read(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    # The limit is lowered instead of writing a workbook with 200000 cells: the
+    # behaviour under test is the counter and the verdict skipped(too_many_cells),
+    # not openpyxl's ability to write a large file.
     monkeypatch.setenv("FINDLING_MAX_CELLS", "10")
     config.settings.cache_clear()
     try:

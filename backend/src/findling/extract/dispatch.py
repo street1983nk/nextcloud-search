@@ -75,9 +75,11 @@ ALLOWED_MIMETYPES: Final[Mapping[str, Route]] = {
 
 
 # The routes that have an extractor behind them. The three text formats arrived
-# with plan 02-05, PDF is the first of the document formats of plan 02-08, and
-# what is not in here raises rather than pretends.
-_ROUTES_WITH_AN_EXTRACTOR: Final = frozenset({Route.PLAIN, Route.HTML, Route.RTF, Route.PDF})
+# with plan 02-05, the document formats with plan 02-08, and what is not in here
+# raises rather than pretends.
+_ROUTES_WITH_AN_EXTRACTOR: Final = frozenset(
+    {Route.PLAIN, Route.HTML, Route.RTF, Route.PDF, Route.DOCX, Route.PPTX, Route.XLSX}
+)
 
 
 def judge(mime: str, size: int) -> Route | ExtractionOutcome:
@@ -166,8 +168,23 @@ def _run_route(route: Route, path: str) -> ExtractionOutcome:
             from findling.extract import pdf
 
             return pdf.extract_pdf(path)
+        case Route.DOCX | Route.PPTX | Route.XLSX:
+            return _run_ooxml_route(route, path)
         case _:
             return _run_text_route(route, path)
+
+
+def _run_ooxml_route(route: Route, path: str) -> ExtractionOutcome:
+    """The three ZIP packages of the Office world."""
+    from findling.extract import office
+
+    match route:
+        case Route.DOCX:
+            return office.extract_docx(path)
+        case Route.PPTX:
+            return office.extract_pptx(path)
+        case _:
+            return office.extract_xlsx(path)
 
 
 def _run_text_route(route: Route, path: str) -> ExtractionOutcome:

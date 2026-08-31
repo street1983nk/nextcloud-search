@@ -124,6 +124,7 @@ _EXCEPTION_REASONS: Final[Mapping[str, Reason]] = {
     "builtins.MemoryError": Reason.OUT_OF_MEMORY,
     "zipfile.BadZipFile": Reason.CORRUPT,
     "docx.opc.exceptions.PackageNotFoundError": Reason.CORRUPT,
+    "pptx.exc.PackageNotFoundError": Reason.CORRUPT,
     "lxml.etree.XMLSyntaxError": Reason.XML_INVALID,
     "pypdf.errors.EmptyFileError": Reason.EMPTY_FILE,
 }
