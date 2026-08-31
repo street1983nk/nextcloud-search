@@ -115,6 +115,147 @@ Do not reuse the word for anything else, and do not use "contains" anywhere in
 the comparison. A diagnostic that shows up uninvited stops being evidence of
 anything.
 
+## Phase 2: from a file on disk to a content hit
+
+The proof of phase 1 was that an answer came out of the running container. The
+proof of phase 2 is the product itself: a word out of a real German document,
+typed into the ordinary search bar, brings the document back with an excerpt from
+its text, and only to somebody who is allowed to see the file.
+
+**Port 8090 and not 8080, everywhere in this section.** A second local Nextcloud
+holds 8080 on this machine, and two instances on one port do not fail loudly,
+they answer each other's requests. `FINDLING_PORT` is read by the compose file
+and by `register-exapp.sh`, so exporting it once covers both.
+
+```bash
+export COMPOSE_FILE=scripts/dev/compose.yaml
+export FINDLING_PORT=8090
+```
+
+The dialect stays SQLite here. The second dialect is not a local exercise: the
+job `index-search-e2e` in `.github/workflows/integration.yml` runs the whole
+proof below a second time against MariaDB, which is where a dialect dependent
+query builder defect shows up.
+
+### 1. Start the instance and the backend
+
+```bash
+docker compose up -d
+curl -sf http://localhost:8090/status.php > /dev/null && echo up
+```
+
+The German constituent list comes next, and it needs one command that phase 1 did
+not need. The runtime image installs the Debian package `wngerman`, but the
+development backend runs as a plain host process, and there is no
+`/usr/share/dict/ngerman` on a developer machine. The command below builds the
+artifact once, directly into the volume the backend reads, in a throwaway
+container:
+
+```bash
+docker run --rm \
+  -v "$(pwd)/backend/src:/src:ro" -v "$(pwd)/.dev/storage:/storage" \
+  -e PYTHONPATH=/src -e APP_PERSISTENT_STORAGE=/storage \
+  -e DEBIAN_FRONTEND=noninteractive \
+  python:3.13-slim-trixie sh -c 'apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends wngerman > /dev/null \
+    && python -c "from findling.index.wordlist import build_artifact; a = build_artifact(); print(len(a.entries), a.digest)"'
+```
+
+Expected output: `276496 b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396edc808dde0`.
+That is the same entry count and the same digest as in `docs/german-analyzer.md`.
+A different digest means a different tokenisation, not a cosmetic difference.
+
+```bash
+sh scripts/dev/register-exapp.sh
+```
+
+### 2. Two accounts, and the corpus in the first one
+
+```bash
+docker compose exec -T -u www-data -e OC_PASS=findling-dev-testuser app php occ user:add --password-from-env testuser
+docker compose exec -T -u www-data -e OC_PASS=findling-dev-kollegin app php occ user:add --password-from-env kollegin
+docker compose exec -T -u www-data app php occ files:scan --all
+
+docker compose cp testdata/corpus app:/var/www/html/data/testuser/files/corpus
+docker compose exec -T -u root app chown -R www-data:www-data /var/www/html/data/testuser/files/corpus
+docker compose exec -T -u www-data app php occ files:scan --all
+```
+
+`docker compose cp` copies as root, so the `chown` is not optional: a file the
+web server cannot read is invisible to the crawl and to the file list alike.
+
+### 3. Share exactly one file, before the crawl
+
+```bash
+curl -s -u testuser:findling-dev-testuser \
+  -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+  -d 'path=/corpus/09-bescheid.pdf' -d 'shareType=0' \
+  -d 'shareWith=kollegin' -d 'permissions=1' \
+  http://localhost:8090/ocs/v2.php/apps/files_sharing/api/v1/shares
+docker compose exec -T -u www-data app php occ files:scan --all
+```
+
+The order matters and it is not a detail of this script: the access list is
+written while a file is indexed. A share granted after the crawl is not seen by
+this phase at all, events and reconciliation are phase 3. Sharing through the
+Files interface works just as well, as long as it happens before the next step.
+
+### 4. Crawl
+
+```bash
+docker compose exec -T -u www-data app php occ findling:index --restart --no-interaction
+docker compose exec -T -u www-data app php occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once
+docker compose exec -T -u www-data app php occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 60
+```
+
+Two spellings that cost a run each when they were wrong. `--no-interaction`:
+`occ` treats this shell as interactive, so the restart question would default to
+No and the queue would stay empty. `--stop_after` with an underscore: the dashed
+spelling does not exist on `background-job:worker`, Symfony rejects it and the
+crawl never starts.
+
+### 5. Watch it finish
+
+```bash
+docker compose exec -T -u www-data app php occ findling:index
+(cd backend && uv run python -m findling.tools.index_status --db ../.dev/storage/state.db)
+```
+
+The first command is the Nextcloud side: `scheduled` and `handed to the worker`
+both have to reach zero. The second is the container side and answers with JSON;
+it is done when `indexed` is 9, `skipped` is 2 and `failed` is 1. Those three
+numbers are the corpus doing its job: the scan without a text layer and the
+encrypted PDF are skipped, the zero byte PDF fails, and the picture never enters
+the queue because the crawl only takes document types.
+
+If nothing is indexed at all, read `.dev/exapp.log` first. A `FileNotFoundError`
+on `/usr/share/dict/ngerman` means the artifact step above was skipped.
+
+### 6. The hit, in the browser
+
+Open http://localhost:8090, log in as `testuser` and type `Genehmigung` into the
+search bar.
+
+Expected: the result group **File contents** shows `09-bescheid.pdf`, and the
+second line is an excerpt out of the document in which
+`Grundstücksverkehrsgenehmigung` appears. The word searched for is a constituent
+of that compound and stands nowhere in the file name or the path, so the excerpt
+can only have come from the text of the file. It is readable plain text without
+any markup.
+
+Second probe: `Vertrag` finds `11-uebersicht.odt`, which says `Verträge` and
+never says `Vertrag`.
+
+### 7. The counter probe, and the reason any of this may run on a server
+
+Log out and log in as `kollegin`. Search for `Genehmigung`: exactly one hit, the
+shared `09-bescheid.pdf`. Search for `Frist`, for `Vertrag` and for `Mueller`:
+nothing at all, although all three find a file for `testuser`.
+
+Which of the twelve documents a user sees is decided in PHP against that user's
+own folder, and the excerpt is cut only afterwards. Both halves are asserted in
+`index-search-e2e` on every push, on two database dialects.
+
 ## Counter check: the backend goes away
 
 ```bash

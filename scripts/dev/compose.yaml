@@ -5,6 +5,12 @@
 # builder errors, so a second compose profile with MariaDB or Postgres belongs
 # there, not here.
 #
+# Phase 2 answered that differently and on purpose: the second dialect became a
+# matrix entry of the job index-search-e2e, which installs against MariaDB and
+# runs the whole search proof a second time. A local profile would have moved the
+# question to a machine that nobody runs before pushing, so this file stays
+# single dialect and the gate carries the dialect coverage.
+#
 # The version is pinned to the same server line the integration workflow uses
 # (stable34). A floating tag would let a background image update change what the
 # proof means.
