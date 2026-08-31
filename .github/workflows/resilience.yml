@@ -1,0 +1,490 @@
+name: Resilience
+
+# Why this proof gets a workflow of its own instead of a third job in
+# integration.yml: a red kill-resume gate is a different verdict from a broken
+# search, and in the run list of a pull request the two must not be confusable.
+# "The first index survives every abort" is the promise that separates this phase
+# from its predecessor, and a promise without a gate is an assertion. It also
+# keeps integration.yml free for the search proof of plan 02-14.
+#
+# Every number this workflow asserts on comes out of the state database and out
+# of the tantivy index, read with findling.tools.index_status. A proof that rests
+# on a log line this project writes itself proves the log line.
+#
+# What a run costs, stated openly: the SIGKILL leaves the rows that were in
+# flight locked in the queue, and they only come back after QueueMapper's
+# LOCK_TIMEOUT of 900 seconds. A green run therefore takes upwards of a quarter
+# of an hour. That wait is the point rather than the price: with the 24 hour
+# timeout of the app this queue is modelled on (pitfall 7), the same wait would
+# never end.
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - 'php/**'
+      - '.github/workflows/resilience.yml'
+      # The whole setup up to the registered ExApp lives in a composite action,
+      # so a change there is a change to this workflow.
+      - '.github/actions/setup-test-nc/**'
+  # The measurement job produces numbers and guards no regression, so it runs on
+  # a schedule and on demand rather than on every push. Monday morning, before
+  # anybody is looking at the repository.
+  schedule:
+    - cron: '31 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run per branch. Both jobs install a whole Nextcloud or build the image, so
+# a superseded run is expensive to keep alive.
+concurrency:
+  group: resilience-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kill-resume:
+    name: kill-resume
+    # Never on the schedule: this is a gate on the code, and a gate that runs
+    # without a change to look at only produces noise.
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        server-version: ['stable34']
+        php-version: ['8.2']
+
+    env:
+      # Test only values of a throwaway instance that is destroyed with the
+      # runner. Nothing here is reused and no real secret is needed: every
+      # question this job asks goes through occ or through the command line tool,
+      # never through an authenticated HTTP route.
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+      # How much work has to sit in the account before the crawl starts. Enough
+      # that documents are still open while others are already done, which is the
+      # state the kill has to fall into.
+      CORPUS_FILES: '200'
+      # Ceiling of the wait for that state. Reaching it is a failure with the
+      # last counters printed, not a job that hangs until the runner is reaped.
+      MIDRUN_TIMEOUT: '300'
+      # Ceiling of the wait for an empty queue after the restart. Above
+      # QueueMapper::LOCK_TIMEOUT (900 s), because the rows the killed process
+      # held come back exactly then. This number is what turns pitfall 7 into a
+      # test: a lock timeout of a day would blow it every single time.
+      DRAIN_TIMEOUT: '1200'
+
+    steps:
+      # Actions are pinned to commit SHAs, never to tags: a moved tag would be
+      # arbitrary code execution inside a job that holds a Nextcloud instance.
+      #
+      # Both checkouts stay in this order. actions/checkout empties its target
+      # directory, so the server checkout at the workspace root has to come
+      # first, and the second one is what puts the composite action below into
+      # the workspace at all.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          repository: nextcloud/server
+          ref: ${{ matrix.server-version }}
+          submodules: recursive
+
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          path: findling-src
+
+      - name: Set up the test Nextcloud with both halves and register the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: ${{ matrix.server-version }}
+          php-version: ${{ matrix.php-version }}
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+
+      # Copies of the reference corpus rather than generated files: they carry the
+      # cases that end in every state this job counts, a readable PDF, a scan
+      # without a text layer, an encrypted one and an empty one. The corpus itself
+      # is never modified, it is only copied, so gate B in integration.yml keeps
+      # asserting against the very same bytes.
+      - name: Multiply the reference corpus until the account holds enough work
+        run: |
+          per_copy=$(find findling-src/testdata/corpus -type f | wc -l)
+          copies=$(( (CORPUS_FILES + per_copy - 1) / per_copy ))
+          for number in $(seq 1 "${copies}"); do
+            cp -r findling-src/testdata/corpus "data/admin/files/corpus-${number}"
+          done
+          ./occ files:scan --all
+          echo "the account holds $(find data/admin/files -type f | wc -l) files in ${copies} copies of the corpus"
+
+      # Background jobs do not run by themselves in this CI, so both halves are
+      # started by hand. The scheduler creates one crawl job per mount, the crawl
+      # walks the mount in slices and plans its own successor, which is why the
+      # worker runs with --stop-after instead of --once.
+      - name: Queue the crawl
+        run: |
+          ./occ findling:index --restart
+          timeout 60 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once
+          ./occ findling:index
+
+      # The crawl runs in the background on purpose. It has to keep filling the
+      # queue while the container is already emptying it, because the state this
+      # step waits for, some documents done and others still open, is exactly the
+      # overlap of the two. A crawl that finished first could make that window
+      # disappear entirely and the job would fail for a reason that is not a
+      # defect.
+      - name: Crawl, and kill the container in the middle of the first index
+        run: |
+          timeout 300 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop-after 120 \
+            > "${{ runner.temp }}/crawl.log" 2>&1 &
+
+          status() {
+            ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+                --db "${{ runner.temp }}/findling/state.db" )
+          }
+          # scheduled plus the rows a worker holds. Both come out of the queue
+          # table of Nextcloud, so "still open" is a fact and not a guess.
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+
+          deadline=$(( $(date +%s) + MIDRUN_TIMEOUT ))
+          while :; do
+            report=$(status)
+            indexed=$(echo "${report}" | jq -r '.indexed')
+            open=$(open_rows)
+            echo "waiting for the middle of the run: indexed=${indexed} open=${open}"
+            if [ "${indexed}" -gt 0 ] && [ "${open}" -gt 0 ]; then
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "the run never reached the state this test needs: some documents done and others still open"
+              echo "${report}"
+              ./occ findling:index
+              exit 1
+            fi
+            sleep 1
+          done
+
+          # SIGKILL, no cleanup, no SIGTERM path and therefore no unlock of the
+          # rows this process holds. Semantically the same event as docker kill,
+          # and APP_PERSISTENT_STORAGE survives it untouched, which is the only
+          # reason the test proves anything at all.
+          kill -9 "$(cat "${{ runner.temp }}/exapp.pid")"
+          for _ in $(seq 1 30); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null || break
+            sleep 1
+          done
+
+          # Counters read after the process is gone, so they are the state at the
+          # moment of death rather than a moving target.
+          report=$(status)
+          echo "::group::counters at the moment of the kill"
+          echo "${report}"
+          echo "::endgroup::"
+          {
+            echo "indexed_before=$(echo "${report}" | jq -r '.indexed')"
+            echo "docs_before=$(echo "${report}" | jq -r '.docs')"
+          } >> "${GITHUB_ENV}"
+
+      - name: Start the container again on the very same volume
+        working-directory: findling-src/backend
+        run: |
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_PORT="${EXAPP_PORT}"
+          export APP_VERSION=0.1.0
+          export APP_HOST=127.0.0.1
+          export NEXTCLOUD_URL=http://localhost:8080
+          # The same directory as before the kill. Pointing this somewhere else
+          # would leave the test asserting against a fresh index, and it would be
+          # green for the wrong reason.
+          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+          uv run python -m findling.main >> "${{ runner.temp }}/exapp.log" 2>&1 &
+          echo $! > "${{ runner.temp }}/exapp.pid"
+          for _ in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+              echo "the container answers again"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "the container did not come back"
+          tail -50 "${{ runner.temp }}/exapp.log" || true
+          exit 1
+
+      # A restarted process starts silenced. The indexing task is armed by the
+      # AppAPI enable call and by nothing else, and AppAPI has no idea that the
+      # process behind the port was replaced. In a deployment the container is
+      # restarted by AppAPI, which sends that call; here it is two occ commands.
+      # Without them the resume half of this test would wait for a container that
+      # is up, healthy and deliberately doing nothing.
+      - name: Arm the indexing task again
+        run: |
+          ./occ app_api:app:disable findling_backend
+          ./occ app_api:app:enable findling_backend
+
+      - name: Wait until nothing is open any more
+        run: |
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+
+          started=$(date +%s)
+          deadline=$(( started + DRAIN_TIMEOUT ))
+          while :; do
+            open=$(open_rows)
+            report=$( cd findling-src/backend && uv run python -m findling.tools.index_status \
+              --db "${{ runner.temp }}/findling/state.db" )
+            echo "draining: open=${open} indexed=$(echo "${report}" | jq -r '.indexed') docs=$(echo "${report}" | jq -r '.docs')"
+            if [ "${open}" -eq 0 ]; then
+              echo "the queue is empty after $(( $(date +%s) - started )) seconds of waiting"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "the queue did not drain within ${DRAIN_TIMEOUT} seconds"
+              echo "${report}"
+              ./occ findling:index
+              exit 1
+            fi
+            sleep 15
+          done
+
+      # The three assertions of the acceptance test, each with its own message,
+      # because the three failures mean three different things.
+      - name: A hard kill costs no progress, and no document lies twice
+        run: |
+          report=$( cd findling-src/backend && uv run python -m findling.tools.index_status \
+            --db "${{ runner.temp }}/findling/state.db" )
+          echo "::group::counters after the resume"
+          echo "${report}"
+          ./occ findling:index
+          echo "::endgroup::"
+
+          indexed=$(echo "${report}" | jq -r '.indexed')
+          skipped=$(echo "${report}" | jq -r '.skipped')
+          failed=$(echo "${report}" | jq -r '.failed')
+          docs=$(echo "${report}" | jq -r '.docs')
+          judged=$(( indexed + skipped + failed ))
+          # The other side of the same run: Nextcloud records an end state for
+          # every file it handed over. Two databases, filled by two processes,
+          # and the comparison is only worth something because of that. The one
+          # case that would make the two totals differ legitimately is a file the
+          # crawl rejects as too large, which is recorded on the Nextcloud side
+          # alone and never reaches the container; nothing in this account comes
+          # anywhere near the 50 MB cap.
+          handed_over=$(./occ findling:index | awk '
+            $1 == "indexed" || $1 == "skipped" || $1 == "failed" { total += $2 }
+            END { print total + 0 }')
+
+          echo "indexed before the kill ${indexed_before}, after the resume ${indexed}"
+          echo "documents in the index before the kill ${docs_before}, after the resume ${docs}"
+          echo "judged in the container ${judged}, handed over by nextcloud ${handed_over}"
+
+          if [ "${indexed}" -lt "${indexed_before}" ]; then
+            echo "the restart lost progress: ${indexed} documents are indexed, ${indexed_before} were before the kill"
+            exit 1
+          fi
+          if [ "${judged}" -ne "${handed_over}" ]; then
+            echo "the states do not add up: the container judged ${judged} files, nextcloud handed over ${handed_over}"
+            exit 1
+          fi
+          if [ "${judged}" -lt "${CORPUS_FILES}" ]; then
+            echo "too little work was done to prove anything: ${judged} files judged, at least ${CORPUS_FILES} expected"
+            exit 1
+          fi
+          if [ "${docs}" -ne "${indexed}" ]; then
+            echo "a document lies twice in the index: ${docs} documents against ${indexed} indexed files"
+            exit 1
+          fi
+          echo "kill-resume holds: ${judged} files judged, ${docs} documents, nothing lost and nothing doubled"
+
+      - name: Everything the failure had to say
+        if: failure()
+        run: |
+          echo "--- counters ---"
+          ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+            --db "${{ runner.temp }}/findling/state.db" ) || true
+          ./occ findling:index || true
+          ./occ app_api:app:list || true
+          echo "--- crawl worker ---"
+          tail -n 100 "${{ runner.temp }}/crawl.log" || echo "no crawl log written"
+          echo "--- exapp ---"
+          tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+          echo "--- nextcloud ---"
+          tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
+
+      - name: Stop the ExApp
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/exapp.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          fi
+
+  # The two operating figures of this phase that were estimates until now: what a
+  # search costs while the indexer writes on a slow disk, and what the German
+  # language quality costs in resident memory. Both decide default values before
+  # phase 5, so they are measured rather than assumed.
+  #
+  # This job deliberately does not fail on an inconvenient number. A measurement
+  # job that turns red when a figure comes out badly gets switched off, and then
+  # there are no figures at all. It fails when a measurement does not happen: no
+  # throttle, no answer, no output.
+  measurements:
+    name: measurements
+    # Not on push. It produces numbers and guards no regression, and it would add
+    # an image build to every backend change for nothing.
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+
+    env:
+      # The rate the device carrying the container filesystem is throttled to
+      # while the search is measured. Two megabytes per second is roughly a slow
+      # USB disk or a tired SD card, which is the hardware this app promises to
+      # work on. It stands here rather than inside a command line so that the
+      # number can be found without reading the shell.
+      WRITE_BPS: '2mb'
+      # Every figure of this job goes out under this prefix, so a run can be read
+      # with a single grep months later.
+      MEASURE_PREFIX: 'findling-measurement'
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+
+    steps:
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+
+      # A plain docker build, not the buildx action the release workflow uses:
+      # this job measures one architecture, the one the runner has, and every
+      # further moving part between the Dockerfile and the number would be one
+      # more thing to explain when the number looks odd.
+      - name: Build the backend image
+        run: docker build --tag findling_backend:measure ./backend
+
+      # The device the container filesystem is written to. Throttling asks for
+      # the whole disk rather than the partition, which is what PKNAME resolves.
+      - name: Find the device the container writes to, and prove the throttle bites
+        run: |
+          source=$(findmnt -no SOURCE --target /var/lib/docker)
+          parent=$(lsblk -no PKNAME "${source}" | head -n1)
+          if [ -n "${parent}" ]; then
+            device="/dev/${parent}"
+          else
+            device="${source}"
+          fi
+          echo "the container filesystem sits on ${device} (mounted from ${source})"
+          echo "MEASURE_DEVICE=${device}" >> "${GITHUB_ENV}"
+
+          # A throttle that silently does nothing would turn the whole
+          # measurement below into a second idle run reported as a loaded one.
+          # Eight megabytes at two megabytes per second cannot be done in under
+          # two seconds; an unthrottled runner does it in a few hundredths.
+          started=$(date +%s)
+          docker run --rm --device-write-bps "${device}:${WRITE_BPS}" \
+            --entrypoint dd findling_backend:measure \
+            if=/dev/zero of=/tmp/throttle-probe bs=1M count=8 conv=fsync
+          elapsed=$(( $(date +%s) - started ))
+          echo "${MEASURE_PREFIX} throttle-probe seconds=${elapsed} rate=${WRITE_BPS} device=${device}"
+          if [ "${elapsed}" -lt 2 ]; then
+            echo "the write throttle had no effect, so nothing below would be a measurement"
+            exit 1
+          fi
+
+      # Part one. Both modes in the same throttled container, so the write load is
+      # the only difference between the two numbers. If the p95 under load is far
+      # worse than the idle one, the knob is batch_max_bytes in
+      # backend/src/findling/config.py: smaller batches mean shorter, more
+      # frequent commits.
+      - name: Search latency on a throttled disk, idle and under write load
+        run: |
+          docker run --rm --device-write-bps "${MEASURE_DEVICE}:${WRITE_BPS}" \
+            --entrypoint python findling_backend:measure \
+            -m findling.index.bench --mode idle --queries 200 \
+            | sed "s/^/${MEASURE_PREFIX} search-latency-idle /"
+
+          docker run --rm --device-write-bps "${MEASURE_DEVICE}:${WRITE_BPS}" \
+            --entrypoint python findling_backend:measure \
+            -m findling.index.bench --mode under-write --queries 200 \
+            | sed "s/^/${MEASURE_PREFIX} search-latency-under-write /"
+
+      # Part two. The compound automaton is built on first use and never freed,
+      # so the difference between the first two figures is the price of the
+      # German language quality, and the third one is the runtime proof that the
+      # cached factory really builds it once: it has to sit on the second.
+      - name: Resident memory around the first search
+        run: |
+          docker run -d --name findling_measure \
+            -e APP_ID=findling_backend \
+            -e APP_SECRET="${EXAPP_SECRET}" \
+            -e APP_PORT="${EXAPP_PORT}" \
+            -e APP_VERSION=0.1.0 \
+            -e NEXTCLOUD_URL=http://127.0.0.1:8080 \
+            -e APP_PERSISTENT_STORAGE=/tmp/fs \
+            -p "${EXAPP_PORT}:${EXAPP_PORT}" \
+            findling_backend:measure
+          for _ in $(seq 30); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null && break
+            sleep 1
+          done
+
+          # The user arrives in the signed header and nowhere else, which is why
+          # a search can be triggered here without a Nextcloud behind it.
+          auth=$(printf 'measure:%s' "${EXAPP_SECRET}" | base64 -w0)
+          search() {
+            curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:${EXAPP_PORT}/search" \
+              -H 'Content-Type: application/json' \
+              -H 'EX-APP-ID: findling_backend' \
+              -H 'EX-APP-VERSION: 0.1.0' \
+              -H "AUTHORIZATION-APP-API: ${auth}" \
+              -d '{"query":"vertrag"}'
+          }
+
+          before=$(docker stats --no-stream --format '{{.MemUsage}}' findling_measure)
+          echo "${MEASURE_PREFIX} rss before-first-search ${before}"
+
+          first=$(search)
+          sleep 2
+          after_first=$(docker stats --no-stream --format '{{.MemUsage}}' findling_measure)
+          echo "${MEASURE_PREFIX} rss after-first-search ${after_first} http=${first}"
+
+          second=$(search)
+          sleep 2
+          after_second=$(docker stats --no-stream --format '{{.MemUsage}}' findling_measure)
+          echo "${MEASURE_PREFIX} rss after-second-search ${after_second} http=${second}"
+
+          # The direct measurement of what the difference above is expected to
+          # be, taken in the very same image with the very same word list. Two
+          # numbers that are supposed to explain each other are worth more than
+          # one, and this one also states the price of the frugal variant.
+          docker run --rm --entrypoint python findling_backend:measure \
+            -m findling.index.analyzer \
+            | sed "s/^/${MEASURE_PREFIX} automaton-full /"
+          docker run --rm -e FINDLING_COMPOUND_DICT=nouns \
+            --entrypoint python findling_backend:measure \
+            -m findling.index.analyzer \
+            | sed "s/^/${MEASURE_PREFIX} automaton-nouns /"
+
+          docker logs findling_measure
+          docker rm -f findling_measure
+
+          # The only failure this part knows: a measurement that did not happen.
+          # A bad number is a result, an absent one is a broken job.
+          if [ "${first}" != "200" ] || [ "${second}" != "200" ]; then
+            echo "the container did not answer both searches (${first}, ${second}), so there is nothing to compare"
+            exit 1
+          fi
+          if [ -z "${before}" ] || [ -z "${after_first}" ] || [ -z "${after_second}" ]; then
+            echo "docker stats returned nothing, so the memory figures do not exist"
+            exit 1
+          fi
+
+      - name: Remove the measurement container
+        if: always()
+        run: docker rm -f findling_measure 2>/dev/null || true
