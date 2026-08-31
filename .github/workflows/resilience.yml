@@ -147,7 +147,13 @@ jobs:
           # stop_after with an underscore: the dashed spelling does not exist on
           # background-job:worker, Symfony rejects it and the crawl never runs
           # (second first-run finding of this gate).
-          timeout 300 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 120 \
+          # 240 seconds: the crawl walks the mount in slices and plans its own
+          # successor, and a worker that stops before the last slice leaves the
+          # remaining files unqueued with nobody left to run the successor job
+          # (a 120 s worker enqueued 193 of 222 files). The kill window this
+          # step waits for opens long before the crawl ends, so the longer
+          # worker costs nothing there.
+          timeout 300 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 240 \
             > "${{ runner.temp }}/crawl.log" 2>&1 &
 
           status() {
