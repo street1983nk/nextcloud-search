@@ -111,7 +111,11 @@ jobs:
       - name: Multiply the reference corpus until the account holds enough work
         run: |
           per_copy=$(find findling-src/testdata/corpus -type f | wc -l)
-          copies=$(( (CORPUS_FILES + per_copy - 1) / per_copy ))
+          # One copy on top of the arithmetic: the crawl's extension allowlist
+          # keeps a few corpus files out of the queue entirely, so the number of
+          # JUDGED files per copy is lower than the number of files on disk
+          # (185 judged out of 5x40 copied on the first run of this gate).
+          copies=$(( (CORPUS_FILES + per_copy - 1) / per_copy + 1 ))
           for number in $(seq 1 "${copies}"); do
             cp -r findling-src/testdata/corpus "data/admin/files/corpus-${number}"
           done
