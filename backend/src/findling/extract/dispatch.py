@@ -74,11 +74,6 @@ ALLOWED_MIMETYPES: Final[Mapping[str, Route]] = {
 }
 
 
-# The routes this plan implements. The other five arrive in plan 02-08, and until
-# then they raise rather than pretend.
-_TEXT_ROUTES: Final = frozenset({Route.PLAIN, Route.HTML, Route.RTF})
-
-
 def judge(mime: str, size: int) -> Route | ExtractionOutcome:
     """Decide before the first byte: a route to follow, or a finished verdict.
 
@@ -146,20 +141,47 @@ def _run_route(route: Route, path: str) -> ExtractionOutcome:
 
     The format module is imported here rather than at the top of this file, and
     that is deliberate: a plain text file then never pays for loading lxml and
-    striprtf, and the five document formats of plan 02-08 will never be loaded by
-    a child that only ever sees text. In a process that is recycled every 200
-    files, an import that is not needed is an import paid over and over.
+    striprtf, and a child that only ever sees text never loads pypdf and pdfium
+    either. In a process that is recycled every 200 files, an import that is not
+    needed is an import paid over and over.
 
-    The five document formats raise instead of returning a verdict, because a
-    missing extractor is a hole in this container and not a property of the
-    document: reporting them as skipped would bury the gap in a counter nobody
-    reads twice. The message names the route and never the file, since an
-    exception text is the easiest way to smuggle a file name into a log
-    (T-02-56).
+    Every route of the allowlist arrives at an extractor from here on. While the
+    document formats were still missing, this function raised for them rather than
+    reporting them as skipped, because a missing extractor was a hole in this
+    container and not a property of the document. That guard is gone with plan
+    02-08, and there is a test that walks the whole allowlist so it cannot be
+    needed again unnoticed.
     """
-    if route not in _TEXT_ROUTES:
-        raise NotImplementedError(f"the {route.value} extractor arrives in plan 02-08")
+    match route:
+        case Route.PDF:
+            from findling.extract import pdf
 
+            return pdf.extract_pdf(path)
+        case Route.ODF:
+            from findling.extract import odf
+
+            return odf.extract_odf(path)
+        case Route.DOCX | Route.PPTX | Route.XLSX:
+            return _run_ooxml_route(route, path)
+        case _:
+            return _run_text_route(route, path)
+
+
+def _run_ooxml_route(route: Route, path: str) -> ExtractionOutcome:
+    """The three ZIP packages of the Office world."""
+    from findling.extract import office
+
+    match route:
+        case Route.DOCX:
+            return office.extract_docx(path)
+        case Route.PPTX:
+            return office.extract_pptx(path)
+        case _:
+            return office.extract_xlsx(path)
+
+
+def _run_text_route(route: Route, path: str) -> ExtractionOutcome:
+    """The three formats that need no container opened."""
     from findling.extract import text
 
     match route:
