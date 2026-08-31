@@ -16,19 +16,22 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from zipfile import ZipFile
 
 import docx
 import openpyxl
 import pypdfium2
 import pytest
+from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
 from openpyxl import Workbook
 from pptx import Presentation
 from pptx.util import Emu
 from pypdf.errors import EmptyFileError, FileNotDecryptedError
 
 from findling import config
-from findling.extract.dispatch import extract
+from findling.extract.dispatch import ALLOWED_MIMETYPES, Route, extract
 from findling.extract.errors import ExtractionOutcome, Reason, State
+from findling.extract.odf import extract_odf
 from findling.extract.office import extract_docx, extract_pptx, extract_xlsx
 from findling.extract.pdf import extract_pdf
 
@@ -376,3 +379,159 @@ def test_the_dispatcher_reaches_the_three_ooxml_routes(tmp_path: Path) -> None:
 
         assert outcome.state is State.INDEXED
         assert needle in outcome.text
+
+
+# ---------------------------------------------------------------------------
+# OpenDocument: ODT, ODS and ODP
+# ---------------------------------------------------------------------------
+
+ODF_HEADER = (
+    '<?xml version="1.0" encoding="UTF-8"?>'
+    '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+    ' xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">'
+    "<office:body><office:text>"
+)
+ODF_FOOTER = "</office:text></office:body></office:document-content>"
+
+ODF_BODY = (
+    "<text:h>Sitzungsvorlage des Ausschusses</text:h>"
+    "<text:p>Erster Absatz mit einer <text:span>Anlage</text:span>.</text:p>"
+    "<text:p>Zweiter Absatz zur Grundstücksverkehrsgenehmigung.</text:p>"
+)
+
+
+def _odf(directory: Path, name: str, content: str | None) -> str:
+    """An OpenDocument file, written with zipfile so its innards stay readable.
+
+    Building the fixture here rather than adding three binaries to the reference
+    corpus keeps that corpus at the size it was designed for and puts the whole
+    document into the diff of this test.
+    """
+    target = directory / name
+    with ZipFile(target, "w") as archive:
+        archive.writestr("mimetype", "application/vnd.oasis.opendocument.text")
+        if content is not None:
+            archive.writestr("content.xml", content)
+    return str(target)
+
+
+def test_an_odt_yields_every_heading_and_paragraph_in_document_order(tmp_path: Path) -> None:
+    outcome = extract_odf(_odf(tmp_path, "vorlage.odt", ODF_HEADER + ODF_BODY + ODF_FOOTER))
+
+    assert outcome.state is State.INDEXED
+    assert outcome.text.index("Sitzungsvorlage") < outcome.text.index("Erster Absatz")
+    assert outcome.text.index("Erster Absatz") < outcome.text.index("Zweiter Absatz")
+    assert "Grundstücksverkehrsgenehmigung" in outcome.text
+
+
+def test_the_parts_are_joined_with_a_space_instead_of_being_glued_together(tmp_path: Path) -> None:
+    # Two paragraphs concatenated produce a word that exists in neither of them,
+    # and that word is then the only thing the index knows about the boundary.
+    outcome = extract_odf(_odf(tmp_path, "vorlage.odt", ODF_HEADER + ODF_BODY + ODF_FOOTER))
+
+    assert "Anlage. Zweiter Absatz" in outcome.text
+    assert "Anlage.Zweiter" not in outcome.text
+
+
+@pytest.mark.parametrize("name", ["tabelle.ods", "praesentation.odp"])
+def test_ods_and_odp_run_through_the_very_same_path(name: str, tmp_path: Path) -> None:
+    outcome = extract_odf(_odf(tmp_path, name, ODF_HEADER + ODF_BODY + ODF_FOOTER))
+
+    assert outcome.state is State.INDEXED
+    assert "Sitzungsvorlage des Ausschusses" in outcome.text
+
+
+def test_an_archive_without_a_content_part_is_failed_corrupt(tmp_path: Path) -> None:
+    outcome = extract_odf(_odf(tmp_path, "leer.odt", None))
+
+    assert outcome == ExtractionOutcome.failed(Reason.CORRUPT)
+
+
+def test_a_file_that_is_no_archive_at_all_is_failed_corrupt(tmp_path: Path) -> None:
+    outcome = extract_odf(_write(tmp_path, "kein-archiv.odt", NOT_A_ZIP))
+
+    assert outcome == ExtractionOutcome.failed(Reason.CORRUPT)
+
+
+def test_a_broken_content_part_is_failed_xml_invalid_and_not_corrupt(tmp_path: Path) -> None:
+    # The two reasons are different information for whoever reads the status page:
+    # a package that cannot be opened is a different repair job from a package
+    # that opens and holds nonsense.
+    outcome = extract_odf(_odf(tmp_path, "kaputt.odt", ODF_HEADER + "<text:p>Ohne Ende"))
+
+    assert outcome == ExtractionOutcome.failed(Reason.XML_INVALID)
+
+
+def test_the_content_parser_follows_neither_an_entity_nor_a_url(tmp_path: Path) -> None:
+    # An OpenDocument file is untrusted input, and its content part is XML. Without
+    # the three switches a crafted document makes this container read a local file
+    # and call an address of the attacker's choosing, and both results then travel
+    # into the search index.
+    secret = tmp_path / "passphrase.txt"
+    secret.write_bytes(b"TOPSECRET-PASSPHRASE")
+    content = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<!DOCTYPE office:document-content [\n"
+        f'  <!ENTITY leak SYSTEM "{secret.as_uri()}">\n'
+        '  <!ENTITY call SYSTEM "http://127.0.0.1:9/collect">\n'
+        "]>"
+        '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+        ' xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">'
+        "<office:body><office:text><text:p>Anlage &leak; &call;</text:p></office:text></office:body>"
+        "</office:document-content>"
+    )
+    path = _odf(tmp_path, "xxe.odt", content)
+
+    outcome = extract_odf(path)
+
+    assert "TOPSECRET" not in outcome.text
+    assert "PASSPHRASE" not in outcome.text
+
+    # The counter measurement, so the test proves the switches rather than the
+    # fixture: the same bytes through a parser built without them do leak.
+    greedy = etree.XMLParser(resolve_entities=True, no_network=True, load_dtd=True)
+    leaked = etree.fromstring(content.encode("utf-8"), parser=greedy)
+
+    assert "TOPSECRET-PASSPHRASE" in "".join(leaked.itertext())
+
+
+def test_the_archive_is_only_ever_read_and_never_unpacked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # extractall() writes attacker chosen names to the file system, which is how
+    # zip slip works. The one part that is needed is read into memory instead, and
+    # this test is the reason that cannot be quietly changed back.
+    def unreachable(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("the archive was unpacked to disk")
+
+    monkeypatch.setattr(ZipFile, "extractall", unreachable)
+
+    outcome = extract_odf(_odf(tmp_path, "vorlage.odt", ODF_HEADER + ODF_BODY + ODF_FOOTER))
+
+    assert outcome.state is State.INDEXED
+
+
+def test_every_route_of_the_allowlist_has_an_extractor_behind_it(tmp_path: Path) -> None:
+    # The dispatcher had five open places while the document formats were missing.
+    # This walks the whole allowlist, so a route that loses its extractor cannot
+    # hide behind the fourteen mimetypes that still work.
+    odf_document = _odf(tmp_path, "vorlage.odt", ODF_HEADER + ODF_BODY + ODF_FOOTER)
+    fixtures = {
+        Route.PDF: str(CORPUS / "01-text-layer.pdf"),
+        Route.DOCX: _docx_with_a_table(tmp_path),
+        Route.PPTX: _pptx_with_two_text_frames(tmp_path),
+        Route.XLSX: _xlsx(tmp_path, rows=3, columns=2),
+        Route.ODF: odf_document,
+        Route.HTML: _write(tmp_path, "seite.html", b"<html><body><p>Ein Absatz.</p></body></html>"),
+        Route.RTF: _write(tmp_path, "brief.rtf", rb"{\rtf1\ansi Ein Absatz.\par}"),
+        Route.PLAIN: _write(tmp_path, "notiz.txt", b"Ein Absatz."),
+    }
+
+    assert set(fixtures) == set(Route)
+
+    for mime, route in ALLOWED_MIMETYPES.items():
+        path = fixtures[route]
+
+        outcome = extract(path, mime, Path(path).stat().st_size)
+
+        assert outcome.state is State.INDEXED, f"{mime} came back as {outcome.state}/{outcome.reason}"
