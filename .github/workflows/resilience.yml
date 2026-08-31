@@ -284,27 +284,28 @@ jobs:
           failed=$(echo "${report}" | jq -r '.failed')
           docs=$(echo "${report}" | jq -r '.docs')
           judged=$(( indexed + skipped + failed ))
-          # The other side of the same run: Nextcloud records an end state for
-          # every file it handed over. Two databases, filled by two processes,
-          # and the comparison is only worth something because of that. The one
-          # case that would make the two totals differ legitimately is a file the
-          # crawl rejects as too large, which is recorded on the Nextcloud side
-          # alone and never reaches the container; nothing in this account comes
-          # anywhere near the 50 MB cap.
-          handed_over=$(./occ findling:index | awk '
-            $1 == "indexed" || $1 == "skipped" || $1 == "failed" { total += $2 }
+          # The other side of the same run. The acknowledgement channel of the
+          # queue carries FAILURES only (QueueService::acknowledge records
+          # 'failed' rows and deletes everything else), so the one set the two
+          # databases share is the failure set, and that is what is compared.
+          # Verdicts for indexed and skipped files live in the container store
+          # alone; asserting them on the Nextcloud side would assert a contract
+          # the return channel never had (first run of this gate did exactly
+          # that and compared 185 against 23).
+          nc_failed=$(./occ findling:index | awk '
+            $1 == "failed" { total += $2 }
             END { print total + 0 }')
 
           echo "indexed before the kill ${indexed_before}, after the resume ${indexed}"
           echo "documents in the index before the kill ${docs_before}, after the resume ${docs}"
-          echo "judged in the container ${judged}, handed over by nextcloud ${handed_over}"
+          echo "failed in the container ${failed}, failures nextcloud recorded ${nc_failed}"
 
           if [ "${indexed}" -lt "${indexed_before}" ]; then
             echo "the restart lost progress: ${indexed} documents are indexed, ${indexed_before} were before the kill"
             exit 1
           fi
-          if [ "${judged}" -ne "${handed_over}" ]; then
-            echo "the states do not add up: the container judged ${judged} files, nextcloud handed over ${handed_over}"
+          if [ "${failed}" -ne "${nc_failed}" ]; then
+            echo "the failure channel lost reports: the container failed ${failed} files, nextcloud recorded ${nc_failed}"
             exit 1
           fi
           if [ "${judged}" -lt "${CORPUS_FILES}" ]; then
