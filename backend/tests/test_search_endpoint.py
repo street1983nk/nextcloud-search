@@ -21,6 +21,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from socket import gethostname
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -41,7 +42,7 @@ CANARY = "findling-canary"
 TERM = "Kündigungsfrist"
 
 
-def _search(client: TestClient, headers: dict[str, str], **body: object) -> dict[str, object]:
+def _search(client: TestClient, headers: dict[str, str], **body: object) -> dict[str, Any]:
     response = client.post("/search", json={"query": TERM, **body}, headers=headers)
 
     assert response.status_code == 200, response.text
