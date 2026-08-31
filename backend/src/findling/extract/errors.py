@@ -109,15 +109,23 @@ STATE_REASONS: Final[Mapping[State, frozenset[Reason | None]]] = {
 # against deliberately broken inputs in python:3.13-slim-trixie. Matched along the
 # inheritance chain, so a library specific subclass lands on the same reason.
 #
-# Plan 02-08 extends this table with the pypdf errors, which carry more meaning
-# than corrupt: EmptyFileError is empty_file and FileNotDecryptedError is
-# encrypted. They are absent here because no PDF route exists yet, and a mapping
-# nobody exercises is a mapping nobody notices when it is wrong.
+# pypdf.errors.EmptyFileError arrived with plan 02-08. The PDF extractor catches
+# it itself, so this entry is the net under the day somebody reorders that
+# function: a zero byte file that escapes should still be empty_file and not the
+# blanket corrupt.
+#
+# FileNotDecryptedError is deliberately **not** in this table, although the note
+# of plan 02-05 proposed it. This function only ever builds a failed verdict, and
+# encrypted belongs to skipped: the pair failed(encrypted) does not exist, so the
+# entry would not translate an exception, it would raise a ValueError inside the
+# error handler. A password protected file is a decision, and a decision is made
+# where the file is opened, not where an exception is read.
 _EXCEPTION_REASONS: Final[Mapping[str, Reason]] = {
     "builtins.MemoryError": Reason.OUT_OF_MEMORY,
     "zipfile.BadZipFile": Reason.CORRUPT,
     "docx.opc.exceptions.PackageNotFoundError": Reason.CORRUPT,
     "lxml.etree.XMLSyntaxError": Reason.XML_INVALID,
+    "pypdf.errors.EmptyFileError": Reason.EMPTY_FILE,
 }
 
 

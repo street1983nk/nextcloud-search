@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pypdfium2
 import pytest
+from pypdf.errors import EmptyFileError, FileNotDecryptedError
 
 from findling import config
 from findling.extract.dispatch import extract
@@ -177,6 +178,24 @@ def test_a_pdf_over_the_page_cap_stops_and_says_truncated(monkeypatch: pytest.Mo
         assert "Blatt 3" not in outcome.text
     finally:
         config.settings.cache_clear()
+
+
+def test_a_pypdf_empty_file_error_that_escapes_keeps_its_own_reason() -> None:
+    # The extractor catches this one itself. The table entry is the net for the
+    # day somebody reorders that function: an escaped zero byte error stays
+    # empty_file instead of falling into the blanket corrupt.
+    outcome = ExtractionOutcome.from_exception(EmptyFileError("nothing to read"))
+
+    assert outcome == ExtractionOutcome.failed(Reason.EMPTY_FILE)
+
+
+def test_an_encrypted_pdf_is_never_translated_out_of_an_exception() -> None:
+    # failed(encrypted) is not a pair the taxonomy has, so a table entry for
+    # FileNotDecryptedError would raise inside the error handler instead of
+    # producing a verdict. The decision belongs where the file is opened.
+    outcome = ExtractionOutcome.from_exception(FileNotDecryptedError("password required"))
+
+    assert outcome == ExtractionOutcome.failed(Reason.CORRUPT)
 
 
 def test_the_dispatcher_reaches_the_pdf_route() -> None:
