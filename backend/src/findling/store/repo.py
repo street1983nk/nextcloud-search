@@ -484,6 +484,18 @@ class Store:
             cursor = self._conn.execute("DELETE FROM acl WHERE file_id = ?", (file_id,))
         return cursor.rowcount
 
+    def acl_rows(self) -> int:
+        """Total number of permission rows, zero while the table is empty.
+
+        The absolute figure next to the average below, and the one an operating
+        report needs: a run that indexed documents and wrote no permission row at
+        all is invisible in an average, because an average over nothing is zero
+        as well. Read by :mod:`findling.tools.index_status`, which reports the
+        state of a volume without an authenticated header.
+        """
+        row = self._conn.execute("SELECT COUNT(*) FROM acl").fetchone()
+        return int(row[0]) if row else 0
+
     def acl_rows_per_document(self) -> float:
         """Average permission rows per document, 0.0 while the table is empty.
 

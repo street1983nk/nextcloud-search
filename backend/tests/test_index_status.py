@@ -180,8 +180,13 @@ def test_the_reasons_are_broken_down_per_state(tmp_path: Path) -> None:
 
     report = index_status.collect(db, tmp_path / "index")
 
-    assert report["reasons"]["skipped"]["too_large"] == 1
-    assert report["reasons"]["indexed"][index_status.NO_REASON] == 1
+    # The report is a mapping of plain values, so the nested breakdown is narrowed
+    # here rather than typed away at the source: the values really are of mixed
+    # type, and a signature that claimed otherwise would be the lie.
+    reasons = report["reasons"]
+    assert isinstance(reasons, dict)
+    assert reasons["skipped"]["too_large"] == 1
+    assert reasons["indexed"][index_status.NO_REASON] == 1
 
 
 def test_the_index_sits_next_to_the_database_unless_it_is_named(tmp_path: Path) -> None:
