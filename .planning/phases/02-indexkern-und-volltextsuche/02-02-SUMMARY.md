@@ -162,6 +162,10 @@ Keine.
 - Phase 3 findet `skipped(no_text_layer)` vor und braucht fuer die OCR-Auswahl keinen Reindex.
 - Phase 4 findet `counts()` und `reasons_by_state()` vor, beide mit allen drei Zustaenden, auch den leeren.
 
+## Self-Check: PASSED
+
+Alle fuenf neuen bzw. geaenderten Quelldateien liegen auf der Platte, alle sieben Commits sind im Log von `gsd/agent-02-02`. Abschliessender Lauf: `uv run pytest -q` 90 passed, `tests/test_readonly_gate.py` 13 passed, `ruff check`, `ruff format --check`, `pyright` und `vulture --min-confidence 80` ohne Befund.
+
 ---
 *Phase: 02-indexkern-und-volltextsuche*
 *Completed: 2026-08-31*
