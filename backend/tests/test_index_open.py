@@ -22,12 +22,11 @@ import ast
 from pathlib import Path
 
 import pytest
-import tantivy
 from tantivy import Document, Index
 
 from findling.config import INDEX_VERSION, SCHEMA_VERSION, settings
 from findling.index.analyzer import ANALYZER_VERSION, build_count
-from findling.index.open import expected_versions, open_index, open_reader
+from findling.index.open import TANTIVY_VERSION, expected_versions, open_index, open_reader
 from findling.index.schema import (
     FIELD_BODY_DE,
     FIELD_BODY_EN,
@@ -235,9 +234,7 @@ def test_ext_is_an_exact_term(index_dir: Path) -> None:
     assert _hits(index, f"{FIELD_EXT}:pd", [FIELD_EXT]) == 0
 
 
-def test_the_schema_does_not_change_with_the_language_setting(
-    monkeypatch: pytest.MonkeyPatch, index_dir: Path
-) -> None:
+def test_the_schema_does_not_change_with_the_language_setting(monkeypatch: pytest.MonkeyPatch, index_dir: Path) -> None:
     # FINDLING_LANGUAGES decides what the writer fills in, never what the schema
     # holds. A language switch that reshaped the schema would silently turn every
     # existing index into a different one.
@@ -289,9 +286,16 @@ def test_expected_versions_names_every_mark_the_store_compares() -> None:
         "index_version": str(INDEX_VERSION),
         "analyzer_version": str(ANALYZER_VERSION),
         "wordlist_hash": DIGEST,
-        "tantivy_version": tantivy.__version__,
+        "tantivy_version": TANTIVY_VERSION,
     }
     assert all(isinstance(value, str) for value in expected.values())
+
+
+def test_the_tantivy_mark_carries_the_on_disk_format() -> None:
+    # tantivy makes no promise that its index format survives its own releases,
+    # so the mark has to name the format and not only the release.
+    assert TANTIVY_VERSION.startswith("tantivy v")
+    assert "index_format" in TANTIVY_VERSION
 
 
 def test_only_the_opening_module_opens_an_index() -> None:
