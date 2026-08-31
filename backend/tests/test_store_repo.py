@@ -1,0 +1,153 @@
+"""The state database: opening it, splitting read from write, and the version marks.
+
+The predecessor this project replaces died because nobody could say why a
+document was not findable. That answer lives in this database, so the tests here
+are about the properties that keep the answer trustworthy rather than about SQL.
+
+Three of them are worth naming up front:
+
+* ``open_store`` never overwrites a meta value it finds. The whole point of the
+  version marks is to notice that the analyzer changed while the index did not,
+  and a store that helpfully "repairs" the value on open destroys the evidence.
+* the read connection refuses writes. A bug in the search path must not be able
+  to change the operating state, and that is a structural property here, not a
+  review habit.
+* a journal mode other than WAL is a warning and not an error. WAL needs shared
+  memory, some network file systems do not have it, and a container that refuses
+  to start there would be a worse outcome than a slower one.
+"""
+
+from __future__ import annotations
+
+import logging
+import sqlite3
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from findling.store.repo import SCHEMA_VERSION, UNKNOWN_VERSION, Store, enable_wal, open_read_only, open_store
+
+
+@pytest.fixture
+def store(tmp_path: Path) -> Iterator[Store]:
+    opened = open_store(tmp_path / "state.db")
+    yield opened
+    opened.close()
+
+
+def test_open_store_creates_the_database_and_is_idempotent(tmp_path: Path) -> None:
+    path = tmp_path / "nested" / "state.db"
+
+    first = open_store(path)
+    first.write_meta("marker", "kept")
+    first.close()
+
+    second = open_store(path)
+    try:
+        assert path.exists()
+        assert second.read_meta()["marker"] == "kept"
+    finally:
+        second.close()
+
+
+def test_journal_mode_is_wal_after_open(store: Store) -> None:
+    assert store.journal_mode == "wal"
+
+
+def test_a_journal_mode_other_than_wal_warns_and_does_not_raise(caplog: pytest.LogCaptureFixture) -> None:
+    # An in-memory database is the honest stand-in for a file system without
+    # shared memory: it answers "memory" to the same pragma a network share
+    # would answer "delete" to. Either way the container has to keep running.
+    connection = sqlite3.connect(":memory:", autocommit=True)
+    try:
+        with caplog.at_level(logging.WARNING, logger="findling.store.repo"):
+            mode = enable_wal(connection)
+    finally:
+        connection.close()
+
+    assert mode != "wal"
+    assert "journal_mode" in caplog.text
+
+
+def test_the_read_connection_refuses_a_write(tmp_path: Path) -> None:
+    path = tmp_path / "state.db"
+    writer = open_store(path)
+    writer.close()
+
+    reader = open_read_only(path)
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            reader.write_meta("schema_version", "999")
+    finally:
+        reader.close()
+
+
+def test_the_read_connection_can_read(tmp_path: Path) -> None:
+    path = tmp_path / "state.db"
+    writer = open_store(path)
+    writer.write_meta("wordlist_hash", "cafebabe")
+    writer.close()
+
+    reader = open_read_only(path)
+    try:
+        assert reader.read_meta()["wordlist_hash"] == "cafebabe"
+    finally:
+        reader.close()
+
+
+def test_open_read_only_on_a_missing_file_raises(tmp_path: Path) -> None:
+    # Without this the connect call would create an empty database and every
+    # search would answer "no results" instead of "the state is gone".
+    with pytest.raises(FileNotFoundError):
+        open_read_only(tmp_path / "absent.db")
+
+
+def test_meta_carries_the_version_marks_after_the_first_open(store: Store) -> None:
+    meta = store.read_meta()
+
+    assert meta["schema_version"] == SCHEMA_VERSION
+    assert meta["index_version"] == "0"
+    assert meta["analyzer_version"] == UNKNOWN_VERSION
+    assert meta["tantivy_version"] == UNKNOWN_VERSION
+    assert int(meta["created_at"]) > 0
+
+
+def test_open_store_seeds_the_marks_the_caller_names(tmp_path: Path) -> None:
+    opened = open_store(tmp_path / "state.db", meta={"analyzer_version": "3", "wordlist_hash": "abc"})
+    try:
+        assert opened.version_mismatch({"analyzer_version": "3", "wordlist_hash": "abc"}) == []
+    finally:
+        opened.close()
+
+
+def test_open_store_never_overwrites_an_existing_mark(tmp_path: Path) -> None:
+    # The load bearing one. If a second open silently wrote the new analyzer
+    # version, the mismatch it is supposed to reveal would be gone by the time
+    # anybody looks.
+    path = tmp_path / "state.db"
+    first = open_store(path, meta={"analyzer_version": "3"})
+    first.close()
+
+    second = open_store(path, meta={"analyzer_version": "4"})
+    try:
+        assert second.read_meta()["analyzer_version"] == "3"
+        assert second.version_mismatch({"analyzer_version": "4"}) == ["analyzer_version"]
+    finally:
+        second.close()
+
+
+def test_version_mismatch_names_only_the_diverging_keys(store: Store) -> None:
+    store.write_meta("analyzer_version", "7")
+    store.write_meta("tantivy_version", "0.26.0")
+
+    expected = {"analyzer_version": "8", "tantivy_version": "0.26.0", "schema_version": SCHEMA_VERSION}
+
+    assert store.version_mismatch(expected) == ["analyzer_version"]
+
+
+def test_version_mismatch_reports_a_mark_that_was_never_written(store: Store) -> None:
+    assert store.version_mismatch({"embedding_version": "1"}) == ["embedding_version"]
+
+
+def test_version_mismatch_is_empty_when_everything_matches(store: Store) -> None:
+    assert store.version_mismatch(store.read_meta()) == []
