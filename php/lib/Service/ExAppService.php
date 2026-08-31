@@ -419,12 +419,22 @@ final class ExAppService {
 			}
 
 			// The highlights count characters of exactly the string the
-			// container sent. Cleaning removed characters or the ceiling cut
-			// the string, so every offset behind the change would point
-			// somewhere else: the ranges are dropped as a whole rather than
-			// shifted by a guess. An unchanged string is the normal case.
-			$highlights = $text === $raw
-				? $this->filterHighlights($snippet['highlights'] ?? null, mb_strlen($text, 'UTF-8'))
+			// container sent, so an offset survives only as long as every
+			// character kept its position. PlainText::bounded does exactly two
+			// things: it replaces single characters one for one, which moves
+			// nothing, and it cuts at the ceiling, which moves nothing either
+			// but drops the tail. Equal length therefore means equal positions,
+			// and equal length is what is compared.
+			//
+			// The comparison used to be identity. That was correct while the
+			// cleaning deleted characters, and it became too strict the moment
+			// it started replacing them: every excerpt out of a multi line PDF
+			// carries a line break, and identity would throw away the
+			// highlights of exactly those documents this phase is about. What
+			// stays out of bounds is guessing an offset that has moved.
+			$length = mb_strlen($text, 'UTF-8');
+			$highlights = $length === mb_strlen($raw, 'UTF-8')
+				? $this->filterHighlights($snippet['highlights'] ?? null, $length)
 				: [];
 
 			$result[$fileId] = ['text' => $text, 'highlights' => $highlights];

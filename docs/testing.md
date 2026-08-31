@@ -61,8 +61,10 @@ listed by name rather than summarised:
    user's own folder, and takes title and link from the resolved node.
 5. It returns an empty result, not unchecked hits, when the user has no home
    folder.
-6. `PlainText::bounded` strips control characters, keeps the tab, caps at the
-   given length, cuts on character boundaries and refuses invalid UTF-8.
+6. `PlainText::bounded` replaces control characters with a single space, keeps
+   the tab, caps at the given length, cuts on character boundaries and refuses
+   invalid UTF-8. The replacement is one character for one character, and that
+   the length is preserved is the property number 12 relies on.
 7. `ExAppService::searchCandidates` refuses an empty term without a round trip
    and clamps the limit into 1..100.
 8. The answer body is refused above one megabyte, before it reaches
@@ -76,8 +78,9 @@ listed by name rather than summarised:
     ids, and not at all when the budget is gone, in which case the subline is
     the path.
 12. `ExAppService::filterSnippets` drops an excerpt for a file id that was not
-    asked for, and drops the highlight ranges of a text that the cleaning
-    changed, because every offset behind the change would point elsewhere.
+    asked for, and drops the highlight ranges of a text the cleaning made
+    shorter, because every offset behind the cut would point elsewhere. A text
+    that only changed characters without changing its length keeps them.
 
 Number 9 is reachable over HTTP but not from the integration job as it stands: it
 would need a second registered ExApp to call the gateway under a foreign app id.
