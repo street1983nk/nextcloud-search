@@ -16,6 +16,19 @@ Two files are broken on purpose. The zero byte PDF and the password protected
 PDF are the error path, and the error path is where the predecessor app
 (files_fulltextsearch_tesseract) destroyed user data. A corpus of well formed
 documents would prove the pleasant half of the read only invariant only.
+
+From phase 2 on the corpus has a second job. The files 09 to 12 carry German
+administrative prose, and every one of the search terms the end to end job in
+.github/workflows/integration.yml asserts on sits in exactly one of them. That
+is not tidiness, it is what makes a green assertion mean something: in a corpus
+where every word stands everywhere, a hit only proves that something was found.
+The one deliberate exception is the word "Bescheid", which stands in 09 and in
+10 so that the exclusion `bescheid -frist` has something to exclude.
+
+Real umlauts in the German strings below are deliberate, exactly as in the
+office part that has carried them since phase 1: an ASCII spelling would test the
+one case that cannot go wrong. testdata/corpus/README.md holds the table of which
+file carries which language case.
 """
 
 from __future__ import annotations
@@ -255,6 +268,169 @@ def build_cp1252_txt() -> bytes:
     return ("\n".join(lines) + "\n").encode("cp1252")
 
 
+# --------------------------------------------------------------------------
+# The German language cases of phase 2.
+#
+# Every file below is new. Not one line above this block was touched, so the
+# seven files of phase 1 and the legacy encoding file come out byte for byte as
+# they did before, and gate B in integration.yml keeps comparing the very same
+# checksums.
+# --------------------------------------------------------------------------
+
+# A fixed timestamp for every ZIP entry of the new archives, for the same reason
+# the office part of phase 1 carries one: the default stamps the build time into
+# the archive and a rebuild would differ from the committed file.
+ZIP_TIMESTAMP = (2026, 9, 1, 12, 0, 0)
+
+
+def _reproducible_zip(parts: dict[str, str], *, stored_first: str | None = None) -> bytes:
+    """Pack named text parts into a ZIP that a rebuild reproduces exactly.
+
+    ``stored_first`` names the one part that has to be written uncompressed and
+    at the very beginning, which is what the OpenDocument specification demands
+    of the ``mimetype`` entry.
+    """
+    order = list(parts)
+    if stored_first is not None:
+        order.remove(stored_first)
+        order.insert(0, stored_first)
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name in order:
+            info = zipfile.ZipInfo(name, date_time=ZIP_TIMESTAMP)
+            info.compress_type = zipfile.ZIP_STORED if name == stored_first else zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, parts[name])
+    return buffer.getvalue()
+
+
+def build_german_pdf() -> bytes:
+    """A PDF with a German text layer, encoded the way a real one would be.
+
+    ``/Encoding /WinAnsiEncoding`` is stated explicitly although it is not
+    strictly needed: measured, pdfium reads the cp1252 umlauts of a standard
+    library PDF correctly even without it. Leaving it out would make this test
+    case depend on the leniency of the parser rather than on the file, and the
+    day that leniency changes the failure would look like a broken indexer.
+
+    The words carry two of the seven assertions: "Genehmigung" finds this file
+    through one constituent of a compound, and "type:pdf bescheid" finds it
+    because the second file with "Bescheid" in it is not a PDF.
+    """
+    lines = (
+        "Bescheid der unteren Verwaltungsbehörde",
+        "Die Grundstücksverkehrsgenehmigung wurde erteilt.",
+        "Dieser Bescheid ist kostenfrei.",
+    )
+    content = bytearray()
+    baseline = 130
+    for line in lines:
+        content += f"BT /F1 11 Tf 20 {baseline} Td (".encode("ascii")
+        # cp1252 is what /WinAnsiEncoding means, so the bytes of the literal
+        # string and the encoding declared on the font agree by construction.
+        content += line.encode("cp1252")
+        content += b") Tj ET\n"
+        baseline -= 22
+    objects = _page_objects("<< /Font << /F1 5 0 R >> >>", bytes(content), "[0 0 420 160]")
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")
+    return build_pdf(objects)
+
+
+def build_german_docx() -> bytes:
+    """An OOXML document with the compound, the phrase and the exclusion word.
+
+    Three assertions live here: "Frist" finds it through the second constituent
+    of "Kündigungsfrist", the phrase "drei Monate" finds it as a word sequence,
+    and "bescheid -frist" must **not** find it, which is what proves the minus
+    does something.
+    """
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+        "<w:p><w:r><w:t>Bescheid über die Beendigung des Mietverhältnisses</w:t></w:r></w:p>"
+        "<w:p><w:r><w:t>Die Kündigungsfrist beträgt drei Monate zum Quartalsende.</w:t></w:r></w:p>"
+        "<w:p><w:r><w:t>Die Wohnung ist besenrein zu übergeben.</w:t></w:r></w:p>"
+        "</w:body></w:document>"
+    )
+    return _reproducible_zip(
+        {
+            "[Content_Types].xml": (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument'
+                '.wordprocessingml.document.main+xml"/>'
+                "</Types>"
+            ),
+            "_rels/.rels": (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+                '/officeDocument" Target="word/document.xml"/>'
+                "</Relationships>"
+            ),
+            "word/document.xml": document,
+        }
+    )
+
+
+def build_odt() -> bytes:
+    """An OpenDocument text file, the format the office trio is missing so far.
+
+    It carries the nominal inflection: the file says "Verträge", the search says
+    "Vertrag", and the stemmer is what closes the gap. No other file of the
+    corpus contains a word that stems to "vertrag", so the assertion cannot be
+    green for another reason.
+    """
+    text_ns = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+    office_ns = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+    content = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<office:document-content xmlns:office="{office_ns}" xmlns:text="{text_ns}" office:version="1.3">'
+        "<office:body><office:text>"
+        "<text:h>Übersicht der laufenden Verträge</text:h>"
+        "<text:p>Alle Verträge des Fachbereichs liegen im Original vor.</text:p>"
+        "<text:p>Die Übersicht wird jährlich fortgeschrieben.</text:p>"
+        "</office:text></office:body></office:document-content>"
+    )
+    manifest_ns = "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
+    manifest = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<manifest:manifest xmlns:manifest="{manifest_ns}" manifest:version="1.3">'
+        '<manifest:file-entry manifest:full-path="/"'
+        ' manifest:media-type="application/vnd.oasis.opendocument.text"/>'
+        '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
+        "</manifest:manifest>"
+    )
+    return _reproducible_zip(
+        {
+            "mimetype": "application/vnd.oasis.opendocument.text",
+            "content.xml": content,
+            "META-INF/manifest.xml": manifest,
+        },
+        stored_first="mimetype",
+    )
+
+
+def build_umlaut_name_txt() -> bytes:
+    """Windows-1252 text carrying the written out umlaut case.
+
+    The file says "Müller" with the character, the search says "Mueller" with the
+    two letters, and only the query side rewriting of plan 02-09 joins the two.
+    The encoding is cp1252 for the same reason as in 08: this is what a decade of
+    Windows tooling wrote, and it is the encoding in which the umlaut is a single
+    byte that is invalid UTF-8.
+    """
+    lines = [
+        "Aktenvermerk der Registratur.",
+        "",
+        "Zuständig für diese Akte ist Frau Müller.",
+        "Rückfragen bitte an das Sekretariat richten.",
+    ]
+    return ("\n".join(lines) + "\n").encode("cp1252")
+
+
 FILES: dict[str, bytes] = {
     "01-text-layer.pdf": build_text_layer_pdf(),
     "02-scan-no-text-layer.pdf": build_scan_pdf(),
@@ -265,6 +441,13 @@ FILES: dict[str, bytes] = {
     "06-zero-bytes.pdf": b"",
     "07-password-protected.pdf": build_encrypted_pdf(),
     "08-legacy-encoding.txt": build_cp1252_txt(),
+    # The four German language cases of phase 2. Flat in the same directory and
+    # numbered onwards on purpose: the readonly gate resolves file ids over
+    # basename in a flat WebDAV path and would not follow a subdirectory.
+    "09-bescheid.pdf": build_german_pdf(),
+    "10-kuendigung.docx": build_german_docx(),
+    "11-uebersicht.odt": build_odt(),
+    "12-aktenvermerk.txt": build_umlaut_name_txt(),
 }
 
 
