@@ -207,8 +207,21 @@ def _connect(path: Path, *, read_only: bool) -> sqlite3.Connection:
     ``autocommit=True`` means sqlite3 does not invent transactions around single
     statements; the two places that need one open it explicitly. Every pragma
     below is per connection and therefore set here rather than in schema.sql.
+
+    ``check_same_thread=False`` is what lets the indexing worker do its writes in
+    ``asyncio.to_thread`` instead of on the event loop. Blocking SQLite work in
+    the loop is a ``/heartbeat`` that hangs while ``/enabled`` still answers, and
+    the thread a coroutine is resumed on is not the thread it started on, so the
+    default guard refuses the second call of a pass. The guard is a Python side
+    assertion and not the actual safety property: CPython reports
+    ``sqlite3.threadsafety == 3`` for this build, which means the underlying
+    library serialises access itself. On top of that there is exactly one writer
+    in the process (IDX-08), and its thread hops are awaited one after another, so
+    two threads never hold this connection at the same moment. A guard test in
+    ``tests/test_store_repo.py`` fails should a build ever report less than
+    serialised mode.
     """
-    connection = sqlite3.connect(path, autocommit=True)
+    connection = sqlite3.connect(path, autocommit=True, check_same_thread=False)
     connection.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
     connection.execute("PRAGMA foreign_keys = ON")
     if read_only:

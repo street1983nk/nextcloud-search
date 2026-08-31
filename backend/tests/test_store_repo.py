@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -313,3 +314,28 @@ def test_record_mount_mirrors_the_crawl_progress(store: Store) -> None:
     store.record_mount(2, 3, 1800, 240)
 
     assert store.mount_rows() == [{"storage_id": 2, "root_id": 3, "cursor_file_id": 1800, "files_seen": 240}]
+
+
+def test_the_connection_may_cross_a_worker_thread(store: Store) -> None:
+    """The property the indexing worker rests on, checked rather than assumed.
+
+    The worker writes its verdicts in ``asyncio.to_thread``, because a blocking
+    SQLite transaction on the event loop is a ``/heartbeat`` that hangs while
+    ``/enabled`` still answers. That only holds while the connection may be used
+    from another thread, so the guard is off and the library serialises instead.
+    A build that reports less than serialised mode would make the poller unsafe
+    in a way nothing else would notice, hence this tripwire.
+    """
+    written: list[dict[str, object] | None] = []
+
+    def write_from_another_thread() -> None:
+        store.record(4711, a_file(4711), "indexed", content_hash="cafe")
+        written.append(store.file_row(4711))
+
+    assert sqlite3.threadsafety == 3
+    worker = threading.Thread(target=write_from_another_thread)
+    worker.start()
+    worker.join()
+
+    assert len(written) == 1
+    assert written[0] is not None

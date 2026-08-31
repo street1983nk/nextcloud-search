@@ -13,6 +13,8 @@ container that binds the wrong one looks perfectly healthy in its own log while
 being unreachable from Nextcloud.
 """
 
+import asyncio
+import contextlib
 import logging
 import os
 from collections.abc import AsyncIterator, Mapping, Sequence
@@ -26,8 +28,15 @@ from fastapi.responses import JSONResponse
 
 from findling.api.search import ROUTER
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp, run_app, set_handlers
+from findling.worker.poller import POLLER_STOP_SECONDS, Poller, default_poller
 
 LOGGER = logging.getLogger("findling")
+
+# The one indexing task of the process, held at module level because the AppAPI
+# handler that arms and silences it takes no application object. It exists while
+# the lifespan is up and is None outside it, which is also what keeps a test
+# suite that enters the lifespan repeatedly from accumulating pollers.
+_POLLER: Poller | None = None
 
 KNOWN_LOG_LEVELS = frozenset({"debug", "info", "warning", "error"})
 
@@ -73,20 +82,39 @@ def binding_mode() -> str:
     return f"tcp {os.environ.get('APP_HOST', '127.0.0.1')}:{os.environ.get('APP_PORT', 'unset')}"
 
 
+def active_poller() -> Poller | None:
+    """The poller of this process, None while the lifespan is not running."""
+    return _POLLER
+
+
 async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
     """Report the result of enabling or disabling the app; empty means success.
 
     Must be a coroutine. The registration helper checks that, and the synchronous
     path is scheduled for removal upstream.
+
+    This is also where the indexing task is armed and silenced. A disabled backend
+    that keeps collecting work is the classic of the integration list: the
+    container looks healthy in its own log while it drains the queue of an app the
+    admin switched off.
     """
     del nc
+    poller = active_poller()
+    if poller is not None:
+        if enabled:
+            poller.arm()
+        else:
+            poller.silence()
     LOGGER.info("findling backend %s", "enabled" if enabled else "disabled")
     return ""
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Register the AppAPI routes once and announce the binding mode."""
+    """Register the AppAPI routes once, start the one poller, stop it in order."""
+    # One task per process, and the AppAPI handler that arms it is given no
+    # application object, so the task has to be reachable from module level.
+    global _POLLER
     logging.basicConfig(level=log_level().upper())
     # set_handlers adds routes to the application object, and the application
     # object outlives the lifespan: one process can start it once, a test suite
@@ -102,7 +130,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         set_handlers(app, enabled_handler)  # pyright: ignore[reportArgumentType]
         app.state.findling_handlers_registered = True
     LOGGER.info("findling backend starting, binding mode: %s", binding_mode())
-    yield
+
+    # Exactly one indexing task, started silenced. It opens neither the index nor
+    # the state database before it is armed, so a container that is deployed but
+    # not yet enabled holds no tantivy lock and touches no volume.
+    stop_indexing = asyncio.Event()
+    _POLLER = default_poller()
+    indexing = asyncio.create_task(_POLLER.run(stop_indexing))
+    try:
+        yield
+    finally:
+        stop_indexing.set()
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(indexing), timeout=POLLER_STOP_SECONDS)
+        if not indexing.done():
+            # Over the budget. The pass is somewhere inside a worker thread and
+            # will not come back in time; the rows it holds fall back to the lock
+            # timeout, which is exactly what that timeout is for.
+            indexing.cancel()
+            await asyncio.gather(indexing, return_exceptions=True)
+        # Hand back what the container is holding, so a restart is productive at
+        # once instead of waiting the rows out.
+        with contextlib.suppress(Exception):
+            await _POLLER.unlock_held()
+        await _POLLER.aclose()
+        _POLLER = None
 
 
 APP = FastAPI(lifespan=lifespan)
