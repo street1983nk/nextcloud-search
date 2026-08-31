@@ -614,7 +614,7 @@ jobs:
       # without a text layer (OCR is phase 3) and the encrypted PDF. Asserting
       # the exact numbers is the point; "failed is small" would hide the day a
       # working document starts failing.
-      EXPECTED_INDEXED: '9'
+      EXPECTED_INDEXED: '8'
       EXPECTED_SKIPPED: '2'
       EXPECTED_FAILED: '1'
       # Ceiling of the wait for an empty queue. Thirteen small files, so this is

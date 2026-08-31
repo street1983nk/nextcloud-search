@@ -223,7 +223,7 @@ docker compose exec -T -u www-data app php occ findling:index
 
 The first command is the Nextcloud side: `scheduled` and `handed to the worker`
 both have to reach zero. The second is the container side and answers with JSON;
-it is done when `indexed` is 9, `skipped` is 2 and `failed` is 1. Those three
+it is done when `indexed` is 8, `skipped` is 2 and `failed` is 1. Those three
 numbers are the corpus doing its job: the scan without a text layer and the
 encrypted PDF are skipped, the zero byte PDF fails, and the picture never enters
 the queue because the crawl only takes document types.

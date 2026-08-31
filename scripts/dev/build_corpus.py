@@ -27,7 +27,7 @@ The one deliberate exception is the word "Bescheid", which stands in 09 and in
 
 Real umlauts in the German strings below are deliberate, exactly as in the
 office part that has carried them since phase 1: an ASCII spelling would test the
-one case that cannot go wrong. testdata/corpus/README.md holds the table of which
+one case that cannot go wrong. testdata/CORPUS.md holds the table of which
 file carries which language case.
 """
 
