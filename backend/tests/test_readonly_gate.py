@@ -69,6 +69,18 @@ FORBIDDEN_IDENTIFIERS = frozenset(
     }
 )
 
+# Reviewed exceptions to invariant 2, the extension the module docstring above
+# anticipates. One entry is one (module, identifier) pair, and the pair is the
+# whole point: waving "mkdir" through everywhere would hide a real
+# nc_py_api.files.mkdir one file over, which is exactly the class of breach this
+# gate exists for. Adding an entry is a review decision.
+#
+# index/wordlist.py creates the dictionary directory of the container's own
+# persistent volume. That path is never a Nextcloud node: the container has no
+# access to the Nextcloud storage at all, and invariant 1 keeps nc_py_api out of
+# that module, so the only object a mkdir there can reach is a local one.
+INVARIANT_2_EXCEPTIONS = frozenset({("index/wordlist.py", "mkdir")})
+
 WRITING_HTTP_METHODS = frozenset({"PUT", "POST", "PATCH", "DELETE"})
 
 # Stands in for the HTTP method when the gate cannot read it, for instance because
@@ -184,7 +196,7 @@ def scan_source(relative_path: str, source: str) -> list[str]:
             identifier, lineno = node.id, node.lineno
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             identifier, lineno = node.name, node.lineno
-        if identifier in FORBIDDEN_IDENTIFIERS:
+        if identifier in FORBIDDEN_IDENTIFIERS and (normalized, identifier) not in INVARIANT_2_EXCEPTIONS:
             violations.append(f"{normalized}:{lineno}: invariant 2, writing identifier {identifier}")
 
         if isinstance(node, ast.Call):
@@ -247,6 +259,28 @@ def test_bypass_writing_identifier_outside_the_client_is_a_violation() -> None:
 
 def test_set_user_is_a_violation() -> None:
     violations = scan_source(CLIENT_MODULE, 'nc.set_user("bob")\n')
+
+    assert len(violations) == 1
+    assert "invariant 2" in violations[0]
+
+
+def test_the_reviewed_exception_covers_exactly_one_module() -> None:
+    # The volume layout of the container is created in one place, and only there.
+    assert scan_source("index/wordlist.py", "target.mkdir(parents=True, exist_ok=True)\n") == []
+
+
+def test_the_reviewed_exception_does_not_leak_into_other_modules() -> None:
+    # Same line, one file over. An exception that spreads by itself is not an
+    # exception, it is a hole.
+    violations = scan_source("index/schema.py", "target.mkdir(parents=True, exist_ok=True)\n")
+
+    assert len(violations) == 1
+    assert "invariant 2" in violations[0]
+
+
+def test_the_reviewed_exception_covers_only_the_identifier_it_names() -> None:
+    # mkdir is allowed in that module, delete is not.
+    violations = scan_source("index/wordlist.py", "target.delete()\n")
 
     assert len(violations) == 1
     assert "invariant 2" in violations[0]
