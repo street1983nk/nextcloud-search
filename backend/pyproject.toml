@@ -10,6 +10,15 @@ dependencies = [
     "nc-py-api[app]==0.30.3",
     "fastapi==0.141.1",
     "httpx==0.28.1",
+    "tantivy==0.26.0",
+    "pypdfium2==5.13.0",
+    "pypdf==6.16.1",
+    "python-docx==1.2.0",
+    "python-pptx==1.0.2",
+    "openpyxl==3.1.5",
+    "striprtf==0.0.32",
+    "charset-normalizer==3.5.1",
+    "lxml==6.1.1",
 ]
 
 [dependency-groups]
