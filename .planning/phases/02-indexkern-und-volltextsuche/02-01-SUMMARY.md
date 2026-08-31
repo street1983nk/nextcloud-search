@@ -198,6 +198,10 @@ Bereit fuer die naechsten Plaene der Phase:
 
 Kein Blocker.
 
+## Self-Check: PASSED
+
+Alle elf angelegten Dateien liegen im Worktree, alle sieben Commit-Hashes stehen im Log von `gsd/agent-02-01`. Keine Loeschungen in irgendeinem der Commits.
+
 ---
 *Phase: 02-indexkern-und-volltextsuche*
 *Completed: 2026-08-31*
