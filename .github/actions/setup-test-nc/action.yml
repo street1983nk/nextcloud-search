@@ -172,10 +172,18 @@ runs:
     # symbolic only in info.xml.
     #
     # The route list is exactly the productive one from backend/appinfo/info.xml:
-    # one entry, POST on search, USER level. It used to be url ".*" with all four
-    # writing verbs, which registered an instance no user will ever have and left
-    # the route restriction itself untested. If a later phase adds a route to
-    # info.xml and forgets it here, the integration job is what says so.
+    # three entries, POST on search and snippets at USER level, GET on status at
+    # ADMIN level. It used to be url ".*" with all four writing verbs, which
+    # registered an instance no user will ever have and left the route
+    # restriction itself untested. If a later phase adds a route to info.xml and
+    # forgets it here, the integration job is what says so.
+    #
+    # It said so. Phase 2 put snippets and status into info.xml and left this
+    # list at the single entry of phase 1, and an unlisted route is refused by
+    # the proxy, so every search would have come back with hits and never with a
+    # text excerpt: the second call is where the excerpt comes from. Found while
+    # building the end to end job of plan 02-14, which is the job that asserts an
+    # excerpt exists.
     #
     # /enabled, /heartbeat and /init are absent on purpose and the registration
     # still completes: AppAPI addresses those three directly instead of going
@@ -186,5 +194,5 @@ runs:
       shell: bash
       run: |
         timeout 120 ./occ app_api:app:register findling_backend manual_install --json-info \
-          "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"${{ inputs.exapp-version }}\",\"secret\":\"${{ inputs.exapp-secret }}\",\"port\":${{ inputs.exapp-port }},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\"search\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]}]}" \
+          "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"${{ inputs.exapp-version }}\",\"secret\":\"${{ inputs.exapp-secret }}\",\"port\":${{ inputs.exapp-port }},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\"search\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]},{\"url\":\"snippets\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]},{\"url\":\"status\",\"verb\":\"GET\",\"access_level\":2,\"headers_to_exclude\":[]}]}" \
           --force-scopes --wait-finish
