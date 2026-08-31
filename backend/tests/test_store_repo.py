@@ -26,7 +26,16 @@ from pathlib import Path
 
 import pytest
 
-from findling.store.repo import SCHEMA_VERSION, UNKNOWN_VERSION, Store, enable_wal, open_read_only, open_store
+from findling.store.repo import (
+    SCHEMA_VERSION,
+    STATE_REASONS,
+    UNKNOWN_VERSION,
+    FileMeta,
+    Store,
+    enable_wal,
+    open_read_only,
+    open_store,
+)
 
 
 @pytest.fixture
@@ -34,6 +43,19 @@ def store(tmp_path: Path) -> Iterator[Store]:
     opened = open_store(tmp_path / "state.db")
     yield opened
     opened.close()
+
+
+def a_file(file_id: int = 1) -> FileMeta:
+    """The metadata one crawled file arrives with. Values are irrelevant here."""
+    return FileMeta(
+        storage_id=2,
+        root_id=3,
+        path=f"files/report-{file_id}.pdf",
+        title=f"report-{file_id}.pdf",
+        mime="application/pdf",
+        size=1024,
+        mtime=1_700_000_000,
+    )
 
 
 def test_open_store_creates_the_database_and_is_idempotent(tmp_path: Path) -> None:
@@ -152,3 +174,142 @@ def test_version_mismatch_reports_a_mark_that_was_never_written(store: Store) ->
 
 def test_version_mismatch_is_empty_when_everything_matches(store: Store) -> None:
     assert store.version_mismatch(store.read_meta()) == []
+
+
+def test_record_writes_state_and_reason_and_stamps_the_verdict(store: Store) -> None:
+    store.record(7, a_file(7), "skipped", "too_large")
+
+    row = store.file_row(7)
+
+    assert row is not None
+    assert row["state"] == "skipped"
+    assert row["reason"] == "too_large"
+    assert row["indexed_at"] > 0
+    assert row["path"] == "files/report-7.pdf"
+
+
+def test_indexed_carries_no_reason_and_may_carry_truncated(store: Store) -> None:
+    store.record(1, a_file(1), "indexed", content_hash="abc", text_chars=42)
+    store.record(2, a_file(2), "indexed", "truncated", content_hash="def", text_chars=524_288)
+
+    assert store.counts()["indexed"] == 2
+    assert store.reasons_by_state()["indexed"] == {None: 1, "truncated": 1}
+
+
+def test_a_reason_outside_the_closed_list_is_rejected(store: Store) -> None:
+    # The reason codes are rendered on an admin page in phase 4. Free text is the
+    # shortest path to a file name standing in a place where no file name may
+    # stand, so the store refuses it rather than trusting every caller.
+    with pytest.raises(ValueError, match="reason"):
+        store.record(1, a_file(1), "failed", "could not read /files/anna/Kuendigung.pdf")
+
+    assert store.file_row(1) is None
+
+
+def test_a_reason_that_does_not_fit_its_state_is_rejected(store: Store) -> None:
+    # too_large is a decision not to index, never an attempt that went wrong.
+    # Mixing the two would make the failure counter of the status page lie.
+    with pytest.raises(ValueError, match="reason"):
+        store.record(1, a_file(1), "failed", "too_large")
+
+    assert store.file_row(1) is None
+
+
+def test_an_unknown_state_is_rejected(store: Store) -> None:
+    with pytest.raises(ValueError, match="state"):
+        store.record(1, a_file(1), "pending")
+
+
+def test_skipped_and_failed_need_a_reason(store: Store) -> None:
+    with pytest.raises(ValueError, match="reason"):
+        store.record(1, a_file(1), "skipped")
+    with pytest.raises(ValueError, match="reason"):
+        store.record(2, a_file(2), "failed")
+
+
+def test_no_text_layer_is_a_skip_and_the_bridge_to_phase_three(store: Store) -> None:
+    # Without this reason phase 3 would need a full reindex just to learn which
+    # PDFs need OCR.
+    store.record(1, a_file(1), "skipped", "no_text_layer")
+
+    assert "no_text_layer" in STATE_REASONS["skipped"]
+    assert store.reasons_by_state()["skipped"] == {"no_text_layer": 1}
+
+
+def test_counts_names_every_state_even_the_empty_ones(store: Store) -> None:
+    # A missing key in a status output is the kind of gap where zero and error
+    # look the same.
+    store.record(1, a_file(1), "failed", "corrupt")
+
+    assert store.counts() == {"indexed": 0, "skipped": 0, "failed": 1}
+
+
+def test_reasons_by_state_breaks_the_counters_down(store: Store) -> None:
+    store.record(1, a_file(1), "failed", "corrupt")
+    store.record(2, a_file(2), "failed", "corrupt")
+    store.record(3, a_file(3), "failed", "timeout")
+
+    assert store.reasons_by_state()["failed"] == {"corrupt": 2, "timeout": 1}
+    assert store.reasons_by_state()["skipped"] == {}
+
+
+def test_record_increments_attempts(store: Store) -> None:
+    # The data behind giving up after three tries.
+    store.record(1, a_file(1), "failed", "gateway_error")
+    store.record(1, a_file(1), "failed", "gateway_error")
+
+    row = store.file_row(1)
+
+    assert row is not None
+    assert row["attempts"] == 2
+
+
+def test_is_unchanged_is_true_for_the_same_hash_in_state_indexed(store: Store) -> None:
+    store.record(1, a_file(1), "indexed", content_hash="cafe")
+
+    assert store.is_unchanged(1, "cafe") is True
+    assert store.is_unchanged(1, "beef") is False
+
+
+def test_is_unchanged_is_false_for_an_unknown_file_and_an_unknown_hash(store: Store) -> None:
+    assert store.is_unchanged(404, "cafe") is False
+
+    store.record(1, a_file(1), "indexed", content_hash=None)
+
+    assert store.is_unchanged(1, "cafe") is False
+
+
+def test_is_unchanged_is_false_for_a_file_that_was_not_indexed(store: Store) -> None:
+    store.record(1, a_file(1), "failed", "gateway_error", content_hash="cafe")
+
+    assert store.is_unchanged(1, "cafe") is False
+
+
+def test_is_unchanged_is_false_after_the_index_version_moved(store: Store) -> None:
+    # Same bytes, different analyzer. Answering True here would let an index
+    # version bump skip every file it was raised to rebuild.
+    store.record(1, a_file(1), "indexed", content_hash="cafe")
+    store.write_meta("index_version", "2")
+
+    assert store.is_unchanged(1, "cafe") is False
+
+
+def test_reset_for_reindex_removes_only_the_stale_rows(store: Store) -> None:
+    store.record(1, a_file(1), "indexed", content_hash="cafe")
+    store.write_meta("index_version", "2")
+    store.record(2, a_file(2), "indexed", content_hash="beef")
+
+    removed = store.reset_for_reindex(2)
+
+    assert removed == 1
+    assert store.file_row(1) is None
+    assert store.file_row(2) is not None
+
+
+def test_record_mount_mirrors_the_crawl_progress(store: Store) -> None:
+    # A mirror for the display. The original of the cursor lives in the argument
+    # of the next background job in Nextcloud.
+    store.record_mount(2, 3, 900, 120)
+    store.record_mount(2, 3, 1800, 240)
+
+    assert store.mount_rows() == [{"storage_id": 2, "root_id": 3, "cursor_file_id": 1800, "files_seen": 240}]
