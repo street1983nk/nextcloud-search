@@ -14,9 +14,12 @@
 	file unchanged. Filtering or rewriting it during packaging would leave the
 	installed app without its search route and without an error message.
 
-	The version is kept identical to php/appinfo/info.xml. Both halves are
-	released together, so a user cannot end up with two versions that disagree
-	about the protocol between them.
+	The version is kept identical to php/appinfo/info.xml, and to the image-tag
+	below. Both halves are released together, so a user cannot end up with two
+	versions that disagree about the protocol between them, and the release step
+	in docker.yml compares all three against the git tag before it builds. Phase
+	2 raises both halves from 0.1.0 to 0.2.0: the container gained a second and a
+	third route, and the PHP side now calls them.
 -->
 <info>
 	<id>findling_backend</id>
@@ -28,9 +31,17 @@ It extracts text from documents, runs OCR on scanned pages and maintains the
 search index. All of that happens inside your own instance: no file content
 ever leaves the server, and nothing is ever written back to your files.
 
+What is stored, so that nobody has to guess: the text extracted from every
+indexed document is kept in this app's own volume, because the short excerpts
+shown under a search result are cut out of it on demand. A backup of that
+volume, including the ones an all-in-one setup takes, therefore contains the
+text of your indexed documents. None of it is sent anywhere: the volume is on
+your server, the index is read by this container only, and the search never
+leaves the instance.
+
 This app does nothing on its own. Install the app "Findling", which puts the
 results into the normal search bar and is the only caller of this backend.]]></description>
-	<version>0.1.0</version>
+	<version>0.2.0</version>
 	<licence>agpl</licence>
 	<author>street1983nk</author>
 	<category>files</category>
@@ -49,13 +60,15 @@ results into the normal search bar and is the only caller of this backend.]]></d
 				so this exact tag has to exist in the registry before a release
 				is published, not after.
 			-->
-			<image-tag>0.1.0</image-tag>
+			<image-tag>0.2.0</image-tag>
 		</docker-install>
 		<routes>
 			<!--
-				Exactly one route. /enabled, /heartbeat and /init need no entry:
-				AppAPI addresses those directly instead of going through the
-				proxy, so declaring them would only widen the surface.
+				Three routes, and that is the whole reachable surface of this
+				container. /enabled, /heartbeat and /init need no entry: AppAPI
+				addresses those directly instead of going through the proxy, so
+				declaring them would only widen it for nothing. No route is
+				reachable without a Nextcloud login (T-02-72).
 
 				Brute force protection is limited to 401 and nothing else.
 				Adding 500 would mean that a backend defect blocks the instance
@@ -69,13 +82,68 @@ results into the normal search bar and is the only caller of this backend.]]></d
 				<headers_to_exclude>[]</headers_to_exclude>
 				<bruteforce_protection>[401]</bruteforce_protection>
 			</route>
+			<!--
+				Why the excerpts are a second call and not part of the first
+				one: an excerpt is document content, and it may only be built
+				for a hit that survived the permission recheck, which happens in
+				PHP after the search answered. One call would mean the container
+				hands out text for hits that PHP is about to drop.
+			-->
+			<route>
+				<url>snippets</url>
+				<verb>POST</verb>
+				<access_level>USER</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+			<!--
+				The status route is filled in phase 2 and read in phase 4, which
+				builds the admin page on top of it. It answers with counters and
+				versions, never with a path and never with a search term
+				(T-02-73), and it is the one route with ADMIN instead of the
+				USER baseline of the other two: how far the indexing has come is
+				an operator's business, not every user's.
+			-->
+			<route>
+				<url>status</url>
+				<verb>GET</verb>
+				<access_level>ADMIN</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
 		</routes>
+		<!--
+			These are the settings, and there is no settings page. Every name
+			below is spelled exactly as backend/src/findling/config.py reads it;
+			a variable that is renamed on one side and not on the other is
+			simply ignored, with no error anywhere. An unusable value never
+			stops the container either: config.py falls back to the default
+			shown here and logs the name of the variable (T-02-74).
+		-->
 		<environment-variables>
 			<variable>
 				<name>FINDLING_LOG_LEVEL</name>
 				<display-name>Log level</display-name>
 				<description>One of debug, info, warning, error. Anything else falls back to info.</description>
 				<default>info</default>
+			</variable>
+			<variable>
+				<name>FINDLING_LANGUAGES</name>
+				<display-name>Index languages</display-name>
+				<description>Comma separated, currently de and en. Changing this changes how text is broken into words, so the index has to be built again afterwards: until it is, older documents answer differently from newer ones, which looks like "my hits are gone". An empty or unknown value keeps de,en.</description>
+				<default>de,en</default>
+			</variable>
+			<variable>
+				<name>FINDLING_COMPOUND_DICT</name>
+				<display-name>German compound word list</display-name>
+				<description>full or nouns. Measured: full has 276496 entries and finds 14 of 16 test compounds through one of their parts; nouns has 86345 entries, finds 12 of 16 and needs roughly two thirds less memory for the splitting automaton, which is worth having on a small box. Like the language list, this changes how text is broken into words and requires the index to be built again.</description>
+				<default>full</default>
+			</variable>
+			<variable>
+				<name>FINDLING_MAX_FILE_BYTES</name>
+				<display-name>Largest file that gets indexed</display-name>
+				<description>In bytes, 52428800 is 50 MB. Larger files are skipped while the file list is walked, so they never cost the container anything. Raising this raises the peak memory of one extraction. Anything that is not a positive whole number falls back to the default.</description>
+				<default>52428800</default>
 			</variable>
 		</environment-variables>
 	</external-app>
