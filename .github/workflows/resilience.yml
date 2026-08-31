@@ -121,7 +121,7 @@ jobs:
       # Background jobs do not run by themselves in this CI, so both halves are
       # started by hand. The scheduler creates one crawl job per mount, the crawl
       # walks the mount in slices and plans its own successor, which is why the
-      # worker runs with --stop-after instead of --once.
+      # worker runs with --stop_after instead of --once.
       - name: Queue the crawl
         run: |
           # --no-interaction: occ treats this shell as interactive (no TTY check
@@ -140,7 +140,10 @@ jobs:
       # defect.
       - name: Crawl, and kill the container in the middle of the first index
         run: |
-          timeout 300 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop-after 120 \
+          # stop_after with an underscore: the dashed spelling does not exist on
+          # background-job:worker, Symfony rejects it and the crawl never runs
+          # (second first-run finding of this gate).
+          timeout 300 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 120 \
             > "${{ runner.temp }}/crawl.log" 2>&1 &
 
           status() {
@@ -169,6 +172,10 @@ jobs:
               echo "the run never reached the state this test needs: some documents done and others still open"
               echo "${report}"
               ./occ findling:index
+              # The crawl worker runs detached; without its log a dead worker
+              # and an empty account look identical from here.
+              echo "--- crawl worker log ---"
+              cat "${{ runner.temp }}/crawl.log" || true
               exit 1
             fi
             sleep 1
