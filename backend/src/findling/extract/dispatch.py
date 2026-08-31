@@ -74,14 +74,6 @@ ALLOWED_MIMETYPES: Final[Mapping[str, Route]] = {
 }
 
 
-# The routes that have an extractor behind them. The three text formats arrived
-# with plan 02-05, the document formats with plan 02-08, and what is not in here
-# raises rather than pretends.
-_ROUTES_WITH_AN_EXTRACTOR: Final = frozenset(
-    {Route.PLAIN, Route.HTML, Route.RTF, Route.PDF, Route.DOCX, Route.PPTX, Route.XLSX}
-)
-
-
 def judge(mime: str, size: int) -> Route | ExtractionOutcome:
     """Decide before the first byte: a route to follow, or a finished verdict.
 
@@ -153,21 +145,22 @@ def _run_route(route: Route, path: str) -> ExtractionOutcome:
     either. In a process that is recycled every 200 files, an import that is not
     needed is an import paid over and over.
 
-    A route without an extractor raises instead of returning a verdict, because a
-    missing extractor is a hole in this container and not a property of the
-    document: reporting it as skipped would bury the gap in a counter nobody
-    reads twice. The message names the route and never the file, since an
-    exception text is the easiest way to smuggle a file name into a log
-    (T-02-56).
+    Every route of the allowlist arrives at an extractor from here on. While the
+    document formats were still missing, this function raised for them rather than
+    reporting them as skipped, because a missing extractor was a hole in this
+    container and not a property of the document. That guard is gone with plan
+    02-08, and there is a test that walks the whole allowlist so it cannot be
+    needed again unnoticed.
     """
-    if route not in _ROUTES_WITH_AN_EXTRACTOR:
-        raise NotImplementedError(f"the {route.value} extractor arrives in plan 02-08")
-
     match route:
         case Route.PDF:
             from findling.extract import pdf
 
             return pdf.extract_pdf(path)
+        case Route.ODF:
+            from findling.extract import odf
+
+            return odf.extract_odf(path)
         case Route.DOCX | Route.PPTX | Route.XLSX:
             return _run_ooxml_route(route, path)
         case _:

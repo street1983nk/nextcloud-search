@@ -495,9 +495,7 @@ def test_the_content_parser_follows_neither_an_entity_nor_a_url(tmp_path: Path) 
     assert "TOPSECRET-PASSPHRASE" in "".join(leaked.itertext())
 
 
-def test_the_archive_is_only_ever_read_and_never_unpacked(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_the_archive_is_only_ever_read_and_never_unpacked(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # extractall() writes attacker chosen names to the file system, which is how
     # zip slip works. The one part that is needed is read into memory instead, and
     # this test is the reason that cannot be quietly changed back.
