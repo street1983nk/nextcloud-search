@@ -14,8 +14,9 @@ a whole class of cleanup mistakes on the error path, where cleanup is forgotten.
 page loop and keep what was read, two end the job:
 
 * pages per document, and the verdict is ``indexed(truncated)``
-* seconds per page, enforced by the child process call; the page is dropped and
-  the loop goes on, and only if every page went that way is it ``failed(timeout)``
+* seconds per page, enforced by the child process call; the page is dropped, the
+  loop goes on and the document says ``truncated``, and only if every page went
+  that way is it ``failed(timeout)``
 * the soft overall deadline, checked before each page, again ``indexed(truncated)``
 * the hard deadline of the parent and ``RLIMIT_AS`` sit outside this module
 
@@ -167,7 +168,11 @@ def _read_document(document: pypdfium2.PdfDocument, resolved: Settings) -> Extra
     if attempted > 0 and lost == attempted:
         # Not a thin document: nothing was read at all, and that is a failure.
         return ExtractionOutcome.failed(Reason.TIMEOUT)
-    return _verdict("\n".join(parts), truncated=cut)
+    # A page lost to its timeout counts as a cut (review finding WR-03). D-08
+    # says a partial result is visible as such, and a document that silently
+    # dropped half its pages is exactly the quietly thin result the module head
+    # rules out; no later run fetches the lost page, the hash never changes.
+    return _verdict("\n".join(parts), truncated=cut or lost > 0)
 
 
 def read_page(png: bytes, languages: str, seconds: int) -> str:

@@ -303,7 +303,9 @@ def test_a_document_over_the_page_cap_is_indexed_and_says_truncated(monkeypatch:
     assert len(engine.calls) == 1
 
 
-def test_a_page_over_the_time_cap_is_dropped_and_the_loop_goes_on(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_page_over_the_time_cap_is_dropped_and_the_document_says_truncated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def answers(number: int) -> _Finished:
         if number == 0:
             raise subprocess.TimeoutExpired(cmd="tesseract", timeout=30)
@@ -313,9 +315,13 @@ def test_a_page_over_the_time_cap_is_dropped_and_the_loop_goes_on(monkeypatch: p
 
     outcome = ocr.extract_pdf_ocr(SCAN)
 
-    # One page lost, the document kept. A hanging page costs the page.
+    # One page lost, the document kept, and the loss visible. A document that
+    # silently dropped a page is exactly the quietly thin result D-08 rules
+    # out (review finding WR-03): no later run fetches the lost page, because
+    # the hash never changes, so the mark is the only trace the loss leaves.
     assert outcome.state is State.INDEXED
-    assert outcome.reason is None
+    assert outcome.reason is Reason.TRUNCATED
+    assert outcome.truncated is True
     assert "Seite 1" in outcome.text
     assert "Seite 2" in outcome.text
     assert len(engine.calls) == 3
@@ -754,6 +760,27 @@ def test_all_frames_of_a_multi_frame_tiff_are_read_under_the_cap(monkeypatch: py
     # not the file.
     assert outcome.state is State.INDEXED
     assert outcome.reason is None
+    assert len(engine.calls) == 3
+
+
+def test_a_lost_frame_of_a_multi_frame_tiff_is_visible_as_truncated(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The picture half of review finding WR-03: a fax archive that lost its
+    # middle page to the page timeout is a partial result, and D-08 wants a
+    # partial result visible as one instead of quietly thin.
+    def answers(number: int) -> _Finished:
+        if number == 1:
+            raise subprocess.TimeoutExpired(cmd="tesseract", timeout=30)
+        return _Finished(stdout=f"Sendebericht, Seite {number} von drei\n".encode())
+
+    engine = _install_engine(monkeypatch, answers)
+
+    outcome = image.extract_image(FAX)
+
+    assert outcome.state is State.INDEXED
+    assert outcome.reason is Reason.TRUNCATED
+    assert outcome.truncated is True
+    assert "Seite 0" in outcome.text
+    assert "Seite 2" in outcome.text
     assert len(engine.calls) == 3
 
 

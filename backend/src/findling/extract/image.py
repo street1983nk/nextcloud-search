@@ -199,7 +199,10 @@ def _read_frames(picture: Image.Image, resolved: Settings) -> ExtractionOutcome:
     if attempted > 0 and lost == attempted:
         # Nothing was read at all, so this is not a thin picture, it is a failure.
         return ExtractionOutcome.failed(Reason.TIMEOUT)
-    return _verdict("\n".join(parts), truncated=cut)
+    # A frame lost to its timeout counts as a cut, for the reason the scan
+    # branch gives (review finding WR-03): D-08 wants a partial result visible
+    # as one, and a fax archive missing a page is a partial result.
+    return _verdict("\n".join(parts), truncated=cut or lost > 0)
 
 
 def _encode_frame(picture: Image.Image) -> bytes:
