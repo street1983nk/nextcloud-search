@@ -269,9 +269,7 @@ def _pdf_with_page_lines(pages: Sequence[Sequence[str]]) -> bytes:
                 f" /Resources << /Font << /F1 {font_number} 0 R >> >> /Contents {4 + 2 * index} 0 R >>"
             ).encode("ascii")
         )
-        objects.append(
-            f"<< /Length {len(content)} >>\nstream\n".encode("ascii") + bytes(content) + b"\nendstream"
-        )
+        objects.append(f"<< /Length {len(content)} >>\nstream\n".encode("ascii") + bytes(content) + b"\nendstream")
     objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
     return _assemble_pdf(objects)
 

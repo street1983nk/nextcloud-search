@@ -249,13 +249,102 @@ null wird zu `failed(ocr_failed)`.
 inhaltsbezogene Warnungen, und die Regel aus Phase 2 (T-02-107: der Log trägt
 Zähler und Reason-Codes, sonst nichts) gilt hier unverändert.
 
+## Die Textlayer-Erkennung
+
+Diese Entscheidung fällt vor jedem OCR-Aufruf und ist die teuerste der ganzen
+Kaskade: Sie sagt, ob ein PDF überhaupt in die OCR-Spur geht. Ab dieser Phase
+ist der Fehler nicht mehr symmetrisch billig. Ein Text-PDF, das fälschlich
+gerastert und durch tesseract geschickt wird, kostet nach der Deckel-Kaskade
+oben bis zu 600 Sekunden CPU, für einen Text, der schon dastand.
+
+**Datum:** 2026-09-01
+**Womit:** dem Referenzkorpus dieses Repositories, 33 Dateien, davon 19 PDFs,
+gelesen mit der `pypdfium2` 5.13.0 aus `backend/uv.lock`.
+
+```
+cd backend && uv run python -c "
+from pathlib import Path
+import pypdfium2
+for path in sorted(Path('../testdata/corpus').glob('*.pdf')):
+    document = pypdfium2.PdfDocument(str(path))
+    counts = []
+    for number in range(min(len(document), 30)):
+        page = document[number]
+        textpage = page.get_textpage()
+        counts.append(len(textpage.get_text_bounded().strip()))
+        textpage.close()
+        page.close()
+    document.close()
+    print(path.name, counts)
+"
+```
+
+Zeichen je Seite, nach `strip()`:
+
+| Datei | Seiten | Gemessen | Was die Seite ist |
+|---|---|---|---|
+| `14-pacht-mit-anhang.pdf` | 5 | 456, 442, 0, 0, 0 | zwei volle A4-Seiten Verwaltungsprosa, dahinter drei gescannte Anlagen |
+| `09-bescheid.pdf` | 1 | 123 | drei kurze Zeilen |
+| `01-text-layer.pdf` | 1 | 63 | zwei kurze Zeilen |
+| `29-doppelt-komprimiert.pdf` | 1 | 29 | eine Zeile, die dünnste echte Textseite des Korpus |
+| `31-riesenformat.pdf` | 1 | 12 | nur eine Überschrift, auf 14400 x 14400 Punkt |
+| `13`, `15`, `16`, `30` und die Anlagen von `14` | 9 | jeweils 0 | gerenderte Scans |
+
+**Die wichtigste Zahl ist die Null.** Eine gerasterte Seite misst nicht wenig,
+sondern exakt nichts: Es gibt kein Textobjekt, über das sich streiten ließe.
+Der Korpus allein würde deshalb jede Schwelle zwischen 1 und 12 zulassen, und
+genau deshalb ist er nicht der ganze Maßstab.
+
+**Gewählt: `_MIN_CHARS_PER_PAGE = 25`, unverändert, jetzt aber belegt.** Die
+Zahl muss die Frage beantworten, die der Korpus nicht stellt: Was trägt eine
+Seite, auf der nur ein Stempel steht? Eine gemessene Prosazeile ist 38 Zeichen
+breit, ein aufgestempeltes "Seite 3 von 40" sind 14 Zeichen, und die dünnste
+echte Textseite der Messung hat 29. Die 25 liegen zwischen diesen beiden
+Nachbarn und näher an der echten Seite, weil der Fehler jetzt in Richtung
+OCR-Kosten teuer ist. Annahme A2 aus der Phasenrecherche überlebt damit ihre
+Messung und hört auf, eine Annahme zu sein.
+
+**Zweite Zahl: `_SCAN_PAGE_SHARE = 2/3`.** Je Seite zu zählen ist nur die halbe
+Antwort auf Bug M2 aus dem Phase-2-Audit; die andere Hälfte ist, dass eine
+einzelne Seite gar nichts entscheiden darf. Zwei gemessene Fälle klammern den
+Wert ein:
+
+| Fall | Anteil Seiten unter der Schwelle | Richtiges Verdikt |
+|---|---|---|
+| `14-pacht-mit-anhang.pdf`, zwei lesbare Seiten plus drei gescannte Anlagen | 3 von 5, also 0,60 | `indexed` |
+| Deckblatt mit Text plus neun Scanseiten | 9 von 10, also 0,90 | `skipped(no_text_layer)` |
+
+Genau zwei Drittel gelten noch als Dokument mit Textlayer: Der Vergleich im Code
+ist echt größer, also werden 2 von 3 gescannten Seiten extrahiert und 3 von 4
+nicht.
+
+**Der Realfall, den beide Extreme falsch behandeln,** ist die Pachtvereinbarung
+mit ihren drei eingescannten Anlagen, und "beide" ist wörtlich gemeint. Der alte
+Dokumentdurchschnitt hätte 898 Zeichen gegen 5 mal 25 gerechnet und das Dokument
+indexiert, samt drei Anlagen, die danach nie wieder jemand ansieht. Eine Regel
+"eine Seite ohne Text heißt Scan" hätte dieselbe Datei komplett durch tesseract
+geschickt, für einen Text, der auf den ersten beiden Seiten bereits maschinell
+lesbar dastand. Nur die Kombination aus Zählung je Seite und Anteilsregel
+behandelt sie richtig.
+
+**Was der gemischte Fall nicht tut:** Die drei Anlagenseiten werden in v1 nicht
+zusätzlich OCR-t. Eine Datei hat genau ein Verdikt, und ein zweiter Teil-Job je
+Datei wäre eine eigene Mechanik mit eigenem Warteschlangeneintrag, eigenem
+Versuchszähler und einer eigenen Art, halb fertig zu sein. Die Anlage einer
+Pachtvereinbarung ist diese Mechanik nicht wert; die Entscheidung steht als
+Kommentar an derselben Stelle im Code.
+
+**Nebenbefund, der in die Deckel-Kaskade gehört:** `26-riesige-seitenzahl.pdf`
+sind 627 Byte, die 100000 Seiten deklarieren, und `len(document)` liefert
+tatsächlich 100000. Erst der Seitendeckel macht daraus 30 Leseversuche, von
+denen der zweite mit `Failed to load page` endet. Ohne den Deckel wäre die
+Schleife hunderttausend Fehlversuche lang. Die Datei liegt genau dafür im
+Korpus (Bedrohung T-03-601), und sie ist in unter zehn Millisekunden fertig.
+
 ## Was diese Seite nicht misst
 
 Ehrlichkeitshalber, damit die nächste Phase nicht das Falsche annimmt:
 
-- **Die Textlayer-Schwelle.** `_MIN_CHARS_PER_PAGE = 25` in `pdf.py` ist
-  weiterhin an zwei Korpusdateien gemessen. Sie gehört an einen echten
-  DACH-Korpus, und das ist Sache des Plans, der die Erkennung verdrahtet.
 - **Die OCR-Qualität auf echten Scans.** Die Vorlage hier ist gerenderter Text,
   also der freundlichste denkbare Fall. Wie gut tesseract ein schief
   eingescanntes Protokoll liest, sagt diese Seite nicht, und der Abnahmetest für

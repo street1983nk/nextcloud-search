@@ -605,21 +605,28 @@ jobs:
       OVERVIEW_FILE: '11-uebersicht.odt'
       MEMO_FILE: '12-aktenvermerk.txt'
       # What the container has to end up with, measured against the corpus and
-      # not guessed. Thirteen entries lie in the directory, twelve of them reach
-      # the container: the png is kept out by the mimetype allowlist of the crawl
-      # and therefore never gets a verdict at all.
+      # not guessed. Thirty three entries lie in the directory, twenty five of
+      # them reach the container: the eight image files are kept out by the
+      # mimetype allowlist of the crawl and therefore never get a verdict at all.
+      # Images become indexable with the OCR route of this phase, and the numbers
+      # below move on the day they do.
       #
-      # failed is one and not zero, and that is the corpus doing its job:
-      # 06-zero-bytes.pdf is an empty file on purpose. skipped is two, the scan
-      # without a text layer (OCR is phase 3) and the encrypted PDF. Asserting
-      # the exact numbers is the point; "failed is small" would hide the day a
-      # working document starts failing.
-      EXPECTED_INDEXED: '8'
-      EXPECTED_SKIPPED: '2'
-      EXPECTED_FAILED: '1'
-      # Ceiling of the wait for an empty queue. Thirteen small files, so this is
-      # a generous bound whose only job is to end a broken run with counters
-      # instead of with a reaped runner.
+      # The three numbers were produced by running the real dispatcher over the
+      # corpus with the mimetypes of the allowlist, not by counting by hand:
+      #   cd backend && uv run python -c "..."   (the loop is in 03-06-SUMMARY.md)
+      #
+      # failed is six and not zero, and that is the corpus doing its job: the
+      # zero byte file plus five of the ten deliberately broken PDFs of phase 3.
+      # The other five are broken in ways pdfium repairs or in ways that end as
+      # an OCR candidate, and testdata/CORPUS.md carries the verdict of every
+      # single one. Asserting the exact numbers is the point; "failed is small"
+      # would hide the day a working document starts failing.
+      EXPECTED_INDEXED: '12'
+      EXPECTED_SKIPPED: '7'
+      EXPECTED_FAILED: '6'
+      # Ceiling of the wait for an empty queue. Twenty five small files, none of
+      # them over 80 kB, so this is a generous bound whose only job is to end a
+      # broken run with counters instead of with a reaped runner.
       DRAIN_TIMEOUT: '420'
       # The delay the container is restarted with for the time budget probe.
       # It acts in /snippets only (test hook of plan 02-11), so the first call
@@ -862,7 +869,7 @@ jobs:
             jq -e '.ocs.data.entries | length == 0' colleague-denied.json > /dev/null \
               || fail "the second user found a file that was never shared with him, searching for ${term}" colleague-denied.json
           done
-          echo "the second user sees one file out of thirteen, and it is the shared one"
+          echo "the second user sees one file out of thirty three, and it is the shared one"
 
       # The time budget, measured instead of claimed. The container is restarted
       # with FINDLING_ARTIFICIAL_DELAY_MS, which acts in /snippets and nowhere
@@ -947,11 +954,11 @@ jobs:
             exit 1
           fi
           if [ "${skipped}" -ne "${EXPECTED_SKIPPED}" ]; then
-            echo "::error::${skipped} files were skipped, ${EXPECTED_SKIPPED} were expected: the scan without a text layer and the encrypted PDF"
+            echo "::error::${skipped} files were skipped, ${EXPECTED_SKIPPED} were expected: the encrypted PDF and six documents without a text layer"
             exit 1
           fi
           if [ "${failed}" -ne "${EXPECTED_FAILED}" ]; then
-            echo "::error::${failed} files failed, ${EXPECTED_FAILED} was expected: the zero byte PDF and nothing else"
+            echo "::error::${failed} files failed, ${EXPECTED_FAILED} were expected: the zero byte PDF and five of the ten broken ones"
             exit 1
           fi
           if [ "${docs}" -ne "${indexed}" ]; then

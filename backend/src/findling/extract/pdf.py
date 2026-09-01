@@ -18,8 +18,14 @@ The third decision is the one that reaches furthest: a PDF without a text layer
 is **not** a failure, it is skipped(no_text_layer). That verdict is the queue
 phase 3 works through with OCR, and it has
 to be recorded now, otherwise phase 3 needs a complete reindex just to find out
-which files it is even about. The threshold that separates the two cases carries
-its own reasoning below, because it is the softest number in this module.
+which files it is even about. The two numbers that separate the cases used to be
+the softest thing in this module; since phase 3 they are measured over the whole
+reference corpus, and the measurement stands at each of them.
+
+The decision runs per page and then over the share of pages, never over the
+document average. That is bug M2 of the phase 2 audit and pitfall 9 of the phase
+3 research in one line of code: an average lets a cover page speak for nine
+scanned ones, in whichever of the two directions the document happens to lean.
 
 Like every module of this package, this one never writes: it opens documents for
 reading, and the original file is not touched even on the error path (IDX-07).
@@ -35,28 +41,50 @@ from findling import config
 from findling.extract.dispatch import cap_text
 from findling.extract.errors import ExtractionOutcome, Reason
 
-# Assumption A2 of the phase research, and the softest number here.
+# Measured on 2026-09-01 over the whole reference corpus, on the pypdfium2
+# 5.13.0 of this lock file. The command line and the full table are in
+# docs/ocr.md under "Die Textlayer-Erkennung"; the numbers are characters per
+# page after strip():
 #
-# The research proposes "under 100 characters in the whole document". That number
-# cannot be used as written: the reference corpus file with a real text layer
-# carries 63 characters, so a document wide threshold of 100 would file the one
-# PDF the research itself calls indexed as an OCR candidate. The measured pair is
-# 63 characters on one page against 0 characters on the scanned page, so any
-# threshold between them separates the two.
+#   14-pacht-mit-anhang.pdf   456, 442, 0, 0, 0   full A4 prose, then the annex
+#   09-bescheid.pdf           123                 three short lines
+#   01-text-layer.pdf          63                 two short lines
+#   29-doppelt-komprimiert.pdf 29                 one line, the sparsest real one
+#   31-riesenformat.pdf        12                 a headline and nothing else
+#   13, 15, 16, 30 and the annex pages of 14: exactly 0 on every page
 #
-# It is counted per page instead of per document, which is what the research names
-# as the better shape: a PDF with one line of text on the cover and forty scanned
-# pages behind it would pass a document wide threshold and would then never be
-# OCR-ed. Twenty five characters is roughly one short line of text; a scanned page
-# whose only text object is a stamped "Seite 3 von 40" stays below it and remains
-# a candidate.
+# So a rendered scan measures 0 and never something small: the separation is the
+# whole range, and the corpus alone would allow any threshold between 1 and 12.
+# The number therefore answers the question the corpus cannot: what does a page
+# carry that is only a stamp? A measured prose line is 38 characters wide, a
+# stamped "Seite 3 von 40" is 14, and the sparsest genuine text page measured is
+# 29. Twenty five sits between those two, which is where it already sat as
+# assumption A2; the assumption survives its measurement and stops being one.
 #
-# The error is asymmetric, which is why the threshold sits high rather than low. A
-# text PDF wrongly sent to OCR still ends up with its text in phase 3. A scan
-# wrongly called indexed is never looked at again. Phase 3 adjusts this number
-# with measurements against real documents; until then it is an assumption and
-# says so.
+# It stays low rather than high on purpose, and the reason flipped in phase 3. It
+# used to be cheap to send a text PDF to OCR, because there was no OCR. From here
+# on that mistake costs minutes of CPU per document on a 4 GB box, so the
+# threshold errs towards "this page has text".
+#
+# Measured 2026-09-01 against 14-pacht-mit-anhang.pdf, 09-bescheid.pdf,
+# 01-text-layer.pdf, 29-doppelt-komprimiert.pdf, 31-riesenformat.pdf and the nine
+# rendered scan pages of 13, 15, 16, 30 and 14.
 _MIN_CHARS_PER_PAGE = 25
+
+# How much of a document may be scanned before the whole file is one.
+#
+# Counting per page is only half of the fix for bug M2 of the phase 2 audit; the
+# other half is that a single page decides nothing. Two measured cases bracket
+# this number: 14-pacht-mit-anhang.pdf is a readable agreement with three scanned
+# annex pages behind two readable ones, 3 of 5 or 0.60, and it has to be
+# extracted. A cover page in front of nine scans, 9 of 10 or 0.90, has to go to
+# OCR. Two thirds is the value the phase research proposed, and it lies between
+# the two.
+#
+# Exactly two thirds still counts as a document with a text layer: the comparison
+# below is strictly greater, so 2 scanned pages out of 3 are extracted and 3 out
+# of 4 are not.
+_SCAN_PAGE_SHARE = 2 / 3
 
 
 def extract_pdf(path: str) -> ExtractionOutcome:
@@ -97,9 +125,20 @@ def extract_pdf(path: str) -> ExtractionOutcome:
         document.close()
 
     text = "\n".join(parts)
-    if len(text.strip()) < _MIN_CHARS_PER_PAGE * max(read_pages, 1):
-        # Deliberately not failed and not empty_text. This is the OCR queue.
+    scanned = sum(1 for part in parts if len(part.strip()) < _MIN_CHARS_PER_PAGE)
+    if scanned / max(read_pages, 1) > _SCAN_PAGE_SHARE:
+        # Deliberately not failed and not empty_text. This is the OCR queue, and
+        # the text of the few readable pages is dropped here on purpose: OCR
+        # reads those pages as well, so nothing is lost, and a file that arrived
+        # in the OCR track carrying half its text already would make the later
+        # verdict of that track meaningless.
         return ExtractionOutcome.skipped(Reason.NO_TEXT_LAYER)
+
+    # Mixed, but under the share: the text is indexed and the scanned pages of
+    # this document are not additionally OCR-ed in v1. One file has exactly one
+    # verdict, and a second partial job per file would be a mechanism of its own,
+    # with its own queue entry, its own retry counter and its own way of being
+    # half done. The annex of an agreement is worth less than that machinery.
 
     outcome = cap_text(text)
     if page_count > cap:
