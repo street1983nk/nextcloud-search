@@ -268,6 +268,12 @@ Task 3 traegt `tdd="true"`, und die Gate-Folge steht im Log:
 | 671bdf2 | feat | GREEN-Gate: config.py und info.xml |
 | d907cda | docs | arm64-Paketaufloesung als Beleg der Pin-Entscheidung |
 
+## Self-Check: PASSED
+
+Alle acht in dieser Zusammenfassung genannten Dateien existieren, alle sechs
+Commit-Hashes stehen im Log, und `git diff --name-only cc14285..HEAD` enthaelt
+weder `STATE.md` noch `ROADMAP.md`.
+
 ## Was die naechsten Plaene davon haben
 
 - `settings().ocr_*` liefert sieben fertige Werte, inklusive der abgeleiteten
