@@ -174,10 +174,10 @@ def test_the_recycling_count_still_holds_after_a_job_with_its_own_deadline() -> 
     # the sum of the leaks in a shared address space.
     short_lived = sandbox.ExtractionWorker(max_files=2, timeout_seconds=60)
     try:
-        short_lived.probe("sleep", 0.0, timeout_seconds=30)
+        short_lived.run(NOWHERE, UNSUPPORTED, 1024, timeout_seconds=30)
         first = short_lived.pid
-        short_lived.probe("sleep", 0.0, timeout_seconds=30)
-        short_lived.probe("sleep", 0.0, timeout_seconds=30)
+        short_lived.run(NOWHERE, UNSUPPORTED, 1024, timeout_seconds=30)
+        short_lived.run(NOWHERE, UNSUPPORTED, 1024, timeout_seconds=30)
         third = short_lived.pid
 
         assert first is not None

@@ -108,16 +108,28 @@ def _kill_child_tree(process: SpawnProcess) -> None:
 
 
 def _run_probe(kind: str, amount: float) -> ExtractionOutcome:
-    """Drive the guard into one of its three failure situations, on request.
+    """Drive the guard into one of its four failure situations, on request.
 
     This exists because the guard cannot be tested with a document. A file that
     hangs for two minutes or allocates half a gigabyte is not in the reference
-    corpus, and writing one would test the file rather than the guard. The three
+    corpus, and writing one would test the file rather than the guard. The four
     kinds are reached only through an explicit probe job, never from the
     extraction path, and they never touch user data.
     """
     if kind == "sleep":
         time.sleep(amount)
+    elif kind == "grandchild":
+        # The shape the OCR branch has since phase 3: this child starts a process
+        # of its own and answers while it is still running. Its pid travels back
+        # so that a test can watch the group kill reach it (security audit L3).
+        # A python that sleeps rather than tesseract, because the guard is the
+        # subject here and an engine would only make the test need one.
+        import subprocess
+
+        started = subprocess.Popen(  # noqa: S603 - an argument list, never a shell
+            [sys.executable, "-c", f"import time; time.sleep({float(amount)})"],
+        )
+        return ExtractionOutcome.indexed(str(started.pid))
     elif kind == "allocate":
         # Freed immediately on success. Under RLIMIT_AS this raises MemoryError,
         # which the loop below turns into failed(out_of_memory).
@@ -209,17 +221,17 @@ class ExtractionWorker:
         """The process id of the current child, or None while there is none."""
         return None if self._process is None else self._process.pid
 
-    def run(self, path: str, mime: str, size: int) -> ExtractionOutcome:
+    def run(self, path: str, mime: str, size: int, *, timeout_seconds: float | None = None) -> ExtractionOutcome:
         """Extract one file behind the boundary and return its verdict."""
-        outcome = self._ask((_JOB_EXTRACT, path, mime, size))
+        outcome = self._ask((_JOB_EXTRACT, path, mime, size), timeout_seconds)
         if not isinstance(outcome, ExtractionOutcome):
             outcome = ExtractionOutcome.failed(Reason.CORRUPT)
         self._files_handled += 1
         return self._recycle_if_needed(outcome)
 
-    def probe(self, kind: str, amount: float) -> ExtractionOutcome:
+    def probe(self, kind: str, amount: float, *, timeout_seconds: float | None = None) -> ExtractionOutcome:
         """Run a diagnostic job. See :func:`_run_probe` for why this is here."""
-        outcome = self._ask((_JOB_PROBE, kind, amount))
+        outcome = self._ask((_JOB_PROBE, kind, amount), timeout_seconds)
         if not isinstance(outcome, ExtractionOutcome):
             outcome = ExtractionOutcome.failed(Reason.CORRUPT)
         return self._recycle_if_needed(outcome)
@@ -239,8 +251,16 @@ class ExtractionWorker:
                 pass
         self._recycle()
 
-    def _ask(self, job: tuple[object, ...]) -> object:
-        """Send one job, wait for the answer with a deadline, judge what comes back."""
+    def _ask(self, job: tuple[object, ...], timeout_seconds: float | None = None) -> object:
+        """Send one job, wait for the answer with a deadline, judge what comes back.
+
+        The deadline is an argument of the job and not a property of the worker,
+        because there are two of them. A text job gets EXTRACT_TIMEOUT_SECONDS,
+        an OCR job the far longer budget of docs/ocr.md, and the caller that
+        knows which kind of job this is is the only one that can tell them apart.
+        Anything that passes nothing keeps the configured default.
+        """
+        deadline = self._timeout_seconds if timeout_seconds is None else float(timeout_seconds)
         self._start_child()
         process, pipe = self._process, self._pipe
         if process is None or pipe is None:  # pragma: no cover - _start_child sets both
@@ -253,9 +273,17 @@ class ExtractionWorker:
             self._recycle()
             return ExtractionOutcome.failed(Reason.CORRUPT)
 
-        if not pipe.poll(self._timeout_seconds):
+        if not pipe.poll(deadline):
             # Recycling rule 2: over the deadline. Only a kill ends a hung C
             # extension, and after it the process is gone by definition.
+            #
+            # Which deadline this is matters. An OCR job carries the hard one of
+            # docs/ocr.md, and it has to sit strictly above the soft deadline the
+            # child checks in its page loop: without that distance the parent
+            # kills the child in the very moment it wants to hand over the pages
+            # it already read, and indexed(truncated) from D-08 would never occur
+            # in practice (T-03-902). The margin is derived in the configuration,
+            # so raising the soft budget moves the hard one along with it.
             _kill_child_tree(process)
             process.join(_JOIN_GRACE_SECONDS)
             self._recycle()
@@ -317,14 +345,21 @@ class ExtractionWorker:
 _WORKER: ExtractionWorker | None = None
 
 
-def extract_guarded(path: str, mime: str, size: int) -> ExtractionOutcome:
+def extract_guarded(path: str, mime: str, size: int, *, timeout_seconds: float | None = None) -> ExtractionOutcome:
     """Extract one file without ever letting it take the container with it.
 
     The facade the indexing worker calls. One worker per process, because IDX-08
     allows exactly one extraction at a time and a second worker would quietly
-    double both the memory peak and the number of children to supervise.
+    double both the memory peak and the number of children to supervise. That
+    stays true with the OCR track: a second facade for OCR would double the
+    memory peak of the container for a branch that runs one file at a time
+    anyway (T-03-904).
+
+    ``timeout_seconds`` is what an OCR job brings along and a text job leaves
+    alone. It is passed through rather than resolved here, because which kind of
+    job this is is known by the poller and by nobody else.
     """
     global _WORKER
     if _WORKER is None:
         _WORKER = ExtractionWorker()
-    return _WORKER.run(path, mime, size)
+    return _WORKER.run(path, mime, size, timeout_seconds=timeout_seconds)
