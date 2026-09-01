@@ -557,6 +557,34 @@ def test_write_allowlist_has_exactly_three_entries() -> None:
     } == OCS_WRITE_ALLOWLIST
 
 
+def test_a_reading_route_needs_no_allowlist_entry_and_gets_none() -> None:
+    # The two reconcile routes of plan 03-11. They are written down here because
+    # the next person to add a reading route will wonder whether it belongs in
+    # the list above, and the answer has to be findable: the gate only judges
+    # writing HTTP methods, so a GET is already allowed everywhere, and entering
+    # it into OCS_WRITE_ALLOWLIST would not tighten anything. It would loosen
+    # something: the same path would then be allowed for DELETE and POST as well,
+    # and the ratchet below would have to be raised for no gain at all.
+    for path in ("/ocs/v2.php/apps/findling/mounts", "/ocs/v2.php/apps/findling/files/slice"):
+        source = f'async def f(nc):\n    await nc._session.ocs("GET", "{path}")\n'
+
+        assert scan_source(CLIENT_MODULE, source) == [], path
+
+        # The other half of the same statement: reading them is free, writing to
+        # them is not, and that stays true precisely because they are not listed.
+        writing = f'async def f(nc):\n    await nc._session.ocs("POST", "{path}")\n'
+
+        violations = scan_source(CLIENT_MODULE, writing)
+
+        assert len(violations) == 1, path
+        assert "invariant 3" in violations[0]
+
+    assert not OCS_WRITE_ALLOWLIST & {
+        "/ocs/v2.php/apps/findling/mounts",
+        "/ocs/v2.php/apps/findling/files/slice",
+    }
+
+
 def test_writing_ocs_call_to_another_path_is_still_a_violation() -> None:
     # Without this one the allowlist would be proven to exist but not to be
     # narrow. A neighbouring path, and a writing method on an allowed path's
