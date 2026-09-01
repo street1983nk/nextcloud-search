@@ -206,6 +206,12 @@ Keine.
 - Der Lesegate `test_readonly_gate` schlug zuerst an, weil `_encode_frame` `picture.copy()` benutzte und `copy` in der Liste der schreibenden Bezeichner von `nc_py_api.files` steht. Der Aufruf war ohnehin nur der unerreichbare Zweig der `exif_transpose`-Signatur; er ist durch eine Fallunterscheidung ohne Kopie ersetzt.
 - Das Wegwerf-Image aus Plan 03-09 trägt das installierte Paket des damaligen Standes. Mit `PYTHONPATH=/w/backend/src` überlagern die Quellen des Worktrees die Installation, was einen Neubau des Images für diesen Nachweis erspart.
 
+## Selbstprüfung: BESTANDEN
+
+Alle im SUMMARY genannten Dateien und alle sechs Commits sind vorhanden und geprüft:
+drei neue Dateien, sechs Commit-Hashes, keine Em-Dashes, STATE.md und ROADMAP.md
+unberührt, kein Co-Authored-By-Trailer.
+
 ## Bereitschaft für die nächsten Pläne
 
 - Plan 03-13 kann Gate B jetzt sinnvoll laufen lassen: die acht Bilddateien des Korpus bekommen ein Verdikt statt keines, was die Voraussetzung dafür ist, dass der Prüfsummenlauf überhaupt etwas beweist (Pitfall 13).
