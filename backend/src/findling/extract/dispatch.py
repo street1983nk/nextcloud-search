@@ -14,12 +14,14 @@ What is deliberately absent, and why:
   for the sake of files we would then have to judge one by one anyway.
 * Pictures need OCR to mean anything, and since plan 03-09 that path exists:
   ``Route.OCR`` hands a page to the engine and comes back with text or with a
-  verdict that says why there is none. The route is chosen by the kind of the
-  job and not by the mimetype, because a second track is a property of the
-  order, not of the file. An image file still lands as skipped(mime_not_allowed)
-  for now: the image mimetypes join the allowlist in plan 03-10, and until they
-  do, the only way into this route is a scanned PDF that the text pass judged
-  as skipped(no_text_layer).
+  verdict that says why there is none. There are two ways onto that route and
+  they are different in kind. A scanned PDF gets there through the kind of its
+  job, because a second attempt at the same file is a property of the order and
+  not of the file. The four picture formats of D-05 get there through this table,
+  because being a picture is a property of the file and nothing else. Which
+  decoder opens it is therefore read off the mimetype: pdfium for a document,
+  Pillow for a picture. HEIC, BMP and GIF stay out, and the reason is written
+  down in both allowlists rather than in one.
 * Legacy Office (the pre-2007 binary formats, extensions doc, xls and ppt) is
   outside v1: it needs antiword, catdoc or a headless office suite, which is a
   multiple of the image size and a process zoo of its own. Those files land as
@@ -57,12 +59,40 @@ class Route(StrEnum):
     HTML = "html"
     RTF = "rtf"
     PLAIN = "plain"
-    # The fourth kind of branch, and the only one no mimetype maps to. It is
-    # reached by the kind of the job instead, which is what keeps the second
-    # track out of ALLOWED_MIMETYPES: a pseudo mimetype would make every reader
-    # of that table believe Nextcloud can hand one over, and judge would have to
-    # know about job kinds to keep it out.
+    # The fourth kind of branch, and the only one that is reached in two ways:
+    # by the kind of the job, for a scanned PDF that the text pass handed over,
+    # and by the mimetype, for the four picture formats below. The first of the
+    # two is why there is no pseudo mimetype for scans: it would make every
+    # reader of the table believe Nextcloud can hand one over, and judge would
+    # have to know about job kinds to keep it out. A picture is not that case,
+    # it really does arrive with a type of its own.
     OCR = "ocr"
+
+
+# The picture formats of D-05, kept as a set of their own because two places need
+# them: the allowlist below, and the branch that decides which decoder opens the
+# file. Four in, three deliberately out.
+#
+# In, and why these four: JPEG is what a phone upload is, PNG is what a screenshot
+# and most exported notices are, TIFF is what a scanner and a fax gateway write,
+# and WebP is what a browser saves today. All four are read by the Pillow and the
+# leptonica of this image, measured, with the WebP result written up as
+# measurement 4 of docs/ocr.md.
+#
+# Out, and why: HEIC needs a further decoder in the sandbox child, and every
+# decoder is attack surface that a picture from a stranger's phone gets to reach.
+# BMP and GIF carry documents essentially never, so the same surface would be
+# bought for nothing at all. The identical paragraph stands next to the PHP list,
+# because a decision that is readable in one place only is a decision the other
+# place will undo.
+IMAGE_MIMETYPES: Final[frozenset[str]] = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/tiff",
+        "image/webp",
+    }
+)
 
 
 # The allowlist. Nextcloud hands the mimetype over with the queue entry, so this
@@ -82,6 +112,10 @@ ALLOWED_MIMETYPES: Final[Mapping[str, Route]] = {
     "text/plain": Route.PLAIN,
     "text/markdown": Route.PLAIN,
     "text/csv": Route.PLAIN,
+    # Spread rather than written out again, so that the set above stays the one
+    # place the four types are named. Two literal lists would be the same drift
+    # this file already warns about, one file further in.
+    **dict.fromkeys(IMAGE_MIMETYPES, Route.OCR),
 }
 
 
@@ -158,10 +192,10 @@ def extract(path: str, mime: str, size: int, route: Route | None = None) -> Extr
         if isinstance(verdict, ExtractionOutcome):
             return verdict
         route = verdict
-    return _run_route(route, path)
+    return _run_route(route, path, mime)
 
 
-def _run_route(route: Route, path: str) -> ExtractionOutcome:
+def _run_route(route: Route, path: str, mime: str) -> ExtractionOutcome:
     """Hand the file to its extractor.
 
     The format module is imported here rather than at the top of this file, and
@@ -183,9 +217,21 @@ def _run_route(route: Route, path: str) -> ExtractionOutcome:
 
             return pdf.extract_pdf(path)
         case Route.OCR:
-            # ocr pulls raster and, through it, Pillow. A container that never
-            # sees a scan would otherwise carry all three in every one of its
-            # children, and the children are the thing this deferral is about.
+            # One route, two decoders, and the mimetype is what tells them apart.
+            # The route says "this file has to be read as pixels"; whether those
+            # pixels come out of pdfium or out of Pillow is a property of the
+            # file, and the forced route of an OCR job carries the mimetype of
+            # its scan along, so the same question answers both callers.
+            #
+            # Both imports stay inside the branch. ocr pulls raster and pdfium,
+            # image pulls Pillow and ocr behind it, and a container that never
+            # sees a scan or a picture would otherwise carry all of it in every
+            # one of its children, which is what this deferral is about.
+            if mime in IMAGE_MIMETYPES:
+                from findling.extract import image
+
+                return image.extract_image(path)
+
             from findling.extract import ocr
 
             return ocr.extract_pdf_ocr(path)

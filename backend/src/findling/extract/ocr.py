@@ -83,15 +83,23 @@ _THREAD_LIMIT: Final = {"OMP_THREAD_LIMIT": "1"}
 _MIN_OCR_CHARS: Final = 25
 
 
-class _PageTimeout(Exception):
+# The three outcomes of a single engine call, and the call itself, carry public
+# names since plan 03-10. They are the surface :mod:`findling.extract.image` uses
+# to read a picture with the same engine: one call form, measured once and
+# written down in docs/ocr.md, is the whole point, and a second call site in the
+# picture branch is a call form that drifts. A name a sibling module depends on
+# is not private, whatever the underscore in front of it used to claim.
+
+
+class PageTimeout(Exception):
     """One page did not finish inside its budget. Costs the page, not the job."""
 
 
-class _EngineFailed(Exception):
+class EngineFailed(Exception):
     """The engine ended with a non zero code or was killed by a signal."""
 
 
-class _EngineMissing(Exception):
+class EngineMissing(Exception):
     """There is no engine in this image, which is a different thing entirely."""
 
 
@@ -115,11 +123,11 @@ def extract_pdf_ocr(path: str) -> ExtractionOutcome:
 
     try:
         return _read_document(document, resolved)
-    except _EngineMissing:
+    except EngineMissing:
         # Its own verdict, because "this image has no OCR" and "this document
         # beat the parser" call for entirely different answers from an admin.
         return ExtractionOutcome.failed(Reason.OCR_UNAVAILABLE)
-    except _EngineFailed:
+    except EngineFailed:
         # Includes the death by signal that an exhausted address space produces:
         # the grandchild asked for the memory, so no MemoryError ever arrives in
         # this process and the recycling rule for it never fires (pitfall 10).
@@ -152,8 +160,8 @@ def _read_document(document: pypdfium2.PdfDocument, resolved: Settings) -> Extra
         png = raster.render_page_png(document, number, dpi=resolved.ocr_dpi)
         attempted += 1
         try:
-            parts.append(_read_page(png, languages, resolved.ocr_page_seconds))
-        except _PageTimeout:
+            parts.append(read_page(png, languages, resolved.ocr_page_seconds))
+        except PageTimeout:
             lost += 1
 
     if attempted > 0 and lost == attempted:
@@ -162,7 +170,7 @@ def _read_document(document: pypdfium2.PdfDocument, resolved: Settings) -> Extra
     return _verdict("\n".join(parts), truncated=cut)
 
 
-def _read_page(png: bytes, languages: str, seconds: int) -> str:
+def read_page(png: bytes, languages: str, seconds: int) -> str:
     """One page through the engine, as an argument list and never through a shell.
 
     The language list has passed the allowlist of installed languages in the
@@ -189,14 +197,14 @@ def _read_page(png: bytes, languages: str, seconds: int) -> str:
             check=False,
         )
     except subprocess.TimeoutExpired as expired:
-        raise _PageTimeout from expired
+        raise PageTimeout from expired
     except FileNotFoundError as absent:
-        raise _EngineMissing from absent
+        raise EngineMissing from absent
 
     if finished.returncode != 0:
         # Whatever ended page one ends page two as well, so this stops the job
         # instead of spending the remaining budget on the same wall.
-        raise _EngineFailed
+        raise EngineFailed
     return finished.stdout.decode("utf-8", errors="replace")
 
 

@@ -214,8 +214,15 @@ def test_a_mimetype_outside_the_allowlist_is_judged_without_reaching_an_extracto
         "application/msword",
         "application/vnd.ms-excel",
         "application/vnd.ms-powerpoint",
-        "image/jpeg",
-        "image/png",
+        # The pictures that stay out. Until plan 03-10 this line read image/jpeg
+        # and image/png, because no picture was read at all; those two are in the
+        # allowlist now, and the three below took their place. Each of them is a
+        # further decoder in the sandbox child, which is attack surface a picture
+        # from a stranger's phone gets to reach, and none of them carries the
+        # documents this app is about (T-03-1003).
+        "image/heic",
+        "image/bmp",
+        "image/gif",
     ],
 )
 def test_video_archive_image_and_legacy_office_are_deliberately_not_supported(mime: str) -> None:
