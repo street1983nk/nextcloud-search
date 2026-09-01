@@ -232,7 +232,7 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
         return RewrittenQuery(
             query=None,
             text="",
-            extensions=[],
+            extensions=(),
             errors=[f"the query nests brackets deeper than {SEARCH_QUERY_MAX_DEPTH} levels"],
         )
     residual, extensions = extract_filters(text)

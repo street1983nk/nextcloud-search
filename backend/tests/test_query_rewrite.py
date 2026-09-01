@@ -249,7 +249,7 @@ def test_a_query_nested_past_the_bracket_ceiling_never_reaches_the_parser(index:
 
     assert rewritten.query is None
     assert rewritten.errors
-    assert "brackets" in rewritten.errors[0]
+    assert "brackets" in str(rewritten.errors[0])
 
 
 def test_a_query_at_the_bracket_ceiling_is_still_parsed(index: Index) -> None:
