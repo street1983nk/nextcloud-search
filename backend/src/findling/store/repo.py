@@ -273,9 +273,23 @@ class Store:
         It decides nothing. Whether the answer is a full reindex or resetting one
         storage is a policy question, and a storage layer is the wrong place for
         it.
+
+        ``index_version`` is the one mark that is a floor rather than an equality:
+        a lost index directory raises the local generation past the code's
+        baseline to force a reindex, and that is a healthy state, not a drift.
+        Only a stored generation BELOW the expected one means the index predates
+        the current code.
         """
         stored = self.read_meta()
-        return [key for key, value in expected.items() if stored.get(key) != value]
+        diverging = []
+        for key, value in expected.items():
+            current = stored.get(key)
+            if current == value:
+                continue
+            if key == "index_version" and _generation_at_least(current, value):
+                continue
+            diverging.append(key)
+        return diverging
 
     @property
     def index_version(self) -> int:
@@ -539,6 +553,18 @@ class Store:
             {"storage_id": storage_id, "root_id": root_id, "cursor_file_id": cursor_file_id, "files_seen": files_seen}
             for storage_id, root_id, cursor_file_id, files_seen in rows
         ]
+
+
+def _generation_at_least(stored: str | None, expected: str) -> bool:
+    """True when both marks are numbers and the stored generation is not behind.
+
+    Anything that does not parse is a divergence, never a pass: an index whose
+    generation cannot be read cannot be shown to match the current code.
+    """
+    try:
+        return stored is not None and int(stored) >= int(expected)
+    except ValueError:
+        return False
 
 
 def open_store(path: Path | str, *, meta: Mapping[str, str] | None = None) -> Store:

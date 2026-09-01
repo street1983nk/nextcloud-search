@@ -177,6 +177,26 @@ def test_version_mismatch_is_empty_when_everything_matches(store: Store) -> None
     assert store.version_mismatch(store.read_meta()) == []
 
 
+def test_a_generation_raised_past_the_baseline_is_not_a_drift(store: Store) -> None:
+    # A lost index directory raises the local generation to force a reindex;
+    # that is a healthy state and must not read as reindexRequired forever.
+    store.write_meta("index_version", "3")
+
+    assert store.version_mismatch({"index_version": "1"}) == []
+
+
+def test_a_generation_behind_the_baseline_is_a_drift(store: Store) -> None:
+    store.write_meta("index_version", "1")
+
+    assert store.version_mismatch({"index_version": "2"}) == ["index_version"]
+
+
+def test_an_unreadable_generation_is_a_drift(store: Store) -> None:
+    store.write_meta("index_version", "unknown")
+
+    assert store.version_mismatch({"index_version": "1"}) == ["index_version"]
+
+
 def test_record_writes_state_and_reason_and_stamps_the_verdict(store: Store) -> None:
     store.record(7, a_file(7), "skipped", "too_large")
 

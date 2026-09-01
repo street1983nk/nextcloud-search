@@ -60,6 +60,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any, Final, cast
 
+from tantivy import Index
+
 from findling.config import settings
 from findling.extract.dispatch import extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
@@ -181,12 +183,41 @@ def _open_state() -> Store:
     return open_store(settings().state_db, meta=expected_versions(build_artifact().digest))
 
 
-def _open_writer() -> IndexBatchWriter:
+def _open_writer(store: Store) -> IndexBatchWriter:
     """The single index writer of the running container."""
     resolved = settings()
     artifact = build_artifact()
     index = open_index(resolved.index_dir, artifact.entries)
+    _raise_generation_for_lost_index(index, store)
     return IndexBatchWriter(index, directory=resolved.index_dir)
+
+
+def _raise_generation_for_lost_index(index: Index, store: Store) -> None:
+    """Force a reindex when the index is gone but the state database is not.
+
+    An empty index directory next to a state database full of ``indexed``
+    verdicts means the tantivy directory was lost, restored from an older
+    backup, or wiped by hand. Without this check the state stays authoritative:
+    a crawl requeues every file, ``is_unchanged`` skips every one of them, and
+    the search is empty for good with every counter claiming success (bug audit
+    H5). Raising the generation makes every stored verdict stale at once, so
+    the next crawl actually rebuilds the index.
+
+    The container cannot start that crawl itself; the queue lives in Nextcloud
+    and is filled by ``occ findling:index --restart``. What this check
+    guarantees is that the restart rebuilds instead of skipping.
+    """
+    if index.searcher().num_docs > 0:
+        return
+    if store.counts()["indexed"] == 0:
+        return
+    generation = store.index_version + 1
+    store.write_meta("index_version", str(generation))
+    LOGGER.warning(
+        "the index is empty while the state database holds indexed verdicts; "
+        "raised the generation to %d so the next crawl reindexes everything",
+        generation,
+    )
 
 
 class Poller:
@@ -533,7 +564,7 @@ class Poller:
         if self._store is None:
             self._store = _open_state()
         if self._writer is None:
-            self._writer = _open_writer()
+            self._writer = _open_writer(self._store)
         self._tmp_dir.mkdir(parents=True, exist_ok=True)
         _clear_scratch(self._tmp_dir)
         self._client = self._client_factory()

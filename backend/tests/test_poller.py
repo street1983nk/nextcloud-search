@@ -46,7 +46,7 @@ from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
 from findling.nc.client import AsyncNextcloudApp, NextcloudException
 from findling.nc.queue import CallResult, ClaimResult, QueueJob, QueueStats
-from findling.store.repo import Store, open_store
+from findling.store.repo import FileMeta, Store, open_store
 from findling.worker.poller import (
     ROUND_EMPTY,
     ROUND_GATEWAY_UNAVAILABLE,
@@ -55,6 +55,7 @@ from findling.worker.poller import (
     ROUND_WORKED,
     Poller,
     _open_state,
+    _raise_generation_for_lost_index,
 )
 
 POLLER_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "worker" / "poller.py"
@@ -610,6 +611,31 @@ def test_the_poller_builds_exactly_one_client() -> None:
 def test_the_shutdown_path_releases_what_the_container_holds() -> None:
     """The lifespan has to hand the rows back, otherwise a restart waits."""
     assert "unlock" in MAIN_SOURCE.read_text(encoding="utf-8")
+
+
+def test_an_empty_index_next_to_indexed_verdicts_raises_the_generation(index: Index, store: Store) -> None:
+    """A lost tantivy directory must not leave the search empty for good.
+
+    With the state database still saying "indexed", the fast path would skip
+    every requeued file and the counters would claim success over an empty
+    index forever (bug audit H5). Raising the generation makes every stored
+    verdict stale, so the next crawl actually rebuilds.
+    """
+    meta = FileMeta(storage_id=1, root_id=2, path="files/a.txt", title="a.txt", mime="text/plain", size=3, mtime=4)
+    store.record(1, meta, "indexed", None, content_hash="abc")
+    assert store.is_unchanged(1, "abc") is True
+
+    _raise_generation_for_lost_index(index, store)
+
+    assert store.is_unchanged(1, "abc") is False
+
+
+def test_a_fresh_volume_does_not_raise_the_generation(index: Index, store: Store) -> None:
+    before = store.index_version
+
+    _raise_generation_for_lost_index(index, store)
+
+    assert store.index_version == before
 
 
 def test_a_state_database_created_by_the_poller_carries_the_version_marks(volume: Path) -> None:
