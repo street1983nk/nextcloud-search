@@ -499,9 +499,11 @@ class QueueMapper extends QBMapper {
 				// no better: it hands over file ids and a kind. Everything the
 				// container sees about the file is resolved from the node at
 				// claim time; these two fields are the exception, they come from
-				// the row. Plan 03-12 is the only caller that creates rows, and
-				// if it needs them it has to widen this signature rather than
-				// letting a zero travel.
+				// the row. QueueService::describe therefore repairs a zero from
+				// the mount point of the resolved node before a work order
+				// leaves the house, so it never reaches the container and never
+				// overwrites a correct storage_id in its state database (review
+				// finding WR-01).
 				$requeued += $this->db->insertIgnoreConflict(self::TABLE_NAME, [
 					'file_id' => $fileId,
 					'storage_id' => 0,

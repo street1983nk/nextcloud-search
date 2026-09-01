@@ -435,10 +435,28 @@ class QueueService {
 
 		$size = $node->getSize();
 
+		// Rows created by requeueAs carry storage_id and root_id 0, because the
+		// requeue route only knows file ids; the reconcile of plan 03-12 is the
+		// caller that produces them. Letting the zero travel poisoned the state
+		// of every file the reconcile repaired: the container upserts
+		// storage_id over the previously correct value, gone_in_range asks per
+		// real storage, and a later eventless deletion of that file was never
+		// found again, so IDX-05 broke exactly for the files the repair had
+		// touched (review finding WR-01). The mount point of the node resolved
+		// above is the same source the event listeners read these two ids
+		// from, so a zero is replaced here and never travels further.
+		$storageId = $row->getStorageId();
+		$rootId = $row->getRootId();
+		if ($storageId === 0 || $rootId === 0) {
+			$mount = $node->getMountPoint();
+			$storageId = $storageId !== 0 ? $storageId : (int)$mount->getNumericStorageId();
+			$rootId = $rootId !== 0 ? $rootId : (int)$mount->getStorageRootId();
+		}
+
 		return [
 			'fileId' => $fileId,
-			'storageId' => $row->getStorageId(),
-			'rootId' => $row->getRootId(),
+			'storageId' => $storageId,
+			'rootId' => $rootId,
 			'path' => ltrim((string)$userFolder->getRelativePath($node->getPath()), '/'),
 			'title' => $node->getName(),
 			'mime' => $node->getMimetype(),
