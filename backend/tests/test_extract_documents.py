@@ -30,7 +30,7 @@ from pptx.util import Emu
 from pypdf.errors import EmptyFileError, FileNotDecryptedError
 
 from findling import config
-from findling.extract.dispatch import ALLOWED_MIMETYPES, Route, extract
+from findling.extract.dispatch import ALLOWED_MIMETYPES, IMAGE_MIMETYPES, Route, extract
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.odf import extract_odf
 from findling.extract.office import extract_docx, extract_pptx, extract_xlsx
@@ -775,14 +775,19 @@ def test_every_route_of_the_allowlist_has_an_extractor_behind_it(tmp_path: Path)
         Route.PLAIN: _write(tmp_path, "notiz.txt", b"Ein Absatz."),
     }
 
-    # Route.OCR is the one route with no fixture here, and that is the assertion
-    # rather than an omission: no mimetype maps to it, it is reached by the kind
-    # of the job (plan 03-09), and this loop walks the allowlist. Its extractor is
-    # covered in tests/test_ocr.py, where the engine can be stood in for.
+    # Route.OCR is the one route with no fixture here, and that is deliberate
+    # rather than an omission: its extractor needs an engine, the development
+    # machine has none, and it is covered in tests/test_ocr.py where the engine
+    # can be stood in for. Until plan 03-10 no mimetype reached it at all; since
+    # then the four picture formats do, so what is asserted here is that those
+    # four are exactly the ones and that the walk below skips them for the reason
+    # above rather than by accident.
     assert set(fixtures) == set(Route) - {Route.OCR}
-    assert Route.OCR not in set(ALLOWED_MIMETYPES.values())
+    assert {mime for mime, route in ALLOWED_MIMETYPES.items() if route is Route.OCR} == set(IMAGE_MIMETYPES)
 
     for mime, route in ALLOWED_MIMETYPES.items():
+        if route is Route.OCR:
+            continue
         path = fixtures[route]
 
         outcome = extract(path, mime, Path(path).stat().st_size)

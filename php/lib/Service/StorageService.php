@@ -52,12 +52,32 @@ class StorageService {
 
 	/**
 	 * The document allowlist of the zero config guard rails: PDF, the OOXML
-	 * trio, OpenDocument, plain text and Markdown, RTF and HTML.
+	 * trio, OpenDocument, plain text and Markdown, RTF and HTML, and since
+	 * plan 03-10 the four picture formats that OCR can read.
 	 *
 	 * Everything else, and that includes video, audio and archives, is not a
 	 * document and is never queued. Two spellings are listed for RTF because
 	 * instances disagree on which one they store, and an entry this instance
 	 * has never seen simply drops out below.
+	 *
+	 * The pictures, and why exactly these four: JPEG is what a phone upload is,
+	 * PNG is what a screenshot and most exported notices are, TIFF is what a
+	 * scanner and a fax gateway write, and WebP is what a browser saves today.
+	 * All four are read by the Pillow and the leptonica of the container image,
+	 * measured, with the WebP result written up as measurement 4 of
+	 * docs/ocr.md.
+	 *
+	 * HEIC, BMP and GIF stay out. HEIC needs a further decoder inside the
+	 * sandbox child, and every decoder is attack surface that a picture from a
+	 * stranger's phone gets to reach; BMP and GIF carry documents essentially
+	 * never, so the same surface would be bought for nothing at all.
+	 *
+	 * This list is kept twice on purpose, here and in the container's
+	 * dispatch.ALLOWED_MIMETYPES, because each side has to hold on the day the
+	 * other one is changed alone. Since plan 03-10 a gate compares the two in
+	 * both directions: backend/tests/test_allowlist_parity.py reads this
+	 * constant out of this file, so the identical paragraph above stands next
+	 * to the Python list as well.
 	 *
 	 * @var list<string>
 	 */
@@ -73,8 +93,13 @@ class StorageService {
 		'text/markdown',
 		'text/csv',
 		'text/html',
+		'application/xhtml+xml',
 		'application/rtf',
 		'text/rtf',
+		'image/jpeg',
+		'image/png',
+		'image/tiff',
+		'image/webp',
 	];
 
 	/**
