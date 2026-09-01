@@ -27,6 +27,10 @@ use OCP\AppFramework\Db\Entity;
  * @method void setLockedAt(?string $lockedAt)
  * @method int getRetries()
  * @method void setRetries(int $retries)
+ * @method bool getDirty()
+ * @method void setDirty(bool $dirty)
+ * @method string|null getClaimToken()
+ * @method void setClaimToken(?string $claimToken)
  */
 class QueueFile extends Entity {
 	protected int $fileId = 0;
@@ -35,6 +39,13 @@ class QueueFile extends Entity {
 	protected bool $isUpdate = false;
 	protected ?int $size = null;
 	protected int $retries = 0;
+
+	// Set while a claim is open and the file changed underneath it; the
+	// acknowledgement then requeues the row instead of deleting it.
+	protected bool $dirty = false;
+
+	// Identifies the winners of one batch claim, see QueueMapper::claimBatch.
+	protected ?string $claimToken = null;
 
 	/**
 	 * Deliberately a string and deliberately without a registered type.
@@ -54,5 +65,6 @@ class QueueFile extends Entity {
 		$this->addType('size', 'integer');
 		$this->addType('retries', 'integer');
 		$this->addType('isUpdate', 'boolean');
+		$this->addType('dirty', 'boolean');
 	}
 }

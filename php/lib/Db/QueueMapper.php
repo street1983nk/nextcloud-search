@@ -13,16 +13,21 @@ use OCP\IDBConnection;
 /**
  * The work stock, and the only place that decides who owns a row.
  *
- * Two properties carry this class. The first one is that a claim is a
+ * Three properties carry this class. The first one is that a claim is a
  * conditional update and nothing else: candidates are read without any lock,
- * and then every single row is claimed with an update that repeats the free
- * condition in its WHERE clause. Only a statement that reported at least one
- * affected row won the row. Two collectors asking at the same time therefore
- * read the same candidates and still never get the same row, and none of that
- * needs a row locking clause of a specific dialect.
+ * and then the batch is claimed with one update that repeats the free condition
+ * in its WHERE clause. Only rows the statement actually affected were won, and
+ * the claim token is how they are read back. Two collectors asking at the same
+ * time therefore read the same candidates and still never get the same row, and
+ * none of that needs a row locking clause of a specific dialect.
  *
  * The second one is that a claim expires. A container that is killed hard holds
  * its rows for LOCK_TIMEOUT and no longer, which is why that value is small.
+ *
+ * The third one is that an acknowledgement only deletes what did not change in
+ * the meantime. A file that changes while its row is claimed marks the row
+ * dirty instead of unlocking it, and the acknowledgement of the stale bytes
+ * turns the mark into a fresh, free row.
  *
  * @template-extends QBMapper<QueueFile>
  */
@@ -76,38 +81,77 @@ class QueueMapper extends QBMapper {
 	 * fail there, the fix is local to this method and nothing above it changes.
 	 */
 	public function enqueue(int $fileId, int $storageId, int $rootId, int $size, bool $isUpdate): void {
-		$insert = $this->db->getQueryBuilder();
-		$insert->insert(self::TABLE_NAME)
-			->values([
-				'file_id' => $insert->createNamedParameter($fileId, IQueryBuilder::PARAM_INT),
-				'storage_id' => $insert->createNamedParameter($storageId, IQueryBuilder::PARAM_INT),
-				'root_id' => $insert->createNamedParameter($rootId, IQueryBuilder::PARAM_INT),
-				'is_update' => $insert->createNamedParameter($isUpdate, IQueryBuilder::PARAM_BOOL),
-				'size' => $insert->createNamedParameter($size, IQueryBuilder::PARAM_INT),
-			]);
+		// Two attempts, because the conflict branch can find the row already
+		// deleted by a concurrent acknowledgement, in which case the insert is
+		// simply right again. A third collision within one call is not a race
+		// any more, it is a defect worth an exception.
+		for ($attempt = 0; $attempt < 2; $attempt++) {
+			$insert = $this->db->getQueryBuilder();
+			$insert->insert(self::TABLE_NAME)
+				->values([
+					'file_id' => $insert->createNamedParameter($fileId, IQueryBuilder::PARAM_INT),
+					'storage_id' => $insert->createNamedParameter($storageId, IQueryBuilder::PARAM_INT),
+					'root_id' => $insert->createNamedParameter($rootId, IQueryBuilder::PARAM_INT),
+					'is_update' => $insert->createNamedParameter($isUpdate, IQueryBuilder::PARAM_BOOL),
+					'size' => $insert->createNamedParameter($size, IQueryBuilder::PARAM_INT),
+					'locked_at' => $insert->createNamedParameter($this->freeMark(), IQueryBuilder::PARAM_DATE),
+				]);
 
-		try {
-			$insert->executeStatement();
-			return;
-		} catch (DbException $e) {
-			if ($e->getReason() !== DbException::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				throw $e;
+			try {
+				$insert->executeStatement();
+				return;
+			} catch (DbException $e) {
+				if ($e->getReason() !== DbException::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+					throw $e;
+				}
+			}
+
+			if ($this->refreshExisting($fileId, $size, $isUpdate)) {
+				return;
 			}
 		}
 
-		// The row exists, so this file is queued again rather than twice. The
-		// lock is cleared because a file that changed has to be processed again
-		// even while an older claim of it is still open, and the size is
-		// refreshed because the byte budget of the next batch is computed from
-		// it. retries is deliberately left alone: a row that keeps coming back
-		// through updates must still be able to reach its end state.
-		$update = $this->db->getQueryBuilder();
-		$update->update(self::TABLE_NAME)
-			->set('is_update', $update->createNamedParameter($isUpdate, IQueryBuilder::PARAM_BOOL))
-			->set('size', $update->createNamedParameter($size, IQueryBuilder::PARAM_INT))
-			->set('locked_at', $update->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
-			->where($update->expr()->eq('file_id', $update->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)));
-		$update->executeStatement();
+		throw new \RuntimeException('the queue row for this file keeps appearing and disappearing');
+	}
+
+	/**
+	 * The conflict branch of enqueue: the row exists, so this file is queued
+	 * again rather than twice.
+	 *
+	 * Which of the two updates applies is decided by the database, not by a
+	 * read: a free row (or one whose claim expired) is refreshed and stays
+	 * free, retries deliberately untouched so a row that keeps coming back can
+	 * still reach its end state. A row that is claimed right now keeps its
+	 * claim and is marked dirty instead. Clearing the lock here was the audit's
+	 * H4: the acknowledgement of the old bytes then deleted the row, and the
+	 * new version silently vanished from the queue. The dirty mark makes the
+	 * acknowledgement requeue it, see acknowledge().
+	 *
+	 * @return bool false when the row vanished before either update could hit it
+	 */
+	private function refreshExisting(int $fileId, int $size, bool $isUpdate): bool {
+		$cutoff = $this->lockCutoff($this->now());
+
+		$free = $this->db->getQueryBuilder();
+		$free->update(self::TABLE_NAME)
+			->set('is_update', $free->createNamedParameter($isUpdate, IQueryBuilder::PARAM_BOOL))
+			->set('size', $free->createNamedParameter($size, IQueryBuilder::PARAM_INT))
+			->set('locked_at', $free->createNamedParameter($this->freeMark(), IQueryBuilder::PARAM_DATE))
+			->set('dirty', $free->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+			->where($free->expr()->eq('file_id', $free->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)))
+			->andWhere($this->freeRowCondition($free, $cutoff));
+		if ($free->executeStatement() >= 1) {
+			return true;
+		}
+
+		$claimed = $this->db->getQueryBuilder();
+		$claimed->update(self::TABLE_NAME)
+			->set('is_update', $claimed->createNamedParameter($isUpdate, IQueryBuilder::PARAM_BOOL))
+			->set('size', $claimed->createNamedParameter($size, IQueryBuilder::PARAM_INT))
+			->set('dirty', $claimed->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
+			->where($claimed->expr()->eq('file_id', $claimed->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)));
+
+		return $claimed->executeStatement() >= 1;
 	}
 
 	/**
@@ -126,45 +170,67 @@ class QueueMapper extends QBMapper {
 		$cutoff = $this->lockCutoff($now);
 
 		$candidates = $this->db->getQueryBuilder();
-		$candidates->select('*')
+		$candidates->select('id', 'size')
 			->from(self::TABLE_NAME)
 			->where($this->freeRowCondition($candidates, $cutoff))
 			->orderBy('id', 'ASC')
-			->addOrderBy('is_update', 'ASC')
 			->setMaxResults($limit);
 
-		$claimed = [];
+		// The byte budget is decided on the candidate list, the ownership is
+		// decided by the database below. A candidate is only a guess about a
+		// row another collector may take in the meantime.
+		$wanted = [];
 		$bytes = 0;
-
-		foreach ($this->findEntities($candidates) as $row) {
-			$size = $row->getSize() ?? 0;
-			if ($claimed !== [] && ($bytes + $size) > $maxBytes) {
+		$result = $candidates->executeQuery();
+		while (($row = $result->fetch()) !== false) {
+			$size = is_numeric($row['size'] ?? null) ? (int)$row['size'] : 0;
+			if ($wanted !== [] && ($bytes + $size) > $maxBytes) {
 				break;
 			}
-
-			// The row is only ours if the database says so. Everything before
-			// this line was a guess about a row that another collector may have
-			// taken in the meantime.
-			if (!$this->claimRow($row->getId(), $now, $cutoff)) {
-				continue;
-			}
-
 			$bytes += $size;
-			$claimed[] = $row;
+			$wanted[] = (int)$row['id'];
+		}
+		$result->closeCursor();
+
+		if ($wanted === []) {
+			return [];
 		}
 
-		if ($claimed !== []) {
-			// Handing a row out is the attempt, so it is counted here and not
-			// somewhere in the caller. A row that is handed out and never
-			// acknowledged is the case retries exists for.
-			$ids = array_map(static fn (QueueFile $row): int => $row->getId(), $claimed);
-			$this->bumpRetries($ids);
-			foreach ($claimed as $row) {
-				$row->setRetries($row->getRetries() + 1);
-			}
+		// One conditional update claims the whole band (the per-row version was
+		// 34 round trips per batch, perf audit H4). The free condition in the
+		// WHERE clause is still what decides ownership: a competitor that got
+		// a row first leaves it out of the affected set. The token is what
+		// makes the winners readable afterwards, because two collectors
+		// claiming within the same second are indistinguishable by locked_at.
+		//
+		// Handing a row out is the attempt, so retries is counted here, in the
+		// database: read-modify-write loses increments the moment two
+		// collectors work at the same time, which is the normal case. The
+		// identifier is unquoted because it is a reserved word in none of the
+		// three dialects, and quoting it correctly would be the one thing that
+		// differs between them. The claim also clears dirty: whatever the file
+		// looked like before this moment is exactly what this claim is going
+		// to read, so only a change AFTER now makes the row dirty again.
+		$token = bin2hex(random_bytes(16));
+		$claim = $this->db->getQueryBuilder();
+		$claim->update(self::TABLE_NAME)
+			->set('locked_at', $claim->createNamedParameter($now, IQueryBuilder::PARAM_DATE))
+			->set('claim_token', $claim->createNamedParameter($token))
+			->set('dirty', $claim->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+			->set('retries', $claim->createFunction('retries + 1'))
+			->where($claim->expr()->in('id', $claim->createNamedParameter($wanted, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($this->freeRowCondition($claim, $cutoff));
+		if ($claim->executeStatement() === 0) {
+			return [];
 		}
 
-		return $claimed;
+		$won = $this->db->getQueryBuilder();
+		$won->select('*')
+			->from(self::TABLE_NAME)
+			->where($won->expr()->eq('claim_token', $won->createNamedParameter($token)))
+			->orderBy('id', 'ASC');
+
+		return $this->findEntities($won);
 	}
 
 	/**
@@ -197,8 +263,14 @@ class QueueMapper extends QBMapper {
 	 * Remove acknowledged rows. Deleting is the acknowledgement: a row that is
 	 * gone cannot be delivered a second time.
 	 *
+	 * The exception is a row whose file changed while it was being processed.
+	 * The claim cleared its dirty mark, so a set mark can only mean "the bytes
+	 * this acknowledgement is about are already stale". Deleting it would carry
+	 * the old text into the index for good (bug audit H4); instead the mark is
+	 * traded for a fresh, free row and the next collector reads the new bytes.
+	 *
 	 * @param int[] $ids
-	 * @return int number of rows that were still there
+	 * @return int number of rows that were acknowledged away
 	 */
 	public function acknowledge(array $ids): int {
 		if ($ids === []) {
@@ -207,10 +279,22 @@ class QueueMapper extends QBMapper {
 
 		$deleted = 0;
 		foreach (array_chunk($ids, self::DELETE_BAND) as $band) {
+			// The delete runs first. The other way round the requeue would
+			// clear the dirty mark and the delete would then remove exactly
+			// the rows the requeue had just saved.
 			$qb = $this->db->getQueryBuilder();
 			$qb->delete(self::TABLE_NAME)
-				->where($qb->expr()->in('id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
+				->where($qb->expr()->in('id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($qb->expr()->eq('dirty', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
 			$deleted += $qb->executeStatement();
+
+			$requeue = $this->db->getQueryBuilder();
+			$requeue->update(self::TABLE_NAME)
+				->set('locked_at', $requeue->createNamedParameter($this->freeMark(), IQueryBuilder::PARAM_DATE))
+				->set('dirty', $requeue->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+				->where($requeue->expr()->in('id', $requeue->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($requeue->expr()->eq('dirty', $requeue->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
+			$requeue->executeStatement();
 		}
 
 		return $deleted;
@@ -233,35 +317,12 @@ class QueueMapper extends QBMapper {
 		foreach (array_chunk($ids, self::DELETE_BAND) as $band) {
 			$qb = $this->db->getQueryBuilder();
 			$qb->update(self::TABLE_NAME)
-				->set('locked_at', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
+				->set('locked_at', $qb->createNamedParameter($this->freeMark(), IQueryBuilder::PARAM_DATE))
 				->where($qb->expr()->in('id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
 			$released += $qb->executeStatement();
 		}
 
 		return $released;
-	}
-
-	/**
-	 * @param int[] $ids
-	 */
-	public function bumpRetries(array $ids): void {
-		if ($ids === []) {
-			return;
-		}
-
-		foreach (array_chunk($ids, self::DELETE_BAND) as $band) {
-			$qb = $this->db->getQueryBuilder();
-			// Counted in the database, not read, incremented and written back.
-			// The read modify write version loses increments the moment two
-			// collectors work at the same time, which is the normal case here.
-			// The identifier is unquoted because it is a reserved word in none of
-			// the three dialects, and quoting it correctly would be the one thing
-			// that differs between them.
-			$qb->update(self::TABLE_NAME)
-				->set('retries', $qb->createFunction('retries + 1'))
-				->where($qb->expr()->in('id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
-			$qb->executeStatement();
-		}
 	}
 
 	/**
@@ -287,41 +348,33 @@ class QueueMapper extends QBMapper {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->func()->count('*', 'rows'))
 			->from(self::TABLE_NAME)
-			->where($qb->expr()->isNotNull('locked_at'))
-			->andWhere($qb->expr()->gt('locked_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATE)));
+			->where($qb->expr()->gt('locked_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATE)));
 
 		return $this->countFrom($qb);
 	}
 
 	/**
-	 * The conditional update that is the actual lock.
+	 * Free means marked with the epoch or claimed too long ago. One expression,
+	 * used by the candidate query, by the claim, by the conflict refresh and by
+	 * the counter, so they can never drift apart.
 	 *
-	 * The free condition of the candidate query is repeated here in the WHERE
-	 * clause. Whatever happened between reading the candidate and this statement
-	 * is decided by the database: a competitor that got there first leaves zero
-	 * affected rows behind, and this method reports the loss instead of handing
-	 * the same file to two collectors.
+	 * A single closed range on purpose: the free mark used to be NULL, and the
+	 * resulting OR condition was served by no index, so every claim walked the
+	 * primary key (perf audit H3). The migration rewrote NULL to the epoch and
+	 * nothing writes NULL since, which is what lets findling_q_free
+	 * (locked_at, id) answer "the free rows, oldest first" directly.
 	 */
-	private function claimRow(int $id, \DateTime $now, \DateTime $cutoff): bool {
-		$qb = $this->db->getQueryBuilder();
-		$qb->update(self::TABLE_NAME)
-			->set('locked_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATE))
-			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
-			->andWhere($this->freeRowCondition($qb, $cutoff));
-
-		return $qb->executeStatement() >= 1;
+	private function freeRowCondition(IQueryBuilder $qb, \DateTime $cutoff): string {
+		return (string)$qb->expr()->lte('locked_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATE));
 	}
 
 	/**
-	 * Free means never claimed or claimed too long ago. One expression, used by
-	 * the candidate query, by the claim and by the counter, so the three can
-	 * never drift apart.
+	 * The value that marks a row as free. The epoch rather than NULL, because a
+	 * closed range is what the free index answers; and it is guaranteed to lie
+	 * before every cutoff a clock can produce.
 	 */
-	private function freeRowCondition(IQueryBuilder $qb, \DateTime $cutoff): string {
-		return (string)$qb->expr()->orX(
-			$qb->expr()->isNull('locked_at'),
-			$qb->expr()->lte('locked_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATE)),
-		);
+	private function freeMark(): \DateTime {
+		return new \DateTime('@0');
 	}
 
 	/**
