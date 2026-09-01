@@ -46,16 +46,22 @@ def store(tmp_path: Path) -> Iterator[Store]:
     opened.close()
 
 
-def a_file(file_id: int = 1) -> FileMeta:
-    """The metadata one crawled file arrives with. Values are irrelevant here."""
+def a_file(file_id: int = 1, *, storage_id: int = 2, etag: str | None = None) -> FileMeta:
+    """The metadata one crawled file arrives with. Values are irrelevant here.
+
+    ``storage_id`` and ``etag`` are keyword arguments with the values every older
+    test in this file relied on, so the reconcile tests below can vary the two
+    fields their comparison runs on without touching a single existing case.
+    """
     return FileMeta(
-        storage_id=2,
+        storage_id=storage_id,
         root_id=3,
         path=f"files/report-{file_id}.pdf",
         title=f"report-{file_id}.pdf",
         mime="application/pdf",
         size=1024,
         mtime=1_700_000_000,
+        etag=etag,
     )
 
 
@@ -394,6 +400,199 @@ def test_record_mount_mirrors_the_crawl_progress(store: Store) -> None:
     store.record_mount(2, 3, 1800, 240)
 
     assert store.mount_rows() == [{"storage_id": 2, "root_id": 3, "cursor_file_id": 1800, "files_seen": 240}]
+
+
+# ---------------------------------------------------------------------------
+# The reconcile: which files are gone, which etag we hold, and where the walk
+# stopped. Every test below is about the same danger from a different side. The
+# reconcile concludes "deleted" from an absence, and an absence is the cheapest
+# thing in the world to produce by accident: a page that ended early, a row the
+# client refused, a storage nobody asked about. So the range is bounded, the
+# bound only falls away on a final page, and a tombstone is never rediscovered.
+# ---------------------------------------------------------------------------
+
+
+def test_gone_in_range_names_the_known_files_the_page_does_not_carry(store: Store) -> None:
+    store.record(10, a_file(10), "indexed", content_hash="a")
+    store.record(20, a_file(20), "indexed", content_hash="b")
+    store.record(30, a_file(30), "indexed", content_hash="c")
+
+    gone = store.gone_in_range(2, 0, 30, final=False, present={10, 30})
+
+    assert gone == [20]
+
+
+def test_gone_in_range_respects_the_page_end(store: Store) -> None:
+    # The load bearing one, and the reason the page carries a final mark at all.
+    # File 40 lies behind the last row of the page, so nothing is known about it
+    # yet; calling it deleted here would drop a document that exists because a
+    # page happened to end.
+    store.record(10, a_file(10), "indexed", content_hash="a")
+    store.record(40, a_file(40), "indexed", content_hash="d")
+
+    gone = store.gone_in_range(2, 0, 30, final=False, present={10})
+
+    assert gone == []
+
+
+def test_gone_in_range_drops_the_upper_bound_on_a_final_page(store: Store) -> None:
+    # Same two files, and now the page says there is nothing behind it. Only then
+    # does the absence of 40 mean anything.
+    store.record(10, a_file(10), "indexed", content_hash="a")
+    store.record(40, a_file(40), "indexed", content_hash="d")
+
+    gone = store.gone_in_range(2, 0, 30, final=True, present={10})
+
+    assert gone == [40]
+
+
+def test_gone_in_range_ignores_already_deleted_files(store: Store) -> None:
+    # A tombstone is an answer, not a question. Without this condition every
+    # cycle would rediscover the same deletion and produce a delete job for a
+    # document that left the index months ago.
+    store.record(10, a_file(10), "indexed", content_hash="a")
+    store.record(20, a_file(20), "indexed", content_hash="b")
+    store.tombstone(20, 1_700_000_500)
+
+    gone = store.gone_in_range(2, 0, 30, final=True, present={10})
+
+    assert gone == []
+
+
+def test_gone_in_range_only_looks_at_the_storage_it_was_asked_about(store: Store) -> None:
+    # The walk runs mount by mount. A file of another storage is simply not part
+    # of this page, and reading that as a deletion would empty the index of every
+    # mount the round has not reached yet.
+    store.record(10, a_file(10), "indexed", content_hash="a")
+    store.record(11, a_file(11, storage_id=9), "indexed", content_hash="b")
+
+    gone = store.gone_in_range(2, 0, 30, final=True, present={10})
+
+    assert gone == []
+
+
+def test_gone_in_range_ignores_everything_at_or_below_the_cursor(store: Store) -> None:
+    # What lies before the cursor was judged by an earlier page of this same
+    # walk. Looking at it again would turn every page into a verdict about the
+    # whole mount.
+    store.record(10, a_file(10), "indexed", content_hash="a")
+    store.record(20, a_file(20), "indexed", content_hash="b")
+
+    gone = store.gone_in_range(2, 10, 30, final=True, present={20})
+
+    assert gone == []
+
+
+def test_known_etags_answers_with_the_version_marks_it_holds(store: Store) -> None:
+    store.record(10, a_file(10, etag="aaa"), "indexed", content_hash="a")
+    store.record(20, a_file(20, etag="bbb"), "indexed", content_hash="b")
+
+    assert store.known_etags([10, 20, 30]) == {10: "aaa", 20: "bbb"}
+
+
+def test_known_etags_leaves_out_a_file_with_a_tombstone(store: Store) -> None:
+    # A deleted file that turns up in a page again is a restore, and a restore
+    # has to be indexed even though its bytes never changed. Answering with the
+    # stored etag here would compare equal and the file would stay gone.
+    store.record(10, a_file(10, etag="aaa"), "indexed", content_hash="a")
+    store.tombstone(10, 1_700_000_500)
+
+    assert store.known_etags([10]) == {}
+
+
+def test_known_etags_asks_nothing_for_an_empty_list(store: Store) -> None:
+    statements: list[str] = []
+    store.trace(statements.append)
+    try:
+        assert store.known_etags([]) == {}
+    finally:
+        store.trace(None)
+
+    assert statements == []
+
+
+def test_known_etags_splits_a_long_list_into_bands(store: Store) -> None:
+    # The same property the prefilter has, for the same reason: the parameter
+    # limit of a SQLite build is a compile time option and our lists are not.
+    statements: list[str] = []
+    store.trace(statements.append)
+    try:
+        store.known_etags(list(range(1, 1501)))
+    finally:
+        store.trace(None)
+
+    assert len([line for line in statements if line.lstrip().startswith("SELECT")]) == 2
+
+
+def test_the_reconcile_cursor_of_an_unknown_storage_starts_at_zero(store: Store) -> None:
+    cursor = store.reconcile_cursor(4711)
+
+    assert cursor.after_file_id == 0
+    assert cursor.finished_at is None
+
+
+def test_the_reconcile_cursor_can_be_advanced(store: Store) -> None:
+    store.set_reconcile_cursor(2, 500)
+    store.set_reconcile_cursor(2, 1000)
+
+    cursor = store.reconcile_cursor(2)
+
+    assert cursor.after_file_id == 1000
+    assert cursor.started_at is not None
+    assert cursor.finished_at is None
+
+
+def test_finishing_a_mount_resets_the_cursor_and_stamps_the_time(store: Store) -> None:
+    # Zero and a finish stamp together are what "this mount is done" means. The
+    # next cycle starts at the beginning again, which is the whole point of a
+    # bookmark that may be lost without losing work.
+    store.set_reconcile_cursor(2, 1000)
+    store.set_reconcile_cursor(2, 0, finished=True)
+
+    cursor = store.reconcile_cursor(2)
+
+    assert cursor.after_file_id == 0
+    assert cursor.finished_at is not None
+
+
+def test_reconcile_state_reports_a_walk_that_stopped_in_the_middle(store: Store) -> None:
+    store.set_reconcile_cursor(2, 1000)
+
+    state = store.reconcile_state()
+
+    assert state.unfinished == 1
+    assert state.last_finished_at is None
+
+
+def test_reconcile_state_reports_the_end_of_the_last_cycle(store: Store) -> None:
+    store.set_reconcile_cursor(2, 0, finished=True, at=1_700_000_100)
+    store.set_reconcile_cursor(3, 0, finished=True, at=1_700_000_900)
+
+    state = store.reconcile_state()
+
+    assert state.unfinished == 0
+    assert state.last_finished_at == 1_700_000_900
+
+
+def test_the_schema_applies_to_an_existing_database_without_losing_anything(tmp_path: Path) -> None:
+    # open_store runs schema.sql on every start, so the new table has to arrive
+    # on a database that is already full. Every statement in that file is
+    # IF NOT EXISTS, which is why no SCHEMA_VERSION bump belongs to this change.
+    path = tmp_path / "state.db"
+    first = open_store(path)
+    first.record(10, a_file(10, etag="aaa"), "indexed", content_hash="a")
+    first.set_reconcile_cursor(2, 700)
+    first.close()
+
+    second = open_store(path)
+    try:
+        row = second.file_row(10)
+        assert row is not None
+        assert row["etag"] == "aaa"
+        assert second.reconcile_cursor(2).after_file_id == 700
+        assert second.read_meta()["schema_version"] == SCHEMA_VERSION
+    finally:
+        second.close()
 
 
 def test_the_connection_may_cross_a_worker_thread(store: Store) -> None:
