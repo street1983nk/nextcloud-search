@@ -141,6 +141,10 @@ class IndexBatchWriter:
     ) -> None:
         resolved = settings()
         self._directory = directory
+        # The index itself, not only its schema: stored_body reads documents back
+        # out of it, and a second Index object on the same directory would be a
+        # second writer lock waiting to happen.
+        self._index = index
         self._schema: Schema = index.schema
         self._min_free_bytes = resolved.min_free_bytes if min_free_bytes is None else min_free_bytes
         self._batch_files = resolved.batch_files if batch_files is None else batch_files
@@ -208,6 +212,41 @@ class IndexBatchWriter:
 
         self._pending += 1
         self._pending_bytes += len(record.body.encode("utf-8"))
+
+    def stored_body(self, file_id: int) -> str | None:
+        """The stored text of one indexed document, or None when there is none.
+
+        This method is the reason a rename costs no download. ``body_de`` is the
+        only stored copy of the extracted text in the whole system, the same copy
+        the snippet generator already cuts from, so a file that was renamed can be
+        written again from what the index holds: no gateway call, no scratch file,
+        no extraction, no OCR. The alternative would fetch bytes that did not
+        change in order to produce a text that did not change either.
+
+        None is an answer and not a failure. A file that was never indexed, or one
+        that ended as skipped, has no stored text, and the caller turns the
+        metadata job into a content job for it.
+
+        The term goes through the schema, exactly as the upsert in :meth:`add`
+        does, and for the same measured reason: a term built from the field name
+        takes the Python integer as it comes and becomes an I64 term, which the
+        U64 column of ``file_id`` never holds. That mismatch raises nothing here
+        either. It would simply answer None for every file in the index, and every
+        rename would fall back to the expensive route without a single counter
+        noticing. See the module docstring for the measurement.
+        """
+        # The reload is what makes the text of the current batch visible: the
+        # searcher pool of tantivy stands on the segments of the last reload, and
+        # a metadata job that arrives in the same pass as the indexing of its own
+        # file would otherwise read None from a searcher one commit too old.
+        self._index.reload()
+        searcher = self._index.searcher()
+        hits = searcher.search(Query.term_query(self._schema, FIELD_FILE_ID, file_id), limit=1).hits
+        if not hits:
+            return None
+        _score, address = hits[0]
+        values = searcher.doc(address).to_dict().get(FIELD_BODY_DE, [])
+        return str(values[0]) if values else None
 
     def flush(self) -> FlushResult:
         """Commit the pending batch, unless the volume is running out of space.
