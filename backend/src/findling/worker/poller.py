@@ -580,7 +580,7 @@ class Poller:
         was just recognised as a scan has exactly the content hash it had during
         the text attempt, and its stored verdict is skipped(no_text_layer). Ask
         ``is_unchanged`` and the answer is False today, because that verdict is
-        not ``indexed`` — but the question is the wrong one either way, and the
+        not ``indexed``, but the question is the wrong one either way, and the
         day an OCR run is repeated after a successful one the fast path would
         acknowledge the row without ever starting the engine. The bytes did not
         change; what changed is what is to be done with them.
