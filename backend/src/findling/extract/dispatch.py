@@ -12,9 +12,14 @@ What is deliberately absent, and why:
 * Container formats such as compressed archives are not opened at all. Unpacking
   untrusted input means path traversal on write and a decompression bomb on read,
   for the sake of files we would then have to judge one by one anyway.
-* Pictures need OCR to mean anything. Phase 3 adds that path, and until then a
-  picture is honestly reported as unsupported instead of quietly counted as
-  empty.
+* Pictures need OCR to mean anything, and since plan 03-09 that path exists:
+  ``Route.OCR`` hands a page to the engine and comes back with text or with a
+  verdict that says why there is none. The route is chosen by the kind of the
+  job and not by the mimetype, because a second track is a property of the
+  order, not of the file. An image file still lands as skipped(mime_not_allowed)
+  for now: the image mimetypes join the allowlist in plan 03-10, and until they
+  do, the only way into this route is a scanned PDF that the text pass judged
+  as skipped(no_text_layer).
 * Legacy Office (the pre-2007 binary formats, extensions doc, xls and ppt) is
   outside v1: it needs antiword, catdoc or a headless office suite, which is a
   multiple of the image size and a process zoo of its own. Those files land as
@@ -52,6 +57,12 @@ class Route(StrEnum):
     HTML = "html"
     RTF = "rtf"
     PLAIN = "plain"
+    # The fourth kind of branch, and the only one no mimetype maps to. It is
+    # reached by the kind of the job instead, which is what keeps the second
+    # track out of ALLOWED_MIMETYPES: a pseudo mimetype would make every reader
+    # of that table believe Nextcloud can hand one over, and judge would have to
+    # know about job kinds to keep it out.
+    OCR = "ocr"
 
 
 # The allowlist. Nextcloud hands the mimetype over with the queue entry, so this
@@ -123,17 +134,31 @@ def extension_of(name: str) -> str:
     return PurePosixPath(name).suffix.removeprefix(".").lower()
 
 
-def extract(path: str, mime: str, size: int) -> ExtractionOutcome:
+def extract(path: str, mime: str, size: int, route: Route | None = None) -> ExtractionOutcome:
     """Judge a file and, if it passed, run its extractor. Called in the child.
 
     Raises whatever the extraction library raises. The translation into a verdict
     happens once, in ExtractionOutcome.from_exception, at the process boundary, so
     that no format module has to know the taxonomy.
+
+    ``route`` is how a job overrules the mimetype, and the OCR track is the one
+    caller that does. It is cleaner than a pseudo mimetype for two reasons. A
+    second track is a property of the order and not of the file, so a table that
+    maps types to extractors is the wrong place to write it down; and judge stays
+    exactly what it is, the one place that forms a verdict out of type and size,
+    instead of growing a case for a type Nextcloud never sends.
+
+    The size cap is not lost with the override, it has already been paid: an OCR
+    job only exists because a content job for the same file went through judge
+    and through the gateway, where a file that grew past the cap in the meantime
+    becomes skipped(too_large) before a single byte is extracted.
     """
-    verdict = judge(mime, size)
-    if isinstance(verdict, ExtractionOutcome):
-        return verdict
-    return _run_route(verdict, path)
+    if route is None:
+        verdict = judge(mime, size)
+        if isinstance(verdict, ExtractionOutcome):
+            return verdict
+        route = verdict
+    return _run_route(route, path)
 
 
 def _run_route(route: Route, path: str) -> ExtractionOutcome:
@@ -157,6 +182,13 @@ def _run_route(route: Route, path: str) -> ExtractionOutcome:
             from findling.extract import pdf
 
             return pdf.extract_pdf(path)
+        case Route.OCR:
+            # ocr pulls raster and, through it, Pillow. A container that never
+            # sees a scan would otherwise carry all three in every one of its
+            # children, and the children are the thing this deferral is about.
+            from findling.extract import ocr
+
+            return ocr.extract_pdf_ocr(path)
         case Route.ODF:
             from findling.extract import odf
 

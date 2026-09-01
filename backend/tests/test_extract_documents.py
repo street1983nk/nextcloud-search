@@ -775,7 +775,12 @@ def test_every_route_of_the_allowlist_has_an_extractor_behind_it(tmp_path: Path)
         Route.PLAIN: _write(tmp_path, "notiz.txt", b"Ein Absatz."),
     }
 
-    assert set(fixtures) == set(Route)
+    # Route.OCR is the one route with no fixture here, and that is the assertion
+    # rather than an omission: no mimetype maps to it, it is reached by the kind
+    # of the job (plan 03-09), and this loop walks the allowlist. Its extractor is
+    # covered in tests/test_ocr.py, where the engine can be stood in for.
+    assert set(fixtures) == set(Route) - {Route.OCR}
+    assert Route.OCR not in set(ALLOWED_MIMETYPES.values())
 
     for mime, route in ALLOWED_MIMETYPES.items():
         path = fixtures[route]

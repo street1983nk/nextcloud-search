@@ -2,7 +2,10 @@
 
 Two modules, one test file, because they are one claim: a scan becomes text, or
 it becomes a verdict that says why it did not. Splitting them would hide the
-place where the two meet, which is the page loop with its caps.
+place where the two meet, which is the page loop with its caps. Since plan 03-09
+the dispatcher is the third module in here, for the same reason: the route is the
+only way the page loop is ever reached, and a group of tests that proved the loop
+without proving the way in would be a machine nobody can start.
 
 The corpus files are the input on purpose. A PDF built inside this test would
 prove something about that PDF; the files under ``testdata/corpus`` are the ones
@@ -21,6 +24,7 @@ about that document.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import logging
 import shutil
@@ -35,14 +39,21 @@ import pytest
 from PIL import Image
 
 from findling.config import settings
-from findling.extract import ocr, raster
+from findling.extract import dispatch, ocr, raster
+from findling.extract.dispatch import Route
 from findling.extract.errors import Reason, State
 
 CORPUS = Path(__file__).resolve().parents[2] / "testdata" / "corpus"
 
+DISPATCH_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "extract" / "dispatch.py"
+
 # Three A4 pages of German council prose that exist only as pixels. The one term
 # that stands in no other file of the corpus is Bebauungsplan.
 SCAN = str(CORPUS / "13-ratsvorlage-scan.pdf")
+
+# The counterpart: a PDF that carries its text as text. D-06 says it is extracted
+# and never OCR-t, and the decision falls in pdf.py, not on this route.
+TEXT_LAYER = str(CORPUS / "01-text-layer.pdf")
 
 # 14400 by 14400 points, the largest page the format allows. At 300 dpi that is
 # 60000 pixels on an edge, or nine gigapixels in one channel.
@@ -417,6 +428,84 @@ def test_a_corrupt_pdf_becomes_a_verdict_instead_of_an_exception(monkeypatch: py
 
     assert outcome.state is State.FAILED
     assert outcome.reason is Reason.CORRUPT
+
+
+def _module_level_imports(source: Path) -> set[str]:
+    """Every module name the file imports at module level, dotted and whole."""
+    names: set[str] = set()
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names.add(node.module)
+            names.update(f"{node.module}.{alias.name}" for alias in node.names)
+    return names
+
+
+def test_a_job_of_kind_ocr_takes_the_ocr_route_whatever_the_mimetype(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The second track is a property of the job, not of the file. A mimetype that
+    # the allowlist rejects outright is the sharpest way to say so: judge would
+    # answer skipped(mime_not_allowed), and the forced route still reads the page.
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", "1")
+    engine = _install_engine(monkeypatch, _page("Ratsvorlage"))
+
+    outcome = dispatch.extract(SCAN, "application/x-findling-not-a-real-type", 4096, Route.OCR)
+
+    assert outcome.state is State.INDEXED
+    assert "Ratsvorlage" in outcome.text
+    assert len(engine.calls) == 1
+
+
+def test_a_pdf_with_a_text_layer_still_takes_the_pdf_route(monkeypatch: pytest.MonkeyPatch) -> None:
+    # D-06, from the side of the dispatcher: a document that carries text is
+    # extracted and never handed to the engine. This plan must not undo that
+    # decision by running OCR in addition (T-03-906).
+    engine = _install_engine(monkeypatch, _page("nie erreicht"))
+
+    outcome = dispatch.extract(TEXT_LAYER, "application/pdf", Path(TEXT_LAYER).stat().st_size)
+
+    assert outcome.state is State.INDEXED
+    assert engine.calls == []
+
+
+def test_the_ocr_route_imports_its_modules_inside_the_branch() -> None:
+    # Same reason as every other route: the child is recycled every 200 files, so
+    # an import at module level is paid on every recycle, even in a container
+    # that never sees a single scan.
+    body = DISPATCH_SOURCE.read_text(encoding="utf-8")
+    branch = body.split("case Route.OCR:", 1)[1].split("case ", 1)[0]
+
+    assert "from findling.extract import ocr" in branch
+
+    imported = _module_level_imports(DISPATCH_SOURCE)
+    assert "findling.extract.ocr" not in imported
+    assert "findling.extract.raster" not in imported
+
+
+def test_the_forced_ocr_route_without_an_engine_is_ocr_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The route reaches the verdict, not only the module. An image without OCR in
+    # it has to say so, because "no engine here" and "this document beat the
+    # parser" call for entirely different answers from an admin (T-03-806).
+    def answers(number: int) -> _Finished:
+        raise FileNotFoundError(2, "No such file or directory: 'tesseract'")
+
+    _install_engine(monkeypatch, answers)
+
+    outcome = dispatch.extract(SCAN, "application/pdf", 4096, Route.OCR)
+
+    assert outcome.state is State.FAILED
+    assert outcome.reason is Reason.OCR_UNAVAILABLE
+
+
+def test_the_dispatcher_no_longer_calls_its_picture_path_missing() -> None:
+    # The paragraph that said phase 3 would add the path and that a picture is
+    # honestly reported as unsupported until then. Half of it is now false, and a
+    # docstring that lies is worse than none.
+    body = DISPATCH_SOURCE.read_text(encoding="utf-8").lower()
+
+    assert "until then a picture is honestly reported as unsupported" not in " ".join(body.split())
+    assert "image" in body
 
 
 def test_original_file_is_unchanged_after_ocr() -> None:

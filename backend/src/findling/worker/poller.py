@@ -63,7 +63,7 @@ from typing import IO, Any, Final, cast
 from tantivy import Index
 
 from findling.config import settings
-from findling.extract.dispatch import extension_of, judge
+from findling.extract.dispatch import Route, extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.sandbox import extract_guarded
 from findling.index.open import expected_versions, open_index
@@ -100,7 +100,11 @@ POLLER_STOP_SECONDS: Final = 30.0
 # Everything the poller talks to, as a type. The defaults are the production
 # wiring and a test replaces them one by one.
 FetchFile = Callable[..., Awaitable[int | None]]
-ExtractFile = Callable[[str, str, int], ExtractionOutcome]
+# Open in its arguments since plan 03-09, because an OCR job passes two more of
+# them: the route it forces and the deadline it is allowed to take. Writing the
+# three positional ones out and leaving the keywords implicit would look precise
+# and be wrong, since the keyword names are the part a replacement has to match.
+ExtractFile = Callable[..., ExtractionOutcome]
 GatewayFactory = Callable[[], GatewayClient]
 QueueFactory = Callable[[AsyncNextcloudApp], DocumentQueue]
 
@@ -155,6 +159,11 @@ class _Verdict:
     job: QueueJob
     outcome: ExtractionOutcome
     content_hash: str | None = None
+    # Whether an OCR run stands behind this verdict. Carried per verdict rather
+    # than derived from the job kind, because the rename path re-records a
+    # verdict it did not produce and would otherwise drop the flag of the run
+    # that did.
+    ocr_used: bool = False
 
 
 class _HashingSink:
@@ -269,6 +278,10 @@ class Poller:
         self._fetch = fetch
         self._extract = extract
         self._ocr_enabled = resolved.ocr_enabled
+        # The hard deadline of an OCR job, derived in the configuration so that it
+        # is always above the soft one the child checks in its page loop. See the
+        # cap cascade in docs/ocr.md.
+        self._ocr_hard_deadline = float(resolved.ocr_hard_deadline_seconds)
         self._batch_files = resolved.batch_files if batch_files is None else batch_files
         self._batch_max_bytes = resolved.batch_max_bytes if batch_max_bytes is None else batch_max_bytes
         self._cooldown_start = float(resolved.poll_cooldown_start_seconds if cooldown_start is None else cooldown_start)
@@ -489,6 +502,15 @@ class Poller:
         if job.kind == KIND_METADATA and await self._rewrite_metadata(job, done, failed, verdicts):
             return 0
 
+        # The second track, and it stands before the judgement below because the
+        # route of such a job is not a property of its mimetype. The row got here
+        # through the requeue of step 3b, which only ever puts a file on it that
+        # the text pass judged as skipped(no_text_layer); nothing else can reach
+        # this branch, which is what keeps D-06 intact (T-03-906).
+        if job.kind == KIND_OCR:
+            await self._read_the_scan(job, done, failed, verdicts)
+            return 0
+
         route = judge(job.mime, job.size)
         if isinstance(route, ExtractionOutcome):
             # Decided before the first byte. Reading fifty megabytes to learn what
@@ -539,6 +561,66 @@ class Poller:
             handover.append(job.file_id)
         self._collect(job, outcome, done, failed, verdicts, read.content_hash, hand_over=hand_over)
         return 0
+
+    async def _read_the_scan(
+        self,
+        job: QueueJob,
+        done: list[int],
+        failed: dict[int, str],
+        verdicts: list[_Verdict],
+    ) -> None:
+        """The same file once more, this time as pixels rather than as text.
+
+        It runs like the content branch above, and the three places where it does
+        not are the reason it is a branch at all. Each of them carries its own
+        comment below: the route is forced instead of derived, the deadline is
+        the long one, and the fast path is skipped.
+
+        **The fast path is skipped, and that is not an oversight.** A file that
+        was just recognised as a scan has exactly the content hash it had during
+        the text attempt, and its stored verdict is skipped(no_text_layer). Ask
+        ``is_unchanged`` and the answer is False today, because that verdict is
+        not ``indexed``, but the question is the wrong one either way, and the
+        day an OCR run is repeated after a successful one the fast path would
+        acknowledge the row without ever starting the engine. The bytes did not
+        change; what changed is what is to be done with them.
+        """
+        try:
+            read = await self._fetch_file(job)
+        except FileTooLargeError:
+            self._collect(job, ExtractionOutcome.skipped(Reason.TOO_LARGE), done, failed, verdicts)
+            return
+        if read is None:
+            self._collect(job, ExtractionOutcome.skipped(Reason.GONE), done, failed, verdicts)
+            return
+
+        try:
+            outcome = await asyncio.to_thread(
+                self._extract,
+                str(read.path),
+                job.mime,
+                read.size,
+                # The route comes from the kind of the job, so that the second
+                # track is not disguised as a mimetype the crawl could send.
+                route=Route.OCR,
+                # And the long deadline, not the 120 s of a text job. It sits
+                # above the soft one of the page loop, and that distance is the
+                # window in which the child hands over the pages it already read
+                # (D-08, T-03-902).
+                timeout_seconds=self._ocr_hard_deadline,
+            )
+        finally:
+            # Same rule as on the content path: the scratch file holds user
+            # content, and the error path is where a cleanup is forgotten.
+            _discard(read.path)
+
+        if outcome.state is State.INDEXED:
+            await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
+        # No handover, whatever came back. This row was the handover, and putting
+        # it on the track again is the endless loop of T-03-704 from the other
+        # side. ocr_used travels with the verdict even when the engine found
+        # nothing, because the time was spent either way.
+        self._collect(job, outcome, done, failed, verdicts, read.content_hash, ocr_used=True)
 
     async def _goes_to_the_ocr_track(self, job: QueueJob, outcome: ExtractionOutcome, content_hash: str) -> bool:
         """True when this verdict becomes an OCR job instead of an end state.
@@ -676,12 +758,18 @@ class Poller:
         row = await asyncio.to_thread(self._store_or_die().file_row, job.file_id)
         content_hash = str(row["content_hash"]) if row and row["content_hash"] else None
         truncated = bool(row and row["reason"] == str(Reason.TRUNCATED))
+        # Carried over for the same reason as the content hash above: this path
+        # writes a verdict it did not produce. The text in the index may well be
+        # the text an OCR run read, and letting the rename reset the flag would
+        # make the engine time disappear from the state on the day somebody moves
+        # the file into another folder.
+        ocr_used = bool(row and row["ocr_used"])
 
         outcome = ExtractionOutcome.indexed(body, truncated=truncated)
         # writer.add replaces through the term deletion, so this is an upsert on
         # the file id and not a second document under a second name.
         await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
-        self._collect(job, outcome, done, failed, verdicts, content_hash)
+        self._collect(job, outcome, done, failed, verdicts, content_hash, ocr_used=ocr_used)
         return True
 
     async def _fetch_file(self, job: QueueJob) -> _Read | None:
@@ -740,6 +828,7 @@ class Poller:
         content_hash: str | None = None,
         *,
         hand_over: bool = False,
+        ocr_used: bool = False,
     ) -> None:
         """Sort one verdict into the two lists the acknowledgement carries.
 
@@ -755,7 +844,7 @@ class Poller:
         the text track and because the next pass reads it to see that this file
         has been handed over already.
         """
-        verdicts.append(_Verdict(job=job, outcome=outcome, content_hash=content_hash))
+        verdicts.append(_Verdict(job=job, outcome=outcome, content_hash=content_hash, ocr_used=ocr_used))
         if outcome.state is State.FAILED and outcome.reason is not None:
             failed[job.queue_id] = str(outcome.reason)
             return
@@ -788,6 +877,7 @@ class Poller:
                 str(verdict.outcome.reason) if verdict.outcome.reason is not None else None,
                 content_hash=verdict.content_hash,
                 text_chars=verdict.outcome.text_chars,
+                ocr_used=verdict.ocr_used,
             )
 
     # -- plumbing --------------------------------------------------------
@@ -871,6 +961,11 @@ def _meta_of(job: QueueJob) -> FileMeta:
         mime=job.mime,
         size=job.size,
         mtime=job.mtime,
+        # Nextcloud's own version mark, written down for the first time here. The
+        # reconcile of plan 03-12 compares it against the current one, and without
+        # a stored value it would have to fetch every file to find out that none
+        # of them changed.
+        etag=job.etag,
     )
 
 

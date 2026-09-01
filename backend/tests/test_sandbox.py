@@ -12,12 +12,20 @@ import the analysis half of the package. That costs roughly 23 MB and a third of
 second per recycle, measured in plan 02-01, for an automaton the extractor never
 uses. The test asks a running child what it has loaded, because the alternative is
 a comment, and a comment does not notice the next convenient import.
+
+The fifth, added with the OCR track of plan 03-09, is that there are now two
+deadlines rather than one. A text job may take 120 seconds and an OCR job up to
+660, and the group of tests below asserts both directions: a long budget is not
+cut short by the built in default, and a short one still ends a hanging job. The
+grandchild test is the one that could not be written before phase 3, because
+before it the child spawned nothing at all.
 """
 
 from __future__ import annotations
 
 import os
 import sys
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -107,6 +115,117 @@ def test_a_job_over_the_deadline_is_a_timeout_and_costs_the_child() -> None:
 
         assert impatient.pid is not None
         assert impatient.pid != doomed_pid
+    finally:
+        impatient.stop()
+
+
+def test_a_job_may_carry_a_deadline_of_its_own_above_the_default() -> None:
+    # The whole point of plan 03-09: an OCR job runs up to 660 s where a text job
+    # runs 120. Bound to the worker, the long value would apply to every text
+    # file as well, and the short one would kill the OCR child before it could
+    # hand over its partial text.
+    impatient = sandbox.ExtractionWorker(max_files=200, timeout_seconds=1)
+    try:
+        outcome = impatient.probe("sleep", 3.0, timeout_seconds=60)
+
+        assert outcome.state is State.INDEXED, "the deadline of the job has to win over the default"
+        assert impatient.pid is not None, "nothing was killed, so the child stays"
+    finally:
+        impatient.stop()
+
+
+def test_a_short_deadline_on_the_job_still_ends_a_hanging_call() -> None:
+    # The other direction, and the one that keeps the guard a guard: a per job
+    # value is not an escape hatch, it is the value that is enforced.
+    patient = sandbox.ExtractionWorker(max_files=200, timeout_seconds=600)
+    try:
+        patient.probe("sleep", 0.0)
+        doomed_pid = patient.pid
+        outcome = patient.probe("sleep", 30.0, timeout_seconds=3)
+
+        assert outcome == ExtractionOutcome.failed(Reason.TIMEOUT)
+        # Recycling rule 2 is untouched by the new argument: over the deadline
+        # means the child is gone, whichever deadline it was.
+        assert patient.pid is None
+
+        patient.probe("sleep", 0.0)
+
+        assert patient.pid is not None
+        assert patient.pid != doomed_pid
+    finally:
+        patient.stop()
+
+
+def test_a_job_without_a_deadline_uses_the_configured_default() -> None:
+    # Every caller that existed before plan 03-09 passes nothing, and nothing has
+    # to keep meaning EXTRACT_TIMEOUT_SECONDS.
+    impatient = sandbox.ExtractionWorker(max_files=200, timeout_seconds=3)
+    try:
+        outcome = impatient.probe("sleep", 30.0)
+
+        assert outcome == ExtractionOutcome.failed(Reason.TIMEOUT)
+    finally:
+        impatient.stop()
+
+
+def test_the_recycling_count_still_holds_after_a_job_with_its_own_deadline() -> None:
+    # Recycling rule 1 counts files, not deadlines. A job that brought its own
+    # budget must not fall out of that count, because the count is what bounds
+    # the sum of the leaks in a shared address space.
+    short_lived = sandbox.ExtractionWorker(max_files=2, timeout_seconds=60)
+    try:
+        short_lived.run(NOWHERE, UNSUPPORTED, 1024, timeout_seconds=30)
+        first = short_lived.pid
+        short_lived.run(NOWHERE, UNSUPPORTED, 1024, timeout_seconds=30)
+        short_lived.run(NOWHERE, UNSUPPORTED, 1024, timeout_seconds=30)
+        third = short_lived.pid
+
+        assert first is not None
+        assert third is not None
+        assert third != first
+    finally:
+        short_lived.stop()
+
+
+def _process_state(pid: int) -> str:
+    """The letter the kernel gives one process, or the empty string when it is gone.
+
+    Read from /proc rather than probed with signal 0, and that is the whole
+    reliability of the test below. An orphaned grandchild is reparented to
+    whatever runs as pid 1 in the container, and a pid 1 that does not reap
+    leaves a zombie behind; ``os.kill(pid, 0)`` calls a zombie alive, which is
+    exactly the answer this test must not accept.
+    """
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    return stat.rpartition(")")[2].split()[0]
+
+
+@ONLY_POSIX
+def test_group_kill_reaches_a_grandchild() -> None:
+    # The reason setsid and killpg were built in phase 2 (security audit L3),
+    # asserted for the first time with a real grandchild. tesseract runs exactly
+    # here, and a hung grandchild that survives the kill of its parent would hold
+    # the single worker slot of the container forever (T-03-901).
+    impatient = sandbox.ExtractionWorker(max_files=200, timeout_seconds=3)
+    try:
+        answer = impatient.probe("grandchild", 300.0)
+        grandchild = int(answer.text)
+        assert _process_state(grandchild) not in {"", "Z"}, "the grandchild has to be running first"
+
+        outcome = impatient.probe("sleep", 300.0)
+
+        assert outcome == ExtractionOutcome.failed(Reason.TIMEOUT)
+        # The kill is asynchronous, so this waits rather than asserts at once.
+        # It waits for a state, not for a duration: a sleep long enough to be
+        # safe would be long enough to make the suite unpleasant.
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline and _process_state(grandchild) not in {"", "Z"}:
+            time.sleep(0.05)
+
+        assert _process_state(grandchild) in {"", "Z"}, "the group kill has to take the grandchild with it"
     finally:
         impatient.stop()
 
