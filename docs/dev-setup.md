@@ -165,6 +165,17 @@ Expected output: `276496 b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396e
 That is the same entry count and the same digest as in `docs/german-analyzer.md`.
 A different digest means a different tokenisation, not a cosmetic difference.
 
+Since phase 3 the same host-process reasoning applies to the OCR engine. The
+runtime image installs `tesseract-ocr` with its language packs, but
+`extract/ocr.py` simply calls `tesseract` and there is no configuration variable
+for a path. On a developer machine without `tesseract.exe` in `PATH` every scan
+and every image ends as `failed(ocr_unavailable)`, and the OCR steps of the
+visual check cannot succeed. Install the engine on the host (on Windows:
+`winget install tesseract`, which brings 5.4) and point `TESSDATA_PREFIX` at a
+directory that contains `deu.traineddata` and `eng.traineddata`, for example
+`C:\Users\<you>\tessdata`. Export both before the registration below, because
+the backend inherits its environment from that shell.
+
 ```bash
 sh scripts/dev/register-exapp.sh
 ```
@@ -223,10 +234,12 @@ docker compose exec -T -u www-data app php occ findling:index
 
 The first command is the Nextcloud side: `scheduled` and `handed to the worker`
 both have to reach zero. The second is the container side and answers with JSON;
-it is done when `indexed` is 8, `skipped` is 2 and `failed` is 1. Those three
-numbers are the corpus doing its job: the scan without a text layer and the
-encrypted PDF are skipped, the zero byte PDF fails, and the picture never enters
-the queue because the crawl only takes document types.
+it is done when `indexed` is 22, `skipped` is 5 and `failed` is 6. Those three
+numbers are the corpus of phase 3 doing its job: 33 files, the four image types
+are on the allowlist since the OCR work, scans without a text layer get indexed
+through the OCR lane, and the deliberate failure cases fail. The table in
+`testdata/CORPUS.md` names the expected verdict for every single file, and the
+CI reads that column.
 
 If nothing is indexed at all, read `.dev/exapp.log` first. A `FileNotFoundError`
 on `/usr/share/dict/ngerman` means the artifact step above was skipped.

@@ -136,3 +136,9 @@ hinterlegt.
 **Wohin es gehört:** in den phasenweiten Integrationsschritt, zusammen mit der
 Sichtprobe. Wer die Sichtprobe vorbereitet, braucht beide Angaben ohnehin und
 sieht dabei, welche Fassung stimmt.
+
+**ERLEDIGT 01.09.2026 im Integrationsschritt:** beide Stellen in
+`docs/dev-setup.md` korrigiert. Schritt 5 nennt jetzt 22/5/6 über 33 Dateien
+mit Verweis auf `testdata/CORPUS.md`, und Abschnitt 1 erklärt die
+tesseract-Voraussetzung des Host-Prozesses (PATH + `TESSDATA_PREFIX`, vor
+`register-exapp.sh` exportieren).
