@@ -1540,7 +1540,7 @@ async def test_the_resources_open_off_the_event_loop(store: Store, writer: Index
         writer=writer,
         tmp_dir=tmp_path / "tmp",
         client_factory=client_factory,
-        gateway_factory=_FakeGatewayClient,
+        gateway_factory=lambda: cast("Any", _FakeGatewayClient()),
         queue_factory=lambda nc: cast("Any", _FakeQueue()),
     )
 

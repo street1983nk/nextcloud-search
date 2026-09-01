@@ -56,7 +56,7 @@ import contextlib
 import hashlib
 import logging
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import IO, Any, Final, cast
 
@@ -372,7 +372,15 @@ class Poller:
 
     async def run_once(self) -> RoundResult:
         """One pass over one batch, in the order the module docstring states."""
-        queue = self._open()
+        # Off the loop, and only the first pass pays anything at all (perf audit
+        # M1). What happens in here is a SQLite connect with the schema, the word
+        # list artifact over 276k entries including its checksum, opening the
+        # tantivy index and a sweep of the scratch directory: an estimated 1.5 to
+        # 3 seconds on ARM, and during every one of them /heartbeat does not
+        # answer while /enabled still does. AppAPI reads a missing heartbeat as a
+        # dead container and restarts it, so the cost of doing this on the loop is
+        # not latency, it is a boot loop on exactly the hardware this app targets.
+        queue = await asyncio.to_thread(self._open)
 
         claim = await queue.claim(limit=self._batch_files, max_bytes=self._batch_max_bytes)
         if claim.unavailable:
@@ -843,7 +851,17 @@ class Poller:
         OCR track. The verdict is still recorded, because it is the truth about
         the text track and because the next pass reads it to see that this file
         has been handed over already.
+
+        **The text is dropped here** (perf audit M2). The writer already holds it
+        by the time this runs, and ``_record_verdicts`` never reads it: it writes
+        the state, the reason, the character count and the content hash. Without
+        the drop the list keeps the text of the whole batch until after the
+        commit, which is 16.8 to 33.6 MB at 32 documents on the character cap, on
+        a box with four gigabytes; a single euro sign doubles the string. The
+        character count survives, because it is stored at extraction time and
+        never recomputed from the text.
         """
+        outcome = replace(outcome, text="")
         verdicts.append(_Verdict(job=job, outcome=outcome, content_hash=content_hash, ocr_used=ocr_used))
         if outcome.state is State.FAILED and outcome.reason is not None:
             failed[job.queue_id] = str(outcome.reason)
