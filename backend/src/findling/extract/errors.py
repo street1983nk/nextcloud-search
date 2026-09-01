@@ -63,6 +63,7 @@ class Reason(StrEnum):
     EMPTY_TEXT = "empty_text"
     TOO_MANY_CELLS = "too_many_cells"
     GONE = "gone"
+    IMAGE_NOT_OCRABLE = "image_not_ocrable"  # a picture too small or too flat to carry text
 
     # failed, the things we wanted to do and could not
     EMPTY_FILE = "empty_file"
@@ -73,6 +74,8 @@ class Reason(StrEnum):
     OUT_OF_MEMORY = "out_of_memory"
     GATEWAY_ERROR = "gateway_error"
     REPEATEDLY_STUCK = "repeatedly_stuck"
+    OCR_FAILED = "ocr_failed"  # the engine ended with a non zero code or was killed by a signal
+    OCR_UNAVAILABLE = "ocr_unavailable"  # no engine and no language data in this image
 
 
 # The closed list. Kept word for word identical with STATE_REASONS in
@@ -88,6 +91,7 @@ STATE_REASONS: Final[Mapping[State, frozenset[Reason | None]]] = {
             Reason.EMPTY_TEXT,
             Reason.TOO_MANY_CELLS,
             Reason.GONE,
+            Reason.IMAGE_NOT_OCRABLE,
         }
     ),
     State.FAILED: frozenset(
@@ -100,6 +104,8 @@ STATE_REASONS: Final[Mapping[State, frozenset[Reason | None]]] = {
             Reason.OUT_OF_MEMORY,
             Reason.GATEWAY_ERROR,
             Reason.REPEATEDLY_STUCK,
+            Reason.OCR_FAILED,
+            Reason.OCR_UNAVAILABLE,
         }
     ),
 }
@@ -120,6 +126,11 @@ STATE_REASONS: Final[Mapping[State, frozenset[Reason | None]]] = {
 # entry would not translate an exception, it would raise a ValueError inside the
 # error handler. A password protected file is a decision, and a decision is made
 # where the file is opened, not where an exception is read.
+#
+# image_not_ocrable of phase 3 is the same rule a second time: a picture that is
+# too small to carry text is a decision made where the picture is measured, and
+# the pair failed(image_not_ocrable) does not exist either. Only failed reasons
+# belong in this table, and a test walks its values to keep it that way.
 _EXCEPTION_REASONS: Final[Mapping[str, Reason]] = {
     "builtins.MemoryError": Reason.OUT_OF_MEMORY,
     "zipfile.BadZipFile": Reason.CORRUPT,
