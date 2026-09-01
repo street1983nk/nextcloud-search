@@ -311,9 +311,10 @@ admin und kollegin mitindexiert; die drei Sonderfaelle des Korpus stimmen exakt)
 - Zweite Sichtprobe ebenfalls im Browser bestanden (Screenshot): `Vertrag`
   findet `11-uebersicht.odt` mit Klartext-Snippet "Übersicht der laufenden
   Verträge ...", die Datei enthaelt nur die Flexion "Verträge".
-- Gegenproben ueber exakt dieselbe OCS-Route (`search/providers/findling/search`),
-  maschinell verifiziert im selben Aufbau: `kollegin` + `Genehmigung`
-  liefert genau die eine Freigabe, `Frist`/`Vertrag`/`Mueller` liefern 0 Treffer.
+- Rechte-Gegenprobe ebenfalls vom Owner im Browser bestanden: als `kollegin`
+  liefert `Genehmigung` genau einen Treffer (die Freigabe `09-bescheid.pdf`),
+  `Frist` liefert nichts. Zusaetzlich maschinell ueber dieselbe OCS-Route
+  verifiziert: auch `Vertrag` und `Mueller` liefern fuer `kollegin` 0 Treffer.
 - Aufbau-Reibungen, die docs/dev-setup.md bereits nennt oder die nur die
   Windows-Shell betreffen: verwaister Backend-Prozess auf 10035 musste beendet
   werden (Skript meldet das sauber); unter Git Bash brauchen docker exec und
