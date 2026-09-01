@@ -109,6 +109,60 @@ RUN apt-get update \
     && install -D -m 0444 /usr/share/doc/wngerman/copyright \
         /usr/local/share/findling/COPYING.wngerman
 
+# The OCR engine and its language data, installed in the runtime stage and
+# staying there, for the same reason the word list above does: a scanned PDF has
+# to become searchable on a box behind a firewall, and a first start that
+# downloads a 15 MB model is not zero-config, it is a support case.
+#
+# Why the engine is NOT pinned to a version while the language packs are.
+# Measured in this base image on 2026-09-01: apt installs tesseract-ocr
+# 5.5.0-1+b1, not 5.5.0-1. The +b1 is a binary NMU, it is produced per
+# architecture, and arm64 carries it as well. A hard =5.5.0-1 would therefore
+# fail on both platforms of the multi-arch build, and a hard =5.5.0-1+b1 would
+# fail the day one architecture is rebuilt without the other. The anchor for the
+# engine is the digest of the base image at the top of this file, which is the
+# same anchor the rest of the runtime stage already relies on.
+#
+# The three language packages are the opposite case: they are Architecture: all,
+# they come from the tesseract-lang source package and they have not moved since
+# bookworm. They are pinned hard, because the traineddata decides what the OCR
+# reads, and a silent change of it is a silent change of the text of every
+# scanned document in the index. When trixie moves them, this build fails loudly.
+#
+# osd is in the list although the call form uses --psm 3, not --psm 1: the
+# orientation and script model is what makes a rotated scan recoverable at all,
+# and installing it now costs nothing beyond the 10 MB it already weighs.
+#
+# The Fraktur option of D-09, deliberately left off by default. The language code
+# is frk, not deu_frak: deu_frak died with tesseract 3, and the package
+# tesseract-ocr-deu-frak does not exist in trixie ("No such package"). Switching
+# it on means uncommenting the line and adding frk to the allowlist in
+# backend/src/findling/config.py, which is the second half of the same change:
+#         tesseract-ocr-frk=1:4.1.0-2 \
+#
+# Apache-2.0 obligation: the licence text has to travel with the image, not only
+# with the repository, because the image is what is distributed. Measured, the
+# engine and libtesseract5 share one copyright file and the three language packs
+# share a second one (tessdata_fast), so two copies cover all five packages.
+# Both tests below are the fail closed half: an image without the language data
+# or without the licence texts must not be built at all. THIRD-PARTY.md carries
+# the same statement for readers of the repository.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        tesseract-ocr \
+        tesseract-ocr-deu=1:4.1.0-2 \
+        tesseract-ocr-eng=1:4.1.0-2 \
+        tesseract-ocr-osd=1:4.1.0-2 \
+    && rm -rf /var/lib/apt/lists/* \
+    && tesseract --list-langs 2>&1 | grep -qx deu \
+    && tesseract --list-langs 2>&1 | grep -qx eng \
+    && test -s /usr/share/doc/tesseract-ocr/copyright \
+    && test -s /usr/share/doc/tesseract-ocr-deu/copyright \
+    && install -D -m 0444 /usr/share/doc/tesseract-ocr/copyright \
+        /usr/local/share/findling/COPYING.tesseract \
+    && install -D -m 0444 /usr/share/doc/tesseract-ocr-deu/copyright \
+        /usr/local/share/findling/COPYING.tesseract-langdata
+
 COPY --from=build /app/.venv /app/.venv
 COPY --from=frpc /usr/local/bin/frpc /usr/local/bin/frpc
 COPY docker/init.sh docker/entrypoint.sh docker/harp_connect.sh /app/docker/

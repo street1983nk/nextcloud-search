@@ -19,6 +19,13 @@ dependencies = [
     "striprtf==0.0.32",
     "charset-normalizer==3.5.1",
     "lxml==6.1.1",
+    # Pillow was already in uv.lock, pulled in transitively by python-pptx. The
+    # OCR path uses it directly (header inspection before decoding, EXIF
+    # rotation, downscaling, PNG encoding), and a direct import of an indirect
+    # dependency is the version that silently disappears when the package that
+    # dragged it in stops needing it. So it becomes a direct edge here. Net new
+    # PyPI packages of phase 3: zero.
+    "pillow==12.3.0",
 ]
 
 [dependency-groups]
