@@ -323,3 +323,55 @@ def test_a_closed_writer_refuses_further_work(index: Index, index_dir: Path) -> 
 
     with pytest.raises(RuntimeError, match="closed"):
         writer.add(_record())
+
+
+def test_stored_body_returns_the_text_that_was_written(batch_writer: IndexBatchWriter) -> None:
+    # body_de is the only stored copy of the text in the whole system. That it
+    # can be read back is the entire reason a rename needs no download.
+    batch_writer.add(_record(42, body=GERMAN_BODY))
+    batch_writer.flush()
+
+    assert batch_writer.stored_body(42) == GERMAN_BODY
+
+
+def test_stored_body_returns_none_for_unknown_file(batch_writer: IndexBatchWriter) -> None:
+    # Not an error. A file that was never indexed, or one that ended as skipped,
+    # has no stored text, and the metadata job turns into a content job for it.
+    batch_writer.add(_record(42))
+    batch_writer.flush()
+
+    assert batch_writer.stored_body(4711) is None
+
+
+def test_stored_body_reads_a_document_of_an_earlier_run(index: Index, index_dir: Path) -> None:
+    # The rename usually arrives days after the indexing, so the text has to
+    # come out of a writer that never wrote it.
+    first = IndexBatchWriter(index, directory=index_dir)
+    first.add(_record(42))
+    first.flush()
+    first.close()
+
+    reopened = open_index(index_dir, CONSTITUENTS)
+    second = IndexBatchWriter(reopened, directory=index_dir)
+    try:
+        assert second.stored_body(42) == GERMAN_BODY
+    finally:
+        second.close()
+
+
+def test_stored_body_builds_its_term_through_the_schema() -> None:
+    # The same I64 against U64 mismatch as the upsert, with a quieter failure:
+    # a term built from the field name matches nothing, stored_body answers None
+    # for every file, and every rename falls back to a download nobody asked for.
+    tree = ast.parse(WRITER_SOURCE.read_text(encoding="utf-8"))
+    method = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "stored_body")
+    terms = [
+        node
+        for node in ast.walk(method)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "term_query"
+    ]
+
+    assert len(terms) == 1
+    first = terms[0].args[0]
+    assert isinstance(first, ast.Attribute)
+    assert first.attr == "_schema"

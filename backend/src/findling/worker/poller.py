@@ -77,7 +77,7 @@ from findling.nc.client import (
     fetch_file_stream,
     new_gateway_client,
 )
-from findling.nc.queue import DocumentQueue, QueueJob
+from findling.nc.queue import KIND_METADATA, DocumentQueue, QueueJob
 from findling.store.repo import FileMeta, Store, open_store
 
 LOGGER = logging.getLogger("findling.worker.poller")
@@ -434,6 +434,24 @@ class Poller:
         verdicts: list[_Verdict],
     ) -> int:
         """Take one job as far as the writer. Returns 1 when it needed no work."""
+        # A rename or a move, and the cheapest job the system has: the text is
+        # already in the index, so nothing is fetched, nothing is extracted and
+        # no sandbox child is started.
+        #
+        # It needs a branch of its own because the ordinary content route would
+        # do nothing at all. The bytes of a renamed file are the bytes of the
+        # same file, so is_unchanged below acknowledges the row without a single
+        # write, and neither the name in the index nor the path in the state
+        # database would ever be corrected (phase research, pitfall 2).
+        #
+        # A False answer means the index holds no text for this file, because it
+        # was never indexed or ended as skipped. That is not an error and not a
+        # reason to requeue either, since the row is already here: it falls
+        # through to the content route below, which is exactly what a first
+        # indexing of this file would have done.
+        if job.kind == KIND_METADATA and await self._rewrite_metadata(job, done, failed, verdicts):
+            return 0
+
         route = judge(job.mime, job.size)
         if isinstance(route, ExtractionOutcome):
             # Decided before the first byte. Reading fifty megabytes to learn what
@@ -472,6 +490,42 @@ class Poller:
             await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
         self._collect(job, outcome, done, failed, verdicts, read.content_hash)
         return 0
+
+    async def _rewrite_metadata(
+        self,
+        job: QueueJob,
+        done: list[int],
+        failed: dict[int, str],
+        verdicts: list[_Verdict],
+    ) -> bool:
+        """Write the file again with new metadata and the text the index holds.
+
+        False means the index has no text for this file, and it is the caller's
+        signal to run the content route instead.
+
+        Both reads block: the searcher opens a snapshot of the segments and the
+        state row is a SQLite query, so both go through a worker thread like
+        every other blocking call on this path.
+        """
+        body = await asyncio.to_thread(self._writer_or_die().stored_body, job.file_id)
+        if body is None:
+            return False
+
+        # The verdict does not change, and neither does the content hash. The same
+        # text is indexed, only under a different name, so carrying the hash over
+        # is what keeps the fast path intact: writing None into it would send the
+        # next content job into a full download and extraction of a file nobody
+        # touched, and is_unchanged would answer False until the next reindex.
+        row = await asyncio.to_thread(self._store_or_die().file_row, job.file_id)
+        content_hash = str(row["content_hash"]) if row and row["content_hash"] else None
+        truncated = bool(row and row["reason"] == str(Reason.TRUNCATED))
+
+        outcome = ExtractionOutcome.indexed(body, truncated=truncated)
+        # writer.add replaces through the term deletion, so this is an upsert on
+        # the file id and not a second document under a second name.
+        await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
+        self._collect(job, outcome, done, failed, verdicts, content_hash)
+        return True
 
     async def _fetch_file(self, job: QueueJob) -> _Read | None:
         """Stream one file into scratch, hashing it on the way.

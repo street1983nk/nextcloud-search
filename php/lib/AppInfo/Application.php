@@ -40,15 +40,19 @@ class Application extends App implements IBootstrap {
 		// a reader can check by counting lines. The class names are written out
 		// here so that the list is complete on its own.
 		//
-		// Rename, delete and share are missing on purpose. Each of them needs a
-		// counterpart in the container before it may be queued (plans 03-02 to
+		// Delete and share are missing on purpose. Each of them needs a
+		// counterpart in the container before it may be queued (plans 03-03 and
 		// 03-04); an event without one would be a row that travels through the
 		// whole queue to do nothing.
+		//
+		// Rename joined the list with plan 03-02, once the container had the
+		// metadata job that runs it without a download.
 		foreach ([
 			\OCP\Files\Events\Node\NodeCreatedEvent::class,
 			\OCP\Files\Events\Node\NodeWrittenEvent::class,
 			\OCP\Files\Events\Node\NodeTouchedEvent::class,
 			\OCP\Files\Events\Node\NodeCopiedEvent::class,
+			\OCP\Files\Events\Node\NodeRenamedEvent::class,
 		] as $event) {
 			$context->registerEventListener($event, FileEventListener::class);
 		}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Listener;
 
 use OCA\Findling\BackgroundJobs\StorageCrawlJob;
+use OCA\Findling\Db\QueueMapper;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
 use OCA\Findling\Service\StorageService;
@@ -12,6 +13,7 @@ use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\NodeCopiedEvent;
 use OCP\Files\Events\Node\NodeCreatedEvent;
+use OCP\Files\Events\Node\NodeRenamedEvent;
 use OCP\Files\Events\Node\NodeTouchedEvent;
 use OCP\Files\Events\Node\NodeWrittenEvent;
 use OCP\Files\File;
@@ -86,6 +88,14 @@ class FileEventListener implements IEventListener {
 				$this->queue($event->getNode(), true);
 				return;
 			}
+
+			if ($event instanceof NodeRenamedEvent) {
+				// Renaming and moving are the same event. The source is where the
+				// node used to be, the target is what it is now, and only the
+				// target carries the name and the path the index has to hold.
+				$this->queueRename($event->getTarget());
+				return;
+			}
 		} catch (\Throwable $e) {
 			// The type name and nothing else. The message of a filesystem
 			// exception carries the path of the file it failed on.
@@ -96,10 +106,43 @@ class FileEventListener implements IEventListener {
 	}
 
 	/**
+	 * A renamed or moved node, queued as the cheap job.
+	 *
+	 * A file goes in as kind 'metadata': the container reads the text back out of
+	 * the index and writes the document again with the new name, without
+	 * fetching a single byte. Queueing it as content instead would achieve
+	 * nothing at all, because the bytes did not change and the container
+	 * acknowledges an unchanged file without touching the index.
+	 *
+	 * A folder is deliberately not queued at all, and this is the whole reason:
+	 * FIELD_PATH is written into the index but read by no query and shown by no
+	 * provider, because a search result takes its title and its path from the
+	 * Nextcloud node at display time. The children keep their name, their content
+	 * and their file id, so a folder rename inside the same mount changes nothing
+	 * the index can answer on. There is no index write to do here, neither one
+	 * per child nor one at all, and expanding the subtree would be thousands of
+	 * queue rows for no effect.
+	 *
+	 * The one exception is a move across a mount boundary, which changes who may
+	 * see the subtree. That is a permission change, it belongs to the acl jobs of
+	 * plan 03-04, and it is named here so the gap stays visible instead of being
+	 * forgotten behind a folder check that looks complete.
+	 */
+	private function queueRename(Node $target): void {
+		if (!$target instanceof File) {
+			return;
+		}
+
+		// isUpdate is true: whatever the container has for this file id, it has
+		// it from before the rename.
+		$this->queue($target, true, QueueMapper::KIND_METADATA);
+	}
+
+	/**
 	 * Three questions before a row is written, in this order because each one is
 	 * cheaper than the one after it.
 	 */
-	private function queue(Node $node, bool $isUpdate): void {
+	private function queue(Node $node, bool $isUpdate, string $kind = QueueMapper::KIND_CONTENT): void {
 		// 1. A file, never a folder. A folder operation is exactly one event
 		// over a whole subtree, so queueing the folder node would queue one row
 		// for something that has no content and none of the rows that actually
@@ -151,6 +194,6 @@ class FileEventListener implements IEventListener {
 			return;
 		}
 
-		$this->queueService->enqueueFile($fileId, $storageId, $rootId, $size, $isUpdate);
+		$this->queueService->enqueueFile($fileId, $storageId, $rootId, $size, $isUpdate, $kind);
 	}
 }

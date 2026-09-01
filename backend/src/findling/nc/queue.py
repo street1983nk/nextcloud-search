@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 from findling.nc.client import (
     AsyncNextcloudApp,
@@ -47,6 +47,21 @@ from findling.nc.client import (
 )
 
 LOGGER = logging.getLogger("findling.nc.queue")
+
+# What the container can do with a row, spelled as the PHP side spells it.
+#
+# A closed list, because this string picks the branch in the poller and it
+# arrives from outside this process (T-03-201). The queue itself is only
+# reachable across the ExApp boundary, which rejectForeignCaller guards, but a
+# route chosen by a value from a database row deserves a list it has to be in.
+#
+# The PHP side knows five kinds. Only these two have a branch in the container
+# today; delete arrives with plan 03-03, acl with 03-04 and ocr with 03-05. Until
+# then their rows take the content route, which is the honest thing to do with a
+# job whose handler does not exist yet.
+KIND_CONTENT: Final = "content"
+KIND_METADATA: Final = "metadata"
+KINDS: Final = frozenset({KIND_CONTENT, KIND_METADATA})
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +81,10 @@ class QueueJob:
     ``etag`` has no function in phase 2. It is part of the protocol anyway, so the
     reconcile of phase 3 does not have to change the shape of this object to get
     it.
+
+    ``kind`` says what is to be done with the file and therefore which branch of
+    the poller runs. It defaults to ``content`` so that a row written before the
+    kind column existed is still an ordinary job rather than an unusable entry.
     """
 
     queue_id: int
@@ -81,6 +100,10 @@ class QueueJob:
     user_ids: tuple[str, ...]
     fetch_as: str
     is_update: bool
+    # Last and with a default, so that the three fields above keep having none:
+    # a job without a fetch user is a job nobody can read, and that must stay
+    # impossible to build by forgetting an argument.
+    kind: str = KIND_CONTENT
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +180,20 @@ def _text(value: object) -> str:
     return value if isinstance(value, str) else ""
 
 
+def _kind(value: object) -> str:
+    """The job kind, or ``content`` for anything this container cannot run.
+
+    Two cases fall back, and both on purpose. A row written by a PHP side from
+    before the kind column carries no kind at all, and it is an ordinary content
+    job: discarding it would stop the queue of an instance in the middle of an
+    upgrade. And a kind this container has no branch for, which is what delete,
+    acl and ocr are until plans 03-03 to 03-05 arrive, must not be able to pick
+    a branch by being spelled a certain way (T-03-201); it runs the content
+    route, which is the only handler that exists for it.
+    """
+    return value if isinstance(value, str) and value in KINDS else KIND_CONTENT
+
+
 def _user_ids(value: object) -> tuple[str, ...]:
     """The users who can see this file, deduplicated and in order.
 
@@ -205,6 +242,7 @@ def _job(queue_id_raw: object, source: object) -> QueueJob | None:
         user_ids=user_ids,
         fetch_as=fetch_as,
         is_update=bool(fields.get("isUpdate")),
+        kind=_kind(fields.get("kind")),
     )
 
 
