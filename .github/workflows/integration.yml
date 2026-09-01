@@ -1415,6 +1415,59 @@ jobs:
             sleep 5
           done
 
+      # D-09 as a gate, and the shape of the assertion is the point. The two
+      # documents below exist as pixels, so they can only be found once OCR has
+      # run, and what is asked is whether a search term finds them. What is
+      # deliberately never asked is what the engine actually read: that would be
+      # a test against a tesseract build, red on the next Debian point release,
+      # and it would say nothing about whether a user finds the document.
+      # Measured, this very engine reads the heading of one corpus picture
+      # without its umlaut dots, and the file is findable all the same.
+      #
+      # Each of the three terms stands in exactly one file of the whole instance,
+      # which build_corpus.py enforces, so one hit is an unambiguous answer.
+      #
+      # The two terms below carry real umlauts and a sharp s, unlike every other
+      # string in this file. They have to: the spelling is what is under test.
+      - name: The DACH cases, over search terms and never over recognised text
+        run: |
+          search() {
+            curl -sfS -G -u "${OWNER_USER}:${OWNER_PASS}" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              --data-urlencode "term=$1" \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "$2"
+          }
+          fail() { echo "::error::$1"; cat "$2"; exit 1; }
+
+          # 1. The Swiss spelling as it stands in the document, with ss.
+          search 'Strasse' swiss-ss.json
+          jq -e '.ocs.data.entries | length == 1' swiss-ss.json > /dev/null \
+            || fail "the Swiss document is not findable through the spelling it uses itself" swiss-ss.json
+          jq -e --arg name "${SWISS_FILE}" '.ocs.data.entries[0].title == $name' swiss-ss.json > /dev/null \
+            || fail "the hit for the Swiss spelling is a different file" swiss-ss.json
+
+          # 2. The same document through the German spelling with the sharp s.
+          # There is no ascii_fold in the German chain; the Snowball stemmer
+          # folds the sharp s and the double s onto the same term, and the query
+          # side builds the variant on top. Neither is a promise here, both are
+          # measured by this line.
+          search 'Straße' swiss-sharp.json
+          jq -e '.ocs.data.entries | length == 1' swiss-sharp.json > /dev/null \
+            || fail "the German spelling does not find the Swiss document" swiss-sharp.json
+          jq -e --arg name "${SWISS_FILE}" '.ocs.data.entries[0].title == $name' swiss-sharp.json > /dev/null \
+            || fail "the hit for the German spelling is a different file" swiss-sharp.json
+
+          # 3. The Austrian word form, through itself. A search for Januar
+          # finding Jänner would be synonymy, is not built in v1 and is written
+          # down as a limit in docs/german-analyzer.md rather than asserted here.
+          search 'Jänner' austrian.json
+          jq -e '.ocs.data.entries | length == 1' austrian.json > /dev/null \
+            || fail "the Austrian document is not findable through its own word form" austrian.json
+          jq -e --arg name "${AUSTRIAN_FILE}" '.ocs.data.entries[0].title == $name' austrian.json > /dev/null \
+            || fail "the hit for the Austrian word form is a different file" austrian.json
+
+          echo "both spellings lead to the Swiss document, and the Austrian word form to the Austrian one"
+
       # The control, and without it the three assertions after the cycle would be
       # worth nothing. "Not findable" is the normal state of a file that was never
       # indexed, so each of the three has to be findable here first.
@@ -1618,7 +1671,8 @@ jobs:
           echo "--- the reconcile round ---"
           cat reconcile.txt || true
           echo "--- the last search answers ---"
-          for answer in before-changed.json before-removed-owner.json before-removed-colleague.json \
+          for answer in swiss-ss.json swiss-sharp.json austrian.json before-changed.json \
+                        before-removed-owner.json before-removed-colleague.json \
                         before-new.json new.json changed.json stale.json removed-owner.json \
                         removed-colleague.json; do
             if [ -f "${answer}" ]; then
