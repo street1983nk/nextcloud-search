@@ -261,9 +261,31 @@ Ehrlichkeitshalber, damit die nächste Phase nicht das Falsche annimmt:
   eingescanntes Protokoll liest, sagt diese Seite nicht, und der Abnahmetest für
   D-09 prüft es bewusst über auffindbare Suchbegriffe statt über einen
   Rohtextvergleich.
-- **ARM.** Alle Zahlen stammen von amd64. Die Sprachdaten sind
+- **ARM-Laufzeit.** Alle Zeitwerte stammen von amd64. Die Sprachdaten sind
   `Architecture: all` und damit bitgleich, der Adressraumbedarf hängt an der
-  Pixelzahl, aber die Zeitwerte gelten auf einer ARM-Box nicht.
+  Pixelzahl, aber die Sekunden je Seite gelten auf einer ARM-Box nicht.
+
+Was für arm64 dagegen sehr wohl geprüft ist, ist die Paketauflösung, denn dort
+sitzt das eigentliche Risiko der Versions-Pins:
+
+```
+docker run --rm --platform linux/arm64 python:3.13-slim-trixie@sha256:ffb752e1... \
+    apt-get install -s -y --no-install-recommends tesseract-ocr \
+        tesseract-ocr-deu=1:4.1.0-2 tesseract-ocr-eng=1:4.1.0-2 tesseract-ocr-osd=1:4.1.0-2
+# Inst libtesseract5     (5.5.0-1+b1 Debian:13.6/stable [arm64])
+# Inst tesseract-ocr     (5.5.0-1+b1 Debian:13.6/stable [arm64])
+# Inst tesseract-ocr-deu (1:4.1.0-2  Debian:13.6/stable [all])
+# Inst tesseract-ocr-eng (1:4.1.0-2  Debian:13.6/stable [all])
+# Inst tesseract-ocr-osd (1:4.1.0-2  Debian:13.6/stable [all])
+```
+
+Zwei Dinge stehen damit fest. Die drei harten Pins auf `1:4.1.0-2` lösen auf
+arm64 genauso auf wie auf amd64, weil die Pakete `Architecture: all` sind. Und
+die Engine trägt auf beiden Architekturen die Binary-NMU-Version `5.5.0-1+b1`,
+nicht `5.5.0-1`: ein harter Pin auf die in der Recherche genannte Version hätte
+also nicht nur den arm64-Bau gebrochen, sondern beide. Das ist der Beleg für die
+Entscheidung im Dockerfile, die Engine ungepinnt zu lassen und stattdessen am
+Digest des Basis-Image zu verankern.
 
 ## Reproduzieren
 
