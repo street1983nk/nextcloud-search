@@ -23,11 +23,18 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
+from conftest import CONSTITUENTS
+from findling.index.open import open_index
+from findling.index.writer import IndexBatchWriter
+from findling.nc.client import AsyncNextcloudApp
+from findling.nc.queue import CallResult, ClaimResult, QueueJob, QueueStats
 from findling.store import repo
 from findling.store.repo import Store, open_store
+from findling.worker.poller import ROUND_WORKED, Poller
 
 PACKAGE_ROOT = Path(repo.__file__).resolve().parents[1]
 
@@ -135,6 +142,85 @@ def test_prefilter_forgets_a_deleted_file(store: Store) -> None:
 
     assert store.prefilter_visible("anna", [1, 2]) == {2}
     assert store.prefilter_visible("bernd", [1, 2]) == {2}
+
+
+class _OneBatchQueue:
+    """The queue calls of one pass, answered from a single scripted batch."""
+
+    def __init__(self, *jobs: QueueJob) -> None:
+        self._batches = [tuple(jobs)]
+        self.acknowledged: list[list[int]] = []
+
+    async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
+        del limit, max_bytes
+        return ClaimResult(jobs=self._batches.pop(0)) if self._batches else ClaimResult()
+
+    async def acknowledge(self, done: Any, failed: Any) -> CallResult:
+        del failed
+        self.acknowledged.append(list(done))
+        return CallResult(ok=True, count=len(self.acknowledged[-1]))
+
+    async def unlock(self, ids: Any) -> CallResult:
+        return CallResult(ok=True, count=len(list(ids)))
+
+    async def stats(self) -> QueueStats:
+        return QueueStats()
+
+
+class _NoGateway:
+    """Stands in for the pooled HTTP client. The acl path never asks it anything."""
+
+    async def aclose(self) -> None:
+        return None
+
+
+async def test_unshare_with_empty_user_list_clears_the_prefilter(tmp_path: Path, store: Store) -> None:
+    # Pitfall 4, proved through the whole container path rather than against
+    # replace_acl alone. After an unshare nobody sees the file any more, so
+    # usersFor answers with an empty list, and every layer between Nextcloud and
+    # this table used to read that emptiness as "the row is unusable": the entry
+    # was written off as skipped(gone) and the old permission rows stayed. The
+    # question is asked from the point of view of bernd, who lost the share, and
+    # of anna, who never had one to lose.
+    index = open_index(tmp_path / "index", CONSTITUENTS)
+    writer = IndexBatchWriter(index, directory=tmp_path / "index", min_free_bytes=0)
+    store.replace_acl(4711, ["anna", "bernd"])
+    queue = _OneBatchQueue(
+        QueueJob(
+            queue_id=94,
+            file_id=4711,
+            storage_id=3,
+            root_id=0,
+            path="",
+            title="",
+            mime="",
+            size=0,
+            mtime=0,
+            etag="",
+            kind="acl",
+            user_ids=(),
+            fetch_as="",
+            is_update=False,
+        )
+    )
+    poller = Poller(
+        store=store,
+        writer=writer,
+        tmp_dir=tmp_path / "tmp",
+        client_factory=lambda: cast("AsyncNextcloudApp", object()),
+        gateway_factory=lambda: cast("Any", _NoGateway()),
+        queue_factory=lambda nc: cast("Any", queue),
+    )
+
+    try:
+        result = await poller.run_once()
+    finally:
+        writer.close()
+
+    assert result.state == ROUND_WORKED
+    assert store.prefilter_visible("bernd", [4711]) == set()
+    assert store.prefilter_visible("anna", [4711]) == set()
+    assert queue.acknowledged == [[94]]
 
 
 def test_acl_rows_per_document_is_the_status_figure(store: Store) -> None:
