@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\AppInfo;
 
 use OCA\Findling\Listener\FileEventListener;
+use OCA\Findling\Listener\ShareEventListener;
 use OCA\Findling\Search\Provider;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -40,10 +41,6 @@ class Application extends App implements IBootstrap {
 		// a reader can check by counting lines. The class names are written out
 		// here so that the list is complete on its own.
 		//
-		// Share is missing on purpose. It needs a counterpart in the container
-		// before it may be queued (plan 03-04); an event without one would be a
-		// row that travels through the whole queue to do nothing.
-		//
 		// Rename joined the list with plan 03-02, once the container had the
 		// metadata job that runs it without a download, and the three events of
 		// a deletion joined it with plan 03-03.
@@ -65,6 +62,24 @@ class Application extends App implements IBootstrap {
 			\OCA\Files_Trashbin\Events\NodeRestoredEvent::class,
 		] as $event) {
 			$context->registerEventListener($event, FileEventListener::class);
+		}
+
+		// The share events, in a loop of their own and not appended to the one
+		// above. They are a different listener because they answer a different
+		// question: not "what does this file contain now" but "who may find it
+		// now", and that question needs neither the mimetype allowlist for
+		// folders nor the size ceiling for anything. Two short lists that each
+		// name their listener stay countable, which is what COMP-03 asks for.
+		//
+		// They joined with plan 03-04, once the container had the acl branch that
+		// runs them. Before that they would have been rows travelling through the
+		// whole queue to do nothing.
+		foreach ([
+			\OCP\Share\Events\ShareCreatedEvent::class,
+			\OCP\Share\Events\ShareDeletedEvent::class,
+			\OCP\Share\Events\ShareDeletedFromSelfEvent::class,
+		] as $event) {
+			$context->registerEventListener($event, ShareEventListener::class);
 		}
 	}
 

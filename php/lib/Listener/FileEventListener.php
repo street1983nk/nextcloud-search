@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace OCA\Findling\Listener;
 
 use OCA\Findling\BackgroundJobs\StorageCrawlJob;
+use OCA\Findling\BackgroundJobs\SubtreeExpandJob;
 use OCA\Findling\Db\QueueMapper;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
 use OCA\Findling\Service\StorageService;
 use OCA\Files_Trashbin\Events\MoveToTrashEvent;
 use OCA\Files_Trashbin\Events\NodeRestoredEvent;
+use OCP\BackgroundJob\IJobList;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\NodeCopiedEvent;
@@ -20,6 +22,7 @@ use OCP\Files\Events\Node\NodeRenamedEvent;
 use OCP\Files\Events\Node\NodeTouchedEvent;
 use OCP\Files\Events\Node\NodeWrittenEvent;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
 
@@ -54,6 +57,7 @@ class FileEventListener implements IEventListener {
 		private QueueService $queueService,
 		private StorageService $storageService,
 		private FileStateService $fileStateService,
+		private IJobList $jobList,
 		private LoggerInterface $logger,
 	) {
 	}
@@ -95,8 +99,10 @@ class FileEventListener implements IEventListener {
 			if ($event instanceof NodeRenamedEvent) {
 				// Renaming and moving are the same event. The source is where the
 				// node used to be, the target is what it is now, and only the
-				// target carries the name and the path the index has to hold.
-				$this->queueRename($event->getTarget());
+				// target carries the name and the path the index has to hold. The
+				// source is needed for one question all the same: whether the node
+				// crossed a mount boundary on its way.
+				$this->queueRename($event->getSource(), $event->getTarget());
 				return;
 			}
 
@@ -105,7 +111,7 @@ class FileEventListener implements IEventListener {
 				// far side. The mimetype filter does not run for it, see queue():
 				// a file that reports a different type now than it did when it
 				// was indexed still has to leave the index.
-				$this->queue($event->getNode(), true, QueueMapper::KIND_DELETE);
+				$this->queueDeletion($event->getNode());
 				return;
 			}
 
@@ -122,7 +128,7 @@ class FileEventListener implements IEventListener {
 				// wrote instead of adding a second one. Both branches are here
 				// anyway, because a deletion on an instance with the trash bin
 				// switched off raises only the other one.
-				$this->queue($event->getNode(), true, QueueMapper::KIND_DELETE);
+				$this->queueDeletion($event->getNode());
 				return;
 			}
 
@@ -135,6 +141,15 @@ class FileEventListener implements IEventListener {
 				// makes this work at all: without it the unchanged content hash
 				// would let the container acknowledge the row without writing
 				// anything, and the restored file would stay lost.
+				//
+				// A restored folder is deliberately not expanded here. Its
+				// descendants need their text back, so they would need content
+				// jobs, and content is not one of the kinds SubtreeExpandJob
+				// hands out: a subtree of content jobs is a re-crawl, and the
+				// thing that already does re-crawls without a user action is the
+				// ETag reconcile of plan 03-12. Restoring a folder therefore
+				// takes until the next reconcile pass rather than seconds, and
+				// that is a decision with a named owner instead of a gap.
 				$this->queue($event->getTarget(), true);
 				return;
 			}
@@ -166,11 +181,15 @@ class FileEventListener implements IEventListener {
 	 * queue rows for no effect.
 	 *
 	 * The one exception is a move across a mount boundary, which changes who may
-	 * see the subtree. That is a permission change, it belongs to the acl jobs of
-	 * plan 03-04, and it is named here so the gap stays visible instead of being
-	 * forgotten behind a folder check that looks complete.
+	 * see the subtree. That is a permission change and it is handled below, with
+	 * a subtree job that hands every descendant an acl row.
 	 */
-	private function queueRename(Node $target): void {
+	private function queueRename(Node $source, Node $target): void {
+		if ($target instanceof Folder) {
+			$this->expandMovedFolder($source, $target);
+			return;
+		}
+
 		if (!$target instanceof File) {
 			return;
 		}
@@ -181,6 +200,103 @@ class FileEventListener implements IEventListener {
 	}
 
 	/**
+	 * A folder that was renamed or moved, in the two cases pitfall 1 separates.
+	 *
+	 * **Inside the same mount nothing happens, and that is the decision from plan
+	 * 03-02.** The descendants keep their name, their content, their file id and
+	 * their permissions. Only files.path in the container goes stale, and that
+	 * field is written into the index but read by no query and shown by no
+	 * provider, because a result takes its title and its path from the Nextcloud
+	 * node at display time. Expanding the subtree for it would be thousands of
+	 * queue rows for no effect at all.
+	 *
+	 * **Across a mount boundary everything changes.** Moving a folder into a Team
+	 * Folder or out of one rewrites who may see every file inside it, and none of
+	 * those files raises an event of its own. That is what the subtree job is
+	 * for: it resolves the descendants in bands and gives each of them an acl
+	 * row.
+	 *
+	 * The numeric storage id is the mount identity here. Comparing mount points
+	 * by their path would answer a different question, since a rename changes the
+	 * path of a folder that never left its mount.
+	 */
+	private function expandMovedFolder(Node $source, Node $target): void {
+		$targetMount = $target->getMountPoint();
+		$storageId = (int)$targetMount->getNumericStorageId();
+		$rootId = (int)$targetMount->getStorageRootId();
+		$ancestorId = (int)$target->getId();
+		if ($storageId <= 0 || $rootId <= 0 || $ancestorId <= 0) {
+			return;
+		}
+
+		if ((int)$source->getMountPoint()->getNumericStorageId() === $storageId) {
+			return;
+		}
+
+		if (!$this->storageService->isIndexedStorage($storageId)) {
+			return;
+		}
+
+		$this->expand($storageId, $rootId, $ancestorId, QueueMapper::KIND_ACL);
+	}
+
+	/**
+	 * A deletion, for a file directly and for a folder through its subtree.
+	 *
+	 * A deleted folder raises one event and takes its whole subtree with it, so
+	 * without the expansion every descendant would stay in the index and in the
+	 * prefilter until somebody reindexed the instance.
+	 *
+	 * That the descendants can still be enumerated after the deletion is a
+	 * property of the trash bin: it keeps their file ids and their cache entries
+	 * under a different parent of the same storage, so an ancestor query still
+	 * finds them. Where the trash bin is switched off, or where it was emptied
+	 * before the job ran, they are really gone and the query comes back empty. In
+	 * that case the ETag reconcile of plan 03-12 carries the result, which is
+	 * exactly what it is for. Both events of a deletion route through here, and
+	 * IJobList::add deduplicates over the argument, so a trashed folder plans one
+	 * job and not two.
+	 */
+	private function queueDeletion(Node $node): void {
+		if (!$node instanceof Folder) {
+			$this->queue($node, true, QueueMapper::KIND_DELETE);
+			return;
+		}
+
+		$mount = $node->getMountPoint();
+		$storageId = (int)$mount->getNumericStorageId();
+		$rootId = (int)$mount->getStorageRootId();
+		$ancestorId = (int)$node->getId();
+		if ($storageId <= 0 || $rootId <= 0 || $ancestorId <= 0) {
+			return;
+		}
+
+		if (!$this->storageService->isIndexedStorage($storageId)) {
+			return;
+		}
+
+		$this->expand($storageId, $rootId, $ancestorId, QueueMapper::KIND_DELETE);
+	}
+
+	/**
+	 * Plan the subtree of one folder operation, never walk it here.
+	 *
+	 * The walk is unbounded by definition: one event stands for as many files as
+	 * the folder holds. Doing it inside the user's action would put that whole
+	 * amount into a single web request, which is the difference between a click
+	 * that answers and a click that times out.
+	 */
+	private function expand(int $storageId, int $rootId, int $ancestorId, string $kind): void {
+		$this->jobList->add(SubtreeExpandJob::class, [
+			'storage_id' => $storageId,
+			'root_id' => $rootId,
+			'ancestor_id' => $ancestorId,
+			'kind' => $kind,
+			'last_file_id' => 0,
+		]);
+	}
+
+	/**
 	 * Three questions before a row is written, in this order because each one is
 	 * cheaper than the one after it.
 	 */
@@ -188,15 +304,9 @@ class FileEventListener implements IEventListener {
 		// 1. A file, never a folder. A folder operation is exactly one event
 		// over a whole subtree, so queueing the folder node would queue one row
 		// for something that has no content and none of the rows that actually
-		// changed. Subtrees are resolved by a background job of their own in
-		// plan 03-04, which is also the only thing that can band them.
-		//
-		// For a deleted folder that leaves a gap, and it is a known one. The
-		// trash bin keeps the file ids and the cache entries of the descendants
-		// under a different parent of the same storage, so the subtree job of
-		// plan 03-04 can still enumerate them. With the trash bin switched off,
-		// or once it has been emptied, they are really gone, and then the ETag
-		// reconcile of plan 03-12 carries the result. That is what it is for.
+		// changed. Subtrees are resolved by SubtreeExpandJob, which is the only
+		// thing that can band them, and the two callers that need it hand their
+		// folder to it before they ever reach this method.
 		if (!$node instanceof File) {
 			return;
 		}

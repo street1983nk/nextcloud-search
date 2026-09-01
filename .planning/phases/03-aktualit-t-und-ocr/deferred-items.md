@@ -29,3 +29,42 @@ den Haupt-Checkout zusammengeführt ist. Passend zu dem End-to-End-Job, den Patt
 Index und eine echte SQLite, aus der Sicht eines zweiten Nutzers. Was der Test
 nicht abdeckt, ist die Nextcloud-Seite: dass die drei Ereignisse tatsächlich
 feuern und die Zeile in der Queue landet.
+
+## Plan 03-04: Sichtprobe Ordner-Freigabe im Test-Nextcloud
+
+**Was:** Ordner mit mehreren Dateien freigeben, als Empfänger nach einem Wort aus
+einer der Dateien suchen und sie finden; Freigabe entziehen, danach kein Treffer
+mehr. Letztes Abnahmekriterium von Task 3 des Plans 03-04.
+
+**Warum nicht hier erledigt:** dieselben zwei Gründe wie bei der Sichtprobe aus
+Plan 03-03. Der Container `findling-nextcloud` bindet die PHP-App aus dem
+Haupt-Checkout ein, den ein Wave-Executor nicht anfassen darf, und der
+ExApp-Container mit dem Poller läuft nicht.
+
+**Wohin es gehört:** in den phasenweiten Integrationsschritt nach dem
+Zusammenführen der Welle.
+
+**Ersatzdeckung bis dahin:** `test_unshare_with_empty_user_list_clears_the_prefilter`
+in `backend/tests/test_acl_prefilter.py` führt den Beweis für die Container-Seite
+gegen eine echte SQLite, aus der Sicht des Nutzers, dem die Freigabe entzogen
+wurde. Nicht abgedeckt bleibt die Nextcloud-Seite: dass die drei Share-Ereignisse
+feuern und dass der Teilbaum-Job die Nachkommen wirklich auflöst.
+
+## Plan 03-04: Ein wiederhergestellter Ordner braucht den ETag-Abgleich
+
+**Was:** `NodeRestoredEvent` auf einen Ordner reiht nichts für dessen Nachkommen
+ein. Die Dateien darin tragen nach dem Löschen einen Tombstone und sind aus dem
+Index genommen; sie brauchen also Inhaltsjobs, und `content` ist bewusst keine der
+Arten, die `SubtreeExpandJob` verteilt (ein Teilbaum aus Inhaltsjobs ist ein
+Neu-Crawl).
+
+**Warum nicht hier erledigt:** ausserhalb des Plans, und der zuständige Mechanismus
+ist bereits benannt. Ein Teilbaum mit `kind=content` wäre ein zweiter Weg zum
+Neu-Crawl neben dem ETag-Abgleich.
+
+**Wohin es gehört:** Plan 03-12 (ETag-Abgleich). Der Fall "lokal als gelöscht
+markiert, in der Seite wieder vorhanden" ist dort ohnehin zu behandeln.
+
+**Zwischenzustand:** ein wiederhergestellter Ordner wird beim nächsten
+Abgleichlauf wieder auffindbar, nicht binnen Sekunden. Der Grund steht als
+Kommentar im Restore-Zweig von `FileEventListener`.

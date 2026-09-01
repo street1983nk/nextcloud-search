@@ -82,6 +82,7 @@ def _job(
     kind: str = "content",
     title: str = "Kuendigung.txt",
     path: str = "Vertraege/Kuendigung.txt",
+    users: tuple[str, ...] = ("alice", "bob"),
 ) -> QueueJob:
     return QueueJob(
         queue_id=queue_id,
@@ -95,8 +96,8 @@ def _job(
         mtime=1_756_600_000,
         etag="5d41402abc4b2a76b9719d911017c592",
         kind=kind,
-        user_ids=("alice", "bob"),
-        fetch_as="alice",
+        user_ids=users,
+        fetch_as=users[0] if users else "",
         is_update=False,
     )
 
@@ -657,6 +658,134 @@ async def test_a_delete_job_for_a_file_nobody_ever_indexed_is_acknowledged(
     assert result.state == ROUND_WORKED
     assert store.file_row(999) is None
     assert queue.acknowledged == [([93], {})]
+
+
+def _permission_change(
+    queue_id: int = 94,
+    file_id: int = 4711,
+    users: tuple[str, ...] = ("alice", "bob"),
+) -> QueueJob:
+    """An acl job as it leaves the queue: a file id, a storage, a user list.
+
+    No mimetype, no size and no fetch user, because nothing is read. The user
+    list is the whole payload, and after an unshare it may legitimately be empty:
+    that is the target state and not a broken row (pitfall 4).
+    """
+    return QueueJob(
+        queue_id=queue_id,
+        file_id=file_id,
+        storage_id=3,
+        root_id=0,
+        path="",
+        title="",
+        mime="",
+        size=0,
+        mtime=0,
+        etag="",
+        kind="acl",
+        user_ids=users,
+        fetch_as="",
+        is_update=False,
+    )
+
+
+async def test_an_acl_job_writes_the_permissions_without_reading_bytes(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # A permission change costs a row and not a download, and that is the whole
+    # reason it may overtake a content backlog (D-04). A gateway call here would
+    # make the cheap kind as expensive as the one it is meant to jump over, and
+    # on top of that ask for a file whose mimetype the job does not even carry.
+    fetched: list[int] = []
+    extracted: list[str] = []
+    queue = _FakeQueue(ClaimResult(jobs=(_permission_change(users=("alice", "bob", "carol")),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, fetched=fetched)
+    poller._extract = lambda path, mime, size: extracted.append(path)  # type: ignore[assignment,func-returns-value]
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert fetched == []
+    assert extracted == []
+    assert sorted(entry.name for entry in (tmp_path / "tmp").iterdir()) == []
+    assert store.prefilter_visible("carol", [4711]) == {4711}
+    assert queue.acknowledged == [([94], {})]
+
+
+async def test_an_acl_job_does_not_run_through_record(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # store.record counts attempts up and overwrites the verdict, and a
+    # permission change judges nothing. Three unshares of the same file would
+    # otherwise walk into the give-up rule and end as failed(repeatedly_stuck)
+    # although every one of them worked.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(_permission_change(users=("alice",)),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    await poller.run_once()
+
+    row = store.file_row(4711)
+    assert row is not None
+    assert row["attempts"] == 1
+    assert (row["state"], row["reason"]) == ("indexed", None)
+    assert row["deleted_at"] is None
+    assert store.prefilter_visible("alice", [4711]) == {4711}
+    assert store.prefilter_visible("bob", [4711]) == set()
+
+
+async def test_an_acl_job_keeps_the_order_commit_then_state_then_acknowledge(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The new branch does not bend the order of a pass. The permissions are
+    # written inside step 1 so the change takes effect at once, and the
+    # acknowledgement stays the last thing that happens: an abort before it hands
+    # the row back and replace_acl simply runs again with the same target state.
+    events: list[str] = []
+    queue = _FakeQueue(ClaimResult(jobs=(_permission_change(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    real_replace = store.replace_acl
+    real_flush = writer.flush
+    real_acknowledge = queue.acknowledge
+
+    def replace_acl(*args: Any, **kwargs: Any) -> None:
+        events.append("replace_acl")
+        real_replace(*args, **kwargs)
+
+    def flush() -> Any:
+        events.append("commit")
+        return real_flush()
+
+    async def acknowledge(*args: Any, **kwargs: Any) -> CallResult:
+        events.append("acknowledge")
+        return await real_acknowledge(*args, **kwargs)
+
+    monkeypatch.setattr(store, "replace_acl", replace_acl)
+    monkeypatch.setattr(writer, "flush", flush)
+    monkeypatch.setattr(queue, "acknowledge", acknowledge)
+
+    await poller.run_once()
+
+    assert events == ["replace_acl", "commit", "acknowledge"]
+
+
+async def test_unchanged_file_still_updates_the_acl(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # Bug audit M1, due in this phase. The fast path acknowledges a file whose
+    # bytes did not change without writing anything at all, and a permission
+    # change that arrives as a content job carries the new user list in exactly
+    # that row. Without this write it would never reach the prefilter, and bob
+    # would keep being offered a file he lost access to until the next reindex.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(_job(92, users=("alice",)),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    assert store.prefilter_visible("bob", [4711]) == {4711}
+
+    second = await poller.run_once()
+
+    assert second.unchanged == 1
+    assert second.indexed == 0
+    assert store.prefilter_visible("alice", [4711]) == {4711}
+    assert store.prefilter_visible("bob", [4711]) == set()
 
 
 async def test_crash_between_commit_and_state(

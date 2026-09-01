@@ -71,6 +71,17 @@ DELETE_SOURCE = {
     "kind": "delete",
 }
 
+# An acl row as the acl branch of QueueService::describe builds it after an
+# unshare: the file is still there, but nobody in the prefilter may see it any
+# more. The empty list is the payload of the job, which is why it appears here as
+# the normal shape rather than as an edge case.
+ACL_SOURCE = {
+    "fileId": 4711,
+    "storageId": 3,
+    "kind": "acl",
+    "userIds": [],
+}
+
 
 class _FakeSession:
     """The one method of the private session object the queue calls touch."""
@@ -163,10 +174,10 @@ async def test_a_source_without_a_kind_is_a_content_job() -> None:
 
 async def test_a_kind_this_container_does_not_know_is_a_content_job() -> None:
     # The job picks the branch, so an unknown value must not pick one (T-03-201).
-    # acl and ocr arrive with plans 03-04 and 03-05; until their branch exists, a
-    # row carrying them runs the ordinary content route. delete left this list in
-    # plan 03-03, because it now has a branch of its own.
-    for unknown in ("acl", "ocr", "", 7):
+    # ocr arrives with plan 03-05; until its branch exists, a row carrying it runs
+    # the ordinary content route. delete left this list in plan 03-03 and acl in
+    # plan 03-04, because both have a branch of their own now.
+    for unknown in ("ocr", "", 7):
         session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**SOURCE, "kind": unknown}}}})
 
         result = await _queue(session).claim(limit=1, max_bytes=1)
@@ -193,6 +204,41 @@ async def test_a_delete_job_without_a_usable_file_id_is_still_discarded() -> Non
     # The one field a deletion cannot do without: it is the whole payload, and a
     # zero would tell the index to forget a document nobody named.
     session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**DELETE_SOURCE, "fileId": 0}}}})
+
+    result = await _queue(session).claim(limit=1, max_bytes=1)
+
+    assert result.jobs == ()
+    assert result.discarded == 1
+
+
+async def test_an_acl_job_survives_an_empty_user_list() -> None:
+    # The emptiness is the message. An unshare leaves a file that nobody in the
+    # prefilter may see, and discarding the entry here would leave the old
+    # permission rows standing for good (pitfall 4).
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": ACL_SOURCE}}})
+
+    result = await _queue(session).claim(limit=1, max_bytes=1)
+
+    assert result.discarded == 0
+    job = result.jobs[0]
+    assert (job.queue_id, job.file_id, job.kind) == (91, 4711, "acl")
+    assert (job.user_ids, job.fetch_as, job.mime, job.size) == ((), "", "", 0)
+
+
+async def test_an_acl_job_carries_the_new_user_list() -> None:
+    # The other half of the same job: who may see the file now, in the order the
+    # PHP side sorted them into.
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**ACL_SOURCE, "userIds": ["anna", "bernd"]}}}})
+
+    job = (await _queue(session).claim(limit=1, max_bytes=1)).jobs[0]
+
+    assert job.user_ids == ("anna", "bernd")
+
+
+async def test_an_acl_job_without_a_usable_file_id_is_still_discarded() -> None:
+    # Same rule as for a deletion: the file id names the document the permissions
+    # belong to, and a zero would rewrite the rows of nothing at all.
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**ACL_SOURCE, "fileId": 0}}}})
 
     result = await _queue(session).claim(limit=1, max_bytes=1)
 
