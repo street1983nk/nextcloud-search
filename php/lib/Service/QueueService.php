@@ -269,11 +269,20 @@ class QueueService {
 		$fileId = $row->getFileId();
 
 		// The one place where the kind of a row decides what its source object
-		// looks like. Today every kind takes the same route below, and that is
-		// correct as long as every queued row belongs to a file that is still
-		// there: only create and write reach the queue in this plan.
+		// looks like.
 		//
-		// The two kinds that do not fit that route hang their early return here,
+		// metadata takes the route below unchanged, and that is a decision rather
+		// than an omission. A renamed file is still there, still readable and
+		// still owned by the same people, so it needs exactly the same source
+		// object as a content job; what differs is only what the container does
+		// with it. The one property that must survive any rewrite of this method
+		// is that title and path are read from the node resolved here and not
+		// from the queue row, because the node carries the new name and the row
+		// carries nothing but a file id. Take those two fields from the row one
+		// day and a rename would travel the whole queue to write the old name
+		// back into the index, without a single error anywhere.
+		//
+		// The two kinds that do not fit the route hang their early return here,
 		// each together with its counterpart in the container: delete in plan
 		// 03-03, which must not resolve a node because the node is gone, and acl
 		// in plan 03-04, where an empty user list is the legitimate payload of an
