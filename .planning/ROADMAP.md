@@ -15,7 +15,7 @@ Der Schnitt ist vertikal: jede Phase liefert eine end-to-end nutzbare Fähigkeit
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Integrationsbeweis** - Ein Treffer aus dem Container erscheint in der Unified Search, App-IDs eingefroren, beide CSRs eingereicht (completed 2026-08-15)
-- [ ] **Phase 2: Indexkern und Volltextsuche** - Dateien werden vollständig, wiederaufsetzbar und rechtekorrekt durchsuchbar
+- [x] **Phase 2: Indexkern und Volltextsuche** - Dateien werden vollständig, wiederaufsetzbar und rechtekorrekt durchsuchbar (completed 2026-09-01)
 - [ ] **Phase 3: Aktualität und OCR** - Neue, geänderte und gescannte Dokumente sind kurz darauf auffindbar, ohne dass eine Datei angefasst wird
 - [ ] **Phase 4: Admin-Sichtbarkeit und Diagnose** - Admin sieht Deckungsgrad, Fehler und den Grund pro Datei, bevor Nutzer etwas vermissen
 - [ ] **Phase 5: Härtung und Store-Einreichung v1.0** - Belegte Zahlen auf 4-GB-ARM, Rechte-Paritätstest als Dauergate, v1.0 im App Store
@@ -120,7 +120,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
-| 2. Indexkern und Volltextsuche | 13/14 | In Progress|  |
+| 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 0/TBD | Not started | - |
 | 4. Admin-Sichtbarkeit und Diagnose | 0/TBD | Not started | - |
 | 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
