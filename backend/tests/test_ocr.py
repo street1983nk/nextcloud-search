@@ -227,17 +227,34 @@ def _install_engine(monkeypatch: pytest.MonkeyPatch, answers: Callable[[int], _F
 
 
 def _page(text: str) -> Callable[[int], _Finished]:
-    return lambda number: _Finished(stdout=f"{text} {number}\n".encode())
+    """One line of plausible page text per page.
+
+    Long enough on purpose: a whole run under the character threshold of the
+    module is skipped(empty_text), and a fixture that accidentally sits below it
+    would assert the empty case while claiming to assert the full one.
+    """
+    return lambda number: _Finished(stdout=f"{text}, Seite {number} von drei\n".encode())
 
 
 @needs_engine
-def test_a_scanned_document_becomes_the_term_the_corpus_promises() -> None:
-    # The acceptance of D-09, at the level of the module: Bebauungsplan stands in
-    # this file and in no other one of the corpus, and it exists only as pixels.
-    outcome = ocr.extract_pdf_ocr(SCAN)
+@pytest.mark.parametrize(
+    ("name", "term"),
+    [
+        ("13-ratsvorlage-scan.pdf", "Bebauungsplan"),
+        ("15-schweiz-baubewilligung.pdf", "Strasse"),
+        ("16-oesterreich-mitteilung.pdf", "Jänner"),
+    ],
+)
+def test_a_scanned_document_becomes_the_terms_the_corpus_promises(name: str, term: str) -> None:
+    # The acceptance of D-09 at the level of the module. Each of these three words
+    # stands in exactly one file of the corpus and exists there only as pixels, so
+    # a hit is proof that the engine read them and not that the corpus is chatty.
+    # The Swiss ss and the Austrian wording are in the list because a DACH corpus
+    # that only proves German is half a proof.
+    outcome = ocr.extract_pdf_ocr(str(CORPUS / name))
 
     assert outcome.state is State.INDEXED
-    assert "Bebauungsplan" in outcome.text
+    assert term in outcome.text
 
 
 def test_a_document_over_the_page_cap_is_indexed_and_says_truncated(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -259,7 +276,7 @@ def test_a_page_over_the_time_cap_is_dropped_and_the_loop_goes_on(monkeypatch: p
     def answers(number: int) -> _Finished:
         if number == 0:
             raise subprocess.TimeoutExpired(cmd="tesseract", timeout=30)
-        return _Finished(stdout=f"Seite {number}\n".encode())
+        return _Finished(stdout=f"Beschlussvorlage, Seite {number} von drei\n".encode())
 
     engine = _install_engine(monkeypatch, answers)
 
@@ -333,7 +350,7 @@ def test_the_soft_deadline_ends_the_loop_and_keeps_the_pages_already_read(
     def answers(number: int) -> _Finished:
         # The first page alone eats the whole job budget.
         clock["now"] += settings().ocr_job_seconds + 1
-        return _Finished(stdout=f"Seite {number}\n".encode())
+        return _Finished(stdout=f"Beschlussvorlage, Seite {number} von drei\n".encode())
 
     engine = _install_engine(monkeypatch, answers)
 
@@ -384,7 +401,7 @@ def test_the_engine_stderr_reaches_no_log(monkeypatch: pytest.MonkeyPatch, caplo
     # Tesseract writes file names and content related warnings there, and the log
     # of this project carries counters and reason codes, nothing else (T-02-107).
     leak = b"Warning: Invalid resolution 0 dpi in /home/anna/Steuerbescheid-2026.pdf"
-    _install_engine(monkeypatch, lambda number: _Finished(stdout=b"Ratsvorlage\n", stderr=leak))
+    _install_engine(monkeypatch, lambda number: _Finished(stdout=b"Ratsvorlage des Bauamtes\n", stderr=leak))
 
     with caplog.at_level(logging.DEBUG):
         ocr.extract_pdf_ocr(SCAN)
