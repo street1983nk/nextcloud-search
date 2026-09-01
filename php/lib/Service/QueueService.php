@@ -157,13 +157,27 @@ class QueueService {
 	public function enqueue(ICacheEntry $entry, int $storageId, int $rootId, bool $isUpdate = false): void {
 		$size = $entry->getSize();
 
-		$this->queueMapper->enqueue(
+		$this->enqueueFile(
 			$entry->getId(),
 			$storageId,
 			$rootId,
 			$size > 0 ? (int)$size : 0,
 			$isUpdate,
 		);
+	}
+
+	/**
+	 * The same work stock, for a caller that holds a node instead of a cache
+	 * entry.
+	 *
+	 * The event listener is that caller. An event carries an OCP\Files\Node, and
+	 * the cache entry behind it is only reachable through FileInfo::getData,
+	 * which exists since Nextcloud 34 while this app declares 32. Reading the
+	 * entry out of the cache by internal path instead would be one query per
+	 * write on the instance for four numbers the node already knows.
+	 */
+	public function enqueueFile(int $fileId, int $storageId, int $rootId, int $size, bool $isUpdate, string $kind = QueueMapper::KIND_CONTENT): void {
+		$this->queueMapper->enqueue($fileId, $storageId, $rootId, max(0, $size), $isUpdate, $kind);
 	}
 
 	/**

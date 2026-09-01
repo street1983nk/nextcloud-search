@@ -85,6 +85,16 @@ class StorageService {
 	 */
 	private ?array $mimeIds = null;
 
+	/**
+	 * The storage ids of MOUNT_PROVIDERS, resolved once per request and kept as
+	 * a lookup rather than a list. The event listener asks this question for
+	 * every single write on the instance, and getMounts() is a query plus one
+	 * more per home mount.
+	 *
+	 * @var array<int, true>|null
+	 */
+	private ?array $indexedStorages = null;
+
 	public function __construct(
 		private IFileAccess $fileAccess,
 		private IMimeTypeLoader $mimeTypeLoader,
@@ -106,6 +116,36 @@ class StorageService {
 	 */
 	public function getMounts(): iterable {
 		return $this->fileAccess->getDistinctMounts(self::MOUNT_PROVIDERS, true);
+	}
+
+	/**
+	 * Does this app index the mount a file lives on?
+	 *
+	 * Asked by the event listener before it queues anything, and asked against
+	 * getMounts(), which is the same source the crawl walks. A second list of
+	 * providers here would be a second answer to "which mounts are in", and the
+	 * two would disagree the day external storage becomes a switch (ADM-04):
+	 * events would keep indexing what the crawl was told to leave alone.
+	 *
+	 * What this cannot answer is where inside a storage a file sits. The
+	 * trashbin and the version folder of a home live on the same storage as the
+	 * files folder, so a write there passes this check. Those rows resolve to
+	 * nothing in QueueService::describe, which acknowledges them as
+	 * skipped(gone); keeping the check cheap is worth that handful of rows,
+	 * because the alternative is an ancestor query on every write of the
+	 * instance.
+	 */
+	public function isIndexedStorage(int $storageId): bool {
+		if ($this->indexedStorages === null) {
+			$storages = [];
+			foreach ($this->getMounts() as $mount) {
+				$storages[(int)$mount['storage_id']] = true;
+			}
+
+			$this->indexedStorages = $storages;
+		}
+
+		return isset($this->indexedStorages[$storageId]);
 	}
 
 	/**
