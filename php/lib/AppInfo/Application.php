@@ -40,19 +40,29 @@ class Application extends App implements IBootstrap {
 		// a reader can check by counting lines. The class names are written out
 		// here so that the list is complete on its own.
 		//
-		// Delete and share are missing on purpose. Each of them needs a
-		// counterpart in the container before it may be queued (plans 03-03 and
-		// 03-04); an event without one would be a row that travels through the
-		// whole queue to do nothing.
+		// Share is missing on purpose. It needs a counterpart in the container
+		// before it may be queued (plan 03-04); an event without one would be a
+		// row that travels through the whole queue to do nothing.
 		//
 		// Rename joined the list with plan 03-02, once the container had the
-		// metadata job that runs it without a download.
+		// metadata job that runs it without a download, and the three events of
+		// a deletion joined it with plan 03-03.
+		//
+		// The last two of them live in the trash bin app, which an admin may
+		// have disabled. A listener on a class that does not exist on the
+		// instance is harmless: the dispatcher compares class names as strings,
+		// so the entry simply never matches an event. Nothing has to load the
+		// class either, because the compiler resolves the constant into a
+		// string without asking the autoloader.
 		foreach ([
 			\OCP\Files\Events\Node\NodeCreatedEvent::class,
 			\OCP\Files\Events\Node\NodeWrittenEvent::class,
 			\OCP\Files\Events\Node\NodeTouchedEvent::class,
 			\OCP\Files\Events\Node\NodeCopiedEvent::class,
 			\OCP\Files\Events\Node\NodeRenamedEvent::class,
+			\OCP\Files\Events\Node\NodeDeletedEvent::class,
+			\OCA\Files_Trashbin\Events\MoveToTrashEvent::class,
+			\OCA\Files_Trashbin\Events\NodeRestoredEvent::class,
 		] as $event) {
 			$context->registerEventListener($event, FileEventListener::class);
 		}
