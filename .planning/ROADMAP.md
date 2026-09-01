@@ -123,7 +123,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 03-14-PLAN.md , Verschobene Audit-Befunde aus Phase 2
+- [x] 03-14-PLAN.md , Verschobene Audit-Befunde aus Phase 2
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
@@ -187,7 +187,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
-| 3. Aktualität und OCR | 12/14 | In Progress|  |
+| 3. Aktualität und OCR | 13/14 | In Progress|  |
 | 4. Admin-Sichtbarkeit und Diagnose | 0/TBD | Not started | - |
 | 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
