@@ -183,6 +183,29 @@ return _verdict("\n".join(parts), truncated=cut or lost > 0)
 
 ---
 
+## Behebung (01.09.2026, gsd-code-fixer)
+
+Alle 6 Findings im Scope Critical + Warning wurden behoben, je Finding ein
+atomarer Commit auf main, Gates grün (ruff check + format, 703 passed /
+11 skipped, pyright 0 errors, php -l):
+
+- CR-01: `7d334bf` requeue in Bändern von 200 unter MAX_LIST_LENGTH 256,
+  Paritätstest liest die PHP-Konstante.
+- CR-02: `bc371b0` Redelivery-Blockade in _goes_to_the_ocr_track entfernt;
+  Begründung, warum T-03-704 nicht zurückkehren kann, steht im Commit-Text.
+- WR-01: `77db129` storage_id/root_id=0 werden in QueueService::describe aus
+  dem aufgelösten Node repariert.
+- WR-02: `1ddc806` neue Store-Methode refresh_meta aktualisiert das ETag im
+  is_unchanged-Fast-Path.
+- WR-03: `6893af3` per Timeout verlorene Seiten/Frames setzen truncated
+  (indexed(truncated), D-08).
+- WR-04: `e4959c1` OCR_JOB_SECONDS_MAX abgeleitet: 1800/2 - 60 - 60 = 780,
+  mit Paritäts- und Invariantentest; info.xml korrigiert.
+
+Die 3 Info-Findings (IN-01 bis IN-03) bleiben offen und sind bewusst nicht
+angefasst.
+
 _Geprüft: 2026-09-01T18:15:11Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Tiefe: standard_
+_Behoben: 2026-09-01, Commits 7d334bf..e4959c1_
