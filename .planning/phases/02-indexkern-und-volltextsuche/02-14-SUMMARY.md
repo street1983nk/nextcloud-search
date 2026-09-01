@@ -308,9 +308,11 @@ admin und kollegin mitindexiert; die drei Sonderfaelle des Korpus stimmen exakt)
   "Bescheid der unteren Verwaltungsbehörde  Die Grundstücksverkehrsgenehmi...",
   keine Markierungszeichen. Der Suchbegriff ist ein Wortbestandteil des
   Kompositums und steht weder im Dateinamen noch im Pfad.
+- Zweite Sichtprobe ebenfalls im Browser bestanden (Screenshot): `Vertrag`
+  findet `11-uebersicht.odt` mit Klartext-Snippet "Übersicht der laufenden
+  Verträge ...", die Datei enthaelt nur die Flexion "Verträge".
 - Gegenproben ueber exakt dieselbe OCS-Route (`search/providers/findling/search`),
-  maschinell verifiziert im selben Aufbau: `testuser` + `Vertrag` findet
-  `11-uebersicht.odt` (Datei sagt nur "Verträge"); `kollegin` + `Genehmigung`
+  maschinell verifiziert im selben Aufbau: `kollegin` + `Genehmigung`
   liefert genau die eine Freigabe, `Frist`/`Vertrag`/`Mueller` liefern 0 Treffer.
 - Aufbau-Reibungen, die docs/dev-setup.md bereits nennt oder die nur die
   Windows-Shell betreffen: verwaister Backend-Prozess auf 10035 musste beendet
