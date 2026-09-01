@@ -51,10 +51,57 @@ carry `path-exclude /usr/share/doc/*` in `/etc/dpkg/dpkg.cfg.d`, and only a
 obligation must not depend on a dpkg configuration line in a base image somebody
 else maintains, so the build copies the file and fails if it is missing.
 
+## The OCR engine and its language data
+
+Added in phase 3. Same construction as the word list above and for the same
+reason: the data has to be in the image, because a first start that downloads a
+model is not zero-config.
+
+| Item | Value |
+|---|---|
+| Debian package | `tesseract-ocr`, version `5.5.0-1+b1`, architecture dependent |
+| Source package | `tesseract`, upstream `github.com/tesseract-ocr/tesseract` |
+| Origin | Debian trixie archive, installed with `apt-get` during the image build |
+| Files in the image | `/usr/bin/tesseract` plus `libtesseract5` and `libleptonica6` |
+| Licence | **Apache-2.0** (`debian/copyright`, `Files: *`, `Copyright: 1988-1995 Hewlett Packard Company, 2006-2024 Google Inc.`) |
+| Licence text in the image | `/usr/local/share/findling/COPYING.tesseract`, copied from `/usr/share/doc/tesseract-ocr/copyright` |
+| Version pin | **none on purpose.** The package is architecture dependent and carries the binary NMU suffix `+b1` on amd64 and on arm64. A hard pin breaks the multi-arch build; the anchor is the digest of the base image |
+
+| Item | Value |
+|---|---|
+| Debian packages | `tesseract-ocr-deu`, `tesseract-ocr-eng`, `tesseract-ocr-osd`, all version `1:4.1.0-2`, all `Architecture: all` |
+| Source package | `tesseract-lang`, upstream `github.com/tesseract-ocr/tessdata_fast` |
+| Files in the image | `/usr/share/tesseract-ocr/5/tessdata/deu.traineddata` (1525436 bytes), `eng.traineddata` (4113088 bytes), `osd.traineddata` (10562727 bytes) |
+| Licence | **Apache-2.0** (`debian/copyright`, `Upstream-Name: tessdata_fast`) |
+| Licence text in the image | `/usr/local/share/findling/COPYING.tesseract-langdata`, copied from `/usr/share/doc/tesseract-ocr-deu/copyright` |
+| Version pin | `1:4.1.0-2`, hard. `Architecture: all`, so amd64 and arm64 read byte identical models and no scan is read differently on the ARM box than on the x86 one |
+
+Two licence files cover five packages, and that is measured, not assumed: on
+2026-09-01 the copyright files of `tesseract-ocr` and `libtesseract5` were byte
+identical (`md5 cd5e791f…`), and so were the three of `tesseract-ocr-deu`,
+`-eng` and `-osd` (`md5 63a049f5…`).
+
+The optional Fraktur model `tesseract-ocr-frk` `1:4.1.0-2` is **not** installed
+today. It carries the same licence and would be listed here the moment the line
+in the Dockerfile is uncommented.
+
+`tesseract-ocr` pulls a large dependency closure into the image even with
+`--no-install-recommends`, and all of it is distributed too:
+
+| Item | Value |
+|---|---|
+| Count | 71 new Debian packages, 104415 kB installed size, measured on 2026-09-01 in the pinned base image |
+| The heavy ones | `tesseract-ocr-osd` (10331 kB, the orientation model), `libtesseract5` (3948 kB), `libicu76` (37371 kB, via `libxml2` and `libharfbuzz`), the pango, cairo, freetype and X11 client libraries that `libtesseract5` links, and the image codecs `libtiff6`, `libwebp7`, `libopenjp2-7`, `libpng16-16t64`, `libjpeg62-turbo`, `libgif7` |
+| Licences | all Debian main, therefore DFSG free, per package under `/usr/share/doc/*/copyright`; the closure is MIT, BSD, LGPL-2.1+, X11/MIT-X, Apache-2.0 and, for `libgnutls30t64`, LGPL-2.1+ with the usual GPL-3+ tools split. Nothing in it is copyleft beyond LGPL, and nothing reaches further than the AGPL-3.0 of Findling |
+
+That closure is why the OCR feature is not free in image size. It is the price
+of not shipping our own build of tesseract, which would mean owning its security
+updates ourselves.
+
 ## Python packages of the extraction and index path
 
-All nine are installed from PyPI into `/app/.venv` and are pinned exactly in
-`backend/pyproject.toml` and `backend/uv.lock`. All nine ship wheels; no
+All ten are installed from PyPI into `/app/.venv` and are pinned exactly in
+`backend/pyproject.toml` and `backend/uv.lock`. All ten ship wheels; no
 `setup.py` runs at installation time.
 
 | Package | Version | Licence | Source repository | Place in the image |
@@ -68,6 +115,7 @@ All nine are installed from PyPI into `/app/.venv` and are pinned exactly in
 | `striprtf` | 0.0.32 | BSD-3-Clause | github.com/joshy/striprtf | `/app/.venv/lib/python3.13/site-packages/striprtf` |
 | `charset-normalizer` | 3.5.1 | MIT | github.com/jawah/charset_normalizer | `/app/.venv/lib/python3.13/site-packages/charset_normalizer` |
 | `lxml` | 6.1.1 | BSD-3-Clause (bundled libxml2 and libxslt: MIT) | github.com/lxml/lxml | `/app/.venv/lib/python3.13/site-packages/lxml` |
+| `pillow` | 12.3.0 | MIT-CMU | github.com/python-pillow/Pillow | `/app/.venv/lib/python3.13/site-packages/PIL` |
 
 `tantivy` is the one entry whose licence is **not** readable from its PyPI
 metadata: the 0.26.0 release carries neither a `license` field nor a licence
@@ -101,6 +149,10 @@ only. They are not part of the runtime image and are therefore not distributed.
 # the word list and its licence, inside the built image
 docker run --rm ghcr.io/street1983nk/findling_backend:dev \
     sh -c 'wc -lc /usr/share/dict/ngerman; head -3 /usr/local/share/findling/COPYING.wngerman'
+
+# the OCR engine, its models and both licence texts, inside the built image
+docker run --rm --entrypoint sh ghcr.io/street1983nk/findling_backend:dev \
+    -c 'tesseract --list-langs; ls -l /usr/local/share/findling/'
 
 # the pinned versions of the Python side
 grep -A 20 '^dependencies' backend/pyproject.toml

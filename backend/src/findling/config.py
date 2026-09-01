@@ -2,7 +2,8 @@
 # findling/index/analyzer.py, directly next to the filter chain it versions,
 # because a version number that sits away from the thing it describes is a
 # version number that stops being raised.
-"""The single home of every cap and every path of phase 2.
+"""The single home of every cap and every path of phase 2, and of the OCR caps
+of phase 3.
 
 Seven later plans read the same numbers. A second place holding the same number
 is an operational fault in slow motion: the two copies agree on the day they are
@@ -185,6 +186,74 @@ SEARCH_QUERY_MAX_DEPTH = 32
 # it as too_large is the honest verdict at the price of a directory read.
 EXTRACT_ARCHIVE_MEMBER_MAX_BYTES = 64 * 1024 * 1024
 
+# ---------------------------------------------------------------------------
+# OCR. Every number below was measured on 2026-09-01 in the shipping image and
+# is written up, with its command line, in docs/ocr.md.
+# ---------------------------------------------------------------------------
+
+# OCR is on out of the box, because "the search finds the content of scanned
+# documents" is the core promise of the product and a feature an admin has to
+# discover is a feature that is off on most instances.
+OCR_ENABLED = True
+
+# The languages tesseract is asked for, in the order it is asked for them: the
+# first one weighs more, so this is an argument order, not the schema field
+# order of DEFAULT_LANGUAGES above.
+OCR_DEFAULT_LANGUAGES = ("deu", "eng")
+
+# What the image actually carries, and therefore the only values that may ever
+# reach the command line (T-03-502). Measured on 2026-09-01,
+# `tesseract --list-langs` in the built image answers deu, eng and osd; osd is
+# an orientation model, not a text language, so it is not offered here.
+#
+# This set is maintained together with the apt block in backend/Dockerfile.
+# Switching on the Fraktur option means uncommenting tesseract-ocr-frk there and
+# adding "frk" here, in the same change. Adding it here alone would produce a
+# call that tesseract rejects on every page.
+OCR_LANGUAGE_ALLOWLIST = frozenset({"deu", "eng"})
+
+# Pages per document before the OCR loop stops and the state becomes truncated.
+# 30, not the 100 that STACK.md names, and the deviation is deliberate: an OCR
+# job may run up to OCR_JOB_SECONDS, QueueMapper::LOCK_TIMEOUT is 900 s, and two
+# 100 page jobs in one claim would let the lock expire while work is in fact
+# progressing. docs/ocr.md carries the full argument.
+OCR_MAX_PAGES = 30
+
+# Wall clock budget of a single page, enforced by subprocess.run(timeout=) in
+# the child. Measured 2026-09-01: a rendered A4 page at 300 dpi takes a median
+# of 1984 ms on an amd64 laptop core. The cap is fifteen times that, because the
+# target hardware is a slower ARM box and a dense bad scan costs a multiple of a
+# clean one. It is meant to cut off the outlier, not the normal case.
+OCR_PAGE_SECONDS = 30
+
+# Soft overall deadline inside the child. Reaching it ends the page loop and
+# yields indexed(truncated), so the pages already read stay searchable.
+OCR_JOB_SECONDS = 600
+
+# How far the parent's hard deadline sits above the child's soft one. Derived
+# rather than a second constant on purpose: if an admin raises the soft budget
+# and the hard one stayed at its built in 660, the parent would kill the child
+# before it could hand over its partial text and indexed(truncated) would stop
+# occurring at all. The margin is the window in which the child pushes what it
+# has through the pipe.
+OCR_HARD_DEADLINE_MARGIN_SECONDS = 60
+
+# Rendering resolution. "Tesseract works best on images which have a DPI of at
+# least 300 dpi", and measured on 2026-09-01 an A4 page at 300 dpi finishes
+# inside a 128 MB address space, well under the 512 MB the sandbox child grants.
+OCR_DPI = 300
+
+# Ranges an admin supplied number has to fall into. These are not taste: the
+# rasterised page grows with the square of the dpi, so A4 at 1200 dpi is 137
+# megapixels and bursts EXTRACT_ADDRESS_SPACE_BYTES, and a page or job budget
+# far above the queue lock timeout reproduces exactly the stuck-claim failure
+# the 30 page cap exists to avoid (T-03-503). Anything outside the range warns
+# and degrades to the default.
+OCR_MAX_PAGES_RANGE = (1, MAX_PDF_PAGES)
+OCR_PAGE_SECONDS_RANGE = (1, 300)
+OCR_JOB_SECONDS_RANGE = (1, 1800)
+OCR_DPI_RANGE = (72, 600)
+
 # Subdirectory used when APP_PERSISTENT_STORAGE is absent, which is the case in
 # tests and in a bare local run, never in a container deployed by AppAPI.
 FALLBACK_STORAGE_DIRNAME = "findling"
@@ -225,6 +294,14 @@ class Settings:
     snippet_chars: int
     search_limit_max: int
 
+    ocr_enabled: bool
+    ocr_languages: tuple[str, ...]
+    ocr_max_pages: int
+    ocr_page_seconds: int
+    ocr_job_seconds: int
+    ocr_hard_deadline_seconds: int
+    ocr_dpi: int
+
 
 def _int_from_environment(name: str, default: int) -> int:
     """Read a positive whole number, falling back to the measured default.
@@ -245,6 +322,44 @@ def _int_from_environment(name: str, default: int) -> int:
         LOGGER.warning("%s is not a positive number, falling back to the built in default", name)
         return default
     return value
+
+
+def _bounded_int_from_environment(name: str, default: int, bounds: tuple[int, int]) -> int:
+    """Read a whole number that also has to fall inside a measured range.
+
+    Same contract as the reader above, one condition more. A number that is
+    positive but absurd is not obviously a typo to a parser and is very much one
+    in practice: 1200 dpi bursts the address space of the sandbox child, and a
+    job budget above the queue lock timeout makes every large scan look stuck.
+    """
+    value = _int_from_environment(name, default)
+    low, high = bounds
+    if low <= value <= high:
+        return value
+    LOGGER.warning("%s is outside the range this build was measured for, falling back to the default", name)
+    return default
+
+
+# What an admin may type into a yes or no field. Everything else warns.
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+_FALSY = frozenset({"0", "false", "no", "off"})
+
+
+def _bool_from_environment(name: str, default: bool) -> bool:
+    """Read a switch, falling back to the built in position.
+
+    Same reason as everywhere else in this module: an unreadable switch is a
+    warning, never a refusal to start.
+    """
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        return default
+    if raw in _TRUTHY:
+        return True
+    if raw in _FALSY:
+        return False
+    LOGGER.warning("%s is not a yes or no value, falling back to the built in default", name)
+    return default
 
 
 def _storage_root() -> Path:
@@ -287,6 +402,47 @@ def _compound_dict() -> str:
     return DEFAULT_COMPOUND_DICT
 
 
+def _ocr_languages() -> tuple[str, ...]:
+    """Return the OCR languages, filtered down to what this image actually has.
+
+    Two jobs in one function. The obvious one is usability: a language the image
+    does not carry makes tesseract reject every single page, so a typo would
+    turn OCR off silently instead of loudly.
+
+    The other one is the security boundary (T-03-502). This value ends up in the
+    argument list of a subprocess. The call site uses a list and never a shell,
+    which already closes the classic hole, but an argument that starts with a
+    dash is still an option to tesseract, not a language. A closed allowlist is
+    the answer that does not depend on the call site staying careful.
+
+    Unlike ``_languages`` above, the admin's order is preserved: the schema field
+    order is ours to decide, a tesseract language order is not, and the first
+    language in the list is the one the engine weighs most.
+    """
+    raw = os.environ.get("FINDLING_OCR_LANGUAGES", "").strip()
+    if not raw:
+        return OCR_DEFAULT_LANGUAGES
+
+    kept: list[str] = []
+    dropped = False
+    for part in raw.split("+"):
+        candidate = part.strip().lower()
+        if not candidate:
+            continue
+        if candidate not in OCR_LANGUAGE_ALLOWLIST:
+            dropped = True
+            continue
+        if candidate not in kept:
+            kept.append(candidate)
+
+    if not kept:
+        LOGGER.warning("FINDLING_OCR_LANGUAGES names no installed language, falling back to the built in default")
+        return OCR_DEFAULT_LANGUAGES
+    if dropped:
+        LOGGER.warning("FINDLING_OCR_LANGUAGES names a language this image does not carry, ignoring that entry")
+    return tuple(kept)
+
+
 @lru_cache(maxsize=1)
 def settings() -> Settings:
     """Resolve the settings once per process.
@@ -296,6 +452,7 @@ def settings() -> Settings:
     exactly the drift this module exists to prevent. Tests clear the cache.
     """
     root = _storage_root()
+    ocr_job_seconds = _bounded_int_from_environment("FINDLING_OCR_JOB_SECONDS", OCR_JOB_SECONDS, OCR_JOB_SECONDS_RANGE)
     return Settings(
         index_dir=root / "index",
         state_db=root / "state.db",
@@ -326,4 +483,13 @@ def settings() -> Settings:
         search_rounds=_int_from_environment("FINDLING_SEARCH_ROUNDS", SEARCH_ROUNDS),
         snippet_chars=_int_from_environment("FINDLING_SNIPPET_CHARS", SNIPPET_CHARS),
         search_limit_max=_int_from_environment("FINDLING_SEARCH_LIMIT_MAX", SEARCH_LIMIT_MAX),
+        ocr_enabled=_bool_from_environment("FINDLING_OCR_ENABLED", OCR_ENABLED),
+        ocr_languages=_ocr_languages(),
+        ocr_max_pages=_bounded_int_from_environment("FINDLING_OCR_MAX_PAGES", OCR_MAX_PAGES, OCR_MAX_PAGES_RANGE),
+        ocr_page_seconds=_bounded_int_from_environment(
+            "FINDLING_OCR_PAGE_SECONDS", OCR_PAGE_SECONDS, OCR_PAGE_SECONDS_RANGE
+        ),
+        ocr_job_seconds=ocr_job_seconds,
+        ocr_hard_deadline_seconds=ocr_job_seconds + OCR_HARD_DEADLINE_MARGIN_SECONDS,
+        ocr_dpi=_bounded_int_from_environment("FINDLING_OCR_DPI", OCR_DPI, OCR_DPI_RANGE),
     )
