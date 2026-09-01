@@ -191,7 +191,13 @@ final class Provider implements IFilteringProvider {
 				break;
 			}
 
-			$page = $this->exApp->searchCandidates($uid, $term, $limit * self::OVERFETCH, $offset, $titleOnly);
+			// Fetching more than the recheck budget could ever examine buys
+			// nothing (perf audit M4): the overfetch is capped at what is left
+			// of the budget plus one display page for the candidates that cost
+			// no recheck. The remaining wall clock travels with the call, so
+			// the request timeout can never overdraw the deadline (perf H5).
+			$fetchLimit = min($limit * self::OVERFETCH, $recheckBudget - $rechecks + $limit);
+			$page = $this->exApp->searchCandidates($uid, $term, $fetchLimit, $offset, $titleOnly, $this->secondsLeft($deadline));
 			if ($page === null) {
 				break;
 			}
@@ -327,8 +333,8 @@ final class Provider implements IFilteringProvider {
 			}
 		}
 
-		$excerpts = ($fileIds !== [] && hrtime(true) < $deadline)
-			? $this->exApp->snippets($uid, $term, $fileIds, $titleOnly)
+		$excerpts = $fileIds !== []
+			? $this->exApp->snippets($uid, $term, $fileIds, $titleOnly, $this->secondsLeft($deadline))
 			: [];
 
 		$entries = $this->toEntries($approved, $excerpts);
@@ -414,6 +420,14 @@ final class Provider implements IFilteringProvider {
 		}
 
 		return $storageIds;
+	}
+
+	/**
+	 * What is left of the wall clock, in seconds. Negative once the deadline
+	 * has passed, which the callee reads as "do not call at all".
+	 */
+	private function secondsLeft(int|float $deadline): float {
+		return ((float)$deadline - (float)hrtime(true)) / 1_000_000_000.0;
 	}
 
 	/**

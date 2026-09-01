@@ -48,8 +48,21 @@ final class ExAppService {
 	 * what the timeout covers is the proxy round trip and a cold start, not the
 	 * search. The previous value of two seconds was budgeted for a single call
 	 * and would allow four seconds across the two.
+	 *
+	 * This is the ceiling per call, never the floor: every call shrinks it to
+	 * what is left of the caller's budget (perf audit H5). A deadline that was
+	 * only checked BEFORE a call let 2.49 s of spent budget plus a full 1.5 s
+	 * timeout add up to four real seconds, and the unified search waits for
+	 * every provider.
 	 */
 	private const REQUEST_TIMEOUT_SECONDS = 1.5;
+
+	/**
+	 * Below this remaining budget a call is not placed at all. An answer that
+	 * arrives after the unified search stopped waiting costs a round trip and
+	 * buys nothing.
+	 */
+	private const MIN_CALL_SECONDS = 0.3;
 
 	/**
 	 * The one title that is allowed to arrive without a file behind it. It is
@@ -123,7 +136,7 @@ final class ExAppService {
 	 *
 	 * @return array{candidates:list<array{fileId:int,title?:string,snippet?:string}>,hasMore:bool,nextOffset:int,degraded:bool}|null
 	 */
-	public function searchCandidates(string $userId, string $term, int $limit, int $offset, bool $titleOnly): ?array {
+	public function searchCandidates(string $userId, string $term, int $limit, int $offset, bool $titleOnly, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS): ?array {
 		// An empty term is not an error, it is what the unified search sends
 		// while the user is still typing, and it can only ever produce a 422
 		// over there. A round trip per keystroke for a request that cannot
@@ -141,7 +154,7 @@ final class ExAppService {
 			'limit' => $limit,
 			'offset' => $offset,
 			'titleOnly' => $titleOnly,
-		]);
+		], $secondsLeft);
 		if ($decoded === null) {
 			return null;
 		}
@@ -189,7 +202,7 @@ final class ExAppService {
 	 * @param list<int> $fileIds file ids that have passed the permission recheck
 	 * @return array<int,array{text:string,highlights:list<array{int,int}>}>
 	 */
-	public function snippets(string $userId, string $term, array $fileIds, bool $titleOnly): array {
+	public function snippets(string $userId, string $term, array $fileIds, bool $titleOnly, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS): array {
 		$term = trim($term);
 		if ($term === '') {
 			return [];
@@ -210,7 +223,7 @@ final class ExAppService {
 			'query' => $term,
 			'fileIds' => array_values($wanted),
 			'titleOnly' => $titleOnly,
-		]);
+		], $secondsLeft);
 		if ($decoded === null) {
 			return [];
 		}
@@ -232,9 +245,18 @@ final class ExAppService {
 	 * throws, every one of them ends in a null.
 	 *
 	 * @param array<string,mixed> $body
+	 * @param float $secondsLeft what is left of the caller's wall clock; the
+	 *                           timeout of this call never exceeds it
 	 * @return array<mixed>|null
 	 */
-	private function call(string $path, string $userId, array $body): ?array {
+	private function call(string $path, string $userId, array $body, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS): ?array {
+		$timeout = min(self::REQUEST_TIMEOUT_SECONDS, $secondsLeft);
+		if ($timeout < self::MIN_CALL_SECONDS) {
+			// Not an error: the budget is spent, and the caller shows what it
+			// already has instead of waiting for an answer nobody displays.
+			return null;
+		}
+
 		$user = $this->userManager->get($userId);
 		if ($user === null) {
 			// Without a user object the app check below would silently fall
@@ -264,7 +286,7 @@ final class ExAppService {
 			$userId,
 			'POST',
 			$body,
-			['timeout' => self::REQUEST_TIMEOUT_SECONDS],
+			['timeout' => $timeout],
 		);
 
 		// Case 1 first, always. AppAPI catches every transport exception and

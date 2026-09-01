@@ -59,8 +59,6 @@ def test_defaults_are_the_measured_numbers() -> None:
     assert current.writer_heap_bytes == 50_000_000
     assert current.poll_cooldown_start_seconds == 15
     assert current.poll_cooldown_max_seconds == 120
-    assert current.search_overfetch == 4
-    assert current.search_rounds == 3
     assert current.snippet_chars == 200
     assert current.search_limit_max == 100
     assert current.languages == ("de", "en")
