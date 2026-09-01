@@ -14,8 +14,10 @@ Der Schnitt ist vertikal: jede Phase liefert eine end-to-end nutzbare Fähigkeit
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 1: Integrationsbeweis** - Ein Treffer aus dem Container erscheint in der Unified Search, App-IDs eingefroren, beide CSRs eingereicht (completed 2026-08-15)
-- [x] **Phase 2: Indexkern und Volltextsuche** - Dateien werden vollständig, wiederaufsetzbar und rechtekorrekt durchsuchbar (completed 2026-09-01)
+- [x] **Phase 1: Integrationsbeweis** - Ein Treffer aus dem Container erscheint in der Unified Search, App-IDs eingefroren, beide CSRs eingereicht
+ (completed 2026-08-15)
+- [x] **Phase 2: Indexkern und Volltextsuche** - Dateien werden vollständig, wiederaufsetzbar und rechtekorrekt durchsuchbar
+ (completed 2026-09-01)
 - [ ] **Phase 3: Aktualität und OCR** - Neue, geänderte und gescannte Dokumente sind kurz darauf auffindbar, ohne dass eine Datei angefasst wird
 - [ ] **Phase 4: Admin-Sichtbarkeit und Diagnose** - Admin sieht Deckungsgrad, Fehler und den Grund pro Datei, bevor Nutzer etwas vermissen
 - [ ] **Phase 5: Härtung und Store-Einreichung v1.0** - Belegte Zahlen auf 4-GB-ARM, Rechte-Paritätstest als Dauergate, v1.0 im App Store
@@ -70,7 +72,23 @@ Plans:
   3. Entzogener Share und gelöschte Datei verschwinden zeitnah aus den Trefferlisten aller nicht mehr berechtigten Nutzer
   4. Bei komplett blockierten Events ist der Index nach einem einzigen ETag-Abgleichzyklus wieder korrekt (Abnahmetest genau so)
   5. Nach einem OCR-Lauf über ein Korpus mit defekten und ungewöhnlichen PDFs sind alle Originaldateien bitweise unverändert, und kein OCR-Job überschreitet Seitenlimit, Zeit- oder RAM-Deckel
-**Plans**: TBD
+**Plans**: 14 plans
+
+Plans:
+- [ ] 03-01-PLAN.md , Ereignisweg und Job-Art in der Queue (Upload und Aenderung sind sofort findbar)
+- [ ] 03-02-PLAN.md , Umbenennen und Verschieben ohne Download (Metadaten-Job)
+- [ ] 03-03-PLAN.md , Loeschen, Papierkorb und Wiederherstellen
+- [ ] 03-04-PLAN.md , Share, Unshare und Teilbaum-Job fuer Ordner-Operationen
+- [ ] 03-05-PLAN.md , tesseract im Image, OCR-Messlauf und OCR-Konfiguration
+- [ ] 03-06-PLAN.md , DACH- und Scan-Korpus, Textlayer-Schwelle nachgemessen
+- [ ] 03-07-PLAN.md , Requeue-Route, Gate A und die OCR-Zweitspur
+- [ ] 03-08-PLAN.md , OCR-Modul: Rasterung, tesseract-Subprozess, Deckel-Kaskade
+- [ ] 03-09-PLAN.md , Verdrahtung: gescanntes PDF ist auffindbar
+- [ ] 03-10-PLAN.md , Bilder per OCR plus Allowlist-Paritaets-Gate
+- [ ] 03-11-PLAN.md , Abgleich-Leseweg: mounts und files/slice
+- [ ] 03-12-PLAN.md , Abgleichlauf mit Ruhe-Gate, Tombstones und Cursor
+- [ ] 03-13-PLAN.md , Abnahmen als Dauergates plus Sichtprobe
+- [ ] 03-14-PLAN.md , Verschobene Audit-Befunde aus Phase 2
 
 ### Phase 4: Admin-Sichtbarkeit und Diagnose
 **Goal**: Der Admin erkennt den Zustand der Suche vor dem Nutzer, kann für jede einzelne Datei begründen, warum sie auffindbar ist oder nicht, und kennt den Aufwand vorher.
@@ -121,7 +139,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
-| 3. Aktualität und OCR | 0/TBD | Not started | - |
+| 3. Aktualität und OCR | 0/14 | Planned | - |
 | 4. Admin-Sichtbarkeit und Diagnose | 0/TBD | Not started | - |
 | 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
