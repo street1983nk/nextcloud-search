@@ -109,3 +109,30 @@ mitgeben, wenn die gewählte Route `Route.OCR` war.
 
 **Wohin es gehört:** derselbe Folgeplan wie der Punkt darüber, beides ist dieselbe
 Stelle im Poller.
+
+## Plan 03-13: `docs/dev-setup.md` beschreibt noch den Korpus von Phase 2
+
+**Was:** Schritt 5 der lokalen Sichtprobe nennt als Fertigmeldung `indexed` 8,
+`skipped` 2, `failed` 1 und begründet die Zahlen damit, dass das Bild "nie in die
+Warteschlange kommt, weil der Crawl nur Dokumenttypen nimmt". Beides stimmt seit
+Plan 03-10 nicht mehr: die vier Bildtypen stehen auf der Allowlist, der Korpus hat
+33 statt 12 Dateien, und die gemessenen Endverdikte sind 22 indexiert, 5
+übersprungen, 6 gescheitert. Die Tabelle in `testdata/CORPUS.md` nennt sie je
+Datei.
+
+**Zweiter Punkt derselben Seite:** die lokale Einrichtung startet das Backend als
+Host-Prozess (`uv run python -m findling.main`, `.dev/exapp.pid`), nicht im
+Laufzeitimage. `extract/ocr.py` ruft die Engine schlicht als `tesseract` auf, es
+gibt keine Konfigurationsvariable für einen Pfad. Auf einer Windows-Maschine ohne
+`tesseract.exe` im PATH endet damit jeder Scan und jedes Bild als
+`failed(ocr_unavailable)`, und die Schritte 3 und 4 der Sichtprobe aus Plan 03-13
+können gar nicht gelingen. Die Seite sagt dazu bisher nichts.
+
+**Warum nicht hier erledigt:** `docs/dev-setup.md` steht nicht in `files_modified`
+dieses Plans, und beide Punkte sind Doku über die Entwicklungsmaschine, nicht über
+das Produkt. Die Zahlen selbst sind in `testdata/CORPUS.md` bereits richtig
+hinterlegt.
+
+**Wohin es gehört:** in den phasenweiten Integrationsschritt, zusammen mit der
+Sichtprobe. Wer die Sichtprobe vorbereitet, braucht beide Angaben ohnehin und
+sieht dabei, welche Fassung stimmt.
