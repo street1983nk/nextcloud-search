@@ -613,9 +613,7 @@ async def test_scanned_pdf_is_findable_after_ocr(
     # pass: a word that exists in exactly one corpus file and there only as
     # pixels is searchable afterwards, without an admin having configured OCR.
     queue = _FakeQueue(ClaimResult(jobs=(_ocr_job(len(COUNCIL_SCAN_BYTES)),)))
-    poller = _poller(
-        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: COUNCIL_SCAN_BYTES}
-    )
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: COUNCIL_SCAN_BYTES})
 
     result = await poller.run_once()
 

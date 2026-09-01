@@ -128,8 +128,9 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
 # the overwrite.
 _RECORD_SQL: Final = """
 INSERT INTO files (file_id, storage_id, root_id, path, title, mime, size, mtime,
-                   content_hash, text_chars, state, reason, attempts, indexed_at, index_version)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                   etag, content_hash, text_chars, state, reason, attempts, ocr_used,
+                   indexed_at, index_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
 ON CONFLICT(file_id) DO UPDATE SET
     storage_id    = excluded.storage_id,
     root_id       = excluded.root_id,
@@ -138,11 +139,18 @@ ON CONFLICT(file_id) DO UPDATE SET
     mime          = excluded.mime,
     size          = excluded.size,
     mtime         = excluded.mtime,
+    etag          = excluded.etag,
     content_hash  = excluded.content_hash,
     text_chars    = excluded.text_chars,
     state         = excluded.state,
     reason        = excluded.reason,
     attempts      = files.attempts + 1,
+    -- Overwritten rather than accumulated, and that is the caller's job to get
+    -- right: the value describes the attempt that is being written, so a caller
+    -- that re-records an existing verdict has to carry the old flag over. The
+    -- poller does exactly that on the rename path, where nothing was extracted
+    -- at all and the text in the index is the text OCR produced earlier.
+    ocr_used      = excluded.ocr_used,
     indexed_at    = excluded.indexed_at,
     index_version = excluded.index_version,
     -- The restore from the trash bin, and the reason there is no revive method.
@@ -194,6 +202,12 @@ class FileMeta:
     Carried separately from the verdict because it comes from a different source:
     these values are what Nextcloud handed over with the queue entry, while state
     and reason are what this container concluded.
+
+    ``etag`` belongs here for exactly that reason: it is Nextcloud's own version
+    mark of the file, it arrives with the queue entry like the mimetype and the
+    size, and the reconcile of plan 03-12 compares it to find out which files
+    changed while the container was not listening. It defaults to absent because
+    a caller that has no etag is honest, not broken; a delete job carries none.
     """
 
     storage_id: int
@@ -203,6 +217,7 @@ class FileMeta:
     mime: str
     size: int
     mtime: int
+    etag: str | None = None
 
 
 def enable_wal(connection: sqlite3.Connection) -> str:
@@ -345,6 +360,7 @@ class Store:
         *,
         content_hash: str | None = None,
         text_chars: int = 0,
+        ocr_used: bool = False,
     ) -> None:
         """Write the verdict for one file, rejecting anything outside the list.
 
@@ -358,6 +374,13 @@ class Store:
         three tries runs on. There is no state transition to manage: a file is
         judged once per attempt, and a file that is still to be done has no row
         here at all.
+
+        ``ocr_used`` is set as soon as an OCR run happened, including the run that
+        came back as skipped(empty_text). The flag says that the time was spent,
+        not that it paid off, and that is the whole reason phase 4 can tell a
+        document nobody looked at from one that went through the engine and
+        produced nothing: without it, both are a row with no text and no
+        explanation for the hour of CPU that went into the second one.
         """
         allowed = STATE_REASONS.get(state)
         if allowed is None:
@@ -377,10 +400,12 @@ class Store:
                     meta.mime,
                     meta.size,
                     meta.mtime,
+                    meta.etag,
                     content_hash,
                     text_chars,
                     state,
                     reason,
+                    int(ocr_used),
                     int(time.time()),
                     self.index_version,
                 ),
