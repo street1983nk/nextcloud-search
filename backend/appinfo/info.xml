@@ -182,7 +182,7 @@ results into the normal search bar and is the only caller of this backend.]]></d
 			<variable>
 				<name>FINDLING_OCR_JOB_SECONDS</name>
 				<display-name>Seconds allowed per scanned document</display-name>
-				<description>A whole number between 1 and 1800. When the budget is spent the document is indexed with what was read so far and marked as shortened. The hard limit at which the whole job is abandoned is always this value plus 60 seconds, so that the partial text has a window to be handed over; that is why it is not a setting of its own.</description>
+				<description>A whole number between 1 and 780. When the budget is spent the document is indexed with what was read so far and marked as shortened. The hard limit at which the whole job is abandoned is always this value plus 60 seconds, so that the partial text has a window to be handed over; that is why it is not a setting of its own. The ceiling of 780 keeps a claimed batch of two OCR jobs safely under the 1800 second queue lock; anything outside the range falls back to the default.</description>
 				<default>600</default>
 			</variable>
 			<variable>

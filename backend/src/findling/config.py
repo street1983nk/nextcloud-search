@@ -243,6 +243,26 @@ OCR_HARD_DEADLINE_MARGIN_SECONDS = 60
 # inside a 128 MB address space, well under the 512 MB the sandbox child grants.
 OCR_DPI = 300
 
+# The two PHP-side numbers the job ceiling below is derived from, mirrored here
+# because a PHP constant cannot be imported: QueueMapper::LOCK_TIMEOUTS[ocr] and
+# QueueService::KIND_BATCH[ocr]. A parity test in tests/test_config.py reads
+# both out of the PHP sources and goes red the day one of them moves, the same
+# construction that holds the two mimetype allowlists together.
+OCR_LOCK_TIMEOUT_SECONDS = 1800
+OCR_CLAIM_BATCH = 2
+
+# The ceiling of the admin settable job budget, derived rather than chosen
+# (review finding WR-04). One claim may hold OCR_CLAIM_BATCH rows, so each row
+# owns OCR_LOCK_TIMEOUT_SECONDS / OCR_CLAIM_BATCH = 900 s of the claim. The
+# parent's hard deadline is job plus the margin, and the download of the bytes
+# runs inside the same claim, so a second margin is budgeted for it:
+# 900 - 60 - 60 = 780. The old ceiling of 1800 declared a value valid at which
+# a single job's hard deadline (1860 s) already outlived the lock: the rows
+# reappeared as free, collected retries and ended as failed(repeatedly_stuck)
+# while the engine was legitimately working, which is word for word the failure
+# the bounded range exists to prevent (T-03-503).
+OCR_JOB_SECONDS_MAX = OCR_LOCK_TIMEOUT_SECONDS // OCR_CLAIM_BATCH - 2 * OCR_HARD_DEADLINE_MARGIN_SECONDS
+
 # Ranges an admin supplied number has to fall into. These are not taste: the
 # rasterised page grows with the square of the dpi, so A4 at 1200 dpi is 137
 # megapixels and bursts EXTRACT_ADDRESS_SPACE_BYTES, and a page or job budget
@@ -251,7 +271,7 @@ OCR_DPI = 300
 # and degrades to the default.
 OCR_MAX_PAGES_RANGE = (1, MAX_PDF_PAGES)
 OCR_PAGE_SECONDS_RANGE = (1, 300)
-OCR_JOB_SECONDS_RANGE = (1, 1800)
+OCR_JOB_SECONDS_RANGE = (1, OCR_JOB_SECONDS_MAX)
 OCR_DPI_RANGE = (72, 600)
 
 # ---------------------------------------------------------------------------

@@ -14,13 +14,25 @@ accident. The test fails the moment somebody makes it one.
 
 from __future__ import annotations
 
+import re
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
-from findling.config import INDEX_WORKERS, MAX_TEXT_CHARS, settings
+from findling.config import (
+    INDEX_WORKERS,
+    MAX_TEXT_CHARS,
+    OCR_CLAIM_BATCH,
+    OCR_HARD_DEADLINE_MARGIN_SECONDS,
+    OCR_JOB_SECONDS_MAX,
+    OCR_LOCK_TIMEOUT_SECONDS,
+    settings,
+)
+
+PHP_QUEUE_MAPPER = Path(__file__).resolve().parents[2] / "php" / "lib" / "Db" / "QueueMapper.php"
+PHP_QUEUE_SERVICE = Path(__file__).resolve().parents[2] / "php" / "lib" / "Service" / "QueueService.php"
 
 # Every variable the module reads. Cleared before each test so a developer
 # machine that happens to export one of them cannot turn a red test green.
@@ -303,7 +315,7 @@ def test_an_unusable_ocr_switch_stays_on_instead_of_raising(monkeypatch: pytest.
     assert settings().ocr_enabled is True
 
 
-@pytest.mark.parametrize("job_seconds", ["120", "600", "900", "1800"])
+@pytest.mark.parametrize("job_seconds", ["120", "600", "780", "1800"])
 def test_the_hard_deadline_always_stays_above_the_soft_one(monkeypatch: pytest.MonkeyPatch, job_seconds: str) -> None:
     monkeypatch.setenv("FINDLING_OCR_JOB_SECONDS", job_seconds)
     settings.cache_clear()
@@ -313,9 +325,71 @@ def test_the_hard_deadline_always_stays_above_the_soft_one(monkeypatch: pytest.M
     # If the parent killed the child at the same second the child stops its own
     # page loop, the partial text would never make it through the pipe and
     # indexed(truncated) would never occur in practice. Deriving the hard
-    # deadline is what keeps that true when an admin moves the soft one.
+    # deadline is what keeps that true when an admin moves the soft one, and it
+    # holds for an out of range value as well, because that falls back to the
+    # default before the derivation runs.
     assert current.ocr_hard_deadline_seconds > current.ocr_job_seconds
     assert current.ocr_hard_deadline_seconds == current.ocr_job_seconds + 60
+
+
+def test_the_job_ceiling_itself_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_OCR_JOB_SECONDS", str(OCR_JOB_SECONDS_MAX))
+    settings.cache_clear()
+
+    assert settings().ocr_job_seconds == OCR_JOB_SECONDS_MAX
+
+
+@pytest.mark.parametrize("job_seconds", ["781", "900", "1800"])
+def test_a_job_budget_that_would_outlive_the_ocr_lock_falls_back(
+    monkeypatch: pytest.MonkeyPatch, job_seconds: str
+) -> None:
+    # Review finding WR-04. The old ceiling of 1800 declared a value valid at
+    # which a single job's hard deadline (1860 s) already outlived the 1800 s
+    # OCR lock, and a claim of two jobs could legitimately work for twice that:
+    # the rows reappeared as free, collected retries and ended as
+    # failed(repeatedly_stuck) while the engine was working correctly. A
+    # documented maximum that rebuilds the stuck-claim failure is worse than a
+    # typo, so these values now degrade like every other out of range number.
+    monkeypatch.setenv("FINDLING_OCR_JOB_SECONDS", job_seconds)
+    settings.cache_clear()
+
+    current = settings()
+
+    assert current.ocr_job_seconds == 600
+    assert current.ocr_hard_deadline_seconds == 660
+
+
+def _php_constant_entry(source_path: Path, block_name: str, key: str) -> int:
+    """One integer entry of a PHP constant array, read out of the source.
+
+    Read as text because a PHP constant cannot be imported, in the shape of the
+    mimetype allowlist gate: writing the number into the Python side by hand a
+    second time would be exactly the drift this gate exists to catch.
+    """
+    source = source_path.read_text(encoding="utf-8")
+    block = re.search(rf"const {block_name} = \[(.*?)\];", source, re.DOTALL)
+    assert block is not None, f"the {block_name} constant is no longer where this gate looks for it"
+    entry = re.search(rf"{key} => (\d+),", block.group(1))
+    assert entry is not None, f"{block_name} no longer carries a literal for {key}"
+    return int(entry.group(1))
+
+
+def test_the_mirrored_php_numbers_behind_the_job_ceiling_are_the_real_ones() -> None:
+    # The parity gate of the derivation. OCR_JOB_SECONDS_MAX is computed from
+    # two PHP-side numbers this module can only mirror; the day one of them
+    # moves, this test goes red instead of the ceiling silently drifting away
+    # from the lock it exists to stay under.
+    assert _php_constant_entry(PHP_QUEUE_MAPPER, "LOCK_TIMEOUTS", "KIND_OCR") == OCR_LOCK_TIMEOUT_SECONDS
+    assert _php_constant_entry(PHP_QUEUE_SERVICE, "KIND_BATCH", "KIND_OCR") == OCR_CLAIM_BATCH
+
+
+def test_a_full_ocr_claim_at_the_ceiling_stays_under_the_lock_timeout() -> None:
+    # The invariant behind WR-04, spelled out: a claim of OCR_CLAIM_BATCH jobs,
+    # each running to its hard deadline, must end before the lock expires and
+    # hands the rows out a second time.
+    worst_claim = OCR_CLAIM_BATCH * (OCR_JOB_SECONDS_MAX + OCR_HARD_DEADLINE_MARGIN_SECONDS)
+
+    assert worst_claim < OCR_LOCK_TIMEOUT_SECONDS
 
 
 def test_an_ocr_cap_cannot_drift_at_runtime_either() -> None:
