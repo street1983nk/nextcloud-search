@@ -12,7 +12,9 @@ as a verdict, and a call that reached a library would raise instead.
 
 from __future__ import annotations
 
+import re
 import zipfile
+from pathlib import Path
 
 import pytest
 from docx.opc.exceptions import PackageNotFoundError
@@ -32,10 +34,22 @@ from findling.extract.dispatch import (
     extract,
     judge,
 )
-from findling.extract.errors import STATE_REASONS, ExtractionOutcome, Reason, State
+from findling.extract.errors import (
+    _EXCEPTION_REASONS,
+    STATE_REASONS,
+    ExtractionOutcome,
+    Reason,
+    State,
+)
 from findling.store import repo
 
 PLAIN = "text/plain"
+
+# The third list of the taxonomy, in the other language. Read as text on purpose:
+# a PHP constant cannot be imported, and the alternative would be a second copy
+# of the same values inside this test, which is the very duplication the test is
+# here to catch.
+PHP_FILE_STATE_SERVICE = Path(__file__).resolve().parents[2] / "php" / "lib" / "Service" / "FileStateService.php"
 
 
 def test_indexed_carries_no_reason_by_default() -> None:
@@ -115,6 +129,66 @@ def test_the_taxonomy_is_identical_to_the_one_the_state_store_enforces() -> None
     theirs = {state: set(reasons) for state, reasons in repo.STATE_REASONS.items()}
 
     assert ours == theirs
+
+
+def _php_reasons() -> set[str]:
+    """The REASONS constant of the PHP companion, read out of its source file."""
+    source = PHP_FILE_STATE_SERVICE.read_text(encoding="utf-8")
+    block = re.search(r"const REASONS = \[(.*?)\];", source, re.DOTALL)
+    assert block is not None, "the REASONS constant is no longer where this test looks for it"
+    return set(re.findall(r"'([a-z_]+)'", block.group(1)))
+
+
+def test_php_reason_list_matches_python() -> None:
+    """The third list, and the only one that had no automatic comparison so far.
+
+    Python and the state store are already compared above. The PHP companion is
+    the third copy of the same taxonomy, and it is the one that decides whether a
+    verdict is written at all: ``FileStateService::record`` drops a reason it does
+    not know, silently, and the file then carries no verdict anywhere. A code that
+    only one side knows therefore does not produce an error, it produces a gap on
+    the status page, which is exactly the failure this project exists to end.
+
+    Both directions are asserted. A missing code on the PHP side breaks the return
+    channel; a surplus code there is a label phase 4 renders for a state that can
+    never occur.
+    """
+    ours = {reason.value for reasons in STATE_REASONS.values() for reason in reasons if reason is not None}
+
+    assert _php_reasons() == ours
+
+
+@pytest.mark.parametrize(
+    ("reason", "state"),
+    [
+        (Reason.IMAGE_NOT_OCRABLE, State.SKIPPED),
+        (Reason.OCR_FAILED, State.FAILED),
+        (Reason.OCR_UNAVAILABLE, State.FAILED),
+    ],
+)
+def test_the_three_ocr_reasons_belong_to_the_state_the_ocr_branch_uses(reason: Reason, state: State) -> None:
+    assert reason in STATE_REASONS[state]
+    assert reason.value in repo.STATE_REASONS[state.value]
+
+
+def test_an_ocr_failure_cannot_be_dressed_up_as_a_decision() -> None:
+    # skipped(ocr_failed) would move a broken engine out of the error count on the
+    # status page and into the "we decided against it" column, which is the one
+    # number an admin uses to tell a working install from a broken one.
+    with pytest.raises(ValueError, match="does not belong to state"):
+        ExtractionOutcome.skipped(Reason.OCR_FAILED)
+
+    with pytest.raises(ValueError, match="does not belong to state"):
+        ExtractionOutcome.failed(Reason.IMAGE_NOT_OCRABLE)
+
+
+def test_the_exception_table_holds_failures_only() -> None:
+    # image_not_ocrable is a decision, so an entry for it here would not translate
+    # an exception, it would raise a ValueError inside the error handler. The
+    # comment at the table says so; this is the line that keeps it true.
+    assert Reason.IMAGE_NOT_OCRABLE not in set(_EXCEPTION_REASONS.values())
+    for reason in _EXCEPTION_REASONS.values():
+        assert reason in STATE_REASONS[State.FAILED]
 
 
 def test_a_mimetype_outside_the_allowlist_is_judged_without_reaching_an_extractor() -> None:
