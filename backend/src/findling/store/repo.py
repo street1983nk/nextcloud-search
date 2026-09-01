@@ -820,8 +820,24 @@ def open_store(path: Path | str, *, meta: Mapping[str, str] | None = None) -> St
     :meth:`Store.version_mismatch` reports, and an open that silently repaired it
     would destroy that evidence before anybody looked.
 
-    There is exactly one of these connections in a running container, held by the
-    poller. Everything else reads through :func:`open_read_only`.
+    There are two of these connections in a running container since plan 03-12,
+    and the second one is worth naming because it used to be one. The poller
+    holds the first and does every verdict, every permission row and every
+    tombstone through it. The reconcile holds the second and writes nothing but
+    its own bookmark, one small row per page of the file list; everything else it
+    does here is a read. Two writers on one SQLite file are safe under WAL, which
+    serialises them, and both transactions are milliseconds long, so the busy
+    timeout is never approached. What would not be safe is sharing one connection
+    between the two tasks: ``BEGIN IMMEDIATE`` is per connection, and two
+    transactions interleaving on the same one is a different problem entirely.
+
+    Everything else reads through :func:`open_read_only`. The reconcile cannot,
+    because ``PRAGMA query_only`` would refuse its bookmark.
+
+    Note also what the second caller must not do: create this database. Only the
+    poller seeds the version marks, and a store created anywhere else would carry
+    unknown marks forever. :func:`findling.worker.reconcile._open_state` opens an
+    existing file and reports None for a missing one.
     """
     database = Path(path)
     database.parent.mkdir(parents=True, exist_ok=True)

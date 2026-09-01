@@ -254,6 +254,41 @@ OCR_PAGE_SECONDS_RANGE = (1, 300)
 OCR_JOB_SECONDS_RANGE = (1, 1800)
 OCR_DPI_RANGE = (72, 600)
 
+# ---------------------------------------------------------------------------
+# The ETag reconcile. Events are an accelerator, never a guarantee; these five
+# numbers decide how expensive the guarantee is allowed to be. The full argument,
+# including why the cadence lives in the container rather than in a Nextcloud
+# job, is in docs/reconcile.md.
+# ---------------------------------------------------------------------------
+
+# On out of the box. A container that only believes its events is the container
+# this project was started to replace: a lost event is invisible, and the index
+# stays wrong until somebody notices that a document cannot be found.
+RECONCILE_ENABLED = True
+
+# Container local hour the full cycle is preferred in. Nextcloud's own
+# maintenance window is not a substitute: cron.php reads maintenance_window_start
+# with the default 100 and only restricts anything at 23 or below, so a freshly
+# installed instance has no maintenance window at all.
+RECONCILE_HOUR = 2
+
+# At most one full cycle per this many hours. The floor under the whole feature:
+# without it the reconcile would walk the file list on every tick.
+RECONCILE_MIN_INTERVAL_HOURS = 24
+
+# Scheduled queue rows the reconcile tolerates before it stands down (D-03). One
+# hundred is roughly three batches of the indexing worker: enough that ordinary
+# event traffic does not block the repair, low enough that an initial index or an
+# OCR backlog does.
+RECONCILE_QUIET_MAX = 100
+
+# Files per page of the file list. Matches the DEFAULT_SLICE of the PHP side, and
+# the ceiling is its MAX_SLICE, which clamps anything larger anyway.
+RECONCILE_SLICE = 500
+
+RECONCILE_HOUR_RANGE = (0, 23)
+RECONCILE_SLICE_RANGE = (1, 2000)
+
 # Subdirectory used when APP_PERSISTENT_STORAGE is absent, which is the case in
 # tests and in a bare local run, never in a container deployed by AppAPI.
 FALLBACK_STORAGE_DIRNAME = "findling"
@@ -302,6 +337,12 @@ class Settings:
     ocr_hard_deadline_seconds: int
     ocr_dpi: int
 
+    reconcile_enabled: bool
+    reconcile_hour: int
+    reconcile_min_interval_hours: int
+    reconcile_quiet_max: int
+    reconcile_slice: int
+
 
 def _int_from_environment(name: str, default: int) -> int:
     """Read a positive whole number, falling back to the measured default.
@@ -337,6 +378,29 @@ def _bounded_int_from_environment(name: str, default: int, bounds: tuple[int, in
     if low <= value <= high:
         return value
     LOGGER.warning("%s is outside the range this build was measured for, falling back to the default", name)
+    return default
+
+
+def _hour_from_environment(name: str, default: int) -> int:
+    """Read an hour of the day, where zero is a legitimate answer.
+
+    The reader above refuses zero on purpose: a cap of zero is a container that
+    does nothing. An hour of zero is midnight, which is the first thing an admin
+    who wants a quiet night types, so this one has its own bounds and its own
+    function rather than a flag on the other.
+    """
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        LOGGER.warning("%s is not a whole number, falling back to the built in default", name)
+        return default
+    low, high = RECONCILE_HOUR_RANGE
+    if low <= value <= high:
+        return value
+    LOGGER.warning("%s is not an hour of the day, falling back to the built in default", name)
     return default
 
 
@@ -492,4 +556,13 @@ def settings() -> Settings:
         ocr_job_seconds=ocr_job_seconds,
         ocr_hard_deadline_seconds=ocr_job_seconds + OCR_HARD_DEADLINE_MARGIN_SECONDS,
         ocr_dpi=_bounded_int_from_environment("FINDLING_OCR_DPI", OCR_DPI, OCR_DPI_RANGE),
+        reconcile_enabled=_bool_from_environment("FINDLING_RECONCILE_ENABLED", RECONCILE_ENABLED),
+        reconcile_hour=_hour_from_environment("FINDLING_RECONCILE_HOUR", RECONCILE_HOUR),
+        reconcile_min_interval_hours=_int_from_environment(
+            "FINDLING_RECONCILE_MIN_INTERVAL_HOURS", RECONCILE_MIN_INTERVAL_HOURS
+        ),
+        reconcile_quiet_max=_int_from_environment("FINDLING_RECONCILE_QUIET_MAX", RECONCILE_QUIET_MAX),
+        reconcile_slice=_bounded_int_from_environment(
+            "FINDLING_RECONCILE_SLICE", RECONCILE_SLICE, RECONCILE_SLICE_RANGE
+        ),
     )
