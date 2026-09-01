@@ -84,6 +84,20 @@ RECONCILE_TICK_SECONDS: Final = 300.0
 # tolerable at night is a reconcile an admin switches off.
 SLICE_PAUSE_SECONDS: Final = 1.0
 
+# How many file ids one requeue call may carry. The ceiling on the PHP side is
+# QueueController::MAX_LIST_LENGTH, 256 since plan 03-14, and intList refuses a
+# longer list outright with HTTP 400. A slice exceeds that easily: the default
+# slice is 500, and the missing list of a final page is not bounded by the
+# slice at all, because gone_in_range runs open ended over the rest of the
+# mount there. Handing a slice over in one call therefore wedged the round for
+# good (review finding CR-01): the controller answered 400, the round ended
+# without moving the bookmark, and the next round read the same page and
+# produced the same over-long list again, forever. 200 leaves headroom under
+# the controller limit; a parity test in tests/test_reconcile.py reads the PHP
+# constant and holds the two numbers together, the same way the allowlist
+# parity gate does it.
+REQUEUE_BAND: Final = 200
+
 # Everything the round talks to, as a type. The defaults are the production
 # wiring and a test replaces them one by one.
 ClientFactory = Callable[[], AsyncNextcloudApp]
@@ -400,14 +414,21 @@ class Reconcile:
         content re-reads the file, and the delete branch of the poller takes the
         document out of the index, forgets the permissions and sets the
         tombstone. This round writes neither of those itself.
+
+        Each list travels in bands of REQUEUE_BAND, below the list ceiling of
+        the PHP controller; the reasoning stands at the constant. A band that
+        fails ends the round exactly like a failed call did before, without
+        moving the bookmark, and the bands already delivered are harmless: a
+        repeated slice hands the same ids over again and requeueAs refreshes
+        the rows rather than duplicating them.
         """
         for file_ids, kind in ((stale, KIND_CONTENT), (missing, KIND_DELETE)):
-            if not file_ids:
-                continue
-            result = await queue.requeue(list(file_ids), kind=kind)
-            if not result.ok:
-                LOGGER.warning("could not hand %d files of kind %s to the queue, ending the round", len(file_ids), kind)
-                return False
+            for start in range(0, len(file_ids), REQUEUE_BAND):
+                band = list(file_ids[start : start + REQUEUE_BAND])
+                result = await queue.requeue(band, kind=kind)
+                if not result.ok:
+                    LOGGER.warning("could not hand %d files of kind %s to the queue, ending the round", len(band), kind)
+                    return False
         return True
 
     # -- the two gates ---------------------------------------------------
@@ -539,6 +560,7 @@ async def _pause(seconds: float, stop_event: asyncio.Event) -> None:
 
 __all__ = [
     "RECONCILE_STOP_SECONDS",
+    "REQUEUE_BAND",
     "ROUND_NOT_DUE",
     "ROUND_NO_STATE",
     "ROUND_QUEUE_BUSY",

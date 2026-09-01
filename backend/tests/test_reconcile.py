@@ -36,6 +36,7 @@ from findling.nc.files import FileRow, Mount, MountResult, SliceResult
 from findling.nc.queue import KIND_CONTENT, KIND_DELETE, CallResult, QueueStats
 from findling.store.repo import FileMeta, Store, open_store
 from findling.worker.reconcile import (
+    REQUEUE_BAND,
     ROUND_NOT_DUE,
     ROUND_QUEUE_BUSY,
     ROUND_QUEUE_UNAVAILABLE,
@@ -45,6 +46,7 @@ from findling.worker.reconcile import (
 )
 
 RECONCILE_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "worker" / "reconcile.py"
+PHP_QUEUE_CONTROLLER = Path(__file__).resolve().parents[2] / "php" / "lib" / "Controller" / "QueueController.php"
 
 STORAGE = 3
 ROOT = 17
@@ -124,14 +126,16 @@ class _FakeFiles:
         return self._pages.pop(0) if self._pages else SliceResult(final=True)
 
 
-def _reconcile(store: Store, files: _FakeFiles, queue: _FakeQueue, *, now: float = NOW) -> Reconcile:
+def _reconcile(
+    store: Store, files: _FakeFiles, queue: _FakeQueue, *, now: float = NOW, slice_size: int = 2
+) -> Reconcile:
     """A round wired to fakes, with the clock and the hour under test control."""
     return Reconcile(
         store=store,
         client_factory=lambda: cast("AsyncNextcloudApp", None),
         files_factory=lambda nc: cast("Any", files),
         queue_factory=lambda nc: cast("Any", queue),
-        slice_size=2,
+        slice_size=slice_size,
         quiet_max=100,
         hour=2,
         min_interval_hours=24,
@@ -191,6 +195,92 @@ async def test_an_incomplete_page_never_produces_a_deletion(store: Store) -> Non
     await _reconcile(store, files, queue).run_once()
 
     assert queue.kinds_of(KIND_DELETE) == []
+
+
+# -- the handover bands (review finding CR-01) --------------------------------
+#
+# QueueController::MAX_LIST_LENGTH is 256 and intList answers 400 for anything
+# longer, so a slice with more findings than that has to travel in bands. Before
+# the bands, such a slice wedged the round for good: the same page produced the
+# same over-long list every cycle, the cursor never moved, and the two scenarios
+# the reconcile exists for, a restore and a mass deletion, were exactly the ones
+# that produced it.
+
+
+def _php_max_list_length() -> int:
+    """The MAX_LIST_LENGTH constant of the PHP controller, read out of its source.
+
+    Read as text because a PHP constant cannot be imported, in the shape of the
+    allowlist parity gate: writing the number into this file a second time would
+    be the very drift the gate exists to catch.
+    """
+    source = PHP_QUEUE_CONTROLLER.read_text(encoding="utf-8")
+    found = re.search(r"const MAX_LIST_LENGTH = (\d+);", source)
+    assert found is not None, "the MAX_LIST_LENGTH constant is no longer where this gate looks for it"
+    return int(found.group(1))
+
+
+def test_the_requeue_band_stays_below_the_php_list_ceiling() -> None:
+    # The parity gate. The day somebody lowers the controller limit under the
+    # band, every slice with more findings than the new limit wedges the round
+    # again, and this is the test that goes red instead.
+    assert _php_max_list_length() >= REQUEUE_BAND
+
+
+async def test_a_slice_with_more_stale_files_than_the_list_ceiling_is_handed_over_in_bands(store: Store) -> None:
+    # The restore scenario: a page of 500 files the container does not know, all
+    # of them stale at once. One call would carry 500 ids and be refused.
+    rows = tuple(a_row(number, etag="aaa") for number in range(1, 501))
+    files = _FakeFiles(SliceResult(files=rows, final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue, slice_size=500).run_once()
+
+    assert result.state == ROUND_WALKED
+    assert result.stale == 500
+    assert queue.kinds_of(KIND_CONTENT) == list(range(1, 501))
+    bands = [len(ids) for ids, kind in queue.requeues if kind == KIND_CONTENT]
+    assert bands == [200, 200, 100]
+    assert all(band <= _php_max_list_length() for band in bands)
+
+
+async def test_a_mass_deletion_over_the_list_ceiling_is_handed_over_in_bands(store: Store) -> None:
+    # The other scenario, and the unbounded one: on the final page gone_in_range
+    # runs over the whole rest of the mount, so the missing list is not limited
+    # by the slice size at all.
+    for number in range(1, 301):
+        store.record(number, a_file(number, etag="aaa"), "indexed", content_hash="a")
+    files = _FakeFiles(SliceResult(files=(), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert result.state == ROUND_WALKED
+    assert result.missing == 300
+    assert queue.kinds_of(KIND_DELETE) == list(range(1, 301))
+    assert [len(ids) for ids, kind in queue.requeues if kind == KIND_DELETE] == [200, 100]
+
+
+async def test_a_band_that_fails_ends_the_round_without_moving_the_bookmark(store: Store) -> None:
+    # A transport failure in the middle of the bands behaves like the failed
+    # single call always did: the round ends, the cursor stands, and the repeated
+    # slice hands the earlier bands over again, which requeueAs absorbs.
+    rows = tuple(a_row(number, etag="aaa") for number in range(1, 501))
+    files = _FakeFiles(SliceResult(files=rows, final=True))
+
+    class _FailsFromTheSecondCall(_FakeQueue):
+        async def requeue(self, file_ids: Any, *, kind: str) -> CallResult:
+            result = await super().requeue(file_ids, kind=kind)
+            if len(self.requeues) >= 2:
+                return CallResult(ok=False)
+            return result
+
+    queue = _FailsFromTheSecondCall()
+    result = await _reconcile(store, files, queue, slice_size=500).run_once()
+
+    assert result.state == ROUND_UNAVAILABLE
+    assert len(queue.requeues) == 2
+    assert store.reconcile_cursor(STORAGE).after_file_id == 0
 
 
 # -- the gates --------------------------------------------------------------
