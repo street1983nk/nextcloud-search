@@ -564,7 +564,7 @@ class Poller:
 
         if outcome.state is State.INDEXED:
             await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
-        hand_over = await self._goes_to_the_ocr_track(job, outcome, read.content_hash)
+        hand_over = self._goes_to_the_ocr_track(outcome)
         if hand_over:
             handover.append(job.file_id)
         self._collect(job, outcome, done, failed, verdicts, read.content_hash, hand_over=hand_over)
@@ -630,7 +630,7 @@ class Poller:
         # nothing, because the time was spent either way.
         self._collect(job, outcome, done, failed, verdicts, read.content_hash, ocr_used=True)
 
-    async def _goes_to_the_ocr_track(self, job: QueueJob, outcome: ExtractionOutcome, content_hash: str) -> bool:
+    def _goes_to_the_ocr_track(self, outcome: ExtractionOutcome) -> bool:
         """True when this verdict becomes an OCR job instead of an end state.
 
         ``skipped(no_text_layer)`` is the handover point phase 2 prepared: the
@@ -643,23 +643,25 @@ class Poller:
         ``FINDLING_OCR_ENABLED=false`` gets the honest verdict rather than rows
         that wait forever for a track that does not exist there.
 
-        **The same bytes are handed over once.** The requeued row comes back as
-        an ocr job, and until the OCR route is wired it runs the content route
-        again and produces the same verdict again. Handing it over once more
-        every pass, with the attempt counter reset every time, is an endless loop
-        (T-03-704), and the stored verdict of the earlier pass is what ends it.
-        The content hash is part of the question, so a file that was replaced in
-        the meantime is a different file and is handed over again.
+        **There is deliberately no redelivery guard here any more.** A
+        successful requeue turns the row into kind=ocr (requeueAs), and an ocr
+        job never runs through this decision again, so a content job that
+        arrives here with a stored ``skipped(no_text_layer)`` verdict is either
+        the first find or the redelivery of a handover that failed: the requeue
+        did not reach Nextcloud, or the container died between step 3 and step
+        3b. The earlier guard read the stored verdict and answered False for
+        exactly that redelivery, which made a transient failure permanent: the
+        row was acknowledged as done, the scan stayed skipped(no_text_layer)
+        with OCR switched on, and no counter ever moved (review finding CR-02).
+        The endless loop of T-03-704 cannot return through this relaxation,
+        because that loop needed the requeued row to run the content route
+        again, and since plan 03-09 an ocr row runs the OCR route instead. The
+        worst case left is one redundant requeue after a lost requeue answer,
+        and requeueAs absorbs that as a refresh.
         """
         if outcome.state is not State.SKIPPED or outcome.reason is not Reason.NO_TEXT_LAYER:
             return False
-        if not self._ocr_enabled:
-            return False
-
-        row = await asyncio.to_thread(self._store_or_die().file_row, job.file_id)
-        if row is None or row["content_hash"] != content_hash:
-            return True
-        return not (row["state"] == str(State.SKIPPED) and row["reason"] == str(Reason.NO_TEXT_LAYER))
+        return self._ocr_enabled
 
     async def _hand_over(self, queue: DocumentQueue, file_ids: Sequence[int]) -> int:
         """Move the rows of this pass to the OCR track, and count what moved.

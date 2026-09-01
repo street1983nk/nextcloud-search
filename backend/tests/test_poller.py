@@ -29,6 +29,7 @@ verdicts, the reasons and the character cap stay the real ones.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import re
 import shutil
 import threading
@@ -475,30 +476,69 @@ async def test_no_text_layer_stays_skipped_when_ocr_is_off(
     assert (row["state"], row["reason"]) == ("skipped", "no_text_layer")
 
 
-async def test_the_same_bytes_are_handed_over_once_and_then_judged(
+async def test_a_failed_handover_is_handed_over_again_when_the_row_comes_back(
     store: Store, writer: IndexBatchWriter, tmp_path: Path
 ) -> None:
-    # The loop this closes: the requeued row comes back as an ocr job, and until
-    # plan 03-09 wires the OCR route it runs the content route again, produces
-    # the same verdict again and would be handed over again, forever, with the
-    # attempt counter reset every single time (T-03-704).
-    #
-    # The stored verdict of the first pass is what ends it. Bytes that changed
-    # since then are a different file and are handed over again, which is why the
-    # content hash is part of the question.
+    # The scenario of review finding CR-02. The requeue fails transiently, the
+    # row stays claimed, runs into the lock timeout and is redelivered as a
+    # content job. The stored skipped(no_text_layer) verdict with the same hash
+    # used to block the second handover: the row went into done, was
+    # acknowledged away, and the scan stayed skipped forever although OCR is
+    # switched on. The second pass has to hand over again, because a successful
+    # requeue would have turned the row into kind=ocr and it would never have
+    # come back as content.
     queue = _FakeQueue(
         ClaimResult(jobs=(_scan_job(),)),
         ClaimResult(jobs=(_scan_job(),)),
     )
+    queue.requeue_fails = True
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES})
 
     first = await poller.run_once()
+    queue.requeue_fails = False
     second = await poller.run_once()
 
-    assert first.requeued == 1
-    assert second.requeued == 0
+    assert first.requeued == 0
+    assert second.requeued == 1
+    assert queue.requeues == [([4711], "ocr"), ([4711], "ocr")]
+    # And in neither pass does the row travel in the acknowledgement: a handover
+    # that also acknowledged would delete the row the requeue put work on.
+    assert queue.acknowledged == [([], {}), ([], {})]
+
+
+async def test_a_stored_no_text_layer_verdict_does_not_block_the_handover(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The other window of CR-02: the container died between step 3 (the verdict
+    # is durable) and step 3b (the requeue never ran). After the restart the row
+    # comes back as a content job, the text pass finds the same missing text
+    # layer over the same bytes, and the stored verdict must not turn that into
+    # an end state.
+    scan_hash = hashlib.sha256(SCAN_BYTES).hexdigest()
+    store.record(
+        4711,
+        FileMeta(
+            storage_id=3,
+            root_id=2,
+            path="Rat/Ratsvorlage.pdf",
+            title="Ratsvorlage.pdf",
+            mime="application/pdf",
+            size=len(SCAN_BYTES),
+            mtime=1_756_600_000,
+            etag="5d41402abc4b2a76b9719d911017c592",
+        ),
+        "skipped",
+        "no_text_layer",
+        content_hash=scan_hash,
+    )
+    queue = _FakeQueue(ClaimResult(jobs=(_scan_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES})
+
+    result = await poller.run_once()
+
+    assert result.requeued == 1
     assert queue.requeues == [([4711], "ocr")]
-    assert queue.acknowledged[-1] == ([91], {})
+    assert queue.acknowledged == [([], {})]
 
 
 async def test_a_requeue_that_does_not_reach_nextcloud_does_not_end_the_pass(
