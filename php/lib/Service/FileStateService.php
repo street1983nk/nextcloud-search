@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace OCA\Findling\Service;
 
 use OCP\AppFramework\Utility\ITimeFactory;
-use OCP\DB\Exception as DbException;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
@@ -107,33 +106,37 @@ class FileStateService {
 
 		$now = $this->timeFactory->getDateTime('now', new \DateTimeZone('UTC'));
 
-		$insert = $this->db->getQueryBuilder();
-		$insert->insert(self::TABLE_NAME)
-			->values([
-				'file_id' => $insert->createNamedParameter($fileId, IQueryBuilder::PARAM_INT),
-				'state' => $insert->createNamedParameter($state, IQueryBuilder::PARAM_STR),
-				'reason' => $insert->createNamedParameter($reason, $reason === null ? IQueryBuilder::PARAM_NULL : IQueryBuilder::PARAM_STR),
-				'updated_at' => $insert->createNamedParameter($now, IQueryBuilder::PARAM_DATE),
-			]);
-
-		try {
-			$insert->executeStatement();
-			return true;
-		} catch (DbException $e) {
-			if ($e->getReason() !== DbException::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				throw $e;
+		// Update first, insert only when nothing was there. On the mass paths
+		// (re-crawl, acknowledgement) the row almost always exists, and the old
+		// insert-and-catch order produced one caught constraint violation per
+		// file (bug audit M7). Worse than the cost: this method runs inside the
+		// acknowledgement transaction, and on PostgreSQL a caught violation
+		// still aborts that whole transaction. insertIgnoreConflict answers
+		// "already there" as zero affected rows instead of throwing, and the
+		// primary key keeps deciding the race, not a select.
+		for ($attempt = 0; $attempt < 2; $attempt++) {
+			$update = $this->db->getQueryBuilder();
+			$update->update(self::TABLE_NAME)
+				->set('state', $update->createNamedParameter($state, IQueryBuilder::PARAM_STR))
+				->set('reason', $update->createNamedParameter($reason, $reason === null ? IQueryBuilder::PARAM_NULL : IQueryBuilder::PARAM_STR))
+				->set('updated_at', $update->createNamedParameter($now, IQueryBuilder::PARAM_DATE))
+				->where($update->expr()->eq('file_id', $update->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)));
+			if ($update->executeStatement() >= 1) {
+				return true;
 			}
-		}
 
-		// Same reasoning as in QueueMapper::enqueue(): the primary key decides
-		// the race, not a select before the insert.
-		$update = $this->db->getQueryBuilder();
-		$update->update(self::TABLE_NAME)
-			->set('state', $update->createNamedParameter($state, IQueryBuilder::PARAM_STR))
-			->set('reason', $update->createNamedParameter($reason, $reason === null ? IQueryBuilder::PARAM_NULL : IQueryBuilder::PARAM_STR))
-			->set('updated_at', $update->createNamedParameter($now, IQueryBuilder::PARAM_DATE))
-			->where($update->expr()->eq('file_id', $update->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)));
-		$update->executeStatement();
+			$inserted = $this->db->insertIgnoreConflict(self::TABLE_NAME, [
+				'file_id' => $fileId,
+				'state' => $state,
+				'reason' => $reason,
+				'updated_at' => $now->format('Y-m-d H:i:s'),
+			]);
+			if ($inserted > 0) {
+				return true;
+			}
+			// Zero rows twice means somebody inserted between the two
+			// statements; the update of the next attempt wins over their value.
+		}
 
 		return true;
 	}

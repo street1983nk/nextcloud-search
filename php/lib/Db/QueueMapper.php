@@ -6,7 +6,6 @@ namespace OCA\Findling\Db;
 
 use OCP\AppFramework\Db\QBMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
-use OCP\DB\Exception as DbException;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
@@ -68,11 +67,11 @@ class QueueMapper extends QBMapper {
 	 * Queue a file, or refresh the row that is already there.
 	 *
 	 * There is no select before this insert on purpose. Two crawl jobs looking
-	 * at the same file at the same time would both see nothing and both insert;
-	 * the unique index on file_id is what makes that impossible, and the conflict
-	 * it raises is caught here and turned into an update of the existing row.
-	 * The race is decided by the database, which is the only participant that
-	 * can decide it.
+	 * at the same file at the same time would both see nothing in such a select
+	 * and both insert; the unique index on file_id is what makes that
+	 * impossible, and the swallowed conflict is turned into an update of the
+	 * existing row. The race is decided by the database, which is the only
+	 * participant that can decide it.
 	 *
 	 * The conflict branch is written out instead of using a single upsert
 	 * statement because the public query builder of Nextcloud has no upsert that
@@ -81,29 +80,27 @@ class QueueMapper extends QBMapper {
 	 * fail there, the fix is local to this method and nothing above it changes.
 	 */
 	public function enqueue(int $fileId, int $storageId, int $rootId, int $size, bool $isUpdate): void {
+		// insertIgnoreConflict rather than insert-and-catch, and that is a
+		// transaction property, not taste: on PostgreSQL a caught constraint
+		// violation still aborts the surrounding transaction, so the crawl
+		// could never put its slices inside one (perf audit H2, bug audit M7).
+		// The dialects answer "already there" as zero affected rows instead.
+		//
 		// Two attempts, because the conflict branch can find the row already
 		// deleted by a concurrent acknowledgement, in which case the insert is
 		// simply right again. A third collision within one call is not a race
 		// any more, it is a defect worth an exception.
 		for ($attempt = 0; $attempt < 2; $attempt++) {
-			$insert = $this->db->getQueryBuilder();
-			$insert->insert(self::TABLE_NAME)
-				->values([
-					'file_id' => $insert->createNamedParameter($fileId, IQueryBuilder::PARAM_INT),
-					'storage_id' => $insert->createNamedParameter($storageId, IQueryBuilder::PARAM_INT),
-					'root_id' => $insert->createNamedParameter($rootId, IQueryBuilder::PARAM_INT),
-					'is_update' => $insert->createNamedParameter($isUpdate, IQueryBuilder::PARAM_BOOL),
-					'size' => $insert->createNamedParameter($size, IQueryBuilder::PARAM_INT),
-					'locked_at' => $insert->createNamedParameter($this->freeMark(), IQueryBuilder::PARAM_DATE),
-				]);
-
-			try {
-				$insert->executeStatement();
+			$inserted = $this->db->insertIgnoreConflict(self::TABLE_NAME, [
+				'file_id' => $fileId,
+				'storage_id' => $storageId,
+				'root_id' => $rootId,
+				'is_update' => $isUpdate ? 1 : 0,
+				'size' => $size,
+				'locked_at' => $this->freeMark()->format('Y-m-d H:i:s'),
+			]);
+			if ($inserted > 0) {
 				return;
-			} catch (DbException $e) {
-				if ($e->getReason() !== DbException::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-					throw $e;
-				}
 			}
 
 			if ($this->refreshExisting($fileId, $size, $isUpdate)) {

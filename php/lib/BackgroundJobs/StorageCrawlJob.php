@@ -12,6 +12,7 @@ use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\IJobList;
 use OCP\BackgroundJob\QueuedJob;
 use OCP\IAppConfig;
+use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -57,6 +58,15 @@ class StorageCrawlJob extends QueuedJob {
 	 */
 	public const MAX_SIZE = 50 * 1024 * 1024;
 
+	/**
+	 * Writes per transaction. One commit per file made the commit the slice's
+	 * main cost on slow disks (perf audit H2: 2-6 s of pure commit time out of
+	 * a 30 s budget); one transaction for the whole slice of 2000 would block
+	 * the single writer of a SQLite instance for the entire slice. A band of a
+	 * few hundred is where neither end hurts.
+	 */
+	private const TX_BAND = 250;
+
 	public function __construct(
 		ITimeFactory $time,
 		private IJobList $jobList,
@@ -64,6 +74,7 @@ class StorageCrawlJob extends QueuedJob {
 		private QueueService $queueService,
 		private FileStateService $fileStateService,
 		private IAppConfig $appConfig,
+		private IDBConnection $db,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct($time);
@@ -86,37 +97,55 @@ class StorageCrawlJob extends QueuedJob {
 		$seen = 0;
 		$queued = 0;
 		$skipped = 0;
+		$band = 0;
 
-		foreach ($this->storageService->getFilesInMount($storageId, $overriddenRoot, $lastFileId, self::BATCH_SIZE) as $entry) {
-			// The cursor moves for every entry that was looked at, including
-			// the ones that were too large. Moving it only for queued files
-			// would hand the same oversized file to every following slice.
-			//
-			// This assignment is the PHP half of IDX-02. The cursor lives in
-			// the job argument and therefore in the Nextcloud database, which
-			// is the reason the container holds no crawl state at all: a
-			// docker kill in the middle of the first index costs the current
-			// slice and nothing else, because the last_file_id of the next
-			// slice was written before the container was ever involved.
-			$lastFileId = max($lastFileId, $entry->getId());
-			$seen++;
+		// The writes of a slice run in transaction bands rather than one commit
+		// per file, see TX_BAND. Nothing in the band throws for "already
+		// there", which is what makes this safe on PostgreSQL: a caught
+		// constraint violation inside an open transaction would abort the
+		// whole band over there.
+		$this->db->beginTransaction();
+		try {
+			foreach ($this->storageService->getFilesInMount($storageId, $overriddenRoot, $lastFileId, self::BATCH_SIZE) as $entry) {
+				// The cursor moves for every entry that was looked at, including
+				// the ones that were too large. Moving it only for queued files
+				// would hand the same oversized file to every following slice.
+				//
+				// This assignment is the PHP half of IDX-02. The cursor lives in
+				// the job argument and therefore in the Nextcloud database, which
+				// is the reason the container holds no crawl state at all: a
+				// docker kill in the middle of the first index costs the current
+				// slice and nothing else, because the last_file_id of the next
+				// slice was written before the container was ever involved.
+				$lastFileId = max($lastFileId, $entry->getId());
+				$seen++;
 
-			$size = $entry->getSize();
-			if ($size > self::MAX_SIZE) {
-				$this->fileStateService->record($entry->getId(), 'skipped', 'too_large');
-				$skipped++;
-				continue;
+				$size = $entry->getSize();
+				if ($size > self::MAX_SIZE) {
+					$this->fileStateService->record($entry->getId(), 'skipped', 'too_large');
+					$skipped++;
+				} else {
+					// Idempotent by the unique index on file_id: a file that ten
+					// users see is one row, and a second crawl of the same mount
+					// refreshes that row instead of duplicating it.
+					$this->queueService->enqueue($entry, $storageId, $rootId);
+					$queued++;
+				}
+
+				if (++$band >= self::TX_BAND) {
+					$this->db->commit();
+					$this->db->beginTransaction();
+					$band = 0;
+				}
+
+				if ($this->time->getTime() >= $deadline) {
+					break;
+				}
 			}
-
-			// Idempotent by the unique index on file_id: a file that ten users
-			// see is one row, and a second crawl of the same mount refreshes
-			// that row instead of duplicating it.
-			$this->queueService->enqueue($entry, $storageId, $rootId);
-			$queued++;
-
-			if ($this->time->getTime() >= $deadline) {
-				break;
-			}
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
 		}
 
 		$this->appConfig->setValueInt(Application::APP_ID, SchedulerJob::LAST_JOB_RUN, $this->time->getTime());
