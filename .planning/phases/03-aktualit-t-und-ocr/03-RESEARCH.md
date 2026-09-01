@@ -79,7 +79,7 @@ Für IDX-04 empfiehlt sich der Abgleich als **Container-Pull** über eine neue L
 | Share- und Unshare-Ereignisse aufnehmen | PHP-Companion | - | `OCP\Share\Events\*` existiert nur dort; Rechte bleiben grundsätzlich PHP-seitig (Out-of-Scope-Regel "kein zweites Rechtemodell in Python") |
 | Teilbaum-Auflösung bei Ordner-Operationen | PHP-Companion (QueuedJob) | - | Nur PHP hat `IFileAccess::getByAncestorInStorage`; der Container kennt keine Nextcloud-Dateiliste |
 | Arbeitsvorrat, Priorität, Idempotenz | PHP-Companion (`findling_queue`) | - | IDX-03 ist gesetzt: die Queue liegt in Nextcloud, der Container zieht. Eine zweite Queue im Container wäre die zweite Wahrheitsquelle, die das Projekt ausdrücklich vermeidet |
-| Nächtliche Terminierung / Slicing | PHP-Companion (TimedJob/QueuedJob) | Container (Ruhe-Gate) | Cron gehört Nextcloud; ob es ruhig genug ist, weiß der Container am besten (eigener OCR-Rückstau) |
+| Nächtliche Terminierung / Slicing | Container (asyncio-Task im ExApp-Prozess) | - | **Geändert bei der Planung, siehe Plan 03-12.** Ursprünglich war ein PHP-TimedJob (`ReconcileScheduleJob.php`) vorgesehen. Da der Abgleich ein Container-Pull ist, läge der Takt sonst in Nextcloud und der Cursor im Container, also zwei Orte für einen Lauf. Der Takt liegt deshalb dort, wo der Zustand liegt; das Ruhe-Gate ist ohnehin containerseitig |
 | ETag-Vergleich und Lösch-Erkennung | Container (state.db) | PHP (liefert Seiten der Dateiliste) | Die Menge "indexiert" liegt nur im Container; `findling_file_state` führt keine `indexed`-Zeilen |
 | Textlayer-Erkennung | Container, Sandbox-Kind | - | Braucht pypdfium2 am geöffneten Dokument, existiert bereits |
 | Rasterung und OCR | Container, Sandbox-Kind (tesseract als Enkel) | - | Nur dort gelten RLIMIT_AS, Deadline, setsid/killpg und die Nur-Lesen-Invariante |
@@ -259,7 +259,7 @@ php/lib/
 │   └── ShareEventListener.php       # Share/Unshare -> ACL-Jobs
 ├── BackgroundJobs/
 │   ├── SubtreeExpandJob.php         # Ordner-Operation in Baendern aufloesen
-│   └── ReconcileScheduleJob.php     # nur der naechtliche Takt, kein Vergleich
+│   (ReconcileScheduleJob.php entfaellt, siehe Plan 03-12: Takt im Container)
 ├── Controller/
 │   ├── QueueController.php          # + requeue()
 │   └── ReconcileController.php      # GET /files/slice, nur lesend
@@ -735,6 +735,8 @@ def _ocr_page(png: bytes, languages: str, seconds: float) -> str | None:
 
 ### Beispiel 5: Nächtlicher Takt, der auch ohne Wartungsfenster erträglich ist (PHP)
 
+> **Bei der Planung geändert, siehe Plan 03-12.** Dieses Beispiel bleibt als Referenz für das Wartungsfenster-Verhalten von Nextcloud stehen, wird aber nicht gebaut: Der Takt liegt im Container, damit Takt und Abgleich-Cursor nicht auf zwei Prozesse verteilt sind. Das Zusammenspiel mit `maintenance_window_start` gilt unverändert und wird containerseitig nachgebildet.
+
 ```php
 // php/lib/BackgroundJobs/ReconcileScheduleJob.php
 // Quelle: nextcloud/server@stable32 lib/public/BackgroundJob/TimedJob.php,
@@ -778,32 +780,39 @@ class ReconcileScheduleJob extends TimedJob {
 | A7 | Die Lizenzdateien der tesseract-Pakete liegen unter `/usr/share/doc/tesseract-ocr/copyright` und den Sprachpaket-Entsprechungen | Standard Stack | Der Bau bricht am `test -s`, was der gewollte Fehlerzeitpunkt ist |
 | A8 | Ein 24-Stunden-Gate plus Ruhe-Gate reicht als Ersatz für ein echtes Wartungsfenster | Pitfall 5 | Der Abgleich läuft zur Unzeit. Abgemildert durch die 30-Sekunden-Scheiben |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Alle fünf Fragen sind durch die Planung dieser Phase geschlossen. Je Frage steht unten, welcher Plan die Antwort verbindlich macht.
 
 1. **Wie viel Adressraum braucht tesseract wirklich?**
    - Was wir wissen: `RLIMIT_AS` ist 512 MB, wird vom Enkel geerbt, STACK.md schätzt die OCR-Spitze auf 300 bis 600 MB je Seite bei 300 dpi.
    - Was unklar ist: ob 512 MB virtueller Adressraum reichen; die Schätzung in STACK.md ist RSS, nicht VA, und `OMP_THREAD_LIMIT=1` verändert beides.
    - Empfehlung: erster Umsetzungsschritt der Phase ist ein Messlauf im Bau-Image über eine A4-Seite bei 300 dpi mit `ulimit -v 524288`. Das Ergebnis entscheidet, ob der OCR-Enkel ein eigenes, höheres Limit bekommt.
+   - **Geschlossen durch: Plan 03-05, Task 2** (Messlauf und Eintrag der gemessenen Deckel in docs/ocr.md).
 
 2. **Wird der Abgleich-Cursor container- oder Nextcloud-seitig geführt?**
    - Was wir wissen: IDX-02 verlangt Fortschritt in der Datenbank, der Crawl-Cursor liegt im Job-Argument in Nextcloud.
    - Was unklar ist: ob ein containerseitiger Abgleich-Cursor als Bruch dieser Regel gilt oder als zulässige Ausnahme (der Abgleich ist reine, idempotente Reparatur).
    - Empfehlung: containerseitig in `state.db`, mit einem ausdrücklichen Absatz im Modul-Docstring. Falls die Regel streng gelesen werden soll, kann der Cursor auch als Antwortfeld der Requeue-Route zurückgeschrieben werden, das ist eine Zeile mehr.
+   - **Geschlossen durch: Plan 03-11 und Plan 03-12** (Abgleich als Container-Pull, Cursor containerseitig, Begründung im Objective von 03-11).
 
 3. **Wird `_MIN_CHARS_PER_PAGE` in dieser Phase neu vermessen, und mit welchem Korpus?**
    - Was wir wissen: `pdf.py` fordert die Nachmessung ausdrücklich ein und nennt sie Annahme A2.
    - Was unklar ist: ob der DACH-Korpus früh genug fertig ist, um sie zu speisen.
    - Empfehlung: die Messung an den Korpusbau koppeln, nicht an die OCR-Umsetzung. Sonst wird die Zahl "später" nachgezogen und bleibt für immer bei 25.
+   - **Geschlossen durch: Plan 03-06, Task 2** (Nachmessung am neuen Korpus, gekoppelt an den Korpusbau).
 
 4. **Reicht `getFilesInMount` für die Abgleich-Seite, oder braucht sie einen eigenen Query?**
    - Was wir wissen: `getByAncestorInStorage` liefert `ICacheEntry` mit `getEtag()`, nach `file_id` sortiert, mit Mime-Filter in der Abfrage.
    - Was unklar ist: ob der Mime-Filter beim Abgleich stört. Eine Datei, deren Typ sich geändert hat, fällt dadurch aus der Seite und wird korrekt als gelöscht behandelt. Eine Datei, die auf der PHP-Seite erlaubt, auf der Python-Seite aber nicht erlaubt ist, würde dagegen jede Nacht einmal aufgeräumt und wieder eingereiht.
    - Empfehlung: Mime-Filter beibehalten und die beiden Allowlists in einem CI-Gate gegeneinander prüfen (siehe Pitfall 13). Das schließt den Fall aus, statt ihn zu behandeln.
+   - **Geschlossen durch: Plan 03-11, Task 1** (getFilesInMount bleibt die Quelle, Mime-Filter bleibt, Begründungskommentar in der Methode; das Allowlist-Gate liegt in Plan 03-10).
 
 5. **Wie wird "Events blockiert" im Abnahmetest hergestellt?**
    - Was wir wissen: Der Test steht wörtlich in Roadmap und CONTEXT.md.
    - Was unklar ist: der sauberste Weg. Kandidaten: eine Umgebungsvariable, die `register()` die Listener überspringen lässt (ehrlich, aber Testcode im Produktionspfad); die Datei per `occ files:scan` direkt in den Cache bringen (näher am echten Fall "Massenoperation ohne Events"); die App kurz deaktivieren und wieder aktivieren.
    - Empfehlung: `occ files:scan` beziehungsweise ein Schreibweg, der die App gar nicht erst geladen hat. Das prüft zusätzlich genau den Realfall, an dem fulltextsearch gescheitert ist.
+   - **Geschlossen durch: Plan 03-13, Task 2** (IDX-04-Abnahmetest im Integrationslauf, occ files:scan plus Nachweis, dass keine Queue-Zeile entstanden ist).
 
 ## Environment Availability
 
