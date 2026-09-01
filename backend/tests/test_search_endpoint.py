@@ -59,14 +59,14 @@ def test_a_candidate_carries_no_name_no_path_and_no_text(
     candidates = answer["candidates"]
     assert candidates, "the corpus matches this term, so this must not be empty"
     for candidate in candidates:
-        assert set(candidate) == {"fileId", "score", "mtime", "ext"}
+        assert set(candidate) == {"fileId", "score", "mtime"}
 
 
 def test_the_candidate_model_has_no_text_field() -> None:
     # The structural half of pitfall 5. A functional test cannot see this: the
     # result the user finally gets is filtered further down the line and looks
     # correct whether or not the model carries a text field.
-    assert set(Candidate.model_fields) == {"fileId", "score", "mtime", "ext"}
+    assert set(Candidate.model_fields) == {"fileId", "score", "mtime"}
 
 
 def test_the_answer_carries_the_page_marks(

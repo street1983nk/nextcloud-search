@@ -23,12 +23,12 @@ search is neither of them, it is the two proxy round trips and the recheck.
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Final, Protocol
+from typing import Protocol
 
 from tantivy import Document, Index, Query, SearchResult, SnippetGenerator
 
 from findling.config import settings
-from findling.index.schema import FIELD_BODY_DE, FIELD_EXT, FIELD_FILE_ID, FIELD_MTIME
+from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_MTIME
 from findling.store.repo import Store
 
 LOGGER = logging.getLogger("findling.index.search")
@@ -38,27 +38,27 @@ LOGGER = logging.getLogger("findling.index.search")
 # users mostly see what lies in their own mounts, but the case exists. The answer
 # to it is the bounded repeat on the PHP side, never a larger first request: a
 # larger request pays the full ranking cost for hits nobody is allowed to see.
-_UNKNOWN_EXTENSION: Final = ""
 
 
 @dataclass(frozen=True, slots=True)
 class Candidate:
     """One hit before the permission check, and deliberately nothing more.
 
-    Four values, and the three that are missing are the point. No file name, no
-    location, no text: before the recheck has run, nothing may leave this process
-    that tells a user anything about a document they might not be allowed to see.
+    Three values, and everything that is missing is the point. No file name, no
+    location, no text, not even the extension: before the recheck has run,
+    nothing may leave this process that tells a user anything about a document
+    they might not be allowed to see.
 
     There is a second reason for the file name in particular. The PHP side
     resolves every surviving id into a node of the user's own folder anyway, and
-    that node carries the current name. A name from the index would be the older
-    of the two.
+    that node carries the current name, location and extension. A value from the
+    index would be the older of the two, which is why ``ext`` lives only inside
+    the index for the ``type:`` filter and never rides along here.
     """
 
     file_id: int
     score: float
     mtime: int
-    ext: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,15 +87,6 @@ def _hits_in_total(result: SearchResult) -> int:
     return result.count  # pyright: ignore[reportAttributeAccessIssue]
 
 
-def _stored_int(value: object) -> int:
-    """Read a stored number back, and answer 0 when the field is absent.
-
-    The document store hands values back as ``Any``. A missing modification time
-    is a display detail, so it degrades to zero rather than ending the search.
-    """
-    return int(value) if isinstance(value, int | float | str) else 0
-
-
 def candidates(
     index: Index,
     store: Store,
@@ -115,34 +106,34 @@ def candidates(
     # decides whether asking again could produce anything, and nothing else.
     result = searcher.search(query, limit, count=True, offset=offset)
 
-    ranked: list[tuple[int, float, int, str]] = []
-    for score, address in result.hits:
-        document = searcher.doc(address)
-        file_id = document.get_first(FIELD_FILE_ID)
+    # The columns, never the document store. searcher.doc() hands back the whole
+    # stored document including the full text, and that read was 99.9% of the
+    # candidate round: measured 20.5 ms per hit at the 512k cap against 0.02 ms
+    # for the two fast-field columns, independent of document size.
+    addresses = [address for _, address in result.hits]
+    file_ids = searcher.fast_field_values(FIELD_FILE_ID, addresses)
+    mtimes = searcher.fast_field_values(FIELD_MTIME, addresses)
+
+    ranked: list[tuple[int, float, int]] = []
+    for (score, _), file_id, mtime in zip(result.hits, file_ids, mtimes, strict=True):
         if file_id is None:
             # A hit without the key cannot be rechecked and cannot be resolved
             # into a node, so it is not a result. Skipped rather than raised: one
             # damaged document must not take the whole search down with it.
             LOGGER.warning("skipping a hit without a file id")
             continue
-        extension = document.get_first(FIELD_EXT)
-        ranked.append(
-            (
-                int(file_id),
-                float(score),
-                _stored_int(document.get_first(FIELD_MTIME)),
-                extension if isinstance(extension, str) else _UNKNOWN_EXTENSION,
-            )
-        )
+        # A missing modification time is a display detail, so it degrades to
+        # zero rather than ending the search.
+        ranked.append((int(file_id), float(score), int(mtime) if mtime is not None else 0))
 
     # From the candidates to the permissions, never the other way round. Building
     # the list of everything a user may see is the inverse question, and its cost
     # grows with the instance instead of with the query.
-    visible = store.prefilter_visible(uid, [file_id for file_id, _, _, _ in ranked])
+    visible = store.prefilter_visible(uid, [file_id for file_id, _, _ in ranked])
 
     permitted = [
-        Candidate(file_id=file_id, score=score, mtime=mtime, ext=extension)
-        for file_id, score, mtime, extension in ranked
+        Candidate(file_id=file_id, score=score, mtime=mtime)
+        for file_id, score, mtime in ranked
         if file_id in visible
     ]
     seen = offset + len(result.hits)

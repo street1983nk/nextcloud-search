@@ -113,7 +113,7 @@ def test_a_candidate_carries_no_name_no_path_and_no_text(index: Index, store: St
 
     names = {field.name for field in dataclasses.fields(page.candidates[0])}
 
-    assert names == {"file_id", "score", "mtime", "ext"}
+    assert names == {"file_id", "score", "mtime"}
 
 
 def test_the_candidate_model_cannot_grow_a_text_field_by_accident() -> None:
@@ -183,10 +183,9 @@ def test_a_query_without_hits_is_not_an_error(index: Index, store: Store) -> Non
     assert page.next_offset == 0
 
 
-def test_every_candidate_carries_its_extension_and_modification_time(index: Index, store: Store) -> None:
+def test_every_candidate_carries_its_modification_time(index: Index, store: Store) -> None:
     page = candidates(index, store, ALICE, _query(index), limit=DOCUMENTS)
 
     for candidate in page.candidates:
-        assert candidate.ext == "pdf"
         assert candidate.mtime == 1_700_000_000 + candidate.file_id
         assert candidate.score > 0.0

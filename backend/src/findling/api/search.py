@@ -93,16 +93,18 @@ class SearchRequest(BaseModel):
 
 
 class Candidate(BaseModel):
-    """One hit before the permission recheck: four values, and no fifth.
+    """One hit before the permission recheck: three values, and no fourth.
 
-    The three that are missing are the point, and a test asserts the field names
-    as a set because their absence is invisible in every functional test.
+    Everything that is missing is the point, and a test asserts the field names
+    as a set because their absence is invisible in every functional test. The
+    extension left with the perf audit of the phase: the PHP side resolves every
+    surviving id into a node that knows its current name and extension anyway,
+    so the field carried stale data at the cost of a document-store read.
     """
 
     fileId: int
     score: float = 0.0
     mtime: int = 0
-    ext: str = ""
 
 
 class CanaryCandidate(Candidate):
@@ -162,7 +164,6 @@ def build_canary_hits(user_id: str) -> list[CanaryCandidate]:
             fileId=0,
             score=0.0,
             mtime=int(produced_at.timestamp()),
-            ext="",
             title=CANARY_TITLE,
             snippet=text,
         )
@@ -201,7 +202,7 @@ def one_round(uid: str, text: str, limit: int, offset: int, title_only: bool) ->
         return _Round([], False, offset, True)
 
     return _Round(
-        [Candidate(fileId=hit.file_id, score=hit.score, mtime=hit.mtime, ext=hit.ext) for hit in page.candidates],
+        [Candidate(fileId=hit.file_id, score=hit.score, mtime=hit.mtime) for hit in page.candidates],
         page.has_more,
         page.next_offset,
         is_degraded,
