@@ -30,7 +30,9 @@ from __future__ import annotations
 
 import asyncio
 import re
+import shutil
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Any, cast
 
@@ -40,7 +42,9 @@ from tantivy import Index
 
 from conftest import write_wordlist
 from findling.config import settings
+from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
+from findling.extract.errors import ExtractionOutcome, Reason
 from findling.index.open import expected_versions, open_index
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
 from findling.index.writer import IndexBatchWriter
@@ -73,6 +77,22 @@ BODY_BYTES = BODY.encode("utf-8")
 # skipped(no_text_layer), is produced by the real extractor and a hand written
 # stand-in would only prove that the stand-in says so.
 SCAN_BYTES = (Path(__file__).resolve().parents[2] / "testdata" / "corpus" / "02-scan-no-text-layer.pdf").read_bytes()
+
+CORPUS = Path(__file__).resolve().parents[2] / "testdata" / "corpus"
+
+# Three A4 pages of council prose that exist only as pixels. Bebauungsplan stands
+# in no other file of the corpus and in none of them as text, so a search that
+# finds this document through that word found it because OCR read the pixels.
+COUNCIL_SCAN_BYTES = (CORPUS / "13-ratsvorlage-scan.pdf").read_bytes()
+COUNCIL_SCAN_TERM = "Bebauungsplan"
+
+# The counterpart, a PDF that carries its text as text (D-06).
+TEXT_LAYER_BYTES = (CORPUS / "01-text-layer.pdf").read_bytes()
+
+needs_engine = pytest.mark.skipif(
+    shutil.which("tesseract") is None,
+    reason="no tesseract on this machine; the container runs this test for real",
+)
 
 # The same file after a rename. Neither word occurs in the body, so a search that
 # finds the document under this name found it through FIELD_NAME and nothing else.
@@ -221,6 +241,41 @@ def store(tmp_path: Path) -> Iterator[Store]:
     opened.close()
 
 
+@dataclass(slots=True)
+class _Extractor:
+    """The guarded extractor, replaced by one that writes down how it was called.
+
+    With ``outcome`` unset it hands the file to the real dispatcher, which is what
+    keeps the verdicts, the reasons and the character cap the real ones. With an
+    outcome set it answers that instead, which is the only way to reach a verdict
+    of the OCR route on a machine without an engine.
+
+    The recorded ``route`` and ``timeout_seconds`` are the subject of two tests on
+    their own: a job that quietly took the text route with the short deadline
+    would produce exactly the same index as one that did neither.
+    """
+
+    outcome: ExtractionOutcome | None = None
+    error: BaseException | None = None
+    calls: list[dict[str, Any]] = field(default_factory=list)
+
+    def __call__(
+        self,
+        path: str,
+        mime: str,
+        size: int,
+        *,
+        route: Route | None = None,
+        timeout_seconds: float | None = None,
+    ) -> ExtractionOutcome:
+        self.calls.append({"path": path, "mime": mime, "size": size, "route": route, "timeout": timeout_seconds})
+        if self.error is not None:
+            raise self.error
+        if self.outcome is not None:
+            return self.outcome
+        return dispatch_extract(path, mime, size, route)
+
+
 def _poller(
     *,
     store: Store,
@@ -230,6 +285,7 @@ def _poller(
     bodies: dict[int, bytes | BaseException | None] | None = None,
     clients: list[object] | None = None,
     fetched: list[int] | None = None,
+    extract: _Extractor | None = None,
 ) -> Poller:
     """Wire a poller to fakes, counting client creations when asked to."""
 
@@ -247,7 +303,7 @@ def _poller(
         gateway_factory=lambda: cast("Any", _FakeGatewayClient()),
         queue_factory=lambda nc: cast("Any", queue),
         fetch=_gateway(bodies or {}, fetched),
-        extract=dispatch_extract,
+        extract=_Extractor() if extract is None else extract,
     )
 
 
@@ -500,6 +556,203 @@ async def test_the_handover_happens_after_the_commit_and_before_the_acknowledgem
     await poller.run_once()
 
     assert events == ["commit", "record", "requeue", "acknowledge"]
+
+
+def _ocr_job(size: int) -> QueueJob:
+    """The row that comes back from the requeue, now on the second track."""
+    return _job(
+        mime="application/pdf",
+        size=size,
+        kind="ocr",
+        title="Ratsvorlage.pdf",
+        path="Rat/Ratsvorlage.pdf",
+    )
+
+
+async def test_an_ocr_job_runs_the_ocr_route_with_the_long_deadline(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path
+) -> None:
+    # The three differences to the content branch, in one assertion each: the
+    # bytes are fetched, the route is forced rather than derived from the
+    # mimetype, and the deadline is the hard one of docs/ocr.md and not the 120 s
+    # of a text job. A run that quietly took the text route would build exactly
+    # the same index (T-03-902).
+    queue = _FakeQueue(ClaimResult(jobs=(_ocr_job(len(SCAN_BYTES)),)))
+    engine = _Extractor(outcome=ExtractionOutcome.indexed(BODY))
+    fetched: list[int] = []
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        bodies={4711: SCAN_BYTES},
+        fetched=fetched,
+        extract=engine,
+    )
+
+    result = await poller.run_once()
+
+    assert fetched == [4711]
+    assert len(engine.calls) == 1
+    assert engine.calls[0]["route"] is Route.OCR
+    assert engine.calls[0]["timeout"] == float(settings().ocr_hard_deadline_seconds)
+    assert engine.calls[0]["timeout"] > float(settings().ocr_job_seconds)
+    assert result.indexed == 1
+    assert _documents(index) == 1
+    # An OCR job is the end of the line: handing it over again is the loop that
+    # T-03-704 closes from the other side.
+    assert queue.requeues == []
+    assert queue.acknowledged == [([91], {})]
+
+
+@needs_engine
+async def test_scanned_pdf_is_findable_after_ocr(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path
+) -> None:
+    # The second acceptance criterion of the whole phase, end to end through the
+    # pass: a word that exists in exactly one corpus file and there only as
+    # pixels is searchable afterwards, without an admin having configured OCR.
+    queue = _FakeQueue(ClaimResult(jobs=(_ocr_job(len(COUNCIL_SCAN_BYTES)),)))
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: COUNCIL_SCAN_BYTES}
+    )
+
+    result = await poller.run_once()
+
+    assert result.indexed == 1
+    index.reload()
+    searcher = index.searcher()
+    hits = searcher.search(index.parse_query(COUNCIL_SCAN_TERM, [FIELD_BODY_DE]), 10).hits
+    assert [int(searcher.doc(address)[FIELD_FILE_ID][0]) for _, address in hits] == [4711]
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["ocr_used"]) == ("indexed", 1)
+
+
+async def test_ocr_used_is_recorded_even_when_the_scan_carried_no_text(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The flag says that the time was spent, not that it paid off. Without it
+    # phase 4 cannot tell a document nobody looked at from one that went through
+    # the engine and came back empty.
+    queue = _FakeQueue(ClaimResult(jobs=(_ocr_job(len(SCAN_BYTES)),)))
+    engine = _Extractor(outcome=ExtractionOutcome.skipped(Reason.EMPTY_TEXT))
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES}, extract=engine
+    )
+
+    result = await poller.run_once()
+
+    assert result.skipped == 1
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "empty_text")
+    assert row["ocr_used"] == 1
+
+
+async def test_a_text_job_leaves_ocr_used_alone(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # The other half of the flag: it is written by the OCR branch and by nothing
+    # else, so a plain text file never claims that an engine ran over it.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+
+    row = store.file_row(4711)
+    assert row is not None
+    assert row["ocr_used"] == 0
+
+
+async def test_the_etag_of_the_job_reaches_the_state_row(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # Empty since phase 2 and written here for the first time. Without it the
+    # reconcile of plan 03-12 has nothing to compare and would have to fetch every
+    # file to find out that none of them changed.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+
+    row = store.file_row(4711)
+    assert row is not None
+    assert row["etag"] == "5d41402abc4b2a76b9719d911017c592"
+
+
+async def test_a_document_with_a_text_layer_never_reaches_the_ocr_route(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # D-06 through the poller. The decision falls in pdf.py with the measured
+    # threshold, and this plan must not undo it by running OCR in addition: a
+    # text PDF that is rasterised anyway costs up to 600 seconds of CPU for text
+    # that was already there (T-03-906).
+    queue = _FakeQueue(ClaimResult(jobs=(_job(mime="application/pdf", size=len(TEXT_LAYER_BYTES)),)))
+    engine = _Extractor()
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: TEXT_LAYER_BYTES}, extract=engine
+    )
+
+    result = await poller.run_once()
+
+    assert result.indexed == 1
+    assert [call["route"] for call in engine.calls] == [None]
+    assert queue.requeues == []
+
+
+async def test_the_scratch_file_is_gone_after_a_failing_ocr_run(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The scratch file holds user content. Leaving one behind is a disclosure,
+    # and leaving one behind per job fills the volume (T-03-905). The error path
+    # is where that cleanup is forgotten, so the error path is what is asserted.
+    queue = _FakeQueue(ClaimResult(jobs=(_ocr_job(len(SCAN_BYTES)),)))
+    engine = _Extractor(error=RuntimeError("the engine went up in smoke"))
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES}, extract=engine
+    )
+
+    with pytest.raises(RuntimeError):
+        await poller.run_once()
+
+    assert list((tmp_path / "tmp").glob("*.part")) == []
+
+
+async def test_an_ocr_job_keeps_the_order_commit_then_state_then_acknowledge(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The order of the module docstring is not a property of the content branch,
+    # it is a property of the pass. A second branch that wrote its verdict before
+    # the commit would lose documents in exactly the same silent way.
+    events: list[str] = []
+    queue = _FakeQueue(ClaimResult(jobs=(_ocr_job(len(SCAN_BYTES)),)))
+    engine = _Extractor(outcome=ExtractionOutcome.indexed(BODY))
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES}, extract=engine
+    )
+
+    real_flush = writer.flush
+    real_record = store.record
+    real_acknowledge = queue.acknowledge
+
+    def flush() -> Any:
+        events.append("commit")
+        return real_flush()
+
+    def record(*args: Any, **kwargs: Any) -> None:
+        events.append("record")
+        real_record(*args, **kwargs)
+
+    async def acknowledge(*args: Any, **kwargs: Any) -> CallResult:
+        events.append("acknowledge")
+        return await real_acknowledge(*args, **kwargs)
+
+    monkeypatch.setattr(writer, "flush", flush)
+    monkeypatch.setattr(store, "record", record)
+    monkeypatch.setattr(queue, "acknowledge", acknowledge)
+
+    await poller.run_once()
+
+    assert events == ["commit", "record", "acknowledge"]
 
 
 async def test_a_gateway_error_aborts_the_batch_and_acknowledges_nothing(
