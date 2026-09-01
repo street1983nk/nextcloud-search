@@ -181,9 +181,7 @@ def test_every_kill_goes_through_the_group_kill() -> None:
     # kill() would orphan a hung grandchild that keeps the worker slot (audit
     # L3). The single bare kill() is the fallback inside _kill_child_tree.
     code = [
-        line
-        for line in SANDBOX_SOURCE.read_text(encoding="utf-8").splitlines()
-        if not line.lstrip().startswith("#")
+        line for line in SANDBOX_SOURCE.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
     ]
 
     assert sum("process.kill()" in line for line in code) == 1
