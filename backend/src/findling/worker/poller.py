@@ -77,7 +77,7 @@ from findling.nc.client import (
     fetch_file_stream,
     new_gateway_client,
 )
-from findling.nc.queue import KIND_ACL, KIND_DELETE, KIND_METADATA, DocumentQueue, QueueJob
+from findling.nc.queue import KIND_ACL, KIND_DELETE, KIND_METADATA, KIND_OCR, DocumentQueue, QueueJob
 from findling.store.repo import FileMeta, Store, open_store
 
 LOGGER = logging.getLogger("findling.worker.poller")
@@ -133,6 +133,10 @@ class RoundResult:
     failed: int = 0
     unchanged: int = 0
     acknowledged: int = 0
+    # Rows this pass moved to the OCR track instead of finishing them. Counted
+    # separately from skipped because they are the opposite of an end state: the
+    # text track is done with them and the second track has not started.
+    requeued: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,6 +268,7 @@ class Poller:
         self._queue_factory = queue_factory
         self._fetch = fetch
         self._extract = extract
+        self._ocr_enabled = resolved.ocr_enabled
         self._batch_files = resolved.batch_files if batch_files is None else batch_files
         self._batch_max_bytes = resolved.batch_max_bytes if batch_max_bytes is None else batch_max_bytes
         self._cooldown_start = float(resolved.poll_cooldown_start_seconds if cooldown_start is None else cooldown_start)
@@ -368,6 +373,9 @@ class Poller:
         done: list[int] = []
         failed: dict[int, str] = {}
         verdicts: list[_Verdict] = []
+        # File ids, not queue ids: the requeue is about the file, and the row it
+        # belongs to may not even exist for the caller that comes in plan 03-12.
+        handover: list[int] = []
         unchanged = 0
 
         # 1. Per file: judge, read the bytes into scratch, extract, hand over to
@@ -375,7 +383,7 @@ class Poller:
         #    still locked in Nextcloud and run in again after the lock timeout.
         for job in claim.jobs:
             try:
-                counted = await self._handle(job, done, failed, verdicts)
+                counted = await self._handle(job, done, failed, verdicts, handover)
             except _GatewayDown:
                 # The gateway says nothing about the file, so no verdict may be
                 # written for any of them. Give the whole batch back and wait.
@@ -396,6 +404,14 @@ class Poller:
         #    repeats the work instead of acknowledging a half written state.
         await asyncio.to_thread(self._record_verdicts, verdicts)
 
+        # 3b. The handover to the OCR track, after the commit and before the
+        #     acknowledgement. An abort right here costs one repeated text layer
+        #     check and nothing else: the rows were not acknowledged, so they come
+        #     back after the lock timeout and are handed over again. The reverse
+        #     order would delete the row in the same pass in which the requeue put
+        #     work on it, and the scan would never be read.
+        requeued = await self._hand_over(queue, handover)
+
         # 4. The acknowledgement, the last step by construction. Everything it
         #    reports is already durable, so losing it costs one repetition and
         #    never a document.
@@ -406,12 +422,13 @@ class Poller:
         indexed = sum(1 for verdict in verdicts if verdict.outcome.state is State.INDEXED)
         skipped = sum(1 for verdict in verdicts if verdict.outcome.state is State.SKIPPED)
         LOGGER.info(
-            "pass finished, claimed=%d indexed=%d skipped=%d failed=%d unchanged=%d committed=%d",
+            "pass finished, claimed=%d indexed=%d skipped=%d failed=%d unchanged=%d requeued=%d committed=%d",
             len(claim.jobs),
             indexed,
             skipped,
             len(failed),
             unchanged,
+            requeued,
             flush.documents,
         )
         return RoundResult(
@@ -422,6 +439,7 @@ class Poller:
             failed=len(failed),
             unchanged=unchanged,
             acknowledged=ack.count,
+            requeued=requeued,
         )
 
     # -- one file --------------------------------------------------------
@@ -432,6 +450,7 @@ class Poller:
         done: list[int],
         failed: dict[int, str],
         verdicts: list[_Verdict],
+        handover: list[int],
     ) -> int:
         """Take one job as far as the writer. Returns 1 when it needed no work."""
         # The kind=delete branch, and it stands before everything because a
@@ -515,8 +534,58 @@ class Poller:
 
         if outcome.state is State.INDEXED:
             await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
-        self._collect(job, outcome, done, failed, verdicts, read.content_hash)
+        hand_over = await self._goes_to_the_ocr_track(job, outcome, read.content_hash)
+        if hand_over:
+            handover.append(job.file_id)
+        self._collect(job, outcome, done, failed, verdicts, read.content_hash, hand_over=hand_over)
         return 0
+
+    async def _goes_to_the_ocr_track(self, job: QueueJob, outcome: ExtractionOutcome, content_hash: str) -> bool:
+        """True when this verdict becomes an OCR job instead of an end state.
+
+        ``skipped(no_text_layer)`` is the handover point phase 2 prepared: the
+        page carries pixels and no text, so the text track is done and the second
+        track has to read it (D-07). Without this the scanned half of a typical
+        administration is skipped for good, which is exactly what this phase was
+        started over.
+
+        **With OCR switched off nothing changes.** An instance whose admin set
+        ``FINDLING_OCR_ENABLED=false`` gets the honest verdict rather than rows
+        that wait forever for a track that does not exist there.
+
+        **The same bytes are handed over once.** The requeued row comes back as
+        an ocr job, and until the OCR route is wired it runs the content route
+        again and produces the same verdict again. Handing it over once more
+        every pass, with the attempt counter reset every time, is an endless loop
+        (T-03-704), and the stored verdict of the earlier pass is what ends it.
+        The content hash is part of the question, so a file that was replaced in
+        the meantime is a different file and is handed over again.
+        """
+        if outcome.state is not State.SKIPPED or outcome.reason is not Reason.NO_TEXT_LAYER:
+            return False
+        if not self._ocr_enabled:
+            return False
+
+        row = await asyncio.to_thread(self._store_or_die().file_row, job.file_id)
+        if row is None or row["content_hash"] != content_hash:
+            return True
+        return not (row["state"] == str(State.SKIPPED) and row["reason"] == str(Reason.NO_TEXT_LAYER))
+
+    async def _hand_over(self, queue: DocumentQueue, file_ids: Sequence[int]) -> int:
+        """Move the rows of this pass to the OCR track, and count what moved.
+
+        A failure is a number and never an exception: the rows stay claimed, run
+        into the lock timeout and are handed over by a later pass. The pass
+        itself has to finish, because index and verdicts are already durable.
+        """
+        if not file_ids:
+            return 0
+
+        result = await queue.requeue(file_ids, kind=KIND_OCR)
+        if not result.ok:
+            LOGGER.warning("could not move %d files to the OCR track, they run into the lock timeout", len(file_ids))
+            return 0
+        return result.count
 
     async def _forget(self, job: QueueJob, done: list[int]) -> None:
         """Take one file out of the index, out of the prefilter and mark it gone.
@@ -669,6 +738,8 @@ class Poller:
         failed: dict[int, str],
         verdicts: list[_Verdict],
         content_hash: str | None = None,
+        *,
+        hand_over: bool = False,
     ) -> None:
         """Sort one verdict into the two lists the acknowledgement carries.
 
@@ -676,10 +747,19 @@ class Poller:
         error list of the status page live on the Nextcloud side, where an admin
         can still read them while the container is down. ``skipped`` is a decision
         this container made and needs no second home.
+
+        ``hand_over`` is the one verdict that ends in neither list. Acknowledging
+        is deleting, so a row that travels in ``done`` and in the requeue at once
+        would be gone from the queue in the same pass in which it was put on the
+        OCR track. The verdict is still recorded, because it is the truth about
+        the text track and because the next pass reads it to see that this file
+        has been handed over already.
         """
         verdicts.append(_Verdict(job=job, outcome=outcome, content_hash=content_hash))
         if outcome.state is State.FAILED and outcome.reason is not None:
             failed[job.queue_id] = str(outcome.reason)
+            return
+        if hand_over:
             return
         done.append(job.queue_id)
 

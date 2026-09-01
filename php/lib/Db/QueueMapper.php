@@ -428,6 +428,118 @@ class QueueMapper extends QBMapper {
 	}
 
 	/**
+	 * Put rows on another kind of job, and create the ones that are not there.
+	 *
+	 * This is the one path that may raise a row from content to ocr, and the
+	 * reason the merge rule of refreshExisting may not: a scanned PDF is only
+	 * recognised as one after the container looked for a text layer, and an
+	 * ordinary write to that file must never throw the row back to content
+	 * afterwards. KIND_RANK gives content and ocr the same rank for exactly that
+	 * reason, so this method is the only way across.
+	 *
+	 * Three properties carry it.
+	 *
+	 * The attempt counter goes back to zero. Handing a row out counts as an
+	 * attempt, so a row arriving here has already spent one, and the OCR track
+	 * would start with a used try. Three of them end a row as
+	 * failed(repeatedly_stuck), and it would end exactly the large scans, which
+	 * are the files this whole track exists for (phase research, pitfall 11).
+	 *
+	 * A file without a row gets one. The reconcile of plan 03-12 finds files that
+	 * were never queued at all, and a requeue that could only touch existing rows
+	 * would leave it without a way to schedule them.
+	 *
+	 * A deletion is not undone. delete is the absorbing element of KIND_RANK
+	 * because a file that is gone has nothing left to extract, and a requeue that
+	 * overwrote it would leave the document in the index for good, which is the
+	 * defect class of pitfall 3. The kind is therefore both filtered here and
+	 * excluded in the WHERE clause, the second one for the row that becomes a
+	 * deletion between the two statements.
+	 *
+	 * The rows that are there are read before they are written, rather than
+	 * trusting the number of affected rows: MySQL reports changed rows and not
+	 * matched ones, so a row that already carries the kind and a zero counter
+	 * would look absent and the answer would be short of the truth.
+	 *
+	 * @param int[] $fileIds
+	 * @return int rows that carry the requested kind because of this call
+	 */
+	public function requeueAs(array $fileIds, string $kind): int {
+		if ($fileIds === []) {
+			return 0;
+		}
+
+		$requeued = 0;
+		foreach (array_chunk(array_values(array_unique($fileIds)), self::DELETE_BAND) as $band) {
+			$present = $this->kindsByFileId($band);
+			$switchable = array_keys(array_filter(
+				$present,
+				static fn (string $kindOfRow): bool => $kindOfRow !== self::KIND_DELETE,
+			));
+
+			if ($switchable !== []) {
+				$switch = $this->db->getQueryBuilder();
+				$switch->update(self::TABLE_NAME)
+					->set('kind', $switch->createNamedParameter($kind))
+					// Pitfall 11 in one line: without this the OCR track starts
+					// with a used attempt and the third one gives up on the very
+					// scans it was built for.
+					->set('retries', $switch->createNamedParameter(0, IQueryBuilder::PARAM_INT))
+					// The claim is released as well, so the row is collectable at
+					// once instead of after the lock timeout of its old kind.
+					->set('locked_at', $switch->createNamedParameter($this->freeMark(), IQueryBuilder::PARAM_DATE))
+					->where($switch->expr()->in('file_id', $switch->createNamedParameter($switchable, IQueryBuilder::PARAM_INT_ARRAY)))
+					->andWhere($switch->expr()->neq('kind', $switch->createNamedParameter(self::KIND_DELETE)));
+				$switch->executeStatement();
+				$requeued += count($switchable);
+			}
+
+			foreach (array_diff($band, array_keys($present)) as $fileId) {
+				// storage and root are zero, and the caller of this route knows
+				// no better: it hands over file ids and a kind. Everything the
+				// container sees about the file is resolved from the node at
+				// claim time; these two fields are the exception, they come from
+				// the row. Plan 03-12 is the only caller that creates rows, and
+				// if it needs them it has to widen this signature rather than
+				// letting a zero travel.
+				$requeued += $this->db->insertIgnoreConflict(self::TABLE_NAME, [
+					'file_id' => $fileId,
+					'storage_id' => 0,
+					'root_id' => 0,
+					'is_update' => 0,
+					'size' => 0,
+					'kind' => $kind,
+					'locked_at' => $this->freeMark()->format('Y-m-d H:i:s'),
+				]);
+			}
+		}
+
+		return $requeued;
+	}
+
+	/**
+	 * The kind of every row of this band that exists, keyed by file id.
+	 *
+	 * @param int[] $band
+	 * @return array<int, string>
+	 */
+	private function kindsByFileId(array $band): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('file_id', 'kind')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->in('file_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
+
+		$kinds = [];
+		$result = $qb->executeQuery();
+		while (($row = $result->fetch()) !== false) {
+			$kinds[(int)$row['file_id']] = is_string($row['kind'] ?? null) ? $row['kind'] : self::KIND_CONTENT;
+		}
+		$result->closeCursor();
+
+		return $kinds;
+	}
+
+	/**
 	 * Give rows back without processing them. This is the graceful restart: a
 	 * container that is asked to stop returns what it holds instead of letting
 	 * LOCK_TIMEOUT run out.

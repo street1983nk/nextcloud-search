@@ -19,11 +19,11 @@ Consequently the writing entry points of ``nc_py_api.files`` and the
 impersonation entry point of ``AsyncNextcloudApp`` are deliberately absent from
 the re-export list: a caller cannot reach what the boundary does not hand out.
 
-Since plan 02-10 this module holds the one writing channel the container has: two
-of the four queue calls at the bottom of the file acknowledge and release rows of
-the work stock. They reach the two database tables the companion app owns and
-nothing else, and the gate carries them as a named, tested exception rather than
-as a general permission to write.
+Since plan 02-10 this module holds the one writing channel the container has:
+three of the five queue calls at the bottom of the file acknowledge rows, release
+them and move them to the OCR track. They reach the two database tables the
+companion app owns and nothing else, and the gate carries them as named, tested
+exceptions rather than as a general permission to write.
 """
 
 import asyncio
@@ -56,6 +56,7 @@ __all__ = [
     "gateway_url",
     "new_gateway_client",
     "queue_stats",
+    "requeue_documents",
     "run_app",
     "set_handlers",
     "unlock_documents",
@@ -269,11 +270,11 @@ async def fetch_file_stream(
 
 
 # ---------------------------------------------------------------------------
-# The work queue: take work, acknowledge it, hand it back, count it.
+# The work queue: take work, acknowledge it, hand it back, move it, count it.
 # ---------------------------------------------------------------------------
 #
-# Two properties of the four functions below are load bearing and neither of them
-# is obvious from the code, so both are stated here once instead of four times.
+# Two properties of the five functions below are load bearing and neither of them
+# is obvious from the code, so both are stated here once instead of five times.
 #
 # **The client is an argument and is never built here.** ``AsyncNextcloudApp``
 # owns a connection pool, and the pool is the point: an initial index walks a
@@ -286,11 +287,11 @@ async def fetch_file_stream(
 # **The path is a string literal inside the call, and it has to stay one.** The
 # read-only gate (``tests/test_readonly_gate.py``) reads the path as an
 # ``ast.Constant`` at the call site and compares it against its allowlist. Lifting
-# these four paths into module constants would look tidier and would leave the
-# gate with "an unknown path": a violation for the two writing calls, and a blind
-# spot for all four. The duplication is deliberate and a test pins it.
+# these five paths into module constants would look tidier and would leave the
+# gate with "an unknown path": a violation for the three writing calls, and a
+# blind spot for all five. The duplication is deliberate and a test pins it.
 #
-# The two writing calls are the only writes this container performs against
+# The three writing calls are the only writes this container performs against
 # Nextcloud. They reach the two database tables the companion app owns and have no
 # code path into the file system; the reasoning and the threat ids sit at
 # OCS_WRITE_ALLOWLIST in the gate.
@@ -350,6 +351,29 @@ async def unlock_documents(nc: AsyncNextcloudApp, *, ids: Sequence[int]) -> obje
         "POST",
         "/ocs/v2.php/apps/findling/queues/documents/unlock",
         json={"ids": list(ids)},
+    )
+
+
+async def requeue_documents(nc: AsyncNextcloudApp, *, file_ids: Sequence[int], kind: str) -> object:
+    """Put rows of the work stock on another kind of job, or create them.
+
+    The second track of the first index (D-07). A PDF the text extraction found
+    no text layer in is not finished, it is an OCR job, and this call is what
+    turns the finding back into work. The answer carries the number of rows that
+    now hold the requested kind.
+
+    The ids are file ids and not queue row ids, because that is what the two
+    callers know: the worker knows the file it just looked into, and the
+    reconcile of plan 03-12 finds files that have no queue row at all.
+
+    This is the third and last write of the container. Like the other two it
+    reaches the tables of the companion app and nothing else; the reasoning and
+    the threat ids sit at OCS_WRITE_ALLOWLIST in the gate.
+    """
+    return await nc._session.ocs(
+        "POST",
+        "/ocs/v2.php/apps/findling/queues/documents/requeue",
+        json={"fileIds": list(file_ids), "kind": kind},
     )
 
 

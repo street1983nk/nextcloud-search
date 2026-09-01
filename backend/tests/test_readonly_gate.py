@@ -10,8 +10,9 @@ write path that nobody reviewed. The gate parses every module under
    contains ``set_user``.
 3. No call on any receiver outside a small local allowlist uses PUT, POST,
    PATCH or DELETE, or a method this gate cannot read, on a path outside an
-   explicit allowlist. The path allowlist was empty throughout phase 1 and
-   holds exactly the two queue paths of the return channel since plan 02-10;
+   explicit allowlist. The path allowlist was empty throughout phase 1, holds
+   the two queue paths of the return channel since plan 02-10 and the requeue
+   path of the OCR track since plan 03-07, which is three in total;
    the reasoning sits at :data:`OCS_WRITE_ALLOWLIST`. Judged by default since
    the M2 inversion: a receiver name proves nothing about where the object
    points, so only :data:`LOCAL_RECEIVERS` is exempt.
@@ -170,10 +171,45 @@ LOCAL_RECEIVERS = frozenset({"ROUTER"})
 # Every further entry carries the same duty: a named threat, a statement of which
 # tables it can reach, and a negative test. An entry without those three is not a
 # reviewed exception, it is the hole this gate was written to prevent.
+#
+# Extended on 2026-09-01 by plan 03-07 with the third entry, again in a step of
+# its own and again for the reason above:
+#
+#   POST   .../queues/documents/requeue   puts a row of the work stock on another
+#                                         kind of job, or creates one, and resets
+#                                         its attempt counter
+#
+# Why it exists. A PDF without a text layer ends the text track as
+# skipped(no_text_layer), and that verdict was prepared in phase 2 as the handover
+# point to OCR. Without a way to turn the finding back into work, a scanned
+# document would stay skipped for good, which is precisely the outcome D-07
+# forbids. The same route carries the findings of the reconcile of plan 03-12,
+# because a file the comparison discovers may have no queue row at all.
+#
+# What it can reach, which is the property that makes the exception defensible:
+# findling_queue and nothing else. The endpoint takes file ids and a job kind, it
+# writes the kind column, the attempt counter and the free mark of that one table,
+# and it has no code path into the file system of Nextcloud. No user file is
+# reachable from it. The kind is checked against QueueMapper::KINDS, a closed list
+# of five strings, so the route cannot invent a job either.
+#
+# The threat register of plan 03-07 carries this as T-03-701 (Tampering, "widening
+# of the OCS write allowlist"), disposition mitigate, with three mitigations that
+# are the same three duties: exactly one additional literal path, the widening as
+# its own step, and the two tests below that show the list is narrow rather than
+# merely present. T-03-702 covers the second half, that no foreign ExApp may call
+# the route, and rejectForeignCaller as the first statement of the controller
+# method is what answers it.
+#
+# This is the third and, on today's understanding, the last write this container
+# needs: take work, say what happened to it, hand it back, and move it to the
+# other track. A fourth entry has to argue for itself against
+# test_write_allowlist_has_exactly_three_entries, which is the point of that test.
 OCS_WRITE_ALLOWLIST: frozenset[str] = frozenset(
     {
         "/ocs/v2.php/apps/findling/queues/documents",
         "/ocs/v2.php/apps/findling/queues/documents/unlock",
+        "/ocs/v2.php/apps/findling/queues/documents/requeue",
     }
 )
 
@@ -462,6 +498,63 @@ def test_writing_ocs_call_to_an_allowed_path_is_not_a_violation() -> None:
 
     assert scan_source(CLIENT_MODULE, acknowledge) == []
     assert scan_source(CLIENT_MODULE, unlock) == []
+
+
+def test_writing_ocs_call_to_the_requeue_path_is_not_a_violation() -> None:
+    # The third and last write of the return channel: the container turns a
+    # skipped(no_text_layer) verdict back into work by putting the row on the
+    # OCR track instead of letting it end there (plan 03-07, D-07).
+    requeue = (
+        'async def f(nc):\n    await nc._session.ocs("POST", "/ocs/v2.php/apps/findling/queues/documents/requeue")\n'
+    )
+
+    assert scan_source(CLIENT_MODULE, requeue) == []
+
+
+def test_writing_ocs_call_to_another_path_beside_the_requeue_route_is_a_violation() -> None:
+    # The negative half of the entry above, and the duty every entry of the
+    # allowlist carries. A neighbour of the new path, a longer spelling of it and
+    # the same path reached through a module constant all have to stay
+    # violations, otherwise the list would be proven to exist but not to be
+    # narrow.
+    for path in (
+        "/ocs/v2.php/apps/findling/queues/documents/requeue/all",
+        "/ocs/v2.php/apps/findling/queues/documents/requeues",
+        "/ocs/v2.php/apps/findling/queues/documents/requeue ",
+    ):
+        source = f'async def f(nc):\n    await nc._session.ocs("POST", "{path}")\n'
+
+        violations = scan_source(CLIENT_MODULE, source)
+
+        assert len(violations) == 1, path
+        assert "invariant 3" in violations[0]
+
+    hidden = (
+        'REQUEUE = "/ocs/v2.php/apps/findling/queues/documents/requeue"\n'
+        "\n"
+        "async def f(nc):\n"
+        '    await nc._session.ocs("POST", REQUEUE)\n'
+    )
+
+    violations = scan_source(CLIENT_MODULE, hidden)
+
+    assert len(violations) == 1
+    assert "an unknown path" in violations[0]
+
+
+def test_write_allowlist_has_exactly_three_entries() -> None:
+    # Not a tautology, a ratchet. Every entry of this list is a hole in IDX-07
+    # that somebody argued for once, and the argument is in the comment block
+    # above the list. A fourth entry that arrives as a side effect of a feature
+    # fails here first, which is the moment at which the three duties (a named
+    # threat, a statement of the reachable tables, a negative test) can still be
+    # asked for.
+    assert len(OCS_WRITE_ALLOWLIST) == 3
+    assert {
+        "/ocs/v2.php/apps/findling/queues/documents",
+        "/ocs/v2.php/apps/findling/queues/documents/unlock",
+        "/ocs/v2.php/apps/findling/queues/documents/requeue",
+    } == OCS_WRITE_ALLOWLIST
 
 
 def test_writing_ocs_call_to_another_path_is_still_a_violation() -> None:
