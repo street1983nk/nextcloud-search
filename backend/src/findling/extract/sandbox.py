@@ -88,6 +88,25 @@ def _limit_address_space(cap: int) -> None:
     resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
 
 
+def _kill_child_tree(process: SpawnProcess) -> None:
+    """Kill the child together with everything it may have spawned.
+
+    The child made itself a session leader, so its process group id is its own
+    pid and the group kill reaches a hung grandchild too. Before the child got
+    that far, or on Windows where neither sessions nor group kills exist, the
+    plain kill of the single process is the whole answer.
+    """
+    if sys.platform != "win32" and process.pid is not None:
+        import signal
+
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+            return
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    process.kill()
+
+
 def _run_probe(kind: str, amount: float) -> ExtractionOutcome:
     """Drive the guard into one of its three failure situations, on request.
 
@@ -112,13 +131,35 @@ def _run_probe(kind: str, amount: float) -> ExtractionOutcome:
     return ExtractionOutcome.indexed(kind)
 
 
+def _shed_secrets() -> None:
+    """Drop everything from the environment a compromised child could spend.
+
+    This child is the one place of the container where attacker controlled
+    bytes meet C libraries, and it never talks to Nextcloud, so it has no
+    business holding the AppAPI credentials the spawn inherited (security audit
+    M6). With APP_SECRET in hand, code running in here could sign content
+    gateway requests for any user id and read every file of the instance; with
+    the variables gone, an RCE in a parser is confined to what the child can
+    already see.
+    """
+    for name in ("APP_SECRET", "HP_SHARED_KEY", "NEXTCLOUD_URL", "AA_VERSION"):
+        os.environ.pop(name, None)
+
+
 def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
-    """The child: cap first, then answer jobs until told to stop.
+    """The child: shed credentials and cap the address space first, then answer jobs.
 
     The dispatcher is imported here rather than at module level so that the cap is
     already in place while the extraction libraries are being loaded, and so that
     the parent, which imports this module too, never pays for them.
     """
+    if sys.platform != "win32":
+        # Its own session, so a kill can take the whole process group with it.
+        # Today the child spawns nothing; phase 3 runs tesseract, and a hung
+        # grandchild that survives the kill would hold the worker slot forever
+        # (security audit L3).
+        os.setsid()
+    _shed_secrets()
     _limit_address_space(address_space_bytes)
 
     from findling.extract.dispatch import extract
@@ -213,9 +254,9 @@ class ExtractionWorker:
             return ExtractionOutcome.failed(Reason.CORRUPT)
 
         if not pipe.poll(self._timeout_seconds):
-            # Recycling rule 2: over the deadline. Only kill() ends a hung C
+            # Recycling rule 2: over the deadline. Only a kill ends a hung C
             # extension, and after it the process is gone by definition.
-            process.kill()
+            _kill_child_tree(process)
             process.join(_JOIN_GRACE_SECONDS)
             self._recycle()
             return ExtractionOutcome.failed(Reason.TIMEOUT)
@@ -263,7 +304,7 @@ class ExtractionWorker:
         """Leave no child and no pipe behind, whatever state either of them is in."""
         if self._process is not None:
             if self._process.is_alive():
-                self._process.kill()
+                _kill_child_tree(self._process)
             self._process.join(_JOIN_GRACE_SECONDS)
             self._process.close()
             self._process = None

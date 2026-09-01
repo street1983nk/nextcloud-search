@@ -29,7 +29,7 @@ the first step towards two lists that disagree.
 
 from __future__ import annotations
 
-from zipfile import BadZipFile
+from zipfile import BadZipFile, ZipFile
 
 import docx
 import openpyxl
@@ -38,6 +38,7 @@ from docx.opc.exceptions import PackageNotFoundError as DocxPackageNotFound
 from pptx.exc import PackageNotFoundError as PptxPackageNotFound
 
 from findling import config
+from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
 from findling.extract.dispatch import cap_text
 from findling.extract.errors import ExtractionOutcome, Reason
 
@@ -47,12 +48,35 @@ from findling.extract.errors import ExtractionOutcome, Reason
 _BROKEN_PACKAGE = (BadZipFile, DocxPackageNotFound, PptxPackageNotFound)
 
 
+def _oversized_part(path: str) -> ExtractionOutcome | None:
+    """The bomb check, before any loader touches the package.
+
+    The archive directory declares the uncompressed size of every part, and the
+    loaders below read whole parts into memory; a bomb therefore has to be
+    refused on the declaration, because after the read it is the attack
+    (security audit M4). zipfile enforces the declared size on read, so the
+    declaration cannot be lied past. A package that will not even open is left
+    to the loader, whose exception carries the better diagnosis.
+    """
+    try:
+        with ZipFile(path) as archive:
+            if any(info.file_size > EXTRACT_ARCHIVE_MEMBER_MAX_BYTES for info in archive.infolist()):
+                return ExtractionOutcome.skipped(Reason.TOO_LARGE)
+    except (BadZipFile, OSError):
+        return None
+    return None
+
+
 def extract_docx(path: str) -> ExtractionOutcome:
     """The body text of a Word document: paragraphs first, then table cells.
 
     Defined at module level, like every extractor here, so it survives the
     process boundary of the extraction child.
     """
+    oversized = _oversized_part(path)
+    if oversized is not None:
+        return oversized
+
     try:
         document = docx.Document(path)
     except _BROKEN_PACKAGE as error:
@@ -72,6 +96,10 @@ def extract_pptx(path: str) -> ExtractionOutcome:
     them for text raises rather than returning nothing, which is why the question
     is asked before the text is taken.
     """
+    oversized = _oversized_part(path)
+    if oversized is not None:
+        return oversized
+
     try:
         presentation = pptx.Presentation(path)
     except _BROKEN_PACKAGE as error:
@@ -101,6 +129,10 @@ def extract_xlsx(path: str) -> ExtractionOutcome:
     happens without them. The workbook is closed in a finally, because the read
     only mode keeps file handles on the archive open.
     """
+    oversized = _oversized_part(path)
+    if oversized is not None:
+        return oversized
+
     limit = config.settings().max_cells
     try:
         workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)

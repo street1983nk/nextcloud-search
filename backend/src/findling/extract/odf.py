@@ -31,6 +31,7 @@ from zipfile import BadZipFile, ZipFile
 
 from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
 
+from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
 from findling.extract.dispatch import cap_text
 from findling.extract.errors import ExtractionOutcome, Reason
 
@@ -61,6 +62,12 @@ def extract_odf(path: str) -> ExtractionOutcome:
     """
     try:
         with ZipFile(path) as archive:
+            # The declared size is checked before a byte is decompressed: a
+            # bomb names its real size in the archive directory, and reading
+            # first would be the attack (security audit M4). zipfile enforces
+            # the declared size on read, so the check cannot be lied past.
+            if archive.getinfo(_CONTENT_PART).file_size > EXTRACT_ARCHIVE_MEMBER_MAX_BYTES:
+                return ExtractionOutcome.skipped(Reason.TOO_LARGE)
             content = archive.read(_CONTENT_PART)
     except BadZipFile as error:
         return ExtractionOutcome.from_exception(error)

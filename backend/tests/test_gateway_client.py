@@ -25,10 +25,12 @@ from typing import Any, cast
 import httpx
 import pytest
 
+from findling import config
 from findling.nc.client import (
     CHUNK_SIZE,
     GATEWAY_PATH,
     AsyncNextcloudApp,
+    FileTooLargeError,
     NextcloudException,
     app_api_headers,
     fetch_file_stream,
@@ -199,6 +201,26 @@ async def test_a_file_the_user_may_not_see_returns_none() -> None:
         assert await fetch_file_stream(_app(), 1, "stranger", sink, client=client) is None
 
     assert sink.getvalue() == b""
+
+
+async def test_a_download_beyond_the_byte_cap_is_cut_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The size the crawl checked lives in the queue metadata, and the file can
+    # be replaced under the same id afterwards (security audit M5, a TOCTOU).
+    # Without the running count the replacement fills the scratch volume.
+    monkeypatch.setenv("FINDLING_MAX_FILE_BYTES", "8")
+    config.settings.cache_clear()
+    try:
+        gateway = _Gateway(chunks=[b"aaaa", b"bbbb", b"cccc"])
+        sink = io.BytesIO()
+
+        async with gateway.client() as client:
+            with pytest.raises(FileTooLargeError):
+                await fetch_file_stream(_app(), 1, "testuser", sink, client=client)
+
+        # The chunk over the line was never written: eight bytes at most.
+        assert len(sink.getvalue()) <= 8
+    finally:
+        config.settings.cache_clear()
 
 
 async def test_an_unexpected_error_is_not_swallowed() -> None:

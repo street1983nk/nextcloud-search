@@ -433,6 +433,37 @@ def test_the_parts_are_joined_with_a_space_instead_of_being_glued_together(tmp_p
     assert "Anlage.Zweiter" not in outcome.text
 
 
+def test_a_declared_decompression_bomb_is_skipped_before_it_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The archive directory names the real size; reading first would BE the
+    # attack (security audit M4: 815 kB ODT -> 800 MB content.xml). The cap is
+    # lowered so the fixture stays a fixture instead of a real bomb.
+    monkeypatch.setattr("findling.extract.odf.EXTRACT_ARCHIVE_MEMBER_MAX_BYTES", 64)
+
+    outcome = extract_odf(_odf(tmp_path, "bombe.odt", "x" * 65))
+
+    assert outcome.state is State.SKIPPED
+    assert outcome.reason is Reason.TOO_LARGE
+
+
+def test_an_office_package_with_an_oversized_part_is_skipped_before_any_loader_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("findling.extract.office.EXTRACT_ARCHIVE_MEMBER_MAX_BYTES", 64)
+    target = tmp_path / "bombe.docx"
+    with ZipFile(target, "w") as archive:
+        archive.writestr("word/document.xml", "x" * 65)
+
+    # The archive is not even a valid package; a verdict of too_large therefore
+    # proves the guard ran before the loader ever touched it.
+    for extractor in (extract_docx, extract_pptx, extract_xlsx):
+        outcome = extractor(str(target))
+
+        assert outcome.state is State.SKIPPED
+        assert outcome.reason is Reason.TOO_LARGE
+
+
 @pytest.mark.parametrize("name", ["tabelle.ods", "praesentation.odp"])
 def test_ods_and_odp_run_through_the_very_same_path(name: str, tmp_path: Path) -> None:
     outcome = extract_odf(_odf(tmp_path, name, ODF_HEADER + ODF_BODY + ODF_FOOTER))

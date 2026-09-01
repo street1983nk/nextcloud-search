@@ -16,14 +16,18 @@ a comment, and a comment does not notice the next convenient import.
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
 from findling import config
 from findling.extract import sandbox
 from findling.extract.errors import ExtractionOutcome, Reason, State
+
+SANDBOX_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "extract" / "sandbox.py"
 
 # A mimetype outside the allowlist is the cheapest complete round trip there is:
 # the child judges it and answers without touching the file system at all, so the
@@ -148,3 +152,39 @@ def test_child_does_not_import_findling_index(worker: sandbox.ExtractionWorker) 
 
 def test_the_address_space_cap_is_the_configured_one(worker: sandbox.ExtractionWorker) -> None:
     assert worker.address_space_bytes == config.settings().extract_address_space_bytes
+
+
+def test_shedding_removes_every_appapi_credential(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The child is the one place where attacker controlled bytes meet C
+    # libraries, and it never talks to Nextcloud; with APP_SECRET in hand an
+    # RCE in a parser could sign gateway requests for any user (audit M6).
+    for name in ("APP_SECRET", "HP_SHARED_KEY", "NEXTCLOUD_URL", "AA_VERSION"):
+        monkeypatch.setenv(name, "held-by-the-parent")
+
+    sandbox._shed_secrets()
+
+    for name in ("APP_SECRET", "HP_SHARED_KEY", "NEXTCLOUD_URL", "AA_VERSION"):
+        assert name not in os.environ
+
+
+def test_the_child_hardens_itself_before_the_parsers_load() -> None:
+    # Order is the property: shedding after the dispatcher import would hand
+    # the credentials to every module the import pulls in first.
+    body = SANDBOX_SOURCE.read_text(encoding="utf-8").split("def _child_main", 1)[1]
+
+    assert body.index("_shed_secrets()") < body.index("from findling.extract.dispatch import extract")
+    assert body.index("os.setsid()") < body.index("_shed_secrets()")
+
+
+def test_every_kill_goes_through_the_group_kill() -> None:
+    # Today the child spawns nothing; phase 3 runs tesseract, and a plain
+    # kill() would orphan a hung grandchild that keeps the worker slot (audit
+    # L3). The single bare kill() is the fallback inside _kill_child_tree.
+    code = [
+        line
+        for line in SANDBOX_SOURCE.read_text(encoding="utf-8").splitlines()
+        if not line.lstrip().startswith("#")
+    ]
+
+    assert sum("process.kill()" in line for line in code) == 1
+    assert sum("_kill_child_tree(" in line for line in code) == 3, "the definition and both kill sites"

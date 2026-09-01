@@ -176,6 +176,15 @@ SEARCH_QUERY_MAX_CHARS = 512
 # parser is even entered (security audit C2). Real queries never nest this deep.
 SEARCH_QUERY_MAX_DEPTH = 32
 
+# Upper bound on the DECLARED uncompressed size of a single archive member
+# before it is read (security audit M4). Office and OpenDocument files are ZIP
+# archives, and a decompression bomb declares its real size in the directory:
+# measured, an 815 kB ODT expanded to an 800 MB content.xml that RLIMIT_AS only
+# caught after the worker slot and its timeout were already spent. Any XML part
+# above this line would burst the extraction address space anyway, so skipping
+# it as too_large is the honest verdict at the price of a directory read.
+EXTRACT_ARCHIVE_MEMBER_MAX_BYTES = 64 * 1024 * 1024
+
 # Subdirectory used when APP_PERSISTENT_STORAGE is absent, which is the case in
 # tests and in a bare local run, never in a container deployed by AppAPI.
 FALLBACK_STORAGE_DIRNAME = "findling"

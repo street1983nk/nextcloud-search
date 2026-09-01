@@ -70,7 +70,13 @@ from findling.index.open import expected_versions, open_index
 from findling.index.wordlist import build_artifact
 from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord
 from findling.nc import client as nc_client
-from findling.nc.client import AsyncNextcloudApp, GatewayClient, fetch_file_stream, new_gateway_client
+from findling.nc.client import (
+    AsyncNextcloudApp,
+    FileTooLargeError,
+    GatewayClient,
+    fetch_file_stream,
+    new_gateway_client,
+)
 from findling.nc.queue import DocumentQueue, QueueJob
 from findling.store.repo import FileMeta, Store, open_store
 
@@ -436,7 +442,15 @@ class Poller:
             self._collect(job, route, done, failed, verdicts)
             return 0
 
-        read = await self._fetch_file(job)
+        try:
+            read = await self._fetch_file(job)
+        except FileTooLargeError:
+            # The size the crawl checked was the file of that moment; whoever
+            # replaced it under the same id afterwards does not get to fill the
+            # scratch volume (security audit M5). A verdict, not an error: the
+            # row leaves the queue with a reason a status page can show.
+            self._collect(job, ExtractionOutcome.skipped(Reason.TOO_LARGE), done, failed, verdicts)
+            return 0
         if read is None:
             # 404 is what the gateway answers for "does not exist" and for "not
             # yours" alike, deliberately indistinguishable. Either way the row has
@@ -469,6 +483,11 @@ class Poller:
         scratch = self._tmp_dir / f"job-{job.queue_id}{SCRATCH_SUFFIX}"
         try:
             written, sink = await self._stream_into(scratch, job)
+        except FileTooLargeError:
+            # A verdict about this one file, never a gateway problem: the
+            # caller records it as skipped(too_large) and the pass goes on.
+            _discard(scratch)
+            raise
         except Exception as error:
             _discard(scratch)
             LOGGER.warning("content gateway did not deliver, %s", type(error).__name__)

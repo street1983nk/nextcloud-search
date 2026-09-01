@@ -36,6 +36,8 @@ import httpx
 from nc_py_api import AsyncNextcloudApp, NextcloudException
 from nc_py_api.ex_app import AppAPIAuthMiddleware, anc_app, run_app, set_handlers
 
+from findling.config import settings
+
 __all__ = [
     "CHUNK_SIZE",
     "GATEWAY_PATH",
@@ -177,6 +179,17 @@ def new_gateway_client() -> httpx.AsyncClient:
     return httpx.AsyncClient(verify=_certificate_setting(), timeout=_timeout(), follow_redirects=False)
 
 
+class FileTooLargeError(Exception):
+    """The gateway delivered more bytes than any file this app would queue.
+
+    The size the crawl checked lives in the queue metadata, and a user can
+    replace the file under the same file id between the check and this download
+    (a TOCTOU, security audit M5). Without the running count the replacement
+    fills the scratch volume, and min_free_bytes only guards the commit. The
+    message carries the file id and nothing else: no name, no path.
+    """
+
+
 async def _stream_file(
     client: httpx.AsyncClient,
     header_user: str,
@@ -186,6 +199,7 @@ async def _stream_file(
 ) -> int | None:
     """Stream one gateway answer into the sink, return the byte count."""
     written = 0
+    cap = settings().max_file_bytes
     async with client.stream(
         "GET",
         gateway_url(file_id),
@@ -202,6 +216,8 @@ async def _stream_file(
 
         async for chunk in response.aiter_bytes(CHUNK_SIZE):
             written += len(chunk)
+            if written > cap:
+                raise FileTooLargeError(f"file id {file_id} exceeded the byte cap while downloading")
             # The sink is an ordinary file object, so this is blocking disk IO in
             # the middle of an async request. On a 4 GB box one large PDF would
             # otherwise stall every other request in the process, indexing and

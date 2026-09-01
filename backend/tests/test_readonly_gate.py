@@ -8,11 +8,13 @@ write path that nobody reviewed. The gate parses every module under
 1. Only ``findling/nc/client.py`` imports ``nc_py_api`` or ``httpx``.
 2. No module contains a writing identifier of ``nc_py_api.files`` and none
    contains ``set_user``.
-3. No call on a receiver that goes out to Nextcloud uses PUT, POST, PATCH or
-   DELETE, or a method this gate cannot read, on a path outside an explicit
-   allowlist. The allowlist was empty throughout phase 1 and holds exactly the
-   two queue paths of the return channel since plan 02-10; the reasoning sits at
-   :data:`OCS_WRITE_ALLOWLIST`.
+3. No call on any receiver outside a small local allowlist uses PUT, POST,
+   PATCH or DELETE, or a method this gate cannot read, on a path outside an
+   explicit allowlist. The path allowlist was empty throughout phase 1 and
+   holds exactly the two queue paths of the return channel since plan 02-10;
+   the reasoning sits at :data:`OCS_WRITE_ALLOWLIST`. Judged by default since
+   the M2 inversion: a receiver name proves nothing about where the object
+   points, so only :data:`LOCAL_RECEIVERS` is exempt.
 
 All three are worded fail closed, and the three self tests named "bypass" below
 are the reason. The first version of this gate could be walked past in three
@@ -118,12 +120,22 @@ WRITING_HTTP_METHODS = frozenset({"PUT", "POST", "PATCH", "DELETE"})
 # may be a write has to be treated as one.
 UNREADABLE_METHOD = "a method this gate cannot read"
 
-# Entry points that take an HTTP method as their first argument.
-OCS_ENTRY_POINTS = frozenset({"ocs", "request", "request_json"})
+# Entry points that take an HTTP method as their first argument. stream is the
+# httpx one: `client.stream("PUT", url)` is a request like any other, it merely
+# hands the body over lazily.
+OCS_ENTRY_POINTS = frozenset({"ocs", "request", "request_json", "stream"})
 
-# Receiver names that mark a call as going out to Nextcloud rather than into a
-# local data structure. Keeps `index_writer.delete(...)` out of invariant 3.
-REMOTE_RECEIVERS = frozenset({"nc", "ocs", "_session", "session", "adapter"})
+# Receiver names whose write-shaped methods are local registrations rather than
+# network calls: `ROUTER.post(...)` mounts an endpoint, it does not send one.
+#
+# Inverted on 2026-09-01 (security audit M2). The gate used to keep an allowlist
+# of REMOTE receivers ({nc, ocs, _session, ...}) and judged only those, so
+# `client.put(...)` on a pooled gateway client, one name the list did not know,
+# walked past invariant 3 unjudged. A gate that cannot judge something has to
+# say no: every write-shaped call is treated as remote now, and a purely local
+# object with such a method has to be added here, deliberately and with a
+# reason, instead of being waved through by default.
+LOCAL_RECEIVERS = frozenset({"ROUTER"})
 
 # Paths the backend may write to over OCS. Empty throughout phase 1; extended on
 # 2026-08-31 by plan 02-10 with exactly two entries, in a step of its own rather
@@ -211,7 +223,9 @@ def _writing_request(call: ast.Call) -> tuple[str, str | None] | None:
     if not isinstance(func, ast.Attribute):
         return None
 
-    receiver_is_remote = bool(_receiver_names(func.value) & REMOTE_RECEIVERS)
+    receiver_is_local = bool(_receiver_names(func.value) & LOCAL_RECEIVERS)
+    if receiver_is_local:
+        return None
 
     if func.attr in OCS_ENTRY_POINTS:
         path = _string_argument(call, 1, "path", "url", "path_and_query")
@@ -219,14 +233,19 @@ def _writing_request(call: ast.Call) -> tuple[str, str | None] | None:
         if method is None:
             # The bypass this closes: the method used to be judged only when it
             # was a literal, so `nc.ocs(verb, path)` fell through as harmless.
-            # A call the gate cannot read is reported when it goes out to
-            # Nextcloud, and ignored when the receiver is a local object.
-            return (UNREADABLE_METHOD, path) if receiver_is_remote else None
+            # A call the gate cannot read is reported like a write, because a
+            # call that may be a write has to be treated as one.
+            return (UNREADABLE_METHOD, path)
         if method.upper() not in WRITING_HTTP_METHODS:
             return None
         return method.upper(), path
 
-    if func.attr.upper() in WRITING_HTTP_METHODS and receiver_is_remote:
+    if func.attr.upper() in WRITING_HTTP_METHODS:
+        # Write-shaped method on any receiver the local allowlist does not
+        # name (security audit M2): `client.put(...)` on a pooled httpx client
+        # used to fall through because the old REMOTE allowlist did not know
+        # the name. Invariant 2 already restricts `delete` everywhere, so this
+        # judges the three others plus every future receiver by default.
         return func.attr.upper(), _string_argument(call, 0, "path", "url")
 
     return None
@@ -349,11 +368,13 @@ def test_the_reviewed_exception_does_not_leak_into_other_modules() -> None:
 
 
 def test_the_reviewed_exception_covers_only_the_identifier_it_names() -> None:
-    # mkdir is allowed in that module, delete is not.
+    # mkdir is allowed in that module, delete is not. Both invariants report
+    # it since the M2 inversion: as a writing identifier and as a write-shaped
+    # method on a receiver the local list does not name.
     violations = scan_source("index/wordlist.py", "target.delete()\n")
 
-    assert len(violations) == 1
-    assert "invariant 2" in violations[0]
+    assert violations != []
+    assert any("invariant 2" in violation for violation in violations)
 
 
 def test_writing_ocs_call_is_a_violation() -> None:
@@ -376,12 +397,52 @@ def test_bypass_a_method_the_gate_cannot_read_is_a_violation() -> None:
     assert "invariant 3" in violations[0]
 
 
-def test_a_method_the_gate_cannot_read_on_a_local_object_is_allowed() -> None:
-    # The same shape on a receiver that is not Nextcloud. Reporting this one would
-    # make the gate noisy without making it stricter, and a noisy gate gets muted.
+def test_a_method_the_gate_cannot_read_is_a_violation_on_any_receiver() -> None:
+    # The old REMOTE allowlist waved this through because "parser" was not on
+    # it. A receiver name proves nothing about where the object points, so an
+    # unreadable method is judged the same on every receiver the LOCAL list
+    # does not name (security audit M2).
     source = 'async def f(parser, verb):\n    parser.request(verb, "/foo")\n'
 
-    assert scan_source("nc/other.py", source) == []
+    violations = scan_source("nc/other.py", source)
+
+    assert len(violations) == 1
+    assert "invariant 3" in violations[0]
+
+
+def test_bypass_a_write_on_a_pooled_client_is_a_violation() -> None:
+    # The receiver "client" was on no list, so this used to pass unjudged.
+    source = 'async def f(client):\n    await client.put("/foo")\n'
+
+    violations = scan_source("worker/poller.py", source)
+
+    assert len(violations) == 1
+    assert "invariant 3" in violations[0]
+
+
+def test_bypass_a_streamed_write_is_a_violation() -> None:
+    # stream() takes the method as its first argument, exactly like ocs(), and
+    # used to be no entry point at all.
+    source = 'async def f(client):\n    async with client.stream("PUT", "/foo"):\n        pass\n'
+
+    violations = scan_source(CLIENT_MODULE, source)
+
+    assert len(violations) == 1
+    assert "invariant 3" in violations[0]
+
+
+def test_a_streamed_read_is_allowed() -> None:
+    source = 'async def f(client):\n    async with client.stream("GET", "/foo"):\n        pass\n'
+
+    assert scan_source(CLIENT_MODULE, source) == []
+
+
+def test_mounting_a_route_is_not_a_write() -> None:
+    # The one reviewed entry of the LOCAL list: a FastAPI router registers an
+    # endpoint, it sends nothing anywhere.
+    source = '@ROUTER.post("/search")\nasync def f():\n    pass\n'
+
+    assert scan_source("api/search.py", source) == []
 
 
 def test_reading_ocs_call_is_allowed() -> None:
