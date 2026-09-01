@@ -62,6 +62,14 @@ _INVISIBLE_TAGS = ("script", "style")
 _REPLACEMENT_CHARACTER = "�"
 _MAX_REPLACEMENT_SHARE = 0.05
 
+# Hard ceiling on the RTF bytes handed to striprtf (security audit H1). Its
+# HYPERLINK regex backtracks quadratically, and INDEX_WORKERS is 1, so a crafted
+# file under a megabyte burns the full extraction deadline of the single indexer
+# of the whole instance (measured: 252 KB = 10.7 s, 656 KB > 120 s). A real RTF
+# whose text survives the 512k character cap is far smaller than this; anything
+# larger is skipped as oversized rather than parsed.
+_MAX_RTF_BYTES = 256 * 1024
+
 # Below this share of printable characters an RTF result is nonsense rather than
 # text. Measured against a deliberately broken file: 0.72 printable, while an
 # intact document sits at 1.0.
@@ -135,6 +143,11 @@ def extract_html(path: str) -> ExtractionOutcome:
 def extract_rtf(path: str) -> ExtractionOutcome:
     """RTF, with the plausibility check that stands in for the missing error path."""
     raw = Path(path).read_bytes()
+    # Oversized RTF is skipped before striprtf ever sees it (security audit H1):
+    # its hyperlink regex backtracks quadratically and would hold the single
+    # indexer for the full deadline. A genuine RTF whose text matters is small.
+    if len(raw) > _MAX_RTF_BYTES:
+        return ExtractionOutcome.skipped(Reason.TOO_LARGE)
     source = _decode(raw)
     if source is None:
         return ExtractionOutcome.failed(Reason.ENCODING_UNKNOWN)

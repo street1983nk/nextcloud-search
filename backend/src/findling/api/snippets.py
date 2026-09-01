@@ -34,7 +34,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from findling.api import resources
-from findling.config import SEARCH_LIMIT_MAX
+from findling.config import SEARCH_LIMIT_MAX, SEARCH_QUERY_MAX_CHARS
 from findling.index import search as index_search
 from findling.nc.client import AsyncNextcloudApp, anc_app, current_user_id
 from findling.query.rewrite import build_query
@@ -70,7 +70,7 @@ class SnippetsRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    query: str = Field(min_length=1)
+    query: str = Field(min_length=1, max_length=SEARCH_QUERY_MAX_CHARS)
     fileIds: list[int] = Field(max_length=SEARCH_LIMIT_MAX)
     # camelCase because the wire format belongs to the PHP side; see the same
     # field in findling.api.search for the whole reason.

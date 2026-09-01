@@ -31,6 +31,7 @@ from typing import Final
 
 from tantivy import Index, Occur, Query
 
+from findling.config import SEARCH_QUERY_MAX_DEPTH
 from findling.index.schema import FIELD_BODY_DE, FIELD_BODY_EN, FIELD_EXT, FIELD_NAME, FIELD_TITLE
 
 LOGGER = logging.getLogger("findling.query")
@@ -197,6 +198,23 @@ def _extension_query(index: Index, extensions: tuple[str, ...]) -> Query:
     return Query.boolean_query([(Occur.Should, term) for term in terms])
 
 
+def _max_bracket_depth(text: str) -> int:
+    """Deepest run of unclosed round brackets, ignoring closers without an opener.
+
+    A pure counter, so the depth guard is testable without an index and cannot
+    itself recurse. Only ``(`` and ``)`` matter to the query parser's grammar.
+    """
+    depth = 0
+    deepest = 0
+    for char in text:
+        if char == "(":
+            depth += 1
+            deepest = max(deepest, depth)
+        elif char == ")" and depth > 0:
+            depth -= 1
+    return deepest
+
+
 def build_query(index: Index, text: str, *, title_only: bool = False) -> RewrittenQuery:
     """Turn a search line into a query, its filters and the parser's complaints.
 
@@ -205,6 +223,18 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
     together with a query that finds nothing, because an exception here is an
     HTTP 500 and a search bar that stays broken until somebody redeploys.
     """
+    # Bracket depth is checked before the parser is ever entered (security audit
+    # C2): parse_query_lenient descends recursively on parentheses, so a deeply
+    # nested line overflows the native stack of this very process, which is a
+    # crash no except-clause can catch, not an error the parser reports. Counted
+    # on the raw input so the guard cannot be walked past by a filter or a variant.
+    if _max_bracket_depth(text) > SEARCH_QUERY_MAX_DEPTH:
+        return RewrittenQuery(
+            query=None,
+            text="",
+            extensions=[],
+            errors=[f"the query nests brackets deeper than {SEARCH_QUERY_MAX_DEPTH} levels"],
+        )
     residual, extensions = extract_filters(text)
     rewritten = add_umlaut_variants(residual).strip()
     if not rewritten:

@@ -161,6 +161,50 @@ def test_a_negative_offset_is_rejected(client: TestClient, sign: Sign) -> None:
     assert response.status_code == 422
 
 
+def test_an_offset_past_the_ceiling_is_rejected(client: TestClient, sign: Sign) -> None:
+    # Security audit C1: an unbounded offset makes tantivy allocate
+    # (limit+offset)*24 bytes and aborts the process with a Rust allocation
+    # failure no Python handler can catch. The model rejects it before the engine
+    # is ever entered, so this stays a 422 and not a dead container.
+    from findling.config import SEARCH_OFFSET_MAX
+
+    response = client.post(
+        "/search",
+        json={"query": "contract", "offset": SEARCH_OFFSET_MAX + 1},
+        headers=sign("alice"),
+    )
+
+    assert response.status_code == 422
+
+
+def test_the_documented_offset_ceiling_is_accepted(client: TestClient, sign: Sign) -> None:
+    # The boundary itself is a legitimate cursor and must answer normally.
+    from findling.config import SEARCH_OFFSET_MAX
+
+    response = client.post(
+        "/search",
+        json={"query": "contract", "offset": SEARCH_OFFSET_MAX},
+        headers=sign("alice"),
+    )
+
+    assert response.status_code == 200
+
+
+def test_an_overlong_query_is_rejected(client: TestClient, sign: Sign) -> None:
+    # Security audit C2/M3: a megabyte-long query is seconds of CPU per request,
+    # and the expansion runs against the live index. The length ceiling stops it
+    # at the model.
+    from findling.config import SEARCH_QUERY_MAX_CHARS
+
+    response = client.post(
+        "/search",
+        json={"query": "a" * (SEARCH_QUERY_MAX_CHARS + 1)},
+        headers=sign("alice"),
+    )
+
+    assert response.status_code == 422
+
+
 def test_missing_user_id_is_unauthorized(client: TestClient, sign: Sign) -> None:
     # A signed header without a user name: the signature checks out, the identity
     # does not exist. Answering with results here would be the actual bug.

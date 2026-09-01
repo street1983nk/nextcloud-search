@@ -134,6 +134,20 @@ def test_broken_rtf_is_skipped_instead_of_filling_the_index_with_nonsense(tmp_pa
     assert outcome == ExtractionOutcome.skipped(Reason.EMPTY_TEXT)
 
 
+def test_oversized_rtf_is_skipped_before_striprtf_backtracks(tmp_path: Path) -> None:
+    # Security audit H1: striprtf's hyperlink regex backtracks quadratically, and
+    # with INDEX_WORKERS at 1 a crafted file under a megabyte would hold the
+    # single indexer for the full deadline. An RTF over the byte ceiling is
+    # skipped as oversized before rtf_to_text ever runs, so the pathological
+    # pattern is never handed to the regex at all.
+    from findling.extract.text import _MAX_RTF_BYTES
+
+    payload = b"{\\rtf1" + b"a" * (_MAX_RTF_BYTES + 1)
+    outcome = extract_rtf(_write(tmp_path, "riesig.rtf", payload))
+
+    assert outcome == ExtractionOutcome.skipped(Reason.TOO_LARGE)
+
+
 @pytest.mark.parametrize("payload", [b"", b"   \n\t  "])
 def test_an_extraction_that_yields_nothing_is_skipped(payload: bytes, tmp_path: Path) -> None:
     outcome = extract_plain(_write(tmp_path, "leer.txt", payload))

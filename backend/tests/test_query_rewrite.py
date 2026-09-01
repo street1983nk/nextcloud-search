@@ -234,3 +234,39 @@ def test_a_filter_alone_still_reports_the_extension_it_recognised(index: Index) 
 
     assert rewritten.query is None
     assert rewritten.extensions == ("docx",)
+
+
+def test_a_query_nested_past_the_bracket_ceiling_never_reaches_the_parser(index: Index) -> None:
+    # Security audit C2: parse_query_lenient descends recursively on parentheses,
+    # so a deeply nested line overflows the native stack of this process, a crash
+    # no except-clause can catch. The depth guard rejects it with an empty query
+    # and a message before the parser is entered, so this returns instead of
+    # taking the process down.
+    from findling.config import SEARCH_QUERY_MAX_DEPTH
+
+    line = "(" * (SEARCH_QUERY_MAX_DEPTH + 5) + "haus" + ")" * (SEARCH_QUERY_MAX_DEPTH + 5)
+    rewritten = build_query(index, line)
+
+    assert rewritten.query is None
+    assert rewritten.errors
+    assert "brackets" in rewritten.errors[0]
+
+
+def test_a_query_at_the_bracket_ceiling_is_still_parsed(index: Index) -> None:
+    # The boundary is a legitimate, if unusual, query and must still run.
+    from findling.config import SEARCH_QUERY_MAX_DEPTH
+
+    line = "(" * SEARCH_QUERY_MAX_DEPTH + "haus" + ")" * SEARCH_QUERY_MAX_DEPTH
+    rewritten = build_query(index, line)
+
+    assert rewritten.query is not None
+
+
+def test_unbalanced_closers_do_not_inflate_the_depth() -> None:
+    # A run of closing brackets without openers is depth zero, not depth n: the
+    # guard must not reject a line that never nests.
+    from findling.query.rewrite import _max_bracket_depth
+
+    assert _max_bracket_depth(")))))") == 0
+    assert _max_bracket_depth("(a) (b) (c)") == 1
+    assert _max_bracket_depth("((a))") == 2

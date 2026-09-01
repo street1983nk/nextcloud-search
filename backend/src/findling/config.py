@@ -148,6 +148,27 @@ SNIPPET_CHARS = 200
 # Upper bound of the limit a caller may request, mirrored by the API model.
 SEARCH_LIMIT_MAX = 100
 
+# Upper bound of the paging offset a caller may request (security audit C1). The
+# endpoints carry access_level USER, so any signed-in account reaches them with a
+# free JSON body; tantivy allocates (limit+offset)*24 bytes eagerly, and an
+# unbounded offset therefore aborts the whole process with a Rust allocation
+# failure that no Python handler can catch. No legitimate cursor ever climbs past
+# a full result set of overfetched, multi-round candidates, so this ceiling is far
+# above any real paging depth and still keeps the allocation in the kilobyte range.
+SEARCH_OFFSET_MAX = SEARCH_LIMIT_MAX * SEARCH_OVERFETCH * SEARCH_ROUNDS
+
+# Upper bound on the length of a query string (security audit C2/M3). The query is
+# expanded per token with umlaut variants across several boosted fields and then
+# run against the live index with count=True, so a megabyte-long query is seconds
+# of CPU per request; and the lenient parser descends recursively on parentheses,
+# so a deeply nested query overflows the native stack of the same process the ASGI
+# app runs in. 512 characters is longer than any real search line.
+SEARCH_QUERY_MAX_CHARS = 512
+
+# Maximum bracket nesting a query line may carry before the recursive-descent
+# parser is even entered (security audit C2). Real queries never nest this deep.
+SEARCH_QUERY_MAX_DEPTH = 32
+
 # Subdirectory used when APP_PERSISTENT_STORAGE is absent, which is the case in
 # tests and in a bare local run, never in a container deployed by AppAPI.
 FALLBACK_STORAGE_DIRNAME = "findling"

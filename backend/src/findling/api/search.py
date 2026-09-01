@@ -43,7 +43,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from findling.api import resources
-from findling.config import SEARCH_LIMIT_MAX
+from findling.config import (
+    SEARCH_LIMIT_MAX,
+    SEARCH_OFFSET_MAX,
+    SEARCH_QUERY_MAX_CHARS,
+)
 from findling.index.search import candidates as candidate_round
 from findling.nc.client import AsyncNextcloudApp, anc_app, current_user_id
 from findling.query.rewrite import build_query
@@ -75,9 +79,12 @@ class SearchRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    query: str = Field(min_length=1)
+    query: str = Field(min_length=1, max_length=SEARCH_QUERY_MAX_CHARS)
     limit: int = Field(default=20, ge=1, le=SEARCH_LIMIT_MAX)
-    offset: int = Field(default=0, ge=0)
+    # le= is a denial-of-service control (security audit C1): tantivy allocates
+    # (limit+offset)*24 bytes up front, and an unbounded offset aborts the whole
+    # process with a Rust allocation failure that no Python handler can catch.
+    offset: int = Field(default=0, ge=0, le=SEARCH_OFFSET_MAX)
     # camelCase because the wire format belongs to the PHP side. A rename here
     # would silently drop the field on the way in, and the naming rules of ruff
     # are not part of the configured rule set, so a noqa directive would itself
