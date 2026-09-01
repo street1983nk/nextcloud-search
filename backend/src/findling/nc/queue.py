@@ -109,6 +109,15 @@ class QueueJob:
     ``kind`` says what is to be done with the file and therefore which branch of
     the poller runs. It defaults to ``content`` so that a row written before the
     kind column existed is still an ordinary job rather than an unusable entry.
+
+    ``users_truncated`` says that ``user_ids`` is a prefix of the truth and not
+    the truth. Nextcloud caps the list at QueueService::MAX_USERS, because an
+    instance wide team folder otherwise puts the complete user list of the
+    instance on every file (perf audit M5). What the container does with the mark
+    is written down at :data:`findling.store.repo.ACL_ANY_USER`; what matters
+    here is that the short list must never be written as if it were complete,
+    which is why the mark travels with the job rather than being reconstructed
+    from a length somewhere later.
     """
 
     queue_id: int
@@ -128,6 +137,10 @@ class QueueJob:
     # a job without a fetch user is a job nobody can read, and that must stay
     # impossible to build by forgetting an argument.
     kind: str = KIND_CONTENT
+    # False by default, and that direction is the safe one: an unmarked job is
+    # the ordinary case, and reading a missing mark as "capped" would make every
+    # file a candidate for every user on every search.
+    users_truncated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,6 +299,11 @@ def _job(queue_id_raw: object, source: object) -> QueueJob | None:
         fetch_as=fetch_as,
         is_update=bool(fields.get("isUpdate")),
         kind=kind,
+        # Only the literal boolean true counts. bool() of an arbitrary value
+        # would read a stray non-empty string as "capped" and widen the
+        # prefilter through a typo on the PHP side; anything this container
+        # cannot read as the explicit truth falls to the strict side.
+        users_truncated=fields.get("userIdsTruncated") is True,
     )
 
 

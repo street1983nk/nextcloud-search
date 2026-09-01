@@ -78,7 +78,7 @@ from findling.nc.client import (
     new_gateway_client,
 )
 from findling.nc.queue import KIND_ACL, KIND_DELETE, KIND_METADATA, KIND_OCR, DocumentQueue, QueueJob
-from findling.store.repo import FileMeta, Store, open_store
+from findling.store.repo import ACL_ANY_USER, FileMeta, Store, open_store
 
 LOGGER = logging.getLogger("findling.worker.poller")
 
@@ -545,7 +545,7 @@ class Poller:
                 # shared file produces, would otherwise never reach the
                 # prefilter. It is one declarative write against a file the pass
                 # has read anyway, so the exit stays cheap.
-                await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, job.user_ids)
+                await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, _acl_users(job))
                 done.append(job.queue_id)
                 return 1
             outcome = await asyncio.to_thread(self._extract, str(read.path), job.mime, read.size)
@@ -727,7 +727,7 @@ class Poller:
         same file would walk into the give-up rule and end as
         failed(repeatedly_stuck) although every one of them worked.
         """
-        await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, job.user_ids)
+        await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, _acl_users(job))
         done.append(job.queue_id)
 
     async def _rewrite_metadata(
@@ -869,7 +869,7 @@ class Poller:
                 # Declarative, never incremental: the queue entry carries the
                 # target state, so a lost delivery costs one round of staleness
                 # and repairs itself with the next one.
-                store.replace_acl(job.file_id, job.user_ids)
+                store.replace_acl(job.file_id, _acl_users(job))
             store.record(
                 job.file_id,
                 _meta_of(job),
@@ -949,6 +949,27 @@ def default_poller() -> Poller:
     would hold the tantivy lock without ever indexing anything.
     """
     return Poller()
+
+
+def _acl_users(job: QueueJob) -> tuple[str, ...]:
+    """The rows the prefilter gets for this job, capped list or real list.
+
+    One function for all three write sites, and that is the whole point of it.
+    Nextcloud caps a user list that would otherwise be the complete user list of
+    the instance (perf audit M5) and marks the job when it did; writing the
+    remaining names as if they were the truth would make the file disappear from
+    the prefilter for everybody behind the cap. The collective row of
+    :data:`findling.store.repo.ACL_ANY_USER` says "no usable list" instead, and
+    the prefilter reads it as "candidate for anybody".
+
+    A generosity, never a right: the only authority is the PHP recheck, and a
+    candidate that the recheck rejects costs one resolution and shows nobody
+    anything. The three call sites all go through here so that a fourth one
+    cannot forget the mark and quietly write the short list.
+    """
+    if job.users_truncated:
+        return (ACL_ANY_USER,)
+    return job.user_ids
 
 
 def _meta_of(job: QueueJob) -> FileMeta:

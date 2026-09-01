@@ -78,6 +78,27 @@ _BUSY_TIMEOUT_MS: Final = 10_000
 # produced them.
 _ACL_BAND: Final = 1000
 
+# The reserved uid of a file whose real user list was too long to travel.
+#
+# Nextcloud caps the list at QueueService::MAX_USERS and marks the job when it
+# did, because an instance wide team folder otherwise puts the complete user list
+# of the instance on every single file (perf audit M5). A capped list must not be
+# written as if it were the truth: the file would drop out of the prefilter for
+# everybody behind the cap, and the search would hide documents from people who
+# are allowed to read them.
+#
+# So the container writes one row with this uid instead, and the prefilter treats
+# it as "this file is a candidate for anybody". That is a deliberate generosity
+# and not a right: the prefilter is allowed to be wider than the truth and never
+# narrower, because the only authority is the PHP recheck through
+# getUserFolder()->getFirstNodeById() (COMP-04). Nothing is shown to anybody on
+# the strength of this row; it merely costs the recheck a candidate it will
+# usually reject.
+#
+# The asterisk is safe as a reserved value because Nextcloud refuses it in a user
+# id, so no real account can ever collide with it.
+ACL_ANY_USER: Final = "*"
+
 # The closed list, taken from the measured taxonomy in the phase research. A file
 # is judged exactly once and carries one of these pairs; there is no fourth state,
 # because a file that is still to be done has no row at all.
@@ -710,6 +731,13 @@ class Store:
         The result is a set. Ordering is the caller's business and comes from the
         Tantivy score, which is why there is no ORDER BY and no join against
         ``files`` on this path.
+
+        Two uids are asked for, not one. The second is :data:`ACL_ANY_USER`, the
+        reserved row of a file whose user list was capped on the Nextcloud side;
+        the reasoning sits at that constant. It widens the answer for those files
+        and for no others, and the index of the table still carries the query,
+        because the primary key leads with the uid and ``IN`` over two values is
+        two lookups rather than a scan.
         """
         if not file_ids:
             # No candidates, no question. Worth its own branch: an empty IN list
@@ -724,8 +752,8 @@ class Store:
             rows = self._conn.execute(
                 # The parameters are placeholders, all of them. Only their number
                 # is interpolated, and it is a count this function computed.
-                f"SELECT file_id FROM acl WHERE uid = ? AND file_id IN ({placeholders})",  # noqa: S608
-                (uid, *band),
+                f"SELECT file_id FROM acl WHERE uid IN (?, ?) AND file_id IN ({placeholders})",  # noqa: S608
+                (uid, ACL_ANY_USER, *band),
             )
             visible.update(int(row[0]) for row in rows)
         return visible
