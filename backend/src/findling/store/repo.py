@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -193,6 +193,80 @@ ON CONFLICT(storage_id) DO UPDATE SET
     files_seen     = excluded.files_seen,
     updated_at     = excluded.updated_at
 """
+
+
+# The deletion rule of the reconcile, and every line of it is a bound.
+#
+# The upper bound is the reason the page carries a final mark at all: without it
+# every file behind the end of a page would read as deleted, and a page ends for
+# reasons that have nothing to do with the instance. Only a page that says there
+# is nothing behind it may drop the bound, which is what the third parameter
+# switches off.
+#
+# The lower bound is the cursor. What lies before it was judged by an earlier
+# page of the same walk, and looking at it again would turn one page into a
+# verdict about a whole mount.
+#
+# deleted_at IS NULL is the third one. A tombstone is an answer, not a question;
+# without this condition every cycle would rediscover the same deletion and
+# produce a delete job for a document that left the index months ago.
+_GONE_IN_RANGE_SQL: Final = """
+SELECT file_id FROM files
+ WHERE storage_id = ?
+   AND file_id > ?
+   AND (? = 1 OR file_id <= ?)
+   AND deleted_at IS NULL
+ ORDER BY file_id
+"""
+
+_RECONCILE_CURSOR_SQL: Final = """
+SELECT after_file_id, started_at, finished_at FROM reconcile WHERE storage_id = ?
+"""
+
+# Written once per page. The CASE is what keeps the start of a walk from being
+# overwritten by every page of it: a cursor coming off zero is a new beginning, a
+# cursor moving on is the same walk one page further.
+_SET_RECONCILE_CURSOR_SQL: Final = """
+INSERT INTO reconcile (storage_id, after_file_id, started_at, finished_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(storage_id) DO UPDATE SET
+    after_file_id = excluded.after_file_id,
+    started_at    = CASE WHEN reconcile.after_file_id = 0
+                         THEN excluded.started_at ELSE reconcile.started_at END,
+    finished_at   = excluded.finished_at
+"""
+
+# Two numbers that only mean something together: when the last mount finished,
+# and how many mounts are standing in the middle of a walk. A walk in the middle
+# outranks the interval, because an interrupted round has to be resumed rather
+# than waited out for another day.
+_RECONCILE_STATE_SQL: Final = """
+SELECT MAX(finished_at), SUM(CASE WHEN after_file_id > 0 THEN 1 ELSE 0 END) FROM reconcile
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcileCursor:
+    """Where the reconcile stopped on one mount, and when it last got through.
+
+    ``after_file_id`` of zero together with a ``finished_at`` means the mount is
+    done; zero without one means nobody has walked it yet. Both start the next
+    walk at the front, which is exactly why losing this row costs a repetition
+    and never a document.
+    """
+
+    storage_id: int
+    after_file_id: int = 0
+    started_at: int | None = None
+    finished_at: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcileState:
+    """The two facts the cadence is decided on, over all mounts at once."""
+
+    last_finished_at: int | None = None
+    unfinished: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -501,6 +575,110 @@ class Store:
         with self._transaction():
             self._conn.execute(_RECORD_MOUNT_SQL, (storage_id, root_id, cursor, files_seen, int(time.time())))
 
+    # -- the reconcile ----------------------------------------------------
+
+    def gone_in_range(
+        self,
+        storage_id: int,
+        after: int,
+        upto: int,
+        *,
+        final: bool,
+        present: Collection[int],
+    ) -> list[int]:
+        """Files this container knows in the range that the page does not carry.
+
+        The answer is a proposal for delete jobs, never a deletion: the reconcile
+        owns no index writer, so it turns these ids into queue rows and the
+        delete branch of the poller does the work. The reasoning behind that sits
+        in the module docstring of :mod:`findling.worker.reconcile`.
+
+        ``upto`` is the last file id the page carried and ``final`` says whether
+        anything can lie behind it. The bounds and the tombstone condition are
+        argued at :data:`_GONE_IN_RANGE_SQL`; the caller adds a fourth condition
+        that this layer cannot see, namely that a page which had to refuse a row
+        may not be used here at all (``SliceResult.complete``).
+
+        ``present`` is compared in Python and never reaches the database. The
+        range query already returns exactly the rows in question, at most one
+        page worth plus whatever went missing, so a second pass over the same ids
+        in SQL would buy nothing and would need a parameter band on top.
+        """
+        rows = self._conn.execute(_GONE_IN_RANGE_SQL, (storage_id, after, 1 if final else 0, upto))
+        return [int(row[0]) for row in rows if int(row[0]) not in present]
+
+    def known_etags(self, file_ids: Sequence[int]) -> dict[int, str | None]:
+        """The version marks this container holds for these files, tombstones aside.
+
+        A file that is missing from the answer is one the reconcile has to hand
+        to the queue: either it was never judged, or it carries a tombstone and
+        turning up in a page again makes it a restore. A restore has the bytes it
+        always had, so comparing its stored etag would say "unchanged" and the
+        document would stay gone for good.
+
+        Banded like :meth:`prefilter_visible`, and for the same reason: the
+        parameter limit of a SQLite build is a compile time option while a page
+        of the file list is not.
+        """
+        if not file_ids:
+            # No question, no round trip. The walk hits this on the last page of
+            # every mount that ends exactly on a page boundary.
+            return {}
+
+        known: dict[int, str | None] = {}
+        for start in range(0, len(file_ids), _ACL_BAND):
+            band = file_ids[start : start + _ACL_BAND]
+            placeholders = ",".join("?" * len(band))
+            rows = self._conn.execute(
+                # The parameters are placeholders, all of them. Only their number
+                # is interpolated, and it is a count this function computed.
+                f"SELECT file_id, etag FROM files WHERE deleted_at IS NULL AND file_id IN ({placeholders})",  # noqa: S608
+                tuple(band),
+            )
+            known.update({int(file_id): etag for file_id, etag in rows})
+        return known
+
+    def reconcile_cursor(self, storage_id: int) -> ReconcileCursor:
+        """Where the walk over this mount stopped, at the front when nobody walked it."""
+        row = self._conn.execute(_RECONCILE_CURSOR_SQL, (storage_id,)).fetchone()
+        if row is None:
+            return ReconcileCursor(storage_id=storage_id)
+        return ReconcileCursor(
+            storage_id=storage_id,
+            after_file_id=int(row[0]),
+            started_at=None if row[1] is None else int(row[1]),
+            finished_at=None if row[2] is None else int(row[2]),
+        )
+
+    def set_reconcile_cursor(
+        self,
+        storage_id: int,
+        after: int,
+        *,
+        finished: bool = False,
+        at: int | None = None,
+    ) -> None:
+        """Write the bookmark after a page, or close the walk over this mount.
+
+        ``finished`` is passed with ``after`` back at zero: the mount is through,
+        and the next cycle starts at the front again. Nothing here is a promise
+        that work happened; the queue rows this page produced were written before
+        this call, so an abort in between costs one repeated page.
+        """
+        stamp = int(time.time()) if at is None else at
+        with self._transaction():
+            self._conn.execute(_SET_RECONCILE_CURSOR_SQL, (storage_id, after, stamp, stamp if finished else None))
+
+    def reconcile_state(self) -> ReconcileState:
+        """When the last mount finished, and how many stand mid-walk."""
+        row = self._conn.execute(_RECONCILE_STATE_SQL).fetchone()
+        if row is None:
+            return ReconcileState()
+        return ReconcileState(
+            last_finished_at=None if row[0] is None else int(row[0]),
+            unfinished=0 if row[1] is None else int(row[1]),
+        )
+
     def replace_acl(self, file_id: int, uids: Iterable[str]) -> None:
         """Write the permissions of one file as a whole, never as a change.
 
@@ -642,8 +820,24 @@ def open_store(path: Path | str, *, meta: Mapping[str, str] | None = None) -> St
     :meth:`Store.version_mismatch` reports, and an open that silently repaired it
     would destroy that evidence before anybody looked.
 
-    There is exactly one of these connections in a running container, held by the
-    poller. Everything else reads through :func:`open_read_only`.
+    There are two of these connections in a running container since plan 03-12,
+    and the second one is worth naming because it used to be one. The poller
+    holds the first and does every verdict, every permission row and every
+    tombstone through it. The reconcile holds the second and writes nothing but
+    its own bookmark, one small row per page of the file list; everything else it
+    does here is a read. Two writers on one SQLite file are safe under WAL, which
+    serialises them, and both transactions are milliseconds long, so the busy
+    timeout is never approached. What would not be safe is sharing one connection
+    between the two tasks: ``BEGIN IMMEDIATE`` is per connection, and two
+    transactions interleaving on the same one is a different problem entirely.
+
+    Everything else reads through :func:`open_read_only`. The reconcile cannot,
+    because ``PRAGMA query_only`` would refuse its bookmark.
+
+    Note also what the second caller must not do: create this database. Only the
+    poller seeds the version marks, and a store created anywhere else would carry
+    unknown marks forever. :func:`findling.worker.reconcile._open_state` opens an
+    existing file and reports None for a missing one.
     """
     database = Path(path)
     database.parent.mkdir(parents=True, exist_ok=True)

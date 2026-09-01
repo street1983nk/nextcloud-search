@@ -191,6 +191,48 @@ results into the normal search bar and is the only caller of this backend.]]></d
 				<description>A whole number between 72 and 600. 300 is what the engine works best with. Lower values are faster and read worse; higher ones cost memory with the square of the number, which is why the ceiling exists at all. Anything outside the range falls back to the default.</description>
 				<default>300</default>
 			</variable>
+			<!--
+				The nightly comparison. Nothing here has to be touched
+				either: the defaults walk the file list once a day, in the
+				small hours, and only while the indexing queue is quiet.
+				These exist for the two cases where that is wrong for an
+				instance: a box whose quiet hour is a different one, and an
+				instance so large that a daily walk is too much.
+
+				What the comparison is for, and why it cannot be replaced by
+				the maintenance window of Nextcloud, is written up in
+				docs/reconcile.md.
+			-->
+			<variable>
+				<name>FINDLING_RECONCILE_ENABLED</name>
+				<display-name>Check the index against the file list</display-name>
+				<description>true or false. When this is on, Findling walks the file list once a day and repairs whatever the live updates missed: files that were added or changed without an event reaching the app, and files that were removed while it was not running. Turning it off means the index is only ever as good as the stream of events, and a lost event then stays lost until the next full re-index. Anything that is not a yes or no value keeps the check on.</description>
+				<default>true</default>
+			</variable>
+			<variable>
+				<name>FINDLING_RECONCILE_HOUR</name>
+				<display-name>Preferred hour for the check</display-name>
+				<description>A whole number between 0 and 23, in the time zone of the container. The check waits for this hour before it starts a full walk. If the container is switched off at that hour, the walk starts anyway once twice the pause below has gone by, so that the guarantee is not lost on a machine that only runs during the day. Anything outside the range falls back to 2.</description>
+				<default>2</default>
+			</variable>
+			<variable>
+				<name>FINDLING_RECONCILE_MIN_INTERVAL_HOURS</name>
+				<display-name>Hours between two full checks</display-name>
+				<description>A whole number of hours. At most one full walk over the file list happens in this span. Raising it on a very large instance makes the check cheaper and the repair slower; lowering it below a day rarely pays, because live updates already carry the day to day changes. Anything that is not a positive whole number falls back to 24.</description>
+				<default>24</default>
+			</variable>
+			<variable>
+				<name>FINDLING_RECONCILE_QUIET_MAX</name>
+				<display-name>Queue length the check tolerates</display-name>
+				<description>A whole number of waiting queue entries. Above it the check stands down and tries again later, so that it never competes with a first indexing run or a backlog of scanned documents. The default of 100 is about three batches of the indexing worker. Raising it makes the check more insistent on a busy instance; lowering it to 1 means it only ever runs on a completely empty queue.</description>
+				<default>100</default>
+			</variable>
+			<variable>
+				<name>FINDLING_RECONCILE_SLICE</name>
+				<display-name>Files per page of the check</display-name>
+				<description>A whole number between 1 and 2000. The file list is read in pages of this size, with a short breather between them, which is what keeps the check bearable outside the quiet hours. Larger pages are faster and heavier on the Nextcloud database; the server side caps this at 2000 in any case. Anything outside the range falls back to 500.</description>
+				<default>500</default>
+			</variable>
 		</environment-variables>
 	</external-app>
 </info>

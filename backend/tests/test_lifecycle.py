@@ -11,17 +11,27 @@ same property Gate A proves through the AST.
 """
 
 import asyncio
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
 
-from findling.main import APP, enabled_handler, unusable_startup_variables
+from conftest import Corpus
+from findling.config import settings
+from findling.main import (
+    APP,
+    active_poller,
+    active_reconcile,
+    enabled_handler,
+    unusable_startup_variables,
+)
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
+
+Sign = Callable[[str], dict[str, str]]
 
 
 @pytest.fixture
@@ -110,6 +120,130 @@ def test_a_numeric_app_port_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("APP_PORT", "10035")
 
     assert unusable_startup_variables() == []
+
+
+# ---------------------------------------------------------------------------
+# The reconcile beside the poller. Two tasks, one process, and the whole point of
+# the arrangement is that the second one cannot take the first one with it: the
+# search is what a user sees, and a repair that failed must never cost it.
+# ---------------------------------------------------------------------------
+
+
+class _FakeReconcile:
+    """A reconcile that only records what the lifespan did to it."""
+
+    def __init__(self) -> None:
+        self.armed = False
+        self.closed = False
+        self.rounds = 0
+
+    def arm(self) -> None:
+        self.armed = True
+
+    def silence(self) -> None:
+        self.armed = False
+
+    async def run(self, stop_event: asyncio.Event) -> None:
+        while not stop_event.is_set():
+            self.rounds += 1
+            await asyncio.sleep(0.001)
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+class _ExplodingReconcile(_FakeReconcile):
+    """A reconcile that ends the way an unhandled bug would end it."""
+
+    async def run(self, stop_event: asyncio.Event) -> None:
+        del stop_event
+        raise RuntimeError("the file list could not be read")
+
+
+def _install(monkeypatch: pytest.MonkeyPatch, replacement: _FakeReconcile) -> _FakeReconcile:
+    monkeypatch.setattr("findling.main.default_reconcile", lambda: replacement)
+    return replacement
+
+
+def test_the_reconcile_runs_as_a_task_beside_the_poller(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _install(monkeypatch, _FakeReconcile())
+
+    with TestClient(APP):
+        assert active_reconcile() is fake
+        assert active_poller() is not None
+
+    assert fake.closed
+
+
+def test_reconcile_task_is_not_started_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A backend whose admin switched the comparison off must not walk the file
+    # list anyway, and the switch has to be read where the task is created rather
+    # than inside a round that already opened a connection.
+    fake = _install(monkeypatch, _FakeReconcile())
+    monkeypatch.setenv("FINDLING_RECONCILE_ENABLED", "false")
+    settings.cache_clear()
+    try:
+        with TestClient(APP):
+            assert active_reconcile() is None
+            assert active_poller() is not None
+    finally:
+        settings.cache_clear()
+
+    assert fake.rounds == 0
+
+
+def test_the_reconcile_task_ends_with_the_lifespan(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _install(monkeypatch, _FakeReconcile())
+
+    with TestClient(APP):
+        pass
+
+    assert active_reconcile() is None
+    assert fake.closed
+
+
+def test_failing_reconcile_does_not_stop_the_poller(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The property the whole arrangement exists for. An exception in the repair
+    # task is a log line, never a dead container and never a stopped indexer.
+    _install(monkeypatch, _ExplodingReconcile())
+
+    with TestClient(APP) as client:
+        assert client.get("/heartbeat").status_code == 200
+        poller = active_poller()
+        assert poller is not None
+
+
+async def test_the_enabled_handler_arms_and_silences_the_reconcile(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _install(monkeypatch, _FakeReconcile())
+
+    with TestClient(APP):
+        await enabled_handler(True, cast("AsyncNextcloudApp", None))
+        assert fake.armed is True
+
+        await enabled_handler(False, cast("AsyncNextcloudApp", None))
+        assert fake.armed is False
+
+
+@pytest.mark.usefixtures("appapi_environment")
+def test_the_search_answers_while_a_reconcile_round_is_running(
+    monkeypatch: pytest.MonkeyPatch,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The reconcile is repair work beside the search, not in front of it. A round
+    # that held the event loop would be invisible in every counter and would show
+    # up as a search that hangs.
+    fake = _install(monkeypatch, _FakeReconcile())
+
+    with TestClient(APP) as client:
+        answer: dict[str, Any] = client.post(
+            "/search",
+            json={"query": "Kündigungsfrist"},
+            headers=sign(indexed_volume.bob),
+        ).json()
+
+    assert answer["candidates"]
+    assert fake.rounds > 0
 
 
 def test_only_the_client_module_imports_nc_py_api() -> None:
