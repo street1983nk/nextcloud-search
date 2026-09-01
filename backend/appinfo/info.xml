@@ -145,6 +145,52 @@ results into the normal search bar and is the only caller of this backend.]]></d
 				<description>In bytes, 52428800 is 50 MB. Larger files are skipped while the file list is walked, so they never cost the container anything. Raising this raises the peak memory of one extraction. Anything that is not a positive whole number falls back to the default.</description>
 				<default>52428800</default>
 			</variable>
+			<!--
+				The OCR settings. Nothing here has to be touched to get OCR:
+				the engine and the German and English models are inside the
+				image and switched on. These exist for the two cases where the
+				defaults are wrong for an instance: a box too slow to afford
+				OCR at all, and a document stock that needs different limits.
+
+				Every default below is a measured number, and the measurement
+				that produced it, with its command line, is in docs/ocr.md.
+			-->
+			<variable>
+				<name>FINDLING_OCR_ENABLED</name>
+				<display-name>Read scanned documents (OCR)</display-name>
+				<description>true or false. When this is off, scanned PDFs and images are still listed by name but their content is not read, and everything else about the indexing stays exactly as it is. Turn it off on a very slow machine where the indexing queue never catches up. Anything that is not a yes or no value keeps OCR on.</description>
+				<default>true</default>
+			</variable>
+			<variable>
+				<name>FINDLING_OCR_LANGUAGES</name>
+				<display-name>OCR languages</display-name>
+				<description>Joined with a plus sign, in the order of importance, for example deu+eng or deu. Only the languages this image carries are accepted, which today are deu (German) and eng (English); anything else is ignored with a warning in the log and never reaches the engine. Note that this is not the same setting as the index languages above: this one decides how a scan is read, that one decides how any text is broken into words.</description>
+				<default>deu+eng</default>
+			</variable>
+			<variable>
+				<name>FINDLING_OCR_MAX_PAGES</name>
+				<display-name>Pages read per scanned document</display-name>
+				<description>A whole number between 1 and 500. Beyond it the document is indexed with the pages read so far and marked as shortened, rather than skipped: a 200 page scan stays findable through its first 30 pages. The default of 30 keeps one batch of the indexing queue below its lock timeout, so raising it a lot without also raising that timeout makes large scans look stuck. Anything outside the range falls back to the default.</description>
+				<default>30</default>
+			</variable>
+			<variable>
+				<name>FINDLING_OCR_PAGE_SECONDS</name>
+				<display-name>Seconds allowed per page</display-name>
+				<description>A whole number between 1 and 300. A page that takes longer is dropped and the next one is read. Measured on a laptop core, a clean A4 page at 300 dpi takes about two seconds; the default of 30 is meant to cut off the outlier on a slow ARM board, not the normal page.</description>
+				<default>30</default>
+			</variable>
+			<variable>
+				<name>FINDLING_OCR_JOB_SECONDS</name>
+				<display-name>Seconds allowed per scanned document</display-name>
+				<description>A whole number between 1 and 1800. When the budget is spent the document is indexed with what was read so far and marked as shortened. The hard limit at which the whole job is abandoned is always this value plus 60 seconds, so that the partial text has a window to be handed over; that is why it is not a setting of its own.</description>
+				<default>600</default>
+			</variable>
+			<variable>
+				<name>FINDLING_OCR_DPI</name>
+				<display-name>Resolution used to read a scanned page</display-name>
+				<description>A whole number between 72 and 600. 300 is what the engine works best with. Lower values are faster and read worse; higher ones cost memory with the square of the number, which is why the ceiling exists at all. Anything outside the range falls back to the default.</description>
+				<default>300</default>
+			</variable>
 		</environment-variables>
 	</external-app>
 </info>
