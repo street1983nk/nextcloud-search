@@ -82,6 +82,29 @@ CREATE TABLE IF NOT EXISTS acl (
 -- whole table.
 CREATE INDEX IF NOT EXISTS acl_file ON acl (file_id);
 
+-- The bookmark of the ETag reconcile, and the one table in this file that seems
+-- to argue with the header above. It does not: what stands here is not a work
+-- stock, it is a place in a walk. The list of what exists still lives in
+-- Nextcloud, and this table only remembers which file id the last page of a
+-- mount ended on, so that the next round does not start from the front again.
+--
+-- Losing it therefore costs a repetition and never work. The reconcile is pure,
+-- idempotent repair: it reads the file list, compares, and turns differences
+-- into queue jobs. A forgotten bookmark makes the next cycle walk a mount it had
+-- already walked, which is slow and correct, while a forgotten crawl cursor
+-- would be a document nobody ever indexes. That difference is the entire reason
+-- this cursor may live in the container while the crawl cursor may not; the
+-- argument is written out in docs/reconcile.md.
+--
+-- after_file_id back at 0 together with a finished_at is what "this mount is
+-- done" means. started_at dates the walk that is running for a support case.
+CREATE TABLE IF NOT EXISTS reconcile (
+    storage_id    INTEGER PRIMARY KEY,
+    after_file_id INTEGER NOT NULL DEFAULT 0,   -- 0 plus finished_at means: done
+    started_at    INTEGER,
+    finished_at   INTEGER
+);
+
 -- A mirror for the display, nothing else. The original of the crawl progress is
 -- the last_file_id in the argument of the next StorageCrawlJob in Nextcloud, so
 -- a container that loses this table loses a status number and no work.
