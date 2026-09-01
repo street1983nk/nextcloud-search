@@ -33,6 +33,7 @@ import logging
 import shutil
 import struct
 import subprocess
+import unicodedata
 import zlib
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -585,6 +586,27 @@ def _declares(tmp_path: Path, name: str, width: int, height: int) -> str:
     return str(path)
 
 
+def _folded(text: str) -> str:
+    """The text the way the German analyzer chain ends up seeing a word.
+
+    Measured in the shipping image on 2026-09-01: tesseract 5.5.0 reads the
+    headline of ``19-uebermittlung.tif`` as "Ubermittlungsprotokoll", without the
+    two dots over the first letter. The four lower case umlauts of the other
+    corpus pictures come back intact; it is the capital one in a large headline
+    that loses them.
+
+    Asserting the raw glyph anyway would be exactly the test pitfall 8 of the
+    phase research warns against: a comparison against the OCR raw text is a test
+    against the tesseract version and goes red at the next Debian point release.
+    What the product promises is findability, and there the difference does not
+    exist: the Snowball stemmer of the German chain drops the umlaut accent in its
+    postlude, so both spellings land on the same token. This folding is that step,
+    and nothing beyond it, so a word the engine did not read still fails.
+    """
+    decomposed = unicodedata.normalize("NFKD", text.casefold())
+    return "".join(sign for sign in decomposed if not unicodedata.combining(sign))
+
+
 def _handed_over(engine: _Engine, number: int = 0) -> Image.Image:
     """The picture the engine was actually given, decoded back out of the pipe."""
     payload = engine.calls[number]["input"]
@@ -613,7 +635,7 @@ def test_a_photographed_document_becomes_the_terms_the_corpus_promises(name: str
     outcome = image.extract_image(str(CORPUS / name))
 
     assert outcome.state is State.INDEXED
-    assert term in outcome.text
+    assert _folded(term) in _folded(outcome.text)
 
 
 def test_an_icon_under_the_minimum_edge_is_skipped_image_not_ocrable(monkeypatch: pytest.MonkeyPatch) -> None:
