@@ -181,6 +181,14 @@ Keine.
 - Der Statusseite von Phase 4 steht mit `Findling: capped the user list of a queued file` ein Zaehler zur Verfuegung, falls dort einmal sichtbar gemacht werden soll, wie viele Dateien den Vorfilter nicht mehr verengen.
 - Offen und bewusst nicht in diesem Plan: die in `usersFor` beschriebene Optimierung, je Storage statt je Datei zu fragen. Sie gehoert hinter eine Messung in Phase 5, zusammen mit dem dort geplanten Paritaetstest.
 
+## Self-Check: PASSED
+
+- Alle angelegten und geaenderten Dateien existieren im Arbeitsbaum.
+- Alle sieben Commits sind in `git log` auffindbar: `f2c2013`, `da5321a`, `e4c113f`, `a32b419`, `bf2dc34`, `1955438`, `4a43c67`.
+- Gates gruen: `uv run python -m pytest -q` mit 684 bestanden und 11 uebersprungen, `ruff check`, `ruff format --check`, `pyright` mit 0 Fehlern, `vulture --min-confidence 80` ohne Befund, `php -l` ueber alle Dateien unter `php/lib` ohne Fehler.
+- Kein Co-Authored-By-Trailer, keine Em-Dashes, keine Emojis.
+- STATE.md und ROADMAP.md wurden nicht angefasst, nichts wurde gepusht.
+
 ---
 *Phase: 03-aktualit-t-und-ocr*
 *Completed: 2026-09-01*
