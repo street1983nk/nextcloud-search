@@ -38,8 +38,9 @@ import pytest
 from fastapi.testclient import TestClient
 from tantivy import Index
 
+from conftest import write_wordlist
 from findling.extract.dispatch import extract as dispatch_extract
-from findling.index.open import open_index
+from findling.index.open import expected_versions, open_index
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID
 from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
@@ -53,6 +54,7 @@ from findling.worker.poller import (
     ROUND_QUEUE_UNAVAILABLE,
     ROUND_WORKED,
     Poller,
+    _open_state,
 )
 
 POLLER_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "worker" / "poller.py"
@@ -608,3 +610,20 @@ def test_the_poller_builds_exactly_one_client() -> None:
 def test_the_shutdown_path_releases_what_the_container_holds() -> None:
     """The lifespan has to hand the rows back, otherwise a restart waits."""
     assert "unlock" in MAIN_SOURCE.read_text(encoding="utf-8")
+
+
+def test_a_state_database_created_by_the_poller_carries_the_version_marks(volume: Path) -> None:
+    """Freshly created state must agree with the index this code builds.
+
+    Without the seed the marks stay unknown/0 forever: every answer says
+    degraded, /status reports reindexRequired, and the drift alarm becomes
+    permanent noise (bug audit H1). The seed fills only missing keys, so an
+    existing database keeps the marks of the index it actually belongs to.
+    """
+    digest = write_wordlist(volume)
+
+    opened = _open_state()
+    try:
+        assert opened.version_mismatch(expected_versions(digest)) == []
+    finally:
+        opened.close()

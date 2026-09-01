@@ -64,7 +64,7 @@ from findling.config import settings
 from findling.extract.dispatch import extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.sandbox import extract_guarded
-from findling.index.open import open_index
+from findling.index.open import expected_versions, open_index
 from findling.index.wordlist import build_artifact
 from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord
 from findling.nc import client as nc_client
@@ -170,8 +170,15 @@ class _HashingSink:
 
 
 def _open_state() -> Store:
-    """The state database of the running container."""
-    return open_store(settings().state_db)
+    """The state database of the running container, seeded with version marks.
+
+    The seed only fills keys that are missing, so an existing database keeps the
+    marks its index was actually built with. Without the seed a state database
+    created by this process carries unknown/0 marks forever: every answer says
+    degraded, /status reports reindexRequired, and the drift alarm this
+    mechanism exists for becomes permanent noise nobody reads (bug audit H1).
+    """
+    return open_store(settings().state_db, meta=expected_versions(build_artifact().digest))
 
 
 def _open_writer() -> IndexBatchWriter:
