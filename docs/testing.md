@@ -44,6 +44,53 @@ through the real unified search API of a real Nextcloud:
   the case that used to answer 500 and told a caller which accounts exist
 - not one byte and not one timestamp of the corpus moves in the process
 
+## The three acceptances of phase 3, and what each one does not prove
+
+Since phase 3 the three acceptance statements of the roadmap are gates that run
+on every commit instead of sentences somebody once checked. Each of them is
+listed with what it proves and with what it deliberately does not, because an
+acceptance test that is read as proving more than it does is worse than none.
+
+**Gate B over the whole OCR corpus** (`readonly-gate`). The corpus is indexed
+with the OCR track switched on, and file list, checksums, modification times and
+sizes are frozen before and compared afterwards. What it proves: neither the
+download path nor the renderer nor the engine writes to a user file, over
+thirty three files including twelve broken PDFs, five pictures and a nine
+gigapixel page. What it does not prove: that nothing is written anywhere else on
+the instance. It watches the corpus directory, not the data directory.
+
+Its second half is the verdict counter, and it exists because the first half can
+be green for the wrong reason. A comparison only measures the files the run
+touched, so a pass that never reached the pictures would compare thirty three
+untouched files with thirty three untouched files and say nothing at all. The
+counter therefore asserts, file by file, the verdict `testdata/CORPUS.md` names,
+and it counts the caps of the OCR cascade separately. What it does not prove:
+that the recognised text is any good. It only knows that a file was judged and
+how.
+
+**IDX-04, word for word** (`reconcile-and-dach`). A file is created, a second
+one changed and a third one removed past the event path, with `occ files:scan`,
+which is what a mass import and a restore from a backup look like. A step in
+between proves that no queue row was created, then exactly one reconcile cycle
+runs, and afterwards the new file is findable, the changed one answers with its
+new content and the removed one is findable for neither of the two users. What it
+proves: after one cycle the index is correct even though not a single event
+arrived. What it does not prove: the cadence. When a cycle starts is decided
+against the clock of the container and is measured in `test_reconcile.py`; the
+cycle in the job is triggered by hand, and the reconcile task of the container is
+switched off for that whole job so that "exactly one" is a fact.
+
+**D-09, the DACH promise** (`reconcile-and-dach`). The Swiss document is searched
+for with both spellings, with ss and with the sharp s, and the Austrian one with
+its own word form. What it proves: a scanned document from Switzerland or Austria
+is findable through the ordinary search route after OCR. What it does not prove:
+that tesseract read the page correctly. That is deliberate and is the whole
+reason the assertion is a search and not a comparison of the recognised text: a
+text comparison would be a test against the version of the engine and would go
+red on the next Debian point release. The limit that a search for `Januar` does
+not find `Jänner` is documented in `docs/german-analyzer.md` and asserted
+nowhere, because it is not a defect.
+
 ## The gap
 
 These behaviours of the PHP half have no test at all today. They are pure logic,

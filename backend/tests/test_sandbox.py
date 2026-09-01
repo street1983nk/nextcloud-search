@@ -259,6 +259,28 @@ def test_an_unexpected_child_death_is_a_verdict_and_not_a_hang(worker: sandbox.E
     assert worker.pid != doomed_pid
 
 
+def test_a_forced_route_survives_the_boundary(worker: sandbox.ExtractionWorker, tmp_path: Path) -> None:
+    # The OCR track of plan 03-09 is the only caller that forces a route, and it
+    # forces it across two address spaces. The route is written as a plain string
+    # here for the same reason the parent sends one: this side of the boundary
+    # must not import the dispatcher.
+    #
+    # A text file announced as a PDF is the cheapest way to see which route
+    # actually ran, and it needs no engine: the PDF route cannot parse it, the
+    # forced text route reads it without trouble. A run that lost the route on
+    # the way would answer with the first verdict twice.
+    page = tmp_path / "announced-as-a-pdf.txt"
+    page.write_text("Bebauungsplan der Gemeinde", encoding="utf-8")
+    size = page.stat().st_size
+
+    derived = worker.run(str(page), "application/pdf", size)
+    forced = worker.run(str(page), "application/pdf", size, route="plain")
+
+    assert derived.state is State.FAILED, "a text file read as a PDF cannot end well"
+    assert forced.state is State.INDEXED, "the forced route did not reach the child"
+    assert "Bebauungsplan" in (forced.text or "")
+
+
 def test_child_does_not_import_findling_index(worker: sandbox.ExtractionWorker) -> None:
     worker.run(NOWHERE, UNSUPPORTED, 1024)
 
@@ -291,7 +313,7 @@ def test_the_child_hardens_itself_before_the_parsers_load() -> None:
     # the credentials to every module the import pulls in first.
     body = SANDBOX_SOURCE.read_text(encoding="utf-8").split("def _child_main", 1)[1]
 
-    assert body.index("_shed_secrets()") < body.index("from findling.extract.dispatch import extract")
+    assert body.index("_shed_secrets()") < body.index("from findling.extract.dispatch import ")
     assert body.index("os.setsid()") < body.index("_shed_secrets()")
 
 

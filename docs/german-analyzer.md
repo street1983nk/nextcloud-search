@@ -161,9 +161,44 @@ Admins who cannot afford the `full` variant set `FINDLING_COMPOUND_DICT=nouns`.
 That is a measured trade, not a guess: two of sixteen compounds stop being
 findable through one of their parts, and about 34 MiB come back.
 
+## The DACH cases (D-09)
+
+Findling soll nicht nur bundesdeutsche Dokumente finden. Die Zusage aus D-09
+lautet: ein Schweizer Dokument mit der Schreibweise ss ist ebenso auffindbar wie
+ein deutsches mit dem scharfen s, und ein österreichisches Dokument ist über
+seine eigene Wortform auffindbar. Was dabei belegt ist und was nicht, steht hier,
+weil beides gemessen wurde.
+
+Gemessen am 2026-09-01 mit dem Laufzeitimage: die drei gescannten Dokumente des
+Referenzkorpus einmal durch OCR, der erkannte Text in einen echten Tantivy-Index
+mit der echten Konstituentenliste, gefragt mit dem echten Abfrage-Parser.
+
+| Gesucht | So steht es in der Datei | Datei | Treffer | Warum |
+|---|---|---|---|---|
+| `Strasse` | Strasse, Bahnhofstrasse | `15-schweiz-baubewilligung.pdf` | 1 | Term `strass`, direkt getroffen |
+| `Straße` | Strasse, Bahnhofstrasse | `15-schweiz-baubewilligung.pdf` | 1 | Der Snowball-Stemmer faltet das scharfe s auf `ss`, beide Schreibweisen landen auf `strass` |
+| `Jänner` | Jänner | `16-oesterreich-mitteilung.pdf` | 1 | Gewöhnlicher Termtreffer, der Stemmer entfernt nur den Umlautakzent |
+| `Januar` | steht in keiner Datei | keine | 0 | Wäre Synonymie und ist in v1 nicht gebaut |
+| `Bebauungsplan` | Bebauungsplan | `13-ratsvorlage-scan.pdf` | 1 | Steht selbst in der Liste, wird also nicht zerlegt |
+
+Die Schweizer Zusage braucht keine zusätzliche Mechanik. In der deutschen Kette
+steht kein `ascii_fold`, der Stemmer faltet Umlaute und das scharfe s selbst, und
+die Abfrageseite bildet zusätzlich die Variante für ausgeschriebene Umlaute. Beide
+Wege führen auf denselben Term, und die Zeile mit dem scharfen s im
+Integrationslauf ist der Beleg dafür statt einer Ableitung aus der Doku.
+
+**Der eigentliche DACH-Risikopunkt liegt nicht in dieser Kette, sondern in der
+OCR-Qualität.** Tesseract verwechselt bei schlechten Scans regelmäßig Zeichen;
+gemessen liest die Engine des Images die fette Überschrift einer Korpusdatei als
+"Ubermittlungsprotokoll", ohne die beiden Punkte. Deshalb läuft die Abnahme über
+auffindbare Suchbegriffe und niemals über einen Vergleich des OCR-Rohtextes: ein
+Rohtextvergleich wäre ein Test gegen die Version der Engine und beim nächsten
+Debian-Punktrelease rot. `docs/ocr.md` führt dieselbe Begründung an der Stelle,
+an der die Engine beschrieben wird.
+
 ## Known limits
 
-These three are measured, documented and deliberately not fixed here.
+These four are measured, documented and deliberately not fixed here.
 
 **D2, verb forms.** The Snowball stemmer unifies the infinitive and the noun but
 not the past tense or the participle: `suchen` and `Suche` both become `such`,
@@ -181,6 +216,18 @@ branches are joined with `Occur.Should`. That costs no index space, acts only on
 queries, and an occasionally meaningless variant simply produces an empty branch.
 Indexing both forms instead would work as well and would cost index space
 permanently for a rarer case.
+
+**D-09, the Austrian month name.** `Jänner` is stemmed and is findable through
+`Jänner`. A search for `Januar` does not find it, and it is not meant to: the two
+are different words, and joining them is synonymy. A synonym list would be a
+second data file with a second licence, it would act on every query of every
+language branch, and the first entry always drags a hundred more behind it. What
+would be affected is a handful of Austrian month names and a few
+Austrian and Swiss administrative terms, so the trade is a whole mechanism
+against a small, nameable set. The measured table above records the zero rather
+than hiding it, and `testdata/CORPUS.md` names the one file the Austrian word
+stands in, so whoever builds synonymy in a later version has both the case and
+the counter case ready.
 
 **Compounds that stand in the list themselves.** A compound of at most 14
 characters that is an entry of the list is never split, because the splitter

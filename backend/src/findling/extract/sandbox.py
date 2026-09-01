@@ -45,7 +45,7 @@ import os
 import sys
 import time
 from multiprocessing.context import SpawnProcess
-from typing import Final
+from typing import Any, Final
 
 from findling import config
 from findling.extract.errors import ExtractionOutcome, Reason
@@ -174,7 +174,18 @@ def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
     _shed_secrets()
     _limit_address_space(address_space_bytes)
 
-    from findling.extract.dispatch import extract
+    from findling.extract.dispatch import Route, extract
+
+    def _extraction_of(job: tuple[Any, ...]) -> ExtractionOutcome:
+        """Run one extraction job, forced route included.
+
+        The route crosses the pipe as a plain string and becomes a ``Route``
+        here, which is the whole reason this function sits inside the child: the
+        parent must not import the dispatcher, and a ``Route`` in the job tuple
+        would make it do exactly that while unpickling.
+        """
+        wanted = job[4]
+        return extract(job[1], job[2], job[3], Route(wanted) if wanted is not None else None)
 
     while True:
         try:
@@ -188,7 +199,7 @@ def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
             answer: object = tuple(sorted(name for name in sys.modules if name.startswith("findling")))
         else:
             try:
-                answer = _run_probe(job[1], job[2]) if kind == _JOB_PROBE else extract(job[1], job[2], job[3])
+                answer = _run_probe(job[1], job[2]) if kind == _JOB_PROBE else _extraction_of(job)
             except MemoryError:
                 # Reported rather than raised: the parent has to tell an exhausted
                 # address space apart from a hang, and it can only do that if the
@@ -221,9 +232,23 @@ class ExtractionWorker:
         """The process id of the current child, or None while there is none."""
         return None if self._process is None else self._process.pid
 
-    def run(self, path: str, mime: str, size: int, *, timeout_seconds: float | None = None) -> ExtractionOutcome:
-        """Extract one file behind the boundary and return its verdict."""
-        outcome = self._ask((_JOB_EXTRACT, path, mime, size), timeout_seconds)
+    def run(
+        self,
+        path: str,
+        mime: str,
+        size: int,
+        *,
+        route: str | None = None,
+        timeout_seconds: float | None = None,
+    ) -> ExtractionOutcome:
+        """Extract one file behind the boundary and return its verdict.
+
+        ``route`` is a plain string and not a ``Route``, so that this side of the
+        boundary keeps its promise never to import the dispatcher. It is the one
+        thing an OCR order brings along that a text job does not: the second
+        track belongs to the kind of the job, not to the mimetype of the file.
+        """
+        outcome = self._ask((_JOB_EXTRACT, path, mime, size, route), timeout_seconds)
         if not isinstance(outcome, ExtractionOutcome):
             outcome = ExtractionOutcome.failed(Reason.CORRUPT)
         self._files_handled += 1
@@ -345,7 +370,14 @@ class ExtractionWorker:
 _WORKER: ExtractionWorker | None = None
 
 
-def extract_guarded(path: str, mime: str, size: int, *, timeout_seconds: float | None = None) -> ExtractionOutcome:
+def extract_guarded(
+    path: str,
+    mime: str,
+    size: int,
+    *,
+    route: str | None = None,
+    timeout_seconds: float | None = None,
+) -> ExtractionOutcome:
     """Extract one file without ever letting it take the container with it.
 
     The facade the indexing worker calls. One worker per process, because IDX-08
@@ -355,11 +387,11 @@ def extract_guarded(path: str, mime: str, size: int, *, timeout_seconds: float |
     memory peak of the container for a branch that runs one file at a time
     anyway (T-03-904).
 
-    ``timeout_seconds`` is what an OCR job brings along and a text job leaves
-    alone. It is passed through rather than resolved here, because which kind of
-    job this is is known by the poller and by nobody else.
+    ``route`` and ``timeout_seconds`` are what an OCR job brings along and a text
+    job leaves alone. Both are passed through rather than resolved here, because
+    which kind of job this is is known by the poller and by nobody else.
     """
     global _WORKER
     if _WORKER is None:
         _WORKER = ExtractionWorker()
-    return _WORKER.run(path, mime, size, timeout_seconds=timeout_seconds)
+    return _WORKER.run(path, mime, size, route=route, timeout_seconds=timeout_seconds)

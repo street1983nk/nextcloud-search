@@ -341,6 +341,34 @@ denen der zweite mit `Failed to load page` endet. Ohne den Deckel wäre die
 Schleife hunderttausend Fehlversuche lang. Die Datei liegt genau dafür im
 Korpus (Bedrohung T-03-601), und sie ist in unter zehn Millisekunden fertig.
 
+## Die DACH-Abnahme, und warum sie kein Rohtextvergleich ist
+
+Die Abnahme zu D-09 prüft, dass ein Schweizer Dokument mit der Schreibweise ss
+und mit dem scharfen s auffindbar ist und ein österreichisches über seine eigene
+Wortform. Sie läuft im Integrationslauf als drei Suchen über die gewöhnliche
+Suchroute; die Tabelle mit den gemessenen Trefferzahlen und die Begründung je
+Zeile stehen in `docs/german-analyzer.md` unter "The DACH cases".
+
+Die Form der Prüfung ist dabei die eigentliche Entscheidung. Naheliegend wäre,
+den erkannten Text einer Seite mit einer erwarteten Zeichenfolge zu vergleichen.
+Das wäre ein Test gegen die tesseract-Version und nicht gegen dieses Projekt: die
+Engine ist an den Digest des Basis-Image gebunden, nicht an eine gepinnte
+Version, und schon ein Debian-Punktrelease verschiebt einzelne Zeichen. Die
+Messung oben zeigt genau das im Kleinen. Der Lauf im Container liest die fette
+Überschrift von `19-uebermittlung.tif` als "Ubermittlungsprotokoll", ohne die
+beiden Punkte, während die vier kleingeschriebenen Umlaute der anderen Bilder
+unversehrt zurückkommen. Ein Rohtextvergleich wäre daran rot geworden. Die Datei
+ist trotzdem über "Übermittlungsprotokoll" auffindbar, weil die deutsche Kette
+den Umlautakzent im Stemmer entfernt und beide Schreibweisen auf denselben Term
+fallen.
+
+Die Zusage lautet deshalb: der Begriff findet das Dokument. Sie lautet nicht: die
+Engine liest die Seite zeichengenau. Das Zweite verspricht dieses Projekt an
+keiner Stelle, und der Unterschied ist der Grund, warum die Abnahme über
+Suchbegriffe läuft. Was ein Suchbegriff nicht abdeckt, deckt auch niemand sonst
+ab: ein Wort, das die Engine gar nicht gelesen hat, fällt durch, und genau das
+soll es.
+
 ## Was diese Seite nicht misst
 
 Ehrlichkeitshalber, damit die nächste Phase nicht das Falsche annimmt:

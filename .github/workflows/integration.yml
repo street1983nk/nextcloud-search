@@ -13,6 +13,14 @@ name: Integration
 # afterwards. A user without access to the corpus runs the very same list and
 # has to come back with nothing, which is the negative half of COMP-02.
 #
+# Since phase 3 that job also runs the whole indexing pass over the corpus, OCR
+# track included, because the download path is no longer the only path that
+# touches a user file: a page is rendered to pixels and an engine is run over it,
+# and that is the track the predecessor of this app destroyed data on. And it
+# counts the verdicts afterwards, which is the other half of the same thought. A
+# checksum comparison only measures what the run actually touched, so a pass that
+# never reached the new files would be green and would prove nothing.
+#
 # The third job, added in phase 2, is the product promise itself: the same corpus
 # is indexed and then searched through the ordinary Nextcloud search route, with
 # seven German language cases, a second user who sees exactly the one file that
@@ -24,6 +32,10 @@ on:
       - 'php/**'
       - 'backend/**'
       - 'testdata/corpus/**'
+      # The expected verdict of every corpus file stands in this document and
+      # the verdict counter reads it from there. A reference that can change
+      # without the gate running is not a reference.
+      - 'testdata/CORPUS.md'
       - 'scripts/dev/build_corpus.py'
       - 'scripts/ci/**'
       - '.github/workflows/integration.yml'
@@ -37,6 +49,7 @@ on:
       - 'php/**'
       - 'backend/**'
       - 'testdata/corpus/**'
+      - 'testdata/CORPUS.md'
       - 'scripts/dev/build_corpus.py'
       - 'scripts/ci/**'
       - '.github/workflows/integration.yml'
@@ -54,6 +67,15 @@ on:
           switch exists to make it fail on demand. The run must end red.
         type: boolean
         default: false
+      missing_verdict_probe:
+        description: >-
+          Drop the verdict of one corpus file on purpose, the WebP, which is the
+          state a run has when a mimetype falls out of the allowlist. It is the
+          falsification of the verdict counter and therefore of the sentence
+          that a checksum comparison alone cannot prove anything. The run must
+          end red, and red in the counter step, not in the checksum step.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -69,6 +91,10 @@ jobs:
   walking-skeleton:
     name: walking-skeleton
     runs-on: ubuntu-24.04
+    # Nothing here indexes, so this is the short one of the three deadlines. It
+    # exists for the same reason as the others: a job that hangs must cost
+    # minutes and not the default six hours.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -323,6 +349,12 @@ jobs:
   readonly-gate:
     name: readonly-gate
     runs-on: ubuntu-24.04
+    # The OCR pass over the corpus is the slowest thing this repository runs in
+    # CI, and a hung engine is exactly the failure this job exists to notice. The
+    # default of six hours would hold a runner for an afternoon over it, so the
+    # deadline is here (T-03-1303, and the same finding as in the perf audit of
+    # resilience.yml). Measured, the whole job is well under twenty minutes.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -332,6 +364,10 @@ jobs:
     env:
       EXAPP_SECRET: '12345'
       EXAPP_PORT: '10035'
+      # Every file of the corpus has to end with a verdict, and that number is
+      # the file count rather than a constant: the drain loop below waits for it
+      # and the counter step asserts it name by name against CORPUS.md.
+      DRAIN_TIMEOUT: '900'
       # The corpus lives in the admin account, because the installer owns a data
       # directory from the first second. The second account deliberately owns
       # nothing and is the negative case.
@@ -370,10 +406,33 @@ jobs:
           exapp-secret: ${{ env.EXAPP_SECRET }}
           exapp-port: ${{ env.EXAPP_PORT }}
 
+      # The engine the picture and the scan track need. It is installed here and
+      # not in the composite action because only this job runs the OCR pass; the
+      # walking skeleton indexes nothing at all.
+      #
+      # The version on the runner is not the version in the runtime image
+      # (Debian trixie ships 5.5.0, Ubuntu noble a 5.3 series), and that
+      # difference is deliberate rather than tolerated: it is precisely why the
+      # assertions of this phase are verdicts and search terms and never a
+      # comparison of the recognised text. A raw text assertion would be a test
+      # against a tesseract build and would go red on a point release.
+      - name: Install the OCR engine, so the scan track really runs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-osd
+          tesseract --version | head -1
+          tesseract --list-langs
+
       - name: Put the reference corpus into the account of the corpus user
         run: |
+          # The skeleton of the installer would be crawled as well, and its
+          # documents would appear in the verdict list next to the corpus. The
+          # corpus is the subject here, so the account starts empty.
+          ./occ config:system:set skeletondirectory --value=''
+          rm -rf "data/${CORPUS_USER}/files"/* "data/${CORPUS_USER}/files"/.[!.]* 2>/dev/null || true
           cp -r findling-src/testdata/corpus "data/${CORPUS_USER}/files/corpus"
           ./occ files:scan --all
+          echo "files on the instance: $(find data/*/files -type f 2>/dev/null | wc -l)"
 
       # The list is frozen exactly once and both checksum runs use this very
       # list. Hashing a freshly globbed set instead would let a deleted file
@@ -478,6 +537,181 @@ jobs:
           grep -q "summary files=${count} read=0 not-accessible=${count} error=0 bytes=0" unknown-user-report.txt
           ! grep -q ' error bytes=' unknown-user-report.txt
 
+      # From here on the second half of the gate: the whole indexing pass over
+      # the same files, so that the comparison below covers the track that reads
+      # a document as pixels and not only the track that downloads it.
+      - name: Index the whole corpus, OCR track included
+        run: |
+          # --no-interaction: occ treats this shell as interactive, so the
+          # restart confirmation would default to No and the queue would stay
+          # empty (first run finding of the resilience gate).
+          ./occ findling:index --restart --no-interaction
+          timeout 60 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once
+          # stop_after with an underscore. The dashed spelling does not exist on
+          # background-job:worker, Symfony rejects it and the crawl never runs.
+          timeout 180 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 120
+          ./occ findling:index
+
+      # The scans reach the queue twice: once as a content job, which ends as
+      # skipped(no_text_layer), and once more as an ocr job that the container
+      # requeues itself. So the loop waits for an empty queue and not for a fixed
+      # number of passes, and the deadline is generous because thirty rendered
+      # pages through an engine is minutes and not seconds.
+      - name: Wait until the queue is empty and every file has a verdict
+        run: |
+          status() {
+            ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+                --db "${{ runner.temp }}/findling/state.db" )
+          }
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+
+          expected=$(wc -l < filelist.txt)
+          deadline=$(( $(date +%s) + DRAIN_TIMEOUT ))
+          while :; do
+            report=$(status)
+            indexed=$(echo "${report}" | jq -r '.indexed')
+            skipped=$(echo "${report}" | jq -r '.skipped')
+            failed=$(echo "${report}" | jq -r '.failed')
+            open=$(open_rows)
+            judged=$(( indexed + skipped + failed ))
+            echo "draining: open=${open} indexed=${indexed} skipped=${skipped} failed=${failed}"
+            if [ "${open}" -eq 0 ] && [ "${judged}" -ge "${expected}" ]; then
+              echo "the queue is empty and ${judged} files have a verdict"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "::error::the indexing pass did not finish within ${DRAIN_TIMEOUT} seconds"
+              echo "${report}"
+              ./occ findling:index
+              exit 1
+            fi
+            sleep 5
+          done
+
+      # Off by default, switched on through workflow_dispatch, and the
+      # falsification of the step that follows it. Taking a mimetype out of the
+      # allowlist leaves exactly this trace: the file is never handed over and
+      # keeps no verdict, while every checksum stays where it was.
+      - name: Verdict probe, drop the verdict of the WebP on purpose
+        if: ${{ inputs.missing_verdict_probe }}
+        run: |
+          python3 - "${{ runner.temp }}/findling/state.db" <<'PY'
+          import sqlite3
+          import sys
+
+          connection = sqlite3.connect(sys.argv[1])
+          removed = connection.execute("DELETE FROM files WHERE path LIKE '%20-rueckruf.webp'").rowcount
+          connection.commit()
+          connection.close()
+          print(f"verdict probe: removed {removed} row(s)")
+          PY
+
+      # The step that makes this gate mean something, and the reason it exists is
+      # worth spelling out. A checksum comparison measures the files the run
+      # touched. A run that never reached the pictures and the scans compares
+      # thirty three unchanged files with thirty three unchanged files and ends
+      # green while proving nothing at all (pitfall 13). So every file is looked
+      # up by name, and the expected verdict comes out of testdata/CORPUS.md
+      # rather than out of a constant in here: the document that describes the
+      # corpus is the reference, and a file added there without a verdict fails
+      # this step instead of quietly leaving the count alone.
+      - name: Every corpus file has exactly one verdict, and the one CORPUS.md names
+        run: |
+          python3 - "${{ runner.temp }}/findling/state.db" filelist.txt findling-src/testdata/CORPUS.md <<'PY'
+          import re
+          import sqlite3
+          import sys
+          from pathlib import Path
+
+          database, listing, reference = (Path(argument) for argument in sys.argv[1:4])
+
+          # A row of the file table of CORPUS.md: the name in backticks, one
+          # column of prose, then the verdict as state or state(reason). Only the
+          # first backticked token of that cell is read, so the remarks behind it
+          # stay prose.
+          ROW = re.compile(r"^\|\s*`(?P<name>\d\d-[^`]+)`\s*\|[^|]*\|\s*`(?P<state>[a-z_]+)(?:\((?P<reason>[a-z_]+)\))?`")
+          CAP_REASONS = ("truncated", "timeout", "out_of_memory")
+
+          expected = {}
+          for line in reference.read_text(encoding="utf-8").splitlines():
+              found = ROW.match(line)
+              if found:
+                  expected[found["name"]] = (found["state"], found["reason"] or "none")
+
+          on_disk = sorted(Path(line.strip()).name for line in listing.read_text(encoding="utf-8").splitlines() if line.strip())
+
+          # The self check of the reference, and it comes first: a pattern that
+          # silently matches nothing would turn this whole step into a loop over
+          # an empty dictionary, which is the same kind of green as the one this
+          # step was written against.
+          unlisted = [name for name in on_disk if name not in expected]
+          if unlisted:
+              print(f"::error::{reference} names no expected verdict for: {', '.join(unlisted)}")
+              print("A corpus file without a reference cannot be counted, so the counter would pass it by.")
+              sys.exit(1)
+
+          connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+          rows = connection.execute("SELECT path, state, reason, deleted_at FROM files").fetchall()
+          connection.close()
+
+          actual = {}
+          for path, state, reason, deleted_at in rows:
+              if not str(path).startswith("corpus/"):
+                  continue
+              actual[str(path).rsplit("/", 1)[-1]] = (state, reason or "none", deleted_at)
+
+          # The caps of docs/ocr.md, counted before anything can end the step, so
+          # that they stand in the log of a red run as well. Every one of them is
+          # a pass that was cut short, and a corpus that starts hitting them is a
+          # corpus whose numbers stop meaning what CORPUS.md says.
+          caps = dict.fromkeys(CAP_REASONS, 0)
+          for _state, reason, _deleted in actual.values():
+              if reason in caps:
+                  caps[reason] += 1
+          print("cap verdicts: " + ", ".join(f"{reason}={count}" for reason, count in caps.items()))
+
+          print(f"{'file':<34} {'expected':<28} {'actual':<28}")
+          problems = []
+          for name in on_disk:
+              want = expected[name]
+              got = actual.get(name)
+              shown = "no verdict at all" if got is None else f"{got[0]}({got[1]})"
+              print(f"{name:<34} {want[0] + '(' + want[1] + ')':<28} {shown:<28}")
+              if got is None:
+                  problems.append(f"{name} was never judged")
+              elif (got[0], got[1]) != want:
+                  problems.append(f"{name} is {shown} and CORPUS.md expects {want[0]}({want[1]})")
+              elif got[2] is not None:
+                  problems.append(f"{name} carries a tombstone, so it left the index again")
+
+          # Belt and braces on the caps: the comparison above already catches
+          # every one of them, because none of the three stands in CORPUS.md. It
+          # is repeated as a rule of its own so that a future row which does name
+          # a cap cannot make this job green by agreeing with it.
+          if any(caps.values()):
+              problems.append(
+                  "a cap of the OCR cascade was hit: " + ", ".join(f"{reason}={count}" for reason, count in caps.items())
+              )
+
+          if problems:
+              for problem in problems:
+                  print(f"::error::{problem}")
+              print(
+                  "A file without a verdict is worse than a red checksum comparison: "
+                  "the OCR pass never touched it, so the comparison above compared "
+                  "files nothing had happened to and would have stayed green whatever "
+                  "the read path does to a picture."
+              )
+              sys.exit(1)
+
+          print(f"{len(on_disk)} files, {len(actual)} verdicts, every one of them the expected one")
+          PY
+
       # Off by default, switched on through workflow_dispatch. A gate nobody has
       # ever seen turn red is a gate nobody knows to work, so the falsification
       # is a step in the job rather than a note in a document.
@@ -489,7 +723,9 @@ jobs:
           # breaks the invariant, which is why metadata is compared as well.
           touch "data/${CORPUS_USER}/files/corpus/05-picture.png"
 
-      - name: Checksums and metadata after the read run
+      # After both halves: the gateway read and the whole indexing pass with its
+      # renderer and its engine.
+      - name: Checksums and metadata after the read run and the OCR pass
         run: |
           xargs -a filelist.txt sha256sum > after.txt
           xargs -a filelist.txt stat -c '%n %Y %s' > after-meta.txt
@@ -552,6 +788,10 @@ jobs:
   index-search-e2e:
     name: index-search-e2e (${{ matrix.database }})
     runs-on: ubuntu-24.04
+    # Two installations of a whole Nextcloud plus an OCR pass over the corpus,
+    # twice. The deadline is the guard against a hung engine holding a runner for
+    # the default six hours (T-03-1303).
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -605,29 +845,30 @@ jobs:
       OVERVIEW_FILE: '11-uebersicht.odt'
       MEMO_FILE: '12-aktenvermerk.txt'
       # What the container has to end up with, measured against the corpus and
-      # not guessed. Thirty three entries lie in the directory, twenty five of
-      # them reach the container: the eight image files are kept out by the
-      # mimetype allowlist of the crawl and therefore never get a verdict at all.
-      # Images become indexable with the OCR route of this phase, and the numbers
-      # below move on the day they do.
+      # not guessed. All thirty three entries of the directory reach the
+      # container since plan 03-10: the four picture formats are on the mimetype
+      # allowlist of the crawl, so nothing is left without a verdict any more.
       #
-      # The three numbers were produced by running the real dispatcher over the
-      # corpus with the mimetypes of the allowlist, not by counting by hand:
-      #   cd backend && uv run python -c "..."   (the loop is in 03-06-SUMMARY.md)
+      # The three numbers were produced by running the real pipeline over the
+      # corpus in the runtime image, text pass first and one OCR pass for every
+      # handover, and testdata/CORPUS.md carries the verdict of every single file
+      # next to the reason it has that one. The verdict counter of the
+      # readonly-gate job asserts that table file by file; these three numbers
+      # are the same statement as a sum, and both have to be changed together.
       #
       # failed is six and not zero, and that is the corpus doing its job: the
-      # zero byte file plus five of the ten deliberately broken PDFs of phase 3.
-      # The other five are broken in ways pdfium repairs or in ways that end as
-      # an OCR candidate, and testdata/CORPUS.md carries the verdict of every
-      # single one. Asserting the exact numbers is the point; "failed is small"
-      # would hide the day a working document starts failing.
-      EXPECTED_INDEXED: '12'
-      EXPECTED_SKIPPED: '7'
+      # zero byte file plus five of the twelve deliberately broken PDFs. The
+      # others are broken in ways pdfium repairs. Asserting the exact numbers is
+      # the point; "failed is small" would hide the day a working document
+      # starts failing.
+      EXPECTED_INDEXED: '22'
+      EXPECTED_SKIPPED: '5'
       EXPECTED_FAILED: '6'
-      # Ceiling of the wait for an empty queue. Twenty five small files, none of
-      # them over 80 kB, so this is a generous bound whose only job is to end a
+      # Ceiling of the wait for an empty queue. Thirty three small files, but a
+      # dozen rendered pages go through the OCR engine on the way, and that is
+      # minutes rather than seconds. Still only a bound whose job is to end a
       # broken run with counters instead of with a reaped runner.
-      DRAIN_TIMEOUT: '420'
+      DRAIN_TIMEOUT: '900'
       # The delay the container is restarted with for the time budget probe.
       # It acts in /snippets only (test hook of plan 02-11), so the first call
       # answers normally and the second one runs into its 1.5 second limit.
@@ -657,6 +898,16 @@ jobs:
           database: ${{ matrix.database }}
           exapp-secret: ${{ env.EXAPP_SECRET }}
           exapp-port: ${{ env.EXAPP_PORT }}
+
+      # Without the engine every scan and every picture of the corpus would end
+      # as failed(ocr_unavailable), which is an honest verdict and the wrong one
+      # to measure the corpus against. The counters below are the verdicts of an
+      # instance that can read pixels.
+      - name: Install the OCR engine, so the scan track really runs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-osd
+          tesseract --version | head -1
 
       # Every file on the instance is crawled, so every file on the instance is
       # part of the arithmetic below. The skeleton would put a manual, a picture
@@ -979,6 +1230,451 @@ jobs:
           echo "--- the last search answers ---"
           for answer in compound.json frist.json umlaut.json flexion.json phrase.json both.json \
                         excluded.json filetype.json colleague-shared.json colleague-denied.json delayed.json; do
+            if [ -f "${answer}" ]; then
+              echo "== ${answer} =="
+              cat "${answer}"
+              echo
+            fi
+          done
+          echo "--- exapp ---"
+          tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+          echo "--- nextcloud ---"
+          tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
+
+      - name: Stop the ExApp
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/exapp.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          fi
+
+  # The fourth job, and the two acceptance tests of this phase that a unit test
+  # cannot make: the reconcile of IDX-04 word for word, against a real Nextcloud
+  # whose cache was filled past the event path, and the DACH promise of D-09 over
+  # search terms rather than over recognised text.
+  #
+  # It is a job of its own for the same reason the read only gate is one: what it
+  # asserts is a statement about repair, and a repair that fails must not look
+  # like a search that fails.
+  reconcile-and-dach:
+    name: reconcile-and-dach
+    runs-on: ubuntu-24.04
+    # The corpus goes through the OCR engine here as well, because the DACH terms
+    # of the two scanned documents exist as pixels and in no other form.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        server-version: ['stable34']
+        php-version: ['8.2']
+
+    env:
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+      OWNER_USER: 'owner'
+      OWNER_PASS: 'findling-ci-owner-2026'
+      COLLEAGUE_USER: 'colleague'
+      COLLEAGUE_PASS: 'findling-ci-colleague-2026'
+      # The reconcile task of the container stays off for the whole job, and this
+      # is what turns "exactly one cycle" from a hope into a fact. A container
+      # that has never run a cycle considers itself due, so its own loop would
+      # walk the file list at some tick of its own choosing, possibly between the
+      # manipulation below and the cycle this job triggers. The step that
+      # triggers the cycle switches the variable back on for its own process.
+      #
+      # Job level, so that it reaches the backend the composite action starts. A
+      # restart with a different environment would be the alternative, and it
+      # would silently lose the armed state that the AppAPI handshake set.
+      FINDLING_RECONCILE_ENABLED: 'false'
+      # The two scanned DACH documents. Named here so that a rename of a corpus
+      # file breaks in one place instead of in three.
+      SWISS_FILE: '15-schweiz-baubewilligung.pdf'
+      AUSTRIAN_FILE: '16-oesterreich-mitteilung.pdf'
+      # The folder the reconcile test works in, and it is deliberately not the
+      # corpus: those files are under a read only invariant that the job above
+      # measures byte for byte, and a test that rewrites one of them would take
+      # that measurement apart.
+      WORK_DIR: 'abgleich'
+      # Thirty three corpus files plus the two files of the work folder. The
+      # third one is created later, past the event path, and is the point of the
+      # whole exercise.
+      EXPECTED_JUDGED: '35'
+      DRAIN_TIMEOUT: '900'
+
+    steps:
+      # Same order and the same reason as in the three jobs above: the server
+      # checkout empties the workspace root, and the second checkout is what
+      # brings the composite action into the workspace.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          repository: nextcloud/server
+          ref: ${{ matrix.server-version }}
+          submodules: recursive
+
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          path: findling-src
+
+      - name: Set up the test Nextcloud with both halves and register the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: ${{ matrix.server-version }}
+          php-version: ${{ matrix.php-version }}
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+
+      - name: Install the OCR engine, so the scan track really runs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-osd
+          tesseract --version | head -1
+
+      - name: Empty the instance and add the two users
+        run: |
+          ./occ config:system:set skeletondirectory --value=''
+          rm -rf data/admin/files/* data/admin/files/.[!.]* 2>/dev/null || true
+          OC_PASS="${OWNER_PASS}" ./occ user:add --password-from-env "${OWNER_USER}"
+          OC_PASS="${COLLEAGUE_PASS}" ./occ user:add --password-from-env "${COLLEAGUE_USER}"
+          ./occ files:scan --all
+
+      # The corpus carries the DACH cases, the work folder carries the reconcile
+      # case. Two files of the work folder exist before the crawl, so that they
+      # are ordinary indexed files by the time anything happens behind the back
+      # of the event path.
+      #
+      # The words are measured and not picked: each of them stands in exactly one
+      # file of this instance, so a hit is unambiguous and a missing hit cannot be
+      # explained away. They are written without umlauts on purpose, unlike the
+      # two DACH terms further down, which have to carry theirs because the
+      # spelling is the thing under test.
+      - name: Put the corpus and the work folder into the account of the owner
+        run: |
+          mkdir -p "data/${OWNER_USER}/files/${WORK_DIR}"
+          cp -r findling-src/testdata/corpus "data/${OWNER_USER}/files/corpus"
+          printf 'Der Kanalspuelplan liegt als Vorabzug vor.\n' \
+            > "data/${OWNER_USER}/files/${WORK_DIR}/geaendert.txt"
+          printf 'Der Ausschreibungsvermerk wurde abgelegt.\n' \
+            > "data/${OWNER_USER}/files/${WORK_DIR}/entfernt.txt"
+          ./occ files:scan --all
+          echo "files of the owner: $(find "data/${OWNER_USER}/files" -type f | wc -l)"
+
+      # The whole work folder is shared, because the removal has to be checked
+      # for somebody other than the owner as well: "findable for nobody" is the
+      # wording of the acceptance test, and one user is not nobody.
+      - name: Share the work folder with the second user, before the crawl
+        run: |
+          curl -s -u "${OWNER_USER}:${OWNER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            -d "path=/${WORK_DIR}" \
+            -d 'shareType=0' \
+            -d "shareWith=${COLLEAGUE_USER}" \
+            -d 'permissions=1' \
+            'http://localhost:8080/ocs/v2.php/apps/files_sharing/api/v1/shares' | tee share.json
+          jq -e '.ocs.meta.statuscode == 200' share.json > /dev/null \
+            || { echo "::error::the share was not created, so the removal would be checked for one user only"; cat share.json; exit 1; }
+          ./occ files:scan --all
+
+      - name: Queue and run the crawl
+        run: |
+          ./occ findling:index --restart --no-interaction
+          timeout 60 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once
+          timeout 180 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 120
+          ./occ findling:index
+
+      - name: Wait until the queue is empty and everything has a verdict
+        run: |
+          status() {
+            ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+                --db "${{ runner.temp }}/findling/state.db" )
+          }
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+
+          deadline=$(( $(date +%s) + DRAIN_TIMEOUT ))
+          while :; do
+            report=$(status)
+            judged=$(echo "${report}" | jq -r '.indexed + .skipped + .failed')
+            open=$(open_rows)
+            echo "draining: open=${open} judged=${judged}"
+            if [ "${open}" -eq 0 ] && [ "${judged}" -ge "${EXPECTED_JUDGED}" ]; then
+              echo "the queue is empty and ${judged} files have a verdict"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "::error::the crawl did not finish within ${DRAIN_TIMEOUT} seconds"
+              echo "${report}"
+              ./occ findling:index
+              exit 1
+            fi
+            sleep 5
+          done
+
+      # D-09 as a gate, and the shape of the assertion is the point. The two
+      # documents below exist as pixels, so they can only be found once OCR has
+      # run, and what is asked is whether a search term finds them. What is
+      # deliberately never asked is what the engine actually read: that would be
+      # a test against a tesseract build, red on the next Debian point release,
+      # and it would say nothing about whether a user finds the document.
+      # Measured, this very engine reads the heading of one corpus picture
+      # without its umlaut dots, and the file is findable all the same.
+      #
+      # Each of the three terms stands in exactly one file of the whole instance,
+      # which build_corpus.py enforces, so one hit is an unambiguous answer.
+      #
+      # The two terms below carry real umlauts and a sharp s, unlike every other
+      # string in this file. They have to: the spelling is what is under test.
+      - name: The DACH cases, over search terms and never over recognised text
+        run: |
+          search() {
+            curl -sfS -G -u "${OWNER_USER}:${OWNER_PASS}" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              --data-urlencode "term=$1" \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "$2"
+          }
+          fail() { echo "::error::$1"; cat "$2"; exit 1; }
+
+          # 1. The Swiss spelling as it stands in the document, with ss.
+          search 'Strasse' swiss-ss.json
+          jq -e '.ocs.data.entries | length == 1' swiss-ss.json > /dev/null \
+            || fail "the Swiss document is not findable through the spelling it uses itself" swiss-ss.json
+          jq -e --arg name "${SWISS_FILE}" '.ocs.data.entries[0].title == $name' swiss-ss.json > /dev/null \
+            || fail "the hit for the Swiss spelling is a different file" swiss-ss.json
+
+          # 2. The same document through the German spelling with the sharp s.
+          # There is no ascii_fold in the German chain; the Snowball stemmer
+          # folds the sharp s and the double s onto the same term, and the query
+          # side builds the variant on top. Neither is a promise here, both are
+          # measured by this line.
+          search 'Straße' swiss-sharp.json
+          jq -e '.ocs.data.entries | length == 1' swiss-sharp.json > /dev/null \
+            || fail "the German spelling does not find the Swiss document" swiss-sharp.json
+          jq -e --arg name "${SWISS_FILE}" '.ocs.data.entries[0].title == $name' swiss-sharp.json > /dev/null \
+            || fail "the hit for the German spelling is a different file" swiss-sharp.json
+
+          # 3. The Austrian word form, through itself. A search for Januar
+          # finding Jänner would be synonymy, is not built in v1 and is written
+          # down as a limit in docs/german-analyzer.md rather than asserted here.
+          search 'Jänner' austrian.json
+          jq -e '.ocs.data.entries | length == 1' austrian.json > /dev/null \
+            || fail "the Austrian document is not findable through its own word form" austrian.json
+          jq -e --arg name "${AUSTRIAN_FILE}" '.ocs.data.entries[0].title == $name' austrian.json > /dev/null \
+            || fail "the hit for the Austrian word form is a different file" austrian.json
+
+          echo "both spellings lead to the Swiss document, and the Austrian word form to the Austrian one"
+
+      # The control, and without it the three assertions after the cycle would be
+      # worth nothing. "Not findable" is the normal state of a file that was never
+      # indexed, so each of the three has to be findable here first.
+      - name: The three work files are as expected before anything happens behind the events
+        run: |
+          search() {
+            curl -sfS -G -u "$1:$2" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              --data-urlencode "term=$3" \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "$4"
+          }
+          fail() { echo "::error::$1"; cat "$2"; exit 1; }
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Vorabzug' before-changed.json
+          jq -e '.ocs.data.entries | length == 1' before-changed.json > /dev/null \
+            || fail "the file that is about to change is not findable by its old content" before-changed.json
+          jq -e '.ocs.data.entries[0].title == "geaendert.txt"' before-changed.json > /dev/null \
+            || fail "the old content leads to a different file" before-changed.json
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Ausschreibungsvermerk' before-removed-owner.json
+          jq -e '.ocs.data.entries | length == 1' before-removed-owner.json > /dev/null \
+            || fail "the file that is about to be removed is not findable for its owner" before-removed-owner.json
+
+          search "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" 'Ausschreibungsvermerk' before-removed-colleague.json
+          jq -e '.ocs.data.entries | length == 1' before-removed-colleague.json > /dev/null \
+            || fail "the file that is about to be removed is not findable for the second user, so its disappearance would prove nothing" before-removed-colleague.json
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Nachtragsvereinbarung' before-new.json
+          jq -e '.ocs.data.entries | length == 0' before-new.json > /dev/null \
+            || fail "the word of a file that does not exist yet already brings back a hit" before-new.json
+
+      # Step one of the acceptance test of IDX-04, word for word: events blocked.
+      #
+      # How they are blocked is the decision worth writing down. The obvious way
+      # would be a test variable that switches the listeners off, and that is test
+      # code in the production path: the switch would exist on every installation
+      # for the sake of this run. occ files:scan needs none. It writes the file
+      # cache directly and emits none of the node events the companion app listens
+      # to, which is the ordinary shape of a mass import and of a restore from a
+      # backup. So it is not only the cheaper way to block the events, it is the
+      # very case the predecessor of this app failed on, and the next step proves
+      # that the blocking really worked.
+      #
+      # All three cases in one go: a new file, a changed file, a removed file.
+      - name: New, changed and removed, all three past the event path
+        run: |
+          printf 'Die Nachtragsvereinbarung wurde unterzeichnet.\n' \
+            > "data/${OWNER_USER}/files/${WORK_DIR}/neu.txt"
+          printf 'Der Kanalspuelplan liegt jetzt als Reinschrift vor.\n' \
+            > "data/${OWNER_USER}/files/${WORK_DIR}/geaendert.txt"
+          rm "data/${OWNER_USER}/files/${WORK_DIR}/entfernt.txt"
+          ./occ files:scan --all
+          ls -l "data/${OWNER_USER}/files/${WORK_DIR}"
+
+      # Step two, and the one that keeps this test honest. Without it the run
+      # could quietly go green over the event path and the reconcile would never
+      # have been measured at all. No queue row means the events really stayed
+      # out.
+      - name: No queue row was created, so the reconcile is what is measured
+        run: |
+          ./occ findling:index | tee queue-after-scan.txt
+          open=$(awk '
+            $1 == "scheduled" { scheduled = $2 }
+            /^  handed to the worker/ { running = $NF }
+            END { print (scheduled + 0) + (running + 0) }' queue-after-scan.txt)
+          echo "rows waiting after the scan: ${open}"
+          if [ "${open}" -ne 0 ]; then
+            echo "::error::${open} queue rows exist after occ files:scan, so events reached the app and this test measures the event path instead of the reconcile"
+            exit 1
+          fi
+          echo "no queue row exists, the three changes are invisible to the app so far"
+
+      # Step three: exactly one reconcile cycle. run_once is one cycle by
+      # definition, the task inside the container is switched off for this whole
+      # job, and the minimum interval is zero here because a container that was
+      # just started would otherwise wait out its daily cadence.
+      #
+      # It runs as a process of its own against the same state database, which is
+      # allowed under WAL and is the second write connection docs/reconcile.md
+      # describes. Nothing here writes the index: the cycle produces content and
+      # delete jobs, and the poller inside the container does the work.
+      - name: One reconcile cycle, and only one
+        working-directory: findling-src/backend
+        run: |
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_VERSION=0.1.0
+          export NEXTCLOUD_URL=http://localhost:8080
+          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+          export FINDLING_RECONCILE_ENABLED=true
+          uv run python - <<'PY' | tee "${{ github.workspace }}/reconcile.txt"
+          import asyncio
+          import json
+
+          from findling.worker.reconcile import Reconcile
+
+          result = asyncio.run(Reconcile(min_interval_hours=0).run_once())
+          print(
+              json.dumps(
+                  {
+                      "state": result.state,
+                      "mounts": result.mounts,
+                      "seen": result.seen,
+                      "stale": result.stale,
+                      "missing": result.missing,
+                      "slices": result.slices,
+                  }
+              )
+          )
+          PY
+
+      - name: The cycle found the three changes and nothing else
+        run: |
+          report=$(tail -n 1 reconcile.txt)
+          echo "${report}"
+          jq -e '.state == "walked"' <<< "${report}" > /dev/null \
+            || { echo "::error::the cycle did not walk the whole file list, so its numbers say nothing"; exit 1; }
+          # Two content jobs, the new file and the changed one, and one delete
+          # job. stale is compared with at least, because a scan may refresh a
+          # version mark without anybody editing a file; missing is exact, because
+          # concluding a deletion out of an absence is the one thing this round
+          # must never get wrong.
+          jq -e '.stale >= 2' <<< "${report}" > /dev/null \
+            || { echo "::error::the cycle did not see the new and the changed file"; exit 1; }
+          jq -e '.missing == 1' <<< "${report}" > /dev/null \
+            || { echo "::error::the cycle did not see exactly the one removed file"; exit 1; }
+
+      - name: Wait until the poller has worked off what the cycle queued
+        run: |
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+          deadline=$(( $(date +%s) + 300 ))
+          while :; do
+            open=$(open_rows)
+            echo "draining after the cycle: open=${open}"
+            if [ "${open}" -eq 0 ]; then
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "::error::the jobs of the reconcile cycle were not worked off in time"
+              ./occ findling:index
+              exit 1
+            fi
+            sleep 5
+          done
+          # The index is committed in batches, so the last commit may be a moment
+          # behind the empty queue.
+          sleep 5
+
+      # Step four: after one cycle the index is correct. One question per case,
+      # and the changed file is asked twice, because a new content that is
+      # findable while the old one is findable as well is not an update, it is a
+      # second document.
+      - name: After one cycle the index is correct, in all three cases
+        run: |
+          search() {
+            curl -sfS -G -u "$1:$2" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              --data-urlencode "term=$3" \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "$4"
+          }
+          fail() { echo "::error::$1"; cat "$2"; exit 1; }
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Nachtragsvereinbarung' new.json
+          jq -e '.ocs.data.entries | length == 1' new.json > /dev/null \
+            || fail "the file that never produced an event is not findable after the cycle" new.json
+          jq -e '.ocs.data.entries[0].title == "neu.txt"' new.json > /dev/null \
+            || fail "the hit for the new file is a different file" new.json
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Reinschrift' changed.json
+          jq -e '.ocs.data.entries | length == 1' changed.json > /dev/null \
+            || fail "the changed file is not findable by its new content" changed.json
+          jq -e '.ocs.data.entries[0].title == "geaendert.txt"' changed.json > /dev/null \
+            || fail "the new content leads to a different file" changed.json
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Vorabzug' stale.json
+          jq -e '.ocs.data.entries | length == 0' stale.json > /dev/null \
+            || fail "the old content is still findable, so the update added a document instead of replacing one" stale.json
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Ausschreibungsvermerk' removed-owner.json
+          jq -e '.ocs.data.entries | length == 0' removed-owner.json > /dev/null \
+            || fail "the removed file is still findable for its owner" removed-owner.json
+
+          search "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" 'Ausschreibungsvermerk' removed-colleague.json
+          jq -e '.ocs.data.entries | length == 0' removed-colleague.json > /dev/null \
+            || fail "the removed file is still findable for the second user, so it left the index but not the prefilter" removed-colleague.json
+
+          echo "one cycle, and all three cases are correct: new, changed, removed"
+
+      - name: Everything the failure had to say
+        if: failure()
+        run: |
+          echo "--- counters ---"
+          ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+            --db "${{ runner.temp }}/findling/state.db" ) || true
+          ./occ findling:index || true
+          echo "--- the reconcile round ---"
+          cat reconcile.txt || true
+          echo "--- the last search answers ---"
+          for answer in swiss-ss.json swiss-sharp.json austrian.json before-changed.json \
+                        before-removed-owner.json before-removed-colleague.json \
+                        before-new.json new.json changed.json stale.json removed-owner.json \
+                        removed-colleague.json; do
             if [ -f "${answer}" ]; then
               echo "== ${answer} =="
               cat "${answer}"
