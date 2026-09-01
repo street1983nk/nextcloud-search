@@ -286,6 +286,23 @@ final class Provider implements IFilteringProvider {
 					continue;
 				}
 
+				// The stricter question, asked right after the type check
+				// (security audit L5). Resolving a node through this user's own
+				// folder answers "is it reachable for them", and on an ordinary
+				// share that is the same as "may they read it". On a team folder
+				// it is not: the ACL wrapper of groupfolders can hand out a node
+				// that resolves perfectly well while the per folder rules take
+				// the read bit away, and a hit for a document whose content the
+				// user may not open is the one outcome this class exists to
+				// prevent. This recheck is the security boundary of the whole
+				// product, so the stricter question belongs here rather than
+				// anywhere further down: two lines later a title and a path of
+				// that node would already have been read, and one call later a
+				// snippet of its content would exist.
+				if (!$node->isReadable()) {
+					continue;
+				}
+
 				$title = PlainText::bounded($node->getName(), self::MAX_TITLE_LENGTH);
 				$path = PlainText::bounded(
 					ltrim((string)$userFolder->getRelativePath($node->getPath()), '/'),

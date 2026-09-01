@@ -96,7 +96,16 @@ class QueueController extends OCSController {
 		try {
 			$files = $this->queueService->claim($limit, $budget);
 		} catch (\Throwable $e) {
-			$this->logger->error('Findling: could not hand out a batch: ' . $e->getMessage(), ['exception' => $e]);
+			// A static sentence plus the exception field, never the message of
+			// the exception itself (security audit L6). The rule of this project
+			// is that the log carries counters and reason codes and nothing else,
+			// and a library message is exactly the place where a path or an SQL
+			// fragment appears: the database layer of Nextcloud puts the failing
+			// statement into its exceptions, and that statement carries file ids
+			// and table names of a private instance. Nextcloud renders the
+			// exception field itself, under the admin's own log level, which is
+			// where such a detail belongs.
+			$this->logger->error('Findling: could not hand out a batch', ['exception' => $e]);
 			return new DataResponse(['error' => 'Queue is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 
@@ -150,7 +159,8 @@ class QueueController extends OCSController {
 		try {
 			$result = $this->queueService->acknowledge($done, $failures);
 		} catch (\Throwable $e) {
-			$this->logger->error('Findling: could not acknowledge a batch: ' . $e->getMessage(), ['exception' => $e]);
+			// Same rule as above: no library message in the log.
+			$this->logger->error('Findling: could not acknowledge a batch', ['exception' => $e]);
 			return new DataResponse(['error' => 'Queue is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 
@@ -185,7 +195,8 @@ class QueueController extends OCSController {
 		try {
 			$released = $this->queueService->unlock($queueIds);
 		} catch (\Throwable $e) {
-			$this->logger->error('Findling: could not release a batch: ' . $e->getMessage(), ['exception' => $e]);
+			// Same rule as above: no library message in the log.
+			$this->logger->error('Findling: could not release a batch', ['exception' => $e]);
 			return new DataResponse(['error' => 'Queue is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 
@@ -238,7 +249,8 @@ class QueueController extends OCSController {
 		try {
 			$requeued = $this->queueService->requeue($ids, $kind);
 		} catch (\Throwable $e) {
-			$this->logger->error('Findling: could not requeue a batch: ' . $e->getMessage(), ['exception' => $e]);
+			// Same rule as above: no library message in the log.
+			$this->logger->error('Findling: could not requeue a batch', ['exception' => $e]);
 			return new DataResponse(['error' => 'Queue is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 
@@ -264,7 +276,8 @@ class QueueController extends OCSController {
 		try {
 			return new DataResponse($this->queueService->stats());
 		} catch (\Throwable $e) {
-			$this->logger->error('Findling: could not count the queue: ' . $e->getMessage(), ['exception' => $e]);
+			// Same rule as above: no library message in the log.
+			$this->logger->error('Findling: could not count the queue', ['exception' => $e]);
 			return new DataResponse(['error' => 'Queue is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}

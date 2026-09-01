@@ -6,8 +6,6 @@ namespace OCA\Findling\Controller;
 
 use OCA\Findling\AppInfo\Application;
 use OCP\AppFramework\Http;
-use OCP\AppFramework\Http\Attribute\ApiRoute;
-use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http\StreamResponse;
 use OCP\AppFramework\OCSController;
@@ -39,9 +37,11 @@ class GatewayController extends OCSController {
 	 *
 	 * The first attribute below locks browsers and ordinary users out. The
 	 * signed AppAPI header is the credential here, which is also why session
-	 * CSRF does not apply. It is spelled out fully qualified so that the file
-	 * carries exactly one occurrence of it and a grep gate stays meaningful,
-	 * the same way the read only fopen mode is gated.
+	 * CSRF does not apply. All three are spelled out fully qualified, in the
+	 * spelling of QueueController and ReconcileController: the trust boundary
+	 * gate of plan 03-14 counts route attributes by reading the sources, and an
+	 * import line would count as a route without being one. One spelling in
+	 * every controller is what keeps that count exact.
 	 *
 	 * The file id is an int and there is no path string anywhere in this
 	 * signature, so path traversal is structurally impossible rather than
@@ -56,30 +56,12 @@ class GatewayController extends OCSController {
 	 * list this directory.
 	 */
 	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
-	#[NoCSRFRequired]
-	#[ApiRoute(verb: 'GET', url: '/files/{fileId}', requirements: ['fileId' => '\d+'])]
+	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
+	#[\OCP\AppFramework\Http\Attribute\ApiRoute(verb: 'GET', url: '/files/{fileId}', requirements: ['fileId' => '\d+'])]
 	public function getFileContents(int $fileId, string $userId): DataResponse|StreamResponse {
-		// ExAppRequired answers "is this a registered ExApp", not "is this our
-		// ExApp". Every external app on the instance passes that test, so without
-		// the comparison below any other backend, for instance an AI assistant a
-		// user installed last week, could read any file of any user through this
-		// route. AppAPI puts the calling app id into this header.
-		//
-		// Threat model note, and a deliberate residual risk: this trusts AppAPI to
-		// have authenticated the caller before the request arrives, exactly as the
-		// attribute above already does. Whoever can forge that header has broken
-		// the AppAPI trust model itself and then owns the gateway of every other
-		// ExApp on the instance too. The alternative would be a second
-		// implementation of AppAPI's shared secret handling inside this app, with
-		// a second copy of the secret store. Not worth it, so it is written down
-		// instead of pretended away.
-		$callerAppId = $this->request->getHeader('EX-APP-ID');
-		if ($callerAppId !== Application::BACKEND_APP_ID) {
-			$this->logger->warning('Findling: content gateway called by a foreign ExApp', ['app' => $callerAppId]);
-			return new DataResponse(
-				['error' => 'This route is reserved for the Findling backend.'],
-				Http::STATUS_FORBIDDEN,
-			);
+		$foreign = $this->rejectForeignCaller();
+		if ($foreign !== null) {
+			return $foreign;
 		}
 
 		try {
@@ -113,9 +95,52 @@ class GatewayController extends OCSController {
 			$this->logger->debug('Findling: content gateway asked for a user that does not exist');
 			return new DataResponse(['error' => 'Node is not a file or could not be found.'], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
-			// The message of the exception only, never any file content.
-			$this->logger->error('Findling: unknown error reading a file: ' . $e->getMessage(), ['exception' => $e]);
+			// The exception travels in the exception field, which Nextcloud
+			// renders itself, and the message of this app is a static sentence
+			// (security audit L6). The rule of this project is that the log
+			// carries counters and reason codes and nothing else, and a library
+			// message is precisely where a path or an SQL fragment shows up: the
+			// file system layer of Nextcloud puts absolute paths into its
+			// exceptions, and this route is reached with a file id of any user
+			// on the instance.
+			$this->logger->error('Findling: unknown error reading a file', ['exception' => $e]);
 			return new DataResponse(['error' => 'Unknown error occurred.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	/**
+	 * The attribute on the method above answers "is this a registered external
+	 * app", not "is this our external app". Every other backend on the instance
+	 * passes that test, so without this comparison any other container, for
+	 * instance an AI assistant a user installed last week, could read any file of
+	 * any user through this route. AppAPI puts the calling app id into this
+	 * header.
+	 *
+	 * Threat model note, and a deliberate residual risk: this trusts AppAPI to
+	 * have authenticated the caller before the request arrives, exactly as the
+	 * attribute does. Whoever can forge that header has broken the AppAPI trust
+	 * model itself and then owns the gateway of every other ExApp on the instance
+	 * too. The alternative would be a second implementation of AppAPI's shared
+	 * secret handling inside this app, with a second copy of the secret store.
+	 * Not worth it, so it is written down instead of pretended away.
+	 *
+	 * It is a method of its own rather than an inline comparison since plan
+	 * 03-14, and that is not cosmetics. The trust boundary gate reads the first
+	 * statement of every route and asks for this call by name; a boundary that
+	 * exists in three different shapes cannot be checked, and the one shape that
+	 * differed was this one.
+	 */
+	private function rejectForeignCaller(): ?DataResponse {
+		$callerAppId = $this->request->getHeader('EX-APP-ID');
+		if ($callerAppId === Application::BACKEND_APP_ID) {
+			return null;
+		}
+
+		$this->logger->warning('Findling: content gateway called by a foreign ExApp', ['app' => $callerAppId]);
+
+		return new DataResponse(
+			['error' => 'This route is reserved for the Findling backend.'],
+			Http::STATUS_FORBIDDEN,
+		);
 	}
 }
