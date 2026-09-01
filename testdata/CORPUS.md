@@ -33,17 +33,31 @@ of the first two jobs still weigh under 7 KB together.
 
 ## The files
 
-The verdict column is what the extractor of the container produces for the file,
-measured on 2026-09-01 against the whole corpus. `skipped(no_text_layer)` is not
-a defeat: it is the handover to the OCR track.
+The verdict column is the **end** verdict: what a file is left with after the
+text pass and, where the text pass handed it over, after the OCR pass as well.
+`skipped(no_text_layer)` therefore appears nowhere below any more. It is not an
+end state since phase 3, it is the handover to the second track, and a scan that
+still carried it would be a scan the OCR pass never reached.
+
+Measured on 2026-09-01 with the runtime image of this repository, over the whole
+corpus, text pass first and one forced OCR pass for every handover, which is
+exactly the sequence `worker/poller.py` produces.
+
+**This column is read by a machine.** The `readonly-gate` job of
+`.github/workflows/integration.yml` parses the first backticked token of every
+verdict cell and asserts it file by file against the state database after its
+indexing pass. Everything behind that token is prose and is ignored. Two rules
+follow from that, and both matter more than they look: a new file needs a row
+here or the job fails on the missing reference, and a verdict that changes has to
+change here in the same commit.
 
 | File | What it is | Verdict | The one term that stands only here |
 |---|---|---|---|
 | `01-text-layer.pdf` | One page PDF with an embedded Helvetica text object, 63 characters | `indexed` | none |
-| `02-scan-no-text-layer.pdf` | One page PDF showing an 8x8 greyscale image, no text object at all | `skipped(no_text_layer)` | none |
+| `02-scan-no-text-layer.pdf` | One page PDF showing an 8x8 greyscale image, no text object at all | `skipped(empty_text)`, handed over and the engine found nothing on eight by eight pixels | none |
 | `03-document.docx` | Minimal but valid OOXML package, two paragraphs, one of them with real umlauts and a sharp s | `indexed` | none |
 | `04-notes.txt` | UTF-8 plain text with umlauts and a sharp s | `indexed` | none |
-| `05-picture.png` | 8x8 greyscale PNG | never crawled, the mimetype allowlist keeps it out | none |
+| `05-picture.png` | 8x8 greyscale PNG | `skipped(image_not_ocrable)`, below the plausibility threshold, no engine is started | none |
 | `06-zero-bytes.pdf` | An empty file with a PDF extension | `failed(empty_file)` | none |
 | `07-password-protected.pdf` | PDF encrypted with the standard security handler, revision 2, 40 bit RC4 | `skipped(encrypted)` | none |
 | `08-legacy-encoding.txt` | German text in Windows-1252, without a byte order mark | `indexed` | none |
@@ -51,33 +65,47 @@ a defeat: it is the handover to the OCR track.
 | `10-kuendigung.docx` | German notice of termination as OOXML | `indexed` | Frist, drei Monate |
 | `11-uebersicht.odt` | OpenDocument text, the format the office trio was missing | `indexed` | Verträge |
 | `12-aktenvermerk.txt` | A short file note in Windows-1252 | `indexed` | Müller |
-| `13-ratsvorlage-scan.pdf` | Three A4 pages of council prose as greyscale images, no text object on any page | `skipped(no_text_layer)` | Bebauungsplan |
-| `14-pacht-mit-anhang.pdf` | Five pages: two with a real text layer, three scanned annex pages | `indexed` | Pachtvereinbarung |
-| `15-schweiz-baubewilligung.pdf` | One scanned A4 page in Swiss spelling, ss instead of the sharp s | `skipped(no_text_layer)` | Strasse, Baubewilligung |
-| `16-oesterreich-mitteilung.pdf` | One scanned A4 page in Austrian wording | `skipped(no_text_layer)` | Jänner, Grundbuchsauszug |
-| `17-beleg.jpg` | A slip with readable text as JPEG, the format phone uploads arrive in | never crawled in v1, OCR route only | Zahlungsavis |
-| `18-aushang.png` | A notice with readable text as PNG | never crawled in v1, OCR route only | Sperrmüllabfuhr |
-| `19-uebermittlung.tif` | A one page TIFF with readable text, deflate compressed | never crawled in v1, OCR route only | Übermittlungsprotokoll |
-| `20-rueckruf.webp` | A note with readable text as lossless WebP | never crawled in v1, OCR route only | Rückrufbitte |
-| `21-sendebericht.tif` | Three pages in one TIFF, the shape a fax archive has | never crawled in v1, OCR route only | Sendebericht |
-| `22-icon.png` | 48 by 48 pixels, an icon | must be refused below the plausibility threshold | none |
-| `23-gedreht.jpg` | A page photographed sideways, EXIF orientation 6 | never crawled in v1, OCR route only | Lieferschein |
+| `13-ratsvorlage-scan.pdf` | Three A4 pages of council prose as greyscale images, no text object on any page | `indexed` through the OCR track, 1593 characters over three pages | Bebauungsplan |
+| `14-pacht-mit-anhang.pdf` | Five pages: two with a real text layer, three scanned annex pages | `indexed` on the text pass, the three annex pages stay unread on purpose | Pachtvereinbarung |
+| `15-schweiz-baubewilligung.pdf` | One scanned A4 page in Swiss spelling, ss instead of the sharp s | `indexed` through the OCR track, 493 characters | Strasse, Baubewilligung |
+| `16-oesterreich-mitteilung.pdf` | One scanned A4 page in Austrian wording | `indexed` through the OCR track, 404 characters | Jänner, Grundbuchsauszug |
+| `17-beleg.jpg` | A slip with readable text as JPEG, the format phone uploads arrive in | `indexed`, the picture track of plan 03-10 | Zahlungsavis |
+| `18-aushang.png` | A notice with readable text as PNG | `indexed`, the picture track | Sperrmüllabfuhr |
+| `19-uebermittlung.tif` | A one page TIFF with readable text, deflate compressed | `indexed`, the picture track | Übermittlungsprotokoll |
+| `20-rueckruf.webp` | A note with readable text as lossless WebP | `indexed`, the picture track, and leptonica reads WebP without a detour | Rückrufbitte |
+| `21-sendebericht.tif` | Three pages in one TIFF, the shape a fax archive has | `indexed`, all three pages in one verdict | Sendebericht |
+| `22-icon.png` | 48 by 48 pixels, an icon | `skipped(image_not_ocrable)`, refused below the plausibility threshold, without starting the engine | none |
+| `23-gedreht.jpg` | A page photographed sideways, EXIF orientation 6 | `indexed`, uprighted before the engine sees it | Lieferschein |
 | `24-abgeschnittener-trailer.pdf` | The file stops in the middle of its trailer | `failed(corrupt)` | none |
 | `25-kaputte-xref.pdf` | Every cross reference entry carries a broken keyword | `indexed`, pdfium rebuilds the table | none |
 | `26-riesige-seitenzahl.pdf` | 627 bytes that declare one hundred thousand pages | `failed(corrupt)`, and above all: no allocation and no hang | none |
 | `27-nullbytes-im-kopf.pdf` | A PDF header followed by 512 NUL bytes | `failed(corrupt)` | none |
 | `28-ohne-seiten.pdf` | Valid structure, correct cross reference table, zero pages | `failed(corrupt)` | none |
 | `29-doppelt-komprimiert.pdf` | A content stream behind two chained Flate filters | `indexed`, pdfium applies both filters | none |
-| `30-nur-ein-bild.pdf` | One A4 page, one image, no text object in the whole file | `skipped(no_text_layer)` | Zahlungserinnerung |
-| `31-riesenformat.pdf` | A page of 14400 by 14400 points, the largest the format allows | `skipped(no_text_layer)`, twelve characters on a nine gigapixel page | none |
+| `30-nur-ein-bild.pdf` | One A4 page, one image, no text object in the whole file | `indexed` through the OCR track, 332 characters | Zahlungserinnerung |
+| `31-riesenformat.pdf` | A page of 14400 by 14400 points, the largest the format allows | `skipped(empty_text)`, handed over, and the nine gigapixel page comes back without readable text | none |
 | `32-startxref-ins-leere.pdf` | Correct objects, and a `startxref` that points past the end of the file | `indexed`, pdfium recovers | none |
 | `33-seitenbaum-zyklus.pdf` | A page tree that contains itself | `failed(corrupt)`, and above all: no hang | none |
+
+Twenty two indexed, five skipped, six failed. None of the caps of the OCR
+cascade is reached on this corpus: no `indexed(truncated)`, no `failed(timeout)`
+and no `failed(out_of_memory)`, and the same job that counts the verdicts counts
+those three separately, because a corpus that starts hitting a cap is a corpus
+whose numbers stop meaning what stands here.
 
 Four of these verdicts are the interesting ones, because they are not what a
 first guess says. `25`, `29` and `32` are broken in ways pdfium repairs on the
 fly, so they end up indexed; asserting `failed` for them would be asserting a
 bug. `26` and `33` are the two that could hang a test run instead of ending it,
 and both come back in under ten milliseconds.
+
+Two more are worth knowing before somebody reads them as defects. `14` keeps its
+three scanned annex pages unread: a file has exactly one verdict, and the mixed
+case is decided in favour of the text that is already machine readable, with the
+reasoning in `docs/ocr.md`. And `31` is the one file whose verdict says that a
+guard held: a page of nine gigapixels is not rendered, so the engine has nothing
+to read and the file ends as `skipped(empty_text)` rather than as a memory
+incident.
 
 ## The language cases and which file carries them
 
