@@ -180,6 +180,42 @@ class StorageService {
 	}
 
 	/**
+	 * One page of the same slice, reduced to the five fields the reconcile
+	 * compares against (IDX-04).
+	 *
+	 * Deliberately built on getFilesInMount and not on a query of its own.
+	 * Reconcile and crawl have to see the same files, including the same
+	 * mimetype filter and the same two encryption booleans: a second query here
+	 * would be a second answer to "what is in this mount", and the reconcile
+	 * would spend every night repairing the difference between the two.
+	 *
+	 * Only the projection is new, because the crawl needs the cache entry and the
+	 * reconcile needs five values it can put into a JSON answer. No path, no
+	 * name, no owner: the comparison in the container works on file id and etag,
+	 * and everything beyond that would be content of a private instance crossing
+	 * the boundary for no reason.
+	 *
+	 * @return list<array{fileId: int, etag: string, size: int, mtime: int, mime: string}>
+	 */
+	public function getFileSlice(int $storageId, int $overriddenRoot, int $lastFileId, int $batchSize): array {
+		$rows = [];
+		foreach ($this->getFilesInMount($storageId, $overriddenRoot, $lastFileId, $batchSize) as $entry) {
+			$rows[] = [
+				'fileId' => $entry->getId(),
+				'etag' => $entry->getEtag(),
+				// int on every ordinary file; the interface allows a float for
+				// sizes beyond the integer range, and a document of that size
+				// does not exist in an index capped at fifty megabytes.
+				'size' => (int)$entry->getSize(),
+				'mtime' => $entry->getMTime(),
+				'mime' => $entry->getMimeType(),
+			];
+		}
+
+		return $rows;
+	}
+
+	/**
 	 * The allowlist as the numeric ids the file cache stores.
 	 *
 	 * Unknown types are skipped rather than thrown over: IMimeTypeLoader::getId
