@@ -417,9 +417,7 @@ def test_drop_document_builds_its_term_through_the_schema() -> None:
     # consequence: a term built from the field name matches nothing, the document
     # stays in the index, and the pass reports a successful deletion.
     tree = ast.parse(WRITER_SOURCE.read_text(encoding="utf-8"))
-    method = next(
-        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "drop_document"
-    )
+    method = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "drop_document")
     calls = [node for node in ast.walk(method) if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)]
     by_name = {node.func.attr for node in calls if isinstance(node.func, ast.Attribute)}
 

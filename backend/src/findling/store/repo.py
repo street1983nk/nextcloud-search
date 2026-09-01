@@ -141,15 +141,36 @@ ON CONFLICT(file_id) DO UPDATE SET
     reason        = excluded.reason,
     attempts      = files.attempts + 1,
     indexed_at    = excluded.indexed_at,
-    index_version = excluded.index_version
+    index_version = excluded.index_version,
+    -- The restore from the trash bin, and the reason there is no revive method.
+    -- A file that is being judged again is by definition not deleted, so the
+    -- upsert lifts the tombstone rather than a second entry point that every
+    -- future caller would have to remember. Without this line a restored file
+    -- would carry deleted_at forever, is_unchanged would answer False on every
+    -- pass, and the container would re-extract it for good.
+    deleted_at    = NULL
 """
 
-# deleted_at is NULL throughout phase 2. The condition is here so that the phase 3
-# tombstone cannot make a deleted file look unchanged and therefore untouchable.
+# deleted_at was NULL throughout phase 2 and is written by tombstone since plan
+# 03-03. The condition was put here before the writer existed so that a tombstone
+# could never make a deleted file look unchanged and therefore untouchable, and
+# it is what lets a restored file be indexed again although its bytes never
+# changed.
 _IS_UNCHANGED_SQL: Final = """
 SELECT 1 FROM files
  WHERE file_id = ? AND content_hash = ? AND state = 'indexed'
    AND index_version = ? AND deleted_at IS NULL
+"""
+
+# The tombstone of D-10. It marks the row instead of removing it, for two
+# reasons that pull in the same direction: phase 4 has to be able to report "it
+# was there and it is gone", which a missing row cannot say, and a file id that
+# Nextcloud hands out again must not meet the leftovers of its predecessor. The
+# mark alone is enough to make the file work again, because deleted_at IS NULL
+# already stands in _IS_UNCHANGED_SQL above; without that condition a deleted
+# file would look unchanged and no requeue could ever touch it.
+_TOMBSTONE_SQL: Final = """
+UPDATE files SET deleted_at = ? WHERE file_id = ?
 """
 
 _RECORD_MOUNT_SQL: Final = """
@@ -410,6 +431,22 @@ class Store:
             return False
         row = self._conn.execute(_IS_UNCHANGED_SQL, (file_id, content_hash, self.index_version)).fetchone()
         return row is not None
+
+    def tombstone(self, file_id: int, at: int | None = None) -> int:
+        """Mark one file as deleted, return how many rows that was.
+
+        Zero is an answer and not a failure: a file nobody ever judged has no row
+        here, and a delete job carries no proof that it was ever indexed. Nothing
+        else in the row is touched, so the verdict stays readable and ``attempts``
+        keeps counting what it counted.
+
+        This is deliberately not a DELETE. The reasoning sits at
+        :data:`_TOMBSTONE_SQL`, together with the condition in
+        :data:`_IS_UNCHANGED_SQL` that makes the mark take effect.
+        """
+        with self._transaction():
+            cursor = self._conn.execute(_TOMBSTONE_SQL, (int(time.time()) if at is None else at, file_id))
+        return cursor.rowcount
 
     def reset_for_reindex(self, index_version: int) -> int:
         """Forget every verdict older than this generation, return how many.
