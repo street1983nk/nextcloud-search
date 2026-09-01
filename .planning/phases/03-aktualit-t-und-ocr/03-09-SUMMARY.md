@@ -61,7 +61,7 @@ completed: 2026-09-01
 
 - **Dauer:** ca. 45 Minuten
 - **Tasks:** 3 (alle mit TDD-Gates)
-- **Commits:** 6 (drei RED, drei GREEN)
+- **Commits:** 7 (drei RED, drei GREEN, ein style-Commit)
 - **Geänderte Dateien:** 8
 - **Tests:** 588 grün auf dem Entwicklungsrechner (6 übersprungen), 594 grün im Container ohne ein einziges Überspringen
 
@@ -70,6 +70,10 @@ completed: 2026-09-01
 1. **Task 1: Deadline je Auftrag im Sandbox-Kind** , `3731045` (test, RED) und `be61b3b` (feat, GREEN)
 2. **Task 2: OCR als vierter Zweig im Dispatcher** , `42911bb` (test, RED) und `6b56972` (feat, GREEN)
 3. **Task 3: OCR-Aufträge im Poller, mit Vermerk im Zustand** , `9a03e99` (test, RED) und `cd2c3f6` (feat, GREEN)
+
+Dazu `bf9f047` (style): ein Gedankenstrich, der in einen Docstring gerutscht war,
+ist durch ein Komma ersetzt. Die Projektregel verbietet ihn, und ein eigener
+Commit macht die Textänderung vom Verhalten unterscheidbar.
 
 ## Was gebaut wurde
 
@@ -330,7 +334,7 @@ diesem Plan schon gab.
 ## Self-Check: PASSED
 
 - Alle acht geänderten Dateien stehen in `git diff --name-only 5ccd595..HEAD`.
-- Alle sechs Commit-Hashes stehen im Log von `worktree-agent-03-09`.
+- Alle sieben Commit-Hashes stehen im Log von `worktree-agent-03-09`.
 - Weder `.planning/STATE.md` noch `.planning/ROADMAP.md` sind im Diff.
 - `testdata/` ist unverändert, `git status --porcelain testdata/` ist leer.
 
