@@ -104,8 +104,8 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 03-04-PLAN.md , Share, Unshare und Teilbaum-Job fuer Ordner-Operationen
-- [ ] 03-08-PLAN.md , OCR-Modul: Rasterung, tesseract-Subprozess, Deckel-Kaskade
+- [x] 03-04-PLAN.md , Share, Unshare und Teilbaum-Job fuer Ordner-Operationen
+- [x] 03-08-PLAN.md , OCR-Modul: Rasterung, tesseract-Subprozess, Deckel-Kaskade
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -187,7 +187,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
-| 3. Aktualität und OCR | 5/14 | In Progress|  |
+| 3. Aktualität und OCR | 7/14 | In Progress|  |
 | 4. Admin-Sichtbarkeit und Diagnose | 0/TBD | Not started | - |
 | 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
