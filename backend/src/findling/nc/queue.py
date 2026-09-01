@@ -43,6 +43,7 @@ from findling.nc.client import (
     ack_documents,
     claim_documents,
     queue_stats,
+    requeue_documents,
     unlock_documents,
 )
 
@@ -63,6 +64,14 @@ KIND_METADATA: Final = "metadata"
 KIND_DELETE: Final = "delete"
 KIND_ACL: Final = "acl"
 KINDS: Final = frozenset({KIND_CONTENT, KIND_METADATA, KIND_DELETE, KIND_ACL})
+
+# The kind the container asks Nextcloud for, and deliberately not a member of the
+# list above. KINDS answers "which branch may a claimed row pick", and there is no
+# OCR branch until plan 03-09 wires one; a row that carries this kind therefore
+# runs the content route, which is the honest thing to do with a job whose handler
+# does not exist yet. Asking for it is a different question and possible today:
+# the row is put on the second track and waits there for the handler.
+KIND_OCR: Final = "ocr"
 
 # The kinds that describe no node on the PHP side, and therefore arrive without
 # the fields a node would have supplied.
@@ -281,7 +290,7 @@ def _job(queue_id_raw: object, source: object) -> QueueJob | None:
 
 
 class DocumentQueue:
-    """The four queue calls, bound to one client for the whole run."""
+    """The five queue calls, bound to one client for the whole run."""
 
     def __init__(self, nc: AsyncNextcloudApp) -> None:
         self._nc = nc
@@ -358,6 +367,32 @@ class DocumentQueue:
 
         payload = _mapping(answer) or {}
         return CallResult(ok=True, count=_whole_number(payload.get("released")) or 0)
+
+    async def requeue(self, file_ids: Sequence[int], *, kind: str) -> CallResult:
+        """Put files on another kind of job, the handover to the second track.
+
+        File ids, not queue row ids: the caller knows the file it just looked
+        into, and the reconcile of a later plan knows nothing else at all.
+
+        An empty list never leaves the process, for the same reason as in
+        :meth:`acknowledge`: a pass that found no scanned PDF would otherwise pay
+        a round trip for an answer that can only be zero.
+        """
+        if not file_ids:
+            return CallResult(ok=True)
+
+        try:
+            answer = await requeue_documents(self._nc, file_ids=list(file_ids), kind=kind)
+        except Exception:
+            # Survivable by construction as well: the rows were not acknowledged,
+            # so they come back after the lock timeout, and the second pass finds
+            # the same missing text layer and hands them over again. It costs one
+            # repeated text layer check and never a document.
+            LOGGER.warning("could not hand %d files to another track", len(file_ids))
+            return CallResult(ok=False)
+
+        payload = _mapping(answer) or {}
+        return CallResult(ok=True, count=_whole_number(payload.get("requeued")) or 0)
 
     async def stats(self) -> QueueStats:
         """The three counters of the work stock, for the status display."""
