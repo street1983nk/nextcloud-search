@@ -77,7 +77,7 @@ from findling.nc.client import (
     fetch_file_stream,
     new_gateway_client,
 )
-from findling.nc.queue import KIND_DELETE, KIND_METADATA, DocumentQueue, QueueJob
+from findling.nc.queue import KIND_ACL, KIND_DELETE, KIND_METADATA, DocumentQueue, QueueJob
 from findling.store.repo import FileMeta, Store, open_store
 
 LOGGER = logging.getLogger("findling.worker.poller")
@@ -443,6 +443,15 @@ class Poller:
             await self._forget(job, done)
             return 0
 
+        # The kind=acl branch, and it stands here for the same reason: a
+        # permission change touches the file as little as a deletion does. It
+        # costs one write and no download, and that is exactly why the claim
+        # hands it out before any content job (D-04): its effect has to be
+        # visible while an OCR backlog is still being worked off.
+        if job.kind == KIND_ACL:
+            await self._replace_access(job, done)
+            return 0
+
         # A rename or a move, and the cheapest job the system has: the text is
         # already in the index, so nothing is fetched, nothing is extracted and
         # no sandbox child is started.
@@ -487,6 +496,15 @@ class Poller:
 
         try:
             if await asyncio.to_thread(self._store_or_die().is_unchanged, job.file_id, read.content_hash):
+                # The permissions are written even here, and that is bug audit
+                # M1. The fast path acknowledges a file whose bytes did not
+                # change without a single write, while the user list of the job
+                # is the current one: a permission change that arrives as a
+                # content job, which is what every crawl and every write of a
+                # shared file produces, would otherwise never reach the
+                # prefilter. It is one declarative write against a file the pass
+                # has read anyway, so the exit stays cheap.
+                await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, job.user_ids)
                 done.append(job.queue_id)
                 return 1
             outcome = await asyncio.to_thread(self._extract, str(read.path), job.mime, read.size)
@@ -527,6 +545,38 @@ class Poller:
         await asyncio.to_thread(self._writer_or_die().drop_document, job.file_id)
         await asyncio.to_thread(store.forget_acl, job.file_id)
         await asyncio.to_thread(store.tombstone, job.file_id)
+        done.append(job.queue_id)
+
+    async def _replace_access(self, job: QueueJob, done: list[int]) -> None:
+        """Write the permissions of one file again, and touch nothing else.
+
+        One call, no bytes over the network, no extraction and no index write.
+        The job carries the target state, so this is ``replace_acl`` and never an
+        addition or a removal: a delivery that gets lost costs one round of
+        staleness and repairs itself with the next one, while an incremental
+        variant would be wrong forever after the first lost message.
+
+        **An empty user list is the payload, not an error.** After an unshare
+        nobody may see the file any more, and ``replace_acl(file_id, [])`` is what
+        removes the last rows. Treating the emptiness as a broken job is how the
+        old permissions used to survive an unshare for good (pitfall 4).
+
+        **How much this is worth, and how much it is not.** Nothing leaks while
+        this job waits. A hit only becomes a snippet after the recheck in PHP, and
+        that recheck resolves the file through ``getUserFolder()->
+        getFirstNodeById()``, so a user who lost access sees nothing either way. A
+        stale prefilter costs result quality and compute time, not
+        confidentiality. It is written down here because the alternative readings
+        are both bad: panic, which turns this into a security control it is not,
+        and negligence, which lets the delay grow because nothing breaks.
+
+        Like the deletion this deliberately does not go through
+        :meth:`Store.record`. That call counts ``attempts`` up and overwrites the
+        verdict, and a permission change judges nothing: three unshares of the
+        same file would walk into the give-up rule and end as
+        failed(repeatedly_stuck) although every one of them worked.
+        """
+        await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, job.user_ids)
         done.append(job.queue_id)
 
     async def _rewrite_metadata(

@@ -712,9 +712,7 @@ async def test_an_acl_job_writes_the_permissions_without_reading_bytes(
     assert queue.acknowledged == [([94], {})]
 
 
-async def test_an_acl_job_does_not_run_through_record(
-    store: Store, writer: IndexBatchWriter, tmp_path: Path
-) -> None:
+async def test_an_acl_job_does_not_run_through_record(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
     # store.record counts attempts up and overwrites the verdict, and a
     # permission change judges nothing. Three unshares of the same file would
     # otherwise walk into the give-up rule and end as failed(repeatedly_stuck)
@@ -770,9 +768,7 @@ async def test_an_acl_job_keeps_the_order_commit_then_state_then_acknowledge(
     assert events == ["replace_acl", "commit", "acknowledge"]
 
 
-async def test_unchanged_file_still_updates_the_acl(
-    store: Store, writer: IndexBatchWriter, tmp_path: Path
-) -> None:
+async def test_unchanged_file_still_updates_the_acl(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
     # Bug audit M1, due in this phase. The fast path acknowledges a file whose
     # bytes did not change without writing anything at all, and a permission
     # change that arrives as a content job carries the new user list in exactly

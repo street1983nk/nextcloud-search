@@ -282,11 +282,11 @@ class QueueService {
 		// day and a rename would travel the whole queue to write the old name
 		// back into the index, without a single error anywhere.
 		//
-		// The kind that does not fit the route hangs its early return here,
-		// together with its counterpart in the container: delete below, which
-		// must not resolve a node because the node is gone, and acl in plan
-		// 03-04, where an empty user list is the legitimate payload of an unshare
-		// and not a reason to drop the row. Both would be a silent skipped(gone)
+		// The kinds that do not fit the route hang their early return here,
+		// together with their counterpart in the container: delete below, which
+		// must not resolve a node because the node is gone, and acl below it,
+		// where an empty user list is the legitimate payload of an unshare and
+		// not a reason to drop the row. Both would be a silent skipped(gone)
 		// further down. One branch point that they attach to is the whole reason
 		// this variable is read here and not five lines lower; five special cases
 		// scattered through this method later would be the alternative.
@@ -312,6 +312,38 @@ class QueueService {
 				'fileId' => $fileId,
 				'storageId' => $row->getStorageId(),
 				'kind' => $kind,
+			];
+		}
+
+		// A permission change, and the one branch where an empty user list is the
+		// answer rather than a failure. It sits here, directly next to the delete
+		// branch, because both are the same defect seen twice: the null return of
+		// this method used to mean two different things at once, "there is nothing
+		// to do" and "the file cannot be described any more", and claim() turns
+		// both into skipped(gone). After an unshare usersFor() legitimately
+		// answers with nothing, the row was written off, and the old permission
+		// rows stayed in the container for good. The empty list is the payload of
+		// the job: the container hands it to replace_acl, which removes the last
+		// row of that file (pitfall 4).
+		//
+		// No node is resolved for it either. The permissions come from the mount
+		// cache, which is the same source the crawl uses, so the container never
+		// forms a permission of its own; and asking a node for a size and a
+		// mimetype would be work for fields this job does not carry.
+		//
+		// What this branch is worth, and what it is not: nothing leaks while an
+		// acl row waits in the queue. A hit becomes a snippet only after the
+		// recheck in Provider, and that recheck resolves the file through
+		// getUserFolder()->getFirstNodeById(). A stale prefilter costs result
+		// quality and compute time, not confidentiality. That is the reason this
+		// kind is cheap and first in the claim order (D-04) rather than a reason
+		// to treat it as a security control.
+		if ($kind === QueueMapper::KIND_ACL) {
+			return [
+				'fileId' => $fileId,
+				'storageId' => $row->getStorageId(),
+				'kind' => $kind,
+				'userIds' => $this->usersFor($fileId),
 			];
 		}
 
