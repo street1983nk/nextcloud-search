@@ -30,8 +30,10 @@ from findling.api import resources
 from findling.api.search import ROUTER as SEARCH_ROUTER
 from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
 from findling.api.status import ROUTER as STATUS_ROUTER
+from findling.config import settings
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp, run_app, set_handlers
 from findling.worker.poller import POLLER_STOP_SECONDS, Poller, default_poller
+from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_reconcile
 
 LOGGER = logging.getLogger("findling")
 
@@ -40,6 +42,11 @@ LOGGER = logging.getLogger("findling")
 # the lifespan is up and is None outside it, which is also what keeps a test
 # suite that enters the lifespan repeatedly from accumulating pollers.
 _POLLER: Poller | None = None
+
+# The second task, and the same reasoning: the AppAPI handler has to reach it to
+# arm and silence it. It is None while the comparison is switched off, which is
+# the difference between a task that does nothing and no task at all.
+_RECONCILE: Reconcile | None = None
 
 KNOWN_LOG_LEVELS = frozenset({"debug", "info", "warning", "error"})
 
@@ -90,26 +97,54 @@ def active_poller() -> Poller | None:
     return _POLLER
 
 
+def active_reconcile() -> Reconcile | None:
+    """The reconcile of this process, None while it is off or not running."""
+    return _RECONCILE
+
+
 async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
     """Report the result of enabling or disabling the app; empty means success.
 
     Must be a coroutine. The registration helper checks that, and the synchronous
     path is scheduled for removal upstream.
 
-    This is also where the indexing task is armed and silenced. A disabled backend
-    that keeps collecting work is the classic of the integration list: the
+    This is also where the two background tasks are armed and silenced. A disabled
+    backend that keeps collecting work is the classic of the integration list: the
     container looks healthy in its own log while it drains the queue of an app the
-    admin switched off.
+    admin switched off. The reconcile is armed with the same call and for the same
+    reason: a backend that is off but keeps reading the file list of the instance
+    is the same mistake with a different verb.
     """
     del nc
-    poller = active_poller()
-    if poller is not None:
+    for task in (active_poller(), active_reconcile()):
+        if task is None:
+            continue
         if enabled:
-            poller.arm()
+            task.arm()
         else:
-            poller.silence()
+            task.silence()
     LOGGER.info("findling backend %s", "enabled" if enabled else "disabled")
     return ""
+
+
+async def _guarded_reconcile(reconcile: Reconcile, stop_event: asyncio.Event) -> None:
+    """Run the repair task and let nothing out of it but a log line.
+
+    ``Reconcile.run`` already survives an exception inside a round. This is the
+    layer above it, for the failure that ends the loop itself. The reason it
+    exists at all is a ranking: the search is the part a user sees, the indexing
+    is what keeps it worth using, and the comparison is repair work that both of
+    them are fine without for a while. So a broken repair must never end the
+    process and never end the poller, and only the type name is logged, because a
+    traceback here would carry whatever a library put into its message.
+    """
+    try:
+        await reconcile.run(stop_event)
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        kind_of_failure = type(error).__name__
+        LOGGER.error("the reconcile task ended in an unexpected %s; search and indexing continue", kind_of_failure)
 
 
 @asynccontextmanager
@@ -150,10 +185,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     stop_indexing = asyncio.Event()
     _POLLER = default_poller()
     indexing = asyncio.create_task(_POLLER.run(stop_indexing))
+
+    # The second task, and only when the comparison is switched on. Not starting
+    # it is different from starting one that returns at once: a task that exists
+    # holds a state connection sooner or later, and an admin who switched the
+    # comparison off gets to see one line saying so rather than nothing.
+    global _RECONCILE
+    stop_reconcile = asyncio.Event()
+    repairing: asyncio.Task[None] | None = None
+    if settings().reconcile_enabled:
+        _RECONCILE = default_reconcile()
+        repairing = asyncio.create_task(_guarded_reconcile(_RECONCILE, stop_reconcile))
+    else:
+        LOGGER.info("findling reconcile is switched off, the index follows events only")
+
     try:
         yield
     finally:
         stop_indexing.set()
+        stop_reconcile.set()
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(asyncio.shield(indexing), timeout=POLLER_STOP_SECONDS)
         if not indexing.done():
@@ -168,6 +218,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await _POLLER.unlock_held()
         await _POLLER.aclose()
         _POLLER = None
+
+        if repairing is not None:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(asyncio.shield(repairing), timeout=RECONCILE_STOP_SECONDS)
+            if not repairing.done():
+                # A slice is bounded work, so the budget is generous. Over it the
+                # round is inside a worker thread and the only thing it could
+                # still have written is its own bookmark, which may be lost.
+                repairing.cancel()
+                await asyncio.gather(repairing, return_exceptions=True)
+        if _RECONCILE is not None:
+            await _RECONCILE.aclose()
+            _RECONCILE = None
 
 
 APP = FastAPI(lifespan=lifespan)
