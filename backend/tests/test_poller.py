@@ -508,6 +508,157 @@ async def test_a_metadata_job_keeps_the_order_commit_then_state_then_acknowledge
     assert events == ["commit", "record", "acknowledge"]
 
 
+def _deletion(queue_id: int = 93, file_id: int = 4711) -> QueueJob:
+    """A delete job as it leaves the queue: a file id, a storage, nothing else.
+
+    No mimetype, no size, no user list and no fetch user, because the file is
+    gone and no node can be asked for any of them. A container that needs one of
+    these fields to run a deletion cannot run one at all (pitfall 3).
+    """
+    return QueueJob(
+        queue_id=queue_id,
+        file_id=file_id,
+        storage_id=3,
+        root_id=0,
+        path="",
+        title="",
+        mime="",
+        size=0,
+        mtime=0,
+        etag="",
+        kind="delete",
+        user_ids=(),
+        fetch_as="",
+        is_update=False,
+    )
+
+
+async def test_deleted_file_is_gone_for_another_user(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path
+) -> None:
+    # The proof is led from the outside on purpose. Searching as the user who
+    # deleted the file proves nothing: the PHP recheck resolves the node through
+    # getFirstNodeById and filters the hit away for that user whatever the index
+    # holds. Only a second user who still has an entry in the prefilter can tell
+    # "the recheck hid it" apart from "it is really out of the index", and the
+    # second is what IDX-05 asks for.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(_deletion(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    assert _documents(index) == 1
+    assert store.prefilter_visible("bob", [4711]) == {4711}
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert _documents(index) == 0
+    assert store.prefilter_visible("alice", [4711]) == set()
+    assert store.prefilter_visible("bob", [4711]) == set()
+    assert queue.acknowledged[1] == ([93], {})
+
+
+async def test_a_delete_job_reads_no_bytes_and_extracts_nothing(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # No gateway call, no scratch file, no sandbox child. A deletion that
+    # downloaded the file first would ask the gateway for bytes that are gone and
+    # take the 404 for a verdict.
+    fetched: list[int] = []
+    extracted: list[str] = []
+    queue = _FakeQueue(ClaimResult(jobs=(_deletion(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, fetched=fetched)
+    poller._extract = lambda path, mime, size: extracted.append(path)  # type: ignore[assignment,func-returns-value]
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert fetched == []
+    assert extracted == []
+    assert sorted(entry.name for entry in (tmp_path / "tmp").iterdir()) == []
+    # And no verdict either. Without a branch of its own the empty mimetype of a
+    # delete job would fall to the allowlist and be written down as
+    # skipped(mime_not_allowed), which is a lie about a file that is simply gone.
+    assert store.file_row(4711) is None
+
+
+async def test_a_delete_job_does_not_run_through_record(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # store.record counts attempts up and overwrites the verdict, and there is
+    # nothing left to judge here. Three deletions of the same file would
+    # otherwise walk straight into the give-up rule. The tombstone is the state.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(_deletion(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    await poller.run_once()
+
+    row = store.file_row(4711)
+    assert row is not None
+    assert row["attempts"] == 1
+    assert (row["state"], row["reason"]) == ("indexed", None)
+    assert row["deleted_at"] > 0
+
+
+async def test_a_delete_job_is_durable_before_it_is_acknowledged(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The order of a pass survives the new branch. The prefilter is cleared
+    # inside step 1, so the file stops being a candidate at once, and the
+    # acknowledgement stays the last thing that happens: an abort before the
+    # commit hands the row back and the whole deletion runs again, which is
+    # harmless because every one of its three writes is idempotent.
+    events: list[str] = []
+    queue = _FakeQueue(ClaimResult(jobs=(_deletion(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    real_forget = store.forget_acl
+    real_tombstone = store.tombstone
+    real_flush = writer.flush
+    real_acknowledge = queue.acknowledge
+
+    def forget(*args: Any, **kwargs: Any) -> int:
+        events.append("forget_acl")
+        return real_forget(*args, **kwargs)
+
+    def tombstone(*args: Any, **kwargs: Any) -> int:
+        events.append("tombstone")
+        return real_tombstone(*args, **kwargs)
+
+    def flush() -> Any:
+        events.append("commit")
+        return real_flush()
+
+    async def acknowledge(*args: Any, **kwargs: Any) -> CallResult:
+        events.append("acknowledge")
+        return await real_acknowledge(*args, **kwargs)
+
+    monkeypatch.setattr(store, "forget_acl", forget)
+    monkeypatch.setattr(store, "tombstone", tombstone)
+    monkeypatch.setattr(writer, "flush", flush)
+    monkeypatch.setattr(queue, "acknowledge", acknowledge)
+
+    await poller.run_once()
+
+    assert events == ["forget_acl", "tombstone", "commit", "acknowledge"]
+
+
+async def test_a_delete_job_for_a_file_nobody_ever_indexed_is_acknowledged(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # A deletion carries no proof that the file was ever indexed, and it must not
+    # need one. Dropping an absent document, forgetting rows that are not there
+    # and marking a row that does not exist are all no-ops, and the row still has
+    # to leave the queue rather than circle into the give-up rule.
+    queue = _FakeQueue(ClaimResult(jobs=(_deletion(file_id=999),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert store.file_row(999) is None
+    assert queue.acknowledged == [([93], {})]
+
+
 async def test_crash_between_commit_and_state(
     store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
