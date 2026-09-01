@@ -813,6 +813,53 @@ def test_image_file_is_unchanged_after_ocr() -> None:
     assert Path(SLIP).stat().st_mtime == stat_before.st_mtime
 
 
+def test_a_picture_mimetype_takes_the_ocr_route_through_the_picture_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The second way into the OCR route, and the first one that is a property of
+    # the file rather than of the job: since plan 03-10 the four picture types are
+    # in the allowlist. Which of the two decoders opens the file is decided by the
+    # mimetype, because the route alone cannot say whether pdfium or Pillow is the
+    # right one.
+    engine = _install_engine(monkeypatch, _page("Zahlungsavis"))
+
+    outcome = dispatch.extract(SLIP, "image/jpeg", Path(SLIP).stat().st_size)
+
+    assert outcome.state is State.INDEXED
+    assert "Zahlungsavis" in outcome.text
+    assert len(engine.calls) == 1
+    with _handed_over(engine) as handed:
+        # The picture itself and not a rasterised PDF page, so the branch really
+        # went through Pillow.
+        assert handed.size == (1000, 260)
+
+
+def test_an_icon_is_refused_by_the_route_and_not_only_by_the_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The cap has to hold where files actually arrive. An icon reaches the
+    # dispatcher as image/png like every other picture, and it must leave it as a
+    # verdict without an engine call (T-03-1002).
+    engine = _install_engine(monkeypatch, _page("nie erreicht"))
+
+    outcome = dispatch.extract(ICON, "image/png", Path(ICON).stat().st_size)
+
+    assert outcome.state is State.SKIPPED
+    assert outcome.reason is Reason.IMAGE_NOT_OCRABLE
+    assert engine.calls == []
+
+
+def test_a_forced_ocr_job_on_a_pdf_still_reaches_the_scan_branch(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The other side of the same decision: the OCR track of plan 03-09 hands over
+    # scanned PDFs, and those must not end up in the picture branch now that the
+    # route is shared. The rasterised A4 page at 300 dpi is the proof.
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", "1")
+    engine = _install_engine(monkeypatch, _page("Ratsvorlage"))
+
+    dispatch.extract(SCAN, "application/pdf", 4096, Route.OCR)
+
+    with _handed_over(engine) as handed:
+        assert handed.size == (2480, 3509)
+
+
 def test_the_picture_caps_are_named_constants_and_the_bomb_guard_is_set() -> None:
     # Every cap of pitfall 6 with the start value the research names, read off the
     # module rather than off a literal in a comparison. The last line is the one
