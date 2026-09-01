@@ -120,6 +120,49 @@ def test_prefilter_visible_bands_a_long_candidate_list(store: Store) -> None:
     assert len(statements) == 5
 
 
+def test_prefilter_passes_a_file_with_truncated_user_list(store: Store) -> None:
+    # Perf audit M5, and the design decision that comes with it. An instance wide
+    # team folder gives every single file the complete user list of the instance,
+    # so QueueService caps that list. A capped list must not be written as if it
+    # were the whole truth: the file would vanish from the prefilter for everybody
+    # behind the cap, and a prefilter that is stricter than reality hides
+    # documents from people who may read them.
+    #
+    # The collective row is the answer. It says "this file has no usable list",
+    # the prefilter lets the file through as a candidate for any user, and the
+    # PHP recheck decides as it does for every other hit. The prefilter is
+    # allowed to be more generous than the truth, never stricter, because it is
+    # not the security boundary (COMP-04).
+    store.replace_acl(1, [repo.ACL_ANY_USER])
+
+    assert store.prefilter_visible("anna", [1]) == {1}
+    assert store.prefilter_visible("bernd", [1]) == {1}
+    assert store.prefilter_visible("somebody-who-never-logged-in", [1]) == {1}
+
+
+def test_prefilter_still_filters_for_normal_files(store: Store) -> None:
+    # The other half of the same decision, and the more important one. The
+    # collective row is an exception for capped lists and must not soften the
+    # ordinary case: a file with a real user list stays invisible to everyone who
+    # is not on it, and a user who happens to see a collective file gets no free
+    # pass for the rest.
+    store.replace_acl(1, [repo.ACL_ANY_USER])
+    store.replace_acl(2, ["anna"])
+    store.replace_acl(3, ["bernd"])
+
+    assert store.prefilter_visible("anna", [1, 2, 3]) == {1, 2}
+    assert store.prefilter_visible("bernd", [1, 2, 3]) == {1, 3}
+    assert store.prefilter_visible("carla", [1, 2, 3]) == {1}
+
+
+def test_the_reserved_uid_cannot_collide_with_a_real_one() -> None:
+    # Nextcloud refuses an asterisk in a user id, which is what makes it usable
+    # as the reserved value. A collision would be the bad direction of this
+    # mechanism: a user literally called like the marker would see every capped
+    # file, and no test anywhere would notice.
+    assert repo.ACL_ANY_USER == "*"
+
+
 def test_forget_acl_removes_every_row_of_one_file(store: Store) -> None:
     store.replace_acl(1, ["anna", "bernd", "carla"])
     store.replace_acl(2, ["anna"])
@@ -221,6 +264,55 @@ async def test_unshare_with_empty_user_list_clears_the_prefilter(tmp_path: Path,
     assert store.prefilter_visible("bernd", [4711]) == set()
     assert store.prefilter_visible("anna", [4711]) == set()
     assert queue.acknowledged == [[94]]
+
+
+async def test_a_marked_acl_job_writes_the_collective_row_and_not_the_short_list(tmp_path: Path, store: Store) -> None:
+    # The container half of M5, proved through the whole pass rather than against
+    # replace_acl alone. Nextcloud capped the user list of this file and said so,
+    # and what has to reach the table is the collective row, never the first few
+    # hundred names: those names are the shape that makes the file disappear for
+    # everybody else.
+    index = open_index(tmp_path / "index", CONSTITUENTS)
+    writer = IndexBatchWriter(index, directory=tmp_path / "index", min_free_bytes=0)
+    queue = _OneBatchQueue(
+        QueueJob(
+            queue_id=95,
+            file_id=4712,
+            storage_id=3,
+            root_id=0,
+            path="",
+            title="",
+            mime="",
+            size=0,
+            mtime=0,
+            etag="",
+            kind="acl",
+            user_ids=("anna", "bernd"),
+            users_truncated=True,
+            fetch_as="",
+            is_update=False,
+        )
+    )
+    poller = Poller(
+        store=store,
+        writer=writer,
+        tmp_dir=tmp_path / "tmp",
+        client_factory=lambda: cast("AsyncNextcloudApp", object()),
+        gateway_factory=lambda: cast("Any", _NoGateway()),
+        queue_factory=lambda nc: cast("Any", queue),
+    )
+
+    try:
+        result = await poller.run_once()
+    finally:
+        writer.close()
+
+    assert result.state == ROUND_WORKED
+    # One row, and it is the collective one. Two hundred names plus a marker
+    # would be the version that looks harmless and costs exactly the memory the
+    # cap was introduced to save.
+    assert store.acl_rows() == 1
+    assert store.prefilter_visible("carla", [4712]) == {4712}
 
 
 def test_acl_rows_per_document_is_the_status_figure(store: Store) -> None:
