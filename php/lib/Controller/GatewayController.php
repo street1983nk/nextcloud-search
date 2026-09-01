@@ -46,10 +46,18 @@ class GatewayController extends OCSController {
 	 * The file id is an int and there is no path string anywhere in this
 	 * signature, so path traversal is structurally impossible rather than
 	 * filtered.
+	 *
+	 * The requirement on the placeholder is not cosmetic. Nextcloud collects
+	 * attribute routes with a DirectoryIterator over lib/Controller, so the order
+	 * in which two routes enter the Symfony collection is file system order, and
+	 * the first match wins. Without the digit rule this route would match
+	 * /files/slice as well, and the reading slice route of the reconcile (plan
+	 * 03-11) would work or not work depending on how the file system happened to
+	 * list this directory.
 	 */
 	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
 	#[NoCSRFRequired]
-	#[ApiRoute(verb: 'GET', url: '/files/{fileId}')]
+	#[ApiRoute(verb: 'GET', url: '/files/{fileId}', requirements: ['fileId' => '\d+'])]
 	public function getFileContents(int $fileId, string $userId): DataResponse|StreamResponse {
 		// ExAppRequired answers "is this a registered ExApp", not "is this our
 		// ExApp". Every external app on the instance passes that test, so without

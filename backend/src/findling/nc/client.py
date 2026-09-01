@@ -24,6 +24,10 @@ three of the five queue calls at the bottom of the file acknowledge rows, releas
 them and move them to the OCR track. They reach the two database tables the
 companion app owns and nothing else, and the gate carries them as named, tested
 exceptions rather than as a general permission to write.
+
+The two calls of the reconcile added in plan 03-11 sit below them and read: the
+mount list and one page of the file list. They need no exception and get none,
+because the gate judges writing methods and a GET is not one.
 """
 
 import asyncio
@@ -53,7 +57,9 @@ __all__ = [
     "create_app_client",
     "current_user_id",
     "fetch_file_stream",
+    "files_slice",
     "gateway_url",
+    "mounts",
     "new_gateway_client",
     "queue_stats",
     "requeue_documents",
@@ -382,4 +388,56 @@ async def queue_stats(nc: AsyncNextcloudApp) -> object:
     return await nc._session.ocs(
         "GET",
         "/ocs/v2.php/apps/findling/queues/documents/stats",
+    )
+
+
+# ---------------------------------------------------------------------------
+# The reconcile, read side: which mounts are there, and what is really in them.
+# ---------------------------------------------------------------------------
+#
+# Both properties of the block above hold here unchanged: the client is an
+# argument and is never built, and the path is a string literal inside the call.
+#
+# What is new is that both calls read, and that this is the whole point. The
+# comparison itself runs in this container, so the Nextcloud side needs no
+# knowledge of what was indexed, and neither of these two paths belongs in
+# OCS_WRITE_ALLOWLIST: the gate judges writing methods, a GET is none, and an
+# entry that is not needed would widen a security gate for nothing. The one write
+# the reconcile does need already exists, it is the requeue above.
+
+
+async def mounts(nc: AsyncNextcloudApp) -> object:
+    """Every mount the crawl walks, and therefore every mount worth comparing.
+
+    Answers with a list of storage id, root id and overridden root. Deliberately
+    the same source the crawl uses: a second list of mounts on this side would be
+    a second answer to "which mounts are in", and the reconcile would spend every
+    night repairing the difference between the two.
+
+    Returned untyped on purpose, exactly like the queue calls. Turning the answer
+    into objects is the job of :mod:`findling.nc.files`, which validates every
+    field; a type annotation here would claim a guarantee this boundary cannot
+    give.
+    """
+    return await nc._session.ocs(
+        "GET",
+        "/ocs/v2.php/apps/findling/mounts",
+    )
+
+
+async def files_slice(nc: AsyncNextcloudApp, *, storage: int, root: int, after: int, limit: int) -> object:
+    """One page of the file list of one mount, ordered by file id.
+
+    ``root`` is the overridden root of the mount, because that is the node the
+    query on the other side walks. ``after`` is the cursor: the page starts behind
+    it, which makes a page a well defined range rather than a sample.
+
+    The answer carries a final mark, and that mark is the reason this call exists
+    in this shape. The deletion rule of the reconcile needs an upper bound for
+    every page but the last one, and only the answer can say which one that is.
+    """
+    return await nc._session.ocs(
+        "GET",
+        "/ocs/v2.php/apps/findling/files/slice",
+        params={"storage": storage, "root": root, "after": after, "limit": limit},
     )
