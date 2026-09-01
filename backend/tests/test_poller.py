@@ -39,6 +39,7 @@ from fastapi.testclient import TestClient
 from tantivy import Index
 
 from conftest import write_wordlist
+from findling.config import settings
 from findling.extract.dispatch import extract as dispatch_extract
 from findling.index.open import expected_versions, open_index
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
@@ -66,6 +67,12 @@ CONSTITUENTS = FIXTURE.read_text(encoding="utf-8").split()
 
 BODY = "Die Kündigungsfrist beträgt drei Monate.\n"
 BODY_BYTES = BODY.encode("utf-8")
+
+# A scanned PDF out of the reference corpus, pixels and no text layer. It is read
+# here rather than built, because the verdict this file is about,
+# skipped(no_text_layer), is produced by the real extractor and a hand written
+# stand-in would only prove that the stand-in says so.
+SCAN_BYTES = (Path(__file__).resolve().parents[2] / "testdata" / "corpus" / "02-scan-no-text-layer.pdf").read_bytes()
 
 # The same file after a rename. Neither word occurs in the body, so a search that
 # finds the document under this name found it through FIELD_NAME and nothing else.
@@ -110,6 +117,8 @@ class _FakeQueue:
         self.claims = 0
         self.acknowledged: list[tuple[list[int], dict[int, str]]] = []
         self.unlocked: list[list[int]] = []
+        self.requeues: list[tuple[list[int], str]] = []
+        self.requeue_fails = False
 
     async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
         del limit, max_bytes
@@ -123,6 +132,12 @@ class _FakeQueue:
     async def unlock(self, ids: Any) -> CallResult:
         self.unlocked.append(list(ids))
         return CallResult(ok=True, count=len(ids))
+
+    async def requeue(self, file_ids: Any, *, kind: str) -> CallResult:
+        self.requeues.append((list(file_ids), kind))
+        if self.requeue_fails:
+            return CallResult(ok=False)
+        return CallResult(ok=True, count=len(list(file_ids)))
 
     async def stats(self) -> QueueStats:
         return QueueStats()
@@ -183,6 +198,20 @@ def writer(index: Index, index_dir: Path) -> Iterator[IndexBatchWriter]:
     batch_writer = IndexBatchWriter(index, directory=index_dir, min_free_bytes=0)
     yield batch_writer
     batch_writer.close()
+
+
+@pytest.fixture
+def ocr_off(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """An instance whose admin switched OCR off, through the documented variable.
+
+    The cache is cleared on both sides, exactly like the volume fixture does it:
+    the settings are resolved once per process by design, and a test that changed
+    the environment without clearing would hand its answer to the next one.
+    """
+    monkeypatch.setenv("FINDLING_OCR_ENABLED", "false")
+    settings.cache_clear()
+    yield
+    settings.cache_clear()
 
 
 @pytest.fixture
@@ -338,6 +367,139 @@ async def test_a_gone_file_is_acknowledged_as_skipped_gone(
     assert row is not None
     assert (row["state"], row["reason"]) == ("skipped", "gone")
     assert queue.acknowledged == [([91], {})]
+
+
+def _scan_job() -> QueueJob:
+    """One scanned PDF, the shape that hands over to the OCR track (D-07)."""
+    return _job(mime="application/pdf", size=len(SCAN_BYTES), title="Ratsvorlage.pdf", path="Rat/Ratsvorlage.pdf")
+
+
+async def test_no_text_layer_is_requeued_and_not_acknowledged(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The handover of D-07. Without it a scanned PDF is skipped for good, and the
+    # verdict that phase 2 built as the bridge to OCR would be a dead end.
+    #
+    # The second assertion is the one that matters as much as the first: a row
+    # that is handed over must not travel in the acknowledgement as well.
+    # Acknowledging is deleting, so the row would be gone from the queue at the
+    # same moment the requeue put work on it, and the file would never be read.
+    queue = _FakeQueue(ClaimResult(jobs=(_scan_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES})
+
+    result = await poller.run_once()
+
+    assert queue.requeues == [([4711], "ocr")]
+    assert queue.acknowledged == [([], {})]
+    assert result.requeued == 1
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "no_text_layer")
+
+
+async def test_no_text_layer_stays_skipped_when_ocr_is_off(
+    ocr_off: None, store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # An instance without OCR gets the honest verdict instead of rows waiting for
+    # a track that does not exist. Nothing is requeued, and the row leaves the
+    # queue the way it did before this plan.
+    del ocr_off
+    queue = _FakeQueue(ClaimResult(jobs=(_scan_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES})
+
+    result = await poller.run_once()
+
+    assert queue.requeues == []
+    assert queue.acknowledged == [([91], {})]
+    assert result.requeued == 0
+    assert result.skipped == 1
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "no_text_layer")
+
+
+async def test_the_same_bytes_are_handed_over_once_and_then_judged(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The loop this closes: the requeued row comes back as an ocr job, and until
+    # plan 03-09 wires the OCR route it runs the content route again, produces
+    # the same verdict again and would be handed over again, forever, with the
+    # attempt counter reset every single time (T-03-704).
+    #
+    # The stored verdict of the first pass is what ends it. Bytes that changed
+    # since then are a different file and are handed over again, which is why the
+    # content hash is part of the question.
+    queue = _FakeQueue(
+        ClaimResult(jobs=(_scan_job(),)),
+        ClaimResult(jobs=(_scan_job(),)),
+    )
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES})
+
+    first = await poller.run_once()
+    second = await poller.run_once()
+
+    assert first.requeued == 1
+    assert second.requeued == 0
+    assert queue.requeues == [([4711], "ocr")]
+    assert queue.acknowledged[-1] == ([91], {})
+
+
+async def test_a_requeue_that_does_not_reach_nextcloud_does_not_end_the_pass(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The row stays claimed and runs into the lock timeout, which costs one more
+    # text layer check and nothing else. The pass itself finishes, because the
+    # index is already committed and the verdict already written.
+    queue = _FakeQueue(ClaimResult(jobs=(_scan_job(),)))
+    queue.requeue_fails = True
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES})
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert result.requeued == 0
+    assert queue.acknowledged == [([], {})]
+
+
+async def test_the_handover_happens_after_the_commit_and_before_the_acknowledgement(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Same reasoning as the order test above. An abort before the requeue costs
+    # one repeated text layer check; an acknowledgement before it would delete
+    # the row that the requeue was about to put work on.
+    events: list[str] = []
+    queue = _FakeQueue(ClaimResult(jobs=(_scan_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES})
+
+    real_flush = writer.flush
+    real_record = store.record
+    real_requeue = queue.requeue
+    real_acknowledge = queue.acknowledge
+
+    def flush() -> Any:
+        events.append("commit")
+        return real_flush()
+
+    def record(*args: Any, **kwargs: Any) -> None:
+        events.append("record")
+        real_record(*args, **kwargs)
+
+    async def requeue(*args: Any, **kwargs: Any) -> CallResult:
+        events.append("requeue")
+        return await real_requeue(*args, **kwargs)
+
+    async def acknowledge(*args: Any, **kwargs: Any) -> CallResult:
+        events.append("acknowledge")
+        return await real_acknowledge(*args, **kwargs)
+
+    monkeypatch.setattr(writer, "flush", flush)
+    monkeypatch.setattr(store, "record", record)
+    monkeypatch.setattr(queue, "requeue", requeue)
+    monkeypatch.setattr(queue, "acknowledge", acknowledge)
+
+    await poller.run_once()
+
+    assert events == ["commit", "record", "requeue", "acknowledge"]
 
 
 async def test_a_gateway_error_aborts_the_batch_and_acknowledges_nothing(

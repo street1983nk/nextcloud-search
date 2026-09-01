@@ -40,6 +40,7 @@ QUEUE_SOURCE = PACKAGE_ROOT / "nc" / "queue.py"
 CLAIM_PATH = "/ocs/v2.php/apps/findling/queues/documents"
 ACK_PATH = "/ocs/v2.php/apps/findling/queues/documents"
 UNLOCK_PATH = "/ocs/v2.php/apps/findling/queues/documents/unlock"
+REQUEUE_PATH = "/ocs/v2.php/apps/findling/queues/documents/requeue"
 STATS_PATH = "/ocs/v2.php/apps/findling/queues/documents/stats"
 
 # One row exactly as QueueService::describe builds it, keys included. The queue
@@ -294,6 +295,32 @@ async def test_unlock_sends_the_open_ids_to_the_unlock_endpoint() -> None:
     assert kwargs["json"] == {"ids": [91, 92, 93]}
 
 
+async def test_requeue_sends_the_file_ids_and_the_kind_to_the_requeue_endpoint() -> None:
+    # File ids, not queue row ids. The container knows the file it just looked
+    # into, and the reconcile of plan 03-12 knows nothing else either.
+    session = _FakeSession({("POST", REQUEUE_PATH): {"requeued": 2}})
+
+    result = await _queue(session).requeue([4711, 4712], kind="ocr")
+
+    assert result.ok is True
+    assert result.count == 2
+    method, path, kwargs = session.calls[0]
+    assert (method, path) == ("POST", REQUEUE_PATH)
+    assert kwargs["json"] == {"fileIds": [4711, 4712], "kind": "ocr"}
+
+
+async def test_requeue_with_nothing_to_hand_over_does_not_call_nextcloud() -> None:
+    # Every pass that finds no scanned PDF would otherwise pay a round trip for
+    # an answer that can only be zero, which on a small box is the same cost as
+    # the empty acknowledgement this rule already exists for.
+    session = _FakeSession()
+
+    result = await _queue(session).requeue([], kind="ocr")
+
+    assert result.ok is True
+    assert session.calls == []
+
+
 async def test_stats_returns_the_counters_of_the_queue() -> None:
     session = _FakeSession({("GET", STATS_PATH): {"scheduled": 7, "running": 2, "failed": 1}})
 
@@ -314,12 +341,14 @@ async def test_a_transport_error_is_a_defined_result_and_not_an_exception() -> N
     claimed = await queue.claim(limit=32, max_bytes=64)
     acknowledged = await queue.acknowledge([91], {})
     unlocked = await queue.unlock([91])
+    requeued = await queue.requeue([4711], kind="ocr")
     counters = await queue.stats()
 
     assert claimed.unavailable is True
     assert claimed.jobs == ()
     assert acknowledged.ok is False
     assert unlocked.ok is False
+    assert requeued.ok is False
     assert counters.ok is False
 
 
@@ -368,14 +397,15 @@ def test_no_queue_call_builds_a_client_of_its_own() -> None:
 def test_the_queue_paths_stand_as_literals_at_the_call_site() -> None:
     """The shape the read-only gate depends on, pinned from the other side.
 
-    The gate reads the path as a literal at the call site. Tidying these four
+    The gate reads the path as a literal at the call site. Tidying these five
     calls into constants would leave it with "an unknown path", which is a
-    violation for the writing two and blindness for all four.
+    violation for the writing three and blindness for all five.
     """
     source = CLIENT_SOURCE.read_text(encoding="utf-8")
 
     assert source.count('"/ocs/v2.php/apps/findling/queues/documents"') == 2
     assert source.count('"/ocs/v2.php/apps/findling/queues/documents/unlock"') == 1
+    assert source.count('"/ocs/v2.php/apps/findling/queues/documents/requeue"') == 1
     assert source.count('"/ocs/v2.php/apps/findling/queues/documents/stats"') == 1
 
 
