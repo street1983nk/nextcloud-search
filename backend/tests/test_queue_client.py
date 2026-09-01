@@ -55,6 +55,7 @@ SOURCE = {
     "size": 12345,
     "mtime": 1756600000,
     "etag": "5d41402abc4b2a76b9719d911017c592",
+    "kind": "content",
     "userIds": ["alice", "bob"],
     "fetchAs": "alice",
     "isUpdate": False,
@@ -106,6 +107,7 @@ async def test_claim_delivers_jobs_with_ids_metadata_users_and_fetch_as() -> Non
         size=12345,
         mtime=1756600000,
         etag="5d41402abc4b2a76b9719d911017c592",
+        kind="content",
         user_ids=("alice", "bob"),
         fetch_as="alice",
         is_update=False,
@@ -125,6 +127,40 @@ async def test_claim_keeps_the_two_access_questions_apart() -> None:
 
     assert job.fetch_as == "alice"
     assert job.user_ids == ("alice", "bob")
+
+
+async def test_claim_carries_the_kind_of_the_job() -> None:
+    # The kind picks the branch in the poller, so it has to survive the trip.
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**SOURCE, "kind": "metadata"}}}})
+
+    job = (await _queue(session).claim(limit=1, max_bytes=1)).jobs[0]
+
+    assert job.kind == "metadata"
+
+
+async def test_a_source_without_a_kind_is_a_content_job() -> None:
+    # Rows written by a PHP side from before the kind column carry no kind at
+    # all. They are ordinary content jobs and must keep running as such rather
+    # than being discarded as unusable.
+    source = {key: value for key, value in SOURCE.items() if key != "kind"}
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": source}}})
+
+    result = await _queue(session).claim(limit=1, max_bytes=1)
+
+    assert result.discarded == 0
+    assert result.jobs[0].kind == "content"
+
+
+async def test_a_kind_this_container_does_not_know_is_a_content_job() -> None:
+    # The job picks the branch, so an unknown value must not pick one (T-03-201).
+    # delete, acl and ocr arrive with plans 03-03 to 03-05; until their branch
+    # exists, a row carrying them runs the ordinary content route.
+    for unknown in ("delete", "acl", "ocr", "", 7):
+        session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**SOURCE, "kind": unknown}}}})
+
+        result = await _queue(session).claim(limit=1, max_bytes=1)
+
+        assert result.jobs[0].kind == "content", unknown
 
 
 async def test_an_empty_queue_is_no_work_and_no_error() -> None:

@@ -41,7 +41,7 @@ from tantivy import Index
 from conftest import write_wordlist
 from findling.extract.dispatch import extract as dispatch_extract
 from findling.index.open import expected_versions, open_index
-from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID
+from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
 from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
 from findling.nc.client import AsyncNextcloudApp, NextcloudException
@@ -67,19 +67,34 @@ CONSTITUENTS = FIXTURE.read_text(encoding="utf-8").split()
 BODY = "Die Kündigungsfrist beträgt drei Monate.\n"
 BODY_BYTES = BODY.encode("utf-8")
 
+# The same file after a rename. Neither word occurs in the body, so a search that
+# finds the document under this name found it through FIELD_NAME and nothing else.
+RENAMED_TITLE = "Aufhebungsvertrag.txt"
+RENAMED_PATH = "Vertraege/2026/Aufhebungsvertrag.txt"
 
-def _job(queue_id: int = 91, file_id: int = 4711, *, mime: str = "text/plain", size: int | None = None) -> QueueJob:
+
+def _job(
+    queue_id: int = 91,
+    file_id: int = 4711,
+    *,
+    mime: str = "text/plain",
+    size: int | None = None,
+    kind: str = "content",
+    title: str = "Kuendigung.txt",
+    path: str = "Vertraege/Kuendigung.txt",
+) -> QueueJob:
     return QueueJob(
         queue_id=queue_id,
         file_id=file_id,
         storage_id=3,
         root_id=2,
-        path="Vertraege/Kuendigung.txt",
-        title="Kuendigung.txt",
+        path=path,
+        title=title,
         mime=mime,
         size=len(BODY_BYTES) if size is None else size,
         mtime=1_756_600_000,
         etag="5d41402abc4b2a76b9719d911017c592",
+        kind=kind,
         user_ids=("alice", "bob"),
         fetch_as="alice",
         is_update=False,
@@ -122,8 +137,13 @@ class _FakeGatewayClient:
         self.closed = True
 
 
-def _gateway(bodies: dict[int, bytes | BaseException | None]) -> Callable[..., Any]:
-    """A fetch_file_stream doppelganger driven by a table of file ids."""
+def _gateway(bodies: dict[int, bytes | BaseException | None], fetched: list[int] | None = None) -> Callable[..., Any]:
+    """A fetch_file_stream doppelganger driven by a table of file ids.
+
+    ``fetched`` records every file id whose bytes were asked for. That counter is
+    the only way to prove a job stayed off the network: a metadata job that
+    quietly downloaded the file would produce exactly the same index.
+    """
 
     async def fetch(
         nc: AsyncNextcloudApp,
@@ -134,6 +154,8 @@ def _gateway(bodies: dict[int, bytes | BaseException | None]) -> Callable[..., A
         client: Any = None,
     ) -> int | None:
         del nc, user_id, client
+        if fetched is not None:
+            fetched.append(file_id)
         body = bodies.get(file_id, BODY_BYTES)
         if isinstance(body, BaseException):
             raise body
@@ -177,6 +199,7 @@ def _poller(
     queue: _FakeQueue,
     bodies: dict[int, bytes | BaseException | None] | None = None,
     clients: list[object] | None = None,
+    fetched: list[int] | None = None,
 ) -> Poller:
     """Wire a poller to fakes, counting client creations when asked to."""
 
@@ -193,7 +216,7 @@ def _poller(
         client_factory=client_factory,
         gateway_factory=lambda: cast("Any", _FakeGatewayClient()),
         queue_factory=lambda nc: cast("Any", queue),
-        fetch=_gateway(bodies or {}),
+        fetch=_gateway(bodies or {}, fetched),
         extract=dispatch_extract,
     )
 
@@ -208,6 +231,14 @@ def _stored_ids(index: Index) -> list[int]:
     index.reload()
     searcher = index.searcher()
     hits = searcher.search(index.parse_query("frist", [FIELD_BODY_DE]), 10).hits
+    return [int(searcher.doc(address)[FIELD_FILE_ID][0]) for _, address in hits]
+
+
+def _by_name(index: Index, term: str) -> list[int]:
+    """The file ids a search over FIELD_NAME finds. The field a rename changes."""
+    index.reload()
+    searcher = index.searcher()
+    hits = searcher.search(index.parse_query(term, [FIELD_NAME]), 10).hits
     return [int(searcher.doc(address)[FIELD_FILE_ID][0]) for _, address in hits]
 
 
@@ -342,6 +373,139 @@ async def test_an_unchanged_file_is_acknowledged_without_doing_the_work_again(
     assert second.unchanged == 1
     assert second.indexed == 0
     assert queue.acknowledged[1] == ([91], {})
+
+
+def _renamed(queue_id: int = 92) -> QueueJob:
+    """The same file id under a new name, as a rename reaches the container."""
+    return _job(queue_id, kind="metadata", title=RENAMED_TITLE, path=RENAMED_PATH)
+
+
+async def test_rename_makes_the_file_findable_under_the_new_name(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path
+) -> None:
+    # Searching for the CONTENT after a rename is green and proves nothing,
+    # because the content did not change. FIELD_NAME is the field that did, and
+    # it is the one carrying boost 3.0 in the query, so this is the search a user
+    # actually performs after renaming a file.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(_renamed(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    result = await poller.run_once()
+
+    assert result.indexed == 1
+    assert _by_name(index, "aufhebungsvertrag") == [4711]
+    assert _by_name(index, "kuendigung") == []
+    assert queue.acknowledged[1] == ([92], {})
+
+
+async def test_metadata_job_does_not_fetch_bytes(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # The whole point of the kind. The text is already in the index, so a rename
+    # costs no gateway call, no scratch file and no extraction.
+    fetched: list[int] = []
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(_renamed(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, fetched=fetched)
+
+    await poller.run_once()
+    assert fetched == [4711]
+
+    await poller.run_once()
+
+    assert fetched == [4711]
+
+
+async def test_a_rename_leaves_the_content_findable(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path
+) -> None:
+    # The other half of the promise: the cheap route must not lose the text it
+    # did not fetch. Exactly one document, and it still answers on the body.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(_renamed(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    await poller.run_once()
+
+    assert _documents(index) == 1
+    assert _stored_ids(index) == [4711]
+
+
+async def test_a_rename_updates_the_state_row_and_keeps_the_verdict(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The verdict stays indexed and the content hash stays what it was: the bytes
+    # did not change, and dropping the hash would send the next content job into
+    # a full download and extraction of a file nobody touched.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(_renamed(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    before = store.file_row(4711)
+    assert before is not None
+    await poller.run_once()
+
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["path"], row["title"]) == (RENAMED_PATH, RENAMED_TITLE)
+    assert (row["state"], row["reason"]) == ("indexed", None)
+    assert row["content_hash"] == before["content_hash"]
+    assert store.is_unchanged(4711, str(before["content_hash"])) is True
+
+
+async def test_a_metadata_job_without_stored_text_runs_as_a_content_job(
+    store: Store, writer: IndexBatchWriter, index: Index, tmp_path: Path
+) -> None:
+    # A file that was never indexed, or one that ended as skipped, has no stored
+    # text. That is not an error and not a requeue: the row is already here, so
+    # it takes the content route it would have taken on a first indexing.
+    fetched: list[int] = []
+    queue = _FakeQueue(ClaimResult(jobs=(_renamed(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, fetched=fetched)
+
+    result = await poller.run_once()
+
+    assert result.indexed == 1
+    assert fetched == [4711]
+    assert _by_name(index, "aufhebungsvertrag") == [4711]
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("indexed", None)
+    assert row["content_hash"]
+
+
+async def test_a_metadata_job_keeps_the_order_commit_then_state_then_acknowledge(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The cheap branch sits inside step 1 of a pass and not next to it, so the
+    # three steps after it stay in the only order in which every abort is
+    # harmless.
+    events: list[str] = []
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(_renamed(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    await poller.run_once()
+
+    real_flush = writer.flush
+    real_record = store.record
+    real_acknowledge = queue.acknowledge
+
+    def flush() -> Any:
+        events.append("commit")
+        return real_flush()
+
+    def record(*args: Any, **kwargs: Any) -> None:
+        events.append("record")
+        real_record(*args, **kwargs)
+
+    async def acknowledge(*args: Any, **kwargs: Any) -> CallResult:
+        events.append("acknowledge")
+        return await real_acknowledge(*args, **kwargs)
+
+    monkeypatch.setattr(writer, "flush", flush)
+    monkeypatch.setattr(store, "record", record)
+    monkeypatch.setattr(queue, "acknowledge", acknowledge)
+
+    await poller.run_once()
+
+    assert events == ["commit", "record", "acknowledge"]
 
 
 async def test_crash_between_commit_and_state(
