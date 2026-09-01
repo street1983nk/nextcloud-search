@@ -464,6 +464,64 @@ def test_writing_ocs_call_to_an_allowed_path_is_not_a_violation() -> None:
     assert scan_source(CLIENT_MODULE, unlock) == []
 
 
+def test_writing_ocs_call_to_the_requeue_path_is_not_a_violation() -> None:
+    # The third and last write of the return channel: the container turns a
+    # skipped(no_text_layer) verdict back into work by putting the row on the
+    # OCR track instead of letting it end there (plan 03-07, D-07).
+    requeue = (
+        "async def f(nc):\n"
+        '    await nc._session.ocs("POST", "/ocs/v2.php/apps/findling/queues/documents/requeue")\n'
+    )
+
+    assert scan_source(CLIENT_MODULE, requeue) == []
+
+
+def test_writing_ocs_call_to_another_path_beside_the_requeue_route_is_a_violation() -> None:
+    # The negative half of the entry above, and the duty every entry of the
+    # allowlist carries. A neighbour of the new path, a longer spelling of it and
+    # the same path reached through a module constant all have to stay
+    # violations, otherwise the list would be proven to exist but not to be
+    # narrow.
+    for path in (
+        "/ocs/v2.php/apps/findling/queues/documents/requeue/all",
+        "/ocs/v2.php/apps/findling/queues/documents/requeues",
+        "/ocs/v2.php/apps/findling/queues/documents/requeue ",
+    ):
+        source = f'async def f(nc):\n    await nc._session.ocs("POST", "{path}")\n'
+
+        violations = scan_source(CLIENT_MODULE, source)
+
+        assert len(violations) == 1, path
+        assert "invariant 3" in violations[0]
+
+    hidden = (
+        'REQUEUE = "/ocs/v2.php/apps/findling/queues/documents/requeue"\n'
+        "\n"
+        "async def f(nc):\n"
+        '    await nc._session.ocs("POST", REQUEUE)\n'
+    )
+
+    violations = scan_source(CLIENT_MODULE, hidden)
+
+    assert len(violations) == 1
+    assert "an unknown path" in violations[0]
+
+
+def test_write_allowlist_has_exactly_three_entries() -> None:
+    # Not a tautology, a ratchet. Every entry of this list is a hole in IDX-07
+    # that somebody argued for once, and the argument is in the comment block
+    # above the list. A fourth entry that arrives as a side effect of a feature
+    # fails here first, which is the moment at which the three duties (a named
+    # threat, a statement of the reachable tables, a negative test) can still be
+    # asked for.
+    assert len(OCS_WRITE_ALLOWLIST) == 3
+    assert OCS_WRITE_ALLOWLIST == {
+        "/ocs/v2.php/apps/findling/queues/documents",
+        "/ocs/v2.php/apps/findling/queues/documents/unlock",
+        "/ocs/v2.php/apps/findling/queues/documents/requeue",
+    }
+
+
 def test_writing_ocs_call_to_another_path_is_still_a_violation() -> None:
     # Without this one the allowlist would be proven to exist but not to be
     # narrow. A neighbouring path, and a writing method on an allowed path's
