@@ -102,6 +102,7 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
             "empty_text",
             "too_many_cells",
             "gone",
+            "image_not_ocrable",  # a picture too small or too flat to carry text
         }
     ),
     "failed": frozenset(
@@ -114,6 +115,8 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
             "out_of_memory",
             "gateway_error",
             "repeatedly_stuck",
+            "ocr_failed",  # the engine ended with a non zero code or was killed by a signal
+            "ocr_unavailable",  # no engine and no language data in this image
         }
     ),
 }

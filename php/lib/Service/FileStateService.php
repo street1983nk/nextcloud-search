@@ -47,6 +47,14 @@ class FileStateService {
 	 * The closed list of reasons, identical to the table in the phase research.
 	 * Anything outside of it is dropped rather than stored.
 	 *
+	 * This list is the third copy of the same taxonomy, next to
+	 * backend/src/findling/extract/errors.py and
+	 * backend/src/findling/store/repo.py, and it is the one whose absence is
+	 * silent: record() below drops a reason it does not know, so a code that
+	 * only the container knows leaves the file with no verdict at all. Since
+	 * phase 3 a Python test reads this constant and compares it with the other
+	 * two in both directions, so the three cannot drift apart unnoticed.
+	 *
 	 * @var list<string>
 	 */
 	public const REASONS = [
@@ -60,6 +68,7 @@ class FileStateService {
 		'empty_text',
 		'too_many_cells',
 		'gone',
+		'image_not_ocrable',
 		// failed
 		'empty_file',
 		'corrupt',
@@ -69,6 +78,8 @@ class FileStateService {
 		'out_of_memory',
 		'gateway_error',
 		'repeatedly_stuck',
+		'ocr_failed',
+		'ocr_unavailable',
 	];
 
 	/**
