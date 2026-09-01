@@ -123,6 +123,20 @@ def test_forget_acl_removes_every_row_of_one_file(store: Store) -> None:
     assert store.prefilter_visible("anna", [1, 2]) == {2}
 
 
+def test_prefilter_forgets_a_deleted_file(store: Store) -> None:
+    # The prefilter half of D-10, and it is asked for every user rather than for
+    # the one who deleted the file. A row left behind for a second user is not a
+    # leak, because the PHP recheck still runs, but it is a candidate the search
+    # pays for on every query and a hit that flickers before it disappears.
+    store.replace_acl(1, ["anna", "bernd"])
+    store.replace_acl(2, ["anna", "bernd"])
+
+    store.forget_acl(1)
+
+    assert store.prefilter_visible("anna", [1, 2]) == {2}
+    assert store.prefilter_visible("bernd", [1, 2]) == {2}
+
+
 def test_acl_rows_per_document_is_the_status_figure(store: Store) -> None:
     store.replace_acl(1, ["anna", "bernd", "carla"])
     store.replace_acl(2, ["anna"])

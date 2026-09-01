@@ -282,16 +282,38 @@ class QueueService {
 		// day and a rename would travel the whole queue to write the old name
 		// back into the index, without a single error anywhere.
 		//
-		// The two kinds that do not fit the route hang their early return here,
-		// each together with its counterpart in the container: delete in plan
-		// 03-03, which must not resolve a node because the node is gone, and acl
-		// in plan 03-04, where an empty user list is the legitimate payload of an
-		// unshare and not a reason to drop the row. Both would be a silent
-		// skipped(gone) below. One branch point that they attach to is the whole
-		// reason this variable is read here and not five lines further down;
-		// five special cases scattered through this method later would be the
-		// alternative.
+		// The kind that does not fit the route hangs its early return here,
+		// together with its counterpart in the container: delete below, which
+		// must not resolve a node because the node is gone, and acl in plan
+		// 03-04, where an empty user list is the legitimate payload of an unshare
+		// and not a reason to drop the row. Both would be a silent skipped(gone)
+		// further down. One branch point that they attach to is the whole reason
+		// this variable is read here and not five lines lower; five special cases
+		// scattered through this method later would be the alternative.
 		$kind = $row->getKind();
+
+		// A delete order needs no node, no mount and no user list, and it must
+		// not go looking for any of them. This is the inversion of everything
+		// below, which is why it is spelled out rather than left to the reader:
+		// for every other kind "the file is gone" is a reason to give up, and the
+		// method answers null, the row is written off as skipped(gone) and the
+		// container never learns of it. For a deletion "the file is gone" is the
+		// order itself. Resolving a node first would make the outcome depend on
+		// whether the trash bin still happens to hold a cache entry, and the
+		// document would stay in the index for good on every instance where it
+		// does not (IDX-05, pitfall 3).
+		//
+		// The source object is therefore the file id, the storage it lived on and
+		// the kind. storageId comes from the queue row rather than from a node,
+		// so it survives the deletion; the container carries it for the per mount
+		// view and needs nothing else to forget a document.
+		if ($kind === QueueMapper::KIND_DELETE) {
+			return [
+				'fileId' => $fileId,
+				'storageId' => $row->getStorageId(),
+				'kind' => $kind,
+			];
+		}
 
 		$userIds = $this->usersFor($fileId);
 		if ($userIds === []) {

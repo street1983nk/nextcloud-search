@@ -55,13 +55,14 @@ LOGGER = logging.getLogger("findling.nc.queue")
 # reachable across the ExApp boundary, which rejectForeignCaller guards, but a
 # route chosen by a value from a database row deserves a list it has to be in.
 #
-# The PHP side knows five kinds. Only these two have a branch in the container
-# today; delete arrives with plan 03-03, acl with 03-04 and ocr with 03-05. Until
-# then their rows take the content route, which is the honest thing to do with a
-# job whose handler does not exist yet.
+# The PHP side knows five kinds. Only these three have a branch in the container
+# today; acl arrives with plan 03-04 and ocr with 03-05. Until then their rows
+# take the content route, which is the honest thing to do with a job whose
+# handler does not exist yet.
 KIND_CONTENT: Final = "content"
 KIND_METADATA: Final = "metadata"
-KINDS: Final = frozenset({KIND_CONTENT, KIND_METADATA})
+KIND_DELETE: Final = "delete"
+KINDS: Final = frozenset({KIND_CONTENT, KIND_METADATA, KIND_DELETE})
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,7 +77,8 @@ class QueueJob:
     who may read this file so that it can be indexed, and who may find it
     afterwards. Phase 3 answers them differently, and merging them now is exactly
     how a prefilter turns into a permission model without anybody deciding that it
-    should.
+    should. On a delete job both are empty, and so are ``mime`` and ``size``: the
+    file is gone, nobody can read it, and the deletion needs none of them.
 
     ``etag`` has no function in phase 2. It is part of the protocol anyway, so the
     reconcile of phase 3 does not have to change the shape of this object to get
@@ -186,10 +188,10 @@ def _kind(value: object) -> str:
     Two cases fall back, and both on purpose. A row written by a PHP side from
     before the kind column carries no kind at all, and it is an ordinary content
     job: discarding it would stop the queue of an instance in the middle of an
-    upgrade. And a kind this container has no branch for, which is what delete,
-    acl and ocr are until plans 03-03 to 03-05 arrive, must not be able to pick
-    a branch by being spelled a certain way (T-03-201); it runs the content
-    route, which is the only handler that exists for it.
+    upgrade. And a kind this container has no branch for, which is what acl and
+    ocr are until plans 03-04 and 03-05 arrive, must not be able to pick a branch
+    by being spelled a certain way (T-03-201); it runs the content route, which
+    is the only handler that exists for it.
     """
     return value if isinstance(value, str) and value in KINDS else KIND_CONTENT
 
@@ -214,18 +216,33 @@ def _job(queue_id_raw: object, source: object) -> QueueJob | None:
     gateway and would read as "the user may not see this"; an empty mimetype has
     no route in the extraction allowlist; and a file nobody can see has no user to
     read it as.
+
+    All of that holds for the kinds that go and read the file. A deletion reads
+    nothing, so the last three rejections do not apply to it; see the comment at
+    the check itself.
     """
     queue_id = _positive_int(queue_id_raw)
     fields = _mapping(source)
     if queue_id is None or fields is None:
         return None
 
+    kind = _kind(fields.get("kind"))
     file_id = _positive_int(fields.get("fileId"))
     size = _whole_number(fields.get("size"))
     mime = _text(fields.get("mime"))
     user_ids = _user_ids(fields.get("userIds"))
     fetch_as = _text(fields.get("fetchAs"))
-    if file_id is None or size is None or not mime or not user_ids or not fetch_as:
+    # The one line that used to swallow every deletion. A deleted file has no
+    # node left, so the delete branch of QueueService::describe can offer no
+    # mimetype, no size and no user who still sees it, and refusing the entry
+    # here left the document in the index and the rows in the prefilter forever
+    # (pitfall 3). The same emptiness is the legitimate payload of an unshare,
+    # which is why the check is split by kind rather than loosened for everybody
+    # (pitfall 4). A usable file id stays required for every kind: it is the
+    # whole payload of a deletion, and a zero would name no document at all.
+    if file_id is None:
+        return None
+    if kind != KIND_DELETE and (size is None or not mime or not user_ids or not fetch_as):
         return None
 
     return QueueJob(
@@ -236,13 +253,13 @@ def _job(queue_id_raw: object, source: object) -> QueueJob | None:
         path=_text(fields.get("path")),
         title=_text(fields.get("title")),
         mime=mime,
-        size=size,
+        size=0 if size is None else size,
         mtime=_whole_number(fields.get("mtime")) or 0,
         etag=_text(fields.get("etag")),
         user_ids=user_ids,
         fetch_as=fetch_as,
         is_update=bool(fields.get("isUpdate")),
-        kind=_kind(fields.get("kind")),
+        kind=kind,
     )
 
 

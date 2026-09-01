@@ -61,6 +61,16 @@ SOURCE = {
     "isUpdate": False,
 }
 
+# A delete row, exactly as the delete branch of QueueService::describe builds it:
+# a file id, the storage it lived on, and nothing else. There is no node left to
+# ask for a name, a mimetype or a size, and no user list to build, which is the
+# whole reason that branch exists.
+DELETE_SOURCE = {
+    "fileId": 4711,
+    "storageId": 3,
+    "kind": "delete",
+}
+
 
 class _FakeSession:
     """The one method of the private session object the queue calls touch."""
@@ -153,14 +163,41 @@ async def test_a_source_without_a_kind_is_a_content_job() -> None:
 
 async def test_a_kind_this_container_does_not_know_is_a_content_job() -> None:
     # The job picks the branch, so an unknown value must not pick one (T-03-201).
-    # delete, acl and ocr arrive with plans 03-03 to 03-05; until their branch
-    # exists, a row carrying them runs the ordinary content route.
-    for unknown in ("delete", "acl", "ocr", "", 7):
+    # acl and ocr arrive with plans 03-04 and 03-05; until their branch exists, a
+    # row carrying them runs the ordinary content route. delete left this list in
+    # plan 03-03, because it now has a branch of its own.
+    for unknown in ("acl", "ocr", "", 7):
         session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**SOURCE, "kind": unknown}}}})
 
         result = await _queue(session).claim(limit=1, max_bytes=1)
 
         assert result.jobs[0].kind == "content", unknown
+
+
+async def test_a_delete_job_survives_without_users_mime_or_size() -> None:
+    # The one row that must not be discarded, and the line right above used to
+    # discard it. A deleted file has no node, so QueueService::describe can offer
+    # no mimetype, no size and no user who still sees it. Refusing the entry here
+    # is how the document stayed in the index forever (pitfalls 3 and 4).
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": DELETE_SOURCE}}})
+
+    result = await _queue(session).claim(limit=1, max_bytes=1)
+
+    assert result.discarded == 0
+    job = result.jobs[0]
+    assert (job.queue_id, job.file_id, job.kind) == (91, 4711, "delete")
+    assert (job.user_ids, job.fetch_as, job.mime, job.size) == ((), "", "", 0)
+
+
+async def test_a_delete_job_without_a_usable_file_id_is_still_discarded() -> None:
+    # The one field a deletion cannot do without: it is the whole payload, and a
+    # zero would tell the index to forget a document nobody named.
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**DELETE_SOURCE, "fileId": 0}}}})
+
+    result = await _queue(session).claim(limit=1, max_bytes=1)
+
+    assert result.jobs == ()
+    assert result.discarded == 1
 
 
 async def test_an_empty_queue_is_no_work_and_no_error() -> None:

@@ -327,6 +327,66 @@ def test_reset_for_reindex_removes_only_the_stale_rows(store: Store) -> None:
     assert store.file_row(2) is not None
 
 
+def test_tombstone_marks_the_file_as_deleted_and_keeps_the_verdict_readable(store: Store) -> None:
+    # The row stays. Phase 4 has to be able to say "it was there and it is gone",
+    # and a deleted row could only say "never heard of it".
+    store.record(1, a_file(1), "indexed", content_hash="cafe")
+
+    marked = store.tombstone(1, 1_700_000_500)
+
+    row = store.file_row(1)
+    assert marked == 1
+    assert row is not None
+    assert row["deleted_at"] == 1_700_000_500
+    assert (row["state"], row["reason"]) == ("indexed", None)
+    assert row["attempts"] == 1
+
+
+def test_a_tombstone_stamps_the_current_time_when_none_is_given(store: Store) -> None:
+    store.record(1, a_file(1), "indexed", content_hash="cafe")
+
+    store.tombstone(1)
+
+    row = store.file_row(1)
+    assert row is not None
+    assert row["deleted_at"] > 0
+
+
+def test_a_file_with_a_tombstone_is_not_unchanged(store: Store) -> None:
+    # The condition that makes the tombstone work at all. Same bytes, same
+    # generation, and still work to do: without it a deleted file would look
+    # unchanged forever and no requeue could ever touch it again.
+    store.record(1, a_file(1), "indexed", content_hash="cafe")
+    assert store.is_unchanged(1, "cafe") is True
+
+    store.tombstone(1, 1_700_000_500)
+
+    assert store.is_unchanged(1, "cafe") is False
+
+
+def test_recording_a_file_again_lifts_its_tombstone(store: Store) -> None:
+    # The restore from the trash bin, seen from this side. It is the ordinary
+    # upsert and not a method of its own: a file that is being judged again is by
+    # definition not deleted, and a second entry point would be a second place
+    # that has to remember to clear the mark.
+    store.record(1, a_file(1), "indexed", content_hash="cafe")
+    store.tombstone(1, 1_700_000_500)
+
+    store.record(1, a_file(1), "indexed", content_hash="cafe")
+
+    row = store.file_row(1)
+    assert row is not None
+    assert row["deleted_at"] is None
+    assert store.is_unchanged(1, "cafe") is True
+
+
+def test_a_tombstone_on_a_file_that_was_never_judged_changes_nothing(store: Store) -> None:
+    # Not an error. A file nobody ever looked at has nothing to remember, and a
+    # delete job carries no proof that the file was ever indexed.
+    assert store.tombstone(4711) == 0
+    assert store.file_row(4711) is None
+
+
 def test_record_mount_mirrors_the_crawl_progress(store: Store) -> None:
     # A mirror for the display. The original of the cursor lives in the argument
     # of the next background job in Nextcloud.

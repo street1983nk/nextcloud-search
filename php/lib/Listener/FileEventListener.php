@@ -9,10 +9,13 @@ use OCA\Findling\Db\QueueMapper;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
 use OCA\Findling\Service\StorageService;
+use OCA\Files_Trashbin\Events\MoveToTrashEvent;
+use OCA\Files_Trashbin\Events\NodeRestoredEvent;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\NodeCopiedEvent;
 use OCP\Files\Events\Node\NodeCreatedEvent;
+use OCP\Files\Events\Node\NodeDeletedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
 use OCP\Files\Events\Node\NodeTouchedEvent;
 use OCP\Files\Events\Node\NodeWrittenEvent;
@@ -96,6 +99,45 @@ class FileEventListener implements IEventListener {
 				$this->queueRename($event->getTarget());
 				return;
 			}
+
+			if ($event instanceof NodeDeletedEvent) {
+				// Queued as kind 'delete', the one job that needs no node on the
+				// far side. The mimetype filter does not run for it, see queue():
+				// a file that reports a different type now than it did when it
+				// was indexed still has to leave the index.
+				$this->queue($event->getNode(), true, QueueMapper::KIND_DELETE);
+				return;
+			}
+
+			if ($event instanceof MoveToTrashEvent) {
+				// D-10: for the search the trash bin is a deletion, exactly as in
+				// the native Files search. A file a user threw away has to stop
+				// being findable at once, and waiting for the bin to be emptied
+				// would leave it in the results for another thirty days. The
+				// mimetype filter is skipped here as well, for the same reason.
+				//
+				// This fires alongside NodeDeletedEvent for one and the same
+				// operation, and that costs nothing: enqueue is idempotent over
+				// the file id, so the second call refreshes the row the first one
+				// wrote instead of adding a second one. Both branches are here
+				// anyway, because a deletion on an instance with the trash bin
+				// switched off raises only the other one.
+				$this->queue($event->getNode(), true, QueueMapper::KIND_DELETE);
+				return;
+			}
+
+			if ($event instanceof NodeRestoredEvent) {
+				// The other direction of D-10, and it goes in as content rather
+				// than as metadata. The container dropped the document out of the
+				// index when the file was deleted, so there is no stored text left
+				// to write again under a different name and the metadata job would
+				// fall through to the content route anyway. The tombstone is what
+				// makes this work at all: without it the unchanged content hash
+				// would let the container acknowledge the row without writing
+				// anything, and the restored file would stay lost.
+				$this->queue($event->getTarget(), true);
+				return;
+			}
 		} catch (\Throwable $e) {
 			// The type name and nothing else. The message of a filesystem
 			// exception carries the path of the file it failed on.
@@ -148,15 +190,32 @@ class FileEventListener implements IEventListener {
 		// for something that has no content and none of the rows that actually
 		// changed. Subtrees are resolved by a background job of their own in
 		// plan 03-04, which is also the only thing that can band them.
+		//
+		// For a deleted folder that leaves a gap, and it is a known one. The
+		// trash bin keeps the file ids and the cache entries of the descendants
+		// under a different parent of the same storage, so the subtree job of
+		// plan 03-04 can still enumerate them. With the trash bin switched off,
+		// or once it has been emptied, they are really gone, and then the ETag
+		// reconcile of plan 03-12 carries the result. That is what it is for.
 		if (!$node instanceof File) {
 			return;
 		}
+
+		// A deletion answers two of the three questions below differently, and
+		// both exceptions are decisions rather than forgotten branches.
+		$isDeletion = $kind === QueueMapper::KIND_DELETE;
 
 		// 2. The document allowlist, read from the same constant the crawl
 		// filters its query with. Without it every uploaded video and every
 		// archive would be a queue row that the container fetches only to throw
 		// it away, on the machine class this project targets.
-		if (!in_array($node->getMimetype(), StorageService::ALLOWED_MIMETYPES, true)) {
+		//
+		// A deletion skips this question. The allowlist decides what gets into
+		// the index, never what gets out of it: a file that reports a different
+		// mimetype at deletion time than it did when it was indexed, because it
+		// was overwritten or because the detection changed with an update, would
+		// otherwise stay in the index for good.
+		if (!$isDeletion && !in_array($node->getMimetype(), StorageService::ALLOWED_MIMETYPES, true)) {
 			return;
 		}
 
@@ -185,15 +244,23 @@ class FileEventListener implements IEventListener {
 		}
 
 		$size = (int)$node->getSize();
-		if ($size > StorageCrawlJob::MAX_SIZE) {
+		if (!$isDeletion && $size > StorageCrawlJob::MAX_SIZE) {
 			// The same ceiling and the same end state as the crawl. A file above
 			// it is a visible decision with a reason and not a silent omission,
 			// which is the whole content of IDX-06, and the constant lives with
 			// the crawl because that is where it was measured.
+			//
+			// The second exception for a deletion. This ceiling writes a verdict,
+			// and skipped(too_large) is a statement about a file that is present
+			// and was not indexed. Writing it over a file that is gone would put
+			// the wrong reason on the admin page and, worse, drop the deletion.
 			$this->fileStateService->record($fileId, 'skipped', 'too_large');
 			return;
 		}
 
-		$this->queueService->enqueueFile($fileId, $storageId, $rootId, $size, $isUpdate, $kind);
+		// A deletion moves no bytes, so it takes no share of the byte budget a
+		// claim spends. Handing over the size of the file that used to be there
+		// would let a handful of large deletions fill a whole batch.
+		$this->queueService->enqueueFile($fileId, $storageId, $rootId, $isDeletion ? 0 : $size, $isUpdate, $kind);
 	}
 }

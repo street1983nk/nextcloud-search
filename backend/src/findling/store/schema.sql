@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS files (
     ocr_used      INTEGER NOT NULL DEFAULT 0,   -- phase 3, created now
     indexed_at    INTEGER,
     index_version INTEGER NOT NULL DEFAULT 0,
-    deleted_at    INTEGER                       -- phase 3 tombstone, stays NULL
+    deleted_at    INTEGER                       -- tombstone, written by Store.tombstone
 );
 
 -- files_state carries the status page: three counters over a hundred thousand

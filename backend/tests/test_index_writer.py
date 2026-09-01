@@ -359,6 +359,76 @@ def test_stored_body_reads_a_document_of_an_earlier_run(index: Index, index_dir:
         second.close()
 
 
+def test_dropped_document_is_not_found_after_commit(index: Index, batch_writer: IndexBatchWriter) -> None:
+    # The proof that the delete path of D-10 actually deletes. The failure it
+    # guards against is silent: a deletion built from the field name instead of
+    # from the schema raises nothing, deletes nothing, and leaves the document
+    # findable while every counter reports success.
+    batch_writer.add(_record(42))
+    batch_writer.flush()
+    assert _hits(index, "frist") == 1
+
+    batch_writer.drop_document(42)
+    batch_writer.flush()
+
+    assert _hits(index, "frist") == 0
+    index.reload()
+    assert index.searcher().num_docs == 0
+
+
+def test_a_dropped_document_makes_the_flush_commit_at_all(index: Index, batch_writer: IndexBatchWriter) -> None:
+    # A batch of nothing but deletions has no added document, and a flush that
+    # only counted additions would answer nothing_pending and leave the deletion
+    # sitting in the writer. The file would stay findable until some unrelated
+    # file happened to be indexed, which is the same bug as not deleting at all,
+    # only harder to reproduce.
+    batch_writer.add(_record(42))
+    batch_writer.flush()
+
+    batch_writer.drop_document(42)
+
+    assert batch_writer.pending == 1
+    assert batch_writer.flush().state == FLUSH_COMMITTED
+    assert _hits(index, "frist") == 0
+
+
+def test_dropping_an_unknown_file_id_is_harmless(index: Index, batch_writer: IndexBatchWriter) -> None:
+    # A delete job carries no proof that the document was ever indexed, and it
+    # must not need one: the file is gone, so nobody can look.
+    batch_writer.add(_record(42))
+    batch_writer.flush()
+
+    batch_writer.drop_document(4711)
+    batch_writer.flush()
+
+    assert _hits(index, "frist") == 1
+
+
+def test_a_closed_writer_refuses_to_drop(index: Index, index_dir: Path) -> None:
+    writer = IndexBatchWriter(index, directory=index_dir)
+    writer.close()
+
+    with pytest.raises(RuntimeError, match="closed"):
+        writer.drop_document(42)
+
+
+def test_drop_document_builds_its_term_through_the_schema() -> None:
+    # The same I64 against U64 mismatch as the upsert, with the worst possible
+    # consequence: a term built from the field name matches nothing, the document
+    # stays in the index, and the pass reports a successful deletion.
+    tree = ast.parse(WRITER_SOURCE.read_text(encoding="utf-8"))
+    method = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "drop_document")
+    calls = [node for node in ast.walk(method) if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)]
+    by_name = {node.func.attr for node in calls if isinstance(node.func, ast.Attribute)}
+
+    assert "delete_documents_by_query" in by_name
+    terms = [node for node in calls if isinstance(node.func, ast.Attribute) and node.func.attr == "term_query"]
+    assert len(terms) == 1
+    first = terms[0].args[0]
+    assert isinstance(first, ast.Attribute)
+    assert first.attr == "_schema"
+
+
 def test_stored_body_builds_its_term_through_the_schema() -> None:
     # The same I64 against U64 mismatch as the upsert, with a quieter failure:
     # a term built from the field name matches nothing, stored_body answers None

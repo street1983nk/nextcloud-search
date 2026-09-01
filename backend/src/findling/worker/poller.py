@@ -77,7 +77,7 @@ from findling.nc.client import (
     fetch_file_stream,
     new_gateway_client,
 )
-from findling.nc.queue import KIND_METADATA, DocumentQueue, QueueJob
+from findling.nc.queue import KIND_DELETE, KIND_METADATA, DocumentQueue, QueueJob
 from findling.store.repo import FileMeta, Store, open_store
 
 LOGGER = logging.getLogger("findling.worker.poller")
@@ -434,6 +434,15 @@ class Poller:
         verdicts: list[_Verdict],
     ) -> int:
         """Take one job as far as the writer. Returns 1 when it needed no work."""
+        # The kind=delete branch, and it stands before everything because a
+        # deletion is the one job that must not touch the file. Every line below
+        # would either ask the gateway for bytes that are gone or read the empty
+        # mimetype of a delete row as skipped(mime_not_allowed), which is a
+        # verdict about a file that is simply no longer there.
+        if job.kind == KIND_DELETE:
+            await self._forget(job, done)
+            return 0
+
         # A rename or a move, and the cheapest job the system has: the text is
         # already in the index, so nothing is fetched, nothing is extracted and
         # no sandbox child is started.
@@ -490,6 +499,35 @@ class Poller:
             await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
         self._collect(job, outcome, done, failed, verdicts, read.content_hash)
         return 0
+
+    async def _forget(self, job: QueueJob, done: list[int]) -> None:
+        """Take one file out of the index, out of the prefilter and mark it gone.
+
+        Three writes and no reading of the file. A delete job carries a file id
+        and a storage id and nothing else, because the node it used to describe
+        does not exist any more, and needing one of the missing fields is exactly
+        how a deletion never reached this container before (pitfall 3).
+
+        It deliberately does not go through :meth:`Store.record`. That call counts
+        ``attempts`` up and overwrites the verdict, so three deletions of the same
+        file would walk into the give-up rule, and the row would end as
+        failed(repeatedly_stuck) for having been deleted successfully. The
+        tombstone is the state here, and it leaves the old verdict readable so
+        that phase 4 can still say what the file was before it went.
+
+        The permissions are cleared inside step 1 of the pass rather than in step
+        3, which is what makes the file stop being a candidate at once (D-10).
+        Nothing is lost by that: the acknowledgement stays the last thing that
+        happens, so an abort before the commit hands the row back and the whole
+        deletion runs a second time, and all three writes are idempotent. The
+        commit itself happens in the shared step 2, so the rule of this module
+        holds for deletions as well: durable first, acknowledged second.
+        """
+        store = self._store_or_die()
+        await asyncio.to_thread(self._writer_or_die().drop_document, job.file_id)
+        await asyncio.to_thread(store.forget_acl, job.file_id)
+        await asyncio.to_thread(store.tombstone, job.file_id)
+        done.append(job.queue_id)
 
     async def _rewrite_metadata(
         self,
