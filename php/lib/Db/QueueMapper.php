@@ -21,7 +21,8 @@ use OCP\IDBConnection;
  * none of that needs a row locking clause of a specific dialect.
  *
  * The second one is that a claim expires. A container that is killed hard holds
- * its rows for LOCK_TIMEOUT and no longer, which is why that value is small.
+ * its rows for the lock timeout of their kind and no longer, which is why those
+ * values are small.
  *
  * The third one is that an acknowledgement only deletes what did not change in
  * the meantime. A file that changes while its row is claimed marks the row
@@ -32,6 +33,44 @@ use OCP\IDBConnection;
  */
 class QueueMapper extends QBMapper {
 	public const TABLE_NAME = 'findling_queue';
+
+	/**
+	 * The five kinds of work a row can carry.
+	 *
+	 *   acl       share, unshare, group change   no download, permissions only
+	 *   delete    NodeDeleted, reconcile finding no node needed, and none allowed
+	 *   metadata  rename, move of a file         no download, the text is indexed
+	 *   content   create, write, first index     download plus extraction
+	 *   ocr       PDF without a text layer       download, rasterise, tesseract
+	 *
+	 * This list is the only truth about valid kinds in the whole app. The
+	 * controller validates against it, the claim iterates over it, and the
+	 * database default is one of its members.
+	 */
+	public const KIND_ACL = 'acl';
+	public const KIND_DELETE = 'delete';
+	public const KIND_METADATA = 'metadata';
+	public const KIND_CONTENT = 'content';
+	public const KIND_OCR = 'ocr';
+
+	/**
+	 * The closed list, in the order the claim asks for them: permissions and
+	 * deletions before anything that downloads bytes (D-04), and OCR last
+	 * because it is the trailing track of the first index (D-07).
+	 *
+	 * The order lives in this constant and not in an ORDER BY, because a
+	 * priority column would devalue findling_q_free and findling_q_kind and buy
+	 * nothing that a loop over five cheap queries does not buy as well.
+	 *
+	 * @var list<string>
+	 */
+	public const KINDS = [
+		self::KIND_ACL,
+		self::KIND_DELETE,
+		self::KIND_METADATA,
+		self::KIND_CONTENT,
+		self::KIND_OCR,
+	];
 
 	/**
 	 * Fifteen minutes, and this number is the whole reason this constant exists.
@@ -46,8 +85,52 @@ class QueueMapper extends QBMapper {
 	 *
 	 * It is a named constant because the number standing directly in the query
 	 * is the documented warning sign for exactly this defect.
+	 *
+	 * Phase 3 took the second of the two options the paragraph above offered: it
+	 * splits the value per kind (LOCK_TIMEOUTS) and this constant is what every
+	 * kind gets that does not ask for something else.
 	 */
 	public const LOCK_TIMEOUT = 900;
+
+	/**
+	 * Seconds a claim of one kind survives without an acknowledgement.
+	 *
+	 * OCR is the one exception, and the number is arithmetic rather than taste:
+	 * a single OCR job may run up to 600 s under the ceiling cascade of plan
+	 * 03-05, two of them are one claim (KIND_BATCH), and 1200 s of legitimate
+	 * work under a 900 s timeout would make the row reappear as free, count a
+	 * retry, and end as failed(repeatedly_stuck) while it is being worked on
+	 * correctly at that very moment.
+	 *
+	 * @var array<string, int>
+	 */
+	public const LOCK_TIMEOUTS = [
+		self::KIND_ACL => self::LOCK_TIMEOUT,
+		self::KIND_DELETE => self::LOCK_TIMEOUT,
+		self::KIND_METADATA => self::LOCK_TIMEOUT,
+		self::KIND_CONTENT => self::LOCK_TIMEOUT,
+		self::KIND_OCR => 1800,
+	];
+
+	/**
+	 * What outranks what when two kinds meet in one row, see refreshExisting.
+	 *
+	 * Upgrade always, downgrade never. delete absorbs everything, because a file
+	 * that is gone has nothing left to extract. content and ocr share a rank on
+	 * purpose: a write to a scanned PDF must not throw its row back from ocr to
+	 * content, otherwise a text free PDF circles between the two kinds forever.
+	 * The one path from content to ocr is requeueAs (plan 03-07), which the
+	 * container calls after it looked for a text layer.
+	 *
+	 * @var array<string, int>
+	 */
+	private const KIND_RANK = [
+		self::KIND_ACL => 0,
+		self::KIND_METADATA => 1,
+		self::KIND_CONTENT => 2,
+		self::KIND_OCR => 2,
+		self::KIND_DELETE => 3,
+	];
 
 	/**
 	 * Acknowledgements arrive in one list and are deleted in bands, so a large
@@ -79,7 +162,7 @@ class QueueMapper extends QBMapper {
 	 * verifies the behaviour of this method against a second dialect; should it
 	 * fail there, the fix is local to this method and nothing above it changes.
 	 */
-	public function enqueue(int $fileId, int $storageId, int $rootId, int $size, bool $isUpdate): void {
+	public function enqueue(int $fileId, int $storageId, int $rootId, int $size, bool $isUpdate, string $kind = self::KIND_CONTENT): void {
 		// insertIgnoreConflict rather than insert-and-catch, and that is a
 		// transaction property, not taste: on PostgreSQL a caught constraint
 		// violation still aborts the surrounding transaction, so the crawl
@@ -97,13 +180,14 @@ class QueueMapper extends QBMapper {
 				'root_id' => $rootId,
 				'is_update' => $isUpdate ? 1 : 0,
 				'size' => $size,
+				'kind' => $kind,
 				'locked_at' => $this->freeMark()->format('Y-m-d H:i:s'),
 			]);
 			if ($inserted > 0) {
 				return;
 			}
 
-			if ($this->refreshExisting($fileId, $size, $isUpdate)) {
+			if ($this->refreshExisting($fileId, $size, $isUpdate, $kind)) {
 				return;
 			}
 		}
@@ -124,10 +208,45 @@ class QueueMapper extends QBMapper {
 	 * new version silently vanished from the queue. The dirty mark makes the
 	 * acknowledgement requeue it, see acknowledge().
 	 *
+	 * The kind of the row is the third thing this method decides, and it is the
+	 * only one of the three that is not simply overwritten: a row is upgraded to
+	 * the incoming kind and never downgraded to it, see KIND_RANK. Written as
+	 * its own conditional statement rather than as a CASE expression, because
+	 * "only these kinds are outranked" is a list the database can answer with
+	 * the unique index on file_id, and because a reader can see the rule.
+	 *
 	 * @return bool false when the row vanished before either update could hit it
 	 */
-	private function refreshExisting(int $fileId, int $size, bool $isUpdate): bool {
-		$cutoff = $this->lockCutoff($this->now());
+	private function refreshExisting(int $fileId, int $size, bool $isUpdate, string $kind): bool {
+		$rank = self::KIND_RANK[$kind] ?? self::KIND_RANK[self::KIND_CONTENT];
+		$outranked = [];
+		foreach (self::KIND_RANK as $present => $presentRank) {
+			if ($presentRank < $rank) {
+				$outranked[] = $present;
+			}
+		}
+
+		if ($outranked !== []) {
+			// Nothing outranks acl, so that statement is skipped rather than
+			// sent with an empty list. The row may be claimed right now and the
+			// upgrade still applies: the kind decides what the container does
+			// with the row after the current claim ends, not what it is doing
+			// at this moment.
+			$raise = $this->db->getQueryBuilder();
+			$raise->update(self::TABLE_NAME)
+				->set('kind', $raise->createNamedParameter($kind))
+				->where($raise->expr()->eq('file_id', $raise->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)))
+				->andWhere($raise->expr()->in('kind', $raise->createNamedParameter($outranked, IQueryBuilder::PARAM_STR_ARRAY)));
+			$raise->executeStatement();
+		}
+
+		// Which timeout applies depends on the kind the row carries, and this
+		// method deliberately does not read the row. The longest of them is the
+		// safe side: being wrong in this direction marks a row dirty that was
+		// free anyway, and the next claim clears that mark. Being wrong in the
+		// other direction would clear the lock of a row a container is still
+		// working on, which is bug H4 of the phase 2 audit.
+		$cutoff = $this->lockCutoff($this->now(), max(self::LOCK_TIMEOUTS));
 
 		$free = $this->db->getQueryBuilder();
 		$free->update(self::TABLE_NAME)
@@ -160,16 +279,26 @@ class QueueMapper extends QBMapper {
 	 * when it alone is over the budget. Otherwise a single oversized file would
 	 * sit at the head of the queue and stall the run forever.
 	 *
+	 * One kind per call, and the caller asks for all of them in the order of
+	 * KINDS. That is where the priority of D-04 lives: not in a sort column, but
+	 * in the sequence of these calls, with a batch size and a lock timeout of
+	 * their own per kind.
+	 *
 	 * @return QueueFile[] the rows this caller owns, in queue order
 	 */
-	public function claimBatch(int $limit, int $maxBytes): array {
+	public function claimBatch(int $limit, int $maxBytes, string $kind = self::KIND_CONTENT): array {
 		$now = $this->now();
-		$cutoff = $this->lockCutoff($now);
+		$cutoff = $this->lockCutoff($now, $this->lockTimeoutFor($kind));
 
+		// The kind filter sits next to freeRowCondition and not inside it:
+		// "free" keeps one definition, shared by the candidate query, the claim,
+		// the conflict refresh and the counters, and the kind is a second,
+		// independent question. Both together are exactly findling_q_kind.
 		$candidates = $this->db->getQueryBuilder();
 		$candidates->select('id', 'size')
 			->from(self::TABLE_NAME)
 			->where($this->freeRowCondition($candidates, $cutoff))
+			->andWhere($candidates->expr()->eq('kind', $candidates->createNamedParameter($kind)))
 			->orderBy('id', 'ASC')
 			->setMaxResults($limit);
 
@@ -216,7 +345,8 @@ class QueueMapper extends QBMapper {
 			->set('dirty', $claim->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
 			->set('retries', $claim->createFunction('retries + 1'))
 			->where($claim->expr()->in('id', $claim->createNamedParameter($wanted, IQueryBuilder::PARAM_INT_ARRAY)))
-			->andWhere($this->freeRowCondition($claim, $cutoff));
+			->andWhere($this->freeRowCondition($claim, $cutoff))
+			->andWhere($claim->expr()->eq('kind', $claim->createNamedParameter($kind)));
 		if ($claim->executeStatement() === 0) {
 			return [];
 		}
@@ -326,28 +456,51 @@ class QueueMapper extends QBMapper {
 	 * Waiting for a collector: never claimed, or claimed by someone who did not
 	 * come back in time. Both are the same thing from the outside, which is why
 	 * they are one number.
+	 *
+	 * Counted per kind and summed, because since this phase "the claim expired"
+	 * is a different moment for an OCR row than for the rest. One query with one
+	 * cutoff would report an OCR row as waiting while the claim still refuses to
+	 * hand it out, and the status page of phase 4 would show work that nobody
+	 * can take. Five narrow counts against findling_q_kind are the price.
 	 */
 	public function countScheduled(): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->func()->count('*', 'rows'))
-			->from(self::TABLE_NAME)
-			->where($this->freeRowCondition($qb, $this->lockCutoff($this->now())));
+		$now = $this->now();
 
-		return $this->countFrom($qb);
+		$scheduled = 0;
+		foreach (self::KINDS as $kind) {
+			$cutoff = $this->lockCutoff($now, $this->lockTimeoutFor($kind));
+
+			$qb = $this->db->getQueryBuilder();
+			$qb->select($qb->func()->count('*', 'rows'))
+				->from(self::TABLE_NAME)
+				->where($this->freeRowCondition($qb, $cutoff))
+				->andWhere($qb->expr()->eq('kind', $qb->createNamedParameter($kind)));
+			$scheduled += $this->countFrom($qb);
+		}
+
+		return $scheduled;
 	}
 
 	/**
-	 * Held by a collector right now, with a claim that has not expired.
+	 * Held by a collector right now, with a claim that has not expired. Per kind
+	 * for the same reason as above.
 	 */
 	public function countRunning(): int {
-		$cutoff = $this->lockCutoff($this->now());
+		$now = $this->now();
 
-		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->func()->count('*', 'rows'))
-			->from(self::TABLE_NAME)
-			->where($qb->expr()->gt('locked_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATE)));
+		$running = 0;
+		foreach (self::KINDS as $kind) {
+			$cutoff = $this->lockCutoff($now, $this->lockTimeoutFor($kind));
 
-		return $this->countFrom($qb);
+			$qb = $this->db->getQueryBuilder();
+			$qb->select($qb->func()->count('*', 'rows'))
+				->from(self::TABLE_NAME)
+				->where($qb->expr()->gt('locked_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATE)))
+				->andWhere($qb->expr()->eq('kind', $qb->createNamedParameter($kind)));
+			$running += $this->countFrom($qb);
+		}
+
+		return $running;
 	}
 
 	/**
@@ -384,10 +537,26 @@ class QueueMapper extends QBMapper {
 		return $this->timeFactory->getDateTime('now', new \DateTimeZone('UTC'));
 	}
 
-	private function lockCutoff(\DateTime $now): \DateTime {
+	/**
+	 * The seconds are an argument and no longer read out of a constant here,
+	 * because there is no single answer any more: every caller knows which kind
+	 * it is asking about and therefore which timeout applies.
+	 */
+	private function lockCutoff(\DateTime $now, int $seconds): \DateTime {
 		$cutoff = clone $now;
 
-		return $cutoff->setTimestamp($now->getTimestamp() - self::LOCK_TIMEOUT);
+		return $cutoff->setTimestamp($now->getTimestamp() - $seconds);
+	}
+
+	/**
+	 * A kind this app does not know cannot appear in a row, the column is
+	 * written from KINDS only. The fallback exists for the row that a future
+	 * version wrote and this one reads during a rolling upgrade, and the shorter
+	 * timeout is the right guess there: it frees the row earlier rather than
+	 * later.
+	 */
+	private function lockTimeoutFor(string $kind): int {
+		return self::LOCK_TIMEOUTS[$kind] ?? self::LOCK_TIMEOUT;
 	}
 
 	private function countFrom(IQueryBuilder $qb): int {

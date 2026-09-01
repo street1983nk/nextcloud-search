@@ -21,6 +21,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setRootId(int $rootId)
  * @method bool getIsUpdate()
  * @method void setIsUpdate(bool $isUpdate)
+ * @method string getKind()
+ * @method void setKind(string $kind)
  * @method int|null getSize()
  * @method void setSize(?int $size)
  * @method string|null getLockedAt()
@@ -39,6 +41,15 @@ class QueueFile extends Entity {
 	protected bool $isUpdate = false;
 	protected ?int $size = null;
 	protected int $retries = 0;
+
+	/**
+	 * What this row is: one of QueueMapper::KINDS. The property has to exist
+	 * even though only the source object reads it, because the claim selects the
+	 * whole row and Entity::fromRow throws for a column without a property.
+	 * The default matches the database default, so a row from an instance that
+	 * has not run the migration yet still describes itself correctly.
+	 */
+	protected string $kind = QueueMapper::KIND_CONTENT;
 
 	// Set while a claim is open and the file changed underneath it; the
 	// acknowledgement then requeues the row instead of deleting it.
