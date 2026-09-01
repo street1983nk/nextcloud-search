@@ -1247,3 +1247,394 @@ jobs:
           if [ -f "${{ runner.temp }}/exapp.pid" ]; then
             kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
           fi
+
+  # The fourth job, and the two acceptance tests of this phase that a unit test
+  # cannot make: the reconcile of IDX-04 word for word, against a real Nextcloud
+  # whose cache was filled past the event path, and the DACH promise of D-09 over
+  # search terms rather than over recognised text.
+  #
+  # It is a job of its own for the same reason the read only gate is one: what it
+  # asserts is a statement about repair, and a repair that fails must not look
+  # like a search that fails.
+  reconcile-and-dach:
+    name: reconcile-and-dach
+    runs-on: ubuntu-24.04
+    # The corpus goes through the OCR engine here as well, because the DACH terms
+    # of the two scanned documents exist as pixels and in no other form.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        server-version: ['stable34']
+        php-version: ['8.2']
+
+    env:
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+      OWNER_USER: 'owner'
+      OWNER_PASS: 'findling-ci-owner-2026'
+      COLLEAGUE_USER: 'colleague'
+      COLLEAGUE_PASS: 'findling-ci-colleague-2026'
+      # The reconcile task of the container stays off for the whole job, and this
+      # is what turns "exactly one cycle" from a hope into a fact. A container
+      # that has never run a cycle considers itself due, so its own loop would
+      # walk the file list at some tick of its own choosing, possibly between the
+      # manipulation below and the cycle this job triggers. The step that
+      # triggers the cycle switches the variable back on for its own process.
+      #
+      # Job level, so that it reaches the backend the composite action starts. A
+      # restart with a different environment would be the alternative, and it
+      # would silently lose the armed state that the AppAPI handshake set.
+      FINDLING_RECONCILE_ENABLED: 'false'
+      # The two scanned DACH documents. Named here so that a rename of a corpus
+      # file breaks in one place instead of in three.
+      SWISS_FILE: '15-schweiz-baubewilligung.pdf'
+      AUSTRIAN_FILE: '16-oesterreich-mitteilung.pdf'
+      # The folder the reconcile test works in, and it is deliberately not the
+      # corpus: those files are under a read only invariant that the job above
+      # measures byte for byte, and a test that rewrites one of them would take
+      # that measurement apart.
+      WORK_DIR: 'abgleich'
+      # Thirty three corpus files plus the two files of the work folder. The
+      # third one is created later, past the event path, and is the point of the
+      # whole exercise.
+      EXPECTED_JUDGED: '35'
+      DRAIN_TIMEOUT: '900'
+
+    steps:
+      # Same order and the same reason as in the three jobs above: the server
+      # checkout empties the workspace root, and the second checkout is what
+      # brings the composite action into the workspace.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          repository: nextcloud/server
+          ref: ${{ matrix.server-version }}
+          submodules: recursive
+
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          path: findling-src
+
+      - name: Set up the test Nextcloud with both halves and register the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: ${{ matrix.server-version }}
+          php-version: ${{ matrix.php-version }}
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+
+      - name: Install the OCR engine, so the scan track really runs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-osd
+          tesseract --version | head -1
+
+      - name: Empty the instance and add the two users
+        run: |
+          ./occ config:system:set skeletondirectory --value=''
+          rm -rf data/admin/files/* data/admin/files/.[!.]* 2>/dev/null || true
+          OC_PASS="${OWNER_PASS}" ./occ user:add --password-from-env "${OWNER_USER}"
+          OC_PASS="${COLLEAGUE_PASS}" ./occ user:add --password-from-env "${COLLEAGUE_USER}"
+          ./occ files:scan --all
+
+      # The corpus carries the DACH cases, the work folder carries the reconcile
+      # case. Two files of the work folder exist before the crawl, so that they
+      # are ordinary indexed files by the time anything happens behind the back
+      # of the event path.
+      #
+      # The words are measured and not picked: each of them stands in exactly one
+      # file of this instance, so a hit is unambiguous and a missing hit cannot be
+      # explained away. They are written without umlauts on purpose, unlike the
+      # two DACH terms further down, which have to carry theirs because the
+      # spelling is the thing under test.
+      - name: Put the corpus and the work folder into the account of the owner
+        run: |
+          mkdir -p "data/${OWNER_USER}/files/${WORK_DIR}"
+          cp -r findling-src/testdata/corpus "data/${OWNER_USER}/files/corpus"
+          printf 'Der Kanalspuelplan liegt als Vorabzug vor.\n' \
+            > "data/${OWNER_USER}/files/${WORK_DIR}/geaendert.txt"
+          printf 'Der Ausschreibungsvermerk wurde abgelegt.\n' \
+            > "data/${OWNER_USER}/files/${WORK_DIR}/entfernt.txt"
+          ./occ files:scan --all
+          echo "files of the owner: $(find "data/${OWNER_USER}/files" -type f | wc -l)"
+
+      # The whole work folder is shared, because the removal has to be checked
+      # for somebody other than the owner as well: "findable for nobody" is the
+      # wording of the acceptance test, and one user is not nobody.
+      - name: Share the work folder with the second user, before the crawl
+        run: |
+          curl -s -u "${OWNER_USER}:${OWNER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            -d "path=/${WORK_DIR}" \
+            -d 'shareType=0' \
+            -d "shareWith=${COLLEAGUE_USER}" \
+            -d 'permissions=1' \
+            'http://localhost:8080/ocs/v2.php/apps/files_sharing/api/v1/shares' | tee share.json
+          jq -e '.ocs.meta.statuscode == 200' share.json > /dev/null \
+            || { echo "::error::the share was not created, so the removal would be checked for one user only"; cat share.json; exit 1; }
+          ./occ files:scan --all
+
+      - name: Queue and run the crawl
+        run: |
+          ./occ findling:index --restart --no-interaction
+          timeout 60 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once
+          timeout 180 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 120
+          ./occ findling:index
+
+      - name: Wait until the queue is empty and everything has a verdict
+        run: |
+          status() {
+            ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+                --db "${{ runner.temp }}/findling/state.db" )
+          }
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+
+          deadline=$(( $(date +%s) + DRAIN_TIMEOUT ))
+          while :; do
+            report=$(status)
+            judged=$(echo "${report}" | jq -r '.indexed + .skipped + .failed')
+            open=$(open_rows)
+            echo "draining: open=${open} judged=${judged}"
+            if [ "${open}" -eq 0 ] && [ "${judged}" -ge "${EXPECTED_JUDGED}" ]; then
+              echo "the queue is empty and ${judged} files have a verdict"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "::error::the crawl did not finish within ${DRAIN_TIMEOUT} seconds"
+              echo "${report}"
+              ./occ findling:index
+              exit 1
+            fi
+            sleep 5
+          done
+
+      # The control, and without it the three assertions after the cycle would be
+      # worth nothing. "Not findable" is the normal state of a file that was never
+      # indexed, so each of the three has to be findable here first.
+      - name: The three work files are as expected before anything happens behind the events
+        run: |
+          search() {
+            curl -sfS -G -u "$1:$2" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              --data-urlencode "term=$3" \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "$4"
+          }
+          fail() { echo "::error::$1"; cat "$2"; exit 1; }
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Vorabzug' before-changed.json
+          jq -e '.ocs.data.entries | length == 1' before-changed.json > /dev/null \
+            || fail "the file that is about to change is not findable by its old content" before-changed.json
+          jq -e '.ocs.data.entries[0].title == "geaendert.txt"' before-changed.json > /dev/null \
+            || fail "the old content leads to a different file" before-changed.json
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Ausschreibungsvermerk' before-removed-owner.json
+          jq -e '.ocs.data.entries | length == 1' before-removed-owner.json > /dev/null \
+            || fail "the file that is about to be removed is not findable for its owner" before-removed-owner.json
+
+          search "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" 'Ausschreibungsvermerk' before-removed-colleague.json
+          jq -e '.ocs.data.entries | length == 1' before-removed-colleague.json > /dev/null \
+            || fail "the file that is about to be removed is not findable for the second user, so its disappearance would prove nothing" before-removed-colleague.json
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Nachtragsvereinbarung' before-new.json
+          jq -e '.ocs.data.entries | length == 0' before-new.json > /dev/null \
+            || fail "the word of a file that does not exist yet already brings back a hit" before-new.json
+
+      # Step one of the acceptance test of IDX-04, word for word: events blocked.
+      #
+      # How they are blocked is the decision worth writing down. The obvious way
+      # would be a test variable that switches the listeners off, and that is test
+      # code in the production path: the switch would exist on every installation
+      # for the sake of this run. occ files:scan needs none. It writes the file
+      # cache directly and emits none of the node events the companion app listens
+      # to, which is the ordinary shape of a mass import and of a restore from a
+      # backup. So it is not only the cheaper way to block the events, it is the
+      # very case the predecessor of this app failed on, and the next step proves
+      # that the blocking really worked.
+      #
+      # All three cases in one go: a new file, a changed file, a removed file.
+      - name: New, changed and removed, all three past the event path
+        run: |
+          printf 'Die Nachtragsvereinbarung wurde unterzeichnet.\n' \
+            > "data/${OWNER_USER}/files/${WORK_DIR}/neu.txt"
+          printf 'Der Kanalspuelplan liegt jetzt als Reinschrift vor.\n' \
+            > "data/${OWNER_USER}/files/${WORK_DIR}/geaendert.txt"
+          rm "data/${OWNER_USER}/files/${WORK_DIR}/entfernt.txt"
+          ./occ files:scan --all
+          ls -l "data/${OWNER_USER}/files/${WORK_DIR}"
+
+      # Step two, and the one that keeps this test honest. Without it the run
+      # could quietly go green over the event path and the reconcile would never
+      # have been measured at all. No queue row means the events really stayed
+      # out.
+      - name: No queue row was created, so the reconcile is what is measured
+        run: |
+          ./occ findling:index | tee queue-after-scan.txt
+          open=$(awk '
+            $1 == "scheduled" { scheduled = $2 }
+            /^  handed to the worker/ { running = $NF }
+            END { print (scheduled + 0) + (running + 0) }' queue-after-scan.txt)
+          echo "rows waiting after the scan: ${open}"
+          if [ "${open}" -ne 0 ]; then
+            echo "::error::${open} queue rows exist after occ files:scan, so events reached the app and this test measures the event path instead of the reconcile"
+            exit 1
+          fi
+          echo "no queue row exists, the three changes are invisible to the app so far"
+
+      # Step three: exactly one reconcile cycle. run_once is one cycle by
+      # definition, the task inside the container is switched off for this whole
+      # job, and the minimum interval is zero here because a container that was
+      # just started would otherwise wait out its daily cadence.
+      #
+      # It runs as a process of its own against the same state database, which is
+      # allowed under WAL and is the second write connection docs/reconcile.md
+      # describes. Nothing here writes the index: the cycle produces content and
+      # delete jobs, and the poller inside the container does the work.
+      - name: One reconcile cycle, and only one
+        working-directory: findling-src/backend
+        run: |
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_VERSION=0.1.0
+          export NEXTCLOUD_URL=http://localhost:8080
+          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+          export FINDLING_RECONCILE_ENABLED=true
+          uv run python - <<'PY' | tee "${{ github.workspace }}/reconcile.txt"
+          import asyncio
+          import json
+
+          from findling.worker.reconcile import Reconcile
+
+          result = asyncio.run(Reconcile(min_interval_hours=0).run_once())
+          print(
+              json.dumps(
+                  {
+                      "state": result.state,
+                      "mounts": result.mounts,
+                      "seen": result.seen,
+                      "stale": result.stale,
+                      "missing": result.missing,
+                      "slices": result.slices,
+                  }
+              )
+          )
+          PY
+
+      - name: The cycle found the three changes and nothing else
+        run: |
+          report=$(tail -n 1 reconcile.txt)
+          echo "${report}"
+          jq -e '.state == "walked"' <<< "${report}" > /dev/null \
+            || { echo "::error::the cycle did not walk the whole file list, so its numbers say nothing"; exit 1; }
+          # Two content jobs, the new file and the changed one, and one delete
+          # job. stale is compared with at least, because a scan may refresh a
+          # version mark without anybody editing a file; missing is exact, because
+          # concluding a deletion out of an absence is the one thing this round
+          # must never get wrong.
+          jq -e '.stale >= 2' <<< "${report}" > /dev/null \
+            || { echo "::error::the cycle did not see the new and the changed file"; exit 1; }
+          jq -e '.missing == 1' <<< "${report}" > /dev/null \
+            || { echo "::error::the cycle did not see exactly the one removed file"; exit 1; }
+
+      - name: Wait until the poller has worked off what the cycle queued
+        run: |
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+          deadline=$(( $(date +%s) + 300 ))
+          while :; do
+            open=$(open_rows)
+            echo "draining after the cycle: open=${open}"
+            if [ "${open}" -eq 0 ]; then
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "::error::the jobs of the reconcile cycle were not worked off in time"
+              ./occ findling:index
+              exit 1
+            fi
+            sleep 5
+          done
+          # The index is committed in batches, so the last commit may be a moment
+          # behind the empty queue.
+          sleep 5
+
+      # Step four: after one cycle the index is correct. One question per case,
+      # and the changed file is asked twice, because a new content that is
+      # findable while the old one is findable as well is not an update, it is a
+      # second document.
+      - name: After one cycle the index is correct, in all three cases
+        run: |
+          search() {
+            curl -sfS -G -u "$1:$2" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              --data-urlencode "term=$3" \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "$4"
+          }
+          fail() { echo "::error::$1"; cat "$2"; exit 1; }
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Nachtragsvereinbarung' new.json
+          jq -e '.ocs.data.entries | length == 1' new.json > /dev/null \
+            || fail "the file that never produced an event is not findable after the cycle" new.json
+          jq -e '.ocs.data.entries[0].title == "neu.txt"' new.json > /dev/null \
+            || fail "the hit for the new file is a different file" new.json
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Reinschrift' changed.json
+          jq -e '.ocs.data.entries | length == 1' changed.json > /dev/null \
+            || fail "the changed file is not findable by its new content" changed.json
+          jq -e '.ocs.data.entries[0].title == "geaendert.txt"' changed.json > /dev/null \
+            || fail "the new content leads to a different file" changed.json
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Vorabzug' stale.json
+          jq -e '.ocs.data.entries | length == 0' stale.json > /dev/null \
+            || fail "the old content is still findable, so the update added a document instead of replacing one" stale.json
+
+          search "${OWNER_USER}" "${OWNER_PASS}" 'Ausschreibungsvermerk' removed-owner.json
+          jq -e '.ocs.data.entries | length == 0' removed-owner.json > /dev/null \
+            || fail "the removed file is still findable for its owner" removed-owner.json
+
+          search "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" 'Ausschreibungsvermerk' removed-colleague.json
+          jq -e '.ocs.data.entries | length == 0' removed-colleague.json > /dev/null \
+            || fail "the removed file is still findable for the second user, so it left the index but not the prefilter" removed-colleague.json
+
+          echo "one cycle, and all three cases are correct: new, changed, removed"
+
+      - name: Everything the failure had to say
+        if: failure()
+        run: |
+          echo "--- counters ---"
+          ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+            --db "${{ runner.temp }}/findling/state.db" ) || true
+          ./occ findling:index || true
+          echo "--- the reconcile round ---"
+          cat reconcile.txt || true
+          echo "--- the last search answers ---"
+          for answer in before-changed.json before-removed-owner.json before-removed-colleague.json \
+                        before-new.json new.json changed.json stale.json removed-owner.json \
+                        removed-colleague.json; do
+            if [ -f "${answer}" ]; then
+              echo "== ${answer} =="
+              cat "${answer}"
+              echo
+            fi
+          done
+          echo "--- exapp ---"
+          tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+          echo "--- nextcloud ---"
+          tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
+
+      - name: Stop the ExApp
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/exapp.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          fi
