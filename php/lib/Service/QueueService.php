@@ -249,6 +249,26 @@ class QueueService {
 	}
 
 	/**
+	 * Put files on another kind of job, and create the rows that are missing.
+	 *
+	 * A pass through with nothing of its own to decide, so that the controller
+	 * keeps knowing only this service. What it means is written down at
+	 * QueueMapper::requeueAs, because the rules it follows are rules about rows:
+	 * the attempt counter goes back to zero, a deletion is never overwritten, and
+	 * this is the only way a row moves from content to ocr.
+	 *
+	 * Note that the ids here are file ids and not queue row ids. The container
+	 * knows the file id of the PDF it just found no text layer in, and the
+	 * reconcile of plan 03-12 knows nothing else at all: a file it discovers as
+	 * missing has no queue row yet.
+	 *
+	 * @param int[] $fileIds
+	 */
+	public function requeue(array $fileIds, string $kind): int {
+		return $this->queueMapper->requeueAs($fileIds, $kind);
+	}
+
+	/**
 	 * @return array{scheduled:int, running:int, failed:int}
 	 */
 	public function stats(): array {

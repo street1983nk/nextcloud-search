@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Controller;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\Db\QueueMapper;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
 use OCP\AppFramework\Http;
@@ -16,17 +17,19 @@ use Psr\Log\LoggerInterface;
 /**
  * The work stock as seen from the container.
  *
- * Four endpoints: take work, acknowledge it, hand it back, count it. Nobody
- * pushes anything into the container, it collects when it can, and that single
- * property is what gives this app back pressure for free and lets a crashed
- * container pile work up instead of losing it.
+ * Five endpoints: take work, acknowledge it, hand it back, move it to the other
+ * track, count it. Nobody pushes anything into the container, it collects when
+ * it can, and that single property is what gives this app back pressure for free
+ * and lets a crashed container pile work up instead of losing it.
  *
  * This is the only writing path from the ExApp into Nextcloud, and it writes
  * into the two tables this app owns and nowhere else. No method here touches a
  * user file, and there is no code path from here into the file system at all.
  * Because of that the read only gate on the Python side gets an explicit, named
- * exception for exactly the two write paths below, added in its own step in
- * plan 02-10 rather than as a side effect of a feature.
+ * exception for the three write paths below: two of them added in their own step
+ * in plan 02-10, the requeue added the same way in plan 03-07. Three write paths
+ * are the whole return channel, and each of them is one entry of that allowlist,
+ * with a named threat and a negative test of its own.
  *
  * Every method carries the ExApp attribute and the CSRF exemption, both spelled
  * out fully qualified for the same reason as in GatewayController: a grep gate
@@ -190,6 +193,59 @@ class QueueController extends OCSController {
 	}
 
 	/**
+	 * POST /ocs/v2.php/apps/findling/queues/documents/requeue
+	 *
+	 * Body: {"fileIds": [fileId], "kind": "ocr"}
+	 *
+	 * The second track of the first index (D-07). A PDF without a text layer
+	 * leaves the text track as skipped(no_text_layer), and this is where that
+	 * finding becomes work again instead of an end state: the row is put on the
+	 * OCR track, its attempt counter goes back to zero, and it is collected again
+	 * after the text documents, which is what makes the search usable within
+	 * hours instead of after the last scan.
+	 *
+	 * The ids are file ids, not queue row ids, and that is not an oversight. The
+	 * container knows the file it just looked into, and the reconcile of plan
+	 * 03-12 knows nothing else either, because a file it finds missing has no
+	 * queue row at all. They are validated by the same intList as everywhere
+	 * else: both are positive whole numbers and nothing else is accepted.
+	 *
+	 * @param array<mixed> $fileIds
+	 */
+	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
+	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
+	#[\OCP\AppFramework\Http\Attribute\ApiRoute(verb: 'POST', url: '/queues/documents/requeue')]
+	public function requeue(array $fileIds = [], mixed $kind = null): DataResponse {
+		$foreign = $this->rejectForeignCaller();
+		if ($foreign !== null) {
+			return $foreign;
+		}
+
+		$ids = $this->intList($fileIds);
+		if ($ids === null) {
+			return $this->badList();
+		}
+
+		// Against the closed list of the mapper, which is the only truth about
+		// valid kinds in this app, and never against a pattern or a copy of the
+		// list: a kind decides which branch the container runs and which lock
+		// timeout the row gets, so a value that is not one of the five must not
+		// reach the database (T-03-703).
+		if (!is_string($kind) || !in_array($kind, QueueMapper::KINDS, true)) {
+			return $this->badKind();
+		}
+
+		try {
+			$requeued = $this->queueService->requeue($ids, $kind);
+		} catch (\Throwable $e) {
+			$this->logger->error('Findling: could not requeue a batch: ' . $e->getMessage(), ['exception' => $e]);
+			return new DataResponse(['error' => 'Queue is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		return new DataResponse(['requeued' => $requeued]);
+	}
+
+	/**
 	 * GET /ocs/v2.php/apps/findling/queues/documents/stats
 	 *
 	 * Three numbers: waiting, held right now, and how many files ended as
@@ -315,6 +371,22 @@ class QueueController extends OCSController {
 		}
 
 		return null;
+	}
+
+	/**
+	 * An unknown job kind, refused before it reaches the database.
+	 *
+	 * The value is not logged, for the same reason as in badList: it is
+	 * unvalidated input, and the log of this app carries counters and codes and
+	 * never something somebody else wrote.
+	 */
+	private function badKind(): DataResponse {
+		$this->logger->warning('Findling: rejected a requeue with an unknown job kind');
+
+		return new DataResponse(
+			['error' => 'Unknown job kind.'],
+			Http::STATUS_BAD_REQUEST,
+		);
 	}
 
 	private function badList(): DataResponse {
