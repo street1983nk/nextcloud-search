@@ -19,3 +19,9 @@ Dockerfile text eol=lf
 # document into a broken one. Git's own binary heuristic does not protect them,
 # because these PDFs contain no NUL byte and would be treated as text.
 testdata/corpus/** -text
+
+# The typeface the corpus is rendered with, and the licence text that has to
+# travel with it. The font decides what OCR reads, so its checksum is pinned in
+# scripts/dev/build_corpus.py and a checkout that rewrote a byte of it would
+# fail the build rather than change the pixels quietly.
+testdata/fonts/** -text

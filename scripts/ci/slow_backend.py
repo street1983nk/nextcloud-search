@@ -37,12 +37,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     protocol_version = "HTTP/1.1"
 
-    def do_POST(self) -> None:  # noqa: N802 - the name is dictated by the base class
+    def do_POST(self) -> None:  # the method name is dictated by the base class
         """The search. This is the one that is late."""
         time.sleep(DELAY_SECONDS)
         self._answer({"results": []})
 
-    def do_GET(self) -> None:  # noqa: N802 - the name is dictated by the base class
+    def do_GET(self) -> None:  # the method name is dictated by the base class
         """The heartbeat, and it has to stay fast.
 
         AppAPI polls this one. A slow answer here would make the registration the
@@ -50,7 +50,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         """
         self._answer({"status": "ok"})
 
-    def do_PUT(self) -> None:  # noqa: N802 - the name is dictated by the base class
+    def do_PUT(self) -> None:  # the method name is dictated by the base class
         """/enabled, so nothing in AppAPI trips over a 501 while this stub runs."""
         self._answer({})
 
