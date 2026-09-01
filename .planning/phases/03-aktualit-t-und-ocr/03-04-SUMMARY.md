@@ -199,6 +199,11 @@ Keine.
 - **Plan 03-12 (ETag-Abgleich)** erbt zwei benannte Fälle: der wiederhergestellte Ordner und die Nachkommen eines Ordners, dessen Papierkorb geleert oder abgeschaltet ist. Beides steht als Kommentar im Code und in `deferred-items.md`.
 - **Phase 4 (Diagnose)** bekommt mit `SubtreeExpandJob` einen zweiten Job, der `SchedulerJob::LAST_JOB_RUN` fortschreibt, die Anzeige "wann lief zuletzt ein Job dieser App" bleibt also auch dann ehrlich, wenn gerade kein Crawl läuft.
 
+## Self-Check: PASSED
+
+Alle elf genannten Dateien liegen vor, alle fünf Commits sind im Branch
+`worktree-agent-03-04` auffindbar, und der Plan hat keine einzige Datei gelöscht.
+
 ---
 *Phase: 03-aktualit-t-und-ocr*
 *Completed: 2026-09-01*
