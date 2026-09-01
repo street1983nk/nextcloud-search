@@ -14,7 +14,8 @@ the test they are visible in the diff, which is where a reviewer looks.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -33,7 +34,7 @@ from findling.extract.dispatch import ALLOWED_MIMETYPES, Route, extract
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.odf import extract_odf
 from findling.extract.office import extract_docx, extract_pptx, extract_xlsx
-from findling.extract.pdf import extract_pdf
+from findling.extract.pdf import _MIN_CHARS_PER_PAGE, _SCAN_PAGE_SHARE, extract_pdf
 
 CORPUS = Path(__file__).resolve().parents[2] / "testdata" / "corpus"
 
@@ -206,6 +207,212 @@ def test_an_encrypted_pdf_is_never_translated_out_of_an_exception() -> None:
     outcome = ExtractionOutcome.from_exception(FileNotDecryptedError("password required"))
 
     assert outcome == ExtractionOutcome.failed(Reason.CORRUPT)
+
+
+# ---------------------------------------------------------------------------
+# The text layer threshold, measured over the corpus on 2026-09-01.
+#
+# The numbers these tests lean on are in docs/ocr.md under "Die Textlayer-
+# Erkennung": a full A4 page of German administrative prose measures 442 to 456
+# characters, the sparsest genuine text page of the corpus measures 29, a page
+# whose only text object is a headline measures 12, and every one of the nine
+# rendered scan pages measures exactly 0.
+# ---------------------------------------------------------------------------
+
+_LINE_WIDTH = 38
+
+
+def _filler(count: int) -> str:
+    """A line of exactly ``count`` characters, which is what pdfium hands back."""
+    base = "Sitzungsvorlage der Gemeinde Musterhausen "
+    text = (base * (count // len(base) + 1))[:count]
+    return text[:-1] + "x" if text.endswith(" ") else text
+
+
+def _lines_for(characters: int) -> tuple[str, ...]:
+    """``characters`` spread over lines that fit on the page.
+
+    One long line would run off the media box, and get_text_bounded only reports
+    what stands inside it: the fixture would then measure the page width instead
+    of the threshold.
+    """
+    full, rest = divmod(characters, _LINE_WIDTH)
+    lines = [_filler(_LINE_WIDTH) for _ in range(full)]
+    if rest:
+        lines.append(_filler(rest))
+    return tuple(lines)
+
+
+def _pdf_with_page_lines(pages: Sequence[Sequence[str]]) -> bytes:
+    """A PDF where every page carries exactly the given lines, empty pages included.
+
+    An empty page here is the shape of a scanned page for this question: a page
+    object with a content stream that draws no text. What a real scan puts on it
+    instead is an image, and the corpus carries those; a fixture that has to vary
+    the character count per page does not need the pixels.
+    """
+    font_number = 3 + 2 * len(pages)
+    kids = " ".join(f"{3 + 2 * index} 0 R" for index in range(len(pages)))
+    objects: list[bytes] = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Kids [{kids}] /Count {len(pages)} >>".encode("ascii"),
+    ]
+    for index, lines in enumerate(pages):
+        content = bytearray()
+        baseline = 650
+        for line in lines:
+            content += f"BT /F1 10 Tf 20 {baseline} Td ({line}) Tj ET\n".encode("ascii")
+            baseline -= 25
+        objects.append(
+            (
+                f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 700]"
+                f" /Resources << /Font << /F1 {font_number} 0 R >> >> /Contents {4 + 2 * index} 0 R >>"
+            ).encode("ascii")
+        )
+        objects.append(
+            f"<< /Length {len(content)} >>\nstream\n".encode("ascii") + bytes(content) + b"\nendstream"
+        )
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    return _assemble_pdf(objects)
+
+
+def test_a_scanned_council_document_is_handed_over_as_no_text_layer() -> None:
+    # Three A4 pages of German prose that exist only as pixels. Every one of them
+    # measures zero characters, so the whole file is the OCR queue and nothing
+    # else. This is the file the acceptance of D-09 later searches for.
+    outcome = extract_pdf(str(CORPUS / "13-ratsvorlage-scan.pdf"))
+
+    assert outcome == ExtractionOutcome.skipped(Reason.NO_TEXT_LAYER)
+
+
+def test_mixed_pdf_with_text_layer_and_scanned_annex_is_extracted() -> None:
+    # Pitfall 9 and bug M2 of the phase 2 audit in one file: two pages with a
+    # real text layer, three scanned annex pages behind them. Three fifths of the
+    # pages are empty, which is under the measured share, so the readable half is
+    # indexed instead of the whole agreement being sent through OCR.
+    outcome = extract_pdf(str(CORPUS / "14-pacht-mit-anhang.pdf"))
+
+    assert outcome.state is State.INDEXED
+    assert outcome.truncated is False
+    assert "Pachtvereinbarung" in outcome.text
+    assert "Der jährliche Zins" in outcome.text
+
+
+def test_a_pdf_with_a_real_text_layer_is_never_treated_as_a_scan() -> None:
+    # The expensive half of the asymmetry. A text PDF that lands in the OCR track
+    # costs minutes of CPU per document from this phase on, so the two smallest
+    # genuine text layers of the corpus are pinned here.
+    for name, needle in (("01-text-layer.pdf", "real text layer"), ("09-bescheid.pdf", "Grundstücks")):
+        outcome = extract_pdf(str(CORPUS / name))
+
+        assert outcome.state is State.INDEXED, f"{name} came back as {outcome.state}/{outcome.reason}"
+        assert needle in outcome.text
+
+
+def test_a_cover_page_in_front_of_nine_scans_is_an_ocr_candidate_and_not_a_text_document(tmp_path: Path) -> None:
+    # The case bug M2 names word for word. The document average would have to
+    # decide between 200 characters and ten pages; the per page count does not
+    # have to decide anything, it counts nine empty pages out of ten and hands
+    # the file over. The cover text is not lost: OCR reads that page as well.
+    path = _write(tmp_path, "deckblatt.pdf", _pdf_with_page_lines([_lines_for(200), *([()] * 9)]))
+
+    outcome = extract_pdf(path)
+
+    assert outcome == ExtractionOutcome.skipped(Reason.NO_TEXT_LAYER)
+
+
+def test_two_dense_pages_in_front_of_eight_scans_are_not_ticked_off_as_a_text_document(tmp_path: Path) -> None:
+    # The one the old document wide rule got wrong: 900 characters over ten pages
+    # are far above 25 per page on average, so the file was indexed and the eight
+    # scanned pages were never looked at again.
+    path = _write(tmp_path, "zwei-und-acht.pdf", _pdf_with_page_lines([_lines_for(450), _lines_for(450), *([()] * 8)]))
+
+    outcome = extract_pdf(path)
+
+    assert outcome == ExtractionOutcome.skipped(Reason.NO_TEXT_LAYER)
+
+
+@pytest.mark.parametrize(
+    ("scanned", "readable", "expected"),
+    [
+        (2, 1, State.INDEXED),
+        (3, 1, State.SKIPPED),
+        (6, 3, State.INDEXED),
+        (7, 3, State.SKIPPED),
+    ],
+)
+def test_the_share_of_empty_pages_decides_at_the_measured_two_thirds(
+    scanned: int, readable: int, expected: State, tmp_path: Path
+) -> None:
+    # Exactly two thirds is still a document with a text layer, above it the file
+    # is a scan. The boundary is stated here rather than left to a comparison
+    # operator nobody reads twice.
+    pages = [*([_lines_for(200)] * readable), *([()] * scanned)]
+    path = _write(tmp_path, f"anteil-{scanned}-{readable}.pdf", _pdf_with_page_lines(pages))
+
+    outcome = extract_pdf(path)
+
+    assert outcome.state is expected
+    assert scanned / (scanned + readable) > _SCAN_PAGE_SHARE if expected is State.SKIPPED else True
+
+
+@pytest.mark.parametrize(
+    ("characters", "expected"),
+    [(_MIN_CHARS_PER_PAGE - 1, State.SKIPPED), (_MIN_CHARS_PER_PAGE + 1, State.INDEXED)],
+)
+def test_one_page_counts_as_scanned_below_the_measured_threshold(
+    characters: int, expected: State, tmp_path: Path
+) -> None:
+    # The measured neighbours of the threshold are a headline only page at 12
+    # characters and the sparsest genuine text page of the corpus at 29. The
+    # constant sits between them, and this pins which side of it means what.
+    path = _write(tmp_path, f"seite-{characters}.pdf", _pdf_with_page_lines([(_filler(characters),)]))
+
+    outcome = extract_pdf(path)
+
+    assert outcome.state is expected
+
+
+CORPUS_PDF_VERDICTS: dict[str, tuple[State, Reason | None]] = {
+    "01-text-layer.pdf": (State.INDEXED, None),
+    "02-scan-no-text-layer.pdf": (State.SKIPPED, Reason.NO_TEXT_LAYER),
+    "06-zero-bytes.pdf": (State.FAILED, Reason.EMPTY_FILE),
+    "07-password-protected.pdf": (State.SKIPPED, Reason.ENCRYPTED),
+    "09-bescheid.pdf": (State.INDEXED, None),
+    "13-ratsvorlage-scan.pdf": (State.SKIPPED, Reason.NO_TEXT_LAYER),
+    "14-pacht-mit-anhang.pdf": (State.INDEXED, None),
+    "15-schweiz-baubewilligung.pdf": (State.SKIPPED, Reason.NO_TEXT_LAYER),
+    "16-oesterreich-mitteilung.pdf": (State.SKIPPED, Reason.NO_TEXT_LAYER),
+    "24-abgeschnittener-trailer.pdf": (State.FAILED, Reason.CORRUPT),
+    "25-kaputte-xref.pdf": (State.INDEXED, None),
+    "26-riesige-seitenzahl.pdf": (State.FAILED, Reason.CORRUPT),
+    "27-nullbytes-im-kopf.pdf": (State.FAILED, Reason.CORRUPT),
+    "28-ohne-seiten.pdf": (State.FAILED, Reason.CORRUPT),
+    "29-doppelt-komprimiert.pdf": (State.INDEXED, None),
+    "30-nur-ein-bild.pdf": (State.SKIPPED, Reason.NO_TEXT_LAYER),
+    "31-riesenformat.pdf": (State.SKIPPED, Reason.NO_TEXT_LAYER),
+    "32-startxref-ins-leere.pdf": (State.INDEXED, None),
+    "33-seitenbaum-zyklus.pdf": (State.FAILED, Reason.CORRUPT),
+}
+
+
+def test_every_pdf_of_the_corpus_keeps_the_verdict_that_is_documented_for_it() -> None:
+    # testdata/CORPUS.md prints this table for a reader, and the OCR acceptance
+    # of the following plans counts on it. Two of the entries are the ones that
+    # could hang a run instead of ending it: 26 declares one hundred thousand
+    # pages in 627 bytes and 33 is a page tree that contains itself. The time
+    # bound is generous on purpose; it is there to fail rather than to hang.
+    names = sorted(path.name for path in CORPUS.glob("*.pdf"))
+    assert names == sorted(CORPUS_PDF_VERDICTS), "a PDF was added to the corpus without a documented verdict"
+
+    started = time.monotonic()
+    for name, (state, reason) in CORPUS_PDF_VERDICTS.items():
+        outcome = extract_pdf(str(CORPUS / name))
+
+        assert outcome.state is state, f"{name} came back as {outcome.state}/{outcome.reason}"
+        assert outcome.reason is reason, f"{name} came back with reason {outcome.reason}"
+
+    assert time.monotonic() - started < 30
 
 
 def test_the_dispatcher_reaches_the_pdf_route() -> None:
