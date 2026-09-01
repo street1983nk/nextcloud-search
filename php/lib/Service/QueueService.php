@@ -34,6 +34,30 @@ class QueueService {
 	 */
 	public const MAX_ATTEMPTS = 3;
 
+	/**
+	 * How many rows of one kind a single claim may take.
+	 *
+	 * The cheap kinds are large, because a permission change is a row and not a
+	 * download, and a hundred of them are still less work than one invoice.
+	 * content keeps the value the queue had before this phase.
+	 *
+	 * ocr is two, and that number is arithmetic. An OCR job may run up to 600 s
+	 * under the ceiling cascade of plan 03-05; a batch of 32 would be more than
+	 * five hours against a claim that expires after 1800 s, so the rows would
+	 * come back as free, count a retry each and end as failed(repeatedly_stuck)
+	 * while a worker is legitimately still working on them (phase research,
+	 * pitfall 11). Two of them stay under the timeout with room to spare.
+	 *
+	 * @var array<string, int>
+	 */
+	private const KIND_BATCH = [
+		QueueMapper::KIND_ACL => 128,
+		QueueMapper::KIND_DELETE => 128,
+		QueueMapper::KIND_METADATA => 64,
+		QueueMapper::KIND_CONTENT => 32,
+		QueueMapper::KIND_OCR => 2,
+	];
+
 	public function __construct(
 		private QueueMapper $queueMapper,
 		private FileStateService $fileStateService,
@@ -54,6 +78,15 @@ class QueueService {
 	 * would mean it travels through the lock timeout again and again until the
 	 * end of time.
 	 *
+	 * The kinds are asked for one after the other, in the order of
+	 * QueueMapper::KINDS: acl, delete, metadata, content, ocr. This loop is
+	 * where the priority of D-04 lives. A permission change overtakes any
+	 * content backlog, however long it is, because the content query is not even
+	 * sent before the acl query came back empty. The alternative, a priority
+	 * column in ORDER BY, would have cost both indexes of the queue.
+	 *
+	 * An empty answer for one kind ends that kind and nothing else.
+	 *
 	 * @return array<int, array<string, mixed>> queue row id to source object
 	 */
 	public function claim(int $limit, int $maxBytes): array {
@@ -61,21 +94,42 @@ class QueueService {
 		$gone = 0;
 		$givenUp = 0;
 
-		foreach ($this->queueMapper->claimBatch($limit, $maxBytes) as $row) {
-			if ($row->getRetries() > self::MAX_ATTEMPTS) {
-				$this->finish($row, 'failed', 'repeatedly_stuck');
-				$givenUp++;
-				continue;
+		// Both ceilings of the caller are spent across the kinds and not handed
+		// out again per kind, otherwise one round would fetch five times the
+		// batch and five times the budget the collector asked for.
+		//
+		// A kind is never skipped because the budget ran out, though: claimBatch
+		// always delivers its first row, budget or not, and that floor is what
+		// keeps the trailing OCR track from starving behind a content backlog
+		// that fills the budget in every single round (D-07).
+		$rows = $limit;
+		$budget = $maxBytes;
+
+		foreach (QueueMapper::KINDS as $kind) {
+			if ($rows <= 0) {
+				break;
 			}
 
-			$source = $this->describe($row);
-			if ($source === null) {
-				$this->finish($row, 'skipped', 'gone');
-				$gone++;
-				continue;
-			}
+			$batch = min(self::KIND_BATCH[$kind] ?? $limit, $rows);
+			foreach ($this->queueMapper->claimBatch($batch, $budget, $kind) as $row) {
+				$rows--;
+				$budget = max(0, $budget - (int)$row->getSize());
 
-			$sources[$row->getId()] = $source;
+				if ($row->getRetries() > self::MAX_ATTEMPTS) {
+					$this->finish($row, 'failed', 'repeatedly_stuck');
+					$givenUp++;
+					continue;
+				}
+
+				$source = $this->describe($row);
+				if ($source === null) {
+					$this->finish($row, 'skipped', 'gone');
+					$gone++;
+					continue;
+				}
+
+				$sources[$row->getId()] = $source;
+			}
 		}
 
 		if ($gone > 0) {
@@ -103,13 +157,27 @@ class QueueService {
 	public function enqueue(ICacheEntry $entry, int $storageId, int $rootId, bool $isUpdate = false): void {
 		$size = $entry->getSize();
 
-		$this->queueMapper->enqueue(
+		$this->enqueueFile(
 			$entry->getId(),
 			$storageId,
 			$rootId,
 			$size > 0 ? (int)$size : 0,
 			$isUpdate,
 		);
+	}
+
+	/**
+	 * The same work stock, for a caller that holds a node instead of a cache
+	 * entry.
+	 *
+	 * The event listener is that caller. An event carries an OCP\Files\Node, and
+	 * the cache entry behind it is only reachable through FileInfo::getData,
+	 * which exists since Nextcloud 34 while this app declares 32. Reading the
+	 * entry out of the cache by internal path instead would be one query per
+	 * write on the instance for four numbers the node already knows.
+	 */
+	public function enqueueFile(int $fileId, int $storageId, int $rootId, int $size, bool $isUpdate, string $kind = QueueMapper::KIND_CONTENT): void {
+		$this->queueMapper->enqueue($fileId, $storageId, $rootId, max(0, $size), $isUpdate, $kind);
 	}
 
 	/**
@@ -200,6 +268,22 @@ class QueueService {
 	private function describe(QueueFile $row): ?array {
 		$fileId = $row->getFileId();
 
+		// The one place where the kind of a row decides what its source object
+		// looks like. Today every kind takes the same route below, and that is
+		// correct as long as every queued row belongs to a file that is still
+		// there: only create and write reach the queue in this plan.
+		//
+		// The two kinds that do not fit that route hang their early return here,
+		// each together with its counterpart in the container: delete in plan
+		// 03-03, which must not resolve a node because the node is gone, and acl
+		// in plan 03-04, where an empty user list is the legitimate payload of an
+		// unshare and not a reason to drop the row. Both would be a silent
+		// skipped(gone) below. One branch point that they attach to is the whole
+		// reason this variable is read here and not five lines further down;
+		// five special cases scattered through this method later would be the
+		// alternative.
+		$kind = $row->getKind();
+
 		$userIds = $this->usersFor($fileId);
 		if ($userIds === []) {
 			return null;
@@ -239,6 +323,10 @@ class QueueService {
 			// that the reconcile of phase 3 does not have to change the shape of
 			// this object to get it.
 			'etag' => $node->getEtag(),
+			// What the container has to do with this row. Next to etag on
+			// purpose: both are the fields phase 3 needs, and the shape of this
+			// object stays what it was otherwise.
+			'kind' => $kind,
 			'userIds' => $userIds,
 			'fetchAs' => $fetchAs,
 			'isUpdate' => $row->getIsUpdate(),
