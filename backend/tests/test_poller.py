@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import re
 import shutil
+import threading
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1510,3 +1511,97 @@ def test_a_state_database_created_by_the_poller_carries_the_version_marks(volume
         assert opened.version_mismatch(expected_versions(digest)) == []
     finally:
         opened.close()
+
+
+async def test_the_resources_open_off_the_event_loop(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    """Perf audit M1: opening must not stall the loop that answers /heartbeat.
+
+    ``_open`` connects SQLite and applies the schema, builds the word list
+    artifact over 276k entries including its checksum, opens the tantivy index
+    and sweeps the scratch directory. Measured on ARM that adds up to an
+    estimated 1.5 to 3 seconds, and every one of those seconds is a heartbeat
+    the platform does not get an answer to while ``/enabled`` still replies.
+    AppAPI reads a missing heartbeat as a dead container and restarts it, so
+    this is not a latency question but a boot loop.
+
+    What is asserted is the property, not the seconds: the factories of ``_open``
+    run on a worker thread. The measurement is a measurement and belongs in the
+    audit, the thread is a decision and belongs in a test.
+    """
+    loop_thread = threading.current_thread()
+    threads: list[threading.Thread] = []
+
+    def client_factory() -> AsyncNextcloudApp:
+        threads.append(threading.current_thread())
+        return cast("AsyncNextcloudApp", object())
+
+    poller = Poller(
+        store=store,
+        writer=writer,
+        tmp_dir=tmp_path / "tmp",
+        client_factory=client_factory,
+        gateway_factory=lambda: cast("Any", _FakeGatewayClient()),
+        queue_factory=lambda nc: cast("Any", _FakeQueue()),
+    )
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_EMPTY
+    assert threads != []
+    assert threads[0] is not loop_thread
+
+
+async def test_the_resources_are_opened_only_once(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # The thread must not cost the invariant it was wrapped around: one client
+    # for the whole run. A second creation is a connection setup and a Nextcloud
+    # bootstrap per pass, which is the difference between an initial index and a
+    # weekend.
+    clients: list[object] = []
+    queue = _FakeQueue()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, clients=clients)
+
+    await poller.run_once()
+    await poller.run_once()
+
+    assert len(clients) == 1
+    assert queue.claims == 2
+
+
+def test_the_verdict_list_does_not_hold_the_document_text() -> None:
+    """Perf audit M2: the text is gone once the writer has it.
+
+    ``verdicts`` lives until after the commit, and at a batch of 32 documents at
+    the character cap that is 16.8 to 33.6 MB of strings held for the whole pass
+    on a box with four gigabytes. ``_record_verdicts`` never reads the text; it
+    writes the state, the reason, the character count and the hash. So the text
+    is dropped on the way into the list, and everything the later steps do read
+    survives untouched.
+    """
+    verdicts: list[Any] = []
+    outcome = ExtractionOutcome.indexed(BODY * 100)
+
+    Poller._collect(_job(), outcome, [], {}, verdicts, "abc")
+
+    assert verdicts[0].outcome.text == ""
+    # The count is stored at extraction time and never recomputed, which is what
+    # makes dropping the text harmless for the status page.
+    assert verdicts[0].outcome.text_chars == outcome.text_chars
+    assert verdicts[0].outcome.state is outcome.state
+    assert verdicts[0].outcome.reason is outcome.reason
+    # The caller keeps its own outcome: the writer is handed the text before this
+    # call, and a mutation would be a document without a body in the index.
+    assert outcome.text != ""
+
+
+def test_a_truncated_verdict_keeps_its_reason_without_its_text() -> None:
+    # truncated is a reason, not a property of the string, so it has to survive
+    # the drop. If it did not, a renamed file would later be re-recorded as
+    # indexed without the mark, and the status page would stop reporting that
+    # the document is only partly in the index.
+    verdicts: list[Any] = []
+    outcome = ExtractionOutcome.indexed(BODY, truncated=True)
+
+    Poller._collect(_job(), outcome, [], {}, verdicts, "abc")
+
+    assert verdicts[0].outcome.text == ""
+    assert verdicts[0].outcome.truncated is True

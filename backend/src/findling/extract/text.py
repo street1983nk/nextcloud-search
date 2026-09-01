@@ -55,7 +55,16 @@ _HTML_PARSER = html.HTMLParser(no_network=True)
 # Elements whose content is code, not text. Indexing them means a search for a
 # variable name finds every page that uses a library, and a search for a word
 # finds pages that only mention it in a stylesheet.
-_INVISIBLE_TAGS = ("script", "style")
+#
+# The namespace wildcard is what makes this work in both branches below, and it
+# is security audit L2 (Indexverschmutzung). An HTML document parsed by libxml2's
+# HTML parser has elements without a namespace, so "script" matched; an XHTML
+# document goes to the XML parser and its elements are named
+# {http://www.w3.org/1999/xhtml}script, so the same pattern matched nothing at
+# all and the whole stylesheet plus the whole script body went into the index.
+# "{*}" matches the tag in any namespace and in none, so one tuple serves both
+# parsers and the two branches cannot drift apart again.
+_INVISIBLE_TAGS = ("{*}script", "{*}style")
 
 # Above this share of replacement characters the fallback decoding is not a text
 # any more, it is a guess that failed.

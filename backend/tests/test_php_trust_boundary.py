@@ -1,0 +1,272 @@
+"""Gate B: the ExApp trust boundary of every PHP route (security audit L4).
+
+Every route this app exposes is reachable by *any* external app registered on
+the instance, and that is the threat this gate exists for. An AI assistant an
+admin installed last week is a registered ExApp, so it passes ``ExAppRequired``
+without any trouble at all: that attribute answers "is this a registered
+external app", never "is this *our* external app". The second question is
+answered by ``rejectForeignCaller``, which compares the ``EX-APP-ID`` header
+against the backend app id of this app, and only by that. A route that carries
+the attribute and forgets the comparison hands the work stock, the file list of
+the whole instance, or the content gateway to a foreign container.
+
+The protection was written in phase 2 and it was complete then. What was
+missing, and what this file adds, is the guarantee that it stays complete: the
+security audit filed this as L4, "protection present, regression unsecured".
+Phase 3 is the proof that the concern was justified. The four routes of the
+audit have become eight, added by four different plans, and each of those plans
+had to remember two attributes and one first statement by hand.
+
+**Why this is a textual check and not a PHP test.** There is no PHP test
+environment on the development machine and none in this repository; the PHP side
+is checked with ``php -l`` in a container and nothing else. A textual gate that
+pins the protection is worth more than the perfect test that does not exist, and
+it is exactly the shape of Gate A in ``test_readonly_gate.py``: parse the
+sources, judge every route, and fail closed when something cannot be read.
+
+Two self tests against text samples belong to that shape and are not decoration.
+A gate whose only assertion is "the current tree is clean" is green on the day
+somebody deletes its body, so the two ways of breaking a route are staged here
+deliberately and the gate has to report both of them.
+
+**What this gate does not claim.** It says nothing about whether AppAPI
+authenticated the caller before the request arrived. That residual risk is
+written down at every ``rejectForeignCaller`` in the PHP sources: whoever can
+forge the header has broken the AppAPI trust model itself.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+CONTROLLER_ROOT = Path(__file__).resolve().parents[2] / "php" / "lib" / "Controller"
+
+# The attribute that makes a method a route. Everything else in this file hangs
+# off finding it: a method without it is not reachable from the outside and
+# needs no boundary.
+ROUTE_ATTRIBUTE = "ApiRoute"
+
+# The attribute that keeps browsers and ordinary users out, and the call that
+# keeps foreign ExApps out. Both are required, because each of them answers a
+# question the other one does not.
+EXAPP_ATTRIBUTE = "ExAppRequired"
+GUARD_CALL = "rejectForeignCaller"
+
+_FUNCTION = re.compile(r"^\s*(?:public|protected|private)\s+(?:static\s+)?function\s+(\w+)\s*\(")
+
+# Lines that are not a statement: blank, and the three comment shapes PHP uses.
+# ``#`` covers an attribute inside a body as well, which is the safe direction:
+# an attribute is never the guard call, so skipping it can only make the gate
+# look further, never make it pass earlier.
+_NOT_A_STATEMENT = ("//", "/*", "*", "#")
+
+
+@dataclass(frozen=True, slots=True)
+class Route:
+    """One method that is reachable over HTTP, with where it stands."""
+
+    file: str
+    method: str
+    line: int
+
+
+def _attributes_above(lines: list[str], function_index: int) -> list[str]:
+    """The attribute lines directly above a method declaration.
+
+    Walking upwards stops at the first line that is not an attribute, which is
+    the docblock. That is deliberate: an attribute of the *previous* method must
+    never be counted for this one, and the docblock is the wall between them.
+    """
+    collected: list[str] = []
+    index = function_index - 1
+    while index >= 0 and lines[index].strip().startswith("#["):
+        collected.append(lines[index].strip())
+        index -= 1
+    return collected
+
+
+def _body_start(lines: list[str], function_index: int) -> int:
+    """The index of the first line inside the method body."""
+    for index in range(function_index, len(lines)):
+        if lines[index].rstrip().endswith("{"):
+            return index + 1
+    return len(lines)
+
+
+def _first_statement(lines: list[str], start: int) -> str:
+    """The first line of a body that is neither blank nor a comment."""
+    for line in lines[start:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith(_NOT_A_STATEMENT):
+            continue
+        return stripped
+    return ""
+
+
+def routes_of(relative_path: str, source: str) -> list[Route]:
+    """Every method of one controller that carries the route attribute."""
+    lines = source.splitlines()
+    routes: list[Route] = []
+    for index, line in enumerate(lines):
+        match = _FUNCTION.match(line)
+        if match is None:
+            continue
+        if not any(ROUTE_ATTRIBUTE in attribute for attribute in _attributes_above(lines, index)):
+            continue
+        routes.append(Route(file=relative_path, method=match.group(1), line=index + 1))
+    return routes
+
+
+def scan_source(relative_path: str, source: str) -> list[str]:
+    """Return one message per unguarded route, empty list when clean.
+
+    Both messages name the file and the method, because a gate that only says
+    "something is wrong" costs the next reader the search this function already
+    did.
+    """
+    lines = source.splitlines()
+    violations: list[str] = []
+
+    for route in routes_of(relative_path, source):
+        attributes = _attributes_above(lines, route.line - 1)
+        if not any(EXAPP_ATTRIBUTE in attribute for attribute in attributes):
+            violations.append(
+                f"{route.file}:{route.line}: {route.method}() is a route without {EXAPP_ATTRIBUTE}, "
+                "so any browser session reaches it"
+            )
+
+        statement = _first_statement(lines, _body_start(lines, route.line - 1))
+        if GUARD_CALL not in statement:
+            violations.append(
+                f"{route.file}:{route.line}: {route.method}() does not call {GUARD_CALL} as its first "
+                "statement, so a foreign ExApp reaches it"
+            )
+
+    return violations
+
+
+def _controller_sources() -> list[tuple[str, str]]:
+    """Every controller of the PHP app, as (file name, source)."""
+    return [(path.name, path.read_text(encoding="utf-8")) for path in sorted(CONTROLLER_ROOT.glob("*.php"))]
+
+
+# -- the real tree ---------------------------------------------------------
+
+
+def test_every_route_of_every_controller_is_guarded() -> None:
+    violations = [message for name, source in _controller_sources() for message in scan_source(name, source)]
+
+    assert violations == []
+
+
+def test_the_gate_sees_every_route_the_sources_declare() -> None:
+    # The count is the anti-vacuity clause of this gate. A parser that stopped
+    # recognising methods would report zero violations over zero routes and look
+    # perfectly healthy, so the number of judged methods is compared against the
+    # number of route attributes in the sources. The two are only equal while the
+    # attribute is spelled fully qualified in every controller, which is the
+    # spelling the controllers themselves say they use for exactly this reason:
+    # an import line would count as a mention without being a route.
+    sources = _controller_sources()
+    routes = [route for name, source in sources for route in routes_of(name, source)]
+    mentions = sum(1 for _, source in sources for line in source.splitlines() if ROUTE_ATTRIBUTE in line)
+
+    assert len(routes) == mentions
+    # Eight today: five on the queue, two on the reconcile, one on the content
+    # gateway. A lower number means the parser lost something.
+    assert len(routes) >= 8
+
+
+def test_every_controller_of_the_app_carries_at_least_one_route() -> None:
+    # A controller without a route is either dead code or a class the gate is
+    # silently ignoring, and both are worth knowing about.
+    unrouted = [name for name, source in _controller_sources() if not routes_of(name, source)]
+
+    assert unrouted == []
+
+
+# -- self tests: the gate has to report both failures ----------------------
+
+_GUARDED = """<?php
+
+class ExampleController extends OCSController {
+\t/**
+\t * A docblock, so that the attribute walk has a wall to stop at.
+\t */
+\t#[\\OCP\\AppFramework\\Http\\Attribute\\ExAppRequired]
+\t#[\\OCP\\AppFramework\\Http\\Attribute\\NoCSRFRequired]
+\t#[\\OCP\\AppFramework\\Http\\Attribute\\ApiRoute(verb: 'GET', url: '/things')]
+\tpublic function things(): DataResponse {
+\t\t$foreign = $this->rejectForeignCaller();
+\t\tif ($foreign !== null) {
+\t\t\treturn $foreign;
+\t\t}
+
+\t\treturn new DataResponse([]);
+\t}
+}
+"""
+
+
+def test_a_fully_guarded_route_is_clean() -> None:
+    # The counter sample of the two below. Without it a gate that reported every
+    # route as broken would also pass both failure tests.
+    assert scan_source("ExampleController.php", _GUARDED) == []
+    assert len(routes_of("ExampleController.php", _GUARDED)) == 1
+
+
+def test_missing_exapp_required_is_reported() -> None:
+    source = _GUARDED.replace("\t#[\\OCP\\AppFramework\\Http\\Attribute\\ExAppRequired]\n", "")
+
+    violations = scan_source("ExampleController.php", source)
+
+    assert len(violations) == 1
+    assert "ExAppRequired" in violations[0]
+    assert "ExampleController.php" in violations[0]
+    assert "things()" in violations[0]
+
+
+def test_missing_reject_foreign_caller_is_reported() -> None:
+    source = _GUARDED.replace("\t\t$foreign = $this->rejectForeignCaller();\n", "")
+
+    violations = scan_source("ExampleController.php", source)
+
+    assert len(violations) == 1
+    assert "rejectForeignCaller" in violations[0]
+    assert "ExampleController.php" in violations[0]
+    assert "things()" in violations[0]
+
+
+def test_the_guard_has_to_be_the_first_statement() -> None:
+    # Second in the body is not good enough, and this is the shape in which the
+    # protection realistically erodes: somebody adds "just one cheap line" in
+    # front of it, and that line runs for a caller that has no business being
+    # here at all.
+    source = _GUARDED.replace(
+        "\t\t$foreign = $this->rejectForeignCaller();\n",
+        "\t\t$this->logger->info('a line in front of the guard');\n\t\t$foreign = $this->rejectForeignCaller();\n",
+    )
+
+    violations = scan_source("ExampleController.php", source)
+
+    assert len(violations) == 1
+    assert "first" in violations[0]
+
+
+def test_a_method_without_the_route_attribute_is_not_judged() -> None:
+    # The private helpers of every controller are methods too, and they carry
+    # neither attribute nor guard. Judging them would make the gate unusable and
+    # therefore, in the end, deleted.
+    source = """<?php
+
+class ExampleController extends OCSController {
+\tprivate function rejectForeignCaller(): ?DataResponse {
+\t\treturn null;
+\t}
+}
+"""
+
+    assert routes_of("ExampleController.php", source) == []
+    assert scan_source("ExampleController.php", source) == []

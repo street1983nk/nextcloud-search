@@ -88,6 +88,29 @@ def test_html_yields_the_visible_text_only(tmp_path: Path) -> None:
     assert "nicht im index" not in outcome.text
 
 
+def test_xhtml_drops_script_and_style(tmp_path: Path) -> None:
+    # Security audit L2. XHTML goes to the XML parser, and there the elements
+    # carry the XHTML namespace: the tag is
+    # {http://www.w3.org/1999/xhtml}script, so a removal that asks for "script"
+    # matches nothing at all and the stylesheet plus the whole script body used
+    # to land in the index. A search for a colour name or a variable then finds
+    # every page of the instance that happens to use the same library.
+    document = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+        "<style>body { color: rebeccapurple; }</style>"
+        "<script>var geheim = 'nicht im index';</script></head>"
+        "<body><h1>Grundstücksverkehrsgenehmigung</h1><p>Zweiter Absatz.</p></body></html>"
+    )
+    outcome = extract_html(_write(tmp_path, "seite.xhtml", document.encode("utf-8")))
+
+    assert outcome.state is State.INDEXED
+    assert "Grundstücksverkehrsgenehmigung" in outcome.text
+    assert "Zweiter Absatz." in outcome.text
+    assert "rebeccapurple" not in outcome.text
+    assert "nicht im index" not in outcome.text
+
+
 def test_the_parser_resolves_no_external_entity_and_reaches_no_network(tmp_path: Path) -> None:
     # The entity points at a real file through an absolute URI, which is what makes
     # this test load bearing: measured against a parser built without the three

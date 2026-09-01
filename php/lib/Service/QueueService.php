@@ -35,6 +35,27 @@ class QueueService {
 	public const MAX_ATTEMPTS = 3;
 
 	/**
+	 * How many users of one file travel in a work order (perf audit M5).
+	 *
+	 * Without a ceiling an instance wide team folder puts the complete user list
+	 * of the instance on every single file: five thousand users times thirty two
+	 * files in one batch measured at roughly sixteen megabytes of heap on the PHP
+	 * side and three and a half megabytes of JSON on the wire, per claim, for a
+	 * list that is identical for every one of those files.
+	 *
+	 * Five hundred is chosen so that an ordinary instance never meets it. What
+	 * happens beyond it is the interesting half, and it is a design decision
+	 * rather than a truncation: the job is marked, the container writes one
+	 * reserved collective row instead of the shortened list, and the prefilter
+	 * treats the file as a candidate for anybody. The prefilter may be more
+	 * generous than the truth and never stricter, because the security boundary
+	 * is the final recheck in Provider (COMP-04); writing the first five hundred
+	 * names as if they were the whole list would be the strict direction and
+	 * would hide the file from everybody behind the cap.
+	 */
+	private const MAX_USERS = 500;
+
+	/**
 	 * How many rows of one kind a single claim may take.
 	 *
 	 * The cheap kinds are large, because a permission change is a row and not a
@@ -105,6 +126,18 @@ class QueueService {
 		$rows = $limit;
 		$budget = $maxBytes;
 
+		// The home folders resolved during this claim, keyed by user id (perf
+		// audit M8). getUserFolder() sets up a mount for the user, and a batch of
+		// thirty two files of the same person paid that setup thirty two times.
+		//
+		// It lives exactly as long as the claim and is handed down rather than
+		// kept on the object on purpose: a longer lived cache would be a second
+		// source of truth about the mount setup of a user, and nobody would ever
+		// invalidate it. A request is short enough that the mounts cannot change
+		// underneath it in a way that matters, and if they do, the next claim
+		// starts with an empty cache.
+		$folders = [];
+
 		foreach (QueueMapper::KINDS as $kind) {
 			if ($rows <= 0) {
 				break;
@@ -121,7 +154,7 @@ class QueueService {
 					continue;
 				}
 
-				$source = $this->describe($row);
+				$source = $this->describe($row, $folders);
 				if ($source === null) {
 					$this->finish($row, 'skipped', 'gone');
 					$gone++;
@@ -283,9 +316,14 @@ class QueueService {
 	 * Build the source object of one row, or null when the file cannot be
 	 * resolved any more.
 	 *
+	 * The folder cache of the running claim travels in by reference (perf audit
+	 * M8). It is a parameter and not a field so that its lifetime is visible at
+	 * the call site: it lives for one claim and not a second longer.
+	 *
+	 * @param array<string, ?Folder> $folders home folders resolved during this claim
 	 * @return array<string, mixed>|null
 	 */
-	private function describe(QueueFile $row): ?array {
+	private function describe(QueueFile $row, array &$folders): ?array {
 		$fileId = $row->getFileId();
 
 		// The one place where the kind of a row decides what its source object
@@ -359,15 +397,19 @@ class QueueService {
 		// kind is cheap and first in the claim order (D-04) rather than a reason
 		// to treat it as a security control.
 		if ($kind === QueueMapper::KIND_ACL) {
+			$access = $this->usersFor($fileId);
+
 			return [
 				'fileId' => $fileId,
 				'storageId' => $row->getStorageId(),
 				'kind' => $kind,
-				'userIds' => $this->usersFor($fileId),
+				'userIds' => $access['users'],
+				'userIdsTruncated' => $access['truncated'],
 			];
 		}
 
-		$userIds = $this->usersFor($fileId);
+		$access = $this->usersFor($fileId);
+		$userIds = $access['users'];
 		if ($userIds === []) {
 			return null;
 		}
@@ -381,7 +423,7 @@ class QueueService {
 		// prefilter silently turns into a permission model.
 		$fetchAs = $userIds[0];
 
-		$userFolder = $this->userFolder($fetchAs);
+		$userFolder = $this->userFolder($fetchAs, $folders);
 		if ($userFolder === null) {
 			return null;
 		}
@@ -411,6 +453,13 @@ class QueueService {
 			// object stays what it was otherwise.
 			'kind' => $kind,
 			'userIds' => $userIds,
+			// The mark that says the list above is a prefix of the truth rather
+			// than the truth (perf audit M5). It travels next to the list it
+			// belongs to, because the container has no other way of telling a
+			// short list from a complete one, and writing a short list as if it
+			// were complete is what would hide the file from everybody behind the
+			// cap.
+			'userIdsTruncated' => $access['truncated'],
 			'fetchAs' => $fetchAs,
 			'isUpdate' => $row->getIsUpdate(),
 		];
@@ -434,20 +483,45 @@ class QueueService {
 	 * This paragraph is here so the simple version is read as a decision rather
 	 * than as an oversight.
 	 *
-	 * @return list<string>
+	 * The answer is a list plus a mark and not a bare list, because a caller has
+	 * no way of telling a capped list from a complete one by looking at it. Five
+	 * hundred names are a plausible team folder either way, and guessing from the
+	 * length would break the moment the ceiling moves.
+	 *
+	 * @return array{users: list<string>, truncated: bool}
 	 */
 	private function usersFor(int $fileId): array {
 		$userIds = [];
+		$truncated = false;
 		try {
 			// The user behind a mount can be gone between the mount cache and
 			// this line, and that throws rather than returning null, so the loop
 			// stays inside the guard.
 			foreach ($this->userMountCache->getMountsForFileId($fileId) as $mount) {
+				if (count($userIds) >= self::MAX_USERS) {
+					// The ceiling is reached inside the loop rather than applied
+					// to the finished list on purpose (perf audit M5): the point
+					// is not to send a shorter answer, it is to stop building the
+					// long one. An instance wide team folder has thousands of
+					// mounts for one file, and every iteration resolves a user
+					// object.
+					$truncated = true;
+					break;
+				}
+
 				$userIds[] = $mount->getUser()->getUID();
 			}
 		} catch (\Throwable $e) {
 			$this->logger->warning('Findling: could not resolve who sees a queued file', ['exception' => $e]);
-			return [];
+			return ['users' => [], 'truncated' => false];
+		}
+
+		if ($truncated) {
+			// A counter and a file id, never a name. Worth a line because a file
+			// that hits this ceiling is a file the prefilter stops narrowing down,
+			// and an admin who wonders why a search got slower deserves to find
+			// the reason in the log.
+			$this->logger->info('Findling: capped the user list of a queued file', ['count' => count($userIds)]);
 		}
 
 		// Sorted and deduplicated: a file that is mounted twice for the same user
@@ -456,16 +530,39 @@ class QueueService {
 		$userIds = array_values(array_unique($userIds));
 		sort($userIds);
 
-		return $userIds;
+		return ['users' => $userIds, 'truncated' => $truncated];
 	}
 
-	private function userFolder(string $userId): ?Folder {
+	/**
+	 * The home folder of one user, resolved once per claim (perf audit M8).
+	 *
+	 * getUserFolder() sets a mount up, and a batch of thirty two files belonging
+	 * to the same person used to pay that setup thirty two times. The cache is
+	 * handed in by reference and lives exactly as long as the claim; a field on
+	 * this service would be a second source of truth about the mounts of a user
+	 * that nobody ever invalidates.
+	 *
+	 * A failure is cached as well. Without that, a user without a home directory
+	 * would be looked up again for every row of the batch, and every one of those
+	 * lookups would throw, be caught and be logged.
+	 *
+	 * @param array<string, ?Folder> $folders
+	 */
+	private function userFolder(string $userId, array &$folders): ?Folder {
+		if (array_key_exists($userId, $folders)) {
+			return $folders[$userId];
+		}
+
 		try {
-			return $this->rootFolder->getUserFolder($userId);
+			$folder = $this->rootFolder->getUserFolder($userId);
 		} catch (\Throwable $e) {
 			$this->logger->warning('Findling: no home folder for the fetch user of a queued file', ['exception' => $e]);
-			return null;
+			$folder = null;
 		}
+
+		$folders[$userId] = $folder;
+
+		return $folder;
 	}
 
 	/**

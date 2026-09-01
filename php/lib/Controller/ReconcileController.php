@@ -100,8 +100,13 @@ class ReconcileController extends OCSController {
 				];
 			}
 		} catch (\Throwable $e) {
-			// The message of the exception only, and a generic verdict outside.
-			$this->logger->error('Findling: could not list the mounts: ' . $e->getMessage(), ['exception' => $e]);
+			// A static sentence and a generic verdict outside; the exception itself
+			// travels in the exception field, which Nextcloud renders under the
+			// admin's own log level (security audit L6). The rule of this project is
+			// that the log carries counters and reason codes and nothing else, and a
+			// library message is exactly where a path or an SQL fragment turns up:
+			// the mount query names storages and roots of a private instance.
+			$this->logger->error('Findling: could not list the mounts', ['exception' => $e]);
 			return new DataResponse(['error' => 'Mount list is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 
@@ -153,7 +158,8 @@ class ReconcileController extends OCSController {
 		try {
 			$files = $this->storageService->getFileSlice($storage, $root, $cursor, $size);
 		} catch (\Throwable $e) {
-			$this->logger->error('Findling: could not read a slice of a mount: ' . $e->getMessage(), ['exception' => $e]);
+			// Same rule as in mounts(): no library message in the log.
+			$this->logger->error('Findling: could not read a slice of a mount', ['exception' => $e]);
 			return new DataResponse(['error' => 'File list is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 

@@ -236,6 +236,45 @@ async def test_an_acl_job_carries_the_new_user_list() -> None:
     assert job.user_ids == ("anna", "bernd")
 
 
+async def test_a_capped_user_list_arrives_as_a_marked_job() -> None:
+    # Perf audit M5. An instance wide team folder puts the complete user list of
+    # the instance on every single file, so QueueService::usersFor caps it and
+    # says that it did. The marker is the whole point: without it the container
+    # would write the first few hundred names as if they were the truth, and the
+    # file would drop out of the prefilter for everybody behind the cap.
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**SOURCE, "userIdsTruncated": True}}}})
+
+    job = (await _queue(session).claim(limit=1, max_bytes=1)).jobs[0]
+
+    assert job.users_truncated is True
+    # The short list still travels: fetchAs is taken from it, and reading the
+    # bytes as somebody who may see the file is exactly what a capped list still
+    # answers correctly.
+    assert job.user_ids == ("alice", "bob")
+
+
+async def test_an_uncapped_job_is_not_marked() -> None:
+    # The default has to be the strict one. A missing marker is the ordinary
+    # case, and reading it as "capped" would make every file a candidate for
+    # every user, which is the direction that costs query time on every search.
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": SOURCE, "92": ACL_SOURCE}}})
+
+    result = await _queue(session).claim(limit=2, max_bytes=1)
+
+    assert [job.users_truncated for job in result.jobs] == [False, False]
+
+
+async def test_a_marker_that_is_not_a_boolean_is_read_as_uncapped() -> None:
+    # The marker arrives from outside this process, and anything that is not the
+    # explicit truth has to fall to the strict side. Reading a stray string as
+    # true would widen the prefilter through a typo on the PHP side.
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**SOURCE, "userIdsTruncated": "vielleicht"}}}})
+
+    job = (await _queue(session).claim(limit=1, max_bytes=1)).jobs[0]
+
+    assert job.users_truncated is False
+
+
 async def test_an_acl_job_without_a_usable_file_id_is_still_discarded() -> None:
     # Same rule as for a deletion: the file id names the document the permissions
     # belong to, and a zero would rewrite the rows of nothing at all.
