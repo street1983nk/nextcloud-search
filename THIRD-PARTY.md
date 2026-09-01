@@ -143,6 +143,26 @@ the closure.
 `uv` 0.11.7 and the build stage tools (`curl`, `ca-certificates`) are build time
 only. They are not part of the runtime image and are therefore not distributed.
 
+## Material in the repository that is not in the image
+
+One entry, added in phase 3, and it is listed although it travels with neither
+the container image nor the app store archives: it is committed to a public
+repository, and a font carries a licence whether it is shipped or not.
+
+| Item | Value |
+|---|---|
+| File | `testdata/fonts/DejaVuSans.ttf`, 759720 bytes, SHA-256 `57f73e11f51999432bf7ab22ce55b6f945d5eca1bf824404cfa9ec2e3718c84e` |
+| Debian package | `fonts-dejavu-core` 2.37-8, `Architecture: all` |
+| Origin | read out of the base image pinned in `backend/Dockerfile`, not downloaded from anywhere else |
+| Licence | Bitstream Vera Fonts Licence (permissive, redistribution and modification allowed); the DejaVu changes are public domain |
+| Licence text | `testdata/fonts/COPYING.dejavu`, the `debian/copyright` of the package verbatim |
+| Why it is here | `scripts/dev/build_corpus.py` renders the scanned pages of the OCR corpus with it. The pixels have to be identical on every machine and in every year, so the typeface is pinned by checksum instead of taken from whatever the build host happens to have installed |
+
+The Bitstream Vera licence asks that the fonts not be sold on their own and that
+the names "Bitstream" and "DejaVu" not be used to promote derived work without
+permission. Neither applies here: the file is unmodified, it is not sold, and it
+is not part of any release artifact.
+
 ## How to check this file against reality
 
 ```bash
