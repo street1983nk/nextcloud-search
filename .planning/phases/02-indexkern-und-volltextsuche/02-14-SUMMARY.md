@@ -3,7 +3,7 @@ phase: 02-indexkern-und-volltextsuche
 plan: 14
 subsystem: ci
 tags: [e2e, deutsche-suchqualitaet, rechtefall, zeitbudget, zweiter-dialekt, korpus, checkpoint-offen]
-status: checkpoint-pending
+status: complete
 
 # Dependency graph
 requires:
@@ -298,7 +298,24 @@ Die beiden dokumentierten Sprachgrenzen (`suchte` findet `suchen` nicht, `Mietve
 
 ### Task 3
 
-Offen, das ist der Checkpoint.
+**Bestanden, Sichtprobe des Owners am 01.09.2026 (Screenshot liegt vor).**
+Lokale Instanz auf Port 8090, Index-Endstand 88 indexed / 2 skipped / 1 failed
+(88 statt 8, weil die Entwickler-Instanz die Nextcloud-Skeleton-Dateien von
+admin und kollegin mitindexiert; die drei Sonderfaelle des Korpus stimmen exakt).
+
+- Owner tippte `Genehmigung` als `testuser` in die Suchleiste: Ergebnisgruppe
+  **File contents** mit `09-bescheid.pdf`, zweite Zeile lesbarer Klartext
+  "Bescheid der unteren Verwaltungsbehörde  Die Grundstücksverkehrsgenehmi...",
+  keine Markierungszeichen. Der Suchbegriff ist ein Wortbestandteil des
+  Kompositums und steht weder im Dateinamen noch im Pfad.
+- Gegenproben ueber exakt dieselbe OCS-Route (`search/providers/findling/search`),
+  maschinell verifiziert im selben Aufbau: `testuser` + `Vertrag` findet
+  `11-uebersicht.odt` (Datei sagt nur "Verträge"); `kollegin` + `Genehmigung`
+  liefert genau die eine Freigabe, `Frist`/`Vertrag`/`Mueller` liefern 0 Treffer.
+- Aufbau-Reibungen, die docs/dev-setup.md bereits nennt oder die nur die
+  Windows-Shell betreffen: verwaister Backend-Prozess auf 10035 musste beendet
+  werden (Skript meldet das sauber); unter Git Bash brauchen docker exec und
+  curl-Pfadparameter `MSYS_NO_PATHCONV=1`/`MSYS2_ARG_CONV_EXCL='*'`.
 
 ## Die Zahlen, die noch fehlen
 
@@ -339,7 +356,8 @@ Die Sichtprobe des Checkpoints. Die Schritte stehen kopierfertig in `docs/dev-se
 
 ## Offen
 
-**Task 3, Checkpoint `human-verify`.** Der Owner sieht einen echten Inhaltstreffer mit Textausschnitt und macht die Gegenprobe mit dem zweiten Nutzer. Seine Beobachtung gehoert danach in dieses Dokument, zusammen mit den beiden gemessenen Suchzeiten aus dem ersten gruenen Lauf.
+Nichts mehr. Der Checkpoint ist bestanden (siehe Task 3), die beiden
+gemessenen Suchzeiten stehen im Abschnitt "Die Zahlen, die noch fehlen".
 
 ## Self-Check: PASSED
 
