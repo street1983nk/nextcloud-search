@@ -5,7 +5,10 @@ it becomes a verdict that says why it did not. Splitting them would hide the
 place where the two meet, which is the page loop with its caps. Since plan 03-09
 the dispatcher is the third module in here, for the same reason: the route is the
 only way the page loop is ever reached, and a group of tests that proved the loop
-without proving the way in would be a machine nobody can start.
+without proving the way in would be a machine nobody can start. Plan 03-10 adds
+the fourth, ``extract.image``: a picture is the other kind of input the same
+engine reads, it goes through the same stand in, and the caps in front of it only
+mean something next to the ones behind it.
 
 The corpus files are the input on purpose. A PDF built inside this test would
 prove something about that PDF; the files under ``testdata/corpus`` are the ones
@@ -28,7 +31,9 @@ import ast
 import hashlib
 import logging
 import shutil
+import struct
 import subprocess
+import zlib
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from io import BytesIO
@@ -39,7 +44,7 @@ import pytest
 from PIL import Image
 
 from findling.config import settings
-from findling.extract import dispatch, ocr, raster
+from findling.extract import dispatch, image, ocr, raster
 from findling.extract.dispatch import Route
 from findling.extract.errors import Reason, State
 
@@ -61,6 +66,20 @@ HUGE = str(CORPUS / "31-riesenformat.pdf")
 
 # The file that stops in the middle of its trailer.
 BROKEN = str(CORPUS / "24-abgeschnittener-trailer.pdf")
+
+# The pictures of plan 03-10, all of them 1000 by 260 pixels: over the minimum
+# edge, well under the aspect ratio cap, and therefore plausible documents.
+SLIP = str(CORPUS / "17-beleg.jpg")
+
+# Three frames in one file, the shape a fax archive has.
+FAX = str(CORPUS / "21-sendebericht.tif")
+
+# 48 by 48 pixels. The one corpus file that must never reach the engine.
+ICON = str(CORPUS / "22-icon.png")
+
+# 260 by 1000 pixels with EXIF orientation 6: a page photographed sideways,
+# which arrives at the engine rotated by ninety degrees unless it is uprighted.
+SIDEWAYS = str(CORPUS / "23-gedreht.jpg")
 
 DPI = 300
 
@@ -102,14 +121,14 @@ def test_a_corpus_page_becomes_a_grayscale_png() -> None:
     finally:
         document.close()
 
-    with _decode(png) as image:
-        assert image.format == "PNG"
+    with _decode(png) as page:
+        assert page.format == "PNG"
         # One channel, not four. A4 at 300 dpi is 8.7 MB in grey and 35 MB in
         # BGRA, and tesseract binarises internally either way.
-        assert image.mode == "L"
+        assert page.mode == "L"
         # 595 by 842 points at 300 dpi, so the ordinary page is rendered at full
         # resolution and the bomb guard below does not touch it.
-        assert image.size == (2480, 3509)
+        assert page.size == (2480, 3509)
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,9 +153,9 @@ def test_the_padded_rows_are_cut_to_the_stride() -> None:
         buffer=bytes([10, 20, 30, 99, 99, 40, 50, 60, 99, 99]),
     )
 
-    with _decode(raster._encode_page(padded)) as image:
-        assert image.size == (3, 2)
-        assert list(image.tobytes()) == [10, 20, 30, 40, 50, 60]
+    with _decode(raster._encode_page(padded)) as page:
+        assert page.size == (3, 2)
+        assert list(page.tobytes()) == [10, 20, 30, 40, 50, 60]
 
 
 def test_both_pdfium_objects_are_released_when_the_encoding_fails(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -183,10 +202,10 @@ def test_a_page_with_an_absurd_area_is_bound_to_the_maximum_edge() -> None:
     finally:
         document.close()
 
-    with _decode(png) as image:
+    with _decode(png) as page:
         # Bound, and bound exactly: a value below the cap would mean the guard
         # missed and something else made the page small.
-        assert max(image.size) == raster.MAX_EDGE_PIXELS
+        assert max(page.size) == raster.MAX_EDGE_PIXELS
 
 
 def test_the_corpus_file_is_unchanged_by_rasterising() -> None:
@@ -521,3 +540,287 @@ def test_original_file_is_unchanged_after_ocr() -> None:
     assert hashlib.sha256(Path(SCAN).read_bytes()).hexdigest() == before
     assert Path(SCAN).stat().st_size == stat_before.st_size
     assert Path(SCAN).stat().st_mtime == stat_before.st_mtime
+
+
+# ---------------------------------------------------------------------------
+# The picture branch of plan 03-10. Everything above reads a PDF; from here on
+# the input is a file that is nothing but pixels, and the question is which of
+# them are worth an engine call at all.
+# ---------------------------------------------------------------------------
+
+
+def _drawn(tmp_path: Path, name: str, size: tuple[int, int]) -> str:
+    """A plain grey picture of a given size, for the caps no corpus file hits.
+
+    The corpus carries the plausible documents and the one icon; a banner and a
+    picture the size of a decompression bomb are shapes, not documents, and a
+    shape belongs next to the rule it exercises rather than in a directory that
+    two CI jobs walk file by file.
+    """
+    path = tmp_path / name
+    with Image.new("L", size, color=200) as picture:
+        picture.save(path)
+    return str(path)
+
+
+def _declares(tmp_path: Path, name: str, width: int, height: int) -> str:
+    """A PNG whose header claims a size its five bytes of pixel data cannot hold.
+
+    This is the decompression bomb in its honest form, and it is the only way to
+    assert that nothing was decoded: the pixel data is deliberately garbage, so a
+    verdict of skipped(too_large) can only have come from the header. Writing a
+    real fifty megapixel file instead would prove the same rule and would also
+    allocate the very memory the rule exists to prevent.
+    """
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        body = kind + payload
+        return struct.pack(">I", len(payload)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    # Width, height, eight bits per channel, colour type 0 (greyscale), and the
+    # three zeroes for compression, filter and interlace.
+    header = struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)
+    path = tmp_path / name
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", b"nope") + chunk(b"IEND", b""))
+    return str(path)
+
+
+def _handed_over(engine: _Engine, number: int = 0) -> Image.Image:
+    """The picture the engine was actually given, decoded back out of the pipe."""
+    payload = engine.calls[number]["input"]
+    assert isinstance(payload, bytes)
+    return Image.open(BytesIO(payload))
+
+
+@needs_engine
+@pytest.mark.parametrize(
+    ("name", "term"),
+    [
+        ("17-beleg.jpg", "Zahlungsavis"),
+        ("18-aushang.png", "Sperrmüllabfuhr"),
+        ("19-uebermittlung.tif", "Übermittlungsprotokoll"),
+        ("20-rueckruf.webp", "Rückrufbitte"),
+        ("21-sendebericht.tif", "Sendebericht"),
+    ],
+)
+def test_a_photographed_document_becomes_the_terms_the_corpus_promises(name: str, term: str) -> None:
+    # D-05 at the level of the module, over all four formats the allowlist opens
+    # plus the multi frame file. Each of these words stands in exactly one file of
+    # the corpus and exists there only as pixels, so a hit is proof that the
+    # engine read them. WebP is in the list although measurement 4 of docs/ocr.md
+    # showed that leptonica reads it directly: the detour through Pillow is about
+    # EXIF rotation, the bomb guard and the caps, not about readability.
+    outcome = image.extract_image(str(CORPUS / name))
+
+    assert outcome.state is State.INDEXED
+    assert term in outcome.text
+
+
+def test_an_icon_under_the_minimum_edge_is_skipped_image_not_ocrable(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 48 by 48 pixels. There is no heuristic that tells a photographed document
+    # from a holiday picture, but there is one that tells both from an avatar, and
+    # this is it. The empty call list is half the assertion: the point of the cap
+    # is that the engine is never started.
+    engine = _install_engine(monkeypatch, _page("nie erreicht"))
+
+    outcome = image.extract_image(ICON)
+
+    assert outcome.state is State.SKIPPED
+    assert outcome.reason is Reason.IMAGE_NOT_OCRABLE
+    assert engine.calls == []
+
+
+def test_a_banner_over_the_aspect_ratio_is_skipped_image_not_ocrable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 4000 by 400 is a ratio of ten, so a page divider, a panorama or a header
+    # graphic. Long enough to pass the minimum edge, which is exactly why the
+    # second rule exists next to the first.
+    engine = _install_engine(monkeypatch, _page("nie erreicht"))
+
+    outcome = image.extract_image(_drawn(tmp_path, "banner.png", (4000, 400)))
+
+    assert outcome.state is State.SKIPPED
+    assert outcome.reason is Reason.IMAGE_NOT_OCRABLE
+    assert engine.calls == []
+
+
+def test_a_picture_over_the_pixel_cap_is_too_large_without_being_decoded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Four hundred megapixels declared in eighty bytes. Pillow refuses this one
+    # itself, because MAX_IMAGE_PIXELS is set to our own budget and not to None,
+    # and the branch turns that refusal into a verdict instead of into a failure
+    # (T-03-1001).
+    engine = _install_engine(monkeypatch, _page("nie erreicht"))
+
+    outcome = image.extract_image(_declares(tmp_path, "bombe.png", 20_000, 20_000))
+
+    assert outcome.state is State.SKIPPED
+    assert outcome.reason is Reason.TOO_LARGE
+    assert engine.calls == []
+
+
+def test_a_picture_just_over_the_pixel_cap_is_too_large_as_well(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Fifty six megapixels: over our cap and under the doubled one at which
+    # Pillow raises by itself, so this is the range only our own check covers.
+    # Pillow warns here, and the warning is the reason the check reads the header
+    # rather than trusting the library to stop everything.
+    engine = _install_engine(monkeypatch, _page("nie erreicht"))
+    oversized = _declares(tmp_path, "riesig.png", 8000, 7000)
+
+    with pytest.warns(Image.DecompressionBombWarning):
+        outcome = image.extract_image(oversized)
+
+    assert outcome.state is State.SKIPPED
+    assert outcome.reason is Reason.TOO_LARGE
+    assert engine.calls == []
+
+
+def test_exif_rotated_photo_is_uprighted(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 260 by 1000 on disk, orientation 6 in the header, so 1000 by 260 the way a
+    # human holds it. Without the transpose the page reaches tesseract turned by
+    # ninety degrees and the result is character salad, which is a defect no
+    # verdict would ever show.
+    engine = _install_engine(monkeypatch, _page("Lieferschein"))
+
+    image.extract_image(SIDEWAYS)
+
+    with _handed_over(engine) as handed:
+        assert handed.size == (1000, 260)
+        # And in one channel, for the same reason the rasteriser uses one:
+        # tesseract binarises internally either way.
+        assert handed.mode == "L"
+
+
+def test_a_large_photo_is_scaled_down_to_the_target_edge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A phone photograph costs as much as an A4 page at 300 dpi and not more.
+    # Twenty megapixels in, three and a half thousand pixels on the long edge out.
+    engine = _install_engine(monkeypatch, _page("Lieferschein"))
+
+    image.extract_image(_drawn(tmp_path, "foto.png", (5000, 4000)))
+
+    with _handed_over(engine) as handed:
+        assert max(handed.size) == 3500
+        assert handed.size == (3500, 2800)
+
+
+def test_a_multi_frame_tiff_is_read_to_the_page_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A fax archive in one file. It gets the page cap of a PDF, because a cap that
+    # a second container format walks around is not a cap (T-03-1004), and the cut
+    # is visible as truncated rather than as a quietly thin document (D-08).
+    monkeypatch.setenv("FINDLING_OCR_MAX_PAGES", "2")
+    engine = _install_engine(monkeypatch, _page("Sendebericht"))
+
+    outcome = image.extract_image(FAX)
+
+    assert outcome.state is State.INDEXED
+    assert outcome.reason is Reason.TRUNCATED
+    assert len(engine.calls) == 2
+    assert "Seite 0" in outcome.text
+    assert "Seite 1" in outcome.text
+
+
+def test_all_frames_of_a_multi_frame_tiff_are_read_under_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = _install_engine(monkeypatch, _page("Sendebericht"))
+
+    outcome = image.extract_image(FAX)
+
+    # Three frames, three calls, and no truncation: the cut above was the cap and
+    # not the file.
+    assert outcome.state is State.INDEXED
+    assert outcome.reason is None
+    assert len(engine.calls) == 3
+
+
+def test_a_picture_under_the_character_threshold_is_skipped_empty_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The real answer to D-05, and the reason the plausibility rules may stay as
+    # coarse as they are: a holiday picture is allowed to cost an engine call, it
+    # is not allowed to enter the index. The caller records that OCR ran, so the
+    # time it took stays visible on the status page of phase 4.
+    _install_engine(monkeypatch, lambda number: _Finished(stdout=b"Strand\n"))
+
+    outcome = image.extract_image(SLIP)
+
+    assert outcome.state is State.SKIPPED
+    assert outcome.reason is Reason.EMPTY_TEXT
+    assert outcome.text == ""
+
+
+def test_a_picture_without_an_engine_is_failed_ocr_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    def answers(number: int) -> _Finished:
+        raise FileNotFoundError(2, "No such file or directory: 'tesseract'")
+
+    _install_engine(monkeypatch, answers)
+
+    outcome = image.extract_image(SLIP)
+
+    assert outcome.state is State.FAILED
+    assert outcome.reason is Reason.OCR_UNAVAILABLE
+
+
+def test_a_picture_that_kills_the_engine_is_failed_ocr_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 134 is what a page that burst the address space looks like from here
+    # (measurement 5 of docs/ocr.md). The picture branch reaches the same verdict
+    # as the scan branch, because it is the same engine behind the same call.
+    _install_engine(monkeypatch, lambda number: _Finished(returncode=134, stderr=b"std::bad_alloc"))
+
+    outcome = image.extract_image(SLIP)
+
+    assert outcome.state is State.FAILED
+    assert outcome.reason is Reason.OCR_FAILED
+
+
+def test_a_picture_over_the_time_cap_ends_as_failed_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    def answers(number: int) -> _Finished:
+        raise subprocess.TimeoutExpired(cmd="tesseract", timeout=30)
+
+    _install_engine(monkeypatch, answers)
+
+    outcome = image.extract_image(SLIP)
+
+    # One frame, and it was lost: nothing was read at all, so this is a failure
+    # and not a thin document.
+    assert outcome.state is State.FAILED
+    assert outcome.reason is Reason.TIMEOUT
+
+
+def test_a_file_that_is_not_a_picture_becomes_a_verdict_instead_of_an_exception(tmp_path: Path) -> None:
+    broken = tmp_path / "kaputt.png"
+    broken.write_bytes(b"\x89PNG\r\n\x1a\nand then nothing that parses")
+
+    outcome = image.extract_image(str(broken))
+
+    assert outcome.state is State.FAILED
+    assert outcome.reason is Reason.CORRUPT
+
+
+def test_image_file_is_unchanged_after_ocr() -> None:
+    # The same invariant the read only gate measures from the outside, asserted at
+    # the module that opens the file. No stand in and no skip mark, for the reason
+    # the PDF counterpart above gives: inside the container this runs the real
+    # engine, on the development machine it ends as ocr_unavailable, and the file
+    # must be untouched on both paths (IDX-07, T-03-805).
+    before = hashlib.sha256(Path(SLIP).read_bytes()).hexdigest()
+    stat_before = Path(SLIP).stat()
+
+    image.extract_image(SLIP)
+
+    assert hashlib.sha256(Path(SLIP).read_bytes()).hexdigest() == before
+    assert Path(SLIP).stat().st_size == stat_before.st_size
+    assert Path(SLIP).stat().st_mtime == stat_before.st_mtime
+
+
+def test_the_picture_caps_are_named_constants_and_the_bomb_guard_is_set() -> None:
+    # Every cap of pitfall 6 with the start value the research names, read off the
+    # module rather than off a literal in a comparison. The last line is the one
+    # that matters most: the widespread advice is to switch MAX_IMAGE_PIXELS off,
+    # and switching it off removes exactly the bomb guard this branch needs.
+    assert image._MIN_LONG_EDGE_PIXELS == 640
+    assert image._MAX_ASPECT_RATIO == 8
+    assert image._MAX_PIXELS == 50_000_000
+    assert image._MAX_EDGE_PIXELS == 3500
+    assert image._MIN_OCR_CHARS == 20
+    assert Image.MAX_IMAGE_PIXELS == image._MAX_PIXELS
