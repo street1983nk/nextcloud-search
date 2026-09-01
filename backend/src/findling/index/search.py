@@ -2,13 +2,22 @@
 
 Two things about this module are decisions rather than implementation details.
 
-*The loop is not here.* One call is one round: ask the engine once, drop what the
-prefilter does not confirm, hand out what is left together with a mark for the
-next round. Whether another round is worth it can only be judged where the real
+*The recheck loop is not here.* One call is one page of prefiltered candidates.
+Whether another page is worth asking for can only be judged where the real
 permission check runs, which is the PHP companion, because only it knows how many
-candidates survived the recheck. A loop in here would be an unbounded loop in the
-one place that cannot see its own stop condition, and that is precisely the
-failure that gives query time permission filtering its bad reputation.
+candidates survived the recheck. A loop over rechecks in here would be an
+unbounded loop in the one place that cannot see its own stop condition, and that
+is precisely the failure that gives query time permission filtering its bad
+reputation. The bounded scan loop inside :func:`candidates` is a different
+animal: its stop condition, "enough prefiltered candidates for this page", is
+fully visible right here.
+
+*Offsets count permitted candidates, not engine hits.* An offset in engine-hit
+space tells whoever varies it how many documents of other people match a term:
+the gap between two raw cursors minus the candidates delivered in between is a
+count of foreign documents, page by page (the counting oracle of T-02-93). So the
+cursor that crosses the process boundary counts only what the caller was allowed
+to see, and the raw cursor stays inside this function.
 
 *The prefilter is a speed-up, not a boundary.* It over-approximates on team
 folders with advanced permissions, and that is the safe direction: a candidate
@@ -23,11 +32,11 @@ search is neither of them, it is the two proxy round trips and the recheck.
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Final, Protocol
 
-from tantivy import Document, Index, Query, SearchResult, SnippetGenerator
+from tantivy import Document, Index, Query, SnippetGenerator
 
-from findling.config import settings
+from findling.config import SEARCH_SCAN_MAX, settings
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_MTIME
 from findling.store.repo import Store
 
@@ -38,6 +47,11 @@ LOGGER = logging.getLogger("findling.index.search")
 # users mostly see what lies in their own mounts, but the case exists. The answer
 # to it is the bounded repeat on the PHP side, never a larger first request: a
 # larger request pays the full ranking cost for hits nobody is allowed to see.
+
+# The smallest raw chunk the scan below asks the engine for. Small pages of a
+# sparsely visible corpus would otherwise crawl through the ranking a handful of
+# hits at a time, and every chunk pays the fixed cost of a search.
+_SCAN_CHUNK_MIN: Final = 128
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,18 +89,6 @@ class CandidatePage:
     next_offset: int
 
 
-def _hits_in_total(result: SearchResult) -> int:
-    """How many documents matched, before any filtering. Never leaves this module.
-
-    The type stub shipped with tantivy 0.26.0 declares only ``hits`` on the
-    result, while the extension does return this number when the search was asked
-    to count. Read once, in one place, and deliberately without a fallback value:
-    a default here would turn a renamed attribute into a page that always claims
-    to be the last one, and the lost results would never be noticed by anybody.
-    """
-    return result.count  # pyright: ignore[reportAttributeAccessIssue]
-
-
 def candidates(
     index: Index,
     store: Store,
@@ -95,49 +97,83 @@ def candidates(
     limit: int,
     offset: int = 0,
 ) -> CandidatePage:
-    """Return one round of permitted candidates in the order the engine ranked them.
+    """Return one page of permitted candidates in the order the engine ranked them.
 
-    One call, one pass over the engine. ``offset`` is where the caller wants the
-    round to start, ``next_offset`` is where the following one has to start so
-    that no hit is seen twice and none is skipped.
+    ``offset`` and ``next_offset`` count permitted candidates, never raw engine
+    hits: the caller asks to continue behind the last candidate it consumed, and
+    what it consumed is by definition something it was allowed to see. The scan
+    below walks the raw ranking in chunks until the page is full, one hit further
+    than the page needs, and that one extra hit only ever becomes ``has_more``.
+
+    The scan is bounded twice. It ends when the engine runs out of hits, and it
+    ends at ``SEARCH_SCAN_MAX`` raw hits for the pathological case of a user who
+    may see almost nothing on an instance where almost everything matches. Hitting
+    the cap answers ``has_more=False``: an honestly truncated result, and the log
+    line below is the trace it leaves.
     """
     searcher = index.searcher()
-    # The only place a total is asked for, and it stays inside this function: it
-    # decides whether asking again could produce anything, and nothing else.
-    result = searcher.search(query, limit, count=True, offset=offset)
+    # One permitted hit more than the page needs, and it only ever becomes a
+    # boolean. It replaces the engine's total: a total counts documents BEFORE
+    # the permission filter, so comparing against it told whoever varies offset
+    # and limit how many documents of other people match a term (a counting
+    # oracle, T-02-93).
+    needed = offset + limit + 1
+    permitted: list[Candidate] = []
+    raw_cursor = 0
+    scan_cap = SEARCH_SCAN_MAX
 
-    # The columns, never the document store. searcher.doc() hands back the whole
-    # stored document including the full text, and that read was 99.9% of the
-    # candidate round: measured 20.5 ms per hit at the 512k cap against 0.02 ms
-    # for the two fast-field columns, independent of document size.
-    addresses = [address for _, address in result.hits]
-    file_ids = searcher.fast_field_values(FIELD_FILE_ID, addresses)
-    mtimes = searcher.fast_field_values(FIELD_MTIME, addresses)
+    while len(permitted) < needed and raw_cursor < scan_cap:
+        chunk_limit = min(max(needed, _SCAN_CHUNK_MIN), scan_cap - raw_cursor)
+        result = searcher.search(query, chunk_limit, offset=raw_cursor)
+        hits = result.hits
+        if not hits:
+            break
 
-    ranked: list[tuple[int, float, int]] = []
-    for (score, _), file_id, mtime in zip(result.hits, file_ids, mtimes, strict=True):
-        if file_id is None:
-            # A hit without the key cannot be rechecked and cannot be resolved
-            # into a node, so it is not a result. Skipped rather than raised: one
-            # damaged document must not take the whole search down with it.
-            LOGGER.warning("skipping a hit without a file id")
-            continue
-        # A missing modification time is a display detail, so it degrades to
-        # zero rather than ending the search.
-        ranked.append((int(file_id), float(score), int(mtime) if mtime is not None else 0))
+        # The columns, never the document store. searcher.doc() hands back the
+        # whole stored document including the full text, and that read was 99.9%
+        # of the candidate round: measured 20.5 ms per hit at the 512k cap
+        # against 0.02 ms for the two fast-field columns, independent of size.
+        addresses = [address for _, address in hits]
+        file_ids = searcher.fast_field_values(FIELD_FILE_ID, addresses)
+        mtimes = searcher.fast_field_values(FIELD_MTIME, addresses)
 
-    # From the candidates to the permissions, never the other way round. Building
-    # the list of everything a user may see is the inverse question, and its cost
-    # grows with the instance instead of with the query.
-    visible = store.prefilter_visible(uid, [file_id for file_id, _, _ in ranked])
+        ranked: list[tuple[int, float, int]] = []
+        for (score, _), file_id, mtime in zip(hits, file_ids, mtimes, strict=True):
+            if file_id is None:
+                # A hit without the key cannot be rechecked and cannot be
+                # resolved into a node, so it is not a result. Skipped rather
+                # than raised: one damaged document must not take the whole
+                # search down with it.
+                LOGGER.warning("skipping a hit without a file id")
+                continue
+            # A missing modification time is a display detail, so it degrades
+            # to zero rather than ending the search.
+            ranked.append((int(file_id), float(score), int(mtime) if mtime is not None else 0))
 
-    permitted = [
-        Candidate(file_id=file_id, score=score, mtime=mtime)
-        for file_id, score, mtime in ranked
-        if file_id in visible
-    ]
-    seen = offset + len(result.hits)
-    return CandidatePage(candidates=permitted, has_more=seen < _hits_in_total(result), next_offset=seen)
+        # From the candidates to the permissions, never the other way round.
+        # Building the list of everything a user may see is the inverse
+        # question, and its cost grows with the instance instead of the query.
+        visible = store.prefilter_visible(uid, [file_id for file_id, _, _ in ranked])
+        permitted.extend(
+            Candidate(file_id=file_id, score=score, mtime=mtime)
+            for file_id, score, mtime in ranked
+            if file_id in visible
+        )
+
+        raw_cursor += len(hits)
+        if len(hits) < chunk_limit:
+            break
+
+    if len(permitted) < needed and raw_cursor >= scan_cap:
+        # Only the fact, never the query or the counts: both are content.
+        LOGGER.info("the candidate scan hit its raw ceiling and answered a truncated page")
+
+    page = permitted[offset : offset + limit]
+    return CandidatePage(
+        candidates=page,
+        has_more=len(permitted) > offset + limit,
+        next_offset=offset + len(page),
+    )
 
 
 class ByteRange(Protocol):

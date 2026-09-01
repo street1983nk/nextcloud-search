@@ -192,18 +192,33 @@ final class Provider implements IFilteringProvider {
 			}
 
 			$page = $this->exApp->searchCandidates($uid, $term, $limit * self::OVERFETCH, $offset, $titleOnly);
-			if ($page === null || $page['candidates'] === []) {
+			if ($page === null) {
 				break;
 			}
 
-			$offset = $page['nextOffset'];
-			$exhausted = !$page['hasMore'];
 			if ($page['degraded']) {
 				// The backend answered from a reduced state, for instance while
 				// the index is still being built. Worth a line, not worth
 				// hiding the hits it did find.
 				$this->logger->debug('Findling: backend answered in a degraded state');
 			}
+
+			$candidates = $page['candidates'];
+			if ($candidates === []) {
+				// An empty page is only the end when the backend says so. The
+				// cheap reduction over there can empty a page whose successors
+				// still hold this user's hits, and breaking here would silently
+				// swallow every hit behind it; the round counter above bounds
+				// how often this is retried.
+				$exhausted = !$page['hasMore'];
+				if ($exhausted) {
+					break;
+				}
+				$offset = $page['nextOffset'];
+				continue;
+			}
+
+			$keptIds = $this->reduceIds($candidates, $storageIds);
 
 			// The one and only permission decision of this product. A candidate
 			// becomes a hit when this user's own folder resolves its file id to
@@ -215,8 +230,17 @@ final class Provider implements IFilteringProvider {
 			// The two counters above this loop cap how many candidates are
 			// examined, never whether a displayed one was. A hit that reaches
 			// the screen without having passed this line does not exist.
-			foreach ($this->reduce($page['candidates'], $storageIds) as $candidate) {
+			//
+			// $consumed counts the candidates this loop has decided about, and
+			// only those. When a budget ends the page early, the cursor resumes
+			// exactly behind the last decided candidate, so the better ranked
+			// remainder of the page shows up on the next unified search page
+			// instead of vanishing between two cursors.
+			$consumed = 0;
+			$stopped = false;
+			foreach ($candidates as $candidate) {
 				if (count($approved) >= $limit) {
+					$stopped = true;
 					break;
 				}
 
@@ -227,6 +251,7 @@ final class Provider implements IFilteringProvider {
 					// timestamp and the user id of the signed header and
 					// carries no user content. The proxy accepts it under one
 					// exact title and under no other.
+					$consumed++;
 					$approved[] = [
 						'fileId' => 0,
 						'title' => $candidate['title'] ?? '',
@@ -235,11 +260,21 @@ final class Provider implements IFilteringProvider {
 					continue;
 				}
 
+				if ($keptIds !== null && !isset($keptIds[$candidate['fileId']])) {
+					// Decided, not skipped: the file lives on a storage this
+					// user has no mount on, so the recheck could only repeat
+					// the verdict at a higher price.
+					$consumed++;
+					continue;
+				}
+
 				if ($rechecks >= $recheckBudget) {
+					$stopped = true;
 					break;
 				}
 
 				$rechecks++;
+				$consumed++;
 				$node = $userFolder->getFirstNodeById($candidate['fileId']);
 				if (!$node instanceof File) {
 					continue;
@@ -265,6 +300,14 @@ final class Provider implements IFilteringProvider {
 				];
 			}
 
+			if ($stopped) {
+				$offset += $consumed;
+				$exhausted = false;
+				break;
+			}
+
+			$offset = $page['nextOffset'];
+			$exhausted = !$page['hasMore'];
 			if ($exhausted) {
 				break;
 			}
@@ -305,16 +348,22 @@ final class Provider implements IFilteringProvider {
 	 * cost a resolution.
 	 *
 	 * This is a reduction and not a boundary, and the difference matters. It is
-	 * an over-approximation in both directions: a storage can carry files of a
-	 * mount this user does not have, and a team folder with per folder
-	 * permissions is not resolved here at all. Everything it lets through is
-	 * still decided by the recheck.
+	 * an over-approximation: a storage can carry files of a mount this user
+	 * does not have, and a team folder with per folder permissions is not
+	 * resolved here at all. Everything it lets through is still decided by the
+	 * recheck.
+	 *
+	 * Null and an empty array are two different answers. Null means the
+	 * reduction cannot decide anything, so every candidate goes to the capped
+	 * recheck; the caps and the recheck are both still in force, so falling
+	 * back is safe. An array is a verdict per positive file id: present means
+	 * "worth a recheck", absent means "cannot be this user's file".
 	 *
 	 * @param list<array{fileId:int,title?:string,snippet?:string}> $candidates
-	 * @param list<int> $storageIds
-	 * @return list<array{fileId:int,title?:string,snippet?:string}>
+	 * @param array<int,true> $storageIds
+	 * @return array<int,true>|null
 	 */
-	private function reduce(array $candidates, array $storageIds): array {
+	private function reduceIds(array $candidates, array $storageIds): ?array {
 		$fileIds = [];
 		foreach ($candidates as $candidate) {
 			if ($candidate['fileId'] > 0) {
@@ -323,32 +372,22 @@ final class Provider implements IFilteringProvider {
 		}
 
 		if ($fileIds === [] || $storageIds === []) {
-			// Nothing to reduce, or no usable mount list. Falling back to the
-			// full page is safe: the cap on resolutions and the recheck are
-			// both still in force.
-			return $candidates;
+			return null;
 		}
 
 		try {
 			$entries = $this->fileAccess->getByFileIds($fileIds);
 		} catch (\Throwable $e) {
 			$this->logger->debug('Findling: bulk cache lookup failed, falling back to the capped recheck', ['exception' => $e]);
-			return $candidates;
+			return null;
 		}
 
 		$kept = [];
-		foreach ($candidates as $candidate) {
-			if ($candidate['fileId'] <= 0) {
-				$kept[] = $candidate;
-				continue;
+		foreach ($fileIds as $fileId) {
+			$entry = $entries[$fileId] ?? null;
+			if ($entry !== null && isset($storageIds[$entry->getStorageId()])) {
+				$kept[$fileId] = true;
 			}
-
-			$entry = $entries[$candidate['fileId']] ?? null;
-			if ($entry === null || !in_array($entry->getStorageId(), $storageIds, true)) {
-				continue;
-			}
-
-			$kept[] = $candidate;
 		}
 
 		return $kept;
@@ -356,10 +395,10 @@ final class Provider implements IFilteringProvider {
 
 	/**
 	 * The numeric storage ids this user has a mount on, fetched once per
-	 * search. An empty list means the reduction is skipped, not that the user
-	 * sees nothing.
+	 * search and keyed by id for the lookup in the reduction. An empty map
+	 * means the reduction is skipped, not that the user sees nothing.
 	 *
-	 * @return list<int>
+	 * @return array<int,true>
 	 */
 	private function storageIdsOfUser(IUser $user): array {
 		try {
@@ -374,7 +413,7 @@ final class Provider implements IFilteringProvider {
 			$storageIds[$mount->getStorageId()] = true;
 		}
 
-		return array_keys($storageIds);
+		return $storageIds;
 	}
 
 	/**

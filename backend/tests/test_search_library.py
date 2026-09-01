@@ -151,6 +151,32 @@ def test_the_next_page_does_not_repeat_the_first(index: Index, store: Store) -> 
     assert set(first_ids).isdisjoint(second_ids)
 
 
+def test_the_offset_counts_permitted_candidates_not_raw_hits(index: Index, store: Store) -> None:
+    # alice sees every second document, so a cursor in raw engine hits would
+    # advance twice as fast as her result list and skip half of her hits.
+    everything = candidates(index, store, ALICE, _query(index), limit=DOCUMENTS).candidates
+
+    second = candidates(index, store, ALICE, _query(index), limit=2, offset=2)
+
+    assert second.candidates == everything[2:4]
+
+
+def test_paging_through_a_filtered_ranking_loses_no_hit(index: Index, store: Store) -> None:
+    everything = candidates(index, store, ALICE, _query(index), limit=DOCUMENTS).candidates
+
+    walked = []
+    offset = 0
+    for _ in range(DOCUMENTS):
+        page = candidates(index, store, ALICE, _query(index), limit=2, offset=offset)
+        walked.extend(page.candidates)
+        assert page.next_offset == offset + len(page.candidates)
+        offset = page.next_offset
+        if not page.has_more:
+            break
+
+    assert walked == everything
+
+
 def test_user_without_acl_rows_gets_an_empty_list(index: Index, store: Store) -> None:
     page = candidates(index, store, CAROL, _query(index), limit=DOCUMENTS)
 

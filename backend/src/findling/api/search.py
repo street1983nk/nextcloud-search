@@ -81,9 +81,10 @@ class SearchRequest(BaseModel):
 
     query: str = Field(min_length=1, max_length=SEARCH_QUERY_MAX_CHARS)
     limit: int = Field(default=20, ge=1, le=SEARCH_LIMIT_MAX)
-    # le= is a denial-of-service control (security audit C1): tantivy allocates
-    # (limit+offset)*24 bytes up front, and an unbounded offset aborts the whole
-    # process with a Rust allocation failure that no Python handler can catch.
+    # le= is a denial-of-service control (security audit C1): the offset sizes
+    # the page the candidate scan has to fill before it can answer, so an
+    # unbounded offset would be an unbounded amount of work per request. Counts
+    # permitted candidates, never raw engine hits, see findling.index.search.
     offset: int = Field(default=0, ge=0, le=SEARCH_OFFSET_MAX)
     # camelCase because the wire format belongs to the PHP side. A rename here
     # would silently drop the field on the way in, and the naming rules of ruff
