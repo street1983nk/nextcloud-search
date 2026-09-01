@@ -9,6 +9,7 @@ Der Schnitt ist vertikal: jede Phase liefert eine end-to-end nutzbare Fähigkeit
 ## Phases
 
 **Phase Numbering:**
+
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
@@ -16,8 +17,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Integrationsbeweis** - Ein Treffer aus dem Container erscheint in der Unified Search, App-IDs eingefroren, beide CSRs eingereicht
  (completed 2026-08-15)
+
 - [x] **Phase 2: Indexkern und Volltextsuche** - Dateien werden vollständig, wiederaufsetzbar und rechtekorrekt durchsuchbar
  (completed 2026-09-01)
+
 - [ ] **Phase 3: Aktualität und OCR** - Neue, geänderte und gescannte Dokumente sind kurz darauf auffindbar, ohne dass eine Datei angefasst wird
 - [ ] **Phase 4: Admin-Sichtbarkeit und Diagnose** - Admin sieht Deckungsgrad, Fehler und den Grund pro Datei, bevor Nutzer etwas vermissen
 - [ ] **Phase 5: Härtung und Store-Einreichung v1.0** - Belegte Zahlen auf 4-GB-ARM, Rechte-Paritätstest als Dauergate, v1.0 im App Store
@@ -26,19 +29,23 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Integrationsbeweis
+
 **Goal**: Ein Suchtreffer, den der ExApp-Container liefert, erscheint nachweislich in der normalen Nextcloud-Unified-Search, und die Store-Identität steht unwiderruflich fest.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
 **Requirements**: COMP-01, COMP-02, IDX-07, PKG-01, PKG-02
 **Success Criteria** (what must be TRUE):
+
   1. Nutzer tippt einen Suchbegriff in die Nextcloud-Suchleiste und sieht einen Findling-Treffer, den der Container erzeugt hat (Web-UI und OCS-Client, über `IProvider`, nicht `IExternalProvider`)
   2. Der Container liest den Inhalt einer konkreten Datei über den `#[ExAppRequired]`-Endpunkt der PHP-App als Stream, und ein Nutzer ohne Recht auf diese Datei bekommt dabei nichts geliefert
   3. Das Multi-Arch-Image (amd64 + arm64, Debian-slim-Basis) baut in der CI durch und startet auf beiden Architekturen bis zum erfolgreichen AppAPI-Handshake
   4. Beide App-IDs (`findling` ExApp + Companion) sind eingefroren und beide CSR-Vorgänge sind eingereicht, bevor der erste Bau-Commit der Folgephase entsteht
   5. Das CI-Gate für die Nur-Lesen-Invariante ist aktiv: ein Testlauf über ein Referenzkorpus belegt per Prüfsumme, dass keine Nutzerdatei verändert wurde
+
 **Plans**: 8 plans
 
 Plans:
+
 - [x] 01-01-PLAN.md , Identitaets-Freeze und Repo-Grundgeruest
 - [x] 01-02-PLAN.md , Qualitaetsgates, Nur-Lesen-Gate A und rote Kanarienprobe
 - [x] 01-03-PLAN.md , CSR-Vorgaenge fuer beide App-IDs
@@ -49,83 +56,124 @@ Plans:
 - [x] 01-08-PLAN.md , Content-Gateway-Beweis und Pruefsummen-Gate B
 
 ### Phase 2: Indexkern und Volltextsuche
+
 **Goal**: Der Nutzer findet den Inhalt seiner Dokumente per Volltextsuche mit deutscher Sprachqualität, und der Erstindex überlebt jeden Abbruch.
 **Mode:** mvp
 **Depends on**: Phase 1
 **Requirements**: COMP-04, IDX-01, IDX-02, IDX-03, IDX-06, IDX-08, SRCH-01, SRCH-02, SRCH-03
 **Success Criteria** (what must be TRUE):
+
   1. Nutzer sucht nach einem Wort aus einem PDF- oder Office-Dokument und bekommt das Dokument mit hervorgehobenem Snippet zurück, inklusive deutschem Stemming, Stopwörtern und Umlaut-Folding
   2. Nutzer bekommt ausschließlich Treffer aus Dateien, die er sehen darf: SQLite-ACL-Vorfilter liefert Kandidaten, der finale PHP-Recheck entscheidet, und Snippets entstehen erst nach bestandener Prüfung
   3. Ein `docker kill` mitten im Erstindex kostet keinen Fortschritt: nach dem Neustart setzt der Lauf an der Datenbank-Zustandsmarke fort statt neu zu beginnen
   4. Eine Datei, die zehn Nutzer sehen, wird genau einmal verarbeitet (Crawl pro Mount: User-Homes und Team Folders an, External Storage aus)
   5. Nicht indexierbare Dateien (zu groß, Typ nicht in der Allowlist) landen sichtbar in den Zuständen `failed` oder `skipped` statt stumm zu verschwinden, und Suchoperatoren (Phrase, +/-, Dateiname vs. Inhalt, Dateityp) funktionieren
+
 **Plans**: TBD
 
 ### Phase 3: Aktualität und OCR
+
 **Goal**: Was der Nutzer gerade ablegt, ändert, teilt oder löscht, ist kurz darauf korrekt im Index, und gescannte Dokumente sind durchsuchbar, ohne dass eine Originaldatei angefasst wird.
 **Mode:** mvp
 **Depends on**: Phase 2
 **Requirements**: COMP-03, IDX-04, IDX-05, OCR-01, OCR-02
 **Success Criteria** (what must be TRUE):
+
   1. Nutzer lädt eine Datei hoch, benennt sie um oder verschiebt sie und findet sie kurz darauf unter ihrem neuen Zustand wieder (ein einziger Ereignisweg über die PHP-App in die Pull-Queue)
   2. Nutzer sucht nach Text aus einem gescannten PDF ohne Textlayer und findet ihn, ohne dass ein Admin OCR konfiguriert hat; Dokumente mit vorhandenem Textlayer werden extrahiert statt erneut OCR-t
   3. Entzogener Share und gelöschte Datei verschwinden zeitnah aus den Trefferlisten aller nicht mehr berechtigten Nutzer
   4. Bei komplett blockierten Events ist der Index nach einem einzigen ETag-Abgleichzyklus wieder korrekt (Abnahmetest genau so)
   5. Nach einem OCR-Lauf über ein Korpus mit defekten und ungewöhnlichen PDFs sind alle Originaldateien bitweise unverändert, und kein OCR-Job überschreitet Seitenlimit, Zeit- oder RAM-Deckel
+
 **Plans**: 14 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 03-01-PLAN.md , Ereignisweg und Job-Art in der Queue (Upload und Aenderung sind sofort findbar)
-- [ ] 03-02-PLAN.md , Umbenennen und Verschieben ohne Download (Metadaten-Job)
-- [ ] 03-03-PLAN.md , Loeschen, Papierkorb und Wiederherstellen
-- [ ] 03-04-PLAN.md , Share, Unshare und Teilbaum-Job fuer Ordner-Operationen
 - [ ] 03-05-PLAN.md , tesseract im Image, OCR-Messlauf und OCR-Konfiguration
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md , Umbenennen und Verschieben ohne Download (Metadaten-Job)
 - [ ] 03-06-PLAN.md , DACH- und Scan-Korpus, Textlayer-Schwelle nachgemessen
-- [ ] 03-07-PLAN.md , Requeue-Route, Gate A und die OCR-Zweitspur
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-03-PLAN.md , Loeschen, Papierkorb und Wiederherstellen
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 03-04-PLAN.md , Share, Unshare und Teilbaum-Job fuer Ordner-Operationen
 - [ ] 03-08-PLAN.md , OCR-Modul: Rasterung, tesseract-Subprozess, Deckel-Kaskade
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 03-07-PLAN.md , Requeue-Route, Gate A und die OCR-Zweitspur
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 03-09-PLAN.md , Verdrahtung: gescanntes PDF ist auffindbar
-- [ ] 03-10-PLAN.md , Bilder per OCR plus Allowlist-Paritaets-Gate
 - [ ] 03-11-PLAN.md , Abgleich-Leseweg: mounts und files/slice
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 03-10-PLAN.md , Bilder per OCR plus Allowlist-Paritaets-Gate
 - [ ] 03-12-PLAN.md , Abgleichlauf mit Ruhe-Gate, Tombstones und Cursor
-- [ ] 03-13-PLAN.md , Abnahmen als Dauergates plus Sichtprobe
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 03-14-PLAN.md , Verschobene Audit-Befunde aus Phase 2
 
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 03-13-PLAN.md , Abnahmen als Dauergates plus Sichtprobe
+
 ### Phase 4: Admin-Sichtbarkeit und Diagnose
+
 **Goal**: Der Admin erkennt den Zustand der Suche vor dem Nutzer, kann für jede einzelne Datei begründen, warum sie auffindbar ist oder nicht, und kennt den Aufwand vorher.
 **Mode:** mvp
 **Depends on**: Phase 3
 **Requirements**: ADM-01, ADM-02, ADM-03, ADM-04
 **Success Criteria** (what must be TRUE):
+
   1. Admin öffnet die Statusseite und sieht Indexfortschritt, Deckungsgrad (indexierte gegen indexierbare Dateien) und die Fehlerliste, ohne Logs zu lesen
   2. Admin gibt eine beliebige Datei an und bekommt den Grund ihres Zustands genannt (zu groß, Typ nicht unterstützt, OCR fehlgeschlagen, wartet in der Queue, indexiert)
   3. Admin sieht vor dem Erstindex eine Schätzung: Anzahl Dateien, davon OCR-pflichtig, erwartete Dauer und Platzbedarf
   4. Admin schaltet Ordner-Ausschlüsse, Größen-Cap, Team Folders und External Storage um, und der nächste Lauf hält sich daran
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 5: Härtung und Store-Einreichung v1.0
+
 **Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0 (Volltext + OCR) liegt vor Jahresende 2026 im Nextcloud App Store.
 **Mode:** mvp
 **Depends on**: Phase 4
 **Requirements**: SRCH-04, PKG-03, PKG-04, PKG-05
 **Success Criteria** (what must be TRUE):
+
   1. Ein voller Index- und OCR-Lauf auf einer echten 4-GB-ARM-Box läuft ohne OOM durch, und die gemessene RSS-Kurve ist als Store-Zahl dokumentiert
   2. Der automatisierte Paritätstest gegen die native Nextcloud-Suche ist über alle sechs Rechteszenarien grün und läuft als Dauergate in der CI (eigene Dateien, empfangener Share, entzogener Share, Team Folder, Gruppenwechsel, eingeschränkter Nutzer)
   3. Beide Apps installieren, laufen und deinstallieren sauber auf docker-compose und AIO über HaRP, auf Nextcloud 32 bis 34; Uninstall entfernt Queue-Tabellen, Preferences und nach Bestätigung das Index-Volume
   4. Beide signierten Releases mit XSD-validierter info.xml sind im App Store eingereicht, mit gekoppelter Versionierung und ausdrücklicher Privacy-Aussage im Store-Text
+
 **Plans**: TBD
 
 ### Phase 6: Semantische Suche (Release v1.1)
+
 **Goal**: Der Nutzer findet Dokumente auch über Umschreibungen statt nur über exakte Wörter, im selben RAM-Budget und durch dieselbe Rechtekette.
 **Mode:** mvp
 **Depends on**: Phase 5 (eigenständiges Release v1.1, 4 bis 6 Wochen nach der v1.0-Store-Einreichung)
 **Requirements**: SEM-01, SEM-02, SEM-03
 **Success Criteria** (what must be TRUE):
+
   1. Nutzer sucht mit einer Umschreibung, die im Dokument wörtlich nicht vorkommt, und findet es trotzdem (RRF-Hybrid aus Tantivy- und Vektor-Treffern)
   2. Vektor-Treffer durchlaufen exakt dieselbe ACL-Kette wie Volltext-Treffer: SQLite-Vorfilter, dann finaler PHP-Recheck, und der Paritätstest aus Phase 5 bleibt grün
   3. Fehlt das Modell oder fällt der Vektorzweig aus, liefert die Suche unverändert Volltext-Ergebnisse statt einen Fehler
   4. Das Vektorschema wird erst nach einem Lasttest auf mindestens 50.000 synthetischen Dokumenten festgezurrt, mit dokumentierter Kennzahl Bytes pro Dokument und beschriebenem Ausweichpfad (Bit-Vektoren/usearch)
   5. Ein voller Lauf mit aktivierten Embeddings bleibt auf der 4-GB-ARM-Box stabil (INDEX_WORKERS=1 verhindert OCR- und Embedding-Spitze gleichzeitig)
+
 **Plans**: TBD
 
 ## Progress
