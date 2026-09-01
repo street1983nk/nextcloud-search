@@ -207,6 +207,11 @@ Keine.
 - **Phase 4 (Diagnose)** kann "war da, ist weg" ausweisen, weil die Zeile mit ihrem letzten Verdikt stehen bleibt und nur `deleted_at` trägt.
 - **Bewusst offene Lücke:** ein gelöschter Ordner erzeugt weiterhin keine Zeile für seine Nachkommen. Der Weg dorthin ist der Teilbaum-Job aus Plan 03-04, die Rücklage der ETag-Abgleich aus 03-12. Beides steht als Kommentar im Code, nicht nur hier (T-03-305).
 
+## Self-Check: PASSED
+
+Alle dreizehn genannten Dateien liegen vor, alle sechs Commits sind im Branch
+`worktree-agent-03-03` auffindbar, und der Plan hat keine einzige Datei gelöscht.
+
 ---
 *Phase: 03-aktualit-t-und-ocr*
 *Completed: 2026-09-01*
