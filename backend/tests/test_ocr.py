@@ -91,7 +91,7 @@ def test_the_padded_rows_are_cut_to_the_stride() -> None:
 
     with _decode(raster._encode_page(padded)) as image:
         assert image.size == (3, 2)
-        assert list(image.getdata()) == [10, 20, 30, 40, 50, 60]
+        assert list(image.tobytes()) == [10, 20, 30, 40, 50, 60]
 
 
 def test_both_pdfium_objects_are_released_when_the_encoding_fails(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -100,8 +100,12 @@ def test_both_pdfium_objects_are_released_when_the_encoding_fails(monkeypatch: p
     # it is the end of the process. The order is asserted too: the bitmap is a
     # child of the page, so it goes first.
     closed: list[str] = []
-    page_close: Callable[[pypdfium2.PdfPage], None] = pypdfium2.PdfPage.close
-    bitmap_close: Callable[[pypdfium2.PdfBitmap], None] = pypdfium2.PdfBitmap.close
+    # Captured as plain callables: the close of pypdfium2 takes a private second
+    # argument and answers a bool, and pinning that shape here would make this
+    # test fail on the day the library adds a keyword rather than on the day the
+    # release stops happening.
+    page_close: Callable[..., object] = pypdfium2.PdfPage.close
+    bitmap_close: Callable[..., object] = pypdfium2.PdfBitmap.close
 
     def closing_page(page: pypdfium2.PdfPage) -> None:
         closed.append("page")
