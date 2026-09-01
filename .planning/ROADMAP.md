@@ -95,8 +95,8 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-PLAN.md , Umbenennen und Verschieben ohne Download (Metadaten-Job)
-- [ ] 03-06-PLAN.md , DACH- und Scan-Korpus, Textlayer-Schwelle nachgemessen
+- [x] 03-02-PLAN.md , Umbenennen und Verschieben ohne Download (Metadaten-Job)
+- [x] 03-06-PLAN.md , DACH- und Scan-Korpus, Textlayer-Schwelle nachgemessen
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -187,7 +187,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
-| 3. Aktualität und OCR | 2/14 | In Progress|  |
+| 3. Aktualität und OCR | 4/14 | In Progress|  |
 | 4. Admin-Sichtbarkeit und Diagnose | 0/TBD | Not started | - |
 | 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
