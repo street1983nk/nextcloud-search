@@ -34,7 +34,7 @@ import re
 import shutil
 import threading
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import IO, Any, cast
 
@@ -828,6 +828,32 @@ async def test_an_unchanged_file_is_acknowledged_without_doing_the_work_again(
     assert second.unchanged == 1
     assert second.indexed == 0
     assert queue.acknowledged[1] == ([91], {})
+
+
+async def test_the_fast_path_carries_the_new_etag_into_the_state_row(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # Review finding WR-02. A touch or a sync with identical bytes moves the
+    # etag without moving a byte; the fast path used to acknowledge without
+    # updating the stored mark, so the nightly reconcile read the file as stale
+    # and re-downloaded it every cycle, forever. After the pass the stored etag
+    # has to be the live one, and no attempt may have been counted, because
+    # nothing was extracted.
+    touched = replace(_job(), etag="ffffffffffffffffffffffffffffffff")
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)), ClaimResult(jobs=(touched,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+    second = await poller.run_once()
+
+    assert second.unchanged == 1
+    row = store.file_row(4711)
+    assert row is not None
+    assert row["etag"] == "ffffffffffffffffffffffffffffffff"
+    assert row["attempts"] == 1
+    # The comparison of the reconcile is closed with this: known_etags answers
+    # the live mark, so _stale_of stops proposing the file as work.
+    assert store.known_etags([4711]) == {4711: "ffffffffffffffffffffffffffffffff"}
 
 
 def _renamed(queue_id: int = 92) -> QueueJob:

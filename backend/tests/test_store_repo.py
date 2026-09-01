@@ -23,6 +23,7 @@ import logging
 import sqlite3
 import threading
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -289,6 +290,65 @@ def test_record_increments_attempts(store: Store) -> None:
 
     assert row is not None
     assert row["attempts"] == 2
+
+
+def test_refresh_meta_moves_the_crawl_facts_and_leaves_the_verdict_alone(store: Store) -> None:
+    # The write behind the fast path of the poller (review finding WR-02). A
+    # touch moves the etag without moving a byte; without this narrow update the
+    # stored mark stays behind the live one and the reconcile re-downloads the
+    # file every cycle, forever.
+    store.record(1, a_file(1, etag="old"), "indexed", content_hash="cafe", text_chars=42)
+
+    touched = replace(a_file(1, etag="new"), mtime=1_700_000_999, path="files/moved-1.pdf", title="moved-1.pdf")
+    changed = store.refresh_meta(1, touched)
+
+    row = store.file_row(1)
+    assert changed == 1
+    assert row is not None
+    assert row["etag"] == "new"
+    assert row["mtime"] == 1_700_000_999
+    assert row["path"] == "files/moved-1.pdf"
+    assert row["title"] == "moved-1.pdf"
+    # The verdict, the hash and the attempts counter are none of its business:
+    # nothing was extracted, so no attempt may be counted and no state changed.
+    assert row["state"] == "indexed"
+    assert row["content_hash"] == "cafe"
+    assert row["text_chars"] == 42
+    assert row["attempts"] == 1
+
+
+def test_refresh_meta_makes_the_file_read_as_unchanged_by_the_reconcile(store: Store) -> None:
+    # The property the whole fix is for: after the refresh, known_etags answers
+    # with the live mark and _stale_of stops proposing the file as work.
+    store.record(1, a_file(1, etag="old"), "indexed", content_hash="cafe")
+
+    store.refresh_meta(1, a_file(1, etag="new"))
+
+    assert store.known_etags([1]) == {1: "new"}
+
+
+def test_refresh_meta_leaves_a_tombstoned_file_alone(store: Store) -> None:
+    # Lifting a tombstone is the business of the upsert in record() alone. A
+    # refresh that revived a deleted file would make the deletion silently
+    # disappear from the state.
+    store.record(1, a_file(1, etag="old"), "indexed", content_hash="cafe")
+    store.tombstone(1, at=1_700_000_500)
+
+    changed = store.refresh_meta(1, a_file(1, etag="new"))
+
+    row = store.file_row(1)
+    assert changed == 0
+    assert row is not None
+    assert row["etag"] == "old"
+    assert row["deleted_at"] == 1_700_000_500
+
+
+def test_refresh_meta_on_a_file_that_was_never_judged_changes_nothing(store: Store) -> None:
+    # Zero is an answer, not a failure: a file without a row has nothing to
+    # refresh, and inventing one here would be a second entry point next to
+    # record() that every future caller would have to remember.
+    assert store.refresh_meta(404, a_file(404, etag="new")) == 0
+    assert store.file_row(404) is None
 
 
 def test_is_unchanged_is_true_for_the_same_hash_in_state_indexed(store: Store) -> None:

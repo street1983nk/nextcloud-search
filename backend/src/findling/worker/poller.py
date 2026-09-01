@@ -554,6 +554,14 @@ class Poller:
                 # prefilter. It is one declarative write against a file the pass
                 # has read anyway, so the exit stays cheap.
                 await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, _acl_users(job))
+                # The version mark travels on the cheap exit as well (review
+                # finding WR-02). record() never runs here, and it was the only
+                # writer of the etag: a touch or a sync with identical bytes
+                # would leave the stored mark behind the live one, the nightly
+                # reconcile would read that as stale, and this very fast path
+                # would acknowledge the re-download without ever closing the
+                # gap, one full download per file per cycle, forever.
+                await asyncio.to_thread(self._store_or_die().refresh_meta, job.file_id, _meta_of(job))
                 done.append(job.queue_id)
                 return 1
             outcome = await asyncio.to_thread(self._extract, str(read.path), job.mime, read.size)

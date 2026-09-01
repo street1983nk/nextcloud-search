@@ -194,6 +194,20 @@ SELECT 1 FROM files
    AND index_version = ? AND deleted_at IS NULL
 """
 
+# The narrow write of the fast path. The poller acknowledges a file whose bytes
+# did not change without running record(), and record() was the only writer of
+# the etag: a touch, a client sync with identical bytes or any other etag move
+# without a content change left the stored mark behind the live one, the nightly
+# reconcile read that as stale, and the same file was downloaded in full every
+# cycle, forever (review finding WR-02). This statement carries the crawl facts
+# along and touches neither the verdict nor attempts, so the give-up rule keeps
+# counting real attempts; deleted_at stays a condition because lifting a
+# tombstone is the business of the upsert in record() alone.
+_REFRESH_META_SQL: Final = """
+UPDATE files SET path = ?, title = ?, mtime = ?, etag = ?
+ WHERE file_id = ? AND deleted_at IS NULL
+"""
+
 # The tombstone of D-10. It marks the row instead of removing it, for two
 # reasons that pull in the same direction: phase 4 has to be able to report "it
 # was there and it is gone", which a missing row cannot say, and a file id that
@@ -554,6 +568,28 @@ class Store:
             return False
         row = self._conn.execute(_IS_UNCHANGED_SQL, (file_id, content_hash, self.index_version)).fetchone()
         return row is not None
+
+    def refresh_meta(self, file_id: int, meta: FileMeta) -> int:
+        """Carry the crawl facts of an unchanged file along, verdict untouched.
+
+        The fast path of the poller is the intended caller: same bytes, nothing
+        to extract, and :meth:`record` would count an attempt for work that
+        never happened. Without this write the stored etag stays behind the
+        live one after a touch, and the reconcile re-queues and re-downloads
+        the same file every cycle (the argument stands at
+        :data:`_REFRESH_META_SQL`).
+
+        Zero rows is an answer and not a failure: a tombstoned file is left
+        alone, because lifting a tombstone belongs to the upsert of
+        :meth:`record` alone, and a file that was never judged has nothing to
+        refresh.
+        """
+        with self._transaction():
+            cursor = self._conn.execute(
+                _REFRESH_META_SQL,
+                (meta.path, meta.title, meta.mtime, meta.etag, file_id),
+            )
+        return cursor.rowcount
 
     def tombstone(self, file_id: int, at: int | None = None) -> int:
         """Mark one file as deleted, return how many rows that was.
