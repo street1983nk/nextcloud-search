@@ -175,15 +175,27 @@ async def test_a_source_without_a_kind_is_a_content_job() -> None:
 
 async def test_a_kind_this_container_does_not_know_is_a_content_job() -> None:
     # The job picks the branch, so an unknown value must not pick one (T-03-201).
-    # ocr arrives with plan 03-05; until its branch exists, a row carrying it runs
-    # the ordinary content route. delete left this list in plan 03-03 and acl in
-    # plan 03-04, because both have a branch of their own now.
-    for unknown in ("ocr", "", 7):
+    # All five known kinds have their own branch by now; anything else runs the
+    # ordinary content route.
+    for unknown in ("thumbnails", "", 7):
         session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**SOURCE, "kind": unknown}}}})
 
         result = await _queue(session).claim(limit=1, max_bytes=1)
 
         assert result.jobs[0].kind == "content", unknown
+
+
+async def test_an_ocr_job_keeps_its_kind_across_the_queue_boundary() -> None:
+    # Regression for the Sichtprobe finding of phase 3: KIND_OCR existed, the
+    # poller branch existed, but the kind was missing from KINDS, so every row
+    # the requeue route created was degraded to content and the second track
+    # judged the same bytes as no_text_layer again instead of running the
+    # engine. The kind has to survive the trip, exactly like metadata does.
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**SOURCE, "kind": "ocr"}}}})
+
+    job = (await _queue(session).claim(limit=1, max_bytes=1)).jobs[0]
+
+    assert job.kind == "ocr"
 
 
 async def test_a_delete_job_survives_without_users_mime_or_size() -> None:

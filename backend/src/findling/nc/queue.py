@@ -56,22 +56,16 @@ LOGGER = logging.getLogger("findling.nc.queue")
 # reachable across the ExApp boundary, which rejectForeignCaller guards, but a
 # route chosen by a value from a database row deserves a list it has to be in.
 #
-# The PHP side knows five kinds. Only these four have a branch in the container
-# today; ocr arrives with plan 03-05. Until then its rows take the content route,
-# which is the honest thing to do with a job whose handler does not exist yet.
+# The PHP side knows five kinds, and since plan 03-09 all five have a branch in
+# the container: content, metadata, delete, acl and ocr. A kind outside this
+# list still degrades to content in _kind below, which is the honest thing to
+# do with a job whose handler does not exist.
 KIND_CONTENT: Final = "content"
 KIND_METADATA: Final = "metadata"
 KIND_DELETE: Final = "delete"
 KIND_ACL: Final = "acl"
-KINDS: Final = frozenset({KIND_CONTENT, KIND_METADATA, KIND_DELETE, KIND_ACL})
-
-# The kind the container asks Nextcloud for, and deliberately not a member of the
-# list above. KINDS answers "which branch may a claimed row pick", and there is no
-# OCR branch until plan 03-09 wires one; a row that carries this kind therefore
-# runs the content route, which is the honest thing to do with a job whose handler
-# does not exist yet. Asking for it is a different question and possible today:
-# the row is put on the second track and waits there for the handler.
 KIND_OCR: Final = "ocr"
+KINDS: Final = frozenset({KIND_CONTENT, KIND_METADATA, KIND_DELETE, KIND_ACL, KIND_OCR})
 
 # The kinds that describe no node on the PHP side, and therefore arrive without
 # the fields a node would have supplied.
@@ -223,10 +217,9 @@ def _kind(value: object) -> str:
     Two cases fall back, and both on purpose. A row written by a PHP side from
     before the kind column carries no kind at all, and it is an ordinary content
     job: discarding it would stop the queue of an instance in the middle of an
-    upgrade. And a kind this container has no branch for, which is what acl and
-    ocr are until plans 03-04 and 03-05 arrive, must not be able to pick a branch
-    by being spelled a certain way (T-03-201); it runs the content route, which
-    is the only handler that exists for it.
+    upgrade. And a kind this container has no branch for must not be able to
+    pick a branch by being spelled a certain way (T-03-201); it runs the content
+    route, which is the safe handler for the unknown.
     """
     return value if isinstance(value, str) and value in KINDS else KIND_CONTENT
 
