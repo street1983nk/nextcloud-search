@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
-status: ready_to_plan
-stopped_at: Phase 03 complete (14/14) — ready to discuss Phase 4
-last_updated: 2026-09-01T18:17:43.025Z
-last_activity: 2026-09-01 -- Phase 03 execution started
+status: planning
+stopped_at: Phase 4 context gathered
+last_updated: "2026-09-02T14:30:07.313Z"
+last_activity: 2026-09-01
 progress:
   total_phases: 6
   completed_phases: 0
@@ -91,6 +91,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-01T05:44:48.517Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-aktualit-t-und-ocr/03-CONTEXT.md
+Last session: 2026-09-02T14:30:07.294Z
+Stopped at: Phase 4 context gathered
+Resume file: .planning/phases/04-admin-sichtbarkeit-und-diagnose/04-CONTEXT.md
