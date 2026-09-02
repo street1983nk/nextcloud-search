@@ -237,6 +237,32 @@ final class AdminViewService {
 	private const MAX_SECONDS_LEFT = 86400000;
 
 	/**
+	 * How long the comparison run holds itself back, in hours.
+	 *
+	 * The default of ``FINDLING_RECONCILE_MIN_INTERVAL_HOURS`` in
+	 * backend/src/findling/config.py, and the second copy of a container constant
+	 * on this page, next to MIN_FREE_BYTES and for the same reason: the
+	 * alternative would be one more field on a status answer, and the page needs
+	 * the figure with the container switched off as well, because taking an
+	 * exclusion back is exactly the moment somebody wants to know how long it
+	 * takes. An instance that changed the variable waits a different span, and the
+	 * sentence on the page is an order of magnitude rather than a promise; without
+	 * a figure at all the page would leave an admin unable to tell waiting from
+	 * broken.
+	 */
+	private const RECONCILE_INTERVAL_HOURS = 24;
+
+	/**
+	 * The way to skip that wait, spelled the way an admin types it.
+	 *
+	 * The same command the reindex banner names, and it is a constant here because
+	 * two places on one page must not disagree about it. It queues everything
+	 * again, so it is the answer to "I do not want to wait a day" for a prefix
+	 * that was taken back as well.
+	 */
+	private const RESTART_COMMAND = 'occ findling:index --restart';
+
+	/**
 	 * How many example paths one reason group carries at the most.
 	 *
 	 * Twenty, and it is a display decision with a visible remainder rather than
@@ -490,9 +516,21 @@ final class AdminViewService {
 	 * ``occ config:app:set`` is shown here the way it will be compared, not the
 	 * way it was typed.
 	 *
+	 * ``cleanupLatencyHours`` and ``restartCommand`` are the two fields the page
+	 * needs in order to name the one thing this phase cannot make immediate. A new
+	 * exclusion clears the index while the admin is still on the page, because the
+	 * expansion job starts within a cron round. Taking an exclusion BACK heals
+	 * itself and does so slowly: the files are enumerated again, but they are
+	 * picked up by the comparison run, and that run holds itself back for as long
+	 * as this figure says. Saying so is the point of this phase; leaving it out
+	 * would have an admin remove a prefix, reload the page and see nothing happen,
+	 * with no way of telling waiting from broken. The command is the way to skip
+	 * the wait, and it is the same one the reindex banner names.
+	 *
 	 * @return array{
 	 *     exclusions:list<string>, maxFileBytes:int, maxFileBytesCeiling:int,
-	 *     indexTeamFolders:bool, indexExternalStorage:bool
+	 *     indexTeamFolders:bool, indexExternalStorage:bool,
+	 *     cleanupLatencyHours:int, restartCommand:string
 	 * }
 	 */
 	public function rules(): array {
@@ -502,6 +540,8 @@ final class AdminViewService {
 			'maxFileBytesCeiling' => $this->settingsService->containerCap(),
 			'indexTeamFolders' => $this->settingsService->indexTeamFolders(),
 			'indexExternalStorage' => $this->settingsService->indexExternalStorage(),
+			'cleanupLatencyHours' => self::RECONCILE_INTERVAL_HOURS,
+			'restartCommand' => self::RESTART_COMMAND,
 		];
 	}
 
@@ -610,7 +650,7 @@ final class AdminViewService {
 	 * unknown rather than to an empty string, because the card has a chip for
 	 * unknown and none for nothing.
 	 *
-	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int}|null $facts
+	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int,internalPath:string}|null $facts
 	 * @param array<string,mixed> $verdict whatever the stage that answered filled in
 	 * @return array{
 	 *     found:bool, fileId:int, path:string, uid:string, trashed:bool,
@@ -656,7 +696,7 @@ final class AdminViewService {
 	 * read as a deletion, which is what makes "it was indexed and has since been
 	 * deleted" an honest sentence instead of the misreading of pitfall 6.
 	 *
-	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int}|null $facts
+	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int,internalPath:string}|null $facts
 	 * @param array<string,mixed> $container
 	 * @return array<string,mixed>|null
 	 */
@@ -692,7 +732,7 @@ final class AdminViewService {
 	 * lies decides more than what it is, and what it is decides more than how
 	 * large it is.
 	 *
-	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int} $facts
+	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int,internalPath:string} $facts
 	 * @return array<string,mixed>|null
 	 */
 	private function stageTwoRulesOfToday(array $facts): ?array {
@@ -744,27 +784,44 @@ final class AdminViewService {
 			return $this->reasonVerdict('skipped', 'too_large');
 		}
 
-		return $this->excludedByAPrefix($facts['path']);
+		return $this->excludedByAPrefix($facts['storageId'], $facts['internalPath']);
 	}
 
 	/**
-	 * The exclusion prefix test of this stage, and it answers nothing yet.
+	 * The exclusion prefix test of this stage, and the last comparison of it.
 	 *
-	 * The rules themselves arrive with the settings block, and plan 04-09 hangs
-	 * this method into that ExclusionService. It stands here, named and called
-	 * from its place in the order, rather than being left out: a stage that is
-	 * incomplete and says so is a stage somebody can finish, and a stage that is
-	 * missing is one nobody knows to look for. Until then a file left out by a
-	 * prefix falls through to stage four, where the crawl's own
-	 * ``skipped(excluded)`` row answers for it.
+	 * It answers with ``skipped(excluded)``, so the label and the remedy come out
+	 * of the same closed table every other reason uses and the card reads
+	 * "Excluded by a rule" with "Remove the matching entry under Excluded
+	 * folders" underneath. No row anywhere says so: this is the one verdict of
+	 * the app that is worked out at the moment it is asked, because a row per
+	 * excluded file would be two hundred thousand writes on one archive folder
+	 * and every one of them wrong again the moment the rule is taken back.
+	 *
+	 * The internal path and the storage go in, and not the display path, which is
+	 * the hazard plan 04-08 wrote down when it left this body empty:
+	 * ExclusionService::mountRelativePathInStorage is the one place that turns
+	 * them into the space the crawl compares in, so a Team Folder file is judged
+	 * by the rule that really applies to it rather than by its mount point name.
+	 *
+	 * Where this stands in the order is the sharp edge of pitfall 6. Stage one has
+	 * already established that the file EXISTS, so an excluded file is reported as
+	 * excluded even when the container carries a tombstone for it, and that
+	 * tombstone is the clearing this rule caused rather than a deletion of the
+	 * file. Only stage one, where no cache entry was found at all, may read a
+	 * tombstone as "was indexed and has since been deleted", and a file that keeps
+	 * every rule and carries one is ``pending_crawl`` with the note that it was
+	 * indexed before (stage six).
 	 *
 	 * @return array<string,mixed>|null
 	 */
-	private function excludedByAPrefix(string $path): ?array {
-		// The parameter is the value the prefix test will read, and it is in the
-		// signature now so that hanging the service in is one method body and not
-		// a change at the call site as well.
-		return null;
+	private function excludedByAPrefix(int $storageId, string $internalPath): ?array {
+		$relative = $this->exclusionService->mountRelativePathInStorage($storageId, $internalPath);
+		if ($relative === null || !$this->exclusionService->isExcluded($relative)) {
+			return null;
+		}
+
+		return $this->reasonVerdict('skipped', 'excluded');
 	}
 
 	/**

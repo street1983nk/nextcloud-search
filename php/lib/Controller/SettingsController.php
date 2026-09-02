@@ -16,23 +16,31 @@ use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 
 /**
- * The three addresses the admin page asks, and the only three.
+ * The four addresses the admin page asks, and the only four.
  *
  * One reads the whole page and is polled; one looks up a single file and is
- * asked when somebody types into a field; one writes the rules. The first two
- * are two routes and not one with a parameter, because the first answers the
- * same thing for every administrator and the second answers about a string
- * somebody wrote, and folding the two together would put a user supplied path
- * into the request that refreshes the numbers every five seconds.
+ * asked when somebody types into a field; one previews what a new exclusion
+ * would remove; one writes the rules. The first two are two routes and not one
+ * with a parameter, because the first answers the same thing for every
+ * administrator and the second answers about a string somebody wrote, and
+ * folding the two together would put a user supplied path into the request that
+ * refreshes the numbers every five seconds.
  *
- * The third one is the only writing route of this phase, and like the other two
+ * The preview is a route of its own and a reading one, which is a decision worth
+ * writing down: the form has to name the number of documents a new exclusion
+ * takes out of the index BEFORE it writes anything, and a write route that
+ * sometimes only previews would be exactly the route where somebody eventually
+ * takes the wrong branch. So it is a GET, it touches nothing, and the writing
+ * route stays a route that always writes.
+ *
+ * The fourth one is the only writing route of this phase, and like the other two
  * it lives under /apps/findling/ rather than in the OCS space. That is a
  * boundary and not a preference: the write allowlist of the read-only gate on
  * the Python side stands at exactly three entries with a test that says so, and
  * the clearing that a new exclusion causes is queued on this side through
  * SubtreeExpandJob (research pattern 9). So no fourth OCS write is needed and
  * none is added. The attribute name of these routes is deliberately written
- * only above the three methods themselves, because the anti vacuity clause of
+ * only above the four methods themselves, because the anti vacuity clause of
  * backend/tests/test_php_trust_boundary.py counts the lines that mention it and
  * compares them against the number of routes it found: a mention in prose would
  * break that gate without a route having changed (pitfall 7).
@@ -71,8 +79,10 @@ use Psr\Log\LoggerInterface;
  * defense in depth for a path this app does not walk; the effective protection
  * of the admin page is this controller.
  *
- * Only the third route writes, and it writes nothing but appconfig: there is no
- * code path from this class into the queue, the state table or the file system.
+ * Only the last route writes, and it writes appconfig plus one job entry per
+ * newly excluded subtree: the clearing of D-07 is planned in the background job
+ * list of Nextcloud and never carried out inside this request. There is no code
+ * path from this class into the index, and none into the file system at all.
  * The log follows the rule of the other controllers of this app: a static
  * sentence outwards, the exception in the exception field where Nextcloud
  * renders it under the admin's own log level, and never a path, a file name or a
@@ -193,6 +203,73 @@ final class SettingsController extends Controller {
 	}
 
 	/**
+	 * GET /apps/findling/admin/rules/preview
+	 *
+	 * What the list in the form would remove from the index, before anything is
+	 * written. The answer is the prefixes of the list that are not in force yet,
+	 * the number of indexed documents under them and whether that number ran into
+	 * its ceiling; the page turns those three into the inline confirmation of D-07
+	 * and shows the number with "at least" in front of it when the ceiling was
+	 * reached.
+	 *
+	 * A reading route, and it writes nothing at all: no appconfig, no queue row,
+	 * no job. That is why it is a GET and why it is separate from the write, see
+	 * the class docblock.
+	 *
+	 * The new prefixes travel back, and they are the one value of this page that
+	 * comes back the way somebody typed it, normalised. That is deliberate and it
+	 * is narrow: the confirmation has to name the path whose content is about to
+	 * leave the index, otherwise it asks an admin to confirm a consequence without
+	 * naming what it applies to. The value came out of this same request, from the
+	 * same admin session, and it goes into a text node on the page. It does not
+	 * reach the log, for the reason the whole class follows (T-04-51).
+	 *
+	 * An invalid list is refused with the same codes the write uses rather than
+	 * being previewed. A preview of a list that cannot be saved would be a number
+	 * for a consequence that will not happen.
+	 *
+	 * @param list<mixed> $exclusions the prefix list as the form holds it
+	 */
+	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'GET', url: '/admin/rules/preview')]
+	public function previewRules(array $exclusions = []): DataResponse {
+		$list = array_values($exclusions);
+
+		$listErrors = $this->exclusionService->validate($list);
+		if ($listErrors !== []) {
+			$this->logger->warning('Findling: refused to preview a list of exclusions that did not validate', [
+				'exclusions' => count($listErrors),
+			]);
+
+			return new DataResponse(
+				['exclusions' => $listErrors, 'error' => 'The rules were not saved.'],
+				Http::STATUS_BAD_REQUEST,
+			);
+		}
+
+		try {
+			$newPrefixes = $this->exclusionService->newPrefixes($list);
+			$affected = $this->exclusionService->affectedDocuments($newPrefixes);
+
+			return new DataResponse([
+				'newPrefixes' => $newPrefixes,
+				'affectedDocuments' => $affected,
+				'capped' => $affected >= ExclusionService::PREVIEW_CAP,
+			]);
+		} catch (\Throwable $e) {
+			// A failed preview may not block the save. The page falls back to the
+			// confirmation without a number, which still names the path and still
+			// says the files stay on disk, because the consequence is the same
+			// whether or not this count succeeded.
+			$this->logger->error('Findling: could not preview the effect of an exclusion', ['exception' => $e]);
+
+			return new DataResponse(
+				['error' => 'Preview is not available.'],
+				Http::STATUS_INTERNAL_SERVER_ERROR,
+			);
+		}
+	}
+
+	/**
 	 * POST /apps/findling/admin/rules
 	 *
 	 * The four switches of ADM-04 in one call, and the only writing route of this
@@ -215,12 +292,19 @@ final class SettingsController extends Controller {
 	 * typed. Clamping without saying so would be the page showing a value that
 	 * does not hold, one screen further along than pitfall 2.
 	 *
-	 * No confirmation is asked for here, and the reason is a decision of the
-	 * plan order rather than an oversight. D-07 wants a confirmation before a NEW
-	 * exclusion, because it clears already indexed documents out of the index, and
-	 * that clearing arrives with plan 04-09. Until it exists there is nothing to
-	 * lose by saving, and asking somebody to confirm a consequence that does not
-	 * happen yet would teach them to click the confirmation away.
+	 * The confirmation of D-07 is not asked for HERE, and that is not the same as
+	 * not being asked at all. A new exclusion clears the documents under it out of
+	 * the index, ExclusionService::save() plans that clearing, and the admin has
+	 * to have seen the number before this route is called: the page previews it
+	 * over the route above and only then posts here. The confirmation lives where
+	 * the consequence is shown rather than in the request that carries it out,
+	 * because a route that judged its own confirmation flag would trust a value
+	 * from the same form it is judging.
+	 *
+	 * A prefix that is taken back triggers nothing here, deliberately. The
+	 * comparison run picks those files up again by itself, which takes up to the
+	 * latency AdminViewService::rules() reports, and the page names both the wait
+	 * and the command that skips it.
 	 *
 	 * @param list<mixed> $exclusions the prefix list as the form holds it
 	 */

@@ -136,9 +136,20 @@ final class PathResolverService {
 	 * a tombstone in the container may not be read as a deletion on its own
 	 * (pitfall 6).
 	 *
+	 * ``internalPath`` is the path inside the storage, and it is a different value
+	 * from ``path`` on purpose. ``path`` is what a human reads, the display path
+	 * in the home of the owner, and it is the path of the mount point plus the
+	 * rest, so a file on a Team Folder mount reads as ``TeamX/x.pdf``.
+	 * ``internalPath`` is what the crawl compares, the value the file cache holds,
+	 * so the same file reads as whatever it is called under the root of its own
+	 * mount. The exclusion rules live in the second space, and handing the first
+	 * one to them would answer with a rule that does not apply to that file
+	 * (plan 04-09). It costs nothing to carry: the cache entry it comes out of is
+	 * already open at that point.
+	 *
 	 * @return array{
 	 *     uid:string, path:string, shares:int, trashed:bool,
-	 *     storageId:int, mime:string, size:int
+	 *     storageId:int, mime:string, size:int, internalPath:string
 	 * }|null
 	 */
 	public function inspect(int $fileId): ?array {
@@ -169,6 +180,7 @@ final class PathResolverService {
 			'storageId' => $entry instanceof ICacheEntry ? $entry->getStorageId() : 0,
 			'mime' => $entry instanceof ICacheEntry ? $entry->getMimeType() : '',
 			'size' => $entry instanceof ICacheEntry ? max(0, $entry->getSize()) : 0,
+			'internalPath' => $entry instanceof ICacheEntry ? $entry->getPath() : '',
 		];
 	}
 

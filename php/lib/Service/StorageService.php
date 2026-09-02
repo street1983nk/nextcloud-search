@@ -6,6 +6,7 @@ namespace OCA\Findling\Service;
 
 use OCP\Files\Cache\ICacheEntry;
 use OCP\Files\Cache\IFileAccess;
+use OCP\Files\FileInfo;
 use OCP\Files\IMimeTypeLoader;
 use Psr\Log\LoggerInterface;
 
@@ -250,6 +251,41 @@ class StorageService {
 		$this->rootPaths[$key] = $entry === null ? '' : $entry->getPath();
 
 		return $this->rootPaths[$key];
+	}
+
+	/**
+	 * The folder at one internal path of one storage, as a file id, or nought.
+	 *
+	 * The counterpart of mountRootPath(): that one turns a root into a path, this
+	 * one turns a path back into a node, and both live here because this class is
+	 * the only one in the app that reaches into the file cache. The clearing of a
+	 * new exclusion needs it: a prefix is a path and the expansion job needs an
+	 * ancestor file id, and this is the one step between the two.
+	 *
+	 * Nought for anything that is not a folder, and that is the guard rather than
+	 * a detail. The id travels into a job argument that expands a whole subtree
+	 * as deletions, so handing that job a file instead of a folder would plan a
+	 * subtree walk over a node that has no descendants, and handing it a nought
+	 * is what the job itself refuses with a warning. A path that does not exist
+	 * on this storage is nought as well: a prefix an admin typed for a folder
+	 * that only exists in some other home is not an error, it is a prefix that
+	 * has nothing to clear here.
+	 *
+	 * One query per call and no cache. Both callers ask once per prefix and mount
+	 * while an admin waits for a form to save, which is a handful of queries on a
+	 * human action, and a cache would only hold values that a rename invalidates.
+	 */
+	public function folderIdAtPath(int $storageId, string $internalPath): int {
+		if ($storageId <= 0 || $internalPath === '') {
+			return 0;
+		}
+
+		$entry = $this->fileAccess->getByPathInStorage($internalPath, $storageId);
+		if ($entry === null || $entry->getMimeType() !== FileInfo::MIMETYPE_FOLDER) {
+			return 0;
+		}
+
+		return max(0, $entry->getId());
 	}
 
 	/**
