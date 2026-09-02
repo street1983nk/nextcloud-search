@@ -302,6 +302,19 @@ class QueueService {
 	}
 
 	/**
+	 * What the work stock holds for one file, for the per file diagnosis.
+	 *
+	 * A pass through to the mapper, because the lock arithmetic belongs to the
+	 * class that writes the lock, and the admin page reads the queue through this
+	 * service and never through a mapper of its own.
+	 *
+	 * @return array{kind:string, retries:int, running:bool, secondsLeft:int}|null
+	 */
+	public function forFile(int $fileId): ?array {
+		return $this->queueMapper->statusOfFile($fileId);
+	}
+
+	/**
 	 * @return array{scheduled:int, running:int, failed:int}
 	 */
 	public function stats(): array {

@@ -233,12 +233,12 @@ def test_the_gate_sees_every_route_the_sources_declare() -> None:
     )
 
     assert len(routes) == mentions
-    # Nine today: eight ExApp routes, five on the queue, two on the reconcile
-    # and one on the content gateway, plus the one admin route of the settings
-    # page. A lower number means the parser lost something. Every plan that adds
-    # a route raises this bound with it, admin routes included, otherwise the
-    # clause stops being a ratchet.
-    assert len(routes) >= 9
+    # Ten today: eight ExApp routes, five on the queue, two on the reconcile and
+    # one on the content gateway, plus the two admin routes of the settings page,
+    # the overview and the single file lookup of plan 04-07. A lower number means
+    # the parser lost something. Every plan that adds a route raises this bound
+    # with it, admin routes included, otherwise the clause stops being a ratchet.
+    assert len(routes) >= 10
 
 
 def test_every_controller_of_the_app_carries_at_least_one_route() -> None:

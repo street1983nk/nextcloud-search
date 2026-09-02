@@ -6,6 +6,7 @@ namespace OCA\Findling\Service;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\BackgroundJobs\SchedulerJob;
+use OCA\Findling\BackgroundJobs\StorageCrawlJob;
 use OCA\Findling\Text\PlainText;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IAppConfig;
@@ -106,6 +107,38 @@ final class AdminViewService {
 	public const RUN_STALLED = 'stalled';
 	public const RUN_RUNNING = 'running';
 	public const RUN_IDLE = 'idle';
+
+	/**
+	 * The states of a single file that no verdict table holds.
+	 *
+	 * Four names, and each of them is a state the diagnosis can reach without a
+	 * row anywhere saying so. ``unknown`` is "nothing on this instance knows this
+	 * file", ``queued`` and ``processing`` come out of the work stock, and
+	 * ``pending_crawl`` is the one that had to be given a name: a file that keeps
+	 * every rule, has no verdict and no queue row has not been reached by the
+	 * crawl yet. Rendering that as "not indexed, reason unknown" is exactly the
+	 * silent failure this whole phase exists to remove, so it gets a state of its
+	 * own and a sentence of its own.
+	 *
+	 * ``excluded`` is the fifth and it is deliberately not in this list: the
+	 * reason taxonomy already carries it, and a file left out by a rule of today
+	 * is reported with that code so that label and remedy come from the same
+	 * table as every other reason.
+	 */
+	public const STATE_UNKNOWN = 'unknown';
+	public const STATE_QUEUED = 'queued';
+	public const STATE_PROCESSING = 'processing';
+	public const STATE_PENDING_CRAWL = 'pending_crawl';
+
+	/** The state of a file that a rule of today leaves alone. */
+	public const STATE_EXCLUDED = 'excluded';
+
+	/**
+	 * The mimetype Nextcloud gives a directory. It is a node like any other, so a
+	 * path one segment short of a file resolves without complaint, and the answer
+	 * has to name that rather than judge the type.
+	 */
+	private const MIME_FOLDER = 'httpd/unix-directory';
 
 	/**
 	 * Ceiling for the two free text fields the container sends. Both are shown
@@ -331,6 +364,7 @@ final class AdminViewService {
 		private ExAppService $exAppService,
 		private ScanStatsService $scanStats,
 		private PathResolverService $pathResolver,
+		private StorageService $storageService,
 		private IAppConfig $appConfig,
 		private IUserSession $userSession,
 		private ITimeFactory $timeFactory,
@@ -409,6 +443,462 @@ final class AdminViewService {
 			'coverage' => $this->coverage($scan, $backend, $backendReachable, $indexable),
 			'estimate' => $this->estimate($scan, $backend, $backendReachable, $indexable, $scheduled + $running),
 			'errors' => $this->errors(),
+		];
+	}
+
+	/**
+	 * One file, one state, one reason: the precedence rule over three sources.
+	 *
+	 * ADM-02, and the technical core of this phase. A file holds its state in up
+	 * to three places and in none of them completely. ``findling_queue`` knows
+	 * what is waiting and what is running. ``findling_file_state`` knows what was
+	 * skipped or failed, with a reason, and it survives a switched off container.
+	 * The ``files`` table inside the container knows what is indexed, whether OCR
+	 * ran and whether a tombstone lies on the row. The three contradict each
+	 * other legitimately, which is why this is a merge with a fixed order and not
+	 * a summary: without an order the page shows both answers and the
+	 * administrator knows less than before.
+	 *
+	 * Six stages, from "is true now" to "was true then", first answer wins, one
+	 * named method each so that the order is readable in the code rather than
+	 * being an emergent property of a long conditional:
+	 *
+	 * 1. Does the file exist at all? Nothing means unknown, and a tombstone in
+	 *    the container then means it really was deleted.
+	 * 2. Does it break a rule of TODAY, computed live and out of no database row?
+	 *    This stage has to be live, because ``mime_not_allowed`` is never written:
+	 *    the crawl filters the mimetype inside its query and therefore never sees
+	 *    an unsuitable file, and the event listener returns without a verdict
+	 *    (pitfall 1). Writing a row per excluded file instead would be two
+	 *    hundred thousand rows on one excluded archive folder for an answer that
+	 *    follows from four comparisons.
+	 * 3. Is there a queue row? Then it is waiting or being worked on right now.
+	 * 4. Is there a verdict on this side? That is the one that survives a stopped
+	 *    container.
+	 * 5. Is there a verdict in the container? Only there does "it is findable"
+	 *    exist.
+	 * 6. None of that? Then the file keeps every rule, nothing has judged it and
+	 *    nothing is waiting for it, so the crawl has not reached it yet. That is
+	 *    ``pending_crawl`` and it is a state with a name, not an absence.
+	 *
+	 * Degradation. When stage five falls out, the page SAYS so: backendReachable
+	 * is false and the note names it. "The state is unknown right now because the
+	 * backend does not answer" is honest, "not indexed" would be the lie that the
+	 * predecessor of this app was known for, and it is never claimed here.
+	 *
+	 * A tombstone is read as a deletion only after stage one has confirmed that
+	 * no cache entry is left (pitfall 6). The clearing after an exclusion is
+	 * mechanically a deletion in the container and semantically none: the file
+	 * lies untouched on the disk. So a file that exists and keeps the rules is
+	 * ``pending_crawl`` with the note that it was indexed and will be picked up
+	 * again, and never "gone".
+	 *
+	 * No text excerpt, ever. A snippet is file content, it stays bound to SRCH-02
+	 * where it is only built for a hit that already survived the permission
+	 * recheck, and blurring that line here is the way an administration tool
+	 * turns into a content leak. The container reports a character count and this
+	 * method does not even pass that on: a number could be shown, a text could
+	 * not, and the shortest way to keep the two apart is to carry neither.
+	 *
+	 * @return array{
+	 *     found:bool, fileId:int, path:string, uid:string, trashed:bool,
+	 *     shares:int, state:string, reason:string, label:string, remedy:string,
+	 *     checkedAt:int, backendReachable:bool, note:string
+	 * }
+	 */
+	public function diagnose(string $input, string $userId): array {
+		$fileId = $this->pathResolver->resolveReference($input);
+		if ($fileId === null) {
+			// Nothing was asked of the container, so nothing was missed either:
+			// this answer comes entirely from this side and does not depend on a
+			// container being up. Reporting it as unreachable would raise an
+			// outage banner for an input that was simply not a file.
+			return $this->diagnosis(0, null, true, []);
+		}
+
+		$facts = $this->pathResolver->inspect($fileId);
+
+		// Asked once, ahead of the chain, and handed to the two stages that need
+		// it. Stage one needs the tombstone in order to tell "was indexed, is
+		// deleted" from "never seen", and stage five needs the verdict; two calls
+		// for one lookup would be a second round trip for the same answer.
+		// The identity of the call travels in from the caller and is not read out
+		// of the session here. The route of the container reads no identity at
+		// all, but exAppRequest demands one and AppAPI signs the header with it,
+		// and a service that reached for the session itself would answer
+		// differently depending on who happened to be logged in when it ran.
+		$answer = $this->exAppService->adminGet('/diagnose', $userId, ['fileId' => $fileId]);
+		$reachable = $answer !== null;
+		$container = $this->containerVerdict($answer);
+
+		$verdict = $this->stageOneDoesItExist($facts, $container)
+			?? $this->stageTwoRulesOfToday($facts)
+			?? $this->stageThreeWorkStock($fileId)
+			?? $this->stageFourVerdictOfThisSide($fileId)
+			?? $this->stageFiveVerdictOfTheContainer($container, $reachable)
+			?? $this->stageSixNotSeenYet($container);
+
+		return $this->diagnosis($fileId, $facts, $reachable, $verdict);
+	}
+
+	/**
+	 * The thirteen keys of a diagnosis, never sparse and never partial.
+	 *
+	 * Same rule as overview(): a caller that has to ask whether a key exists ends
+	 * up writing one default in the template and a different one in the script,
+	 * and the two disagree on the day it matters. Everything the stages did not
+	 * fill is an empty string, a nought or false, and the state falls back to
+	 * unknown rather than to an empty string, because the card has a chip for
+	 * unknown and none for nothing.
+	 *
+	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int}|null $facts
+	 * @param array<string,mixed> $verdict whatever the stage that answered filled in
+	 * @return array{
+	 *     found:bool, fileId:int, path:string, uid:string, trashed:bool,
+	 *     shares:int, state:string, reason:string, label:string, remedy:string,
+	 *     checkedAt:int, backendReachable:bool, note:string
+	 * }
+	 */
+	private function diagnosis(int $fileId, ?array $facts, bool $reachable, array $verdict): array {
+		return [
+			'found' => $facts !== null,
+			'fileId' => max(0, $fileId),
+			// The path is the one field of this answer that a user wrote, and it
+			// leaves this method exactly as the mount cache spelled it. The
+			// template prints it with the escaping printer and the script writes
+			// it into a text node, so there is no third rule for it here.
+			'path' => is_string($facts['path'] ?? null) ? $facts['path'] : '',
+			'uid' => is_string($facts['uid'] ?? null) ? $facts['uid'] : '',
+			'trashed' => ($facts['trashed'] ?? false) === true,
+			'shares' => is_int($facts['shares'] ?? null) ? max(0, $facts['shares']) : 0,
+			'state' => is_string($verdict['state'] ?? null) && $verdict['state'] !== ''
+				? $verdict['state']
+				: self::STATE_UNKNOWN,
+			'reason' => is_string($verdict['reason'] ?? null) ? $verdict['reason'] : '',
+			'label' => is_string($verdict['label'] ?? null) ? $verdict['label'] : '',
+			'remedy' => is_string($verdict['remedy'] ?? null) ? $verdict['remedy'] : '',
+			'checkedAt' => is_int($verdict['checkedAt'] ?? null) ? max(0, $verdict['checkedAt']) : 0,
+			'backendReachable' => $reachable,
+			'note' => is_string($verdict['note'] ?? null) ? $verdict['note'] : '',
+		];
+	}
+
+	/**
+	 * Stage one: does this file exist on this instance at all?
+	 *
+	 * Null means "yes, carry on with the next stage". An answer means the file
+	 * has no cache entry and no mount row any more, so it is either deleted or a
+	 * file id that never existed, and those two are one answer on purpose: three
+	 * distinguishable answers here would make this field a way of probing the
+	 * instance.
+	 *
+	 * The one thing that can be added is a tombstone in the container. With the
+	 * absence of the cache entry confirmed HERE, and only here, the mark may be
+	 * read as a deletion, which is what makes "it was indexed and has since been
+	 * deleted" an honest sentence instead of the misreading of pitfall 6.
+	 *
+	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int}|null $facts
+	 * @param array<string,mixed> $container
+	 * @return array<string,mixed>|null
+	 */
+	private function stageOneDoesItExist(?array $facts, array $container): ?array {
+		if ($facts !== null) {
+			return null;
+		}
+
+		$deletedAt = is_int($container['deletedAt'] ?? null) ? max(0, $container['deletedAt']) : 0;
+		if ($deletedAt > 0) {
+			return [
+				'state' => self::STATE_UNKNOWN,
+				'checkedAt' => $deletedAt,
+				'note' => $this->l10n->t('This file was indexed and has since been deleted. It is out of the index with it.'),
+			];
+		}
+
+		return ['state' => self::STATE_UNKNOWN];
+	}
+
+	/**
+	 * Stage two: does the file break a rule that applies today?
+	 *
+	 * Computed live, out of the file and the rules, and out of no database row at
+	 * all. That is not an optimisation, it is the only way this stage can be
+	 * right: ``mime_not_allowed`` is never written, because the crawl filters the
+	 * mimetype inside its query and never sees an unsuitable file, and the event
+	 * listener returns without writing a verdict (pitfall 1). A file of an
+	 * unsupported type therefore has no row anywhere, and an admin who asks about
+	 * it would be told "not seen yet" for a file that will never be seen.
+	 *
+	 * Four comparisons and their order is the order of certainty: where the file
+	 * lies decides more than what it is, and what it is decides more than how
+	 * large it is.
+	 *
+	 * @param array{uid:string,path:string,shares:int,trashed:bool,storageId:int,mime:string,size:int} $facts
+	 * @return array<string,mixed>|null
+	 */
+	private function stageTwoRulesOfToday(array $facts): ?array {
+		if ($facts['trashed'] === true) {
+			// A file in the trash bin still has a cache entry, so it resolves and
+			// looks perfectly ordinary. The search drops it on purpose (phase 3,
+			// D-10), and saying so is a diagnosis rather than a detail: without
+			// this branch the file would fall through to "not seen yet", which
+			// would be a promise that it is about to be indexed.
+			return [
+				'state' => self::STATE_EXCLUDED,
+				'label' => $this->l10n->t('In the trash bin'),
+				'remedy' => $this->l10n->t('Restore the file. The next comparison run picks it up.'),
+			];
+		}
+
+		if ($facts['storageId'] > 0 && !$this->storageService->isIndexedStorage($facts['storageId'])) {
+			return [
+				'state' => self::STATE_EXCLUDED,
+				'label' => $this->l10n->t('Storage is not indexed'),
+				'remedy' => $this->l10n->t('Findling reads the home directories of your users. Team Folders and external storage are settings of their own.'),
+			];
+		}
+
+		if ($facts['mime'] === self::MIME_FOLDER) {
+			// A folder resolves like any other node and has no state of its own,
+			// and it is the input an administrator produces by pasting a path one
+			// segment short. Without this branch the answer would be "file type
+			// not supported", which is true of the mimetype and useless as an
+			// answer to what was actually asked.
+			return [
+				'state' => self::STATE_EXCLUDED,
+				'label' => $this->l10n->t('This is a folder'),
+				'remedy' => $this->l10n->t('Enter the path of a file. A folder has no state of its own.'),
+			];
+		}
+
+		if ($facts['mime'] !== '' && !in_array($facts['mime'], StorageService::ALLOWED_MIMETYPES, true)) {
+			return $this->reasonVerdict('skipped', 'mime_not_allowed');
+		}
+
+		if ($facts['size'] > StorageCrawlJob::MAX_SIZE) {
+			return $this->reasonVerdict('skipped', 'too_large');
+		}
+
+		return $this->excludedByAPrefix($facts['path']);
+	}
+
+	/**
+	 * The exclusion prefix test of this stage, and it answers nothing yet.
+	 *
+	 * The rules themselves arrive with the settings block, and plan 04-09 hangs
+	 * this method into that ExclusionService. It stands here, named and called
+	 * from its place in the order, rather than being left out: a stage that is
+	 * incomplete and says so is a stage somebody can finish, and a stage that is
+	 * missing is one nobody knows to look for. Until then a file left out by a
+	 * prefix falls through to stage four, where the crawl's own
+	 * ``skipped(excluded)`` row answers for it.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private function excludedByAPrefix(string $path): ?array {
+		// The parameter is the value the prefix test will read, and it is in the
+		// signature now so that hanging the service in is one method body and not
+		// a change at the call site as well.
+		return null;
+	}
+
+	/**
+	 * Stage three: is this file in the work stock right now?
+	 *
+	 * Read through QueueService and not over the HTTP routes of the queue: those
+	 * carry the ExApp attribute and are unreachable from an admin session.
+	 *
+	 * Waiting and running are told apart by the remaining claim time and not by
+	 * the lock column being empty, because a free row is marked with the epoch
+	 * rather than with NULL and a claim that ran past its timeout is free again
+	 * without anybody having written to it. The remaining time is also the one
+	 * number worth showing here: an administrator who sees "being processed" wants
+	 * to know how long that may still be true before something is wrong.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private function stageThreeWorkStock(int $fileId): ?array {
+		$row = $this->queueService->forFile($fileId);
+		if ($row === null) {
+			return null;
+		}
+
+		$attempts = max(0, $row['retries']);
+		$note = $attempts > 0
+			? $this->l10n->t('Attempts so far: %s', [(string)$attempts])
+			: '';
+
+		if ($row['running']) {
+			return [
+				'state' => self::STATE_PROCESSING,
+				'label' => $this->l10n->t('Being processed'),
+				'remedy' => $this->l10n->n(
+					'A worker holds this file. The claim runs out in %n second if nothing acknowledges it.',
+					'A worker holds this file. The claim runs out in %n seconds if nothing acknowledges it.',
+					$row['secondsLeft'],
+				),
+				'note' => $note,
+			];
+		}
+
+		return [
+			'state' => self::STATE_QUEUED,
+			'label' => $this->l10n->t('Waiting in the queue'),
+			'remedy' => $this->l10n->t('The next background run picks this file up (%s).', [$row['kind']]),
+			'note' => $note,
+		];
+	}
+
+	/**
+	 * Stage four: the verdict of this side, out of findling_file_state.
+	 *
+	 * The one source that survives a switched off container, which is exactly the
+	 * moment an administrator comes looking for it. It carries skipped and failed
+	 * with their reason and the time it was written, and its label and remedy come
+	 * out of the same closed table the error list of plan 04-06 uses, so a code
+	 * cannot read one way in the list and another way in the card.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private function stageFourVerdictOfThisSide(int $fileId): ?array {
+		$row = $this->fileStateService->forFile($fileId);
+		if ($row === null || $row['state'] === '') {
+			return null;
+		}
+
+		return $this->reasonVerdict($row['state'], $row['reason'], $row['updatedAt']);
+	}
+
+	/**
+	 * Stage five: the verdict of the container, and the one place "findable" exists.
+	 *
+	 * Three outcomes and every one of them is an answer. A silent container
+	 * returns the honest one: the state is unknown right now BECAUSE the backend
+	 * does not answer, and the note says that word for word. Nothing here ever
+	 * claims "not indexed" for a container that did not speak (T-04-42).
+	 *
+	 * A row carrying a tombstone falls through to stage six instead of being
+	 * reported as the verdict it holds. The mark means the file left the index,
+	 * so the verdict next to it is what WAS true, and stage one has already
+	 * confirmed that the file itself still exists. Reporting "indexed" there
+	 * would be the page telling an administrator a document is searchable while
+	 * it is not (pitfall 6).
+	 *
+	 * @param array<string,mixed> $container
+	 * @return array<string,mixed>|null
+	 */
+	private function stageFiveVerdictOfTheContainer(array $container, bool $reachable): ?array {
+		if (!$reachable) {
+			return [
+				'state' => self::STATE_UNKNOWN,
+				'note' => $this->l10n->t('The state of this file is unknown right now because the backend does not answer.'),
+			];
+		}
+
+		$state = is_string($container['state'] ?? null) ? $container['state'] : '';
+		$deletedAt = is_int($container['deletedAt'] ?? null) ? max(0, $container['deletedAt']) : 0;
+		if ($state === '' || $deletedAt > 0) {
+			return null;
+		}
+
+		$reason = is_string($container['reason'] ?? null) ? $container['reason'] : '';
+		$indexedAt = is_int($container['indexedAt'] ?? null) ? max(0, $container['indexedAt']) : 0;
+		if ($state === 'indexed' && $reason === '') {
+			return [
+				'state' => 'indexed',
+				'label' => $this->l10n->t('Indexed'),
+				'remedy' => $this->l10n->t('The content of this file is searchable.'),
+				'checkedAt' => $indexedAt,
+			];
+		}
+
+		return $this->reasonVerdict($state, $reason, $indexedAt);
+	}
+
+	/**
+	 * Stage six: the file keeps every rule and nothing has looked at it yet.
+	 *
+	 * A state with a name, and that is the whole point of it. "Not indexed,
+	 * reason unknown" is the sentence this app exists to make impossible: it
+	 * leaves an administrator with a file, no explanation and nothing to do. This
+	 * says what is true instead, that the crawl has not arrived, and what happens
+	 * next, which is the comparison run picking it up.
+	 *
+	 * The one variant is a tombstone on a file that still exists, which is the
+	 * clearing after an exclusion or after a delete event that the file survived.
+	 * The state is the same, and the note says it was in the index before, so that
+	 * a figure dropping by one is explained rather than surprising.
+	 *
+	 * @param array<string,mixed> $container
+	 * @return array<string,mixed>
+	 */
+	private function stageSixNotSeenYet(array $container): array {
+		$deletedAt = is_int($container['deletedAt'] ?? null) ? max(0, $container['deletedAt']) : 0;
+
+		return [
+			'state' => self::STATE_PENDING_CRAWL,
+			'label' => $this->l10n->t('Not seen yet'),
+			'remedy' => $this->l10n->t('This file has not reached the queue. The next comparison run picks it up.'),
+			'checkedAt' => $deletedAt,
+			'note' => $deletedAt > 0
+				? $this->l10n->t('It was indexed before and is recorded again on the next comparison run.')
+				: '',
+		];
+	}
+
+	/**
+	 * A state and a reason code as a verdict with its label and its remedy.
+	 *
+	 * Every stage that has a reason code ends here, so the card and the error
+	 * list read a code the same way, down to the fallback for a code neither of
+	 * them knows.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function reasonVerdict(string $state, string $reason, int $checkedAt = 0): array {
+		[$label, $remedy] = $this->reasonText($reason);
+
+		return [
+			'state' => $state,
+			'reason' => $reason,
+			'label' => $label,
+			'remedy' => $remedy,
+			'checkedAt' => $checkedAt,
+		];
+	}
+
+	/**
+	 * The verdict of the container, rebuilt field by field.
+	 *
+	 * Called with null as well, which is what a silent container looks like, and
+	 * then every field is a zero or an empty string. Same rule as backend()
+	 * above: one shape for both cases is what keeps the caller free of a second
+	 * code path.
+	 *
+	 * The state has to be one of the three this app knows, because there is
+	 * nowhere to put a fourth, and the reason only has to have the shape of a
+	 * code: a code that is in the container and not yet in the taxonomy is the
+	 * drift the three lists are tested against, and hiding it here would hide the
+	 * only symptom. ``textChars`` is deliberately not read at all: it is a number
+	 * and could be shown, but nothing on the page needs it, and a field that is
+	 * not carried cannot be widened into the text next to it (T-04-39).
+	 *
+	 * @param array<mixed>|null $answer the decoded body, or null when there was none
+	 * @return array<string,mixed>
+	 */
+	private function containerVerdict(?array $answer): array {
+		$answer ??= [];
+
+		$state = $answer['state'] ?? null;
+		$reason = $answer['reason'] ?? null;
+
+		return [
+			'state' => is_string($state) && in_array($state, FileStateService::STATES, true) ? $state : '',
+			'reason' => is_string($reason) && preg_match(self::REASON_PATTERN, $reason) === 1 ? $reason : '',
+			'indexedAt' => $this->counter($answer, 'indexedAt'),
+			'attempts' => $this->counter($answer, 'attempts'),
+			'deletedAt' => $this->counter($answer, 'deletedAt'),
+			'note' => $this->text($answer, 'note'),
 		];
 	}
 

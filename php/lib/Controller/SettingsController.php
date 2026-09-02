@@ -10,10 +10,18 @@ use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IRequest;
+use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 
 /**
- * The one address the admin page asks, and the only one.
+ * The two addresses the admin page asks, and the only two.
+ *
+ * One reads the whole page and is polled; the other looks up a single file and
+ * is asked when somebody types into a field. They are two routes and not one
+ * with a parameter, because the first one answers the same thing for every
+ * administrator and the second one answers about a string somebody wrote, and
+ * folding the two together would put a user supplied path into the request that
+ * refreshes the numbers every five seconds.
  *
  * The class extends the plain Controller and not OCSController, so the route
  * lives under /apps/findling/ and stays outside the OCS space. That is a
@@ -50,9 +58,24 @@ use Psr\Log\LoggerInterface;
  * level, and never a path, a file name or a library message.
  */
 final class SettingsController extends Controller {
+	/**
+	 * The longest lookup reference this route accepts, in characters.
+	 *
+	 * Four thousand and ninety six, which is well above any path Nextcloud can
+	 * hold and far below anything that costs this request memory. The point is
+	 * not the number, it is that there is one: without a ceiling a single field
+	 * on an administration page is a way of handing this app a megabyte to
+	 * normalise, split and compare (T-04-44).
+	 *
+	 * Refused and not cut. A cut path names a different file, or a folder instead
+	 * of a file, and answering about that would be worse than answering nothing.
+	 */
+	private const MAX_REFERENCE_LENGTH = 4096;
+
 	public function __construct(
 		IRequest $request,
 		private AdminViewService $view,
+		private IUserSession $userSession,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -89,5 +112,72 @@ final class SettingsController extends Controller {
 				Http::STATUS_INTERNAL_SERVER_ERROR,
 			);
 		}
+	}
+
+	/**
+	 * GET /apps/findling/admin/diagnose
+	 *
+	 * One file, one state, one reason. The reference is a path or a numeric file
+	 * id in the same parameter, which is D-04: an administrator who has a path
+	 * does not want to look up an id first, and one who copied an id out of the
+	 * error list does not want to build a path.
+	 *
+	 * Protected by the same absence of attributes as the route above, and that is
+	 * the whole guard: without them SecurityMiddleware demands a logged in
+	 * administrator and the request token of the session. This route reaches the
+	 * file system of the instance through a string somebody typed, so it is the
+	 * one on this page where that absence is worth reading twice.
+	 *
+	 * An empty or oversized reference is refused with a static sentence, and the
+	 * value never reaches the log, in the same spirit as
+	 * ReconcileController::badMount: what arrives in this field is a file name,
+	 * and the log of this app carries counters and reason codes and never
+	 * something somebody else wrote (T-04-38).
+	 *
+	 * A file that does not exist and a reference naming a user that does not
+	 * exist give word for word the same answer, which is what keeps this field
+	 * from becoming a way of asking which users an instance has.
+	 */
+	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'GET', url: '/admin/diagnose')]
+	public function diagnose(string $ref = ''): DataResponse {
+		$reference = trim($ref);
+		if ($reference === '' || strlen($reference) > self::MAX_REFERENCE_LENGTH) {
+			$this->logger->warning('Findling: rejected a lookup without a usable reference');
+
+			return new DataResponse(
+				['error' => 'Malformed file reference.'],
+				Http::STATUS_BAD_REQUEST,
+			);
+		}
+
+		try {
+			return new DataResponse($this->view->diagnose($reference, $this->userId()));
+		} catch (\Throwable $e) {
+			// The exception travels in the exception field, where Nextcloud
+			// renders it under the admin's own log level, and the message of this
+			// app stays a static sentence: the file system layer of Nextcloud
+			// puts absolute paths into its exceptions, and this route is reached
+			// with a path of any user on the instance.
+			$this->logger->error('Findling: could not diagnose a single file', ['exception' => $e]);
+
+			return new DataResponse(
+				['error' => 'Lookup is not available.'],
+				Http::STATUS_INTERNAL_SERVER_ERROR,
+			);
+		}
+	}
+
+	/**
+	 * The identity the call to the container travels under.
+	 *
+	 * The session user, and this method is only ever reached from an admin
+	 * session because the route above carries no attribute that would let anybody
+	 * else in. An empty string is left empty rather than substituted with a fixed
+	 * name, so that a call without a session fails in ExAppService, where the
+	 * failure has a log line, instead of succeeding under an identity nobody
+	 * chose.
+	 */
+	private function userId(): string {
+		return $this->userSession->getUser()?->getUID() ?? '';
 	}
 }

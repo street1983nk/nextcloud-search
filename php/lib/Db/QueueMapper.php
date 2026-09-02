@@ -387,6 +387,75 @@ class QueueMapper extends QBMapper {
 	}
 
 	/**
+	 * What the work stock holds for one file, or null when it holds nothing.
+	 *
+	 * The third stage of the per file diagnosis of plan 04-07, and it reads the
+	 * table rather than the HTTP routes above it: those carry the ExApp attribute
+	 * and are unreachable from an admin session, and asking the container about
+	 * the work stock of this side would invent a second answer to a question this
+	 * database answers directly.
+	 *
+	 * Waiting and running are not the two values of the lock column, and the
+	 * difference matters here. A free row is marked with the epoch and not with
+	 * NULL, for the index reason written at freeRowCondition, and a claim that
+	 * has run past its timeout is free again without anybody having written to
+	 * it. So the answer is the remaining claim time: above zero means a collector
+	 * holds this row right now, zero means it is waiting, and the timeout is the
+	 * one of its own kind because an OCR claim lives twice as long as the rest.
+	 *
+	 * @return array{kind:string, retries:int, running:bool, secondsLeft:int}|null
+	 */
+	public function statusOfFile(int $fileId): ?array {
+		if ($fileId <= 0) {
+			return null;
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('kind', 'retries', 'locked_at')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('file_id', $qb->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
+
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+		if (!is_array($row)) {
+			return null;
+		}
+
+		$kind = is_string($row['kind'] ?? null) && $row['kind'] !== '' ? $row['kind'] : self::KIND_CONTENT;
+		$claimed = $this->claimStamp($row['locked_at'] ?? null);
+		$elapsed = $this->now()->getTimestamp() - $claimed;
+		$secondsLeft = $claimed <= 0 ? 0 : max(0, $this->lockTimeoutFor($kind) - $elapsed);
+
+		return [
+			'kind' => $kind,
+			'retries' => (int)($row['retries'] ?? 0),
+			'running' => $secondsLeft > 0,
+			'secondsLeft' => $secondsLeft,
+		];
+	}
+
+	/**
+	 * The lock column as a Unix timestamp, and zero for the free mark.
+	 *
+	 * Zero rather than the current time for a value that cannot be read: "we do
+	 * not know when this was claimed" must not be rendered as "claimed just now",
+	 * which would show a row as running for the length of a whole timeout.
+	 */
+	private function claimStamp(mixed $value): int {
+		if (!is_string($value) || $value === '') {
+			return 0;
+		}
+
+		try {
+			return max(0, (new \DateTimeImmutable($value, new \DateTimeZone('UTC')))->getTimestamp());
+		} catch (\Throwable) {
+			return 0;
+		}
+	}
+
+	/**
 	 * Remove acknowledged rows. Deleting is the acknowledgement: a row that is
 	 * gone cannot be delivered a second time.
 	 *
