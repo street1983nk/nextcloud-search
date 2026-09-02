@@ -33,6 +33,7 @@ mechanically checkable prohibitions cannot come back unnoticed.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -142,8 +143,16 @@ def _deprecated(name: str, source: str) -> list[str]:
     return [f"{name}: uses the retired {api}" for api in DEPRECATED_APIS if api in source]
 
 
-def _sources() -> list[tuple[str, str, object]]:
-    """The three files of the page, as (name, source, scanner)."""
+Scanner = Callable[[str, str], list[str]]
+
+
+def _sources() -> list[tuple[str, str, Scanner]]:
+    """The three files of the page, as (name, source, scanner).
+
+    The scanner is typed as what it is rather than as an object. With ``object``
+    the call in the comprehension below is not a call any type checker can
+    verify, and the gate would only fail on the release that starts to care.
+    """
     return [
         (TEMPLATE.name, TEMPLATE.read_text(encoding="utf-8"), scan_template),
         (STYLESHEET.name, STYLESHEET.read_text(encoding="utf-8"), scan_stylesheet),

@@ -26,10 +26,12 @@ weeks. "occ findling:index --status" shows how far it has come.]]></description>
 	<!--
 		Both halves of Findling carry the same major and minor version, so that
 		nobody ends up with a companion app and a backend that disagree about
-		the protocol between them. This bump to 0.2.0 is the pull queue and the
-		crawl; the ExApp info.xml follows in plan 02-07.
+		the protocol between them. The bump to 0.2.0 was the pull queue and the
+		crawl; the bump to 0.3.0 is the fourth container route, GET /rates,
+		which the admin page of this half reads for its estimate of the first
+		index.
 	-->
-	<version>0.2.0</version>
+	<version>0.3.0</version>
 	<licence>agpl</licence>
 	<author>street1983nk</author>
 	<namespace>Findling</namespace>
@@ -73,9 +75,10 @@ weeks. "occ findling:index --status" shows how far it has come.]]></description>
 		settings finding explicitly" holds that finding and turns red the day
 		it stops being true.
 
-		The version stays at 0.2.0 on purpose. This plan adds no container
-		route, and the joint bump of both info.xml files and the image tag
-		belongs to the plan that does.
+		The version above moved to 0.3.0 together with the two versions in
+		backend/appinfo/info.xml, because plan 04-05 adds the container route
+		GET /rates. All three are compared against the git tag in docker.yml, so
+		a bump on one side alone fails the release before it builds.
 	-->
 	<settings><admin>OCA\Findling\Settings\Admin</admin><admin-section>OCA\Findling\Settings\Section</admin-section></settings>
 </info>

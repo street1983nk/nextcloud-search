@@ -19,7 +19,9 @@
 	versions that disagree about the protocol between them, and the release step
 	in docker.yml compares all three against the git tag before it builds. Phase
 	2 raises both halves from 0.1.0 to 0.2.0: the container gained a second and a
-	third route, and the PHP side now calls them.
+	third route, and the PHP side now calls them. Phase 4 raises them to 0.3.0
+	for the same reason: the container gained a fourth route, and the admin page
+	of the PHP side reads it.
 -->
 <info>
 	<id>findling_backend</id>
@@ -41,7 +43,7 @@ leaves the instance.
 
 This app does nothing on its own. Install the app "Findling", which puts the
 results into the normal search bar and is the only caller of this backend.]]></description>
-	<version>0.2.0</version>
+	<version>0.3.0</version>
 	<licence>agpl</licence>
 	<author>street1983nk</author>
 	<category>files</category>
@@ -60,11 +62,11 @@ results into the normal search bar and is the only caller of this backend.]]></d
 				so this exact tag has to exist in the registry before a release
 				is published, not after.
 			-->
-			<image-tag>0.2.0</image-tag>
+			<image-tag>0.3.0</image-tag>
 		</docker-install>
 		<routes>
 			<!--
-				Three routes, and that is the whole reachable surface of this
+				Four routes, and that is the whole reachable surface of this
 				container. /enabled, /heartbeat and /init need no entry: AppAPI
 				addresses those directly instead of going through the proxy, so
 				declaring them would only widen it for nothing. No route is
@@ -106,6 +108,23 @@ results into the normal search bar and is the only caller of this backend.]]></d
 			-->
 			<route>
 				<url>status</url>
+				<verb>GET</verb>
+				<access_level>ADMIN</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+			<!--
+				The throughput route, added in phase 4 for the estimate of the
+				first index. It reports how many documents were finished in a
+				window, text apart from OCR, and how much one document costs on
+				disk, and the admin page extrapolates the time left from those.
+				It carries no row, no name and no path, although it counts over
+				the one table that holds both. ADMIN like /status above, and for
+				the same reason: how fast the indexing is going is an operator's
+				business, not every user's.
+			-->
+			<route>
+				<url>rates</url>
 				<verb>GET</verb>
 				<access_level>ADMIN</access_level>
 				<headers_to_exclude>[]</headers_to_exclude>

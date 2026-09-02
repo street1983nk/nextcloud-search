@@ -553,6 +553,37 @@ class Store:
             breakdown.setdefault(str(state), {})[reason] = int(total)
         return breakdown
 
+    def throughput(self, window_seconds: int, now: int) -> dict[str, int]:
+        """How many documents were finished in the last window, text apart from OCR.
+
+        The measurement the duration estimate of the admin page is built on. It
+        groups and it computes nothing: every rate, every remainder and every
+        fallback to a startup value is a decision of the caller, so there is no
+        second arithmetic in here that could disagree with the page.
+
+        Text and OCR are counted apart because they cost orders of magnitude
+        apart. A page of OCR was measured at about two seconds on an amd64 core
+        while a page of text costs nothing measurable, so one combined figure
+        would be wrong for every instance whose mix of documents is not the mix
+        it was measured on.
+
+        Why the window has an index behind it. ``files_indexed_at`` exists for
+        this query alone: an admin page polls every five seconds, and a bare
+        ``WHERE indexed_at > ?`` over a hundred thousand rows is a full scan of
+        the table each time (T-04-25). Rows without a timestamp are excluded
+        rather than treated as old, because a judged file that never carried one
+        is not a document this pass finished.
+        """
+        counted = {"text": 0, "ocr": 0}
+        for used_ocr, total in self._conn.execute(
+            "SELECT ocr_used, COUNT(*) FROM files "
+            "WHERE state = 'indexed' AND indexed_at IS NOT NULL AND indexed_at > ? "
+            "GROUP BY ocr_used",
+            (now - window_seconds,),
+        ):
+            counted["ocr" if int(used_ocr) else "text"] += int(total)
+        return {**counted, "windowSeconds": window_seconds}
+
     def is_unchanged(self, file_id: int, content_hash: str | None) -> bool:
         """True when this file is already indexed with this content and generation.
 

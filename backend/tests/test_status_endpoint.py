@@ -266,7 +266,12 @@ def test_a_request_without_any_appapi_header_is_unauthorized(client: TestClient)
     assert response.status_code == 401
 
 
-def test_all_three_routes_are_mounted() -> None:
+def test_every_route_of_this_container_is_mounted() -> None:
+    # Named without a count, because the previous name claimed three and the
+    # container has had four since plan 04-05. A test whose name has to be
+    # corrected alongside the assertion is a test that will one day only have
+    # the assertion corrected.
+    #
     # Asked through the OpenAPI description rather than by walking APP.routes.
     # Measured on fastapi 0.141.1: an included router sits in the route list as a
     # private wrapper object with no path of its own, so a test that walked the
@@ -274,7 +279,7 @@ def test_all_three_routes_are_mounted() -> None:
     # reason on the release that renames it.
     paths = set(APP.openapi()["paths"])
 
-    assert {"/search", "/snippets", "/status"} <= paths
+    assert {"/search", "/snippets", "/status", "/rates"} <= paths
 
 
 def test_the_status_module_opens_the_state_read_only() -> None:
