@@ -162,11 +162,65 @@
 
   /** Everything that is allowed to change while the page is open, in one line. */
   function fingerprint (view) {
+    const coverage = view.coverage || {}
     return [
       view.runState, view.backendReachable, view.indexedDisplay, view.skipped,
-      view.failed, view.excluded, view.indexable, view.scheduled, view.running,
-      view.lastJobRun
+      view.failed, view.excluded, view.scheduled, view.running, view.lastJobRun,
+      coverage.indexed, coverage.indexable, coverage.deliberatelyLeftOut,
+      coverage.percent, coverage.provisional, coverage.mountsFinished,
+      coverage.mountsTotal
     ].join('|')
+  }
+
+  /**
+   * The coverage block, all three of its shapes.
+   *
+   * Every element is in the template already and the two shapes that do not
+   * apply carry the hidden attribute, so this function writes text and flips
+   * visibility and never builds markup. The text is written before the
+   * visibility so that an element which becomes visible is already correct on
+   * the frame it appears in.
+   *
+   * The figure itself is deliberately not a live region. It changes on every
+   * poll, and a screen reader that reads it out every five seconds would make
+   * the page unusable for the person it is meant to help. The status line below
+   * is the live region, and it changes when something actually happened.
+   */
+  function coverageBlock (view) {
+    const coverage = view.coverage || {}
+    const indexable = whole(coverage.indexable)
+    const searchable = whole(coverage.indexed)
+    // Null and not zero when there is no honest percentage: nought is a claim
+    // and null is the absence of one. The template holds a sentence for each of
+    // the two cases and neither of them is a number.
+    const percent = Number.isInteger(coverage.percent) ? coverage.percent : null
+    const hasDenominator = indexable > 0
+    const hasFraction = hasDenominator && percent !== null
+
+    text('findling-coverage-percent', numbers.format(percent === null ? 0 : percent) + ' %')
+    text('findling-coverage-subline', t('findling', '%1$s of %2$s indexable files are searchable')
+      .replace('%1$s', numbers.format(searchable))
+      .replace('%2$s', numbers.format(indexable)))
+    text('findling-coverage-unknown', t('findling', 'The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.')
+      .replace('%s', numbers.format(indexable)))
+    text('findling-coverage-leftout-count', t('findling', 'Deliberately left out: %s')
+      .replace('%s', numbers.format(whole(coverage.deliberatelyLeftOut))))
+    text('findling-coverage-provisional', t('findling', 'Provisional figure, %1$s of %2$s storages have been counted through.')
+      .replace('%1$s', numbers.format(whole(coverage.mountsFinished)))
+      .replace('%2$s', numbers.format(whole(coverage.mountsTotal))))
+
+    const bar = document.getElementById('findling-coverage-bar')
+    if (bar !== null) {
+      bar.setAttribute('value', String(percent === null ? 0 : percent))
+    }
+
+    shown('findling-coverage-figure', hasFraction)
+    shown('findling-coverage-bar', hasFraction)
+    shown('findling-coverage-subline', hasFraction)
+    shown('findling-coverage-unknown', hasDenominator && !hasFraction)
+    shown('findling-coverage-leftout', hasDenominator)
+    shown('findling-coverage-provisional', hasDenominator && coverage.provisional === true)
+    shown('findling-coverage-empty', !hasDenominator)
   }
 
   function render (view) {
@@ -179,24 +233,10 @@
     shown('findling-processing-chip', whole(view.running) > 0)
     text('findling-run-state', runStateText(view))
 
-    const indexable = whole(view.indexable)
-    const indexed = whole(view.indexedDisplay)
-    if (indexable > 0) {
-      // Never a hundred while anything is still missing, and never a
-      // percentage at all while there is no denominator to name. The template
-      // renders the empty state in that case and there is nothing here to fill.
-      const percent = indexed >= indexable
-        ? 100
-        : Math.min(99, Math.max(0, Math.floor(indexed * 100 / indexable)))
-      text('findling-coverage-percent', numbers.format(percent) + ' %')
-      text('findling-coverage-subline', t('findling', '%1$s of %2$s indexable files are searchable')
-        .replace('%1$s', numbers.format(indexed))
-        .replace('%2$s', numbers.format(indexable)))
-      const bar = document.getElementById('findling-coverage-bar')
-      if (bar !== null) {
-        bar.value = percent
-      }
-    }
+    // The percentage is worked out once, on the server, and arrives ready made.
+    // Working it out here as well would be a second rule for the same number,
+    // and the two would disagree on the day one of them is corrected.
+    coverageBlock(view)
 
     shown('findling-banner-unreachable', view.backendReachable !== true)
     const backend = view.backend || {}

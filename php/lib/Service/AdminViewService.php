@@ -32,6 +32,10 @@ use OCP\IUserSession;
  * - Out of appconfig: ``lastJobRun``, which is the answer to "does the cron of
  *   this instance run at all", the failure mode the predecessor of this app died
  *   of quietly.
+ * - Out of ``findling_scan_stats`` through ScanStatsService: the denominator of
+ *   the coverage figure and the files that were deliberately left out. Only this
+ *   side owns the Nextcloud file list, so only this side can say how many files
+ *   could be indexed at all.
  *
  * The two views stay visible side by side and are never added into one figure.
  * A difference between them is a diagnostic signal, not a defect of the page: it
@@ -100,6 +104,7 @@ final class AdminViewService {
 		private FileStateService $fileStateService,
 		private QueueService $queueService,
 		private ExAppService $exAppService,
+		private ScanStatsService $scanStats,
 		private IAppConfig $appConfig,
 		private IUserSession $userSession,
 		private ITimeFactory $timeFactory,
@@ -115,15 +120,16 @@ final class AdminViewService {
 	 * of this method read the same keys and get zero where there is nothing.
 	 *
 	 * @return array{
-	 *     indexed:int, skipped:int, failed:int, excluded:int, indexable:int,
+	 *     indexed:int, skipped:int, failed:int, excluded:int,
 	 *     indexedDisplay:int, scheduled:int, running:int, lastJobRun:int,
 	 *     stalledFor:int, runState:string, backendReachable:bool,
-	 *     backend:array<string,mixed>
+	 *     backend:array<string,mixed>, coverage:array<string,mixed>
 	 * }
 	 */
 	public function overview(): array {
 		$states = $this->fileStateService->counts();
 		$queue = $this->queueService->stats();
+		$scan = $this->scanStats->totals();
 
 		$scheduled = (int)($queue['scheduled'] ?? 0);
 		$running = (int)($queue['running'] ?? 0);
@@ -146,18 +152,13 @@ final class AdminViewService {
 			'indexed' => $indexed,
 			'skipped' => (int)($states['skipped'] ?? 0),
 			'failed' => (int)($states['failed'] ?? 0),
-			// Zero until plan 04-08 introduces the exclusion rules and with them
-			// the reason code. The key is here from the first day so that the
-			// tile exists and cannot appear later as a number that grew out of
-			// nowhere: excluded files are never silent (IDX-06).
-			'excluded' => 0,
-			// The denominator of the coverage figure, and it is zero here on
-			// purpose. It is the count of indexable files, which only exists once
-			// the metadata scan of plan 04-04 has a counter to read. A zero means
-			// "no denominator yet", and the template answers that with the empty
-			// state instead of dividing by it. No percentage without a named
-			// denominator, says the design contract.
-			'indexable' => 0,
+			// Out of the scan counters and not out of findling_file_state: the
+			// crawl decides which files it leaves alone, so it is the only side
+			// that can count them. Zero until plan 04-08 introduces the
+			// exclusion rules and with them the reason code; the tile exists
+			// from the first day so that the number cannot appear later as one
+			// that grew out of nowhere (IDX-06).
+			'excluded' => (int)$scan['excluded'],
 			// The one derived value, and it picks instead of adding. Only the
 			// container knows how many documents are in the index; with the
 			// container silent the last figure this side recorded is what an
@@ -170,6 +171,81 @@ final class AdminViewService {
 			'runState' => $this->runState($lastJobRun, $stalledFor, $scheduled, $running),
 			'backendReachable' => $backendReachable,
 			'backend' => $backend,
+			'coverage' => $this->coverage($scan, $backend, $backendReachable),
+		];
+	}
+
+	/**
+	 * The headline figure of the page: a fraction whose denominator is written
+	 * out in the sentence next to it.
+	 *
+	 * The numerator is the container's ``indexed`` and deliberately not its
+	 * ``docs``. Those two are two sources on purpose, and their being equal is
+	 * the proof that the upsert of the index works; the fraction takes the one
+	 * that counts judged files, and both stay visible side by side.
+	 *
+	 * The denominator is filesSeen minus overCap minus excluded, and that
+	 * subtraction happens here and exactly once in this file. It is word for
+	 * word the set the crawl walked: the mimetype filter and the two encryption
+	 * booleans are already in its query, and the cap and the exclusions are the
+	 * two conditions it applies itself. So the denominator comes out of the same
+	 * work as the numerator and never out of a second query, which is what would
+	 * otherwise leave the reconcile repairing the difference between two counts
+	 * every night.
+	 *
+	 * ``deliberatelyLeftOut`` is those two omissions plus the files the container
+	 * refused by type. skipped(no_text_layer) is expressly not part of it: that
+	 * reason is the hand over point to the OCR track and not a final verdict, so
+	 * counting it as left out would write off files that are on their way into
+	 * the index.
+	 *
+	 * ``percent`` is null in the two cases where no honest percentage exists,
+	 * and the template renders a sentence rather than a number for both of them.
+	 * With no denominator there is nothing to divide by, and a division by zero
+	 * is not sold as nought per cent. With the container silent there is no
+	 * numerator either, and the numerator of this side is zero by construction,
+	 * so a figure would read "nothing is searchable" when the truth is "nobody
+	 * asked the index" (T-04-23).
+	 *
+	 * @param array<string,int> $scan
+	 * @param array<string,mixed> $backend
+	 * @return array{
+	 *     indexed:int, indexable:int, deliberatelyLeftOut:int, percent:int|null,
+	 *     provisional:bool, mountsTotal:int, mountsFinished:int
+	 * }
+	 */
+	private function coverage(array $scan, array $backend, bool $backendReachable): array {
+		$overCap = max(0, (int)$scan['overCap']);
+		$excluded = max(0, (int)$scan['excluded']);
+		$indexable = max(0, (int)$scan['filesSeen'] - $overCap - $excluded);
+
+		$indexed = $backendReachable ? max(0, (int)$backend['indexed']) : 0;
+		$mountsTotal = max(0, (int)$scan['mountsTotal']);
+		$mountsFinished = max(0, (int)$scan['mountsFinished']);
+
+		$percent = null;
+		if ($indexable > 0 && $backendReachable) {
+			// Rounded down, and held below a hundred while anything is still
+			// missing. A page that says a hundred per cent with files left over
+			// is the failure this whole phase exists to make impossible.
+			$percent = $indexable - $indexed > 0
+				? min(99, max(0, (int)floor($indexed * 100 / $indexable)))
+				: 100;
+		}
+
+		return [
+			'indexed' => $indexed,
+			'indexable' => $indexable,
+			'deliberatelyLeftOut' => $overCap + $excluded
+				+ $this->fileStateService->countByReason('skipped', 'mime_not_allowed'),
+			'percent' => $percent,
+			// A scan that has not walked every mount to its end has counted a
+			// lower bound, and the page has to say so and name both figures. An
+			// estimate that quietly corrects itself upwards looks like a defect.
+			// No row at all is the same case and not a finished scan.
+			'provisional' => $mountsTotal === 0 || $mountsFinished < $mountsTotal,
+			'mountsTotal' => $mountsTotal,
+			'mountsFinished' => $mountsFinished,
 		];
 	}
 

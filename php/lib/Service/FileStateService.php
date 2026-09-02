@@ -204,6 +204,39 @@ class FileStateService {
 		return $counts;
 	}
 
+	/**
+	 * How many files carry exactly this verdict.
+	 *
+	 * Asked for one pair at a time and validated against the two closed lists
+	 * first, so that a caller cannot count a state or a reason this app does not
+	 * have and get a zero that reads like an answer. A pair outside the lists is
+	 * a rejected call and is counted as such.
+	 *
+	 * The coverage figure needs this for skipped(mime_not_allowed): those files
+	 * are not indexable by definition and therefore belong next to the fraction
+	 * as deliberately left out, never into its denominator. The reason travels
+	 * in as an argument rather than being fixed here, because a second caller
+	 * with a second reason would otherwise copy this query.
+	 */
+	public function countByReason(string $state, string $reason): int {
+		if (!in_array($state, self::STATES, true) || !in_array($reason, self::REASONS, true)) {
+			$this->reject();
+			return 0;
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectAlias($qb->func()->count('*'), 'total')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('state', $qb->createNamedParameter($state, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('reason', $qb->createNamedParameter($reason, IQueryBuilder::PARAM_STR)));
+
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+
+		return is_array($row) ? (int)($row['total'] ?? 0) : 0;
+	}
+
 	private function reject(): void {
 		$this->rejected++;
 		$this->logger->warning(

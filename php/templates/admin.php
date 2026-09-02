@@ -37,7 +37,19 @@ $formatter = \OCP\Server::get(\OCP\IDateTimeFormatter::class);
 $backend = is_array($_['backend'] ?? null) ? $_['backend'] : [];
 $whole = static fn (mixed $value): int => is_int($value) && $value >= 0 ? $value : 0;
 
-$indexable = $whole($_['indexable'] ?? 0);
+$coverage = is_array($_['coverage'] ?? null) ? $_['coverage'] : [];
+
+$indexable = $whole($coverage['indexable'] ?? 0);
+$searchable = $whole($coverage['indexed'] ?? 0);
+$leftOut = $whole($coverage['deliberatelyLeftOut'] ?? 0);
+// Null and not zero when no honest percentage exists, which is why this one is
+// not read through $whole: nought is a claim here and null is the absence of
+// one.
+$percent = is_int($coverage['percent'] ?? null) ? $coverage['percent'] : null;
+$provisional = ($coverage['provisional'] ?? false) === true;
+$mountsTotal = $whole($coverage['mountsTotal'] ?? 0);
+$mountsFinished = $whole($coverage['mountsFinished'] ?? 0);
+
 $indexed = $whole($_['indexedDisplay'] ?? 0);
 $scheduled = $whole($_['scheduled'] ?? 0);
 $running = $whole($_['running'] ?? 0);
@@ -100,23 +112,25 @@ $status = match ($runState) {
 	default => $l->t('No background job of this app has run yet. Background jobs may not be running.'),
 };
 
-// The coverage figure, and the one rule that decides whether it exists at all:
-// no percentage without a named denominator. The denominator is the number of
-// indexable files, which the metadata scan of a later plan counts; until then
-// it is zero and this block shows the empty state instead of dividing by it.
-$percent = 0;
-if ($indexable > 0) {
-	// Rounded down, and capped below a hundred while anything is still missing.
-	// A page that says "100 %" with files left over is the failure this whole
-	// phase exists to make impossible.
-	$percent = (int)floor($indexed * 100 / $indexable);
-	$percent = $indexed >= $indexable ? 100 : min(99, max(0, $percent));
-}
+// Which of the three shapes of the coverage block is the true one right now.
+// All three are in the markup and the two that do not apply carry the hidden
+// attribute, the same way the banners below do. The script then only flips an
+// attribute and writes text nodes, so a figure that becomes available while the
+// page is open appears without the script owning any markup. Nothing hidden is
+// a skeleton either: the hidden elements hold real values, they are simply not
+// the answer at this moment.
+//
+// The one rule behind all of it: no percentage without a named denominator, and
+// a division by zero is never sold as nought per cent.
+$hasDenominator = $indexable > 0;
+$hasFraction = $hasDenominator && $percent !== null;
 
 $tiles = [
 	['id' => 'findling-tile-indexed', 'label' => $l->t('Indexed'), 'value' => $indexed],
 	['id' => 'findling-tile-skipped', 'label' => $l->t('Skipped'), 'value' => $whole($_['skipped'] ?? 0)],
 	['id' => 'findling-tile-failed', 'label' => $l->t('Failed'), 'value' => $whole($_['failed'] ?? 0)],
+	// Out of the scan counters since this plan, so that the tile and the
+	// denominator of the figure above agree on what excluded means.
 	['id' => 'findling-tile-excluded', 'label' => $l->t('Excluded'), 'value' => $whole($_['excluded'] ?? 0)],
 ];
 
@@ -173,18 +187,25 @@ $banners = [
 		<?php } ?>
 	</div>
 
-	<?php if ($indexable > 0) { ?>
-		<p class="findling-figure">
-			<span class="findling-figure__value" id="findling-coverage-percent"><?php p($count($percent) . "\u{00A0}%"); ?></span>
-		</p>
-		<progress id="findling-coverage-bar" max="100" value="<?php p((string)$percent); ?>" aria-labelledby="findling-coverage-heading"></progress>
-		<p class="settings-hint" id="findling-coverage-subline"><?php p($l->t('%1$s of %2$s indexable files are searchable', [$count($indexed), $count($indexable)])); ?></p>
-	<?php } else { ?>
-		<div id="findling-coverage-empty">
-			<h3 class="findling-subheading"><?php p($l->t('No numbers yet')); ?></h3>
-			<p class="settings-hint"><?php p($l->t('The first indexing pass has not finished. Findling started on its own, there is nothing to configure.')); ?></p>
-		</div>
-	<?php } ?>
+	<p class="findling-figure" id="findling-coverage-figure"<?php if (!$hasFraction) { ?> hidden<?php } ?>>
+		<span class="findling-figure__value" id="findling-coverage-percent"><?php p($count($percent ?? 0) . "\u{00A0}%"); ?></span>
+	</p>
+	<progress id="findling-coverage-bar" max="100" value="<?php p((string)($percent ?? 0)); ?>" aria-labelledby="findling-coverage-heading"<?php if (!$hasFraction) { ?> hidden<?php } ?>></progress>
+	<p class="settings-hint" id="findling-coverage-subline"<?php if (!$hasFraction) { ?> hidden<?php } ?>><?php p($l->t('%1$s of %2$s indexable files are searchable', [$count($searchable), $count($indexable)])); ?></p>
+
+	<p class="settings-hint" id="findling-coverage-unknown"<?php if (!$hasDenominator || $hasFraction) { ?> hidden<?php } ?>><?php p($l->t('The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.', [$count($indexable)])); ?></p>
+
+	<p class="settings-hint" id="findling-coverage-leftout"<?php if (!$hasDenominator) { ?> hidden<?php } ?>>
+		<span id="findling-coverage-leftout-count"><?php p($l->t('Deliberately left out: %s', [$count($leftOut)])); ?></span>
+		<?php p($l->t('Those files are too large, of a type Findling does not read, or excluded by a rule. They are not in the denominator above, so the coverage figure can reach a hundred per cent.')); ?>
+	</p>
+
+	<p class="settings-hint" id="findling-coverage-provisional"<?php if (!$hasDenominator || !$provisional) { ?> hidden<?php } ?>><?php p($l->t('Provisional figure, %1$s of %2$s storages have been counted through.', [$count($mountsFinished), $count($mountsTotal)])); ?></p>
+
+	<div id="findling-coverage-empty"<?php if ($hasDenominator) { ?> hidden<?php } ?>>
+		<h3 class="findling-subheading"><?php p($l->t('No numbers yet')); ?></h3>
+		<p class="settings-hint"><?php p($l->t('The first indexing pass has not finished. Findling started on its own, there is nothing to configure.')); ?></p>
+	</div>
 
 	<p class="findling-run-state" id="findling-run-state" role="status" aria-live="polite"><?php p($status); ?></p>
 
