@@ -63,6 +63,14 @@ CREATE TABLE IF NOT EXISTS files (
 CREATE INDEX IF NOT EXISTS files_state   ON files (state);
 CREATE INDEX IF NOT EXISTS files_storage ON files (storage_id);
 
+-- files_indexed_at carries the throughput of the admin page. That number is a
+-- window over indexed_at ("how many files in the last hour"), the page asks for
+-- it while an admin watches it, and without this index every one of those asks
+-- is a full scan of a table that holds a hundred thousand rows on a small box.
+-- A poll that gets slower the more the container has achieved is the kind of
+-- self inflicted load that only shows up on the instances that need the page.
+CREATE INDEX IF NOT EXISTS files_indexed_at ON files (indexed_at);
+
 -- The prefilter table. It carries no rowid because the composite key *is* the table:
 -- an ordinary table would keep a second B-tree on an invisible rowid and pay for
 -- it twice, once in space and once on every insert. Measured at 100k files and

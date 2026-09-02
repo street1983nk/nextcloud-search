@@ -127,6 +127,32 @@ def low_disk() -> bool:
         return False
 
 
+def disk_bytes() -> tuple[int, int]:
+    """Free and total bytes of the volume, both 0 when it cannot be measured.
+
+    The measurement next to the verdict of :func:`low_disk` above, and kept
+    apart from it on purpose. The flag carries a threshold this container
+    decided; these two carry what the file system said, and the admin page needs
+    them raw because a space requirement is a division and a boolean cannot be
+    divided.
+
+    ``low_disk`` deliberately keeps its own call. Deriving the flag from these
+    numbers would move its behaviour, and a value that is reported and a value
+    that pauses the indexer are worth being able to change apart.
+    """
+    directory = _existing_directory(settings().index_dir)
+    if directory is None:
+        return (0, 0)
+    try:
+        usage = shutil.disk_usage(directory)
+    except OSError:
+        # Same rule as low_disk above: not measurable is not the same as full,
+        # and the log line names neither the path nor the volume.
+        LOGGER.warning("the size of the volume could not be read")
+        return (0, 0)
+    return (usage.free, usage.total)
+
+
 def read_side() -> ReadSide | None:
     """The index and the state database of this container, None while either is absent.
 

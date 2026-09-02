@@ -862,6 +862,39 @@ class Store:
         ]
 
 
+def index_bytes(directory: Path) -> int:
+    """The size of the index on disk, and 0 when it cannot be measured.
+
+    It sits in this module because it answers the same question the counters
+    above answer, namely how big the state of this container is, and because it
+    obeys the same rule as everything else here: the path arrives as an
+    argument, so nothing in this file has to know where a volume is mounted.
+
+    The sum walks subdirectories. Tantivy keeps its segments below the index
+    directory, so a sum over the top level alone would report a fraction of the
+    real size, and the space estimate the admin page builds on it would be wrong
+    in the direction that fills a volume.
+
+    A missing directory is the ordinary state of a container that has not
+    indexed anything yet, and an unreadable one is a mount that went away under
+    the process. Both answer zero and warn, and the warning names the type of
+    the failure and never the path (T-04-07).
+    """
+    if not directory.is_dir():
+        _LOG.warning("the index directory cannot be read, its size is reported as zero")
+        return 0
+
+    total = 0
+    try:
+        for entry in directory.rglob("*"):
+            if entry.is_file():
+                total += entry.stat().st_size
+    except OSError as error:
+        _LOG.warning("the size of the index could not be summed, an %s", type(error).__name__)
+        return 0
+    return total
+
+
 def _generation_at_least(stored: str | None, expected: str) -> bool:
     """True when both marks are numbers and the stored generation is not behind.
 
