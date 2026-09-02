@@ -354,4 +354,142 @@ if (!$estimateDone) { ?>
 
 	<p class="settings-hint"><?php p($l->t('Findling does not wait for a confirmation. The first index has already started.')); ?></p>
 </div>
-<?php } ?>
+<?php }
+/*
+ * Block three: which files were not indexed, why, and what changes that.
+ *
+ * The second half of ADM-01, and the place where a number turns into an action.
+ * Every group carries a label, a remedy and up to twenty example paths, and the
+ * remedy says "none" out loud where there is none, because an empty cell is
+ * indistinguishable from a defect of the page.
+ *
+ * A real table with a caption and column headers, not a grid of divs: the rows
+ * are data with three columns, and a screen reader has to be able to say which
+ * column a cell belongs to.
+ *
+ * Paths are the payload of this list, so they are never shortened and never
+ * printed unescaped. A path can contain every character a user can type into a
+ * file name, which is why p() is the only printer used below (T-04-30). The
+ * expand buttons carry the hidden attribute and are shown by the script: with
+ * JavaScript switched off every group stays open and readable, and a control
+ * that could not do anything is not offered.
+ */
+$errors = is_array($_['errors'] ?? null) ? $_['errors'] : [];
+$errorGroups = is_array($errors['groups'] ?? null) ? $errors['groups'] : [];
+
+// Icon path data: Material Design Icons by Pictogrammers, Apache-2.0, pinned by
+// commit in THIRD-PARTY.md. One per state of the state inventory, so that
+// colour is never the only carrier of the verdict.
+$skippedIcon = 'M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M7,13H17V11H7';
+$failedIcon = $alertIcon;
+$truncatedIcon = 'M19,3L13,9L15,11L22,4V3M12,12.5A0.5,0.5 0 0,1 11.5,12A0.5,0.5 0 0,1 12,11.5A0.5,0.5 0 0,1 12.5,12A0.5,0.5 0 0,1 12,12.5M6,20A2,2 0 0,1 4,18C4,16.89 4.9,16 6,16A2,2 0 0,1 8,18C8,19.11 7.1,20 6,20M6,8A2,2 0 0,1 4,6C4,4.89 4.9,4 6,4A2,2 0 0,1 8,6C8,7.11 7.1,8 6,8M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64Z';
+$excludedIcon = 'M2.39 1.73L1.11 3L2.64 4.53C2.25 4.9 2 5.42 2 6V18C2 19.11 2.9 20 4 20H18.11L20.84 22.73L22.11 21.46L2.39 1.73M4 18V8H6.11L16.11 18H4M11.2 8L7.2 4H10L12 6H20C21.1 6 22 6.89 22 8V18C22 18.24 21.96 18.47 21.88 18.68L20 16.8V8H11.2Z';
+
+/**
+ * The state chip of one reason group: modifier, icon and text label.
+ *
+ * Four shapes and not three, because two of the reason codes are a state of
+ * their own in the state inventory: a truncated document is indexed and cut,
+ * and an excluded file was skipped on purpose rather than refused. Both would
+ * read as a defect under the plain "skipped" label, so both get their own icon
+ * and their own sentence.
+ *
+ * @return array{0:string, 1:string, 2:string}
+ */
+$chip = static function (string $state, string $reason) use ($l, $skippedIcon, $failedIcon, $truncatedIcon, $excludedIcon): array {
+	if ($state === 'indexed') {
+		return ['truncated', $truncatedIcon, $l->t('Indexed, text truncated')];
+	}
+	if ($reason === 'excluded') {
+		return ['excluded', $excludedIcon, $l->t('Excluded')];
+	}
+	if ($state === 'failed') {
+		return ['failed', $failedIcon, $l->t('Failed')];
+	}
+
+	return ['skipped', $skippedIcon, $l->t('Skipped')];
+};
+?>
+<div id="findling-errors" class="section">
+	<h2><?php p($l->t('Files that were not indexed')); ?></h2>
+
+	<?php if ($errorGroups === []) { ?>
+		<p class="settings-hint"><?php p($l->t('Every file was indexed. Nothing was skipped and nothing failed.')); ?></p>
+	<?php } else { ?>
+		<p class="settings-hint" id="findling-errors-lookup-later"><?php p($l->t('Looking up a single file is not on this page yet. It arrives with the next step.')); ?></p>
+
+		<table class="findling-errors">
+			<caption class="hidden-visually"><?php p($l->t('Files that were not indexed, grouped by reason')); ?></caption>
+			<thead>
+				<tr>
+					<th scope="col"><?php p($l->t('Reason')); ?></th>
+					<th scope="col"><?php p($l->t('Files')); ?></th>
+					<th scope="col"><?php p($l->t('State')); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ($errorGroups as $group) {
+					$reason = is_string($group['reason'] ?? null) ? $group['reason'] : '';
+					$state = is_string($group['state'] ?? null) ? $group['state'] : '';
+					$examples = is_array($group['examples'] ?? null) ? $group['examples'] : [];
+					$remaining = $whole($group['remaining'] ?? 0);
+					// The region id of the design contract, one per reason code.
+					// The code is validated against the closed list before it
+					// ever reaches this template, so it is safe as an id, and it
+					// is printed escaped all the same.
+					$regionId = 'findling-errors-' . $reason;
+					[$chipKind, $chipIcon, $chipLabel] = $chip($state, $reason);
+					?>
+					<tr class="findling-errors__group">
+						<th scope="row" class="findling-errors__label"><?php p(is_string($group['label'] ?? null) ? $group['label'] : ''); ?></th>
+						<td class="findling-errors__count" id="findling-errors-count-<?php p($reason); ?>"><?php p($count($whole($group['count'] ?? 0))); ?></td>
+						<td>
+							<span class="findling-chip findling-chip--<?php p($chipKind); ?>">
+								<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($chipIcon); ?>"/></svg>
+								<span><?php p($chipLabel); ?></span>
+							</span>
+						</td>
+					</tr>
+					<tr class="findling-errors__detail">
+						<td colspan="3">
+							<p class="settings-hint"><?php p(is_string($group['remedy'] ?? null) ? $group['remedy'] : ''); ?></p>
+
+							<?php if ($examples !== []) { ?>
+								<button type="button" class="findling-errors__toggle" aria-expanded="false" aria-controls="<?php p($regionId); ?>" hidden><?php p($l->t('Show example paths')); ?></button>
+
+								<div id="<?php p($regionId); ?>">
+									<ul class="findling-errors__examples">
+										<?php foreach ($examples as $example) {
+											$fileId = $whole($example['fileId'] ?? 0);
+											$path = is_string($example['path'] ?? null) ? $example['path'] : '';
+											$resolved = ($example['resolved'] ?? false) === true;
+											$trashed = ($example['trashed'] ?? false) === true;
+											// A file id without a cache entry keeps its
+											// line and says what happened to it. A line
+											// that disappeared would take its count with
+											// it, and "the file is gone" is itself the
+											// answer to why it was never indexed.
+											$shown = !$resolved
+												? $l->t('File no longer exists (ID %s)', [(string)$fileId])
+												: ($trashed ? $l->t('%s (in the trash bin)', [$path]) : $path);
+											?>
+											<li>
+												<button type="button" class="findling-errors__example findling-path" data-findling-path="<?php p($path); ?>" data-findling-file-id="<?php p((string)$fileId); ?>" aria-describedby="findling-errors-lookup-later" disabled><?php p($shown); ?></button>
+											</li>
+										<?php } ?>
+									</ul>
+
+									<?php if ($remaining > 0) { ?>
+										<p class="settings-hint"><?php p($l->n('and %n more', 'and %n more', $remaining)); ?></p>
+									<?php } ?>
+								</div>
+							<?php } elseif ($remaining > 0) { ?>
+								<p class="settings-hint"><?php p($l->n('and %n more', 'and %n more', $remaining)); ?></p>
+							<?php } ?>
+						</td>
+					</tr>
+				<?php } ?>
+			</tbody>
+		</table>
+	<?php } ?>
+</div>

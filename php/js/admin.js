@@ -191,6 +191,17 @@
     }
   }
 
+  /** The reason groups of the error list as one line, for the fingerprint. */
+  function errorSignature (view) {
+    const groups = (view.errors || {}).groups
+    if (!Array.isArray(groups)) {
+      return ''
+    }
+    return groups.map(function (group) {
+      return group.state + ':' + group.reason + ':' + group.count
+    }).join(',')
+  }
+
   /** Everything that is allowed to change while the page is open, in one line. */
   function fingerprint (view) {
     const coverage = view.coverage || {}
@@ -202,7 +213,7 @@
       coverage.percent, coverage.provisional, coverage.mountsFinished,
       coverage.mountsTotal, estimate.ocrMeasured, estimate.secondsLeft,
       estimate.bytesExpected, estimate.startupValues, estimate.spaceWarning,
-      estimate.firstIndexDone
+      estimate.firstIndexDone, errorSignature(view)
     ].join('|')
   }
 
@@ -324,6 +335,62 @@
     shown('findling-estimate-space-warning', estimate.spaceWarning === true)
   }
 
+  /**
+   * Block three, the error list, and only its numbers.
+   *
+   * The example paths are deliberately not rebuilt on a poll. They are markup
+   * with a focusable button per line, and replacing them every five seconds
+   * would throw away the open groups and the keyboard focus of whoever is
+   * reading them. So a group whose count changes shows the new count and keeps
+   * the examples it has; the next full page load renders the new ones. A group
+   * that did not exist at render time has no row to write into either, and it
+   * appears with the next load for the same reason.
+   */
+  function errorsBlock (view) {
+    const groups = (view.errors || {}).groups
+    if (!Array.isArray(groups)) {
+      return
+    }
+    groups.forEach(function (group) {
+      text('findling-errors-count-' + group.reason, numbers.format(whole(group.count)))
+    })
+  }
+
+  /**
+   * The expand buttons of the error groups, wired once.
+   *
+   * The template renders every group open and every button hidden, so the page
+   * without this script shows all example paths and offers no control that
+   * could not do anything. This function is the moment the control becomes
+   * real: it collapses the groups, shows the buttons and keeps aria-expanded
+   * and the hidden attribute of the region saying the same thing. Plain showing
+   * and hiding, no height animation and no request: the examples are already in
+   * the markup.
+   */
+  function setupErrorGroups () {
+    const buttons = document.querySelectorAll('#findling-errors button[aria-controls]')
+    Array.prototype.forEach.call(buttons, function (button) {
+      const region = document.getElementById(button.getAttribute('aria-controls'))
+      if (region === null) {
+        return
+      }
+
+      region.hidden = true
+      button.setAttribute('aria-expanded', 'false')
+      button.textContent = t('findling', 'Show example paths')
+      button.hidden = false
+
+      button.addEventListener('click', function () {
+        const open = button.getAttribute('aria-expanded') === 'true'
+        button.setAttribute('aria-expanded', open ? 'false' : 'true')
+        region.hidden = open
+        button.textContent = open
+          ? t('findling', 'Show example paths')
+          : t('findling', 'Hide example paths')
+      })
+    })
+  }
+
   function render (view) {
     text('findling-tile-indexed', numbers.format(whole(view.indexedDisplay)))
     text('findling-tile-skipped', numbers.format(whole(view.skipped)))
@@ -339,6 +406,7 @@
     // and the two would disagree on the day one of them is corrected.
     coverageBlock(view)
     estimateBlock(view)
+    errorsBlock(view)
 
     shown('findling-banner-unreachable', view.backendReachable !== true)
     const backend = view.backend || {}
@@ -405,6 +473,8 @@
       window.clearTimeout(timer)
     }
   })
+
+  setupErrorGroups()
 
   const bootstrap = initialState('bootstrap')
   if (bootstrap !== null) {
