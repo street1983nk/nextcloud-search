@@ -60,8 +60,16 @@ jobs:
       # this workflow: there is no PHP on the development machine, so it could not
       # be run once before being committed. What does cover the PHP half today is
       # both jobs of integration.yml, end to end against a real Nextcloud.
+      #
+      # php/templates is in the list because there is no PHP on the development
+      # machine: a syntax error in a settings template would otherwise surface
+      # as a white page in the admin's browser and nowhere earlier. The
+      # directory is held open by php/templates/.gitkeep on purpose. find aborts
+      # on a missing path, and the tolerant spellings all end the same way,
+      # namely with the gate silently checking fewer files than it names, which
+      # is the failure mode this job exists to prevent.
       - name: Syntax check every PHP file
-        run: find php/lib php/appinfo -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: find php/lib php/appinfo php/templates -name '*.php' -print0 | xargs -0 -n1 php -l
 
   app-metadata:
     name: info.xml on the store validation path
@@ -115,3 +123,30 @@ jobs:
             exit 1
           fi
           echo "pre-info.xslt dropped the routes block as expected, so the release archive must carry info.xml unchanged"
+
+      # The twin of the step above, for the settings block of the companion app.
+      # pre-info.xslt has the templates for activity and settings swapped: the
+      # settings template copies the children of activity, so a settings block
+      # is normalised into an empty element, and that empty element validates
+      # because every child of the settings type carries minOccurs="0" in
+      # info.xsd. Nothing has to be done about it, and that is precisely why it
+      # has to be written down in a form that breaks: the day the store fixes
+      # the transform, this step goes red and the assumption gets re-read
+      # instead of believed.
+      - name: State the settings finding explicitly
+        run: |
+          if ! grep -q '<settings' php/appinfo/info.xml; then
+            echo "php/appinfo/info.xml carries no settings block yet, so there is nothing for the transform to normalise"
+            exit 0
+          fi
+          normalised=$(xsltproc "${RUNNER_TEMP}/pre-info.xslt" php/appinfo/info.xml)
+          if echo "$normalised" | grep -q '<settings/>'; then
+            echo "pre-info.xslt emptied the settings block as expected; the empty element validates because every child of the settings type has minOccurs=0, and Nextcloud reads settings at runtime from the installed appinfo/info.xml through AppManager::loadApp(), so the normalisation stays harmless as long as the release archive carries info.xml unchanged"
+            exit 0
+          fi
+          if echo "$normalised" | grep -q '<settings'; then
+            echo "pre-info.xslt kept children inside the settings block; the assumption behind the packaging step changed"
+            exit 1
+          fi
+          echo "pre-info.xslt dropped the settings block entirely; the assumption behind the packaging step changed"
+          exit 1

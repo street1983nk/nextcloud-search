@@ -1,0 +1,6 @@
+This directory is held open so that the "Syntax check every PHP file" step of
+.github/workflows/php.yml can name php/templates in its find path. find aborts
+on a missing path, and every tolerant spelling of that path ends with the gate
+checking fewer files than it claims to check.
+
+The first template arrives in plan 04-03.
