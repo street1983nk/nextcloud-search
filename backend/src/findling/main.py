@@ -27,6 +27,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from findling.api import resources
+from findling.api.diagnose import ROUTER as DIAGNOSE_ROUTER
 from findling.api.rates import ROUTER as RATES_ROUTER
 from findling.api.search import ROUTER as SEARCH_ROUTER
 from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
@@ -244,6 +245,7 @@ APP.include_router(SEARCH_ROUTER)
 APP.include_router(SNIPPETS_ROUTER)
 APP.include_router(STATUS_ROUTER)
 APP.include_router(RATES_ROUTER)
+APP.include_router(DIAGNOSE_ROUTER)
 
 
 def smuggles_identity(errors: Sequence[Mapping[str, Any]]) -> bool:

@@ -201,10 +201,15 @@ def test_a_tombstone_is_handed_over_as_a_timestamp_and_never_as_a_label(
     answer = _diagnose(client, sign("admin"), 2)
 
     assert answer["deletedAt"] == 1_700_000_500
+    # The verdict is untouched by the mark, and no field of the answer turns the
+    # timestamp into a word. Only the values are walked here and not the keys:
+    # the key is the name of the number and the values are what could carry a
+    # reading of it.
     assert answer["state"] == "indexed"
-    for value in _strings(answer):
-        assert "delete" not in value.lower()
-        assert "gone" not in value.lower()
+    for value in answer.values():
+        if isinstance(value, str):
+            assert "delete" not in value.lower()
+            assert "gone" not in value.lower()
 
 
 def test_a_file_id_that_is_not_a_number_is_refused(

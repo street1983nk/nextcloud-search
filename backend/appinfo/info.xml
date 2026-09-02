@@ -22,6 +22,13 @@
 	third route, and the PHP side now calls them. Phase 4 raises them to 0.3.0
 	for the same reason: the container gained a fourth route, and the admin page
 	of the PHP side reads it.
+
+	The fifth route, /diagnose, arrives in the same release and the version is
+	deliberately NOT raised again for it. Plan 04-05 already moved both halves to
+	0.3.0 and both plans ship together, so a second bump would leave docker.yml
+	comparing an image tag against a git tag that was never cut. Written down
+	here rather than remembered, because the next plan that widens the surface
+	has to know which of the two rules it is under.
 -->
 <info>
 	<id>findling_backend</id>
@@ -66,7 +73,7 @@ results into the normal search bar and is the only caller of this backend.]]></d
 		</docker-install>
 		<routes>
 			<!--
-				Four routes, and that is the whole reachable surface of this
+				Five routes, and that is the whole reachable surface of this
 				container. /enabled, /heartbeat and /init need no entry: AppAPI
 				addresses those directly instead of going through the proxy, so
 				declaring them would only widen it for nothing. No route is
@@ -125,6 +132,24 @@ results into the normal search bar and is the only caller of this backend.]]></d
 			-->
 			<route>
 				<url>rates</url>
+				<verb>GET</verb>
+				<access_level>ADMIN</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+			<!--
+				The per file diagnosis, added in phase 4 for ADM-02. It is asked
+				for one file id and answers with the verdict this container holds
+				for it: the state, the reason code, whether OCR ran, when it was
+				indexed, how many attempts it took and whether a tombstone is on
+				the row. It answers with no path and no title, although the table
+				it reads holds both for every row, and with no text at all: a
+				snippet is file content and stays bound to SRCH-02 (T-04-39,
+				T-04-40). ADMIN like the two routes above, and for the same
+				reason: why one file is not searchable is an operator's business.
+			-->
+			<route>
+				<url>diagnose</url>
 				<verb>GET</verb>
 				<access_level>ADMIN</access_level>
 				<headers_to_exclude>[]</headers_to_exclude>

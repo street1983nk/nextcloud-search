@@ -268,7 +268,7 @@ def test_a_request_without_any_appapi_header_is_unauthorized(client: TestClient)
 
 def test_every_route_of_this_container_is_mounted() -> None:
     # Named without a count, because the previous name claimed three and the
-    # container has had four since plan 04-05. A test whose name has to be
+    # container has had five since plan 04-07. A test whose name has to be
     # corrected alongside the assertion is a test that will one day only have
     # the assertion corrected.
     #
@@ -279,7 +279,7 @@ def test_every_route_of_this_container_is_mounted() -> None:
     # reason on the release that renames it.
     paths = set(APP.openapi()["paths"])
 
-    assert {"/search", "/snippets", "/status", "/rates"} <= paths
+    assert {"/search", "/snippets", "/status", "/rates", "/diagnose"} <= paths
 
 
 def test_the_status_module_opens_the_state_read_only() -> None:
