@@ -255,6 +255,91 @@ def test_the_guard_has_to_be_the_first_statement() -> None:
     assert "first" in violations[0]
 
 
+# -- self tests: the admin class has its own, stricter rule ----------------
+
+_ADMIN = """<?php
+
+class AdminSettingsController extends Controller {
+\t/**
+\t * A docblock, so that the attribute walk has a wall to stop at.
+\t */
+\t#[\\OCP\\AppFramework\\Http\\Attribute\\FrontpageRoute(verb: 'GET', url: '/settings/admin')]
+\tpublic function index(): TemplateResponse {
+\t\treturn new TemplateResponse(Application::APP_ID, 'admin');
+\t}
+}
+"""
+
+
+def _admin_route_carrying(attribute: str) -> str:
+    """The clean admin sample with one more attribute above the same method."""
+    marker = "\t#[\\OCP\\AppFramework\\Http\\Attribute\\FrontpageRoute"
+    replacement = f"\t#[\\OCP\\AppFramework\\Http\\Attribute\\{attribute}]\n{marker}"
+    return _ADMIN.replace(marker, replacement, 1)
+
+
+def test_a_clean_admin_route_is_clean() -> None:
+    # The counter sample of the four below, and at the same time the proof that
+    # an admin controller is a controller as far as this gate is concerned: the
+    # route is counted, so a class of nothing but FrontpageRoute methods can
+    # satisfy test_every_controller_of_the_app_carries_at_least_one_route.
+    routes = routes_of("AdminSettingsController.php", _ADMIN)
+
+    assert scan_source("AdminSettingsController.php", _ADMIN) == []
+    assert len(routes) == 1
+    assert routes[0].kind == "admin"
+
+
+def test_an_admin_route_needs_no_reject_foreign_caller() -> None:
+    # The loosening of this plan, written down so that it cannot be undone by
+    # accident. There is no ExApp caller on an admin route, so there is nothing
+    # for the comparison to reject, and demanding it would force a meaningless
+    # call into every settings page method.
+    assert GUARD_CALL not in _ADMIN
+    assert scan_source("AdminSettingsController.php", _ADMIN) == []
+
+
+def test_no_admin_required_on_an_admin_route_is_reported() -> None:
+    violations = scan_source("AdminSettingsController.php", _admin_route_carrying("NoAdminRequired"))
+
+    assert len(violations) == 1
+    assert "NoAdminRequired" in violations[0]
+    assert "AdminSettingsController.php" in violations[0]
+    assert "index()" in violations[0]
+
+
+def test_public_page_on_an_admin_route_is_reported() -> None:
+    violations = scan_source("AdminSettingsController.php", _admin_route_carrying("PublicPage"))
+
+    assert len(violations) == 1
+    assert "PublicPage" in violations[0]
+    assert "index()" in violations[0]
+
+
+def test_no_csrf_required_on_an_admin_route_is_reported() -> None:
+    # Harmless on an ExApp route, where the credential is the signed AppAPI
+    # header and no session is involved, and the opposite here: this route is
+    # reached by a browser session, so the token is the only thing that keeps a
+    # foreign page from acting as the logged in admin.
+    violations = scan_source("AdminSettingsController.php", _admin_route_carrying("NoCSRFRequired"))
+
+    assert len(violations) == 1
+    assert "NoCSRFRequired" in violations[0]
+    assert "index()" in violations[0]
+
+
+def test_exapp_required_on_an_admin_route_is_reported() -> None:
+    # Mixing the two classes is the mistake pitfall 7 and pitfall 10 describe
+    # together, and it points the protection the wrong way round: the admin's
+    # own browser would no longer reach the page, while every registered
+    # foreign container would.
+    violations = scan_source("AdminSettingsController.php", _admin_route_carrying("ExAppRequired"))
+
+    assert len(violations) == 1
+    assert "ExAppRequired" in violations[0]
+    assert "index()" in violations[0]
+
+
 def test_a_method_without_the_route_attribute_is_not_judged() -> None:
     # The private helpers of every controller are methods too, and they carry
     # neither attribute nor guard. Judging them would make the gate unusable and
