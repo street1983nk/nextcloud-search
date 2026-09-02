@@ -108,6 +108,23 @@ class FileStateService {
 	];
 
 	/**
+	 * How many rows one call of page() may hand out at the most.
+	 *
+	 * Fifty, and the number is a cost and not a taste. Every row of a page ends
+	 * up in PathResolverService, where it costs one mount cache query and one
+	 * userExists() call, so a page is worth roughly three queries per row. Fifty
+	 * rows stay under a hundred and fifty queries, which is a page an
+	 * administrator waits out; the error list of the status page asks for twenty
+	 * per reason group and therefore never reaches this ceiling.
+	 *
+	 * A limit above it is clamped rather than refused. A caller asking for a
+	 * thousand rows is not an attack and not a defect, it is a caller that does
+	 * not know the ceiling, and answering fifty rows is more useful than
+	 * answering none.
+	 */
+	public const MAX_PAGE = 50;
+
+	/**
 	 * Counter of everything that was thrown away, for the log line below. The
 	 * rejected value itself is never logged: it is unvalidated input from the
 	 * container, and a file name arriving as a reason is precisely the case this
@@ -202,6 +219,170 @@ class FileStateService {
 		$result->closeCursor();
 
 		return $counts;
+	}
+
+	/**
+	 * One number per state and reason code, and never a sparse answer.
+	 *
+	 * All three states are always keys, with an empty map under a state nothing
+	 * was written for yet. That is the same rule counts() follows and it exists
+	 * for the same reason: a status answer that leaves out an empty value makes
+	 * "nothing failed" and "the counter is broken" indistinguishable, and this
+	 * app exists because its predecessor reported the first while meaning the
+	 * second.
+	 *
+	 * A row without a reason is normalised to the empty string rather than
+	 * carrying null into the answer, so that the structure is the same shape
+	 * whether it is read in PHP or decoded from JSON. Such a row cannot arise
+	 * from any writer of this app, every one of them passes a code, so the empty
+	 * key is the honest place for a row that came from somewhere else.
+	 *
+	 * @return array<string, array<string, int>> state to reason code to count
+	 */
+	public function reasonsByState(): array {
+		$breakdown = array_fill_keys(self::STATES, []);
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('state', 'reason')
+			->selectAlias($qb->func()->count('*'), 'total')
+			->from(self::TABLE_NAME)
+			->groupBy('state', 'reason');
+
+		$result = $qb->executeQuery();
+		while (($row = $result->fetch()) !== false) {
+			$state = (string)($row['state'] ?? '');
+			if (!array_key_exists($state, $breakdown)) {
+				continue;
+			}
+			$breakdown[$state][(string)($row['reason'] ?? '')] = (int)($row['total'] ?? 0);
+		}
+		$result->closeCursor();
+
+		return $breakdown;
+	}
+
+	/**
+	 * One page of rows carrying this verdict, the most recent ones first.
+	 *
+	 * Ordered by updated_at descending and by file_id descending after it. The
+	 * second key is not decoration: a crawl writes hundreds of rows within the
+	 * same second, and an order that is only defined down to the second hands
+	 * out the same row twice across two pages on some dialects and drops another
+	 * one. The index findling_fs_upd of migration 20260904 answers the state and
+	 * the sort together.
+	 *
+	 * The limit is clamped and the offset is floored instead of being refused,
+	 * because both are display decisions of a caller and neither can be an
+	 * attack: MAX_PAGE is the ceiling and one row is the floor.
+	 *
+	 * A state outside STATES or a reason outside REASONS is a rejected call and
+	 * answers with an empty list. The rejected value is counted and never
+	 * logged, for the reason written above reject(): a file name can arrive in
+	 * exactly this argument.
+	 *
+	 * A null reason means no filter on the reason at all, which is what a caller
+	 * asking for "the failed rows" rather than "the failed rows of one code"
+	 * needs. It is deliberately not read as "the rows without a reason": no
+	 * writer of this app produces one, so a filter for it would be a query
+	 * nobody can trigger.
+	 *
+	 * @return list<array{fileId:int,state:string,reason:string,updatedAt:int}>
+	 */
+	public function page(string $state, ?string $reason, int $limit, int $offset): array {
+		if (!in_array($state, self::STATES, true)) {
+			$this->reject();
+			return [];
+		}
+		if ($reason !== null && !in_array($reason, self::REASONS, true)) {
+			$this->reject();
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('file_id', 'state', 'reason', 'updated_at')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('state', $qb->createNamedParameter($state, IQueryBuilder::PARAM_STR)))
+			->orderBy('updated_at', 'DESC')
+			->addOrderBy('file_id', 'DESC')
+			->setMaxResults(max(1, min(self::MAX_PAGE, $limit)))
+			->setFirstResult(max(0, $offset));
+
+		if ($reason !== null) {
+			$qb->andWhere($qb->expr()->eq('reason', $qb->createNamedParameter($reason, IQueryBuilder::PARAM_STR)));
+		}
+
+		$rows = [];
+		$result = $qb->executeQuery();
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = $this->shape($row);
+		}
+		$result->closeCursor();
+
+		return $rows;
+	}
+
+	/**
+	 * The verdict this side holds for exactly one file, or null.
+	 *
+	 * The same row shape page() hands out, because both end up in the same
+	 * renderer: the per file diagnosis of ADM-02 shows what a row of the error
+	 * list shows, for one file instead of twenty. Null means this table has
+	 * never heard of the file, which is a different answer from "indexed" and
+	 * from "failed" and has to stay distinguishable from both.
+	 *
+	 * @return array{fileId:int,state:string,reason:string,updatedAt:int}|null
+	 */
+	public function forFile(int $fileId): ?array {
+		if ($fileId <= 0) {
+			$this->reject();
+			return null;
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('file_id', 'state', 'reason', 'updated_at')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('file_id', $qb->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
+
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+
+		return is_array($row) ? $this->shape($row) : null;
+	}
+
+	/**
+	 * One database row as the four fields every reader of this class hands out.
+	 *
+	 * @param array<string, mixed> $row
+	 * @return array{fileId:int,state:string,reason:string,updatedAt:int}
+	 */
+	private function shape(array $row): array {
+		return [
+			'fileId' => (int)($row['file_id'] ?? 0),
+			'state' => (string)($row['state'] ?? ''),
+			'reason' => (string)($row['reason'] ?? ''),
+			'updatedAt' => $this->stamp($row['updated_at'] ?? null),
+		];
+	}
+
+	/**
+	 * A datetime column as a Unix timestamp, or zero when it cannot be read.
+	 *
+	 * Zero rather than the current time for an unreadable value: "we do not know
+	 * when" must not be rendered as "just now", which is the shape of every
+	 * status page that claims to be up to date while knowing nothing.
+	 */
+	private function stamp(mixed $value): int {
+		if (!is_string($value) || $value === '') {
+			return 0;
+		}
+
+		try {
+			return (new \DateTimeImmutable($value, new \DateTimeZone('UTC')))->getTimestamp();
+		} catch (\Throwable) {
+			return 0;
+		}
 	}
 
 	/**
