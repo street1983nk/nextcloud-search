@@ -1070,7 +1070,17 @@ if (is_array($response)) {
 | A6 | Ein `(state, updated_at)`-Index auf `findling_file_state` und ein `indexed_at`-Index in `state.db` sind nötig. | Pattern 7, Pitfall 12 | Ohne Messung. Auf einer kleinen Instanz sind beide überflüssig; auf 100.000 Zeilen bei 5-Sekunden-Polling nicht. Beide sind billig und rückwärtskompatibel. |
 | A7 | Deutsche Prosa auf der Admin-Seite ist gewünscht, aber die Quellstrings sind Englisch mit einer `l10n/de.json`. | Open Question 3 | Bei falscher Annahme ist es eine reine Textänderung, aber sie betrifft jede Zeile des Templates. Sollte vor dem Bau geklärt werden. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Alle fünf Fragen sind entschieden und in die Pläne übernommen (Stand 02.09.2026):
+
+1. RESOLVED: Owner-Bestätigung 02.09., Ausschlüsse nur für Home-Mounts, relativ zum `files`-Ordner (D-06-Präzisierung in 04-CONTEXT.md; umgesetzt in Plan 04-08).
+2. RESOLVED: D-05 gewinnt; Beschriftung "vorläufig, Scan läuft" in 04-CONTEXT.md festgehalten, der Verifier prüft gegen diese Formulierung (Plan 04-05).
+3. RESOLVED: Quellstrings Englisch über `$l->t()` plus `l10n/de.json` (Plan 04-03, konsistent mit 04-UI-SPEC.md).
+4. RESOLVED: `occ findling:diagnose` als kleiner Endtask in Plan 04-10; wird zuerst gestrichen, wenn der Termin drückt.
+5. RESOLVED: KEIN "Erweitert"-Bereich; die Fünf-Blöcke-Regel des 04-UI-SPEC.md gewinnt als bewusste Abweichung von der Empfehlung unten. `backend.reasons` bleibt in der API-Antwort von `AdminViewService::overview()` verfügbar, wird aber nicht gerendert.
+
+Ursprüngliche Diskussion:
 
 1. **In welchem Pfadraum gibt der Admin ein Ausschluss-Präfix ein?**
    - Was wir wissen: Nur der **mount-relative** Pfad (interner Pfad minus internem Pfad des Mount-Roots) ist für Crawl und Event-Listener gleich billig und gleich definiert. Der absolute Nextcloud-Pfad (`/alice/files/...`) bräuchte im Crawl eine Mount-Abfrage je Datei. Der nutzersichtbare Pfad ist für Team Folders nicht eindeutig, weil der Mount-Punkt je Nutzer anders heißen kann.

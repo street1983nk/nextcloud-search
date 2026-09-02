@@ -142,8 +142,46 @@ Plans:
   3. Admin sieht vor dem Erstindex eine Schätzung: Anzahl Dateien, davon OCR-pflichtig, erwartete Dauer und Platzbedarf
   4. Admin schaltet Ordner-Ausschlüsse, Größen-Cap, Team Folders und External Storage um, und der nächste Lauf hält sich daran
 
-**Plans**: TBD
+**Plans**: 10 plans
 **UI hint**: yes
+
+Plans:
+**Wave 1**
+
+- [ ] 04-01-PLAN.md , Gate B lernt zwei Routenklassen; CI sieht php/templates und den settings-Block
+- [ ] 04-02-PLAN.md , Container-Statusvertrag: sechs neue Zahlen, Docblock-Widerspruch aufgeloest
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 04-03-PLAN.md , Die Sektion Findling erscheint und zeigt den Betriebszustand (ADM-01)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 04-04-PLAN.md , Deckungsgrad als Bruch mit benanntem Nenner, Scan-Zaehler im Crawl (ADM-01)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 04-05-PLAN.md , Vorab-Schaetzung ab Minute 1 plus rates-Route (ADM-03)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 04-06-PLAN.md , Fehlerliste mit lesbaren Pfaden und Abhilfe je Grund (ADM-01)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 04-07-PLAN.md , Pro-Datei-Diagnose, diagnose-Route und Sechs-Stufen-Vorrangregel (ADM-02)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 04-08-PLAN.md , Regeln und Grenzen: vier Schalter, ein Pfadraum, Durchsetzung an der Quelle (ADM-04)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 04-09-PLAN.md , Ausschluss raeumt Bestand, excluded in drei Listen, Inline-Bestaetigung (ADM-04)
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 04-10-PLAN.md , occ-Zweitzugang, Betriebsdokumentation, Gate-Lauf und Sichtprobe
 
 ### Phase 5: Härtung und Store-Einreichung v1.0
 
@@ -188,7 +226,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
-| 4. Admin-Sichtbarkeit und Diagnose | 0/TBD | Not started | - |
+| 4. Admin-Sichtbarkeit und Diagnose | 0/10 | Planned | - |
 | 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 

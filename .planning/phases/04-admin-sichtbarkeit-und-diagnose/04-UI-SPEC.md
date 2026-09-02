@@ -252,7 +252,7 @@ Ein `ISettings` der PHP-Companion-App, registriert in einer eigenen `Section` mi
 | 4 | `findling-diagnosis` | Einzelne Datei prüfen | ADM-02 | Ein Textfeld, ein Button, eine Ergebniskarte |
 | 5 | `findling-rules` | Regeln und Grenzen | ADM-04 | Ausschlussliste, Größen-Cap, zwei Schalter, ein `.primary`-Button |
 
-Genau fünf Blöcke und vier Schalter. Die Pitfalls-Lehre "Einstellungsseite mit 20 Optionen widerspricht dem Zero-Config-Versprechen" ist damit eingehalten: eine Statusseite, wenige Schalter, kein "Erweitert"-Bereich.
+Genau fünf Blöcke und vier Schalter. Die Pitfalls-Lehre "Einstellungsseite mit 20 Optionen widerspricht dem Zero-Config-Versprechen" ist damit eingehalten: eine Statusseite, wenige Schalter, kein "Erweitert"-Bereich. Bewusste Abweichung von 04-RESEARCH.md (Open Question 5): die dort empfohlene Zweitanzeige der Container-Sicht auf `skipped`/`failed` unter "Erweitert" entfällt zugunsten der Fünf-Blöcke-Regel; `backend.reasons` bleibt in der API-Antwort erhalten und ist für Support-Fälle per `occ findling:diagnose` bzw. `tools/index_status.py` zugänglich.
 
 ### Deckungsgrad: Anzeigevertrag
 
@@ -439,11 +439,11 @@ Gegen `docs/dev-setup.md` (Port 8090, `testuser`/`kollegin`, Testkorpus):
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-09-02 (Erstprüfung: 1 Copywriting-Blocker; Revision 1: alle 6 Dimensionen PASS, keine offenen Empfehlungen)
