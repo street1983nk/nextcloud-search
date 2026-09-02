@@ -31,6 +31,21 @@ class Application extends App implements IBootstrap {
 	 * in boot() fails silently: no error, no entry in the provider list, no
 	 * result group in the search bar. The same is true for the event listeners
 	 * below, and for the same reason: boot() runs too late for the dispatcher.
+	 *
+	 * No config lexicon is registered, and that is a decision of plan 04-08
+	 * rather than an omission. A lexicon would declare the four appconfig keys of
+	 * ADM-04 with type, default and description in one place, which would make
+	 * ``occ config:app:set findling ...`` document and validate itself. The
+	 * interface for it is not stable across the version window this app declares:
+	 * it arrived in Nextcloud 31 as ``OCP\Config\Lexicon\IConfigLexicon`` and was
+	 * renamed inside the window, so a registration written against either
+	 * spelling is a class reference that resolves on some of the servers this app
+	 * runs on and not on others. A half registered lexicon is worse than none:
+	 * appconfig keeps working either way, so the failure would not be a missing
+	 * feature but a fatal error while booting the app. SettingsService and
+	 * ExclusionService therefore validate defensively on the way out as well as
+	 * on the way in, which is what makes the second, scriptable way into
+	 * appconfig safe without a lexicon.
 	 */
 	public function register(IRegistrationContext $context): void {
 		$context->registerSearchProvider(Provider::class);
