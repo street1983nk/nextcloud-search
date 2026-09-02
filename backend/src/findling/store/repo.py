@@ -124,6 +124,7 @@ STATE_REASONS: Final[Mapping[str, frozenset[str | None]]] = {
             "too_many_cells",
             "gone",
             "image_not_ocrable",  # a picture too small or too flat to carry text
+            "excluded",  # an admin rule, not a property of the file
         }
     ),
     "failed": frozenset(

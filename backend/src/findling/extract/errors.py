@@ -64,6 +64,7 @@ class Reason(StrEnum):
     TOO_MANY_CELLS = "too_many_cells"
     GONE = "gone"
     IMAGE_NOT_OCRABLE = "image_not_ocrable"  # a picture too small or too flat to carry text
+    EXCLUDED = "excluded"  # an admin rule keeps this file out of the index, the file itself is untouched
 
     # failed, the things we wanted to do and could not
     EMPTY_FILE = "empty_file"
@@ -92,6 +93,7 @@ STATE_REASONS: Final[Mapping[State, frozenset[Reason | None]]] = {
             Reason.TOO_MANY_CELLS,
             Reason.GONE,
             Reason.IMAGE_NOT_OCRABLE,
+            Reason.EXCLUDED,  # an admin rule, not a property of the file
         }
     ),
     State.FAILED: frozenset(

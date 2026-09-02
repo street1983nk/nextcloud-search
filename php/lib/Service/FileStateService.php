@@ -80,6 +80,16 @@ class FileStateService {
 	 * raw code on its own: an admin who reads a blank cell learns nothing, and a
 	 * blank cell is also what a drift between the three lists would look like.
 	 *
+	 * One code in this list is never written to a row by anybody: `excluded` is
+	 * the reason a file carries because an exclusion rule of the admin covers its
+	 * path, and the diagnosis works that out live at the moment it is asked
+	 * (stage two of the precedence rule in AdminViewService). It is in the list
+	 * because the list is also the vocabulary the reader validates against, not
+	 * only the vocabulary the writer may use. Writing one row per excluded file
+	 * instead would be two hundred thousand rows for one excluded archive folder,
+	 * and every one of them would have to be deleted again the moment the admin
+	 * takes the rule back.
+	 *
 	 * @var list<string>
 	 */
 	public const REASONS = [
@@ -94,6 +104,7 @@ class FileStateService {
 		'too_many_cells',
 		'gone',
 		'image_not_ocrable',
+		'excluded',
 		// failed
 		'empty_file',
 		'corrupt',
