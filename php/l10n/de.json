@@ -112,7 +112,26 @@
         "Attempts so far: %s": "Bisherige Versuche: %s",
         "The next background run picks this file up (%s).": "Der nächste Hintergrundlauf holt diese Datei ab (%s).",
         "The content of this file is searchable.": "Der Inhalt dieser Datei ist durchsuchbar.",
-        "A worker holds this file. The claim runs out in %n second if nothing acknowledges it.": ["Ein Arbeiter hält diese Datei. Der Anspruch läuft in %n Sekunde aus, wenn ihn niemand quittiert.", "Ein Arbeiter hält diese Datei. Der Anspruch läuft in %n Sekunden aus, wenn ihn niemand quittiert."]
+        "A worker holds this file. The claim runs out in %n second if nothing acknowledges it.": ["Ein Arbeiter hält diese Datei. Der Anspruch läuft in %n Sekunde aus, wenn ihn niemand quittiert.", "Ein Arbeiter hält diese Datei. Der Anspruch läuft in %n Sekunden aus, wenn ihn niemand quittiert."],
+        "Rules and limits": "Regeln und Grenzen",
+        "Excluded folders": "Ausgeschlossene Ordner",
+        "Prefix match on the path, no wildcards and no patterns. Example: alice/files/Backups": "Präfix-Vergleich auf dem Pfad, keine Platzhalter und keine Muster. Beispiel: alice/files/Backups",
+        "Add exclusion": "Ausschluss hinzufügen",
+        "Remove exclusion %s": "Ausschluss %s entfernen",
+        "No folder is excluded.": "Kein Ordner ist ausgeschlossen.",
+        "Largest file to read": "Größte zu lesende Datei",
+        "Files above this size are recorded as skipped (too large) and never read.": "Größere Dateien werden als übersprungen (zu groß) vermerkt und nie gelesen.",
+        "The backend of this instance reads at most %s MB. For more, raise FINDLING_MAX_FILE_BYTES in the app settings of AppAPI, which restarts the container.": "Das Backend dieser Instanz liest höchstens %s MB. Für mehr FINDLING_MAX_FILE_BYTES in den App-Einstellungen von AppAPI anheben, was den Container neu startet.",
+        "Index Team Folders": "Team Folders indexieren",
+        "Index external storage": "Externen Speicher indexieren",
+        "External storage can be slow or charged per request. Indexing reads every file once.": "Externer Speicher kann langsam oder pro Zugriff kostenpflichtig sein. Die Indexierung liest jede Datei einmal.",
+        "The next run applies the new rules. Nothing restarts.": "Der nächste Lauf übernimmt die neuen Regeln. Es startet nichts neu.",
+        "Save rules": "Regeln speichern",
+        "Rules saved. The next run applies them.": "Regeln gespeichert. Der nächste Lauf übernimmt sie.",
+        "The rules were not saved. Nothing changed.": "Die Regeln wurden nicht gespeichert. Es hat sich nichts geändert.",
+        "Enter a size between %1$s and %2$s MB.": "Eine Größe zwischen %1$s und %2$s MB eingeben.",
+        "Enter a folder path.": "Einen Ordnerpfad eingeben.",
+        "This path is already excluded.": "Dieser Pfad ist bereits ausgeschlossen."
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }

@@ -1,12 +1,21 @@
 /**
- * The refresh of blocks one to three and the lookup of block four, in plain
- * browser JavaScript.
+ * The refresh of blocks one to three, the lookup of block four and the rules
+ * form of block five, in plain browser JavaScript.
  *
  * No module, no bundler, no dependency and no package file anywhere in this
  * app: the page is a PHP template, the Nextcloud server CSS and this file. The
  * script never builds markup. Everything it touches already exists in the
  * template, rendered server side with real values, so the page is complete
  * before this file has run and stays complete if it never runs at all.
+ *
+ * The one element that has to come into existence at runtime is a row of the
+ * exclusion list, and it is cloned from the template element of the page rather
+ * than assembled from a string. Its two variable parts are a text node and an
+ * aria-label, so a folder name cannot become an element here no matter what
+ * characters it contains. That is what keeps the markup assigning properties of
+ * an element out of this file altogether, and Gate C in
+ * backend/tests/test_admin_ui_contract.py holds it: the gate matches on their
+ * names as plain text, so they may not even be named in a comment.
  *
  * Sources of the two facts that are easy to get wrong:
  *   core/templates/layout.initial-state.php   the hidden input, its id, base64
@@ -42,6 +51,11 @@
   // it moves.
   const ROUTE_OVERVIEW = 'admin/overview'
   const ROUTE_DIAGNOSE = 'admin/diagnose'
+  const ROUTE_RULES = 'admin/rules'
+
+  // Megabytes in the field, bytes in appconfig. The same divisor the template
+  // divides by, named on both sides so that the two cannot drift.
+  const BYTES_PER_MEGABYTE = 1048576
 
   // The eight states of the inventory, by the key the template gave their icons.
   // The script shows one of them and hides the rest; it never builds one,
@@ -176,6 +190,37 @@
     }
 
     return response.json()
+  }
+
+  /**
+   * The one writing call of this page.
+   *
+   * Separate from ask() and not a parameter on it, because the two differ in
+   * more than the verb: this one carries a body, it is triggered by a person
+   * pressing a button rather than by a timer, and it is the only call on this
+   * page that changes anything. Folding them together would put the writing
+   * path one wrong argument away from the polling path.
+   *
+   * The token is read out of the document inside this function for the same
+   * reason as in ask(): Nextcloud rotates it when the session is renewed, and a
+   * copy taken at load time fails without an error message after a long
+   * session.
+   *
+   * A non ok answer is returned rather than thrown, because its body carries
+   * the field errors and those are the whole point of the answer.
+   */
+  async function send (path, payload) {
+    const response = await fetch(OC.generateUrl('/apps/findling/' + path), {
+      method: 'POST',
+      headers: {
+        requesttoken: document.head.dataset.requesttoken,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+
+    return { ok: response.ok, body: await response.json() }
   }
 
   function text (id, value) {
@@ -628,6 +673,311 @@
     })
   }
 
+  /**
+   * Block five, the four rules, and the one part of this page that writes.
+   *
+   * Every change is local until "Save rules" is pressed. There is no auto save,
+   * because a folder exclusion takes documents out of the index and a control
+   * that acts while somebody is still typing is a control that acts on a half
+   * typed path.
+   *
+   * The list can grow, which is the one place on this page where an element has
+   * to come into existence at runtime. It is cloned from the template element
+   * the PHP template holds, and its two variable parts are a text node and an
+   * aria-label. So the rule still holds: this script never assembles markup out
+   * of a string, and a folder name can therefore not become an element no
+   * matter what characters it contains.
+   */
+  function currentPrefixes () {
+    const list = document.getElementById('findling-rules-list')
+    if (list === null) {
+      return []
+    }
+    return Array.prototype.map.call(
+      list.querySelectorAll('.findling-rules__prefix'),
+      function (span) {
+        return span.textContent
+      }
+    )
+  }
+
+  /** Show or hide the "nothing is excluded" sentence, after every change. */
+  function refreshEmptyState () {
+    shown('findling-rules-exclusions-empty', currentPrefixes().length === 0)
+  }
+
+  /** One error at one field, with the focus moved into it. */
+  function fieldError (errorId, fieldId, message) {
+    text(errorId, message)
+    shown(errorId, true)
+    const field = document.getElementById(fieldId)
+    if (field !== null) {
+      field.focus()
+    }
+  }
+
+  function clearFieldError (errorId) {
+    shown(errorId, false)
+  }
+
+  /** One row of the exclusion list, cloned from the template of the page. */
+  function addPrefixRow (prefix) {
+    const list = document.getElementById('findling-rules-list')
+    const template = document.getElementById('findling-rules-row')
+    if (list === null || template === null) {
+      return
+    }
+
+    const row = template.content.cloneNode(true)
+    const label = row.querySelector('.findling-rules__prefix')
+    const remove = row.querySelector('.findling-rules__remove')
+    if (label === null || remove === null) {
+      return
+    }
+
+    label.textContent = prefix
+    remove.setAttribute('aria-label', t('findling', 'Remove exclusion %s').replace('%s', prefix))
+    list.appendChild(row)
+  }
+
+  /**
+   * Add and remove, both local and neither of them saved.
+   *
+   * Remove is wired by delegation on the list, so a row that was cloned a
+   * moment ago needs no wiring of its own and a row that was rendered by the
+   * server needs none either. One handler for both is also one place where the
+   * unsaved state is announced.
+   */
+  function setupExclusionList () {
+    const field = document.getElementById('findling-rules-new')
+    const add = document.getElementById('findling-rules-add')
+    const list = document.getElementById('findling-rules-list')
+
+    if (add !== null && field !== null) {
+      add.addEventListener('click', function () {
+        const value = field.value.trim()
+        if (value === '') {
+          fieldError('findling-rules-new-error', 'findling-rules-new', t('findling', 'Enter a folder path.'))
+          return
+        }
+        if (currentPrefixes().indexOf(value) !== -1) {
+          fieldError('findling-rules-new-error', 'findling-rules-new', t('findling', 'This path is already excluded.'))
+          return
+        }
+
+        clearFieldError('findling-rules-new-error')
+        addPrefixRow(value)
+        field.value = ''
+        field.focus()
+        refreshEmptyState()
+        touched()
+      })
+    }
+
+    if (list !== null) {
+      list.addEventListener('click', function (event) {
+        const remove = event.target.closest('.findling-rules__remove')
+        if (remove === null) {
+          return
+        }
+        const row = remove.closest('.findling-rules__row')
+        if (row !== null) {
+          row.remove()
+          refreshEmptyState()
+          touched()
+        }
+      })
+    }
+  }
+
+  /**
+   * The effect line, shown while something is unsaved.
+   *
+   * It is the answer to the question an unsaved form raises, "what happens when
+   * I press this", and the answer is the one sentence that matters here: the
+   * next run applies it and nothing restarts. The saved feedback goes away at
+   * the same moment, because it is about the previous state of the form.
+   */
+  function touched () {
+    shown('findling-rules-effect', true)
+    shown('findling-rules-feedback', false)
+  }
+
+  /**
+   * The inline confirmation of D-07, and it confirms nothing yet.
+   *
+   * Plan 04-09 hangs the destructive confirmation in here: a NEW exclusion also
+   * removes the documents already indexed under that path from the index, and
+   * that consequence has to be confirmed with the number of documents in the
+   * sentence. Until that clearing exists there is nothing to lose by saving,
+   * and asking somebody to confirm a consequence that does not happen would
+   * teach them to click the confirmation away before it ever means anything.
+   *
+   * It stands here, named and called from its place in the order, rather than
+   * being left out: a hook that is incomplete and says so is one somebody can
+   * finish, and a missing one is one nobody knows to look for.
+   */
+  function confirmNewExclusions (exclusions) {
+    // The list is in the signature already so that hanging the confirmation in
+    // is one function body and not a change at the call site as well: plan
+    // 04-09 compares it against what was stored, asks the route how many
+    // documents lie under the new prefixes, and returns false until the
+    // administrator has pressed the confirming button, saving from there.
+    return Array.isArray(exclusions)
+  }
+
+  /**
+   * Validate, then write, then say what happened.
+   *
+   * The cap is judged here as well as on the server, and the two are not
+   * redundant: this one puts the message at the field with the focus in it,
+   * which is what the interaction contract asks for, and the server one is the
+   * boundary. The server also clamps, so the answer carries the value in force
+   * and the field is set to it afterwards: a value silently lowered would be a
+   * page showing a limit that does not hold.
+   */
+  async function saveRules () {
+    const cap = document.getElementById('findling-rules-cap')
+    const button = document.getElementById('findling-rules-save')
+    if (cap === null) {
+      return
+    }
+
+    const ceiling = Number(cap.getAttribute('max')) || 1
+    const megabytes = Number.parseInt(cap.value, 10)
+    if (!Number.isInteger(megabytes) || megabytes < 1 || megabytes > ceiling) {
+      fieldError(
+        'findling-rules-cap-error',
+        'findling-rules-cap',
+        t('findling', 'Enter a size between %1$s and %2$s MB.')
+          .replace('%1$s', numbers.format(1))
+          .replace('%2$s', numbers.format(ceiling))
+      )
+      return
+    }
+    clearFieldError('findling-rules-cap-error')
+    clearFieldError('findling-rules-new-error')
+
+    const exclusions = currentPrefixes()
+    if (!confirmNewExclusions(exclusions)) {
+      return
+    }
+
+    if (button !== null) {
+      button.disabled = true
+    }
+
+    try {
+      const answer = await send(ROUTE_RULES, {
+        exclusions: exclusions,
+        maxFileBytes: megabytes * BYTES_PER_MEGABYTE,
+        indexTeamFolders: checked('findling-rules-team-folders'),
+        indexExternalStorage: checked('findling-rules-external-storage')
+      })
+
+      if (answer.ok && answer.body.saved === true) {
+        applyRules(answer.body.rules)
+        feedback(true, t('findling', 'Rules saved. The next run applies them.'))
+        shown('findling-rules-effect', false)
+        return
+      }
+
+      // "Nothing changed" is the payload of this message. The route writes all
+      // four values or none of them, so an administrator does not have to work
+      // out which half held.
+      feedback(false, t('findling', 'The rules were not saved. Nothing changed.'))
+    } catch (error) {
+      feedback(false, t('findling', 'The rules were not saved. Nothing changed.'))
+    } finally {
+      if (button !== null) {
+        button.disabled = false
+      }
+    }
+  }
+
+  function checked (id) {
+    const box = document.getElementById(id)
+    return box !== null && box.checked === true
+  }
+
+  /** The answer of a save, inline and never a toast. */
+  function feedback (success, message) {
+    const box = document.getElementById('findling-rules-feedback')
+    if (box === null) {
+      return
+    }
+    box.className = 'findling-rules__feedback findling-rules__feedback--' + (success ? 'success' : 'error')
+    box.textContent = message
+    box.hidden = false
+  }
+
+  /**
+   * The rules as they are in force after a save.
+   *
+   * Written back into the form because the server clamps the cap at what the
+   * container reported, so the number that holds is not always the number that
+   * was typed. Showing the typed one would be this page claiming a limit the
+   * container ignores, one screen further along than the contradiction this
+   * phase exists to remove.
+   */
+  function applyRules (rules) {
+    if (rules === null || typeof rules !== 'object') {
+      return
+    }
+
+    const cap = document.getElementById('findling-rules-cap')
+    if (cap !== null && Number.isInteger(rules.maxFileBytes)) {
+      cap.value = String(Math.max(1, Math.floor(rules.maxFileBytes / BYTES_PER_MEGABYTE)))
+    }
+    if (cap !== null && Number.isInteger(rules.maxFileBytesCeiling)) {
+      cap.setAttribute('max', String(Math.max(1, Math.floor(rules.maxFileBytesCeiling / BYTES_PER_MEGABYTE))))
+    }
+
+    const list = document.getElementById('findling-rules-list')
+    if (list !== null && Array.isArray(rules.exclusions)) {
+      // Rebuilt from the answer, because the server normalises: "files/Archiv"
+      // and "/Archiv/" are one and the same rule, and the form has to show the
+      // spelling that will be compared.
+      while (list.firstChild !== null) {
+        list.removeChild(list.firstChild)
+      }
+      rules.exclusions.forEach(function (prefix) {
+        if (typeof prefix === 'string') {
+          addPrefixRow(prefix)
+        }
+      })
+      refreshEmptyState()
+    }
+  }
+
+  /**
+   * The rules block, wired once.
+   *
+   * The effect line starts hidden here, at the one moment that proves it is
+   * about unsaved changes: nothing has been changed yet. Without a script it
+   * stays visible, which is the honest reading of a form that cannot be saved
+   * without one.
+   */
+  function setupRules () {
+    shown('findling-rules-effect', false)
+    refreshEmptyState()
+    setupExclusionList()
+
+    const save = document.getElementById('findling-rules-save')
+    if (save !== null) {
+      save.addEventListener('click', function () {
+        saveRules()
+      })
+    }
+
+    Array.prototype.forEach.call(
+      document.querySelectorAll('#findling-rules input'),
+      function (field) {
+        field.addEventListener('change', touched)
+      }
+    )
+  }
+
   function render (view) {
     text('findling-tile-indexed', numbers.format(whole(view.indexedDisplay)))
     text('findling-tile-skipped', numbers.format(whole(view.skipped)))
@@ -649,6 +999,13 @@
     const backend = view.backend || {}
     shown('findling-banner-lowdisk', backend.lowDisk === true)
     shown('findling-banner-reindex', backend.reindexRequired === true)
+
+    // view.rules is deliberately not rendered. Block five is a form somebody may
+    // be halfway through filling in, and a poll every five seconds that wrote
+    // the stored values back into it would throw away what they just typed. The
+    // rules of the answer are read at one moment only: after a save, out of the
+    // answer of the save itself, which is the one moment they are known to have
+    // changed and the form is known not to be in the middle of anything.
   }
 
   function cadence (view) {
@@ -716,6 +1073,7 @@
 
   setupErrorGroups()
   setupDiagnosis()
+  setupRules()
 
   const bootstrap = initialState('bootstrap')
   if (bootstrap !== null) {

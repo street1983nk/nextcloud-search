@@ -18,7 +18,8 @@
 #findling-coverage,
 #findling-estimate,
 #findling-errors,
-#findling-diagnosis {
+#findling-diagnosis,
+#findling-rules {
 	/* The same width as the h2 of a settings block in the core, so that text
 	   and heading end on the same line. */
 	max-width: 900px;
@@ -339,4 +340,132 @@
 
 .findling-card > p {
 	margin-block: calc(var(--default-grid-baseline) * 2);
+}
+
+/* -- the rules and limits -------------------------------------------------- */
+
+/* A label of its own line, in the one bold weight this page uses. The core
+   resets every heading and label to inherit, so the weight has to be said out
+   loud, and there is no fifth font size: this is the body size in 700. */
+.findling-rules__label {
+	display: block;
+	margin-block: calc(var(--default-grid-baseline) * 4) var(--default-grid-baseline);
+	font-weight: 700;
+}
+
+.findling-rules__list {
+	margin-block: calc(var(--default-grid-baseline) * 2);
+	padding-inline-start: 0;
+	list-style: none;
+}
+
+/* One excluded folder per row: the path takes the width it needs and wraps, the
+   remove button stays at the end. A path is the payload of this row, so it is
+   never shortened and never cut off. */
+.findling-rules__row {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--default-grid-baseline) * 2);
+	min-height: var(--default-clickable-area);
+	border-bottom: 1px solid var(--color-border);
+}
+
+.findling-rules__prefix {
+	flex: 1 1 auto;
+	font-size: 13px;
+}
+
+/* The one icon-only control of this page. It carries its label in an aria-label
+   with the path inside it, and it is as tall and as wide as the clickable area
+   of the theme, because an icon of sixteen pixels is not a target. */
+.findling-rules__remove {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: var(--default-clickable-area);
+	min-height: var(--default-clickable-area);
+}
+
+.findling-rules__remove svg {
+	width: calc(var(--default-grid-baseline) * 4);
+	height: calc(var(--default-grid-baseline) * 4);
+}
+
+/* Field and button on one line, both at least as tall as the clickable area,
+   the same shape the lookup of block four uses. */
+.findling-rules__add,
+.findling-rules__field {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block: calc(var(--default-grid-baseline) * 2);
+}
+
+.findling-rules__add input {
+	flex: 1 1 calc(var(--default-grid-baseline) * 60);
+	min-height: var(--default-clickable-area);
+}
+
+.findling-rules__add button,
+#findling-rules-save {
+	min-height: var(--default-clickable-area);
+}
+
+.findling-rules__field input {
+	flex: 0 0 calc(var(--default-grid-baseline) * 24);
+	min-height: var(--default-clickable-area);
+}
+
+.findling-rules__field label {
+	flex: 0 0 100%;
+}
+
+.findling-rules__unit {
+	font-size: 13px;
+	color: var(--color-text-maxcontrast);
+}
+
+/* The core checkbox pair: the fourteen pixel box is the graphic and the label
+   is the click target, which is why the minimum height sits on the label and
+   not on the row. */
+.findling-rules__toggle {
+	display: flex;
+	align-items: center;
+	gap: var(--default-grid-baseline);
+}
+
+.findling-rules__toggle label {
+	display: flex;
+	align-items: center;
+	min-height: var(--default-clickable-area);
+}
+
+/* An error belongs to its field and is therefore next to it, in the error text
+   colour on the plain surface: a filled error surface for one sentence at a
+   field would read as a failure of the page rather than of the value. */
+.findling-rules__error {
+	margin-block: var(--default-grid-baseline);
+	font-size: 13px;
+	color: var(--color-error-text);
+}
+
+/* The answer of a save, inline and never a toast. Both outcomes are a surface
+   with its own paired text colour, because those are the pairs Nextcloud ships
+   checked for contrast. */
+.findling-rules__feedback {
+	margin-block: calc(var(--default-grid-baseline) * 4);
+	padding: calc(var(--default-grid-baseline) * 4);
+	border-radius: var(--border-radius-container);
+}
+
+.findling-rules__feedback--success {
+	background-color: var(--color-success);
+	color: var(--color-success-text);
+}
+
+.findling-rules__feedback--error {
+	background-color: var(--color-error);
+	color: var(--color-error-text);
 }

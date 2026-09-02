@@ -6,6 +6,8 @@ namespace OCA\Findling\Controller;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Service\AdminViewService;
+use OCA\Findling\Service\ExclusionService;
+use OCA\Findling\Service\SettingsService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
@@ -14,14 +16,26 @@ use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 
 /**
- * The two addresses the admin page asks, and the only two.
+ * The three addresses the admin page asks, and the only three.
  *
- * One reads the whole page and is polled; the other looks up a single file and
- * is asked when somebody types into a field. They are two routes and not one
- * with a parameter, because the first one answers the same thing for every
- * administrator and the second one answers about a string somebody wrote, and
- * folding the two together would put a user supplied path into the request that
- * refreshes the numbers every five seconds.
+ * One reads the whole page and is polled; one looks up a single file and is
+ * asked when somebody types into a field; one writes the rules. The first two
+ * are two routes and not one with a parameter, because the first answers the
+ * same thing for every administrator and the second answers about a string
+ * somebody wrote, and folding the two together would put a user supplied path
+ * into the request that refreshes the numbers every five seconds.
+ *
+ * The third one is the only writing route of this phase, and like the other two
+ * it lives under /apps/findling/ rather than in the OCS space. That is a
+ * boundary and not a preference: the write allowlist of the read-only gate on
+ * the Python side stands at exactly three entries with a test that says so, and
+ * the clearing that a new exclusion causes is queued on this side through
+ * SubtreeExpandJob (research pattern 9). So no fourth OCS write is needed and
+ * none is added. The attribute name of these routes is deliberately written
+ * only above the three methods themselves, because the anti vacuity clause of
+ * backend/tests/test_php_trust_boundary.py counts the lines that mention it and
+ * compares them against the number of routes it found: a mention in prose would
+ * break that gate without a route having changed (pitfall 7).
  *
  * The class extends the plain Controller and not OCSController, so the route
  * lives under /apps/findling/ and stays outside the OCS space. That is a
@@ -44,6 +58,12 @@ use Psr\Log\LoggerInterface;
  * accident, and why backend/tests/test_php_trust_boundary.py judges an admin
  * route by the list of attributes it may never carry and names the four there.
  *
+ * The same absence is what protects the writing route, where it matters most
+ * (T-04-45, T-04-46). Without the attribute that lifts the token check, a page
+ * on another host cannot make the browser of a logged in administrator change
+ * the indexing rules of the instance; without the one that lifts the admin
+ * requirement, an ordinary user cannot either.
+ *
  * What does *not* protect this page: the ADMIN access level of the container
  * route in backend/appinfo/info.xml. That check sits in the proxy path browser
  * to AppAPI to ExApp, and PublicFunctions::exAppRequest, which is the path this
@@ -51,11 +71,14 @@ use Psr\Log\LoggerInterface;
  * defense in depth for a path this app does not walk; the effective protection
  * of the admin page is this controller.
  *
- * Nothing here writes, and there is no code path from this class into the
- * queue, the state table or the file system. The log follows the rule of the
- * other controllers of this app: a static sentence outwards, the exception in
- * the exception field where Nextcloud renders it under the admin's own log
- * level, and never a path, a file name or a library message.
+ * Only the third route writes, and it writes nothing but appconfig: there is no
+ * code path from this class into the queue, the state table or the file system.
+ * The log follows the rule of the other controllers of this app: a static
+ * sentence outwards, the exception in the exception field where Nextcloud
+ * renders it under the admin's own log level, and never a path, a file name or a
+ * library message. A refused rules form is counted in the log and its values are
+ * not written out, because a folder name of a private instance arrives in
+ * exactly that field (T-04-51).
  */
 final class SettingsController extends Controller {
 	/**
@@ -75,6 +98,8 @@ final class SettingsController extends Controller {
 	public function __construct(
 		IRequest $request,
 		private AdminViewService $view,
+		private SettingsService $settingsService,
+		private ExclusionService $exclusionService,
 		private IUserSession $userSession,
 		private LoggerInterface $logger,
 	) {
@@ -165,6 +190,101 @@ final class SettingsController extends Controller {
 				Http::STATUS_INTERNAL_SERVER_ERROR,
 			);
 		}
+	}
+
+	/**
+	 * POST /apps/findling/admin/rules
+	 *
+	 * The four switches of ADM-04 in one call, and the only writing route of this
+	 * phase. All four travel together because they are one form: an admin presses
+	 * one button, and a route per switch would make a half saved form a state this
+	 * page can reach.
+	 *
+	 * Validated before anything is written, and refused as a whole. With one bad
+	 * field NOTHING is written, so the page can say "nothing has changed" and mean
+	 * it: a form that had saved the cap and refused the list would leave an
+	 * administrator guessing which half held. The answer names the fields that
+	 * failed, by field name and error code, and never by value.
+	 *
+	 * The two services validate again inside their own save(), which is not
+	 * redundancy for its own sake: ``occ config:app:set findling ...`` is a second
+	 * way into the same keys that never passes through this method.
+	 *
+	 * The answer carries the rules as they are in force AFTER the write, which is
+	 * what lets the page show the clamped cap rather than the number that was
+	 * typed. Clamping without saying so would be the page showing a value that
+	 * does not hold, one screen further along than pitfall 2.
+	 *
+	 * No confirmation is asked for here, and the reason is a decision of the
+	 * plan order rather than an oversight. D-07 wants a confirmation before a NEW
+	 * exclusion, because it clears already indexed documents out of the index, and
+	 * that clearing arrives with plan 04-09. Until it exists there is nothing to
+	 * lose by saving, and asking somebody to confirm a consequence that does not
+	 * happen yet would teach them to click the confirmation away.
+	 *
+	 * @param list<mixed> $exclusions the prefix list as the form holds it
+	 */
+	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'POST', url: '/admin/rules')]
+	public function saveRules(
+		array $exclusions = [],
+		int $maxFileBytes = 0,
+		bool $indexTeamFolders = true,
+		bool $indexExternalStorage = false,
+	): DataResponse {
+		$list = array_values($exclusions);
+
+		$fieldErrors = $this->settingsService->validate([
+			SettingsService::FIELD_MAX_FILE_BYTES => $maxFileBytes,
+		]);
+		$listErrors = $this->exclusionService->validate($list);
+
+		if ($fieldErrors !== [] || $listErrors !== []) {
+			// Counted, never quoted. What arrives in the list is a folder name of
+			// a private instance, and the log of this app carries counters and
+			// codes and nothing somebody else wrote.
+			$this->logger->warning('Findling: refused a set of rules that did not validate', [
+				'fields' => count($fieldErrors),
+				'exclusions' => count($listErrors),
+			]);
+
+			return new DataResponse(
+				[
+					'saved' => false,
+					'fields' => $fieldErrors,
+					'exclusions' => $listErrors,
+					'error' => 'The rules were not saved.',
+				],
+				Http::STATUS_BAD_REQUEST,
+			);
+		}
+
+		try {
+			$this->settingsService->save([
+				SettingsService::FIELD_MAX_FILE_BYTES => $maxFileBytes,
+				'indexTeamFolders' => $indexTeamFolders,
+				'indexExternalStorage' => $indexExternalStorage,
+			]);
+			$this->exclusionService->save($list);
+		} catch (\Throwable $e) {
+			// The only way to get here is the database itself, because both
+			// values were judged above. The page says nothing was saved, which
+			// may understate a failure between the two writes; the honest part is
+			// that appconfig is the whole of what either call touches, so the
+			// worst case is one of two keys and the next save fixes it.
+			$this->logger->error('Findling: could not save the rules', ['exception' => $e]);
+
+			return new DataResponse(
+				['saved' => false, 'error' => 'The rules could not be saved.'],
+				Http::STATUS_INTERNAL_SERVER_ERROR,
+			);
+		}
+
+		return new DataResponse([
+			'saved' => true,
+			'fields' => [],
+			'exclusions' => [],
+			'rules' => $this->view->rules(),
+		]);
 	}
 
 	/**

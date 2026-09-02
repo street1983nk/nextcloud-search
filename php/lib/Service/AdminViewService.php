@@ -6,7 +6,6 @@ namespace OCA\Findling\Service;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\BackgroundJobs\SchedulerJob;
-use OCA\Findling\BackgroundJobs\StorageCrawlJob;
 use OCA\Findling\Text\PlainText;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IAppConfig;
@@ -37,7 +36,10 @@ use OCP\IUserSession;
  *   question the database answers directly.
  * - Out of appconfig: ``lastJobRun``, which is the answer to "does the cron of
  *   this instance run at all", the failure mode the predecessor of this app died
- *   of quietly.
+ *   of quietly, and since plan 04-08 the ``rules`` subtree, which is the four
+ *   switches of ADM-04 as they are in force. Those five fields are the only ones
+ *   on this page an admin can change, and they are readable and writable with the
+ *   container switched off, because appconfig lives in Nextcloud.
  * - Out of ``findling_scan_stats`` through ScanStatsService: the denominator of
  *   the coverage figure and the files that were deliberately left out. Only this
  *   side owns the Nextcloud file list, so only this side can say how many files
@@ -365,6 +367,8 @@ final class AdminViewService {
 		private ScanStatsService $scanStats,
 		private PathResolverService $pathResolver,
 		private StorageService $storageService,
+		private SettingsService $settingsService,
+		private ExclusionService $exclusionService,
 		private IAppConfig $appConfig,
 		private IUserSession $userSession,
 		private ITimeFactory $timeFactory,
@@ -385,7 +389,8 @@ final class AdminViewService {
 	 *     indexedDisplay:int, scheduled:int, running:int, lastJobRun:int,
 	 *     stalledFor:int, runState:string, backendReachable:bool,
 	 *     backend:array<string,mixed>, coverage:array<string,mixed>,
-	 *     estimate:array<string,mixed>, errors:array<string,mixed>
+	 *     estimate:array<string,mixed>, errors:array<string,mixed>,
+	 *     rules:array<string,mixed>
 	 * }
 	 */
 	public function overview(): array {
@@ -410,6 +415,19 @@ final class AdminViewService {
 		$answer = $this->exAppService->adminGet('/status', $this->userId(), []);
 		$backendReachable = $answer !== null;
 		$backend = $this->backend($answer);
+
+		// The one write of this reading method, and it is what makes the size cap
+		// honest. The container enforces the cap a second time out of an
+		// environment variable it read at start (pitfall 2), so the value it
+		// reports is the real ceiling, and the page has to clamp its input at it.
+		// Remembering the figure is what keeps that clamp working while the
+		// container is down, which is exactly when an admin is looking at this
+		// page. SettingsService writes only when the number actually changed, so a
+		// page polling every five seconds is not one appconfig write every five
+		// seconds.
+		if ($backendReachable) {
+			$this->settingsService->rememberContainerCap((int)$backend['maxFileBytes']);
+		}
 
 		// The Nextcloud side of the table holds no indexed rows by construction:
 		// phase 2 records skips and failures there and nothing else, so the
@@ -443,6 +461,47 @@ final class AdminViewService {
 			'coverage' => $this->coverage($scan, $backend, $backendReachable, $indexable),
 			'estimate' => $this->estimate($scan, $backend, $backendReachable, $indexable, $scheduled + $running),
 			'errors' => $this->errors(),
+			'rules' => $this->rules(),
+		];
+	}
+
+	/**
+	 * The four switches of ADM-04 as they are in force, plus the ceiling of the
+	 * cap.
+	 *
+	 * Public because two callers need exactly this and nothing else: the page
+	 * renders it, and the write route answers with it so that the form can show
+	 * the value that HOLDS rather than the one that was typed. Everything else on
+	 * the page is a measurement; these five fields are the only ones an admin can
+	 * change.
+	 *
+	 * ``maxFileBytesCeiling`` is the upper bound of the input field, and it is a
+	 * figure of the container rather than of this app. For more than that,
+	 * ``FINDLING_MAX_FILE_BYTES`` has to be raised in the AppAPI app settings,
+	 * which restarts the container, because the variable is read at start and
+	 * ``settings()`` is lru_cached over it. Naming the ceiling is what keeps this
+	 * page from showing a cap the container would ignore (pitfall 2, T-04-50);
+	 * without it the field would accept a hundred megabytes, the crawl would queue
+	 * an eighty megabyte PDF, and the container would answer
+	 * skipped(too_large) next to a page claiming the file was within the limit.
+	 *
+	 * The exclusions come out of ExclusionService and are therefore normalised,
+	 * which matters for the second way in: a list written by
+	 * ``occ config:app:set`` is shown here the way it will be compared, not the
+	 * way it was typed.
+	 *
+	 * @return array{
+	 *     exclusions:list<string>, maxFileBytes:int, maxFileBytesCeiling:int,
+	 *     indexTeamFolders:bool, indexExternalStorage:bool
+	 * }
+	 */
+	public function rules(): array {
+		return [
+			'exclusions' => $this->exclusionService->prefixes(),
+			'maxFileBytes' => $this->settingsService->maxFileBytes(),
+			'maxFileBytesCeiling' => $this->settingsService->containerCap(),
+			'indexTeamFolders' => $this->settingsService->indexTeamFolders(),
+			'indexExternalStorage' => $this->settingsService->indexExternalStorage(),
 		];
 	}
 
@@ -675,7 +734,13 @@ final class AdminViewService {
 			return $this->reasonVerdict('skipped', 'mime_not_allowed');
 		}
 
-		if ($facts['size'] > StorageCrawlJob::MAX_SIZE) {
+		if ($facts['size'] > $this->settingsService->maxFileBytes()) {
+			// The cap IN FORCE and not the constant. This stage is "does the file
+			// break a rule of today", and a rule of today is what an admin set
+			// today: reading the code default here would tell somebody who just
+			// raised the cap that their file is still too large, which is the
+			// contradiction between page and behaviour that this phase exists to
+			// remove.
 			return $this->reasonVerdict('skipped', 'too_large');
 		}
 

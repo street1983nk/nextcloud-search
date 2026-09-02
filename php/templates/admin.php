@@ -565,3 +565,124 @@ $magnifyIcon = 'M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.
 		<p class="settings-hint" id="findling-diagnosis-checked" hidden></p>
 	</div>
 </div>
+<?php
+/*
+ * Block five: the four things an admin may change.
+ *
+ * ADM-04 and D-08, and the only writing part of this page. Four switches and no
+ * "advanced" section: a settings screen with twenty options contradicts the zero
+ * config promise this app is built on, so the number of controls is a decision.
+ *
+ * Every value is rendered server side out of the rules subtree, so the form
+ * shows what is IN FORCE and not what a default would be. The size cap carries a
+ * max attribute out of the ceiling the container reported, because a field
+ * without an upper bound would accept a number the container ignores, and the
+ * page would then be showing a limit that does not hold (pitfall 2).
+ *
+ * This block and the lookup above it are the two parts of the page that need
+ * JavaScript, which is the documented boundary of the design contract. Blocks
+ * one to three are complete without a script.
+ *
+ * The row template at the end is the one piece of markup the script uses: it
+ * clones it and fills text nodes and attributes. That is what keeps the rule "the
+ * script never builds markup" true for a list that can grow. The alternative
+ * would be assembling a list item out of a string that contains a folder name,
+ * which is exactly what Gate C in backend/tests/test_admin_ui_contract.py
+ * forbids the script to do.
+ */
+$rules = is_array($_['rules'] ?? null) ? $_['rules'] : [];
+
+$prefixes = is_array($rules['exclusions'] ?? null) ? $rules['exclusions'] : [];
+$capBytes = $whole($rules['maxFileBytes'] ?? 0);
+$ceilingBytes = $whole($rules['maxFileBytesCeiling'] ?? 0);
+$teamFolders = ($rules['indexTeamFolders'] ?? false) === true;
+$externalStorage = ($rules['indexExternalStorage'] ?? false) === true;
+
+// Megabytes in the field and bytes in appconfig. An admin thinks in megabytes,
+// and a field holding 52428800 is a field nobody can check at a glance. The
+// script converts back with the same divisor, which is named on both sides.
+$megabyte = 1048576;
+$capMb = max(1, intdiv($capBytes, $megabyte));
+$ceilingMb = max(1, intdiv($ceilingBytes, $megabyte));
+
+// Icon path data: Material Design Icons by Pictogrammers, Apache-2.0, pinned by
+// commit in THIRD-PARTY.md. The cross of a remove button, which is the only
+// icon-only control on this page and therefore the one that has to carry its
+// label in an aria-label with the path in it.
+$closeIcon = 'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z';
+?>
+<div id="findling-rules" class="section">
+	<h2><?php p($l->t('Rules and limits')); ?></h2>
+
+	<?php
+	/*
+	 * One label for the group and for the field that adds to it, and that is
+	 * deliberate rather than economical. The design contract carries exactly one
+	 * label for this control, "Excluded folders", so inventing a second string
+	 * for the input would be a string nobody signed off; the list is named by the
+	 * same label through aria-labelledby, which is what a screen reader needs in
+	 * order to say what the list is a list of.
+	 */
+	?>
+	<label class="findling-rules__label" id="findling-rules-exclusions-label" for="findling-rules-new"><?php p($l->t('Excluded folders')); ?></label>
+	<p class="settings-hint" id="findling-rules-exclusions-help"><?php p($l->t('Prefix match on the path, no wildcards and no patterns. Example: alice/files/Backups')); ?></p>
+
+	<p class="settings-hint" id="findling-rules-exclusions-empty"<?php if ($prefixes !== []) { ?> hidden<?php } ?>><?php p($l->t('No folder is excluded.')); ?></p>
+
+	<ul class="findling-rules__list" id="findling-rules-list" aria-labelledby="findling-rules-exclusions-label">
+		<?php foreach ($prefixes as $prefix) {
+			$prefix = is_string($prefix) ? $prefix : '';
+			?>
+			<li class="findling-rules__row">
+				<span class="findling-path findling-rules__prefix"><?php p($prefix); ?></span>
+				<button type="button" class="findling-rules__remove" aria-label="<?php p($l->t('Remove exclusion %s', [$prefix])); ?>">
+					<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($closeIcon); ?>"/></svg>
+				</button>
+			</li>
+		<?php } ?>
+	</ul>
+
+	<div class="findling-rules__add">
+		<input type="text" id="findling-rules-new" name="exclusion" autocomplete="off"
+			aria-describedby="findling-rules-exclusions-help findling-rules-new-error" placeholder="Backups">
+		<button type="button" id="findling-rules-add"><?php p($l->t('Add exclusion')); ?></button>
+	</div>
+	<p class="findling-rules__error" id="findling-rules-new-error" hidden></p>
+
+	<div class="findling-rules__field">
+		<label class="findling-rules__label" for="findling-rules-cap"><?php p($l->t('Largest file to read')); ?></label>
+		<input type="number" id="findling-rules-cap" name="maxFileBytes" inputmode="numeric"
+			min="1" max="<?php p((string)$ceilingMb); ?>" step="1" value="<?php p((string)$capMb); ?>"
+			aria-describedby="findling-rules-cap-unit findling-rules-cap-help findling-rules-cap-error">
+		<span class="findling-rules__unit" id="findling-rules-cap-unit">MB</span>
+	</div>
+	<p class="settings-hint" id="findling-rules-cap-help"><?php p($l->t('Files above this size are recorded as skipped (too large) and never read.')); ?>
+		<?php p($l->t('The backend of this instance reads at most %s MB. For more, raise FINDLING_MAX_FILE_BYTES in the app settings of AppAPI, which restarts the container.', [$count($ceilingMb)])); ?></p>
+	<p class="findling-rules__error" id="findling-rules-cap-error" hidden></p>
+
+	<div class="findling-rules__toggle">
+		<input type="checkbox" class="checkbox" id="findling-rules-team-folders" name="indexTeamFolders"<?php if ($teamFolders) { ?> checked<?php } ?>>
+		<label for="findling-rules-team-folders"><?php p($l->t('Index Team Folders')); ?></label>
+	</div>
+
+	<div class="findling-rules__toggle">
+		<input type="checkbox" class="checkbox" id="findling-rules-external-storage" name="indexExternalStorage"<?php if ($externalStorage) { ?> checked<?php } ?>>
+		<label for="findling-rules-external-storage"><?php p($l->t('Index external storage')); ?></label>
+	</div>
+	<p class="settings-hint" id="findling-rules-external-help"><?php p($l->t('External storage can be slow or charged per request. Indexing reads every file once.')); ?></p>
+
+	<p class="settings-hint" id="findling-rules-effect"><?php p($l->t('The next run applies the new rules. Nothing restarts.')); ?></p>
+
+	<button type="button" class="primary" id="findling-rules-save"><?php p($l->t('Save rules')); ?></button>
+
+	<p class="findling-rules__feedback" id="findling-rules-feedback" role="status" aria-live="polite" hidden></p>
+
+	<template id="findling-rules-row">
+		<li class="findling-rules__row">
+			<span class="findling-path findling-rules__prefix"></span>
+			<button type="button" class="findling-rules__remove">
+				<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($closeIcon); ?>"/></svg>
+			</button>
+		</li>
+	</template>
+</div>
