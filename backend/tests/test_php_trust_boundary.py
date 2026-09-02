@@ -29,6 +29,23 @@ A gate whose only assertion is "the current tree is clean" is green on the day
 somebody deletes its body, so the two ways of breaking a route are staged here
 deliberately and the gate has to report both of them.
 
+**Two route classes since phase 4.** A route of this app is either an ExApp
+route, spelled ``ApiRoute`` and reachable only by a registered container, or an
+admin route, spelled ``FrontpageRoute`` and reachable only by the browser
+session of an admin. The two are judged by opposite rules, and neither rule may
+be applied to the other class. An ``ExAppRequired`` on an admin route points the
+protection the wrong way round: the admin's own browser would no longer reach
+the page, while every registered foreign container would (pitfall 7). And
+``access_level ADMIN`` in ``backend/appinfo/info.xml`` does not close that gap,
+because it is checked in ``ExAppProxyController`` on the way browser to AppAPI
+proxy to ExApp, and ``PublicFunctions::exAppRequest`` never passes that check
+(pitfall 10). The effective protection of the admin side is therefore the PHP
+controller itself: a route without ``NoAdminRequired``, ``PublicPage`` and
+``NoCSRFRequired`` makes ``SecurityMiddleware`` demand a logged in admin plus a
+CSRF token, and with any of those three it does not. This gate is the regression
+lock for that sentence, which is why the admin class is judged by what it must
+*not* carry.
+
 **What this gate does not claim.** It says nothing about whether AppAPI
 authenticated the caller before the request arrived. That residual risk is
 written down at every ``rejectForeignCaller`` in the PHP sources: whoever can
@@ -43,16 +60,26 @@ from pathlib import Path
 
 CONTROLLER_ROOT = Path(__file__).resolve().parents[2] / "php" / "lib" / "Controller"
 
-# The attribute that makes a method a route. Everything else in this file hangs
-# off finding it: a method without it is not reachable from the outside and
-# needs no boundary.
+# The two attributes that make a method a route. Everything else in this file
+# hangs off finding one of them: a method without either is not reachable from
+# the outside and needs no boundary. ApiRoute is the ExApp class, FrontpageRoute
+# the admin class, and the attribute alone decides which set of rules applies.
 ROUTE_ATTRIBUTE = "ApiRoute"
+ADMIN_ROUTE_ATTRIBUTE = "FrontpageRoute"
+ROUTE_ATTRIBUTES = (ROUTE_ATTRIBUTE, ADMIN_ROUTE_ATTRIBUTE)
 
 # The attribute that keeps browsers and ordinary users out, and the call that
-# keeps foreign ExApps out. Both are required, because each of them answers a
-# question the other one does not.
+# keeps foreign ExApps out. Both are required on an ExApp route, because each of
+# them answers a question the other one does not.
 EXAPP_ATTRIBUTE = "ExAppRequired"
 GUARD_CALL = "rejectForeignCaller"
+
+# What an admin route may never carry. The first three each remove one half of
+# what SecurityMiddleware would otherwise demand, and the fourth would hand the
+# route to every registered container while locking the admin out of it. None of
+# them is a weakening that can be argued for on a settings page, so the list is
+# checked as a whole and every hit is named.
+FORBIDDEN_ON_ADMIN_ROUTE = ("NoAdminRequired", "PublicPage", "NoCSRFRequired", EXAPP_ATTRIBUTE)
 
 _FUNCTION = re.compile(r"^\s*(?:public|protected|private)\s+(?:static\s+)?function\s+(\w+)\s*\(")
 
@@ -65,11 +92,16 @@ _NOT_A_STATEMENT = ("//", "/*", "*", "#")
 
 @dataclass(frozen=True, slots=True)
 class Route:
-    """One method that is reachable over HTTP, with where it stands."""
+    """One method that is reachable over HTTP, with where it stands.
+
+    ``kind`` is ``"exapp"`` or ``"admin"`` and decides which of the two rules
+    below judges the method.
+    """
 
     file: str
     method: str
     line: int
+    kind: str
 
 
 def _attributes_above(lines: list[str], function_index: int) -> list[str]:
@@ -106,31 +138,53 @@ def _first_statement(lines: list[str], start: int) -> str:
 
 
 def routes_of(relative_path: str, source: str) -> list[Route]:
-    """Every method of one controller that carries the route attribute."""
+    """Every method of one controller that carries one of the route attributes.
+
+    A method that carries both attribute names counts as ``admin``, which is the
+    safe direction: the admin class is the stricter of the two, so a mixed
+    method is reported rather than waved through.
+    """
     lines = source.splitlines()
     routes: list[Route] = []
     for index, line in enumerate(lines):
         match = _FUNCTION.match(line)
         if match is None:
             continue
-        if not any(ROUTE_ATTRIBUTE in attribute for attribute in _attributes_above(lines, index)):
+        attributes = _attributes_above(lines, index)
+        if any(ADMIN_ROUTE_ATTRIBUTE in attribute for attribute in attributes):
+            kind = "admin"
+        elif any(ROUTE_ATTRIBUTE in attribute for attribute in attributes):
+            kind = "exapp"
+        else:
             continue
-        routes.append(Route(file=relative_path, method=match.group(1), line=index + 1))
+        routes.append(Route(file=relative_path, method=match.group(1), line=index + 1, kind=kind))
     return routes
 
 
 def scan_source(relative_path: str, source: str) -> list[str]:
     """Return one message per unguarded route, empty list when clean.
 
-    Both messages name the file and the method, because a gate that only says
-    "something is wrong" costs the next reader the search this function already
-    did.
+    Every message names the file, the line and the method, because a gate that
+    only says "something is wrong" costs the next reader the search this
+    function already did.
     """
     lines = source.splitlines()
     violations: list[str] = []
 
     for route in routes_of(relative_path, source):
         attributes = _attributes_above(lines, route.line - 1)
+
+        if route.kind == "admin":
+            violations += [
+                f"{route.file}:{route.line}: {route.method}() is an admin route carrying {forbidden}, "
+                "so SecurityMiddleware no longer demands a logged in admin plus a CSRF token"
+                for forbidden in FORBIDDEN_ON_ADMIN_ROUTE
+                if any(forbidden in attribute for attribute in attributes)
+            ]
+            # No rejectForeignCaller here on purpose: there is no ExApp caller on
+            # an admin route, so there is nothing for the comparison to reject.
+            continue
+
         if not any(EXAPP_ATTRIBUTE in attribute for attribute in attributes):
             violations.append(
                 f"{route.file}:{route.line}: {route.method}() is a route without {EXAPP_ATTRIBUTE}, "
@@ -171,11 +225,18 @@ def test_the_gate_sees_every_route_the_sources_declare() -> None:
     # an import line would count as a mention without being a route.
     sources = _controller_sources()
     routes = [route for name, source in sources for route in routes_of(name, source)]
-    mentions = sum(1 for _, source in sources for line in source.splitlines() if ROUTE_ATTRIBUTE in line)
+    mentions = sum(
+        1
+        for _, source in sources
+        for line in source.splitlines()
+        if any(attribute in line for attribute in ROUTE_ATTRIBUTES)
+    )
 
     assert len(routes) == mentions
     # Eight today: five on the queue, two on the reconcile, one on the content
-    # gateway. A lower number means the parser lost something.
+    # gateway, and no admin route yet. A lower number means the parser lost
+    # something. Every plan that adds a route raises this bound with it,
+    # admin routes included, otherwise the clause stops being a ratchet.
     assert len(routes) >= 8
 
 
