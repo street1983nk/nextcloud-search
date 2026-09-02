@@ -143,6 +143,37 @@ the closure.
 `uv` 0.11.7 and the build stage tools (`curl`, `ca-certificates`) are build time
 only. They are not part of the runtime image and are therefore not distributed.
 
+## The icon path data of the admin page
+
+Added in phase 4. This one is not in the container image, it travels in the app
+store archive of the PHP companion app, which is why it is listed among the
+distributed material and not further down.
+
+| Item | Value |
+|---|---|
+| Project | Material Design Icons by Pictogrammers |
+| Source repository | `github.com/Templarian/MaterialDesign-SVG` |
+| Pinned commit | `9e04201d4557e729822fb57f62a316c3dea1d4a8` (tag `v7.4.47`), read on 2026-09-02 |
+| Licence | **Apache-2.0** (`LICENSE` of the repository), compatible with the AGPL-3.0 of Findling |
+| What is used | the `d` attribute of three icons and nothing else: `magnify`, `alert-circle-outline`, `information-outline` |
+| Where it lands | `php/img/app-dark.svg` carries `magnify` as the section icon; the other two are inline SVG in `php/templates/admin.php`, the banner icons of the coverage block |
+
+The commit is pinned instead of `master` because a path is data, and data that
+is quoted has to be quotable. The three strings in this repository are byte
+identical to `svg/magnify.svg`, `svg/alert-circle-outline.svg` and
+`svg/information-outline.svg` at that commit, which is a claim anybody can check
+with the command at the end of this file.
+
+No package, no icon font, no build step and no runtime dependency. What is
+copied here is nine hundred characters of curve data, which is why the app has
+no `package.json` at all: the design contract of phase 4 forbids a bundler in
+the companion app, and an icon set was the only reason to want one.
+
+The remaining five icons of the phase four design contract
+(`check-circle-outline`, `minus-circle-outline`, `clock-outline`,
+`folder-off-outline`, `content-cut`) come from the same repository at the same
+commit and get their row here in the plan that first renders one of them.
+
 ## Material in the repository that is not in the image
 
 One entry, added in phase 3, and it is listed although it travels with neither
@@ -176,4 +207,12 @@ docker run --rm --entrypoint sh ghcr.io/street1983nk/findling_backend:dev \
 
 # the pinned versions of the Python side
 grep -A 20 '^dependencies' backend/pyproject.toml
+
+# the icon path data against the pinned upstream commit
+mdi=9e04201d4557e729822fb57f62a316c3dea1d4a8
+for icon in magnify alert-circle-outline information-outline; do
+    curl -sf "https://raw.githubusercontent.com/Templarian/MaterialDesign-SVG/${mdi}/svg/${icon}.svg" \
+        | grep -o 'd="[^"]*"'
+done
+grep -o 'd="[^"]*"' php/img/app-dark.svg php/templates/admin.php
 ```

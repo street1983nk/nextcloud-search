@@ -1,0 +1,24 @@
+OC.L10N.register(
+    "findling",
+    {
+    "Findling": "Findling",
+    "Search coverage": "Deckungsgrad der Suche",
+    "%1$s of %2$s indexable files are searchable": "%1$s von %2$s indexierbaren Dateien sind durchsuchbar",
+    "Indexing, about %s left": "Indexierung läuft, noch etwa %s",
+    "Up to date, last checked %s": "Aktuell, letzte Prüfung %s",
+    "Indexing has not progressed for %s. Background jobs may not be running.": "Die Indexierung kommt seit %s nicht voran. Möglicherweise laufen die Hintergrundaufträge nicht.",
+    "No background job of this app has run yet. Background jobs may not be running.": "Noch kein Hintergrundauftrag dieser App ist gelaufen. Möglicherweise laufen die Hintergrundaufträge nicht.",
+    "Waiting in the queue": "Wartet in der Warteschlange",
+    "Being processed": "Wird gerade verarbeitet",
+    "Indexed": "Indexiert",
+    "Skipped": "Übersprungen",
+    "Failed": "Fehlgeschlagen",
+    "Excluded": "Ausgeschlossen",
+    "Excluded files are not part of the coverage figure. They are files you told Findling to leave alone.": "Ausgeschlossene Dateien zählen nicht in den Deckungsgrad. Es sind die Dateien, die Findling auf Anweisung nicht anfasst.",
+    "Little disk space left. Indexing is paused so the index stays intact. Search keeps working.": "Wenig Speicherplatz frei. Die Indexierung pausiert, damit der Index unbeschädigt bleibt. Die Suche funktioniert weiter.",
+    "The index was built with an older text analysis. Run \"occ findling:index --restart\" to rebuild it, otherwise some hits stay missing.": "Der Index wurde mit einer älteren Textanalyse gebaut. Mit \"occ findling:index --restart\" neu aufbauen, sonst fehlen weiter Treffer.",
+    "No numbers yet": "Noch keine Zahlen",
+    "The first indexing pass has not finished. Findling started on its own, there is nothing to configure.": "Der erste Indexlauf ist noch nicht durch. Findling ist von selbst gestartet, es ist nichts einzustellen.",
+    "The Findling backend does not answer. The numbers below are the last ones this app recorded. Check under Apps that the External App \"Findling Backend\" is installed and running.": "Das Findling-Backend antwortet nicht. Die Zahlen unten sind die letzten, die diese App festgehalten hat. Unter Apps prüfen, ob die External App \"Findling Backend\" installiert und gestartet ist."
+},
+"nplurals=2; plural=(n != 1);");

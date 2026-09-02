@@ -55,4 +55,27 @@ weeks. "occ findling:index --status" shows how far it has come.]]></description>
 	-->
 	<repair-steps><install><step>OCA\Findling\Repair\AppInstallStep</step></install></repair-steps>
 	<commands><command>OCA\Findling\Command\IndexCommand</command></commands>
+	<!--
+		The settings block, written on one line for the same reason as the two
+		above, and standing here because there is nowhere else to put it:
+		IRegistrationContext has no registerSettings(), so the two classes
+		cannot be registered in Application::register() the way the search
+		provider and the event listeners are. Nextcloud reads these class names
+		out of the installed appinfo/info.xml in AppManager::loadApp(), which
+		makes this file the registration itself.
+
+		The app store transform empties the block: pre-info.xslt has the
+		templates for activity and settings swapped, so what the store
+		validates is an empty <settings/>, and that passes because every child
+		of the settings type carries minOccurs="0". It has no consequence,
+		because the block is read at runtime from the installed file and never
+		from the normalised copy the store keeps. The workflow step "State the
+		settings finding explicitly" holds that finding and turns red the day
+		it stops being true.
+
+		The version stays at 0.2.0 on purpose. This plan adds no container
+		route, and the joint bump of both info.xml files and the image tag
+		belongs to the plan that does.
+	-->
+	<settings><admin>OCA\Findling\Settings\Admin</admin><admin-section>OCA\Findling\Settings\Section</admin-section></settings>
 </info>
