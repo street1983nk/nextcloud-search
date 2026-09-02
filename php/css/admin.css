@@ -1,0 +1,161 @@
+/*
+ * Only what the Nextcloud server CSS does not already deliver.
+ *
+ * Every colour is a variable of the theme, without a single literal value, so
+ * that light, dark and high contrast all work without a second rule and without
+ * a switch. Every distance of our own is a multiple of the four pixel grid
+ * baseline, written as a calculation so that the multiple is visible instead of
+ * being hidden in a rounded number.
+ *
+ * Two font sizes are set here and no others: the twenty eight pixels of the
+ * coverage figure and the thirteen pixels of a label. Fifteen and twenty come
+ * from the core, and the core resets every heading to inherit, which is why the
+ * one subheading below has to say its weight out loud.
+ *
+ * The focus ring is never touched. Nothing here removes an outline.
+ */
+
+#findling-coverage {
+	/* The same width as the h2 of a settings block in the core, so that text
+	   and heading end on the same line. */
+	max-width: 900px;
+}
+
+/* -- banners --------------------------------------------------------------- */
+
+.findling-banner {
+	display: flex;
+	align-items: flex-start;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block: calc(var(--default-grid-baseline) * 2);
+	padding: calc(var(--default-grid-baseline) * 4);
+	border-radius: var(--border-radius-container);
+}
+
+/* Surface and text always as the pair the theme ships, because the pair is what
+   carries the checked contrast. Colour is never the only carrier: every banner
+   also has an icon and a sentence. */
+.findling-banner--error {
+	background-color: var(--color-error);
+	color: var(--color-error-text);
+}
+
+.findling-banner--warning {
+	background-color: var(--color-warning);
+	color: var(--color-warning-text);
+}
+
+.findling-banner__icon {
+	flex: 0 0 auto;
+	/* The icon sits on the first line of the sentence, not in the middle of the
+	   paragraph, so it lines up with the text it belongs to. */
+	margin-block-start: calc(var(--default-grid-baseline) / 2);
+}
+
+.findling-banner__text {
+	/* A banner carries a command line, and a command line must not be cut. */
+	overflow-wrap: anywhere;
+}
+
+/* -- the coverage figure --------------------------------------------------- */
+
+.findling-figure {
+	margin-block: 0 calc(var(--default-grid-baseline) * 6);
+}
+
+.findling-figure__value {
+	font-size: 28px;
+	font-weight: bold;
+	line-height: 1.2;
+}
+
+/* The core draws the bar five pixels high, which is a hairline under a figure
+   this size. Eight pixels is two grid baselines and the only measurement of the
+   core this file overrides. */
+#findling-coverage progress {
+	height: calc(var(--default-grid-baseline) * 2);
+	width: 100%;
+}
+
+/* The core resets every heading to inherit, so a subgroup carries its rank in
+   its weight and not in a fifth font size. */
+.findling-subheading {
+	font-size: var(--default-font-size);
+	font-weight: bold;
+	line-height: 1.2;
+}
+
+/* -- the status line and the work stock ------------------------------------ */
+
+.findling-run-state {
+	margin-block: calc(var(--default-grid-baseline) * 4);
+}
+
+.findling-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block: calc(var(--default-grid-baseline) * 4);
+}
+
+.findling-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--default-grid-baseline);
+	padding: var(--default-grid-baseline) calc(var(--default-grid-baseline) * 2);
+	border-radius: var(--border-radius-small);
+	font-size: 13px;
+	background-color: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+
+.findling-chip svg,
+.findling-chip .icon-loading-small {
+	flex: 0 0 auto;
+	color: var(--color-text-maxcontrast);
+}
+
+.findling-chip__value {
+	font-weight: bold;
+}
+
+/* -- the four tiles -------------------------------------------------------- */
+
+.findling-tiles {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--default-grid-baseline) * 4);
+	margin-block: calc(var(--default-grid-baseline) * 4);
+	/* A list without markers: the four tiles are a set, not an enumeration. */
+	list-style: none;
+	padding-inline-start: 0;
+}
+
+.findling-tile {
+	display: flex;
+	flex-direction: column;
+	gap: var(--default-grid-baseline);
+	min-width: calc(var(--default-grid-baseline) * 30);
+	padding: calc(var(--default-grid-baseline) * 4);
+	border-radius: var(--border-radius-container);
+	background-color: var(--color-background-hover);
+}
+
+.findling-tile__value {
+	font-weight: bold;
+}
+
+.findling-tile__label {
+	font-size: 13px;
+	color: var(--color-text-maxcontrast);
+}
+
+/* -- paths ----------------------------------------------------------------- */
+
+/* A path is the payload of a diagnostic line, so it wraps over as many lines as
+   it needs and is never shortened with an ellipsis. Filled by the error list of
+   a later plan; the rule lives here because the reason belongs next to the
+   banner rule that shares it. */
+.findling-path {
+	overflow-wrap: anywhere;
+}
