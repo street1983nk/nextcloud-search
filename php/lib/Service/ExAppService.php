@@ -36,6 +36,12 @@ use Psr\Log\LoggerInterface;
  * The two calls are separate on purpose, see SRCH-02: a snippet is file
  * content, and file content is only ever fetched for hits that already survived
  * the recheck.
+ *
+ * Since phase 4 there is a third caller with a different clock. The admin page
+ * reads counters rather than content, it has no unified search waiting behind
+ * it, and it therefore gets its own timeout and its own method. What it shares
+ * with the two above is the pre-flight and the four failure cases, because the
+ * way this app degrades has to stay one answer no matter who asked.
  */
 final class ExAppService {
 	/**
@@ -56,6 +62,24 @@ final class ExAppService {
 	 * every provider.
 	 */
 	private const REQUEST_TIMEOUT_SECONDS = 1.5;
+
+	/**
+	 * Two seconds for a reading call of the admin page, and the arithmetic is a
+	 * different one from the search above.
+	 *
+	 * An admin page may wait longer than the unified search: nobody is typing,
+	 * there is no second provider whose result group is delayed by this one, and
+	 * the page is opened when something is already suspected to be wrong, which
+	 * is exactly when a container is slow to answer. So the ceiling is higher
+	 * than the 1.5 s of a search call.
+	 *
+	 * It stays small all the same, and that is the other half of the reasoning.
+	 * A hung container must not take the administration of the instance with it:
+	 * the settings page has to render, say "the backend does not answer" and
+	 * keep the numbers it does have (T-04-15). Two seconds is the longest an
+	 * admin waits without deciding that the page itself is broken.
+	 */
+	private const ADMIN_REQUEST_TIMEOUT_SECONDS = 2.0;
 
 	/**
 	 * Below this remaining budget a call is not placed at all. An answer that
@@ -238,6 +262,117 @@ final class ExAppService {
 	}
 
 	/**
+	 * A reading GET against the container, for the admin page and nothing else.
+	 *
+	 * Separate from call() above rather than a parameter on it, and the reason
+	 * is the budget and not the verb. A search call shrinks its timeout to what
+	 * is left of the wall clock the unified search grants a provider; an admin
+	 * page has no such clock and its own, larger ceiling, and folding both into
+	 * one method would mean one of the two callers reading a rule that is not
+	 * its own. The four failure cases below are the same four, in the same
+	 * order, for the same reasons.
+	 *
+	 * For GET, AppAPI appends the parameters with http_build_query, so this is
+	 * a query string call and there is no JSON body on the way out.
+	 *
+	 * @param array<string,mixed> $params appended to the URL as a query string
+	 * @return array<mixed>|null null on every failure, so that the caller can
+	 *                           say "not reachable" instead of "not indexed"
+	 */
+	public function adminGet(string $path, string $userId, array $params): ?array {
+		$appApi = $this->publicFunctions($userId);
+		if ($appApi === null) {
+			return null;
+		}
+
+		$response = $appApi->exAppRequest(
+			Application::BACKEND_APP_ID,
+			$path,
+			$userId,
+			'GET',
+			$params,
+			['timeout' => self::ADMIN_REQUEST_TIMEOUT_SECONDS],
+		);
+
+		// Case 1 first, always, and here it matters even more than in the
+		// search: AppAPI catches every transport exception and hands back an
+		// array, so a stopped, unknown or timed out backend arrives at this
+		// line. A method call on that array would be a fatal error, and the
+		// page that was supposed to report the outage would be the outage.
+		if (is_array($response)) {
+			$this->logger->warning('Findling: backend unreachable for the admin page', [
+				'path' => $path,
+				'error' => $response['error'] ?? 'unknown',
+			]);
+			return null;
+		}
+
+		// Case 2. AppAPI hard sets http_errors to false, so 4xx and 5xx arrive
+		// as an ordinary response object instead of throwing.
+		/** @var IResponse $response */
+		if ($response->getStatusCode() >= 400) {
+			$this->logger->warning('Findling: backend returned an error for the admin page', [
+				'path' => $path,
+				'status' => $response->getStatusCode(),
+			]);
+			return null;
+		}
+
+		// Case 3. A 2xx promises neither a body that parses nor one that fits
+		// into memory, and the length is checked before the parser sees it.
+		$responseBody = $response->getBody();
+		if (!is_string($responseBody) || strlen($responseBody) > self::MAX_BODY_BYTES) {
+			$this->logger->warning('Findling: backend answer for the admin page is not a bounded string body', [
+				'path' => $path,
+				'bytes' => is_string($responseBody) ? strlen($responseBody) : -1,
+			]);
+			return null;
+		}
+
+		// Case 4.
+		$decoded = json_decode($responseBody, true);
+		if (!is_array($decoded)) {
+			$this->logger->warning('Findling: malformed backend response for the admin page', ['path' => $path]);
+			return null;
+		}
+
+		return $decoded;
+	}
+
+	/**
+	 * The pre-flight both call paths share: a real user, app_api enabled for
+	 * them, and the public functions of AppAPI actually resolvable.
+	 *
+	 * Extracted rather than written twice, because these three checks are not
+	 * about a single request: they are the statement that this app talks to
+	 * exactly one container and only through AppAPI. info.xml has no way to
+	 * declare an app to app dependency, so the bond to app_api is a runtime
+	 * check, and without it a missing AppAPI would not cost a result group but
+	 * the whole request that touched it.
+	 */
+	private function publicFunctions(string $userId): ?\OCA\AppAPI\PublicFunctions {
+		$user = $this->userManager->get($userId);
+		if ($user === null) {
+			// Without a user object the app check below would silently fall
+			// back to the session user, which is a different question.
+			$this->logger->info('Findling: unknown user, no call to the backend');
+			return null;
+		}
+
+		if (!$this->appManager->isEnabledForUser('app_api', $user)) {
+			$this->logger->info('Findling: app_api is not enabled, no call to the backend');
+			return null;
+		}
+
+		try {
+			return \OCP\Server::get(\OCA\AppAPI\PublicFunctions::class);
+		} catch (ContainerExceptionInterface|NotFoundExceptionInterface) {
+			$this->logger->info('Findling: AppAPI public functions unavailable');
+			return null;
+		}
+	}
+
+	/**
 	 * The four silent failure paths of phase 1, in one place for both calls.
 	 *
 	 * Array with an error key, status code 400 and above, a body that is not a
@@ -257,26 +392,10 @@ final class ExAppService {
 			return null;
 		}
 
-		$user = $this->userManager->get($userId);
-		if ($user === null) {
-			// Without a user object the app check below would silently fall
-			// back to the session user, which is a different question.
-			$this->logger->info('Findling: unknown user, returning no results');
-			return null;
-		}
-
-		// info.xml has no way to declare an app to app dependency, so the bond
-		// to app_api is a runtime check. Without it the whole unified search of
-		// this user dies with a container error, not just our result group.
-		if (!$this->appManager->isEnabledForUser('app_api', $user)) {
-			$this->logger->info('Findling: app_api is not enabled, returning no results');
-			return null;
-		}
-
-		try {
-			$appApi = \OCP\Server::get(\OCA\AppAPI\PublicFunctions::class);
-		} catch (ContainerExceptionInterface|NotFoundExceptionInterface) {
-			$this->logger->info('Findling: AppAPI public functions unavailable');
+		$appApi = $this->publicFunctions($userId);
+		if ($appApi === null) {
+			// Unknown user, app_api switched off, or AppAPI not resolvable. All
+			// three cost this user a result group and never the whole search.
 			return null;
 		}
 
