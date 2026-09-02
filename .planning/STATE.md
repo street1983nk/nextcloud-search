@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
 stopped_at: Completed 04-08-PLAN.md
-last_updated: "2026-09-02T19:24:51.917Z"
+last_updated: "2026-09-02T19:51:45.986Z"
 last_activity: 2026-09-02
 progress:
   total_phases: 6
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 04 (admin-sichtbarkeit-und-diagnose): EXECUTING
-Plan: 9 of 10
+Plan: 10 of 10
 Status: Ready to execute
 Last activity: 2026-09-02
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P06 | 22 min | 3 tasks | 9 files |
 | Phase 04 P07 | 25 min | 3 tasks | 16 files |
 | Phase 04 P08 | 33 min | 3 tasks | 16 files |
+| Phase 04 P09 | 22 min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,8 @@ Recent decisions affecting current work:
 - [Phase 04]: App-Version bleibt bei 0.3.0, obwohl der Container eine fuenfte Route bekam: Plan 04-05 hat beide Haelften schon angehoben und beide Plaene liegen im selben Release; ein zweiter Bump haette docker.yml gegen ein nie geschnittenes Git-Tag laufen lassen
 - [Phase 04]: Der Ausschluss wird von den Aufrufern angewandt, nicht von der Aufzaehlung: getFilesInMount und getFileSlice liefern jede Zeile, Crawl und Event-Listener rufen den einen Helfer isExcluded. Ein Filter in getFilesInMount haette den Crawl an einem ausgeschlossenen Ordner beendet, die Kachel Ausgeschlossen dauerhaft auf 0 gehalten und die Raeumung von Plan 04-09 gegen genau ihren Zielordner wirkungslos gemacht; ein Filter in getFileSlice haette ueber die final-Marke des Reconcile den Index eines ganzen Mounts geleert.
 - [Phase 04]: Kein Config-Lexicon registriert: die Schnittstelle wurde innerhalb des Versionsfensters 32 bis 35 umbenannt, und eine Klassenreferenz, die nur auf einem Teil der Server aufloest, waere ein fataler Fehler beim Booten statt eines fehlenden Komforts. SettingsService und ExclusionService validieren stattdessen defensiv in beide Richtungen.
+- [Phase 04]: The clearing of a new exclusion covers every mount the app walks, not only home mounts: The enforcement compares a prefix relative to the root of every mount in the list, and clearing fewer mounts than the crawl excludes would leave index content that nothing removes
+- [Phase 04]: The diagnosis is fed the internal path plus the storage instead of the display path: A Team Folder file arrives as TeamX/x.pdf in the display space and as x.pdf in the space the crawl compares, so the display path would be a second path space
 
 ### Pending Todos
 
@@ -131,6 +134,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-02T19:24:51.900Z
+Last session: 2026-09-02T19:51:31.450Z
 Stopped at: Completed 04-08-PLAN.md
 Resume file: None

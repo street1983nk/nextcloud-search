@@ -177,7 +177,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 04-09-PLAN.md , Ausschluss raeumt Bestand, excluded in drei Listen, Inline-Bestaetigung (ADM-04)
+- [x] 04-09-PLAN.md , Ausschluss raeumt Bestand, excluded in drei Listen, Inline-Bestaetigung (ADM-04)
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
@@ -226,7 +226,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
-| 4. Admin-Sichtbarkeit und Diagnose | 8/10 | In Progress|  |
+| 4. Admin-Sichtbarkeit und Diagnose | 9/10 | In Progress|  |
 | 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 
