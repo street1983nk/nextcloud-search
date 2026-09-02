@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-09-02T15:58:28.044Z"
-last_activity: 2026-09-02 -- Phase 4 planning complete
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-09-02T16:25:46.621Z"
+last_activity: 2026-09-02
 progress:
   total_phases: 6
   completed_phases: 0
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 4 — admin sichtbarkeit und diagnose
+**Current focus:** Phase 04 — admin-sichtbarkeit-und-diagnose
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
+Phase: 04 (admin-sichtbarkeit-und-diagnose) — EXECUTING
+Plan: 2 of 10
 Status: Ready to execute
-Last activity: 2026-09-02 -- Phase 4 planning complete
+Last activity: 2026-09-02
 
-Progress: [..........] 0%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [..........] 0%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 04 P01 | 12 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,9 @@ Recent decisions affecting current work:
 - Roadmap: Integrationsbeweis (IProvider + exAppRequest) steht vor jedem Feature, App-IDs und beide CSRs in Phase 1
 - Engine: Tantivy 0.26 plus SQLite-ACL-Vorfilter, finaler PHP-Recheck ist die Sicherheitsgrenze
 - OCR strikt index-only, Nutzerdateien werden nie verändert (CI-Prüfsummen-Gate ab Phase 1)
+- [Phase 04]: Gate B kennt zwei Routenklassen: ApiRoute (ExApp, ExAppRequired plus rejectForeignCaller) und FrontpageRoute (Admin, kein Zugriffsattribut). Begruendung: Phase 4 legt den ersten PHP-Controller ohne ExAppRequired an; die Klassentrennung musste vor dem Controller stehen, sonst steht der Baum zwischendurch rot
+- [Phase 04]: Eine Route mit beiden Attributnamen gilt als Admin-Route. Begruendung: die Admin-Klasse ist die strengere, also wird Vermischung gemeldet statt durchgelassen
+- [Phase 04]: php/templates wird per .gitkeep offengehalten, statt den find-Pfad des php -l-Jobs tolerant zu machen. Begruendung: jede tolerante Schreibweise laesst das Gate stumm weniger pruefen als es behauptet
 
 ### Pending Todos
 
@@ -91,6 +95,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-02T14:30:07.294Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-admin-sichtbarkeit-und-diagnose/04-CONTEXT.md
+Last session: 2026-09-02T16:25:37.760Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None

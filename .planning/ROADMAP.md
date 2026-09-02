@@ -148,7 +148,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md , Gate B lernt zwei Routenklassen; CI sieht php/templates und den settings-Block
+- [x] 04-01-PLAN.md , Gate B lernt zwei Routenklassen; CI sieht php/templates und den settings-Block
 - [ ] 04-02-PLAN.md , Container-Statusvertrag: sechs neue Zahlen, Docblock-Widerspruch aufgeloest
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -226,7 +226,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
-| 4. Admin-Sichtbarkeit und Diagnose | 0/10 | Planned | - |
+| 4. Admin-Sichtbarkeit und Diagnose | 1/10 | In Progress | - |
 | 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 
