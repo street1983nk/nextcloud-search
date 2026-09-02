@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace OCA\Findling\BackgroundJobs;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
 use OCA\Findling\Service\ScanStatsService;
+use OCA\Findling\Service\SettingsService;
 use OCA\Findling\Service\StorageService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\IJobList;
@@ -112,6 +114,8 @@ class StorageCrawlJob extends QueuedJob {
 		private QueueService $queueService,
 		private FileStateService $fileStateService,
 		private ScanStatsService $scanStats,
+		private SettingsService $settingsService,
+		private ExclusionService $exclusionService,
 		private IAppConfig $appConfig,
 		private IDBConnection $db,
 		private LoggerInterface $logger,
@@ -143,6 +147,14 @@ class StorageCrawlJob extends QueuedJob {
 			$this->scanStats->beginStorage($storageId);
 		}
 
+		// The two rules in force, read once before the loop and never once per
+		// file. IAppConfig caches per request, so this is about not asking the
+		// same question two thousand times rather than about the query; and a
+		// value read once per slice is exactly what "the next run applies it"
+		// means, because a slice is what a run of this job is.
+		$cap = $this->settingsService->maxFileBytes();
+		$mountRoot = $this->storageService->mountRootPath($storageId, $overriddenRoot);
+
 		$deadline = $this->time->getTime() + self::MAX_SECONDS;
 		$seen = 0;
 		$queued = 0;
@@ -154,10 +166,11 @@ class StorageCrawlJob extends QueuedJob {
 		// then set back to zero, while $seen decides whether this mount is done
 		// and $queued and $skipped belong to the log line of the whole slice.
 		//
-		// excluded stays zero throughout this plan. It gets its value in plan
-		// 04-08 with the exclusion rules, and it is counted here already so
-		// that the column does not have to be added later to a table that
-		// already holds data.
+		// excluded was counted here from plan 04-04 on and stayed at zero until
+		// plan 04-08 gave it the exclusion rules to count. It is the one
+		// omission that has no row in findling_file_state, which is why the
+		// counter is the whole record of it: without this number an excluded
+		// file would be a file that quietly stopped being findable.
 		$bandFiles = 0;
 		$bandBytes = 0;
 		$bandOcr = 0;
@@ -174,8 +187,10 @@ class StorageCrawlJob extends QueuedJob {
 		try {
 			foreach ($this->storageService->getFilesInMount($storageId, $overriddenRoot, $lastFileId, self::BATCH_SIZE) as $entry) {
 				// The cursor moves for every entry that was looked at, including
-				// the ones that were too large. Moving it only for queued files
-				// would hand the same oversized file to every following slice.
+				// the ones that were too large and the ones a rule left alone.
+				// Moving it only for queued files would hand the same oversized
+				// file to every following slice, and it would leave the crawl
+				// standing in front of an excluded folder for good.
 				//
 				// This assignment is the PHP half of IDX-02. The cursor lives in
 				// the job argument and therefore in the Nextcloud database, which
@@ -201,7 +216,32 @@ class StorageCrawlJob extends QueuedJob {
 					$bandPdf++;
 				}
 
-				if ($size > self::MAX_SIZE) {
+				// The exclusion test comes BEFORE the size check, because a file
+				// an admin told this app to leave alone is left alone whatever
+				// its size is, and skipped(too_large) on a file inside an
+				// excluded folder would be a reason nobody can act on.
+				//
+				// Both the path and the comparison come from ExclusionService,
+				// which is the only place either of them exists. The event
+				// listener asks the same two methods with a root of its own, and
+				// the two land in the same space by construction: that is
+				// pitfall 4, and it is the difference between an exclusion that
+				// holds and one that the next save undoes without anybody
+				// noticing.
+				if ($this->exclusionService->isExcluded(
+					$this->exclusionService->mountRelativePath($entry->getPath(), $mountRoot),
+				)) {
+					// Counted and not recorded. The scan counter takes the
+					// sighting so that the Excluded tile of the page has a
+					// number and the coverage denominator loses one, and no row
+					// goes into findling_file_state: on an excluded archive
+					// folder with two hundred thousand files that would be two
+					// hundred thousand writes for an answer that follows from
+					// one comparison, and the diagnosis works the reason out
+					// live instead (stage two of the precedence rule).
+					$bandExcluded++;
+					$skipped++;
+				} elseif ($size > $cap) {
 					$this->fileStateService->record($entry->getId(), 'skipped', 'too_large');
 					$skipped++;
 					// The same decision as the line above, counted as well as

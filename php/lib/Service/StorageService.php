@@ -22,33 +22,59 @@ use Psr\Log\LoggerInterface;
  * point of the version floor.
  *
  * The two hard boundaries of the index are decided here and nowhere else:
- * which mounts are looked at, and which document types are considered. Both
- * are constants rather than configuration, because zero config means the
- * defaults have to be right, not adjustable.
+ * which mounts are looked at, and which document types are considered. The
+ * document types are a constant, because zero config means the default has to
+ * be right rather than adjustable. Which mounts are looked at was a constant
+ * until plan 04-08 and is now the default of two switches (ADM-04, D-08): the
+ * three provider lists below are the documented default and providers()
+ * composes the list in force out of them.
  */
 class StorageService {
 	/**
-	 * Which mounts the crawl walks.
+	 * The mounts that are always walked: user homes in both flavours.
 	 *
-	 * User homes in both flavours and Team Folders are in. External storage is
-	 * out: a remote drive blows up every assumption the first index makes about
-	 * how long reading a file takes and how much of it there is, and an admin
-	 * who mounts a multi terabyte share does not expect an app installation to
-	 * start pulling it through HTTP. It becomes a switch in phase 4 (ADM-04),
-	 * which is why the line stays here instead of being deleted.
-	 *
-	 * Team Folders are called that since NC 31, but the app id and the mount
-	 * provider class are unchanged. Whether the app is installed does not need
-	 * to be checked: if it is not, there are no mounts of that class.
+	 * There is no switch for these and there is not going to be one. A search
+	 * that does not read the home directories of the users is not a search, so
+	 * an option for it would be an option for switching the app off, and the way
+	 * to switch an app off is to disable it.
 	 *
 	 * @var list<string>
 	 */
-	private const MOUNT_PROVIDERS = [
+	private const HOME_MOUNT_PROVIDERS = [
 		'OC\Files\Mount\LocalHomeMountProvider',   // user home, file backend
 		'OC\Files\Mount\ObjectHomeMountProvider',  // user home, object storage backend
-		'OCA\GroupFolders\Mount\MountProvider',    // Team Folders
-		// 'OCA\Files_External\Config\ConfigAdapter' -- external storage, off by default
 	];
+
+	/**
+	 * Team Folders, on by default.
+	 *
+	 * They are called that since NC 31, but the app id and the mount provider
+	 * class are unchanged. Whether the app is installed does not need to be
+	 * checked: if it is not, there are no mounts of that class.
+	 *
+	 * On by default because a Team Folder lives on local storage like a home
+	 * does and is where the documents of a small organisation actually are.
+	 * Leaving it out by default would make the search miss the half of the
+	 * instance people search for most.
+	 */
+	private const TEAM_FOLDER_MOUNT_PROVIDER = 'OCA\GroupFolders\Mount\MountProvider';
+
+	/**
+	 * External storage, off by default, and live code since plan 04-08.
+	 *
+	 * This line stood commented out from phase 2 with the note that it becomes a
+	 * switch in phase 4 (ADM-04), which is what happened: it is a constant now
+	 * and SettingsService::indexExternalStorage() decides whether providers()
+	 * puts it into the list.
+	 *
+	 * Off by default, and the reason is unchanged from phase 2: a remote drive
+	 * blows up every assumption the first index makes about how long reading a
+	 * file takes and how much of it there is, and an admin who mounted a multi
+	 * terabyte share does not expect installing an app to start pulling it
+	 * through HTTP. Switching it on is an explicit decision with the consequence
+	 * written next to the switch (T-04-52).
+	 */
+	private const EXTERNAL_STORAGE_MOUNT_PROVIDER = 'OCA\Files_External\Config\ConfigAdapter';
 
 	/**
 	 * The document allowlist of the zero config guard rails: PDF, the OOXML
@@ -111,20 +137,64 @@ class StorageService {
 	private ?array $mimeIds = null;
 
 	/**
-	 * The storage ids of MOUNT_PROVIDERS, resolved once per request and kept as
-	 * a lookup rather than a list. The event listener asks this question for
-	 * every single write on the instance, and getMounts() is a query plus one
+	 * The storage ids of the mount list in force, resolved once per request and
+	 * kept as a lookup rather than a list. The event listener asks this question
+	 * for every single write on the instance, and getMounts() is a query plus one
 	 * more per home mount.
 	 *
 	 * @var array<int, true>|null
 	 */
 	private ?array $indexedStorages = null;
 
+	/**
+	 * The internal path of a mount root, per storage and root, for the request.
+	 *
+	 * One cache query each, and the event listener would otherwise ask for the
+	 * same root on every write of the same request. The same lifetime as the
+	 * lookup above and never longer.
+	 *
+	 * @var array<string, string>
+	 */
+	private array $rootPaths = [];
+
 	public function __construct(
 		private IFileAccess $fileAccess,
 		private IMimeTypeLoader $mimeTypeLoader,
+		private SettingsService $settingsService,
 		private LoggerInterface $logger,
 	) {
+	}
+
+	/**
+	 * The mount providers in force: the homes plus whatever the two switches say.
+	 *
+	 * The one place the list is composed, which is what keeps getMounts(),
+	 * isIndexedStorage() and the mounts route of the reconcile giving the same
+	 * answer. A second composition anywhere would be a second answer to "which
+	 * mounts are in", and the two would disagree the day one of the switches is
+	 * flipped: events would keep indexing what the crawl was told to leave
+	 * alone. backend/tests/test_exclusion_path_space.py reports any second call
+	 * of the mount query and any argument that is not this method.
+	 *
+	 * Read fresh on every call and deliberately not cached on a field.
+	 * IAppConfig caches per request already, so this is a lookup and not a
+	 * query, and a longer lived cache would break the one promise of D-08: the
+	 * next run applies the new rules, with nothing restarted.
+	 *
+	 * @return list<string>
+	 */
+	private function providers(): array {
+		$providers = self::HOME_MOUNT_PROVIDERS;
+
+		if ($this->settingsService->indexTeamFolders()) {
+			$providers[] = self::TEAM_FOLDER_MOUNT_PROVIDER;
+		}
+
+		if ($this->settingsService->indexExternalStorage()) {
+			$providers[] = self::EXTERNAL_STORAGE_MOUNT_PROVIDER;
+		}
+
+		return $providers;
 	}
 
 	/**
@@ -140,7 +210,46 @@ class StorageService {
 	 * @return iterable<array{storage_id: int, root_id: int, overridden_root: int}>
 	 */
 	public function getMounts(): iterable {
-		return $this->fileAccess->getDistinctMounts(self::MOUNT_PROVIDERS, true);
+		return $this->fileAccess->getDistinctMounts($this->providers(), true);
+	}
+
+	/**
+	 * The internal path of one mount root, or the empty string.
+	 *
+	 * The raw material of the one exclusion path space, and it exists here
+	 * because this class is the only one in the app that reaches into the file
+	 * cache. Both callers of ExclusionService::mountRelativePath ask this
+	 * method for the root, so neither of them has to know how a root becomes a
+	 * path.
+	 *
+	 * The two callers hand in two different roots, and both are correct. The
+	 * crawl passes the overridden root of the mount, the files folder, because
+	 * that is the node its query walks; the answer is ``files``. The event
+	 * listener passes the storage root of the mount point, because that is what
+	 * IMountPoint offers; the answer is the empty string. mountRelativePath()
+	 * lands both of them in the same space, which is the entire content of
+	 * pitfall 4.
+	 *
+	 * An unresolvable root is the empty string and not an exception. It is the
+	 * fail open direction on purpose: without a root the path keeps its
+	 * ``files`` vanguard, which the one path space method strips anyway, so a
+	 * root that could not be read costs no correctness. Throwing here would turn
+	 * a missing cache row into a failed upload.
+	 */
+	public function mountRootPath(int $storageId, int $rootId): string {
+		if ($storageId <= 0 || $rootId <= 0) {
+			return '';
+		}
+
+		$key = $storageId . ':' . $rootId;
+		if (isset($this->rootPaths[$key])) {
+			return $this->rootPaths[$key];
+		}
+
+		$entry = $this->fileAccess->getByFileIdInStorage($rootId, $storageId);
+		$this->rootPaths[$key] = $entry === null ? '' : $entry->getPath();
+
+		return $this->rootPaths[$key];
 	}
 
 	/**
@@ -151,6 +260,13 @@ class StorageService {
 	 * providers here would be a second answer to "which mounts are in", and the
 	 * two would disagree the day external storage becomes a switch (ADM-04):
 	 * events would keep indexing what the crawl was told to leave alone.
+	 *
+	 * That day is plan 04-08, and this warning is the reason nothing had to be
+	 * changed in this method for it. Both switches are composed in providers(),
+	 * getMounts() reads that one list and this method reads getMounts(), so
+	 * flipping a switch moves the crawl and the events together. The warning
+	 * stays because it is what has to keep being true, not because it was a
+	 * prediction that has now expired.
 	 *
 	 * What this cannot answer is where inside a storage a file sits. The
 	 * trashbin and the version folder of a home live on the same storage as the
@@ -190,6 +306,24 @@ class StorageService {
 	 * which sees the size in the cache entry and records the decision instead
 	 * of hiding it.
 	 *
+	 * There is no exclusion filter either, and that is a decision of plan 04-08
+	 * with three reasons, each of which is on its own enough (deviation, see
+	 * 04-08-SUMMARY.md). First, every caller of this method reads "nothing behind
+	 * the cursor" from an empty result: StorageCrawlJob ends the mount when it
+	 * saw nothing, and SubtreeExpandJob does the same. One excluded folder
+	 * holding a full batch would therefore stop the crawl in the middle of the id
+	 * range, for good. Second, the crawl has to SEE an excluded file in order to
+	 * count it: the ``Excluded`` tile of the page is the promise that nothing
+	 * disappears quietly (IDX-06), and a filter here would keep that number at
+	 * nought forever. Third, SubtreeExpandJob walks the subtree of a newly
+	 * excluded folder in order to clear it from the index (plan 04-09, research
+	 * pattern 9), and it walks it through this very method, so a filter here
+	 * would make that clearing a no-op against exactly the folder it is for.
+	 *
+	 * The exclusion is therefore applied by the callers, through the one helper
+	 * ExclusionService::isExcluded on the one path space, and
+	 * backend/tests/test_exclusion_path_space.py holds that both of them do it.
+	 *
 	 * @return iterable<ICacheEntry>
 	 */
 	public function getFilesInMount(int $storageId, int $overriddenRoot, int $lastFileId, int $batchSize): iterable {
@@ -219,6 +353,16 @@ class StorageService {
 	 * name, no owner: the comparison in the container works on file id and etag,
 	 * and everything beyond that would be content of a private instance crossing
 	 * the boundary for no reason.
+	 *
+	 * The exclusion is not filtered out here either, and this one is worth a
+	 * sentence of its own because it looks harmless. ReconcileController works
+	 * out its final mark as "fewer rows than asked for", and a final page lets
+	 * the deletion rule of the reconcile drop its upper bound. So a page that
+	 * lost three rows to a prefix would be declared final, and every file the
+	 * container knows above the cursor would be reported as deleted: an exclusion
+	 * on one folder would empty the index of a whole mount. Clearing what a new
+	 * prefix leaves behind is done deliberately and in bands instead, through
+	 * SubtreeExpandJob with kind delete (plan 04-09, research pattern 9).
 	 *
 	 * @return list<array{fileId: int, etag: string, size: int, mtime: int, mime: string}>
 	 */

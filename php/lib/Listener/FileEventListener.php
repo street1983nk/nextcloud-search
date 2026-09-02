@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace OCA\Findling\Listener;
 
-use OCA\Findling\BackgroundJobs\StorageCrawlJob;
 use OCA\Findling\BackgroundJobs\SubtreeExpandJob;
 use OCA\Findling\Db\QueueMapper;
+use OCA\Findling\Service\ExclusionService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
+use OCA\Findling\Service\SettingsService;
 use OCA\Findling\Service\StorageService;
 use OCA\Files_Trashbin\Events\MoveToTrashEvent;
 use OCA\Files_Trashbin\Events\NodeRestoredEvent;
@@ -57,6 +58,8 @@ class FileEventListener implements IEventListener {
 		private QueueService $queueService,
 		private StorageService $storageService,
 		private FileStateService $fileStateService,
+		private SettingsService $settingsService,
+		private ExclusionService $exclusionService,
 		private IJobList $jobList,
 		private LoggerInterface $logger,
 	) {
@@ -297,8 +300,13 @@ class FileEventListener implements IEventListener {
 	}
 
 	/**
-	 * Three questions before a row is written, in this order because each one is
+	 * Four questions before a row is written, in this order because each one is
 	 * cheaper than the one after it.
+	 *
+	 * The fourth joined with plan 04-08, the folder exclusions, and it sits
+	 * where it does for that reason: after the mount question, which is a
+	 * request cached lookup, and before the size check, which is the one that
+	 * writes a verdict.
 	 */
 	private function queue(Node $node, bool $isUpdate, string $kind = QueueMapper::KIND_CONTENT): void {
 		// 1. A file, never a folder. A folder operation is exactly one event
@@ -348,17 +356,57 @@ class FileEventListener implements IEventListener {
 		// external storage into the index although IDX-01 leaves it out by
 		// default, which is the one boundary an admin never explicitly agreed
 		// to: a multi terabyte remote share would start flowing through HTTP
-		// because someone saved a file on it.
+		// because someone saved a file on it. Since plan 04-08 that default is
+		// a switch, and this question still answers it, because it reads the
+		// same composed mount list the crawl walks.
 		if (!$this->storageService->isIndexedStorage($storageId)) {
 			return;
 		}
 
+		// 4. A rule of today, through the one helper the crawl uses, on the one
+		// path space (ADM-04, D-06). This is the question pitfall 4 is about:
+		// the crawl compares against the internal path of a cache entry and
+		// this method against the path of a node, so if each of them built its
+		// own comparison, a prefix would hit in one and miss in the other, the
+		// crawl would leave the folder alone, and every save inside it would
+		// queue the file again. The index would fill up slowly with exactly
+		// what was supposed to be left out, and nothing on the page would say
+		// so. Both call paths therefore ask ExclusionService for the path AND
+		// for the verdict, and backend/tests/test_exclusion_path_space.py
+		// reports any second comparison.
+		//
+		// The list is asked first so that the root lookup does not happen at
+		// all on an instance without exclusions, which is the default of a zero
+		// config app and therefore the overwhelmingly common case: this method
+		// runs inside every single write on the instance.
+		//
+		// A deletion skips this question, and that is the third exception of
+		// this kind rather than a forgotten branch. An excluded file that gets
+		// deleted has to leave the index, and an exclusion branch in front of
+		// the deletion would drop the delete row and keep the document
+		// findable for good.
+		if (!$isDeletion && $this->exclusionService->prefixes() !== []) {
+			$relative = $this->exclusionService->mountRelativePath(
+				$node->getInternalPath(),
+				$this->storageService->mountRootPath($storageId, $rootId),
+			);
+			if ($this->exclusionService->isExcluded($relative)) {
+				// No verdict row, for the reason written at the same branch of
+				// the crawl: the diagnosis works excluded out live, and a row
+				// per excluded file would be a write per save on a folder
+				// somebody excluded precisely because it is large.
+				return;
+			}
+		}
+
 		$size = (int)$node->getSize();
-		if (!$isDeletion && $size > StorageCrawlJob::MAX_SIZE) {
-			// The same ceiling and the same end state as the crawl. A file above
-			// it is a visible decision with a reason and not a silent omission,
-			// which is the whole content of IDX-06, and the constant lives with
-			// the crawl because that is where it was measured.
+		if (!$isDeletion && $size > $this->settingsService->maxFileBytes()) {
+			// The same ceiling and the same end state as the crawl, and since
+			// plan 04-08 the same source for it: SettingsService hands out the
+			// value in force, clamped at what the container reported, while
+			// StorageCrawlJob keeps the constant as the documented default. A
+			// file above the ceiling is a visible decision with a reason and not
+			// a silent omission, which is the whole content of IDX-06.
 			//
 			// The second exception for a deletion. This ceiling writes a verdict,
 			// and skipped(too_large) is a statement about a file that is present
