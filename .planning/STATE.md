@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-09-02T16:36:23.208Z"
+stopped_at: Completed 04-03-PLAN.md
+last_updated: "2026-09-02T17:04:45.037Z"
 last_activity: 2026-09-02
 progress:
   total_phases: 6
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 04 (admin-sichtbarkeit-und-diagnose) — EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 Status: Ready to execute
 Last activity: 2026-09-02
 
@@ -56,6 +56,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 04 P01 | 12 min | 2 tasks | 3 files |
 | Phase 04 P02 | 10 min | 2 tasks | 7 files |
+| Phase 04 P03 | 47 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,11 @@ Recent decisions affecting current work:
 - [Phase 04]: Der Container meldet maxFileBytes aus settings() auch ohne Zustandsdatenbank, damit die PHP-Einstellung an den wirklich durchgesetzten Deckel geklemmt wird
 - [Phase 04]: Die Aufteilung der Wahrheit steht woertlich in beiden Docblocks: skipped, failed und die Fehlerliste aus findling_file_state, indexed, truncated, Platz und Versionsmarken aus dem Container
 - [Phase 04]: access_level ADMIN deckt nur den AppAPI-Proxy-Weg; der wirksame Schutz der Admin-Seite ist die PHP-Route ohne NoAdminRequired
+- [Phase 04]: Der Override-Attribut-Verzicht in den neuen Settings-Klassen: PHP 8.3 gegen die deklarierte min-version 8.2
+- [Phase 04]: Die Statuszeile nennt keine Restzeit, solange kein kalibrierter Durchsatz existiert (kein Schaetzwert, der wie eine Messung aussieht)
+- [Phase 04]: indexedDisplay waehlt zwischen Container- und Nextcloud-Zahl statt zu verrechnen, damit keine Kachel wegen einer gescheiterten Abfrage auf 0 springt
+- [Phase 04]: Stockt-Schwelle 1800 Sekunden, sechs verpasste Runden des Fuenf-Minuten-Systemcrons
+- [Phase 04]: SettingsController erweitert Controller und nicht OCSController, damit die Route ausserhalb des OCS-Raums bleibt
 
 ### Pending Todos
 
@@ -99,6 +105,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-02T16:36:10.897Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-09-02T17:04:34.682Z
+Stopped at: Completed 04-03-PLAN.md
 Resume file: None
