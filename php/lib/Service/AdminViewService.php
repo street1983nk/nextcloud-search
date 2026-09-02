@@ -9,6 +9,7 @@ use OCA\Findling\BackgroundJobs\SchedulerJob;
 use OCA\Findling\Text\PlainText;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IAppConfig;
+use OCP\IL10N;
 use OCP\IUserSession;
 
 /**
@@ -19,8 +20,12 @@ use OCP\IUserSession;
  * split is therefore written down here rather than being discovered later:
  *
  * - Out of ``findling_file_state``, which is this side of the boundary:
- *   ``skipped`` and ``failed``. These survive a stopped container, which is the
+ *   ``skipped`` and ``failed``, their breakdown by reason code and the example
+ *   file ids of every group. These survive a stopped container, which is the
  *   whole reason the table exists, and they are what the page falls back to.
+ *   The file ids become readable paths in PathResolverService and nowhere else,
+ *   which is D-03: the container hands over numbers, this side turns them into
+ *   names, in the permission model that owns that decision.
  * - Out of the container, under the key ``backend``: ``indexed``,
  *   ``truncated``, ``docs``, ``aclRows``, the version marks, the disk figures
  *   and the reason breakdown. Only the container knows what is in the index.
@@ -196,14 +201,140 @@ final class AdminViewService {
 	 */
 	private const MAX_SECONDS_LEFT = 86400000;
 
+	/**
+	 * How many example paths one reason group carries at the most.
+	 *
+	 * Twenty, and it is a display decision with a visible remainder rather than
+	 * a silent cut: every group also reports how many rows it did not show. The
+	 * MAX_LIST_LENGTH gotcha of CR-01 does not apply here, because this list does
+	 * not travel over the queue routes, so nobody may lower this number for that
+	 * reason. What does bound it is the cost of the resolution: every example is
+	 * a mount cache query plus a user lookup, so twenty per group on a page that
+	 * polls is the ceiling this side can afford (T-04-34).
+	 */
+	private const EXAMPLES_PER_GROUP = 20;
+
+	/**
+	 * The display text of every reason code, in English, as the source strings.
+	 *
+	 * One label and one remedy per code, word for word out of the table "Grund
+	 * Taxonomie: Label und Abhilfe" of the design contract, in the same order and
+	 * in the same number. The German versions live in l10n/de.json under exactly
+	 * these keys.
+	 *
+	 * Where there is no remedy the sentence says so out loud instead of leaving
+	 * the field empty. An admin who reads a blank cell learns nothing, and a
+	 * blank cell is also what a drift between the three reason lists would look
+	 * like, so the two cases have to stay distinguishable.
+	 *
+	 * Twenty codes, which is one more than FileStateService::REASONS holds today:
+	 * `excluded` is the reason of the exclusion rules of plan 04-08 and it is
+	 * already in the contract, so its row is here from the start. The other
+	 * direction is the one that would hurt, and it cannot happen unnoticed: a
+	 * code without a row falls into the fallback of reasonText() and is shown as
+	 * "Unknown reason (code)".
+	 *
+	 * The strings are read from here and handed to IL10N::t() rather than being
+	 * written as literals at the call site. This app has no string extractor, its
+	 * translation files are written by hand, and one table next to the contract
+	 * it copies is easier to check against that contract than twenty calls spread
+	 * over a match expression.
+	 *
+	 * @var array<string, array{0:string, 1:string}> reason code to label and remedy
+	 */
+	private const REASON_TEXT = [
+		'truncated' => [
+			'Text truncated',
+			'The beginning of the document is searchable, the rest is not. Very long documents are cut on purpose.',
+		],
+		'too_large' => [
+			'Too large',
+			'Raise the value under "Largest file to read".',
+		],
+		'mime_not_allowed' => [
+			'File type not supported',
+			'None. Findling reads PDF, Office, OpenDocument, text and images.',
+		],
+		'encrypted' => [
+			'Password protected',
+			'None. Without the password the content cannot be read.',
+		],
+		'no_text_layer' => [
+			'No text in the document',
+			'None. The document carries neither a text layer nor recognisable writing.',
+		],
+		'empty_text' => [
+			'No text content',
+			'None. The file is readable but carries no text.',
+		],
+		'too_many_cells' => [
+			'Spreadsheet too large',
+			'None. Very large spreadsheets are skipped so the container does not fall over.',
+		],
+		'gone' => [
+			'File no longer present',
+			'None. The file was already deleted or moved when it was read.',
+		],
+		'image_not_ocrable' => [
+			'Image without recognisable writing',
+			'None.',
+		],
+		'excluded' => [
+			'Excluded by a rule',
+			'Remove the matching entry under "Excluded folders".',
+		],
+		'empty_file' => [
+			'File is empty',
+			'None. The file has 0 bytes.',
+		],
+		'corrupt' => [
+			'File damaged',
+			'Check the file outside of Nextcloud and upload it again.',
+		],
+		'xml_invalid' => [
+			'Document structure faulty',
+			'Open the document in the program it came from and save it again.',
+		],
+		'encoding_unknown' => [
+			'Character set not recognised',
+			'Save the file as UTF-8 and upload it again.',
+		],
+		'timeout' => [
+			'Timed out while reading',
+			'The next run tries again.',
+		],
+		'out_of_memory' => [
+			'Not enough memory while reading',
+			'The next run tries again. If it happens again, lower the size cap.',
+		],
+		'gateway_error' => [
+			'File was not retrievable',
+			'The next run tries again.',
+		],
+		'repeatedly_stuck' => [
+			'Stuck repeatedly',
+			'Findling does not try this file again. Use the lookup to check whether it opens outside of Nextcloud.',
+		],
+		'ocr_failed' => [
+			'Text recognition failed',
+			'The next run tries again.',
+		],
+		'ocr_unavailable' => [
+			'Text recognition not available',
+			'The backend could not start Tesseract. Check the log of the External App.',
+		],
+	];
+
 	public function __construct(
 		private FileStateService $fileStateService,
 		private QueueService $queueService,
 		private ExAppService $exAppService,
 		private ScanStatsService $scanStats,
+		private PathResolverService $pathResolver,
 		private IAppConfig $appConfig,
 		private IUserSession $userSession,
 		private ITimeFactory $timeFactory,
+		private IL10N $l10n,
 	) {
 	}
 
@@ -220,7 +351,7 @@ final class AdminViewService {
 	 *     indexedDisplay:int, scheduled:int, running:int, lastJobRun:int,
 	 *     stalledFor:int, runState:string, backendReachable:bool,
 	 *     backend:array<string,mixed>, coverage:array<string,mixed>,
-	 *     estimate:array<string,mixed>
+	 *     estimate:array<string,mixed>, errors:array<string,mixed>
 	 * }
 	 */
 	public function overview(): array {
@@ -277,7 +408,163 @@ final class AdminViewService {
 			'backend' => $backend,
 			'coverage' => $this->coverage($scan, $backend, $backendReachable, $indexable),
 			'estimate' => $this->estimate($scan, $backend, $backendReachable, $indexable, $scheduled + $running),
+			'errors' => $this->errors(),
 		];
+	}
+
+	/**
+	 * The files that were not indexed, grouped by the reason they were not.
+	 *
+	 * Out of findling_file_state and deliberately not out of backend.reasons.
+	 * This is the half of the taxonomy that survives a stopped container, which
+	 * is exactly the moment an admin goes looking for it, and it is the only
+	 * half whose file ids this side can turn into paths. The view of the
+	 * container stays visible next to it under its own key and the two are never
+	 * added together: a difference between them says the container and Nextcloud
+	 * disagree about a file, which is a diagnostic signal and not a defect of the
+	 * page.
+	 *
+	 * Only skipped and failed appear, plus one exception: indexed(truncated).
+	 * Those files are in the index, so they do not belong in a list of files
+	 * that were not indexed, but D-08 of phase 3 says a cut document has to be
+	 * declared rather than counted as a clean hit, so it gets a group of its own
+	 * with its own label. Everything else under indexed is left out, and a group
+	 * whose count is nought is left out as well, because a list of errors with
+	 * nineteen empty rows hides the one row that has something in it.
+	 *
+	 * Sorted by count descending, and alphabetically by label where two groups
+	 * are the same size, so the order is stable across polls instead of being
+	 * whatever the database felt like returning.
+	 *
+	 * @return array{groups:list<array<string,mixed>>}
+	 */
+	private function errors(): array {
+		$groups = [];
+		foreach ($this->fileStateService->reasonsByState() as $state => $perReason) {
+			foreach ($perReason as $reason => $count) {
+				if ($count <= 0 || !$this->belongsInTheErrorList($state, $reason)) {
+					continue;
+				}
+
+				[$label, $remedy] = $this->reasonText($reason);
+				$examples = $this->examples($state, $reason);
+
+				$groups[] = [
+					'state' => $state,
+					'reason' => $reason,
+					'count' => $count,
+					'label' => $label,
+					'remedy' => $remedy,
+					'examples' => $examples,
+					// The remainder is a field of its own and it is rendered as
+					// a line of its own. A list that is cut without saying so
+					// leaves an admin counting the rows and believing the total
+					// (T-04-35).
+					'remaining' => max(0, $count - count($examples)),
+				];
+			}
+		}
+
+		usort($groups, static function (array $a, array $b): int {
+			$bigger = $b['count'] <=> $a['count'];
+
+			return $bigger !== 0 ? $bigger : strcmp((string)$a['label'], (string)$b['label']);
+		});
+
+		return ['groups' => $groups];
+	}
+
+	/**
+	 * Whether this verdict is one of the ones the error list is about.
+	 *
+	 * The whole of skipped and failed, and out of indexed exactly the truncated
+	 * rows. Written as its own method because the exception needs a sentence and
+	 * a condition inside a loop does not have room for one.
+	 */
+	private function belongsInTheErrorList(string $state, string $reason): bool {
+		if ($state === 'skipped' || $state === 'failed') {
+			return true;
+		}
+
+		return $state === 'indexed' && $reason === 'truncated';
+	}
+
+	/**
+	 * Up to twenty example paths of one group, resolved in the owner's view.
+	 *
+	 * One page out of the state table, then one batch resolution over it. Never
+	 * more than one page, and never the whole table: the cost of a resolution is
+	 * written down in PathResolverService::describeMany and it is the reason both
+	 * numbers here are constants rather than parameters.
+	 *
+	 * A row whose file id no longer resolves stays in the list with resolved
+	 * false. The template renders the replacement text for it, because a line
+	 * that disappears takes its count with it and "the file is gone" is itself
+	 * the answer to why it was never indexed.
+	 *
+	 * @return list<array<string,mixed>>
+	 */
+	private function examples(string $state, string $reason): array {
+		if ($reason === '') {
+			// A row without a reason code cannot be paged for: page() reads a
+			// null reason as "no filter at all", which would answer with the
+			// rows of every other group of this state and put foreign examples
+			// under this label. No writer of this app produces such a row, so
+			// the honest answer is the count with the whole group as the
+			// remainder.
+			return [];
+		}
+
+		$rows = $this->fileStateService->page($state, $reason, self::EXAMPLES_PER_GROUP, 0);
+		if ($rows === []) {
+			return [];
+		}
+
+		$described = $this->pathResolver->describeMany(
+			array_map(static fn (array $row): int => $row['fileId'], $rows),
+		);
+
+		$examples = [];
+		foreach ($rows as $row) {
+			$one = is_array($described[$row['fileId']] ?? null) ? $described[$row['fileId']] : [];
+
+			$examples[] = [
+				'fileId' => $row['fileId'],
+				'path' => is_string($one['path'] ?? null) ? $one['path'] : '',
+				'uid' => is_string($one['uid'] ?? null) ? $one['uid'] : '',
+				'shares' => is_int($one['shares'] ?? null) ? max(0, $one['shares']) : 0,
+				'trashed' => ($one['trashed'] ?? false) === true,
+				'resolved' => ($one['resolved'] ?? false) === true,
+				'updatedAt' => $row['updatedAt'],
+			];
+		}
+
+		return $examples;
+	}
+
+	/**
+	 * The label and the remedy of one reason code, translated.
+	 *
+	 * The fallback is the whole point of this method. A code that has no row in
+	 * the table is the visible symptom of a drift between the three reason lists
+	 * of this project, and the design contract forbids showing a raw code on its
+	 * own or an empty cell for it: the admin gets "Unknown reason (code)" with
+	 * the code in brackets, which names the case instead of hiding it (T-04-33).
+	 * A code that arrived empty is shown with a dash in the brackets rather than
+	 * with nothing, because empty brackets read like a defect of the page.
+	 *
+	 * @return array{0:string, 1:string} label and remedy
+	 */
+	private function reasonText(string $reason): array {
+		$row = self::REASON_TEXT[$reason] ?? null;
+		if ($row === null) {
+			return [
+				$this->l10n->t('Unknown reason (%s)', [$reason === '' ? '-' : $reason]),
+				$this->l10n->t('This app does not know this code. It may come from a newer version of the backend.'),
+			];
+		}
+
+		return [$this->l10n->t($row[0]), $this->l10n->t($row[1])];
 	}
 
 	/**
