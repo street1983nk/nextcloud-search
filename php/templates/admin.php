@@ -598,6 +598,14 @@ $ceilingBytes = $whole($rules['maxFileBytesCeiling'] ?? 0);
 $teamFolders = ($rules['indexTeamFolders'] ?? false) === true;
 $externalStorage = ($rules['indexExternalStorage'] ?? false) === true;
 
+// The two halves of the one sentence this block owes an admin about time. A new
+// exclusion clears the index within a cron round, and taking one back waits for
+// the comparison run, which holds itself back for this many hours. Naming the
+// wait and the way around it is the difference between a page an admin trusts
+// and one where removing an entry looks like nothing happened.
+$latencyHours = $whole($rules['cleanupLatencyHours'] ?? 0);
+$restartCommand = is_string($rules['restartCommand'] ?? null) ? $rules['restartCommand'] : '';
+
 // Megabytes in the field and bytes in appconfig. An admin thinks in megabytes,
 // and a field holding 52428800 is a field nobody can check at a glance. The
 // script converts back with the same divisor, which is named on both sides.
@@ -672,6 +680,48 @@ $closeIcon = 'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L1
 	<p class="settings-hint" id="findling-rules-external-help"><?php p($l->t('External storage can be slow or charged per request. Indexing reads every file once.')); ?></p>
 
 	<p class="settings-hint" id="findling-rules-effect"><?php p($l->t('The next run applies the new rules. Nothing restarts.')); ?></p>
+
+	<?php if ($latencyHours > 0 && $restartCommand !== '') { ?>
+		<p class="settings-hint" id="findling-rules-latency"><?php p($l->t('Removing an entry takes effect within %1$s hours, when the next comparison run picks those files up again. Run "%2$s" to apply it at once.', [$count($latencyHours), $restartCommand])); ?></p>
+	<?php } ?>
+
+	<?php
+	/*
+	 * The inline confirmation of D-07, empty until the script fills it.
+	 *
+	 * It sits directly above the button it holds back, which is the place where
+	 * the consequence belongs: excluding a folder also removes the documents
+	 * already indexed under it from the index, and that is a loss somebody has
+	 * to be able to weigh before it happens. The number of documents and the
+	 * path arrive from the reading preview route; the sentence says as well that
+	 * the files themselves stay on the disk, because "remove" is the word an
+	 * admin fears here and the fear is unfounded.
+	 *
+	 * Inline and not a dialog, for two reasons. The core helper for a
+	 * destructive dialog is deprecated since Nextcloud 30 while this app carries
+	 * max-version 35, so a dialog would be a bet on a version window it may not
+	 * survive. And inline is where the consequence stands anyway: over the
+	 * button, under the list it is about.
+	 *
+	 * role="group" with aria-labelledby on its own text, so a screen reader
+	 * reads the consequence when the focus arrives, which the script moves to
+	 * the harmless of the two buttons.
+	 *
+	 * Icon path data: Material Design Icons by Pictogrammers, Apache-2.0, pinned
+	 * by commit in THIRD-PARTY.md. alert-circle-outline, the same path the
+	 * banners of block one carry, in the destructive icon colour here.
+	 */
+	?>
+	<div class="findling-rules__confirm" id="findling-rules-confirm" role="group" aria-labelledby="findling-rules-confirm-text" hidden>
+		<p class="findling-rules__confirm-text" id="findling-rules-confirm-text">
+			<svg class="findling-rules__confirm-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($alertIcon); ?>"/></svg>
+			<span id="findling-rules-confirm-message"></span>
+		</p>
+		<div class="findling-rules__confirm-actions">
+			<button type="button" class="findling-rules__confirm-accept" id="findling-rules-confirm-accept"><?php p($l->t('Exclude and remove')); ?></button>
+			<button type="button" id="findling-rules-confirm-cancel"><?php p($l->t('Keep files indexed')); ?></button>
+		</div>
+	</div>
 
 	<button type="button" class="primary" id="findling-rules-save"><?php p($l->t('Save rules')); ?></button>
 

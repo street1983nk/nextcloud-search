@@ -451,6 +451,56 @@
 	color: var(--color-error-text);
 }
 
+/* The inline confirmation of a new exclusion, and the only destructive surface
+   of this page: the error surface with its paired text colour, the container
+   radius and sixteen pixels of padding as four grid units. It carries a
+   consequence somebody is about to accept, which is why it looks unlike every
+   other box here. */
+.findling-rules__confirm {
+	margin-block: calc(var(--default-grid-baseline) * 4);
+	padding: calc(var(--default-grid-baseline) * 4);
+	border-radius: var(--border-radius-container);
+	background-color: var(--color-error);
+	color: var(--color-error-text);
+}
+
+/* Icon and sentence on one line, the icon at the top so a sentence that wraps
+   over three lines keeps it next to the first word rather than in the middle. */
+.findling-rules__confirm-text {
+	display: flex;
+	align-items: flex-start;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block: 0;
+}
+
+.findling-rules__confirm-icon {
+	flex: 0 0 auto;
+	width: calc(var(--default-grid-baseline) * 4);
+	height: calc(var(--default-grid-baseline) * 4);
+	color: var(--color-element-error);
+}
+
+.findling-rules__confirm-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block-start: calc(var(--default-grid-baseline) * 4);
+}
+
+.findling-rules__confirm-actions button {
+	min-height: var(--default-clickable-area);
+}
+
+/* The confirming button is the one that acts, so it carries the element colour
+   of the same meaning with the text colour Nextcloud pairs with a filled
+   element. The other one is a plain core button, because keeping the files is
+   the harmless choice and the page does not push it. */
+.findling-rules__confirm-accept {
+	background-color: var(--color-element-error);
+	color: var(--color-primary-element-text);
+}
+
 /* The answer of a save, inline and never a toast. Both outcomes are a surface
    with its own paired text colour, because those are the pairs Nextcloud ships
    checked for contrast. */

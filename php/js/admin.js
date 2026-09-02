@@ -45,13 +45,14 @@
   const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
   const BYTES_PER_UNIT = 1024
 
-  // The two addresses this page asks, written out whole rather than assembled
+  // The four addresses this page asks, written out whole rather than assembled
   // from a prefix and a name: a grep for either route has to find its caller,
   // and a route that is only half spelled anywhere is a route nobody finds when
   // it moves.
   const ROUTE_OVERVIEW = 'admin/overview'
   const ROUTE_DIAGNOSE = 'admin/diagnose'
   const ROUTE_RULES = 'admin/rules'
+  const ROUTE_RULES_PREVIEW = 'admin/rules/preview'
 
   // Megabytes in the field, bytes in appconfig. The same divisor the template
   // divides by, named on both sides so that the two cannot drift.
@@ -68,6 +69,11 @@
   // polling nor gets aborted by it: the two calls answer different questions and
   // one of them was asked by a person who is waiting for it.
   let lookupRequest = null
+  // The prefixes as they are stored, which is what makes a prefix NEW. Taken
+  // from the server rendered list once, before anything can be edited, and
+  // replaced out of the answer of a save. Reading it off the list at comparison
+  // time would compare the list with itself and never find anything new.
+  let inForcePrefixes = []
   let timer = null
   let unchanged = 0
   let signature = ''
@@ -801,29 +807,120 @@
   function touched () {
     shown('findling-rules-effect', true)
     shown('findling-rules-feedback', false)
+    // A confirmation is about the list as it stood when it was asked for. The
+    // moment somebody changes the form again it is about nothing, so it goes
+    // away rather than waiting to be accepted for a list that has moved on.
+    hideConfirmation()
+  }
+
+  function newExclusionsOf (exclusions) {
+    return exclusions.filter(function (prefix) {
+      return inForcePrefixes.indexOf(prefix) === -1
+    })
   }
 
   /**
-   * The inline confirmation of D-07, and it confirms nothing yet.
+   * The inline confirmation of D-07: name the consequence before it happens.
    *
-   * Plan 04-09 hangs the destructive confirmation in here: a NEW exclusion also
-   * removes the documents already indexed under that path from the index, and
-   * that consequence has to be confirmed with the number of documents in the
-   * sentence. Until that clearing exists there is nothing to lose by saving,
-   * and asking somebody to confirm a consequence that does not happen would
-   * teach them to click the confirmation away before it ever means anything.
+   * A new exclusion does not only stop new documents from being indexed, it
+   * takes the ones already indexed under that path out of the index. That is a
+   * loss, so it is confirmed, and it is confirmed with the number of documents
+   * and the path in the sentence rather than with "are you sure": a number is
+   * something an administrator can weigh, and a question they cannot answer
+   * teaches them to click it away.
    *
-   * It stands here, named and called from its place in the order, rather than
-   * being left out: a hook that is incomplete and says so is one somebody can
-   * finish, and a missing one is one nobody knows to look for.
+   * Inline and never a dialog. The core helper for a destructive dialog is
+   * deprecated since Nextcloud 30 while this app carries max-version 35, and
+   * inline is where the consequence stands anyway, right over the button.
+   *
+   * True means "save now": the list holds nothing that is new after
+   * normalisation, so there is nothing to lose. False means the confirmation is
+   * on the screen and the confirming button will come back through saveRules.
+   *
+   * A failed preview does not block the save and does not invent a number
+   * either. The consequence is the same whether or not the count succeeded, so
+   * the sentence appears without a figure instead of claiming nought documents,
+   * which would be the one wrong thing this box could say.
    */
-  function confirmNewExclusions (exclusions) {
-    // The list is in the signature already so that hanging the confirmation in
-    // is one function body and not a change at the call site as well: plan
-    // 04-09 compares it against what was stored, asks the route how many
-    // documents lie under the new prefixes, and returns false until the
-    // administrator has pressed the confirming button, saving from there.
-    return Array.isArray(exclusions)
+  async function confirmNewExclusions (exclusions) {
+    const box = document.getElementById('findling-rules-confirm')
+    const cancel = document.getElementById('findling-rules-confirm-cancel')
+    const save = document.getElementById('findling-rules-save')
+    if (box === null) {
+      return true
+    }
+
+    let answer = null
+    try {
+      answer = await ask(ROUTE_RULES_PREVIEW, exclusions.map(function (prefix) {
+        // One pair per entry, because a list travels as repeated parameters and
+        // a joined string would arrive as one folder with commas in its name.
+        return ['exclusions[]', prefix]
+      }))
+    } catch (error) {
+      answer = null
+    }
+
+    const answered = answer !== null && Array.isArray(answer.newPrefixes)
+    if (answered && answer.newPrefixes.length === 0) {
+      return true
+    }
+
+    const prefixes = answered ? answer.newPrefixes : newExclusionsOf(exclusions)
+    const counted = answered && Number.isInteger(answer.affectedDocuments)
+    const documents = counted
+      ? (answer.capped === true
+          ? t('findling', 'at least %s').replace('%s', numbers.format(answer.affectedDocuments))
+          : numbers.format(answer.affectedDocuments))
+      : ''
+
+    text(
+      'findling-rules-confirm-message',
+      counted
+        ? t('findling', 'Remove indexed content? Excluding %1$s also removes %2$s already indexed documents under that path from the index. The files themselves stay untouched on disk.')
+          .replace('%1$s', prefixes.join(', '))
+          .replace('%2$s', documents)
+        : t('findling', 'Remove indexed content? Excluding %s also removes the documents already indexed under that path from the index. The files themselves stay untouched on disk.')
+          .replace('%s', prefixes.join(', '))
+    )
+
+    shown('findling-rules-confirm', true)
+    if (save !== null) {
+      // Disabled while the box stands, so the only way past it is one of its
+      // own two buttons.
+      save.disabled = true
+    }
+    if (cancel !== null) {
+      // The focus goes to the harmless choice. Somebody who presses the space
+      // bar without reading keeps their files indexed.
+      cancel.focus()
+    }
+
+    return false
+  }
+
+  /** Take the confirmation off the screen and give the button back. */
+  function hideConfirmation () {
+    shown('findling-rules-confirm', false)
+    const save = document.getElementById('findling-rules-save')
+    if (save !== null) {
+      save.disabled = false
+    }
+  }
+
+  /**
+   * Discard the confirmation: nothing is written, the list stays as it is.
+   *
+   * The focus goes back to the button that opened the box, because the element
+   * it currently sits on is about to be hidden and a hidden element with the
+   * focus leaves a keyboard user nowhere.
+   */
+  function dismissConfirmation () {
+    hideConfirmation()
+    const save = document.getElementById('findling-rules-save')
+    if (save !== null) {
+      save.focus()
+    }
   }
 
   /**
@@ -835,8 +932,19 @@
    * boundary. The server also clamps, so the answer carries the value in force
    * and the field is set to it afterwards: a value silently lowered would be a
    * page showing a limit that does not hold.
+   *
+   * Called twice for one save when the list holds a new exclusion: once from
+   * the button, which ends in the confirmation, and once from the confirming
+   * button with ``confirmed`` true. The second call validates everything again
+   * rather than carrying values along, because the form is still editable while
+   * the box stands and the values that get written have to be the ones on the
+   * screen at the moment of the write.
+   *
+   * A change that adds no exclusion writes without a confirmation. Moving the
+   * cap or flipping a switch takes nothing out of the index, so there is nothing
+   * to lose and nothing to confirm.
    */
-  async function saveRules () {
+  async function saveRules (confirmed) {
     const cap = document.getElementById('findling-rules-cap')
     const button = document.getElementById('findling-rules-save')
     if (cap === null) {
@@ -859,9 +967,14 @@
     clearFieldError('findling-rules-new-error')
 
     const exclusions = currentPrefixes()
-    if (!confirmNewExclusions(exclusions)) {
-      return
+    if (confirmed !== true && newExclusionsOf(exclusions).length > 0) {
+      const proceed = await confirmNewExclusions(exclusions)
+      if (!proceed) {
+        return
+      }
     }
+
+    hideConfirmation()
 
     if (button !== null) {
       button.disabled = true
@@ -947,6 +1060,10 @@
         }
       })
       refreshEmptyState()
+      // These are the prefixes in force from now on, so the next save measures
+      // "new" against them. Without this line the same prefix would ask for a
+      // confirmation a second time, for a clearing that already happened.
+      inForcePrefixes = currentPrefixes()
     }
   }
 
@@ -963,10 +1080,38 @@
     refreshEmptyState()
     setupExclusionList()
 
+    // The list as the server rendered it is the list in force. Read before any
+    // handler can change it.
+    inForcePrefixes = currentPrefixes()
+
     const save = document.getElementById('findling-rules-save')
     if (save !== null) {
       save.addEventListener('click', function () {
         saveRules()
+      })
+    }
+
+    const confirmBox = document.getElementById('findling-rules-confirm')
+    const accept = document.getElementById('findling-rules-confirm-accept')
+    const cancel = document.getElementById('findling-rules-confirm-cancel')
+
+    if (accept !== null) {
+      accept.addEventListener('click', function () {
+        // The one click that writes a new exclusion, and the only way past the
+        // box: the button behind it is disabled while the box stands.
+        saveRules(true)
+      })
+    }
+
+    if (cancel !== null) {
+      cancel.addEventListener('click', dismissConfirmation)
+    }
+
+    if (confirmBox !== null) {
+      confirmBox.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          dismissConfirmation()
+        }
       })
     }
 

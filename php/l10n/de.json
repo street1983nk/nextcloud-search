@@ -131,7 +131,13 @@
         "The rules were not saved. Nothing changed.": "Die Regeln wurden nicht gespeichert. Es hat sich nichts geändert.",
         "Enter a size between %1$s and %2$s MB.": "Eine Größe zwischen %1$s und %2$s MB eingeben.",
         "Enter a folder path.": "Einen Ordnerpfad eingeben.",
-        "This path is already excluded.": "Dieser Pfad ist bereits ausgeschlossen."
+        "This path is already excluded.": "Dieser Pfad ist bereits ausgeschlossen.",
+        "Removing an entry takes effect within %1$s hours, when the next comparison run picks those files up again. Run \"%2$s\" to apply it at once.": "Einen Eintrag zu entfernen wirkt innerhalb von %1$s Stunden, wenn der nächste Abgleichlauf diese Dateien wieder aufnimmt. Mit \"%2$s\" sofort übernehmen.",
+        "Remove indexed content? Excluding %1$s also removes %2$s already indexed documents under that path from the index. The files themselves stay untouched on disk.": "Indexierte Inhalte entfernen? Der Ausschluss von %1$s entfernt außerdem %2$s bereits indexierte Dokumente unter diesem Pfad aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte.",
+        "Remove indexed content? Excluding %s also removes the documents already indexed under that path from the index. The files themselves stay untouched on disk.": "Indexierte Inhalte entfernen? Der Ausschluss von %s entfernt außerdem die bereits indexierten Dokumente unter diesem Pfad aus dem Index. Die Dateien selbst bleiben unverändert auf der Platte.",
+        "at least %s": "mindestens %s",
+        "Exclude and remove": "Ausschließen und entfernen",
+        "Keep files indexed": "Dateien indexiert lassen"
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }
