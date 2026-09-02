@@ -52,11 +52,14 @@ weeks. "occ findling:index --status" shows how far it has come.]]></description>
 
 		The install step is what makes the first index start without an admin
 		doing anything, which is the whole zero config promise of this app. The
-		command is the way back out: it is the only way to rebuild the index
-		short of uninstalling the app.
+		first command is the way back out: it is the only way to rebuild the index
+		short of uninstalling the app. The second one is the diagnosis of a single
+		file without a browser, which is the way a support case takes: the admin
+		route of this app demands the request token of a real browser session, so
+		occ is the only access to that answer from a shell.
 	-->
 	<repair-steps><install><step>OCA\Findling\Repair\AppInstallStep</step></install></repair-steps>
-	<commands><command>OCA\Findling\Command\IndexCommand</command></commands>
+	<commands><command>OCA\Findling\Command\IndexCommand</command><command>OCA\Findling\Command\DiagnoseCommand</command></commands>
 	<!--
 		The settings block, written on one line for the same reason as the two
 		above, and standing here because there is nowhere else to put it:
