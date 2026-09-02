@@ -137,6 +137,10 @@ None - no external service configuration required.
 - Die Grund-Aufschluesselung des Containers steht getrennt von der Nextcloud-Sicht bereit. Die Statusseite muss beide zeigen und die Quelle benennen; die Aufteilung liegt woertlich in beiden Docblocks.
 - Offen und bewusst nicht in diesem Plan: die Durchsatz-Fensterabfrage selbst. Der Index `files_indexed_at` liegt bereit, die Abfrage gehoert zu dem Plan, der den Durchsatz anzeigt.
 
+## Self-Check: PASSED
+
+Alle sieben geaenderten Dateien liegen auf Platte, alle vier Commits (`da5ada8`, `11ad779`, `fdcaaed`, `cb54df2`) sind im Log, und alle Acceptance-Criteria beider Tasks wurden nach der Umsetzung erneut ausgefuehrt und sind gruen.
+
 ---
 *Phase: 04-admin-sichtbarkeit-und-diagnose*
 *Completed: 2026-09-02*
