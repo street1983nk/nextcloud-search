@@ -13,7 +13,7 @@ what an installation looks like for the first few minutes, and a 500 there would
 send an admin looking for a defect that is a normal state.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import Corpus
+from findling.config import MAX_FILE_BYTES
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
 
@@ -32,8 +33,10 @@ STATUS_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "api"
 
 FIELDS = {
     "indexed",
+    "truncated",
     "skipped",
     "failed",
+    "reasons",
     "aclRows",
     "docs",
     "indexVersion",
@@ -41,6 +44,10 @@ FIELDS = {
     "wordlistHash",
     "reindexRequired",
     "lowDisk",
+    "diskFreeBytes",
+    "diskTotalBytes",
+    "indexBytes",
+    "maxFileBytes",
     "note",
 }
 
@@ -53,6 +60,24 @@ def _status(client: TestClient, headers: dict[str, str]) -> dict[str, Any]:
 
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def _strings(value: Any) -> Iterator[str]:
+    """Every string in the answer, keys of nested mappings included.
+
+    The privacy claim of this file is about the whole answer and not about its
+    top level. ``reasons`` carries its codes as keys, so a check that only
+    walked the values would stop proving anything the day a breakdown is added.
+    """
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, item in value.items():  # pyright: ignore[reportUnknownVariableType]
+            yield from _strings(key)
+            yield from _strings(item)
+    elif isinstance(value, list):
+        for item in value:  # pyright: ignore[reportUnknownVariableType]
+            yield from _strings(item)
 
 
 def test_the_answer_carries_the_counters_the_versions_and_nothing_else(
@@ -94,17 +119,78 @@ def test_the_counters_name_every_state_including_the_empty_ones(
     assert answer["failed"] == 1
 
 
+def test_truncated_is_counted_separately_and_stays_inside_indexed(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # D-08 of phase 3: a document whose text was cut off is searchable at the
+    # front and not at the back, and an admin who cannot see that number reads
+    # "indexed" as a promise the container never made.
+    store = open_store(indexed_volume.root / "state.db")
+    meta = FileMeta(storage_id=1, root_id=1, path="/x", title="x", mime="application/pdf", size=1, mtime=1)
+    store.record(103, meta, "indexed", "truncated")
+    store.close()
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["truncated"] == 1
+    assert answer["indexed"] == indexed_volume.documents + 1
+    assert answer["truncated"] <= answer["indexed"]
+
+
+def test_the_reasons_break_the_states_down_and_name_the_absent_reason_as_an_empty_string(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # None is not a JSON object key. Normalising it to an empty string here is
+    # what keeps the answer readable by a page that indexes into the mapping
+    # instead of guessing which of two spellings this release produced.
+    store = open_store(indexed_volume.root / "state.db")
+    meta = FileMeta(storage_id=1, root_id=1, path="/x", title="x", mime="text/plain", size=1, mtime=1)
+    store.record(104, meta, "failed", "corrupt")
+    store.close()
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["reasons"]["indexed"][""] == indexed_volume.documents
+    assert answer["reasons"]["failed"]["corrupt"] == 1
+    assert answer["reasons"]["skipped"] == {}
+
+
+def test_the_volume_is_reported_as_raw_numbers_and_the_index_size_is_measured(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The admin page computes a space requirement out of these three, so it
+    # needs the measurements and not the flag that lowDisk already carries.
+    answer = _status(client, sign("admin"))
+
+    assert answer["diskTotalBytes"] > 0
+    assert answer["diskFreeBytes"] > 0
+    assert answer["diskTotalBytes"] >= answer["diskFreeBytes"]
+    assert answer["indexBytes"] > 0
+    assert answer["maxFileBytes"] == MAX_FILE_BYTES
+
+
 def test_the_answer_carries_no_path_no_file_name_and_no_search_term(
     client: TestClient,
     sign: Sign,
     indexed_volume: Corpus,
 ) -> None:
+    store = open_store(indexed_volume.root / "state.db")
+    meta = FileMeta(storage_id=1, root_id=1, path="/x", title="x", mime="text/plain", size=1, mtime=1)
+    store.record(105, meta, "skipped", "too_large")
+    store.record(106, meta, "indexed", "truncated")
+    store.close()
+
     answer = _status(client, sign("admin"))
 
-    for value in answer.values():
-        if isinstance(value, str):
-            assert "/" not in value
-            assert "Akte" not in value
+    for value in _strings(answer):
+        assert "/" not in value
+        assert "Akte" not in value
 
 
 def test_a_matching_index_needs_no_reindex(
@@ -149,9 +235,29 @@ def test_without_a_state_database_the_answer_is_zeros_and_a_note(
 
     assert set(answer) == FIELDS
     assert answer["indexed"] == 0
+    assert answer["truncated"] == 0
+    assert answer["reasons"] == {}
     assert answer["aclRows"] == 0
     assert answer["docs"] == 0
+    assert answer["indexBytes"] == 0
     assert answer["note"] != ""
+
+
+def test_the_size_cap_is_reported_even_without_a_state_database(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # Pitfall 2: the container enforces the cap a second time, so the PHP
+    # setting has to be clamped to this number. It comes out of the environment
+    # and not out of the database, and an empty container is no reason to
+    # withhold it from the page that would otherwise show a value that does not
+    # apply.
+    assert not (volume / "state.db").exists()
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["maxFileBytes"] == MAX_FILE_BYTES
 
 
 def test_a_request_without_any_appapi_header_is_unauthorized(client: TestClient) -> None:

@@ -35,6 +35,7 @@ from findling.store.repo import (
     FileMeta,
     Store,
     enable_wal,
+    index_bytes,
     open_read_only,
     open_store,
 )
@@ -653,6 +654,33 @@ def test_the_schema_applies_to_an_existing_database_without_losing_anything(tmp_
         assert second.read_meta()["schema_version"] == SCHEMA_VERSION
     finally:
         second.close()
+
+
+def test_index_bytes_sums_every_file_below_the_directory(tmp_path: Path) -> None:
+    # The base of the space estimate on the admin page. Tantivy keeps its
+    # segments in subdirectories, so a sum over the top level alone would report
+    # a fraction of the real size and the estimate built on it would be wrong in
+    # the direction that fills a volume.
+    directory = tmp_path / "index"
+    (directory / "segments").mkdir(parents=True)
+    (directory / "meta.json").write_bytes(b"m" * 100)
+    (directory / "segments" / "0.store").write_bytes(b"s" * 23)
+
+    assert index_bytes(directory) == 123
+
+
+def test_index_bytes_reports_zero_for_a_directory_that_is_not_there(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # A container that has not indexed anything yet has no index directory, and
+    # the honest answer to that is zero. The warning names no path, for the same
+    # reason nothing else in this project logs one.
+    with caplog.at_level(logging.WARNING):
+        assert index_bytes(tmp_path / "index") == 0
+
+    assert caplog.records
+    assert str(tmp_path) not in caplog.text
 
 
 def test_the_connection_may_cross_a_worker_thread(store: Store) -> None:
