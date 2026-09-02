@@ -53,6 +53,24 @@ use OCP\IUserSession;
  * string, a reason code that arrives as a sentence and a note the size of a
  * novel all end as a bounded value of the expected type, because every one of
  * them is on its way into the DOM of an administrator (T-04-14).
+ *
+ * The estimate of the first index, D-05, and what it is not. There is no
+ * confirmation gate anywhere in this app: the first index starts on its own,
+ * which is the core promise of a zero-config search, and nothing on the page
+ * waits for an administrator to agree to it. The estimate is an informative
+ * figure from the first minute and it gets more accurate as the run proceeds.
+ * The success criterion of the roadmap says "before the first index", and D-05 is
+ * the later, explicit decision that wins over that wording: the number appears
+ * from minute one and the page labels it as provisional while the scan is still
+ * walking, and it names how many of how many mounts are through.
+ *
+ * Duration and space calibrate themselves against the running pass instead of
+ * being predicted from constants. Every rate this project has measured comes
+ * from an amd64 laptop core, the hardware target is an ARM box, and the
+ * measuring run for it is still outstanding, so a prediction out of the amd64
+ * numbers would be wrong by an unknown factor on the machine that matters. The
+ * constants below are the startup value of the first minute and nothing else,
+ * and ``startupValues`` is the flag with which the page labels them as such.
  */
 final class AdminViewService {
 	/**
@@ -100,6 +118,84 @@ final class AdminViewService {
 	 */
 	private const REASON_PATTERN = '/^[a-z][a-z_]{0,39}$/';
 
+	/**
+	 * The free space the container insists on keeping, in bytes.
+	 *
+	 * The value of MIN_FREE_BYTES in backend/src/findling/config.py. Below it the
+	 * container pauses with paused_low_disk, so an index that is expected to grow
+	 * into that reserve does not fail, it stops. This is the one place where a
+	 * figure of this phase leads to an action: the page warns while there is
+	 * still something an administrator can do about it, instead of reporting a
+	 * halt after it happened.
+	 *
+	 * A second copy of a container constant, and deliberately so: the alternative
+	 * would be a fifth field on a status answer that already carries the flag
+	 * derived from it, and the number has not moved in three phases. If it ever
+	 * does, the container reports lowDisk regardless and the page keeps saying
+	 * the truth, only earlier or later than it could have.
+	 */
+	private const MIN_FREE_BYTES = 524288000;
+
+	/**
+	 * Pages read per scanned document, the default of FINDLING_OCR_MAX_PAGES.
+	 *
+	 * Used for one purpose only: turning the measured milliseconds per OCR page
+	 * that the container reports into documents per hour, for the first minute in
+	 * which nothing has been measured yet. An instance that raised or lowered the
+	 * environment variable makes this startup value optimistic or pessimistic by
+	 * exactly that factor, which is one more reason it is labelled as a startup
+	 * value and replaced by measurement within the minute.
+	 */
+	private const OCR_PAGE_CAP = 30;
+
+	/**
+	 * Text documents per hour, the startup value, and it is an assumption.
+	 *
+	 * Unlike the OCR page rate, which is measured and comes from the container,
+	 * this number has never been measured: the research of this phase records as
+	 * assumption A2 that the HTTP fetch of the bytes dominates the cost of a text
+	 * file, and it records that this was never verified. One document per second
+	 * is the order of magnitude that follows from it, and the per file extraction
+	 * timeout of 120 seconds is the outlier cutoff rather than the normal case.
+	 *
+	 * So this is exactly what the field name says: a startup value. It is used
+	 * only while no rate has been measured, ``startupValues`` is true for as long
+	 * as it is used, and the page says "startup value, being measured" rather
+	 * than presenting it as a measurement. The moment the container has finished
+	 * a handful of documents, the measurement replaces it.
+	 */
+	private const STARTUP_TEXT_DOCS_PER_HOUR = 3600;
+
+	/**
+	 * From which share of judged files the measured OCR count replaces the
+	 * interval, in per cent.
+	 *
+	 * Before the run the OCR share is an interval and not a value: an image has
+	 * no text layer and always needs OCR, and a PDF may or may not have one,
+	 * which only the extraction finds out. So the lower bound is the images and
+	 * the upper bound is the images plus every PDF. The measured value grows out
+	 * of the documents the container reported without a text layer.
+	 *
+	 * While only a handful of files have a verdict, that measured value is a
+	 * lower bound that keeps rising, and a figure that quietly corrects itself
+	 * upwards looks like a defect. So the page keeps showing the interval until
+	 * half of the indexable files have a verdict, and shows the measured number
+	 * from then on. Half is a display decision and not a measurement, which is
+	 * why it is a constant with this sentence next to it rather than a number
+	 * inside an expression.
+	 */
+	private const MEASURED_OCR_FROM_JUDGED_PERCENT = 50;
+
+	/**
+	 * Ceiling on the estimated seconds, so that no sentence on the page claims a
+	 * span nobody can act on.
+	 *
+	 * A thousand days. It is reached only when a rate is so small that the
+	 * remainder divided by it overflows anything meaningful, and a page that says
+	 * "about 400 years" has stopped informing and started entertaining.
+	 */
+	private const MAX_SECONDS_LEFT = 86400000;
+
 	public function __construct(
 		private FileStateService $fileStateService,
 		private QueueService $queueService,
@@ -123,7 +219,8 @@ final class AdminViewService {
 	 *     indexed:int, skipped:int, failed:int, excluded:int,
 	 *     indexedDisplay:int, scheduled:int, running:int, lastJobRun:int,
 	 *     stalledFor:int, runState:string, backendReachable:bool,
-	 *     backend:array<string,mixed>, coverage:array<string,mixed>
+	 *     backend:array<string,mixed>, coverage:array<string,mixed>,
+	 *     estimate:array<string,mixed>
 	 * }
 	 */
 	public function overview(): array {
@@ -133,6 +230,13 @@ final class AdminViewService {
 
 		$scheduled = (int)($queue['scheduled'] ?? 0);
 		$running = (int)($queue['running'] ?? 0);
+
+		// The denominator of the coverage figure and the file count of the
+		// estimate are the same set of files, so the subtraction happens once,
+		// here, and both subtrees below are handed the result. Two places
+		// working it out would put two different numbers for one quantity on the
+		// same page, and the page would be right about neither.
+		$indexable = max(0, (int)$scan['filesSeen'] - max(0, (int)$scan['overCap']) - max(0, (int)$scan['excluded']));
 
 		$lastJobRun = $this->appConfig->getValueInt(Application::APP_ID, SchedulerJob::LAST_JOB_RUN);
 		$now = $this->timeFactory->getTime();
@@ -171,7 +275,8 @@ final class AdminViewService {
 			'runState' => $this->runState($lastJobRun, $stalledFor, $scheduled, $running),
 			'backendReachable' => $backendReachable,
 			'backend' => $backend,
-			'coverage' => $this->coverage($scan, $backend, $backendReachable),
+			'coverage' => $this->coverage($scan, $backend, $backendReachable, $indexable),
+			'estimate' => $this->estimate($scan, $backend, $backendReachable, $indexable, $scheduled + $running),
 		];
 	}
 
@@ -184,8 +289,9 @@ final class AdminViewService {
 	 * the proof that the upsert of the index works; the fraction takes the one
 	 * that counts judged files, and both stay visible side by side.
 	 *
-	 * The denominator is filesSeen minus overCap minus excluded, and that
-	 * subtraction happens here and exactly once in this file. It is word for
+	 * The denominator is filesSeen minus overCap minus excluded, worked out once
+	 * in overview() and handed in here, so that this figure and the file count of
+	 * the estimate cannot drift apart. It is word for
 	 * word the set the crawl walked: the mimetype filter and the two encryption
 	 * booleans are already in its query, and the cap and the exclusions are the
 	 * two conditions it applies itself. So the denominator comes out of the same
@@ -209,15 +315,15 @@ final class AdminViewService {
 	 *
 	 * @param array<string,int> $scan
 	 * @param array<string,mixed> $backend
+	 * @param int $indexable the denominator, worked out once in overview()
 	 * @return array{
 	 *     indexed:int, indexable:int, deliberatelyLeftOut:int, percent:int|null,
 	 *     provisional:bool, mountsTotal:int, mountsFinished:int
 	 * }
 	 */
-	private function coverage(array $scan, array $backend, bool $backendReachable): array {
+	private function coverage(array $scan, array $backend, bool $backendReachable, int $indexable): array {
 		$overCap = max(0, (int)$scan['overCap']);
 		$excluded = max(0, (int)$scan['excluded']);
-		$indexable = max(0, (int)$scan['filesSeen'] - $overCap - $excluded);
 
 		$indexed = $backendReachable ? max(0, (int)$backend['indexed']) : 0;
 		$mountsTotal = max(0, (int)$scan['mountsTotal']);
@@ -246,6 +352,233 @@ final class AdminViewService {
 			'provisional' => $mountsTotal === 0 || $mountsFinished < $mountsTotal,
 			'mountsTotal' => $mountsTotal,
 			'mountsFinished' => $mountsFinished,
+		];
+	}
+
+	/**
+	 * What the first index still costs: files, OCR share, time left, space.
+	 *
+	 * Always all thirteen keys, for the same reason overview() is never sparse.
+	 * Three of them are deliberately nullable, and null means "there is no honest
+	 * number for this yet" rather than nought: a duration of nought reads as
+	 * "done" and a space requirement of nought reads as "free", and both would be
+	 * a claim this method cannot back.
+	 *
+	 * ``files`` is the same set as coverage.indexable and comes from the same
+	 * subtraction, handed in from overview().
+	 *
+	 * The OCR share is an interval before the run and not a value. ocrMin is the
+	 * images, because an image has no text layer at all; ocrMax adds every PDF,
+	 * because a PDF may or may not carry one and only the extraction finds out.
+	 * ocrMeasured is what the run itself produced, the images plus the documents
+	 * the container reported as skipped(no_text_layer), and it stays null until
+	 * enough files have a verdict for it to have stopped climbing. A single
+	 * guessed percentage would be a number without a basis, and the audience of
+	 * this product has believed a status screen that knew nothing before.
+	 *
+	 * ``secondsLeft`` divides the remainder by the measured throughput, one track
+	 * at a time, because a page of OCR and a page of text cost orders of
+	 * magnitude apart. Where no rate has been measured yet the startup value
+	 * steps in and ``startupValues`` turns true, which is the signal the page
+	 * needs in order to label the figure instead of selling it as a measurement.
+	 * With the container silent there is no rate and no startup rate either, so
+	 * the answer is null: an unreachable backend must not produce an invented
+	 * number.
+	 *
+	 * ``spaceWarning`` is the one place in this phase where a figure leads to an
+	 * action, and it fires before the index stops rather than after.
+	 *
+	 * ``firstIndexDone`` ends the block. Once every mount is walked through and
+	 * no work is waiting, an advance estimate has nothing left to say, so the
+	 * page does not render it at all. That is also why the throughput of the
+	 * container is not even asked for in that state: a resting instance is polled
+	 * every thirty seconds and a call whose answer nobody renders is a round trip
+	 * for nothing.
+	 *
+	 * @param array<string,int> $scan
+	 * @param array<string,mixed> $backend
+	 * @param int $indexable the same figure as coverage.indexable
+	 * @param int $openWork queue entries waiting plus queue entries running
+	 * @return array{
+	 *     files:int, ocrMin:int, ocrMax:int, ocrMeasured:int|null,
+	 *     secondsLeft:int|null, bytesExpected:int|null, bytesPerDoc:int|null,
+	 *     spaceWarning:bool, provisional:bool, mountsTotal:int,
+	 *     mountsFinished:int, startupValues:bool, firstIndexDone:bool
+	 * }
+	 */
+	private function estimate(array $scan, array $backend, bool $backendReachable, int $indexable, int $openWork): array {
+		$mountsTotal = max(0, (int)$scan['mountsTotal']);
+		$mountsFinished = max(0, (int)$scan['mountsFinished']);
+		$provisional = $mountsTotal === 0 || $mountsFinished < $mountsTotal;
+		$firstIndexDone = $mountsTotal > 0 && $mountsFinished === $mountsTotal && $openWork === 0;
+
+		// Held inside the file count, because both bounds are counted over
+		// everything the crawl saw while the file count leaves out what is over
+		// the cap or excluded. An upper bound above its own denominator would
+		// read as "more files need OCR than exist".
+		$ceiling = static fn (int $bound): int => $indexable > 0 ? min($bound, $indexable) : $bound;
+		$ocrMin = $ceiling(max(0, (int)$scan['ocrCandidates']));
+		$ocrMax = $ceiling($ocrMin + max(0, (int)$scan['pdfSeen']));
+
+		$shape = [
+			'files' => $indexable,
+			'ocrMin' => $ocrMin,
+			'ocrMax' => $ocrMax,
+			'ocrMeasured' => null,
+			'secondsLeft' => null,
+			'bytesExpected' => null,
+			'bytesPerDoc' => null,
+			'spaceWarning' => false,
+			'provisional' => $provisional,
+			'mountsTotal' => $mountsTotal,
+			'mountsFinished' => $mountsFinished,
+			// True until something is measured, so that a page which renders the
+			// block before the first rate exists labels what it shows.
+			'startupValues' => true,
+			'firstIndexDone' => $firstIndexDone,
+		];
+
+		if ($firstIndexDone || !$backendReachable) {
+			// Nothing to estimate, or nothing to estimate it from. Either way the
+			// keys are all here and none of them carries an invented value.
+			return $shape;
+		}
+
+		$judged = max(0, (int)$backend['indexed']) + max(0, (int)$backend['skipped']) + max(0, (int)$backend['failed']);
+		$shape['ocrMeasured'] = $this->measuredOcr($backend, $ocrMin, $ocrMax, $indexable, $judged);
+
+		$rest = max(0, $indexable - $judged);
+		$rates = $this->rates($this->exAppService->adminGet('/rates', $this->userId(), []));
+		[$shape['secondsLeft'], $shape['startupValues']] = $this->timeLeft($rest, $rates, $shape);
+
+		$docs = max(0, (int)$backend['docs']);
+		if ($docs > 0) {
+			// Out of the two operands of the status answer this page already
+			// holds, and not out of the quotient the throughput route also
+			// carries: the space figure then survives a throughput call that
+			// failed, and there is no second rule for one number.
+			$shape['bytesPerDoc'] = intdiv(max(0, (int)$backend['indexBytes']), $docs);
+			$shape['bytesExpected'] = $shape['bytesPerDoc'] * $indexable;
+			$usable = max(0, (int)$backend['diskFreeBytes']) - self::MIN_FREE_BYTES;
+			$shape['spaceWarning'] = $shape['bytesExpected'] > $usable;
+		}
+
+		return $shape;
+	}
+
+	/**
+	 * The OCR count the run itself produced, or null while it is still climbing.
+	 *
+	 * Images always need OCR, and on top of them come the PDFs the container
+	 * found without a text layer. That sum is the true value, and it is only
+	 * worth showing once it has stopped being a lower bound, which is what the
+	 * threshold constant decides. Held inside the interval in any case: a
+	 * measurement above the upper bound would mean the crawl and the container
+	 * disagree about the file stock, and a page is not the place to resolve that.
+	 *
+	 * @param array<string,mixed> $backend
+	 */
+	private function measuredOcr(array $backend, int $ocrMin, int $ocrMax, int $indexable, int $judged): ?int {
+		if ($indexable <= 0 || $judged * 100 < $indexable * self::MEASURED_OCR_FROM_JUDGED_PERCENT) {
+			return null;
+		}
+
+		$reasons = is_array($backend['reasons'] ?? null) ? $backend['reasons'] : [];
+		$skipped = is_array($reasons['skipped'] ?? null) ? $reasons['skipped'] : [];
+		$withoutTextLayer = is_int($skipped['no_text_layer'] ?? null) ? max(0, $skipped['no_text_layer']) : 0;
+
+		return min($ocrMax, $ocrMin + $withoutTextLayer);
+	}
+
+	/**
+	 * Seconds left, and whether a startup value had to be used for them.
+	 *
+	 * One division per track, because the two tracks cost orders of magnitude
+	 * apart. The remainder is split by the OCR share of the whole file stock,
+	 * measured where a measurement exists and the middle of the interval
+	 * otherwise, which is an approximation and is meant as one: the share of the
+	 * remaining files is not knowable without judging them, and the alternative
+	 * is no figure at all.
+	 *
+	 * A track with nothing left in it needs no rate, so a missing rate there
+	 * does not label the whole figure as a startup value. A track that does have
+	 * work left and no measured rate uses the startup value and says so. If even
+	 * the startup value is missing, which is what a silent container looks like,
+	 * the answer is null rather than a number nobody can back.
+	 *
+	 * @param array{docsPerHourText:int,docsPerHourOcr:int,startupRateOcrMs:int} $rates
+	 * @param array<string,mixed> $shape the estimate so far, for the OCR share
+	 * @return array{0:int|null,1:bool}
+	 */
+	private function timeLeft(int $rest, array $rates, array $shape): array {
+		$files = (int)$shape['files'];
+		if ($files <= 0) {
+			// Nothing has been counted yet, so there is no remainder to divide.
+			// Zero seconds would read as "done" while the scan has not even
+			// started, which is the opposite of the truth.
+			return [null, true];
+		}
+		if ($rest <= 0) {
+			// Every counted file has a verdict. Zero is exact here and not a
+			// startup value, so the page shows it without a label.
+			return [0, false];
+		}
+
+		$ocrShare = is_int($shape['ocrMeasured'])
+			? $shape['ocrMeasured']
+			: intdiv((int)$shape['ocrMin'] + (int)$shape['ocrMax'], 2);
+		$restOcr = min($rest, (int)round($rest * min($files, max(0, $ocrShare)) / $files));
+		$restText = $rest - $restOcr;
+
+		$startupValues = false;
+		$textPerHour = max(0, $rates['docsPerHourText']);
+		if ($restText > 0 && $textPerHour === 0) {
+			$textPerHour = self::STARTUP_TEXT_DOCS_PER_HOUR;
+			$startupValues = true;
+		}
+
+		$ocrPerHour = max(0, $rates['docsPerHourOcr']);
+		if ($restOcr > 0 && $ocrPerHour === 0) {
+			$perPage = max(0, $rates['startupRateOcrMs']);
+			if ($perPage === 0) {
+				// The container never told us its measured page rate, which is
+				// what a silent backend looks like. No number then, and the page
+				// says the backend does not answer.
+				return [null, true];
+			}
+			$ocrPerHour = max(1, intdiv(3600 * 1000, $perPage * self::OCR_PAGE_CAP));
+			$startupValues = true;
+		}
+
+		$seconds = 0.0;
+		if ($restText > 0) {
+			$seconds += $restText * 3600 / $textPerHour;
+		}
+		if ($restOcr > 0) {
+			$seconds += $restOcr * 3600 / $ocrPerHour;
+		}
+
+		return [min(self::MAX_SECONDS_LEFT, (int)ceil($seconds)), $startupValues];
+	}
+
+	/**
+	 * The three throughput fields of the container, rebuilt one by one.
+	 *
+	 * Called with null as well, which is what an unreachable container looks
+	 * like, and then every field is a zero. The caller reads a zero as "not
+	 * measured" and falls back to a labelled startup value or to no figure at
+	 * all, which is the only honest pair of answers here.
+	 *
+	 * @param array<mixed>|null $answer the decoded body, or null when there was none
+	 * @return array{docsPerHourText:int,docsPerHourOcr:int,startupRateOcrMs:int}
+	 */
+	private function rates(?array $answer): array {
+		$answer ??= [];
+
+		return [
+			'docsPerHourText' => $this->counter($answer, 'docsPerHourText'),
+			'docsPerHourOcr' => $this->counter($answer, 'docsPerHourOcr'),
+			'startupRateOcrMs' => $this->counter($answer, 'startupRateOcrMs'),
 		];
 	}
 
