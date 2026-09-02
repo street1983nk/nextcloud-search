@@ -7,6 +7,7 @@ namespace OCA\Findling\BackgroundJobs;
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
+use OCA\Findling\Service\ScanStatsService;
 use OCA\Findling\Service\StorageService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\IJobList;
@@ -26,6 +27,15 @@ use Psr\Log\LoggerInterface;
  * Nothing here logs a path or a file name. Counters, the storage id and the
  * cursor are enough to follow a crawl, and a log line is the one place where
  * the content of a private instance leaves the permission model.
+ *
+ * This job is also the metadata scan of the coverage figure, and it is the only
+ * one there will ever be. It already sees every indexable file with its size
+ * and its mimetype, before any extraction has happened, so the counters it
+ * needs are the ones it is producing anyway. Until now they lived in local
+ * variables and ended in a log line; since this plan they go into
+ * findling_scan_stats and become the denominator of the coverage figure. A scan
+ * job of its own would be a second walk over the same file list, and the two
+ * walks would disagree the moment one of them was interrupted.
  */
 class StorageCrawlJob extends QueuedJob {
 	/**
@@ -55,8 +65,36 @@ class StorageCrawlJob extends QueuedJob {
 	 * a reason, because the diagnosis of phase 4 reads exactly that table and
 	 * "the file is simply not in the index" is the answer we are building this
 	 * app to avoid (IDX-06).
+	 *
+	 * From plan 04-08 on this value is the default of a cap an admin can change,
+	 * not the cap itself. The line therefore stays here as the documented
+	 * default rather than moving into the settings: zero config means the
+	 * default has to be right, and a default that only exists in a database row
+	 * cannot be read by somebody looking at this file.
 	 */
 	public const MAX_SIZE = 50 * 1024 * 1024;
+
+	/**
+	 * The mimetypes OCR is certain for, because a picture carries no text layer
+	 * at all.
+	 *
+	 * application/pdf is deliberately not in this list. Whether a PDF needs OCR
+	 * is decided by its text layer, and that is only visible inside the
+	 * container. So the OCR share is an interval before a run and not a value:
+	 * the lower bound is this list, the upper bound is this list plus every PDF,
+	 * and pdf_seen is counted separately so that the two ends stay tellable
+	 * apart. A single guessed percentage would be a number nobody can account
+	 * for, and the audience of this app has believed a status screen that knew
+	 * nothing once already.
+	 *
+	 * @var list<string>
+	 */
+	private const OCR_CERTAIN_MIMETYPES = [
+		'image/jpeg',
+		'image/png',
+		'image/tiff',
+		'image/webp',
+	];
 
 	/**
 	 * Writes per transaction. One commit per file made the commit the slice's
@@ -73,6 +111,7 @@ class StorageCrawlJob extends QueuedJob {
 		private StorageService $storageService,
 		private QueueService $queueService,
 		private FileStateService $fileStateService,
+		private ScanStatsService $scanStats,
 		private IAppConfig $appConfig,
 		private IDBConnection $db,
 		private LoggerInterface $logger,
@@ -93,11 +132,38 @@ class StorageCrawlJob extends QueuedJob {
 			return;
 		}
 
+		if ($lastFileId === 0) {
+			// This mount starts from the beginning: a fresh installation or occ
+			// findling:index --restart. The scan counters of this storage go
+			// back to zero here, because a second walk over the same mount
+			// would otherwise add its sightings on top of the first ones and
+			// the page would claim roughly twice as many indexable files as the
+			// instance has. This is the one place a storage starts over, the
+			// termination branch below is the one place it is done.
+			$this->scanStats->beginStorage($storageId);
+		}
+
 		$deadline = $this->time->getTime() + self::MAX_SECONDS;
 		$seen = 0;
 		$queued = 0;
 		$skipped = 0;
 		$band = 0;
+
+		// The scan counters of the current transaction band. They are separate
+		// from the three above because they are handed to ScanStatsService and
+		// then set back to zero, while $seen decides whether this mount is done
+		// and $queued and $skipped belong to the log line of the whole slice.
+		//
+		// excluded stays zero throughout this plan. It gets its value in plan
+		// 04-08 with the exclusion rules, and it is counted here already so
+		// that the column does not have to be added later to a table that
+		// already holds data.
+		$bandFiles = 0;
+		$bandBytes = 0;
+		$bandOcr = 0;
+		$bandPdf = 0;
+		$bandOverCap = 0;
+		$bandExcluded = 0;
 
 		// The writes of a slice run in transaction bands rather than one commit
 		// per file, see TX_BAND. Nothing in the band throws for "already
@@ -121,9 +187,28 @@ class StorageCrawlJob extends QueuedJob {
 				$seen++;
 
 				$size = $entry->getSize();
+
+				$bandFiles++;
+				// The interface allows a float for a size beyond the integer
+				// range, and a document of that size does not exist behind a cap
+				// of fifty megabytes; the cast is the same one
+				// StorageService::getFileSlice makes for the same reason.
+				$bandBytes += max(0, (int)$size);
+				$mimeType = $entry->getMimeType();
+				if (in_array($mimeType, self::OCR_CERTAIN_MIMETYPES, true)) {
+					$bandOcr++;
+				} elseif ($mimeType === 'application/pdf') {
+					$bandPdf++;
+				}
+
 				if ($size > self::MAX_SIZE) {
 					$this->fileStateService->record($entry->getId(), 'skipped', 'too_large');
 					$skipped++;
+					// The same decision as the line above, counted as well as
+					// recorded: over_cap is one of the two deliberate omissions
+					// that come out of the denominator, which is what lets the
+					// coverage figure reach a hundred per cent at all.
+					$bandOverCap++;
 				} else {
 					// Idempotent by the unique index on file_id: a file that ten
 					// users see is one row, and a second crawl of the same mount
@@ -133,6 +218,18 @@ class StorageCrawlJob extends QueuedJob {
 				}
 
 				if (++$band >= self::TX_BAND) {
+					// Once per band and never once per file. One counter update
+					// per file would be exactly the doubling of write cost that
+					// the band exists to avoid, and the update belongs inside
+					// the band it counts, so it goes before the commit.
+					$this->scanStats->add($storageId, $bandFiles, $bandBytes, $bandOcr, $bandPdf, $bandOverCap, $bandExcluded, $lastFileId);
+					$bandFiles = 0;
+					$bandBytes = 0;
+					$bandOcr = 0;
+					$bandPdf = 0;
+					$bandOverCap = 0;
+					$bandExcluded = 0;
+
 					$this->db->commit();
 					$this->db->beginTransaction();
 					$band = 0;
@@ -142,6 +239,13 @@ class StorageCrawlJob extends QueuedJob {
 					break;
 				}
 			}
+
+			// The remainder of the last, incomplete band. Called without a
+			// condition on purpose: with zero deltas this is one update that
+			// changes nothing but the timestamp, and a condition here would be a
+			// second place deciding what a band is.
+			$this->scanStats->add($storageId, $bandFiles, $bandBytes, $bandOcr, $bandPdf, $bandOverCap, $bandExcluded, $lastFileId);
+
 			$this->db->commit();
 		} catch (\Throwable $e) {
 			$this->db->rollBack();
@@ -153,6 +257,14 @@ class StorageCrawlJob extends QueuedJob {
 		if ($seen === 0) {
 			// Nothing behind the cursor any more, so this mount is done and
 			// gets no successor. This is the only way the crawl terminates.
+			//
+			// It is therefore also the only place a mount is marked as counted
+			// through. Without that mark the page has to label its coverage
+			// figure as provisional and say how many of how many mounts are
+			// done, because the number is a lower bound until every mount
+			// carries a finished_at.
+			$this->scanStats->finishStorage($storageId, $lastFileId);
+
 			$this->logger->info('Findling: finished crawling a mount', [
 				'storage_id' => $storageId,
 				'cursor' => $lastFileId,
