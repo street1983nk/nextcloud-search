@@ -29,6 +29,12 @@
   const SECONDS_PER_HOUR = 3600
   const SECONDS_PER_DAY = 86400
 
+  // The same unit table the template uses, so that a size does not change its
+  // shape when the first poll arrives. The symbols are not translated, in
+  // Nextcloud either.
+  const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  const BYTES_PER_UNIT = 1024
+
   let request = null
   let timer = null
   let unchanged = 0
@@ -85,6 +91,31 @@
       return n('findling', '%n hour', '%n hours', Math.floor(seconds / SECONDS_PER_HOUR))
     }
     return n('findling', '%n minute', '%n minutes', Math.max(1, Math.floor(seconds / SECONDS_PER_MINUTE)))
+  }
+
+  /**
+   * A size with its unit, in the notation of this session.
+   *
+   * The same steps the template takes, down to the number of decimals: whole
+   * bytes and whole kilobytes, one decimal from megabytes upwards. Both halves
+   * of the page have to agree on what one and a half gigabytes looks like,
+   * because the template writes the first value and this writes every one
+   * after it.
+   */
+  function size (bytes) {
+    let value = Math.max(0, Number.isFinite(bytes) ? bytes : 0)
+    let unit = 0
+    while (value >= BYTES_PER_UNIT && unit < SIZE_UNITS.length - 1) {
+      value /= BYTES_PER_UNIT
+      unit++
+    }
+    const digits = unit < 2 ? 0 : 1
+    const formatted = new Intl.NumberFormat(locale(), {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits
+    }).format(value)
+
+    return formatted + ' ' + SIZE_UNITS[unit]
   }
 
   /** The same duration as a point in the past, for the sentence that needs one. */
@@ -163,12 +194,15 @@
   /** Everything that is allowed to change while the page is open, in one line. */
   function fingerprint (view) {
     const coverage = view.coverage || {}
+    const estimate = view.estimate || {}
     return [
       view.runState, view.backendReachable, view.indexedDisplay, view.skipped,
       view.failed, view.excluded, view.scheduled, view.running, view.lastJobRun,
       coverage.indexed, coverage.indexable, coverage.deliberatelyLeftOut,
       coverage.percent, coverage.provisional, coverage.mountsFinished,
-      coverage.mountsTotal
+      coverage.mountsTotal, estimate.ocrMeasured, estimate.secondsLeft,
+      estimate.bytesExpected, estimate.startupValues, estimate.spaceWarning,
+      estimate.firstIndexDone
     ].join('|')
   }
 
@@ -223,6 +257,73 @@
     shown('findling-coverage-empty', !hasDenominator)
   }
 
+  /**
+   * Block two, the estimate of the first index.
+   *
+   * Every element is in the template already, so this writes text and flips
+   * visibility and never builds markup. The whole block disappears the moment
+   * the first index is through, because an advance estimate has nothing left to
+   * say afterwards and the page must not have to be reloaded to stop showing
+   * one. It is deliberately not a live region: the three live regions of this
+   * page are the status line, the diagnosis card and the save feedback, and a
+   * screen reader that read an estimate out every five seconds would be
+   * unusable for the person it is meant to help.
+   *
+   * Null and not zero for the three figures that may not exist yet. A duration
+   * of nought reads as "done" and a space requirement of nought reads as
+   * "free", so neither is rendered as a number: the sentences the template
+   * holds for those cases say what is actually known.
+   */
+  function estimateBlock (view) {
+    const estimate = view.estimate || {}
+    const done = estimate.firstIndexDone === true
+
+    shown('findling-estimate', !done)
+    if (done) {
+      return
+    }
+
+    const measured = Number.isInteger(estimate.ocrMeasured) ? estimate.ocrMeasured : null
+    const seconds = Number.isInteger(estimate.secondsLeft) ? estimate.secondsLeft : null
+    const bytes = Number.isInteger(estimate.bytesExpected) ? estimate.bytesExpected : null
+    // Nothing counted yet means no sentence about files at all. A line reading
+    // "0 files, 0 to 0 of them need OCR" is the placeholder figure the design
+    // contract forbids here, and the counting hint is the whole answer.
+    const hasFiles = whole(estimate.files) > 0
+    const complete = hasFiles && seconds !== null && bytes !== null
+    // An interval while nothing better is known, a single figure once the run
+    // has measured one. A single guessed percentage would be a number without
+    // a basis.
+    const share = measured === null
+      ? t('findling', '%1$s to %2$s')
+        .replace('%1$s', numbers.format(whole(estimate.ocrMin)))
+        .replace('%2$s', numbers.format(whole(estimate.ocrMax)))
+      : numbers.format(measured)
+
+    text('findling-estimate-line', t('findling', '%1$s files, %2$s of them need OCR. About %3$s and about %4$s of index.')
+      .replace('%1$s', numbers.format(whole(estimate.files)))
+      .replace('%2$s', share)
+      .replace('%3$s', span(seconds === null ? 0 : seconds))
+      .replace('%4$s', size(bytes === null ? 0 : bytes)))
+    text('findling-estimate-line-short', t('findling', '%1$s files, %2$s of them need OCR.')
+      .replace('%1$s', numbers.format(whole(estimate.files)))
+      .replace('%2$s', share))
+    text('findling-estimate-counting-text', t('findling', 'Counting the files, this takes a moment.') + ' ' +
+      t('findling', 'Provisional figure, %1$s of %2$s storages have been counted through.')
+        .replace('%1$s', numbers.format(whole(estimate.mountsFinished)))
+        .replace('%2$s', numbers.format(whole(estimate.mountsTotal))))
+
+    shown('findling-estimate-line', complete)
+    shown('findling-estimate-line-short', hasFiles && !complete)
+    shown('findling-estimate-counting', estimate.provisional === true)
+    shown('findling-estimate-space-unknown', hasFiles && bytes === null)
+    // Only where there is a duration to label. The flag is true as well while
+    // nothing has been measured at all, and labelling an absent figure as a
+    // startup value would be a sentence about nothing.
+    shown('findling-estimate-startup', estimate.startupValues === true && seconds !== null)
+    shown('findling-estimate-space-warning', estimate.spaceWarning === true)
+  }
+
   function render (view) {
     text('findling-tile-indexed', numbers.format(whole(view.indexedDisplay)))
     text('findling-tile-skipped', numbers.format(whole(view.skipped)))
@@ -237,6 +338,7 @@
     // Working it out here as well would be a second rule for the same number,
     // and the two would disagree on the day one of them is corrected.
     coverageBlock(view)
+    estimateBlock(view)
 
     shown('findling-banner-unreachable', view.backendReachable !== true)
     const backend = view.backend || {}

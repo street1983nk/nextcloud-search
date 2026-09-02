@@ -27,7 +27,16 @@
         "The index was built with an older text analysis. Run \"occ findling:index --restart\" to rebuild it, otherwise some hits stay missing.": "Der Index wurde mit einer älteren Textanalyse gebaut. Mit \"occ findling:index --restart\" neu aufbauen, sonst fehlen weiter Treffer.",
         "No numbers yet": "Noch keine Zahlen",
         "The first indexing pass has not finished. Findling started on its own, there is nothing to configure.": "Der erste Indexlauf ist noch nicht durch. Findling ist von selbst gestartet, es ist nichts einzustellen.",
-        "The Findling backend does not answer. The numbers below are the last ones this app recorded. Check under Apps that the External App \"Findling Backend\" is installed and running.": "Das Findling-Backend antwortet nicht. Die Zahlen unten sind die letzten, die diese App festgehalten hat. Unter Apps prüfen, ob die External App \"Findling Backend\" installiert und gestartet ist."
+        "The Findling backend does not answer. The numbers below are the last ones this app recorded. Check under Apps that the External App \"Findling Backend\" is installed and running.": "Das Findling-Backend antwortet nicht. Die Zahlen unten sind die letzten, die diese App festgehalten hat. Unter Apps prüfen, ob die External App \"Findling Backend\" installiert und gestartet ist.",
+        "Estimate for the first index": "Schätzung für den Erstindex",
+        "%1$s files, %2$s of them need OCR. About %3$s and about %4$s of index.": "%1$s Dateien, davon %2$s mit OCR. Etwa %3$s und etwa %4$s Index.",
+        "%1$s files, %2$s of them need OCR.": "%1$s Dateien, davon %2$s mit OCR.",
+        "%1$s to %2$s": "%1$s bis %2$s",
+        "Counting the files, this takes a moment.": "Die Dateien werden gezählt, das dauert einen Moment.",
+        "Startup value, being measured.": "Startwert, wird gemessen.",
+        "The space needed is measured as soon as the first documents are in the index.": "Der Platzbedarf wird gemessen, sobald die ersten Dokumente im Index sind.",
+        "The index is expected to need more space than this volume has free. Indexing pauses before the volume fills up, and search keeps working.": "Der Index braucht voraussichtlich mehr Platz, als auf diesem Datenträger frei ist. Die Indexierung pausiert, bevor der Datenträger voll wird, und die Suche funktioniert weiter.",
+        "Findling does not wait for a confirmation. The first index has already started.": "Findling wartet auf keine Bestätigung. Der Erstindex läuft bereits."
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }

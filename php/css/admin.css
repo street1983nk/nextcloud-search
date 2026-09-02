@@ -15,10 +15,26 @@
  * The focus ring is never touched. Nothing here removes an outline.
  */
 
-#findling-coverage {
+#findling-coverage,
+#findling-estimate {
 	/* The same width as the h2 of a settings block in the core, so that text
 	   and heading end on the same line. */
 	max-width: 900px;
+}
+
+/* A sentence with the core spinner in front of it. The spinner is a background
+   image on an empty element, so it needs a box of its own; the flex row is what
+   keeps it on the first line of the sentence instead of above it. */
+.findling-progress-hint {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--default-grid-baseline) * 2);
+}
+
+.findling-progress-hint .icon-loading-small {
+	flex: 0 0 auto;
+	width: calc(var(--default-grid-baseline) * 4);
+	height: calc(var(--default-grid-baseline) * 4);
 }
 
 /* -- banners --------------------------------------------------------------- */

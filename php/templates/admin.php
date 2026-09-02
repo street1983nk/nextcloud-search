@@ -233,3 +233,125 @@ $banners = [
 
 	<p class="settings-hint"><?php p($l->t('Excluded files are not part of the coverage figure. They are files you told Findling to leave alone.')); ?></p>
 </div>
+<?php
+/*
+ * Block two: what the first index still costs.
+ *
+ * D-05 made visible. There is no confirmation gate anywhere on this page: the
+ * first index started on its own, and the last line of this block says so in
+ * as many words. The block is informative from minute one and it gets more
+ * accurate while the run proceeds, which is why every figure in it is labelled
+ * as measured, as a startup value or as provisional.
+ *
+ * Rendered only while the first index is not through. Afterwards an advance
+ * estimate has nothing left to say, so the block does not exist in the markup
+ * at all rather than sitting there hidden.
+ *
+ * Two shapes of the estimate line, and the reason for the second one: the
+ * design contract carries one sentence with four placeholders, and two of them
+ * are a duration and a size that only exist once something has been measured.
+ * A sentence with a hole in it is worse than a shorter sentence, so the full
+ * line is used when both figures exist and the short one when they do not, and
+ * the missing figure is explained by its own sentence below instead of being
+ * guessed at.
+ */
+$estimate = is_array($_['estimate'] ?? null) ? $_['estimate'] : [];
+
+$estimateFiles = $whole($estimate['files'] ?? 0);
+$estimateOcrMin = $whole($estimate['ocrMin'] ?? 0);
+$estimateOcrMax = $whole($estimate['ocrMax'] ?? 0);
+// Null while the interval is still both numbers moving at once, and a figure
+// once the run has measured it. Not read through $whole for that reason: nought
+// measured documents is a statement and null is the absence of one.
+$estimateOcrMeasured = is_int($estimate['ocrMeasured'] ?? null) ? $estimate['ocrMeasured'] : null;
+$estimateSeconds = is_int($estimate['secondsLeft'] ?? null) ? $estimate['secondsLeft'] : null;
+$estimateBytes = is_int($estimate['bytesExpected'] ?? null) ? $estimate['bytesExpected'] : null;
+$estimateProvisional = ($estimate['provisional'] ?? false) === true;
+$estimateStartup = ($estimate['startupValues'] ?? false) === true;
+$estimateSpaceWarning = ($estimate['spaceWarning'] ?? false) === true;
+$estimateDone = ($estimate['firstIndexDone'] ?? false) === true;
+$estimateMountsTotal = $whole($estimate['mountsTotal'] ?? 0);
+$estimateMountsFinished = $whole($estimate['mountsFinished'] ?? 0);
+
+/**
+ * A size in the notation of this admin, unit and all.
+ *
+ * Written here rather than taken from Util::humanFileSize, which always puts a
+ * full stop before the decimal no matter what the session language is. The
+ * script formats the same number with Intl.NumberFormat and the same unit
+ * table, so both halves of the page agree on what one and a half gigabytes
+ * looks like. The unit names are not translated, in Nextcloud either: they are
+ * symbols and they read the same in every language this app ships.
+ */
+$size = static function (int $bytes) use ($l): string {
+	$units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+	$value = (float)max(0, $bytes);
+	$unit = 0;
+	while ($value >= 1024 && $unit < count($units) - 1) {
+		$value /= 1024;
+		$unit++;
+	}
+
+	// Whole bytes and whole kilobytes, one decimal from megabytes upwards. A
+	// tenth of a kilobyte is precision this figure does not have.
+	$digits = $unit < 2 ? 0 : 1;
+	if (!class_exists('NumberFormatter')) {
+		return number_format($value, $digits, '.', '') . ' ' . $units[$unit];
+	}
+
+	$formatter = new NumberFormatter($l->getLocaleCode(), NumberFormatter::DECIMAL);
+	$formatter->setAttribute(NumberFormatter::FRACTION_DIGITS, $digits);
+	$formatted = $formatter->format($value);
+
+	return ($formatted === false ? number_format($value, $digits, '.', '') : $formatted) . ' ' . $units[$unit];
+};
+
+// The OCR share: an interval as long as nothing better is known, a single
+// figure once the run has measured one. A single guessed percentage would be a
+// number without a basis.
+$estimateOcrText = $estimateOcrMeasured === null
+	? $l->t('%1$s to %2$s', [$count($estimateOcrMin), $count($estimateOcrMax)])
+	: $count($estimateOcrMeasured);
+
+// Nothing counted yet means no sentence about files, not a sentence full of
+// noughts. "0 files, 0 to 0 of them need OCR" is exactly the placeholder figure
+// the design contract forbids for this block; the counting hint below is the
+// whole answer in that minute.
+$estimateHasFiles = $estimateFiles > 0;
+$estimateComplete = $estimateHasFiles && $estimateSeconds !== null && $estimateBytes !== null;
+$estimateFullLine = $l->t('%1$s files, %2$s of them need OCR. About %3$s and about %4$s of index.', [
+	$count($estimateFiles),
+	$estimateOcrText,
+	$span($estimateSeconds ?? 0),
+	$size($estimateBytes ?? 0),
+]);
+$estimateShortLine = $l->t('%1$s files, %2$s of them need OCR.', [$count($estimateFiles), $estimateOcrText]);
+
+// Icon path data: Material Design Icons by Pictogrammers, Apache-2.0, pinned by
+// commit in THIRD-PARTY.md.
+$infoIcon = 'M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z';
+
+if (!$estimateDone) { ?>
+<div id="findling-estimate" class="section">
+	<h2><?php p($l->t('Estimate for the first index')); ?></h2>
+
+	<p id="findling-estimate-line"<?php if (!$estimateComplete) { ?> hidden<?php } ?>><?php p($estimateFullLine); ?></p>
+	<p id="findling-estimate-line-short"<?php if (!$estimateHasFiles || $estimateComplete) { ?> hidden<?php } ?>><?php p($estimateShortLine); ?></p>
+
+	<p class="settings-hint findling-progress-hint" id="findling-estimate-counting"<?php if (!$estimateProvisional) { ?> hidden<?php } ?>>
+		<span class="icon-loading-small"></span>
+		<span id="findling-estimate-counting-text"><?php p($l->t('Counting the files, this takes a moment.') . ' ' . $l->t('Provisional figure, %1$s of %2$s storages have been counted through.', [$count($estimateMountsFinished), $count($estimateMountsTotal)])); ?></span>
+	</p>
+
+	<p class="settings-hint" id="findling-estimate-space-unknown"<?php if (!$estimateHasFiles || $estimateBytes !== null) { ?> hidden<?php } ?>><?php p($l->t('The space needed is measured as soon as the first documents are in the index.')); ?></p>
+
+	<p class="settings-hint" id="findling-estimate-startup"<?php if (!$estimateStartup || $estimateSeconds === null) { ?> hidden<?php } ?>><?php p($l->t('Startup value, being measured.')); ?></p>
+
+	<p class="findling-banner findling-banner--warning" id="findling-estimate-space-warning"<?php if (!$estimateSpaceWarning) { ?> hidden<?php } ?>>
+		<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($infoIcon); ?>"/></svg>
+		<span class="findling-banner__text"><?php p($l->t('The index is expected to need more space than this volume has free. Indexing pauses before the volume fills up, and search keeps working.')); ?></span>
+	</p>
+
+	<p class="settings-hint"><?php p($l->t('Findling does not wait for a confirmation. The first index has already started.')); ?></p>
+</div>
+<?php } ?>
