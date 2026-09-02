@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
 stopped_at: Completed 04-03-PLAN.md
-last_updated: "2026-09-02T17:04:45.037Z"
+last_updated: "2026-09-02T17:33:58.922Z"
 last_activity: 2026-09-02
 progress:
   total_phases: 6
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 04 (admin-sichtbarkeit-und-diagnose) — EXECUTING
-Plan: 4 of 10
+Plan: 5 of 10
 Status: Ready to execute
 Last activity: 2026-09-02
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P01 | 12 min | 2 tasks | 3 files |
 | Phase 04 P02 | 10 min | 2 tasks | 7 files |
 | Phase 04 P03 | 47 min | 3 tasks | 15 files |
+| Phase 04 P04 | 25 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,12 @@ Recent decisions affecting current work:
 - [Phase 04]: indexedDisplay waehlt zwischen Container- und Nextcloud-Zahl statt zu verrechnen, damit keine Kachel wegen einer gescheiterten Abfrage auf 0 springt
 - [Phase 04]: Stockt-Schwelle 1800 Sekunden, sechs verpasste Runden des Fuenf-Minuten-Systemcrons
 - [Phase 04]: SettingsController erweitert Controller und nicht OCSController, damit die Route ausserhalb des OCS-Raums bleibt
+- [Phase 04]: Der Nenner des Deckungsgrads entsteht im Crawl (filesSeen minus overCap minus excluded) und nie aus einer zweiten Abfrage; die Subtraktion steht genau einmal in AdminViewService
+- [Phase 04]: Idempotenz der Scan-Zaehler nach Variante (a): beginStorage setzt die Zeile bei last_file_id gleich 0 zurueck; der Cursor-Vergleich je Datei wurde verworfen
+- [Phase 04]: pdf_seen ist eine eigene Spalte, weil der OCR-Anteil vor dem Lauf ein Intervall ist und keine Zahl
+- [Phase 04]: percent ist auch bei stummem Backend null; 0 Prozent Deckung wird nie als Aussage gerendert
+- [Phase 04]: Alle Gestalten des Deckungsgrad-Blocks liegen im Markup und werden ueber hidden geschaltet, damit die Kopfzahl ohne Neuladen erscheinen kann und das Skript kein Markup baut
+- [Phase 04]: Top-Level-Schluessel indexable entfaellt aus overview(); die Zahl lebt nur noch unter coverage
 
 ### Pending Todos
 
@@ -105,6 +112,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-02T17:04:34.682Z
+Last session: 2026-09-02T17:33:22.920Z
 Stopped at: Completed 04-03-PLAN.md
 Resume file: None
