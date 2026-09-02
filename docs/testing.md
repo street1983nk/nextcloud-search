@@ -10,13 +10,41 @@ is, and what closes it.
 | Half | Gates | Runs where |
 |---|---|---|
 | Python backend | ruff, ruff format, pyright basic, vulture, pytest | locally before every commit, and in `python.yml` |
-| PHP companion | `php -l`, plus both integration jobs end to end | `php.yml` and `integration.yml`, CI only |
+| PHP companion | `php -l`, the textual gates in `backend/tests/`, plus both integration jobs end to end | `php.yml` and `integration.yml`, CI only |
 
 The reason for the difference is not a decision, it is the development machine:
 there is no PHP and no composer on it, and the local system Python is broken
 which is why the backend runs through `uv`. Every PHP change in this repository
 is therefore written once and verified in CI, never executed while it is written.
 That is worth knowing when reading a PHP diff here.
+
+What the PHP half is covered by today is therefore three things and not one:
+`php -l` over `php/lib`, `php/appinfo` and `php/templates` inside the container,
+the two integration jobs end to end, and the textual gates below, which read the
+PHP sources with a Python parser and judge them. The last group is the part that
+grew with phase 4: the admin page added a second route class, a design contract
+and a second path space, and each of those is a property no syntax check and no
+end to end job can see. What is still missing is a PHPUnit suite, and the gap
+section further down names the twelve behaviours that would fill it.
+
+## The textual gates over the PHP sources
+
+Every one of these lives in `backend/tests/` and runs with the ordinary
+`uv run python -m pytest -q`. They parse text instead of executing PHP, which is
+a deliberate trade: a gate that pins a property is worth more than the perfect
+test that does not exist on a machine without PHP. Each of them also carries self
+tests against staged samples, so that a gate whose body was deleted cannot report
+zero violations over zero routes and look healthy.
+
+| Gate | What it prevents |
+|---|---|
+| `test_readonly_gate.py` (Gate A) | A write call on a user file. The allowlist holds exactly three entries, and a fourth way of opening a file for writing fails the gate instead of being reviewed later. |
+| `test_php_trust_boundary.py` (Gate B) | A route without its boundary, in either of the two route classes: an `ApiRoute` missing `ExAppRequired` or `rejectForeignCaller` as its first statement hands the work stock to a foreign container, and a `FrontpageRoute` carrying `NoAdminRequired`, `PublicPage`, `NoCSRFRequired` or `ExAppRequired` hands the admin page to somebody who is not the admin. The route count is a ratchet, so a plan that adds a route has to raise it. |
+| `test_extract_errors.py` | A drift between the three reason lists. A reason code the container writes and the PHP side has no label for would reach an admin as an empty cell. |
+| `test_allowlist_parity.py` | A drift between the two mimetype allowlists. A type one side reads and the other refuses is a file that is queued forever or never counted. |
+| `test_admin_ui_contract.py` (Gate C) | The mechanically checkable prohibitions of the design contract, over the three files of the page: no markup built from a string in the script, no unescaped printing in the template, no inline script, no literal colour in the stylesheet, no removed focus ring, no dash that is not a hyphen, no emoji, and none of the five Nextcloud APIs the contract retired. It says nothing about how the page looks; that is the human sight check. |
+| `test_exclusion_path_space.py` | A second exclusion path space. The crawl, the event listener, the clearing and the diagnosis have to compare a prefix through the one helper on the one space, otherwise a Team Folder file is judged by a rule that does not apply to it. |
+| `test_status_endpoint.py`, `test_rates_endpoint.py`, `test_diagnose_endpoint.py` | The three container routes the admin page reads: the shape of the answer, the privacy boundary (numbers, never names) and the answer for a file nothing knows. |
 
 ## What the integration jobs do cover
 
