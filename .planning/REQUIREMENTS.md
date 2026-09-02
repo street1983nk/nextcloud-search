@@ -47,7 +47,7 @@ v1 = ein Produkt, zwei Releases: **v1.0** (Volltext + OCR, Store-Einreichung vor
 
 - [x] **ADM-01**: Statusseite: Indexfortschritt, Deckungsgrad (indexierte vs. indexierbare Dateien), Fehlerliste
 - [ ] **ADM-02**: Pro-Datei-Diagnose: Admin kann für jede Datei sehen, warum sie (nicht) auffindbar ist (zu groß, Typ nicht unterstützt, OCR fehlgeschlagen, wartet in Queue)
-- [ ] **ADM-03**: Vorab-Schätzung vor dem Erstindex: X Dateien, davon Y OCR-nötig, geschätzte Dauer und Platz
+- [x] **ADM-03**: Vorab-Schätzung vor dem Erstindex: X Dateien, davon Y OCR-nötig, geschätzte Dauer und Platz
 - [x] **ADM-04**: Ausschluss-Regeln und Toggles: Ordner-Ausschlüsse, Größen-Cap, Team Folders / External Storage an/aus
 
 ### Packaging & Store

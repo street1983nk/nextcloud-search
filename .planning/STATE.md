@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 04-03-PLAN.md
-last_updated: "2026-09-02T17:33:58.922Z"
+stopped_at: Completed 04-05-PLAN.md
+last_updated: "2026-09-02T17:56:06.670Z"
 last_activity: 2026-09-02
 progress:
   total_phases: 6
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 04 (admin-sichtbarkeit-und-diagnose) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 Status: Ready to execute
 Last activity: 2026-09-02
 
@@ -58,6 +58,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P02 | 10 min | 2 tasks | 7 files |
 | Phase 04 P03 | 47 min | 3 tasks | 15 files |
 | Phase 04 P04 | 25 min | 3 tasks | 9 files |
+| Phase 04 P05 | 21 min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,12 @@ Recent decisions affecting current work:
 - [Phase 04]: percent ist auch bei stummem Backend null; 0 Prozent Deckung wird nie als Aussage gerendert
 - [Phase 04]: Alle Gestalten des Deckungsgrad-Blocks liegen im Markup und werden ueber hidden geschaltet, damit die Kopfzahl ohne Neuladen erscheinen kann und das Skript kein Markup baut
 - [Phase 04]: Top-Level-Schluessel indexable entfaellt aus overview(); die Zahl lebt nur noch unter coverage
+- [Phase 04]: Der Durchsatz wird gemessen statt vorhergesagt: GET /rates meldet Text- und OCR-Rate getrennt ueber ein geklemmtes Fenster, und die Seite rechnet daraus hoch (ARM-Faktor unbekannt)
+- [Phase 04]: Startwerte sind ein eigenes Feld (startupValues) und keine stille Annahme; die Seite beschriftet die Dauer entsprechend
+- [Phase 04]: Der OCR-Anteil bleibt ein Intervall, bis die Haelfte der indexierbaren Dateien ein Verdikt hat (MEASURED_OCR_FROM_JUDGED_PERCENT)
+- [Phase 04]: Der Platzbedarf entsteht aus backend.indexBytes durch backend.docs und nicht aus dem Quotienten von /rates, damit die Zahl einen gescheiterten /rates-Aufruf ueberlebt
+- [Phase 04]: Bei firstIndexDone wird /rates nicht mehr aufgerufen, weil der Block nicht gerendert wird
+- [Phase 04]: Ohne gezaehlte Dateien zeigt Block 2 keine Nullzeile, sondern nur den Zaehl-Hinweis
 
 ### Pending Todos
 
@@ -112,6 +119,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-02T17:33:22.920Z
-Stopped at: Completed 04-03-PLAN.md
+Last session: 2026-09-02T17:53:35.362Z
+Stopped at: Completed 04-05-PLAN.md
 Resume file: None
