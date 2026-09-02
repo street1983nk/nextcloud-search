@@ -1,5 +1,6 @@
 /**
- * The refresh of block one, in plain browser JavaScript.
+ * The refresh of blocks one to three and the lookup of block four, in plain
+ * browser JavaScript.
  *
  * No module, no bundler, no dependency and no package file anywhere in this
  * app: the page is a PHP template, the Nextcloud server CSS and this file. The
@@ -35,7 +36,24 @@
   const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
   const BYTES_PER_UNIT = 1024
 
+  // The two addresses this page asks, written out whole rather than assembled
+  // from a prefix and a name: a grep for either route has to find its caller,
+  // and a route that is only half spelled anywhere is a route nobody finds when
+  // it moves.
+  const ROUTE_OVERVIEW = 'admin/overview'
+  const ROUTE_DIAGNOSE = 'admin/diagnose'
+
+  // The eight states of the inventory, by the key the template gave their icons.
+  // The script shows one of them and hides the rest; it never builds one,
+  // because a reason code that became markup here would be the one place on this
+  // page where a value from the container turns into an element.
+  const CHIP_ICONS = ['indexed', 'truncated', 'queued', 'processing', 'skipped', 'excluded', 'failed', 'unknown']
+
   let request = null
+  // The lookup has a controller of its own, so that it neither aborts the
+  // polling nor gets aborted by it: the two calls answer different questions and
+  // one of them was asked by a person who is waiting for it.
+  let lookupRequest = null
   let timer = null
   let unchanged = 0
   let signature = ''
@@ -130,20 +148,24 @@
   }
 
   /**
-   * One reading call against the one address this page asks.
+   * One reading call against one of the two addresses of this page.
    *
    * The token is read out of the document on every single call and never
    * copied into a variable at load time. Nextcloud rotates it when the session
    * is renewed, and a stale copy does not produce an error message: the page
    * simply stops updating and keeps showing yesterday's numbers.
+   *
+   * The abort signal comes in from the caller rather than being made here. The
+   * polling and the single file lookup have one controller each, so that the
+   * lookup of a waiting person is never cancelled by the timer and the timer is
+   * never cancelled by the lookup.
    */
-  async function ask (path, params) {
+  async function ask (path, params, signal) {
     const query = params ? '?' + new URLSearchParams(params).toString() : ''
-    const url = OC.generateUrl('/apps/findling/admin/' + path) + query
+    const url = OC.generateUrl('/apps/findling/' + path) + query
 
-    request = new AbortController()
     const response = await fetch(url, {
-      signal: request.signal,
+      signal: signal,
       headers: {
         requesttoken: document.head.dataset.requesttoken,
         Accept: 'application/json'
@@ -391,6 +413,221 @@
     })
   }
 
+  /**
+   * Which of the eight chips of the state inventory this answer wears.
+   *
+   * A file nobody found wears the neutral one, because "there is no such file"
+   * is an answer and not a defect: the design contract forbids the error colours
+   * for it in as many words. Two reason codes are a state of their own, a
+   * truncated document and an excluded file, so both get their own chip instead
+   * of reading as a fault under a plain label. Everything this version does not
+   * know, ``pending_crawl`` included, ends on the neutral chip, which is exactly
+   * what "not seen yet" is.
+   */
+  function chipOf (view) {
+    if (view.found !== true) {
+      return 'unknown'
+    }
+    switch (view.state) {
+      case 'indexed':
+        return view.reason === 'truncated' ? 'truncated' : 'indexed'
+      case 'queued':
+        return 'queued'
+      case 'processing':
+        return 'processing'
+      case 'excluded':
+        return 'excluded'
+      case 'skipped':
+        return view.reason === 'excluded' ? 'excluded' : 'skipped'
+      case 'failed':
+        return 'failed'
+      default:
+        return 'unknown'
+    }
+  }
+
+  /** The word beside the icon, so colour is never the only carrier. */
+  function chipLabel (chip, found) {
+    if (found !== true) {
+      return t('findling', 'No file at this path, and no file with this ID.')
+    }
+    switch (chip) {
+      case 'indexed':
+        return t('findling', 'Indexed')
+      case 'truncated':
+        return t('findling', 'Indexed, text truncated')
+      case 'queued':
+        return t('findling', 'Waiting in the queue')
+      case 'processing':
+        return t('findling', 'Being processed')
+      case 'skipped':
+        return t('findling', 'Skipped')
+      case 'excluded':
+        return t('findling', 'Excluded')
+      case 'failed':
+        return t('findling', 'Failed')
+      default:
+        return t('findling', 'Not seen yet')
+    }
+  }
+
+  /**
+   * The result card of one lookup, in the order the design contract fixes:
+   * state chip, resolved path, reason label, remedy, file id, last checked.
+   *
+   * Every element is in the template already and every icon of the inventory
+   * with it, so this shows one and hides the others and writes text nodes. A new
+   * lookup replaces the card; there is no history and no stack, because a stack
+   * of answers about different files is a page an administrator has to read
+   * bottom up to find the one they just asked for.
+   *
+   * A row with nothing in it is hidden rather than left empty. An empty line in
+   * a diagnostic card is indistinguishable from a defect of the page, which is
+   * the same reason the remedy of every reason code says "none" out loud instead
+   * of being blank.
+   */
+  function diagnosisCard (view) {
+    const chip = chipOf(view)
+    const found = view.found === true
+    const fileId = whole(view.fileId)
+    const checkedAt = whole(view.checkedAt)
+    const path = typeof view.path === 'string' ? view.path : ''
+    const label = typeof view.label === 'string' ? view.label : ''
+    const remedy = typeof view.remedy === 'string' ? view.remedy : ''
+    const note = typeof view.note === 'string' ? view.note : ''
+
+    const box = document.getElementById('findling-diagnosis-chip')
+    if (box !== null) {
+      box.className = 'findling-chip findling-chip--' + chip
+    }
+    CHIP_ICONS.forEach(function (name) {
+      shown('findling-diagnosis-icon-' + name, name === chip)
+    })
+    text('findling-diagnosis-chip-label', chipLabel(chip, found))
+
+    text('findling-diagnosis-path', view.trashed === true
+      ? t('findling', '%s (in the trash bin)').replace('%s', path)
+      : path)
+    text('findling-diagnosis-label', label)
+    text('findling-diagnosis-remedy', remedy)
+    text('findling-diagnosis-note', note)
+    text('findling-diagnosis-id', t('findling', 'File ID: %s').replace('%s', String(fileId)))
+    text('findling-diagnosis-checked', t('findling', 'Last checked %s').replace('%s', ago(elapsed(checkedAt))))
+
+    shown('findling-diagnosis-path', found && path !== '')
+    shown('findling-diagnosis-label', label !== '')
+    shown('findling-diagnosis-remedy', remedy !== '')
+    shown('findling-diagnosis-note', note !== '')
+    shown('findling-diagnosis-id', fileId > 0)
+    shown('findling-diagnosis-checked', checkedAt > 0)
+    shown('findling-diagnosis-result', true)
+  }
+
+  /** Seconds since a point in time, and nought for a time nobody recorded. */
+  function elapsed (stamp) {
+    if (stamp <= 0) {
+      return 0
+    }
+    return Math.max(0, Math.floor(Date.now() / 1000) - stamp)
+  }
+
+  /**
+   * Ask about one file and show the answer.
+   *
+   * The button is disabled while the call is out and carries the core spinner,
+   * and the field stays usable: somebody who mistyped a path should be able to
+   * correct it without waiting for the answer to the wrong one.
+   *
+   * A failed request leaves the card as it is and says that the lookup did not
+   * work. Replacing the card with an error would throw away the answer about the
+   * file that was asked about before, and this request says nothing about that
+   * file either way.
+   */
+  async function lookUpOneFile (reference) {
+    const field = document.getElementById('findling-diagnosis-input')
+    const button = document.getElementById('findling-diagnosis-submit')
+    if (field === null) {
+      return
+    }
+
+    const value = reference === null ? field.value.trim() : reference.trim()
+    if (value === '') {
+      field.focus()
+      return
+    }
+
+    field.value = value
+    if (lookupRequest !== null) {
+      // The previous answer is about a different file and nobody is waiting for
+      // it any more.
+      lookupRequest.abort()
+    }
+    lookupRequest = new AbortController()
+
+    if (button !== null) {
+      button.disabled = true
+    }
+    shown('findling-diagnosis-spinner', true)
+
+    try {
+      diagnosisCard(await ask(ROUTE_DIAGNOSE, { ref: value }, lookupRequest.signal))
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        text('findling-diagnosis-note', t('findling', 'The lookup did not work. Nothing about this file has changed.'))
+        shown('findling-diagnosis-note', true)
+        shown('findling-diagnosis-result', true)
+      }
+    } finally {
+      lookupRequest = null
+      if (button !== null) {
+        button.disabled = false
+      }
+      shown('findling-diagnosis-spinner', false)
+    }
+  }
+
+  /**
+   * The lookup, wired once, and the second half of D-04 with it.
+   *
+   * Three ways in and they all end in the same call: the button, Enter in the
+   * field, which the form gives us without a keyboard handler, and every example
+   * path of the error list. The last one is what makes the two blocks one tool
+   * rather than two lists: a click fills the field, scrolls the block into view
+   * and runs the lookup, so the reason in the card is the reason of the row that
+   * was clicked.
+   *
+   * The sentence about JavaScript is hidden here, at the one moment that proves
+   * it wrong.
+   */
+  function setupDiagnosis () {
+    shown('findling-diagnosis-nojs', false)
+
+    const form = document.getElementById('findling-diagnosis-form')
+    if (form !== null) {
+      form.addEventListener('submit', function (event) {
+        // The form has no action, so the default would reload the settings page
+        // and lose the answer it is about to show.
+        event.preventDefault()
+        lookUpOneFile(null)
+      })
+    }
+
+    const examples = document.querySelectorAll('#findling-errors button[data-findling-path]')
+    Array.prototype.forEach.call(examples, function (button) {
+      button.addEventListener('click', function () {
+        // The path where there is one and the file id where there is none: a row
+        // whose file id no longer resolves carries the number and nothing else,
+        // and that number is exactly what the lookup can still answer about.
+        const reference = button.dataset.findlingPath || button.dataset.findlingFileId || ''
+        const block = document.getElementById('findling-diagnosis')
+        if (block !== null) {
+          block.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+        lookUpOneFile(reference)
+      })
+    })
+  }
+
   function render (view) {
     text('findling-tile-indexed', numbers.format(whole(view.indexedDisplay)))
     text('findling-tile-skipped', numbers.format(whole(view.skipped)))
@@ -435,14 +672,17 @@
       return
     }
 
-    // Exactly one request in flight. The previous one is abandoned rather than
-    // awaited, because its answer is older than the one about to be asked for.
+    // Exactly one polling request in flight. The previous one is abandoned
+    // rather than awaited, because its answer is older than the one about to be
+    // asked for. The single file lookup has a controller of its own and is not
+    // touched here: it was asked by a person who is waiting for it.
     if (request !== null) {
       request.abort()
     }
+    request = new AbortController()
 
     try {
-      const view = await ask('overview', null)
+      const view = await ask(ROUTE_OVERVIEW, null, request.signal)
       const current = fingerprint(view)
       unchanged = current === signature ? unchanged + 1 : 0
       signature = current
@@ -475,6 +715,7 @@
   })
 
   setupErrorGroups()
+  setupDiagnosis()
 
   const bootstrap = initialState('bootstrap')
   if (bootstrap !== null) {

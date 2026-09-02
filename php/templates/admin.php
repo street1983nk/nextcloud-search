@@ -416,8 +416,6 @@ $chip = static function (string $state, string $reason) use ($l, $skippedIcon, $
 	<?php if ($errorGroups === []) { ?>
 		<p class="settings-hint"><?php p($l->t('Every file was indexed. Nothing was skipped and nothing failed.')); ?></p>
 	<?php } else { ?>
-		<p class="settings-hint" id="findling-errors-lookup-later"><?php p($l->t('Looking up a single file is not on this page yet. It arrives with the next step.')); ?></p>
-
 		<table class="findling-errors">
 			<caption class="hidden-visually"><?php p($l->t('Files that were not indexed, grouped by reason')); ?></caption>
 			<thead>
@@ -474,7 +472,7 @@ $chip = static function (string $state, string $reason) use ($l, $skippedIcon, $
 												: ($trashed ? $l->t('%s (in the trash bin)', [$path]) : $path);
 											?>
 											<li>
-												<button type="button" class="findling-errors__example findling-path" data-findling-path="<?php p($path); ?>" data-findling-file-id="<?php p((string)$fileId); ?>" aria-describedby="findling-errors-lookup-later" disabled><?php p($shown); ?></button>
+												<button type="button" class="findling-errors__example findling-path" data-findling-path="<?php p($path); ?>" data-findling-file-id="<?php p((string)$fileId); ?>"><?php p($shown); ?></button>
 											</li>
 										<?php } ?>
 									</ul>
@@ -492,4 +490,78 @@ $chip = static function (string $state, string $reason) use ($l, $skippedIcon, $
 			</tbody>
 		</table>
 	<?php } ?>
+</div>
+<?php
+/*
+ * Block four: one file, one state, one reason.
+ *
+ * ADM-02 and the second half of D-04. The field takes a path or a numeric file
+ * id, because an administrator who has a path does not want to look up an id
+ * first and one who copied an id out of the list above does not want to build a
+ * path, and every example path of that list fills this field, scrolls here and
+ * runs the lookup with one click.
+ *
+ * The field lies in a form so that Enter submits without a keyboard handler of
+ * our own, and the form has no action: the script cancels the submit and asks
+ * the JSON route. Without JavaScript the card stays empty and the sentence under
+ * the field says so, which is the documented, deliberate boundary of this page
+ * (the design contract, "Erstes Rendern ohne JavaScript"): blocks one to three
+ * are complete without a script, this one and the rules block are not.
+ *
+ * The card is built here and never in the script, like every other part of this
+ * page. That is why all seven state icons are in the markup at once, hidden, and
+ * the script shows one of them and sets the modifier class of the chip. A script
+ * that assembled an icon out of a string would be the one place on this page
+ * where a reason code from the container could become markup.
+ */
+
+// Icon path data: Material Design Icons by Pictogrammers, Apache-2.0, pinned by
+// commit in THIRD-PARTY.md. One per state of the state inventory, plus the
+// magnifier of the button, so that colour is never the only carrier of a
+// verdict and the script never has to compose one.
+$diagnosisIcons = [
+	'indexed' => 'M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M12 20C7.59 20 4 16.41 4 12S7.59 4 12 4 20 7.59 20 12 16.41 20 12 20M16.59 7.58L10 14.17L7.41 11.59L6 13L10 17L18 9L16.59 7.58Z',
+	'truncated' => $truncatedIcon,
+	'queued' => $clockIcon,
+	'skipped' => $skippedIcon,
+	'excluded' => $excludedIcon,
+	'failed' => $failedIcon,
+	'unknown' => $infoIcon,
+];
+
+$magnifyIcon = 'M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z';
+?>
+<div id="findling-diagnosis" class="section">
+	<h2><?php p($l->t('Look up one file')); ?></h2>
+
+	<form class="findling-lookup" id="findling-diagnosis-form">
+		<label for="findling-diagnosis-input"><?php p($l->t('Path or file ID')); ?></label>
+		<input type="text" id="findling-diagnosis-input" name="ref" autocomplete="off"
+			aria-describedby="findling-diagnosis-help" placeholder="alice/files/Vertraege/Miete.pdf">
+		<button type="submit" id="findling-diagnosis-submit">
+			<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($magnifyIcon); ?>"/></svg>
+			<span class="icon-loading-small" id="findling-diagnosis-spinner" hidden></span>
+			<span><?php p($l->t('Look up file')); ?></span>
+		</button>
+	</form>
+
+	<p class="settings-hint" id="findling-diagnosis-help"><?php p($l->t('A path as Nextcloud stores it, or the numeric ID from the list above.')); ?></p>
+	<p class="settings-hint" id="findling-diagnosis-nojs"><?php p($l->t('Looking up a single file needs JavaScript. Everything above stays complete without it.')); ?></p>
+
+	<div class="findling-card" id="findling-diagnosis-result" role="status" aria-live="polite" hidden>
+		<p class="findling-chip" id="findling-diagnosis-chip">
+			<?php foreach ($diagnosisIcons as $state => $icon) { ?>
+				<svg id="findling-diagnosis-icon-<?php p($state); ?>" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" hidden><path fill="currentColor" d="<?php p($icon); ?>"/></svg>
+			<?php } ?>
+			<span class="icon-loading-small" id="findling-diagnosis-icon-processing" hidden></span>
+			<span id="findling-diagnosis-chip-label"></span>
+		</p>
+
+		<p class="findling-path" id="findling-diagnosis-path" hidden></p>
+		<p id="findling-diagnosis-label" hidden></p>
+		<p class="settings-hint" id="findling-diagnosis-remedy" hidden></p>
+		<p class="settings-hint" id="findling-diagnosis-note" hidden></p>
+		<p class="settings-hint" id="findling-diagnosis-id" hidden></p>
+		<p class="settings-hint" id="findling-diagnosis-checked" hidden></p>
+	</div>
 </div>

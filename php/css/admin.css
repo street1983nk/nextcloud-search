@@ -17,7 +17,8 @@
 
 #findling-coverage,
 #findling-estimate,
-#findling-errors {
+#findling-errors,
+#findling-diagnosis {
 	/* The same width as the h2 of a settings block in the core, so that text
 	   and heading end on the same line. */
 	max-width: 900px;
@@ -156,9 +157,20 @@
 	color: var(--color-element-error);
 }
 
+.findling-chip--indexed {
+	background-color: var(--color-success);
+	color: var(--color-success-text);
+}
+
+.findling-chip--indexed svg {
+	color: var(--color-element-success);
+}
+
 /* Excluded is not a fault, so it stays on the neutral surface of the base chip
-   and only says so with its own icon. */
-.findling-chip--excluded svg {
+   and only says so with its own icon. The same holds for a state nobody has
+   established yet: not seen is not an error. */
+.findling-chip--excluded svg,
+.findling-chip--unknown svg {
 	color: var(--color-text-maxcontrast);
 }
 
@@ -277,4 +289,54 @@
 	overflow-wrap: anywhere;
 	white-space: normal;
 	height: auto;
+}
+
+/* -- the single file lookup ------------------------------------------------ */
+
+/* The label sits on its own line above the field, because a label beside a
+   field that grows would move with it. Field and button share the second line
+   and both are at least as tall as the clickable area of the theme. */
+.findling-lookup {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block: calc(var(--default-grid-baseline) * 4);
+}
+
+.findling-lookup label {
+	flex: 0 0 100%;
+}
+
+.findling-lookup input {
+	flex: 1 1 calc(var(--default-grid-baseline) * 60);
+	min-height: var(--default-clickable-area);
+}
+
+.findling-lookup button {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--default-grid-baseline);
+	min-height: var(--default-clickable-area);
+}
+
+.findling-lookup button svg,
+.findling-lookup button .icon-loading-small {
+	flex: 0 0 auto;
+	width: calc(var(--default-grid-baseline) * 4);
+	height: calc(var(--default-grid-baseline) * 4);
+}
+
+/* The answer of one lookup. Neutral surface in every case, including the one
+   where nothing was found: that is an answer and not a defect, so it never gets
+   the error colours. The state chip inside carries the verdict. */
+.findling-card {
+	margin-block: calc(var(--default-grid-baseline) * 4);
+	padding: calc(var(--default-grid-baseline) * 4);
+	border-radius: var(--border-radius-container);
+	background-color: var(--color-background-hover);
+}
+
+.findling-card > p {
+	margin-block: calc(var(--default-grid-baseline) * 2);
 }
