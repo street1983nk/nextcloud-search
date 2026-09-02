@@ -12,10 +12,27 @@ use Psr\Log\LoggerInterface;
 /**
  * The return channel, and the only writer of findling_file_state.
  *
- * Everything that was not indexed lands here with a reason code, which is the
- * whole point: the status page of phase 4 reads this table and never asks the
- * container. Asking the container would create a second place that knows the
- * truth about the same file, and two of those always disagree eventually.
+ * Everything that was not indexed lands here with a reason code, and this table
+ * is one of the two sources the status page of phase 4 reads. The split between
+ * them is written down on both sides, here and in the module docstring of
+ * backend/src/findling/api/status.py, because two docblocks that each claimed
+ * the whole page is how a page ends up reporting "no errors" while a switched
+ * off container quietly answers nothing at all.
+ *
+ * This table is the source for skipped, failed, the reason codes behind them and
+ * the per file error list. That is the half an admin can still read when the
+ * container is down, which is exactly the moment they go looking for it.
+ *
+ * The container is the source for indexed, indexed(truncated), the document
+ * count of the index, the permission rows, the version marks, the space on the
+ * volume and the throughput. Only the container sees the volume and the Tantivy
+ * index, so nobody else can count those.
+ *
+ * The status page shows both views separately and names the source of each. A
+ * difference between them is a diagnostic signal and not a defect of the page.
+ * What must not happen: a single number called "failed" without a source, or two
+ * counters that get combined into one value; either one hides precisely the case
+ * that is worth seeing.
  *
  * Two callers exist. The crawl of plan 02-04 writes skipped(too_large) before a
  * file is ever queued, and the acknowledgement endpoint writes whatever the
@@ -54,6 +71,14 @@ class FileStateService {
 	 * only the container knows leaves the file with no verdict at all. Since
 	 * phase 3 a Python test reads this constant and compares it with the other
 	 * two in both directions, so the three cannot drift apart unnoticed.
+	 *
+	 * The display text of every code lives in
+	 * .planning/phases/04-admin-sichtbarkeit-und-diagnose/04-UI-SPEC.md as a
+	 * binding table, one German label and one remedy per reason. A code that
+	 * arrives here without a row in that table is shown as "Unbekannter Grund
+	 * (%s)" with the code in brackets, never as an empty field and never as the
+	 * raw code on its own: an admin who reads a blank cell learns nothing, and a
+	 * blank cell is also what a drift between the three lists would look like.
 	 *
 	 * @var list<string>
 	 */
