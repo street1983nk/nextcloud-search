@@ -173,7 +173,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 04-08-PLAN.md , Regeln und Grenzen: vier Schalter, ein Pfadraum, Durchsetzung an der Quelle (ADM-04)
+- [x] 04-08-PLAN.md , Regeln und Grenzen: vier Schalter, ein Pfadraum, Durchsetzung an der Quelle (ADM-04)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -226,7 +226,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
-| 4. Admin-Sichtbarkeit und Diagnose | 7/10 | In Progress|  |
+| 4. Admin-Sichtbarkeit und Diagnose | 8/10 | In Progress|  |
 | 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 

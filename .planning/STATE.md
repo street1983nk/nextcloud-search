@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 04-07-PLAN.md
-last_updated: "2026-09-02T18:48:32.864Z"
+stopped_at: Completed 04-08-PLAN.md
+last_updated: "2026-09-02T19:24:51.917Z"
 last_activity: 2026-09-02
 progress:
   total_phases: 6
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 04 (admin-sichtbarkeit-und-diagnose): EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 Status: Ready to execute
 Last activity: 2026-09-02
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P05 | 21 min | 3 tasks | 12 files |
 | Phase 04 P06 | 22 min | 3 tasks | 9 files |
 | Phase 04 P07 | 25 min | 3 tasks | 16 files |
+| Phase 04 P08 | 33 min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,8 @@ Recent decisions affecting current work:
 - [Phase 04]: Vorrangregel als Kette ueber sechs benannte Stufen; der Container wird einmal vor der Kette gefragt: Stufe 1 braucht den Grabstein, um geloescht von nie gesehen zu trennen, Stufe 5 das Verdikt; zwei Aufrufe waeren ein zweiter Roundtrip fuer dieselbe Antwort
 - [Phase 04]: Wartet oder laeuft entscheidet die Restsperrzeit, nicht eine leere Sperrspalte: Eine freie Zeile traegt die Epoche statt NULL (Perf-Audit H3) und ein abgelaufener Anspruch ist ohne Schreibvorgang wieder frei
 - [Phase 04]: App-Version bleibt bei 0.3.0, obwohl der Container eine fuenfte Route bekam: Plan 04-05 hat beide Haelften schon angehoben und beide Plaene liegen im selben Release; ein zweiter Bump haette docker.yml gegen ein nie geschnittenes Git-Tag laufen lassen
+- [Phase 04]: Der Ausschluss wird von den Aufrufern angewandt, nicht von der Aufzaehlung: getFilesInMount und getFileSlice liefern jede Zeile, Crawl und Event-Listener rufen den einen Helfer isExcluded. Ein Filter in getFilesInMount haette den Crawl an einem ausgeschlossenen Ordner beendet, die Kachel Ausgeschlossen dauerhaft auf 0 gehalten und die Raeumung von Plan 04-09 gegen genau ihren Zielordner wirkungslos gemacht; ein Filter in getFileSlice haette ueber die final-Marke des Reconcile den Index eines ganzen Mounts geleert.
+- [Phase 04]: Kein Config-Lexicon registriert: die Schnittstelle wurde innerhalb des Versionsfensters 32 bis 35 umbenannt, und eine Klassenreferenz, die nur auf einem Teil der Server aufloest, waere ein fataler Fehler beim Booten statt eines fehlenden Komforts. SettingsService und ExclusionService validieren stattdessen defensiv in beide Richtungen.
 
 ### Pending Todos
 
@@ -128,6 +131,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-02T18:48:32.849Z
-Stopped at: Completed 04-07-PLAN.md
+Last session: 2026-09-02T19:24:51.900Z
+Stopped at: Completed 04-08-PLAN.md
 Resume file: None
