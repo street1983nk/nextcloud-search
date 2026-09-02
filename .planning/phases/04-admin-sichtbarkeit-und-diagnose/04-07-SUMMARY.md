@@ -259,4 +259,4 @@ Ein Betriebshinweis fuer die Abnahme: die neue Admin-Route ist erst nach einem N
 
 ## Self-Check: PASSED
 
-Alle in `key-files.created` genannten Dateien liegen auf der Platte, und alle fuenf Commits dieses Plans (`78c00b0`, `92c6979`, `ea6af7c`, `9ad144f`, `ee2a71b`) stehen im Git-Log.
+Alle in `key-files.created` genannten Dateien liegen auf der Platte, und alle vier Aufgaben-Commits dieses Plans (`78c00b0`, `92c6979`, `ea6af7c`, `9ad144f`) stehen im Git-Log.

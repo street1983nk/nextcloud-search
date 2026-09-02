@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 04-05-PLAN.md
-last_updated: "2026-09-02T18:17:09.695Z"
+stopped_at: Completed 04-07-PLAN.md
+last_updated: "2026-09-02T18:48:32.864Z"
 last_activity: 2026-09-02
 progress:
   total_phases: 6
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 04 — admin-sichtbarkeit-und-diagnose
+**Current focus:** Phase 04: admin-sichtbarkeit-und-diagnose
 
 ## Current Position
 
-Phase: 04 (admin-sichtbarkeit-und-diagnose) — EXECUTING
-Plan: 7 of 10
+Phase: 04 (admin-sichtbarkeit-und-diagnose): EXECUTING
+Plan: 8 of 10
 Status: Ready to execute
 Last activity: 2026-09-02
 
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P04 | 25 min | 3 tasks | 9 files |
 | Phase 04 P05 | 21 min | 3 tasks | 12 files |
 | Phase 04 P06 | 22 min | 3 tasks | 9 files |
+| Phase 04 P07 | 25 min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Recent decisions affecting current work:
 - [Phase 04]: page() liest einen null-Grund als kein Filter; MAX_PAGE 50 und 20 Beispiele je Gruppe sind Auflösungskosten und ausdruecklich nicht der MAX_LIST_LENGTH-Gotcha aus CR-01
 - [Phase 04]: Beispielpfade werden im Poll nie neu gebaut, nur die Gruppenzahlen, damit geoeffnete Gruppen und Tastaturfokus erhalten bleiben
 - [Phase 04]: Aufklapp-Buttons liegen hidden im Markup und werden vom Skript sichtbar gemacht: ohne JavaScript alle Gruppen offen und kein totes Bedienelement
+- [Phase 04]: Vorrangregel als Kette ueber sechs benannte Stufen; der Container wird einmal vor der Kette gefragt: Stufe 1 braucht den Grabstein, um geloescht von nie gesehen zu trennen, Stufe 5 das Verdikt; zwei Aufrufe waeren ein zweiter Roundtrip fuer dieselbe Antwort
+- [Phase 04]: Wartet oder laeuft entscheidet die Restsperrzeit, nicht eine leere Sperrspalte: Eine freie Zeile traegt die Epoche statt NULL (Perf-Audit H3) und ein abgelaufener Anspruch ist ohne Schreibvorgang wieder frei
+- [Phase 04]: App-Version bleibt bei 0.3.0, obwohl der Container eine fuenfte Route bekam: Plan 04-05 hat beide Haelften schon angehoben und beide Plaene liegen im selben Release; ein zweiter Bump haette docker.yml gegen ein nie geschnittenes Git-Tag laufen lassen
 
 ### Pending Todos
 
@@ -124,6 +128,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-02T18:16:54.168Z
-Stopped at: Completed 04-05-PLAN.md
+Last session: 2026-09-02T18:48:32.849Z
+Stopped at: Completed 04-07-PLAN.md
 Resume file: None
