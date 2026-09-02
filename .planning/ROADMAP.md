@@ -165,7 +165,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 04-06-PLAN.md , Fehlerliste mit lesbaren Pfaden und Abhilfe je Grund (ADM-01)
+- [x] 04-06-PLAN.md , Fehlerliste mit lesbaren Pfaden und Abhilfe je Grund (ADM-01)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -226,7 +226,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
-| 4. Admin-Sichtbarkeit und Diagnose | 5/10 | In Progress|  |
+| 4. Admin-Sichtbarkeit und Diagnose | 6/10 | In Progress|  |
 | 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 
