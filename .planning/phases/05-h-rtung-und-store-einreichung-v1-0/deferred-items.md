@@ -547,3 +547,23 @@ Plan, dessen Gegenstand sechs Verhaltensweisen sind.
 die Entscheidung; wer sie trifft, sollte sie fuer die dann gedoppelten
 Schnittstellen erneut erheben, weil diese Suite seit 05-16 auch `IRequest` und
 `File::fopen` doppelt.
+
+## DI-05-19 (in 05-10-SUMMARY.md als DI-05-07 gefuehrt): Zwei Doku-Seiten sollten auf `docs/performance.md` verweisen
+
+**Found during:** Plan 05-10, beim Anlegen des Messberichts.
+
+**Was:** `docs/admin-page.md` (Zeile 219) begründet eine Schätzung mit einem
+amd64-Laptopkern und sagt dazu "die Zielhardware ist eine ARM-Box"; genau diese
+Box ist ab jetzt in `docs/performance.md` beschrieben. `docs/ocr.md` verweist im
+Abschnitt "Was diese Seite nicht misst" auf Messungen, die der Volllauf liefern
+wird. Beide Stellen gewinnen durch einen Einzeiler auf den neuen Bericht.
+
+**Warum nicht hier erledigt:** keine der beiden Dateien steht in
+`files_modified` von 05-10, beide werden in dieser Phase von anderen Plänen
+angefasst, und ein Querverweis aus einem parallel laufenden Worktree wäre ein
+Konflikt in einer Datei, deren eigentliche Änderung anderswo liegt. Außerdem
+lohnt der Verweis erst, wenn der Bericht Zahlen trägt und nicht nur seine
+Methode.
+
+**Wohin es gehört:** in den Plan, der den Volllauf auswertet (05-14), oder in
+den Phase-Review.

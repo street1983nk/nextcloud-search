@@ -33,10 +33,31 @@ set -eu
 
 API_BASE='https://api.hetzner.cloud/v1'
 
-SERVER_TYPE='cax11'
+# cax11 is the target of decision D-01 and it is what the store claim talks
+# about. On 2026-09-03 all four arm types of this provider were out of stock in
+# every european location, so the owner decided to run the rehearsal on the x86
+# machine of the same size and to repeat the core measurement on arm once the
+# stock returns. Both runs are wanted, and the report keeps their numbers apart.
+# Switching back is this one word, because everything that follows is read from
+# the API rather than repeated here.
+SERVER_TYPE='cpx22'
 SERVER_IMAGE='ubuntu-24.04'
-SERVER_LOCATION='nbg1'
-SERVER_NAME='findling-arm-loadtest'
+# Helsinki, because decision D-01 of the phase names that location. The earlier
+# value here was nbg1, taken from the example request of the research document;
+# the price is the same in all three cax locations (7.1281 EUR per month, gross,
+# read from this account), so this is a choice and not a cost. It is corrected
+# before the first create, because the location of a server cannot be changed
+# afterwards: a box in the wrong region costs a destroy and a create.
+SERVER_LOCATION='hel1'
+# Without the architecture in it, on purpose: the same script rents the x86
+# rehearsal and the arm repeat, and a box called arm that is not one is a trap
+# for whoever opens the console next.
+SERVER_NAME='findling-loadtest'
+# The key is injected by name, and the name has to exist in the account. Hetzner
+# puts only the keys of this one request into the machine, so a create without
+# this field produces a box that is reachable by password over the web console
+# and by nothing else. The AIO run needs an ssh tunnel, so that would not do.
+SSH_KEY_NAME='khaled-windows-ed25519'
 VOLUME_NAME='findling-corpus'
 VOLUME_SIZE_GB=50
 LABEL='purpose=findling-phase5'
@@ -157,26 +178,37 @@ import json
 import sys
 
 payload = json.load(sys.stdin)
-print("%-8s %5s %7s %6s %-8s %s" % ("name", "cores", "memory", "disk", "arch", "price per month, gross"))
+print("%-8s %5s %7s %6s %-8s %-26s %s" % (
+    "name", "cores", "memory", "disk", "arch", "price per month, gross", "in stock"))
 for server_type in payload["server_types"]:
     if not server_type["name"].startswith("cax"):
         continue
-    prices = ", ".join(
-        "%s %s" % (price["location"], price["price_monthly"]["gross"]) for price in server_type["prices"]
+    monthly = {price["location"]: price["price_monthly"]["gross"] for price in server_type["prices"]}
+    one_price = sorted(set(monthly.values()))
+    price_column = one_price[0] if len(one_price) == 1 else ", ".join(
+        "%s %s" % (location, value) for location, value in sorted(monthly.items())
     )
+    # Availability is a property of the type in this API, it differs per
+    # location, and it moves without notice. It is printed next to the price
+    # because a price for a machine nobody can rent is half the answer.
+    in_stock = [
+        location["name"] for location in server_type.get("locations", []) if location.get("available")
+    ]
     print(
-        "%-8s %5s %6s G %5s G %-8s %s"
+        "%-8s %5s %6s G %5s G %-8s %-26s %s"
         % (
             server_type["name"],
             server_type["cores"],
             server_type["memory"],
             server_type["disk"],
             server_type["architecture"],
-            prices,
+            price_column,
+            ", ".join(in_stock) if in_stock else "nowhere",
         )
     )
 '
     echo "hetzner_box: these are the prices of this account, not of a web search"
+    echo "hetzner_box: in stock is read at this moment and it changes without notice"
 }
 
 cmd_create() {
@@ -189,9 +221,115 @@ cmd_create() {
         exit 1
     fi
 
+    # Stock first, because it is the one precondition that no amount of correct
+    # arguments can fix. When the arm types are gone the API answers a create
+    # with "unsupported location for server type", which reads like a mistake in
+    # this script and sends the next reader to the location field. It is not:
+    # the type carries a per location availability flag, that flag is false, and
+    # the only cure is to wait. So the state is read here and said plainly.
+    types=$(api GET "/server_types?name=$SERVER_TYPE")
+    fail_on_error "$types"
+    stock=$(printf '%s' "$types" | json "
+import json
+import sys
+
+server_types = json.load(sys.stdin)['server_types']
+if not server_types:
+    print('missing')
+    raise SystemExit(0)
+available = [
+    location['name']
+    for location in server_types[0].get('locations', [])
+    if location.get('available')
+]
+if '$SERVER_LOCATION' in available:
+    print('here')
+elif available:
+    print('elsewhere ' + ' '.join(available))
+else:
+    print('nowhere')
+")
+    case "$stock" in
+    here)
+        echo "hetzner_box: $SERVER_TYPE is in stock in $SERVER_LOCATION"
+        ;;
+    missing)
+        echo "hetzner_box: this account does not know a server type called $SERVER_TYPE" >&2
+        exit 1
+        ;;
+    nowhere)
+        echo "hetzner_box: $SERVER_TYPE is out of stock in every location right now" >&2
+        echo "this is capacity, not a wrong argument: the type carries availability" >&2
+        echo "false everywhere, and it returns without an announcement" >&2
+        echo "watch it with: hetzner_box.sh prices, then run create again" >&2
+        exit 1
+        ;;
+    *)
+        echo "hetzner_box: $SERVER_TYPE is out of stock in $SERVER_LOCATION" >&2
+        echo "in stock right now: ${stock#elsewhere }" >&2
+        echo "the location of a box cannot be changed afterwards, so moving the run" >&2
+        echo "is a decision and not a retry: change SERVER_LOCATION on purpose" >&2
+        exit 1
+        ;;
+    esac
+
+    # The key is looked up before anything is created. A box that came up without
+    # a key cannot be given one later without reinstalling it, so the cheap check
+    # belongs in front of the expensive request.
+    keys=$(api GET "/ssh_keys?name=$SSH_KEY_NAME")
+    fail_on_error "$keys"
+    key_line=$(printf '%s' "$keys" | json '
+import json
+import sys
+
+keys = json.load(sys.stdin)["ssh_keys"]
+if len(keys) == 1:
+    print("%s %s" % (keys[0]["id"], keys[0]["fingerprint"]))
+')
+    if [ -z "$key_line" ]; then
+        echo "hetzner_box: this account has no ssh key named $SSH_KEY_NAME" >&2
+        echo "without it the box would only take a password over the web console," >&2
+        echo "and the AIO interface of the load test is reached through an ssh tunnel" >&2
+        exit 1
+    fi
+    echo "hetzner_box: injecting ssh key $SSH_KEY_NAME, $key_line"
+
+    # Same reason as the key, one line further: the name ubuntu-24.04 exists
+    # twice in every account, once for x86 and once for arm, and the wrong half
+    # of it does not boot on this machine. The architecture is not repeated as a
+    # constant but read off the server type, so that changing the type is one
+    # word and cannot leave a mismatched image behind.
+    architecture=$(printf '%s' "$types" | json "
+import json
+import sys
+
+server_types = json.load(sys.stdin)['server_types']
+print(server_types[0]['architecture'] if server_types else '')
+")
+    if [ -z "$architecture" ]; then
+        echo "hetzner_box: the API did not state an architecture for $SERVER_TYPE" >&2
+        exit 1
+    fi
+    images=$(api GET "/images?name=$SERVER_IMAGE&architecture=$architecture&status=available")
+    fail_on_error "$images"
+    image_id=$(printf '%s' "$images" | json '
+import json
+import sys
+
+images = json.load(sys.stdin)["images"]
+if len(images) == 1:
+    print(images[0]["id"])
+')
+    if [ -z "$image_id" ]; then
+        echo "hetzner_box: no single available $SERVER_IMAGE image for $architecture in this account" >&2
+        exit 1
+    fi
+    echo "hetzner_box: image $SERVER_IMAGE for $architecture is id $image_id"
+
     server_body=$(
-        printf '{"name":"%s","server_type":"%s","image":"%s","location":"%s"' \
-            "$SERVER_NAME" "$SERVER_TYPE" "$SERVER_IMAGE" "$SERVER_LOCATION"
+        printf '{"name":"%s","server_type":"%s","image":%s,"location":"%s"' \
+            "$SERVER_NAME" "$SERVER_TYPE" "$image_id" "$SERVER_LOCATION"
+        printf ',"ssh_keys":["%s"]' "$SSH_KEY_NAME"
         printf ',"start_after_create":true,"labels":{"%s":"%s"}}' \
             "${LABEL%%=*}" "${LABEL#*=}"
     )
@@ -216,6 +354,25 @@ cmd_create() {
     volume_id=$(printf '%s' "$response" | json 'import json,sys; print(json.load(sys.stdin)["volume"]["id"])')
     volume_device=$(printf '%s' "$response" | json 'import json,sys; print(json.load(sys.stdin)["volume"]["linux_device"])')
 
+    # The firewall sits outside the machine on purpose. A rule set on the box
+    # itself does not hold here: docker writes its published ports straight into
+    # iptables and walks past ufw, so the interface of AIO on 8080 would be open
+    # to the world while ufw reports it closed. This one filters before the
+    # packet reaches the host, and it knows nothing about docker (T-05-40).
+    firewall_body=$(
+        printf '{"name":"%s-fw","labels":{"%s":"%s"},"rules":[' \
+            "$SERVER_NAME" "${LABEL%%=*}" "${LABEL#*=}"
+        printf '{"direction":"in","protocol":"tcp","port":"22","source_ips":["0.0.0.0/0","::/0"]},'
+        printf '{"direction":"in","protocol":"tcp","port":"80","source_ips":["0.0.0.0/0","::/0"]},'
+        printf '{"direction":"in","protocol":"tcp","port":"443","source_ips":["0.0.0.0/0","::/0"]},'
+        printf '{"direction":"in","protocol":"icmp","source_ips":["0.0.0.0/0","::/0"]}],'
+        printf '"apply_to":[{"type":"server","server":{"id":%s}}]}' "$server_id"
+    )
+    echo "hetzner_box: firewall with 22, 80, 443 and nothing else"
+    response=$(api POST /firewalls "$firewall_body")
+    fail_on_error "$response"
+    firewall_id=$(printf '%s' "$response" | json 'import json,sys; print(json.load(sys.stdin)["firewall"]["id"])')
+
     created_at=$(date -u +%s)
     created_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -236,13 +393,14 @@ cmd_create() {
             echo "VOLUME_NAME=$VOLUME_NAME"
             echo "VOLUME_SIZE_GB=$VOLUME_SIZE_GB"
             echo "VOLUME_DEVICE=$volume_device"
+            echo "FIREWALL_ID=$firewall_id"
             echo "CREATED_AT=$created_at"
             echo "CREATED_ISO=$created_iso"
         } >"$STATE_FILE"
     )
 
-    echo "hetzner_box: server=$server_id volume=$volume_id ipv4=$server_ip created=$created_iso"
-    echo "hetzner_box: state in $STATE_FILE, label $LABEL on both resources"
+    echo "hetzner_box: server=$server_id volume=$volume_id firewall=$firewall_id ipv4=$server_ip created=$created_iso"
+    echo "hetzner_box: state in $STATE_FILE, label $LABEL on all three resources"
     echo "hetzner_box: when the run ends, for any reason: hetzner_box.sh destroy"
 }
 
@@ -285,13 +443,18 @@ for volume in json.load(sys.stdin)["volumes"]:
     fail_on_error "$pricing"
 
     now=$(date -u +%s)
-    printf '%s\n%s\n%s\n' "$server" "$volume" "$pricing" | json "
+    # The three answers are handed over as one array and not as three lines. The
+    # real API pretty prints its JSON, so a reader that takes one line per answer
+    # gets an opening brace and nothing else. Against a stub that answers in a
+    # single line this looked like it worked.
+    printf '[%s,%s,%s]' "$server" "$volume" "$pricing" | json "
 import json
 import sys
 
-server = json.loads(sys.stdin.readline())['server']
-volume = json.loads(sys.stdin.readline())['volume']
-pricing = json.loads(sys.stdin.readline())['pricing']
+answers = json.load(sys.stdin)
+server = answers[0]['server']
+volume = answers[1]['volume']
+pricing = answers[2]['pricing']
 
 hours = ($now - $CREATED_AT) / 3600.0
 currency = pricing['currency']
@@ -309,16 +472,32 @@ for server_type in pricing['server_types']:
 
 volume_monthly = float(pricing['volume']['price_per_gb_month']['gross']) * $VOLUME_SIZE_GB
 volume_hourly = volume_monthly / $HOURS_PER_MONTH
-spent = hours * (server_hourly + volume_hourly)
+
+# The public address is a separate item on the invoice, and it is not small
+# against a box that costs one cent an hour: leaving it out understates the run
+# by roughly eight percent. It is counted when the box actually has one.
+ipv4_hourly = 0.0
+ipv4_monthly = 0.0
+if (server['public_net'] or {}).get('ipv4'):
+    for entry in pricing.get('primary_ips', []):
+        if entry['type'] != 'ipv4':
+            continue
+        for price in entry['prices']:
+            if price['location'] != '$SERVER_LOCATION':
+                continue
+            ipv4_hourly = float(price['price_hourly']['gross'])
+            ipv4_monthly = float(price['price_monthly']['gross'])
+
+spent = hours * (server_hourly + volume_hourly + ipv4_hourly)
 
 print('server  %s %s %s' % (server['id'], server['name'], server['status']))
 print('volume  %s %s %s G attached to %s' % (
     volume['id'], volume['name'], volume['size'], volume['server']))
 print('running %.1f hours since $CREATED_ISO' % hours)
-print('price   %.4f %s per hour for the box, %.4f for the volume' % (
-    server_hourly, currency, volume_hourly))
-print('month   %.2f %s box, %.2f %s volume' % (
-    server_monthly, currency, volume_monthly, currency))
+print('price   %.4f %s per hour for the box, %.4f for the volume, %.4f for the address' % (
+    server_hourly, currency, volume_hourly, ipv4_hourly))
+print('month   %.2f %s box, %.2f %s volume, %.2f %s address' % (
+    server_monthly, currency, volume_monthly, currency, ipv4_monthly, currency))
 print('spent   %.2f %s so far, gross, out of this account' % (spent, currency))
 "
 }
@@ -339,6 +518,19 @@ except ValueError:
 error = payload.get("error") or {}
 print("gone" if error.get("code") == "not_found" else "there")
 '
+}
+
+# Everywhere else in this script an empty answer means the request never arrived,
+# and that is worth an error. Not here: a successful delete answers either with an
+# action object or, as the volume endpoint does, with 204 and no body at all. If
+# the empty case were reported as a failure, the one step that has to be trusted
+# would print a sentence that sounds like a lost volume every single time, and an
+# operator learns fast to stop reading the output of destroy.
+delete_error() {
+    if [ -z "$1" ]; then
+        return 0
+    fi
+    api_error "$1"
 }
 
 cmd_destroy() {
@@ -394,15 +586,15 @@ except (ValueError, KeyError, TypeError):
 
         echo "hetzner_box: deleting volume $volume_id"
         response=$(api DELETE "/volumes/$volume_id")
-        if [ -n "$(api_error "$response")" ]; then
-            echo "hetzner_box: the volume was not deleted yet: $(api_error "$response")" >&2
+        if [ -n "$(delete_error "$response")" ]; then
+            echo "hetzner_box: the volume was not deleted yet: $(delete_error "$response")" >&2
         fi
     fi
 
     echo "hetzner_box: deleting server $server_id"
     response=$(api DELETE "/servers/$server_id")
-    if [ -n "$(api_error "$response")" ]; then
-        echo "hetzner_box: the server was not deleted: $(api_error "$response")" >&2
+    if [ -n "$(delete_error "$response")" ]; then
+        echo "hetzner_box: the server was not deleted: $(delete_error "$response")" >&2
     fi
 
     # A second attempt at the volume, for the case above where the server had to
@@ -410,6 +602,37 @@ except (ValueError, KeyError, TypeError):
     if [ -n "$volume_id" ] && [ "$(gone "$(api GET "/volumes/$volume_id")")" != "gone" ]; then
         api DELETE "/volumes/$volume_id" >/dev/null
     fi
+
+    # The firewall costs nothing, which is exactly why it is the resource that
+    # stays behind. It is deleted by id when the state file names one, and in
+    # any case every firewall carrying the label is swept up: a run that was
+    # torn down by hand once leaves no state file behind, and the label is then
+    # the only thread left (T-05-39). A firewall cannot be deleted while it is
+    # applied to a server, so this happens after the server is gone.
+    firewall_id="${FIREWALL_ID:-}"
+    if [ -z "$firewall_id" ]; then
+        firewall_id=$(api GET "/firewalls?label_selector=$LABEL" | json '
+import json
+import sys
+
+try:
+    firewalls = json.load(sys.stdin)["firewalls"]
+except (ValueError, KeyError):
+    firewalls = []
+print(" ".join(str(firewall["id"]) for firewall in firewalls))
+')
+    fi
+    firewall_state='gone'
+    for one_firewall in $firewall_id; do
+        echo "hetzner_box: deleting firewall $one_firewall"
+        response=$(api DELETE "/firewalls/$one_firewall")
+        if [ -n "$(delete_error "$response")" ]; then
+            echo "hetzner_box: the firewall was not deleted: $(delete_error "$response")" >&2
+        fi
+        if [ "$(gone "$(api GET "/firewalls/$one_firewall")")" != "gone" ]; then
+            firewall_state='there'
+        fi
+    done
 
     failed=0
     server_state=$(gone "$(api GET "/servers/$server_id")")
@@ -430,6 +653,12 @@ except (ValueError, KeyError, TypeError):
         echo "hetzner_box: volume $volume_id is still there ($volume_state)" >&2
         failed=1
     fi
+    if [ "$firewall_state" = "gone" ]; then
+        echo "hetzner_box: firewall ${firewall_id:-none} is gone, verified against the API"
+    else
+        echo "hetzner_box: firewall $firewall_id is still there" >&2
+        failed=1
+    fi
 
     if [ "$failed" -ne 0 ]; then
         echo "hetzner_box: something is left over. Find it by label: $LABEL" >&2
@@ -440,7 +669,7 @@ except (ValueError, KeyError, TypeError):
     # Only now, because a state file that names deleted resources is a lie and a
     # state file that is missing while they still exist is worse.
     rm -f "$STATE_FILE"
-    echo "hetzner_box: both resources are gone and $STATE_FILE is removed"
+    echo "hetzner_box: every resource of this run is gone and $STATE_FILE is removed"
 }
 
 COMMAND="${1:-}"
