@@ -172,6 +172,10 @@ Keine.
 - **Fuer Plan 05-17 (Versions-Bump)** ist die Versionszeile in `php/appinfo/info.xml` ausdruecklich unangetastet bei 0.3.0 geblieben, damit zwei Plaene nicht dieselbe Zeile anheben.
 - **Keine Blocker.**
 
+## Self-Check: PASSED
+
+Alle sechs genannten Dateien liegen im Worktree, alle fuenf Commits sind in der Historie von `worktree-agent-05-02`, der Arbeitsbaum ist sauber.
+
 ---
 *Phase: 05-h-rtung-und-store-einreichung-v1-0*
 *Completed: 2026-09-03*
