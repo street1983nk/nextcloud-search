@@ -877,29 +877,31 @@ Code-Lows:
 | A8 | Bug-L4 (`--status` zeigt `indexed 0`) ist inzwischen geschlossen | Review-Reste-Inventar | Nur eine Position mehr oder weniger im Inventar. Vom Planner in einem Satz zu prüfen |
 | A9 | Die Position "wiederhergestellter Ordner braucht den ETag-Abgleich" wurde in Plan 03-12 behandelt | Review-Reste-Inventar, Gruppe C | Falls nicht, ist es eine echte Lücke in IDX-04 und keine Kosmetik |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **NC 35 ist zur Einreichung draussen, aber nicht in der Matrix.**
+Alle fuenf Fragen wurden am 03.09.2026 vom Owner entschieden und als Nachtraege D-23 bis D-27 in 05-CONTEXT.md festgehalten.
+
+1. **NC 35 ist zur Einreichung draussen, aber nicht in der Matrix.** RESOLVED: D-23 (Matrix + max-version 35).
    - Was wir wissen: `v35.0.0rc2` wurde am 27.08.2026 veröffentlicht; die Apps deklarieren `max-version 35`, sind dort also installierbar. NC 35 verlangt PHP 8.3 und entfernt den Docker Socket Proxy.
    - Was unklar ist: ob der Owner das Risiko trägt, für eine Serverversion freizugeben, die kein Gate abdeckt.
    - Empfehlung: `stable35` als vierten Matrix-Eintrag des neuen, schlanken Deploy-Jobs aufnehmen, sobald der Zweig existiert, mit `php-version: 8.3` für diesen Eintrag und `continue-on-error: true` bis NC 35 GA ist. Alternative: `max-version` auf 34 senken, was aber die Reichweite zum Einreichungszeitpunkt beschneidet. Owner-Entscheid.
 
-2. **Der PHPUnit-Rückstand: zwölf benannte Verhaltensweisen ohne Test.**
+2. **Der PHPUnit-Rückstand: zwölf benannte Verhaltensweisen ohne Test.** RESOLVED: D-24 (komplett rein).
    - Was wir wissen: `docs/testing.md` listet zwölf reine Logik-Eigenschaften der PHP-Hälfte, alle ohne Test, alle als Spezifikation ausformuliert, und benennt auch den Weg (Server auschecken, App nach `apps/findling`, `tests/bootstrap.php`). Elf davon sind Unit-Test-Material.
    - Was unklar ist: ob das unter D-20 fällt. Es ist kein Review-Befund, sondern eine dokumentierte Lücke. Es ist zugleich der grösste Qualitätshebel dieser Phase, und die Infrastruktur (Server-Checkout je Version) baut diese Phase ohnehin.
    - Empfehlung: als eigenen, klar abgegrenzten Block anbieten (Schätzung ein bis zwei Tage) und dem Owner die Wahl lassen. Wenn der Dezember drückt, ist das der ehrlichste Kürzungskandidat, weil die Lücke dokumentiert ist und nicht verschwiegen.
 
-3. **Wo wohnt der Uninstall-Räumbefehl?**
+3. **Wo wohnt der Uninstall-Räumbefehl?** RESOLVED: D-25 (Absichtsmarke + occ findling:purge).
    - Was wir wissen: Pitfall 1 lässt drei Formen zu. `occ findling:purge` ist ein dritter occ-Befehl neben `findling:index` und `findling:diagnose`.
    - Was unklar ist: ob der Owner einen dritten Befehl will oder die Räumung lieber als Schalter auf der Admin-Seite hat (was aber D-15 "kein Eigenbau-Dialog" berührt).
    - Empfehlung: occ-Befehl. Die Admin-Seite hat mit der Ausschluss-Räumung schon eine destruktive Bestätigung; eine zweite dort erhöht die Fehlbedienungsfläche, und ein Purge ist ein Betriebsvorgang, kein Alltagsklick.
 
-4. **`<donation>` in der Store-Beschreibung?**
+4. **`<donation>` in der Store-Beschreibung?** RESOLVED: D-27 (rein, Link wie Connector).
    - Was wir wissen: Die XSD erlaubt bis zu zehn `donation`-Elemente; das Schwesterprojekt nextcloud-mcp-connector hat Spenden live (paypal.me).
    - Was unklar ist: nicht entschieden, in CONTEXT.md nicht erwähnt.
    - Empfehlung: als Frage an den Owner beim plan-phase, nicht eigenmächtig aufnehmen. Kosten: eine Zeile in beiden info.xml.
 
-5. **Wie wird die "einreichungsbereite" Kandidatur aus D-09 nachprüfbar abgelegt?**
+5. **Wie wird die "einreichungsbereite" Kandidatur aus D-09 nachprüfbar abgelegt?** RESOLVED: D-26 (Tag v1.0.0 + signierte Releases Ende Phase 5).
    - Was wir wissen: Phase 5 endet mit signierten Artefakten, aber ohne Upload. Ein Tag `v1.0.0` würde `docker.yml` auslösen und das Image unter `1.0.0` veröffentlichen, was in Ordnung ist; das GitHub-Release wäre der https-Download für den späteren API-Aufruf.
    - Was unklar ist: ob Phase 5 den Tag schon setzen soll (dann ist der Store-Upload wirklich ein Klick) oder ob der Tag zu Phase 6 gehört (dann muss Phase 5 die Artefakte als Build-Artefakte ablegen und Phase 6 baut neu).
    - Empfehlung: Tag und GitHub-Release in Phase 5 setzen, den Store-Upload in Phase 6. Dann ist "ein Klick bis zur Abgabe" wörtlich wahr, das Image liegt unter dem Tag, den `info.xml` nennt, und Phase 6 fügt nur die Semantik hinzu und hebt auf `1.0.0` in einem zweiten Anlauf. Achtung auf den Nebeneffekt: ein öffentliches Release `1.0.0`, das noch nicht im Store ist, könnte von Nutzern gefunden und installiert werden. Alternative: Pre-Release-Tag `v1.0.0-rc.1` (das semver-Muster der XSD erlaubt Vorabversionen, der Store würde es als Beta führen). Owner-Entscheid.
