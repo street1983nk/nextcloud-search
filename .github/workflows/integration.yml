@@ -121,14 +121,14 @@ jobs:
       # has to come first, and the second one is what puts the composite action
       # below into the workspace at all.
       - name: Check out nextcloud/server
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
 
@@ -381,14 +381,14 @@ jobs:
       # empties the workspace root, and the second checkout is what brings the
       # composite action into the workspace.
       - name: Check out nextcloud/server
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
 
@@ -879,14 +879,14 @@ jobs:
       # checkout empties the workspace root, and the second checkout is what
       # brings the composite action into the workspace.
       - name: Check out nextcloud/server
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
 
@@ -1306,14 +1306,14 @@ jobs:
       # checkout empties the workspace root, and the second checkout is what
       # brings the composite action into the workspace.
       - name: Check out nextcloud/server
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
 
@@ -1775,14 +1775,14 @@ jobs:
       # checkout empties the workspace root, and the second checkout is what
       # brings the composite action into the workspace.
       - name: Check out nextcloud/server
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
 

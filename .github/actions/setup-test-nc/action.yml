@@ -162,8 +162,26 @@ runs:
 
     # Actions are pinned to commit SHAs, never to tags: a moved tag would be
     # arbitrary code execution inside a job that holds a Nextcloud instance.
+    #
+    # The residual risk behind that sentence, written down instead of assumed
+    # (Sec-L10 of the phase 2 audit, disposition: accepted). Pinning an action
+    # pins the action, not everything the action does at runtime. setup-php
+    # fetches a PHP build and its extensions while the job runs, and setup-uv
+    # below fetches the uv release named in its version input. Neither payload is
+    # covered by the SHA above: the SHA fixes which code decides where to fetch
+    # from, and nothing more. This is structural. Turning it off would mean
+    # carrying our own PHP and our own uv, which is a distribution problem
+    # traded for a supply chain problem, and one this project cannot staff.
+    #
+    # What is actually defended, so nobody reads more into the pin than is there:
+    # a moved tag cannot swap the fetching code underneath us, the version inputs
+    # are literals in this file and not expressions, and every job that uses this
+    # action is a throwaway instance that is destroyed with the runner and holds
+    # no secret other than the test credentials in this file. The published
+    # artefact of this project is the container image, and its build in
+    # docker.yml does not go through either of these two actions.
     - name: Set up PHP
-      uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+      uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
       with:
         # Linting and running against the oldest supported runtime is what catches
         # syntax and behaviour that only newer PHP accepts.
@@ -176,7 +194,7 @@ runs:
         coverage: none
 
     - name: Check out nextcloud/app_api
-      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         repository: nextcloud/app_api
         ref: ${{ inputs.server-version }}
@@ -348,7 +366,7 @@ runs:
     # none of them on the runner.
     - name: Install uv
       if: inputs.register-exapp == 'true'
-      uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       with:
         # Same uv release that produced backend/uv.lock, so --frozen resolves
         # identically here and on a developer machine.

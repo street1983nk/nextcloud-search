@@ -49,6 +49,16 @@ jobs:
     # without a change to look at only produces noise.
     if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
+    # The deadline is not derived from the measured runtime here, and the reason
+    # is worth a sentence. Measured, this job takes one minute and forty seconds
+    # to two minutes and twenty seconds (the six most recent runs, read on
+    # 03.09.2026). But its own two ceilings allow far more: MIDRUN_TIMEOUT is 300
+    # seconds and DRAIN_TIMEOUT is 1200, so a run that waits for the locked rows
+    # to come back may legitimately spend twenty five minutes waiting before it
+    # says anything. A deadline under that would kill runs the job itself still
+    # considers healthy and would report an infrastructure verdict as a code
+    # verdict. Forty minutes is those twenty five plus the installation.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -84,14 +94,14 @@ jobs:
       # first, and the second one is what puts the composite action below into
       # the workspace at all.
       - name: Check out nextcloud/server
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
 
@@ -368,6 +378,16 @@ jobs:
     # an image build to every backend change for nothing.
     if: github.event_name != 'push'
     runs-on: ubuntu-24.04
+    # No measurement behind this number either, and for the same reason as the
+    # arm64 bench in python.yml: every recorded run of this workflow skipped this
+    # job, because it never runs on a push. The bound therefore comes from what
+    # the job does. It builds the backend image without a registry cache, which
+    # the cold build in docker.yml puts at two and a half minutes, and it then
+    # measures against a device throttled to two megabytes per second, which is
+    # deliberately slow. Forty five minutes is generous for that and is still a
+    # bound instead of the default 360. The first real run is what replaces the
+    # estimate with a figure.
+    timeout-minutes: 45
 
     env:
       # The rate the device carrying the container filesystem is throttled to
@@ -384,7 +404,7 @@ jobs:
 
     steps:
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # A plain docker build, not the buildx action the release workflow uses:
       # this job measures one architecture, the one the runner has, and every

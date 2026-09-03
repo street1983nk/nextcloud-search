@@ -36,11 +36,17 @@ jobs:
   gates:
     name: ruff, format, pyright, vulture, pytest
     runs-on: ubuntu-24.04
+    # Measured over the sixteen most recent green runs, read on 03.09.2026: 12
+    # seconds with a warm uv cache, up to two minutes and twelve seconds when the
+    # cache misses and the locked environment is downloaded. Fifteen minutes is
+    # roughly seven times the worst of those, and it is a deadline where there
+    # was none: the default is 360 minutes.
+    timeout-minutes: 15
     steps:
       # Actions are pinned to commit SHAs, never to tags: a tag can be moved and
       # would hand a third party arbitrary code execution in this build.
       - name: Check out the repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -79,9 +85,19 @@ jobs:
     name: extraction start cost on arm64
     runs-on: ubuntu-24.04-arm
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    # This one has no measurement behind it, and saying so is more useful than a
+    # number that looks derived: every run of this workflow on record skipped the
+    # job, because it fires on dispatch and on the Monday schedule only. So the
+    # bound comes from the thing being measured instead. The job exists because
+    # the start cost of the extraction child is somewhere between half a second
+    # and two seconds, and it takes a thousand samples, which is eight to
+    # thirty three minutes of measuring plus the checkout and the environment.
+    # Sixty minutes sits above the upper end of that with room, and the first
+    # real run is what turns this into a measured number.
+    timeout-minutes: 60
     steps:
       - name: Check out the repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1

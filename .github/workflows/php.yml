@@ -36,14 +36,19 @@ jobs:
   lint:
     name: php -l
     runs-on: ubuntu-24.04
+    # Measured rather than guessed: 12 to 20 seconds over the six most recent
+    # runs, read on 03.09.2026. Ten minutes is thirty times that and is still a
+    # deadline, which is the point: without this key the ceiling is the GitHub
+    # default of 360 minutes, so a hung job holds a runner for six hours.
+    timeout-minutes: 10
     steps:
       # Actions are pinned to commit SHAs, never to tags: a tag can be moved and
       # would hand a third party arbitrary code execution in this build.
       - name: Check out the repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           # The lower bound declared in appinfo/info.xml. Linting against the
           # oldest supported runtime is what catches syntax that only newer PHP
@@ -74,9 +79,14 @@ jobs:
   app-metadata:
     name: info.xml on the store validation path
     runs-on: ubuntu-24.04
+    # 12 to 36 seconds over the same six runs. The spread is the apt install and
+    # the two fetches from raw.githubusercontent.com, which is also the reason
+    # this one gets the same ten minutes rather than less: the two things that
+    # can be slow here are both on somebody else's network.
+    timeout-minutes: 10
     steps:
       - name: Check out the repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install xsltproc and xmllint
         run: |

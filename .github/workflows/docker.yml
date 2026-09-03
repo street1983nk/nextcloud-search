@@ -82,7 +82,7 @@ jobs:
       # Actions are pinned to commit SHAs, never to tags: a tag can be moved and
       # would hand a third party arbitrary code execution in this build.
       - name: Check out the repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # A release that publishes a tag the metadata does not name is worse than no
       # release: AppAPI pulls registry/image:<image-tag> at installation time, and
