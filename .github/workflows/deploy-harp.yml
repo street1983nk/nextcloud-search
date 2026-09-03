@@ -173,18 +173,38 @@ jobs:
       # The key is created here and never printed. add-mask covers the case of a
       # command that echoes its own arguments, which occ does on higher verbosity
       # levels.
+      #
+      # --net host, and that is the second thing this job had to measure rather
+      # than assume. HaRP is not only the way in, it is also the way back: the
+      # container reports its init status and asks for queue rows through
+      # {nextcloud_url}/ocs/..., HaRP forwards everything that is not /exapps to
+      # NC_INSTANCE_URL, and its own agent resolves the ExApp against Nextcloud
+      # as well. With published ports instead of the host network that address
+      # points into the network namespace of the HaRP container, where nothing
+      # listens on 8080. Measured in run 33745892327: "Cannot connect to host
+      # localhost:8080" in the HaRP log, followed by 404 on
+      # PUT /ocs/v1.php/apps/app_api/ex-app/status in the ExApp log, and an
+      # app_api:app:register --wait-finish that printed "deployed successfully"
+      # and then waited for an init status that could never arrive, until the
+      # timeout of the step ended it after ten minutes. The compose stack of
+      # scripts/dev/compose-harp.yaml has no counterpart to this, because there
+      # Nextcloud is a service name in the same network.
+      #
+      # On the host network the published ports are gone and 8780 plus 8782 are
+      # bound on the runner directly, which is the same address the daemon
+      # registration below uses, and the ExApp container that AppAPI creates with
+      # --net host lands in the same namespace.
       - name: Start HaRP
         run: |
           harp_key=$(openssl rand -hex 16)
           echo "::add-mask::${harp_key}"
           echo "HARP_SHARED_KEY=${harp_key}" >> "${GITHUB_ENV}"
           mkdir -p "${RUNNER_TEMP}/certs"
-          docker run -d --name appapi-harp -h appapi-harp \
+          docker run -d --name appapi-harp --net host \
             -e HP_SHARED_KEY="${harp_key}" \
             -e NC_INSTANCE_URL="http://localhost:8080" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "${RUNNER_TEMP}/certs:/certs" \
-            -p 8780:8780 -p 8782:8782 \
             "${HARP_IMAGE}"
           # The readiness gate is the very call AppAPI makes first, and it has to
           # be. A TCP handshake on 8780 succeeds from the moment the container
