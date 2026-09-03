@@ -228,6 +228,12 @@ None - keine externe Konfiguration.
 - Der 50k-Lastkorpus enthaelt Bilder (D-02, OCR-Anteil ~20 %). Sie laufen ab jetzt mit der OCR-Frist und der OCR-Anspruchsgroesse, also mit derselben Rechnung, die die gescannten PDFs schon tragen. Erwartete Nebenwirkung fuer den Lauf: zwei Durchgaenge je Bild statt einem, und zwei Zeilen je Forderung statt 32, wenn der Rueckstand aus Bildern besteht.
 - Offen und beschrieben: der Nachlaeufer-Fall der Loeschexpansion, der Kommentar in `integration.yml` und die Anzeige des OCR-Anteils auf der Statusseite (alle drei in `deferred-items.md` dieser Phase).
 
+## Self-Check: PASSED
+
+Alle sieben genannten Dateien liegen auf der Platte, alle fuenf Commits stehen im
+Log des Zweiges, und der Arbeitsbaum ist leer. Der Testcontainer der
+Nachstellung wurde entfernt, es blieb keine Datei im Worktree zurueck.
+
 ---
 *Phase: 05-h-rtung-und-store-einreichung-v1-0*
 *Completed: 2026-09-03*
