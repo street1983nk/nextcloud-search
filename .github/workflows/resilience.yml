@@ -378,16 +378,13 @@ jobs:
     # an image build to every backend change for nothing.
     if: github.event_name != 'push'
     runs-on: ubuntu-24.04
-    # No measurement behind this number either, and for the same reason as the
-    # arm64 bench in python.yml: every recorded run of this workflow skipped this
-    # job, because it never runs on a push. The bound therefore comes from what
-    # the job does. It builds the backend image without a registry cache, which
-    # the cold build in docker.yml puts at two and a half minutes, and it then
-    # measures against a device throttled to two megabytes per second, which is
-    # deliberately slow. Forty five minutes is generous for that and is still a
-    # bound instead of the default 360. The first real run is what replaces the
-    # estimate with a figure.
-    timeout-minutes: 45
+    # This job had never run either, for the same reason as the arm64 bench in
+    # python.yml: it never runs on a push, so every recorded run of this workflow
+    # skipped it. It was dispatched once on 03.09.2026 instead of being
+    # estimated, and it took fifty four seconds including the uncached image
+    # build (run 33766227097). Twenty minutes is more than twenty times that and
+    # is still a bound instead of the default 360.
+    timeout-minutes: 20
 
     env:
       # The rate the device carrying the container filesystem is throttled to

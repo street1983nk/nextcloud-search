@@ -85,16 +85,14 @@ jobs:
     name: extraction start cost on arm64
     runs-on: ubuntu-24.04-arm
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-    # This one has no measurement behind it, and saying so is more useful than a
-    # number that looks derived: every run of this workflow on record skipped the
-    # job, because it fires on dispatch and on the Monday schedule only. So the
-    # bound comes from the thing being measured instead. The job exists because
-    # the start cost of the extraction child is somewhere between half a second
-    # and two seconds, and it takes a thousand samples, which is eight to
-    # thirty three minutes of measuring plus the checkout and the environment.
-    # Sixty minutes sits above the upper end of that with room, and the first
-    # real run is what turns this into a measured number.
-    timeout-minutes: 60
+    # This job had never run: it fires on dispatch and on the Monday schedule
+    # only, and every recorded run of this workflow skipped it, so there was
+    # nothing to derive a deadline from. It was therefore dispatched once on
+    # 03.09.2026 rather than estimated, and it took one minute and twelve
+    # seconds for the thousand samples (run 33766223084). Twenty minutes is
+    # sixteen times that, which leaves room for a slower runner and for a larger
+    # sample count, and is still a deadline instead of the default 360.
+    timeout-minutes: 20
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
