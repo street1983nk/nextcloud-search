@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 04-08-PLAN.md
-last_updated: "2026-09-02T19:51:45.986Z"
-last_activity: 2026-09-02
+stopped_at: Completed 04-10-PLAN.md
+last_updated: "2026-09-03T03:20:48.315Z"
+last_activity: 2026-09-03
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 8
-  completed_plans: 36
+  total_plans: 10
+  completed_plans: 37
   percent: 0
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 
 ## Current Position
 
-Phase: 04 (admin-sichtbarkeit-und-diagnose): EXECUTING
-Plan: 10 of 10
-Status: Ready to execute
-Last activity: 2026-09-02
+Phase: 04 (admin-sichtbarkeit-und-diagnose): EXECUTED, VERIFICATION PENDING
+Plan: 10 of 10 (all executed)
+Status: Alle zehn Plaene ausgefuehrt und committet. Die Sichtprobe des Owners ist gelaufen und freigegeben (2026-09-03), mit vier Befunden sofort behoben und zwei Luecken als Gap-Closure notiert. Naechster Schritt: /gsd:verify-work fuer Phase 04.
+Last activity: 2026-09-03
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P07 | 25 min | 3 tasks | 16 files |
 | Phase 04 P08 | 33 min | 3 tasks | 16 files |
 | Phase 04 P09 | 22 min | 3 tasks | 14 files |
+| Phase 04 P10 | 19 min plus Sichtprobe | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,11 @@ Recent decisions affecting current work:
 - [Phase 04]: Kein Config-Lexicon registriert: die Schnittstelle wurde innerhalb des Versionsfensters 32 bis 35 umbenannt, und eine Klassenreferenz, die nur auf einem Teil der Server aufloest, waere ein fataler Fehler beim Booten statt eines fehlenden Komforts. SettingsService und ExclusionService validieren stattdessen defensiv in beide Richtungen.
 - [Phase 04]: The clearing of a new exclusion covers every mount the app walks, not only home mounts: The enforcement compares a prefix relative to the root of every mount in the list, and clearing fewer mounts than the crawl excludes would leave index content that nothing removes
 - [Phase 04]: The diagnosis is fed the internal path plus the storage instead of the display path: A Team Folder file arrives as TeamX/x.pdf in the display space and as x.pdf in the space the crawl compares, so the display path would be a second path space
+- [Phase 04, Sichtprobe]: Erfolgskriterium 3 ist trotz Wortlaut-Abweichung angenommen: die Seite sagt "Vorlaeufige Zahl, X von Y Speicherorten sind durchgezaehlt" statt der D-05-Formulierung und nennt zusaetzlich ausdruecklich, dass auf keine Bestaetigung gewartet wird. D-05 ist der Sache nach erfuellt (Owner-Entscheidung a)
+- [Phase 04, Sichtprobe]: Sichtprobe 4 wird per Gap-Closure geschlossen: Skip-Verdikte des Containers werden nicht pro Datei uebergeben, nur Fehler; die Fehlerliste kann sie deshalb nicht gruppieren, die Pro-Datei-Diagnose beantwortet sie sehr wohl (Owner-Entscheidung b, DI-04-03)
+- [Phase 04, Sichtprobe]: Ein Ausschluss ist kein Fehler: Kachel, gesenkter Nenner und Diagnose sind der Nachweis, die Fehlerliste bleibt eine Liste von Fehlern (Owner-Entscheidung c zu Sichtprobe 7)
+- [Phase 04, Sichtprobe]: Jeder Block besitzt seine eigene [hidden]-Regel, weil eine spezifische display-Regel die User-Agent-Regel des Attributs schlaegt; das Attribut ist seit 04-03 der einzige Schaltmechanismus der Seite
+- [Phase 04, Sichtprobe]: Eine Zahl, die die Seite zu halten verspricht, wird dort gemerkt, wo sie wahr war (SettingsService::rememberIndexedCount in appconfig, Schreiben nur bei Aenderung), statt aus einer Tabelle neu berechnet zu werden, die sie bauartbedingt nicht enthaelt
 
 ### Pending Todos
 
@@ -123,6 +129,8 @@ None yet.
 - Kill-Kriterium aktiv: Nextcloud GmbH hat fulltextsearch am 12.08.2026 reaktiviert. Kündigt sie eine Elasticsearch-freie Suche mit OCR an, wird das Projekt neu bewertet (Nextcloud Conference September beobachten)
 - CSR-Vorlaufzeit für zwei getrennte App-Store-Einträge ist ein bekanntes Terminrisiko aus dem Schwesterprojekt
 - RAM-Spitzen auf ARM sind bisher nur geschätzt, Messlauf steht in Phase 5 aus
+- Zwei benannte Luecken aus der Sichtprobe 04-10, beide in .planning/phases/04-admin-sichtbarkeit-und-diagnose/deferred-items.md mit ihrer Schliessform: DI-04-03 (Skip-Verdikte pro fileid uebergeben, damit die Fehlerliste die vier Container-Gruende gruppieren kann) und DI-04-04 (Versionsmarken nach abgeschlossenem Neuaufbau neu stempeln, sonst kann der Reindex-Banner die eigene Abhilfe nie einloesen)
+- Das Pruefsummen-Gate ueber das Referenzkorpus nach der Live-Raeumung steht aus und gehoert in die Phasen-Verifikation (Gate A auf Quellcode-Ebene ist gruen, die Write-Allowlist unveraendert bei drei Eintraegen)
 
 ## Deferred Items
 
@@ -134,6 +142,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-02T19:51:31.450Z
-Stopped at: Completed 04-08-PLAN.md
+Last session: 2026-09-03T03:20:47.971Z
+Stopped at: Completed 04-10-PLAN.md (Phase 04: alle 10 Plaene ausgefuehrt, Verifikation steht aus)
 Resume file: None

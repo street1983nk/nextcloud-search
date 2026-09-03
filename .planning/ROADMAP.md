@@ -22,7 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-09-01)
 
 - [x] **Phase 3: Aktualität und OCR** - Neue, geänderte und gescannte Dokumente sind kurz darauf auffindbar, ohne dass eine Datei angefasst wird (completed 2026-09-01)
-- [ ] **Phase 4: Admin-Sichtbarkeit und Diagnose** - Admin sieht Deckungsgrad, Fehler und den Grund pro Datei, bevor Nutzer etwas vermissen
+- [ ] **Phase 4: Admin-Sichtbarkeit und Diagnose** - Admin sieht Deckungsgrad, Fehler und den Grund pro Datei, bevor Nutzer etwas vermissen (alle 10 Plaene ausgefuehrt, Verifikation steht aus)
 - [ ] **Phase 5: Härtung und Store-Einreichung v1.0** - Belegte Zahlen auf 4-GB-ARM, Rechte-Paritätstest als Dauergate, v1.0 im App Store
 - [ ] **Phase 6: Semantische Suche (Release v1.1)** - Hybrid-Ranking findet Umschreibungen, im selben RAM-Budget und derselben ACL-Kette
 
@@ -181,7 +181,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 04-10-PLAN.md , occ-Zweitzugang, Betriebsdokumentation, Gate-Lauf und Sichtprobe
+- [x] 04-10-PLAN.md , occ-Zweitzugang, Betriebsdokumentation, Gate-Lauf und Sichtprobe
 
 ### Phase 5: Härtung und Store-Einreichung v1.0
 
@@ -226,7 +226,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Integrationsbeweis | 8/8 | Complete    | 2026-08-15 |
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
-| 4. Admin-Sichtbarkeit und Diagnose | 9/10 | In Progress|  |
+| 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
 | 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 
