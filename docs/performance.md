@@ -26,22 +26,31 @@ wiederholt, sobald es wieder Bestand gibt.
 |---|---|---|
 | Maschine | Hetzner cpx22, x86 | Hetzner CAX11, arm64 |
 | Zustand | läuft seit 2026-09-03 | wartet auf Bestand |
-| Beweist den AIO-Weg über HaRP | ja | nicht nötig, gilt von hier |
-| Beweist die Störfälle | ja | nicht nötig, gilt von hier |
-| Beweist die Speicherzusage der Store-Aussage | **nein** | ja |
-| Beweist den OCR-Faktor | **nein** | ja |
+| Umfang | vollständig | **vollständig, alles noch einmal** |
+| AIO über HaRP, Grundlast, Volllauf, Störfälle | ja | ja, auf eigener Hardware |
+| Trägt die Store-Aussage | **nein** | ja |
 
-Die beiden mittleren Zeilen sind der Grund, warum die Generalprobe mehr ist als
-Zeitvertreib: alles, was nicht an der Architektur hängt, also die Reihenfolge der
-Einrichtung, der Weg über HaRP, das Zertifikat, die Störfälle, ist danach
-erledigt und geprüft. Das knappe ARM-Fenster geht dann nicht mehr für
-Einrichtungsfehler drauf.
+Die entscheidende Zeile ist die dritte. Der ARM-Lauf ist keine Nachlese, die sich
+ein paar Zahlen aus der Generalprobe borgt, sondern derselbe Lauf noch einmal,
+vollständig: eigene Grundlast, eigener Volllauf über 50.000 Dateien, eigene
+Störfall-Drills, eigener OCR-Faktor. Nichts an der Store-Aussage wird von der
+x86-Maschine geerbt.
 
-Die beiden unteren Zeilen sind der Grund, warum sie den ARM-Lauf nicht ersetzt.
-Eine x86-Grundlast ist nicht die ARM-Grundlast, und der OCR-Faktor auf ARM bleibt
-bis zu seiner Messung ungemessen. Wo in diesem Bericht x86-Zahlen stehen, sind
-sie als **Generalprobe cpx22** gekennzeichnet, und die ARM-Zeilen daneben stehen
-so lange auf ausstehend.
+Wofür die Generalprobe dann gut ist, wenn sie nichts vererbt: sie entschärft den
+Weg. Die Reihenfolge der Einrichtung, der Umgang mit dem Zertifikat, die Auswahl
+der optionalen Container, die Handgriffe des HaRP-Wegs, die Form der
+Störfall-Drills, das alles wird hier einmal durchgespielt und die Fehler darin
+fallen hier auf statt dort. Der ARM-Bestand ist knapp und kann jederzeit wieder
+verschwinden; wenn er kommt, soll das Fenster für die Messung draufgehen und
+nicht für Einrichtungsfehler. Schon der erste Tag hat drei Fehler zutage
+gefördert, die den ARM-Lauf Stunden gekostet hätten, darunter einen, der die
+40-GB-Systemplatte der CAX11 vollgeschrieben hätte.
+
+Der zweite Nutzen ist der Vergleich selbst. Zwei Messreihen derselben Anwendung
+auf zwei Architekturen sagen mehr über ihr Verhalten als eine von beiden allein.
+
+Wo in diesem Bericht x86-Zahlen stehen, sind sie als **Generalprobe cpx22**
+gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 
 ## Stand dieses Berichts
 
@@ -186,6 +195,50 @@ genau dieses Feld, bevor es etwas anlegt, und `prices` zeigt den Bestand in eine
 eigenen Spalte. Auch die billigen x86-Typen `cx23` bis `cx53` waren zur selben
 Minute überall ausverkauft; knapp waren die günstigen geteilten Linien insgesamt.
 
+### Was AIO ungefragt mitbringt
+
+Die Auswahl der optionalen Container entscheidet über die Grundlast, gegen die
+später gemessen wird, und deshalb ist die Ausgangslage der Oberfläche eine
+Stolperstelle: **drei optionale Container sind ab Werk angehakt**, und eine
+Bürosuite ist ab Werk ausgewählt.
+
+| Vorgabe | Zustand vor der Änderung | für diese Messung |
+|---|---|---|
+| Imaginary | angehakt | aus |
+| Talk | angehakt | aus |
+| Whiteboard | angehakt | aus |
+| Bürosuite | eurooffice ausgewählt | keine |
+| HaRP | aus | wird nach der Grundlast zugeschaltet |
+
+Wer die Oberfläche durchklickt und nur den einen Haken setzt, den er sucht,
+misst also gegen eine Grundlast mit vier zusätzlichen Containern und merkt es
+nicht. Für diesen Bericht sind alle vier abgewählt worden, bevor die Container
+zum ersten Mal gestartet sind; die Konfiguration von AIO trägt danach keinen
+einzigen Schalter auf `true`.
+
+Gemessen wird also über genau diese fünf Container: Mastercontainer, Apache,
+Nextcloud, Postgres, Redis und notify-push. HaRP kommt nach der Grundlastmessung
+dazu, damit sein Beitrag getrennt ausgewiesen werden kann.
+
+### Das Zertifikat ist echt
+
+Der Rückfall `SKIP_DOMAIN_VALIDATION` wurde nicht gebraucht und ist nicht
+gesetzt. Die Domäne zeigt per A-Satz auf die Box, DNS-only und nicht über einen
+Proxy, AIO hat die Domänenprüfung bestanden und sich über ACME ein Zertifikat
+geholt:
+
+```
+Aussteller:  Let's Encrypt
+gueltig bis: Oct 18 2026
+GET https://loadtest.infranode.dev/status.php -> HTTP 200
+{"installed":true,"maintenance":false,"needsDbUpgrade":false,
+ "version":"33.0.8.2","versionstring":"33.0.8","productname":"Nextcloud"}
+```
+
+Damit gilt für diesen Lauf die Aussage, die mit einem selbstsignierten
+Zertifikat nicht zu haben gewesen wäre: die TLS-Prüfungen der Container laufen
+gegen ein Zertifikat, dem sie wirklich vertrauen, und nicht ins Leere.
+
 ### Die Oberfläche von AIO ist von außen nicht erreichbar
 
 Der Filter sitzt außerhalb der Maschine, als Firewall des Anbieters, und das ist
@@ -193,22 +246,33 @@ kein Geschmacksurteil: Docker schreibt seine veröffentlichten Ports unmittelbar
 in iptables und geht dabei an `ufw` vorbei. Eine `ufw`-Regel gegen Port 8080
 würde also melden, der Port sei zu, während er offen ist.
 
-Gemessen von einer fremden Adresse, bevor überhaupt etwas lauschte:
+Gemessen von einer fremden Adresse, zweimal: einmal bevor überhaupt etwas
+lauschte, und einmal mit laufendem AIO.
+
+| Port | vor dem Start | mit laufendem AIO |
+|---|---|---|
+| 22 | offen | offen |
+| 80 | abgelehnt (RST) | abgelehnt (RST) |
+| 443 | abgelehnt (RST) | **offen** |
+| 8080 | verworfen | verworfen |
+| 8443 | verworfen | verworfen |
+| 3478 | verworfen | verworfen |
+| 9000 | verworfen | verworfen |
+
+Der Unterschied zwischen abgelehnt und verworfen ist hier der ganze Beweis.
+Abgelehnt heißt, das Paket kam bis zur Maschine und fand niemanden vor;
+verworfen heißt, es kam gar nicht erst an. Port 443 wechselt von abgelehnt zu
+offen, weil dort jetzt Nextcloud steht. Die Oberfläche von AIO auf 8080 und 8443
+bleibt in beiden Messungen unerreichbar, obwohl auf 8080 seit dem Start etwas
+lauscht. Der Mastercontainer ist zusätzlich nur an `127.0.0.1` gebunden:
 
 ```
-22     offen (Verbindung angenommen)
-80     abgelehnt (RST, also kein Filter davor)
-443    abgelehnt (RST, also kein Filter davor)
-8080   verworfen (Zeitueberschreitung)
-8443   verworfen (Zeitueberschreitung)
-3478   verworfen (Zeitueberschreitung)
+LISTEN 0 4096 127.0.0.1:8080 0.0.0.0:*  users:(("docker-proxy",...))
 ```
 
-Der Unterschied zwischen abgelehnt und verworfen ist hier der ganze Beweis: 80
-und 443 kommen bis zur Maschine durch und finden nur noch niemanden vor, 8080 und
-8443 kommen gar nicht erst an. Port 3478 steht in der Liste, weil Talk
-abgeschaltet bleibt und niemand später glauben soll, das sei vergessen worden.
-Erreicht wird die Oberfläche von AIO ausschließlich durch einen SSH-Tunnel.
+Port 3478 und 9000 stehen mit in der Liste, weil Talk abgeschaltet bleibt und
+niemand später glauben soll, das sei vergessen worden. Erreicht wird die
+Oberfläche von AIO ausschließlich durch einen SSH-Tunnel.
 
 ## Die Methode
 
@@ -273,15 +337,14 @@ mit dem Grenzwert steht hier.
 Die Regel dieses Repositories lautet, zu jeder Aussage ihre Grenze zu nennen.
 Für diesen Bericht sind das sieben:
 
-0. **Die Zahlen der Generalprobe gelten nicht für ARM.** Sie stammen von einer
-   x86-Maschine, und zwar von einer mit doppelt so großer Systemplatte. Was sie
-   belegen, ist der Weg: dass AIO über HaRP installierbar ist, dass die
-   Reihenfolge der Einrichtung trägt, dass die Störfälle sich so verhalten wie
-   beschrieben. Was sie nicht belegen, ist die Store-Aussage selbst. Der
-   Speicherverlauf eines Prozesses hängt an Seitengröße, Allokator und den
-   Bibliotheken der Architektur, und der OCR-Faktor hängt daran besonders. Jede
-   Zeile dieses Berichts, die eine Zahl der Generalprobe nennt, ist als solche
-   gekennzeichnet, und die ARM-Zeile daneben bleibt leer, bis sie gemessen ist.
+0. **Die Zahlen der Generalprobe gelten nicht für ARM, keine einzige.** Sie
+   stammen von einer x86-Maschine, und zwar von einer mit doppelt so großer
+   Systemplatte. Der Speicherverlauf eines Prozesses hängt an Seitengröße,
+   Allokator und den Bibliotheken der Architektur, und der OCR-Faktor hängt
+   daran besonders. Deshalb wird auf ARM nicht nachgemessen, sondern der ganze
+   Lauf wiederholt, Grundlast und Volllauf und Störfälle. Jede Zeile dieses
+   Berichts, die eine Zahl der Generalprobe nennt, ist als solche gekennzeichnet,
+   und die ARM-Zeile daneben bleibt leer, bis sie gemessen ist.
 1. **Eine Box ist keine Aussage über alle Boxen.** Gemessen wird auf einer
    einzelnen gemieteten CAX11. Geteilte Kerne bedeuten wechselnde Nachbarn, und
    eine andere 4-GB-Maschine mit anderer Platte kann andere Laufzeiten liefern.
