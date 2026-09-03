@@ -56,18 +56,65 @@ jobs:
   deploy-harp:
     name: deploy-harp
     runs-on: ubuntu-24.04
-    # A job that hangs must cost minutes, not the default six hours. The image
-    # build is the long pole here, everything after it is a handshake.
-    timeout-minutes: 30
+    # A job that hangs must cost minutes, not the default six hours. The number
+    # is the measured runtime with a margin and not a guess; the measurement is
+    # written down at the matrix below.
+    timeout-minutes: 20
+    # The one entry that may fail is the one for a server version that is not
+    # released yet, and which one that is stands at the entry itself.
+    continue-on-error: ${{ matrix.tolerate-failure }}
     strategy:
       fail-fast: false
       matrix:
-        # One server version for now. Plan 05-08 widens this to stable32,
-        # stable33, stable34 and stable35 and hangs the uninstall proof into the
-        # cleanup step below. The single entry is a starting point, not an
-        # oversight. PHP 8.2 covers 32 through 34; stable35 will need 8.3.
-        server-version: ['stable34']
-        php-version: ['8.2']
+        # Four server versions, and an include list rather than a cross product,
+        # because every version brings its own PHP floor.
+        #
+        # PHP 8.2 covers the floors of 32, 33 and 34 completely: lib/versioncheck.php
+        # asks for at least 8.1 on stable32 and for at least 8.2 on stable33 and
+        # stable34 (read out of the four branches through the GitHub API on
+        # 2026-09-03). Nextcloud 35 asks for at least 8.3 in the same file, so that
+        # entry carries 8.3. A cross product over PHP versions would produce twelve
+        # runs for a statement that four runs make.
+        #
+        # The backend image is built once per entry and not built once and shared,
+        # and that is a measurement rather than a preference: build plus push into
+        # the local registry took 60 s in run 33743374344, and the image is about
+        # 390 MB. Handing it to four entries through an artifact would move that
+        # much data eight times, once out and once back per entry, to save four
+        # minutes of runner time. The entries run in parallel, so the wall clock
+        # would get worse rather than better.
+        #
+        # Measured on 2026-09-03: the whole job up to the installed ExApp took
+        # 1 m 45 s, of which 60 s were the image build. The uninstall assertions
+        # add two more deployments and the observation window of assertion 6, so
+        # timeout-minutes above is 20: roughly twice the expected runtime and far
+        # away from the default of 360, which is the number that lets a hung
+        # handshake burn an afternoon.
+        include:
+          - server-version: stable32
+            php-version: '8.2'
+            tolerate-failure: false
+          - server-version: stable33
+            php-version: '8.2'
+            tolerate-failure: false
+          - server-version: stable34
+            php-version: '8.2'
+            tolerate-failure: false
+          # stable35 exists in both repositories this job checks out, and that was
+          # not guessed: "gh api repos/nextcloud/server/branches/stable35" and
+          # "gh api repos/nextcloud/app_api/branches/stable35" both answered with the
+          # branch on 2026-09-03, so neither half falls back to master or main. The
+          # line has an expiry date: once Nextcloud 35 is released, stable35 stops
+          # being the branch under development and this comment stops being true.
+          - server-version: stable35
+            php-version: '8.3'
+            # The only entry that may fail, and here is the condition for removing
+            # this flag: as soon as Nextcloud 35 is generally available. D-23 asks
+            # for a statement about NC 35, and a run that has to be green before the
+            # server version is finished would be a statement about the state of a
+            # branch and not about Findling. The result lands in the log either way,
+            # which is what makes it a statement instead of a hope.
+            tolerate-failure: true
 
     env:
       # Test-only values of a throwaway instance that is destroyed with the
