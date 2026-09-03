@@ -1778,9 +1778,7 @@ async def test_an_answering_queue_ends_the_retreat_at_once(
     assert len([line for line in _poller_lines(caplog) if "passes" in line]) == 2
 
 
-async def test_an_empty_answer_ends_the_retreat_as_well(
-    store: Store, writer: IndexBatchWriter, tmp_path: Path
-) -> None:
+async def test_an_empty_answer_ends_the_retreat_as_well(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
     # An empty queue is an answer. It says "the companion is there and has
     # nothing for you", so the retreat is over and the ordinary ladder starts
     # again at its beginning rather than at the retreat cap.
@@ -1834,7 +1832,7 @@ def test_the_retreat_cap_is_a_named_constant_with_its_reason_next_to_it() -> Non
     where = next(number for number, line in enumerate(source) if line.startswith("RETREAT_MAX_SECONDS"))
 
     assert RETREAT_MAX_SECONDS == 300
-    assert RETREAT_MAX_SECONDS > settings().poll_cooldown_max_seconds
+    assert settings().poll_cooldown_max_seconds < RETREAT_MAX_SECONDS
     assert source[where - 1].lstrip().startswith("#")
     assert "backoff" in "\n".join(source).lower()
 

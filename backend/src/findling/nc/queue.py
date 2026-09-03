@@ -317,7 +317,15 @@ class DocumentQueue:
             # import neither of them to name their classes. A narrower catch would
             # be the one that lets the unnamed case end the poller, which is the
             # outcome this whole layer exists to prevent.
-            LOGGER.warning("could not take a batch from the queue, backing off")
+            # Debug and not a warning, and that is the one line of this method
+            # that needs a reason. One call says nothing about the situation:
+            # the caller counts the passes in a row that came back like this and
+            # owns the log policy for all of them (Poller._retreat, D-17). While
+            # the Nextcloud half is removed a warning here would be one line per
+            # attempt forever, which is the disk filling log the retreat exists
+            # to prevent (T-05-30). The unavailable flag below carries the whole
+            # information, and it is not a log line.
+            LOGGER.debug("could not take a batch from the queue")
             return ClaimResult(unavailable=True)
 
         payload = _mapping(answer)

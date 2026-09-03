@@ -236,16 +236,27 @@ Die beiden halben Zustände, und beide sind gutartig:
   solche. Die Suchleiste arbeitet weiter, nur ohne die Trefferliste von
   Findling. Kein Fehler, keine hängende Suche.
 - **Backend ohne Companion:** der Container läuft weiter und hat keinen Anrufer
-  mehr. Er fragt eine Arbeitsliste ab, die es nicht mehr gibt, und verlängert
-  seine Pause nach jedem Fehlschlag, von 15 Sekunden verdoppelnd bis auf 120
-  Sekunden. Eine Fehlerschleife im Sekundentakt entsteht dabei nicht, wohl aber
-  eine Protokollzeile je Durchgang, und die nennt nur den Fehlertyp und keinen
-  Pfad.
+  mehr. Er fragt eine Arbeitsliste ab, die es nicht mehr gibt, und zieht sich
+  daraufhin zurück: die Pause wächst von 15 Sekunden verdoppelnd bis auf 300
+  Sekunden, also höchstens zwölf Versuche in der Stunde. Ins Protokoll schreibt
+  er dabei eine Zeile je Fehlschlag für die ersten beiden Durchgänge und eine
+  einzige Zeile, wenn er den Zustand erreicht hat, und danach schweigt er, bis
+  die Arbeitsliste wieder antwortet. Antwortet sie wieder, ist die Pause sofort
+  vorbei: der nächste Durchgang läuft ohne Wartezeit, ein laufender Index wird
+  durch den Rückzug nie abgebrochen, und die Suche des Containers antwortet die
+  ganze Zeit.
 
-Die Grenze dieses Abschnitts: die beiden Zustände sind aus dem Verhalten der
-beteiligten Bausteine beschrieben und nicht als Kette gefahren. Der Job aus
-Abschnitt 5 fährt die Kette bis zum entfernten Companion; was er dabei am
-Container feststellt, steht dort.
+Warum die Obergrenze bei 300 Sekunden liegt und nicht höher oder niedriger: lang
+genug, dass ein vergessener Container wochenlang nicht auffällt, kurz genug,
+dass eine Wiederinstallation innerhalb von fünf Minuten bemerkt wird. Der Wert
+steht als benannte Konstante `RETREAT_MAX_SECONDS` im Container, mit derselben
+Begründung daneben.
+
+Die Grenze dieses Abschnitts: gemessen ist die Richtung "Backend ohne
+Companion", als Kette und auf allen vier Serverversionen, nämlich in
+Feststellung 6 des Jobs aus Abschnitt 5. Die Richtung "Companion ohne Backend"
+ist der bestehende Hinweis der Statusseite aus einer früheren Phase und hier
+nicht als Kette gefahren.
 
 ## 5. Der Beweis in CI: was der Job feststellt und was nicht
 
@@ -255,7 +266,7 @@ räumt danach wieder ab. Er läuft über eine Matrix aus vier Serverversionen:
 Nextcloud 32, 33 und 34 mit PHP 8.2 und Nextcloud 35 mit PHP 8.3 (Entscheide
 D-07 und D-23).
 
-Der Job trifft fünf Feststellungen, jede mit eigener Fehlermeldung, und jede so
+Der Job trifft sechs Feststellungen, jede mit eigener Fehlermeldung, und jede so
 gebaut, dass eine leere Ausgabe rot ist und nicht grün:
 
 1. **Ohne Kennzeichen bleibt das Volume.** `occ app_api:app:unregister
@@ -274,6 +285,12 @@ gebaut, dass eine leere Ausgabe rot ist und nicht grün:
 5. **Ein Entfernen mit Absicht räumt vollständig.** Nach `occ findling:purge
    --arm` und `occ app:remove findling` existiert keine der drei Tabellen mehr
    und die Zahl der Einstellungen ist null.
+6. **Der Container ohne Companion zieht sich zurück.** Nach dem Entfernen der
+   Companion-App läuft der Container weiter, meldet den Rückzug mit einer Zeile
+   und schreibt danach höchstens fünf weitere Warn- oder Fehlerzeilen. Fünf ist
+   die Grenze zwischen Rückzug und Fehlerschleife, und sie zählt den Zuwachs
+   gegenüber dem Stand vor dem Entfernen, damit nichts mitgezählt wird, was
+   vorher schon dastand.
 
 Feststellung 4 steht vor Feststellung 5 und nicht danach: die Absichtsmarke ist
 Einmalgebrauch, und die Aussage "ein Abschalten räumt nichts" lässt sich nur

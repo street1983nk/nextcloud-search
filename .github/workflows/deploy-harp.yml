@@ -506,6 +506,63 @@ jobs:
             exit 1
           fi
 
+      # Assertion 6: the other half of a half removal. The container that has
+      # just lost its caller keeps running and polls a queue that is not there
+      # any more, and D-17 says that is a state of operation and not a defect.
+      # What it must not become is an error loop: a line per pass fills the disk
+      # of a four gigabyte box and hides the lines that would have said something
+      # (T-05-30). Measured here in both directions, alive and quiet.
+      - name: Uninstall 6, the container without a companion retreats
+        run: |
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -z "${container}" ]; then
+            echo "no running container after the companion was removed, so the container did not survive the half removal"
+            docker ps -a
+            exit 1
+          fi
+          noisy_lines() {
+            docker logs "${container}" 2>&1 | grep -cE '^(WARNING|ERROR|CRITICAL):' || true
+          }
+          before=$(noisy_lines)
+          # A budget, not a fixed pause. The poller announces the retreat on the
+          # third unanswered pass, and the pause before the first of them can be
+          # anything up to the cap of an empty queue, so the worst case is around
+          # 165 s. The loop leaves as soon as the line is there, which is some
+          # 45 s in the ordinary case.
+          entered=""
+          for _ in $(seq 1 24); do
+            if docker logs "${container}" 2>&1 | grep -q 'the queue has not answered for'; then
+              entered="yes"
+              break
+            fi
+            sleep 10
+          done
+          if [ -z "${entered}" ]; then
+            echo "the container never announced the retreat, so it is either still polling pass by pass or it is not polling at all"
+            docker logs "${container}" 2>&1 | tail -n 40
+            exit 1
+          fi
+          alive=$(docker ps --filter "name=${container}" --format '{{.Status}}')
+          if [ -z "${alive}" ]; then
+            echo "the container stopped during the retreat instead of waiting it out"
+            docker ps -a
+            exit 1
+          fi
+          # The number that separates a retreat from an error loop, and it is a
+          # growth rather than a total so that whatever the container logged
+          # while the companion was still there does not count: two ordinary
+          # lines for the two passes before the state, one for the state itself,
+          # and two spare. A loop per pass would be far above five within the
+          # four minutes of the budget above.
+          after=$(noisy_lines)
+          grew=$((after - before))
+          if [ "${grew}" -gt 5 ]; then
+            echo "the container wrote ${grew} new warning or error lines while its caller was gone, which is an error loop and not a retreat"
+            docker logs "${container}" 2>&1 | grep -E '^(WARNING|ERROR|CRITICAL):' | tail -n 20
+            exit 1
+          fi
+          echo "container ${container} is ${alive}, retreat announced, ${grew} new warning or error lines"
+
       - name: Collect the logs and tear the deployment down
         if: always()
         run: |
