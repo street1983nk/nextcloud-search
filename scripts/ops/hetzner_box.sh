@@ -354,6 +354,25 @@ if len(images) == 1:
     volume_id=$(printf '%s' "$response" | json 'import json,sys; print(json.load(sys.stdin)["volume"]["id"])')
     volume_device=$(printf '%s' "$response" | json 'import json,sys; print(json.load(sys.stdin)["volume"]["linux_device"])')
 
+    # The firewall sits outside the machine on purpose. A rule set on the box
+    # itself does not hold here: docker writes its published ports straight into
+    # iptables and walks past ufw, so the interface of AIO on 8080 would be open
+    # to the world while ufw reports it closed. This one filters before the
+    # packet reaches the host, and it knows nothing about docker (T-05-40).
+    firewall_body=$(
+        printf '{"name":"%s-fw","labels":{"%s":"%s"},"rules":[' \
+            "$SERVER_NAME" "${LABEL%%=*}" "${LABEL#*=}"
+        printf '{"direction":"in","protocol":"tcp","port":"22","source_ips":["0.0.0.0/0","::/0"]},'
+        printf '{"direction":"in","protocol":"tcp","port":"80","source_ips":["0.0.0.0/0","::/0"]},'
+        printf '{"direction":"in","protocol":"tcp","port":"443","source_ips":["0.0.0.0/0","::/0"]},'
+        printf '{"direction":"in","protocol":"icmp","source_ips":["0.0.0.0/0","::/0"]}],'
+        printf '"apply_to":[{"type":"server","server":{"id":%s}}]}' "$server_id"
+    )
+    echo "hetzner_box: firewall with 22, 80, 443 and nothing else"
+    response=$(api POST /firewalls "$firewall_body")
+    fail_on_error "$response"
+    firewall_id=$(printf '%s' "$response" | json 'import json,sys; print(json.load(sys.stdin)["firewall"]["id"])')
+
     created_at=$(date -u +%s)
     created_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -374,13 +393,14 @@ if len(images) == 1:
             echo "VOLUME_NAME=$VOLUME_NAME"
             echo "VOLUME_SIZE_GB=$VOLUME_SIZE_GB"
             echo "VOLUME_DEVICE=$volume_device"
+            echo "FIREWALL_ID=$firewall_id"
             echo "CREATED_AT=$created_at"
             echo "CREATED_ISO=$created_iso"
         } >"$STATE_FILE"
     )
 
-    echo "hetzner_box: server=$server_id volume=$volume_id ipv4=$server_ip created=$created_iso"
-    echo "hetzner_box: state in $STATE_FILE, label $LABEL on both resources"
+    echo "hetzner_box: server=$server_id volume=$volume_id firewall=$firewall_id ipv4=$server_ip created=$created_iso"
+    echo "hetzner_box: state in $STATE_FILE, label $LABEL on all three resources"
     echo "hetzner_box: when the run ends, for any reason: hetzner_box.sh destroy"
 }
 
@@ -578,6 +598,37 @@ except (ValueError, KeyError, TypeError):
         api DELETE "/volumes/$volume_id" >/dev/null
     fi
 
+    # The firewall costs nothing, which is exactly why it is the resource that
+    # stays behind. It is deleted by id when the state file names one, and in
+    # any case every firewall carrying the label is swept up: a run that was
+    # torn down by hand once leaves no state file behind, and the label is then
+    # the only thread left (T-05-39). A firewall cannot be deleted while it is
+    # applied to a server, so this happens after the server is gone.
+    firewall_id="${FIREWALL_ID:-}"
+    if [ -z "$firewall_id" ]; then
+        firewall_id=$(api GET "/firewalls?label_selector=$LABEL" | json '
+import json
+import sys
+
+try:
+    firewalls = json.load(sys.stdin)["firewalls"]
+except (ValueError, KeyError):
+    firewalls = []
+print(" ".join(str(firewall["id"]) for firewall in firewalls))
+')
+    fi
+    firewall_state='gone'
+    for one_firewall in $firewall_id; do
+        echo "hetzner_box: deleting firewall $one_firewall"
+        response=$(api DELETE "/firewalls/$one_firewall")
+        if [ -n "$(delete_error "$response")" ]; then
+            echo "hetzner_box: the firewall was not deleted: $(delete_error "$response")" >&2
+        fi
+        if [ "$(gone "$(api GET "/firewalls/$one_firewall")")" != "gone" ]; then
+            firewall_state='there'
+        fi
+    done
+
     failed=0
     server_state=$(gone "$(api GET "/servers/$server_id")")
     volume_state='gone'
@@ -597,6 +648,12 @@ except (ValueError, KeyError, TypeError):
         echo "hetzner_box: volume $volume_id is still there ($volume_state)" >&2
         failed=1
     fi
+    if [ "$firewall_state" = "gone" ]; then
+        echo "hetzner_box: firewall ${firewall_id:-none} is gone, verified against the API"
+    else
+        echo "hetzner_box: firewall $firewall_id is still there" >&2
+        failed=1
+    fi
 
     if [ "$failed" -ne 0 ]; then
         echo "hetzner_box: something is left over. Find it by label: $LABEL" >&2
@@ -607,7 +664,7 @@ except (ValueError, KeyError, TypeError):
     # Only now, because a state file that names deleted resources is a lie and a
     # state file that is missing while they still exist is worse.
     rm -f "$STATE_FILE"
-    echo "hetzner_box: both resources are gone and $STATE_FILE is removed"
+    echo "hetzner_box: every resource of this run is gone and $STATE_FILE is removed"
 }
 
 COMMAND="${1:-}"

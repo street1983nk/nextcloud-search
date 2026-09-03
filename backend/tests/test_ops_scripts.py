@@ -101,10 +101,15 @@ def test_the_box_tool_demands_the_token_and_never_prints_it() -> None:
     assert not [line for line in text.splitlines() if "echo" in line and "HCLOUD_TOKEN" in line]
 
 
-def test_the_box_tool_labels_the_box_and_the_volume() -> None:
-    """Two create bodies, two label fields, one label (T-05-19)."""
+def test_the_box_tool_labels_every_resource_it_creates() -> None:
+    """Three create bodies, three label fields, one label (T-05-19).
+
+    The count is the point and not a formality: it was two while the run created
+    a box and a volume, and it went to three the moment a firewall came along.
+    An unlabelled resource is one that a sweep by label does not find.
+    """
     text = HETZNER_BOX.read_text(encoding="utf-8")
-    assert text.count('"labels":{"%s":"%s"}') == 2
+    assert text.count('"labels":{"%s":"%s"}') == 3
     assert "LABEL='purpose=findling-phase5'" in text
 
 
@@ -142,6 +147,25 @@ def test_the_box_is_created_where_the_phase_decided() -> None:
     """Decision D-01 names Helsinki, and a server cannot move afterwards."""
     text = HETZNER_BOX.read_text(encoding="utf-8")
     assert "SERVER_LOCATION='hel1'" in text
+
+
+def test_the_firewall_is_created_and_taken_down_again() -> None:
+    """A rule set on the box would not hold, and a free resource is the one that stays.
+
+    Docker writes its published ports straight into iptables and walks past ufw,
+    so the AIO interface on 8080 would be open to the world while ufw reports it
+    closed. The filter therefore sits outside the machine (T-05-40). And because
+    a firewall costs nothing, it is exactly the resource nobody misses, so the
+    deletion covers it by id and, when no state file is left, by label (T-05-39).
+    """
+    text = HETZNER_BOX.read_text(encoding="utf-8")
+    assert '"direction":"in","protocol":"tcp","port":"22"' in text
+    assert '"direction":"in","protocol":"tcp","port":"443"' in text
+    # Three ports and no fourth. The interface of AIO is reached through the ssh
+    # tunnel, and a rule for it would be the quiet end of that promise.
+    assert text.count('"direction":"in","protocol":"tcp"') == 3
+    assert '/firewalls?label_selector=$LABEL' in text
+    assert "firewall ${firewall_id:-none} is gone, verified against the API" in text
 
 
 def test_the_deletion_does_not_call_an_empty_answer_a_failure() -> None:
