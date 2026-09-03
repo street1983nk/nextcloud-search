@@ -248,6 +248,15 @@ jobs:
             exit 1
           fi
           echo "exapp volume: ${volume}"
+          # The uninstall assertions below look for exactly these two names
+          # rather than for a filter that may match nothing. A name that arrives
+          # empty is caught there a second time, because "docker volume ls
+          # --filter name=" lists everything and would turn a missing measurement
+          # into a green result (T-05-29).
+          {
+            echo "EXAPP_CONTAINER=${container}"
+            echo "EXAPP_VOLUME=${volume}"
+          } >> "${GITHUB_ENV}"
           # Plan 05-08 removes this volume again and needs its name, so it goes
           # into the job summary and not only into the log.
           {
@@ -291,10 +300,165 @@ jobs:
           jq -e '.ocs.data.entries[0].subline | startswith("produced inside container ")' out.json
           jq -e '.ocs.data.entries[0].subline | endswith("for user testuser")' out.json
 
-      # The uninstall proof does not belong here, it belongs to plan 05-08:
-      # occ app_api:app:unregister findling_backend --rm-data goes in right here,
-      # before the containers are torn down, and asserts that container and volume
-      # are gone afterwards.
+      # From here to the teardown runs the uninstall proof, the second half of
+      # success criterion 3 of this phase. It falls into assertions that are
+      # separate steps on purpose: each one has its own message, each one treats
+      # an empty result as a failure, and the order is not free. Assertion 1 is
+      # first because it is the only one that can still be made afterwards.
+      #
+      # What this proof does not cover, and it says so where an admin reads it
+      # (docs/uninstall.md): it never touches the web interface, so the "delete
+      # data" switch of Nextcloud 32 and 33 stays unproven, and it does not check
+      # that the pulled image is gone, because the unregister path of AppAPI
+      # removes containers and volumes and never an image.
+      #
+      # Assertion 1: without the flag the data stay. That is the promise decision
+      # D-16 rests on, and once assertion 3 has run it cannot be made any more.
+      - name: Uninstall 1, an unregister without the flag keeps the volume
+        run: |
+          if [ -z "${EXAPP_VOLUME}" ] || [ -z "${EXAPP_CONTAINER}" ]; then
+            echo "the install step handed over no container or volume name, so this assertion would pass without looking at anything"
+            exit 1
+          fi
+          timeout 300 ./occ app_api:app:unregister findling_backend
+          still_there=$(docker ps -a --filter "name=${EXAPP_CONTAINER}" --format '{{.Names}}')
+          if [ -n "${still_there}" ]; then
+            echo "the container ${EXAPP_CONTAINER} survived the unregister, so the deregistration removed nothing"
+            docker ps -a
+            exit 1
+          fi
+          kept=$(docker volume ls --filter "name=${EXAPP_VOLUME}" --format '{{.Name}}')
+          if [ "${kept}" != "${EXAPP_VOLUME}" ]; then
+            echo "the volume ${EXAPP_VOLUME} is gone after an unregister without --rm-data, and the documented default is that it stays; found '${kept}'"
+            docker volume ls
+            exit 1
+          fi
+          echo "container gone, volume ${kept} kept"
+
+      # Assertion 2: the way back. A second registration on the volume the first
+      # one left behind is the path an admin takes after a failed attempt, and
+      # that it succeeds and picks up the same volume is worth asserting rather
+      # than assuming: this is where days of OCR work on a weak box either
+      # survive or quietly do not.
+      - name: Uninstall 2, a second registration picks up the volume it left
+        run: |
+          timeout 600 ./occ app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${RUNNER_TEMP}/info-citest.xml" --wait-finish
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -z "${container}" ]; then
+            echo "the second registration created no running container"
+            docker ps -a
+            exit 1
+          fi
+          volume=$(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}')
+          if [ "${volume}" != "${EXAPP_VOLUME}" ]; then
+            echo "the second registration did not take the volume of the first one, expected ${EXAPP_VOLUME} and found '${volume}'"
+            docker volume ls
+            exit 1
+          fi
+          echo "registered again as ${container} on the kept volume ${volume}"
+
+      # Assertion 3: with the flag the data go. The filter is the name from the
+      # install step, so an empty answer here means the volume is gone and not
+      # that nothing was ever looked for.
+      - name: Uninstall 3, an unregister with --rm-data removes the volume
+        run: |
+          if [ -z "${EXAPP_VOLUME}" ]; then
+            echo "no volume name from the install step, so an empty filter result would be a false green (T-05-29)"
+            exit 1
+          fi
+          timeout 300 ./occ app_api:app:unregister findling_backend --rm-data
+          left=$(docker volume ls --filter "name=${EXAPP_VOLUME}" --format '{{.Name}}')
+          if [ -n "${left}" ]; then
+            echo "the volume ${EXAPP_VOLUME} survived an unregister with --rm-data, found '${left}'"
+            docker volume ls
+            exit 1
+          fi
+          container=$(docker ps -a --filter "name=${EXAPP_CONTAINER}" --format '{{.Names}}')
+          if [ -n "${container}" ]; then
+            echo "the container ${EXAPP_CONTAINER} survived the unregister with --rm-data"
+            docker ps -a
+            exit 1
+          fi
+          echo "container and volume ${EXAPP_VOLUME} both gone"
+
+      # Assertions 4 and 5 ask the same two questions of the database, and they
+      # ask the database rather than occ on purpose: there is no occ command that
+      # reports whether a table exists (occ db:* converts, adds indices and
+      # repairs), and an occ call that fails prints nothing, which would read
+      # exactly like "no tables left" and turn a broken measurement into a green
+      # result. The dialect is checked before the first query, because a query
+      # against the wrong dialect is the same false green in a different costume.
+      - name: The database probe the last two assertions share
+        run: |
+          dbtype=$(timeout 30 ./occ config:system:get dbtype)
+          if [ "${dbtype}" != "sqlite3" ]; then
+            echo "these assertions read the sqlite test database, but dbtype is '${dbtype}'"
+            exit 1
+          fi
+          db="$(timeout 30 ./occ config:system:get datadirectory)/$(timeout 30 ./occ config:system:get dbname).db"
+          if [ ! -f "${db}" ]; then
+            echo "no database file at ${db}, so the two assertions below would measure nothing"
+            exit 1
+          fi
+          if ! command -v sqlite3 > /dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq sqlite3
+          fi
+          echo "FINDLING_DB=${db}" >> "${GITHUB_ENV}"
+          echo "database ${db}, dialect ${dbtype}"
+
+      # Assertion 4: a disable without intent leaves the Nextcloud half alone.
+      # It runs before assertion 5 for the reason threat T-05-31 names: the
+      # intent mark of plan 05-02 is a one shot flag, and the only way to show
+      # that a disable clears nothing is to disable while no mark is set.
+      - name: Uninstall 4, a disable without intent keeps tables and settings
+        run: |
+          expected='oc_findling_file_state oc_findling_queue oc_findling_scan_stats'
+          tables=$(sqlite3 "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          echo "before the disable: tables [${tables}], settings ${settings}"
+          if [ "${tables}" != "${expected}" ]; then
+            echo "the three tables of the app are not all there before the disable, expected [${expected}] and found [${tables}]"
+            exit 1
+          fi
+          timeout 300 ./occ app:disable findling
+          tables=$(sqlite3 "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          echo "after the disable: tables [${tables}], settings ${settings}"
+          if [ "${tables}" != "${expected}" ]; then
+            echo "the disable removed tables although no intent was armed, expected [${expected}] and found [${tables}]"
+            exit 1
+          fi
+          if [ "${settings}" -lt 1 ]; then
+            echo "the disable emptied the settings of the app although no intent was armed, ${settings} values left"
+            exit 1
+          fi
+
+      # Assertion 5: a remove with intent clears the Nextcloud half. The order
+      # inside the step is the documented one from docs/uninstall.md, and the
+      # registration in the middle of it belongs to assertion 6: that one needs a
+      # live container while the companion goes away, and the deployment
+      # handshake has to happen while the installation is still complete.
+      - name: Uninstall 5, a remove with intent clears tables and settings
+        run: |
+          timeout 300 ./occ app:enable findling
+          timeout 600 ./occ app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${RUNNER_TEMP}/info-citest.xml" --wait-finish
+          timeout 300 ./occ findling:purge --arm --no-interaction
+          timeout 300 ./occ app:remove findling
+          tables=$(sqlite3 "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          echo "after the remove with intent: tables [${tables}], settings ${settings}"
+          if [ -n "${tables}" ]; then
+            echo "the remove with intent left tables behind: [${tables}]"
+            exit 1
+          fi
+          if [ "${settings}" -ne 0 ]; then
+            echo "the remove with intent left ${settings} settings behind"
+            exit 1
+          fi
+
       - name: Collect the logs and tear the deployment down
         if: always()
         run: |
@@ -305,6 +469,12 @@ jobs:
           fi
           docker logs appapi-harp > "${RUNNER_TEMP}/harp-logs/harp.log" 2>&1 || true
           docker rm -f appapi-harp registry 2>/dev/null || true
+          # The ExApp container outlives the assertions since assertion 6 keeps
+          # it alive on purpose, so the teardown takes it along. Its log is
+          # already saved above, which is the reason this line comes after it.
+          if [ -n "${container}" ]; then
+            docker rm -f "${container}" 2>/dev/null || true
+          fi
 
       - name: Upload the logs
         if: always()

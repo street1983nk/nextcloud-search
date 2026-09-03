@@ -63,8 +63,8 @@ Absicht zu erklären, ist `occ findling:purge`.
 **Die Grenze dieser Messung.** Sie gilt für Nextcloud 34.0.3 und für sonst
 nichts. Der Quellcode von `AppManager::disableApp()` ist in den Zweigen
 stable32, stable33 und stable34 wortgleich, aber gelesener Quellcode ist kein
-Messwert. Die Wiederholung derselben Kette auf Nextcloud 32, 33, 34 und 35 in
-CI gehört zu Plan 05-08 und ist bis dahin ein offener Punkt.
+Messwert. Die Wiederholung als Kette über alle vier Serverversionen macht der
+Job `deploy-harp` in CI; was er feststellt und was nicht, steht in Abschnitt 5.
 
 ## 1. Abschalten oder entfernen: was der Unterschied ist
 
@@ -135,7 +135,10 @@ schwachen Box überleben also jedes Abschalten. Die Grenze dieser Aussage: hier
 gemessen ist die Nextcloud-Hälfte, also Tabellen, Einstellungen und Jobs. Dass
 die Suchleiste nach dem Wiedereinschalten sofort wieder Treffer liefert, folgt
 daraus, dass das Volume unberührt bleibt, und ist als Suchprobe über die ganze
-Kette hier nicht gemessen. Diese Probe gehört zu Plan 05-08.
+Kette hier nicht gemessen. Gemessen ist inzwischen die Hälfte, auf die es dabei
+ankommt: der Job aus Abschnitt 5 meldet die ExApp ohne `--rm-data` ab, findet
+das Volume danach unverändert vor und registriert auf demselben Volume erneut.
+Eine Suche über die ganze Kette nach einem Wiedereinschalten bleibt ungemessen.
 
 **Eine Nebenwirkung, die der Befehl selbst ausspricht.** `--now` nimmt auch den
 Wert `enabled` mit, weil er zu den Einstellungen dieser App gehört. Die App ist
@@ -180,10 +183,10 @@ Gegenschalter dazu ist bei AppAPI abgekündigt und steht hier deshalb nicht als
 Weg: wer die Daten behalten will, lässt das Kennzeichen einfach weg.
 
 Die Grenze dieser Aussage: die Versionsunterschiede stehen aus dem Quellcode der
-Serverzweige und der AppAPI fest, gemessen wurde in diesem Plan nur auf
-Nextcloud 34.0.3, und dort ohne AppAPI im Spiel. Der Beweis, dass `--rm-data`
-das Volume auf jeder der vier Versionen wirklich mitnimmt, gehört zum
-Deploy-Job aus Plan 05-08.
+Serverzweige und der AppAPI fest, und der Weg über die Weboberfläche ist nach wie
+vor ungemessen. Dass `--rm-data` das Volume wirklich mitnimmt und dass es
+ohne das Kennzeichen wirklich liegen bleibt, stellt der Job aus Abschnitt 5 auf
+jeder der vier Serverversionen fest.
 
 ## 3. Was auch mit `--rm-data` liegen bleibt
 
@@ -240,6 +243,53 @@ Die beiden halben Zustände, und beide sind gutartig:
   Pfad.
 
 Die Grenze dieses Abschnitts: die beiden Zustände sind aus dem Verhalten der
-beteiligten Bausteine beschrieben und in diesem Plan nicht als Kette gefahren.
-Der Beweis über beide Teilentfernungen und über alle vier Serverversionen ist
-der Deploy-Job aus Plan 05-08.
+beteiligten Bausteine beschrieben und nicht als Kette gefahren. Der Job aus
+Abschnitt 5 fährt die Kette bis zum entfernten Companion; was er dabei am
+Container feststellt, steht dort.
+
+## 5. Der Beweis in CI: was der Job feststellt und was nicht
+
+Der Job `deploy-harp` (`.github/workflows/deploy-harp.yml`) installiert Findling
+auf dem Weg einer Store-Installation, also über einen Deploy-Daemon mit HaRP, und
+räumt danach wieder ab. Er läuft über eine Matrix aus vier Serverversionen:
+Nextcloud 32, 33 und 34 mit PHP 8.2 und Nextcloud 35 mit PHP 8.3 (Entscheide
+D-07 und D-23).
+
+Der Job trifft fünf Feststellungen, jede mit eigener Fehlermeldung, und jede so
+gebaut, dass eine leere Ausgabe rot ist und nicht grün:
+
+1. **Ohne Kennzeichen bleibt das Volume.** `occ app_api:app:unregister
+   findling_backend` entfernt den Container, und das Volume aus dem
+   Installationsschritt liegt danach unverändert da. Diese Feststellung steht
+   zuerst, weil sie nach Feststellung 3 nicht mehr zu treffen ist.
+2. **Der Weg zurück.** Eine zweite Registrierung gelingt und nimmt genau das
+   liegen gebliebene Volume, nicht ein neues. Das ist der Weg, den ein Admin
+   nach einem Fehlversuch geht.
+3. **Mit Kennzeichen verschwindet das Volume.** Nach `occ app_api:app:unregister
+   findling_backend --rm-data` findet dieselbe Suche nach demselben Namen nichts
+   mehr, und der Container ist ebenfalls fort.
+4. **Ein Abschalten ohne Absicht räumt nichts.** Nach `occ app:disable findling`
+   existieren alle drei Tabellen weiter und die Zahl der gespeicherten
+   Einstellungen ist größer als null.
+5. **Ein Entfernen mit Absicht räumt vollständig.** Nach `occ findling:purge
+   --arm` und `occ app:remove findling` existiert keine der drei Tabellen mehr
+   und die Zahl der Einstellungen ist null.
+
+Feststellung 4 steht vor Feststellung 5 und nicht danach: die Absichtsmarke ist
+Einmalgebrauch, und die Aussage "ein Abschalten räumt nichts" lässt sich nur
+treffen, solange keine Marke gesetzt ist.
+
+Die Tabellen und die Einstellungen fragt der Job direkt an der Testdatenbank ab
+und nicht über occ. Der Grund steht als Kommentar im Job: es gibt kein
+occ-Kommando, das die Existenz einer Tabelle meldet, und ein occ-Aufruf, der
+scheitert, gibt nichts aus, was sich von "keine Tabellen mehr" nicht
+unterscheiden lässt. Der Dialekt wird vor der ersten Abfrage geprüft.
+
+**Und was der Job ausdrücklich nicht feststellt.** Zwei Dinge, beide bewusst:
+
+- **Nicht die Weboberfläche.** Der Job ruft ausschließlich occ auf. Der Schalter
+  "Daten löschen" der App-Verwaltung von Nextcloud 32 und 33 (Abschnitt 2) wird
+  von ihm nie angefasst und bleibt ungemessen.
+- **Nicht das Container-Image.** Dass es liegen bleibt, ist Bauart der AppAPI
+  (Abschnitt 3) und kein Fehler, den eine Prüfung finden könnte. Der Job sucht
+  deshalb nicht danach.
