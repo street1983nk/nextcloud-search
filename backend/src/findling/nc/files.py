@@ -77,9 +77,22 @@ class Mount:
 class FileRow:
     """One file of a page, reduced to what the comparison needs.
 
-    Five fields and no more. There is no path, no name and no owner in this
+    Seven fields and no more. There is no path, no name and no owner in this
     object, because the comparison works on file id and etag and everything
     beyond that would be content of a private instance travelling for no reason.
+
+    ``state`` and ``reason`` are the end state the Nextcloud side holds for this
+    file, as two codes out of the closed list both sides share. They are the
+    verdict handover of review finding IN-03: the give-up rule runs over there,
+    the comparison runs in here, and without the two codes the comparison keeps
+    requeueing a file that was written off months ago. Codes and numbers cross
+    the boundary, names and paths do not, so this stays inside the privacy
+    contract of the whole route.
+
+    Both default to the empty string, which reads as "no verdict". A companion
+    app that is one release behind sends neither field, and the round then
+    behaves exactly as it did before them rather than treating every file as
+    unjudged work.
     """
 
     file_id: int
@@ -87,6 +100,8 @@ class FileRow:
     size: int
     mtime: int
     mime: str
+    state: str = ""
+    reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,7 +233,19 @@ def _row(entry: object) -> FileRow | None:
     if file_id is None or not etag or size is None or mtime is None or not mime:
         return None
 
-    return FileRow(file_id=file_id, etag=etag, size=size, mtime=mtime, mime=mime)
+    # The two verdict codes are read but never required. A missing one is the
+    # honest answer of a companion app that does not send them yet, and _text
+    # turns anything that is not a string into the same empty value, so a broken
+    # field can only ever mean "no verdict" and never a verdict nobody wrote.
+    return FileRow(
+        file_id=file_id,
+        etag=etag,
+        size=size,
+        mtime=mtime,
+        mime=mime,
+        state=_text(fields.get("state")),
+        reason=_text(fields.get("reason")),
+    )
 
 
 class FileList:

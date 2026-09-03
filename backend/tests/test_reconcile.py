@@ -36,6 +36,8 @@ from findling.nc.files import FileRow, Mount, MountResult, SliceResult
 from findling.nc.queue import KIND_CONTENT, KIND_DELETE, CallResult, QueueStats
 from findling.store.repo import FileMeta, Store, open_store
 from findling.worker.reconcile import (
+    GIVEN_UP_REASON,
+    GIVEN_UP_STATE,
     REQUEUE_BAND,
     ROUND_NOT_DUE,
     ROUND_QUEUE_BUSY,
@@ -77,8 +79,26 @@ def a_file(file_id: int, *, etag: str) -> FileMeta:
     )
 
 
-def a_row(file_id: int, *, etag: str) -> FileRow:
-    return FileRow(file_id=file_id, etag=etag, size=1024, mtime=1_700_000_000, mime="application/pdf")
+def a_row(file_id: int, *, etag: str, state: str = "", reason: str = "") -> FileRow:
+    return FileRow(
+        file_id=file_id,
+        etag=etag,
+        size=1024,
+        mtime=1_700_000_000,
+        mime="application/pdf",
+        state=state,
+        reason=reason,
+    )
+
+
+def a_given_up_row(file_id: int, *, etag: str) -> FileRow:
+    """A page row carrying the end state Nextcloud reached for this file.
+
+    The verdict travels in the page and not in a second call per file, which is
+    the whole reason this shape exists: the walk works in bands, and a round trip
+    per row would make the repair more expensive than the work it saves.
+    """
+    return a_row(file_id, etag=etag, state=GIVEN_UP_STATE, reason=GIVEN_UP_REASON)
 
 
 class _FakeQueue:
@@ -181,6 +201,67 @@ async def test_reconcile_hands_a_file_that_is_gone_to_the_delete_track(store: St
 
     assert queue.kinds_of(KIND_DELETE) == [11]
     assert result.missing == 1
+
+
+async def test_a_file_nextcloud_gave_up_on_is_not_requeued_by_two_cycles(store: Store) -> None:
+    """The defect this pair of tests exists for (review finding IN-03 of phase 3).
+
+    A row that is handed out and never acknowledged ends on the Nextcloud side as
+    failed(repeatedly_stuck), and the queue row is removed with it. The container
+    never heard of the file, so every night the comparison found it unindexed,
+    requeued it, watched it fail three more times and started over. On fifty
+    thousand files that is permanent load with no cause anybody can see, and the
+    verdict never becomes final for exactly the files the repair discovered.
+
+    Two cycles rather than one, because the rule may not be bound to a point in
+    time. The second round is the one that would go red again if somebody made
+    the verdict expire.
+    """
+    queue = _FakeQueue()
+
+    first = await _reconcile(
+        store, _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True)), queue
+    ).run_once()
+    second = await _reconcile(
+        store,
+        _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True)),
+        queue,
+        now=NOW + 25 * HOUR,
+    ).run_once()
+
+    assert (first.state, second.state) == (ROUND_WALKED, ROUND_WALKED)
+    assert queue.requeues == []
+    assert (first.stale, second.stale) == (0, 0)
+    # Counted once and never again: after the first round the file is a known,
+    # unchanged row like any other, which is what makes the rule cost nothing.
+    assert (first.given_up, second.given_up) == (1, 0)
+
+    row = store.file_row(10)
+    assert row is not None
+    assert (row["state"], row["reason"], row["etag"]) == (GIVEN_UP_STATE, GIVEN_UP_REASON, "aaa")
+
+
+async def test_a_new_etag_lifts_the_final_verdict_and_requeues_the_file(store: Store) -> None:
+    """The counterpart, and the reason the verdict is stored against the etag.
+
+    A final verdict belongs to the version of the file it was reached on, never
+    to the file id for good. The Nextcloud row keeps saying repeatedly_stuck
+    after the document was replaced, so a rule that only read that row would
+    leave the new bytes out of the index forever.
+    """
+    queue = _FakeQueue()
+
+    await _reconcile(
+        store, _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True)), queue
+    ).run_once()
+    assert queue.kinds_of(KIND_CONTENT) == []
+
+    changed = _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="bbb"),), final=True))
+    result = await _reconcile(store, changed, queue, now=NOW + 25 * HOUR).run_once()
+
+    assert result.stale == 1
+    assert result.given_up == 0
+    assert queue.kinds_of(KIND_CONTENT) == [10]
 
 
 async def test_an_incomplete_page_never_produces_a_deletion(store: Store) -> None:

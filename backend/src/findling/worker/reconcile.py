@@ -70,6 +70,24 @@ ROUND_QUEUE_UNAVAILABLE: Final = "queue_unavailable"
 ROUND_UNAVAILABLE: Final = "unavailable"
 ROUND_NO_STATE: Final = "no_state"
 
+# The one end state of the Nextcloud side that this round has to respect instead
+# of overwriting it every night (review finding IN-03 of phase 3).
+#
+# A queue row that is handed out and never acknowledged is written off over there
+# as failed(repeatedly_stuck) and its row is removed. Nothing of that ever reached
+# this container: the file stayed unknown here, so the comparison read it as
+# unindexed, requeued it, and the same three deliveries and the same give-up
+# happened again the next night, forever. On fifty thousand files that is
+# permanent load whose cause is invisible in every counter the app has.
+#
+# The two codes are spelled out here rather than imported from
+# findling.extract.errors on purpose. This module never produces a verdict of its
+# own; it recognises one that arrived over the wire, and the vocabulary of the
+# wire is held against drift by tests/test_extract_errors.py, which reads all
+# three lists (PHP, extract, store) and compares them in both directions.
+GIVEN_UP_STATE: Final = "failed"
+GIVEN_UP_REASON: Final = "repeatedly_stuck"
+
 # How long the shutdown waits for a round to end before it stops waiting. Same
 # budget as the poller, and for the same reason: a slice is bounded work.
 RECONCILE_STOP_SECONDS: Final = 30.0
@@ -116,6 +134,7 @@ class RoundResult:
     seen: int = 0
     stale: int = 0
     missing: int = 0
+    given_up: int = 0
     slices: int = 0
 
 
@@ -126,6 +145,7 @@ class _Tally:
     seen: int = 0
     stale: int = 0
     missing: int = 0
+    given_up: int = 0
     slices: int = 0
 
 
@@ -559,6 +579,8 @@ async def _pause(seconds: float, stop_event: asyncio.Event) -> None:
 
 
 __all__ = [
+    "GIVEN_UP_REASON",
+    "GIVEN_UP_STATE",
     "RECONCILE_STOP_SECONDS",
     "REQUEUE_BAND",
     "ROUND_NOT_DUE",
