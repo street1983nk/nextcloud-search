@@ -198,12 +198,13 @@ jobs:
       # in it; this catches the case that hurts more, namely a discovery that
       # silently shrank to a handful while the run stayed green.
       #
-      # Fourteen is the number plan 05-15 requires for the six behaviours it
-      # covers, and it is a floor rather than the current count on purpose: the
-      # suite runs well above it today, and a floor that tracked the exact number
-      # would have to be edited by every plan that adds a case. Plan 05-16 adds
-      # the remaining six behaviours and raises it.
-      MINIMUM_TESTS: 14
+      # Twenty eight is the number plan 05-16 requires, and it is the same
+      # arithmetic plan 05-15 used for its fourteen: two cases per behaviour of
+      # the list in docs/testing.md plus a little, now that all twelve of them
+      # are covered instead of six. It stays a floor rather than the current
+      # count on purpose: the suite runs well above it, and a floor that tracked
+      # the exact number would have to be edited by every plan that adds a case.
+      MINIMUM_TESTS: 28
 
     steps:
       # Actions are pinned to commit SHAs, never to tags: a moved tag would be

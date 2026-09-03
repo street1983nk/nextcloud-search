@@ -91,6 +91,26 @@ final class Provider implements IFilteringProvider {
 	private const MAX_TITLE_LENGTH = 255;
 	private const MAX_PATH_LENGTH = 255;
 
+	/**
+	 * The monotonic clock of a search, in nanoseconds, as a callable.
+	 *
+	 * A property and not a bare hrtime() call for exactly one reason: the wall
+	 * clock above is a behaviour of this class (number 10 of docs/testing.md),
+	 * and a test of it that waited two and a half real seconds would make the
+	 * suite slow and would go flaky on a loaded runner. This is the smallest
+	 * seam that removes the wait: one optional constructor argument, no new
+	 * interface, no new service, and nothing in the app passes it.
+	 *
+	 * Nextcloud resolves the argument to its default, because the container
+	 * cannot build a Closure and falls back to the declared default when it
+	 * cannot. hrtime() and not microtime() stays the rule: a clock adjustment
+	 * during a search would otherwise either double the budget or end it at
+	 * once.
+	 *
+	 * @var \Closure(): float
+	 */
+	private \Closure $clock;
+
 	public function __construct(
 		private IL10N $l10n,
 		private IURLGenerator $urlGenerator,
@@ -99,7 +119,9 @@ final class Provider implements IFilteringProvider {
 		private IUserMountCache $mountCache,
 		private IFileAccess $fileAccess,
 		private LoggerInterface $logger,
+		?\Closure $clock = null,
 	) {
+		$this->clock = $clock ?? static fn (): float => (float)hrtime(true);
 	}
 
 	#[\Override]
@@ -160,7 +182,7 @@ final class Provider implements IFilteringProvider {
 
 	#[\Override]
 	public function search(IUser $user, ISearchQuery $query): SearchResult {
-		$deadline = hrtime(true) + self::BUDGET_NANOSECONDS;
+		$deadline = ($this->clock)() + self::BUDGET_NANOSECONDS;
 		$uid = $user->getUID();
 		$term = trim($query->getTerm());
 		$limit = max(1, $query->getLimit());
@@ -223,7 +245,7 @@ final class Provider implements IFilteringProvider {
 		$approved = [];
 
 		for ($round = 0; $round < self::MAX_ROUNDS; $round++) {
-			if (count($approved) >= $limit || $rechecks >= $recheckBudget || hrtime(true) >= $deadline) {
+			if (count($approved) >= $limit || $rechecks >= $recheckBudget || ($this->clock)() >= $deadline) {
 				break;
 			}
 
@@ -480,7 +502,7 @@ final class Provider implements IFilteringProvider {
 	 * has passed, which the callee reads as "do not call at all".
 	 */
 	private function secondsLeft(int|float $deadline): float {
-		return ((float)$deadline - (float)hrtime(true)) / 1_000_000_000.0;
+		return ((float)$deadline - ($this->clock)()) / 1_000_000_000.0;
 	}
 
 	/**
