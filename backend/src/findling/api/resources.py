@@ -28,8 +28,11 @@ this module reports.
 
 import logging
 import shutil
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from tantivy import Index
 
@@ -45,6 +48,18 @@ LOGGER = logging.getLogger("findling.api.resources")
 # exactly as much as a proven mismatch (pitfall 14).
 UNPROVEN_WORDLIST = "wordlist_hash"
 
+# How long a degraded verdict stays valid before it is measured again.
+#
+# Five seconds, and the number is a trade between two costs that are both real.
+# Measured for phase 2: a search costs 0.005 ms, while the verdict behind it is a
+# meta read plus a disk_usage call on the volume. Paying that on every keystroke
+# of a unified search is the expensive half. The other half is that a state which
+# turns bad has to become visible without a restart, and five seconds is shorter
+# than any admin page poll and shorter than the patience of somebody who just
+# filled a volume. Above roughly a minute the flag would stop being an operating
+# signal and become a stale value; below a second it stops saving anything.
+DEGRADED_TTL_SECONDS: Final = 5.0
+
 
 @dataclass(frozen=True, slots=True)
 class ReadSide:
@@ -57,6 +72,22 @@ class ReadSide:
 
 _OPEN: ReadSide | None = None
 _MARKS: tuple[Path, dict[str, str]] | None = None
+_DEGRADED: tuple[Path, float, bool] | None = None
+
+# One lock for the three caches above, and it is not a precaution.
+#
+# Every search runs its round in asyncio.to_thread and the unified search asks
+# all providers at the same moment, so two requests really do arrive in here at
+# once. Without the lock both threads see an empty cache, both open an index and
+# a state database, and the one that loses the assignment leaves a SQLite
+# connection that nothing holds a reference to any more: it is closed whenever
+# the garbage collector gets round to it, and until then it is a file handle and
+# a WAL reader on a 4 GB box (audit M7, phase 4 finding IN-06).
+#
+# Re-entrant, because degraded() computes its verdict inside the lock and
+# version_drift() below it asks expected_marks(), which takes the same lock. A
+# plain Lock would deadlock the first search of every container.
+_LOCK = threading.RLock()
 
 
 def expected_marks() -> dict[str, str] | None:
@@ -74,15 +105,16 @@ def expected_marks() -> dict[str, str] | None:
     """
     global _MARKS
     dictionary = settings().dict_dir
-    if _MARKS is not None and _MARKS[0] == dictionary:
-        return dict(_MARKS[1])
-    try:
-        marks = expected_versions(build_artifact().digest)
-    except OSError:
-        LOGGER.warning("the constituent list is unavailable, version marks cannot be compared")
-        return None
-    _MARKS = (dictionary, marks)
-    return dict(marks)
+    with _LOCK:
+        if _MARKS is not None and _MARKS[0] == dictionary:
+            return dict(_MARKS[1])
+        try:
+            marks = expected_versions(build_artifact().digest)
+        except OSError:
+            LOGGER.warning("the constituent list is unavailable, version marks cannot be compared")
+            return None
+        _MARKS = (dictionary, marks)
+        return dict(marks)
 
 
 def version_drift(store: Store) -> list[str]:
@@ -164,34 +196,52 @@ def read_side() -> ReadSide | None:
     """
     global _OPEN
     resolved = settings()
-    if _OPEN is not None and _OPEN.index_dir == resolved.index_dir:
+    with _LOCK:
+        if _OPEN is not None and _OPEN.index_dir == resolved.index_dir:
+            return _OPEN
+
+        # The cached handle belongs to a directory that is no longer the one the
+        # settings name, so it is released here and not further down. It used to
+        # be released after the two checks below, which meant the branch for a
+        # volume that has nothing yet walked straight past it: the connection
+        # then lived on with nothing referring to it, for as long as the process
+        # did.
+        previous, _OPEN = _OPEN, None
+        if previous is not None:
+            previous.store.close()
+
+        if not resolved.state_db.is_file() or not Index.exists(str(resolved.index_dir)):
+            # Nothing to open yet, which is an ordinary state: the container is
+            # deployed and the first indexing pass has not finished. Asking again
+            # on the next request costs two stat calls.
+            return None
+
+        # Held in a local until the cache owns it. Between the open and the
+        # assignment there is a step that can fail, and a connection that failed
+        # to reach the cache has to be closed by whoever opened it; nobody else
+        # can reach it any more.
+        store: Store | None = None
+        try:
+            index = open_index(resolved.index_dir, build_artifact().entries)
+            # Once per index, not once per query: configuring the reader costs
+            # 0.10 ms while a whole search costs 0.005 ms. The searcher it returns
+            # is a snapshot and deliberately not kept; the reload policy is what
+            # makes a later commit of the poller visible to this process at all.
+            open_reader(index)
+            store = open_read_only(resolved.state_db)
+            _OPEN = ReadSide(index=index, store=store, index_dir=resolved.index_dir)
+            store = None
+        # Deliberately every exception, for the reason in the docstring above.
+        except Exception as error:
+            # The type name and nothing else. A traceback here would carry
+            # whatever a library put into its message, and a path is the usual
+            # content.
+            LOGGER.warning("the read side could not be opened, an unexpected %s", type(error).__name__)
+            return None
+        finally:
+            if store is not None:
+                store.close()
         return _OPEN
-
-    if not resolved.state_db.is_file() or not Index.exists(str(resolved.index_dir)):
-        # Nothing to open yet, which is an ordinary state: the container is
-        # deployed and the first indexing pass has not finished. Asking again on
-        # the next request costs two stat calls.
-        return None
-
-    previous, _OPEN = _OPEN, None
-    if previous is not None:
-        previous.store.close()
-
-    try:
-        index = open_index(resolved.index_dir, build_artifact().entries)
-        # Once per index, not once per query: configuring the reader costs
-        # 0.10 ms while a whole search costs 0.005 ms. The searcher it returns is
-        # a snapshot and deliberately not kept; the reload policy is what makes
-        # a later commit of the poller visible to this process at all.
-        open_reader(index)
-        _OPEN = ReadSide(index=index, store=open_read_only(resolved.state_db), index_dir=resolved.index_dir)
-    # Deliberately every exception, for the reason in the docstring above.
-    except Exception as error:
-        # The type name and nothing else. A traceback here would carry whatever
-        # a library put into its message, and a path is the usual content.
-        LOGGER.warning("the read side could not be opened, an unexpected %s", type(error).__name__)
-        return None
-    return _OPEN
 
 
 def degraded(side: ReadSide | None) -> bool:
@@ -201,10 +251,29 @@ def degraded(side: ReadSide | None) -> bool:
     different tokenisation, or the volume is too full for the indexer to commit.
     The PHP side gets one boolean out of it so that it can stay quiet instead of
     guessing, and phase 4 builds the status page out of the same three answers.
+
+    The verdict is remembered for :data:`DEGRADED_TTL_SECONDS`, which is five
+    seconds, and that number belongs in this docstring because it decides how
+    fast a search starts calling itself degraded. Behind the flag sit a meta read
+    and a disk_usage call on the volume, and a unified search asks per keystroke;
+    without the window the two measurements were the most expensive part of an
+    answer that otherwise costs 0.005 ms. Within the window a volume that just
+    filled up is reported late by at most those five seconds, and an index that
+    was never built is not affected at all: no read side means degraded, and that
+    branch is answered without measuring anything.
     """
     if side is None:
         return True
-    return bool(version_drift(side.store)) or low_disk()
+
+    global _DEGRADED
+    now = time.monotonic()
+    with _LOCK:
+        cached = _DEGRADED
+        if cached is not None and cached[0] == side.index_dir and now - cached[1] < DEGRADED_TTL_SECONDS:
+            return cached[2]
+        verdict = bool(version_drift(side.store)) or low_disk()
+        _DEGRADED = (side.index_dir, now, verdict)
+        return verdict
 
 
 def report_version_drift() -> None:

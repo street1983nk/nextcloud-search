@@ -30,6 +30,8 @@ from pathlib import Path
 import pytest
 
 from findling.store.repo import (
+    _ACL_DOCUMENTS_SQL,
+    _ACL_ROWS_SQL,
     SCHEMA_VERSION,
     STATE_REASONS,
     UNKNOWN_VERSION,
@@ -40,7 +42,6 @@ from findling.store.repo import (
     open_read_only,
     open_store,
 )
-from findling.store.repo import _ACL_DOCUMENTS_SQL, _ACL_ROWS_SQL
 
 
 @pytest.fixture
@@ -746,7 +747,7 @@ def test_acl_totals_builds_no_temporary_b_tree(store: Store) -> None:
         for sql in (_ACL_DOCUMENTS_SQL, _ACL_ROWS_SQL)
         # Both statements are module constants of the store, never anything a
         # caller composed, which is what makes the concatenation here harmless.
-        for row in store._conn.execute(f"EXPLAIN QUERY PLAN {sql}")  # noqa: S608
+        for row in store._conn.execute(f"EXPLAIN QUERY PLAN {sql}")
     )
 
     assert "TEMP B-TREE" not in plans.upper()

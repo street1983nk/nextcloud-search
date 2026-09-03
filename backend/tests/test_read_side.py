@@ -25,8 +25,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from conftest import Corpus, write_index, write_state, write_wordlist
 
+from conftest import Corpus, write_index, write_state, write_wordlist
 from findling.api import resources
 from findling.config import settings
 from findling.store.repo import Store, open_store
