@@ -453,6 +453,10 @@ final class AdminViewService {
 		// seconds.
 		if ($backendReachable) {
 			$this->settingsService->rememberContainerCap((int)$backend['maxFileBytes']);
+			// The second remembered measurement, and the one the banner promises:
+			// "the last ones this app recorded" has to exist somewhere for the
+			// tile below to hold still while the container is down.
+			$this->settingsService->rememberIndexedCount((int)$backend['indexed']);
 		}
 
 		// The Nextcloud side of the table holds no indexed rows by construction:
@@ -475,8 +479,11 @@ final class AdminViewService {
 			// The one derived value, and it picks instead of adding. Only the
 			// container knows how many documents are in the index; with the
 			// container silent the last figure this side recorded is what an
-			// admin gets, together with the banner that says exactly that.
-			'indexedDisplay' => $backendReachable ? (int)$backend['indexed'] : $indexed,
+			// admin gets, together with the banner that says exactly that. The
+			// record is the remembered count above, never the state table: that
+			// side holds no indexed rows by construction, and reading it here
+			// made the tile jump to zero the moment the container went silent.
+			'indexedDisplay' => $backendReachable ? (int)$backend['indexed'] : $this->settingsService->lastIndexedCount(),
 			'scheduled' => $scheduled,
 			'running' => $running,
 			'lastJobRun' => $lastJobRun,

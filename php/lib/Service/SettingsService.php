@@ -71,6 +71,16 @@ final class SettingsService {
 	public const KEY_CONTAINER_CAP = 'container_max_file_bytes';
 
 	/**
+	 * The last indexed count the container reported, another measurement of the
+	 * other side. The banner over the coverage block promises "the last ones
+	 * this app recorded" for a silent container, and this key is that record:
+	 * without it the tile would fall back to the Nextcloud side of the state
+	 * table, which holds no indexed rows by construction, and the figure would
+	 * jump to zero at exactly the moment the admin needs it to hold still.
+	 */
+	public const KEY_LAST_INDEXED = 'last_indexed_count';
+
+	/**
 	 * The lower end of the size cap, one megabyte.
 	 *
 	 * Below it the setting would stop being a limit and start being an outage:
@@ -167,6 +177,33 @@ final class SettingsService {
 		}
 
 		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_CONTAINER_CAP, $bytes);
+	}
+
+	/**
+	 * The last indexed count the container reported, zero before the first
+	 * answer. Read by the admin view when the container is silent, so that the
+	 * tile shows the figure of the last answer instead of a zero it never
+	 * reported.
+	 */
+	public function lastIndexedCount(): int {
+		return max(0, $this->appConfig->getValueInt(Application::APP_ID, self::KEY_LAST_INDEXED, 0));
+	}
+
+	/**
+	 * Remember the indexed count of a container answer. Written only when it
+	 * changed, for the same reason as the cap above: the page polls every five
+	 * seconds and the figure moves only while indexing makes progress.
+	 */
+	public function rememberIndexedCount(int $indexed): void {
+		if ($indexed < 0) {
+			return;
+		}
+
+		if ($indexed === $this->appConfig->getValueInt(Application::APP_ID, self::KEY_LAST_INDEXED, 0)) {
+			return;
+		}
+
+		$this->appConfig->setValueInt(Application::APP_ID, self::KEY_LAST_INDEXED, $indexed);
 	}
 
 	/**
