@@ -246,6 +246,19 @@ Die beiden halben Zustände, und beide sind gutartig:
   durch den Rückzug nie abgebrochen, und die Suche des Containers antwortet die
   ganze Zeit.
 
+So sieht das im Protokoll des Containers aus, gemessen im selben Lauf:
+
+```
+WARNING:findling.worker.poller:the queue did not answer, next attempt in 15 s
+WARNING:findling.worker.poller:the queue did not answer, next attempt in 30 s
+WARNING:findling.worker.poller:the queue has not answered for 3 passes, backing off
+  to at most one attempt every 300 s; the Nextcloud half looks removed and the
+  container keeps answering searches
+```
+
+Danach kommt nichts mehr. Zwei Zeilen für die beiden Durchgänge, die noch ein
+Aussetzer sein könnten, eine Zeile für den Zustand, dann Ruhe.
+
 Warum die Obergrenze bei 300 Sekunden liegt und nicht höher oder niedriger: lang
 genug, dass ein vergessener Container wochenlang nicht auffällt, kurz genug,
 dass eine Wiederinstallation innerhalb von fünf Minuten bemerkt wird. Der Wert
@@ -265,6 +278,23 @@ auf dem Weg einer Store-Installation, also über einen Deploy-Daemon mit HaRP, u
 räumt danach wieder ab. Er läuft über eine Matrix aus vier Serverversionen:
 Nextcloud 32, 33 und 34 mit PHP 8.2 und Nextcloud 35 mit PHP 8.3 (Entscheide
 D-07 und D-23).
+
+**Gemessen am 3. September 2026**, Lauf 33757405755, alle vier Einträge grün.
+Jeder der vier Läufe protokolliert dieselben Zeilen, hier die von Nextcloud 32:
+
+```
+container gone, volume nc_app_findling_backend_data kept
+registered again as nc_app_findling_backend on the kept volume nc_app_findling_backend_data
+container and volume nc_app_findling_backend_data both gone
+before the disable: tables [oc_findling_file_state oc_findling_queue oc_findling_scan_stats], settings 4
+after the disable:  tables [oc_findling_file_state oc_findling_queue oc_findling_scan_stats], settings 5
+after the remove with intent: tables [], settings 0
+container nc_app_findling_backend is Up About a minute, retreat announced, 2 new warning or error lines
+```
+
+Die Zahl der Einstellungen steigt beim Abschalten von 4 auf 5, und das ist kein
+Fehler: der Uninstall-Schritt zählt seinen eigenen Aufruf mit, siehe die Messung
+ganz oben auf dieser Seite. Nichts verschwindet, es kommt eine Zahl dazu.
 
 Der Job trifft sechs Feststellungen, jede mit eigener Fehlermeldung, und jede so
 gebaut, dass eine leere Ausgabe rot ist und nicht grün:

@@ -167,3 +167,63 @@ anfassen darf, und die HaRP-Stacks der Nachbar-Wellen gehören anderen Agenten.
 **Wohin es gehört:** in den phasenweiten Integrationsschritt beziehungsweise in
 den Messbericht der Phase (D-06), der den OCR-Anteil ohnehin auf echter Hardware
 ausweisen muss.
+
+## DI-05-07: Der lokale HaRP-Stack hängt beim `--wait-finish`, aus demselben Grund wie CI
+
+**Found during:** 05-08, beim ersten Lauf des Deploy-Jobs auf einem Runner.
+
+**Was:** Das Feld `nextcloud_url` einer HaRP-Daemon-Registrierung wird von AppAPI
+zweimal benutzt, und die beiden Verwendungen ziehen in verschiedene Richtungen.
+`DockerActions::resolveExAppUrl` bildet daraus die Adresse der ExApp als
+`{nextcloud_url}/exapps/{appId}`, muss also HaRP erreichen; derselbe Wert geht
+als `NEXTCLOUD_URL` an den Container, muss also Nextcloud erreichen. HaRP
+bedient ausschließlich Pfade, die `/exapps/{appId}` enthalten: der SPOE-Agent
+prüft das mit einem regulären Ausdruck und weist alles andere mit "Invalid
+request path, cannot find AppID" ab.
+
+Folge: mit der HaRP-Adresse in diesem Feld kann der Container seinen
+Init-Status nie melden. `PUT /ocs/v1.php/apps/app_api/ex-app/status` antwortet
+404, und `occ app_api:app:register --wait-finish` wartet genau auf diesen Status
+(`ExAppService::waitInitStepFinish` schleift, bis `init` 100 erreicht). Der
+Befehl schreibt vorher `ExApp ... deployed successfully` und hängt danach,
+während Container, Suche und Heartbeat gesund sind.
+
+**Was in diesem Plan daraus wurde:** der CI-Job stellt die Topologie her, für die
+HaRP gebaut ist. Ein nginx auf Port 8090 leitet `/exapps` an HaRP und alles
+andere an Nextcloud, und `nextcloud_url` ist diese eine Adresse. Damit läuft
+`--wait-finish` durch, gemessen über alle vier Serverversionen (Lauf
+33757405755).
+
+**Was offen bleibt:** `scripts/dev/compose-harp.yaml` und der zugehörige
+Abschnitt in `docs/dev-setup.md` registrieren weiterhin `http://harp:8780` als
+`nextcloud_url`. Der lokale Weg hat also dieselbe Lücke, und die Beschreibung in
+`docs/dev-setup.md`, HaRP leite "alles außer /exapps an NC_INSTANCE_URL weiter",
+ist so nicht richtig. Beides gehört zusammen korrigiert, entweder mit einem
+Frontproxy-Dienst in der compose-Datei oder mit einem Nextcloud-Image, dessen
+Apache `/exapps` weiterreicht. Beide Dateien gehören Plan 05-01 und liegen
+außerhalb der `files_modified` dieses Plans, deshalb hier statt dort.
+
+**Wer es außerdem braucht:** Plan 05-10 (ARM- und AIO-Lauf). All-in-one bringt
+den Frontproxy von Haus aus mit, dort ist die Adresse für `nextcloud_url` also
+die Adresse von Nextcloud hinter dem Apache und ausdrücklich nicht die von HaRP.
+Diese Korrektur ersetzt die Verkürzung aus DI-05-03, die den Fall
+"Container meldet sich zurück" noch nicht kannte.
+
+## DI-05-08: Zwei Wahrheiten über das Verhältnis von Warteschlange und Statusseite
+
+**Found during:** 05-08, beim Bau des Rückzugspfads im Poller.
+
+**Was:** Der Poller kennt jetzt zwei Zählwerke für Wartezeiten, das gewöhnliche
+für eine leere Warteschlange (15 bis 120 Sekunden) und den Rückzug für eine
+Warteschlange, die nicht antwortet (15 bis 300 Sekunden). Die Statusseite aus
+Phase 4 zeigt weder das eine noch das andere: Sie kann einem Admin also nicht
+sagen, dass der Container sich gerade zurückgezogen hat und warum.
+
+**Warum nicht hier erledigt:** `php/templates/admin.php`, `php/js/admin.js` und
+`backend/src/findling/api/status.py` gehören anderen Plänen dieser Phase
+(05-07 und 05-11), und ein neues Feld in `/status` ist eine Absprache zwischen
+beiden Hälften und keine Zeile in einer Datei.
+
+**Wohin es gehört:** in Plan 05-11, der die Statusseite ohnehin anfasst. Der
+Rückzug ist im Protokoll des Containers sichtbar und in `docs/uninstall.md`
+beschrieben; das ist die Untergrenze und nicht das Ziel.
