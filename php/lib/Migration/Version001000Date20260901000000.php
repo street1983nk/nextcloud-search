@@ -63,7 +63,12 @@ class Version001000Date20260901000000 extends SimpleMigrationStep {
 		$changed = false;
 
 		if (!$table->hasColumn('dirty')) {
-			$table->addColumn('dirty', Types::BOOLEAN, ['notnull' => true, 'default' => false]);
+			// Nullable for the same reason as is_update in the first migration:
+			// Nextcloud 32 refuses a boolean column that is NotNull
+			// (MigrationService::ensureOracleConstraints, stable32), and the
+			// default of false is what keeps an insert that omits the column
+			// away from NULL.
+			$table->addColumn('dirty', Types::BOOLEAN, ['notnull' => false, 'default' => false]);
 			$changed = true;
 		}
 
