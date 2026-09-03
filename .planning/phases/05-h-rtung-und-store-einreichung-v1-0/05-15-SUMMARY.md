@@ -170,3 +170,12 @@ Keine.
 ## Naechster Schritt
 
 Bereit fuer Plan 05-16: die Verhaltensweisen 7 bis 12 haengen an demselben Geruest, und die Untergrenze `MINIMUM_TESTS` im Job ist die Stelle, die dabei mitwaechst.
+
+## Self-Check: PASSED
+
+Sieben angelegte Dateien liegen auf der Platte, fuenf Commits sind in der Historie
+(310bf97, 070bdf1, 74b2437, a6c53d0, 07ca35a), der Wegwerf-Zweig der Rotprobe ist
+lokal und auf `origin` verschwunden, der `require`-Block von `php/composer.json`
+ist gegenueber dem Ausgangsstand unveraendert (der Diff zeigt nur `_comment`,
+`require-dev` und `autoload-dev`), und weder `STATE.md` noch `ROADMAP.md` wurden
+angefasst. Letzter Workflow-Lauf 33773350793: gruen, 43 Tests.
