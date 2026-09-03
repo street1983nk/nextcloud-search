@@ -35,8 +35,19 @@ API_BASE='https://api.hetzner.cloud/v1'
 
 SERVER_TYPE='cax11'
 SERVER_IMAGE='ubuntu-24.04'
-SERVER_LOCATION='nbg1'
+# Helsinki, because decision D-01 of the phase names that location. The earlier
+# value here was nbg1, taken from the example request of the research document;
+# the price is the same in all three cax locations (7.1281 EUR per month, gross,
+# read from this account), so this is a choice and not a cost. It is corrected
+# before the first create, because the location of a server cannot be changed
+# afterwards: a box in the wrong region costs a destroy and a create.
+SERVER_LOCATION='hel1'
 SERVER_NAME='findling-arm-loadtest'
+# The key is injected by name, and the name has to exist in the account. Hetzner
+# puts only the keys of this one request into the machine, so a create without
+# this field produces a box that is reachable by password over the web console
+# and by nothing else. The AIO run needs an ssh tunnel, so that would not do.
+SSH_KEY_NAME='khaled-windows-ed25519'
 VOLUME_NAME='findling-corpus'
 VOLUME_SIZE_GB=50
 LABEL='purpose=findling-phase5'
@@ -189,9 +200,31 @@ cmd_create() {
         exit 1
     fi
 
+    # The key is looked up before anything is created. A box that came up without
+    # a key cannot be given one later without reinstalling it, so the cheap check
+    # belongs in front of the expensive request.
+    keys=$(api GET "/ssh_keys?name=$SSH_KEY_NAME")
+    fail_on_error "$keys"
+    key_line=$(printf '%s' "$keys" | json '
+import json
+import sys
+
+keys = json.load(sys.stdin)["ssh_keys"]
+if len(keys) == 1:
+    print("%s %s" % (keys[0]["id"], keys[0]["fingerprint"]))
+')
+    if [ -z "$key_line" ]; then
+        echo "hetzner_box: this account has no ssh key named $SSH_KEY_NAME" >&2
+        echo "without it the box would only take a password over the web console," >&2
+        echo "and the AIO interface of the load test is reached through an ssh tunnel" >&2
+        exit 1
+    fi
+    echo "hetzner_box: injecting ssh key $SSH_KEY_NAME, $key_line"
+
     server_body=$(
         printf '{"name":"%s","server_type":"%s","image":"%s","location":"%s"' \
             "$SERVER_NAME" "$SERVER_TYPE" "$SERVER_IMAGE" "$SERVER_LOCATION"
+        printf ',"ssh_keys":["%s"]' "$SSH_KEY_NAME"
         printf ',"start_after_create":true,"labels":{"%s":"%s"}}' \
             "${LABEL%%=*}" "${LABEL#*=}"
     )

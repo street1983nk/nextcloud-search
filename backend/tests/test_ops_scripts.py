@@ -108,6 +108,28 @@ def test_the_box_tool_labels_the_box_and_the_volume() -> None:
     assert "LABEL='purpose=findling-phase5'" in text
 
 
+def test_the_box_tool_injects_the_ssh_key_by_name() -> None:
+    """Hetzner injects only the keys named in the create request itself.
+
+    A box that came up without a key takes a password over the web console and
+    nothing else, and it cannot be given a key afterwards without a reinstall.
+    The AIO interface of the load test is reached through an ssh tunnel, so the
+    field is load bearing and the name is checked against the account before the
+    first paid request goes out.
+    """
+    text = HETZNER_BOX.read_text(encoding="utf-8")
+    assert "SSH_KEY_NAME='khaled-windows-ed25519'" in text
+    assert '"ssh_keys":["%s"]' in text
+    assert "/ssh_keys?name=$SSH_KEY_NAME" in text
+    assert "has no ssh key named" in text
+
+
+def test_the_box_is_created_where_the_phase_decided() -> None:
+    """Decision D-01 names Helsinki, and a server cannot move afterwards."""
+    text = HETZNER_BOX.read_text(encoding="utf-8")
+    assert "SERVER_LOCATION='hel1'" in text
+
+
 def test_the_box_tool_verifies_the_deletion_and_keeps_the_state_out_of_the_repo() -> None:
     text = HETZNER_BOX.read_text(encoding="utf-8")
     assert "is gone, verified against the API" in text
