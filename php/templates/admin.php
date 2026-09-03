@@ -642,7 +642,7 @@ $closeIcon = 'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L1
 	 */
 	?>
 	<label class="findling-rules__label" id="findling-rules-exclusions-label" for="findling-rules-new"><?php p($l->t('Excluded folders')); ?></label>
-	<p class="settings-hint" id="findling-rules-exclusions-help"><?php p($l->t('Prefix match on the path, no wildcards and no patterns. Example: alice/files/Backups')); ?></p>
+	<p class="settings-hint" id="findling-rules-exclusions-help"><?php p($l->t('Prefix match on the path as the lists on this page show it, no wildcards and no patterns. Example: Backups')); ?></p>
 
 	<p class="settings-hint" id="findling-rules-exclusions-empty"<?php if ($prefixes !== []) { ?> hidden<?php } ?>><?php p($l->t('No folder is excluded.')); ?></p>
 
