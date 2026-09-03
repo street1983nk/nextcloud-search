@@ -59,8 +59,16 @@ use Psr\Log\LoggerInterface;
  * a container that wanted to lie about it could. What keeps a foreign container
  * out is the signed AppAPI path plus ``rejectForeignCaller`` on the routes of
  * this app, and nothing here (T-05-25).
+ *
+ * @final This class is not meant to be extended, and the keyword is gone for one
+ *        reason only: PHPUnit cannot create a test double of a final class, and
+ *        Provider takes this class by its concrete type. Behaviours 4 and 5 of
+ *        docs/testing.md are statements about Provider::search over a controlled
+ *        answer of this service, so without a double they cannot be asserted at
+ *        all. The annotation is what static analysis and a reader go by; nothing
+ *        in this repository extends this class, and nothing should.
  */
-final class ExAppService {
+class ExAppService {
 	/**
 	 * One and a half seconds per call, and the arithmetic behind it.
 	 *
