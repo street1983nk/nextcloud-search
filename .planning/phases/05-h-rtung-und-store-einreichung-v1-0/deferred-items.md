@@ -509,3 +509,41 @@ den Phase-Review. Der billige Zwischenschritt waere ein zweiter Job auf
 `stable32` mit PHPUnit 10 und einem eigenen Lockfile, und die ehrliche Frage
 davor ist, ob eine Signaturabweichung in OCP innerhalb eines
 Nextcloud-Versionsfensters ueberhaupt vorkommt.
+
+## DI-05-18 (Plan 05-16): DI-05-17 bleibt offen, aber die ehrliche Frage davor ist beantwortet
+
+**Found during:** Plan 05-16, bei der Pruefung von DI-05-17, das ausdruecklich an
+diesen Plan adressiert war.
+
+**Was DI-05-17 verlangt:** eine Matrix der Unit-Suite ueber `stable32` bis
+`stable35`, weil die uebrigen Gates dieser Phase eine fahren und die Suite nur
+gegen `stable34` laeuft.
+
+**Was hier stattdessen gemessen wurde.** DI-05-17 nennt selbst eine Vorfrage:
+kommt eine Signaturabweichung in OCP innerhalb des Versionsfensters ueberhaupt
+vor. Fuer die Schnittstellen, die diese Suite tatsaechlich doppelt, ist sie am
+03.09.2026 gegen alle vier Zweige von `nextcloud/server` erhoben und lautet
+nein. Identisch auf 32, 33, 34 und 35:
+
+| Datei | Signatur |
+|---|---|
+| `lib/public/Files/Folder.php` | `getFirstNodeById(int $id): ?Node` |
+| `lib/public/Files/Config/IUserMountCache.php` | `getMountsForUser(IUser $user)` |
+| `lib/public/Http/Client/IResponse.php` | `getBody()`, `getStatusCode(): int` |
+| `lib/public/Files/Cache/IFileAccess.php` | `getByFileIds(array $fileIds): array` |
+
+Das ist kein Beweis fuer die Zukunft, aber es ist die Antwort auf die Frage, die
+DI-05-17 stellt: der heutige Nutzen einer vierfachen Suite waere null, und der
+Preis waeren vier PHPUnit-Hauptversionen und vier Lockdateien.
+
+**Warum nicht hier erledigt:** unveraendert der Grund aus DI-05-17, und dieser
+Plan bringt keinen neuen. Ein zweiter Lauf auf `stable32` braucht PHPUnit 10 als
+zweite gepinnte Abhaengigkeit, und ein Paketbezug steht in dieser Phase unter
+einem Owner-Gate (siehe 05-15-SUMMARY.md). Das ist eine Entscheidung ueber die
+Bezugsdisziplin und keine Zeile in einer Datei, und sie gehoert nicht in einen
+Plan, dessen Gegenstand sechs Verhaltensweisen sind.
+
+**Wohin es gehoert:** in den Phase-Review. Die Tabelle oben ist das Material fuer
+die Entscheidung; wer sie trifft, sollte sie fuer die dann gedoppelten
+Schnittstellen erneut erheben, weil diese Suite seit 05-16 auch `IRequest` und
+`File::fopen` doppelt.
