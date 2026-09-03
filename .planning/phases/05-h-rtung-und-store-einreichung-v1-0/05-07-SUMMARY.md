@@ -256,3 +256,13 @@ Keine.
 ---
 *Phase: 05-h-rtung-und-store-einreichung-v1-0*
 *Completed: 2026-09-03*
+
+## Self-Check: PASSED
+
+Alle elf genannten Dateien liegen im Arbeitsbaum, alle sechs Commits stehen in
+der Historie dieses Zweiges, `git status` ist sauber, und `.planning/STATE.md`
+sowie `.planning/ROADMAP.md` sind in der Spanne `ac7a12a..HEAD` unveraendert
+(der Orchestrator schreibt sie). Gemessen zum Schluss: `uv run python -m pytest
+-q` 883 bestanden, 11 uebersprungen; `ruff check`, `ruff format --check`,
+`pyright` und `vulture` gruen; `php -l` ohne Fehler fuer alle vier geaenderten
+PHP-Dateien; `sh -n scripts/dev/register-exapp.sh` fehlerfrei.
