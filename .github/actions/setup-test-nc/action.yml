@@ -86,6 +86,16 @@ inputs:
       daemon, so a host process would only answer instead of it.
     required: false
     default: 'true'
+  install-groupfolders:
+    description: >-
+      true or false. With true the Team folders app is installed and enabled on
+      the instance, which is what the team folder scenario of the parity gate
+      needs: a mount that belongs to a group rather than to a user. It is off by
+      default and has to stay off by default, because it costs a download and a
+      set of migrations that the other jobs of this repository have no use for,
+      and because a mount provider that is present changes what the crawl walks.
+    required: false
+    default: 'false'
   nextcloud-host:
     description: >-
       Address the builtin PHP server binds, localhost or 0.0.0.0, handed to
@@ -117,6 +127,7 @@ runs:
       shell: bash
       env:
         REGISTER_EXAPP: ${{ inputs.register-exapp }}
+        INSTALL_GROUPFOLDERS: ${{ inputs.install-groupfolders }}
         NEXTCLOUD_HOST: ${{ inputs.nextcloud-host }}
         DATABASE: ${{ inputs.database }}
       run: |
@@ -124,6 +135,13 @@ runs:
           true|false) ;;
           *)
             echo "register-exapp has to be true or false, got '${REGISTER_EXAPP}'"
+            exit 1
+            ;;
+        esac
+        case "${INSTALL_GROUPFOLDERS}" in
+          true|false) ;;
+          *)
+            echo "install-groupfolders has to be true or false, got '${INSTALL_GROUPFOLDERS}'"
             exit 1
             ;;
         esac
@@ -279,6 +297,49 @@ runs:
     - name: Enable findling
       shell: bash
       run: ./occ app:enable -vvv -f findling
+
+    # Team folders, and only for a caller that asks for them. A mount provider
+    # that is present changes what the crawl walks, so this must never become
+    # something every job gets by accident.
+    #
+    # Two ways in, and which one was taken is printed rather than guessed. The
+    # app store is the first choice, because it resolves the release that fits
+    # the installed server on its own. The tarball of the matching major line is
+    # the fallback for the case the store is unreachable or refuses the
+    # resolution inside a job; the mapping of a server branch to a major line is
+    # the one thing this fallback has to know, and it comes from the release
+    # list of nextcloud-releases/groupfolders, read on 2026-09-03: the 20 line
+    # carries Nextcloud 32, 21 carries 33 and 22 carries 34.
+    - name: Install the Team folders app
+      if: inputs.install-groupfolders == 'true'
+      shell: bash
+      env:
+        SERVER_VERSION: ${{ inputs.server-version }}
+        RUNNER_TEMP_DIR: ${{ runner.temp }}
+      run: |
+        if ./occ app:install groupfolders --force; then
+          echo "groupfolders came from the app store"
+        else
+          case "${SERVER_VERSION}" in
+            stable32) tag='v20.1.18' ;;
+            stable33) tag='v21.0.15' ;;
+            stable34) tag='v22.0.6' ;;
+            *)
+              echo "no groupfolders fallback release is recorded for ${SERVER_VERSION}"
+              exit 1
+              ;;
+          esac
+          echo "the app store did not deliver groupfolders, falling back to the tarball ${tag}"
+          curl -sfSL -o "${RUNNER_TEMP_DIR}/groupfolders.tar.gz" \
+            "https://github.com/nextcloud-releases/groupfolders/releases/download/${tag}/groupfolders-${tag}.tar.gz"
+          tar -xzf "${RUNNER_TEMP_DIR}/groupfolders.tar.gz" -C apps
+          echo "groupfolders came from the tarball ${tag}"
+        fi
+        # -f, because a fallback tarball may declare a version window that the
+        # installed server sits at the edge of, and this is a throwaway instance
+        # whose only job is to hold a mount that belongs to a group.
+        ./occ app:enable -f groupfolders
+        ./occ app:list | grep -A2 groupfolders || true
 
     # Everything from here to the end of this file belongs to the host process
     # path and is skipped for register-exapp: false. uv, the locked environment

@@ -1744,6 +1744,15 @@ jobs:
       # deliberately not a dependency of this matrix.
       MINIMAL_USER: 'minimal'
       MINIMAL_PASS: 'findling-ci-minimal-2026'
+      # The fourth account exists for scenario 5 and for nothing else. A group
+      # change can only be measured against somebody who stays in the group:
+      # "the removed user finds nothing" is also what a broken search says.
+      MEMBER_USER: 'member'
+      MEMBER_PASS: 'findling-ci-member-2026'
+      # The group that holds the team folder, and the mount point of the folder.
+      # Neither name contains a marker, for the same reason no folder name does.
+      TEAM_GROUP: 'parity-team'
+      TEAM_FOLDER: 'parity-team-folder'
       # One marker per scenario, so that the scenarios cannot colour each other.
       # Lower case and ASCII on purpose: the native term filter becomes a LIKE
       # over the name column, which is ASCII case insensitive on SQLite and
@@ -1753,9 +1762,12 @@ jobs:
       MARKER_SHARED: 'parityshared'
       MARKER_REVOKED: 'parityrevoked'
       MARKER_MINIMAL: 'parityminimal'
-      # Four folders times three files. A number rather than a duration, because
-      # the drain loop waits for a verdict per file.
-      EXPECTED_JUDGED: '12'
+      MARKER_TEAM: 'parityteam'
+      # Four folders in the home of the owner plus one team folder, three files
+      # each. A number rather than a duration, because the drain loop waits for a
+      # verdict per file, and because a team folder that never reached the crawl
+      # is exactly the failure this number catches.
+      EXPECTED_JUDGED: '15'
       DRAIN_TIMEOUT: '600'
 
     steps:
@@ -1781,6 +1793,9 @@ jobs:
           php-version: ${{ matrix.php-version }}
           exapp-secret: ${{ env.EXAPP_SECRET }}
           exapp-port: ${{ env.EXAPP_PORT }}
+          # Scenario 4 needs a mount that belongs to a group and not to a user.
+          # This is the only job of the repository that asks for it.
+          install-groupfolders: 'true'
 
       # Everything on the instance is crawled and everything on the instance is
       # visible to the native search, so a skeleton folder would end up in both
@@ -1879,6 +1894,56 @@ jobs:
           echo "the share to be withdrawn later has id $(cat revoked-share-id.txt)"
           # The mount of a recipient only exists in the mount cache after a scan,
           # and the crawl reads the access list out of that cache.
+          ./occ files:scan --all
+
+      # Scenario 4 and the setup half of scenario 5, and both belong before the
+      # crawl for the same reason the shares do: the access list of a file is
+      # written while the file is indexed.
+      #
+      # Two members, and the second one is not redundancy. Scenario 5 removes the
+      # colleague from this group, and "the removed user finds nothing" is also
+      # what a search that broke entirely would say; the member who stays is what
+      # turns that into a statement.
+      #
+      # The three marker files are uploaded over WebDAV as a member of the group
+      # rather than written into the data directory. A team folder does not live
+      # under the home of a user, its storage layout is the business of the
+      # groupfolders app, and an upload is both the honest path and the one that
+      # cannot go stale when that layout changes.
+      - name: Create the team folder, its group and its two members
+        run: |
+          OC_PASS="${MEMBER_PASS}" ./occ user:add --password-from-env "${MEMBER_USER}"
+          ./occ group:add "${TEAM_GROUP}"
+          ./occ group:adduser "${TEAM_GROUP}" "${COLLEAGUE_USER}"
+          ./occ group:adduser "${TEAM_GROUP}" "${MEMBER_USER}"
+
+          # groupfolders:create writes the id of the new folder and nothing else.
+          folder_id=$(./occ groupfolders:create "${TEAM_FOLDER}")
+          echo "${folder_id}" > team-folder-id.txt
+          ./occ groupfolders:group "${folder_id}" "${TEAM_GROUP}" read write
+          ./occ groupfolders:list
+
+          for n in 1 2 3; do
+            printf '%s marker file %s of the parity fixture, in the name and in the content.\n' \
+              "${MARKER_TEAM}" "${n}" > "${{ runner.temp }}/${MARKER_TEAM}-${n}.txt"
+            curl -sfS -u "${COLLEAGUE_USER}:${COLLEAGUE_PASS}" \
+              -T "${{ runner.temp }}/${MARKER_TEAM}-${n}.txt" \
+              "http://localhost:8080/remote.php/dav/files/${COLLEAGUE_USER}/${TEAM_FOLDER}/${MARKER_TEAM}-${n}.txt"
+          done
+
+          # The upload is asked back rather than assumed. A team folder that the
+          # group cannot write to would answer every PUT with a 403, curl -f
+          # would stop the step, and this count is what catches the quieter
+          # variant where the files land somewhere else.
+          uploaded=$(curl -sfS -u "${COLLEAGUE_USER}:${COLLEAGUE_PASS}" \
+            -X PROPFIND -H 'Depth: 1' \
+            "http://localhost:8080/remote.php/dav/files/${COLLEAGUE_USER}/${TEAM_FOLDER}/" \
+            | grep -o "${MARKER_TEAM}-[0-9]*\.txt" | sort -u | wc -l)
+          echo "marker files in the team folder: ${uploaded}"
+          if [ "${uploaded}" -ne 3 ]; then
+            echo "::error::the team folder holds ${uploaded} marker files instead of three, so scenario 4 would compare nothing"
+            exit 1
+          fi
           ./occ files:scan --all
 
       # Both questions and the comparison, in a file rather than in every step.
@@ -2052,10 +2117,73 @@ jobs:
           compare revoked-share "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_REVOKED}" 0
           compare revoked-share-owner "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_REVOKED}" 3
 
+      # Scenario 4. A mount that belongs to a group and not to a user, and two
+      # members of that group who both have to find all three files. The owner of
+      # the other fixtures is not in the group and must find none of them, which
+      # is the direction that would show an additional hit.
+      - name: Scenario 4, the team folder
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+          compare team-folder-colleague "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_TEAM}" 3
+          compare team-folder-member "${MEMBER_USER}" "${MEMBER_PASS}" "${MARKER_TEAM}" 3
+          compare team-folder-outsider "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_TEAM}" 0
+
+      # Scenario 5, the group change, and the one scenario whose mechanism the
+      # plan of this work had wrong. The correction is worth writing down here,
+      # because the wrong version reads perfectly plausibly.
+      #
+      # A membership change raises no share event. ShareEventListener says so in
+      # its own docblock and the listener list confirms it: the three events it
+      # subscribes to are ShareCreated, ShareDeleted and ShareDeletedFromSelf,
+      # and none of them fires when a user leaves a group, because the share did
+      # not change. So there is no subtree expansion to drive here, unlike in
+      # scenario 3, and waiting for one would be waiting for a job that is never
+      # planned.
+      #
+      # What follows from that is two questions instead of one, and the first one
+      # is the more interesting.
+      #
+      # Asked immediately, while the ACL prefilter still lists the removed user,
+      # it measures the sentence the whole architecture rests on: the prefilter
+      # is not the permission boundary, the recheck in Provider is, and it
+      # resolves every candidate through getUserFolder()->getFirstNodeById().
+      # A stale prefilter therefore costs result quality and compute time and not
+      # confidentiality. If that sentence were ever wrong, this comparison is
+      # where it would show up, as extra.
+      #
+      # The second question is asked after the prefilter has been brought up to
+      # date, explicitly and with a deadline rather than with a sleep on
+      # suspicion. The carrier is a crawl pass: it rewrites the access list of
+      # every file out of the mount cache, which is the same source the event
+      # path reads. The nightly reconcile carries the case too, but it is
+      # triggered by a change of the etag and a group change does not touch one,
+      # so the crawl is the deterministic half of the pair.
+      - name: Scenario 5, the group change
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+
+          ./occ group:removeuser "${TEAM_GROUP}" "${COLLEAGUE_USER}"
+          ./occ user:info "${COLLEAGUE_USER}" || true
+
+          # Immediately, with the prefilter still holding the old answer.
+          compare group-change-immediate "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_TEAM}" 0
+          echo "the removed user finds nothing even before the prefilter knows, which is the recheck doing its work"
+
+          ./occ findling:index --restart --no-interaction
+          timeout 60 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once
+          timeout 180 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 120
+          drain 300
+
+          compare group-change "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_TEAM}" 0
+          # The half that carries the statement: the member who stayed in the
+          # group still finds all three. Without it the line above would be
+          # satisfied by a search that stopped working altogether.
+          compare group-change-member "${MEMBER_USER}" "${MEMBER_PASS}" "${MARKER_TEAM}" 3
+
       # Scenario 6, in the shape D-22 gives it for CI: a user without any group,
       # without team folder access, with exactly one received view only share. He
-      # has to find his three files and nothing of the three other markers, and
-      # each of those four questions is a comparison rather than an assertion
+      # has to find his three files and nothing of the four other markers, and
+      # each of those five questions is a comparison rather than an assertion
       # about findling alone.
       - name: Scenario 6, the restricted user
         run: |
@@ -2064,10 +2192,52 @@ jobs:
           # having no group at all.
           ./occ user:info "${MINIMAL_USER}" || true
           compare restricted-user "${MINIMAL_USER}" "${MINIMAL_PASS}" "${MARKER_MINIMAL}" 3
-          for marker in "${MARKER_OWN}" "${MARKER_SHARED}" "${MARKER_REVOKED}"; do
+          for marker in "${MARKER_OWN}" "${MARKER_SHARED}" "${MARKER_REVOKED}" "${MARKER_TEAM}"; do
             compare "restricted-user-denied-${marker}" \
               "${MINIMAL_USER}" "${MINIMAL_PASS}" "${marker}" 0
           done
+
+      # The falsification of everything above, and the reason the comparisons are
+      # worth anything at all: a gate that has never been seen failing is not
+      # known to work. Two answers of a scenario that passed are taken apart on
+      # purpose, once with a fileid added and once with one removed, and the
+      # comparison has to go red both times and has to name the direction.
+      #
+      # The exit code is inverted in this step: a failing parity_diff is the
+      # success here, and a green one is the error. Without this step the whole
+      # job is the claim that everything is in order, made by a tool nobody has
+      # watched disagree.
+      - name: The negative probe, in both directions
+        run: |
+          probe() {  # $1 name of the probe, $2 the word that has to appear
+            if python3 findling-src/scripts/ci/parity_diff.py \
+                --scenario "probe-$1" \
+                --native probe-native.json \
+                --findling probe-findling.json \
+                --expect-min 1 > "probe-$1.log" 2>&1; then
+              cat "probe-$1.log"
+              echo "::error::the $1 probe stayed green, so the parity gate cannot go red and every comparison above proves nothing"
+              exit 1
+            fi
+            cat "probe-$1.log"
+            grep -q "$2" "probe-$1.log" \
+              || { echo "::error::the $1 probe went red without naming the finding as $2"; exit 1; }
+          }
+
+          # One fileid more on the findling side: the search shows something the
+          # native search does not show this user.
+          cp native-own-files.json probe-native.json
+          jq '.ocs.data.entries += [{"attributes": {"fileId": "999999"}}]' \
+            native-own-files.json > probe-findling.json
+          probe extra extra
+
+          # One fileid less on the findling side: the search does not find
+          # something the user is allowed to see.
+          cp native-own-files.json probe-native.json
+          jq '.ocs.data.entries |= .[1:]' native-own-files.json > probe-findling.json
+          probe missing missing
+
+          echo "the parity gate goes red in both directions and names which one it is"
 
       - name: Everything the failure had to say
         if: failure()
@@ -2078,9 +2248,10 @@ jobs:
           ( cd findling-src/backend && uv run python -m findling.tools.index_status \
             --db "${{ runner.temp }}/findling/state.db" ) || true
           ./occ findling:index || true
-          echo "--- users and groups ---"
+          echo "--- users, groups and team folders ---"
           ./occ user:list || true
           ./occ group:list || true
+          ./occ groupfolders:list || true
           # The fileids of every answer and nothing else. A whole answer would
           # put the paths of the fixture files into the log, and the tool this
           # job rests on is careful not to do that.
