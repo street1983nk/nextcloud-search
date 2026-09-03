@@ -168,3 +168,9 @@ Keine externe Konfiguration. Wer den lokalen Stack fahren will, braucht Docker u
 ---
 *Phase: 05-h-rtung-und-store-einreichung-v1-0*
 *Completed: 2026-09-03*
+
+## Self-Check: PASSED
+
+Alle sechs genannten Dateien liegen im Arbeitsbaum, alle fuenf Commits sind in
+der Zweighistorie, und `.planning/STATE.md` sowie `.planning/ROADMAP.md` sind in
+dieser Zweigspanne unveraendert (der Orchestrator schreibt sie).
