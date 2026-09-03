@@ -366,3 +366,76 @@ Commit umschreiben.
 
 **Wohin es gehört:** in einen Plan, der ohnehin an der Werkzeugkette arbeitet,
 oder in den Phase-Review. Eine Zeile `*.py text eol=lf` genügt.
+
+## DI-05-13 (Plan 05-11): Der Rückzug des Pollers bleibt für die Statusseite unsichtbar, und zwar aus einem neuen Grund
+
+**Found during:** Plan 05-11, bei der Prüfung von DI-05-08, das ausdrücklich an
+diesen Plan adressiert war.
+
+**Was DI-05-08 verlangt:** Die Statusseite soll zeigen, dass der Container sich
+von einer Warteschlange zurückgezogen hat, die nicht antwortet, und warum.
+
+**Warum es hier nicht erledigt wurde, mit einem Argument, das DI-05-08 noch nicht
+kannte.** Der Hauptfall, für den der Rückzug gebaut ist, ist die halb entfernte
+Installation aus D-17: die Nextcloud-Hälfte ist weg, der Container läuft weiter.
+In genau diesem Fall gibt es keine Statusseite mehr, auf der ein Banner stehen
+könnte, denn die Seite ist Teil der entfernten App. Der Rückzug wäre also
+sichtbar in allen Fällen ausser dem, für den er existiert.
+
+Es bleibt ein zweiter, kleinerer Fall: die App ist installiert, die Seite
+rendert, und die Queue-Aufrufe scheitern trotzdem, etwa nach einer
+Secret-Rotation von AppAPI oder bei einem Datenbankfehler. Dort wäre die Anzeige
+echten Wert wert, weil die Seite heute nur "Die Indexierung kommt seit %s nicht
+voran" sagt und damit die Hintergrundaufträge beschuldigt, die in Ordnung sind.
+
+**Was dafür nötig wäre, und warum es nicht in diesen Plan passt.** Ein neues Feld
+in `GET /status`, also `backend/src/findling/api/status.py`, die nicht in den
+`files_modified` dieses Plans steht. Dazu kommt, dass `status.report()` heute
+eine reine Funktion des Datenträgers und der Zustandsdatenbank ist und den Poller
+gar nicht kennt: die beiden Zähler des Rückzugs liegen auf dem Poller-Objekt, das
+`findling.main` hält, und `main` importiert den Status-Router, nicht umgekehrt.
+Das ist keine Zeile, sondern eine Entscheidung darüber, wie Laufzeitzustand des
+Pollers in eine Antwort kommt, die bisher nur Persistiertes meldet.
+
+**Wohin es gehört:** in einen Plan, der `status.py` ohnehin anfasst, oder in den
+Phase-Review. Die billigste ehrliche Form wäre ein Feld `queueUnansweredRounds`
+neben `lowDisk`, gespeist aus dem Poller über einen Zugriff wie
+`active_poller()`, plus ein weiterer Eintrag in der Bannerliste aus Plan 04-03.
+Bis dahin steht der Rückzug im Protokoll des Containers und in
+`docs/uninstall.md`.
+
+## DI-05-14 (Plan 05-11): Ein Verdikt in `findling_file_state` wird nie zurückgenommen
+
+**Found during:** Plan 05-11, beim Bau des Skip-Kanals.
+
+**Was:** `FileStateService::record` schreibt genau eine Zeile je Datei und
+überschreibt sie, wenn ein neues Verdikt kommt. Ein Verdikt zu LÖSCHEN kann
+niemand. Wird eine Datei erst als `failed` oder `skipped` beurteilt und später
+erfolgreich indexiert, bleibt die alte Zeile stehen: `indexed` ist die Zahl des
+Containers und wird in diese Tabelle grundsätzlich nicht geschrieben, also gibt
+es kein Verdikt, das die alte Zeile ersetzen könnte. Die Datei erscheint dauerhaft
+in der Fehlerliste, obwohl sie durchsuchbar ist.
+
+**Wie alt der Befund ist:** älter als dieser Plan. Er gilt seit Phase 2 für alle
+`failed`-Gründe, etwa `timeout` und `gateway_error`, die beim nächsten Lauf
+gutgehen. Dieser Plan verbreitert ihn um die `skipped`-Gründe des Containers.
+
+**Was dieser Plan dagegen getan hat:** den einen Fall ausgeschlossen, in dem die
+Veralterung nicht die Ausnahme, sondern der Normalfall wäre. Eine Datei, die an
+die OCR-Spur übergeben wird, meldet kein Verdikt; sonst stünde jeder Scan der
+Instanz dauerhaft unter "Kein Text im Dokument". Gemessen und in
+05-11-SUMMARY.md protokolliert: nach einem Lauf über das Referenzkorpus gibt es
+keine Gruppe `no_text_layer`.
+
+**Warum nicht hier behoben:** Die Behebung ist eine dritte Liste in der
+Quittierung, in der der Container die Dateien nennt, die er in diesem Durchgang
+als indexiert beurteilt hat, damit die andere Hälfte deren Zeile löscht. Das ist
+eine Erweiterung des Protokolls zwischen beiden Hälften und keine Zeile in einer
+Datei, und der Plan nennt ausdrücklich eine zweite Liste. Aus der Zahl `done`
+lässt sich das NICHT ableiten: dort stehen auch `acl`- und `delete`-Aufträge, die
+über den Inhalt einer Datei nichts aussagen, und ein Löschen auf dieser Grundlage
+würde ein gültiges Verdikt wegen einer Rechteänderung verwerfen.
+
+**Wohin es gehört:** in den Phase-Review oder in einen Folgeplan, der an der
+Quittierung arbeitet. Bis dahin räumt ein `occ findling:index --restart` auf,
+weil der Neuaufbau jede Datei neu beurteilt.
