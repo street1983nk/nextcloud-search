@@ -134,6 +134,51 @@ def test_ranges_that_do_not_touch_stay_apart() -> None:
     assert got == [(0, 5), (10, 15)]
 
 
+def test_two_matches_that_only_touch_stay_two_highlights() -> None:
+    # The difference between overlapping and adjacent, and the whole reason the
+    # merge condition is strict. A split compound reports the same span several
+    # times and those belong together; two matches that happen to end and begin
+    # at the same position are two hits and have to stay two marks, otherwise
+    # the client wraps them as one word that never existed.
+    fragment = "FristFrist"
+
+    got = char_ranges(fragment, [_Range(0, 5), _Range(5, 10)])
+
+    assert got == [(0, 5), (5, 10)]
+
+
+def test_a_bound_inside_a_multi_byte_character_does_not_raise() -> None:
+    # The engine counts bytes, and a fragmenter that cuts at a byte position can
+    # hand over a bound in the middle of an umlaut. Without an explicit errors
+    # rule the decode below raises and the whole search ends with it, so the
+    # assertion is deliberately weak: any sane pair of numbers is a better
+    # answer than an exception.
+    fragment = "Kündigung"
+    inside_the_umlaut = len("K".encode()) + 1
+
+    got = char_ranges(fragment, [_Range(inside_the_umlaut, len(fragment.encode()))])
+
+    assert len(got) == 1
+    start, end = got[0]
+    assert 0 <= start <= end <= len(fragment)
+
+
+def test_several_ranges_are_converted_exactly_as_one_would_be() -> None:
+    # The prefix of the fragment is decoded once for all bounds instead of once
+    # per bound. This is a pure speed change, so the guard is that the numbers
+    # do not move: three matches behind three umlauts, reported out of order.
+    fragment = "Müller und Schröder und Kündigung und Frist"
+    reported = [
+        _Range(len("Müller und Schröder und ".encode()), len("Müller und Schröder und Kündigung".encode())),
+        _Range(0, len("Müller".encode())),
+        _Range(len("Müller und ".encode()), len("Müller und Schröder".encode())),
+    ]
+
+    got = char_ranges(fragment, reported)
+
+    assert [fragment[start:end] for start, end in got] == ["Müller", "Schröder", "Kündigung"]
+
+
 def test_searching_one_constituent_marks_the_whole_compound(index: Index, store: Store) -> None:
     found = snippets_for(index, store, OWNER, _query(index, "Genehmigung"), [2])
 
