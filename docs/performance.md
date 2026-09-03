@@ -19,8 +19,8 @@ Dieser Bericht führt zwei Messreihen, und das ist keine Gründlichkeit um ihrer
 selbst willen, sondern die Folge einer Knappheit. Am 03.09.2026 war bei Hetzner
 keine einzige ARM-Maschine zu mieten, in keiner der drei europäischen Regionen.
 Der Betreiber hat daraufhin entschieden, beides zu tun: die **Generalprobe** läuft
-sofort auf der x86-Maschine gleicher Größe, und die **Kernmessung** wird auf ARM
-wiederholt, sobald es wieder Bestand gibt.
+sofort auf der x86-Maschine gleicher Größe, und der **vollständige Lauf** wird auf
+ARM wiederholt, sobald es wieder Bestand gibt.
 
 | | Generalprobe | ARM-Lauf |
 |---|---|---|
@@ -58,10 +58,11 @@ gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 |---|---|---|
 | Umgebung und Kosten, beide Maschinen | aus der Konto-API abgefragt | 2026-09-03 |
 | Reihenfolge der Einrichtung | auf der Generalprobe durchgeführt und belegt | 2026-09-03 |
+| Zertifikat und Abschottung | auf der Generalprobe belegt | 2026-09-03 |
 | Methode | steht | 2026-09-03 |
 | Grenzen | steht | 2026-09-03 |
 | Grenzwert für den Spitzenwert | festgelegt | 2026-09-03 |
-| AIO-Grundlast, Generalprobe cpx22 | FEHLT NOCH | dieser Plan |
+| AIO-Grundlast, Generalprobe cpx22 | gemessen, 290 MB Höchststand | 2026-09-03 |
 | AIO-Grundlast, ARM | FEHLT NOCH | wartet auf Bestand |
 | Findling im Volllauf, 50.000 Dateien | FEHLT NOCH | Pläne 05-12 und 05-14 |
 | Störfall-Drills | FEHLT NOCH | Plan 05-14 |
@@ -82,7 +83,7 @@ Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 | Region | hel1, Helsinki | hel1, Helsinki |
 | Betriebssystem | Ubuntu 24.04 LTS, Kernel 6.8.0 | Ubuntu 24.04 LTS |
 | cgroup | v2 | v2 |
-| Nextcloud | All-in-One über HaRP, Postgres aus dem AIO-Paket | ebenso |
+| Nextcloud | 33.0.8, All-in-One, PostgreSQL 18.6 | ausstehend |
 | Inbegriffener Verkehr | 20 TB je Monat | 20 TB je Monat |
 
 Der Unterschied, der über die Architektur hinaus zählt, steht in der Zeile
@@ -371,24 +372,88 @@ Für diesen Bericht sind das sieben:
 ## Die AIO-Grundlast ohne Findling
 
 Diese Zahl ist der Bezugspunkt des ganzen Berichts, denn ohne sie sagt eine
-Findling-Kurve nichts darüber, ob die Box insgesamt reicht.
+Findling-Kurve nichts darüber, ob die Box insgesamt reicht. Gemessen wird sie,
+bevor Findling die Maschine zum ersten Mal anfasst.
 
-| Lauf | Summe `anon` | höchster Stand | Container |
+| Lauf | Summe `anon` im Mittel | höchster Stand | ohne Speichertod |
 |---|---|---|---|
-| Generalprobe cpx22 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
+| Generalprobe cpx22 | 224 MB | **290 MB** | ja |
 | ARM CAX11 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
 
-Gemessen wird sie, bevor Findling die Maschine zum ersten Mal anfasst: mindestens
-dreißig Minuten mit demselben Sampler, über alle laufenden AIO-Container, mit
-einer Phase im Leerlauf und einer Phase mit einer Handvoll gewöhnlicher Aufrufe
-der Weboberfläche. Ergebnis sind die Summe der `anon`-Werte über die Container
-und der höchste beobachtete Stand, dazu die Liste der Container, die dabei
-liefen. Nach dem Zuschalten von HaRP wird kurz nachgemessen, damit der Beitrag
-dieses einen Containers getrennt ausgewiesen ist.
+### Wie die Zahl entstanden ist
 
-Bis dahin gilt die Vorabrechnung von 0,7 bis 1,1 GB, und sie ist ausdrücklich
-geschätzt und nicht gemessen. Für die Store-Aussage zählt am Ende allein die
-Zeile der CAX11.
+Dreißig Minuten und vierzehn Sekunden, von 2026-09-03T17:34:23Z bis
+2026-09-03T18:04:37Z, ein eigener Sampler je Container im Abstand von fünf
+Sekunden, 361 Messpunkte je Container. Drei Phasen: zwölf Minuten Leerlauf,
+sechs Minuten mit 29 Runden gewöhnlicher Aufrufe (Anmeldeseite, `status.php`,
+Nutzerabfrage über OCS, `PROPFIND` auf das Wurzelverzeichnis, Dateiansicht,
+Übersicht, dazu je Runde eine kleine Datei hochladen und wieder löschen), dann
+zwölf Minuten Leerlauf.
+
+Gelaufen sind dabei genau sechs Container und kein siebter:
+
+| Container | höchster `anon`-Stand |
+|---|---|
+| nextcloud-aio-nextcloud | 190 MB |
+| nextcloud-aio-mastercontainer | 47 MB |
+| nextcloud-aio-apache | 47 MB |
+| nextcloud-aio-database (PostgreSQL 18.6) | 12 MB |
+| nextcloud-aio-redis | 4 MB |
+| nextcloud-aio-notify-push | 1 MB |
+
+Die Summe wird je Zeitpunkt gebildet und erst danach ihr Höchstwert genommen,
+denn was die Box tragen muss, ist der gleichzeitige Stand und nicht die Summe
+von sechs Maxima, die zu verschiedenen Minuten aufgetreten sind. Zur Einordnung
+steht diese theoretische obere Schranke trotzdem daneben: sie liegt bei 301 MB,
+also nur elf MB über dem gemessenen gleichzeitigen Höchststand. Die Zahl ist
+damit belastbar und hängt nicht an der Art der Summenbildung.
+
+Nach Phasen getrennt:
+
+| Phase | Mittel | höchster Stand |
+|---|---|---|
+| Leerlauf | 223 MB | 233 MB |
+| unter Aufrufen | 227 MB | 290 MB |
+
+Der Ausschlag auf 290 MB stammt aus der Aufrufphase und fast vollständig aus dem
+Nextcloud-Container, also aus den PHP-Arbeitern, die eine Anfrage bedienen. Im
+Leerlauf fällt der Stand innerhalb weniger Minuten wieder auf gut 220 MB.
+
+Alle sechs Abschlusszeilen melden `oom_killed=false` und `memory.events` in allen
+sechs Zählern auf null. Es gab also nicht nur keinen Speichertod, es gab auch
+keinen einzigen Fall, in dem die Grenze überhaupt berührt wurde.
+
+### Die Vorabrechnung war zu pessimistisch, und um welchen Faktor
+
+Angenommen waren 0,7 bis 1,1 GB. Gemessen sind 290 MB im Höchststand, also rund
+ein Drittel des unteren Endes der Schätzung. Das ist eine gute Nachricht mit
+einer Fußnote, und die Fußnote ist wichtig genug für einen eigenen Absatz.
+
+Beide Zahlen müssen mit demselben Maß genommen sein, sonst vergleicht man nichts.
+Der Maßstab dieses Berichts ist `anon`, und mit ihm sind es 290 MB. Nimmt man
+stattdessen `memory.current`, also die Zahl, die der Docker-Client anzeigt, dann
+liegen dieselben sechs Container im Mittel bei **1353 MB**, denn dort zählt der
+Dateicache mit. Wer also die geschätzten 0,7 bis 1,1 GB im Sinne von
+`memory.current` gemeint hat, lag richtig, und wer sie im Sinne des tatsächlich
+belegten Speichers gemeint hat, lag um den Faktor drei bis vier zu hoch.
+
+Für die Budgetrechnung zählt der zweite Maßstab, weil der Dateicache
+zurückforderbar ist: gerät die Maschine unter Druck, gibt der Kernel diese
+1063 MB Differenz her, ohne dass ein Prozess etwas davon merkt. Neben den 290 MB
+Grundlast bleiben auf einer 4-GB-Box also gut 3,5 GB, und der Grenzwert von
+2,0 GB für Findling hat mehr Luft als angenommen.
+
+Die Zahlen dieses Abschnitts gelten für x86. Auf ARM wird die Grundlast neu
+gemessen, nicht umgerechnet.
+
+### Der Beitrag von HaRP
+
+FEHLT NOCH. HaRP wird nach dieser Messung zugeschaltet und die Grundlast dann
+ein zweites Mal kurz gemessen, damit sein Beitrag getrennt ausgewiesen ist und
+nicht in der Zahl von oben verschwindet.
+
+Die Rohdaten aller sechs Sampler liegen unter
+`docs/measurements/2026-09-03-grundlast-cpx22/`.
 
 ## Findling im Volllauf
 
