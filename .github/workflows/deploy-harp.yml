@@ -150,6 +150,15 @@ jobs:
       # register-exapp: false is the whole point of this job. The instance comes
       # up with both apps enabled and nothing else; the daemon below does the
       # part that manual-install never did.
+      #
+      # nextcloud-host 0.0.0.0 is the named way out the composite action offers,
+      # and this job needs it since it puts a proxy in front of the instance. The
+      # builtin server binds the first address "localhost" resolves to, which is
+      # ::1 on this runner image: curl finds the instance because it tries both
+      # families, and the nginx below answered 502 with "connect() failed (111:
+      # Connection refused) upstream 127.0.0.1:8080" (run 33755989853). Binding
+      # all interfaces puts the instance on both families and adds 127.0.0.1 and
+      # localhost to the trusted domains, which the proxied host header needs.
       - name: Set up the test Nextcloud without registering the ExApp
         id: setup
         uses: ./findling-src/.github/actions/setup-test-nc
@@ -159,6 +168,7 @@ jobs:
           exapp-secret: ${{ env.EXAPP_SECRET }}
           exapp-port: ${{ env.EXAPP_PORT }}
           register-exapp: 'false'
+          nextcloud-host: '0.0.0.0'
 
       # The deploy daemon pulls registry/image:image-tag out of
       # backend/appinfo/info.xml, which is ghcr.io/street1983nk/findling_backend
