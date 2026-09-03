@@ -442,6 +442,20 @@ Bedeutung.
 - **Ein Punkt bleibt offen** und ist oben ausführlich begründet: die nachgestellte
   Kette auf einem laufenden Stack. Sie gehört in den ARM-Volllauf.
 
+## Self-Check: PASSED
+
+- Alle 16 als geändert genannten Dateien liegen auf der Platte (`[ -f ]` je Datei).
+- Alle fünf Commits sind in der Historie: `2666221`, `5957d75`, `1e68214`,
+  `e967a99`, `483e69f`.
+- `.planning/STATE.md` und `.planning/ROADMAP.md` sind unberührt (Diff gegen die
+  Basis leer), wie es der parallele Lauf verlangt.
+- Plan-Verifikation: `uv run python -m pytest -q` 799 passed / 11 skipped;
+  `ruff check`, `ruff format --check`, `pyright` (0 errors) und
+  `vulture src tests --min-confidence 80` grün; `php -l` 33 von 33 Dateien ohne
+  Fehler; kein Em- oder En-Dash in einer geänderten Datei.
+- Die eine offene Akzeptanzbedingung ist oben als offene Verifikation
+  ausgewiesen und **nicht** als erfüllt gezählt.
+
 ---
 *Phase: 05-h-rtung-und-store-einreichung-v1-0*
 *Completed: 2026-09-03*
