@@ -477,19 +477,10 @@ class ExAppService {
 	 *                           say "not reachable" instead of "not indexed"
 	 */
 	public function adminGet(string $path, string $userId, array $params): ?array {
-		$appApi = $this->publicFunctions($userId);
-		if ($appApi === null) {
+		$response = $this->proxyRequest($path, $userId, 'GET', $params, self::ADMIN_REQUEST_TIMEOUT_SECONDS);
+		if ($response === null) {
 			return null;
 		}
-
-		$response = $appApi->exAppRequest(
-			Application::BACKEND_APP_ID,
-			$path,
-			$userId,
-			'GET',
-			$params,
-			['timeout' => self::ADMIN_REQUEST_TIMEOUT_SECONDS],
-		);
 
 		// Case 1 first, always, and here it matters even more than in the
 		// search: AppAPI catches every transport exception and hands back an
@@ -534,6 +525,46 @@ class ExAppService {
 		}
 
 		return $decoded;
+	}
+
+	/**
+	 * The one outbound request of this app, in one method for all three callers.
+	 *
+	 * Everything that leaves this process towards the container goes through
+	 * here: the pre-flight, the app id both halves are registered under, and the
+	 * timeout of this particular call. Written once rather than three times,
+	 * because "this app talks to exactly one container and only through AppAPI"
+	 * is a statement a reader should be able to check by reading a single method.
+	 *
+	 * It is protected rather than private, and that is the one concession this
+	 * class makes to the unit suite. ``OCA\AppAPI\PublicFunctions`` is a class of
+	 * another app: it is absent from the autoload space the suite runs in, so it
+	 * cannot be doubled, and without a double every statement about what happens
+	 * to an answer would need a registered container behind it. This method has a
+	 * signature of our own and a return type of our own, so a test double of it
+	 * is a double of the transport and of nothing else. Nothing in this
+	 * repository overrides it, and nothing should; see the ``@final`` note on the
+	 * class.
+	 *
+	 * @param array<string,mixed> $params body for POST, query string for GET
+	 * @return array<mixed>|IResponse|null null when the pre-flight refused, an
+	 *                                     array when AppAPI turned a transport
+	 *                                     failure into one, a response otherwise
+	 */
+	protected function proxyRequest(string $path, string $userId, string $method, array $params, float $timeout): array|IResponse|null {
+		$appApi = $this->publicFunctions($userId);
+		if ($appApi === null) {
+			return null;
+		}
+
+		return $appApi->exAppRequest(
+			Application::BACKEND_APP_ID,
+			$path,
+			$userId,
+			$method,
+			$params,
+			['timeout' => $timeout],
+		);
 	}
 
 	/**
@@ -589,21 +620,12 @@ class ExAppService {
 			return null;
 		}
 
-		$appApi = $this->publicFunctions($userId);
-		if ($appApi === null) {
+		$response = $this->proxyRequest($path, $userId, 'POST', $body, $timeout);
+		if ($response === null) {
 			// Unknown user, app_api switched off, or AppAPI not resolvable. All
 			// three cost this user a result group and never the whole search.
 			return null;
 		}
-
-		$response = $appApi->exAppRequest(
-			Application::BACKEND_APP_ID,
-			$path,
-			$userId,
-			'POST',
-			$body,
-			['timeout' => $timeout],
-		);
 
 		// Case 1 first, always. AppAPI catches every transport exception and
 		// hands back an array, so an unknown, unreachable or timed out backend
