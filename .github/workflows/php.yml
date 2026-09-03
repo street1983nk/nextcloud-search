@@ -59,12 +59,14 @@ jobs:
       # xargs returns a non zero exit code as soon as one php -l fails, so a
       # single broken file turns the gate red.
       #
-      # This is a syntax check and not a test, and the PHP half has no unit test
-      # yet. That gap is written down in docs/testing.md, including the nine
-      # behaviours a PHPUnit suite has to cover and the reason the suite is not in
-      # this workflow: there is no PHP on the development machine, so it could not
-      # be run once before being committed. What does cover the PHP half today is
-      # both jobs of integration.yml, end to end against a real Nextcloud.
+      # This is a syntax check and not a test, and it stays a separate job now
+      # that the phpunit job below exists: it runs in seconds without checking
+      # out a server, and it covers every PHP file of the app rather than the
+      # three classes the unit suite reaches. The gap it used to stand in for is
+      # written down in docs/testing.md as twelve behaviours; plan 05-15 closed
+      # the first six of them, plan 05-16 closes the rest. What covers the PHP
+      # half besides the two is both jobs of integration.yml, end to end against
+      # a real Nextcloud.
       #
       # php/templates is in the list because there is no PHP on the development
       # machine: a syntax error in a settings template would otherwise surface
@@ -160,3 +162,147 @@ jobs:
           fi
           echo "pre-info.xslt dropped the settings block entirely; the assumption behind the packaging step changed"
           exit 1
+
+  phpunit:
+    name: PHPUnit over the companion app
+    runs-on: ubuntu-24.04
+    # Measured on the first runs of this job: a little over three minutes, of
+    # which the server checkout with its submodules is by far the largest part
+    # and the suite itself is seconds. Fifteen minutes is the deadline for the
+    # same reason the two jobs above have one, and it is generous on purpose:
+    # what can be slow here is a clone from somebody else's network.
+    timeout-minutes: 15
+
+    # This suite is CI only, and that is a fact about the machine rather than a
+    # preference. There is no PHP on the development machine of this project, so
+    # nothing here can be run before it is committed, and docs/testing.md says so
+    # in the section that specifies these tests. That is also why the suite is
+    # not documented as a local command anywhere: an instruction nobody in this
+    # project can follow is worse than none. What makes the arrangement work is
+    # that the tests need nothing but mocks, so the only thing this job has to
+    # build is the autoload space of the server.
+    env:
+      # The branch the integration jobs use. It decides two things at once, and
+      # they have to stay together: the OCP the tests mock against, and the
+      # PHPUnit major, because nextcloud/server pins phpunit/phpunit ^11.5 in
+      # vendor-bin/phpunit/composer.json on this branch and the suite runs inside
+      # the same process as the server bootstrap. Moving this value means
+      # re-reading that file and moving the pin in php/composer.json with it.
+      SERVER_VERSION: stable34
+      # Test-only credentials of a throwaway instance that dies with the runner.
+      # The instance exists so that the server bootstrap has a config to read;
+      # not a single test touches it.
+      ADMIN_PASS: password
+      # The floor under the executed test count, and the machine readable half of
+      # T-05-64. failOnEmptyTestSuite in phpunit.xml catches a suite with nothing
+      # in it; this catches the case that hurts more, namely a discovery that
+      # silently shrank to a handful while the run stayed green.
+      #
+      # Fourteen is the number plan 05-15 requires for the six behaviours it
+      # covers, and it is a floor rather than the current count on purpose: the
+      # suite runs well above it today, and a floor that tracked the exact number
+      # would have to be edited by every plan that adds a case. Plan 05-16 adds
+      # the remaining six behaviours and raises it.
+      MINIMUM_TESTS: 14
+
+    steps:
+      # Actions are pinned to commit SHAs, never to tags: a moved tag would be
+      # arbitrary code execution in a job that checks out and installs a whole
+      # Nextcloud.
+      #
+      # These two checkouts stay in this order, same as in integration.yml.
+      # actions/checkout empties its target directory, so the server has to land
+      # at the workspace root first, and the app is moved into apps/findling
+      # afterwards.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nextcloud/server
+          ref: ${{ env.SERVER_VERSION }}
+          submodules: recursive
+
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: findling-src
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          # The lower bound declared in appinfo/info.xml, same as the lint job.
+          # It is also the reason the PHPUnit major is 11: 12 needs 8.3 and 13
+          # needs 8.4.1.
+          php-version: '8.2'
+          extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, gd, zip
+          coverage: none
+
+      # The directory name has to be exactly the app id, for the same reason it
+      # does in setup-test-nc: anything else and the autoloader never finds the
+      # classes.
+      - name: Move the PHP companion to apps/findling
+        run: mv findling-src/php apps/findling
+
+      # The server bootstrap loads lib/base.php, which expects an installed
+      # instance. SQLite and a throwaway admin are the cheapest way to give it
+      # one. This is scaffolding for the bootstrap and not a fixture: the tests
+      # themselves run on mocks and never open a connection.
+      - name: Install a throwaway Nextcloud so the server bootstrap has a config
+        run: |
+          mkdir data
+          ./occ maintenance:install --database=sqlite \
+            --admin-user admin --admin-pass "${ADMIN_PASS}"
+          ./occ config:system:get version
+
+      - name: Install the dev dependencies of the companion app
+        working-directory: apps/findling
+        # --no-scripts because there are none and a package that adds one should
+        # not get a shell in this job for free. The lock file is committed, so
+        # this resolves nothing: it installs exactly what was resolved when the
+        # pin was introduced.
+        run: composer install --no-interaction --no-progress --no-scripts
+
+      # The negative probe of the bootstrap, and it runs BEFORE the suite on
+      # purpose. The whole value of the guard in tests/bootstrap.php is that a
+      # missing server checkout says so instead of surfacing as a class not found
+      # inside an unrelated test, and a guard nobody ever triggered is a guard
+      # nobody knows the wording of.
+      - name: Prove the bootstrap refuses a path with no server behind it
+        working-directory: apps/findling
+        run: |
+          if NEXTCLOUD_SERVER_ROOT=/nonexistent-on-purpose \
+             vendor/bin/phpunit --no-progress > probe.log 2>&1; then
+            echo "the bootstrap accepted a path with no nextcloud/server in it"
+            cat probe.log
+            exit 1
+          fi
+          cat probe.log
+          grep -q 'no nextcloud/server checkout at this path' probe.log
+          grep -q 'NEXTCLOUD_SERVER_ROOT' probe.log
+          echo "the bootstrap aborted with its own message, as intended"
+          rm -f probe.log
+
+      - name: Run the unit suite
+        working-directory: apps/findling
+        run: vendor/bin/phpunit --no-progress --log-junit junit.xml
+
+      # A green run that executed nothing is the failure this project calls
+      # vacuous, and it is threat T-05-64 of this plan. The count is read out of
+      # the JUnit log rather than out of the human readable summary, because the
+      # summary changes wording between PHPUnit versions and the log has the
+      # number as an attribute.
+      - name: State how many tests actually ran
+        working-directory: apps/findling
+        run: |
+          count=$(php -r '
+            $log = simplexml_load_file("junit.xml");
+            if ($log === false) { fwrite(STDERR, "junit.xml is not readable\n"); exit(1); }
+            $total = 0;
+            foreach ($log->testsuite as $suite) { $total += (int)$suite["tests"]; }
+            echo $total;
+          ')
+          echo "the suite executed ${count} tests, the floor is ${MINIMUM_TESTS}"
+          if [ "${count}" -lt "${MINIMUM_TESTS}" ]; then
+            echo "fewer tests ran than this job requires, so the run proves nothing"
+            exit 1
+          fi
+          rm -f junit.xml

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	The unit suite of the companion app.
+
+	No coverage configuration on purpose. There is no number that would follow
+	from it here, and driving coverage means xdebug or pcov in the job, which
+	costs runtime for a figure nobody acts on. What this suite is measured by is
+	the list in docs/testing.md, section "The gap": twelve named behaviours, and
+	which of them have a test is a question a reader answers by reading the test
+	names, not a percentage.
+
+	The strict switches below are the same posture the rest of this repository
+	takes. A warning, a notice or a risky verdict ends the run, because a suite
+	that reports them and stays green trains everybody to ignore the report.
+
+	failOnDeprecation is deliberately NOT set. This suite runs inside the
+	autoload space of nextcloud/server, so a deprecation raised by server code
+	that the tests never call would turn the gate red for something this
+	repository cannot fix and did not cause.
+
+	failOnEmptyTestSuite is the machine readable half of T-05-64: a run that
+	executes nothing must not be able to report success. The job in php.yml
+	checks the executed test count on top of it, because an empty suite and a
+	suite whose discovery silently shrank look the same from the outside.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+	bootstrap="tests/bootstrap.php"
+	cacheDirectory=".phpunit.cache"
+	colors="true"
+	executionOrder="depends,defects"
+	beStrictAboutOutputDuringTests="true"
+	beStrictAboutCoverageMetadata="false"
+	failOnRisky="true"
+	failOnWarning="true"
+	failOnNotice="true"
+	failOnEmptyTestSuite="true"
+	displayDetailsOnTestsThatTriggerWarnings="true"
+	displayDetailsOnTestsThatTriggerNotices="true"
+	displayDetailsOnTestsThatTriggerErrors="true"
+	displayDetailsOnIncompleteTests="true"
+	displayDetailsOnSkippedTests="true">
+	<testsuites>
+		<testsuite name="unit">
+			<directory>tests/Unit</directory>
+		</testsuite>
+	</testsuites>
+	<source>
+		<include>
+			<directory suffix=".php">lib</directory>
+		</include>
+	</source>
+</phpunit>

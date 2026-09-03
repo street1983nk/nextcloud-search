@@ -478,3 +478,34 @@ geht auf dem Runner durch, `occ config:app:set core
 unified_search_max_results_per_request --type=integer` kennt die Option auf
 stable34, und die sechs Szenarien liefern ihre Trefferzahlen. Der Eintrag oben
 bleibt als Fundstelle stehen, dieser Absatz ist seine Erledigung.
+
+## DI-05-17 (Plan 05-15): Die Unit-Suite laeuft nur gegen eine der vier Serverversionen
+
+**Found during:** Plan 05-15, beim Zuschnitt des Jobs `phpunit`.
+
+**Was:** Der neue Job checkt `stable34` aus, weil der Plan "denselben Zweig, den
+die Integrationsjobs benutzen" vorgibt und weil die PHPUnit-Hauptversion daran
+haengt: `nextcloud/server` fuehrt `phpunit/phpunit ^11.5` in
+`vendor-bin/phpunit/composer.json` auf `stable34` und `^10.5.35` auf `stable32`.
+Die uebrigen Gates dieser Phase fahren dagegen eine Matrix ueber 32, 33, 34 und
+35 (D-07, D-23). Die Unit-Suite prueft also gegen genau eine der vier
+Schnittstellenversionen.
+
+**Warum das heute nicht viel kostet:** Die Suite mockt Schnittstellen und ruft
+keine Serverimplementierung. Was zwischen zwei Serverversionen abweichen kann,
+ist die Signatur einer gemockten Methode, etwa `Folder::getFirstNodeById` oder
+`IUserMountCache::getMountsForUser`. Eine Signaturaenderung faellt heute in den
+Integrationsjobs auf, allerdings erst dort und nicht in Sekunden.
+
+**Warum nicht hier erledigt:** Eine Matrix ueber vier Serverversionen bedeutet
+vier PHPUnit-Hauptversionen, denn die Bindung an das Bootstrap des Servers ist
+genau der Grund, aus dem die Version nicht frei gewaehlt wird. Ein
+`composer.lock` je Serverzweig oder eine Aufloesung ohne Lockdatei im Job ist
+eine Entscheidung ueber die Bezugsdisziplin dieses Projekts und keine Zeile in
+einer Datei; der Paketbezug selbst steht unter einem Owner-Gate.
+
+**Wohin es gehoert:** in Plan 05-16, der die Suite ohnehin verbreitert, oder in
+den Phase-Review. Der billige Zwischenschritt waere ein zweiter Job auf
+`stable32` mit PHPUnit 10 und einem eigenen Lockfile, und die ehrliche Frage
+davor ist, ob eine Signaturabweichung in OCP innerhalb eines
+Nextcloud-Versionsfensters ueberhaupt vorkommt.

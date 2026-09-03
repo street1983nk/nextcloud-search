@@ -3,12 +3,26 @@
 	"description": "Zero-config full text search companion app, registers the search provider and proxies into the ExApp container",
 	"license": "AGPL-3.0-or-later",
 	"type": "project",
+	"_comment": [
+		"phpunit/phpunit is pinned to an exact version and not to a caret range, and the major is not a taste decision. The suite runs with the tests/bootstrap.php of nextcloud/server, which means it runs inside the autoload space of the server, and two PHPUnit versions in one process is not a state anybody wants to debug. nextcloud/server carries phpunit/phpunit ^11.5 in vendor-bin/phpunit/composer.json on stable34, which is the branch the phpunit job of .github/workflows/php.yml checks out, so the major here is 11 for that reason and has to move with that branch.",
+		"11 is also the highest major that still runs on the php >=8.2 this app declares: PHPUnit 12 requires 8.3 and PHPUnit 13 requires 8.4.1.",
+		"The dependency is require-dev and is installed in CI only. Neither it nor a vendor directory of the tests reaches the release archive; plan 05-18 builds that archive and asserts exactly this. The runtime requirement of the app is the php constraint above and nothing else.",
+		"The package itself was cleared by the owner before it was fetched, because the package legitimacy audit of this phase lists no packages at all: source repository sebastianbergmann/phpunit, 991 million downloads, actively released. See 05-15-SUMMARY.md."
+	],
 	"require": {
 		"php": ">=8.2"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "11.5.56"
 	},
 	"autoload": {
 		"psr-4": {
 			"OCA\\Findling\\": "lib/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"OCA\\Findling\\Tests\\": "tests/"
 		}
 	},
 	"config": {
