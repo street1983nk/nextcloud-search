@@ -33,13 +33,15 @@ set -eu
 
 API_BASE='https://api.hetzner.cloud/v1'
 
-SERVER_TYPE='cax11'
+# cax11 is the target of decision D-01 and it is what the store claim talks
+# about. On 2026-09-03 all four arm types of this provider were out of stock in
+# every european location, so the owner decided to run the rehearsal on the x86
+# machine of the same size and to repeat the core measurement on arm once the
+# stock returns. Both runs are wanted, and the report keeps their numbers apart.
+# Switching back is this one word, because everything that follows is read from
+# the API rather than repeated here.
+SERVER_TYPE='cpx22'
 SERVER_IMAGE='ubuntu-24.04'
-# The image name exists twice in every account, once for x86 and once for arm,
-# and a create that names only the string leaves the choice to the API. The
-# machine of this test boots exactly one of the two, so the architecture is
-# stated and the id is resolved from both before the request goes out.
-SERVER_ARCH='arm'
 # Helsinki, because decision D-01 of the phase names that location. The earlier
 # value here was nbg1, taken from the example request of the research document;
 # the price is the same in all three cax locations (7.1281 EUR per month, gross,
@@ -47,7 +49,10 @@ SERVER_ARCH='arm'
 # before the first create, because the location of a server cannot be changed
 # afterwards: a box in the wrong region costs a destroy and a create.
 SERVER_LOCATION='hel1'
-SERVER_NAME='findling-arm-loadtest'
+# Without the architecture in it, on purpose: the same script rents the x86
+# rehearsal and the arm repeat, and a box called arm that is not one is a trap
+# for whoever opens the console next.
+SERVER_NAME='findling-loadtest'
 # The key is injected by name, and the name has to exist in the account. Hetzner
 # puts only the keys of this one request into the machine, so a create without
 # this field produces a box that is reachable by password over the web console
@@ -289,9 +294,23 @@ if len(keys) == 1:
     fi
     echo "hetzner_box: injecting ssh key $SSH_KEY_NAME, $key_line"
 
-    # Same reason as the key, one line further: the answer to a bare image name
-    # is ambiguous, and the wrong half of it does not boot on this machine.
-    images=$(api GET "/images?name=$SERVER_IMAGE&architecture=$SERVER_ARCH&status=available")
+    # Same reason as the key, one line further: the name ubuntu-24.04 exists
+    # twice in every account, once for x86 and once for arm, and the wrong half
+    # of it does not boot on this machine. The architecture is not repeated as a
+    # constant but read off the server type, so that changing the type is one
+    # word and cannot leave a mismatched image behind.
+    architecture=$(printf '%s' "$types" | json "
+import json
+import sys
+
+server_types = json.load(sys.stdin)['server_types']
+print(server_types[0]['architecture'] if server_types else '')
+")
+    if [ -z "$architecture" ]; then
+        echo "hetzner_box: the API did not state an architecture for $SERVER_TYPE" >&2
+        exit 1
+    fi
+    images=$(api GET "/images?name=$SERVER_IMAGE&architecture=$architecture&status=available")
     fail_on_error "$images"
     image_id=$(printf '%s' "$images" | json '
 import json
@@ -302,10 +321,10 @@ if len(images) == 1:
     print(images[0]["id"])
 ')
     if [ -z "$image_id" ]; then
-        echo "hetzner_box: no single available $SERVER_IMAGE image for $SERVER_ARCH in this account" >&2
+        echo "hetzner_box: no single available $SERVER_IMAGE image for $architecture in this account" >&2
         exit 1
     fi
-    echo "hetzner_box: image $SERVER_IMAGE for $SERVER_ARCH is id $image_id"
+    echo "hetzner_box: image $SERVER_IMAGE for $architecture is id $image_id"
 
     server_body=$(
         printf '{"name":"%s","server_type":"%s","image":%s,"location":"%s"' \
