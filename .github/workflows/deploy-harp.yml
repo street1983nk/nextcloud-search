@@ -1,0 +1,282 @@
+name: HaRP deploy
+
+# The installation path a store install takes, and the first job of this
+# repository that walks it. Both existing registration paths are manual-install
+# (.github/actions/setup-test-nc/action.yml and scripts/dev/register-exapp.sh),
+# and the docker smoke test starts the image with a hand built auth header and
+# no AppAPI at all. None of them pulls an image, creates a container or a volume,
+# and none of them reads the route list out of the release archive.
+#
+# This job does: a deploy daemon with --harp pulls the backend image from a
+# registry, creates the ExApp container and its data volume, and a search over
+# the ordinary OCS route comes back with a hit that can only have been produced
+# inside that container. Every one of those three is asserted separately, and an
+# empty result is red rather than green (the warning sign of pitfall 3).
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - 'php/appinfo/**'
+      - '.github/workflows/deploy-harp.yml'
+      # The instance this job installs comes out of the composite action, so a
+      # change there is a change to this workflow.
+      - '.github/actions/setup-test-nc/**'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'php/appinfo/**'
+      - '.github/workflows/deploy-harp.yml'
+      - '.github/actions/setup-test-nc/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run per branch. This job installs a whole Nextcloud and builds the runtime
+# image, so a superseded run is expensive to keep alive.
+concurrency:
+  group: deploy-harp-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned by digest, deliberately not by the tag "release". The tag moves, and a
+  # deploy proof that means something different next week is not a proof.
+  # Resolved on 2026-09-03 from the tag "release" of the repository
+  # ghcr.io/nextcloud/nextcloud-appapi-harp, with the command
+  # "docker buildx imagetools inspect <repository>:<tag> --format
+  # '{{.Manifest.Digest}}'" (the tag is spelled out here and nowhere as part of
+  # an image reference, so that a grep for the moving reference stays empty). The
+  # manifest is an index and carries linux/amd64 and linux/arm64, which is why
+  # the same line can be used on the ARM box later in this phase, and why the
+  # index digest is pinned rather than one of the two platform digests.
+  # scripts/dev/compose-harp.yaml carries the identical string.
+  HARP_IMAGE: ghcr.io/nextcloud/nextcloud-appapi-harp@sha256:603fdf5ca2802235fd4e40301476dd2fafff409e84a42f8cb3b8f2e17c22ce39
+
+jobs:
+  deploy-harp:
+    name: deploy-harp
+    runs-on: ubuntu-24.04
+    # A job that hangs must cost minutes, not the default six hours. The image
+    # build is the long pole here, everything after it is a handshake.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # One server version for now. Plan 05-08 widens this to stable32,
+        # stable33, stable34 and stable35 and hangs the uninstall proof into the
+        # cleanup step below. The single entry is a starting point, not an
+        # oversight. PHP 8.2 covers 32 through 34; stable35 will need 8.3.
+        server-version: ['stable34']
+        php-version: ['8.2']
+
+    env:
+      # Test-only values of a throwaway instance that is destroyed with the
+      # runner. The composite action requires both although this path starts no
+      # host process: the container gets its secret from AppAPI, not from here.
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+      TESTUSER_PASS: 'findling-ci-canary-2026'
+      LOCAL_REGISTRY: 'localhost:5000'
+      LOCAL_IMAGE_TAG: 'citest'
+
+    steps:
+      # Actions are pinned to commit SHAs, never to tags: a moved tag would be
+      # arbitrary code execution inside a job that holds a Nextcloud instance and
+      # a docker socket.
+      #
+      # These two checkouts stay in the job and stay in this order.
+      # actions/checkout empties its target directory, so the server checkout at
+      # the workspace root has to come first, and the second one is what puts the
+      # composite action below into the workspace at all.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          repository: nextcloud/server
+          ref: ${{ matrix.server-version }}
+          submodules: recursive
+
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          path: findling-src
+
+      # register-exapp: false is the whole point of this job. The instance comes
+      # up with both apps enabled and nothing else; the daemon below does the
+      # part that manual-install never did.
+      - name: Set up the test Nextcloud without registering the ExApp
+        id: setup
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: ${{ matrix.server-version }}
+          php-version: ${{ matrix.php-version }}
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+          register-exapp: 'false'
+
+      # The deploy daemon pulls registry/image:image-tag out of
+      # backend/appinfo/info.xml, which is ghcr.io/street1983nk/findling_backend
+      # at the released tag. That tag does not exist on a feature branch, so the
+      # image this run is supposed to prove has to come from somewhere local.
+      - name: Start a local registry and push the backend image into it
+        run: |
+          docker run -d -p 5000:5000 --name registry registry:2
+          docker build -t "${LOCAL_REGISTRY}/findling_backend:${LOCAL_IMAGE_TAG}" ./findling-src/backend
+          docker push "${LOCAL_REGISTRY}/findling_backend:${LOCAL_IMAGE_TAG}"
+
+      # The key is created here and never printed. add-mask covers the case of a
+      # command that echoes its own arguments, which occ does on higher verbosity
+      # levels.
+      - name: Start HaRP
+        run: |
+          harp_key=$(openssl rand -hex 16)
+          echo "::add-mask::${harp_key}"
+          echo "HARP_SHARED_KEY=${harp_key}" >> "${GITHUB_ENV}"
+          mkdir -p "${RUNNER_TEMP}/certs"
+          docker run -d --name appapi-harp -h appapi-harp \
+            -e HP_SHARED_KEY="${harp_key}" \
+            -e NC_INSTANCE_URL="http://localhost:8080" \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${RUNNER_TEMP}/certs:/certs" \
+            -p 8780:8780 -p 8782:8782 \
+            "${HARP_IMAGE}"
+          for _ in $(seq 1 30); do
+            if timeout 2 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/8780' 2>/dev/null; then
+              echo "harp accepts connections on 8780"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "harp did not open port 8780"
+          docker logs appapi-harp || true
+          exit 1
+
+      # Only for the registration. The release archive carries
+      # backend/appinfo/info.xml unchanged, because AppAPI reads the route list
+      # out of the archive at installation time: an archive with a rewritten
+      # info.xml would install an app without its search route and without an
+      # error message. The comment head of that file says the same thing next to
+      # the block it concerns.
+      - name: Build the temporary info.xml that points at the local registry
+        run: |
+          sed -e "s|<registry>ghcr.io</registry>|<registry>${LOCAL_REGISTRY}</registry>|" \
+              -e 's|<image>street1983nk/findling_backend</image>|<image>findling_backend</image>|' \
+              -e "s|<image-tag>[^<]*</image-tag>|<image-tag>${LOCAL_IMAGE_TAG}</image-tag>|" \
+              findling-src/backend/appinfo/info.xml > "${RUNNER_TEMP}/info-citest.xml"
+          grep -E '<registry>|<image>|<image-tag>' "${RUNNER_TEMP}/info-citest.xml"
+          # The source file is untouched, and this is where that is checked
+          # rather than assumed.
+          git -C findling-src diff --quiet -- backend/appinfo/info.xml
+
+      # --net host is what solves the way back: the ExApp container shares the
+      # network namespace of the runner and therefore reaches localhost:8080,
+      # where the builtin PHP server listens. Without it the server would have to
+      # bind 0.0.0.0 and the instance URL would have to point at the bridge
+      # address, with trusted_domains and overwrite.cli.url in tow. Every occ call
+      # of this job carries a timeout, because a handshake that hangs must not eat
+      # the job deadline on its own.
+      - name: Register the HaRP deploy daemon
+        run: |
+          timeout 30 ./occ app_api:daemon:register \
+            harp_proxy_host "Harp Proxy (Host)" docker-install http localhost:8780 \
+            http://localhost:8080 \
+            --harp --harp_frp_address localhost:8782 \
+            --harp_shared_key "${HARP_SHARED_KEY}" \
+            --net host --set-default
+          timeout 30 ./occ app_api:daemon:list
+
+      # --wait-finish makes the handshake synchronous, so the next step asserts a
+      # finished installation and not a race.
+      - name: Install the ExApp through the daemon
+        run: |
+          timeout 600 ./occ app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${RUNNER_TEMP}/info-citest.xml" --wait-finish
+
+      # The three assertions this job exists for. Each one has its own message,
+      # and each one treats an empty result as a failure: a deploy job that goes
+      # green without a container is the exact warning sign this phase set out to
+      # remove. The container name is not guessed, it comes out of
+      # buildExAppContainerName and is found by filtering on the app id.
+      - name: The container, the volume and the app list
+        run: |
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -z "${container}" ]; then
+            echo "no running container matches findling_backend, so the deploy daemon created nothing"
+            docker ps -a
+            exit 1
+          fi
+          echo "exapp container: ${container}"
+          docker ps --filter "name=${container}" --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
+
+          volume=$(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}')
+          if [ -z "${volume}" ]; then
+            echo "no volume matches findling_backend, so the installation has no data volume"
+            docker volume ls
+            exit 1
+          fi
+          echo "exapp volume: ${volume}"
+          # Plan 05-08 removes this volume again and needs its name, so it goes
+          # into the job summary and not only into the log.
+          {
+            echo "### HaRP deploy on ${{ matrix.server-version }}"
+            echo ""
+            echo "- container: \`${container}\`"
+            echo "- volume: \`${volume}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          timeout 30 ./occ app_api:app:list | tee app-list.txt
+          if ! grep -q 'findling_backend' app-list.txt; then
+            echo "app_api:app:list does not know findling_backend, so the registration did not survive"
+            exit 1
+          fi
+
+      # The proof has to run as an ordinary user. The admin would work too, but
+      # the user id in the answer is the load bearing part, and a second account
+      # makes it impossible to confuse it with the installer.
+      - name: Add a test user and scan the files
+        run: |
+          OC_PASS="${TESTUSER_PASS}" ./occ user:add --password-from-env testuser
+          timeout 300 ./occ files:scan --all
+
+      # The same canary call the job walking-skeleton makes, and the difference is
+      # the whole point: there a host process on the runner answers, here a
+      # container that a deploy daemon pulled and started. The subline carries the
+      # host name and the timestamp of the process that produced it and ends with
+      # the user id that only the signed AppAPI header could have carried into the
+      # backend, so a hard coded hit in PHP cannot pass this.
+      - name: Search over the ordinary OCS route
+        run: |
+          curl -sf -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary' | tee out.json
+          if ! jq -e '.ocs.data.entries | length == 1' out.json > /dev/null; then
+            echo "the search did not return exactly one hit, so nothing answered out of the container"
+            exit 1
+          fi
+          jq -e '.ocs.data.entries[0].title == "findling-canary"' out.json
+          jq -e '.ocs.data.entries[0].subline | startswith("produced inside container ")' out.json
+          jq -e '.ocs.data.entries[0].subline | endswith("for user testuser")' out.json
+
+      # The uninstall proof does not belong here, it belongs to plan 05-08:
+      # occ app_api:app:unregister findling_backend --rm-data goes in right here,
+      # before the containers are torn down, and asserts that container and volume
+      # are gone afterwards.
+      - name: Collect the logs and tear the deployment down
+        if: always()
+        run: |
+          mkdir -p "${RUNNER_TEMP}/harp-logs"
+          container=$(docker ps -a --filter 'name=findling_backend' --format '{{.Names}}' | head -n 1)
+          if [ -n "${container}" ]; then
+            docker logs "${container}" > "${RUNNER_TEMP}/harp-logs/exapp.log" 2>&1 || true
+          fi
+          docker logs appapi-harp > "${RUNNER_TEMP}/harp-logs/harp.log" 2>&1 || true
+          docker rm -f appapi-harp registry 2>/dev/null || true
+
+      - name: Upload the logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: harp-logs-${{ matrix.server-version }}
+          path: ${{ runner.temp }}/harp-logs
+          if-no-files-found: warn
+          retention-days: 7
