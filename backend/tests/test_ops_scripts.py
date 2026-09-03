@@ -12,8 +12,9 @@ they are checked here rather than remembered:
 * The sampler reads the cgroup files itself and never asks the docker client for
   a memory figure. That client reports memory.current, which counts the page
   cache of the mmap index and would overstate the store claim by gigabytes.
-The Hetzner tool joins this file with the same three checks and two of its own,
-in the plan step that creates it.
+* The Hetzner tool never puts the API token into an output, and it labels both
+  the box and the volume, because a label is the only way to find a forgotten
+  resource in an account that holds other things (T-05-17, T-05-19).
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ import pytest
 
 OPS_DIR = Path(__file__).resolve().parents[2] / "scripts" / "ops"
 RSS_SAMPLER = OPS_DIR / "rss_sampler.sh"
+HETZNER_BOX = OPS_DIR / "hetzner_box.sh"
 
 # Assembled from code points so that this file does not carry the characters it
 # forbids and fail on itself.
@@ -34,7 +36,7 @@ DASHES = (chr(0x2014), chr(0x2013))
 DOCKER_MEMORY_SHORTCUT = "docker" + " " + "stats"
 
 
-@pytest.fixture(params=[RSS_SAMPLER], ids=lambda path: path.name)
+@pytest.fixture(params=[RSS_SAMPLER, HETZNER_BOX], ids=lambda path: path.name)
 def script(request: pytest.FixtureRequest) -> Path:
     return Path(request.param)
 
@@ -76,3 +78,41 @@ def test_the_sampler_refuses_rather_than_writing_zeroes() -> None:
     text = RSS_SAMPLER.read_text(encoding="utf-8")
     assert "no readable memory.stat" in text
     assert "not one sample was written" in text
+
+
+def test_the_box_tool_names_its_four_subcommands_in_the_usage() -> None:
+    text = HETZNER_BOX.read_text(encoding="utf-8")
+    for subcommand in ("prices", "create", "status", "destroy"):
+        assert f"    {subcommand})" in text, subcommand
+    assert "usage: hetzner_box.sh <prices|create|status|destroy>" in text
+
+
+def test_the_box_tool_demands_the_token_and_never_prints_it() -> None:
+    """The value goes into a curl config on standard input and nowhere else.
+
+    Two places may mention the variable at all: the check that it is set, and the
+    one line that hands it to curl. A third would be the beginning of a token in
+    a log file (T-05-17).
+    """
+    text = HETZNER_BOX.read_text(encoding="utf-8")
+    assert ': "${HCLOUD_TOKEN:?token fehlt}"' in text
+    expanding = [line for line in text.splitlines() if "$HCLOUD_TOKEN" in line or "${HCLOUD_TOKEN" in line]
+    assert len(expanding) == 2, expanding
+    assert not [line for line in text.splitlines() if "echo" in line and "HCLOUD_TOKEN" in line]
+
+
+def test_the_box_tool_labels_the_box_and_the_volume() -> None:
+    """Two create bodies, two label fields, one label (T-05-19)."""
+    text = HETZNER_BOX.read_text(encoding="utf-8")
+    assert text.count('"labels":{"%s":"%s"}') == 2
+    assert "LABEL='purpose=findling-phase5'" in text
+
+
+def test_the_box_tool_verifies_the_deletion_and_keeps_the_state_out_of_the_repo() -> None:
+    text = HETZNER_BOX.read_text(encoding="utf-8")
+    assert "is gone, verified against the API" in text
+    assert "something is left over" in text
+    # The state file is under HOME, and the only other path in it is the override
+    # a test uses. Neither is inside the working tree.
+    assert 'STATE_DIR="${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}"' in text
+    assert "umask 077" in text
