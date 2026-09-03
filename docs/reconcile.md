@@ -49,6 +49,22 @@ Der Container zieht, die PHP-App liefert nur. Der Ablauf je Scheibe:
 5. Vergleichen: eine unbekannte Datei-Id oder ein abweichender ETag wird zur
    Inhaltsaufgabe; eine lokal bekannte Datei im Bereich der Seite, die nicht in
    der Seite steht, wird zur Löschaufgabe.
+
+   Eine Ausnahme, und sie ist die vierte Grenze: trägt die Seite für eine dem
+   Container völlig unbekannte Datei das Endurteil `failed(repeatedly_stuck)`
+   der Nextcloud-Seite, wird sie nicht eingereiht. Der Container merkt sich das
+   Urteil in seiner eigenen Tabelle `files`, und zwar gegen den ETag der Seite.
+   Damit gilt es genau so lange, wie die Datei sich nicht ändert: ein neuer ETag
+   erreicht den zweiten Zweig als gewöhnliche Arbeit, und ein Requeue von Hand
+   wirkt ohnehin, weil er die Datei über die Warteschlange ausliefert.
+
+   Ohne diese Regel war das Endurteil für abgleich-gefundene Dateien nie
+   endgültig: die Aufgabe-Regel läuft in `QueueService::claim`, ihre Queue-Zeile
+   verschwindet dabei, und der Container erfuhr davon nichts. Jede Nacht fand
+   der Vergleich dieselbe kaputte Datei unindexiert, reihte sie ein, und
+   dieselben drei Auslieferungen endeten wieder mit demselben Urteil. Auf
+   50.000 Dateien ist das Dauerlast, deren Ursache in keinem Zähler der App
+   sichtbar ist.
 6. Beides über `POST /queues/documents/requeue` einreihen, getrennt nach Art.
 7. Cursor fortschreiben, kurz pausieren, nächste Scheibe.
 

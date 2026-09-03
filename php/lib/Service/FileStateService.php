@@ -185,6 +185,16 @@ class FileStateService {
 	public const MAX_PAGE = 50;
 
 	/**
+	 * How many file ids one statement of verdictsFor may bind.
+	 *
+	 * The same value QueueMapper::DELETE_BAND uses and for the same reason: every
+	 * dialect has a ceiling on bound parameters, they differ, and a page of the
+	 * file list is not bounded by any of them. It is not a ceiling on the answer,
+	 * only on one statement of it.
+	 */
+	private const MAX_LOOKUP = 1000;
+
+	/**
 	 * Counter of everything that was thrown away, for the log line below. The
 	 * rejected value itself is never logged: it is unvalidated input from the
 	 * container, and a file name arriving as a reason is precisely the case this
@@ -415,6 +425,65 @@ class FileStateService {
 		$result->closeCursor();
 
 		return is_array($row) ? $this->shape($row) : null;
+	}
+
+	/**
+	 * The verdicts this side holds for a whole page of file ids, one query wide.
+	 *
+	 * The verdict handover of review finding IN-03, and the shape of it is the
+	 * point. The container runs the ETag comparison and gives up on nothing; the
+	 * give-up rule runs here, in QueueService::claim, and until now nothing of
+	 * its outcome ever crossed the boundary. So a file that was handed out three
+	 * times and never acknowledged ended as failed(repeatedly_stuck) over here
+	 * while the container kept reading it as an unindexed file, requeued it every
+	 * night and started the same three deliveries again. On fifty thousand files
+	 * that is permanent load whose cause is invisible in every counter the app
+	 * has.
+	 *
+	 * Asked for a page at a time and never per file. The reconcile walks in
+	 * bands of up to ReconcileController::MAX_SLICE rows, and a round trip per
+	 * row would make the repair more expensive than the work it saves. One IN
+	 * query per page is the cheapest shape that answers the question at all, and
+	 * findling_file_state is keyed by file_id, so it is a primary key lookup per
+	 * id rather than a scan.
+	 *
+	 * The band exists for the dialects and not for the size of the answer: every
+	 * database has a ceiling on bound parameters and they differ, so a page is
+	 * split the same way QueueMapper splits its acknowledgements.
+	 *
+	 * What travels back is a state and a reason code out of the two closed lists
+	 * of this class, both of which the container knows by the same names. No
+	 * path, no title and no timestamp: the container compares codes, and the
+	 * answer of this route stays inside the same privacy contract as the file
+	 * list it belongs to (T-03-1102).
+	 *
+	 * @param int[] $fileIds
+	 * @return array<int, array{state:string, reason:string}> file id to verdict
+	 */
+	public function verdictsFor(array $fileIds): array {
+		$wanted = array_values(array_unique(array_filter($fileIds, static fn (int $fileId): bool => $fileId > 0)));
+		if ($wanted === []) {
+			return [];
+		}
+
+		$verdicts = [];
+		foreach (array_chunk($wanted, self::MAX_LOOKUP) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('file_id', 'state', 'reason')
+				->from(self::TABLE_NAME)
+				->where($qb->expr()->in('file_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
+
+			$result = $qb->executeQuery();
+			while (($row = $result->fetch()) !== false) {
+				$verdicts[(int)($row['file_id'] ?? 0)] = [
+					'state' => (string)($row['state'] ?? ''),
+					'reason' => (string)($row['reason'] ?? ''),
+				];
+			}
+			$result->closeCursor();
+		}
+
+		return $verdicts;
 	}
 
 	/**

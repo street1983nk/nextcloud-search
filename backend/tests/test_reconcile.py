@@ -48,7 +48,10 @@ from findling.worker.reconcile import (
 )
 
 RECONCILE_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "worker" / "reconcile.py"
-PHP_QUEUE_CONTROLLER = Path(__file__).resolve().parents[2] / "php" / "lib" / "Controller" / "QueueController.php"
+PHP_LIB = Path(__file__).resolve().parents[2] / "php" / "lib"
+PHP_QUEUE_CONTROLLER = PHP_LIB / "Controller" / "QueueController.php"
+PHP_QUEUE_SERVICE = PHP_LIB / "Service" / "QueueService.php"
+PHP_RECONCILE_CONTROLLER = PHP_LIB / "Controller" / "ReconcileController.php"
 
 STORAGE = 3
 ROOT = 17
@@ -511,6 +514,66 @@ async def test_run_survives_an_exception_and_ends_on_the_stop_event(store: Store
 
 
 # -- the properties a grep has to keep --------------------------------------
+
+
+def _php_source(path: Path) -> str:
+    """One PHP file as text, and a missing one is red rather than green.
+
+    The anti-vacuity clause every text gate of this project carries
+    (docs/testing.md): a gate that silently passes because its source moved
+    proves nothing at all.
+    """
+    assert path.is_file(), f"the gate looks for {path.name} and it is not there any more"
+    return path.read_text(encoding="utf-8")
+
+
+def test_the_give_up_rule_delivers_three_times_and_not_four() -> None:
+    """The delivery count, pinned in the shape of the allowlist parity gate.
+
+    The arithmetic is the part that was shifted by one before (phase 2 perf
+    audit) and would be shifted again: the queue raises the counter in the claim
+    itself, so the value the rule reads already includes the hand-out that is
+    happening. Three deliveries therefore means "greater than three", and
+    "greater or equal" would cut them to two.
+
+    Read as text because a PHP constant cannot be imported, and read at all
+    because this container is the half that lives with the consequence: a rule
+    that never becomes final is a file this round requeues every night.
+    """
+    source = _php_source(PHP_QUEUE_SERVICE)
+
+    limit = re.search(r"const MAX_DELIVERIES = (\d+);", source)
+    assert limit is not None, "the delivery ceiling is no longer where this gate looks for it"
+    assert int(limit.group(1)) == 3
+
+    assert re.search(r"getRetries\(\) > self::MAX_DELIVERIES", source) is not None, (
+        "the comparison has to be strictly greater than the ceiling, see the docblock of the constant"
+    )
+    # Never against a literal: the number standing in the condition is how the
+    # ceiling and its docblock drifted apart in the first place.
+    assert re.search(r"getRetries\(\) >=?\s*\d", source) is None
+
+
+def test_a_row_that_is_given_up_costs_the_batch_no_slot_and_no_budget() -> None:
+    # The second half of the same defect: the give-up claim used to be charged
+    # against both ceilings of the batch, so a handful of permanently stuck
+    # files made every round of real work smaller. The write-offs are therefore
+    # decided before the row is charged, and the order is what this gate holds.
+    source = _php_source(PHP_QUEUE_SERVICE)
+    claim = source[source.index("public function claim(") : source.index("public function enqueue(")]
+
+    assert claim.index("repeatedly_stuck") < claim.index("$rows--")
+    assert claim.index("'skipped', 'gone'") < claim.index("$budget = max(")
+
+
+def test_the_slice_route_hands_the_verdict_over_with_the_page() -> None:
+    # The channel this round's give-up rule stands on. One query per page and
+    # never one per file: the walk works in bands, and a round trip per row
+    # would cost more than the work the rule saves.
+    source = _php_source(PHP_RECONCILE_CONTROLLER)
+
+    assert "verdictsFor" in source
+    assert re.search(r"private function withVerdicts\(array \$files\): array", source) is not None
 
 
 def test_the_reconcile_opens_no_second_index_writer() -> None:

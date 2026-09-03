@@ -209,6 +209,48 @@ UPDATE files SET path = ?, title = ?, mtime = ?, etag = ?
  WHERE file_id = ? AND deleted_at IS NULL
 """
 
+# The verdict the reconcile brings back from Nextcloud, written against the
+# version of the file it belongs to (review finding IN-03 of phase 3).
+#
+# Three properties, and each one is a defect that was possible without it.
+#
+# The etag is the whole point. A give-up is bound to the bytes it was reached on
+# and never to the file id for good: the Nextcloud row keeps saying
+# repeatedly_stuck after the document was replaced, so a rule that read only that
+# row would leave the new version out of the index forever. With the mark stored
+# here the next page answers "unchanged" while the file stands still and "stale"
+# the moment it moves, through the ordinary comparison and with no second rule.
+#
+# path stays empty and is never overwritten. The reconcile does not receive a
+# path, by design and not by omission (T-03-1102): the whole route carries file
+# ids, numbers and codes. An existing row keeps whatever the poller knew, and a
+# row created here carries the empty string, which no reader of this table uses:
+# the index gets its path from the queue entry and the diagnosis route hands out
+# no path at all.
+#
+# attempts is left alone. It counts what this container tried, and this verdict
+# was reached on the other side of the boundary; adding to it here would make the
+# per file diagnosis claim work that never happened in this process.
+#
+# deleted_at is cleared for the same reason record() clears it: a file that turns
+# up in a page again is present, and a tombstone left behind would keep the file
+# out of known_etags, so every single cycle would write this row again.
+_GIVE_UP_SQL: Final = """
+INSERT INTO files (file_id, storage_id, root_id, path, title, mime, size, mtime,
+                   etag, state, reason, attempts, index_version)
+VALUES (?, ?, ?, '', NULL, ?, ?, ?, ?, ?, ?, 0, ?)
+ON CONFLICT(file_id) DO UPDATE SET
+    storage_id = excluded.storage_id,
+    root_id    = excluded.root_id,
+    mime       = excluded.mime,
+    size       = excluded.size,
+    mtime      = excluded.mtime,
+    etag       = excluded.etag,
+    state      = excluded.state,
+    reason     = excluded.reason,
+    deleted_at = NULL
+"""
+
 # The tombstone of D-10. It marks the row instead of removing it, for two
 # reasons that pull in the same direction: phase 4 has to be able to report "it
 # was there and it is gone", which a missing row cannot say, and a file id that
@@ -639,6 +681,51 @@ class Store:
             cursor = self._conn.execute(_TOMBSTONE_SQL, (int(time.time()) if at is None else at, file_id))
         return cursor.rowcount
 
+    def give_up(
+        self,
+        file_id: int,
+        *,
+        storage_id: int,
+        root_id: int,
+        mime: str,
+        size: int,
+        mtime: int,
+        etag: str,
+        state: str,
+        reason: str,
+    ) -> None:
+        """Remember a verdict Nextcloud reached, against this version of the file.
+
+        The second writer of the ``files`` table and the narrowest one. It exists
+        because the give-up rule runs on the Nextcloud side while the comparison
+        runs in here, and the two had no channel between them: a row that was
+        handed out and never acknowledged ended over there as
+        failed(repeatedly_stuck), the queue row was removed with it, and this
+        container never heard of the file, so the nightly comparison requeued it
+        and the whole cycle started again (review finding IN-03 of phase 3).
+
+        The pair is validated exactly like :meth:`record` validates it. The values
+        arrive over the wire from a trusted component, and a trusted component
+        with a defect must not be able to write a free text into a column an
+        admin page renders.
+
+        Everything else this statement does and deliberately does not do is
+        argued at :data:`_GIVE_UP_SQL`: the etag binds the verdict to a version,
+        the path stays empty because this round never sees one, and the attempt
+        counter of this container is left alone.
+        """
+        allowed = STATE_REASONS.get(state)
+        if allowed is None:
+            raise ValueError(f"unknown state {state!r}, expected one of {sorted(STATE_REASONS)}")
+        if reason not in allowed:
+            raise ValueError(f"reason {reason!r} does not belong to state {state!r}")
+
+        with self._transaction():
+            self._conn.execute(
+                _GIVE_UP_SQL,
+                (file_id, storage_id, root_id, mime, size, mtime, etag, state, reason, self.index_version),
+            )
+
     def reset_for_reindex(self, index_version: int) -> int:
         """Forget every verdict older than this generation, return how many.
 
@@ -952,9 +1039,17 @@ def open_store(path: Path | str, *, meta: Mapping[str, str] | None = None) -> St
     There are two of these connections in a running container since plan 03-12,
     and the second one is worth naming because it used to be one. The poller
     holds the first and does every verdict, every permission row and every
-    tombstone through it. The reconcile holds the second and writes nothing but
-    its own bookmark, one small row per page of the file list; everything else it
-    does here is a read. Two writers on one SQLite file are safe under WAL, which
+    tombstone through it. The reconcile holds the second and writes two things
+    through it: its own bookmark, one small row per page of the file list, and
+    since plan 05-03 the give-up verdicts a page brought back from Nextcloud
+    (:meth:`Store.give_up`). Everything else it does here is a read.
+
+    That second write is worth naming, because it is the one place where the two
+    connections can meet on the same row. They only can while a file is unknown
+    to this container and the poller is judging it at that very moment, and the
+    outcome of a race is one repeated comparison next cycle: whichever write
+    lands second is the one that stands, and both of them carry the etag of the
+    version they saw. Two writers on one SQLite file are safe under WAL, which
     serialises them, and both transactions are milliseconds long, so the busy
     timeout is never approached. What would not be safe is sharing one connection
     between the two tasks: ``BEGIN IMMEDIATE`` is per connection, and two

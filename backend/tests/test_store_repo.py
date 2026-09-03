@@ -394,6 +394,90 @@ def test_reset_for_reindex_removes_only_the_stale_rows(store: Store) -> None:
     assert store.file_row(2) is not None
 
 
+def _give_up(store: Store, file_id: int, *, etag: str, state: str = "failed", reason: str = "repeatedly_stuck") -> None:
+    """The verdict handover of the reconcile, with the fields a page carries."""
+    store.give_up(
+        file_id,
+        storage_id=2,
+        root_id=3,
+        mime="application/pdf",
+        size=1024,
+        mtime=1_700_000_000,
+        etag=etag,
+        state=state,
+        reason=reason,
+    )
+
+
+def test_give_up_stores_the_verdict_against_the_etag_of_the_page(store: Store) -> None:
+    # The write that makes a give-up final (review finding IN-03 of phase 3). It
+    # carries the etag because the verdict belongs to the version of the file it
+    # was reached on, and the path stays empty because the reconcile never sees
+    # one.
+    _give_up(store, 1, etag="aaa")
+
+    row = store.file_row(1)
+    assert row is not None
+    assert (row["state"], row["reason"], row["etag"]) == ("failed", "repeatedly_stuck", "aaa")
+    assert row["path"] == ""
+    assert store.known_etags([1]) == {1: "aaa"}
+
+
+def test_give_up_leaves_the_attempt_counter_of_this_container_alone(store: Store) -> None:
+    # attempts counts what this process tried. The give-up was reached on the
+    # other side of the boundary, so counting it here would make the per file
+    # diagnosis claim work that never happened in this container.
+    store.record(1, a_file(1, etag="aaa"), "failed", "gateway_error")
+
+    _give_up(store, 1, etag="bbb")
+
+    row = store.file_row(1)
+    assert row is not None
+    assert row["attempts"] == 1
+    assert (row["state"], row["reason"], row["etag"]) == ("failed", "repeatedly_stuck", "bbb")
+
+
+def test_give_up_keeps_a_path_an_earlier_verdict_knew(store: Store) -> None:
+    # The empty path is the value of a row this write creates, never an erasure
+    # of one the poller already filled in.
+    store.record(1, a_file(1, etag="aaa"), "indexed", content_hash="cafe")
+
+    _give_up(store, 1, etag="aaa")
+
+    row = store.file_row(1)
+    assert row is not None
+    assert row["path"] == "files/report-1.pdf"
+
+
+def test_give_up_lifts_a_tombstone(store: Store) -> None:
+    # A file that turns up in a page again is present. Leaving the mark would
+    # keep the row out of known_etags, so every single cycle would write this
+    # verdict again instead of reading an unchanged file.
+    store.record(1, a_file(1, etag="aaa"), "indexed", content_hash="cafe")
+    store.tombstone(1, 1_700_000_500)
+
+    _give_up(store, 1, etag="aaa")
+
+    row = store.file_row(1)
+    assert row is not None
+    assert row["deleted_at"] is None
+    assert store.known_etags([1]) == {1: "aaa"}
+
+
+def test_give_up_refuses_a_pair_outside_the_closed_list(store: Store) -> None:
+    # Same rule as record(), and here it guards a value that arrived over the
+    # wire: these two codes are rendered on an admin page, and a companion app
+    # with a defect must not be able to put free text into that column.
+    with pytest.raises(ValueError, match="reason"):
+        _give_up(store, 1, etag="aaa", reason="could not read /files/anna/Kuendigung.pdf")
+    with pytest.raises(ValueError, match="reason"):
+        _give_up(store, 1, etag="aaa", reason="too_large")
+    with pytest.raises(ValueError, match="state"):
+        _give_up(store, 1, etag="aaa", state="pending")
+
+    assert store.file_row(1) is None
+
+
 def test_tombstone_marks_the_file_as_deleted_and_keeps_the_verdict_readable(store: Store) -> None:
     # The row stays. Phase 4 has to be able to say "it was there and it is gone",
     # and a deleted row could only say "never heard of it".

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Controller;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\StorageService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataResponse;
@@ -33,10 +34,11 @@ use Psr\Log\LoggerInterface;
  * HTTP methods. That is deliberate and it stays that way: a GET entered into
  * OCS_WRITE_ALLOWLIST would widen a security gate for nothing.
  *
- * The answers carry file ids, etags, sizes, modification times and mimetypes.
- * No path, no title, no user name, in the answer as much as in the log
- * (T-03-1102): counters, the storage id and the cursor are enough to follow a
- * reconcile.
+ * The answers carry file ids, etags, sizes, modification times, mimetypes and,
+ * since plan 05-03, the end state this side holds for the file as two codes out
+ * of the closed list both sides share. No path, no title, no user name, in the
+ * answer as much as in the log (T-03-1102): counters, the storage id and the
+ * cursor are enough to follow a reconcile.
  *
  * Every method carries the attribute trio fully qualified, in the spelling of
  * QueueController rather than the mixed one of GatewayController, because a grep
@@ -66,6 +68,7 @@ class ReconcileController extends OCSController {
 	public function __construct(
 		IRequest $request,
 		private StorageService $storageService,
+		private FileStateService $fileStateService,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -116,8 +119,13 @@ class ReconcileController extends OCSController {
 	/**
 	 * GET /ocs/v2.php/apps/findling/files/slice?storage=&root=&after=&limit=
 	 *
-	 * Answers with {"files": [{fileId, etag, size, mtime, mime}], "final": bool},
-	 * ordered by file id and starting behind the cursor.
+	 * Answers with {"files": [{fileId, etag, size, mtime, mime, state, reason}],
+	 * "final": bool}, ordered by file id and starting behind the cursor.
+	 *
+	 * state and reason are the end state findling_file_state holds for the file,
+	 * two empty strings for a file it has never heard of. They are what stops the
+	 * comparison from requeueing a file this side gave up on; the reasoning sits
+	 * at withVerdicts below.
 	 *
 	 * The final mark is the reason this route exists in this shape. The deletion
 	 * rule of the reconcile reads "known locally in the range (after, last id of
@@ -157,6 +165,7 @@ class ReconcileController extends OCSController {
 
 		try {
 			$files = $this->storageService->getFileSlice($storage, $root, $cursor, $size);
+			$files = $this->withVerdicts($files);
 		} catch (\Throwable $e) {
 			// Same rule as in mounts(): no library message in the log.
 			$this->logger->error('Findling: could not read a slice of a mount', ['exception' => $e]);
@@ -176,6 +185,45 @@ class ReconcileController extends OCSController {
 		]);
 
 		return new DataResponse(['files' => $files, 'final' => $final]);
+	}
+
+	/**
+	 * Add the end state this side holds to every row of a page.
+	 *
+	 * One query for the whole page, next to the one that read the page, and the
+	 * reason it is worth the second statement stands at
+	 * FileStateService::verdictsFor: the give-up rule lives on this side and the
+	 * comparison lives in the container, so without these two codes a file that
+	 * was written off as failed(repeatedly_stuck) is requeued every single night
+	 * (review finding IN-03 of phase 3). A call per row was the alternative and
+	 * would have cost more than the work it saves, because the reconcile walks in
+	 * bands of up to MAX_SLICE rows.
+	 *
+	 * A file without a row carries two empty strings, which is what the container
+	 * reads as "no verdict". Empty and absent are deliberately the same value
+	 * here: the two fields are new in plan 05-03, and a container of an older
+	 * release ignores them, so neither side has to know which release the other
+	 * one is.
+	 *
+	 * @param list<array<string, mixed>> $files
+	 * @return list<array<string, mixed>>
+	 */
+	private function withVerdicts(array $files): array {
+		if ($files === []) {
+			return [];
+		}
+
+		$verdicts = $this->fileStateService->verdictsFor(
+			array_map(static fn (array $row): int => (int)($row['fileId'] ?? 0), $files),
+		);
+
+		$rows = [];
+		foreach ($files as $row) {
+			$verdict = $verdicts[(int)($row['fileId'] ?? 0)] ?? ['state' => '', 'reason' => ''];
+			$rows[] = $row + $verdict;
+		}
+
+		return $rows;
 	}
 
 	/**

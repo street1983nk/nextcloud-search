@@ -44,8 +44,10 @@ SLICE_PATH = "/ocs/v2.php/apps/findling/files/slice"
 # while the overridden root is what the slice query walks.
 MOUNT = {"storageId": 3, "rootId": 2, "overriddenRoot": 17}
 
-# One row exactly as ReconcileController::filesSlice builds it: five fields, no
-# path, no name, no owner.
+# One row as ReconcileController::filesSlice built it before plan 05-03: five
+# fields, no path, no name, no owner. It stays in this shape on purpose, because
+# it is also the answer of a companion app one release behind, and the two
+# verdict fields below have to be optional for exactly that reason.
 ROW = {
     "fileId": 4711,
     "etag": "5d41402abc4b2a76b9719d911017c592",
@@ -53,6 +55,12 @@ ROW = {
     "mtime": 1756600000,
     "mime": "application/pdf",
 }
+
+# The same row with the verdict the Nextcloud side holds for the file: two codes
+# out of the closed list both sides share, and no third field. This is the
+# handover that stops the comparison from requeueing a file that was given up
+# (review finding IN-03 of phase 3).
+ROW_GIVEN_UP = {**ROW, "state": "failed", "reason": "repeatedly_stuck"}
 
 
 class _FakeSession:
@@ -92,7 +100,10 @@ async def test_mounts_delivers_the_mount_list_as_objects() -> None:
     assert session.calls[0][:2] == ("GET", MOUNTS_PATH)
 
 
-async def test_a_page_carries_the_five_fields_and_the_cursor() -> None:
+async def test_a_page_without_verdict_codes_reads_as_no_verdict() -> None:
+    # A row of a companion app that does not send the two codes yet. It has to
+    # produce the behaviour of before, so both fields answer with the empty
+    # string, which the round reads as "no verdict" and therefore as work.
     session = _FakeSession({("GET", SLICE_PATH): {"files": [ROW], "final": True}})
 
     result = await _files(session).page(storage=3, root=17, after=4000, limit=500)
@@ -108,9 +119,32 @@ async def test_a_page_carries_the_five_fields_and_the_cursor() -> None:
             mime="application/pdf",
         ),
     )
+    assert (result.files[0].state, result.files[0].reason) == ("", "")
     method, path, kwargs = session.calls[0]
     assert (method, path) == ("GET", SLICE_PATH)
     assert kwargs["params"] == {"storage": 3, "root": 17, "after": 4000, "limit": 500}
+
+
+async def test_a_page_carries_the_verdict_codes_of_the_nextcloud_side() -> None:
+    session = _FakeSession({("GET", SLICE_PATH): {"files": [ROW_GIVEN_UP], "final": True}})
+
+    result = await _files(session).page(storage=3, root=17, after=0, limit=500)
+
+    assert result.discarded == 0
+    assert (result.files[0].state, result.files[0].reason) == ("failed", "repeatedly_stuck")
+
+
+async def test_a_verdict_field_that_is_not_a_string_reads_as_no_verdict() -> None:
+    # The safe direction: an unreadable code must never be believed. Believing
+    # one would suppress the requeue of a file nobody ever gave up on, which is
+    # the one way this handover could lose a document.
+    for broken in (None, 17, ["failed"], {"state": "failed"}, True):
+        session = _FakeSession({("GET", SLICE_PATH): {"files": [{**ROW, "state": broken}], "final": True}})
+
+        result = await _files(session).page(storage=3, root=17, after=0, limit=500)
+
+        assert result.files[0].state == "", broken
+        assert result.discarded == 0, broken
 
 
 async def test_a_page_is_final_only_when_the_answer_says_so() -> None:
