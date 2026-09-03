@@ -15,7 +15,9 @@ automaton rather than paying for it twice, which on the 4 GB box this project
 targets is the difference between a search service and a memory problem.
 """
 
-from collections.abc import Sequence
+import hashlib
+import logging
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -34,6 +36,23 @@ from findling.index.analyzer import (
 )
 from findling.index.schema import TOKENIZER_STORED_ONLY, build_schema
 from findling.index.wordlist import wordlist_hash
+from findling.store.repo import Store
+
+LOGGER = logging.getLogger("findling.index.open")
+
+# The mark that says which set of expected versions a rebuild is aimed at.
+#
+# It is not a version of anything and never compared against the code; it is a
+# fingerprint, and its only job is to tell "a rebuild for exactly this code is
+# already under way" from "the code changed again". Without it a container that
+# restarts during a rebuild would raise the generation on every start and make
+# the work of the previous start stale each time, which on a box that restarts
+# often is a rebuild that never ends.
+REBUILD_MARK: Final = "rebuild_for"
+
+# The one mark that is never written by the stamp below, spelled out here so
+# that the exception is visible next to the function that has to make it.
+_LOCAL_GENERATION: Final = "index_version"
 
 # Any token of one byte or more is dropped, which is every token there is. See
 # stored_only_analyzer below for why that is the wanted behaviour.
@@ -115,8 +134,121 @@ def expected_versions(digest: str) -> dict[str, str]:
     """
     return {
         "schema_version": str(SCHEMA_VERSION),
-        "index_version": str(INDEX_VERSION),
+        _LOCAL_GENERATION: str(INDEX_VERSION),
         "analyzer_version": str(ANALYZER_VERSION),
         "wordlist_hash": digest,
         "tantivy_version": TANTIVY_VERSION,
     }
+
+
+def _fingerprint(expected: Mapping[str, str]) -> str:
+    """One short name for a whole set of expected marks.
+
+    Only equality is ever asked of it, so any stable function of the values will
+    do; a hash is used rather than the values themselves so that the mark stays
+    one short row whatever a future mark carries.
+    """
+    material = "\n".join(f"{key}={expected[key]}" for key in sorted(expected))
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+
+
+def start_rebuild_on_drift(store: Store, expected: Mapping[str, str]) -> int | None:
+    """Raise the local generation when the index was built by other code.
+
+    Returns the new generation, or None when there is nothing to rebuild.
+
+    **Why raising the generation is the rebuild.** The remedy the reindex banner
+    names is ``occ findling:index --restart``, which queues a crawl of every
+    mount, and until this plan that crawl did nothing at all: the fast path of
+    the poller asks :meth:`findling.store.repo.Store.is_unchanged`, which
+    compares the content hash and the generation, and an analyzer drift moves
+    neither of them. Every file came back, matched, and was acknowledged without
+    a byte being read. Raising the generation makes every stored verdict stale
+    at once, so the crawl the admin asked for actually reads the documents again.
+
+    **Why it happens once per drift and not once per start.** The fingerprint of
+    the marks being rebuilt towards is written next to the generation. A
+    container that restarts in the middle of a two day rebuild finds its own
+    fingerprint, leaves the generation alone and carries on; a container whose
+    code changed again finds a different one and starts a rebuild for the new
+    code. Without that distinction a box that restarts nightly would make the
+    work of every day stale on the next morning.
+
+    **What it does not do is declare anything current.** The marks stay as they
+    are, so the banner stays up for as long as the work is not through. That is
+    :func:`stamp_after_rebuild`'s job and nobody else's.
+    """
+    if not store.version_mismatch(expected):
+        return None
+
+    wanted = _fingerprint(expected)
+    if store.read_meta().get(REBUILD_MARK) == wanted:
+        return None
+
+    generation = store.index_version + 1
+    store.write_meta(_LOCAL_GENERATION, str(generation))
+    store.write_meta(REBUILD_MARK, wanted)
+    LOGGER.warning(
+        "the index was built by different code; raised the generation to %d so the next crawl rebuilds it",
+        generation,
+    )
+    return generation
+
+
+def stamp_after_rebuild(store: Store, expected: Mapping[str, str]) -> bool:
+    """Write the marks of the running code once the rebuild is through.
+
+    Returns True when the marks are current afterwards, which includes the
+    ordinary case of an index that never drifted, and False while there is still
+    work to do. A caller that polls this may stop the moment it answers True.
+
+    **What "through" means here, exactly.** Not the end of the command and not
+    an empty queue: the state in which no living file carries a verdict of an
+    earlier generation any more, which is what
+    :meth:`findling.store.repo.Store.verdicts_older_than` counts. Every writer
+    of a verdict stamps the generation that is running, so a file that ends as
+    indexed, skipped or failed under this code leaves the count, and a file that
+    was never touched again keeps it above zero.
+
+    **The limit of that definition, named as the plan requires.** It is the
+    second best form, because it can only see files this container has heard of.
+    A file that was deleted in Nextcloud without a delete job reaching the
+    container keeps its old row and holds the count above zero until the nightly
+    reconcile turns it into a tombstone, which the count leaves out. So the
+    stamp can be a night late on an instance where documents were deleted during
+    an update. That is the direction to be late in: a mark written too early
+    declares half an index complete and takes away the one banner that told the
+    admin why hits are missing (T-05-48).
+
+    **The generation is deliberately not written back.** ``index_version`` in
+    the expected marks is the baseline of the code, while the stored one is the
+    local generation, and after a rebuild the local one stands above it. The
+    store reads that mark as a floor rather than as an equality for exactly this
+    reason. Writing the baseline back would make every row of the rebuild that
+    just finished look stale and start the whole thing over.
+
+    **This is not the seed and must never move into it.** ``_seed_meta`` fills
+    in a mark that is missing and touches nothing that is there, because an
+    existing database has to keep the marks its index was really built with.
+    This function is the opposite operation and therefore a separate one.
+    """
+    stored = store.read_meta()
+    if not store.version_mismatch(expected) and not stored.get(REBUILD_MARK):
+        # Nothing drifted and nothing is being rebuilt, so there is nothing to
+        # write. Said here rather than at the call site because a caller that
+        # had to know this would be a second place deciding what a current index
+        # looks like, and it saves the count below on every ordinary instance.
+        return True
+
+    generation = store.index_version
+    remaining = store.verdicts_older_than(generation)
+    if remaining > 0:
+        return False
+
+    for key, value in expected.items():
+        if key == _LOCAL_GENERATION:
+            continue
+        store.write_meta(key, value)
+    store.write_meta(REBUILD_MARK, "")
+    LOGGER.info("the rebuild is through at generation %d; the version marks are current again", generation)
+    return True

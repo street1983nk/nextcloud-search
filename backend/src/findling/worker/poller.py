@@ -66,7 +66,7 @@ from findling.config import settings
 from findling.extract.dispatch import Route, extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.sandbox import extract_guarded
-from findling.index.open import expected_versions, open_index
+from findling.index.open import expected_versions, open_index, stamp_after_rebuild, start_rebuild_on_drift
 from findling.index.wordlist import build_artifact
 from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord
 from findling.nc import client as nc_client
@@ -213,8 +213,18 @@ def _open_state() -> Store:
     created by this process carries unknown/0 marks forever: every answer says
     degraded, /status reports reindexRequired, and the drift alarm this
     mechanism exists for becomes permanent noise nobody reads (bug audit H1).
+
+    A database that WAS built by other code is put into a rebuild here, which is
+    the second half of DI-04-04: the banner names ``occ findling:index
+    --restart`` as its remedy, and that crawl only rebuilds anything once the
+    generation has moved. Raising it declares nothing current; the marks are
+    written by :func:`findling.index.open.stamp_after_rebuild` and only after
+    the last file has been judged by this code.
     """
-    return open_store(settings().state_db, meta=expected_versions(build_artifact().digest))
+    expected = expected_versions(build_artifact().digest)
+    store = open_store(settings().state_db, meta=expected)
+    start_rebuild_on_drift(store, expected)
+    return store
 
 
 def _open_writer(store: Store) -> IndexBatchWriter:
@@ -312,6 +322,10 @@ class Poller:
         # not to the queue: the queue answers one call, the state is a sequence.
         self._unavailable_rounds = 0
         self._retreat_announced = False
+        # Whether this process has yet seen the version marks agree with the
+        # running code. True until an idle pass proved otherwise, so a container
+        # asks the question once per start rather than once per poll (DI-04-04).
+        self._marks_unproven = True
         self._armed = asyncio.Event()
 
     # -- lifecycle -------------------------------------------------------
@@ -411,6 +425,15 @@ class Poller:
         # half is there and has nothing to do.
         self._recovered()
         if not claim.jobs:
+            # The one moment a rebuild can be through, and therefore the only
+            # moment worth asking (DI-04-04). Asking after every pass would put
+            # a count over the whole file table between two batches on a box
+            # with fifty thousand documents; asking here costs one query per
+            # idle poll, and the flag stops even that as soon as the answer is
+            # yes once, which on an instance that never drifted is the first
+            # idle poll of the process.
+            if self._marks_unproven:
+                self._marks_unproven = not await asyncio.to_thread(self._stamp_if_rebuilt)
             self._back_off()
             return RoundResult(ROUND_EMPTY)
 
@@ -1025,6 +1048,29 @@ class Poller:
         self._held.clear()
         self._back_off()
         return RoundResult(state, claimed=claimed)
+
+    def _stamp_if_rebuilt(self) -> bool:
+        """Write the version marks again once the last file has been re-judged.
+
+        The half of DI-04-04 that keeps the promise of the banner: its remedy
+        says a restart makes it go away, and this is what makes it go away, with
+        nobody stamping anything by hand.
+
+        It runs on an empty queue only, and it runs whether or not this container
+        raised the generation itself, because the pass that finishes a rebuild is
+        rarely the process that started it. On an instance without a drift the
+        marks are already current, the write is a write of the same values, and
+        the count behind it is the only cost.
+
+        A failure is swallowed on purpose. This is bookkeeping about the index
+        and not the index: a locked database here must not end a pass whose
+        documents are durable, and the next idle poll asks again.
+        """
+        try:
+            return stamp_after_rebuild(self._store_or_die(), expected_versions(build_artifact().digest))
+        except Exception as error:
+            LOGGER.warning("could not refresh the version marks, %s", type(error).__name__)
+            return False
 
     def _store_or_die(self) -> Store:
         if self._store is None:  # pragma: no cover - _open sets it

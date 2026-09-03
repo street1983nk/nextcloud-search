@@ -2289,3 +2289,158 @@ async def test_a_file_judged_again_carries_its_new_reason(
     await poller.run_once()
 
     assert queue.skips == [{4711: "mime_not_allowed"}, {4711: "empty_text"}]
+
+
+# -- the whole chain of the reindex banner (DI-04-04) ------------------------
+
+
+def _aged_state(volume: Path) -> None:
+    """A state database whose index was built by an older text analysis.
+
+    One indexed file and marks that do not match this code, which is what a
+    container update leaves behind on a volume that has been indexing for weeks.
+    """
+    aged = open_store(settings().state_db, meta=expected_versions("older-digest"))
+    aged.record(
+        4711,
+        FileMeta(
+            storage_id=3,
+            root_id=2,
+            path="Vertraege/Kuendigung.txt",
+            title="Kuendigung.txt",
+            mime="text/plain",
+            size=len(BODY_BYTES),
+            mtime=1_756_600_000,
+            etag="5d41402abc4b2a76b9719d911017c592",
+        ),
+        "indexed",
+        None,
+        content_hash=hashlib.sha256(BODY_BYTES).hexdigest(),
+    )
+    aged.close()
+
+
+async def test_the_restart_rebuilds_and_the_banner_goes_by_itself(
+    volume: Path, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    """DI-04-04 end to end: the remedy the banner names actually clears it.
+
+    The chain is the one an admin walks: the container comes up after an update,
+    the marks disagree, ``occ findling:index --restart`` puts every file back
+    into the queue, the pass reads them again, and the moment the queue runs dry
+    the marks are written and the drift is gone. Nobody stamped anything.
+    """
+    digest = write_wordlist(volume)
+    expected = expected_versions(digest)
+    _aged_state(volume)
+
+    store = _open_state()
+    try:
+        # The state an admin sees as the banner, and the raised generation that
+        # is what makes the restart do anything at all.
+        assert store.version_mismatch(expected) != []
+        assert store.is_unchanged(4711, hashlib.sha256(BODY_BYTES).hexdigest()) is False
+
+        queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+        poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+        worked = await poller.run_once()
+        assert worked.indexed == 1
+        # Still up: the queue has not been proven empty yet, so the rebuild is
+        # not through and nothing may be declared current.
+        assert store.version_mismatch(expected) != []
+
+        empty = await poller.run_once()
+
+        assert empty.state == ROUND_EMPTY
+        assert store.version_mismatch(expected) == []
+    finally:
+        store.close()
+
+
+async def test_an_unfinished_rebuild_keeps_the_banner_up(
+    volume: Path, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # T-05-48. The queue is empty because the crawl has not been queued yet, not
+    # because the work is done, and the old row is the proof: a mark written
+    # here would call an index of the old analysis current and take away the one
+    # line telling the admin why hits are missing.
+    digest = write_wordlist(volume)
+    expected = expected_versions(digest)
+    _aged_state(volume)
+
+    store = _open_state()
+    try:
+        poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue())
+
+        result = await poller.run_once()
+
+        assert result.state == ROUND_EMPTY
+        assert store.version_mismatch(expected) != []
+    finally:
+        store.close()
+
+
+async def test_an_index_that_never_drifted_is_left_alone(
+    volume: Path, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The ordinary instance, which is every instance most of the time. Nothing
+    # is raised, nothing is written, and the generation stays where it was.
+    digest = write_wordlist(volume)
+    expected = expected_versions(digest)
+
+    store = _open_state()
+    try:
+        before = store.index_version
+        poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue())
+
+        await poller.run_once()
+
+        assert store.index_version == before
+        assert store.version_mismatch(expected) == []
+    finally:
+        store.close()
+
+
+async def test_a_rebuild_survives_a_restart_of_the_container(
+    volume: Path, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # A rebuild of fifty thousand files on a four gigabyte box runs for days, and
+    # such a box restarts. A container that raised the generation again on every
+    # start would make the work of every day stale on the next morning, so the
+    # second start has to find the rebuild it is already in.
+    write_wordlist(volume)
+    _aged_state(volume)
+
+    first = _open_state()
+    generation = first.index_version
+    first.close()
+
+    second = _open_state()
+    try:
+        assert second.index_version == generation
+    finally:
+        second.close()
+
+
+async def test_a_pass_that_cannot_write_the_marks_still_ends(
+    volume: Path, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Bookkeeping about the index is not the index. A locked database here must
+    # not end a pass whose documents are durable, and the next idle poll asks
+    # again rather than the container falling over.
+    write_wordlist(volume)
+    _aged_state(volume)
+    store = _open_state()
+    try:
+        poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue())
+        monkeypatch.setattr(
+            "findling.worker.poller.stamp_after_rebuild",
+            lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("locked")),
+        )
+
+        result = await poller.run_once()
+
+        assert result.state == ROUND_EMPTY
+    finally:
+        store.close()
