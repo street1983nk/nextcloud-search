@@ -57,8 +57,15 @@ weeks. "occ findling:index --status" shows how far it has come.]]></description>
 		file without a browser, which is the way a support case takes: the admin
 		route of this app demands the request token of a real browser session, so
 		occ is the only access to that answer from a shell.
+
+		The uninstall step is the other half of the same lifecycle, and it is
+		here for a reason that is easy to get wrong: Nextcloud executes
+		repair-steps/uninstall in AppManager::disableApp(), so this entry is
+		reached by every disable and not only by a removal. That is why the step
+		removes nothing unless an administrator stated the intent first, and why
+		docs/uninstall.md carries the measurement instead of a claim.
 	-->
-	<repair-steps><install><step>OCA\Findling\Repair\AppInstallStep</step></install></repair-steps>
+	<repair-steps><install><step>OCA\Findling\Repair\AppInstallStep</step></install><uninstall><step>OCA\Findling\Repair\AppUninstallStep</step></uninstall></repair-steps>
 	<commands><command>OCA\Findling\Command\IndexCommand</command><command>OCA\Findling\Command\DiagnoseCommand</command></commands>
 	<!--
 		The settings block, written on one line for the same reason as the two
