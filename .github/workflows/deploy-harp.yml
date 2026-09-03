@@ -547,6 +547,13 @@ jobs:
           fi
           echo "container and volume ${EXAPP_VOLUME} both gone"
 
+      # Every query below carries ".timeout 30000", and that is a measurement as
+      # well: the ExApp container is running next to these reads and Nextcloud
+      # writes to the same sqlite file for it, so the plain client walked into
+      # "in prepare, database is locked (5)" on Nextcloud 32 (run 33756788051)
+      # while the other three versions happened to read between two writes. A
+      # busy timeout turns a race into a wait.
+      #
       # Assertions 4 and 5 ask the same two questions of the database, and they
       # ask the database rather than occ on purpose: there is no occ command that
       # reports whether a table exists (occ db:* converts, adds indices and
@@ -592,16 +599,16 @@ jobs:
       - name: Uninstall 4, a disable without intent keeps tables and settings
         run: |
           expected='oc_findling_file_state oc_findling_queue oc_findling_scan_stats'
-          tables=$(sqlite3 "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
-          settings=$(sqlite3 "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          tables=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
           echo "before the disable: tables [${tables}], settings ${settings}"
           if [ "${tables}" != "${expected}" ]; then
             echo "the three tables of the app are not all there before the disable, expected [${expected}] and found [${tables}]"
             exit 1
           fi
           timeout 300 ./occ app:disable findling
-          tables=$(sqlite3 "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
-          settings=$(sqlite3 "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          tables=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
           echo "after the disable: tables [${tables}], settings ${settings}"
           if [ "${tables}" != "${expected}" ]; then
             echo "the disable removed tables although no intent was armed, expected [${expected}] and found [${tables}]"
@@ -624,8 +631,8 @@ jobs:
             --info-xml "${RUNNER_TEMP}/info-citest.xml" --wait-finish
           timeout 300 ./occ findling:purge --arm --no-interaction
           timeout 300 ./occ app:remove findling
-          tables=$(sqlite3 "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
-          settings=$(sqlite3 "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          tables=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
           echo "after the remove with intent: tables [${tables}], settings ${settings}"
           if [ -n "${tables}" ]; then
             echo "the remove with intent left tables behind: [${tables}]"
