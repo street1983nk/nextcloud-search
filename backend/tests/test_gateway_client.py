@@ -231,6 +231,69 @@ async def test_an_unexpected_error_is_not_swallowed() -> None:
             await fetch_file_stream(_app(), 1, "testuser", io.BytesIO(), client=client)
 
 
+def test_the_block_size_is_a_named_constant_of_one_mebibyte() -> None:
+    """The block size, and the arithmetic that decides it (phase 2 perf audit).
+
+    Every block of the answer is one hop into a worker thread, because the sink
+    is an ordinary file object and the write may not happen on the event loop. At
+    64 kB a 50 MB scan cost roughly 800 of those hops, and on the ARM box of the
+    load test that was measured as the most noticeable item of the whole audit
+    list. At 1 MiB the same file costs about 50.
+
+    The price is memory, and it is one block per running download: with
+    INDEX_WORKERS at one that is exactly one mebibyte, which is nothing next to
+    the 300 to 600 MB an OCR page costs on the same box.
+    """
+    assert CHUNK_SIZE == 1024 * 1024
+    # The two numbers the paragraph above claims, computed rather than repeated.
+    assert -(-50_000_000 // CHUNK_SIZE) <= 50
+    assert -(-50_000_000 // 65536) > 700
+
+
+async def test_a_large_body_costs_one_thread_hop_per_mebibyte_and_no_more() -> None:
+    # The hop count seen from the outside, against an absolute size rather than
+    # against the constant: four mebibytes are four writes, not sixty four. This
+    # is the test that goes red if the block size is lowered again without the
+    # memory argument being revisited.
+    payload = bytes(4 * 1024 * 1024)
+    gateway = _Gateway(chunks=[payload])
+    sink = _CountingBuffer()
+
+    async with gateway.client() as client:
+        written = await fetch_file_stream(_app(), 1, "testuser", sink, client=client)
+
+    assert written == len(payload)
+    assert len(sink.block_sizes) == 4
+
+
+async def test_a_byte_cap_inside_a_block_still_cuts_the_download_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """T-05-11: the larger block may not carry the cap over.
+
+    The cap is deliberately put inside the second block, which is the case a
+    cap on a block boundary would not exercise. Two properties are asserted, and
+    the second one is the one the block size could have broken: not a single byte
+    beyond the cap reaches the sink, so the abort is no later than it was at
+    64 kB. What the larger block does cost is that the block which crosses the
+    cap is read into memory before it is refused, and that is one block, which is
+    the documented price of the block size itself.
+    """
+    cap = CHUNK_SIZE + 7
+    monkeypatch.setenv("FINDLING_MAX_FILE_BYTES", str(cap))
+    config.settings.cache_clear()
+    try:
+        gateway = _Gateway(chunks=[bytes(3 * CHUNK_SIZE)])
+        sink = io.BytesIO()
+
+        async with gateway.client() as client:
+            with pytest.raises(FileTooLargeError):
+                await fetch_file_stream(_app(), 1, "testuser", sink, client=client)
+
+        assert len(sink.getvalue()) == CHUNK_SIZE
+        assert len(sink.getvalue()) <= cap
+    finally:
+        config.settings.cache_clear()
+
+
 async def test_the_body_arrives_in_blocks_of_at_most_the_chunk_size() -> None:
     # A bounded block size is what keeps a multi gigabyte file out of the heap of
     # a 4 GB box. The payload is deliberately larger than one block and not a
