@@ -19,6 +19,9 @@ node_modules/
 
 # PHP
 vendor/
+# Result cache of the PHPUnit suite, written next to php/phpunit.xml. It is a
+# per machine artefact of the last run and says nothing a checkout needs.
+.phpunit.cache/
 
 # Runtime and build output
 data/
