@@ -66,6 +66,15 @@ CRAWL = PHP_ROOT / "BackgroundJobs" / "StorageCrawlJob.php"
 LISTENER = PHP_ROOT / "Listener" / "FileEventListener.php"
 STORAGE_SERVICE = PHP_ROOT / "Service" / "StorageService.php"
 
+# The third call site, added for review finding CR-01. The reconcile of plan
+# 03-12 is a third way into the queue: it requeues every file whose etag the
+# container cannot match, and it never sees a path, so the hand-out of the bytes
+# in QueueService::describe is the last point the rules of today can be applied.
+# Without a check there a fresh exclusion is undone within one reconcile
+# interval, because the container reads the tombstones of the cleared subtree as
+# restores and re-fetches the whole folder.
+QUEUE_SERVICE = PHP_ROOT / "Service" / "QueueService.php"
+
 # The one helper both call paths go through, and the one method that builds the
 # path they hand it.
 HELPER_CALL = "isExcluded"
@@ -188,10 +197,10 @@ def _call_sites() -> list[tuple[str, str]]:
 # -- the real tree ---------------------------------------------------------
 
 
-def test_the_three_files_of_the_exclusion_exist() -> None:
+def test_the_four_files_of_the_exclusion_exist() -> None:
     # The anti vacuity clause. Every scanner above returns an empty list for a
     # file it cannot read, so a gate that lost its files would look perfect.
-    missing = [path.name for path in (CRAWL, LISTENER, STORAGE_SERVICE) if not path.is_file()]
+    missing = [path.name for path in (CRAWL, LISTENER, STORAGE_SERVICE, QUEUE_SERVICE) if not path.is_file()]
 
     assert missing == []
 
@@ -216,6 +225,48 @@ def test_the_path_space_is_built_by_the_one_method_that_owns_it() -> None:
         code = statements(source)
 
         assert any(PATH_SPACE_CALL in line for _, line in code), name
+
+
+def test_the_reconcile_requeue_path_consults_the_helper() -> None:
+    # Review finding CR-01. QueueService::describe is the point where a row the
+    # reconcile requeued turns back into a fetch of the bytes, so the rules of
+    # today have to be asked there through the same helper and the same path
+    # space as the other two call sites. The cap half of scan_call_site does not
+    # apply here, because describe hands out work orders and enforces no size,
+    # so the two exclusion checks are asserted on their own.
+    code = statements(QUEUE_SERVICE.read_text(encoding="utf-8"))
+
+    violations = [
+        f"{QUEUE_SERVICE.name}:{number}: compares a path with {comparison} instead of asking "
+        f"ExclusionService::{HELPER_CALL}, which is a second path space"
+        for number, line in code
+        for comparison in PREFIX_COMPARISONS
+        if comparison in line
+    ]
+
+    assert violations == []
+    assert any(HELPER_CALL in line for _, line in code), (
+        f"{QUEUE_SERVICE.name}: never calls ExclusionService::{HELPER_CALL}, so the reconcile "
+        "re-indexes an excluded subtree within one interval and undoes the clearing"
+    )
+    assert any(PATH_SPACE_CALL in line for _, line in code), QUEUE_SERVICE.name
+
+
+def test_an_excluded_row_is_handed_out_as_a_delete_order() -> None:
+    # The other half of CR-01, and the half that keeps a cleared subtree clear:
+    # a tombstoned file that the reconcile requeued as a restore has to be
+    # re-deleted, not merely dropped. Dropping the row would leave the document
+    # in the index whenever the file was indexed before the rule arrived. So the
+    # branch behind the helper has to answer with a delete order, and this test
+    # reads exactly that: KIND_DELETE within the statements that follow the
+    # isExcluded call.
+    lines = [line for _, line in statements(QUEUE_SERVICE.read_text(encoding="utf-8"))]
+    index = next(i for i, line in enumerate(lines) if HELPER_CALL in line)
+
+    assert any("KIND_DELETE" in line for line in lines[index : index + 8]), (
+        f"{QUEUE_SERVICE.name}: the exclusion branch of describe() does not answer with a "
+        "delete order, so a tombstoned excluded file is not re-deleted"
+    )
 
 
 def test_the_two_mount_switches_are_read_and_the_external_entry_is_live() -> None:

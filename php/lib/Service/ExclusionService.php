@@ -568,10 +568,14 @@ final class ExclusionService {
 	/**
 	 * Does a rule of today leave this file alone?
 	 *
-	 * THE helper, and the only one. The crawl and the event listener both call
-	 * this method with a path built by mountRelativePath() below, and neither of
-	 * them compares a prefix itself. Two call sites with two comparisons is
-	 * pitfall 4 of the phase research, and the failure mode is quiet: the crawl
+	 * THE helper, and the only one. The crawl, the event listener and the claim
+	 * of QueueService::describe all call this method with a path built by
+	 * mountRelativePath() below, and none of them compares a prefix itself. The
+	 * third call site exists because the reconcile of plan 03-12 is a third way
+	 * into the queue that never sees a path, so the hand-out of the bytes is the
+	 * last point the rules of today can be applied (review finding CR-01).
+	 * Call sites with comparisons of their
+	 * own are pitfall 4 of the phase research, and the failure mode is quiet: the crawl
 	 * leaves the folder alone, every save inside it queues the file again, and
 	 * the index fills up slowly with exactly what was supposed to be left out
 	 * while nothing on the page says so. The warning has been standing in

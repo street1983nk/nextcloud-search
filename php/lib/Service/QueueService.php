@@ -82,6 +82,8 @@ class QueueService {
 	public function __construct(
 		private QueueMapper $queueMapper,
 		private FileStateService $fileStateService,
+		private ExclusionService $exclusionService,
+		private StorageService $storageService,
 		private IUserMountCache $userMountCache,
 		private IRootFolder $rootFolder,
 		private IDBConnection $db,
@@ -464,6 +466,46 @@ class QueueService {
 			$mount = $node->getMountPoint();
 			$storageId = $storageId !== 0 ? $storageId : (int)$mount->getNumericStorageId();
 			$rootId = $rootId !== 0 ? $rootId : (int)$mount->getStorageRootId();
+		}
+
+		// A rule of TODAY, asked one last time before the bytes travel. The
+		// reconcile of plan 03-12 is a third way into this queue, next to the
+		// crawl and the event listener: it requeues every file whose etag the
+		// container cannot match, it never sees a path, and the slice it reads
+		// deliberately carries excluded files (see the docblocks of
+		// StorageService::getFileSlice). Without a check here a fresh exclusion
+		// is undone within one reconcile interval: the container reads every
+		// tombstoned row of the cleared subtree as a restore, requeues it as
+		// content, and this method would hand out its bytes again (review
+		// finding CR-01). The same helper on the same path space as the other
+		// two call sites, so a prefix cannot hit in one place and miss in
+		// another (pitfall 4), and backend/tests/test_exclusion_path_space.py
+		// holds this call site alongside the other two.
+		//
+		// The outcome is a delete order and not a dropped row. Dropping the row
+		// as skipped(gone) would leave the document in the index whenever the
+		// file was indexed before the rule arrived, and it would leave the row
+		// travelling through the lock timeout again. The delete order is what
+		// the container needs to clear the file and keep it clear: _forget is
+		// idempotent, so re-deleting an already cleared file costs one write and
+		// nothing else. The shape is the same as the delete branch above,
+		// because the node must not matter to the container for a file it is
+		// about to forget.
+		//
+		// The list is asked first so that the root lookup costs nothing on an
+		// instance without exclusions, same as in the event listener.
+		if ($this->exclusionService->prefixes() !== []) {
+			$relative = $this->exclusionService->mountRelativePath(
+				$node->getInternalPath(),
+				$this->storageService->mountRootPath($storageId, $rootId),
+			);
+			if ($this->exclusionService->isExcluded($relative)) {
+				return [
+					'fileId' => $fileId,
+					'storageId' => $storageId,
+					'kind' => QueueMapper::KIND_DELETE,
+				];
+			}
 		}
 
 		return [
