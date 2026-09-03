@@ -439,3 +439,42 @@ würde ein gültiges Verdikt wegen einer Rechteänderung verwerfen.
 **Wohin es gehört:** in den Phase-Review oder in einen Folgeplan, der an der
 Quittierung arbeitet. Bis dahin räumt ein `occ findling:index --restart` auf,
 weil der Neuaufbau jede Datei neu beurteilt.
+
+## DI-05-16: Die Provenance des veroeffentlichten Images ist unsigniert
+
+**Found during:** Plan 05-13, bei der Beantwortung von Sec-L9.
+
+**Was:** Der veroeffentlichte Index von
+`ghcr.io/street1983nk/findling_backend:dev` traegt je Plattform eine
+Provenance-Bescheinigung, das ist am 03.09.2026 gegen die Registry geprueft und
+seit diesem Plan ein Gate im merge-Job von `docker.yml`. Inhalt: eine
+in-toto-Aussage mit `predicateType https://slsa.dev/provenance/v1`, erzeugt von
+buildkit, mit Quellrepository, Commit und den aufgeloesten Digests der
+Basisimages. Das ist ein Pruefpfad und keine Unterschrift. `gh attestation
+verify` kann sie nicht pruefen, weil dieser Befehl eine GitHub Artifact
+Attestation erwartet, also `actions/attest-build-provenance` mit
+`id-token: write`, und diesen Schritt gibt es in `docker.yml` nicht.
+
+**Warum das nicht hier erledigt wurde:** Eine echte Signatur ist keine Zeile.
+Sie braucht `id-token: write` in einem Workflow, der heute ausdruecklich nur
+`contents: read` und `packages: write` fuehrt und dessen Kommentar diese
+Sparsamkeit begruendet, sie braucht eine Aussage darueber, was ein Nutzer damit
+prueft und wo diese Anleitung steht, und sie beruehrt den Veroeffentlichungsweg,
+der in dieser Phase ohnehin noch von der Release-Arbeit angefasst wird.
+
+**Wohin es gehoert:** in den Plan, der den Release-Weg besitzt (Tag `v1.0.0`,
+D-26), oder in den Phase-Review. Der Umfang: ein Schritt
+`actions/attest-build-provenance` im merge-Job, `id-token: write` in den
+Berechtigungen, und ein Absatz in der Doku, der den Pruefbefehl nennt. Bis dahin
+gilt die Aussage der Datei genau so, wie sie dort steht.
+
+## DI-05-10 ist beantwortet (aus Plan 05-13)
+
+Der ausstehende CI-Lauf des Jobs `search-parity` aus DI-05-10 ist gesehen: Lauf
+33766125632 auf dem Zweig `worktree-agent-05-13`, gruen in 5,6 Minuten, und
+derselbe Job war schon im Lauf 33761279279 auf `main` gruen. Damit sind auch die
+drei dort offen gebliebenen Teile beantwortet: `occ app:install groupfolders`
+geht auf dem Runner durch, `occ config:app:set core
+unified_search_max_results_per_request --type=integer` kennt die Option auf
+stable34, und die sechs Szenarien liefern ihre Trefferzahlen. Der Eintrag oben
+bleibt als Fundstelle stehen, dieser Absatz ist seine Erledigung.

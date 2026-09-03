@@ -121,14 +121,14 @@ jobs:
       # has to come first, and the second one is what puts the composite action
       # below into the workspace at all.
       - name: Check out nextcloud/server
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
 
@@ -381,14 +381,14 @@ jobs:
       # empties the workspace root, and the second checkout is what brings the
       # composite action into the workspace.
       - name: Check out nextcloud/server
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
 
@@ -796,22 +796,43 @@ jobs:
       fail-fast: false
       matrix:
         # The value travels into the composite action and ends up as the
-        # --database=sqlite or --database=mysql of occ maintenance:install. The
-        # installed dialect is printed there rather than assumed, because a run
-        # that quietly fell back would answer the dialect question with the
-        # dialect it was asked about.
-        database: ['sqlite', 'mysql']
+        # --database=sqlite, --database=mysql or --database=pgsql of occ
+        # maintenance:install. The installed dialect is printed there rather than
+        # assumed, because a run that quietly fell back would answer the dialect
+        # question with the dialect it was asked about.
+        #
+        # pgsql joined on 03.09.2026 and it is the one entry that is not a
+        # portability exercise: Nextcloud all-in-one runs
+        # ghcr.io/nextcloud-releases/aio-postgresql, so PostgreSQL is the dialect
+        # of the environment this app has to work on, and it was the only one the
+        # project had never installed against. It also has the only
+        # dialect-specific defect on record, perf finding M7 of phase 2, which
+        # the last step of this job now asks about by name.
+        #
+        # It runs on every push and not on a schedule, and the measurement says
+        # that is affordable: the three entries are one matrix and run in
+        # parallel, so the wall clock of the job does not move. The three most
+        # recent runs took two and a half to four and a half minutes per dialect
+        # (runs 33761279279, 33747191605, 33745892446, read on 03.09.2026), and a
+        # third entry costs runner minutes, not feedback time. A dialect that is
+        # only tested weekly is a dialect whose breakage is found by a user.
+        database: ['sqlite', 'mysql', 'pgsql']
         server-version: ['stable34']
         php-version: ['8.2']
 
-    # Service containers cannot be made conditional on a matrix entry, so the
-    # database server also starts for the sqlite run, which then ignores it. The
-    # alternative would be a second, nearly identical job definition, and one
-    # idle container for a few minutes is the cheaper of the two.
+    # Service containers cannot be made conditional on a matrix entry, so both
+    # database servers start for every run and two of the three ignore one of
+    # them. The alternative would be three nearly identical job definitions, and
+    # an idle container for a few minutes is the cheaper of the two.
     #
-    # The image is pinned to the 11.4 series and not to latest. A patch release
-    # inside that series is wanted here: what this job asks is whether the query
-    # builder speaks MariaDB, not whether it speaks one particular build.
+    # Both images are pinned to a series and not to latest. A patch release
+    # inside the series is wanted here: what this job asks is whether the query
+    # builder speaks MariaDB and PostgreSQL, not whether it speaks one particular
+    # build. 16 for PostgreSQL because that is the major the all-in-one image
+    # ships, which is the whole reason this dialect is in the matrix.
+    #
+    # The credentials of both are the defaults of the composite action, so the
+    # calling side stays a single database input.
     services:
       mariadb:
         image: mariadb:11.4
@@ -824,6 +845,24 @@ jobs:
           - 3306:3306
         options: >-
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: nextcloud
+          POSTGRES_USER: nextcloud
+          POSTGRES_PASSWORD: nextcloud
+        ports:
+          - 5432:5432
+        # pg_isready with the user and the database named. The bare form asks
+        # whether the server accepts connections, which it does a moment before
+        # the initdb of this particular database is through, and the install then
+        # fails against a server that had just reported itself healthy.
+        options: >-
+          --health-cmd="pg_isready --username=nextcloud --dbname=nextcloud"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=12
@@ -879,14 +918,14 @@ jobs:
       # checkout empties the workspace root, and the second checkout is what
       # brings the composite action into the workspace.
       - name: Check out nextcloud/server
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
 
@@ -1218,6 +1257,36 @@ jobs:
           fi
           echo "the corpus ended as ${indexed} indexed, ${skipped} skipped, ${failed} failed, ${docs} documents in the index"
 
+      # The one question this job asks that only PostgreSQL makes interesting,
+      # asked on all three dialects so that the answer stays comparable.
+      #
+      # Perf finding M7 of phase 2, in the wording of the finding: a record()
+      # inside an open transaction aborts the WHOLE transaction on PostgreSQL,
+      # the acknowledgement of the queue row then fails, and the queue never
+      # empties; MariaDB and SQLite are not affected. It was fixed with
+      # UPDATE-first, and until this matrix grew a third entry the fix had never
+      # been tried on the dialect the defect was found on.
+      #
+      # This is a step of its own rather than a line inside the drain loop above,
+      # and that is not tidiness. The loop waits for an empty queue, so a broken
+      # acknowledgement reaches a reader as "the crawl did not finish within 900
+      # seconds", which reads like a slow runner and gets retried. Here the same
+      # fact carries its own name, and the day somebody rewrites the loop the
+      # statement survives. Without this comment the line looks like an arbitrary
+      # extra check and is deleted at the next rewrite.
+      - name: The queue really is empty, which is what finding M7 was about
+        run: |
+          ./occ findling:index | tee queue-final.txt
+          open=$(awk '
+            $1 == "scheduled" { scheduled = $2 }
+            /^  handed to the worker/ { running = $NF }
+            END { print (scheduled + 0) + (running + 0) }' queue-final.txt)
+          if [ "${open}" -ne 0 ]; then
+            echo "::error::${open} queue rows are still open on ${{ matrix.database }} after every verdict was counted, which is the shape of finding M7: the work was done and the acknowledgement was lost"
+            exit 1
+          fi
+          echo "the queue is empty on ${{ matrix.database }}, so every claimed row was acknowledged and no transaction was aborted underneath it"
+
       - name: Everything the failure had to say
         if: failure()
         run: |
@@ -1306,14 +1375,14 @@ jobs:
       # checkout empties the workspace root, and the second checkout is what
       # brings the composite action into the workspace.
       - name: Check out nextcloud/server
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
 
@@ -1775,14 +1844,14 @@ jobs:
       # checkout empties the workspace root, and the second checkout is what
       # brings the composite action into the workspace.
       - name: Check out nextcloud/server
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: nextcloud/server
           ref: ${{ matrix.server-version }}
           submodules: recursive
 
       - name: Check out findling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
 

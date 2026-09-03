@@ -59,6 +59,14 @@ jobs:
   build:
     name: Build and smoke test ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
+    # Derived from what this job has actually cost, not guessed. The ten most
+    # recent runs finished this job in 32 to 55 seconds with a warm build cache
+    # (runs 33761279058, 33641431312, 33664226243, read on 03.09.2026), and the
+    # slowest one on record, the first one that had no cache at all, took two and
+    # a half minutes (run 32111380972, 18.08.2026). Twenty minutes is roughly
+    # eight times a cold build, so an honest slowdown still fits, and a job that
+    # hangs costs minutes instead of the default six hours.
+    timeout-minutes: 20
     strategy:
       # One architecture failing should not hide the state of the other one.
       fail-fast: false
@@ -74,7 +82,7 @@ jobs:
       # Actions are pinned to commit SHAs, never to tags: a tag can be moved and
       # would hand a third party arbitrary code execution in this build.
       - name: Check out the repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # A release that publishes a tag the metadata does not name is worse than no
       # release: AppAPI pulls registry/image:<image-tag> at installation time, and
@@ -116,17 +124,68 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # First a local image, so the smoke test runs before anything is pushed.
-      # A broken image that nobody ever pulled is a red build; a broken image in
-      # the registry is an incident.
-      - name: Build the image for this architecture
+      # One build per architecture, and the artefact the smoke test judges is the
+      # artefact that leaves this job. Until 03.09.2026 the job built twice: once
+      # with load: true for the smoke test and a second time with push-by-digest
+      # for the registry. Both builds shared a cache and were very probably
+      # identical, but "very probably identical" is not a proof: the smoke test
+      # ran against a twin, and the image users pull was checked by nobody
+      # (Sec-M7). Now there is one build, and the thing that is tested is the
+      # thing that was published, addressed by its digest.
+      #
+      # What that costs, stated openly, because it reverses the trade the old
+      # comment here made. A red smoke test now leaves a manifest behind in the
+      # registry. It leaves no tag: push-by-digest publishes none, the merge job
+      # below is the only step in this repository that ever gives a digest a
+      # name, and it does not run when this job is red. An image that failed here
+      # is therefore unreachable under every name a user or AppAPI knows.
+      #
+      # The alternative that was considered and dropped: a registry service on
+      # localhost:5000, as the deploy job of deploy-harp.yml uses, push there,
+      # smoke against that, then push to ghcr out of the same cache and assert
+      # that the two digests are equal. It keeps the registry free of orphans,
+      # but it turns the proof from an identity of one artefact into an equality
+      # of two, and it adds a service container to the one job whose whole point
+      # is that the tested bytes and the shipped bytes are the same bytes.
+      - name: Build the image for this architecture and push it by digest
+        id: push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ./backend
           platforms: ${{ matrix.platform }}
-          load: true
-          tags: findling_backend:smoke
+          # By digest and not by tag: two runners pushing the same tag would
+          # overwrite each other, and the merge job below is what turns the two
+          # digests into one manifest.
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-${{ matrix.arch }}
+          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache-${{ matrix.arch }},mode=max
+
+      # The pull is what makes the paragraph above a measurement instead of an
+      # intention. The image comes back out of the registry addressed by the
+      # digest the push returned, and the digest the local daemon then reports
+      # for it has to be that same value. Both are printed, so the run log
+      # carries the evidence and not only the verdict.
+      - name: Pull the pushed digest back out of the registry
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          if [ -z "${DIGEST}" ]; then
+            echo "the push step returned no digest, so there is nothing to smoke test"
+            exit 1
+          fi
+          echo "push digest ${DIGEST}"
+          docker pull "${IMAGE}@${DIGEST}"
+          pulled=$(docker image inspect --format '{{join .RepoDigests ","}}' "${IMAGE}@${DIGEST}")
+          echo "pull digest ${pulled}"
+          case "${pulled}" in
+            *"${DIGEST}"*)
+              echo "the smoke test runs against ${IMAGE}@${DIGEST}, the manifest this run published"
+              ;;
+            *)
+              echo "the pulled image does not carry the pushed digest ${DIGEST}"
+              exit 1
+              ;;
+          esac
 
       # The environment is the one from the local probe, deliberately. Without
       # HP_SHARED_KEY the app binds APP_PORT, frpc logs one line and exits, and
@@ -138,8 +197,15 @@ jobs:
       # exempt from authentication. An unsigned /search has to be refused, because
       # a container that answers without a credential is worse than one that does
       # not answer at all. And the uid says the image does not run as root.
+      #
+      # The container is started from the digest reference itself rather than
+      # from a local tag. A tag is a name somebody could have pointed anywhere;
+      # a digest is the content.
       - name: Smoke test the image on this architecture
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
         run: |
+          echo "smoke testing ${IMAGE}@${DIGEST}"
           docker run -d --name findling_smoke \
             -e APP_ID=findling_backend \
             -e APP_SECRET=12345 \
@@ -148,7 +214,7 @@ jobs:
             -e NEXTCLOUD_URL=http://127.0.0.1:8080 \
             -e APP_PERSISTENT_STORAGE=/tmp/fs \
             -p 10035:10035 \
-            findling_backend:smoke
+            "${IMAGE}@${DIGEST}"
           answer=""
           for _ in $(seq 30); do
             answer=$(curl -sf http://127.0.0.1:10035/heartbeat || true)
@@ -198,19 +264,6 @@ jobs:
           echo "the container runs as uid ${uid}"
           test "${uid}" = "1000"
 
-      # Only now the push, and by digest rather than by tag: two runners pushing
-      # the same tag would overwrite each other, and the merge job below is what
-      # turns the two digests into one manifest.
-      - name: Push the image by digest
-        id: push
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: ./backend
-          platforms: ${{ matrix.platform }}
-          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-${{ matrix.arch }}
-          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache-${{ matrix.arch }},mode=max
-
       # The digest travels as a file name, so nothing has to be parsed later.
       - name: Write the digest to a file
         run: |
@@ -230,6 +283,10 @@ jobs:
     name: Merge both digests into one manifest
     needs: build
     runs-on: ubuntu-24.04
+    # Measured like the one above: 12 to 22 seconds in the ten most recent runs,
+    # read on 03.09.2026. Ten minutes is far beyond anything this job has ever
+    # cost and is still a bound rather than the default six hours.
+    timeout-minutes: 10
     steps:
       - name: Collect the digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -251,6 +308,35 @@ jobs:
       # imagetools rather than a hand built manifest: assembling the index by
       # hand drops the attestations that say where the image came from, and
       # provenance is the only thing a user can check us against.
+      #
+      # That claim had never been checked, which is Sec-L9 of the phase 2 audit.
+      # It was checked on 03.09.2026, against the published index of
+      # ghcr.io/street1983nk/findling_backend:dev, read anonymously through the
+      # registry API. Result, in both directions:
+      #
+      #   TRUE. The index carries four entries, not two: linux/amd64,
+      #   linux/arm64 and one attestation-manifest per platform, each annotated
+      #   with vnd.docker.reference.type=attestation-manifest and pointing at its
+      #   platform digest. The payload is an in-toto statement with
+      #   predicateType https://slsa.dev/provenance/v1, produced by buildkit, and
+      #   it names the source repository, the commit
+      #   6d1f091b89606dd715e3272d4e065bfe59caf21f the image was built from, and
+      #   the resolved digests of the base images (python:3.13-slim-trixie and
+      #   ghcr.io/astral-sh/uv:0.11.7). So imagetools does preserve them.
+      #
+      #   AND NOT MORE THAN THAT. This is unsigned buildkit provenance. It is not
+      #   a GitHub artifact attestation, so `gh attestation verify` cannot check
+      #   it: that command wants an attestation from actions/attest-build-provenance
+      #   with id-token: write, which this workflow does not produce. The
+      #   difference matters and is stated rather than glossed over: the metadata
+      #   says where the image came from, but nothing cryptographically binds it
+      #   to this repository, so it is an audit trail and not a signature. Adding
+      #   a real signature is a decision of its own and belongs in a plan that
+      #   owns the release path.
+      #
+      # The step after the manifest check turns the verified half into a gate, so
+      # that the day imagetools stops preserving them is a red run and not a
+      # discovery.
       #
       # dev is the moving pointer, the commit SHA is the one that stays
       # addressable, and on a tag run the version from the tag is added. That
@@ -297,6 +383,41 @@ jobs:
             grep -q 'linux/arm64' release-manifest.txt
             echo "manifest ${IMAGE}:${version} carries both platforms"
           fi
+
+      # The gate behind the verification written down above. Two attestation
+      # manifests, one per platform, and each one has to point at a platform
+      # digest that is really in this index. Asking for the count alone would
+      # stay green on an index that carries two attestations of something else.
+      - name: Verify the provenance attestations survived the merge
+        run: |
+          docker buildx imagetools inspect "${IMAGE}:dev" --raw > index.json
+          python3 - index.json <<'PY'
+          import json
+          import sys
+
+          index = json.load(open(sys.argv[1], encoding="utf-8"))
+          manifests = index.get("manifests", [])
+          platforms = {
+              m["digest"]
+              for m in manifests
+              if m.get("platform", {}).get("architecture") in ("amd64", "arm64")
+          }
+          attestations = [
+              m
+              for m in manifests
+              if m.get("annotations", {}).get("vnd.docker.reference.type") == "attestation-manifest"
+          ]
+          subjects = {m["annotations"].get("vnd.docker.reference.digest") for m in attestations}
+          print(f"platform manifests: {sorted(platforms)}")
+          print(f"attestation manifests: {len(attestations)}, subjects {sorted(s or '' for s in subjects)}")
+          if len(platforms) != 2:
+              sys.exit("the index does not carry exactly the two platform manifests")
+          if len(attestations) != 2:
+              sys.exit("the index does not carry one provenance attestation per platform")
+          if subjects != platforms:
+              sys.exit("an attestation points at something that is not a platform of this index")
+          print("provenance survived the merge: one attestation per platform, each on its own platform digest")
+          PY
 
       # The first push creates the package, and a newly created package is
       # private. The store cannot pull a private image, so the package has to be
