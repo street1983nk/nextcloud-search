@@ -1,0 +1,99 @@
+# The second local stack, and the reason it exists is the deploy path, not the
+# app. compose.yaml next to this file is the everyday stack: the backend runs as
+# a plain process on the host and is registered through a manual-install daemon.
+# That path proves the HTTP interface and the signature headers, and it proves
+# nothing about an installation: no image is pulled, no container is created, no
+# volume is laid down and the route list is never read out of the archive.
+#
+# This file walks the path a store installation takes. A HaRP proxy holds the
+# docker socket, the deploy daemon pulls the runtime image and creates the ExApp
+# container itself, exactly as .github/workflows/deploy-harp.yml does it in CI.
+# The commands that go with it are in docs/dev-setup.md, section "Der
+# Store-Installationsweg lokal".
+#
+# The server image is pinned to the same line the integration workflow uses
+# (stable34), for the same reason as in compose.yaml: a floating tag would let a
+# background image update change what the proof means.
+name: findling-harp
+
+services:
+  app:
+    image: nextcloud:34.0.3-apache
+    container_name: findling-harp-nextcloud
+    restart: unless-stopped
+    ports:
+      # Its own variable and its own default on purpose. The everyday stack is
+      # documented with "export FINDLING_PORT=8090", and a shared variable would
+      # put both stacks on the same port the moment somebody follows that
+      # instruction. Two Nextcloud instances on one port do not fail loudly, they
+      # answer each other's requests.
+      - "${FINDLING_HARP_PORT:-8096}:80"
+    environment:
+      SQLITE_DATABASE: nextcloud
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: findling-harp-admin
+      # "app" is in the list because HaRP and the ExApp container address the
+      # instance under its compose service name, and Nextcloud answers an unknown
+      # host header with its trusted domain warning instead of with the request.
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost app host.docker.internal"
+    extra_hosts:
+      # Docker Desktop provides this name by itself, a plain Linux daemon does
+      # not. Kept for the same reason as in compose.yaml, so that both files
+      # behave the same on both.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - nextcloud:/var/www/html
+      # The directory name has to be exactly the app id, otherwise the class
+      # autoloader never finds the provider and the app stays invisible without
+      # any error message. custom_apps is the writable app path of this image.
+      - ../../php:/var/www/html/custom_apps/findling
+      # Where the temporary info.xml of the registration is handed into the
+      # container. It points at the locally built image instead of at the release
+      # tag on ghcr.io, and it is temporary on purpose: the release archive
+      # carries backend/appinfo/info.xml unchanged, because AppAPI reads the
+      # route list out of the archive. Create the directory before the first
+      # start, see docs/dev-setup.md.
+      - ../../.dev/harp:/findling-harp:ro
+
+  harp:
+    # The identical string that .github/workflows/deploy-harp.yml carries as
+    # HARP_IMAGE. Pinned by digest and not by the moving tag, so the local run
+    # and the CI run are the same run. If one of the two is raised, the other one
+    # is raised in the same commit.
+    image: ghcr.io/nextcloud/nextcloud-appapi-harp@sha256:603fdf5ca2802235fd4e40301476dd2fafff409e84a42f8cb3b8f2e17c22ce39
+    # The container name carries the project prefix, unlike the one in CI, where
+    # the runner holds exactly one stack. A developer machine usually holds more
+    # than one Nextcloud, and a plain appapi-harp is the name every other AppAPI
+    # setup takes as well. Inside the compose network the service name harp is
+    # what the daemon registration addresses, and that is what docs/dev-setup.md
+    # uses.
+    container_name: findling-harp-proxy
+    hostname: appapi-harp
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      # No default, deliberately. A missing variable has to stop compose rather
+      # than start a proxy with an empty shared secret, and a test value in this
+      # file would be a shared secret in the repository.
+      HP_SHARED_KEY: "${HP_SHARED_KEY:?set HP_SHARED_KEY first, for instance to the output of openssl rand -hex 16}"
+      # How the ExApp container reaches Nextcloud. In CI this is
+      # http://localhost:8080, because the daemon runs with --net host there and
+      # every party shares the network namespace of the runner. Here the parties
+      # are containers on the compose network, so the service name is the address.
+      NC_INSTANCE_URL: http://app
+    ports:
+      - "8780:8780"
+      - "8782:8782"
+    volumes:
+      # This line is the whole point of HaRP, and it is written down instead of
+      # being mounted quietly: access to the docker socket is root equivalent on
+      # the host. HaRP exists so that exactly one component holds it, instead of
+      # every ExApp getting the socket handed to it. That is a property of AppAPI
+      # and not of Findling, and the same sentence stands in docs/dev-setup.md.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - harp-certs:/certs
+
+volumes:
+  nextcloud:
+  harp-certs:

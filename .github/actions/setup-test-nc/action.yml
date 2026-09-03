@@ -6,6 +6,11 @@ description: >-
   anything, and it lived twice in integration.yml before this action existed.
   Phase 2 adds a third job, which is why the duplication is removed now.
 
+  Since phase 5 the second half is optional. With register-exapp set to false the
+  action stops after the installed instance with both apps enabled, and the
+  caller registers the backend itself. That is what the HaRP deploy job does: it
+  has no host process at all, because a deploy daemon creates the container.
+
   Two steps are deliberately not in here: the checkout of nextcloud/server and
   the checkout of this repository. actions/checkout empties its target directory,
   so the server checkout at the workspace root has to happen before the checkout
@@ -20,11 +25,13 @@ inputs:
     required: true
   database:
     description: >-
-      Dialect handed to maintenance:install, sqlite or mysql. Phase 2 introduces
-      the first table of this app, and IQueryBuilder defects are dialect
-      dependent: green on SQLite and red on MariaDB is the normal case, not the
-      exception. mysql expects a reachable server, which is a service container
-      of the calling job.
+      Dialect handed to maintenance:install, sqlite, mysql or pgsql. Phase 2
+      introduces the first table of this app, and IQueryBuilder defects are
+      dialect dependent: green on SQLite and red on MariaDB is the normal case,
+      not the exception. Phase 5 adds pgsql, because the all-in-one setup this
+      phase has to prove runs PostgreSQL and the project has never installed
+      against it. mysql and pgsql expect a reachable server, which is a service
+      container of the calling job.
     required: false
     default: sqlite
   database-host:
@@ -58,13 +65,83 @@ inputs:
     description: TCP port the backend binds while the tests run.
     required: true
   exapp-version:
-    description: Version the registration announces, has to match backend/appinfo/info.xml.
+    description: >-
+      Version the registration announces. Empty by default, which means the
+      action reads <version> out of backend/appinfo/info.xml of the findling
+      checkout. It used to carry the literal 0.1.0 while both info.xml files had
+      long moved on to 0.3.0, and from phase 5 on that value is not cosmetic:
+      APP_VERSION is what the container reports as its own version, and the PHP
+      half compares major and minor against it. A default that goes stale next to
+      the info.xml would turn the lockstep check red for the wrong reason.
     required: false
-    default: '0.1.0'
+    default: ''
+  register-exapp:
+    description: >-
+      true or false. With true, this action does what it always did: it starts the
+      backend as a host process and registers it through a manual-install daemon.
+      With false it stops after the installed instance with app_api and findling
+      enabled, and it starts no host process. A caller that passes false promises
+      to register a daemon and the ExApp itself, which is what the HaRP deploy job
+      does: there the image is pulled and the container is created by the deploy
+      daemon, so a host process would only answer instead of it.
+    required: false
+    default: 'true'
+  nextcloud-host:
+    description: >-
+      Address the builtin PHP server binds, localhost or 0.0.0.0, handed to
+      NEXTCLOUD_HOST of composer run serve. localhost is the default because a
+      daemon registered with --net host shares the network namespace of the runner
+      and reaches the loopback address anyway. The input exists as a named way out
+      for a caller that cannot use --net host: 0.0.0.0 additionally puts 127.0.0.1
+      and localhost into trusted_domains, so the server does not refuse the
+      request over a host header it does not know.
+    required: false
+    default: localhost
+
+outputs:
+  exapp-version:
+    description: >-
+      The version this action registered, either the input or the value read out
+      of backend/appinfo/info.xml. A caller that registers the ExApp itself needs
+      the same number, and reading the file twice is how the two drift apart.
+    value: ${{ steps.app-version.outputs.version }}
 
 runs:
   using: composite
   steps:
+    # The two inputs this action branches on are checked against a fixed list of
+    # values before anything is installed. A typo in a boolean would otherwise
+    # silently take the branch it was not meant to take, and a run that skipped
+    # the registration by accident looks exactly like a run that was asked to.
+    - name: Check the inputs this action branches on
+      shell: bash
+      env:
+        REGISTER_EXAPP: ${{ inputs.register-exapp }}
+        NEXTCLOUD_HOST: ${{ inputs.nextcloud-host }}
+        DATABASE: ${{ inputs.database }}
+      run: |
+        case "${REGISTER_EXAPP}" in
+          true|false) ;;
+          *)
+            echo "register-exapp has to be true or false, got '${REGISTER_EXAPP}'"
+            exit 1
+            ;;
+        esac
+        case "${NEXTCLOUD_HOST}" in
+          localhost|0.0.0.0) ;;
+          *)
+            echo "nextcloud-host has to be localhost or 0.0.0.0, got '${NEXTCLOUD_HOST}'"
+            exit 1
+            ;;
+        esac
+        case "${DATABASE}" in
+          sqlite|mysql|pgsql) ;;
+          *)
+            echo "database has to be sqlite, mysql or pgsql, got '${DATABASE}'"
+            exit 1
+            ;;
+        esac
+
     # Actions are pinned to commit SHAs, never to tags: a moved tag would be
     # arbitrary code execution inside a job that holds a Nextcloud instance.
     - name: Set up PHP
@@ -73,11 +150,11 @@ runs:
         # Linting and running against the oldest supported runtime is what catches
         # syntax and behaviour that only newer PHP accepts.
         php-version: ${{ inputs.php-version }}
-        # pdo_mysql and mysqli are installed unconditionally although a sqlite
-        # run never touches them: an extension list that depends on an input is
-        # a second place where the dialect is decided, and the two extensions
-        # cost seconds, not minutes.
-        extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, mysqli, pdo_mysql, gd, zip
+        # pdo_mysql, mysqli, pgsql and pdo_pgsql are installed unconditionally
+        # although a sqlite run never touches them: an extension list that depends
+        # on an input is a second place where the dialect is decided, and the four
+        # extensions cost seconds, not minutes.
+        extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, mysqli, pdo_mysql, pgsql, pdo_pgsql, gd, zip
         coverage: none
 
     - name: Check out nextcloud/app_api
@@ -95,33 +172,91 @@ runs:
       shell: bash
       run: mv findling-src/php apps/findling
 
+    # One place decides which version both halves talk about, and it is the
+    # info.xml unless the caller says otherwise. An empty result is an error
+    # rather than an empty APP_VERSION: the version is what the lockstep check
+    # compares, and comparing against nothing is the failure mode this step
+    # exists to rule out.
+    - name: Resolve the version the registration announces
+      id: app-version
+      shell: bash
+      env:
+        EXAPP_VERSION_INPUT: ${{ inputs.exapp-version }}
+      run: |
+        if [ -n "${EXAPP_VERSION_INPUT}" ]; then
+          version="${EXAPP_VERSION_INPUT}"
+          source="the exapp-version input"
+        else
+          version=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' \
+            findling-src/backend/appinfo/info.xml | head -n 1)
+          source="findling-src/backend/appinfo/info.xml"
+        fi
+        if [ -z "${version}" ]; then
+          echo "no app version could be determined from ${source}"
+          exit 1
+        fi
+        echo "app version ${version}, taken from ${source}"
+        echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
     # 127.0.0.1 rather than localhost for the server address, and it is not a
     # matter of taste: the PHP mysql driver reads "localhost" as an instruction
     # to use a unix socket, and a service container of a workflow answers on a
-    # forwarded TCP port and on no socket at all.
+    # forwarded TCP port and on no socket at all. The same holds for the
+    # PostgreSQL driver.
+    #
+    # Every input below is handed to the shell through env rather than
+    # interpolated into the script text. Today these are literals of a throwaway
+    # instance, but an input that arrives as shell text is an injection site, and
+    # this phase adds inputs (Sec-L7).
     - name: Install Nextcloud
       shell: bash
+      env:
+        DATABASE: ${{ inputs.database }}
+        DATABASE_HOST: ${{ inputs.database-host }}
+        DATABASE_NAME: ${{ inputs.database-name }}
+        DATABASE_USER: ${{ inputs.database-user }}
+        DATABASE_PASS: ${{ inputs.database-pass }}
+        ADMIN_USER: ${{ inputs.admin-user }}
+        ADMIN_PASS: ${{ inputs.admin-pass }}
+        NEXTCLOUD_HOST: ${{ inputs.nextcloud-host }}
       run: |
         mkdir data
-        if [ "${{ inputs.database }}" = "sqlite" ]; then
+        if [ "${DATABASE}" = "sqlite" ]; then
           ./occ maintenance:install --database=sqlite \
-            --admin-user "${{ inputs.admin-user }}" \
-            --admin-pass "${{ inputs.admin-pass }}"
+            --admin-user "${ADMIN_USER}" \
+            --admin-pass "${ADMIN_PASS}"
         else
-          ./occ maintenance:install --database="${{ inputs.database }}" \
-            --database-host "${{ inputs.database-host }}" \
-            --database-name "${{ inputs.database-name }}" \
-            --database-user "${{ inputs.database-user }}" \
-            --database-pass "${{ inputs.database-pass }}" \
-            --admin-user "${{ inputs.admin-user }}" \
-            --admin-pass "${{ inputs.admin-pass }}"
+          # mysql and pgsql take the identical set of parameters, so the dialect
+          # is the only thing that differs between the two branches. Writing them
+          # as one branch keeps it that way.
+          ./occ maintenance:install --database="${DATABASE}" \
+            --database-host "${DATABASE_HOST}" \
+            --database-name "${DATABASE_NAME}" \
+            --database-user "${DATABASE_USER}" \
+            --database-pass "${DATABASE_PASS}" \
+            --admin-user "${ADMIN_USER}" \
+            --admin-pass "${ADMIN_PASS}"
         fi
         # Printed rather than assumed: a run that quietly fell back to sqlite
         # would prove the dialect question with the dialect it was asked about.
         ./occ config:system:get dbtype
+        # A server bound to 0.0.0.0 is reached under addresses the installer never
+        # saw, and Nextcloud answers an unknown host header with its trusted
+        # domain warning instead of with the request. Index 0 belongs to the
+        # installer, so these two go next to it.
+        if [ "${NEXTCLOUD_HOST}" = "0.0.0.0" ]; then
+          ./occ config:system:set trusted_domains 1 --value=127.0.0.1
+          ./occ config:system:set trusted_domains 2 --value=localhost
+          ./occ config:system:get trusted_domains
+        fi
 
+    # composer run serve is PHP_CLI_SERVER_WORKERS=${NEXTCLOUD_WORKERS:=4}
+    # php -S ${NEXTCLOUD_HOST:=localhost}:${NEXTCLOUD_PORT:=8080}, so the binding
+    # is loopback unless this variable says otherwise (pitfall 12).
     - name: Start the PHP builtin server
       shell: bash
+      env:
+        NEXTCLOUD_HOST: ${{ inputs.nextcloud-host }}
       run: composer run serve &
 
     - name: Wait for the server
@@ -145,7 +280,13 @@ runs:
       shell: bash
       run: ./occ app:enable -vvv -f findling
 
+    # Everything from here to the end of this file belongs to the host process
+    # path and is skipped for register-exapp: false. uv, the locked environment
+    # and the German dictionary are part of it: the runtime image carries all
+    # three, so a caller that lets a deploy daemon create the container needs
+    # none of them on the runner.
     - name: Install uv
+      if: inputs.register-exapp == 'true'
       uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
       with:
         # Same uv release that produced backend/uv.lock, so --frozen resolves
@@ -155,6 +296,7 @@ runs:
         cache-dependency-glob: findling-src/backend/uv.lock
 
     - name: Install the locked backend environment
+      if: inputs.register-exapp == 'true'
       shell: bash
       working-directory: findling-src/backend
       run: uv sync --frozen
@@ -165,6 +307,7 @@ runs:
     # /usr/share/dict/ngerman before it ever claims a queue row (first run of
     # the resilience gate).
     - name: Install the German dictionary the analyzer reads
+      if: inputs.register-exapp == 'true'
       shell: bash
       run: |
         if [ ! -f /usr/share/dict/ngerman ]; then
@@ -179,35 +322,46 @@ runs:
     # socket instead of the TCP port, and nothing here speaks to that socket
     # (pitfall 5).
     - name: Start the ExApp
+      if: inputs.register-exapp == 'true'
       shell: bash
       working-directory: findling-src/backend
+      env:
+        EXAPP_SECRET: ${{ inputs.exapp-secret }}
+        EXAPP_PORT: ${{ inputs.exapp-port }}
+        EXAPP_VERSION: ${{ steps.app-version.outputs.version }}
+        RUNNER_TEMP_DIR: ${{ runner.temp }}
       run: |
         export APP_ID=findling_backend
-        export APP_SECRET="${{ inputs.exapp-secret }}"
-        export APP_PORT="${{ inputs.exapp-port }}"
-        export APP_VERSION="${{ inputs.exapp-version }}"
+        export APP_SECRET="${EXAPP_SECRET}"
+        export APP_PORT="${EXAPP_PORT}"
+        export APP_VERSION="${EXAPP_VERSION}"
         export APP_HOST=127.0.0.1
         export NEXTCLOUD_URL=http://localhost:8080
-        export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+        export APP_PERSISTENT_STORAGE="${RUNNER_TEMP_DIR}/findling"
         mkdir -p "${APP_PERSISTENT_STORAGE}"
-        uv run python -m findling.main > "${{ runner.temp }}/exapp.log" 2>&1 &
-        echo $! > "${{ runner.temp }}/exapp.pid"
+        uv run python -m findling.main > "${RUNNER_TEMP_DIR}/exapp.log" 2>&1 &
+        echo $! > "${RUNNER_TEMP_DIR}/exapp.pid"
 
     - name: Wait for the ExApp heartbeat
+      if: inputs.register-exapp == 'true'
       shell: bash
+      env:
+        EXAPP_PORT: ${{ inputs.exapp-port }}
+        RUNNER_TEMP_DIR: ${{ runner.temp }}
       run: |
         for _ in $(seq 1 30); do
-          if curl -sf "http://127.0.0.1:${{ inputs.exapp-port }}/heartbeat" > /dev/null; then
+          if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
             echo "exapp is up"
             exit 0
           fi
           sleep 1
         done
-        echo "exapp did not answer on http://127.0.0.1:${{ inputs.exapp-port }}/heartbeat"
-        cat "${{ runner.temp }}/exapp.log" || true
+        echo "exapp did not answer on http://127.0.0.1:${EXAPP_PORT}/heartbeat"
+        cat "${RUNNER_TEMP_DIR}/exapp.log" || true
         exit 1
 
     - name: Register the manual install daemon
+      if: inputs.register-exapp == 'true'
       shell: bash
       run: |
         timeout 10 ./occ app_api:daemon:register --net host \
@@ -237,8 +391,13 @@ runs:
     # verifies. bruteforce_protection is left out here, unlike in info.xml,
     # because it changes what happens after a 401 and not which routes exist.
     - name: Register the ExApp
+      if: inputs.register-exapp == 'true'
       shell: bash
+      env:
+        EXAPP_SECRET: ${{ inputs.exapp-secret }}
+        EXAPP_PORT: ${{ inputs.exapp-port }}
+        EXAPP_VERSION: ${{ steps.app-version.outputs.version }}
       run: |
         timeout 120 ./occ app_api:app:register findling_backend manual_install --json-info \
-          "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"${{ inputs.exapp-version }}\",\"secret\":\"${{ inputs.exapp-secret }}\",\"port\":${{ inputs.exapp-port }},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\"search\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]},{\"url\":\"snippets\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]},{\"url\":\"status\",\"verb\":\"GET\",\"access_level\":2,\"headers_to_exclude\":[]}]}" \
+          "{\"id\":\"findling_backend\",\"name\":\"Findling Backend\",\"daemon_config_name\":\"manual_install\",\"version\":\"${EXAPP_VERSION}\",\"secret\":\"${EXAPP_SECRET}\",\"port\":${EXAPP_PORT},\"scopes\":[],\"system\":0,\"routes\":[{\"url\":\"search\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]},{\"url\":\"snippets\",\"verb\":\"POST\",\"access_level\":1,\"headers_to_exclude\":[]},{\"url\":\"status\",\"verb\":\"GET\",\"access_level\":2,\"headers_to_exclude\":[]}]}" \
           --force-scopes --wait-finish
