@@ -343,12 +343,46 @@ final class SettingsController extends Controller {
 		}
 
 		try {
-			$this->settingsService->save([
+			// Both save() calls revalidate and answer with error codes, and those
+			// answers are judged rather than discarded (review finding WR-03).
+			// The double validation is not guaranteed to agree with the one
+			// above: the clamp of the cap reads the remembered container
+			// ceiling, and an overview poll of a second admin tab can move that
+			// value between the validate() above and this save(). In that window
+			// save() writes nothing and answers ERROR_OUT_OF_RANGE, and a route
+			// that ignored the answer would report "saved" for a write that was
+			// refused.
+			//
+			// The list is only written after the fields held, so a refused cap
+			// leaves appconfig untouched as a whole and "nothing changed" stays
+			// a true sentence. A refused list after written fields cannot arise
+			// from this request: the controller validated the same list above
+			// with the same rules, and nothing about the list depends on a value
+			// another request could move.
+			$savedFieldErrors = $this->settingsService->save([
 				SettingsService::FIELD_MAX_FILE_BYTES => $maxFileBytes,
 				'indexTeamFolders' => $indexTeamFolders,
 				'indexExternalStorage' => $indexExternalStorage,
 			]);
-			$this->exclusionService->save($list);
+			$savedListErrors = $savedFieldErrors === [] ? $this->exclusionService->save($list) : [];
+
+			if ($savedFieldErrors !== [] || $savedListErrors !== []) {
+				// Counted, never quoted, same as the refusal above.
+				$this->logger->warning('Findling: refused a set of rules at the write itself', [
+					'fields' => count($savedFieldErrors),
+					'exclusions' => count($savedListErrors),
+				]);
+
+				return new DataResponse(
+					[
+						'saved' => false,
+						'fields' => $savedFieldErrors,
+						'exclusions' => $savedListErrors,
+						'error' => 'The rules were not saved.',
+					],
+					Http::STATUS_BAD_REQUEST,
+				);
+			}
 		} catch (\Throwable $e) {
 			// The only way to get here is the database itself, because both
 			// values were judged above. The page says nothing was saved, which
