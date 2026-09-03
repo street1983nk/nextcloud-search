@@ -13,45 +13,121 @@ Der Aufbau ist Absicht: erst die Umgebung, dann die Methode, dann die Grenzen,
 und erst danach Zahlen. Eine Methode, die nach den Ergebnissen geschrieben wird,
 passt immer zu ihnen.
 
+## Zwei Läufe, und warum
+
+Dieser Bericht führt zwei Messreihen, und das ist keine Gründlichkeit um ihrer
+selbst willen, sondern die Folge einer Knappheit. Am 03.09.2026 war bei Hetzner
+keine einzige ARM-Maschine zu mieten, in keiner der drei europäischen Regionen.
+Der Betreiber hat daraufhin entschieden, beides zu tun: die **Generalprobe** läuft
+sofort auf der x86-Maschine gleicher Größe, und die **Kernmessung** wird auf ARM
+wiederholt, sobald es wieder Bestand gibt.
+
+| | Generalprobe | ARM-Lauf |
+|---|---|---|
+| Maschine | Hetzner cpx22, x86 | Hetzner CAX11, arm64 |
+| Zustand | läuft seit 2026-09-03 | wartet auf Bestand |
+| Beweist den AIO-Weg über HaRP | ja | nicht nötig, gilt von hier |
+| Beweist die Störfälle | ja | nicht nötig, gilt von hier |
+| Beweist die Speicherzusage der Store-Aussage | **nein** | ja |
+| Beweist den OCR-Faktor | **nein** | ja |
+
+Die beiden mittleren Zeilen sind der Grund, warum die Generalprobe mehr ist als
+Zeitvertreib: alles, was nicht an der Architektur hängt, also die Reihenfolge der
+Einrichtung, der Weg über HaRP, das Zertifikat, die Störfälle, ist danach
+erledigt und geprüft. Das knappe ARM-Fenster geht dann nicht mehr für
+Einrichtungsfehler drauf.
+
+Die beiden unteren Zeilen sind der Grund, warum sie den ARM-Lauf nicht ersetzt.
+Eine x86-Grundlast ist nicht die ARM-Grundlast, und der OCR-Faktor auf ARM bleibt
+bis zu seiner Messung ungemessen. Wo in diesem Bericht x86-Zahlen stehen, sind
+sie als **Generalprobe cpx22** gekennzeichnet, und die ARM-Zeilen daneben stehen
+so lange auf ausstehend.
+
 ## Stand dieses Berichts
 
 | Abschnitt | Zustand | Stand |
 |---|---|---|
-| Umgebung und Kosten | aus der Konto-API abgefragt | 2026-09-03 |
+| Umgebung und Kosten, beide Maschinen | aus der Konto-API abgefragt | 2026-09-03 |
+| Reihenfolge der Einrichtung | auf der Generalprobe durchgeführt und belegt | 2026-09-03 |
 | Methode | steht | 2026-09-03 |
 | Grenzen | steht | 2026-09-03 |
 | Grenzwert für den Spitzenwert | festgelegt | 2026-09-03 |
-| AIO-Grundlast ohne Findling | FEHLT NOCH | siehe unten |
+| AIO-Grundlast, Generalprobe cpx22 | FEHLT NOCH | dieser Plan |
+| AIO-Grundlast, ARM | FEHLT NOCH | wartet auf Bestand |
 | Findling im Volllauf, 50.000 Dateien | FEHLT NOCH | Pläne 05-12 und 05-14 |
 | Störfall-Drills | FEHLT NOCH | Plan 05-14 |
 
-Die drei fehlenden Abschnitte sind hier ausdrücklich als fehlend benannt und
-nicht ausgelassen. Was fehlt, ist bis heute nicht gemessen worden, und die
-Ursache steht im nächsten Abschnitt: die Zielhardware war am 03.09.2026 bei
-Hetzner in keiner Region zu mieten.
+Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
 ## Die Umgebung
 
-### Die Zielhardware
+### Die beiden Maschinen
 
-| Posten | Wert |
-|---|---|
-| Server | Hetzner CAX11, Ampere ARM |
-| Architektur | arm64 |
-| Kerne | 2 vCPU, geteilt |
-| Arbeitsspeicher | 4 GB |
-| Systemplatte | 40 GB |
-| Zusatzplatte | Volume, 50 GB, ext4 |
-| Region | hel1, Helsinki |
-| Betriebssystem | Ubuntu 24.04 LTS, arm64 |
-| Nextcloud | All-in-One über HaRP, Postgres aus dem AIO-Paket |
-| Inbegriffener Verkehr | 20 TB je Monat |
+| Posten | Generalprobe cpx22 | ARM-Lauf CAX11 |
+|---|---|---|
+| Architektur | x86_64 | arm64, Ampere |
+| Kerne | 2 vCPU, geteilt | 2 vCPU, geteilt |
+| Arbeitsspeicher | 4 GB (3814 MB nutzbar) | 4 GB |
+| Systemplatte | 80 GB (76 GB nutzbar) | 40 GB |
+| Zusatzplatte | Volume, 50 GB, ext4 | Volume, 50 GB, ext4 |
+| Region | hel1, Helsinki | hel1, Helsinki |
+| Betriebssystem | Ubuntu 24.04 LTS, Kernel 6.8.0 | Ubuntu 24.04 LTS |
+| cgroup | v2 | v2 |
+| Nextcloud | All-in-One über HaRP, Postgres aus dem AIO-Paket | ebenso |
+| Inbegriffener Verkehr | 20 TB je Monat | 20 TB je Monat |
 
-Die 50 GB kommen nicht aus Bequemlichkeit dazu: der Lastkorpus wiegt 20,12 GB,
-daneben liegen der Index und die Abbilder der Container, und 40 GB Systemplatte
-wären damit voll. Das Docker-Datenverzeichnis und das Nextcloud-Datenverzeichnis
-liegen deshalb beide auf dem Volume, und zwar bevor AIO zum ersten Mal startet:
-`NEXTCLOUD_DATADIR` lässt sich nach der Installation nicht mehr ändern.
+Der Unterschied, der über die Architektur hinaus zählt, steht in der Zeile
+Systemplatte: die Generalprobe hat 76 GB, die ARM-Zielmaschine nur 40. Der
+Platzdruck, gegen den die Einrichtung unten abgesichert wird, ist auf der
+Generalprobe also **milder als im Ernstfall**. Wer die Reihenfolge dort schludert,
+merkt es nicht; auf der CAX11 läuft die Platte voll.
+
+Die 50 GB Volume kommen nicht aus Bequemlichkeit dazu: der Lastkorpus wiegt
+20,12 GB, daneben liegen der Index und die Abbilder der Container.
+
+### Die Reihenfolge der Einrichtung, und die Falle darin
+
+Drei Dinge müssen auf dem Volume liegen, und zwei davon lassen sich später nicht
+mehr verschieben. Die Reihenfolge ist deshalb keine Empfehlung.
+
+1. **Volume einbinden.** Hetzner hängt es mit `automount` selbst ein und schreibt
+   den Eintrag in die `fstab`, mit `nofail`.
+2. **Das Datenverzeichnis von Docker auf das Volume, vor dem ersten Abbild.**
+   `/etc/docker/daemon.json` mit `data-root` wird geschrieben, bevor das Paket
+   installiert wird, denn die Installation startet den Dienst selbst.
+3. **Das Wurzelverzeichnis von containerd ebenfalls.** Diese Zeile ist neu, und
+   sie ist der Fund der Generalprobe. Siehe unten.
+4. **`NEXTCLOUD_DATADIR` auf das Volume, vor dem ersten Start von AIO.** Danach
+   ist der Wert nicht mehr änderbar.
+
+Zu Punkt 3, weil es teuer wäre, das erst im Volllauf zu bemerken: seit Docker 29
+werden Abbilder nicht mehr im Datenverzeichnis von Docker abgelegt, sondern über
+den containerd-Snapshotter, und der hat sein eigenes Wurzelverzeichnis unter
+`/var/lib/containerd`. `data-root` allein genügt also nicht mehr. Gemessen auf
+der Generalprobe: nach dem ersten `docker pull` wuchs die Systemplatte um
+400 MB, das Volume um nichts, während `docker info` unbeirrt das Volume als
+`Docker Root Dir` meldete.
+
+```
+Storage Driver: overlayfs
+ driver-type: io.containerd.snapshotter.v1
+Docker Root Dir: /mnt/HC_Volume_106785477/docker
+373M   /var/lib/containerd
+216K   /mnt/HC_Volume_106785477/docker
+```
+
+Die Abhilfe ist eine Zeile in `/etc/containerd/config.toml`:
+
+```toml
+root = "/mnt/HC_Volume_<id>/containerd"
+```
+
+Danach liegen die 373 MB auf dem Volume, und eine Gegenprobe mit einem frischen
+Abbild lässt die Systemplatte bei 0 KB und das Volume um 104 KB wachsen. Auf der
+CAX11 mit ihren 40 GB wäre der ursprüngliche Zustand nicht kosmetisch gewesen:
+die Abbilder von AIO, Postgres, Apache, HaRP und Findling zusammen hätten die
+Systemplatte neben Betriebssystem und Protokollen ernsthaft gefüllt, und das
+wäre als Fehler von Findling erschienen.
 
 ### Was die Umgebung kostet
 
@@ -61,10 +137,16 @@ Mehrwertsteuersatz des Kontos beträgt 19 Prozent.
 
 | Posten | je Stunde | je Monat |
 |---|---|---|
-| CAX11 in hel1 | 0,011424 EUR | 7,1281 EUR |
+| cpx22 in hel1, Generalprobe | 0,037128 EUR | 23,1931 EUR |
+| CAX11 in hel1, ARM-Lauf | 0,011424 EUR | 7,1281 EUR |
 | Volume, 50 GB | 0,004662 EUR | 3,4034 EUR |
 | Primäre IPv4 | 0,000952 EUR | 0,5950 EUR |
-| Summe | 0,017038 EUR | 11,1265 EUR |
+| Summe Generalprobe | 0,042742 EUR | 27,1915 EUR |
+| Summe ARM-Lauf | 0,017038 EUR | 11,1265 EUR |
+
+Die Generalprobe kostet also gut das Dreifache der Zielmaschine je Stunde. Das
+ist der Preis dafür, dass die günstigen geteilten Linien ausverkauft sind, und er
+war dem Betreiber die Sache wert: zwei Tage Generalprobe liegen bei rund 2,05 EUR.
 
 Zwei Dinge daran sind leicht zu übersehen. Der Preis je GB und Monat des Volumes
 wird oft mit 0,057 EUR angegeben; das ist der Nettowert, brutto sind es
@@ -72,12 +154,13 @@ wird oft mit 0,057 EUR angegeben; das ist der Nettowert, brutto sind es
 der Rechnung. Sie macht gegen eine Box für gut einen Cent je Stunde rund acht
 Prozent aus, weshalb `scripts/ops/hetzner_box.sh status` sie mitrechnet.
 
-Ein Lauf über zwei Tage kostet damit rund 0,82 EUR. Die Miete endet mit dem Test:
-die Löschung der Box ist ein Pflichtschritt und kein Aufräumen bei Gelegenheit,
-denn eine vergessene Box ist eine öffentlich erreichbare Nextcloud mit
-Admin-Zugang und eine monatliche Rechnung.
+Die Miete endet mit dem Test: die Löschung der Box ist ein Pflichtschritt und
+kein Aufräumen bei Gelegenheit, denn eine vergessene Box ist eine öffentlich
+erreichbare Nextcloud mit Admin-Zugang und eine monatliche Rechnung. Abgeräumt
+werden drei Ressourcen, nicht zwei: Box, Volume und die Firewall. Die Firewall
+kostet nichts, und genau deshalb ist sie die, die stehen bleibt.
 
-### Warum hier noch keine Messung steht
+### Warum die ARM-Maschine fehlt
 
 Am 03.09.2026 waren alle vier ARM-Typen des Anbieters in allen drei europäischen
 Regionen ohne Bestand:
@@ -100,7 +183,32 @@ Sie erscheint für jede Region und sogar ohne Regionsangabe, und sie hat nichts
 mit dem Aufruf zu tun. Die Wahrheit steht am Server-Typ selbst, im Feld
 `locations[].available`. `scripts/ops/hetzner_box.sh` liest seit diesem Bericht
 genau dieses Feld, bevor es etwas anlegt, und `prices` zeigt den Bestand in einer
-eigenen Spalte.
+eigenen Spalte. Auch die billigen x86-Typen `cx23` bis `cx53` waren zur selben
+Minute überall ausverkauft; knapp waren die günstigen geteilten Linien insgesamt.
+
+### Die Oberfläche von AIO ist von außen nicht erreichbar
+
+Der Filter sitzt außerhalb der Maschine, als Firewall des Anbieters, und das ist
+kein Geschmacksurteil: Docker schreibt seine veröffentlichten Ports unmittelbar
+in iptables und geht dabei an `ufw` vorbei. Eine `ufw`-Regel gegen Port 8080
+würde also melden, der Port sei zu, während er offen ist.
+
+Gemessen von einer fremden Adresse, bevor überhaupt etwas lauschte:
+
+```
+22     offen (Verbindung angenommen)
+80     abgelehnt (RST, also kein Filter davor)
+443    abgelehnt (RST, also kein Filter davor)
+8080   verworfen (Zeitueberschreitung)
+8443   verworfen (Zeitueberschreitung)
+3478   verworfen (Zeitueberschreitung)
+```
+
+Der Unterschied zwischen abgelehnt und verworfen ist hier der ganze Beweis: 80
+und 443 kommen bis zur Maschine durch und finden nur noch niemanden vor, 8080 und
+8443 kommen gar nicht erst an. Port 3478 steht in der Liste, weil Talk
+abgeschaltet bleibt und niemand später glauben soll, das sei vergessen worden.
+Erreicht wird die Oberfläche von AIO ausschließlich durch einen SSH-Tunnel.
 
 ## Die Methode
 
@@ -163,8 +271,17 @@ mit dem Grenzwert steht hier.
 ## Die Grenzen dieses Berichts
 
 Die Regel dieses Repositories lautet, zu jeder Aussage ihre Grenze zu nennen.
-Für diesen Bericht sind das sechs:
+Für diesen Bericht sind das sieben:
 
+0. **Die Zahlen der Generalprobe gelten nicht für ARM.** Sie stammen von einer
+   x86-Maschine, und zwar von einer mit doppelt so großer Systemplatte. Was sie
+   belegen, ist der Weg: dass AIO über HaRP installierbar ist, dass die
+   Reihenfolge der Einrichtung trägt, dass die Störfälle sich so verhalten wie
+   beschrieben. Was sie nicht belegen, ist die Store-Aussage selbst. Der
+   Speicherverlauf eines Prozesses hängt an Seitengröße, Allokator und den
+   Bibliotheken der Architektur, und der OCR-Faktor hängt daran besonders. Jede
+   Zeile dieses Berichts, die eine Zahl der Generalprobe nennt, ist als solche
+   gekennzeichnet, und die ARM-Zeile daneben bleibt leer, bis sie gemessen ist.
 1. **Eine Box ist keine Aussage über alle Boxen.** Gemessen wird auf einer
    einzelnen gemieteten CAX11. Geteilte Kerne bedeuten wechselnde Nachbarn, und
    eine andere 4-GB-Maschine mit anderer Platte kann andere Laufzeiten liefern.
@@ -190,8 +307,13 @@ Für diesen Bericht sind das sechs:
 
 ## Die AIO-Grundlast ohne Findling
 
-FEHLT NOCH. Diese Zahl ist der Bezugspunkt des ganzen Berichts, denn ohne sie
-sagt eine Findling-Kurve nichts darüber, ob die Box insgesamt reicht.
+Diese Zahl ist der Bezugspunkt des ganzen Berichts, denn ohne sie sagt eine
+Findling-Kurve nichts darüber, ob die Box insgesamt reicht.
+
+| Lauf | Summe `anon` | höchster Stand | Container |
+|---|---|---|---|
+| Generalprobe cpx22 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
+| ARM CAX11 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
 
 Gemessen wird sie, bevor Findling die Maschine zum ersten Mal anfasst: mindestens
 dreißig Minuten mit demselben Sampler, über alle laufenden AIO-Container, mit
@@ -202,13 +324,19 @@ liefen. Nach dem Zuschalten von HaRP wird kurz nachgemessen, damit der Beitrag
 dieses einen Containers getrennt ausgewiesen ist.
 
 Bis dahin gilt die Vorabrechnung von 0,7 bis 1,1 GB, und sie ist ausdrücklich
-geschätzt und nicht gemessen.
+geschätzt und nicht gemessen. Für die Store-Aussage zählt am Ende allein die
+Zeile der CAX11.
 
 ## Findling im Volllauf
 
-FEHLT NOCH. Hier stehen später die Kurve über den Lauf, der höchste `anon`-Wert,
-der Vergleich mit dem Grenzwert von 2,0 GB, die Laufzeit, der OCR-Anteil und der
-Beweis, dass kein Speichertod stattgefunden hat.
+| Lauf | höchster `anon` | unter 2,0 GB | Laufzeit | OCR-Anteil | Speichertod |
+|---|---|---|---|---|---|
+| Generalprobe cpx22 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
+| ARM CAX11 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
+
+Die Zeile, die in die Store-Beschreibung geht, ist die zweite. Die erste steht
+daneben, weil ein Vergleich der beiden mehr über das Verhalten der Anwendung
+verrät als jede von beiden allein, und weil sie zuerst da ist.
 
 ## Die Störfall-Drills
 
