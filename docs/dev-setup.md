@@ -279,6 +279,163 @@ Search again. The search bar has to keep working exactly as before, only without
 the Findling result group and without an error message. If the whole search dies
 instead, the proxy treated an error array as a response object.
 
+## Der Store-Installationsweg lokal (HaRP)
+
+Alles oben beschreibt den Alltagsstack: das Backend läuft als gewöhnlicher
+Prozess auf dem Rechner und wird über einen `manual-install`-Daemon angemeldet.
+Dieser Weg belegt die HTTP-Schnittstelle und die Signaturköpfe, und er belegt
+nichts über eine Installation. Es wird kein Image geholt, kein Container
+erzeugt, kein Datenvolume angelegt, und die Routenliste wird nie aus dem Archiv
+gelesen. Genau diese vier Dinge macht eine Installation aus dem App Store aus.
+
+`scripts/dev/compose-harp.yaml` ist der zweite Stack und geht diesen Weg: ein
+HaRP-Proxy hält den Docker-Socket, und der Deploy-Daemon zieht das Laufzeitimage
+und erzeugt den ExApp-Container selbst. Es sind dieselben Befehle, die
+`.github/workflows/deploy-harp.yml` in der CI ausführt; abweichend sind nur die
+Adressen, weil in der CI alle Beteiligten den Netz-Namensraum des Runners teilen
+(`--net host`, `localhost:8080`) und hier Container in einem compose-Netz stehen.
+
+Ein Satz zum Docker-Socket, weil er die eigentliche Aussage dieses Stacks ist:
+Zugriff auf `/var/run/docker.sock` ist Root-Äquivalent auf dem Host. HaRP
+existiert, damit genau eine Komponente ihn hält, statt ihn jeder App in die Hand
+zu geben. Das ist eine Eigenschaft von AppAPI und keine von Findling.
+
+### Hochfahren
+
+```bash
+export COMPOSE_FILE=scripts/dev/compose-harp.yaml
+export HP_SHARED_KEY=$(openssl rand -hex 16)
+mkdir -p .dev/harp
+docker compose up -d
+```
+
+Ohne `HP_SHARED_KEY` bricht compose ab, und das ist Absicht: ein Vorgabewert in
+der Datei wäre ein geteiltes Geheimnis im Repository. Die Instanz hört auf
+`http://localhost:8096`; `FINDLING_HARP_PORT` überschreibt den Port. Der
+Alltagsstack behält seinen eigenen Port, damit beide gleichzeitig laufen können.
+
+### Image bauen und in eine lokale Registry legen
+
+Der Daemon zieht `registry/image:image-tag` aus `backend/appinfo/info.xml`, also
+den veröffentlichten Stand auf ghcr.io. Für einen lokalen Bau gibt es diesen Tag
+nicht, deshalb dieselbe Lösung wie in der CI: eine Registry auf Port 5000 und
+eine temporäre info.xml.
+
+```bash
+docker run -d -p 5000:5000 --name findling-harp-registry registry:2
+docker build -t localhost:5000/findling_backend:dev ./backend
+docker push localhost:5000/findling_backend:dev
+
+sed -e 's|<registry>ghcr.io</registry>|<registry>localhost:5000</registry>|' \
+    -e 's|<image>street1983nk/findling_backend</image>|<image>findling_backend</image>|' \
+    -e 's|<image-tag>[^<]*</image-tag>|<image-tag>dev</image-tag>|' \
+    backend/appinfo/info.xml > .dev/harp/info-local.xml
+```
+
+Die temporäre Datei ist ausschliesslich für die Anmeldung. Das Release-Archiv
+trägt `backend/appinfo/info.xml` unverändert, weil AppAPI die Routenliste beim
+Installieren aus dem Archiv liest: ein Tarball mit ersetzten Werten wäre eine App
+ohne Suchroute, und zwar ohne Fehlermeldung.
+
+### Registrieren
+
+```bash
+occ() { docker compose exec -T -u www-data app php occ "$@"; }
+
+occ app:install app_api || true
+occ app:enable app_api
+occ app:enable findling
+
+occ app_api:daemon:register \
+  harp_proxy_compose "Harp Proxy (compose)" docker-install http harp:8780 http://harp:8780 \
+  --harp --harp_frp_address harp:8782 --harp_shared_key "$HP_SHARED_KEY" \
+  --net findling-harp_default --set-default
+
+occ app_api:app:register findling_backend harp_proxy_compose \
+  --info-xml /findling-harp/info-local.xml --wait-finish
+```
+
+Die letzte Adresse ist die von HaRP und nicht die von Nextcloud, und das ist die
+Stelle, an der dieser Weg beim ersten Mal gescheitert ist. Im HaRP-Betrieb bildet
+AppAPI die Adresse der ExApp als `{nextcloud_url}/exapps/{appId}`
+(`DockerActions::resolveExAppUrl`), weil HaRP der Eingang ist: es leitet
+`/exapps` in den Tunnel und alles andere an `NC_INSTANCE_URL` weiter. Steht dort
+die Instanz selbst, gehen alle Heartbeats an den Webserver, der mit 404 antwortet,
+und die Installation endet mit `heartbeat check failed`, während daneben ein
+gesunder Container läuft. Denselben Wert bekommt der Container als
+`NEXTCLOUD_URL`, der Rückweg läuft also ebenfalls über HaRP.
+
+`harp` ist der Dienstname aus der compose-Datei und damit die Adresse im
+compose-Netz; `findling-harp_default` ist das Netz dieses Projekts, in das der
+Daemon den ExApp-Container hängen muss. `--wait-finish` macht den Handschlag
+synchron, sonst prüft der nächste Schritt ein Rennen statt ein Ergebnis, und der
+Erfolg steht als `ExApp findling_backend deployed successfully` da.
+
+`HP_SHARED_KEY` muss in jeder Shell gesetzt sein, die einen compose-Befehl
+ausführt, auch für ein `exec` oder ein `logs`: die Variable hat in der
+compose-Datei keinen Vorgabewert, und compose bricht sonst schon beim Auswerten
+der Datei ab. Aus einem laufenden Stack holt man sie zurück mit
+
+```bash
+export HP_SHARED_KEY=$(docker inspect findling-harp-proxy \
+  --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^HP_SHARED_KEY=//p')
+```
+
+### Der Beweis
+
+```bash
+docker ps --filter name=findling_backend --format '{{.Names}}\t{{.Status}}'
+docker volume ls --filter name=findling_backend --format '{{.Name}}'
+occ app_api:app:list
+```
+
+Beide Filterbefehle müssen etwas ausgeben. Eine leere Ausgabe heisst, dass der
+Daemon nichts erzeugt hat, und ist der Fehlerfall, den dieser Stack sichtbar
+machen soll. Gemessen am 03.09.2026 heissen die beiden
+`nc_app_findling_backend` und `nc_app_findling_backend_data`; die Namen baut
+AppAPI aus der App-Id, sie sind nicht zu raten und deshalb hier nur als
+Orientierung notiert.
+
+Im Log des Containers muss `mutual TLS` stehen, und zwar in der LETZTEN
+Startsequenz. Der erste Start läuft regulär noch ohne Zertifikate
+(`not readable by uid 1000`), weil HaRP sie erst danach hineinlegt und den
+Container neu startet; das ist kein Fehler. Steht `mutual TLS` aber in keiner
+Sequenz, hat HaRP sie nicht ablegen können, und der frp-Server weist den Tunnel
+ab, obwohl der Container läuft und die App auf ihrem Socket antwortet. Warum das
+Image `/certs/frp` mitbringt, steht im Kommentar an der betreffenden Zeile in
+`backend/Dockerfile`.
+
+Danach ein Nutzer und die Suche wie oben:
+
+```bash
+occ user:add --password-from-env testuser   # OC_PASS vorher setzen
+occ files:scan --all
+```
+
+Im Browser auf `http://localhost:8096` als `testuser` anmelden und
+`findling-canary` in die Suchleiste tippen. Die zweite Zeile des Treffers nennt
+den Rechnernamen des Prozesses, der ihn erzeugt hat: hier ist das der Container,
+den der Daemon gebaut hat, und nicht mehr ein Prozess auf dem Rechner.
+
+### Abbauen
+
+```bash
+occ app_api:app:unregister findling_backend --rm-data
+docker compose down -v
+docker rm -f findling-harp-registry
+```
+
+`--rm-data` entfernt das Datenvolume mit; ohne die Angabe bleibt der Index
+liegen. Was dabei genau verschwindet, steht in `docs/uninstall.md`.
+
+### Die Grenze dieses Stacks
+
+Für die tägliche Arbeit bleibt `scripts/dev/compose.yaml` der schnellere Weg.
+Jede Änderung am Backend kostet hier einen Bildneubau und ein erneutes
+Hochladen, also Minuten statt Sekunden, und der Container muss anschliessend neu
+angelegt werden. Dieser Stack ist für die Frage da, ob die Installation
+funktioniert, nicht für die Frage, ob der Code funktioniert.
+
 ## Diagnosis, in this order
 
 Always ask the provider list first. It splits the problem in half in one request:
