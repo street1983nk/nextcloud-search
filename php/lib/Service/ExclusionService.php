@@ -154,6 +154,15 @@ final class ExclusionService {
 	 * compared, so a malformed row cannot turn into a prefix that matches
 	 * everything.
 	 *
+	 * A dropped entry is reported and does not merely disappear, and that matters
+	 * because this list is also what the settings page renders: a stored value
+	 * this method refuses is neither in force nor visible, so without the warning
+	 * below an admin would face a page that agrees with them and an index that
+	 * does not (finding IN-07). One line per read rather than one per entry, so
+	 * that the report stays a report and does not become the log flood of IN-01,
+	 * and a count rather than a value, because what stands in these entries is a
+	 * folder name of a private instance.
+	 *
 	 * @return list<string>
 	 */
 	public function prefixes(): array {
@@ -164,18 +173,19 @@ final class ExclusionService {
 		$stored = $this->appConfig->getValueArray(Application::APP_ID, SettingsService::KEY_EXCLUSIONS, []);
 
 		$prefixes = [];
+		$unusable = 0;
 		$remaining = count($stored);
 		foreach ($stored as $entry) {
 			$remaining--;
 
 			if (!is_string($entry)) {
-				$this->reject();
+				$unusable++;
 				continue;
 			}
 
 			$normalised = $this->normalise($entry);
 			if ($normalised === null) {
-				$this->reject();
+				$unusable++;
 				continue;
 			}
 
@@ -201,6 +211,17 @@ final class ExclusionService {
 			}
 		}
 
+		if ($unusable > 0) {
+			// Named rather than dropped in silence. ``./Archiv`` is the case this
+			// exists for: it used to be stored, shown as a rule in force and match
+			// nothing, and now it is refused on the way in and reported on the way
+			// out for every list that still holds one.
+			$this->logger->warning(
+				'Findling: stored exclusion entries are not usable folder paths, so they are neither in force nor shown',
+				['unusable' => $unusable, 'inForce' => count($prefixes)],
+			);
+		}
+
 		$this->cached = array_keys($prefixes);
 
 		return $this->cached;
@@ -220,6 +241,22 @@ final class ExclusionService {
 	 * never reaches a file system call at all, it only ever reaches
 	 * str_starts_with, and the refusal is what keeps that true by making the
 	 * intent visible (T-04-47).
+	 *
+	 * A segment ``.`` is refused for the same reason and was not, until phase 5
+	 * (finding IN-07). It is the worse of the two failures, because it fails in
+	 * the direction nobody checks: ``./Archiv`` and ``Archiv/./x`` were stored,
+	 * listed on the page as rules in force, and matched nothing at all, because a
+	 * path out of the file cache never carries a ``.`` segment. An admin then had
+	 * a setting that looked like it worked, which is exactly the quiet failure the
+	 * refusal of ``..`` exists to prevent. Refused and not filtered, for the same
+	 * reason again: ``Archiv/./x`` filtered down to ``Archiv/x`` would exclude a
+	 * folder the admin did not type.
+	 *
+	 * Both refusals live in this one method, which is what makes the two sides
+	 * agree. The comparison in isExcluded() interprets no segment of its own, so
+	 * a shape refused here can never reach it, and a shape that reaches it was
+	 * accepted here. backend/tests/test_exclusion_path_space.py reads exactly that
+	 * pairing.
 	 */
 	public function normalise(string $prefix): ?string {
 		$value = trim($prefix);
@@ -233,7 +270,7 @@ final class ExclusionService {
 		}
 
 		foreach (explode('/', $value) as $segment) {
-			if ($segment === '..') {
+			if ($segment === '..' || $segment === '.') {
 				return null;
 			}
 		}

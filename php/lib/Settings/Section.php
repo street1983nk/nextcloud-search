@@ -19,12 +19,19 @@ use OCP\Settings\IIconSection;
  * nothing.
  *
  * The Override attribute is deliberately absent from every method here, and
- * that is a decision and not an oversight. It is a PHP 8.3 attribute while
- * php/appinfo/info.xml declares php min-version="8.2", so on the oldest
- * instance this app claims to support the attribute itself is a parse error.
- * php/lib/Search/Provider.php does carry it and stays untouched; the asymmetry
- * is named here so that nobody harmonises one of the two sides in the
- * direction that breaks PHP 8.2.
+ * that is a decision and not an oversight. It is engine-checked from PHP 8.3
+ * on, while php/appinfo/info.xml declares php min-version="8.2", so across the
+ * version span this app supports the attribute is a promise the oldest instance
+ * does not keep: on 8.2 it is parsed and ignored rather than enforced, so a
+ * method that stopped overriding anything would be caught on 8.3 and pass in
+ * silence on 8.2. It goes in once the floor is 8.3 and not before.
+ *
+ * php/lib/Search/Provider.php does carry it and stays untouched, for the same
+ * reason in the other direction: it is harmless there, being ignored on 8.2 and
+ * correct on 8.3. The asymmetry is named here so that nobody harmonises the two
+ * sides on the strength of a guess about what the attribute does on 8.2. It is
+ * not a parse error there, which an earlier version of this docblock claimed
+ * (phase 4 finding IN-05).
  */
 final class Section implements IIconSection {
 	public function __construct(

@@ -232,6 +232,16 @@ class ExtractionWorker:
         """The process id of the current child, or None while there is none."""
         return None if self._process is None else self._process.pid
 
+    @property
+    def files_handled(self) -> int:
+        """How many files the CURRENT child has served.
+
+        Per child, never per worker: the count is what bounds the sum of the
+        leaks inside one shared address space, so it has to start at zero every
+        time a child is replaced.
+        """
+        return self._files_handled
+
     def run(
         self,
         path: str,
@@ -251,7 +261,15 @@ class ExtractionWorker:
         outcome = self._ask((_JOB_EXTRACT, path, mime, size, route), timeout_seconds)
         if not isinstance(outcome, ExtractionOutcome):
             outcome = ExtractionOutcome.failed(Reason.CORRUPT)
-        self._files_handled += 1
+        if self._process is not None:
+            # Only a child that is still there can have handled a file. _ask
+            # replaces the child on a deadline and on an unexpected death, and
+            # that replacement sets the count back to zero; raising the count
+            # afterwards wrote a used file onto a process that had not seen one.
+            # The consequence was paid on every timeout: the next child counted
+            # as already used and was recycled one file early, so a hung
+            # document cost an extra spawn on top of the deadline.
+            self._files_handled += 1
         return self._recycle_if_needed(outcome)
 
     def probe(self, kind: str, amount: float, *, timeout_seconds: float | None = None) -> ExtractionOutcome:

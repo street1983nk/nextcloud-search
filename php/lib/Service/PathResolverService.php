@@ -199,10 +199,28 @@ final class PathResolverService {
 	 * file system path, so there is no traversal to defend against in the first
 	 * place: this refusal exists so that a request carrying one is not answered
 	 * as though it had made sense (T-04-37).
+	 *
+	 * A backslash is a character of a file name here and never a separator, and
+	 * that is a decision taken in phase 5 against the convenience it costs
+	 * (finding IN-04). This method used to convert every backslash into a slash
+	 * so that a Windows style paste would resolve as well, and the price was that
+	 * a file really named ``a\b.pdf`` could not be looked up by path at all: the
+	 * conversion split its name into two segments and the walk then asked for a
+	 * folder nobody has. A backslash is legal in a Nextcloud file name, and
+	 * ExclusionService::trimmed() has preserved it since phase 2 for exactly that
+	 * reason, so the conversion was also the one place in this app where a path
+	 * meant something different from everywhere else.
+	 *
+	 * What is lost: an administrator who pastes ``alice\files\x.pdf`` now gets the
+	 * same null as any other unresolvable input. That costs a retype, while the
+	 * old behaviour cost the answer to "why is this file not indexed" for a whole
+	 * class of names, which is the question phase 4 was built to answer. Neither
+	 * spelling this page shows carries a backslash: the error list writes
+	 * ``alice/files/Ordner/x.pdf`` and the short form is ``alice:Ordner/x.pdf``.
+	 * Dropping the conversion adds no path space, it removes one.
 	 */
 	private function fileIdOfPath(string $input): ?int {
-		$candidate = str_replace('\\', '/', $input);
-		$candidate = (string)preg_replace('#/+#', '/', $candidate);
+		$candidate = (string)preg_replace('#/+#', '/', $input);
 		$candidate = trim($candidate, '/');
 		if ($candidate === '') {
 			$this->refuse();

@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+import time
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -29,6 +30,8 @@ from pathlib import Path
 import pytest
 
 from findling.store.repo import (
+    _ACL_DOCUMENTS_SQL,
+    _ACL_ROWS_SQL,
     SCHEMA_VERSION,
     STATE_REASONS,
     UNKNOWN_VERSION,
@@ -758,13 +761,81 @@ def test_index_bytes_reports_zero_for_a_directory_that_is_not_there(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     # A container that has not indexed anything yet has no index directory, and
-    # the honest answer to that is zero. The warning names no path, for the same
-    # reason nothing else in this project logs one.
+    # the honest answer to that is zero WITHOUT a warning. The admin page polls
+    # this figure, so a warning for the ordinary fresh state wrote one line per
+    # poll into the log and made every other warning of this module worthless
+    # (IN-01).
     with caplog.at_level(logging.WARNING):
         assert index_bytes(tmp_path / "index") == 0
 
+    assert caplog.records == []
+
+
+def test_index_bytes_warns_when_something_is_there_but_not_a_directory(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The state that really is unexpected: the index path exists and is a file,
+    # so the volume is not laid out the way this container needs it. That is
+    # worth a warning, and the warning names no path for the same reason nothing
+    # else in this project logs one (T-04-07).
+    occupied = tmp_path / "index"
+    occupied.write_bytes(b"not a directory")
+
+    with caplog.at_level(logging.WARNING):
+        assert index_bytes(occupied) == 0
+
     assert caplog.records
     assert str(tmp_path) not in caplog.text
+
+
+def _fill_acl(store: Store, documents: int, users: int) -> None:
+    """Write a permission table large enough for a runtime statement."""
+    for file_id in range(1, documents + 1):
+        store.replace_acl(file_id, [f"user{index}" for index in range(users)])
+
+
+def test_acl_totals_answers_the_same_numbers_on_a_large_table(
+    store: Store,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The numbers are the contract, the query form is not. 6.000 rows over 2.000
+    # documents is above the 5.000 the plan asks for and still cheap enough for
+    # a unit suite; the reference below is the form that was replaced.
+    _fill_acl(store, documents=2_000, users=3)
+
+    started = time.perf_counter()
+    rows, documents = store.acl_totals()
+    elapsed_ms = (time.perf_counter() - started) * 1000
+
+    reference = store._conn.execute("SELECT COUNT(*), COUNT(DISTINCT file_id) FROM acl").fetchone()
+
+    assert (rows, documents) == (int(reference[0]), int(reference[1]))
+    assert (rows, documents) == (6_000, 2_000)
+    # Logged rather than asserted. A threshold on wall clock time in a unit suite
+    # is a flaky test on a busy machine; the number belongs in the record of the
+    # change, and the structural guarantee is the query plan asserted below.
+    logging.getLogger(__name__).info("acl_totals over %d rows took %.3f ms", rows, elapsed_ms)
+
+
+def test_acl_totals_builds_no_temporary_b_tree(store: Store) -> None:
+    # The structural half of the statement above, and the one that matters on a
+    # 4 GB box: COUNT(DISTINCT file_id) made SQLite materialise one ephemeral
+    # index entry per document on every admin poll. The plan of the replacement
+    # scans the covering index in order, so the distinct step costs a comparison
+    # and no memory at all.
+    _fill_acl(store, documents=200, users=3)
+
+    plans = "\n".join(
+        str(row)
+        for sql in (_ACL_DOCUMENTS_SQL, _ACL_ROWS_SQL)
+        # Both statements are module constants of the store, never anything a
+        # caller composed, which is what makes the concatenation here harmless.
+        for row in store._conn.execute(f"EXPLAIN QUERY PLAN {sql}")
+    )
+
+    assert "TEMP B-TREE" not in plans.upper()
+    assert "COVERING INDEX acl_file" in plans
 
 
 def test_the_connection_may_cross_a_worker_thread(store: Store) -> None:

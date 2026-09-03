@@ -187,6 +187,37 @@ def test_the_recycling_count_still_holds_after_a_job_with_its_own_deadline() -> 
         short_lived.stop()
 
 
+def test_a_timeout_leaves_no_file_counted_against_the_next_child() -> None:
+    # Recycling rule 2 kills the child and resets the count with it, and the
+    # count was raised again right afterwards for a job that no child had
+    # survived. The replacement then started life as if it had already worked,
+    # so it was recycled one file too early and every timeout cost an extra
+    # spawn. A deadline below the cost of starting a child is the cheapest way
+    # into that branch.
+    impatient = sandbox.ExtractionWorker(max_files=2, timeout_seconds=60)
+    try:
+        outcome = impatient.run(NOWHERE, UNSUPPORTED, 1024, timeout_seconds=0.01)
+
+        assert outcome == ExtractionOutcome.failed(Reason.TIMEOUT)
+        assert impatient.pid is None, "the deadline has to take the child with it"
+        assert impatient.files_handled == 0, "a file nobody handled must not be counted"
+    finally:
+        impatient.stop()
+
+
+def test_a_handled_file_is_counted_against_the_child_that_handled_it() -> None:
+    # The other direction of the same rule: the count is what bounds the sum of
+    # the leaks in a shared address space, so a job that really ran has to
+    # arrive in it.
+    worker = sandbox.ExtractionWorker(max_files=200, timeout_seconds=60)
+    try:
+        worker.run(NOWHERE, UNSUPPORTED, 1024)
+
+        assert worker.files_handled == 1
+    finally:
+        worker.stop()
+
+
 def _process_state(pid: int) -> str:
     """The letter the kernel gives one process, or the empty string when it is gone.
 

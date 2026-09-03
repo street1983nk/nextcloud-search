@@ -14,8 +14,8 @@ the mistake is visible is the diff, and only if somebody notices that the crawl
 compares against ``files/Archiv/x.pdf`` while the listener compares against
 ``/alice/files/Archiv/x.pdf``. So this gate reads the diff instead.
 
-Four things are held, and each of them is one of the two ways the exclusion can
-come apart:
+Five things are held, and each of them is one of the ways the exclusion can come
+apart:
 
 1. Neither the crawl nor the event listener may compare a prefix itself. The
    comparison lives in ``ExclusionService::isExcluded`` and the path space in
@@ -33,6 +33,14 @@ come apart:
    The constant stays as the documented default, and the value in force comes
    from ``SettingsService::maxFileBytes()``, which is the one place that clamps
    it at what the container reported (pitfall 2).
+5. Since phase 5, for finding IN-07: the validation on the way in and the
+   comparison on the way out have one answer about a dot segment. The first four
+   hold that both call paths ask the same helper; this one holds that the helper
+   itself does not contradict itself, because a shape the validation stores and
+   the comparison never meets is a rule that exists on the settings page and
+   nowhere else. That is the same quiet failure as above, one layer further in:
+   the admin excluded a folder, the page agrees with them, and the index fills up
+   anyway.
 
 **Why this is a textual check and not a PHP test.** There is no PHP test
 environment on the development machine and none in this repository; the PHP side
@@ -60,6 +68,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 PHP_ROOT = Path(__file__).resolve().parents[2] / "php" / "lib"
 
 CRAWL = PHP_ROOT / "BackgroundJobs" / "StorageCrawlJob.php"
@@ -74,6 +84,10 @@ STORAGE_SERVICE = PHP_ROOT / "Service" / "StorageService.php"
 # interval, because the container reads the tombstones of the cleared subtree as
 # restores and re-fetches the whole folder.
 QUEUE_SERVICE = PHP_ROOT / "Service" / "QueueService.php"
+
+# The service that owns both halves of the space: the validation on the way in
+# and the comparison on the way out. Read here since phase 5, for finding IN-07.
+EXCLUSION_SERVICE = PHP_ROOT / "Service" / "ExclusionService.php"
 
 # The one helper both call paths go through, and the one method that builds the
 # path they hand it.
@@ -113,6 +127,26 @@ COMPOSED_PROVIDER_LIST = "$this->providers()"
 # A line that only defines the constant, which is allowed and is in fact where
 # the documented default has to stay.
 _CAP_DEFINITION = re.compile(r"const\s+MAX_SIZE\s*=")
+
+# The two segment shapes a stored prefix may never carry, as they are written in
+# PHP. Both are refused in normalise() and neither is filtered out: a filter
+# would turn a prefix into a different prefix, and the admin would have excluded
+# a folder they never typed.
+#
+# The second one is the finding. A path out of the file cache never carries a
+# ``.`` segment, so a rule holding one was stored, listed on the page as in
+# force, and matched nothing at all: the quiet failure the refusal of ``..``
+# exists to prevent, in the one shape that was still let through (IN-07).
+DOT_SEGMENT = "'.'"
+PARENT_SEGMENT = "'..'"
+
+# The one trim both halves go through, which is what makes the value the
+# validation accepts and the value the comparison receives the same value.
+SHARED_TRIM = "$this->trimmed("
+
+# The two halves of the space, by signature.
+VALIDATION_METHOD = "public function normalise("
+COMPARISON_METHOD = "public function isExcluded("
 
 # Lines that are not a statement: blank, and the comment shapes PHP uses. ``#``
 # covers an attribute as well, which is the safe direction here too: an
@@ -189,6 +223,61 @@ def scan_mount_list(name: str, source: str) -> list[str]:
     return violations
 
 
+def method_body(name: str, source: str, signature: str) -> str:
+    """The lines of one PHP method, from its signature to its closing brace.
+
+    Every method of these classes sits one tab in, so a line that is exactly one
+    tab and a brace ends it. Crude on purpose: a gate that needed a PHP parser
+    would need a PHP toolchain, and this repository deliberately has none.
+    """
+    lines = source.splitlines()
+    starts = [number for number, line in enumerate(lines) if signature in line]
+    assert starts, f"{name}: {signature} is gone, so this gate would pass on nothing"
+    start = starts[0]
+    for end in range(start + 1, len(lines)):
+        if lines[end] == "\t}":
+            return "\n".join(lines[start : end + 1])
+    raise AssertionError(f"{name}: {signature} has no closing brace at method level")
+
+
+def scan_segment_refusal(name: str, source: str) -> list[str]:
+    """Findings about the two halves of the one path space, empty when clean.
+
+    Three statements, and together they are what makes the validation and the
+    comparison agree about a dot segment.
+
+    One, the validation refuses both dot shapes. Two, the comparison interprets
+    no segment at all, so a shape refused on the way in can never turn up on the
+    way out with a different answer. Three, both halves reach their value through
+    the same trim, so they are talking about the same string in the first place.
+    """
+    violations: list[str] = []
+    validation = method_body(name, source, VALIDATION_METHOD)
+    comparison = method_body(name, source, COMPARISON_METHOD)
+
+    for segment in (PARENT_SEGMENT, DOT_SEGMENT):
+        if segment not in validation:
+            violations.append(
+                f"{name}: normalise() does not refuse a {segment} segment, so a prefix carrying one "
+                "is stored, shown as a rule in force and matches nothing"
+            )
+
+    if "explode(" in comparison or DOT_SEGMENT in comparison or PARENT_SEGMENT in comparison:
+        violations.append(
+            f"{name}: isExcluded() interprets segments of its own, so the answer to a dot segment "
+            "no longer depends on normalise() alone and the two halves can disagree"
+        )
+
+    for half, body in ((VALIDATION_METHOD, validation), (COMPARISON_METHOD, comparison)):
+        if SHARED_TRIM not in body:
+            violations.append(
+                f"{name}: {half} does not go through {SHARED_TRIM}, so the value it judges is not "
+                "the value the other half judges, which is a second path space"
+            )
+
+    return violations
+
+
 def _call_sites() -> list[tuple[str, str]]:
     """The two call paths of the exclusion, as (file name, source)."""
     return [(path.name, path.read_text(encoding="utf-8")) for path in (CRAWL, LISTENER)]
@@ -200,9 +289,22 @@ def _call_sites() -> list[tuple[str, str]]:
 def test_the_four_files_of_the_exclusion_exist() -> None:
     # The anti vacuity clause. Every scanner above returns an empty list for a
     # file it cannot read, so a gate that lost its files would look perfect.
-    missing = [path.name for path in (CRAWL, LISTENER, STORAGE_SERVICE, QUEUE_SERVICE) if not path.is_file()]
+    missing = [
+        path.name for path in (CRAWL, LISTENER, STORAGE_SERVICE, QUEUE_SERVICE, EXCLUSION_SERVICE) if not path.is_file()
+    ]
 
     assert missing == []
+
+
+def test_the_validation_and_the_comparison_share_one_path_space() -> None:
+    # The fifth statement of this gate, added in phase 5 for finding IN-07. The
+    # four above hold that both call paths ask the same helper; this one holds
+    # that the helper itself has one answer, because a shape the validation lets
+    # through and the comparison never sees is a rule that exists on the page and
+    # nowhere else.
+    source = EXCLUSION_SERVICE.read_text(encoding="utf-8")
+
+    assert scan_segment_refusal(EXCLUSION_SERVICE.name, source) == []
 
 
 def test_both_call_paths_go_through_the_one_helper() -> None:
@@ -409,6 +511,98 @@ def test_a_mount_list_that_is_not_the_composed_one_is_reported() -> None:
 
     assert len(violations) == 1
     assert COMPOSED_PROVIDER_LIST in violations[0]
+
+
+_CLEAN_EXCLUSION_SERVICE = """<?php
+
+class ExampleExclusionService {
+\tpublic function normalise(string $prefix): ?string {
+\t\t$value = $this->withoutTheFilesFolder($this->trimmed(trim($prefix)));
+\t\tif ($value === '') {
+\t\t\treturn null;
+\t\t}
+
+\t\tforeach (explode('/', $value) as $segment) {
+\t\t\tif ($segment === '..' || $segment === '.') {
+\t\t\t\treturn null;
+\t\t\t}
+\t\t}
+
+\t\treturn $value;
+\t}
+
+\tpublic function isExcluded(string $mountRelativePath): bool {
+\t\t$path = $this->trimmed($mountRelativePath);
+\t\tif ($path === '') {
+\t\t\treturn false;
+\t\t}
+
+\t\tforeach ($this->prefixes() as $prefix) {
+\t\t\tif ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+\t\t\t\treturn true;
+\t\t\t}
+\t\t}
+
+\t\treturn false;
+\t}
+}
+"""
+
+
+def test_the_clean_exclusion_sample_is_clean() -> None:
+    # The counter sample of the three below, and it is the shape the real file
+    # has: both refusals in the validation, no segment handling in the
+    # comparison, one trim on both sides.
+    assert scan_segment_refusal("ExampleExclusionService.php", _CLEAN_EXCLUSION_SERVICE) == []
+
+
+def test_a_validation_that_keeps_a_dot_segment_is_reported() -> None:
+    # The regression itself: somebody removes the second half of the condition
+    # because a single dot looks harmless next to a double one.
+    source = _CLEAN_EXCLUSION_SERVICE.replace("$segment === '..' || $segment === '.'", "$segment === '..'")
+
+    violations = scan_segment_refusal("ExampleExclusionService.php", source)
+
+    assert len(violations) == 1
+    assert "does not refuse a '.' segment" in violations[0]
+
+
+def test_a_comparison_that_interprets_segments_is_reported() -> None:
+    # The other direction, and the one that would make the two halves disagree
+    # while both look careful: the comparison starts filtering what the
+    # validation refuses, so a dot segment gets two answers in one app.
+    source = _CLEAN_EXCLUSION_SERVICE.replace(
+        "\t\t$path = $this->trimmed($mountRelativePath);",
+        "\t\t$parts = explode('/', $mountRelativePath);\n\t\t$path = $this->trimmed(implode('/', $parts));",
+    )
+
+    violations = scan_segment_refusal("ExampleExclusionService.php", source)
+
+    assert len(violations) == 1
+    assert "interprets segments of its own" in violations[0]
+
+
+def test_a_half_that_skips_the_shared_trim_is_reported() -> None:
+    # The quietest of the three. Both halves still agree about dot segments and
+    # they no longer agree about slashes, which is the original pitfall 4 one
+    # layer further in.
+    source = _CLEAN_EXCLUSION_SERVICE.replace(
+        "$path = $this->trimmed($mountRelativePath);", "$path = $mountRelativePath;"
+    )
+
+    violations = scan_segment_refusal("ExampleExclusionService.php", source)
+
+    assert len(violations) == 1
+    assert COMPARISON_METHOD in violations[0]
+
+
+def test_a_method_that_disappeared_is_not_a_pass() -> None:
+    # The anti vacuity clause of this scanner. Renaming the validation away
+    # would otherwise make every statement above unreachable and the gate green.
+    source = _CLEAN_EXCLUSION_SERVICE.replace(VALIDATION_METHOD, "private function normaliseSomething(")
+
+    with pytest.raises(AssertionError, match="is gone"):
+        scan_segment_refusal("ExampleExclusionService.php", source)
 
 
 def test_a_comment_is_not_a_statement() -> None:
