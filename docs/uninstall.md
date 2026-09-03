@@ -65,3 +65,181 @@ nichts. Der Quellcode von `AppManager::disableApp()` ist in den Zweigen
 stable32, stable33 und stable34 wortgleich, aber gelesener Quellcode ist kein
 Messwert. Die Wiederholung derselben Kette auf Nextcloud 32, 33, 34 und 35 in
 CI gehört zu Plan 05-08 und ist bis dahin ein offener Punkt.
+
+## 1. Abschalten oder entfernen: was der Unterschied ist
+
+**Abschalten lässt alles liegen.** `occ app:disable findling` beendet den
+Suchanbieter, den Poller und die Ereignisverarbeitung. Die drei Tabellen der
+App, alle ihre Einstellungen und ihre Hintergrundjobs bleiben unangetastet.
+Gemessen auf derselben Instanz, Zählungen jeweils direkt vor und nach dem
+Befehl:
+
+| Zustand | Tabellen | appconfig-Werte | Jobs |
+|---------|----------|-----------------|------|
+| vor `occ app:disable findling` | 3 | 5 | 1 |
+| nach `occ app:disable findling` | 3 | 5 | 1 |
+
+**Entfernen verlangt eine ausdrückliche Absicht.** `occ findling:purge` ohne
+Option sagt nur, was eine Räumung mitnehmen würde, und ändert nichts. Lesen ist
+die Vorgabe:
+
+```
+occ findling:purge
+```
+
+Die Ausgabe nennt die drei Hintergrundjobs, die drei Tabellen mit der Angabe, ob
+sie existieren, die Zahl der Migrationseinträge und die Zahl der gespeicherten
+Einstellungen. Tabellennamen und Zahlen, und ausdrücklich kein Pfad und kein
+Dateiname: die Ausgabe eines occ-Befehls landet in der Regel in einem Protokoll.
+
+Die beiden Absichten und ihre Befehlsfolgen:
+
+```
+# Ich will die App loswerden, mit allem was sie in der Datenbank hat.
+occ findling:purge --arm
+occ app:remove findling
+
+# Ich will nur den Datenbestand dieser Hälfte leeren, die App bleibt liegen.
+occ findling:purge --now
+```
+
+`--arm` setzt die Marke, `--disarm` nimmt sie zurück, `--now` räumt sofort. Alle
+drei fragen nach, wenn ein Mensch vor dem Terminal sitzt; ein Aufruf mit
+`--no-interaction` gilt als bestätigt, weil CI so ruft.
+
+Gemessen mit gesetzter Marke, jeweils direkt nach dem Befehl:
+
+| Schritt | Tabellen | appconfig-Werte | Jobs |
+|---------|----------|-----------------|------|
+| `occ findling:purge --arm --no-interaction` | 3 | 6 | 1 |
+| `occ app:disable findling` | 0 | 0 | 0 |
+| noch einmal `occ app:disable findling` | 0 | 0 | 0 |
+| `occ app:enable findling` | 3 | 4 | 1 |
+
+Drei Eigenschaften stehen in dieser Tabelle:
+
+- Die Räumung ist vollständig. Drei Tabellen, alle Einstellungen, alle drei
+  Hintergrundjobs.
+- Sie ist wiederholbar. Der Schritt läuft bei jedem Abschalten erneut und hält
+  fehlende Tabellen aus; ein zweiter Lauf mit gesetzter Marke und drei
+  abwesenden Tabellen wurde ausdrücklich gefahren und schrieb keine Zeile ins
+  Protokoll der Instanz.
+- Sie ist umkehrbar. Nach `occ app:enable findling` legen die Migrationen die
+  drei Tabellen wieder an, der Install-Schritt plant die Erstindexierung erneut
+  und `occ findling:index` antwortet ohne Fehler.
+
+**Ein Re-Enable braucht keinen Reindex** (Entscheid D-16). Der Suchindex selbst
+liegt nicht in der Nextcloud-Datenbank, sondern im Datenvolume des Containers,
+und keiner der Befehle dieses Abschnitts fasst es an. Tage OCR-Arbeit auf einer
+schwachen Box überleben also jedes Abschalten. Die Grenze dieser Aussage: hier
+gemessen ist die Nextcloud-Hälfte, also Tabellen, Einstellungen und Jobs. Dass
+die Suchleiste nach dem Wiedereinschalten sofort wieder Treffer liefert, folgt
+daraus, dass das Volume unberührt bleibt, und ist als Suchprobe über die ganze
+Kette hier nicht gemessen. Diese Probe gehört zu Plan 05-08.
+
+**Eine Nebenwirkung, die der Befehl selbst ausspricht.** `--now` nimmt auch den
+Wert `enabled` mit, weil er zu den Einstellungen dieser App gehört. Die App ist
+danach abgeschaltet. `occ app:enable findling` bringt sie mit leeren Tabellen
+zurück, und der Befehl sagt genau das in seiner Ausgabe.
+
+**Und ein Rückstand, der erst in der Messung auffiel.** Nextcloud führt in der
+Kerntabelle `migrations` Buch darüber, welche Migration welcher App gelaufen
+ist. Diese Zeilen überleben ein `occ app:remove` und wären damit ein Rückstand,
+den Entscheid D-18 verbietet. Schlimmer noch: solange sie stehen, hält Nextcloud
+das Schema für aktuell, und eine wieder eingeschaltete App hätte keine Tabellen
+mehr und bekäme sie durch kein occ-Kommando zurück. Gemessen und bestätigt.
+Die Räumung nimmt deshalb auch diese Zeilen mit, ausschließlich die mit der
+App-Kennung `findling`, und genau darum ist die letzte Zeile der Tabelle oben
+wieder gesund.
+
+## 2. Das Index-Volume: wo die Bestätigung liegt
+
+Der Suchindex, die Zustandsdatenbank und der Arbeitsbereich des Containers
+liegen in einem Docker-Volume, das **AppAPI** gehört und nicht dieser App.
+Deshalb gibt es hier keinen eigenen Bestätigungsdialog (Entscheid D-15): die
+Bestätigung ist die Standardmechanik von AppAPI, und ein Eigenbau daneben wäre
+eine zweite Wahrheit über eine Löschung, die Findling nicht ausführt.
+
+Wo diese Bestätigung liegt, hängt von der Serverversion ab:
+
+- **Nextcloud 32 und 33:** im Seitenbereich der App-Verwaltung gibt es einen
+  Schalter, der die Daten beim Entfernen mitnimmt.
+- **Nextcloud 34 und 35:** dieses Bedienelement gibt es nicht mehr. Die
+  App-Verwaltung wurde umgebaut, und kein Schalter der neuen Oberfläche setzt
+  das Kennzeichen. Wer auf einer dieser Versionen danach sucht, sucht
+  vergeblich; das ist kein Fehler von Findling.
+
+Der Weg, der auf **allen vier Versionen** gilt:
+
+```
+occ app_api:app:unregister findling_backend --rm-data
+```
+
+Ohne `--rm-data` bleiben die Daten liegen, und das ist die Vorgabe. Der
+Gegenschalter dazu ist bei AppAPI abgekündigt und steht hier deshalb nicht als
+Weg: wer die Daten behalten will, lässt das Kennzeichen einfach weg.
+
+Die Grenze dieser Aussage: die Versionsunterschiede stehen aus dem Quellcode der
+Serverzweige und der AppAPI fest, gemessen wurde in diesem Plan nur auf
+Nextcloud 34.0.3, und dort ohne AppAPI im Spiel. Der Beweis, dass `--rm-data`
+das Volume auf jeder der vier Versionen wirklich mitnimmt, gehört zum
+Deploy-Job aus Plan 05-08.
+
+## 3. Was auch mit `--rm-data` liegen bleibt
+
+Eine ehrliche Deinstallationsseite nennt die Reste, und es gibt drei:
+
+- **Das gezogene Container-Image** bleibt auf dem Host liegen. Der
+  Abmeldepfad von AppAPI entfernt den Container und auf Wunsch das Volume, aber
+  kein Image. Wer den Platz braucht, entfernt es mit den Mitteln seiner
+  Docker-Installation. Findling tut das nicht von sich aus, weil ein Image auf
+  einem Host auch anderen Zwecken dienen kann.
+- **Was AppAPI selbst führt**, also der Eintrag der ExApp, die
+  Ereignis-Anmeldung und die Zuordnung zum Deploy-Daemon, verschwindet mit der
+  Abmeldung der ExApp. Wird nur die Companion-App entfernt und die ExApp nicht
+  abgemeldet, bleibt dieser Zustand stehen.
+- **Nichts sonst.** Kein systemd-Dienst, kein Eintrag in einer Aufgabenplanung,
+  kein Pfad auf dem Host außerhalb von Docker.
+
+**Nutzerdateien bleiben unberührt.** Das ist ausdrücklich keine Zusage dieser
+Seite, sondern die Nur-Lesen-Invariante des Projekts mit ihrem eigenen Gate: die
+Schreib-Allowlist des Containers hat genau drei Einträge, und ein Test hält
+diese Zahl fest. Eine Deinstallation weicht diese Disziplin nicht auf, weil sie
+keine neue Schreibroute braucht. Die Grenze: das Gate prüft die Allowlist und
+nicht jeden möglichen Schreibvorgang der Welt; was es beweist und was nicht,
+steht in `docs/testing.md`.
+
+## 4. Die empfohlene Reihenfolge, und was eine halbe Entfernung bedeutet
+
+Findling besteht aus zwei Teilen, und keiner der beiden zwingt den anderen zur
+Deinstallation (Entscheid D-17). Empfohlen ist diese Reihenfolge:
+
+```
+# 1. Die ExApp abmelden, mit oder ohne ihre Daten.
+occ app_api:app:unregister findling_backend --rm-data
+
+# 2. Die Companion-App entfernen, mit ausdrücklicher Absicht.
+occ findling:purge --arm
+occ app:remove findling
+```
+
+Erst das Backend, dann die Companion-App. Andersherum verliert der Container
+seinen Anrufer, während er noch läuft.
+
+Die beiden halben Zustände, und beide sind gutartig:
+
+- **Companion ohne Backend:** die Statusseite zeigt ihren bestehenden Hinweis,
+  dass das Backend nicht antwortet, und nennt die zuletzt erfassten Zahlen als
+  solche. Die Suchleiste arbeitet weiter, nur ohne die Trefferliste von
+  Findling. Kein Fehler, keine hängende Suche.
+- **Backend ohne Companion:** der Container läuft weiter und hat keinen Anrufer
+  mehr. Er fragt eine Arbeitsliste ab, die es nicht mehr gibt, und verlängert
+  seine Pause nach jedem Fehlschlag, von 15 Sekunden verdoppelnd bis auf 120
+  Sekunden. Eine Fehlerschleife im Sekundentakt entsteht dabei nicht, wohl aber
+  eine Protokollzeile je Durchgang, und die nennt nur den Fehlertyp und keinen
+  Pfad.
+
+Die Grenze dieses Abschnitts: die beiden Zustände sind aus dem Verhalten der
+beteiligten Bausteine beschrieben und in diesem Plan nicht als Kette gefahren.
+Der Beweis über beide Teilentfernungen und über alle vier Serverversionen ist
+der Deploy-Job aus Plan 05-08.
