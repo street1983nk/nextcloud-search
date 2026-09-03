@@ -59,7 +59,7 @@ jobs:
     # A job that hangs must cost minutes, not the default six hours. The number
     # is the measured runtime with a margin and not a guess; the measurement is
     # written down at the matrix below.
-    timeout-minutes: 20
+    timeout-minutes: 15
     # The one entry that may fail is the one for a server version that is not
     # released yet, and which one that is stands at the entry itself.
     continue-on-error: ${{ matrix.tolerate-failure }}
@@ -84,11 +84,12 @@ jobs:
         # minutes of runner time. The entries run in parallel, so the wall clock
         # would get worse rather than better.
         #
-        # Measured on 2026-09-03: the whole job up to the installed ExApp took
-        # 1 m 45 s, of which 60 s were the image build. The uninstall assertions
-        # add two more deployments and the observation window of assertion 6, so
-        # timeout-minutes above is 20: roughly twice the expected runtime and far
-        # away from the default of 360, which is the number that lets a hung
+        # Measured on 2026-09-03 in the first green run over all four entries
+        # (run 33757405755): 3 m 47 s to 4 m 29 s per entry, of which 60 s are the
+        # image build and about 50 s the observation window of assertion 6. The
+        # four entries run in parallel, so that is the wall clock as well.
+        # timeout-minutes above is 15, roughly three times the measurement and
+        # far away from the default of 360, which is the number that lets a hung
         # handshake burn an afternoon.
         include:
           - server-version: stable32
