@@ -167,18 +167,27 @@ jobs:
           # rather than assumed.
           git -C findling-src diff --quiet -- backend/appinfo/info.xml
 
-      # --net host is what solves the way back: the ExApp container shares the
-      # network namespace of the runner and therefore reaches localhost:8080,
-      # where the builtin PHP server listens. Without it the server would have to
-      # bind 0.0.0.0 and the instance URL would have to point at the bridge
-      # address, with trusted_domains and overwrite.cli.url in tow. Every occ call
-      # of this job carries a timeout, because a handshake that hangs must not eat
-      # the job deadline on its own.
+      # The nextcloud url of a HaRP daemon is the HaRP address and not the address
+      # of Nextcloud, which reads wrong and is the one thing this job had to
+      # measure to get right. In HaRP mode AppAPI resolves the ExApp address as
+      # "{nextcloud_url}/exapps/{appId}" (DockerActions::resolveExAppUrl, read in
+      # the running instance on 2026-09-03), because HaRP is the entry point that
+      # forwards /exapps to the tunnel and everything else to NC_INSTANCE_URL.
+      # With http://localhost:8080 in this position every heartbeat goes to the
+      # PHP server, which answers 404, and the install ends in
+      # "heartbeat check failed" with a healthy container next to it. AppAPI also
+      # hands this value to the container as NEXTCLOUD_URL, so the way back runs
+      # through HaRP as well.
+      #
+      # --net host stays: the ExApp container shares the network namespace of the
+      # runner and therefore reaches the published HaRP port on localhost. Every
+      # occ call of this job carries a timeout, because a handshake that hangs
+      # must not eat the job deadline on its own.
       - name: Register the HaRP deploy daemon
         run: |
           timeout 30 ./occ app_api:daemon:register \
             harp_proxy_host "Harp Proxy (Host)" docker-install http localhost:8780 \
-            http://localhost:8080 \
+            http://localhost:8780 \
             --harp --harp_frp_address localhost:8782 \
             --harp_shared_key "${HARP_SHARED_KEY}" \
             --net host --set-default

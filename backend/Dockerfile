@@ -187,6 +187,28 @@ RUN chmod 0755 /app/docker/init.sh /app/docker/entrypoint.sh /app/docker/harp_co
 #             owned by the app user instead of by root. If AppAPI ever mounts
 #             somewhere else, the volume arrives root owned; entrypoint.sh checks
 #             for exactly that and says so in one line.
+#   /certs/frp  where HaRP installs the client certificate, its key and the CA of
+#             the tunnel. It creates the directory and writes the three files
+#             through docker exec, and that exec runs as the image user, which is
+#             the unprivileged one below. Without this line the installation
+#             fails in a way that looks like something else entirely: HaRP logs
+#             "mkdir: cannot create directory '/certs': Permission denied",
+#             harp_connect.sh finds no readable certificate and falls back to TLS
+#             without a client certificate, and the frp server then refuses every
+#             login with EOF. The container is up, the app answers on its socket,
+#             and it is unreachable. Measured on 2026-09-03 against
+#             scripts/dev/compose-harp.yaml: with the directory pre-created and
+#             owned by this user, the same run logs "client certificates in
+#             /certs/frp, configuring the tunnel with mutual TLS" and "login to
+#             server success". Mode 0700, because the private key of the tunnel
+#             lands here.
+#             What is deliberately NOT done: HaRP also runs
+#             update-ca-certificates, which needs /etc/ssl/certs and fails with
+#             exit 2 in this image. The trust store stays owned by root, because
+#             frpc reads the CA through the trustedCaFile that
+#             docker/harp_connect.sh writes and never from the OS bundle, and a
+#             trust store the application can rewrite is a worse problem than a
+#             log line.
 #   /app itself stays owned by root and world readable. The process reads its
 #             virtual environment and its scripts, it must not be able to
 #             rewrite them.
@@ -194,9 +216,9 @@ RUN chmod 0755 /app/docker/init.sh /app/docker/entrypoint.sh /app/docker/harp_co
 #             socket goes.
 RUN groupadd --gid 1000 findling \
     && useradd --uid 1000 --gid 1000 --no-create-home --home-dir /app --shell /usr/sbin/nologin findling \
-    && mkdir -p /app/run /nc_app_findling_backend_data \
-    && chown findling:findling /app/run /nc_app_findling_backend_data \
-    && chmod 0700 /app/run
+    && mkdir -p /app/run /nc_app_findling_backend_data /certs/frp \
+    && chown findling:findling /app/run /nc_app_findling_backend_data /certs /certs/frp \
+    && chmod 0700 /app/run /certs /certs/frp
 
 USER findling
 
