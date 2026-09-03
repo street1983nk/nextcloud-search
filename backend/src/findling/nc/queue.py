@@ -77,6 +77,20 @@ KINDS: Final = frozenset({KIND_CONTENT, KIND_METADATA, KIND_DELETE, KIND_ACL, KI
 # otherwise, which is the safe direction of that mistake.
 _KINDS_WITHOUT_A_NODE: Final = frozenset({KIND_DELETE, KIND_ACL})
 
+# How many entries one list of an acknowledgement may carry.
+#
+# The number is not ours. It is QueueController::MAX_LIST_LENGTH on the other
+# side, and a list longer than that turns the whole acknowledgement into a bad
+# request, which would cost the batch its acknowledgement and leave every row of
+# it circling until the lock expires. A test reads the constant out of the PHP
+# source and compares it with this one, because the two are one agreement and
+# there is no import that could carry it across.
+#
+# An ordinary pass cannot reach it: a claim is capped at 256 rows on the
+# Nextcloud side as well. This is the guard against the day one of those two
+# numbers moves without the other.
+MAX_ACK_LIST: Final = 256
+
 
 @dataclass(frozen=True, slots=True)
 class QueueJob:
@@ -235,6 +249,26 @@ def _user_ids(value: object) -> tuple[str, ...]:
     return tuple(dict.fromkeys(entry for entry in value if isinstance(entry, str) and entry))
 
 
+def _capped_skips(skips: Mapping[int, str]) -> list[dict[str, object]]:
+    """The skip verdicts as the acknowledgement carries them, never too many.
+
+    Cut rather than refused, and the cut is said out loud (T-05-46). The other
+    side answers a list over its ceiling with a bad request for the WHOLE
+    acknowledgement, so refusing here would trade a few lost verdicts for a
+    whole batch that stays locked until the claim expires. Losing the verdicts
+    beyond the ceiling costs two numbers on a page; losing the acknowledgement
+    costs the batch.
+
+    Nothing but the file id and the code goes into an entry. No path, no title,
+    no excerpt: the reason code is the whole message (T-05-45).
+    """
+    entries = [{"fileId": file_id, "reason": reason} for file_id, reason in skips.items()]
+    if len(entries) <= MAX_ACK_LIST:
+        return entries
+    LOGGER.warning("dropped %d skip verdicts over the list ceiling of the acknowledgement", len(entries) - MAX_ACK_LIST)
+    return entries[:MAX_ACK_LIST]
+
+
 def _job(queue_id_raw: object, source: object) -> QueueJob | None:
     """Build one job, or None when a field makes the entry unusable.
 
@@ -348,19 +382,36 @@ class DocumentQueue:
             LOGGER.warning("discarded %d unusable queue entries", discarded)
         return ClaimResult(jobs=tuple(jobs), discarded=discarded)
 
-    async def acknowledge(self, done: Sequence[int], failed: Mapping[int, str]) -> CallResult:
-        """Report the batch: what is finished, and what failed with which reason.
+    async def acknowledge(
+        self,
+        done: Sequence[int],
+        failed: Mapping[int, str],
+        skipped: Mapping[int, str] | None = None,
+    ) -> CallResult:
+        """Report the batch: what is finished, what failed, and what was skipped.
 
-        Two empty lists never leave the process. That request can only answer
+        Three lists and two ways of naming a row. ``failed`` is keyed by queue
+        row id, ``skipped`` by file id, and the difference is the receiving side:
+        a failure has to be translated into a file id before its row is deleted,
+        while a skipped file is acknowledged in the same request anyway. The
+        verdict table over there is keyed by file id in both cases.
+
+        ``skipped`` is the crossing of DI-04-03. Four of the reasons in it are
+        decided by this container alone, and until they travelled the error list
+        of the status page could group only what Nextcloud had decided itself.
+
+        Three empty lists never leave the process. That request can only answer
         zero, and on an idle instance the poller would otherwise pay a round trip
         for every single empty poll.
         """
-        if not done and not failed:
+        skips = dict(skipped or {})
+        if not done and not failed and not skips:
             return CallResult(ok=True)
 
         failures = [{"queueId": queue_id, "reason": reason} for queue_id, reason in failed.items()]
+        decisions = _capped_skips(skips)
         try:
-            answer = await ack_documents(self._nc, files=list(done), failed=failures)
+            answer = await ack_documents(self._nc, files=list(done), failed=failures, skipped=decisions)
         except Exception:
             # Not acknowledging is survivable by construction: the rows come back
             # after the lock timeout, the state store already knows the verdicts,

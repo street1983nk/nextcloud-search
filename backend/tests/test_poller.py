@@ -141,6 +141,11 @@ class _FakeQueue:
         self._batches = list(batches)
         self.claims = 0
         self.acknowledged: list[tuple[list[int], dict[int, str]]] = []
+        # The third list of the acknowledgement, recorded next to the other two
+        # rather than inside their tuple: three dozen assertions in this file
+        # spell the pair out, and widening the tuple would rewrite all of them
+        # for a list most of those tests do not care about.
+        self.skips: list[dict[int, str]] = []
         self.unlocked: list[list[int]] = []
         self.requeues: list[tuple[list[int], str]] = []
         self.requeue_fails = False
@@ -150,8 +155,9 @@ class _FakeQueue:
         self.claims += 1
         return self._batches.pop(0) if self._batches else ClaimResult()
 
-    async def acknowledge(self, done: Any, failed: Any) -> CallResult:
+    async def acknowledge(self, done: Any, failed: Any, skipped: Any = None) -> CallResult:
         self.acknowledged.append((list(done), dict(failed)))
+        self.skips.append(dict(skipped or {}))
         return CallResult(ok=True, count=len(done) + len(failed))
 
     async def unlock(self, ids: Any) -> CallResult:
@@ -2107,3 +2113,179 @@ def test_a_truncated_verdict_keeps_its_reason_without_its_text() -> None:
 
     assert verdicts[0].outcome.text == ""
     assert verdicts[0].outcome.truncated is True
+
+
+# -- the skip verdicts of the acknowledgement (DI-04-03) ---------------------
+#
+# Four reasons are decided by this container and by nothing else: encrypted, no
+# text layer, empty text and a picture without a readable word. Until this plan
+# they never crossed the boundary, so the error list of the status page grouped
+# the half of the truth that Nextcloud had decided itself, and an admin read a
+# scanned archive as "no errors". The tests below pin the shape of the crossing:
+# one entry per file id, a code out of the closed list, and nothing else at all.
+
+
+def _skip_job(queue_id: int, file_id: int, mime: str) -> QueueJob:
+    """A job whose title and path are worth leaking, so that a leak is visible."""
+    return _job(
+        queue_id,
+        file_id,
+        mime=mime,
+        size=len(BODY_BYTES),
+        title="Gehaltsabrechnung Mueller.pdf",
+        path="Personal/Loehne/Gehaltsabrechnung Mueller.pdf",
+    )
+
+
+async def test_a_skipped_file_travels_with_its_file_id_and_its_reason(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The verdict belongs to this container alone, and without this list the
+    # Nextcloud half never learns it: the error list groups findling_file_state,
+    # and that table only ever saw what Nextcloud itself had decided (DI-04-03).
+    job = _skip_job(91, 4711, "video/mp4")
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    result = await poller.run_once()
+
+    assert result.skipped == 1
+    assert queue.skips == [{4711: "mime_not_allowed"}]
+    # And the row still leaves the queue the ordinary way: the skip list is a
+    # second statement about it, never a replacement for the acknowledgement.
+    assert queue.acknowledged == [([91], {})]
+
+
+async def test_a_skip_verdict_carries_neither_path_nor_title_nor_text(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # T-05-45. The job carries a telling name and a telling path, and the whole
+    # point of the list is that neither of them travels with the verdict.
+    job = _skip_job(91, 4711, "video/mp4")
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    await poller.run_once()
+
+    payload = repr(queue.skips)
+    assert "Gehaltsabrechnung" not in payload
+    assert "Personal" not in payload
+    assert queue.skips == [{4711: "mime_not_allowed"}]
+
+
+async def test_an_empty_text_document_reports_its_reason(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # One of the four container reasons, produced by the real extractor instead
+    # of a stand-in: a readable file that carries no word at all.
+    job = _skip_job(91, 4711, "text/plain")
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: b"   \n\t \n"})
+
+    await poller.run_once()
+
+    assert queue.skips == [{4711: "empty_text"}]
+
+
+async def test_a_file_handed_to_the_ocr_track_sends_no_skip_verdict(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # skipped(no_text_layer) with OCR on is the handover point and not an end
+    # state. Reporting it would put every scan of the instance into the error
+    # list under "no text in the document", and nothing would ever take it out
+    # again: indexed is the container's number and is never written into that
+    # table. The rule is the one the done list already follows.
+    job = _job(mime="application/pdf", size=len(SCAN_BYTES))
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES})
+
+    await poller.run_once()
+
+    assert queue.requeues == [([4711], "ocr")]
+    assert queue.skips == [{}]
+
+
+@pytest.mark.usefixtures("ocr_off")
+async def test_the_same_verdict_travels_once_it_is_an_end_state(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # With OCR switched off nothing is handed over, so the very same verdict is
+    # final and belongs in the list. The distinction is the handover and never
+    # the reason code.
+    job = _job(mime="application/pdf", size=len(SCAN_BYTES))
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SCAN_BYTES})
+
+    await poller.run_once()
+
+    assert queue.requeues == []
+    assert queue.skips == [{4711: "no_text_layer"}]
+
+
+async def test_a_pass_without_a_skip_behaves_exactly_as_before(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The regression guard of this change: an ordinary indexing pass sends an
+    # empty third list and is otherwise the pass of yesterday.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    result = await poller.run_once()
+
+    assert result.indexed == 1
+    assert queue.acknowledged == [([91], {})]
+    assert queue.skips == [{}]
+
+
+async def test_a_failure_stays_in_the_failure_list_and_out_of_the_skip_list(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The two lists carry two different states, and a file belongs to exactly
+    # one of them. A verdict in both would be recorded twice inside the same
+    # transaction, and the second write would decide what the admin sees.
+    broken = b"PK not really a package at all"
+    job = _job(mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", size=len(broken))
+    queue = _FakeQueue(ClaimResult(jobs=(job,)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: broken})
+
+    await poller.run_once()
+
+    assert queue.acknowledged == [([], {91: "corrupt"})]
+    assert queue.skips == [{}]
+
+
+async def test_every_skipped_file_of_a_batch_gets_its_own_entry(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # One entry per file id and not one per batch: the groups of the error list
+    # are counted from these rows, so a batch that reported only its first skip
+    # would undercount every group by the length of the batch.
+    jobs = (
+        _skip_job(91, 4711, "video/mp4"),
+        _skip_job(92, 4712, "video/mp4"),
+        _skip_job(93, 4713, "text/plain"),
+    )
+    queue = _FakeQueue(ClaimResult(jobs=jobs))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4713: b"  \n "})
+
+    await poller.run_once()
+
+    assert queue.skips == [{4711: "mime_not_allowed", 4712: "mime_not_allowed", 4713: "empty_text"}]
+
+
+async def test_a_file_judged_again_carries_its_new_reason(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The upsert on the receiving side needs a second verdict for the same file
+    # id to work on. The container produces one whenever the row comes back, and
+    # the reason may well differ from the one before.
+    queue = _FakeQueue(
+        ClaimResult(jobs=(_skip_job(91, 4711, "video/mp4"),)),
+        ClaimResult(jobs=(_skip_job(92, 4711, "text/plain"),)),
+    )
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: b"   "})
+
+    await poller.run_once()
+    await poller.run_once()
+
+    assert queue.skips == [{4711: "mime_not_allowed"}, {4711: "empty_text"}]

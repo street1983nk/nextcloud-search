@@ -459,8 +459,10 @@ class Poller:
 
         # 4. The acknowledgement, the last step by construction. Everything it
         #    reports is already durable, so losing it costs one repetition and
-        #    never a document.
-        ack = await queue.acknowledge(done, failed)
+        #    never a document. Since plan 05-11 it carries the decisions of this
+        #    container as well, so that the error list of the status page can
+        #    group the four reasons only this side ever decides (DI-04-03).
+        ack = await queue.acknowledge(done, failed, _skip_verdicts(verdicts, handover))
         self._held.clear()
         self._reset_cooldown()
 
@@ -1107,6 +1109,41 @@ def default_poller() -> Poller:
     would hold the tantivy lock without ever indexing anything.
     """
     return Poller()
+
+
+def _skip_verdicts(verdicts: Sequence[_Verdict], handover: Sequence[int]) -> dict[int, str]:
+    """The decisions of this pass that the other half has to know, per file id.
+
+    **What this produces over there and what it does not.** The rows become the
+    groups of the error list on the status page, counted out of
+    findling_file_state, and nothing else: no text of the file, no path and no
+    title travel with them, only the file id and a code out of the closed list
+    (T-05-45). Four of those codes are decided here and nowhere else, namely
+    encrypted, no text layer, empty text and a picture without readable writing,
+    and until plan 05-11 the aggregation of them did not exist although the per
+    file diagnosis knew every one of them (DI-04-03).
+
+    **A file handed to the OCR track is left out**, and that exclusion is the
+    load bearing part. Its verdict is skipped(no_text_layer), which is the
+    handover point and not an end state; reporting it would put every scan of
+    the instance into the error list under "no text in the document", and
+    nothing would ever take it out again, because ``indexed`` is this
+    container's number and is never written into that table. It is the rule the
+    ``done`` list already follows, applied to the second statement about the
+    same row.
+
+    Derived from the finished verdict list rather than collected along the way,
+    so that there is one place deciding what counts as an end state instead of
+    eight call sites each remembering to pass a flag.
+    """
+    handed_over = set(handover)
+    return {
+        verdict.job.file_id: str(verdict.outcome.reason)
+        for verdict in verdicts
+        if verdict.outcome.state is State.SKIPPED
+        and verdict.outcome.reason is not None
+        and verdict.job.file_id not in handed_over
+    }
 
 
 def _acl_users(job: QueueJob) -> tuple[str, ...]:

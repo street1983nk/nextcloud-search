@@ -129,18 +129,42 @@ class QueueController extends OCSController {
 	/**
 	 * DELETE /ocs/v2.php/apps/findling/queues/documents
 	 *
-	 * Body: {"files": [queueId], "failed": [{"queueId": id, "reason": code}]}
+	 * Body: {"files": [queueId], "failed": [{"queueId": id, "reason": code}],
+	 *        "skipped": [{"fileId": id, "reason": code}]}
 	 *
-	 * The second list is the return channel and the reason this endpoint takes
-	 * two lists instead of one. Without it the status page of phase 4 would have
-	 * to ask the container which files it could not process, and that would be a
-	 * second place holding the truth about the same fact. Two of those always
+	 * Three lists, and what each of them means is the division of the truth this
+	 * phase has already written down twice; this is the third place, because the
+	 * third list is the one that was missing.
+	 *
+	 * `files` are the rows that are done and may leave the work stock.
+	 *
+	 * `failed` is "we wanted to index this and could not", keyed by queue row id
+	 * because the row is deleted in the same breath and the file id has to be
+	 * looked up before that happens. Without it the status page of phase 4 would
+	 * have to ask the container which files it could not process, which would be
+	 * a second place holding the truth about the same fact. Two of those always
 	 * disagree eventually, and the one on the Nextcloud side is the one an admin
-	 * can still read when the container is down.
+	 * can still read while the container is down.
 	 *
-	 * Both lists are processed in one transaction: rows removed without their
-	 * reason recorded would disappear from the queue and from the diagnosis at
-	 * the same moment.
+	 * `skipped` is "we decided not to index this", and it is keyed by FILE id
+	 * (DI-04-03). Four of those decisions belong to the container alone, namely
+	 * encrypted, no text layer, empty text and a picture without readable
+	 * writing, and until they crossed this boundary the error list of the status
+	 * page could group only the half of the truth that Nextcloud had decided
+	 * itself: the knowledge existed per file in the diagnosis, the aggregation
+	 * did not exist at all. The key is the file id and not the queue row id
+	 * because a skipped row travels in `files` as well, so its row is gone by the
+	 * end of this request, and findling_file_state is keyed by file id anyway.
+	 *
+	 * What is deliberately NOT in any of these lists: a file that was handed over
+	 * to the OCR track. That verdict is not an end state, and recording it would
+	 * put every scan of the instance under "no text in the document" with nothing
+	 * ever taking it out again, because `indexed` is the container's number and
+	 * is never written into this table.
+	 *
+	 * All three lists are processed in one transaction: rows removed without
+	 * their reason recorded would disappear from the queue and from the diagnosis
+	 * at the same moment.
 	 *
 	 * Nextcloud binds OCS parameters from the query string and from the request
 	 * body alike, so the Python client can send this as a DELETE with a JSON
@@ -150,11 +174,12 @@ class QueueController extends OCSController {
 	 *
 	 * @param array<mixed> $files
 	 * @param array<mixed> $failed
+	 * @param array<mixed> $skipped
 	 */
 	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
 	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
 	#[\OCP\AppFramework\Http\Attribute\ApiRoute(verb: 'DELETE', url: '/queues/documents')]
-	public function acknowledgeDocuments(array $files = [], array $failed = []): DataResponse {
+	public function acknowledgeDocuments(array $files = [], array $failed = [], array $skipped = []): DataResponse {
 		$foreign = $this->rejectForeignCaller();
 		if ($foreign !== null) {
 			return $foreign;
@@ -170,8 +195,13 @@ class QueueController extends OCSController {
 			return $this->badList();
 		}
 
+		$skips = $this->skipList($skipped);
+		if ($skips === null) {
+			return $this->badList();
+		}
+
 		try {
-			$result = $this->queueService->acknowledge($done, $failures);
+			$result = $this->queueService->acknowledge($done, $failures, $skips);
 		} catch (\Throwable $e) {
 			// Same rule as above: no library message in the log.
 			$this->logger->error('Findling: could not acknowledge a batch', ['exception' => $e]);
@@ -338,7 +368,7 @@ class QueueController extends OCSController {
 
 		$ids = [];
 		foreach ($raw as $value) {
-			$id = $this->queueId($value);
+			$id = $this->positiveId($value);
 			if ($id === null) {
 				return null;
 			}
@@ -370,7 +400,7 @@ class QueueController extends OCSController {
 				return null;
 			}
 
-			$id = $this->queueId($entry['queueId'] ?? null);
+			$id = $this->positiveId($entry['queueId'] ?? null);
 			$reason = $entry['reason'] ?? null;
 			if ($id === null || !is_string($reason) || !in_array($reason, FileStateService::REASONS, true)) {
 				return null;
@@ -383,10 +413,61 @@ class QueueController extends OCSController {
 	}
 
 	/**
+	 * The skip list, mapped from FILE id to reason code (DI-04-03).
+	 *
+	 * The same shape as failureList above and deliberately so: the same ceiling,
+	 * the same closed list of codes, the same refusal of the whole request rather
+	 * than a silent filtering of one entry. A worker that sends a malformed list
+	 * has a defect, and a partially accepted acknowledgement would leave it
+	 * believing that verdicts were recorded which were dropped. A second ceiling
+	 * or a second validation rule for a second list is how two lists that mean
+	 * the same thing start behaving differently.
+	 *
+	 * The key is the file id, which is the one difference. A failure is keyed by
+	 * queue row id because it has to be translated before the row is deleted; a
+	 * skipped file is acknowledged in the same request, so the row is gone by the
+	 * end of it either way, and findling_file_state is keyed by file id.
+	 *
+	 * The code is checked against the closed list before it goes anywhere near
+	 * the database, which is what makes it impossible for free text, and
+	 * therefore for a file name, to be stored as a reason. Whether the code
+	 * belongs to the state `skipped` is judged one layer further in, by
+	 * FileStateService::record, which owns the pair mapping: a pair that does not
+	 * exist is rejected and counted there rather than stored (T-05-47).
+	 *
+	 * @param array<mixed> $raw
+	 * @return array<int, string>|null
+	 */
+	private function skipList(array $raw): ?array {
+		if (count($raw) > self::MAX_LIST_LENGTH) {
+			return null;
+		}
+
+		$skips = [];
+		foreach ($raw as $entry) {
+			if (!is_array($entry)) {
+				return null;
+			}
+
+			$id = $this->positiveId($entry['fileId'] ?? null);
+			$reason = $entry['reason'] ?? null;
+			if ($id === null || !is_string($reason) || !in_array($reason, FileStateService::REASONS, true)) {
+				return null;
+			}
+
+			$skips[$id] = $reason;
+		}
+
+		return $skips;
+	}
+
+	/**
+	 * A positive whole number as OCS may deliver it: a queue row id or a file id.
+	 *
 	 * OCS delivers numbers from a JSON body as integers and the same numbers
 	 * from a query string as strings, so both are accepted, and nothing else is.
 	 */
-	private function queueId(mixed $value): ?int {
+	private function positiveId(mixed $value): ?int {
 		if (is_int($value)) {
 			return $value > 0 ? $value : null;
 		}
