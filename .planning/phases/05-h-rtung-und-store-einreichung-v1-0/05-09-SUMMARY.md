@@ -174,3 +174,11 @@ Keine. Der Job braucht keine Zugangsdaten, keine Netzfreigabe ausser dem Nextclo
 ---
 *Phase: 05-h-rtung-und-store-einreichung-v1-0*
 *Completed: 2026-09-03*
+
+## Self-Check: PASSED
+
+Alle sechs genannten Dateien liegen im Arbeitsbaum, alle fuenf Commits sind in
+der Zweighistorie, und `.planning/STATE.md` sowie `.planning/ROADMAP.md` sind in
+dieser Zweigspanne unveraendert (der Orchestrator schreibt sie). Die vier
+bestehenden Jobs von `integration.yml` zeigen gegen den Ausgangsstand null
+entfernte Zeilen.
