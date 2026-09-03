@@ -593,3 +593,34 @@ keine Zeile in einer Datei, also Rule 4 und nicht Rule 1.
 Deckungsgrad ueber hundert Prozent lieber sichtbar sein sollte als gedeckelt: die
 gedeckelten hundert Prozent sind die einzige Anzeige, die aussieht wie ein
 fertiger Index, obwohl gerade ein Mount fehlt.
+
+## DI-05-21: Ein Fehlschlag bleibt in der Fehlerliste stehen, auch wenn die Datei danach indexiert wird
+
+**Found during:** Plan 05-12, Task 2, auf der Box, nach der Korrektur des
+xlsx-Befunds.
+
+**Was:** `QueueService::acknowledge()` schreibt Zeilen in
+`oc_findling_file_state` nur fuer Fehlschlaege und fuer Uebersprungene. Die
+erfolgreich indexierten Dateien reisen in `$queueIds` und schreiben dort
+bewusst nichts, weil das Endverdikt "indexiert" der Container zaehlt. Also
+raeumen sie auch ihre alte Zeile nicht weg. Gemessen: nach der Korrektur meldet
+der Container 587 indexiert und 0 fehlgeschlagen, waehrend die Nextcloud-Seite
+weiterhin 32 `failed(corrupt)` fuehrt und `occ findling:diagnose` fuer eine
+dieser Dateien "Datei beschaedigt" nennt, obwohl dieselbe Datei ueber die Suche
+zu finden ist.
+
+**Warum nicht hier erledigt:** Die Abhilfe ist keine Zeile, sondern eine
+Entscheidung darueber, was die Zustandstabelle bedeutet. Loescht die
+Quittierung die Zeilen der Dateien in `$queueIds`, dann ist die Fehlerliste
+immer der aktuelle Stand, aber die Nextcloud-Seite verliert die Spur eines
+Fehlschlags, der sich beim naechsten Versuch wiederholt, und die Aufgeben-Regel
+nach drei Versuchen haengt an genau dieser Spur. Bleibt es, wie es ist, ist die
+Liste nach jeder erfolgreichen Wiederholung falsch. Dazu kommt, dass die
+Zustandstabelle keinen Zeitstempel des Verdikts fuehrt, an dem sich "alt"
+ablesen liesse. Das ist Rule 4 und nicht Rule 1, und es beruehrt PHP-Seite,
+Container-Vertrag und die Anzeige zugleich.
+
+**Wohin es gehoert:** in den Phase-Review, und zwar vor dem Volllauf in 05-14
+zur Kenntnis: der Volllauf sollte auf einer geraeumten Zustandstabelle starten,
+sonst traegt sein Fehlerbericht die 32 Zeilen dieses Trockenlaufs weiter, obwohl
+die Dateien indexiert sind.

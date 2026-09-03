@@ -65,6 +65,9 @@ gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 | AIO-Grundlast, Generalprobe cpx22 | gemessen, 290 MB Höchststand | 2026-09-03 |
 | Beitrag von HaRP, Generalprobe cpx22 | gemessen, 55 MB | 2026-09-03 |
 | Installation auf der Box, Generalprobe cpx22 | durchgeführt und belegt | 2026-09-03 |
+| Trockenlauf 500 Dateien, Generalprobe cpx22 | gemessen, 381 MB Spitze, 7 min 38 s | 2026-09-03 |
+| OCR-Faktor, Generalprobe cpx22 | gemessen, 2517 ms je Seite | 2026-09-03 |
+| Laufzeitprognose des Volllaufs, x86 | gerechnet aus gemessenen Posten, rund 13 h | 2026-09-03 |
 | AIO-Grundlast, ARM | FEHLT NOCH | wartet auf Bestand |
 | Findling im Volllauf, 50.000 Dateien | FEHLT NOCH | Pläne 05-12 und 05-14 |
 | Störfall-Drills | FEHLT NOCH | Plan 05-14 |
@@ -715,6 +718,291 @@ Drei Beobachtungen, die keine Kachel falsch machen, aber notiert gehören:
    räumt es aus. Für den Volllauf heißt das: erst den Nutzer einmal ganz
    durchsuchen, dann den Korpus einwerfen.
 
+## Der Trockenlauf: 500 Dateien, bevor 50.000 laufen
+
+Dieser Abschnitt ist der Grund, aus dem der Volllauf noch nicht gelaufen ist.
+Die Laufzeitrechnung der Recherche stand auf einer geschätzten Zahl, es war der
+erste PostgreSQL-Lauf des Projekts, und ein Fehler, der nach zwanzig Stunden
+zuschlägt, kostet den ganzen Lauf. Also erst zwanzig Minuten.
+
+Er hat sich in der ersten davon bezahlt gemacht: **jede Tabellendatei der
+Instanz war unindexierbar**, und das wäre in einem Volllauf über 50.000 Dateien
+als eine Zahl im Fehlerbericht untergegangen. Siehe unten.
+
+### Der Korpus, und eine Prüfsumme, die an ihre Umgebung gebunden ist
+
+```
+build_load_corpus: seed=phase5-dry files=500 bytes=246452632
+  checksum=afe5de552ae9cdf7a515326e7d0787a9133b4dfef3c08e75f41f9ad5db95a5d0
+```
+
+| Kategorie | Dateien | Anteil |
+|---|---|---|
+| einseitige Scans | 99 | 19,8 Prozent |
+| mehrseitiger Scan | 1 | 0,2 Prozent |
+| Text-PDF | 225 | 45,0 Prozent |
+| OOXML (docx, xlsx, pptx) | 100 | 20,0 Prozent |
+| OpenDocument (odt, ods) | 50 | 10,0 Prozent |
+| reiner Text (txt, md, csv) | 23 | 4,6 Prozent |
+| Bild | 1 | 0,2 Prozent |
+| über dem Größendeckel | 1 | 0,2 Prozent |
+
+Der Korpus entsteht auf der Box und wird nicht über die Leitung geschoben, und
+er entsteht **im Abbild der ExApp** und nicht im System-Python der Box: dort
+liegt Pillow in der gepinnten Fassung, und es kommt kein einziges Paket auf die
+Maschine, das nicht ohnehin im Container läuft. 17 Sekunden für 500 Dateien und
+246 MB.
+
+Dabei ist etwas aufgefallen, das in den Bericht gehört, weil es eine Zusage
+einschränkt. Plan 05-05 hat für denselben Seed `phase5-dry` die Prüfsumme
+`cac56ed1...` bei 245.695.552 Byte protokolliert. Im Container sind es
+`afe5de55...` bei 246.452.632 Byte, und zwei Läufe hintereinander liefern dort
+beide Male dieselbe. **Der Seed reproduziert den Korpus also innerhalb einer
+Umgebung und nicht über Umgebungen hinweg.** Die Ursache liegt in der
+Bildseite: die Scans werden gerendert, und Schriftrasterung und Kompression
+hängen an den Fassungen der Bibliotheken.
+
+| Größe | Entwicklungsrechner (05-05) | Abbild auf der Box |
+|---|---|---|
+| Prüfsumme | `cac56ed1...` | `afe5de55...` |
+| Bytes | 245.695.552 | 246.452.632 |
+| Unterschied | | 757.080 Byte, 0,31 Prozent |
+| Pillow | Fassung des Arbeitsbaums | 12.3.0 |
+| FreeType | Fassung des Betriebssystems | 2.14.3 |
+| zlib | | 1.3.1 |
+
+Die Zusage aus 05-05 bleibt damit gültig, aber sie lautet genauer: reproduzierbar
+ist das Paar aus Seed **und** Abbild, und das Abbild ist über seinen Digest
+festgenagelt. Für den Volllauf ist deshalb der Digest oben die zweite Hälfte der
+Angabe, und der Prüfsummenvergleich gilt nur gegen einen Lauf im selben Abbild.
+
+### Der Befund, der diesen ganzen Plan bezahlt: keine Tabelle wurde indexiert
+
+Nach dem Lauf standen 32 Dateien auf `failed(corrupt)`, und zwar genau die 32
+`.xlsx` des Korpus. Kein anderes Format war betroffen, und der Fehler lag nicht
+an den erzeugten Dateien:
+
+```
+openpyxl.load_workbook("/tmp/job-42.part", read_only=True, data_only=True)
+InvalidFileException: openpyxl does not support .part file format, please check
+you can open it with Excel first. Supported formats are: .xlsx,.xlsm,.xltx,.xltm
+```
+
+openpyxl prüft die Dateiendung, bevor es ein einziges Byte liest. Der Poller
+übergibt der Extraktion aber nie den Namen aus Nextcloud, sondern seine
+Zwischendatei `job-<Warteschlangen-Id>.part`. Die Ausnahme wandert durch die
+allgemeine Übersetzung in `extract/errors.py` und wird zu `failed(corrupt)`, also
+zu "Datei beschädigt" auf der Statusseite. python-docx und python-pptx öffnen ihr
+Paket am Inhalt und sind deshalb nicht betroffen.
+
+Das war keine Eigenheit dieses Korpus. **Jede Tabellendatei jeder Instanz war
+davon betroffen**, seit es die Zwischendatei gibt, und keine der 47 Prüfungen des
+Dateiformats hat es gesehen, weil jede von ihnen ihre Testdatei unter dem Namen
+ihres Formats angelegt hat.
+
+Behoben, indem der Lader einen offenen Datenstrom statt eines Pfades bekommt: ein
+Datenstrom trägt keinen Namen, an dem sich prüfen ließe. Der neue Testfall legt
+docx, pptx und xlsx unter dem Namen `job-4711.part` an, also unter dem Namen, den
+der Poller wirklich übergibt.
+
+Belegt auf der Box, nicht nur in der Suite: nach einem auf der Maschine gebauten
+Abbild mit der Korrektur meldet der Container 587 indexierte Dokumente und **null
+Fehlschläge**, alle 32 Tabellen tragen `indexed`, und eine Suche nach einem Wort
+aus einer Tabellenzelle liefert die Tabelle unter ihren Treffern.
+
+### Was der Lauf gemessen hat
+
+| Größe | Wert |
+|---|---|
+| Beginn | 2026-09-03T18:58:31Z |
+| Ende, letzter Index | 2026-09-03T19:06:09Z |
+| Dauer | 458 s, also 7 Minuten 38 Sekunden |
+| Arbeitsvorrat | 603 Zeilen: die 500 des Korpus und 103 aus dem Bestand |
+| indexiert | 555 |
+| fehlgeschlagen | 32, alle `corrupt`, alle Tabellen, Ursache oben |
+| übersprungen | 17: `empty_text` 14, `image_not_ocrable` 2, `too_large` 1 |
+| ohne Verdikt | keine |
+
+Die Verteilung der Verdikte passt zur Erzeugung, mit genau einer benannten
+Abweichung: die 32 Tabellen hätten indexiert werden müssen und waren der Befund
+oben. Die 17 Übersprungenen sind erwartet: `too_large` ist die eine Datei über
+dem Größendeckel, die der Generator absichtlich schreibt, die 14 `empty_text` und
+2 `image_not_ocrable` stammen aus dem Altbestand der Instanz (Vorlagen ohne Text
+und die Beispielfotos von Nextcloud) und nicht aus dem Korpus.
+
+### Der OCR-Faktor auf dieser Maschine, und was er nicht sagt
+
+Zwei Messungen, weil eine allein sich nicht prüfen ließe.
+
+**Aus dem Lauf selbst**, über die Zeitstempel der Zustandsdatenbank des
+Containers, eingegrenzt auf das Zeitfenster des Trockenlaufs:
+
+| Spur | Dokumente | Spanne | je Dokument |
+|---|---|---|---|
+| OCR | 101 | 288 s | **2,85 s** |
+| Text | 366 | Indexschreibung in 43 s | siehe unten |
+
+**Direkt, nach dem Muster von Messung 3 aus `docs/ocr.md`**, damit die Zahl mit
+der dortigen Laptopzahl vergleichbar ist. Dieselbe Befehlszeile, dieselbe
+Auflösung, dieselbe Seitengeometrie, dreimal:
+
+```
+Seite 2480x3509, Graustufen, 300 dpi, aus einer Scan-PDF des Korpus
+tesseract - - -l deu+eng --oem 1 --psm 3 -c tessedit_do_invert=0
+OMP_THREAD_LIMIT=1
+2594 ms, 2477 ms, 2517 ms  ->  Median 2517 ms
+Rasterung der Seite allein: 276 ms
+```
+
+| Bezug | Laptop (docs/ocr.md) | cpx22 | Faktor |
+|---|---|---|---|
+| je Seite | 1984 ms | 2517 ms | 1,27 |
+| Zeichen auf der Seite | 2340 | 3427 | 1,46 |
+| je 1000 Zeichen | 848 ms | 734 ms | **0,87** |
+
+Und damit zu dem Satz, der hier wichtiger ist als die Zahl: **der Faktor 1,27 ist
+kein Hardwarefaktor.** Die Seite des Lastkorpus trägt 46 Prozent mehr Zeichen als
+die Seite aus `docs/ocr.md`, und tesseract kostet die Zeichen und nicht die
+Fläche. Auf den Zeicheninhalt bezogen ist der geteilte x86-Kern der Miet-Box
+sogar etwas schneller als der Laptopkern.
+
+Was damit ersetzt ist: die Rechnung der Recherche hat für tesseract 4,5 s je
+Seite und 1 s für die Rasterung angenommen. Gemessen sind 2,52 s und 0,28 s, also
+zusammen **2,80 s je Seite statt 5,5 s**. Der Wert deckt sich mit den 2,85 s je
+OCR-Dokument aus dem Lauf, was beide Messungen gegeneinander bestätigt.
+
+Was damit **nicht** ersetzt ist: die Zahl für ARM. Sie ist unverändert
+ungemessen, und sie ist die einzige, die die Store-Aussage tragen wird.
+
+### Die Prognose für den Volllauf, mit gemessenen statt geschätzten Posten
+
+Dieselbe Tabellenform wie in der Recherche, nur ohne die Marke ASSUMED:
+
+| Posten | Menge | gemessen | Summe |
+|---|---|---|---|
+| einseitige Scans | 9.900 Seiten | 2,80 s je Seite | 27.720 s = 7,7 h |
+| mehrseitige Scans | 100 Dateien zu 8 Seiten | 2,80 s je Seite | 2.240 s = 0,6 h |
+| Textdateien | 40.000 | 0,43 s je Datei | 17.200 s = 4,8 h |
+| **Summe** | | | **rund 13 h** |
+
+Die 0,43 s je Textdatei sind der einzige abgeleitete Posten der Tabelle: die
+Indexschreibung selbst läuft in Stapeln, ihre Zeitstempel taugen deshalb nicht
+als Zeitmessung je Datei. Genommen ist stattdessen die Textphase des Laufs als
+Ganzes, also 170 s vom Beginn bis zum ersten OCR-Dokument, für rund 400 Dateien
+samt Durchgang, Abholung und Quittierung.
+
+Gegenprobe ohne jede Aufteilung: 500 Dateien in 458 s sind 0,92 s je Datei, und
+der Trockenlauf hat mit 20 Prozent genau den OCR-Anteil des Volllaufs. Linear
+hochgerechnet sind das 12,8 h. Die beiden Wege liegen 2 Prozent auseinander.
+
+**Die Rechnung der Recherche lag bei 18 bis 20 h, gemessen sind rund 13 h.** Der
+Unterschied kommt fast vollständig aus dem OCR-Posten, dessen Sekundenwert
+halbiert wurde.
+
+Und die Einschränkung, die diese Prognose wertlos machen würde, wenn sie nicht
+dabeistünde: **sie gilt für x86.** Kostet tesseract auf dem Ampere-Kern das
+Zweifache, werden aus 8,3 h OCR 16,6 h und aus der Summe rund 21 h; beim
+Dreifachen sind es rund 30 h. Genau diese Spanne war der Grund, den Faktor zu
+messen, und sie bleibt bis zum ARM-Lauf offen. Sollte sie zwei Tage deutlich
+übersteigen, ist die Steuergröße die OCR-Menge und nicht die Verteilung: die
+Verteilung zu ändern hieße, die Aussage zu ändern. Die Frage gehört dann dem
+Betreiber vorgelegt und nicht stillschweigend beantwortet.
+
+### Speicher
+
+| Größe | Lauf 1 (Abbild vom Commit-Kennzeichen) | Lauf 2 (Abbild mit der Korrektur) |
+|---|---|---|
+| höchster `anon` | **381 MB** (400.003.072 Byte) | 262 MB (274.288.640 Byte) |
+| `memory.peak` | 455 MB | 339 MB |
+| `memory.events` | alle sechs Zähler 0 | alle sechs Zähler 0 |
+| `.State.OOMKilled` | false | false |
+| Messpunkte | 146 | 40 |
+
+Der Grenzwert des Berichts liegt bei 2,0 GB. Der Trockenlauf hat davon 19
+Prozent gebraucht. Das ist kein Freibrief für den Volllauf: der Korpus hier trägt
+genau einen mehrseitigen Scan und keine Datei nahe am Größendeckel von 50 MB,
+und beides sind die Fälle, an denen der Spitzenwert hängt. Aber er sagt, dass die
+Grundlast des Containers samt Kompositum-Automat und Schreibpuffer bei rund
+250 bis 300 MB liegt und die Spitze eines gewöhnlichen Dokuments daran wenig
+ändert.
+
+Die Rohdaten liegen unter `docs/measurements/2026-09-03-trockenlauf-cpx22/`.
+
+### Die Größe des Index
+
+| Größe | Wert |
+|---|---|
+| Index nach dem Lauf | 8.298.442 Byte bei 587 Dokumenten |
+| je Dokument | 14.137 Byte |
+| Korpus auf der Platte | 246.452.632 Byte |
+| Index gegen Korpus | 3,4 Prozent |
+| hochgerechnet auf 50.000 Dokumente | rund 707 MB |
+
+Phase 3 hat den Index des Volllaufs mit 3 bis 6 GB veranschlagt. Gemessen wird er
+rund ein Fünftel des unteren Endes dieser Schätzung. Der Grund ist kein Kunststück
+der Anwendung, sondern der Korpus: seine Dateien wiegen viel und tragen wenig
+Text, weil ihr Bytegewicht aus einer unkomprimierten Scan-Anlage kommt und nicht
+aus Prosa (05-05). Ein echter Bestand mit demselben Byteumfang trägt mehr Text
+und erzeugt einen größeren Index. Die Zahl gehört deshalb mit dieser Fußnote in
+den Bericht und nicht ohne sie.
+
+### Der Blick auf PostgreSQL, ausdrücklich
+
+Der Perf-Befund M7 aus Phase 2 lautet: `record()` innerhalb einer offenen
+Transaktion bricht auf PostgreSQL die **ganze** Transaktion ab, die Quittierung
+schlägt fehl, und die Warteschlange wird nie leer. Behoben wurde er damals über
+eine Umstellung auf UPDATE-first, aber nie auf PostgreSQL ausprobiert.
+
+Dieser Lauf ist die Probe, und er ist eine schärfere, als eine geplante gewesen
+wäre: die 32 Fehlschläge oben sind genau der Pfad, den M7 benennt, nämlich ein
+`record()` mit Grundcode innerhalb der Quittierungstransaktion, 32 Mal, verteilt
+über acht Durchgänge.
+
+| Prüfung | Ergebnis |
+|---|---|
+| `oc_findling_queue` nach dem Lauf | 0 Zeilen |
+| hängendes Ack | keines, jeder Durchgang endete mit einer Quittierung |
+| `current transaction is aborted` im PostgreSQL-Protokoll | kein einziges Vorkommen |
+| Perf-M7 | auf PostgreSQL belegt behoben |
+| Anlegen der drei Tabellen, Zähler über sie, Fehlerliste, Deckungsgrad | ohne Dialektfehler |
+
+Das einzige `ERROR:` im Datenbankprotokoll des ganzen Tages stammt aus einer
+Abfrage dieser Untersuchung selbst, nach einer Spalte, die es nicht gibt.
+
+### Die Statusseite unter Last
+
+Beobachtet vor dem Lauf, dreimal während des Laufs und danach. Notiert ist auch
+das Unauffällige, weil eine Liste, die nur Auffälliges enthält, nicht sagt, wie
+weit geschaut wurde.
+
+- Der Deckungsgrad wächst monoton und bleibt in seinen Grenzen: 84 Prozent vor
+  dem Lauf, 92 Prozent danach, 97 Prozent nach der Korrektur. Zähler und Nenner
+  gehen jederzeit auf.
+- Die Fehlerliste zeigt die vier Gruppen mit anklickbaren Beispielpfaden, die
+  Gruppe `corrupt` erscheint mit dem Lauf und verschwindet nicht wieder, siehe
+  den Befund unten.
+- Der Arbeitsvorrat zählt herunter, ohne zwischendurch zu wachsen, und "an den
+  Arbeiter übergeben" steht nie über der Stapelgröße.
+- Der Versionsgleichstand steht durchgehend auf `match`, auch während der
+  Container neu gestartet wurde.
+- Die Kachel für den freien Platz liest das Volume und nicht die Systemplatte,
+  also 44,3 GB frei von 52,5 GB. Auf einer Box, deren Datenverzeichnis
+  woanders liegt als das Betriebssystem, ist das der Unterschied zwischen einer
+  richtigen und einer beruhigenden Zahl.
+- Die Kachel "gemessene OCR-Zeit" bleibt leer, und das ist beabsichtigt: die
+  Schätzung erlischt, sobald der erste Durchgang fertig ist, weil es dann nichts
+  mehr zu schätzen gibt.
+- **Ein Fehlschlag von gestern bleibt in der Fehlerliste stehen, auch wenn die
+  Datei heute indexiert ist.** Nach der Korrektur meldet der Container 587
+  indexiert und 0 fehlgeschlagen, die Nextcloud-Seite weiterhin 32
+  fehlgeschlagen, und `occ findling:diagnose` nennt für eine dieser Dateien
+  "Datei beschädigt", während dieselbe Datei über die Suche zu finden ist. Der
+  Grund steht in der Quittierung: erfolgreiche Dateien schreiben nichts in die
+  Zustandstabelle, also räumen sie ihre alte Zeile auch nicht weg. Beide Zahlen
+  stehen nebeneinander auf der Seite, ein aufmerksamer Verwalter sieht den
+  Widerspruch also, aber die Fehlerliste ist so lange falsch, bis jemand sie
+  räumt. Notiert als DI-05-21.
+
 ## Findling im Volllauf
 
 | Lauf | höchster `anon` | unter 2,0 GB | Laufzeit | OCR-Anteil | Speichertod |
@@ -751,12 +1039,26 @@ scripts/ops/rss_sampler.sh "$(docker ps --filter name=findling_backend --format 
 HCLOUD_TOKEN=... scripts/ops/hetzner_box.sh destroy
 ```
 
-Der Lastkorpus entsteht aus einem Seed und ist damit Jahre später nachbaubar:
+Der Lastkorpus entsteht aus einem Seed und ist damit Jahre später nachbaubar,
+solange dieselbe Umgebung dazu genannt wird:
 
 ```sh
-python scripts/dev/build_load_corpus.py --seed phase5-full --files 50000 --out /mnt/corpus
+# im Abbild der ExApp, weil dort Pillow in der gepinnten Fassung liegt und die
+# Prüfsumme an der Rasterung der Schrift hängt
+docker run --rm --user 0:0 --entrypoint python3 \
+  -v <repo>/scripts:/w/scripts:ro -v <repo>/testdata:/w/testdata:ro \
+  -v /mnt/corpus:/out \
+  ghcr.io/street1983nk/findling_backend@sha256:bb8f17e7d18df86b410308ee06bb2a6935dbbd183f0c6fcd032ab1ef17234544 \
+  /w/scripts/dev/build_load_corpus.py --seed phase5-full --files 50000 --out /out
 ```
 
-Der Trockenlauf mit 500 Dateien verwendet den Seed `phase5-dry` und hat die
-Listen-Prüfsumme
-`cac56ed1801efb3e691b28088c363c84d8941670394f5fed95ab19359b17d530`.
+Zwei Seeds und zwei Prüfsummen, jede mit der Umgebung, in der sie gilt:
+
+| Lauf | Seed | Umgebung | Dateien | Bytes | Listen-Prüfsumme |
+|---|---|---|---|---|---|
+| Trockenlauf | `phase5-dry` | Abbild der ExApp, Pillow 12.3.0 | 500 | 246.452.632 | `afe5de552ae9cdf7a515326e7d0787a9133b4dfef3c08e75f41f9ad5db95a5d0` |
+| Trockenlauf | `phase5-dry` | Entwicklungsrechner, Plan 05-05 | 500 | 245.695.552 | `cac56ed1801efb3e691b28088c363c84d8941670394f5fed95ab19359b17d530` |
+| Volllauf | `phase5-full` | offen | 50.000 | offen | offen |
+
+Warum es zwei sind und welche wofür gilt, steht oben im Abschnitt zum
+Trockenlauf.
