@@ -162,6 +162,13 @@ Number 9 is reachable over HTTP but not from the integration job as it stands: i
 would need a second registered ExApp to call the gateway under a foreign app id.
 The other eleven are unit test material.
 
+**State of this list.** Numbers 1 to 6 have tests since plan 05-15, in
+`php/tests/Unit/ExAppServiceTest.php`, `php/tests/Unit/ProviderTest.php` and
+`php/tests/Unit/PlainTextTest.php`. Numbers 7 to 12 are still open and belong to
+plan 05-16. The list itself is deliberately left whole rather than trimmed: it is
+the specification these tests are read against, and a specification that shrinks
+as it is implemented cannot be used to check the implementation afterwards.
+
 ## What closes it
 
 A PHPUnit job in `php.yml`, CI only, following the pattern every Nextcloud app
@@ -172,8 +179,21 @@ that `OCP` is available and `IRootFolder`, `IUserManager`, `IAppManager`,
 `IUserMountCache`, `IFileAccess` and `LoggerInterface` can be mocked with
 `createMock`.
 
-It is deliberately not part of the audit follow up. Writing a PHPUnit suite and a
-new CI job without being able to run either of them once is how a workflow ends
-up red for reasons that have nothing to do with the code under test, and the
-twelve items above are the specification for whoever writes it with a PHP runtime
-at hand. Until then the gap is here, in writing, and not in somebody's memory.
+This is what plan 05-15 built, and it is built exactly that way. The job is
+called `phpunit`, it checks out `stable34`, it installs a throwaway SQLite
+instance so the server bootstrap has a config to read, and it runs
+`php/phpunit.xml` against `php/tests`. Two things were added to the sketch above
+while it was being run for the first time. `php/tests/bootstrap.php` aborts with
+its own message when there is no server checkout at the path it computed, because
+the alternative is a class not found thirty lines into an unrelated test; the job
+proves that guard on every run before it runs the suite. And the job asserts how
+many tests actually executed, because a suite that reports success without
+executing anything is the failure mode this repository calls vacuous.
+
+The suite stays CI only, and that is a fact about the machine rather than a
+preference: there is no PHP on the development machine of this project, so it is
+not documented as a local command anywhere. That was also the reason the gap
+existed for three phases. Writing a PHPUnit suite and a new CI job without being
+able to run either of them once is how a workflow ends up red for reasons that
+have nothing to do with the code under test; what changed is that this phase
+builds the server checkout per version anyway.

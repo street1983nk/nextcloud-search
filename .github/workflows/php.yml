@@ -59,12 +59,14 @@ jobs:
       # xargs returns a non zero exit code as soon as one php -l fails, so a
       # single broken file turns the gate red.
       #
-      # This is a syntax check and not a test, and the PHP half has no unit test
-      # yet. That gap is written down in docs/testing.md, including the nine
-      # behaviours a PHPUnit suite has to cover and the reason the suite is not in
-      # this workflow: there is no PHP on the development machine, so it could not
-      # be run once before being committed. What does cover the PHP half today is
-      # both jobs of integration.yml, end to end against a real Nextcloud.
+      # This is a syntax check and not a test, and it stays a separate job now
+      # that the phpunit job below exists: it runs in seconds without checking
+      # out a server, and it covers every PHP file of the app rather than the
+      # three classes the unit suite reaches. The gap it used to stand in for is
+      # written down in docs/testing.md as twelve behaviours; plan 05-15 closed
+      # the first six of them, plan 05-16 closes the rest. What covers the PHP
+      # half besides the two is both jobs of integration.yml, end to end against
+      # a real Nextcloud.
       #
       # php/templates is in the list because there is no PHP on the development
       # machine: a syntax error in a settings template would otherwise surface
