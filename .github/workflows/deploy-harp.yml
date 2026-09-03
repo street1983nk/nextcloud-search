@@ -139,14 +139,39 @@ jobs:
             -v "${RUNNER_TEMP}/certs:/certs" \
             -p 8780:8780 -p 8782:8782 \
             "${HARP_IMAGE}"
-          for _ in $(seq 1 30); do
-            if timeout 2 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/8780' 2>/dev/null; then
-              echo "harp accepts connections on 8780"
+          # The readiness gate is the very call AppAPI makes first, and it has to
+          # be. A TCP handshake on 8780 succeeds from the moment the container
+          # exists, because docker publishes the port with a proxy of its own long
+          # before HAProxy inside the container binds it, so the handshake proves
+          # nothing at all. The first run of this job on a GitHub runner went
+          # green on that probe and failed 0.84 s later with "Connection refused
+          # for URI http://localhost:8780/exapps/app_api/v1.44/images/create"
+          # (run 33743374344), while the HaRP log of that run still said "Waiting
+          # for FRP server port". Measured against the pinned image on 2026-09-03:
+          # the TCP probe answers in the first second, the docker engine route
+          # answers after three to four seconds.
+          #
+          # /_ping under /exapps/app_api is HaRP's docker engine route, and it
+          # needs both headers: harp-shared-key is what the SPOE agent compares
+          # against HP_SHARED_KEY (haproxy_agent.py, handle_app_api_request), and
+          # docker-engine-port selects the frp tunnel port that carries the docker
+          # socket. 24000 is the port of the bundled deploy daemon, the same value
+          # occ app_api:daemon:list prints under "HaRP Docker Socket Port". A 200
+          # here proves HAProxy, the agent, the frp server and the tunnel down to
+          # the docker socket in one call, and the address is spelled the way
+          # AppAPI spells it so that name resolution is part of the proof.
+          for _ in $(seq 1 45); do
+            code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' \
+              -H "harp-shared-key: ${harp_key}" \
+              -H 'docker-engine-port: 24000' \
+              http://localhost:8780/exapps/app_api/v1.44/_ping || true)
+            if [ "${code}" = "200" ]; then
+              echo "harp answers the docker engine route on 8780"
               exit 0
             fi
             sleep 2
           done
-          echo "harp did not open port 8780"
+          echo "harp did not answer the docker engine route on 8780, last status '${code}'"
           docker logs appapi-harp || true
           exit 1
 
