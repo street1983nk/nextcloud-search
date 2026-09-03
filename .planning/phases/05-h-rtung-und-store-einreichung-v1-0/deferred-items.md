@@ -167,3 +167,60 @@ anfassen darf, und die HaRP-Stacks der Nachbar-Wellen gehören anderen Agenten.
 **Wohin es gehört:** in den phasenweiten Integrationsschritt beziehungsweise in
 den Messbericht der Phase (D-06), der den OCR-Anteil ohnehin auf echter Hardware
 ausweisen muss.
+
+## DI-05-07-A: `scripts/dev/compose.yaml` lässt sich aus einem Worktree nicht zweimal fahren
+
+**Found during:** Plan 05-07, beim Live-Nachstellen der Versionsdrift.
+
+**Was:** Die Datei trägt `name: findling-dev` und
+`container_name: findling-nextcloud`, beide fest. Ein Wave-Executor, der den
+Alltagsstack für seine eigene Änderung braucht, kann ihn deshalb nicht starten:
+der Name kollidiert mit dem laufenden Stack des Haupt-Checkouts, und
+`docker compose -f <worktree>/scripts/dev/compose.yaml exec app ...` landet
+wegen des gleichen Projektnamens in genau diesem fremden Stack. Damit ist auch
+`scripts/dev/register-exapp.sh` aus einem Worktree nicht als Ganzes ausführbar,
+obwohl das Skript sonst nichts vom Haupt-Checkout braucht: sein `COMPOSE_FILE`
+zeigt auf diese Datei.
+
+**Was stattdessen gemacht wurde:** eine Wegwerf-Kopie der Compose-Datei im
+Scratchpad mit eigenem Projektnamen, eigenem Containernamen, eigenem Port und
+absolutem Bind auf das Worktree-`php`. Damit lief der volle Beweis (siehe
+05-07-SUMMARY.md), und der Stack wurde danach mit `down -v` restlos entfernt.
+
+**Warum nicht hier erledigt:** die Änderung wäre entweder ein Projektname aus
+einer Umgebungsvariablen (dann verliert `register-exapp.sh` seinen festen
+Containerbezug nicht, `container_name` müsste ebenfalls weichen) oder ein
+zweites Compose-Profil. Beides fasst `scripts/dev/compose.yaml` an, die nicht in
+`files_modified` dieses Plans steht, und der Alltagsstack des Owners läuft
+gerade daraus.
+
+**Wohin es gehört:** in einen Plan, der ohnehin an den Dev-Stacks arbeitet, oder
+in den Phase-Review. Der billige Teil wäre `name: ${FINDLING_PROJECT:-findling-dev}`
+plus ein Wegfall von `container_name`; `register-exapp.sh` adressiert den Dienst
+ohnehin über `docker compose exec app`.
+
+## DI-05-07-B: Die Versionsdrift wird erst nach dem ersten Blick auf die Statusseite wirksam
+
+**Found during:** Plan 05-07, beim Entwurf der Suchseite der Lockstep-Prüfung.
+
+**Was:** Die PHP-Hälfte erfährt die Version des Containers ausschließlich aus
+`GET /status`, und diese Route ruft genau ein Ort auf: die Admin-Seite. Der
+Suchweg liest deshalb den zuletzt gemerkten Wert aus appconfig
+(`ExAppService::KEY_BACKEND_VERSION`), statt pro Tastendruck einen Roundtrip zu
+bezahlen. Auf einer Instanz, auf der niemand die Einstellungsseite geöffnet hat,
+steht dort nichts, und die Suche verhält sich wie vorher. Gemessen und in der
+Zusammenfassung protokolliert: erste Suche vor jedem Statusabruf liefert den
+Kanarienvogel-Treffer, nach dem ersten Seitenaufruf liefert dieselbe Suche 200
+mit null Treffern und die Warnung im Log.
+
+**Warum das kein Fehler ist:** die Alternative wäre entweder ein Statusabruf pro
+Suche oder ein neuer Hintergrundauftrag. Das erste kostet einen Roundtrip pro
+Tastendruck der Unified Search, das zweite ist ein Job mit eigenem Zeitplan für
+eine Frage, die sich nur beim Update ändert. Fail-open ist außerdem die
+richtige Richtung: eine Instanz ohne Kenntnis darf nicht schlechter suchen als
+vorher (T-05-27).
+
+**Wohin es gehört:** in den Plan, der den Poller oder den Scheduler dieser
+Hälfte anfasst. Ein Satz im `SchedulerJob`, der den Statusabruf einmal pro
+Cron-Runde mitnimmt, würde die Lücke ohne neuen Job schließen. Bis dahin ist die
+Statusseite der Weg, auf dem ein Admin den Zustand ohnehin sucht.
