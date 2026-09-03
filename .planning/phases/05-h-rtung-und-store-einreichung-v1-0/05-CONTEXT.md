@@ -132,6 +132,27 @@ Store-Einreichung erfolgt NICHT mehr in Phase 5, sondern gebündelt mit v1.1
   einen Inhalt); zusätzlich ein Gastnutzer über die guests-App als manuelle
   Probe vor der Einreichung (keine guests-Abhängigkeit in der CI-Matrix).
 
+### Nachträge nach Research (Owner-Entscheide 03.09.2026)
+- **D-23:** NC 35 kommt REIN: CI-Matrix wird NC 32+33+34+35, info.xml
+  max-version 35. Betriebsversprechen auch auf NC 35 belegt.
+- **D-24:** PHPUnit-Rückstand KOMPLETT abarbeiten: alle 12 dokumentierten,
+  bisher ungetesteten Verhaltensweisen bekommen Tests in Phase 5
+  (passt zu D-20 "alle Review-Reste" und zur Regel "Tests: alle Paths").
+- **D-25:** Konflikt D-16/D-18 aufgelöst per ABSICHTSMARKE + occ findling:purge:
+  Disable/Remove ohne Absicht lässt alle Daten liegen (D-16 bleibt wahr);
+  Räumung läuft nur bei expliziter Absicht (--rm-data setzt die Marke für den
+  repair-steps/uninstall-Lauf, alternativ räumt der Admin per occ
+  findling:purge). Hintergrund: AppManager::disableApp() führt
+  repair-steps/uninstall bereits beim DISABLE aus (NC 32/33/34, siehe
+  05-RESEARCH.md).
+- **D-26:** Release-Tag v1.0.0 wird ENDE PHASE 5 gesetzt; signierte Releases
+  entstehen in Phase 5 ("einreichungsbereit" = ein Klick bis zur Abgabe).
+  release.yml-Trigger auf v*-Tags ist hier gewollt. Die Einreichung selbst
+  bleibt gebündelt nach Phase 6 (D-09 unverändert).
+- **D-27 (Claude-Diskretion, analog Connector):** <donation>-Element kommt in
+  den Store-Eintrag, gleicher Link wie beim MCP Connector
+  (paypal.me/KhaledCherifDev).
+
 ### Claude's Discretion
 - Konkreter Peak-RSS-Budgetwert (Größenordnung 2,5 GB) und Messwerkzeug/
   Messkadenz (z.B. cgroup memory.current-Sampling) auf der Box.
