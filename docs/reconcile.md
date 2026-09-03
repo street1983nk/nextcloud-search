@@ -92,6 +92,45 @@ Zweige des Pollers erledigen sie: `kind=content` liest die Datei neu ein,
 setzt den Grabstein. Die erwünschte Nebenwirkung ist, dass der Löschweg genau
 einmal existiert statt zweimal.
 
+## Die Wiederherstellung aus dem Papierkorb: was sofort passiert
+
+Ein Nutzer holt einen Ordner aus dem Papierkorb zurueck. Das ist keine
+Reparatur, sondern eine Absicht, und sie wird darum nicht vom Abgleich
+getragen, sondern vom Ereignisweg.
+
+**Was sofort passiert.** `NodeRestoredEvent` trifft die Companion-App. Fuer eine
+einzelne Datei reiht sie eine Inhaltsaufgabe ein, fuer einen Ordner denselben
+Teilbaum-Job, den auch die Ordner-Freigabe und die Ordner-Loeschung benutzen,
+mit dem wiederhergestellten Ordner als Wurzel und `kind=content`. Der Job loest
+die Nachkommen bandweise auf und gibt jedem eine Inhaltsaufgabe. Die Dateien
+sind damit nach dem naechsten Poller-Durchgang wieder auffindbar und nicht nach
+dem naechsten Abgleichzyklus.
+
+Inhaltsaufgaben sind fuer einen Teilbaum die Ausnahme und gelten nur hier: die
+Nachkommen eines geloeschten Ordners hat der Container aus dem Index genommen
+und mit einem Grabstein versehen, ihr Text ist also wirklich weg. Bei einer
+Umbenennung oder einer Freigabe ist er es nicht, und dort bleibt es bei den
+Arten, die nichts neu lesen.
+
+**Gemessen am 03.09.2026** auf einer lokalen Instanz (Ordner mit drei Dateien,
+Warteschlange vorher leer, kein Abgleich angestossen):
+
+| Schritt | Zeilen in der Warteschlange |
+|---|---|
+| Ordner geloescht, Teilbaum abgearbeitet | 4 mal `delete` |
+| Warteschlange geleert, Ordner wiederhergestellt, vor Plan 05-04 | 0 |
+| dasselbe mit dem Teilbaum-Job der Wiederherstellung | 3 mal `content`, mit ihrer echten Groesse |
+
+**Was der Abgleich zusaetzlich abdeckt.** Alles, was am Ereignis vorbeigeht: der
+Papierkorb wird geleert oder geraeumt, waehrend der Container steht; jemand
+spielt ein Backup zurueck; der Listener ist nach einem Update nicht registriert;
+eine Zeile geht verloren. In diesen Faellen ist der Abgleich der einzige Weg
+zurueck.
+
+**Die Grenze.** Der Abgleich ist die Sicherung, nicht der Weg. Wer die
+Wiederherstellung ihm allein ueberlaesst, verspricht dem Nutzer Sekunden und
+liefert bis zu einen Tag.
+
 ## Warum der Cursor im Container liegt
 
 Überall sonst in diesem Projekt gilt: Fortschritt gehört in die Datenbank von

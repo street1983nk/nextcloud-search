@@ -74,19 +74,34 @@ class SubtreeExpandJob extends QueuedJob {
 	/**
 	 * The kinds a subtree operation can hand to its descendants.
 	 *
-	 * Two, and the list is closed because the other three make no sense here.
-	 * content and ocr would be a re-crawl of a subtree whose bytes nobody
-	 * touched, and metadata would rewrite names that did not change: the
-	 * descendants of a renamed folder keep their own name, and the path field of
-	 * the index is written by nobody's query (plan 03-02). What a folder
-	 * operation really changes is who may see the subtree, or whether it exists
-	 * at all.
+	 * Three, and the list stays closed because the other two make no sense here.
+	 * metadata would rewrite names that did not change, since the descendants of
+	 * a renamed folder keep their own name and the path field of the index is
+	 * read by nobody's query (plan 03-02); and ocr is never handed out by an
+	 * event at all, it is what the container requeues a file as once it has
+	 * looked into it.
+	 *
+	 * **Why content is in the list since plan 05-04.** Until then it was out,
+	 * with the argument that a subtree of content jobs is a re-crawl and the
+	 * thing that re-crawls is the ETag reconcile. That argument holds for the
+	 * three folder operations it was written for, whose descendants keep their
+	 * bytes and their place in the index. It does not hold for the fourth one: a
+	 * folder that comes back out of the trash bin has descendants the container
+	 * dropped out of the index and tombstoned when they were deleted, so the
+	 * only thing that gets them back is a content job each. Without it a
+	 * restored folder waits for the next reconcile cycle, measured up to a day
+	 * on the default cadence, and IDX-04 promises otherwise.
+	 *
+	 * The caller side is where this stays narrow: the listener asks for content
+	 * on the restore branch and nowhere else, so this kind never expands a
+	 * subtree whose bytes nobody touched.
 	 *
 	 * @var list<string>
 	 */
 	private const EXPANDABLE_KINDS = [
 		QueueMapper::KIND_ACL,
 		QueueMapper::KIND_DELETE,
+		QueueMapper::KIND_CONTENT,
 	];
 
 	public function __construct(
@@ -154,16 +169,31 @@ class SubtreeExpandJob extends QueuedJob {
 				$lastFileId = max($lastFileId, $entry->getId());
 				$seen++;
 
-				// Size zero, whatever the file really weighs. Neither an acl job
-				// nor a deletion moves a byte, so neither may take a share of the
-				// byte budget a claim spends; otherwise a subtree of large
+				// Size zero for the two kinds that move no bytes. Neither an acl
+				// job nor a deletion reads the file, so neither may take a share
+				// of the byte budget a claim spends; otherwise a subtree of large
 				// documents would fill a whole batch with work that costs nothing.
+				//
+				// A content job is the opposite case and carries its real weight,
+				// which the cache entry of this band already knows. A subtree of
+				// restored files with a zero in that column would let one claim
+				// take thirty two documents of any size at all, past the byte
+				// ceiling the batch exists to keep, and the batch would run into
+				// the lock timeout of its kind.
 				//
 				// Idempotent by the unique index on file_id, and never a
 				// downgrade: KIND_RANK in QueueMapper keeps the more expensive kind
 				// when a row is already waiting, so an expansion cannot throw away
 				// a pending content job.
-				$this->queueService->enqueueFile((int)$entry->getId(), $storageId, $rootId, 0, true, $kind);
+				$moves = $kind === QueueMapper::KIND_CONTENT;
+				$this->queueService->enqueueFile(
+					(int)$entry->getId(),
+					$storageId,
+					$rootId,
+					$moves ? max(0, (int)$entry->getSize()) : 0,
+					true,
+					$kind,
+				);
 				$queued++;
 
 				if (++$band >= self::TX_BAND) {

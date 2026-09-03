@@ -144,16 +144,7 @@ class FileEventListener implements IEventListener {
 				// makes this work at all: without it the unchanged content hash
 				// would let the container acknowledge the row without writing
 				// anything, and the restored file would stay lost.
-				//
-				// A restored folder is deliberately not expanded here. Its
-				// descendants need their text back, so they would need content
-				// jobs, and content is not one of the kinds SubtreeExpandJob
-				// hands out: a subtree of content jobs is a re-crawl, and the
-				// thing that already does re-crawls without a user action is the
-				// ETag reconcile of plan 03-12. Restoring a folder therefore
-				// takes until the next reconcile pass rather than seconds, and
-				// that is a decision with a named owner instead of a gap.
-				$this->queue($event->getTarget(), true);
+				$this->queueRestore($event->getTarget());
 				return;
 			}
 		} catch (\Throwable $e) {
@@ -223,24 +214,13 @@ class FileEventListener implements IEventListener {
 	 * by their path would answer a different question, since a rename changes the
 	 * path of a folder that never left its mount.
 	 */
-	private function expandMovedFolder(Node $source, Node $target): void {
-		$targetMount = $target->getMountPoint();
-		$storageId = (int)$targetMount->getNumericStorageId();
-		$rootId = (int)$targetMount->getStorageRootId();
-		$ancestorId = (int)$target->getId();
-		if ($storageId <= 0 || $rootId <= 0 || $ancestorId <= 0) {
+	private function expandMovedFolder(Node $source, Folder $target): void {
+		$storageId = (int)$target->getMountPoint()->getNumericStorageId();
+		if ($storageId <= 0 || (int)$source->getMountPoint()->getNumericStorageId() === $storageId) {
 			return;
 		}
 
-		if ((int)$source->getMountPoint()->getNumericStorageId() === $storageId) {
-			return;
-		}
-
-		if (!$this->storageService->isIndexedStorage($storageId)) {
-			return;
-		}
-
-		$this->expand($storageId, $rootId, $ancestorId, QueueMapper::KIND_ACL);
+		$this->expandFolder($target, QueueMapper::KIND_ACL);
 	}
 
 	/**
@@ -266,6 +246,56 @@ class FileEventListener implements IEventListener {
 			return;
 		}
 
+		$this->expandFolder($node, QueueMapper::KIND_DELETE);
+	}
+
+	/**
+	 * A restoration out of the trash bin, for a file directly and for a folder
+	 * through its subtree.
+	 *
+	 * A restored folder raises one event and brings its whole subtree back with
+	 * it, exactly as the deletion took it away, and none of the descendants
+	 * raises an event of its own. They need their text back, because the
+	 * deletion dropped every one of them out of the index and left a tombstone
+	 * behind, so what they need is content jobs and the subtree job is what
+	 * hands them out in bands.
+	 *
+	 * **Why this is not left to the reconcile.** It was, until this plan, and
+	 * measured on a local instance the result is nothing at all: a restored
+	 * folder produced zero queue rows and its files stayed unfindable until the
+	 * next reconcile cycle, which is up to a day on the default cadence. That is
+	 * not the promise of IDX-04, and restoring a folder is a deliberate user
+	 * action and not a repair case. The reconcile stays what it is, the safety
+	 * net for the events nobody sent, and it keeps covering the cases this
+	 * branch cannot see: the trash bin emptied while the container was down, a
+	 * restore during an update with the listener unregistered, a row that was
+	 * lost on the way.
+	 *
+	 * **It is the same subtree job the other three folder operations use.** A
+	 * second mechanism for a re-crawl would be the one thing worth avoiding
+	 * here: this job has its band, its wall clock ceiling, its cursor and its
+	 * self planned successor, so the subtree of a restored archive folder cannot
+	 * become an unbounded amount of work inside a user's click.
+	 */
+	private function queueRestore(Node $node): void {
+		if (!$node instanceof Folder) {
+			$this->queue($node, true);
+			return;
+		}
+
+		$this->expandFolder($node, QueueMapper::KIND_CONTENT);
+	}
+
+	/**
+	 * The four questions a folder has to answer before its subtree is planned.
+	 *
+	 * One method for the three callers that need them, so that a fourth folder
+	 * operation cannot arrive with three of the four. Every one of them is a
+	 * reason to do nothing at all rather than to plan a job: a node without a
+	 * usable mount or file id names no subtree, and a mount this app does not
+	 * index has no descendants to correct.
+	 */
+	private function expandFolder(Folder $node, string $kind): void {
 		$mount = $node->getMountPoint();
 		$storageId = (int)$mount->getNumericStorageId();
 		$rootId = (int)$mount->getStorageRootId();
@@ -278,7 +308,7 @@ class FileEventListener implements IEventListener {
 			return;
 		}
 
-		$this->expand($storageId, $rootId, $ancestorId, QueueMapper::KIND_DELETE);
+		$this->expand($storageId, $rootId, $ancestorId, $kind);
 	}
 
 	/**
@@ -399,7 +429,17 @@ class FileEventListener implements IEventListener {
 			}
 		}
 
-		$size = (int)$node->getSize();
+		// 5. The size, and a deletion is not asked for one (Gruppe-B-IN-02). The
+		// call used to stand in front of this exception, so every deletion paid
+		// it for an answer that is discarded twice over: the ceiling below does
+		// not apply to a deletion, and the queue row of a deletion carries a
+		// zero by the rule at the enqueue below. What the call costs is a look at
+		// the cache entry of a node that is on its way out, and depending on the
+		// event that node is not fully available any more: MoveToTrashEvent and
+		// NodeDeletedEvent fire around the moment the entry moves, and asking a
+		// vanishing node for a number nobody uses is the kind of question that
+		// turns into a warning in a log nobody can act on.
+		$size = $isDeletion ? 0 : (int)$node->getSize();
 		if (!$isDeletion && $size > $this->settingsService->maxFileBytes()) {
 			// The same ceiling and the same end state as the crawl, and since
 			// plan 04-08 the same source for it: SettingsService hands out the
@@ -418,7 +458,9 @@ class FileEventListener implements IEventListener {
 
 		// A deletion moves no bytes, so it takes no share of the byte budget a
 		// claim spends. Handing over the size of the file that used to be there
-		// would let a handful of large deletions fill a whole batch.
-		$this->queueService->enqueueFile($fileId, $storageId, $rootId, $isDeletion ? 0 : $size, $isUpdate, $kind);
+		// would let a handful of large deletions fill a whole batch. The zero is
+		// set where the size is read, one branch above, so this line has one
+		// meaning for every kind of job.
+		$this->queueService->enqueueFile($fileId, $storageId, $rootId, $size, $isUpdate, $kind);
 	}
 }

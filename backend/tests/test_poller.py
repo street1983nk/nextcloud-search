@@ -33,6 +33,7 @@ import hashlib
 import re
 import shutil
 import threading
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -792,6 +793,277 @@ async def test_an_ocr_job_keeps_the_order_commit_then_state_then_acknowledge(
     await poller.run_once()
 
     assert events == ["commit", "record", "acknowledge"]
+
+
+# -- pictures ------------------------------------------------------------
+#
+# Three pictures out of the reference corpus, read rather than built for the
+# reason the scan above is read: the verdicts of this branch come out of the
+# real extractor, and a hand written stand-in would only prove that the stand-in
+# says so. A slip that carries readable text, a three page TIFF of the shape a
+# fax archive has, and an icon that is refused before the engine ever starts.
+SLIP_BYTES = (CORPUS / "17-beleg.jpg").read_bytes()
+FAX_BYTES = (CORPUS / "21-sendebericht.tif").read_bytes()
+ICON_BYTES = (CORPUS / "22-icon.png").read_bytes()
+
+
+def _picture_job(
+    size: int,
+    *,
+    mime: str = "image/jpeg",
+    kind: str = "content",
+    title: str = "Beleg.jpg",
+    path: str = "Belege/Beleg.jpg",
+) -> QueueJob:
+    """One picture, as the crawl queues it: an ordinary content row.
+
+    ``kind`` is what the requeue turns the row into afterwards, so the same
+    helper describes both halves of the journey a picture makes.
+    """
+    return _job(mime=mime, size=size, kind=kind, title=title, path=path)
+
+
+@dataclass(slots=True)
+class _PagesUnderTheDeadline:
+    """An extractor that answers the way the engine would under the deadline it got.
+
+    A three page fax costs more than the 120 s of a text job and less than the
+    660 s of an OCR job. Asking the real engine that question in a unit test
+    would mean spending the seconds, so this stand-in encodes the measured
+    relation instead: under the short deadline the parent kills the child and the
+    verdict is failed(timeout), under the long one the page loop hands over what
+    it read and the verdict is indexed(truncated), which is the outcome D-08 asks
+    for.
+    """
+
+    calls: list[dict[str, Any]] = field(default_factory=list)
+
+    def __call__(
+        self,
+        path: str,
+        mime: str,
+        size: int,
+        *,
+        route: Route | None = None,
+        timeout_seconds: float | None = None,
+    ) -> ExtractionOutcome:
+        del path, mime, size
+        self.calls.append({"route": route, "timeout": timeout_seconds})
+        short = float(settings().extract_timeout_seconds)
+        if timeout_seconds is None or float(timeout_seconds) <= short:
+            return ExtractionOutcome.failed(Reason.TIMEOUT)
+        return ExtractionOutcome.indexed(BODY, truncated=True)
+
+
+async def test_a_picture_is_handed_to_the_ocr_track_instead_of_the_text_route(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # A picture has no text layer to measure, so the text track has nothing to do
+    # with it: the pass hands it straight to the second track instead of running
+    # an extraction under the short deadline. The first assertion is the whole
+    # point: not a single extraction happened on the text pass.
+    queue = _FakeQueue(ClaimResult(jobs=(_picture_job(len(SLIP_BYTES)),)))
+    engine = _Extractor()
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SLIP_BYTES}, extract=engine
+    )
+
+    result = await poller.run_once()
+
+    assert engine.calls == []
+    assert queue.requeues == [([4711], "ocr")]
+    # Acknowledging is deleting, so a handed over row must not travel in the
+    # acknowledgement of the same pass.
+    assert queue.acknowledged == [([], {})]
+    assert result.requeued == 1
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "no_text_layer")
+
+
+async def test_a_picture_carries_ocr_used_once_the_second_track_read_it(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The whole journey of a single page picture: handed over by the text pass,
+    # read by the OCR pass, and indexed with the flag that says an engine ran.
+    # Without the flag the OCR share of the measurement report has a hole exactly
+    # where the picture heavy half of a typical instance is.
+    queue = _FakeQueue(
+        ClaimResult(jobs=(_picture_job(len(SLIP_BYTES)),)),
+        ClaimResult(jobs=(_picture_job(len(SLIP_BYTES), kind="ocr"),)),
+    )
+    engine = _Extractor(outcome=ExtractionOutcome.indexed(BODY))
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SLIP_BYTES}, extract=engine
+    )
+
+    first = await poller.run_once()
+    second = await poller.run_once()
+
+    assert first.requeued == 1
+    assert second.indexed == 1
+    assert engine.calls[0]["route"] is Route.OCR
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["ocr_used"]) == ("indexed", 1)
+
+
+async def test_a_many_paged_picture_runs_under_the_ocr_deadline_and_ends_truncated(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The position of the deferred list, in one test. Under the content deadline
+    # of 120 s a fax archive ends as failed(timeout) although the page cap of the
+    # module provides for indexed(truncated); under the OCR deadline it ends the
+    # way it should. A run that quietly took the short deadline would produce the
+    # same index for a single page picture and the wrong verdict for this one.
+    queue = _FakeQueue(
+        ClaimResult(jobs=(_picture_job(len(FAX_BYTES), mime="image/tiff"),)),
+        ClaimResult(jobs=(_picture_job(len(FAX_BYTES), mime="image/tiff", kind="ocr"),)),
+    )
+    engine = _PagesUnderTheDeadline()
+    poller = _poller(
+        store=store,
+        writer=writer,
+        tmp_path=tmp_path,
+        queue=queue,
+        bodies={4711: FAX_BYTES},
+        extract=cast("Any", engine),
+    )
+
+    await poller.run_once()
+    result = await poller.run_once()
+
+    assert len(engine.calls) == 1
+    assert engine.calls[0]["route"] is Route.OCR
+    assert engine.calls[0]["timeout"] == float(settings().ocr_hard_deadline_seconds)
+    assert engine.calls[0]["timeout"] > float(settings().extract_timeout_seconds)
+    assert result.indexed == 1
+    assert result.failed == 0
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("indexed", "truncated")
+
+
+async def test_a_picture_without_readable_text_is_skipped_and_not_a_failure(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The icon of the corpus, through the real extractor and without an engine on
+    # this machine: it is refused by the plausibility rules of the picture module
+    # and keeps the verdict that exists for exactly this case. A folder full of
+    # avatars must not fill the error list of the admin page.
+    icon = _picture_job(len(ICON_BYTES), mime="image/png", title="Symbol.png", path="Bilder/Symbol.png")
+    queue = _FakeQueue(ClaimResult(jobs=(icon,)), ClaimResult(jobs=(replace(icon, kind="ocr"),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: ICON_BYTES})
+
+    await poller.run_once()
+    result = await poller.run_once()
+
+    assert result.skipped == 1
+    assert result.failed == 0
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "image_not_ocrable")
+
+
+async def test_the_ocr_share_of_the_counters_contains_pictures(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The number the measurement report of this phase rests on. throughput()
+    # splits what was indexed into text and OCR along ocr_used, so a picture that
+    # never sets the flag is counted as a text document and makes the OCR share
+    # of a picture heavy corpus look like zero.
+    queue = _FakeQueue(
+        ClaimResult(jobs=(_picture_job(len(SLIP_BYTES)),)),
+        ClaimResult(jobs=(_picture_job(len(SLIP_BYTES), kind="ocr"),)),
+        ClaimResult(jobs=(_job(92, 4712),)),
+    )
+    engine = _Extractor(outcome=ExtractionOutcome.indexed(BODY))
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SLIP_BYTES}, extract=engine
+    )
+
+    await poller.run_once()
+    after_the_text_pass = store.throughput(3600, int(time.time()))
+    await poller.run_once()
+    await poller.run_once()
+    counted = store.throughput(3600, int(time.time()))
+
+    # The defect this test is about: the text pass must not put the picture into
+    # the index as a text document, because from there no later run can tell how
+    # much engine time it cost.
+    assert (after_the_text_pass["text"], after_the_text_pass["ocr"]) == (0, 0)
+    assert counted["ocr"] == 1
+    assert counted["text"] == 1
+
+
+async def test_a_picture_stays_skipped_when_ocr_is_off(
+    ocr_off: None, store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # An instance whose admin switched OCR off gets the honest verdict, and the
+    # engine is not started behind their back. Nothing is requeued, and the row
+    # leaves the queue in the same pass.
+    del ocr_off
+    queue = _FakeQueue(ClaimResult(jobs=(_picture_job(len(SLIP_BYTES)),)))
+    engine = _Extractor()
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SLIP_BYTES}, extract=engine
+    )
+
+    result = await poller.run_once()
+
+    assert engine.calls == []
+    assert queue.requeues == []
+    assert queue.acknowledged == [([91], {})]
+    assert result.requeued == 0
+    assert result.skipped == 1
+    row = store.file_row(4711)
+    assert row is not None
+    assert (row["state"], row["reason"]) == ("skipped", "no_text_layer")
+
+
+async def test_a_text_document_keeps_the_text_route_and_the_short_deadline(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The other side of the same line. Only pictures move; a text document stays
+    # a content job with the derived route and the deadline of a text job, and it
+    # is never handed to the second track.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    engine = _Extractor()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, extract=engine)
+
+    result = await poller.run_once()
+
+    assert [(call["route"], call["timeout"]) for call in engine.calls] == [(None, None)]
+    assert queue.requeues == []
+    assert result.indexed == 1
+
+
+async def test_an_unchanged_picture_is_not_handed_over_a_second_time(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # What the detour through the text pass buys, and the reason a picture is not
+    # queued as an OCR row by Nextcloud in the first place: the fast path lives on
+    # the content route. A second crawl over the same mount finds the same bytes,
+    # acknowledges the row without work and hands nothing over, so occ
+    # findling:index does not repeat days of engine time on every run.
+    queue = _FakeQueue(
+        ClaimResult(jobs=(_picture_job(len(SLIP_BYTES)),)),
+        ClaimResult(jobs=(_picture_job(len(SLIP_BYTES), kind="ocr"),)),
+        ClaimResult(jobs=(_picture_job(len(SLIP_BYTES)),)),
+    )
+    engine = _Extractor(outcome=ExtractionOutcome.indexed(BODY))
+    poller = _poller(
+        store=store, writer=writer, tmp_path=tmp_path, queue=queue, bodies={4711: SLIP_BYTES}, extract=engine
+    )
+
+    await poller.run_once()
+    await poller.run_once()
+    third = await poller.run_once()
+
+    assert third.unchanged == 1
+    assert third.requeued == 0
+    assert queue.requeues == [([4711], "ocr")]
+    assert queue.acknowledged[2] == ([91], {})
 
 
 async def test_a_gateway_error_aborts_the_batch_and_acknowledges_nothing(
