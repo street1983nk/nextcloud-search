@@ -36,6 +36,8 @@ from findling.nc.files import FileRow, Mount, MountResult, SliceResult
 from findling.nc.queue import KIND_CONTENT, KIND_DELETE, CallResult, QueueStats
 from findling.store.repo import FileMeta, Store, open_store
 from findling.worker.reconcile import (
+    GIVEN_UP_REASON,
+    GIVEN_UP_STATE,
     REQUEUE_BAND,
     ROUND_NOT_DUE,
     ROUND_QUEUE_BUSY,
@@ -46,7 +48,10 @@ from findling.worker.reconcile import (
 )
 
 RECONCILE_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "worker" / "reconcile.py"
-PHP_QUEUE_CONTROLLER = Path(__file__).resolve().parents[2] / "php" / "lib" / "Controller" / "QueueController.php"
+PHP_LIB = Path(__file__).resolve().parents[2] / "php" / "lib"
+PHP_QUEUE_CONTROLLER = PHP_LIB / "Controller" / "QueueController.php"
+PHP_QUEUE_SERVICE = PHP_LIB / "Service" / "QueueService.php"
+PHP_RECONCILE_CONTROLLER = PHP_LIB / "Controller" / "ReconcileController.php"
 
 STORAGE = 3
 ROOT = 17
@@ -77,8 +82,26 @@ def a_file(file_id: int, *, etag: str) -> FileMeta:
     )
 
 
-def a_row(file_id: int, *, etag: str) -> FileRow:
-    return FileRow(file_id=file_id, etag=etag, size=1024, mtime=1_700_000_000, mime="application/pdf")
+def a_row(file_id: int, *, etag: str, state: str = "", reason: str = "") -> FileRow:
+    return FileRow(
+        file_id=file_id,
+        etag=etag,
+        size=1024,
+        mtime=1_700_000_000,
+        mime="application/pdf",
+        state=state,
+        reason=reason,
+    )
+
+
+def a_given_up_row(file_id: int, *, etag: str) -> FileRow:
+    """A page row carrying the end state Nextcloud reached for this file.
+
+    The verdict travels in the page and not in a second call per file, which is
+    the whole reason this shape exists: the walk works in bands, and a round trip
+    per row would make the repair more expensive than the work it saves.
+    """
+    return a_row(file_id, etag=etag, state=GIVEN_UP_STATE, reason=GIVEN_UP_REASON)
 
 
 class _FakeQueue:
@@ -181,6 +204,67 @@ async def test_reconcile_hands_a_file_that_is_gone_to_the_delete_track(store: St
 
     assert queue.kinds_of(KIND_DELETE) == [11]
     assert result.missing == 1
+
+
+async def test_a_file_nextcloud_gave_up_on_is_not_requeued_by_two_cycles(store: Store) -> None:
+    """The defect this pair of tests exists for (review finding IN-03 of phase 3).
+
+    A row that is handed out and never acknowledged ends on the Nextcloud side as
+    failed(repeatedly_stuck), and the queue row is removed with it. The container
+    never heard of the file, so every night the comparison found it unindexed,
+    requeued it, watched it fail three more times and started over. On fifty
+    thousand files that is permanent load with no cause anybody can see, and the
+    verdict never becomes final for exactly the files the repair discovered.
+
+    Two cycles rather than one, because the rule may not be bound to a point in
+    time. The second round is the one that would go red again if somebody made
+    the verdict expire.
+    """
+    queue = _FakeQueue()
+
+    first = await _reconcile(
+        store, _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True)), queue
+    ).run_once()
+    second = await _reconcile(
+        store,
+        _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True)),
+        queue,
+        now=NOW + 25 * HOUR,
+    ).run_once()
+
+    assert (first.state, second.state) == (ROUND_WALKED, ROUND_WALKED)
+    assert queue.requeues == []
+    assert (first.stale, second.stale) == (0, 0)
+    # Counted once and never again: after the first round the file is a known,
+    # unchanged row like any other, which is what makes the rule cost nothing.
+    assert (first.given_up, second.given_up) == (1, 0)
+
+    row = store.file_row(10)
+    assert row is not None
+    assert (row["state"], row["reason"], row["etag"]) == (GIVEN_UP_STATE, GIVEN_UP_REASON, "aaa")
+
+
+async def test_a_new_etag_lifts_the_final_verdict_and_requeues_the_file(store: Store) -> None:
+    """The counterpart, and the reason the verdict is stored against the etag.
+
+    A final verdict belongs to the version of the file it was reached on, never
+    to the file id for good. The Nextcloud row keeps saying repeatedly_stuck
+    after the document was replaced, so a rule that only read that row would
+    leave the new bytes out of the index forever.
+    """
+    queue = _FakeQueue()
+
+    await _reconcile(
+        store, _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True)), queue
+    ).run_once()
+    assert queue.kinds_of(KIND_CONTENT) == []
+
+    changed = _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="bbb"),), final=True))
+    result = await _reconcile(store, changed, queue, now=NOW + 25 * HOUR).run_once()
+
+    assert result.stale == 1
+    assert result.given_up == 0
+    assert queue.kinds_of(KIND_CONTENT) == [10]
 
 
 async def test_an_incomplete_page_never_produces_a_deletion(store: Store) -> None:
@@ -430,6 +514,66 @@ async def test_run_survives_an_exception_and_ends_on_the_stop_event(store: Store
 
 
 # -- the properties a grep has to keep --------------------------------------
+
+
+def _php_source(path: Path) -> str:
+    """One PHP file as text, and a missing one is red rather than green.
+
+    The anti-vacuity clause every text gate of this project carries
+    (docs/testing.md): a gate that silently passes because its source moved
+    proves nothing at all.
+    """
+    assert path.is_file(), f"the gate looks for {path.name} and it is not there any more"
+    return path.read_text(encoding="utf-8")
+
+
+def test_the_give_up_rule_delivers_three_times_and_not_four() -> None:
+    """The delivery count, pinned in the shape of the allowlist parity gate.
+
+    The arithmetic is the part that was shifted by one before (phase 2 perf
+    audit) and would be shifted again: the queue raises the counter in the claim
+    itself, so the value the rule reads already includes the hand-out that is
+    happening. Three deliveries therefore means "greater than three", and
+    "greater or equal" would cut them to two.
+
+    Read as text because a PHP constant cannot be imported, and read at all
+    because this container is the half that lives with the consequence: a rule
+    that never becomes final is a file this round requeues every night.
+    """
+    source = _php_source(PHP_QUEUE_SERVICE)
+
+    limit = re.search(r"const MAX_DELIVERIES = (\d+);", source)
+    assert limit is not None, "the delivery ceiling is no longer where this gate looks for it"
+    assert int(limit.group(1)) == 3
+
+    assert re.search(r"getRetries\(\) > self::MAX_DELIVERIES", source) is not None, (
+        "the comparison has to be strictly greater than the ceiling, see the docblock of the constant"
+    )
+    # Never against a literal: the number standing in the condition is how the
+    # ceiling and its docblock drifted apart in the first place.
+    assert re.search(r"getRetries\(\) >=?\s*\d", source) is None
+
+
+def test_a_row_that_is_given_up_costs_the_batch_no_slot_and_no_budget() -> None:
+    # The second half of the same defect: the give-up claim used to be charged
+    # against both ceilings of the batch, so a handful of permanently stuck
+    # files made every round of real work smaller. The write-offs are therefore
+    # decided before the row is charged, and the order is what this gate holds.
+    source = _php_source(PHP_QUEUE_SERVICE)
+    claim = source[source.index("public function claim(") : source.index("public function enqueue(")]
+
+    assert claim.index("repeatedly_stuck") < claim.index("$rows--")
+    assert claim.index("'skipped', 'gone'") < claim.index("$budget = max(")
+
+
+def test_the_slice_route_hands_the_verdict_over_with_the_page() -> None:
+    # The channel this round's give-up rule stands on. One query per page and
+    # never one per file: the walk works in bands, and a round trip per row
+    # would cost more than the work the rule saves.
+    source = _php_source(PHP_RECONCILE_CONTROLLER)
+
+    assert "verdictsFor" in source
+    assert re.search(r"private function withVerdicts\(array \$files\): array", source) is not None
 
 
 def test_the_reconcile_opens_no_second_index_writer() -> None:

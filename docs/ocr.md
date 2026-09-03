@@ -60,7 +60,7 @@ Grund ist die Sperrfrist der Queue. `QueueMapper::LOCK_TIMEOUT` steht auf 900 s.
 Ein OCR-Job darf nach der Kaskade oben bis zu 600 s laufen. Bei 100 Seiten wäre
 die weiche Deadline die einzige wirksame Grenze, und schon zwei solche Dateien
 in einem Claim reißen die Sperrfrist: die Zeilen erscheinen wieder als
-`scheduled`, `retries` wird hochgezählt und nach `MAX_ATTEMPTS` endet eine Datei
+`scheduled`, `retries` wird hochgezählt und nach `MAX_DELIVERIES` endet eine Datei
 als `failed(repeatedly_stuck)`, obwohl gerade völlig in Ordnung an ihr
 gearbeitet wird. Mit 30 Seiten bleibt ein Batch verlässlich unter der Sperrfrist.
 

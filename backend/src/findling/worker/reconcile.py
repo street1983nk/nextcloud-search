@@ -70,6 +70,24 @@ ROUND_QUEUE_UNAVAILABLE: Final = "queue_unavailable"
 ROUND_UNAVAILABLE: Final = "unavailable"
 ROUND_NO_STATE: Final = "no_state"
 
+# The one end state of the Nextcloud side that this round has to respect instead
+# of overwriting it every night (review finding IN-03 of phase 3).
+#
+# A queue row that is handed out and never acknowledged is written off over there
+# as failed(repeatedly_stuck) and its row is removed. Nothing of that ever reached
+# this container: the file stayed unknown here, so the comparison read it as
+# unindexed, requeued it, and the same three deliveries and the same give-up
+# happened again the next night, forever. On fifty thousand files that is
+# permanent load whose cause is invisible in every counter the app has.
+#
+# The two codes are spelled out here rather than imported from
+# findling.extract.errors on purpose. This module never produces a verdict of its
+# own; it recognises one that arrived over the wire, and the vocabulary of the
+# wire is held against drift by tests/test_extract_errors.py, which reads all
+# three lists (PHP, extract, store) and compares them in both directions.
+GIVEN_UP_STATE: Final = "failed"
+GIVEN_UP_REASON: Final = "repeatedly_stuck"
+
 # How long the shutdown waits for a round to end before it stops waiting. Same
 # budget as the poller, and for the same reason: a slice is bounded work.
 RECONCILE_STOP_SECONDS: Final = 30.0
@@ -116,6 +134,7 @@ class RoundResult:
     seen: int = 0
     stale: int = 0
     missing: int = 0
+    given_up: int = 0
     slices: int = 0
 
 
@@ -126,6 +145,7 @@ class _Tally:
     seen: int = 0
     stale: int = 0
     missing: int = 0
+    given_up: int = 0
     slices: int = 0
 
 
@@ -344,8 +364,9 @@ class Reconcile:
             tally.seen += len(page.files)
             upto = max((row.file_id for row in page.files), default=after)
 
-            stale = await asyncio.to_thread(self._stale_of, store, page.files)
+            stale, given_up = await asyncio.to_thread(self._compare, store, mount, page.files)
             missing = await asyncio.to_thread(self._missing_of, store, mount, after, upto, page)
+            tally.given_up += given_up
 
             # The findings travel before the bookmark does. An abort in between
             # costs one repeated slice, while the reverse order would drop the
@@ -376,16 +397,61 @@ class Reconcile:
             await asyncio.sleep(self._pause)
 
     @staticmethod
-    def _stale_of(store: Store, rows: Sequence[FileRow]) -> list[int]:
-        """The files of this page whose version mark this container cannot match.
+    def _compare(store: Store, mount: Mount, rows: Sequence[FileRow]) -> tuple[list[int], int]:
+        """Split one page into work and into verdicts, and remember the verdicts.
+
+        A file whose stored version mark matches the page is done and costs
+        nothing. Everything else used to be work outright, and that is the defect
+        this method was widened for.
 
         A file the store does not answer for is either unknown or carries a
-        tombstone, and both are work: the second one is a restore, and a restore
-        has exactly the bytes it always had, so it would never be noticed by a
-        content comparison.
+        tombstone, and both are ordinarily work: the second one is a restore, and
+        a restore has exactly the bytes it always had, so a content comparison
+        would never notice it. But one unknown file is not work, and it is the one
+        Nextcloud already gave up on: a row that was handed out three times and
+        never acknowledged ends over there as failed(repeatedly_stuck) and its
+        queue row is removed. Nothing of that ever reached this container, so
+        every cycle read the file as unindexed and requeued it, the give-up
+        happened again, and on fifty thousand files that became permanent load
+        with no cause visible anywhere (review finding IN-03 of phase 3).
+
+        The verdict is written into the ``files`` table of this container against
+        the etag the page carried, and that is what makes the rule hold without
+        being bound to a point in time. The next cycle finds a known, unchanged
+        row and stops at the first branch; a page with a different etag reaches
+        the second branch as ordinary stale work, because the file has moved on
+        and a verdict belongs to the version it was reached on.
+
+        The verdict is only believed while this container knows nothing at all
+        about the file. Once it holds a row, its own knowledge decides: that is
+        what keeps a stale Nextcloud row from suppressing a changed file, and it
+        is why a manual requeue works without touching anything here. The requeue
+        delivers the file through the queue, the poller writes a real verdict, and
+        from then on this comparison reads that one.
         """
         known = store.known_etags([row.file_id for row in rows])
-        return [row.file_id for row in rows if known.get(row.file_id) != row.etag]
+        stale: list[int] = []
+        given_up = 0
+        for row in rows:
+            stored = known.get(row.file_id)
+            if stored == row.etag:
+                continue
+            if stored is None and row.state == GIVEN_UP_STATE and row.reason == GIVEN_UP_REASON:
+                store.give_up(
+                    row.file_id,
+                    storage_id=mount.storage_id,
+                    root_id=mount.root_id,
+                    mime=row.mime,
+                    size=row.size,
+                    mtime=row.mtime,
+                    etag=row.etag,
+                    state=row.state,
+                    reason=row.reason,
+                )
+                given_up += 1
+                continue
+            stale.append(row.file_id)
+        return stale, given_up
 
     @staticmethod
     def _missing_of(store: Store, mount: Mount, after: int, upto: int, page: Any) -> list[int]:
@@ -501,13 +567,14 @@ class Reconcile:
     def _report(state: str, mounts: int, tally: _Tally) -> RoundResult:
         """One log line of counters, and the same numbers as a result."""
         LOGGER.info(
-            "reconcile round %s, mounts=%d slices=%d seen=%d stale=%d missing=%d",
+            "reconcile round %s, mounts=%d slices=%d seen=%d stale=%d missing=%d given_up=%d",
             state,
             mounts,
             tally.slices,
             tally.seen,
             tally.stale,
             tally.missing,
+            tally.given_up,
         )
         return RoundResult(
             state,
@@ -515,6 +582,7 @@ class Reconcile:
             seen=tally.seen,
             stale=tally.stale,
             missing=tally.missing,
+            given_up=tally.given_up,
             slices=tally.slices,
         )
 
@@ -559,6 +627,8 @@ async def _pause(seconds: float, stop_event: asyncio.Event) -> None:
 
 
 __all__ = [
+    "GIVEN_UP_REASON",
+    "GIVEN_UP_STATE",
     "RECONCILE_STOP_SECONDS",
     "REQUEUE_BAND",
     "ROUND_NOT_DUE",

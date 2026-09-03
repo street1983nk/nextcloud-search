@@ -27,12 +27,35 @@ use Psr\Log\LoggerInterface;
  */
 class QueueService {
 	/**
-	 * How often a row may be handed out before it is given up as
-	 * failed(repeatedly_stuck). A row that is claimed and never acknowledged
-	 * comes back after the lock expires, and without this ceiling it would
-	 * circle forever instead of becoming a visible end state.
+	 * How many times a row may be DELIVERED to the container before it is given
+	 * up as failed(repeatedly_stuck).
+	 *
+	 * Deliveries, not failures, and the difference is the whole reason this
+	 * docblock is this long. A row that is claimed and never acknowledged comes
+	 * back after the lock expires, so nothing ever reports a failure for it;
+	 * without a ceiling on the deliveries it would circle forever instead of
+	 * becoming a visible end state.
+	 *
+	 * The counter is raised by the claim itself, in the database
+	 * (QueueMapper::claimBatch), so the value on a row already includes the
+	 * hand-out that is happening at this moment. Written out, because this is the
+	 * arithmetic somebody shifted by one before (phase 2 perf audit) and would
+	 * otherwise shift again:
+	 *
+	 *   claim 1 -> retries 1 -> delivered, attempt 1 of 3
+	 *   claim 2 -> retries 2 -> delivered, attempt 2 of 3
+	 *   claim 3 -> retries 3 -> delivered, attempt 3 of 3
+	 *   claim 4 -> retries 4 -> NOT delivered, this is the give-up
+	 *
+	 * So the comparison below is "greater than", and three deliveries happen. The
+	 * fourth claim is the one that discovers the exhaustion and writes the end
+	 * state; it hands nothing to the container, and since this plan it also costs
+	 * the batch neither a row of its budget nor a byte of it, so a doomed row
+	 * cannot displace real work any more. Changing the comparison to "greater or
+	 * equal" would cut the deliveries to two, which is the off-by-one in the
+	 * other direction.
 	 */
-	public const MAX_ATTEMPTS = 3;
+	public const MAX_DELIVERIES = 3;
 
 	/**
 	 * How many users of one file travel in a work order (perf audit M5).
@@ -147,10 +170,15 @@ class QueueService {
 
 			$batch = min(self::KIND_BATCH[$kind] ?? $limit, $rows);
 			foreach ($this->queueMapper->claimBatch($batch, $budget, $kind) as $row) {
-				$rows--;
-				$budget = max(0, $budget - (int)$row->getSize());
-
-				if ($row->getRetries() > self::MAX_ATTEMPTS) {
+				// The two write-offs are decided before the row is charged
+				// against either ceiling, and that order is the fix rather than
+				// a detail. A row that is given up hands nothing to the
+				// container and a row whose file is gone hands nothing either,
+				// so charging them would spend a slot of the batch and a share
+				// of the byte budget on work that does not exist. On an instance
+				// with a handful of permanently stuck files that is a smaller
+				// batch of real work in every single round.
+				if ($row->getRetries() > self::MAX_DELIVERIES) {
 					$this->finish($row, 'failed', 'repeatedly_stuck');
 					$givenUp++;
 					continue;
@@ -163,6 +191,8 @@ class QueueService {
 					continue;
 				}
 
+				$rows--;
+				$budget = max(0, $budget - (int)$row->getSize());
 				$sources[$row->getId()] = $source;
 			}
 		}

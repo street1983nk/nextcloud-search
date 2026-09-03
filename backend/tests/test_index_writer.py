@@ -32,6 +32,7 @@ import pytest
 from tantivy import Document, Index, IndexWriter
 
 from findling.config import settings
+from findling.index.bench import batch_full
 from findling.index.open import open_index
 from findling.index.schema import FIELD_BODY_DE, FIELD_BODY_EN, FIELD_FILE_ID, FIELD_STORAGE_ID
 from findling.index.writer import (
@@ -255,7 +256,7 @@ def test_a_second_writer_on_the_same_directory_is_reported_as_locked(
     # Measured: the second writer answers "Failed to acquire Lockfile: LockBusy".
     # Unwrapped it reads like a corrupt index instead of like two writers. The
     # first writer is the fixture; it is still open while this one is refused.
-    assert batch_writer.should_flush is False
+    assert batch_writer.pending == 0
 
     with pytest.raises(IndexLockedError):
         IndexBatchWriter(index, directory=index_dir)
@@ -304,17 +305,100 @@ def test_collect_garbage_keeps_the_committed_documents(index: Index, batch_write
     assert _hits(index, "frist") == 1
 
 
-def test_should_flush_follows_the_configured_batch_caps(index: Index, index_dir: Path) -> None:
-    writer = IndexBatchWriter(index, directory=index_dir, batch_files=2)
+def test_the_batch_is_full_at_the_file_cap(index: Index, index_dir: Path) -> None:
+    # The rule lives in the measuring tool since plan 05-03, because that is its
+    # only caller: the poller commits once per claimed batch and never asks. It
+    # is tested here all the same, next to the counters it reads.
+    writer = IndexBatchWriter(index, directory=index_dir)
     try:
         writer.add(_record(1))
-        assert writer.should_flush is False
+        assert batch_full(writer, files=2, max_bytes=1 << 30) is False
 
         writer.add(_record(2))
 
-        assert writer.should_flush is True
+        assert batch_full(writer, files=2, max_bytes=1 << 30) is True
     finally:
         writer.close()
+
+
+def test_the_batch_is_full_at_the_byte_cap_and_therefore_decides_by_bytes(index: Index, index_dir: Path) -> None:
+    # BATCH_MAX_BYTES keeps its meaning: it is a number of bytes, not of
+    # characters, and it is the cap that matters, because thirty scanned PDFs are
+    # a different workload from thirty text files (T-05-12).
+    writer = IndexBatchWriter(index, directory=index_dir)
+    try:
+        writer.add(_record(1, body=GERMAN_BODY))
+
+        assert batch_full(writer, files=1000, max_bytes=len(GERMAN_BODY.encode("utf-8"))) is True
+        assert batch_full(writer, files=1000, max_bytes=1 << 30) is False
+    finally:
+        writer.close()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "ascii only, one byte per character",
+        GERMAN_BODY,
+        # Two bytes per character throughout, the ordinary case for German text
+        # once the umlauts are counted.
+        "Grundstuecksverkehrsgenehmigungszustaendigkeitsuebertragung" + "äöüß" * 200,
+        # Three bytes per character: CJK, which a German instance does hold.
+        "契約書" * 500,
+        # Four bytes per character: outside the basic plane, the worst case the
+        # bound has to survive.
+        "\U0001f9fe" * 500,
+    ],
+)
+def test_the_byte_accounting_is_never_below_the_true_utf8_length(index: Index, index_dir: Path, body: str) -> None:
+    """T-05-12, and the direction is the whole point.
+
+    The accounting no longer builds a UTF-8 copy of every document, so it is a
+    bound and not a measurement. A bound below the truth would let a batch grow
+    past the RAM budget of a 4 GB box, which is the one direction that costs an
+    OOM; a bound above it costs an earlier commit and nothing else.
+    """
+    writer = IndexBatchWriter(index, directory=index_dir)
+    try:
+        writer.add(_record(1, body=body))
+
+        assert writer.pending_bytes >= len(body.encode("utf-8"))
+    finally:
+        writer.close()
+
+
+def test_an_ascii_document_is_counted_to_the_byte(index: Index, index_dir: Path) -> None:
+    # The cheap exact case: str.isascii() is a stored flag on the object, so an
+    # ASCII document gets its true length without a scan and without a copy.
+    body = "the notice period is three months"
+    writer = IndexBatchWriter(index, directory=index_dir)
+    try:
+        writer.add(_record(1, body=body))
+
+        assert writer.pending_bytes == len(body)
+    finally:
+        writer.close()
+
+
+def test_a_deletion_adds_no_bytes_but_counts_as_pending(batch_writer: IndexBatchWriter) -> None:
+    # A deletion carries no text, so counting it towards the byte cap would
+    # commit batches early for no memory reason. It still has to count as
+    # pending, otherwise a batch of nothing but deletions would never be
+    # committed at all.
+    batch_writer.drop_document(4711)
+
+    assert batch_writer.pending == 1
+    assert batch_writer.pending_bytes == 0
+
+
+def test_a_commit_resets_the_byte_accounting(index: Index, batch_writer: IndexBatchWriter) -> None:
+    del index
+    batch_writer.add(_record(1, body=GERMAN_BODY))
+    assert batch_writer.pending_bytes > 0
+
+    batch_writer.flush()
+
+    assert batch_writer.pending_bytes == 0
 
 
 def test_a_closed_writer_refuses_further_work(index: Index, index_dir: Path) -> None:

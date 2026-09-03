@@ -85,7 +85,28 @@ GATEWAY_PATH = "/ocs/v2.php/apps/findling/files/{file_id}"
 
 # Bytes per block on the way from the gateway into the caller's file object. The
 # target hardware is a 4 GB box, so a file is never held in memory as a whole.
-CHUNK_SIZE = 65536
+#
+# One mebibyte, and the number is arithmetic rather than taste. Every block is
+# one hop into a worker thread, because the sink is an ordinary file object and
+# the write may not happen on the event loop. Measured on this machine with a
+# 50 MB body:
+#
+#   64 kB blocks -> 763 thread hops, 573 ms (median of three)
+#    1 MiB blocks ->  48 thread hops, 346 ms (median of three)
+#
+# The ARM box of the load test downloads roughly 20 GB in one full pass, so this
+# was named the most noticeable single item of the phase 2 performance audit.
+#
+# The price is memory and it is one block per running download: with
+# INDEX_WORKERS at one that is exactly one mebibyte, next to the 300 to 600 MB
+# an OCR page costs on the same box.
+#
+# What the larger block does not do is soften the byte cap. _stream_file counts
+# before it writes, so not a single byte beyond settings().max_file_bytes ever
+# reaches the sink, at 64 kB as at 1 MiB (T-05-11, and the test for it puts the
+# cap inside a block rather than on a boundary). What grows is only the block
+# that gets refused: it is read into memory once and then dropped.
+CHUNK_SIZE = 1024 * 1024
 
 # Answers that mean "this user does not get this file". 404 is what the gateway
 # returns for both "does not exist" and "not yours", deliberately indistinguishable.
