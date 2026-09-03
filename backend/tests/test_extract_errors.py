@@ -139,6 +139,47 @@ def _php_reasons() -> set[str]:
     return set(re.findall(r"'([a-z_]+)'", block.group(1)))
 
 
+def _php_state_reasons() -> dict[str, set[str | None]]:
+    """The STATE_REASONS pair mapping of the PHP companion, read out of its source.
+
+    Same approach as ``_php_reasons``: a PHP constant cannot be imported, and a
+    second copy of the values inside this test would be the very duplication the
+    test is here to catch. ``null`` inside a state's list is the row without a
+    reason, spelled ``None`` on this side.
+    """
+    source = PHP_FILE_STATE_SERVICE.read_text(encoding="utf-8")
+    block = re.search(r"const STATE_REASONS = \[(.*?)\];", source, re.DOTALL)
+    assert block is not None, "the STATE_REASONS constant is no longer where this test looks for it"
+
+    mapping: dict[str, set[str | None]] = {}
+    for state, inner in re.findall(r"'(indexed|skipped|failed)'\s*=>\s*\[(.*?)\]", block.group(1), re.DOTALL):
+        reasons: set[str | None] = set(re.findall(r"'([a-z_]+)'", inner))
+        if re.search(r"\bnull\b", inner) is not None:
+            reasons.add(None)
+        mapping[state] = reasons
+
+    return mapping
+
+
+def test_php_pair_mapping_matches_python() -> None:
+    """The pair mapping of the PHP side, against the one this side enforces.
+
+    Review finding WR-02: ``FileStateService::record`` used to judge state and
+    reason independently, so failed(too_large), a pair that exists nowhere,
+    passed the boundary. The fix ported the pair mapping, and this test is what
+    keeps the port from drifting: the fourth copy of the taxonomy is compared
+    against the first, per state and including the null of a reasonless indexed
+    row, in both directions because a surplus pair over there is as wrong as a
+    missing one.
+    """
+    ours = {
+        state.value: {reason.value if reason is not None else None for reason in reasons}
+        for state, reasons in STATE_REASONS.items()
+    }
+
+    assert _php_state_reasons() == ours
+
+
 def test_php_reason_list_matches_python() -> None:
     """The third list, and the only one that had no automatic comparison so far.
 

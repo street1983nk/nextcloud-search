@@ -425,7 +425,10 @@
       return
     }
     groups.forEach(function (group) {
-      text('findling-errors-count-' + group.reason, numbers.format(whole(group.count)))
+      // Keyed by state AND reason, same as the ids the template mints (review
+      // finding WR-02): a reason alone would write the count of one state into
+      // the row of another the day one code shows up under two states.
+      text('findling-errors-count-' + group.state + '-' + group.reason, numbers.format(whole(group.count)))
     })
   }
 

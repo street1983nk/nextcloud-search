@@ -119,6 +119,55 @@ class FileStateService {
 	];
 
 	/**
+	 * Which reason belongs to which state, and the pair is what is validated.
+	 *
+	 * Ported from the STATE_REASONS mappings in
+	 * backend/src/findling/extract/errors.py and
+	 * backend/src/findling/store/repo.py (review finding WR-02). The two flat
+	 * lists above accept pairs that do not exist, failed(too_large) for
+	 * instance, and the class docblock names exactly the caller that could
+	 * produce one: a trusted component with a defect, writing through the
+	 * acknowledgement route. Downstream such a pair would put the same reason
+	 * under two states at once, and the error list of the page keys its groups
+	 * by state and reason. record() therefore judges the pair here, the same
+	 * way the container's own store does.
+	 *
+	 * null under indexed is the row without a reason at all, spelled the same
+	 * way the Python mapping spells None. STATES and REASONS above stay as the
+	 * flat vocabularies the readers validate against; the Python parity test
+	 * reads this constant as well, so the three mappings cannot drift apart
+	 * unnoticed.
+	 *
+	 * @var array<string, list<?string>>
+	 */
+	private const STATE_REASONS = [
+		'indexed' => [null, 'truncated'],
+		'skipped' => [
+			'too_large',
+			'mime_not_allowed',
+			'encrypted',
+			'no_text_layer',
+			'empty_text',
+			'too_many_cells',
+			'gone',
+			'image_not_ocrable',
+			'excluded',
+		],
+		'failed' => [
+			'empty_file',
+			'corrupt',
+			'xml_invalid',
+			'encoding_unknown',
+			'timeout',
+			'out_of_memory',
+			'gateway_error',
+			'repeatedly_stuck',
+			'ocr_failed',
+			'ocr_unavailable',
+		],
+	];
+
+	/**
 	 * How many rows one call of page() may hand out at the most.
 	 *
 	 * Fifty, and the number is a cost and not a taste. Every row of a page ends
@@ -163,7 +212,13 @@ class FileStateService {
 			return false;
 		}
 
-		if ($reason !== null && !in_array($reason, self::REASONS, true)) {
+		// The PAIR is judged and not the two values independently (review
+		// finding WR-02): failed(too_large) passes both flat lists and exists
+		// nowhere, and a defective or newer container could write it through
+		// the acknowledgement route. skipped and failed without a reason are
+		// refused by the same table, because no writer of this app produces
+		// such a row and a reader could not label it.
+		if (!in_array($reason, self::STATE_REASONS[$state], true)) {
 			$this->reject();
 			return false;
 		}

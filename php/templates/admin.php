@@ -431,16 +431,20 @@ $chip = static function (string $state, string $reason) use ($l, $skippedIcon, $
 					$state = is_string($group['state'] ?? null) ? $group['state'] : '';
 					$examples = is_array($group['examples'] ?? null) ? $group['examples'] : [];
 					$remaining = $whole($group['remaining'] ?? 0);
-					// The region id of the design contract, one per reason code.
-					// The code is validated against the closed list before it
-					// ever reaches this template, so it is safe as an id, and it
-					// is printed escaped all the same.
-					$regionId = 'findling-errors-' . $reason;
+					// The region id of the design contract, one per group. Keyed
+					// by state AND reason (review finding WR-02): the groups come
+					// grouped by both, so a reason alone would mint the same id
+					// twice the day one code shows up under two states, and
+					// aria-controls would point every button at the first region.
+					// Both values are validated against the closed lists before
+					// they ever reach this template, so they are safe as an id,
+					// and they are printed escaped all the same.
+					$regionId = 'findling-errors-' . $state . '-' . $reason;
 					[$chipKind, $chipIcon, $chipLabel] = $chip($state, $reason);
 					?>
 					<tr class="findling-errors__group">
 						<th scope="row" class="findling-errors__label"><?php p(is_string($group['label'] ?? null) ? $group['label'] : ''); ?></th>
-						<td class="findling-errors__count" id="findling-errors-count-<?php p($reason); ?>"><?php p($count($whole($group['count'] ?? 0))); ?></td>
+						<td class="findling-errors__count" id="findling-errors-count-<?php p($state . '-' . $reason); ?>"><?php p($count($whole($group['count'] ?? 0))); ?></td>
 						<td>
 							<span class="findling-chip findling-chip--<?php p($chipKind); ?>">
 								<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($chipIcon); ?>"/></svg>
