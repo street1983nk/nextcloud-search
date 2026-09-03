@@ -226,7 +226,7 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [ ] 05-14-PLAN.md , ARM-Volllauf, Stoerfall-Drills, Messbericht, Box-Abbau
-- [ ] 05-15-PLAN.md , PHPUnit-Suite: Geruest und die ersten sechs Verhaltensweisen (D-24)
+- [x] 05-15-PLAN.md , PHPUnit-Suite: Geruest und die ersten sechs Verhaltensweisen (D-24)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -270,7 +270,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
-| 5. Härtung und Store-Einreichung v1.0 | 11/19 | In Progress|  |
+| 5. Härtung und Store-Einreichung v1.0 | 12/19 | In Progress|  |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 
 ## Requirement Coverage
