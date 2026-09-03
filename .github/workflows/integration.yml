@@ -1692,3 +1692,413 @@ jobs:
           if [ -f "${{ runner.temp }}/exapp.pid" ]; then
             kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
           fi
+
+  # The fifth job, and the only one in this repository that measures a security
+  # property rather than a function: SRCH-04, the permission parity of the two
+  # searches. D-21 states it as visibility parity, per scenario and per marker
+  # findling produces a hit exactly when the native Nextcloud search shows the
+  # same file to the same user. Both directions are compared and they are two
+  # different findings: a missed hit is a functional defect, an additional hit is
+  # a security defect. scripts/ci/parity_diff.py is what keeps them apart.
+  #
+  # What this job is not. The permission boundary itself stays the final recheck
+  # in Provider, which resolves every candidate through
+  # getUserFolder()->getFirstNodeById(). This job measures that boundary, it does
+  # not replace it, and that is also why a stale ACL prefilter cannot make it
+  # red: the recheck drops the candidate whatever the prefilter still holds.
+  #
+  # One server version and not the full matrix, on purpose. Parity is a property
+  # of the permission chain and not of the server version, and the matrix width
+  # of this phase sits on the lean deploy-harp job. Three server versions times
+  # an indexing pass would buy three repetitions of the same chain.
+  #
+  # No OCR engine is installed here, unlike in the three jobs above: every
+  # fixture of this job is a text file, because the marker has to be readable by
+  # both sides and a scanned page is exactly the case where the native side is
+  # blind by design.
+  search-parity:
+    name: search-parity
+    runs-on: ubuntu-24.04
+    # One installation, twelve small text files, one crawl and a handful of
+    # searches. The deadline is the guard against a hung run holding a runner
+    # for the default six hours.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        server-version: ['stable34']
+        php-version: ['8.2']
+
+    env:
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+      # Test only credentials of a throwaway instance that is destroyed with the
+      # runner. Nothing here is reused anywhere else.
+      OWNER_USER: 'owner'
+      OWNER_PASS: 'findling-ci-owner-2026'
+      COLLEAGUE_USER: 'colleague'
+      COLLEAGUE_PASS: 'findling-ci-colleague-2026'
+      # Scenario 6 in the shape D-22 gives it for CI: no group at all, no team
+      # folder access, exactly one received view only share. The guest user of
+      # the same decision is a manual probe before the submission and
+      # deliberately not a dependency of this matrix.
+      MINIMAL_USER: 'minimal'
+      MINIMAL_PASS: 'findling-ci-minimal-2026'
+      # One marker per scenario, so that the scenarios cannot colour each other.
+      # Lower case and ASCII on purpose: the native term filter becomes a LIKE
+      # over the name column, which is ASCII case insensitive on SQLite and
+      # collation dependent on MariaDB, and an umlaut in a marker would turn
+      # parity into a question about collations.
+      MARKER_OWN: 'parityown'
+      MARKER_SHARED: 'parityshared'
+      MARKER_REVOKED: 'parityrevoked'
+      MARKER_MINIMAL: 'parityminimal'
+      # Four folders times three files. A number rather than a duration, because
+      # the drain loop waits for a verdict per file.
+      EXPECTED_JUDGED: '12'
+      DRAIN_TIMEOUT: '600'
+
+    steps:
+      # Same order and the same reason as in the four jobs above: the server
+      # checkout empties the workspace root, and the second checkout is what
+      # brings the composite action into the workspace.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          repository: nextcloud/server
+          ref: ${{ matrix.server-version }}
+          submodules: recursive
+
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          path: findling-src
+
+      - name: Set up the test Nextcloud with both halves and register the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: ${{ matrix.server-version }}
+          php-version: ${{ matrix.php-version }}
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+
+      # Everything on the instance is crawled and everything on the instance is
+      # visible to the native search, so a skeleton folder would end up in both
+      # answers and in neither expectation.
+      - name: Empty the instance and add the three users
+        run: |
+          ./occ config:system:set skeletondirectory --value=''
+          rm -rf data/admin/files/* data/admin/files/.[!.]* 2>/dev/null || true
+          OC_PASS="${OWNER_PASS}" ./occ user:add --password-from-env "${OWNER_USER}"
+          OC_PASS="${COLLEAGUE_PASS}" ./occ user:add --password-from-env "${COLLEAGUE_USER}"
+          OC_PASS="${MINIMAL_PASS}" ./occ user:add --password-from-env "${MINIMAL_USER}"
+          ./occ files:scan --all
+          echo "files on the instance before the fixtures: $(find data/*/files -type f 2>/dev/null | wc -l)"
+
+      # The condition of every comparison in this job, and therefore a step of
+      # its own with a read back rather than a line inside another step. Without
+      # it the server cuts both answers down to twenty five entries, and two
+      # truncated lists agree without saying anything about the permission chain.
+      # SearchQuery::LIMIT_DEFAULT is five, the cap
+      # unified_search_max_results_per_request is twenty five, and one hundred is
+      # the same number every ask() below sends as its limit.
+      #
+      # The typed variant is tried first and the untyped one is the fallback: the
+      # option exists on the branches this job runs on, and a fallback is cheaper
+      # than a job that goes red over the spelling of an occ option.
+      - name: Raise the result cap of the unified search
+        run: |
+          ./occ config:app:set core unified_search_max_results_per_request --value=100 --type=integer \
+            || ./occ config:app:set core unified_search_max_results_per_request --value=100
+          cap=$(./occ config:app:get core unified_search_max_results_per_request)
+          echo "unified_search_max_results_per_request is ${cap}"
+          if [ "${cap}" != "100" ]; then
+            echo "::error::the result cap is ${cap} and not 100, so every comparison below would be made of truncated lists"
+            exit 1
+          fi
+
+      # The fixture rule of this job, and it is the difference between a
+      # comparison and a coin toss: a marker token stands in the FILE NAME and in
+      # the CONTENT. The native search is a name search, the term filter of the
+      # provider files becomes a LIKE over the name column inside the visible set
+      # of the user, and it never looks at a text layer. Findling reads the
+      # content and the name. So a marker only in the content makes the native
+      # side blind and the comparison worthless, and a marker only in the name
+      # makes findling blind and produces a false alarm.
+      #
+      # The folder names carry no marker, and the hyphen is what keeps it that
+      # way: parity-own does not contain parityown. The native answer includes
+      # folders, and a folder has a fileid that findling never indexes, so a
+      # folder named after its marker would show up as a missing hit forever.
+      - name: Build the marker fixtures, one marker per scenario
+        run: |
+          write_three() {  # $1 folder, $2 marker
+            mkdir -p "data/${OWNER_USER}/files/$1"
+            for n in 1 2 3; do
+              printf '%s marker file %s of the parity fixture, in the name and in the content.\n' "$2" "${n}" \
+                > "data/${OWNER_USER}/files/$1/$2-${n}.txt"
+            done
+          }
+          write_three parity-own "${MARKER_OWN}"
+          write_three parity-shared "${MARKER_SHARED}"
+          write_three parity-revoked "${MARKER_REVOKED}"
+          write_three parity-minimal "${MARKER_MINIMAL}"
+          ./occ files:scan --all
+          find "data/${OWNER_USER}/files" -type f -printf '%P\n' | sort
+          echo "fixture files: $(find "data/${OWNER_USER}/files" -type f | wc -l)"
+
+      # Before the crawl, and that order is the point rather than a detail: the
+      # access list of a file is written while the file is indexed. A share
+      # granted afterwards travels over the share events instead, which is what
+      # scenario 3 measures further down.
+      #
+      # permissions=1 is read only, shareType=0 is a share with a single user.
+      # Every call checks the statuscode, because a refused share would turn the
+      # scenario into a comparison of two empty sets.
+      - name: Share three folders with their recipients, before the crawl
+        run: |
+          share() {  # $1 path, $2 recipient, $3 output file
+            # Without -f on purpose: a refused share answers with a body that
+            # says why, and -f would throw exactly that body away.
+            curl -s -u "${OWNER_USER}:${OWNER_PASS}" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              -d "path=/$1" \
+              -d 'shareType=0' \
+              -d "shareWith=$2" \
+              -d 'permissions=1' \
+              'http://localhost:8080/ocs/v2.php/apps/files_sharing/api/v1/shares' | tee "$3"
+            jq -e '.ocs.meta.statuscode == 200' "$3" > /dev/null \
+              || { echo "::error::the share of /$1 was not created, so its scenario would prove nothing"; cat "$3"; exit 1; }
+          }
+          share parity-shared "${COLLEAGUE_USER}" share-shared.json
+          share parity-revoked "${COLLEAGUE_USER}" share-revoked.json
+          share parity-minimal "${MINIMAL_USER}" share-minimal.json
+          # The id of the second one, because scenario 3 withdraws exactly that
+          # share and a DELETE needs its id.
+          jq -r '.ocs.data.id' share-revoked.json > revoked-share-id.txt
+          echo "the share to be withdrawn later has id $(cat revoked-share-id.txt)"
+          # The mount of a recipient only exists in the mount cache after a scan,
+          # and the crawl reads the access list out of that cache.
+          ./occ files:scan --all
+
+      # Both questions and the comparison, in a file rather than in every step.
+      # A copy of the curl call per scenario is how the two sides start to differ
+      # in a way nobody sees, and the whole job rests on them being identical
+      # apart from the provider id.
+      - name: The two questions, the comparison and the drain, as functions
+        run: |
+          cat > "${{ runner.temp }}/parity.sh" <<'SH'
+          # $1 search route, $2 user, $3 password, $4 term, $5 output file.
+          #
+          # The route is the only argument that differs between the two calls,
+          # and the limit is written out rather than taken from a variable: it is
+          # the same number the result cap was raised to a few steps above, and
+          # the two are one decision that has to be changed together. Asking
+          # without a limit is the deadly variant, because SearchQuery::
+          # LIMIT_DEFAULT is five.
+          ask() {
+            curl -sfS -G -u "$2:$3" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              --data-urlencode "term=$4" \
+              --data-urlencode 'limit=100' \
+              "http://localhost:8080/ocs/v2.php/search/$1" -o "$5"
+          }
+
+          # $1 scenario, $2 user, $3 password, $4 term, $5 expected minimum of
+          # fileids. One line per scenario in the log, with the name and the
+          # number of compared fileids, and its own error message on the way out.
+          compare() {
+            ask 'providers/files/search' "$2" "$3" "$4" "native-$1.json"
+            ask 'providers/findling/search' "$2" "$3" "$4" "findling-$1.json"
+            if ! python3 findling-src/scripts/ci/parity_diff.py \
+                --scenario "$1" \
+                --native "native-$1.json" \
+                --findling "findling-$1.json" \
+                --expect-min "$5"; then
+              echo "::error::scenario $1 did not pass the parity comparison, see the message above"
+              return 1
+            fi
+          }
+
+          # $1 seconds until the deadline. Waits for an empty work stock, with a
+          # running line, and never sleeps on suspicion: the number it waits for
+          # is a fact out of the queue table of Nextcloud.
+          drain() {
+            deadline=$(( $(date +%s) + $1 ))
+            while :; do
+              open=$(./occ findling:index | awk '
+                $1 == "scheduled" { scheduled = $2 }
+                /^  handed to the worker/ { running = $NF }
+                END { print (scheduled + 0) + (running + 0) }')
+              echo "draining: open=${open}"
+              if [ "${open}" -eq 0 ]; then
+                break
+              fi
+              if [ "$(date +%s)" -ge "${deadline}" ]; then
+                echo "::error::the work stock was not emptied within $1 seconds"
+                ./occ findling:index
+                return 1
+              fi
+              sleep 5
+            done
+            # The index is committed in batches, so the last commit may be a
+            # moment behind an empty queue.
+            sleep 5
+          }
+          SH
+          echo "the two questions and the comparison are in place"
+
+      - name: Queue and run the crawl
+        run: |
+          # --no-interaction: occ treats this shell as interactive, so the
+          # restart confirmation would default to No and the queue would stay
+          # empty (first run finding of the resilience gate).
+          ./occ findling:index --restart --no-interaction
+          timeout 60 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once
+          # stop_after with an underscore. The dashed spelling does not exist on
+          # background-job:worker, Symfony rejects it and the crawl never runs.
+          timeout 120 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 60
+          ./occ findling:index
+
+      - name: Wait until the queue is empty and every fixture file has a verdict
+        run: |
+          status() {
+            ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+                --db "${{ runner.temp }}/findling/state.db" )
+          }
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+
+          deadline=$(( $(date +%s) + DRAIN_TIMEOUT ))
+          while :; do
+            report=$(status)
+            judged=$(echo "${report}" | jq -r '.indexed + .skipped + .failed')
+            open=$(open_rows)
+            echo "draining: open=${open} judged=${judged}"
+            if [ "${open}" -eq 0 ] && [ "${judged}" -ge "${EXPECTED_JUDGED}" ]; then
+              echo "the queue is empty and ${judged} files have a verdict"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "::error::the crawl did not finish within ${DRAIN_TIMEOUT} seconds"
+              echo "${report}"
+              ./occ findling:index
+              exit 1
+            fi
+            sleep 5
+          done
+          # Printed rather than asserted: every fixture is a plain text file, so
+          # the interesting number here is how many of the twelve ended as
+          # indexed, and the comparisons below are what turns it into a verdict.
+          status
+
+      # Scenario 1 and scenario 2. The first is the base case, the one that would
+      # be green with no permission chain at all, and it is here because a
+      # comparison that never sees a hit proves nothing about the ones that must
+      # not see any.
+      #
+      # Scenario 2 is asked in both directions. The colleague has to find the
+      # three files of the folder that was shared with him, and nothing at all of
+      # the folder that was not, and the second question is exactly where an
+      # additional hit would show up as extra.
+      - name: Scenario 1, own files, and scenario 2, a received share
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+          compare own-files "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_OWN}" 3
+          compare received-share "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_SHARED}" 3
+          # Nought expected, and it is not a vacuous comparison: the question
+          # above proved that this user finds something at all, so an empty
+          # answer here is a statement and not a silence.
+          compare received-share-denied "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_OWN}" 0
+
+      # Scenario 3, and the only scenario that changes the instance after the
+      # crawl. A withdrawn share raises a share event, and a folder share is not
+      # queued as a row but planned as a subtree expansion, so that job is driven
+      # explicitly and the rows it produces are waited for. Nothing here sleeps
+      # on suspicion.
+      #
+      # Both directions again, and this time they are the two halves of one
+      # statement: the recipient finds nothing any more, and the owner still
+      # finds all three. Without the second half a search that broke entirely
+      # would pass the first.
+      - name: Scenario 3, the withdrawn share
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+
+          # Before the withdrawal, so that its effect is a change and not a state
+          # that was there all along.
+          compare revoked-share-before "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_REVOKED}" 3
+
+          share_id=$(cat revoked-share-id.txt)
+          curl -s -X DELETE -u "${OWNER_USER}:${OWNER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            "http://localhost:8080/ocs/v2.php/apps/files_sharing/api/v1/shares/${share_id}" | tee unshare.json
+          jq -e '.ocs.meta.statuscode == 200' unshare.json > /dev/null \
+            || { echo "::error::the share was not withdrawn, so scenario 3 would repeat scenario 2"; cat unshare.json; exit 1; }
+
+          timeout 120 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SubtreeExpandJob' --stop_after 60
+          drain 300
+
+          # Nought is the right expectation for the recipient, and this is the one
+          # place in this job where --expect-min 0 carries a decision rather than
+          # a measurement: after the withdrawal this user is supposed to find
+          # nothing on either side, so an empty comparison is the correct answer
+          # and not a missing fixture. The question above and the one below are
+          # what keep that honest.
+          compare revoked-share "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_REVOKED}" 0
+          compare revoked-share-owner "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_REVOKED}" 3
+
+      # Scenario 6, in the shape D-22 gives it for CI: a user without any group,
+      # without team folder access, with exactly one received view only share. He
+      # has to find his three files and nothing of the three other markers, and
+      # each of those four questions is a comparison rather than an assertion
+      # about findling alone.
+      - name: Scenario 6, the restricted user
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+          # Printed rather than assumed: the whole scenario rests on this user
+          # having no group at all.
+          ./occ user:info "${MINIMAL_USER}" || true
+          compare restricted-user "${MINIMAL_USER}" "${MINIMAL_PASS}" "${MARKER_MINIMAL}" 3
+          for marker in "${MARKER_OWN}" "${MARKER_SHARED}" "${MARKER_REVOKED}"; do
+            compare "restricted-user-denied-${marker}" \
+              "${MINIMAL_USER}" "${MINIMAL_PASS}" "${marker}" 0
+          done
+
+      - name: Everything the failure had to say
+        if: failure()
+        run: |
+          echo "--- the result cap ---"
+          ./occ config:app:get core unified_search_max_results_per_request || true
+          echo "--- counters ---"
+          ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+            --db "${{ runner.temp }}/findling/state.db" ) || true
+          ./occ findling:index || true
+          echo "--- users and groups ---"
+          ./occ user:list || true
+          ./occ group:list || true
+          # The fileids of every answer and nothing else. A whole answer would
+          # put the paths of the fixture files into the log, and the tool this
+          # job rests on is careful not to do that.
+          echo "--- the answers of both providers, as fileids ---"
+          for answer in native-*.json findling-*.json; do
+            if [ -f "${answer}" ]; then
+              echo "== ${answer} =="
+              jq -c '[.ocs.data.entries[]?.attributes.fileId]' "${answer}" || true
+            fi
+          done
+          echo "--- exapp ---"
+          tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+          echo "--- nextcloud ---"
+          tail -n 200 data/nextcloud.log || echo "no data/nextcloud.log written"
+
+      - name: Stop the ExApp
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/exapp.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          fi
