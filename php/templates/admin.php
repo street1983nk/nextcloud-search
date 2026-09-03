@@ -467,12 +467,21 @@ $chip = static function (string $state, string $reason) use ($l, $skippedIcon, $
 											// that disappeared would take its count with
 											// it, and "the file is gone" is itself the
 											// answer to why it was never indexed.
+											$uid = is_string($example['uid'] ?? null) ? $example['uid'] : '';
 											$shown = !$resolved
 												? $l->t('File no longer exists (ID %s)', [(string)$fileId])
 												: ($trashed ? $l->t('%s (in the trash bin)', [$path]) : $path);
+											// The lookup takes a path in the shape the
+											// placeholder teaches, uid/files/rest, and a
+											// trashed or vanished file is not at that
+											// path any more: those rows carry only the
+											// id, which the lookup resolves either way.
+											$lookupPath = ($resolved && !$trashed && $uid !== '' && $path !== '')
+												? $uid . '/files/' . $path
+												: '';
 											?>
 											<li>
-												<button type="button" class="findling-errors__example findling-path" data-findling-path="<?php p($path); ?>" data-findling-file-id="<?php p((string)$fileId); ?>"><?php p($shown); ?></button>
+												<button type="button" class="findling-errors__example findling-path" data-findling-path="<?php p($lookupPath); ?>" data-findling-file-id="<?php p((string)$fileId); ?>"><?php p($shown); ?></button>
 											</li>
 										<?php } ?>
 									</ul>
