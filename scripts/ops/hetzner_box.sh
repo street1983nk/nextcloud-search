@@ -35,6 +35,11 @@ API_BASE='https://api.hetzner.cloud/v1'
 
 SERVER_TYPE='cax11'
 SERVER_IMAGE='ubuntu-24.04'
+# The image name exists twice in every account, once for x86 and once for arm,
+# and a create that names only the string leaves the choice to the API. The
+# machine of this test boots exactly one of the two, so the architecture is
+# stated and the id is resolved from both before the request goes out.
+SERVER_ARCH='arm'
 # Helsinki, because decision D-01 of the phase names that location. The earlier
 # value here was nbg1, taken from the example request of the research document;
 # the price is the same in all three cax locations (7.1281 EUR per month, gross,
@@ -168,26 +173,37 @@ import json
 import sys
 
 payload = json.load(sys.stdin)
-print("%-8s %5s %7s %6s %-8s %s" % ("name", "cores", "memory", "disk", "arch", "price per month, gross"))
+print("%-8s %5s %7s %6s %-8s %-26s %s" % (
+    "name", "cores", "memory", "disk", "arch", "price per month, gross", "in stock"))
 for server_type in payload["server_types"]:
     if not server_type["name"].startswith("cax"):
         continue
-    prices = ", ".join(
-        "%s %s" % (price["location"], price["price_monthly"]["gross"]) for price in server_type["prices"]
+    monthly = {price["location"]: price["price_monthly"]["gross"] for price in server_type["prices"]}
+    one_price = sorted(set(monthly.values()))
+    price_column = one_price[0] if len(one_price) == 1 else ", ".join(
+        "%s %s" % (location, value) for location, value in sorted(monthly.items())
     )
+    # Availability is a property of the type in this API, it differs per
+    # location, and it moves without notice. It is printed next to the price
+    # because a price for a machine nobody can rent is half the answer.
+    in_stock = [
+        location["name"] for location in server_type.get("locations", []) if location.get("available")
+    ]
     print(
-        "%-8s %5s %6s G %5s G %-8s %s"
+        "%-8s %5s %6s G %5s G %-8s %-26s %s"
         % (
             server_type["name"],
             server_type["cores"],
             server_type["memory"],
             server_type["disk"],
             server_type["architecture"],
-            prices,
+            price_column,
+            ", ".join(in_stock) if in_stock else "nowhere",
         )
     )
 '
     echo "hetzner_box: these are the prices of this account, not of a web search"
+    echo "hetzner_box: in stock is read at this moment and it changes without notice"
 }
 
 cmd_create() {
@@ -199,6 +215,58 @@ cmd_create() {
         echo "run status, or destroy first: two boxes are two invoices" >&2
         exit 1
     fi
+
+    # Stock first, because it is the one precondition that no amount of correct
+    # arguments can fix. When the arm types are gone the API answers a create
+    # with "unsupported location for server type", which reads like a mistake in
+    # this script and sends the next reader to the location field. It is not:
+    # the type carries a per location availability flag, that flag is false, and
+    # the only cure is to wait. So the state is read here and said plainly.
+    types=$(api GET "/server_types?name=$SERVER_TYPE")
+    fail_on_error "$types"
+    stock=$(printf '%s' "$types" | json "
+import json
+import sys
+
+server_types = json.load(sys.stdin)['server_types']
+if not server_types:
+    print('missing')
+    raise SystemExit(0)
+available = [
+    location['name']
+    for location in server_types[0].get('locations', [])
+    if location.get('available')
+]
+if '$SERVER_LOCATION' in available:
+    print('here')
+elif available:
+    print('elsewhere ' + ' '.join(available))
+else:
+    print('nowhere')
+")
+    case "$stock" in
+    here)
+        echo "hetzner_box: $SERVER_TYPE is in stock in $SERVER_LOCATION"
+        ;;
+    missing)
+        echo "hetzner_box: this account does not know a server type called $SERVER_TYPE" >&2
+        exit 1
+        ;;
+    nowhere)
+        echo "hetzner_box: $SERVER_TYPE is out of stock in every location right now" >&2
+        echo "this is capacity, not a wrong argument: the type carries availability" >&2
+        echo "false everywhere, and it returns without an announcement" >&2
+        echo "watch it with: hetzner_box.sh prices, then run create again" >&2
+        exit 1
+        ;;
+    *)
+        echo "hetzner_box: $SERVER_TYPE is out of stock in $SERVER_LOCATION" >&2
+        echo "in stock right now: ${stock#elsewhere }" >&2
+        echo "the location of a box cannot be changed afterwards, so moving the run" >&2
+        echo "is a decision and not a retry: change SERVER_LOCATION on purpose" >&2
+        exit 1
+        ;;
+    esac
 
     # The key is looked up before anything is created. A box that came up without
     # a key cannot be given one later without reinstalling it, so the cheap check
@@ -221,9 +289,27 @@ if len(keys) == 1:
     fi
     echo "hetzner_box: injecting ssh key $SSH_KEY_NAME, $key_line"
 
+    # Same reason as the key, one line further: the answer to a bare image name
+    # is ambiguous, and the wrong half of it does not boot on this machine.
+    images=$(api GET "/images?name=$SERVER_IMAGE&architecture=$SERVER_ARCH&status=available")
+    fail_on_error "$images"
+    image_id=$(printf '%s' "$images" | json '
+import json
+import sys
+
+images = json.load(sys.stdin)["images"]
+if len(images) == 1:
+    print(images[0]["id"])
+')
+    if [ -z "$image_id" ]; then
+        echo "hetzner_box: no single available $SERVER_IMAGE image for $SERVER_ARCH in this account" >&2
+        exit 1
+    fi
+    echo "hetzner_box: image $SERVER_IMAGE for $SERVER_ARCH is id $image_id"
+
     server_body=$(
-        printf '{"name":"%s","server_type":"%s","image":"%s","location":"%s"' \
-            "$SERVER_NAME" "$SERVER_TYPE" "$SERVER_IMAGE" "$SERVER_LOCATION"
+        printf '{"name":"%s","server_type":"%s","image":%s,"location":"%s"' \
+            "$SERVER_NAME" "$SERVER_TYPE" "$image_id" "$SERVER_LOCATION"
         printf ',"ssh_keys":["%s"]' "$SSH_KEY_NAME"
         printf ',"start_after_create":true,"labels":{"%s":"%s"}}' \
             "${LABEL%%=*}" "${LABEL#*=}"

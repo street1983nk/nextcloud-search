@@ -124,6 +124,20 @@ def test_the_box_tool_injects_the_ssh_key_by_name() -> None:
     assert "has no ssh key named" in text
 
 
+def test_the_box_tool_reads_the_stock_before_it_tries_to_rent() -> None:
+    """The API blames the location when the truth is that the type is sold out.
+
+    A create against a sold out arm type answers "unsupported location for
+    server type", which reads like a wrong argument and sends the next reader
+    to the location field. The availability flag sits on the server type, one
+    per location, so it is read first and the state is said in words.
+    """
+    text = HETZNER_BOX.read_text(encoding="utf-8")
+    assert '/server_types?name=$SERVER_TYPE' in text
+    assert "is out of stock in every location right now" in text
+    assert "this is capacity, not a wrong argument" in text
+
+
 def test_the_box_is_created_where_the_phase_decided() -> None:
     """Decision D-01 names Helsinki, and a server cannot move afterwards."""
     text = HETZNER_BOX.read_text(encoding="utf-8")
