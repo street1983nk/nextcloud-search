@@ -514,7 +514,9 @@ class Poller:
         # route of such a job is not a property of its mimetype. The row got here
         # through the requeue of step 3b, which only ever puts a file on it that
         # the text pass judged as skipped(no_text_layer); nothing else can reach
-        # this branch, which is what keeps D-06 intact (T-03-906).
+        # this branch, which is what keeps D-06 intact (T-03-906). Two kinds of
+        # file earn that verdict: a PDF whose text layer was measured and found
+        # missing, and a picture, which has no text layer to measure at all.
         if job.kind == KIND_OCR:
             await self._read_the_scan(job, done, failed, verdicts)
             return 0
@@ -564,7 +566,44 @@ class Poller:
                 await asyncio.to_thread(self._store_or_die().refresh_meta, job.file_id, _meta_of(job))
                 done.append(job.queue_id)
                 return 1
-            outcome = await asyncio.to_thread(self._extract, str(read.path), job.mime, read.size)
+            if route is Route.OCR:
+                # **A picture is an OCR job, and this is the one line that says
+                # so.** The route already carries the decision: judge maps the
+                # four picture mimetypes of D-05 onto Route.OCR, so the mapping
+                # lives in the allowlist and is read off here instead of being
+                # written down a second time. Why a picture belongs on that
+                # track although it is not a PDF: it has no text layer at all,
+                # so OCR is not the second attempt, it is the only one, and
+                # running the text extractor over it first would be an
+                # extraction with a foregone verdict.
+                #
+                # **Why the handover and not simply the long deadline here.**
+                # The obvious fix is to extract right here with the OCR deadline
+                # instead of the 120 s of a text job. That would give a many
+                # paged TIFF the budget it needs and break the arithmetic of the
+                # claim at the same time: a content claim takes up to 32 rows
+                # under a lock of 900 s (QueueService::KIND_BATCH and
+                # QueueMapper::LOCK_TIMEOUTS), so two files of 660 s in one batch
+                # put the whole batch past its lock, the rows are handed out
+                # again while this worker is legitimately still working on them,
+                # and they end as failed(repeatedly_stuck). The OCR track is the
+                # one place whose numbers are built for a job of that length: two
+                # rows per claim under a lock of 1800 s. So a picture goes where
+                # a scan goes, over the requeue that already exists, and nothing
+                # on the Nextcloud side has to learn a new kind of row.
+                #
+                # **The verdict is the truth about the text track**, and it is
+                # the one a scan gets for the same reason: there is no text layer
+                # here. The OCR pass overwrites it, and while it stands it is
+                # what tells the next pass that this file has been handed over.
+                #
+                # This branch sits below the fast path on purpose. The bytes have
+                # been read and hashed by then, so a second crawl over an
+                # unchanged picture is acknowledged without work instead of
+                # spending the engine time of the whole mount again.
+                outcome = ExtractionOutcome.skipped(Reason.NO_TEXT_LAYER)
+            else:
+                outcome = await asyncio.to_thread(self._extract, str(read.path), job.mime, read.size)
         finally:
             # The scratch file holds user content. Leaving one behind is a
             # disclosure, and leaving one behind per job fills the volume.
@@ -586,6 +625,11 @@ class Poller:
         verdicts: list[_Verdict],
     ) -> None:
         """The same file once more, this time as pixels rather than as text.
+
+        Two kinds of file arrive here, and both were handed over by the pass
+        above: a scanned PDF whose text layer was measured and found missing, and
+        a picture, which never had one. What they have in common is the only
+        thing this branch cares about, that the pixels are all there is.
 
         It runs like the content branch above, and the three places where it does
         not are the reason it is a branch at all. Each of them carries its own
@@ -646,6 +690,12 @@ class Poller:
         track has to read it (D-07). Without this the scanned half of a typical
         administration is skipped for good, which is exactly what this phase was
         started over.
+
+        A picture reaches this decision with the same verdict and without an
+        extraction behind it, because there is no text layer on a picture to
+        measure. The handover is therefore the same one, and so are its limits:
+        the caps, the deadline and the claim arithmetic of the OCR track apply to
+        both without a second mechanism.
 
         **With OCR switched off nothing changes.** An instance whose admin set
         ``FINDLING_OCR_ENABLED=false`` gets the honest verdict rather than rows
