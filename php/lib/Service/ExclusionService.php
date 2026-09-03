@@ -164,7 +164,10 @@ final class ExclusionService {
 		$stored = $this->appConfig->getValueArray(Application::APP_ID, SettingsService::KEY_EXCLUSIONS, []);
 
 		$prefixes = [];
+		$remaining = count($stored);
 		foreach ($stored as $entry) {
+			$remaining--;
+
 			if (!is_string($entry)) {
 				$this->reject();
 				continue;
@@ -180,6 +183,20 @@ final class ExclusionService {
 			// costs one comparison and not two.
 			$prefixes[$normalised] = true;
 			if (count($prefixes) >= self::MAX_PREFIXES) {
+				if ($remaining > 0) {
+					// The UI cannot store more entries than the ceiling, but occ
+					// config:app:set is the documented second writer and has no
+					// such bound. Everything beyond the ceiling is not compared
+					// anywhere, which is fail open in exactly the direction this
+					// feature promises not to fail, so the truncation is named
+					// instead of silent (review finding WR-06). A count and the
+					// ceiling, never a value: what stands in these entries is a
+					// folder name of a private instance.
+					$this->logger->warning(
+						'Findling: the stored exclusion list exceeds the ceiling, entries beyond it are not applied',
+						['dropped' => $remaining, 'ceiling' => self::MAX_PREFIXES],
+					);
+				}
 				break;
 			}
 		}
