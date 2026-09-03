@@ -188,14 +188,10 @@ def test_an_abort_leaves_nothing_that_looks_finished(tmp_path: Path) -> None:
     assert list(tmp_path.iterdir()) == []
 
 
-def test_the_command_prints_seed_files_bytes_and_checksum(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_the_command_prints_seed_files_bytes_and_checksum(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     out = tmp_path / "corpus"
     report = tmp_path / "report.csv"
-    code = corpus.main(
-        ["--seed", "phase5-cli", "--files", str(SMALL), "--out", str(out), "--report", str(report)]
-    )
+    code = corpus.main(["--seed", "phase5-cli", "--files", str(SMALL), "--out", str(out), "--report", str(report)])
     printed = capsys.readouterr().out
 
     assert code == 0
@@ -260,13 +256,13 @@ def test_neither_new_file_carries_a_dash_or_an_indeterminate_source() -> None:
     The dashes are the typography rule of this project. The three names are the
     reproducibility rule: a corpus that draws from the clock or from the kernel
     entropy pool cannot be rebuilt, and the seed on the report would be a
-    decoration. The names are assembled rather than written out, because this
-    file would otherwise fail its own second half.
+    decoration. Both are assembled from code points rather than written out, because this
+    file would otherwise fail on itself.
     """
     for path in (GENERATOR_PATH, Path(__file__)):
         text = path.read_text(encoding="utf-8")
-        assert "—" not in text, path.name
-        assert "–" not in text, path.name
+        for dash in (chr(0x2014), chr(0x2013)):
+            assert dash not in text, f"{dash!r} in {path.name}"
 
     generator = GENERATOR_PATH.read_text(encoding="utf-8")
     for name in ("ur" + "andom", "random." + "random", "time." + "time"):
