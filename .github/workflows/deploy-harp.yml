@@ -242,6 +242,85 @@ jobs:
           docker logs appapi-harp || true
           exit 1
 
+      # One address that answers for both halves, and this is the third thing
+      # this job had to measure rather than read off.
+      #
+      # The daemon field nextcloud_url is used twice by AppAPI, and the two uses
+      # pull in opposite directions. resolveExAppUrl builds the address of the
+      # ExApp as "{nextcloud_url}/exapps/{appId}", so it has to reach HaRP, and
+      # the very same value is handed to the container as NEXTCLOUD_URL
+      # (DockerActions.php, both read on 2026-09-03), so it has to reach
+      # Nextcloud. HaRP answers only paths that carry /exapps/{appId}: its agent
+      # matches them with a regular expression and rejects everything else with
+      # "Invalid request path, cannot find AppID" (haproxy_agent.py). With the
+      # HaRP address in that field the container therefore cannot report that it
+      # finished its initialisation: measured in run 33747191689 as
+      # "404 Client Error for url http://localhost:8780/ocs/v1.php/apps/app_api/
+      # ex-app/status" in the ExApp log, and app_api:app:register --wait-finish
+      # waits for exactly that status (ExAppService::waitInitStepFinish loops
+      # until init reaches 100), so the step ran into its timeout although the
+      # container was healthy and the search worked.
+      #
+      # That is not a defect of HaRP, it is its topology: HaRP belongs in front
+      # of Nextcloud, where one address serves the instance and forwards /exapps
+      # into the tunnel. A Nextcloud behind Apache does that with a location
+      # block, and all-in-one ships it. The PHP builtin server of this job cannot
+      # proxy anything, so the topology is built here instead, with the smallest
+      # thing that can do it.
+      #
+      # nginx by tag and not by digest, unlike the HaRP image: no statement of
+      # this job depends on its version, it forwards bytes. The same reasoning
+      # the local registry above already follows.
+      - name: Put one address in front of Nextcloud and HaRP
+        run: |
+          cat > "${RUNNER_TEMP}/exapps-proxy.conf" <<'CONF'
+          server {
+            listen 8090;
+            # Everything the ExApp side speaks: AppAPI to the container, and the
+            # heartbeat that goes with it.
+            location /exapps/ {
+              proxy_pass http://127.0.0.1:8780;
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              # A search over a large index and an OCR job both take longer than
+              # the default minute.
+              proxy_read_timeout 1800s;
+              proxy_send_timeout 1800s;
+            }
+            # Everything else is Nextcloud, and that is the direction the
+            # container needs for its status and for its queue calls.
+            location / {
+              proxy_pass http://127.0.0.1:8080;
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              proxy_read_timeout 300s;
+              client_max_body_size 512M;
+            }
+          }
+          CONF
+          docker run -d --name exapps-proxy --net host \
+            -v "${RUNNER_TEMP}/exapps-proxy.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:1.27-alpine
+          # Both directions are asserted before anything is registered, because a
+          # proxy that forwards one of them and not the other produces exactly
+          # the failure this step exists to remove, only later and in a place
+          # that reads like an app defect.
+          for _ in $(seq 1 30); do
+            nc_code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://localhost:8090/status.php || true)
+            harp_code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' \
+              -H "harp-shared-key: ${HARP_SHARED_KEY}" \
+              -H 'docker-engine-port: 24000' \
+              http://localhost:8090/exapps/app_api/v1.44/_ping || true)
+            if [ "${nc_code}" = "200" ] && [ "${harp_code}" = "200" ]; then
+              echo "the front proxy answers for Nextcloud and for HaRP"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "the front proxy did not serve both halves, status.php '${nc_code}' and the docker engine route '${harp_code}'"
+          docker logs exapps-proxy || true
+          exit 1
+
       # Only for the registration. The release archive carries
       # backend/appinfo/info.xml unchanged, because AppAPI reads the route list
       # out of the archive at installation time: an archive with a rewritten
@@ -259,27 +338,36 @@ jobs:
           # rather than assumed.
           git -C findling-src diff --quiet -- backend/appinfo/info.xml
 
-      # The nextcloud url of a HaRP daemon is the HaRP address and not the address
-      # of Nextcloud, which reads wrong and is the one thing this job had to
-      # measure to get right. In HaRP mode AppAPI resolves the ExApp address as
-      # "{nextcloud_url}/exapps/{appId}" (DockerActions::resolveExAppUrl, read in
-      # the running instance on 2026-09-03), because HaRP is the entry point that
-      # forwards /exapps to the tunnel and everything else to NC_INSTANCE_URL.
-      # With http://localhost:8080 in this position every heartbeat goes to the
-      # PHP server, which answers 404, and the install ends in
-      # "heartbeat check failed" with a healthy container next to it. AppAPI also
-      # hands this value to the container as NEXTCLOUD_URL, so the way back runs
-      # through HaRP as well.
+      # The two addresses in this command are different on purpose, and getting
+      # them right cost this job three runs.
+      #
+      # The fifth argument is the host of the daemon, and it is the one AppAPI
+      # uses for the docker engine: it talks to "{protocol}://{host}/exapps/
+      # app_api/..." with the shared key and the socket port in the headers, so
+      # it points straight at HaRP.
+      #
+      # The sixth argument is nextcloud_url, and it has to serve both halves,
+      # which is why it is the front proxy and neither 8080 nor 8780. AppAPI
+      # resolves the ExApp as "{nextcloud_url}/exapps/{appId}"
+      # (DockerActions::resolveExAppUrl), so Nextcloud alone would send every
+      # heartbeat into the PHP server, which answers 404 and ends the install in
+      # "heartbeat check failed" next to a healthy container (measured in plan
+      # 05-01). The same value reaches the container as NEXTCLOUD_URL, so HaRP
+      # alone would leave the container without a way back: HaRP serves only
+      # paths with /exapps in them, and the status the container reports after
+      # its initialisation is /ocs/v1.php/apps/app_api/ex-app/status, which HaRP
+      # rejects with 404 (measured in run 33747191689). The proxy step above
+      # explains the rest.
       #
       # --net host stays: the ExApp container shares the network namespace of the
-      # runner and therefore reaches the published HaRP port on localhost. Every
+      # runner and therefore reaches HaRP and the front proxy on localhost. Every
       # occ call of this job carries a timeout, because a handshake that hangs
       # must not eat the job deadline on its own.
       - name: Register the HaRP deploy daemon
         run: |
           timeout 30 ./occ app_api:daemon:register \
             harp_proxy_host "Harp Proxy (Host)" docker-install http localhost:8780 \
-            http://localhost:8780 \
+            http://localhost:8090 \
             --harp --harp_frp_address localhost:8782 \
             --harp_shared_key "${HARP_SHARED_KEY}" \
             --net host --set-default
@@ -592,7 +680,8 @@ jobs:
             docker logs "${container}" > "${RUNNER_TEMP}/harp-logs/exapp.log" 2>&1 || true
           fi
           docker logs appapi-harp > "${RUNNER_TEMP}/harp-logs/harp.log" 2>&1 || true
-          docker rm -f appapi-harp registry 2>/dev/null || true
+          docker logs exapps-proxy > "${RUNNER_TEMP}/harp-logs/proxy.log" 2>&1 || true
+          docker rm -f appapi-harp registry exapps-proxy 2>/dev/null || true
           # The ExApp container outlives the assertions since assertion 6 keeps
           # it alive on purpose, so the teardown takes it along. Its log is
           # already saved above, which is the reason this line comes after it.
