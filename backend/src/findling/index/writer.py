@@ -81,6 +81,11 @@ FLUSH_PAUSED_LOW_DISK: Final = "paused_low_disk"
 # The marker tantivy puts into the message when another writer holds the lock.
 _LOCK_BUSY: Final = "LockBusy"
 
+# The most bytes one code point can take in UTF-8. It is the whole basis of the
+# byte bound in add(); the argument for using a bound at all sits at the
+# pending_bytes property.
+_MAX_UTF8_BYTES: Final = 4
+
 
 @dataclass(frozen=True, slots=True)
 class IndexRecord:
@@ -135,8 +140,6 @@ class IndexBatchWriter:
         directory: Path,
         heap_bytes: int | None = None,
         min_free_bytes: int | None = None,
-        batch_files: int | None = None,
-        batch_max_bytes: int | None = None,
         index_english: bool | None = None,
     ) -> None:
         resolved = settings()
@@ -147,8 +150,6 @@ class IndexBatchWriter:
         self._index = index
         self._schema: Schema = index.schema
         self._min_free_bytes = resolved.min_free_bytes if min_free_bytes is None else min_free_bytes
-        self._batch_files = resolved.batch_files if batch_files is None else batch_files
-        self._batch_max_bytes = resolved.batch_max_bytes if batch_max_bytes is None else batch_max_bytes
         self._index_english = ("en" in resolved.languages) if index_english is None else index_english
         self._pending = 0
         self._pending_bytes = 0
@@ -174,14 +175,37 @@ class IndexBatchWriter:
         return self._pending
 
     @property
-    def should_flush(self) -> bool:
-        """True once the batch has reached one of the configured caps.
+    def pending_bytes(self) -> int:
+        """An upper bound on the UTF-8 bytes of the text in the pending batch.
 
-        The byte cap is the one that matters: thirty scanned PDFs are a different
-        workload from thirty text files, and the memory the writer holds follows
-        the text rather than the file count.
+        The figure the byte cap of a batch is decided on, and the caller decides
+        it: ``findling.index.bench.batch_full`` is the one place that compares
+        this against ``BATCH_MAX_BYTES``. Until plan 05-03 the comparison was a
+        predicate on this class instead, and no production caller ever asked it,
+        because the poller commits once per claimed batch (phase 2 performance
+        audit; vulture at min-confidence 80 did not report the predicate, which
+        is why it survived two phases).
+
+        A bound and not a measurement, deliberately. ``len(body.encode("utf-8"))``
+        built a complete second copy of every document for this counter: at the
+        documented ceiling of MAX_TEXT_CHARS characters that was measured at
+        529 us and roughly half a megabyte of transient allocation per file, both
+        of them on a box with four gigabytes. The bound costs 0.7 us.
+
+        The direction is fixed and it is the safe one: never below the truth. A
+        count below it would let a batch grow past the RAM budget, which is the
+        one error that ends in an OOM (T-05-12); a count above it costs an
+        earlier commit and nothing else.
+
+        What the bound does not change is when a batch is full, and that is
+        arithmetic rather than luck. UTF-8 spends at most four bytes per code
+        point, so the bound of one document is at most four times MAX_TEXT_CHARS,
+        which is 2_097_152, and BATCH_MAX_BYTES is 67_108_864, which is exactly
+        BATCH_FILES times that number. The byte cap is therefore the worst case
+        of the file cap: for every document this app accepts the file cap is
+        reached first, before this change as after it.
         """
-        return self._pending >= self._batch_files or self._pending_bytes >= self._batch_max_bytes
+        return self._pending_bytes
 
     def add(self, record: IndexRecord) -> None:
         """Write one file into the pending batch, replacing an earlier version.
@@ -217,7 +241,12 @@ class IndexBatchWriter:
         writer.add_document(document)
 
         self._pending += 1
-        self._pending_bytes += len(record.body.encode("utf-8"))
+        # str.isascii() is a stored flag on the object and not a scan, so an
+        # ascii document gets its exact length for free; everything else gets the
+        # four byte per code point ceiling of UTF-8. The reasoning behind the
+        # bound, its direction and why it does not move the flush point stands at
+        # the pending_bytes property.
+        self._pending_bytes += len(record.body) if record.body.isascii() else _MAX_UTF8_BYTES * len(record.body)
 
     def drop_document(self, file_id: int) -> None:
         """Take one file out of the index; an unknown id is not an error.

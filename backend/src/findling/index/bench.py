@@ -45,6 +45,7 @@ from typing import Final
 
 from tantivy import Index
 
+from findling.config import settings
 from findling.index.open import open_index, open_reader
 from findling.index.schema import FIELD_BODY_DE, FIELD_NAME, FIELD_TITLE
 from findling.index.wordlist import FUGEN, SYSTEM_WORDLIST, load_constituents
@@ -104,6 +105,11 @@ class _WriteCounters:
     documents: int = 0
     commits: int = 0
     retries: int = 0
+    # Only the fill sets this. It is the write side of the tool, next to the
+    # search latency this module was built for, and it is the number a change to
+    # the write path is measured against; without it a claim about the indexing
+    # cost would have no artefact anywhere.
+    seconds: float = 0.0
     states: list[str] = field(default_factory=list)
 
 
@@ -131,6 +137,29 @@ def _commit(writer: IndexBatchWriter, counters: _WriteCounters) -> None:
     counters.states.append(result.state)
     if result.state == FLUSH_COMMITTED:
         counters.commits += 1
+
+
+def batch_full(writer: IndexBatchWriter, *, files: int, max_bytes: int) -> bool:
+    """True once the pending batch has reached one of the two caps.
+
+    The rule lives here and not on the writer, because this module is its only
+    caller. In production the batch boundary is the claim: the poller commits
+    once per claimed batch and never asks a predicate, so the version of this
+    that sat on IndexBatchWriter was dead code that vulture did not report at
+    min-confidence 80 (phase 2 performance audit).
+
+    Both caps travel as arguments rather than being read from
+    :mod:`findling.config` inside, so that a loop over a thousand documents does
+    not resolve the settings a thousand times and a test does not need the
+    environment to state a cap.
+
+    The byte cap is the one that matters in principle: thirty scanned PDFs are a
+    different workload from thirty text files, and the memory the writer holds
+    follows the text rather than the file count. In practice the file cap is
+    reached first for every document this app accepts, and the arithmetic behind
+    that stands at :attr:`IndexBatchWriter.pending_bytes`.
+    """
+    return writer.pending >= files or writer.pending_bytes >= max_bytes
 
 
 def _percentile(samples: Sequence[float], fraction: float) -> float:
@@ -178,13 +207,16 @@ def _record(file_id: int, body: str) -> IndexRecord:
 
 def _fill(writer: IndexBatchWriter, documents: int, body: str) -> _WriteCounters:
     """Write the base index in batches, exactly the way the poller will."""
+    resolved = settings()
     counters = _WriteCounters()
+    started = time.perf_counter()
     for file_id in range(documents):
         writer.add(_record(file_id, body))
         counters.documents += 1
-        if writer.should_flush:
+        if batch_full(writer, files=resolved.batch_files, max_bytes=resolved.batch_max_bytes):
             _commit(writer, counters)
     _commit(writer, counters)
+    counters.seconds = time.perf_counter() - started
     return counters
 
 
@@ -222,13 +254,14 @@ def _measure_searches(index: Index, queries: int, pace_seconds: float) -> tuple[
 
 def _write_until(writer: IndexBatchWriter, stop: threading.Event, first_file_id: int, body: str) -> _WriteCounters:
     """Keep writing and committing until the search loop says stop."""
+    resolved = settings()
     counters = _WriteCounters()
     file_id = first_file_id
     while not stop.is_set():
         writer.add(_record(file_id, body))
         counters.documents += 1
         file_id += 1
-        if writer.should_flush:
+        if batch_full(writer, files=resolved.batch_files, max_bytes=resolved.batch_max_bytes):
             _commit(writer, counters)
     if writer.pending:
         _commit(writer, counters)
@@ -288,6 +321,8 @@ def measure(
         "constituents": len(constituents),
         "documents_in_index": index.searcher().num_docs,
         "index_bytes": _directory_bytes(directory),
+        "fill_seconds": round(filling.seconds, 3),
+        "fill_documents": filling.documents,
         "queries": queries,
         "hits_total": hits,
         "median_ms": round(statistics.median(durations), 4),
