@@ -215,7 +215,7 @@ Plans:
 - [x] 05-07-PLAN.md , Lockstep-Version: beide Haelften nennen und pruefen ihre Version (D-11)
 - [x] 05-08-PLAN.md , Uninstall auf dem echten Weg, NC 32 bis 35, Teilentfernung (PKG-03, PKG-04)
 - [x] 05-09-PLAN.md , Sichtbarkeits-Paritaet ueber sechs Szenarien als Dauergate (SRCH-04)
-- [ ] 05-10-PLAN.md , Die Miet-Box: Voraussetzungen, Bestellung, AIO ueber HaRP, Grundlast
+- [x] 05-10-PLAN.md , Die Miet-Box: Voraussetzungen, Bestellung, AIO ueber HaRP, Grundlast
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -270,7 +270,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
-| 5. Härtung und Store-Einreichung v1.0 | 13/19 | In Progress|  |
+| 5. Härtung und Store-Einreichung v1.0 | 14/19 | In Progress|  |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 
 ## Requirement Coverage
