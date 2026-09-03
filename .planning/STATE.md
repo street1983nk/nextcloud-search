@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
-status: executing
-stopped_at: Completed 04-10-PLAN.md
-last_updated: "2026-09-03T03:20:48.315Z"
+status: ready_to_plan
+stopped_at: Phase 04 complete (10/10) — ready to discuss Phase 5
+last_updated: 2026-09-03T03:59:22.144Z
 last_activity: 2026-09-03
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 10
-  completed_plans: 37
+  completed_plans: 46
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 04: admin-sichtbarkeit-und-diagnose
+**Current focus:** Phase 5 — härtung und store einreichung v1.0
 
 ## Current Position
 
-Phase: 04 (admin-sichtbarkeit-und-diagnose): EXECUTED, VERIFICATION PENDING
-Plan: 10 of 10 (all executed)
-Status: Alle zehn Plaene ausgefuehrt und committet. Die Sichtprobe des Owners ist gelaufen und freigegeben (2026-09-03), mit vier Befunden sofort behoben und zwei Luecken als Gap-Closure notiert. Naechster Schritt: /gsd:verify-work fuer Phase 04.
+Phase: 5
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-09-03
 
 Progress: [░░░░░░░░░░] 0%
@@ -36,7 +36,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 36
+- Total plans completed: 46
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -47,6 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 | 1 | 8 | - | - |
 | 02 | 14 | - | - |
 | 03 | 14 | - | - |
+| 04 | 10 | - | - |
 
 **Recent Trend:**
 
