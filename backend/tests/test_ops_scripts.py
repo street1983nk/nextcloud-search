@@ -149,6 +149,20 @@ def test_the_box_is_created_where_the_phase_decided() -> None:
     assert "SERVER_LOCATION='hel1'" in text
 
 
+def test_the_cost_line_does_not_read_the_answers_line_by_line() -> None:
+    """The real API pretty prints, a stub does not, and one of them was believed.
+
+    status handed three answers to one reader as three lines. Hetzner wraps its
+    JSON over several lines, so the reader got an opening brace and died, and
+    the command that produces the cost figure of the report had never once run
+    against the real thing. The answers are passed as one array instead, which
+    does not care about whitespace at all.
+    """
+    text = HETZNER_BOX.read_text(encoding="utf-8")
+    assert "printf '[%s,%s,%s]'" in text
+    assert "sys.stdin.readline()" not in text
+
+
 def test_the_firewall_is_created_and_taken_down_again() -> None:
     """A rule set on the box would not hold, and a free resource is the one that stays.
 

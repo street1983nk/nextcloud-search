@@ -443,13 +443,18 @@ for volume in json.load(sys.stdin)["volumes"]:
     fail_on_error "$pricing"
 
     now=$(date -u +%s)
-    printf '%s\n%s\n%s\n' "$server" "$volume" "$pricing" | json "
+    # The three answers are handed over as one array and not as three lines. The
+    # real API pretty prints its JSON, so a reader that takes one line per answer
+    # gets an opening brace and nothing else. Against a stub that answers in a
+    # single line this looked like it worked.
+    printf '[%s,%s,%s]' "$server" "$volume" "$pricing" | json "
 import json
 import sys
 
-server = json.loads(sys.stdin.readline())['server']
-volume = json.loads(sys.stdin.readline())['volume']
-pricing = json.loads(sys.stdin.readline())['pricing']
+answers = json.load(sys.stdin)
+server = answers[0]['server']
+volume = answers[1]['volume']
+pricing = answers[2]['pricing']
 
 hours = ($now - $CREATED_AT) / 3600.0
 currency = pricing['currency']
