@@ -52,7 +52,17 @@ class Version001000Date20260816000000 extends SimpleMigrationStep {
 			// Not called 'update'. That word is a reserved identifier in several
 			// dialects, and a column named after a keyword only fails on the one
 			// database nobody tested against.
-			$table->addColumn('is_update', Types::BOOLEAN, ['notnull' => true, 'default' => false]);
+			//
+			// Nullable, and that is not a matter of taste either: Nextcloud 32
+			// refuses every boolean column that is NotNull, with "is type Bool
+			// and also NotNull, so it can not store false"
+			// (MigrationService::ensureOracleConstraints, stable32). The check is
+			// gone in 33, 34 and 35, so this column was NotNull for four phases
+			// and the app could not be enabled on the oldest version it claims to
+			// support; the version matrix of the deploy job found it. The default
+			// stays false, so an insert that omits the column gets false and never
+			// NULL, and every writer of this app sets it anyway.
+			$table->addColumn('is_update', Types::BOOLEAN, ['notnull' => false, 'default' => false]);
 
 			// Nullable on purpose: the size is what lets the batch endpoint stop
 			// at a byte budget, and a row whose size is unknown must still be

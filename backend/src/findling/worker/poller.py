@@ -97,6 +97,21 @@ SCRATCH_SUFFIX: Final = ".part"
 # How long the shutdown waits for a pass to end before it stops waiting.
 POLLER_STOP_SECONDS: Final = 30.0
 
+# How many passes in a row have to come back unanswered before the container
+# treats it as a state instead of as a hiccup. One is a lost packet or a request
+# that ran into its timeout, two is a restart of Nextcloud, three is a companion
+# half that is not coming back on its own.
+RETREAT_AFTER_ROUNDS: Final = 3
+
+# The cap of the retreat backoff, and the trade-off behind this number: at five
+# minutes a container whose companion was removed costs twelve attempts an hour
+# instead of two hundred and forty, which is small enough to be unnoticeable for
+# weeks, and a reinstallation is picked up within five minutes rather than within
+# an hour. It sits deliberately above the cap of an empty queue (120 s by
+# default): an empty queue is a question about work, an unanswered queue is a
+# question about the installation, and the second one is worth waiting longer on.
+RETREAT_MAX_SECONDS: Final = 300.0
+
 # Everything the poller talks to, as a type. The defaults are the production
 # wiring and a test replaces them one by one.
 FetchFile = Callable[..., Awaitable[int | None]]
@@ -292,6 +307,11 @@ class Poller:
         self._queue: DocumentQueue | None = None
         self._held: set[int] = set()
         self._cooldown = 0.0
+        # Passes in a row whose claim came back unanswered, and whether the
+        # retreat has been said out loud already. Both belong to the poller and
+        # not to the queue: the queue answers one call, the state is a sequence.
+        self._unavailable_rounds = 0
+        self._retreat_announced = False
         self._armed = asyncio.Event()
 
     # -- lifecycle -------------------------------------------------------
@@ -384,8 +404,12 @@ class Poller:
 
         claim = await queue.claim(limit=self._batch_files, max_bytes=self._batch_max_bytes)
         if claim.unavailable:
-            self._back_off()
+            self._retreat()
             return RoundResult(ROUND_QUEUE_UNAVAILABLE)
+        # The queue answered, so a retreat is over, and this stands before the
+        # check below because an empty answer is an answer: it says the companion
+        # half is there and has nothing to do.
+        self._recovered()
         if not claim.jobs:
             self._back_off()
             return RoundResult(ROUND_EMPTY)
@@ -1014,6 +1038,62 @@ class Poller:
         """Grow the pause: from the configured start, doubling up to the cap."""
         self._cooldown = min(self._cooldown * 2, self._cooldown_max) if self._cooldown else self._cooldown_start
 
+    def _retreat(self) -> None:
+        """Withdraw from a queue that does not answer, quietly and with backoff.
+
+        **This is the half removed installation of D-17, and it is a state of
+        operation rather than a defect.** An admin may remove the Nextcloud half
+        and leave the container running; from then on the container polls a
+        queue that is not there any more, and the answer to that is a growing
+        pause and silence, not a line per attempt. A log that repeats the same
+        sentence every few seconds fills the disk of a four gigabyte box and, far
+        worse, hides the lines that would have said something (T-05-30).
+
+        The ladder is its own, and it starts at the ordinary start value however
+        long the pause of an empty queue had already grown: the two pauses answer
+        two different questions, and the one asked here is "is my caller back
+        yet". It climbs to :data:`RETREAT_MAX_SECONDS`, which is above the cap of
+        the ordinary one for the reason written down at the constant.
+
+        The first failures below the threshold keep behaving exactly as they did
+        before this method existed, one warning each, because a single failure is
+        a restart or a lost packet and says nothing about the installation.
+        """
+        self._unavailable_rounds += 1
+        if self._unavailable_rounds == 1:
+            self._cooldown = self._cooldown_start
+        else:
+            self._cooldown = min(self._cooldown * 2, RETREAT_MAX_SECONDS)
+        if self._unavailable_rounds < RETREAT_AFTER_ROUNDS:
+            LOGGER.warning("the queue did not answer, next attempt in %d s", int(self._cooldown))
+            return
+        if self._retreat_announced:
+            return
+        self._retreat_announced = True
+        LOGGER.warning(
+            "the queue has not answered for %d passes, backing off to at most one attempt every %d s; "
+            "the Nextcloud half looks removed and the container keeps answering searches",
+            self._unavailable_rounds,
+            int(RETREAT_MAX_SECONDS),
+        )
+
+    def _recovered(self) -> None:
+        """End a retreat, because the queue answered again.
+
+        The pause goes back to nothing rather than to whatever the retreat had
+        grown to. That is the whole point of the immediate reset: the admin who
+        reinstalled the companion half must not wait out five minutes to see the
+        first batch move, and the long pause said something about a missing
+        caller and nothing about how much work is waiting.
+        """
+        if not self._unavailable_rounds:
+            return
+        rounds, self._unavailable_rounds = self._unavailable_rounds, 0
+        announced, self._retreat_announced = self._retreat_announced, False
+        self._cooldown = 0.0
+        if announced:
+            LOGGER.info("the queue answers again after %d passes without an answer", rounds)
+
     def _reset_cooldown(self) -> None:
         """A batch that worked means there is probably another one waiting."""
         self._cooldown = 0.0
@@ -1126,6 +1206,8 @@ async def _pause(seconds: float, stop_event: asyncio.Event) -> None:
 
 __all__ = [
     "POLLER_STOP_SECONDS",
+    "RETREAT_AFTER_ROUNDS",
+    "RETREAT_MAX_SECONDS",
     "ROUND_EMPTY",
     "ROUND_GATEWAY_UNAVAILABLE",
     "ROUND_PAUSED_LOW_DISK",

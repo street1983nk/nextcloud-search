@@ -56,6 +56,8 @@ from findling.nc.client import AsyncNextcloudApp, NextcloudException
 from findling.nc.queue import CallResult, ClaimResult, QueueJob, QueueStats
 from findling.store.repo import FileMeta, Store, open_store
 from findling.worker.poller import (
+    RETREAT_AFTER_ROUNDS,
+    RETREAT_MAX_SECONDS,
     ROUND_EMPTY,
     ROUND_GATEWAY_UNAVAILABLE,
     ROUND_PAUSED_LOW_DISK,
@@ -1671,6 +1673,168 @@ async def test_an_unreachable_queue_is_a_state_and_not_a_crash(
 
     assert result.state == ROUND_QUEUE_UNAVAILABLE
     assert poller.cooldown == 15
+
+
+def _poller_lines(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """What this module logged, without the lines of any other one."""
+    return [record.getMessage() for record in caplog.records if record.name == "findling.worker.poller"]
+
+
+async def test_a_queue_that_stops_answering_grows_the_pause_up_to_the_retreat_cap(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # D-17: the Nextcloud half can be removed while the container keeps running,
+    # and then there is nobody left to call it. That is a state of operation, and
+    # the pause of that state has its own ladder: it starts where the ordinary one
+    # starts and climbs past the cap of an empty queue up to the named one.
+    queue = _FakeQueue(*([ClaimResult(unavailable=True)] * 7))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    seen: list[float] = []
+
+    for _ in range(7):
+        result = await poller.run_once()
+        assert result.state == ROUND_QUEUE_UNAVAILABLE
+        seen.append(poller.cooldown)
+
+    assert seen == [15, 30, 60, 120, 240, RETREAT_MAX_SECONDS, RETREAT_MAX_SECONDS]
+
+
+async def test_one_unanswered_pass_is_not_a_retreat(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A single failure is a restart of Nextcloud, a lost packet or a request that
+    # took too long, and it has to keep behaving as it always did: one line, the
+    # ordinary pause, no verdict about the installation.
+    queue = _FakeQueue(ClaimResult(unavailable=True))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    with caplog.at_level("WARNING", logger="findling.worker.poller"):
+        await poller.run_once()
+
+    lines = _poller_lines(caplog)
+
+    assert len(lines) == 1
+    assert "passes" not in lines[0]
+    assert poller.cooldown == 15
+
+
+async def test_the_retreat_is_announced_once_and_then_the_container_keeps_quiet(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The point of the whole mechanism. A container whose caller is gone must not
+    # report it per attempt: a log that says the same thing every few seconds
+    # fills the disk of a four gigabyte box and hides the lines that matter
+    # (T-05-30). One line when the state is reached, and silence after it.
+    rounds = 8
+    queue = _FakeQueue(*([ClaimResult(unavailable=True)] * rounds))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    with caplog.at_level("WARNING", logger="findling.worker.poller"):
+        for _ in range(rounds):
+            await poller.run_once()
+
+    lines = _poller_lines(caplog)
+    announcements = [line for line in lines if "passes" in line]
+
+    assert len(announcements) == 1
+    # Two ordinary lines for the two failures before the state is reached, one
+    # announcement, and nothing for the five attempts after it.
+    assert len(lines) == RETREAT_AFTER_ROUNDS
+
+
+async def test_an_answering_queue_ends_the_retreat_at_once(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The way back has to be immediate, because it is the way an admin takes: the
+    # companion is reinstalled, and the next pass has to work rather than sit out
+    # a five minute pause. A second disappearance is announced again, because it
+    # is a second event and not a repetition of the first.
+    queue = _FakeQueue(
+        *([ClaimResult(unavailable=True)] * RETREAT_AFTER_ROUNDS),
+        ClaimResult(jobs=(_job(),)),
+        *([ClaimResult(unavailable=True)] * RETREAT_AFTER_ROUNDS),
+    )
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    with caplog.at_level("WARNING", logger="findling.worker.poller"):
+        for _ in range(RETREAT_AFTER_ROUNDS):
+            await poller.run_once()
+
+        assert poller.cooldown == 60
+
+        worked = await poller.run_once()
+
+        assert worked.state == ROUND_WORKED
+        assert poller.cooldown == 0
+
+        again = await poller.run_once()
+
+        assert again.state == ROUND_QUEUE_UNAVAILABLE
+        assert poller.cooldown == 15
+
+        for _ in range(RETREAT_AFTER_ROUNDS - 1):
+            await poller.run_once()
+
+    assert len([line for line in _poller_lines(caplog) if "passes" in line]) == 2
+
+
+async def test_an_empty_answer_ends_the_retreat_as_well(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:
+    # An empty queue is an answer. It says "the companion is there and has
+    # nothing for you", so the retreat is over and the ordinary ladder starts
+    # again at its beginning rather than at the retreat cap.
+    queue = _FakeQueue(*([ClaimResult(unavailable=True)] * 5), ClaimResult())
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+
+    for _ in range(5):
+        await poller.run_once()
+
+    assert poller.cooldown == 240
+
+    empty = await poller.run_once()
+
+    assert empty.state == ROUND_EMPTY
+    assert poller.cooldown == 15
+
+
+async def test_a_retreat_neither_stops_the_indexing_nor_the_container(
+    index: Index, store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The retreat is a pause and nothing else. It does not silence the poller, it
+    # does not close the index and it does not end the task, so the batch that
+    # arrives after a reinstallation is indexed like any other one and the search
+    # of the container answers the whole time.
+    queue = _FakeQueue(*([ClaimResult(unavailable=True)] * 4), ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller.arm()
+
+    for _ in range(4):
+        await poller.run_once()
+
+    assert poller.armed is True
+
+    result = await poller.run_once()
+
+    assert result.state == ROUND_WORKED
+    assert result.indexed == 1
+    assert _documents(index) == 1
+    assert poller.armed is True
+
+
+def test_the_retreat_cap_is_a_named_constant_with_its_reason_next_to_it() -> None:
+    """A bare number in a loop is a mystery in six months.
+
+    The cap decides how long a container without a companion stays unnoticed and
+    how long a reinstallation takes to be picked up, which is a trade-off and not
+    a detail. So it is named, it sits above the cap of an empty queue, and the
+    line above it is the reason it has that value.
+    """
+    source = POLLER_SOURCE.read_text(encoding="utf-8").splitlines()
+    where = next(number for number, line in enumerate(source) if line.startswith("RETREAT_MAX_SECONDS"))
+
+    assert RETREAT_MAX_SECONDS == 300
+    assert settings().poll_cooldown_max_seconds < RETREAT_MAX_SECONDS
+    assert source[where - 1].lstrip().startswith("#")
+    assert "backoff" in "\n".join(source).lower()
 
 
 async def test_shutdown_releases_the_held_ids(

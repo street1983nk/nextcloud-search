@@ -56,18 +56,66 @@ jobs:
   deploy-harp:
     name: deploy-harp
     runs-on: ubuntu-24.04
-    # A job that hangs must cost minutes, not the default six hours. The image
-    # build is the long pole here, everything after it is a handshake.
-    timeout-minutes: 30
+    # A job that hangs must cost minutes, not the default six hours. The number
+    # is the measured runtime with a margin and not a guess; the measurement is
+    # written down at the matrix below.
+    timeout-minutes: 15
+    # The one entry that may fail is the one for a server version that is not
+    # released yet, and which one that is stands at the entry itself.
+    continue-on-error: ${{ matrix.tolerate-failure }}
     strategy:
       fail-fast: false
       matrix:
-        # One server version for now. Plan 05-08 widens this to stable32,
-        # stable33, stable34 and stable35 and hangs the uninstall proof into the
-        # cleanup step below. The single entry is a starting point, not an
-        # oversight. PHP 8.2 covers 32 through 34; stable35 will need 8.3.
-        server-version: ['stable34']
-        php-version: ['8.2']
+        # Four server versions, and an include list rather than a cross product,
+        # because every version brings its own PHP floor.
+        #
+        # PHP 8.2 covers the floors of 32, 33 and 34 completely: lib/versioncheck.php
+        # asks for at least 8.1 on stable32 and for at least 8.2 on stable33 and
+        # stable34 (read out of the four branches through the GitHub API on
+        # 2026-09-03). Nextcloud 35 asks for at least 8.3 in the same file, so that
+        # entry carries 8.3. A cross product over PHP versions would produce twelve
+        # runs for a statement that four runs make.
+        #
+        # The backend image is built once per entry and not built once and shared,
+        # and that is a measurement rather than a preference: build plus push into
+        # the local registry took 60 s in run 33743374344, and the image is about
+        # 390 MB. Handing it to four entries through an artifact would move that
+        # much data eight times, once out and once back per entry, to save four
+        # minutes of runner time. The entries run in parallel, so the wall clock
+        # would get worse rather than better.
+        #
+        # Measured on 2026-09-03 in the first green run over all four entries
+        # (run 33757405755): 3 m 47 s to 4 m 29 s per entry, of which 60 s are the
+        # image build and about 50 s the observation window of assertion 6. The
+        # four entries run in parallel, so that is the wall clock as well.
+        # timeout-minutes above is 15, roughly three times the measurement and
+        # far away from the default of 360, which is the number that lets a hung
+        # handshake burn an afternoon.
+        include:
+          - server-version: stable32
+            php-version: '8.2'
+            tolerate-failure: false
+          - server-version: stable33
+            php-version: '8.2'
+            tolerate-failure: false
+          - server-version: stable34
+            php-version: '8.2'
+            tolerate-failure: false
+          # stable35 exists in both repositories this job checks out, and that was
+          # not guessed: "gh api repos/nextcloud/server/branches/stable35" and
+          # "gh api repos/nextcloud/app_api/branches/stable35" both answered with the
+          # branch on 2026-09-03, so neither half falls back to master or main. The
+          # line has an expiry date: once Nextcloud 35 is released, stable35 stops
+          # being the branch under development and this comment stops being true.
+          - server-version: stable35
+            php-version: '8.3'
+            # The only entry that may fail, and here is the condition for removing
+            # this flag: as soon as Nextcloud 35 is generally available. D-23 asks
+            # for a statement about NC 35, and a run that has to be green before the
+            # server version is finished would be a statement about the state of a
+            # branch and not about Findling. The result lands in the log either way,
+            # which is what makes it a statement instead of a hope.
+            tolerate-failure: true
 
     env:
       # Test-only values of a throwaway instance that is destroyed with the
@@ -103,6 +151,15 @@ jobs:
       # register-exapp: false is the whole point of this job. The instance comes
       # up with both apps enabled and nothing else; the daemon below does the
       # part that manual-install never did.
+      #
+      # nextcloud-host 0.0.0.0 is the named way out the composite action offers,
+      # and this job needs it since it puts a proxy in front of the instance. The
+      # builtin server binds the first address "localhost" resolves to, which is
+      # ::1 on this runner image: curl finds the instance because it tries both
+      # families, and the nginx below answered 502 with "connect() failed (111:
+      # Connection refused) upstream 127.0.0.1:8080" (run 33755989853). Binding
+      # all interfaces puts the instance on both families and adds 127.0.0.1 and
+      # localhost to the trusted domains, which the proxied host header needs.
       - name: Set up the test Nextcloud without registering the ExApp
         id: setup
         uses: ./findling-src/.github/actions/setup-test-nc
@@ -112,6 +169,7 @@ jobs:
           exapp-secret: ${{ env.EXAPP_SECRET }}
           exapp-port: ${{ env.EXAPP_PORT }}
           register-exapp: 'false'
+          nextcloud-host: '0.0.0.0'
 
       # The deploy daemon pulls registry/image:image-tag out of
       # backend/appinfo/info.xml, which is ghcr.io/street1983nk/findling_backend
@@ -126,28 +184,152 @@ jobs:
       # The key is created here and never printed. add-mask covers the case of a
       # command that echoes its own arguments, which occ does on higher verbosity
       # levels.
+      #
+      # --net host, and that is the second thing this job had to measure rather
+      # than assume. HaRP is not only the way in, it is also the way back: the
+      # container reports its init status and asks for queue rows through
+      # {nextcloud_url}/ocs/..., HaRP forwards everything that is not /exapps to
+      # NC_INSTANCE_URL, and its own agent resolves the ExApp against Nextcloud
+      # as well. With published ports instead of the host network that address
+      # points into the network namespace of the HaRP container, where nothing
+      # listens on 8080. Measured in run 33745892327: "Cannot connect to host
+      # localhost:8080" in the HaRP log, followed by 404 on
+      # PUT /ocs/v1.php/apps/app_api/ex-app/status in the ExApp log, and an
+      # app_api:app:register --wait-finish that printed "deployed successfully"
+      # and then waited for an init status that could never arrive, until the
+      # timeout of the step ended it after ten minutes. The compose stack of
+      # scripts/dev/compose-harp.yaml has no counterpart to this, because there
+      # Nextcloud is a service name in the same network.
+      #
+      # On the host network the published ports are gone and 8780 plus 8782 are
+      # bound on the runner directly, which is the same address the daemon
+      # registration below uses, and the ExApp container that AppAPI creates with
+      # --net host lands in the same namespace.
       - name: Start HaRP
         run: |
           harp_key=$(openssl rand -hex 16)
           echo "::add-mask::${harp_key}"
           echo "HARP_SHARED_KEY=${harp_key}" >> "${GITHUB_ENV}"
           mkdir -p "${RUNNER_TEMP}/certs"
-          docker run -d --name appapi-harp -h appapi-harp \
+          docker run -d --name appapi-harp --net host \
             -e HP_SHARED_KEY="${harp_key}" \
             -e NC_INSTANCE_URL="http://localhost:8080" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "${RUNNER_TEMP}/certs:/certs" \
-            -p 8780:8780 -p 8782:8782 \
             "${HARP_IMAGE}"
-          for _ in $(seq 1 30); do
-            if timeout 2 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/8780' 2>/dev/null; then
-              echo "harp accepts connections on 8780"
+          # The readiness gate is the very call AppAPI makes first, and it has to
+          # be. A TCP handshake on 8780 succeeds from the moment the container
+          # exists, because docker publishes the port with a proxy of its own long
+          # before HAProxy inside the container binds it, so the handshake proves
+          # nothing at all. The first run of this job on a GitHub runner went
+          # green on that probe and failed 0.84 s later with "Connection refused
+          # for URI http://localhost:8780/exapps/app_api/v1.44/images/create"
+          # (run 33743374344), while the HaRP log of that run still said "Waiting
+          # for FRP server port". Measured against the pinned image on 2026-09-03:
+          # the TCP probe answers in the first second, the docker engine route
+          # answers after three to four seconds.
+          #
+          # /_ping under /exapps/app_api is HaRP's docker engine route, and it
+          # needs both headers: harp-shared-key is what the SPOE agent compares
+          # against HP_SHARED_KEY (haproxy_agent.py, handle_app_api_request), and
+          # docker-engine-port selects the frp tunnel port that carries the docker
+          # socket. 24000 is the port of the bundled deploy daemon, the same value
+          # occ app_api:daemon:list prints under "HaRP Docker Socket Port". A 200
+          # here proves HAProxy, the agent, the frp server and the tunnel down to
+          # the docker socket in one call, and the address is spelled the way
+          # AppAPI spells it so that name resolution is part of the proof.
+          for _ in $(seq 1 45); do
+            code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' \
+              -H "harp-shared-key: ${harp_key}" \
+              -H 'docker-engine-port: 24000' \
+              http://localhost:8780/exapps/app_api/v1.44/_ping || true)
+            if [ "${code}" = "200" ]; then
+              echo "harp answers the docker engine route on 8780"
               exit 0
             fi
             sleep 2
           done
-          echo "harp did not open port 8780"
+          echo "harp did not answer the docker engine route on 8780, last status '${code}'"
           docker logs appapi-harp || true
+          exit 1
+
+      # One address that answers for both halves, and this is the third thing
+      # this job had to measure rather than read off.
+      #
+      # The daemon field nextcloud_url is used twice by AppAPI, and the two uses
+      # pull in opposite directions. resolveExAppUrl builds the address of the
+      # ExApp as "{nextcloud_url}/exapps/{appId}", so it has to reach HaRP, and
+      # the very same value is handed to the container as NEXTCLOUD_URL
+      # (DockerActions.php, both read on 2026-09-03), so it has to reach
+      # Nextcloud. HaRP answers only paths that carry /exapps/{appId}: its agent
+      # matches them with a regular expression and rejects everything else with
+      # "Invalid request path, cannot find AppID" (haproxy_agent.py). With the
+      # HaRP address in that field the container therefore cannot report that it
+      # finished its initialisation: measured in run 33747191689 as
+      # "404 Client Error for url http://localhost:8780/ocs/v1.php/apps/app_api/
+      # ex-app/status" in the ExApp log, and app_api:app:register --wait-finish
+      # waits for exactly that status (ExAppService::waitInitStepFinish loops
+      # until init reaches 100), so the step ran into its timeout although the
+      # container was healthy and the search worked.
+      #
+      # That is not a defect of HaRP, it is its topology: HaRP belongs in front
+      # of Nextcloud, where one address serves the instance and forwards /exapps
+      # into the tunnel. A Nextcloud behind Apache does that with a location
+      # block, and all-in-one ships it. The PHP builtin server of this job cannot
+      # proxy anything, so the topology is built here instead, with the smallest
+      # thing that can do it.
+      #
+      # nginx by tag and not by digest, unlike the HaRP image: no statement of
+      # this job depends on its version, it forwards bytes. The same reasoning
+      # the local registry above already follows.
+      - name: Put one address in front of Nextcloud and HaRP
+        run: |
+          cat > "${RUNNER_TEMP}/exapps-proxy.conf" <<'CONF'
+          server {
+            listen 8090;
+            # Everything the ExApp side speaks: AppAPI to the container, and the
+            # heartbeat that goes with it.
+            location /exapps/ {
+              proxy_pass http://127.0.0.1:8780;
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              # A search over a large index and an OCR job both take longer than
+              # the default minute.
+              proxy_read_timeout 1800s;
+              proxy_send_timeout 1800s;
+            }
+            # Everything else is Nextcloud, and that is the direction the
+            # container needs for its status and for its queue calls.
+            location / {
+              proxy_pass http://127.0.0.1:8080;
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              proxy_read_timeout 300s;
+              client_max_body_size 512M;
+            }
+          }
+          CONF
+          docker run -d --name exapps-proxy --net host \
+            -v "${RUNNER_TEMP}/exapps-proxy.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:1.27-alpine
+          # Both directions are asserted before anything is registered, because a
+          # proxy that forwards one of them and not the other produces exactly
+          # the failure this step exists to remove, only later and in a place
+          # that reads like an app defect.
+          for _ in $(seq 1 30); do
+            nc_code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://localhost:8090/status.php || true)
+            harp_code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' \
+              -H "harp-shared-key: ${HARP_SHARED_KEY}" \
+              -H 'docker-engine-port: 24000' \
+              http://localhost:8090/exapps/app_api/v1.44/_ping || true)
+            if [ "${nc_code}" = "200" ] && [ "${harp_code}" = "200" ]; then
+              echo "the front proxy answers for Nextcloud and for HaRP"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "the front proxy did not serve both halves, status.php '${nc_code}' and the docker engine route '${harp_code}'"
+          docker logs exapps-proxy || true
           exit 1
 
       # Only for the registration. The release archive carries
@@ -167,27 +349,36 @@ jobs:
           # rather than assumed.
           git -C findling-src diff --quiet -- backend/appinfo/info.xml
 
-      # The nextcloud url of a HaRP daemon is the HaRP address and not the address
-      # of Nextcloud, which reads wrong and is the one thing this job had to
-      # measure to get right. In HaRP mode AppAPI resolves the ExApp address as
-      # "{nextcloud_url}/exapps/{appId}" (DockerActions::resolveExAppUrl, read in
-      # the running instance on 2026-09-03), because HaRP is the entry point that
-      # forwards /exapps to the tunnel and everything else to NC_INSTANCE_URL.
-      # With http://localhost:8080 in this position every heartbeat goes to the
-      # PHP server, which answers 404, and the install ends in
-      # "heartbeat check failed" with a healthy container next to it. AppAPI also
-      # hands this value to the container as NEXTCLOUD_URL, so the way back runs
-      # through HaRP as well.
+      # The two addresses in this command are different on purpose, and getting
+      # them right cost this job three runs.
+      #
+      # The fifth argument is the host of the daemon, and it is the one AppAPI
+      # uses for the docker engine: it talks to "{protocol}://{host}/exapps/
+      # app_api/..." with the shared key and the socket port in the headers, so
+      # it points straight at HaRP.
+      #
+      # The sixth argument is nextcloud_url, and it has to serve both halves,
+      # which is why it is the front proxy and neither 8080 nor 8780. AppAPI
+      # resolves the ExApp as "{nextcloud_url}/exapps/{appId}"
+      # (DockerActions::resolveExAppUrl), so Nextcloud alone would send every
+      # heartbeat into the PHP server, which answers 404 and ends the install in
+      # "heartbeat check failed" next to a healthy container (measured in plan
+      # 05-01). The same value reaches the container as NEXTCLOUD_URL, so HaRP
+      # alone would leave the container without a way back: HaRP serves only
+      # paths with /exapps in them, and the status the container reports after
+      # its initialisation is /ocs/v1.php/apps/app_api/ex-app/status, which HaRP
+      # rejects with 404 (measured in run 33747191689). The proxy step above
+      # explains the rest.
       #
       # --net host stays: the ExApp container shares the network namespace of the
-      # runner and therefore reaches the published HaRP port on localhost. Every
+      # runner and therefore reaches HaRP and the front proxy on localhost. Every
       # occ call of this job carries a timeout, because a handshake that hangs
       # must not eat the job deadline on its own.
       - name: Register the HaRP deploy daemon
         run: |
           timeout 30 ./occ app_api:daemon:register \
             harp_proxy_host "Harp Proxy (Host)" docker-install http localhost:8780 \
-            http://localhost:8780 \
+            http://localhost:8090 \
             --harp --harp_frp_address localhost:8782 \
             --harp_shared_key "${HARP_SHARED_KEY}" \
             --net host --set-default
@@ -223,6 +414,15 @@ jobs:
             exit 1
           fi
           echo "exapp volume: ${volume}"
+          # The uninstall assertions below look for exactly these two names
+          # rather than for a filter that may match nothing. A name that arrives
+          # empty is caught there a second time, because "docker volume ls
+          # --filter name=" lists everything and would turn a missing measurement
+          # into a green result (T-05-29).
+          {
+            echo "EXAPP_CONTAINER=${container}"
+            echo "EXAPP_VOLUME=${volume}"
+          } >> "${GITHUB_ENV}"
           # Plan 05-08 removes this volume again and needs its name, so it goes
           # into the job summary and not only into the log.
           {
@@ -266,10 +466,241 @@ jobs:
           jq -e '.ocs.data.entries[0].subline | startswith("produced inside container ")' out.json
           jq -e '.ocs.data.entries[0].subline | endswith("for user testuser")' out.json
 
-      # The uninstall proof does not belong here, it belongs to plan 05-08:
-      # occ app_api:app:unregister findling_backend --rm-data goes in right here,
-      # before the containers are torn down, and asserts that container and volume
-      # are gone afterwards.
+      # From here to the teardown runs the uninstall proof, the second half of
+      # success criterion 3 of this phase. It falls into assertions that are
+      # separate steps on purpose: each one has its own message, each one treats
+      # an empty result as a failure, and the order is not free. Assertion 1 is
+      # first because it is the only one that can still be made afterwards.
+      #
+      # What this proof does not cover, and it says so where an admin reads it
+      # (docs/uninstall.md): it never touches the web interface, so the "delete
+      # data" switch of Nextcloud 32 and 33 stays unproven, and it does not check
+      # that the pulled image is gone, because the unregister path of AppAPI
+      # removes containers and volumes and never an image.
+      #
+      # Assertion 1: without the flag the data stay. That is the promise decision
+      # D-16 rests on, and once assertion 3 has run it cannot be made any more.
+      - name: Uninstall 1, an unregister without the flag keeps the volume
+        run: |
+          if [ -z "${EXAPP_VOLUME}" ] || [ -z "${EXAPP_CONTAINER}" ]; then
+            echo "the install step handed over no container or volume name, so this assertion would pass without looking at anything"
+            exit 1
+          fi
+          timeout 300 ./occ app_api:app:unregister findling_backend
+          still_there=$(docker ps -a --filter "name=${EXAPP_CONTAINER}" --format '{{.Names}}')
+          if [ -n "${still_there}" ]; then
+            echo "the container ${EXAPP_CONTAINER} survived the unregister, so the deregistration removed nothing"
+            docker ps -a
+            exit 1
+          fi
+          kept=$(docker volume ls --filter "name=${EXAPP_VOLUME}" --format '{{.Name}}')
+          if [ "${kept}" != "${EXAPP_VOLUME}" ]; then
+            echo "the volume ${EXAPP_VOLUME} is gone after an unregister without --rm-data, and the documented default is that it stays; found '${kept}'"
+            docker volume ls
+            exit 1
+          fi
+          echo "container gone, volume ${kept} kept"
+
+      # Assertion 2: the way back. A second registration on the volume the first
+      # one left behind is the path an admin takes after a failed attempt, and
+      # that it succeeds and picks up the same volume is worth asserting rather
+      # than assuming: this is where days of OCR work on a weak box either
+      # survive or quietly do not.
+      - name: Uninstall 2, a second registration picks up the volume it left
+        run: |
+          timeout 600 ./occ app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${RUNNER_TEMP}/info-citest.xml" --wait-finish
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -z "${container}" ]; then
+            echo "the second registration created no running container"
+            docker ps -a
+            exit 1
+          fi
+          volume=$(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}')
+          if [ "${volume}" != "${EXAPP_VOLUME}" ]; then
+            echo "the second registration did not take the volume of the first one, expected ${EXAPP_VOLUME} and found '${volume}'"
+            docker volume ls
+            exit 1
+          fi
+          echo "registered again as ${container} on the kept volume ${volume}"
+
+      # Assertion 3: with the flag the data go. The filter is the name from the
+      # install step, so an empty answer here means the volume is gone and not
+      # that nothing was ever looked for.
+      - name: Uninstall 3, an unregister with --rm-data removes the volume
+        run: |
+          if [ -z "${EXAPP_VOLUME}" ]; then
+            echo "no volume name from the install step, so an empty filter result would be a false green (T-05-29)"
+            exit 1
+          fi
+          timeout 300 ./occ app_api:app:unregister findling_backend --rm-data
+          left=$(docker volume ls --filter "name=${EXAPP_VOLUME}" --format '{{.Name}}')
+          if [ -n "${left}" ]; then
+            echo "the volume ${EXAPP_VOLUME} survived an unregister with --rm-data, found '${left}'"
+            docker volume ls
+            exit 1
+          fi
+          container=$(docker ps -a --filter "name=${EXAPP_CONTAINER}" --format '{{.Names}}')
+          if [ -n "${container}" ]; then
+            echo "the container ${EXAPP_CONTAINER} survived the unregister with --rm-data"
+            docker ps -a
+            exit 1
+          fi
+          echo "container and volume ${EXAPP_VOLUME} both gone"
+
+      # Every query below carries ".timeout 30000", and that is a measurement as
+      # well: the ExApp container is running next to these reads and Nextcloud
+      # writes to the same sqlite file for it, so the plain client walked into
+      # "in prepare, database is locked (5)" on Nextcloud 32 (run 33756788051)
+      # while the other three versions happened to read between two writes. A
+      # busy timeout turns a race into a wait.
+      #
+      # Assertions 4 and 5 ask the same two questions of the database, and they
+      # ask the database rather than occ on purpose: there is no occ command that
+      # reports whether a table exists (occ db:* converts, adds indices and
+      # repairs), and an occ call that fails prints nothing, which would read
+      # exactly like "no tables left" and turn a broken measurement into a green
+      # result. The dialect is checked before the first query, because a query
+      # against the wrong dialect is the same false green in a different costume.
+      - name: The database probe the last two assertions share
+        run: |
+          dbtype=$(timeout 30 ./occ config:system:get dbtype)
+          if [ "${dbtype}" != "sqlite3" ]; then
+            echo "these assertions read the sqlite test database, but dbtype is '${dbtype}'"
+            exit 1
+          fi
+          # Neither key is asked for without a way out: config:system:get exits
+          # non zero and prints nothing when a key is absent from config.php, and
+          # dbname is absent after a sqlite install (measured in run
+          # 33756342732, where this step died silently on that single line). The
+          # file is therefore looked for rather than derived, and not finding it
+          # is an error with a message.
+          datadir=$(timeout 30 ./occ config:system:get datadirectory 2>/dev/null || echo "${PWD}/data")
+          dbname=$(timeout 30 ./occ config:system:get dbname 2>/dev/null || echo '')
+          db="${datadir}/${dbname}.db"
+          if [ -z "${dbname}" ] || [ ! -f "${db}" ]; then
+            db=$(find "${datadir}" -maxdepth 1 -name '*.db' | head -n 1)
+          fi
+          if [ -z "${db}" ] || [ ! -f "${db}" ]; then
+            echo "no sqlite database found under ${datadir}, so the two assertions below would measure nothing"
+            ls -la "${datadir}" || true
+            exit 1
+          fi
+          if ! command -v sqlite3 > /dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq sqlite3
+          fi
+          echo "FINDLING_DB=${db}" >> "${GITHUB_ENV}"
+          echo "database ${db}, dialect ${dbtype}"
+
+      # Assertion 4: a disable without intent leaves the Nextcloud half alone.
+      # It runs before assertion 5 for the reason threat T-05-31 names: the
+      # intent mark of plan 05-02 is a one shot flag, and the only way to show
+      # that a disable clears nothing is to disable while no mark is set.
+      - name: Uninstall 4, a disable without intent keeps tables and settings
+        run: |
+          expected='oc_findling_file_state oc_findling_queue oc_findling_scan_stats'
+          tables=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          echo "before the disable: tables [${tables}], settings ${settings}"
+          if [ "${tables}" != "${expected}" ]; then
+            echo "the three tables of the app are not all there before the disable, expected [${expected}] and found [${tables}]"
+            exit 1
+          fi
+          timeout 300 ./occ app:disable findling
+          tables=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          echo "after the disable: tables [${tables}], settings ${settings}"
+          if [ "${tables}" != "${expected}" ]; then
+            echo "the disable removed tables although no intent was armed, expected [${expected}] and found [${tables}]"
+            exit 1
+          fi
+          if [ "${settings}" -lt 1 ]; then
+            echo "the disable emptied the settings of the app although no intent was armed, ${settings} values left"
+            exit 1
+          fi
+
+      # Assertion 5: a remove with intent clears the Nextcloud half. The order
+      # inside the step is the documented one from docs/uninstall.md, and the
+      # registration in the middle of it belongs to assertion 6: that one needs a
+      # live container while the companion goes away, and the deployment
+      # handshake has to happen while the installation is still complete.
+      - name: Uninstall 5, a remove with intent clears tables and settings
+        run: |
+          timeout 300 ./occ app:enable findling
+          timeout 600 ./occ app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${RUNNER_TEMP}/info-citest.xml" --wait-finish
+          timeout 300 ./occ findling:purge --arm --no-interaction
+          timeout 300 ./occ app:remove findling
+          tables=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          echo "after the remove with intent: tables [${tables}], settings ${settings}"
+          if [ -n "${tables}" ]; then
+            echo "the remove with intent left tables behind: [${tables}]"
+            exit 1
+          fi
+          if [ "${settings}" -ne 0 ]; then
+            echo "the remove with intent left ${settings} settings behind"
+            exit 1
+          fi
+
+      # Assertion 6: the other half of a half removal. The container that has
+      # just lost its caller keeps running and polls a queue that is not there
+      # any more, and D-17 says that is a state of operation and not a defect.
+      # What it must not become is an error loop: a line per pass fills the disk
+      # of a four gigabyte box and hides the lines that would have said something
+      # (T-05-30). Measured here in both directions, alive and quiet.
+      - name: Uninstall 6, the container without a companion retreats
+        run: |
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -z "${container}" ]; then
+            echo "no running container after the companion was removed, so the container did not survive the half removal"
+            docker ps -a
+            exit 1
+          fi
+          noisy_lines() {
+            docker logs "${container}" 2>&1 | grep -cE '^(WARNING|ERROR|CRITICAL):' || true
+          }
+          before=$(noisy_lines)
+          # A budget, not a fixed pause. The poller announces the retreat on the
+          # third unanswered pass, and the pause before the first of them can be
+          # anything up to the cap of an empty queue, so the worst case is around
+          # 165 s. The loop leaves as soon as the line is there, which is some
+          # 45 s in the ordinary case.
+          entered=""
+          for _ in $(seq 1 24); do
+            if docker logs "${container}" 2>&1 | grep -q 'the queue has not answered for'; then
+              entered="yes"
+              break
+            fi
+            sleep 10
+          done
+          if [ -z "${entered}" ]; then
+            echo "the container never announced the retreat, so it is either still polling pass by pass or it is not polling at all"
+            docker logs "${container}" 2>&1 | tail -n 40
+            exit 1
+          fi
+          alive=$(docker ps --filter "name=${container}" --format '{{.Status}}')
+          if [ -z "${alive}" ]; then
+            echo "the container stopped during the retreat instead of waiting it out"
+            docker ps -a
+            exit 1
+          fi
+          # The number that separates a retreat from an error loop, and it is a
+          # growth rather than a total so that whatever the container logged
+          # while the companion was still there does not count: two ordinary
+          # lines for the two passes before the state, one for the state itself,
+          # and two spare. A loop per pass would be far above five within the
+          # four minutes of the budget above.
+          after=$(noisy_lines)
+          grew=$((after - before))
+          if [ "${grew}" -gt 5 ]; then
+            echo "the container wrote ${grew} new warning or error lines while its caller was gone, which is an error loop and not a retreat"
+            docker logs "${container}" 2>&1 | grep -E '^(WARNING|ERROR|CRITICAL):' | tail -n 20
+            exit 1
+          fi
+          echo "container ${container} is ${alive}, retreat announced, ${grew} new warning or error lines"
+
       - name: Collect the logs and tear the deployment down
         if: always()
         run: |
@@ -279,7 +710,14 @@ jobs:
             docker logs "${container}" > "${RUNNER_TEMP}/harp-logs/exapp.log" 2>&1 || true
           fi
           docker logs appapi-harp > "${RUNNER_TEMP}/harp-logs/harp.log" 2>&1 || true
-          docker rm -f appapi-harp registry 2>/dev/null || true
+          docker logs exapps-proxy > "${RUNNER_TEMP}/harp-logs/proxy.log" 2>&1 || true
+          docker rm -f appapi-harp registry exapps-proxy 2>/dev/null || true
+          # The ExApp container outlives the assertions since assertion 6 keeps
+          # it alive on purpose, so the teardown takes it along. Its log is
+          # already saved above, which is the reason this line comes after it.
+          if [ -n "${container}" ]; then
+            docker rm -f "${container}" 2>/dev/null || true
+          fi
 
       - name: Upload the logs
         if: always()
