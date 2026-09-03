@@ -230,7 +230,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 05-16-PLAN.md , PHPUnit-Suite: die restlichen sechs Verhaltensweisen (D-24)
+- [x] 05-16-PLAN.md , PHPUnit-Suite: die restlichen sechs Verhaltensweisen (D-24)
 - [ ] 05-17-PLAN.md , Store-Metadaten dreisprachig, 1.0.0, Privacy, Textgate (PKG-05)
 
 **Wave 6** *(blocked on Wave 5 completion)*
@@ -270,7 +270,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
-| 5. Härtung und Store-Einreichung v1.0 | 12/19 | In Progress|  |
+| 5. Härtung und Store-Einreichung v1.0 | 13/19 | In Progress|  |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 
 ## Requirement Coverage
