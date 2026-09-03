@@ -26,15 +26,20 @@ declare(strict_types=1);
 /**
  * Where the server checkout is.
  *
- * The default is the position the CI job produces: the server sits at the root
- * of the workspace and this app in apps/findling, so four levels up from
- * apps/findling/php/tests is the server root. NEXTCLOUD_SERVER_ROOT overrides it
- * for any other layout.
+ * The default is the position the CI job produces, and the job is what defines
+ * it: the server sits at the root of the workspace, and the php directory of
+ * this repository is MOVED to apps/findling rather than placed inside it. So
+ * this file ends up at apps/findling/tests/bootstrap.php and the server root is
+ * three levels above this directory, not four. The difference is one level and
+ * it was measured rather than counted: run 33772152218 aborted here with the
+ * message below, which is the guard doing its job on its first outing.
+ *
+ * NEXTCLOUD_SERVER_ROOT overrides the default for any other layout.
  */
 $serverRoot = getenv('NEXTCLOUD_SERVER_ROOT');
 if (!is_string($serverRoot) || $serverRoot === '') {
-	$serverRoot = dirname(__DIR__, 4);
-	$origin = 'the default layout, four levels above ' . __DIR__;
+	$serverRoot = dirname(__DIR__, 3);
+	$origin = 'the default layout, three levels above ' . __DIR__;
 } else {
 	$origin = 'the environment variable NEXTCLOUD_SERVER_ROOT';
 }
