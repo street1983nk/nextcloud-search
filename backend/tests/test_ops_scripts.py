@@ -144,6 +144,21 @@ def test_the_box_is_created_where_the_phase_decided() -> None:
     assert "SERVER_LOCATION='hel1'" in text
 
 
+def test_the_deletion_does_not_call_an_empty_answer_a_failure() -> None:
+    """DELETE on a volume answers 204 with no body, and that is a success.
+
+    The generic reader of this script calls an empty answer a request that never
+    arrived, which is right everywhere except here: reported in the deletion it
+    would print a sentence that reads like a lost volume on every clean run, and
+    an operator learns fast to stop reading the output of the one step that has
+    to be trusted (T-05-39).
+    """
+    text = HETZNER_BOX.read_text(encoding="utf-8")
+    assert 'delete_error "$response"' in text
+    assert "the volume was not deleted yet: $(delete_error" in text
+    assert "the server was not deleted: $(delete_error" in text
+
+
 def test_the_box_tool_verifies_the_deletion_and_keeps_the_state_out_of_the_repo() -> None:
     text = HETZNER_BOX.read_text(encoding="utf-8")
     assert "is gone, verified against the API" in text

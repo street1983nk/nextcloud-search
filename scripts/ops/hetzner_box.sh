@@ -428,16 +428,32 @@ for server_type in pricing['server_types']:
 
 volume_monthly = float(pricing['volume']['price_per_gb_month']['gross']) * $VOLUME_SIZE_GB
 volume_hourly = volume_monthly / $HOURS_PER_MONTH
-spent = hours * (server_hourly + volume_hourly)
+
+# The public address is a separate item on the invoice, and it is not small
+# against a box that costs one cent an hour: leaving it out understates the run
+# by roughly eight percent. It is counted when the box actually has one.
+ipv4_hourly = 0.0
+ipv4_monthly = 0.0
+if (server['public_net'] or {}).get('ipv4'):
+    for entry in pricing.get('primary_ips', []):
+        if entry['type'] != 'ipv4':
+            continue
+        for price in entry['prices']:
+            if price['location'] != '$SERVER_LOCATION':
+                continue
+            ipv4_hourly = float(price['price_hourly']['gross'])
+            ipv4_monthly = float(price['price_monthly']['gross'])
+
+spent = hours * (server_hourly + volume_hourly + ipv4_hourly)
 
 print('server  %s %s %s' % (server['id'], server['name'], server['status']))
 print('volume  %s %s %s G attached to %s' % (
     volume['id'], volume['name'], volume['size'], volume['server']))
 print('running %.1f hours since $CREATED_ISO' % hours)
-print('price   %.4f %s per hour for the box, %.4f for the volume' % (
-    server_hourly, currency, volume_hourly))
-print('month   %.2f %s box, %.2f %s volume' % (
-    server_monthly, currency, volume_monthly, currency))
+print('price   %.4f %s per hour for the box, %.4f for the volume, %.4f for the address' % (
+    server_hourly, currency, volume_hourly, ipv4_hourly))
+print('month   %.2f %s box, %.2f %s volume, %.2f %s address' % (
+    server_monthly, currency, volume_monthly, currency, ipv4_monthly, currency))
 print('spent   %.2f %s so far, gross, out of this account' % (spent, currency))
 "
 }
@@ -458,6 +474,19 @@ except ValueError:
 error = payload.get("error") or {}
 print("gone" if error.get("code") == "not_found" else "there")
 '
+}
+
+# Everywhere else in this script an empty answer means the request never arrived,
+# and that is worth an error. Not here: a successful delete answers either with an
+# action object or, as the volume endpoint does, with 204 and no body at all. If
+# the empty case were reported as a failure, the one step that has to be trusted
+# would print a sentence that sounds like a lost volume every single time, and an
+# operator learns fast to stop reading the output of destroy.
+delete_error() {
+    if [ -z "$1" ]; then
+        return 0
+    fi
+    api_error "$1"
 }
 
 cmd_destroy() {
@@ -513,15 +542,15 @@ except (ValueError, KeyError, TypeError):
 
         echo "hetzner_box: deleting volume $volume_id"
         response=$(api DELETE "/volumes/$volume_id")
-        if [ -n "$(api_error "$response")" ]; then
-            echo "hetzner_box: the volume was not deleted yet: $(api_error "$response")" >&2
+        if [ -n "$(delete_error "$response")" ]; then
+            echo "hetzner_box: the volume was not deleted yet: $(delete_error "$response")" >&2
         fi
     fi
 
     echo "hetzner_box: deleting server $server_id"
     response=$(api DELETE "/servers/$server_id")
-    if [ -n "$(api_error "$response")" ]; then
-        echo "hetzner_box: the server was not deleted: $(api_error "$response")" >&2
+    if [ -n "$(delete_error "$response")" ]; then
+        echo "hetzner_box: the server was not deleted: $(delete_error "$response")" >&2
     fi
 
     # A second attempt at the volume, for the case above where the server had to
