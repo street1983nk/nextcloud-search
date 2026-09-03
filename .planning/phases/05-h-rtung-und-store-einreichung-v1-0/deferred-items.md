@@ -567,3 +567,29 @@ Methode.
 
 **Wohin es gehört:** in den Plan, der den Volllauf auswertet (05-14), oder in
 den Phase-Review.
+
+## DI-05-20: Ein Mount, den es beim ersten Durchgang noch nicht gab, fehlt im Nenner des Deckungsgrads
+
+**Found during:** Plan 05-12, Task 1, auf der Box.
+
+**Was:** Der erste Durchgang schreibt je Mount eine Zeile in
+`oc_findling_scan_stats`, und der Deckungsgrad bildet seinen Nenner aus genau
+diesen Zeilen. Ein Nutzer, der nach dem Durchgang angelegt wird, bekommt keine
+Zeile. Seine Dateien kommen ueber den Vergleichslauf trotzdem in den Index, also
+waechst der Zaehler, waehrend der Nenner steht. Gemessen auf der Box: 88
+indexierte Dokumente gegen 49 indexierbare, angezeigt als hundert Prozent, weil
+die Kachel deckelt. Nach `occ findling:index --restart -n` stimmen beide Zahlen
+(88 von 104, 84 Prozent).
+
+**Warum nicht hier erledigt:** Der Zustand heilt von selbst, spaetestens mit dem
+naechtlichen Vergleich, und er verfaelscht keine Messung dieses Plans. Die
+Abhilfe waere dagegen eine Aenderung an der Frage, welche Mounts der Nenner
+zaehlt, also am Deckungsgrad selbst: entweder legt der Vergleichslauf die fehlende
+Zeile an, oder der Nenner kommt nicht mehr aus `scan_stats`, sondern aus der
+Mount-Liste. Beides ist eine Entscheidung ueber die Bedeutung der Kachel und
+keine Zeile in einer Datei, also Rule 4 und nicht Rule 1.
+
+**Wohin es gehoert:** in den Phase-Review, zusammen mit der Frage, ob ein
+Deckungsgrad ueber hundert Prozent lieber sichtbar sein sollte als gedeckelt: die
+gedeckelten hundert Prozent sind die einzige Anzeige, die aussieht wie ein
+fertiger Index, obwohl gerade ein Mount fehlt.

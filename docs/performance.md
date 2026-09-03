@@ -64,6 +64,7 @@ gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 | Grenzwert für den Spitzenwert | festgelegt | 2026-09-03 |
 | AIO-Grundlast, Generalprobe cpx22 | gemessen, 290 MB Höchststand | 2026-09-03 |
 | Beitrag von HaRP, Generalprobe cpx22 | gemessen, 55 MB | 2026-09-03 |
+| Installation auf der Box, Generalprobe cpx22 | durchgeführt und belegt | 2026-09-03 |
 | AIO-Grundlast, ARM | FEHLT NOCH | wartet auf Bestand |
 | Findling im Volllauf, 50.000 Dateien | FEHLT NOCH | Pläne 05-12 und 05-14 |
 | Störfall-Drills | FEHLT NOCH | Plan 05-14 |
@@ -506,6 +507,213 @@ Die schlichte Textantwort kommt von HaRP, die HTML-Seite von Nextcloud. Die
 Weiterleitung steht also, und die Registrierung, die AIO selbst vorgenommen hat,
 ist unter AIO richtig. Sie darf nicht nach dem compose-Muster "korrigiert"
 werden.
+
+## Installation auf der Box
+
+Dieser Abschnitt beantwortet vor allen Zahlen die Frage, ohne die keine Zahl
+etwas wert ist: **welcher Codestand wurde gemessen, und wie kam er auf die
+Maschine.**
+
+### Welcher Codestand
+
+`backend/appinfo/info.xml` nennt als Abbild `ghcr.io/street1983nk/findling_backend`
+mit dem Kennzeichen `0.3.0`. Dieses Kennzeichen existiert in der Registry nicht:
+
+```
+docker manifest inspect ghcr.io/street1983nk/findling_backend:0.3.0
+manifest unknown
+```
+
+Das ist kein Mangel, sondern die Folge von D-26: der Freigabe-Tag `v1.0.0` wird
+erst am Ende der Phase gesetzt, und `docker.yml` legt das Abbild unter dem
+Kennzeichen der Freigabe erst dann ab. Was die Registry heute führt, ist ein
+Kennzeichen je Commit. Der Stand, gegen den diese Phase misst, ist deshalb
+namentlich zu haben:
+
+| Angabe | Wert |
+|---|---|
+| Commit des Arbeitsbaums | `5c82598a4b793e77834b494861ddbf13d4671f22` |
+| gezogenes Kennzeichen | derselbe Commit, als Kennzeichen des Abbilds |
+| Digest des Index | `sha256:bb8f17e7d18df86b410308ee06bb2a6935dbbd183f0c6fcd032ab1ef17234544` |
+| Digest der Ebene amd64 | `sha256:308ff23621bdd13dae0cd345f5c39e651bddfd3578dcd1409af4e3dd2eb82dd2` |
+| Digest der Ebene arm64 | `sha256:eb1798dcab0125a0b967cdb2898c8be3ed887cf8357a51a9673714d8c19b3ad1` |
+| Weg | gezogen, nicht auf der Box gebaut |
+
+Der Index trägt beide Architekturen, also zieht der ARM-Lauf später aus
+demselben Index seine eigene Hälfte, und die Aussage "derselbe Codestand auf
+beiden Maschinen" ist dann keine Behauptung, sondern derselbe Digest.
+
+Gebaut wurde auf der Box nichts. Das ist die bessere Wahl, solange es geht: ein
+auf der Messmaschine gebautes Abbild ist ein Stand, den nur diese Maschine
+kennt, und die Maschine wird gelöscht.
+
+### Wie das Abbild registriert wurde, ohne die Quelldatei anzufassen
+
+Nur das Kennzeichen des Abbilds musste ersetzt werden, Registry und Abbildname
+blieben, wie sie sind. Die Ersetzung läuft in eine Datei außerhalb des
+Arbeitsbaums, nach dem Muster des CI-Auftrags:
+
+```sh
+sed -e "s|<image-tag>[^<]*</image-tag>|<image-tag>${TAG}</image-tag>|" \
+    backend/appinfo/info.xml > /root/findling/info-box.xml
+```
+
+Die Quelldatei bleibt unberührt, und das ist eine Abnahmebedingung und keine
+Absichtserklärung: `git status --porcelain backend/appinfo/info.xml` ist nach dem
+ganzen Lauf leer.
+
+Registriert wird gegen den Daemon, den AppAPI unter AIO **selbst** angelegt hat.
+Kein `app_api:daemon:register`, keine Korrektur an seiner `NC Url`, aus dem
+Grund, der im Abschnitt darüber steht:
+
+```sh
+occ app_api:app:register findling_backend harp_aio \
+    --info-xml /tmp/info-box.xml --wait-finish
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+```
+
+Beim ersten Versuch, ohne einen einzigen Fehlschlag. Der Weg, den Plan 05-01
+gegen docker-compose mühsam freigeräumt hat, ist unter AIO genau ein Befehl.
+
+### Die drei Feststellungen, hier auf der Box
+
+Dieselben drei, die der CI-Auftrag `deploy-harp` trifft, damit ein leeres
+Ergebnis nicht als Erfolg durchgeht:
+
+```
+docker ps --filter name=findling_backend
+nc_app_findling_backend  ghcr.io/street1983nk/findling_backend:5c82598a4b79...  Up
+
+docker volume ls --filter name=findling_backend
+nc_app_findling_backend_data
+
+occ app_api:app:list
+findling_backend (Findling Backend): 0.3.0 [enabled]
+```
+
+| Angabe | Wert |
+|---|---|
+| Container der ExApp | `nc_app_findling_backend` |
+| Datenspeicher | `nc_app_findling_backend_data` |
+| Daemon | `harp_aio`, von AppAPI selbst angelegt |
+| Container insgesamt | acht: die sieben von AIO plus dieser |
+
+Der Containername ist die Angabe, die der Sampler braucht, und deshalb steht er
+hier und nicht nur im Protokoll.
+
+### Die Begleit-App
+
+Auf AIO gibt es keinen Arbeitsbaum, in den sich eine App legen ließe, und der
+App Store scheidet aus, weil dort noch nichts liegt. Der Weg ist deshalb der
+Datenspeicher des Nextcloud-Containers:
+
+```sh
+docker cp php nextcloud-aio-nextcloud:/var/www/html/custom_apps/findling
+docker exec nextcloud-aio-nextcloud chown -R 33:33 /var/www/html/custom_apps/findling
+occ app:enable findling
+findling 0.3.0 enabled
+```
+
+Das Verzeichnis heißt `findling` und nicht anders, weil der Klassenlader von
+Nextcloud sonst nichts findet und der Suchanbieter unsichtbar bleibt, ohne
+Fehlermeldung. `custom_apps` liegt in einem Docker-Volume, überlebt also einen
+Neustart der Container; die 33 ist die Nutzerkennung von `www-data` in den
+AIO-Abbildern.
+
+### Was auf dieser Box anders ist als in CI: PostgreSQL
+
+```
+occ config:system:get dbtype   -> pgsql
+select version()               -> PostgreSQL 18.6 on x86_64-pc-linux-musl
+Nextcloud                      -> 33.0.8.2
+```
+
+Das ist der erste Lauf dieses Projekts auf PostgreSQL. Jede Zahl der Statusseite
+wurde deshalb einzeln gegen einen erwarteten Wert gehalten, siehe unten.
+
+### Die Suche antwortet, zweimal
+
+Beide Wege wurden gegangen, weil sie verschiedene Dinge belegen. Sechs kleine
+Textdateien liegen im Verzeichnis `probe` eines gewöhnlichen Nutzers, nicht des
+Verwalters, damit die Nutzerkennung in der Antwort nicht mit der des Installateurs
+verwechselt werden kann.
+
+**Über die OCS-Route**, mit einfacher Anmeldung, so wie ein Klient sie ruft:
+
+```
+GET /ocs/v2.php/search/providers/findling/search?term=findlingprobe
+HTTP 200, 5 Treffer
+  vermerk-1.txt bis vermerk-5.txt, jeweils mit Textausschnitt und Fundstellen
+```
+
+**Über die Weboberfläche**, also mit einer echten angemeldeten Sitzung samt
+Anfragemarke, was genau der Aufruf ist, den die Suchleiste selbst macht:
+
+```
+POST /login  (Sitzung), danach derselbe Suchaufruf mit requesttoken
+HTTP 200, 5 Treffer
+```
+
+Der Textausschnitt in der Antwort stammt aus dem Inhalt der Datei und nicht aus
+ihrem Namen, also hat der Container gelesen und nicht der Dateibaum geraten.
+Damit ist D-04 belegt: auf dieser Box liefert eine Suche einen Treffer aus einem
+Container, den der AIO-HaRP-Daemon erzeugt hat.
+
+Eine Fußnote zur Sitzung, weil sie eine halbe Stunde gekostet hat und der
+nächste Leser sie geschenkt bekommen soll: eine Anmeldung über `/login` ohne
+`Origin`-Kopfzeile beantwortet Nextcloud mit `loginErrors: ["invalidOrigin"]`,
+und zwar mit HTTP 200 und der Anmeldeseite als Antwort. Wer nur den Statuscode
+prüft, hält das für eine geglückte Anmeldung und rätselt danach über 401 auf
+jedem folgenden Aufruf.
+
+### Die Statusseite unter PostgreSQL, Kachel für Kachel
+
+Aufgerufen als Verwalter über `/apps/findling/admin/overview`, also über
+dieselbe Route, aus der die Seite ihre Zahlen zieht. Bestand zu diesem
+Zeitpunkt: 104 Dateien in zwei Nutzerverzeichnissen.
+
+| Kachel | Wert | erwartet | Beurteilung |
+|---|---|---|---|
+| Erreichbarkeit des Containers | ja | ja | wie erwartet |
+| Versionsgleichstand | `match`, 0.3.0 gegen 0.3.0 | Gleichstand | wie erwartet |
+| indexiert, Zählung Nextcloud | 0 | 0 | wie erwartet und ausdrücklich so dokumentiert: das Endverdikt "indexiert" zählt der Container, nicht die Nextcloud-Seite |
+| indexiert, Anzeige | 88 | 88 | wie erwartet |
+| übersprungen | 16 | 16 | wie erwartet |
+| fehlgeschlagen | 0 | 0 | wie erwartet |
+| Deckungsgrad | 88 von 104, 84 Prozent | 84 Prozent | wie erwartet: 88 plus 16 ergibt genau die 104 des Bestands |
+| Mounts | 2 von 2 fertig | 2 | wie erwartet |
+| Fehlerliste | `empty_text` 14, `image_not_ocrable` 2 | zwei Gruppen | wie erwartet: die 14 leeren sind Vorlagen und Verzeichnisdateien ohne Text, die zwei Bilder sind die Beispielfotos von Nextcloud |
+| Indexgröße | 795.701 Byte | Größenordnung | plausibel für 88 kleine Dokumente |
+| freier Platz | 44,6 GB von 52,5 GB | Volume | richtig: die Kachel liest das Volume und nicht die Systemplatte |
+| Neuaufbau nötig | nein | nein | wie erwartet |
+| Wortlisten-Prüfsumme | `b1f64012...` | gesetzt | wie erwartet |
+| gemessene OCR-Zeit | leer | leer | wie erwartet: bis hierher lief keine einzige OCR-Seite |
+
+Keine Kachel weicht ab. **Der erste PostgreSQL-Lauf dieses Projekts hat keinen
+Dialektfehler zutage gefördert**, weder beim Anlegen der drei Tabellen noch beim
+Zählen über sie.
+
+Drei Beobachtungen, die keine Kachel falsch machen, aber notiert gehören:
+
+1. **Ein Nutzer, der nach dem ersten Durchgang angelegt wird, fehlt zunächst im
+   Nenner.** Direkt nach dem Anlegen des zweiten Nutzers stand der Deckungsgrad
+   auf 88 von 49, also über hundert Prozent und auf hundert gedeckelt: der
+   Durchgang hatte nur den einen Mount gesehen, den es beim Start gab, während
+   die Dateien des neuen Nutzers über den Vergleichslauf trotzdem in den Index
+   kamen. Nach `occ findling:index --restart` stimmen Zähler und Nenner. Der
+   Zustand ist vorübergehend und heilt spätestens mit dem nächtlichen Vergleich,
+   er sieht aber für die Dauer wie ein Zählfehler aus. Notiert als DI-05-20.
+2. **`occ findling:index --restart` fragt nach und tut ohne `-n` nichts.** Die
+   Rückfrage ist richtig, der Befehl liest jedes Dokument neu. In einem Skript
+   ohne `--no-interaction` bleibt sie unbeantwortet, der Befehl endet mit
+   "Nothing was changed", und der Aufrufer denkt, der Neuaufbau laufe.
+3. **`occ files:scan --path=...` meldet auf einem Nutzerverzeichnis, das noch nie
+   vollständig durchsucht wurde, `Error during scan: mkdir(): File exists`.** Das
+   ist Nextcloud und nicht Findling: der Teilbaum wird gescannt, bevor das
+   Grundgerüst des Nutzers angelegt ist. Ein vorheriges `occ files:scan <nutzer>`
+   räumt es aus. Für den Volllauf heißt das: erst den Nutzer einmal ganz
+   durchsuchen, dann den Korpus einwerfen.
 
 ## Findling im Volllauf
 
