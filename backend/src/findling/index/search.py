@@ -200,6 +200,11 @@ class SnippetText:
     highlights: list[tuple[int, int]] = field(default_factory=list)
 
 
+def _inside(bound: int, limit: int) -> int:
+    """Keep a reported byte offset inside the fragment it claims to describe."""
+    return min(max(bound, 0), limit)
+
+
 def char_ranges(fragment: str, ranges: Sequence[ByteRange]) -> list[tuple[int, int]]:
     """Convert byte ranges of a fragment into character ranges, merged and sorted.
 
@@ -221,12 +226,39 @@ def char_ranges(fragment: str, ranges: Sequence[ByteRange]) -> list[tuple[int, i
     so that it can be tested with a fragment and two numbers.
     """
     data = fragment.encode("utf-8")
+    limit = len(data)
+    # The prefix of the fragment is decoded once for the whole conversion, not
+    # once per reported bound. The earlier form built data[:bound] for every
+    # number that arrived, so ten ranges decoded the same leading bytes ten
+    # times over; the walk below reads every byte at most once and answers the
+    # same character positions.
+    #
+    # errors="ignore" is the robustness of this function rather than a detail. A
+    # bound may land in the middle of a multi byte character, and a decode that
+    # insists on a clean prefix ends the entire search with an exception at that
+    # point (T-05-22). A snippet that loses one character to a badly placed
+    # bound is a far smaller failure than a search that answers nothing at all.
+    wanted = {_inside(edge, limit) for reported in ranges for edge in (reported.start, reported.end)}
+    chars_before: dict[int, int] = {}
+    cursor = 0
+    seen = 0
+    for bound in sorted(wanted):
+        seen += len(data[cursor:bound].decode("utf-8", errors="ignore"))
+        chars_before[bound] = seen
+        cursor = bound
+
     spans = sorted(
-        (len(data[: reported.start].decode("utf-8")), len(data[: reported.end].decode("utf-8"))) for reported in ranges
+        (chars_before[_inside(reported.start, limit)], chars_before[_inside(reported.end, limit)])
+        for reported in ranges
     )
     merged: list[tuple[int, int]] = []
     for start, end in spans:
-        if merged and start <= merged[-1][1]:
+        # Strictly less, and that is the whole distinction. Ranges that overlap
+        # are the same word seen through several constituents of a compound and
+        # belong together; a range that merely begins where the previous one
+        # ended is the next match and stays its own highlight. The earlier form
+        # compared with <= and turned two neighbouring hits into one mark.
+        if merged and start < merged[-1][1]:
             merged[-1] = (merged[-1][0], max(merged[-1][1], end))
         else:
             merged.append((start, end))

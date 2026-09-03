@@ -154,7 +154,8 @@ def test_a_bound_inside_a_multi_byte_character_does_not_raise() -> None:
     # assertion is deliberately weak: any sane pair of numbers is a better
     # answer than an exception.
     fragment = "Kündigung"
-    inside_the_umlaut = len("K".encode()) + 1
+    # One byte for the K, then the second of the two bytes the umlaut occupies.
+    inside_the_umlaut = 2
 
     got = char_ranges(fragment, [_Range(inside_the_umlaut, len(fragment.encode()))])
 
