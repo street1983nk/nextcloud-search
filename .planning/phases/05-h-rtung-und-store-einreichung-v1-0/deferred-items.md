@@ -167,3 +167,86 @@ anfassen darf, und die HaRP-Stacks der Nachbar-Wellen gehören anderen Agenten.
 **Wohin es gehört:** in den phasenweiten Integrationsschritt beziehungsweise in
 den Messbericht der Phase (D-06), der den OCR-Anteil ohnehin auf echter Hardware
 ausweisen muss.
+
+## DI-05-07: Der CI-Lauf des Jobs `search-parity` ist noch nicht gesehen worden
+
+**Found during:** Plan 05-09, beim letzten Abnahmekriterium von Task 2 und
+Task 3.
+
+**Was:** Beide Kriterien verlangen einen grünen Lauf des neuen Jobs auf einem
+GitHub-Runner. Das ist aus dem Ausführungs-Worktree aus denselben zwei Gründen
+nicht möglich wie bei DI-05-01: der Zweig `worktree-agent-05-09` existiert nur
+lokal, und `workflow_dispatch` bietet nur Workflows des Vorgabezweigs an.
+
+**Was stattdessen belegt ist.** Die Datei lädt als YAML, jeder einzelne
+`run`-Block des Jobs ist mit `bash -n` syntaktisch geprüft, die per Here-Dokument
+erzeugte `parity.sh` wurde materialisiert und ebenfalls geprüft, und die beiden
+Funktionen, auf denen alles ruht, sind gegen einen curl-Ersatz durchgespielt
+worden: eine Paritätsverletzung bricht den Schritt mit Exitcode 1 ab, eine
+Übereinstimmung nicht. Der Negativprobe-Schritt wurde vollständig ausgeführt
+(echtes `jq`, echtes `parity_diff.py`) und meldet beide Richtungen; zusätzlich
+wurde belegt, dass er selbst rot wird, wenn `parity_diff` grün bliebe.
+
+**Was offen bleibt.** Genau die Teile, die kein lokales Gegenstück haben: dass
+`occ app:install groupfolders` auf dem Runner durchgeht (sonst greift der
+Tarball-Zweig, und welcher Weg genommen wurde, steht im Log), dass
+`occ config:app:set core unified_search_max_results_per_request --type=integer`
+auf stable34 die Option kennt, und die tatsächlichen Trefferzahlen der sechs
+Szenarien. Der Workflow hat Push-Trigger auf `scripts/ci/**`, `php/**`,
+`backend/**` und seinen eigenen Pfad, der erste Lauf passiert also nach dem
+Merge von selbst und muss angesehen werden.
+
+## DI-05-08: Ein Gruppenwechsel erreicht den ACL-Vorfilter erst über den nächsten Crawl
+
+**Found during:** Plan 05-09, beim Bau von Szenario 5.
+
+**Was:** Der Plan nimmt an, das Vorfilter-Update nach einem Gruppenwechsel komme
+über die Share-Ereignisse und den Teilbaum-Job. Das ist nicht so, und
+`ShareEventListener` sagt es in seinem eigenen Klassenkommentar: die drei
+abonnierten Ereignisse sind `ShareCreatedEvent`, `ShareDeletedEvent` und
+`ShareDeletedFromSelfEvent`, und keines davon feuert, wenn ein Nutzer eine
+Gruppe verlässt, weil sich der Share selbst nicht geändert hat. Es gibt also
+keinen Teilbaum-Job, den man anstoßen könnte.
+
+**Warum das kein Sicherheitsbefund ist:** die Sicherheitsgrenze ist der Recheck
+in `Provider`, der jeden Kandidaten über `getUserFolder()->getFirstNodeById()`
+auflöst. Ein veralteter Vorfilter kostet Ergebnisqualität und Rechenzeit, nicht
+Vertraulichkeit. Genau das misst Szenario 5 jetzt ausdrücklich: die erste
+Vergleichsfrage wird gestellt, während der Vorfilter den entfernten Nutzer noch
+führt, und die Parität hält.
+
+**Was offen bleibt:** ein Nutzer, der einer Gruppe BEITRITT, findet die Inhalte
+der Gruppe erst nach dem nächsten Crawl beziehungsweise nachdem eine
+Inhaltsaufgabe die Datei ohnehin angefasst hat. Der Klassenkommentar nennt den
+ETag-Abgleich als Träger; der Abgleich wird aber über eine geänderte ETag
+ausgelöst, und eine Mitgliedschaft ändert keine. Die billige Behebung wäre ein
+Listener auf `OCP\Group\Events\UserAddedEvent` und `UserRemovedEvent`, der die
+Mounts der Gruppe als `acl`-Teilbäume einreiht. Das ist ein neuer Listener und
+gehört in einen eigenen Plan.
+
+**Wohin es gehört:** in den Phase-Review oder in einen Folgeplan, der an der
+Ereigniskette arbeitet.
+
+## DI-05-09: `.gitattributes` führt `*.py` nicht, und CI-Skripte tragen eine Shebang
+
+**Found during:** Plan 05-09, beim Anlegen von `scripts/ci/parity_diff.py`.
+
+**Was:** `.gitattributes` erzwingt `eol=lf` für `*.sh`, `*.yml`, `*.yaml`,
+`*.conf`, `Dockerfile` und `.dockerignore`, nicht aber für `*.py`. Auf der
+Entwicklungsmaschine ist `core.autocrlf` an, also liegen `slow_backend.py` und
+jetzt auch `parity_diff.py` mit CRLF im Arbeitsbaum. Beide tragen eine
+Shebang-Zeile.
+
+**Warum es heute nichts kaputt macht:** beide werden als `python3 <datei>`
+aufgerufen, und Python liest universelle Zeilenenden. Erst ein direkter Aufruf
+über die Shebang (`./scripts/ci/parity_diff.py`) würde am Wagenrücklauf hinter
+`python3` scheitern, mit genau der Fehlermeldung, die die Kopfzeile von
+`.gitattributes` beschreibt.
+
+**Warum nicht hier erledigt:** `.gitattributes` steht nicht in `files_modified`
+dieses Plans, die Datei ist gemeinsames Gut mehrerer Pläne dieser Phase, und die
+Änderung würde die Zeilenenden aller Python-Dateien des Repositories in einem
+Commit umschreiben.
+
+**Wohin es gehört:** in einen Plan, der ohnehin an der Werkzeugkette arbeitet,
+oder in den Phase-Review. Eine Zeile `*.py text eol=lf` genügt.
