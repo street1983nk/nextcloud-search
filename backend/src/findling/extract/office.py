@@ -29,6 +29,7 @@ the first step towards two lists that disagree.
 
 from __future__ import annotations
 
+from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 import docx
@@ -134,23 +135,36 @@ def extract_xlsx(path: str) -> ExtractionOutcome:
         return oversized
 
     limit = config.settings().max_cells
-    try:
-        workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    except _BROKEN_PACKAGE as error:
-        return ExtractionOutcome.from_exception(error)
-
     parts: list[str] = []
     seen = 0
-    try:
-        for sheet in workbook.worksheets:
-            for row in sheet.iter_rows(values_only=True):
-                seen += len(row)
-                if seen > limit:
-                    # Stop here rather than deliver half a workbook. A truncated
-                    # spreadsheet in the index looks like a complete one.
-                    return ExtractionOutcome.skipped(Reason.TOO_MANY_CELLS)
-                parts += [str(value) for value in row if value is not None]
-    finally:
-        workbook.close()
+    # An open handle rather than the path, and this is the one line of this
+    # module that is not obvious. openpyxl looks at the extension before it looks
+    # at a single byte and refuses anything outside .xlsx, .xlsm, .xltx and .xltm
+    # with an InvalidFileException. The file this function is handed is never
+    # called .xlsx: the poller streams it into job-<queue id>.part
+    # (worker/poller.py, SCRATCH_SUFFIX), so every spreadsheet of every instance
+    # ended as failed(corrupt), measured on the load test box in plan 05-12 where
+    # exactly the 32 spreadsheets of the corpus failed and no other format did.
+    # A handle carries no name to check, so the loader reads the content, which
+    # is what python-docx and python-pptx above do anyway. It stays open until
+    # the workbook is closed, because the read only mode reads the archive while
+    # the rows are walked.
+    with Path(path).open("rb") as stream:
+        try:
+            workbook = openpyxl.load_workbook(stream, read_only=True, data_only=True)
+        except _BROKEN_PACKAGE as error:
+            return ExtractionOutcome.from_exception(error)
+
+        try:
+            for sheet in workbook.worksheets:
+                for row in sheet.iter_rows(values_only=True):
+                    seen += len(row)
+                    if seen > limit:
+                        # Stop here rather than deliver half a workbook. A truncated
+                        # spreadsheet in the index looks like a complete one.
+                        return ExtractionOutcome.skipped(Reason.TOO_MANY_CELLS)
+                    parts += [str(value) for value in row if value is not None]
+        finally:
+            workbook.close()
 
     return cap_text("\n".join(part for part in parts if part.strip()))

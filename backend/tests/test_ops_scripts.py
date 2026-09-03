@@ -138,7 +138,7 @@ def test_the_box_tool_reads_the_stock_before_it_tries_to_rent() -> None:
     per location, so it is read first and the state is said in words.
     """
     text = HETZNER_BOX.read_text(encoding="utf-8")
-    assert '/server_types?name=$SERVER_TYPE' in text
+    assert "/server_types?name=$SERVER_TYPE" in text
     assert "is out of stock in every location right now" in text
     assert "this is capacity, not a wrong argument" in text
 
@@ -178,7 +178,7 @@ def test_the_firewall_is_created_and_taken_down_again() -> None:
     # Three ports and no fourth. The interface of AIO is reached through the ssh
     # tunnel, and a rule for it would be the quiet end of that promise.
     assert text.count('"direction":"in","protocol":"tcp"') == 3
-    assert '/firewalls?label_selector=$LABEL' in text
+    assert "/firewalls?label_selector=$LABEL" in text
     assert "firewall ${firewall_id:-none} is gone, verified against the API" in text
 
 
