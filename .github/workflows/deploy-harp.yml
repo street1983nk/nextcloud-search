@@ -561,9 +561,21 @@ jobs:
             echo "these assertions read the sqlite test database, but dbtype is '${dbtype}'"
             exit 1
           fi
-          db="$(timeout 30 ./occ config:system:get datadirectory)/$(timeout 30 ./occ config:system:get dbname).db"
-          if [ ! -f "${db}" ]; then
-            echo "no database file at ${db}, so the two assertions below would measure nothing"
+          # Neither key is asked for without a way out: config:system:get exits
+          # non zero and prints nothing when a key is absent from config.php, and
+          # dbname is absent after a sqlite install (measured in run
+          # 33756342732, where this step died silently on that single line). The
+          # file is therefore looked for rather than derived, and not finding it
+          # is an error with a message.
+          datadir=$(timeout 30 ./occ config:system:get datadirectory 2>/dev/null || echo "${PWD}/data")
+          dbname=$(timeout 30 ./occ config:system:get dbname 2>/dev/null || echo '')
+          db="${datadir}/${dbname}.db"
+          if [ -z "${dbname}" ] || [ ! -f "${db}" ]; then
+            db=$(find "${datadir}" -maxdepth 1 -name '*.db' | head -n 1)
+          fi
+          if [ -z "${db}" ] || [ ! -f "${db}" ]; then
+            echo "no sqlite database found under ${datadir}, so the two assertions below would measure nothing"
+            ls -la "${datadir}" || true
             exit 1
           fi
           if ! command -v sqlite3 > /dev/null; then
