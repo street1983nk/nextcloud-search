@@ -61,7 +61,7 @@ gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 | Zertifikat und Abschottung | auf der Generalprobe belegt | 2026-09-03 |
 | Methode | steht | 2026-09-03 |
 | Grenzen | steht | 2026-09-03 |
-| Grenzwert für den Spitzenwert | festgelegt | 2026-09-03 |
+| Grenzwert für den Spitzenwert | festgelegt, 2,0 GB, aus gemessenen Größen hergeleitet | 2026-09-03 |
 | AIO-Grundlast, Generalprobe cpx22 | gemessen, 290 MB Höchststand | 2026-09-03 |
 | Beitrag von HaRP, Generalprobe cpx22 | gemessen, 55 MB | 2026-09-03 |
 | Installation auf der Box, Generalprobe cpx22 | durchgeführt und belegt | 2026-09-03 |
@@ -69,7 +69,8 @@ gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 | OCR-Faktor, Generalprobe cpx22 | gemessen, 2517 ms je Seite | 2026-09-03 |
 | Laufzeitprognose des Volllaufs, x86 | gerechnet aus gemessenen Posten, rund 13 h | 2026-09-03 |
 | AIO-Grundlast, ARM | FEHLT NOCH | wartet auf Bestand |
-| Findling im Volllauf, 50.000 Dateien | FEHLT NOCH | Pläne 05-12 und 05-14 |
+| Härtungsprobe unter harter Grenze | Befehl belegt und beschrieben, Lauf steht aus | 2026-09-03 |
+| Findling im Volllauf, 50.000 Dateien | FEHLT NOCH | Plan 05-14 |
 | Störfall-Drills | FEHLT NOCH | Plan 05-14 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
@@ -326,14 +327,15 @@ sieht aus wie eine Messung, und das ist schlimmer als eine fehlende Datei.
 Bestanden heißt: der Volllauf über 50.000 Dateien läuft ohne Speichertod durch,
 UND der höchste `anon`-Wert des Findling-Containers bleibt unter **2,0 GB**.
 
-Die Zahl ist eine Festlegung und keine Messung, deshalb hier ihre Rechnung. Die
-Box hat 4 GB. Die ungünstigste gleichzeitige Lage der Findling-Posten liegt nach
-der Vorabrechnung bei 1,6 bis 1,7 GB. Daneben muss die AIO-Grundlast Platz haben,
-für die 0,7 bis 1,1 GB veranschlagt sind, und darüber noch etwas Luft für den
-Seitencache und den Kernel selbst. 2,0 GB lassen der Grundlast im schlechtesten
-Fall knapp zwei GB und liegen damit unter der Größenordnung von 2,5 GB, die als
-Rahmen vorgegeben war. Das ist Absicht: 2,5 GB wären neben einer Grundlast von
-1,1 GB auf einer 4-GB-Box keine Zusage, sondern eine Wette.
+Die Zahl ist eine Festlegung und keine Messung. Ihre vollständige Herleitung aus
+den inzwischen gemessenen Eingangsgrößen steht weiter unten im eigenen Abschnitt
+"Der Grenzwert, jetzt aus gemessenen Größen", zusammen mit der Härtungsprobe und
+mit dem, was passiert, wenn sie greift. In Kurzform: die Box hat 3814 MB nutzbar,
+die gemessene Grundlast von AIO und HaRP nimmt 345 MB davon, die ungünstigste
+gerechnete Lage der Findling-Posten liegt bei 1,6 bis 1,7 GB, und 2,0 GB lassen
+neben all dem noch 1421 MB für Kernel und Seitencache. 2,5 GB, die als
+Größenordnung im Raum standen, ließen 909 MB und wären damit keine Zusage,
+sondern eine Wette.
 
 Der Sampler fällt dieses Urteil nicht selbst. Er nennt Zahlen, und der Vergleich
 mit dem Grenzwert steht hier.
@@ -1002,6 +1004,153 @@ weit geschaut wurde.
   stehen nebeneinander auf der Seite, ein aufmerksamer Verwalter sieht den
   Widerspruch also, aber die Fehlerliste ist so lange falsch, bis jemand sie
   räumt. Notiert als DI-05-21.
+
+## Der Grenzwert, jetzt aus gemessenen Größen
+
+Der Abschnitt "Der Grenzwert, gegen den geprüft wird" oben im Methodenteil nennt
+die Zahl. Hier steht ihre Herleitung, und sie steht bewusst **hier**, nach den
+Messungen und vor dem Volllauf: der Grenzwert wird festgelegt, bevor der Lauf
+beginnt, dessen Ergebnis er beurteilt. Ein Grenzwert, der nach dem Ergebnis
+entsteht, beurteilt nichts.
+
+### Die Rechnung
+
+Drei der vier Eingangsgrößen sind inzwischen gemessen und nicht mehr geschätzt:
+
+| Eingangsgröße | Wert | Herkunft |
+|---|---|---|
+| Arbeitsspeicher der Box | 3814 MB nutzbar von 4 GB | `free -m` auf der Maschine |
+| AIO-Grundlast einschließlich HaRP | 345 MB (290 plus 55) | **gemessen**, Plan 05-10, oben im Bericht |
+| ungünstigste gleichzeitige Lage der Findling-Posten | 1,6 bis 1,7 GB | gerechnet aus den Projektkonstanten, nicht gemessen |
+| Spitzenwert des Trockenlaufs | 381 MB | **gemessen**, Abschnitt oben |
+
+Daraus:
+
+```
+3814 MB nutzbar
+-  345 MB gemessene Grundlast von AIO und HaRP
+- 2048 MB Grenzwert für Findling
+= 1421 MB für Kernel, Seitencache und alles Übrige
+```
+
+Der Grenzwert muss zwei Bedingungen erfüllen, und beide sind erfüllt:
+
+1. **Er liegt über dem, was Findling braucht, mit Luft.** 2048 MB sind das
+   1,2fache der ungünstigsten gerechneten Lage von 1700 MB und das 5,4fache des
+   im Trockenlauf gemessenen Spitzenwerts. Die Luft ist nicht großzügig, sie ist
+   nötig: der Volllauf bringt 100 mehrseitige Scans und Dateien bis an den
+   Größendeckel von 50 MB, und beides fehlt im Trockenlauf.
+2. **Er lässt neben sich Platz.** 1421 MB für Kernel und Seitencache sind auf
+   einer Maschine, deren Index als Datei in den Speicher abgebildet wird,
+   kein Rest, sondern ein Arbeitsmittel: je mehr Index im Seitencache liegt,
+   desto schneller antwortet die Suche.
+
+Die Empfehlung der Recherche lautete 2,0 GB, und die Rechnung bestätigt sie, also
+bleibt es dabei. **Der Grenzwert ist 2,0 GB, also 2.147.483.648 Byte, für den
+höchsten `anon`-Wert des Findling-Containers.**
+
+Was 2,5 GB bedeutet hätten, weil die Zahl als Größenordnung im Raum stand:
+`3814 - 2560 - 345 = 909 MB` für alles Übrige. Das ist weniger, als der
+Seitencache eines 20-GB-Korpus gern hätte, und es ist der Bereich, in dem der
+Kernel anfängt zu räumen statt zu arbeiten. Nach der Messung der Grundlast ist
+die Entscheidung für 2,0 GB bequemer als vorher gedacht: die Grundlast war mit
+0,7 bis 1,1 GB veranschlagt und liegt bei 0,345 GB.
+
+### Drei Zahlen, die nicht dasselbe sind
+
+Diese Trennung ist der Kern des Abschnitts, denn ohne sie rechnet der erste
+Leser, der `docker stats` aufruft, andere Zahlen nach und hält den Bericht für
+falsch.
+
+| Zahl | Trockenlauf | Volllauf | Was sie ist |
+|---|---|---|---|
+| **Grenzwert** | 2,0 GB | 2,0 GB | eine Festlegung. Der Volllauf besteht oder besteht nicht gegen sie. Sie wird nicht gemessen und sie ändert sich nicht mit dem Ergebnis. |
+| **gemessener Spitzenwert `anon`** | 381 MB | FEHLT NOCH | eine Messung. Der Wert des ARM-Volllaufs wird die Zahl der Store-Aussage. |
+| **`memory.peak`** | 455 MB | FEHLT NOCH | dieselbe cgroup, anderer Maßstab: hier zählt der Dateicache mit. |
+
+Warum die Store-Zahl aus `anon` kommt und nicht aus `memory.peak`: der Index ist
+eine in den Speicher abgebildete Datei, also landet jeder gelesene Indexblock im
+Dateicache derselben cgroup. Dieser Cache ist vollständig zurückforderbar, der
+Kernel gibt ihn unter Druck her, und kein Prozess merkt etwas davon. Eine
+Store-Aussage aus `memory.peak` würde die Anwendung also schlechter darstellen,
+als sie ist, und zwar umso schlechter, je größer der Bestand des Betreibers ist.
+Im Trockenlauf sind das 74 MB Unterschied, in der Grundlastmessung von 05-10
+waren es über die AIO-Container 1063 MB.
+
+Aufgezeichnet werden beide, und beide stehen in jeder Tabelle nebeneinander. Der
+Docker-Client zeigt eine Zahl auf Basis von `memory.current`, also die höhere.
+Wer sie neben die Zahl dieses Berichts legt, soll den Unterschied erklärt finden
+statt versteckt.
+
+### Die Härtungsprobe: der Volllauf läuft unter einer harten Grenze
+
+Ein beobachteter Spitzenwert ist eine Momentaufnahme. Er sagt, dass die
+Anwendung in den 146 Augenblicken, in denen gemessen wurde, unter der Zahl lag.
+Ein Lauf, der unter einer vom Kernel durchgesetzten Grenze durchläuft, sagt
+etwas anderes: dass sie in **keinem** Augenblick überschritten wurde, auch nicht
+zwischen zwei Messpunkten. Das ist ein Satz, den man in eine Store-Beschreibung
+schreiben kann.
+
+AppAPI kennt `resourceLimits.memory` nur im Deploy-Config eines Daemons und nicht
+als Option von `occ`, deshalb ist der Weg der Docker-Client. Der Befehl steht
+hier wortwörtlich, damit Plan 05-14 ihn nicht neu erfindet:
+
+```sh
+docker update --memory=2g --memory-swap=2g nc_app_findling_backend
+```
+
+Auf dieser Box am 2026-09-03 ausprobiert, mit dem Ergebnis:
+
+```
+memory.max      2147483648
+memory.swap.max 0
+docker inspect  Memory=2147483648 MemorySwap=2147483648
+Status          Up, der Container läuft weiter
+```
+
+`--memory-swap` auf denselben Wert heißt: kein Swap. Ohne diese Angabe bekäme der
+Container die doppelte Menge als Swap-Budget, und ein Lauf, der sich nur durch
+Auslagern unter der Grenze hält, hätte mit der Zusage nichts zu tun.
+
+Drei Dinge, die beim Setzen zu wissen sind:
+
+1. **Die Grenze lässt sich mit `docker update` nicht wieder abnehmen.**
+   `--memory=0` tut nichts und `--memory=-1` wird abgewiesen (beides hier
+   ausprobiert). Wer sie loswerden will, muss den Container neu erzeugen lassen,
+   also `occ app_api:app:unregister findling_backend` ohne `--rm-data` und
+   danach wieder registrieren. Der Datenspeicher bleibt dabei erhalten.
+2. **Sie überlebt keine Neuerzeugung des Containers.** Jede Registrierung legt
+   einen neuen Container an, und der kommt ohne Grenze. Sie gehört deshalb
+   gesetzt, nachdem zum letzten Mal registriert wurde, und vor dem Start des
+   Laufs mit `docker inspect` gegengeprüft.
+3. **`memory.max` begrenzt `memory.current` und nicht `anon`**, zählt also den
+   Dateicache mit. Die Probe ist damit **strenger** als der Grenzwert, den sie
+   prüft. Das ist Absicht und kein Versehen: der Cache ist zurückforderbar, der
+   Kernel räumt ihn, bevor er tötet, und ein Lauf, der unter dieser Grenze
+   durchkommt, hat `anon` erst recht darunter gehalten.
+
+### Wenn die harte Grenze greift
+
+Dann tötet der Kernel den Container. `memory.events` zählt `oom_kill` hoch,
+`.State.OOMKilled` steht auf `true`, und die Abschlusszeile des Samplers nennt
+beides. **Das ist dann das Ergebnis des Laufs und kein Betriebsunfall**, und es
+ist genau die Aussage, für die die Probe gefahren wird. Ein solcher Volllauf ist
+nicht wiederholbar, bis eine der drei Antworten gewählt ist:
+
+| Antwort | Was sie kostet | Wann sie richtig ist |
+|---|---|---|
+| **Grenzwert anheben**, mit Begründung im Bericht | Die Store-Aussage wird schwächer, und auf einer 4-GB-Box wird es eng: über 2,5 GB ist die Rechnung oben nicht mehr zu halten. | Wenn der Spitzenwert knapp und nachvollziehbar über der Grenze liegt und die Rechnung oben mit der gemessenen Grundlast noch aufgeht. |
+| **Stellschraube senken** | Ein kleinerer Schreibpuffer bedeutet mehr Segmente und mehr Vereinigungsläufe, weniger DPI bedeutet schlechtere Erkennung. | Wenn der Spitzenwert an einem benannten Posten hängt: `FINDLING_WRITER_HEAP_BYTES` (50 MB), `FINDLING_BATCH_MAX_BYTES` (64 MB), `FINDLING_OCR_DPI` (300), `FINDLING_OCR_MAX_PAGES` (30), `FINDLING_MAX_CELLS` (200.000). `INDEX_WORKERS` steht bereits auf 1 und ist keine Reserve mehr. |
+| **OCR-Menge des Korpus senken** | Die Aussage ändert sich, denn OCR ist die Steuergröße des ganzen Laufs. | Nur nach einer Entscheidung des Betreibers. Sie darf nicht stillschweigend fallen, weil sie aus "50.000 Dateien mit 20 Prozent Scans" etwas anderes macht. |
+
+Was in keinem der drei Fälle passiert: die Verteilung des Korpus wird nicht
+angepasst, bis die Zahl stimmt. Das wäre keine Messung mehr.
+
+### Zusammengefasst, in einer Zeile
+
+**Der Volllauf besteht, wenn er ohne Speichertod durchläuft und der höchste
+`anon`-Wert des Findling-Containers unter 2,0 GB bleibt, gefahren unter
+`docker update --memory=2g --memory-swap=2g`.**
 
 ## Findling im Volllauf
 
