@@ -437,7 +437,31 @@ final class AdminViewService {
 		// here, and both subtrees below are handed the result. Two places
 		// working it out would put two different numbers for one quantity on the
 		// same page, and the page would be right about neither.
-		$indexable = max(0, (int)$scan['filesSeen'] - max(0, (int)$scan['overCap']) - max(0, (int)$scan['excluded']));
+		//
+		// The third subtrahend is new in plan 05-11 and it is a consequence of
+		// DI-04-03 rather than a change of the figure's meaning. The files the
+		// container refuses by type were always part of deliberatelyLeftOut in
+		// coverage() below, and the sentence next to that number says word for
+		// word that those files are NOT in the denominator, so that the coverage
+		// figure can reach a hundred per cent. Until this plan the counter behind
+		// it was always nought, because nothing on this side ever wrote
+		// skipped(mime_not_allowed); now the container reports it, the number
+		// becomes real, and without this line the promise of that sentence would
+		// break on the same day: an instance with one video would sit at 99 per
+		// cent for good, waiting for a file nobody will ever index.
+		//
+		// Asked once and handed down for the same reason as the difference
+		// itself: coverage() names the number as deliberately left out and this
+		// line takes it out of the denominator, and the two have to be the same
+		// number or the sentence stops describing the figure above it.
+		$refusedByType = $this->fileStateService->countByReason('skipped', 'mime_not_allowed');
+		$indexable = max(
+			0,
+			(int)$scan['filesSeen']
+				- max(0, (int)$scan['overCap'])
+				- max(0, (int)$scan['excluded'])
+				- $refusedByType,
+		);
 
 		$lastJobRun = $this->appConfig->getValueInt(Application::APP_ID, SchedulerJob::LAST_JOB_RUN);
 		$now = $this->timeFactory->getTime();
@@ -504,7 +528,7 @@ final class AdminViewService {
 			// two numbers; nothing here decides what happens to the search,
 			// which is ExAppService and the search provider.
 			'lockstep' => $this->exAppService->lockstep($answer),
-			'coverage' => $this->coverage($scan, $backend, $backendReachable, $indexable),
+			'coverage' => $this->coverage($scan, $backend, $backendReachable, $indexable, $refusedByType),
 			'estimate' => $this->estimate($scan, $backend, $backendReachable, $indexable, $scheduled + $running),
 			'errors' => $this->errors(),
 			'rules' => $this->rules(),
@@ -742,11 +766,20 @@ final class AdminViewService {
 	 *
 	 * Computed live, out of the file and the rules, and out of no database row at
 	 * all. That is not an optimisation, it is the only way this stage can be
-	 * right: ``mime_not_allowed`` is never written, because the crawl filters the
-	 * mimetype inside its query and never sees an unsuitable file, and the event
-	 * listener returns without writing a verdict (pitfall 1). A file of an
-	 * unsupported type therefore has no row anywhere, and an admin who asks about
-	 * it would be told "not seen yet" for a file that will never be seen.
+	 * right for the files it is asked about most: this side never writes
+	 * ``mime_not_allowed`` itself, because the crawl filters the mimetype inside
+	 * its query and never sees an unsuitable file, and the event listener returns
+	 * without writing a verdict (pitfall 1). A file of an unsupported type
+	 * therefore has no row from this half at all, and an admin who asks about it
+	 * would be told "not seen yet" for a file that will never be seen.
+	 *
+	 * Since plan 05-11 the container writes such a row for the files that reach
+	 * it and are refused by ITS allowlist, which is stricter than the query of
+	 * the crawl (DI-04-03). That does not move this stage: it stands ahead of the
+	 * stored verdict on purpose, it answers with the same code out of the same
+	 * table, and it answers it for files that never reached the container as
+	 * well. A rule of today beats a row from yesterday, and where both exist they
+	 * say the same sentence.
 	 *
 	 * Four comparisons and their order is the order of certainty: where the file
 	 * lies decides more than what it is, and what it is decides more than how
@@ -1219,10 +1252,14 @@ final class AdminViewService {
 	 * every night.
 	 *
 	 * ``deliberatelyLeftOut`` is those two omissions plus the files the container
-	 * refused by type. skipped(no_text_layer) is expressly not part of it: that
-	 * reason is the hand over point to the OCR track and not a final verdict, so
-	 * counting it as left out would write off files that are on their way into
-	 * the index.
+	 * refused by type, and all three are out of the denominator, which is what
+	 * the sentence next to the number on the page says as well. The third one was
+	 * always nought until plan 05-11, because nothing on this side wrote
+	 * skipped(mime_not_allowed) before the container started reporting its own
+	 * decisions (DI-04-03). skipped(no_text_layer) is expressly not part of it:
+	 * that reason is the hand over point to the OCR track and not a final
+	 * verdict, so counting it as left out would write off files that are on their
+	 * way into the index.
 	 *
 	 * ``percent`` is null in the two cases where no honest percentage exists,
 	 * and the template renders a sentence rather than a number for both of them.
@@ -1235,12 +1272,19 @@ final class AdminViewService {
 	 * @param array<string,int> $scan
 	 * @param array<string,mixed> $backend
 	 * @param int $indexable the denominator, worked out once in overview()
+	 * @param int $refusedByType skipped(mime_not_allowed), counted once in overview()
 	 * @return array{
 	 *     indexed:int, indexable:int, deliberatelyLeftOut:int, percent:int|null,
 	 *     provisional:bool, mountsTotal:int, mountsFinished:int
 	 * }
 	 */
-	private function coverage(array $scan, array $backend, bool $backendReachable, int $indexable): array {
+	private function coverage(
+		array $scan,
+		array $backend,
+		bool $backendReachable,
+		int $indexable,
+		int $refusedByType,
+	): array {
 		$overCap = max(0, (int)$scan['overCap']);
 		$excluded = max(0, (int)$scan['excluded']);
 
@@ -1261,8 +1305,7 @@ final class AdminViewService {
 		return [
 			'indexed' => $indexed,
 			'indexable' => $indexable,
-			'deliberatelyLeftOut' => $overCap + $excluded
-				+ $this->fileStateService->countByReason('skipped', 'mime_not_allowed'),
+			'deliberatelyLeftOut' => $overCap + $excluded + $refusedByType,
 			'percent' => $percent,
 			// A scan that has not walked every mount to its end has counted a
 			// lower bound, and the page has to say so and name both figures. An

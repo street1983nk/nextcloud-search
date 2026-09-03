@@ -348,13 +348,16 @@ async def ack_documents(
     *,
     files: Sequence[int],
     failed: Sequence[Mapping[str, object]],
+    skipped: Sequence[Mapping[str, object]] = (),
 ) -> object:
-    """Acknowledge a batch: what is done, and what could not be processed and why.
+    """Acknowledge a batch: what is done, what failed, and what was skipped.
 
-    The second list is the return channel. Without it the status page would have
-    to ask the container which files it could not process, which would be a second
-    place holding the truth about the same fact, and the copy on the Nextcloud side
-    is the one an admin can still read while the container is down.
+    The two verdict lists are the return channel. Without them the status page
+    would have to ask the container which files it could not index, which would
+    be a second place holding the truth about the same fact, and the copy on the
+    Nextcloud side is the one an admin can still read while the container is
+    down. ``failed`` is keyed by queue row id, ``skipped`` by file id; the
+    reasoning for the difference sits in :meth:`findling.nc.queue.DocumentQueue.acknowledge`.
 
     Nextcloud binds OCS parameters from the query string and from the request body
     alike, so this goes out as a DELETE with a JSON body and needs no POST
@@ -363,7 +366,11 @@ async def ack_documents(
     return await nc._session.ocs(
         "DELETE",
         "/ocs/v2.php/apps/findling/queues/documents",
-        json={"files": list(files), "failed": [dict(entry) for entry in failed]},
+        json={
+            "files": list(files),
+            "failed": [dict(entry) for entry in failed],
+            "skipped": [dict(entry) for entry in skipped],
+        },
     )
 
 

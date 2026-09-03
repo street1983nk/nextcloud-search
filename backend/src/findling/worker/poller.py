@@ -66,7 +66,7 @@ from findling.config import settings
 from findling.extract.dispatch import Route, extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.sandbox import extract_guarded
-from findling.index.open import expected_versions, open_index
+from findling.index.open import expected_versions, open_index, stamp_after_rebuild, start_rebuild_on_drift
 from findling.index.wordlist import build_artifact
 from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord
 from findling.nc import client as nc_client
@@ -213,8 +213,18 @@ def _open_state() -> Store:
     created by this process carries unknown/0 marks forever: every answer says
     degraded, /status reports reindexRequired, and the drift alarm this
     mechanism exists for becomes permanent noise nobody reads (bug audit H1).
+
+    A database that WAS built by other code is put into a rebuild here, which is
+    the second half of DI-04-04: the banner names ``occ findling:index
+    --restart`` as its remedy, and that crawl only rebuilds anything once the
+    generation has moved. Raising it declares nothing current; the marks are
+    written by :func:`findling.index.open.stamp_after_rebuild` and only after
+    the last file has been judged by this code.
     """
-    return open_store(settings().state_db, meta=expected_versions(build_artifact().digest))
+    expected = expected_versions(build_artifact().digest)
+    store = open_store(settings().state_db, meta=expected)
+    start_rebuild_on_drift(store, expected)
+    return store
 
 
 def _open_writer(store: Store) -> IndexBatchWriter:
@@ -312,6 +322,10 @@ class Poller:
         # not to the queue: the queue answers one call, the state is a sequence.
         self._unavailable_rounds = 0
         self._retreat_announced = False
+        # Whether this process has yet seen the version marks agree with the
+        # running code. True until an idle pass proved otherwise, so a container
+        # asks the question once per start rather than once per poll (DI-04-04).
+        self._marks_unproven = True
         self._armed = asyncio.Event()
 
     # -- lifecycle -------------------------------------------------------
@@ -411,6 +425,15 @@ class Poller:
         # half is there and has nothing to do.
         self._recovered()
         if not claim.jobs:
+            # The one moment a rebuild can be through, and therefore the only
+            # moment worth asking (DI-04-04). Asking after every pass would put
+            # a count over the whole file table between two batches on a box
+            # with fifty thousand documents; asking here costs one query per
+            # idle poll, and the flag stops even that as soon as the answer is
+            # yes once, which on an instance that never drifted is the first
+            # idle poll of the process.
+            if self._marks_unproven:
+                self._marks_unproven = not await asyncio.to_thread(self._stamp_if_rebuilt)
             self._back_off()
             return RoundResult(ROUND_EMPTY)
 
@@ -459,8 +482,10 @@ class Poller:
 
         # 4. The acknowledgement, the last step by construction. Everything it
         #    reports is already durable, so losing it costs one repetition and
-        #    never a document.
-        ack = await queue.acknowledge(done, failed)
+        #    never a document. Since plan 05-11 it carries the decisions of this
+        #    container as well, so that the error list of the status page can
+        #    group the four reasons only this side ever decides (DI-04-03).
+        ack = await queue.acknowledge(done, failed, _skip_verdicts(verdicts, handover))
         self._held.clear()
         self._reset_cooldown()
 
@@ -1024,6 +1049,29 @@ class Poller:
         self._back_off()
         return RoundResult(state, claimed=claimed)
 
+    def _stamp_if_rebuilt(self) -> bool:
+        """Write the version marks again once the last file has been re-judged.
+
+        The half of DI-04-04 that keeps the promise of the banner: its remedy
+        says a restart makes it go away, and this is what makes it go away, with
+        nobody stamping anything by hand.
+
+        It runs on an empty queue only, and it runs whether or not this container
+        raised the generation itself, because the pass that finishes a rebuild is
+        rarely the process that started it. On an instance without a drift the
+        marks are already current, the write is a write of the same values, and
+        the count behind it is the only cost.
+
+        A failure is swallowed on purpose. This is bookkeeping about the index
+        and not the index: a locked database here must not end a pass whose
+        documents are durable, and the next idle poll asks again.
+        """
+        try:
+            return stamp_after_rebuild(self._store_or_die(), expected_versions(build_artifact().digest))
+        except Exception as error:
+            LOGGER.warning("could not refresh the version marks, %s", type(error).__name__)
+            return False
+
     def _store_or_die(self) -> Store:
         if self._store is None:  # pragma: no cover - _open sets it
             raise RuntimeError("the poller has no state database")
@@ -1107,6 +1155,41 @@ def default_poller() -> Poller:
     would hold the tantivy lock without ever indexing anything.
     """
     return Poller()
+
+
+def _skip_verdicts(verdicts: Sequence[_Verdict], handover: Sequence[int]) -> dict[int, str]:
+    """The decisions of this pass that the other half has to know, per file id.
+
+    **What this produces over there and what it does not.** The rows become the
+    groups of the error list on the status page, counted out of
+    findling_file_state, and nothing else: no text of the file, no path and no
+    title travel with them, only the file id and a code out of the closed list
+    (T-05-45). Four of those codes are decided here and nowhere else, namely
+    encrypted, no text layer, empty text and a picture without readable writing,
+    and until plan 05-11 the aggregation of them did not exist although the per
+    file diagnosis knew every one of them (DI-04-03).
+
+    **A file handed to the OCR track is left out**, and that exclusion is the
+    load bearing part. Its verdict is skipped(no_text_layer), which is the
+    handover point and not an end state; reporting it would put every scan of
+    the instance into the error list under "no text in the document", and
+    nothing would ever take it out again, because ``indexed`` is this
+    container's number and is never written into that table. It is the rule the
+    ``done`` list already follows, applied to the second statement about the
+    same row.
+
+    Derived from the finished verdict list rather than collected along the way,
+    so that there is one place deciding what counts as an end state instead of
+    eight call sites each remembering to pass a flag.
+    """
+    handed_over = set(handover)
+    return {
+        verdict.job.file_id: str(verdict.outcome.reason)
+        for verdict in verdicts
+        if verdict.outcome.state is State.SKIPPED
+        and verdict.outcome.reason is not None
+        and verdict.job.file_id not in handed_over
+    }
 
 
 def _acl_users(job: QueueJob) -> tuple[str, ...]:

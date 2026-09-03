@@ -214,6 +214,13 @@ _ACL_DOCUMENTS_SQL: Final = "SELECT COUNT(*) FROM (SELECT DISTINCT file_id FROM 
 # could never make a deleted file look unchanged and therefore untouchable, and
 # it is what lets a restored file be indexed again although its bytes never
 # changed.
+# The measure of an unfinished rebuild (DI-04-04). Rows of an older generation
+# are the files the running code has not looked at yet, and a tombstoned row is
+# a file it never will, so it must not hold the rebuild open forever.
+_VERDICTS_OLDER_THAN_SQL: Final = """
+SELECT COUNT(*) FROM files WHERE index_version < ? AND deleted_at IS NULL
+"""
+
 _IS_UNCHANGED_SQL: Final = """
 SELECT 1 FROM files
  WHERE file_id = ? AND content_hash = ? AND state = 'indexed'
@@ -750,6 +757,24 @@ class Store:
                 _GIVE_UP_SQL,
                 (file_id, storage_id, root_id, mime, size, mtime, etag, state, reason, self.index_version),
             )
+
+    def verdicts_older_than(self, generation: int) -> int:
+        """How many living files still carry a verdict of an earlier generation.
+
+        The measure of an unfinished rebuild, and it is a count rather than a
+        list because nobody acts on the identities: the crawl in Nextcloud owns
+        the work, this number only answers whether the work is done. Zero means
+        every file this container knows was judged by the code that is running.
+
+        Tombstoned rows are left out, and that exclusion is what keeps the
+        answer reachable. A file that was deleted while the rebuild ran will
+        never be judged again, so counting it would mean the marks are never
+        written on any instance where somebody deleted a document during an
+        update. The reconcile turns an eventless deletion into a tombstone as
+        well, so the count converges there too, one nightly run later.
+        """
+        row = self._conn.execute(_VERDICTS_OLDER_THAN_SQL, (generation,)).fetchone()
+        return int(row[0]) if row else 0
 
     def reset_for_reindex(self, index_version: int) -> int:
         """Forget every verdict older than this generation, return how many.

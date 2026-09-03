@@ -246,21 +246,48 @@ class QueueService {
 	}
 
 	/**
-	 * Acknowledge a batch: remove what was processed, and record a reason for
-	 * everything the container could not process.
+	 * Acknowledge a batch: remove what was processed, record a reason for
+	 * everything the container could not process, and record the decisions it
+	 * made on its own.
 	 *
-	 * Both lists are handled in one transaction. Half an acknowledgement is the
+	 * Three lists, two of which write a verdict, and the split between them is
+	 * the split between "we wanted to and could not" and "we decided not to".
+	 * Only the first is an error on the status page; the second is what makes the
+	 * error list group the four reasons the container decides per file, namely
+	 * encrypted, no text layer, empty text and a picture without readable writing
+	 * (DI-04-03). Until they crossed this boundary the aggregation was missing
+	 * while the per file diagnosis knew them perfectly well.
+	 *
+	 * The skips are keyed by FILE id and the failures by queue row id. That is
+	 * not an inconsistency: a failed row has to be translated before it is
+	 * deleted, and a skipped file is acknowledged in the same call anyway, so
+	 * there is nothing left to translate and nothing to look up.
+	 *
+	 * All three are handled in one transaction. Half an acknowledgement is the
 	 * worst of the possible outcomes: rows deleted without their reason recorded
 	 * would vanish from the queue and from the diagnosis at the same time.
 	 *
+	 * A skip that is not a `skipped` reason at all is dropped by
+	 * FileStateService::record, which judges the pair, counts the rejection and
+	 * writes nothing. The batch is still acknowledged, because a defective code
+	 * for one file must not leave thirty one healthy rows locked.
+	 *
+	 * What this does NOT do is take a verdict back. A file that was skipped and
+	 * is indexed later keeps its row until something writes over it, exactly as a
+	 * file that failed and succeeded later does today. The container therefore
+	 * never reports a verdict for a file it handed over to the OCR track, which
+	 * is the one case where that staleness would be the normal path rather than
+	 * an edge of it.
+	 *
 	 * @param int[] $queueIds rows that are done
 	 * @param array<int, string> $failures queue row id to reason code
+	 * @param array<int, string> $skips file id to reason code
 	 * @return array{acknowledged:int, recorded:int}
 	 */
-	public function acknowledge(array $queueIds, array $failures): array {
+	public function acknowledge(array $queueIds, array $failures, array $skips = []): array {
 		$failedIds = array_keys($failures);
 		$allIds = array_values(array_unique(array_merge($queueIds, $failedIds)));
-		if ($allIds === []) {
+		if ($allIds === [] && $skips === []) {
 			return ['acknowledged' => 0, 'recorded' => 0];
 		}
 
@@ -288,7 +315,17 @@ class QueueService {
 				}
 			}
 
-			$acknowledged = $this->queueMapper->acknowledge($allIds);
+			// The decisions of the container, inside the same transaction as the
+			// failures above and as the delete below. There is one row per file,
+			// so a file that is judged again overwrites its earlier verdict
+			// instead of adding a second row.
+			foreach ($skips as $fileId => $reason) {
+				if ($this->fileStateService->record($fileId, 'skipped', $reason)) {
+					$recorded++;
+				}
+			}
+
+			$acknowledged = $allIds === [] ? 0 : $this->queueMapper->acknowledge($allIds);
 			$this->db->commit();
 		} catch (\Throwable $e) {
 			$this->db->rollBack();
@@ -296,7 +333,10 @@ class QueueService {
 		}
 
 		if ($recorded > 0) {
-			$this->logger->info('Findling: recorded files the container could not process', ['count' => $recorded]);
+			// One counter for both lists. Which verdict a file carries is in the
+			// state table a query away, and a log line per list would be two
+			// lines per batch on an instance whose scans all take the same route.
+			$this->logger->info('Findling: recorded verdicts the container reported', ['count' => $recorded]);
 		}
 
 		return ['acknowledged' => $acknowledged, 'recorded' => $recorded];

@@ -221,6 +221,18 @@ $banners = [
 	</div>
 
 	<p class="findling-figure" id="findling-coverage-figure"<?php if (!$hasFraction) { ?> hidden<?php } ?>>
+		<?php
+		/*
+		 * U+00A0 between the figure and the sign, spelled as an escape on both
+		 * sides of the page so that the agreement is visible in a diff (IN-03).
+		 * The script writes the same character when it takes over on the first
+		 * poll, which is what keeps the number from changing its shape three
+		 * seconds after the page opened. Non-breaking because a percent sign
+		 * must not wrap onto the next line away from its number; whoever
+		 * changes it here changes coverageBlock() in the same commit, and a
+		 * test in test_admin_ui_contract.py holds the two together.
+		 */
+		?>
 		<span class="findling-figure__value" id="findling-coverage-percent"><?php p($count($percent ?? 0) . "\u{00A0}%"); ?></span>
 	</p>
 	<progress id="findling-coverage-bar" max="100" value="<?php p((string)($percent ?? 0)); ?>" aria-labelledby="findling-coverage-heading"<?php if (!$hasFraction) { ?> hidden<?php } ?>></progress>

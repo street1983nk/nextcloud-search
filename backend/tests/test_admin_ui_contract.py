@@ -32,6 +32,7 @@ mechanically checkable prohibitions cannot come back unnoticed.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -41,6 +42,19 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = REPO_ROOT / "php" / "templates" / "admin.php"
 STYLESHEET = REPO_ROOT / "php" / "css" / "admin.css"
 SCRIPT = REPO_ROOT / "php" / "js" / "admin.js"
+
+# The two hand written translation catalogues and the two PHP files that decide
+# what the error list of the page can say. They are not part of the three files
+# the prohibitions above are scanned in; the tests at the bottom read them for
+# the two agreements this app has no tooling to enforce (IN-02 and DI-04-03).
+L10N_JSON = REPO_ROOT / "php" / "l10n" / "de.json"
+L10N_JS = REPO_ROOT / "php" / "l10n" / "de.js"
+ADMIN_VIEW = REPO_ROOT / "php" / "lib" / "Service" / "AdminViewService.php"
+FILE_STATE = REPO_ROOT / "php" / "lib" / "Service" / "FileStateService.php"
+
+# The separator between the coverage figure and its sign, written as an escape
+# on both sides of the page so that the agreement can be read in a diff (IN-03).
+NBSP = "\u00a0"
 
 # The five APIs the contract retired, with the reason in one word each: the
 # first three are deprecated since Nextcloud 18, 30 and 30, the fourth is a
@@ -296,3 +310,69 @@ def test_a_dash_and_an_emoji_are_reported() -> None:
     assert len(scan_prose("sample.js", _CLEAN_SCRIPT + "// a dash " + EM_DASH + "\n")) == 1
     assert len(scan_prose("sample.js", _CLEAN_SCRIPT + "// a dash " + EN_DASH + "\n")) == 1
     assert len(scan_prose("sample.js", _CLEAN_SCRIPT + "// a face \U0001f600\n")) == 1
+
+
+def test_both_halves_of_the_page_write_the_same_percent_separator() -> None:
+    """IN-03, turned from a review note into a gate.
+
+    The template renders the coverage figure once, server side, and the script
+    rewrites it on every poll. If the two spell the separator differently, the
+    number visibly changes its shape three seconds after the page opened with
+    nothing having happened, and the page promised the opposite: a value does
+    not change form when the script takes over.
+
+    Both sides write the escape rather than the character, which is the second
+    half of the fix. The literal was there all along and reads as an ordinary
+    space in most editors, so the phase 4 review filed a drift that did not
+    exist. An invisible agreement is one nobody can review.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert '"\\u{00A0}%"' in template
+    assert "'\\u00a0%'" in script
+    # And neither side smuggles the character in instead of naming it.
+    assert NBSP not in template
+    assert NBSP not in script
+
+
+def test_the_two_translation_files_carry_the_same_keys() -> None:
+    """IN-02, and the reason it is a gate rather than a single deletion.
+
+    This app has no string extractor: ``l10n/de.json`` and ``l10n/de.js`` are
+    written by hand and have to stay identical, because Nextcloud reads the
+    first from PHP and the second from the browser. A key removed from one of
+    them alone is a sentence that is German on the server and English in the
+    page, which is the shape of every half finished cleanup.
+    """
+    catalogue = json.loads(L10N_JSON.read_text(encoding="utf-8"))
+    # de.js is a call of OC.L10N.register with the catalogue as its third
+    # argument, so the object is cut out rather than parsed as a whole file.
+    script = L10N_JS.read_text(encoding="utf-8")
+    keys = set(json.loads(script[script.index("{") : script.rindex("}") + 1]))
+
+    assert keys == set(catalogue["translations"])
+    # The dead entry of IN-02 named a sentence the page never showed. Its
+    # absence is asserted by name, so that a revert is a red test and not a
+    # silent return.
+    assert "Indexing, about %s left" not in keys
+
+
+def test_every_reason_of_the_closed_list_has_a_label_and_a_remedy() -> None:
+    """DI-04-03 from the reading end: a group without words is a blank cell.
+
+    Four of the codes are decided by the container alone, and until plan 05-11
+    they never reached this side, so their rows in the label table were never
+    rendered by anything. Now they are, and a code without a row would be shown
+    as "Unknown reason (code)" to an admin whose files are perfectly ordinary.
+    """
+    php = ADMIN_VIEW.read_text(encoding="utf-8")
+    labelled = set(re.findall(r"^\t\t'([a-z_]+)' => \[$", php, re.MULTILINE))
+    block = re.search(r"const REASONS = \[(.*?)\];", FILE_STATE.read_text(encoding="utf-8"), re.DOTALL)
+
+    assert block is not None, "the closed list of reasons is no longer where this test looks for it"
+    reasons = set(re.findall(r"'([a-z_]+)'", block.group(1)))
+    assert reasons
+    assert reasons - labelled == set()
+    for decided_here in ("encrypted", "no_text_layer", "empty_text", "image_not_ocrable"):
+        assert decided_here in labelled

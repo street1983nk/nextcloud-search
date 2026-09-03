@@ -317,7 +317,16 @@
     const hasDenominator = indexable > 0
     const hasFraction = hasDenominator && percent !== null
 
-    text('findling-coverage-percent', numbers.format(percent === null ? 0 : percent) + ' %')
+    // The separator between the figure and the sign is U+00A0, and it is
+    // spelled as an escape rather than as the character itself (IN-03). The
+    // template writes the same one, so the number does not change its shape
+    // when the script takes over on the first poll. It was written here as a
+    // literal before, which reads as an ordinary space in most editors, and
+    // the phase 4 review filed the pair as a drift for exactly that reason:
+    // the agreement was real and invisible. Non-breaking is the right one of
+    // the two, because a percent sign must not wrap away from its number, and
+    // whoever changes it here changes it in the template in the same commit.
+    text('findling-coverage-percent', numbers.format(percent === null ? 0 : percent) + '\u00a0%')
     text('findling-coverage-subline', t('findling', '%1$s of %2$s indexable files are searchable')
       .replace('%1$s', numbers.format(searchable))
       .replace('%2$s', numbers.format(indexable)))

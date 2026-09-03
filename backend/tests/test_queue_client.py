@@ -26,16 +26,24 @@ initial index and a weekend.
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
+
 from findling.nc.client import AsyncNextcloudApp
-from findling.nc.queue import DocumentQueue, QueueJob
+from findling.nc.queue import MAX_ACK_LIST, DocumentQueue, QueueJob
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 CLIENT_SOURCE = PACKAGE_ROOT / "nc" / "client.py"
 QUEUE_SOURCE = PACKAGE_ROOT / "nc" / "queue.py"
+
+# The other end of the acknowledgement. Two tests at the bottom of this file read
+# it, because the ceiling of the list and the closed list of reason codes are one
+# agreement between the halves and cannot be imported across the boundary.
+QUEUE_CONTROLLER = PACKAGE_ROOT.parents[2] / "php" / "lib" / "Controller" / "QueueController.php"
 
 CLAIM_PATH = "/ocs/v2.php/apps/findling/queues/documents"
 ACK_PATH = "/ocs/v2.php/apps/findling/queues/documents"
@@ -310,7 +318,10 @@ async def test_an_empty_queue_is_no_work_and_no_error() -> None:
         assert result.unavailable is False
 
 
-async def test_acknowledge_sends_both_lists_to_the_delete_endpoint() -> None:
+async def test_acknowledge_sends_all_three_lists_to_the_delete_endpoint() -> None:
+    # The third list is always spelled out, empty or not: a body whose shape
+    # depends on its content is a body the other side has to guess at, and OCS
+    # binds a missing parameter to the default of the method either way.
     session = _FakeSession({("DELETE", ACK_PATH): {"acknowledged": 2, "recorded": 1}})
 
     result = await _queue(session).acknowledge([91, 92], {93: "timeout"})
@@ -319,7 +330,11 @@ async def test_acknowledge_sends_both_lists_to_the_delete_endpoint() -> None:
     assert result.count == 2
     method, path, kwargs = session.calls[0]
     assert (method, path) == ("DELETE", ACK_PATH)
-    assert kwargs["json"] == {"files": [91, 92], "failed": [{"queueId": 93, "reason": "timeout"}]}
+    assert kwargs["json"] == {
+        "files": [91, 92],
+        "failed": [{"queueId": 93, "reason": "timeout"}],
+        "skipped": [],
+    }
 
 
 async def test_acknowledge_with_nothing_to_say_does_not_call_nextcloud() -> None:
@@ -483,3 +498,102 @@ def test_nc_py_api_is_still_named_in_the_client_module_only() -> None:
     )
 
     assert offenders == ["nc/client.py"]
+
+
+# -- the third list of the acknowledgement (DI-04-03) ------------------------
+
+
+async def test_acknowledge_sends_the_skip_verdicts_as_a_third_list() -> None:
+    # Keyed by file id and not by queue row id, unlike the failure list. The
+    # receiving half writes into findling_file_state, which is keyed by file id,
+    # and a skipped row travels in the done list as well, so its queue row is
+    # deleted in the same request: a queue id would have to be translated before
+    # the delete, while the file id is what the verdict is about anyway.
+    session = _FakeSession({("DELETE", ACK_PATH): {"acknowledged": 1, "recorded": 1}})
+
+    result = await _queue(session).acknowledge([91], {}, {4711: "encrypted"})
+
+    assert result.ok is True
+    method, path, kwargs = session.calls[0]
+    assert (method, path) == ("DELETE", ACK_PATH)
+    assert kwargs["json"] == {
+        "files": [91],
+        "failed": [],
+        "skipped": [{"fileId": 4711, "reason": "encrypted"}],
+    }
+
+
+async def test_a_skip_verdict_alone_is_worth_a_call() -> None:
+    # The done list is empty when every row of the batch was handed over, and a
+    # skip verdict still has to reach the other side: it is the only thing that
+    # ever puts one of the four container reasons into the error list.
+    session = _FakeSession({("DELETE", ACK_PATH): {"acknowledged": 0, "recorded": 1}})
+
+    result = await _queue(session).acknowledge([], {}, {4711: "empty_text"})
+
+    assert result.ok is True
+    assert len(session.calls) == 1
+
+
+async def test_three_empty_lists_still_do_not_call_nextcloud() -> None:
+    # The rule of the empty acknowledgement survives the third list. An idle
+    # instance polls every two minutes and must not pay a round trip for an
+    # answer that can only be zero.
+    session = _FakeSession()
+
+    result = await _queue(session).acknowledge([], {}, {})
+
+    assert result.ok is True
+    assert session.calls == []
+
+
+async def test_a_skip_list_over_the_limit_is_cut_and_says_so(caplog: pytest.LogCaptureFixture) -> None:
+    # T-05-46. The receiving half refuses a list longer than its own ceiling and
+    # answers the whole request with a bad request, which would cost the batch
+    # its acknowledgement. Cutting here keeps the acknowledgement, loses only
+    # the verdicts beyond the ceiling, and says how many those were. A batch is
+    # capped at MAX_BATCH_FILES on the Nextcloud side, so this cannot be reached
+    # by an ordinary pass; it is the guard against the day that changes.
+    session = _FakeSession({("DELETE", ACK_PATH): {"acknowledged": 1}})
+    oversized = dict.fromkeys(range(1, MAX_ACK_LIST + 8), "empty_text")
+
+    with caplog.at_level(logging.WARNING, logger="findling.nc.queue"):
+        await _queue(session).acknowledge([91], {}, oversized)
+
+    _, _, kwargs = session.calls[0]
+    assert len(kwargs["json"]["skipped"]) == MAX_ACK_LIST
+    assert "7" in caplog.text
+
+
+def test_the_container_cap_matches_the_ceiling_of_the_receiving_half() -> None:
+    """The two numbers are one agreement, so they are compared instead of copied.
+
+    ``QueueController::MAX_LIST_LENGTH`` decides what Nextcloud accepts, and a
+    container that sends more than that turns a whole acknowledgement into a bad
+    request. The constant cannot be imported across the language boundary, so it
+    is read out of the source, the same way the reason lists are held against
+    each other in ``test_extract_errors.py``.
+    """
+    source = QUEUE_CONTROLLER.read_text(encoding="utf-8")
+    match = re.search(r"const MAX_LIST_LENGTH = (\d+);", source)
+    assert match is not None, "the ceiling of the acknowledgement is no longer where this test looks for it"
+    assert int(match.group(1)) == MAX_ACK_LIST
+
+
+def test_the_receiving_half_takes_a_skip_list_and_judges_its_codes() -> None:
+    """Gate for the other end of the crossing, read out of the PHP source.
+
+    There is no PHP test environment in this repository, so the guarantee that
+    the sending side has a counterpart is textual, in the shape of Gate B in
+    ``test_php_trust_boundary.py``. Three properties are pinned, and each of
+    them is a way in which the list could rot into a silent data loss: the
+    parameter has to exist, its entries have to be judged against the closed
+    list of reason codes, and it has to be bounded by the shared ceiling above.
+    """
+    source = QUEUE_CONTROLLER.read_text(encoding="utf-8")
+    assert re.search(r"public function acknowledgeDocuments\([^)]*\$skipped", source, re.DOTALL) is not None
+    block = re.search(r"private function skipList\(array \$raw\): \?array \{(.*?)\n\t\}", source, re.DOTALL)
+    assert block is not None, "the skip list has no validator of its own"
+    body = block.group(1)
+    assert "FileStateService::REASONS" in body
+    assert "self::MAX_LIST_LENGTH" in body

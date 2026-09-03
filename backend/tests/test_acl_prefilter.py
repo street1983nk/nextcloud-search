@@ -198,8 +198,10 @@ class _OneBatchQueue:
         del limit, max_bytes
         return ClaimResult(jobs=self._batches.pop(0)) if self._batches else ClaimResult()
 
-    async def acknowledge(self, done: Any, failed: Any) -> CallResult:
-        del failed
+    async def acknowledge(self, done: Any, failed: Any, skipped: Any = None) -> CallResult:
+        # Neither verdict list matters here: this file is about the prefilter,
+        # and an acl job writes no verdict at all.
+        del failed, skipped
         self.acknowledged.append(list(done))
         return CallResult(ok=True, count=len(self.acknowledged[-1]))
 

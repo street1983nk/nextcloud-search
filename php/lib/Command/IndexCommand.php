@@ -87,6 +87,20 @@ class IndexCommand extends Command {
 	 * mount it was walking, and leaving them in place would mean the instance
 	 * runs two crawls per mount, an old one that continues in the middle and a
 	 * new one that starts at the beginning.
+	 *
+	 * **Where this command ends and the other half begins (DI-04-04).** Queueing
+	 * the crawl is everything this side can do. The reindex banner names this
+	 * command as its remedy, and the banner is raised and lowered by the
+	 * container: it compares the version marks in its own state database against
+	 * what the running code expects. Until plan 05-11 nothing ever wrote those
+	 * marks again, so this command could never clear the banner, and it could
+	 * not even rebuild, because the container read every requeued file as
+	 * unchanged. Both halves of that live over there now, in
+	 * findling/index/open.py: the drift raises the local generation so that this
+	 * crawl reads the documents again, and the marks are stamped once the last
+	 * of them has been judged. Stamping deliberately sits at the END of the
+	 * rebuild and not in the seed of the state database, because seeding is a
+	 * first operation that must never overwrite a mark that is there.
 	 */
 	private function restart(): void {
 		$this->appConfig->deleteKey(Application::APP_ID, AppInstallStep::FIRST_INDEX_SCHEDULED);
@@ -98,6 +112,24 @@ class IndexCommand extends Command {
 		$this->appConfig->setValueBool(Application::APP_ID, AppInstallStep::FIRST_INDEX_SCHEDULED, true);
 	}
 
+	/**
+	 * The counters of this half, and the answer to assumption A8.
+	 *
+	 * Bug-L4 of the phase 2 audit reads "--status always shows indexed 0", and
+	 * this command was suspected of having outgrown it because it asks
+	 * FileStateService::counts() today. It has not, and the zero is not a
+	 * defect: findling_file_state is the source for skipped and failed, and
+	 * indexed belongs to the container, which is the only half that can see the
+	 * index. Nothing on this side ever writes an indexed row, so the counter is
+	 * structurally nought and always will be.
+	 *
+	 * So the fix is the label and not the number, which is what the division of
+	 * the truth from phase 4 prescribes: the block says whose view it is, and
+	 * the line under it names the half that counts the documents and where to
+	 * ask it. Printing a number that cannot be anything but nought without
+	 * saying so is how a status command teaches an admin to distrust all of its
+	 * output.
+	 */
 	private function status(OutputInterface $output): void {
 		$queue = $this->queueService->stats();
 		$states = $this->fileStateService->counts();
@@ -106,10 +138,12 @@ class IndexCommand extends Command {
 		$output->writeln(sprintf('  scheduled            %d', $queue['scheduled']));
 		$output->writeln(sprintf('  handed to the worker %d', $queue['running']));
 		$output->writeln('');
-		$output->writeln('End states');
+		$output->writeln('End states as Nextcloud recorded them');
 		foreach ($states as $state => $count) {
 			$output->writeln(sprintf('  %-20s %d', $state, $count));
 		}
+		$output->writeln('<comment>  indexed is counted by the backend container and never written here, so it stays 0.</comment>');
+		$output->writeln('<comment>  The admin settings page of Findling shows the counters of both halves side by side.</comment>');
 		$output->writeln('');
 
 		$lastRun = $this->appConfig->getValueInt(Application::APP_ID, SchedulerJob::LAST_JOB_RUN);
