@@ -160,12 +160,18 @@ listed by name rather than summarised:
 
 Number 9 is reachable over HTTP but not from the integration job as it stands: it
 would need a second registered ExApp to call the gateway under a foreign app id.
-The other eleven are unit test material.
+The other eleven are unit test material, and number 9 turned out to be unit test
+material too: doubled, it is a header on a request object and four cases, which
+is what `php/tests/Unit/GatewayControllerTest.php` does since plan 05-16.
 
-**State of this list.** Numbers 1 to 6 have tests since plan 05-15, in
-`php/tests/Unit/ExAppServiceTest.php`, `php/tests/Unit/ProviderTest.php` and
-`php/tests/Unit/PlainTextTest.php`. Numbers 7 to 12 are still open and belong to
-plan 05-16. The list itself is deliberately left whole rather than trimmed: it is
+**State of this list.** All twelve have a test. Numbers 1 to 6 arrived with plan
+05-15 and numbers 7 to 12 with plan 05-16, in
+`php/tests/Unit/ExAppServiceTest.php`, `php/tests/Unit/ProviderTest.php`,
+`php/tests/Unit/PlainTextTest.php` and
+`php/tests/Unit/GatewayControllerTest.php`. Which number is asserted by which
+test name is a table in `05-16-SUMMARY.md`, and plan 05-19 is the one that
+rewrites this section around it. The list itself is deliberately left whole
+rather than trimmed: it is
 the specification these tests are read against, and a specification that shrinks
 as it is implemented cannot be used to check the implementation afterwards.
 
