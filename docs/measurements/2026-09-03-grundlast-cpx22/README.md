@@ -35,4 +35,17 @@ scripts/ops/rss_sampler.sh <container> 5 <container>.csv
 bei 224 MB und im gleichzeitigen Höchststand bei 290 MB, ohne einen einzigen
 Eintrag in `memory.events` und ohne Speichertod.
 
+## Die zweite Messung, mit HaRP
+
+Unter `mit-harp/` liegt eine zweite, kürzere Reihe: 2026-09-03T18:12:20Z bis
+18:22:43Z, zehn Minuten, sieben Container, 124 Messpunkte je Container, nachdem
+HaRP als einziger optionaler Container zugeschaltet und alle Container einmal
+neu gestartet wurden. Sie beantwortet genau eine Frage, nämlich was HaRP selbst
+wiegt: 54 MB im Mittel, 55 MB im Höchststand, über zehn Minuten praktisch
+konstant.
+
+Die Summen der beiden Reihen sind ausdrücklich **nicht** vergleichbar. Die
+zweite ist kürzer, hat keine Aufrufphase und lief direkt nach einem Neustart.
+Vergleichbar ist allein die eigene Spalte von HaRP.
+
 Diese Zahlen gelten für x86. Für ARM wird neu gemessen, nicht umgerechnet.

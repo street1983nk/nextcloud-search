@@ -63,6 +63,7 @@ gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 | Grenzen | steht | 2026-09-03 |
 | Grenzwert für den Spitzenwert | festgelegt | 2026-09-03 |
 | AIO-Grundlast, Generalprobe cpx22 | gemessen, 290 MB Höchststand | 2026-09-03 |
+| Beitrag von HaRP, Generalprobe cpx22 | gemessen, 55 MB | 2026-09-03 |
 | AIO-Grundlast, ARM | FEHLT NOCH | wartet auf Bestand |
 | Findling im Volllauf, 50.000 Dateien | FEHLT NOCH | Pläne 05-12 und 05-14 |
 | Störfall-Drills | FEHLT NOCH | Plan 05-14 |
@@ -448,12 +449,63 @@ gemessen, nicht umgerechnet.
 
 ### Der Beitrag von HaRP
 
-FEHLT NOCH. HaRP wird nach dieser Messung zugeschaltet und die Grundlast dann
-ein zweites Mal kurz gemessen, damit sein Beitrag getrennt ausgewiesen ist und
-nicht in der Zahl von oben verschwindet.
+HaRP ist der einzige optionale Container, den Findling braucht, und er wurde
+deshalb erst nach der Messung oben zugeschaltet. Zehn Minuten Nachmessung über
+alle sieben Container, 124 Messpunkte je Container, 2026-09-03T18:12:20Z bis
+18:22:43Z:
 
-Die Rohdaten aller sechs Sampler liegen unter
+| Container | `anon` im Mittel | höchster Stand |
+|---|---|---|
+| **nextcloud-aio-harp** | **54 MB** | **55 MB** |
+| nextcloud-aio-nextcloud | 91 MB | 92 MB |
+| nextcloud-aio-harp und die sechs anderen zusammen | 233 MB | 236 MB |
+
+Der Beitrag von HaRP sind also rund **55 MB**, und er ist bemerkenswert flach:
+zwischen niedrigstem und höchstem Stand liegen über zehn Minuten zwei MB.
+
+Was hier ausdrücklich **nicht** steht, ist ein Vergleich der beiden Summen. Die
+236 MB dieser Messung sind nicht kleiner als die 290 MB von oben, weil HaRP
+Speicher spart, sondern weil diese Messung zehn Minuten statt dreißig dauerte,
+keine Aufrufphase hatte und direkt nach einem Neustart aller Container lief, als
+die PHP-Arbeiter von Nextcloud noch frisch waren (92 MB statt 190 MB). Zwei
+Messungen mit verschiedenem Aufbau nebeneinanderzustellen und die Differenz zu
+deuten, wäre genau die Art von Zahl, gegen die dieser Bericht geschrieben ist.
+
+Belastbar ist die eigene Spalte von HaRP. Für die Budgetrechnung gilt daher
+konservativ: Grundlast 290 MB plus HaRP 55 MB, also rund **345 MB**, neben denen
+Findling seine 2,0 GB haben darf. Auf einer 4-GB-Box bleibt damit rund ein
+weiteres Gigabyte ungenutzt.
+
+Die Rohdaten beider Messungen liegen unter
 `docs/measurements/2026-09-03-grundlast-cpx22/`.
+
+### Der HaRP-Weg von AIO, und warum die Warnung aus 05-01 hier nicht greift
+
+AppAPI hat den Daemon selbst registriert, ohne einen einzigen `occ`-Aufruf:
+
+```
+| Def | Name     | Display name | Deploy ID      | Protocol | Host                    | NC Url                         | Is HaRP |
+| *   | harp_aio | AIO HaRP     | docker-install | http     | nextcloud-aio-harp:8780 | https://loadtest.infranode.dev | yes     |
+```
+
+In der Zeile steckt eine Stelle, die aus Phase 5 als Fehler bekannt ist. Beim
+Aufbau mit docker-compose führte genau dieses Feld `NC Url` mit der Adresse von
+Nextcloud statt der von HaRP zu `heartbeat check failed`, weil AppAPI die Adresse
+einer ExApp als `{nextcloud_url}/exapps/{appId}` bildet und HaRP dort der
+Eingang ist.
+
+Unter AIO ist der Eingang aber nicht HaRP, sondern Apache, und Apache reicht
+`/exapps` an HaRP durch. Nachgewiesen, bevor die erste ExApp installiert wird:
+
+```
+GET https://loadtest.infranode.dev/exapps/          -> HTTP 404, text/plain, 13 Byte
+GET https://loadtest.infranode.dev/gibtesnicht      -> HTTP 404, text/html, Nextcloud-Seite
+```
+
+Die schlichte Textantwort kommt von HaRP, die HTML-Seite von Nextcloud. Die
+Weiterleitung steht also, und die Registrierung, die AIO selbst vorgenommen hat,
+ist unter AIO richtig. Sie darf nicht nach dem compose-Muster "korrigiert"
+werden.
 
 ## Findling im Volllauf
 
