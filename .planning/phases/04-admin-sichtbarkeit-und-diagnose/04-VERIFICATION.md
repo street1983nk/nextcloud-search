@@ -141,7 +141,27 @@ Keine. Der Owner-Walkthrough (2026-09-03, dokumentiert in 04-10-SUMMARY.md) hat 
 
 Keine blockierenden Gaps gefunden. Alle vier Roadmap-Erfolgskriterien sind durch Code, Live-Proben und den bereits erfolgten Owner-Walkthrough belegt. Der eine kritische und die sechs Warnbefunde aus dem Code-Review wurden vollständig behoben und im aktuellen Code verifiziert. Zwei Befunde aus dem Walkthrough (Skip-Verdikt-Handover, Versionsmarken-Neustempelung) sind bewusst als Gap-Closure-Material für einen späteren Zyklus zurückgestellt, mit explizitem Owner-Sign-off — das sind dokumentierte Entscheidungen, keine übersehenen Lücken. Alle Qualitätsgates (pytest, ruff, pyright, vulture, php -l) laufen grün über das gesamte Repository, unabhängig nachvollzogen und nicht nur aus SUMMARY.md übernommen.
 
+### Nachtrag 2026-09-03: Prüfsummen-Nachweis T-04-64 (Security-Audit)
+
+Der Security-Audit (04-SECURITY.md) fand als einzigen offenen Punkt den in
+04-10-SUMMARY.md:275 selbst protokollierten fehlenden Prüfsummenlauf über das
+Referenzkorpus nach der Live-Räumung (T-04-64, Plan 04-10:335/344/369). Die
+Messung wurde am 03.09. nachgeholt, auf derselben Dev-Instanz
+(`findling-nextcloud`), auf der die Räumung der Sichtprobe 7 lief:
+
+- **sha256-Vergleich:** alle 16 korpus-stämmigen Dateien der Instanz (12 unter
+  `testuser/files/corpus/`, 4 lose: 13, 15, 17, 22) gegen den deterministischen
+  Build-Stand `testdata/corpus/` — 16 geprüft, 0 Abweichungen.
+- **mtime-Beweis:** `find data/{admin,kollegin,testuser}/files -type f
+  -newermt "2026-09-03 02:30"` liefert keinen Treffer; die Sichtprobe lief
+  02:30 bis 03:12, die Räumung 02:51. Keine Nutzerdatei irgendeines Accounts
+  wurde während oder nach dem Durchlauf verändert.
+
+Damit ist die im Threat-Register verlangte Messung erbracht und T-04-64 in
+04-SECURITY.md geschlossen (65/65 CLOSED, threats_open: 0).
+
 ---
 
 *Verified: 2026-09-03T12:00:00Z*
 *Verifier: Claude (gsd-verifier)*
+*Nachtrag T-04-64: 2026-09-03, Prüfsummen-Nachweis siehe oben*
