@@ -196,7 +196,50 @@ Plans:
   3. Beide Apps installieren, laufen und deinstallieren sauber auf docker-compose und AIO über HaRP, auf Nextcloud 32 bis 34; Uninstall entfernt Queue-Tabellen, Preferences und nach Bestätigung das Index-Volume
   4. Beide signierten Releases mit XSD-validierter info.xml sind im App Store eingereicht, mit gekoppelter Versionierung und ausdrücklicher Privacy-Aussage im Store-Text
 
-**Plans**: TBD
+**Lesart von Kriterium 4** (Owner-Entscheid D-09 vom 03.09.2026, festgehalten in 05-CONTEXT.md): Kriterium 4 gilt für Phase 5 als "einreichungsbereit", also signierte, XSD-validierte Release-Artefakte beider Apps plus fertige Store-Texte und der Tag v1.0.0 (D-26). Die tatsächliche Abgabe erfolgt gebündelt mit der Semantik nach Phase 6 (D-08), Fallback gestaffelt nach D-10. Kriterium 3 deckt zusätzlich Nextcloud 35 ab (D-23).
+
+**Plans**: 19 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 05-01-PLAN.md , HaRP: der echte Installationsweg, install und run
+- [ ] 05-02-PLAN.md , Ein Disable verliert nichts, ein Purge raeumt alles (PKG-04)
+- [ ] 05-03-PLAN.md , Endgueltige Aufgabe-Regel und zwei Durchsatzposten vor dem Volllauf
+- [ ] 05-04-PLAN.md , Bildzweig und Ordner-Wiederherstellung
+- [ ] 05-05-PLAN.md , Lastkorpus-Generator, RSS-Sampler und Box-Skript
+- [ ] 05-06-PLAN.md , Audit-Kleinreste in Container und PHP-Haelfte (D-20)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05-07-PLAN.md , Lockstep-Version: beide Haelften nennen und pruefen ihre Version (D-11)
+- [ ] 05-08-PLAN.md , Uninstall auf dem echten Weg, NC 32 bis 35, Teilentfernung (PKG-03, PKG-04)
+- [ ] 05-09-PLAN.md , Sichtbarkeits-Paritaet ueber sechs Szenarien als Dauergate (SRCH-04)
+- [ ] 05-10-PLAN.md , Die Miet-Box: Voraussetzungen, Bestellung, AIO ueber HaRP, Grundlast
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 05-11-PLAN.md , Phase-4-Erbe: Skip-Verdikte und Versionsmarken (D-19)
+- [ ] 05-12-PLAN.md , Trockenlauf, gemessener OCR-Faktor und der Grenzwert
+- [ ] 05-13-PLAN.md , CI-Haertung: Digest-Smoke, Pin-Gate, Deadlines, Postgres-Dauergate
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 05-14-PLAN.md , ARM-Volllauf, Stoerfall-Drills, Messbericht, Box-Abbau
+- [ ] 05-15-PLAN.md , PHPUnit-Suite: Geruest und die ersten sechs Verhaltensweisen (D-24)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 05-16-PLAN.md , PHPUnit-Suite: die restlichen sechs Verhaltensweisen (D-24)
+- [ ] 05-17-PLAN.md , Store-Metadaten dreisprachig, 1.0.0, Privacy, Textgate (PKG-05)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 05-18-PLAN.md , Store-Medien, Release-Job, signierte Artefakte
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 05-19-PLAN.md , Abnahme: Gastnutzer-Probe, Gate-Landschaft, Tag v1.0.0
 
 ### Phase 6: Semantische Suche (Release v1.1)
 
@@ -227,7 +270,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
-| 5. Härtung und Store-Einreichung v1.0 | 0/TBD | Not started | - |
+| 5. Härtung und Store-Einreichung v1.0 | 0/19 | Planned | - |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 
 ## Requirement Coverage
