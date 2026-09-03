@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Repair;
 
 use OCA\Findling\AppInfo\Application;
+use OCA\Findling\Service\PurgeService;
 use OCP\IAppConfig;
 use OCP\Migration\IOutput;
 use OCP\Migration\IRepairStep;
@@ -45,6 +46,11 @@ class AppUninstallStep implements IRepairStep {
 	 * Set by "occ findling:purge --arm", cleared by "--disarm". As long as it is
 	 * absent, every disable and every remove of this app leaves the queue, the
 	 * counters and the settings exactly where they are.
+	 *
+	 * The mark is used up by the very run it triggers, because the app config
+	 * of this app goes with the removal and the mark lives in it. So a purge
+	 * arms once and never twice, and the disable after the disable is a no-op
+	 * again.
 	 */
 	public const PURGE_INTENT = 'purge_intent';
 
@@ -54,11 +60,17 @@ class AppUninstallStep implements IRepairStep {
 	 * The evidence behind the measurement in docs/uninstall.md: it answers the
 	 * question which lifecycle events reach an uninstall repair step, on the
 	 * running instance rather than out of the server sources.
+	 *
+	 * It counts up on every call, including the one that removes everything,
+	 * and it disappears with the app config in that same run. A counter that
+	 * starts at zero again is therefore the fingerprint of a purge that went
+	 * through.
 	 */
 	public const PURGE_STEP_CALLS = 'purge_step_calls';
 
 	public function __construct(
 		private IAppConfig $appConfig,
+		private PurgeService $purgeService,
 		private LoggerInterface $logger,
 	) {
 	}
@@ -78,6 +90,11 @@ class AppUninstallStep implements IRepairStep {
 			}
 
 			$output->info('Findling was asked to remove its data, so its tables, its background jobs and its settings go now.');
+
+			// One routine, and this side holds no removal logic of its own.
+			// PurgeService writes one line per item it found, and it takes a
+			// second run without anything left to remove.
+			$this->purgeService->run($output);
 		} catch (\Throwable $e) {
 			$this->logger->error('Findling: the uninstall step could not finish', ['exception' => $e]);
 			$output->warning('Findling could not finish its uninstall step. Run "occ findling:purge --now" to remove its data by hand.');

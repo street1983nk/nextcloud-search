@@ -64,9 +64,16 @@ weeks. "occ findling:index --status" shows how far it has come.]]></description>
 		reached by every disable and not only by a removal. That is why the step
 		removes nothing unless an administrator stated the intent first, and why
 		docs/uninstall.md carries the measurement instead of a claim.
+
+		The third command belongs to that step and is the only place where an
+		administrator states the intent to remove the data of this app. It is a
+		command and not a button, because clearing the index bookkeeping is an
+		operational procedure and not an everyday click, and because the admin
+		page already carries one destructive confirmation with the cleanup of
+		the exclusion rules.
 	-->
 	<repair-steps><install><step>OCA\Findling\Repair\AppInstallStep</step></install><uninstall><step>OCA\Findling\Repair\AppUninstallStep</step></uninstall></repair-steps>
-	<commands><command>OCA\Findling\Command\IndexCommand</command><command>OCA\Findling\Command\DiagnoseCommand</command></commands>
+	<commands><command>OCA\Findling\Command\IndexCommand</command><command>OCA\Findling\Command\DiagnoseCommand</command><command>OCA\Findling\Command\PurgeCommand</command></commands>
 	<!--
 		The settings block, written on one line for the same reason as the two
 		above, and standing here because there is nowhere else to put it:
