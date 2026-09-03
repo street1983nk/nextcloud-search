@@ -567,3 +567,60 @@ Methode.
 
 **Wohin es gehört:** in den Plan, der den Volllauf auswertet (05-14), oder in
 den Phase-Review.
+
+## DI-05-20: Ein Mount, den es beim ersten Durchgang noch nicht gab, fehlt im Nenner des Deckungsgrads
+
+**Found during:** Plan 05-12, Task 1, auf der Box.
+
+**Was:** Der erste Durchgang schreibt je Mount eine Zeile in
+`oc_findling_scan_stats`, und der Deckungsgrad bildet seinen Nenner aus genau
+diesen Zeilen. Ein Nutzer, der nach dem Durchgang angelegt wird, bekommt keine
+Zeile. Seine Dateien kommen ueber den Vergleichslauf trotzdem in den Index, also
+waechst der Zaehler, waehrend der Nenner steht. Gemessen auf der Box: 88
+indexierte Dokumente gegen 49 indexierbare, angezeigt als hundert Prozent, weil
+die Kachel deckelt. Nach `occ findling:index --restart -n` stimmen beide Zahlen
+(88 von 104, 84 Prozent).
+
+**Warum nicht hier erledigt:** Der Zustand heilt von selbst, spaetestens mit dem
+naechtlichen Vergleich, und er verfaelscht keine Messung dieses Plans. Die
+Abhilfe waere dagegen eine Aenderung an der Frage, welche Mounts der Nenner
+zaehlt, also am Deckungsgrad selbst: entweder legt der Vergleichslauf die fehlende
+Zeile an, oder der Nenner kommt nicht mehr aus `scan_stats`, sondern aus der
+Mount-Liste. Beides ist eine Entscheidung ueber die Bedeutung der Kachel und
+keine Zeile in einer Datei, also Rule 4 und nicht Rule 1.
+
+**Wohin es gehoert:** in den Phase-Review, zusammen mit der Frage, ob ein
+Deckungsgrad ueber hundert Prozent lieber sichtbar sein sollte als gedeckelt: die
+gedeckelten hundert Prozent sind die einzige Anzeige, die aussieht wie ein
+fertiger Index, obwohl gerade ein Mount fehlt.
+
+## DI-05-21: Ein Fehlschlag bleibt in der Fehlerliste stehen, auch wenn die Datei danach indexiert wird
+
+**Found during:** Plan 05-12, Task 2, auf der Box, nach der Korrektur des
+xlsx-Befunds.
+
+**Was:** `QueueService::acknowledge()` schreibt Zeilen in
+`oc_findling_file_state` nur fuer Fehlschlaege und fuer Uebersprungene. Die
+erfolgreich indexierten Dateien reisen in `$queueIds` und schreiben dort
+bewusst nichts, weil das Endverdikt "indexiert" der Container zaehlt. Also
+raeumen sie auch ihre alte Zeile nicht weg. Gemessen: nach der Korrektur meldet
+der Container 587 indexiert und 0 fehlgeschlagen, waehrend die Nextcloud-Seite
+weiterhin 32 `failed(corrupt)` fuehrt und `occ findling:diagnose` fuer eine
+dieser Dateien "Datei beschaedigt" nennt, obwohl dieselbe Datei ueber die Suche
+zu finden ist.
+
+**Warum nicht hier erledigt:** Die Abhilfe ist keine Zeile, sondern eine
+Entscheidung darueber, was die Zustandstabelle bedeutet. Loescht die
+Quittierung die Zeilen der Dateien in `$queueIds`, dann ist die Fehlerliste
+immer der aktuelle Stand, aber die Nextcloud-Seite verliert die Spur eines
+Fehlschlags, der sich beim naechsten Versuch wiederholt, und die Aufgeben-Regel
+nach drei Versuchen haengt an genau dieser Spur. Bleibt es, wie es ist, ist die
+Liste nach jeder erfolgreichen Wiederholung falsch. Dazu kommt, dass die
+Zustandstabelle keinen Zeitstempel des Verdikts fuehrt, an dem sich "alt"
+ablesen liesse. Das ist Rule 4 und nicht Rule 1, und es beruehrt PHP-Seite,
+Container-Vertrag und die Anzeige zugleich.
+
+**Wohin es gehoert:** in den Phase-Review, und zwar vor dem Volllauf in 05-14
+zur Kenntnis: der Volllauf sollte auf einer geraeumten Zustandstabelle starten,
+sonst traegt sein Fehlerbericht die 32 Zeilen dieses Trockenlaufs weiter, obwohl
+die Dateien indexiert sind.

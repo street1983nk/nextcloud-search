@@ -61,11 +61,16 @@ gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 | Zertifikat und Abschottung | auf der Generalprobe belegt | 2026-09-03 |
 | Methode | steht | 2026-09-03 |
 | Grenzen | steht | 2026-09-03 |
-| Grenzwert für den Spitzenwert | festgelegt | 2026-09-03 |
+| Grenzwert für den Spitzenwert | festgelegt, 2,0 GB, aus gemessenen Größen hergeleitet | 2026-09-03 |
 | AIO-Grundlast, Generalprobe cpx22 | gemessen, 290 MB Höchststand | 2026-09-03 |
 | Beitrag von HaRP, Generalprobe cpx22 | gemessen, 55 MB | 2026-09-03 |
+| Installation auf der Box, Generalprobe cpx22 | durchgeführt und belegt | 2026-09-03 |
+| Trockenlauf 500 Dateien, Generalprobe cpx22 | gemessen, 381 MB Spitze, 7 min 38 s | 2026-09-03 |
+| OCR-Faktor, Generalprobe cpx22 | gemessen, 2517 ms je Seite | 2026-09-03 |
+| Laufzeitprognose des Volllaufs, x86 | gerechnet aus gemessenen Posten, rund 13 h | 2026-09-03 |
 | AIO-Grundlast, ARM | FEHLT NOCH | wartet auf Bestand |
-| Findling im Volllauf, 50.000 Dateien | FEHLT NOCH | Pläne 05-12 und 05-14 |
+| Härtungsprobe unter harter Grenze | Befehl belegt und beschrieben, Lauf steht aus | 2026-09-03 |
+| Findling im Volllauf, 50.000 Dateien | FEHLT NOCH | Plan 05-14 |
 | Störfall-Drills | FEHLT NOCH | Plan 05-14 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
@@ -322,14 +327,15 @@ sieht aus wie eine Messung, und das ist schlimmer als eine fehlende Datei.
 Bestanden heißt: der Volllauf über 50.000 Dateien läuft ohne Speichertod durch,
 UND der höchste `anon`-Wert des Findling-Containers bleibt unter **2,0 GB**.
 
-Die Zahl ist eine Festlegung und keine Messung, deshalb hier ihre Rechnung. Die
-Box hat 4 GB. Die ungünstigste gleichzeitige Lage der Findling-Posten liegt nach
-der Vorabrechnung bei 1,6 bis 1,7 GB. Daneben muss die AIO-Grundlast Platz haben,
-für die 0,7 bis 1,1 GB veranschlagt sind, und darüber noch etwas Luft für den
-Seitencache und den Kernel selbst. 2,0 GB lassen der Grundlast im schlechtesten
-Fall knapp zwei GB und liegen damit unter der Größenordnung von 2,5 GB, die als
-Rahmen vorgegeben war. Das ist Absicht: 2,5 GB wären neben einer Grundlast von
-1,1 GB auf einer 4-GB-Box keine Zusage, sondern eine Wette.
+Die Zahl ist eine Festlegung und keine Messung. Ihre vollständige Herleitung aus
+den inzwischen gemessenen Eingangsgrößen steht weiter unten im eigenen Abschnitt
+"Der Grenzwert, jetzt aus gemessenen Größen", zusammen mit der Härtungsprobe und
+mit dem, was passiert, wenn sie greift. In Kurzform: die Box hat 3814 MB nutzbar,
+die gemessene Grundlast von AIO und HaRP nimmt 345 MB davon, die ungünstigste
+gerechnete Lage der Findling-Posten liegt bei 1,6 bis 1,7 GB, und 2,0 GB lassen
+neben all dem noch 1421 MB für Kernel und Seitencache. 2,5 GB, die als
+Größenordnung im Raum standen, ließen 909 MB und wären damit keine Zusage,
+sondern eine Wette.
 
 Der Sampler fällt dieses Urteil nicht selbst. Er nennt Zahlen, und der Vergleich
 mit dem Grenzwert steht hier.
@@ -507,6 +513,645 @@ Weiterleitung steht also, und die Registrierung, die AIO selbst vorgenommen hat,
 ist unter AIO richtig. Sie darf nicht nach dem compose-Muster "korrigiert"
 werden.
 
+## Installation auf der Box
+
+Dieser Abschnitt beantwortet vor allen Zahlen die Frage, ohne die keine Zahl
+etwas wert ist: **welcher Codestand wurde gemessen, und wie kam er auf die
+Maschine.**
+
+### Welcher Codestand
+
+`backend/appinfo/info.xml` nennt als Abbild `ghcr.io/street1983nk/findling_backend`
+mit dem Kennzeichen `0.3.0`. Dieses Kennzeichen existiert in der Registry nicht:
+
+```
+docker manifest inspect ghcr.io/street1983nk/findling_backend:0.3.0
+manifest unknown
+```
+
+Das ist kein Mangel, sondern die Folge von D-26: der Freigabe-Tag `v1.0.0` wird
+erst am Ende der Phase gesetzt, und `docker.yml` legt das Abbild unter dem
+Kennzeichen der Freigabe erst dann ab. Was die Registry heute führt, ist ein
+Kennzeichen je Commit. Der Stand, gegen den diese Phase misst, ist deshalb
+namentlich zu haben:
+
+| Angabe | Wert |
+|---|---|
+| Commit des Arbeitsbaums | `5c82598a4b793e77834b494861ddbf13d4671f22` |
+| gezogenes Kennzeichen | derselbe Commit, als Kennzeichen des Abbilds |
+| Digest des Index | `sha256:bb8f17e7d18df86b410308ee06bb2a6935dbbd183f0c6fcd032ab1ef17234544` |
+| Digest der Ebene amd64 | `sha256:308ff23621bdd13dae0cd345f5c39e651bddfd3578dcd1409af4e3dd2eb82dd2` |
+| Digest der Ebene arm64 | `sha256:eb1798dcab0125a0b967cdb2898c8be3ed887cf8357a51a9673714d8c19b3ad1` |
+| Weg | gezogen, nicht auf der Box gebaut |
+
+Der Index trägt beide Architekturen, also zieht der ARM-Lauf später aus
+demselben Index seine eigene Hälfte, und die Aussage "derselbe Codestand auf
+beiden Maschinen" ist dann keine Behauptung, sondern derselbe Digest.
+
+Gebaut wurde auf der Box nichts. Das ist die bessere Wahl, solange es geht: ein
+auf der Messmaschine gebautes Abbild ist ein Stand, den nur diese Maschine
+kennt, und die Maschine wird gelöscht.
+
+### Wie das Abbild registriert wurde, ohne die Quelldatei anzufassen
+
+Nur das Kennzeichen des Abbilds musste ersetzt werden, Registry und Abbildname
+blieben, wie sie sind. Die Ersetzung läuft in eine Datei außerhalb des
+Arbeitsbaums, nach dem Muster des CI-Auftrags:
+
+```sh
+sed -e "s|<image-tag>[^<]*</image-tag>|<image-tag>${TAG}</image-tag>|" \
+    backend/appinfo/info.xml > /root/findling/info-box.xml
+```
+
+Die Quelldatei bleibt unberührt, und das ist eine Abnahmebedingung und keine
+Absichtserklärung: `git status --porcelain backend/appinfo/info.xml` ist nach dem
+ganzen Lauf leer.
+
+Registriert wird gegen den Daemon, den AppAPI unter AIO **selbst** angelegt hat.
+Kein `app_api:daemon:register`, keine Korrektur an seiner `NC Url`, aus dem
+Grund, der im Abschnitt darüber steht:
+
+```sh
+occ app_api:app:register findling_backend harp_aio \
+    --info-xml /tmp/info-box.xml --wait-finish
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+```
+
+Beim ersten Versuch, ohne einen einzigen Fehlschlag. Der Weg, den Plan 05-01
+gegen docker-compose mühsam freigeräumt hat, ist unter AIO genau ein Befehl.
+
+### Die drei Feststellungen, hier auf der Box
+
+Dieselben drei, die der CI-Auftrag `deploy-harp` trifft, damit ein leeres
+Ergebnis nicht als Erfolg durchgeht:
+
+```
+docker ps --filter name=findling_backend
+nc_app_findling_backend  ghcr.io/street1983nk/findling_backend:5c82598a4b79...  Up
+
+docker volume ls --filter name=findling_backend
+nc_app_findling_backend_data
+
+occ app_api:app:list
+findling_backend (Findling Backend): 0.3.0 [enabled]
+```
+
+| Angabe | Wert |
+|---|---|
+| Container der ExApp | `nc_app_findling_backend` |
+| Datenspeicher | `nc_app_findling_backend_data` |
+| Daemon | `harp_aio`, von AppAPI selbst angelegt |
+| Container insgesamt | acht: die sieben von AIO plus dieser |
+
+Der Containername ist die Angabe, die der Sampler braucht, und deshalb steht er
+hier und nicht nur im Protokoll.
+
+### Die Begleit-App
+
+Auf AIO gibt es keinen Arbeitsbaum, in den sich eine App legen ließe, und der
+App Store scheidet aus, weil dort noch nichts liegt. Der Weg ist deshalb der
+Datenspeicher des Nextcloud-Containers:
+
+```sh
+docker cp php nextcloud-aio-nextcloud:/var/www/html/custom_apps/findling
+docker exec nextcloud-aio-nextcloud chown -R 33:33 /var/www/html/custom_apps/findling
+occ app:enable findling
+findling 0.3.0 enabled
+```
+
+Das Verzeichnis heißt `findling` und nicht anders, weil der Klassenlader von
+Nextcloud sonst nichts findet und der Suchanbieter unsichtbar bleibt, ohne
+Fehlermeldung. `custom_apps` liegt in einem Docker-Volume, überlebt also einen
+Neustart der Container; die 33 ist die Nutzerkennung von `www-data` in den
+AIO-Abbildern.
+
+### Was auf dieser Box anders ist als in CI: PostgreSQL
+
+```
+occ config:system:get dbtype   -> pgsql
+select version()               -> PostgreSQL 18.6 on x86_64-pc-linux-musl
+Nextcloud                      -> 33.0.8.2
+```
+
+Das ist der erste Lauf dieses Projekts auf PostgreSQL. Jede Zahl der Statusseite
+wurde deshalb einzeln gegen einen erwarteten Wert gehalten, siehe unten.
+
+### Die Suche antwortet, zweimal
+
+Beide Wege wurden gegangen, weil sie verschiedene Dinge belegen. Sechs kleine
+Textdateien liegen im Verzeichnis `probe` eines gewöhnlichen Nutzers, nicht des
+Verwalters, damit die Nutzerkennung in der Antwort nicht mit der des Installateurs
+verwechselt werden kann.
+
+**Über die OCS-Route**, mit einfacher Anmeldung, so wie ein Klient sie ruft:
+
+```
+GET /ocs/v2.php/search/providers/findling/search?term=findlingprobe
+HTTP 200, 5 Treffer
+  vermerk-1.txt bis vermerk-5.txt, jeweils mit Textausschnitt und Fundstellen
+```
+
+**Über die Weboberfläche**, also mit einer echten angemeldeten Sitzung samt
+Anfragemarke, was genau der Aufruf ist, den die Suchleiste selbst macht:
+
+```
+POST /login  (Sitzung), danach derselbe Suchaufruf mit requesttoken
+HTTP 200, 5 Treffer
+```
+
+Der Textausschnitt in der Antwort stammt aus dem Inhalt der Datei und nicht aus
+ihrem Namen, also hat der Container gelesen und nicht der Dateibaum geraten.
+Damit ist D-04 belegt: auf dieser Box liefert eine Suche einen Treffer aus einem
+Container, den der AIO-HaRP-Daemon erzeugt hat.
+
+Eine Fußnote zur Sitzung, weil sie eine halbe Stunde gekostet hat und der
+nächste Leser sie geschenkt bekommen soll: eine Anmeldung über `/login` ohne
+`Origin`-Kopfzeile beantwortet Nextcloud mit `loginErrors: ["invalidOrigin"]`,
+und zwar mit HTTP 200 und der Anmeldeseite als Antwort. Wer nur den Statuscode
+prüft, hält das für eine geglückte Anmeldung und rätselt danach über 401 auf
+jedem folgenden Aufruf.
+
+### Die Statusseite unter PostgreSQL, Kachel für Kachel
+
+Aufgerufen als Verwalter über `/apps/findling/admin/overview`, also über
+dieselbe Route, aus der die Seite ihre Zahlen zieht. Bestand zu diesem
+Zeitpunkt: 104 Dateien in zwei Nutzerverzeichnissen.
+
+| Kachel | Wert | erwartet | Beurteilung |
+|---|---|---|---|
+| Erreichbarkeit des Containers | ja | ja | wie erwartet |
+| Versionsgleichstand | `match`, 0.3.0 gegen 0.3.0 | Gleichstand | wie erwartet |
+| indexiert, Zählung Nextcloud | 0 | 0 | wie erwartet und ausdrücklich so dokumentiert: das Endverdikt "indexiert" zählt der Container, nicht die Nextcloud-Seite |
+| indexiert, Anzeige | 88 | 88 | wie erwartet |
+| übersprungen | 16 | 16 | wie erwartet |
+| fehlgeschlagen | 0 | 0 | wie erwartet |
+| Deckungsgrad | 88 von 104, 84 Prozent | 84 Prozent | wie erwartet: 88 plus 16 ergibt genau die 104 des Bestands |
+| Mounts | 2 von 2 fertig | 2 | wie erwartet |
+| Fehlerliste | `empty_text` 14, `image_not_ocrable` 2 | zwei Gruppen | wie erwartet: die 14 leeren sind Vorlagen und Verzeichnisdateien ohne Text, die zwei Bilder sind die Beispielfotos von Nextcloud |
+| Indexgröße | 795.701 Byte | Größenordnung | plausibel für 88 kleine Dokumente |
+| freier Platz | 44,6 GB von 52,5 GB | Volume | richtig: die Kachel liest das Volume und nicht die Systemplatte |
+| Neuaufbau nötig | nein | nein | wie erwartet |
+| Wortlisten-Prüfsumme | `b1f64012...` | gesetzt | wie erwartet |
+| gemessene OCR-Zeit | leer | leer | wie erwartet: bis hierher lief keine einzige OCR-Seite |
+
+Keine Kachel weicht ab. **Der erste PostgreSQL-Lauf dieses Projekts hat keinen
+Dialektfehler zutage gefördert**, weder beim Anlegen der drei Tabellen noch beim
+Zählen über sie.
+
+Drei Beobachtungen, die keine Kachel falsch machen, aber notiert gehören:
+
+1. **Ein Nutzer, der nach dem ersten Durchgang angelegt wird, fehlt zunächst im
+   Nenner.** Direkt nach dem Anlegen des zweiten Nutzers stand der Deckungsgrad
+   auf 88 von 49, also über hundert Prozent und auf hundert gedeckelt: der
+   Durchgang hatte nur den einen Mount gesehen, den es beim Start gab, während
+   die Dateien des neuen Nutzers über den Vergleichslauf trotzdem in den Index
+   kamen. Nach `occ findling:index --restart` stimmen Zähler und Nenner. Der
+   Zustand ist vorübergehend und heilt spätestens mit dem nächtlichen Vergleich,
+   er sieht aber für die Dauer wie ein Zählfehler aus. Notiert als DI-05-20.
+2. **`occ findling:index --restart` fragt nach und tut ohne `-n` nichts.** Die
+   Rückfrage ist richtig, der Befehl liest jedes Dokument neu. In einem Skript
+   ohne `--no-interaction` bleibt sie unbeantwortet, der Befehl endet mit
+   "Nothing was changed", und der Aufrufer denkt, der Neuaufbau laufe.
+3. **`occ files:scan --path=...` meldet auf einem Nutzerverzeichnis, das noch nie
+   vollständig durchsucht wurde, `Error during scan: mkdir(): File exists`.** Das
+   ist Nextcloud und nicht Findling: der Teilbaum wird gescannt, bevor das
+   Grundgerüst des Nutzers angelegt ist. Ein vorheriges `occ files:scan <nutzer>`
+   räumt es aus. Für den Volllauf heißt das: erst den Nutzer einmal ganz
+   durchsuchen, dann den Korpus einwerfen.
+
+## Der Trockenlauf: 500 Dateien, bevor 50.000 laufen
+
+Dieser Abschnitt ist der Grund, aus dem der Volllauf noch nicht gelaufen ist.
+Die Laufzeitrechnung der Recherche stand auf einer geschätzten Zahl, es war der
+erste PostgreSQL-Lauf des Projekts, und ein Fehler, der nach zwanzig Stunden
+zuschlägt, kostet den ganzen Lauf. Also erst zwanzig Minuten.
+
+Er hat sich in der ersten davon bezahlt gemacht: **jede Tabellendatei der
+Instanz war unindexierbar**, und das wäre in einem Volllauf über 50.000 Dateien
+als eine Zahl im Fehlerbericht untergegangen. Siehe unten.
+
+### Der Korpus, und eine Prüfsumme, die an ihre Umgebung gebunden ist
+
+```
+build_load_corpus: seed=phase5-dry files=500 bytes=246452632
+  checksum=afe5de552ae9cdf7a515326e7d0787a9133b4dfef3c08e75f41f9ad5db95a5d0
+```
+
+| Kategorie | Dateien | Anteil |
+|---|---|---|
+| einseitige Scans | 99 | 19,8 Prozent |
+| mehrseitiger Scan | 1 | 0,2 Prozent |
+| Text-PDF | 225 | 45,0 Prozent |
+| OOXML (docx, xlsx, pptx) | 100 | 20,0 Prozent |
+| OpenDocument (odt, ods) | 50 | 10,0 Prozent |
+| reiner Text (txt, md, csv) | 23 | 4,6 Prozent |
+| Bild | 1 | 0,2 Prozent |
+| über dem Größendeckel | 1 | 0,2 Prozent |
+
+Der Korpus entsteht auf der Box und wird nicht über die Leitung geschoben, und
+er entsteht **im Abbild der ExApp** und nicht im System-Python der Box: dort
+liegt Pillow in der gepinnten Fassung, und es kommt kein einziges Paket auf die
+Maschine, das nicht ohnehin im Container läuft. 17 Sekunden für 500 Dateien und
+246 MB.
+
+Dabei ist etwas aufgefallen, das in den Bericht gehört, weil es eine Zusage
+einschränkt. Plan 05-05 hat für denselben Seed `phase5-dry` die Prüfsumme
+`cac56ed1...` bei 245.695.552 Byte protokolliert. Im Container sind es
+`afe5de55...` bei 246.452.632 Byte, und zwei Läufe hintereinander liefern dort
+beide Male dieselbe. **Der Seed reproduziert den Korpus also innerhalb einer
+Umgebung und nicht über Umgebungen hinweg.** Die Ursache liegt in der
+Bildseite: die Scans werden gerendert, und Schriftrasterung und Kompression
+hängen an den Fassungen der Bibliotheken.
+
+| Größe | Entwicklungsrechner (05-05) | Abbild auf der Box |
+|---|---|---|
+| Prüfsumme | `cac56ed1...` | `afe5de55...` |
+| Bytes | 245.695.552 | 246.452.632 |
+| Unterschied | | 757.080 Byte, 0,31 Prozent |
+| Pillow | Fassung des Arbeitsbaums | 12.3.0 |
+| FreeType | Fassung des Betriebssystems | 2.14.3 |
+| zlib | | 1.3.1 |
+
+Die Zusage aus 05-05 bleibt damit gültig, aber sie lautet genauer: reproduzierbar
+ist das Paar aus Seed **und** Abbild, und das Abbild ist über seinen Digest
+festgenagelt. Für den Volllauf ist deshalb der Digest oben die zweite Hälfte der
+Angabe, und der Prüfsummenvergleich gilt nur gegen einen Lauf im selben Abbild.
+
+### Der Befund, der diesen ganzen Plan bezahlt: keine Tabelle wurde indexiert
+
+Nach dem Lauf standen 32 Dateien auf `failed(corrupt)`, und zwar genau die 32
+`.xlsx` des Korpus. Kein anderes Format war betroffen, und der Fehler lag nicht
+an den erzeugten Dateien:
+
+```
+openpyxl.load_workbook("/tmp/job-42.part", read_only=True, data_only=True)
+InvalidFileException: openpyxl does not support .part file format, please check
+you can open it with Excel first. Supported formats are: .xlsx,.xlsm,.xltx,.xltm
+```
+
+openpyxl prüft die Dateiendung, bevor es ein einziges Byte liest. Der Poller
+übergibt der Extraktion aber nie den Namen aus Nextcloud, sondern seine
+Zwischendatei `job-<Warteschlangen-Id>.part`. Die Ausnahme wandert durch die
+allgemeine Übersetzung in `extract/errors.py` und wird zu `failed(corrupt)`, also
+zu "Datei beschädigt" auf der Statusseite. python-docx und python-pptx öffnen ihr
+Paket am Inhalt und sind deshalb nicht betroffen.
+
+Das war keine Eigenheit dieses Korpus. **Jede Tabellendatei jeder Instanz war
+davon betroffen**, seit es die Zwischendatei gibt, und keine der 47 Prüfungen des
+Dateiformats hat es gesehen, weil jede von ihnen ihre Testdatei unter dem Namen
+ihres Formats angelegt hat.
+
+Behoben, indem der Lader einen offenen Datenstrom statt eines Pfades bekommt: ein
+Datenstrom trägt keinen Namen, an dem sich prüfen ließe. Der neue Testfall legt
+docx, pptx und xlsx unter dem Namen `job-4711.part` an, also unter dem Namen, den
+der Poller wirklich übergibt.
+
+Belegt auf der Box, nicht nur in der Suite: nach einem auf der Maschine gebauten
+Abbild mit der Korrektur meldet der Container 587 indexierte Dokumente und **null
+Fehlschläge**, alle 32 Tabellen tragen `indexed`, und eine Suche nach einem Wort
+aus einer Tabellenzelle liefert die Tabelle unter ihren Treffern.
+
+### Was der Lauf gemessen hat
+
+| Größe | Wert |
+|---|---|
+| Beginn | 2026-09-03T18:58:31Z |
+| Ende, letzter Index | 2026-09-03T19:06:09Z |
+| Dauer | 458 s, also 7 Minuten 38 Sekunden |
+| Arbeitsvorrat | 603 Zeilen: die 500 des Korpus und 103 aus dem Bestand |
+| indexiert | 555 |
+| fehlgeschlagen | 32, alle `corrupt`, alle Tabellen, Ursache oben |
+| übersprungen | 17: `empty_text` 14, `image_not_ocrable` 2, `too_large` 1 |
+| ohne Verdikt | keine |
+
+Die Verteilung der Verdikte passt zur Erzeugung, mit genau einer benannten
+Abweichung: die 32 Tabellen hätten indexiert werden müssen und waren der Befund
+oben. Die 17 Übersprungenen sind erwartet: `too_large` ist die eine Datei über
+dem Größendeckel, die der Generator absichtlich schreibt, die 14 `empty_text` und
+2 `image_not_ocrable` stammen aus dem Altbestand der Instanz (Vorlagen ohne Text
+und die Beispielfotos von Nextcloud) und nicht aus dem Korpus.
+
+### Der OCR-Faktor auf dieser Maschine, und was er nicht sagt
+
+Zwei Messungen, weil eine allein sich nicht prüfen ließe.
+
+**Aus dem Lauf selbst**, über die Zeitstempel der Zustandsdatenbank des
+Containers, eingegrenzt auf das Zeitfenster des Trockenlaufs:
+
+| Spur | Dokumente | Spanne | je Dokument |
+|---|---|---|---|
+| OCR | 101 | 288 s | **2,85 s** |
+| Text | 366 | Indexschreibung in 43 s | siehe unten |
+
+**Direkt, nach dem Muster von Messung 3 aus `docs/ocr.md`**, damit die Zahl mit
+der dortigen Laptopzahl vergleichbar ist. Dieselbe Befehlszeile, dieselbe
+Auflösung, dieselbe Seitengeometrie, dreimal:
+
+```
+Seite 2480x3509, Graustufen, 300 dpi, aus einer Scan-PDF des Korpus
+tesseract - - -l deu+eng --oem 1 --psm 3 -c tessedit_do_invert=0
+OMP_THREAD_LIMIT=1
+2594 ms, 2477 ms, 2517 ms  ->  Median 2517 ms
+Rasterung der Seite allein: 276 ms
+```
+
+| Bezug | Laptop (docs/ocr.md) | cpx22 | Faktor |
+|---|---|---|---|
+| je Seite | 1984 ms | 2517 ms | 1,27 |
+| Zeichen auf der Seite | 2340 | 3427 | 1,46 |
+| je 1000 Zeichen | 848 ms | 734 ms | **0,87** |
+
+Und damit zu dem Satz, der hier wichtiger ist als die Zahl: **der Faktor 1,27 ist
+kein Hardwarefaktor.** Die Seite des Lastkorpus trägt 46 Prozent mehr Zeichen als
+die Seite aus `docs/ocr.md`, und tesseract kostet die Zeichen und nicht die
+Fläche. Auf den Zeicheninhalt bezogen ist der geteilte x86-Kern der Miet-Box
+sogar etwas schneller als der Laptopkern.
+
+Was damit ersetzt ist: die Rechnung der Recherche hat für tesseract 4,5 s je
+Seite und 1 s für die Rasterung angenommen. Gemessen sind 2,52 s und 0,28 s, also
+zusammen **2,80 s je Seite statt 5,5 s**. Der Wert deckt sich mit den 2,85 s je
+OCR-Dokument aus dem Lauf, was beide Messungen gegeneinander bestätigt.
+
+Was damit **nicht** ersetzt ist: die Zahl für ARM. Sie ist unverändert
+ungemessen, und sie ist die einzige, die die Store-Aussage tragen wird.
+
+### Die Prognose für den Volllauf, mit gemessenen statt geschätzten Posten
+
+Dieselbe Tabellenform wie in der Recherche, nur ohne die Marke ASSUMED:
+
+| Posten | Menge | gemessen | Summe |
+|---|---|---|---|
+| einseitige Scans | 9.900 Seiten | 2,80 s je Seite | 27.720 s = 7,7 h |
+| mehrseitige Scans | 100 Dateien zu 8 Seiten | 2,80 s je Seite | 2.240 s = 0,6 h |
+| Textdateien | 40.000 | 0,43 s je Datei | 17.200 s = 4,8 h |
+| **Summe** | | | **rund 13 h** |
+
+Die 0,43 s je Textdatei sind der einzige abgeleitete Posten der Tabelle: die
+Indexschreibung selbst läuft in Stapeln, ihre Zeitstempel taugen deshalb nicht
+als Zeitmessung je Datei. Genommen ist stattdessen die Textphase des Laufs als
+Ganzes, also 170 s vom Beginn bis zum ersten OCR-Dokument, für rund 400 Dateien
+samt Durchgang, Abholung und Quittierung.
+
+Gegenprobe ohne jede Aufteilung: 500 Dateien in 458 s sind 0,92 s je Datei, und
+der Trockenlauf hat mit 20 Prozent genau den OCR-Anteil des Volllaufs. Linear
+hochgerechnet sind das 12,8 h. Die beiden Wege liegen 2 Prozent auseinander.
+
+**Die Rechnung der Recherche lag bei 18 bis 20 h, gemessen sind rund 13 h.** Der
+Unterschied kommt fast vollständig aus dem OCR-Posten, dessen Sekundenwert
+halbiert wurde.
+
+Und die Einschränkung, die diese Prognose wertlos machen würde, wenn sie nicht
+dabeistünde: **sie gilt für x86.** Kostet tesseract auf dem Ampere-Kern das
+Zweifache, werden aus 8,3 h OCR 16,6 h und aus der Summe rund 21 h; beim
+Dreifachen sind es rund 30 h. Genau diese Spanne war der Grund, den Faktor zu
+messen, und sie bleibt bis zum ARM-Lauf offen. Sollte sie zwei Tage deutlich
+übersteigen, ist die Steuergröße die OCR-Menge und nicht die Verteilung: die
+Verteilung zu ändern hieße, die Aussage zu ändern. Die Frage gehört dann dem
+Betreiber vorgelegt und nicht stillschweigend beantwortet.
+
+### Speicher
+
+| Größe | Lauf 1 (Abbild vom Commit-Kennzeichen) | Lauf 2 (Abbild mit der Korrektur) |
+|---|---|---|
+| höchster `anon` | **381 MB** (400.003.072 Byte) | 262 MB (274.288.640 Byte) |
+| `memory.peak` | 455 MB | 339 MB |
+| `memory.events` | alle sechs Zähler 0 | alle sechs Zähler 0 |
+| `.State.OOMKilled` | false | false |
+| Messpunkte | 146 | 40 |
+
+Der Grenzwert des Berichts liegt bei 2,0 GB. Der Trockenlauf hat davon 19
+Prozent gebraucht. Das ist kein Freibrief für den Volllauf: der Korpus hier trägt
+genau einen mehrseitigen Scan und keine Datei nahe am Größendeckel von 50 MB,
+und beides sind die Fälle, an denen der Spitzenwert hängt. Aber er sagt, dass die
+Grundlast des Containers samt Kompositum-Automat und Schreibpuffer bei rund
+250 bis 300 MB liegt und die Spitze eines gewöhnlichen Dokuments daran wenig
+ändert.
+
+Die Rohdaten liegen unter `docs/measurements/2026-09-03-trockenlauf-cpx22/`.
+
+### Die Größe des Index
+
+| Größe | Wert |
+|---|---|
+| Index nach dem Lauf | 8.298.442 Byte bei 587 Dokumenten |
+| je Dokument | 14.137 Byte |
+| Korpus auf der Platte | 246.452.632 Byte |
+| Index gegen Korpus | 3,4 Prozent |
+| hochgerechnet auf 50.000 Dokumente | rund 707 MB |
+
+Phase 3 hat den Index des Volllaufs mit 3 bis 6 GB veranschlagt. Gemessen wird er
+rund ein Fünftel des unteren Endes dieser Schätzung. Der Grund ist kein Kunststück
+der Anwendung, sondern der Korpus: seine Dateien wiegen viel und tragen wenig
+Text, weil ihr Bytegewicht aus einer unkomprimierten Scan-Anlage kommt und nicht
+aus Prosa (05-05). Ein echter Bestand mit demselben Byteumfang trägt mehr Text
+und erzeugt einen größeren Index. Die Zahl gehört deshalb mit dieser Fußnote in
+den Bericht und nicht ohne sie.
+
+### Der Blick auf PostgreSQL, ausdrücklich
+
+Der Perf-Befund M7 aus Phase 2 lautet: `record()` innerhalb einer offenen
+Transaktion bricht auf PostgreSQL die **ganze** Transaktion ab, die Quittierung
+schlägt fehl, und die Warteschlange wird nie leer. Behoben wurde er damals über
+eine Umstellung auf UPDATE-first, aber nie auf PostgreSQL ausprobiert.
+
+Dieser Lauf ist die Probe, und er ist eine schärfere, als eine geplante gewesen
+wäre: die 32 Fehlschläge oben sind genau der Pfad, den M7 benennt, nämlich ein
+`record()` mit Grundcode innerhalb der Quittierungstransaktion, 32 Mal, verteilt
+über acht Durchgänge.
+
+| Prüfung | Ergebnis |
+|---|---|
+| `oc_findling_queue` nach dem Lauf | 0 Zeilen |
+| hängendes Ack | keines, jeder Durchgang endete mit einer Quittierung |
+| `current transaction is aborted` im PostgreSQL-Protokoll | kein einziges Vorkommen |
+| Perf-M7 | auf PostgreSQL belegt behoben |
+| Anlegen der drei Tabellen, Zähler über sie, Fehlerliste, Deckungsgrad | ohne Dialektfehler |
+
+Das einzige `ERROR:` im Datenbankprotokoll des ganzen Tages stammt aus einer
+Abfrage dieser Untersuchung selbst, nach einer Spalte, die es nicht gibt.
+
+### Die Statusseite unter Last
+
+Beobachtet vor dem Lauf, dreimal während des Laufs und danach. Notiert ist auch
+das Unauffällige, weil eine Liste, die nur Auffälliges enthält, nicht sagt, wie
+weit geschaut wurde.
+
+- Der Deckungsgrad wächst monoton und bleibt in seinen Grenzen: 84 Prozent vor
+  dem Lauf, 92 Prozent danach, 97 Prozent nach der Korrektur. Zähler und Nenner
+  gehen jederzeit auf.
+- Die Fehlerliste zeigt die vier Gruppen mit anklickbaren Beispielpfaden, die
+  Gruppe `corrupt` erscheint mit dem Lauf und verschwindet nicht wieder, siehe
+  den Befund unten.
+- Der Arbeitsvorrat zählt herunter, ohne zwischendurch zu wachsen, und "an den
+  Arbeiter übergeben" steht nie über der Stapelgröße.
+- Der Versionsgleichstand steht durchgehend auf `match`, auch während der
+  Container neu gestartet wurde.
+- Die Kachel für den freien Platz liest das Volume und nicht die Systemplatte,
+  also 44,3 GB frei von 52,5 GB. Auf einer Box, deren Datenverzeichnis
+  woanders liegt als das Betriebssystem, ist das der Unterschied zwischen einer
+  richtigen und einer beruhigenden Zahl.
+- Die Kachel "gemessene OCR-Zeit" bleibt leer, und das ist beabsichtigt: die
+  Schätzung erlischt, sobald der erste Durchgang fertig ist, weil es dann nichts
+  mehr zu schätzen gibt.
+- **Ein Fehlschlag von gestern bleibt in der Fehlerliste stehen, auch wenn die
+  Datei heute indexiert ist.** Nach der Korrektur meldet der Container 587
+  indexiert und 0 fehlgeschlagen, die Nextcloud-Seite weiterhin 32
+  fehlgeschlagen, und `occ findling:diagnose` nennt für eine dieser Dateien
+  "Datei beschädigt", während dieselbe Datei über die Suche zu finden ist. Der
+  Grund steht in der Quittierung: erfolgreiche Dateien schreiben nichts in die
+  Zustandstabelle, also räumen sie ihre alte Zeile auch nicht weg. Beide Zahlen
+  stehen nebeneinander auf der Seite, ein aufmerksamer Verwalter sieht den
+  Widerspruch also, aber die Fehlerliste ist so lange falsch, bis jemand sie
+  räumt. Notiert als DI-05-21.
+
+## Der Grenzwert, jetzt aus gemessenen Größen
+
+Der Abschnitt "Der Grenzwert, gegen den geprüft wird" oben im Methodenteil nennt
+die Zahl. Hier steht ihre Herleitung, und sie steht bewusst **hier**, nach den
+Messungen und vor dem Volllauf: der Grenzwert wird festgelegt, bevor der Lauf
+beginnt, dessen Ergebnis er beurteilt. Ein Grenzwert, der nach dem Ergebnis
+entsteht, beurteilt nichts.
+
+### Die Rechnung
+
+Drei der vier Eingangsgrößen sind inzwischen gemessen und nicht mehr geschätzt:
+
+| Eingangsgröße | Wert | Herkunft |
+|---|---|---|
+| Arbeitsspeicher der Box | 3814 MB nutzbar von 4 GB | `free -m` auf der Maschine |
+| AIO-Grundlast einschließlich HaRP | 345 MB (290 plus 55) | **gemessen**, Plan 05-10, oben im Bericht |
+| ungünstigste gleichzeitige Lage der Findling-Posten | 1,6 bis 1,7 GB | gerechnet aus den Projektkonstanten, nicht gemessen |
+| Spitzenwert des Trockenlaufs | 381 MB | **gemessen**, Abschnitt oben |
+
+Daraus:
+
+```
+3814 MB nutzbar
+-  345 MB gemessene Grundlast von AIO und HaRP
+- 2048 MB Grenzwert für Findling
+= 1421 MB für Kernel, Seitencache und alles Übrige
+```
+
+Der Grenzwert muss zwei Bedingungen erfüllen, und beide sind erfüllt:
+
+1. **Er liegt über dem, was Findling braucht, mit Luft.** 2048 MB sind das
+   1,2fache der ungünstigsten gerechneten Lage von 1700 MB und das 5,4fache des
+   im Trockenlauf gemessenen Spitzenwerts. Die Luft ist nicht großzügig, sie ist
+   nötig: der Volllauf bringt 100 mehrseitige Scans und Dateien bis an den
+   Größendeckel von 50 MB, und beides fehlt im Trockenlauf.
+2. **Er lässt neben sich Platz.** 1421 MB für Kernel und Seitencache sind auf
+   einer Maschine, deren Index als Datei in den Speicher abgebildet wird,
+   kein Rest, sondern ein Arbeitsmittel: je mehr Index im Seitencache liegt,
+   desto schneller antwortet die Suche.
+
+Die Empfehlung der Recherche lautete 2,0 GB, und die Rechnung bestätigt sie, also
+bleibt es dabei. **Der Grenzwert ist 2,0 GB, also 2.147.483.648 Byte, für den
+höchsten `anon`-Wert des Findling-Containers.**
+
+Was 2,5 GB bedeutet hätten, weil die Zahl als Größenordnung im Raum stand:
+`3814 - 2560 - 345 = 909 MB` für alles Übrige. Das ist weniger, als der
+Seitencache eines 20-GB-Korpus gern hätte, und es ist der Bereich, in dem der
+Kernel anfängt zu räumen statt zu arbeiten. Nach der Messung der Grundlast ist
+die Entscheidung für 2,0 GB bequemer als vorher gedacht: die Grundlast war mit
+0,7 bis 1,1 GB veranschlagt und liegt bei 0,345 GB.
+
+### Drei Zahlen, die nicht dasselbe sind
+
+Diese Trennung ist der Kern des Abschnitts, denn ohne sie rechnet der erste
+Leser, der `docker stats` aufruft, andere Zahlen nach und hält den Bericht für
+falsch.
+
+| Zahl | Trockenlauf | Volllauf | Was sie ist |
+|---|---|---|---|
+| **Grenzwert** | 2,0 GB | 2,0 GB | eine Festlegung. Der Volllauf besteht oder besteht nicht gegen sie. Sie wird nicht gemessen und sie ändert sich nicht mit dem Ergebnis. |
+| **gemessener Spitzenwert `anon`** | 381 MB | FEHLT NOCH | eine Messung. Der Wert des ARM-Volllaufs wird die Zahl der Store-Aussage. |
+| **`memory.peak`** | 455 MB | FEHLT NOCH | dieselbe cgroup, anderer Maßstab: hier zählt der Dateicache mit. |
+
+Warum die Store-Zahl aus `anon` kommt und nicht aus `memory.peak`: der Index ist
+eine in den Speicher abgebildete Datei, also landet jeder gelesene Indexblock im
+Dateicache derselben cgroup. Dieser Cache ist vollständig zurückforderbar, der
+Kernel gibt ihn unter Druck her, und kein Prozess merkt etwas davon. Eine
+Store-Aussage aus `memory.peak` würde die Anwendung also schlechter darstellen,
+als sie ist, und zwar umso schlechter, je größer der Bestand des Betreibers ist.
+Im Trockenlauf sind das 74 MB Unterschied, in der Grundlastmessung von 05-10
+waren es über die AIO-Container 1063 MB.
+
+Aufgezeichnet werden beide, und beide stehen in jeder Tabelle nebeneinander. Der
+Docker-Client zeigt eine Zahl auf Basis von `memory.current`, also die höhere.
+Wer sie neben die Zahl dieses Berichts legt, soll den Unterschied erklärt finden
+statt versteckt.
+
+### Die Härtungsprobe: der Volllauf läuft unter einer harten Grenze
+
+Ein beobachteter Spitzenwert ist eine Momentaufnahme. Er sagt, dass die
+Anwendung in den 146 Augenblicken, in denen gemessen wurde, unter der Zahl lag.
+Ein Lauf, der unter einer vom Kernel durchgesetzten Grenze durchläuft, sagt
+etwas anderes: dass sie in **keinem** Augenblick überschritten wurde, auch nicht
+zwischen zwei Messpunkten. Das ist ein Satz, den man in eine Store-Beschreibung
+schreiben kann.
+
+AppAPI kennt `resourceLimits.memory` nur im Deploy-Config eines Daemons und nicht
+als Option von `occ`, deshalb ist der Weg der Docker-Client. Der Befehl steht
+hier wortwörtlich, damit Plan 05-14 ihn nicht neu erfindet:
+
+```sh
+docker update --memory=2g --memory-swap=2g nc_app_findling_backend
+```
+
+Auf dieser Box am 2026-09-03 ausprobiert, mit dem Ergebnis:
+
+```
+memory.max      2147483648
+memory.swap.max 0
+docker inspect  Memory=2147483648 MemorySwap=2147483648
+Status          Up, der Container läuft weiter
+```
+
+`--memory-swap` auf denselben Wert heißt: kein Swap. Ohne diese Angabe bekäme der
+Container die doppelte Menge als Swap-Budget, und ein Lauf, der sich nur durch
+Auslagern unter der Grenze hält, hätte mit der Zusage nichts zu tun.
+
+Drei Dinge, die beim Setzen zu wissen sind:
+
+1. **Die Grenze lässt sich mit `docker update` nicht wieder abnehmen.**
+   `--memory=0` tut nichts und `--memory=-1` wird abgewiesen (beides hier
+   ausprobiert). Wer sie loswerden will, muss den Container neu erzeugen lassen,
+   also `occ app_api:app:unregister findling_backend` ohne `--rm-data` und
+   danach wieder registrieren. Der Datenspeicher bleibt dabei erhalten.
+2. **Sie überlebt keine Neuerzeugung des Containers.** Jede Registrierung legt
+   einen neuen Container an, und der kommt ohne Grenze. Sie gehört deshalb
+   gesetzt, nachdem zum letzten Mal registriert wurde, und vor dem Start des
+   Laufs mit `docker inspect` gegengeprüft.
+3. **`memory.max` begrenzt `memory.current` und nicht `anon`**, zählt also den
+   Dateicache mit. Die Probe ist damit **strenger** als der Grenzwert, den sie
+   prüft. Das ist Absicht und kein Versehen: der Cache ist zurückforderbar, der
+   Kernel räumt ihn, bevor er tötet, und ein Lauf, der unter dieser Grenze
+   durchkommt, hat `anon` erst recht darunter gehalten.
+
+### Wenn die harte Grenze greift
+
+Dann tötet der Kernel den Container. `memory.events` zählt `oom_kill` hoch,
+`.State.OOMKilled` steht auf `true`, und die Abschlusszeile des Samplers nennt
+beides. **Das ist dann das Ergebnis des Laufs und kein Betriebsunfall**, und es
+ist genau die Aussage, für die die Probe gefahren wird. Ein solcher Volllauf ist
+nicht wiederholbar, bis eine der drei Antworten gewählt ist:
+
+| Antwort | Was sie kostet | Wann sie richtig ist |
+|---|---|---|
+| **Grenzwert anheben**, mit Begründung im Bericht | Die Store-Aussage wird schwächer, und auf einer 4-GB-Box wird es eng: über 2,5 GB ist die Rechnung oben nicht mehr zu halten. | Wenn der Spitzenwert knapp und nachvollziehbar über der Grenze liegt und die Rechnung oben mit der gemessenen Grundlast noch aufgeht. |
+| **Stellschraube senken** | Ein kleinerer Schreibpuffer bedeutet mehr Segmente und mehr Vereinigungsläufe, weniger DPI bedeutet schlechtere Erkennung. | Wenn der Spitzenwert an einem benannten Posten hängt: `FINDLING_WRITER_HEAP_BYTES` (50 MB), `FINDLING_BATCH_MAX_BYTES` (64 MB), `FINDLING_OCR_DPI` (300), `FINDLING_OCR_MAX_PAGES` (30), `FINDLING_MAX_CELLS` (200.000). `INDEX_WORKERS` steht bereits auf 1 und ist keine Reserve mehr. |
+| **OCR-Menge des Korpus senken** | Die Aussage ändert sich, denn OCR ist die Steuergröße des ganzen Laufs. | Nur nach einer Entscheidung des Betreibers. Sie darf nicht stillschweigend fallen, weil sie aus "50.000 Dateien mit 20 Prozent Scans" etwas anderes macht. |
+
+Was in keinem der drei Fälle passiert: die Verteilung des Korpus wird nicht
+angepasst, bis die Zahl stimmt. Das wäre keine Messung mehr.
+
+### Zusammengefasst, in einer Zeile
+
+**Der Volllauf besteht, wenn er ohne Speichertod durchläuft und der höchste
+`anon`-Wert des Findling-Containers unter 2,0 GB bleibt, gefahren unter
+`docker update --memory=2g --memory-swap=2g`.**
+
 ## Findling im Volllauf
 
 | Lauf | höchster `anon` | unter 2,0 GB | Laufzeit | OCR-Anteil | Speichertod |
@@ -543,12 +1188,26 @@ scripts/ops/rss_sampler.sh "$(docker ps --filter name=findling_backend --format 
 HCLOUD_TOKEN=... scripts/ops/hetzner_box.sh destroy
 ```
 
-Der Lastkorpus entsteht aus einem Seed und ist damit Jahre später nachbaubar:
+Der Lastkorpus entsteht aus einem Seed und ist damit Jahre später nachbaubar,
+solange dieselbe Umgebung dazu genannt wird:
 
 ```sh
-python scripts/dev/build_load_corpus.py --seed phase5-full --files 50000 --out /mnt/corpus
+# im Abbild der ExApp, weil dort Pillow in der gepinnten Fassung liegt und die
+# Prüfsumme an der Rasterung der Schrift hängt
+docker run --rm --user 0:0 --entrypoint python3 \
+  -v <repo>/scripts:/w/scripts:ro -v <repo>/testdata:/w/testdata:ro \
+  -v /mnt/corpus:/out \
+  ghcr.io/street1983nk/findling_backend@sha256:bb8f17e7d18df86b410308ee06bb2a6935dbbd183f0c6fcd032ab1ef17234544 \
+  /w/scripts/dev/build_load_corpus.py --seed phase5-full --files 50000 --out /out
 ```
 
-Der Trockenlauf mit 500 Dateien verwendet den Seed `phase5-dry` und hat die
-Listen-Prüfsumme
-`cac56ed1801efb3e691b28088c363c84d8941670394f5fed95ab19359b17d530`.
+Zwei Seeds und zwei Prüfsummen, jede mit der Umgebung, in der sie gilt:
+
+| Lauf | Seed | Umgebung | Dateien | Bytes | Listen-Prüfsumme |
+|---|---|---|---|---|---|
+| Trockenlauf | `phase5-dry` | Abbild der ExApp, Pillow 12.3.0 | 500 | 246.452.632 | `afe5de552ae9cdf7a515326e7d0787a9133b4dfef3c08e75f41f9ad5db95a5d0` |
+| Trockenlauf | `phase5-dry` | Entwicklungsrechner, Plan 05-05 | 500 | 245.695.552 | `cac56ed1801efb3e691b28088c363c84d8941670394f5fed95ab19359b17d530` |
+| Volllauf | `phase5-full` | offen | 50.000 | offen | offen |
+
+Warum es zwei sind und welche wofür gilt, steht oben im Abschnitt zum
+Trockenlauf.

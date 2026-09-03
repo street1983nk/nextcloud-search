@@ -521,6 +521,37 @@ def test_a_spreadsheet_is_opened_read_only_and_data_only_and_never_otherwise(
     assert seen[0]["data_only"] is True
 
 
+@pytest.mark.parametrize(
+    ("extractor", "builder"),
+    [
+        (extract_docx, _docx_with_a_table),
+        (extract_pptx, _pptx_with_two_text_frames),
+        (extract_xlsx, lambda directory: _xlsx(directory, rows=3, columns=2)),
+    ],
+)
+def test_an_ooxml_file_is_read_by_its_content_and_not_by_the_name_it_arrives_under(
+    extractor: Callable[[str], ExtractionOutcome],
+    builder: Callable[[Path], str],
+    tmp_path: Path,
+) -> None:
+    # The name the poller hands over is job-<queue id>.part and never the name of
+    # the file in Nextcloud (worker/poller.py, SCRATCH_SUFFIX). openpyxl checks
+    # the extension before it looks at a single byte and raises
+    # InvalidFileException for anything outside .xlsx, .xlsm, .xltx and .xltm,
+    # which travelled all the way to failed(corrupt): measured on the load test
+    # box in plan 05-12, where all 32 spreadsheets of the corpus failed and no
+    # other format did. Every test before this one built its file under the name
+    # of its format, so the whole suite was blind to it.
+    source = Path(builder(tmp_path))
+    scratch = tmp_path / "job-4711.part"
+    scratch.write_bytes(source.read_bytes())
+
+    outcome = extractor(str(scratch))
+
+    assert outcome.state is State.INDEXED
+    assert outcome.text.strip() != ""
+
+
 def test_a_spreadsheet_over_the_cell_limit_is_skipped_instead_of_half_read(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
