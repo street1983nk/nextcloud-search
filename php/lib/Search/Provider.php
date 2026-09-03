@@ -39,6 +39,14 @@ use Psr\Log\LoggerInterface;
  * The whole group runs against a wall clock of two and a half seconds. The
  * unified search asks every provider and waits for all of them, so a slow
  * provider does not cost its own result group, it costs the search.
+ *
+ * Since phase 5 there is one more way for this group to be empty, and it is a
+ * decision rather than a failure. When the two halves of this app report
+ * versions whose major or minor disagree, the search answers with nothing at
+ * all: the protocol between them is what a hit is built out of, so a hit across
+ * a version break would be a guess presented as a finding (D-11). The state is
+ * named on the admin page with both version numbers, and this class only
+ * declines.
  */
 final class Provider implements IFilteringProvider {
 	/**
@@ -160,6 +168,34 @@ final class Provider implements IFilteringProvider {
 		// An empty search line is not asked about at all. It is what the dialog
 		// sends while the user is still typing, and it cannot produce a hit.
 		if ($term === '') {
+			return SearchResult::complete($this->getName(), []);
+		}
+
+		// D-11: the two halves have to agree on their major and minor, and when
+		// the last answer of the container said otherwise this group stays
+		// empty. Same shape as a missing backend one screen below, and for a
+		// sharper reason: a protocol break is the one case in which a hit would
+		// be a guess dressed up as a finding, because neither half can say what
+		// the other one meant by its answer. So the search costs a result group
+		// and says so in the log, the admin page names the state with both
+		// version numbers, and nothing here throws: a mismatch between two
+		// installed apps is an operating state and never an error of the search.
+		//
+		// No round trip is spent on the question. What is read is the version the
+		// container reported the last time anything asked it, which is what the
+		// settings page does whenever it is open; see
+		// ExAppService::KEY_BACKEND_VERSION for what follows from that.
+		$drift = $this->exApp->driftOnRecord();
+		if ($drift !== null) {
+			// Both numbers in the line, because "the versions differ" without
+			// them is a sentence an admin cannot act on. Neither of them is user
+			// content: both passed the version pattern of ExAppService, and
+			// anything that did not is treated as unknown rather than as drift.
+			$this->logger->warning('Findling: the two halves report different versions, answering with no hits', [
+				'companion' => $drift['companion'],
+				'backend' => $drift['container'],
+			]);
+
 			return SearchResult::complete($this->getName(), []);
 		}
 

@@ -29,6 +29,11 @@ use OCP\IUserSession;
  * - Out of the container, under the key ``backend``: ``indexed``,
  *   ``truncated``, ``docs``, ``aclRows``, the version marks, the disk figures
  *   and the reason breakdown. Only the container knows what is in the index.
+ * - Out of both at once, under the key ``lockstep``: whether the version of the
+ *   container and the version of this app agree in major and minor (D-11), and
+ *   the two numbers the verdict was made from. It is the one field on this page
+ *   that is neither a measurement of one side nor a count, but a statement about
+ *   the pair, and it is built in ExAppService out of the status answer above.
  * - Out of ``findling_queue`` through QueueService: ``scheduled`` and
  *   ``running``. Deliberately not over the HTTP routes: those carry the ExApp
  *   attribute and are unreachable from an admin session, and asking the
@@ -414,9 +419,9 @@ final class AdminViewService {
 	 *     indexed:int, skipped:int, failed:int, excluded:int,
 	 *     indexedDisplay:int, scheduled:int, running:int, lastJobRun:int,
 	 *     stalledFor:int, runState:string, backendReachable:bool,
-	 *     backend:array<string,mixed>, coverage:array<string,mixed>,
-	 *     estimate:array<string,mixed>, errors:array<string,mixed>,
-	 *     rules:array<string,mixed>
+	 *     backend:array<string,mixed>, lockstep:array<string,string>,
+	 *     coverage:array<string,mixed>, estimate:array<string,mixed>,
+	 *     errors:array<string,mixed>, rules:array<string,mixed>
 	 * }
 	 */
 	public function overview(): array {
@@ -491,6 +496,14 @@ final class AdminViewService {
 			'runState' => $this->runState($lastJobRun, $stalledFor, $scheduled, $running),
 			'backendReachable' => $backendReachable,
 			'backend' => $backend,
+			// The lockstep verdict of D-11, out of the same answer and without a
+			// second call. It is not part of ``backend`` on purpose: everything
+			// under that key is a number or a flag the container measured, and
+			// this is a comparison between the container and this app, with the
+			// two versions it was made from. The page renders the state and the
+			// two numbers; nothing here decides what happens to the search,
+			// which is ExAppService and the search provider.
+			'lockstep' => $this->exAppService->lockstep($answer),
 			'coverage' => $this->coverage($scan, $backend, $backendReachable, $indexable),
 			'estimate' => $this->estimate($scan, $backend, $backendReachable, $indexable, $scheduled + $running),
 			'errors' => $this->errors(),

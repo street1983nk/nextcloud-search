@@ -11,6 +11,14 @@ this app promises never to move.
 The second claim is that a fresh container answers. A missing state database is
 what an installation looks like for the first few minutes, and a 500 there would
 send an admin looking for a defect that is a normal state.
+
+The third claim arrives with phase 5 and it is about one field. ``appVersion`` is
+the version AppAPI registered this container under, and D-11 has the PHP half
+compare its major and minor against it, so a wrong or missing value there does
+not produce a wrong number on a page, it produces a search that answers
+differently from what either half believes. Three properties are asserted for
+it: it comes out of the environment, it is there for a container that has no
+index yet, and it is not derived from the two index format marks next to it.
 """
 
 from collections.abc import Callable, Iterator
@@ -20,8 +28,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from conftest import Corpus
-from findling.api.status import STATE_UNREADABLE
+from conftest import APP_VERSION, Corpus
+from findling.api.status import STATE_UNREADABLE, report
 from findling.config import MAX_FILE_BYTES
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
@@ -42,6 +50,7 @@ FIELDS = {
     "docs",
     "indexVersion",
     "analyzerVersion",
+    "appVersion",
     "wordlistHash",
     "reindexRequired",
     "lowDisk",
@@ -221,6 +230,80 @@ def test_a_version_drift_is_reported_as_reindex_required(
     answer = _status(client, sign("admin"))
 
     assert answer["reindexRequired"] is True
+
+
+def test_the_answer_names_the_version_this_container_was_registered_under(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # D-11 needs a field that this route did not have: the app version of this
+    # half. It comes out of APP_VERSION, which AppAPI injects into the container
+    # when it deploys it, so what is reported is the version this container was
+    # really registered under rather than a constant baked into the image, which
+    # would agree with the registration only until somebody forgot to raise it.
+    answer = _status(client, sign("admin"))
+
+    assert answer["appVersion"] == APP_VERSION
+
+
+def test_the_app_version_is_reported_without_a_state_database(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # A container deployed a minute ago is exactly the one whose version has to
+    # be readable: the protocol check of the other half may not wait for an index
+    # to exist, otherwise the first minutes after an update are the minutes in
+    # which nobody can tell a mismatch from a slow first pass.
+    assert not (volume / "state.db").exists()
+
+    answer = _status(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    assert answer["appVersion"] == APP_VERSION
+
+
+def test_the_app_version_is_not_derived_from_the_index_marks(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # Three values, three sources, and none of them computed out of another. The
+    # two marks say how the index was built, the app version says which release
+    # is running, and a page that mixed them would answer a protocol question
+    # with a reindex banner. Moving the marks therefore moves nothing here.
+    store = open_store(indexed_volume.root / "state.db")
+    store.write_meta("analyzer_version", "7")
+    store.write_meta("index_version", "9")
+    store.close()
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["appVersion"] == APP_VERSION
+    assert answer["analyzerVersion"] == 7
+    assert answer["indexVersion"] == 9
+
+
+def test_without_the_environment_variable_the_app_version_is_empty_and_the_answer_is_whole(
+    monkeypatch: pytest.MonkeyPatch,
+    volume: Path,
+) -> None:
+    # Asked of report() and not through the client, and that is not convenience.
+    # The AppAPI middleware builds a session object per request which reads
+    # APP_VERSION itself, so a request that arrives without the variable never
+    # reaches this route at all; whether it should is AppAPI's business. What
+    # belongs to this route is the shape of its answer, and it stays whole: every
+    # field is there and the version is an empty string rather than a missing key,
+    # because a page that has to ask whether a key exists writes one default in
+    # its template and a different one in its script.
+    assert not (volume / "state.db").exists()
+    monkeypatch.delenv("APP_VERSION", raising=False)
+
+    answer = report().model_dump()
+
+    assert set(answer) == FIELDS
+    assert answer["appVersion"] == ""
 
 
 def test_without_a_state_database_the_answer_is_zeros_and_a_note(

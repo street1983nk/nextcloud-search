@@ -15,6 +15,13 @@ permission rows, the version marks, the space on the volume and the throughput.
 Only this process sees the volume and the tantivy index, so nobody else can
 count them.
 
+*And one value that is neither a counter nor a measurement*: ``appVersion``, the
+version AppAPI registered this container under. It is here because D-11 has both
+halves carry the same major and minor and the other half compare them, and this
+is the only place that can say what this container really is. It is deliberately
+not one of the version marks: those describe the index, this one describes the
+release.
+
 Both views stay visible next to each other, each with its source named. A
 difference between them is a diagnostic signal and not a defect of the page,
 while a single number called "failed" without a source would hide precisely the
@@ -50,6 +57,7 @@ answer is the same for all of them.
 
 import asyncio
 import logging
+import os
 import sqlite3
 
 from fastapi import APIRouter
@@ -95,6 +103,19 @@ class StatusResponse(BaseModel):
     docs: int = 0
     indexVersion: int = 0
     analyzerVersion: int = 0
+    # The version this container was registered under, and the one field of this
+    # answer that says nothing about the index. The two marks above are index
+    # format numbers: they decide whether the documents have to be read again.
+    # This one is the release both halves are supposed to share (D-11), and the
+    # other half compares its major and minor against it. Confusing the two
+    # would mix a reindex banner with a protocol check, which are opposite
+    # answers: one says "the index is old", the other says "the two halves do
+    # not agree on what they are saying to each other".
+    #
+    # An empty string means the container does not know, which is what a
+    # container without APP_VERSION looks like. It is not a mismatch and the
+    # other half must not read it as one.
+    appVersion: str = ""
     wordlistHash: str = ""
     reindexRequired: bool = False
     lowDisk: bool = False
@@ -126,6 +147,24 @@ def _number(mark: str | None) -> int:
         return 0
 
 
+def _app_version() -> str:
+    """The version AppAPI registered this container under, empty when it did not say.
+
+    Read out of the environment on every call and not through ``settings()``.
+    ``settings()`` is the configuration of this app, every name in it starts with
+    ``FINDLING_`` and it is cached once per process; ``APP_VERSION`` belongs to
+    the four variables AppAPI itself sets next to ``APP_ID``, ``APP_SECRET`` and
+    ``NEXTCLOUD_URL``, which the client library also reads per request. Keeping
+    it out of the cached settings means a container that AppAPI restarted with a
+    new version reports the new one, and it keeps this value out of a structure
+    whose defaults are a matter of this app.
+
+    Whitespace is stripped and nothing else is judged. What a version has to look
+    like is decided where it is compared, which is the other half.
+    """
+    return os.environ.get("APP_VERSION", "").strip()
+
+
 def _named_reasons(breakdown: dict[str, dict[str | None, int]]) -> dict[str, dict[str, int]]:
     """The breakdown with the absent reason spelled as an empty string."""
     return {
@@ -139,13 +178,20 @@ def _volume() -> StatusResponse:
 
     Built as a whole answer rather than as four loose values, so the three
     branches of :func:`report` below add what they learned to it instead of
-    repeating the volume part each time. Every one of these numbers comes from
-    the environment or from the file system, which is why a container without a
+    repeating the volume part each time. Every one of these values comes from the
+    environment or from the file system, which is why a container without a
     state database still reports them.
+
+    ``appVersion`` belongs in exactly this branch and for exactly that reason. A
+    container that was deployed a minute ago has no index and no state database,
+    and it is the one whose version the other half most needs to be able to
+    check: the minutes after an update are when a protocol mismatch is either
+    seen or mistaken for a slow first pass.
     """
     resolved = settings()
     free, total = resources.disk_bytes()
     return StatusResponse(
+        appVersion=_app_version(),
         lowDisk=resources.low_disk(),
         diskFreeBytes=free,
         diskTotalBytes=total,
@@ -181,6 +227,10 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         # the one queries are parsed with, so hits vanish with nothing saying
         # why. Reported, never acted on: what follows is the poller's decision.
         reindexRequired=bool(resources.version_drift(store)),
+        # Carried over from the volume answer, named like every other field of
+        # it. The version says nothing about the state database, so it is not
+        # read a second time here: one place asks the environment.
+        appVersion=volume.appVersion,
         lowDisk=volume.lowDisk,
         diskFreeBytes=volume.diskFreeBytes,
         diskTotalBytes=volume.diskTotalBytes,

@@ -58,6 +58,16 @@ $stalledFor = $whole($_['stalledFor'] ?? 0);
 $runState = is_string($_['runState'] ?? null) ? $_['runState'] : 'never_run';
 $reachable = ($_['backendReachable'] ?? false) === true;
 
+// The lockstep verdict of D-11, and the three states it can hold. Only "drift"
+// shows anything: "match" is the normal case and "unknown" is a container that
+// did not say, which the page must not turn into a claim about the pair.
+$lockstep = is_array($_['lockstep'] ?? null) ? $_['lockstep'] : [];
+$lockstepState = is_string($lockstep['state'] ?? null) ? $lockstep['state'] : 'unknown';
+// Both numbers have passed the version pattern of ExAppService before they got
+// here, and they are printed with the escaping printer all the same.
+$companionVersion = is_string($lockstep['companion'] ?? null) ? $lockstep['companion'] : '';
+$containerVersion = is_string($lockstep['container'] ?? null) ? $lockstep['container'] : '';
+
 /**
  * A count in the admin's own notation, with the thousands separator of their
  * locale. The script formats the same numbers with Intl.NumberFormat, so both
@@ -153,6 +163,19 @@ $banners = [
 		'shown' => !$reachable,
 	],
 	[
+		// The version break of D-11, and it stands directly under the
+		// unreachable banner because the two are the same kind of trouble: the
+		// halves of this app are not working together. The sentence names what
+		// is true, what follows from it and the one thing that fixes it, with
+		// the numbers that were actually reported rather than with a general
+		// remark about versions.
+		'id' => 'findling-banner-lockstep',
+		'kind' => 'error',
+		'icon' => $alertIcon,
+		'text' => $l->t('The two halves of Findling report different versions: this app is %1$s, the backend is %2$s. While they disagree the search answers with no results, because a wrong answer without a word would be worse. Bring both halves to the same version.', [$companionVersion, $containerVersion]),
+		'shown' => $lockstepState === 'drift',
+	],
+	[
 		'id' => 'findling-banner-stale',
 		'kind' => 'error',
 		'icon' => $alertIcon,
@@ -182,7 +205,17 @@ $banners = [
 		<?php foreach ($banners as $banner) { ?>
 			<p class="findling-banner findling-banner--<?php p($banner['kind']); ?>" id="<?php p($banner['id']); ?>"<?php if (!$banner['shown']) { ?> hidden<?php } ?>>
 				<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($banner['icon']); ?>"/></svg>
-				<span class="findling-banner__text"><?php p($banner['text']); ?></span>
+				<?php
+				/*
+				 * The text of a banner carries an id of its own, derived from
+				 * the id of the banner. The script writes into it rather than
+				 * into the paragraph, which holds the icon as well: a
+				 * textContent on the paragraph would delete that icon, and a
+				 * banner whose sentence changes while the page is open is
+				 * exactly what the version state below needs.
+				 */
+				?>
+				<span class="findling-banner__text" id="<?php p($banner['id']); ?>-text"><?php p($banner['text']); ?></span>
 			</p>
 		<?php } ?>
 	</div>

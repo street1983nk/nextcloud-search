@@ -8,6 +8,7 @@ use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Text\PlainText;
 use OCP\App\IAppManager;
 use OCP\Http\Client\IResponse;
+use OCP\IAppConfig;
 use OCP\IUserManager;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\NotFoundExceptionInterface;
@@ -42,6 +43,22 @@ use Psr\Log\LoggerInterface;
  * it, and it therefore gets its own timeout and its own method. What it shares
  * with the two above is the pre-flight and the four failure cases, because the
  * way this app degrades has to stay one answer no matter who asked.
+ *
+ * Phase 5 adds the lockstep check of D-11, and it is a boundary of a third
+ * kind: not "may this user see it" and not "is this answer well formed", but
+ * "are the two halves talking about the same protocol at all". Both halves carry
+ * the same major and minor by release policy, this half reads its own version
+ * out of IAppManager and the other one out of the ``appVersion`` field of
+ * ``GET /status``, and a mismatch of major or minor makes the search answer
+ * with nothing rather than with something. That is the one situation where a
+ * silent hit is worse than no hit: neither half can say what the other one
+ * meant, so a result would be a guess presented as a finding.
+ *
+ * The check is deliberately NOT an authentication. ``appVersion`` comes from
+ * the environment AppAPI set, so it is as trustworthy as the registration, and
+ * a container that wanted to lie about it could. What keeps a foreign container
+ * out is the signed AppAPI path plus ``rejectForeignCaller`` on the routes of
+ * this app, and nothing here (T-05-25).
  */
 final class ExAppService {
 	/**
@@ -142,11 +159,183 @@ final class ExAppService {
 	 */
 	private const MAX_SNIPPET_IDS = 100;
 
+	/**
+	 * The three verdicts of the lockstep check, and there is no fourth.
+	 *
+	 * ``unknown`` is not a weaker ``drift`` and it is not a weaker ``match``
+	 * either: it is the answer for a container that did not say, and the only
+	 * one that changes nothing about the search. A container of a version older
+	 * than this field reaches exactly this verdict, once, on the update that
+	 * introduces it (T-05-27).
+	 */
+	public const LOCKSTEP_MATCH = 'match';
+	public const LOCKSTEP_DRIFT = 'drift';
+	public const LOCKSTEP_UNKNOWN = 'unknown';
+
+	/**
+	 * The version of the other half, as it was last reported.
+	 *
+	 * Written whenever something read ``GET /status``, which is the admin page,
+	 * and read by the search path, which has no status call of its own. Without
+	 * this the drift could only be noticed by a request that asked for it, and
+	 * asking for it once per keystroke of the unified search would be a round
+	 * trip per keystroke for a value that moves when a container restarts.
+	 *
+	 * The consequence is written down rather than glossed over: on an instance
+	 * where nobody ever opened the settings page there is nothing on record, the
+	 * search therefore behaves exactly as it did before, and the page is what
+	 * turns the drift into a verdict. An admin whose search stopped finding
+	 * things opens that page, which is the same route by which every other
+	 * diagnosis of this app is reached.
+	 */
+	public const KEY_BACKEND_VERSION = 'backend_app_version';
+
+	/**
+	 * What a version has to look like before it is compared or shown.
+	 *
+	 * Major and minor are mandatory, the patch part is optional, and a prerelease
+	 * tail is allowed because the store schema allows one. The pattern is not
+	 * cosmetics: the value arrives from across the trust boundary and is printed
+	 * on an admin page, so anything that is not a version is refused here rather
+	 * than bounded later, and the verdict for it is ``unknown`` and never
+	 * ``drift``. A container that answers nonsense is a broken container, not a
+	 * reason to switch the search off.
+	 */
+	private const VERSION_PATTERN = '/^\d{1,5}\.\d{1,5}(?:\.[0-9A-Za-z][0-9A-Za-z.-]{0,19})?$/';
+
 	public function __construct(
 		private IAppManager $appManager,
 		private IUserManager $userManager,
+		private IAppConfig $appConfig,
 		private LoggerInterface $logger,
 	) {
+	}
+
+	/**
+	 * The lockstep verdict for one answer of ``GET /status`` (D-11).
+	 *
+	 * No round trip of its own: the caller already has the status answer, this
+	 * reads one field out of it and compares. Null is accepted and means the
+	 * container did not answer at all, which is ``unknown`` and not ``drift``,
+	 * because the page already says "the backend does not answer" and two
+	 * statements about one silence would leave an admin choosing between them.
+	 *
+	 * Major and minor are compared exactly and the patch part is expressly NOT
+	 * compared. The protocol between the halves changes with a minor by release
+	 * policy, never with a patch, so comparing patches would force two releases
+	 * where one is enough and would turn every hotfix of one half into an
+	 * instance whose search answers nothing.
+	 *
+	 * A missing ``appVersion`` is the container of an older release, which is
+	 * exactly what an instance looks like for the minutes between updating one
+	 * half and the other. It is ``unknown``: the search keeps working, the page
+	 * says nothing about it, and the next answer of a current container settles
+	 * the question.
+	 *
+	 * @param array<mixed>|null $status the decoded body of GET /status, or null
+	 * @return array{state:string, companion:string, container:string}
+	 */
+	public function lockstep(?array $status): array {
+		$answer = $status ?? [];
+		$companion = $this->ownVersion();
+		$container = $this->versionOrNothing(is_string($answer['appVersion'] ?? null) ? $answer['appVersion'] : '');
+
+		if ($companion === '' || $container === '') {
+			return [
+				'state' => self::LOCKSTEP_UNKNOWN,
+				'companion' => $companion,
+				'container' => $container,
+			];
+		}
+
+		$this->rememberBackendVersion($container);
+
+		return [
+			'state' => $this->majorMinor($companion) === $this->majorMinor($container)
+				? self::LOCKSTEP_MATCH
+				: self::LOCKSTEP_DRIFT,
+			'companion' => $companion,
+			'container' => $container,
+		];
+	}
+
+	/**
+	 * The drift that is on record, for a caller that cannot ask the container.
+	 *
+	 * Null means "nothing to act on", and it covers both of the two harmless
+	 * cases: the versions agree, or no version was ever recorded. Only a
+	 * recorded version that disagrees in major or minor with this half produces
+	 * an answer, and the two numbers travel with it so that whoever reports the
+	 * outage can name them.
+	 *
+	 * @return array{companion:string, container:string}|null
+	 */
+	public function driftOnRecord(): ?array {
+		$container = $this->versionOrNothing(
+			$this->appConfig->getValueString(Application::APP_ID, self::KEY_BACKEND_VERSION, ''),
+		);
+		if ($container === '') {
+			return null;
+		}
+
+		$companion = $this->ownVersion();
+		if ($companion === '' || $this->majorMinor($companion) === $this->majorMinor($container)) {
+			return null;
+		}
+
+		return ['companion' => $companion, 'container' => $container];
+	}
+
+	/**
+	 * The version of this half, out of the app info Nextcloud already holds.
+	 *
+	 * ``getAppVersion`` answers out of the loaded app info, so this costs no
+	 * query. An app that Nextcloud does not know answers ``0``, which the
+	 * pattern refuses, and the verdict for it is ``unknown``: whatever that
+	 * would be, it is not a statement about the container.
+	 */
+	private function ownVersion(): string {
+		return $this->versionOrNothing($this->appManager->getAppVersion(Application::APP_ID));
+	}
+
+	/**
+	 * A version string that has the shape of a version, or an empty string.
+	 *
+	 * Trimmed and then matched as a whole. Everything else is an empty string,
+	 * which every reader of this class treats as "not known": that is the safe
+	 * direction, because the alternative is either comparing two things that are
+	 * not versions or printing a container's free text on an admin page.
+	 */
+	private function versionOrNothing(string $version): string {
+		$candidate = trim($version);
+
+		return preg_match(self::VERSION_PATTERN, $candidate) === 1 ? $candidate : '';
+	}
+
+	/**
+	 * Major and minor of a version that has already passed the pattern, as one
+	 * string. The pattern guarantees both parts, so there is nothing to default.
+	 */
+	private function majorMinor(string $version): string {
+		$parts = explode('.', $version);
+
+		return $parts[0] . '.' . $parts[1];
+	}
+
+	/**
+	 * Remember the version of the other half, and only when it changed.
+	 *
+	 * The admin page polls every five seconds, so an unconditional write would
+	 * be one appconfig update per poll for a value that moves when somebody
+	 * restarts a container. Same shape and same reason as
+	 * SettingsService::rememberContainerCap.
+	 */
+	private function rememberBackendVersion(string $version): void {
+		if ($version === $this->appConfig->getValueString(Application::APP_ID, self::KEY_BACKEND_VERSION, '')) {
+			return;
+		}
+
+		$this->appConfig->setValueString(Application::APP_ID, self::KEY_BACKEND_VERSION, $version);
 	}
 
 	/**

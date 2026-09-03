@@ -279,7 +279,9 @@
   function fingerprint (view) {
     const coverage = view.coverage || {}
     const estimate = view.estimate || {}
+    const lockstep = view.lockstep || {}
     return [
+      lockstep.state, lockstep.container,
       view.runState, view.backendReachable, view.indexedDisplay, view.skipped,
       view.failed, view.excluded, view.scheduled, view.running, view.lastJobRun,
       coverage.indexed, coverage.indexable, coverage.deliberatelyLeftOut,
@@ -1168,6 +1170,19 @@
     errorsBlock(view)
 
     shown('findling-banner-unreachable', view.backendReachable !== true)
+
+    // The version state of D-11. The sentence is written before the banner is
+    // shown, like everywhere else on this page, so that it is already correct on
+    // the frame it appears in; and it is written into the text span rather than
+    // into the paragraph, which also holds the icon. Both numbers come from the
+    // server side comparison and are put into a text node, never into markup.
+    const lockstep = view.lockstep || {}
+    text('findling-banner-lockstep-text',
+      t('findling', 'The two halves of Findling report different versions: this app is %1$s, the backend is %2$s. While they disagree the search answers with no results, because a wrong answer without a word would be worse. Bring both halves to the same version.')
+        .replace('%1$s', typeof lockstep.companion === 'string' ? lockstep.companion : '')
+        .replace('%2$s', typeof lockstep.container === 'string' ? lockstep.container : ''))
+    shown('findling-banner-lockstep', lockstep.state === 'drift')
+
     const backend = view.backend || {}
     shown('findling-banner-lowdisk', backend.lowDisk === true)
     shown('findling-banner-reindex', backend.reindexRequired === true)
