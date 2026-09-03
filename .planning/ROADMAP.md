@@ -220,7 +220,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 05-11-PLAN.md , Phase-4-Erbe: Skip-Verdikte und Versionsmarken (D-19)
-- [ ] 05-12-PLAN.md , Trockenlauf, gemessener OCR-Faktor und der Grenzwert
+- [x] 05-12-PLAN.md , Trockenlauf, gemessener OCR-Faktor und der Grenzwert
 - [x] 05-13-PLAN.md , CI-Haertung: Digest-Smoke, Pin-Gate, Deadlines, Postgres-Dauergate
 
 **Wave 4** *(blocked on Wave 3 completion)*
@@ -270,7 +270,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
-| 5. Härtung und Store-Einreichung v1.0 | 14/19 | In Progress|  |
+| 5. Härtung und Store-Einreichung v1.0 | 15/19 | In Progress|  |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 
 ## Requirement Coverage
