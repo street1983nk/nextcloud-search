@@ -203,12 +203,12 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md , HaRP: der echte Installationsweg, install und run
-- [ ] 05-02-PLAN.md , Ein Disable verliert nichts, ein Purge raeumt alles (PKG-04)
-- [ ] 05-03-PLAN.md , Endgueltige Aufgabe-Regel und zwei Durchsatzposten vor dem Volllauf
-- [ ] 05-04-PLAN.md , Bildzweig und Ordner-Wiederherstellung
-- [ ] 05-05-PLAN.md , Lastkorpus-Generator, RSS-Sampler und Box-Skript
-- [ ] 05-06-PLAN.md , Audit-Kleinreste in Container und PHP-Haelfte (D-20)
+- [x] 05-01-PLAN.md , HaRP: der echte Installationsweg, install und run
+- [x] 05-02-PLAN.md , Ein Disable verliert nichts, ein Purge raeumt alles (PKG-04)
+- [x] 05-03-PLAN.md , Endgueltige Aufgabe-Regel und zwei Durchsatzposten vor dem Volllauf
+- [x] 05-04-PLAN.md , Bildzweig und Ordner-Wiederherstellung
+- [x] 05-05-PLAN.md , Lastkorpus-Generator, RSS-Sampler und Box-Skript
+- [x] 05-06-PLAN.md , Audit-Kleinreste in Container und PHP-Haelfte (D-20)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -270,7 +270,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Indexkern und Volltextsuche | 14/14 | Complete   | 2026-09-01 |
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
-| 5. Härtung und Store-Einreichung v1.0 | 0/19 | Planned | - |
+| 5. Härtung und Store-Einreichung v1.0 | 6/19 | In Progress|  |
 | 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
 
 ## Requirement Coverage

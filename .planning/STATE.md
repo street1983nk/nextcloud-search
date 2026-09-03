@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
 stopped_at: Phase 5 context gathered
-last_updated: "2026-09-03T08:12:53.643Z"
-last_activity: 2026-09-03 -- Phase 5 planning complete
+last_updated: "2026-09-03T08:55:30.293Z"
+last_activity: 2026-09-03 -- Phase 05 execution started
 progress:
   total_phases: 2
   completed_phases: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 5 — härtung und store einreichung v1.0
+**Current focus:** Phase 05 — h-rtung-und-store-einreichung-v1-0
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-09-03 -- Phase 5 planning complete
+Phase: 05 (h-rtung-und-store-einreichung-v1-0) — EXECUTING
+Plan: 1 of 19
+Status: Executing Phase 05
+Last activity: 2026-09-03 -- Phase 05 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
