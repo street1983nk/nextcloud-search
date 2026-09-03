@@ -97,6 +97,7 @@ OC.L10N.register(
     "Looking up a single file needs JavaScript. Everything above stays complete without it.": "Die Einzelprüfung braucht JavaScript. Alles darüber bleibt auch ohne vollständig lesbar.",
     "No file at this path, and no file with this ID.": "Unter diesem Pfad liegt keine Datei, und keine Datei hat diese ID.",
     "Not seen yet": "Noch nicht gesehen",
+    "State unknown right now": "Zustand im Moment unbekannt",
     "File ID: %s": "Datei-ID: %s",
     "Last checked %s": "Zuletzt geprüft: %s",
     "The lookup did not work. Nothing about this file has changed.": "Die Prüfung hat nicht funktioniert. An dieser Datei hat sich nichts geändert.",

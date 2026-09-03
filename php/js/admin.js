@@ -501,8 +501,8 @@
   }
 
   /** The word beside the icon, so colour is never the only carrier. */
-  function chipLabel (chip, found) {
-    if (found !== true) {
+  function chipLabel (chip, view) {
+    if (view.found !== true) {
       return t('findling', 'No file at this path, and no file with this ID.')
     }
     switch (chip) {
@@ -521,7 +521,16 @@
       case 'failed':
         return t('findling', 'Failed')
       default:
-        return t('findling', 'Not seen yet')
+        // Two states share the neutral chip and may not share a sentence
+        // (review finding WR-05). pending_crawl is the honest "the crawl has
+        // not arrived", so it keeps "Not seen yet". unknown means the backend
+        // is silent and nothing can be said either way, and "Not seen yet"
+        // there would be a positive claim about the crawl that the page
+        // cannot back; the note underneath names the silent backend, this
+        // label says only what holds.
+        return view.state === 'unknown'
+          ? t('findling', 'State unknown right now')
+          : t('findling', 'Not seen yet')
     }
   }
 
@@ -557,7 +566,7 @@
     CHIP_ICONS.forEach(function (name) {
       shown('findling-diagnosis-icon-' + name, name === chip)
     })
-    text('findling-diagnosis-chip-label', chipLabel(chip, found))
+    text('findling-diagnosis-chip-label', chipLabel(chip, view))
 
     // The path travels through a function replacement, never as a plain
     // second argument: a string there is a replacement PATTERN, and $&, $'
