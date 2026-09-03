@@ -40,6 +40,7 @@ stays correct as defence in depth for the proxy route.
 
 import asyncio
 import logging
+import sqlite3
 import time
 
 from fastapi import APIRouter
@@ -165,14 +166,21 @@ def _report(window_seconds: int) -> RatesResponse:
     if not resolved.state_db.is_file():
         return empty.model_copy(update={"note": NO_STATE_YET})
 
+    # sqlite3.Error is caught next to OSError on both the open and the read, for
+    # the reason written at status.report(): a non-database file fails the first
+    # PRAGMA and a zero byte state.db fails the first query, and both have to be
+    # the unreadable-state answer rather than a 500 (review finding WR-01).
     try:
         store = open_read_only(resolved.state_db)
-    except OSError as error:
+    except (OSError, sqlite3.Error) as error:
         LOGGER.warning("the state database could not be opened, an %s", type(error).__name__)
         return empty.model_copy(update={"note": STATE_UNREADABLE})
 
     try:
         return _of(store, window_seconds)
+    except sqlite3.Error as error:
+        LOGGER.warning("the state database could not be read, an %s", type(error).__name__)
+        return empty.model_copy(update={"note": STATE_UNREADABLE})
     finally:
         # Opened per call rather than kept: this route is asked by one admin
         # page, and a connection of its own is always current without a cache

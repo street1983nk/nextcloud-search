@@ -23,7 +23,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import Corpus
-from findling.api.rates import STARTUP_OCR_PAGE_MS, WINDOW_SECONDS_MAX, WINDOW_SECONDS_MIN
+from findling.api.rates import STARTUP_OCR_PAGE_MS, STATE_UNREADABLE, WINDOW_SECONDS_MAX, WINDOW_SECONDS_MIN
 from findling.main import APP
 
 pytestmark = pytest.mark.usefixtures("appapi_environment")
@@ -198,6 +198,40 @@ def test_without_a_state_database_the_answer_is_zeros_and_a_note(
     assert answer["docs"] == 0
     assert answer["bytesPerDoc"] == 0
     assert answer["note"] != ""
+
+
+def test_a_zero_byte_state_database_is_an_answer_and_not_a_server_error(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # A kill between sqlite3.connect and the schema script leaves exactly this
+    # file behind: it opens cleanly and the first query raises "no such table".
+    # A broken state is an answer of this route, never a 500 (review finding
+    # WR-01).
+    (volume / "state.db").touch()
+
+    answer = _rates(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    assert answer["docs"] == 0
+    assert answer["note"] == STATE_UNREADABLE
+
+
+def test_a_state_file_that_is_no_database_is_an_answer_and_not_a_server_error(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # The other realistic shape: the file is not SQLite at all, so the open
+    # itself raises DatabaseError rather than OSError (review finding WR-01).
+    (volume / "state.db").write_bytes(b"this is not a sqlite database")
+
+    answer = _rates(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    assert answer["docs"] == 0
+    assert answer["note"] == STATE_UNREADABLE
 
 
 def test_the_answer_carries_no_path_no_file_name_and_no_search_term(

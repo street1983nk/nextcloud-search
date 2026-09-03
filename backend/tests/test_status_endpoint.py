@@ -21,6 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import Corpus
+from findling.api.status import STATE_UNREADABLE
 from findling.config import MAX_FILE_BYTES
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
@@ -241,6 +242,41 @@ def test_without_a_state_database_the_answer_is_zeros_and_a_note(
     assert answer["docs"] == 0
     assert answer["indexBytes"] == 0
     assert answer["note"] != ""
+
+
+def test_a_zero_byte_state_database_is_an_answer_and_not_a_server_error(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # A kill between sqlite3.connect and the schema script leaves exactly this
+    # file behind: it opens cleanly and the first query raises "no such table".
+    # The contract of this route says a broken state is an answer, never a 500,
+    # and the banner of the admin page depends on it (review finding WR-01).
+    (volume / "state.db").touch()
+
+    answer = _status(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    assert answer["indexed"] == 0
+    assert answer["note"] == STATE_UNREADABLE
+
+
+def test_a_state_file_that_is_no_database_is_an_answer_and_not_a_server_error(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # The other realistic shape of a broken state: the file exists and is not
+    # SQLite at all, so the open itself raises DatabaseError rather than OSError
+    # (review finding WR-01).
+    (volume / "state.db").write_bytes(b"this is not a sqlite database")
+
+    answer = _status(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    assert answer["indexed"] == 0
+    assert answer["note"] == STATE_UNREADABLE
 
 
 def test_the_size_cap_is_reported_even_without_a_state_database(

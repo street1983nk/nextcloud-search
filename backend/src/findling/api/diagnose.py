@@ -31,6 +31,7 @@ defence in depth for the path this app does not walk (pitfall 10).
 
 import asyncio
 import logging
+import sqlite3
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -83,14 +84,22 @@ def _report(file_id: int) -> DiagnoseResponse:
     if file_id <= 0 or not resolved.state_db.is_file():
         return DiagnoseResponse(fileId=file_id, note=NOT_JUDGED)
 
+    # sqlite3.Error is caught next to OSError on both the open and the read, for
+    # the reason written at status.report(): a non-database file fails the first
+    # PRAGMA and a zero byte state.db fails the first query, and both have to be
+    # the no-verdict answer rather than a 500, or the docstring above would lie
+    # about never raising (review finding WR-01).
     try:
         store = open_read_only(resolved.state_db)
-    except OSError as error:
+    except (OSError, sqlite3.Error) as error:
         LOGGER.warning("the state database could not be opened, an %s", type(error).__name__)
         return DiagnoseResponse(fileId=file_id, note=NOT_JUDGED)
 
     try:
         row = store.file_row(file_id)
+    except sqlite3.Error as error:
+        LOGGER.warning("the state database could not be read, an %s", type(error).__name__)
+        return DiagnoseResponse(fileId=file_id, note=NOT_JUDGED)
     finally:
         # Opened per call rather than kept: this route is asked by one admin who
         # typed something into a field, and a connection of its own is always

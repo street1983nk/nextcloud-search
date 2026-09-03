@@ -50,6 +50,7 @@ answer is the same for all of them.
 
 import asyncio
 import logging
+import sqlite3
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -201,14 +202,24 @@ def report() -> StatusResponse:
     if not resolved.state_db.is_file():
         return volume.model_copy(update={"note": NO_STATE_YET})
 
+    # sqlite3.Error is caught next to OSError on both the open and the read,
+    # because two realistic shapes of a broken state escape the open alone: a
+    # file that is not a SQLite database raises DatabaseError from the first
+    # PRAGMA, and a zero byte state.db, which a kill between connect and the
+    # schema script leaves behind, opens cleanly and raises OperationalError on
+    # the first query. Both are the same answer as an unreadable file: a state
+    # of this container, never a 500 (review finding WR-01).
     try:
         store = open_read_only(resolved.state_db)
-    except OSError as error:
+    except (OSError, sqlite3.Error) as error:
         LOGGER.warning("the state database could not be opened, an %s", type(error).__name__)
         return volume.model_copy(update={"note": STATE_UNREADABLE})
 
     try:
         return _of(store, volume)
+    except sqlite3.Error as error:
+        LOGGER.warning("the state database could not be read, an %s", type(error).__name__)
+        return volume.model_copy(update={"note": STATE_UNREADABLE})
     finally:
         # Opened per call rather than kept: this route is asked rarely, by one
         # admin page, and a connection of its own is always current without a
