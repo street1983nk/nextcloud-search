@@ -1152,6 +1152,173 @@ angepasst, bis die Zahl stimmt. Das wäre keine Messung mehr.
 `anon`-Wert des Findling-Containers unter 2,0 GB bleibt, gefahren unter
 `docker update --memory=2g --memory-swap=2g`.**
 
+## Die Vorbereitung des Volllaufs
+
+Zwischen dem Trockenlauf und dem Volllauf liegen vier Schritte. Keiner von ihnen
+ist eine Formalie, jeder hat seinen Grund im Trockenlauf, und sie stehen hier,
+weil ein Bericht, der nur die Messung zeigt, nicht sagt, woran sie entstanden
+ist.
+
+### Erstens: das Abbild trägt die Korrektur, und das ist nachgerechnet
+
+Der Trockenlauf hat einen Fehler gefunden, der jede Tabellendatei unindexierbar
+machte. Ein Volllauf gegen ein Abbild ohne diese Korrektur würde dreizehn Stunden
+lang den falschen Pfad messen, und zwar für jede fünfte Datei des Korpus. Der
+Name eines Kennzeichens ist als Beleg dafür zu wenig, denn ein Kennzeichen kann
+jeder vergeben. Nachgerechnet wird deshalb der Inhalt: über jede Python-Datei des
+Pakets, auf Zeilenenden vereinheitlicht, weil der Arbeitsbaum auf Windows liegt
+und das Abbild auf Linux gebaut ist.
+
+```python
+h = hashlib.sha256()
+for p in sorted(root.rglob("*.py")):
+    data = p.read_bytes().replace(b"\r\n", b"\n")
+    h.update(p.relative_to(root).as_posix().encode() + b"\0"
+             + hashlib.sha256(data).hexdigest().encode() + b"\n")
+```
+
+| Ort | Dateien | Baumhash |
+|---|---|---|
+| Arbeitsbaum, `backend/src/findling` | 44 | `f305ac09adeae37ede6e210311c32ef2cf2b5d9b7d870409d7b550785046954e` |
+| Abbild, `/app/.venv/lib/python3.13/site-packages/findling` | 44 | `f305ac09adeae37ede6e210311c32ef2cf2b5d9b7d870409d7b550785046954e` |
+
+Dieselbe Zahl, also derselbe Code. Zusätzlich gelesen und im Abbild vorgefunden:
+die Stelle selbst, `with Path(path).open("rb") as stream` in `extract_xlsx`,
+samt der Begründung, die im Arbeitsbaum daneben steht.
+
+| Angabe | Wert |
+|---|---|
+| Abbild | `localhost:5000/findling_backend:05-12-fix` |
+| Kennung des Abbilds | `sha256:00c457bf48a2c531a5bbd8ff0fa589dc861216e57c84746189aaefd9b2d4c19b` |
+| erzeugt | 2026-09-03T19:19:38Z, auf der Box gebaut |
+| Größe | 138.520.962 Byte |
+
+Warum nicht neu gebaut wurde: zwischen dem Stand, aus dem dieses Abbild entstand,
+und dem Stand dieses Berichts liegt keine einzige Änderung unter `backend/`,
+`php/` oder `docker/`. Ein neuer Bau ergäbe denselben Inhalt, und der Baumhash
+oben sagt genau das, nur ohne die Bauzeit. Der Preis dieser Wahl steht dennoch
+in der Rechnung: dieses Abbild ist auf der Messmaschine entstanden und existiert
+nur dort, im Unterschied zu dem gezogenen Abbild des ersten Trockenlaufs, das
+über seinen Digest in der Registry festgenagelt ist. Der Baumhash ist der
+Ausgleich dafür, denn er ist aus dem Arbeitsbaum jederzeit nachrechenbar, auch
+wenn die Maschine längst gelöscht ist.
+
+### Zweitens: der Volllauf startet auf einem leeren Index
+
+Drei Dinge aus dem Trockenlauf hätten die Zahlen des Volllaufs verfälscht, und
+alle drei sind vorher weggeräumt.
+
+| Was | Warum es weg musste | Wie |
+|---|---|---|
+| die 500 Dateien des Trockenlaufs | sie zählen sonst im Nenner des Deckungsgrads mit und tauchen in jeder Verdiktzählung wieder auf | von der Platte gelöscht, danach `occ files:scan lasttest`, das 500 Entfernungen meldet |
+| 49 Zeilen in `oc_findling_file_state`, davon 32 veraltete `failed(corrupt)` | genau der Befund DI-05-21: eine erfolgreich nachindexierte Datei räumt ihre alte Fehlerzeile nicht weg, der Fehlerbericht des Volllaufs trüge also 32 Zeilen über Dateien, die es nicht mehr gibt | `TRUNCATE oc_findling_queue, oc_findling_file_state, oc_findling_scan_stats` |
+| der Index des Trockenlaufs, 587 Dokumente | ein Lauf, der auf einem halb gefüllten Index beginnt, misst nicht, was eine frische Installation misst, und genau darüber wird die Store-Aussage getroffen | `occ app_api:app:unregister findling_backend --rm-data`, danach neu registrieren |
+
+Der dritte Schritt ist der einschneidendste und der wichtigste. `--rm-data`
+löscht den Datenspeicher der ExApp, also Index und Zustandsdatenbank des
+Containers. Was danach läuft, ist die Lage eines Betreibers am ersten Tag: leerer
+Index, voller Bestand. Nebenbei ist das die zweite Beobachtung der Zusage aus
+D-16 auf AIO, diesmal in ihrer anderen Richtung: 05-12 hat belegt, dass ein
+Abmelden ohne `--rm-data` die Daten stehen lässt, hier ist belegt, dass ein
+Abmelden mit `--rm-data` sie nimmt.
+
+### Drittens: der Korpus des Volllaufs
+
+Erzeugt wurde er auf derselben Weise wie der Trockenlauf-Korpus, also im Abbild
+der ExApp und nicht im System-Python der Box, und aus demselben Grund: Pillow
+liegt dort in der gepinnten Fassung, und es kommt kein Paket auf die Messmaschine,
+das nicht ohnehin im Container läuft (T-05-SC).
+
+```
+build_load_corpus: seed=phase5-full files=50000 bytes=20208046426
+  checksum=c03a880323171d29c5278ed350db277291e39d256e95d5a8654dd4a6c244a274
+```
+
+| Angabe | Wert |
+|---|---|
+| Seed | `phase5-full` |
+| Umgebung | Abbild `localhost:5000/findling_backend:05-12-fix`, Pillow 12.3.0 |
+| Dateien | 50.000 |
+| Gesamtgröße | 20.208.046.426 Byte, also 20,2 GB |
+| Listen-Prüfsumme | `c03a880323171d29c5278ed350db277291e39d256e95d5a8654dd4a6c244a274` |
+| Beginn | 2026-09-03T19:44:54Z |
+| Ende | 2026-09-03T20:13:09Z |
+| Dauer der Erzeugung | 1695 s, also 28 Minuten 15 Sekunden |
+| Durchsatz | rund 417 Dateien und 140 MB je Minute, durchgehend an einem Kern |
+
+Die Verteilung, wie der Generator sie meldet, und daneben die Gegenprobe von der
+Platte, weil eine Zählung, die nur ihre eigene Quelle befragt, nichts prüft:
+
+| Kategorie | Dateien | Anteil | Gegenprobe an den Dateiendungen |
+|---|---|---|---|
+| einseitige Scans | 9.916 | 19,8 Prozent | zusammen 32.552 `.pdf` |
+| mehrseitige Scans | 100 | 0,2 Prozent | (dieselben 32.552) |
+| Text-PDF | 22.536 | 45,1 Prozent | (dieselben 32.552) |
+| OOXML | 10.016 | 20,0 Prozent | 3.345 `.xlsx`, 3.344 `.pptx`, 3.327 `.docx` |
+| OpenDocument | 5.008 | 10,0 Prozent | 2.504 `.odt`, 2.504 `.ods` |
+| reiner Text | 2.304 | 4,6 Prozent | 781 `.txt`, 775 `.md`, 748 `.csv` |
+| Bild | 100 | 0,2 Prozent | 27 `.webp`, 27 `.jpg`, 23 `.tif`, 23 `.png` |
+| über dem Größendeckel | 20 | 0,04 Prozent | 20 `.csv` über 50 MB, zusammen 1.119.433.236 Byte |
+| **Summe** | **50.000** | | **50.000 Dateien auf der Platte** |
+
+Beide Zählungen gehen auf. Der OCR-Anteil des Korpus liegt bei 20,0 Prozent,
+also genau dort, wo D-02 ihn verlangt, und die 20 Dateien über dem Deckel sind
+die Gruppe, die am Ende als `too_large` wieder auftauchen muss; sie sind der
+einzige Posten, dessen Verdikt der Generator vorher kennt.
+
+Die Dateien liegen flach in einem Verzeichnis. `occ files:scan lasttest` hat sie
+in 42 Sekunden aufgenommen, und `oc_filecache` führt danach genau 50.000 Zeilen
+unter `files/loadtest/`.
+
+| Größe | Vor dem Korpus | Nach dem Korpus |
+|---|---|---|
+| belegt auf dem Volume | 6,2 GB | 26 GB |
+| frei auf dem Volume | 41 GB | 22 GB |
+
+22 GB frei sind reichlich für einen Index, der nach der Hochrechnung des
+Trockenlaufs rund 700 MB wiegt, und sie sind vor allem weit von den 500 MB
+entfernt, ab denen der Container `paused_low_disk` meldet. Der Lauf pausiert also
+nicht aus Versehen; der Störfall wird später ausdrücklich herbeigeführt.
+
+### Viertens: die harte Grenze, nach der letzten Registrierung
+
+Der Befund aus 05-12 lautet: jede Registrierung legt einen neuen Container an,
+und der kommt ohne Grenze. Die Grenze gehört deshalb ans Ende der Vorbereitung
+und nicht an ihren Anfang. Gesetzt wurde sie mit dem Befehl aus 05-12,
+wortwörtlich, und danach an zwei Stellen gegengeprüft: beim Docker-Client und im
+cgroup selbst.
+
+```sh
+docker update --memory=2g --memory-swap=2g nc_app_findling_backend
+```
+
+```
+docker inspect  Memory=2147483648 MemorySwap=2147483648
+                Image=localhost:5000/findling_backend:05-12-fix
+memory.max      2147483648
+memory.swap.max 0
+```
+
+`memory.swap.max 0` ist die Angabe, auf die es ankommt: ein Lauf, der sich nur
+durch Auslagern unter der Grenze hält, hätte mit der Zusage nichts zu tun.
+
+Eine Kleinigkeit, die eine Viertelstunde gekostet hat und deshalb hier steht:
+`occ app_api:app:register --info-xml` liest den Pfad **im Nextcloud-Container**
+und nicht auf dem Wirt, denn dort läuft `occ`. Ein Pfad des Wirtes endet mit
+`Failed to read info.xml`, und zwar nachdem die alte Registrierung bereits
+entfernt ist. Die Datei gehört also vorher mit `docker cp` hinein.
+
+### Der Beginn des Laufs
+
+| Angabe | Wert |
+|---|---|
+| Beginn | 2026-09-03T23:13:11Z |
+| Vorrat | 50.000 Dateien des Korpus plus 104 des Bestands |
+| Index zu Beginn | leer, Datenspeicher neu angelegt |
+| Zustandstabellen zu Beginn | leer |
+| Sampler | `rss_sampler.sh nc_app_findling_backend 5`, Abstand 5 Sekunden |
+| Beobachter der Statusseite | alle 5 Minuten eine vollständige Aufnahme von `/apps/findling/admin/overview` |
+
 ## Findling im Volllauf
 
 | Lauf | höchster `anon` | unter 2,0 GB | Laufzeit | OCR-Anteil | Speichertod |
