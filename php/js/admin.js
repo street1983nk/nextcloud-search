@@ -559,8 +559,12 @@
     })
     text('findling-diagnosis-chip-label', chipLabel(chip, found))
 
+    // The path travels through a function replacement, never as a plain
+    // second argument: a string there is a replacement PATTERN, and $&, $'
+    // and friends in a file name would be expanded by String.prototype.replace
+    // (review finding WR-04). A function's return value is inserted literally.
     text('findling-diagnosis-path', view.trashed === true
-      ? t('findling', '%s (in the trash bin)').replace('%s', path)
+      ? t('findling', '%s (in the trash bin)').replace('%s', function () { return path })
       : path)
     text('findling-diagnosis-label', label)
     text('findling-diagnosis-remedy', remedy)
@@ -745,7 +749,10 @@
     }
 
     label.textContent = prefix
-    remove.setAttribute('aria-label', t('findling', 'Remove exclusion %s').replace('%s', prefix))
+    // A function replacement, because a plain string is a replacement PATTERN
+    // and a folder named with $& or $' in it would be mangled (review finding
+    // WR-04).
+    remove.setAttribute('aria-label', t('findling', 'Remove exclusion %s').replace('%s', function () { return prefix }))
     list.appendChild(row)
   }
 
@@ -877,14 +884,22 @@
           : numbers.format(answer.affectedDocuments))
       : ''
 
+    // This is the one sentence on the page that must be exact, so both
+    // substitutions are function replacements: a plain string is a replacement
+    // PATTERN, and a folder named Archiv$&2024 would render mangled inside the
+    // destructive confirmation (review finding WR-04). The figure goes in
+    // FIRST and the folder names LAST, because a function only guards the
+    // dollar patterns of its own insertion: a prefix containing the literal
+    // text of the other placeholder must not be there any more when the later
+    // replace scans the sentence, and the figure cannot contain a placeholder.
     text(
       'findling-rules-confirm-message',
       counted
         ? t('findling', 'Remove indexed content? Excluding %1$s also removes %2$s already indexed documents under that path from the index. The files themselves stay untouched on disk.')
-          .replace('%1$s', prefixes.join(', '))
-          .replace('%2$s', documents)
+          .replace('%2$s', function () { return documents })
+          .replace('%1$s', function () { return prefixes.join(', ') })
         : t('findling', 'Remove indexed content? Excluding %s also removes the documents already indexed under that path from the index. The files themselves stay untouched on disk.')
-          .replace('%s', prefixes.join(', '))
+          .replace('%s', function () { return prefixes.join(', ') })
     )
 
     shown('findling-rules-confirm', true)
