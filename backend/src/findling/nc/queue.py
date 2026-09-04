@@ -424,7 +424,21 @@ class DocumentQueue:
         return CallResult(ok=True, count=_whole_number(payload.get("acknowledged")) or 0)
 
     async def unlock(self, ids: Sequence[int]) -> CallResult:
-        """Hand rows back unprocessed, so a restart is productive at once."""
+        """Hand rows back unprocessed, so a restart is productive at once.
+
+        **What the other side does with it, because this container depends on
+        it.** Handing a row back is the one way this container can say "I did
+        not judge this file", and since plan 05-20 the other side reads it that
+        way: the delivery the claim counted is given back with the row
+        (QueueMapper::unlock). Without that, a pause below the free space floor
+        spent the give-up budget of exactly the rows it was protecting, and a
+        disk that was tight for half a minute cost the whole load that happened
+        to be with the worker (DI-05-23, measured twice in plan 05-14).
+
+        So the three callers of this method, the disk pause, the content gateway
+        that did not answer and the shutdown, all cost time and never work. A
+        call that fails costs the lock timeout instead, which is time as well.
+        """
         if not ids:
             return CallResult(ok=True)
 

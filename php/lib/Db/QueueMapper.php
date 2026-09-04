@@ -331,8 +331,12 @@ class QueueMapper extends QBMapper {
 		//
 		// Handing a row out is the attempt, so retries is counted here, in the
 		// database: read-modify-write loses increments the moment two
-		// collectors work at the same time, which is the normal case. The
-		// identifier is unquoted because it is a reserved word in none of the
+		// collectors work at the same time, which is the normal case. Since
+		// plan 05-20 the sentence has a second half: unlock() takes the count
+		// back down, because a row the container hands back unjudged was a
+		// hand-out and not an attempt of the file (DI-05-23, and the reasoning
+		// stands in full at that method). The identifier is unquoted because it
+		// is a reserved word in none of the
 		// three dialects, and quoting it correctly would be the one thing that
 		// differs between them. The claim also clears dirty: whatever the file
 		// looked like before this moment is exactly what this claim is going
@@ -611,9 +615,48 @@ class QueueMapper extends QBMapper {
 	}
 
 	/**
-	 * Give rows back without processing them. This is the graceful restart: a
-	 * container that is asked to stop returns what it holds instead of letting
-	 * LOCK_TIMEOUT run out.
+	 * Give rows back without processing them, and give their delivery back with
+	 * them. This is the graceful restart: a container that is asked to stop
+	 * returns what it holds instead of letting LOCK_TIMEOUT run out.
+	 *
+	 * **The refund is the fix for DI-05-23, and it is the reason this method has
+	 * two statements instead of one.** The claim counts a delivery when it hands
+	 * a row out, which is right for the case the give-up rule exists for: a row
+	 * that is handed out and never comes back reports no failure anywhere, so
+	 * without a ceiling on the deliveries it circles forever instead of becoming
+	 * a visible end state. A row that IS handed back is the opposite of that
+	 * case. The container said out loud that it did not judge the file, and a
+	 * hand-out that produced no judgement is not an attempt of the file.
+	 *
+	 * What it cost before this plan, measured twice on a four gigabyte box in
+	 * the full run of plan 05-14 (docs/performance.md, "Drill 3, Nachtrag"):
+	 * below MIN_FREE_BYTES the container pauses correctly and hands its whole
+	 * load back as `paused_low_disk`, a pass takes seconds, and after roughly
+	 * twenty seconds of a tight disk MAX_DELIVERIES was spent for every row that
+	 * happened to be with the worker. Thirty of thirty rows in the second pass
+	 * of that drill ended as failed(repeatedly_stuck), twenty eight of them
+	 * without ever having been handed to the container, while the page said
+	 * "Indexing is paused so the index stays intact". That sentence was true of
+	 * the index and false of the work stock.
+	 *
+	 * DI-05-23 reads the fix as needing a third channel in the acknowledgement,
+	 * because the container has no way of saying "I did not even start". It has
+	 * one: this route. Handing a row back IS that statement, and it already
+	 * exists for the graceful restart, so the honest change is to let it mean
+	 * what it says rather than to invent a second way of saying it.
+	 *
+	 * The refund is deliberately not limited to the disk pause. Every caller of
+	 * this route is the container returning rows it did not judge: the pause,
+	 * the content gateway that did not answer, and the shutdown. All three are
+	 * the same statement, and a rule that held for one of them would leave the
+	 * other two writing off work for a reason that has nothing to do with the
+	 * file. What is NOT refunded is the delivery of a row that is never handed
+	 * back at all, which is exactly the row the ceiling was built for.
+	 *
+	 * A container that pauses forever therefore circles forever, and that is the
+	 * intended reading: while the disk is tight the work stock is preserved, the
+	 * status page shows the rows as scheduled and the banner names the cause.
+	 * Nothing is lost and nothing is judged.
 	 *
 	 * @param int[] $ids
 	 * @return int number of rows that were actually released
@@ -625,6 +668,25 @@ class QueueMapper extends QBMapper {
 
 		$released = 0;
 		foreach (array_chunk($ids, self::DELETE_BAND) as $band) {
+			// The refund runs BEFORE the release, and the order is the whole
+			// safety of it: while the row is still claimed nobody else can take
+			// it, so the counter this decrement takes down is the one this
+			// caller put up. Released first, a competing collector could claim
+			// the row in between and this statement would silently spend its
+			// delivery instead.
+			//
+			// The floor is a condition and not a function, because GREATEST and
+			// MAX differ across the three dialects this app runs on while a
+			// WHERE clause does not. A row at zero cannot be a row somebody is
+			// handing back anyway: the claim raised it to at least one before
+			// the container ever saw it.
+			$refund = $this->db->getQueryBuilder();
+			$refund->update(self::TABLE_NAME)
+				->set('retries', $refund->createFunction('retries - 1'))
+				->where($refund->expr()->in('id', $refund->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($refund->expr()->gt('retries', $refund->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+			$refund->executeStatement();
+
 			$qb = $this->db->getQueryBuilder();
 			$qb->update(self::TABLE_NAME)
 				->set('locked_at', $qb->createNamedParameter($this->freeMark(), IQueryBuilder::PARAM_DATE))
