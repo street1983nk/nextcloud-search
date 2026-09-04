@@ -71,8 +71,9 @@ gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 | Vorbereitung des Volllaufs, Generalprobe cpx22 | Abbild nachgerechnet, geräumt, Korpus erzeugt | 2026-09-04 |
 | Härtungsprobe unter harter Grenze | gefahren, 2 GB, `memory.events` durchgehend null | 2026-09-04 |
 | **Findling im Volllauf, 50.000 Dateien, Generalprobe cpx22** | **gemessen, 428,6 MB Spitze, 10 h 14 min, kein Speichertod** | 2026-09-04 |
-| Störfall-Drills, Generalprobe cpx22 | alle drei durchgespielt, mit ihren Grenzen | 2026-09-04 |
-| Kosten des Tests | aus der Konto-API, 0,80 EUR bis zum Abbau | 2026-09-04 |
+| Störfall-Drills, Generalprobe cpx22 | alle drei durchgespielt, mit ihren Grenzen, einer mit Nachtrag | 2026-09-04 |
+| Kosten des Tests | aus den Preisen dieses Kontos, 0,82 EUR brutto | 2026-09-04 |
+| Abbau der Generalprobe cpx22 | durchgeführt, Server, Volume und Firewall gegen die API geprüft | 2026-09-04 |
 | AIO-Grundlast, ARM | FEHLT NOCH | wartet auf Bestand |
 | Findling im Volllauf, ARM CAX11 | FEHLT NOCH | wartet auf Bestand |
 | Störfall-Drills, ARM CAX11 | FEHLT NOCH, und ausdrücklich nicht vorgesehen | die Drills hängen am Verhalten, nicht an der Architektur |
@@ -1895,24 +1896,93 @@ die Datenbank derselben Instanz nicht in Mitleidenschaft gezogen wird.
 
 ## Was der Test gekostet hat
 
-Abgefragt aus der Konto-API mit `scripts/ops/hetzner_box.sh status`, am
-2026-09-04T10:52Z, also nach dem Volllauf und den Drills und vor dem Abbau:
+Die letzte Abfrage vor dem Abbau, am 2026-09-04T11:22:59Z, also nach dem
+Volllauf, nach allen Drills und nach dem Nachtrag:
 
 | Posten | Wert |
 |---|---|
-| Laufzeit der Box | 18,7 Stunden seit 2026-09-03T16:10:50Z |
-| Preis der Box | 0,0371 EUR je Stunde |
-| Preis des Volumes | 0,0047 EUR je Stunde |
-| Preis der Adresse | 0,0010 EUR je Stunde |
-| **bisher ausgegeben, brutto** | **0,80 EUR** |
-| Monatspreis, falls sie stehen bliebe | 23,19 EUR Box, 3,40 EUR Volume, 0,59 EUR Adresse |
+| Laufzeit der Box | 19,2 Stunden, von 2026-09-03T16:10:50Z bis 2026-09-04T11:23:18Z |
+| Preis der Box, cpx22 in `hel1` | 0,0371 EUR je Stunde, brutto |
+| Preis des Volumes, 50 GB | 0,0047 EUR je Stunde, brutto |
+| Preis der öffentlichen Adresse | 0,0010 EUR je Stunde, brutto |
+| **Gesamtkosten des Tests** | **0,82 EUR, brutto** |
+| Monatspreis, wäre sie stehen geblieben | 23,19 EUR Box, 3,40 EUR Volume, 0,59 EUR Adresse |
 
-Die Endabrechnung nach dem Löschen steht im Abschnitt darunter.
+Woher die Zahl kommt, gehört dazu, weil "aus der Konto-API" zweierlei heißen
+kann. Die drei Stundenpreise sind live aus der Preisliste dieses Kontos gelesen,
+für genau diesen Servertyp und genau diesen Ort, und mit der Laufzeit
+multipliziert, die die API für diesen Server führt. Es ist also der Bruttowert
+dieses Kontos und nicht ein Posten von einer Rechnung; eine Rechnung gibt es zum
+Zeitpunkt dieser Zeile noch nicht. Die Adresse steht ausdrücklich mit in der
+Summe: sie macht acht Prozent aus, und wer sie weglässt, rechnet den Test
+billiger, als er war.
+
+Zum Vergleich, weil es die Größenordnung einordnet: die 0,82 EUR sind ungefähr
+der Preis eines belegten Brötchens und decken einen Volllauf über 50.000 Dateien,
+drei Störfall-Drills und alle Vorarbeiten ab.
 
 ### Der Abbau
 
-FEHLT NOCH. Er läuft erst nach der Abnahme des Berichts, weil danach keine
-Nachmessung mehr möglich ist, ohne eine neue Box zu bestellen.
+Gelaufen am 2026-09-04T11:23:18Z mit `sh scripts/ops/hetzner_box.sh destroy`, in
+zwei Aufrufen.
+
+```
+hetzner_box: detaching volume 106785477
+hetzner_box: deleting volume 106785477
+hetzner_box: deleting server 164459278
+hetzner_box: deleting firewall 11569745
+hetzner_box: the firewall was not deleted: resource_in_use: firewall with ID
+             11569745 is still in use
+hetzner_box: server 164459278 is gone, verified against the API
+hetzner_box: volume 106785477 is gone, verified against the API
+hetzner_box: firewall 11569745 is still there
+hetzner_box: something is left over. Find it by label: purpose=findling-phase5
+hetzner_box: the state file stays, so a second destroy can use it
+```
+
+Der zweite Aufruf, zwanzig Sekunden später:
+
+```
+hetzner_box: server 164459278 is gone, verified against the API
+hetzner_box: volume 106785477 is gone, verified against the API
+hetzner_box: firewall 11569745 is gone, verified against the API
+hetzner_box: every resource of this run is gone and the state file is removed
+```
+
+Dass zwei Aufrufe nötig waren, ist die Bauart und kein Mangel: die Bindung einer
+Firewall an einen Server löst sich erst, nachdem der Server wirklich weg ist, und
+das Skript behandelt jede Antwort, die es nicht als `not_found` lesen kann,
+ausdrücklich als "steht noch da". Ein Skript, das eine Ressource für gelöscht
+erklärt, weil die API etwas Unverständliches geantwortet hat, wäre genau das
+Risiko, gegen das dieser Abschnitt geschrieben ist.
+
+Die Gegenprobe, unabhängig vom Skript, unmittelbar danach:
+
+| Abfrage | Antwort |
+|---|---|
+| `/servers?label_selector=purpose=findling-phase5` | 0 Treffer |
+| `/volumes?label_selector=purpose=findling-phase5` | 0 Treffer |
+| `/firewalls?label_selector=purpose=findling-phase5` | 0 Treffer |
+| `/floating_ips?label_selector=purpose=findling-phase5` | 0 Treffer |
+| `/primary_ips?label_selector=purpose=findling-phase5` | 0 Treffer |
+| `ssh root@62.238.114.125` | `Connection timed out` |
+| Zustandsdatei des Werkzeugs | entfernt |
+
+Damit ist der Auftrag aus D-01 erfüllt: keine Ressource dieses Kontos trägt das
+Kennzeichen dieser Phase mehr, und die öffentliche Nextcloud mit Verwalterzugang,
+die einen Tag lang im Netz stand, ist weg. Offen bleibt genau eine Spur außerhalb
+dieses Kontos, und sie gehört nicht diesem Skript: der DNS-Eintrag
+`loadtest.infranode.dev` zeigt auf eine Adresse, die es nicht mehr gibt, und wird
+gesondert entfernt.
+
+**Was mit dem Abbau unwiederbringlich weg ist:** das Abbild
+`localhost:5000/findling_backend:05-12-fix`, das auf dieser Maschine gebaut wurde,
+der Korpus aus 50.000 Dateien, der Index aus 50.396 Dokumenten und die
+Zustandsdatenbank. Nachbaubar bleibt alles davon: der Codestand über den Baumhash,
+der Korpus über Seed und Abbild, und die Messungen über die Rohdaten unter
+`docs/measurements/2026-09-04-volllauf-cpx22/`. Was nicht nachbaubar ist, ist eine
+Nachmessung an genau dieser Maschine; deshalb stand die Frage danach vor dem
+Abbau und nicht danach.
 
 ## Reproduzieren
 
