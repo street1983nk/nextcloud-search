@@ -23,40 +23,155 @@
 	for the same reason: the container gained a fourth route, and the admin page
 	of the PHP side reads it.
 
-	The fifth route, /diagnose, arrives in the same release and the version is
+	The fifth route, /diagnose, arrived in the same release and the version was
 	deliberately NOT raised again for it. Plan 04-05 already moved both halves to
-	0.3.0 and both plans ship together, so a second bump would leave docker.yml
-	comparing an image tag against a git tag that was never cut. Written down
-	here rather than remembered, because the next plan that widens the surface
-	has to know which of the two rules it is under.
+	0.3.0 and both plans shipped together, so a second bump would have left
+	docker.yml comparing an image tag against a git tag that was never cut.
+	Written down here rather than remembered, because the next plan that widens
+	the surface has to know which of the two rules it is under.
+
+	Phase 5 raises both halves to 1.0.0, and that bump is under neither rule. It
+	is a decision: D-11 names 1.0.0 as the version the two entries are submitted
+	under, and plan 05-17 is the only place in this phase that performs it. No
+	route was added for it and nothing about the protocol changed.
 -->
 <info>
 	<id>findling_backend</id>
+	<!--
+		The three languages of D-12, in the order the store schema prescribes:
+		every name, then every summary, then every description. The English
+		wording sits in an element WITHOUT a lang attribute, because the schema
+		defaults that attribute to "en"; spelling it out would be a second "en"
+		and would break the uniqueness constraint on the element kind.
+
+		Not one of these elements may be empty. An empty element in an
+		info.xml ends the store upload in a server error rather than in a
+		validation message, which is the most expensive known trap of the
+		sister project, and the cheapest to walk into while translating.
+
+		The wording is not maintained here. docs/store-listing.md holds all
+		three languages of both halves side by side, which is what the
+		translation follow up rule of D-12 needs, and
+		backend/tests/test_store_metadata.py holds the mechanical part of that
+		rule: a language that goes missing from one element kind is a red test.
+	-->
 	<name>Findling Backend</name>
+	<name lang="de">Findling Backend</name>
+	<name lang="fr">Findling Backend</name>
 	<summary>Search backend for Findling: text extraction, OCR and the index</summary>
+	<summary lang="de">Suchdienst für Findling: Textauszug, Texterkennung und der Index</summary>
+	<summary lang="fr">Service de recherche pour Findling : extraction de texte, OCR et index</summary>
 	<description><![CDATA[This is the External App behind the Findling search app.
 
 It extracts text from documents, runs OCR on scanned pages and maintains the
 search index. All of that happens inside your own instance: no file content
 ever leaves the server, and nothing is ever written back to your files.
 
-What is stored, so that nobody has to guess: the text extracted from every
-indexed document is kept in this app's own volume, because the short excerpts
-shown under a search result are cut out of it on demand. A backup of that
-volume, including the ones an all-in-one setup takes, therefore contains the
-text of your indexed documents. None of it is sent anywhere: the volume is on
-your server, the index is read by this container only, and the search never
-leaves the instance.
+This app does nothing on its own. It needs the app "AppAPI", which installs and
+runs it, and the app "Findling", which puts the results into the normal search
+bar and is the only caller of this backend. Once both are there, nothing has to
+be configured: the first index starts by itself, and scanned documents are read
+with OCR without a setting being touched.
 
-This app does nothing on its own. Install the app "Findling", which puts the
-results into the normal search bar and is the only caller of this backend.]]></description>
-	<version>0.3.0</version>
+What it costs in memory, measured: A full index and OCR run over 50,000 files
+and 20 GB on a 4-GB box peaked at 429 MB of resident anonymous memory, under a
+hard 2 GB limit enforced by the kernel, with no OOM kill. The machine was x86
+and the repetition on ARM hardware is still open; the report docs/performance.md
+in the source code carries the method, the curve and every figure that
+repetition will replace.
+
+Privacy: everything runs locally in this container on your own machine. No file
+content ever leaves the server, and there is no telemetry of any kind, not even
+a version check. What is stored, so that nobody has to guess: the text extracted
+from every indexed document is kept in this app's own volume, because the short
+excerpts shown under a search result are cut out of it on demand. A backup of
+that volume, including the ones an all-in-one setup takes, therefore contains
+the text of your indexed documents, and the index is not encrypted at rest,
+which is a matter for the host it runs on.]]></description>
+	<description lang="de"><![CDATA[Dies ist die External App hinter der Such-App Findling.
+
+Sie gewinnt Text aus Dokumenten, liest gescannte Seiten per Texterkennung und
+pflegt den Suchindex. All das geschieht innerhalb Ihrer eigenen Instanz: kein
+Dateiinhalt verlässt den Server, und in Ihre Dateien wird nie etwas
+zurückgeschrieben.
+
+Diese App tut von sich aus nichts. Sie braucht die App "AppAPI", die sie
+installiert und betreibt, und die App "Findling", die die Ergebnisse in die
+gewöhnliche Suchleiste bringt und der einzige Aufrufer dieses Dienstes ist. Sind
+beide vorhanden, muss nichts eingerichtet werden: Der erste Indexlauf beginnt
+von selbst, und gescannte Dokumente werden per Texterkennung gelesen, ohne dass
+eine Einstellung angefasst wird.
+
+Was es an Arbeitsspeicher kostet, gemessen: Ein vollständiger Index- und
+Texterkennungslauf über 50.000 Dateien und 20 GB auf einer 4-GB-Box hatte seine
+Spitze bei 429 MB anonymem Arbeitsspeicher, unter einer harten Grenze von 2 GB,
+die der Kernel durchsetzt, und ohne einen einzigen Abschuss wegen
+Speichermangels. Die Maschine war x86, die Wiederholung auf ARM-Hardware steht
+aus; der Bericht docs/performance.md im Quellcode nennt die Methode, die Kurve
+und jede Zahl, die diese Wiederholung ersetzen wird.
+
+Datenschutz: Alles läuft lokal in diesem Container auf Ihrer eigenen Maschine.
+Kein Dateiinhalt verlässt den Server, und es gibt keinerlei Telemetrie, nicht
+einmal eine Versionsabfrage. Was gespeichert wird, damit niemand raten muss: Der
+aus jedem indexierten Dokument gewonnene Text liegt im eigenen Datenspeicher
+dieser App, weil die kurzen Auszüge unter einem Suchtreffer bei Bedarf daraus
+geschnitten werden. Eine Sicherung dieses Datenspeichers, auch die einer
+All-in-One-Installation, enthält damit den Text Ihrer indexierten Dokumente, und
+der Index ist im Ruhezustand nicht verschlüsselt, was Sache des Wirtssystems
+ist.]]></description>
+	<description lang="fr"><![CDATA[Ceci est l'External App qui se trouve derrière l'application de recherche
+Findling.
+
+Elle extrait le texte des documents, lit les pages numérisées par reconnaissance
+optique de caractères et tient à jour l'index de recherche. Tout cela se passe
+à l'intérieur de votre propre instance : aucun contenu de fichier ne quitte le
+serveur, et rien n'est jamais réécrit dans vos fichiers.
+
+Cette application ne fait rien d'elle-même. Elle a besoin de l'application
+"AppAPI", qui l'installe et la fait tourner, et de l'application "Findling", qui
+place les résultats dans la barre de recherche habituelle et qui est le seul
+appelant de ce service. Une fois les deux en place, il n'y a rien à configurer :
+la première indexation démarre d'elle-même, et les documents numérisés sont lus
+par reconnaissance optique sans qu'un seul réglage soit touché.
+
+Ce que cela coûte en mémoire, mesuré : une indexation complète avec
+reconnaissance optique portant sur 50 000 fichiers et 20 Go sur une machine de
+4 Go a culminé à 429 Mo de mémoire anonyme résidente, sous une limite stricte de
+2 Go imposée par le noyau, et sans la moindre interruption pour manque de
+mémoire. La machine était en x86, la répétition sur du matériel ARM reste à
+faire ; le rapport docs/performance.md dans le code source donne la méthode, la
+courbe et chaque chiffre que cette répétition remplacera.
+
+Confidentialité : tout fonctionne localement dans ce conteneur, sur votre propre
+machine. Aucun contenu de fichier ne quitte le serveur, et il n'y a aucune
+télémétrie, pas même une vérification de version. Ce qui est conservé, pour que
+personne n'ait à le deviner : le texte extrait de chaque document indexé est
+gardé dans le volume propre de cette application, parce que les courts extraits
+affichés sous un résultat de recherche y sont découpés à la demande. Une
+sauvegarde de ce volume, y compris celle que prend une installation
+tout-en-un, contient donc le texte de vos documents indexés, et l'index n'est
+pas chiffré au repos, ce qui relève de l'hôte sur lequel il tourne.]]></description>
+	<version>1.0.0</version>
 	<licence>agpl</licence>
 	<author>street1983nk</author>
 	<category>files</category>
 	<website>https://github.com/street1983nk/nextcloud-search</website>
 	<bugs>https://github.com/street1983nk/nextcloud-search/issues</bugs>
 	<repository type="git">https://github.com/street1983nk/nextcloud-search.git</repository>
+	<!--
+		The screenshots belong between the repository above and the donation
+		below, and they are deliberately absent rather than empty. Plan 05-18
+		puts the elements here once the images are reachable under an https
+		address, which the schema demands of them; an empty screenshot element
+		left as a placeholder would end the upload in a server error.
+	-->
+	<!--
+		The same donation link as the sister project of this author. The
+		platform is named in the type attribute because the schema knows the
+		value, which lets the store show the right destination instead of a
+		bare address.
+	-->
+	<donation type="paypal">https://paypal.me/KhaledCherifDev</donation>
 	<dependencies>
 		<nextcloud min-version="32" max-version="35"/>
 	</dependencies>
@@ -69,7 +184,7 @@ results into the normal search bar and is the only caller of this backend.]]></d
 				so this exact tag has to exist in the registry before a release
 				is published, not after.
 			-->
-			<image-tag>0.3.0</image-tag>
+			<image-tag>1.0.0</image-tag>
 		</docker-install>
 		<routes>
 			<!--
