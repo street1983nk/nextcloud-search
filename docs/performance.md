@@ -22,13 +22,67 @@ Der Betreiber hat daraufhin entschieden, beides zu tun: die **Generalprobe** lä
 sofort auf der x86-Maschine gleicher Größe, und der **vollständige Lauf** wird auf
 ARM wiederholt, sobald es wieder Bestand gibt.
 
+Bestand gab es nicht. Am 04.09.2026 war `cax11` erneut in keiner Region zu
+haben, zwei Erzeugungsversuche wurden abgewiesen, und ein Telefonat des
+Betreibers mit dem Anbieter am selben Tag hat ergeben, dass die Knappheit
+Monate läuft. Diese Auskunft schlägt jede Lesung der API. Der ARM-Lauf ist
+deshalb auf eine Maschine eines anderen Anbieters umgezogen, ausgewählt als
+CAX11-Äquivalent und nicht als etwas Besseres.
+
 | | Generalprobe | ARM-Lauf |
 |---|---|---|
-| Maschine | Hetzner cpx22, x86 | Hetzner CAX11, arm64 |
-| Zustand | läuft seit 2026-09-03 | wartet auf Bestand |
+| Maschine | Hetzner cpx22, x86 | AWS m7g.large, arm64, Speicher auf 4 GB gedeckelt |
+| Zustand | gelaufen 2026-09-03 bis 04, Box abgebaut | läuft seit 2026-09-04 |
 | Umfang | vollständig | **vollständig, alles noch einmal** |
 | AIO über HaRP, Grundlast, Volllauf, Störfälle | ja | ja, auf eigener Hardware |
 | Trägt die Store-Aussage | **nein** | ja |
+
+### Warum eine m7g.large als CAX11 gilt, und woran das hängt
+
+Die Zielmaschine der Entscheidung D-01 ist eine CAX11: zwei Kerne, 4 GB, 40 GB
+Systemplatte, arm64. Die Ersatzmaschine ist nach genau diesen vier Größen
+gewählt, und bei einer davon musste nachgeholfen werden.
+
+| Größe | CAX11 | m7g.large | gleich? |
+|---|---|---|---|
+| Architektur | arm64, Ampere Altra | arm64, AWS Graviton3 | ja, beides aarch64 |
+| Kerne | 2 vCPU, geteilt | 2 vCPU | ja |
+| Arbeitsspeicher | 4 GB | 8 GB laut Typ, **vom Kernel auf 4 GB gedeckelt** | ja, nach dem Deckel |
+| Systemplatte | 40 GB | 40 GB gp3 | ja, mit einem Unterschied, siehe unten |
+
+Der Deckel ist der Kern dieser Parität und keine Kosmetik. Gemessen wird in
+diesem Bericht der **Abstand zur Decke**: der Seitencache des Index, die Halde
+von tesseract und die Grundlast von AIO streiten sich um genau den Speicher, der
+nicht da ist. Eine Messung auf 8 GB sagt über eine 4-GB-Box nichts, auch wenn
+die Kurve gleich aussieht, weil der Kernel unter Druck andere Entscheidungen
+trifft.
+
+Gesetzt ist der Deckel als Kernelparameter, in einer eigenen Datei und nicht
+durch Überschreiben der Zeile des Cloud-Abbilds:
+
+```
+/etc/default/grub.d/99-mem4g.cfg
+GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT mem=4G"
+```
+
+Die Erweiterung statt der Ersetzung ist Absicht: die Konsolenparameter des
+Abbilds müssen stehen bleiben, sonst verliert die Maschine ihre serielle
+Ausgabe, und das merkt man erst, wenn man sie braucht. Drei Zahlen sind vor
+jedem Lauf gegengelesen und stehen in jeder Messreihe dieses Berichts:
+
+```
+free -h   ->  3.9Gi        (free -m sagt 3958)
+nproc     ->  2
+uname -m  ->  aarch64
+```
+
+Was mit dem Umzug **nicht** gleich bleibt, und wo es im Bericht auftaucht: der
+Datenträger. Die Systemplatte der CAX11 ist lokaler NVMe-Speicher ohne
+ausgewiesene Grenze, die der Ersatzmaschine ist ein Netzwerkdatenträger vom Typ
+gp3 mit 3000 IOPS und 125 MB/s. Diese Drosselung ist die eine Größe, in der die
+Ersatzmaschine schlechter ist als das Original, und sie trifft ausgerechnet den
+Posten, der in diesem Lauf die Uhr bestimmt: das Lesen von 20 GB Korpus und das
+Schreiben des Index. Wo eine Laufzeit genannt wird, steht sie deshalb dabei.
 
 Die entscheidende Zeile ist die dritte. Der ARM-Lauf ist keine Nachlese, die sich
 ein paar Zahlen aus der Generalprobe borgt, sondern derselbe Lauf noch einmal,
@@ -50,7 +104,9 @@ Der zweite Nutzen ist der Vergleich selbst. Zwei Messreihen derselben Anwendung
 auf zwei Architekturen sagen mehr über ihr Verhalten als eine von beiden allein.
 
 Wo in diesem Bericht x86-Zahlen stehen, sind sie als **Generalprobe cpx22**
-gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
+gekennzeichnet, und die ARM-Zeile daneben als **ARM m7g.large**. Beide bleiben
+stehen; die Generalprobe wird nicht durch die schärfere Messung ersetzt, weil
+zwei Reihen auf zwei Architekturen mehr sagen als eine.
 
 ## Stand dieses Berichts
 
@@ -74,9 +130,16 @@ gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 | Störfall-Drills, Generalprobe cpx22 | alle drei durchgespielt, mit ihren Grenzen, einer mit Nachtrag | 2026-09-04 |
 | Kosten des Tests | aus den Preisen dieses Kontos, 0,82 EUR brutto | 2026-09-04 |
 | Abbau der Generalprobe cpx22 | durchgeführt, Server, Volume und Firewall gegen die API geprüft | 2026-09-04 |
-| AIO-Grundlast, ARM | FEHLT NOCH | wartet auf Bestand |
-| Findling im Volllauf, ARM CAX11 | FEHLT NOCH | wartet auf Bestand |
-| Störfall-Drills, ARM CAX11 | FEHLT NOCH, und ausdrücklich nicht vorgesehen | die Drills hängen am Verhalten, nicht an der Architektur |
+| Parität der Ersatzmaschine | gesetzt und gegengelesen, `mem=4G`, drei Zahlen | 2026-09-04 |
+| Einrichtung der ARM-Box, m7g.large | durchgeführt und belegt, samt Gegenprobe des containerd-Funds | 2026-09-04 |
+| **AIO-Grundlast, ARM m7g.large** | **gemessen, 260 MB gleichzeitiger Höchststand** | 2026-09-04 |
+| **Beitrag von HaRP, ARM m7g.large** | **gemessen, 53 MB** | 2026-09-04 |
+| Codestand des ARM-Laufs | Baumhash beider Hälften nachgerechnet, Abbild auf der Box gebaut | 2026-09-04 |
+| Korpus des ARM-Laufs | in Erzeugung | 2026-09-04 |
+| Findling im Volllauf, ARM m7g.large | FEHLT NOCH | der Lauf läuft |
+| Störfall-Drills, ARM m7g.large | FEHLT NOCH | nach dem Volllauf |
+| Zusatzmessung INDEX_WORKERS=2 | FEHLT NOCH | nach den Drills, Freigabe des Betreibers liegt vor |
+| Kosten des ARM-Laufs | FEHLT NOCH | am Ende, aus Laufzeit und belegten Sätzen |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -84,27 +147,41 @@ Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
 ### Die beiden Maschinen
 
-| Posten | Generalprobe cpx22 | ARM-Lauf CAX11 |
+| Posten | Generalprobe cpx22 | ARM-Lauf m7g.large |
 |---|---|---|
-| Architektur | x86_64 | arm64, Ampere |
-| Kerne | 2 vCPU, geteilt | 2 vCPU, geteilt |
-| Arbeitsspeicher | 4 GB (3814 MB nutzbar) | 4 GB |
-| Systemplatte | 80 GB (76 GB nutzbar) | 40 GB |
-| Zusatzplatte | Volume, 50 GB, ext4 | Volume, 50 GB, ext4 |
-| Region | hel1, Helsinki | hel1, Helsinki |
-| Betriebssystem | Ubuntu 24.04 LTS, Kernel 6.8.0 | Ubuntu 24.04 LTS |
+| Architektur | x86_64 | arm64, AWS Graviton3, 2,6 GHz |
+| Kerne | 2 vCPU, geteilt | 2 vCPU |
+| Arbeitsspeicher | 4 GB (3814 MB nutzbar) | 8 GB laut Typ, per `mem=4G` gedeckelt (3958 MB nutzbar) |
+| Systemplatte | 80 GB (76 GB nutzbar) | 40 GB gp3, 3000 IOPS, 125 MB/s (38 GB nutzbar) |
+| Zusatzplatte | Volume, 50 GB, ext4 | Volume, 60 GB gp3, ext4, 3000 IOPS, 125 MB/s |
+| Region | hel1, Helsinki | eu-central-1c, Frankfurt |
+| Betriebssystem | Ubuntu 24.04 LTS, Kernel 6.8.0 | Ubuntu 24.04.4 LTS, Kernel 7.0.0-1012-aws |
 | cgroup | v2 | v2 |
-| Nextcloud | 33.0.8, All-in-One, PostgreSQL 18.6 | ausstehend |
-| Inbegriffener Verkehr | 20 TB je Monat | 20 TB je Monat |
+| Docker | 28er Reihe mit containerd-Snapshotter | 29.8.0, containerd 2.3.4, overlayfs |
+| Nextcloud | 33.0.8, All-in-One, PostgreSQL 18.6 | 33.0.8, All-in-One, PostgreSQL, AppAPI 33.0.0 |
 
-Der Unterschied, der über die Architektur hinaus zählt, steht in der Zeile
-Systemplatte: die Generalprobe hat 76 GB, die ARM-Zielmaschine nur 40. Der
-Platzdruck, gegen den die Einrichtung unten abgesichert wird, ist auf der
-Generalprobe also **milder als im Ernstfall**. Wer die Reihenfolge dort schludert,
-merkt es nicht; auf der CAX11 läuft die Platte voll.
+Zwei Unterschiede zählen über die Architektur hinaus, und beide gehen zulasten
+der ARM-Maschine, was für eine Store-Aussage die richtige Richtung ist.
 
-Die 50 GB Volume kommen nicht aus Bequemlichkeit dazu: der Lastkorpus wiegt
-20,12 GB, daneben liegen der Index und die Abbilder der Container.
+**Erstens die Systemplatte.** Die Generalprobe hat 76 GB, die ARM-Maschine 40,
+genau wie die CAX11. Der Platzdruck, gegen den die Einrichtung unten abgesichert
+wird, ist auf der Generalprobe also **milder als im Ernstfall**. Wer die
+Reihenfolge dort schludert, merkt es nicht; auf 40 GB läuft die Platte voll.
+
+**Zweitens die Drosselung dieser 40 GB.** Beide Datenträger der ARM-Maschine
+sind Netzwerkspeicher vom Typ gp3, und der bringt je Datenträger 3000 IOPS und
+125 MB/s mit. Das ist kein theoretischer Deckel: 20 GB Korpus einmal zu lesen
+sind bei 125 MB/s knapp drei Minuten reine Übertragungszeit, und die Schreiblast
+des Index kommt dazu. Die Systemplatte der CAX11 ist dagegen lokaler
+NVMe-Speicher, für den der Anbieter keine Grenze ausweist. Wo dieser Bericht
+Laufzeiten nennt, ist das die eine Stelle, an der die Ersatzmaschine die Zahl
+nach oben treibt statt nach unten. Für die Speicherfrage, um die es hier geht,
+ändert sie nichts.
+
+Die 60 GB Volume kommen nicht aus Bequemlichkeit dazu: der Lastkorpus wiegt
+20,12 GB, daneben liegen der Index, das Datenverzeichnis von Nextcloud und die
+Abbilder von neun Containern. Zehn GB mehr als in der Generalprobe, weil dort
+die Systemplatte die Hälfte davon mitgetragen hat.
 
 ### Die Reihenfolge der Einrichtung, und die Falle darin
 
@@ -112,7 +189,20 @@ Drei Dinge müssen auf dem Volume liegen, und zwei davon lassen sich später nic
 mehr verschieben. Die Reihenfolge ist deshalb keine Empfehlung.
 
 1. **Volume einbinden.** Hetzner hängt es mit `automount` selbst ein und schreibt
-   den Eintrag in die `fstab`, mit `nofail`.
+   den Eintrag in die `fstab`, mit `nofail`. Auf der ARM-Box ist das ein
+   Handgriff mehr, und einer, bei dem der naheliegende Weg falsch ist: der
+   angeforderte Gerätename (`/dev/sdf`) erscheint auf einer Nitro-Instanz nicht.
+   Die Datenträger heißen dort `/dev/nvme?n1` in der Reihenfolge ihres
+   Anschlusses, und diese Reihenfolge ist über einen Neustart hinweg nicht
+   zugesagt. Gefunden wird der Datenträger deshalb an seiner Größe, formatiert
+   mit ext4 und in die `fstab` **per UUID** eingetragen, ebenfalls mit `nofail`:
+
+   ```
+   UUID=34959bdb-9d29-46d7-9cbc-f94440e3b89a /mnt/findling ext4 defaults,nofail,x-systemd.device-timeout=10 0 2
+   ```
+
+   Ein Eintrag über den Gerätenamen wäre der Fehler, der beim ersten Neustart
+   auffällt, und zwar als Nextcloud ohne Datenverzeichnis.
 2. **Das Datenverzeichnis von Docker auf das Volume, vor dem ersten Abbild.**
    `/etc/docker/daemon.json` mit `data-root` wird geschrieben, bevor das Paket
    installiert wird, denn die Installation startet den Dienst selbst.
@@ -144,13 +234,48 @@ root = "/mnt/HC_Volume_<id>/containerd"
 ```
 
 Danach liegen die 373 MB auf dem Volume, und eine Gegenprobe mit einem frischen
-Abbild lässt die Systemplatte bei 0 KB und das Volume um 104 KB wachsen. Auf der
-CAX11 mit ihren 40 GB wäre der ursprüngliche Zustand nicht kosmetisch gewesen:
-die Abbilder von AIO, Postgres, Apache, HaRP und Findling zusammen hätten die
-Systemplatte neben Betriebssystem und Protokollen ernsthaft gefüllt, und das
-wäre als Fehler von Findling erschienen.
+Abbild lässt die Systemplatte bei 0 KB und das Volume um 104 KB wachsen. Auf
+einer Maschine mit 40 GB Systemplatte wäre der ursprüngliche Zustand nicht
+kosmetisch gewesen: die Abbilder von AIO, Postgres, Apache, HaRP und Findling
+zusammen hätten die Systemplatte neben Betriebssystem und Protokollen ernsthaft
+gefüllt, und das wäre als Fehler von Findling erschienen.
+
+**Auf der ARM-Box ist derselbe Fund noch einmal gemessen worden, in der
+umgekehrten Richtung, weil dort die Abhilfe vor dem ersten Abbild stand.** Der
+Ablauf war: `data-root` in `/etc/docker/daemon.json` vor der Installation des
+Pakets, dann die Installation, dann die Dienste anhalten, `containerd config
+default` erzeugen und darin die Wurzel auf das Volume setzen, dann starten. Erst
+danach der erste `docker pull`. Die Gegenprobe steht in Zahlen:
+
+| | Generalprobe, ohne die containerd-Zeile | ARM-Box, mit ihr |
+|---|---|---|
+| Zuwachs Systemplatte nach dem ersten Pull | 400 MB | **4 KB** |
+| Zuwachs Volume | nichts | **375 MB** |
+| Was `docker info` meldete | das Volume | das Volume |
+
+Ein Detail für den nächsten Leser, weil es eine Viertelstunde gekostet hat: die
+Vorgabedatei von containerd 2.3 trägt `version = 4`, und ihr Wurzelfeld ist eine
+Zeile, die man ersetzen muss und nicht anhängen darf. Eine selbstgeschriebene
+Minimaldatei mit nur der Wurzel darin ist der falsche Weg, weil die Fassung des
+Formats dann fehlt; `containerd config default` als Ausgangspunkt ist der
+richtige.
+
+Und ein zweites, weil es dieselbe Viertelstunde gekostet hat: `daemon.json`
+wurde beim ersten Versuch über eine Kette aus Anführungszeichen geschrieben, die
+den Weg über ssh nicht überlebt hat. In der Datei stand danach `{n`, und
+`dockerd` sagte dazu "invalid JSON: invalid character 'n' looking for beginning
+of object key string". Seitdem reist jedes Skript dieses Laufs als Datei und
+nicht als Zeichenkette.
 
 ### Was die Umgebung kostet
+
+Die beiden Läufe liegen bei verschiedenen Anbietern, und ihre Kostentabellen
+sind deshalb **nicht ineinander umzurechnen**. Die eine ist in Brutto-Euro aus
+der Konto-API, die andere in Netto-Dollar aus einer öffentlichen Preisliste. Sie
+stehen hier getrennt, mit ihrer Quelle, und dieser Bericht bildet daraus
+ausdrücklich keine Vergleichszahl.
+
+#### Die Generalprobe, Hetzner
 
 Abgefragt am 03.09.2026 um 10:48 UTC gegen `/v1/pricing` und `/v1/server_types`
 dieses Kontos, also nicht aus einer Preisliste im Netz. Alle Werte brutto, der
@@ -159,15 +284,13 @@ Mehrwertsteuersatz des Kontos beträgt 19 Prozent.
 | Posten | je Stunde | je Monat |
 |---|---|---|
 | cpx22 in hel1, Generalprobe | 0,037128 EUR | 23,1931 EUR |
-| CAX11 in hel1, ARM-Lauf | 0,011424 EUR | 7,1281 EUR |
+| CAX11 in hel1, nie gemietet | 0,011424 EUR | 7,1281 EUR |
 | Volume, 50 GB | 0,004662 EUR | 3,4034 EUR |
 | Primäre IPv4 | 0,000952 EUR | 0,5950 EUR |
 | Summe Generalprobe | 0,042742 EUR | 27,1915 EUR |
-| Summe ARM-Lauf | 0,017038 EUR | 11,1265 EUR |
 
-Die Generalprobe kostet also gut das Dreifache der Zielmaschine je Stunde. Das
-ist der Preis dafür, dass die günstigen geteilten Linien ausverkauft sind, und er
-war dem Betreiber die Sache wert: zwei Tage Generalprobe liegen bei rund 2,05 EUR.
+Die CAX11-Zeile bleibt stehen, obwohl diese Maschine nie zustande kam: sie ist
+die Zahl, an der sich der Preis der Ersatzmaschine messen lässt.
 
 Zwei Dinge daran sind leicht zu übersehen. Der Preis je GB und Monat des Volumes
 wird oft mit 0,057 EUR angegeben; das ist der Nettowert, brutto sind es
@@ -175,13 +298,55 @@ wird oft mit 0,057 EUR angegeben; das ist der Nettowert, brutto sind es
 der Rechnung. Sie macht gegen eine Box für gut einen Cent je Stunde rund acht
 Prozent aus, weshalb `scripts/ops/hetzner_box.sh status` sie mitrechnet.
 
+#### Der ARM-Lauf, AWS
+
+Hier kommen die Sätze **nicht** aus der Konto-API, und der Grund gehört dazu:
+der Zugang dieses Laufs trägt `AmazonEC2FullAccess` und sonst nichts, also fehlt
+ihm `pricing:GetProducts`. Die Antwort auf die Preisfrage ist ein
+`AccessDeniedException`, der den Nutzer und die Aktion nennt. Genommen sind die
+Sätze deshalb aus der öffentlichen Preisliste desselben Anbieters, die ohne
+Anmeldung erreichbar ist, gefiltert am 04.09.2026 aus der Fassung
+`20260903195206` für `eu-central-1` (AmazonEC2, wirksam ab 01.09.) und
+`20260831092232` (AmazonVPC). Die gefilterten Zeilen liegen unverändert in
+`docs/measurements/2026-09-04-grundlast-m7g/`. Alle Werte **netto in USD**.
+
+| Posten | je Stunde | je Monat |
+|---|---|---|
+| m7g.large in eu-central-1, On Demand, Linux | 0,097800 USD | 71,394 USD |
+| Systemplatte, 40 GB gp3 | 0,005216 USD | 3,808 USD |
+| Datenträger, 60 GB gp3 | 0,007824 USD | 5,712 USD |
+| öffentliche IPv4, in Benutzung | 0,005000 USD | 3,650 USD |
+| **Summe ARM-Lauf** | **0,115840 USD** | **84,564 USD** |
+
+Die Monatszahlen sind mit 730 Stunden gerechnet, so wie der Anbieter seine
+Monatspreise für Speicher ausweist.
+
+Drei Anmerkungen, die eine Kostenzeile ohne sie schöner aussehen ließen als sie
+ist. Erstens: die Ersatzmaschine kostet je Stunde rund das Achtfache der CAX11,
+für die sie einsteht. Das ist der Preis der Verfügbarkeit, und er war dem
+Betreiber die Messung wert, weil die Alternative kein Lauf gewesen wäre.
+Zweitens: gp3 bringt 3000 IOPS und 125 MB/s je Datenträger ohne Aufpreis mit,
+und dieser Lauf bleibt in beiden Grenzen, also kommt für Ein- und Ausgaben nichts
+dazu. Drittens: die öffentliche Adresse ist seit dem 01.02.2024 ein eigener
+Posten, genau wie bei Hetzner seit 2024. Sie macht hier rund vier Prozent aus,
+und `scripts/ops/aws_box.sh status` rechnet sie mit, wenn die Box wirklich eine
+trägt. Der Grund für diese Sorgfalt steht ein paar Zeilen weiter oben in der
+Hetzner-Tabelle: dort hat genau dieser Posten den Lauf einmal um acht Prozent zu
+niedrig gerechnet.
+
+Die Endkosten dieses Laufs stehen am Ende des Berichts. Sie sind **gerechnet und
+nicht abgelesen**, aus der Laufzeit und den Sätzen oben, denn dem Zugang dieses
+Laufs fehlt auch der Blick auf die Abrechnung. Für eine Maschine, deren Laufzeit
+auf die Sekunde bekannt ist, ist das Produkt genauer als ein Abrechnungsposten,
+der Tage später erscheint.
+
 Die Miete endet mit dem Test: die Löschung der Box ist ein Pflichtschritt und
 kein Aufräumen bei Gelegenheit, denn eine vergessene Box ist eine öffentlich
 erreichbare Nextcloud mit Admin-Zugang und eine monatliche Rechnung. Abgeräumt
 werden drei Ressourcen, nicht zwei: Box, Volume und die Firewall. Die Firewall
 kostet nichts, und genau deshalb ist sie die, die stehen bleibt.
 
-### Warum die ARM-Maschine fehlt
+### Warum die ARM-Maschine nicht von diesem Anbieter kommt
 
 Am 03.09.2026 waren alle vier ARM-Typen des Anbieters in allen drei europäischen
 Regionen ohne Bestand:
@@ -206,6 +371,31 @@ mit dem Aufruf zu tun. Die Wahrheit steht am Server-Typ selbst, im Feld
 genau dieses Feld, bevor es etwas anlegt, und `prices` zeigt den Bestand in einer
 eigenen Spalte. Auch die billigen x86-Typen `cx23` bis `cx53` waren zur selben
 Minute überall ausverkauft; knapp waren die günstigen geteilten Linien insgesamt.
+
+#### Am 04.09. noch einmal, und dann eine Entscheidung
+
+Der Tag darauf sah gleich aus. `cax11` stand in allen drei Regionen weiter auf
+nicht verfügbar, und zwei echte Erzeugungsversuche, `hel1` und `nbg1`, wurden
+mit derselben irreführenden Meldung abgewiesen. Es wurde dabei nichts angelegt;
+die Suche nach dem Kennzeichen `purpose=findling-phase5` blieb über Server,
+Volumes und Firewalls leer.
+
+Dazu ein Widerspruch in der API selbst, der eine Stunde gekostet hätte:
+`/datacenters` führte `cax11` zur selben Minute als verfügbar in `hel1-dc2` und
+`nbg1-dc3`. Diese Auskunft ist falsch, und sie ist falsch, weil dieser Endpunkt
+auf dem Weg nach draußen ist: das Feld `datacenter` eines Erzeugungsaufrufs ist
+seit dem 16.12.2025 abgeschafft und antwortet mit "datacenter is deprecated and
+cannot be used anymore". Ein Endpunkt, auf dessen Auskunft man nicht mehr handeln
+kann, wird nicht gepflegt. `scripts/ops/hetzner_box.sh` fragt ihn seither
+weiterhin, aber nur zu einem Zweck: den Widerspruch zu melden, statt dem
+fröhlicheren Teil der API zu glauben.
+
+Den Ausschlag gegeben hat keine API, sondern ein Telefonat. Der Betreiber hat am
+04.09. beim Anbieter angerufen, und die Auskunft lautet, dass die ARM-Knappheit
+Monate läuft. Damit war die Wahl nicht mehr "warten oder messen", sondern
+"anderswo messen oder nicht messen", und der Store-Termin dieser Phase
+entscheidet diese Frage. Die Ersatzmaschine ist oben beschrieben, samt dem
+Speicherdeckel, der sie zur CAX11 macht.
 
 ### Was AIO ungefragt mitbringt
 
@@ -359,9 +549,14 @@ Für diesen Bericht sind das sieben:
    Berichts, die eine Zahl der Generalprobe nennt, ist als solche gekennzeichnet,
    und die ARM-Zeile daneben bleibt leer, bis sie gemessen ist.
 1. **Eine Box ist keine Aussage über alle Boxen.** Gemessen wird auf einer
-   einzelnen gemieteten CAX11. Geteilte Kerne bedeuten wechselnde Nachbarn, und
-   eine andere 4-GB-Maschine mit anderer Platte kann andere Laufzeiten liefern.
-   Übertragbar ist der Speicherverlauf, nicht die Uhr.
+   einzelnen gemieteten m7g.large, die als CAX11-Äquivalent geführt wird.
+   Wechselnde Nachbarn und ein anderer Datenträger können andere Laufzeiten
+   liefern. Übertragbar ist der Speicherverlauf, nicht die Uhr. Und die Parität
+   gilt für die vier Größen, an denen sie geprüft ist: Architektur, Kerne,
+   nutzbarer Speicher einschließlich Seitencache, Größe der Systemplatte. Sie
+   gilt ausdrücklich **nicht** für die Geschwindigkeit dieser Platte, die hier
+   gedrosselt und dort lokal ist, und nicht für den Kern selbst: ein Graviton3
+   ist kein Ampere Altra.
 2. **`anon` ist nicht das, was der Docker-Client anzeigt.** Wer die Zahl dieses
    Berichts neben dessen Anzeige legt, wird eine deutlich höhere finden. Der
    Unterschied ist der Dateicache des Index, er ist zurückforderbar, und der
@@ -390,7 +585,14 @@ bevor Findling die Maschine zum ersten Mal anfasst.
 | Lauf | Summe `anon` im Mittel | höchster Stand | ohne Speichertod |
 |---|---|---|---|
 | Generalprobe cpx22 | 224 MB | **290 MB** | ja |
-| ARM CAX11 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
+| **ARM m7g.large** | **193 MB** | **260 MB** | **ja** |
+
+Die ARM-Zahlen stammen aus einer eigenen Messung nach demselben Muster und sind
+keine umgerechneten. Sie liegen rund zehn Prozent unter den x86-Zahlen, und der
+Bericht deutet diesen Abstand ausdrücklich **nicht**: die beiden Läufe
+unterscheiden sich in Architektur, Kernel und Serverfassung zugleich, und die
+Grundlast von AIO ist nicht der Gegenstand dieses Berichts. Was zählt, ist die
+Zahl selbst, denn sie ist der Sockel, auf dem das Findling-Budget steht.
 
 ### Wie die Zahl entstanden ist
 
@@ -455,8 +657,50 @@ zurückforderbar ist: gerät die Maschine unter Druck, gibt der Kernel diese
 Grundlast bleiben auf einer 4-GB-Box also gut 3,5 GB, und der Grenzwert von
 2,0 GB für Findling hat mehr Luft als angenommen.
 
-Die Zahlen dieses Abschnitts gelten für x86. Auf ARM wird die Grundlast neu
-gemessen, nicht umgerechnet.
+Die Zahlen dieses Abschnitts gelten für x86. Auf ARM ist die Grundlast neu
+gemessen und nicht umgerechnet; der Abschnitt darunter nennt sie.
+
+### Dieselbe Messung auf ARM
+
+Dreißig Minuten nach demselben Muster, 2026-09-04T15:40:05Z bis 16:07:37Z, ein
+eigener Sampler je Container im Abstand von fünf Sekunden, 331 Messpunkte je
+Container, dieselben drei Phasen und dieselben 29 Runden gewöhnlicher Aufrufe.
+Gelaufen sind auch hier genau sechs Container und kein siebter.
+
+| Container | höchster `anon`-Stand |
+|---|---|
+| nextcloud-aio-nextcloud | 164 MB |
+| nextcloud-aio-mastercontainer | 46 MB |
+| nextcloud-aio-apache | 37 MB |
+| nextcloud-aio-database | 11 MB |
+| nextcloud-aio-redis | 4 MB |
+| nextcloud-aio-notify-push | 1 MB |
+
+Die Summe je Zeitpunkt ergibt 193 MB im Mittel und **260 MB im gleichzeitigen
+Höchststand**, um 15:54:21Z, also in der Aufrufphase. Die theoretische obere
+Schranke, die Summe der sechs Maxima, liegt bei 264 MB: vier MB darüber, die
+Zahl hängt also auch hier nicht an der Art der Summenbildung.
+
+Nach Phasen getrennt:
+
+| Phase | Mittel | höchster Stand |
+|---|---|---|
+| Leerlauf, 12 min | 192 MB | 195 MB |
+| unter Aufrufen, 29 Runden | 207 MB | 260 MB |
+| Leerlauf, 12 min | 190 MB | 193 MB |
+
+Auch hier stammt der Ausschlag aus der Aufrufphase und fast vollständig aus dem
+Nextcloud-Container. Die Aufrufphase dauerte 3 min 29 s statt der sechs Minuten
+der Generalprobe, weil zwischen den Runden nur fünf Sekunden Pause liegen; die
+Zahl der Runden ist dieselbe, und verglichen wird der gleichzeitige Höchststand
+und nicht die Dauer.
+
+Alle sechs Abschlusszeilen melden `oom_killed=false`, und `memory.events` steht
+in jedem Zähler auf null. Dieser Lauf führt dort **sieben** Zähler statt sechs:
+der Kernel 7.0 bringt `sock_throttled` mit, und der steht wie die anderen auf
+null.
+
+Die Rohdaten liegen unter `docs/measurements/2026-09-04-grundlast-m7g/`.
 
 ### Der Beitrag von HaRP
 
@@ -489,6 +733,64 @@ weiteres Gigabyte ungenutzt.
 
 Die Rohdaten beider Messungen liegen unter
 `docs/measurements/2026-09-03-grundlast-cpx22/`.
+
+#### Derselbe Beitrag auf ARM, und diesmal ist der Vergleich zulässig
+
+Zehn Minuten über alle sieben Container, 124 Messpunkte je Container,
+2026-09-04T16:18:57Z bis 16:29:13Z.
+
+| Container | `anon` im Mittel | höchster Stand |
+|---|---|---|
+| **nextcloud-aio-harp** | **53 MB** | **53 MB** |
+| nextcloud-aio-nextcloud | 89 MB | 90 MB |
+| alle sieben zusammen, je Zeitpunkt | 231 MB | 234 MB |
+
+**53 MB**, und ebenso flach wie auf x86: über zehn Minuten liegt zwischen
+niedrigstem und höchstem Stand weniger als ein MB.
+
+Bei der Generalprobe stand an dieser Stelle die Warnung, dass die beiden Summen
+nicht zu vergleichen sind, weil die zweite Messung nach einem Neustart aller
+Container lief. Hier ist es umgekehrt, und das ist ein Nebenprodukt eines Fundes
+über AIO: das Anhaken von HaRP hat nur den HaRP-Container angelegt und die
+anderen sechs unberührt weiterlaufen lassen. Deren PHP-Arbeiter waren also
+dieselben, und der Abstand zwischen 234 MB mit HaRP und dem gleichzeitigen Stand
+ohne ihn ist wirklich HaRP.
+
+Für die Budgetrechnung des ARM-Laufs: Grundlast 260 MB plus HaRP 53 MB, also
+rund **313 MB**. Neben dem Grenzwert von 2,0 GB für Findling bleiben auf der
+gedeckelten 4-GB-Box damit rund 1,6 GB für Kernel und Seitencache.
+
+Die Rohdaten liegen unter
+`docs/measurements/2026-09-04-grundlast-m7g/mit-harp/`.
+
+#### Ein Fund über AIO, der eine Stunde kosten kann
+
+Das Anhaken von HaRP legt den HaRP-Container an, und das genügt nicht. Die App
+`app_api`, ohne die es keine ExApp gibt, wird vom Startskript des
+Nextcloud-Containers installiert, und dieses Skript läuft nur beim Start eines
+Containers. Nach dem Anhaken stand deshalb ein gesunder HaRP-Container neben
+einer Nextcloud, die das Wort `app_api` nicht kannte:
+
+```
+occ app_api:daemon:list
+There are no commands defined in the "app_api" namespace.
+```
+
+Die Abhilfe ist ein Stopp und ein Start über die Schnittstelle von AIO, danach
+ist `app_api` da (hier 33.0.0) und der Daemon `harp_aio` registriert. Wer
+stattdessen nach einem `occ app:install app_api` greift, umgeht den Weg, den AIO
+selbst geht, und bekommt eine Instanz, die anders aussieht als die eines
+Nutzers.
+
+Und zwei Dinge über die Anmeldung an dieser Schnittstelle, weil sie zusammen
+eine Viertelstunde gekostet haben. Erstens: `GET /api/auth/getlogin` antwortet
+mit 302 bei richtigem **und** bei falschem Token, im Fehlerfall nach fünf
+Sekunden Strafschlaf. Der Statuscode ist also kein Beweis für eine Sitzung;
+geprüft wird sie, indem man eine Seite holt, die nur angemeldet 200 liefert.
+Zweitens: AIO würfelt diesen Token bei jedem Containerstart neu und schreibt ihn
+in seine Konfiguration, während die Umgebung eines Containers, der nicht neu
+gestartet wurde, den alten Wert behält. Die Konfiguration ist die Quelle, nicht
+die Umgebung.
 
 ### Der HaRP-Weg von AIO, und warum die Warnung aus 05-01 hier nicht greift
 
@@ -1329,7 +1631,7 @@ entfernt ist. Die Datei gehört also vorher mit `docker cp` hinein.
 | Lauf | höchster `anon` | unter 2,0 GB | Laufzeit | OCR-Anteil | Speichertod |
 |---|---|---|---|---|---|
 | Generalprobe cpx22 | **428,6 MB** (449.441.792 Byte) | ja, 20,9 Prozent davon | 10 h 14 min 14 s | 10.134 von 50.104 Dateien | nein, `oom_kill 0` und `OOMKilled false` |
-| ARM CAX11 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
+| ARM m7g.large | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
 
 Die Zeile, die in die Store-Beschreibung geht, ist die zweite. Die erste steht
 daneben, weil ein Vergleich der beiden mehr über das Verhalten der Anwendung
