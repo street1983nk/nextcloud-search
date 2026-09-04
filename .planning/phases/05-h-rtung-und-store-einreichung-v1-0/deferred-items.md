@@ -786,3 +786,81 @@ Bezugsdisziplin, die in dieser Phase unter einem Owner-Gate steht.
 den Phase-Review. Der billige Weg: `scripts/dev/validate-info-xml.sh`, das die
 beiden gepinnten Dateien holt und den Pfad in einem Container faehrt, plus eine
 Zeile in `docs/testing.md`.
+
+## DI-05-30 (Plan 05-18): Zwei Saetze der Verwaltungsseite stehen ohne Trennung aneinander
+
+**Found during:** Plan 05-18, beim Aufnehmen des Verwaltungs-Screenshots fuer
+den Store.
+
+**Was:** `php/templates/admin.php:244` gibt `Deliberately left out: %s` aus und
+Zeile 245 setzt unmittelbar `Those files are too large, ...` daneben. Im
+gerenderten Absatz liest das als ein Satz: "Deliberately left out: 0 Those files
+are too large, of a type Findling does not read, or excluded by a rule." Die
+Zahl und der Anfang des naechsten Satzes stossen ohne Punkt zusammen. Dasselbe
+gilt fuer die deutsche Fassung in `php/l10n/de.js` und `php/l10n/de.json`
+("Bewusst ausgelassen: %s").
+
+**Warum es mehr ist als eine Kleinigkeit:** Der Absatz steht in
+`store/media/screenshot-admin.png`, also in einem oeffentlichen Store-Bild, und
+er ist die erste Zeile, die ein Betrachter unter dem Deckungsgrad liest.
+
+**Warum nicht hier erledigt:** `php/templates/admin.php` und die beiden
+l10n-Dateien stehen nicht in den `files_modified` dieses Plans, und ein
+paralleler Ausfuehrer arbeitet in derselben Welle genau an den
+Verwaltungs-Vorlagen. Eine Zeile in einer fremden Datei aus einem Worktree ist
+die Art Konflikt, die diese Liste vermeiden soll.
+
+**Wohin es gehoert:** in den Plan, der die Verwaltungsseite ohnehin anfasst
+(05-20), oder in den Phase-Review. Der Umfang: ein Punkt hinter `%s` in drei
+Dateien, und danach das Store-Bild neu aufnehmen, weil es den alten Wortlaut
+zeigt.
+
+## DI-05-31 (Plan 05-18): `.gitattributes` fuehrt `store/media` nicht
+
+**Found during:** Plan 05-18, beim Ablegen der drei Store-Bilder.
+
+**Was:** `.gitattributes` erzwingt `-text` ausdruecklich fuer
+`testdata/corpus/**` und `testdata/fonts/**`, mit der Begruendung, dass ein
+Checkout dort keinen einzigen Vertragsbyte umschreiben darf. Die drei Bilder
+unter `store/media` sind Artefakte derselben Art: sie sind byte-genau, sie sind
+oeffentlich, und ihre Adresse steht in beiden `info.xml`. Eine Regel dafuer gibt
+es nicht.
+
+**Warum es heute nichts kaputt macht:** eine PNG-Datei enthaelt NUL-Bytes, also
+erkennt die eigene Heuristik von Git sie als binaer und laesst sie in Ruhe. Die
+beiden gefuehrten Verzeichnisse stehen genau deshalb dort, weil ihre PDF-Dateien
+diese Eigenschaft NICHT haben.
+
+**Warum nicht hier erledigt:** `.gitattributes` steht nicht in den
+`files_modified` dieses Plans, sie ist gemeinsames Gut mehrerer Plaene dieser
+Phase, und DI-05-12 haelt bereits eine zweite offene Aenderung an derselben
+Datei.
+
+**Wohin es gehoert:** in denselben Plan, der DI-05-12 erledigt, oder in den
+Phase-Review. Eine Zeile `store/media/** -text` genuegt.
+
+## DI-05-32 (Plan 05-18): Ein gesperrter Begriff steht in einem oeffentlichen Kommentar
+
+**Found during:** Plan 05-18, bei der Typografie- und Vokabularpruefung der
+geaenderten Dateien.
+
+**Was:** Die Regel des Owners fuer oeffentliche Artefakte sperrt einen
+bestimmten deutschen Begriff fuer einen Aufbewahrungsort. Plan 05-17 hat
+festgehalten, dass er in keiner der sechs Store-Fassungen vorkommt. Die Pruefung
+dieses Plans hat ihn als englisches Wort in einem Kommentar gefunden:
+`backend/appinfo/info.xml`, Zeile 13, im Absatz ueber das Release-Paket. Der
+Kommentar reist im Release-Paket mit und ist damit oeffentlich.
+
+**Warum es eine Frage und keine Behebung ist:** Ob die Regel den englischen
+Fachausdruck fuer ein Paket ueberhaupt trifft, ist eine Entscheidung des Owners
+und keine Zeile in einer Datei. Trifft sie ihn, dann trifft sie ihn nicht nur
+hier: der Release-Plan dieser Phase spricht durchgehend davon, und die Antwort
+muss vor diesem Plan stehen, nicht danach.
+
+**Warum nicht hier erledigt:** der Fund ist aelter als dieser Plan, er liegt
+ausserhalb der Aenderung, die dieser Plan an derselben Datei vornimmt, und eine
+Umbenennung ohne die Entscheidung waere geraten.
+
+**Wohin es gehoert:** in den Phase-Review, zusammen mit der Frage, ob dieses
+Repository das Vokabular-Gate ueberhaupt mechanisch fuehren soll; heute fuehrt
+es keines, das ist der Befund von Plan 05-17.
