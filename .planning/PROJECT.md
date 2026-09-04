@@ -48,7 +48,7 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 ## Constraints
 
-- **Timeline**: Bau beginnt nach der MCP-Connector-Einreichung (Sept. 2026); HARTES ZIEL: v1.0-Store-Einreichung (Volltext+OCR) vor Jahresende 2026, v1.1 (Semantik) 4-6 Wochen danach; Scope-Kürzung schlägt Termin
+- **Timeline**: HARTES ZIEL: EINE gemeinsame Store-Einreichung als Erstrelease 1.0.0 mit Volltext, OCR und Semantik, vor Jahresende 2026 (Owner-Entscheide D-08, D-10, D-11 vom 03.09.2026; ersetzt die frühere Staffelung v1.0 jetzt, v1.1 vier bis sechs Wochen später). Scope-Kürzung schlägt Termin; Fallback laut D-10 ist die Staffelung, falls Phase 6 den Dezember gefährdet
 - **Kapazität**: Solo-Entwickler; Aufwandsschätzung 10-14 Personenwochen für v1 mit allem
 - **Hardware-Ziel**: 4-8 GB RAM, ARM-tauglich , alles CPU-only, kein GPU-Zwang, RAM-Budget hart einplanen
 - **Tech stack**: Python 3.13 + uv (lokales System-Python defekt), ExApp via AppAPI/nc_py_api, plus kleine PHP-Companion-App; Docker/WSL2 für Test-Nextcloud
@@ -62,7 +62,7 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Alles in v1, aber gestaffelt released: v1.0 Volltext+OCR in den Store, v1.1 Semantik 4-6 Wochen später | Grilling 15.08.: früher sichtbar + Feedback vor Nextcloud-Reaktion; Architektur ab Tag 1 embedding-ready, kein Umbau | , Pending |
+| Alles in v1, aber gestaffelt released: v1.0 Volltext+OCR in den Store, v1.1 Semantik 4-6 Wochen später | Grilling 15.08.: früher sichtbar + Feedback vor Nextcloud-Reaktion; Architektur ab Tag 1 embedding-ready, kein Umbau | ÜBERHOLT durch D-08 vom 03.09.2026: eine gemeinsame Einreichung als Erstrelease 1.0.0. Die Staffelung bleibt Fallback (D-10). Der Eintrag steht als Protokoll dessen, was am 15.08. entschieden war |
 | Name: **Findling**; App-IDs: Companion = `findling`, ExApp = `findling_backend` | Verfügbarkeits-Check 15.08. (Store beide frei, keine Markenkollision); context_chat-Muster: sichtbare Store-App trägt den kurzen Namen; nach CSR irreversibel | , Pending |
 | Kill-Kriterium: Nextcloud kündigt ES-freie Volltextsuche mit OCR an -> Stopp/Pivot-Neubewertung | fulltextsearch am 12.08.26 von NC GmbH wiederbelebt; Nextcloud Conference Sept. beobachten | , Pending |
 | Ziel: Reputation/Portfolio; Pro-Schiene bewusst offen ab v2 | Store hat kein Bezahlmodell; Monetarisierung jetzt wuerde v1 verlangsamen | , Pending |
@@ -80,7 +80,7 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 | PHP-Companion-App für Unified Search | AppAPI kann keine Search-Provider registrieren; context_chat-Muster ist etabliert | , Pending |
 | AGPL-3.0 + public street1983nk | Ökosystem-Kultur, CSR braucht public Repo, OCR-Stack ist AGPL | , Pending |
 | Baustart SOFORT (Owner-Entscheid 15.08. abends, ersetzt "nach MCP-Abgabe") | Arbeit liegt bei Claude, Sessions laufen unabhängig; Phasen werden am Stück durchgezogen, Releases ggf. zusammen eingereicht; fertig zur Nextcloud Conference = bester Launch | , Pending |
-| Release-Staffelung v1.0/v1.1 wird zur Einreichungs-Option | Wenn beim Einreichen alles fertig ist, gemeinsame oder direkt aufeinanderfolgende Abgabe; Entscheid bei Store-Einreichung | , Pending |
+| Release-Staffelung v1.0/v1.1 wird zur Einreichungs-Option | Wenn beim Einreichen alles fertig ist, gemeinsame oder direkt aufeinanderfolgende Abgabe; Entscheid bei Store-Einreichung | ENTSCHIEDEN durch D-08 vom 03.09.2026: gemeinsame Abgabe als EIN Erstrelease 1.0.0 |
 | App-ID und Name VOR dem ersten Bau-Commit einfrieren | Zertifikat ist ID-gebunden (Lehre aus MCP-Connector-Research) | , Pending (Naming-Task in Phase 1) |
 
 ## Evolution

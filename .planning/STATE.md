@@ -73,7 +73,7 @@ Progress: [░░░░░░░░░░] 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Roadmap: Alles in v1, gestaffelt released. Phasen 1 bis 5 = v1.0 (Volltext + OCR, Store vor Jahresende 2026), Phase 6 = v1.1 (Semantik, 4 bis 6 Wochen später)
+- Roadmap: EIN Store-Erstrelease 1.0.0 mit Volltext, OCR und Semantik. Phasen 1 bis 5 stellen den einreichungsbereiten Zustand her (D-09), Phase 6 ergänzt die Semantik, die Abgabe ist Abschluss von Phase 6 (D-08), hart vor Jahresende 2026 (D-10). Die frühere Staffelung v1.0 jetzt und v1.1 vier bis sechs Wochen später ist überholt und nur noch Fallback
 - Roadmap: ACL-Tabelle liegt im ersten Storage-Schema (Phase 2), nicht nachgerüstet
 - Roadmap: Integrationsbeweis (IProvider + exAppRequest) steht vor jedem Feature, App-IDs und beide CSRs in Phase 1
 - Engine: Tantivy 0.26 plus SQLite-ACL-Vorfilter, finaler PHP-Recheck ist die Sicherheitsgrenze

@@ -5,7 +5,7 @@
 
 ## v1 Requirements
 
-v1 = ein Produkt, zwei Releases: **v1.0** (Volltext + OCR, Store-Einreichung vor Jahresende 2026) und **v1.1** (Semantik, 4-6 Wochen danach). SEM-Requirements sind v1.1, alles andere v1.0.
+v1 = ein Produkt, ein Store-Erstrelease: **1.0.0** mit Volltext, OCR und semantischer Suche, eingereicht hart vor Jahresende 2026 (Owner-Entscheide D-08 und D-11 vom 03.09.2026). Die SEM-Requirements gehören zu Phase 6 und damit in dasselbe Release. Der frühere Schnitt in v1.0 und v1.1 vier bis sechs Wochen später ist überholt und bleibt nur als Fallback aus D-10, falls Phase 6 den Dezember gefährdet.
 
 ### Integration (PHP-Companion)
 
@@ -37,7 +37,7 @@ v1 = ein Produkt, zwei Releases: **v1.0** (Volltext + OCR, Store-Einreichung vor
 - [ ] **OCR-01**: Gescannte PDFs und Bilder werden beim Indexieren automatisch per OCR erfasst (pypdfium2-Rendering + tesseract-Subprozess, Sprachen DE+EN), rein index-seitig
 - [ ] **OCR-02**: Text-Layer-Erkennung: Dokumente mit vorhandenem Text werden extrahiert, nicht erneut OCR-t; Seiten-Timeouts und RAM-Deckel pro OCR-Job
 
-### Semantik (v1.1)
+### Semantik (Phase 6, Teil des Store-Erstrelease 1.0.0)
 
 - [ ] **SEM-01**: Lokale Embeddings (multilingual-e5-small, MIT, int8 selbst quantisiert, ins Image gebacken, `HF_HUB_OFFLINE=1`) mit Hybrid-Ranking (RRF) über Volltext- und Vektor-Treffer
 - [ ] **SEM-02**: Vektor-Suche läuft durch dieselbe ACL-Kette (SQLite-Vorfilter + PHP-Recheck) wie die Volltextsuche
@@ -83,7 +83,7 @@ Deferred. Nicht in v1 bauen.
 ## Traceability
 
 Jedes v1-Requirement ist genau einer Phase zugeordnet. Abdeckung: 30 von 30, keine Waisen, keine Doppelungen.
-Release-Schnitt: Phasen 1 bis 5 = v1.0 (Volltext + OCR), Phase 6 = v1.1 (Semantik).
+Release-Schnitt: Phasen 1 bis 6 bilden gemeinsam das Store-Erstrelease 1.0.0 (D-08, D-11). Fallback aus D-10, falls Phase 6 den Dezember gefährdet: doch gestaffelt, Phasen 1 bis 5 als v1.0 und die Semantik als v1.1-Update.
 
 | Requirement | Kurzbeschreibung | Phase | Release | Status |
 |---|---|---|---|---|
@@ -105,9 +105,9 @@ Release-Schnitt: Phasen 1 bis 5 = v1.0 (Volltext + OCR), Phase 6 = v1.1 (Semanti
 | SRCH-04 | Berechtigungs-Paritätstest über 6 Rechteszenarien | Phase 5 (Härtung und Store-Einreichung v1.0) | v1.0 | Pending |
 | OCR-01 | OCR für gescannte PDFs und Bilder, automatisch, index-seitig | Phase 3 (Aktualität und OCR) | v1.0 | Pending |
 | OCR-02 | Text-Layer-Erkennung, Seiten-Timeouts, RAM-Deckel pro Job | Phase 3 (Aktualität und OCR) | v1.0 | Pending |
-| SEM-01 | Lokale Embeddings mit RRF-Hybrid-Ranking | Phase 6 (Semantische Suche, Release v1.1) | v1.1 | Pending |
-| SEM-02 | Vektor-Suche durch dieselbe ACL-Kette | Phase 6 (Semantische Suche, Release v1.1) | v1.1 | Pending |
-| SEM-03 | Vektor-Schema erst nach Lasttest festgezurrt | Phase 6 (Semantische Suche, Release v1.1) | v1.1 | Pending |
+| SEM-01 | Lokale Embeddings mit RRF-Hybrid-Ranking | Phase 6 (Semantische Suche) | v1.0 | Pending |
+| SEM-02 | Vektor-Suche durch dieselbe ACL-Kette | Phase 6 (Semantische Suche) | v1.0 | Pending |
+| SEM-03 | Vektor-Schema erst nach Lasttest festgezurrt | Phase 6 (Semantische Suche) | v1.0 | Pending |
 | ADM-01 | Statusseite: Fortschritt, Deckungsgrad, Fehlerliste | Phase 4 (Admin-Sichtbarkeit und Diagnose) | v1.0 | Pending |
 | ADM-02 | Pro-Datei-Diagnose mit Grund | Phase 4 (Admin-Sichtbarkeit und Diagnose) | v1.0 | Pending |
 | ADM-03 | Vorab-Schätzung vor dem Erstindex | Phase 4 (Admin-Sichtbarkeit und Diagnose) | v1.0 | Pending |

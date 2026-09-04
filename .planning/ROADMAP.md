@@ -2,7 +2,7 @@
 
 ## Overview
 
-Findling entsteht in sechs Phasen, die dem Prinzip "unbewiesenstes Stück zuerst, teuerstes zuletzt" folgen. Phase 1 entkräftet das einzige Integrationsrisiko ohne Vorbild im Ökosystem: eine PHP-Companion-App registriert einen `IProvider` und holt sich Treffer per `exAppRequest` aus dem Container. Erst wenn ein Treffer nachweislich in der Unified Search steht, wird der Indexkern gebaut (Phase 2), inklusive ACL-Tabelle im allerersten Storage-Schema, weil Berechtigungen eine Sicherheitseigenschaft sind und sich nicht nachrüsten lassen. Phase 3 hält den Index aktuell und erfasst gescannte Dokumente per OCR. Phase 4 macht den Betriebszustand für den Admin sichtbar, was nach dem stillen Sterben des Vorgängers das eigentliche Produktversprechen ist. Phase 5 beweist die Betriebsversprechen auf echter 4-GB-ARM-Hardware und reicht v1.0 (Volltext + OCR) vor Jahresende 2026 im App Store ein. Phase 6 zieht die semantische Suche als eigenständiges Release v1.1 nach, 4 bis 6 Wochen später, auf einem Schema, das von Tag eins embedding-fähig geschnitten ist.
+Findling entsteht in sechs Phasen, die dem Prinzip "unbewiesenstes Stück zuerst, teuerstes zuletzt" folgen. Phase 1 entkräftet das einzige Integrationsrisiko ohne Vorbild im Ökosystem: eine PHP-Companion-App registriert einen `IProvider` und holt sich Treffer per `exAppRequest` aus dem Container. Erst wenn ein Treffer nachweislich in der Unified Search steht, wird der Indexkern gebaut (Phase 2), inklusive ACL-Tabelle im allerersten Storage-Schema, weil Berechtigungen eine Sicherheitseigenschaft sind und sich nicht nachrüsten lassen. Phase 3 hält den Index aktuell und erfasst gescannte Dokumente per OCR. Phase 4 macht den Betriebszustand für den Admin sichtbar, was nach dem stillen Sterben des Vorgängers das eigentliche Produktversprechen ist. Phase 5 beweist die Betriebsversprechen auf echter 4-GB-ARM-Hardware und bringt Volltext und OCR in den einreichungsbereiten Zustand. Phase 6 ergänzt die semantische Suche, auf einem Schema, das von Tag eins embedding-fähig geschnitten ist. Eingereicht wird beides gemeinsam, als ein einziges Store-Erstrelease 1.0.0, hart vor Jahresende 2026 (Owner-Entscheide D-08, D-09, D-10 und D-11 vom 03.09.2026, festgehalten in 05-CONTEXT.md).
 
 Der Schnitt ist vertikal: jede Phase liefert eine end-to-end nutzbare Fähigkeit, keine technische Schicht. Scope-Kürzung schlägt Termin, das harte Ziel ist die v1.0-Store-Einreichung vor Jahresende 2026.
 
@@ -24,7 +24,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Aktualität und OCR** - Neue, geänderte und gescannte Dokumente sind kurz darauf auffindbar, ohne dass eine Datei angefasst wird (completed 2026-09-01)
 - [ ] **Phase 4: Admin-Sichtbarkeit und Diagnose** - Admin sieht Deckungsgrad, Fehler und den Grund pro Datei, bevor Nutzer etwas vermissen (alle 10 Plaene ausgefuehrt, Verifikation steht aus)
 - [ ] **Phase 5: Härtung und Store-Einreichung v1.0** - Belegte Zahlen auf 4-GB-ARM, Rechte-Paritätstest als Dauergate, v1.0 im App Store
-- [ ] **Phase 6: Semantische Suche (Release v1.1)** - Hybrid-Ranking findet Umschreibungen, im selben RAM-Budget und derselben ACL-Kette
+- [ ] **Phase 6: Semantische Suche** - Hybrid-Ranking findet Umschreibungen, im selben RAM-Budget und derselben ACL-Kette
 
 ## Phase Details
 
@@ -241,11 +241,11 @@ Plans:
 
 - [ ] 05-19-PLAN.md , Abnahme: Gastnutzer-Probe, Gate-Landschaft, Tag v1.0.0
 
-### Phase 6: Semantische Suche (Release v1.1)
+### Phase 6: Semantische Suche
 
 **Goal**: Der Nutzer findet Dokumente auch über Umschreibungen statt nur über exakte Wörter, im selben RAM-Budget und durch dieselbe Rechtekette.
 **Mode:** mvp
-**Depends on**: Phase 5 (eigenständiges Release v1.1, 4 bis 6 Wochen nach der v1.0-Store-Einreichung)
+**Depends on**: Phase 5 (D-08: die Semantik gehört ins gemeinsame Store-Erstrelease 1.0.0, kein eigenes Release; D-09: Phase 5 endet einreichungsbereit, die Abgabe ist Abschluss dieser Phase)
 **Requirements**: SEM-01, SEM-02, SEM-03
 **Success Criteria** (what must be TRUE):
 
@@ -262,7 +262,7 @@ Plans:
 **Execution Order:**
 Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 
-**Release-Schnitt:** Phasen 1 bis 5 bilden v1.0 (Volltext + OCR, Store-Einreichung vor Jahresende 2026). Phase 6 ist Release v1.1 (Semantik), 4 bis 6 Wochen später.
+**Release-Schnitt:** Es gibt EIN Store-Erstrelease, und es heißt 1.0.0. Es enthält Volltext, OCR und semantische Suche, denn D-11 hält die Semantik ausdrücklich als Teil der 1.0-Story fest ("Volltext + OCR + semantische Suche ab Tag 1"). Phase 5 stellt den einreichungsbereiten Zustand her (D-09), Phase 6 ergänzt die Semantik, und die Abgabe erfolgt am Ende von Phase 6 (D-08), hart vor Jahresende 2026 (D-10). Der frühere Schnitt in v1.0 und ein v1.1 vier bis sechs Wochen später ist damit überholt; er bleibt als dokumentierter Fallback aus D-10 bestehen, falls Phase 6 den Dezember gefährdet.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -271,7 +271,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
 | 5. Härtung und Store-Einreichung v1.0 | 18/20 | In Progress|  |
-| 6. Semantische Suche (Release v1.1) | 0/TBD | Not started | - |
+| 6. Semantische Suche | 0/TBD | Not started | - |
 
 ## Requirement Coverage
 
