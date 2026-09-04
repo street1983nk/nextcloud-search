@@ -235,7 +235,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 05-18-PLAN.md , Store-Medien, Release-Job, signierte Artefakte
+- [x] 05-18-PLAN.md , Store-Medien, Release-Job, signierte Artefakte
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
