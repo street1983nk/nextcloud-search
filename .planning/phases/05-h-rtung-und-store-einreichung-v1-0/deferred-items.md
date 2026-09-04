@@ -624,3 +624,87 @@ Container-Vertrag und die Anzeige zugleich.
 zur Kenntnis: der Volllauf sollte auf einer geraeumten Zustandstabelle starten,
 sonst traegt sein Fehlerbericht die 32 Zeilen dieses Trockenlaufs weiter, obwohl
 die Dateien indexiert sind.
+
+**Erledigt fuer den Volllauf:** Plan 05-14 hat die drei Tabellen vor dem Lauf
+geraeumt (`TRUNCATE oc_findling_queue, oc_findling_file_state,
+oc_findling_scan_stats`) und den Datenspeicher der ExApp mit `--rm-data`
+geloescht. Der Befund selbst bleibt offen, siehe DI-05-23, der ihn von einer
+anderen Seite trifft.
+
+## DI-05-22: Die Statusseite sagt acht Stunden lang "kommt nicht voran", waehrend sie 6.500 Dokumente indexiert
+
+**Found during:** Plan 05-14, im Volllauf ueber 50.000 Dateien auf der Box.
+
+**Was:** `AdminViewService::runState` liest `stalled`, wenn Arbeit wartet und der
+letzte Hintergrundauftrag DIESER App laenger als `STALLED_AFTER_SECONDS` (1800)
+zurueckliegt. Die Seite zeigt dann "Indexing has not progressed for %s. Background
+jobs may not be running."
+
+Im Volllauf war der Crawl um 2026-09-04T01:30:49Z fertig, danach hatte diese App
+keinen Hintergrundauftrag mehr auszufuehren, und der Zeitstempel stand still. Der
+Container arbeitete bis 09:27:25Z weiter und indexierte in dieser Zeit rund 6.500
+Dokumente, quittiert aber ueber OCS und nicht ueber einen Hintergrundauftrag. Von
+02:01Z bis 09:27Z, also **acht Stunden und ueber die Mehrheit der Laufzeit**, stand
+`runState` auf `stalled` und `stalledFor` wuchs auf ueber 30.000 Sekunden, waehrend
+der Deckungsgrad in derselben Reihe von 82 auf 99 Prozent stieg. Belegt in
+`docs/measurements/2026-09-04-volllauf-cpx22/statusseite.csv`, 130 Aufnahmen.
+
+**Warum es auf einer gewoehnlichen Instanz nicht auffaellt:** dort enden Crawl und
+Inhaltsarbeit ungefaehr gleichzeitig. Der Fall entsteht erst, wenn der
+OCR-Nachlauf laenger ist als der Crawl, und das ist genau das Lastprofil der
+Zielhardware: 20 Prozent Scans auf einer 4-GB-Box machen den Nachlauf zu 77
+Prozent der Laufzeit.
+
+**Warum nicht hier behoben:** die Abhilfe ist eine Entscheidung darueber, welche
+Groesse `stalled` messen soll. Der Fortschritt der Warteschlange waere die
+naheliegende Antwort (ein Zaehler, der sich seit einer halben Stunde nicht bewegt
+hat), aber damit misst die Kachel nicht mehr das, was ihr Text behauptet, naemlich
+die Hintergrundauftraege. Beides zugleich zu sagen braucht ein zweites Feld und
+einen zweiten Satz. Das beruehrt `AdminViewService`, den Text der Seite und die
+Bannerliste aus Plan 04-03, also drei Orte und keine Zeile.
+
+**Wohin es gehoert:** in den Phase-Review. Der billige Zwischenschritt waere, den
+Vergleichslauf so zu planen, dass er auch waehrend eines langen OCR-Nachlaufs
+regelmaessig laeuft, denn dann bewegt sich `lastJobRun` wieder und die Regel
+stimmt von selbst.
+
+## DI-05-23: Ein Abschuss zwischen Inhaltsverdikt und Quittierung strandet die Datei, und der naechtliche Vergleich holt sie nicht zurueck
+
+**Found during:** Plan 05-14, Stoerfall-Drill 1 auf der Box.
+
+**Was:** `docker kill` mitten in einem Lauf ueber 300 Scans hat zwei von 300
+Dateien in einem Zustand hinterlassen, aus dem sie von selbst nicht mehr
+herauskommen. Im Container stehen `drill/d037.pdf` und `drill/d038.pdf` auf
+`skipped(no_text_layer)` mit `attempts 1` und `ocr_used 0`, auf der
+Nextcloud-Seite auf `failed(repeatedly_stuck)`.
+
+Der Hergang laesst sich aus den beiden Zustaenden lesen: der Inhaltsauftrag war
+fertig und das Verdikt "kein Textinhalt" im Container geschrieben, aber die
+Quittierung, aus der die andere Haelfte den OCR-Auftrag gemacht haette, ging mit
+dem Container verloren. Beim naechsten Zugriff sieht der Container seine eigene
+Zeile als unveraendert, quittiert "unveraendert", und der OCR-Auftrag entsteht
+nie. Nach den Wiederholungen schreibt die Nextcloud-Seite `repeatedly_stuck`, und
+genau dieses Verdikt haelt den naechtlichen Vergleich davon ab, die Datei erneut
+einzureihen: `ReconcileController` uebergibt die Endzustaende ausdruecklich mit,
+damit eine aufgegebene Datei nicht jede Nacht neu eingereiht wird (IN-03 aus
+Phase 3).
+
+**Was daran nicht schlimm ist:** die Datei ist nicht unbemerkt weg. Sie steht
+namentlich in der Fehlerliste der Verwaltungsseite, `occ findling:diagnose` nennt
+sie, und ein `occ findling:index --restart` faengt sie wieder ein. Zum Vergleich:
+zwei andere Zeilen desselben Drills, die im Augenblick des Abschusses als
+OCR-Auftrag gesperrt waren, haben sich nach dem Ablauf der 1800-Sekunden-Sperre
+von selbst erledigt. Der Unterschied ist genau die Stelle in der Kette, an der der
+Abschuss trifft.
+
+**Warum nicht hier behoben:** die Abhilfe beruehrt die Uebergabe zwischen beiden
+Haelften. Entweder darf ein `no_text_layer` im Container erst geschrieben werden,
+nachdem die Quittierung durch ist (dann kostet jeder Scan eine zusaetzliche
+Runde), oder die Quittierung muss diesen Zustand als "OCR steht aus" fuehren
+koennen (dann braucht der Vertrag ein Feld), oder `repeatedly_stuck` darf den
+naechtlichen Vergleich nicht dauerhaft blockieren (dann kehrt IN-03 zurueck). Das
+ist dieselbe Entscheidung, die DI-05-21 von der anderen Seite stellt: was bedeutet
+eine Zeile in der Zustandstabelle.
+
+**Wohin es gehoert:** in den Phase-Review, zusammen mit DI-05-21, weil beide an
+`QueueService::acknowledge` haengen und eine gemeinsame Antwort brauchen.

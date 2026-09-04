@@ -7,9 +7,10 @@ scanned PDFs, without an Elasticsearch cluster and without a single required set
 Results appear in the regular unified search bar, next to files, contacts and
 calendar entries.
 
-**Status: Phase 1, walking skeleton, not usable yet.** There is no indexing and no
-real search in this phase. This repository currently proves the integration path
-end to end and freezes the store identity. Do not install it on a production server.
+**Status: hardening before the first store release, not submitted yet.** Indexing,
+OCR and search work and are measured on rented hardware, see below. The release
+artefacts of both apps are being prepared; until they are in the store, do not
+install this on a production server.
 
 ## The two app model
 
@@ -33,6 +34,23 @@ external app. The container owns the heavy lifting.
 
 The project is built for self hosters and small organisations on ordinary hardware,
 not for a search cluster.
+
+## What it costs in memory, measured
+
+**A full index and OCR run over 50,000 files and 20 GB on a 4-GB box peaked at
+429 MB of resident anonymous memory, under a hard 2 GB limit enforced by the
+kernel, with no OOM kill.** The run took 10 hours 14 minutes, wrote a 726 MB index
+and left every one of the 50,104 files with a verdict and none of them failed.
+
+That is a measurement and not an estimate. Method, the full curve, the corpus, the
+four part OOM proof and three failure drills on the same machine (`docker kill`
+during OCR, backend gone, disk nearly full) are in
+[docs/performance.md](docs/performance.md), including what each of them does not
+prove.
+
+The machine was a rented 4 GB x86 box running Nextcloud All-in-One. The repetition
+on 4 GB ARM hardware is still open, and the report names every figure that it will
+replace.
 
 ## Privacy
 
