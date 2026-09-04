@@ -74,6 +74,40 @@ Vergleich mit einer First-Party-Funktion hilft uns nicht.
 eigenes MCP-Werkzeug gegen die Datenbank. Alles läuft über die Unified Search, damit
 Nextcloud die einzige Berechtigungsgrenze bleibt. Das verlangen beide Threat-Models.
 
+**Was der Store hergibt, am 04.09.2026 gegen das gepinnte Schema geprüft**
+(APPSTORE_SHA `5c4373d7`, `nextcloudappstore/api/v1/release/info.xsd`):
+
+- Es gibt **kein Feld** dafür. Das Schema kennt info, id, name, summary,
+  description, version, licence, author, namespace, types, documentation, category,
+  website, discussion, bugs, repository, screenshot, donation, dependencies und die
+  technischen Registrierungen. Kein `related`, kein `works-with`, kein `recommend`,
+  kein `suggest`. Es wird also Prosa in der `<description>`, es gibt kein
+  Widget für verwandte Apps, und **auf der Seite der anderen App entsteht kein
+  automatischer Rückverweis**. Beide Seiten tragen ihren eigenen Satz, genau
+  deshalb gibt es BL-01 auf der Connector-Seite.
+- Die `<description>` rendert Markdown, also Überschriften, Links und Listen. Der
+  Store-Text des Connectors nutzt das schon und verlinkt aus einem Abschnitt
+  "Weiterführendes" in allen drei Sprachen den n8n-Guide. Ein solcher Abschnitt ist
+  der natürliche Ort für den Findling-Querverweis.
+- Platz ist reichlich: die drei Beschreibungen des Connectors liegen bei etwa 4400
+  (en), 4900 (de) und 5200 (fr) Zeichen. Unser Gate begrenzt `name` und `summary`
+  auf 128 Zeichen und die Beschreibung überhaupt nicht. Verboten bleiben in jedem
+  Fall Em-Dash, En-Dash und Emoji (Gate) sowie Backticks und Tabellen (Projektregel).
+
+**Release-Reihenfolge, und das ist die Falle:** Der Store-Text kommt aus der
+`info.xml` des hochgeladenen Releases. Er lässt sich nicht nachträglich bearbeiten,
+er reist mit einer Version. Im Connector-Repo trägt der n8n-Store-Text genau diesen
+Vermerk, "kommt mit 0.1.12".
+
+Für uns heißt das: unser Banner kann nur mit 1.0.0 selbst in den Store, nicht später
+nachgeschoben werden. Und der Connector braucht **ein Release nach unserem 1.0.0**,
+nur um seinen Querverweis zu tragen. Da 0.1.12 nach dem ISV-Call am 14.09.2026
+ausgeliefert werden soll, würde ein Verweis dort auf eine Store-Seite zeigen, die es
+noch nicht gibt. Zwei Auswege, zu entscheiden wenn die Termine stehen: der Verweis
+wartet auf 0.1.13, oder er zeigt auf das GitHub-Repository statt auf die
+Store-Seite, was jederzeit gilt. Auf keinen Fall stillschweigend einen toten
+Store-Link ausliefern.
+
 **Warum überhaupt:** Jedes der beiden Produkte schließt die größte Lücke des
 anderen. Findling ohne Client ist ein Suchfeld, der Connector ohne Findling erzählt
 jedem Assistenten, dass Inhalte nicht indexiert sind. Zusammen sind sie die
