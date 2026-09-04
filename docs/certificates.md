@@ -190,9 +190,9 @@ type string, bool given` out of `IntegrityCheck/Checker.php` (seen on 04.09.2026
 run 33895245084). Store them from a shell that does not re-encode the stream:
 
 ```bash
-tr -d '' < ~/.findling-secrets/findling.key \
+tr -d '\r' < ~/.findling-secrets/findling.key \
   | gh secret set APP_PRIVATE_KEY --repo street1983nk/nextcloud-search
-tr -d '' < ~/.findling-secrets/findling_backend.key \
+tr -d '\r' < ~/.findling-secrets/findling_backend.key \
   | gh secret set BACKEND_PRIVATE_KEY --repo street1983nk/nextcloud-search
 ```
 
