@@ -69,7 +69,50 @@ Plans:
   4. Eine Datei, die zehn Nutzer sehen, wird genau einmal verarbeitet (Crawl pro Mount: User-Homes und Team Folders an, External Storage aus)
   5. Nicht indexierbare Dateien (zu groß, Typ nicht in der Allowlist) landen sichtbar in den Zuständen `failed` oder `skipped` statt stumm zu verschwinden, und Suchoperatoren (Phrase, +/-, Dateiname vs. Inhalt, Dateityp) funktionieren
 
-**Plans**: TBD
+**Plans**: 12 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 06-01-PLAN.md , Bausteine: Pakete, Modell int8, vec0-Erweiterung, zwei Proben (A12/A13)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 06-02-PLAN.md , Welle 0: die drei Vormessungen auf aarch64 und die Owner-Abnahme (SEM-03)
+- [ ] 06-03-PLAN.md , Dreisprachiger Qualitaetsnachweis fp32 gegen int8 und der E5-Praefixbeleg (D-03, D-05)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 06-04-PLAN.md , Das Vektorschema festzurren: vectors.py, Schemaversion 2, Kennzahl und Ausweichpfade (SEM-03)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 06-05-PLAN.md , Chunker, Modell-Wrapper und die Embedding-Caps (D-01, D-02, D-05, D-19)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 06-06-PLAN.md , Der Durchstich: RRF-Verschmelzung in candidates(), Degradieren (SEM-01, SEM-02)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 06-07-PLAN.md , Embedding-Zweitspur, KIND_EMBED beidseitig und der vollstaendige Loeschweg (D-15, D-21)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 06-08-PLAN.md , Snippet fuer den rein semantischen Treffer (D-13)
+- [ ] 06-09-PLAN.md , Zweite Deckungszahl und Herkunft in der Diagnose (D-14, D-16)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 06-10-PLAN.md , Gate-Landschaft: kein zweiter Ausgang, Offline-Nachweis, Doku
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 06-11-PLAN.md , ARM-Volllauf mit Semantik, neue RSS-Zahl, gemessene Kennzahl (Kriterium 4 und 5, D-17)
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 06-12-PLAN.md , Die gebuendelte Abgabe des Erstrelease 1.0.0 (D-08 aus 05-CONTEXT.md)
 
 ### Phase 3: Aktualität und OCR
 
@@ -271,7 +314,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
 | 5. Härtung und Store-Einreichung v1.0 | 18/20 | In Progress|  |
-| 6. Semantische Suche | 0/TBD | Not started | - |
+| 6. Semantische Suche | 0/12 | Planned | - |
 
 ## Requirement Coverage
 

@@ -4,12 +4,12 @@ milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
 stopped_at: Phase 6 context gathered
-last_updated: "2026-09-04T21:35:48.927Z"
-last_activity: 2026-09-03 -- Phase 05 execution started
+last_updated: "2026-09-04T22:41:37.966Z"
+last_activity: 2026-09-04 -- Phase 6 planning complete
 progress:
   total_phases: 2
   completed_phases: 0
-  total_plans: 21
+  total_plans: 33
   completed_plans: 19
   percent: 0
 ---
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 
 Phase: 05 (h-rtung-und-store-einreichung-v1-0) — EXECUTING
 Plan: 1 of 19
-Status: Executing Phase 05
-Last activity: 2026-09-03 -- Phase 05 execution started
+Status: Ready to execute
+Last activity: 2026-09-04 -- Phase 6 planning complete
 
 Progress: [░░░░░░░░░░] 0%
 

@@ -1189,7 +1189,7 @@ er misst allerdings auf anderer ARM-Hardware als der Zielbox, was für Messung C
 
 ---
 
-## Offene Fragen für den Discuss
+## Offene Fragen für den Discuss (RESOLVED, entschieden in 06-CONTEXT.md D-01..D-21)
 
 Das ist der Zweck dieser Vorarbeit. Neun Fragen, jede mit Optionen und meiner
 Empfehlung samt Begründung. **Keine davon ist entschieden.**
