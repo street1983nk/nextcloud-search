@@ -864,3 +864,72 @@ Umbenennung ohne die Entscheidung waere geraten.
 **Wohin es gehoert:** in den Phase-Review, zusammen mit der Frage, ob dieses
 Repository das Vokabular-Gate ueberhaupt mechanisch fuehren soll; heute fuehrt
 es keines, das ist der Befund von Plan 05-17.
+
+## DI-05-33 (Plan 05-18): Der CI-Probelauf von release.yml ist noch nicht gefahren
+
+**Found during:** Plan 05-18, Task 3.
+
+**Was fehlt:** Die Abnahmebedingung "Ein Probelauf ueber `workflow_dispatch` ist
+gruen" ist NICHT erfuellt, und sie war aus diesem Worktree nicht erfuellbar.
+`workflow_dispatch` setzt voraus, dass die Workflow-Datei auf einem Zweig im
+entfernten Repository liegt. Dieser Ausfuehrer darf nicht pushen, also existiert
+`release.yml` fuer GitHub noch nicht.
+
+**Was stattdessen belegt ist.** Jeder Schritt des Workflows wurde am 04.09.2026
+auf dieser Maschine gefahren (`scratchpad/shots/rehearse-release.sh`), mit zwei
+benannten Ersetzungen: Wegwerf-Schluessel mit denselben Subjects wie die echten
+(`CN=findling`, `CN=findling_backend`), und `occ` aus dem laufenden
+Nextcloud-34.0.3-Container statt aus einem frischen `nextcloud/server`-Checkout.
+Ergebnis, Ende zu Ende gruen:
+
+| Beweis | Wert |
+|---|---|
+| Store-Validierungspfad ueber beide gestagte `info.xml` | `- validates` |
+| `occ integrity:sign-app` | `Successfully signed`, `signature.json` 10697 Bytes |
+| Companion-Archiv | 220913 Bytes, 67 Eintraege, ein Top-Level `findling/` |
+| Backend-Archiv | 26807 Bytes, 5 Eintraege, ein Top-Level `findling_backend/` |
+| Beide Release-Signaturen | 684 base64-Zeichen, `openssl dgst -verify` sagt `Verified OK` |
+| Ausschlussliste | kein `tests`, `vendor`, `phpunit.xml`, `composer.json`, `composer.lock` |
+| Gegenprobe | ein absichtlich mit `tests`, `phpunit.xml` und `composer.json` gebautes Archiv wird von derselben Schleife gefangen |
+| Alle 23 `run`-Bloecke | `bash -n` ohne Fehler |
+| Beide Zertifikate | live geholt, Subject und Fingerprint stimmen mit der Tabelle in `docs/certificates.md` |
+
+**Was daran offen bleibt, und zwar genau das und nichts weiter:**
+
+1. Dass `APP_PRIVATE_KEY` und `BACKEND_PRIVATE_KEY` im Lauf wirklich in die
+   Schluesseldateien geraten. Der Owner hat bestaetigt, dass beide Secrets
+   liegen; ob der Inhalt ein brauchbarer RSA-Schluessel ist, sieht erst der
+   Lauf. Der Workflow bricht mit eigener Meldung ab, wenn eine Variable leer
+   ist.
+2. Dass der `nextcloud/server`-Checkout auf `stable34` ein `occ` liefert, das
+   signiert. Lokal gegen 34.0.3 belegt, also dieselbe Familie, aber nicht
+   dieselbe Quelle.
+3. `actions/upload-artifact` mit den vier Dateien.
+4. `gh release create`. Bleibt beim Probelauf ausdruecklich unausgefuehrt, das
+   ist der Owner-Entscheid vom 04.09.2026 und T-05-77.
+5. Die `timeout-minutes: 20` sind eine benannte Schaetzung, siehe DI-05-34.
+
+**Wohin es gehoert:** in den Plan, der den Zweig merged, oder in Plan 05-19, der
+den Tag setzt und den Lauf ohnehin ausloest. Der Befehl danach:
+
+```
+gh workflow run release.yml --ref main
+```
+
+## DI-05-34 (Plan 05-18): `timeout-minutes` von release.yml ist geschaetzt, nicht gemessen
+
+**Found during:** Plan 05-18, Task 3.
+
+**Was:** Plan 05-13 hat die Regel gesetzt, dass jede Deadline die Messung nennt,
+aus der sie stammt, oder ausdruecklich sagt, dass es keine gibt.
+`.github/workflows/release.yml` sagt es ausdruecklich: die 20 Minuten sind aus
+dem `phpunit`-Job von `php.yml` abgeleitet (Server-Checkout mit Submodulen, ein
+wenig ueber drei Minuten) plus den Messwerten des `app-metadata`-Jobs (12 bis 36
+Sekunden), grosszuegig verdreifacht.
+
+**Warum nicht hier erledigt:** Es gibt keinen Lauf, aus dem eine Messung kommen
+koennte, und der Grund dafuer steht als DI-05-33.
+
+**Wohin es gehoert:** in denselben Vorgang, der DI-05-33 schliesst. Nach dem
+ersten gruenen Lauf den Absatz durch die gemessene Spanne ersetzen, wie es die
+sechs anderen Workflow-Dateien halten.
