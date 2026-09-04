@@ -18,7 +18,10 @@ the store schema and of one measured trap of the sister project:
 * ``description`` is a non empty string, and an empty element does not fail the
   validation with a message: it ends the upload in a server error, which is the
   most expensive thing this project knows about the store,
-* a ``screenshot`` has to be an https address of at most 256 characters,
+* a ``screenshot`` has to be an https address of at most 256 characters, there
+  has to be at least one of them per app, and an image has to be lying behind
+  every one of them: an address without a file is an empty frame on the store
+  page, which passes every schema check there is,
 * and the whole file, like every public artefact of this project, carries no em
   dash, no en dash and no emoji.
 
@@ -56,6 +59,11 @@ PHP_INFO = REPO_ROOT / "php" / "appinfo" / "info.xml"
 BACKEND_INFO = REPO_ROOT / "backend" / "appinfo" / "info.xml"
 README = REPO_ROOT / "README.md"
 
+# Where the images of the store page live. The store keeps addresses and not
+# files, so the images are in this repository and are linked over https; this
+# directory is the other end of every one of those addresses.
+MEDIA = REPO_ROOT / "store" / "media"
+
 # An em dash and an en dash, written as escapes rather than as themselves, so
 # that this file does not carry the two characters it exists to keep out. Same
 # device as in test_admin_ui_contract.py, and for the same reason.
@@ -88,6 +96,18 @@ ALLOWED_LANGUAGES = (DEFAULT_LANGUAGE, *TRANSLATIONS)
 
 # secure-url in the store schema: https and at most 256 characters.
 SCREENSHOT_LIMIT = 256
+
+# The one address every screenshot of this project starts with. The branch and
+# not a tag is a decision of plan 05-18 and stands with its reason in both
+# info.xml: an image has to stay reachable for as long as the entry stands, and
+# a broken one should be fixable with a commit instead of with a release.
+RAW_MEDIA_PREFIX = "https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/"
+
+# One image per app is the floor and not a target. Plan 05-17 left this number
+# out on purpose, because the images did not exist yet and a gate that demanded
+# them would have been red over a tree that was correct; plan 05-18 adds the
+# images and therefore the number.
+SCREENSHOT_MINIMUM = 1
 
 # The sentence of plan 05-14, quoted and not paraphrased. It is compared after
 # the whitespace of every side has been collapsed, because README.md wraps its
@@ -187,27 +207,72 @@ def _missing_translations(name: str, present: dict[str, list[str]]) -> list[str]
 
 
 def _screenshots(name: str, info: ElementTree.Element) -> list[str]:
-    """Every screenshot address that is there, judged.
+    """Every screenshot address, judged, plus the two rules of plan 05-18.
 
-    There are none today, and that is on purpose: plan 05-18 adds them once the
-    images are reachable. The rule that at least one screenshot has to exist per
-    app belongs to that plan and is deliberately NOT set here, so that this gate
-    can go green over a tree that has no images yet. What it does check is the
-    shape of every address that IS present, which is the half that can be
-    checked before the first image exists.
+    The schema half is the shape of an address: https and at most 256
+    characters, which is what secure-url means. Two rules are added here that
+    the schema cannot state.
+
+    The first is a number. At least one image per app, because a store entry
+    without one is a page of text next to an empty carousel, and because the
+    images now exist; plan 05-17 deliberately left this floor out while they
+    did not.
+
+    The second is the anti vacuity clause of the media themselves. An address
+    that no image stands behind passes every schema check there is and shows an
+    empty frame on the store page, which is worse than showing nothing: it says
+    the entry was not looked at. So every address has to point into the media
+    directory of this repository, and the file it names has to be there. A
+    third party host would be the same hole with an extra owner.
     """
     violations: list[str] = []
+    addresses = [(element.text or "").strip() for element in info.findall("screenshot")]
 
-    for element in info.findall("screenshot"):
-        url = (element.text or "").strip()
+    if len(addresses) < SCREENSHOT_MINIMUM:
+        violations.append(
+            f"{name}: carries {len(addresses)} screenshot elements and the store entry needs "
+            f"at least {SCREENSHOT_MINIMUM}"
+        )
+
+    for url in addresses:
         if not url.startswith("https://"):
             violations.append(f"{name}: the screenshot address {url!r} is not https, which the schema demands")
         if len(url) > SCREENSHOT_LIMIT:
             violations.append(
                 f"{name}: the screenshot address is {len(url)} characters, over the limit of {SCREENSHOT_LIMIT}"
             )
+        violations += _local_image(name, url)
 
     return violations
+
+
+def _local_image(name: str, url: str) -> list[str]:
+    """Whether an address names an image that is really lying under store/media.
+
+    Only an address into the media directory of this repository is judged for
+    existence, and an address anywhere else is a finding of its own: the images
+    of this entry are kept where this repository can keep them reachable, and a
+    picture on somebody else's server is one outage away from an empty frame
+    that nobody here can fix.
+    """
+    if not url.startswith(RAW_MEDIA_PREFIX):
+        foreign = (
+            f"{name}: the screenshot address {url!r} does not start with {RAW_MEDIA_PREFIX!r}, "
+            f"so no file of this repository can be checked behind it"
+        )
+        return [foreign]
+
+    relative = url[len(RAW_MEDIA_PREFIX) :]
+    if not relative or "/" in relative:
+        return [f"{name}: the screenshot address names {relative!r}, and store/media holds no subdirectories"]
+    if not (MEDIA / relative).is_file():
+        absent = (
+            f"{name}: the screenshot address names {relative!r}, which does not exist under store/media, "
+            f"so the store page would show an empty frame"
+        )
+        return [absent]
+
+    return []
 
 
 def scan_measured_sentence(name: str, source: str) -> list[str]:
@@ -244,6 +309,15 @@ def test_the_three_files_of_the_store_texts_exist() -> None:
     missing = [path.name for path in (PHP_INFO, BACKEND_INFO, README) if not path.is_file()]
 
     assert missing == []
+
+
+def test_the_media_directory_holds_at_least_one_image() -> None:
+    # The second half of the same clause, for the images. Without it a tree in
+    # which store/media had been deleted would report nothing at all: the
+    # existence rule only judges the addresses it finds, and an address that
+    # was deleted with the image is an address nobody judges.
+    assert MEDIA.is_dir()
+    assert sorted(path.name for path in MEDIA.glob("*.png")) != []
 
 
 def test_no_store_text_carries_a_dash_or_an_emoji() -> None:
@@ -285,9 +359,15 @@ _CLEAN_INFO = """<?xml version="1.0"?>
 \t<description>What it does, in English.</description>
 \t<description lang="de">Was sie tut, auf Deutsch.</description>
 \t<description lang="fr">Ce qu'elle fait, en francais.</description>
+\t<screenshot>{prefix}header.png</screenshot>
 \t<version>1.0.0</version>
 </info>
-"""
+""".replace("{prefix}", RAW_MEDIA_PREFIX)
+
+# The one address in the clean sample that is not made up: it names an image
+# that really is under store/media, so the sample passes the existence rule for
+# the same reason the two real files do.
+_CLEAN_SCREENSHOT = f"\t<screenshot>{RAW_MEDIA_PREFIX}header.png</screenshot>\n"
 
 
 def test_the_clean_sample_is_clean() -> None:
@@ -356,20 +436,63 @@ def test_a_duplicated_language_is_reported() -> None:
     assert "carries lang=fr twice" in violations[0]
 
 
-def test_a_screenshot_that_is_not_https_or_too_long_is_reported() -> None:
-    insecure = _CLEAN_INFO.replace(
-        "\t<version>1.0.0</version>\n",
-        "\t<screenshot>http://example.org/one.png</screenshot>\n\t<version>1.0.0</version>\n",
-    )
-    overlong = _CLEAN_INFO.replace(
-        "\t<version>1.0.0</version>\n",
-        f"\t<screenshot>https://example.org/{'a' * SCREENSHOT_LIMIT}.png</screenshot>\n\t<version>1.0.0</version>\n",
-    )
+def _with_screenshot(address: str) -> str:
+    """The clean sample with one more screenshot element, the given address."""
+    return _CLEAN_INFO.replace(_CLEAN_SCREENSHOT, f"{_CLEAN_SCREENSHOT}\t<screenshot>{address}</screenshot>\n")
 
-    assert len(scan_info("sample.xml", insecure)) == 1
-    assert "not https" in scan_info("sample.xml", insecure)[0]
-    assert len(scan_info("sample.xml", overlong)) == 1
-    assert "over the limit" in scan_info("sample.xml", overlong)[0]
+
+def test_a_screenshot_that_is_not_https_is_reported() -> None:
+    # Two findings, and both are real: the scheme is wrong, and an address that
+    # is not the https address of this repository names no file that could be
+    # checked. One edit fixes both.
+    violations = scan_info("sample.xml", _with_screenshot(f"http{RAW_MEDIA_PREFIX[5:]}header.png"))
+
+    assert len(violations) == 2
+    assert "is not https" in violations[0]
+    assert "does not start with" in violations[1]
+
+
+def test_a_screenshot_over_the_length_limit_is_reported() -> None:
+    violations = scan_info("sample.xml", _with_screenshot(f"{RAW_MEDIA_PREFIX}{'a' * SCREENSHOT_LIMIT}.png"))
+
+    assert len(violations) == 2
+    assert f"over the limit of {SCREENSHOT_LIMIT}" in violations[0]
+    assert "does not exist under store/media" in violations[1]
+
+
+def test_a_screenshot_whose_image_is_not_in_the_repository_is_reported() -> None:
+    # The anti vacuity clause of the media: this address is well formed, it is
+    # https, it is short enough, it points at the right directory, and there is
+    # no image behind it. Nothing but this rule can see that.
+    never = f"{RAW_MEDIA_PREFIX}screenshot-of-a-thing-that-never-was.png"
+    violations = scan_info("sample.xml", _with_screenshot(never))
+
+    assert len(violations) == 1
+    assert "screenshot-of-a-thing-that-never-was.png" in violations[0]
+    assert "does not exist under store/media" in violations[0]
+
+
+def test_a_screenshot_on_a_foreign_host_is_reported() -> None:
+    violations = scan_info("sample.xml", _with_screenshot("https://example.org/one.png"))
+
+    assert len(violations) == 1
+    assert "does not start with" in violations[0]
+
+
+def test_a_screenshot_in_a_subdirectory_is_reported() -> None:
+    violations = scan_info("sample.xml", _with_screenshot(f"{RAW_MEDIA_PREFIX}2026/header.png"))
+
+    assert len(violations) == 1
+    assert "no subdirectories" in violations[0]
+
+
+def test_an_entry_without_a_screenshot_is_reported() -> None:
+    # The rule plan 05-17 left open on purpose, and the reason it was left
+    # open: over a tree without images this finding would have been noise.
+    violations = scan_info("sample.xml", _CLEAN_INFO.replace(_CLEAN_SCREENSHOT, ""))
+
+    assert len(violations) == 1
+    assert f"carries 0 screenshot elements and the store entry needs at least {SCREENSHOT_MINIMUM}" in violations[0]
 
 
 def test_a_document_that_is_not_well_formed_is_a_finding_and_not_an_error() -> None:

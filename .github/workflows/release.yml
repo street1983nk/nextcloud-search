@@ -1,0 +1,598 @@
+name: Release archives for the app store
+
+# One run produces everything the store submission needs, for both halves at
+# once: a staged directory, the store validation path over the info.xml that
+# really ships, both size limits, the code signature inside the companion
+# archive, the tarball, and the release signature over that tarball.
+#
+# The submission itself is not here. It is phase 6 (D-09), it needs
+# APPSTORE_TOKEN, and it needs a download URL that exists, which is what the
+# release step below creates.
+#
+# Two ways in:
+#   - a tag v<major>.<minor>.<patch>: the real release.
+#   - workflow_dispatch: the rehearsal. It builds, signs and uploads artifacts
+#     and creates NO release unless the operator explicitly ticks the input,
+#     whose default is false. The reason is in the threat model of plan 05-18 as
+#     T-05-77: a public release 1.0.0 that is not in the store yet can be found
+#     and installed, and nobody asked for that.
+#
+# Deliberately NOT path filtered, unlike docker.yml. That workflow applies one
+# paths filter to every push event including tag pushes, so a release tag on a
+# commit that does not touch backend/** skips it. This workflow produces the
+# artefact that gets uploaded to the store, so a skipped run here is a release
+# that does not exist, and a filter that can cause it has no place in it.
+#
+# There is no pull_request trigger, and that absence is the primary defence of
+# the two signing keys rather than a condition inside a step. docs/certificates.md
+# requires that a fork workflow can never reach these secrets; a trigger that
+# does not exist cannot be reached by anybody, and unlike an "if" it cannot be
+# weakened by a later edit that looks harmless.
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish a GitHub release with both archives (leave off for a rehearsal)'
+        type: boolean
+        default: false
+
+permissions:
+  # Only what the release step needs, and only because of it. Everything else
+  # in this workflow reads.
+  contents: write
+
+# No cancel-in-progress here, and that is the one place in this repository where
+# the setting differs from the other workflows on purpose. Elsewhere an older
+# run's verdict is worthless once a newer commit exists. Here a cancelled run is
+# a run that was interrupted somewhere between writing a signing key to disk and
+# deleting it again, and a duplicate release run is cheaper than that.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # The same pin php.yml uses, and it has to stay the same value: the store
+  # validation path is only evidence if it is the same path in both places.
+  # Deliberately not master, so an unrelated commit upstream cannot turn this
+  # build red or, worse, silently stop catching what it used to catch.
+  APPSTORE_SHA: 5c4373d7d026a8f7c7838cc9990fecaf19e8e682
+
+  # The branch whose occ signs the companion app, same value as the phpunit job
+  # of php.yml.
+  SERVER_VERSION: stable34
+
+  # Test-only credentials of a throwaway instance that dies with the runner. It
+  # exists for one reason, stated at the step that installs it, and not a single
+  # byte of the release passes through its database.
+  ADMIN_PASS: password
+
+  # The two hard limits of the store API, spelled out in bytes so the steps that
+  # enforce them read as comparisons and not as arithmetic.
+  # 20 MB per archive, 512 KB per info.xml.
+  ARCHIVE_MAX_BYTES: 20971520
+  INFO_XML_MAX_BYTES: 524288
+
+jobs:
+  archives:
+    name: Build, sign and size check both archives
+    runs-on: ubuntu-24.04
+
+    # No measurement behind this number yet, and it is named as an estimate
+    # rather than dressed up as one: this workflow has never run. What it is
+    # derived from is the phpunit job of php.yml, whose server checkout with
+    # submodules is the same work and measures a little over three minutes, plus
+    # the apt install and the four fetches of app-metadata, which measure 12 to
+    # 36 seconds there. Twenty minutes is roughly four times that sum and is
+    # still a deadline, which is the point: without this key the ceiling is the
+    # GitHub default of 360 minutes. The first real run replaces this paragraph
+    # with a measured range.
+    timeout-minutes: 20
+
+    steps:
+      # Actions are pinned to commit SHAs, never to tags: a moved tag would be
+      # arbitrary code execution in the one job of this repository that holds
+      # both signing keys.
+      #
+      # Order matters and is the reverse of php.yml. actions/checkout empties
+      # its target directory, so this repository lands at the workspace root
+      # first and the server goes into a subdirectory afterwards. Doing it the
+      # other way round would wipe the server checkout.
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check out nextcloud/server for its occ
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nextcloud/server
+          ref: ${{ env.SERVER_VERSION }}
+          submodules: recursive
+          path: server
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          # The lower bound declared in appinfo/info.xml, same as every other
+          # PHP job here. openssl is the extension integrity:sign-app needs.
+          php-version: '8.2'
+          extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, gd, zip, openssl
+          coverage: none
+
+      - name: Install xsltproc and xmllint
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xsltproc libxml2-utils
+
+      # The guard, and it is deliberately a step of its own that can fail rather
+      # than a condition that can silently skip. A skipped signing step produces
+      # an unsigned archive that looks finished, which is the failure this whole
+      # workflow exists to prevent; a failing guard produces a red run and a
+      # sentence.
+      #
+      # What it allows: a tag push on this repository, or a manual dispatch.
+      # A dispatch is not a weaker case than a tag: workflow_dispatch can only
+      # be started by an account with write access to this repository, so it can
+      # never come from a fork. The rehearsal that plan 05-18 requires is such a
+      # dispatch, and it has to produce a real signature, otherwise it rehearses
+      # nothing.
+      - name: Refuse to sign anything outside a tag or a manual run of this repository
+        run: |
+          echo "event      ${GITHUB_EVENT_NAME}"
+          echo "ref        ${GITHUB_REF}"
+          echo "repository ${GITHUB_REPOSITORY}"
+          if [ "${GITHUB_REPOSITORY}" != "street1983nk/nextcloud-search" ]; then
+            echo "this workflow signs with the release keys of street1983nk/nextcloud-search and must not run elsewhere"
+            exit 1
+          fi
+          case "${GITHUB_EVENT_NAME}" in
+            push)
+              case "${GITHUB_REF}" in
+                refs/tags/v*) echo "a release tag, signing is in scope" ;;
+                *) echo "a push that is not a release tag has no business holding the signing keys"; exit 1 ;;
+              esac
+              ;;
+            workflow_dispatch)
+              echo "a manual run, which requires write access to this repository and therefore cannot come from a fork"
+              ;;
+            *)
+              echo "unexpected event ${GITHUB_EVENT_NAME}; this workflow accepts a release tag or a manual run"
+              exit 1
+              ;;
+          esac
+
+      # Duplicates the check docker.yml already performs on a tag, and the
+      # duplication is the point. docker.yml is path filtered on backend/**, so
+      # a release tag placed on a commit that does not touch the backend skips
+      # it entirely. This workflow is the one that builds the file the store
+      # downloads, so it verifies the version itself instead of trusting a
+      # workflow that may not have run.
+      - name: On a tag, the tag and both info.xml versions have to agree
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          php_version=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' php/appinfo/info.xml)
+          backend_version=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' backend/appinfo/info.xml)
+          echo "git tag         ${tag}"
+          echo "php version     ${php_version}      (php/appinfo/info.xml)"
+          echo "backend version ${backend_version}      (backend/appinfo/info.xml)"
+          fail=0
+          [ "${php_version}" = "${tag}" ] || { echo "the companion version does not match the git tag"; fail=1; }
+          [ "${backend_version}" = "${tag}" ] || { echo "the backend version does not match the git tag"; fail=1; }
+          exit "${fail}"
+
+      - name: Fetch the pinned store transform and schema
+        run: |
+          base="https://raw.githubusercontent.com/nextcloud/appstore/${APPSTORE_SHA}/nextcloudappstore/api/v1/release"
+          curl -fsSL "${base}/pre-info.xslt" -o "${RUNNER_TEMP}/pre-info.xslt"
+          curl -fsSL "${base}/info.xsd" -o "${RUNNER_TEMP}/info.xsd"
+
+      # The certificate is public information and only the key is secret, so it
+      # is fetched at build time rather than stored. The fingerprint check is
+      # point 2 of the checklist in docs/certificates.md, run by the machine
+      # instead of by hand: if the fetched certificate does not belong to the
+      # local key, signing with it produces an archive no instance will accept,
+      # and the failure would surface at a user's installation rather than here.
+      - name: Fetch both certificates and prove they belong to our keys
+        run: |
+          base="https://github.com/nextcloud/app-certificate-requests/raw/master"
+          curl -fsSL "${base}/findling/findling.crt"                 -o "${RUNNER_TEMP}/findling.crt"
+          curl -fsSL "${base}/findling_backend/findling_backend.crt" -o "${RUNNER_TEMP}/findling_backend.crt"
+          fail=0
+          check() {
+            expected="$2"
+            subject=$(openssl x509 -in "${RUNNER_TEMP}/$1.crt" -noout -subject)
+            actual=$(openssl x509 -in "${RUNNER_TEMP}/$1.crt" -noout -pubkey | openssl sha256 -r | cut -d' ' -f1)
+            echo "$1 subject     ${subject}"
+            echo "$1 fingerprint ${actual}"
+            [ "${subject}" = "subject=CN=$1" ] || { echo "$1: the certificate subject is not the app id, so the server will report Certificate is not valid for required scope"; fail=1; }
+            [ "${actual}" = "${expected}" ] || { echo "$1: the certificate does not belong to the key recorded in docs/certificates.md"; fail=1; }
+          }
+          # The two values from the fingerprint table of docs/certificates.md,
+          # recorded when the keys were generated on 15.08.2026.
+          check findling         781011795ce8b96c78a9fb485d98dd3cd95e0d2cc93c684beebd3263b81e5e3b
+          check findling_backend 70b9340b24457bd29fb107519495e51b3fb7e4edbcf725334c33a229be6f8b8e
+          exit "${fail}"
+
+      # Scaffolding for occ and nothing else. integrity:sign-app reaches the
+      # Checker, which reaches the app config, which needs a database, so occ on
+      # an uninstalled instance cannot sign. SQLite and a throwaway admin are
+      # the cheapest instance that satisfies it, exactly as in the phpunit job
+      # of php.yml. Nothing that ends up in either archive passes through it.
+      - name: Install a throwaway Nextcloud so occ can reach its own services
+        working-directory: server
+        run: |
+          mkdir -p data
+          ./occ maintenance:install --database=sqlite \
+            --admin-user admin --admin-pass "${ADMIN_PASS}"
+          ./occ config:system:get version
+
+      # ---------------------------------------------------------------------
+      # The companion half: findling
+      # ---------------------------------------------------------------------
+
+      # Exactly one top level directory, named after the app id in lowercase
+      # ASCII, with appinfo/info.xml inside it. That is a store requirement and
+      # it is also what integrity:sign-app derives the app id from, so the
+      # directory name is load bearing twice.
+      #
+      # The include list is explicit, and an include list rather than an exclude
+      # list on purpose: a new directory in php/ then has to be named here
+      # before it ships, instead of shipping because nobody remembered to
+      # exclude it.
+      #
+      # What is left out and why:
+      #   tests, phpunit.xml    the unit suite. An archive with test code in it
+      #                         is a different product from the one that was
+      #                         reviewed.
+      #   composer.json/.lock   plan 05-15 added phpunit as a require-dev
+      #                         dependency. The app has no runtime composer
+      #                         dependency at all, Nextcloud autoloads OCA\Findling
+      #                         from lib/ by convention, and a composer.json in a
+      #                         released app invites a composer install on a
+      #                         production instance.
+      #   vendor                never built here, and named anyway, because the
+      #                         day somebody runs composer install before this
+      #                         step the silence would be the bug.
+      #   .gitkeep, .git        repository plumbing.
+      #
+      # LICENSE and THIRD-PARTY.md travel with the archive because their subject
+      # travels with it: php/img/app-dark.svg and php/templates/admin.php carry
+      # nine icon paths from Material Design Icons under Apache-2.0, and
+      # THIRD-PARTY.md is the attribution for them. Shipping the icons without
+      # the attribution is the one licence mistake this archive could make.
+      - name: Stage the companion app
+        run: |
+          stage="${RUNNER_TEMP}/build-php"
+          app="${stage}/findling"
+          mkdir -p "${app}"
+          for d in appinfo lib templates js css img l10n; do
+            cp -R "php/${d}" "${app}/${d}"
+          done
+          cp LICENSE THIRD-PARTY.md "${app}/"
+          find "${app}" -name '.gitkeep' -delete
+          echo "staged tree:"
+          find "${app}" -maxdepth 1 -mindepth 1 -printf '  %P\n' | sort
+
+      # The store transforms info.xml first and validates the result, so
+      # validating the file directly against info.xsd would check a document
+      # that is never submitted. This runs over the STAGED copy and not over the
+      # working tree, because the staged copy is the one that gets uploaded, and
+      # a packaging step that changed it would otherwise go unnoticed.
+      - name: Validate the staged companion info.xml the way the store does
+        run: |
+          xsltproc "${RUNNER_TEMP}/pre-info.xslt" "${RUNNER_TEMP}/build-php/findling/appinfo/info.xml" \
+            | xmllint --noout --schema "${RUNNER_TEMP}/info.xsd" -
+
+      - name: The companion info.xml has to stay under 512 KB
+        run: |
+          bytes=$(stat -c%s "${RUNNER_TEMP}/build-php/findling/appinfo/info.xml")
+          echo "php/appinfo/info.xml is ${bytes} bytes, the store limit is ${INFO_XML_MAX_BYTES}"
+          if [ "${bytes}" -ge "${INFO_XML_MAX_BYTES}" ]; then
+            echo "the companion info.xml is at or over the store limit and the upload would be rejected"
+            exit 1
+          fi
+
+      # The key is written to a file under RUNNER_TEMP and never into the
+      # checkout, it arrives through the environment rather than through the
+      # rendered command line, and umask 077 means the file is readable by
+      # nobody else on the runner. All three rules are verbatim from
+      # docs/certificates.md, and the deletion is the last step of this job with
+      # if: always().
+      - name: Sign the companion code
+        env:
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          if [ -z "${APP_PRIVATE_KEY}" ]; then
+            echo "APP_PRIVATE_KEY is empty; the secret is missing and an unsigned archive must not be built"
+            exit 1
+          fi
+          ( umask 077; printf '%s\n' "${APP_PRIVATE_KEY}" > "${RUNNER_TEMP}/findling.key" )
+          php server/occ integrity:sign-app \
+            --privateKey="${RUNNER_TEMP}/findling.key" \
+            --certificate="${RUNNER_TEMP}/findling.crt" \
+            --path="${RUNNER_TEMP}/build-php/findling"
+          test -s "${RUNNER_TEMP}/build-php/findling/appinfo/signature.json"
+          echo "appinfo/signature.json was written and is not empty"
+
+      # The order is bake into this file on purpose: stage, code sign, pack,
+      # then the release signature. The code signature has to be inside the
+      # tarball, so it happens before packing; the release signature is over the
+      # tarball, so it happens after. Swapping the last two is the mistake that
+      # produces "Invalid signature" from the store with no indication of which
+      # of the two signatures was wrong.
+      #
+      # --numeric-owner with owner and group zero because the uid of a GitHub
+      # runner has no business inside a public artefact, and because it removes
+      # one source of difference between two builds of the same commit.
+      - name: Pack the companion archive
+        run: |
+          mkdir -p dist
+          tar --numeric-owner --owner=0 --group=0 \
+            -czf dist/findling.tar.gz -C "${RUNNER_TEMP}/build-php" findling
+          ls -l dist/findling.tar.gz
+
+      - name: The companion archive has to stay under 20 MB
+        run: |
+          bytes=$(stat -c%s dist/findling.tar.gz)
+          echo "dist/findling.tar.gz is ${bytes} bytes, the store limit is ${ARCHIVE_MAX_BYTES}"
+          if [ "${bytes}" -ge "${ARCHIVE_MAX_BYTES}" ]; then
+            echo "the companion archive is at or over the store limit and the upload would be rejected"
+            exit 1
+          fi
+
+      # The second of the two signatures, and the one the store checks at upload
+      # time. It belongs to the bytes of the archive, which has one consequence
+      # that decides the shape of this whole workflow: the archive that is
+      # signed here is the very file that the release step uploads, and no later
+      # step rebuilds it. A tar.gz is not byte reproducible, so a rebuilt
+      # archive would carry a signature that belongs to a file nobody has.
+      #
+      # The sister project of this author measured that difference the hard way
+      # on its 0.1.8 release, 45710 bytes locally against 45546 published, and
+      # its runbook now recomputes the signature over the downloaded asset. This
+      # workflow does not need that step, because it never builds the archive
+      # twice.
+      - name: Sign the companion archive for the store
+        env:
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          openssl dgst -sha512 -sign "${RUNNER_TEMP}/findling.key" dist/findling.tar.gz \
+            | openssl base64 -A > dist/findling.tar.gz.sig
+          test -s dist/findling.tar.gz.sig
+          echo "the release signature is $(wc -c < dist/findling.tar.gz.sig) base64 characters"
+          # Verified here rather than trusted, with the public half of the
+          # certificate and never the key. A signature that does not verify
+          # against the certificate the store has on file is rejected at upload
+          # with the words "Invalid signature" and nothing else, and this is the
+          # step that turns that into a sentence at the place where it can still
+          # be fixed. Plain files and not process substitution, so that the same
+          # commands can be rehearsed off a runner.
+          openssl x509 -in "${RUNNER_TEMP}/findling.crt" -noout -pubkey > "${RUNNER_TEMP}/findling.pub"
+          openssl base64 -d -A -in dist/findling.tar.gz.sig -out "${RUNNER_TEMP}/findling.sig.bin"
+          openssl dgst -sha512 -verify "${RUNNER_TEMP}/findling.pub" \
+            -signature "${RUNNER_TEMP}/findling.sig.bin" dist/findling.tar.gz
+
+      # ---------------------------------------------------------------------
+      # The backend half: findling_backend
+      # ---------------------------------------------------------------------
+
+      # info.xml is copied byte for byte and is never filtered or rewritten, and
+      # that is a hard requirement rather than tidiness. pre-info.xslt drops the
+      # routes block silently, so the store database never sees the five routes
+      # of this container; AppAPI reads them back out of this archive at
+      # installation time. An archive with a rewritten info.xml installs an app
+      # with no search route and no error message. The app-metadata job of
+      # php.yml holds that finding as a step that goes red if the transform ever
+      # stops dropping them.
+      #
+      # This archive carries metadata and not code. The container image is not
+      # in it: info.xml names it, and AppAPI pulls it from ghcr at installation
+      # time. LICENSE and THIRD-PARTY.md travel along for the same reason they
+      # do on the other side, and because THIRD-PARTY.md is where the licences of
+      # everything inside that image are written down.
+      - name: Stage the backend app
+        run: |
+          stage="${RUNNER_TEMP}/build-backend"
+          app="${stage}/findling_backend"
+          mkdir -p "${app}/appinfo"
+          cp backend/appinfo/info.xml "${app}/appinfo/info.xml"
+          cp LICENSE THIRD-PARTY.md "${app}/"
+          cmp backend/appinfo/info.xml "${app}/appinfo/info.xml"
+          echo "info.xml is byte identical to the working tree, so AppAPI will read the routes it expects"
+
+      - name: Validate the staged backend info.xml the way the store does
+        run: |
+          xsltproc "${RUNNER_TEMP}/pre-info.xslt" "${RUNNER_TEMP}/build-backend/findling_backend/appinfo/info.xml" \
+            | xmllint --noout --schema "${RUNNER_TEMP}/info.xsd" -
+
+      - name: The backend info.xml has to stay under 512 KB
+        run: |
+          bytes=$(stat -c%s "${RUNNER_TEMP}/build-backend/findling_backend/appinfo/info.xml")
+          echo "backend/appinfo/info.xml is ${bytes} bytes, the store limit is ${INFO_XML_MAX_BYTES}"
+          if [ "${bytes}" -ge "${INFO_XML_MAX_BYTES}" ]; then
+            echo "the backend info.xml is at or over the store limit and the upload would be rejected"
+            exit 1
+          fi
+
+      # No integrity:sign-app on this half, and the absence is a decision rather
+      # than an oversight. The code signature is checked by the integrity check
+      # of the Nextcloud instance, over the PHP files the instance itself loads.
+      # This half delivers no PHP into the instance: it is a container that
+      # AppAPI runs beside it, and the archive contains metadata only. There is
+      # nothing for that check to look at, so signing it would produce a
+      # signature over a file list of one.
+      #
+      # The store signature below is a different matter and is required for both
+      # halves, because apps.nextcloud.com checks it for every upload.
+      - name: Pack the backend archive
+        run: |
+          tar --numeric-owner --owner=0 --group=0 \
+            -czf dist/findling_backend.tar.gz -C "${RUNNER_TEMP}/build-backend" findling_backend
+          ls -l dist/findling_backend.tar.gz
+
+      - name: The backend archive has to stay under 20 MB
+        run: |
+          bytes=$(stat -c%s dist/findling_backend.tar.gz)
+          echo "dist/findling_backend.tar.gz is ${bytes} bytes, the store limit is ${ARCHIVE_MAX_BYTES}"
+          if [ "${bytes}" -ge "${ARCHIVE_MAX_BYTES}" ]; then
+            echo "the backend archive is at or over the store limit and the upload would be rejected"
+            exit 1
+          fi
+
+      - name: Sign the backend archive for the store
+        env:
+          BACKEND_PRIVATE_KEY: ${{ secrets.BACKEND_PRIVATE_KEY }}
+        run: |
+          if [ -z "${BACKEND_PRIVATE_KEY}" ]; then
+            echo "BACKEND_PRIVATE_KEY is empty; the secret is missing and an unsigned upload must not be prepared"
+            exit 1
+          fi
+          ( umask 077; printf '%s\n' "${BACKEND_PRIVATE_KEY}" > "${RUNNER_TEMP}/findling_backend.key" )
+          openssl dgst -sha512 -sign "${RUNNER_TEMP}/findling_backend.key" dist/findling_backend.tar.gz \
+            | openssl base64 -A > dist/findling_backend.tar.gz.sig
+          test -s dist/findling_backend.tar.gz.sig
+          echo "the release signature is $(wc -c < dist/findling_backend.tar.gz.sig) base64 characters"
+          openssl x509 -in "${RUNNER_TEMP}/findling_backend.crt" -noout -pubkey > "${RUNNER_TEMP}/findling_backend.pub"
+          openssl base64 -d -A -in dist/findling_backend.tar.gz.sig -out "${RUNNER_TEMP}/findling_backend.sig.bin"
+          openssl dgst -sha512 -verify "${RUNNER_TEMP}/findling_backend.pub" \
+            -signature "${RUNNER_TEMP}/findling_backend.sig.bin" dist/findling_backend.tar.gz
+
+      # ---------------------------------------------------------------------
+      # What is in the two files, asserted rather than described
+      # ---------------------------------------------------------------------
+
+      # The claims of this workflow, turned into a step that can fail. Every one
+      # of them is a promise made somewhere else in the repository: the single
+      # top level directory to the store API, the absent test code to
+      # php/composer.json, signature.json to the integrity check, and its absence
+      # on the backend side to the comment two steps above. A promise nobody
+      # checks is a sentence, and this is the difference.
+      # Every archive is listed exactly ONCE, into a file, and every check below
+      # reads that file. Not a matter of taste: `tar -tzf x | grep -q pattern`
+      # makes grep exit on the first hit, tar takes SIGPIPE while it is still
+      # writing, and with pipefail in force the whole pipeline reports failure.
+      # It is worse than a plain bug, because it depends on the size of the
+      # archive: the small backend listing finishes before grep leaves and looks
+      # fine, the larger companion one does not. The rehearsal of plan 05-18
+      # found it exactly that way, with two present files reported as missing.
+      - name: Prove what the archives contain and what they do not
+        run: |
+          fail=0
+          for pair in "findling:1" "findling_backend:0"; do
+            app="${pair%:*}"
+            wants_signature="${pair#*:}"
+            archive="dist/${app}.tar.gz"
+            listing="${RUNNER_TEMP}/${app}.listing"
+            tar -tzf "${archive}" > "${listing}"
+            echo "::group::${archive}, $(wc -l < "${listing}") entries"
+            cat "${listing}"
+            echo "::endgroup::"
+
+            tops=$(cut -d/ -f1 "${listing}" | sort -u)
+            if [ "${tops}" != "${app}" ]; then
+              echo "${archive}: the top level is '${tops}' and the store needs exactly one directory named ${app}"
+              fail=1
+            fi
+
+            if grep -qx "${app}/appinfo/info.xml" "${listing}"; then
+              echo "${archive}: appinfo/info.xml is present"
+            else
+              echo "${archive}: appinfo/info.xml is missing and the store cannot read the app at all"
+              fail=1
+            fi
+
+            if grep -qx "${app}/appinfo/signature.json" "${listing}"; then
+              if [ "${wants_signature}" = "0" ]; then
+                echo "${archive}: carries a code signature, and this half has no PHP for the integrity check to see"
+                fail=1
+              else
+                echo "${archive}: carries appinfo/signature.json, as the integrity check of the instance requires"
+              fi
+            elif [ "${wants_signature}" = "1" ]; then
+              echo "${archive}: has no appinfo/signature.json, so the integrity check of every instance would report it as modified"
+              fail=1
+            else
+              echo "${archive}: carries no code signature, which is correct for a container half"
+            fi
+
+            # The exclusion list of the staging step, as a test. Anchored on the
+            # top level directory so that a file named tests somewhere inside
+            # l10n could not be mistaken for the suite, and matched case
+            # sensitively because that is how the names are written.
+            for forbidden in tests vendor phpunit.xml composer.json composer.lock; do
+              if grep -q "^${app}/${forbidden}\(/\|$\)" "${listing}"; then
+                echo "${archive}: contains ${forbidden}, which is development material and must not be released"
+                fail=1
+              fi
+            done
+
+            test -s "${archive}.sig" || { echo "${archive}.sig is missing or empty"; fail=1; }
+          done
+          exit "${fail}"
+
+      # Four files: two archives and two release signatures. On a rehearsal
+      # these artifacts are the entire output of the run, which is why they are
+      # uploaded before the release step rather than after it.
+      - name: Upload both archives and both signatures
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: store-release
+          path: |
+            dist/findling.tar.gz
+            dist/findling.tar.gz.sig
+            dist/findling_backend.tar.gz
+            dist/findling_backend.tar.gz.sig
+          if-no-files-found: error
+          retention-days: 30
+
+      # gh release create rather than a third party action, and that is a supply
+      # chain decision. The GitHub CLI is installed on the runner and is
+      # maintained by the same party as the API it talks to, so it adds no fourth
+      # party to a job that holds two signing keys, and no pin that
+      # backend/tests/test_workflow_pins.py would have to police.
+      #
+      # The two .sig files are attached as well. They are not secret: a
+      # signature made with a private key is verifiable with the public
+      # certificate and reveals nothing about the key. Attaching them means the
+      # phase 6 submission can read the signature next to the archive it belongs
+      # to, instead of a human copying a base64 blob out of a build log.
+      - name: Publish a GitHub release with both archives
+        if: startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || inputs.create_release)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF#refs/tags/}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF#refs/tags/}" \
+            --generate-notes \
+            dist/findling.tar.gz \
+            dist/findling.tar.gz.sig \
+            dist/findling_backend.tar.gz \
+            dist/findling_backend.tar.gz.sig
+
+      - name: Say that no release was published
+        if: ${{ !(startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || inputs.create_release)) }}
+        run: |
+          echo "No GitHub release was created. The four artifacts of this run are the output."
+          echo "That is the rehearsal path of plan 05-18 and the decision of the owner on 04.09.2026:"
+          echo "a public release 1.0.0 that is not in the store yet could be found and installed."
+
+      # The last step of the job and the only one with if: always(). Both key
+      # files live under RUNNER_TEMP, which a hosted runner discards with the
+      # machine, so this is the second line of defence and not the only one. It
+      # exists because the first line is an assumption about somebody else's
+      # infrastructure, and because a self hosted runner would not hold it.
+      - name: Remove both key files
+        if: always()
+        run: |
+          shred -u "${RUNNER_TEMP}/findling.key" "${RUNNER_TEMP}/findling_backend.key" 2>/dev/null || true
+          rm -f "${RUNNER_TEMP}/findling.key" "${RUNNER_TEMP}/findling_backend.key"
+          for f in "${RUNNER_TEMP}/findling.key" "${RUNNER_TEMP}/findling_backend.key"; do
+            if [ -e "$f" ]; then
+              echo "$f still exists after the deletion step"
+              exit 1
+            fi
+          done
+          echo "neither key file exists any more"

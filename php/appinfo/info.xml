@@ -180,12 +180,33 @@ repos, ce qui relève de l'hôte sur lequel il tourne.]]></description>
 	<bugs>https://github.com/street1983nk/nextcloud-search/issues</bugs>
 	<repository type="git">https://github.com/street1983nk/nextcloud-search.git</repository>
 	<!--
-		The screenshots belong between the repository above and the donation
-		below, and they are deliberately absent rather than empty. Plan 05-18
-		puts the elements here once the images are reachable under an https
-		address, which the schema demands of them; an empty screenshot element
-		left as a placeholder would end the upload in a server error.
+		The images of the store page. The store keeps addresses and not files,
+		so they live in this public repository and are linked over https. The
+		schema type is secure-url: https and at most 256 characters, which is
+		what backend/tests/test_store_metadata.py checks, together with the one
+		thing the schema cannot: that every address points at a file that
+		actually exists under store/media. An address without an image behind
+		it is an empty frame on the store page, and that is worse than no image.
+
+		The branch and not a tag, on purpose. The images have to be reachable
+		while the entry is reviewed and for as long as it stands, and a broken
+		image should be fixable with a commit rather than with a new release.
+
+		The order is the order the store shows them in, so the header image
+		comes first. There is no separate field for it: a store page has
+		screenshots and nothing else, and the first one is the one everybody
+		sees.
+
+		This half gets all three, because it is the half a person installs and
+		searches with: the search image is the promise of the product, and the
+		admin image is what whoever runs the instance wants to see first.
+
+		store/media/README.md says what each image shows, how it was taken, and
+		why it comes from the development instance rather than from CI.
 	-->
+	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/header.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/screenshot-search.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/screenshot-admin.png</screenshot>
 	<!--
 		The same donation link as the sister project of this author. The
 		platform is named in the type attribute because the schema knows the
