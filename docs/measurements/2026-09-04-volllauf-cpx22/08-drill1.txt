@@ -1,0 +1,142 @@
+### Drill 1, Ausgangszustand 2026-09-04T10:09:54Z
++---------+-------+-----+---------+---------+--------+--------------+
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 1       | 300   | 0   | 301     | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+StartedAt=2026-09-03T23:12:58.503203335Z Memory=2147483648
+### DRILL 1: docker kill mitten im OCR-Lauf
+--- Zaehler unmittelbar vor dem Abschuss 2026-09-04T10:12:43Z ---
+files       50260
+indexed     50090
+acl         50090
+drill-Zeilen 156
+Work stock
+  scheduled            133
+  handed to the worker 13
+
+   146
+
+--- Abschuss ---
+kill um 2026-09-04T10:12:44Z
+nc_app_findling_backend
+Status=exited ExitCode=137 OOMKilled=false FinishedAt=2026-09-04T10:12:44.890375313Z
+--- Versuch 1: docker start (die naheliegende Handlung eines Verwalters) ---
+nc_app_findling_backend
+Status=running Memory=2147483648
+--- Protokoll des Containers nach dem Start ---
+INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/70994?userId=lasttest "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/70940?userId=lasttest "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/70979?userId=lasttest "HTTP/1.1 200 OK"
+entrypoint: binding mode tcp 0.0.0.0:23000
+harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+init: no HaRP tunnel in this deployment, watching the application only
+INFO:     Started server process [7]
+INFO:     Waiting for application startup.
+INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+--- Kommt der Vorrat voran? ---
+Work stock
+  scheduled            191
+  handed to the worker 13
+
+Work stock
+  scheduled            235
+  handed to the worker 13
+
+T+ 57s
+--- Gegenprobe: bewegt sich nach docker start etwas? ---
+ERROR:  column "claimed_at" does not exist
+LINE 1: select count(*) from oc_findling_queue where claimed_at is n...
+                                                     ^
+ERROR:  column "claimed_at" does not exist
+LINE 1: select count(*) from oc_findling_queue where claimed_at is n...
+                                                     ^
+belegte Zeilen:  dann  (unveraendert = der Poller arbeitet nicht)
+indexed nach docker start 50090
+--- Versuch 2: Neuregistrierung ohne --rm-data, der Weg aus 05-12 ---
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully removed
+ExApp findling_backend successfully unregistered.
+DRIVER    VOLUME NAME
+local     nc_app_findling_backend_data
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+nc_app_findling_backend
+Memory=2147483648 MemorySwap=2147483648
+Neuregistrierung dauerte 5s
+bereit um 2026-09-04T10:14:50Z
+--- Zeit bis zur Wiederaufnahme ---
+erste neue Datei nach 6s, indexed=50092 um 2026-09-04T10:15:10Z
+Work stock
+  scheduled            261
+  handed to the worker 15
+
+hochgeladen 2026-09-04T10:14:15Z
+--- DRILL 1, Endzustand 2026-09-04T10:35:43Z ---
+     2
+
+files gesamt        50404
+indexed             50364
+acl-Zeilen          50364
+drill-Zeilen        300
+drill indexiert     296
+drill mit OCR       296
+drill doppelt       0
+Verdikte gesamt     [('indexed', None, 50364), ('skipped', 'empty_text', 14), ('skipped', 'image_not_ocrable', 2), ('skipped', 'no_text_layer', 4), ('skipped', 'too_large', 20)]
+file_id doppelt     0
+Versuche max        2
+--- DRILL 1, Endzustand endgueltig 2026-09-04T10:37:01Z ---
+     2
+
+files gesamt    50404
+indexed         50364
+acl-Zeilen      50364
+drill indexiert 296
+Verdikte        [('indexed', None, 50364), ('skipped', 'empty_text', 14), ('skipped', 'image_not_ocrable', 2), ('skipped', 'no_text_layer', 4), ('skipped', 'too_large', 20)]
+Versuche > 1    10430
+docs im Index   50364
+Work stock
+  scheduled            0
+  handed to the worker 2
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              36
+  failed               2
+--- Die zwei haengenden Zeilen: Sperre laeuft 30 min nach 10:12:43 ab ---
+10:38:41Z Queue=2
+10:39:42Z Queue=2
+10:40:42Z Queue=2
+10:41:42Z Queue=2
+10:42:42Z Queue=2
+10:43:42Z Queue=2
+10:44:42Z Queue=0
+ id | file_id | locked_at | retries | kind 
+----+---------+-----------+---------+------
+(0 rows)
+
+(70747, 'drill/d024.pdf', 'indexed', None, 2, 1)
+(70979, 'drill/d023.pdf', 'indexed', None, 2, 1)
+indexed 50366
+  state  |      reason       | count 
+---------+-------------------+-------
+ failed  | repeatedly_stuck  |     2
+ skipped | empty_text        |    14
+ skipped | image_not_ocrable |     2
+ skipped | too_large         |    20
+(4 rows)
+
+--- Endabrechnung Drill 1, 2026-09-04T10:45:08Z ---
+Verdikte: [('indexed', None, 50366), ('skipped', 'empty_text', 14), ('skipped', 'image_not_ocrable', 2), ('skipped', 'no_text_layer', 2), ('skipped', 'too_large', 20)]
+gesamt  : 50404
+acl     : 50366
+noch no_text_layer: [(70767, 'drill/d038.pdf', 1, 0), (70811, 'drill/d037.pdf', 1, 0)]
+drill indexiert: 298
+drill gesamt   : 300

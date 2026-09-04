@@ -1,0 +1,86 @@
+### DRILL 2: das Backend ist weg
+--- Ausgangszustand: eine Suche mit Backend 2026-09-04T10:45:44Z ---
+HTTP 200
+Treffer: 5
+  35799-aktenvermerk.docx  ->  /f/12029
+     Bauleitplanung Zahlungseingang gemäß Haushaltsplan Zahlungseingang. wird vorgelegt mitgeteilt wurde festgestel
+  17375-satzung.pdf  ->  /f/36632
+     Zahlungseingang zurückgestellt Umlage Antrag erforderlich Zahlungseingang  Bestandsaufnahme Instandhaltung. fo
+Dauer: 1933 ms (einschliesslich Anmeldung)
+--- Eingriff: Container stoppen ---
+nc_app_findling_backend
+Status=exited ExitCode=0
+2026-09-04T10:45:46Z
+--- Die Suche ohne Backend 2026-09-04T10:46:00Z ---
+Versuch 1: HTTP 200, Treffer 0, 1560 ms, name='File contents', isPaginated=False
+Versuch 2: HTTP 200, Treffer 0, 1605 ms, name='File contents', isPaginated=False
+Versuch 3: HTTP 200, Treffer 0, 1612 ms, name='File contents', isPaginated=False
+--- Die native Suche derselben Sitzung, zur Gegenprobe ---
+native Suche: HTTP 200 Treffer 5 113 ms
+--- Die Admin-Seite ohne Backend ---
+HTTP 200
+backendReachable False
+indexedDisplay   50104
+backend          {"indexed": 0, "docs": 0, "failed": 0, "note": ""}
+Seite HTTP 200 Bytes 74539
+'The Findling backend does not answer' -> True
+'findling-banner-unreachable' -> True
+'findling-banner-lowdisk' -> True
+--- Welche Banner tragen das Attribut hidden, welche nicht ---
+  findling-banner-unreachable        SICHTBAR
+  findling-banner-lockstep           verborgen
+  findling-banner-stale              verborgen
+  findling-banner-lowdisk            verborgen
+  findling-banner-reindex            verborgen
+--- Wiederherstellung Versuch 1: docker start ---
+nc_app_findling_backend
+harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+init: no HaRP tunnel in this deployment, watching the application only
+nach docker start: HTTP 200 Treffer 5 442 ms
+T+ 22s
+--- Gegenprobe: arbeitet der Poller nach docker start? ---
+PUT d001 erneut -> 204
+  10:47:54Z Queue=1
+  10:48:09Z Queue=1
+  10:48:24Z Queue=1
+  10:48:39Z Queue=1
+  10:48:54Z Queue=1
+  10:49:09Z Queue=1
+  10:49:24Z Queue=1
+  10:49:40Z Queue=1
+  10:49:55Z Queue=1
+  10:50:10Z Queue=1
+  10:50:25Z Queue=1
+  10:50:40Z Queue=1
+--- Was das Protokoll seit dem docker start sagt ---
+harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+entrypoint: binding mode tcp 0.0.0.0:23000
+init: no HaRP tunnel in this deployment, watching the application only
+INFO:     Started server process [8]
+INFO:     Waiting for application startup.
+INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+INFO:     172.18.0.4:52850 - "GET /status HTTP/1.1" 200 OK
+INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.254 s, build 1 in this process
+INFO:     172.18.0.4:45624 - "POST /search HTTP/1.1" 200 OK
+INFO:     172.18.0.4:45624 - "POST /snippets HTTP/1.1" 200 OK
+--- Wiederherstellung Versuch 2: Neuregistrierung ohne --rm-data ---
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+Memory=2147483648 MemorySwap=2147483648
+  10:51:30Z Queue=1  (T+5s)
+  10:51:45Z Queue=0  (T+20s)
+init: no HaRP tunnel in this deployment, watching the application only
+harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+init: no HaRP tunnel in this deployment, watching the application only
+INFO:findling.worker.poller:pass finished, claimed=1 indexed=0 skipped=0 failed=0 unchanged=1 requeued=0 committed=0
+--- Suche nach der Wiederherstellung ---
+HTTP 200
+Treffer: 5
+  35799-aktenvermerk.docx  ->  /f/12029
+--- Endzustand 2026-09-04T10:51:47Z ---
+Verdikte: [('indexed', None, 50366), ('skipped', 'empty_text', 14), ('skipped', 'image_not_ocrable', 2), ('skipped', 'no_text_layer', 2), ('skipped', 'too_large', 20)]
+gesamt: 50404 acl: 50366

@@ -1,0 +1,94 @@
+### DRILL 3: die Platte wird knapp
+--- Ausgangszustand 2026-09-04T10:15:40Z ---
+/dev/sdb       52521566208 28022894592 21797539840  57% /mnt/HC_Volume_106785477
+frei: 21797539840 Byte
+{"total": 52521566208, "used": 28022894592, "free": 21797539840}
+indexed vor der Verknappung 50102
+--- Verknappung: eine grosse Datei, so dass unter 500 MB frei bleiben ---
+fallocate 21378109440 Byte
+/dev/sdb         49G   47G  400M 100% /mnt/HC_Volume_106785477
+2026-09-04T10:15:41Z
+--- Beobachtung, 90 Sekunden nach der Verknappung ---
+WARNING:findling.index.writer:index commit paused, free space is below the configured floor of 524288000 byte
+WARNING:findling.worker.poller:index paused, free space below the floor, 2 rows handed back
+WARNING:findling.index.writer:index commit paused, free space is below the configured floor of 524288000 byte
+WARNING:findling.worker.poller:index paused, free space below the floor, 2 rows handed back
+WARNING:findling.index.writer:index commit paused, free space is below the configured floor of 524288000 byte
+WARNING:findling.worker.poller:index paused, free space below the floor, 2 rows handed back
+--- /status ueber die Statusseite ---
+lowDisk        True
+diskFreeBytes  419762176
+runState       stalled
+spaceWarning   True
+scheduled      253 running 13
+indexed jetzt 50102
+indexed 60 s spaeter 50102
+Work stock
+  scheduled            251
+  handed to the worker 13
+
+--- Die Admin-Seite, gerendert, waehrend die Platte knapp ist ---
+HTTP 200 Bytes 76469
+'Little disk space left' -> True
+'findling-banner-lowdisk' -> True
+'Indexing is paused so the index stays intact' -> True
+<p class="findling-banner findling-banner--warning" id="findling-banner-lowdisk">
+				<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 
+--- Wiederherstellung: der Ballast geht weg 2026-09-04T10:19:06Z ---
+/dev/sdb         49G   27G   21G  57% /mnt/HC_Volume_106785477
+Lauf geht weiter nach 42s ohne Eingriff, indexed=50104 um 2026-09-04T10:19:48Z
+lowDisk False frei 21797584896 scheduled 247
+### DRILL 3, Nachtrag: die Suche waehrend der Plattenpause
+--- Ausgangszustand 2026-09-04T11:13:25Z ---
+Work stock
+  scheduled            30
+  handed to the worker 30
+
+frei: 21756407808 Byte
+--- Verknappung ---
+/dev/sdb         49G   47G  401M 100% /mnt/HC_Volume_106785477
+--- Ist die Pause erreicht? ---
+WARNING:findling.worker.poller:index paused, free space below the floor, 30 rows handed back
+WARNING:findling.index.writer:index commit paused, free space is below the configured floor of 524288000 byte
+WARNING:findling.worker.poller:index paused, free space below the floor, 30 rows handed back
+lowDisk True frei 420040704 docs 50366 scheduled 60
+--- Die Suche, waehrend die Indexierung pausiert ---
+  Zahlungseingang    HTTP 200  Treffer 5  114 ms
+     erster Treffer: 35799-aktenvermerk.docx
+  Bauleitplanung     HTTP 200  Treffer 5  136 ms
+     erster Treffer: 24258-vermerk.pdf
+  Instandhaltung     HTTP 200  Treffer 5  149 ms
+     erster Treffer: 17820-schriftwechsel.pdf
+--- Ballast weg 2026-09-04T11:15:03Z ---
+  11:15:03Z Queue=60
+  11:15:33Z Queue=30
+  11:16:03Z Queue=30
+  11:16:33Z Queue=30
+  11:17:04Z Queue=30
+  11:17:34Z Queue=30
+  11:18:04Z Queue=20
+  11:18:34Z Queue=10
+  11:19:04Z Queue=0
+Verdikte: [('indexed', None, 50396), ('skipped', 'empty_text', 14), ('skipped', 'image_not_ocrable', 2), ('skipped', 'no_text_layer', 4), ('skipped', 'too_large', 20)]
+gesamt: 50436 acl: 50396
+drill2 indexiert: 30 von 32
+doppelte file_id: 0
+lowDisk False docs 50396 failed 0 runState idle
+--- Beweis: die Abschreibungen zaehlen genau die Zeilen, die in der Pause unterwegs waren ---
+Pause 1 (10:15:41Z bis 10:19:06Z): je Durchgang 2 Zeilen zurueckgegeben
+Pause 2 (11:13:25Z bis 11:15:03Z): je Durchgang 30 Zeilen zurueckgegeben
+  state  |      reason       | count 
+---------+-------------------+-------
+ failed  | repeatedly_stuck  |    32
+ skipped | empty_text        |    14
+ skipped | image_not_ocrable |     2
+ skipped | too_large         |    20
+(4 rows)
+
+drill2: 60 hochgeladen, davon im Container:
+  Zeilen im Container: 32
+  davon indexiert   : 30
+  davon no_text_layer: 2
+  nie an den Container uebergeben: 28
+--- Zaehlung der Zurueckgaben im Protokoll der zweiten Pause ---
+3

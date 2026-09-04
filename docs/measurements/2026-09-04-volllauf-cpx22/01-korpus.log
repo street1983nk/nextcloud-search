@@ -1,0 +1,12 @@
+start 2026-09-03T19:44:54Z
+build_load_corpus: category=scan_single files=9916
+build_load_corpus: category=scan_multi files=100
+build_load_corpus: category=text_pdf files=22536
+build_load_corpus: category=ooxml files=10016
+build_load_corpus: category=opendocument files=5008
+build_load_corpus: category=plain_text files=2304
+build_load_corpus: category=image files=100
+build_load_corpus: category=oversize files=20
+build_load_corpus: seed=phase5-full files=50000 bytes=20208046426 checksum=c03a880323171d29c5278ed350db277291e39d256e95d5a8654dd4a6c244a274
+ende 2026-09-03T20:13:09Z dauer=1695s
+/dev/sdb         49G   26G   22G  54% /mnt/HC_Volume_106785477

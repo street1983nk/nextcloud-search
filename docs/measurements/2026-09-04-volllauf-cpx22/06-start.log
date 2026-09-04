@@ -1,0 +1,42 @@
+
+=== ExApp neu registrieren  2026-09-03T23:12:56Z ===
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+ExApps:
+findling_backend (Findling Backend): 0.3.0 [enabled]
+
+=== Harte Grenze setzen und gegenpruefen  2026-09-03T23:13:02Z ===
+nc_app_findling_backend
+Memory=2147483648 MemorySwap=2147483648 Image=localhost:5000/findling_backend:05-12-fix
+memory.max      2147483648
+memory.swap.max 0
+DRIVER    VOLUME NAME
+local     nc_app_findling_backend_data
+
+=== Zustandstabellen der Nextcloud-Haelfte raeumen (DI-05-21)  2026-09-03T23:13:02Z ===
+TRUNCATE TABLE
+
+=== Sampler starten  2026-09-03T23:13:02Z ===
+findling-rss 1788477182,113729536,23367680,3152968,141123584,170192896
+findling-rss 1788477187,113434624,23367680,3149216,140820480,170192896
+
+=== Beobachter der Statusseite starten  2026-09-03T23:13:08Z ===
+
+=== Den Lauf anstossen  2026-09-03T23:13:11Z ===
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              0
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-03 19:21:04 (232 minutes ago)
+2026-09-03T23:13:11Z
+
+=== fertig, der Lauf laeuft  2026-09-03T23:13:11Z ===

@@ -1,0 +1,30 @@
+### erhoben 2026-09-04T10:02:50Z
+--- memory.events ---
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+--- memory.events.local ---
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+--- memory.peak ---
+1004195840
+--- memory.current ---
+355504128
+--- memory.max / swap.max ---
+2147483648
+max
+--- memory.stat (anon,file,slab) ---
+anon 251699200
+file 92176384
+slab 10088896
+--- docker inspect ---
+OOMKilled=false Status=running ExitCode=0 StartedAt=2026-09-03T23:12:58.503203335Z RestartCount=0 Memory=2147483648 MemorySwap=2147483648 Image=localhost:5000/findling_backend:05-12-fix
+--- Platte ---
+/dev/sdb         49G   26G   21G  56% /mnt/HC_Volume_106785477

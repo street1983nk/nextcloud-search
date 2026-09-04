@@ -624,3 +624,116 @@ Container-Vertrag und die Anzeige zugleich.
 zur Kenntnis: der Volllauf sollte auf einer geraeumten Zustandstabelle starten,
 sonst traegt sein Fehlerbericht die 32 Zeilen dieses Trockenlaufs weiter, obwohl
 die Dateien indexiert sind.
+
+**Erledigt fuer den Volllauf:** Plan 05-14 hat die drei Tabellen vor dem Lauf
+geraeumt (`TRUNCATE oc_findling_queue, oc_findling_file_state,
+oc_findling_scan_stats`) und den Datenspeicher der ExApp mit `--rm-data`
+geloescht. Der Befund selbst bleibt offen, siehe DI-05-23, der ihn von einer
+anderen Seite trifft.
+
+## DI-05-22: Die Statusseite sagt acht Stunden lang "kommt nicht voran", waehrend sie 6.500 Dokumente indexiert
+
+**Found during:** Plan 05-14, im Volllauf ueber 50.000 Dateien auf der Box.
+
+**Was:** `AdminViewService::runState` liest `stalled`, wenn Arbeit wartet und der
+letzte Hintergrundauftrag DIESER App laenger als `STALLED_AFTER_SECONDS` (1800)
+zurueckliegt. Die Seite zeigt dann "Indexing has not progressed for %s. Background
+jobs may not be running."
+
+Im Volllauf war der Crawl um 2026-09-04T01:30:49Z fertig, danach hatte diese App
+keinen Hintergrundauftrag mehr auszufuehren, und der Zeitstempel stand still. Der
+Container arbeitete bis 09:27:25Z weiter und indexierte in dieser Zeit rund 6.500
+Dokumente, quittiert aber ueber OCS und nicht ueber einen Hintergrundauftrag. Von
+02:01Z bis 09:27Z, also **acht Stunden und ueber die Mehrheit der Laufzeit**, stand
+`runState` auf `stalled` und `stalledFor` wuchs auf ueber 30.000 Sekunden, waehrend
+der Deckungsgrad in derselben Reihe von 82 auf 99 Prozent stieg. Belegt in
+`docs/measurements/2026-09-04-volllauf-cpx22/statusseite.csv`, 130 Aufnahmen.
+
+**Warum es auf einer gewoehnlichen Instanz nicht auffaellt:** dort enden Crawl und
+Inhaltsarbeit ungefaehr gleichzeitig. Der Fall entsteht erst, wenn der
+OCR-Nachlauf laenger ist als der Crawl, und das ist genau das Lastprofil der
+Zielhardware: 20 Prozent Scans auf einer 4-GB-Box machen den Nachlauf zu 77
+Prozent der Laufzeit.
+
+**Warum nicht hier behoben:** die Abhilfe ist eine Entscheidung darueber, welche
+Groesse `stalled` messen soll. Der Fortschritt der Warteschlange waere die
+naheliegende Antwort (ein Zaehler, der sich seit einer halben Stunde nicht bewegt
+hat), aber damit misst die Kachel nicht mehr das, was ihr Text behauptet, naemlich
+die Hintergrundauftraege. Beides zugleich zu sagen braucht ein zweites Feld und
+einen zweiten Satz. Das beruehrt `AdminViewService`, den Text der Seite und die
+Bannerliste aus Plan 04-03, also drei Orte und keine Zeile.
+
+**Wohin es gehoert:** in den angekuendigten Fix-Plan dieser Phase, vor 05-17 und
+vor dem ARM-Volllauf, damit der ARM-Lauf das korrigierte Verhalten prueft. Der
+billige Zwischenschritt waere, den Vergleichslauf so zu planen, dass er auch
+waehrend eines langen OCR-Nachlaufs regelmaessig laeuft, denn dann bewegt sich
+`lastJobRun` wieder und die Regel stimmt von selbst.
+
+## DI-05-23: Eine kurze Plattenknappheit schreibt den gesamten Vorrat ab, der gerade unterwegs ist
+
+**Found during:** Plan 05-14, Stoerfall-Drill 3 auf der Box, in zwei unabhaengigen
+Durchgaengen.
+
+**Was:** Wird der freie Platz unter `MIN_FREE_BYTES` (500 MB) gedrueckt, pausiert
+der Container richtigerweise und gibt seine Ladung unbeurteilt zurueck ("index
+paused, free space below the floor, N rows handed back"). Die Nextcloud-Seite
+zaehlt aber die Wiederholung **bei der Ausgabe** hoch, nicht beim Fehlschlag:
+`QueueMapper` schreibt `retries + 1` beim Holen, mit dem Kommentar "Handing a row
+out is the attempt, so retries is counted here". Ein Durchgang des Pollers dauert
+wenige Sekunden, `QueueService::MAX_DELIVERIES` steht auf 3, also ist das
+Wiederholungsbudget einer Zeile nach rund zwanzig Sekunden Plattenknappheit
+aufgebraucht. Danach schreibt `QueueService` sie als `failed(repeatedly_stuck)` ab
+und gibt sie nicht mehr aus.
+
+**Gemessen, zweimal, mit demselben Verhaeltnis:**
+
+| Durchgang | Zeilen beim Arbeiter, als die Platte knapp wurde | Dauer der Pause | abgeschrieben |
+|---|---|---|---|
+| 1 (2026-09-04T10:15:41Z) | 2 | 3 min 25 s | 2 |
+| 2 (2026-09-04T11:13:25Z) | 30 | 1 min 38 s | 30 |
+
+Im zweiten Durchgang waren 60 Dateien hochgeladen worden: 30 wurden indexiert, 28
+nie an den Container uebergeben und als `repeatedly_stuck` abgeschrieben, 2 blieben
+im Container auf `skipped(no_text_layer)` stehen, weil ihr Inhaltsverdikt schon
+geschrieben war und die Quittierung, aus der der OCR-Auftrag entstanden waere,
+nicht mehr kam.
+
+**Warum das mehr ist als eine Unschoenheit:** die Oberflaeche sagt in derselben
+Minute "Little disk space left. Indexing is paused so the index stays intact."
+Der Index bleibt tatsaechlich heil und die Suche laeuft weiter, das ist in
+demselben Drill belegt. Der Arbeitsvorrat bleibt aber nicht heil, und genau davon
+sagt das Banner nichts. Auf einer 4-GB-Box mit einem knappen Datentraeger, also
+der Zielumgebung dieses Produkts, ist eine halbe Minute Knappheit kein
+Ausnahmefall.
+
+**Was den Schaden begrenzt:** die Dateien sind nicht unbemerkt weg. Sie stehen
+namentlich in der Fehlerliste der Verwaltungsseite, `occ findling:diagnose` nennt
+sie, und `occ findling:index --restart` faengt sie wieder ein. Der naechtliche
+Vergleich holt sie ausdruecklich NICHT zurueck: `repeatedly_stuck` ist genau das
+Verdikt, mit dem eine aufgegebene Datei vom Vergleich ausgenommen wird
+(`ReconcileController`, IN-03 aus Phase 3).
+
+**Was ausdruecklich NICHT die Ursache ist:** der `docker kill` aus Drill 1. Sein
+Verdacht lag naeher, weil er zeitlich davorlag, und er ist entlastet: seine 13
+unterwegs befindlichen Zeilen kamen entweder ueber die gewoehnliche Wiederholung
+zurueck oder, im Fall der beiden OCR-Auftraege, nach dem Ablauf ihrer
+1800-Sekunden-Sperre. Der Abschuss hat keine einzige Datei gekostet.
+
+**Warum nicht hier behoben:** die Abhilfe ist keine Zeile und sie beruehrt beide
+Haelften. Drei Wege sind denkbar, und die Wahl ist eine Entscheidung ueber die
+Bedeutung von `retries`:
+
+1. Eine Rueckgabe wegen Plattenknappheit belastet die Wiederholung nicht. Dann
+   braucht die Quittierung einen dritten Kanal neben Fehlschlag und
+   Uebersprungenem, denn heute kann der Container "ich habe gar nicht erst
+   angefangen" nicht sagen.
+2. Der Poller holt nichts, solange die Platte knapp ist. Dann muss er das vor dem
+   Holen wissen, und heute merkt er es erst beim Schreiben.
+3. `MAX_DELIVERIES` zaehlt Zeit statt Ausgaben. Dann verliert die Aufgeben-Regel
+   ihre einfache Bedeutung.
+
+**Wohin es gehoert:** in den angekuendigten Fix-Plan dieser Phase, vor 05-17 und
+vor dem ARM-Volllauf, damit der ARM-Lauf das korrigierte Verhalten prueft. Er
+gehoert zusammen mit DI-05-21 entschieden, weil beide an
+`QueueService::acknowledge` und an der Frage haengen, was eine Zeile in der
+Zustandstabelle bedeutet.
