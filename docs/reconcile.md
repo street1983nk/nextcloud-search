@@ -65,6 +65,11 @@ Der Container zieht, die PHP-App liefert nur. Der Ablauf je Scheibe:
    dieselben drei Auslieferungen endeten wieder mit demselben Urteil. Auf
    50.000 Dateien ist das Dauerlast, deren Ursache in keinem Zähler der App
    sichtbar ist.
+
+   Und eine Ausnahme von dieser Ausnahme, siehe den nächsten Abschnitt: trägt
+   der Container für dieselbe Datei `skipped(no_text_layer)`, ist das
+   Endurteil der Nextcloud-Seite kein Endurteil, sondern eine verlorene
+   Übergabe an die OCR-Spur, und die Datei wird eingereiht.
 6. Beides über `POST /queues/documents/requeue` einreihen, getrennt nach Art.
 7. Cursor fortschreiben, kurz pausieren, nächste Scheibe.
 
@@ -80,6 +85,56 @@ Teil des Systems aus einer Abwesenheit etwas folgert:
   genauso aus wie eine gelöschte Datei.
 - **Der Transportfehler.** Eine Seite, die nie ankam, beendet die Runde, ohne den
   Cursor zu bewegen. Aus einer ausgebliebenen Antwort folgt nichts.
+
+## Die verlorene Übergabe an die OCR-Spur, und wie sie sich selbst heilt
+
+Ein Durchgang des Pollers schreibt in vier Schritten: erst das Verdikt in den
+Index, dann den Commit, dann das Verdikt in die Zustandsdatenbank, zuletzt die
+Quittierung an Nextcloud. Für einen Scan bedeutet das zwei Zeilen an zwei
+Stellen: der Container hält `skipped(no_text_layer)`, und aus der Quittierung
+entsteht der OCR-Auftrag.
+
+Stirbt der Durchgang zwischen diesen beiden Schritten, bleibt genau eine Hälfte
+stehen. Der Container hat sein Verdikt, die OCR-Aufgabe gibt es nie, und die
+Queue-Zeile läuft in die Sperrfrist. Passiert das in einer Phase, in der die
+Nextcloud-Seite die Zeile abschreibt, weil ihr Auslieferungsbudget verbraucht
+ist, entsteht das Paar aus DI-05-23:
+
+| Wer | Urteil |
+|---|---|
+| Container | `skipped(no_text_layer)` |
+| Nextcloud | `failed(repeatedly_stuck)` |
+
+Vor Plan 05-20 war diese Datei damit für immer aus dem Index heraus, und zwar
+ohne dass irgendein Zähler es gezeigt hätte. Der Abgleich sah eine bekannte
+Datei mit unverändertem ETag, also nichts zu tun; und selbst wenn er sie nicht
+gekannt hätte, hätte das abschreibende Endurteil der Seite ihn abgehalten. Beide
+Regeln sind einzeln richtig und zusammen genau falsch.
+
+**Was jetzt passiert.** Der Vergleich erkennt das Paar, bevor eine der beiden
+Regeln greift, und reiht die Datei als Inhaltsaufgabe ein. Der nächste Durchgang
+liest sie neu, findet dieselbe fehlende Textschicht, übergibt sie an die
+OCR-Spur, und ab da hat der Container ein eigenes Urteil über die Datei. Damit
+feuert der Zweig nicht wieder: eine Reparatur, die jede Nacht läuft, wäre ein
+nächtlicher Download jedes Scans der Instanz.
+
+**Wie eng der Zweig ist**, und jede Bedingung schließt genau einen Rückfall aus:
+
+- Der ETag muss übereinstimmen. Eine geänderte Datei ist gewöhnliche Arbeit, und
+  eine hier unbekannte Datei ist die Aufgabe-Regel des vorigen Abschnitts.
+- Das Urteil des Containers muss der Übergabepunkt sein. `failed(corrupt)` neben
+  der Abschreibung sind zwei Hälften, die sich einig sind, dass die Datei nicht
+  lesbar ist.
+- Die Nextcloud-Seite muss die Zeile abgeschrieben haben. Ein Scan mit lebender
+  Queue-Zeile wartet einfach auf seinen OCR-Auftrag.
+- OCR muss eingeschaltet sein. Mit `FINDLING_OCR_ENABLED=false` gibt es keine
+  zweite Spur, und dann ist `skipped(no_text_layer)` das Endurteil und nichts,
+  was man heilen könnte.
+
+**Der Zweitweg bleibt.** `occ findling:index --restart` fängt dieselben Dateien
+ein, weil der Neuaufbau jede Datei neu beurteilt. Er ist der schnelle Weg, wenn
+jemand die Fehlerliste ansieht und nicht bis zur nächsten Nacht warten will; der
+Abgleich ist der Weg, der auch ohne Zuschauer funktioniert.
 
 ## Warum der Abgleich nichts in den Index schreibt
 

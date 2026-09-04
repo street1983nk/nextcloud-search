@@ -88,6 +88,21 @@ ROUND_NO_STATE: Final = "no_state"
 GIVEN_UP_STATE: Final = "failed"
 GIVEN_UP_REASON: Final = "repeatedly_stuck"
 
+# The verdict of this container that is not an end state, spelled out here for
+# the same reason as the two codes above: this module recognises it, it never
+# produces it, and the vocabulary of the wire is held against drift by
+# tests/test_extract_errors.py.
+#
+# It is the handover point of the OCR track (D-07). A file that carries it is
+# not finished, it is waiting for the second track, and the pass that produced
+# it is the one that hands it over. When that pass dies between the verdict and
+# the acknowledgement, the handover is lost and nothing on either side is left
+# that would notice: the file has a verdict here and no queue row over there.
+# Together with the give-up above it forms the pair of DI-05-23, and the branch
+# in _compare is where the two are read as one finding.
+HANDOVER_STATE: Final = "skipped"
+HANDOVER_REASON: Final = "no_text_layer"
+
 # How long the shutdown waits for a round to end before it stops waiting. Same
 # budget as the poller, and for the same reason: a slice is bounded work.
 RECONCILE_STOP_SECONDS: Final = 30.0
@@ -428,15 +443,35 @@ class Reconcile:
         is why a manual requeue works without touching anything here. The requeue
         delivers the file through the queue, the poller writes a real verdict, and
         from then on this comparison reads that one.
+
+        **The one exception to that last sentence, and it is the second half of
+        DI-05-23.** A file that carries skipped(no_text_layer) here and
+        failed(repeatedly_stuck) over there is not a file both halves are done
+        with. It is a handover that was lost: the text pass wrote the verdict,
+        the acknowledgement that would have created the OCR job never arrived,
+        and the row was written off on the other side in the same minute. Both
+        of the branches below then say "nothing to do", the first one because
+        the etag matches and the second one because the page carries the
+        give-up, and the scan stays out of the index for good. So the pair is
+        recognised before either of them and turned back into content work,
+        which is the same thing ``occ findling:index --restart`` does for it,
+        one night earlier and without anybody having to know.
         """
         known = store.known_etags([row.file_id for row in rows])
+        # Asked once per page rather than once per row: it is a cached lookup,
+        # and the branch below is on the hot path of every slice of every cycle.
+        ocr_enabled = settings().ocr_enabled
         stale: list[int] = []
         given_up = 0
         for row in rows:
             stored = known.get(row.file_id)
+            written_off = row.state == GIVEN_UP_STATE and row.reason == GIVEN_UP_REASON
+            if written_off and ocr_enabled and Reconcile._is_a_stranded_handover(store, row, stored):
+                stale.append(row.file_id)
+                continue
             if stored == row.etag:
                 continue
-            if stored is None and row.state == GIVEN_UP_STATE and row.reason == GIVEN_UP_REASON:
+            if stored is None and written_off:
                 store.give_up(
                     row.file_id,
                     storage_id=mount.storage_id,
@@ -452,6 +487,42 @@ class Reconcile:
                 continue
             stale.append(row.file_id)
         return stale, given_up
+
+    @staticmethod
+    def _is_a_stranded_handover(store: Store, row: FileRow, stored: str | None) -> bool:
+        """Whether this file is a lost handover to the OCR track (DI-05-23).
+
+        Three conditions, and every one of them narrows a repair that must not
+        become a nightly download of every scan on the instance.
+
+        The version has to match. A file whose etag moved is ordinary stale work
+        for the branch below, and a file this container does not know at all is
+        the give-up of review finding IN-03, which is a real end state.
+
+        The verdict of THIS container has to be the handover point. Only
+        skipped(no_text_layer) says "the text track is done and the second one
+        has not started"; failed(corrupt) next to the write-off is two halves
+        agreeing that the file cannot be read, and requeueing that would be the
+        permanent load of IN-03 through a new door.
+
+        And the caller has already established that the other side wrote the row
+        off, which is what makes the pair a finding rather than a scan that is
+        simply queued for OCR right now.
+
+        The cost is one row lookup per page row that is both known and written
+        off over there, which is a small set on any instance: a file only enters
+        it after the give-up rule reached it, and it leaves the set for good as
+        soon as the OCR pass writes a verdict of its own. A batched question
+        belongs in the store next to known_etags on the day that set is large,
+        and this comment is the note for whoever finds it so.
+        """
+        if stored != row.etag:
+            return False
+
+        verdict = store.file_row(row.file_id)
+        if verdict is None:  # pragma: no cover - known_etags answered, so there is a row
+            return False
+        return str(verdict["state"]) == HANDOVER_STATE and str(verdict["reason"] or "") == HANDOVER_REASON
 
     @staticmethod
     def _missing_of(store: Store, mount: Mount, after: int, upto: int, page: Any) -> list[int]:
