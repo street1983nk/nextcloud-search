@@ -257,7 +257,9 @@
       case 'idle':
         return t('findling', 'Up to date, last checked %s').replace('%s', ago(whole(view.stalledFor)))
       case 'stalled':
-        return t('findling', 'Indexing has not progressed for %s. Background jobs may not be running.')
+        // Word for word the sentence of the template, and both halves are named
+        // for the reason written down there (DI-05-22).
+        return t('findling', 'Indexing has not progressed for %s. Neither a background job nor the backend finished anything in that time.')
           .replace('%s', span(whole(view.stalledFor)))
       default:
         return t('findling', 'No background job of this app has run yet. Background jobs may not be running.')

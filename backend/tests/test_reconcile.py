@@ -31,6 +31,7 @@ from typing import Any, cast
 
 import pytest
 
+from findling.config import settings
 from findling.nc.client import AsyncNextcloudApp
 from findling.nc.files import FileRow, Mount, MountResult, SliceResult
 from findling.nc.queue import KIND_CONTENT, KIND_DELETE, CallResult, QueueStats
@@ -67,6 +68,21 @@ def store(tmp_path: Path) -> Iterator[Store]:
     opened = open_store(tmp_path / "state.db")
     yield opened
     opened.close()
+
+
+@pytest.fixture
+def ocr_off(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """An instance whose admin switched OCR off, through the documented variable.
+
+    The cache is cleared on both sides, exactly the way tests/test_poller.py
+    does it: the settings are resolved once per process by design, and a test
+    that changed the environment without clearing would hand its answer to the
+    next one.
+    """
+    monkeypatch.setenv("FINDLING_OCR_ENABLED", "false")
+    settings.cache_clear()
+    yield
+    settings.cache_clear()
 
 
 def a_file(file_id: int, *, etag: str) -> FileMeta:
@@ -265,6 +281,134 @@ async def test_a_new_etag_lifts_the_final_verdict_and_requeues_the_file(store: S
     assert result.stale == 1
     assert result.given_up == 0
     assert queue.kinds_of(KIND_CONTENT) == [10]
+
+
+# -- the stranded handover (DI-05-23) -----------------------------------------
+#
+# The pair the disk pause of plan 05-14 left behind on two files: the container
+# had already written skipped(no_text_layer), which is the handover point of the
+# OCR track and not an end state, and the acknowledgement that would have turned
+# it into an OCR job never came, because the rows were written off on the other
+# side in the same minute. Both halves then agree that nothing is to be done: the
+# etag matches, so the comparison reads a known unchanged file, and the give-up
+# verdict of the page is exactly the one that keeps the round from requeueing.
+# The scan stays out of the index for good and no counter anywhere moves.
+
+
+def a_stranded_scan(store: Store, file_id: int, *, etag: str) -> None:
+    """The verdict of a text pass that died before the OCR job was created."""
+    store.record(file_id, a_file(file_id, etag=etag), "skipped", "no_text_layer", content_hash="h")
+
+
+async def test_a_scan_stranded_between_verdict_and_acknowledgement_heals_itself(store: Store) -> None:
+    """DI-05-23, the half the refund in QueueMapper::unlock does not reach.
+
+    The refund keeps the pause from producing new strandings. It cannot help the
+    files that were already stranded when it shipped, and it cannot help a file
+    whose container died between step 3 and step 4 of a pass, which is a
+    permanent possibility and not a defect. So the round that exists to repair
+    what nothing else notices has to notice this one.
+    """
+    a_stranded_scan(store, 10, etag="aaa")
+    files = _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert queue.kinds_of(KIND_CONTENT) == [10]
+    assert result.stale == 1
+    # Not counted as a give-up: the point of the branch is that this file is
+    # work again, and the counter that says "we respected an end state" would be
+    # saying the opposite of what happened.
+    assert result.given_up == 0
+
+
+async def test_the_healed_scan_is_not_requeued_once_it_has_a_verdict_of_its_own(store: Store) -> None:
+    """The loop this branch could have become, closed from the other side.
+
+    The requeue puts the file on the content track, the pass finds the same
+    missing text layer, hands it to the OCR track and the engine writes a real
+    verdict. From then on the container knows something else about the file, and
+    the branch has to stop firing: a repair that runs every night forever is a
+    download of every scan of the instance every night forever.
+    """
+    a_stranded_scan(store, 10, etag="aaa")
+    queue = _FakeQueue()
+
+    await _reconcile(
+        store, _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True)), queue
+    ).run_once()
+    assert queue.kinds_of(KIND_CONTENT) == [10]
+
+    # What the OCR pass leaves behind, with the etag unchanged: the bytes never
+    # moved, only what is known about them.
+    store.record(10, a_file(10, etag="aaa"), "indexed", content_hash="h")
+    second = await _reconcile(
+        store,
+        _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True)),
+        queue,
+        now=NOW + 25 * HOUR,
+    ).run_once()
+
+    assert second.stale == 0
+    assert queue.kinds_of(KIND_CONTENT) == [10]
+
+
+async def test_with_ocr_switched_off_the_missing_text_layer_is_an_end_state(store: Store, ocr_off: None) -> None:
+    """The one instance where the pair is not a stranding but the truth.
+
+    With ``FINDLING_OCR_ENABLED=false`` there is no second track, so
+    skipped(no_text_layer) is what this file gets and keeps. Requeueing it would
+    download the document every night to reach the same verdict, which is the
+    endless repair the branch above must not become.
+    """
+    del ocr_off
+    a_stranded_scan(store, 10, etag="aaa")
+    files = _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert queue.kinds_of(KIND_CONTENT) == []
+    assert result.stale == 0
+
+
+async def test_a_file_written_off_over_there_and_failed_here_stays_written_off(store: Store) -> None:
+    """Only the handover verdict is healed, and the narrowness is the point.
+
+    failed(corrupt) on this side next to failed(repeatedly_stuck) on the other
+    is two halves agreeing that the file cannot be read, and a round that
+    requeued it would be the permanent load of review finding IN-03 again, only
+    through a new door.
+    """
+    store.record(10, a_file(10, etag="aaa"), "failed", "corrupt", content_hash="h")
+    files = _FakeFiles(SliceResult(files=(a_given_up_row(10, etag="aaa"),), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert queue.kinds_of(KIND_CONTENT) == []
+    assert result.stale == 0
+
+
+async def test_a_stranded_scan_without_the_write_off_over_there_is_ordinary_unchanged_work(
+    store: Store,
+) -> None:
+    """The other half of the narrowness: no write-off, no repair.
+
+    A scan that carries skipped(no_text_layer) while its queue row is alive is
+    simply waiting for its OCR job. Requeueing on the verdict alone would put
+    every scan of the instance back on the content track once a night, during
+    the very OCR backlog it belongs to.
+    """
+    a_stranded_scan(store, 10, etag="aaa")
+    files = _FakeFiles(SliceResult(files=(a_row(10, etag="aaa"),), final=True))
+    queue = _FakeQueue()
+
+    result = await _reconcile(store, files, queue).run_once()
+
+    assert queue.kinds_of(KIND_CONTENT) == []
+    assert result.stale == 0
 
 
 async def test_an_incomplete_page_never_produces_a_deletion(store: Store) -> None:

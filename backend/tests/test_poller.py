@@ -71,6 +71,14 @@ from findling.worker.poller import (
 POLLER_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "worker" / "poller.py"
 MAIN_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "main.py"
 
+# The two PHP files that own the work stock. They are read as text and never
+# imported, the same way tests/test_reconcile.py reads the list ceiling: a PHP
+# constant has no import into this process, and the rules below are one
+# agreement between the two halves with nothing but a docblock holding it.
+PHP_LIB = Path(__file__).resolve().parents[2] / "php" / "lib"
+PHP_QUEUE_MAPPER = PHP_LIB / "Db" / "QueueMapper.php"
+PHP_QUEUE_SERVICE = PHP_LIB / "Service" / "QueueService.php"
+
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt"
 CONSTITUENTS = FIXTURE.read_text(encoding="utf-8").split()
 
@@ -1667,6 +1675,262 @@ async def test_a_full_volume_ends_the_pass_and_hands_the_rows_back(
     assert queue.acknowledged == []
     assert queue.unlocked == [[91]]
     assert store.file_row(4711) is None
+
+
+# -- the disk pause and the delivery budget (DI-05-23) ------------------------
+#
+# The heaviest finding of the full run of plan 05-14, and it needed ten hours on
+# a four gigabyte box to show itself. The pause works, the index stays intact,
+# the search keeps answering, and the work stock is written off while the banner
+# says the opposite. The mechanism is spread over both halves, which is why the
+# reproduction below is a simulation of the Nextcloud side driven by the real
+# poller rather than a test of either half on its own:
+#
+#   1. QueueMapper counts the retry when it HANDS A ROW OUT, in the claim.
+#   2. The container pauses below the free space floor and gives the whole load
+#      back unjudged, which is the _abort with ROUND_PAUSED_LOW_DISK below.
+#   3. A pass takes seconds, so QueueService::MAX_DELIVERIES = 3 is spent after
+#      roughly twenty seconds of a tight disk.
+#   4. The fourth claim writes the row off as failed(repeatedly_stuck) and never
+#      hands it to the container at all.
+#
+# Measured twice on the box, with the same ratio both times: 2 of 2 rows in the
+# first pass of drill 3 and 30 of 30 in the second, 28 of those 30 written off
+# without ever having been delivered (docs/performance.md, "Drill 3, Nachtrag").
+
+# The rows that were with the worker when the disk went tight in the second pass
+# of the drill. The number is taken from the measurement and not rounded: it is
+# what makes the reproduction the one that happened rather than one like it.
+ROWS_IN_FLIGHT = 30
+
+# How many passes the pause lasts here. The drill paused for 98 seconds at a few
+# seconds per pass; ten is comfortably past the budget of three deliveries and
+# short enough to stay a unit test.
+PASSES_OF_THE_PAUSE = 10
+
+
+def _php_source(path: Path) -> str:
+    """One PHP file as text, and a missing one is red rather than green.
+
+    The anti-vacuity clause every text gate of this project carries
+    (docs/testing.md): a gate that silently passes because its source moved
+    proves nothing at all.
+    """
+    assert path.is_file(), f"the gate looks for {path.name} and it is not there any more"
+    return path.read_text(encoding="utf-8")
+
+
+def _max_deliveries() -> int:
+    """QueueService::MAX_DELIVERIES, read out of the PHP source."""
+    limit = re.search(r"const MAX_DELIVERIES = (\d+);", _php_source(PHP_QUEUE_SERVICE))
+
+    assert limit is not None, "the delivery ceiling is no longer where this gate looks for it"
+    return int(limit.group(1))
+
+
+def _unlock_body(source: str) -> str:
+    """The body of QueueMapper::unlock, cut out of the source.
+
+    Ends at the first closing brace on one tab of indentation, which is the end
+    of the method and not the end of a block inside it. Cutting at the next
+    ``public function`` instead would take the docblock of the following method
+    along, and a sentence of that docblock would then answer for this one.
+    """
+    start = source.index("public function unlock(")
+    end = source.index("\n\t}\n", start)
+
+    return source[start:end]
+
+
+def _hands_the_delivery_back(unlock_body: str) -> bool:
+    """Whether handing a row back through unlock gives its delivery back.
+
+    The one question this simulation cannot answer for itself. The counter lives
+    in a database column on the other side of the boundary, so the rule is read
+    where it is written: a decrement of ``retries`` inside the body of
+    ``unlock``. Written as a helper with a self test below rather than inline,
+    because a gate that reads a foreign source has to be able to say what it
+    would look like if the rule were gone.
+    """
+    return re.search(r"'retries',\s*\$\w+->createFunction\('retries - 1'\)", unlock_body) is not None
+
+
+@dataclass(slots=True)
+class _StockRow:
+    """One row of the work stock, with the counter the give-up rule reads."""
+
+    job: QueueJob
+    retries: int = 0
+    claimed: bool = False
+
+
+class _WorkStock:
+    """The Nextcloud work stock, modelled after the two PHP files that own it.
+
+    Not a script of answers like :class:`_FakeQueue` above but a small state
+    machine, because the defect this class exists for is a sequence: the same
+    rows are handed out again and again, and what matters is what the counter
+    does between the hand-outs.
+
+    Three rules and every one of them is read out of the PHP source rather than
+    chosen here, so that a change over there turns this red instead of leaving a
+    simulation that models a system nobody runs any more:
+
+    * the retry is counted when the row is HANDED OUT (``claimBatch``),
+    * a row above ``MAX_DELIVERIES`` is written off as failed(repeatedly_stuck)
+      and never delivered (``QueueService::claim``),
+    * a row handed back through ``unlock`` does or does not get its delivery
+      back, which is exactly the fix this file is the gate for.
+    """
+
+    def __init__(self, jobs: tuple[QueueJob, ...], *, max_deliveries: int, refunds: bool) -> None:
+        self._rows = {job.queue_id: _StockRow(job=job) for job in jobs}
+        self._max_deliveries = max_deliveries
+        self._refunds = refunds
+        self.written_off: list[int] = []
+        self.claims = 0
+
+    async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
+        del max_bytes
+        self.claims += 1
+        handed: list[QueueJob] = []
+        for row in list(self._rows.values()):
+            if row.claimed or len(handed) >= limit:
+                continue
+            row.retries += 1
+            if row.retries > self._max_deliveries:
+                # The give-up, and the row is gone from the stock with it: the
+                # PHP side records failed(repeatedly_stuck) and acknowledges the
+                # row away without the container ever seeing it.
+                self.written_off.append(row.job.file_id)
+                del self._rows[row.job.queue_id]
+                continue
+            row.claimed = True
+            handed.append(row.job)
+        return ClaimResult(jobs=tuple(handed))
+
+    async def acknowledge(self, done: Any, failed: Any, skipped: Any = None) -> CallResult:
+        del skipped
+        gone = list(done) + list(dict(failed))
+        for queue_id in gone:
+            self._rows.pop(queue_id, None)
+        return CallResult(ok=True, count=len(gone))
+
+    async def unlock(self, ids: Any) -> CallResult:
+        released = 0
+        for queue_id in ids:
+            row = self._rows.get(queue_id)
+            if row is None:
+                continue
+            row.claimed = False
+            if self._refunds:
+                row.retries = max(0, row.retries - 1)
+            released += 1
+        return CallResult(ok=True, count=released)
+
+    async def requeue(self, file_ids: Any, *, kind: str) -> CallResult:
+        del kind
+        return CallResult(ok=True, count=len(list(file_ids)))
+
+    async def stats(self) -> QueueStats:
+        return QueueStats(scheduled=len(self._rows))
+
+    def waiting(self) -> list[int]:
+        """The file ids still in the stock, in queue order."""
+        return [row.job.file_id for row in self._rows.values()]
+
+    def deliveries_spent(self) -> list[int]:
+        """The retry counter of every row still in the stock."""
+        return [row.retries for row in self._rows.values()]
+
+
+def _work_stock(jobs: tuple[QueueJob, ...]) -> _WorkStock:
+    unlock = _unlock_body(_php_source(PHP_QUEUE_MAPPER))
+
+    return _WorkStock(jobs, max_deliveries=_max_deliveries(), refunds=_hands_the_delivery_back(unlock))
+
+
+async def test_a_disk_pause_does_not_spend_the_delivery_budget_of_the_rows_it_hands_back(
+    index: Index, index_dir: Path, store: Store, tmp_path: Path
+) -> None:
+    """DI-05-23, reproduced: thirty rows, a tight disk, and nothing written off.
+
+    The banner says "Little disk space left. Indexing is paused so the index
+    stays intact." That was true of the index and false of the work stock, and
+    the difference cost thirty of sixty uploaded files in the drill. A pause has
+    to be free: the rows that were with the worker when it started are the same
+    rows that are waiting when it ends, with the same budget in front of them.
+    """
+    jobs = tuple(_job(90 + offset, 5000 + offset) for offset in range(ROWS_IN_FLIGHT))
+    stock = _work_stock(jobs)
+    paused = IndexBatchWriter(index, directory=index_dir, min_free_bytes=1 << 60)
+    poller = _poller(store=store, writer=paused, tmp_path=tmp_path, queue=cast("Any", stock))
+
+    try:
+        for _ in range(PASSES_OF_THE_PAUSE):
+            paused_round = await poller.run_once()
+
+            # Never ROUND_EMPTY. An empty claim in the middle of a pause means
+            # the stock handed nothing out, and the only reason it would not is
+            # that it wrote the rows off.
+            assert paused_round.state == ROUND_PAUSED_LOW_DISK
+
+        assert stock.written_off == []
+        assert stock.waiting() == [5000 + offset for offset in range(ROWS_IN_FLIGHT)]
+        # And the budget is not merely unspent, it is untouched: every row stands
+        # where it stood before the pause, so the give-up rule keeps its meaning
+        # for the deliveries that really were attempts.
+        assert set(stock.deliveries_spent()) == {0}
+
+        # The disk frees up, and nobody does anything about it. No occ command,
+        # no restart, no reindex: the second half of the promise of the banner.
+        paused._min_free_bytes = 0
+        resumed = await poller.run_once()
+    finally:
+        paused.close()
+
+    assert resumed.state == ROUND_WORKED
+    assert resumed.indexed == ROWS_IN_FLIGHT
+    assert stock.written_off == []
+    assert stock.waiting() == []
+
+
+def test_the_work_stock_simulation_reads_its_rules_out_of_the_php_source() -> None:
+    """The anti-vacuity clause of the simulation above.
+
+    A model that hard coded its rules would stay green on the day the rules
+    move, and it would prove nothing about the halves that actually run. Both
+    numbers are therefore read, and the helper that reads the harder one is
+    shown a body with the rule and a body without it.
+    """
+    assert _max_deliveries() == 3
+
+    without = "public function unlock(array $ids): int {\n\t\t$qb->set('locked_at', $free);\n"
+    with_refund = without + "\t\t$r->set('retries', $r->createFunction('retries - 1'));\n"
+
+    assert _hands_the_delivery_back(without) is False
+    assert _hands_the_delivery_back(with_refund) is True
+
+
+def test_a_row_handed_back_unjudged_does_not_count_as_a_delivery() -> None:
+    """The fix itself, where it is written: QueueMapper::unlock.
+
+    The give-up rule exists for a row that is handed out and never comes back,
+    because nothing ever reports a failure for such a row and without a ceiling
+    it would circle forever. A row that IS handed back is the opposite of that
+    case: the container said out loud that it did not judge the file. Counting
+    that hand-out against the file is what turned a disk pause into thirty
+    write-offs.
+    """
+    body = _unlock_body(_php_source(PHP_QUEUE_MAPPER))
+
+    assert _hands_the_delivery_back(body), (
+        "unlock has to give the delivery back, otherwise a pause spends the budget of the rows it protects"
+    )
+    # And the refund happens while the row is still claimed. Releasing first
+    # would let another collector take the row and count its own delivery, and
+    # this decrement would then take that one away.
+    assert body.index("retries - 1") < body.index("'locked_at'")
 
 
 async def test_an_unreachable_queue_is_a_state_and_not_a_crash(

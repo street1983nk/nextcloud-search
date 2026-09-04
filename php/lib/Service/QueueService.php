@@ -37,10 +37,16 @@ class QueueService {
 	 * becoming a visible end state.
 	 *
 	 * The counter is raised by the claim itself, in the database
-	 * (QueueMapper::claimBatch), so the value on a row already includes the
-	 * hand-out that is happening at this moment. Written out, because this is the
-	 * arithmetic somebody shifted by one before (phase 2 perf audit) and would
-	 * otherwise shift again:
+	 * (QueueMapper::claimBatch), and lowered again by QueueMapper::unlock, so the
+	 * value on a row is the number of hand-outs the container never came back
+	 * from plus the one that is happening at this moment. A row that was handed
+	 * back unjudged is not among them, which is the fix of DI-05-23: before it, a
+	 * disk pause of half a minute spent the whole budget of every row that
+	 * happened to be with the worker, and thirty of thirty rows of a measured
+	 * drill ended as failed(repeatedly_stuck) without ever having been delivered.
+	 *
+	 * Written out, because this is the arithmetic somebody shifted by one before
+	 * (phase 2 perf audit) and would otherwise shift again:
 	 *
 	 *   claim 1 -> retries 1 -> delivered, attempt 1 of 3
 	 *   claim 2 -> retries 2 -> delivered, attempt 2 of 3

@@ -118,7 +118,12 @@ $span = static function (int $seconds) use ($l): string {
 $status = match ($runState) {
 	'running' => $l->t('Indexing is running.'),
 	'idle' => $l->t('Up to date, last checked %s', [$formatter->formatTimeSpan($lastJobRun)]),
-	'stalled' => $l->t('Indexing has not progressed for %s. Background jobs may not be running.', [$span($stalledFor)]),
+	// Both halves are named, because since plan 05-20 both of them have to have
+	// stood still for this sentence to appear: the background jobs of this app
+	// and the backend that keeps writing documents long after the last crawl.
+	// Blaming the jobs alone was true of the measure and false of the situation,
+	// and on the target hardware it was false for most of a run (DI-05-22).
+	'stalled' => $l->t('Indexing has not progressed for %s. Neither a background job nor the backend finished anything in that time.', [$span($stalledFor)]),
 	default => $l->t('No background job of this app has run yet. Background jobs may not be running.'),
 };
 

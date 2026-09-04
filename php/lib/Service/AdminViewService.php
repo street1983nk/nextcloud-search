@@ -106,6 +106,19 @@ final class AdminViewService {
 	private const STALLED_AFTER_SECONDS = 1800;
 
 	/**
+	 * When the container last reported more indexed documents than it had at the
+	 * poll before, as a Unix timestamp.
+	 *
+	 * The second half of the stall verdict and the fix for DI-05-22. It lives in
+	 * appconfig and not in SettingsService, next to the reading of
+	 * SchedulerJob::LAST_JOB_RUN above, because it is the same kind of value: a
+	 * measurement of when something last happened, written by this page and read
+	 * by nobody else. The four switches over there are the fields an admin can
+	 * change, and this is not one of them.
+	 */
+	private const KEY_INDEX_PROGRESS = 'last_index_progress';
+
+	/**
 	 * The run states, and there are exactly four. Anything the page wants to say
 	 * about progress has to be one of them, so that a fifth case cannot appear
 	 * as an empty status line.
@@ -465,11 +478,16 @@ final class AdminViewService {
 
 		$lastJobRun = $this->appConfig->getValueInt(Application::APP_ID, SchedulerJob::LAST_JOB_RUN);
 		$now = $this->timeFactory->getTime();
-		$stalledFor = $lastJobRun === 0 ? 0 : max(0, $now - $lastJobRun);
 
 		$answer = $this->exAppService->adminGet('/status', $this->userId(), []);
 		$backendReachable = $answer !== null;
 		$backend = $this->backend($answer);
+
+		// Read BEFORE the remembering below overwrites it. The difference between
+		// this figure and the one in the answer is the only evidence this side has
+		// that the container is working, and the write two lines down destroys it
+		// (DI-05-22, and the whole argument stands at backendProgressAt).
+		$rememberedIndexed = $this->settingsService->lastIndexedCount();
 
 		// The one write of this reading method, and it is what makes the size cap
 		// honest. The container enforces the cap a second time out of an
@@ -487,6 +505,16 @@ final class AdminViewService {
 			// tile below to hold still while the container is down.
 			$this->settingsService->rememberIndexedCount((int)$backend['indexed']);
 		}
+
+		// Since when nothing has moved forward, and BOTH halves count as movement.
+		// The background job is the half this side can see directly; the indexed
+		// counter of the container is the other one, and on the target hardware it
+		// is the half that runs longest (DI-05-22).
+		$movedAt = max(
+			$lastJobRun,
+			$this->backendProgressAt($backendReachable, (int)$backend['indexed'], $rememberedIndexed, $now),
+		);
+		$stalledFor = $movedAt === 0 ? 0 : max(0, $now - $movedAt);
 
 		// The Nextcloud side of the table holds no indexed rows by construction:
 		// phase 2 records skips and failures there and nothing else, so the
@@ -516,6 +544,10 @@ final class AdminViewService {
 			'scheduled' => $scheduled,
 			'running' => $running,
 			'lastJobRun' => $lastJobRun,
+			// How long ago EITHER half last moved, which is what the sentence on
+			// the page says word for word since plan 05-20. The background job
+			// alone was the measure before, and during a long OCR pass that is the
+			// half which legitimately stands still (DI-05-22).
 			'stalledFor' => $stalledFor,
 			'runState' => $this->runState($lastJobRun, $stalledFor, $scheduled, $running),
 			'backendReachable' => $backendReachable,
@@ -1551,7 +1583,93 @@ final class AdminViewService {
 	 * page that reports "up to date" while nothing has ever run is the exact
 	 * failure the predecessor of this app was known for, so "never run" is
 	 * answered first and the pending work stock decides the rest.
+	 *
+	 * ``$stalledFor`` is the age of the LAST MOVEMENT of either half since plan
+	 * 05-20, not the age of the last background job, and the difference is the
+	 * whole of DI-05-22: during a long OCR pass the job half stands still by
+	 * construction while the container writes thousands of documents, and a
+	 * verdict built on one half alone accused it of a stall for eight hours.
+	 * ``$lastJobRun`` stays what it was and keeps deciding one question only,
+	 * whether anything of this app has ever executed at all.
 	 */
+	/**
+	 * When the container last finished something, or nought if it never did.
+	 *
+	 * **The finding this method exists for, DI-05-22.** ``runState`` used to ask
+	 * one question, how long ago the last background job of this app ran, and it
+	 * called everything above half an hour a stall. On an ordinary instance the
+	 * crawl and the content work end at about the same time, so the question was
+	 * good enough. On the hardware this product is built for it is not: the OCR
+	 * pass runs on after the crawl, and in the full run of plan 05-14 it ran on
+	 * for eight hours, which was seventy seven per cent of the whole run. The
+	 * crawl finished at 01:30Z, the container wrote roughly 6.500 more documents
+	 * until 09:27Z, and over all of that time the page said "Indexing has not
+	 * progressed" while the coverage figure in the same row climbed from 82 to 99
+	 * per cent. That is not a cosmetic defect: an admin who reads it stops the
+	 * container, restarts it or files a bug, all three of which cost more than
+	 * the eight hours would have.
+	 *
+	 * **Why the counter and not a timestamp from the container.** The container
+	 * knows exactly when it last judged a file, and a field in the status answer
+	 * would be the direct measurement. It would also be a measurement taken by a
+	 * second clock: two containers, two time zones, a host whose clock drifts,
+	 * and the comparison against the Nextcloud clock silently answers "in the
+	 * future" or "eight hours ago" for no reason anybody can see. The counter is
+	 * a number this page can compare against a number it wrote itself, and both
+	 * timestamps in the comparison come from the clock of Nextcloud.
+	 *
+	 * **Only growth counts.** A counter that fell is a reindex or a data
+	 * directory that was cleared, and neither is progress. A counter that stands
+	 * still says nothing at all, which is exactly the situation in which the
+	 * background job half decides.
+	 *
+	 * **The first observation of an instance is deliberately not progress.** The
+	 * remembered value is nought before the page has ever seen an answer, so a
+	 * container that has been indexing for a week and is now genuinely stuck
+	 * would look like a jump from nought to fifty thousand and buy itself half an
+	 * hour of silence. Requiring a previous figure costs one poll, five seconds,
+	 * on a fresh installation and nothing afterwards.
+	 *
+	 * The write follows the same rule as the two remembered figures above: only
+	 * when the value changes, so a page polling every five seconds writes only
+	 * while the indexing is actually moving.
+	 *
+	 * The decision itself is in progressStamp below, which is the same method
+	 * without the reading and the writing. Splitting it is what makes it
+	 * testable at all: this one needs an appconfig and a container, and that one
+	 * needs four numbers.
+	 */
+	private function backendProgressAt(bool $reachable, int $indexed, int $remembered, int $now): int {
+		$stamp = max(0, $this->appConfig->getValueInt(Application::APP_ID, self::KEY_INDEX_PROGRESS));
+		$moved = self::progressStamp($reachable, $indexed, $remembered, $stamp, $now);
+		if ($moved !== $stamp) {
+			$this->appConfig->setValueInt(Application::APP_ID, self::KEY_INDEX_PROGRESS, $moved);
+		}
+
+		return $moved;
+	}
+
+	/**
+	 * The stamp of the last container progress, decided out of five numbers.
+	 *
+	 * Static and public because it is the arithmetic of DI-05-22 and nothing
+	 * else, and because the alternative to that is a unit test which builds a
+	 * whole admin view out of twelve doubles in order to ask what a counter that
+	 * grew by one means. The reasoning behind every branch is at
+	 * backendProgressAt above, which is this method plus the appconfig around
+	 * it.
+	 *
+	 * Returns the previous stamp when nothing moved, so an unchanged answer is
+	 * also the signal that nothing has to be written.
+	 */
+	public static function progressStamp(bool $reachable, int $indexed, int $remembered, int $stamp, int $now): int {
+		if (!$reachable || $remembered <= 0 || $indexed <= $remembered) {
+			return $stamp;
+		}
+
+		return $now;
+	}
+
 	private function runState(int $lastJobRun, int $stalledFor, int $scheduled, int $running): string {
 		if ($lastJobRun === 0) {
 			// Not "idle" and not "stalled": nothing of this app has executed

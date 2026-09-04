@@ -1043,6 +1043,15 @@ class Poller:
         the redelivery; the upsert makes that harmless. Handing the rows back is
         the only thing worth doing here, because it turns the lock timeout into an
         immediate retry.
+
+        **And because it is the only way to say that nothing was judged.** The
+        other half counts a delivery when it hands a row out and gives it back
+        when the row is unlocked, so a pass that ends here costs the rows their
+        time and not their give-up budget. Before plan 05-20 it cost both: a
+        disk pause of twenty seconds was enough to spend MAX_DELIVERIES for
+        every row in flight, and they ended as failed(repeatedly_stuck) while
+        the page said the indexing was merely paused (DI-05-23). Which is why
+        this method unlocks on every path out of it and never simply returns.
         """
         await queue.unlock(sorted(self._held))
         self._held.clear()

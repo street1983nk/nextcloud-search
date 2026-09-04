@@ -786,3 +786,84 @@ Bezugsdisziplin, die in dieser Phase unter einem Owner-Gate steht.
 den Phase-Review. Der billige Weg: `scripts/dev/validate-info-xml.sh`, das die
 beiden gepinnten Dateien holt und den Pfad in einem Container faehrt, plus eine
 Zeile in `docs/testing.md`.
+
+**Behoben in Plan 05-20**, in beiden Haelften und auf zwei Wegen: `unlock` gibt
+die Auslieferung zurueck, damit eine Pause den Vorrat gar nicht erst kostet, und
+der naechtliche Abgleich holt das Paar `skipped(no_text_layer)` plus
+`failed(repeatedly_stuck)` zurueck, damit die Dateien, die vor dem Fix gestrandet
+sind, nicht liegen bleiben. Der Eintrag oben bleibt als Fundstelle stehen. Was
+DI-05-21 offen laesst, bleibt offen und steht jetzt als DI-05-28 unten.
+
+## DI-05-27 (Plan 05-20): Die Rueckgabe der Auslieferung ist nirgends gegen eine echte Datenbank geprueft
+
+**Found during:** Plan 05-20, Task 1, beim Bau des Gates zu DI-05-23.
+
+**Was:** Der Fix ist eine SQL-Anweisung, `retries - 1` mit einer WHERE-Grenze
+gegen negative Werte, und geprueft wird er von zwei Seiten, die beide keine
+Datenbank anfassen. `backend/tests/test_poller.py` stellt den Vorrat als
+Zustandsautomat nach und liest die Regel dabei aus dem PHP-Quelltext, und ein
+Textgate haelt die Anweisung selbst. Was keiner von beiden sieht: ob die
+Anweisung auf SQLite, MariaDB und PostgreSQL dasselbe tut. Das ist genau die
+Frage, wegen der die Grenze eine WHERE-Bedingung ist und kein `GREATEST`.
+
+**Warum nicht hier erledigt:** Die PHPUnit-Suite dieses Projekts arbeitet mit
+Doubles und laeuft ausdruecklich nur in CI (docs/testing.md und der Kommentar
+des Jobs `phpunit`), auf der Entwicklungsmaschine gibt es kein PHP. Ein Test des
+Query Builders waere ein Mock des Query Builders und wuerde die eigene
+Nachbildung pruefen; ein Test gegen eine echte Datenbank ist ein
+Integrationsjob und keine Zeile in einer Datei.
+
+**Wohin es gehoert:** in den ARM-Volllauf, der ohnehin das korrigierte Verhalten
+validieren soll, und in den Integrationsjob. Die billigste Form dort: die Platte
+knapp machen, dreissig Zeilen unterwegs, danach `retries` in `oc_findling_queue`
+ablesen. Bis dahin traegt die Nachstellung die Aussage ueber den Mechanismus und
+nicht ueber den Dialekt.
+
+## DI-05-28 (Plan 05-20): Eine geheilte Datei bleibt in der Fehlerliste der Verwaltungsseite stehen
+
+**Found during:** Plan 05-20, Task 2, beim Zuschnitt des Heilungszweigs.
+
+**Was:** Der Abgleich holt das gestrandete Paar zurueck, der Container liest die
+Datei neu, die OCR-Spur indexiert sie, und danach ist sie ueber die Suche zu
+finden. Die Zeile `failed(repeatedly_stuck)` in `oc_findling_file_state` nimmt
+davon niemand zurueck: `indexed` ist die Zahl des Containers und wird in diese
+Tabelle grundsaetzlich nicht geschrieben. Die Verwaltungsseite fuehrt die Datei
+also weiter unter "Stuck repeatedly", waehrend sie durchsuchbar ist, und
+`occ findling:diagnose` sagt in Stufe vier dasselbe.
+
+**Wie neu das ist:** gar nicht. Es ist DI-05-14 und DI-05-21, erreicht durch eine
+neue Tuer. Neu ist nur, dass diese Tuer ab jetzt regelmaessig benutzt wird: vor
+Plan 05-20 blieb die Datei unindexiert und die Fehlerzeile war richtig, ab jetzt
+wird sie indexiert und die Fehlerzeile ist falsch.
+
+**Warum nicht hier erledigt:** unveraendert der Grund aus DI-05-21. Die Abhilfe
+ist eine Entscheidung darueber, was eine Zeile der Zustandstabelle bedeutet, und
+sie beruehrt die Quittierung, den Container-Vertrag und die Anzeige zugleich. Sie
+gehoert nicht in einen Plan, dessen Gegenstand drei Befunde eines Volllaufs sind.
+
+**Wohin es gehoert:** in den Phase-Review, zusammen mit DI-05-14 und DI-05-21,
+die dieselbe Frage von den anderen zwei Seiten stellen.
+
+## DI-05-29 (Plan 05-20): Die Verdrahtung des Stillstands-Urteils hat keinen Unit-Test, nur die Entscheidung darin
+
+**Found during:** Plan 05-20, Task 3.
+
+**Was:** `AdminViewService::progressStamp` ist statisch und rein, und
+`php/tests/Unit/AdminViewServiceTest.php` prueft sie auf beiden Seiten der
+Grenze. Was daneben steht und nicht geprueft ist, ist die Verdrahtung in
+`overview()`: dass der gemerkte Zaehler VOR dem Ueberschreiben gelesen wird, dass
+`stalledFor` aus dem spaeteren der beiden Zeitpunkte entsteht und dass die
+Schreiboperation nur bei einer Aenderung passiert. Ein Textgate in
+`backend/tests/test_admin_ui_contract.py` haelt die drei Zeilen an ihrem Platz;
+was sie tun, prueft niemand.
+
+**Warum nicht hier erledigt:** `overview()` ruft zwoelf Mitspieler auf, und ein
+Test durch diese Methode hindurch waere ein Dutzend Doubles samt Statusantwort
+und Scan-Statistik, um zu fragen, was ein um eins gewachsener Zaehler bedeutet.
+Auf einer Maschine ohne PHP ist so ein Test ausserdem blind geschrieben, und ein
+blind geschriebener Test mit einem Dutzend Doubles ist eine Wette auf die CI.
+
+**Wohin es gehoert:** in den Plan, der die PHPUnit-Suite als naechstes
+verbreitert, oder in den Phase-Review. Der billige Zwischenschritt waere, die
+drei Zeilen von `overview()` in eine eigene, ebenfalls statische Methode zu
+ziehen, die vier Zahlen bekommt und eine zurueckgibt.

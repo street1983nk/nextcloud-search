@@ -56,6 +56,21 @@ FILE_STATE = REPO_ROOT / "php" / "lib" / "Service" / "FileStateService.php"
 # on both sides of the page so that the agreement can be read in a diff (IN-03).
 NBSP = "\u00a0"
 
+# The sentence the page shows when nothing moves forward any more, and the one
+# the page must never show while the container is working (DI-05-22). It is
+# written out here because three files have to carry it identically, the
+# template, the script and the German catalogue, and because the wording is the
+# claim this whole verdict is judged against: it names both halves, so it is
+# only true when both of them stood still.
+STALLED_SENTENCE = (
+    "Indexing has not progressed for %s. Neither a background job nor the backend finished anything in that time."
+)
+
+# What it said before plan 05-20. Asserted absent by name, so that a revert is a
+# red test and not a sentence that quietly accuses the background jobs again
+# during an OCR pass that is doing exactly what it should.
+STALLED_SENTENCE_BEFORE = "Indexing has not progressed for %s. Background jobs may not be running."
+
 # The five APIs the contract retired, with the reason in one word each: the
 # first three are deprecated since Nextcloud 18, 30 and 30, the fourth is a
 # dialog helper that is deprecated too, and the last one is a CSS class that was
@@ -376,3 +391,41 @@ def test_every_reason_of_the_closed_list_has_a_label_and_a_remedy() -> None:
     assert reasons - labelled == set()
     for decided_here in ("encrypted", "no_text_layer", "empty_text", "image_not_ocrable"):
         assert decided_here in labelled
+
+
+def test_all_three_files_carry_the_same_sentence_about_a_stall() -> None:
+    """DI-05-22 from the reading end: the page has to say what it measures.
+
+    The sentence appears three times, once in the template for the first render,
+    once in the script for every poll after it, and once in the German
+    catalogue. Two of them agreeing and the third one left behind is a page that
+    changes its accusation three seconds after it opened, or one that is German
+    on the server and English in the browser.
+    """
+    catalogue = json.loads(L10N_JSON.read_text(encoding="utf-8"))["translations"]
+
+    assert STALLED_SENTENCE in TEMPLATE.read_text(encoding="utf-8")
+    assert STALLED_SENTENCE in SCRIPT.read_text(encoding="utf-8")
+    assert STALLED_SENTENCE in catalogue
+    assert STALLED_SENTENCE_BEFORE not in catalogue
+
+
+def test_the_stall_verdict_asks_both_halves_and_reads_the_counter_before_it_writes_it() -> None:
+    """The mechanism behind the sentence above, held where it is decided.
+
+    Two properties, and the second one is the trap. The age the page reports has
+    to be the age of the LATER of the two movements, otherwise the container
+    half is measured and then ignored. And the remembered indexed count has to
+    be read BEFORE rememberIndexedCount writes the new one over it: the growth
+    between two polls is the whole evidence, and the write destroys it. Both are
+    the kind of line a later refactoring moves without noticing, and neither
+    produces an error when it goes wrong. It reports a stall for eight hours
+    instead, next to a coverage figure that is climbing (plan 05-14).
+    """
+    php = ADMIN_VIEW.read_text(encoding="utf-8")
+    overview = php[php.index("public function overview(") : php.index("public function rules(")]
+
+    assert "backendProgressAt(" in overview
+    assert re.search(r"\$movedAt = max\(\s*\$lastJobRun,", overview) is not None
+    assert re.search(r"\$stalledFor = \$movedAt === 0 \? 0 : max\(0, \$now - \$movedAt\)", overview) is not None
+    assert overview.index("lastIndexedCount()") < overview.index("rememberIndexedCount(")
