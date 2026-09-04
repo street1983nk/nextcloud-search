@@ -980,3 +980,119 @@ beiden ist genauer als ein Abrechnungsposten, der erst Tage spaeter erscheint.
 Zugangsbeschreibung. Der billige Weg fuer einen naechsten Lauf: dem Nutzer
 `pricing:GetProducts` erlauben, dann kann `aws_box.sh prices` die Saetze wieder
 live lesen, so wie die Hetzner-Fassung es tut.
+
+## DI-05-35 (Plan 05-21): Ein angekuendigtes HTTP/3, das nicht erreichbar ist, kostet dem Poller einen Durchgang
+
+**Found during:** Plan 05-21, Task 2, beim ersten Anlauf des Volllaufs auf der Box.
+
+**Was:** Der Apache von All-in-One kuendigt HTTP/3 an. Gemessen an dieser
+Instanz:
+
+```
+HTTP/2 200
+alt-svc: h3=":443"; ma=2592000
+```
+
+Der Container spricht mit der Nextcloud-Haelfte ueber die oeffentliche Adresse,
+und sein HTTP-Klient nimmt diese Ankuendigung an. Ist UDP 443 gefiltert, was in
+einer gewoehnlichen Firewall der Normalfall ist, scheitert der Aufstieg, und der
+Klient gibt den Fehlschlag nach oben, statt zurueck auf HTTP/2 zu fallen:
+
+```
+WARNING:urllib3._async.connectionpool:Retrying (Retry(total=0, ...)) after
+connection broken by 'MustDowngradeError('The server yielded its support for
+HttpVersion.h3 through the Alt-Svc header while unable to do so. ...')':
+/ocs/v2.php/apps/findling/queues/documents?n=32&max_bytes=67108864&format=json
+WARNING:findling.worker.poller:the queue did not answer, next attempt in 30 s
+```
+
+**Wie schlimm es wirklich ist, gemessen und nicht geschaetzt:** ein Durchgang je
+Prozessleben. Die Gegenprobe mit wieder gesperrtem UDP 443, dreimal
+hintereinander aus dem Container heraus, bleibt anschliessend auf HTTP/2 und
+liefert dreimal 200; der Klient merkt sich also, dass h3 nicht geht. Mit
+offenem UDP 443 steigt der zweite Aufruf auf h3 und bleibt dort. Der Poller
+verliert im schlechten Fall also einen Durchgang und 15 Sekunden, nicht mehr.
+
+**Warum es trotzdem hier steht:** der eine verlorene Durchgang ist der
+Holen-Aufruf, und die Nextcloud-Haelfte zaehlt die Wiederholung **bei der
+Ausgabe** (DI-05-23). Trifft der Fehlschlag eine Antwort, die die andere Seite
+schon geschrieben hat, sind diese Zeilen unterwegs und ihre Wiederholung ist
+verbraucht. Die Wahrscheinlichkeit ist klein, die Folge ist die aus DI-05-23.
+
+**Was in diesem Lauf daraus wurde:** UDP 443 ist in der Security Group geoeffnet,
+weil die Anleitung von All-in-One genau das verlangt (443 TCP **und** UDP) und
+die Messung damit den Weg eines richtig eingerichteten Servers nimmt. Die
+Generalprobe lief mit gesperrtem UDP und hat den Fall nicht gesehen, wohl weil
+die damalige Fassung von AIO die Ankuendigung noch nicht sandte.
+
+**Warum nicht hier behoben:** die Abhilfe ist eine Entscheidung ueber die
+Netzwerkpolitik des Klienten und keine Zeile. Denkbar sind drei Wege: h3 im
+Klienten ausschalten, ihm ein Wiederholungsbudget geben, das den Rueckfall
+selbst faehrt, oder die Ankuendigung ignorieren. Das beruehrt jeden Aufruf des
+Containers an die Nextcloud-Haelfte, also Poller, Quittierung und Abgleich.
+
+**Wohin es gehoert:** in den Plan, der den HTTP-Klienten des Containers besitzt,
+oder in den Phase-Review. Dazu ein Satz in `docs/dev-setup.md` oder in der
+Installationsdoku: wer AIO betreibt, oeffnet 443 auch als UDP.
+
+## DI-05-36 (Plan 05-21): Ein Neustart des Containers, der nicht von AppAPI kommt, stellt die Indexierung dauerhaft still
+
+**Found during:** Plan 05-21, Task 2, unmittelbar nach dem Anstoss des
+Volllaufs. Der Befund ist der schwerste dieses Laufs.
+
+**Was:** Der Poller wird im Lifespan **stillgestellt** erzeugt, und bewaffnet
+wird er ausschliesslich von `enabled_handler()`, also von dem Aufruf
+`PUT /enabled?enabled=1`, den AppAPI sendet. Beides ist gut begruendet und im
+Quelltext begruendet: ein abgeschalteter Container, der weiter Arbeit einsammelt,
+ist der Klassiker der Integrationsliste, und ein Container, der vor dem
+Einschalten noch keinen tantivy-Riegel haelt, kann ohne Sperre ausgeliefert
+werden.
+
+Die Folge ist, dass **jeder** Start des Containers, der nicht von AppAPI kommt,
+einen Container hinterlaesst, der Suchen beantwortet, auf der Statusseite als
+erreichbar erscheint, seine Fassung meldet, und nie wieder eine Datei indexiert.
+Gemessen auf der Box, mit 4048 wartenden Zeilen in der Warteschlange:
+
+```
+17:45:02Z  occ findling:index  ->  scheduled 4048, handed to the worker 0
+           Containerprotokoll: keine Zeile des Pollers, kein Fehler, nichts
+17:46:23Z  occ app_api:app:disable + enable
+17:46:40Z  der Container holt Dateien, GET /ocs/v2.php/apps/findling/files/...
+```
+
+Ausgeloest hat es hier ein `docker restart` von Hand, bei der Pruefung des
+HTTP/3-Wegs. Das ist der harmlose Fall. Die beiden, die zaehlen, sind:
+
+1. **Ein Neustart der Maschine.** Der Container kommt mit seiner Restart-Regel
+   von selbst hoch, AppAPI sendet nichts, und die Indexierung bleibt aus, bis
+   ein Verwalter die ExApp von Hand neu einschaltet. Auf einem Selfhoster-Server
+   ist ein Neustart nach einem Update der Normalfall, und niemand schaut danach
+   auf den Deckungsgrad.
+2. **Ein Speichertod.** Wird der Container vom Kernel beendet, startet Docker
+   ihn nach seiner Regel neu, und danach gilt dasselbe. Genau dieser Fall ist
+   der Gegenstand dieses Berichts.
+
+Was den Schaden begrenzt: die Suche laeuft weiter, der Index bleibt heil, und
+`occ findling:index` zeigt den Vorrat, der sich nicht bewegt. Nach Plan 05-20
+sagt die Statusseite in dieser Lage auch nicht mehr faelschlich "kommt nicht
+voran" wegen der Hintergrundauftraege, sondern misst den Fortschritt der
+Warteschlange; sie hat also die richtige Zahl, um es zu zeigen.
+
+**Warum nicht hier behoben:** die Abhilfe ist eine Entscheidung darueber, woher
+ein frisch gestarteter Container weiss, ob er eingeschaltet ist, und sie hat
+mehrere Kandidaten mit verschiedenen Nachteilen. Den Zustand im Datenspeicher
+merken und beim Start selbst bewaffnen: dann bewaffnet sich ein Container, den
+ein Verwalter gerade abgeschaltet hat, nach einem Neustart wieder von selbst.
+Beim Start die Nextcloud-Haelfte fragen: dann haengt der Start an einem Aufruf
+nach draussen, und ein Container ohne Antwort muss sich entscheiden. Auf die
+erste Antwort der Warteschlange warten und daraus schliessen: dann ist die
+Unterscheidung zwischen abgeschaltet und entfernt weg, die Plan 05-08 gerade
+eingebaut hat. Das ist Rule 4 und keine Zeile, und es beruehrt `main.py`, den
+Poller, den Abgleich und den Vertrag mit AppAPI.
+
+**Wohin es gehoert:** in den Phase-Review, und zwar mit Vorrang. Fuer den
+Volllauf dieses Plans ist der Fall behandelt: der Sampler laeuft unter einer
+Aufsicht, die ihn nach einem Containerwechsel neu startet, und der Drill 1
+(Abschuss des Containers) prueft ausdruecklich, ob die Indexierung von selbst
+weiterlaeuft oder ob sie genau diesen Handgriff braucht. Was der Drill dazu
+findet, steht im Messbericht.
