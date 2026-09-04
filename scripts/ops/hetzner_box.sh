@@ -50,6 +50,13 @@ SERVER_IMAGE='ubuntu-24.04'
 # read from this account), so this is a choice and not a cost. It is corrected
 # before the first create, because the location of a server cannot be changed
 # afterwards: a box in the wrong region costs a destroy and a create.
+#
+# The plan of the arm run names nbg1 as the sanctioned fallback when hel1 is
+# empty, and that fallback stays a deliberate edit of this word rather than an
+# environment variable: the arm types come back one region at a time, an
+# override would make the wrong region one typo away, and the edit puts the
+# region of the run into the history of this repository where the report can
+# cite it. There is a gate on this line.
 SERVER_LOCATION='hel1'
 # Without the architecture in it, on purpose: the same script rents the x86
 # rehearsal and the arm repeat, and a box called arm that is not one is a trap
