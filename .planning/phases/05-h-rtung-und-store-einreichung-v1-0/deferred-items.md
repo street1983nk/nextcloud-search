@@ -897,6 +897,21 @@ sobald `hel1` oder `nbg1` frei wird; ihr Protokoll liegt in
 `scratchpad/cax11-watch.log`. Faellt sie aus, ist der Handgriff
 `scripts/ops/hetzner_box.sh prices`, gefolgt von `create`.
 
+**Erledigt, aber anders: die Kapazitaet kam nicht.** Der Owner hat am
+04.09. beim Anbieter angerufen, und die Auskunft lautet, dass die arm-Knappheit
+Monate laeuft. Diese Auskunft schlaegt jede Lesung der API, und damit ist die
+Warteschleife oben gegenstandslos; sie ist beendet und hat nichts angelegt. Der
+ARM-Lauf zieht auf eine AWS-Box mit ausdruecklicher CAX11-Paritaet um:
+`m7g.large`, 2 vCPU Graviton3, `eu-central-1c`, Ubuntu 24.04 arm64, und der
+Arbeitsspeicher vom Kernel auf 4 GB gedeckelt, weil der Typ 8 GB traegt. Der
+Deckel sitzt als Drop-in `/etc/default/grub.d/99-mem4g.cfg`, er erweitert
+`GRUB_CMDLINE_LINUX_DEFAULT` statt es zu ersetzen, und er ist auf der Box
+gegengelesen: `free -h` 3.9Gi, `nproc` 2, `uname -m` aarch64. Das Werkzeug dazu
+ist `scripts/ops/aws_box.sh`, und `scripts/ops/hetzner_box.sh` steht wieder auf
+`cpx22`, der Maschine, die mit ihm wirklich gelaufen ist. Der Befund oben bleibt
+als Fundstelle stehen, samt dem Widerspruch der beiden Endpunkte, denn der gilt
+weiter.
+
 ## DI-05-33 (Plan 05-21): Der Workers-Vergleich ist ohne Produktaenderung nicht messbar
 
 **Found during:** Plan 05-21, bei der Vorbereitung der Zusatzmessung.
@@ -920,3 +935,48 @@ die Speicherhaelfte der Frage in zwanzig Minuten und gefaehrdet die Hauptmessung
 nicht.
 
 **Wohin es gehoert:** in Task 2 und Task 3 dieses Plans.
+
+**Stand 04.09. nachmittags:** die Box steht (siehe die Erledigung von DI-05-32),
+also gilt der Vorschlag von oben unveraendert und mit einem Zusatz: die
+Wegwerf-Messung laeuft in einem eigenen Abbild mit einem eigenen Kennzeichen, das
+nur auf der Box existiert und mit ihr geloescht wird, und der Bericht fuehrt sie
+in einem eigenen Abschnitt neben der Hauptmessung, nicht in derselben Tabelle.
+
+## DI-05-34 (Plan 05-21): Die Endkosten des AWS-Laufs sind gerechnet und nicht abgelesen
+
+**Found during:** Plan 05-21, Task 1, beim Bau der Kostenzeile von `aws_box.sh`.
+
+**Was:** Der IAM-Nutzer dieses Laufs traegt `AmazonEC2FullAccess` und sonst
+nichts. Damit fehlen ihm zwei Dinge, die die Kostenzeile des Berichts gern
+gehabt haette. `pricing:GetProducts` fehlt, also kann das Werkzeug die Preise
+nicht wie die Hetzner-Fassung aus der Konto-API holen; die Antwort ist ein
+`AccessDeniedException`, der den Nutzer und die Aktion nennt. Und `ce:*`
+beziehungsweise der Zugriff auf die Abrechnung fehlt ebenfalls, also ist auch die
+Schlusszahl nicht abrufbar.
+
+**Was stattdessen gemacht wurde, und warum das reicht:** die Saetze kommen aus
+der oeffentlichen Preisliste desselben Anbieters, die ohne Anmeldung erreichbar
+ist, gefiltert am 04.09. gegen die Fassung `20260903195206` fuer `eu-central-1`
+(EC2) und `20260831092232` (VPC), wirksam ab 01.09.:
+
+| Posten | Satz | Quelle |
+|---|---|---|
+| m7g.large, On Demand, Linux | 0,0978 USD je Stunde | AmazonEC2, eu-central-1 |
+| gp3, bereitgestellter Speicher | 0,0952 USD je GB und Monat | AmazonEC2, eu-central-1 |
+| oeffentliche IPv4, in Benutzung | 0,0050 USD je Stunde | AmazonVPC, eu-central-1 |
+
+Alle drei sind Netto-USD und damit **nicht** dasselbe Mass wie die
+Brutto-EUR-Tabelle der Hetzner-Haelfte des Berichts. Der Bericht sagt das, statt
+die beiden Tabellen in einen Vergleich zu stellen, den keine von beiden traegt.
+Die gefilterten Zeilen liegen als Rohdaten neben der Messreihe.
+
+**Warum nicht hier erledigt:** eine zusaetzliche Richtlinie an einem
+IAM-Nutzer ist eine Entscheidung des Owners ueber Rechte in seinem Konto und
+keine Zeile in einer Datei. Sie ist fuer diesen Lauf auch nicht noetig: die
+Laufzeit ist auf die Sekunde bekannt, die Saetze sind belegt, und das Produkt aus
+beiden ist genauer als ein Abrechnungsposten, der erst Tage spaeter erscheint.
+
+**Wohin es gehoert:** in den Phase-Review, mit einer Zeile in der
+Zugangsbeschreibung. Der billige Weg fuer einen naechsten Lauf: dem Nutzer
+`pricing:GetProducts` erlauben, dann kann `aws_box.sh prices` die Saetze wieder
+live lesen, so wie die Hetzner-Fassung es tut.
