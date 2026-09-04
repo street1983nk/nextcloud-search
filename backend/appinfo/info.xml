@@ -154,7 +154,18 @@ pas chiffré au repos, ce qui relève de l'hôte sur lequel il tourne.]]></descr
 	<version>1.0.0</version>
 	<licence>agpl</licence>
 	<author>street1983nk</author>
+	<!--
+		The same three categories as the companion half, and for the same
+		measured reason: the store "search" category carries 15 apps and no
+		featured one, "files" carries 142 of which 7 are featured and therefore
+		sit above anything this app can do. Both halves are listed separately in
+		the store, so both need the category, and the sister projects show the
+		pattern is normal rather than a trick: recognize and recognize_backend,
+		context_chat and context_chat_backend each stand next to each other.
+	-->
+	<category>search</category>
 	<category>files</category>
+	<category>tools</category>
 	<website>https://github.com/street1983nk/nextcloud-search</website>
 	<bugs>https://github.com/street1983nk/nextcloud-search/issues</bugs>
 	<repository type="git">https://github.com/street1983nk/nextcloud-search.git</repository>

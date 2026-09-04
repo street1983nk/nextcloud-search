@@ -155,7 +155,27 @@ repos, ce qui relève de l'hôte sur lequel il tourne.]]></description>
 	<licence>agpl</licence>
 	<author>street1983nk</author>
 	<namespace>Findling</namespace>
+	<!--
+		Three categories, and the first one is the one that was missing. The
+		store has a "search" category, this app was in "files" only, so nobody
+		browsing for a search app ever saw it. info.xsd declares category with
+		maxOccurs="unbounded", so the number is free; 73 apps in the store carry
+		three and 25 carry four.
+
+		Why "search" first is not cosmetic. Measured against the store API on
+		2026-09-04: the category page sorts by is_featured, then
+		rating_num_recent, then last_release, and the "search" category has 15
+		apps and NOT ONE featured app, while "files" has 142 apps of which 7 are
+		featured and therefore unreachable. On the day of the submission that is
+		place 1 of 16 here against place 8 of 143 there, for the same app and
+		the same text.
+
+		"tools" is the wide catch-all and adds little on its own, but it costs
+		nothing and it is true of this app.
+	-->
+	<category>search</category>
 	<category>files</category>
+	<category>tools</category>
 	<website>https://github.com/street1983nk/nextcloud-search</website>
 	<bugs>https://github.com/street1983nk/nextcloud-search/issues</bugs>
 	<repository type="git">https://github.com/street1983nk/nextcloud-search.git</repository>
