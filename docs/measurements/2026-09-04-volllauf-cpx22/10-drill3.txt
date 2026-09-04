@@ -1,0 +1,40 @@
+### DRILL 3: die Platte wird knapp
+--- Ausgangszustand 2026-09-04T10:15:40Z ---
+/dev/sdb       52521566208 28022894592 21797539840  57% /mnt/HC_Volume_106785477
+frei: 21797539840 Byte
+{"total": 52521566208, "used": 28022894592, "free": 21797539840}
+indexed vor der Verknappung 50102
+--- Verknappung: eine grosse Datei, so dass unter 500 MB frei bleiben ---
+fallocate 21378109440 Byte
+/dev/sdb         49G   47G  400M 100% /mnt/HC_Volume_106785477
+2026-09-04T10:15:41Z
+--- Beobachtung, 90 Sekunden nach der Verknappung ---
+WARNING:findling.index.writer:index commit paused, free space is below the configured floor of 524288000 byte
+WARNING:findling.worker.poller:index paused, free space below the floor, 2 rows handed back
+WARNING:findling.index.writer:index commit paused, free space is below the configured floor of 524288000 byte
+WARNING:findling.worker.poller:index paused, free space below the floor, 2 rows handed back
+WARNING:findling.index.writer:index commit paused, free space is below the configured floor of 524288000 byte
+WARNING:findling.worker.poller:index paused, free space below the floor, 2 rows handed back
+--- /status ueber die Statusseite ---
+lowDisk        True
+diskFreeBytes  419762176
+runState       stalled
+spaceWarning   True
+scheduled      253 running 13
+indexed jetzt 50102
+indexed 60 s spaeter 50102
+Work stock
+  scheduled            251
+  handed to the worker 13
+
+--- Die Admin-Seite, gerendert, waehrend die Platte knapp ist ---
+HTTP 200 Bytes 76469
+'Little disk space left' -> True
+'findling-banner-lowdisk' -> True
+'Indexing is paused so the index stays intact' -> True
+<p class="findling-banner findling-banner--warning" id="findling-banner-lowdisk">
+				<svg class="findling-banner__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 
+--- Wiederherstellung: der Ballast geht weg 2026-09-04T10:19:06Z ---
+/dev/sdb         49G   27G   21G  57% /mnt/HC_Volume_106785477
+Lauf geht weiter nach 42s ohne Eingriff, indexed=50104 um 2026-09-04T10:19:48Z
+lowDisk False frei 21797584896 scheduled 247

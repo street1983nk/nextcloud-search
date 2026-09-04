@@ -68,10 +68,14 @@ gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 | Trockenlauf 500 Dateien, Generalprobe cpx22 | gemessen, 381 MB Spitze, 7 min 38 s | 2026-09-03 |
 | OCR-Faktor, Generalprobe cpx22 | gemessen, 2517 ms je Seite | 2026-09-03 |
 | Laufzeitprognose des Volllaufs, x86 | gerechnet aus gemessenen Posten, rund 13 h | 2026-09-03 |
+| Vorbereitung des Volllaufs, Generalprobe cpx22 | Abbild nachgerechnet, geräumt, Korpus erzeugt | 2026-09-04 |
+| Härtungsprobe unter harter Grenze | gefahren, 2 GB, `memory.events` durchgehend null | 2026-09-04 |
+| **Findling im Volllauf, 50.000 Dateien, Generalprobe cpx22** | **gemessen, 428,6 MB Spitze, 10 h 14 min, kein Speichertod** | 2026-09-04 |
+| Störfall-Drills, Generalprobe cpx22 | alle drei durchgespielt, mit ihren Grenzen | 2026-09-04 |
+| Kosten des Tests | aus der Konto-API, 0,80 EUR bis zum Abbau | 2026-09-04 |
 | AIO-Grundlast, ARM | FEHLT NOCH | wartet auf Bestand |
-| Härtungsprobe unter harter Grenze | Befehl belegt und beschrieben, Lauf steht aus | 2026-09-03 |
-| Findling im Volllauf, 50.000 Dateien | FEHLT NOCH | Plan 05-14 |
-| Störfall-Drills | FEHLT NOCH | Plan 05-14 |
+| Findling im Volllauf, ARM CAX11 | FEHLT NOCH | wartet auf Bestand |
+| Störfall-Drills, ARM CAX11 | FEHLT NOCH, und ausdrücklich nicht vorgesehen | die Drills hängen am Verhalten, nicht an der Architektur |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -1323,18 +1327,531 @@ entfernt ist. Die Datei gehört also vorher mit `docker cp` hinein.
 
 | Lauf | höchster `anon` | unter 2,0 GB | Laufzeit | OCR-Anteil | Speichertod |
 |---|---|---|---|---|---|
-| Generalprobe cpx22 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
+| Generalprobe cpx22 | **428,6 MB** (449.441.792 Byte) | ja, 20,9 Prozent davon | 10 h 14 min 14 s | 10.134 von 50.104 Dateien | nein, `oom_kill 0` und `OOMKilled false` |
 | ARM CAX11 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
 
 Die Zeile, die in die Store-Beschreibung geht, ist die zweite. Die erste steht
 daneben, weil ein Vergleich der beiden mehr über das Verhalten der Anwendung
 verrät als jede von beiden allein, und weil sie zuerst da ist.
 
+### Was der Lauf gemessen hat
+
+| Größe | Wert |
+|---|---|
+| Crawl eingereiht | 2026-09-03T23:13:11Z |
+| erstes Verdikt | 2026-09-03T23:18:51Z |
+| letztes Verdikt | 2026-09-04T09:27:25Z |
+| Dauer vom Anstoß bis zum letzten Verdikt | 36.854 s, also 10 h 14 min 14 s |
+| Arbeitsvorrat | 50.104 Dateien: die 50.000 des Korpus und 104 des Bestands |
+| indexiert | 50.068 |
+| fehlgeschlagen | **0** |
+| übersprungen | 36: `too_large` 20, `empty_text` 14, `image_not_ocrable` 2 |
+| ohne Verdikt | keine, 50.068 plus 36 sind genau 50.104 |
+| mit OCR | 10.134 Dateien |
+| Durchsatz | 1,36 Dateien je Sekunde über den ganzen Lauf |
+| Textzeichen im Index | 1.355.205.169, davon 37.407.953 aus der OCR-Spur |
+| Zeilen in der ACL-Tabelle | 50.068, also genau eine je indexiertem Dokument |
+
+Die Verdikte gegen die Verteilung, die der Generator gemeldet hat, Kategorie für
+Kategorie:
+
+| Erzeugt | Anzahl | Erwartetes Verdikt | Gemessen |
+|---|---|---|---|
+| über dem Größendeckel | 20 | `skipped(too_large)` | **20**, die Zahl stimmt auf die Datei |
+| einseitige Scans | 9.916 | indexiert über die OCR-Spur | in den 10.134 mit `ocr_used` enthalten |
+| mehrseitige Scans | 100 | indexiert über die OCR-Spur, 8 Seiten je Datei | ebenda |
+| Bilder | 100 | indexiert über die OCR-Spur | ebenda |
+| Text-PDF, OOXML, OpenDocument, reiner Text | 39.864 | indexiert über die Textspur | in den 39.970 ohne `ocr_used` enthalten |
+| aus dem Bestand der Instanz | 104 | gemischt | 14 `empty_text` und 2 `image_not_ocrable` stammen von hier, aus Vorlagen ohne Text und den Beispielfotos |
+
+Der einzige Posten, dessen Verdikt vorher feststand, ist der Größendeckel, und er
+stimmt: 20 erzeugt, 20 als `too_large` beurteilt.
+
+Die OCR-Zahl geht ebenfalls auf. Der Generator hat 9.916 einseitige Scans, 100
+mehrseitige und 100 Bilder geschrieben, zusammen 10.116 Dateien ohne Textinhalt;
+gemessen sind 10.134 mit `ocr_used`. Die 18 Dateien Unterschied stammen aus dem
+Bestand der Instanz, nämlich aus den Beispielfotos, die Nextcloud jedem neuen
+Nutzer mitgibt.
+
+Und der Befund des Trockenlaufs ist auf hundertfacher Menge erledigt: dort endeten
+alle 32 Tabellen als "Datei beschädigt", hier sind alle 3.345 `.xlsx` indexiert
+und die Gruppe `corrupt` kommt in keiner der 130 Aufnahmen der Statusseite vor.
+Das ist die Wirkung der Korrektur aus 05-12.
+
+### Der OOM-Beweis, vierteilig
+
+Ein Text, der "kein OOM" behauptet, weil im Protokoll kein "Killed" steht, findet
+den Fall nicht, in dem ein Kindprozess der cgroup getötet wurde. Deshalb vier
+Belege statt einem, alle am 2026-09-04T10:02:50Z erhoben, also nach dem Lauf und
+vor jedem Eingriff:
+
+```
+--- memory.events ---           --- memory.events.local ---
+low             0               low             0
+high            0               high            0
+max             0               max             0
+oom             0               oom             0
+oom_kill        0               oom_kill        0
+oom_group_kill  0               oom_group_kill  0
+
+--- docker inspect ---
+OOMKilled=false Status=running ExitCode=0 RestartCount=0
+Memory=2147483648 MemorySwap=2147483648
+
+--- die harte Grenze, wie der Kernel sie führt ---
+memory.max      2147483648
+
+--- die Abschlusszeile des Samplers ---
+findling-rss summary samples=7782 max_anon=449441792 peak=1004195840
+  events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0] oom_killed=false
+```
+
+| Teil | Aussage |
+|---|---|
+| `memory.events` und `memory.events.local` | Der Kernel hat in dieser cgroup nie an die Grenze angeschlagen. Nicht nur `oom_kill` steht auf null, auch `max` und `high`: die Grenze wurde in 36.854 Sekunden **kein einziges Mal** berührt. |
+| `docker inspect .State.OOMKilled` | `false`, dazu `RestartCount 0` und `ExitCode 0`: der Container, der gemessen wurde, ist derselbe, der gestartet wurde. |
+| höchster `anon` aus der CSV | **449.441.792 Byte, also 428,6 MB**, erreicht am 2026-09-03T23:38:51Z, 26 Minuten nach dem Anstoß. Das ist die Zahl der Store-Aussage. |
+| `memory.peak` und der Dateicache | **1.004.195.840 Byte, also 957,7 MB.** Der Abstand von 529 MB ist der Seitencache des Index, der als Datei in den Speicher abgebildet wird. Am Ende des Laufs standen `anon 251.699.200`, `file 92.176.384` und `slab 10.088.896` nebeneinander. |
+
+Warum die Store-Zahl aus `anon` kommt, steht im Abschnitt "Drei Zahlen, die nicht
+dasselbe sind" oben. Der Volllauf belegt die Begründung jetzt mit Zahlen statt mit
+einer Erwartung: `memory.peak` liegt beim 2,2fachen von `anon`, und der ganze
+Unterschied ist zurückforderbarer Cache, den der Kernel unter Druck hergibt, ohne
+dass ein Prozess davon etwas merkt. Eine Store-Aussage aus `memory.peak` würde die
+Anwendung um mehr als das Doppelte schlechter darstellen, als sie ist.
+
+**Der Grenzwert war 2,0 GB, gemessen sind 428,6 MB, das sind 20,9 Prozent.** Der
+Lauf besteht.
+
+Eine Einschränkung, die zur Härtungsprobe gehört und deshalb hier steht:
+`memory.swap.max` stand unmittelbar nach dem Setzen der Grenze auf `0` und am Ende
+des Laufs auf `max`. Was die Aussage trägt, ist nicht diese Datei, sondern die
+Maschine: sie hat überhaupt keinen Auslagerungsbereich (`free -m` meldet
+durchgehend `Swap 0 0 0`), es konnte also in keinem Augenblick ausgelagert werden.
+`memory.max` stand über den ganzen Lauf unverändert auf 2.147.483.648.
+
+### Die Kurve
+
+7.782 Messpunkte im Abstand von fünf Sekunden, vom Start des Samplers um
+2026-09-03T23:13:02Z bis zu seinem geordneten Ende um 2026-09-04T10:03:29Z. Der
+Bericht führt sie verdichtet, die Rohdaten liegen als CSV unter
+`docs/measurements/2026-09-04-volllauf-cpx22/volllauf.csv`, weil die Maschine
+gelöscht wird und eine Zahl ohne ihre Reihe eine Behauptung ist.
+
+| Stunde (UTC) | Messpunkte | `anon` Minimum | `anon` Median | `anon` Spitze | `memory.peak` am Ende der Stunde |
+|---|---|---|---|---|---|
+| 09-03 23 | 562 | 108 MB | 245 MB | **429 MB** | 829 MB |
+| 09-04 00 | 719 | 173 MB | 255 MB | 391 MB | 958 MB |
+| 09-04 01 | 717 | 176 MB | 334 MB | 423 MB | 958 MB |
+| 09-04 02 | 718 | 192 MB | 360 MB | 376 MB | 958 MB |
+| 09-04 03 | 718 | 180 MB | 361 MB | 406 MB | 958 MB |
+| 09-04 04 | 717 | 235 MB | 361 MB | 422 MB | 958 MB |
+| 09-04 05 | 718 | 213 MB | 362 MB | 423 MB | 958 MB |
+| 09-04 06 | 718 | 210 MB | 363 MB | 424 MB | 958 MB |
+| 09-04 07 | 717 | 183 MB | 364 MB | 426 MB | 958 MB |
+| 09-04 08 | 718 | 183 MB | 364 MB | 425 MB | 958 MB |
+| 09-04 09 | 718 | 183 MB | 240 MB | 426 MB | 958 MB |
+| 09-04 10 | 42 | 240 MB | 240 MB | 240 MB | 958 MB |
+
+Drei Dinge, die man an dieser Reihe sieht und an einer einzelnen Zahl nicht.
+
+Erstens: **die Spitze fällt in die erste halbe Stunde und wird danach nie wieder
+erreicht.** Sie liegt dort, wo die Textspur unter Volllast lief und der
+Schreibpuffer seine ersten großen Vereinigungsläufe fuhr. Die acht Stunden reiner
+OCR-Arbeit danach kosten weniger Speicher, nicht mehr.
+
+Zweitens: **die Kurve steigt nicht.** Der Median liegt in jeder Stunde zwischen
+240 und 364 MB, obwohl der Index von null auf 726 MB und der Bestand von null auf
+50.000 Dokumente wächst. Ein Speicherleck über zehn Stunden hätte hier eine
+Steigung, und es gibt keine.
+
+Drittens: **`memory.peak` steht ab der zweiten Stunde still.** Der Wert ist ein
+Höchststand seit dem Start und wird von 958 MB nie mehr überschritten, obwohl er
+den Dateicache mitzählt: der Kernel hält den Cache dieser cgroup von selbst weit
+unter der Grenze, ohne dass er dazu räumen musste (`memory.events` low und high
+stehen auf null).
+
+### Die Prognose, und wo sie danebenlag
+
+| Posten | Prognose 05-12 | Gemessen | Abweichung |
+|---|---|---|---|
+| Textspur, rund 40.000 Dateien | 0,43 s je Datei, 4,8 h | rund 0,19 s je Datei, 2,2 h | die Prognose war mehr als doppelt so hoch |
+| OCR-Spur, 10.134 Dateien | 2,80 s je Seite, 8,3 h | 3,16 s je Datei, rund 7,9 h | die Prognose war knapp richtig |
+| **Summe** | **13,1 h** | **10,2 h** | **22 Prozent schneller** |
+
+Die 3,16 s je OCR-Datei sind sauber getrennt gemessen und nicht abgeleitet: von
+2026-09-04T01:43Z an lief nur noch die OCR-Spur, und in den 27.808 Sekunden bis
+zum Ende kamen 8.788 Dokumente dazu. Sie enthalten Abholung, Rasterung, tesseract
+und Indexschreibung, während die 2,80 s der Prognose nur tesseract waren; unter
+diesem Vorbehalt lag die Prognose des Trockenlaufs für den teuersten Posten des
+Laufs richtig.
+
+Der Fehler steckt in der Textspur, und er hat einen benennbaren Grund: die 0,43 s
+je Datei stammten aus den ersten 170 Sekunden des Trockenlaufs, also aus einem
+Anlauf, in dem der Container seine Wortliste lädt, den Kompositum-Automaten baut
+und die Warteschlange erst gefüllt wird. Über 40.000 Dateien verteilt sich dieser
+Anlauf auf nichts. **Eine Prognose aus dem Anfang eines kurzen Laufs überschätzt
+den Dauerbetrieb**, und zwar hier um den Faktor zwei.
+
+Was das für den ARM-Lauf heißt: die Steuergröße ist die OCR-Spur, sie macht 77
+Prozent der gemessenen Laufzeit aus. Kostet tesseract auf dem Ampere-Kern das
+Zweifache, werden aus 7,9 h rund 15,8 h und aus der Summe rund 18 h. Beim
+Dreifachen sind es rund 26 h. Die Spanne bleibt bis zum ARM-Lauf offen, aber sie
+ist jetzt an einer gemessenen und nicht mehr an einer geschätzten Zahl aufgehängt.
+
+### Die Größe des Index
+
+| Größe | Wert |
+|---|---|
+| Index nach dem Lauf | 761.374.910 Byte bei 50.068 Dokumenten |
+| je Dokument | 15.207 Byte |
+| Korpus auf der Platte | 20.208.046.426 Byte |
+| Index gegen Korpus | 3,8 Prozent |
+| Hochrechnung des Trockenlaufs | rund 707 MB |
+| Abweichung der Hochrechnung | 2,7 Prozent |
+
+Die Hochrechnung aus 587 Dokumenten hat den Index über 50.068 Dokumente auf 2,7
+Prozent genau getroffen. Das ist mehr Glück als Methode, aber es sagt etwas über
+die Sache: die Indexgröße wächst linear mit dem Text und nicht mit dem Bestand,
+und der Text je Dokument ist in einem erzeugten Korpus eben konstant. Die Fußnote
+aus dem Trockenlauf gilt unverändert und gehört zu jeder Verwendung dieser Zahl:
+ein echter Bestand mit demselben Byteumfang trägt mehr Text und erzeugt einen
+größeren Index. Phase 3 hatte 3 bis 6 GB veranschlagt.
+
+### Die Statusseite über den ganzen Lauf
+
+130 Aufnahmen im Abstand von fünf Minuten, keine einzige davon fehlgeschlagen, von
+2026-09-03T23:13:08Z bis 2026-09-04T10:01:28Z. Die verdichtete Reihe liegt unter
+`docs/measurements/2026-09-04-volllauf-cpx22/statusseite.csv`. Elf davon, weil der
+Plan drei verlangt und eine Auswahl von drei sich immer aussuchen lässt:
+
+| Zeitpunkt | Zustand | eingereiht | Dokumente | Deckungsgrad | Index |
+|---|---|---|---|---|---|
+| 23:13:08Z | `idle` | 0 | 0 | noch keiner | 2.254 Byte |
+| 23:18:09Z | `running` | 549 | 0 | noch keiner | 2.254 Byte |
+| 23:43:18Z | `running` | 2.110 | 7.886 | 78 Prozent, vorläufig | 141 MB |
+| 00:43:38Z | `running` | 6.316 | 27.669 | 81 Prozent, vorläufig | 501 MB |
+| 01:43:57Z | `running` | 8.786 | 41.280 | 82 Prozent, endgültig | 741 MB |
+| 03:44:33Z | **`stalled`** | 6.464 | 43.602 | 87 Prozent | 746 MB |
+| 05:45:08Z | **`stalled`** | 4.208 | 45.858 | 91 Prozent | 751 MB |
+| 07:45:45Z | **`stalled`** | 1.954 | 48.112 | 96 Prozent | 757 MB |
+| 09:16:14Z | **`stalled`** | 222 | 49.844 | 99 Prozent | 761 MB |
+| 09:36:20Z | `idle` | 0 | 50.068 | 99 Prozent | 761 MB |
+| 10:01:28Z | `idle` | 0 | 50.068 | 99 Prozent | 761 MB |
+
+Das Unauffällige zuerst, weil eine Liste, die nur Auffälliges enthält, nicht sagt,
+wie weit geschaut wurde. Über alle 130 Aufnahmen hinweg gilt: `failed` steht
+durchgehend auf null, `backendReachable` durchgehend auf wahr, der
+Versionsgleichstand durchgehend auf `match`, `lowDisk` durchgehend auf falsch, die
+Dokumentzahl wächst monoton, und die ACL-Zeilen sind in jeder einzelnen Aufnahme
+genau so viele wie die Dokumente. Der Deckungsgrad wächst monoton von 78 auf 99
+Prozent und wird nie über hundert; die Kachel meldet ihn bis 01:43Z ausdrücklich
+als vorläufig, weil noch nicht jeder Mount durchlaufen war, und danach nicht mehr.
+
+Und jetzt das Auffällige.
+
+**Die Seite behauptet acht Stunden lang, die Indexierung komme nicht voran,
+während sie 6.500 Dokumente indexiert.** Von 02:01Z bis 09:27Z steht `runState`
+auf `stalled`, und die Seite zeigt den Satz "Indexing has not progressed for %s.
+Background jobs may not be running." Die Zeitspanne darin wächst bis auf über acht
+Stunden.
+
+Der Grund ist keine Störung, sondern eine Regel, die für diesen Lauf nicht gebaut
+war. `AdminViewService::runState` liest `stalled`, wenn Arbeit wartet und der
+letzte Hintergrundauftrag **dieser App** länger als 1800 Sekunden zurückliegt. Der
+Crawl war um 01:30:49Z fertig, danach hatte diese App keinen Hintergrundauftrag
+mehr auszuführen, und der Zeitstempel stand still. Der Container arbeitete
+weiter, aber er quittiert über OCS und nicht über einen Hintergrundauftrag, also
+sieht ihn diese Regel nicht.
+
+Auf einer gewöhnlichen Instanz fällt das nicht auf, weil der Crawl und die
+Inhaltsarbeit ungefähr gleichzeitig enden. Auf einer 4-GB-Box mit 20 Prozent Scans
+ist der OCR-Nachlauf **die Mehrheit der Laufzeit**, und genau dort steht die
+falsche Anschuldigung. Notiert als DI-05-22, nicht behoben: welche Größe `stalled`
+messen soll, ist eine Entscheidung über die Bedeutung der Kachel und keine Zeile
+in einer Datei.
+
+Zwei kleinere Beobachtungen aus derselben Reihe:
+
+- Die Restzeitschätzung fällt schon um 01:43Z auf null, während noch acht Stunden
+  Arbeit vor dem Container liegen. Sichtbar wird sie dabei nicht: sobald jeder
+  Mount durchlaufen ist, rendert die Seite den Vorabschätzungsblock nicht mehr.
+  Die Zahl ist also falsch und wird nicht gezeigt, was in dieser Reihenfolge das
+  kleinere Übel ist, aber es heißt auch, dass die Seite für den längsten Abschnitt
+  des Laufs keine Restzeit mehr anbietet.
+- Der Deckungsgrad bleibt bei 99 Prozent stehen, obwohl der Lauf fertig ist, und
+  die Zahl dahinter ist richtig gerechnet: der Nenner lautet 50.084 und nicht
+  50.104, weil die 20 Dateien über dem Größendeckel ausdrücklich herausgenommen
+  sind (`deliberatelyLeftOut`), während die 16 übrigen Übersprungenen drin
+  bleiben. 50.068 von 50.084 sind 99,97 Prozent, und die Kachel rundet ab. Es
+  stimmt also und sieht trotzdem nach einem Rest aus, der noch kommt.
+
 ## Die Störfall-Drills
 
-FEHLT NOCH. Vorgesehen sind drei: ein Abschuss des Containers mitten im OCR-Lauf
-mit anschließendem Neustart, eine Probe mit abgeschaltetem Backend, und eine fast
-volle Platte.
+Drei Störfälle, auf derselben Maschine, mit demselben Index von 50.068 Dokumenten
+hinter sich, jeder mit Ausgangszustand, Eingriff, Beobachtung, Wiederherstellung
+und mit dem Satz, den er ausdrücklich **nicht** beweist. Der Unterschied zu den
+gleichnamigen Aufträgen in CI ist der Gegenstand: dort ein leerer Index und ein
+Korpus von 33 Dateien, hier 20 GB und eine Maschine, die seit zwölf Stunden
+arbeitet.
+
+Für den Kill-Drill und den Platten-Drill wird Arbeit gebraucht, die im Augenblick
+des Eingriffs läuft. Der Volllauf war zu diesem Zeitpunkt fertig, also entstand
+ein eigener, kurzer Vorrat: 300 der einseitigen Scans des Korpus, kopiert und über
+WebDAV als der Nutzer `lasttest` hochgeladen, also auf demselben Weg, auf dem ein
+Mensch Dateien in seine Nextcloud legt. Sie laufen sämtlich über die OCR-Spur,
+womit der Eingriff sicher in die OCR-Arbeit fällt und nicht daneben.
+
+### Drill 1: `docker kill` mitten im OCR-Lauf
+
+**Ausgangszustand, 2026-09-04T10:12:43Z.** Der Container arbeitet den Vorrat ab.
+
+```
+files gesamt     50.260      (50.104 aus dem Volllauf plus 156 neue Zeilen)
+indexed          50.090
+acl              50.090
+Warteschlange       146      davon 13 an den Arbeiter übergeben
+```
+
+**Eingriff, 2026-09-04T10:12:44Z.**
+
+```
+docker kill nc_app_findling_backend
+Status=exited ExitCode=137 OOMKilled=false FinishedAt=2026-09-04T10:12:44.890Z
+```
+
+**Beobachtung 1: der naheliegende Handgriff hilft nicht.** Was ein Verwalter als
+erstes tut, ist `docker start`, und das Ergebnis sieht aus wie ein Erfolg: der
+Container läuft, sein Protokoll meldet den vollständigen Start, die Wortliste wird
+geladen, uvicorn horcht. Die Warteschlange bewegt sich trotzdem nicht. Über eine
+Minute blieb `indexed` auf 50.090 stehen, während der Vorrat von 191 auf 235 Zeilen
+wuchs, weil die Uploads weiterliefen.
+
+Die Ursache liegt nicht dort, wo Plan 05-12 sie vermutet hat. Das Protokoll meldet
+zwar `HP_SHARED_KEY is not set, no HaRP tunnel is opened`, aber dieser Satz steht
+auch nach einer geglückten Neuregistrierung im Protokoll, und die Suche
+funktioniert in beiden Fällen. Der Unterschied ist ein anderer:
+`findling.main.enabled_handler` bewaffnet Poller und Vergleichslauf, und dieser
+Handler wird von AppAPI über `PUT /enabled` gerufen, also bei der Registrierung.
+Ein `docker start` ruft ihn nicht. **Der Container bedient danach jede Anfrage von
+außen und arbeitet von sich aus nichts ab.** Das ist die richtige Bauart, denn ein
+abgeschaltetes Backend, das weiter Arbeit einsammelt, ist der Klassiker aus der
+Integrationsliste; auf einer Box wird daraus aber ein Container, der gesund
+aussieht und stillsteht.
+
+**Wiederherstellung.** Der Weg ist die Neuregistrierung ohne `--rm-data`:
+
+```
+occ app_api:app:unregister findling_backend        # ohne --rm-data
+docker volume ls --filter name=findling_backend    # nc_app_findling_backend_data, unangetastet
+occ app_api:app:register findling_backend harp_aio --info-xml /tmp/info-fix.xml --wait-finish
+docker update --memory=2g --memory-swap=2g nc_app_findling_backend
+```
+
+| Größe | Wert |
+|---|---|
+| Dauer der Neuregistrierung | 5 s |
+| erstes neues Dokument danach | nach weiteren 6 s, um 10:15:10Z |
+| **Zeit bis zur Wiederaufnahme auf dem richtigen Weg** | **11 s** |
+| Zeit bis zur Wiederaufnahme mit dem Umweg über `docker start` | 146 s |
+| Datenspeicher | erhalten, der Index der 50.090 Dokumente steht unverändert |
+| harte Grenze nach der Neuregistrierung | wieder gesetzt, `Memory=2147483648` |
+
+**Beobachtung 2: was der Abschuss gekostet hat.** Endabrechnung um
+2026-09-04T10:45:08Z, nachdem die Warteschlange leer war:
+
+| Prüfung | Ergebnis |
+|---|---|
+| Zeilen insgesamt | 50.404, also genau 50.104 plus die 300 des Vorrats |
+| doppelte `file_id` | 0 |
+| doppelte Pfade unter `drill/` | 0 |
+| ACL-Zeilen gegen Dokumente | 50.366 gegen 50.366, gleich |
+| vom Vorrat indexiert | 298 von 300 |
+| **nicht fertig geworden** | **2 von 300** |
+
+Der Index hat den Abschuss also ohne Verlust und ohne Doppelung überstanden, und
+zwei Dateien haben ihn nicht überstanden. Beide Fälle gehören in den Bericht, weil
+sie verschiedene Dinge über die Zustandsmarke sagen.
+
+Der erste Fall heilt von selbst. Zwei Zeilen waren in der Sekunde des Abschusses
+als OCR-Auftrag gesperrt, mit dem Zeichen des toten Containers. Die Sperre eines
+OCR-Auftrags gilt 1800 Sekunden (`QueueMapper::LOCK_TIMEOUTS`, mit der Begründung,
+dass zwei OCR-Läufe unter der Deckelkaskade bis zu 1200 s dauern dürfen). Um
+10:42:43Z lief sie ab, der Container holte beide Zeilen, und um 10:44:42Z waren
+sie indexiert, mit `attempts 2` und `ocr_used 1`. **Die Fortsetzung an der
+Zustandsmarke ist damit auf echter Hardware belegt**, mit einer halben Stunde
+Verzögerung, die keine Störung ist, sondern der Preis dafür, dass eine lange
+laufende OCR-Arbeit nicht fälschlich für tot erklärt wird.
+
+Der zweite Fall heilt nicht von selbst. Zwei Dateien, `drill/d037.pdf` und
+`drill/d038.pdf`, stehen bis heute auf `skipped(no_text_layer)` mit `attempts 1`
+und `ocr_used 0`, und die Nextcloud-Seite führt sie als
+`failed(repeatedly_stuck)`. Der Hergang lässt sich aus den beiden Zuständen lesen:
+ihr Inhaltsauftrag war fertig und das Verdikt "kein Textinhalt" im Container
+geschrieben, aber die Quittierung, die daraus den OCR-Auftrag gemacht hätte, ging
+mit dem Container verloren. Beim nächsten Zugriff sieht der Container seine eigene
+Zeile als unverändert, quittiert "unverändert", und der OCR-Auftrag entsteht nie.
+Nach den Wiederholungen schreibt die Nextcloud-Seite `repeatedly_stuck`, und genau
+dieses Verdikt hält den nächtlichen Vergleich davon ab, die Datei erneut
+einzureihen (die Absicht dahinter steht in `ReconcileController`).
+
+Der Schaden ist begrenzt und sichtbar: zwei von 300 Dateien, beide namentlich in
+der Fehlerliste der Verwaltungsseite, beide durch ein
+`occ findling:index --restart` wieder einzufangen. Verloren im Sinne von
+"unbemerkt weg" ist keine. Notiert als DI-05-23, nicht behoben, weil die Abhilfe
+die Übergabe zwischen den beiden Hälften betrifft und dieselbe Aufgeben-Regel
+berührt wie DI-05-21.
+
+**Was dieser Drill nicht beweist.** Er sagt nichts über einen Abschuss **während
+eines Schreibvorgangs im Index**. Getroffen wurde die Verarbeitungskette, nicht
+ein laufender Commit des Schreibpuffers; ob ein Abschuss zwischen zwei Segmenten
+eines Vereinigungslaufs ebenso ausgeht, steht hier nicht. Er sagt außerdem nichts
+über einen Abschuss während des nächtlichen Vergleichslaufs, der eine eigene
+Zustandsmarke führt.
+
+### Drill 2: das Backend ist weg
+
+**Ausgangszustand, 2026-09-04T10:45:44Z.** Eine Suche des Nutzers `lasttest` nach
+`Zahlungseingang` liefert über OCS HTTP 200 mit fünf Treffern, jeder mit
+Textausschnitt aus dem Dateiinhalt.
+
+**Eingriff, 2026-09-04T10:45:46Z.** `docker stop nc_app_findling_backend`, der
+Container endet geordnet mit `ExitCode 0`.
+
+**Beobachtung.** Dieselbe Suche, dreimal in derselben angemeldeten Sitzung:
+
+| Versuch | Antwort | Treffer | Dauer |
+|---|---|---|---|
+| 1 | HTTP 200 | 0 | 1560 ms |
+| 2 | HTTP 200 | 0 | 1605 ms |
+| 3 | HTTP 200 | 0 | 1612 ms |
+| Gegenprobe: die native Dateisuche derselben Sitzung | HTTP 200 | 5 | 113 ms |
+
+Kein Fehler, keine hängende Suche, keine leere Seite: der Anbieter meldet sich mit
+seinem Namen "File contents" und null Treffern zurück, und die übrigen Anbieter
+der Unified Search arbeiten unbeeinflusst weiter. Die 1,6 Sekunden sind das harte
+Zeitlimit, das die Begleit-App dem Aufruf mitgibt; sie sind der Preis dieser
+Degradierung und werden bei jeder Suche fällig, solange das Backend fehlt.
+
+Die Verwaltungsseite nennt den Zustand, und zwar genau einen. Von den fünf Bannern
+der Seite trägt nach dem Stopp nur eines kein `hidden`:
+
+```
+findling-banner-unreachable        SICHTBAR
+findling-banner-lockstep           verborgen
+findling-banner-stale              verborgen
+findling-banner-lowdisk            verborgen
+findling-banner-reindex            verborgen
+```
+
+Der Text lautet "The Findling backend does not answer. The numbers below are the
+last ones this app recorded." `backendReachable` steht auf falsch, und die Seite
+zeigt weiter die zuletzt festgehaltenen Zahlen, statt Nullen zu behaupten.
+
+**Wiederherstellung, und der Unterschied zwischen Lesen und Schreiben.** Ein
+`docker start` genügt für die Suche: 22 Sekunden später liefert dieselbe Anfrage
+wieder fünf Treffer in 442 ms, ohne jeden weiteren Eingriff. Für die Indexierung
+genügt er nicht, und das wurde eigens nachgeprüft, weil der Befund dem ersten
+Drill widerspricht, wenn man ihn nicht trennt: eine einzelne neu hochgeladene
+Datei blieb nach dem `docker start` drei Minuten lang unangetastet in der
+Warteschlange liegen, und das Protokoll zeigt in dieser Zeit `/status`, `/search`
+und `/snippets` mit 200, aber keinen einzigen Durchgang des Pollers. Nach der
+Neuregistrierung war dieselbe Zeile in 20 Sekunden abgearbeitet.
+
+| Weg zurück | Suche | Indexierung |
+|---|---|---|
+| `docker start` | wieder da nach 22 s | bleibt aus |
+| Neuregistrierung ohne `--rm-data` | wieder da | wieder da nach 20 s |
+
+**Was dieser Drill nicht beweist.** Er sagt nichts über ein Backend, das
+**langsam** ist statt stumm. Ein gestoppter Container antwortet sofort mit einem
+Verbindungsfehler, ein überlasteter lässt das Zeitlimit von zwei Sekunden
+auslaufen, und nur der zweite Fall verlangsamt die Unified Search wirklich; dieser
+Zweig ist in CI abgedeckt ("Backend hängt") und hier nicht. Er sagt außerdem
+nichts über die Suche eines Nutzers, der noch nie gesucht hat, während das Backend
+fehlt: die Begleit-App merkt sich die Version des Containers aus dem letzten
+Statusabruf, und diese Gedächtnisstelle wurde hier nicht geleert.
+
+### Drill 3: die Platte wird knapp
+
+**Ausgangszustand, 2026-09-04T10:15:40Z.** Der Container arbeitet den Rest des
+Vorrats ab, 21.797.539.840 Byte sind frei, `indexed` steht auf 50.102.
+
+**Eingriff.** Der Schwellwert des Containers ist `MIN_FREE_BYTES = 524.288.000`,
+also 500 MB. Verknappt wird mit einer einzigen großen Datei außerhalb der App:
+
+```sh
+fallocate -l 21378109440 /mnt/HC_Volume_106785477/BALLAST
+```
+
+Das Ziel sind bewusst rund 400 MB Rest und nicht null. Der Schwellwert der App
+wird damit sicher unterschritten, die Platte selbst läuft aber nie voll, und die
+PostgreSQL-Datenbank derselben Instanz, die auf demselben Dateisystem liegt,
+gerät in keinem Augenblick in Gefahr. Eine Probe, die nebenbei die Datenbank der
+Messmaschine beschädigt, misst am Ende etwas anderes als sie sollte.
+
+**Beobachtung, innerhalb von 90 Sekunden.** Das Protokoll des Containers:
+
+```
+WARNING:findling.index.writer:index commit paused, free space is below the
+        configured floor of 524288000 byte
+WARNING:findling.worker.poller:index paused, free space below the floor,
+        2 rows handed back
+```
+
+| Prüfung | Ergebnis |
+|---|---|
+| `lowDisk` in `/status` | wahr |
+| `diskFreeBytes` | 419.762.176 |
+| `spaceWarning` der Vorabschätzung | wahr |
+| `indexed` über 60 Sekunden | 50.102, unverändert |
+| Warteschlange | wächst wieder, die belegten Zeilen werden zurückgegeben |
+| Banner `findling-banner-lowdisk` | ohne `hidden`, also sichtbar |
+| Text des Banners | "Little disk space left. Indexing is paused so the index stays intact. Search keeps working." |
+| abgebrochene oder fehlgeschlagene Dateien | keine |
+
+Der Unterschied, auf den es ankommt: die Zeilen werden **zurückgegeben** und nicht
+als Fehlschlag beurteilt. Die Indexierung pausiert, sie bricht nicht ab, und im
+Protokoll steht der Grund im Klartext samt der Zahl, gegen die geprüft wurde.
+
+**Wiederherstellung, 2026-09-04T10:19:06Z.** Der Ballast wird gelöscht.
+
+| Größe | Wert |
+|---|---|
+| Dauer der Pause | rund 3 Minuten 25 Sekunden |
+| bis der Lauf weiterläuft | 42 s nach dem Freigeben, ohne jeden Eingriff |
+| `indexed` danach | 50.104, der Lauf setzt fort, wo er stand |
+| `lowDisk` danach | falsch, `diskFreeBytes` wieder 21.797.584.896 |
+| Verlust | keiner, keine Datei doppelt |
+
+**Was dieser Drill nicht beweist.** Er sagt nichts über eine Platte, die
+**zwischen zwei Schreibvorgängen** eines einzelnen Commits voll wird: geprüft wird
+der freie Platz vor dem Commit, und der Fall, in dem er währenddessen ausgeht,
+liegt hinter dieser Prüfung. Er sagt außerdem nichts über einen Datenträger, der
+tatsächlich auf null läuft, denn hier blieben 400 MB übrig, und er belegt die
+Zusage des Banners "Search keeps working" nicht, weil während der Pause nicht
+gesucht wurde.
+
+## Was der Test gekostet hat
+
+Abgefragt aus der Konto-API mit `scripts/ops/hetzner_box.sh status`, am
+2026-09-04T10:52Z, also nach dem Volllauf und den Drills und vor dem Abbau:
+
+| Posten | Wert |
+|---|---|
+| Laufzeit der Box | 18,7 Stunden seit 2026-09-03T16:10:50Z |
+| Preis der Box | 0,0371 EUR je Stunde |
+| Preis des Volumes | 0,0047 EUR je Stunde |
+| Preis der Adresse | 0,0010 EUR je Stunde |
+| **bisher ausgegeben, brutto** | **0,80 EUR** |
+| Monatspreis, falls sie stehen bliebe | 23,19 EUR Box, 3,40 EUR Volume, 0,59 EUR Adresse |
+
+Die Endabrechnung nach dem Löschen steht im Abschnitt darunter.
+
+### Der Abbau
+
+FEHLT NOCH. Er läuft erst nach der Abnahme des Berichts, weil danach keine
+Nachmessung mehr möglich ist, ohne eine neue Box zu bestellen.
 
 ## Reproduzieren
 
@@ -1374,7 +1891,7 @@ Zwei Seeds und zwei Prüfsummen, jede mit der Umgebung, in der sie gilt:
 |---|---|---|---|---|---|
 | Trockenlauf | `phase5-dry` | Abbild der ExApp, Pillow 12.3.0 | 500 | 246.452.632 | `afe5de552ae9cdf7a515326e7d0787a9133b4dfef3c08e75f41f9ad5db95a5d0` |
 | Trockenlauf | `phase5-dry` | Entwicklungsrechner, Plan 05-05 | 500 | 245.695.552 | `cac56ed1801efb3e691b28088c363c84d8941670394f5fed95ab19359b17d530` |
-| Volllauf | `phase5-full` | offen | 50.000 | offen | offen |
+| Volllauf | `phase5-full` | Abbild `localhost:5000/findling_backend:05-12-fix`, Pillow 12.3.0 | 50.000 | 20.208.046.426 | `c03a880323171d29c5278ed350db277291e39d256e95d5a8654dd4a6c244a274` |
 
 Warum es zwei sind und welche wofür gilt, steht oben im Abschnitt zum
 Trockenlauf.
