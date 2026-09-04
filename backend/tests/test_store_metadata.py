@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import cast
 from xml.etree import ElementTree
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -246,6 +247,26 @@ def _screenshots(name: str, info: ElementTree.Element) -> list[str]:
     return violations
 
 
+def _is_present_file(path: Path) -> bool:
+    """Whether the path is a file, with an unstattable name counting as absent.
+
+    The two platforms of this project disagree about a name that is longer than
+    the filesystem allows. Windows swallows it and answers False, Linux raises
+    OSError with ENAMETOOLONG out of the stat call inside ``is_file``. The
+    length gate right above produces exactly such a name on purpose, so the
+    disagreement was not hypothetical: the suite was green on the development
+    machine and red in CI on the same commit.
+
+    A name the filesystem cannot even look at is certainly not a file that lies
+    there, so both platforms are made to reach that same verdict here instead of
+    at every call site.
+    """
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
 def _local_image(name: str, url: str) -> list[str]:
     """Whether an address names an image that is really lying under store/media.
 
@@ -265,7 +286,7 @@ def _local_image(name: str, url: str) -> list[str]:
     relative = url[len(RAW_MEDIA_PREFIX) :]
     if not relative or "/" in relative:
         return [f"{name}: the screenshot address names {relative!r}, and store/media holds no subdirectories"]
-    if not (MEDIA / relative).is_file():
+    if not _is_present_file(MEDIA / relative):
         absent = (
             f"{name}: the screenshot address names {relative!r}, which does not exist under store/media, "
             f"so the store page would show an empty frame"
@@ -458,6 +479,23 @@ def test_a_screenshot_over_the_length_limit_is_reported() -> None:
     assert len(violations) == 2
     assert f"over the limit of {SCREENSHOT_LIMIT}" in violations[0]
     assert "does not exist under store/media" in violations[1]
+
+
+def test_a_name_the_filesystem_refuses_counts_as_absent() -> None:
+    """The verdict about an unstattable name must read the same on both platforms.
+
+    Without this rule the length gate above is green on the development machine
+    and red in CI on the very same commit, which is how it reached main on
+    2026-09-04: Windows answers False for a name that is too long, Linux raises
+    OSError out of the stat call. The stub raises what Linux raises, so the
+    verdict is checked here without needing a filesystem that refuses the name.
+    """
+
+    class _Refusing:
+        def is_file(self) -> bool:
+            raise OSError(36, "File name too long")
+
+    assert _is_present_file(cast(Path, _Refusing())) is False
 
 
 def test_a_screenshot_whose_image_is_not_in_the_repository_is_reported() -> None:
