@@ -867,3 +867,56 @@ blind geschriebener Test mit einem Dutzend Doubles ist eine Wette auf die CI.
 verbreitert, oder in den Phase-Review. Der billige Zwischenschritt waere, die
 drei Zeilen von `overview()` in eine eigene, ebenfalls statische Methode zu
 ziehen, die vier Zahlen bekommt und eine zurueckgibt.
+
+## DI-05-32 (Plan 05-21): Der ARM-Volllauf steht aus, weil cax11 nicht buchbar ist
+
+**Found during:** Plan 05-21, Task 1, beim ersten create.
+
+**Was:** Am 04.09. gegen 12:20Z ist `cax11` in keiner Region dieses Kontos
+buchbar. Zwei echte create-Versuche, `hel1` und `nbg1`, wurden mit
+`invalid_input: unsupported location for server type` abgewiesen. Es wurde nichts
+angelegt: die Suche nach dem Kennzeichen `purpose=findling-phase5` liefert ueber
+Server, Volumes und Firewalls null Treffer, und es gibt keine Zustandsdatei.
+
+**Die Falle, die eine Stunde gekostet haette:** die beiden Auskuenfte der API
+widersprechen sich. `/datacenters` fuehrt cax11 als verfuegbar in `hel1-dc2` und
+`nbg1-dc3`; die Flagge am Servertyp selbst steht in allen drei europaeischen
+Regionen auf `false`. Die Flagge hat recht, und die Gegenprobe ist `cpx22`, das
+dort auf `true` steht und tags zuvor wirklich gelaufen ist. `/datacenters` wird
+nicht mehr gepflegt, weil man auf seine Auskunft nicht mehr handeln kann: das
+Feld `datacenter` eines create ist seit dem 16.12.2025 abgeschafft und antwortet
+mit `datacenter is deprecated and cannot be used anymore`. Das Werkzeug fragt den
+Endpunkt seither nur noch, um den Widerspruch zu melden, statt ihm zu glauben.
+
+**Warum nicht hier erledigt:** das ist Kapazitaet und kein Fehler. Sie kommt ohne
+Ankuendigung zurueck und verschwindet ebenso.
+
+**Wohin es gehoert:** in denselben Plan, sobald die Kapazitaet da ist. Eine
+Warteschleife im Kratzverzeichnis fragt jede Minute und legt die Box selbst an,
+sobald `hel1` oder `nbg1` frei wird; ihr Protokoll liegt in
+`scratchpad/cax11-watch.log`. Faellt sie aus, ist der Handgriff
+`scripts/ops/hetzner_box.sh prices`, gefolgt von `create`.
+
+## DI-05-33 (Plan 05-21): Der Workers-Vergleich ist ohne Produktaenderung nicht messbar
+
+**Found during:** Plan 05-21, bei der Vorbereitung der Zusatzmessung.
+
+**Was:** Der Owner hat am 04.09. eine Zusatzmessung `INDEX_WORKERS=2`
+freigegeben. `backend/src/findling/config.py:52` macht sie ohne Eingriff
+unmoeglich, und zwar mit Absicht: "One indexing worker, always. [...] This is not
+a tuning knob and deliberately reads no environment variable, so that making it
+one is a code change somebody has to defend in review." Die Begruendung daneben
+ist genau die Groesse, um die dieser ganze Lauf gefuehrt wird: OCR steht bei 300
+bis 600 MB je Seite, das Einbettungsmodell bei 250 bis 400 MB, und auf der 4-GB-
+Box duerfen die beiden Spitzen sich nie treffen.
+
+**Warum nicht hier erledigt:** noch gibt es keine Box. Der Vorschlag fuer den
+Bericht, sobald es eine gibt: die Begruendung aus IDX-08 woertlich zitieren und
+benennen, was ein zweiter Worker architektonisch kostet, statt eine Zahl zu
+liefern, die niemand einsetzen darf. Wenn nach Volllauf und Drills noch Box-Zeit
+bleibt, dazu eine eng begrenzte Wegwerf-Messung auf dem kurzen Drill-Vorrat, klar
+als Experiment gekennzeichnet und niemals ins Produkt eingecheckt: sie beantwortet
+die Speicherhaelfte der Frage in zwanzig Minuten und gefaehrdet die Hauptmessung
+nicht.
+
+**Wohin es gehoert:** in Task 2 und Task 3 dieses Plans.
