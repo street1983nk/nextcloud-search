@@ -56,6 +56,12 @@ replace.
 
 - No file content leaves the server. Extraction, OCR, indexing and search all run
   inside the container on your own machine.
+- What is stored is the extracted text. The text of every indexed document is kept
+  in the backend app's own volume, because the excerpts shown under a search result
+  are cut out of it on demand. A backup of that volume therefore contains the text
+  of your indexed documents, and the index is not encrypted at rest, which is a
+  matter for the host it runs on. The same paragraph stands in both store
+  descriptions, in all three languages.
 - No telemetry. The app does not phone home, not even for version checks.
 - User files are never modified. Every file access goes through a read only content
   gateway, and a checksum gate in CI proves the invariant on a reference corpus.

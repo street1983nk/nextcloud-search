@@ -737,3 +737,52 @@ vor dem ARM-Volllauf, damit der ARM-Lauf das korrigierte Verhalten prueft. Er
 gehoert zusammen mit DI-05-21 entschieden, weil beide an
 `QueueService::acknowledge` und an der Frage haengen, was eine Zeile in der
 Zustandstabelle bedeutet.
+
+## DI-05-24 (Plan 05-17): `docs/testing.md` kennt das neue Store-Gate noch nicht
+
+**Found during:** Plan 05-17, beim Bau von `backend/tests/test_store_metadata.py`.
+
+**Was:** `docs/testing.md` fuehrt im Abschnitt "Die textuellen Gates ueber die
+PHP-Quellen" eine Tabelle, in der jedes Gate mit dem Satz steht, was es
+verhindert. Das neue Gate ueber die Store-Texte steht dort nicht, und
+`docs/store-listing.md` wird in der Doku dieses Repositories bisher von keiner
+Seite verlinkt. Beides zusammen heisst: wer die Gate-Landschaft ueber die
+Dokumentation kennenlernt, erfaehrt weder von der Nachzieh-Regel noch von dem
+Ort, an dem die drei Sprachfassungen nebeneinander stehen.
+
+**Warum nicht hier erledigt:** `docs/testing.md` steht nicht in den
+`files_modified` dieses Plans, und ein paralleler Ausfuehrer arbeitet in
+derselben Welle an anderen Dateien; eine Zeile in einer fremden Datei aus einem
+Worktree ist genau die Art Konflikt, die diese Liste vermeiden soll.
+
+**Wohin es gehoert:** in den Plan, der `docs/testing.md` ohnehin anfasst, oder in
+den Phase-Review. Der Umfang: eine Tabellenzeile fuer
+`test_store_metadata.py` und ein Verweis auf `docs/store-listing.md` in der
+Doku-Uebersicht.
+
+## DI-05-25 (Plan 05-17): Der Store-Validierungspfad hat kein lokales Werkzeug
+
+**Found during:** Plan 05-17, beim Nachfahren der XSD-Pruefung vor dem Commit.
+
+**Was:** `.github/workflows/php.yml` prueft beide `info.xml` mit `xsltproc` und
+`xmllint` gegen die unter `APPSTORE_SHA` gepinnte Fassung von `pre-info.xslt`
+und `info.xsd`. Auf der Entwicklungsmaschine gibt es keines der beiden
+Werkzeuge, und es gibt im Repository kein Skript, das den Pfad ersatzweise
+faehrt. Ein Schema-Fehler faellt damit fruehestens auf dem Runner auf, und bei
+der Einreichung waere er teuer.
+
+**Was stattdessen gemacht wurde:** ein Wegwerf-Abbild aus `php:8.2-cli` mit
+`xsltproc` und `libxml2-utils`, dazu die beiden gepinnten Dateien im
+Scratchpad geholt. Damit lief der volle Pfad lokal, fuer beide Dateien, mit dem
+Ergebnis `validates`. Das Abbild ist nicht Teil des Repositories und ueberlebt
+diesen Plan nicht.
+
+**Warum nicht hier erledigt:** ein Skript unter `scripts/dev/` waere eine neue
+Datei ausserhalb der `files_modified` dieses Plans, und die Frage, ob es ein
+Container-Aufruf oder eine Abhaengigkeit sein soll, beruehrt die
+Bezugsdisziplin, die in dieser Phase unter einem Owner-Gate steht.
+
+**Wohin es gehoert:** in den Plan, der die Release-Artefakte baut (D-26), oder in
+den Phase-Review. Der billige Weg: `scripts/dev/validate-info-xml.sh`, das die
+beiden gepinnten Dateien holt und den Pfad in einem Container faehrt, plus eine
+Zeile in `docs/testing.md`.
