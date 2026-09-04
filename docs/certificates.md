@@ -91,15 +91,25 @@ Recorded at creation time so that the request that eventually gets merged can be
 to be the one that was generated here, and so that a swapped or regenerated key is
 noticed instead of silently accepted.
 
+The digest is taken over the **DER** of the public key, not over the PEM text that
+`openssl ... -pubkey` prints. The PEM text is not stable across openssl versions: for
+the very same key, OpenSSL 3.0.13 and 3.5.6 print PEM that hashes to different values
+(`f5324067...` against `78101179...` for `findling`). The table below therefore held a
+value that only one machine could reproduce, and the release run failed on it on
+04.09.2026 while the development machine kept saying the certificate was fine. The DER
+is the encoding of the key itself and is identical under both versions.
+
 ```bash
-openssl req -in ~/.findling-secrets/findling.csr         -noout -pubkey | openssl sha256
-openssl req -in ~/.findling-secrets/findling_backend.csr -noout -pubkey | openssl sha256
+openssl req -in ~/.findling-secrets/findling.csr -noout -pubkey \
+  | openssl pkey -pubin -outform DER | openssl sha256
+openssl req -in ~/.findling-secrets/findling_backend.csr -noout -pubkey \
+  | openssl pkey -pubin -outform DER | openssl sha256
 ```
 
-| App id | SHA256 of the public key |
-|--------|--------------------------|
-| `findling` | `781011795ce8b96c78a9fb485d98dd3cd95e0d2cc93c684beebd3263b81e5e3b` |
-| `findling_backend` | `70b9340b24457bd29fb107519495e51b3fb7e4edbcf725334c33a229be6f8b8e` |
+| App id | SHA256 of the public key (DER) |
+|--------|--------------------------------|
+| `findling` | `c99e28f3decd64cf5d3e7fdecaac4e3d29b3444c71b7cb914aff81519f2108ab` |
+| `findling_backend` | `340d369f3573d9c936f0ce9de5e8af978425131c2d66adec2231e86642592e76` |
 
 Both requests were checked with `openssl req -noout -verify` and both reported
 `Certificate request self-signature verify OK`. Both keys are RSA 4096.
@@ -108,7 +118,8 @@ The same fingerprint can be taken from the issued certificate once it exists, wh
 how the certificate is matched back to the local key:
 
 ```bash
-openssl x509 -in findling.crt -noout -pubkey | openssl sha256
+openssl x509 -in findling.crt -noout -pubkey \
+  | openssl pkey -pubin -outform DER | openssl sha256
 ```
 
 If that value differs from the table above, the certificate does not belong to the

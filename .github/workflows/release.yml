@@ -200,19 +200,33 @@ jobs:
           curl -fsSL "${base}/findling/findling.crt"                 -o "${RUNNER_TEMP}/findling.crt"
           curl -fsSL "${base}/findling_backend/findling_backend.crt" -o "${RUNNER_TEMP}/findling_backend.crt"
           fail=0
+          # Both readings below are deliberately canonical rather than textual,
+          # because the first version of this step compared the text that
+          # openssl happens to print and was therefore green on the development
+          # machine and red here on the same certificate (run 33894444190):
+          #
+          #   subject: 3.0.13 prints "subject=CN = findling", 3.5.6 prints
+          #     "subject=CN=findling". -nameopt RFC2253 pins the spelling.
+          #   fingerprint: the digest over the public key PEM TEXT differs
+          #     between the two versions for the very same key (3.0.13 gives
+          #     f5324067..., 3.5.6 gives 78101179... for findling). The digest
+          #     over the public key DER is identical in both, so the DER is what
+          #     identifies a key here.
           check() {
             expected="$2"
-            subject=$(openssl x509 -in "${RUNNER_TEMP}/$1.crt" -noout -subject)
-            actual=$(openssl x509 -in "${RUNNER_TEMP}/$1.crt" -noout -pubkey | openssl sha256 -r | cut -d' ' -f1)
+            subject=$(openssl x509 -in "${RUNNER_TEMP}/$1.crt" -noout -subject -nameopt RFC2253)
+            actual=$(openssl x509 -in "${RUNNER_TEMP}/$1.crt" -noout -pubkey \
+              | openssl pkey -pubin -outform DER | openssl sha256 -r | cut -d' ' -f1)
             echo "$1 subject     ${subject}"
             echo "$1 fingerprint ${actual}"
             [ "${subject}" = "subject=CN=$1" ] || { echo "$1: the certificate subject is not the app id, so the server will report Certificate is not valid for required scope"; fail=1; }
             [ "${actual}" = "${expected}" ] || { echo "$1: the certificate does not belong to the key recorded in docs/certificates.md"; fail=1; }
           }
-          # The two values from the fingerprint table of docs/certificates.md,
-          # recorded when the keys were generated on 15.08.2026.
-          check findling         781011795ce8b96c78a9fb485d98dd3cd95e0d2cc93c684beebd3263b81e5e3b
-          check findling_backend 70b9340b24457bd29fb107519495e51b3fb7e4edbcf725334c33a229be6f8b8e
+          # The two values from the fingerprint table of docs/certificates.md.
+          # Verified on 04.09.2026 against our own CSR, our own private key and
+          # the issued certificate, under OpenSSL 3.0.13 and 3.5.6 alike.
+          check findling         c99e28f3decd64cf5d3e7fdecaac4e3d29b3444c71b7cb914aff81519f2108ab
+          check findling_backend 340d369f3573d9c936f0ce9de5e8af978425131c2d66adec2231e86642592e76
           exit "${fail}"
 
       # Scaffolding for occ and nothing else. integrity:sign-app reaches the
