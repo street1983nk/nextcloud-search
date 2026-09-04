@@ -1,9 +1,12 @@
 #!/bin/sh
 # Rent the ARM box of the load test, prove what it costs, and give it back.
 #
-# The load run of phase 5 needs a machine this project does not own: an Ampere
-# CAX11 with 4 GB of memory and a 50 GB volume, because the 40 GB root disk of
-# that machine does not hold a 20 GB corpus plus the index plus the images. The
+# The load run of phase 5 needs a machine this project does not own: 4 GB of
+# memory, two cores and a 50 GB volume, because the 40 GB root disk of the
+# target machine does not hold a 20 GB corpus plus the index plus the images.
+# This tool rented the x86 rehearsal of that run. The arm half of it went to
+# another provider in the end, see scripts/ops/aws_box.sh and the note at
+# SERVER_TYPE, because no CAX11 was to be had for months. The
 # box is rented for the run and deleted afterwards, and that second half is not
 # an afterthought but decision D-01: a forgotten box with a Nextcloud, an admin
 # password and an open port 443 is a security problem and a monthly invoice.
@@ -38,11 +41,20 @@ API_BASE='https://api.hetzner.cloud/v1'
 # every european location, so the owner decided to run the rehearsal on the x86
 # machine of the same size and to repeat the core measurement on arm once the
 # stock returns. Both runs are wanted, and the report keeps their numbers apart.
-# Switching back is this one word, because everything that follows is read from
-# the API rather than repeated here. On 2026-09-04 the stock returned and this
-# word was switched back for the arm run; the rehearsal ran on cpx22 and its
-# numbers stay in the report next to these.
-SERVER_TYPE='cax11'
+# Switching back was meant to be this one word, because everything that follows
+# is read from the API rather than repeated here. It did not come to that: on
+# 2026-09-04 cax11 was still unavailable in every european location, two create
+# attempts were refused, and the owner established by telephone the same day
+# that the shortage runs for months. That answer beats any reading of this API,
+# and it moved the arm run to another provider: scripts/ops/aws_box.sh rents an
+# m7g.large with its memory capped to 4 GB by the kernel.
+#
+# So this word stays on the machine that really ran with this tool, the x86
+# rehearsal, and it is not a placeholder for an arm run that will not happen
+# here. What is worth keeping from that attempt is one directory further down:
+# the stock question in cmd_create, which two endpoints of this API answer
+# differently.
+SERVER_TYPE='cpx22'
 SERVER_IMAGE='ubuntu-24.04'
 # Helsinki, because decision D-01 of the phase names that location. The earlier
 # value here was nbg1, taken from the example request of the research document;
@@ -51,12 +63,11 @@ SERVER_IMAGE='ubuntu-24.04'
 # before the first create, because the location of a server cannot be changed
 # afterwards: a box in the wrong region costs a destroy and a create.
 #
-# The plan of the arm run names nbg1 as the sanctioned fallback when hel1 is
-# empty, and that fallback stays a deliberate edit of this word rather than an
-# environment variable: the arm types come back one region at a time, an
-# override would make the wrong region one typo away, and the edit puts the
-# region of the run into the history of this repository where the report can
-# cite it. There is a gate on this line.
+# The plan of the arm run named nbg1 as a sanctioned fallback for an empty hel1,
+# and that fallback was never needed, because the type was empty in both. It
+# stays out of this file as a variable: a region cannot be changed after a
+# create, so it belongs in the history of this repository where the report can
+# cite it, and not one typo away in an environment. There is a gate on this line.
 SERVER_LOCATION='hel1'
 # Without the architecture in it, on purpose: the same script rents the x86
 # rehearsal and the arm repeat, and a box called arm that is not one is a trap
