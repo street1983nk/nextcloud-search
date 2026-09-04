@@ -1683,24 +1683,20 @@ Zustandsmarke ist damit auf echter Hardware belegt**, mit einer halben Stunde
 Verzögerung, die keine Störung ist, sondern der Preis dafür, dass eine lange
 laufende OCR-Arbeit nicht fälschlich für tot erklärt wird.
 
-Der zweite Fall heilt nicht von selbst. Zwei Dateien, `drill/d037.pdf` und
-`drill/d038.pdf`, stehen bis heute auf `skipped(no_text_layer)` mit `attempts 1`
-und `ocr_used 0`, und die Nextcloud-Seite führt sie als
-`failed(repeatedly_stuck)`. Der Hergang lässt sich aus den beiden Zuständen lesen:
-ihr Inhaltsauftrag war fertig und das Verdikt "kein Textinhalt" im Container
-geschrieben, aber die Quittierung, die daraus den OCR-Auftrag gemacht hätte, ging
-mit dem Container verloren. Beim nächsten Zugriff sieht der Container seine eigene
-Zeile als unverändert, quittiert "unverändert", und der OCR-Auftrag entsteht nie.
-Nach den Wiederholungen schreibt die Nextcloud-Seite `repeatedly_stuck`, und genau
-dieses Verdikt hält den nächtlichen Vergleich davon ab, die Datei erneut
-einzureihen (die Absicht dahinter steht in `ReconcileController`).
+Der zweite Fall heilt nicht von selbst, und er gehört, wie sich später
+herausstellte, gar nicht diesem Drill. Zwei Dateien, `drill/d037.pdf` und
+`drill/d038.pdf`, stehen auf `skipped(no_text_layer)` mit `attempts 1` und
+`ocr_used 0`, und die Nextcloud-Seite führt sie als `failed(repeatedly_stuck)`.
+Der erste Verdacht fiel auf den Abschuss, weil er zeitlich davorlag. Die
+Nachmessung in Drill 3 hat ihn entlastet: dort entstanden **30 solcher
+Abschreibungen ohne jeden Abschuss**, und ihre Zahl war beide Male genau die Zahl
+der Zeilen, die im Augenblick der Plattenpause unterwegs waren. Der Hergang und
+seine Folgen stehen deshalb unten bei Drill 3, wo sie hingehören.
 
-Der Schaden ist begrenzt und sichtbar: zwei von 300 Dateien, beide namentlich in
-der Fehlerliste der Verwaltungsseite, beide durch ein
-`occ findling:index --restart` wieder einzufangen. Verloren im Sinne von
-"unbemerkt weg" ist keine. Notiert als DI-05-23, nicht behoben, weil die Abhilfe
-die Übergabe zwischen den beiden Hälften betrifft und dieselbe Aufgeben-Regel
-berührt wie DI-05-21.
+Für diesen Drill bleibt damit die schlichtere Bilanz: **der Abschuss selbst hat
+keine einzige Datei gekostet.** Seine 13 unterwegs befindlichen Zeilen kamen
+entweder über die gewöhnliche Wiederholung zurück oder, im Fall der beiden
+OCR-Aufträge, nach dem Ablauf ihrer Sperre.
 
 **Was dieser Drill nicht beweist.** Er sagt nichts über einen Abschuss **während
 eines Schreibvorgangs im Index**. Getroffen wurde die Verarbeitungskette, nicht
@@ -1824,13 +1820,78 @@ Protokoll steht der Grund im Klartext samt der Zahl, gegen die geprüft wurde.
 | `lowDisk` danach | falsch, `diskFreeBytes` wieder 21.797.584.896 |
 | Verlust | keiner, keine Datei doppelt |
 
+### Drill 3, Nachtrag: die Suche während der Pause, und was die Pause wirklich kostet
+
+Der erste Durchgang liess eine Zusage offen. Das Banner sagt "Indexing is paused so
+the index stays intact. Search keeps working", und während der Pause war nicht
+gesucht worden. Also ein zweiter Durchgang, mit demselben Eingriff und einem
+grösseren Vorrat: 60 frische Kopien einseitiger Scans, über WebDAV hochgeladen,
+30 davon im Augenblick der Verknappung beim Arbeiter.
+
+**Die erste Hälfte der Zusage stimmt.** Während `lowDisk` wahr war, die
+Indexierung pausierte und 420.040.704 Byte frei waren:
+
+| Suchbegriff | Antwort | Treffer | Dauer |
+|---|---|---|---|
+| `Zahlungseingang` | HTTP 200 | 5 | 114 ms |
+| `Bauleitplanung` | HTTP 200 | 5 | 136 ms |
+| `Instandhaltung` | HTTP 200 | 5 | 149 ms |
+
+Jeder Treffer mit Titel und Textausschnitt, in der gewohnten Zeit, gegen einen
+Index von 50.366 Dokumenten. Die Suche liest den Index über eine
+Speicherabbildung und braucht dafür keinen freien Platz; die Zusage ist damit
+belegt und nicht mehr nur plausibel.
+
+**Die zweite Hälfte stimmt nicht.** "The index stays intact" ist wahr, aber es ist
+nicht die ganze Rechnung. Nach der Pause fehlten von den 60 Dateien 30:
+
+| Von 60 hochgeladenen Dateien | Anzahl |
+|---|---|
+| indexiert | 30 |
+| als `failed(repeatedly_stuck)` abgeschrieben, nie an den Container übergeben | 28 |
+| als `failed(repeatedly_stuck)` abgeschrieben, im Container auf `no_text_layer` stehengeblieben | 2 |
+
+Die Zahl 30 ist keine zufällige. Sie ist genau die Zahl der Zeilen, die beim
+Beginn der Pause an den Arbeiter übergeben waren, und im ersten Durchgang dieses
+Drills waren es genau 2 von 2. Der Mechanismus steht im Quelltext beider Hälften
+und ist nachlesbar:
+
+1. `QueueMapper` zählt die Wiederholungen **bei der Ausgabe** hoch, mit dem
+   Kommentar "Handing a row out is the attempt, so retries is counted here".
+2. Der Container gibt bei knapper Platte die ganze Ladung zurück, ohne sie zu
+   beurteilen: "index paused, free space below the floor, 30 rows handed back".
+3. Der nächste Durchgang des Pollers holt dieselben Zeilen wieder, zählt wieder
+   hoch, und gibt sie wieder zurück. Ein Durchgang dauert wenige Sekunden.
+4. `QueueService::MAX_DELIVERIES` steht auf 3. Nach vier Ausgaben, also nach
+   **rund zwanzig Sekunden Plattenknappheit**, schreibt die Nextcloud-Seite die
+   Zeile als `failed(repeatedly_stuck)` ab und gibt sie nicht mehr aus.
+
+Die Pause verbraucht also das Wiederholungsbudget genau der Dateien, die sie
+schützen soll. Drei Zurückgaben im Protokoll haben gereicht; die Pause dauerte
+hundert Sekunden, und die Abschreibung war nach einem Fünftel davon vollzogen.
+
+Was das für einen Betreiber heisst, ist unangenehm konkret: **eine volle Platte,
+die eine halbe Minute besteht, kostet den gesamten Arbeitsvorrat, der in diesem
+Moment unterwegs ist**, und die Oberfläche sagt in derselben Minute, es sei nur
+pausiert. Die Dateien sind nicht unbemerkt weg, sie stehen namentlich in der
+Fehlerliste, und `occ findling:index --restart` fängt sie wieder ein. Aber der
+nächtliche Vergleich holt sie ausdrücklich nicht zurück, denn `repeatedly_stuck`
+ist genau das Verdikt, mit dem eine aufgegebene Datei vom Vergleich ausgenommen
+wird.
+
+Notiert als DI-05-23, nicht behoben. Die Abhilfe ist keine Zeile: eine Rückgabe
+wegen Plattenknappheit ist kein Fehlversuch der Datei, sie müsste also entweder
+die Wiederholung nicht belasten oder den Vorrat gar nicht erst ausgeben, solange
+die Platte knapp ist. Beides ändert die Bedeutung von `retries`, beides berührt
+beide Hälften, und die zweite Variante berührt zusätzlich die Frage, woran der
+Poller vor dem Holen erkennt, dass er nicht schreiben kann.
+
 **Was dieser Drill nicht beweist.** Er sagt nichts über eine Platte, die
 **zwischen zwei Schreibvorgängen** eines einzelnen Commits voll wird: geprüft wird
 der freie Platz vor dem Commit, und der Fall, in dem er währenddessen ausgeht,
 liegt hinter dieser Prüfung. Er sagt außerdem nichts über einen Datenträger, der
-tatsächlich auf null läuft, denn hier blieben 400 MB übrig, und er belegt die
-Zusage des Banners "Search keeps working" nicht, weil während der Pause nicht
-gesucht wurde.
+tatsächlich auf null läuft, denn hier blieben beide Male rund 400 MB übrig, damit
+die Datenbank derselben Instanz nicht in Mitleidenschaft gezogen wird.
 
 ## Was der Test gekostet hat
 

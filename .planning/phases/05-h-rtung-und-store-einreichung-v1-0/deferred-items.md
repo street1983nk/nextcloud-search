@@ -663,48 +663,77 @@ die Hintergrundauftraege. Beides zugleich zu sagen braucht ein zweites Feld und
 einen zweiten Satz. Das beruehrt `AdminViewService`, den Text der Seite und die
 Bannerliste aus Plan 04-03, also drei Orte und keine Zeile.
 
-**Wohin es gehoert:** in den Phase-Review. Der billige Zwischenschritt waere, den
-Vergleichslauf so zu planen, dass er auch waehrend eines langen OCR-Nachlaufs
-regelmaessig laeuft, denn dann bewegt sich `lastJobRun` wieder und die Regel
-stimmt von selbst.
+**Wohin es gehoert:** in den angekuendigten Fix-Plan dieser Phase, vor 05-17 und
+vor dem ARM-Volllauf, damit der ARM-Lauf das korrigierte Verhalten prueft. Der
+billige Zwischenschritt waere, den Vergleichslauf so zu planen, dass er auch
+waehrend eines langen OCR-Nachlaufs regelmaessig laeuft, denn dann bewegt sich
+`lastJobRun` wieder und die Regel stimmt von selbst.
 
-## DI-05-23: Ein Abschuss zwischen Inhaltsverdikt und Quittierung strandet die Datei, und der naechtliche Vergleich holt sie nicht zurueck
+## DI-05-23: Eine kurze Plattenknappheit schreibt den gesamten Vorrat ab, der gerade unterwegs ist
 
-**Found during:** Plan 05-14, Stoerfall-Drill 1 auf der Box.
+**Found during:** Plan 05-14, Stoerfall-Drill 3 auf der Box, in zwei unabhaengigen
+Durchgaengen.
 
-**Was:** `docker kill` mitten in einem Lauf ueber 300 Scans hat zwei von 300
-Dateien in einem Zustand hinterlassen, aus dem sie von selbst nicht mehr
-herauskommen. Im Container stehen `drill/d037.pdf` und `drill/d038.pdf` auf
-`skipped(no_text_layer)` mit `attempts 1` und `ocr_used 0`, auf der
-Nextcloud-Seite auf `failed(repeatedly_stuck)`.
+**Was:** Wird der freie Platz unter `MIN_FREE_BYTES` (500 MB) gedrueckt, pausiert
+der Container richtigerweise und gibt seine Ladung unbeurteilt zurueck ("index
+paused, free space below the floor, N rows handed back"). Die Nextcloud-Seite
+zaehlt aber die Wiederholung **bei der Ausgabe** hoch, nicht beim Fehlschlag:
+`QueueMapper` schreibt `retries + 1` beim Holen, mit dem Kommentar "Handing a row
+out is the attempt, so retries is counted here". Ein Durchgang des Pollers dauert
+wenige Sekunden, `QueueService::MAX_DELIVERIES` steht auf 3, also ist das
+Wiederholungsbudget einer Zeile nach rund zwanzig Sekunden Plattenknappheit
+aufgebraucht. Danach schreibt `QueueService` sie als `failed(repeatedly_stuck)` ab
+und gibt sie nicht mehr aus.
 
-Der Hergang laesst sich aus den beiden Zustaenden lesen: der Inhaltsauftrag war
-fertig und das Verdikt "kein Textinhalt" im Container geschrieben, aber die
-Quittierung, aus der die andere Haelfte den OCR-Auftrag gemacht haette, ging mit
-dem Container verloren. Beim naechsten Zugriff sieht der Container seine eigene
-Zeile als unveraendert, quittiert "unveraendert", und der OCR-Auftrag entsteht
-nie. Nach den Wiederholungen schreibt die Nextcloud-Seite `repeatedly_stuck`, und
-genau dieses Verdikt haelt den naechtlichen Vergleich davon ab, die Datei erneut
-einzureihen: `ReconcileController` uebergibt die Endzustaende ausdruecklich mit,
-damit eine aufgegebene Datei nicht jede Nacht neu eingereiht wird (IN-03 aus
-Phase 3).
+**Gemessen, zweimal, mit demselben Verhaeltnis:**
 
-**Was daran nicht schlimm ist:** die Datei ist nicht unbemerkt weg. Sie steht
+| Durchgang | Zeilen beim Arbeiter, als die Platte knapp wurde | Dauer der Pause | abgeschrieben |
+|---|---|---|---|
+| 1 (2026-09-04T10:15:41Z) | 2 | 3 min 25 s | 2 |
+| 2 (2026-09-04T11:13:25Z) | 30 | 1 min 38 s | 30 |
+
+Im zweiten Durchgang waren 60 Dateien hochgeladen worden: 30 wurden indexiert, 28
+nie an den Container uebergeben und als `repeatedly_stuck` abgeschrieben, 2 blieben
+im Container auf `skipped(no_text_layer)` stehen, weil ihr Inhaltsverdikt schon
+geschrieben war und die Quittierung, aus der der OCR-Auftrag entstanden waere,
+nicht mehr kam.
+
+**Warum das mehr ist als eine Unschoenheit:** die Oberflaeche sagt in derselben
+Minute "Little disk space left. Indexing is paused so the index stays intact."
+Der Index bleibt tatsaechlich heil und die Suche laeuft weiter, das ist in
+demselben Drill belegt. Der Arbeitsvorrat bleibt aber nicht heil, und genau davon
+sagt das Banner nichts. Auf einer 4-GB-Box mit einem knappen Datentraeger, also
+der Zielumgebung dieses Produkts, ist eine halbe Minute Knappheit kein
+Ausnahmefall.
+
+**Was den Schaden begrenzt:** die Dateien sind nicht unbemerkt weg. Sie stehen
 namentlich in der Fehlerliste der Verwaltungsseite, `occ findling:diagnose` nennt
-sie, und ein `occ findling:index --restart` faengt sie wieder ein. Zum Vergleich:
-zwei andere Zeilen desselben Drills, die im Augenblick des Abschusses als
-OCR-Auftrag gesperrt waren, haben sich nach dem Ablauf der 1800-Sekunden-Sperre
-von selbst erledigt. Der Unterschied ist genau die Stelle in der Kette, an der der
-Abschuss trifft.
+sie, und `occ findling:index --restart` faengt sie wieder ein. Der naechtliche
+Vergleich holt sie ausdruecklich NICHT zurueck: `repeatedly_stuck` ist genau das
+Verdikt, mit dem eine aufgegebene Datei vom Vergleich ausgenommen wird
+(`ReconcileController`, IN-03 aus Phase 3).
 
-**Warum nicht hier behoben:** die Abhilfe beruehrt die Uebergabe zwischen beiden
-Haelften. Entweder darf ein `no_text_layer` im Container erst geschrieben werden,
-nachdem die Quittierung durch ist (dann kostet jeder Scan eine zusaetzliche
-Runde), oder die Quittierung muss diesen Zustand als "OCR steht aus" fuehren
-koennen (dann braucht der Vertrag ein Feld), oder `repeatedly_stuck` darf den
-naechtlichen Vergleich nicht dauerhaft blockieren (dann kehrt IN-03 zurueck). Das
-ist dieselbe Entscheidung, die DI-05-21 von der anderen Seite stellt: was bedeutet
-eine Zeile in der Zustandstabelle.
+**Was ausdruecklich NICHT die Ursache ist:** der `docker kill` aus Drill 1. Sein
+Verdacht lag naeher, weil er zeitlich davorlag, und er ist entlastet: seine 13
+unterwegs befindlichen Zeilen kamen entweder ueber die gewoehnliche Wiederholung
+zurueck oder, im Fall der beiden OCR-Auftraege, nach dem Ablauf ihrer
+1800-Sekunden-Sperre. Der Abschuss hat keine einzige Datei gekostet.
 
-**Wohin es gehoert:** in den Phase-Review, zusammen mit DI-05-21, weil beide an
-`QueueService::acknowledge` haengen und eine gemeinsame Antwort brauchen.
+**Warum nicht hier behoben:** die Abhilfe ist keine Zeile und sie beruehrt beide
+Haelften. Drei Wege sind denkbar, und die Wahl ist eine Entscheidung ueber die
+Bedeutung von `retries`:
+
+1. Eine Rueckgabe wegen Plattenknappheit belastet die Wiederholung nicht. Dann
+   braucht die Quittierung einen dritten Kanal neben Fehlschlag und
+   Uebersprungenem, denn heute kann der Container "ich habe gar nicht erst
+   angefangen" nicht sagen.
+2. Der Poller holt nichts, solange die Platte knapp ist. Dann muss er das vor dem
+   Holen wissen, und heute merkt er es erst beim Schreiben.
+3. `MAX_DELIVERIES` zaehlt Zeit statt Ausgaben. Dann verliert die Aufgeben-Regel
+   ihre einfache Bedeutung.
+
+**Wohin es gehoert:** in den angekuendigten Fix-Plan dieser Phase, vor 05-17 und
+vor dem ARM-Volllauf, damit der ARM-Lauf das korrigierte Verhalten prueft. Er
+gehoert zusammen mit DI-05-21 entschieden, weil beide an
+`QueueService::acknowledge` und an der Frage haengen, was eine Zeile in der
+Zustandstabelle bedeutet.

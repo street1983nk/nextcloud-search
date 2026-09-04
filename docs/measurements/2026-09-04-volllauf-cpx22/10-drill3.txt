@@ -38,3 +38,57 @@ HTTP 200 Bytes 76469
 /dev/sdb         49G   27G   21G  57% /mnt/HC_Volume_106785477
 Lauf geht weiter nach 42s ohne Eingriff, indexed=50104 um 2026-09-04T10:19:48Z
 lowDisk False frei 21797584896 scheduled 247
+### DRILL 3, Nachtrag: die Suche waehrend der Plattenpause
+--- Ausgangszustand 2026-09-04T11:13:25Z ---
+Work stock
+  scheduled            30
+  handed to the worker 30
+
+frei: 21756407808 Byte
+--- Verknappung ---
+/dev/sdb         49G   47G  401M 100% /mnt/HC_Volume_106785477
+--- Ist die Pause erreicht? ---
+WARNING:findling.worker.poller:index paused, free space below the floor, 30 rows handed back
+WARNING:findling.index.writer:index commit paused, free space is below the configured floor of 524288000 byte
+WARNING:findling.worker.poller:index paused, free space below the floor, 30 rows handed back
+lowDisk True frei 420040704 docs 50366 scheduled 60
+--- Die Suche, waehrend die Indexierung pausiert ---
+  Zahlungseingang    HTTP 200  Treffer 5  114 ms
+     erster Treffer: 35799-aktenvermerk.docx
+  Bauleitplanung     HTTP 200  Treffer 5  136 ms
+     erster Treffer: 24258-vermerk.pdf
+  Instandhaltung     HTTP 200  Treffer 5  149 ms
+     erster Treffer: 17820-schriftwechsel.pdf
+--- Ballast weg 2026-09-04T11:15:03Z ---
+  11:15:03Z Queue=60
+  11:15:33Z Queue=30
+  11:16:03Z Queue=30
+  11:16:33Z Queue=30
+  11:17:04Z Queue=30
+  11:17:34Z Queue=30
+  11:18:04Z Queue=20
+  11:18:34Z Queue=10
+  11:19:04Z Queue=0
+Verdikte: [('indexed', None, 50396), ('skipped', 'empty_text', 14), ('skipped', 'image_not_ocrable', 2), ('skipped', 'no_text_layer', 4), ('skipped', 'too_large', 20)]
+gesamt: 50436 acl: 50396
+drill2 indexiert: 30 von 32
+doppelte file_id: 0
+lowDisk False docs 50396 failed 0 runState idle
+--- Beweis: die Abschreibungen zaehlen genau die Zeilen, die in der Pause unterwegs waren ---
+Pause 1 (10:15:41Z bis 10:19:06Z): je Durchgang 2 Zeilen zurueckgegeben
+Pause 2 (11:13:25Z bis 11:15:03Z): je Durchgang 30 Zeilen zurueckgegeben
+  state  |      reason       | count 
+---------+-------------------+-------
+ failed  | repeatedly_stuck  |    32
+ skipped | empty_text        |    14
+ skipped | image_not_ocrable |     2
+ skipped | too_large         |    20
+(4 rows)
+
+drill2: 60 hochgeladen, davon im Container:
+  Zeilen im Container: 32
+  davon indexiert   : 30
+  davon no_text_layer: 2
+  nie an den Container uebergeben: 28
+--- Zaehlung der Zurueckgaben im Protokoll der zweiten Pause ---
+3
