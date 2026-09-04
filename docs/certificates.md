@@ -178,6 +178,27 @@ Rules for the workflow that consumes them:
   and never enable step debugging on a job that touches them.
 - The signing job runs only on tags from the default branch, never on pull requests
   from forks, because a fork workflow must never be able to reach these secrets.
+- Strip carriage returns before writing the key to a file.
+
+How to store the two key secrets, because getting this wrong costs a release run:
+the value has to arrive with **LF** line endings. The key files in
+`~/.findling-secrets/` are CRLF on the development machine, and a value stored from
+them unchanged makes the signing step fail in a way that names neither the key nor
+the line endings. PHP’s openssl cannot read a CRLF PEM, `openssl_sign` returns
+false, and Nextcloud dies with `base64_encode(): Argument #1 ($string) must be of
+type string, bool given` out of `IntegrityCheck/Checker.php` (seen on 04.09.2026,
+run 33895245084). Store them from a shell that does not re-encode the stream:
+
+```bash
+tr -d '' < ~/.findling-secrets/findling.key \
+  | gh secret set APP_PRIVATE_KEY --repo street1983nk/nextcloud-search
+tr -d '' < ~/.findling-secrets/findling_backend.key \
+  | gh secret set BACKEND_PRIVATE_KEY --repo street1983nk/nextcloud-search
+```
+
+The workflow strips CR as well, so a value stored the wrong way no longer breaks the
+run. Both belts are wanted: the workflow protects the run, this paragraph protects
+the next person from debugging a PHP type error.
 
 How `.github/workflows/release.yml` implements the third rule is worth stating,
 because it is not the `if:` condition the sentence suggests. That workflow has **no

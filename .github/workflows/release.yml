@@ -322,7 +322,13 @@ jobs:
             echo "APP_PRIVATE_KEY is empty; the secret is missing and an unsigned archive must not be built"
             exit 1
           fi
-          ( umask 077; printf '%s\n' "${APP_PRIVATE_KEY}" > "${RUNNER_TEMP}/findling.key" )
+          # tr -d '\r': a secret that was stored from Windows carries CRLF, and
+          # PHP's openssl then cannot read the key. The failure says nothing
+          # about a key: openssl_sign returns false and Nextcloud dies with
+          # "base64_encode(): Argument #1 ($string) must be of type string, bool
+          # given" (run 33895245084). Stripping CR is free and cannot damage a
+          # key that is already LF, because CR is not part of PEM.
+          ( umask 077; printf '%s\n' "${APP_PRIVATE_KEY}" | tr -d '\r' > "${RUNNER_TEMP}/findling.key" )
           php server/occ integrity:sign-app \
             --privateKey="${RUNNER_TEMP}/findling.key" \
             --certificate="${RUNNER_TEMP}/findling.crt" \
@@ -463,7 +469,8 @@ jobs:
             echo "BACKEND_PRIVATE_KEY is empty; the secret is missing and an unsigned upload must not be prepared"
             exit 1
           fi
-          ( umask 077; printf '%s\n' "${BACKEND_PRIVATE_KEY}" > "${RUNNER_TEMP}/findling_backend.key" )
+          # tr -d '\r' for the same reason as at the companion key above.
+          ( umask 077; printf '%s\n' "${BACKEND_PRIVATE_KEY}" | tr -d '\r' > "${RUNNER_TEMP}/findling_backend.key" )
           openssl dgst -sha512 -sign "${RUNNER_TEMP}/findling_backend.key" dist/findling_backend.tar.gz \
             | openssl base64 -A > dist/findling_backend.tar.gz.sig
           test -s dist/findling_backend.tar.gz.sig
