@@ -259,6 +259,15 @@ lesend gescopten `GITHUB_TOKEN` hinaus. Die AWS-Box wurde nicht angefasst.
 
 ## Self-Check: PASSED
 
+**Nach dem Abschluss erneut geprüft (05.09.2026):** alle vier neu angelegten
+oder ergänzten Dateien liegen auf der Platte, die 30 Rohdateien sind vollzählig,
+die drei Commits `d84fbbc`, `ce053fc` und `ced86f7` stehen in `git log`, die
+ROADMAP führt Phase 6 mit 3 von 12, und der Arbeitsbaum ist sauber.
+`uv run ruff check .` und `uv run ruff format --check .` sind im CI-Umfang grün.
+`pytest` wurde nicht ausgeführt, weil dieser Abschluss ausschliesslich Markdown-
+und Rohdatendateien angefasst hat und keine Zeile Python; die letzte volle Suite
+lief in Plan 06-03 grün.
+
 Alle fünf Kerndateien und alle 30 Rohdateien liegen auf der Platte, alle fünf
 Commits stehen in `git log`. Zusätzlich geprüft: der Lauf 33946845859 ist über
 `gh run view` als `success` in beiden Jobs bestätigt, keine der vier
