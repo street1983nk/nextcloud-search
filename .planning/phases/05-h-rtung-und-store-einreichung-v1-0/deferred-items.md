@@ -1216,3 +1216,41 @@ braucht DI-05-38 dringend, denn dann ist die Seite der einzige Ort, an dem ein
 Verwalter den Zustand ueberhaupt bemerken koennte.
 
 **Wohin es gehoert:** in den Phase-Review, zusammen mit DI-05-36 und nach ihm.
+
+## DI-05-39 (Plan 05-21): Die Kernzahl der Generalprobe steht zweimal verschieden im Repository
+
+**Found during:** Plan 05-21, Task 5, beim Aufschreiben des Vergleichs zwischen
+den beiden Laeufen.
+
+**Was:** Wie viele Kerne die cpx22 der Generalprobe hatte, steht an vier Stellen,
+und sie sind sich nicht einig.
+
+| Ort | Angabe |
+|---|---|
+| `docs/performance.md`, Tabelle der beiden Maschinen | 2 vCPU, geteilt |
+| `docs/performance.md`, Paritaetstabelle der Ersatzmaschine | 2 vCPU, mit "gleich? ja" |
+| `docs/measurements/2026-09-03-grundlast-cpx22/README.md` | 2 vCPU |
+| `docs/measurements/2026-09-03-trockenlauf-cpx22/README.md` | 2 vCPU |
+| `docs/measurements/2026-09-04-volllauf-cpx22/README.md` | **3 vCPU** |
+
+Ein `nproc` von dieser Maschine ist nirgends aufgeschrieben, und die Maschine ist
+am 04.09. geloescht worden. Der Widerspruch laesst sich also nicht mehr durch
+eine Messung entscheiden, sondern nur noch durch den Katalog des Anbieters, und
+der gehoert dann mit seinem Abrufdatum daneben.
+
+**Warum das mehr ist als ein Tippfehler:** die Paritaetstabelle des Berichts
+begruendet mit dieser Zahl, warum die m7g.large als CAX11-Aequivalent gelten
+darf ("Kerne: 2 vCPU, geteilt | 2 vCPU | gleich? ja"). Stimmen die drei Kerne,
+dann war die Generalprobe in dieser Hinsicht **staerker** als die Zielmaschine,
+und die Zeile "gleich? ja" gilt fuer die cax11 gegen die m7g.large weiter, fuer
+die cpx22 aber nicht. An der Store-Aussage aendert das nichts, denn die kommt aus
+dem ARM-Lauf; an der Einordnung der Laufzeitdifferenz von 25 Prozent aendert es
+etwas.
+
+**Behandlung in diesem Plan:** keine Aussage des ARM-Abschnitts traegt eine
+Kernzahl der Generalprobe. Der Vergleich nennt die Architektur und die Zeiten,
+nicht die Kerne.
+
+**Wohin es gehoert:** in den Phase-Review, geringe Dringlichkeit, aber vor einer
+Store-Einreichung, die den Bericht verlinkt. Zu klaeren mit dem Katalog des
+Anbieters, danach an allen fuenf Stellen dieselbe Zahl.

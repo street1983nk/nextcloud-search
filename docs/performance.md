@@ -2094,15 +2094,21 @@ Die Trennung ist nicht gerechnet, sondern abgelesen: von 19:40:38Z an trägt jed
 weitere indexierte Datei das Kennzeichen `ocr_used`, die Textspur war zu diesem
 Zeitpunkt leer.
 
-| Abschnitt | Zeitraum | Dauer | Dateien | je Datei |
+| Abschnitt | Zeitraum | Dauer | Verdikte | je Verdikt |
 |---|---|---|---|---|
-| Textspur und Crawl | 17:46:36Z bis 19:40:38Z | 6.842 s | 40.516 Verdikte, davon 39.904 über die Textspur | 0,169 s |
-| reine OCR-Spur | 19:40:38Z bis 06:35:23Z | 39.285 s | 9.505 | **4,133 s** |
+| Textspur und Crawl | 17:46:36Z bis 19:40:38Z | 6.842 s | 40.524, davon 39.904 über die Textspur und 620 über die OCR-Spur | 0,169 s |
+| reine OCR-Spur | 19:40:38Z bis 06:35:23Z | 39.285 s | 9.525, davon 9.505 über die OCR-Spur | **4,133 s je OCR-Datei** |
+
+Die 20 Verdikte des zweiten Abschnitts, die nicht aus der OCR-Spur stammen, sind
+die `too_large`-Dateien: der Abgleich um 06:31Z hat sie noch einmal
+vorgelegt, und sie sind noch einmal an ihrer Größe abgewiesen worden, ohne dass
+ein Byte von ihnen gelesen wurde. Sie kosten also nichts, was in dieser Tabelle
+sichtbar wäre.
 
 Der zweite Wert ist die einzige Zahl dieses Laufs, die man ohne Rechnung mit der
 Generalprobe vergleichen kann, und der Vergleich ist unangenehm ehrlich:
 
-| Posten | Generalprobe cpx22 (x86, 3 vCPU) | ARM m7g.large (2 vCPU) | Verhältnis |
+| Posten | Generalprobe cpx22 (x86) | ARM m7g.large (arm64) | Verhältnis |
 |---|---|---|---|
 | je Datei der OCR-Spur | 3,16 s | 4,13 s | ARM braucht 31 Prozent länger |
 | Laufzeit des ganzen Laufs | 10 h 14 min | 12 h 49 min | ARM braucht 25 Prozent länger |
@@ -2112,10 +2118,19 @@ Generalprobe vergleichen kann, und der Vergleich ist unangenehm ehrlich:
 eine Speicheraussage tragen soll, ist das genau die richtige Richtung: die Zahl,
 die in die Store-Beschreibung geht, wird auf der schwächeren Maschine nicht
 größer. Die Laufzeit dagegen wird es, und der Anteil daran, der auf die
-Architektur entfällt, lässt sich hier nicht sauber von dem trennen, der auf
-einen Kern weniger und auf gedrosselten Netzspeicher entfällt. Der Bericht sagt
-deshalb nicht "ARM ist 31 Prozent langsamer", sondern: **diese Maschine hat für
-diesen Korpus 12 h 49 min gebraucht.**
+Architektur entfällt, lässt sich hier nicht von dem trennen, der auf den
+gedrosselten Netzspeicher entfällt. Der Bericht sagt deshalb nicht "ARM ist 31
+Prozent langsamer", sondern: **diese Maschine hat für diesen Korpus 12 h 49 min
+gebraucht.**
+
+Eine Kernzahl steht in dieser Tabelle bewusst nicht, und der Grund ist ein
+Widerspruch in diesem Repository, den dieser Lauf gefunden hat. Die Tabelle der
+beiden Maschinen weiter oben führt für die cpx22 zwei Kerne, ebenso die READMEs
+der Grundlast- und der Trockenlauf-Messung; die README der Volllauf-Messung
+führt drei. Ein `nproc` von dieser Maschine ist nirgends aufgeschrieben, und die
+Maschine ist gelöscht, also lässt sich der Widerspruch nicht mehr durch eine
+Messung entscheiden. Solange das so ist, trägt keine Aussage dieses Berichts
+eine Kernzahl der Generalprobe. Notiert als DI-05-39.
 
 ### Die eine Warnung aus dreizehn Stunden, und was sie gekostet hat
 
