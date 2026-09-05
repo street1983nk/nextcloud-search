@@ -977,14 +977,26 @@ jobs:
       # this app makes; .github/workflows/measure.yml already takes the same
       # road for the same reason.
       #
-      # The limit of that, said plainly rather than glossed over: on a commit
-      # that moves MODEL_REVISION this job runs against the previous model until
-      # the next push to main has published a new :dev. The assertions below are
-      # about the wiring through the whole stack and not about model quality, so
-      # a one build old model does not make them wrong. Quality is answered by
-      # docs/measurements/2026-09-05-modellqualitaet/ and by the offline step of
-      # docker.yml, which runs inside the image that was just built.
+      # The checksum is what turns the paragraph above from an intention into a
+      # fact, and it is the same argument backend/Dockerfile makes about every
+      # file it fetches (T-06-01): an artefact that nobody checks is an artefact
+      # anybody can replace, and this one is handed to onnxruntime, which
+      # executes the graph in it. :dev is a moving pointer, so without the
+      # comparison a moved tag would decide what this job embeds with.
+      #
+      # The value is the one plan 06-03 measured, at
+      # docs/measurements/2026-09-05-modellqualitaet/README.md, where the
+      # locally quantised file and the one in the image came out byte identical
+      # three times. That is also what makes the staleness question above a gate
+      # rather than a caveat: a commit that moves MODEL_REVISION in
+      # backend/Dockerfile has to move this line and the measurement report with
+      # it, and until the next :dev is published this job says so out loud
+      # instead of measuring against a model nobody named.
       - name: Take the embedding model out of the published image
+        env:
+          # int8 model.onnx, 118101091 bytes, produced by scripts/dev/quantize_model.py
+          # from onnx/model.onnx of intfloat/multilingual-e5-small at revision 614241f6.
+          MODEL_SHA256: '8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6'
         run: |
           image=ghcr.io/street1983nk/findling_backend:dev
           docker pull "${image}"
@@ -998,7 +1010,12 @@ jobs:
             echo "::error::the published image carries no usable model directory, so the second track cannot run here"
             exit 1
           fi
-          sha256sum "${FINDLING_EMBED_MODEL_DIR}/model.onnx"
+          if ! echo "${MODEL_SHA256}  ${FINDLING_EMBED_MODEL_DIR}/model.onnx" | sha256sum -c -; then
+            echo "::error::the model in the published image is not the one this repository measured"
+            echo "If backend/Dockerfile moved MODEL_REVISION on purpose, update MODEL_SHA256 here and the"
+            echo "table in docs/measurements/2026-09-05-modellqualitaet/README.md in the same commit."
+            exit 1
+          fi
 
       - name: Set up the test Nextcloud with both halves and register the ExApp
         uses: ./findling-src/.github/actions/setup-test-nc
