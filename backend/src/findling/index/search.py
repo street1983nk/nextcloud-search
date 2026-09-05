@@ -228,6 +228,72 @@ def _semantic_documents(semantic: SemanticSide | None, *, window: int, scan_max:
     return [document.file_id for document in documents[:window]]
 
 
+@dataclass(frozen=True, slots=True)
+class RankedSides:
+    """The two ranked lists of one query, before anything merges them.
+
+    File ids and no scores, because the one caller outside this module is the
+    admin diagnosis and what it asks is which list a document stands in. A rank
+    or a distance would be a statement about how well a document matched, and
+    this project keeps those out of everything that leaves the container (D-14).
+    """
+
+    lexical: list[int]
+    semantic: list[int]
+
+
+def _sides(
+    searcher: Searcher,
+    query: Query,
+    *,
+    window: int,
+    semantic: SemanticSide | None,
+    scan_max: int,
+) -> tuple[list[tuple[int, float, int]], list[int], int]:
+    """Both rankings of one query, plus the number of raw engine hits behind them.
+
+    One function and two callers, and that is the point rather than an economy
+    of lines. :func:`candidates` merges these two lists into the answer a user
+    gets; :func:`ranked_sides` hands them to the admin diagnosis so it can say
+    which of them a document came from. A second way of building either list
+    would answer that question about a search this container never ran, and the
+    difference would show up as a mark that is right most of the time.
+
+    The third value is ``len(hits)`` and it never leaves :func:`candidates`: the
+    continuation behind the window needs the raw cursor, and a raw cursor is the
+    counting oracle of T-02-93 the moment it crosses a process boundary.
+    """
+    hits = searcher.search(query, window).hits
+    lexical = _ranked(searcher, hits)
+    documents = _semantic_documents(semantic, window=window, scan_max=scan_max)
+    return (lexical, documents, len(hits))
+
+
+def ranked_sides(index: Index, query: Query, *, semantic: SemanticSide | None = None) -> RankedSides:
+    """The two rankings of one query, for the admin diagnosis and for nobody else.
+
+    The same window and the same two lists a search builds, through the same
+    function, which is what makes the answer of the diagnosis a statement about
+    this container's search rather than about a reconstruction of it.
+
+    No permission prefilter, and that is a property of the caller and not an
+    omission here: the diagnosis is an administrator asking about one file they
+    already named, admin side and not once per hit, which is the whole reason
+    D-14 puts the origin mark over there instead of on the search path.
+    """
+    resolved = settings()
+    searcher = index.searcher()
+    window = min(resolved.search_rrf_window, SEARCH_SCAN_MAX)
+    lexical, documents, _ = _sides(
+        searcher,
+        query,
+        window=window,
+        semantic=semantic,
+        scan_max=resolved.vector_scan_max,
+    )
+    return RankedSides(lexical=[file_id for file_id, _, _ in lexical], semantic=documents)
+
+
 def _mtimes_of(searcher: Searcher, schema: Schema, file_ids: Sequence[int]) -> dict[int, int]:
     """Timestamps of the documents only the vector half contributed.
 
@@ -311,12 +377,19 @@ def candidates(
     scan_cap = SEARCH_SCAN_MAX
     window = min(resolved.search_rrf_window, scan_cap)
 
-    # Section 1, the fusion window.
-    hits = searcher.search(query, window).hits
-    lexical = _ranked(searcher, hits)
+    # Section 1, the fusion window. Both lists come out of the one function the
+    # admin diagnosis asks as well, so the mark it hands an operator names the
+    # list a document really stood in here.
+    lexical, semantic_documents, raw_hits = _sides(
+        searcher,
+        query,
+        window=window,
+        semantic=semantic,
+        scan_max=resolved.vector_scan_max,
+    )
     fused = reciprocal_rank_fusion(
         [file_id for file_id, _, _ in lexical],
-        _semantic_documents(semantic, window=window, scan_max=resolved.vector_scan_max),
+        semantic_documents,
         k=resolved.search_rrf_k,
         lexical_weight=resolved.search_lexical_weight,
         semantic_weight=resolved.search_semantic_weight,
@@ -348,8 +421,8 @@ def candidates(
     # ones already delivered, because the rank belongs to the lexical list and
     # not to what survived the prefilter.
     lexical_rank = len(lexical)
-    raw_cursor = len(hits)
-    exhausted = len(hits) < window
+    raw_cursor = raw_hits
+    exhausted = raw_hits < window
     while not exhausted and len(permitted) < needed and raw_cursor < scan_cap:
         chunk_limit = min(max(needed, _SCAN_CHUNK_MIN), scan_cap - raw_cursor)
         more = searcher.search(query, chunk_limit, offset=raw_cursor).hits
