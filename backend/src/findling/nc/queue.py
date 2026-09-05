@@ -56,16 +56,23 @@ LOGGER = logging.getLogger("findling.nc.queue")
 # reachable across the ExApp boundary, which rejectForeignCaller guards, but a
 # route chosen by a value from a database row deserves a list it has to be in.
 #
-# The PHP side knows five kinds, and since plan 03-09 all five have a branch in
-# the container: content, metadata, delete, acl and ocr. A kind outside this
-# list still degrades to content in _kind below, which is the honest thing to
-# do with a job whose handler does not exist.
+# The PHP side knows six kinds, and every one of them has a branch in the
+# container: content, metadata, delete, acl, ocr and, since plan 06-07, embed.
+# A kind outside this list still degrades to content in _kind below, which is
+# the honest thing to do with a job whose handler does not exist.
+#
+# ``embed`` is the second trailing track, built after the pattern of ``ocr``:
+# the text pass is through, the document is in the index, and the row comes back
+# to have its vectors written from the stored text. A test reads the closed list
+# out of QueueMapper.php and compares it with this one, because a kind that only
+# one half knows is refused as "Unknown job kind" and its track never runs.
 KIND_CONTENT: Final = "content"
 KIND_METADATA: Final = "metadata"
 KIND_DELETE: Final = "delete"
 KIND_ACL: Final = "acl"
 KIND_OCR: Final = "ocr"
-KINDS: Final = frozenset({KIND_CONTENT, KIND_METADATA, KIND_DELETE, KIND_ACL, KIND_OCR})
+KIND_EMBED: Final = "embed"
+KINDS: Final = frozenset({KIND_CONTENT, KIND_METADATA, KIND_DELETE, KIND_ACL, KIND_OCR, KIND_EMBED})
 
 # The kinds that describe no node on the PHP side, and therefore arrive without
 # the fields a node would have supplied.

@@ -98,6 +98,27 @@ class QueueService {
 	 * while a worker is legitimately still working on them (phase research,
 	 * pitfall 11). Two of them stay under the timeout with room to spare.
 	 *
+	 * embed is eight, and what that number is NOT derived from is the memory
+	 * peak. The activation peak of the engine is set by the model batch, which
+	 * is two chunks (FINDLING_EMBED_BATCH_SIZE, plan 06-05), and every row here
+	 * is embedded on its own, so a larger claim does not add a byte to it.
+	 *
+	 * What it does decide is how long one pass holds rows before it comes back
+	 * for the next one, and that is the latency of every kind above: a
+	 * permission change overtakes a content backlog by not being claimed behind
+	 * it (D-04), but it still waits out the pass that is running. One document
+	 * is capped at 1024 tokens (D-01) and was measured at 3581 tokens per second
+	 * at p95 on aarch64 for the shipped combination of batch 2 and sequence 512
+	 * (docs/measurements/2026-09-05-welle0-arm64/README.md, "Messung B auf
+	 * aarch64", 2026-09-05), which is 0.29 s per document there; the same report
+	 * bounds the target box at eight times slower than that runner. Eight rows
+	 * are therefore roughly 18 s in the worst derived case, one percent of the
+	 * 1800 s the claim travels under, against 73 s for a batch of 32.
+	 *
+	 * Not one either: the whole first index passes through this track once, one
+	 * row per indexed document, and a batch of one would double the number of
+	 * claims of the initial run for nothing.
+	 *
 	 * @var array<string, int>
 	 */
 	private const KIND_BATCH = [
@@ -106,6 +127,7 @@ class QueueService {
 		QueueMapper::KIND_METADATA => 64,
 		QueueMapper::KIND_CONTENT => 32,
 		QueueMapper::KIND_OCR => 2,
+		QueueMapper::KIND_EMBED => 8,
 	];
 
 	public function __construct(
@@ -131,7 +153,7 @@ class QueueService {
 	 * end of time.
 	 *
 	 * The kinds are asked for one after the other, in the order of
-	 * QueueMapper::KINDS: acl, delete, metadata, content, ocr. This loop is
+	 * QueueMapper::KINDS: acl, delete, metadata, content, ocr, embed. This loop is
 	 * where the priority of D-04 lives. A permission change overtakes any
 	 * content backlog, however long it is, because the content query is not even
 	 * sent before the acl query came back empty. The alternative, a priority

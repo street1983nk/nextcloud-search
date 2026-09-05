@@ -35,13 +35,19 @@ class QueueMapper extends QBMapper {
 	public const TABLE_NAME = 'findling_queue';
 
 	/**
-	 * The five kinds of work a row can carry.
+	 * The six kinds of work a row can carry.
 	 *
 	 *   acl       share, unshare, group change   no download, permissions only
 	 *   delete    NodeDeleted, reconcile finding no node needed, and none allowed
 	 *   metadata  rename, move of a file         no download, the text is indexed
 	 *   content   create, write, first index     download plus extraction
 	 *   ocr       PDF without a text layer       download, rasterise, tesseract
+	 *   embed     indexed document, no vectors   no download at all, see below
+	 *
+	 * embed is the second trailing track and the only kind that touches no file
+	 * whatsoever: the text it works on is the one the index already stores, so
+	 * the container reads it back out of the index instead of asking the content
+	 * gateway for bytes it has already seen (D-15).
 	 *
 	 * This list is the only truth about valid kinds in the whole app. The
 	 * controller validates against it, the claim iterates over it, and the
@@ -52,15 +58,17 @@ class QueueMapper extends QBMapper {
 	public const KIND_METADATA = 'metadata';
 	public const KIND_CONTENT = 'content';
 	public const KIND_OCR = 'ocr';
+	public const KIND_EMBED = 'embed';
 
 	/**
 	 * The closed list, in the order the claim asks for them: permissions and
-	 * deletions before anything that downloads bytes (D-04), and OCR last
-	 * because it is the trailing track of the first index (D-07).
+	 * deletions before anything that downloads bytes (D-04), then OCR because it
+	 * is the trailing track of the first index (D-07), and embed last of all
+	 * because it is the trailing track of that one.
 	 *
 	 * The order lives in this constant and not in an ORDER BY, because a
 	 * priority column would devalue findling_q_free and findling_q_kind and buy
-	 * nothing that a loop over five cheap queries does not buy as well.
+	 * nothing that a loop over six cheap queries does not buy as well.
 	 *
 	 * @var list<string>
 	 */
@@ -70,6 +78,7 @@ class QueueMapper extends QBMapper {
 		self::KIND_METADATA,
 		self::KIND_CONTENT,
 		self::KIND_OCR,
+		self::KIND_EMBED,
 	];
 
 	/**
@@ -102,6 +111,26 @@ class QueueMapper extends QBMapper {
 	 * retry, and end as failed(repeatedly_stuck) while it is being worked on
 	 * correctly at that very moment.
 	 *
+	 * embed carries the same 1800 s, and the arithmetic of its own work is not
+	 * what puts it there. That work is small and measured: one document is
+	 * capped at 1024 tokens (D-01), and the shipped combination of batch 2 and
+	 * sequence 512 was measured at 3581 tokens per second at p95 on aarch64
+	 * (docs/measurements/2026-09-05-welle0-arm64/README.md, "Messung B auf
+	 * aarch64", 2026-09-05), which is 0.29 s per document on that runner. The
+	 * same report bounds the target box at eight times slower than the runner,
+	 * so a full claim of eight rows is roughly 18 s of embedding.
+	 *
+	 * What decides the number is the claim an embed row travels IN. One pass
+	 * claims across every kind in KINDS order, so an embed row can be handed out
+	 * in the same pass as a full OCR batch and then waits behind it, and that
+	 * batch is bounded by 1800 s and by nothing shorter. A timeout derived from
+	 * the embedding work alone would therefore hand those rows out a second time
+	 * while a worker is legitimately still on the pass, which rebuilds the
+	 * failed(repeatedly_stuck) defect of T-03-503 for the cheapest kind of row
+	 * in the system. Keeping it equal to the OCR value has a second effect worth
+	 * naming: max(LOCK_TIMEOUTS) does not move, so the conservative branch of
+	 * refreshExisting does not widen its dirty window for every other kind.
+	 *
 	 * @var array<string, int>
 	 */
 	public const LOCK_TIMEOUTS = [
@@ -110,6 +139,7 @@ class QueueMapper extends QBMapper {
 		self::KIND_METADATA => self::LOCK_TIMEOUT,
 		self::KIND_CONTENT => self::LOCK_TIMEOUT,
 		self::KIND_OCR => 1800,
+		self::KIND_EMBED => 1800,
 	];
 
 	/**
@@ -122,10 +152,25 @@ class QueueMapper extends QBMapper {
 	 * The one path from content to ocr is requeueAs (plan 03-07), which the
 	 * container calls after it looked for a text layer.
 	 *
+	 * embed sits at the bottom next to acl, which says two things. It outranks
+	 * nothing, so an embedding row never displaces work somebody is waiting for:
+	 * a deletion, a rename, a new version of the file and a scan all take the row
+	 * away from the second track, and the pass that follows hands it over again
+	 * once the document is back in the index. And it is not displaced by an acl
+	 * change either, because the embedding branch of the container writes the
+	 * permissions of its job exactly like the unchanged-file exit does (bug audit
+	 * M1): a share that arrived while the row was waiting for its vectors would
+	 * otherwise be swallowed by the row it upgraded.
+	 *
+	 * Nothing here ever raises a row TO embed. That path is requeueAs, the same
+	 * one the OCR track uses, and it is deliberately the only way onto both
+	 * trailing tracks.
+	 *
 	 * @var array<string, int>
 	 */
 	private const KIND_RANK = [
 		self::KIND_ACL => 0,
+		self::KIND_EMBED => 0,
 		self::KIND_METADATA => 1,
 		self::KIND_CONTENT => 2,
 		self::KIND_OCR => 2,
@@ -706,7 +751,7 @@ class QueueMapper extends QBMapper {
 	 * is a different moment for an OCR row than for the rest. One query with one
 	 * cutoff would report an OCR row as waiting while the claim still refuses to
 	 * hand it out, and the status page of phase 4 would show work that nobody
-	 * can take. Five narrow counts against findling_q_kind are the price.
+	 * can take. Six narrow counts against findling_q_kind are the price.
 	 */
 	public function countScheduled(): int {
 		$now = $this->now();

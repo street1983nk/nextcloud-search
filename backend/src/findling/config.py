@@ -453,6 +453,24 @@ EMBED_SEQUENCE_LEN_RANGE = (16, EMBED_CONTEXT_TOKENS)
 # here would move that verdict into the boot path of the container.
 EMBED_MODEL_DIR = "/usr/local/share/findling/model"
 
+# The two PHP-side numbers of the embedding track, mirrored here because a PHP
+# constant cannot be imported: QueueMapper::LOCK_TIMEOUTS[embed] and
+# QueueService::KIND_BATCH[embed]. A parity test in tests/test_config.py reads
+# both out of the PHP sources and goes red the day one of them moves, the same
+# construction that holds the OCR pair and the two mimetype allowlists together.
+#
+# Both numbers are argued at their PHP definitions, and the short form is this.
+# The claim size follows from the measured rate: one document is capped at
+# EMBED_TOKEN_CAP tokens, batch 2 at sequence 512 was measured at 3581 tokens
+# per second at p95 on aarch64 (docs/measurements/2026-09-05-welle0-arm64,
+# "Messung B auf aarch64", 2026-09-05), and the same report bounds the target
+# box at eight times slower than that runner, so eight rows are roughly 18 s.
+# The lock timeout does NOT follow from those 18 s: an embed row is claimed in
+# the same pass as a full OCR batch and waits behind it, so it needs the timeout
+# of the longest kind it can share a claim with, which is OCR at 1800 s.
+EMBED_LOCK_TIMEOUT_SECONDS = 1800
+EMBED_CLAIM_BATCH = 8
+
 # ---------------------------------------------------------------------------
 # The hybrid read side, phase 6. What the merge in index/fusion.py is fed with,
 # how the two halves are weighed against each other, and the one ceiling that
