@@ -46,6 +46,12 @@ $leftOut = $whole($coverage['deliberatelyLeftOut'] ?? 0);
 // not read through $whole: nought is a claim here and null is the absence of
 // one.
 $percent = is_int($coverage['percent'] ?? null) ? $coverage['percent'] : null;
+// The second track, read the same way and null for the same kind of reason: a
+// container that did not report the figure, or one that is silent, leaves the
+// page without a numerator, and nought per cent would be a claim about a
+// semantic half nobody could ask (D-16).
+$embedded = $whole($coverage['embedded'] ?? 0);
+$embeddedPercent = is_int($coverage['embeddedPercent'] ?? null) ? $coverage['embeddedPercent'] : null;
 $provisional = ($coverage['provisional'] ?? false) === true;
 $mountsTotal = $whole($coverage['mountsTotal'] ?? 0);
 $mountsFinished = $whole($coverage['mountsFinished'] ?? 0);
@@ -139,6 +145,11 @@ $status = match ($runState) {
 // a division by zero is never sold as nought per cent.
 $hasDenominator = $indexable > 0;
 $hasFraction = $hasDenominator && $percent !== null;
+// The same two questions for the second figure, and the same rule behind them.
+// The block below carries its own hidden rules rather than sharing those of the
+// first figure: the two tracks become available at different moments, and a
+// shared rule would hide a figure that exists or show one that does not.
+$hasEmbeddedFraction = $hasDenominator && $embeddedPercent !== null;
 
 $tiles = [
 	['id' => 'findling-tile-indexed', 'label' => $l->t('Indexed'), 'value' => $indexed],
@@ -251,6 +262,41 @@ $banners = [
 	</p>
 
 	<p class="settings-hint" id="findling-coverage-provisional"<?php if (!$hasDenominator || !$provisional) { ?> hidden<?php } ?>><?php p($l->t('Provisional figure, %1$s of %2$s storages have been counted through.', [$count($mountsFinished), $count($mountsTotal)])); ?></p>
+
+	<?php
+	/*
+	 * The second track, and it is a block of its own rather than a second
+	 * number in the sentence above. The two figures move at different speeds:
+	 * the full text half is complete while the semantic half is still filling
+	 * up, for hours, and an admin who sees one figure at a hundred per cent and
+	 * a search by paraphrase that finds nothing has no way to tell why (D-16).
+	 *
+	 * Built like every other block on this page: all shapes lie in the markup
+	 * and the ones that do not apply carry the hidden attribute, each with its
+	 * own rule, because a specific display rule beats the user agent rule of
+	 * the attribute. The script flips attributes and writes text nodes.
+	 */
+	?>
+	<div id="findling-semantic"<?php if (!$hasDenominator) { ?> hidden<?php } ?>>
+		<h3 class="findling-subheading" id="findling-semantic-heading"><?php p($l->t('Findable by meaning')); ?></h3>
+
+		<p class="findling-figure" id="findling-semantic-figure"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>>
+			<?php
+			/*
+			 * The same non-breaking space as the figure above, written as the
+			 * same escape, so that both figures of this page keep one shape
+			 * when the script takes over on the first poll (IN-03).
+			 */
+			?>
+			<span class="findling-figure__value" id="findling-semantic-percent"><?php p($count($embeddedPercent ?? 0) . "\u{00A0}%"); ?></span>
+		</p>
+		<progress id="findling-semantic-bar" max="100" value="<?php p((string)($embeddedPercent ?? 0)); ?>" aria-labelledby="findling-semantic-heading"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>></progress>
+		<p class="settings-hint" id="findling-semantic-subline"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('%1$s of %2$s indexable files can also be found by meaning', [$count($embedded), $count($indexable)])); ?></p>
+
+		<p class="settings-hint" id="findling-semantic-unknown"<?php if ($hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.')); ?></p>
+
+		<p class="settings-hint" id="findling-semantic-hint"><?php p($l->t('The full text search covers every indexed document. The semantic search covers the beginning of each document, and this second figure fills up after the first index has finished.')); ?></p>
+	</div>
 
 	<div id="findling-coverage-empty"<?php if ($hasDenominator) { ?> hidden<?php } ?>>
 		<h3 class="findling-subheading"><?php p($l->t('No numbers yet')); ?></h3>

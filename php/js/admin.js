@@ -287,7 +287,13 @@
       view.runState, view.backendReachable, view.indexedDisplay, view.skipped,
       view.failed, view.excluded, view.scheduled, view.running, view.lastJobRun,
       coverage.indexed, coverage.indexable, coverage.deliberatelyLeftOut,
-      coverage.percent, coverage.provisional, coverage.mountsFinished,
+      coverage.percent,
+      // The second track belongs in this line or the page stops moving during
+      // the one pass it exists to show: while the embedding runs, the full text
+      // half stands still, so every other value in here is unchanged from poll
+      // to poll and the render would be skipped (D-16).
+      coverage.embedded, coverage.embeddedPercent,
+      coverage.provisional, coverage.mountsFinished,
       coverage.mountsTotal, estimate.ocrMeasured, estimate.secondsLeft,
       estimate.bytesExpected, estimate.startupValues, estimate.spaceWarning,
       estimate.firstIndexDone, errorSignature(view)
@@ -352,6 +358,49 @@
     shown('findling-coverage-leftout', hasDenominator)
     shown('findling-coverage-provisional', hasDenominator && coverage.provisional === true)
     shown('findling-coverage-empty', !hasDenominator)
+
+    semanticBlock(coverage, hasDenominator)
+  }
+
+  /**
+   * The second coverage figure, the one that fills up after the first index.
+   *
+   * Called from the block above and not from render(), because it reads the
+   * same subtree of the same answer and its denominator is the same number. A
+   * second reader of coverage would be a second place that decides what
+   * "indexable" means.
+   *
+   * It has to be written on every poll and not only on the first render, and
+   * that is the whole reason this function exists: during the embedding pass
+   * the full text half stands still and this figure is the only number on the
+   * page that moves. A block that were rendered once server side would sit at
+   * the value it had when the page was opened, next to a first figure that is
+   * live, which is the shape of a page that lies while looking healthy.
+   */
+  function semanticBlock (coverage, hasDenominator) {
+    const indexable = whole(coverage.indexable)
+    const embedded = whole(coverage.embedded)
+    // Null and not zero for the reason the first figure is: nought per cent is
+    // a claim about a semantic half nobody could ask, and the template holds a
+    // sentence for that case rather than a number.
+    const percent = Number.isInteger(coverage.embeddedPercent) ? coverage.embeddedPercent : null
+    const hasFraction = hasDenominator && percent !== null
+
+    text('findling-semantic-percent', numbers.format(percent === null ? 0 : percent) + '\u00a0%')
+    text('findling-semantic-subline', t('findling', '%1$s of %2$s indexable files can also be found by meaning')
+      .replace('%1$s', numbers.format(embedded))
+      .replace('%2$s', numbers.format(indexable)))
+
+    const bar = document.getElementById('findling-semantic-bar')
+    if (bar !== null) {
+      bar.setAttribute('value', String(percent === null ? 0 : percent))
+    }
+
+    shown('findling-semantic', hasDenominator)
+    shown('findling-semantic-figure', hasFraction)
+    shown('findling-semantic-bar', hasFraction)
+    shown('findling-semantic-subline', hasFraction)
+    shown('findling-semantic-unknown', !hasFraction)
   }
 
   /**

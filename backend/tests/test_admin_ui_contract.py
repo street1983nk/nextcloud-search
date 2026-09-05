@@ -172,6 +172,28 @@ def _deprecated(name: str, source: str) -> list[str]:
     return [f"{name}: uses the retired {api}" for api in DEPRECATED_APIS if api in source]
 
 
+# The two names the second coverage figure travels under, and every half of the
+# page has to carry both (D-16). The container reports ``embedded``,
+# AdminViewService turns it into ``embeddedPercent``, and the template and the
+# script render the pair. A half that loses one of them does not break: it shows
+# a figure that never moves, or none at all, next to a first figure that is
+# live, which is a page that lies while looking healthy.
+#
+# Matched with word boundaries, because ``embedded`` is a prefix of
+# ``embeddedPercent`` and a plain substring test would accept a file that
+# carries only the second one.
+COVERAGE_KEYS = ("embedded", "embeddedPercent")
+
+
+def scan_coverage_keys(name: str, source: str) -> list[str]:
+    """Findings of one half of the page: a key of the second figure it lost."""
+    return [
+        f"{name}: does not carry {key} of the second coverage figure"
+        for key in COVERAGE_KEYS
+        if re.search(rf"\b{key}\b", source) is None
+    ]
+
+
 Scanner = Callable[[str, str], list[str]]
 
 
@@ -349,6 +371,55 @@ def test_both_halves_of_the_page_write_the_same_percent_separator() -> None:
     # And neither side smuggles the character in instead of naming it.
     assert NBSP not in template
     assert NBSP not in script
+
+
+def test_every_half_of_the_page_carries_the_second_coverage_figure() -> None:
+    """D-16 as a gate, and the other half of it is the PHPUnit case.
+
+    The semantic figure fills up for hours after the full text figure is
+    complete, so it is the one number on this page that moves while everything
+    else stands still. That is exactly why it is the one that can be lost
+    without anybody noticing: a template without it renders nothing, a service
+    without it sends nothing, and a script without it leaves whatever the first
+    render put there, and none of the three produces an error.
+    """
+    findings = (
+        scan_coverage_keys(ADMIN_VIEW.name, ADMIN_VIEW.read_text(encoding="utf-8"))
+        + scan_coverage_keys(TEMPLATE.name, TEMPLATE.read_text(encoding="utf-8"))
+        + scan_coverage_keys(SCRIPT.name, SCRIPT.read_text(encoding="utf-8"))
+    )
+
+    assert findings == []
+
+
+def test_a_half_that_lost_the_second_coverage_figure_is_reported() -> None:
+    # The gate has to be able to go red, and the prefix case is the one it would
+    # get wrong: a file that carries only embeddedPercent has lost the counter
+    # the figure is made of, and a plain substring test would call it clean.
+    assert len(scan_coverage_keys("sample.php", "'percent' => $percent,")) == 2
+    assert len(scan_coverage_keys("sample.php", "'embeddedPercent' => $share,")) == 1
+    assert scan_coverage_keys("sample.php", "'embedded' => 3, 'embeddedPercent' => 25,") == []
+
+
+def test_the_second_figure_is_a_second_call_and_not_a_second_calculation() -> None:
+    """The mechanism behind the pair, held where it is decided.
+
+    One declaration and two calls. Two calculations for one kind of number are
+    the beginning of the drift phase 4 avoided by working the denominator out
+    exactly once, and the failure they produce is the worst kind this page has:
+    two figures that are each plausible and no longer comparable.
+    """
+    php = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    # The call sites and not every mention of the name: the docblock of
+    # coverage() names the method as well, and a count that included prose would
+    # go red on an edit that only explained something better.
+    assert php.count("public static function coverageShare(") == 1
+    assert php.count("self::coverageShare(") == 2
+    # And the second call is the one that knows the figure may be absent. Without
+    # that guard a container older than this app would be shown as nought per
+    # cent semantic coverage, which is a claim about something nobody asked.
+    assert "$backendReachable && $embeddedKnown" in php
 
 
 def test_the_two_translation_files_carry_the_same_keys() -> None:

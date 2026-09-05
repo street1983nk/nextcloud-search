@@ -81,6 +81,44 @@ Schranke, und die Seite sagt das: "Vorläufige Zahl, X von Y Speicherorten sind
 durchgezählt." Eine Zahl, die sich still nach oben korrigiert, sieht wie ein
 Defekt aus.
 
+## Die zweite Zahl: auffindbar nach Bedeutung
+
+Unter dem Deckungsgrad steht eine zweite Zahl, und sie hat denselben Nenner wie
+die erste. Zähler ist `embedded` aus dem Container: die Zahl der Dokumente, die
+einen Vektor tragen, gezählt in `vectors.db` und nirgendwo sonst. Der Container
+meldet sie neben `indexed`, und sie ist darin enthalten und wird nie daneben
+addiert: ein Dokument ohne Vektor ist indexiert, es ist nur noch nicht nach
+Bedeutung auffindbar.
+
+Warum die Zahl überhaupt existiert: die Einbettung läuft als zweite Spur und
+füllt sich über Stunden nach, nachdem Volltext und OCR längst nutzbar sind.
+Mit nur einer Zahl sähe ein Admin 100 Prozent, während eine Umschreibung nichts
+findet, und nirgends stünde, warum. Der Satz auf der Seite nennt deshalb beide
+Spuren:
+
+> Die Volltextsuche deckt jedes indexierte Dokument ab. Die semantische Suche
+> deckt den Anfang jedes Dokuments ab, und diese zweite Zahl füllt sich nach dem
+> Erstindex nach.
+
+Gerechnet wird sie mit `AdminViewService::coverageShare()`, und das ist genau die
+Methode, die auch die erste Zahl rechnet: ein zweiter Aufruf mit einem anderen
+Zähler und nie ein zweiter Rechenweg. Zwei Rechenwege für dieselbe Art Zahl
+wären der Anfang der Drift, die Phase 4 mit ihrer einen Subtraktion vermieden
+hat, und das Ergebnis wären zwei Zahlen, die jede für sich plausibel sind und
+nicht mehr vergleichbar.
+
+Auch hier gilt: abgerundet, und bei 99 stehend, solange ein Dokument ohne Vektor
+übrig ist. Keine Prozentzahl, sondern einen Satz, gibt es in drei Fällen: kein
+Nenner, stummer Container, und ein Container, der die Zahl gar nicht meldet, weil
+er älter ist als diese App. Der dritte Fall ist der Grund, warum `embedded` auf
+der PHP-Seite als `null` geführt wird und nicht als 0: "keine Vektoren" und
+"niemand hat gefragt" sind zwei verschiedene Auskünfte, und 0 Prozent wäre eine
+Aussage über eine Instanz, deren semantische Hälfte vollständig sein kann.
+
+Ein fehlender oder unlesbarer Vektorspeicher ist ebenfalls ein Zustand und nie
+ein Fehler: die Statusantwort trägt dann `embedded` gleich 0 und eine Notiz, und
+jede Volltextzahl derselben Antwort bleibt gültig.
+
 ## Was nicht im Nenner steht, und warum
 
 Nicht im Nenner stehen: Ordner, Dateien eines nicht unterstützten Typs, Dateien

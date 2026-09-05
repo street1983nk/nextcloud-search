@@ -1301,12 +1301,22 @@ final class AdminViewService {
 	 * so a figure would read "nothing is searchable" when the truth is "nobody
 	 * asked the index" (T-04-23).
 	 *
+	 * ``embeddedPercent`` is the second track of D-16 and it is a second CALL of
+	 * coverageShare() with another numerator, never a second calculation. The
+	 * denominator is the same indexable set, so the two figures are comparable
+	 * by construction, which is the only thing that makes showing them next to
+	 * each other honest. It is null in a third case on top of the two above: a
+	 * container that did not report the figure at all, which is a container
+	 * older than this app. Nought per cent semantic coverage would be a claim
+	 * about a container that never said anything about it.
+	 *
 	 * @param array<string,int> $scan
 	 * @param array<string,mixed> $backend
 	 * @param int $indexable the denominator, worked out once in overview()
 	 * @param int $refusedByType skipped(mime_not_allowed), counted once in overview()
 	 * @return array{
 	 *     indexed:int, indexable:int, deliberatelyLeftOut:int, percent:int|null,
+	 *     embedded:int, embeddedPercent:int|null,
 	 *     provisional:bool, mountsTotal:int, mountsFinished:int
 	 * }
 	 */
@@ -1324,21 +1334,34 @@ final class AdminViewService {
 		$mountsTotal = max(0, (int)$scan['mountsTotal']);
 		$mountsFinished = max(0, (int)$scan['mountsFinished']);
 
-		$percent = null;
-		if ($indexable > 0 && $backendReachable) {
-			// Rounded down, and held below a hundred while anything is still
-			// missing. A page that says a hundred per cent with files left over
-			// is the failure this whole phase exists to make impossible.
-			$percent = $indexable - $indexed > 0
-				? min(99, max(0, (int)floor($indexed * 100 / $indexable)))
-				: 100;
-		}
+		// The number of documents that carry a vector, and whether the container
+		// said anything about it at all. A container older than this app leaves
+		// the key out, and that is a third state next to "nought" and "some":
+		// the two have to stay apart, or an update in the wrong order would show
+		// nought per cent semantic coverage on an instance whose semantic half
+		// is perfectly complete.
+		$embedded = $backend['embedded'] ?? null;
+		$embeddedKnown = is_int($embedded) && $embedded >= 0;
+
+		$percent = self::coverageShare($indexed, $indexable, $backendReachable);
+		// A second call and not a second calculation, and that is the whole
+		// design of this figure. Two ways of working out one kind of number
+		// agree on the day they are written and drift on the day one of them is
+		// corrected, which is exactly what phase 4 avoided by working the
+		// denominator out once (D-16).
+		$embeddedPercent = self::coverageShare(
+			$embeddedKnown ? $embedded : 0,
+			$indexable,
+			$backendReachable && $embeddedKnown,
+		);
 
 		return [
 			'indexed' => $indexed,
 			'indexable' => $indexable,
 			'deliberatelyLeftOut' => $overCap + $excluded + $refusedByType,
 			'percent' => $percent,
+			'embedded' => $embeddedKnown ? $embedded : 0,
+			'embeddedPercent' => $embeddedPercent,
 			// A scan that has not walked every mount to its end has counted a
 			// lower bound, and the page has to say so and name both figures. An
 			// estimate that quietly corrects itself upwards looks like a defect.
@@ -1347,6 +1370,45 @@ final class AdminViewService {
 			'mountsTotal' => $mountsTotal,
 			'mountsFinished' => $mountsFinished,
 		];
+	}
+
+	/**
+	 * One coverage figure: a counter over the indexable set, as a percentage.
+	 *
+	 * The one place this page turns two numbers into a share, and it is called
+	 * twice: once with the documents the container has judged, once with the
+	 * documents that carry a vector (D-16). The denominator is the same both
+	 * times, which is what makes the two figures comparable, and the arithmetic
+	 * is the same both times, which is what keeps them comparable a year from
+	 * now. A second calculation for the second track would agree with this one
+	 * on the day it is written and drift on the day one of them is corrected,
+	 * and nothing on the page would show it.
+	 *
+	 * Rounded down, and held below a hundred while anything is still missing. A
+	 * page that says a hundred per cent with files left over is the failure this
+	 * whole phase exists to make impossible.
+	 *
+	 * Null and not nought where no honest percentage exists. With no denominator
+	 * there is nothing to divide by, and with the figure unavailable there is no
+	 * numerator either: nought per cent would be read as "nothing is findable"
+	 * where the truth is "nobody could ask" (T-04-23). The template renders a
+	 * sentence for that case and never a number.
+	 *
+	 * Static and public for the reason progressStamp() above is: it is the
+	 * arithmetic and nothing else, and the alternative is a unit test that
+	 * builds a whole admin view out of twelve doubles in order to ask what a
+	 * fraction of two numbers comes to.
+	 */
+	public static function coverageShare(int $counted, int $indexable, bool $available): ?int {
+		if ($indexable <= 0 || !$available) {
+			return null;
+		}
+
+		$counted = max(0, $counted);
+
+		return $indexable - $counted > 0
+			? min(99, max(0, (int)floor($counted * 100 / $indexable)))
+			: 100;
 	}
 
 	/**
@@ -1697,12 +1759,19 @@ final class AdminViewService {
 	}
 
 	/**
-	 * The seventeen status fields of the container, rebuilt one by one.
+	 * The eighteen status fields of the container, rebuilt one by one.
 	 *
-	 * Called with null as well, and then it returns the same seventeen keys as
+	 * Called with null as well, and then it returns the same eighteen keys as
 	 * zeros, false and empty strings. That is what keeps the caller free of a
 	 * second code path: a page that renders "container silent" out of the same
 	 * shape it renders a healthy container from cannot forget one of the two.
+	 *
+	 * ``embedded`` is the one exception to that rule and it is deliberate. It is
+	 * null when the container did not report it, which is what a container older
+	 * than this app looks like, and null is the only value that keeps that state
+	 * apart from a container whose second track has not started. Nought would
+	 * merge the two into "no document is findable by meaning", which is a claim
+	 * about an instance nobody asked (D-16).
 	 *
 	 * @param array<mixed>|null $answer the decoded body, or null when there was none
 	 * @return array<string,mixed>
@@ -1713,6 +1782,7 @@ final class AdminViewService {
 		return [
 			'indexed' => $this->counter($answer, 'indexed'),
 			'truncated' => $this->counter($answer, 'truncated'),
+			'embedded' => $this->optionalCounter($answer, 'embedded'),
 			'skipped' => $this->counter($answer, 'skipped'),
 			'failed' => $this->counter($answer, 'failed'),
 			'reasons' => $this->reasons($answer['reasons'] ?? null),
@@ -1746,6 +1816,25 @@ final class AdminViewService {
 		$value = $answer[$key] ?? null;
 
 		return is_int($value) && $value >= 0 ? $value : 0;
+	}
+
+	/**
+	 * One counter of the container answer that may be missing, as null.
+	 *
+	 * The same judgement as counter() above with one difference: a value that is
+	 * not there and a value of nought are two different findings here, and the
+	 * caller decides what to do with each. Used for exactly one field, and the
+	 * reason it exists rather than being a nullable branch inside counter() is
+	 * that every other counter of this protocol is a number this container can
+	 * always answer, so making them all nullable would put a null check on
+	 * seventeen call sites in order to serve one.
+	 *
+	 * @param array<mixed> $answer
+	 */
+	private function optionalCounter(array $answer, string $key): ?int {
+		$value = $answer[$key] ?? null;
+
+		return is_int($value) && $value >= 0 ? $value : null;
 	}
 
 	/**

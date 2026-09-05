@@ -10,8 +10,18 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The stall verdict of the status page, on both sides of its boundary
- * (DI-05-22).
+ * The two pieces of arithmetic of the status page that can be asked without a
+ * Nextcloud: the stall verdict (DI-05-22) and the coverage figures (D-16).
+ *
+ * Both are static and public for the same reason, and the reason is written out
+ * at each of them: they are the arithmetic and nothing else, and the
+ * alternative to reaching them directly is a unit test which builds a whole
+ * admin view out of twelve doubles in order to ask what a fraction of two
+ * numbers comes to. Everything around them, the reading and the writing of
+ * appconfig and the assembly of the answer, stays in the page where it cannot
+ * be tested without a server anyway.
+ *
+ * The first half of this file, the stall verdict:
  *
  * What this defends. The page used to measure one thing, how long ago the last
  * background job of this app ran, and it called everything above half an hour a
@@ -109,5 +119,76 @@ final class AdminViewServiceTest extends TestCase {
 		$stamp = AdminViewService::progressStamp(true, 0, 0, 0, self::NOW);
 
 		self::assertSame(0, max(0, $stamp));
+	}
+
+	// -- the two coverage figures: one calculation, two numerators ------------
+
+	/**
+	 * What the page shows during the embedding pass, in one line: the full text
+	 * half is complete and the semantic half is a quarter of the way through.
+	 *
+	 * The two figures come out of one call each of the same method, with the
+	 * same denominator, and that is what makes putting them next to each other
+	 * honest (D-16). Two calculations for one kind of number would agree on the
+	 * day they are written and drift on the day one of them is corrected, and
+	 * nothing on the page would show it.
+	 */
+	public function testBothFiguresComeOutOfOneCalculationOverOneDenominator(): void {
+		$indexable = 200;
+
+		$indexed = AdminViewService::coverageShare(200, $indexable, true);
+		$embedded = AdminViewService::coverageShare(50, $indexable, true);
+
+		self::assertSame(100, $indexed);
+		self::assertSame(25, $embedded);
+		// The property that makes the pair readable: as long as fewer documents
+		// carry a vector than have been judged, the second figure cannot be the
+		// larger one. It holds because both go through one calculation.
+		self::assertLessThanOrEqual($indexed, $embedded);
+	}
+
+	public function testTheSecondFigureStaysBelowAHundredWhileDocumentsWithoutVectorsAreLeft(): void {
+		// One document of two hundred is missing, and floor() alone would round
+		// that to a hundred. A page that says a hundred per cent with files left
+		// over is the failure this whole phase exists to make impossible.
+		self::assertSame(99, AdminViewService::coverageShare(199, 200, true));
+		self::assertSame(99, AdminViewService::coverageShare(1_999, 2_000, true));
+		self::assertSame(100, AdminViewService::coverageShare(200, 200, true));
+	}
+
+	/**
+	 * Three ways of having no honest figure, and all three answer null.
+	 *
+	 * The second row carries two readings of this plan and they are one argument
+	 * here on purpose: a container that is silent and a container that does not
+	 * report the embedded count at all both leave this method without a
+	 * numerator, and both have to answer null rather than nought. Which of the
+	 * two happened is decided in coverage(), where the missing key becomes the
+	 * false this row passes in.
+	 *
+	 * @return array<string,array{int,int,bool}>
+	 */
+	public static function everythingWithoutAnHonestFigure(): array {
+		return [
+			'no denominator, because nothing has been counted yet' => [0, 0, true],
+			'no numerator, because the container is silent or did not report it' => [0, 200, false],
+		];
+	}
+
+	#[DataProvider('everythingWithoutAnHonestFigure')]
+	public function testWithoutAnHonestFigureTheAnswerIsNullAndNotNought(
+		int $counted,
+		int $indexable,
+		bool $available,
+	): void {
+		self::assertNull(AdminViewService::coverageShare($counted, $indexable, $available));
+	}
+
+	public function testAFigureIsNeverNegativeAndNeverAboveAHundred(): void {
+		// Neither input can legitimately occur, and both would be visible as a
+		// defect of the page rather than of whatever produced them. A progress
+		// bar with a negative value renders as an empty bar and says nothing.
+		self::assertSame(0, AdminViewService::coverageShare(-5, 200, true));
+		self::assertSame(100, AdminViewService::coverageShare(300, 200, true));
 	}
 }
