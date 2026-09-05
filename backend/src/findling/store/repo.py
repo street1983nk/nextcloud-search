@@ -552,6 +552,34 @@ class Store:
         """
         self._vectors = vectors
 
+    def _forget_vectors_of(self, file_id: int) -> None:
+        """Take one document out of the vector stock, if there is one at all.
+
+        A failure is a warning and never an exception. This runs behind a write
+        that already succeeded, so raising here would turn a deletion that did
+        happen into a caller that believes it did not, and the redelivery would
+        repeat a tombstone that is already set. What is lost instead is a stock
+        of vectors nobody can reach, and the rebuild path empties it.
+
+        The type name and never the message: a sqlite error carries the
+        statement it failed on, and the statement carries a file id.
+        """
+        if self._vectors is None:
+            return
+        try:
+            self._vectors.drop_vectors(file_id)
+        except Exception as error:
+            _LOG.warning("could not drop the vectors of a deleted document, %s", type(error).__name__)
+
+    def _forget_all_vectors(self) -> None:
+        """Empty the vector stock, if there is one. Same rule about failures."""
+        if self._vectors is None:
+            return
+        try:
+            self._vectors.forget_all()
+        except Exception as error:
+            _LOG.warning("could not empty the vector stock for the rebuild, %s", type(error).__name__)
+
     def close(self) -> None:
         """Release the connection. Idempotent, so a double close is harmless."""
         self._conn.close()
@@ -801,9 +829,22 @@ class Store:
         This is deliberately not a DELETE. The reasoning sits at
         :data:`_TOMBSTONE_SQL`, together with the condition in
         :data:`_IS_UNCHANGED_SQL` that makes the mark take effect.
+
+        **The vectors are not marked, they are removed** (D-21). The row here
+        stays so that a later pass can tell "deleted" from "never seen", and
+        that distinction has no counterpart in the stock: a vector says nothing
+        but "this passage exists", so a tombstoned one would keep answering
+        searches for a document that is gone. The general form of the rule
+        stands at ``IndexBatchWriter.drop_document``, which is the same
+        deletion seen from the index.
+
+        Zero vectors is the ordinary case, not the exception. Most deleted
+        documents never had one, and asking first would be a second query per
+        deletion for an answer the deletion itself already gives.
         """
         with self._transaction():
             cursor = self._conn.execute(_TOMBSTONE_SQL, (int(time.time()) if at is None else at, file_id))
+        self._forget_vectors_of(file_id)
         return cursor.rowcount
 
     def give_up(
@@ -879,9 +920,18 @@ class Store:
         Rows of a newer generation are left alone. A downgrade is not a stale
         index but an incompatible one, and that decision belongs to the caller
         holding the answer of :meth:`version_mismatch`, not here.
+
+        **The vector stock is emptied whole, and not by generation.** It carries
+        no generation of its own, so there is no half of it that could be kept,
+        and there is nothing to be gained by keeping one: every verdict this
+        call forgets is re-judged by the crawl that follows, and the second
+        track writes the vectors again behind it. Leaving them in place would
+        mean answering semantically out of a stock that may belong to another
+        model, and those answers look entirely ordinary while being wrong.
         """
         with self._transaction():
             cursor = self._conn.execute("DELETE FROM files WHERE index_version < ?", (index_version,))
+        self._forget_all_vectors()
         return cursor.rowcount
 
     def record_mount(self, storage_id: int, root_id: int, cursor: int, files_seen: int) -> None:

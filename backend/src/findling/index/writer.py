@@ -261,7 +261,9 @@ class IndexBatchWriter:
         self._pending_bytes += len(record.body) if record.body.isascii() else _MAX_UTF8_BYTES * len(record.body)
 
     def drop_document(self, file_id: int) -> None:
-        """Take one file out of the index; an unknown id is not an error.
+        """Take one file out of the index and out of the vector stock.
+
+        An unknown id is not an error, in either half.
 
         Named drop_document because gate A forbids the identifier ``delete`` in
         every module of this package, and the deletion goes through
@@ -269,11 +271,38 @@ class IndexBatchWriter:
         module docstring: a term built from the field name is I64 and never
         touches the U64 key, so the shorter route would raise nothing, delete
         nothing and report success.
+
+        **Why the vectors go with it, and this is the general form of the rule
+        that also stands at the state database and at the rebuild.** A document
+        whose vectors survive it keeps answering semantic queries, and the
+        prefilter only catches that for as long as the acl rows really do
+        disappear as well. Even where it does catch them, a verbatim stock of
+        vectors nobody can reach costs scan time on every single search and
+        moves the ranks of the documents that are still there. So the four
+        places that remove a document remove its vectors too, and this is the
+        first of them.
+
+        The two halves are not one transaction and cannot be: one of them is a
+        tantivy operation that becomes durable at the next commit and the other
+        is a SQLite write that is durable at once. What makes that harmless is
+        the redelivery: a pass that dies between them is repeated, and both
+        calls are idempotent by construction.
         """
         self._require_open().delete_documents_by_query(Query.term_query(self._schema, FIELD_FILE_ID, file_id))
         # No byte cap contribution: a deletion carries no text, and counting it
         # towards _pending_bytes would flush batches early for no memory reason.
         self._pending += 1
+        if self._vectors is None:
+            return
+        try:
+            self._vectors.drop_vectors(file_id)
+        except Exception as error:
+            # The type name and never the message: a sqlite error carries the
+            # statement, and the statement carries a file id. Swallowed on
+            # purpose, because a vector database that has gone away must not
+            # take the deletion of the document with it; what stays behind is a
+            # stock the rebuild path empties.
+            LOGGER.warning("could not drop the vectors of a removed document, %s", type(error).__name__)
 
     def stored_body(self, file_id: int) -> str | None:
         """The stored text of one indexed document, or None when there is none.
