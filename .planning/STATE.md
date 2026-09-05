@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 06-05-PLAN.md
-last_updated: "2026-09-05T07:43:41.612Z"
+stopped_at: Completed 06-07-PLAN.md
+last_updated: "2026-09-05T08:28:35.196Z"
 last_activity: 2026-09-05
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 33
-  completed_plans: 25
+  completed_plans: 26
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 6 (Semantische Suche) — EXECUTING
-Plan: 7 of 12
+Plan: 8 of 12
 Status: Ready to execute
 Last activity: 2026-09-05
 
-Progress: [████████░░] 76%
+Progress: [████████░░] 79%
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Progress: [████████░░] 76%
 | Phase 6 P04 | 30min | 3 tasks | 8 files |
 | Phase 6 P05 | 30min | 3 tasks | 8 files |
 | Phase 6 P06 | 35min | 3 tasks | 12 files |
+| Phase 6 P07 | 38min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -151,6 +152,13 @@ Recent decisions affecting current work:
 - [Phase 6]: 06-05: Zwei Tokenizer-Instanzen aus derselben Datei, weil enable_truncation eine Eigenschaft des Objekts ist: eine geteilte Instanz haette den 1.024-Token-Deckel aus D-01 still auf 512 halbiert
 - [Phase 6]: 06-05: Die Zeile 'zwei Chunks je Dokument' aus 06-04 war gerechnet; gemessen sind es zwei bis drei. Kennzahl 4 ist damit ein Boden (5,8 bis rund 8,6 Prozent des Tantivy-Index), und sie haelt an beiden Enden
 - [Phase 6]: 06-05: Die geschaetzten 250 bis 400 MB an INDEX_WORKERS werden nicht durch eine zweite Schaetzung ersetzt: die Modellgewichte sind mit 118.101.091 Byte gemessen, die Aktivierungsspitze bleibt ungemessen (A5) und gehoert an den Lasttest der Zweitspur
+- [Phase 6]: 06-07: EMBED_LOCK_TIMEOUT_SECONDS = 1800 ist NICHT aus der Einbettungsarbeit hergeleitet (die sind rund 18 s je Charge): ein embed-Auftrag reist im selben Anspruch wie eine volle OCR-Charge und wartet hinter ihr, also braucht er das Timeout der laengsten Art, mit der er sich einen Anspruch teilt. Eine kuerzere Zahl waere failed(repeatedly_stuck) aus T-03-503 fuer die billigste Zeilenart
+
+- [Phase 6]: 06-07: EMBED_CLAIM_BATCH = 8 folgt aus der Passdauer und nicht aus dem RAM. Die Aktivierungsspitze setzt EMBED_BATCH_SIZE = 2, nicht die Chargengroesse der Warteschlange; 8 Zeilen sind rund 18 s im schlechtesten hergeleiteten Fall (1024 Token gegen 3581 Token/s p95 aarch64, Sicherheitsfaktor 8) gegen 73 s bei 32
+- [Phase 6]: 06-07: KIND_RANK stellt embed auf 0, neben acl. Ein eigener Rang darunter haette eine Rechteaenderung die wartende Embedding-Zeile verdraengen lassen (Datei dauerhaft ohne Vektoren), gleicher Rang laesst die embed-Zeile die acl-Zeile aufsaugen. Beantwortet dadurch, dass der embed-Zweig replace_acl mit der Nutzerliste seiner Zeile schreibt, nach dem Muster von bug audit M1
+- [Phase 6]: 06-07: Die vier Endzustaende eines embed-Auftrags (embedded, no_stored_text, embedding_incomplete, embedding_unavailable) sind benannte Konstanten und werden NIE an Store.record gereicht: ein Dokument ohne Vektoren ist trotzdem indexiert (D-15), und ein Verdikt dort haette die Datei aus dem Index gemeldet und is_unchanged fuer immer auf False gestellt
+- [Phase 6]: 06-07: _needs_vectors schliesst den CR-02-Defekt eine Spur weiter: der Schnellpfad quittiert eine unveraenderte, bereits indexierte Datei ohne Schreibvorgang, also waere ein Uebergang, der Nextcloud nicht erreicht hat, nie wiederholt worden. Gefragt wird der Vektorbestand und nicht die Zustandsdatenbank, weil das gespeicherte Verdikt ueber Vektoren nichts sagt
+- [Phase 6]: 06-07: Der Plattenplatzvorbehalt zieht auf den IndexBatchWriter (free_bytes, disk_is_tight), damit Index und Vektorbestand ein Verzeichnis gegen eine Zahl fragen; der Zweitspurzweig antwortet mit _DiskTight und laeuft in die bestehende Plattenpause
 
 ### Pending Todos
 
@@ -177,6 +185,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-05T07:43:36.847Z
-Stopped at: Completed 06-05-PLAN.md
+Last session: 2026-09-05T08:28:35.172Z
+Stopped at: Completed 06-07-PLAN.md
 Resume file: None

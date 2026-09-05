@@ -95,7 +95,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 06-07-PLAN.md , Embedding-Zweitspur, KIND_EMBED beidseitig und der vollstaendige Loeschweg (D-15, D-21)
+- [x] 06-07-PLAN.md , Embedding-Zweitspur, KIND_EMBED beidseitig und der vollstaendige Loeschweg (D-15, D-21)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -314,7 +314,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
 | 5. Härtung und Store-Einreichung v1.0 | 18/20 | In Progress|  |
-| 6. Semantische Suche | 6/12 | In Progress|  |
+| 6. Semantische Suche | 7/12 | In Progress|  |
 
 ## Requirement Coverage
 
