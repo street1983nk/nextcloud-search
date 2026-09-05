@@ -11,7 +11,7 @@ requires:
   - phase: 03-ocr
     provides: "scripts/dev/build_corpus.py mit der erfundenen deutschen Behoerdenprosa, aus der 20 der 42 deutschen Abschnitte stammen"
 provides:
-  - "ein dreisprachiges Testset aus 126 Umschreibung-zu-Passage-Paaren mit maschinell durchgesetzter Wortueberschneidungsregel"
+  - "ein dreisprachiges Testset aus 204 Umschreibung-zu-Passage-Paaren mit maschinell durchgesetzter Wortueberschneidungsregel (126 im Erstlauf, Franzoesisch am 05.09.2026 auf 120 Faelle verbreitert)"
   - "ein Messwerkzeug fuer Recall@1, Recall@5 und MRR je Modellfassung, Sprache, Praefixeinstellung und Vektorquantisierung"
   - "die beantwortete Frage D-05: die E5-Praefixe wirken nachweislich"
   - "die beantwortete Frage D-02, mit einem Befund auf Franzoesisch, der die Abbruchregel des Plans reisst"
@@ -36,6 +36,7 @@ key-files:
     - scripts/dev/model_quality.py
     - backend/tests/test_model_quality.py
     - docs/measurements/2026-09-05-modellqualitaet/README.md
+    - docs/measurements/2026-09-05-modellqualitaet/nachtrag-fr-laeufe.txt
   modified:
     - .planning/STATE.md
     - .planning/ROADMAP.md
@@ -48,6 +49,7 @@ key-decisions:
   - "Die Vektorquantisierung kostet auf diesem Testset nichts Messbares: keiner der sechs Vergleiche erreicht den doppelten Standardfehler"
   - "Die lokal erzeugte int8-Datei ist byteidentisch mit der im Abbild; gemessen wurde das ausgelieferte Artefakt und nicht seine Nachbildung"
   - "Die absoluten Werte dieses Testsets sind eine Untergrenze und nicht mit NDCG@10 auf MIRACL vergleichbar; der Bericht sagt das ausdruecklich"
+  - "Nachtrag 05.09.2026: das franzoesische Testset traegt 120 statt 42 Faelle, und D-02 bleibt fuer Franzoesisch gerissen (-6,87 Prozent MRR). Die Richtung ist im Vorzeichentest jetzt belastbar (p = 0,0022), der t-Wert der Kehrwerte ist zugleich auf -1,19 gefallen; beides steht im Messbericht nebeneinander"
 
 patterns-established:
   - "Ein Gatter bekommt seinen Gegenbeweis: die Wortueberschneidungsregel wird im Testlauf rot gefahren, und die franzoesische Elision wird als Schlupfloch ausdruecklich geschlossen"
@@ -215,5 +217,112 @@ Verifikationszeile des Plans über den Messbericht (alle sechs Schlüsselbegriff
 vorhanden, 357 Tabellenstriche, kein Geviert- und kein Halbgeviertstrich).
 
 ---
+
+## Nachtrag vom 05.09.2026: die Owner-Entscheidung und ihr Ergebnis
+
+Der Abschnitt oben endete mit einem Befund und einer offenen
+Owner-Entscheidung: -9,24 Prozent MRR auf Französisch, aber nur t = -2,03 auf
+42 Fällen. Der Owner hat am 05.09.2026 entschieden, nicht die Quantisierung
+umzubauen, sondern zuerst das Testset zu verbreitern, also genau den Weg, den
+der Messbericht selbst als den billigsten benannt hatte.
+
+**Was gemacht wurde.** Das französische Testset ist von 42 auf 120 Fälle
+gewachsen (`fr-43` bis `fr-120`, die ersten 42 unangetastet, dieselbe maschinell
+durchgesetzte Wortüberschneidungsregel, über dreißig weitere Sachgebiete). Die
+französischen Läufe sind im selben Abbild mit derselben Kennung, denselben
+beiden Modelldateien und derselben Kommandozeile wiederholt worden: vier für die
+Quantisierung, einer für den Präfixvergleich. Deutsch und Englisch sind nicht
+neu gemessen worden, weil sie die Abbruchregel nicht gerissen hatten.
+
+**Das Ergebnis, Französisch, 120 Fälle, MRR:**
+
+| Modell | Vektoren | MRR | relativ zu fp32/fp32 |
+|---|---|---|---|
+| fp32 | fp32 | 0,2870 | Bezug |
+| fp32 | int8 | 0,2908 | +1,32 Prozent |
+| int8 | fp32 | **0,2673** | **-6,87 Prozent** |
+| int8 | int8 | 0,2767 | -3,59 Prozent |
+
+Die absoluten Werte sind mit den 42er-Zahlen nicht vergleichbar: die
+Ablenkermenge ist von 41 auf 119 gewachsen, die Aufgabe ist also schwerer
+geworden. Vergleichbar sind ausschließlich die vier Zeilen untereinander.
+
+**Das Verdikt: D-02 bleibt für Französisch gerissen. Die selbst quantisierte
+int8-Fassung trägt auf Französisch nicht.** Die Grenze liegt bei 5 Prozent
+relativem MRR-Rückgang, gemessen sind 6,87 Prozent, jetzt auf dem dreifachen
+Testset.
+
+**Der eigentliche Ertrag steckt nicht im Punktschätzer, sondern in der
+Belastbarkeit.** Der t-Wert der Kehrwertdifferenzen ist von -2,03 auf -1,19
+gefallen, was nach Entwarnung aussieht und keine ist: diese Statistik wird von
+den wenigen Fällen beherrscht, die zwischen Rang 1 und Rang 2 wechseln, und bei
+119 Ablenkern liegen fast alle Ränge hinten. Ein Vorzeichentest über die
+bewegten Fälle ist dagegen unempfindlich und sagt das Gegenteil: von 97 bewegten
+Fällen rutschen 64 nach hinten und 33 nach vorn, zweiseitig p = 0,0022. Auf 42
+Fällen war dasselbe Verhältnis 16 zu 9 und damit p = 0,23, also nichts. Die
+Verbreiterung hat den Befund nicht entkräftet, sondern seine Richtung zum ersten
+Mal belastbar gemacht.
+
+**Drei Nebenergebnisse:**
+
+- **D-05 ist breiter bestätigt.** 104 von 120 französischen Fällen bekommen mit
+  und ohne Präfix einen anderen Rang.
+- **Die Beobachtung "die Präfixe helfen außerhalb des Deutschen nicht" hält
+  nicht.** Auf 42 Fällen lag die Fassung ohne Präfixe auf Französisch mit
+  +6,46 Prozent vorne, auf 120 Fällen mit -3,72 Prozent hinten. Das Vorzeichen
+  hat sich umgedreht: es war Rauschen, wie der Bericht vermutet hatte. Für Plan
+  06-05 entfällt diese Beobachtung ersatzlos, die Anweisung, die Präfixe zu
+  setzen, gilt unverändert.
+- **Die Entlastung der Vektorquantisierung hält.** p = 0,91 und p = 0,65,
+  uneinheitliche Vorzeichen, kein |t| erreicht 1. Für Plan 06-04 ändert sich
+  nichts.
+
+**Eine Vorhersage des Messberichts hat sich nicht bewahrheitet, und das steht
+dort jetzt auch.** Der Bericht hatte angenommen, 120 statt 42 Fälle würden den
+Standardfehler etwa halbieren. Er ist von 0,0224 auf 0,0165 gefallen, also um
+gut ein Viertel. Die Rechnung unterstellte gleiche Streuung je Fall, während die
+Verbreiterung zugleich die Messgröße mitveränderte.
+
+**Was weiterhin offen ist, und es ist keine Verifikation.** Die Entscheidung
+gehört dem Owner. Der Bericht führt jetzt vier Wege statt drei: die drei alten
+(andere Quantisierungsachse, fp32-Datei ins Abbild, kleinere Zusage im
+Store-Text) und einen vierten, der ohne belastbare Richtung keinen Sinn ergeben
+hätte, nämlich die ausgelieferte Kombination int8-Modell mit int8-Vektoren
+getrennt zu betrachten: sie steht bei -3,59 Prozent und damit unter der Grenze,
+ihre Richtung ist mit p = 0,0172 ebenfalls belastbar, ihr Betrag nicht mehr. Ob
+die Abbruchregel den richtigen Punkt misst, ist selbst eine Owner-Frage und wird
+im Bericht ausdrücklich nicht beantwortet.
+
+### Nachtrag: Commits
+
+1. **Das französische Testset von 42 auf 120 Fälle** - `dad2165` (test)
+2. **Fünf französische Läufe, der Nachtrag im Messbericht, die Rohdaten** - `0dcd7d8` (docs)
+
+### Nachtrag: Abweichungen
+
+**Die Rohdaten liegen jetzt neben dem Bericht.** Der Erstlauf hatte nur den
+Bericht abgelegt, die fünfzehn Ausgaben selbst nicht. Für den Nachtrag stehen
+die fünf Ausgaben wörtlich in `nachtrag-fr-laeufe.txt`, `--per-case`
+eingeschlossen. Grund: die Tabellen dieses Nachtrags sind daraus gerechnet, und
+ein Vorzeichentest, der eine Owner-Entscheidung trägt, sollte ohne einen zweiten
+Messlauf nachrechenbar sein. Die Datei enthält ausschließlich Zahlen, Pfade und
+Kennungen, der Datenschutzvertrag des Werkzeugs gilt für sie unverändert.
+
+**Ein fünfter Lauf, den die Aufgabe nicht verlangt hatte.** Verlangt waren die
+vier Quantisierungskombinationen. Der Präfixlauf mit `--prefixes off` ist
+dazugekommen, weil die Beobachtung aus dem Erstlauf ("die Präfixe helfen nur auf
+Deutsch") auf denselben 42 französischen Fällen beruhte und mit ihnen zur
+Disposition stand. Er kostet eine Minute und hat eine Aussage des Erstlaufs
+widerlegt.
+
+**Die fp32-Datei musste erneut geholt werden.** Sie liegt bewusst außerhalb des
+Repositoriums und war nach dem Erstlauf nicht mehr auf der Maschine. Vor dem
+Abruf wurde die Ratengrenze geprüft (keine `x-ratelimit`-Kopfzeilen, kein
+`retry-after`, ein einzelner Abruf einer festgenagelten Revision), die Prüfsumme
+nach dem Abruf ebenfalls. Sie stimmt mit der des Erstlaufs überein, und die
+daraus erzeugte int8-Datei ist zum dritten Mal byteidentisch mit der im Abbild.
+
+---
 *Phase: 06-semantische-suche*
 *Completed: 2026-09-05*
+*Nachtrag: 2026-09-05, Franzoesisch auf 120 Faellen nachgemessen*

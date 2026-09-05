@@ -143,7 +143,7 @@ None yet.
 - RAM-Spitzen auf ARM sind bisher nur geschätzt, Messlauf steht in Phase 5 aus
 - Zwei benannte Luecken aus der Sichtprobe 04-10, beide in .planning/phases/04-admin-sichtbarkeit-und-diagnose/deferred-items.md mit ihrer Schliessform: DI-04-03 (Skip-Verdikte pro fileid uebergeben, damit die Fehlerliste die vier Container-Gruende gruppieren kann) und DI-04-04 (Versionsmarken nach abgeschlossenem Neuaufbau neu stempeln, sonst kann der Reindex-Banner die eigene Abhilfe nie einloesen)
 - Das Pruefsummen-Gate ueber das Referenzkorpus nach der Live-Raeumung steht aus und gehoert in die Phasen-Verifikation (Gate A auf Quellcode-Ebene ist gruen, die Write-Allowlist unveraendert bei drei Eintraegen)
-- Owner-Entscheidung offen (D-02/D-03): franzoesischer int8-Rueckgang von 9,24 Prozent reisst die Abbruchregel von Plan 06-03; drei Wege im Messbericht docs/measurements/2026-09-05-modellqualitaet/ benannt
+- Owner-Entscheidung offen (D-02/D-03): franzoesischer int8-Rueckgang reisst die Abbruchregel von Plan 06-03. Stand 05.09.2026 nach der Nachmessung auf 120 statt 42 franzoesischen Faellen: -6,87 Prozent MRR statt -9,24, die 5-Prozent-Grenze bleibt gerissen, und die Richtung ist im Vorzeichentest jetzt belastbar (64 von 97 bewegten Faellen schlechter, p = 0,0022, gegenueber p = 0,23 auf 42 Faellen). Vier Wege im Messbericht docs/measurements/2026-09-05-modellqualitaet/ benannt, Nachtrag am Dateiende
 
 ## Deferred Items
 
