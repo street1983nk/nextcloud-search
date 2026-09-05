@@ -1937,11 +1937,13 @@ indexiert. Behoben wurde er mit `occ app_api:app:disable` und `enable`, und ab
 | Versionsgleichstand | `match`, 1.0.0 auf beiden Seiten, `reindexRequired` falsch |
 
 Über den ganzen Lauf hat der Container **fünf** Zeilen auf Warnstufe
-geschrieben und keine einzige auf Fehlerstufe. Drei davon stehen vor 17:24Z, also
-bevor die App überhaupt eingeschaltet war, und sind die geordnete Rückstufung
-eines Containers, dessen Gegenstelle noch nicht existiert. Eine gehört zu
-DI-05-35. Die fünfte ist die einzige Warnung aus dreizehn Stunden Arbeit, und sie
-bekommt weiter unten einen eigenen Absatz.
+geschrieben und keine einzige auf Fehlerstufe. Vier davon stehen zwischen
+17:23:08Z und 17:23:55Z, also bevor die App überhaupt eingeschaltet war: drei
+sind die geordnete Rückstufung eines Containers, dessen Gegenstelle noch nicht
+existiert ("next attempt in 15 s", "in 30 s", dann "at most one attempt every
+300 s"), und die vierte ist der gescheiterte Aufstieg auf HTTP/3 aus DI-05-35.
+Die fünfte ist die einzige Warnung aus dreizehn Stunden Arbeit, und sie bekommt
+weiter unten einen eigenen Absatz.
 
 ### Die Verdikte gegen die Verteilung des Generators, Endung für Endung
 
