@@ -55,7 +55,7 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Final, Protocol
 
 from findling.store.repo import enable_wal
 
@@ -99,6 +99,26 @@ _ID_BAND: Final = 1000
 # ceiling, which is what keeps the cap visible at the call site instead of
 # hidden in here.
 DEFAULT_K_MAX: Final = 100
+
+
+class VectorSink(Protocol):
+    """The two calls the delete path of this container makes on a vector stock.
+
+    A protocol and not :class:`VectorStore` itself, for two reasons that pull in
+    the same direction. The first is the one :class:`findling.index.search.QueryEmbedder`
+    gives: a caller can then be exercised without loading a shared object into
+    the test process. The second is the direction of the import. This module
+    already imports :mod:`findling.store.repo` for ``enable_wal``, so the delete
+    path over there cannot import this one back at run time; it takes the shape
+    of what it needs and never the thing itself.
+
+    Two calls, because there are exactly two questions the delete path asks:
+    "this document is gone" and "everything is being rebuilt".
+    """
+
+    def drop_vectors(self, file_id: int) -> int: ...
+
+    def forget_all(self) -> None: ...
 
 
 class VectorStoreError(RuntimeError):

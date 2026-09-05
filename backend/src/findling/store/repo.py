@@ -36,8 +36,11 @@ from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, S
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from findling.store.vectors import VectorSink
 
 _LOG = logging.getLogger(__name__)
 
@@ -527,6 +530,27 @@ class Store:
     def __init__(self, connection: sqlite3.Connection, *, journal_mode: str) -> None:
         self._conn = connection
         self.journal_mode = journal_mode
+        # The vector stock, when this container has one. None is the ordinary
+        # state of an instance on which the embedding never ran, and of every
+        # read only connection: see attach_vectors below.
+        self._vectors: VectorSink | None = None
+
+    def attach_vectors(self, vectors: VectorSink | None) -> None:
+        """Tell this store which vector stock belongs to its documents.
+
+        A setter and not a constructor argument, and the reason is the order in
+        which the volume comes into being: :func:`open_store` is what creates
+        the directory, and :func:`findling.store.vectors.open_vectors`
+        deliberately refuses to create one (gate A). The vector database can
+        therefore only be opened after this store exists, so handing it in at
+        construction time would mean opening it before its directory is there.
+
+        The handle is an argument in every case and is never resolved in here.
+        This module imports no configuration and knows no paths; whoever wires
+        the container decides whether there is a stock at all, which is what
+        keeps a read only connection from ever carrying a writable one.
+        """
+        self._vectors = vectors
 
     def close(self) -> None:
         """Release the connection. Idempotent, so a double close is harmless."""

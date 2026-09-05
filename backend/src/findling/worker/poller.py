@@ -7,6 +7,7 @@ code. One pass over a batch does, in this order:
    hand the document to the writer;
 2. **commit** the writer, which is the moment the index becomes durable;
 3. write the verdicts and the permissions into the state database;
+3b. hand the rows that are not finished on to a trailing track, OCR or embedding;
 4. acknowledge the batch to the queue.
 
 What an abort costs at each point, and why the order is not negotiable:
@@ -58,11 +59,13 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import IO, Any, Final, cast
+from typing import IO, Any, Final, Protocol, cast
 
 from tantivy import Index
 
 from findling.config import settings
+from findling.embed.chunker import ChunkSpan, chunk_spans, make_splitter
+from findling.embed.model import EMBEDDING_UNAVAILABLE, EmbeddingModel, EmbedOutcome, open_tokenizer, to_int8
 from findling.extract.dispatch import Route, extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.sandbox import extract_guarded
@@ -77,8 +80,9 @@ from findling.nc.client import (
     fetch_file_stream,
     new_gateway_client,
 )
-from findling.nc.queue import KIND_ACL, KIND_DELETE, KIND_METADATA, KIND_OCR, DocumentQueue, QueueJob
+from findling.nc.queue import KIND_ACL, KIND_DELETE, KIND_EMBED, KIND_METADATA, KIND_OCR, DocumentQueue, QueueJob
 from findling.store.repo import ACL_ANY_USER, FileMeta, Store, open_store
+from findling.store.vectors import Chunk, VectorStore, open_vectors
 
 LOGGER = logging.getLogger("findling.worker.poller")
 
@@ -89,6 +93,20 @@ ROUND_EMPTY: Final = "empty"
 ROUND_QUEUE_UNAVAILABLE: Final = "queue_unavailable"
 ROUND_GATEWAY_UNAVAILABLE: Final = "gateway_unavailable"
 ROUND_PAUSED_LOW_DISK: Final = "paused_low_disk"
+
+# How one job of the second track ended. Four names, and none of them is a state
+# of the file: a document whose vectors could not be written is still indexed,
+# has been since the text pass hours earlier, and stays searchable by every word
+# it contains (D-15). So none of these is ever handed to Store.record, which is
+# also why they are not members of extract.errors.Reason, whose list is the
+# closed vocabulary of a judged file and stands in lockstep with the PHP side.
+#
+# EMBEDDING_UNAVAILABLE is the fourth of them and comes from embed/model.py,
+# where the wrapper already answers with it. Naming it a second time here would
+# be two spellings of one state.
+EMBED_WRITTEN: Final = "embedded"
+EMBED_NO_STORED_TEXT: Final = "no_stored_text"
+EMBED_INCOMPLETE: Final = "embedding_incomplete"
 
 # Suffix of the scratch files under tmp_dir. Named so that the cleanup on start
 # can recognise its own leftovers and touches nothing else in the volume.
@@ -131,6 +149,22 @@ QueueFactory = Callable[[AsyncNextcloudApp], DocumentQueue]
 # case.
 ClientFactory = Callable[[], AsyncNextcloudApp]
 
+# The two halves of the second track, as types. Both are replaceable for the
+# same reason: the real ones need a 17 MB tokenizer and 118 MB of weights on the
+# machine, and what this module decides has nothing to do with either of them.
+Chunker = Callable[[str], "list[ChunkSpan]"]
+
+
+class PassageEmbedder(Protocol):
+    """Whatever can turn the passages of one document into vectors.
+
+    A protocol rather than :class:`findling.embed.model.EmbeddingModel` itself,
+    the shape :class:`findling.index.search.QueryEmbedder` established on the
+    read side of the same model.
+    """
+
+    def embed_passages(self, texts: Sequence[str]) -> EmbedOutcome: ...
+
 
 class _GatewayDown(RuntimeError):
     """The content gateway did not answer, so the batch cannot be finished.
@@ -138,6 +172,18 @@ class _GatewayDown(RuntimeError):
     Its own type because the answer differs from every other failure: a file that
     could not be read says nothing about the file, so no verdict may be written
     for it. The rows go back unacknowledged and the pass ends.
+    """
+
+
+class _DiskTight(RuntimeError):
+    """The volume fell below the free space floor while a job was running.
+
+    Raised by the embedding branch and by nothing else. The index writer answers
+    the same condition at its own flush, but the vector stock is written inside
+    the per file loop and long before that flush, so it needs a way of saying
+    "not this pass" from in there. What the caller does with it is exactly what
+    the flush already does: hand the whole batch back and pause, rather than
+    leave half a document in the stock.
     """
 
 
@@ -152,10 +198,15 @@ class RoundResult:
     failed: int = 0
     unchanged: int = 0
     acknowledged: int = 0
-    # Rows this pass moved to the OCR track instead of finishing them. Counted
-    # separately from skipped because they are the opposite of an end state: the
-    # text track is done with them and the second track has not started.
+    # Rows this pass moved to a trailing track instead of finishing them.
+    # Counted separately from skipped because they are the opposite of an end
+    # state: the track that had them is done and the next one has not started.
+    # Both tracks are counted here, because the number answers one question,
+    # namely how much of this pass turned into work somewhere else.
     requeued: int = 0
+    # Documents whose vectors this pass wrote. Not a subset of indexed: those
+    # were judged in an earlier pass, hours earlier on a first index (D-15).
+    embedded: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,13 +278,18 @@ def _open_state() -> Store:
     return store
 
 
-def _open_writer(store: Store) -> IndexBatchWriter:
-    """The single index writer of the running container."""
+def _open_writer(store: Store, *, vectors: VectorStore | None = None) -> IndexBatchWriter:
+    """The single index writer of the running container.
+
+    The vector stock travels in because ``drop_document`` has to take the
+    vectors of a file with it, and this is the only place that knows whether
+    this container has a stock at all.
+    """
     resolved = settings()
     artifact = build_artifact()
     index = open_index(resolved.index_dir, artifact.entries)
     _raise_generation_for_lost_index(index, store)
-    return IndexBatchWriter(index, directory=resolved.index_dir)
+    return IndexBatchWriter(index, directory=resolved.index_dir, vectors=vectors)
 
 
 def _raise_generation_for_lost_index(index: Index, store: Store) -> None:
@@ -287,6 +343,9 @@ class Poller:
         queue_factory: QueueFactory = DocumentQueue,
         fetch: FetchFile = fetch_file_stream,
         extract: ExtractFile = extract_guarded,
+        vectors: VectorStore | None = None,
+        chunker: Chunker | None = None,
+        model: PassageEmbedder | None = None,
         batch_files: int | None = None,
         batch_max_bytes: int | None = None,
         cooldown_start: float | None = None,
@@ -302,6 +361,15 @@ class Poller:
         self._queue_factory = queue_factory
         self._fetch = fetch
         self._extract = extract
+        # The three parts of the second track. They travel together: a container
+        # that has one of them and not the others cannot embed anything, so the
+        # track is either wired whole or switched off, and _embed_ready is the
+        # one place that says which of the two it is.
+        self._vectors = vectors
+        self._chunker = chunker
+        self._model = model
+        self._owns_vectors = vectors is None
+        self._embed_enabled = resolved.embed_enabled
         self._ocr_enabled = resolved.ocr_enabled
         # The hard deadline of an OCR job, derived in the configuration so that it
         # is always above the soft one the child checks in its page loop. See the
@@ -379,6 +447,12 @@ class Poller:
         store, self._store = self._store, None
         if store is not None:
             store.close()
+        # Only the handle this poller opened itself. One that was handed in
+        # belongs to whoever handed it in, and closing it here would take the
+        # stock away from a caller that is still using it.
+        vectors, self._vectors = self._vectors, None
+        if vectors is not None and self._owns_vectors:
+            vectors.close()
 
     # -- the loop --------------------------------------------------------
 
@@ -444,6 +518,14 @@ class Poller:
         # File ids, not queue ids: the requeue is about the file, and the row it
         # belongs to may not even exist for the caller that comes in plan 03-12.
         handover: list[int] = []
+        # The same list for the second trailing track. Two lists and not one
+        # with a kind beside every entry, because they are two calls to the
+        # requeue and a mixed list would have to be split again before it went.
+        embedding: list[int] = []
+        # Documents whose vectors this pass actually wrote. A list of ids and
+        # not a counter, so that it reads like the two lists above it and so a
+        # future caller has the ids rather than only their number.
+        embedded: list[int] = []
         unchanged = 0
 
         # 1. Per file: judge, read the bytes into scratch, extract, hand over to
@@ -451,11 +533,18 @@ class Poller:
         #    still locked in Nextcloud and run in again after the lock timeout.
         for job in claim.jobs:
             try:
-                counted = await self._handle(job, done, failed, verdicts, handover)
+                counted = await self._handle(job, done, failed, verdicts, handover, embedding, embedded)
             except _GatewayDown:
                 # The gateway says nothing about the file, so no verdict may be
                 # written for any of them. Give the whole batch back and wait.
                 return await self._abort(queue, len(claim.jobs))
+            except _DiskTight:
+                # The same answer the flush below gives to the same condition,
+                # only from inside the loop: nothing of this pass is written,
+                # the rows go back unjudged and the pause is the operating state
+                # the status page names. Half a vector stock is the alternative.
+                LOGGER.warning("index paused, free space below the floor, %d rows handed back", len(claim.jobs))
+                return await self._abort(queue, len(claim.jobs), state=ROUND_PAUSED_LOW_DISK)
             unchanged += counted
 
         # 2. The commit. From here the index is durable, and this is the earliest
@@ -472,13 +561,21 @@ class Poller:
         #    repeats the work instead of acknowledging a half written state.
         await asyncio.to_thread(self._record_verdicts, verdicts)
 
-        # 3b. The handover to the OCR track, after the commit and before the
-        #     acknowledgement. An abort right here costs one repeated text layer
-        #     check and nothing else: the rows were not acknowledged, so they come
-        #     back after the lock timeout and are handed over again. The reverse
-        #     order would delete the row in the same pass in which the requeue put
-        #     work on it, and the scan would never be read.
-        requeued = await self._hand_over(queue, handover)
+        # 3b. The handover to the trailing tracks, after the commit and before
+        #     the acknowledgement. An abort right here costs one repeated text
+        #     layer check, or one repeated pass over a document that is already
+        #     in the index, and nothing else: the rows were not acknowledged, so
+        #     they come back after the lock timeout and are handed over again.
+        #     The reverse order would delete the row in the same pass in which
+        #     the requeue put work on it, and the scan would never be read, or
+        #     the document would never get a vector.
+        #
+        #     Two calls and not one, because the requeue takes one kind. OCR
+        #     first, because a scan has to be read before there is a text of it
+        #     to embed; the two lists are disjoint for the same reason, since a
+        #     verdict is either skipped(no_text_layer) or indexed.
+        requeued = await self._hand_over(queue, handover, kind=KIND_OCR)
+        requeued += await self._hand_over(queue, embedding, kind=KIND_EMBED)
 
         # 4. The acknowledgement, the last step by construction. Everything it
         #    reports is already durable, so losing it costs one repetition and
@@ -492,13 +589,15 @@ class Poller:
         indexed = sum(1 for verdict in verdicts if verdict.outcome.state is State.INDEXED)
         skipped = sum(1 for verdict in verdicts if verdict.outcome.state is State.SKIPPED)
         LOGGER.info(
-            "pass finished, claimed=%d indexed=%d skipped=%d failed=%d unchanged=%d requeued=%d committed=%d",
+            "pass finished, claimed=%d indexed=%d skipped=%d failed=%d unchanged=%d "
+            "requeued=%d embedded=%d committed=%d",
             len(claim.jobs),
             indexed,
             skipped,
             len(failed),
             unchanged,
             requeued,
+            len(embedded),
             flush.documents,
         )
         return RoundResult(
@@ -510,6 +609,7 @@ class Poller:
             unchanged=unchanged,
             acknowledged=ack.count,
             requeued=requeued,
+            embedded=len(embedded),
         )
 
     # -- one file --------------------------------------------------------
@@ -521,6 +621,8 @@ class Poller:
         failed: dict[int, str],
         verdicts: list[_Verdict],
         handover: list[int],
+        embedding: list[int],
+        embedded: list[int],
     ) -> int:
         """Take one job as far as the writer. Returns 1 when it needed no work."""
         # The kind=delete branch, and it stands before everything because a
@@ -556,7 +658,7 @@ class Poller:
         # reason to requeue either, since the row is already here: it falls
         # through to the content route below, which is exactly what a first
         # indexing of this file would have done.
-        if job.kind == KIND_METADATA and await self._rewrite_metadata(job, done, failed, verdicts):
+        if job.kind == KIND_METADATA and await self._rewrite_metadata(job, done, failed, verdicts, embedding):
             return 0
 
         # The second track, and it stands before the judgement below because the
@@ -567,7 +669,21 @@ class Poller:
         # file earn that verdict: a PDF whose text layer was measured and found
         # missing, and a picture, which has no text layer to measure at all.
         if job.kind == KIND_OCR:
-            await self._read_the_scan(job, done, failed, verdicts)
+            await self._read_the_scan(job, done, failed, verdicts, embedding)
+            return 0
+
+        # The third track, and the only branch in this method that touches no
+        # file at all. The row got here through the handover of step 3b, which
+        # only ever puts a file on it that a pass judged as indexed with text on
+        # it, and the text it works from is the copy the index already stores.
+        #
+        # It stands below the OCR branch and above the judgement for the same
+        # reason that one does: the route of such a job is not a property of its
+        # mimetype, and asking judge() about it would send a picture that OCR
+        # read successfully back onto the OCR track.
+        if job.kind == KIND_EMBED:
+            if await self._embed_the_body(job, done) == EMBED_WRITTEN:
+                embedded.append(job.file_id)
             return 0
 
         route = judge(job.mime, job.size)
@@ -613,7 +729,17 @@ class Poller:
                 # would acknowledge the re-download without ever closing the
                 # gap, one full download per file per cycle, forever.
                 await asyncio.to_thread(self._store_or_die().refresh_meta, job.file_id, _meta_of(job))
-                done.append(job.queue_id)
+                # One read on top of the two writes, and it is what keeps the
+                # second track from losing a document for good: this exit
+                # acknowledges a file whose verdict is already indexed, so a
+                # handover that never reached Nextcloud would have no other
+                # chance of being made again (CR-02, one track along). The
+                # question costs an indexed lookup in the stock and is only
+                # asked at all while the embedding is switched on.
+                if await asyncio.to_thread(self._needs_vectors, job.file_id):
+                    embedding.append(job.file_id)
+                else:
+                    done.append(job.queue_id)
                 return 1
             if route is Route.OCR:
                 # **A picture is an OCR job, and this is the one line that says
@@ -663,7 +789,10 @@ class Poller:
         hand_over = self._goes_to_the_ocr_track(outcome)
         if hand_over:
             handover.append(job.file_id)
-        self._collect(job, outcome, done, failed, verdicts, read.content_hash, hand_over=hand_over)
+        to_embed = self._goes_to_the_embedding_track(outcome)
+        if to_embed:
+            embedding.append(job.file_id)
+        self._collect(job, outcome, done, failed, verdicts, read.content_hash, hand_over=hand_over or to_embed)
         return 0
 
     async def _read_the_scan(
@@ -672,6 +801,7 @@ class Poller:
         done: list[int],
         failed: dict[int, str],
         verdicts: list[_Verdict],
+        embedding: list[int],
     ) -> None:
         """The same file once more, this time as pixels rather than as text.
 
@@ -725,11 +855,22 @@ class Poller:
 
         if outcome.state is State.INDEXED:
             await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
-        # No handover, whatever came back. This row was the handover, and putting
-        # it on the track again is the endless loop of T-03-704 from the other
-        # side. ocr_used travels with the verdict even when the engine found
-        # nothing, because the time was spent either way.
-        self._collect(job, outcome, done, failed, verdicts, read.content_hash, ocr_used=True)
+        # No handover to the OCR track, whatever came back. This row was that
+        # handover, and putting it on the same track again is the endless loop of
+        # T-03-704 from the other side.
+        #
+        # The embedding track is the other direction and belongs here: the text
+        # of a scan exists only because the engine read it, and it is exactly the
+        # kind of document a user will look for by describing it. So a successful
+        # OCR pass hands the file on to the second track, which cannot loop back
+        # because an embed job never reaches this method.
+        #
+        # ocr_used travels with the verdict even when the engine found nothing,
+        # because the time was spent either way.
+        to_embed = self._goes_to_the_embedding_track(outcome)
+        if to_embed:
+            embedding.append(job.file_id)
+        self._collect(job, outcome, done, failed, verdicts, read.content_hash, hand_over=to_embed, ocr_used=True)
 
     def _goes_to_the_ocr_track(self, outcome: ExtractionOutcome) -> bool:
         """True when this verdict becomes an OCR job instead of an end state.
@@ -770,19 +911,180 @@ class Poller:
             return False
         return self._ocr_enabled
 
-    async def _hand_over(self, queue: DocumentQueue, file_ids: Sequence[int]) -> int:
-        """Move the rows of this pass to the OCR track, and count what moved.
+    def _goes_to_the_embedding_track(self, outcome: ExtractionOutcome) -> bool:
+        """True when this document still has to have its vectors written.
+
+        The handover point of D-15, and it is deliberately the end of the text
+        pass rather than a step inside it: full text and OCR stay usable after
+        the hours they take, and the semantics fill in behind them. A user gets
+        a working search after ten hours and a better one afterwards, instead of
+        nothing after none and everything after thirty.
+
+        Two questions and both of them are about this document. It has to have
+        ended as indexed, because a file that is not in the index has nothing to
+        embed, and it has to carry text, because a chunk of nothing costs a
+        vector, a row and a rank with a distance nobody can read. The character
+        count is asked rather than the text itself, since the text is dropped as
+        soon as the writer holds it (perf audit M2) and the count is stored at
+        extraction time.
+
+        **With the embedding switched off nothing changes.** An instance whose
+        admin set ``FINDLING_EMBED_ENABLED=false`` gets the end verdict rather
+        than rows that wait for a track which does not exist there. The same
+        holds when the track could not be wired at all, which is the ordinary
+        state of a container without a model: ``_embed_ready`` is false, nothing
+        is handed over, and the search answers lexically.
+        """
+        if outcome.state is not State.INDEXED or outcome.text_chars <= 0:
+            return False
+        return self._embed_enabled and self._embed_ready
+
+    def _needs_vectors(self, file_id: int) -> bool:
+        """True when this document has no vectors although its text is current.
+
+        The question the two cheap exits ask, and they have to ask it because
+        their verdict is ``indexed``: a redelivered content job whose bytes did
+        not change is acknowledged by the fast path without a single write, and
+        a rename is answered out of the stored text. Neither of them produces a
+        fresh verdict, so neither reaches
+        :meth:`_goes_to_the_embedding_track`, and without this question a
+        handover that was lost between the commit and the acknowledgement would
+        never be made again. That is the defect CR-02 named for the OCR track,
+        one track further along: a transient failure turned permanent, with no
+        counter moving anywhere.
+
+        It is asked of the stock rather than of the state database, because the
+        stock is the only place that knows. The stored verdict says the document
+        is indexed and says nothing about its vectors, and adding a column for
+        it would be a second truth about the same thing.
+
+        The other direction is why the ordinary handover does NOT ask it: when
+        the text is fresh, the vectors of the old text are wrong and have to be
+        replaced whether or not they exist.
+
+        A useful side effect, and it is deliberate: on an instance that was
+        indexed before the embedding existed, the first crawl afterwards hands
+        every file over and the stock fills up without anybody rebuilding
+        anything.
+        """
+        vectors = self._vectors
+        if vectors is None or not (self._embed_enabled and self._embed_ready):
+            return False
+        return not vectors.chunks_of([file_id])
+
+    async def _embed_the_body(self, job: QueueJob, done: list[int]) -> str:
+        """Write the vectors of one document, out of the text the index holds.
+
+        **The one line this method does not have is the point of it.**
+        :meth:`_read_the_scan` fetches the file a second time, because pixels
+        are the only thing a scan has. This branch does not, and the reason
+        stands in full at ``IndexBatchWriter.stored_body``: body_de is the only
+        stored copy of the extracted text in the whole system, the same copy the
+        snippet generator cuts from, so there is "no gateway call, no scratch
+        file, no extraction, no OCR". Downloading the bytes again would mean
+        reading a file that did not change in order to produce a text that did
+        not change either, once for every document on the instance.
+
+        **No second handover, whatever comes back.** This row was the handover,
+        and putting it on the track again is the endless loop of T-03-704 seen
+        from the second track. Nothing in here appends to a requeue list, and an
+        embed job never reaches the branches that do.
+
+        **Every ending acknowledges the row.** The four of them are named at the
+        top of this module and none is a state of the file: the document is
+        indexed and stays indexed even when its vectors could not be written
+        (D-15). A row that was kept back instead would come round again, collect
+        a delivery each time and end as failed(repeatedly_stuck) for a document
+        that is perfectly fine.
+        """
+        # Before anything is read and long before anything is written. The floor
+        # is the one the index writer respects at its flush, asked through the
+        # writer so there is one directory and one number rather than two of
+        # each (T-06-36). Checking here rather than just before the write also
+        # saves the engine time of a document that could not be stored anyway.
+        if self._writer_or_die().disk_is_tight():
+            raise _DiskTight
+
+        vectors, chunker, model = self._vectors, self._chunker, self._model
+        if vectors is None or chunker is None or model is None:
+            # A row left over from before the admin switched the embedding off,
+            # or from before the model was removed. It leaves the queue.
+            done.append(job.queue_id)
+            return EMBEDDING_UNAVAILABLE
+
+        # The permissions of this row, written for the reason the unchanged-file
+        # exit writes them (bug audit M1). An embedding row is not displaced by
+        # an acl change on the Nextcloud side (KIND_RANK), so a share that
+        # arrives while the row waits travels on the row it upgraded, and this
+        # is the pass that has to put it into the prefilter. One declarative
+        # write against a file this pass is handling anyway.
+        await asyncio.to_thread(self._store_or_die().replace_acl, job.file_id, _acl_users(job))
+
+        body = await asyncio.to_thread(self._writer_or_die().stored_body, job.file_id)
+        if not body:
+            # An answer and not a failure: the document was never indexed, or it
+            # ended as skipped, and either way there is nothing here to embed.
+            done.append(job.queue_id)
+            return EMBED_NO_STORED_TEXT
+
+        spans = await asyncio.to_thread(chunker, body)
+        if not spans:
+            done.append(job.queue_id)
+            return EMBED_NO_STORED_TEXT
+
+        outcome = await asyncio.to_thread(
+            model.embed_passages, [body[span.char_start : span.char_end] for span in spans]
+        )
+        if not outcome.available:
+            # The container has no weights. Once per process the wrapper says so
+            # and remembers it, so this costs one verdict per row and not one
+            # search of the file system per document.
+            done.append(job.queue_id)
+            return EMBEDDING_UNAVAILABLE
+        if len(outcome.vectors) != len(spans):
+            # The one wrong answer that looks right. Writing what came back would
+            # store passages under the offsets of other passages, and nothing in
+            # the system would ever notice; half a document is worse than none.
+            LOGGER.warning("the model answered %d vectors for %d passages", len(outcome.vectors), len(spans))
+            done.append(job.queue_id)
+            return EMBED_INCOMPLETE
+
+        await asyncio.to_thread(
+            vectors.replace_chunks,
+            job.file_id,
+            [
+                Chunk(
+                    ordinal=span.ordinal,
+                    char_start=span.char_start,
+                    char_end=span.char_end,
+                    embedding=to_int8(vector),
+                )
+                for span, vector in zip(spans, outcome.vectors, strict=True)
+            ],
+        )
+        done.append(job.queue_id)
+        return EMBED_WRITTEN
+
+    async def _hand_over(self, queue: DocumentQueue, file_ids: Sequence[int], *, kind: str) -> int:
+        """Move the rows of this pass to a trailing track, and count what moved.
 
         A failure is a number and never an exception: the rows stay claimed, run
         into the lock timeout and are handed over by a later pass. The pass
         itself has to finish, because index and verdicts are already durable.
+
+        The kind is an argument since plan 06-07, because there are two tracks
+        and the call is otherwise the same one. It comes from the closed list in
+        :mod:`findling.nc.queue` and never from a row, so it may appear in the
+        line below without carrying anything of a user with it.
         """
         if not file_ids:
             return 0
 
-        result = await queue.requeue(file_ids, kind=KIND_OCR)
+        result = await queue.requeue(file_ids, kind=kind)
         if not result.ok:
-            LOGGER.warning("could not move %d files to the OCR track, they run into the lock timeout", len(file_ids))
+            LOGGER.warning(
+                "could not move %d files to the %s track, they run into the lock timeout", len(file_ids), kind
+            )
             return 0
         return result.count
 
@@ -853,6 +1155,7 @@ class Poller:
         done: list[int],
         failed: dict[int, str],
         verdicts: list[_Verdict],
+        embedding: list[int],
     ) -> bool:
         """Write the file again with new metadata and the text the index holds.
 
@@ -886,7 +1189,20 @@ class Poller:
         # writer.add replaces through the term deletion, so this is an upsert on
         # the file id and not a second document under a second name.
         await asyncio.to_thread(self._writer_or_die().add, _record_of(job, outcome))
-        self._collect(job, outcome, done, failed, verdicts, content_hash, ocr_used=ocr_used)
+        # And on to the second track when this document has no vectors yet, but
+        # not otherwise: a rename does not change a single character of the
+        # text, so the vectors it already has are still the right ones and
+        # embedding them again would be engine time spent on an answer nobody
+        # asked to have recomputed.
+        #
+        # Asking at all is what closes a window. A rename outranks an embedding
+        # row (KIND_RANK), so a move between the handover and the claim takes
+        # the row off the track, and without this the document would carry no
+        # vectors until the next rebuild.
+        to_embed = await asyncio.to_thread(self._needs_vectors, job.file_id)
+        if to_embed:
+            embedding.append(job.file_id)
+        self._collect(job, outcome, done, failed, verdicts, content_hash, hand_over=to_embed, ocr_used=ocr_used)
         return True
 
     async def _fetch_file(self, job: QueueJob) -> _Read | None:
@@ -954,12 +1270,16 @@ class Poller:
         can still read them while the container is down. ``skipped`` is a decision
         this container made and needs no second home.
 
-        ``hand_over`` is the one verdict that ends in neither list. Acknowledging
-        is deleting, so a row that travels in ``done`` and in the requeue at once
-        would be gone from the queue in the same pass in which it was put on the
-        OCR track. The verdict is still recorded, because it is the truth about
-        the text track and because the next pass reads it to see that this file
-        has been handed over already.
+        ``hand_over`` is the verdict that ends in neither list. Acknowledging is
+        deleting, so a row that travels in ``done`` and in the requeue at once
+        would be gone from the queue in the same pass in which it was put on a
+        trailing track. The verdict is still recorded, because it is the truth
+        about the track that produced it and because the next pass reads it to
+        see that this file has been handed over already.
+
+        It says nothing about which track. Since plan 06-07 there are two of
+        them, and what this flag decides is the same for both: the row belongs
+        to the next track now and not to the acknowledgement of this pass.
 
         **The text is dropped here** (perf audit M2). The writer already holds it
         by the time this runs, and ``_record_verdicts`` never reads it: it writes
@@ -1021,14 +1341,91 @@ class Poller:
             return self._queue
         if self._store is None:
             self._store = _open_state()
+        # After the state database and before the writer, and the order is not
+        # style: open_store is what creates the volume directory and open_vectors
+        # deliberately refuses to create one (gate A), so the stock can only be
+        # opened once the state database exists. The writer takes it as an
+        # argument, which is why it has to exist by then.
+        if self._owns_resources and self._embed_enabled and self._vectors is None:
+            self._wire_the_second_track()
+        # The delete path of the state database needs the same handle: a
+        # tombstone has to take the vectors of its file with it (D-21).
+        self._store.attach_vectors(self._vectors)
         if self._writer is None:
-            self._writer = _open_writer(self._store)
+            self._writer = _open_writer(self._store, vectors=self._vectors)
         self._tmp_dir.mkdir(parents=True, exist_ok=True)
         _clear_scratch(self._tmp_dir)
         self._client = self._client_factory()
         self._gateway = self._gateway_factory()
         self._queue = self._queue_factory(self._client)
         return self._queue
+
+    def _wire_the_second_track(self) -> None:
+        """Open the vector stock and build the chunker and the model, or do neither.
+
+        All three or none, and a failure of any one of them switches the track
+        off for this process instead of ending the pass. Three things can go
+        wrong here and every one of them is a state of an installation rather
+        than a defect: the sqlite-vec extension is not loadable on this build,
+        the volume has no vector database and cannot get one, or there is no
+        model directory, which is the ordinary case outside the shipping image.
+
+        Nothing is loaded. Building :class:`EmbeddingModel` reads no weights,
+        which is why it may be built before it is known whether there are any;
+        the tokenizer, on the other hand, is read here on purpose, because
+        handing 17 MB of it across the language boundary once per document is
+        the cost ``make_splitter`` exists to avoid.
+
+        It runs on the first pass, off the event loop with the rest of ``_open``.
+        """
+        resolved = settings()
+        stock: VectorStore | None = None
+        try:
+            stock = open_vectors(resolved.vectors_db)
+            tokenizer = open_tokenizer(resolved.embed_model_dir)
+            splitter = make_splitter(
+                tokenizer,
+                chunk_tokens=resolved.embed_chunk_tokens,
+                overlap=resolved.embed_chunk_overlap,
+            )
+        except Exception as error:
+            if stock is not None:
+                stock.close()
+            # The type name and nothing else, the rule of every log line in this
+            # module. Once per process, because this runs once per process.
+            LOGGER.warning(
+                "the embedding track stays off in this container, %s; the search answers lexically",
+                type(error).__name__,
+            )
+            return
+
+        def cut(text: str) -> list[ChunkSpan]:
+            return chunk_spans(
+                text,
+                tokenizer=tokenizer,
+                splitter=splitter,
+                token_cap=resolved.embed_token_cap,
+            )
+
+        self._vectors = stock
+        self._chunker = cut
+        self._model = EmbeddingModel(
+            resolved.embed_model_dir,
+            batch_size=resolved.embed_batch_size,
+            sequence_len=resolved.embed_sequence_len,
+        )
+
+    @property
+    def _embed_ready(self) -> bool:
+        """True when all three parts of the second track are here.
+
+        Asked before a row is handed over, never after. A container whose stock
+        could not be opened must not put rows on a track it cannot run: they
+        would be claimed, answered with a verdict, claimed again by the next
+        pass and eventually written off as failed(repeatedly_stuck) for a track
+        that does not exist on this instance.
+        """
+        return self._vectors is not None and self._chunker is not None and self._model is not None
 
     async def _abort(
         self,
@@ -1297,6 +1694,9 @@ async def _pause(seconds: float, stop_event: asyncio.Event) -> None:
 
 
 __all__ = [
+    "EMBED_INCOMPLETE",
+    "EMBED_NO_STORED_TEXT",
+    "EMBED_WRITTEN",
     "POLLER_STOP_SECONDS",
     "RETREAT_AFTER_ROUNDS",
     "RETREAT_MAX_SECONDS",

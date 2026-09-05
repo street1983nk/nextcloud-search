@@ -279,15 +279,6 @@ def embed_off(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     settings.cache_clear()
 
 
-@pytest.fixture
-def tight_disk(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """A free space floor no volume on this planet clears."""
-    monkeypatch.setenv("FINDLING_MIN_FREE_BYTES", str(2**62))
-    settings.cache_clear()
-    yield
-    settings.cache_clear()
-
-
 def _poller(
     *,
     store: Store,
@@ -666,13 +657,28 @@ async def test_every_ending_of_an_embed_job_has_a_name_of_its_own(
 
 
 async def test_a_tight_disk_writes_no_vectors_and_hands_the_rows_back(
-    tight_disk: None, store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+    store: Store,
+    writer: IndexBatchWriter,
+    vectors: VectorStore,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # T-06-36. Below the free space floor the pass behaves the way it already
     # does for the index: nothing is written, the rows go back unjudged, and the
-    # operating state says why. Half a vector stock is the alternative.
-    del tight_disk
+    # operating state says why.
+    #
+    # The floor is asked through the writer, which is why the volume is made
+    # tight there: one directory and one number for the index and for the stock
+    # beside it, rather than two of each that could disagree. A second writer
+    # with another floor is not an option, since tantivy grants one lock per
+    # index directory and that is the whole reason this class exists once.
+    #
+    # The empty stock is the assertion that separates this from the pause the
+    # flush already produced before this plan. Without the check inside the loop
+    # the vectors would be written first and the flush would refuse afterwards,
+    # which is exactly the half written stock this case exists to prevent.
     _index_the_body(writer)
+    monkeypatch.setattr(writer, "disk_is_tight", lambda: True)
     queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)))
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
 
@@ -760,7 +766,8 @@ def test_the_second_track_does_not_fetch_a_file_in_the_source() -> None:
     """
     source = POLLER_SOURCE.read_text(encoding="utf-8")
     start = source.index("async def _embed_the_body")
-    body = source[start : source.index("\n    def ", start)]
+    after = min(source.index(f"\n    {opener}def ", start) for opener in ("", "async "))
+    body = source[start:after]
 
     assert "_fetch_file" not in body
     assert "_stream_into" not in body

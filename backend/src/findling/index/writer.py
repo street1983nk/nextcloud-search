@@ -48,11 +48,13 @@ schema and therefore gets the type right by construction. It is also the sturdie
 of the two: it would still be correct if the key ever changed its type.
 """
 
+from __future__ import annotations
+
 import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from tantivy import Document, Index, IndexWriter, Query, Schema
 
@@ -68,6 +70,9 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
+
+if TYPE_CHECKING:
+    from findling.store.vectors import VectorSink
 
 LOGGER = logging.getLogger("findling.index.writer")
 
@@ -141,9 +146,16 @@ class IndexBatchWriter:
         heap_bytes: int | None = None,
         min_free_bytes: int | None = None,
         index_english: bool | None = None,
+        vectors: VectorSink | None = None,
     ) -> None:
         resolved = settings()
         self._directory = directory
+        # The vector stock of the same volume, when this container has one.
+        # Only drop_document uses it: a document that leaves the index has to
+        # leave the stock as well, and this is one of the four places that say
+        # so. None is the ordinary state of an instance on which the embedding
+        # never ran, and the full text path may not depend on one being there.
+        self._vectors = vectors
         # The index itself, not only its schema: stored_body reads documents back
         # out of it, and a second Index object on the same directory would be a
         # second writer lock waiting to happen.
@@ -298,6 +310,29 @@ class IndexBatchWriter:
         values = searcher.doc(address).to_dict().get(FIELD_BODY_DE, [])
         return str(values[0]) if values else None
 
+    def free_bytes(self) -> int:
+        """Free space on the volume this index is written to.
+
+        Public because it is not only this class that writes to that volume. The
+        vector stock of plan 06-07 lives beside the index in the same directory
+        and is written inside the per file loop, long before this class gets to
+        commit anything, so the second track has to be able to ask the same
+        question against the same directory. Two calls to ``shutil.disk_usage``
+        with two paths would be two answers about one volume, and the one that
+        was measured is the one at :meth:`flush`.
+        """
+        return shutil.disk_usage(self._directory).free
+
+    def disk_is_tight(self) -> bool:
+        """True while the volume sits below the configured free space floor.
+
+        The predicate behind the pause, named so that a caller outside this
+        class can respect the same floor without repeating the comparison. A
+        second copy of it is exactly how one writer would pause while another
+        kept writing on the same full disk.
+        """
+        return self.free_bytes() < self._min_free_bytes
+
     def flush(self) -> FlushResult:
         """Commit the pending batch, unless the volume is running out of space.
 
@@ -312,7 +347,7 @@ class IndexBatchWriter:
         segments committed so far are untouched.
         """
         writer = self._require_open()
-        free_bytes = shutil.disk_usage(self._directory).free
+        free_bytes = self.free_bytes()
         if free_bytes < self._min_free_bytes:
             LOGGER.warning(
                 "index commit paused, free space is below the configured floor of %d byte",
