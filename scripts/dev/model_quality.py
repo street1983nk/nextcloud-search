@@ -118,6 +118,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         choices=VECTOR_DTYPE_CHOICES,
         help="fp32 leaves the produced vectors alone, int8 quantises them before the comparison",
     )
+    parser.add_argument(
+        "--per-case",
+        action="store_true",
+        help="also print the rank of every case, keyed by identifier, so two runs can be compared pairwise",
+    )
     return parser.parse_args(argv)
 
 
@@ -276,9 +281,9 @@ def metrics_of(ranks: Sequence[int]) -> Metrics:
     )
 
 
-def worst_cases(identifiers: Sequence[str], ranks: Sequence[int]) -> list[tuple[str, int]]:
+def worst_cases(ranked: Sequence[tuple[str, int]]) -> list[tuple[str, int]]:
     """The cases the model got most wrong, by identifier. Never by text."""
-    missed = [(identifier, rank) for identifier, rank in zip(identifiers, ranks, strict=True) if rank > 1]
+    missed = [pair for pair in ranked if pair[1] > 1]
     missed.sort(key=lambda pair: (-pair[1], pair[0]))
     return missed[:WORST_CASES_REPORTED]
 
@@ -290,7 +295,8 @@ def format_report(
     prefixes: str,
     vector_dtype: str,
     metrics: Metrics,
-    missed: Sequence[tuple[str, int]],
+    ranked: Sequence[tuple[str, int]],
+    per_case: bool = False,
 ) -> str:
     lines = [
         f"model         {model}",
@@ -303,9 +309,18 @@ def format_report(
         f"Recall@5      {metrics.recall_at_5:.4f}",
         f"MRR           {metrics.mrr:.4f}",
     ]
+    missed = worst_cases(ranked)
     if missed:
         named = ", ".join(f"{identifier} rank {rank}" for identifier, rank in missed)
         lines.append(f"worst ranks   {named}")
+    if per_case:
+        # Every rank, keyed by identifier. Two summaries of two runs cannot be
+        # compared case by case, and a difference of a few hundredths in MRR over
+        # 42 cases is exactly the kind of number that has to be readable as
+        # "three cases moved" rather than believed as a decimal. Still only
+        # identifiers and integers, so the privacy contract is unchanged.
+        pairs = ", ".join(f"{identifier} {rank}" for identifier, rank in ranked)
+        lines.append(f"per case      {pairs}")
     return "\n".join(lines)
 
 
@@ -335,14 +350,14 @@ def measure(
         queries = quantise_to_int8(queries)
 
     ranks = ranks_of(queries, passages)
-    identifiers = [record["id"] for record in records]
-    return metrics_of(ranks), worst_cases(identifiers, ranks)
+    ranked = list(zip((record["id"] for record in records), ranks, strict=True))
+    return metrics_of(ranks), ranked
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        metrics, missed = measure(args.model, args.tokenizer, args.dataset, args.prefixes, args.vector_dtype)
+        metrics, ranked = measure(args.model, args.tokenizer, args.dataset, args.prefixes, args.vector_dtype)
     except MeasurementError as error:
         print(f"REFUSED: {error}", file=sys.stderr)
         return 2
@@ -354,7 +369,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.prefixes,
             args.vector_dtype,
             metrics,
-            missed,
+            ranked,
+            args.per_case,
         )
     )
     return 0

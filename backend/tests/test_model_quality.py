@@ -396,12 +396,13 @@ def test_a_full_run_prints_no_word_of_the_test_set(
     """The privacy claim of this tool, checked rather than promised (T-02-14, T-06-11).
 
     The measurement itself is replaced, because what is under test here is the
-    printing and not the model: every value the report can carry is fed in, worst
-    cases included, and none of the text behind those identifiers may appear.
+    printing and not the model: every value the report can carry is fed in, the
+    worst cases and the full per case list included, and none of the text behind
+    those identifiers may appear.
     """
     metrics = quality.Metrics(cases=42, recall_at_1=0.9, recall_at_5=1.0, mrr=0.95)
-    missed = [(record["id"], 4) for record in cases("de")[:5]]
-    monkeypatch.setattr(quality, "measure", lambda *_args, **_kwargs: (metrics, missed))
+    ranked = [(record["id"], number % 7 + 1) for number, record in enumerate(cases("de"))]
+    monkeypatch.setattr(quality, "measure", lambda *_args, **_kwargs: (metrics, ranked))
 
     code = quality.main(
         [
@@ -410,6 +411,7 @@ def test_a_full_run_prints_no_word_of_the_test_set(
             *("--dataset", str(DATASET_DIR / "de.jsonl")),
             *("--prefixes", "on"),
             *("--vector-dtype", "int8"),
+            "--per-case",
         ]
     )
     printed = capsys.readouterr().out.lower()
@@ -431,6 +433,19 @@ def test_the_two_prefixes_stand_in_the_tool() -> None:
     source = TOOL_PATH.read_text(encoding="utf-8")
     assert source.count("query: ") >= 1
     assert source.count("passage: ") >= 1
+
+
+def test_the_per_case_line_names_every_rank_and_only_identifiers() -> None:
+    """Two summaries cannot be compared case by case, so the ranks themselves have to be readable."""
+    metrics = quality.Metrics(cases=3, recall_at_1=1 / 3, recall_at_5=1.0, mrr=0.6)
+    ranked = [("fr-01", 1), ("fr-02", 2), ("fr-03", 4)]
+    arguments = (Path("/model/model.onnx"), Path("/model"), DATASET_DIR / "fr.jsonl", "on", "fp32")
+
+    without = quality.format_report(*arguments, metrics, ranked)
+    assert "per case" not in without
+
+    with_ranks = quality.format_report(*arguments, metrics, ranked, per_case=True)
+    assert "per case      fr-01 1, fr-02 2, fr-03 4" in with_ranks
 
 
 def test_the_help_names_all_five_switches(capsys: pytest.CaptureFixture[str]) -> None:
