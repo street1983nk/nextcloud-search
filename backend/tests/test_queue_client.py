@@ -34,7 +34,7 @@ from typing import Any, cast
 import pytest
 
 from findling.nc.client import AsyncNextcloudApp
-from findling.nc.queue import MAX_ACK_LIST, DocumentQueue, QueueJob
+from findling.nc.queue import KIND_EMBED, KINDS, MAX_ACK_LIST, DocumentQueue, QueueJob
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 CLIENT_SOURCE = PACKAGE_ROOT / "nc" / "client.py"
@@ -44,6 +44,7 @@ QUEUE_SOURCE = PACKAGE_ROOT / "nc" / "queue.py"
 # it, because the ceiling of the list and the closed list of reason codes are one
 # agreement between the halves and cannot be imported across the boundary.
 QUEUE_CONTROLLER = PACKAGE_ROOT.parents[2] / "php" / "lib" / "Controller" / "QueueController.php"
+PHP_QUEUE_MAPPER = PACKAGE_ROOT.parents[2] / "php" / "lib" / "Db" / "QueueMapper.php"
 
 CLAIM_PATH = "/ocs/v2.php/apps/findling/queues/documents"
 ACK_PATH = "/ocs/v2.php/apps/findling/queues/documents"
@@ -597,3 +598,63 @@ def test_the_receiving_half_takes_a_skip_list_and_judges_its_codes() -> None:
     body = block.group(1)
     assert "FileStateService::REASONS" in body
     assert "self::MAX_LIST_LENGTH" in body
+
+
+async def test_an_embed_job_keeps_its_kind_across_the_queue_boundary() -> None:
+    # The same regression the OCR case above nails down, for the second track of
+    # phase 6: a kind that is missing from KINDS degrades to content, and a row
+    # the handover created would then extract the same bytes again instead of
+    # embedding the text the index already holds.
+    session = _FakeSession({("GET", CLAIM_PATH): {"files": {"91": {**SOURCE, "kind": "embed"}}}})
+
+    job = (await _queue(session).claim(limit=1, max_bytes=1)).jobs[0]
+
+    assert job.kind == KIND_EMBED
+    assert job.kind == "embed"
+
+
+async def test_requeue_sends_the_embed_kind_unchanged() -> None:
+    # The handover of plan 06-07 travels through the same call the OCR one uses,
+    # and the kind is the only thing that differs between them.
+    session = _FakeSession({("POST", REQUEUE_PATH): {"requeued": 1}})
+
+    result = await _queue(session).requeue([4711], kind=KIND_EMBED)
+
+    assert result.ok is True
+    _method, _path, kwargs = session.calls[0]
+    assert kwargs["json"] == {"fileIds": [4711], "kind": "embed"}
+
+
+def test_both_halves_know_the_same_kinds_of_work() -> None:
+    """Gate over the closed list itself, read out of the PHP source.
+
+    The list decides which branch the container runs and which lock timeout the
+    row travels under, and it exists twice because a PHP constant has no import
+    into this process. A kind that only one half knows is not a typo with a
+    stack trace: the requeue is refused with "Unknown job kind" and the track it
+    was supposed to reach simply never runs, which is the shape of the phase 3
+    Sichtprobe finding.
+    """
+    source = PHP_QUEUE_MAPPER.read_text(encoding="utf-8")
+    block = re.search(r"const KINDS = \[(.*?)\];", source, re.DOTALL)
+    assert block is not None, "the closed list of kinds is no longer where this gate looks for it"
+    names = re.findall(r"self::(KIND_[A-Z]+),", block.group(1))
+    values = set()
+    for name in names:
+        literal = re.search(rf"const {name} = '([a-z]+)';", source)
+        assert literal is not None, f"{name} stands in KINDS without a literal of its own"
+        values.add(literal.group(1))
+
+    assert values == set(KINDS)
+
+
+def test_the_receiving_half_validates_a_requeue_against_that_same_list() -> None:
+    """The other end of the handover: an unknown kind is refused, not stored.
+
+    Textual for the reason the gate above is textual. What it pins is that the
+    controller compares against ``QueueMapper::KINDS`` rather than against a
+    pattern or a copy of the list, because a copy is what lets a new kind be
+    accepted on one side and rejected on the other.
+    """
+    source = QUEUE_CONTROLLER.read_text(encoding="utf-8")
+    assert re.search(r"in_array\(\$kind, QueueMapper::KINDS, true\)", source) is not None

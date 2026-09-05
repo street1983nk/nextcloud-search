@@ -23,9 +23,12 @@ import pytest
 
 from findling.config import (
     EMBED_CHUNK_TOKENS,
+    EMBED_CLAIM_BATCH,
     EMBED_CONTEXT_TOKENS,
+    EMBED_LOCK_TIMEOUT_SECONDS,
     EMBED_MODEL_DIR,
     EMBED_SPECIAL_TOKENS,
+    EMBED_TOKEN_CAP,
     EMBED_TOKEN_CAP_RANGE,
     INDEX_WORKERS,
     MAX_TEXT_CHARS,
@@ -401,6 +404,49 @@ def test_the_mirrored_php_numbers_behind_the_job_ceiling_are_the_real_ones() -> 
     # from the lock it exists to stay under.
     assert _php_constant_entry(PHP_QUEUE_MAPPER, "LOCK_TIMEOUTS", "KIND_OCR") == OCR_LOCK_TIMEOUT_SECONDS
     assert _php_constant_entry(PHP_QUEUE_SERVICE, "KIND_BATCH", "KIND_OCR") == OCR_CLAIM_BATCH
+
+
+def test_the_mirrored_php_numbers_of_the_embedding_track_are_the_real_ones() -> None:
+    # The same gate for the second track of phase 6. Both numbers live on the
+    # PHP side and are mirrored here because a PHP constant has no import into
+    # this process; the day one of them moves, this goes red instead of the two
+    # halves drifting apart, which is failed(repeatedly_stuck) of T-03-503 with
+    # another kind written on it.
+    assert _php_constant_entry(PHP_QUEUE_MAPPER, "LOCK_TIMEOUTS", "KIND_EMBED") == EMBED_LOCK_TIMEOUT_SECONDS
+    assert _php_constant_entry(PHP_QUEUE_SERVICE, "KIND_BATCH", "KIND_EMBED") == EMBED_CLAIM_BATCH
+
+
+def test_a_moved_php_number_makes_the_parity_gate_red(tmp_path: Path) -> None:
+    # The gate above only means something if it can fail, so the failure is
+    # staged rather than argued: the PHP source is copied, one number in it is
+    # changed, and the same reader has to disagree with the mirrored constant.
+    # Without this a regex that stopped matching would report the old value
+    # forever and the gate would be green by not looking.
+    moved = tmp_path / "QueueMapper.php"
+    source = PHP_QUEUE_MAPPER.read_text(encoding="utf-8")
+    moved.write_text(
+        source.replace(
+            f"self::KIND_EMBED => {EMBED_LOCK_TIMEOUT_SECONDS},",
+            f"self::KIND_EMBED => {EMBED_LOCK_TIMEOUT_SECONDS + 1},",
+        ),
+        encoding="utf-8",
+    )
+
+    assert _php_constant_entry(moved, "LOCK_TIMEOUTS", "KIND_EMBED") != EMBED_LOCK_TIMEOUT_SECONDS
+
+
+def test_a_full_embedding_claim_stays_far_under_its_lock_timeout() -> None:
+    # The same invariant as the OCR one below, with the measured rate of the
+    # welle 0 report behind it: one document is capped at EMBED_TOKEN_CAP tokens
+    # (D-01) and the shipped combination of batch 2 and sequence 512 was measured
+    # at 3581 tokens per second at p95 on aarch64
+    # (docs/measurements/2026-09-05-welle0-arm64/README.md, "Messung B auf
+    # aarch64", 2026-09-05). The target box is bounded at eight times slower than
+    # that runner by the same report, which is the safety factor used here.
+    seconds_per_document = EMBED_TOKEN_CAP / 3581 * 8
+    worst_claim = EMBED_CLAIM_BATCH * seconds_per_document
+
+    assert worst_claim < EMBED_LOCK_TIMEOUT_SECONDS / 10
 
 
 def test_a_full_ocr_claim_at_the_ceiling_stays_under_the_lock_timeout() -> None:
