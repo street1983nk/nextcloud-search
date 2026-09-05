@@ -1,0 +1,79 @@
+Die fuenf franzoesischen Laeufe der Nachmessung vom 05.09.2026, woertlich.
+Abbild findling-sem-probe:local, sha256:c9bb41d65746c584480ad05569445a2c36c6f347543f983d42416cedb02bfef9,
+jeder Lauf mit --network none, jeder mit --per-case. Die Kommandozeile steht im README.
+Ausgegeben werden ausschliesslich Zahlen, Pfade und Kennungen: keine Anfrage und keine Passage (T-02-14, T-06-11).
+
+==============================================================================
+fr-fp32-fp32-on
+==============================================================================
+model         /model/fp32/model.onnx
+tokenizer     /usr/local/share/findling/model
+dataset       fr.jsonl
+prefixes      on
+vector-dtype  fp32
+cases         120
+Recall@1      0.1667
+Recall@5      0.3833
+MRR           0.2870
+worst ranks   fr-64 rank 89, fr-107 rank 79, fr-101 rank 63, fr-14 rank 60, fr-35 rank 60
+per case      fr-01 1, fr-02 49, fr-03 6, fr-04 2, fr-05 2, fr-06 1, fr-07 8, fr-08 1, fr-09 14, fr-10 2, fr-11 1, fr-12 3, fr-13 41, fr-14 60, fr-15 1, fr-16 1, fr-17 5, fr-18 1, fr-19 44, fr-20 7, fr-21 18, fr-22 5, fr-23 1, fr-24 2, fr-25 4, fr-26 19, fr-27 16, fr-28 2, fr-29 6, fr-30 29, fr-31 3, fr-32 6, fr-33 16, fr-34 38, fr-35 60, fr-36 23, fr-37 2, fr-38 10, fr-39 1, fr-40 7, fr-41 48, fr-42 38, fr-43 44, fr-44 10, fr-45 19, fr-46 3, fr-47 4, fr-48 1, fr-49 2, fr-50 6, fr-51 2, fr-52 27, fr-53 2, fr-54 21, fr-55 4, fr-56 1, fr-57 6, fr-58 1, fr-59 19, fr-60 11, fr-61 11, fr-62 4, fr-63 12, fr-64 89, fr-65 47, fr-66 20, fr-67 16, fr-68 17, fr-69 12, fr-70 36, fr-71 20, fr-72 1, fr-73 44, fr-74 17, fr-75 30, fr-76 38, fr-77 15, fr-78 7, fr-79 19, fr-80 2, fr-81 52, fr-82 24, fr-83 2, fr-84 3, fr-85 1, fr-86 1, fr-87 45, fr-88 36, fr-89 3, fr-90 1, fr-91 24, fr-92 2, fr-93 5, fr-94 26, fr-95 1, fr-96 19, fr-97 40, fr-98 4, fr-99 1, fr-100 35, fr-101 63, fr-102 15, fr-103 8, fr-104 27, fr-105 9, fr-106 8, fr-107 79, fr-108 11, fr-109 10, fr-110 1, fr-111 52, fr-112 6, fr-113 3, fr-114 54, fr-115 58, fr-116 28, fr-117 1, fr-118 25, fr-119 45, fr-120 22
+
+==============================================================================
+fr-fp32-int8-on
+==============================================================================
+model         /model/fp32/model.onnx
+tokenizer     /usr/local/share/findling/model
+dataset       fr.jsonl
+prefixes      on
+vector-dtype  int8
+cases         120
+Recall@1      0.1833
+Recall@5      0.3917
+MRR           0.2908
+worst ranks   fr-64 rank 79, fr-107 rank 77, fr-35 rank 76, fr-115 rank 64, fr-101 rank 63
+per case      fr-01 1, fr-02 50, fr-03 6, fr-04 1, fr-05 2, fr-06 1, fr-07 8, fr-08 1, fr-09 10, fr-10 3, fr-11 1, fr-12 3, fr-13 36, fr-14 54, fr-15 1, fr-16 1, fr-17 5, fr-18 1, fr-19 47, fr-20 9, fr-21 18, fr-22 14, fr-23 1, fr-24 1, fr-25 4, fr-26 17, fr-27 21, fr-28 2, fr-29 5, fr-30 24, fr-31 3, fr-32 6, fr-33 19, fr-34 34, fr-35 76, fr-36 28, fr-37 3, fr-38 7, fr-39 1, fr-40 9, fr-41 48, fr-42 32, fr-43 41, fr-44 6, fr-45 15, fr-46 3, fr-47 5, fr-48 1, fr-49 2, fr-50 6, fr-51 3, fr-52 27, fr-53 2, fr-54 22, fr-55 3, fr-56 1, fr-57 6, fr-58 1, fr-59 20, fr-60 9, fr-61 10, fr-62 4, fr-63 12, fr-64 79, fr-65 62, fr-66 23, fr-67 19, fr-68 16, fr-69 7, fr-70 34, fr-71 22, fr-72 1, fr-73 47, fr-74 12, fr-75 24, fr-76 40, fr-77 17, fr-78 9, fr-79 20, fr-80 2, fr-81 57, fr-82 27, fr-83 3, fr-84 4, fr-85 1, fr-86 1, fr-87 45, fr-88 37, fr-89 4, fr-90 1, fr-91 19, fr-92 2, fr-93 5, fr-94 24, fr-95 1, fr-96 18, fr-97 39, fr-98 3, fr-99 1, fr-100 38, fr-101 63, fr-102 16, fr-103 7, fr-104 22, fr-105 10, fr-106 8, fr-107 77, fr-108 7, fr-109 12, fr-110 1, fr-111 57, fr-112 4, fr-113 3, fr-114 51, fr-115 64, fr-116 28, fr-117 1, fr-118 25, fr-119 51, fr-120 21
+
+==============================================================================
+fr-int8-fp32-on
+==============================================================================
+model         /model/int8/model.onnx
+tokenizer     /usr/local/share/findling/model
+dataset       fr.jsonl
+prefixes      on
+vector-dtype  fp32
+cases         120
+Recall@1      0.1583
+Recall@5      0.3667
+MRR           0.2673
+worst ranks   fr-64 rank 101, fr-73 rank 87, fr-107 rank 85, fr-35 rank 77, fr-115 rank 74
+per case      fr-01 1, fr-02 46, fr-03 6, fr-04 1, fr-05 1, fr-06 1, fr-07 17, fr-08 1, fr-09 22, fr-10 1, fr-11 1, fr-12 3, fr-13 37, fr-14 18, fr-15 1, fr-16 1, fr-17 2, fr-18 2, fr-19 30, fr-20 9, fr-21 19, fr-22 11, fr-23 1, fr-24 4, fr-25 4, fr-26 25, fr-27 15, fr-28 2, fr-29 5, fr-30 36, fr-31 4, fr-32 6, fr-33 24, fr-34 49, fr-35 77, fr-36 29, fr-37 5, fr-38 6, fr-39 2, fr-40 3, fr-41 65, fr-42 24, fr-43 51, fr-44 27, fr-45 14, fr-46 5, fr-47 2, fr-48 1, fr-49 1, fr-50 11, fr-51 2, fr-52 33, fr-53 10, fr-54 30, fr-55 5, fr-56 1, fr-57 4, fr-58 2, fr-59 36, fr-60 10, fr-61 6, fr-62 5, fr-63 10, fr-64 101, fr-65 53, fr-66 17, fr-67 19, fr-68 23, fr-69 13, fr-70 49, fr-71 55, fr-72 2, fr-73 87, fr-74 39, fr-75 21, fr-76 19, fr-77 10, fr-78 37, fr-79 16, fr-80 2, fr-81 68, fr-82 20, fr-83 1, fr-84 4, fr-85 1, fr-86 1, fr-87 51, fr-88 57, fr-89 6, fr-90 2, fr-91 33, fr-92 4, fr-93 12, fr-94 17, fr-95 6, fr-96 27, fr-97 34, fr-98 5, fr-99 1, fr-100 31, fr-101 63, fr-102 26, fr-103 8, fr-104 45, fr-105 12, fr-106 11, fr-107 85, fr-108 31, fr-109 12, fr-110 1, fr-111 43, fr-112 8, fr-113 2, fr-114 59, fr-115 74, fr-116 38, fr-117 1, fr-118 23, fr-119 64, fr-120 29
+
+==============================================================================
+fr-int8-int8-on
+==============================================================================
+model         /model/int8/model.onnx
+tokenizer     /usr/local/share/findling/model
+dataset       fr.jsonl
+prefixes      on
+vector-dtype  int8
+cases         120
+Recall@1      0.1833
+Recall@5      0.3750
+MRR           0.2767
+worst ranks   fr-64 rank 107, fr-73 rank 92, fr-35 rank 85, fr-107 rank 82, fr-119 rank 79
+per case      fr-01 1, fr-02 44, fr-03 6, fr-04 1, fr-05 1, fr-06 1, fr-07 13, fr-08 1, fr-09 21, fr-10 2, fr-11 1, fr-12 3, fr-13 37, fr-14 21, fr-15 1, fr-16 1, fr-17 2, fr-18 1, fr-19 21, fr-20 7, fr-21 20, fr-22 10, fr-23 1, fr-24 4, fr-25 4, fr-26 27, fr-27 14, fr-28 2, fr-29 5, fr-30 35, fr-31 4, fr-32 5, fr-33 26, fr-34 40, fr-35 85, fr-36 28, fr-37 5, fr-38 6, fr-39 1, fr-40 4, fr-41 75, fr-42 21, fr-43 56, fr-44 21, fr-45 15, fr-46 4, fr-47 3, fr-48 1, fr-49 1, fr-50 9, fr-51 1, fr-52 34, fr-53 7, fr-54 29, fr-55 5, fr-56 1, fr-57 5, fr-58 2, fr-59 36, fr-60 12, fr-61 8, fr-62 5, fr-63 10, fr-64 107, fr-65 56, fr-66 16, fr-67 17, fr-68 25, fr-69 18, fr-70 44, fr-71 55, fr-72 3, fr-73 92, fr-74 35, fr-75 22, fr-76 21, fr-77 10, fr-78 41, fr-79 17, fr-80 1, fr-81 71, fr-82 24, fr-83 1, fr-84 5, fr-85 1, fr-86 1, fr-87 45, fr-88 56, fr-89 7, fr-90 2, fr-91 34, fr-92 3, fr-93 14, fr-94 17, fr-95 6, fr-96 26, fr-97 35, fr-98 5, fr-99 1, fr-100 35, fr-101 67, fr-102 24, fr-103 10, fr-104 46, fr-105 15, fr-106 13, fr-107 82, fr-108 30, fr-109 11, fr-110 1, fr-111 40, fr-112 7, fr-113 2, fr-114 58, fr-115 69, fr-116 40, fr-117 1, fr-118 25, fr-119 79, fr-120 31
+
+==============================================================================
+fr-int8-fp32-off
+==============================================================================
+model         /model/int8/model.onnx
+tokenizer     /usr/local/share/findling/model
+dataset       fr.jsonl
+prefixes      off
+vector-dtype  fp32
+cases         120
+Recall@1      0.1583
+Recall@5      0.3667
+MRR           0.2573
+worst ranks   fr-64 rank 108, fr-94 rank 100, fr-35 rank 82, fr-65 rank 69, fr-107 rank 67
+per case      fr-01 1, fr-02 35, fr-03 5, fr-04 4, fr-05 1, fr-06 1, fr-07 16, fr-08 1, fr-09 28, fr-10 1, fr-11 2, fr-12 7, fr-13 8, fr-14 7, fr-15 1, fr-16 6, fr-17 1, fr-18 1, fr-19 50, fr-20 6, fr-21 8, fr-22 5, fr-23 1, fr-24 2, fr-25 4, fr-26 9, fr-27 3, fr-28 2, fr-29 3, fr-30 46, fr-31 4, fr-32 5, fr-33 19, fr-34 24, fr-35 82, fr-36 33, fr-37 1, fr-38 10, fr-39 1, fr-40 1, fr-41 14, fr-42 30, fr-43 63, fr-44 28, fr-45 5, fr-46 8, fr-47 6, fr-48 1, fr-49 1, fr-50 28, fr-51 1, fr-52 27, fr-53 5, fr-54 39, fr-55 3, fr-56 5, fr-57 9, fr-58 1, fr-59 21, fr-60 5, fr-61 12, fr-62 3, fr-63 4, fr-64 108, fr-65 69, fr-66 11, fr-67 31, fr-68 22, fr-69 11, fr-70 32, fr-71 46, fr-72 14, fr-73 59, fr-74 30, fr-75 23, fr-76 27, fr-77 27, fr-78 29, fr-79 19, fr-80 4, fr-81 63, fr-82 13, fr-83 5, fr-84 2, fr-85 1, fr-86 1, fr-87 47, fr-88 32, fr-89 18, fr-90 7, fr-91 42, fr-92 8, fr-93 8, fr-94 100, fr-95 5, fr-96 24, fr-97 51, fr-98 3, fr-99 4, fr-100 18, fr-101 27, fr-102 23, fr-103 20, fr-104 30, fr-105 3, fr-106 21, fr-107 67, fr-108 6, fr-109 11, fr-110 1, fr-111 52, fr-112 7, fr-113 7, fr-114 34, fr-115 60, fr-116 28, fr-117 17, fr-118 58, fr-119 53, fr-120 29

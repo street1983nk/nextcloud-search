@@ -7,6 +7,12 @@ selbst gebaute int8-Quantisierung des Modells kostet (D-02), und ob die
 E5-Präfixe wirken (D-05). Getrennt davon gemessen: was die Quantisierung der
 gespeicherten Vektoren zusätzlich kostet.
 
+> **Hinweis auf den Nachtrag.** Am Ende dieses Berichts steht der Abschnitt
+> "Nachtrag vom 05.09.2026: Französisch auf 120 Fällen". Er ersetzt keine der
+> Zahlen unten, sondern stellt die französischen daneben, gemessen auf einem
+> Testset, das von 42 auf 120 Fälle verbreitert wurde. Wer das französische
+> Verdikt sucht, liest beide Stellen.
+
 ## Die beiden Verdikte, zuerst
 
 **Zu D-05: die Präfixe sitzen.** Dieselbe Anfrage mit und ohne `query: `
@@ -359,3 +365,191 @@ Vor dem Holen wurde die Ratengrenze geprüft: die HuggingFace-Auslieferung setzt
 für diesen Abruf keine `x-ratelimit`-Kopfzeilen und keine `retry-after`, und es
 ist ein einzelner Abruf einer festgenagelten Revision. Die AWS-Box wurde für
 diesen Bericht nicht angefasst.
+
+## Nachtrag vom 05.09.2026: Französisch auf 120 Fällen
+
+Der Abschnitt oben endete mit einem Befund und einer Owner-Entscheidung. Der
+Owner hat am 05.09.2026 den billigsten der dort genannten Wege gewählt, und
+zwar den, den dieser Bericht selbst vorgeschlagen hatte: erst das Testset
+verbreitern, dann entscheiden. Das französische Testset ist von 42 auf 120
+Fälle gewachsen (`fr-43` bis `fr-120`, die ersten 42 unverändert), und die
+französischen Läufe sind wiederholt worden.
+
+**Nichts an den Zahlen oben ist angefasst worden.** Sie gelten weiter für 42
+Fälle. Was hier dazukommt, gilt für 120.
+
+### Was gleich geblieben ist, und was das wert ist
+
+| Angabe | Wert |
+|---|---|
+| Abbild | `findling-sem-probe:local` |
+| Abbildkennung | `sha256:c9bb41d65746c584480ad05569445a2c36c6f347543f983d42416cedb02bfef9`, dieselbe wie oben |
+| int8-Datei im Abbild | `8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6`, dieselbe wie oben |
+| fp32-Datei | `ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665`, erneut geholt, Prüfsumme geprüft |
+| lokal erzeugte int8-Datei | wieder `8da4c9ba0a...`, also zum dritten Mal byteidentisch |
+| Maschine, Netzwerk, Kommandozeile | unverändert, `--network none`, nur `--dataset` zeigt auf die gewachsene Datei |
+| Läufe | fünf, alle französisch: vier für die Quantisierung, einer für den Präfixvergleich |
+| Rohdaten | `nachtrag-fr-laeufe.txt` in diesem Verzeichnis, die fünf Ausgaben wörtlich, `--per-case` eingeschlossen |
+
+`quantize_dynamic` hat damit über drei Läufe auf zwei Maschinen dieselbe Datei
+erzeugt. Gemessen wurde erneut das ausgelieferte Artefakt.
+
+### Die Zahlen, Französisch, 120 Fälle
+
+Alle mit Präfixen an. Die Klammer nennt die relative Änderung gegenüber der
+Bezugszeile fp32-Modell mit fp32-Vektoren, in Prozent.
+
+| Modell | Vektoren | Recall@1 | Recall@5 | MRR |
+|---|---|---|---|---|
+| fp32 | fp32 | 0,1667 (Bezug) | 0,3833 (Bezug) | 0,2870 (Bezug) |
+| fp32 | int8 | 0,1833 (+9,96) | 0,3917 (+2,19) | 0,2908 (+1,32) |
+| int8 | fp32 | 0,1583 (-5,04) | 0,3667 (-4,33) | **0,2673 (-6,87)** |
+| int8 | int8 | 0,1833 (+9,96) | 0,3750 (-2,17) | 0,2767 (-3,59) |
+
+**Die absoluten Werte sind mit denen der 42er-Tabelle nicht vergleichbar, und
+zwar nicht ein bisschen, sondern grundsätzlich.** Die Passagenmenge ist die
+Ablenkermenge: jede Anfrage kämpfte vorher gegen 41 Mitbewerber und kämpft
+jetzt gegen 119. Dass MRR von 0,4926 auf 0,2870 fällt, ist deshalb kein
+Qualitätsverlust, sondern eine schwerere Aufgabe. Vergleichbar sind
+ausschließlich zwei Läufe über dieselbe Datei, und genau das sind die vier
+Zeilen dieser Tabelle untereinander.
+
+### Paarweise, und der Grund, warum hier zwei Prüfungen stehen
+
+Fall gegen Fall über den Kehrwert des Ranges, wie oben. Neu ist die letzte
+Spalte, und sie ist der eigentliche Ertrag dieses Nachtrags.
+
+| Vergleich | MRR-Änderung | mittlere Differenz je Fall | Standardfehler | t | bewegt | schlechter / besser | Vorzeichentest p |
+|---|---|---|---|---|---|---|---|
+| Modell int8 gegen fp32, fp32-Vektoren | -6,87 Prozent | -0,0197 | 0,0165 | -1,19 | 97 von 120 | 64 / 33 | **0,0022** |
+| Modell int8 gegen fp32, int8-Vektoren | -4,86 Prozent | -0,0141 | 0,0174 | -0,81 | 94 von 120 | 59 / 35 | 0,0172 |
+| Vektoren int8 gegen fp32, fp32-Modell | +1,32 Prozent | +0,0038 | 0,0069 | +0,55 | 72 von 120 | 37 / 35 | 0,9063 |
+| Vektoren int8 gegen fp32, int8-Modell | +3,52 Prozent | +0,0094 | 0,0096 | +0,98 | 79 von 120 | 42 / 37 | 0,6530 |
+| Präfixe aus gegen an, int8-Modell | -3,72 Prozent | -0,0100 | 0,0233 | -0,43 | 104 von 120 | 43 / 61 | 0,0950 |
+
+Die Bezugszeile der zweiten Zeile ist fp32-Modell mit int8-Vektoren, nicht die
+Bezugszeile der Haupttabelle; deshalb steht dort -4,86 und in der Haupttabelle
+-3,59. Beide Zahlen beschreiben dieselben zwei Läufe, gemessen gegen zwei
+verschiedene Bezugspunkte.
+
+**Warum ein zweiter Test dazugekommen ist.** Der t-Wert der ersten Zeile ist von
+-2,03 auf -1,19 gefallen, und das sieht auf den ersten Blick nach Entwarnung
+aus. Es ist keine. Die Differenz zweier Kehrwerte wird von wenigen Fällen
+beherrscht, die zwischen Rang 1 und Rang 2 wechseln: ein einziger solcher Fall
+trägt 0,5 bei, während ein Sprung von Rang 60 auf Rang 90 nur 0,006 beiträgt.
+Bei 119 Ablenkern liegen fast alle Ränge im hinteren Bereich, die Differenzen
+werden klein, ihre Streuung bleibt von den wenigen Vorderplätzen bestimmt, und
+der t-Wert verliert Trennschärfe. Der Vorzeichentest über die bewegten Fälle
+benutzt nur die Richtung und ist gegen diese Schieflage unempfindlich.
+
+Er sagt das Gegenteil einer Entwarnung: **von 97 bewegten Fällen rutschen 64
+nach hinten und nur 33 nach vorn, zweiseitig p = 0,0022.** Auf 42 Fällen war
+dasselbe Verhältnis 16 zu 9 und damit p = 0,23, also nichts. Die Verbreiterung
+hat die Richtung des Befundes nicht entkräftet, sondern zum ersten Mal
+belastbar gemacht.
+
+### Der Vergleich beider Messungen in einer Zeile
+
+| Fallzahl | MRR fp32 | MRR int8 | relativ | mittlere Differenz | Standardfehler | t | bewegt | schlechter / besser | Vorzeichentest p |
+|---|---|---|---|---|---|---|---|---|---|
+| 42 | 0,4926 | 0,4471 | -9,24 Prozent | -0,0455 | 0,0224 | -2,03 | 25 von 42 | 16 / 9 | 0,2295 |
+| 120 | 0,2870 | 0,2673 | -6,87 Prozent | -0,0197 | 0,0165 | -1,19 | 97 von 120 | 64 / 33 | 0,0022 |
+
+Zwei Dinge stehen hier, die auseinandergehalten gehören. Der Punktschätzer ist
+milder geworden, von -9,24 auf -6,87 Prozent. Die Richtung ist sicherer
+geworden. Beides zugleich ist der Normalfall, wenn eine kleine Stichprobe einen
+echten, aber kleineren Effekt zufällig überzeichnet hat.
+
+**Eine Vorhersage dieses Berichts hat sich nicht bewahrheitet, und das gehört
+hierher.** Oben steht, 120 statt 42 Fälle würden den Standardfehler etwa
+halbieren. Er ist von 0,0224 auf 0,0165 gefallen, also um gut ein Viertel statt
+um die Hälfte. Die Rechnung unterstellte gleiche Streuung je Fall; tatsächlich
+hat die Verbreiterung zugleich die Aufgabe verändert, weil sie die Ablenkermenge
+verdreifacht hat. Eine Prognose über eine Stichprobengröße, die nebenbei die
+Messgröße mitverändert, war zu einfach gerechnet.
+
+### Das Verdikt zu D-02 für Französisch bei n = 120
+
+**Die selbst quantisierte int8-Fassung trägt auf Französisch nicht.** MRR fällt
+gegenüber fp32 um 6,87 Prozent relativ, die Abbruchregel dieses Plans liegt bei
+5 Prozent. Die Grenze ist zum zweiten Mal gerissen, jetzt auf dem dreifachen
+Testset, und die Richtung des Rückgangs ist mit p = 0,0022 nicht mehr mit Zufall
+zu erklären. Für Deutsch und Englisch bleibt es bei den Verdikten oben; sie sind
+nicht neu gemessen worden, weil sie die Grenze nicht gerissen hatten.
+
+Die Entscheidung gehört weiterhin dem Owner. Was diese Messung den drei Wegen
+aus dem Abschnitt "Der Befund" hinzufügt:
+
+1. **Eine andere Quantisierungsachse.** Der Befund ist jetzt belastbar genug,
+   dass sich der Aufwand lohnen könnte. Was er weiterhin nicht sagt: wo im
+   Modell der Verlust entsteht. Die Einbettungstabelle mit ihren 81,7 Prozent
+   aller Parameter bleibt der erste Verdächtige, und sie auszunehmen bleibt der
+   erste Versuch. Preis unverändert: eine größere Datei gegen das Größengatter
+   aus Plan 06-01, und je Variante wieder ein voller Satz Läufe.
+2. **Die fp32-Datei ins Abbild.** Preis unverändert: 470 MB statt 118 MB, das
+   Abbild bei rund 1,09 GB statt 740 MB, auf einer 4-GB-Box. Was diese Messung
+   dazu beiträgt: der Gegenwert ist kleiner als bisher angenommen, nämlich 6,87
+   statt 9,24 Prozent MRR auf einer Sprache, und für Deutsch und Englisch kauft
+   die Datei nach der Messung oben nichts.
+3. **Eine kleinere Zusage im Store-Text.** Unverändert die einzige der drei
+   Möglichkeiten ohne neue Unbekannte, und unverändert im Widerspruch zu D-03.
+
+Und ein vierter Punkt, den es vorher nicht gab, weil er ohne belastbare Richtung
+keinen Sinn ergab:
+
+4. **Die ausgelieferte Kombination getrennt betrachten.** Was Nutzer bekommen,
+   ist int8-Modell mit int8-Vektoren, und diese Zeile steht bei -3,59 Prozent
+   gegenüber fp32/fp32, also unter der Grenze. Ihre Richtung ist mit p = 0,0172
+   ebenfalls belastbar, ihr Betrag aber nicht mehr. Die Abbruchregel des Plans
+   ist ausdrücklich auf die Modellfassung bei fp32-Vektoren geschrieben und
+   dort gerissen. Ob die Regel den richtigen Punkt misst, ist selbst eine
+   Owner-Frage und wird hier nicht beantwortet.
+
+### Zwei Nebenergebnisse der Nachmessung
+
+**D-05 ist auf breiterer Grundlage bestätigt.** Mit und ohne Präfixe bekommen
+104 von 120 französischen Fällen einen anderen Rang. Der Alarmfall des Plans,
+gar kein Unterschied, liegt weiterhin nicht vor, und zwar deutlicher als vorher.
+
+**Die Beobachtung "die Präfixe helfen außerhalb des Deutschen nicht" hält
+nicht.** Auf 42 Fällen lag die Fassung ohne Präfixe auf Französisch mit +6,46
+Prozent MRR vorn. Auf 120 Fällen liegt sie mit -3,72 Prozent hinten. Das
+Vorzeichen hat sich umgedreht, |t| liegt in beiden Messungen unter 0,7, und der
+Vorzeichentest kommt auf p = 0,095. Damit ist belegt, was der Bericht oben
+vermutet hat: diese Beobachtung war Rauschen. Für Plan 06-05 heißt das, dass sie
+als Beobachtung ersatzlos entfällt, während die Anweisung, die Präfixe zu
+setzen, unverändert gilt.
+
+**Die Entlastung der Vektorquantisierung hält.** Beide französischen Vergleiche
+liegen bei p = 0,91 und p = 0,65, die Vorzeichen bleiben uneinheitlich, kein
+t-Wert erreicht 1. Für Plan 06-04 ändert sich nichts: int8 in vec0 kostet auch
+auf 120 Fällen nichts Messbares.
+
+### Nachvollziehen
+
+```bash
+# fp32-Original holen wie oben, int8-Fassung daneben legen wie oben, dann
+# fuenfmal derselbe Aufruf, nur --model, --prefixes und --vector-dtype wechseln:
+docker run --rm --network none \
+  -v "$PWD/scripts/dev/model_quality.py:/tmp/model_quality.py:ro" \
+  -v "$PWD/testdata/semantik:/tmp/semantik:ro" \
+  -v "$FP32_DIR/model.onnx:/model/fp32/model.onnx:ro" \
+  -v "$INT8_DIR/model.onnx:/model/int8/model.onnx:ro" \
+  --entrypoint /app/.venv/bin/python \
+  findling-sem-probe:local /tmp/model_quality.py \
+  --model /model/int8/model.onnx \
+  --tokenizer /usr/local/share/findling/model \
+  --dataset /tmp/semantik/fr.jsonl \
+  --prefixes on --vector-dtype fp32 --per-case
+```
+
+Unter Git Bash weiterhin `MSYS_NO_PATHCONV=1` davor. Die fünf Ausgaben liegen
+wörtlich in `nachtrag-fr-laeufe.txt`; die Tabellen dieses Nachtrags sind daraus
+gerechnet und nicht abgeschrieben. Der Vorzeichentest ist die zweiseitige
+Binomialwahrscheinlichkeit über die bewegten Fälle, Gleichstände ausgeschlossen.
+
+Vor dem erneuten Holen der fp32-Datei wurde die Ratengrenze wieder geprüft: die
+HuggingFace-Auslieferung setzt für diesen Abruf weiterhin keine
+`x-ratelimit`-Kopfzeilen und kein `retry-after`, `content-length` stimmt mit der
+ersten Messung überein, und es ist ein einzelner Abruf einer festgenagelten
+Revision. Die AWS-Box wurde auch für diesen Nachtrag nicht angefasst.
