@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 06-07-PLAN.md
-last_updated: "2026-09-05T08:28:35.196Z"
+stopped_at: Completed 06-08-PLAN.md
+last_updated: "2026-09-05T08:49:42.876Z"
 last_activity: 2026-09-05
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 33
-  completed_plans: 26
+  completed_plans: 27
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 6 (Semantische Suche) — EXECUTING
-Plan: 8 of 12
+Plan: 9 of 12
 Status: Ready to execute
 Last activity: 2026-09-05
 
-Progress: [████████░░] 79%
+Progress: [████████░░] 82%
 
 ## Performance Metrics
 
@@ -72,6 +72,7 @@ Progress: [████████░░] 79%
 | Phase 6 P05 | 30min | 3 tasks | 8 files |
 | Phase 6 P06 | 35min | 3 tasks | 12 files |
 | Phase 6 P07 | 38min | 3 tasks | 12 files |
+| Phase 6 P08 | 16min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -159,6 +160,8 @@ Recent decisions affecting current work:
 - [Phase 6]: 06-07: Die vier Endzustaende eines embed-Auftrags (embedded, no_stored_text, embedding_incomplete, embedding_unavailable) sind benannte Konstanten und werden NIE an Store.record gereicht: ein Dokument ohne Vektoren ist trotzdem indexiert (D-15), und ein Verdikt dort haette die Datei aus dem Index gemeldet und is_unchanged fuer immer auf False gestellt
 - [Phase 6]: 06-07: _needs_vectors schliesst den CR-02-Defekt eine Spur weiter: der Schnellpfad quittiert eine unveraenderte, bereits indexierte Datei ohne Schreibvorgang, also waere ein Uebergang, der Nextcloud nicht erreicht hat, nie wiederholt worden. Gefragt wird der Vektorbestand und nicht die Zustandsdatenbank, weil das gespeicherte Verdikt ueber Vektoren nichts sagt
 - [Phase 6]: 06-07: Der Plattenplatzvorbehalt zieht auf den IndexBatchWriter (free_bytes, disk_is_tight), damit Index und Vektorbestand ein Verzeichnis gegen eine Zahl fragen; der Zweitspurzweig antwortet mit _DiskTight und laeuft in die bestehende Plattenpause
+- [Phase 6]: 06-08: best_chunk_for fragt in der Richtung des Vorfilters (gegebene Dateien, ihr bester Chunk) und rechnet den Abstand je Zeile, weil k eine Bedingung ueber den ganzen Bestand ist
+- [Phase 6]: 06-08: snippets_for nimmt das SemanticSide-Buendel statt zweier Parameter, weil ohne Modell nichts eingebettet werden kann
 
 ### Pending Todos
 
@@ -185,6 +188,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-05T08:28:35.172Z
-Stopped at: Completed 06-07-PLAN.md
+Last session: 2026-09-05T08:49:42.861Z
+Stopped at: Completed 06-08-PLAN.md
 Resume file: None
