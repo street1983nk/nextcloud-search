@@ -20,15 +20,23 @@ second list is not needed and cannot drift away from the first.
 Two halves live in this file. The first, from plan 06-03 task 1, is the well
 formedness of the data. The second, from task 2, is the behaviour of
 ``scripts/dev/model_quality.py``, which reads exactly these files.
+
+The tool is a script rather than part of the installed package, so it is loaded
+from its path, the same way test_load_corpus.py loads the corpus generator. It
+belongs next to quantize_model.py where a reader looks for model tooling, and it
+has to stay runnable with a bare ``uv run python scripts/dev/model_quality.py``.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
+import sys
 from collections.abc import Mapping
 from functools import cache
 from pathlib import Path
+from types import ModuleType
 from typing import Final
 
 import pytest
@@ -237,3 +245,197 @@ def test_the_readme_states_the_true_number_of_cases(language: str) -> None:
     rows = [line for line in README_PATH.read_text(encoding="utf-8").splitlines() if f"{language}.jsonl" in line]
     assert rows, f"the README does not mention {language}.jsonl"
     assert any(str(len(cases(language))) in row for row in rows), f"{language}: count not stated"
+
+
+# ---------------------------------------------------------------------------
+# The measuring tool, from task 2 of the same plan.
+#
+# Everything below runs without a model on disk and without onnxruntime. That is
+# not a shortcut, it is the design: the arithmetic of a rank, the shape of the
+# report and the three refusals are the parts that can be wrong in a way nobody
+# would notice, and they are exactly the parts that need no weights.
+# ---------------------------------------------------------------------------
+
+TOOL_PATH: Final = REPO_ROOT / "scripts" / "dev" / "model_quality.py"
+
+
+def _load_tool() -> ModuleType:
+    specification = importlib.util.spec_from_file_location("model_quality", TOOL_PATH)
+    assert specification is not None
+    assert specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[specification.name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+quality = _load_tool()
+
+
+def _dummy_model(tmp_path: Path) -> Path:
+    """A file that exists. Its content is never read on the paths tested here."""
+    path = tmp_path / "model.onnx"
+    path.write_bytes(b"not a model, and never opened on these paths")
+    return path
+
+
+def _one_hot(size: int, hot: int) -> list[float]:
+    return [1.0 if index == hot else 0.0 for index in range(size)]
+
+
+def test_the_rank_of_the_correct_passage_is_counted_from_one() -> None:
+    """Three queries, three passages, one deliberate miss. No model anywhere near this."""
+    import numpy as np
+
+    passages = np.array([_one_hot(3, 0), _one_hot(3, 1), _one_hot(3, 2)], dtype=np.float32)
+    queries = np.array(
+        [
+            _one_hot(3, 0),  # exactly its own passage
+            [0.0, 0.9, 0.4],  # closest to its own, but not identical
+            [0.9, 0.1, 0.4],  # closer to passage 0 than to its own passage 2
+        ],
+        dtype=np.float32,
+    )
+    assert quality.ranks_of(queries, passages) == [1, 1, 2]
+
+
+def test_a_tie_is_counted_against_the_tool() -> None:
+    """A model that maps everything onto one vector must not come out looking perfect."""
+    import numpy as np
+
+    identical = np.array([_one_hot(2, 0), _one_hot(2, 0)], dtype=np.float32)
+    assert quality.ranks_of(identical, identical) == [2, 2]
+
+
+def test_the_metrics_are_the_ordinary_ones() -> None:
+    metrics = quality.metrics_of([1, 1, 2, 10])
+    assert metrics.cases == 4
+    assert metrics.recall_at_1 == pytest.approx(0.5)
+    assert metrics.recall_at_5 == pytest.approx(0.75)
+    assert metrics.mrr == pytest.approx((1.0 + 1.0 + 0.5 + 0.1) / 4)
+
+
+def test_quantising_the_vectors_moves_them_without_turning_them_around() -> None:
+    """The second stage, on its own: rounding to int8 costs precision, not direction."""
+    import numpy as np
+
+    original = quality.normalise(np.array([[0.31, -0.62, 0.72], [0.9, 0.1, -0.42]], dtype=np.float32))
+    quantised = quality.quantise_to_int8(original)
+    assert not np.array_equal(original, quantised)
+    cosines = (quality.normalise(original) * quality.normalise(quantised)).sum(axis=1)
+    assert cosines.min() > 0.999
+
+
+def test_the_report_names_every_number_that_was_asked_for() -> None:
+    model = Path("/model/int8/model.onnx")
+    metrics = quality.Metrics(cases=42, recall_at_1=0.9524, recall_at_5=1.0, mrr=0.9762)
+    report = quality.format_report(
+        model, Path("/model"), DATASET_DIR / "de.jsonl", "on", "int8", metrics, [("de-13", 3)]
+    )
+    for token in ("Recall@1", "Recall@5", "MRR", "42", str(model), "de.jsonl", "on", "int8"):
+        assert token in report, token
+    assert "de-13 rank 3" in report
+
+
+def test_a_missing_model_ends_with_a_named_message_and_a_non_zero_code(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = quality.main(
+        [
+            *("--model", str(tmp_path / "absent.onnx")),
+            *("--tokenizer", str(tmp_path)),
+            *("--dataset", str(DATASET_DIR / "de.jsonl")),
+            *("--prefixes", "on"),
+            *("--vector-dtype", "fp32"),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code != 0
+    assert "model not found" in captured.err
+    assert captured.out == ""
+
+
+def test_a_missing_tokenizer_ends_with_a_named_message(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code = quality.main(
+        [
+            *("--model", str(_dummy_model(tmp_path))),
+            *("--tokenizer", str(tmp_path / "no-such-directory")),
+            *("--dataset", str(DATASET_DIR / "de.jsonl")),
+            *("--prefixes", "on"),
+            *("--vector-dtype", "fp32"),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code != 0
+    assert "tokenizer directory not found" in captured.err
+    assert captured.out == ""
+
+
+def test_an_empty_dataset_ends_with_a_named_message(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """An empty file is a refusal, never a zero that travels into a table as a measurement."""
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("\n\n", encoding="utf-8")
+    code = quality.main(
+        [
+            *("--model", str(_dummy_model(tmp_path))),
+            *("--tokenizer", str(tmp_path)),
+            *("--dataset", str(empty)),
+            *("--prefixes", "on"),
+            *("--vector-dtype", "fp32"),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code != 0
+    assert "dataset is empty" in captured.err
+    assert captured.out == ""
+
+
+def test_a_full_run_prints_no_word_of_the_test_set(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The privacy claim of this tool, checked rather than promised (T-02-14, T-06-11).
+
+    The measurement itself is replaced, because what is under test here is the
+    printing and not the model: every value the report can carry is fed in, worst
+    cases included, and none of the text behind those identifiers may appear.
+    """
+    metrics = quality.Metrics(cases=42, recall_at_1=0.9, recall_at_5=1.0, mrr=0.95)
+    missed = [(record["id"], 4) for record in cases("de")[:5]]
+    monkeypatch.setattr(quality, "measure", lambda *_args, **_kwargs: (metrics, missed))
+
+    code = quality.main(
+        [
+            *("--model", "/model/int8/model.onnx"),
+            *("--tokenizer", "/model"),
+            *("--dataset", str(DATASET_DIR / "de.jsonl")),
+            *("--prefixes", "on"),
+            *("--vector-dtype", "int8"),
+        ]
+    )
+    printed = capsys.readouterr().out.lower()
+    assert code == 0
+
+    corpus_words = {
+        word
+        for record in cases("de")
+        for text in (record["query"], record["passage"])
+        for word in tokens(text)
+        if len(word) >= 5
+    }
+    leaked = sorted(word for word in corpus_words if word in printed)
+    assert leaked == [], f"the report carries words out of the test set: {leaked}"
+
+
+def test_the_two_prefixes_stand_in_the_tool() -> None:
+    """Fallstrick 3 of the research: fastembed does not add them for a model registered by hand."""
+    source = TOOL_PATH.read_text(encoding="utf-8")
+    assert source.count("query: ") >= 1
+    assert source.count("passage: ") >= 1
+
+
+def test_the_help_names_all_five_switches(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        quality.parse_args(["--help"])
+    printed = capsys.readouterr().out
+    for switch in ("--model", "--tokenizer", "--dataset", "--prefixes", "--vector-dtype"):
+        assert switch in printed, switch
