@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 06-02-PLAN.md und den D-02-Entscheid zu 06-03
-last_updated: "2026-09-05T05:57:06.465Z"
+stopped_at: Completed 06-04-PLAN.md
+last_updated: "2026-09-05T06:29:04.730Z"
 last_activity: 2026-09-05
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 33
-  completed_plans: 22
+  completed_plans: 23
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 6 (Semantische Suche) — EXECUTING
-Plan: 4 of 12
+Plan: 5 of 12
 Status: Ready to execute
 Last activity: 2026-09-05
 
-Progress: [███████░░░] 67%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Progress: [███████░░░] 67%
 | Phase 06 P01 | 35min | 3 tasks | 14 files |
 | Phase 06 P03 | 3h05m | 3 tasks | 8 files |
 | Phase 06 P02 | 2h05m | 3 tasks | 37 files |
+| Phase 6 P04 | 30min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -135,6 +136,11 @@ Recent decisions affecting current work:
 - [Phase 6]: 06-02: int8 mit brute force haelt das Zeitbudget auf beiden Architekturen: bei 100.136 Chunks 37,8 ms p95 warm und 153,5 ms kalt je Runde gegen 300 ms, also 4,5 bis 18,4 Prozent des 2,5-Sekunden-Budgets bei MAX_ROUNDS = 3. D-10 und D-08 bleiben richtig
 - [Phase 6]: 06-02: Der Tokenizer ist architekturunabhaengig, belegt statt behauptet: die Tokenzahlen auf aarch64 und x86_64 stimmen in allen drei Textsorten auf das letzte Token ueberein (142.396, 163, 247.204)
 - [Phase 6]: 06-03: D-02 BESTANDEN nach Owner-Entscheid vom 05.09.2026. Die Abbruchregel wird auf die ausgelieferte Kombination bezogen (int8-Modell mit int8-Vektoren): -3,59 Prozent MRR auf Franzoesisch, unter der 5-Prozent-Grenze, Richtung p = 0,0172. Die Umdeutung des Messpunktes ist dokumentationspflichtig und keine stille Regelaenderung, die Grenze selbst steht unveraendert. Kein Umbau, keine fp32-Auslieferung, Store-Text-Zusage unveraendert nach D-03 und D-17
+- [Phase 6]: 06-04: Die Vektoren liegen in einer eigenen vectors.db neben state.db (verwerfbar ohne Volltextverlust, haelt die Ladefaehigkeit fuer Erweiterungen von state.db fern, Pfad bleibt ein Argument); repo.py::_connect bleibt deshalb OHNE enable_load_extension
+- [Phase 6]: 06-04: SCHEMA_VERSION steigt auf 2, aber unter einer eigenen Marke store_schema_version. Der Schluessel schema_version traegt die Tantivy-Schemafassung aus config.py; ein Sprung unter diesem Schluessel haette den Volltext-Reindex erzwungen, den D-21 ausschliesst
+- [Phase 6]: 06-04: embedding_version ist eine meta-Marke; version_mismatch meldet ihren Drift weiterhin und entscheidet nichts, VECTOR_ONLY_MARKS trennt sie, und version_drift laesst sie aus, damit kein Reindex-Banner auf einem frischen Container steht
+- [Phase 6]: 06-04: Kennzahl aus Erfolgskriterium 4 gemessen statt geschaetzt: 43.859.968 Byte fuer 100.136 Chunks, also 438,0 Byte je Chunk und 876,0 je Dokument, 5,8 Prozent des Tantivy-Index (geschaetzt waren 432, 864 und 5,7)
+- [Phase 6]: 06-04: nearest deckelt k als Argument (Vorgabe 100, Fenstertiefe aus D-12) und sagt ausdruecklich, dass es die Zahl der besuchten Zeilen nicht deckelt; genau das kaufen die beiden Ausweichpfade, und keiner von beiden ist gebaut (D-10)
 
 ### Pending Todos
 
@@ -161,6 +167,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-05T05:57:06.453Z
-Stopped at: Completed 06-02-PLAN.md und den D-02-Entscheid zu 06-03
+Last session: 2026-09-05T06:29:04.714Z
+Stopped at: Completed 06-04-PLAN.md
 Resume file: None

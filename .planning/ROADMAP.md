@@ -83,7 +83,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 06-04-PLAN.md , Das Vektorschema festzurren: vectors.py, Schemaversion 2, Kennzahl und Ausweichpfade (SEM-03)
+- [x] 06-04-PLAN.md , Das Vektorschema festzurren: vectors.py, Schemaversion 2, Kennzahl und Ausweichpfade (SEM-03)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -314,7 +314,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
 | 5. Härtung und Store-Einreichung v1.0 | 18/20 | In Progress|  |
-| 6. Semantische Suche | 3/12 | In Progress|  |
+| 6. Semantische Suche | 4/12 | In Progress|  |
 
 ## Requirement Coverage
 
