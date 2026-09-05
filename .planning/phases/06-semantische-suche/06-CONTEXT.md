@@ -32,6 +32,21 @@ Abschluss der Phase ist die gebündelte Store-Abgabe des Erstrelease 1.0.0
   unbrauchbar), ins Image gebacken, HF_HUB_OFFLINE=1 (SEM-01 unverändert).
   Owner-Wunsch "beste Qualität" ist gegen e5-base abgewogen: +0,9 nDCG@10
   rechtfertigt doppelten Vektorspeicher und 2-3x Embedding-Zeit nicht.
+  - **D-02, Zusatz vom 05.09.2026 (Owner).** Der Text oben bleibt unverändert.
+    Plan 06-03 hat die Qualität dreisprachig gemessen und die Abbruchregel (5
+    Prozent relativer MRR-Rückgang) auf Französisch gerissen. Nach der
+    Nachmessung auf 120 statt 42 französischen Fällen hat der Owner **den
+    Messpunkt der Regel auf die ausgelieferte Kombination gelegt**, also
+    int8-Modell mit int8-Vektoren: sie steht bei -3,59 Prozent und damit unter
+    der Grenze, ihre Richtung ist mit p = 0,0172 belastbar. **D-02 gilt damit als
+    bestanden.** Die isolierte Modellfassung bei fp32-Vektoren bleibt mit -6,87
+    Prozent gemessen; sie wird nicht ausgeliefert und ist deshalb nicht der
+    Punkt, an dem die Regel greift. Die Umdeutung des Messpunktes ist eine
+    Owner-Entscheidung und ausdrücklich keine stille Regeländerung; die Grenze
+    von 5 Prozent steht unverändert. Folgen: kein Umbau, keine fp32-Auslieferung,
+    Store-Text-Zusage unverändert nach D-03 und D-17. Belege und Begründung:
+    `docs/measurements/2026-09-05-modellqualitaet/README.md`, Abschnitt "Der
+    Owner-Entscheid vom 05.09.2026: der Messpunkt der Abbruchregel".
 - **D-03:** MEHRSPRACHIGKEIT IST ANFORDERUNG (Owner): Deutsch, Englisch UND
   Französisch. Das Welle-0-Testset (fp32 gegen int8) wird DREISPRACHIG
   DE/EN/FR aufgebaut (deutsche Basis: GermanQuAD-Stichprobe + DACH-Korpus aus

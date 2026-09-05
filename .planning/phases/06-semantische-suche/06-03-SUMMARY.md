@@ -50,6 +50,7 @@ key-decisions:
   - "Die lokal erzeugte int8-Datei ist byteidentisch mit der im Abbild; gemessen wurde das ausgelieferte Artefakt und nicht seine Nachbildung"
   - "Die absoluten Werte dieses Testsets sind eine Untergrenze und nicht mit NDCG@10 auf MIRACL vergleichbar; der Bericht sagt das ausdruecklich"
   - "Nachtrag 05.09.2026: das franzoesische Testset traegt 120 statt 42 Faelle, und D-02 bleibt fuer Franzoesisch gerissen (-6,87 Prozent MRR). Die Richtung ist im Vorzeichentest jetzt belastbar (p = 0,0022), der t-Wert der Kehrwerte ist zugleich auf -1,19 gefallen; beides steht im Messbericht nebeneinander"
+  - "Zweiter Nachtrag 05.09.2026 (Owner-Entscheid): die Abbruchregel wird auf die ausgelieferte Kombination bezogen (int8-Modell mit int8-Vektoren, -3,59 Prozent MRR auf Franzoesisch, unter der 5-Prozent-Grenze, Richtung p = 0,0172). D-02 gilt damit als BESTANDEN. Die Umdeutung des Messpunktes ist dokumentationspflichtig und keine stille Regelaenderung; die Grenze selbst steht unveraendert. Kein Umbau, keine fp32-Auslieferung, Store-Text-Zusage unveraendert nach D-03 und D-17"
 
 patterns-established:
   - "Ein Gatter bekommt seinen Gegenbeweis: die Wortueberschneidungsregel wird im Testlauf rot gefahren, und die franzoesische Elision wird als Schlupfloch ausdruecklich geschlossen"
@@ -323,6 +324,56 @@ nach dem Abruf ebenfalls. Sie stimmt mit der des Erstlaufs überein, und die
 daraus erzeugte int8-Datei ist zum dritten Mal byteidentisch mit der im Abbild.
 
 ---
+
+## Zweiter Nachtrag vom 05.09.2026: der D-02-Entscheid des Owners
+
+Der erste Nachtrag endete mit einer offenen Owner-Entscheidung und vier Wegen.
+Der Owner hat den vierten gewählt.
+
+**Der Entscheid: die Abbruchregel wird auf die ausgelieferte Kombination
+bezogen, also int8-Modell mit int8-Vektoren. Diese Kombination steht auf
+Französisch bei -3,59 Prozent MRR und damit unter der 5-Prozent-Grenze; ihre
+Richtung ist mit p = 0,0172 belastbar. D-02 gilt damit als BESTANDEN.**
+
+Die Begründung in einem Satz: die Regel soll die Qualität dessen absichern, was
+Nutzer bekommen, und das ist die Kombination beider Quantisierungsstufen und
+nicht die Modellfassung bei fp32-Vektoren, die in keinem Abbild ausgeliefert
+wird.
+
+**Das ist eine dokumentationspflichtige Umdeutung des Messpunktes und keine
+stille Regeländerung**, und sie ist als solche an drei Stellen festgehalten:
+im Messbericht (`docs/measurements/2026-09-05-modellqualitaet/README.md`,
+eigener Abschnitt am Dateiende plus datierter Verweis über dem alten Verdikt),
+in `06-CONTEXT.md` als datierter Zusatz unter D-02, dessen ursprünglicher Text
+unangetastet bleibt, und hier. Verschoben hat sich der Messpunkt, nicht die
+Grenze: 5 Prozent relativer MRR-Rückgang stehen unverändert.
+
+**Was der Entscheid nicht wegräumt.** Die -6,87 Prozent der Modellfassung bei
+fp32-Vektoren bleiben gemessen und bleiben in den Tabellen stehen. Der Entscheid
+sagt, welche der beiden Zahlen die Regel prüft, nicht dass die andere falsch
+wäre. Der Betrag der -3,59 Prozent ist weiterhin nicht belastbar, nur seine
+Richtung.
+
+**Die Folgen:**
+
+- **Kein Umbau.** Die Wege 1 bis 3 (andere Quantisierungsachse, fp32-Datei ins
+  Abbild, kleinere Zusage im Store-Text) werden nicht gegangen. Das Abbild
+  bleibt bei 118 MB Modelldatei.
+- **Die Store-Text-Zusage bleibt, wie D-03 und D-17 sie festhalten.** Deutsch,
+  Englisch und Französisch gleichrangig.
+- **Für Plan 06-04 und 06-05 ändert sich nichts.** int8 in vec0 bleibt gesetzt,
+  die E5-Präfixe bleiben an.
+- **Der Blocker in `.planning/STATE.md` ist ausgetragen.** Der Abschnitt "User
+  Setup Required" oben, der eine Owner-Entscheidung statt einer Konfiguration
+  verlangte, ist damit eingelöst.
+
+### Zweiter Nachtrag: Commits
+
+1. **Der D-02-Entscheid in Bericht, CONTEXT-Amendment und Summary** - siehe den
+   `docs(06-03)`-Commit vom 05.09.2026, der diese drei Stellen zusammen ändert
+
+---
 *Phase: 06-semantische-suche*
 *Completed: 2026-09-05*
 *Nachtrag: 2026-09-05, Franzoesisch auf 120 Faellen nachgemessen*
+*Zweiter Nachtrag: 2026-09-05, D-02 nach Owner-Entscheid bestanden*

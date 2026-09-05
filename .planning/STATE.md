@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 06-02-PLAN.md (Checkpoint abgenommen, D-04 haelt)
-last_updated: "2026-09-05T05:52:56.329Z"
+stopped_at: Completed 06-02-PLAN.md und den D-02-Entscheid zu 06-03
+last_updated: "2026-09-05T05:57:06.465Z"
 last_activity: 2026-09-05
 progress:
   total_phases: 2
@@ -134,6 +134,7 @@ Recent decisions affecting current work:
 - [Phase 6]: 06-02: Unter dem Deckel aus D-01 entscheidet A1 die Laufzeit nicht mehr, sondern nur die Abdeckungszusage aus D-17b: 51.269.632 Token und 100.136 Chunks unabhaengig vom A1-Wert, gemessener Abdeckungsanteil 12,5 statt 13,2 Prozent eines durchschnittlichen Dokuments
 - [Phase 6]: 06-02: int8 mit brute force haelt das Zeitbudget auf beiden Architekturen: bei 100.136 Chunks 37,8 ms p95 warm und 153,5 ms kalt je Runde gegen 300 ms, also 4,5 bis 18,4 Prozent des 2,5-Sekunden-Budgets bei MAX_ROUNDS = 3. D-10 und D-08 bleiben richtig
 - [Phase 6]: 06-02: Der Tokenizer ist architekturunabhaengig, belegt statt behauptet: die Tokenzahlen auf aarch64 und x86_64 stimmen in allen drei Textsorten auf das letzte Token ueberein (142.396, 163, 247.204)
+- [Phase 6]: 06-03: D-02 BESTANDEN nach Owner-Entscheid vom 05.09.2026. Die Abbruchregel wird auf die ausgelieferte Kombination bezogen (int8-Modell mit int8-Vektoren): -3,59 Prozent MRR auf Franzoesisch, unter der 5-Prozent-Grenze, Richtung p = 0,0172. Die Umdeutung des Messpunktes ist dokumentationspflichtig und keine stille Regelaenderung, die Grenze selbst steht unveraendert. Kein Umbau, keine fp32-Auslieferung, Store-Text-Zusage unveraendert nach D-03 und D-17
 
 ### Pending Todos
 
@@ -149,7 +150,6 @@ None yet.
 - RAM-Spitzen auf ARM sind bisher nur geschätzt, Messlauf steht in Phase 5 aus
 - Zwei benannte Luecken aus der Sichtprobe 04-10, beide in .planning/phases/04-admin-sichtbarkeit-und-diagnose/deferred-items.md mit ihrer Schliessform: DI-04-03 (Skip-Verdikte pro fileid uebergeben, damit die Fehlerliste die vier Container-Gruende gruppieren kann) und DI-04-04 (Versionsmarken nach abgeschlossenem Neuaufbau neu stempeln, sonst kann der Reindex-Banner die eigene Abhilfe nie einloesen)
 - Das Pruefsummen-Gate ueber das Referenzkorpus nach der Live-Raeumung steht aus und gehoert in die Phasen-Verifikation (Gate A auf Quellcode-Ebene ist gruen, die Write-Allowlist unveraendert bei drei Eintraegen)
-- Owner-Entscheidung offen (D-02/D-03): franzoesischer int8-Rueckgang reisst die Abbruchregel von Plan 06-03. Stand 05.09.2026 nach der Nachmessung auf 120 statt 42 franzoesischen Faellen: -6,87 Prozent MRR statt -9,24, die 5-Prozent-Grenze bleibt gerissen, und die Richtung ist im Vorzeichentest jetzt belastbar (64 von 97 bewegten Faellen schlechter, p = 0,0022, gegenueber p = 0,23 auf 42 Faellen). Vier Wege im Messbericht docs/measurements/2026-09-05-modellqualitaet/ benannt, Nachtrag am Dateiende
 
 ## Deferred Items
 
@@ -161,6 +161,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-05T05:52:56.309Z
-Stopped at: Completed 06-02-PLAN.md (Checkpoint abgenommen, D-04 haelt)
+Last session: 2026-09-05T05:57:06.453Z
+Stopped at: Completed 06-02-PLAN.md und den D-02-Entscheid zu 06-03
 Resume file: None

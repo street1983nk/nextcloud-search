@@ -470,6 +470,12 @@ Messgröße mitverändert, war zu einfach gerechnet.
 
 ### Das Verdikt zu D-02 für Französisch bei n = 120
 
+> **Nachtrag 05.09.2026, Owner-Entscheid.** Der Abschnitt unter dieser Zeile
+> bleibt unverändert stehen. Der Owner hat den Messpunkt der Abbruchregel
+> inzwischen auf die ausgelieferte Kombination gelegt (Weg 4 unten); **D-02 gilt
+> damit als bestanden.** Die Begründung steht am Ende dieser Datei unter
+> [Der Owner-Entscheid vom 05.09.2026](#der-owner-entscheid-vom-05092026-der-messpunkt-der-abbruchregel).
+
 **Die selbst quantisierte int8-Fassung trägt auf Französisch nicht.** MRR fällt
 gegenüber fp32 um 6,87 Prozent relativ, die Abbruchregel dieses Plans liegt bei
 5 Prozent. Die Grenze ist zum zweiten Mal gerissen, jetzt auf dem dreifachen
@@ -553,3 +559,41 @@ HuggingFace-Auslieferung setzt für diesen Abruf weiterhin keine
 `x-ratelimit`-Kopfzeilen und kein `retry-after`, `content-length` stimmt mit der
 ersten Messung überein, und es ist ein einzelner Abruf einer festgenagelten
 Revision. Die AWS-Box wurde auch für diesen Nachtrag nicht angefasst.
+
+## Der Owner-Entscheid vom 05.09.2026: der Messpunkt der Abbruchregel
+
+**Entscheid (Owner, 05.09.2026): Die Abbruchregel von Plan 06-03 wird auf die
+ausgelieferte Kombination bezogen, also int8-Modell mit int8-Vektoren. Diese
+Kombination steht auf Französisch bei -3,59 Prozent MRR und damit unter der
+5-Prozent-Grenze. D-02 gilt damit als BESTANDEN.** Begründung in einem Satz: die
+Regel soll die Qualität dessen absichern, was Nutzer bekommen, und das ist die
+Kombination beider Quantisierungsstufen und nicht die Modellfassung bei
+fp32-Vektoren, die in keinem Abbild ausgeliefert wird.
+
+**Das ist eine dokumentationspflichtige Umdeutung des Messpunktes und keine
+stille Regeländerung.** Verschoben hat sich der Messpunkt, von der isolierten
+Modellfassung auf die ausgelieferte Kombination; die Grenze von 5 Prozent
+relativem MRR-Rückgang steht unverändert. Weg 4 des Abschnitts oben hatte genau
+diese Möglichkeit benannt und ausdrücklich offen gelassen, ob die Regel den
+richtigen Punkt misst. Diese Frage ist hiermit beantwortet, und zwar vom Owner
+und nicht vom Bericht.
+
+**Was der Entscheid nicht wegräumt, und was deshalb hier stehen bleibt.** Die
+Richtung des Rückgangs ist auch für die ausgelieferte Kombination belastbar
+(p = 0,0172); nicht belastbar ist ihr Betrag. Die Zahl -6,87 Prozent für die
+Modellfassung bei fp32-Vektoren bleibt gemessen und bleibt in den Tabellen oben
+stehen. Der Entscheid sagt, welche der beiden Zahlen die Regel prüft, nicht dass
+die andere falsch wäre.
+
+**Die Folgen, aufgezählt statt angedeutet:**
+
+- **Kein Umbau.** Die Wege 1 bis 3 aus dem Abschnitt "Der Befund" werden nicht
+  gegangen: keine andere Quantisierungsachse, keine fp32-Datei im Abbild, keine
+  kleinere Zusage im Store-Text. Das Abbild bleibt bei 118 MB Modelldatei und
+  rund 740 MB gesamt.
+- **Die Store-Text-Zusage bleibt, wie D-03 und D-17 sie festhalten.** Deutsch,
+  Englisch und Französisch werden weiter gleichrangig zugesagt.
+- **Für Plan 06-04 und 06-05 ändert sich nichts.** int8 in vec0 bleibt gesetzt,
+  die E5-Präfixe bleiben an.
+- **Der Blocker ist damit aufgeloest.** Die offene Owner-Entscheidung, die seit
+  dem Erstlauf in .planning/STATE.md stand, ist getroffen und dort ausgetragen.
