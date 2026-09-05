@@ -1,0 +1,39 @@
+
+### DRILL 2 auf ARM: das Backend ist weg
+--- Ausgangszustand, eine Suche mit Backend 2026-09-05T08:32:15Z ---
+  {'http': '200', 'ms': 426, 'name': 'File contents', 'treffer': 5, 'erster': '35799-aktenvermerk.docx'}
+  Vorrat {'zeilen': 124, 'ausgeliefert': 6, 'auslieferungen_max': 1, 'auslieferungen_summe': 6}
+  Zaehler {'indexed': 51439, 'skipped': 158, 'failed': 0, 'docs': 51597, 'aclRows': 51439, 'ocr': 10315, 'auslieferungen_max': 3}
+--- Eingriff: Container anhalten 2026-09-05T08:32:16Z ---
+nc_app_findling_backend
+Status=exited ExitCode=0
+angehalten um 2026-09-05T08:32:18Z
+--- Die Suche ohne Backend, dreimal 2026-09-05T08:32:28Z ---
+  Versuch 1: {'http': '200', 'ms': 1833, 'name': 'File contents', 'treffer': 0, 'erster': None}
+  Versuch 2: {'http': '200', 'ms': 1821, 'name': 'File contents', 'treffer': 0, 'erster': None}
+  Versuch 3: {'http': '200', 'ms': 1817, 'name': 'File contents', 'treffer': 0, 'erster': None}
+--- Die Dateisuche von Nextcloud, zur Gegenprobe 2026-09-05T08:32:42Z ---
+  HTTP 200 in 0.417886s
+--- Die Verwaltungsseite ohne Backend 2026-09-05T08:32:43Z ---
+  backendReachable False runState running indexedDisplay 51433 backend.indexed 0 backend.docs 0 note ''
+  Verwaltungsseite HTTP-Inhalt 73854 Byte
+  findling-banner-unreachable        SICHTBAR
+  findling-banner-lockstep           verborgen
+  findling-banner-stale              verborgen
+  findling-banner-lowdisk            verborgen
+  findling-banner-reindex            verborgen
+  Satz 'The Findling backend does not answer' in der Seite: True
+  Satz 'Little disk space left' in der Seite: True
+--- Wiederherstellung ueber AppAPI 2026-09-05T08:32:48Z ---
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully enabled.
+  disable/enable dauerte 29s
+Status=running Memory=2147483648 MemorySwap=2147483648
+  Suche danach: {'http': '200', 'ms': 436, 'name': 'File contents', 'treffer': 5, 'erster': '35799-aktenvermerk.docx'}
+  Bewegt sich der Vorrat wieder?
+    indexed 51447
+--- Endstand 2026-09-05T08:33:44Z ---
+  Vorrat {'zeilen': 116, 'ausgeliefert': 6, 'auslieferungen_max': 1, 'auslieferungen_summe': 6}
+  Zaehler {'indexed': 51447, 'skipped': 150, 'failed': 0, 'docs': 51597, 'aclRows': 51447, 'ocr': 10323, 'auslieferungen_max': 3}
+  backendReachable True runState running scheduled 110 running 6
+23-DRILL2-FERTIG

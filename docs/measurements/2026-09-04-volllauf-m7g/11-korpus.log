@@ -1,0 +1,63 @@
+=== Nutzer anlegen ===
+The account "lasttest" was created successfully
+  - admin: admin
+  - lasttest: lasttest
+=== den leeren Nutzer einmal ganz durchsuchen, wegen der mkdir-Meldung ===
+Starting scan for user 1 out of 1 (lasttest)
++---------+-------+-----+---------+---------+--------+--------------+
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 0       | 0     | 0   | 0       | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
+=== Korpus erzeugen, im Abbild ===
+korpus-start 2026-09-04T16:37:32Z
+49990-mitteilung.csv,55989269,80c76359a16db3a9a76d474c141888c14203ff24f0a1c18a67944ce18b3adc80
+49991-bericht.csv,55977101,653b892368f57e3a34f189c12efa5eeb97d0373b8ae12f12b66891d7b5004c5a
+49992-uebersicht.csv,56021509,100376581f44446fb470e62ccd82d8f026db2b98bb6bbf172b283e607b49f3da
+49993-ausschreibung.csv,56004297,9c10e4d4b98d058ab406ddb0b82a3527a062566ee405158e8c975ae7a6e19041
+49994-antrag.csv,55921773,90e507ef45cef518fdf91a491c41bdb0046764de3dacec54028cbf5556acfb89
+49995-antrag.csv,55934721,f7041d50458773ff2653ae362f9a035cfa71fba813215e009065d8d40dbcfa92
+49996-widerspruch.csv,55988333,c5035636eb6b44e0dcc924d38319e46a9805ab64dedc434a3290449ca17ba299
+49997-aktenvermerk.csv,56012461,356c4cc7c70e0d9d55e4131a51e789f2c7a1ea21e480b2b6f747ff3d9afce63d
+49998-rechnung.csv,55930145,b0e4331935b2d8a340b457b3ce04f1fbff76364142750def8ae7c072df0040ff
+49999-bericht.csv,55958849,d0a272d811b28547c8d60b1d431b0b6db1927a6a43ca35321ebda9655a33abd8
+50000-niederschrift.csv,56004037,32f8859d9a73085672750beea36d235b15940eb9320dae2f1f6cb65b8f368de0
+build_load_corpus: category=scan_single files=9916
+build_load_corpus: category=scan_multi files=100
+build_load_corpus: category=text_pdf files=22536
+build_load_corpus: category=ooxml files=10016
+build_load_corpus: category=opendocument files=5008
+build_load_corpus: category=plain_text files=2304
+build_load_corpus: category=image files=100
+build_load_corpus: category=oversize files=20
+build_load_corpus: seed=phase5-full files=50000 bytes=20208046426 checksum=bcbef9b2cb067c2200df2a4a2e89408f690710983117d4e78328024046098a72
+korpus-ende 2026-09-04T17:21:14Z
+=== Gegenprobe von der Platte ===
+50000
+20208046426	/mnt/findling/ncdata/lasttest/files/loadtest
+  32552 pdf
+   3345 xlsx
+   3344 pptx
+   3327 docx
+   2504 odt
+   2504 ods
+    781 txt
+    775 md
+    768 csv
+     27 webp
+     27 jpg
+     23 tif
+     23 png
+=== dem Webserver uebergeben und aufnehmen ===
+scan-start 2026-09-04T17:21:14Z
+Starting scan for user 1 out of 1 (lasttest)
++---------+-------+-----+---------+---------+--------+--------------+
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 3       | 50000 | 0   | 50002   | 0       | 0      | 00:00:52     |
++---------+-------+-----+---------+---------+--------+--------------+
+scan-ende 2026-09-04T17:22:06Z
+=== Platz ===
+/dev/root        38G  2.8G   35G   8% /
+/dev/nvme1n1     59G   25G   32G  45% /mnt/findling
+11-KORPUS-FERTIG

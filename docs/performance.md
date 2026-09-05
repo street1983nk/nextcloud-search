@@ -22,13 +22,67 @@ Der Betreiber hat daraufhin entschieden, beides zu tun: die **Generalprobe** lä
 sofort auf der x86-Maschine gleicher Größe, und der **vollständige Lauf** wird auf
 ARM wiederholt, sobald es wieder Bestand gibt.
 
+Bestand gab es nicht. Am 04.09.2026 war `cax11` erneut in keiner Region zu
+haben, zwei Erzeugungsversuche wurden abgewiesen, und ein Telefonat des
+Betreibers mit dem Anbieter am selben Tag hat ergeben, dass die Knappheit
+Monate läuft. Diese Auskunft schlägt jede Lesung der API. Der ARM-Lauf ist
+deshalb auf eine Maschine eines anderen Anbieters umgezogen, ausgewählt als
+CAX11-Äquivalent und nicht als etwas Besseres.
+
 | | Generalprobe | ARM-Lauf |
 |---|---|---|
-| Maschine | Hetzner cpx22, x86 | Hetzner CAX11, arm64 |
-| Zustand | läuft seit 2026-09-03 | wartet auf Bestand |
+| Maschine | Hetzner cpx22, x86 | AWS m7g.large, arm64, Speicher auf 4 GB gedeckelt |
+| Zustand | gelaufen 2026-09-03 bis 04, Box abgebaut | läuft seit 2026-09-04 |
 | Umfang | vollständig | **vollständig, alles noch einmal** |
 | AIO über HaRP, Grundlast, Volllauf, Störfälle | ja | ja, auf eigener Hardware |
 | Trägt die Store-Aussage | **nein** | ja |
+
+### Warum eine m7g.large als CAX11 gilt, und woran das hängt
+
+Die Zielmaschine der Entscheidung D-01 ist eine CAX11: zwei Kerne, 4 GB, 40 GB
+Systemplatte, arm64. Die Ersatzmaschine ist nach genau diesen vier Größen
+gewählt, und bei einer davon musste nachgeholfen werden.
+
+| Größe | CAX11 | m7g.large | gleich? |
+|---|---|---|---|
+| Architektur | arm64, Ampere Altra | arm64, AWS Graviton3 | ja, beides aarch64 |
+| Kerne | 2 vCPU, geteilt | 2 vCPU | ja |
+| Arbeitsspeicher | 4 GB | 8 GB laut Typ, **vom Kernel auf 4 GB gedeckelt** | ja, nach dem Deckel |
+| Systemplatte | 40 GB | 40 GB gp3 | ja, mit einem Unterschied, siehe unten |
+
+Der Deckel ist der Kern dieser Parität und keine Kosmetik. Gemessen wird in
+diesem Bericht der **Abstand zur Decke**: der Seitencache des Index, die Halde
+von tesseract und die Grundlast von AIO streiten sich um genau den Speicher, der
+nicht da ist. Eine Messung auf 8 GB sagt über eine 4-GB-Box nichts, auch wenn
+die Kurve gleich aussieht, weil der Kernel unter Druck andere Entscheidungen
+trifft.
+
+Gesetzt ist der Deckel als Kernelparameter, in einer eigenen Datei und nicht
+durch Überschreiben der Zeile des Cloud-Abbilds:
+
+```
+/etc/default/grub.d/99-mem4g.cfg
+GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT mem=4G"
+```
+
+Die Erweiterung statt der Ersetzung ist Absicht: die Konsolenparameter des
+Abbilds müssen stehen bleiben, sonst verliert die Maschine ihre serielle
+Ausgabe, und das merkt man erst, wenn man sie braucht. Drei Zahlen sind vor
+jedem Lauf gegengelesen und stehen in jeder Messreihe dieses Berichts:
+
+```
+free -h   ->  3.9Gi        (free -m sagt 3958)
+nproc     ->  2
+uname -m  ->  aarch64
+```
+
+Was mit dem Umzug **nicht** gleich bleibt, und wo es im Bericht auftaucht: der
+Datenträger. Die Systemplatte der CAX11 ist lokaler NVMe-Speicher ohne
+ausgewiesene Grenze, die der Ersatzmaschine ist ein Netzwerkdatenträger vom Typ
+gp3 mit 3000 IOPS und 125 MB/s. Diese Drosselung ist die eine Größe, in der die
+Ersatzmaschine schlechter ist als das Original, und sie trifft ausgerechnet den
+Posten, der in diesem Lauf die Uhr bestimmt: das Lesen von 20 GB Korpus und das
+Schreiben des Index. Wo eine Laufzeit genannt wird, steht sie deshalb dabei.
 
 Die entscheidende Zeile ist die dritte. Der ARM-Lauf ist keine Nachlese, die sich
 ein paar Zahlen aus der Generalprobe borgt, sondern derselbe Lauf noch einmal,
@@ -50,7 +104,9 @@ Der zweite Nutzen ist der Vergleich selbst. Zwei Messreihen derselben Anwendung
 auf zwei Architekturen sagen mehr über ihr Verhalten als eine von beiden allein.
 
 Wo in diesem Bericht x86-Zahlen stehen, sind sie als **Generalprobe cpx22**
-gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
+gekennzeichnet, und die ARM-Zeile daneben als **ARM m7g.large**. Beide bleiben
+stehen; die Generalprobe wird nicht durch die schärfere Messung ersetzt, weil
+zwei Reihen auf zwei Architekturen mehr sagen als eine.
 
 ## Stand dieses Berichts
 
@@ -74,9 +130,18 @@ gekennzeichnet, und die ARM-Zeile daneben steht so lange auf ausstehend.
 | Störfall-Drills, Generalprobe cpx22 | alle drei durchgespielt, mit ihren Grenzen, einer mit Nachtrag | 2026-09-04 |
 | Kosten des Tests | aus den Preisen dieses Kontos, 0,82 EUR brutto | 2026-09-04 |
 | Abbau der Generalprobe cpx22 | durchgeführt, Server, Volume und Firewall gegen die API geprüft | 2026-09-04 |
-| AIO-Grundlast, ARM | FEHLT NOCH | wartet auf Bestand |
-| Findling im Volllauf, ARM CAX11 | FEHLT NOCH | wartet auf Bestand |
-| Störfall-Drills, ARM CAX11 | FEHLT NOCH, und ausdrücklich nicht vorgesehen | die Drills hängen am Verhalten, nicht an der Architektur |
+| Parität der Ersatzmaschine | gesetzt und gegengelesen, `mem=4G`, drei Zahlen | 2026-09-04 |
+| Einrichtung der ARM-Box, m7g.large | durchgeführt und belegt, samt Gegenprobe des containerd-Funds | 2026-09-04 |
+| **AIO-Grundlast, ARM m7g.large** | **gemessen, 260 MB gleichzeitiger Höchststand** | 2026-09-04 |
+| **Beitrag von HaRP, ARM m7g.large** | **gemessen, 53 MB** | 2026-09-04 |
+| Codestand des ARM-Laufs | Baumhash beider Hälften nachgerechnet, Abbild auf der Box gebaut | 2026-09-04 |
+| Korpus des ARM-Laufs | erzeugt, 50.000 Dateien, 20.208.046.426 Byte, Prüfsumme im Bericht | 2026-09-04 |
+| **Findling im Volllauf, 50.000 Dateien, ARM m7g.large** | **gemessen, 422,2 MB Spitze, 12 h 48 min, kein Speichertod, 0 Fehlschläge** | 2026-09-05 |
+| Störfall-Drills, ARM m7g.large | alle drei durchgespielt, dazu ein vierter mit dem Neustart der Maschine | 2026-09-05 |
+| Zusatzmessung INDEX_WORKERS=2 | gemessen, A/B über 200 Scans, Wegwerf-Abbild | 2026-09-05 |
+| Kosten des ARM-Laufs | gerechnet, aus Laufzeit und belegten Sätzen | 2026-09-05 |
+| Abnahme durch den Betreiber | erteilt, ohne Nacharbeiten | 2026-09-05 |
+| Verbleib der ARM-Box | **angehalten statt abgebaut**, Korpus und Index bleiben für Phase 6 | 2026-09-05 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -84,27 +149,41 @@ Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
 ### Die beiden Maschinen
 
-| Posten | Generalprobe cpx22 | ARM-Lauf CAX11 |
+| Posten | Generalprobe cpx22 | ARM-Lauf m7g.large |
 |---|---|---|
-| Architektur | x86_64 | arm64, Ampere |
-| Kerne | 2 vCPU, geteilt | 2 vCPU, geteilt |
-| Arbeitsspeicher | 4 GB (3814 MB nutzbar) | 4 GB |
-| Systemplatte | 80 GB (76 GB nutzbar) | 40 GB |
-| Zusatzplatte | Volume, 50 GB, ext4 | Volume, 50 GB, ext4 |
-| Region | hel1, Helsinki | hel1, Helsinki |
-| Betriebssystem | Ubuntu 24.04 LTS, Kernel 6.8.0 | Ubuntu 24.04 LTS |
+| Architektur | x86_64 | arm64, AWS Graviton3, 2,6 GHz |
+| Kerne | 2 vCPU, geteilt | 2 vCPU |
+| Arbeitsspeicher | 4 GB (3814 MB nutzbar) | 8 GB laut Typ, per `mem=4G` gedeckelt (3958 MB nutzbar) |
+| Systemplatte | 80 GB (76 GB nutzbar) | 40 GB gp3, 3000 IOPS, 125 MB/s (38 GB nutzbar) |
+| Zusatzplatte | Volume, 50 GB, ext4 | Volume, 60 GB gp3, ext4, 3000 IOPS, 125 MB/s |
+| Region | hel1, Helsinki | eu-central-1c, Frankfurt |
+| Betriebssystem | Ubuntu 24.04 LTS, Kernel 6.8.0 | Ubuntu 24.04.4 LTS, Kernel 7.0.0-1012-aws |
 | cgroup | v2 | v2 |
-| Nextcloud | 33.0.8, All-in-One, PostgreSQL 18.6 | ausstehend |
-| Inbegriffener Verkehr | 20 TB je Monat | 20 TB je Monat |
+| Docker | 28er Reihe mit containerd-Snapshotter | 29.8.0, containerd 2.3.4, overlayfs |
+| Nextcloud | 33.0.8, All-in-One, PostgreSQL 18.6 | 33.0.8, All-in-One, PostgreSQL, AppAPI 33.0.0 |
 
-Der Unterschied, der über die Architektur hinaus zählt, steht in der Zeile
-Systemplatte: die Generalprobe hat 76 GB, die ARM-Zielmaschine nur 40. Der
-Platzdruck, gegen den die Einrichtung unten abgesichert wird, ist auf der
-Generalprobe also **milder als im Ernstfall**. Wer die Reihenfolge dort schludert,
-merkt es nicht; auf der CAX11 läuft die Platte voll.
+Zwei Unterschiede zählen über die Architektur hinaus, und beide gehen zulasten
+der ARM-Maschine, was für eine Store-Aussage die richtige Richtung ist.
 
-Die 50 GB Volume kommen nicht aus Bequemlichkeit dazu: der Lastkorpus wiegt
-20,12 GB, daneben liegen der Index und die Abbilder der Container.
+**Erstens die Systemplatte.** Die Generalprobe hat 76 GB, die ARM-Maschine 40,
+genau wie die CAX11. Der Platzdruck, gegen den die Einrichtung unten abgesichert
+wird, ist auf der Generalprobe also **milder als im Ernstfall**. Wer die
+Reihenfolge dort schludert, merkt es nicht; auf 40 GB läuft die Platte voll.
+
+**Zweitens die Drosselung dieser 40 GB.** Beide Datenträger der ARM-Maschine
+sind Netzwerkspeicher vom Typ gp3, und der bringt je Datenträger 3000 IOPS und
+125 MB/s mit. Das ist kein theoretischer Deckel: 20 GB Korpus einmal zu lesen
+sind bei 125 MB/s knapp drei Minuten reine Übertragungszeit, und die Schreiblast
+des Index kommt dazu. Die Systemplatte der CAX11 ist dagegen lokaler
+NVMe-Speicher, für den der Anbieter keine Grenze ausweist. Wo dieser Bericht
+Laufzeiten nennt, ist das die eine Stelle, an der die Ersatzmaschine die Zahl
+nach oben treibt statt nach unten. Für die Speicherfrage, um die es hier geht,
+ändert sie nichts.
+
+Die 60 GB Volume kommen nicht aus Bequemlichkeit dazu: der Lastkorpus wiegt
+20,12 GB, daneben liegen der Index, das Datenverzeichnis von Nextcloud und die
+Abbilder von neun Containern. Zehn GB mehr als in der Generalprobe, weil dort
+die Systemplatte die Hälfte davon mitgetragen hat.
 
 ### Die Reihenfolge der Einrichtung, und die Falle darin
 
@@ -112,7 +191,20 @@ Drei Dinge müssen auf dem Volume liegen, und zwei davon lassen sich später nic
 mehr verschieben. Die Reihenfolge ist deshalb keine Empfehlung.
 
 1. **Volume einbinden.** Hetzner hängt es mit `automount` selbst ein und schreibt
-   den Eintrag in die `fstab`, mit `nofail`.
+   den Eintrag in die `fstab`, mit `nofail`. Auf der ARM-Box ist das ein
+   Handgriff mehr, und einer, bei dem der naheliegende Weg falsch ist: der
+   angeforderte Gerätename (`/dev/sdf`) erscheint auf einer Nitro-Instanz nicht.
+   Die Datenträger heißen dort `/dev/nvme?n1` in der Reihenfolge ihres
+   Anschlusses, und diese Reihenfolge ist über einen Neustart hinweg nicht
+   zugesagt. Gefunden wird der Datenträger deshalb an seiner Größe, formatiert
+   mit ext4 und in die `fstab` **per UUID** eingetragen, ebenfalls mit `nofail`:
+
+   ```
+   UUID=34959bdb-9d29-46d7-9cbc-f94440e3b89a /mnt/findling ext4 defaults,nofail,x-systemd.device-timeout=10 0 2
+   ```
+
+   Ein Eintrag über den Gerätenamen wäre der Fehler, der beim ersten Neustart
+   auffällt, und zwar als Nextcloud ohne Datenverzeichnis.
 2. **Das Datenverzeichnis von Docker auf das Volume, vor dem ersten Abbild.**
    `/etc/docker/daemon.json` mit `data-root` wird geschrieben, bevor das Paket
    installiert wird, denn die Installation startet den Dienst selbst.
@@ -144,13 +236,48 @@ root = "/mnt/HC_Volume_<id>/containerd"
 ```
 
 Danach liegen die 373 MB auf dem Volume, und eine Gegenprobe mit einem frischen
-Abbild lässt die Systemplatte bei 0 KB und das Volume um 104 KB wachsen. Auf der
-CAX11 mit ihren 40 GB wäre der ursprüngliche Zustand nicht kosmetisch gewesen:
-die Abbilder von AIO, Postgres, Apache, HaRP und Findling zusammen hätten die
-Systemplatte neben Betriebssystem und Protokollen ernsthaft gefüllt, und das
-wäre als Fehler von Findling erschienen.
+Abbild lässt die Systemplatte bei 0 KB und das Volume um 104 KB wachsen. Auf
+einer Maschine mit 40 GB Systemplatte wäre der ursprüngliche Zustand nicht
+kosmetisch gewesen: die Abbilder von AIO, Postgres, Apache, HaRP und Findling
+zusammen hätten die Systemplatte neben Betriebssystem und Protokollen ernsthaft
+gefüllt, und das wäre als Fehler von Findling erschienen.
+
+**Auf der ARM-Box ist derselbe Fund noch einmal gemessen worden, in der
+umgekehrten Richtung, weil dort die Abhilfe vor dem ersten Abbild stand.** Der
+Ablauf war: `data-root` in `/etc/docker/daemon.json` vor der Installation des
+Pakets, dann die Installation, dann die Dienste anhalten, `containerd config
+default` erzeugen und darin die Wurzel auf das Volume setzen, dann starten. Erst
+danach der erste `docker pull`. Die Gegenprobe steht in Zahlen:
+
+| | Generalprobe, ohne die containerd-Zeile | ARM-Box, mit ihr |
+|---|---|---|
+| Zuwachs Systemplatte nach dem ersten Pull | 400 MB | **4 KB** |
+| Zuwachs Volume | nichts | **375 MB** |
+| Was `docker info` meldete | das Volume | das Volume |
+
+Ein Detail für den nächsten Leser, weil es eine Viertelstunde gekostet hat: die
+Vorgabedatei von containerd 2.3 trägt `version = 4`, und ihr Wurzelfeld ist eine
+Zeile, die man ersetzen muss und nicht anhängen darf. Eine selbstgeschriebene
+Minimaldatei mit nur der Wurzel darin ist der falsche Weg, weil die Fassung des
+Formats dann fehlt; `containerd config default` als Ausgangspunkt ist der
+richtige.
+
+Und ein zweites, weil es dieselbe Viertelstunde gekostet hat: `daemon.json`
+wurde beim ersten Versuch über eine Kette aus Anführungszeichen geschrieben, die
+den Weg über ssh nicht überlebt hat. In der Datei stand danach `{n`, und
+`dockerd` sagte dazu "invalid JSON: invalid character 'n' looking for beginning
+of object key string". Seitdem reist jedes Skript dieses Laufs als Datei und
+nicht als Zeichenkette.
 
 ### Was die Umgebung kostet
+
+Die beiden Läufe liegen bei verschiedenen Anbietern, und ihre Kostentabellen
+sind deshalb **nicht ineinander umzurechnen**. Die eine ist in Brutto-Euro aus
+der Konto-API, die andere in Netto-Dollar aus einer öffentlichen Preisliste. Sie
+stehen hier getrennt, mit ihrer Quelle, und dieser Bericht bildet daraus
+ausdrücklich keine Vergleichszahl.
+
+#### Die Generalprobe, Hetzner
 
 Abgefragt am 03.09.2026 um 10:48 UTC gegen `/v1/pricing` und `/v1/server_types`
 dieses Kontos, also nicht aus einer Preisliste im Netz. Alle Werte brutto, der
@@ -159,15 +286,13 @@ Mehrwertsteuersatz des Kontos beträgt 19 Prozent.
 | Posten | je Stunde | je Monat |
 |---|---|---|
 | cpx22 in hel1, Generalprobe | 0,037128 EUR | 23,1931 EUR |
-| CAX11 in hel1, ARM-Lauf | 0,011424 EUR | 7,1281 EUR |
+| CAX11 in hel1, nie gemietet | 0,011424 EUR | 7,1281 EUR |
 | Volume, 50 GB | 0,004662 EUR | 3,4034 EUR |
 | Primäre IPv4 | 0,000952 EUR | 0,5950 EUR |
 | Summe Generalprobe | 0,042742 EUR | 27,1915 EUR |
-| Summe ARM-Lauf | 0,017038 EUR | 11,1265 EUR |
 
-Die Generalprobe kostet also gut das Dreifache der Zielmaschine je Stunde. Das
-ist der Preis dafür, dass die günstigen geteilten Linien ausverkauft sind, und er
-war dem Betreiber die Sache wert: zwei Tage Generalprobe liegen bei rund 2,05 EUR.
+Die CAX11-Zeile bleibt stehen, obwohl diese Maschine nie zustande kam: sie ist
+die Zahl, an der sich der Preis der Ersatzmaschine messen lässt.
 
 Zwei Dinge daran sind leicht zu übersehen. Der Preis je GB und Monat des Volumes
 wird oft mit 0,057 EUR angegeben; das ist der Nettowert, brutto sind es
@@ -175,13 +300,55 @@ wird oft mit 0,057 EUR angegeben; das ist der Nettowert, brutto sind es
 der Rechnung. Sie macht gegen eine Box für gut einen Cent je Stunde rund acht
 Prozent aus, weshalb `scripts/ops/hetzner_box.sh status` sie mitrechnet.
 
+#### Der ARM-Lauf, AWS
+
+Hier kommen die Sätze **nicht** aus der Konto-API, und der Grund gehört dazu:
+der Zugang dieses Laufs trägt `AmazonEC2FullAccess` und sonst nichts, also fehlt
+ihm `pricing:GetProducts`. Die Antwort auf die Preisfrage ist ein
+`AccessDeniedException`, der den Nutzer und die Aktion nennt. Genommen sind die
+Sätze deshalb aus der öffentlichen Preisliste desselben Anbieters, die ohne
+Anmeldung erreichbar ist, gefiltert am 04.09.2026 aus der Fassung
+`20260903195206` für `eu-central-1` (AmazonEC2, wirksam ab 01.09.) und
+`20260831092232` (AmazonVPC). Die gefilterten Zeilen liegen unverändert in
+`docs/measurements/2026-09-04-grundlast-m7g/`. Alle Werte **netto in USD**.
+
+| Posten | je Stunde | je Monat |
+|---|---|---|
+| m7g.large in eu-central-1, On Demand, Linux | 0,097800 USD | 71,394 USD |
+| Systemplatte, 40 GB gp3 | 0,005216 USD | 3,808 USD |
+| Datenträger, 60 GB gp3 | 0,007824 USD | 5,712 USD |
+| öffentliche IPv4, in Benutzung | 0,005000 USD | 3,650 USD |
+| **Summe ARM-Lauf** | **0,115840 USD** | **84,564 USD** |
+
+Die Monatszahlen sind mit 730 Stunden gerechnet, so wie der Anbieter seine
+Monatspreise für Speicher ausweist.
+
+Drei Anmerkungen, die eine Kostenzeile ohne sie schöner aussehen ließen als sie
+ist. Erstens: die Ersatzmaschine kostet je Stunde rund das Achtfache der CAX11,
+für die sie einsteht. Das ist der Preis der Verfügbarkeit, und er war dem
+Betreiber die Messung wert, weil die Alternative kein Lauf gewesen wäre.
+Zweitens: gp3 bringt 3000 IOPS und 125 MB/s je Datenträger ohne Aufpreis mit,
+und dieser Lauf bleibt in beiden Grenzen, also kommt für Ein- und Ausgaben nichts
+dazu. Drittens: die öffentliche Adresse ist seit dem 01.02.2024 ein eigener
+Posten, genau wie bei Hetzner seit 2024. Sie macht hier rund vier Prozent aus,
+und `scripts/ops/aws_box.sh status` rechnet sie mit, wenn die Box wirklich eine
+trägt. Der Grund für diese Sorgfalt steht ein paar Zeilen weiter oben in der
+Hetzner-Tabelle: dort hat genau dieser Posten den Lauf einmal um acht Prozent zu
+niedrig gerechnet.
+
+Die Endkosten dieses Laufs stehen am Ende des Berichts. Sie sind **gerechnet und
+nicht abgelesen**, aus der Laufzeit und den Sätzen oben, denn dem Zugang dieses
+Laufs fehlt auch der Blick auf die Abrechnung. Für eine Maschine, deren Laufzeit
+auf die Sekunde bekannt ist, ist das Produkt genauer als ein Abrechnungsposten,
+der Tage später erscheint.
+
 Die Miete endet mit dem Test: die Löschung der Box ist ein Pflichtschritt und
 kein Aufräumen bei Gelegenheit, denn eine vergessene Box ist eine öffentlich
 erreichbare Nextcloud mit Admin-Zugang und eine monatliche Rechnung. Abgeräumt
 werden drei Ressourcen, nicht zwei: Box, Volume und die Firewall. Die Firewall
 kostet nichts, und genau deshalb ist sie die, die stehen bleibt.
 
-### Warum die ARM-Maschine fehlt
+### Warum die ARM-Maschine nicht von diesem Anbieter kommt
 
 Am 03.09.2026 waren alle vier ARM-Typen des Anbieters in allen drei europäischen
 Regionen ohne Bestand:
@@ -206,6 +373,31 @@ mit dem Aufruf zu tun. Die Wahrheit steht am Server-Typ selbst, im Feld
 genau dieses Feld, bevor es etwas anlegt, und `prices` zeigt den Bestand in einer
 eigenen Spalte. Auch die billigen x86-Typen `cx23` bis `cx53` waren zur selben
 Minute überall ausverkauft; knapp waren die günstigen geteilten Linien insgesamt.
+
+#### Am 04.09. noch einmal, und dann eine Entscheidung
+
+Der Tag darauf sah gleich aus. `cax11` stand in allen drei Regionen weiter auf
+nicht verfügbar, und zwei echte Erzeugungsversuche, `hel1` und `nbg1`, wurden
+mit derselben irreführenden Meldung abgewiesen. Es wurde dabei nichts angelegt;
+die Suche nach dem Kennzeichen `purpose=findling-phase5` blieb über Server,
+Volumes und Firewalls leer.
+
+Dazu ein Widerspruch in der API selbst, der eine Stunde gekostet hätte:
+`/datacenters` führte `cax11` zur selben Minute als verfügbar in `hel1-dc2` und
+`nbg1-dc3`. Diese Auskunft ist falsch, und sie ist falsch, weil dieser Endpunkt
+auf dem Weg nach draußen ist: das Feld `datacenter` eines Erzeugungsaufrufs ist
+seit dem 16.12.2025 abgeschafft und antwortet mit "datacenter is deprecated and
+cannot be used anymore". Ein Endpunkt, auf dessen Auskunft man nicht mehr handeln
+kann, wird nicht gepflegt. `scripts/ops/hetzner_box.sh` fragt ihn seither
+weiterhin, aber nur zu einem Zweck: den Widerspruch zu melden, statt dem
+fröhlicheren Teil der API zu glauben.
+
+Den Ausschlag gegeben hat keine API, sondern ein Telefonat. Der Betreiber hat am
+04.09. beim Anbieter angerufen, und die Auskunft lautet, dass die ARM-Knappheit
+Monate läuft. Damit war die Wahl nicht mehr "warten oder messen", sondern
+"anderswo messen oder nicht messen", und der Store-Termin dieser Phase
+entscheidet diese Frage. Die Ersatzmaschine ist oben beschrieben, samt dem
+Speicherdeckel, der sie zur CAX11 macht.
 
 ### Was AIO ungefragt mitbringt
 
@@ -359,9 +551,14 @@ Für diesen Bericht sind das sieben:
    Berichts, die eine Zahl der Generalprobe nennt, ist als solche gekennzeichnet,
    und die ARM-Zeile daneben bleibt leer, bis sie gemessen ist.
 1. **Eine Box ist keine Aussage über alle Boxen.** Gemessen wird auf einer
-   einzelnen gemieteten CAX11. Geteilte Kerne bedeuten wechselnde Nachbarn, und
-   eine andere 4-GB-Maschine mit anderer Platte kann andere Laufzeiten liefern.
-   Übertragbar ist der Speicherverlauf, nicht die Uhr.
+   einzelnen gemieteten m7g.large, die als CAX11-Äquivalent geführt wird.
+   Wechselnde Nachbarn und ein anderer Datenträger können andere Laufzeiten
+   liefern. Übertragbar ist der Speicherverlauf, nicht die Uhr. Und die Parität
+   gilt für die vier Größen, an denen sie geprüft ist: Architektur, Kerne,
+   nutzbarer Speicher einschließlich Seitencache, Größe der Systemplatte. Sie
+   gilt ausdrücklich **nicht** für die Geschwindigkeit dieser Platte, die hier
+   gedrosselt und dort lokal ist, und nicht für den Kern selbst: ein Graviton3
+   ist kein Ampere Altra.
 2. **`anon` ist nicht das, was der Docker-Client anzeigt.** Wer die Zahl dieses
    Berichts neben dessen Anzeige legt, wird eine deutlich höhere finden. Der
    Unterschied ist der Dateicache des Index, er ist zurückforderbar, und der
@@ -390,7 +587,14 @@ bevor Findling die Maschine zum ersten Mal anfasst.
 | Lauf | Summe `anon` im Mittel | höchster Stand | ohne Speichertod |
 |---|---|---|---|
 | Generalprobe cpx22 | 224 MB | **290 MB** | ja |
-| ARM CAX11 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
+| **ARM m7g.large** | **193 MB** | **260 MB** | **ja** |
+
+Die ARM-Zahlen stammen aus einer eigenen Messung nach demselben Muster und sind
+keine umgerechneten. Sie liegen rund zehn Prozent unter den x86-Zahlen, und der
+Bericht deutet diesen Abstand ausdrücklich **nicht**: die beiden Läufe
+unterscheiden sich in Architektur, Kernel und Serverfassung zugleich, und die
+Grundlast von AIO ist nicht der Gegenstand dieses Berichts. Was zählt, ist die
+Zahl selbst, denn sie ist der Sockel, auf dem das Findling-Budget steht.
 
 ### Wie die Zahl entstanden ist
 
@@ -455,8 +659,50 @@ zurückforderbar ist: gerät die Maschine unter Druck, gibt der Kernel diese
 Grundlast bleiben auf einer 4-GB-Box also gut 3,5 GB, und der Grenzwert von
 2,0 GB für Findling hat mehr Luft als angenommen.
 
-Die Zahlen dieses Abschnitts gelten für x86. Auf ARM wird die Grundlast neu
-gemessen, nicht umgerechnet.
+Die Zahlen dieses Abschnitts gelten für x86. Auf ARM ist die Grundlast neu
+gemessen und nicht umgerechnet; der Abschnitt darunter nennt sie.
+
+### Dieselbe Messung auf ARM
+
+Dreißig Minuten nach demselben Muster, 2026-09-04T15:40:05Z bis 16:07:37Z, ein
+eigener Sampler je Container im Abstand von fünf Sekunden, 331 Messpunkte je
+Container, dieselben drei Phasen und dieselben 29 Runden gewöhnlicher Aufrufe.
+Gelaufen sind auch hier genau sechs Container und kein siebter.
+
+| Container | höchster `anon`-Stand |
+|---|---|
+| nextcloud-aio-nextcloud | 164 MB |
+| nextcloud-aio-mastercontainer | 46 MB |
+| nextcloud-aio-apache | 37 MB |
+| nextcloud-aio-database | 11 MB |
+| nextcloud-aio-redis | 4 MB |
+| nextcloud-aio-notify-push | 1 MB |
+
+Die Summe je Zeitpunkt ergibt 193 MB im Mittel und **260 MB im gleichzeitigen
+Höchststand**, um 15:54:21Z, also in der Aufrufphase. Die theoretische obere
+Schranke, die Summe der sechs Maxima, liegt bei 264 MB: vier MB darüber, die
+Zahl hängt also auch hier nicht an der Art der Summenbildung.
+
+Nach Phasen getrennt:
+
+| Phase | Mittel | höchster Stand |
+|---|---|---|
+| Leerlauf, 12 min | 192 MB | 195 MB |
+| unter Aufrufen, 29 Runden | 207 MB | 260 MB |
+| Leerlauf, 12 min | 190 MB | 193 MB |
+
+Auch hier stammt der Ausschlag aus der Aufrufphase und fast vollständig aus dem
+Nextcloud-Container. Die Aufrufphase dauerte 3 min 29 s statt der sechs Minuten
+der Generalprobe, weil zwischen den Runden nur fünf Sekunden Pause liegen; die
+Zahl der Runden ist dieselbe, und verglichen wird der gleichzeitige Höchststand
+und nicht die Dauer.
+
+Alle sechs Abschlusszeilen melden `oom_killed=false`, und `memory.events` steht
+in jedem Zähler auf null. Dieser Lauf führt dort **sieben** Zähler statt sechs:
+der Kernel 7.0 bringt `sock_throttled` mit, und der steht wie die anderen auf
+null.
+
+Die Rohdaten liegen unter `docs/measurements/2026-09-04-grundlast-m7g/`.
 
 ### Der Beitrag von HaRP
 
@@ -489,6 +735,64 @@ weiteres Gigabyte ungenutzt.
 
 Die Rohdaten beider Messungen liegen unter
 `docs/measurements/2026-09-03-grundlast-cpx22/`.
+
+#### Derselbe Beitrag auf ARM, und diesmal ist der Vergleich zulässig
+
+Zehn Minuten über alle sieben Container, 124 Messpunkte je Container,
+2026-09-04T16:18:57Z bis 16:29:13Z.
+
+| Container | `anon` im Mittel | höchster Stand |
+|---|---|---|
+| **nextcloud-aio-harp** | **53 MB** | **53 MB** |
+| nextcloud-aio-nextcloud | 89 MB | 90 MB |
+| alle sieben zusammen, je Zeitpunkt | 231 MB | 234 MB |
+
+**53 MB**, und ebenso flach wie auf x86: über zehn Minuten liegt zwischen
+niedrigstem und höchstem Stand weniger als ein MB.
+
+Bei der Generalprobe stand an dieser Stelle die Warnung, dass die beiden Summen
+nicht zu vergleichen sind, weil die zweite Messung nach einem Neustart aller
+Container lief. Hier ist es umgekehrt, und das ist ein Nebenprodukt eines Fundes
+über AIO: das Anhaken von HaRP hat nur den HaRP-Container angelegt und die
+anderen sechs unberührt weiterlaufen lassen. Deren PHP-Arbeiter waren also
+dieselben, und der Abstand zwischen 234 MB mit HaRP und dem gleichzeitigen Stand
+ohne ihn ist wirklich HaRP.
+
+Für die Budgetrechnung des ARM-Laufs: Grundlast 260 MB plus HaRP 53 MB, also
+rund **313 MB**. Neben dem Grenzwert von 2,0 GB für Findling bleiben auf der
+gedeckelten 4-GB-Box damit rund 1,6 GB für Kernel und Seitencache.
+
+Die Rohdaten liegen unter
+`docs/measurements/2026-09-04-grundlast-m7g/mit-harp/`.
+
+#### Ein Fund über AIO, der eine Stunde kosten kann
+
+Das Anhaken von HaRP legt den HaRP-Container an, und das genügt nicht. Die App
+`app_api`, ohne die es keine ExApp gibt, wird vom Startskript des
+Nextcloud-Containers installiert, und dieses Skript läuft nur beim Start eines
+Containers. Nach dem Anhaken stand deshalb ein gesunder HaRP-Container neben
+einer Nextcloud, die das Wort `app_api` nicht kannte:
+
+```
+occ app_api:daemon:list
+There are no commands defined in the "app_api" namespace.
+```
+
+Die Abhilfe ist ein Stopp und ein Start über die Schnittstelle von AIO, danach
+ist `app_api` da (hier 33.0.0) und der Daemon `harp_aio` registriert. Wer
+stattdessen nach einem `occ app:install app_api` greift, umgeht den Weg, den AIO
+selbst geht, und bekommt eine Instanz, die anders aussieht als die eines
+Nutzers.
+
+Und zwei Dinge über die Anmeldung an dieser Schnittstelle, weil sie zusammen
+eine Viertelstunde gekostet haben. Erstens: `GET /api/auth/getlogin` antwortet
+mit 302 bei richtigem **und** bei falschem Token, im Fehlerfall nach fünf
+Sekunden Strafschlaf. Der Statuscode ist also kein Beweis für eine Sitzung;
+geprüft wird sie, indem man eine Seite holt, die nur angemeldet 200 liefert.
+Zweitens: AIO würfelt diesen Token bei jedem Containerstart neu und schreibt ihn
+in seine Konfiguration, während die Umgebung eines Containers, der nicht neu
+gestartet wurde, den alten Wert behält. Die Konfiguration ist die Quelle, nicht
+die Umgebung.
 
 ### Der HaRP-Weg von AIO, und warum die Warnung aus 05-01 hier nicht greift
 
@@ -1070,8 +1374,8 @@ falsch.
 | Zahl | Trockenlauf | Volllauf | Was sie ist |
 |---|---|---|---|
 | **Grenzwert** | 2,0 GB | 2,0 GB | eine Festlegung. Der Volllauf besteht oder besteht nicht gegen sie. Sie wird nicht gemessen und sie ändert sich nicht mit dem Ergebnis. |
-| **gemessener Spitzenwert `anon`** | 381 MB | FEHLT NOCH | eine Messung. Der Wert des ARM-Volllaufs wird die Zahl der Store-Aussage. |
-| **`memory.peak`** | 455 MB | FEHLT NOCH | dieselbe cgroup, anderer Maßstab: hier zählt der Dateicache mit. |
+| **gemessener Spitzenwert `anon`** | 381 MB | **422,2 MB** (ARM), 428,6 MB (Generalprobe) | eine Messung. Der Wert des ARM-Volllaufs ist die Zahl der Store-Aussage. |
+| **`memory.peak`** | 455 MB | **970,9 MB** (ARM), 957,7 MB (Generalprobe) | dieselbe cgroup, anderer Maßstab: hier zählt der Dateicache mit. |
 
 Warum die Store-Zahl aus `anon` kommt und nicht aus `memory.peak`: der Index ist
 eine in den Speicher abgebildete Datei, also landet jeder gelesene Indexblock im
@@ -1329,7 +1633,7 @@ entfernt ist. Die Datei gehört also vorher mit `docker cp` hinein.
 | Lauf | höchster `anon` | unter 2,0 GB | Laufzeit | OCR-Anteil | Speichertod |
 |---|---|---|---|---|---|
 | Generalprobe cpx22 | **428,6 MB** (449.441.792 Byte) | ja, 20,9 Prozent davon | 10 h 14 min 14 s | 10.134 von 50.104 Dateien | nein, `oom_kill 0` und `OOMKilled false` |
-| ARM CAX11 | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH | FEHLT NOCH |
+| **ARM m7g.large** | **422,2 MB** (442.695.680 Byte) | **ja, 20,6 Prozent davon** | 12 h 48 min 47 s | 10.125 von 50.049 Dateien | nein, `oom_kill 0` und `OOMKilled false` |
 
 Die Zeile, die in die Store-Beschreibung geht, ist die zweite. Die erste steht
 daneben, weil ein Vergleich der beiden mehr über das Verhalten der Anwendung
@@ -1586,6 +1890,322 @@ Zwei kleinere Beobachtungen aus derselben Reihe:
   sind (`deliberatelyLeftOut`), während die 16 übrigen Übersprungenen drin
   bleiben. 50.068 von 50.084 sind 99,97 Prozent, und die Kachel rundet ab. Es
   stimmt also und sieht trotzdem nach einem Rest aus, der noch kommt.
+
+## Der ARM-Volllauf: dieselbe Messung auf der Zielarchitektur
+
+Dies ist die Messung, aus der die Store-Aussage kommt. Sie erbt keine Zahl aus
+der Generalprobe: derselbe Korpus, dieselbe harte Grenze, dieselben Beobachter,
+neu gefahren auf arm64 mit dem Abbild, das die drei Korrekturen aus 05-20 trägt.
+Die Rohdaten liegen unter `docs/measurements/2026-09-04-volllauf-m7g/`.
+
+### Der Beginn, und der Fehlstart davor
+
+| Angabe | Wert |
+|---|---|
+| App eingeschaltet | 2026-09-04T17:29:50Z |
+| erster Hintergrundauftrag, Crawl beginnt | 2026-09-04T17:32:26Z |
+| erstes Verdikt | 2026-09-04T17:46:36Z |
+| letztes Verdikt | 2026-09-05T06:35:23Z |
+| Dauer vom ersten bis zum letzten Verdikt | 46.127 s, also 12 h 48 min 47 s |
+| Arbeitsvorrat | 50.049 Dateien: 50.000 des Korpus und 49 des Bestands |
+| Sampler | `rss_sampler.sh nc_app_findling_backend 5`, 9.622 Messpunkte |
+| Beobachter der Statusseite | 161 vollständige Aufnahmen im Abstand von 5 Minuten |
+
+Zwischen dem Einschalten und dem ersten Verdikt liegen siebzehn Minuten, und
+davon sind vierzehn ein Fehlstart, der in `00-start.txt` steht: die
+Warteschlange füllte sich bis auf 4.048 Zeilen, während der Container keine
+einzige davon abholte. Ursache war ein `docker restart` bei der Prüfung des
+HTTP/3-Wegs kurz zuvor, und die Folge davon ist der Befund, der weiter unten als
+Drill 1b eine eigene Messung bekommt: ein Containerstart, der nicht von AppAPI
+kommt, hinterlässt einen Container, der Suchen beantwortet und nie wieder
+indexiert. Behoben wurde er mit `occ app_api:app:disable` und `enable`, und ab
+17:46:40Z lief der Lauf wirklich.
+
+### Was der Lauf gemessen hat
+
+| Größe | Wert |
+|---|---|
+| indexiert | **50.021** |
+| fehlgeschlagen | **0** |
+| übersprungen | 28: `too_large` 20, `empty_text` 7, `image_not_ocrable` 1 |
+| ohne Verdikt | keine, 50.021 plus 28 sind genau 50.049 |
+| mit OCR | 10.125 Dateien, davon 10.117 indexiert und 8 übersprungen |
+| Durchsatz | 1,09 Dateien je Sekunde über den ganzen Lauf |
+| Textzeichen im Index | 1.354.887.410, davon 37.407.860 aus der OCR-Spur |
+| Zeilen in der ACL-Tabelle | 50.021, also genau eine je indexiertem Dokument |
+| Dokumente im Tantivy-Index | 50.021, dieselbe Zahl noch einmal |
+| Index nach dem Lauf | 761.082.220 Byte, 15.215 Byte je Dokument, 3,77 Prozent des Korpus |
+| Versionsgleichstand | `match`, 1.0.0 auf beiden Seiten, `reindexRequired` falsch |
+
+Über den ganzen Lauf hat der Container **fünf** Zeilen auf Warnstufe
+geschrieben und keine einzige auf Fehlerstufe. Vier davon stehen zwischen
+17:23:08Z und 17:23:55Z, also bevor die App überhaupt eingeschaltet war: drei
+sind die geordnete Rückstufung eines Containers, dessen Gegenstelle noch nicht
+existiert ("next attempt in 15 s", "in 30 s", dann "at most one attempt every
+300 s"), und die vierte ist der gescheiterte Aufstieg auf HTTP/3 aus DI-05-35.
+Die fünfte ist die einzige Warnung aus dreizehn Stunden Arbeit, und sie bekommt
+weiter unten einen eigenen Absatz.
+
+### Die Verdikte gegen die Verteilung des Generators, Endung für Endung
+
+Die Generalprobe hat diese Gegenrechnung auf der Ebene der Kategorien geführt.
+Hier steht sie auf der Ebene der Dateiendungen, weil sie dort vollständig
+aufgeht und keine Sammelzeile mehr braucht.
+
+| Endung | Korpus, von der Platte gezählt | Textspur | OCR-Spur | übersprungen | Bestand der Instanz |
+|---|---|---|---|---|---|
+| `.pdf` | 32.552 | 22.539 | 10.016 | 0 | 3 |
+| `.xlsx` | 3.345 | 3.345 | 0 | 0 | 0 |
+| `.pptx` | 3.344 | 3.344 | 0 | 0 | 0 |
+| `.docx` | 3.327 | 3.328 | 0 | 0 | 1 |
+| `.odt` | 2.504 | 2.515 | 0 | 0 | 11 |
+| `.ods` | 2.504 | 2.510 | 0 | 0 | 6 |
+| `.odp` | 0 | 11 | 0 | 0 | 11 |
+| `.txt` | 781 | 781 | 0 | 0 | 0 |
+| `.md` | 775 | 783 | 0 | 0 | 8 |
+| `.csv` | 768 | 748 | 0 | **20** | 0 |
+| `.jpg` | 27 | 0 | 28 | **7** | 8 |
+| `.webp` | 27 | 0 | 27 | 0 | 0 |
+| `.png` | 23 | 0 | 23 | **1** | 1 |
+| `.tif` | 23 | 0 | 23 | 0 | 0 |
+
+Vier Aussagen stehen in dieser Tabelle, und jede einzelne ist der Grund, warum
+sie so ausführlich ist.
+
+**Erstens: der Größendeckel stimmt auf die Datei.** Der Generator hat 20 Dateien
+über 50 MB geschrieben, alle mit der Endung `.csv`, und genau 20 `.csv` sind als
+`too_large` beurteilt. Die 768 erzeugten `.csv` minus 20 sind die 748 der
+Textspur.
+
+**Zweitens: keine einzige Datei ist auf der falschen Spur gelandet.** Der
+Generator hat 9.916 einseitige und 100 mehrseitige Scans geschrieben, zusammen
+10.016 PDF ohne Textebene, und exakt 10.016 PDF sind über die OCR-Spur
+gegangen. Die 22.536 Text-PDF mit ihrem einen gescannten Anhang sind sämtlich
+auf der Textspur geblieben. Das ist die Zusage, die `build_load_corpus.py` im
+Kommentar an `build_text_pdf` gibt ("far below the share at which
+findling.extract.pdf declares a whole document scanned"), und sie hält auf
+22.536 Dateien.
+
+**Drittens: alle 100 Bilder des Korpus wurden gelesen.** 27 `.jpg`, 27 `.webp`,
+23 `.png` und 23 `.tif`, jedes über tesseract, keines übersprungen.
+
+**Viertens: die acht Ausnahmen sind sämtlich Bestand und nicht Korpus.** Die
+sieben `empty_text` sind die Beispielfotos, die Nextcloud jedem neuen Konto
+mitgibt, und das eine `image_not_ocrable` ist das Nextcloud-Logo. Das sind
+Bilder ohne Schrift, und "kein Text darin" ist über sie das richtige Urteil.
+Rechnet man den Bestand zusammen, kommen 41 indexierte und 8 übersprungene
+Dateien heraus, zusammen 49, und genau 49 Dateien führt die Crawl-Statistik für
+diesen Speicher. Vom Korpus selbst sind 49.980 von 50.000 indexiert, und die
+fehlenden 20 sind der Größendeckel.
+
+### Der OOM-Beweis, vierteilig
+
+Alle Teile am 2026-09-05T06:54:19Z erhoben, also nach dem Lauf und vor jedem
+Eingriff.
+
+```
+--- 1. memory.events und memory.events.local, jeder Zaehler ---
+low             0        high            0        max             0
+oom             0        oom_kill        0        oom_group_kill  0
+sock_throttled  14865
+
+--- 2. memory.peak, memory.max, memory.current ---
+memory.peak     1018101760
+memory.max      2147483648
+memory.current   430878720
+
+--- 3. memory.stat, die Posten dahinter ---
+anon 228569088   file 182521856   kernel 19779584   slab 18295416
+anon_thp 0       pgfault 402002127   pgmajfault 6058
+
+--- 4. der Container selbst ---
+OOMKilled=false Status=running ExitCode=0 RestartCount=0
+StartedAt=2026-09-04T17:46:29Z Memory=2147483648 MemorySwap=2147483648
+
+--- die Abschlusszeile des Samplers ---
+findling-rss summary samples=9421 max_anon=442695680 peak=1018101760
+  events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=14865]
+  oom_killed=false
+```
+
+| Teil | Aussage |
+|---|---|
+| `memory.events` und `memory.events.local` | Der Kernel hat in dieser cgroup nie an die Grenze angeschlagen. Nicht nur `oom_kill` steht auf null, auch `max` und `high`: die Grenze wurde in 46.127 Sekunden **kein einziges Mal** berührt. |
+| `docker inspect .State.OOMKilled` | `false`, dazu `RestartCount 0` und `ExitCode 0`: der Container, der gemessen wurde, ist derselbe, der gestartet wurde. |
+| höchster `anon` aus der CSV | **442.695.680 Byte, also 422,2 MB**, erreicht am 2026-09-04T18:22:11Z, 36 Minuten nach dem ersten Verdikt. Das ist die Zahl der Store-Aussage. |
+| `memory.peak` und der Dateicache | **1.018.101.760 Byte, also 970,9 MB**, erstmals erreicht um 18:27:07Z und danach nie überschritten. Der Abstand von 549 MB ist der Seitencache des Index. Am Ende des Laufs standen `anon 228.569.088`, `file 182.521.856` und `slab 18.295.416` nebeneinander. |
+
+**Der Grenzwert war 2,0 GB, gemessen sind 422,2 MB, das sind 20,6 Prozent. Der
+Lauf besteht.** Das ist der Satz, der in die Store-Beschreibung geht, und er ist
+auf der Architektur gemessen, für die er gilt.
+
+Zum siebten Zähler, weil ein weggelassener Zähler schlimmer ist als ein
+erklärter: `sock_throttled` steht auf dem Kernel dieser Box (7.0.0-1012-aws) neu
+in `memory.events` und gehört nicht zu den sechs, die einen Speichertod
+anzeigen. Er zählt, wie oft die Zuteilung von Puffern für Netzverbindungen
+innerhalb dieser cgroup gebremst wurde; der Container hat in dreizehn Stunden
+gut fünfzigtausend Dateien über HTTPS abgeholt. Der Kernel der Generalprobe
+(6.8) kennt den Zähler nicht, weshalb er dort in keiner Tabelle steht. Was er
+nicht bedeutet, steht daneben: `max` und `high` sind null, es wurde also nie
+zurückgefordert, und `failed` ist über den ganzen Lauf null geblieben. Der
+Zähler hat den Lauf nichts gekostet, was messbar gewesen wäre.
+
+### Die Kurve
+
+9.622 Messpunkte im Abstand von fünf Sekunden, vom Start des Samplers um
+2026-09-04T17:29:42Z bis zu seinem geordneten Ende um 2026-09-05T06:54:14Z.
+
+| Stunde (UTC) | Messpunkte | `anon` Minimum | `anon` Median | `anon` Spitze | `memory.peak` am Ende der Stunde |
+|---|---|---|---|---|---|
+| 09-04 17 | 346 | 59 MB | 59 MB | 222 MB | 534 MB |
+| 09-04 18 | 718 | 147 MB | 226 MB | **422 MB** | 971 MB |
+| 09-04 19 | 719 | 155 MB | 287 MB | 415 MB | 971 MB |
+| 09-04 20 | 719 | 169 MB | 329 MB | 346 MB | 971 MB |
+| 09-04 21 | 719 | 162 MB | 331 MB | 391 MB | 971 MB |
+| 09-04 22 | 719 | 199 MB | 333 MB | 392 MB | 971 MB |
+| 09-04 23 | 719 | 207 MB | 334 MB | 378 MB | 971 MB |
+| 09-05 00 | 718 | 207 MB | 333 MB | 394 MB | 971 MB |
+| 09-05 01 | 719 | 191 MB | 335 MB | 394 MB | 971 MB |
+| 09-05 02 | 719 | 209 MB | 335 MB | 394 MB | 971 MB |
+| 09-05 03 | 719 | 210 MB | 336 MB | 395 MB | 971 MB |
+| 09-05 04 | 719 | 155 MB | 336 MB | 395 MB | 971 MB |
+| 09-05 05 | 719 | 164 MB | 336 MB | 397 MB | 971 MB |
+| 09-05 06 | 650 | 174 MB | 322 MB | 356 MB | 971 MB |
+
+Dieselben drei Beobachtungen wie auf x86, und dass sie sich auf einer anderen
+Architektur wiederholen, ist der eigentliche Wert dieser Tabelle.
+
+Erstens: **die Spitze fällt in die erste Stunde und wird danach nie wieder
+erreicht.** Sie liegt um 18:22Z, dort wo die Textspur unter Volllast lief und
+der Schreibpuffer seine ersten großen Vereinigungsläufe fuhr. Die elf Stunden
+reiner OCR-Arbeit danach kosten weniger Speicher, nicht mehr.
+
+Zweitens: **die Kurve steigt nicht.** Der Median liegt ab der dritten Stunde
+zwischen 322 und 336 MB und bewegt sich über neun Stunden um vierzehn Megabyte,
+während der Index von null auf 726 MB und der Bestand von null auf 50.021
+Dokumente wächst. Ein Speicherleck über dreizehn Stunden hätte hier eine
+Steigung, und es gibt keine.
+
+Drittens: **`memory.peak` steht ab der zweiten Stunde still**, bei 971 MB,
+obwohl er den Dateicache mitzählt. Der Kernel hält den Cache dieser cgroup von
+selbst weit unter der Grenze, ohne dazu räumen zu müssen: `low` und `high` in
+`memory.events` stehen auf null.
+
+### Die beiden Spuren, getrennt gemessen
+
+Die Trennung ist nicht gerechnet, sondern abgelesen: von 19:40:38Z an trägt jede
+weitere indexierte Datei das Kennzeichen `ocr_used`, die Textspur war zu diesem
+Zeitpunkt leer.
+
+| Abschnitt | Zeitraum | Dauer | Verdikte | je Verdikt |
+|---|---|---|---|---|
+| Textspur und Crawl | 17:46:36Z bis 19:40:38Z | 6.842 s | 40.524, davon 39.904 über die Textspur und 620 über die OCR-Spur | 0,169 s |
+| reine OCR-Spur | 19:40:38Z bis 06:35:23Z | 39.285 s | 9.525, davon 9.505 über die OCR-Spur | **4,133 s je OCR-Datei** |
+
+Die 20 Verdikte des zweiten Abschnitts, die nicht aus der OCR-Spur stammen, sind
+die `too_large`-Dateien: der Abgleich um 06:31Z hat sie noch einmal
+vorgelegt, und sie sind noch einmal an ihrer Größe abgewiesen worden, ohne dass
+ein Byte von ihnen gelesen wurde. Sie kosten also nichts, was in dieser Tabelle
+sichtbar wäre.
+
+Der zweite Wert ist die einzige Zahl dieses Laufs, die man ohne Rechnung mit der
+Generalprobe vergleichen kann, und der Vergleich ist unangenehm ehrlich:
+
+| Posten | Generalprobe cpx22 (x86) | ARM m7g.large (arm64) | Verhältnis |
+|---|---|---|---|
+| je Datei der OCR-Spur | 3,16 s | 4,13 s | ARM braucht 31 Prozent länger |
+| Laufzeit des ganzen Laufs | 10 h 14 min | 12 h 49 min | ARM braucht 25 Prozent länger |
+| höchster `anon` | 428,6 MB | 422,2 MB | ARM braucht 1,5 Prozent weniger |
+
+**Die Zielhardware ist langsamer und nicht hungriger.** Für einen Bericht, der
+eine Speicheraussage tragen soll, ist das genau die richtige Richtung: die Zahl,
+die in die Store-Beschreibung geht, wird auf der schwächeren Maschine nicht
+größer. Die Laufzeit dagegen wird es, und der Anteil daran, der auf die
+Architektur entfällt, lässt sich hier nicht von dem trennen, der auf den
+gedrosselten Netzspeicher entfällt. Der Bericht sagt deshalb nicht "ARM ist 31
+Prozent langsamer", sondern: **diese Maschine hat für diesen Korpus 12 h 49 min
+gebraucht.**
+
+Eine Kernzahl steht in dieser Tabelle bewusst nicht, und der Grund ist ein
+Widerspruch in diesem Repository, den dieser Lauf gefunden hat. Die Tabelle der
+beiden Maschinen weiter oben führt für die cpx22 zwei Kerne, ebenso die READMEs
+der Grundlast- und der Trockenlauf-Messung; die README der Volllauf-Messung
+führt drei. Ein `nproc` von dieser Maschine ist nirgends aufgeschrieben, und die
+Maschine ist gelöscht, also lässt sich der Widerspruch nicht mehr durch eine
+Messung entscheiden. Solange das so ist, trägt keine Aussage dieses Berichts
+eine Kernzahl der Generalprobe. Notiert als DI-05-39.
+
+### Die eine Warnung aus dreizehn Stunden, und was sie gekostet hat
+
+```
+2026-09-05T06:05:42Z WARNING:findling.nc.queue:could not acknowledge a batch of 2 rows
+```
+
+Der Container hatte zwei Dokumente in den Index geschrieben und kam beim
+Quittieren nicht durch. Der Weg dieser beiden Zeilen danach steht vollständig in
+der Zustandsdatenbank: die Sperre lief nach dreißig Minuten ab, die Nextcloud-
+Hälfte gab sie erneut aus, und der Container hat sie um 06:34:41Z ein zweites
+Mal beurteilt, mit `attempts = 3`.
+
+| Auslieferungen | Dateien | was das ist |
+|---|---|---|
+| 1 | 39.924 | die Textspur: einmal abgeholt, einmal beurteilt |
+| 2 | 10.123 | die OCR-Spur: die Übergabe von der Inhalts- an die OCR-Spur ist die zweite Auslieferung derselben Zeile |
+| 3 | **2** | die beiden Zeilen aus der verlorenen Quittung |
+
+Was daraus **nicht** geworden ist: ein Fehlschlag, ein Verlust, ein doppelter
+Eintrag. `failed` steht auf null, die 50.021 ACL-Zeilen sind genau so viele wie
+die Dokumente im Index, und der Deckel von drei Auslieferungen wurde von genau
+zwei Zeilen erreicht und von keiner überschritten. Das ist die Zusage "mindestens
+einmal ausliefern, höchstens einmal indexieren", unter Last und ungeplant
+geprüft.
+
+### Die Statusseite über den ganzen Lauf, und die Korrektur aus 05-20
+
+Hier ist der schwerste Befund der Generalprobe zu prüfen: dort behauptete die
+Verwaltungsseite acht Stunden lang Stillstand, während der Container 6.500
+Dokumente schrieb. Über die 161 Aufnahmen dieses Laufs:
+
+| Zustand | Aufnahmen |
+|---|---|
+| `running` | 156 |
+| `idle` | 4, davon 3 nach dem letzten Verdikt |
+| **`stalled`** | **0** |
+| ohne Antwort | 1, die erste, vor dem Einschalten der App |
+
+Der höchste `stalledFor`-Wert während der Arbeit beträgt **87 Sekunden**. Die
+Zahl, die ihn tragen könnte, steht daneben: der letzte Hintergrundauftrag dieser
+App lief um 2026-09-04T19:42:26Z, in der letzten arbeitenden Aufnahme war er
+39.160 Sekunden alt, also **10 Stunden und 53 Minuten**. Genau diese knapp elf
+Stunden hätte die Seite vor 05-20 als Stillstand ausgewiesen, und sie hat es
+nicht getan, weil der gewachsene `indexed`-Zähler des Containers jetzt als
+Bewegung zählt.
+
+**Der Befund aus 05-14 ist damit im Feld erledigt, auf demselben Korpus und
+einem noch längeren OCR-Nachlauf als dem, der ihn erzeugt hat.** Wo die Regel
+ihre Grenze hat, steht bei Drill 1b, und diese Grenze ist gewollt.
+
+Fünf Aufnahmen aus derselben Reihe, damit die Auswahl nicht nur aus Höhepunkten
+besteht:
+
+| Zeitpunkt | Zustand | eingereiht | laufend | Dokumente | Deckungsgrad |
+|---|---|---|---|---|---|
+| 2026-09-04T17:38:53Z | `running` | 2.048 | 0 | 0 | noch keiner |
+| 2026-09-04T19:19:03Z | `running` | 8.705 | 32 | 33.288 | vorläufig |
+| 2026-09-04T22:39:23Z | `running` | 6.905 | 2 | 43.114 | endgültig |
+| 2026-09-05T03:39:50Z | `running` | 2.531 | 2 | 47.488 | endgültig |
+| 2026-09-05T06:50:07Z | `idle` | 0 | 0 | 50.021 | 99 Prozent |
+
+Über alle Aufnahmen hinweg gilt außerdem: `failed` durchgehend null,
+`backendReachable` durchgehend wahr, `lowDisk` durchgehend falsch, der
+Versionsgleichstand durchgehend `match`, die Dokumentzahl monoton wachsend, und
+die ACL-Zeilen in jeder einzelnen Aufnahme genau so viele wie die Dokumente.
+
+Der Deckungsgrad steht am Ende auf 99 Prozent, und die Rechnung dahinter ist
+dieselbe wie auf x86: der Nenner ist 50.029 statt 50.049, weil die 20 Dateien
+über dem Größendeckel ausdrücklich herausgenommen sind, während die acht
+übrigen Übersprungenen drin bleiben. 50.021 von 50.029 sind 99,98 Prozent, und
+die Kachel rundet ab.
 
 ## Die Störfall-Drills
 
@@ -1894,7 +2514,371 @@ liegt hinter dieser Prüfung. Er sagt außerdem nichts über einen Datenträger,
 tatsächlich auf null läuft, denn hier blieben beide Male rund 400 MB übrig, damit
 die Datenbank derselben Instanz nicht in Mitleidenschaft gezogen wird.
 
+## Dieselben Drills auf ARM, und die Prüfung der drei Korrekturen
+
+Am 2026-09-05, unmittelbar nach dem ARM-Volllauf, auf derselben Maschine und mit
+demselben Index von rund 51.400 Dokumenten dahinter. Der Vorrat für die Eingriffe
+kam auf demselben Weg wie auf x86: 1.500 Dateien mit dem Seed
+`phase5-drill-arm`, über WebDAV als der Nutzer `lasttest` hochgeladen, alle 1.500
+mit HTTP 201 angenommen. Davon sind 297 einseitige Scans, die über die OCR-Spur
+laufen, womit jeder Eingriff sicher in die OCR-Arbeit fällt.
+
+Der Zweck dieser Wiederholung ist nicht die Wiederholung. Zwischen den x86-Drills
+und diesen liegt Plan 05-20, und jeder der drei Drills prüft eine seiner drei
+Korrekturen an der Stelle, an der sie entstanden ist.
+
+### Drill 1 auf ARM: `docker kill` mitten in der OCR-Arbeit
+
+**Ausgangszustand, 2026-09-05T08:16:22Z.** 160 Zeilen im Vorrat, davon 2 an den
+Arbeiter übergeben, 51.401 Dokumente im Index, `RestartPolicy` des Containers
+`unless-stopped`.
+
+**Eingriff.**
+
+```
+docker kill nc_app_findling_backend
+Status=exited ExitCode=137 OOMKilled=false FinishedAt=2026-09-05T08:16:22.909Z
+```
+
+**Der Vorrat unmittelbar danach:** 160 Zeilen, 2 ausgeliefert, höchste
+Auslieferungszahl 1. Der harte Abschuss hat nichts abgeschrieben und nichts
+verloren.
+
+**Wiederherstellung, Versuch 1: `docker start`.** Das ist der naheliegende Griff,
+und er tut nicht, was er zu tun scheint:
+
+```
+Status=running Memory=2147483648 RestartCount=0
+INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+INFO:     Application startup complete.
+```
+
+Der Container läuft, seine harte Grenze steht noch, und er beantwortet Suchen:
+HTTP 200, fünf Treffer, 759 ms. Der `indexed`-Zähler blieb in 122 Sekunden
+Beobachtung auf 51.401 stehen, und das Protokoll zeigt in dieser Zeit keinen
+einzigen Durchgang des Pollers. **Das ist DI-05-36, hier zum ersten Mal
+absichtlich ausgelöst und gemessen.**
+
+**Wiederherstellung, Versuch 2: der Weg über AppAPI.**
+
+```
+occ app_api:app:disable findling_backend
+occ app_api:app:enable  findling_backend
+```
+
+Drei Sekunden für beide Befehle, die erste neue Datei zehn Sekunden später,
+`Memory` weiterhin 2.147.483.648. Die Statusseite meldet unmittelbar danach
+`runState running`, `backendReachable true`, 154 wartende und 4 laufende Zeilen.
+
+### Drill 1b auf ARM: die ganze Maschine startet neu
+
+Diesen Drill gab es auf x86 nicht, und er ist der wichtigste der vier, weil er
+den Produktivfall von DI-05-36 misst. Ein `docker kill` von Hand macht jemand,
+der weiß, was er tut. Ein Neustart der Maschine passiert bei jedem
+Kernel-Update, und danach startet Docker den Container nach seiner Regel
+`unless-stopped` von selbst wieder.
+
+**Eingriff, 2026-09-05T08:20:48Z:** `systemctl reboot`.
+
+**Nach dem Neustart, 08:22:14Z:** alle neun Container sind zurück, der
+Findling-Container trägt dieselbe Kennung wie vorher, `RestartCount 0`, und
+`Memory=2147483648 MemorySwap=2147483648`. **Die harte Grenze überlebt einen
+Neustart der Maschine**, weil sie in der HostConfig des Containers steht und
+nicht im laufenden Prozess. Das ist eine Zusage mehr, als der Bericht bisher
+machen konnte.
+
+**Die Beobachtung, und ein Messfehler auf dem Weg dorthin.** Der erste Durchgang
+dieses Drills hat "der Poller arbeitet wieder, von selbst" gemeldet, und das war
+falsch. Der Vergleichswert stammte aus einer Aufnahme rund dreißig Sekunden vor
+dem Herunterfahren, und in diesen dreißig Sekunden hatte der Container noch zwei
+Dateien fertig gemacht. Der Zähler stand danach von selbst höher, ohne dass nach
+dem Neustart irgendetwas geschehen wäre. Der Fehler steht hier, weil er lehrreich
+ist: **ein Zustand, der zum falschen Zeitpunkt abgelesen wurde, sieht aus wie
+eine Bewegung.** Gemessen wurde deshalb neu, an einer Größe, die diesen Fehler
+nicht machen kann, nämlich an der Zahl der Durchgänge des Pollers im Protokoll,
+gezählt ab dem Start des Containers.
+
+```
+Container gestartet 2026-09-05T08:21:14Z
+Durchgaenge des Pollers seit dem Start: 0        (nach 5 min)
+T+ 60s  Durchgaenge 0  indexed 51433  Vorrat 130
+T+120s  Durchgaenge 0  indexed 51433  Vorrat 130
+T+181s  Durchgaenge 0  indexed 51433  Vorrat 130
+T+241s  Durchgaenge 0  indexed 51433  Vorrat 130
+T+301s  Durchgaenge 0  indexed 51433  Vorrat 130
+```
+
+**Zehn Minuten, kein einziger Durchgang, 130 Zeilen Vorrat, und der Container
+beantwortet in derselben Zeit Suchen mit fünf Treffern.** DI-05-36 trifft also
+auch den Neustart der Maschine, und dort trifft er härter als beim `docker
+start`: es hat niemand etwas falsch gemacht, es hat nur niemand etwas getan.
+
+**Und die Verwaltungsseite sagt es nicht.** In genau dieser Lage meldet sie:
+
+```
+runState running   stalledFor 0   backendReachable True
+scheduled 126      running 4      failed 0
+```
+
+Das ist die Grenze der Korrektur aus 05-20, und sie ist gewollt. Das
+Stillstands-Urteil nimmt die **spätere** von zwei Bewegungen, damit ein langer
+OCR-Nachlauf nicht als Stillstand gilt; solange die Hintergrundaufträge von
+Nextcloud laufen, ist eine der beiden Bewegungen immer frisch. Die Regel kann
+"beide Hälften stehen" erkennen und "nur die Container-Hälfte steht" nicht.
+Beides zugleich geht mit dieser einen Zahl nicht, und der Bericht sagt lieber,
+wo die Kachel blind ist, als so zu tun, als sei sie es nicht. Notiert als
+DI-05-38, der Anzeige-Hälfte von DI-05-36: wer den einen behebt, macht den
+anderen fast gegenstandslos, und wer ihn nicht behebt, braucht den anderen
+dringend.
+
+**Wiederherstellung.** `occ app_api:app:disable` und `enable`, drei Sekunden,
+erste neue Datei nach zehn Sekunden, `Memory` unverändert.
+
+**Was der Neustart nebenbei geprüft hat.** Unmittelbar vor dem Herunterfahren
+steht im Protokoll `could not acknowledge a batch of 2 rows`: das geordnete
+Herunterfahren hat die Quittung nicht mehr durchgebracht. Danach ist die höchste
+Auslieferungszahl im Vorrat weiterhin 1, und abgeschrieben wurde nichts. Genau
+dafür ist die Rückgabe aus 05-20 gebaut.
+
+### Drill 2 auf ARM: das Backend ist weg
+
+**Ausgangszustand, 2026-09-05T08:32:15Z.** Suche mit Backend: HTTP 200, fünf
+Treffer, 426 ms.
+
+**Eingriff:** `docker stop`, `Status=exited ExitCode=0`.
+
+**Die Suche ohne Backend, dreimal:**
+
+```
+Versuch 1: HTTP 200, Treffer 0, 1833 ms, name='File contents'
+Versuch 2: HTTP 200, Treffer 0, 1821 ms
+Versuch 3: HTTP 200, Treffer 0, 1817 ms
+```
+
+Keine Fehlerseite, kein Abbruch, kein Zeitüberschreitungsfehler beim Nutzer: der
+Anbieter meldet sich mit null Treffern. Die Dateisuche von Nextcloud in derselben
+Sitzung antwortet weiter mit HTTP 200 in 418 ms, die Instanz ist also heil.
+
+**Die Verwaltungsseite ohne Backend:**
+
+```
+backendReachable False   indexedDisplay 51433   backend.indexed 0   note ''
+findling-banner-unreachable        SICHTBAR
+findling-banner-lockstep           verborgen
+findling-banner-stale              verborgen
+findling-banner-lowdisk            verborgen
+findling-banner-reindex            verborgen
+Satz 'The Findling backend does not answer' in der Seite: True
+```
+
+Genau ein Banner, und es ist das richtige. Die Seite zeigt den zuletzt bekannten
+Bestand von 51.433 Dokumenten weiter an und erfindet keine Zahl.
+
+**Wiederherstellung** über AppAPI, 29 Sekunden (der Container muss dafür erst
+gestartet werden), Suche danach wieder 436 ms mit fünf Treffern, Vorrat läuft
+weiter.
+
+### Drill 3 auf ARM: die Platte wird knapp, und die Prüfung der Rückgabe
+
+Dies ist der Drill, für den Plan 05-20 geschrieben wurde. Auf x86 endeten hier 32
+Zeilen als `failed(repeatedly_stuck)`, ohne dass sie je jemand bearbeitet hatte:
+jede Rückgabe zählte als Fehlversuch, und nach drei Rückgaben war die Zeile
+abgeschrieben. Seit 05-20 gibt `QueueMapper::unlock` die Auslieferung mit der
+Zeile zusammen zurück.
+
+Die Probe ist deshalb absichtlich streng: die Pause wird **fünf Minuten**
+gehalten. Bei einem Durchgang alle fünf Sekunden wäre ein Budget von drei
+Auslieferungen nach fünfzehn Sekunden verbraucht, also zwanzigfach.
+
+**Ausgangszustand, 2026-09-05T08:34:05Z.** 31.087.046.656 Byte frei, 112 Zeilen
+im Vorrat, 6 Auslieferungen über alle Zeilen, höchste 1, nichts abgeschrieben.
+
+**Verknappung:** `fallocate` über 30.687.308.800 Byte, danach 382 MB frei, also
+unter dem Boden von 524.288.000 Byte.
+
+**Was der Container tut:**
+
+```
+WARNING:findling.index.writer:index commit paused, free space is below the
+        configured floor of 524288000 byte
+WARNING:findling.worker.poller:index paused, free space below the floor,
+        2 rows handed back
+```
+
+Zehn solche Paare in fünf Minuten. Und die Zahl, um die es geht:
+
+| Zeitpunkt | Vorrat | Auslieferungen gesamt | höchste | abgeschrieben |
+|---|---|---|---|---|
+| vor der Verknappung | 112 | 6 | 1 | keine |
+| T+60 s | 110 | 4 | 1 | keine |
+| T+120 s | 110 | 4 | 1 | keine |
+| T+180 s | 110 | 4 | 1 | keine |
+| T+240 s | 110 | 4 | 1 | keine |
+| T+300 s | 110 | 4 | 1 | keine |
+| nach der Wiederherstellung | 108 | 6 | 1 | **keine** |
+
+**Zehn Rückgaben, und die höchste Auslieferungszahl steht unverändert auf eins.**
+Der Vorrat ist vollständig erhalten, kein einziges `failed(repeatedly_stuck)`.
+Auf x86 waren es an dieser Stelle 32 abgeschriebene Zeilen. Der Befund aus 05-14
+ist damit im Feld erledigt.
+
+**Die Verwaltungsseite während der Pause:**
+
+```
+lowDisk True   diskFreeBytes 400154624   scheduled 106   running 4   failed 0
+Banner findling-banner-lowdisk: SICHTBAR
+Satz 'Little disk space left'                          in der Seite: True
+Satz 'Indexing is paused so the index stays intact'    in der Seite: True
+```
+
+**Die Suche während der Pause:** zweimal HTTP 200 mit fünf Treffern, 381 ms und
+387 ms. Ein pausierter Index ist ein vollständig benutzbarer Index, und das ist
+die zweite Hälfte der Zusage, die auf dem Banner steht.
+
+**Wiederherstellung.** Der Ballast geht um 08:39:09Z weg, 31 GB sind wieder frei,
+und der Lauf geht **nach 91 Sekunden ohne jeden Eingriff** weiter. Die 91
+Sekunden sind die Rückstufung des Pollers: er fragt nach mehreren
+Fehlversuchen seltener nach, und der nächste Termin lag eben dort.
+
+### Die drei Korrekturen aus 05-20, abgelesen
+
+| Korrektur | Wo sie geprüft wurde | Ergebnis |
+|---|---|---|
+| Eine Rückgabe kostet keine Auslieferung | Drill 3, fünf Minuten Plattenpause, zehn Rückgaben | höchste Auslieferungszahl unverändert 1, **null** abgeschriebene Zeilen (x86: 32) |
+| Der Abgleich heilt die verlorene Übergabe | der Volllauf selbst, Abgleich um 06:31Z | nicht ausgelöst, weil es nichts zu heilen gab: `seen=50049 stale=20 missing=0 given_up=0`, am Ende null Zeilen mit `no_text_layer` und null Fehlschläge. Siehe den Absatz darunter. |
+| Die Statusseite wirft keinen Stillstand vor | der Volllauf, elf Stunden OCR-Nachlauf | **null** Aufnahmen mit `stalled`, höchster `stalledFor` 87 s, während der letzte Hintergrundauftrag 10 h 53 min alt war (x86: acht Stunden `stalled`) |
+
+Zur mittleren Zeile, weil "nicht ausgelöst" leicht als "nicht geprüft"
+gelesen wird und beides nicht dasselbe ist. Der Heilungszweig repariert ein Paar
+aus `skipped(no_text_layer)` hier und `failed(repeatedly_stuck)` dort. Damit
+dieses Paar entsteht, muss eine Quittung genau zwischen Textspur und OCR-Spur
+verlorengehen **und** die Zeile danach abgeschrieben werden. Der ARM-Lauf hat
+zwar eine verlorene Quittung erlebt, aber die Abschreibung ist ausgeblieben,
+weil die Rückgabe aus derselben Korrektur die Auslieferung zurückgibt. Die
+beiden Korrekturen greifen also ineinander: **die erste sorgt dafür, dass die
+zweite seltener gebraucht wird.** Der Zweig selbst hängt an den sechs Tests aus
+05-20 und nicht an dieser Messung; was diese Messung dazu beiträgt, ist der
+Nachweis, dass der Zustand, den er repariert, unter dreizehn Stunden Volllast
+nicht ein einziges Mal entstanden ist.
+
+## Die Zusatzmessung: was ein zweiter Indexarbeiter bringt
+
+Der Betreiber hat am 04.09. eine Zusatzmessung `INDEX_WORKERS=2` freigegeben.
+Sie ist gefahren, und ihr Ergebnis ist ein anderes als erwartet: **die Frage
+hat eine Antwort im Quelltext, und die Messung kann sie nicht geben.** Der
+Abschnitt steht trotzdem vollständig hier, samt der Messung, denn eine Messung,
+die nichts findet, ist ein Befund und keine Lücke.
+
+### Der Aufbau
+
+`backend/src/findling/config.py` legt `INDEX_WORKERS = 1` fest und sagt daneben
+ausdrücklich, dass die Zahl keine Stellschraube ist und mit Absicht keine
+Umgebungsvariable liest, "so that making it one is a code change somebody has to
+defend in review". Ein `backend/tests/test_config.py` hält genau das fest.
+Gemessen wurde deshalb in einem **Wegwerf-Abbild**, das nur auf der Box
+existiert und mit ihr gelöscht wird:
+
+```
+FROM localhost:5000/findling_backend:05-21-arm
+USER root
+COPY patch.py /tmp/patch.py
+RUN /app/.venv/bin/python /tmp/patch.py && rm /tmp/patch.py
+USER 1000:1000
+```
+
+`patch.py` ersetzt genau eine Zeichenkette und bricht ab, wenn sie nicht genau
+einmal vorkommt. Der Beweis, dass sonst nichts anders ist, ist ein Baumhash über
+die Python-Dateien des Pakets, einmal mit und einmal ohne `config.py`:
+
+| Abbild | Baumhash aller Python-Dateien | derselbe Hash ohne `config.py` |
+|---|---|---|
+| `05-21-arm` | `775a1559bb67fe04...` | `fa390f3addee6ba8...` |
+| `05-21-arm-wegwerf-workers2` | `2e02e7852b538713...` | `fa390f3addee6ba8...` |
+
+Gleiche zweite Spalte, verschiedene erste: der Unterschied liegt in `config.py`
+und in keiner anderen Datei. Der Arbeitsbaum wurde nicht angefasst, dort steht
+`INDEX_WORKERS` unverändert auf 1.
+
+Ein Detail am Rande, das eine Viertelstunde gekostet hat und für jeden gilt, der
+in diesem Abbild etwas mit `sed` sucht: **die Python-Dateien im Abbild tragen
+CRLF**, weil der Arbeitsbaum von Windows kommt und als tar auf die Box gereicht
+wurde. Ein Muster mit `$` am Zeilenende findet dort nichts. Deshalb macht
+`patch.py` die Ersetzung auf Bytes.
+
+### Der A/B-Aufbau
+
+Zweihundert einseitige Scans aus dem Drill-Korpus, in Runde A in den Ordner
+`workersA` und in Runde B derselbe Byteinhalt in den Ordner `workersB`
+hochgeladen. Zwei Ordner und nicht zweimal derselbe, weil der schnelle Weg von
+`is_unchanged` an der `file_id` hängt: dieselbe Datei ein zweites Mal
+hochgeladen wäre in einer Sekunde als unverändert quittiert und hätte nichts
+gemessen. Beide Runden liefen auf leerem Arbeitsvorrat, gegen denselben Index
+von rund 51.700 Dokumenten, unter derselben harten Grenze, mit einem eigenen
+Sampler.
+
+| Größe | Runde A, `INDEX_WORKERS = 1` | Runde B, `INDEX_WORKERS = 2` | Unterschied |
+|---|---|---|---|
+| Dateien | 200, alle über die OCR-Spur | 200, alle über die OCR-Spur | keiner |
+| Spanne erstes bis letztes Verdikt | **802 s** | **799 s** | 0,4 Prozent |
+| je Datei | 4,01 s | 4,00 s | 0,4 Prozent |
+| höchster `anon` | 357.408.768 Byte (340,9 MB) | 339.382.272 Byte (323,7 MB) | 5,0 Prozent |
+| `memory.peak` | 458.264.576 Byte (437,0 MB) | 392.949.760 Byte (374,7 MB) | 14,2 Prozent |
+| Textzeichen gewonnen | 692.486 | 692.486 | **keiner, auf das Zeichen** |
+| `memory.events` | alle sechs null | alle sechs null | keiner |
+
+### Was daraus folgt, und warum es kein Messfehler ist
+
+Der Unterschied zwischen den beiden Runden ist null, und zwar nicht "klein",
+sondern der Länge nach null: die identische Zeichenzahl zeigt, dass beide Runden
+exakt dieselbe Arbeit getan haben, und die drei Sekunden Unterschied auf 800 sind
+das Rauschen dieser Maschine.
+
+Der Grund steht im Quelltext, und die Suche danach ist kurz:
+
+```
+$ grep -rn INDEX_WORKERS backend/src/findling --include=*.py
+backend/src/findling/config.py:57:INDEX_WORKERS = 1
+backend/src/findling/extract/text.py:75:# ... and INDEX_WORKERS is 1, so a crafted ...
+backend/src/findling/nc/client.py:101:# INDEX_WORKERS at one that is exactly one mebibyte ...
+```
+
+**Eine Definition und zwei Kommentare. Keine einzige Stelle liest den Wert.**
+Die Reihenfolge der Arbeit steht nicht an dieser Konstante, sondern in der Form
+des Pollers: ein einziger Nebenläufer, und in ihm die Schleife
+`for job in claim.jobs`, die eine Datei nach der anderen holt, auspackt,
+extrahiert und an den Schreibpuffer übergibt. Das Protokoll zeigt es in beiden
+Runden gleich, `claimed=2 indexed=2` je Durchgang.
+
+`INDEX_WORKERS` ist damit kein Schalter, sondern eine **Zusage in Schriftform**:
+die Zahl steht dort, damit jemand, der die Serialität aufheben will, sie
+anfassen und im Review begründen muss. Der Test daneben bewacht genau diese
+Eigenschaft. Das ist eine sinnvolle Konstruktion, und sie hat einen Preis, den
+diese Messung sichtbar gemacht hat: **wer die Konstante hochsetzt, bekommt kein
+schnelleres Programm, sondern ein Programm, das über sich etwas Falsches sagt.**
+
+Damit ist die Frage des Betreibers beantwortet, nur anders als gedacht:
+
+| Frage | Antwort |
+|---|---|
+| Was bringt ein zweiter Arbeiter der OCR-Spur? | Unbekannt, denn es gibt keinen zweiten Arbeiter zum Einschalten. Ihn zu bauen wäre eine Produktänderung: die Schleife in `poller.py` müsste nebenläufig werden, mit allem, was daran hängt (Schreibpuffer, Sperrfristen, Speicherspitzen zweier gleichzeitiger OCR-Läufe). |
+| Was kostet er den Speicher? | Gerechnet, nicht gemessen: OCR steht bei 300 bis 600 MB je 300-dpi-Seite. Zwei gleichzeitige Läufe kämen zu den gemessenen 422 MB Spitze hinzu, und die Rechnung des Grenzwerts oben (3958 MB nutzbar, 345 MB Grundlast, 2048 MB Deckel) verträgt das nicht ohne den Deckel anzuheben. |
+| Lohnt sich die Frage überhaupt? | Auf zwei Kernen sehr begrenzt. Die OCR-Spur ist rechengebunden; tesseract nutzt auf dieser Maschine bereits beide Kerne für eine Seite. |
+
+Was diese Messung dennoch geliefert hat, und es ist nicht wenig: **eine
+Wiederholbarkeitszahl für die OCR-Spur.** Zweimal dieselben 200 Scans, mit einer
+Neuregistrierung des Containers dazwischen, ergeben 802 s und 799 s. Wer die
+4,13 s je OCR-Datei aus dem Volllauf gegen die 4,01 s dieser Runden hält, sieht
+denselben Wert, und der Unterschied ist die Textspur, die im Volllauf
+danebenlief.
+
+Notiert als DI-05-37: dass `INDEX_WORKERS` nichts steuert, ist im Quelltext
+nicht falsch beschrieben, aber es steht auch nirgends. Ein Leser, der die Zeile
+findet, hält sie für einen Schalter.
+
 ## Was der Test gekostet hat
+
+### Die Generalprobe, Hetzner
 
 Die letzte Abfrage vor dem Abbau, am 2026-09-04T11:22:59Z, also nach dem
 Volllauf, nach allen Drills und nach dem Nachtrag:
@@ -1921,7 +2905,58 @@ Zum Vergleich, weil es die Größenordnung einordnet: die 0,82 EUR sind ungefäh
 der Preis eines belegten Brötchens und decken einen Volllauf über 50.000 Dateien,
 drei Störfall-Drills und alle Vorarbeiten ab.
 
-### Der Abbau
+### Der ARM-Lauf, AWS
+
+Diese Zahl ist **gerechnet und nicht abgelesen**, aus der Laufzeit und den
+Sätzen aus dem Abschnitt "Was die Umgebung kostet". Der Grund steht dort: dem
+Zugang dieses Laufs fehlt `pricing:GetProducts` und der Blick auf die
+Abrechnung. Für eine Maschine, deren Startzeit die API auf die Sekunde führt,
+ist das Produkt genauer als ein Abrechnungsposten, der Tage später erscheint.
+
+Zwei Laufzeiten und nicht eine, weil das Volume zwei Stunden nach der Instanz
+entstanden ist und ein gemeinsamer Zeitraum die Zahl zu hoch rechnen würde.
+
+| Posten | Laufzeit | Satz je Stunde | Kosten |
+|---|---|---|---|
+| m7g.large, `eu-central-1c` | 20,1997 h | 0,097800 USD | 1,9755 USD |
+| Systemplatte, 40 GB gp3 | 20,1997 h | 0,005216 USD | 0,1054 USD |
+| öffentliche IPv4 | 20,1997 h | 0,005000 USD | 0,1010 USD |
+| Datenträger, 60 GB gp3 | 17,9797 h | 0,007824 USD | 0,1407 USD |
+| **Summe bis zum Ende der Messungen** | | | **2,3226 USD, netto** |
+
+Die Zeiten: die Instanz läuft seit 2026-09-04T13:12:28Z (`LaunchTime` aus
+`describe-instances`), das Volume seit 2026-09-04T15:25:40Z, und die letzte
+Messung dieses Berichts endete am 2026-09-05T09:24:27Z.
+
+**Diese Summe ist der Stand am Ende der Messungen und nicht ganz die
+Endabrechnung.** Die Box lief noch weiter, bis der Betreiber diesen Bericht
+abgenommen und über ihren Verbleib entschieden hatte; das war eine Festlegung
+dieses Plans und keine Nachlässigkeit. Er hat sie am 05.09.2026 anhalten lassen,
+und was diese letzten Stunden gekostet haben, steht weiter unten im Abschnitt
+über den Verbleib der Box. Jede Stunde einer laufenden Box kostet 0,1158 USD,
+jeder Tag 2,78 USD; angehalten sind es 0,0130 USD je Stunde, weil dann nur noch
+die beiden Datenträger zählen.
+
+Drei Einordnungen dazu.
+
+**Der Volllauf selbst kostet 1,48 USD.** 12 h 49 min zum vollen Stundensatz,
+also gut die Hälfte der Summe. Die andere Hälfte ist Einrichtung, Korpusbau,
+Drills und Zusatzmessung.
+
+**Der Vergleich mit der Generalprobe ist keiner.** 0,82 EUR brutto bei Hetzner
+gegen 2,32 USD netto bei AWS, für unterschiedlich lange Läufe auf
+unterschiedlicher Hardware in unterschiedlichen Währungen mit
+unterschiedlicher Steuerbehandlung. Der Bericht bildet daraus ausdrücklich keine
+Vergleichszahl. Was sich sagen lässt: **die Ersatzmaschine ist rund achtmal so
+teuer je Stunde wie die CAX11, für die sie einsteht**, und der Volllauf hat auf
+ihr 25 Prozent länger gedauert. Beides zusammen macht den Preis der
+Verfügbarkeit aus, und die Alternative wäre kein Lauf gewesen.
+
+**Auch diese Summe ist klein gegen das, was sie trägt.** 2,32 USD decken den
+gesamten Messteil der Store-Aussage auf der Zielarchitektur: 50.000 Dateien,
+20 GB, vier Störfall-Drills und eine Zusatzmessung.
+
+### Der Abbau der Generalprobe
 
 Gelaufen am 2026-09-04T11:23:18Z mit `sh scripts/ops/hetzner_box.sh destroy`, in
 zwei Aufrufen.
@@ -1984,6 +3019,47 @@ der Korpus über Seed und Abbild, und die Messungen über die Rohdaten unter
 Nachmessung an genau dieser Maschine; deshalb stand die Frage danach vor dem
 Abbau und nicht danach.
 
+### Der Verbleib der ARM-Box: angehalten, nicht abgebaut
+
+**Entschieden am 05.09.2026: der Betreiber hat diesen Bericht abgenommen und die
+Box anhalten lassen.** `stop-instances` ist noch am selben Tag abgesetzt worden,
+die Box ist seitdem nicht mehr erreichbar, und ihr Datenträger mit Korpus, Index
+und beiden Abbildern bleibt bestehen. Der Rest dieses Abschnitts ist die
+Begründung, wie sie vor der Entscheidung dastand; sie bleibt stehen, weil eine
+Entscheidung ohne ihre Alternativen nicht nachvollziehbar ist.
+
+Bis zur Abnahme stand die Box mit Absicht: der Abbau läuft erst danach, weil
+eine Nachmessung an genau dieser Maschine nach dem Abbau nicht mehr möglich ist
+und eine Frage an die Zahlen dieses Berichts genau so eine Nachmessung braucht.
+
+Zur Entscheidung selbst gehört eine Angabe, die außerhalb dieses Plans liegt:
+**Phase 6 braucht für den Semantik-Volllauf wieder eine ARM-Box**, und dieselbe
+Knappheit, die diesen Lauf von Hetzner zu AWS getrieben hat, gilt weiter. Damit
+stehen drei Wege offen statt zwei, und der mittlere ist neu:
+
+| Weg | Was er kostet | Was er wert ist |
+|---|---|---|
+| stehen lassen | 2,78 USD je Tag | die Box ist sofort da, mit Korpus und Index; und sie ist eine öffentlich erreichbare Nextcloud mit Verwalterzugang, die niemand beaufsichtigt |
+| **anhalten** (`stop-instances`) | nur die Datenträger, rund 0,31 USD je Tag | Korpus, Index und beide Abbilder bleiben; die Adresse wechselt beim nächsten Start, `box.env` und der DNS-Eintrag sind nachzuziehen |
+| abbauen (`destroy`) | nichts mehr | Korpus (43 min Erzeugung), Index (12 h 49 min) und die auf der Box gebauten Abbilder sind weg und müssen für Phase 6 neu entstehen |
+
+Der Bericht hat den mittleren Weg empfohlen, und der Betreiber ist ihm gefolgt.
+Er nimmt die beiden Kosten weg, auf die es ankommt, nämlich den Stundensatz der
+Instanz und das offene Netz, und er erhält die zwölfeinhalb Stunden Rechenzeit,
+die im Index stecken.
+
+Was beim Anhalten zu wissen ist, damit es nicht später überrascht: eine
+angehaltene Instanz gibt ihre öffentliche Adresse zurück, `3.65.24.222` ist
+danach nicht mehr diese Box, und der Eintrag `loadtest.infranode.dev` zeigt
+dann auf eine fremde Adresse. Er gehört also mit dem Anhalten entfernt und beim
+nächsten Start neu gesetzt, zusammen mit `BOX_IP` in der Zustandsdatei.
+
+Und eine Zahl, die mit dem Anhalten endgültig wird: die **2,3226 USD** aus der
+Kostentabelle oben sind der Stand am Ende der Messungen. Zwischen diesem
+Zeitpunkt und dem Anhalten lief die Instanz noch, mit 0,0019 USD je Minute. Die
+Endsumme liegt damit knapp über der genannten und unter 2,40 USD; genauer wird
+sie nicht, weil die Sekunde des Anhaltens außerhalb dieses Berichts liegt.
+
 ## Reproduzieren
 
 ```sh
@@ -2023,6 +3099,25 @@ Zwei Seeds und zwei Prüfsummen, jede mit der Umgebung, in der sie gilt:
 | Trockenlauf | `phase5-dry` | Abbild der ExApp, Pillow 12.3.0 | 500 | 246.452.632 | `afe5de552ae9cdf7a515326e7d0787a9133b4dfef3c08e75f41f9ad5db95a5d0` |
 | Trockenlauf | `phase5-dry` | Entwicklungsrechner, Plan 05-05 | 500 | 245.695.552 | `cac56ed1801efb3e691b28088c363c84d8941670394f5fed95ab19359b17d530` |
 | Volllauf | `phase5-full` | Abbild `localhost:5000/findling_backend:05-12-fix`, Pillow 12.3.0 | 50.000 | 20.208.046.426 | `c03a880323171d29c5278ed350db277291e39d256e95d5a8654dd4a6c244a274` |
+| ARM-Volllauf | `phase5-full` | Abbild `localhost:5000/findling_backend:05-21-arm`, arm64 | 50.000 | 20.208.046.426 | `bcbef9b2cb067c2200df2a4a2e89408f690710983117d4e78328024046098a72` |
+| ARM-Drills | `phase5-drill-arm` | dasselbe Abbild | 1.500 | 634.499.870 | `19558722e6af8c5f847f70cfd2d1b91b89952b183ed0331ba8101890fbacb048` |
 
-Warum es zwei sind und welche wofür gilt, steht oben im Abschnitt zum
-Trockenlauf.
+Warum es zwei Prüfsummen für denselben Seed des Trockenlaufs gibt und welche
+wofür gilt, steht oben im Abschnitt zum Trockenlauf. Die vierte Zeile ist der
+Beleg für dieselbe Aussage auf voller Größe: **gleicher Seed, gleiche Bytezahl
+auf das Byte, andere Prüfsumme**, weil die Schriftrasterung auf arm64 anders
+ausfällt als auf x86. Wer eine Prüfsumme dieses Berichts nachrechnet, braucht
+also nicht nur den Seed und das Abbild, sondern auch die Architektur.
+
+Die ARM-Box wird mit demselben Muster bedient, nur gegen den anderen Anbieter:
+
+```sh
+# Preise dieses Kontos und der Bestand, ohne Nebenwirkung
+AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... scripts/ops/aws_box.sh prices
+
+# Zustand, Laufzeit und die bisherigen Kosten
+AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... scripts/ops/aws_box.sh status
+
+# Am Ende jedes Ausgangs, auch des unerwarteten
+AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... scripts/ops/aws_box.sh destroy
+```

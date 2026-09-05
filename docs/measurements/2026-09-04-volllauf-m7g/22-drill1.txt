@@ -1,0 +1,65 @@
+
+### DRILL 1 auf ARM: docker kill mitten in der Arbeit
+--- Ausgangszustand 2026-09-05T08:16:22Z ---
+StartedAt=2026-09-04T17:46:29.699651355Z Memory=2147483648 RestartCount=0 RestartPolicy=unless-stopped
+vor dem Abschuss: Vorrat 160 davon ausgeliefert 2, Auslieferungen max 1 Summe 2, indexed 51401 docs 51597 aclRows 51401 failed 0 skipped 196
+--- Abschuss 2026-09-05T08:16:22Z ---
+nc_app_findling_backend
+Status=exited ExitCode=137 OOMKilled=false FinishedAt=2026-09-05T08:16:22.909155729Z
+abgeschossen um 2026-09-05T08:16:23Z
+Vorrat unmittelbar nach dem Abschuss: {'zeilen': 160, 'ausgeliefert': 2, 'auslieferungen_max': 1, 'auslieferungen_summe': 2}
+--- Versuch 1: docker start, der naheliegende Griff 2026-09-05T08:16:23Z ---
+nc_app_findling_backend
+Status=running Memory=2147483648 RestartCount=0
+Protokoll seit dem Start:
+  harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+  init: no HaRP tunnel in this deployment, watching the application only
+  entrypoint: binding mode tcp 0.0.0.0:23000
+  INFO:findling.index.writer:committed 2 documents
+  INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+  INFO:findling.index.writer:committed 2 documents
+  INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+  INFO:findling.index.writer:committed 2 documents
+  INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+  INFO:findling.index.writer:committed 2 documents
+  INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+  INFO:findling.index.writer:committed 2 documents
+  INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+  INFO:findling.index.writer:committed 2 documents
+  INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+  INFO:     Started server process [9]
+  INFO:     Waiting for application startup.
+  INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+  INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+  INFO:     Application startup complete.
+  INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+Beantwortet der Container Suchen?
+  {'http': '200', 'ms': 759, 'name': 'File contents', 'treffer': 5, 'erster': '35799-aktenvermerk.docx'}
+Bewegt sich der Vorrat? 120 Sekunden lang gefragt:
+  T+ 10s indexed 51401
+  T+ 20s indexed 51401
+  T+ 30s indexed 51401
+  T+ 40s indexed 51401
+  T+ 50s indexed 51401
+  T+ 61s indexed 51401
+  T+ 71s indexed 51401
+  T+ 81s indexed 51401
+  T+ 91s indexed 51401
+  T+101s indexed 51401
+  T+112s indexed 51401
+  T+122s indexed 51401
+  Ergebnis: bewegt=False nach 122s, indexed 51401 -> 51401
+nach docker start: Vorrat 160 davon ausgeliefert 2, Auslieferungen max 1 Summe 2, indexed 51401 docs 51597 aclRows 51401 failed 0 skipped 196
+  DI-05-36 BESTAETIGT: der Container antwortet und indexiert nicht
+--- Versuch 2: der Weg ueber AppAPI, disable und enable 2026-09-05T08:18:46Z ---
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully enabled.
+disable/enable dauerte 3s, fertig um 2026-09-05T08:18:50Z
+  T+ 10s indexed 51403
+  Ergebnis: bewegt=True, erste neue Datei nach 10s, indexed 51401 -> 51403
+Memory=2147483648 MemorySwap=2147483648
+--- Statusseite nach der Heilung 2026-09-05T08:19:00Z ---
+  runState running backendReachable True scheduled 154 running 4 stalledFor 0 indexed 51403 failed 0
+--- Endstand dieses Abschnitts 2026-09-05T08:19:02Z ---
+nach der Heilung: Vorrat 158 davon ausgeliefert 4, Auslieferungen max 1 Summe 4, indexed 51403 docs 51597 aclRows 51403 failed 0 skipped 194
+22-DRILL1-FERTIG

@@ -1,0 +1,23 @@
+
+### Zusatzmessung, Runde B: Ordner workersB
+--- Abbild und Arbeiterzahl 2026-09-05T09:08:13Z ---
+  Image=localhost:5000/findling_backend:05-21-arm-wegwerf-workers2 Memory=2147483648 MemorySwap=2147483648
+  INDEX_WORKERS im laufenden Container: INDEX_WORKERS = 2
+--- Warten, bis der Vorrat leer ist 2026-09-05T09:08:13Z ---
+  Vorrat {'zeilen': 0, 'ausgeliefert': 0, 'auslieferungen_max': 0, 'auslieferungen_summe': 0}
+--- Sampler an 2026-09-05T09:08:13Z ---
+--- Hochladen 2026-09-05T09:08:21Z ---
+  200 Dateien, Antwortcodes {'201': 200}
+  Upload von 2026-09-05T09:08:22Z bis 2026-09-05T09:09:20Z
+--- Warten auf das letzte Verdikt 2026-09-05T09:09:20Z ---
+  T+   0s beurteilt 144 von 200, davon mit OCR 4, Vorrat 196
+  T+  20s beurteilt 200 von 200, davon mit OCR 8, Vorrat 192
+--- Sampler aus 2026-09-05T09:22:08Z ---
+  findling-rss summary samples=167 max_anon=339382272 peak=392949760 events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=0] oom_killed=false
+--- Ergebnis 2026-09-05T09:22:14Z ---
+  {'zeilen': 200, 'ocr': 200, 'erstes': 1788599320, 'letztes': 1788600119, 'zeichen': 692486, 'indexiert': 200}
+  erstes Verdikt 1788599320, letztes 1788600119, Spanne 799 s
+  je Datei 4.00 s ueber 200 Dateien
+  je OCR-Datei 4.00 s ueber 200 Dateien
+  Vorrat am Ende {'zeilen': 0, 'ausgeliefert': 0, 'auslieferungen_max': 0, 'auslieferungen_summe': 0}
+31-WORKERS-B-FERTIG

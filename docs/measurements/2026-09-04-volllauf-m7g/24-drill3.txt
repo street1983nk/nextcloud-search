@@ -1,0 +1,62 @@
+
+### DRILL 3 auf ARM: die Platte wird knapp
+--- Ausgangszustand 2026-09-05T08:34:05Z ---
+  frei 31087046656 Byte, Boden 524288000 Byte
+  Vorrat {'zeilen': 112, 'ausgeliefert': 6, 'auslieferungen_max': 1, 'auslieferungen_summe': 6}
+  Wiederholungsbudget: 6 Auslieferungen ueber 112 Zeilen, hoechste 1
+  abgeschrieben: keine
+  Zaehler {'indexed': 51451, 'skipped': 146, 'failed': 0, 'docs': 51597, 'aclRows': 51451, 'ocr': 10327, 'auslieferungen_max': 3}
+  Verdikte der Nextcloud-Haelfte: skipped empty_text 14, skipped image_not_ocrable 2, skipped too_large 21
+--- Verknappung 2026-09-05T08:34:06Z ---
+  fallocate 30687308800 Byte, damit 400000000 Byte frei bleiben
+
+  frei danach 399970304 Byte
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme1n1     59G   56G  382M 100% /mnt/findling
+  Verknappung steht um 2026-09-05T08:34:06Z
+--- Beobachtung waehrend der Pause 2026-09-05T08:34:06Z ---
+  Die Pause wird 300 s gehalten. Das Budget sind 3 Auslieferungen je Zeile,
+  bei einem Durchgang alle fuenf Sekunden waere es nach 15 s verbraucht.
+  T+ 60s frei 400166912 Vorrat {'zeilen': 110, 'ausgeliefert': 4, 'auslieferungen_max': 1, 'auslieferungen_summe': 4} Budget: 4 Auslieferungen ueber 110 Zeilen, hoechste 1
+        abgeschrieben: keine
+  T+120s frei 400166912 Vorrat {'zeilen': 110, 'ausgeliefert': 4, 'auslieferungen_max': 1, 'auslieferungen_summe': 4} Budget: 4 Auslieferungen ueber 110 Zeilen, hoechste 1
+        abgeschrieben: keine
+  T+180s frei 400166912 Vorrat {'zeilen': 110, 'ausgeliefert': 4, 'auslieferungen_max': 1, 'auslieferungen_summe': 4} Budget: 4 Auslieferungen ueber 110 Zeilen, hoechste 1
+        abgeschrieben: keine
+  T+240s frei 400166912 Vorrat {'zeilen': 110, 'ausgeliefert': 4, 'auslieferungen_max': 1, 'auslieferungen_summe': 4} Budget: 4 Auslieferungen ueber 110 Zeilen, hoechste 1
+        abgeschrieben: keine
+  T+300s frei 400162816 Vorrat {'zeilen': 110, 'ausgeliefert': 4, 'auslieferungen_max': 1, 'auslieferungen_summe': 4} Budget: 4 Auslieferungen ueber 110 Zeilen, hoechste 1
+        abgeschrieben: keine
+--- Was das Protokoll des Containers sagt 2026-09-05T08:39:06Z ---
+  Zeilen mit der Plattenpause: 10
+    WARNING:findling.index.writer:index commit paused, free space is below the configured floor of 524288000 byte
+    WARNING:findling.worker.poller:index paused, free space below the floor, 2 rows handed back
+    WARNING:findling.index.writer:index commit paused, free space is below the configured floor of 524288000 byte
+    WARNING:findling.worker.poller:index paused, free space below the floor, 2 rows handed back
+    ... und 6 weitere derselben Art
+--- Die Statusseite waehrend der Pause 2026-09-05T08:39:07Z ---
+  runState running lowDisk True diskFreeBytes 400154624 scheduled 106 running 4 failed 0
+  Satz 'Little disk space left' in der Seite: True
+  Satz 'Indexing is paused so the index stays intact' in der Seite: True
+  Banner lowdisk: SICHTBAR
+--- Die Suche waehrend der Pause 2026-09-05T08:39:09Z ---
+  {'http': '200', 'ms': 381, 'name': 'File contents', 'treffer': 5, 'erster': '24258-vermerk.pdf'}
+  {'http': '200', 'ms': 387, 'name': 'File contents', 'treffer': 5, 'erster': '17820-schriftwechsel.pdf'}
+--- Der Ballast geht weg 2026-09-05T08:39:09Z ---
+
+  frei danach 31087464448 Byte
+  indexed vor der Verknappung 51451, jetzt 51453
+    T+ 15s indexed 51453 Vorrat 110
+    T+ 30s indexed 51453 Vorrat 110
+    T+ 45s indexed 51453 Vorrat 110
+    T+ 60s indexed 51453 Vorrat 110
+    T+ 76s indexed 51453 Vorrat 110
+    T+ 91s indexed 51455 Vorrat 108
+  Der Lauf geht ohne Eingriff weiter, nach 91s
+--- Endabrechnung 2026-09-05T08:40:41Z ---
+  Vorrat {'zeilen': 108, 'ausgeliefert': 6, 'auslieferungen_max': 1, 'auslieferungen_summe': 6}
+  Wiederholungsbudget: 6 Auslieferungen ueber 108 Zeilen, hoechste 1
+  abgeschrieben: keine
+  Zaehler {'indexed': 51455, 'skipped': 142, 'failed': 0, 'docs': 51597, 'aclRows': 51455, 'ocr': 10331, 'auslieferungen_max': 3}
+  Verdikte der Nextcloud-Haelfte: skipped empty_text 14, skipped image_not_ocrable 2, skipped too_large 21
+24-DRILL3-FERTIG

@@ -57,20 +57,27 @@ not for a search cluster.
 
 ## What it costs in memory, measured
 
-**A full index and OCR run over 50,000 files and 20 GB on a 4-GB box peaked at
-429 MB of resident anonymous memory, under a hard 2 GB limit enforced by the
-kernel, with no OOM kill.** The run took 10 hours 14 minutes, wrote a 726 MB index
-and left every one of the 50,104 files with a verdict and none of them failed.
+**A full index and OCR run over 50,000 files and 20 GB on a 4-GB ARM64 box peaked
+at 422 MB of resident anonymous memory, under a hard 2 GB limit enforced by the
+kernel, with no OOM kill.** The run took 12 hours 49 minutes, wrote a 726 MB index
+and left every one of the 50,049 files with a verdict: 50,021 indexed, 28 skipped
+for a named reason, **none failed**.
 
-That is a measurement and not an estimate. Method, the full curve, the corpus, the
-four part OOM proof and three failure drills on the same machine (`docker kill`
-during OCR, backend gone, disk nearly full) are in
-[docs/performance.md](docs/performance.md), including what each of them does not
-prove.
+That is a measurement and not an estimate. It was taken on arm64 with 2 cores and
+4 GB, which is the hardware this app is built for, and the whole run was carried
+out under a memory ceiling the kernel enforced: `memory.events` reports zero for
+every counter that would indicate memory pressure, so the limit was not merely
+respected on average, it was never touched.
 
-The machine was a rented 4 GB x86 box running Nextcloud All-in-One. The repetition
-on 4 GB ARM hardware is still open, and the report names every figure that it will
-replace.
+The same run was made first on a 4-GB x86 box as a rehearsal, and both series are
+in the report side by side. The short version of the comparison: the ARM machine
+is 25 percent slower and 1.5 percent smaller in peak memory.
+
+Method, the full curve, the corpus, the four part OOM proof, four failure drills
+on the same machine (`docker kill` during OCR, a reboot of the whole machine,
+backend gone, disk nearly full) and a side measurement with a second index worker
+are in [docs/performance.md](docs/performance.md), including what each of them
+does not prove.
 
 ## Privacy
 

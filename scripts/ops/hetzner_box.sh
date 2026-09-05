@@ -1,9 +1,12 @@
 #!/bin/sh
 # Rent the ARM box of the load test, prove what it costs, and give it back.
 #
-# The load run of phase 5 needs a machine this project does not own: an Ampere
-# CAX11 with 4 GB of memory and a 50 GB volume, because the 40 GB root disk of
-# that machine does not hold a 20 GB corpus plus the index plus the images. The
+# The load run of phase 5 needs a machine this project does not own: 4 GB of
+# memory, two cores and a 50 GB volume, because the 40 GB root disk of the
+# target machine does not hold a 20 GB corpus plus the index plus the images.
+# This tool rented the x86 rehearsal of that run. The arm half of it went to
+# another provider in the end, see scripts/ops/aws_box.sh and the note at
+# SERVER_TYPE, because no CAX11 was to be had for months. The
 # box is rented for the run and deleted afterwards, and that second half is not
 # an afterthought but decision D-01: a forgotten box with a Nextcloud, an admin
 # password and an open port 443 is a security problem and a monthly invoice.
@@ -38,8 +41,19 @@ API_BASE='https://api.hetzner.cloud/v1'
 # every european location, so the owner decided to run the rehearsal on the x86
 # machine of the same size and to repeat the core measurement on arm once the
 # stock returns. Both runs are wanted, and the report keeps their numbers apart.
-# Switching back is this one word, because everything that follows is read from
-# the API rather than repeated here.
+# Switching back was meant to be this one word, because everything that follows
+# is read from the API rather than repeated here. It did not come to that: on
+# 2026-09-04 cax11 was still unavailable in every european location, two create
+# attempts were refused, and the owner established by telephone the same day
+# that the shortage runs for months. That answer beats any reading of this API,
+# and it moved the arm run to another provider: scripts/ops/aws_box.sh rents an
+# m7g.large with its memory capped to 4 GB by the kernel.
+#
+# So this word stays on the machine that really ran with this tool, the x86
+# rehearsal, and it is not a placeholder for an arm run that will not happen
+# here. What is worth keeping from that attempt is one directory further down:
+# the stock question in cmd_create, which two endpoints of this API answer
+# differently.
 SERVER_TYPE='cpx22'
 SERVER_IMAGE='ubuntu-24.04'
 # Helsinki, because decision D-01 of the phase names that location. The earlier
@@ -48,6 +62,12 @@ SERVER_IMAGE='ubuntu-24.04'
 # read from this account), so this is a choice and not a cost. It is corrected
 # before the first create, because the location of a server cannot be changed
 # afterwards: a box in the wrong region costs a destroy and a create.
+#
+# The plan of the arm run named nbg1 as a sanctioned fallback for an empty hel1,
+# and that fallback was never needed, because the type was empty in both. It
+# stays out of this file as a variable: a region cannot be changed after a
+# create, so it belongs in the history of this repository where the report can
+# cite it, and not one typo away in an environment. There is a gate on this line.
 SERVER_LOCATION='hel1'
 # Without the architecture in it, on purpose: the same script rents the x86
 # rehearsal and the arm repeat, and a box called arm that is not one is a trap
@@ -190,7 +210,9 @@ for server_type in payload["server_types"]:
     )
     # Availability is a property of the type in this API, it differs per
     # location, and it moves without notice. It is printed next to the price
-    # because a price for a machine nobody can rent is half the answer.
+    # because a price for a machine nobody can rent is half the answer. This
+    # flag and not /datacenters: the two disagreed on 2026-09-04 and this one
+    # was right, see the note in cmd_create.
     in_stock = [
         location["name"] for location in server_type.get("locations", []) if location.get("available")
     ]
@@ -225,21 +247,43 @@ cmd_create() {
     # arguments can fix. When the arm types are gone the API answers a create
     # with "unsupported location for server type", which reads like a mistake in
     # this script and sends the next reader to the location field. It is not:
-    # the type carries a per location availability flag, that flag is false, and
-    # the only cure is to wait. So the state is read here and said plainly.
+    # capacity is a state of the account's region, and the only cure is to wait.
+    #
+    # Two endpoints answer the stock question and they do not agree, so this
+    # names which one is believed and why. The live answer is the per location
+    # availability flag on the server type: on 2026-09-04 it stood false for
+    # cax11 in all three european locations, and two create attempts, hel1 and
+    # nbg1, were refused with "unsupported location for server type". The same
+    # flag stood true for cpx22 in hel1, which is the machine that actually ran
+    # the day before. The flag tells the truth.
+    #
+    # /datacenters at that same minute listed cax11 as available in hel1-dc2 and
+    # nbg1-dc3. It was wrong, and it is wrong because that endpoint is on its way
+    # out: the datacenter field of a create was removed on 2025-12-16 and now
+    # answers "datacenter is deprecated and cannot be used anymore". An endpoint
+    # nobody can act on is an endpoint nobody keeps current.
+    #
+    # It is still queried here, for one purpose: when the two disagree, the
+    # disagreement is printed. Otherwise the next person reads the cheerful half
+    # of the API, believes the machine is there, and spends an hour looking for
+    # the mistake in this script.
     types=$(api GET "/server_types?name=$SERVER_TYPE")
     fail_on_error "$types"
-    stock=$(printf '%s' "$types" | json "
+    datacenters=$(api GET /datacenters)
+    fail_on_error "$datacenters"
+    stock=$(printf '[%s,%s]' "$types" "$datacenters" | json "
 import json
 import sys
 
-server_types = json.load(sys.stdin)['server_types']
+answers = json.load(sys.stdin)
+server_types = answers[0]['server_types']
 if not server_types:
     print('missing')
     raise SystemExit(0)
+server_type = server_types[0]
 available = [
     location['name']
-    for location in server_types[0].get('locations', [])
+    for location in server_type.get('locations', [])
     if location.get('available')
 ]
 if '$SERVER_LOCATION' in available:
@@ -247,8 +291,14 @@ if '$SERVER_LOCATION' in available:
 elif available:
     print('elsewhere ' + ' '.join(available))
 else:
-    print('nowhere')
+    claimed = [
+        datacenter['name']
+        for datacenter in answers[1]['datacenters']
+        if server_type['id'] in datacenter['server_types'].get('available', [])
+    ]
+    print(('nowhere ' + ' '.join(claimed)).strip())
 ")
+    claimed_by_datacenters="${stock#nowhere}"
     case "$stock" in
     here)
         echo "hetzner_box: $SERVER_TYPE is in stock in $SERVER_LOCATION"
@@ -257,10 +307,16 @@ else:
         echo "hetzner_box: this account does not know a server type called $SERVER_TYPE" >&2
         exit 1
         ;;
-    nowhere)
+    nowhere*)
         echo "hetzner_box: $SERVER_TYPE is out of stock in every location right now" >&2
         echo "this is capacity, not a wrong argument: the type carries availability" >&2
         echo "false everywhere, and it returns without an announcement" >&2
+        if [ -n "$claimed_by_datacenters" ]; then
+            echo "note: /datacenters disagrees and claims$claimed_by_datacenters" >&2
+            echo "do not believe it, it was measured wrong on 2026-09-04 and that" >&2
+            echo "endpoint is being retired; a create there is refused with" >&2
+            echo "'unsupported location for server type'" >&2
+        fi
         echo "watch it with: hetzner_box.sh prices, then run create again" >&2
         exit 1
         ;;
@@ -326,6 +382,10 @@ if len(images) == 1:
     fi
     echo "hetzner_box: image $SERVER_IMAGE for $architecture is id $image_id"
 
+    # The location and not the datacenter, and that is no longer a choice: the
+    # datacenter field was removed on 2025-12-16 and a create that carries it is
+    # refused with "datacenter is deprecated and cannot be used anymore". Tried
+    # on 2026-09-04, when /datacenters looked like the better informed endpoint.
     server_body=$(
         printf '{"name":"%s","server_type":"%s","image":%s,"location":"%s"' \
             "$SERVER_NAME" "$SERVER_TYPE" "$image_id" "$SERVER_LOCATION"

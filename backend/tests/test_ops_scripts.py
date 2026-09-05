@@ -1,10 +1,13 @@
 """The house rules of the operating scripts, as a gate instead of a review note.
 
-scripts/ops holds the two shell scripts of the ARM load test: the memory sampler
-and the tool that rents and returns the box. Neither of them is reached by a
-Python test in the usual sense, and both carry promises that are easy to break
-years later with a well meant edit. Three of those promises are mechanical, so
-they are checked here rather than remembered:
+scripts/ops holds the three shell scripts of the ARM load test: the memory
+sampler, the tool that rents and returns a Hetzner box, and its AWS counterpart,
+which exists because the arm machine of decision D-01 could not be rented for
+months and the run moved to an m7g.large with the memory capped to 4 GB by the
+kernel. None of them is reached by a Python test in the usual sense, and all of
+them carry promises that are easy to break years later with a well meant edit.
+Three of those promises are mechanical, so they are checked here rather than
+remembered:
 
 * No em dash and no en dash, which is a project wide typography rule, and no
   carriage return, because these files are read by /bin/sh on Ubuntu and a CR
@@ -12,8 +15,8 @@ they are checked here rather than remembered:
 * The sampler reads the cgroup files itself and never asks the docker client for
   a memory figure. That client reports memory.current, which counts the page
   cache of the mmap index and would overstate the store claim by gigabytes.
-* The Hetzner tool never puts the API token into an output, and it labels both
-  the box and the volume, because a label is the only way to find a forgotten
+* Neither box tool ever puts a credential into an output, and both label every
+  resource they create, because a label is the only way to find a forgotten
   resource in an account that holds other things (T-05-17, T-05-19).
 """
 
@@ -26,6 +29,7 @@ import pytest
 OPS_DIR = Path(__file__).resolve().parents[2] / "scripts" / "ops"
 RSS_SAMPLER = OPS_DIR / "rss_sampler.sh"
 HETZNER_BOX = OPS_DIR / "hetzner_box.sh"
+AWS_BOX = OPS_DIR / "aws_box.sh"
 
 # Assembled from code points so that this file does not carry the characters it
 # forbids and fail on itself.
@@ -36,7 +40,7 @@ DASHES = (chr(0x2014), chr(0x2013))
 DOCKER_MEMORY_SHORTCUT = "docker" + " " + "stats"
 
 
-@pytest.fixture(params=[RSS_SAMPLER, HETZNER_BOX], ids=lambda path: path.name)
+@pytest.fixture(params=[RSS_SAMPLER, HETZNER_BOX, AWS_BOX], ids=lambda path: path.name)
 def script(request: pytest.FixtureRequest) -> Path:
     return Path(request.param)
 
@@ -195,6 +199,133 @@ def test_the_deletion_does_not_call_an_empty_answer_a_failure() -> None:
     assert 'delete_error "$response"' in text
     assert "the volume was not deleted yet: $(delete_error" in text
     assert "the server was not deleted: $(delete_error" in text
+
+
+def test_the_aws_tool_names_its_five_subcommands_in_the_usage() -> None:
+    """Five and not four: the data volume is its own step on this provider.
+
+    The box of the ARM run was created by hand, so create is a record of what
+    happened and refuses to make a second machine, while the volume that the
+    corpus lives on is created by the tool and has to be findable in it.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    for subcommand in ("prices", "create", "volume", "status", "destroy"):
+        assert f"    {subcommand})" in text, subcommand
+    assert "usage: aws_box.sh <prices|create|volume|status|destroy>" in text
+
+
+def test_the_aws_tool_demands_both_credentials_and_never_prints_them() -> None:
+    """Two names, one mention each, and no line that echoes either of them.
+
+    The CLI reads the values out of the environment by itself, so unlike the
+    Hetzner tool this one never has to hand a secret to a program at all. That
+    makes exactly one mention per name the right count: the check that it is set
+    (T-05-17).
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
+        assert f': "${{{name}:?' in text, name
+        expanding = [line for line in text.splitlines() if f"${name}" in line or f"${{{name}" in line]
+        assert len(expanding) == 1, expanding
+        assert not [line for line in text.splitlines() if "echo" in line and name in line]
+
+
+def test_the_aws_tool_tags_the_volume_it_creates() -> None:
+    """One tag, on every resource this tool makes, or a sweep will not find it."""
+    text = AWS_BOX.read_text(encoding="utf-8")
+    assert "TAG_KEY='purpose'" in text
+    assert "TAG_VALUE='findling-phase5'" in text
+    assert "ResourceType=volume,Tags=[{Key=$VOLUME_NAME" not in text
+    assert "{Key=$TAG_KEY,Value=$TAG_VALUE}]" in text
+
+
+def test_the_aws_tool_counts_the_public_address() -> None:
+    """The item that understated the Hetzner half of this report by eight percent.
+
+    A public IPv4 has been its own line on an AWS invoice since 2024-02-01. The
+    rate is pinned with its source, and status only adds it when the box really
+    carries an address.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    assert "PRICE_IPV4_HOURLY='0.0050'" in text
+    assert "if instance.get('PublicIpAddress') else 0.0" in text
+
+
+def test_the_aws_tool_refuses_to_create_a_second_box() -> None:
+    """create documents and does not act, because the box exists and costs money."""
+    text = AWS_BOX.read_text(encoding="utf-8")
+    assert "this command will not make one" in text
+    # The recipe quotes run-instances as text for a human to read. What must not
+    # exist is a call through the wrapper of this script, which would really
+    # start a machine.
+    assert "ec2 run-instances" not in text.replace("  aws ec2 run-instances", "")
+
+
+def test_the_aws_tool_names_the_memory_cap_that_makes_the_parity() -> None:
+    """An m7g.large has 8 GB, and the whole claim rests on it behaving like 4.
+
+    The cap is a kernel parameter, it is the difference between this measurement
+    and a meaningless one, and it is read back before every run. So the tool
+    that rents the box carries both the drop-in and the three numbers.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    assert "mem=4G" in text
+    assert "99-mem4g.cfg" in text
+    assert "capped to 4096 MiB by the kernel" in text
+
+
+def test_the_aws_tool_switches_off_the_windows_path_rewriting() -> None:
+    """Git for Windows turned /dev/sdf into C:/Program Files/Git/dev/sdf.
+
+    The attach was refused with a message that names the value and not the
+    cause, and the volume was already created at that point. This one line is
+    the fix, and it is easy to remove as noise years later.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    assert "MSYS2_ARG_CONV_EXCL='*'" in text
+    assert "export MSYS2_ARG_CONV_EXCL" in text
+
+
+def test_the_aws_destroy_checks_all_three_resources_and_sweeps_by_tag() -> None:
+    """Instance, volume and security group, each verified, plus the tag sweep.
+
+    Gone has a different shape here than at Hetzner: a terminated instance keeps
+    answering the api for up to an hour, so state=terminated is the proof and
+    not_found is not available. That difference is the reason this is a test and
+    not a reading of the Hetzner cases.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    assert "instance $instance_id is gone, verified against the api" in text
+    assert "volume ${volume_id:-none} is gone, verified against the api" in text
+    assert "security group ${group_id:-none} is gone, verified against the api" in text
+    assert "if [ \"$state\" = 'terminated' ]; then" in text
+    assert '--filters "Name=tag:$TAG_KEY,Values=$TAG_VALUE"' in text
+    assert "something is left over" in text
+
+
+def test_the_aws_tool_keeps_the_state_out_of_the_repo() -> None:
+    text = AWS_BOX.read_text(encoding="utf-8")
+    assert 'STATE_DIR="${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}"' in text
+    assert "umask 077" in text
+
+
+def test_the_aws_tool_waits_with_the_waiters_and_not_with_a_loop() -> None:
+    """The rate limit rule of 2026-09-04, as a gate on the one script that polls.
+
+    A diagnostic run that asked a foreign api sixty times a minute against a
+    limit of one got a production address blocked. The waiters of the CLI poll on
+    a fixed interval and give up after a bounded number of tries, so this script
+    has no hand rolled wait loop at all.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    assert "ec2 wait volume-available" in text
+    assert "ec2 wait volume-in-use" in text
+    assert "ec2 wait instance-terminated" in text
+    # Only statements, because the prose above them may well contain the word.
+    loops = [
+        line for line in text.splitlines() if line.strip().startswith("while ") or line.strip().startswith("until ")
+    ]
+    assert not loops, loops
 
 
 def test_the_box_tool_verifies_the_deletion_and_keeps_the_state_out_of_the_repo() -> None:
