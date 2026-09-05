@@ -34,6 +34,7 @@ from dataclasses import fields
 from pathlib import Path
 
 import pytest
+
 from findling.store.vectors import (
     EMBEDDING_DIMENSIONS,
     Chunk,
@@ -406,9 +407,10 @@ def test_the_schema_says_characters_and_not_bytes() -> None:
     # (35, 50)), and a vector store that stores the wrong unit cuts every
     # semantic snippet in the wrong place.
     schema = SCHEMA.read_text(encoding="utf-8")
-    comment = schema[: schema.index("char_start INTEGER")]
+    comment = schema[: schema.index("char_start INTEGER")].lower()
 
-    assert "characters" in comment.lower()
+    assert "character offsets" in comment
+    assert "byte offsets" in comment
 
 
 def test_the_module_reads_no_configuration() -> None:
