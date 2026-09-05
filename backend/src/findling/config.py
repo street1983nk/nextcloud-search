@@ -50,10 +50,26 @@ INDEX_VERSION = 1
 # ---------------------------------------------------------------------------
 
 # IDX-08. One indexing worker, always. OCR peaks at 300 to 600 MB for a single
-# 300 dpi A4 page and the embedding model adds 250 to 400 MB; on the 4 GB box
-# this project targets, those two peaks must never be allowed to meet. This is
-# not a tuning knob and deliberately reads no environment variable, so that
-# making it one is a code change somebody has to defend in review.
+# 300 dpi A4 page, and the embedding side adds two costs on top of it that are
+# worth naming apart, because only one of them is measured today:
+#
+#   the model weights, 118101091 byte of int8 ONNX, measured in the shipping
+#   image on 2026-09-05 (plan 06-01, quantisation 470268510 to 118101091 byte).
+#   They are a resident load from the first embedding call on, not a peak.
+#
+#   the activations on top of them, which are a peak and are NOT measured. The
+#   250 to 400 MB this comment used to name came from research/STACK.md and
+#   describe batch 8 at sequence 512. Wave 0 measured time and not memory and
+#   says so (docs/measurements/2026-09-05-welle0-arm64/README.md, 2026-09-05,
+#   "Die RAM-Spitze beim Einbetten": A5 stays an estimate). What is decided by
+#   measurement is the shape the peak is produced under, EMBED_BATCH_SIZE below,
+#   and the number itself belongs to the load test of the second track.
+#
+# On the 4 GB box this project targets, the OCR peak and the embedding peak must
+# never be allowed to meet, and the unmeasured half of that sentence is the
+# reason this stays at one. This is not a tuning knob and deliberately reads no
+# environment variable, so that making it one is a code change somebody has to
+# defend in review.
 INDEX_WORKERS = 1
 
 # ---------------------------------------------------------------------------
@@ -309,6 +325,117 @@ RECONCILE_SLICE = 500
 RECONCILE_HOUR_RANGE = (0, 23)
 RECONCILE_SLICE_RANGE = (1, 2000)
 
+# ---------------------------------------------------------------------------
+# Embeddings, phase 6. The second track: text becomes vectors after the full
+# text and OCR pass, never beside it (D-15). Every number below carries where it
+# came from, what a wrong value does, and the range that catches it, and the
+# measured ones point at docs/measurements/2026-09-05-welle0-arm64/README.md.
+#
+# The whole block shares one property that the OCR block does not have: none of
+# these values can fail loudly. A cap set too high buys hours of ARM time on a
+# box nobody watches, a chunk larger than the window loses its tail at the
+# session, and a missing model produces a search that finds less rather than an
+# error. That is why every one of them has a range and a test.
+# ---------------------------------------------------------------------------
+
+# On out of the box, like OCR above and for the same reason: a feature an admin
+# has to discover is a feature that is off on most instances.
+#
+# The honest half of D-01 belongs here rather than on the admin page. The token
+# cap below is a setting and it can be turned up, but it is not advertised in
+# the Nextcloud settings: it is a screw for the failure case, not a
+# configuration task, and the zero config promise of this product is that nobody
+# has to touch it. An operator with time and hardware who wants full embedding
+# will find it in this file and in docs/embeddings.md.
+EMBED_ENABLED = True
+
+# The context window of intfloat/multilingual-e5-small. A property of the model
+# and not a knob: everything past it is dropped by the session itself, without
+# an error, which is why the two settings below are measured against it.
+EMBED_CONTEXT_TOKENS = 512
+
+# D-01. The first 1024 tokens of a document, which is roughly one page.
+#
+# Measured, what this cap buys: 51269632 tokens over the 50068 documents of the
+# reference corpus, so 100136 chunks, and an initial embedding run of 2 h 58 min
+# to 4 h 09 min on native aarch64 instead of the 54 to 180 hours a full pass
+# costs (wave 0, derivations 1 and 2, 2026-09-05). Measured, what it costs: a
+# document is findable through its first 12.5 percent semantically, and through
+# all of it lexically, which is the sentence D-17b puts in the store text.
+#
+# Turned too high it is the one setting in this file that can spend days of CPU
+# on a box with two shared cores, so the ceiling of the range is not taste
+# either: 8192 tokens is more than the 6691 to 8215 an average document of the
+# measured corpus carries, so it already means "embed everything" for the normal
+# case, and it is eight times the run time above, which lands at the day D-04
+# treats as the pain threshold. Anything past it warns and falls back.
+EMBED_TOKEN_CAP = 1024
+EMBED_TOKEN_CAP_RANGE = (1, 8192)
+
+# Chunk size inside that cap, and the number that decides how many rows every
+# search has to scan for the rest of this product's life.
+#
+# 512 is the window itself, so a document under the cap becomes exactly two
+# chunks. That is the chunk count plan 06-04 measured its disk figure against
+# (100136 chunks, 876.0 byte per document, 5.8 percent of the tantivy index) and
+# the one the scan latency of wave 0 was read at (37.8 ms p95 warm, 153.5 ms p95
+# cold on aarch64, against an abort criterion of 300 ms per round).
+#
+# Halving it to 256 is tempting and is not done, and the trade is worth writing
+# down because measurement B points the other way. At batch 2, sequence 256 is
+# the fastest and leanest combination of the four measured (5700 against 3451
+# tokens per second on x86, 4745 against 3640 on aarch64), so 256 would shorten
+# the initial run by roughly an hour. It would also double the chunk count to
+# 200000, double the vector file, double the scan every user search pays three
+# times per query, and move the 250000 chunk threshold from 125000 documents
+# down to 62500, which is barely above the corpus this project already measured.
+# An hour paid once against a cost paid on every search forever is the wrong way
+# round, so the sequence follows the chunk size here and not the other way.
+EMBED_CHUNK_TOKENS = 512
+EMBED_CHUNK_TOKENS_RANGE = (16, EMBED_CONTEXT_TOKENS)
+
+# Overlap between neighbouring chunks, in tokens. Zero is the default and a
+# legitimate answer, which is why it has a reader of its own below: the ordinary
+# one refuses zero on purpose, because a cap of nothing is a container that does
+# nothing, and an overlap of nothing is simply no overlap.
+#
+# Zero, not a fashionable 10 percent, because the second chunk of a document
+# starts at a sentence boundary the splitter chose and the cap of 1024 tokens is
+# the scarce resource here: every overlapping token is a token of the document
+# that does not get embedded. An operator who sees answers cut in half at chunk
+# boundaries can raise it.
+EMBED_CHUNK_OVERLAP = 0
+EMBED_CHUNK_OVERLAP_RANGE = (0, EMBED_CONTEXT_TOKENS // 2)
+
+# Lever 4 of 06-RESEARCH.md 3.6, and the one that shapes the activation peak:
+# the research puts batch 2 at 40 to 80 MB of activations against 150 to 300 MB
+# at batch 8, and it expected a small throughput loss for it. Measurement B of
+# wave 0 found no loss at all: on aarch64 batch 2 and batch 8 are within
+# 1.3 percent of each other at sequence 256, and on the x86 laptop batch 2 was a
+# quarter faster. So the sparing choice costs nothing measurable in time, which
+# is a rare shape and the reason this is 2 rather than the 8 STACK.md names.
+EMBED_BATCH_SIZE = 2
+EMBED_BATCH_SIZE_RANGE = (1, 32)
+
+# Lever 5, the sequence length the session is fed. The attention matrix grows
+# with its square, so halving it is a factor of four on that part of the peak
+# and 37 to 40 percent of throughput (wave 0, measurement B, finding 1).
+#
+# It is not free to choose here, and that is the point of the coupling enforced
+# in settings() below: a chunk longer than the sequence is cut at the session
+# and the tail leaves the index without an error line. Whoever lowers this to
+# save memory therefore lowers the chunk size with it.
+EMBED_SEQUENCE_LEN = 512
+EMBED_SEQUENCE_LEN_RANGE = (16, EMBED_CONTEXT_TOKENS)
+
+# Where the model is in the shipping image, set by backend/Dockerfile as
+# FINDLING_EMBED_MODEL_DIR and repeated here as the built in fallback. Outside
+# the image there is usually no model at all, and that is a state and not an
+# error: embed/model.py answers it with the embedding_unavailable verdict. This
+# reader therefore never checks whether the directory exists, because a check
+# here would move that verdict into the boot path of the container.
+EMBED_MODEL_DIR = "/usr/local/share/findling/model"
+
 # Subdirectory used when APP_PERSISTENT_STORAGE is absent, which is the case in
 # tests and in a bare local run, never in a container deployed by AppAPI.
 FALLBACK_STORAGE_DIRNAME = "findling"
@@ -362,6 +489,14 @@ class Settings:
     reconcile_min_interval_hours: int
     reconcile_quiet_max: int
     reconcile_slice: int
+
+    embed_enabled: bool
+    embed_token_cap: int
+    embed_chunk_tokens: int
+    embed_chunk_overlap: int
+    embed_batch_size: int
+    embed_sequence_len: int
+    embed_model_dir: Path
 
 
 def _int_from_environment(name: str, default: int) -> int:
@@ -422,6 +557,45 @@ def _hour_from_environment(name: str, default: int) -> int:
         return value
     LOGGER.warning("%s is not an hour of the day, falling back to the built in default", name)
     return default
+
+
+def _overlap_from_environment(name: str, default: int, bounds: tuple[int, int]) -> int:
+    """Read a whole number where zero is a legitimate answer, inside a range.
+
+    The same split ``_hour_from_environment`` makes, for the same reason and a
+    different value. ``_int_from_environment`` refuses zero because a cap of
+    nothing is a container that does nothing; an overlap of nothing is simply no
+    overlap, and it is the default of this build, so it may not travel through a
+    reader that treats it as a typo.
+    """
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        LOGGER.warning("%s is not a whole number, falling back to the built in default", name)
+        return default
+    low, high = bounds
+    if low <= value <= high:
+        return value
+    LOGGER.warning("%s is outside the range this build was measured for, falling back to the default", name)
+    return default
+
+
+def _embed_model_dir() -> Path:
+    """Return the model directory, which is an image constant with a fallback.
+
+    No existence check on purpose. Whether there is a model behind this path is
+    the question :mod:`findling.embed.model` answers with its
+    ``embedding_unavailable`` verdict, and a reader that refused to resolve here
+    would turn a running search without semantics into a container that does not
+    start.
+    """
+    configured = os.environ.get("FINDLING_EMBED_MODEL_DIR", "").strip()
+    if configured:
+        return Path(configured)
+    return Path(EMBED_MODEL_DIR)
 
 
 # What an admin may type into a yes or no field. Everything else warns.
@@ -537,6 +711,31 @@ def settings() -> Settings:
     """
     root = _storage_root()
     ocr_job_seconds = _bounded_int_from_environment("FINDLING_OCR_JOB_SECONDS", OCR_JOB_SECONDS, OCR_JOB_SECONDS_RANGE)
+    embed_sequence_len = _bounded_int_from_environment(
+        "FINDLING_EMBED_SEQUENCE_LEN", EMBED_SEQUENCE_LEN, EMBED_SEQUENCE_LEN_RANGE
+    )
+    embed_chunk_tokens = _bounded_int_from_environment(
+        "FINDLING_EMBED_CHUNK_TOKENS", EMBED_CHUNK_TOKENS, EMBED_CHUNK_TOKENS_RANGE
+    )
+    if embed_chunk_tokens > embed_sequence_len:
+        # The two values are read independently and are not independent. An
+        # admin who lowers the sequence to save memory and leaves the chunk size
+        # alone would feed 512 token chunks into a 256 token session, and half of
+        # every chunk would leave the index with nothing failing. Clamping rather
+        # than falling back to the default keeps the intent of the change that
+        # was made, and the warning names the variable that moved.
+        LOGGER.warning(
+            "FINDLING_EMBED_CHUNK_TOKENS is larger than the sequence the session is fed, lowering it to the sequence"
+        )
+        embed_chunk_tokens = embed_sequence_len
+    embed_chunk_overlap = _overlap_from_environment(
+        "FINDLING_EMBED_CHUNK_OVERLAP", EMBED_CHUNK_OVERLAP, EMBED_CHUNK_OVERLAP_RANGE
+    )
+    if embed_chunk_overlap >= embed_chunk_tokens:
+        # An overlap that is not smaller than the chunk never advances: the
+        # splitter would hand out the same window forever.
+        LOGGER.warning("FINDLING_EMBED_CHUNK_OVERLAP is not smaller than the chunk, falling back to no overlap")
+        embed_chunk_overlap = EMBED_CHUNK_OVERLAP
     return Settings(
         index_dir=root / "index",
         state_db=root / "state.db",
@@ -585,4 +784,15 @@ def settings() -> Settings:
         reconcile_slice=_bounded_int_from_environment(
             "FINDLING_RECONCILE_SLICE", RECONCILE_SLICE, RECONCILE_SLICE_RANGE
         ),
+        embed_enabled=_bool_from_environment("FINDLING_EMBED_ENABLED", EMBED_ENABLED),
+        embed_token_cap=_bounded_int_from_environment(
+            "FINDLING_EMBED_TOKEN_CAP", EMBED_TOKEN_CAP, EMBED_TOKEN_CAP_RANGE
+        ),
+        embed_chunk_tokens=embed_chunk_tokens,
+        embed_chunk_overlap=embed_chunk_overlap,
+        embed_batch_size=_bounded_int_from_environment(
+            "FINDLING_EMBED_BATCH_SIZE", EMBED_BATCH_SIZE, EMBED_BATCH_SIZE_RANGE
+        ),
+        embed_sequence_len=embed_sequence_len,
+        embed_model_dir=_embed_model_dir(),
     )
