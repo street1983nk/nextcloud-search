@@ -912,6 +912,36 @@ jobs:
       # It acts in /snippets only (test hook of plan 02-11), so the first call
       # answers normally and the second one runs into its 1.5 second limit.
       DELAY_MS: '3000'
+      # Phase 6. The model of the second track is not part of the virtual
+      # environment, it is an artefact of the model stage of backend/Dockerfile,
+      # so the job puts it here and every process of this job reads it from
+      # here. Job level rather than step level, so that it also reaches the
+      # backend the composite action starts, the same reason
+      # FINDLING_RECONCILE_ENABLED sits at job level in the job below.
+      FINDLING_EMBED_MODEL_DIR: '${{ github.workspace }}/findling-model'
+      # How many documents have to carry a vector when the second track has run
+      # dry. It is EXPECTED_INDEXED and not a number of its own: a document is
+      # indexed exactly when it produced stored text, and stored text is what
+      # the second track cuts into chunks. The two move together, and a
+      # divergence is a finding about the second track rather than a number to
+      # be lowered until the run is green (T-06-51).
+      EXPECTED_EMBEDDED: '22'
+      # Ceiling of the extra wait for the second track, derived and not guessed.
+      # The measured rate is 3519 tokens per second p95 on two pinned aarch64
+      # cores (docs/measurements/2026-09-05-welle0-arm64/, measurement B), the
+      # cap of D-01 is 1024 tokens per document, so twenty two documents are
+      # 6.4 seconds of model time in the worst derived case. What the rest of
+      # this budget pays for is queue latency: the rows travel a trailing track
+      # in claims of eight (EMBED_CLAIM_BATCH), so the wait is dominated by
+      # worker passes and not by the model. Three hundred seconds is roughly
+      # fifty times the model time. Exceeding it is a finding.
+      EMBED_TIMEOUT: '300'
+      # The paraphrase case of criterion 1, and the file it has to bring back.
+      # The corpus document is the German notice of termination; the query below
+      # shares no content word with it, which is what the control run asserts
+      # rather than assumes.
+      PARAPHRASE_FILE: '10-kuendigung.docx'
+      PARAPHRASE_TERM: 'Wann darf ich meinen Job aufgeben und wie lange muss ich vorher warten'
 
     steps:
       # Same order and the same reason as in the two jobs above: the server
@@ -928,6 +958,47 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: findling-src
+
+      # The model of the second track, and where it comes from. The ExApp runs
+      # as a native process in this job, so it has the virtual environment of
+      # backend/ and everything in it, onnxruntime and the sqlite-vec wheel
+      # included. What it does not have is the 118 MB int8 model: that artefact
+      # is produced by the model stage of backend/Dockerfile and lives in the
+      # image and nowhere else. Without it every embedding ends as the honest
+      # embedding_unavailable verdict and the paraphrase case below would be a
+      # test of nothing.
+      #
+      # It is copied out of the published image rather than fetched from a model
+      # hub and quantised here, for two reasons. The bytes are the same bytes:
+      # backend/Dockerfile pins MODEL_REVISION to one commit and
+      # quantize_dynamic is reproducible across machines and runs, which plan
+      # 06-03 checked three times against the same sha256. And a job that
+      # reaches for a model hub on every push is the opposite of the promise
+      # this app makes; .github/workflows/measure.yml already takes the same
+      # road for the same reason.
+      #
+      # The limit of that, said plainly rather than glossed over: on a commit
+      # that moves MODEL_REVISION this job runs against the previous model until
+      # the next push to main has published a new :dev. The assertions below are
+      # about the wiring through the whole stack and not about model quality, so
+      # a one build old model does not make them wrong. Quality is answered by
+      # docs/measurements/2026-09-05-modellqualitaet/ and by the offline step of
+      # docker.yml, which runs inside the image that was just built.
+      - name: Take the embedding model out of the published image
+        run: |
+          image=ghcr.io/street1983nk/findling_backend:dev
+          docker pull "${image}"
+          container=$(docker create "${image}")
+          rm -rf "${FINDLING_EMBED_MODEL_DIR}"
+          docker cp "${container}:/usr/local/share/findling/model" "${FINDLING_EMBED_MODEL_DIR}"
+          docker rm -f "${container}" > /dev/null
+          ls -l "${FINDLING_EMBED_MODEL_DIR}"
+          if [ ! -s "${FINDLING_EMBED_MODEL_DIR}/model.onnx" ] \
+             || [ ! -s "${FINDLING_EMBED_MODEL_DIR}/tokenizer.json" ]; then
+            echo "::error::the published image carries no usable model directory, so the second track cannot run here"
+            exit 1
+          fi
+          sha256sum "${FINDLING_EMBED_MODEL_DIR}/model.onnx"
 
       - name: Set up the test Nextcloud with both halves and register the ExApp
         uses: ./findling-src/.github/actions/setup-test-nc
@@ -1047,6 +1118,60 @@ jobs:
             sleep 5
           done
 
+      # The second track, waited for by name. The loop above already waits for
+      # an empty queue and the embedding rows travel that same queue, so this is
+      # usually a single read; it is a step of its own for the reason the M7
+      # step below is one. A second track that never wrote a vector would reach
+      # a reader as "the crawl did not finish within 900 seconds", which reads
+      # like a slow runner and gets retried, and here the same fact carries its
+      # own name.
+      #
+      # Counted out of vectors.db and not out of the status route, because there
+      # is no admin session in this job, and with the plain table rather than
+      # through VectorStore, because chunks is an ordinary table and reading it
+      # needs no loadable extension.
+      #
+      # Exceeding EMBED_TIMEOUT is a finding and not an invitation to raise the
+      # number until the run is green (T-06-51). The budget is derived from the
+      # measured rate, see the comment at the variable.
+      - name: Wait until the second track has written its vectors
+        run: |
+          embedded() {
+            python3 - "${{ runner.temp }}/findling/vectors.db" <<'PY'
+          import sqlite3
+          import sys
+          from pathlib import Path
+
+          database = Path(sys.argv[1])
+          if not database.is_file():
+              print(0)
+              raise SystemExit(0)
+          connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+          row = connection.execute("SELECT COUNT(DISTINCT file_id) FROM chunks").fetchone()
+          connection.close()
+          print(int(row[0]) if row else 0)
+          PY
+          }
+
+          deadline=$(( $(date +%s) + EMBED_TIMEOUT ))
+          while :; do
+            carrying=$(embedded)
+            echo "second track: ${carrying} of ${EXPECTED_EMBEDDED} documents carry a vector"
+            if [ "${carrying}" -ge "${EXPECTED_EMBEDDED}" ]; then
+              echo "every indexed document of the corpus carries at least one vector"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "::error::the second track wrote vectors for ${carrying} of ${EXPECTED_EMBEDDED} documents within ${EMBED_TIMEOUT} seconds"
+              echo "This is a finding about the second track, not a deadline to raise: the budget is fifty times"
+              echo "the model time the measured rate says twenty two documents cost."
+              ./occ findling:index || true
+              tail -n 100 "${{ runner.temp }}/exapp.log" || true
+              exit 1
+            fi
+            sleep 5
+          done
+
       # The seven language cases. Each one has its own message, because the seven
       # failures mean seven different things, and each one asserts a count and a
       # title: a search that finds "something" proves that the index is not
@@ -1160,6 +1285,92 @@ jobs:
               || fail "the second user found a file that was never shared with him, searching for ${term}" colleague-denied.json
           done
           echo "the second user sees one file out of thirty three, and it is the shared one"
+
+      # Criterion 1 of phase 6, through the whole stack instead of only in the
+      # python suite: a query whose content words do not stand in a document
+      # brings the document back anyway.
+      #
+      # It takes two runs and the first one is what gives the second one
+      # meaning. With the second track switched off the search is purely
+      # lexical, so whatever it answers to this query is what the engine can
+      # find on its own; the assertion is that this is nothing. Without that
+      # control a green run below would also be green on a query that happened
+      # to match lexically after all, which is the trap the same pair of cases
+      # guards against in backend/tests/test_semantic_search.py.
+      #
+      # The restart is the only way to get the control: the vector stock is
+      # written by the crawl, and the crawl needs the model. FINDLING_EMBED_ENABLED
+      # is the one switch that removes the vector list without touching a file,
+      # and it is the same switch an operator has.
+      - name: The paraphrase finds nothing without the second track
+        working-directory: findling-src/backend
+        run: |
+          kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          for _ in $(seq 1 20); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null || break
+            sleep 1
+          done
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_PORT="${EXAPP_PORT}"
+          export APP_VERSION=0.1.0
+          export APP_HOST=127.0.0.1
+          export NEXTCLOUD_URL=http://localhost:8080
+          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+          export FINDLING_EMBED_ENABLED=false
+          uv run python -m findling.main >> "${{ runner.temp }}/exapp.log" 2>&1 &
+          echo $! > "${{ runner.temp }}/exapp.pid"
+          for _ in $(seq 1 30); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null && break
+            sleep 1
+          done
+          curl -sfS -G -u "${OWNER_USER}:${OWNER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            --data-urlencode "term=${PARAPHRASE_TERM}" \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search' \
+            -o "${{ github.workspace }}/paraphrase-lexical.json"
+          cat "${{ github.workspace }}/paraphrase-lexical.json"
+          jq -e '.ocs.data.entries | length == 0' "${{ github.workspace }}/paraphrase-lexical.json" > /dev/null \
+            || { echo "::error::the paraphrase matched lexically, so it is not a paraphrase on this corpus and a hit below would prove nothing about the vector half"; exit 1; }
+          echo "the lexical half answers nothing to this query, so anything it finds below came out of the vector half"
+
+      - name: The paraphrase finds the document with the second track
+        working-directory: findling-src/backend
+        run: |
+          kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          for _ in $(seq 1 20); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null || break
+            sleep 1
+          done
+          export APP_ID=findling_backend
+          export APP_SECRET="${EXAPP_SECRET}"
+          export APP_PORT="${EXAPP_PORT}"
+          export APP_VERSION=0.1.0
+          export APP_HOST=127.0.0.1
+          export NEXTCLOUD_URL=http://localhost:8080
+          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+          uv run python -m findling.main >> "${{ runner.temp }}/exapp.log" 2>&1 &
+          echo $! > "${{ runner.temp }}/exapp.pid"
+          for _ in $(seq 1 30); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null && break
+            sleep 1
+          done
+          answer="${{ github.workspace }}/paraphrase-semantic.json"
+          curl -sfS -G -u "${OWNER_USER}:${OWNER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            --data-urlencode "term=${PARAPHRASE_TERM}" \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "${answer}"
+          # The whole ranking into the log, with the resource url of every entry.
+          # A gate whose evidence is a boolean makes the next reader rerun it.
+          jq -r '.ocs.data.entries[] | "  \(.title)  \(.resourceUrl)"' "${answer}" || true
+          jq -e '.ocs.data.entries | length > 0' "${answer}" > /dev/null \
+            || { echo "::error::the paraphrase found nothing at all, so the vector half did not travel the stack"; cat "${answer}"; exit 1; }
+          jq -e --arg name "${PARAPHRASE_FILE}" '[.ocs.data.entries[].title] | index($name) != null' "${answer}" > /dev/null \
+            || { echo "::error::the paraphrase did not bring back ${PARAPHRASE_FILE}, the one document of the corpus it is a paraphrase of"; cat "${answer}"; exit 1; }
+          # The file id, so that the log names the case rather than only passing
+          # it. resourceUrl carries it as the last path segment.
+          jq -r --arg name "${PARAPHRASE_FILE}" \
+            '.ocs.data.entries[] | select(.title == $name) | "criterion 1 in the integration run: \($name) found through a paraphrase, resource \(.resourceUrl)"' "${answer}"
 
       # The time budget, measured instead of claimed. The container is restarted
       # with FINDLING_ARTIFICIAL_DELAY_MS, which acts in /snippets and nowhere
@@ -1298,7 +1509,8 @@ jobs:
           ./occ findling:index || true
           echo "--- the last search answers ---"
           for answer in compound.json frist.json umlaut.json flexion.json phrase.json both.json \
-                        excluded.json filetype.json colleague-shared.json colleague-denied.json delayed.json; do
+                        excluded.json filetype.json colleague-shared.json colleague-denied.json delayed.json \
+                        paraphrase-lexical.json paraphrase-semantic.json; do
             if [ -f "${answer}" ]; then
               echo "== ${answer} =="
               cat "${answer}"

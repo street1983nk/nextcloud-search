@@ -220,6 +220,68 @@ jobs:
             --entrypoint python \
             "${IMAGE}@${DIGEST}" /probe/test_vec_extension_probe.py
 
+      # The offline proof of plan 06-10, and the only check in this repository
+      # that carries the zero-config promise for the semantic half.
+      #
+      # HF_HUB_OFFLINE=1 stands in backend/Dockerfile and it is a net, not a
+      # proof. It makes huggingface-hub refuse to resolve a name; it does not
+      # stop any other code from opening a socket, and fastembed brought two
+      # network libraries, huggingface-hub and requests, into an image that is
+      # not allowed to speak to the outside world at all. The store text makes a
+      # statement about that. The only thing that can carry the statement is
+      # this: the container starts with --network none, embeds a small stock of
+      # its own making and answers a paraphrase out of it.
+      #
+      # The probe runs two searches, and the first one is what gives the second
+      # one meaning: the same query against a volume without a vector stock has
+      # to find nothing at all, so a hit can only have come from the model.
+      #
+      # What the step does NOT claim: that nothing tries to reach the network.
+      # onnxruntime writes "Failed to persist telemetry device ID" to stderr in
+      # every single run, with the network cut as well; it is a failed local
+      # file system write and not traffic (measured in plan 06-03, and named
+      # here because in a store context it is exactly the line somebody reads
+      # the wrong way round). The boundary of this gate is written down in
+      # docs/testing.md next to the gate itself.
+      #
+      # It runs on both architectures of the matrix, because the model is an
+      # ONNX graph executed by an architecture specific runtime and "it works on
+      # x86" says nothing about the box this app targets.
+      - name: The offline proof, a semantic search with the network cut
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          docker run --rm --network none \
+            -v "${GITHUB_WORKSPACE}/backend/tests:/probe:ro" \
+            --entrypoint python \
+            "${IMAGE}@${DIGEST}" /probe/probe_image_search.py offline
+
+      # Criterion 3 on the level of the image, which is where pitfall 4 lives. A
+      # unit test with a stand-in model proves that the code knows the case of a
+      # missing model; it does not prove that the built image behaves that way,
+      # and believing the second follows from the first is the mistake itself.
+      #
+      # An empty directory is mounted over the model directory, so the image is
+      # the one that was just published and the model is gone. What has to come
+      # back is the same hits as a run without any semantics at all, the
+      # degraded mark, and above all not an empty answer and not an error.
+      #
+      # The empty answer is the trap of this step (T-06-49): a step that is green
+      # because nothing was found would be green on a container that answers
+      # nothing to anybody. So the probe ends by running the same verdict against
+      # a deliberately empty index and requires it to come back red.
+      - name: Criterion 3 in the image, full text hits and the degraded mark
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          echo "expected: the same hits as without semantics, degraded true, and no empty answer"
+          mkdir -p "${RUNNER_TEMP}/no-model"
+          docker run --rm --network none \
+            -v "${GITHUB_WORKSPACE}/backend/tests:/probe:ro" \
+            -v "${RUNNER_TEMP}/no-model:/usr/local/share/findling/model:ro" \
+            --entrypoint python \
+            "${IMAGE}@${DIGEST}" /probe/probe_image_search.py model-gone
+
       # The environment is the one from the local probe, deliberately. Without
       # HP_SHARED_KEY the app binds APP_PORT, frpc logs one line and exits, and
       # the published port is what the heartbeat is asked on.
