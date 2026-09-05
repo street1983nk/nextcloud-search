@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Phase 6 context gathered
-last_updated: "2026-09-05T03:24:23.547Z"
+stopped_at: 06-02 Task 3, Checkpoint Owner-Abnahme
+last_updated: "2026-09-05T03:57:52.199Z"
 last_activity: 2026-09-05
 progress:
   total_phases: 2
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 
 Phase: 6 (Semantische Suche) — EXECUTING
 Plan: 2 of 12
-Status: Ready to execute
+Status: AT CHECKPOINT (06-02 Task 3, Owner-Abnahme des Messberichts und die D-04-Entscheidung)
 Last activity: 2026-09-05
 
 Progress: [██████░░░░] 61%
@@ -149,6 +149,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-05T03:23:58.470Z
-Stopped at: Phase 6 context gathered
-Resume file: None
+Last session: 2026-09-05T03:57:52.181Z
+Stopped at: 06-02 Task 3, Checkpoint Owner-Abnahme des Messberichts und die D-04-Entscheidung
+Resume file: docs/measurements/2026-09-05-welle0-arm64/README.md
