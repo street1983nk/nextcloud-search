@@ -308,9 +308,7 @@ def test_an_empty_list_returns_nothing_and_loads_nothing(model_dir: Path, stand_
     assert stand_in.session.batches == []
 
 
-def test_the_batch_size_comes_from_the_settings_and_not_from_the_library(
-    model_dir: Path, stand_in: StandIn
-) -> None:
+def test_the_batch_size_comes_from_the_settings_and_not_from_the_library(model_dir: Path, stand_in: StandIn) -> None:
     engine = _model(model_dir, batch_size=2)
 
     engine.embed_passages([f"Text Nummer {number}" for number in range(7)])

@@ -25,6 +25,7 @@ from findling.config import (
     EMBED_CHUNK_TOKENS,
     EMBED_CONTEXT_TOKENS,
     EMBED_MODEL_DIR,
+    EMBED_SPECIAL_TOKENS,
     EMBED_TOKEN_CAP_RANGE,
     INDEX_WORKERS,
     MAX_TEXT_CHARS,
@@ -425,7 +426,11 @@ def test_embedding_defaults_are_the_chosen_numbers() -> None:
 
     assert current.embed_enabled is True
     assert current.embed_token_cap == 1024
-    assert current.embed_chunk_tokens == 512
+    # 510 and not 512: the encoder adds an opening and a closing marker, so a
+    # chunk of a full window would arrive at the session as 514 tokens and lose
+    # its last two without anything failing.
+    assert current.embed_chunk_tokens == 510
+    assert current.embed_chunk_tokens + EMBED_SPECIAL_TOKENS == EMBED_CONTEXT_TOKENS
     assert current.embed_chunk_overlap == 0
     assert current.embed_batch_size == 2
     assert current.embed_sequence_len == 512
@@ -460,7 +465,7 @@ def test_a_token_cap_outside_the_measured_range_falls_back(monkeypatch: pytest.M
     assert settings().embed_enabled is True
 
 
-@pytest.mark.parametrize("value", ["9999", "513", "0", "acht"])
+@pytest.mark.parametrize("value", ["9999", "513", "512", "511", "0", "acht"])
 def test_a_chunk_size_above_the_context_window_falls_back(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, value: str
 ) -> None:
@@ -470,12 +475,14 @@ def test_a_chunk_size_above_the_context_window_falls_back(
     with caplog.at_level("WARNING", logger="findling.config"):
         current = settings()
 
-    # The model window is 512 tokens. A larger chunk is not refused by anything
-    # downstream, it is silently cut at the session and the tail of every chunk
-    # disappears from the index, so this has to warn and degrade rather than
-    # start a container that indexes less than it says.
+    # The model window is 512 tokens and two of them belong to the encoder. A
+    # larger chunk is not refused by anything downstream, it is silently cut at
+    # the session and the tail of every chunk disappears from the index, so this
+    # has to warn and degrade rather than start a container that indexes less
+    # than it says. 512 and 511 are in the list on purpose: they look like the
+    # window and are already one and two tokens too many.
     assert current.embed_chunk_tokens == EMBED_CHUNK_TOKENS
-    assert current.embed_chunk_tokens <= EMBED_CONTEXT_TOKENS
+    assert current.embed_chunk_tokens + EMBED_SPECIAL_TOKENS <= EMBED_CONTEXT_TOKENS
     assert "FINDLING_EMBED_CHUNK_TOKENS" in caplog.text
     assert value not in caplog.text
 
@@ -552,10 +559,10 @@ def test_a_chunk_never_outgrows_the_sequence_the_session_sees(
 
     # The two values are read independently and are not independent. An admin
     # who lowers the sequence to save memory and leaves the chunk size alone
-    # would otherwise feed 512 token chunks into a 256 token session, and half of
+    # would otherwise feed 510 token chunks into a 256 token session, and half of
     # every chunk would leave the index without a single error line.
     assert current.embed_sequence_len == 256
-    assert current.embed_chunk_tokens == 256
+    assert current.embed_chunk_tokens == 256 - EMBED_SPECIAL_TOKENS
     assert "FINDLING_EMBED_CHUNK_TOKENS" in caplog.text
 
 

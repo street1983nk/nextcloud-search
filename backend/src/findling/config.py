@@ -354,6 +354,17 @@ EMBED_ENABLED = True
 # an error, which is why the two settings below are measured against it.
 EMBED_CONTEXT_TOKENS = 512
 
+# What the encoder puts around every text of its own accord, and therefore what
+# the window has to have room for before a single word of the document fits.
+# Measured in the shipping image on 2026-09-05: the tokenizer of this model adds
+# two ids to an empty string, the opening and the closing marker.
+#
+# It is two rather than a rounder number and it still matters. A chunk of a full
+# 512 content tokens would arrive at the session as 514 and lose its last two,
+# silently and only in the documents whose chunks fill the window, which is the
+# exact failure this whole block exists to make impossible.
+EMBED_SPECIAL_TOKENS = 2
+
 # D-01. The first 1024 tokens of a document, which is roughly one page.
 #
 # Measured, what this cap buys: 51269632 tokens over the 50068 documents of the
@@ -375,11 +386,17 @@ EMBED_TOKEN_CAP_RANGE = (1, 8192)
 # Chunk size inside that cap, and the number that decides how many rows every
 # search has to scan for the rest of this product's life.
 #
-# 512 is the window itself, so a document under the cap becomes exactly two
-# chunks. That is the chunk count plan 06-04 measured its disk figure against
-# (100136 chunks, 876.0 byte per document, 5.8 percent of the tantivy index) and
-# the one the scan latency of wave 0 was read at (37.8 ms p95 warm, 153.5 ms p95
-# cold on aarch64, against an abort criterion of 300 ms per round).
+# 510 is the window minus what the encoder adds, so a chunk fills the model as
+# far as it can be filled and never one token further. A document under the cap
+# becomes two or three chunks, which is the order plan 06-04 measured its disk
+# figure against (100136 chunks, 876.0 byte per document, 5.8 percent of the
+# tantivy index) and the one the scan latency of wave 0 was read at (37.8 ms p95
+# warm, 153.5 ms p95 cold on aarch64, against an abort criterion of 300 ms per
+# round). Measured against the shipped tokenizer on 2026-09-05: a document of
+# 18240 tokens capped at 1024 becomes three chunks of 500, 507 and 17 tokens,
+# because the splitter cuts on sentence boundaries and the remainder is a chunk
+# of its own. Two was the calculation, two to three is the measurement, and
+# docs/embeddings.md carries the consequence for the disk figure.
 #
 # Halving it to 256 is tempting and is not done, and the trade is worth writing
 # down because measurement B points the other way. At batch 2, sequence 256 is
@@ -391,8 +408,8 @@ EMBED_TOKEN_CAP_RANGE = (1, 8192)
 # down to 62500, which is barely above the corpus this project already measured.
 # An hour paid once against a cost paid on every search forever is the wrong way
 # round, so the sequence follows the chunk size here and not the other way.
-EMBED_CHUNK_TOKENS = 512
-EMBED_CHUNK_TOKENS_RANGE = (16, EMBED_CONTEXT_TOKENS)
+EMBED_CHUNK_TOKENS = EMBED_CONTEXT_TOKENS - EMBED_SPECIAL_TOKENS
+EMBED_CHUNK_TOKENS_RANGE = (16, EMBED_CONTEXT_TOKENS - EMBED_SPECIAL_TOKENS)
 
 # Overlap between neighbouring chunks, in tokens. Zero is the default and a
 # legitimate answer, which is why it has a reader of its own below: the ordinary
@@ -717,17 +734,21 @@ def settings() -> Settings:
     embed_chunk_tokens = _bounded_int_from_environment(
         "FINDLING_EMBED_CHUNK_TOKENS", EMBED_CHUNK_TOKENS, EMBED_CHUNK_TOKENS_RANGE
     )
-    if embed_chunk_tokens > embed_sequence_len:
+    embed_chunk_ceiling = embed_sequence_len - EMBED_SPECIAL_TOKENS
+    if embed_chunk_tokens > embed_chunk_ceiling:
         # The two values are read independently and are not independent. An
         # admin who lowers the sequence to save memory and leaves the chunk size
-        # alone would feed 512 token chunks into a 256 token session, and half of
+        # alone would feed 510 token chunks into a 256 token session, and half of
         # every chunk would leave the index with nothing failing. Clamping rather
         # than falling back to the default keeps the intent of the change that
-        # was made, and the warning names the variable that moved.
+        # was made, and the warning names the variable that moved. The two
+        # special tokens are subtracted here for the same reason they are
+        # subtracted from the default: the encoder adds them, so they take room
+        # from the document and not from the session.
         LOGGER.warning(
             "FINDLING_EMBED_CHUNK_TOKENS is larger than the sequence the session is fed, lowering it to the sequence"
         )
-        embed_chunk_tokens = embed_sequence_len
+        embed_chunk_tokens = embed_chunk_ceiling
     embed_chunk_overlap = _overlap_from_environment(
         "FINDLING_EMBED_CHUNK_OVERLAP", EMBED_CHUNK_OVERLAP, EMBED_CHUNK_OVERLAP_RANGE
     )
