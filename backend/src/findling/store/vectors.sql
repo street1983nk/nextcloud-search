@@ -22,7 +22,11 @@
 -- that decision is measured against this very schema rather than estimated:
 --
 --   384 byte of vector payload per chunk (384 dimensions, one byte each)
---   2 chunks per document at the 1024 token cap of D-01
+--   2 chunks per document at the 1024 token cap of D-01. Measured against
+--   the shipped tokenizer on 2026-09-05 (plan 06-05) it is 2 to 3, because
+--   the splitter cuts on sentence boundaries and the remainder becomes a
+--   chunk of its own. The figures below are therefore a floor; the upper
+--   end and the scan latency that goes with it stand in docs/embeddings.md
 --   100136 chunks over the 50068 documents of the measured corpus
 --   43859968 byte on disk, so 438.0 byte per chunk, 876.0 byte per document
 --   and 54.0 byte of overhead per chunk (measured 2026-09-05; the phase

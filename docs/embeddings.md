@@ -168,6 +168,37 @@ die Folge gehört in den Vektorweg.
 | Tantivy-Index desselben Korpus | 761.374.910 Byte | **gemessen**, Volllauf 04.09.2026 | `docs/performance.md` |
 | **Zuwachs gegenüber dem heutigen Index** | **5,8 Prozent** | gerechnet | |
 
+### Nachtrag vom 05.09.2026: die Zeile "Chunks je Dokument" ist ein Boden
+
+Die zweite Zeile der Tabelle war gerechnet, nicht gemessen: 1.024 Token geteilt
+durch 512 Token je Chunk ergibt zwei. Plan 06-05 hat den Chunker gegen den
+ausgelieferten Tokenizer laufen lassen, und dabei sind es **zwei bis drei**
+geworden. Der Grund ist die Arbeitsweise des Splitters: er schneidet an
+Satzgrenzen, und was nach dem letzten vollen Chunk uebrig bleibt, wird ein
+eigener kleiner Chunk. Gemessen an einem Dokument von 18.240 Token, gedeckelt
+auf 1.024: drei Chunks mit 500, 507 und 17 Token.
+
+Zwei Zahlen der Tabelle sind damit Untergrenzen und keine Punktwerte:
+
+| Groesse | bei 2 Chunks je Dokument | bei 3 Chunks je Dokument |
+|---|---|---|
+| Chunks insgesamt | 100.136 | 150.204 |
+| `vectors.db` | 43.859.968 Byte | rund 65.789.352 Byte |
+| Byte je Dokument | 876,0 | rund 1.314,0 |
+| Zuwachs gegenueber dem Tantivy-Index | 5,8 Prozent | rund 8,6 Prozent |
+
+Die gemessene Groesse je Chunk (438,0 Byte) aendert sich dadurch nicht; sie ist
+gegen das ausgelieferte Schema gemessen und gilt je Chunk. Was sich aendert, ist
+die Zahl der Chunks, und das Abnahmekriterium 4 haelt auch am oberen Ende: bei
+150.000 Chunks liegt die Scan-Latenz auf nativem aarch64 interpoliert bei rund
+56 ms p95 warm und rund 186 ms p95 kalt, gegen ein Abbruchkriterium von 300 ms
+je Runde (Welle-0-Bericht, Messung C).
+
+Die Chunkgroesse steht seit Plan 06-05 ausserdem auf **510** und nicht auf 512:
+der Tokenizer setzt zwei Sondertoken um jeden Text, gemessen am ausgelieferten
+Artefakt, und ein Chunk mit 512 eigenen Token kaeme als 514 an der Sitzung an
+und verloere seine letzten beiden, ohne dass irgendetwas fehlschlaegt.
+
 Die Schätzung aus der Phasenrecherche (06-RESEARCH.md 4.3) lag bei 432 Byte je
 Chunk, 864 Byte je Dokument, 48 Byte Verwaltung und 5,7 Prozent. Sie war also um
 1,4 Prozent zu niedrig, im Wesentlichen weil der Verwaltungsanteil je Chunk mit
