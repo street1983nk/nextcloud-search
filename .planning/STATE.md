@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 06-03-PLAN.md
-last_updated: "2026-09-05T05:14:46.326Z"
+stopped_at: Completed 06-02-PLAN.md (Checkpoint abgenommen, D-04 haelt)
+last_updated: "2026-09-05T05:52:56.329Z"
 last_activity: 2026-09-05
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 33
-  completed_plans: 21
+  completed_plans: 22
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 6 (Semantische Suche) — EXECUTING
-Plan: 3 of 12
+Plan: 4 of 12
 Status: Ready to execute
 Last activity: 2026-09-05
 
-Progress: [██████░░░░] 64%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [██████░░░░] 64%
 | Phase 04 P10 | 19 min plus Sichtprobe | 3 tasks | 11 files |
 | Phase 06 P01 | 35min | 3 tasks | 14 files |
 | Phase 06 P03 | 3h05m | 3 tasks | 8 files |
+| Phase 06 P02 | 2h05m | 3 tasks | 37 files |
 
 ## Accumulated Context
 
@@ -128,6 +129,11 @@ Recent decisions affecting current work:
 - [Phase 6]: 06-03: D-02 gespalten beantwortet: die selbst quantisierte int8-Fassung traegt auf Deutsch (+2,30 Prozent MRR) und Englisch (+5,70 Prozent), auf Franzoesisch faellt sie um 9,24 Prozent und reisst damit die 5-Prozent-Abbruchregel des Plans
 - [Phase 6]: 06-03: Die Vektorquantisierung (zweite Stufe, int8 in vec0) kostet auf dem Testset nichts Messbares: keiner der sechs Vergleiche erreicht den doppelten Standardfehler
 - [Phase 6]: 06-03: Die lokal erzeugte int8-Datei ist byteidentisch mit der im Abbild aus Plan 06-01; quantize_dynamic ist ueber getrennte Laeufe reproduzierbar
+- [Phase 6]: 06-02: D-04 greift nicht. Der gemessene x86/ARM-Faktor fuer Messung B ist hoechstens 1,20 gegen Abbruchschwellen von 5,5 und 9,6; der gedeckelte Erstindex dauert auf nativem aarch64 2 h 58 min bis 4 h 09 min statt der geschaetzten 7 bis 24 Stunden. Owner-Abnahme 05.09.2026: weiter wie geplant, potion bleibt zu, D-04 unangetastet
+- [Phase 6]: 06-02: A1 ersetzt (3,2947 bis 3,2972 Zeichen je Token fuer laufende deutsche Prosa, 4,0452 fuer reines Vokabular; geschaetzt waren 3,5), A2 und A3 ersetzt (3.519 bis 4.809 Token je Sekunde auf zwei gepinnten aarch64-Kernen; geschaetzt waren 800 bis 2.000)
+- [Phase 6]: 06-02: Unter dem Deckel aus D-01 entscheidet A1 die Laufzeit nicht mehr, sondern nur die Abdeckungszusage aus D-17b: 51.269.632 Token und 100.136 Chunks unabhaengig vom A1-Wert, gemessener Abdeckungsanteil 12,5 statt 13,2 Prozent eines durchschnittlichen Dokuments
+- [Phase 6]: 06-02: int8 mit brute force haelt das Zeitbudget auf beiden Architekturen: bei 100.136 Chunks 37,8 ms p95 warm und 153,5 ms kalt je Runde gegen 300 ms, also 4,5 bis 18,4 Prozent des 2,5-Sekunden-Budgets bei MAX_ROUNDS = 3. D-10 und D-08 bleiben richtig
+- [Phase 6]: 06-02: Der Tokenizer ist architekturunabhaengig, belegt statt behauptet: die Tokenzahlen auf aarch64 und x86_64 stimmen in allen drei Textsorten auf das letzte Token ueberein (142.396, 163, 247.204)
 
 ### Pending Todos
 
@@ -155,6 +161,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-05T05:12:41.678Z
-Stopped at: Completed 06-03-PLAN.md
+Last session: 2026-09-05T05:52:56.309Z
+Stopped at: Completed 06-02-PLAN.md (Checkpoint abgenommen, D-04 haelt)
 Resume file: None

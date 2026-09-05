@@ -78,7 +78,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 06-02-PLAN.md , Welle 0: die drei Vormessungen auf aarch64 und die Owner-Abnahme (SEM-03)
+- [x] 06-02-PLAN.md , Welle 0: die drei Vormessungen auf aarch64 und die Owner-Abnahme (SEM-03)
 - [x] 06-03-PLAN.md , Dreisprachiger Qualitaetsnachweis fp32 gegen int8 und der E5-Praefixbeleg (D-03, D-05)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -314,7 +314,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
 | 5. Härtung und Store-Einreichung v1.0 | 18/20 | In Progress|  |
-| 6. Semantische Suche | 2/12 | In Progress|  |
+| 6. Semantische Suche | 3/12 | In Progress|  |
 
 ## Requirement Coverage
 
