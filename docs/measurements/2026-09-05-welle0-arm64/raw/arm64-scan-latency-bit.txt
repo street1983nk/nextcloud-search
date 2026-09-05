@@ -1,0 +1,20 @@
+mode=scan-latency
+arch=aarch64
+cpus=2
+python=3.13.15
+sqlite=3.46.1
+vec0_path=/usr/local/lib/findling/vec0.so
+vector_type=bit
+dimensions=384
+vector_bytes=48
+k=50
+queries=100
+cache=both
+scan size=50000 cache=warm cache_dropped=n/a p50_ms=2.401 p95_ms=2.446 max_ms=2.487 neighbours=50 scanned_bytes=2400000 file_bytes=3579904 fill_seconds=0.330
+scan size=50000 cache=cold cache_dropped=true p50_ms=8.143 p95_ms=18.554 max_ms=19.093 neighbours=50 scanned_bytes=2400000 file_bytes=3579904 fill_seconds=0.330
+scan size=100000 cache=warm cache_dropped=n/a p50_ms=4.779 p95_ms=4.926 max_ms=5.040 neighbours=50 scanned_bytes=4800000 file_bytes=7135232 fill_seconds=0.662
+scan size=100000 cache=cold cache_dropped=true p50_ms=13.514 p95_ms=24.585 max_ms=26.708 neighbours=50 scanned_bytes=4800000 file_bytes=7135232 fill_seconds=0.662
+scan size=250000 cache=warm cache_dropped=n/a p50_ms=12.567 p95_ms=12.921 max_ms=13.221 neighbours=50 scanned_bytes=12000000 file_bytes=17928192 fill_seconds=1.668
+scan size=250000 cache=cold cache_dropped=true p50_ms=33.982 p95_ms=75.720 max_ms=81.289 neighbours=50 scanned_bytes=12000000 file_bytes=17928192 fill_seconds=1.668
+scan size=1000000 cache=warm cache_dropped=n/a p50_ms=52.481 p95_ms=52.826 max_ms=53.043 neighbours=50 scanned_bytes=48000000 file_bytes=71892992 fill_seconds=6.762
+scan size=1000000 cache=cold cache_dropped=true p50_ms=162.249 p95_ms=211.458 max_ms=975.639 neighbours=50 scanned_bytes=48000000 file_bytes=71892992 fill_seconds=6.762

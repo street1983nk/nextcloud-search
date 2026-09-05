@@ -15,6 +15,13 @@ und gibt ausschließlich Zahlen aus: kein Wort aus einem Dokument, kein
 Dateiname, und zu jeder Zahl die Architektur und die Zahl der sichtbaren CPUs
 (T-06-06, T-06-07).
 
+> **Nachtrag 05.09.2026.** Der Abschnitt unmittelbar unter dieser Zeile ist der
+> Stand vor dem arm64-Lauf und bleibt unverändert stehen, weil er die Grundlage
+> der D-04-Schwellen ist. Die native aarch64-Zahl liegt inzwischen vor: sie steht
+> mit dem D-04-Verdikt und der Owner-Abnahme im Abschnitt
+> [Nachtrag 05.09.2026: die aarch64-Spalte](#nachtrag-05092026-die-aarch64-spalte-und-was-sie-an-d-04-macht)
+> am Ende dieser Datei. **D-04 greift nicht.**
+
 ## Der Stand dieses Berichts, zuerst und ohne Beschönigung
 
 **Alle Zahlen unten sind auf x86_64 gemessen. Die native aarch64-Zahl fehlt
@@ -437,3 +444,307 @@ wie das Werkzeug sie geschrieben hat:
 Der Lauf auf nativer aarch64-Hardware legt seine Dateien unter denselben Namen
 mit dem Präfix `arm64-` daneben. `measure.yml` erzeugt sie als Artefakt
 `welle0-arm64`.
+
+## Nachtrag 05.09.2026: die aarch64-Spalte, und was sie an D-04 macht
+
+Die oben als offen bezeichnete Zahl liegt vor. Sie stammt aus dem ersten Lauf
+von `.github/workflows/measure.yml`, ausgelöst als `workflow_dispatch` auf
+`main`:
+
+| Angabe | Wert |
+|---|---|
+| Lauf | [33946845859](https://github.com/street1983nk/nextcloud-search/actions/runs/33946845859) |
+| Datum | 2026-09-05, 05:18 UTC |
+| Commit | `8d108a3ad68453884376f70c8685a9c8d3392ba4` |
+| Jobs | "Wave 0 on arm64 (target)" und "Wave 0 on amd64 (comparison)", beide erfolgreich |
+| Abbild | `ghcr.io/street1983nk/findling_backend:dev` |
+| Abbildkennung | `sha256:86cf2fcddb96bd608a761d6b46e5eaa87e15d46e731af9b911f83407f1f54b45` |
+
+Die Kennung benennt das **Mehrarchitektur-Manifest**, nicht eine der beiden
+Hälften; beide Läufer melden sie deshalb gleichlautend, und jeder hat daraus
+seine eigene Architektur gezogen. Es ist ausdrücklich nicht das Abbild, unter dem
+die x86-Zahlen weiter oben gelaufen sind (`findling-sem-probe:local`,
+`sha256:c9bb41d6...`). Beide stammen aus demselben `backend/Dockerfile`, aber
+gemessen wurde nicht zweimal dasselbe Artefakt, und das gehört vor jede Zahl in
+diesem Nachtrag.
+
+### Die beiden neuen Maschinen
+
+| Angabe | arm64 (die Aussage) | amd64 (der Vergleich) |
+|---|---|---|
+| Läufer | `ubuntu-24.04-arm` | `ubuntu-24.04` |
+| Architektur | aarch64 | x86_64 |
+| Prozessor | ARM Neoverse-N2, 4 Kerne, 1 Faden je Kern | AMD EPYC 9V74 (80-Kerner), 4 sichtbare Kerne |
+| Cache | L2 4 MiB, L3 128 MiB | siehe `raw/runner-amd64-machine.txt` |
+| Kern | 6.17.0-1022-azure | 6.17.0-1022-azure |
+| RAM | 15.947 MB | siehe Rohdaten |
+| Kerne für B und C | zwei, `--cpuset-cpus 0,1`, `--threads 2` | ebenso |
+| Netzwerk | in jedem Lauf abgeklemmt | ebenso |
+
+**Drei Vergleichsbasen, und der Nachtrag sagt zu jeder Zahl, welche gilt.**
+Erstens das x86-Notebook von weiter oben: es ist die Basis, auf der die
+D-04-Schwellen 5,5 und 9,6 ausgerechnet wurden, und deshalb ist es die Basis,
+gegen die das Verdikt fällt. Zweitens der arm64-Läufer: die Zielarchitektur.
+Drittens der amd64-Läufer: dieselbe Infrastruktur, dasselbe Abbild, derselbe Tag,
+und damit der einzige saubere Architekturvergleich dieses Berichts, weil sich
+zwischen ihm und dem arm64-Lauf außer dem Befehlssatz nichts unterscheidet.
+
+**Der Vorbehalt, der bleibt und der wichtiger ist als alle drei.** Auch der
+arm64-Läufer ist **nicht die Zielbox**. Er stellt vier dedizierte
+Neoverse-N2-Kerne, von denen zwei gepinnt wurden; die Zielbox hat zwei
+**geteilte** vCPU. Die Zahlen unten sind gegenüber der Zielbox eher optimistisch,
+genau wie die x86-Zahlen weiter oben es gegenüber der cpx22 waren. Was sie
+belastbar macht, ist nicht ihre Nähe zur Zielbox, sondern der Abstand zur
+D-04-Schwelle, und der ist unten beziffert.
+
+### Messung A auf aarch64: die Architekturunabhängigkeit ist jetzt belegt
+
+| Textsorte | Dateien | Zeichen | Token | Zeichen je Token arm64 | amd64-Läufer | x86-Notebook |
+|---|---|---|---|---|---|---|
+| Deutsche Prosa (Planungsunterlagen dieser Phase) | 18 | 469.513 | 142.396 | **3,2972** | 3,2972 | 3,2947 |
+| Referenzkorpus `testdata/corpus` | 3 | 659 | 163 | 4,0429 | 4,0429 | 4,0429 |
+| Wortliste `/usr/share/dict/ngerman` | 1 | 1.000.000 | 247.204 | 4,0452 | 4,0452 | 4,0452 |
+
+**Die Tokenzahlen sind zwischen aarch64 und x86_64 bitgleich**, in allen drei
+Fällen und auf das letzte Token genau: 142.396, 163, 247.204. Die Behauptung "ein
+Tokenizer ist eine Tabellensuche und liefert auf jeder Maschine dieselben Token"
+ist damit keine Behauptung mehr, sondern der billigstmögliche Beweis, den ein
+gleiches Zahlenpaar hergibt.
+
+Die Prosa-Zeile weicht gegenüber dem x86-Notebook um 0,08 Prozent ab (3,2972
+statt 3,2947), und der Grund steht in der Dateizahl: 18 statt 17
+Planungsdateien. Zwischen der lokalen Messung und dem Lauf auf `8d108a3` ist eine
+Datei dazugekommen. Das ist ein anderer Text und keine andere Maschine.
+
+**Ableitung 1 ändert sich dadurch nicht.** Mit 3,2972 statt 3,2947 trägt ein
+durchschnittliches Dokument 8.209 statt 8.215 Token, und 1.024 Token entsprechen
+3.376 statt 3.374 Zeichen. Der Abdeckungsanteil aus D-17b bleibt bei **12,5
+Prozent**, die Chunkzahl bleibt bei 100.136, und der Befund, dass unter dem
+Deckel aus D-01 die Zahl A1 die Laufzeit nicht mehr entscheidet, bleibt
+unberührt.
+
+### Messung B auf aarch64: die Zahl, an der die Phase hing
+
+| Charge | Sequenz | Token je Runde | p50 ms | p95 ms | **Token/s bei p50** | Token/s bei p95 |
+|---|---|---|---|---|---|---|
+| 2 | 256 | 512 | 107,9 | 108,3 | **4.745** | 4.728 |
+| 2 | 512 | 1.024 | 281,4 | 285,9 | **3.640** | 3.581 |
+| 8 | 256 | 2.048 | 425,8 | 428,8 | **4.809** | 4.776 |
+| 8 | 512 | 4.096 | 1.163,8 | 1.191,8 | **3.519** | 3.437 |
+
+Zwei Dinge fallen sofort auf, und beide sind für Plan 06-05 verwertbar.
+
+**Erstens: die Streuung ist auf dem Läufer verschwunden.** Zwischen p50 und p95
+liegen hier 0,4 bis 2,4 Prozent, auf dem Notebook waren es 19 bis 47. Befund 3
+des Abschnitts "Messung B" oben war also kein Merkmal der Rechenlast, sondern
+eines der Maschine, auf der sie lief. Für die Ableitung heißt das, dass p50 und
+p95 auf dem Läufer praktisch dieselbe Aussage tragen; die Rechnung unten führt
+trotzdem beide, weil die Zielbox mit ihren geteilten vCPU eher dem Notebook
+gleichen wird als dem Läufer.
+
+**Zweitens: Befund 2 von oben hält auf ARM nicht.** Auf dem Notebook war Charge 2
+bei Sequenz 256 um ein Viertel schneller als Charge 8 (5.700 gegen 4.573). Auf
+aarch64 sind die beiden praktisch gleich, mit einem Vorsprung von 1,3 Prozent für
+Charge 8 (4.809 gegen 4.745). Die Aussage "Charge 2 ist gleichzeitig die
+sparsamste und die schnellste" wird damit zu "Charge 2 ist die sparsamste und
+kostet auf der Zielarchitektur keine messbare Zeit", was für die Entscheidung in
+06-05 die bequemere Lage ist, aber eine andere Begründung braucht als die
+Notebook-Zahl. Befund 1 dagegen hält unverändert: von 512 auf 256 Token steigt
+der Durchsatz bei Charge 8 um 37 Prozent (3.519 auf 4.809), auf dem Notebook
+waren es 40.
+
+### Der gemessene Faktor zwischen x86 und ARM
+
+| Kombination | x86-Notebook | **arm64-Läufer** | amd64-Läufer | Faktor Notebook/ARM | Faktor amd64-Läufer/ARM |
+|---|---|---|---|---|---|
+| Charge 2, Sequenz 256 | 5.700 | **4.745** | 2.516 | **1,20** | 0,53 |
+| Charge 2, Sequenz 512 | 3.451 | **3.640** | 2.112 | **0,95** | 0,58 |
+| Charge 8, Sequenz 256 | 4.573 | **4.809** | 2.493 | **0,95** | 0,52 |
+| Charge 8, Sequenz 512 | 3.275 | **3.519** | 2.082 | **0,93** | 0,59 |
+
+Alle Werte sind Token je Sekunde bei p50. Ein Faktor größer als 1 heißt "ARM ist
+langsamer".
+
+**Der höchste gemessene Faktor ist 1,20**, und er steht bei genau der
+Kombination, deren D-04-Schwelle mit 9,6 die höchste ist. In drei von vier
+Kombinationen ist ARM nicht langsamer, sondern schneller.
+
+Gegen den amd64-Läufer, also im einzigen Vergleich, in dem sich außer dem
+Befehlssatz nichts unterscheidet, ist der Neoverse-N2 **um den Faktor 1,69 bis
+1,93 schneller** als der EPYC 9V74. Das ist kein Wunder und auch kein
+Messfehler: der EPYC ist ein 80-Kerner, dessen vier sichtbare Kerne auf einem
+geteilten Sockel sitzen, und das ONNX-Runtime-Backend findet auf Neoverse-N2 mit
+`i8mm` und `bf16` genau die Befehle vor, die ein int8-Modell braucht (siehe die
+Flaggenliste in `raw/arm64-machine.txt`).
+
+### Das D-04-Verdikt
+
+D-04 lautet: fällt Messung B so aus, dass selbst der 1.024-Token-Deckel über
+einem Tag liegt, entscheidet der Owner über den potion-Notausgang.
+
+Die gedeckelte Tokenmenge aus Ableitung 1 (50.068 Dokumente mal 1.024 Token =
+51.269.632 Token) gegen die vier gemessenen aarch64-Durchsätze:
+
+| Kombination | Token/s p50 | **Dauer bei p50** | Token/s p95 | Dauer bei p95 |
+|---|---|---|---|---|
+| Charge 8, Sequenz 512 | 3.519 | **4 h 03 min** | 3.437 | 4 h 09 min |
+| Charge 2, Sequenz 512 | 3.640 | **3 h 55 min** | 3.581 | 3 h 59 min |
+| Charge 2, Sequenz 256 | 4.745 | **3 h 00 min** | 4.728 | 3 h 01 min |
+| Charge 8, Sequenz 256 | 4.809 | **2 h 58 min** | 4.776 | 2 h 59 min |
+
+> **Verdikt: D-04 greift nicht.** Der höchste gemessene x86/ARM-Faktor ist
+> **1,20** (Charge 2, Sequenz 256) und liegt damit unter beiden Schwellen dieses
+> Berichts, 5,5 für Charge 8 zu Sequenz 512 und 9,6 für Charge 2 zu Sequenz 256.
+> In den drei übrigen Kombinationen liegt der Faktor bei 0,93 bis 0,95, also
+> unter 1. Der gedeckelte Erstindex dauert auf nativer aarch64-Hardware **2 h 58
+> min bis 4 h 09 min** statt der von der Recherche geschätzten 7 bis 24 Stunden.
+> Der potion-Notausgang bleibt zu, die Phase läuft mit e5-small und dem
+> 1.024-Token-Deckel weiter.
+
+Dieselbe Aussage von der anderen Seite, weil ein Verdikt seine Reserve nennen
+soll: die Zielbox dürfte gegenüber dem arm64-Läufer **um den Faktor 5,9
+langsamer** sein (Charge 8, Sequenz 512) beziehungsweise **um den Faktor 8,0**
+(Charge 2, Sequenz 256), bevor der gedeckelte Erstindex die 24 Stunden reißt.
+Dass zwei gepinnte Neoverse-N2-Kerne schneller sind als zwei geteilte vCPU einer
+kleinen Box, ist sicher; dass sie um mehr als das Sechsfache schneller sind, ist
+es nicht. Der Abstand trägt die Entscheidung, die Nähe der Maschine zur Zielbox
+trägt sie nicht.
+
+**Was das Verdikt nicht sagt.** Es sagt nichts über die Dauer auf der Zielbox in
+Stunden, und der Store-Text nach D-17a darf die 2 h 58 min bis 4 h 09 min deshalb
+nicht als Zusage tragen. Es sagt nur, dass die Größe, an der die Phase hängen
+könnte, sie nicht zum Kippen bringt.
+
+### Messung C auf aarch64
+
+**int8, 384 Byte je Vektor**
+
+| Chunks | Gelesene Byte | warm p50 | warm p95 | kalt p50 | kalt p95 |
+|---|---|---|---|---|---|
+| 50.000 | 19,2 MB | 18,4 ms | 18,6 ms | 41,6 ms | 79,4 ms |
+| **100.000** | **38,4 MB** | **37,5 ms** | **37,8 ms** | **92,0 ms** | **153,5 ms** |
+| 250.000 | 96,0 MB | 93,1 ms | 93,6 ms | 240,1 ms | 251,1 ms |
+| 1.000.000 | 384,0 MB | 347,5 ms | **348,4 ms** | 975,3 ms | **989,0 ms** |
+
+**bit, 48 Byte je Vektor**
+
+| Chunks | Gelesene Byte | warm p50 | warm p95 | kalt p50 | kalt p95 |
+|---|---|---|---|---|---|
+| 50.000 | 2,4 MB | 2,4 ms | 2,4 ms | 8,1 ms | 18,6 ms |
+| **100.000** | **4,8 MB** | **4,8 ms** | **4,9 ms** | **13,5 ms** | **24,6 ms** |
+| 250.000 | 12,0 MB | 12,6 ms | 12,9 ms | 34,0 ms | 75,7 ms |
+| 1.000.000 | 48,0 MB | 52,5 ms | 52,8 ms | 162,2 ms | 211,5 ms |
+
+Fett wie oben: die Zeile aus Erfolgskriterium 4 und jeder Wert über dem
+Abbruchkriterium von 300 ms p95 je Runde. Das Verwerfen des Seitencaches ist auch
+in diesem Lauf in jedem Fall gelungen, in beiden Speichertypen und auf beiden
+Läufern: keine der vier `scan-latency`-Rohdateien trägt eine
+`cold_not_enforced`-Zeile, und der Schritt "Say whether the cold series was
+really cold" ist ohne Warnung durchgelaufen.
+
+Vier Befunde im Abgleich mit der x86-Reihe oben:
+
+1. **Der Befund "speicherbandbreitengebunden" ist bestätigt, und zwar
+   überraschend genau.** Warm bei 1M rechnet der arm64-Läufer 384 MB in 347,5 ms,
+   also **1,11 GB/s**; das Notebook lag bei 1,13 GB/s. Zwei völlig verschiedene
+   Maschinen, zwei verschiedene Befehlssätze, derselbe Durchsatz auf zwei
+   Nachkommastellen genau. Der amd64-Läufer fällt mit 0,66 GB/s deutlich dahinter
+   zurück, was denselben geteilten Sockel meint wie bei Messung B.
+2. **Die Linearität hält.** int8 warm: 18,4 / 37,5 / 93,1 / 347,5 ms für 50k /
+   100k / 250k / 1M. Die Verdopplung der Chunkzahl verdoppelt die Zeit, die
+   Stützstellen bleiben interpolierbar.
+3. **Bit bringt auf ARM Faktor 6,6 statt 5,3**, gemessen bei 1M warm (347,5 gegen
+   52,5 ms). Näher an der Schätzung aus 06-RESEARCH.md 2.3 als die
+   Notebook-Zahl, aber immer noch nicht die dort genannten 8 bis 20. Der Befund
+   "der Platzgewinn ist der volle Faktor 8, der Zeitgewinn ist es nicht" bleibt
+   richtig.
+4. **Die 250.000er-Schwelle fällt auf den beiden Maschinen verschieden aus, und
+   das ist die einzige Stelle, an der sich die zwei Reihen widersprechen.** Auf
+   dem Notebook riss der kalte Punkt bei 250.000 mit 372,7 ms das Kriterium; auf
+   dem arm64-Läufer hält er mit 251,1 ms. Der Unterschied liegt nicht im
+   Prozessor, sondern in der Platte: der Läufer hat eine NVMe-SSD, das Notebook
+   eine WSL2-Datei darauf. **Die vorsichtige Lesart bleibt deshalb die aus dem
+   Hauptteil**: 250.000 Chunks sind der Grenzpunkt, und eine von zwei gemessenen
+   Maschinen reißt ihn kalt. Die Aussage für diese Phase ist davon nicht
+   betroffen, weil sie bei 100.136 Chunks liegt.
+
+### Ableitung 3 auf aarch64: Vektoranteil je Nutzersuche
+
+Bei der Chunkzahl aus Ableitung 1 (100.136, gerechnet mit der Stützstelle
+100.000), gegen `BUDGET_NANOSECONDS = 2_500_000_000` und `MAX_ROUNDS = 3`:
+
+| Speichertyp | Cachezustand | p95 je Runde | gegen 300 ms | drei Runden | Anteil an 2,5 s |
+|---|---|---|---|---|---|
+| int8 | warm | 37,8 ms | 13 % | 113,3 ms | **4,5 %** |
+| int8 | kalt | 153,5 ms | 51 % | 460,6 ms | **18,4 %** |
+| bit | warm | 4,9 ms | 2 % | 14,8 ms | 0,6 % |
+| bit | kalt | 24,6 ms | 8 % | 73,8 ms | 3,0 % |
+
+**int8 mit brute force hält das Budget auch auf der Zielarchitektur**, warm um
+den Faktor 7,9, kalt um den Faktor 2,0. Der kalte Fall ist auf ARM enger als auf
+dem Notebook (51 statt 36 Prozent des Kriteriums), und zwar wegen der höheren
+Streuung der kalten Reihe auf dem Läufer: der kalte p95 bei 100.000 liegt bei
+153,5 ms, der schlechteste Einzelfall bei 566,0 ms. Ein Ausreißer unter hundert
+Abfragen ist kein p95, aber er gehört genannt, weil er zeigt, wo die kalte Spalte
+ihre Unruhe hat.
+
+D-10 (Bit-Vektoren nicht bauen, nur dokumentieren) bleibt damit auch nach der
+ARM-Messung die richtige Entscheidung, und der Abstraktionsschnitt aus D-08
+bleibt aus demselben Grund richtig wie oben: bei einer Million Chunks reißt int8
+auch auf ARM warm (348,4 ms), und bit hält dieselbe Million kalt bei 211,5 ms.
+
+### Die Owner-Abnahme
+
+**Am 05.09.2026 hat der Owner diesen Bericht abgenommen mit der Entscheidung
+"weiter wie geplant" (Checkpoint Task 3 aus 06-02-PLAN.md, Variante 3a).** Die
+Phase läuft mit e5-small und dem 1.024-Token-Deckel weiter, Plan 06-04 zurrt das
+Schema fest. Der potion-Notausgang aus D-04 wurde nicht gezogen und D-04 selbst
+nicht angetastet; die Regel bleibt so stehen, wie sie in 06-CONTEXT.md steht, und
+dieser Bericht ist der Beleg, dass ihre Bedingung nicht eingetreten ist.
+
+Die zweite Frage des Checkpoints (bleibt der Vektoranteil unter 300 ms p95 je
+Runde?) ist mit 37,8 ms warm und 153,5 ms kalt bei der Chunkzahl dieser Phase
+beantwortet. Die Wahl zwischen int8 und Bit-Vektoren wird damit nicht zur
+Owner-Entscheidung, weil sie nicht gestellt werden muss.
+
+### Die Rohdaten des Nachtrags
+
+Im selben Verzeichnis `raw/`, unverändert so, wie das Werkzeug sie geschrieben
+hat, mit den Präfixen `arm64-` für die Aussage und `runner-amd64-` für den
+Vergleich. Das Präfix `runner-` unterscheidet den amd64-Läufer von den
+bestehenden `amd64-`-Dateien, die vom lokalen x86-Notebook stammen und ein
+anderes Abbild gemessen haben:
+
+| Datei | Lauf |
+|---|---|
+| `arm64-machine.txt` | Maschine, Abbildkennung, `lscpu`, `free -m` |
+| `arm64-chars-per-token-corpus.txt` | A über `testdata/corpus` |
+| `arm64-chars-per-token-prosa.txt` | A über die deutschen Planungsunterlagen dieser Phase |
+| `arm64-chars-per-token-wordlist.txt` | A über `/usr/share/dict/ngerman` |
+| `arm64-tokens-per-second-b2-s256.txt` | B, Charge 2, Sequenz 256 |
+| `arm64-tokens-per-second-b2-s512.txt` | B, Charge 2, Sequenz 512 |
+| `arm64-tokens-per-second-b8-s256.txt` | B, Charge 8, Sequenz 256 |
+| `arm64-tokens-per-second-b8-s512.txt` | B, Charge 8, Sequenz 512 |
+| `arm64-scan-latency-int8.txt` | C, int8, warm und kalt, vier Größen |
+| `arm64-scan-latency-bit.txt` | C, bit, warm und kalt, vier Größen |
+| `runner-amd64-*.txt` | dieselben zehn Läufe auf `ubuntu-24.04` |
+
+Die Kommandozeilen stehen nicht noch einmal hier, weil sie in diesem Fall keine
+Handeingabe sind: sie stehen als Schritte "A, characters per token", "B, tokens
+per second" und "C, scan latency" in `.github/workflows/measure.yml` bei Commit
+`8d108a3`, und sie sind bis auf die Bind-Mount-Pfade dieselben wie die oben
+abgedruckten.
+
+### Was auch nach diesem Nachtrag offen bleibt
+
+- **Die Zahl auf der Zielbox selbst.** Der arm64-Läufer hat dedizierte Kerne, die
+  Zielbox hat geteilte vCPU. Beziffert ist der Abstand nicht, gedeckt ist er
+  durch die Reserve von Faktor 5,9 bis 8,0 bis zur D-04-Schwelle.
+- **Die RAM-Spitze beim Einbetten** (A5). Unverändert eine Schätzung; Messung B
+  misst Zeit, nicht Speicher.
+- **Der Qualitätsverlust von Bit-Vektoren** für e5-small auf Deutsch. Unverändert
+  nicht belegt, und dieser Nachtrag misst wie der Hauptteil Zeit und Platz.
+- **Wie viele Dokumente unter 1.024 Token liegen.** Ableitung 1 bleibt eine
+  Obergrenze.
+- **Ob `vec0` mit Metadaten- und Partitionsspalten schneller oder langsamer
+  wird** (A8). Gemessen wurde auch hier eine nackte Vektortabelle.
