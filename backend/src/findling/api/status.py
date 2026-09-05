@@ -10,10 +10,18 @@ reason codes behind them, and the per file error list. That is the half an admin
 can still read when this container is off, which is exactly the moment they go
 looking for it.
 
-*From here*: indexed, indexed(truncated), the document count of the index, the
-permission rows, the version marks, the space on the volume and the throughput.
-Only this process sees the volume and the tantivy index, so nobody else can
-count them.
+*From here*: indexed, indexed(truncated), indexed(embedded), the document count
+of the index, the permission rows, the version marks, the space on the volume and
+the throughput. Only this process sees the volume, the tantivy index and the
+vector stock, so nobody else can count them.
+
+The third of those is the newest and the one with a track of its own behind it.
+The embedding pass runs for hours after the full text half is already usable, so
+a page with one coverage figure says a hundred per cent while a search by
+paraphrase still finds nothing (D-16). The number is read out of the vector
+stock, which is the only place that holds it, and a stock that is absent or
+unreadable is a state of this container with a note, exactly like a state
+database that is.
 
 *And one value that is neither a counter nor a measurement*: ``appVersion``, the
 version AppAPI registered this container under. It is here because D-11 has both
@@ -66,14 +74,21 @@ from pydantic import BaseModel, Field
 from findling.api import resources
 from findling.config import settings
 from findling.store.repo import Store, index_bytes, open_read_only
+from findling.store.vectors import VectorStoreError, open_vectors
 
 LOGGER = logging.getLogger("findling.api.status")
 
 ROUTER = APIRouter()
 
-# Both notes name a state of this container and never a location on disk.
+# Every note names a state of this container and never a location on disk.
 NO_STATE_YET = "no state database yet, the first indexing pass has not finished"
 STATE_UNREADABLE = "the state database exists but could not be opened"
+# The two of the second track. They are worth having apart from the two above,
+# because the answer they belong to is otherwise complete: every full text
+# counter is still true when the vector stock is gone, and exactly one figure of
+# the answer is missing.
+NO_VECTORS_YET = "no vector database yet, the second track has not written anything"
+VECTORS_UNREADABLE = "the vector database exists but could not be read"
 
 
 class StatusResponse(BaseModel):
@@ -91,6 +106,13 @@ class StatusResponse(BaseModel):
     # asks for the number because "indexed" would otherwise be read as a promise
     # this container never made about the end of a long document.
     truncated: int = 0
+    # Contained in indexed above and never added next to it: a document without
+    # a vector is indexed, it is just not findable by meaning yet. D-16 asks for
+    # the number because "indexed" would otherwise be read as a promise about
+    # the semantic half that this container has not made: the second track fills
+    # up for hours after the full text half is usable, and without a figure of
+    # its own the page says a hundred per cent while a paraphrase finds nothing.
+    embedded: int = 0
     skipped: int = 0
     failed: int = 0
     # State to reason code to count, and the key for "no reason at all" is the
@@ -200,6 +222,54 @@ def _volume() -> StatusResponse:
     )
 
 
+def _embedded() -> tuple[int, str]:
+    """How many documents carry a vector, and the note that belongs to that figure.
+
+    Its own function because it needs its own try, and the shape of that try is
+    the one :func:`report` uses one file over: ``sqlite3.Error`` next to
+    ``OSError``, on the open and on the read, because the two realistic shapes of
+    a broken stock escape the open alone. A file that is not a SQLite database
+    raises from the first PRAGMA, and a zero byte vectors.db, which a kill
+    between connect and the schema script leaves behind, opens cleanly and
+    raises on the first query. Both are a state of this container and never a 500
+    (review finding WR-01).
+
+    ``VectorStoreError`` joins the two, and it is the finding this file adds to
+    them: reading the stock means loading a shared object into this process, and
+    a box where vec0 refuses to load is a third way to have no figure and the
+    same answer for the page.
+
+    ``read_only=True`` refuses a missing file rather than creating an empty one,
+    the same discipline the read side keeps: an empty stock this route created
+    would report nought embedded for ever and look exactly like a second track
+    that has not started.
+    """
+    resolved = settings()
+    if not resolved.vectors_db.is_file():
+        return (0, NO_VECTORS_YET)
+
+    try:
+        vectors = open_vectors(resolved.vectors_db, read_only=True)
+    except (OSError, sqlite3.Error, VectorStoreError) as error:
+        LOGGER.warning("the vector database could not be opened, an %s", type(error).__name__)
+        return (0, VECTORS_UNREADABLE)
+
+    try:
+        return (vectors.document_count(), "")
+    except sqlite3.Error as error:
+        LOGGER.warning("the vector database could not be read, an %s", type(error).__name__)
+        return (0, VECTORS_UNREADABLE)
+    finally:
+        # Opened per call rather than kept, for the reason the state database is:
+        # this route is asked rarely, by one admin page, and a connection of its
+        # own is always current without a cache anybody has to invalidate. The
+        # read side keeps a cached handle and this route deliberately does not
+        # share it: that one is opened for searching and is absent on a container
+        # that has no index yet, which is a container this route still answers
+        # for.
+        vectors.close()
+
+
 def _of(store: Store, volume: StatusResponse) -> StatusResponse:
     """Read every number out of one open state database.
 
@@ -231,6 +301,11 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         # it. The version says nothing about the state database, so it is not
         # read a second time here: one place asks the environment.
         appVersion=volume.appVersion,
+        # The second track and its note travel the same way, and for the same
+        # reason: they come out of another file, so a healthy state database
+        # neither produces them nor clears them.
+        embedded=volume.embedded,
+        note=volume.note,
         lowDisk=volume.lowDisk,
         diskFreeBytes=volume.diskFreeBytes,
         diskTotalBytes=volume.diskTotalBytes,
@@ -249,6 +324,15 @@ def report() -> StatusResponse:
     """
     resolved = settings()
     volume = _volume()
+    # Asked before the state database, and its note is carried in the same
+    # structure. One answer carries one note, so the two findings are ordered
+    # rather than joined: the state database is the bigger one, because without
+    # it there are no counters at all, while a missing vector stock costs
+    # exactly one of them. Every branch below therefore overwrites this note and
+    # none of them appends to it.
+    embedded, vector_note = _embedded()
+    volume = volume.model_copy(update={"embedded": embedded, "note": vector_note})
+
     if not resolved.state_db.is_file():
         return volume.model_copy(update={"note": NO_STATE_YET})
 

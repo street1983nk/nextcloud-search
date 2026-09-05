@@ -575,6 +575,25 @@ class VectorStore:
         row = self._conn.execute("SELECT COUNT(*) FROM chunks").fetchone()
         return int(row[0]) if row else 0
 
+    def document_count(self) -> int:
+        """How many documents carry at least one vector. The second coverage figure.
+
+        Documents and not chunks, and the difference is the whole value of the
+        number: a document carries two or three chunks under the token cap
+        (measured 2026-09-05), so a count of chunks would stand next to a count
+        of indexed documents on the same page and be two to three times larger
+        than the figure it is supposed to be a share of.
+
+        Counted here rather than kept in a column of ``files``. The stock is the
+        one place that knows, and a second place claiming to know the backlog is
+        the class of mistake the header of repo.py argues against: the two agree
+        until the first lost write and disagree quietly afterwards. The price is
+        one indexed scan of ``chunks_file`` per status call, and the status route
+        is asked by one admin page.
+        """
+        row = self._conn.execute("SELECT COUNT(DISTINCT file_id) FROM chunks").fetchone()
+        return int(row[0]) if row else 0
+
     def vector_count(self) -> int:
         """How many vectors the stock holds.
 
