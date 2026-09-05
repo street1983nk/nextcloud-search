@@ -50,7 +50,7 @@ from findling.embed.model import EmbedOutcome, to_int8
 from findling.index.fusion import ChunkHit, documents_from_chunks, reciprocal_rank_fusion
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_MTIME
 from findling.store.repo import Store
-from findling.store.vectors import VectorStore
+from findling.store.vectors import BestChunk, VectorStore
 
 LOGGER = logging.getLogger("findling.index.search")
 
@@ -478,12 +478,80 @@ def _document_for(index: Index, file_id: int) -> Document | None:
     return searcher.doc(result.hits[0][1])
 
 
+def _rank_chunks(semantic: SemanticSide | None, file_ids: Sequence[int]) -> dict[int, BestChunk]:
+    """Where the passage of each confirmed document sits, or nothing at all.
+
+    **Every argument of this function is already confirmed, and that is its
+    whole position in the file.** It is called once, after the prefilter has
+    answered, with the documents that survived it. Asking the vector store
+    first and dropping the refused documents afterwards would produce the same
+    answer and would have spent the embedding, the scan and the read on
+    documents this user may not see (T-06-37).
+
+    The try is the same narrow net ``_semantic_documents`` carries and it is
+    there for the same reason: a missing model, an extension that will not load
+    or a damaged vector file must cost the semantic excerpt and never the
+    answer. Everything it catches ends as an empty mapping, and every document
+    then takes the first path, which is the behaviour of this function before
+    plan 06-08 (D-13, D-19).
+
+    The log line prints a type name and nothing else. The raw search line sits
+    in ``semantic.text`` right beside a library that has an opinion about what
+    went wrong, and that line is user content (T-06-39).
+    """
+    if semantic is None:
+        return {}
+    try:
+        outcome = semantic.model.embed_query(semantic.text)
+        if not outcome.available or not outcome.vectors:
+            # The honest verdict of the wrapper rather than an exception, and
+            # the ordinary state of a container built without the model. Same
+            # answer as a failure, without a warning that would repeat per call.
+            return {}
+        return semantic.vectors.best_chunk_for(file_ids, to_int8(outcome.vectors[0]))
+    # Deliberately every exception, for the reason in the docstring above.
+    except Exception as error:
+        LOGGER.warning("the vector branch of the excerpt cut ended in an unexpected %s", type(error).__name__)
+        return {}
+
+
+def _passage_of(document: Document, chunk: BestChunk | None, *, limit: int) -> str:
+    """The stored text between two character offsets, cut to the excerpt cap.
+
+    ``body_de`` is the only stored copy of the extracted text in the whole
+    system, and this reads it exactly the way
+    :meth:`findling.index.writer.IndexBatchWriter.stored_body` does, out of the
+    document the caller is already holding.
+
+    **The two offsets are characters and the slice below counts characters.**
+    This project has measured the confusion once already, at
+    :func:`char_ranges`: the engine reports (35, 51) where the character range
+    is (35, 50). A slice on bytes would move the excerpt of every document with
+    an umlaut in front of the passage, silently, and in German that is all of
+    them (T-06-40).
+
+    The cap is the same number the generator gets. Its meaning differs slightly
+    on the two paths, because ``set_max_num_chars`` compares bytes inside the
+    fragmenter while this one counts characters, and the direction of that
+    difference is the harmless one: an excerpt of this path is never longer
+    than the number an operator set.
+    """
+    if chunk is None:
+        return ""
+    values = document.to_dict().get(FIELD_BODY_DE, [])
+    if not values:
+        return ""
+    return str(values[0])[chunk.char_start : chunk.char_end][:limit]
+
+
 def snippets_for(
     index: Index,
     store: Store,
     uid: str,
     query: Query,
     file_ids: Sequence[int],
+    *,
+    semantic: SemanticSide | None = None,
 ) -> list[SnippetText]:
     """Cut one text excerpt per confirmed file id, in the order they were asked for.
 
@@ -493,33 +561,55 @@ def snippets_for(
     content of any document by its id. That the caller already dropped everything
     the recheck refused is not an argument, it is an assumption about a different
     process running correctly, and the cost of not making that assumption was
-    measured at 0.2 ms.
+    measured at 0.2 ms. **The second excerpt path lies behind that same line.**
+    The query is embedded and the rank chunks are asked for only once the
+    confirmed set is known, and the cut itself happens in the same loop body as
+    the first path, so both kinds of excerpt pass the one gate (T-06-37).
 
     A document the index does not know is skipped. A document the query does not
     match inside the text field yields an empty excerpt rather than an error: a
     hit without a snippet is still a hit, and the subline falls back to the path
     on the PHP side.
+
+    ``semantic`` is what turns that last sentence from the whole story into the
+    first half of it. A hit only the vector branch found has by definition no
+    literal overlap with the query, so the generator answers an empty fragment,
+    and for such a hit that is the normal case rather than the exception. When
+    the bundle is present, an empty fragment is replaced by the passage of the
+    chunk that matched, carrying no highlights because there is no literal match
+    to mark (D-13). Without the bundle, and whenever the vector branch fails,
+    this function behaves exactly as it did before plan 06-08.
     """
     visible = store.prefilter_visible(uid, file_ids)
     if not visible:
         return []
 
+    # Everything below this line is about documents the prefilter confirmed.
+    confirmed = [file_id for file_id in file_ids if file_id in visible]
+    ranked = _rank_chunks(semantic, confirmed)
+
     generator = SnippetGenerator.create(index.searcher(), query, index.schema, FIELD_BODY_DE)
     # Despite its name this is a byte comparison inside the fragmenter, so a
     # German sentence fits into slightly less than the number suggests. The value
     # is the one cap of this module and lives in findling.config with the rest.
-    generator.set_max_num_chars(settings().snippet_chars)
+    cap = settings().snippet_chars
+    generator.set_max_num_chars(cap)
 
     excerpts: list[SnippetText] = []
-    for file_id in file_ids:
-        if file_id not in visible:
-            continue
+    for file_id in confirmed:
         document = _document_for(index, file_id)
         if document is None:
             continue
         snippet = generator.snippet_from_doc(document)
         fragment = snippet.fragment()
-        excerpts.append(
-            SnippetText(file_id=file_id, text=fragment, highlights=char_ranges(fragment, snippet.highlighted()))
-        )
+        if fragment:
+            excerpts.append(
+                SnippetText(file_id=file_id, text=fragment, highlights=char_ranges(fragment, snippet.highlighted()))
+            )
+            continue
+        # The second path, and it produces text without marks on purpose: there
+        # is no literal match in this document, so a highlight would point at a
+        # word the user never searched for. Without a rank chunk this is the
+        # empty excerpt of before, which is still a hit.
+        excerpts.append(SnippetText(file_id=file_id, text=_passage_of(document, ranked.get(file_id), limit=cap)))
     return excerpts

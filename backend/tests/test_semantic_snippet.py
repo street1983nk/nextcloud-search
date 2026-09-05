@@ -565,8 +565,9 @@ def test_a_fragment_that_is_not_empty_is_left_exactly_as_it_was(
 ) -> None:
     # The first excerpt path keeps the last word wherever it has one. The
     # comparison is element for element against the answer of the same call
-    # without the vector half.
-    asked = [GERMAN_FILE, FRENCH_FILE]
+    # without the vector half, over the document this line really occurs in and
+    # that carries a chunk as well, so both paths could have answered.
+    asked = [GERMAN_FILE]
     query = _query(index, TERM)
 
     before = snippets_for(index, store, OWNER, query, asked)

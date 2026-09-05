@@ -23,6 +23,15 @@ around the matches, and nothing in this path ever asks for that form: the
 unified search UI interpolates the subline as text, so a tag would reach the
 user verbatim. Highlighting travels as character offsets instead, converted from
 the byte ranges the engine reports.
+
+Since plan 06-08 there is a second way an excerpt can come about, and it hangs
+on exactly the same check as the first one. A hit that only the vector branch
+found has no literal overlap with the query, so the generator answers an empty
+fragment and the user would see a hit without any preview; for such a hit the
+text is cut out of the stored body between the two character offsets of the
+chunk that matched (D-13). That cut happens inside ``snippets_for``, behind the
+permission prefilter and behind the PHP recheck, which is why this route hands
+over the raw search line and the vector stock and decides nothing itself.
 """
 
 import asyncio
@@ -34,7 +43,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from findling.api import resources
-from findling.config import SEARCH_LIMIT_MAX, SEARCH_QUERY_MAX_CHARS
+from findling.config import SEARCH_LIMIT_MAX, SEARCH_QUERY_MAX_CHARS, settings
 from findling.index import search as index_search
 from findling.nc.client import AsyncNextcloudApp, anc_app, current_user_id
 from findling.query.rewrite import build_query
@@ -126,9 +135,18 @@ def excerpts(uid: str, text: str, file_ids: list[int], title_only: bool) -> list
         rewritten = build_query(side.index, text, title_only=title_only)
         if rewritten.query is None:
             return []
+        # The vector half, handed over as the same bundle the candidate round
+        # takes. The raw line goes along because the model needs words and the
+        # rewritten query is not text any more, and it is the line the user
+        # typed rather than a stored one, so no log line of this module or of
+        # snippets_for may carry it (T-06-39).
+        semantic = None
+        if side.vectors is not None and settings().embed_enabled:
+            semantic = index_search.SemanticSide(vectors=side.vectors, model=resources.query_model(), text=text)
         # The permission prefilter is the first action inside this call, and it
-        # is not redundant here; see the module docstring for why.
-        return index_search.snippets_for(side.index, side.store, uid, rewritten.query, file_ids)
+        # is not redundant here; see the module docstring for why. Both excerpt
+        # paths lie behind it.
+        return index_search.snippets_for(side.index, side.store, uid, rewritten.query, file_ids, semantic=semantic)
     # Deliberately every exception, for the reason in the docstring above.
     except Exception as error:
         # The type name and nothing else: a traceback carries whatever a library
