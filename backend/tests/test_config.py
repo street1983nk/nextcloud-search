@@ -33,6 +33,7 @@ from findling.config import (
     OCR_HARD_DEADLINE_MARGIN_SECONDS,
     OCR_JOB_SECONDS_MAX,
     OCR_LOCK_TIMEOUT_SECONDS,
+    SEARCH_SCAN_MAX,
     settings,
 )
 
@@ -60,6 +61,11 @@ ENVIRONMENT = (
     "FINDLING_EMBED_BATCH_SIZE",
     "FINDLING_EMBED_SEQUENCE_LEN",
     "FINDLING_EMBED_MODEL_DIR",
+    "FINDLING_SEARCH_RRF_K",
+    "FINDLING_SEARCH_RRF_WINDOW",
+    "FINDLING_SEARCH_LEXICAL_WEIGHT",
+    "FINDLING_SEARCH_SEMANTIC_WEIGHT",
+    "FINDLING_VECTOR_SCAN_MAX",
 )
 
 
@@ -95,7 +101,7 @@ def test_defaults_are_the_measured_numbers() -> None:
     assert current.compound_dict == "full"
 
 
-def test_persistent_storage_places_all_four_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_persistent_storage_places_every_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("APP_PERSISTENT_STORAGE", str(tmp_path))
     settings.cache_clear()
 
@@ -103,6 +109,7 @@ def test_persistent_storage_places_all_four_paths(monkeypatch: pytest.MonkeyPatc
 
     assert current.index_dir == tmp_path / "index"
     assert current.state_db == tmp_path / "state.db"
+    assert current.vectors_db == tmp_path / "vectors.db"
     assert current.dict_dir == tmp_path / "dict"
     assert current.tmp_dir == tmp_path / "tmp"
 
@@ -113,6 +120,7 @@ def test_without_persistent_storage_everything_lands_under_the_temp_directory() 
     root = Path(tempfile.gettempdir())
     assert current.index_dir.parent.parent == root
     assert current.index_dir.parent == current.state_db.parent == current.dict_dir.parent == current.tmp_dir.parent
+    assert current.vectors_db.parent == current.state_db.parent
 
 
 @pytest.mark.parametrize("variant", ["full", "nouns"])
@@ -628,3 +636,144 @@ def test_an_embedding_cap_cannot_drift_at_runtime_either() -> None:
 
     with pytest.raises((AttributeError, TypeError)):
         current.embed_token_cap = 1  # pyright: ignore[reportAttributeAccessIssue]
+
+
+# ---------------------------------------------------------------------------
+# The hybrid read side, phase 6. One test per value again, and for the same
+# reason: none of the five can fail loudly. A rank constant far off its
+# documented default still ranks, a window that is too shallow still answers, a
+# weight that arrives as NaN poisons every score silently, and a vector ceiling
+# turned up buys a full scan of the chunk stock on every user search.
+# ---------------------------------------------------------------------------
+
+
+def test_the_hybrid_defaults_are_the_documented_numbers() -> None:
+    current = settings()
+
+    # 60 is the documented default of the Elasticsearch implementation the
+    # formula was taken from, and 100 is the window depth of D-12.
+    assert current.search_rrf_k == 60
+    assert current.search_rrf_window == 100
+    assert current.search_lexical_weight == 1.0
+    assert current.search_semantic_weight == 1.0
+    # Three chunks per capped document times the window depth.
+    assert current.vector_scan_max == 300
+
+
+def test_the_rank_constant_can_be_moved(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_SEARCH_RRF_K", "20")
+    settings.cache_clear()
+
+    assert settings().search_rrf_k == 20
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "601", "sechzig"])
+def test_a_rank_constant_outside_the_measured_range_falls_back(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_SEARCH_RRF_K", value)
+    settings.cache_clear()
+
+    assert settings().search_rrf_k == 60
+
+
+def test_the_fusion_window_can_be_deepened(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_SEARCH_RRF_WINDOW", "250")
+    settings.cache_clear()
+
+    assert settings().search_rrf_window == 250
+
+
+@pytest.mark.parametrize("value", ["0", str(SEARCH_SCAN_MAX + 1), "hundert"])
+def test_a_fusion_window_outside_the_raw_ceiling_falls_back(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_SEARCH_RRF_WINDOW", value)
+    settings.cache_clear()
+
+    # A window wider than the whole scan would be a promise the raw ceiling
+    # cannot keep.
+    assert settings().search_rrf_window == 100
+
+
+def test_the_semantic_weight_may_be_turned_down_to_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_SEARCH_SEMANTIC_WEIGHT", "0")
+    settings.cache_clear()
+
+    # Zero is the far end of damping and a legitimate answer, which is why the
+    # float reader does not refuse it the way the integer reader refuses zero.
+    assert settings().search_semantic_weight == 0.0
+    assert settings().embed_enabled is True
+
+
+def test_a_damped_semantic_weight_is_taken_as_written(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_SEARCH_SEMANTIC_WEIGHT", "0.25")
+    settings.cache_clear()
+
+    assert settings().search_semantic_weight == 0.25
+
+
+@pytest.mark.parametrize("value", ["-0.5", "11", "nan", "inf", "viertel"])
+def test_a_semantic_weight_outside_the_range_falls_back(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_SEARCH_SEMANTIC_WEIGHT", value)
+    settings.cache_clear()
+
+    # nan and inf are in this list because float() parses both of them without
+    # complaint, and either would poison every score the merge produces.
+    assert settings().search_semantic_weight == 1.0
+
+
+def test_the_lexical_weight_may_be_damped(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_SEARCH_LEXICAL_WEIGHT", "0.5")
+    settings.cache_clear()
+
+    assert settings().search_lexical_weight == 0.5
+
+
+@pytest.mark.parametrize("value", ["0", "0.0", "-1", "11", "eins"])
+def test_the_lexical_weight_cannot_be_turned_off(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_SEARCH_LEXICAL_WEIGHT", value)
+    settings.cache_clear()
+
+    # Zero is refused here and accepted for the semantic weight, and the
+    # asymmetry is the point: switching off the half of the search that always
+    # works would break the fallback criterion 3 rests on.
+    assert settings().search_lexical_weight == 1.0
+
+
+def test_the_vector_ceiling_can_be_raised(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_VECTOR_SCAN_MAX", "600")
+    settings.cache_clear()
+
+    assert settings().vector_scan_max == 600
+
+
+@pytest.mark.parametrize("value", ["0", "-5", str(SEARCH_SCAN_MAX + 1), "dreihundert"])
+def test_a_vector_ceiling_outside_the_range_falls_back(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_VECTOR_SCAN_MAX", value)
+    settings.cache_clear()
+
+    assert settings().vector_scan_max == 300
+
+
+def test_a_broken_weight_warns_without_naming_its_value(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("FINDLING_SEARCH_SEMANTIC_WEIGHT", "0,5")
+    settings.cache_clear()
+
+    with caplog.at_level("WARNING", logger="findling.config"):
+        settings()
+
+    # The German decimal comma is the typo this reader will actually see, and
+    # the warning names the variable and never what somebody typed.
+    assert "FINDLING_SEARCH_SEMANTIC_WEIGHT" in caplog.text
+    assert "0,5" not in caplog.text
+
+
+def test_the_vector_database_lies_beside_the_state_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("APP_PERSISTENT_STORAGE", str(tmp_path))
+    settings.cache_clear()
+
+    current = settings()
+
+    # A file of its own, not a table inside state.db: the vector stock is
+    # discardable without losing the full text half (plan 06-04).
+    assert current.vectors_db == tmp_path / "vectors.db"
+    assert current.vectors_db != current.state_db

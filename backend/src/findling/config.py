@@ -453,6 +453,93 @@ EMBED_SEQUENCE_LEN_RANGE = (16, EMBED_CONTEXT_TOKENS)
 # here would move that verdict into the boot path of the container.
 EMBED_MODEL_DIR = "/usr/local/share/findling/model"
 
+# ---------------------------------------------------------------------------
+# The hybrid read side, phase 6. What the merge in index/fusion.py is fed with,
+# how the two halves are weighed against each other, and the one ceiling that
+# keeps a user search from scanning the whole chunk stock without bound.
+#
+# None of the five below is advertised on the admin page, which is D-12 and the
+# same rule the token cap above follows: they are screws for the failure case,
+# not configuration tasks, and the zero config promise of this product is that
+# nobody has to touch them.
+# ---------------------------------------------------------------------------
+
+# The rank constant of the reciprocal rank fusion. 60 is the documented default
+# of the Elasticsearch implementation the formula was taken from word for word
+# ("Defaults to 60", retrieved 2026-09-04), so it is a value with a source and
+# not a preference.
+#
+# The range is tight around it because both of its ends stop being a ranking.
+# Far below 60 the front ranks dominate so hard that the second list can no
+# longer move a document at all; far above it every 1/(k+rank) approaches 1/k,
+# the contributions of rank 1 and rank 100 stop being distinguishable, and the
+# merge answers an arbitrary order while looking exactly as it always did. Ten
+# times the documented default is well past the point where either is visible.
+SEARCH_RRF_K = 60
+SEARCH_RRF_K_RANGE = (1, 600)
+
+# How many hits per source go into the merge at all (D-12).
+#
+# The reservation of D-12 belongs at this line, because this is the number it is
+# about: the window interacts with the selectivity of the permission prefilter.
+# Measured in the phase 2 research, 31 of 400 candidates survived it in the
+# synthetic worst case, and at that selectivity a window of 100 per source
+# yields fewer than ten permitted hits. The answer to that is not a deeper
+# window, which pays the full ranking cost for hits nobody may see; it is the
+# continuation scan behind the window in index/search.py, and that branch exists
+# for this measurement and for no other reason.
+#
+# Bounded above by SEARCH_SCAN_MAX, because a window wider than the whole scan
+# would be a promise the raw ceiling cannot keep.
+SEARCH_RRF_WINDOW = 100
+SEARCH_RRF_WINDOW_RANGE = (1, SEARCH_SCAN_MAX)
+
+# The two weights the merge gives its sources. Elasticsearch has no such thing
+# ("each child retriever carries an equal weight"), so both the values and their
+# ranges are ours, and the two ranges are deliberately not the same.
+#
+# The semantic weight may be turned down to zero, which is the point of it
+# existing: an administrator who sees the vector half push the wrong documents
+# forward can damp it without switching the second track off, and zero is the
+# far end of damping. index/fusion.py answers a weight of zero by dropping that
+# list entirely rather than by scoring it with nothing, so the result set at
+# zero is exactly the result set of a container without a vector stock.
+#
+# The lexical weight may not. Zero there would switch off the half of the search
+# that always works, and the promise of criterion 3 is the opposite one: when
+# the vector half is gone the answer is the unchanged full text ranking. A
+# configuration value that can quietly break the fallback is not a weight, it is
+# a second off switch nobody documented.
+SEARCH_LEXICAL_WEIGHT = 1.0
+SEARCH_LEXICAL_WEIGHT_RANGE = (0.1, 10.0)
+SEARCH_SEMANTIC_WEIGHT = 1.0
+SEARCH_SEMANTIC_WEIGHT_RANGE = (0.0, 10.0)
+
+# The own ceiling of the vector half: how many chunk hits one candidate round
+# may ask the vector store for.
+#
+# The security argument is the one SEARCH_OFFSET_MAX makes above. The endpoints
+# carry access_level USER, so any signed in account reaches them with a free
+# JSON body, and a vector query is not a top-k over an index: sqlite-vec visits
+# every row of the stock and no parameter of that query changes it, which
+# store/vectors.py::nearest states in its own docstring. With MAX_ROUNDS = 3 on
+# the PHP side, mirrored here as SEARCH_ROUNDS, that scan is paid up to three
+# times per user search, so it is the standard load of this container and not an
+# edge case.
+#
+# 300, which is the window depth of 100 documents times the three chunks a
+# capped document carries at most (measured 2026-09-05: two to three chunks per
+# document under the 1024 token cap of D-01). Asking for more would buy a heap
+# the merge cannot use, because the aggregation cuts back to the window anyway.
+#
+# The number this ceiling is measured against is the scan latency of wave 0: at
+# 100136 chunks a full scan reads 38.4 MB and costs 37.8 ms p95 warm and
+# 153.5 ms p95 cold on native aarch64, taken at k = 50
+# (docs/measurements/2026-09-05-welle0-arm64/README.md, measurement C,
+# 2026-09-05), against the abort criterion of 300 ms per round.
+VECTOR_SCAN_MAX = 300
+VECTOR_SCAN_MAX_RANGE = (1, SEARCH_SCAN_MAX)
+
 # Subdirectory used when APP_PERSISTENT_STORAGE is absent, which is the case in
 # tests and in a bare local run, never in a container deployed by AppAPI.
 FALLBACK_STORAGE_DIRNAME = "findling"
@@ -469,6 +556,10 @@ class Settings:
 
     index_dir: Path
     state_db: Path
+    # Beside state.db and not inside it (plan 06-04): the vector stock is
+    # discardable without losing the full text half, and the ability to load a
+    # binary extension stays away from the database the search reads.
+    vectors_db: Path
     dict_dir: Path
     tmp_dir: Path
 
@@ -492,6 +583,11 @@ class Settings:
     search_rounds: int
     snippet_chars: int
     search_limit_max: int
+    search_rrf_k: int
+    search_rrf_window: int
+    search_lexical_weight: float
+    search_semantic_weight: float
+    vector_scan_max: int
 
     ocr_enabled: bool
     ocr_languages: tuple[str, ...]
@@ -546,6 +642,41 @@ def _bounded_int_from_environment(name: str, default: int, bounds: tuple[int, in
     job budget above the queue lock timeout makes every large scan look stuck.
     """
     value = _int_from_environment(name, default)
+    low, high = bounds
+    if low <= value <= high:
+        return value
+    LOGGER.warning("%s is outside the range this build was measured for, falling back to the default", name)
+    return default
+
+
+def _bounded_float_from_environment(name: str, default: float, bounds: tuple[float, float]) -> float:
+    """Read a fractional number that also has to fall inside a measured range.
+
+    The same blueprint as the reader above and the same warning behaviour: never
+    a refusal to start, always the built in default.
+
+    It does not layer on a positive-only reader the way the integer one does,
+    and that is the split ``_hour_from_environment`` and
+    ``_overlap_from_environment`` make below, for the same reason. Zero is a
+    legitimate answer here: a semantic weight of zero is an administrator
+    damping the vector half down to nothing without switching the second track
+    off, and a reader that treated it as a typo would take that setting away.
+
+    The range check does a second job for free, and it is worth naming because
+    it is invisible. ``float()`` happily parses ``nan`` and ``inf``, and either
+    of them would poison every score the merge produces. A comparison against a
+    NaN is false in both directions, so it falls back like any other value
+    outside the range, and an infinity is above every high bound this module
+    hands in.
+    """
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        LOGGER.warning("%s is not a number, falling back to the built in default", name)
+        return default
     low, high = bounds
     if low <= value <= high:
         return value
@@ -760,6 +891,7 @@ def settings() -> Settings:
     return Settings(
         index_dir=root / "index",
         state_db=root / "state.db",
+        vectors_db=root / "vectors.db",
         dict_dir=root / "dict",
         tmp_dir=root / "tmp",
         languages=_languages(),
@@ -787,6 +919,19 @@ def settings() -> Settings:
         search_rounds=_int_from_environment("FINDLING_SEARCH_ROUNDS", SEARCH_ROUNDS),
         snippet_chars=_int_from_environment("FINDLING_SNIPPET_CHARS", SNIPPET_CHARS),
         search_limit_max=_int_from_environment("FINDLING_SEARCH_LIMIT_MAX", SEARCH_LIMIT_MAX),
+        search_rrf_k=_bounded_int_from_environment("FINDLING_SEARCH_RRF_K", SEARCH_RRF_K, SEARCH_RRF_K_RANGE),
+        search_rrf_window=_bounded_int_from_environment(
+            "FINDLING_SEARCH_RRF_WINDOW", SEARCH_RRF_WINDOW, SEARCH_RRF_WINDOW_RANGE
+        ),
+        search_lexical_weight=_bounded_float_from_environment(
+            "FINDLING_SEARCH_LEXICAL_WEIGHT", SEARCH_LEXICAL_WEIGHT, SEARCH_LEXICAL_WEIGHT_RANGE
+        ),
+        search_semantic_weight=_bounded_float_from_environment(
+            "FINDLING_SEARCH_SEMANTIC_WEIGHT", SEARCH_SEMANTIC_WEIGHT, SEARCH_SEMANTIC_WEIGHT_RANGE
+        ),
+        vector_scan_max=_bounded_int_from_environment(
+            "FINDLING_VECTOR_SCAN_MAX", VECTOR_SCAN_MAX, VECTOR_SCAN_MAX_RANGE
+        ),
         ocr_enabled=_bool_from_environment("FINDLING_OCR_ENABLED", OCR_ENABLED),
         ocr_languages=_ocr_languages(),
         ocr_max_pages=_bounded_int_from_environment("FINDLING_OCR_MAX_PAGES", OCR_MAX_PAGES, OCR_MAX_PAGES_RANGE),

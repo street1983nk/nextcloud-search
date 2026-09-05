@@ -37,10 +37,11 @@ from typing import Final
 from tantivy import Index
 
 from findling.config import settings
+from findling.embed.model import EmbeddingModel
 from findling.index.open import expected_versions, open_index, open_reader
 from findling.index.wordlist import build_artifact
 from findling.store.repo import EMBEDDING_MARK, VECTOR_ONLY_MARKS, Store, open_read_only
-from findling.store.vectors import embedding_mark
+from findling.store.vectors import VectorStore, embedding_mark, open_vectors
 
 LOGGER = logging.getLogger("findling.api.resources")
 
@@ -80,18 +81,27 @@ DEGRADED_TTL_SECONDS: Final = 5.0
 
 @dataclass(frozen=True, slots=True)
 class ReadSide:
-    """The two handles a search needs, plus the path they were opened from."""
+    """The handles a search needs, plus the path they were opened from."""
 
     index: Index
     store: Store
     index_dir: Path
+    # The vector stock, and it may be None while the other two are open. That is
+    # the whole statement of this field and it is criterion 3 of phase 6: a
+    # missing, empty or unopenable vectors.db must not make read_side() answer
+    # None, because a broken vector stock would then switch the full text search
+    # off with it. So the open below sits in a try of its own, its failure sets
+    # this to None and writes one log line with a type name, and the search
+    # answers the unchanged lexical ranking (D-19, T-06-29).
+    vectors: VectorStore | None = None
 
 
 _OPEN: ReadSide | None = None
 _MARKS: tuple[Path, dict[str, str]] | None = None
 _DEGRADED: tuple[Path, float, bool] | None = None
+_MODEL: tuple[Path, EmbeddingModel] | None = None
 
-# One lock for the three caches above, and it is not a precaution.
+# One lock for the four caches above, and it is not a precaution.
 #
 # Every search runs its round in asyncio.to_thread and the unified search asks
 # all providers at the same moment, so two requests really do arrive in here at
@@ -216,6 +226,58 @@ def disk_bytes() -> tuple[int, int]:
     return (usage.free, usage.total)
 
 
+def _read_only_vectors(path: Path) -> VectorStore | None:
+    """Open the vector stock for reading, or answer None and say so once.
+
+    Its own function because it needs its own try, and the try is the point. A
+    vectors.db that is absent, that is not a database, or that lies on a box
+    where the vec0 extension refuses to load, are three different findings and
+    one outcome for the search: no vector list, the merge becomes the identity
+    on the lexical ranking, and the user gets full text results instead of
+    nothing (D-19).
+
+    ``read_only=True`` refuses a missing file rather than creating an empty one,
+    which is what keeps "the vector stock is gone" apart from "nothing similar
+    exists". Every failure ends here, and the log line carries the type name and
+    nothing else: a path is a file name and a library message quotes what it was
+    reading.
+    """
+    try:
+        return open_vectors(path, read_only=True)
+    # Deliberately every exception. The three findings above raise three
+    # different types, and a fourth one must not reach the caller either.
+    except Exception as error:
+        LOGGER.warning("the vector stock could not be opened, an %s, the search stays lexical", type(error).__name__)
+        return None
+
+
+def query_model() -> EmbeddingModel:
+    """The embedding model of the read side, built once and loaded on first use.
+
+    Built once for the reason the handles above are cached: the weights are
+    118 MB and the wrapper remembers a failed load, so a container without a
+    model looks for it once instead of once per search. Constructing the object
+    loads nothing, which is why this may be called before it is known whether
+    there is a model at all.
+
+    Keyed on the model directory like the other caches are keyed on their path,
+    so a suite that points a test at another directory gets another wrapper
+    instead of the remembered failure of the previous one.
+    """
+    global _MODEL
+    resolved = settings()
+    with _LOCK:
+        if _MODEL is not None and _MODEL[0] == resolved.embed_model_dir:
+            return _MODEL[1]
+        model = EmbeddingModel(
+            resolved.embed_model_dir,
+            batch_size=resolved.embed_batch_size,
+            sequence_len=resolved.embed_sequence_len,
+        )
+        _MODEL = (resolved.embed_model_dir, model)
+        return model
+
+
 def read_side() -> ReadSide | None:
     """The index and the state database of this container, None while either is absent.
 
@@ -240,6 +302,8 @@ def read_side() -> ReadSide | None:
         previous, _OPEN = _OPEN, None
         if previous is not None:
             previous.store.close()
+            if previous.vectors is not None:
+                previous.vectors.close()
 
         if not resolved.state_db.is_file() or not Index.exists(str(resolved.index_dir)):
             # Nothing to open yet, which is an ordinary state: the container is
@@ -250,8 +314,11 @@ def read_side() -> ReadSide | None:
         # Held in a local until the cache owns it. Between the open and the
         # assignment there is a step that can fail, and a connection that failed
         # to reach the cache has to be closed by whoever opened it; nobody else
-        # can reach it any more.
+        # can reach it any more. The vector handle follows the same discipline,
+        # because it is cached under the same key and released by the same
+        # branch above.
         store: Store | None = None
+        vectors: VectorStore | None = None
         try:
             index = open_index(resolved.index_dir, build_artifact().entries)
             # Once per index, not once per query: configuring the reader costs
@@ -260,8 +327,12 @@ def read_side() -> ReadSide | None:
             # makes a later commit of the poller visible to this process at all.
             open_reader(index)
             store = open_read_only(resolved.state_db)
-            _OPEN = ReadSide(index=index, store=store, index_dir=resolved.index_dir)
+            # After the two that matter, and outside their fate. Whatever this
+            # answers, the read side is opened.
+            vectors = _read_only_vectors(resolved.vectors_db)
+            _OPEN = ReadSide(index=index, store=store, index_dir=resolved.index_dir, vectors=vectors)
             store = None
+            vectors = None
         # Deliberately every exception, for the reason in the docstring above.
         except Exception as error:
             # The type name and nothing else. A traceback here would carry
@@ -272,16 +343,26 @@ def read_side() -> ReadSide | None:
         finally:
             if store is not None:
                 store.close()
+            if vectors is not None:
+                vectors.close()
         return _OPEN
 
 
 def degraded(side: ReadSide | None) -> bool:
     """True when this container is answering, but not from a complete index.
 
-    Three causes, one flag: there is no index yet, the index was built by a
-    different tokenisation, or the volume is too full for the indexer to commit.
-    The PHP side gets one boolean out of it so that it can stay quiet instead of
-    guessing, and phase 4 builds the status page out of the same three answers.
+    Four causes, one flag: there is no index yet, the index was built by a
+    different tokenisation, the volume is too full for the indexer to commit, or
+    embedding is switched on and there is no vector stock to answer with. The
+    PHP side gets one boolean out of it so that it can stay quiet instead of
+    guessing, and phase 4 builds the status page out of the same answers.
+
+    The fourth cause is the one phase 6 added, and it is a statement about
+    completeness rather than about a fault. A container whose second track has
+    not run yet answers lexically and answers correctly; it just does not answer
+    with everything it promises, and that is exactly what this flag is for. It
+    is asked only while ``embed_enabled`` is on, because an instance that
+    switched the second track off is not missing anything.
 
     The verdict is remembered for :data:`DEGRADED_TTL_SECONDS`, which is five
     seconds, and that number belongs in this docstring because it decides how
@@ -302,7 +383,8 @@ def degraded(side: ReadSide | None) -> bool:
         cached = _DEGRADED
         if cached is not None and cached[0] == side.index_dir and now - cached[1] < DEGRADED_TTL_SECONDS:
             return cached[2]
-        verdict = bool(version_drift(side.store)) or low_disk()
+        missing_vectors = side.vectors is None and settings().embed_enabled
+        verdict = missing_vectors or bool(version_drift(side.store)) or low_disk()
         _DEGRADED = (side.index_dir, now, verdict)
         return verdict
 

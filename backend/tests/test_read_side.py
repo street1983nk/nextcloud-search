@@ -264,3 +264,88 @@ def test_a_fresh_volume_gets_its_own_marks(volume: Path, tmp_path_factory: pytes
 
     assert first is not None
     assert first["wordlist_hash"] == digest
+
+
+def test_a_volume_without_a_vector_stock_still_has_a_read_side(indexed_volume: Corpus) -> None:
+    # Criterion 3 at the place where it would be lost first. A missing
+    # vectors.db must cost the semantic half and nothing else, so read_side has
+    # to answer a ReadSide with vectors set to None and never None itself.
+    (indexed_volume.root / "vectors.db").unlink()
+    settings.cache_clear()
+
+    side = resources.read_side()
+
+    assert side is not None
+    assert side.vectors is None
+    assert side.index is not None
+
+
+def test_a_vector_file_that_is_not_a_database_costs_only_the_semantics(
+    indexed_volume: Corpus,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The second shape of a broken stock, and the one an ordinary open would
+    # let through: a file that exists and is not a database.
+    broken = indexed_volume.root / "vectors.db"
+    broken.write_bytes(b"this is not a database")
+    settings.cache_clear()
+
+    with caplog.at_level(logging.WARNING):
+        side = resources.read_side()
+
+    assert side is not None
+    assert side.vectors is None
+    # The log line carries a type name and nothing else: not the path, which is
+    # a file name, and not the library message, which quotes what it read.
+    assert str(broken) not in caplog.text
+    assert "this is not a database" not in caplog.text
+
+
+def test_a_missing_vector_stock_is_a_degraded_container(indexed_volume: Corpus) -> None:
+    # The fourth cause of the flag. A container that answers lexically answers
+    # correctly, it just does not answer with everything it promises.
+    (indexed_volume.root / "vectors.db").unlink()
+    settings.cache_clear()
+
+    side = resources.read_side()
+
+    assert side is not None
+    assert resources.degraded(side) is True
+
+
+def test_a_missing_vector_stock_with_embedding_off_is_not_degraded(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # An instance whose admin switched the second track off is not missing
+    # anything, so the fourth cause is asked only while it is on.
+    (indexed_volume.root / "vectors.db").unlink()
+    monkeypatch.setenv("FINDLING_EMBED_ENABLED", "false")
+    settings.cache_clear()
+
+    side = resources.read_side()
+
+    assert side is not None
+    assert side.vectors is None
+    assert resources.degraded(side) is False
+
+
+def test_a_present_vector_stock_is_opened_read_only(indexed_volume: Corpus) -> None:
+    side = resources.read_side()
+
+    assert side is not None
+    assert side.vectors is not None
+    with pytest.raises(sqlite3.OperationalError):
+        side.vectors.forget_all()
+
+
+def test_the_query_model_is_built_once(volume: Path) -> None:
+    # The wrapper remembers a failed load, so a container without a model looks
+    # for it once instead of once per search. Two wrappers would look twice.
+    assert volume.is_dir()
+
+    first = resources.query_model()
+    second = resources.query_model()
+
+    assert first is second
+    assert first.loaded is False

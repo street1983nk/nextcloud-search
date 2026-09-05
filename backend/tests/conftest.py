@@ -42,6 +42,7 @@ from findling.index.schema import (
 from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, wordlist_hash
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
+from findling.store.vectors import open_vectors
 
 APP_ID = "findling_backend"
 APP_VERSION = "0.1.0"
@@ -128,6 +129,20 @@ def write_state(root: Path, corpus: Corpus) -> None:
     store.close()
 
 
+def write_vectors(root: Path) -> None:
+    """Create the vector stock beside the state database, empty.
+
+    Empty on purpose, and present on purpose. What the endpoint suites need
+    from it is that it exists: a container whose second track has not written
+    anything yet still has the file, and ``degraded`` reads a missing file as
+    "the semantic half of this container is not there" rather than as "nothing
+    similar was found". Without this the whole suite would run against a
+    container that calls itself degraded, which is a different container from
+    the one those tests are about.
+    """
+    open_vectors(root / "vectors.db").close()
+
+
 def _meta_of(file_id: int) -> FileMeta:
     return FileMeta(
         storage_id=1,
@@ -187,9 +202,10 @@ def volume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 
 @pytest.fixture
 def indexed_volume(volume: Path) -> Corpus:
-    """A volume with a word list, a committed index and a matching state database."""
+    """A volume with a word list, an index, a state database and a vector stock."""
     digest = write_wordlist(volume)
     corpus = Corpus(root=volume, digest=digest)
     write_index(volume, corpus.documents)
     write_state(volume, corpus)
+    write_vectors(volume)
     return corpus
