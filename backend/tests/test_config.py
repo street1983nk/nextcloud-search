@@ -22,6 +22,10 @@ from pathlib import Path
 import pytest
 
 from findling.config import (
+    EMBED_CHUNK_TOKENS,
+    EMBED_CONTEXT_TOKENS,
+    EMBED_MODEL_DIR,
+    EMBED_TOKEN_CAP_RANGE,
     INDEX_WORKERS,
     MAX_TEXT_CHARS,
     OCR_CLAIM_BATCH,
@@ -48,6 +52,13 @@ ENVIRONMENT = (
     "FINDLING_OCR_PAGE_SECONDS",
     "FINDLING_OCR_JOB_SECONDS",
     "FINDLING_OCR_DPI",
+    "FINDLING_EMBED_ENABLED",
+    "FINDLING_EMBED_TOKEN_CAP",
+    "FINDLING_EMBED_CHUNK_TOKENS",
+    "FINDLING_EMBED_CHUNK_OVERLAP",
+    "FINDLING_EMBED_BATCH_SIZE",
+    "FINDLING_EMBED_SEQUENCE_LEN",
+    "FINDLING_EMBED_MODEL_DIR",
 )
 
 
@@ -397,3 +408,216 @@ def test_an_ocr_cap_cannot_drift_at_runtime_either() -> None:
 
     with pytest.raises((AttributeError, TypeError)):
         current.ocr_max_pages = 1  # pyright: ignore[reportAttributeAccessIssue]
+
+
+# ---------------------------------------------------------------------------
+# Embeddings, phase 6. One test per value, the same density the OCR block above
+# carries, because every one of these numbers fails silently: a chunk that
+# outgrows the sequence loses its tail without an error, a cap an admin turns to
+# an absurd value buys hours of ARM time nobody watches, and a model directory
+# that falls back to a guess would turn the honest embedding_unavailable verdict
+# into a download attempt.
+# ---------------------------------------------------------------------------
+
+
+def test_embedding_defaults_are_the_chosen_numbers() -> None:
+    current = settings()
+
+    assert current.embed_enabled is True
+    assert current.embed_token_cap == 1024
+    assert current.embed_chunk_tokens == 512
+    assert current.embed_chunk_overlap == 0
+    assert current.embed_batch_size == 2
+    assert current.embed_sequence_len == 512
+    assert current.embed_model_dir == Path(EMBED_MODEL_DIR)
+
+
+def test_the_token_cap_can_be_turned_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_TOKEN_CAP", "4096")
+    settings.cache_clear()
+
+    # D-01 calls the cap a setting an operator with time and hardware may raise,
+    # and a cap that only ever degrades to its default would not be one.
+    assert settings().embed_token_cap == 4096
+
+
+def test_the_documented_ceiling_of_the_token_cap_is_itself_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_TOKEN_CAP", str(EMBED_TOKEN_CAP_RANGE[1]))
+    settings.cache_clear()
+
+    assert settings().embed_token_cap == EMBED_TOKEN_CAP_RANGE[1]
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "100000", "viel", "1024.0"])
+def test_a_token_cap_outside_the_measured_range_falls_back(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_TOKEN_CAP", value)
+    settings.cache_clear()
+
+    # Zero is in this list on purpose: it reads like "switch embedding off" and
+    # is not. That switch is FINDLING_EMBED_ENABLED, and a cap of zero would
+    # otherwise produce a second, silent way to disable a feature.
+    assert settings().embed_token_cap == 1024
+    assert settings().embed_enabled is True
+
+
+@pytest.mark.parametrize("value", ["9999", "513", "0", "acht"])
+def test_a_chunk_size_above_the_context_window_falls_back(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, value: str
+) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_CHUNK_TOKENS", value)
+    settings.cache_clear()
+
+    with caplog.at_level("WARNING", logger="findling.config"):
+        current = settings()
+
+    # The model window is 512 tokens. A larger chunk is not refused by anything
+    # downstream, it is silently cut at the session and the tail of every chunk
+    # disappears from the index, so this has to warn and degrade rather than
+    # start a container that indexes less than it says.
+    assert current.embed_chunk_tokens == EMBED_CHUNK_TOKENS
+    assert current.embed_chunk_tokens <= EMBED_CONTEXT_TOKENS
+    assert "FINDLING_EMBED_CHUNK_TOKENS" in caplog.text
+    assert value not in caplog.text
+
+
+def test_a_smaller_chunk_size_is_taken(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_CHUNK_TOKENS", "256")
+    settings.cache_clear()
+
+    assert settings().embed_chunk_tokens == 256
+
+
+def test_a_zero_overlap_is_a_legitimate_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_CHUNK_OVERLAP", "0")
+    settings.cache_clear()
+
+    # Zero is the default and a real answer, so this value may not travel
+    # through the reader that refuses zero as "a cap of nothing".
+    assert settings().embed_chunk_overlap == 0
+
+
+def test_a_usable_overlap_is_taken(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_CHUNK_OVERLAP", "64")
+    settings.cache_clear()
+
+    assert settings().embed_chunk_overlap == 64
+
+
+@pytest.mark.parametrize("value", ["512", "600", "-1", "halb"])
+def test_an_overlap_that_cannot_advance_falls_back_to_zero(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_CHUNK_OVERLAP", value)
+    settings.cache_clear()
+
+    # An overlap that is not smaller than the chunk never advances: the splitter
+    # would produce the same window forever, on a machine with nobody watching.
+    current = settings()
+    assert current.embed_chunk_overlap == 0
+    assert current.embed_chunk_overlap < current.embed_chunk_tokens
+
+
+@pytest.mark.parametrize("value", ["0", "-4", "64", "zwei"])
+def test_an_unusable_batch_size_falls_back(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_BATCH_SIZE", value)
+    settings.cache_clear()
+
+    assert settings().embed_batch_size == 2
+
+
+def test_a_larger_batch_inside_the_range_is_taken(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_BATCH_SIZE", "8")
+    settings.cache_clear()
+
+    # Lever 4 of 06-RESEARCH.md 3.6 measured at batch 8 as well, so the range
+    # covers the shape the wave 0 report quotes beside the default.
+    assert settings().embed_batch_size == 8
+
+
+@pytest.mark.parametrize("value", ["513", "1024", "0", "lang"])
+def test_a_sequence_length_above_the_context_window_falls_back(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_SEQUENCE_LEN", value)
+    settings.cache_clear()
+
+    assert settings().embed_sequence_len == 512
+    assert settings().embed_sequence_len <= EMBED_CONTEXT_TOKENS
+
+
+def test_a_chunk_never_outgrows_the_sequence_the_session_sees(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_SEQUENCE_LEN", "256")
+    settings.cache_clear()
+
+    with caplog.at_level("WARNING", logger="findling.config"):
+        current = settings()
+
+    # The two values are read independently and are not independent. An admin
+    # who lowers the sequence to save memory and leaves the chunk size alone
+    # would otherwise feed 512 token chunks into a 256 token session, and half of
+    # every chunk would leave the index without a single error line.
+    assert current.embed_sequence_len == 256
+    assert current.embed_chunk_tokens == 256
+    assert "FINDLING_EMBED_CHUNK_TOKENS" in caplog.text
+
+
+@pytest.mark.parametrize("value", ["false", "FALSE", "0", "no", "off"])
+def test_embedding_can_be_switched_off_without_touching_the_full_text_side(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_ENABLED", value)
+    settings.cache_clear()
+
+    current = settings()
+
+    assert current.embed_enabled is False
+    # The switch owns the second track and nothing else. Full text and OCR keep
+    # every number they had, which is the whole promise of criterion 3.
+    assert current.ocr_enabled is True
+    assert current.max_text_chars == 524_288
+    assert current.languages == ("de", "en")
+
+
+@pytest.mark.parametrize("value", ["vielleicht", "ja", "1.0", "  "])
+def test_an_unusable_embedding_switch_stays_on(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_ENABLED", value)
+    settings.cache_clear()
+
+    assert settings().embed_enabled is True
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_an_empty_model_directory_yields_the_built_in_path(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", value)
+    settings.cache_clear()
+
+    # Not an error, and not a check that the directory exists either. Whether
+    # there is a model behind the path is a question for embed/model.py, which
+    # answers it with the embedding_unavailable verdict; a configuration reader
+    # that refused to resolve would move that verdict into the boot path.
+    assert settings().embed_model_dir == Path(EMBED_MODEL_DIR)
+
+
+def test_a_model_directory_from_the_environment_is_taken(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", str(tmp_path))
+    settings.cache_clear()
+
+    assert settings().embed_model_dir == tmp_path
+
+
+def test_a_broken_embedding_number_warns_without_naming_its_value(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_TOKEN_CAP", "1024k")
+    settings.cache_clear()
+
+    with caplog.at_level("WARNING", logger="findling.config"):
+        settings()
+
+    assert "FINDLING_EMBED_TOKEN_CAP" in caplog.text
+    assert "1024k" not in caplog.text
+
+
+def test_an_embedding_cap_cannot_drift_at_runtime_either() -> None:
+    current = settings()
+
+    with pytest.raises((AttributeError, TypeError)):
+        current.embed_token_cap = 1  # pyright: ignore[reportAttributeAccessIssue]
