@@ -194,6 +194,32 @@ jobs:
               ;;
           esac
 
+      # Wave 0 of phase 6: the two questions a vector schema hangs on, asked in
+      # the image that was just published and on the architecture of this
+      # runner. A13 is the gate (a CPython without loadable SQLite extensions
+      # means this image needs a Python translation of its own), A12 is a
+      # measurement that is allowed to come back either way and is recorded in
+      # docs/measurements/2026-09-05-welle0-proben/README.md.
+      #
+      # Three details, each of them load bearing:
+      #   --network none    the extension and the model have to work with the
+      #                     network cut. It is not the offline proof of plan
+      #                     06-10, but it is the half of it this image can show.
+      #   the bind mount    backend/.dockerignore keeps tests/ out of the build
+      #                     context on purpose, so the probe travels in from the
+      #                     checkout instead of living in the image.
+      #   --entrypoint      the probe runs as a plain script, because pytest is
+      #                     a dev dependency and is deliberately not installed
+      #                     in the runtime image.
+      - name: Answer A12 and A13 inside this image
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          docker run --rm --network none \
+            -v "${GITHUB_WORKSPACE}/backend/tests:/probe:ro" \
+            --entrypoint python \
+            "${IMAGE}@${DIGEST}" /probe/test_vec_extension_probe.py
+
       # The environment is the one from the local probe, deliberately. Without
       # HP_SHARED_KEY the app binds APP_PORT, frpc logs one line and exits, and
       # the published port is what the heartbeat is asked on.
