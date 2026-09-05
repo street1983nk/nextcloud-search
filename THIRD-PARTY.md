@@ -124,6 +124,57 @@ classifier. The MIT text is in `LICENSE` of the tagged upstream repository
 is MIT as well. It is written down here so the next reader does not have to
 repeat the search.
 
+## Python packages of the semantic path, and the model they run
+
+Added in phase 6. Four packages and one model, all pinned exactly in
+`backend/pyproject.toml` and `backend/uv.lock`. All four ship wheels; no
+`setup.py` runs at installation time.
+
+| Package | Version | Licence | Source repository | Place in the image |
+|---|---|---|---|---|
+| `fastembed` | 0.8.0 | Apache-2.0 | github.com/qdrant/fastembed | `/app/.venv/lib/python3.13/site-packages/fastembed` |
+| `onnxruntime` | 1.29.0 | MIT | github.com/microsoft/onnxruntime | `/app/.venv/lib/python3.13/site-packages/onnxruntime` |
+| `sqlite-vec` | 0.1.9 | Apache-2.0 | github.com/asg017/sqlite-vec | `/app/.venv/lib/python3.13/site-packages/sqlite_vec`, and the extension itself a second time at `/usr/local/lib/findling/vec0.so` |
+| `semantic-text-splitter` | 0.32.0 | MIT | github.com/benbrandt/text-splitter | `/app/.venv/lib/python3.13/site-packages/semantic_text_splitter` |
+
+`sqlite-vec` is the entry with the second copy, and the copy is the point. The
+package ships a prebuilt shared library inside its wheel, and that library is
+what SQLite loads into the process. The build copies it out of the wheel to a
+path of our own, checks its SHA-256 in the same `RUN` and exports the path as
+`FINDLING_VEC0_PATH`, so the thing that gets loaded is a property of the image
+and not a property of a package layout that may move in the next release. The
+Apache-2.0 text travels with it as
+`/usr/local/share/findling/COPYING.sqlite-vec`, for the same reason the word
+list and the OCR data carry theirs: the image is what is distributed.
+
+The model is not a package, so it gets its own table:
+
+| Item | Value |
+|---|---|
+| Model | `intfloat/multilingual-e5-small`, 384 dimensions, 512 token context |
+| Origin | HuggingFace, repository `intfloat/multilingual-e5-small`, read on 2026-09-04 |
+| Licence | **MIT** (HuggingFace API, `cardData.license = "mit"`, tag `license:mit`) |
+| Licence text in the image | `/usr/local/share/findling/COPYING.multilingual-e5-small` |
+| What is fetched at build time | `onnx/model.onnx` (470268510 bytes, fp32), `onnx/tokenizer.json`, `onnx/sentencepiece.bpe.model`, `config.json`, `tokenizer_config.json`, `special_tokens_map.json`, each checked against a SHA-256 written in `backend/Dockerfile` |
+| What is distributed | the **self quantised** int8 ONNX file plus the tokenizer and the configuration, under `/usr/local/share/findling/model`. The fp32 original stays in the build stage and never reaches the runtime image |
+| Why self quantised | the int8 file the upstream repository ships is `onnx/model_qint8_avx512_vnni.onnx`, and AVX512-VNNI is x86 only. On the ARM box this app targets it is unusable, so the build quantises `onnx/model.onnx` itself with `scripts/dev/quantize_model.py` |
+
+Two network libraries enter the image through `fastembed` and are listed here
+because they are distributed too: `huggingface-hub` 1.30.0 (Apache-2.0) and
+`requests` 2.34.2 (Apache-2.0). Neither is called at run time. The model and the
+tokenizer sit at fixed paths in the image, `HF_HUB_OFFLINE=1` is set in the
+runtime stage, and the probe of plan 06-01 as well as the offline test of plan
+06-10 run the container with `--network none`. `numpy`, `tokenizers`,
+`protobuf`, `flatbuffers` and the rest of the closure are resolved and pinned in
+`backend/uv.lock`, which stays the authoritative list of what lands in
+`/app/.venv`.
+
+`usearch` is deliberately **not** installed. It is the documented way out if
+brute force KNN stops scaling, plan 06-04 writes that way out down in
+`docs/embeddings.md`, and a
+fallback path that nobody imports is not a dependency and does not belong in a
+list of distributed material.
+
 ## The rest of what the image carries
 
 | Item | Version | Licence | Origin | Place in the image |

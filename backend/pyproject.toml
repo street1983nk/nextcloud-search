@@ -26,6 +26,36 @@ dependencies = [
     # dragged it in stops needing it. So it becomes a direct edge here. Net new
     # PyPI packages of phase 3: zero.
     "pillow==12.3.0",
+    # Phase 6, the semantic half of the search. Four new direct edges, each one
+    # pinned exactly, because every one of them decides what a search returns.
+    #
+    # fastembed runs the ONNX model that turns text into a 384 dimensional
+    # vector. 0.8.0 is the current release (2026-03-23) and the only one audited
+    # for this phase. It drags huggingface-hub and requests into an image that is
+    # not allowed to speak to the outside world; the answer to that is
+    # HF_HUB_OFFLINE=1 plus the model and the tokenizer at fixed paths in the
+    # image, and the proof is the offline test of plan 06-10, not this comment.
+    "fastembed==0.8.0",
+    # The inference runtime under fastembed, and the tool that quantises the
+    # model at build time. 1.29.0 (2026-08-17) is the newest release and it
+    # carries a cp313 manylinux_2_28_aarch64 wheel, which the ARM box needs.
+    # fastembed excludes 1.24.0 and 1.24.1 for Python 3.13 explicitly, so the
+    # window this pin sits in is >1.21.0 with those two cut out.
+    "onnxruntime==1.29.0",
+    # The vector store: a loadable SQLite extension, brute force KNN, no second
+    # process. There is deliberately no >= here. Everything after 0.1.9
+    # (2026-03-31) is a prerelease, and no commit has landed in the upstream
+    # repository since 2026-05-18, so a floating floor would only be able to
+    # drift into unreleased code (D-07). This is the same argument the tesseract
+    # language packs are pinned with: the artifact decides what the search
+    # reads. The documented way out if brute force stops scaling is usearch with
+    # an HNSW index; it is written down in docs/embeddings.md (plan 06-04) and it
+    # is not installed here, because a fallback path is not a dependency (D-10).
+    "sqlite-vec==0.1.9",
+    # Chunking. Splits a document into passages along sentence and paragraph
+    # boundaries instead of every N characters. 0.32.0 (2026-06-16), cp310-abi3
+    # wheel, so one wheel serves every Python from 3.10 on.
+    "semantic-text-splitter==0.32.0",
 ]
 
 [dependency-groups]
