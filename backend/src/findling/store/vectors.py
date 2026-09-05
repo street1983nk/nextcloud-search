@@ -1,4 +1,4 @@
-"""The vector half of the store, three operations wide.
+"""The vector half of the store, four operations wide.
 
 This is the abstraction cut of D-08. sqlite-vec is the vector store of this
 project and it is not a safe bet: the last upstream commit is from 2026-05-18,
@@ -11,14 +11,25 @@ usearch is a rewrite of one module and not of a subsystem. The costs and the
 gains of both fallbacks are written down in ``docs/embeddings.md`` (D-10); they
 are deliberately not built.
 
-The three operations, plus the two the delete path of plan 06-07 needs:
+The four operations, plus the two the delete path of plan 06-07 needs:
 
 * :meth:`VectorStore.replace_chunks` writes the vectors of one document as a
   whole and never as a change,
 * :meth:`VectorStore.nearest` answers with numbers, never with text,
+* :meth:`VectorStore.best_chunk_for` answers, for documents that are already
+  confirmed, which of their chunks sits closest to one query vector,
 * :meth:`VectorStore.drop_vectors` and :meth:`VectorStore.forget_all` are the
   two delete paths, and :meth:`VectorStore.chunks_of` is the read back the
   delete paths and the diagnosis need.
+
+**Why best_chunk_for belongs in here and gets no file of its own.** It is a
+question about vectors and it is answered with a distance, so a module outside
+this one could only answer it by knowing how a vector is stored and which metric
+this stock ranks under. That is exactly the knowledge D-08 keeps in one place:
+the day the column becomes ``bit[384]`` or the day usearch replaces sqlite-vec,
+this method changes here, beside :meth:`VectorStore.nearest`, and no caller
+learns about it. It is also the same question as ``nearest`` asked from the
+other end, which is the second reason the two live side by side.
 
 **The delete order is the point of replace_chunks.** It deletes before it
 inserts, in one transaction, exactly like :meth:`findling.store.repo.Store.replace_acl`
@@ -51,7 +62,7 @@ import logging
 import os
 import sqlite3
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -186,6 +197,22 @@ class Neighbour:
     distance: float
 
 
+@dataclass(frozen=True, slots=True)
+class BestChunk:
+    """Where the closest chunk of one confirmed document sits. Three numbers.
+
+    No distance and no chunk id, because neither has a reader: the caller of
+    :meth:`VectorStore.best_chunk_for` cuts a passage out of a stored text and
+    has already been told by the permission chain that it may. A distance would
+    be a statement about how well a document matched, and this project keeps
+    those out of everything that leaves the container (D-14).
+    """
+
+    file_id: int
+    char_start: int
+    char_end: int
+
+
 _INSERT_CHUNK_SQL: Final = "INSERT INTO chunks (file_id, ordinal, char_start, char_end) VALUES (?, ?, ?, ?)"
 _INSERT_VECTOR_SQL: Final = "INSERT INTO chunk_vectors (rowid, embedding) VALUES (?, vec_int8(?))"
 _CHUNK_IDS_SQL: Final = "SELECT chunk_id FROM chunks WHERE file_id = ?"
@@ -204,6 +231,17 @@ JOIN chunks AS c ON c.chunk_id = v.rowid
 WHERE v.embedding MATCH vec_int8(?) AND k = ?
 ORDER BY v.distance
 """
+
+# The metric of this stock, spelled out because best_chunk_for cannot let vec0
+# choose it. An ``int8[384]`` column ranks under the default metric of vec0,
+# which is L2, and the two ways of asking have to agree: a document that leads
+# the KNN of one query must not get the excerpt of a chunk that a second metric
+# would have preferred. Verified on 05.09.2026 against this schema, the
+# distances of the KNN and of this expression are the same numbers to the last
+# digit. The day the column becomes ``bit[384]`` this constant becomes
+# ``vec_distance_hamming`` and nothing outside this module moves (D-08,
+# docs/embeddings.md).
+_DISTANCE_EXPRESSION: Final = "vec_distance_l2(v.embedding, vec_int8(?))"
 
 
 def embedding_mark(model: str, *, tokens: int) -> str:
@@ -429,6 +467,62 @@ class VectorStore:
             for row in rows
         ]
 
+    def best_chunk_for(self, file_ids: Sequence[int], vector: bytes) -> dict[int, BestChunk]:
+        """Given documents, the chunk of each that sits closest to one vector.
+
+        **The direction is the one**
+        :meth:`findling.store.repo.Store.prefilter_visible` **fixes: given
+        candidates, which of them are permitted.** Here it is given documents,
+        which of their chunks matched. The inverse (rank the whole stock and
+        drop everything that is not in the list afterwards) is shorter to write
+        and wrong twice over. It spends ranking work on documents the PHP
+        recheck has already refused, and it answers with fewer documents than
+        were asked about as soon as the stock holds more than ``k`` chunks
+        outside the list, which for a page of confirmed hits is the ordinary
+        case rather than the extreme one.
+
+        This is not a KNN query and cannot be one. ``k`` is a constraint of the
+        vec0 table over the whole stock, so a KNN restricted afterwards is the
+        inverse question again. The distance is therefore computed per row over
+        the chunks of the named documents, with the metric the column ranks
+        under, and the closest row of each document wins.
+
+        Documents without chunks are absent from the answer, exactly as in
+        :meth:`chunks_of`, so a caller can tell "no chunks" from "not asked
+        about". An empty list of ids asks nothing at all.
+
+        Banded like ``prefilter_visible`` and ``chunks_of``, and a vector of the
+        wrong width is the same named error :meth:`nearest` raises: an empty
+        answer would be indistinguishable from a document without vectors.
+        """
+        _check_width(vector, "query vector")
+        if not file_ids:
+            # No ids, no question. The snippet path reaches this case whenever
+            # the prefilter confirmed nothing at all.
+            return {}
+
+        best: dict[int, BestChunk] = {}
+        for start in range(0, len(file_ids), _ID_BAND):
+            band = file_ids[start : start + _ID_BAND]
+            placeholders = ",".join("?" * len(band))
+            rows = self._conn.execute(
+                # The parameters are placeholders, all of them. Only their
+                # number is interpolated, and it is a count this method
+                # computed.
+                f"SELECT c.file_id, c.char_start, c.char_end, {_DISTANCE_EXPRESSION} AS distance "  # noqa: S608
+                "FROM chunks AS c JOIN chunk_vectors AS v ON v.rowid = c.chunk_id "
+                f"WHERE c.file_id IN ({placeholders}) "
+                "ORDER BY c.file_id, distance",
+                (vector, *band),
+            )
+            for row in rows:
+                # First row wins: the ORDER BY put the closest chunk of every
+                # document first, and setdefault is what keeps it there.
+                best.setdefault(
+                    int(row[0]), BestChunk(file_id=int(row[0]), char_start=int(row[1]), char_end=int(row[2]))
+                )
+        return best
+
     def chunks_of(self, file_ids: Sequence[int]) -> dict[int, list[Span]]:
         """The spans of the named documents, per document and in ordinal order.
 
@@ -463,6 +557,18 @@ class VectorStore:
                     Span(chunk_id=int(row[0]), ordinal=int(row[2]), char_start=int(row[3]), char_end=int(row[4]))
                 )
         return spans
+
+    def trace(self, callback: Callable[[str], object] | None) -> None:
+        """Report every statement this connection runs, or stop reporting.
+
+        The same device :meth:`findling.store.repo.Store.trace` is: two
+        properties of :meth:`best_chunk_for` cannot be seen in its result. An
+        empty list of ids never reaches the database, and a long one is split
+        into bands instead of relying on the parameter limit of this SQLite
+        build. Both are properties of the call pattern, so the tests observe
+        the calls.
+        """
+        self._conn.set_trace_callback(callback)
 
     def chunk_count(self) -> int:
         """How many chunks the stock holds. The status page half of the answer."""
