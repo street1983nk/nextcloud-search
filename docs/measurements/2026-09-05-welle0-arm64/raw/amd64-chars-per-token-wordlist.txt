@@ -1,0 +1,12 @@
+mode=chars-per-token
+arch=x86_64
+cpus=12
+python=3.13.15
+sqlite=3.46.1
+model_dir=/usr/local/share/findling/model
+vocabulary=250002
+files=1
+characters=1000000
+tokens=247204
+chars_per_token=4.0452
+tokenize_seconds=0.505

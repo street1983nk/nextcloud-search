@@ -1,0 +1,303 @@
+name: Wave 0 measurements
+
+# Measurements, not gates, and that is why the only trigger below is a manual
+# one.
+#
+# Three reasons, in the order they matter. These runs cost runner minutes in the
+# tens rather than in the ones, and nothing about them changes between two
+# commits: they measure a tokenizer, a model and a SQLite extension, all three of
+# which are constants of a published image. Their result belongs in a report a
+# person reads, not in a red or a green tick that says "still true" once an hour.
+# And a measurement that runs on every push invites the worst habit there is with
+# numbers, which is to look at the last one instead of at the one that was
+# written down with its hardware.
+#
+# What comes out is uploaded as an artefact and copied by hand into
+# docs/measurements/, next to the report that quotes it. The report names the
+# image digest, so any run of this workflow against that digest can be compared
+# with it.
+#
+# The image is pulled and not built. docker.yml already publishes a multi
+# architecture manifest on every push to main that touches backend/**, so the
+# arm64 runner below pulls the arm64 half of exactly the artefact users install,
+# addressed by its digest. Building here instead would cost the model download
+# and the quantisation twice per run and would measure an image nobody ships.
+on:
+  workflow_dispatch:
+    inputs:
+      image_ref:
+        description: 'Tag or sha256:... digest of ghcr.io/street1983nk/findling_backend'
+        required: false
+        default: 'dev'
+      queries:
+        description: 'KNN queries per size and cache state'
+        required: false
+        default: '100'
+
+permissions:
+  contents: read
+  # Read only. This workflow publishes nothing; it pulls one image and uploads
+  # one artefact, and the artefact upload needs no package scope.
+  packages: read
+
+concurrency:
+  # Two measuring runs on the same runner pool would compete for the page cache
+  # the cold series is about, and the cold series drops that cache for the whole
+  # machine. Serialised, and cancelled rather than queued: a measurement that was
+  # superseded is of no interest.
+  group: measure-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/street1983nk/findling_backend
+  # Where the tool sends its output inside the job. One file per run, and the
+  # file names are what the report cites.
+  OUT: measurements
+
+jobs:
+  measure:
+    name: Wave 0 on ${{ matrix.arch }} (${{ matrix.role }})
+    runs-on: ${{ matrix.runner }}
+    # The four throughput combinations cost about half a minute each on a fast
+    # x86 core and are the fastest part; the cold scan series is the slow one,
+    # because it drops the page cache before every single query and then reads
+    # up to 384 MB back from disk. Forty minutes is several times what that has
+    # to cost and is still a bound rather than the default 360.
+    timeout-minutes: 40
+    strategy:
+      # The two entries below are the two jobs the plan asks for, written as one
+      # definition so that nothing can drift between them: a difference between
+      # the two architectures has to come from the hardware and not from a step
+      # somebody edited on one side only. Which of the two is the statement and
+      # which is the comparison is in the role field and in the report, not in
+      # the mechanics.
+      fail-fast: false
+      matrix:
+        include:
+          # The target hardware of this app is a small ARM box. This is the
+          # number the phase is decided on.
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            role: target
+          # The comparison, so that the report can name the architecture gap
+          # instead of asserting it. It is not the answer to anything.
+          - arch: amd64
+            runner: ubuntu-24.04
+            role: comparison
+    steps:
+      # Actions are pinned to commit SHAs, never to tags: a tag can be moved and
+      # would hand a third party arbitrary code execution in this job. The three
+      # SHAs below are the ones the rest of this repository already runs, which
+      # is a rule of its own (test_workflow_pins.py, rule 5).
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The workflow input reaches a command line, so it is read inside the shell
+      # out of an environment variable and checked against a pattern first. An
+      # input is attacker supplied text in the general case, and the fact that
+      # only a maintainer can dispatch this workflow is a permission and not a
+      # validation.
+      - name: Resolve the image to a digest
+        id: image
+        env:
+          IMAGE_REF: ${{ inputs.image_ref }}
+        run: |
+          ref="${IMAGE_REF:-dev}"
+          if ! printf '%s' "${ref}" | grep -Eq '^(sha256:[0-9a-f]{64}|[A-Za-z0-9._-]{1,128})$'; then
+            echo "the image reference ${ref} is neither a digest nor a plain tag"
+            exit 1
+          fi
+          case "${ref}" in
+            sha256:*) target="${IMAGE}@${ref}" ;;
+            *)        target="${IMAGE}:${ref}" ;;
+          esac
+          docker pull "${target}"
+          digest=$(docker image inspect --format '{{join .RepoDigests ","}}' "${target}")
+          echo "requested ${target}"
+          echo "digest    ${digest}"
+          echo "target=${target}" >> "${GITHUB_OUTPUT}"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+
+      # The image published by docker.yml carries findling.embed.bench only from
+      # the commit that added it onward. Without this step a run against an older
+      # :dev would fail four steps later with a module import error, and the
+      # cause would be three screens up. It is also the one place that proves the
+      # measuring code inside the image is the code of this checkout: the module
+      # is not mounted in, it is the one that was built.
+      - name: The image has to carry the measuring tool
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+        run: |
+          if ! docker run --rm --network none --entrypoint python "${TARGET}" \
+              -m findling.embed.bench --help > /dev/null; then
+            echo "this image has no findling.embed.bench."
+            echo "docker.yml publishes it on the first push to main that carries plan 06-02;"
+            echo "dispatch this workflow again once that build is green."
+            exit 1
+          fi
+          mkdir -p "${OUT}"
+
+      # What the numbers below are numbers of. A measurement without its machine
+      # is a claim that gets quoted at the wrong hardware (T-06-07), and the two
+      # runners of this matrix differ in more than their instruction set.
+      - name: Write down the machine
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          {
+            echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "runner=${{ matrix.runner }}"
+            echo "role=${{ matrix.role }}"
+            echo "arch=$(uname -m)"
+            echo "kernel=$(uname -r)"
+            echo "cpus=$(nproc)"
+            echo "image=${TARGET}"
+            echo "digest=${DIGEST}"
+            echo "run=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "commit=${GITHUB_SHA}"
+          } | tee "${OUT}/machine.txt"
+          echo "::group::lscpu"
+          lscpu | tee -a "${OUT}/machine.txt"
+          echo "::endgroup::"
+          echo "::group::memory"
+          free -m | tee -a "${OUT}/machine.txt"
+          echo "::endgroup::"
+
+      # Measurement A, and the only one that reads real text. Three times, and
+      # the three samples are deliberately different kinds of German rather than
+      # three tries at the same one.
+      #
+      #   corpus    the reference corpus of this repository. Real prose, and 659
+      #             characters of it, which is a sample small enough to have to
+      #             be said out loud.
+      #   prose     the German planning documents of this phase, about 450 KB of
+      #             continuous administrative and technical prose, with all the
+      #             short function words prose has and a tokenizer notices.
+      #   wordlist  /usr/share/dict/ngerman, 356.010 German words and not one
+      #             function word among them. This is the vocabulary end, and it
+      #             is also the closest thing there is to the synthetic load
+      #             corpus of phase 5, whose text is generated out of this very
+      #             list and whose 27.067 characters per document every
+      #             derivation in the report starts from.
+      #
+      # The truth for a real holding lies between the prose and the wordlist
+      # figure, and the report says which of the two each derivation used. The
+      # tool prints the file count and the character total and never a file name
+      # (T-06-06).
+      #
+      # This is the one architecture independent number of the three. A tokenizer
+      # is a table lookup and a merge loop; it produces the same ids on every
+      # machine. It is measured on both runners all the same, because an equal
+      # pair of numbers is the cheapest possible proof of that claim.
+      - name: A, characters per token
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+        run: |
+          docker run --rm --network none \
+            -v "${GITHUB_WORKSPACE}/testdata:/testdata:ro" \
+            --entrypoint python "${TARGET}" \
+            -m findling.embed.bench --mode chars-per-token --text-dir /testdata/corpus \
+            | tee "${OUT}/chars-per-token-corpus.txt"
+          docker run --rm --network none \
+            -v "${GITHUB_WORKSPACE}/.planning/phases/06-semantische-suche:/prose:ro" \
+            --entrypoint python "${TARGET}" \
+            -m findling.embed.bench --mode chars-per-token --text-dir /prose \
+            | tee "${OUT}/chars-per-token-prose.txt"
+          docker run --rm --network none \
+            --entrypoint python "${TARGET}" \
+            -m findling.embed.bench --mode chars-per-token --text-dir /usr/share/dict/ngerman \
+            | tee "${OUT}/chars-per-token-wordlist.txt"
+
+      # Measurement B, four times, and the four runs are levers 4 and 5 of
+      # 06-RESEARCH.md 3.6 put against each other: batch 2 against 8 and sequence
+      # 256 against 512. The batch decides the activation peak, the sequence
+      # decides it quadratically, and both decide the throughput, so the pair
+      # that is cheapest in RAM is not obviously the one that is cheapest in
+      # time. Four runs answer that instead of choosing it.
+      #
+      # --cpuset-cpus 0,1 and --threads 2 together are the "two shared cores" of
+      # assumption A2. The cpuset is what makes the CPU count in the output true:
+      # a --cpus quota would leave the process seeing every core of the runner and
+      # the number would be quoted against the wrong machine.
+      - name: B, tokens per second
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+        run: |
+          for combination in "2 256" "2 512" "8 256" "8 512"; do
+            set -- ${combination}
+            echo "::group::batch $1 sequence $2"
+            docker run --rm --network none --cpuset-cpus 0,1 \
+              --entrypoint python "${TARGET}" \
+              -m findling.embed.bench --mode tokens-per-second \
+              --batch "$1" --sequence "$2" --threads 2 \
+              | tee "${OUT}/tokens-per-second-b$1-s$2.txt"
+            echo "::endgroup::"
+          done
+
+      # Measurement C, twice, once per storage type, and each run carries the
+      # warm and the cold series over one and the same fill. The difference is
+      # the statement and not the mean (06-RESEARCH.md 2.2), and two separately
+      # filled tables would carry the fill variance into it.
+      #
+      # The two flags that look alarming and are the whole point: --privileged
+      # and --user 0. Cold means the page cache is empty, and the only way to
+      # empty it is to write to /proc/sys/vm/drop_caches, which is root owned and
+      # read only in an ordinary container. Without them the tool reports
+      # cold_not_enforced and the cold column becomes unquotable, which is
+      # correct behaviour and a wasted run. The alternative that was considered
+      # and dropped: lifting the extension out of the image with docker cp and
+      # running the tool on the runner itself, where sudo exists. It works, and
+      # it measures the runner's Python and the runner's SQLite instead of the
+      # ones users get.
+      #
+      # The blast radius of the two flags, stated rather than waved away: this
+      # workflow is dispatch only, it holds no secret beyond the read scoped
+      # GITHUB_TOKEN, and the container it grants them to is an image this
+      # repository built and pinned to a digest three steps up. The runner is
+      # thrown away afterwards.
+      - name: C, scan latency
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+          QUERIES: ${{ inputs.queries }}
+        run: |
+          queries="${QUERIES:-100}"
+          case "${queries}" in
+            ''|*[!0-9]*) echo "queries has to be a positive integer, got ${queries}"; exit 1 ;;
+          esac
+          for kind in int8 bit; do
+            echo "::group::${kind}"
+            docker run --rm --network none --privileged --user 0 --cpuset-cpus 0,1 \
+              --entrypoint python "${TARGET}" \
+              -m findling.embed.bench --mode scan-latency --vector-type "${kind}" \
+              --cache both --sizes 50000,100000,250000,1000000 --queries "${queries}" \
+              | tee "${OUT}/scan-latency-${kind}.txt"
+            echo "::endgroup::"
+          done
+
+      # A cold series that could not be cold is a finding and not a failure: the
+      # run is still worth having, the warm column is untouched, and the report
+      # has to be able to say which of the two happened. So this step names it
+      # loudly and stays green.
+      - name: Say whether the cold series was really cold
+        run: |
+          if grep -h 'cold_not_enforced' "${OUT}"/scan-latency-*.txt; then
+            echo "::warning::the page cache could not be dropped, so the cold column of this run is warm"
+          else
+            echo "every cold query ran on an empty page cache"
+          fi
+
+      - name: Hand the raw output over
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: welle0-${{ matrix.arch }}
+          path: ${{ env.OUT }}/*
+          if-no-files-found: error
+          retention-days: 30
