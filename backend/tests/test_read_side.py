@@ -29,7 +29,7 @@ import pytest
 from conftest import Corpus, write_index, write_state, write_wordlist
 from findling.api import resources
 from findling.config import settings
-from findling.store.repo import Store, open_store
+from findling.store.repo import EMBEDDING_MARK, Store, open_store
 
 THREADS = 4
 
@@ -217,6 +217,38 @@ def test_the_version_marks_survive_four_threads(volume: Path) -> None:
     assert len(answers) == THREADS
     assert all(marks for marks in answers)
     assert len({tuple(sorted((marks or {}).items())) for marks in answers}) == 1
+
+
+def test_the_expected_marks_carry_the_embedding_version(volume: Path) -> None:
+    # The mark that phase 6 adds. It is composed here and not in
+    # expected_versions(), because that function feeds start_rebuild_on_drift.
+    write_wordlist(volume)
+
+    marks = resources.expected_marks()
+
+    assert marks is not None
+    assert marks[EMBEDDING_MARK] == "multilingual-e5-small/int8/384/1024"
+
+
+def test_an_embedding_drift_is_reported_but_forces_no_reindex(volume: Path) -> None:
+    # The property D-21 asks for, at the place that decides what a difference
+    # means. The stored mark is the one an older model wrote; the index side of
+    # the marks agrees, so the only divergence is the vector one.
+    digest = write_wordlist(volume)
+    corpus = Corpus(root=volume, digest=digest)
+    write_index(volume, corpus.documents)
+    write_state(volume, corpus)
+
+    store = open_store(volume / "state.db")
+    try:
+        store.write_meta(EMBEDDING_MARK, "multilingual-e5-small/int8/384/512")
+        marks = resources.expected_marks()
+
+        assert marks is not None
+        assert EMBEDDING_MARK in store.version_mismatch(marks)
+        assert resources.version_drift(store) == []
+    finally:
+        store.close()
 
 
 def test_a_fresh_volume_gets_its_own_marks(volume: Path, tmp_path_factory: pytest.TempPathFactory) -> None:

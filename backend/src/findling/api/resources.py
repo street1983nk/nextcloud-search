@@ -39,7 +39,8 @@ from tantivy import Index
 from findling.config import settings
 from findling.index.open import expected_versions, open_index, open_reader
 from findling.index.wordlist import build_artifact
-from findling.store.repo import Store, open_read_only
+from findling.store.repo import EMBEDDING_MARK, VECTOR_ONLY_MARKS, Store, open_read_only
+from findling.store.vectors import embedding_mark
 
 LOGGER = logging.getLogger("findling.api.resources")
 
@@ -47,6 +48,22 @@ LOGGER = logging.getLogger("findling.api.resources")
 # parser". Reported like a real difference, because an unprovable match is worth
 # exactly as much as a proven mismatch (pitfall 14).
 UNPROVEN_WORDLIST = "wordlist_hash"
+
+# The two halves of the embedding mark that are not properties of the vector
+# store, spelled out here because this is where the mark is composed.
+#
+# The full value is model, quantisation, dimensions and token cap, and the other
+# two halves come from findling.store.vectors, which owns them. A change to any
+# of the four makes a stored vector incomparable with a freshly computed query
+# vector, and the mark is what turns that into a visible drift instead of into
+# quietly worse results.
+#
+# Both live here as constants of this build until the cap becomes a setting in
+# plan 06-06. At that point the value is composed from the setting rather than
+# from the literal, so that an operator who raises the cap sees the drift the
+# raise really causes; the composition stays in this one place.
+EMBEDDING_MODEL: Final = "multilingual-e5-small"
+EMBEDDING_TOKEN_CAP: Final = 1024
 
 # How long a degraded verdict stays valid before it is measured again.
 #
@@ -113,6 +130,12 @@ def expected_marks() -> dict[str, str] | None:
         except OSError:
             LOGGER.warning("the constituent list is unavailable, version marks cannot be compared")
             return None
+        # The one mark that does not come from the index side. It is added here
+        # and not in expected_versions() on purpose: that function feeds
+        # start_rebuild_on_drift, which answers a difference by raising the index
+        # generation, and a vector stock that no longer matches the model must
+        # not be able to trigger a rebuild of the full text index (D-21).
+        marks[EMBEDDING_MARK] = embedding_mark(EMBEDDING_MODEL, tokens=EMBEDDING_TOKEN_CAP)
         _MARKS = (dictionary, marks)
         return dict(marks)
 
@@ -124,11 +147,19 @@ def version_drift(store: Store) -> list[str]:
     update brings a different word list or a different tantivy release, queries
     are tokenised differently than the documents were, and hits disappear with
     nothing anywhere saying why.
+
+    The question is about the **index**, which is why the vector marks are left
+    out of the answer. This list reaches the status page as
+    ``reindexRequired``, and the remedy behind that flag is a rebuild of the full
+    text stock that costs hours on the box this project targets. A vector stock
+    computed by an older model is a real difference and a different remedy: the
+    vectors are recomputed, the index is not touched (D-21). Store.version_mismatch
+    reports both, and this is the caller that decides what a difference means.
     """
     marks = expected_marks()
     if marks is None:
         return [UNPROVEN_WORDLIST]
-    return store.version_mismatch(marks)
+    return [mark for mark in store.version_mismatch(marks) if mark not in VECTOR_ONLY_MARKS]
 
 
 def _existing_directory(path: Path) -> Path | None:

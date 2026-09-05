@@ -32,9 +32,13 @@ import pytest
 from findling.store.repo import (
     _ACL_DOCUMENTS_SQL,
     _ACL_ROWS_SQL,
+    _DEFAULT_META,
+    EMBEDDING_MARK,
     SCHEMA_VERSION,
     STATE_REASONS,
+    STORE_SCHEMA_MARK,
     UNKNOWN_VERSION,
+    VECTOR_ONLY_MARKS,
     FileMeta,
     Store,
     enable_wal,
@@ -140,11 +144,46 @@ def test_open_read_only_on_a_missing_file_raises(tmp_path: Path) -> None:
 def test_meta_carries_the_version_marks_after_the_first_open(store: Store) -> None:
     meta = store.read_meta()
 
-    assert meta["schema_version"] == SCHEMA_VERSION
+    assert meta[STORE_SCHEMA_MARK] == SCHEMA_VERSION
     assert meta["index_version"] == "0"
     assert meta["analyzer_version"] == UNKNOWN_VERSION
     assert meta["tantivy_version"] == UNKNOWN_VERSION
     assert int(meta["created_at"]) > 0
+
+
+def test_only_the_layout_of_this_file_is_seeded_with_a_value_of_its_own() -> None:
+    # The one number this module owns is the layout of schema.sql. The tantivy
+    # schema layout, the analyzer, the word list and the tantivy release belong
+    # to the index side, so a database created without being told carries the
+    # placeholder for them and reads as a divergence on the next comparison.
+    # Before phase 6 the two schema numbers shared one key and happened to be
+    # equal; raising this one under that key would have claimed a new tantivy
+    # layout and forced exactly the reindex D-21 rules out.
+    assert _DEFAULT_META[STORE_SCHEMA_MARK] == SCHEMA_VERSION
+    assert _DEFAULT_META["schema_version"] == UNKNOWN_VERSION
+    assert _DEFAULT_META[EMBEDDING_MARK] == UNKNOWN_VERSION
+
+
+def test_the_embedding_mark_is_a_vector_mark_and_the_others_are_not(store: Store) -> None:
+    # The split the callers ask about. A drift of the embedding mark is a real
+    # difference with a different remedy: the vector stock is recomputed and the
+    # tantivy index is not touched.
+    assert EMBEDDING_MARK in VECTOR_ONLY_MARKS
+    assert VECTOR_ONLY_MARKS.isdisjoint(
+        {"schema_version", STORE_SCHEMA_MARK, "index_version", "analyzer_version", "wordlist_hash", "tantivy_version"}
+    )
+    assert store.read_meta()[EMBEDDING_MARK] == UNKNOWN_VERSION
+
+
+def test_an_embedding_drift_is_reported_and_is_no_full_text_drift(store: Store) -> None:
+    # version_mismatch reports everything, which is what its docstring promises,
+    # and the separation of what a difference means happens at the caller.
+    store.write_meta(EMBEDDING_MARK, "multilingual-e5-small/int8/384/512")
+
+    diverging = store.version_mismatch({EMBEDDING_MARK: "multilingual-e5-small/int8/384/1024"})
+
+    assert diverging == [EMBEDDING_MARK]
+    assert [mark for mark in diverging if mark not in VECTOR_ONLY_MARKS] == []
 
 
 def test_open_store_seeds_the_marks_the_caller_names(tmp_path: Path) -> None:
@@ -175,7 +214,7 @@ def test_version_mismatch_names_only_the_diverging_keys(store: Store) -> None:
     store.write_meta("analyzer_version", "7")
     store.write_meta("tantivy_version", "0.26.0")
 
-    expected = {"analyzer_version": "8", "tantivy_version": "0.26.0", "schema_version": SCHEMA_VERSION}
+    expected = {"analyzer_version": "8", "tantivy_version": "0.26.0", STORE_SCHEMA_MARK: SCHEMA_VERSION}
 
     assert store.version_mismatch(expected) == ["analyzer_version"]
 
@@ -723,9 +762,9 @@ def test_reconcile_state_reports_the_end_of_the_last_cycle(store: Store) -> None
 
 
 def test_the_schema_applies_to_an_existing_database_without_losing_anything(tmp_path: Path) -> None:
-    # open_store runs schema.sql on every start, so the new table has to arrive
-    # on a database that is already full. Every statement in that file is
-    # IF NOT EXISTS, which is why no SCHEMA_VERSION bump belongs to this change.
+    # open_store runs schema.sql on every start, so a new table has to arrive on
+    # a database that is already full. Every statement in that file is
+    # IF NOT EXISTS, which is why a schema change of this kind is additive.
     path = tmp_path / "state.db"
     first = open_store(path)
     first.record(10, a_file(10, etag="aaa"), "indexed", content_hash="a")
@@ -738,9 +777,42 @@ def test_the_schema_applies_to_an_existing_database_without_losing_anything(tmp_
         assert row is not None
         assert row["etag"] == "aaa"
         assert second.reconcile_cursor(2).after_file_id == 700
-        assert second.read_meta()["schema_version"] == SCHEMA_VERSION
+        assert second.read_meta()[STORE_SCHEMA_MARK] == SCHEMA_VERSION
     finally:
         second.close()
+
+
+def test_a_database_of_layout_one_opens_and_keeps_its_stock(tmp_path: Path) -> None:
+    # The claim of D-21, checked rather than asserted in prose: phase 6 only
+    # adds, so a state database written by the code before it opens, gets the
+    # new mark and loses nothing. The starting point is built by hand, because
+    # the only honest stand-in for "written by the older code" is a database
+    # that carries the older marks and none of the newer ones.
+    path = tmp_path / "state.db"
+    older = open_store(path)
+    older.record(10, a_file(10, etag="aaa"), "indexed", content_hash="a")
+    older.replace_acl(10, ["alice", "bob"])
+    older._conn.execute("DELETE FROM meta WHERE key IN (?, ?)", (STORE_SCHEMA_MARK, EMBEDDING_MARK))
+    older.write_meta("schema_version", "1")
+    older.close()
+
+    reopened = open_store(path)
+    try:
+        meta = reopened.read_meta()
+
+        # The new marks are there ...
+        assert meta[STORE_SCHEMA_MARK] == SCHEMA_VERSION
+        assert meta[EMBEDDING_MARK] == UNKNOWN_VERSION
+        # ... the old ones were not rewritten ...
+        assert meta["schema_version"] == "1"
+        # ... and the stock is untouched, which is what "no reindex" means.
+        row = reopened.file_row(10)
+        assert row is not None
+        assert row["state"] == "indexed"
+        assert reopened.prefilter_visible("alice", [10]) == {10}
+        assert reopened.acl_rows() == 2
+    finally:
+        reopened.close()
 
 
 def test_index_bytes_sums_every_file_below_the_directory(tmp_path: Path) -> None:

@@ -47,7 +47,43 @@ _SCHEMA_FILE: Final = Path(__file__).with_name("schema.sql")
 # absorb. It is a mark, not a migration: this module reports the difference and
 # lets the caller decide, because "reset a subset" and "throw the index away" are
 # not decisions a storage layer gets to make.
-SCHEMA_VERSION: Final = "1"
+#
+# Raised to "2" by phase 6, and what the jump means is worth stating because it
+# is the opposite of what a schema jump usually means. Phase 6 only adds: two
+# tables in a database of its own (store/vectors.sql) and one more key in the
+# meta table, whose names were left open for exactly this case. Every statement
+# of both schema files is IF NOT EXISTS, so an existing database absorbs the
+# change on the next open, and **no reindex of the full text stock is needed**
+# (D-21). That property is valuable and is kept on purpose: a rebuild of the
+# tantivy index costs hours on the box this project targets, and nothing about a
+# vector table justifies one.
+SCHEMA_VERSION: Final = "2"
+
+# The meta key the number above is written under, and it is deliberately not
+# "schema_version".
+#
+# That key exists and belongs to somebody else: it carries the layout of the
+# *tantivy* schema (findling.config.SCHEMA_VERSION) and is one of the marks that
+# invalidate the index, which is what schema.sql says over the meta table. The
+# two numbers happened to be equal until phase 6, so one key served both by
+# accident. Raising this one under that key would claim a new tantivy schema
+# layout and force exactly the reindex the paragraph above rules out.
+STORE_SCHEMA_MARK: Final = "store_schema_version"
+
+# The mark that says which vector stock lies next to this state database: model,
+# quantisation, dimensions and token cap, composed in
+# :func:`findling.store.vectors.embedding_mark`.
+EMBEDDING_MARK: Final = "embedding_version"
+
+# The marks that say nothing about the tantivy index.
+#
+# :meth:`Store.version_mismatch` reports every divergence it finds, including
+# this one, and it decides nothing; the split lives here so that the callers who
+# do decide can ask one place rather than each carrying its own list. A drift of
+# the embedding mark means the vectors no longer match the model this build
+# runs, and the consequence of that belongs in the vector path: the vector stock
+# is rebuilt, the full text stock is not touched (D-21).
+VECTOR_ONLY_MARKS: Final = frozenset({EMBEDDING_MARK})
 
 # The value a version mark carries when nobody named it. It compares unequal to
 # every real version, so an index built by an analyzer that never identified
@@ -58,12 +94,22 @@ UNKNOWN_VERSION: Final = "unknown"
 # Written once, when the database is created, and never touched again. A caller
 # that knows better hands its values to open_store; anything it leaves out gets
 # the placeholder above.
+#
+# Only one value in here is owned by this module, and it is the one under
+# STORE_SCHEMA_MARK. The tantivy schema layout, the analyzer, the word list and
+# the tantivy release are all facts of the index side, so a database this module
+# created without being told gets the placeholder for them and reads as a
+# divergence on the next comparison. That is the intended answer everywhere
+# else in this file already: an unnamed version is exactly as trustworthy as a
+# wrong one.
 _DEFAULT_META: Final[Mapping[str, str]] = {
-    "schema_version": SCHEMA_VERSION,
+    STORE_SCHEMA_MARK: SCHEMA_VERSION,
+    "schema_version": UNKNOWN_VERSION,
     "index_version": "0",
     "analyzer_version": UNKNOWN_VERSION,
     "wordlist_hash": UNKNOWN_VERSION,
     "tantivy_version": UNKNOWN_VERSION,
+    EMBEDDING_MARK: UNKNOWN_VERSION,
 }
 
 # Ten seconds. The writer holds its transactions for milliseconds, so a reader
@@ -443,6 +489,20 @@ def _connect(path: Path, *, read_only: bool) -> sqlite3.Connection:
     two threads never hold this connection at the same moment. A guard test in
     ``tests/test_store_repo.py`` fails should a build ever report less than
     serialised mode.
+
+    **What phase 6 deliberately did not add here: enable_load_extension.** The
+    phase research expected this function to grow it for both connection kinds,
+    because sqlite-vec is a loadable extension. It did not, and the reason is
+    the shape the vector store took: the vectors live in a database of their
+    own, ``vectors.db``, so this connection never has to load a shared object.
+    Probe A13 established that the interpreter in the image is able to
+    (``docs/measurements/2026-09-05-welle0-proben/``, section "A13: ladbare
+    SQLite-Erweiterungen im Abbild"), which makes leaving it out a choice and
+    not a limitation. It is the better answer for the same reason the read
+    connection carries ``query_only``: the ability to load machine code into
+    this process then exists in exactly one module,
+    :mod:`findling.store.vectors`, where it is switched on for one known library
+    and switched off again immediately afterwards (T-06-14).
     """
     connection = sqlite3.connect(path, autocommit=True, check_same_thread=False)
     connection.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
@@ -502,6 +562,15 @@ class Store:
         baseline to force a reindex, and that is a healthy state, not a drift.
         Only a stored generation BELOW the expected one means the index predates
         the current code.
+
+        Since phase 6 the answer can also contain a mark that says nothing about
+        the tantivy index at all. ``embedding_version`` diverging means the
+        stored vectors were computed by another model, another quantisation or
+        another chunk cap than this build uses, and the remedy for that is a
+        rebuild of the vector stock and never one of the full text stock (D-21).
+        This method still reports it, because it reports everything and decides
+        nothing; the callers that decide separate the two sets through
+        :data:`VECTOR_ONLY_MARKS`.
         """
         stored = self.read_meta()
         diverging = []
