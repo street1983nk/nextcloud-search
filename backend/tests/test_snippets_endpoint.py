@@ -22,7 +22,10 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from conftest import Corpus
+from conftest import Corpus, body_of
+from findling.api import resources
+from findling.embed.model import DIMENSIONS, EmbedOutcome
+from findling.store.vectors import Chunk, open_vectors
 
 pytestmark = pytest.mark.usefixtures("appapi_environment")
 
@@ -30,10 +33,51 @@ Sign = Callable[[str], dict[str, str]]
 
 TERM = "Kündigungsfrist"
 
+# A line that occurs in no document of this corpus, which the floor assertion of
+# the semantic case states rather than assumes.
+PARAPHRASE = "Weltraumbahnhof"
+
+# How much of the body the stored chunk of the semantic case covers. Short
+# enough to be well under the excerpt cap, so the assertion is about the place
+# of the cut and not about its length.
+PASSAGE_CHARS = 30
+
 # An odd file id, so alice may see it and bob may see it. Even ids belong to bob
 # alone, which is what the prefilter claim below rests on.
 ALICE_FILE = 1
 BOB_FILE = 2
+
+
+class _Model:
+    """A stand-in that answers one vector, so no 118 MB artifact has to exist.
+
+    The read side builds its model through ``resources.query_model``, and that
+    is the seam these cases replace: constructing the real wrapper loads
+    nothing, but a container without the artifact answers the honest
+    ``embedding_unavailable`` verdict and the semantic path would never run.
+    """
+
+    def embed_query(self, text: str) -> EmbedOutcome:
+        return EmbedOutcome.ready([tuple(1.0 if index == 1 else 0.0 for index in range(DIMENSIONS))])
+
+
+def _stock_one_chunk(root: Path) -> None:
+    """Put one chunk over the opening of alice's document into the stock."""
+    stock = open_vectors(root / "vectors.db")
+    try:
+        stock.replace_chunks(
+            ALICE_FILE,
+            [
+                Chunk(
+                    ordinal=0,
+                    char_start=0,
+                    char_end=PASSAGE_CHARS,
+                    embedding=bytes(127 if index == 1 else 0 for index in range(DIMENSIONS)),
+                )
+            ],
+        )
+    finally:
+        stock.close()
 
 
 def _snippets(client: TestClient, headers: dict[str, str], **body: object) -> dict[str, Any]:
@@ -194,6 +238,54 @@ def test_the_artificial_delay_costs_time_and_changes_nothing(
 
     assert elapsed >= 0.15
     assert delayed == undelayed
+
+
+def test_a_line_that_is_in_no_document_gets_no_fragment(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The floor under the case below. Without it a green semantic excerpt could
+    # just mean that the line matched lexically after all.
+    answer = _snippets(client, sign(indexed_volume.alice), query=PARAPHRASE)
+
+    assert answer[str(ALICE_FILE)]["text"] == ""
+
+
+def test_the_route_hands_the_raw_line_and_the_stock_to_the_second_path(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The wiring of this plan, end to end: the route passes the raw search line
+    # and the vector stock, so a hit whose words do not occur in the document
+    # still shows the passage that matched. The rewritten query could not do
+    # this: a model needs words and a parsed query is not text any more.
+    _stock_one_chunk(indexed_volume.root)
+    monkeypatch.setattr(resources, "query_model", _Model)
+
+    answer = _snippets(client, sign(indexed_volume.alice), query=PARAPHRASE)
+
+    assert answer[str(ALICE_FILE)]["text"] == body_of(ALICE_FILE)[:PASSAGE_CHARS]
+    assert answer[str(ALICE_FILE)]["highlights"] == []
+
+
+def test_the_second_path_hangs_on_the_same_permission_check(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The chunk sits on an odd file id, so bob and alice may see it and carol
+    # may not. A second excerpt path that produced text for carol would be the
+    # confused deputy this endpoint exists to not be.
+    _stock_one_chunk(indexed_volume.root)
+    monkeypatch.setattr(resources, "query_model", _Model)
+
+    answer = _snippets(client, sign(indexed_volume.carol), query=PARAPHRASE)
+
+    assert answer == {}
 
 
 def test_an_unusable_delay_is_ignored(
