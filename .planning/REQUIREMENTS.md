@@ -40,7 +40,7 @@ v1 = ein Produkt, ein Store-Erstrelease: **1.0.0** mit Volltext, OCR und semanti
 ### Semantik (Phase 6, Teil des Store-Erstrelease 1.0.0)
 
 - [x] **SEM-01**: Lokale Embeddings (multilingual-e5-small, MIT, int8 selbst quantisiert, ins Image gebacken, `HF_HUB_OFFLINE=1`) mit Hybrid-Ranking (RRF) über Volltext- und Vektor-Treffer
-- [ ] **SEM-02**: Vektor-Suche läuft durch dieselbe ACL-Kette (SQLite-Vorfilter + PHP-Recheck) wie die Volltextsuche
+- [x] **SEM-02**: Vektor-Suche läuft durch dieselbe ACL-Kette (SQLite-Vorfilter + PHP-Recheck) wie die Volltextsuche
 - [x] **SEM-03**: Vektor-Schema erst nach Lasttest festgezurrt (sqlite-vec Alpha; Ausweichpfad Bit-Vektoren/usearch dokumentiert)
 
 ### Admin-Erlebnis

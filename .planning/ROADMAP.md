@@ -91,7 +91,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 06-06-PLAN.md , Der Durchstich: RRF-Verschmelzung in candidates(), Degradieren (SEM-01, SEM-02)
+- [x] 06-06-PLAN.md , Der Durchstich: RRF-Verschmelzung in candidates(), Degradieren (SEM-01, SEM-02)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -314,7 +314,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
 | 5. Härtung und Store-Einreichung v1.0 | 18/20 | In Progress|  |
-| 6. Semantische Suche | 5/12 | In Progress|  |
+| 6. Semantische Suche | 6/12 | In Progress|  |
 
 ## Requirement Coverage
 
