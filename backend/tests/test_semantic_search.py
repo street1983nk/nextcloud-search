@@ -233,16 +233,20 @@ def test_a_paraphrase_finds_the_document_its_words_do_not_occur_in(
         semantic=_side(vectors, PARAPHRASE),
     )
 
-    assert _ids(page) == [SEMANTIC_FILE]
+    # The lexical half answered nothing to this line, so everything here came
+    # out of the vector half. Both documents that carry a vector come back,
+    # because a brute force neighbour search ranks the whole stock and has no
+    # notion of "close enough"; the one the query points at leads.
+    assert _ids(page) == [SEMANTIC_FILE, HIDDEN_FILE]
 
 
-def test_the_closer_vector_is_the_one_that_comes_back(
+def test_the_closer_vector_is_the_one_that_leads(
     index: Index,
     store: Store,
     vectors: VectorStore,
 ) -> None:
-    # Both documents carry a vector, so this asserts that the query decides
-    # which one is answered rather than the order the chunks were written in.
+    # Both documents carry a vector, so this asserts that the query decides the
+    # order rather than the order the chunks were written in.
     page = candidates(
         index,
         store,
@@ -252,7 +256,7 @@ def test_the_closer_vector_is_the_one_that_comes_back(
         semantic=_side(vectors, OTHER_PARAPHRASE),
     )
 
-    assert _ids(page) == [HIDDEN_FILE]
+    assert _ids(page) == [HIDDEN_FILE, SEMANTIC_FILE]
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +289,10 @@ def test_a_semantic_hit_of_a_document_the_user_may_not_see_is_dropped(
 ) -> None:
     # alice has rows, so this is not the empty user case. The nearest vector to
     # this query belongs to a document she may not see, and no closeness makes
-    # up for that.
+    # up for that: bob gets it in front, she does not get it at all.
+    for_bob = candidates(
+        index, store, BOB, _query(index, OTHER_PARAPHRASE), limit=DOCUMENTS, semantic=_side(vectors, OTHER_PARAPHRASE)
+    )
     page = candidates(
         index,
         store,
@@ -295,7 +302,8 @@ def test_a_semantic_hit_of_a_document_the_user_may_not_see_is_dropped(
         semantic=_side(vectors, OTHER_PARAPHRASE),
     )
 
-    assert page.candidates == []
+    assert _ids(for_bob)[0] == HIDDEN_FILE
+    assert _ids(page) == [SEMANTIC_FILE]
 
 
 def test_a_candidate_from_the_vector_branch_carries_the_same_three_values(

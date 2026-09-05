@@ -24,6 +24,15 @@ folders with advanced permissions, and that is the safe direction: a candidate
 too many is dropped by the recheck a moment later, while a candidate too few is a
 result the user never sees and never learns about.
 
+*The two halves of the search are merged in here and nowhere else.* Phase 6 adds
+a vector ranking beside the engine ranking, and it is joined to it inside
+:func:`candidates`, above the one call that asks about permissions (D-20). That
+is not tidiness. This function is the only place a candidate leaves the
+container from, so a merge in here inherits the permission chain, the offset
+semantics and the parity test of phase 5 by construction, while a route of its
+own would have had to be given all three again and would have been believed
+without them.
+
 Measured for the phase: the engine search costs 0.1 ms, the prefilter 0.18 ms for
 400 candidates, an overfetch of 400 candidates 4.2 ms. The expensive part of a
 search is neither of them, it is the two proxy round trips and the recheck.
@@ -34,11 +43,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Final, Protocol
 
-from tantivy import Document, Index, Query, SnippetGenerator
+from tantivy import DocAddress, Document, Index, Occur, Query, Schema, Searcher, SnippetGenerator
 
 from findling.config import SEARCH_SCAN_MAX, settings
+from findling.embed.model import EmbedOutcome, to_int8
+from findling.index.fusion import ChunkHit, documents_from_chunks, reciprocal_rank_fusion
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_MTIME
 from findling.store.repo import Store
+from findling.store.vectors import VectorStore
 
 LOGGER = logging.getLogger("findling.index.search")
 
@@ -52,6 +64,13 @@ LOGGER = logging.getLogger("findling.index.search")
 # sparsely visible corpus would otherwise crawl through the ranking a handful of
 # hits at a time, and every chunk pays the fixed cost of a search.
 _SCAN_CHUNK_MIN: Final = 128
+
+# How many merged documents are handed to the permission prefilter at a time.
+# The window is 100 by default, so in practice this is one band and the constant
+# looks pointless; it is not. An operator who deepens the window is the person
+# who would otherwise pay the prefilter for six hundred documents on a page that
+# was full after twenty.
+_PREFILTER_BAND: Final = 128
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +108,152 @@ class CandidatePage:
     next_offset: int
 
 
+class QueryEmbedder(Protocol):
+    """Whatever can turn one search line into one vector.
+
+    Written as a protocol rather than as :class:`findling.embed.model.EmbeddingModel`
+    itself for the same reason :class:`ByteRange` below is one: the loop can then
+    be exercised without 118 MB of weights on the machine that runs the suite,
+    and the wrapper is free to change shape without this module noticing.
+    """
+
+    def embed_query(self, text: str) -> EmbedOutcome: ...
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticSide:
+    """The vector half of one candidate round.
+
+    ``text`` is the raw search line and not the rewritten engine query, because
+    the model needs words and a rewritten query is not text any more.
+
+    **That text is user content, and no log line of this module may carry it.**
+    It arrives here beside a vector store and a model that both have opinions
+    about what went wrong, and the two failure branches below are exactly where
+    a library message would drag the search somebody typed into the log
+    (T-06-27). Both of them print a type name and nothing else.
+    """
+
+    vectors: VectorStore
+    model: QueryEmbedder
+    text: str
+
+
+def _ranked(searcher: Searcher, hits: Sequence[tuple[float, DocAddress]]) -> list[tuple[int, float, int]]:
+    """Turn engine hits into id, score and timestamp, dropping the unusable ones."""
+    # The columns, never the document store. searcher.doc() hands back the whole
+    # stored document including the full text, and that read was 99.9% of the
+    # candidate round: measured 20.5 ms per hit at the 512k cap against 0.02 ms
+    # for the two fast-field columns, independent of size.
+    addresses = [address for _, address in hits]
+    file_ids = searcher.fast_field_values(FIELD_FILE_ID, addresses)
+    mtimes = searcher.fast_field_values(FIELD_MTIME, addresses)
+
+    ranked: list[tuple[int, float, int]] = []
+    for (score, _), file_id, mtime in zip(hits, file_ids, mtimes, strict=True):
+        if file_id is None:
+            # A hit without the key cannot be rechecked and cannot be resolved
+            # into a node, so it is not a result. Skipped rather than raised:
+            # one damaged document must not take the whole search down with it.
+            LOGGER.warning("skipping a hit without a file id")
+            continue
+        # A missing modification time is a display detail, so it degrades to
+        # zero rather than ending the search.
+        ranked.append((int(file_id), float(score), int(mtime) if mtime is not None else 0))
+    return ranked
+
+
+def _permit(store: Store, uid: str, ranked: Sequence[Candidate]) -> list[Candidate]:
+    """Keep the candidates the prefilter confirms, in the order they arrived.
+
+    From the candidates to the permissions, never the other way round. Building
+    the list of everything a user may see is the inverse question, and its cost
+    grows with the instance instead of with the query.
+
+    One function rather than two call sites, and that is an assertion and not a
+    style: a test greps this file for the name of the prefilter and expects to
+    find it exactly twice, here and in the snippet cut. The vector branch merges
+    above this line, so it passes through the same one gate every lexical hit
+    passes through (T-06-25, D-20).
+    """
+    if not ranked:
+        return []
+    visible = store.prefilter_visible(uid, [candidate.file_id for candidate in ranked])
+    return [candidate for candidate in ranked if candidate.file_id in visible]
+
+
+def _semantic_documents(semantic: SemanticSide | None, *, window: int, scan_max: int) -> list[int]:
+    """The vector ranking of one query as file ids, or an empty list.
+
+    **The try below is the point of this function, and its position is the point
+    of the try.** ``one_round`` in the API layer already catches everything, and
+    that catch answers with an EMPTY round: a missing model, an extension that
+    will not load or a damaged vector file would therefore take the full text
+    answer down with them, which is word for word what criterion 3 forbids. So
+    the vector branch carries its own, narrower net, one level further in, and
+    everything it catches ends as an empty list. The merge then becomes the
+    identity on the engine ranking and the user gets full text results (D-19).
+
+    The log line follows the shape of the one in ``api/search.py``: the type
+    name and nothing else. A traceback carries whatever a library put into its
+    message, and the search text is sitting right next to it.
+    """
+    if semantic is None:
+        return []
+    try:
+        outcome = semantic.model.embed_query(semantic.text)
+        if not outcome.available or not outcome.vectors:
+            # The honest verdict of the wrapper rather than an exception, and it
+            # is the ordinary state of a container built without the model. Same
+            # answer as a failure, without a warning that would repeat per search.
+            return []
+        neighbours = semantic.vectors.nearest(to_int8(outcome.vectors[0]), scan_max, k_max=scan_max)
+    # Deliberately every exception, for the reason in the docstring above.
+    except Exception as error:
+        LOGGER.warning("the vector branch of the search ended in an unexpected %s", type(error).__name__)
+        return []
+
+    if len(neighbours) >= scan_max:
+        # Only the fact, never the query and never the counts: both are content.
+        # An honestly truncated neighbour list, the same answer the raw ceiling
+        # of the engine scan gives.
+        LOGGER.info("the vector scan hit its own ceiling and answered a truncated neighbour list")
+
+    documents = documents_from_chunks(
+        [
+            ChunkHit(file_id=neighbour.file_id, chunk_id=neighbour.chunk_id, distance=neighbour.distance)
+            for neighbour in neighbours
+        ]
+    )
+    return [document.file_id for document in documents[:window]]
+
+
+def _mtimes_of(searcher: Searcher, schema: Schema, file_ids: Sequence[int]) -> dict[int, int]:
+    """Timestamps of the documents only the vector half contributed.
+
+    One search for all of them rather than one per document: a term query per id
+    would pay the fixed cost of a search a hundred times for a page of a hundred.
+
+    A document the index does not know is absent from the answer, and that is
+    the second job of this function. A file id that lives in the vector stock
+    but no longer in the index is a leftover of a delete path, and handing it
+    out as a candidate would produce a hit that nothing on the other side can
+    ever resolve.
+    """
+    if not file_ids:
+        return {}
+    clauses = [(Occur.Should, Query.term_query(schema, FIELD_FILE_ID, file_id)) for file_id in file_ids]
+    hits = searcher.search(Query.boolean_query(clauses), len(file_ids)).hits
+    addresses = [address for _, address in hits]
+    found = searcher.fast_field_values(FIELD_FILE_ID, addresses)
+    times = searcher.fast_field_values(FIELD_MTIME, addresses)
+    return {
+        int(file_id): int(mtime) if mtime is not None else 0
+        for file_id, mtime in zip(found, times, strict=True)
+        if file_id is not None
+    }
+
+
 def candidates(
     index: Index,
     store: Store,
@@ -96,72 +261,111 @@ def candidates(
     query: Query,
     limit: int,
     offset: int = 0,
+    *,
+    semantic: SemanticSide | None = None,
 ) -> CandidatePage:
-    """Return one page of permitted candidates in the order the engine ranked them.
+    """Return one page of permitted candidates, engine and vectors merged into one.
 
     ``offset`` and ``next_offset`` count permitted candidates, never raw engine
     hits: the caller asks to continue behind the last candidate it consumed, and
-    what it consumed is by definition something it was allowed to see. The scan
-    below walks the raw ranking in chunks until the page is full, one hit further
-    than the page needs, and that one extra hit only ever becomes ``has_more``.
+    what it consumed is by definition something it was allowed to see. That is
+    the property the rebuild of this loop had to carry over, because an offset in
+    engine-hit space is a counting oracle for documents of other people
+    (T-02-93), and it is asserted by a test that compares two pages against one
+    page of twice the size.
 
-    The scan is bounded twice. It ends when the engine runs out of hits, and it
-    ends at ``SEARCH_SCAN_MAX`` raw hits for the pathological case of a user who
-    may see almost nothing on an instance where almost everything matches. Hitting
-    the cap answers ``has_more=False``: an honestly truncated result, and the log
-    line below is the trace it leaves.
+    The work happens in two sections, and they exist for two different reasons.
+
+    Section one is the fusion window. A rank exists only relative to a list, so
+    both lists have to be complete before a single score can be computed: the
+    first ``SEARCH_RRF_WINDOW`` engine hits and at most ``VECTOR_SCAN_MAX``
+    chunk hits, the latter aggregated onto documents by their best chunk. The
+    merged list then goes through the prefilter in bands until the page is full,
+    one permitted hit further than it needs, and that one extra hit only ever
+    becomes ``has_more``.
+
+    Section two is the continuation behind the window, and it is the answer to
+    the reservation of D-12 rather than a completeness exercise. Behind the
+    window the order is purely lexical, which is not a defect but the definition
+    of a window: a document that is semantically strong stands inside it, and
+    one that sits at semantic rank 500 would contribute nothing at a deeper
+    window either. The section exists because the window interacts with the
+    selectivity of the prefilter, measured at 31 of 400 candidates in the
+    synthetic worst case, and at that selectivity a window of 100 per source
+    yields fewer than ten permitted hits.
+
+    Both sections are bounded by ``SEARCH_SCAN_MAX`` raw hits, for the
+    pathological case of a user who may see almost nothing on an instance where
+    almost everything matches. Hitting the ceiling answers ``has_more=False``:
+    an honestly truncated result, and the log line below is the trace it leaves.
     """
+    resolved = settings()
     searcher = index.searcher()
     # One permitted hit more than the page needs, and it only ever becomes a
     # boolean. It replaces the engine's total: a total counts documents BEFORE
     # the permission filter, so comparing against it told whoever varies offset
     # and limit how many documents of other people match a term (a counting
-    # oracle, T-02-93).
+    # oracle, T-02-93). CandidatePage still carries no total, and this is the
+    # number that keeps it from needing one.
     needed = offset + limit + 1
-    permitted: list[Candidate] = []
-    raw_cursor = 0
     scan_cap = SEARCH_SCAN_MAX
+    window = min(resolved.search_rrf_window, scan_cap)
 
-    while len(permitted) < needed and raw_cursor < scan_cap:
-        chunk_limit = min(max(needed, _SCAN_CHUNK_MIN), scan_cap - raw_cursor)
-        result = searcher.search(query, chunk_limit, offset=raw_cursor)
-        hits = result.hits
-        if not hits:
+    # Section 1, the fusion window.
+    hits = searcher.search(query, window).hits
+    lexical = _ranked(searcher, hits)
+    fused = reciprocal_rank_fusion(
+        [file_id for file_id, _, _ in lexical],
+        _semantic_documents(semantic, window=window, scan_max=resolved.vector_scan_max),
+        k=resolved.search_rrf_k,
+        lexical_weight=resolved.search_lexical_weight,
+        semantic_weight=resolved.search_semantic_weight,
+    )
+
+    known = {file_id: mtime for file_id, _, mtime in lexical}
+    known.update(_mtimes_of(searcher, index.schema, [file_id for file_id, _ in fused if file_id not in known]))
+    # Everything the merge produced is remembered, including what the index
+    # could not resolve, so that the continuation below cannot deliver a
+    # document this section already decided about a second time.
+    seen = {file_id for file_id, _ in fused}
+
+    permitted: list[Candidate] = []
+    merged = [(file_id, score) for file_id, score in fused if file_id in known]
+    for start in range(0, len(merged), _PREFILTER_BAND):
+        if len(permitted) >= needed:
             break
+        band = [
+            Candidate(file_id=file_id, score=score, mtime=known[file_id])
+            for file_id, score in merged[start : start + _PREFILTER_BAND]
+        ]
+        permitted.extend(_permit(store, uid, band))
 
-        # The columns, never the document store. searcher.doc() hands back the
-        # whole stored document including the full text, and that read was 99.9%
-        # of the candidate round: measured 20.5 ms per hit at the 512k cap
-        # against 0.02 ms for the two fast-field columns, independent of size.
-        addresses = [address for _, address in hits]
-        file_ids = searcher.fast_field_values(FIELD_FILE_ID, addresses)
-        mtimes = searcher.fast_field_values(FIELD_MTIME, addresses)
-
-        ranked: list[tuple[int, float, int]] = []
-        for (score, _), file_id, mtime in zip(hits, file_ids, mtimes, strict=True):
-            if file_id is None:
-                # A hit without the key cannot be rechecked and cannot be
-                # resolved into a node, so it is not a result. Skipped rather
-                # than raised: one damaged document must not take the whole
-                # search down with it.
-                LOGGER.warning("skipping a hit without a file id")
+    # Section 2, the continuation behind the window. The score stays on the
+    # scale of the merge instead of falling back to the raw engine score: a
+    # document at lexical rank r contributes lexical_weight / (k + r) in the
+    # window, and continuing that count is what keeps the numbers of one answer
+    # comparable across the boundary. Every hit advances the rank, including the
+    # ones already delivered, because the rank belongs to the lexical list and
+    # not to what survived the prefilter.
+    lexical_rank = len(lexical)
+    raw_cursor = len(hits)
+    exhausted = len(hits) < window
+    while not exhausted and len(permitted) < needed and raw_cursor < scan_cap:
+        chunk_limit = min(max(needed, _SCAN_CHUNK_MIN), scan_cap - raw_cursor)
+        more = searcher.search(query, chunk_limit, offset=raw_cursor).hits
+        if not more:
+            break
+        tail: list[Candidate] = []
+        for file_id, _, mtime in _ranked(searcher, more):
+            lexical_rank += 1
+            if file_id in seen:
                 continue
-            # A missing modification time is a display detail, so it degrades
-            # to zero rather than ending the search.
-            ranked.append((int(file_id), float(score), int(mtime) if mtime is not None else 0))
-
-        # From the candidates to the permissions, never the other way round.
-        # Building the list of everything a user may see is the inverse
-        # question, and its cost grows with the instance instead of the query.
-        visible = store.prefilter_visible(uid, [file_id for file_id, _, _ in ranked])
-        permitted.extend(
-            Candidate(file_id=file_id, score=score, mtime=mtime)
-            for file_id, score, mtime in ranked
-            if file_id in visible
-        )
-
-        raw_cursor += len(hits)
-        if len(hits) < chunk_limit:
+            seen.add(file_id)
+            score = resolved.search_lexical_weight / (resolved.search_rrf_k + lexical_rank)
+            tail.append(Candidate(file_id=file_id, score=score, mtime=mtime))
+        permitted.extend(_permit(store, uid, tail))
+        raw_cursor += len(more)
+        if len(more) < chunk_limit:
             break
 
     if len(permitted) < needed and raw_cursor >= scan_cap:

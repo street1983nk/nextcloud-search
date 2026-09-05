@@ -47,7 +47,9 @@ from findling.config import (
     SEARCH_LIMIT_MAX,
     SEARCH_OFFSET_MAX,
     SEARCH_QUERY_MAX_CHARS,
+    settings,
 )
+from findling.index.search import SemanticSide
 from findling.index.search import candidates as candidate_round
 from findling.nc.client import AsyncNextcloudApp, anc_app, current_user_id
 from findling.query.rewrite import build_query
@@ -194,7 +196,16 @@ def one_round(uid: str, text: str, limit: int, offset: int, title_only: bool) ->
             # Nothing left to search for, for instance a line that held only a
             # file type filter. A normal answer, and the engine was never asked.
             return _Round([], False, offset, is_degraded)
-        page = candidate_round(side.index, side.store, uid, rewritten.query, limit, offset)
+        # The vector half, handed over as a bundle and never as a second route:
+        # the merge lives inside the candidate round, above its one permission
+        # prefilter, so a semantic hit travels the same way a lexical one does
+        # and Provider.php does not learn that anything changed (D-20). The raw
+        # text goes along because the model needs words and the rewritten query
+        # is not text any more.
+        semantic = None
+        if side.vectors is not None and settings().embed_enabled:
+            semantic = SemanticSide(vectors=side.vectors, model=resources.query_model(), text=text)
+        page = candidate_round(side.index, side.store, uid, rewritten.query, limit, offset, semantic=semantic)
     # Deliberately every exception, for the reason in the docstring above.
     except Exception as error:
         # The type name and nothing else: a traceback carries whatever a library
