@@ -27,6 +27,7 @@ the real tokenizer changes is the count, never the arithmetic.
 
 from __future__ import annotations
 
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -40,16 +41,16 @@ from findling.embed.chunker import ChunkSpan, chunk_spans, make_splitter
 UNKNOWN = "[UNK]"
 
 GERMAN = (
-    "Die Bueroraeume der Behoerde in Muenchen sind seit Jahren ueberfuellt. "
-    "Groessere Aenderungen an der Gebuehrenordnung waeren dringend noetig. "
+    "Die Büroräume der Behörde in München sind seit Jahren überfüllt. "
+    "Größere Änderungen an der Gebührenordnung wären dringend nötig. "
     "Der Ausschuss hat die Vorlage vertagt und um eine Stellungnahme gebeten."
-).replace("ue", "ü").replace("oe", "ö").replace("ae", "ä")
+)
 
 FRENCH = (
-    "La commune a recu la demande et l'a transmise au service competent. "
-    "Les charges de fonctionnement ont ete revisees apres le controle. "
-    "Le conseil municipal a decide de reporter la deliberation."
-).replace("recu", "reçu").replace("competent", "compétent").replace("ete", "été")
+    "La commune a reçu la demande et l'a transmise au service compétent. "
+    "Les charges de fonctionnement ont été révisées après le contrôle. "
+    "Le conseil municipal a décidé de reporter la délibération."
+)
 
 
 @pytest.fixture
@@ -154,10 +155,13 @@ def test_an_empty_text_is_an_empty_list_and_not_an_error(tokenizer: Tokenizer) -
     assert _spans(tokenizer, "", cap=64, chunk=8) == []
 
 
-@pytest.mark.parametrize("text", ["   ", "\n\n", "\t \r\n ", "   "])
+@pytest.mark.parametrize("text", ["   ", "\n\n", "\t \r\n ", " \u00a0 "])
 def test_a_text_of_nothing_but_whitespace_is_an_empty_list(tokenizer: Tokenizer, text: str) -> None:
     # An empty chunk would still cost a vector and a row, and it would rank
-    # against real content with a distance nobody can interpret.
+    # against real content with a distance nobody can interpret. The last case
+    # carries a non breaking space, written as an escape so that it is visible
+    # in the source: documents that came through a word processor are full of
+    # them, and they are whitespace to str.strip like any other.
     assert _spans(tokenizer, text, cap=64, chunk=8) == []
 
 
@@ -175,10 +179,7 @@ def test_an_overlap_is_allowed_and_shows_up_as_one(tokenizer: Tokenizer) -> None
     assert len(with_overlap) >= len(without)
     # Overlapping spans are the point: neighbouring chunks share text, so a
     # later start may sit before the previous end.
-    assert any(
-        later.char_start < earlier.char_end
-        for earlier, later in zip(with_overlap, with_overlap[1:], strict=False)
-    )
+    assert any(later.char_start < earlier.char_end for earlier, later in pairwise(with_overlap))
 
 
 def test_the_split_opens_no_file(tokenizer: Tokenizer, monkeypatch: pytest.MonkeyPatch) -> None:
