@@ -1,0 +1,89 @@
+grundlinie-woher 2026-09-05T10:41:03Z
+=== Vergleichswert aus Plan 05-21: 58,7 MB anon im Leerlauf, Abbild 05-21-arm ===
+=== Der Zustand jetzt, Abbild 06-11-arm ===
+anon 725372928
+=== Neustart ueber AppAPI, also mit Bewaffnung ===
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully enabled.
+container-start 2026-09-05T10:41:09.977235432Z
+=== anon im Sekundentakt, 90 Sekunden ===
+10:41:14Z sekunde=2 anon=718548992 MB=685.3
+10:41:16Z sekunde=4 anon=718548992 MB=685.3
+10:41:18Z sekunde=6 anon=718548992 MB=685.3
+10:41:20Z sekunde=8 anon=718548992 MB=685.3
+10:41:22Z sekunde=10 anon=718548992 MB=685.3
+10:41:24Z sekunde=12 anon=718548992 MB=685.3
+10:41:26Z sekunde=14 anon=718548992 MB=685.3
+10:41:28Z sekunde=16 anon=718548992 MB=685.3
+10:41:30Z sekunde=18 anon=719380480 MB=686.1
+10:41:32Z sekunde=20 anon=719380480 MB=686.1
+10:41:34Z sekunde=22 anon=719380480 MB=686.1
+10:41:36Z sekunde=24 anon=719380480 MB=686.1
+10:41:38Z sekunde=26 anon=719380480 MB=686.1
+10:41:40Z sekunde=28 anon=719380480 MB=686.1
+10:41:42Z sekunde=30 anon=719380480 MB=686.1
+10:41:44Z sekunde=32 anon=719380480 MB=686.1
+10:41:46Z sekunde=34 anon=719380480 MB=686.1
+10:41:48Z sekunde=36 anon=719380480 MB=686.1
+10:41:50Z sekunde=38 anon=719380480 MB=686.1
+10:41:52Z sekunde=40 anon=719380480 MB=686.1
+10:41:54Z sekunde=42 anon=719380480 MB=686.1
+10:41:56Z sekunde=44 anon=719380480 MB=686.1
+10:41:58Z sekunde=46 anon=719380480 MB=686.1
+10:42:00Z sekunde=48 anon=719380480 MB=686.1
+10:42:02Z sekunde=50 anon=719380480 MB=686.1
+10:42:04Z sekunde=52 anon=719380480 MB=686.1
+10:42:06Z sekunde=54 anon=719380480 MB=686.1
+10:42:08Z sekunde=56 anon=719380480 MB=686.1
+10:42:10Z sekunde=58 anon=719380480 MB=686.1
+10:42:12Z sekunde=60 anon=719380480 MB=686.1
+10:42:14Z sekunde=62 anon=719380480 MB=686.1
+10:42:16Z sekunde=64 anon=719380480 MB=686.1
+10:42:18Z sekunde=66 anon=719380480 MB=686.1
+10:42:20Z sekunde=68 anon=719380480 MB=686.1
+10:42:22Z sekunde=70 anon=719380480 MB=686.1
+10:42:24Z sekunde=72 anon=719380480 MB=686.1
+10:42:26Z sekunde=74 anon=719380480 MB=686.1
+10:42:28Z sekunde=76 anon=719380480 MB=686.1
+10:42:30Z sekunde=78 anon=719380480 MB=686.1
+10:42:32Z sekunde=80 anon=719380480 MB=686.1
+10:42:34Z sekunde=82 anon=719380480 MB=686.1
+10:42:36Z sekunde=84 anon=719380480 MB=686.1
+10:42:38Z sekunde=86 anon=719380480 MB=686.1
+10:42:40Z sekunde=88 anon=719380480 MB=686.1
+10:42:42Z sekunde=90 anon=719380480 MB=686.1
+=== Das Protokoll dieses Starts, mit Zeitstempeln ===
+2026-09-05T10:41:10.085124642Z harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+2026-09-05T10:41:10.085154379Z entrypoint: binding mode tcp 0.0.0.0:23000
+2026-09-05T10:41:10.085711074Z init: no HaRP tunnel in this deployment, watching the application only
+2026-09-05T10:41:11.362372925Z INFO:     Started server process [8]
+2026-09-05T10:41:11.362462144Z INFO:     Waiting for application startup.
+2026-09-05T10:41:11.364465839Z INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+2026-09-05T10:41:11.401290861Z INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+2026-09-05T10:41:11.407267934Z INFO:     Application startup complete.
+2026-09-05T10:41:11.407835850Z INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+2026-09-05T10:41:12.191805706Z INFO:     172.18.0.6:59594 - "GET /heartbeat HTTP/1.1" 200 OK
+2026-09-05T10:41:12.205750879Z INFO:findling:findling backend enabled
+2026-09-05T10:41:12.205862852Z INFO:     172.18.0.6:59594 - "PUT /enabled?enabled=1 HTTP/1.1" 200 OK
+2026-09-05T10:41:12.243690219Z INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+2026-09-05T10:41:13.170759375Z WARNING:findling.nc.queue:could not count the queue
+2026-09-05T10:41:13.469569489Z INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+2026-09-05T10:41:13.799178947Z INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.319 s, build 1 in this process
+2026-09-05T10:41:13.915312978Z WARNING:findling.worker.poller:the queue did not answer, next attempt in 15 s
+2026-09-05T10:41:29.003917115Z WARNING:findling.worker.poller:the queue did not answer, next attempt in 30 s
+2026-09-05T10:41:59.040885994Z WARNING:findling.worker.poller:the queue has not answered for 3 passes, backing off to at most one attempt every 300 s; the Nextcloud half looks removed and the container keeps answering searches
+=== Die Prozesse und ihr RSS ===
+-- Prozesse, RSS in MB --
+     8    719 MB  /app/.venv/bin/python -m findling.main 
+    24     12 MB  /app/.venv/bin/python /tmp/50b-prozesse.py 
+     1      3 MB  /bin/bash /app/docker/init.sh 
+-- Anonyme Bereiche ueber 20 MB in Prozess 8 --
+   128 MB  rw-p  (anonym)
+   126 MB  rw-p  (anonym)
+   123 MB  rw-p  (anonym)
+    64 MB  rw-p  (anonym)
+    64 MB  rw-p  (anonym)
+    64 MB  rw-p  (anonym)
+    35 MB  rw-p  (anonym)
+    20 MB  rw-p  [heap]
+grundlinie-woher-ende 2026-09-05T10:42:45Z

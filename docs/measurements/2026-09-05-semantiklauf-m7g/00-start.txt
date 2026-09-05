@@ -1,0 +1,57 @@
+semantiklauf-start 2026-09-05T10:47:54Z
+findling 1.0.0 enabled
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              0
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+No background job of this app has run yet. Check the cron setting of this instance.
+gegenprobe 2026-09-05T10:53:55Z
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              0
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-05 10:51:52 (2 minutes ago)
+-- DI-05-36, der zweite Teil des Beweises: gezaehlte Durchgaenge des Pollers --
+0
+INFO:findling.worker.poller:the queue answers again after 4 passes without an answer
+INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+INFO:     172.18.0.6:52582 - "GET /status HTTP/1.1" 200 OK
+INFO:     172.18.0.6:52582 - "GET /rates HTTP/1.1" 200 OK
+INFO:     172.18.0.6:53456 - "GET /status HTTP/1.1" 200 OK
+INFO:     172.18.0.6:53456 - "GET /rates HTTP/1.1" 200 OK
+INFO:     172.18.0.6:47706 - "GET /status HTTP/1.1" 200 OK
+INFO:     172.18.0.6:47706 - "GET /rates HTTP/1.1" 200 OK
+statusseite: {"at": "2026-09-05T10:53:49Z", "runState": "idle", "indexed": 0, "indexedPercent": null, "embedded": null, "embeddedPercent": null, "scheduled": 0, "running": 0, "backendReachable": true}
+PRUEFUNG ROT: kein Vorrat, der Lauf laeuft nicht
+=== DI-05-36, Teil 2: gezaehlte Durchgaenge unter echter Arbeit ===
+nachtrag 2026-09-05T10:56:56Z
+container-start 2026-09-05T10:44:39.943634237Z
+-- Durchgaenge des Pollers seit dem Start dieses Containers --
+14
+-- die ersten fuenf Durchgaenge, mit ihren Zahlen --
+INFO:findling.worker.poller:pass finished, claimed=32 indexed=32 skipped=0 failed=0 unchanged=0 requeued=32 embedded=0 committed=32
+INFO:findling.worker.poller:pass finished, claimed=32 indexed=21 skipped=11 failed=0 unchanged=0 requeued=32 embedded=0 committed=21
+INFO:findling.worker.poller:pass finished, claimed=32 indexed=30 skipped=2 failed=0 unchanged=0 requeued=32 embedded=0 committed=30
+INFO:findling.worker.poller:pass finished, claimed=32 indexed=25 skipped=7 failed=0 unchanged=0 requeued=32 embedded=0 committed=25
+INFO:findling.worker.poller:pass finished, claimed=32 indexed=25 skipped=7 failed=0 unchanged=0 requeued=32 embedded=0 committed=25
+-- der Vorrat, zur selben Zeit --
+Work stock
+  scheduled            2016
+  handed to the worker 32
+
+End states as Nextcloud recorded them
+  indexed              0

@@ -1,0 +1,110 @@
+neuaufsatz-start 2026-09-05T10:30:31Z
+=== Der Bestand VOR dem Raeumen, damit der Bericht ihn nennen kann ===
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              37
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-04 19:42:26 (888 minutes ago)
+total 15992
+drwxr-xr-x 5 findling findling     4096 Sep  5 10:21 .
+drwxr-xr-x 1 root     root         4096 Sep  5 09:33 ..
+drwxr-xr-x 2 findling findling     4096 Sep  4 17:23 dict
+drwxr-xr-x 2 findling findling     4096 Sep  5 09:21 index
+-rw-r--r-- 1 findling findling 16351232 Sep  5 09:33 state.db
+drwxr-xr-x 2 findling findling     4096 Sep  5 09:21 tmp
+=== PHP-Haelfte raeumen ===
+Removed
+  background jobs
+    SchedulerJob         no
+    StorageCrawlJob      no
+    SubtreeExpandJob     no
+  tables
+    findling_queue       yes
+    findling_scan_stats  yes
+    findling_file_state  yes
+  schema
+    migration records    5
+  settings
+    stored values        10
+
+This app is switched off now, because "enabled" was one of the settings that went.
+The search keeps answering out of the container. "occ app:enable findling" runs the
+migrations again and brings the queue, the counters and the settings back empty.
+Disabled:
+  - encryption: 2.21.0
+  - files_external: 1.25.1
+  - findling: 1.0.0
+  - suspicious_login: 11.0.0
+  - twofactor_nextcloud_notification: 7.0.0
+  - user_ldap: 1.24.0
+=== Container samt Datenspeicher weg ===
+nc_app_findling_backend_data
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully removed
+ExApp findling_backend successfully unregistered.
+-- der Datenspeicher danach, es darf keiner mehr da sein --
+=== Die PHP-Haelfte des neuen Standes in den Nextcloud-Container ===
+php-dateien: 45
+php-baumhash: 008f91238450a12edee010afe780f67a92221f5270d38b3589e88b27dfc0e35c
+=== info.xml mit dem Kennzeichen der Box ===
+			<registry>localhost:5000</registry>
+			<image>findling_backend</image>
+			<image-tag>06-11-arm</image-tag>
+=== Registrierung ueber AppAPI, also die Bewaffnung ===
+register-start 2026-09-05T10:30:35Z
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+register-ende 2026-09-05T10:30:38Z
+container-start 2026-09-05T10:30:36.945634176Z
+Image=localhost:5000/findling_backend:06-11-arm Restart=unless-stopped
+=== Harte Grenze, nach der Registrierung, weil sie sie nicht ueberlebt ===
+nc_app_findling_backend
+Memory=2147483648 MemorySwap=2147483648
+-- memory.max der cgroup --
+2147483648
+-- memory.events vor dem Lauf, alle Zaehler sollen 0 sein --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Die Semantik im laufenden Container, nicht nur im Abbild ===
+FINDLING_EMBED_MODEL_DIR=/usr/local/share/findling/model
+FINDLING_VEC0_PATH=/usr/local/lib/findling/vec0.so
+HF_HUB_OFFLINE=1
+embed_enabled: True
+token_cap: 1024
+batch: 2 sequence: 512
+model_dir: /usr/local/share/findling/model
+=== DI-05-36: der Beweis der Bewaffnung, an einer Handlung ===
+-- Runde 1, 90 Sekunden nach der Registrierung --
+0
+-- Runde 2, weitere 90 Sekunden --
+0
+-- die letzten Protokollzeilen --
+INFO:     Waiting for application startup.
+INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+INFO:     172.18.0.6:51124 - "GET /heartbeat HTTP/1.1" 200 OK
+INFO:     172.18.0.6:51124 - "POST /init HTTP/1.1" 200 OK
+INFO:     172.18.0.6:51124 - "GET /heartbeat HTTP/1.1" 200 OK
+INFO:findling:findling backend enabled
+INFO:     172.18.0.6:51124 - "PUT /enabled?enabled=1 HTTP/1.1" 200 OK
+INFO:findling.index.wordlist:constituent list built, 276496 entries in 0.363 s
+INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.316 s, build 1 in this process
+WARNING:findling.worker.poller:the queue did not answer, next attempt in 15 s
+WARNING:findling.worker.poller:the queue did not answer, next attempt in 30 s
+WARNING:findling.worker.poller:the queue has not answered for 3 passes, backing off to at most one attempt every 300 s; the Nextcloud half looks removed and the container keeps answering searches
+neuaufsatz-ende 2026-09-05T10:33:39Z
+41-NEUAUFSATZ-FERTIG

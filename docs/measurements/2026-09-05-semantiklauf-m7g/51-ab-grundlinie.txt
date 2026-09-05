@@ -1,0 +1,42 @@
+ab-grundlinie 2026-09-05T10:43:47Z
+=== Runde A: das Abbild dieses Laufs, mit Semantik ===
+Image=localhost:5000/findling_backend:06-11-arm
+721432576 Byte, 688.0 MB
+=== Wechsel auf das Abbild aus Plan 05-21, ohne Semantik, Volumen bleibt ===
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully removed
+ExApp findling_backend successfully unregistered.
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+-- Runde B, Abbild ohne Semantik, derselbe Zustand --
+Image=localhost:5000/findling_backend:05-21-arm
+98078720 Byte, 93.5 MB
+-- das Protokoll dieses Starts --
+INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+INFO:     172.18.0.6:51110 - "GET /heartbeat HTTP/1.1" 200 OK
+INFO:     172.18.0.6:51110 - "POST /init HTTP/1.1" 200 OK
+INFO:     172.18.0.6:51110 - "GET /heartbeat HTTP/1.1" 200 OK
+INFO:findling:findling backend enabled
+INFO:     172.18.0.6:51110 - "PUT /enabled?enabled=1 HTTP/1.1" 200 OK
+INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.328 s, build 1 in this process
+WARNING:findling.nc.queue:could not count the queue
+WARNING:findling.worker.poller:the queue did not answer, next attempt in 15 s
+WARNING:findling.worker.poller:the queue did not answer, next attempt in 30 s
+=== Zurueck auf das Abbild dieses Laufs ===
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully removed
+ExApp findling_backend successfully unregistered.
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+-- Runde A2, zur Gegenprobe --
+Image=localhost:5000/findling_backend:06-11-arm Memory=2147483648
+723714048 Byte, 690.2 MB
+-- die Bewaffnung, wieder bewiesen --
+INFO:findling:findling backend enabled
+INFO:     172.18.0.6:56364 - "PUT /enabled?enabled=1 HTTP/1.1" 200 OK
+INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.316 s, build 1 in this process
+ab-grundlinie-ende 2026-09-05T10:45:26Z

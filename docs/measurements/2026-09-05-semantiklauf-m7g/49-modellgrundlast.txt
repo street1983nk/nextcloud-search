@@ -1,0 +1,32 @@
+modellgrundlast 2026-09-05T10:39:00Z
+=== A. Die Grundlinie des Containers, Modell nie geladen ===
+Image=localhost:5000/findling_backend:06-11-arm StartedAt=2026-09-05T10:30:36.945634176Z
+-- memory.stat, die drei Posten --
+anon 725372928
+file 7839744
+slab 3321856
+-- memory.current und memory.peak --
+738660352
+756641792
+-- die Prozesse der cgroup, mit ihrem RSS in kB --
+sh: 1: ps: not found
+=== B. Der Fussabdruck der Gewichte allein, in einem eigenen Prozess ===
+[0;93m2026-09-05 10:39:01.886954530 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+{
+ "vor_dem_import_kb": 13112,
+ "nach_dem_import_kb": 24852,
+ "nach_dem_bau_kb": 24852,
+ "nach_einer_einbettung_kb": 485356,
+ "verfuegbar": true,
+ "dimension": 384,
+ "nach_langer_einbettung_kb": 511392,
+ "dimension2": 384,
+ "gewichte_kb": 0,
+ "aktivierungen_kb": 486540
+}
+=== Die cgroup unmittelbar nach B, damit der Anteil sichtbar wird ===
+anon 725372928
+file 183029760
+slab 3709648
+914305024
+modellgrundlast-ende 2026-09-05T10:39:02Z

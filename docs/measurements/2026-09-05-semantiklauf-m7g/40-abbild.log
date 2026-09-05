@@ -1,0 +1,79 @@
+=== Registry auf 127.0.0.1:5000 ===
+findling-registry Up 4 minutes
+=== Bau ===
+bau-start 2026-09-05T10:25:51Z
+#29 16.77 total 136984
+#29 16.77 -rw-r--r-- 1 root root       653 Sep  5 10:26 config.json
+#29 16.77 -rw-r--r-- 1 root root 118101091 Sep  5 10:26 model.onnx
+#29 16.77 -rw-r--r-- 1 root root   5069051 Sep  5 10:26 sentencepiece.bpe.model
+#29 16.77 -rw-r--r-- 1 root root       167 Sep  5 10:26 special_tokens_map.json
+#29 16.77 -rw-r--r-- 1 root root  17082730 Sep  5 10:26 tokenizer.json
+#29 16.77 -rw-r--r-- 1 root root       443 Sep  5 10:26 tokenizer_config.json
+#29 DONE 17.0s
+
+#30 [runtime  7/12] COPY --from=model /model /usr/local/share/findling/model
+#30 DONE 0.2s
+
+#31 [runtime  8/12] COPY docker/licenses/COPYING.sqlite-vec docker/licenses/COPYING.multilingual-e5-small      /usr/local/share/findling/
+#31 DONE 0.1s
+
+#32 [runtime  9/12] RUN set -eu;     case "arm64" in         amd64) want=5923730861b86c707cca5602b5f91092f9e52a46706dbc6e269fd4bb9c4498e8 ;;         arm64) want=0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437 ;;         *) echo "no vec0 checksum is recorded for TARGETARCH=arm64"; exit 1 ;;     esac;     src="$(/app/.venv/bin/python -c 'import sqlite_vec; print(sqlite_vec.loadable_path())').so";     test -s "${src}";     install -D -m 0444 "${src}" /usr/local/lib/findling/vec0.so;     echo "${want}  /usr/local/lib/findling/vec0.so" | sha256sum -c -;     test -s /usr/local/share/findling/COPYING.sqlite-vec;     test -s /usr/local/share/findling/COPYING.multilingual-e5-small;     chmod 0444 /usr/local/share/findling/COPYING.sqlite-vec         /usr/local/share/findling/COPYING.multilingual-e5-small;     test -s /usr/local/share/findling/model/model.onnx;     test -s /usr/local/share/findling/model/tokenizer.json
+#32 0.973 /usr/local/lib/findling/vec0.so: OK
+#32 DONE 1.0s
+
+#33 [runtime 10/12] COPY docker/init.sh docker/entrypoint.sh docker/harp_connect.sh /app/docker/
+#33 DONE 0.1s
+
+#34 [runtime 11/12] RUN chmod 0755 /app/docker/init.sh /app/docker/entrypoint.sh /app/docker/harp_connect.sh
+#34 DONE 0.2s
+
+#35 [runtime 12/12] RUN groupadd --gid 1000 findling     && useradd --uid 1000 --gid 1000 --no-create-home --home-dir /app --shell /usr/sbin/nologin findling     && mkdir -p /app/run /nc_app_findling_backend_data /certs/frp     && chown findling:findling /app/run /nc_app_findling_backend_data /certs /certs/frp     && chmod 0700 /app/run /certs /certs/frp
+#35 DONE 0.3s
+
+#36 exporting to image
+#36 exporting layers
+#36 exporting layers 15.4s done
+#36 exporting manifest sha256:dc39fddeeb7adead47f7c25fa69cc85f10b70bc94f4fe8a501fd415b876864b5
+#36 exporting manifest sha256:dc39fddeeb7adead47f7c25fa69cc85f10b70bc94f4fe8a501fd415b876864b5 0.0s done
+#36 exporting config sha256:ab9929866380fb8ced411869aa663b9124f29a7617dbc85585277a964a4954f0 0.0s done
+#36 exporting attestation manifest sha256:4d90981b1401d7ebedd3efe39a590e59889394ea96d650819cc67e1bb1b36634 0.0s done
+#36 exporting manifest list sha256:5703f8d208c4325a4223c58b769a4cd24c9016f4718ef4d0a4129a0f02c7a558 0.0s done
+#36 naming to localhost:5000/findling_backend:06-11-arm done
+#36 unpacking to localhost:5000/findling_backend:06-11-arm
+#36 unpacking to localhost:5000/findling_backend:06-11-arm 3.5s done
+#36 DONE 19.0s
+bau-ende 2026-09-05T10:26:55Z
+=== Push und Kennung ===
+5e8a5789b2b3: Pushed
+cde7546c4fad: Pushed
+06-11-arm: digest: sha256:5703f8d208c4325a4223c58b769a4cd24c9016f4718ef4d0a4129a0f02c7a558 size: 856
+Id=sha256:5703f8d208c4325a4223c58b769a4cd24c9016f4718ef4d0a4129a0f02c7a558 Size=1049989040 Created=2026-09-05T10:26:36.237766329Z
+RepoDigest=localhost:5000/findling_backend@sha256:5703f8d208c4325a4223c58b769a4cd24c9016f4718ef4d0a4129a0f02c7a558
+=== Baumhash im Abbild ===
+=== Baumhash des Arbeitsbaums, zum Vergleich ===
+baum-dateien: 50
+baum-baumhash: c83b5d7f743122c4be922078db879cad31d0bf23afc79fcbcdd0e57e91544d03
+=== Baumhash der PHP-Haelfte ===
+php-dateien: 45
+php-baumhash: 008f91238450a12edee010afe780f67a92221f5270d38b3589e88b27dfc0e35c
+=== Die Semantik im Abbild: Modell, vec0, Pruefsumme ===
+-- Modellverzeichnis --
+total 136992
+drwxr-xr-x 2 root root      4096 Sep  5 10:26 .
+drwxr-xr-x 1 root root      4096 Sep  5 10:26 ..
+-rw-r--r-- 1 root root       653 Sep  5 10:26 config.json
+-rw-r--r-- 1 root root 118101091 Sep  5 10:26 model.onnx
+-rw-r--r-- 1 root root   5069051 Sep  5 10:26 sentencepiece.bpe.model
+-rw-r--r-- 1 root root       167 Sep  5 10:26 special_tokens_map.json
+-rw-r--r-- 1 root root  17082730 Sep  5 10:26 tokenizer.json
+-rw-r--r-- 1 root root       443 Sep  5 10:26 tokenizer_config.json
+-- sha256 der int8-Datei --
+8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6  /usr/local/share/findling/model/model.onnx
+-- vec0 --
+-r--r--r-- 1 root root 156520 Sep  5 10:26 /usr/local/lib/findling/vec0.so
+-- die Umgebungsvorgaben --
+FINDLING_EMBED_MODEL_DIR=/usr/local/share/findling/model
+FINDLING_VEC0_PATH=/usr/local/lib/findling/vec0.so
+HF_HUB_OFFLINE=1
+=== Die Semantik antwortet: ein echter Einbettungsaufruf im Abbild ===
+40-ABBILD-FERTIG

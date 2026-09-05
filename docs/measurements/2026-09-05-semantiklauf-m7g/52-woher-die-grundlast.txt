@@ -1,0 +1,126 @@
+[0;93m2026-09-05 10:47:15.050143180 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+{
+ "schritte": [
+  {
+   "schritt": "00-leerer-prozess",
+   "rss_kb": 13192,
+   "rss_mb": 12.9
+  },
+  {
+   "schritt": "01-config-importiert",
+   "rss_kb": 16252,
+   "rss_mb": 15.9
+  },
+  {
+   "schritt": "02-settings-gelesen",
+   "rss_kb": 16252,
+   "rss_mb": 15.9
+  },
+  {
+   "schritt": "03-index-module-importiert",
+   "rss_kb": 23108,
+   "rss_mb": 22.6
+  },
+  {
+   "schritt": "04-embed-module-importiert",
+   "rss_kb": 24980,
+   "rss_mb": 24.4
+  },
+  {
+   "schritt": "05-store-vectors-importiert",
+   "rss_kb": 26812,
+   "rss_mb": 26.2
+  },
+  {
+   "schritt": "06-poller-importiert",
+   "rss_kb": 68512,
+   "rss_mb": 66.9
+  },
+  {
+   "schritt": "07-api-resources-importiert",
+   "rss_kb": 68524,
+   "rss_mb": 66.9
+  },
+  {
+   "schritt": "08-findling-main-importiert",
+   "rss_kb": 70864,
+   "rss_mb": 69.2
+  },
+  {
+   "schritt": "09-wortliste-gelesen-276496",
+   "rss_kb": 93304,
+   "rss_mb": 91.1
+  },
+  {
+   "schritt": "10-deutscher-automat-gebaut",
+   "rss_kb": 136348,
+   "rss_mb": 133.2
+  },
+  {
+   "schritt": "11-tokenizer-gelesen",
+   "rss_kb": 411560,
+   "rss_mb": 401.9
+  },
+  {
+   "schritt": "12-chunker-gebaut-und-gefahren-2",
+   "rss_kb": 690864,
+   "rss_mb": 674.7
+  },
+  {
+   "schritt": "13-modell-objekt-gebaut-lazy",
+   "rss_kb": 690864,
+   "rss_mb": 674.7
+  },
+  {
+   "schritt": "14-erste-einbettung-gewichte-geladen",
+   "rss_kb": 1097524,
+   "rss_mb": 1071.8
+  },
+  {
+   "schritt": "15-lange-einbettung-aktivierungen",
+   "rss_kb": 1124516,
+   "rss_mb": 1098.2
+  }
+ ],
+ "zuwaechse_ueber_10_mb": [
+  {
+   "von": "05-store-vectors-importiert",
+   "nach": "06-poller-importiert",
+   "delta_mb": 40.7
+  },
+  {
+   "von": "08-findling-main-importiert",
+   "nach": "09-wortliste-gelesen-276496",
+   "delta_mb": 21.9
+  },
+  {
+   "von": "09-wortliste-gelesen-276496",
+   "nach": "10-deutscher-automat-gebaut",
+   "delta_mb": 42.0
+  },
+  {
+   "von": "10-deutscher-automat-gebaut",
+   "nach": "11-tokenizer-gelesen",
+   "delta_mb": 268.8
+  },
+  {
+   "von": "11-tokenizer-gelesen",
+   "nach": "12-chunker-gebaut-und-gefahren-2",
+   "delta_mb": 272.8
+  },
+  {
+   "von": "13-modell-objekt-gebaut-lazy",
+   "nach": "14-erste-einbettung-gewichte-geladen",
+   "delta_mb": 397.1
+  },
+  {
+   "von": "14-erste-einbettung-gewichte-geladen",
+   "nach": "15-lange-einbettung-aktivierungen",
+   "delta_mb": 26.4
+  }
+ ],
+ "verfuegbar": true,
+ "vectors_modul": "findling.store.vectors",
+ "poller_modul": "findling.worker.poller",
+ "haupt_modul": "findling.main"
+}
