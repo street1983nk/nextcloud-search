@@ -215,3 +215,24 @@ def test_every_candidate_carries_its_modification_time(index: Index, store: Stor
     for candidate in page.candidates:
         assert candidate.mtime == 1_700_000_000 + candidate.file_id
         assert candidate.score > 0.0
+
+
+def test_the_permission_prefilter_is_called_at_exactly_two_places() -> None:
+    # T-06-25, and the reason it is a source read rather than a behaviour test:
+    # a second call site would be a second place that decides what a user may
+    # see, and it would be perfectly green in every functional test. The two
+    # that are allowed are the candidate round and the snippet cut, and the
+    # merge of the vector branch runs above the first of them.
+    source = SEARCH_SOURCE.read_text(encoding="utf-8")
+
+    assert source.count("prefilter_visible") == 2
+
+
+def test_the_merge_never_asks_who_may_see_a_document() -> None:
+    # The other half of the same statement. index/fusion.py takes two ranked
+    # lists of numbers and answers one, and a permission question in there
+    # would be a third authority nobody asked for.
+    fusion = SEARCH_SOURCE.with_name("fusion.py").read_text(encoding="utf-8")
+
+    assert "prefilter_visible" not in fusion
+    assert "uid" not in fusion
