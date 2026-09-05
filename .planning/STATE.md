@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
 stopped_at: Completed 06-08-PLAN.md
-last_updated: "2026-09-05T08:49:42.876Z"
+last_updated: "2026-09-05T09:27:35.153Z"
 last_activity: 2026-09-05
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 33
-  completed_plans: 27
+  completed_plans: 28
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 6 (Semantische Suche) — EXECUTING
-Plan: 9 of 12
+Plan: 10 of 12
 Status: Ready to execute
 Last activity: 2026-09-05
 
-Progress: [████████░░] 82%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Progress: [████████░░] 82%
 | Phase 6 P06 | 35min | 3 tasks | 12 files |
 | Phase 6 P07 | 38min | 3 tasks | 12 files |
 | Phase 6 P08 | 16min | 2 tasks | 6 files |
+| Phase 6 P09 | 33min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -162,6 +163,11 @@ Recent decisions affecting current work:
 - [Phase 6]: 06-07: Der Plattenplatzvorbehalt zieht auf den IndexBatchWriter (free_bytes, disk_is_tight), damit Index und Vektorbestand ein Verzeichnis gegen eine Zahl fragen; der Zweitspurzweig antwortet mit _DiskTight und laeuft in die bestehende Plattenpause
 - [Phase 6]: 06-08: best_chunk_for fragt in der Richtung des Vorfilters (gegebene Dateien, ihr bester Chunk) und rechnet den Abstand je Zeile, weil k eine Bedingung ueber den ganzen Bestand ist
 - [Phase 6]: 06-08: snippets_for nimmt das SemanticSide-Buendel statt zweier Parameter, weil ohne Modell nichts eingebettet werden kann
+- [Phase 6]: 06-09: Die zweite Deckungszahl entsteht aus einem zweiten Aufruf von AdminViewService::coverageShare mit einem anderen Zaehler und demselben Nenner (indexable), nie aus einem zweiten Rechenweg; ein Gate zaehlt die eine Deklaration und die zwei Aufrufstellen
+- [Phase 6]: 06-09: embedded zaehlt Dokumente (COUNT DISTINCT file_id) und nicht Chunks, und es wird im Vektorspeicher gezaehlt statt in einer Spalte von files: eine zweite Stelle, die den Rueckstand zu kennen behauptet, laeuft am ersten verlorenen Schreibvorgang auseinander
+- [Phase 6]: 06-09: embedded ist auf der PHP-Seite int|null, weil 'der Container hat die Zahl nicht gemeldet' (aeltere Fassung) und 'kein Dokument hat einen Vektor' zwei Auskuenfte sind; 0 Prozent semantische Deckung waere eine Aussage ueber die zweite
+- [Phase 6]: 06-09: Die Herkunftsmarke bleibt in der Admin-Diagnose (D-14). Beide Ranglisten entstehen in index/search.py::_sides, also fahren eine Suchrunde und die Auskunft dieselbe Verschmelzung, und origins wird ausschliesslich in api/diagnose.py gerufen; in api/search.py und index/search.py kommt der Name nicht vor
+- [Phase 6]: 06-09: origin fehlt in der Diagnoseantwort, statt null zu sein (response_model_exclude_none): null liest sich als 'gesucht und nichts gefunden' und damit als Urteil ueber eine Suche, die niemand gefahren hat
 
 ### Pending Todos
 
@@ -177,6 +183,7 @@ None yet.
 - RAM-Spitzen auf ARM sind bisher nur geschätzt, Messlauf steht in Phase 5 aus
 - Zwei benannte Luecken aus der Sichtprobe 04-10, beide in .planning/phases/04-admin-sichtbarkeit-und-diagnose/deferred-items.md mit ihrer Schliessform: DI-04-03 (Skip-Verdikte pro fileid uebergeben, damit die Fehlerliste die vier Container-Gruende gruppieren kann) und DI-04-04 (Versionsmarken nach abgeschlossenem Neuaufbau neu stempeln, sonst kann der Reindex-Banner die eigene Abhilfe nie einloesen)
 - Das Pruefsummen-Gate ueber das Referenzkorpus nach der Live-Raeumung steht aus und gehoert in die Phasen-Verifikation (Gate A auf Quellcode-Ebene ist gruen, die Write-Allowlist unveraendert bei drei Eintraegen)
+- Vor dem Tag v1.0.0 (Plan 06-12) zu entscheiden: DI-06-02 und DI-06-03 (embedding_version wird nicht gestempelt, reset_for_reindex hat keinen Aufrufer). Plan 06-09 hat die Bedingung geliefert (embedded == indexed bei indexed > 0); es fehlt ein Plan auf dem Indexweg oder eine bewusste Entscheidung in docs/embeddings.md, dass ein Modellwechsel occ findling:index --restart verlangt
 
 ## Deferred Items
 
@@ -188,6 +195,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-05T08:49:42.861Z
+Last session: 2026-09-05T09:26:45.857Z
 Stopped at: Completed 06-08-PLAN.md
 Resume file: None
