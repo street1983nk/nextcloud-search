@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 06-10-PLAN.md
+stopped_at: 06-11 Checkpoint, Semantiklauf laeuft detached
 last_updated: "2026-09-05T10:03:23.582Z"
 last_activity: 2026-09-05
 progress:
@@ -27,8 +27,30 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 
 Phase: 6 (Semantische Suche) — EXECUTING
 Plan: 11 of 12
-Status: Ready to execute
+Status: Checkpoint, der Semantiklauf laeuft detached auf der ARM-Box
 Last activity: 2026-09-05
+
+**Zwischenstand 06-11, 2026-09-05T10:57Z.** Der Volllauf mit Semantik ist um
+10:47:54Z angestossen und laeuft unbeaufsichtigt auf der AWS-Box
+(m7g.large, 4 GB, aarch64). Beobachter, Waechter und Meldekette sind scharf,
+nichts haengt an einer lebenden Sitzung. Erwartete Dauer 16 bis 18 Stunden.
+
+Weckwort fuer die Fortsetzung: **semantiklauf pruefen**.
+Fertigmeldung der Box: `/home/ubuntu/work/semantiklauf/00-FERTIG`.
+
+Belegt vor dem Anstoss: das Abbild `06-11-arm` traegt den Stand des
+Arbeitsbaums (Baumhash `c83b5d7f`), das Modell im Abbild ist dasselbe wie in
+Plan 06-03 (`8da4c9ba`), der Korpus ist bitgleich mit dem aus 05-21
+(`bcbef9b2`), und DI-05-36 ist in beiden Teilen gemessen: null
+Poller-Durchgaenge im unbewaffneten Zustand, vierzehn nach der Registrierung
+ueber AppAPI.
+
+Ein Befund, der schon feststeht und den Bericht traegt: die Semantik kostet
+rund 595 MB Grundlast im Leerlauf (688,0 MB gegen 93,5 MB anon, A/B am selben
+Volumen). Sie gehoert nicht dem Modell, sondern dem Tokenizer (268,8 MB) und
+dem Chunker (272,8 MB); die Modellgewichte kommen mit 397,1 MB erst bei der
+ersten Einbettung dazu. Messreihe:
+`docs/measurements/2026-09-05-semantiklauf-m7g/`.
 
 Progress: [█████████░] 88%
 
