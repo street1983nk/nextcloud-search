@@ -46,21 +46,28 @@ sechs Texte einzelne Dateitypen aufzählt.
 
 ## Die gemessene Zahl
 
-Der Satz mit der Messung stammt aus Plan 05-14 und wird hier zitiert, nicht neu
-formuliert. Er steht an drei Orten in derselben Form: in `README.md`, in
-`php/appinfo/info.xml` und in `backend/appinfo/info.xml`, jeweils in der
-englischen Fassung. Das Gate prüft diese Gleichheit, weil drei Orte für eine
-Zahl sonst auseinanderlaufen und die Store-Beschreibung der Ort ist, an dem es
-niemandem auffällt.
+Der Satz mit der Messung stammt aus Plan 05-14 und ist mit Plan 05-21 auf die
+ARM-Messung umgestellt. Er wird hier zitiert, nicht neu formuliert, und steht an
+drei Orten in derselben Form: in `README.md`, in `php/appinfo/info.xml` und in
+`backend/appinfo/info.xml`, jeweils in der englischen Fassung. Das Gate prüft
+diese Gleichheit, weil drei Orte für eine Zahl sonst auseinanderlaufen und die
+Store-Beschreibung der Ort ist, an dem es niemandem auffällt.
 
-> A full index and OCR run over 50,000 files and 20 GB on a 4-GB box peaked at
-> 429 MB of resident anonymous memory, under a hard 2 GB limit enforced by the
-> kernel, with no OOM kill.
+> A full index and OCR run over 50,000 files and 20 GB on a 4-GB ARM64 box
+> peaked at 422 MB of resident anonymous memory, under a hard 2 GB limit
+> enforced by the kernel, with no OOM kill.
 
-Dazu gehört in jeder Sprache der Zusatz aus dem Messbericht: die Maschine war
-x86, die Wiederholung auf ARM steht aus, und `docs/performance.md` nennt jede
-Zahl, die sie ersetzen wird. Eine zweite Zahl kommt nicht dazu, und gerundet
-wird nichts.
+Warum die Zahl kleiner geworden ist, obwohl die Maschine schwächer ist: sie
+stammt jetzt aus dem Lauf auf arm64 mit zwei Kernen und 4 GB, also auf der
+Hardware, für die die Aussage gilt, statt aus der x86-Generalprobe. Die
+Generalprobe lag bei 429 MB, der ARM-Lauf bei 422 MB. Beide Reihen stehen in
+`docs/performance.md` nebeneinander.
+
+Der Zusatz, der in jeder Sprache dazugehört, hat sich mit der Zahl geändert. Er
+lautete "die Maschine war x86, die Wiederholung auf ARM steht aus"; er lautet
+jetzt, dass die Messung auf der Zielhardware gemacht wurde und dass der Bericht
+im Quelltext die Methode, die Kurve und beide Läufe trägt. Eine zweite Zahl
+kommt nicht dazu, und gerundet wird nichts.
 
 ---
 
@@ -107,11 +114,12 @@ between hours and weeks. "occ findling:index --status" shows how far it has
 come.
 
 What it costs in memory, measured: A full index and OCR run over 50,000 files
-and 20 GB on a 4-GB box peaked at 429 MB of resident anonymous memory, under a
-hard 2 GB limit enforced by the kernel, with no OOM kill. The machine was x86
-and the repetition on ARM hardware is still open; the report docs/performance.md
-in the source code carries the method, the curve and every figure that
-repetition will replace.
+and 20 GB on a 4-GB ARM64 box peaked at 422 MB of resident anonymous memory,
+under a hard 2 GB limit enforced by the kernel, with no OOM kill. That is the
+target hardware and not a stand in, and the run was carried out under a
+ceiling the kernel enforced, so the limit was never merely respected on
+average. The report docs/performance.md in the source code carries the method,
+the curve, the corpus and the x86 rehearsal next to it.
 
 Privacy: everything runs locally in your own instance. No file content ever
 leaves the server, and there is no telemetry of any kind, not even a version
@@ -142,12 +150,13 @@ Stunden und Wochen. "occ findling:index --status" zeigt, wie weit er gekommen
 ist.
 
 Was es an Arbeitsspeicher kostet, gemessen: Ein vollständiger Index- und
-Texterkennungslauf über 50.000 Dateien und 20 GB auf einer 4-GB-Box hatte seine
-Spitze bei 429 MB anonymem Arbeitsspeicher, unter einer harten Grenze von 2 GB,
-die der Kernel durchsetzt, und ohne einen einzigen Abschuss wegen
-Speichermangels. Die Maschine war x86, die Wiederholung auf ARM-Hardware steht
-aus; der Bericht docs/performance.md im Quellcode nennt die Methode, die Kurve
-und jede Zahl, die diese Wiederholung ersetzen wird.
+Texterkennungslauf über 50.000 Dateien und 20 GB auf einer 4-GB-Box mit ARM64
+hatte seine Spitze bei 422 MB anonymem Arbeitsspeicher, unter einer harten
+Grenze von 2 GB, die der Kernel durchsetzt, und ohne einen einzigen Abschuss
+wegen Speichermangels. Das ist die Zielhardware und kein Ersatz, und die
+Grenze wurde nicht nur im Mittel eingehalten, sondern kein einziges Mal
+berührt. Der Bericht docs/performance.md im Quellcode nennt die Methode, die
+Kurve, den Korpus und daneben die x86-Generalprobe.
 
 Datenschutz: Alles läuft lokal in Ihrer eigenen Instanz. Kein Dateiinhalt
 verlässt den Server, und es gibt keinerlei Telemetrie, nicht einmal eine
@@ -179,12 +188,13 @@ Basculer cette instance sur le cron système, c'est la différence entre des
 heures et des semaines. "occ findling:index --status" montre où elle en est.
 
 Ce que cela coûte en mémoire, mesuré : une indexation complète avec
-reconnaissance optique portant sur 50 000 fichiers et 20 Go sur une machine de
-4 Go a culminé à 429 Mo de mémoire anonyme résidente, sous une limite stricte de
-2 Go imposée par le noyau, et sans la moindre interruption pour manque de
-mémoire. La machine était en x86, la répétition sur du matériel ARM reste à
-faire ; le rapport docs/performance.md dans le code source donne la méthode, la
-courbe et chaque chiffre que cette répétition remplacera.
+reconnaissance optique portant sur 50 000 fichiers et 20 Go sur une machine
+ARM64 de 4 Go a culminé à 422 Mo de mémoire anonyme résidente, sous une limite
+stricte de 2 Go imposée par le noyau, et sans la moindre interruption pour
+manque de mémoire. C'est le matériel cible et non un remplaçant, et la limite
+n'a pas seulement été respectée en moyenne : elle n'a jamais été atteinte. Le
+rapport docs/performance.md dans le code source donne la méthode, la courbe,
+le corpus et, à côté, la répétition sur x86.
 
 Confidentialité : tout fonctionne localement dans votre propre instance. Aucun
 contenu de fichier ne quitte le serveur, et il n'y a aucune télémétrie, pas même
@@ -234,11 +244,12 @@ be configured: the first index starts by itself, and scanned documents are read
 with OCR without a setting being touched.
 
 What it costs in memory, measured: A full index and OCR run over 50,000 files
-and 20 GB on a 4-GB box peaked at 429 MB of resident anonymous memory, under a
-hard 2 GB limit enforced by the kernel, with no OOM kill. The machine was x86
-and the repetition on ARM hardware is still open; the report docs/performance.md
-in the source code carries the method, the curve and every figure that
-repetition will replace.
+and 20 GB on a 4-GB ARM64 box peaked at 422 MB of resident anonymous memory,
+under a hard 2 GB limit enforced by the kernel, with no OOM kill. That is the
+target hardware and not a stand in, and the run was carried out under a
+ceiling the kernel enforced, so the limit was never merely respected on
+average. The report docs/performance.md in the source code carries the method,
+the curve, the corpus and the x86 rehearsal next to it.
 
 Privacy: everything runs locally in this container on your own machine. No file
 content ever leaves the server, and there is no telemetry of any kind, not even
@@ -266,12 +277,13 @@ von selbst, und gescannte Dokumente werden per Texterkennung gelesen, ohne dass
 eine Einstellung angefasst wird.
 
 Was es an Arbeitsspeicher kostet, gemessen: Ein vollständiger Index- und
-Texterkennungslauf über 50.000 Dateien und 20 GB auf einer 4-GB-Box hatte seine
-Spitze bei 429 MB anonymem Arbeitsspeicher, unter einer harten Grenze von 2 GB,
-die der Kernel durchsetzt, und ohne einen einzigen Abschuss wegen
-Speichermangels. Die Maschine war x86, die Wiederholung auf ARM-Hardware steht
-aus; der Bericht docs/performance.md im Quellcode nennt die Methode, die Kurve
-und jede Zahl, die diese Wiederholung ersetzen wird.
+Texterkennungslauf über 50.000 Dateien und 20 GB auf einer 4-GB-Box mit ARM64
+hatte seine Spitze bei 422 MB anonymem Arbeitsspeicher, unter einer harten
+Grenze von 2 GB, die der Kernel durchsetzt, und ohne einen einzigen Abschuss
+wegen Speichermangels. Das ist die Zielhardware und kein Ersatz, und die
+Grenze wurde nicht nur im Mittel eingehalten, sondern kein einziges Mal
+berührt. Der Bericht docs/performance.md im Quellcode nennt die Methode, die
+Kurve, den Korpus und daneben die x86-Generalprobe.
 
 Datenschutz: Alles läuft lokal in diesem Container auf Ihrer eigenen Maschine.
 Kein Dateiinhalt verlässt den Server, und es gibt keinerlei Telemetrie, nicht
@@ -301,12 +313,13 @@ la première indexation démarre d'elle-même, et les documents numérisés sont
 par reconnaissance optique sans qu'un seul réglage soit touché.
 
 Ce que cela coûte en mémoire, mesuré : une indexation complète avec
-reconnaissance optique portant sur 50 000 fichiers et 20 Go sur une machine de
-4 Go a culminé à 429 Mo de mémoire anonyme résidente, sous une limite stricte de
-2 Go imposée par le noyau, et sans la moindre interruption pour manque de
-mémoire. La machine était en x86, la répétition sur du matériel ARM reste à
-faire ; le rapport docs/performance.md dans le code source donne la méthode, la
-courbe et chaque chiffre que cette répétition remplacera.
+reconnaissance optique portant sur 50 000 fichiers et 20 Go sur une machine
+ARM64 de 4 Go a culminé à 422 Mo de mémoire anonyme résidente, sous une limite
+stricte de 2 Go imposée par le noyau, et sans la moindre interruption pour
+manque de mémoire. C'est le matériel cible et non un remplaçant, et la limite
+n'a pas seulement été respectée en moyenne : elle n'a jamais été atteinte. Le
+rapport docs/performance.md dans le code source donne la méthode, la courbe,
+le corpus et, à côté, la répétition sur x86.
 
 Confidentialité : tout fonctionne localement dans ce conteneur, sur votre propre
 machine. Aucun contenu de fichier ne quitte le serveur, et il n'y a aucune

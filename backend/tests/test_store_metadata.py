@@ -94,8 +94,8 @@ SCREENSHOT_LIMIT = 256
 # lines at a different width than an info.xml does and a line break is not a
 # difference in what the sentence says.
 MEASURED_SENTENCE = (
-    "A full index and OCR run over 50,000 files and 20 GB on a 4-GB box peaked at 429 MB of resident "
-    "anonymous memory, under a hard 2 GB limit enforced by the kernel, with no OOM kill."
+    "A full index and OCR run over 50,000 files and 20 GB on a 4-GB ARM64 box peaked at 422 MB of "
+    "resident anonymous memory, under a hard 2 GB limit enforced by the kernel, with no OOM kill."
 )
 
 
