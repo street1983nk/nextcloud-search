@@ -83,3 +83,45 @@ die Statusseite unter dieser Nummer fuehren. Plan 06-08 ist der Ausschnitt fuer
 rein semantische Treffer und rechnet keinen Deckungsgrad; die Statusseite ist
 06-09. DI-06-02 und DI-06-03 sind mit 06-08 also ausdruecklich **nicht**
 geschlossen.
+
+**Nachtrag 05.09.2026 (Plan 06-09), gilt für DI-06-02 und DI-06-03:** Die
+Deckungsgradzahl existiert jetzt. Der Container meldet `embedded` neben
+`indexed`, und damit ist "der Bestand ist vollständig" zum ersten Mal eine
+Bedingung statt einer Vermutung: `embedded == indexed` bei `indexed > 0`. Beide
+Punkte bleiben trotzdem offen, und der Grund ist nicht Zeitmangel, sondern die
+Richtung des Schreibens.
+
+Plan 06-09 baut drei lesende Flächen: `GET /status`, `GET /diagnose` und die
+Admin-Seite. Beide Punkte brauchen einen **Schreibvorgang auf dem Indexweg**:
+DI-06-03 einen Stempel der Marke `embedding_version`, DI-06-02 einen Aufruf von
+`reset_for_reindex` beziehungsweise `forget_all`, wenn diese Marke driftet. Das
+gehört in den Poller, neben `Poller._stamp_if_rebuilt`, und nicht in eine Statusroute. Eine
+Statusroute, die beim Lesen etwas stempelt, wäre außerdem genau die Sorte
+Nebenwirkung, die dieses Projekt an drei Stellen ausdrücklich ausschließt
+(`open_read_only`, `PRAGMA query_only`, und der Testfall "asking for the status
+changes nothing").
+
+**Was jetzt klar ist und der nächste Plan nicht neu herleiten muss:**
+
+1. Die Bedingung für "vollständig" ist `embedded == indexed` bei
+   `indexed > 0`, mit `VectorStore.document_count()` als Zähler. Sie ist
+   bewusst nicht `chunk_count`/`vector_count`: die beiden zählen Chunks und
+   stehen für die Frage "ist der Löschweg heil", nicht für "trägt jedes
+   Dokument einen Vektor".
+2. Der Stempel gehört nicht in `expected_versions()`. Diese Menge ist die
+   Marke des Volltextindex, und ein Sprung darin erzwingt den Volltext-Reindex,
+   den D-21 ausschließt. `VECTOR_ONLY_MARKS` trennt die Embedding-Marke aus
+   genau diesem Grund, und sie bleibt getrennt.
+3. Die Ordnung bei einem Drift ist zwingend: erst `forget_all`, dann die neue
+   Marke, dann die Wiedervorlage der Dokumente. Umgekehrt stünde die Marke der
+   neuen Fassung über einem Bestand der alten, und das ist der Zustand, den
+   niemand mehr bemerkt.
+
+**Schliessform, präzisiert:** ein eigener Plan auf dem Indexweg, spätestens
+vor dem Tag `v1.0.0` aus Plan 06-12. Vor dem Tag, weil ein ausgeliefertes
+Release, das einen Modellwechsel nicht bemerkt, still schlechtere Treffer liefert
+und dafür keine Anzeige hat. Die billige Alternative, falls die Zeit nicht
+reicht, ist eine bewusste Entscheidung mit einem Satz in `docs/embeddings.md`:
+ein Modellwechsel verlangt `occ findling:index --restart`, und die App sagt das,
+statt es zu können. Auch diese Alternative ist eine Entscheidung und keine
+Lücke, aber sie muss getroffen und aufgeschrieben werden.
