@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 06-04-PLAN.md
-last_updated: "2026-09-05T06:29:04.730Z"
+stopped_at: Completed 06-05-PLAN.md
+last_updated: "2026-09-05T07:04:11.773Z"
 last_activity: 2026-09-05
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 33
-  completed_plans: 23
+  completed_plans: 24
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 6 (Semantische Suche) — EXECUTING
-Plan: 5 of 12
+Plan: 6 of 12
 Status: Ready to execute
 Last activity: 2026-09-05
 
-Progress: [███████░░░] 70%
+Progress: [███████░░░] 73%
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [███████░░░] 70%
 | Phase 06 P03 | 3h05m | 3 tasks | 8 files |
 | Phase 06 P02 | 2h05m | 3 tasks | 37 files |
 | Phase 6 P04 | 30min | 3 tasks | 8 files |
+| Phase 6 P05 | 30min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -141,6 +142,14 @@ Recent decisions affecting current work:
 - [Phase 6]: 06-04: embedding_version ist eine meta-Marke; version_mismatch meldet ihren Drift weiterhin und entscheidet nichts, VECTOR_ONLY_MARKS trennt sie, und version_drift laesst sie aus, damit kein Reindex-Banner auf einem frischen Container steht
 - [Phase 6]: 06-04: Kennzahl aus Erfolgskriterium 4 gemessen statt geschaetzt: 43.859.968 Byte fuer 100.136 Chunks, also 438,0 Byte je Chunk und 876,0 je Dokument, 5,8 Prozent des Tantivy-Index (geschaetzt waren 432, 864 und 5,7)
 - [Phase 6]: 06-04: nearest deckelt k als Argument (Vorgabe 100, Fenstertiefe aus D-12) und sagt ausdruecklich, dass es die Zahl der besuchten Zeilen nicht deckelt; genau das kaufen die beiden Ausweichpfade, und keiner von beiden ist gebaut (D-10)
+- [Phase 6]: 06-05: Chunkgroesse 510 statt 512, weil der ausgelieferte Tokenizer zwei Sondertoken um jeden Text setzt (gemessen 05.09.2026); ein Chunk mit 512 eigenen Token kaeme als 514 an der Sitzung an und verloere seine letzten beiden ohne Fehlermeldung
+- [Phase 6]: 06-05: Chunkgroesse 510 und nicht 256, obwohl Messung B Charge 2 bei Sequenz 256 als sparsamste UND schnellste Kombination ausweist: 256 haette die Chunkzahl auf 200.272 verdoppelt, den Scan jeder Nutzersuche verdoppelt und die 250.000er-Schwelle von 125.000 auf 62.500 Dokumente gezogen. Eine Stunde einmalig gegen Kosten bei jeder Suche
+- [Phase 6]: 06-05: A11 beantwortet, onnxruntime wird direkt angesteuert. fastembed 0.8.0 reicht von den Sitzungsoptionen ausschliesslich enable_cpu_mem_arena durch (EXPOSED_SESSION_OPTIONS) und die Sequenzlaenge gar nicht, weil preprocessor_utils sie aus tokenizer_config.json liest; die Arena wird abgeschaltet, damit die Aktivierungsspitze nicht zur Dauerlast neben der OCR-Spitze wird
+- [Phase 6]: 06-05: D-05 am echten Modell belegt: 9 von 10 deutschen Faellen bekommen mit und ohne Praefixe eine andere Rangfolge, in einem wechselt der beste Treffer. Die Praefixe stehen als benannte Konstanten im Modul, mit Test daneben
+- [Phase 6]: 06-05: embedding_unavailable ist eine Konstante in embed/model.py und KEIN neuer Reason in extract/errors.py: jene Liste ist das geschlossene Vokabular eines beurteilten Dateizustands im Gleichschritt mit store/repo.py und der PHP-Beschriftung, und eine ausgebliebene Einbettung sagt nichts darueber, ob die Datei indexiert wurde
+- [Phase 6]: 06-05: Zwei Tokenizer-Instanzen aus derselben Datei, weil enable_truncation eine Eigenschaft des Objekts ist: eine geteilte Instanz haette den 1.024-Token-Deckel aus D-01 still auf 512 halbiert
+- [Phase 6]: 06-05: Die Zeile 'zwei Chunks je Dokument' aus 06-04 war gerechnet; gemessen sind es zwei bis drei. Kennzahl 4 ist damit ein Boden (5,8 bis rund 8,6 Prozent des Tantivy-Index), und sie haelt an beiden Enden
+- [Phase 6]: 06-05: Die geschaetzten 250 bis 400 MB an INDEX_WORKERS werden nicht durch eine zweite Schaetzung ersetzt: die Modellgewichte sind mit 118.101.091 Byte gemessen, die Aktivierungsspitze bleibt ungemessen (A5) und gehoert an den Lasttest der Zweitspur
 
 ### Pending Todos
 
@@ -167,6 +176,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-05T06:29:04.714Z
-Stopped at: Completed 06-04-PLAN.md
+Last session: 2026-09-05T07:04:11.756Z
+Stopped at: Completed 06-05-PLAN.md
 Resume file: None

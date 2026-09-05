@@ -87,7 +87,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 06-05-PLAN.md , Chunker, Modell-Wrapper und die Embedding-Caps (D-01, D-02, D-05, D-19)
+- [x] 06-05-PLAN.md , Chunker, Modell-Wrapper und die Embedding-Caps (D-01, D-02, D-05, D-19)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -314,7 +314,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
 | 5. Härtung und Store-Einreichung v1.0 | 18/20 | In Progress|  |
-| 6. Semantische Suche | 4/12 | In Progress|  |
+| 6. Semantische Suche | 5/12 | In Progress|  |
 
 ## Requirement Coverage
 
