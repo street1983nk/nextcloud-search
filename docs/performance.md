@@ -140,7 +140,8 @@ zwei Reihen auf zwei Architekturen mehr sagen als eine.
 | Störfall-Drills, ARM m7g.large | alle drei durchgespielt, dazu ein vierter mit dem Neustart der Maschine | 2026-09-05 |
 | Zusatzmessung INDEX_WORKERS=2 | gemessen, A/B über 200 Scans, Wegwerf-Abbild | 2026-09-05 |
 | Kosten des ARM-Laufs | gerechnet, aus Laufzeit und belegten Sätzen | 2026-09-05 |
-| Abbau der ARM-Box | steht aus, er gehört dem Betreiber nach der Abnahme dieses Berichts | offen |
+| Abnahme durch den Betreiber | erteilt, ohne Nacharbeiten | 2026-09-05 |
+| Verbleib der ARM-Box | **angehalten statt abgebaut**, Korpus und Index bleiben für Phase 6 | 2026-09-05 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -2927,10 +2928,14 @@ Die Zeiten: die Instanz läuft seit 2026-09-04T13:12:28Z (`LaunchTime` aus
 `describe-instances`), das Volume seit 2026-09-04T15:25:40Z, und die letzte
 Messung dieses Berichts endete am 2026-09-05T09:24:27Z.
 
-**Diese Summe ist ein Zwischenstand und keine Endabrechnung.** Die Box läuft
-weiter, bis der Betreiber diesen Bericht abgenommen und über ihren Verbleib
-entschieden hat; das ist eine Festlegung dieses Plans und keine Nachlässigkeit.
-Jede weitere Stunde kostet 0,1158 USD, jeder weitere Tag 2,78 USD.
+**Diese Summe ist der Stand am Ende der Messungen und nicht ganz die
+Endabrechnung.** Die Box lief noch weiter, bis der Betreiber diesen Bericht
+abgenommen und über ihren Verbleib entschieden hatte; das war eine Festlegung
+dieses Plans und keine Nachlässigkeit. Er hat sie am 05.09.2026 anhalten lassen,
+und was diese letzten Stunden gekostet haben, steht weiter unten im Abschnitt
+über den Verbleib der Box. Jede Stunde einer laufenden Box kostet 0,1158 USD,
+jeder Tag 2,78 USD; angehalten sind es 0,0130 USD je Stunde, weil dann nur noch
+die beiden Datenträger zählen.
 
 Drei Einordnungen dazu.
 
@@ -3014,13 +3019,18 @@ der Korpus über Seed und Abbild, und die Messungen über die Rohdaten unter
 Nachmessung an genau dieser Maschine; deshalb stand die Frage danach vor dem
 Abbau und nicht danach.
 
-### Der Verbleib der ARM-Box, und warum er offen ist
+### Der Verbleib der ARM-Box: angehalten, nicht abgebaut
 
-Die ARM-Box **steht noch**, mit ihrem Korpus, ihrem Index und beiden Abbildern.
-Das ist eine Festlegung dieses Plans: der Abbau läuft erst nach der Abnahme
-dieses Berichts durch den Betreiber, weil eine Nachmessung an genau dieser
-Maschine nach dem Abbau nicht mehr möglich ist und eine Frage an die Zahlen
-dieses Berichts genau so eine Nachmessung braucht.
+**Entschieden am 05.09.2026: der Betreiber hat diesen Bericht abgenommen und die
+Box anhalten lassen.** `stop-instances` ist noch am selben Tag abgesetzt worden,
+die Box ist seitdem nicht mehr erreichbar, und ihr Datenträger mit Korpus, Index
+und beiden Abbildern bleibt bestehen. Der Rest dieses Abschnitts ist die
+Begründung, wie sie vor der Entscheidung dastand; sie bleibt stehen, weil eine
+Entscheidung ohne ihre Alternativen nicht nachvollziehbar ist.
+
+Bis zur Abnahme stand die Box mit Absicht: der Abbau läuft erst danach, weil
+eine Nachmessung an genau dieser Maschine nach dem Abbau nicht mehr möglich ist
+und eine Frage an die Zahlen dieses Berichts genau so eine Nachmessung braucht.
 
 Zur Entscheidung selbst gehört eine Angabe, die außerhalb dieses Plans liegt:
 **Phase 6 braucht für den Semantik-Volllauf wieder eine ARM-Box**, und dieselbe
@@ -3033,16 +3043,22 @@ stehen drei Wege offen statt zwei, und der mittlere ist neu:
 | **anhalten** (`stop-instances`) | nur die Datenträger, rund 0,31 USD je Tag | Korpus, Index und beide Abbilder bleiben; die Adresse wechselt beim nächsten Start, `box.env` und der DNS-Eintrag sind nachzuziehen |
 | abbauen (`destroy`) | nichts mehr | Korpus (43 min Erzeugung), Index (12 h 49 min) und die auf der Box gebauten Abbilder sind weg und müssen für Phase 6 neu entstehen |
 
-Der Bericht empfiehlt den mittleren Weg. Er nimmt die beiden Kosten weg, auf die
-es ankommt, nämlich den Stundensatz der Instanz und das offene Netz, und er
-erhält die zwölfeinhalb Stunden Rechenzeit, die im Index stecken. Die
-Entscheidung trifft der Betreiber, nicht dieser Bericht.
+Der Bericht hat den mittleren Weg empfohlen, und der Betreiber ist ihm gefolgt.
+Er nimmt die beiden Kosten weg, auf die es ankommt, nämlich den Stundensatz der
+Instanz und das offene Netz, und er erhält die zwölfeinhalb Stunden Rechenzeit,
+die im Index stecken.
 
 Was beim Anhalten zu wissen ist, damit es nicht später überrascht: eine
 angehaltene Instanz gibt ihre öffentliche Adresse zurück, `3.65.24.222` ist
 danach nicht mehr diese Box, und der Eintrag `loadtest.infranode.dev` zeigt
 dann auf eine fremde Adresse. Er gehört also mit dem Anhalten entfernt und beim
-nächsten Start neu gesetzt.
+nächsten Start neu gesetzt, zusammen mit `BOX_IP` in der Zustandsdatei.
+
+Und eine Zahl, die mit dem Anhalten endgültig wird: die **2,3226 USD** aus der
+Kostentabelle oben sind der Stand am Ende der Messungen. Zwischen diesem
+Zeitpunkt und dem Anhalten lief die Instanz noch, mit 0,0019 USD je Minute. Die
+Endsumme liegt damit knapp über der genannten und unter 2,40 USD; genauer wird
+sie nicht, weil die Sekunde des Anhaltens außerhalb dieses Berichts liegt.
 
 ## Reproduzieren
 
