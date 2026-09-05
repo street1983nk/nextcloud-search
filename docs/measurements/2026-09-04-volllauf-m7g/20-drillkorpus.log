@@ -1,0 +1,12 @@
+drillkorpus-start 2026-09-05T07:56:20Z
+build_load_corpus: category=scan_single files=297
+build_load_corpus: category=scan_multi files=3
+build_load_corpus: category=text_pdf files=676
+build_load_corpus: category=ooxml files=301
+build_load_corpus: category=opendocument files=150
+build_load_corpus: category=plain_text files=69
+build_load_corpus: category=image files=3
+build_load_corpus: category=oversize files=1
+build_load_corpus: seed=phase5-drill-arm files=1500 bytes=634499870 checksum=19558722e6af8c5f847f70cfd2d1b91b89952b183ed0331ba8101890fbacb048
+634638833	/mnt/findling/drillkorpus
+erzeugt 2026-09-05T07:57:45Z

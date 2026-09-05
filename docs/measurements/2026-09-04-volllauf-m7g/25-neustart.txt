@@ -1,0 +1,302 @@
+
+### DRILL 1b auf ARM: die Maschine startet neu
+--- Zustand vor dem Neustart 2026-09-05T08:20:48Z ---
+  Neustartregeln der Container:
+    /nc_app_findling_backend restart=unless-stopped Memory=2147483648
+    /findling-registry restart=always Memory=0
+    /nextcloud-aio-apache restart=unless-stopped Memory=0
+    /nextcloud-aio-nextcloud restart=unless-stopped Memory=0
+    /nextcloud-aio-redis restart=unless-stopped Memory=0
+    /nextcloud-aio-database restart=unless-stopped Memory=0
+    /nextcloud-aio-harp restart=unless-stopped Memory=0
+    /nextcloud-aio-notify-push restart=unless-stopped Memory=0
+    /nextcloud-aio-mastercontainer restart=always Memory=0
+  Vorrat {'zeilen': 132, 'ausgeliefert': 4, 'auslieferungen_max': 1, 'auslieferungen_summe': 4}
+  Zaehler {'indexed': 51431, 'skipped': 166, 'failed': 0, 'docs': 51597, 'aclRows': 51431, 'ocr': 10307, 'auslieferungen_max': 3}
+  Neustart angestossen um 2026-09-05T08:20:48Z
+  Container vor dem Neustart: Id=d8cc6f6b01d391051c0cb541c7b411db2d50c68edcd77d39f87e8fabfd32dd07 StartedAt=2026-09-05T08:18:47.91747448Z
+--- Die Maschine ist wieder da 2026-09-05T08:22:14Z ---
+  nc_app_findling_backend Up 59 seconds
+findling-registry Up 59 seconds
+nextcloud-aio-apache Up 59 seconds (health: starting)
+nextcloud-aio-nextcloud Up 59 seconds (healthy)
+nextcloud-aio-redis Up 59 seconds (healthy)
+nextcloud-aio-database Up 59 seconds (healthy)
+nextcloud-aio-harp Up 59 seconds (healthy)
+nextcloud-aio-notify-push Up 59 seconds (health: starting)
+nextcloud-aio-mastercontainer Up 59 seconds (healthy)
+  Id=d8cc6f6b01d391051c0cb541c7b411db2d50c68edcd77d39f87e8fabfd32dd07 Status=running StartedAt=2026-09-05T08:21:14.595174781Z RestartCount=0 Memory=2147483648 MemorySwap=2147483648
+  Die harte Grenze ueberlebt einen Neustart der Maschine, weil sie in der
+  HostConfig des Containers steht und nicht im laufenden Prozess.
+--- Zehn Minuten ohne Eingriff 2026-09-05T08:22:14Z ---
+  vor dem Neustart: Vorrat 132 Zeilen, indexed 51431
+  T+  60s indexed 51433 Vorrat 130 ausgeliefert 4
+  Der Poller arbeitet wieder, von selbst, nach 60s
+  Ergebnis nach 60s: bewegt=True
+  DI-05-36 trifft den Neustart NICHT: etwas hat den Poller wieder bewaffnet
+--- Was der Container in dieser Zeit getan hat 2026-09-05T08:23:14Z ---
+    harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+    init: no HaRP tunnel in this deployment, watching the application only
+    entrypoint: binding mode tcp 0.0.0.0:23000
+    INFO:     172.18.0.4:49766 - "POST /search HTTP/1.1" 200 OK
+    INFO:     172.18.0.4:49766 - "POST /snippets HTTP/1.1" 200 OK
+    INFO:     172.18.0.4:50602 - "PUT /enabled?enabled=0 HTTP/1.1" 200 OK
+    init: stop requested, the application exited with status 143
+    harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+    entrypoint: binding mode tcp 0.0.0.0:23000
+    init: no HaRP tunnel in this deployment, watching the application only
+    INFO:     172.18.0.4:50622 - "GET /heartbeat HTTP/1.1" 200 OK
+    INFO:     172.18.0.4:50622 - "PUT /enabled?enabled=1 HTTP/1.1" 200 OK
+    INFO:     172.18.0.4:51522 - "GET /status HTTP/1.1" 200 OK
+    INFO:     172.18.0.4:51522 - "GET /rates HTTP/1.1" 200 OK
+    init: stop requested, the application exited with status 143
+    entrypoint: binding mode tcp 0.0.0.0:23000
+    harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+    init: no HaRP tunnel in this deployment, watching the application only
+    INFO:findling.index.writer:committed 32 documents
+    INFO:findling.worker.poller:pass finished, claimed=32 indexed=32 skipped=0 failed=0 unchanged=0 requeued=0 committed=32
+    INFO:findling.index.writer:committed 28 documents
+    INFO:findling.worker.poller:pass finished, claimed=31 indexed=28 skipped=3 failed=0 unchanged=0 requeued=3 committed=28
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.worker.reconcile:reconcile stands down, 280 rows are scheduled and the quiet mark is 100
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.worker.reconcile:reconcile stands down, 202 rows are scheduled and the quiet mark is 100
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:     Started server process [9]
+    INFO:     Waiting for application startup.
+    INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+    INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+    INFO:     Application startup complete.
+    INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+    INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+    INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.316 s, build 1 in this process
+    INFO:findling:findling backend disabled
+    INFO:     Shutting down
+    INFO:     Waiting for application shutdown.
+    INFO:     Application shutdown complete.
+    INFO:     Finished server process [9]
+    INFO:     Started server process [9]
+    INFO:     Waiting for application startup.
+    INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+    INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+    INFO:     Application startup complete.
+    INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+    INFO:findling:findling backend enabled
+    INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+    INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+    INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.310 s, build 1 in this process
+    INFO:findling.worker.poller:removed 1 scratch files from an earlier run
+    INFO:findling.worker.reconcile:reconcile stands down, 156 rows are scheduled and the quiet mark is 100
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:findling.index.writer:committed 2 documents
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:     Shutting down
+    INFO:     Waiting for application shutdown.
+    INFO:findling.index.writer:committed 2 documents
+    WARNING:findling.nc.queue:could not acknowledge a batch of 2 rows
+    INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=0 committed=2
+    INFO:     Application shutdown complete.
+    INFO:     Finished server process [9]
+    INFO:     Started server process [8]
+    INFO:     Waiting for application startup.
+    INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+    INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+    INFO:     Application startup complete.
+    INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+--- Beantwortet er Suchen? 2026-09-05T08:23:15Z ---
+
+### DRILL 1b, NACHTRAG: das Urteil oben ist falsch, hier steht das richtige
+Der Vergleichswert oben wurde 30 s vor dem Herunterfahren genommen, und in
+diesen 30 s hat der Container noch zwei Dateien beurteilt. Der Zaehler stand
+danach von selbst hoeher, ohne dass nach dem Neustart etwas passiert waere.
+Gemessen wird deshalb neu, an der Zahl der Durchgaenge des Pollers.
+--- Was seit dem Start des Containers geschehen ist 2026-09-05T08:26:36Z ---
+  Container gestartet um 2026-09-05T08:21:14Z, jetzt ist 2026-09-05T08:26:36Z
+  Durchgaenge des Pollers seit dem Start: 0
+  Zaehler {'indexed': 51433, 'skipped': 164, 'failed': 0, 'docs': 51597, 'aclRows': 51433, 'ocr': 10309, 'auslieferungen_max': 3}
+  Vorrat {'zeilen': 130, 'ausgeliefert': 4, 'auslieferungen_max': 1, 'auslieferungen_summe': 4}
+--- Weitere 300 s ohne Eingriff 2026-09-05T08:26:36Z ---
+  T+  60s Durchgaenge 0 indexed 51433 Vorrat 130
+  T+ 120s Durchgaenge 0 indexed 51433 Vorrat 130
+  T+ 181s Durchgaenge 0 indexed 51433 Vorrat 130
+  T+ 241s Durchgaenge 0 indexed 51433 Vorrat 130
+  T+ 301s Durchgaenge 0 indexed 51433 Vorrat 130
+  Ergebnis: 0 Durchgaenge, seit der Container laeuft.
+  DI-05-36 BESTAETIGT, auch fuer den Neustart der Maschine: Docker hat den
+  Container nach seiner Regel unless-stopped wieder gestartet, er antwortet
+  auf Suchen, und sein Poller hat in dieser ganzen Zeit keinen einzigen
+  Durchgang gemacht. Niemand hat etwas falsch gemacht; es hat nur niemand
+  etwas getan, und genau das ist der Fall, den ein Kernel-Update erzeugt.
+--- Was die Verwaltungsseite in dieser Lage sagt 2026-09-05T08:31:39Z ---
+  runState running stalledFor 356 backendReachable True scheduled 126 running 4 indexed 51433 failed 0
+  Das ist die Grenze der Korrektur aus 05-20, und sie ist gewollt: das
+  Stillstands-Urteil nimmt die SPAETERE von zwei Bewegungen, damit ein
+  langer OCR-Nachlauf nicht als Stillstand gilt. Solange die
+  Hintergrundauftraege von Nextcloud laufen, kann diese Seite einen
+  stillstehenden Container also nicht anzeigen.
+  Suche in dieser Lage: {'http': '200', 'ms': 396, 'name': 'File contents', 'treffer': 5, 'erster': '35799-aktenvermerk.docx'}
+--- Heilung ueber AppAPI 2026-09-05T08:31:41Z ---
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully enabled.
+  disable/enable dauerte 3s, fertig um 2026-09-05T08:31:44Z
+    T+ 10s indexed 51435
+  Der Lauf ist zurueck, nach 10s, indexed 51433 -> 51435
+  Memory=2147483648 MemorySwap=2147483648
+--- Die zwei Zeilen, deren Quittung das Herunterfahren verschluckt hat 2026-09-05T08:31:54Z ---
+  Unmittelbar vor dem Herunterfahren steht im Protokoll:
+    WARNING:findling.nc.queue:could not acknowledge a batch of 2 rows
+  Die Frage ist, ob diese zwei Zeilen ihr Wiederholungsbudget verlieren.
+  hoechste Auslieferungszahl im Vorrat: 1
+  abgeschrieben: 0
+--- Endstand von Drill 1b 2026-09-05T08:31:55Z ---
+  Vorrat {'zeilen': 128, 'ausgeliefert': 6, 'auslieferungen_max': 1, 'auslieferungen_summe': 6}
+  Zaehler {'indexed': 51435, 'skipped': 162, 'failed': 0, 'docs': 51597, 'aclRows': 51435, 'ocr': 10311, 'auslieferungen_max': 3}
+25-NEUSTART-FERTIG

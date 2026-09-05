@@ -1,0 +1,17 @@
+lauf-ende-erkannt 2026-09-05T06:54:11Z
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              28
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-04 19:42:26 (671 minutes ago)
+findling-rss summary samples=9421 max_anon=442695680 peak=1018101760 events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=14865] oom_killed=false
+   9625 /home/ubuntu/work/volllauf/volllauf.csv
+    161 /home/ubuntu/work/volllauf/statusseite.jsonl
+   9786 total

@@ -1,0 +1,23 @@
+
+### Zusatzmessung, Runde A: Ordner workersA
+--- Abbild und Arbeiterzahl 2026-09-05T08:40:52Z ---
+  Image=localhost:5000/findling_backend:05-21-arm Memory=2147483648 MemorySwap=2147483648
+  INDEX_WORKERS im laufenden Container: INDEX_WORKERS = 1
+--- Warten, bis der Vorrat leer ist 2026-09-05T08:40:52Z ---
+  Vorrat {'zeilen': 0, 'ausgeliefert': 0, 'auslieferungen_max': 0, 'auslieferungen_summe': 0}
+--- Sampler an 2026-09-05T08:51:55Z ---
+--- Hochladen 2026-09-05T08:52:03Z ---
+  200 Dateien, Antwortcodes {'201': 200}
+  Upload von 2026-09-05T08:52:04Z bis 2026-09-05T08:53:03Z
+--- Warten auf das letzte Verdikt 2026-09-05T08:53:03Z ---
+  T+   0s beurteilt 167 von 200, davon mit OCR 4, Vorrat 196
+  T+  20s beurteilt 200 von 200, davon mit OCR 8, Vorrat 192
+--- Sampler aus 2026-09-05T09:05:53Z ---
+  findling-rss summary samples=168 max_anon=357408768 peak=458264576 events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=0] oom_killed=false
+--- Ergebnis 2026-09-05T09:05:59Z ---
+  {'zeilen': 200, 'ocr': 200, 'erstes': 1788598339, 'letztes': 1788599141, 'zeichen': 692486, 'indexiert': 200}
+  erstes Verdikt 1788598339, letztes 1788599141, Spanne 802 s
+  je Datei 4.01 s ueber 200 Dateien
+  je OCR-Datei 4.01 s ueber 200 Dateien
+  Vorrat am Ende {'zeilen': 0, 'ausgeliefert': 0, 'auslieferungen_max': 0, 'auslieferungen_summe': 0}
+31-WORKERS-A-FERTIG

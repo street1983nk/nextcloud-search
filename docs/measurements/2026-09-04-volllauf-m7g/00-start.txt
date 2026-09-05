@@ -1,0 +1,44 @@
+volllauf-start 2026-09-04T17:29:50Z
+findling 1.0.0 enabled
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              0
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+No background job of this app has run yet. Check the cron setting of this instance.
+overview http=412 31 Byte
+felder: 1 runState: None backendReachable: None
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              0
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-04 17:32:26 (0 minutes ago)
+vorrat=0 runState=None indexiert=None
+PRUEFUNG ROT: kein Vorrat, der Lauf laeuft nicht
+
+=== Nachtrag: der Lauf hat zweimal angefangen ===
+17:29:50Z  occ app:enable findling, die drei Tabellen entstehen
+17:32:26Z  erster Hintergrundauftrag der App, SchedulerJob reiht die Mounts ein
+17:37:27Z  erster StorageCrawlJob, die Warteschlange fuellt sich (2048 Zeilen)
+17:45:02Z  4048 Zeilen wartend, aber "handed to the worker 0": der Poller schlief
+17:46:23Z  occ app_api:app:disable + enable, damit AppAPI PUT /enabled erneut sendet
+17:46:40Z  der Container holt Dateien, der Lauf laeuft wirklich
+
+Grund: der Poller wird im Lifespan stillgestellt erzeugt und ausschliesslich von
+enabled_handler() bewaffnet, und der laeuft nur, wenn AppAPI PUT /enabled sendet.
+Ein docker restart des Containers, hier waehrend der Pruefung des HTTP/3-Wegs,
+laesst also einen Container zurueck, der Suchen beantwortet und nie wieder
+indexiert. Siehe DI-05-36.

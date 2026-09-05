@@ -1,0 +1,48 @@
+netrc geschrieben, Inhalt nicht ausgegeben
+=== Zustand vor dem Einschalten ===
+Memory=2147483648 MemorySwap=2147483648
+/dev/nvme1n1     59G   25G   32G  45% /mnt/findling
+=== Beobachter starten, VOR dem Einschalten der App ===
+  3 /home/ubuntu/work/volllauf/volllauf.csv
+  1 /home/ubuntu/work/volllauf/statusseite.jsonl
+  4 total
+=== Anstoss: erst jetzt wird die App eingeschaltet ===
+volllauf-start 2026-09-04T17:29:50Z
+findling 1.0.0 enabled
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              0
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+No background job of this app has run yet. Check the cron setting of this instance.
+=== Probe: antwortet die Verwaltungsseite ueber Basisanmeldung ===
+overview http=412 31 Byte
+felder: 1 runState: None backendReachable: None
+=== Gegenprobe nach drei Minuten: arbeitet wirklich etwas ===
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              0
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-04 17:32:26 (0 minutes ago)
+INFO:     172.18.0.4:44764 - "GET /status HTTP/1.1" 200 OK
+INFO:     172.18.0.4:44764 - "GET /rates HTTP/1.1" 200 OK
+INFO:     172.18.0.4:44764 - "GET /status HTTP/1.1" 200 OK
+INFO:     172.18.0.4:44764 - "GET /rates HTTP/1.1" 200 OK
+INFO:     172.18.0.4:44764 - "GET /status HTTP/1.1" 200 OK
+INFO:     172.18.0.4:44764 - "GET /rates HTTP/1.1" 200 OK
+vorrat=0 runState=None indexiert=None
+PRUEFUNG ROT: kein Vorrat, der Lauf laeuft nicht
+13-VOLLLAUF-GESTARTET

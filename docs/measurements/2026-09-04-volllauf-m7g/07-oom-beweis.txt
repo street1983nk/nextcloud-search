@@ -1,0 +1,37 @@
+oom-beweis 2026-09-05T06:54:19Z
+container=nc_app_findling_backend id=d8cc6f6b01d391051c0cb541c7b411db2d50c68edcd77d39f87e8fabfd32dd07
+cgroup=/sys/fs/cgroup/system.slice/docker-d8cc6f6b01d391051c0cb541c7b411db2d50c68edcd77d39f87e8fabfd32dd07.scope
+
+=== 1. memory.events, jeder Zaehler ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 14865
+
+=== 2. memory.peak und memory.max ===
+memory.peak = 1018101760
+memory.max  = 2147483648
+memory.current = 430878720
+
+=== 3. memory.stat, die Posten, aus denen die Zahl kommt ===
+anon 228569088
+file 182521856
+kernel 19779584
+anon_thp 0
+slab 18295416
+pgfault 402002127
+pgmajfault 6058
+
+=== 4. der Container selbst ===
+OOMKilled=false Status=running ExitCode=0 RestartCount=0 StartedAt=2026-09-04T17:46:29.699651355Z
+Memory=2147483648 MemorySwap=2147483648
+
+=== dazu die Abschlusszeile des Samplers ===
+findling-rss summary samples=9421 max_anon=442695680 peak=1018101760 events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=14865] oom_killed=false
+
+=== und der Bestand des Datentraegers ===
+/dev/root        38G  2.8G   35G   8% /
+/dev/nvme1n1     59G   26G   31G  46% /mnt/findling

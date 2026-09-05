@@ -1,0 +1,19 @@
+wechsel-start 2026-09-05T09:08:04Z
+			<registry>localhost:5000</registry>
+			<image>findling_backend</image>
+			<image-tag>05-21-arm-wegwerf-workers2</image-tag>
+=== der Datenspeicher vor dem Wechsel ===
+nc_app_findling_backend_data
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully removed
+ExApp findling_backend successfully unregistered.
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+=== der Datenspeicher nach dem Wechsel, derselbe ===
+nc_app_findling_backend_data
+=== harte Grenze, nach der Registrierung, weil sie sie nicht ueberlebt ===
+Image=localhost:5000/findling_backend:05-21-arm-wegwerf-workers2 Memory=2147483648 MemorySwap=2147483648
+2147483648
+=== die Arbeiterzahl im laufenden Container ===
+INDEX_WORKERS = 2
+wechsel-ende 2026-09-05T09:08:08Z
