@@ -942,6 +942,15 @@ Wegwerf-Messung laeuft in einem eigenen Abbild mit einem eigenen Kennzeichen, da
 nur auf der Box existiert und mit ihr geloescht wird, und der Bericht fuehrt sie
 in einem eigenen Abschnitt neben der Hauptmessung, nicht in derselben Tabelle.
 
+**Stand 05.09., erledigt.** Die Zusatzmessung ist gefahren, in einem
+Wegwerf-Abbild `localhost:5000/findling_backend:05-21-arm-wegwerf-workers2`, das
+mit der Box geloescht wird. Der Eingriff ist eine Schicht ueber dem gemessenen
+Abbild, die genau eine Zeile ersetzt; der Beweis dafuer steht im Bericht als
+Baumhash: ueber alle Python-Dateien unterscheiden sich die beiden Abbilder, ohne
+`config.py` sind sie identisch. Der Arbeitsbaum ist nicht angefasst worden,
+`INDEX_WORKERS` steht dort unveraendert auf 1. Ergebnis und Einordnung stehen in
+`docs/performance.md` in einem eigenen Abschnitt neben der Hauptmessung.
+
 ## DI-05-34 (Plan 05-21): Die Endkosten des AWS-Laufs sind gerechnet und nicht abgelesen
 
 **Found during:** Plan 05-21, Task 1, beim Bau der Kostenzeile von `aws_box.sh`.
@@ -1096,3 +1105,114 @@ Aufsicht, die ihn nach einem Containerwechsel neu startet, und der Drill 1
 (Abschuss des Containers) prueft ausdruecklich, ob die Indexierung von selbst
 weiterlaeuft oder ob sie genau diesen Handgriff braucht. Was der Drill dazu
 findet, steht im Messbericht.
+
+**Stand 05.09., gemessen:** Drill 1 und Drill 1b dieses Plans haben beide Faelle
+ausgeloest und protokolliert, die Belege liegen in
+`docs/measurements/2026-09-04-volllauf-m7g/22-drill1.txt` und `25-neustart.txt`.
+
+| Fall | Beobachtung |
+|---|---|
+| `docker start` nach `docker kill` | Container laeuft, beantwortet Suchen (HTTP 200, fuenf Treffer, 759 ms), 122 s lang kein einziger Durchgang des Pollers |
+| Neustart der ganzen Maschine | Container kommt nach der Regel `unless-stopped` von selbst hoch, 10 Minuten und 40 Sekunden lang **null** Durchgaenge des Pollers bei 130 wartenden Zeilen |
+| Heilung in beiden Faellen | `occ app_api:app:disable` und `enable`, 3 Sekunden, erste neue Datei nach 10 Sekunden |
+
+Zwei Zusaetze aus der Messung, die den Befund praeziser machen.
+
+**Der erste macht ihn schwerer.** Die Verwaltungsseite kann diese Lage nicht
+anzeigen. In der Beobachtung nach dem Neustart meldet sie `runState running`,
+`stalledFor 0`, `backendReachable true`, waehrend der Container zehn Minuten
+lang nichts getan hat. Das ist kein Fehler der Korrektur aus 05-20, sondern ihre
+gewollte Grenze: das Stillstands-Urteil nimmt die spaetere von zwei Bewegungen,
+damit ein langer OCR-Nachlauf nicht faelschlich als Stillstand gilt, und eine
+der beiden Bewegungen (der Hintergrundauftrag von Nextcloud) ist immer frisch.
+Die Aussage aus dem Absatz oben, die Seite habe "die richtige Zahl, um es zu
+zeigen", ist damit widerlegt: sie hat die Zahl, aber die Regel, die sie
+auswertet, kann zwischen "beide Haelften stehen" und "nur die Container-Haelfte
+steht" nicht unterscheiden. Wer den Befund behebt, sollte deshalb pruefen, ob
+die Seite denselben Zustand auch anzeigen koennen muss.
+
+**Der zweite macht ihn kleiner.** Ein Messfehler auf dem Weg dorthin ist es
+wert, festgehalten zu werden: der erste Durchgang von Drill 1b hat "der Poller
+arbeitet wieder von selbst" gemeldet, weil der Vergleichswert 30 Sekunden vor
+dem Herunterfahren genommen wurde und der Container in diesen 30 Sekunden noch
+zwei Dateien fertig gemacht hat. Ein Zustand, der zum falschen Zeitpunkt
+abgelesen wurde, sieht aus wie eine Bewegung. Gemessen wurde deshalb an der Zahl
+der Durchgaenge im Protokoll, also an einer Handlung statt an einem Zustand.
+
+**Wohin es gehoert, unveraendert:** in den Phase-Review, mit Vorrang.
+
+## DI-05-37 (Plan 05-21): INDEX_WORKERS steuert nichts, es beschreibt nur
+
+**Found during:** Plan 05-21, Task 4, bei der Zusatzmessung mit zwei
+Indexarbeitern.
+
+**Was:** `backend/src/findling/config.py:57` legt `INDEX_WORKERS = 1` fest, mit
+einer ausfuehrlichen Begruendung daneben (IDX-08) und einem eigenen Test, der
+verhindert, dass daraus eine Umgebungsvariable wird. Die Konstante wird von
+keiner einzigen Stelle des Programms gelesen:
+
+```
+$ grep -rn INDEX_WORKERS backend/src/findling --include=*.py
+backend/src/findling/config.py:57:INDEX_WORKERS = 1
+backend/src/findling/extract/text.py:75:# ... and INDEX_WORKERS is 1, so a crafted ...
+backend/src/findling/nc/client.py:101:# INDEX_WORKERS at one that is exactly one mebibyte ...
+```
+
+Eine Definition und zwei Kommentare. Die Serialitaet, die die Zahl beschreibt,
+kommt aus der Form des Pollers: ein Nebenlaeufer, und in ihm die Schleife
+`for job in claim.jobs` in `poller.py`, die eine Datei nach der anderen
+abarbeitet.
+
+**Gemessen:** ein Wegwerf-Abbild mit `INDEX_WORKERS = 2` hat gegen dasselbe
+Abbild mit 1 keinen Unterschied ergeben. 200 Scans, zweimal, 802 s gegen 799 s,
+und dieselbe Zeichenzahl auf das Zeichen. Das ist kein knappes Ergebnis, sondern
+dieselbe Arbeit zweimal.
+
+**Warum das trotzdem eine Konstruktion und kein Fehler ist:** die Zahl ist eine
+Zusage in Schriftform. Sie steht dort, damit jemand, der die Serialitaet
+aufheben will, sie anfassen und im Review begruenden muss, und der Test daneben
+bewacht genau das. Der Preis dieser Konstruktion ist erst durch die Messung
+sichtbar geworden: wer die Konstante hochsetzt, bekommt kein schnelleres
+Programm, sondern ein Programm, das ueber sich etwas Falsches sagt.
+
+**Vorschlag, klein und ohne Verhaltensaenderung:** den Docstring der Konstante
+um einen Satz ergaenzen, der sagt, wo die Serialitaet wirklich herkommt
+(`Poller._round`, die Schleife ueber `claim.jobs`), und dass diese Zahl sie
+beschreibt statt sie zu setzen. Wer sie eines Tages zu einem Schalter macht,
+findet dann in derselben Zeile, welche Schleife er dafuer anfassen muss.
+
+**Wohin es gehoert:** in den Phase-Review, geringe Dringlichkeit. Es ist kein
+Fehlverhalten, sondern eine Stelle, an der ein Leser etwas Falsches annehmen
+kann.
+
+## DI-05-38 (Plan 05-21): Die Verwaltungsseite kann einen stillstehenden Container nicht anzeigen
+
+**Found during:** Plan 05-21, Drill 1b, der Neustart der Maschine.
+
+**Was:** Waehrend der Container zehn Minuten lang keinen einzigen Durchgang
+gemacht hat und 130 Zeilen warteten, meldete die Verwaltungsseite `runState
+running`, `stalledFor 0` und `backendReachable true`. Das ist die gewollte
+Grenze der Korrektur aus 05-20: `stalledFor` ist das Alter der **spaeteren** von
+zwei Bewegungen, dem letzten Hintergrundauftrag dieser App und dem gewachsenen
+indexed-Zaehler des Containers. Solange die Hintergrundauftraege von Nextcloud
+laufen, ist eine der beiden Bewegungen immer frisch.
+
+Die Regel kann also "beide Haelften stehen" erkennen und "nur die
+Container-Haelfte steht" nicht. Vor 05-20 war es genau umgekehrt, und das war
+schlimmer: da hat sie acht Stunden lang einen Stillstand behauptet, waehrend der
+Container 6.500 Dokumente schrieb.
+
+**Warum es hier nicht behoben wird:** die Abhilfe ist keine Zeile, sondern eine
+Entscheidung ueber die Bedeutung der Kachel. Zwei Zustaende brauchen zwei
+Aussagen, und die Seite hat heute eine. Denkbar waere ein zweiter Satz, der nur
+dann erscheint, wenn Vorrat wartet, die Nextcloud-Haelfte sich bewegt und der
+Zaehler des Containers ueber mehrere Poll-Abstaende steht; das ist genau die
+Lage aus DI-05-36 und waere ein Hinweis auf sie.
+
+**Zusammenhang:** DI-05-38 ist die Anzeige-Haelfte von DI-05-36. Wer DI-05-36
+behebt, also einen frisch gestarteten Container von selbst bewaffnet, macht
+DI-05-38 in fast allen Faellen gegenstandslos. Wer DI-05-36 nicht behebt,
+braucht DI-05-38 dringend, denn dann ist die Seite der einzige Ort, an dem ein
+Verwalter den Zustand ueberhaupt bemerken koennte.
+
+**Wohin es gehoert:** in den Phase-Review, zusammen mit DI-05-36 und nach ihm.
