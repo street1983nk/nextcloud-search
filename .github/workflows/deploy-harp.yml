@@ -178,7 +178,11 @@ jobs:
       - name: Start a local registry and push the backend image into it
         run: |
           docker run -d -p 5000:5000 --name registry registry:2
-          docker build -t "${LOCAL_REGISTRY}/findling_backend:${LOCAL_IMAGE_TAG}" ./findling-src/backend
+          # The named context carries scripts/dev/quantize_model.py into the
+          # model stage; it sits outside the backend context and is not
+          # duplicated there.
+          docker build --build-context scripts=./findling-src/scripts \
+            -t "${LOCAL_REGISTRY}/findling_backend:${LOCAL_IMAGE_TAG}" ./findling-src/backend
           docker push "${LOCAL_REGISTRY}/findling_backend:${LOCAL_IMAGE_TAG}"
 
       # The key is created here and never printed. add-mask covers the case of a

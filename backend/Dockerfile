@@ -2,10 +2,18 @@
 
 # Findling ExApp backend.
 #
-# Three stages, one base image. The build stage owns uv and the compiler-adjacent
-# noise, the frpc stage owns the one download this image needs, and the runtime
-# stage gets the finished virtual environment plus that one binary and nothing
-# else from either of them.
+# Four stages, one base image. The build stage owns uv and the compiler-adjacent
+# noise, the frpc stage and the model stage own the two downloads this image
+# needs, and the runtime stage gets the finished virtual environment plus that
+# one binary, the quantised model and nothing else from any of them.
+#
+# The second download is the embedding model, and it is fetched at build time on
+# purpose rather than at first start. A first start that pulls 470 MB from
+# HuggingFace is not zero-config: it fails behind a firewall, it fails behind a
+# proxy, it fails on an offline installation, and it fails on exactly the small
+# self hosted boxes this app is for. The model is baked in, HF_HUB_OFFLINE is
+# set in the runtime stage, and nothing in the running container ever resolves a
+# name. The same argument the German word list below is installed with.
 #
 # The runtime stage installs exactly one package, and it is data, not a tool. It
 # used to apt-get supervisor, curl and ca-certificates, which is 58 MB of apt
@@ -60,6 +68,97 @@ COPY docker/install_frpc.sh /tmp/install_frpc.sh
 RUN chmod 0755 /tmp/install_frpc.sh \
     && /tmp/install_frpc.sh \
     && rm -f /tmp/install_frpc.sh
+
+# The embedding model, fetched and quantised in a stage of its own.
+#
+# It starts FROM build rather than from the base image, because everything this
+# stage needs is already standing there: uv, the lock file and a virtual
+# environment that carries onnxruntime. Only two things are added, and both are
+# build time only. curl and the CA bundle, for the same reason the frpc stage
+# has them. And onnx, which onnxruntime.quantization imports and onnxruntime
+# itself does not depend on; it is a group of its own in pyproject.toml so that
+# 19 MB of graph manipulation library cannot end up in the runtime image, which
+# copies its virtual environment from the build stage and not from this one.
+#
+# Why the build quantises at all, in one line, because the long version is in
+# scripts/dev/quantize_model.py: the int8 file upstream ships is
+# model_qint8_avx512_vnni.onnx, AVX512-VNNI is x86 only, and the target hardware
+# of this app is an ARM board.
+FROM build AS model
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN uv sync --frozen --no-dev --no-editable --group quantize
+
+# The model is addressed by the commit of its repository, never by a branch
+# name. main moves, and a model that moves is a search that silently answers
+# differently after a rebuild. Read on 2026-09-04, together with every checksum
+# below.
+ARG MODEL_REPO=intfloat/multilingual-e5-small
+ARG MODEL_REVISION=614241f622f53c4eeff9890bdc4f31cfecc418b3
+
+# The script lives at scripts/dev/quantize_model.py in the repository, which is
+# outside this build context: the context is backend/. It arrives through an
+# additional named build context instead of being duplicated here, so there is
+# one implementation of the size gate and not two that can drift apart. Every
+# caller passes it:
+#
+#     docker build --build-context scripts=./scripts -f backend/Dockerfile backend
+#
+# and .github/workflows/docker.yml, .github/workflows/resilience.yml and
+# .github/workflows/deploy-harp.yml do exactly that. A build without the flag
+# fails here rather than somewhere later, which is the behaviour we want.
+COPY --from=scripts dev/quantize_model.py /tmp/quantize_model.py
+
+# Six files, each checked against a sha256 written down here, fail closed inside
+# the same RUN as the download. The wngerman block below is the pattern: a
+# fetched artifact that nobody checks is a fetched artifact anybody can replace,
+# and after the build there is nobody left to notice (T-06-01).
+#
+# Which files, and why exactly these. The mandatory set is not guessed, it is
+# read out of fastembed 0.8.0: fastembed/common/preprocessor_utils.py::
+# load_tokenizer raises unless config.json, tokenizer.json, tokenizer_config.json
+# and special_tokens_map.json all sit next to each other in the model directory
+# (preprocessor_config.json is asked for by the image models only). They are
+# taken from the onnx/ subfolder, which carries its own complete set, so that
+# every file comes from one place and one revision. sentencepiece.bpe.model is
+# not in that contract, because the tokenizer is driven by tokenizer.json; it
+# travels along as the source artifact that tokenizer.json was built from, at
+# 4.8 MB, and it is the one file here a later plan may drop again.
+#
+# The fp32 original is the input of the quantisation and never leaves this
+# stage. It is deleted in this very RUN, so that no later COPY can pick up
+# 470 MB by accident: the runtime stage takes /model, and /model holds the int8
+# result only.
+RUN set -eu; \
+    base="https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}"; \
+    mkdir -p /tmp/fp32 /model; \
+    fetch() { \
+        curl -fsSL --retry 3 --retry-delay 2 -o "$2" "${base}/$1"; \
+        echo "$3  $2" | sha256sum -c -; \
+    }; \
+    fetch onnx/model.onnx /tmp/fp32/model.onnx \
+        ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665; \
+    fetch onnx/tokenizer.json /model/tokenizer.json \
+        0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39; \
+    fetch onnx/sentencepiece.bpe.model /model/sentencepiece.bpe.model \
+        cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865; \
+    fetch onnx/config.json /model/config.json \
+        bbb7c1333fc4b3e27fbc9cd5d2070aabcc1d4dfb99917c3633e772f97545a6b6; \
+    fetch onnx/tokenizer_config.json /model/tokenizer_config.json \
+        a1d6bc8734a6f635dc158508bef000f8e2e5a759c7d92f984b2c86e5ff53425b; \
+    fetch onnx/special_tokens_map.json /model/special_tokens_map.json \
+        d05497f1da52c5e09554c0cd874037a083e1dc1b9cfd48034d1c717f1afc07a7; \
+    /app/.venv/bin/python /tmp/quantize_model.py \
+        --input /tmp/fp32/model.onnx \
+        --output /model/model.onnx; \
+    rm -rf /tmp/fp32 /tmp/quantize_model.py; \
+    test -s /model/model.onnx; \
+    ls -l /model
 
 FROM ${BASE_IMAGE} AS runtime
 
@@ -165,6 +264,65 @@ RUN apt-get update \
 
 COPY --from=build /app/.venv /app/.venv
 COPY --from=frpc /usr/local/bin/frpc /usr/local/bin/frpc
+
+# The quantised model, the tokenizer and the four configuration files fastembed
+# insists on. The fp32 original is not here and cannot be: the model stage
+# deletes it before this COPY can see it.
+COPY --from=model /model /usr/local/share/findling/model
+
+# Two licence texts that no upstream artifact carries, which is why they are
+# committed to this repository instead of copied out of a package. sqlite-vec is
+# dual licensed and ships neither text in its wheel; the Apache-2.0 half is
+# taken verbatim from LICENSE-APACHE at the tag v0.1.9. The model declares MIT
+# in the metadata of its model card and ships no licence file at all, so that
+# file says where the declaration comes from and then reproduces the MIT text.
+# Both obligations attach to the image, because the image is what is
+# distributed, and THIRD-PARTY.md carries the same statement for readers of the
+# repository (D-09).
+COPY docker/licenses/COPYING.sqlite-vec docker/licenses/COPYING.multilingual-e5-small \
+     /usr/local/share/findling/
+
+# The vec0 extension, lifted out of the wheel and put at a path of our own.
+#
+# Why the copy, when the file is already in site-packages: enable_load_extension
+# hands SQLite a path and SQLite loads whatever machine code it finds there, so
+# that path is the most security relevant constant in this image (T-06-03). As a
+# constant of the image it can be checked here, once, at build time. As a
+# property of a package layout it would move whenever sqlite-vec changes its
+# packaging, and the code would have to go looking at run time, in the process
+# that holds the index. The path is exported as FINDLING_VEC0_PATH below, it
+# never comes from a request, and /usr/local is not writable by the user this
+# container runs as.
+#
+# The location inside the wheel is asked for rather than guessed:
+# sqlite_vec.loadable_path() returns the path without the platform suffix, which
+# is what SQLite itself would append.
+#
+# The checksum is per architecture, and that is not a weakness of the pin but
+# the shape of the artifact: the wheel is py3-none, so there is no ABI to it,
+# but it carries a compiled shared object and amd64 and arm64 therefore hold
+# different bytes. Both were read on 2026-09-04 out of the two manylinux wheels
+# of sqlite-vec 0.1.9, whose own sha256 matches the one uv.lock records. An
+# architecture nobody recorded a sum for fails the build instead of skipping the
+# check, which is the difference between a gate and a decoration.
+ARG TARGETARCH
+RUN set -eu; \
+    case "${TARGETARCH}" in \
+        amd64) want=5923730861b86c707cca5602b5f91092f9e52a46706dbc6e269fd4bb9c4498e8 ;; \
+        arm64) want=0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437 ;; \
+        *) echo "no vec0 checksum is recorded for TARGETARCH=${TARGETARCH}"; exit 1 ;; \
+    esac; \
+    src="$(/app/.venv/bin/python -c 'import sqlite_vec; print(sqlite_vec.loadable_path())').so"; \
+    test -s "${src}"; \
+    install -D -m 0444 "${src}" /usr/local/lib/findling/vec0.so; \
+    echo "${want}  /usr/local/lib/findling/vec0.so" | sha256sum -c -; \
+    test -s /usr/local/share/findling/COPYING.sqlite-vec; \
+    test -s /usr/local/share/findling/COPYING.multilingual-e5-small; \
+    chmod 0444 /usr/local/share/findling/COPYING.sqlite-vec \
+        /usr/local/share/findling/COPYING.multilingual-e5-small; \
+    test -s /usr/local/share/findling/model/model.onnx; \
+    test -s /usr/local/share/findling/model/tokenizer.json
+
 COPY docker/init.sh docker/entrypoint.sh docker/harp_connect.sh /app/docker/
 RUN chmod 0755 /app/docker/init.sh /app/docker/entrypoint.sh /app/docker/harp_connect.sh
 
@@ -225,9 +383,26 @@ USER findling
 # Inside a container the client library's default of 127.0.0.1 means "reachable
 # from nobody", so the published port would answer nothing. Under HaRP this
 # value is ignored, because the app binds a unix socket there instead.
+#
+# HF_HUB_OFFLINE is a net, not a proof, and the difference is worth one line.
+# What it does: huggingface-hub and requests arrive in this image through
+# fastembed, and with this variable set the library refuses to resolve a name
+# instead of quietly reaching for the network when it misses something in its
+# cache. What it does not do: it does not stop any other code from opening a
+# socket, and it is not evidence that nothing does. The evidence is the offline
+# test of plan 06-10, which starts this container with --network none and runs a
+# real semantic search through it, and the probe of plan 06-01, which loads the
+# extension with the network cut as well.
+#
+# The two paths are constants of the image and are read as such: the model
+# directory and the extension are where this Dockerfile put them, they are not
+# writable by the user below, and no request ever supplies either of them.
 ENV APP_HOST=0.0.0.0 \
     PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:${PATH}"
+    PATH="/app/.venv/bin:${PATH}" \
+    HF_HUB_OFFLINE=1 \
+    FINDLING_EMBED_MODEL_DIR=/usr/local/share/findling/model \
+    FINDLING_VEC0_PATH=/usr/local/lib/findling/vec0.so
 
 # No port is declared or fixed here on purpose. The port is whatever AppAPI
 # hands over in APP_PORT, and under HaRP there is no TCP port at all. A grep for

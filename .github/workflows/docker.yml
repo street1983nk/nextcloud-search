@@ -152,6 +152,13 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ./backend
+          # The model stage runs scripts/dev/quantize_model.py, which lives
+          # outside the context above. It arrives as a named build context
+          # rather than as a second copy of the file in backend/, so the size
+          # gate that catches an unquantised embedding table exists once and
+          # cannot drift. Every other caller of this build passes the same flag.
+          build-contexts: |
+            scripts=./scripts
           platforms: ${{ matrix.platform }}
           # By digest and not by tag: two runners pushing the same tag would
           # overwrite each other, and the merge job below is what turns the two

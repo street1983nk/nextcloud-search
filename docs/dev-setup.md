@@ -323,7 +323,9 @@ eine temporäre info.xml.
 
 ```bash
 docker run -d -p 5000:5000 --name findling-harp-registry registry:2
-docker build -t localhost:5000/findling_backend:dev ./backend
+# Der zusätzliche Kontext `scripts` ist seit Phase 6 nötig: die Modellstufe ruft
+# scripts/dev/quantize_model.py, und die Datei liegt außerhalb von ./backend.
+docker build --build-context scripts=./scripts -t localhost:5000/findling_backend:dev ./backend
 docker push localhost:5000/findling_backend:dev
 
 sed -e 's|<registry>ghcr.io</registry>|<registry>localhost:5000</registry>|' \

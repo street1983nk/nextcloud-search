@@ -406,8 +406,12 @@ Digest des Basis-Image zu verankern.
 
 ## Reproduzieren
 
+Der zusätzliche Kontext `scripts` ist seit Phase 6 nötig: die Modellstufe des
+Dockerfiles ruft `scripts/dev/quantize_model.py`, und diese Datei liegt
+außerhalb des Bau-Kontextes `backend`.
+
 ```
-docker build -f backend/Dockerfile -t findling-ocr-check backend
+docker build --build-context scripts=./scripts -f backend/Dockerfile -t findling-ocr-check backend
 docker run --rm --entrypoint tesseract findling-ocr-check --list-langs
 docker run --rm --entrypoint sh findling-ocr-check \
     -c 'test -s /usr/local/share/findling/COPYING.tesseract'

@@ -66,6 +66,19 @@ dev = [
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
 ]
+# Build time only, and deliberately a group of its own rather than a dependency.
+# onnxruntime.quantization imports the `onnx` package, which onnxruntime itself
+# does not depend on, so scripts/dev/quantize_model.py cannot run without it. It
+# is needed for exactly one step of the image build and would otherwise sit in
+# the runtime image forever: 19 MB of graph manipulation library that the search
+# path never calls. Neither `uv sync --no-dev` in the build stage nor the plain
+# `uv sync` of the gates job installs it; the model stage of backend/Dockerfile
+# asks for it by name with --group quantize.
+#
+# 1.22.0 is the current release (2026-06-15), Apache-2.0, github.com/onnx/onnx,
+# and its cp312-abi3 wheels cover Python 3.13 on manylinux_2_28_aarch64, which
+# is what the arm64 half of the multi-arch build needs.
+quantize = ["onnx==1.22.0"]
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13"]

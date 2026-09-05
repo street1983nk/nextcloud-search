@@ -408,7 +408,9 @@ jobs:
       # further moving part between the Dockerfile and the number would be one
       # more thing to explain when the number looks odd.
       - name: Build the backend image
-        run: docker build --tag findling_backend:measure ./backend
+        # The named context carries scripts/dev/quantize_model.py into the model
+        # stage; it sits outside ./backend and is not duplicated there.
+        run: docker build --build-context scripts=./scripts --tag findling_backend:measure ./backend
 
       # The device the container filesystem is written to. Throttling asks for
       # the whole disk rather than the partition, which is what PKNAME resolves.
