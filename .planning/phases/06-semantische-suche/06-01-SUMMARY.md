@@ -240,6 +240,14 @@ Erweiterung kein Netzwerk und keinen Schluessel.
 - **Zwei Punkte fuer die Nachfolger, damit sie nicht doppelt gefunden werden:** `vec_int8()` an der Aufrufstelle, und die E5-Praefixe `"query: "` und `"passage: "`, die fastembed bei einem selbst registrierten Modell **nicht** automatisch setzt (Fallstrick 3 der Recherche, noch offen).
 - **Kein Blocker.** Der Zuwachs von 345 MB ist gemessen, eingeordnet und unter der Befundgrenze.
 
+## Self-Check: PASSED
+
+Alle fuenf angelegten Dateien liegen auf der Platte, alle vier Commits stehen in
+`git log`. Zusaetzlich geprueft: `uv lock --check` gruen, `ruff`, `ruff format`,
+`pyright` und `vulture` gruen, `pytest -q` mit 989 bestandenen und 11
+uebersprungenen Tests, und `test_workflow_pins.py` gruen nach den drei
+Workflow-Aenderungen.
+
 ---
 *Phase: 06-semantische-suche*
 *Completed: 2026-09-05*

@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
 stopped_at: Phase 6 context gathered
-last_updated: "2026-09-04T22:41:37.966Z"
-last_activity: 2026-09-04 -- Phase 6 planning complete
+last_updated: "2026-09-05T03:24:23.547Z"
+last_activity: 2026-09-05
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 33
-  completed_plans: 19
+  completed_plans: 20
   percent: 0
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 05 — h-rtung-und-store-einreichung-v1-0
+**Current focus:** Phase 6 — Semantische Suche
 
 ## Current Position
 
-Phase: 05 (h-rtung-und-store-einreichung-v1-0) — EXECUTING
-Plan: 1 of 19
+Phase: 6 (Semantische Suche) — EXECUTING
+Plan: 2 of 12
 Status: Ready to execute
-Last activity: 2026-09-04 -- Phase 6 planning complete
+Last activity: 2026-09-05
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████░░░░] 61%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04 P08 | 33 min | 3 tasks | 16 files |
 | Phase 04 P09 | 22 min | 3 tasks | 14 files |
 | Phase 04 P10 | 19 min plus Sichtprobe | 3 tasks | 11 files |
+| Phase 06 P01 | 35min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,11 @@ Recent decisions affecting current work:
 - [Phase 04, Sichtprobe]: Ein Ausschluss ist kein Fehler: Kachel, gesenkter Nenner und Diagnose sind der Nachweis, die Fehlerliste bleibt eine Liste von Fehlern (Owner-Entscheidung c zu Sichtprobe 7)
 - [Phase 04, Sichtprobe]: Jeder Block besitzt seine eigene [hidden]-Regel, weil eine spezifische display-Regel die User-Agent-Regel des Attributs schlaegt; das Attribut ist seit 04-03 der einzige Schaltmechanismus der Seite
 - [Phase 04, Sichtprobe]: Eine Zahl, die die Seite zu halten verspricht, wird dort gemerkt, wo sie wahr war (SettingsService::rememberIndexedCount in appconfig, Schreiben nur bei Aenderung), statt aus einer Tabelle neu berechnet zu werden, die sie bauartbedingt nicht enthaelt
+- [Phase 6]: 06-01: A12 positiv, vec0-KNN laeuft unter PRAGMA query_only = 1 auf amd64 und arm64; die Leseseite von repo.py behaelt ihr Pragma
+- [Phase 6]: 06-01: A13 positiv, die CPython-Uebersetzung im Abbild traegt enable_load_extension; keine eigene Python-Uebersetzung noetig
+- [Phase 6]: 06-01: load_extension muss vor PRAGMA query_only laufen, und sqlite-vec braucht vec_int8() an der Aufrufstelle statt eines nackten Blobs
+- [Phase 6]: 06-01: onnx ist eine reine Baugruppe (dependency-group quantize), weil onnxruntime.quantization es importiert und die Laufzeit es nicht tragen soll
+- [Phase 6]: 06-01: der Docker-Bau braucht ab jetzt --build-context scripts=./scripts, weil die Modellstufe scripts/dev/quantize_model.py ruft
 
 ### Pending Todos
 
@@ -143,6 +149,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-04T21:35:48.906Z
+Last session: 2026-09-05T03:23:58.470Z
 Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-semantische-suche/06-CONTEXT.md
+Resume file: None
