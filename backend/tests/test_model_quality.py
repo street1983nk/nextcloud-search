@@ -46,7 +46,18 @@ DATASET_DIR: Final = REPO_ROOT / "testdata" / "semantik"
 README_PATH: Final = DATASET_DIR / "README.md"
 
 LANGUAGES: Final = ("de", "en", "fr")
-MINIMUM_CASES: Final = 40
+
+# Forty was the floor the plan set for all three languages. French carries a
+# higher one since 2026-09-05, and the reason is a measurement rather than a
+# preference: over 42 cases the int8 model came out 9.24 percent below fp32 on
+# French with t = -2.03, which is a finding that is neither confirmed nor
+# dismissed at that sample size. The owner decided to widen the French set
+# instead of rebuilding the quantisation on a number that thin. A floor of 120
+# roughly halves the standard error, so the follow up measurement can answer the
+# question. The floor lives here rather than in prose because a set that quietly
+# shrank back below it would take the answer with it.
+MINIMUM_CASES: Final[Mapping[str, int]] = {"de": 40, "en": 40, "fr": 120}
+
 FIELDS: Final = ("id", "query", "passage", "note")
 
 # Letters and digits, no underscore, and the apostrophe is a separator rather
@@ -142,8 +153,9 @@ def test_every_line_is_one_record_with_the_four_fields(language: str) -> None:
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
-def test_each_language_carries_at_least_forty_cases(language: str) -> None:
-    assert len(cases(language)) >= MINIMUM_CASES
+def test_each_language_carries_at_least_the_cases_its_verdict_needs(language: str) -> None:
+    """Forty for German and English, a hundred and twenty for French. See MINIMUM_CASES for why."""
+    assert len(cases(language)) >= MINIMUM_CASES[language]
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
