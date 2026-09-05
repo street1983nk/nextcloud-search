@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: 06-02 Task 3, Checkpoint Owner-Abnahme
-last_updated: "2026-09-05T03:57:52.199Z"
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-09-05T05:14:46.326Z"
 last_activity: 2026-09-05
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 33
-  completed_plans: 20
+  completed_plans: 21
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 6 (Semantische Suche) — EXECUTING
-Plan: 2 of 12
-Status: AT CHECKPOINT (06-02 Task 3, Owner-Abnahme des Messberichts und die D-04-Entscheidung)
+Plan: 3 of 12
+Status: Ready to execute
 Last activity: 2026-09-05
 
-Progress: [██████░░░░] 61%
+Progress: [██████░░░░] 64%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [██████░░░░] 61%
 | Phase 04 P09 | 22 min | 3 tasks | 14 files |
 | Phase 04 P10 | 19 min plus Sichtprobe | 3 tasks | 11 files |
 | Phase 06 P01 | 35min | 3 tasks | 14 files |
+| Phase 06 P03 | 3h05m | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -123,6 +124,10 @@ Recent decisions affecting current work:
 - [Phase 6]: 06-01: load_extension muss vor PRAGMA query_only laufen, und sqlite-vec braucht vec_int8() an der Aufrufstelle statt eines nackten Blobs
 - [Phase 6]: 06-01: onnx ist eine reine Baugruppe (dependency-group quantize), weil onnxruntime.quantization es importiert und die Laufzeit es nicht tragen soll
 - [Phase 6]: 06-01: der Docker-Bau braucht ab jetzt --build-context scripts=./scripts, weil die Modellstufe scripts/dev/quantize_model.py ruft
+- [Phase 6]: 06-03: D-05 beantwortet: die E5-Praefixe wirken, 21 bis 31 von 42 Faellen je Sprache bekommen mit Praefix einen anderen Rang; sie helfen aber nur auf Deutsch, und keiner der drei Unterschiede ist von Rauschen zu trennen
+- [Phase 6]: 06-03: D-02 gespalten beantwortet: die selbst quantisierte int8-Fassung traegt auf Deutsch (+2,30 Prozent MRR) und Englisch (+5,70 Prozent), auf Franzoesisch faellt sie um 9,24 Prozent und reisst damit die 5-Prozent-Abbruchregel des Plans
+- [Phase 6]: 06-03: Die Vektorquantisierung (zweite Stufe, int8 in vec0) kostet auf dem Testset nichts Messbares: keiner der sechs Vergleiche erreicht den doppelten Standardfehler
+- [Phase 6]: 06-03: Die lokal erzeugte int8-Datei ist byteidentisch mit der im Abbild aus Plan 06-01; quantize_dynamic ist ueber getrennte Laeufe reproduzierbar
 
 ### Pending Todos
 
@@ -138,6 +143,7 @@ None yet.
 - RAM-Spitzen auf ARM sind bisher nur geschätzt, Messlauf steht in Phase 5 aus
 - Zwei benannte Luecken aus der Sichtprobe 04-10, beide in .planning/phases/04-admin-sichtbarkeit-und-diagnose/deferred-items.md mit ihrer Schliessform: DI-04-03 (Skip-Verdikte pro fileid uebergeben, damit die Fehlerliste die vier Container-Gruende gruppieren kann) und DI-04-04 (Versionsmarken nach abgeschlossenem Neuaufbau neu stempeln, sonst kann der Reindex-Banner die eigene Abhilfe nie einloesen)
 - Das Pruefsummen-Gate ueber das Referenzkorpus nach der Live-Raeumung steht aus und gehoert in die Phasen-Verifikation (Gate A auf Quellcode-Ebene ist gruen, die Write-Allowlist unveraendert bei drei Eintraegen)
+- Owner-Entscheidung offen (D-02/D-03): franzoesischer int8-Rueckgang von 9,24 Prozent reisst die Abbruchregel von Plan 06-03; drei Wege im Messbericht docs/measurements/2026-09-05-modellqualitaet/ benannt
 
 ## Deferred Items
 
@@ -149,6 +155,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-05T03:57:52.181Z
-Stopped at: 06-02 Task 3, Checkpoint Owner-Abnahme des Messberichts und die D-04-Entscheidung
-Resume file: docs/measurements/2026-09-05-welle0-arm64/README.md
+Last session: 2026-09-05T05:12:41.678Z
+Stopped at: Completed 06-03-PLAN.md
+Resume file: None
