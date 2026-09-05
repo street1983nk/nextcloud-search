@@ -387,3 +387,90 @@ und der Wechsel wäre eine Datei und kein Umbau.
 
 Was ein Rückzug des Pakets nicht treffen kann: den Bau. Die Bibliothek liegt im
 Abbild, nicht auf PyPI.
+
+## 7. Der Betriebsablauf: zwei Spuren nacheinander, nicht nebeneinander
+
+Ein Dokument wird in dieser Reihenfolge behandelt, und die Reihenfolge ist eine
+Entscheidung und kein Zufall:
+
+1. **Erste Spur, Volltext und OCR.** Der Crawl übergibt die Datei, der Text wird
+   extrahiert, bei einem Scan durch die OCR-Kaskade, das Dokument geht in den
+   Tantivy-Index und bekommt sein Verdikt in `files`. Ab diesem Moment ist es
+   auffindbar.
+2. **Zweite Spur, die Einbettung.** Erst danach reist dieselbe `fileid` als
+   `embed`-Zeile auf einer nachlaufenden Spur derselben Warteschlange (Plan
+   06-07). Der gespeicherte Text wird in Chunks geschnitten, die Chunks werden
+   eingebettet und als int8-Vektoren in `vectors.db` geschrieben.
+
+**Warum nacheinander und nicht zusammen.** Ein Dokument ohne Vektor ist
+trotzdem indexiert (D-15), und ein Verdikt der zweiten Spur erreicht
+`Store.record` deshalb nie. Die vier Endzustände eines `embed`-Auftrags
+(`embedded`, `no_stored_text`, `embedding_incomplete`, `embedding_unavailable`)
+sagen nichts darüber, ob die Datei indexiert wurde. Wäre es umgekehrt, hätte ein
+fehlendes Modell die Datei aus dem Index gemeldet, und der Volltext wäre am
+Ausfall der Semantik gestorben. Das ist genau, was Erfolgskriterium 3 verbietet.
+
+**Was die zweite Spur an Zeit kostet, gemessen.** Der gedeckelte Bestand des
+Messkorpus sind 50.068 Dokumente mal 1.024 Token, also 51.269.632 Token. Gegen
+die auf nativer aarch64-Hardware gemessenen Durchsätze:
+
+| Kombination | Token/s p50 | Dauer bei p50 | Token/s p95 | Dauer bei p95 |
+|---|---|---|---|---|
+| Charge 8, Sequenz 512 (ausgeliefert) | 3.519 | 4 h 03 min | 3.437 | 4 h 09 min |
+| Charge 8, Sequenz 256 | 4.809 | 2 h 58 min | 4.776 | 2 h 59 min |
+
+Gemessen am 05.09.2026 auf zwei gepinnten Neoverse-N2-Kernen, Messung B des
+Welle-0-Berichts. Die Kommandozeile:
+
+```bash
+for combo in "2 256" "2 512" "8 256" "8 512"; do
+    set -- $combo
+    docker run --rm --network none --cpuset-cpus 0,1 \
+        --entrypoint python ghcr.io/street1983nk/findling_backend:dev \
+        -m findling.embed.bench --mode tokens-per-second \
+        --batch "$1" --sequence "$2" --threads 2
+done
+```
+
+Vollständige Reihen und das D-04-Verdikt, das aus ihnen folgt:
+[`docs/measurements/2026-09-05-welle0-arm64/README.md`](measurements/2026-09-05-welle0-arm64/README.md).
+
+**Was diese Dauer nicht ist.** Sie ist keine Zusage über die Zielbox. Zwei
+gepinnte Neoverse-N2-Kerne sind schneller als zwei geteilte vCPU einer kleinen
+Box, und um wie viel, ist ungemessen. Der Store-Text trägt diese Stunden
+deshalb nicht (D-17a); was der Bericht belegt, ist, dass die Größe, an der die
+Phase hängen könnte, sie nicht zum Kippen bringt.
+
+**Was ein Admin währenddessen sieht.** Die Admin-Seite führt seit Plan 06-09
+zwei Deckungszahlen mit demselben Nenner:
+
+| Zahl | Zähler | Woher |
+|---|---|---|
+| indexiert | Dokumente mit Verdikt `indexed` | `files` in `state.db` |
+| auffindbar nach Bedeutung | Dokumente mit mindestens einem Vektor | `COUNT(DISTINCT file_id)` über `chunks` in `vectors.db` |
+
+Beide entstehen aus einem Aufruf derselben Methode mit einem anderen Zähler und
+nie aus zwei Rechenwegen; ein Gate zählt genau das. Während die zweite Spur
+läuft, steht die erste Zahl still und nur die zweite bewegt sich, weshalb sie im
+Fingerabdruck des Pollings steht und der Block bei jedem Durchgang neu
+geschrieben wird.
+
+Die Zahl zählt **Dokumente und nicht Chunks**: ein Dokument trägt unter dem
+Deckel zwei bis drei Chunks (gemessen 05.09.2026, Plan 06-05), also stünde eine
+Chunkzahl neben einer Dokumentzahl auf derselben Seite und wäre um das Zwei- bis
+Dreifache zu gross. Sie fehlt als Wert, wenn der Container sie nicht gemeldet
+hat, und ist 0, wenn kein Dokument einen Vektor trägt: "nicht gemeldet" und
+"null" sind zwei Auskünfte, und 0 Prozent wäre eine Aussage über die zweite.
+
+**Und der Zustand dazwischen heisst `degraded`.** Ist das Einbetten
+eingeschaltet und es gibt keinen Vektorbestand, meldet sich der Container als
+unvollständig. Das ist eine Aussage über Vollständigkeit und nicht über einen
+Fehler: ein Container, dessen zweite Spur noch nicht gelaufen ist, antwortet
+lexikalisch und antwortet richtig, er antwortet nur noch nicht mit allem, was er
+verspricht.
+
+**Was davon geprüft wird und wie.** Dass das Abbild ohne Netzwerkzugang einbettet
+und sucht, und dass es mit fehlendem Modell Volltexttreffer statt einer leeren
+Antwort liefert, sind zwei Schritte in `.github/workflows/docker.yml`, die auf
+beiden Architekturen laufen. Was jeder von beiden beweist und was nicht, steht in
+[`docs/testing.md`](testing.md).

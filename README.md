@@ -1,11 +1,31 @@
 # Findling
 
-Zero-config full text search for Nextcloud.
+Zero-config full text and semantic search for Nextcloud.
 
 Findling makes the Nextcloud search find what is inside your documents, including
 scanned PDFs, without an Elasticsearch cluster and without a single required setting.
 Results appear in the regular unified search bar, next to files, contacts and
 calendar entries.
+
+## What it finds
+
+- **Words that stand in the document**, with German handling that a search needs:
+  compounds through one of their parts, inflection, the written out umlaut,
+  phrases, exclusions and a file type filter.
+- **Text inside scanned pages**, through OCR, in German, English and the DACH
+  spellings.
+- **Documents you describe instead of quote.** A query whose words do not stand
+  in the document can still bring it back, because a local embedding model
+  ranks by meaning next to the word index.
+
+The honest sentence about the third one, and it is the same one in both store
+descriptions: **semantic search covers the beginning of every document, full
+text search still covers all of it.** How much "the beginning" is depends on the
+document, and on the measured corpus it is 12.5 percent of an average one. The
+model runs inside the container, on the CPU, and no text leaves the machine for
+it. The details, the measured quality in three languages and the two proofs that
+the container needs no network for any of it are in
+[docs/embeddings.md](docs/embeddings.md).
 
 **Status: hardening before the first store release, not submitted yet.** Indexing,
 OCR and search work and are measured on rented hardware, see below. The release

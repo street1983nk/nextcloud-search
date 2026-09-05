@@ -72,6 +72,13 @@ through the real unified search API of a real Nextcloud:
 - the same file ids answer 404 for a user id that does not exist at all, which is
   the case that used to answer 500 and told a caller which accounts exist
 - not one byte and not one timestamp of the corpus moves in the process
+- a query whose content words stand in no document brings back the document it
+  paraphrases, through the ordinary search route (`index-search-e2e`, since
+  phase 6). The step before it runs the same query with the second track
+  switched off and requires an empty answer, so a hit can only have come out of
+  the vector half. What this pair does not prove is ranking quality: it says the
+  vector half travels the whole stack and reaches the right user, not that the
+  document stands first.
 
 ## The three acceptances of phase 3, and what each one does not prove
 
@@ -119,6 +126,29 @@ text comparison would be a test against the version of the engine and would go
 red on the next Debian point release. The limit that a search for `Januar` does
 not find `Jänner` is documented in `docs/german-analyzer.md` and asserted
 nowhere, because it is not a defect.
+
+## The gates of phase 6, and the boundary of each one
+
+The semantic half brought eleven test files and two steps that only the built
+image can run. They are listed together because they are easy to mistake for one
+another: several of them look like "the semantic search works" and none of them
+says that on its own.
+
+| Gate | What it proves | What it does not prove |
+|---|---|---|
+| `test_vec_extension_probe.py` (06-01) | The CPython of this image allows loadable SQLite extensions and vec0 really loads, on both architectures; a KNN query runs under `PRAGMA query_only = 1`. | That the extension is fast enough. The scan latency is a measurement and lives in `docs/measurements/2026-09-05-welle0-arm64/`. |
+| `test_embed_bench.py` (06-02) | The measuring tools compute what they claim: characters per token, tokens per second and scan latency, over staged inputs with known answers, and they print numbers and never text. | Nothing about the model. It checks the ruler, not what was measured with it. |
+| `test_model_quality.py` (06-03) | The three language test sets are well formed, unique and free of lexical bridges: no content word of a query stands in its own passage, machine enforced over every case. The rank arithmetic, the tie handling and the three refusal paths of the tool are checked as well. | The quality of the model. The numbers are in `docs/measurements/2026-09-05-modellqualitaet/`, they are a lower bound by construction, and they are not comparable with a public benchmark figure. |
+| `test_vector_store.py` (06-04) | The four operations of the vector stock, the delete order of `replace_chunks`, the banding of long id lists, and that a `Neighbour` carries six numbers and nothing that could hold content. | That the stock is ever filled. That is the second track. |
+| `test_chunker.py` (06-05) | Chunk boundaries are character offsets and never byte offsets, and the token cap is respected against the tokenizer that ships. | That a chunk is a sensible passage. Where a sentence is cut is the splitter's judgement and is not asserted. |
+| `test_embed_model.py` (06-05) | The E5 prefixes are set and change the ranking, and a missing model gives the honest `embedding_unavailable` verdict instead of an exception. | Absolute quality. The prefix case proves a difference in rank, not that the ranking is good; that number is the measurement report of plan 06-03. |
+| `test_rrf_fusion.py` (06-06) | The merge is a pure function over two lists of numbers: rank starts at 1, an empty list is the identity, equal scores keep a fixed order, and a weight of zero removes its list instead of scoring it zero. | Nothing about permissions. `fusion.py` never learns who is asking, which the boundary gate below asserts. |
+| `test_semantic_search.py` (06-06) | The three success criteria of the phase as behaviour: a paraphrase finds the document with a control run beside it that finds nothing, a user without a permission row gets nothing, and a broken vector half costs the semantics and not the search. | That the built image behaves the same way. The model here is a stand-in; the image level answer is the two steps below. |
+| `test_embedding_track.py` (06-07) | The second track: which files enter it, that a verdict of that track never reaches `Store.record`, and that a delete on the first track takes the vectors with it. | The throughput of the track. The rate is a measurement, and the wait in `integration.yml` is derived from it. |
+| `test_semantic_snippet.py` (06-08) | The excerpt of a purely semantic hit is cut behind the one permission prefilter and behind the PHP recheck, in characters and not in bytes, and the rank chunk is asked for in the direction the prefilter asks in. | That the excerpt is the most useful passage. It is the passage of the nearest chunk, which is a different claim. |
+| `test_semantic_boundary.py` (06-10) | There is no second exit: no route of `api/` carries `semantic` or `vector` in its path, the permission prefilter is called at exactly two places and in which two, the merge and the embedder do not know the question at all, the answer of the search path carries three fields, and the origin mark is not reachable from a user answer. | That the one route filters correctly. That is `test_acl_prefilter.py`, the PHP recheck and the `search-parity` job. This gate is about absence, and absence is the one thing a functional test cannot show. |
+| Offline step (`docker.yml`, 06-10) | That no network is needed. The published image starts with `--network none`, embeds a small stock of its own making and answers a paraphrase out of it, on amd64 and on arm64, with a control run that finds nothing without the stock. | That no network is attempted. `HF_HUB_OFFLINE=1` is a net and not a proof, and `onnxruntime` writes "Failed to persist telemetry device ID" to stderr in every run with the network cut as well: a failed local file system write, not traffic, measured in plan 06-03 and named here because it is the line that gets read the wrong way round. |
+| Model-gone step (`docker.yml`, 06-10) | Criterion 3 on the level of the image: with an empty directory mounted over the model directory the ordinary query answers the same hits as a run without any semantics, carries the degraded mark, and is neither empty nor an error. The step ends by running its own verdict against a deliberately empty index and requiring it to come back red. | That every way a model can fail behaves like this. It covers the model that is not there; the model that loads and then raises is `test_semantic_search.py`. |
 
 ## The gap
 
