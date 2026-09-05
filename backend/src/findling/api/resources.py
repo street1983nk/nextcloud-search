@@ -50,21 +50,21 @@ LOGGER = logging.getLogger("findling.api.resources")
 # exactly as much as a proven mismatch (pitfall 14).
 UNPROVEN_WORDLIST = "wordlist_hash"
 
-# The two halves of the embedding mark that are not properties of the vector
-# store, spelled out here because this is where the mark is composed.
+# The one half of the embedding mark that is not a property of the vector store
+# and not a setting either, spelled out here because this is where the mark is
+# composed.
 #
-# The full value is model, quantisation, dimensions and token cap, and the other
-# two halves come from findling.store.vectors, which owns them. A change to any
-# of the four makes a stored vector incomparable with a freshly computed query
-# vector, and the mark is what turns that into a visible drift instead of into
-# quietly worse results.
+# The full value is model, quantisation, dimensions and token cap. Two of the
+# four come from findling.store.vectors, which owns them, the token cap comes
+# from the settings below, and only the name of the artifact is a constant of
+# this build. A change to any of the four makes a stored vector incomparable
+# with a freshly computed query vector, and the mark is what turns that into a
+# visible drift instead of into quietly worse results.
 #
-# Both live here as constants of this build until the cap becomes a setting in
-# plan 06-06. At that point the value is composed from the setting rather than
-# from the literal, so that an operator who raises the cap sees the drift the
-# raise really causes; the composition stays in this one place.
+# The cap is read rather than written out, which it used to be, so that an
+# operator who raises it sees the drift the raise really causes instead of a
+# mark that keeps claiming 1024.
 EMBEDDING_MODEL: Final = "multilingual-e5-small"
-EMBEDDING_TOKEN_CAP: Final = 1024
 
 # How long a degraded verdict stays valid before it is measured again.
 #
@@ -145,7 +145,7 @@ def expected_marks() -> dict[str, str] | None:
         # start_rebuild_on_drift, which answers a difference by raising the index
         # generation, and a vector stock that no longer matches the model must
         # not be able to trigger a rebuild of the full text index (D-21).
-        marks[EMBEDDING_MARK] = embedding_mark(EMBEDDING_MODEL, tokens=EMBEDDING_TOKEN_CAP)
+        marks[EMBEDDING_MARK] = embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap)
         _MARKS = (dictionary, marks)
         return dict(marks)
 

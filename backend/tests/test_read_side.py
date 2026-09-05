@@ -349,3 +349,17 @@ def test_the_query_model_is_built_once(volume: Path) -> None:
 
     assert first is second
     assert first.loaded is False
+
+
+def test_the_embedding_mark_follows_the_token_cap(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The cap is a setting an operator may raise, and raising it really does
+    # make every stored vector incomparable with a freshly computed one. A mark
+    # that kept claiming 1024 would hide exactly the drift it exists to show.
+    monkeypatch.setenv("FINDLING_EMBED_TOKEN_CAP", "2048")
+    settings.cache_clear()
+    write_wordlist(volume)
+
+    marks = resources.expected_marks()
+
+    assert marks is not None
+    assert marks[EMBEDDING_MARK] == "multilingual-e5-small/int8/384/2048"
