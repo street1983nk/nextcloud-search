@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: Completed 06-08-PLAN.md
-last_updated: "2026-09-05T09:27:35.153Z"
+stopped_at: Completed 06-10-PLAN.md
+last_updated: "2026-09-05T10:03:23.582Z"
 last_activity: 2026-09-05
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 33
-  completed_plans: 28
+  completed_plans: 29
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 6 (Semantische Suche) — EXECUTING
-Plan: 10 of 12
+Plan: 11 of 12
 Status: Ready to execute
 Last activity: 2026-09-05
 
-Progress: [█████████░] 85%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
@@ -74,6 +74,7 @@ Progress: [█████████░] 85%
 | Phase 6 P07 | 38min | 3 tasks | 12 files |
 | Phase 6 P08 | 16min | 2 tasks | 6 files |
 | Phase 6 P09 | 33min | 3 tasks | 15 files |
+| Phase 6 P10 | 32min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -168,6 +169,11 @@ Recent decisions affecting current work:
 - [Phase 6]: 06-09: embedded ist auf der PHP-Seite int|null, weil 'der Container hat die Zahl nicht gemeldet' (aeltere Fassung) und 'kein Dokument hat einen Vektor' zwei Auskuenfte sind; 0 Prozent semantische Deckung waere eine Aussage ueber die zweite
 - [Phase 6]: 06-09: Die Herkunftsmarke bleibt in der Admin-Diagnose (D-14). Beide Ranglisten entstehen in index/search.py::_sides, also fahren eine Suchrunde und die Auskunft dieselbe Verschmelzung, und origins wird ausschliesslich in api/diagnose.py gerufen; in api/search.py und index/search.py kommt der Name nicht vor
 - [Phase 6]: 06-09: origin fehlt in der Diagnoseantwort, statt null zu sein (response_model_exclude_none): null liest sich als 'gesucht und nichts gefunden' und damit als Urteil ueber eine Suche, die niemand gefahren hat
+- [Phase 6]: 06-10: Die Grep-Hygiene laeuft ueber tokenize statt ueber einen Zeilenfilter: alle fuenf Nennungen von prefilter_visible in store/vectors.py stehen in Docstrings, und ein Zeilenfilter haette die Zusicherung an ihrem eigenen Erklaertext scheitern lassen
+- [Phase 6]: 06-10: Der Rumpf der zwei Abbild-Schritte ist backend/tests/probe_image_search.py und kein Heredoc in docker.yml; nicht mit test_ benannt, damit pytest ihn nicht einsammelt, und die Modell-weg-Betriebsart braucht kein Modell und ist deshalb lokal gefahren worden
+- [Phase 6]: 06-10: Der Integrationslauf holt das int8-Modell aus dem veroeffentlichten Abbild (der Weg von measure.yml) und vergleicht seine sha256 gegen die in 06-03 dreimal gemessene; ein bewusster Modellwechsel muss Dockerfile, Messbericht und diese Zeile zusammen bewegen
+- [Phase 6]: 06-10: Der Umschreibungsfall im Integrationslauf behauptet Anwesenheit und nicht Rang; getragen wird die Aussage vom Kontrolllauf mit abgeschalteter Zweitspur, die Rangfrage beantworten der Offline-Schritt und der Messbericht aus 06-03
+- [Phase 6]: 06-10: Der Modell-weg-Fixture setzt die Versionsmarken und traegt keinen Vektorbestand, damit degraded von der vierten Ursache aus 06-06 getrieben ist und nicht von einer nie geschriebenen Marke
 
 ### Pending Todos
 
@@ -195,6 +201,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-05T09:26:45.857Z
-Stopped at: Completed 06-08-PLAN.md
+Last session: 2026-09-05T10:02:58.382Z
+Stopped at: Completed 06-10-PLAN.md
 Resume file: None

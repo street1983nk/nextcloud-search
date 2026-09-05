@@ -104,7 +104,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 06-10-PLAN.md , Gate-Landschaft: kein zweiter Ausgang, Offline-Nachweis, Doku
+- [x] 06-10-PLAN.md , Gate-Landschaft: kein zweiter Ausgang, Offline-Nachweis, Doku
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
@@ -314,7 +314,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
 | 5. Härtung und Store-Einreichung v1.0 | 18/20 | In Progress|  |
-| 6. Semantische Suche | 9/12 | In Progress|  |
+| 6. Semantische Suche | 10/12 | In Progress|  |
 
 ## Requirement Coverage
 
