@@ -297,9 +297,31 @@ Vektorspeicher hinter einer Schnittstelle mit drei Operationen (D-08).
 Eine Anmerkung zur Metrik, die auch für den heutigen Zustand gilt: die
 `int8[384]`-Spalte lässt vec0 seine Vorgabemetrik verwenden, gemessene Distanzen
 liegen entsprechend im L2-Bereich. Bei normierten Vektoren ist die Rangfolge
-unter L2 und unter Kosinus dieselbe; ob die int8-Quantisierung die Normierung
-ausreichend erhält, ist nicht gemessen und gehört in Plan 06-06, wo der
-Anfragevektor entsteht.
+unter L2 und unter Kosinus dieselbe.
+
+**Nachtrag vom 05.09.2026 (Plan 06-06), wo der Anfragevektor entsteht.** Die
+offene Frage war, ob die int8-Quantisierung die Normierung ausreichend erhält.
+Zwei Belege stehen dazu inzwischen da, und beide zusammen sind die Antwort,
+soweit dieses Projekt sie geben kann.
+
+Erstens: der Anfragevektor läuft durch dieselbe Skala wie jeder gespeicherte
+Vektor. `embed/model.py::to_int8` ist die einzige Stelle, an der ein Vektor
+seine Bytefassung bekommt, und die Leseseite ruft sie genauso wie die
+Schreibseite. Beide Seiten verlieren damit denselben Betrag an derselben Stelle,
+und ein systematischer Versatz zwischen Anfrage und Bestand kann so nicht
+entstehen.
+
+Zweitens, und das ist der Messwert: Plan 06-03 hat genau diese zweite
+Quantisierungsstufe auf einem dreisprachigen Testset gegen die unquantisierte
+Fassung geprüft. Keiner der sechs Vergleiche erreicht den doppelten
+Standardfehler. Der Rangverlust durch die Vektorquantisierung ist auf diesem
+Testset also nicht messbar, und das ist die Grösse, um die es geht: nicht die
+Norm eines einzelnen Vektors, sondern die Reihenfolge, die aus ihr folgt.
+
+Was weiterhin **nicht** gemessen ist: die Norm eines quantisierten Vektors als
+Zahl. Sie ist für die Rangfolge unter L2 nur dann von Belang, wenn sie zwischen
+Dokumenten unterschiedlich stark abweicht, und dafür gibt es aus 06-03 keinen
+Hinweis. Ein eigener Messlauf dafür wäre eine Zahl ohne Entscheidung dahinter.
 
 ### Ausweich 2: usearch
 
