@@ -72,7 +72,14 @@ Zeitpunkt "der Bestand ist vollstaendig" ist eine Aussage ueber die ganze
 Instanz und nicht ueber einen Durchgang, und dieser Plan hat keinen Zaehler
 dafuer.
 
-**Schliessform:** Plan 06-08 rechnet den Deckungsgrad des Vektorbestands
+**Schliessform:** Plan 06-**09** rechnet den Deckungsgrad des Vektorbestands
 (`chunk_count`/`vector_count` aus 06-04). Sobald diese Zahl existiert, ist
 "vollstaendig" eine Bedingung, die man stempeln kann, nach dem Muster von
 `stamp_after_rebuild`.
+
+**Nachtrag 05.09.2026 (Plan 06-08):** Die Zeile stand hier zuerst mit der
+Nummer 06-08, uebernommen aus den Zusammenfassungen von 06-06 und 06-07, die
+die Statusseite unter dieser Nummer fuehren. Plan 06-08 ist der Ausschnitt fuer
+rein semantische Treffer und rechnet keinen Deckungsgrad; die Statusseite ist
+06-09. DI-06-02 und DI-06-03 sind mit 06-08 also ausdruecklich **nicht**
+geschlossen.
