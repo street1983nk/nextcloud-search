@@ -19,6 +19,16 @@ not produce a wrong number on a page, it produces a search that answers
 differently from what either half believes. Three properties are asserted for
 it: it comes out of the environment, it is there for a container that has no
 index yet, and it is not derived from the two index format marks next to it.
+
+The fourth claim arrives with phase 6 and it is the second track. ``embedded``
+counts the documents that carry a vector, and it exists because the semantic
+half fills up for hours after the full text half is already usable: without a
+number of its own the page says a hundred per cent while a paraphrase finds
+nothing, with nowhere saying why (D-16). Three properties are asserted for it:
+it is contained in ``indexed`` and never added next to it, a container without a
+vector stock answers with nought plus a note rather than with an error, and a
+vector file that is not a database is the same answer for the same reason
+(WR-01).
 """
 
 from collections.abc import Callable, Iterator
@@ -29,10 +39,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import APP_VERSION, Corpus
-from findling.api.status import STATE_UNREADABLE, report
+from findling.api.status import NO_VECTORS_YET, STATE_UNREADABLE, VECTORS_UNREADABLE, report
 from findling.config import MAX_FILE_BYTES
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
+from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
 
 pytestmark = pytest.mark.usefixtures("appapi_environment")
 
@@ -43,6 +54,7 @@ STATUS_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "api"
 FIELDS = {
     "indexed",
     "truncated",
+    "embedded",
     "skipped",
     "failed",
     "reasons",
@@ -63,6 +75,40 @@ FIELDS = {
 
 # Six odd ids carry two permission rows, six even ones carry one.
 ACL_ROWS = 18
+
+# An em dash and an en dash, written as escapes rather than as themselves so
+# that this file does not carry the two characters it exists to keep out. The
+# same device test_admin_ui_contract.py uses for the three files of the page.
+EM_DASH = chr(0x2014)
+EN_DASH = chr(0x2013)
+
+
+def _stock_vectors(root: Path, chunks_per_file: dict[int, int]) -> None:
+    """Give the named documents that many chunks each, in the real vector stock.
+
+    The vectors themselves are constant and meaningless here: this file asks how
+    many documents carry one, never which of them is closest to anything. What
+    the chunk counts are for is the one property a COUNT over the wrong column
+    would get wrong, and it would get it wrong plausibly: a document with three
+    chunks has to raise the figure by one and not by three.
+    """
+    stock = open_vectors(root / "vectors.db")
+    try:
+        for file_id, total in chunks_per_file.items():
+            stock.replace_chunks(
+                file_id,
+                [
+                    Chunk(
+                        ordinal=ordinal,
+                        char_start=ordinal * 100,
+                        char_end=ordinal * 100 + 80,
+                        embedding=bytes(EMBEDDING_DIMENSIONS),
+                    )
+                    for ordinal in range(total)
+                ],
+            )
+    finally:
+        stock.close()
 
 
 def _status(client: TestClient, headers: dict[str, str]) -> dict[str, Any]:
@@ -147,6 +193,112 @@ def test_truncated_is_counted_separately_and_stays_inside_indexed(
     assert answer["truncated"] == 1
     assert answer["indexed"] == indexed_volume.documents + 1
     assert answer["truncated"] <= answer["indexed"]
+
+
+def test_the_second_track_is_counted_separately_and_stays_inside_indexed(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # D-16: the embedding track fills up for hours after the full text half is
+    # already usable, so the page needs a figure of its own for it. Five of the
+    # twelve documents carry a vector here and one of them carries three chunks,
+    # which is what tells a count over documents from a count over chunks.
+    _stock_vectors(indexed_volume.root, {1: 3, 2: 1, 3: 1, 4: 1, 5: 1})
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["embedded"] == 5
+    assert answer["indexed"] == indexed_volume.documents
+    assert answer["embedded"] <= answer["indexed"]
+    assert answer["note"] == ""
+
+
+def test_a_container_whose_second_track_has_not_started_reports_nought_embedded(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The ordinary state of the first hours: the vector stock exists, the full
+    # text half is complete and nothing has been embedded yet. Nought is an
+    # honest figure here and not a missing one, so there is no note.
+    answer = _status(client, sign("admin"))
+
+    assert answer["embedded"] == 0
+    assert answer["indexed"] == indexed_volume.documents
+    assert answer["note"] == ""
+
+
+def test_without_a_vector_database_the_answer_is_a_state_with_a_note(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # A container built without the model, or one whose vector stock was thrown
+    # away, which is a supported way of rebuilding the semantic half. Not an
+    # error: the full text numbers of this answer are all still true, and a 500
+    # would take them off the page along with the one that is missing (WR-01).
+    (indexed_volume.root / "vectors.db").unlink()
+
+    answer = _status(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    assert answer["embedded"] == 0
+    assert answer["indexed"] == indexed_volume.documents
+    assert answer["note"] == NO_VECTORS_YET
+
+
+def test_a_zero_byte_vector_database_is_an_answer_and_not_a_server_error(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The same two shapes of a broken state the state database has, one file
+    # over: a kill between connect and the schema script leaves a file that
+    # opens cleanly and fails on the first query.
+    vectors = indexed_volume.root / "vectors.db"
+    vectors.unlink()
+    vectors.touch()
+
+    answer = _status(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    assert answer["embedded"] == 0
+    assert answer["indexed"] == indexed_volume.documents
+    assert answer["note"] == VECTORS_UNREADABLE
+
+
+def test_a_vector_file_that_is_no_database_is_an_answer_and_not_a_server_error(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The other shape: the file exists and is not SQLite at all, so the open
+    # itself raises rather than the first query.
+    (indexed_volume.root / "vectors.db").write_bytes(b"this is not a sqlite database")
+
+    answer = _status(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    assert answer["embedded"] == 0
+    assert answer["note"] == VECTORS_UNREADABLE
+
+
+def test_a_broken_state_database_outranks_the_note_of_the_vector_stock(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # Both halves are missing here, and the answer carries one note, so the two
+    # have to be ordered rather than concatenated. The state database is the
+    # bigger finding: without it there are no counters at all, while a missing
+    # vector stock costs exactly one of them.
+    (volume / "state.db").touch()
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["embedded"] == 0
+    assert answer["note"] == STATE_UNREADABLE
 
 
 def test_the_reasons_break_the_states_down_and_name_the_absent_reason_as_an_empty_string(
@@ -320,6 +472,7 @@ def test_without_a_state_database_the_answer_is_zeros_and_a_note(
     assert set(answer) == FIELDS
     assert answer["indexed"] == 0
     assert answer["truncated"] == 0
+    assert answer["embedded"] == 0
     assert answer["reasons"] == {}
     assert answer["aclRows"] == 0
     assert answer["docs"] == 0
@@ -409,6 +562,35 @@ def test_the_status_module_opens_the_state_read_only() -> None:
 
     assert "open_read_only" in source
     assert "open_store" not in source
+
+
+def test_the_second_track_figure_says_in_words_that_it_lives_inside_indexed() -> None:
+    # The counters of this answer are read by a page that puts them next to each
+    # other, and two of them are subsets of a third. That is invisible in the
+    # numbers and it is the one mistake that stays plausible after it is made:
+    # an addition of indexed and embedded produces a total larger than the
+    # corpus, on a page whose entire purpose is that the admin can trust it.
+    source = STATUS_SOURCE.read_text(encoding="utf-8")
+
+    assert source.count("embedded") >= 2
+    assert source.count("Contained in indexed above and never added next to it") == 2
+
+
+def test_no_field_of_the_answer_is_spread_out_of_a_row() -> None:
+    # T-04-06 held statically, because the behaviour tests cannot see it: the
+    # files table carries path and title, and a spread would put both on the
+    # wire in the same commit that meant to add a counter.
+    source = STATUS_SOURCE.read_text(encoding="utf-8")
+
+    assert "**row" not in source
+
+
+def test_the_status_module_carries_neither_dash() -> None:
+    # Written over the code points so that this file does not carry the two
+    # characters it exists to keep out, the same device the UI gate uses.
+    source = STATUS_SOURCE.read_text(encoding="utf-8")
+    assert EM_DASH not in source
+    assert EN_DASH not in source
 
 
 def test_asking_for_the_status_changes_nothing(
