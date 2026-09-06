@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
 stopped_at: Completed 06-10-PLAN.md
-last_updated: "2026-09-06T11:05:06.120Z"
-last_activity: 2026-09-06 -- Phase 06.1 planning complete
+last_updated: "2026-09-06T11:11:08.391Z"
+last_activity: 2026-09-06 -- Phase 06.1 execution started
 progress:
   total_phases: 3
   completed_phases: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 06.1 — Launch-Haertung vor der Store-Abgabe (eingefuegt 06.09.); Phase 6 bleibt bei 11/12, Plan 06-12 wartet
+**Current focus:** Phase 06.1 — launch-haertung-vor-der-store-abgabe
 
 ## Current Position
 
-Phase: 06.1 (Launch-Haertung vor der Store-Abgabe) — NOT PLANNED, naechster Schritt /gsd:plan-phase 06.1
-Plan: 11 of 12 complete
-Status: Ready to execute
-Last activity: 2026-09-06 -- Phase 06.1 planning complete
+Phase: 06.1 (launch-haertung-vor-der-store-abgabe) — EXECUTING
+Plan: 1 of 19
+Status: Executing Phase 06.1
+Last activity: 2026-09-06 -- Phase 06.1 execution started
 
 **Zwischenstand 06-11, 2026-09-05T10:57Z.** Der Volllauf mit Semantik ist um
 10:47:54Z angestossen und laeuft unbeaufsichtigt auf der AWS-Box
