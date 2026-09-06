@@ -3074,6 +3074,158 @@ jobs:
           fi
           echo "the public link moved neither set and not one prefilter row: it is a link for the world and for no account"
 
+      # Scenario 10, the group join, and the scenario that could not have been
+      # written before plan 06.1-08. That is the point of it and it is worth
+      # spelling out, because a reader who arrives here after scenario 5 will
+      # wonder why the same group is touched twice.
+      #
+      # Pitfall 3 of the research of this phase, in plain words: a test for the
+      # group join written while the join still had to wait for the next crawl
+      # could only have frozen that wait as the expected behaviour, and the name
+      # of such a test would have described a delay. The fix would then have been
+      # the thing that turned it red, which is how a finding becomes unfixable.
+      # So the listener came first (E-H3, DI-05-11) and this scenario asks for
+      # the target behaviour: the new colleague finds the team content within one
+      # event deadline and not within one crawl cadence. If GroupEventListener is
+      # removed, this step goes red, which is exactly the direction a gate is
+      # supposed to point.
+      #
+      # Three states and not two, because only the pair of directions is a
+      # statement: outside the group the colleague finds nothing on either side,
+      # after the join all three on both sides, after the departure nothing again
+      # on either side. Scenario 5 left this account outside the group, so the
+      # first state is the state this job is already in.
+      #
+      # Measured twice over, and the second measurement is what keeps the first
+      # honest. The parity comparison sees what a user sees, and the prefilter
+      # rows of one team file are read straight out of the container by fileid,
+      # so "the set changed" is a figure in the log and not a claim. A scenario
+      # that only asked the search would also be green on a build where the
+      # listener does nothing and the PHP recheck carries everything.
+      #
+      # No new fixture file is created here, so EXPECTED_JUDGED stays at nineteen:
+      # this scenario moves memberships, never bytes, which is the same sentence
+      # the listener under test is made of.
+      - name: Scenario 10, the group join and the way back out
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+
+          # The same reader as in scenario 9, written out a second time on
+          # purpose: every run step is its own shell, and putting it into
+          # parity.sh would edit a file the nine scenarios above depend on.
+          acl_users() {
+            python3 - "${{ runner.temp }}/findling/state.db" "$1" <<'PY'
+          import sqlite3
+          import sys
+          from pathlib import Path
+
+          database = Path(sys.argv[1])
+          if not database.is_file():
+              print("no-state-database")
+              raise SystemExit(0)
+          connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+          rows = connection.execute("SELECT uid FROM acl WHERE file_id = ? ORDER BY uid", (int(sys.argv[2]),)).fetchall()
+          connection.close()
+          print(",".join(str(row[0]) for row in rows) or "none")
+          PY
+          }
+
+          holds() {  # $1 the uid list, $2 the account
+            case ",$1," in *",$2,"*) return 0 ;; *) return 1 ;; esac
+          }
+
+          # The control first, and it does double duty: the member who never left
+          # the group still finds all three, and its answer is where the fileid
+          # this scenario follows comes from.
+          compare group-join-control-before "${MEMBER_USER}" "${MEMBER_PASS}" "${MARKER_TEAM}" 3
+          team_file=$(jq -r --arg name "${MARKER_TEAM}-1.txt" \
+            'first(.ocs.data.entries[] | select(.title == $name) | .attributes.fileId) // empty' \
+            native-group-join-control-before.json)
+          case "${team_file}" in
+            ''|*[!0-9]*)
+              echo "::error::the fileid of ${MARKER_TEAM}-1.txt could not be read, so the prefilter rows of the team folder cannot be followed"
+              jq -c '[.ocs.data.entries[] | {title, id: .attributes.fileId}]' native-group-join-control-before.json
+              exit 1
+              ;;
+          esac
+          echo "the file this scenario follows has fileid ${team_file}"
+
+          # State one: outside the group, and nothing on either side.
+          compare group-join-before "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_TEAM}" 0
+          before_users=$(acl_users "${team_file}")
+          echo "before the join: fileid ${team_file} is in the prefilter for [${before_users}]"
+          if holds "${before_users}" "${COLLEAGUE_USER}"; then
+            echo "::error::the prefilter already lists ${COLLEAGUE_USER} before the join, so the change below could not be measured"
+            exit 1
+          fi
+
+          ./occ group:adduser "${TEAM_GROUP}" "${COLLEAGUE_USER}"
+          ./occ group:list | head -40
+
+          # What a new colleague does on their first morning: look at their
+          # files. It is also what writes the new mount into the mount cache,
+          # which is the source the container reads the access list out of. The
+          # listener does not depend on it, because it asks the mount providers
+          # live, but the acl rows it plans are filled in from the cache.
+          curl -sfS -u "${COLLEAGUE_USER}:${COLLEAGUE_PASS}" \
+            -X PROPFIND -H 'Depth: 1' \
+            "http://localhost:8080/remote.php/dav/files/${COLLEAGUE_USER}/" -o join-mounts.xml
+          if ! grep -q "${TEAM_FOLDER}" join-mounts.xml; then
+            echo "::error::the team folder is not in the file list of ${COLLEAGUE_USER} after the join, so the join itself did not happen"
+            exit 1
+          fi
+          echo "the team folder is mounted for the new member"
+
+          # The listener plans a subtree expansion, exactly as a folder share
+          # does, so the job is driven explicitly and the rows it produces are
+          # waited for. Nothing here sleeps on suspicion, and the deadline is the
+          # poller retreat and not a number that was raised until it was green.
+          timeout 120 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SubtreeExpandJob' --stop_after 60
+          drain "${EVENT_DEADLINE}"
+
+          # State two: in the group, and all three on both sides. This is the
+          # line that would have been impossible to write before the listener.
+          compare group-join "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_TEAM}" 3
+          after_users=$(acl_users "${team_file}")
+          echo "after the join: fileid ${team_file} is in the prefilter for [${after_users}]"
+          if [ "${before_users}" = "${after_users}" ]; then
+            echo "::error::the prefilter of fileid ${team_file} did not move over the join, it is still [${after_users}], so the parity above was carried by the recheck alone"
+            exit 1
+          fi
+          if ! holds "${after_users}" "${COLLEAGUE_USER}"; then
+            echo "::error::the prefilter of fileid ${team_file} is [${after_users}] and does not list ${COLLEAGUE_USER}, so the group event never reached the queue"
+            exit 1
+          fi
+          echo "the join reached the prefilter within one event deadline and not within one crawl cadence"
+
+          # The way back out, and it is the same listener on the other event.
+          ./occ group:removeuser "${TEAM_GROUP}" "${COLLEAGUE_USER}"
+          curl -sfS -u "${COLLEAGUE_USER}:${COLLEAGUE_PASS}" \
+            -X PROPFIND -H 'Depth: 1' \
+            "http://localhost:8080/remote.php/dav/files/${COLLEAGUE_USER}/" -o leave-mounts.xml
+          if grep -q "${TEAM_FOLDER}" leave-mounts.xml; then
+            echo "::error::the team folder is still in the file list of ${COLLEAGUE_USER} after the removal, so the removal itself did not happen"
+            exit 1
+          fi
+          timeout 120 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SubtreeExpandJob' --stop_after 60
+          drain "${EVENT_DEADLINE}"
+
+          # State three: outside again, and nothing on either side.
+          compare group-leave "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_TEAM}" 0
+          final_users=$(acl_users "${team_file}")
+          echo "after the departure: fileid ${team_file} is in the prefilter for [${final_users}]"
+          if holds "${final_users}" "${COLLEAGUE_USER}"; then
+            echo "::error::the prefilter of fileid ${team_file} still lists ${COLLEAGUE_USER} after the departure, so the second direction of the listener is not working"
+            exit 1
+          fi
+
+          # The half that keeps the two noughts honest, for the third time and
+          # for the same reason: the member who never left still finds all three,
+          # so "the other one finds nothing" is a statement about membership and
+          # not about a search that stopped answering.
+          compare group-join-control "${MEMBER_USER}" "${MEMBER_PASS}" "${MARKER_TEAM}" 3
+          echo "scenario 10 of ten: a membership change reaches the prefilter in both directions, [${before_users}] to [${after_users}] to [${final_users}]"
+
       # The falsification of everything above, and the reason the comparisons are
       # worth anything at all: a gate that has never been seen failing is not
       # known to work. Two answers of a scenario that passed are taken apart on

@@ -52,3 +52,37 @@ gegen den 06-11-Satz, die Suite ist gruen. Grund fuer den Eingriff ausserhalb
 eines Plans: ohne ihn waere die CI der Hauptlinie bis Welle 7 rot gewesen und
 haette jede echte Regression der Wellen 2 bis 6 verdeckt. Plan 06.1-18 Task 4
 ersetzt die Zahl nach der Nachmessung an denselben drei Stellen plus Konstante.
+
+---
+
+## DI-06.1-02 (gefunden in Plan 06.1-08): ein gewoehnlicher Share auf eine Gruppe faellt weiterhin nur dem Crawl zu
+
+**Gefunden:** beim Bau von `GroupEventListener`, also beim Schliessen von
+DI-05-11.
+
+**Was:** Der neue Listener frischt die Rechte der **Team-Folder-Mounts** einer
+Gruppe auf. Ein gewoehnlicher Share, der auf eine Gruppe geht, erreicht seine
+Mitglieder aber ueber den Mount-Provider von `files_sharing` und nicht ueber den
+von Team Folders. Wer einer Gruppe beitritt, die einen solchen Share haelt,
+findet dessen Inhalte weiterhin erst nach dem naechsten Crawl-Durchgang. Genau
+dieser Fall steht woertlich im Absatz von `ShareEventListener`, den dieser Plan
+fortgeschrieben hat, und deshalb steht er hier und nicht nur im Docstring.
+
+**Warum es kein Sicherheitsbefund ist:** unveraendert die Begruendung aus
+E-H3 und DI-05-11. Die Sicherheitsgrenze ist der PHP-Recheck ueber
+`getUserFolder()->getFirstNodeById()`; ein veralteter Vorfilter kostet
+Trefferqualitaet und Rechenzeit, nicht Vertraulichkeit.
+
+**Warum nicht hier behoben:** die Wurzel eines `files_sharing`-Mounts kann eine
+einzelne Datei sein, und `SubtreeExpandJob` hat fuer den Dateifall keinen Zweig:
+`getFilesInMount` mit einer Datei als Vorfahr liefert nichts, also waere die
+Einplanung ein stiller Leerlauf. Der Fall braucht entweder einen zweiten Zweig im
+Listener, der eine einzelne `acl`-Zeile einreiht, oder eine Auskunft darueber, ob
+die Mount-Wurzel ein Ordner ist. Beides liegt ausserhalb der `files_modified`
+dieses Plans, und die `<behavior>`-Liste von 06.1-08 nennt ausdruecklich den
+Team Folder.
+
+**Wohin es gehoert:** in einen Folgeplan an der Ereigniskette, oder als benannte
+Nichtabdeckung nach `docs/testing.md`, in der Form, die E-H6 fuer den Federated
+Share gewaehlt hat. Ein Paritaets-Szenario dafuer waere die Spiegelung von
+Szenario 10 mit einem Gruppen-Share statt einem Team Folder.

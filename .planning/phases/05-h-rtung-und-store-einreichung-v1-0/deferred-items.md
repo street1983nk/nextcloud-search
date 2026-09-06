@@ -343,6 +343,28 @@ gehört in einen eigenen Plan.
 **Wohin es gehört:** in den Phase-Review oder in einen Folgeplan, der an der
 Ereigniskette arbeitet.
 
+**GESCHLOSSEN (Plan 06.1-08, 06.09.2026), mit einem benannten Rest.** Der Owner
+hat die Behebung in E-H3 entschieden, und der Folgeplan ist gebaut:
+`php/lib/Listener/GroupEventListener.php` hört auf `UserAddedEvent` und
+`UserRemovedEvent` und reiht die Team-Folder-Mounts der Gruppe als
+`acl`-Teilbäume über `SubtreeExpandJob` ein, in beide Richtungen und ohne eine
+einzige Datei erneut zu laden. Registriert ist er in einer dritten Schleife in
+`php/lib/AppInfo/Application.php`; der Absatz zur Gruppengrenze in
+`ShareEventListener` steht unverändert da und trägt seinen Nachtrag. Das Gate ist
+Szenario 10 von `search-parity` in `.github/workflows/integration.yml`, das drei
+Zustände feststellt und dabei nicht nur die Suche vergleicht, sondern die
+Vorfilterzeilen einer Team-Datei vor, zwischen und nach dem Wechsel ausliest.
+
+Eine Korrektur zum Text oben, die beim Bau auffiel: der ETag-Abgleich trägt den
+Fall nicht, weil eine Mitgliedschaft keine ETag ändert. Träger war bis hierhin
+allein der nächste Crawl-Durchgang.
+
+Der benannte Rest: ein **gewöhnlicher Share auf eine Gruppe** erreicht seine
+Mitglieder über den Mount-Provider von `files_sharing`, nicht über den von Team
+Folders, und fällt weiterhin nur dem Crawl zu. Das steht als DI-06.1-02 in den
+Deferred Items der Phase 06.1, mit der Begründung, warum
+`SubtreeExpandJob` dafür einen Zweig fehlt.
+
 ## DI-05-12 (in 05-09-SUMMARY.md als DI-05-09 gefuehrt): `.gitattributes` führt `*.py` nicht, und CI-Skripte tragen eine Shebang
 
 **Found during:** Plan 05-09, beim Anlegen von `scripts/ci/parity_diff.py`.

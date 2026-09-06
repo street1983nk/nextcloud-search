@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\AppInfo;
 
 use OCA\Findling\Listener\FileEventListener;
+use OCA\Findling\Listener\GroupEventListener;
 use OCA\Findling\Listener\ShareEventListener;
 use OCA\Findling\Search\Provider;
 use OCP\AppFramework\App;
@@ -95,6 +96,28 @@ class Application extends App implements IBootstrap {
 			\OCP\Share\Events\ShareDeletedFromSelfEvent::class,
 		] as $event) {
 			$context->registerEventListener($event, ShareEventListener::class);
+		}
+
+		// The group events, in a third loop and not appended to the second one.
+		// They answer the same question the share events answer, namely "who may
+		// find this now", but over a different set of mounts: not the one node a
+		// share names, but every mount a membership in a group hands out. That
+		// difference is a different listener rather than a third branch inside
+		// ShareEventListener, and it is the same reasoning that split the second
+		// loop from the first: three short lists that each name their listener
+		// stay countable, which is what COMP-03 asks for.
+		//
+		// They joined with plan 06.1-08, which is where DI-05-11 was closed:
+		// neither share event fires on a membership change, because the share
+		// itself did not change, and the ETag reconcile does not carry the case
+		// either, because a membership changes no etag. Before this loop the
+		// carrier was the next crawl pass, correct and up to a full crawl cadence
+		// late.
+		foreach ([
+			\OCP\Group\Events\UserAddedEvent::class,
+			\OCP\Group\Events\UserRemovedEvent::class,
+		] as $event) {
+			$context->registerEventListener($event, GroupEventListener::class);
 		}
 	}
 
