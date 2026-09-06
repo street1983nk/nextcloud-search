@@ -356,3 +356,55 @@ nebenbei geaenderte Kommandozeile den Beleg von seiner Messung trennen wuerde.
 **Wohin es gehoert:** in den Abschlussplan der Phase (06.1-19) oder in den Plan,
 der `docs/performance.md` nach der Box-Nachmessung 06.1-18 ohnehin anfasst. Ein
 Satz mit Datum reicht in beiden Faellen.
+
+---
+
+## DI-06.1-11 (Plan 06.1-14): die OCR-Qualitaetsmessung faehrt in keinem Job
+
+**Gefunden:** beim Bau von `findling.extract.ocr_quality` in Plan 06.1-14.
+
+**Was:** das Werkzeug rechnet die Zeichenfehlerrate und traegt einen groben
+Riegel von 0,05, der als Rueckgabewert 1 sichtbar wird. Gefahren wird es heute
+nur von Hand, im Container, so wie es
+`docs/measurements/2026-09-06-ocr-dach/README.md` beschreibt. Ein Riegel, den
+niemand faehrt, faengt nichts: der Totalausfall, fuer den er da ist, wuerde erst
+bei der naechsten Messung von Hand auffallen. Der natuerliche Ort ist der Job
+`reconcile-and-dach` in `.github/workflows/integration.yml`, wo Korpus und
+Engine ohnehin beieinander liegen; ein Schritt mit `--corpus testdata/corpus
+--truth testdata/corpus-truth.json` genuegt, und der Rueckgabewert reicht als
+Zusicherung.
+
+**Warum nicht hier gefixt:** `integration.yml` gehoert in dieser Welle Plan
+06.1-11, der dieselbe Datei anfasst. Zwei Executoren an einer Workflow-Datei
+sind ein Konflikt und kein Fortschritt.
+
+**Wohin es gehoert:** in den Plan, der `integration.yml` nach 06.1-11 als
+naechster anfasst, spaetestens in den Abschlussplan der Phase (06.1-19). Wichtig
+dabei: der Schritt gehoert **neben** die drei DACH-Suchen und nicht an ihre
+Stelle. Das Gate bleibt ein Suchtreffer, die Messung steht daneben, und diese
+Trennung ist die ganze Begruendung des Plans 06.1-14.
+
+---
+
+## DI-06.1-12 (Plan 06.1-14): Annahme A7 ist auf gerendertem Text widerlegt, auf Fotos ungeprueft
+
+**Gefunden:** in der Gegenprobe bei 72 dpi, Plan 06.1-14.
+
+**Was:** die Recherche fuehrt unter A7 als Annahme, Grossbuchstaben mit Umlauten
+seien bei niedriger Aufloesung eine bekannte Schwaeche von tesseract. Auf
+gerendertem Text ist das nicht eingetreten: bei 300 dpi null Fehler ueber alle
+sechs Seiten, bei 72 dpi, dem niedrigsten von `FINDLING_OCR_DPI` zugelassenen
+Wert, 19 Fehler ueber 3.148 Zeichen, und die deutsche Variante ist mit 0,0032
+die beste der drei. Damit ist die Annahme auf sauberem Material widerlegt und
+auf fotografiertem Material weiterhin ungeprueft, denn dafuer liegt kein
+Testmaterial im Repository.
+
+**Warum nicht hier gefixt:** ein fotografiertes Korpus ist keine Erweiterung des
+Generators, sondern ein fremdes Korpus mit unklarer Lizenz und ohne
+Bitgleichheit, und genau das schliesst die Regel "Don't Hand-Roll" der
+Phasenrecherche aus. Es ist eine eigene Entscheidung und keine Nebenaufgabe.
+
+**Wohin es gehoert:** in die Bewertung des RapidOCR-Zusatzpfads, den `STACK.md`
+seit dem 15.08.2026 genau fuer fotografierte Belege fuehrt. Bis dahin gilt, was
+`docs/measurements/2026-09-06-ocr-dach/README.md` unter "Was diese Zahl nicht
+sagt" schreibt: die Null gilt fuer gerenderte Seiten und fuer nichts anderes.
