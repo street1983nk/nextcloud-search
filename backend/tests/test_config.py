@@ -234,7 +234,12 @@ def test_ocr_defaults_are_the_measured_numbers() -> None:
     current = settings()
 
     assert current.ocr_enabled is True
-    assert current.ocr_languages == ("deu", "eng")
+    # Three since the owner decision of 2026-09-06. The durations and the memory
+    # ceiling below were measured with deu+eng and are deliberately left alone:
+    # a third language changes the run, and an unmeasured number that looks
+    # measured is worse than an honest older one. backend/tests/test_ocr_french.py
+    # carries the language half of this assertion.
+    assert current.ocr_languages == ("deu", "eng", "fra")
     assert current.ocr_max_pages == 30
     assert current.ocr_page_seconds == 30
     assert current.ocr_job_seconds == 600
@@ -253,7 +258,7 @@ def test_ocr_languages_falls_back_to_the_default_when_none_is_installed(
 
     # Not an exception: a typo in an admin form must not produce a container
     # that refuses to start on an unattended box (T-03-504).
-    assert current.ocr_languages == ("deu", "eng")
+    assert current.ocr_languages == ("deu", "eng", "fra")
     assert "FINDLING_OCR_LANGUAGES" in caplog.text
     assert "klingon" not in caplog.text
 
@@ -279,7 +284,7 @@ def test_the_ocr_language_list_never_leaves_the_allowlist(monkeypatch: pytest.Mo
 
     # T-03-502: the value reaches an argument list of a subprocess. Nothing that
     # is not a language this image actually carries may survive this reader.
-    assert set(settings().ocr_languages) <= {"deu", "eng"}
+    assert set(settings().ocr_languages) <= {"deu", "eng", "fra"}
 
 
 def test_a_usable_ocr_language_list_is_taken_in_the_order_it_was_asked_for(

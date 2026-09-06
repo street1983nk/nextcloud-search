@@ -411,7 +411,11 @@ def test_the_call_is_an_argument_list_with_the_measured_options(monkeypatch: pyt
     # The call form of docs/ocr.md, argument by argument. stdin and stdout are
     # the two dashes, so no page of user content is ever written to disk.
     assert argv[:3] == ["tesseract", "-", "-"]
-    assert argv[3:5] == ["-l", "deu+eng"]
+    # deu+eng+fra since the owner decision of 2026-09-06. The joined string is
+    # built from OCR_DEFAULT_LANGUAGES, so this line is the proof that the order
+    # of the tuple survives into the argument list: the leading language is the
+    # one the engine weighs most.
+    assert argv[3:5] == ["-l", "deu+eng+fra"]
     assert argv[5:7] == ["--oem", "1"]
     assert argv[7:9] == ["--psm", "3"]
     assert argv[9:] == ["-c", "tessedit_do_invert=0"]

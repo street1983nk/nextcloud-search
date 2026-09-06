@@ -222,11 +222,19 @@ RUN apt-get update \
 # engine is the digest of the base image at the top of this file, which is the
 # same anchor the rest of the runtime stage already relies on.
 #
-# The three language packages are the opposite case: they are Architecture: all,
+# The four language packages are the opposite case: they are Architecture: all,
 # they come from the tesseract-lang source package and they have not moved since
 # bookworm. They are pinned hard, because the traineddata decides what the OCR
 # reads, and a silent change of it is a silent change of the text of every
 # scanned document in the index. When trixie moves them, this build fails loudly.
+#
+# fra joined them on 2026-09-06 by owner decision: a scanned French page has to
+# be readable in v1, and an admin who has to find a form first does not have a
+# feature. Verified the same day against sources.debian.org and packages.debian.org:
+# tesseract-ocr-fra is version 1:4.1.0-2 out of the same tesseract-lang source,
+# the binary is tesseract-ocr-fra_4.1.0-2_all.deb, so arm64 and amd64 get the
+# identical fra.traineddata. This is the OCR half only. The analyzer chain of the
+# index stays German and English, and nothing outside this file may claim more.
 #
 # osd is in the list although the call form uses --psm 3, not --psm 1: the
 # orientation and script model is what makes a rotated scan recoverable at all,
@@ -241,8 +249,8 @@ RUN apt-get update \
 #
 # Apache-2.0 obligation: the licence text has to travel with the image, not only
 # with the repository, because the image is what is distributed. Measured, the
-# engine and libtesseract5 share one copyright file and the three language packs
-# share a second one (tessdata_fast), so two copies cover all five packages.
+# engine and libtesseract5 share one copyright file and the four language packs
+# share a second one (tessdata_fast), so two copies cover all six packages.
 # Both tests below are the fail closed half: an image without the language data
 # or without the licence texts must not be built at all. THIRD-PARTY.md carries
 # the same statement for readers of the repository.
@@ -251,10 +259,12 @@ RUN apt-get update \
         tesseract-ocr \
         tesseract-ocr-deu=1:4.1.0-2 \
         tesseract-ocr-eng=1:4.1.0-2 \
+        tesseract-ocr-fra=1:4.1.0-2 \
         tesseract-ocr-osd=1:4.1.0-2 \
     && rm -rf /var/lib/apt/lists/* \
     && tesseract --list-langs 2>&1 | grep -qx deu \
     && tesseract --list-langs 2>&1 | grep -qx eng \
+    && tesseract --list-langs 2>&1 | grep -qx fra \
     && test -s /usr/share/doc/tesseract-ocr/copyright \
     && test -s /usr/share/doc/tesseract-ocr-deu/copyright \
     && install -D -m 0444 /usr/share/doc/tesseract-ocr/copyright \
