@@ -121,6 +121,31 @@ jobs:
       EXAPP_SECRET: '12345'
       EXAPP_PORT: '10035'
       TESTUSER_PASS: 'findling-ci-canary-2026'
+      # The two sides of the edge of the budget chain, and the first thing to
+      # say about them is which link they straddle. It is
+      # ExAppService::REQUEST_TIMEOUT_SECONDS, one and a half seconds, the
+      # ceiling of ONE call. Provider::BUDGET_NANOSECONDS of two and a half
+      # seconds is the wall clock of the whole result group across at most three
+      # rounds, and every call shrinks its own timeout to what is left of it, so
+      # the group budget can bound a call and never widen one. A single /search
+      # therefore meets 1.5 first, and the edge sits there rather than at 2.5.
+      #
+      # Nine hundred milliseconds is six hundred of headroom under the ceiling,
+      # and 2400 is nine hundred over it. Both distances are deliberately coarse
+      # and not measured to the millisecond: between the stub and the assertion
+      # sit a PHP request, the AppAPI proxy and a loopback round trip, and a step
+      # that flips on a slow runner is not a test but a coin.
+      #
+      # 2400 also stays under the 2500 of the group budget, and that is the
+      # reason for the number rather than a coincidence: the group budget alone
+      # would NOT have ended this call, so the empty group of the upper case can
+      # only be the work of the per call timeout.
+      EDGE_UNDER_MS: '900'
+      EDGE_OVER_MS: '2400'
+      # How far below the naive expectation the upper case has to answer. The
+      # bound it feeds is a difference and not an absolute number, so the speed
+      # of the runner cancels out of it; the arithmetic stands at the step.
+      EDGE_MARGIN_MS: '400'
 
     steps:
       # Actions are pinned to commit SHAs, never to tags: a moved tag would be
@@ -278,6 +303,133 @@ jobs:
           test "${elapsed}" -lt 6
 
       - name: Stop the hanging backend
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/slow.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/slow.pid")" 2>/dev/null || true
+          fi
+
+      # The step above is the total failure: ten seconds against every ceiling
+      # in the chain, and one side of the question. On its own it says that a
+      # backend which never answers costs a result group, which is worth
+      # knowing and is not the same as knowing where the line runs.
+      #
+      # The four steps below are the line itself, from both sides. Only both
+      # together say anything: an upper side on its own would be a second total
+      # failure test with a smaller number, and a lower side on its own would
+      # not show that anything ever gives up. The stub is the same process in
+      # both, started twice with two different delays, so the only difference
+      # between the two runs is the number the chain is measured against.
+      - name: Start the stub just under the per call ceiling
+        run: |
+          for _ in $(seq 1 20); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null || break
+            sleep 1
+          done
+          FINDLING_SLOW_BACKEND_DELAY_MS="${EDGE_UNDER_MS}" \
+            python3 findling-src/scripts/ci/slow_backend.py > "${{ runner.temp }}/edge-under.log" 2>&1 &
+          echo $! > "${{ runner.temp }}/slow.pid"
+          for _ in $(seq 1 20); do
+            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+              cat "${{ runner.temp }}/edge-under.log"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the stub with the delay under the ceiling did not come up"
+          cat "${{ runner.temp }}/edge-under.log" || true
+          exit 1
+
+      - name: The lower side of the edge, a late answer that still arrives
+        run: |
+          read -r seconds status <<< "$(curl -s -G \
+            -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            --data-urlencode 'term=findling-canary' \
+            -o edge-under.json -w '%{time_total} %{http_code}' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search')"
+          elapsed_ms=$(awk -v value="${seconds}" 'BEGIN { printf "%d", value * 1000 }')
+          cat edge-under.json
+          echo "the search answered after ${elapsed_ms}ms with status ${status}, against a stub that waits ${EDGE_UNDER_MS}ms"
+
+          test "${status}" = "200"
+          jq -e '.ocs.data.entries | length == 1' edge-under.json > /dev/null \
+            || { echo "::error::an answer inside the per call ceiling cost the hit"; cat edge-under.json; exit 1; }
+          jq -e '.ocs.data.entries[0].title == "findling-canary"' edge-under.json > /dev/null \
+            || { echo "::error::the one entry is not the hit the stub sent"; cat edge-under.json; exit 1; }
+
+          # The falsifier of this half. An answer that did not wait at all would
+          # mean the call never reached the stub, and a hit from anywhere else
+          # would satisfy every assertion above without saying a word about the
+          # chain.
+          if [ "${elapsed_ms}" -lt "${EDGE_UNDER_MS}" ]; then
+            echo "::error::the search came back in ${elapsed_ms}ms, sooner than the ${EDGE_UNDER_MS}ms the stub sleeps, so this hit did not come through it"
+            exit 1
+          fi
+          # The other half needs this number, because its bound is a difference.
+          echo "EDGE_UNDER_ELAPSED_MS=${elapsed_ms}" >> "${GITHUB_ENV}"
+
+      - name: Start the same stub just over the per call ceiling
+        run: |
+          if [ -f "${{ runner.temp }}/slow.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/slow.pid")" 2>/dev/null || true
+          fi
+          for _ in $(seq 1 20); do
+            curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null || break
+            sleep 1
+          done
+          FINDLING_SLOW_BACKEND_DELAY_MS="${EDGE_OVER_MS}" \
+            python3 findling-src/scripts/ci/slow_backend.py > "${{ runner.temp }}/edge-over.log" 2>&1 &
+          echo $! > "${{ runner.temp }}/slow.pid"
+          for _ in $(seq 1 20); do
+            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+              cat "${{ runner.temp }}/edge-over.log"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the stub with the delay over the ceiling did not come up"
+          cat "${{ runner.temp }}/edge-over.log" || true
+          exit 1
+
+      - name: The upper side of the edge, an answer that arrives too late
+        run: |
+          read -r seconds status <<< "$(curl -s -G \
+            -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            --data-urlencode 'term=findling-canary' \
+            -o edge-over.json -w '%{time_total} %{http_code}' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search')"
+          elapsed_ms=$(awk -v value="${seconds}" 'BEGIN { printf "%d", value * 1000 }')
+          cat edge-over.json
+          echo "the search answered after ${elapsed_ms}ms with status ${status}, against a stub that waits ${EDGE_OVER_MS}ms"
+
+          # Success and an empty group, which is the whole shape of this
+          # behaviour: a provider that gave up must not turn into an error for
+          # the user, because the unified search would then show a failure
+          # instead of the result groups that did answer.
+          test "${status}" = "200"
+          jq -e '.ocs.data.entries | length == 0' edge-over.json > /dev/null \
+            || { echo "::error::an answer past the per call ceiling still produced a hit, so nothing gave up"; cat edge-over.json; exit 1; }
+
+          # The falsifying bound, and it is a difference rather than an absolute
+          # number so that the speed of the runner cancels out of it. A run
+          # without the per call timeout would sit out the whole delay, which is
+          # EDGE_OVER_MS minus EDGE_UNDER_MS longer than the lower case measured
+          # a moment ago on this very runner. A run with the timeout stops at the
+          # ceiling, which is far short of that. EDGE_MARGIN_MS is the gap that
+          # separates the two readings, and it is coarse for the same reason the
+          # two delays are.
+          naive=$(( EDGE_UNDER_ELAPSED_MS + EDGE_OVER_MS - EDGE_UNDER_MS ))
+          ceiling=$(( naive - EDGE_MARGIN_MS ))
+          echo "the lower case cost ${EDGE_UNDER_ELAPSED_MS}ms, so waiting this stub out would cost about ${naive}ms"
+          if [ "${elapsed_ms}" -ge "${ceiling}" ]; then
+            echo "::error::the search took ${elapsed_ms}ms, at or above the ${ceiling}ms of a run that waited for the backend instead of giving up"
+            exit 1
+          fi
+          echo "the chain gave up at its tightest link: ${elapsed_ms}ms against a backend that answers after ${EDGE_OVER_MS}ms"
+
+      - name: Stop the stub of the edge
         if: always()
         run: |
           if [ -f "${{ runner.temp }}/slow.pid" ]; then

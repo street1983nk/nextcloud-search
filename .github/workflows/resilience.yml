@@ -605,6 +605,565 @@ jobs:
             kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
           fi
 
+  # The third gate of this workflow, and the only one about a resource rather
+  # than about a signal. The lowDisk path is built (MIN_FREE_BYTES, a pause
+  # instead of a loss, the banner on the settings page) and it was driven twice
+  # on the box in drill 3 of the 04.09.2026 run. That run produced DI-05-23: a
+  # shortage of twenty seconds spent the delivery budget of every row in flight
+  # and they ended as failed(repeatedly_stuck) while the page said the indexing
+  # was merely paused. Plan 05-20 fixed it, and _abort now unlocks on every path
+  # out of it.
+  #
+  # What has never been measured is the same path WHILE THE SECOND TRACK EMBEDS.
+  # Since decision 06-07 the disk floor hangs on the IndexBatchWriter, so that
+  # the index and the vector stock ask one directory about one number, and the
+  # embedding branch answers the condition with _DiskTight from inside the per
+  # file loop, long before the flush the index side pauses at. Built, not
+  # measured, and this job is the measurement.
+  #
+  # Its own job and not a step of kill-resume, for two reasons and the second is
+  # the hard one. The deadline arithmetic that job states about itself already
+  # adds its ceilings up to fifty five minutes, and a drill that waits out a
+  # shortage and a return would push the sum of the ceilings past the deadline
+  # again, which is the exact mistake the paragraph up there warns about. And
+  # the volume of this job has to be a mounted loop image BEFORE the composite
+  # action starts the backend on it, because that action creates
+  # APP_PERSISTENT_STORAGE itself and starts the process in the same run. A step
+  # appended to kill-resume could not have done that without a second Nextcloud.
+  #
+  # Why a loop image, and not tmpfs and not a patched reader (06.1-RESEARCH
+  # 5.1): tmpfs lies in RAM and falsifies exactly the size that is being
+  # measured, and a mocked ceiling proves the mock. Here the free space is what
+  # the file system says, read through the very shutil.disk_usage call that
+  # resources.low_disk() makes, on a volume whose size this job chose. That the
+  # volume really ends where the image ends is proven by a probe of its own
+  # below, in the shape of the throttle probe of the measurement job: a write
+  # past the end has to come back as ENOSPC from the kernel and has to say so in
+  # words. A measuring instrument that cannot fail measures nothing.
+  #
+  # The drill itself deliberately stops short of a real ENOSPC. The floor exists
+  # so that ENOSPC never happens, so the subject is the pause in front of it and
+  # not the write that would fail behind it.
+  #
+  # Assumption A5 of 06.1-RESEARCH is what this job stands on: a GitHub runner
+  # may mount a loop image with sudo. If it may not, the mount step below fails
+  # with the message the runner gave, and the drill moves to plan 06.1-18 to be
+  # driven locally or on the box. It is not quietly rebuilt on tmpfs, because
+  # that would be a measurement of the wrong thing reported as this one.
+  disk-full:
+    name: disk-full
+    # Never on the schedule, same rule as kill-resume: this is a gate on the
+    # code, and a gate that runs without a change to look at only makes noise.
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    # The sum of the ceilings below plus the installation, the way kill-resume
+    # derives its own. EMBED_START_TIMEOUT is 600, SETTLE_SECONDS is 30,
+    # SHORTAGE_SECONDS is 150 and RESUME_TIMEOUT is 420, which is twenty minutes
+    # of ceilings. The Nextcloud install, the image pull and the crawl worker sit
+    # in front of that. Thirty minutes keeps the sum of the ceilings under the
+    # deadline, which is the property that stops a red run from being an
+    # infrastructure verdict dressed up as a code verdict.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        server-version: ['stable34']
+        php-version: ['8.2']
+
+    env:
+      # Test only values of a throwaway instance that is destroyed with the
+      # runner, the same ones kill-resume uses and for the same reason.
+      EXAPP_SECRET: '12345'
+      EXAPP_PORT: '10035'
+      # Copies of the reference corpus. Enough that the first track is still
+      # queueing work when the second track writes its first vector, because the
+      # shortage has to fall INTO the embedding rather than behind it. Six and
+      # not the fifty of kill-resume: this job installs no OCR engine, so the
+      # pictures and the scans cost a verdict and not a rendering pass, and what
+      # this drill needs is the overlap of the two tracks rather than a
+      # particular number of files.
+      CORPUS_COPIES: '6'
+      # The model of the second track, taken out of the published image below.
+      # Job level and not step level, so that it also reaches the backend the
+      # composite action starts, the same reason it sits at job level in
+      # integration.yml. Without a model directory _wire_the_second_track fails,
+      # the track stays off for the whole process, and this job would be
+      # measuring a disk pause of the index alone while claiming the other one.
+      FINDLING_EMBED_MODEL_DIR: '${{ github.workspace }}/findling-model'
+      # How much bigger than MIN_FREE_BYTES the volume is made. It has to carry
+      # the state database, the index, the vector stock and the scratch of a few
+      # hundred small documents and still leave the floor reachable by filling.
+      # Four hundred mebibytes is far above what a corpus this size occupies, and
+      # the step below prints what was really used.
+      VOLUME_HEADROOM_BYTES: '419430400'
+      # How far below the floor the shortage goes. Fifty mebibytes, so that the
+      # condition is unambiguous from both sides: the container sees less than
+      # MIN_FREE_BYTES, and the volume still holds room for everything the return
+      # writes afterwards.
+      SHORTFALL_BYTES: '52428800'
+      # Ceiling of the wait for the state this drill needs before it may do
+      # anything: the second track has written its first vector and the work
+      # stock is not empty. Reaching it is a failure with the counters printed.
+      EMBED_START_TIMEOUT: '600'
+      # The pass that was in flight when the volume filled is allowed to end
+      # before the counter is frozen. Without it the drill would race its own
+      # baseline, and a vector written half a second after the fallocate would
+      # read as a track that ignored the floor.
+      SETTLE_SECONDS: '30'
+      # How long the frozen counter has to stay frozen. Above
+      # POLL_COOLDOWN_MAX_SECONDS, which is 120 in
+      # backend/src/findling/config.py, and that is the whole reason for the
+      # number: _abort backs the poller off on every paused pass and the backoff
+      # doubles up to that cap, so a window shorter than the cap could contain no
+      # attempt at all, and a counter that stood still would then say nothing.
+      SHORTAGE_SECONDS: '150'
+      # Ceiling of the wait for the return. The same backoff caps at 120 seconds,
+      # so a container that comes back after two quiet minutes is behaving. Four
+      # hundred and twenty is three and a half times that. Exceeding it is a
+      # finding about the return and not a number to raise.
+      RESUME_TIMEOUT: '420'
+
+    steps:
+      # Actions are pinned to commit SHAs, never to tags: a moved tag would be
+      # arbitrary code execution inside a job that holds a Nextcloud instance.
+      # Both checkouts stay in this order for the reason stated in kill-resume.
+      - name: Check out nextcloud/server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nextcloud/server
+          ref: ${{ matrix.server-version }}
+          submodules: recursive
+
+      - name: Check out findling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: findling-src
+
+      # Two readers, written once and called from four steps. They are small
+      # enough to have been heredocs at every call site; they are files because
+      # both of them are the point of this job, and a reader that is copied four
+      # times is a reader that drifts in three of them.
+      - name: Put the two readers of this drill on the runner
+        run: |
+          cat > "${{ runner.temp }}/free_bytes.py" <<'PY'
+          """Free bytes of a volume, through the very call the container makes.
+
+          resources.low_disk() asks shutil.disk_usage(directory).free and holds it
+          against MIN_FREE_BYTES. This asks the same question of the same
+          directory, so the number in the log is the number the container decides
+          on and not a second reading of the same disk by a different tool.
+          """
+
+          import shutil
+          import sys
+
+          print(shutil.disk_usage(sys.argv[1]).free)
+          PY
+
+          cat > "${{ runner.temp }}/vector_count.py" <<'PY'
+          """Documents that carry at least one vector, or zero.
+
+          Read over a read only connection and without the vec0 extension, because
+          chunks is an ordinary table: the count needs neither the extension nor a
+          running container. A stock that is not there yet answers zero rather
+          than failing, which is the state every first round of a wait finds.
+          """
+
+          import sqlite3
+          import sys
+          from pathlib import Path
+
+          database = Path(sys.argv[1])
+          if not database.is_file():
+              print(0)
+              raise SystemExit(0)
+
+          connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+          row = None
+          try:
+              row = connection.execute("SELECT COUNT(DISTINCT file_id) FROM chunks").fetchone()
+          except sqlite3.DatabaseError:
+              # A stock that exists but carries no table yet is the same answer as
+              # no stock at all: nothing has been embedded.
+              row = None
+          finally:
+              connection.close()
+
+          print(int(row[0]) if row else 0)
+          PY
+
+          python3 "${{ runner.temp }}/free_bytes.py" "${{ runner.temp }}" > /dev/null
+          python3 "${{ runner.temp }}/vector_count.py" "${{ runner.temp }}/does-not-exist.db"
+
+      # The volume, and every number about it is one this step chose and printed.
+      # It has to exist before the composite action below, because that action
+      # creates APP_PERSISTENT_STORAGE and starts the backend on it in one run.
+      - name: Build the volume out of a loop image of a known size
+        run: |
+          volume_dir="${{ runner.temp }}/findling"
+          volume_image="${{ runner.temp }}/findling-volume.img"
+          echo "VOLUME_DIR=${volume_dir}" >> "${GITHUB_ENV}"
+          echo "VOLUME_IMAGE=${volume_image}" >> "${GITHUB_ENV}"
+
+          # The floor is read out of the source rather than repeated here. One
+          # number in one place: a copy in this file would go stale the day
+          # config.py moves it, and a drill whose shortage sits above the floor
+          # is green without having measured anything at all.
+          min_free=$(python3 - <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          source = pathlib.Path("findling-src/backend/src/findling/config.py")
+          match = re.search(r"^MIN_FREE_BYTES = ([0-9_]+)$", source.read_text(encoding="utf-8"), re.MULTILINE)
+          if match is None:
+              sys.exit("MIN_FREE_BYTES could not be read out of backend/src/findling/config.py")
+          print(int(match.group(1).replace("_", "")))
+          PY
+          )
+          echo "MIN_FREE_BYTES=${min_free}" >> "${GITHUB_ENV}"
+          image_bytes=$(( min_free + VOLUME_HEADROOM_BYTES ))
+          echo "the floor of this container is ${min_free} bytes, the volume is made ${image_bytes} bytes"
+
+          truncate -s "${image_bytes}" "${volume_image}"
+          # -F because the target is a regular file and not a block device, and
+          # -m 0 because the five percent reserved for root would be taken off
+          # exactly the figure this drill steers by: shutil.disk_usage reports
+          # what an unprivileged writer may still have.
+          mkfs.ext4 -qF -m 0 "${volume_image}"
+          mkdir -p "${volume_dir}"
+
+          # Assumption A5. If a runner refuses this, the message it gives is the
+          # finding, and the drill moves to plan 06.1-18 rather than onto tmpfs.
+          if ! sudo mount -o loop "${volume_image}" "${volume_dir}" 2> "${{ runner.temp }}/mount.txt"; then
+            echo "::error::the runner refused to mount the loop image, so assumption A5 of 06.1-RESEARCH does not hold here"
+            cat "${{ runner.temp }}/mount.txt" || true
+            echo "The drill is not rebuilt on tmpfs. tmpfs lies in RAM and falsifies exactly the size"
+            echo "this measures, so the disk drill belongs on the box instead, in plan 06.1-18."
+            exit 1
+          fi
+          # The backend runs as the runner user, the fresh mount belongs to root.
+          sudo chown "$(id -u):$(id -g)" "${volume_dir}"
+
+          free_bytes=$(python3 "${{ runner.temp }}/free_bytes.py" "${volume_dir}")
+          echo "the fresh volume has ${free_bytes} free bytes against a floor of ${min_free}"
+          df -B1 "${volume_dir}"
+          if [ "${free_bytes}" -le "${min_free}" ]; then
+            echo "::error::the fresh volume already sits at or below the floor, so there would be nothing to fill"
+            exit 1
+          fi
+
+      # The counter probe to the whole construction, in the shape of the throttle
+      # probe of the measurement job. A write past the end of the image has to
+      # come back as ENOSPC from the kernel and has to name it, otherwise the
+      # shortage below would be a number this job invented about a volume that
+      # does not really end anywhere.
+      - name: Prove the volume really ends where the image ends
+        run: |
+          probe="${VOLUME_DIR}/enospc-probe"
+          free_bytes=$(python3 "${{ runner.temp }}/free_bytes.py" "${VOLUME_DIR}")
+          blocks=$(( free_bytes / 1048576 + 64 ))
+          status=0
+          dd if=/dev/zero of="${probe}" bs=1M count="${blocks}" 2> "${{ runner.temp }}/enospc.txt" || status=$?
+          cat "${{ runner.temp }}/enospc.txt"
+          rm -f "${probe}"
+          if [ "${status}" -eq 0 ]; then
+            echo "::error::the volume swallowed ${blocks} mebibytes although it holds fewer, so it is not the bounded file system this drill needs"
+            exit 1
+          fi
+          if ! grep -qi 'no space left on device' "${{ runner.temp }}/enospc.txt"; then
+            echo "::error::the write past the end failed for some other reason than ENOSPC"
+            exit 1
+          fi
+          echo "the kernel refused the write past the end with ENOSPC, so the shortage below is a real one"
+          python3 "${{ runner.temp }}/free_bytes.py" "${VOLUME_DIR}"
+
+      # The model, out of the published image and not out of a download. The
+      # identity of that model is asserted once, in the e2e job of
+      # integration.yml, which pins its sha256 next to the revision it was
+      # quantised from. It is deliberately not pinned a second time here: this
+      # job measures a disk pause and not model quality, and a hash that has to
+      # be updated in two files is a hash that ends up wrong in one of them. What
+      # matters here is that the second track can be wired at all.
+      - name: Take the embedding model out of the published image
+        run: |
+          image=ghcr.io/street1983nk/findling_backend:dev
+          docker pull "${image}"
+          container=$(docker create "${image}")
+          rm -rf "${FINDLING_EMBED_MODEL_DIR}"
+          docker cp "${container}:/usr/local/share/findling/model" "${FINDLING_EMBED_MODEL_DIR}"
+          docker rm -f "${container}" > /dev/null
+          ls -l "${FINDLING_EMBED_MODEL_DIR}"
+          if [ ! -s "${FINDLING_EMBED_MODEL_DIR}/model.onnx" ] \
+             || [ ! -s "${FINDLING_EMBED_MODEL_DIR}/tokenizer.json" ]; then
+            echo "::error::the published image carries no usable model directory, so the second track cannot run here"
+            exit 1
+          fi
+
+      - name: Set up the test Nextcloud with both halves and register the ExApp
+        uses: ./findling-src/.github/actions/setup-test-nc
+        with:
+          server-version: ${{ matrix.server-version }}
+          php-version: ${{ matrix.php-version }}
+          exapp-secret: ${{ env.EXAPP_SECRET }}
+          exapp-port: ${{ env.EXAPP_PORT }}
+
+      # The mount has to have survived the composite action, which creates
+      # APP_PERSISTENT_STORAGE with mkdir -p and would have made an ordinary
+      # directory on the runner disk if anything had unmounted it. A drill that
+      # ran on the runner disk would never reach a floor at all, and it would be
+      # green.
+      - name: The backend really writes into the loop image
+        run: |
+          findmnt --target "${VOLUME_DIR}"
+          source=$(findmnt -no SOURCE --target "${VOLUME_DIR}")
+          echo "${VOLUME_DIR} is served by ${source}"
+          case "${source}" in
+            /dev/loop*) ;;
+            *)
+              echo "::error::the volume is not the loop image any more, so nothing below would be a measurement"
+              exit 1
+              ;;
+          esac
+
+      - name: Multiply the reference corpus into the account
+        run: |
+          for number in $(seq 1 "${CORPUS_COPIES}"); do
+            cp -r findling-src/testdata/corpus "data/admin/files/corpus-${number}"
+          done
+          ./occ files:scan --all
+          echo "the account holds $(find data/admin/files -type f | wc -l) files in ${CORPUS_COPIES} copies of the corpus"
+
+      # Background jobs do not run by themselves in this CI, so the crawl is
+      # started by hand and left running: it has to keep filling the queue while
+      # the container is already emptying it, because the state the next step
+      # waits for is the overlap of the two tracks.
+      - name: Queue the crawl and let it run
+        run: |
+          # --no-interaction for the reason kill-resume names: occ reads this
+          # shell as interactive, so the restart confirmation would default to No
+          # and the whole run would wait on an empty queue.
+          ./occ findling:index --restart --no-interaction
+          timeout 60 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\SchedulerJob' --once
+          # stop_after with an underscore: the dashed spelling does not exist on
+          # background-job:worker and Symfony rejects it.
+          timeout 420 ./occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_after 360 \
+            > "${{ runner.temp }}/crawl.log" 2>&1 &
+          ./occ findling:index
+
+      # The window this whole job is about: the second track has written vectors
+      # and there is still work in the stock. Filling the volume before the first
+      # vector exists would measure a pause of the index alone, and filling it
+      # after the stock ran dry would measure nothing at all.
+      - name: Fill the volume while the second track is writing vectors
+        run: |
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+          failed_rows() {
+            ./occ findling:index | awk '$1 == "failed" { total += $2 } END { print total + 0 }'
+          }
+
+          deadline=$(( $(date +%s) + EMBED_START_TIMEOUT ))
+          while :; do
+            carrying=$(python3 "${{ runner.temp }}/vector_count.py" "${VOLUME_DIR}/vectors.db")
+            open=$(open_rows)
+            echo "waiting for the overlap of the two tracks: vectors=${carrying} open=${open}"
+            if [ "${carrying}" -gt 0 ] && [ "${open}" -gt 0 ]; then
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "::error::the second track never wrote a vector while work was still open, so there is no shortage to fall into"
+              ./occ findling:index || true
+              tail -n 100 "${{ runner.temp }}/exapp.log" || true
+              echo "--- crawl worker ---"
+              tail -n 50 "${{ runner.temp }}/crawl.log" || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          free_before=$(python3 "${{ runner.temp }}/free_bytes.py" "${VOLUME_DIR}")
+          # The ballast is allocated and not written: fallocate reserves the
+          # blocks in one call, so the shortage arrives at a moment this job can
+          # name instead of over the seconds a copy would take. Its size follows
+          # from the reading above, so the volume ends up SHORTFALL_BYTES under
+          # the floor whatever the container has already occupied.
+          target_free=$(( MIN_FREE_BYTES - SHORTFALL_BYTES ))
+          ballast=$(( free_before - target_free ))
+          if [ "${ballast}" -le 0 ]; then
+            echo "::error::the volume already sits at or below the target of ${target_free} bytes, so there is nothing left to fill"
+            exit 1
+          fi
+          fallocate -l "${ballast}" "${VOLUME_DIR}/ballast.bin"
+          free_after=$(python3 "${{ runner.temp }}/free_bytes.py" "${VOLUME_DIR}")
+
+          paused_before=$(grep -c 'index paused, free space below the floor' "${{ runner.temp }}/exapp.log" || true)
+          open_at_fill=$(open_rows)
+          failed_at_fill=$(failed_rows)
+          echo "free before ${free_before}, ballast ${ballast}, free after ${free_after}, floor ${MIN_FREE_BYTES}"
+          echo "work stock at the fill ${open_at_fill}, failures nextcloud had recorded ${failed_at_fill}"
+          if [ "${free_after}" -ge "${MIN_FREE_BYTES}" ]; then
+            echo "::error::the volume still holds ${free_after} bytes, which is at or above the floor, so the container sees no shortage"
+            exit 1
+          fi
+          {
+            echo "FREE_BEFORE=${free_before}"
+            echo "FREE_TIGHT=${free_after}"
+            echo "OPEN_AT_FILL=${open_at_fill}"
+            echo "FAILED_AT_FILL=${failed_at_fill}"
+            echo "PAUSED_LINES_BEFORE=${paused_before}"
+          } >> "${GITHUB_ENV}"
+
+      # Finding one and finding two, and they are two different sentences. One:
+      # the second track stops writing while the floor is undercut. Two: it does
+      # not pay for that with the work stock, which is the regression DI-05-23
+      # was, where a shortage of twenty seconds turned every row in flight into
+      # failed(repeatedly_stuck).
+      #
+      # The counted log line is a liveness witness and nothing else. A counter
+      # that stands still cannot on its own tell a poller that refused from a
+      # poller that was asleep, so the line says that an attempt happened; what
+      # the attempt did is then read out of the two databases. Both branches that
+      # pause write the same sentence, so it does not name which of them fired,
+      # and it is not asked to: in this window the work stock holds nothing but
+      # the trailing track and the unchanged files the crawl keeps handing it.
+      - name: The second track pauses, and no work is written off
+        run: |
+          open_rows() {
+            ./occ findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+          failed_rows() {
+            ./occ findling:index | awk '$1 == "failed" { total += $2 } END { print total + 0 }'
+          }
+
+          echo "letting the pass that was in flight end, ${SETTLE_SECONDS} seconds"
+          sleep "${SETTLE_SECONDS}"
+          frozen=$(python3 "${{ runner.temp }}/vector_count.py" "${VOLUME_DIR}/vectors.db")
+          echo "the vector stock stands at ${frozen} documents with the volume under its floor"
+
+          lowest_open=$(open_rows)
+          deadline=$(( $(date +%s) + SHORTAGE_SECONDS ))
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            sleep 15
+            carrying=$(python3 "${{ runner.temp }}/vector_count.py" "${VOLUME_DIR}/vectors.db")
+            open=$(open_rows)
+            free_now=$(python3 "${{ runner.temp }}/free_bytes.py" "${VOLUME_DIR}")
+            echo "under the floor: vectors=${carrying} open=${open} free=${free_now}"
+            if [ "${open}" -lt "${lowest_open}" ]; then
+              lowest_open="${open}"
+            fi
+            if [ "${carrying}" -ne "${frozen}" ]; then
+              echo "::error::the second track wrote vectors below the floor: ${carrying} documents against the ${frozen} it stood at"
+              exit 1
+            fi
+          done
+
+          paused_now=$(grep -c 'index paused, free space below the floor' "${{ runner.temp }}/exapp.log" || true)
+          failed_now=$(failed_rows)
+          echo "paused passes in the log before the fill ${PAUSED_LINES_BEFORE}, now ${paused_now}"
+          echo "work stock at the fill ${OPEN_AT_FILL}, lowest seen under the floor ${lowest_open}"
+          echo "failures nextcloud recorded at the fill ${FAILED_AT_FILL}, now ${failed_now}"
+
+          if [ "${paused_now}" -le "${PAUSED_LINES_BEFORE}" ]; then
+            echo "::error::not one pass paused in ${SHORTAGE_SECONDS} seconds under the floor, so the counter that stood still says nothing"
+            tail -n 100 "${{ runner.temp }}/exapp.log" || true
+            exit 1
+          fi
+          if [ "${lowest_open}" -le 0 ]; then
+            echo "::error::the work stock ran to zero under the floor, so the shortage cost work instead of time (DI-05-23)"
+            ./occ findling:index || true
+            exit 1
+          fi
+          if [ "${failed_now}" -ne "${FAILED_AT_FILL}" ]; then
+            echo "::error::rows ended as failures under the floor: ${failed_now} against the ${FAILED_AT_FILL} of the fill, which is the DI-05-23 signature"
+            ./occ findling:index || true
+            exit 1
+          fi
+          echo "FROZEN_VECTORS=${frozen}" >> "${GITHUB_ENV}"
+
+      # Finding three, and it is the one that separates a pause from a quiet
+      # loss. A track that stopped and never came back would have satisfied both
+      # findings above.
+      - name: Freeing the space brings the second track back
+        run: |
+          rm -f "${VOLUME_DIR}/ballast.bin"
+          free_again=$(python3 "${{ runner.temp }}/free_bytes.py" "${VOLUME_DIR}")
+          echo "free before the fill ${FREE_BEFORE}, under the floor ${FREE_TIGHT}, after the ballast went ${free_again}"
+          if [ "${free_again}" -lt "${MIN_FREE_BYTES}" ]; then
+            echo "::error::the volume is still under its floor after the ballast was removed"
+            exit 1
+          fi
+
+          deadline=$(( $(date +%s) + RESUME_TIMEOUT ))
+          while :; do
+            carrying=$(python3 "${{ runner.temp }}/vector_count.py" "${VOLUME_DIR}/vectors.db")
+            echo "waiting for the return: vectors=${carrying}, frozen at ${FROZEN_VECTORS}"
+            if [ "${carrying}" -gt "${FROZEN_VECTORS}" ]; then
+              echo "the second track came back: ${FROZEN_VECTORS} documents carried a vector under the floor, ${carrying} carry one now"
+              exit 0
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "::error::the second track did not write a single vector in ${RESUME_TIMEOUT} seconds after the space came back"
+              echo "That is a finding about the return out of the pause and not a deadline to raise: the poller"
+              echo "backs off to at most POLL_COOLDOWN_MAX_SECONDS, which is 120."
+              ./occ findling:index || true
+              tail -n 100 "${{ runner.temp }}/exapp.log" || true
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Everything the failure had to say
+        if: failure()
+        run: |
+          echo "--- the volume ---"
+          df -B1 "${VOLUME_DIR}" || true
+          findmnt --target "${VOLUME_DIR}" || true
+          ls -l "${VOLUME_DIR}" || true
+          echo "--- counters ---"
+          ( cd findling-src/backend && uv run python -m findling.tools.index_status \
+            --db "${VOLUME_DIR}/state.db" ) || true
+          ./occ findling:index || true
+          echo "--- crawl worker ---"
+          tail -n 100 "${{ runner.temp }}/crawl.log" || echo "no crawl log written"
+          echo "--- exapp ---"
+          tail -n 200 "${{ runner.temp }}/exapp.log" || echo "no exapp log written"
+          echo "--- nextcloud ---"
+          tail -n 100 data/nextcloud.log || echo "no data/nextcloud.log written"
+
+      # Always, and in this order. A failed run that left a mounted loop image
+      # behind hands the next job on this runner a volume of nine hundred
+      # megabytes that nobody put there.
+      - name: Take the volume down again
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/exapp.pid" ]; then
+            kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+          fi
+          sync || true
+          sudo umount "${{ runner.temp }}/findling" 2>/dev/null || true
+          # umount detaches the loop device it set up itself. This sweep is for
+          # the case where it never got that far, because a loop device that
+          # still holds a deleted image is invisible in every listing an operator
+          # thinks to look at.
+          sudo losetup -j "${{ runner.temp }}/findling-volume.img" 2>/dev/null \
+            | cut -d: -f1 \
+            | while read -r device; do sudo losetup -d "${device}" || true; done
+          rm -f "${{ runner.temp }}/findling-volume.img"
+          if findmnt --target "${{ runner.temp }}/findling" --noheadings 2>/dev/null | grep -q loop; then
+            echo "a loop mount of this job is still standing on this runner"
+            findmnt --target "${{ runner.temp }}/findling"
+            exit 1
+          fi
+          echo "no loop image of this job is left on the runner"
+
   # The two operating figures of this phase that were estimates until now: what a
   # search costs while the indexer writes on a slow disk, and what the German
   # language quality costs in resident memory. Both decide default values before
