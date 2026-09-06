@@ -71,6 +71,17 @@ _INVISIBLE_TAGS = ("{*}script", "{*}style")
 _REPLACEMENT_CHARACTER = "�"
 _MAX_REPLACEMENT_SHARE = 0.05
 
+# The byte order mark, as the character it becomes once the bytes are decoded.
+# Public because the test that pins it reads it from here: a mark spelled out a
+# second time in the test would be a second place to get it wrong.
+#
+# It is an announcement about the encoding and never a character of the document.
+# Left in place it is a zero width character glued to the first word, so the
+# first word of the file is only findable under a term nobody can type. Removed
+# in _decode, which is the one place bytes become text, rather than at each of
+# the three callers below.
+BYTE_ORDER_MARK = "﻿"
+
 # Hard ceiling on the RTF bytes handed to striprtf (security audit H1). Its
 # HYPERLINK regex backtracks quadratically, and INDEX_WORKERS is 1, so a crafted
 # file under a megabyte burns the full extraction deadline of the single indexer
@@ -84,6 +95,24 @@ _MAX_RTF_BYTES = 256 * 1024
 # intact document sits at 1.0.
 _MIN_PRINTABLE_SHARE = 0.90
 
+# Below this share of printable characters a decoded byte string is not a text in
+# any encoding. Its own threshold and deliberately far below the RTF one above,
+# because the two answer different questions: this one only has to catch the file
+# that is no text at all, while the RTF check judges the output of a parser that
+# never raises and therefore has to be strict.
+#
+# It exists for the file that decodes without a single replacement character and
+# is still not text. A run of nul bytes is the measured case: every codec accepts
+# it, so the replacement share says nothing, and cap_text does not catch it
+# either because str.strip() removes whitespace and nul is not whitespace. The
+# result was an index entry made of control characters.
+#
+# Measured: nul bytes give 0.00, the deliberately broken RTF of the tests gives
+# 0.77, every document of the reference corpus gives 1.00. The threshold sits
+# between the first two with room on both sides, so a byte pattern that is nearly
+# text still goes to the caller and is judged there.
+_MIN_DECODED_PRINTABLE_SHARE = 0.50
+
 
 def _decode(raw: bytes) -> str | None:
     """Turn bytes into text, or say that it cannot be done.
@@ -92,14 +121,38 @@ def _decode(raw: bytes) -> str | None:
     cp1252 and latin-1, which is what German legacy files are written in. When it
     has no answer, UTF-8 with replacement characters is the fallback, and when
     that fallback is mostly replacement characters the honest answer is None.
+
+    Two rules run over both routes, and both are here rather than at the three
+    callers because this is the one place where bytes become text.
+
+    The byte order mark is removed. charset-normalizer strips it today on every
+    input measured, but the fallback route below does not, and a guarantee that
+    rests on the behaviour of a library version is not a guarantee.
+
+    A decoding that is not printable is refused. The replacement share only
+    catches bytes that no codec accepted; a file of nul bytes is accepted by every
+    codec and is still not a text.
     """
     if not raw:
         return ""
     best = from_bytes(raw).best()
     if best is not None:
-        return str(best)
+        return _accept(str(best))
     text = raw.decode("utf-8", errors="replace")
     if not text or text.count(_REPLACEMENT_CHARACTER) / len(text) > _MAX_REPLACEMENT_SHARE:
+        return None
+    return _accept(text)
+
+
+def _accept(text: str) -> str | None:
+    """Strip the byte order mark and refuse a decoding that is not text.
+
+    Only a leading mark is removed. The same character further inside a document
+    is a zero width no break space, which is a character of the text and not an
+    announcement about its encoding, and removing it would edit the document.
+    """
+    text = text.removeprefix(BYTE_ORDER_MARK)
+    if text and _printable_share(text) < _MIN_DECODED_PRINTABLE_SHARE:
         return None
     return text
 
