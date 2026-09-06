@@ -1230,6 +1230,10 @@ jobs:
           # Stage, sign, pack, in that order and for the same reason release.yml
           # keeps it: the code signature has to be inside the tarball.
           rm -rf "${RUNNER_TEMP}/store-php" "${RUNNER_TEMP}/store-backend" "${RUNNER_TEMP}/store-dist"
+          # setup-test-nc moved php/ into apps/findling earlier, so the checkout
+          # no longer carries it. The archive has to come from the committed
+          # state anyway, so restore a pristine copy from git before staging.
+          ( cd findling-src && git restore --source=HEAD -- php )
           ( cd findling-src && sh scripts/release/store-archive.sh stage-companion "${RUNNER_TEMP}/store-php" )
           ( cd findling-src && sh scripts/release/store-archive.sh stage-backend "${RUNNER_TEMP}/store-backend" )
 
