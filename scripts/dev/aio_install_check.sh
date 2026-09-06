@@ -89,6 +89,16 @@ KEEP_INSTALLATION=0
 TAMPER_PROBE=1
 DB_TABLES_CMD=""
 
+# The upper bound of a single occ call. app_api:app:register --wait-finish waits
+# for the container to report that its initialisation finished, and when that
+# report cannot reach Nextcloud it waits for ever: measured on 06.09.2026, where
+# a healthy container ran while the registration never returned. A run that
+# hangs teaches nobody anything, so every occ call carries a limit and an
+# overrun is a finding. The value covers an image pull of about a gigabyte plus
+# the initialisation behind it.
+OCC_TIMEOUT=1800
+TIMEOUT_CMD=""
+
 # The invented search word, and it is invented on purpose. The German analyzer
 # splits compounds against a dictionary, so a real compound can be indexed as
 # its parts and a miss would say nothing about the index. deploy-harp.yml uses
@@ -146,6 +156,7 @@ Options:
                         instance, one per line. Without it the table half of
                         uninstall promises 4 and 5 is reported as not performed
                         rather than silently passed.
+  --occ-timeout SEC     upper bound of a single occ call (default: 1800)
   --rmi-local-image     delete a local copy of the image after the anonymous
                         pull so the deploy daemon has to fetch it itself
   --no-tamper-probe     skip the falsification of the integrity check
@@ -179,6 +190,7 @@ while [ "$#" -gt 0 ]; do
 		--cron-interval) CRON_INTERVAL_SECONDS="$2"; shift 2 ;;
 		--cron-rounds) ZERO_CONFIG_CRON_ROUNDS="$2"; shift 2 ;;
 		--db-tables-cmd) DB_TABLES_CMD="$2"; shift 2 ;;
+		--occ-timeout) OCC_TIMEOUT="$2"; shift 2 ;;
 		--rmi-local-image) RMI_LOCAL_IMAGE=1; shift ;;
 		--no-tamper-probe) TAMPER_PROBE=0; shift ;;
 		--keep) KEEP_INSTALLATION=1; shift ;;
@@ -241,14 +253,32 @@ die() {
 inst() { $EXEC_PREFIX "$@"; }
 occ() {
 	printf 'occ %s\n' "$*" >> "${OCC_LOG}"
-	$EXEC_PREFIX php occ "$@"
+	if [ -n "${TIMEOUT_CMD}" ]; then
+		"${TIMEOUT_CMD}" "${OCC_TIMEOUT}" $EXEC_PREFIX php occ "$@"
+	else
+		$EXEC_PREFIX php occ "$@"
+	fi
 }
 
-# A number out of a JSON answer, by a narrow pattern and not by a parser. The
-# keys this script reads are integers, so anything that is not a run of digits
-# is not an answer and the caller sees an empty string.
+# A number out of a piece of JSON, by a narrow pattern and not by a parser.
+#
+# Two rules learned the hard way on 06.09.2026, when a first version of this
+# read "indexed 41 of 0 indexable" out of a healthy answer. First, the search is
+# done with grep -o and the first match is taken: a sed pattern that begins with
+# .* is greedy and silently reports the LAST occurrence of a key, and this
+# answer carries indexed twice, once for this side and once inside coverage.
+# Second, the caller narrows the text to the object it means before it asks for
+# a key, which is what json_object below is for. A number may carry a decimal
+# point, because the coverage share is a share and not a count.
 json_number() {
-	sed -n 's/.*"'"$1"'":\([0-9][0-9]*\).*/\1/p' "$2" | head -1
+	printf '%s' "$2" | grep -o "\"$1\":[0-9][0-9.]*" | head -1 | sed -e 's/.*://' -e 's/\.$//'
+}
+# The body of a named object of a JSON answer, whitespace removed. Only the
+# first level of it: the objects this script reads carry numbers and flags and
+# no nested object, and a pattern that tried to balance braces would be a parser
+# written in sed.
+json_object() {
+	tr -d ' \n\r' < "$2" | sed -n 's/.*"'"$1"'":{\([^}]*\)}.*/\1/p'
 }
 
 # ---------------------------------------------------------------------------
@@ -299,6 +329,12 @@ log "deploy daemon ${DAEMON_NAME}"
 for tool in curl docker tar; do
 	command -v "${tool}" >/dev/null 2>&1 || die "${tool} is not on the path, and this script needs it"
 done
+TIMEOUT_CMD=$(command -v timeout 2>/dev/null || true)
+if [ -n "${TIMEOUT_CMD}" ]; then
+	log "every occ call is limited to ${OCC_TIMEOUT}s"
+else
+	finding "no timeout command on this host, so an occ call that never returns would hang this run"
+fi
 [ -f "${COMPANION_ARCHIVE}" ] || die "the companion archive ${COMPANION_ARCHIVE} does not exist"
 [ -f "${BACKEND_ARCHIVE}" ] || die "the backend archive ${BACKEND_ARCHIVE} does not exist"
 
@@ -415,8 +451,17 @@ else
 		"${ARCHIVE_INFO}" > "${STORE_INFO_LOCAL}"
 	# Exactly one line differs, and it is shown rather than described. The
 	# routes block above all comes out of the archive unchanged.
-	diff "${ARCHIVE_INFO}" "${STORE_INFO_LOCAL}" >> "${LOG_FILE}" 2>&1 || true
-	changed=$(diff "${ARCHIVE_INFO}" "${STORE_INFO_LOCAL}" | grep -c '^[<>]' || true)
+	#
+	# Both sides are compared without their carriage returns, and that is not
+	# cosmetic: an archive built on a checkout with CRLF line endings is read
+	# by sed here and written back with the line endings the tool of that host
+	# produces, and a comparison that counts those as differences reports the
+	# whole file instead of the one line. The substitution itself works on the
+	# original bytes; only this count is normalised.
+	tr -d '\r' < "${ARCHIVE_INFO}" > "${WORK_DIR}/info-archive.cmp"
+	tr -d '\r' < "${STORE_INFO_LOCAL}" > "${WORK_DIR}/info-store.cmp"
+	diff "${WORK_DIR}/info-archive.cmp" "${WORK_DIR}/info-store.cmp" >> "${LOG_FILE}" 2>&1 || true
+	changed=$(diff "${WORK_DIR}/info-archive.cmp" "${WORK_DIR}/info-store.cmp" | grep -c '^[<>]' || true)
 	[ "${changed}" -eq 2 ] || die "the substitution changed ${changed} lines instead of the one image-tag line"
 	log "the substitution changed exactly the image-tag line"
 fi
@@ -587,17 +632,27 @@ esac
 # The coverage of the admin page. Basic authentication first, because that is
 # one request; a session login only if the instance refuses it, because the
 # route is a frontpage route and demands the request token of a session.
+#
+# The session is built lazily and not in advance, and that is not a detail of
+# style: an attempt that runs before anybody needs it reports a failure into the
+# protocol on every instance that answers basic authentication perfectly well,
+# and a finding that means nothing is worse than no finding at all.
 COVERAGE_TOKEN=""
+COVERAGE_SESSION_TRIED=0
 COVERAGE_COOKIES="${WORK_DIR}/cookies.txt"
 admin_session() {
 	rm -f "${COVERAGE_COOKIES}"
 	token=$(curl -s -c "${COVERAGE_COOKIES}" "${INSTANCE_URL}/login" \
 		| sed -n 's/.*data-requesttoken="\([^"]*\)".*/\1/p' | head -1)
 	[ -n "${token}" ] || return 1
-	curl -s -o /dev/null -b "${COVERAGE_COOKIES}" -c "${COVERAGE_COOKIES}" \
-		-d "user=${ADMIN_CREDENTIALS%%:*}" \
-		-d "password=${ADMIN_CREDENTIALS#*:}" \
-		-d "requesttoken=${token}" "${INSTANCE_URL}/login" || return 1
+	# --data-urlencode and not -d, and that is the whole difference between a
+	# session and a redirect back to the login page: a request token carries +
+	# and / and =, and a plain -d sends the + as a space, which the CSRF check
+	# refuses. Measured on 06.09.2026.
+	curl -s -o /dev/null -L -b "${COVERAGE_COOKIES}" -c "${COVERAGE_COOKIES}" \
+		--data-urlencode "user=${ADMIN_CREDENTIALS%%:*}" \
+		--data-urlencode "password=${ADMIN_CREDENTIALS#*:}" \
+		--data-urlencode "requesttoken=${token}" "${INSTANCE_URL}/login" || return 1
 	COVERAGE_TOKEN=$(curl -s -b "${COVERAGE_COOKIES}" -c "${COVERAGE_COOKIES}" \
 		"${INSTANCE_URL}/settings/admin" \
 		| sed -n 's/.*data-requesttoken="\([^"]*\)".*/\1/p' | head -1)
@@ -608,6 +663,14 @@ coverage_line() {
 	code=$(curl -s -o "${out}" -w '%{http_code}' -u "${ADMIN_CREDENTIALS}" \
 		-H 'OCS-APIRequest: true' -H 'Accept: application/json' \
 		"${INSTANCE_URL}/apps/findling/admin/overview" || true)
+	if [ "${code}" != "200" ] && [ "${COVERAGE_SESSION_TRIED}" -eq 0 ]; then
+		COVERAGE_SESSION_TRIED=1
+		if admin_session; then
+			log "basic authentication was refused for the admin page, an administrator session was established instead"
+		else
+			finding "the admin page answered HTTP ${code} to basic authentication and no administrator session could be established either, so the coverage stays unread"
+		fi
+	fi
 	if [ "${code}" != "200" ] && [ -n "${COVERAGE_TOKEN}" ]; then
 		code=$(curl -s -o "${out}" -w '%{http_code}' -b "${COVERAGE_COOKIES}" \
 			-H "requesttoken: ${COVERAGE_TOKEN}" -H 'Accept: application/json' \
@@ -617,14 +680,28 @@ coverage_line() {
 		echo "coverage unreadable, HTTP ${code}"
 		return 0
 	fi
-	printf 'coverage %s per cent, indexed %s of %s indexable\n' \
-		"$(json_number percent "${out}")" \
-		"$(json_number indexed "${out}")" \
-		"$(json_number indexable "${out}")"
+	# The coverage object and not the whole answer: the answer carries indexed
+	# twice, and the one that belongs to this figure is the one inside coverage.
+	cov=$(json_object coverage "${out}")
+	if [ -z "${cov}" ]; then
+		echo "the answer carries no coverage object"
+		return 0
+	fi
+	# An absent number is printed as unknown rather than as an empty gap: the
+	# share is null while nothing is indexable yet, and a protocol that shows a
+	# blank there reads like a defect of the reader.
+	percent=$(json_number percent "${cov}")
+	[ -n "${percent}" ] || percent="unknown"
+	printf 'coverage %s per cent, indexed %s of %s indexable, %s embedded\n' \
+		"${percent}" \
+		"$(json_number indexed "${cov}")" \
+		"$(json_number indexable "${cov}")" \
+		"$(json_number embedded "${cov}")"
 }
-if ! admin_session; then
-	finding "no administrator session could be established, so the coverage is read with basic authentication only"
-fi
+# The first point of the series, before a single background job has run. Without
+# it the protocol shows a figure and not a movement, and the promise of this
+# step is that the figure rises without anybody doing anything.
+log "round 0, before the first cron round: $(coverage_line)"
 
 FOUND=""
 ROUNDS=0
@@ -668,6 +745,7 @@ cat "${WORK_DIR}/search.json" >> "${LOG_FILE}"
 grep -q "${ZERO_CONFIG_FILE}" "${WORK_DIR}/search.json" \
 	|| die "the search answered with a hit that does not name ${ZERO_CONFIG_FILE}, so it found something else"
 log "content hit after ${ROUNDS} cron rounds, ${FIRST_HIT_SECONDS}s of wall clock, which is $(( ROUNDS * CRON_INTERVAL_SECONDS ))s of system cron time"
+log "at the hit: $(coverage_line)"
 
 tail -n +$(( OCC_MARKER + 1 )) "${OCC_LOG}" > "${WORK_DIR}/occ-since-install.txt"
 log "occ calls between the installation and the hit:"
@@ -699,7 +777,13 @@ settings_of_instance() {
 	# config:list reads oc_appconfig and answers for an app that is no longer
 	# installed as well, which is the case this has to survive: after the remove
 	# the app is gone and the question is whether its settings are.
-	occ config:list findling 2>/dev/null | grep -c '" *:' || true
+	#
+	# Only lines that carry a value are counted, and that is not pedantry: the
+	# answer wraps every value in two lines of structure, "apps": { and
+	# "findling": [, and a count that takes them along reports two settings for
+	# an app whose settings are all gone. Measured on 06.09.2026, where exactly
+	# that turned a clean uninstall into a false finding.
+	occ config:list findling 2>/dev/null | grep -cE '^[[:space:]]+"[^"]+": ("|[0-9-])' || true
 }
 
 step_begin "5 uninstall promise 1, an unregister without the flag keeps the volume"
