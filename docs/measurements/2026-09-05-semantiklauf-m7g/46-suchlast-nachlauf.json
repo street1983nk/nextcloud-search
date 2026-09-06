@@ -1,0 +1,349 @@
+{
+ "start": "2026-09-06T05:15:08Z",
+ "vorher": {
+  "anon": 1474768896,
+  "file": 362561536,
+  "slab": 10218840,
+  "memory.current": 1852633088,
+  "memory.peak": 2147741696
+ },
+ "proben": [
+  {
+   "http": "200",
+   "ms": 2065,
+   "name": "File contents",
+   "treffer": 0,
+   "erster": null,
+   "begriff": "Vertrag+beenden",
+   "runde": 0,
+   "at": "2026-09-06T05:15:11Z"
+  },
+  {
+   "http": "200",
+   "ms": 1129,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "11604-aktenvermerk.pdf",
+   "begriff": "Kuendigung",
+   "runde": 0,
+   "at": "2026-09-06T05:15:12Z"
+  },
+  {
+   "http": "200",
+   "ms": 932,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "34026-mitteilung.xlsx",
+   "begriff": "Widerspruch+einlegen",
+   "runde": 0,
+   "at": "2026-09-06T05:15:13Z"
+  },
+  {
+   "http": "200",
+   "ms": 833,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "30053-bescheid.pdf",
+   "begriff": "Bescheid",
+   "runde": 0,
+   "at": "2026-09-06T05:15:14Z"
+  },
+  {
+   "http": "200",
+   "ms": 739,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "44719-vorlage.ods",
+   "begriff": "Rechnung+bezahlen",
+   "runde": 0,
+   "at": "2026-09-06T05:15:14Z"
+  },
+  {
+   "http": "200",
+   "ms": 836,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "47668-gutachten.txt",
+   "begriff": "Mahnung",
+   "runde": 0,
+   "at": "2026-09-06T05:15:15Z"
+  },
+  {
+   "http": "200",
+   "ms": 672,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "44672-niederschrift.ods",
+   "begriff": "Termin+absagen",
+   "runde": 0,
+   "at": "2026-09-06T05:15:16Z"
+  },
+  {
+   "http": "200",
+   "ms": 724,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "25228-mitteilung.pdf",
+   "begriff": "Mitteilung",
+   "runde": 0,
+   "at": "2026-09-06T05:15:17Z"
+  },
+  {
+   "http": "200",
+   "ms": 671,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "35471-stellungnahme.xlsx",
+   "begriff": "Antrag+stellen",
+   "runde": 0,
+   "at": "2026-09-06T05:15:17Z"
+  },
+  {
+   "http": "200",
+   "ms": 764,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "14036-beschluss.pdf",
+   "begriff": "Beschluss",
+   "runde": 0,
+   "at": "2026-09-06T05:15:18Z"
+  },
+  {
+   "http": "200",
+   "ms": 726,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "38858-beschluss.xlsx",
+   "begriff": "Vertrag+beenden",
+   "runde": 1,
+   "at": "2026-09-06T05:15:19Z"
+  },
+  {
+   "http": "200",
+   "ms": 732,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "11604-aktenvermerk.pdf",
+   "begriff": "Kuendigung",
+   "runde": 1,
+   "at": "2026-09-06T05:15:20Z"
+  },
+  {
+   "http": "200",
+   "ms": 776,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "34026-mitteilung.xlsx",
+   "begriff": "Widerspruch+einlegen",
+   "runde": 1,
+   "at": "2026-09-06T05:15:20Z"
+  },
+  {
+   "http": "200",
+   "ms": 828,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "30053-bescheid.pdf",
+   "begriff": "Bescheid",
+   "runde": 1,
+   "at": "2026-09-06T05:15:21Z"
+  },
+  {
+   "http": "200",
+   "ms": 782,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "44719-vorlage.ods",
+   "begriff": "Rechnung+bezahlen",
+   "runde": 1,
+   "at": "2026-09-06T05:15:22Z"
+  },
+  {
+   "http": "200",
+   "ms": 701,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "47668-gutachten.txt",
+   "begriff": "Mahnung",
+   "runde": 1,
+   "at": "2026-09-06T05:15:23Z"
+  },
+  {
+   "http": "200",
+   "ms": 697,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "44672-niederschrift.ods",
+   "begriff": "Termin+absagen",
+   "runde": 1,
+   "at": "2026-09-06T05:15:23Z"
+  },
+  {
+   "http": "200",
+   "ms": 767,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "25228-mitteilung.pdf",
+   "begriff": "Mitteilung",
+   "runde": 1,
+   "at": "2026-09-06T05:15:24Z"
+  },
+  {
+   "http": "200",
+   "ms": 670,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "35471-stellungnahme.xlsx",
+   "begriff": "Antrag+stellen",
+   "runde": 1,
+   "at": "2026-09-06T05:15:25Z"
+  },
+  {
+   "http": "200",
+   "ms": 668,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "14036-beschluss.pdf",
+   "begriff": "Beschluss",
+   "runde": 1,
+   "at": "2026-09-06T05:15:26Z"
+  },
+  {
+   "http": "200",
+   "ms": 786,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "38858-beschluss.xlsx",
+   "begriff": "Vertrag+beenden",
+   "runde": 2,
+   "at": "2026-09-06T05:15:26Z"
+  },
+  {
+   "http": "200",
+   "ms": 742,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "11604-aktenvermerk.pdf",
+   "begriff": "Kuendigung",
+   "runde": 2,
+   "at": "2026-09-06T05:15:27Z"
+  },
+  {
+   "http": "200",
+   "ms": 600,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "34026-mitteilung.xlsx",
+   "begriff": "Widerspruch+einlegen",
+   "runde": 2,
+   "at": "2026-09-06T05:15:28Z"
+  },
+  {
+   "http": "200",
+   "ms": 682,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "30053-bescheid.pdf",
+   "begriff": "Bescheid",
+   "runde": 2,
+   "at": "2026-09-06T05:15:28Z"
+  },
+  {
+   "http": "200",
+   "ms": 626,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "44719-vorlage.ods",
+   "begriff": "Rechnung+bezahlen",
+   "runde": 2,
+   "at": "2026-09-06T05:15:29Z"
+  },
+  {
+   "http": "200",
+   "ms": 740,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "47668-gutachten.txt",
+   "begriff": "Mahnung",
+   "runde": 2,
+   "at": "2026-09-06T05:15:30Z"
+  },
+  {
+   "http": "200",
+   "ms": 697,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "44672-niederschrift.ods",
+   "begriff": "Termin+absagen",
+   "runde": 2,
+   "at": "2026-09-06T05:15:31Z"
+  },
+  {
+   "http": "200",
+   "ms": 741,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "25228-mitteilung.pdf",
+   "begriff": "Mitteilung",
+   "runde": 2,
+   "at": "2026-09-06T05:15:31Z"
+  },
+  {
+   "http": "200",
+   "ms": 683,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "35471-stellungnahme.xlsx",
+   "begriff": "Antrag+stellen",
+   "runde": 2,
+   "at": "2026-09-06T05:15:32Z"
+  },
+  {
+   "http": "200",
+   "ms": 628,
+   "name": "File contents",
+   "treffer": 5,
+   "erster": "14036-beschluss.pdf",
+   "begriff": "Beschluss",
+   "runde": 2,
+   "at": "2026-09-06T05:15:33Z"
+  }
+ ],
+ "waehrend": [
+  {
+   "anon": 1808072704,
+   "file": 323588096,
+   "slab": 9652584,
+   "memory.current": 2147479552,
+   "memory.peak": 2147741696
+  },
+  {
+   "anon": 1813852160,
+   "file": 318029824,
+   "slab": 9655680,
+   "memory.current": 2147475456,
+   "memory.peak": 2147741696
+  },
+  {
+   "anon": 1811501056,
+   "file": 313323520,
+   "slab": 9658600,
+   "memory.current": 2140418048,
+   "memory.peak": 2147741696
+  }
+ ],
+ "nachher": {
+  "anon": 1811501056,
+  "file": 313323520,
+  "slab": 9658600,
+  "memory.current": 2140418048,
+  "memory.peak": 2147741696
+ },
+ "ende": "2026-09-06T05:15:33Z",
+ "anzahl": 30,
+ "p50_ms": 735.5,
+ "p95_ms": 1129.0,
+ "max_ms": 2065.0,
+ "budget_ms": 2500,
+ "haelt": true
+}

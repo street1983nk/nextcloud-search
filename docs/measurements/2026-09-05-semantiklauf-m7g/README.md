@@ -1,7 +1,8 @@
 # Der Volllauf mit Semantik auf der 4-GB-ARM-Box
 
-**Stand: der Lauf laeuft.** Dieser Bericht wird waehrend des Laufs geschrieben
-und nach seinem Ende vervollstaendigt. Was hier steht, ist gemessen; was fehlt,
+**Stand: der Lauf ist durch, Ende erkannt am 06.09. um 06:15:09Z, Bericht
+vollstaendig bis auf den Endungsvergleich, siehe unten.** Er wurde waehrend des
+Laufs begonnen und nach seinem Ende aus den Rohdaten vervollstaendigt. Was hier steht, ist gemessen; was fehlt,
 ist als fehlend benannt und nicht durch eine Hochrechnung ersetzt.
 
 Messreihe zu Plan 06-11, Erfolgskriterium 5 der Phase 6. Der Vergleichslauf ohne
@@ -216,31 +217,165 @@ die OCR-Spitze entsteht.
 
 Rohdaten: [`49-modellgrundlast.txt`](49-modellgrundlast.txt).
 
-## Was noch fehlt
+## Das Ergebnis, aus den Rohdaten nach dem Lauf
 
-Diese Abschnitte werden nach dem Ende des Laufs gefuellt, aus den Rohdaten, die
-die Beobachter gerade schreiben:
+### Beide Spuren sind durch, ohne OOM und ohne Neustart
 
-- **anon-Spitze ueber den ganzen Lauf**, dazu getrennt die Spitze der OCR-Phase
-  und die der Embedding-Phase. Die Trennung ist der Beleg fuer IDX-08.
-- **`memory.events`, alle Zaehler**, nach dem Lauf und vor jedem Eingriff.
-- **Dauer je Spur**, aus dem Zeitstempelverlauf des Statusbeobachters: Volltext
-  und OCR bis zum letzten Verdikt, Einbettung bis zum letzten Vektor.
-- **Byte je Dokument, gemessen**, gegen die in Plan 06-04 gerechnete Zahl.
-- **`memory.current` gegen `anon` waehrend einer Suchlast**, damit der
-  Dateicache-Posten mit beiden Zahlen dasteht und nicht mit der guenstigeren.
-- **p95 einer Nutzersuche waehrend des Nachlaufs**, gegen 2,5 Sekunden.
-- **Verdikte gegen die Verteilung des Generators**, Endung fuer Endung.
+| Ereignis (UTC) | Zeitpunkt | Quelle |
+|---|---|---|
+| Anstoss | 05.09. 10:47:54Z | `00-start.txt` |
+| erster Vektor | vor 10:59:49Z (32 eingebettet) | `statusseite.jsonl` |
+| erste Spur fertig (51.961 indexiert) | 06.09. zwischen 04:50:57Z und 04:52:58Z | `statusseite.jsonl` |
+| zweite Spur fertig (51.961 eingebettet) | 06.09. zwischen 05:43:10Z und 05:45:10Z | `statusseite.jsonl` |
+| Ende erkannt, Abschluss gestartet | 06.09. 06:15:09Z | `00-ende.txt` |
+| Weckdatei geschrieben, ntfy http=200 | 06.09. 06:20:32Z | `00-FERTIG`, `99-ntfy-watch.log` |
 
-### Eine Einschraenkung, die vorab benannt gehoert
+| Dauer | Wert | Vergleich 05-21 (ohne Semantik) |
+|---|---|---|
+| erste Spur, Volltext und OCR, mit Einbettung nebenher | **18 h 04 min** (auf 2 min genau) | 12 h 49 min |
+| beide Spuren bis zum letzten Vektor | **18 h 56 min** | |
+| Einbettung neben der OCR | rund 43 Dokumente je Minute | |
+| Einbettung allein, nach dem Ende der ersten Spur | rund 170 Dokumente je Minute | |
 
-`memory.peak` der cgroup liess sich auf diesem Kernel nicht zuruecksetzen
-(`echo 0 > memory.peak` bleibt wirkungslos). Der Wert traegt deshalb die
-Vorbereitungsmessungen dieses Berichts mit, insbesondere den Diagnoseprozess,
-der die Gewichte geladen hat: vor dem Anstoss des Laufs stand er bereits bei
-2.043.817.984 Byte. **Die tragende Zahl dieses Berichts ist `anon` aus der
-Messreihe des Samplers**, wie in 05-21, und nicht `memory.peak`. Wo `peak`
-vorkommt, steht diese Einschraenkung daneben.
+Die erste Spur ist mit der Semantik nebenher um 5 h 15 min laenger geworden,
+das sind 41 Prozent, weil `INDEX_WORKERS=1` beide Spuren durch denselben
+Arbeiter zieht und jede `embed`-Zeile OCR-Zeit kostet. Der Nachlauf der zweiten
+Spur nach der ersten war mit 52 Minuten kurz, weil sie den groessten Teil der
+Arbeit schon parallel erledigt hatte.
+
+### memory.events und die Spitzen, vor jedem Eingriff erhoben
+
+`07-oom-beweis.txt`, geschrieben 06:15:32Z vom Waechter, bevor irgendetwas
+angefasst wurde:
+
+| Zaehler | Wert |
+|---|---|
+| low, high | 0, 0 |
+| **max** | **2796** |
+| oom, oom_kill, oom_group_kill | **0, 0, 0** |
+| sock_throttled | 3044 |
+| OOMKilled, RestartCount | false, 0; `StartedAt` unveraendert 05.09. 10:44:39Z |
+| memory.max / memory.peak / memory.current am Ende | 2.147.483.648 / 2.147.741.696 (Vorbehalt oben) / 2.030.563.328 |
+
+Die Reihe des Samplers (`semantiklauf.csv`, 13.983 Aufnahmen im Abstand von
+5 s), geteilt an der Grenze der ersten Spur (04:52Z):
+
+| Groesse | ganzer Lauf | Phase A: Volltext, OCR, Einbettung nebenher | Phase B: nur Einbettung (ab 04:52Z) |
+|---|---|---|---|
+| Aufnahmen | 13.981 | 12.994 | 987 |
+| **anon-Spitze** | **1.837,8 MB** um 05:34:05Z | 1.562,7 MB um 01:49:29Z | **1.837,8 MB** um 05:34:05Z |
+| memory.current-Spitze | 2.048,0 MB um 05:15:11Z | 2.047,9 MB um 05.09. 11:46:16Z | 2.048,0 MB um 05:15:11Z |
+| Aufnahmen mit current >= 2.140 MB, also an der Grenze | 61 (5,1 min) | 2 | 59 (4,9 min) |
+
+**Kriterium 5, Teil 1 (anon-Spitze unter 2,0 GB): erfuellt, 1.837,8 MB.**
+**Kriterium 5, Teil 2 (memory.events mit lauter Nullen): nicht erfuellt, `max`
+steht bei 2796.** Die drei Zaehler, die einen Schaden anzeigen (oom, oom_kill,
+oom_group_kill), stehen auf null, der Container hat den ganzen Lauf ohne
+Neustart durchgehalten, und beide Spuren sind vollstaendig. `max` zaehlt, wie
+oft die cgroup an ihrer harten Grenze zurueckfordern musste; hier war es der
+Dateicache des Index (`file` bis 359 MB), der bei einem `anon` von 1,5 bis
+1,8 GB gegen die 2 GB anlag. Das ist kein Fehler des Containers, aber es ist auch
+keine Null, und die Formulierung des Kriteriums hat die Null verlangt. Der
+Bericht rechnet es deshalb als **nicht erfuellt** und legt die Bewertung dem
+Betreiber vor, mit dem Vorschlag, das Kriterium fuer die Store-Aussage auf die
+drei Schadenszaehler und die anon-Spitze zu stellen und `max` als Kennzahl mit
+auszuweisen. Was `max` wirklich sagt: der Container laeuft auf dieser Box mit
+rund 210 MB Abstand zur harten Grenze, und das ist wenig.
+
+### Der Befund, der die Spitze erklaert: die Suche laedt ein zweites Modell
+
+Die anon-Spitze liegt nicht in der OCR-Phase, gegen die IDX-08 sie halten
+wollte, sondern in Phase B, und sie beginnt auf die Sekunde mit der
+Suchlastprobe: `anon >= 1.700 MB` zum ersten Mal um **05:15:11Z**, die Probe
+startete 05:15:09Z. Vorher stand `anon` seit Stunden zwischen 1.450 und
+1.563 MB, danach bis zum Ende des Laufs nie mehr darunter, und `memory.current`
+ging in derselben Sekunde an die Grenze. Von den 2796 `max`-Ereignissen fielen
+1292 in die letzte Stunde nach der Probe (1504 standen um 05:12Z).
+
+Die Ursache steht im Code und ist Absicht: `EmbeddingModel` ist "not a module
+level singleton", der Arbeiter der zweiten Spur baut in `worker/poller.py` seine
+Instanz, und die Leseseite baut in `api/resources.py` eine zweite, beide im
+selben Prozess (`findling.main`, 1.755,6 MB RSS nach dem Lauf; der
+Spawn-Kindprozess traegt 69 MB). Die erste Suche mit semantischem Anteil laedt
+Tokenizer und onnxruntime-Sitzung ein zweites Mal, und der Preis bleibt liegen:
+**gemessen +276 MB dauerhaft** (1.562,7 nach 1.837,8 MB, Spitze), rund 1.750 MB
+noch eine Stunde spaeter im Leerlauf. Dazu liest die Suchseite bei der ersten
+Anfrage die Wortliste erneut (`constituent list read from the volume` um
+05:15Z, ein zweiter deutscher Automat, laut Aufschluesselung oben 64 MB).
+
+Das ist der wichtigste Befund dieses Laufs fuer die Haertung vor der Abgabe:
+ein Container, der indexiert UND gesucht wird, was der Normalfall jeder
+Installation ist, traegt zwei Saetze Modellgewichte und zwei Automaten. Eine
+gemeinsame Engine fuer beide Seiten, oder ein Entladen der Suchseite nach
+Leerlauf, spart auf dieser Box einen dreistelligen MB-Betrag gegen eine harte
+Grenze, an der 210 MB uebrig sind. Aufgenommen fuer die Launch-Haertungsphase
+(Owner-Regel 06.09.), kein Fix in diesem Plan.
+
+### Die Suche bleibt benutzbar, waehrend und nach dem Lauf
+
+Beide Proben mit `45-suchlast.py`, je 30 echte Nutzersuchen ueber die OCS-Route
+(`File contents`, gemischt lexikalisch und umschreibend), Budget 2.500 ms aus
+`Provider.php`:
+
+| Probe | Zeitpunkt | p50 | **p95** | max | haelt |
+|---|---|---|---|---|---|
+| im Nachlauf, zweite Spur laeuft (Vorrat 4.775) | 06.09. 05:15Z | 735,5 ms | **1.129,0 ms** | 2.065 ms | ja |
+| nach dem Lauf, voller Vektorbestand | 06.09. 06:15Z | 478,5 ms | **524,0 ms** | 525 ms | ja |
+
+Rohdaten: `46-suchlast-nachlauf.json`, `47-suchlast-danach.json`. Der Vektorscan
+lief bei jeder semantischen Anfrage an seinen eigenen Deckel (`the vector scan
+hit its own ceiling and answered a truncated neighbour list`), also mit
+gekappter Nachbarliste, wie fuer 145.854 Vektoren im Brute-Force-Pfad zu
+erwarten; die Antwortzeit haelt trotzdem mit Abstand.
+
+`memory.current` gegen `anon` waehrend der Suchlast nach dem Lauf: vor der Probe
+1.833,6 MB anon bei 2.019,2 MB current, waehrend der Probe hoechstens 1.748,7 MB
+anon bei 1.936,5 MB current. Der Dateicache-Posten des Vektorscans steht damit
+mit beiden Zahlen da; er ist klein (64 MB Vektordatei) gegen den des
+Tantivy-Index.
+
+### Byte je Dokument, gemessen gegen gerechnet
+
+`48-vektorbestand.txt`, gemessen im Container nach dem Lauf, Datei und WAL
+zusammen (die erste Messung des Waechters scheiterte an einem Spaltennamen im
+Skript, `verdict` statt `state`; korrigiert und um 06:39:49Z nachgemessen, am
+unveraenderten Container):
+
+| Groesse | Wert |
+|---|---|
+| `vectors.db` + WAL | 64.098.304 + 4.544.200 = 68.642.504 Byte |
+| Chunks | 145.854, also 2,807 je Dokument |
+| Dokumente mit Vektor | 51.961 (alle indexierten) |
+| **Byte je Dokument** | **1.321,0** |
+| in Plan 06-04 gemessen (kleiner Korpus) / geschaetzt | 876,0 / 864 |
+| Tantivy-Index | 785.308.851 Byte, 15.113 Byte je Dokument |
+| Vektoren im Verhaeltnis zum Index | 8,74 Prozent |
+| Zeichen im Korpus | 1.397.354.875 |
+
+Die gemessene Zahl liegt 51 Prozent ueber der aus 06-04. Der Unterschied
+kommt aus den Chunks je Dokument: 2,807 hier gegen den Zwei-Chunk-Deckel, mit
+dem 06-04 gerechnet hat. Fuer die Store-Aussage gilt die grosse Zahl.
+
+### Verdikte, und was offen bleibt
+
+| Verdikt | Anzahl | Grund |
+|---|---|---|
+| indexed | 51.961 | |
+| skipped | 37 | 21 too_large, 14 empty_text, 2 image_not_ocrable |
+| failed | **0** | |
+
+Derselbe Bestand wie der Index aus 05-21 (51.961 Dokumente). Der Vergleich der
+Verdikte gegen die Verteilung des Generators, Endung fuer Endung, ist **nicht
+gemacht**; er braucht die Endungstabelle des Generators neben `state.db` und
+gehoert in die Abnahme oder die Haertungsphase. Er steht hier als fehlend und
+nicht als erledigt.
+
+### Kosten und Verbleib der Box
+
+Die Box laeuft weiter, 0,1158 USD je Stunde, bis der Betreiber den Bericht
+abnimmt ("bericht abgenommen, box abbauen", Plan 06-11 Task 4). Der Container
+ist seit dem Lauf unangetastet, damit der Betreiber die Verwaltungsseite und die
+cgroup selbst ansehen kann.
 
 ## Der Anstoss, und die Gegenprobe, die zu frueh kam
 

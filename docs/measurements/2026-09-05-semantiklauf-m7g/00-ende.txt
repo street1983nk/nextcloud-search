@@ -1,0 +1,24 @@
+lauf-ende-erkannt 2026-09-06T06:15:09Z
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              37
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-05 13:06:52 (1028 minutes ago)
+=== Suchlast NACH dem Lauf, mit vollem Vektorbestand ===
+{"anzahl": 30, "p50_ms": 478.5, "p95_ms": 524.0, "max_ms": 525.0, "budget_ms": 2500, "haelt": true}
+=== Beobachter beenden, damit die Abschlusszeile geschrieben wird ===
+findling-rss summary samples=13983 max_anon=1927114752 peak=2147741696 events=[low=0 high=0 max=2796 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=3044] oom_killed=false
+  13985 /home/ubuntu/work/semantiklauf/semantiklauf.csv
+    583 /home/ubuntu/work/semantiklauf/statusseite.jsonl
+  14568 total
+=== OOM-Beweis, vor jedem Eingriff ===
+=== Der Vektorbestand: Byte je Dokument, gemessen ===
+waechter-ende 2026-09-06T06:15:33Z
+42B-WAECHTER-FERTIG

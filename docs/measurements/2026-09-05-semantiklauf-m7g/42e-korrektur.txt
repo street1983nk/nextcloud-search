@@ -1,0 +1,1 @@
+korrektur 2026-09-06T05:15:08Z: 42c-lesen.py las embedded/indexed top-level statt backend.*, Waechter sah embedded=0, Suchlastprobe im Nachlauf nie gefahren, Ende nicht erkennbar. Suchlast jetzt manuell gestartet, Waechter mit korrigiertem Leser und SUCHLAST_GEFAHREN=1 neu gestartet.

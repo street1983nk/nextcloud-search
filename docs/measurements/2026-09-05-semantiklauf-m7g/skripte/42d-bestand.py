@@ -50,7 +50,7 @@ def main() -> int:
     if sdb is not None:
         bericht["state_db_byte"] = sdb.stat().st_size
         zustand = sqlite3.connect(f"file:{sdb}?mode=ro", uri=True)
-        bericht["verdikte"] = dict(zustand.execute("select verdict, count(*) from files group by verdict"))
+        bericht["verdikte"] = dict(zustand.execute("select state, count(*) from files group by state"))
         spalten = {r[1] for r in zustand.execute("pragma table_info(files)")}
         if "text_chars" in spalten:
             bericht["zeichen_gesamt"] = zustand.execute(

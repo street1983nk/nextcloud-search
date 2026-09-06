@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
-stopped_at: 06-11 Checkpoint, Semantiklauf laeuft detached
+stopped_at: 06-11 Task 4, Berichtsabnahme durch den Owner steht aus
 last_updated: "2026-09-05T10:03:23.582Z"
 last_activity: 2026-09-05
 progress:
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 
 Phase: 6 (Semantische Suche) — EXECUTING
 Plan: 11 of 12
-Status: Checkpoint, der Semantiklauf laeuft detached auf der ARM-Box
+Status: Semantiklauf FERTIG (06.09. 06:15Z), Bericht geschrieben, Task 4 Berichtsabnahme offen
 Last activity: 2026-09-05
 
 **Zwischenstand 06-11, 2026-09-05T10:57Z.** Der Volllauf mit Semantik ist um
@@ -42,6 +42,13 @@ Einbettung bei 46.853/51.961, Ende gegen 05:45Z erwartet. Waechter-Leser
 manuell gefahren (p95 1.129 ms, haelt), Waechter korrigiert neu gestartet.
 memory.events zeigt max=1504 bei oom=0, anon-Spitze bisher 1.562,7 MB.
 Weckwort weiterhin: **semantiklauf pruefen**.
+**Lauf FERTIG 06.09. 06:15Z, Bericht vollstaendig (bis auf Endungsvergleich).**
+Kriterium 5: anon-Spitze 1.837,8 MB (erfuellt), memory.events max=2796 bei
+oom=0 (NICHT erfuellt wie formuliert, Owner-Bewertung). Hauptbefund: Suchseite
+laedt zweites Modell (+276 MB dauerhaft), fuer die Launch-Haertung vorgemerkt.
+Byte je Dokument 1.321 (06-04: 876). p95 1.129 ms im Nachlauf, 524 ms danach.
+Box laeuft weiter bis "bericht abgenommen, box abbauen".
+
 **Owner-Anweisung 06.09.:** Vor der Store-Abgabe (06-12) kommt eine eigene
 Launch-Haertungsphase mit ausgiebigen Tests jenseits des Happy Path (siehe
 CLAUDE.md, Owner-Regeln). Bei 'semantiklauf pruefen' nach 06-11: diese Phase

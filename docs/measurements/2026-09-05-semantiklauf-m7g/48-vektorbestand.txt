@@ -1,0 +1,51 @@
+vektorbestand 2026-09-06T06:15:33Z
+-- die Dateien des Datenspeichers, mit ihren Groessen --
+total 87484
+drwxr-xr-x 5 findling findling     4096 Sep  5 10:44 .
+drwxr-xr-x 1 root     root         4096 Sep  5 10:47 ..
+drwxr-xr-x 2 findling findling     4096 Sep  5 10:30 dict
+drwxr-xr-x 2 findling findling     4096 Sep  6 04:51 index
+-rw-r--r-- 1 findling findling 16310272 Sep  6 05:43 state.db
+-rw-r--r-- 1 findling findling    32768 Sep  6 05:47 state.db-shm
+-rw-r--r-- 1 findling findling  4564992 Sep  6 05:47 state.db-wal
+drwxr-xr-x 2 findling findling     4096 Sep  6 04:51 tmp
+-rw-r--r-- 1 findling findling 64098304 Sep  6 05:42 vectors.db
+-rw-r--r-- 1 findling findling    32768 Sep  6 05:45 vectors.db-shm
+-rw-r--r-- 1 findling findling  4511432 Sep  6 05:43 vectors.db-wal
+3284251	/nc_app_findling_backend_data/dict
+785308851	/nc_app_findling_backend_data/index
+16310272	/nc_app_findling_backend_data/state.db
+32768	/nc_app_findling_backend_data/state.db-shm
+4564992	/nc_app_findling_backend_data/state.db-wal
+0	/nc_app_findling_backend_data/tmp
+64098304	/nc_app_findling_backend_data/vectors.db
+32768	/nc_app_findling_backend_data/vectors.db-shm
+4511432	/nc_app_findling_backend_data/vectors.db-wal
+-- Chunks, Dokumente und Byte je Dokument --
+Traceback (most recent call last):
+  File "/tmp/42d-bestand.py", line 80, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/tmp/42d-bestand.py", line 53, in main
+    bericht["verdikte"] = dict(zustand.execute("select verdict, count(*) from files group by verdict"))
+                               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: verdict
+vektorbestand-nachmessung 2026-09-06T06:39:49Z (42d-bestand.py: Spalte heisst state, nicht verdict; Container unveraendert seit 10:44:39Z am 05.09.)
+{
+ "vectors_db_pfad": "/nc_app_findling_backend_data/vectors.db",
+ "vectors_db_byte": 64098304,
+ "vectors_db_wal_byte": 4544200,
+ "chunks": 145854,
+ "dokumente_mit_vektor": 51961,
+ "byte_je_dokument": 1321.0,
+ "chunks_je_dokument": 2.807,
+ "state_db_byte": 16310272,
+ "verdikte": {
+  "indexed": 51961,
+  "skipped": 37
+ },
+ "zeichen_gesamt": 1397354875,
+ "tantivy_pfad": "/nc_app_findling_backend_data/index",
+ "tantivy_byte": 785308851,
+ "vektor_anteil_am_tantivy_prozent": 8.74
+}
