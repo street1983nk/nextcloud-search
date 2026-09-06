@@ -1144,11 +1144,34 @@ jobs:
       - name: Take the volume down again
         if: always()
         run: |
+          # The kill is asynchronous and the server holds state.db and the index
+          # on the volume while it shuts down. An umount fired right after the
+          # signal races that shutdown and loses (first run of this job: the
+          # verification below found the mount still standing). So: signal, wait
+          # for the pid to be gone, escalate once, and only then unmount.
           if [ -f "${{ runner.temp }}/exapp.pid" ]; then
-            kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
+            pid="$(cat "${{ runner.temp }}/exapp.pid")"
+            kill "${pid}" 2>/dev/null || true
+            for _ in $(seq 1 20); do
+              kill -0 "${pid}" 2>/dev/null || break
+              sleep 1
+            done
+            if kill -0 "${pid}" 2>/dev/null; then
+              echo "the server ignored the term signal for 20 s, escalating"
+              kill -9 "${pid}" 2>/dev/null || true
+              sleep 2
+            fi
           fi
           sync || true
-          sudo umount "${{ runner.temp }}/findling" 2>/dev/null || true
+          if ! sudo umount "${{ runner.temp }}/findling" 2>/dev/null; then
+            # Name what still holds the volume before the last resort, so a
+            # recurrence of this failure is diagnosable from the log alone.
+            echo "umount refused, whoever holds the volume:"
+            sudo fuser -vm "${{ runner.temp }}/findling" 2>&1 || true
+            sudo fuser -km "${{ runner.temp }}/findling" 2>/dev/null || true
+            sleep 2
+            sudo umount "${{ runner.temp }}/findling" 2>/dev/null || true
+          fi
           # umount detaches the loop device it set up itself. This sweep is for
           # the case where it never got that far, because a loop device that
           # still holds a deleted image is invisible in every listing an operator
