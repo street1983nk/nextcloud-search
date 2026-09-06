@@ -55,7 +55,6 @@ ersetzt die Zahl nach der Nachmessung an denselben drei Stellen plus Konstante.
 
 ---
 
-<<<<<<< HEAD
 ## DI-06.1-02 (gefunden in Plan 06.1-08): ein gewoehnlicher Share auf eine Gruppe faellt weiterhin nur dem Crawl zu
 
 **Gefunden:** beim Bau von `GroupEventListener`, also beim Schliessen von
@@ -132,8 +131,10 @@ Datei aus einem eigenen Grund oeffnet. `docs/uninstall.md` gehoert zu
 Plan 06.1-19, der die ROADMAP wegen E-H1 und E-H5 ohnehin nachzieht, und die
 Zahl der Laeufe steht dort ohnehin erst nach dem naechsten gruenen CI-Lauf
 wieder belegt da.
-=======
-## DI-06.1-02 (gefunden in Plan 06.1-04): der Dauerwaechter ueber die zweite Modellinstanz fehlt weiterhin
+
+---
+
+## DI-06.1-04 (gefunden in Plan 06.1-04): der Dauerwaechter ueber die zweite Modellinstanz fehlt weiterhin
 
 **Was offen ist:** Plan 06.1-04 sollte in `resilience.yml` eine Obergrenze ueber
 die Differenz zwischen `before-first-search` und `after-first-search` setzen. Sie
@@ -160,4 +161,3 @@ unbeurteilte Beobachtung im Protokoll. Rot-Faehigkeit dreifach belegt
 (`backend/tests/test_one_load.py`) plus einem roten Containerlauf. Commits
 0366a3b und d22c8ec. Fuer 06.1-18 bleibt nur noch die einmalige Nachmessung der
 Grundlast auf der arm64-Box; der Dauerwaechter haengt nicht mehr an ihr.
->>>>>>> worktree-agent-a57b59a259749bb24
