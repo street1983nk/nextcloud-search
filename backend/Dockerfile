@@ -247,6 +247,16 @@ RUN apt-get update \
 # backend/src/findling/config.py, which is the second half of the same change:
 #         tesseract-ocr-frk=1:4.1.0-2 \
 #
+# The third sentence, added 2026-09-06, and it is the one that saves a later
+# reader an hour: upstream frk has been renamed to deu_latf and using frk counts
+# as obsolete there. The Debian language data still sit at 4.1.0 and still carry
+# frk, so deu_latf does not exist in trixie and a search for it comes back empty.
+# Anybody concluding from that empty search that Fraktur is unavailable here
+# concludes wrongly. tesseract-ocr-script-frak 1:4.1.0-2 exists as well, same
+# source package, script data rather than language data. docs/ocr.md carries the
+# same table for readers of the repository, plus the note that nothing about
+# Fraktur has been measured.
+#
 # Apache-2.0 obligation: the licence text has to travel with the image, not only
 # with the repository, because the image is what is distributed. Measured, the
 # engine and libtesseract5 share one copyright file and the four language packs

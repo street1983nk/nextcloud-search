@@ -402,6 +402,79 @@ Suchbegriffe läuft. Was ein Suchbegriff nicht abdeckt, deckt auch niemand sonst
 ab: ein Wort, das die Engine gar nicht gelesen hat, fällt durch, und genau das
 soll es.
 
+### Nachtrag 06.09.2026: neben dem Gate steht jetzt eine Messung
+
+Der Absatz oben bleibt richtig, jedes Wort davon. Er beantwortet nur eine Frage
+nicht, und der Owner hat sie in der Launch-Härtung gestellt: liest die Kette die
+Umlaute, die Datums- und die Währungsformate der DACH-Region sauber. Das ist eine
+Frage nach der Erkennungsqualität, und ein Suchtreffer kann sie nicht
+beantworten. Ein Zeichen, das die Engine falsch liest, ist in einem Wort, das
+trotzdem auf denselben Term stemmt, für eine Suche unsichtbar.
+
+Die Trennung, die dieses Projekt an mehreren Stellen schon macht, löst das, ohne
+die Begründung oben zu brechen:
+
+- **Das Gate bleibt ein Suchtreffer.** Es ist unverändert, es ist robust gegen
+  Engine-Fassungen, und es wird von der Messung weder ersetzt noch verschärft.
+- **Die Messung steht daneben.** `findling.extract.ocr_quality` rechnet die
+  Zeichenfehlerrate gegen die bekannte Wahrheit. Die Wahrheit ist da, ohne ein
+  fremdes Korpus: `scripts/dev/build_corpus.py` rendert die Scans aus eigener
+  Prosa und schreibt sie nach `testdata/corpus-truth.json`, byteweise.
+- **Die Messung sagt nur Zahlen.** Weder der erkannte noch der erwartete Text
+  und kein Pfad verlässt das Werkzeug; die Aufschlüsselung läuft über die
+  Sprachvariante `de`, `ch` oder `at`.
+
+Der Aufruf, gegen den Korpus dieses Repositories:
+
+```
+python -m findling.extract.ocr_quality \
+    --corpus testdata/corpus --truth testdata/corpus-truth.json
+```
+
+**Das Ergebnis vom 06.09.2026: null Fehler** über sechs Seiten und 3.148 Zeichen,
+in allen drei Varianten, einschließlich der Großumlaute, des Schweizer
+Apostrophs in `CHF 1'234.56`, des Betrags `1.234,56 Euro`, beider Datumsformate
+und des Aktenzeichens mit Schrägstrichen. Der ganze Lauf, die Kommandozeile, drei
+Gegenproben und der Abschnitt, was die Zahl nicht sagt, stehen in
+`docs/measurements/2026-09-06-ocr-dach/README.md`.
+
+Das Werkzeug trägt einen **groben** Riegel, 0,05, und die Grobheit ist der Punkt.
+Er fängt einen Totalausfall, eine Seite, die leer oder als Rauschen zurückkommt.
+Er fängt ausdrücklich nicht eine falsch gewählte Sprache: gemessen liest `eng`
+allein dieselben Seiten mit 0,0203 und `fra` allein mit 0,0073, beides weit unter
+dem Riegel. Eine Grenze, die das fangen würde, wäre die scharfe Grenze, die
+dieser Abschnitt oben aus guten Gründen ablehnt. Die falsche Sprache wird
+stattdessen von der Positivliste in `findling.config` und vom Bau des Abbilds
+abgefangen, der ohne `deu`, `eng` und `fra` in `--list-langs` gar nicht
+entsteht.
+
+### Die Fraktur-Option: dokumentiert, ausdrücklich kein Standard
+
+Für Frakturschrift gibt es in Debian trixie Sprachdaten, und der Auftrag zu D-09
+verlangt dafür eine dokumentierte Option und keinen Standard. Genau so steht es
+im Abbild: der Eintrag in `backend/Dockerfile` ist auskommentiert, und
+einschalten heißt, die Zeile freizulegen **und** `frk` in die Positivliste von
+`backend/src/findling/config.py` aufzunehmen. Beides, nicht eines von beidem,
+sonst filtert die Positivliste die Sprache wieder weg.
+
+Die Paketlage, geprüft am 06.09.2026:
+
+| Sprachkennung | Paket in trixie | Stand |
+|---|---|---|
+| `frk` | `tesseract-ocr-frk` 1:4.1.0-2 | existiert, "language files for German (Fraktur)" |
+| `frk` (Skriptdaten) | `tesseract-ocr-script-frak` 1:4.1.0-2 | existiert ebenfalls |
+| `deu_frak` | `tesseract-ocr-deu-frak` | existiert **nicht**, "No such package" |
+| `deu_latf` | kein Paket | stromaufwärts die neue Kennung, siehe unten |
+
+Die Umbenennung ist der Satz, der einen späteren Leser sonst eine Stunde kostet:
+stromaufwärts ist `frk` in `deu_latf` umbenannt und die Nutzung von `frk` gilt
+als überholt. Die Debian-Sprachdaten stehen aber weiterhin auf 4.1.0 und führen
+`frk`. Wer nach `deu_latf` sucht, findet in trixie nichts, und wer daraus
+schließt, Fraktur sei nicht verfügbar, schließt falsch.
+
+Gemessen ist Fraktur nicht. Es liegt keine gerenderte Frakturseite im Korpus,
+und der Bericht vom 06.09.2026 sagt zu Fraktur ausdrücklich nichts.
+
 ## Was diese Seite nicht misst
 
 Ehrlichkeitshalber, damit die nächste Phase nicht das Falsche annimmt:

@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import struct
 import sys
 import zipfile
@@ -492,6 +493,12 @@ A4_PIXELS = (1240, 1754)
 # The line that has to come out of the renderer without a single replacement
 # box. Every character class this corpus depends on stands in it: the Swiss ss,
 # the Austrian umlaut and a long compound with both.
+#
+# It is no longer the whole probe. Since the launch hardening the check runs over
+# every character this corpus draws (see _all_rendered_characters), because a
+# hand written probe only covers the characters somebody remembered to put in it,
+# and the apostrophe of CHF 1'234.56 was exactly the kind of character nobody
+# remembers. The line stays as the readable statement of what the corpus is for.
 GLYPH_PROBE = "Strasse Jänner Grundstücksverkehrsgenehmigung"
 
 
@@ -746,6 +753,21 @@ PACHT_SCAN_PAGES: tuple[tuple[str, ...], ...] = (
     ),
 )
 
+# The seven case groups the launch hardening added to the two DACH pages, and
+# why they sit inside the existing files instead of in a new one. The generator
+# enforces that a search term stands in exactly one file, so every word that
+# lands anywhere in this corpus has to be checked against UNIQUE_TERMS below. A
+# new file would have needed a row in testdata/CORPUS.md, an entry in the verdict
+# map of backend/tests/test_extract_documents.py and a file id in the readonly
+# gate, and it would have moved the file count that three documents quote. The
+# cases are material for the character error rate of
+# findling.extract.ocr_quality, not for the acceptance gate: the gate stays a
+# search hit, which is the whole argument of docs/testing.md.
+#
+# Swiss half: a numeric date, the Swiss apostrophe as a thousands separator, and
+# a line of capitals with three umlauts in it. Capitals are the case tesseract is
+# documented to lose first at low resolution, so they are the one line here that
+# is expected to cost characters rather than to come back clean.
 SCHWEIZ_PAGE: tuple[str, ...] = (
     "Gemeinde Musterikon, Kanton Zürich",
     "Bauamt",
@@ -761,21 +783,34 @@ SCHWEIZ_PAGE: tuple[str, ...] = (
     "betragen 1200 Franken und sind mit separater Rechnung zu",
     "begleichen.",
     "",
+    "Die Ersatzabgabe beträgt CHF 1'234.56 und ist bis zum",
+    "01.03.2026 auf das Konto der Gemeindekasse zu überweisen.",
+    "",
+    "ÄNDERUNGEN AN DER AUSSENHÜLLE BENÖTIGEN EINE ZUSTIMMUNG",
+    "",
     "Die Rechtsmittelbelehrung steht auf der Rückseite.",
 )
 
+# Austrian half: a file reference with two slashes, the German thousands and
+# decimal separators the Swiss line above deliberately spells the other way, a
+# written out date, and two more Austrian words next to Jänner.
 OESTERREICH_PAGE: tuple[str, ...] = (
     "Stadtgemeinde Musterdorf",
     "Bezirkshauptmannschaft Musterkreis",
     "",
     "Mitteilung vom 15. Jänner 2026",
+    "Geschäftszahl BH/MU/2026/0042-7",
     "",
     "Der Grundbuchsauszug zur Liegenschaft im Ortsteil Hangfeld",
     "liegt dieser Mitteilung bei. Die Erledigung der Anzeige",
     "erfolgt noch im Jänner, sobald die Vermessung vorliegt.",
     "",
+    "Die Verwaltungsabgabe von 1.234,56 Euro ist mit dem",
+    "beiliegenden Erlagschein bis zum 1. März 2026 einzuzahlen.",
+    "",
     "Allfällige Rückfragen richten Sie bitte an die Kanzlei. Die",
     "Amtsstunden sind Montag bis Donnerstag von 8 bis 12 Uhr.",
+    "Der Parteienverkehr endet jeweils um 11 Uhr.",
     "",
     "Der Bezirkshauptmann",
 )
@@ -928,12 +963,22 @@ def build_pacht_with_annex() -> bytes:
 
 
 def build_schweiz_scan() -> bytes:
-    """The Swiss spelling, and only here: Strasse instead of Straße."""
+    """The Swiss spelling, and only here: Strasse instead of Straße.
+
+    Since the launch hardening the page also carries a numeric date, an amount
+    with the Swiss apostrophe as a thousands separator and a line of capitals
+    with umlauts, so the character error rate has something to be measured on.
+    """
     return _assemble_document([_render_page(SCHWEIZ_PAGE)])
 
 
 def build_oesterreich_scan() -> bytes:
-    """The Austrian month name, and only here: Jänner."""
+    """The Austrian month name, and only here: Jänner.
+
+    Since the launch hardening the page also carries a file reference with
+    slashes, an amount in the German notation, a written out date and two more
+    Austrian words, Erlagschein and Parteienverkehr.
+    """
     return _assemble_document([_render_page(OESTERREICH_PAGE)])
 
 
@@ -1565,6 +1610,13 @@ RENDERED_TEXT: dict[str, tuple[str, ...]] = {
 # Term, and the one file it may stand in. Compared case insensitively, so a
 # compound counts: "genehmigung" inside Grundstücksverkehrsgenehmigung is what
 # the search actually finds.
+#
+# The list is a superset of what CI asserts, and since the launch hardening it
+# says so out loud. Ersatzabgabe, Erlagschein and Parteienverkehr arrived with
+# the DACH format cases and no workflow searches for them; they stand here
+# because a word that is unique today and quietly duplicated tomorrow is exactly
+# the kind of drift this check exists for, and because a later plan that wants to
+# assert one of them should not first have to prove it is unique.
 UNIQUE_TERMS: dict[str, str] = {
     "Genehmigung": "09-bescheid.pdf",
     "Frist": "10-kuendigung.docx",
@@ -1575,8 +1627,11 @@ UNIQUE_TERMS: dict[str, str] = {
     "Pachtvereinbarung": "14-pacht-mit-anhang.pdf",
     "Strasse": "15-schweiz-baubewilligung.pdf",
     "Baubewilligung": "15-schweiz-baubewilligung.pdf",
+    "Ersatzabgabe": "15-schweiz-baubewilligung.pdf",
     "Jänner": "16-oesterreich-mitteilung.pdf",
     "Grundbuchsauszug": "16-oesterreich-mitteilung.pdf",
+    "Erlagschein": "16-oesterreich-mitteilung.pdf",
+    "Parteienverkehr": "16-oesterreich-mitteilung.pdf",
     "Zahlungsavis": "17-beleg.jpg",
     "Sperrmüllabfuhr": "18-aushang.png",
     "Übermittlungsprotokoll": "19-uebermittlung.tif",
@@ -1585,6 +1640,68 @@ UNIQUE_TERMS: dict[str, str] = {
     "Lieferschein": "23-gedreht.jpg",
     "Zahlungserinnerung": "30-nur-ein-bild.pdf",
 }
+
+
+# --------------------------------------------------------------------------
+# The ground truth of the OCR quality measurement. Not a second corpus and not a
+# second set of words: the very same rendered prose, written out once in a form
+# that a measuring tool can read without importing this script.
+#
+# Only documents whose every page is a rendered image belong in here.
+# 14-pacht-mit-anhang.pdf has three rendered annex pages, but its first two pages
+# carry a real text layer, so page 0 of the PDF and page 0 of the truth would not
+# be the same page. A measurement whose page numbering is off by two measures the
+# wrong page and says nothing about it.
+#
+# The variant is the one label besides numbers that the measuring tool is allowed
+# to print. It says which spelling a page carries, de, ch or at, so the report can
+# be broken down by language variant without a file name or a line of prose ever
+# leaving the tool.
+# --------------------------------------------------------------------------
+
+GROUND_TRUTH_PATH = CORPUS_DIR.parent / "corpus-truth.json"
+
+
+def _ground_truth_documents() -> tuple[tuple[str, str, tuple[tuple[str, ...], ...]], ...]:
+    """Name, language variant and the pages of prose, for every fully rendered file."""
+    return (
+        ("13-ratsvorlage-scan.pdf", "de", RATSVORLAGE_PAGES),
+        ("15-schweiz-baubewilligung.pdf", "ch", (SCHWEIZ_PAGE,)),
+        ("16-oesterreich-mitteilung.pdf", "at", (OESTERREICH_PAGE,)),
+        ("30-nur-ein-bild.pdf", "de", (ZAHLUNGSERINNERUNG_PAGE,)),
+    )
+
+
+def build_ground_truth() -> bytes:
+    """The rendered prose per page as UTF-8 JSON, byte for byte the same every run.
+
+    Three decisions make it reproducible rather than merely tidy: the documents
+    are sorted by name, the keys are sorted, and the line separator is written as
+    a plain newline instead of being left to the platform. The measurement is
+    compared across machines and across months, and a truth file that differs in
+    its byte order would turn every such comparison into a question about the
+    file rather than about the engine.
+    """
+    payload = {
+        "generated_by": "scripts/dev/build_corpus.py",
+        "documents": [
+            {"name": name, "variant": variant, "pages": ["\n".join(lines) for lines in pages]}
+            for name, variant, pages in sorted(_ground_truth_documents())
+        ],
+    }
+    return f"{json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)}\n".encode()
+
+
+def _all_rendered_characters() -> str:
+    """Every character this corpus draws, the probe line included.
+
+    ``RENDERED_TEXT`` is the one place that already knows which lines end up as
+    pixels, so deriving the glyph check from it means a page cannot add a
+    character without the check seeing it. That is the difference between a probe
+    that is maintained and a probe that is remembered.
+    """
+    drawn = " ".join(line for lines in RENDERED_TEXT.values() for line in lines)
+    return f"{GLYPH_PROBE} {drawn}"
 
 
 def _searchable_text(name: str, payload: bytes) -> str:
@@ -1703,6 +1820,19 @@ def _check() -> int:
         if target.is_file() and target.name not in FILES:
             problems.append(f"{target.name} lies in the corpus and comes out of no builder")
 
+    # The ground truth is checked in the same breath as the pages it describes.
+    # A truth file that drifted from the pixels is worse than a missing one: the
+    # character error rate would then be measured against prose that no page
+    # carries, and it would come back high for a reason nobody could find.
+    truth = build_ground_truth()
+    if not GROUND_TRUTH_PATH.is_file():
+        problems.append(f"{GROUND_TRUTH_PATH.name} is missing")
+    elif GROUND_TRUTH_PATH.read_bytes() != truth:
+        problems.append(
+            f"{GROUND_TRUTH_PATH.name} differs from a fresh build,"
+            f" rebuilt {len(truth)} bytes sha256={hashlib.sha256(truth).hexdigest()}"
+        )
+
     for problem in problems:
         print(f"check failed: {problem}")
     if problems:
@@ -1717,7 +1847,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Both checks run before the first byte is written. A corpus with a
     # replacement box in it, or with a search term in two files, is worse than
     # no corpus: it turns green assertions into statements about nothing.
-    _assert_every_glyph_exists(GLYPH_PROBE)
+    _assert_every_glyph_exists(_all_rendered_characters())
     _assert_aes_matches_the_standard()
     _assert_terms_stand_in_one_file(FILES)
 
@@ -1731,6 +1861,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         digest = hashlib.sha256(payload).hexdigest()
         print(f"{name} bytes={len(payload)} sha256={digest}")
     print(f"files={len(FILES)} total bytes={sum(len(payload) for payload in FILES.values())}")
+
+    # Outside the corpus directory on purpose: readonly-gate copies that
+    # directory into a throwaway Nextcloud and counts what is in it, and a file
+    # that is not a document under test has no business being counted.
+    truth = build_ground_truth()
+    GROUND_TRUTH_PATH.write_bytes(truth)
+    print(f"{GROUND_TRUTH_PATH.name} bytes={len(truth)} sha256={hashlib.sha256(truth).hexdigest()}")
     return 0
 
 

@@ -38,11 +38,16 @@ file. Since phase 3 that rule is not a promise any more but a check:
 `build_corpus.py` refuses to write the corpus if one of the terms of the second
 table stands in a second file.
 
-Total size is 373 KB. 295 KB of that are the rendered pages of job three, which
+Total size is 391 KB. 313 KB of that are the rendered pages of job three, which
 is the price of being able to prove anything at all about OCR, and 65 KB are the
 one compressed part of the bomb of job four, which is the floor deflate allows
 for a member of that declared size and is worked out in `build_corpus.py`. The
 twelve files of the first two jobs still weigh under 7 KB together.
+
+The rendered pages grew by 18 KB on 2026-09-06: the two DACH files took on the
+formats the owner asked about, and a rendered line costs pixels. What they took
+on and why it went into the existing two files rather than into a new one stands
+under "The DACH cases of phase 3" below.
 
 ## The files
 
@@ -55,6 +60,13 @@ still carried it would be a scan the OCR pass never reached.
 Measured on 2026-09-01 with the runtime image of this repository, over the whole
 corpus, text pass first and one forced OCR pass for every handover, which is
 exactly the sequence `worker/poller.py` produces.
+
+The character counts of `15` and `16` were measured again on 2026-09-06, after
+the two pages took on the DACH formats and after `fra` joined the engine's
+language list. The two files that did not change, `13` and `30`, came back with
+1593 and 332 characters in the same run, byte for byte the numbers of
+2026-09-01, so the run compares with the earlier one and the third language did
+not move what the engine reads on these pages.
 
 **This column is read by a machine.** The `readonly-gate` job of
 `.github/workflows/integration.yml` parses the first backticked token of every
@@ -80,8 +92,8 @@ change here in the same commit.
 | `12-aktenvermerk.txt` | A short file note in Windows-1252 | `indexed` | Müller |
 | `13-ratsvorlage-scan.pdf` | Three A4 pages of council prose as greyscale images, no text object on any page | `indexed` through the OCR track, 1593 characters over three pages | Bebauungsplan |
 | `14-pacht-mit-anhang.pdf` | Five pages: two with a real text layer, three scanned annex pages | `indexed` on the text pass, the three annex pages stay unread on purpose | Pachtvereinbarung |
-| `15-schweiz-baubewilligung.pdf` | One scanned A4 page in Swiss spelling, ss instead of the sharp s | `indexed` through the OCR track, 493 characters | Strasse, Baubewilligung |
-| `16-oesterreich-mitteilung.pdf` | One scanned A4 page in Austrian wording | `indexed` through the OCR track, 404 characters | Jänner, Grundbuchsauszug |
+| `15-schweiz-baubewilligung.pdf` | One scanned A4 page in Swiss spelling, ss instead of the sharp s, with a numeric date, an amount carrying the Swiss apostrophe and a line of capitals with umlauts | `indexed` through the OCR track, 664 characters | Strasse, Baubewilligung, Ersatzabgabe |
+| `16-oesterreich-mitteilung.pdf` | One scanned A4 page in Austrian wording, with a file reference of two slashes, an amount in German notation and a written out date | `indexed` through the OCR track, 594 characters | Jänner, Grundbuchsauszug, Erlagschein, Parteienverkehr |
 | `17-beleg.jpg` | A slip with readable text as JPEG, the format phone uploads arrive in | `indexed`, the picture track of plan 03-10 | Zahlungsavis |
 | `18-aushang.png` | A notice with readable text as PNG | `indexed`, the picture track | Sperrmüllabfuhr |
 | `19-uebermittlung.tif` | A one page TIFF with readable text, deflate compressed | `indexed`, the picture track | Übermittlungsprotokoll |
@@ -171,6 +183,44 @@ analyzer chain has no `ascii_fold`, and the Snowball stemmer folds both the
 sharp s and the double s onto the token `strass`. The Austrian case is a plain
 term match; `Januar` finding `Jänner` would be synonymy and is deliberately not
 built. Both statements are measured in `docs/german-analyzer.md`.
+
+### The formats that arrived on 2026-09-06, and what they are for
+
+Three terms prove that a scanned DACH document is findable. They do not say how
+well the engine read the page, and a search hit never will: a word the engine
+missed simply fails, and a character it got wrong inside a word it still stemmed
+correctly is invisible to a search. That is not a gap in the test, it is what
+the test is for, and the reasoning is written out in `docs/testing.md`.
+
+The question the owner asked is the other one: does the chain read the umlauts,
+the dates and the amounts of this region. That is an answer in numbers, so the
+two DACH pages took on the cases it needs and
+`findling.extract.ocr_quality` measures the character error rate against them.
+The truth is not borrowed from anywhere: `build_corpus.py` renders these pages
+out of its own prose, so the source text is the ground truth, byte for byte.
+
+| Case group | On the page | File |
+|---|---|---|
+| Date, numeric | `01.03.2026` | `15-schweiz-baubewilligung.pdf` |
+| Date, written out | `1. März 2026` | `16-oesterreich-mitteilung.pdf` |
+| Amount, Swiss notation | `CHF 1'234.56`, apostrophe as the thousands separator | `15-schweiz-baubewilligung.pdf` |
+| Amount, German notation | `1.234,56 Euro` | `16-oesterreich-mitteilung.pdf` |
+| File reference with slashes | `Geschäftszahl BH/MU/2026/0042-7` | `16-oesterreich-mitteilung.pdf` |
+| Two more Austrian words | Erlagschein, Parteienverkehr | `16-oesterreich-mitteilung.pdf` |
+| Capitals with umlauts | `ÄNDERUNGEN AN DER AUSSENHÜLLE BENÖTIGEN EINE ZUSTIMMUNG` | `15-schweiz-baubewilligung.pdf` |
+
+They went into the two existing files rather than into a new one because a new
+file is not cheap here: it needs a row in the table above, an entry in the
+verdict map of `backend/tests/test_extract_documents.py`, a file id in the read
+only gate, and it moves the file count that three documents quote. Extending two
+files costs their byte size and their character count, and both are written down
+above. The price of the choice is visible, the price of the other one would have
+been spread over four places.
+
+None of these seven is asserted as a search term, and that is deliberate. The
+gate stays what it is, a search hit that survives a Debian point release. The
+formats are material for the measurement, and the measurement carries a coarse
+bar of its own. What it found is in `docs/measurements/2026-09-06-ocr-dach/`.
 
 ## Why twelve broken files
 

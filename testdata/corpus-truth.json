@@ -1,0 +1,35 @@
+{
+  "documents": [
+    {
+      "name": "13-ratsvorlage-scan.pdf",
+      "pages": [
+        "Gemeinde Musterhausen\nVorlage für den Gemeinderat\n\nBetreff: Aufstellung des Bebauungsplans Nummer 14\nSitzung am 12. November 2026, öffentlicher Teil\n\nSachverhalt\n\nDer Gemeinderat hat die Verwaltung im Frühjahr beauftragt, die\nplanungsrechtlichen Voraussetzungen für die Erweiterung des\nGewerbegebiets im nördlichen Ortsteil zu prüfen. Die Prüfung\nist abgeschlossen. Die Flächen sind geeignet, die Erschließung\nist über die vorhandene Zufahrt möglich und ein Ausbau der\nZufahrt ist nach heutigem Stand nicht erforderlich.\n\nDie Untere Naturschutzbehörde hat auf zwei Gehölzbestände am\nöstlichen Rand hingewiesen. Beide bleiben erhalten und werden\nals Fläche zum Erhalt von Bäumen und Sträuchern festgesetzt.",
+        "Vorlage für den Gemeinderat, Blatt 2\n\nBeteiligung der Träger öffentlicher Belange\n\nDie Beteiligung wurde im Sommer durchgeführt. Von den\nangeschriebenen Stellen haben sich elf geäußert. Die\nStellungnahmen betreffen überwiegend die Entwässerung und\nden Anschluss an das öffentliche Kanalnetz.\n\nDas Wasserwirtschaftsamt bittet um einen Nachweis über die\nRückhaltung des Niederschlagswassers auf den Grundstücken.\nDer Nachweis wird mit dem Erschließungsplan vorgelegt.\n\nDie Kosten der Planung trägt die Gemeinde. Sie sind im\nHaushalt des laufenden Jahres veranschlagt.",
+        "Vorlage für den Gemeinderat, Blatt 3\n\nBeschlussvorschlag\n\nDer Gemeinderat beschließt die Aufstellung des\nBebauungsplans für das Gebiet nördlich der Feldwiese.\nDie Verwaltung wird beauftragt, die Offenlegung\nvorzubereiten und die Öffentlichkeit zu unterrichten.\n\nAnlagen: Übersichtskarte, Stellungnahmen, Kostenschätzung"
+      ],
+      "variant": "de"
+    },
+    {
+      "name": "15-schweiz-baubewilligung.pdf",
+      "pages": [
+        "Gemeinde Musterikon, Kanton Zürich\nBauamt\n\nBaubewilligung für den Umbau eines Wohnhauses\n\nDas Grundstück liegt an der Bahnhofstrasse 12. Die Zufahrt\nerfolgt weiterhin ab der Strasse zum Seeufer. Die Parzelle\nbleibt in ihrer bisherigen Grösse bestehen.\n\nDie Bauherrschaft hat die Arbeiten spätestens drei Jahre nach\nRechtskraft dieser Bewilligung aufzunehmen. Die Gebühren\nbetragen 1200 Franken und sind mit separater Rechnung zu\nbegleichen.\n\nDie Ersatzabgabe beträgt CHF 1'234.56 und ist bis zum\n01.03.2026 auf das Konto der Gemeindekasse zu überweisen.\n\nÄNDERUNGEN AN DER AUSSENHÜLLE BENÖTIGEN EINE ZUSTIMMUNG\n\nDie Rechtsmittelbelehrung steht auf der Rückseite."
+      ],
+      "variant": "ch"
+    },
+    {
+      "name": "16-oesterreich-mitteilung.pdf",
+      "pages": [
+        "Stadtgemeinde Musterdorf\nBezirkshauptmannschaft Musterkreis\n\nMitteilung vom 15. Jänner 2026\nGeschäftszahl BH/MU/2026/0042-7\n\nDer Grundbuchsauszug zur Liegenschaft im Ortsteil Hangfeld\nliegt dieser Mitteilung bei. Die Erledigung der Anzeige\nerfolgt noch im Jänner, sobald die Vermessung vorliegt.\n\nDie Verwaltungsabgabe von 1.234,56 Euro ist mit dem\nbeiliegenden Erlagschein bis zum 1. März 2026 einzuzahlen.\n\nAllfällige Rückfragen richten Sie bitte an die Kanzlei. Die\nAmtsstunden sind Montag bis Donnerstag von 8 bis 12 Uhr.\nDer Parteienverkehr endet jeweils um 11 Uhr.\n\nDer Bezirkshauptmann"
+      ],
+      "variant": "at"
+    },
+    {
+      "name": "30-nur-ein-bild.pdf",
+      "pages": [
+        "Stadtkasse Musterhausen\n\nZahlungserinnerung\n\nZu der Rechnung vom 2. Juli 2026 ist bisher kein Eingang\nverbucht worden. Wir bitten Sie, den offenen Betrag von\n84,00 Euro innerhalb der nächsten zwei Wochen zu überweisen.\n\nSollte sich Ihre Zahlung mit diesem Schreiben überschnitten\nhaben, betrachten Sie es bitte als gegenstandslos."
+      ],
+      "variant": "de"
+    }
+  ],
+  "generated_by": "scripts/dev/build_corpus.py"
+}
