@@ -313,8 +313,8 @@ def test_a_field_prefix_is_a_field_query() -> None:
 
 
 def test_a_file_type_prefix_is_a_file_type_filter() -> None:
-    # type: is the one prefix that is cut out of the line rather than parsed,
-    # so it gets a mark of its own instead of being read as a field.
+    # The file type prefix is the one that is cut out of the line rather than
+    # parsed, so it gets a mark of its own instead of being read as a field.
     assert carried_operators("type:pdf bescheid") == frozenset({FILETYPE})
 
 

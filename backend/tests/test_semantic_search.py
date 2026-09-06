@@ -839,6 +839,6 @@ def test_an_operator_query_answers_what_a_container_without_a_vector_stock_answe
     settings.cache_clear()
     without_vectors = api_search.one_round(indexed_volume.bob, line, 20, 0, False)
 
-    assert [hit.file_id for hit in with_rule.candidates] == [hit.file_id for hit in without_vectors.candidates]
+    assert [hit.fileId for hit in with_rule.candidates] == [hit.fileId for hit in without_vectors.candidates]
     assert with_rule.has_more == without_vectors.has_more
     assert with_rule.next_offset == without_vectors.next_offset
