@@ -1,9 +1,17 @@
-# What is tested, and the one gap that is left
+# What is tested, and what each gate does not prove
 
 This document exists because of a single honest answer to the question "is the
-PHP half tested?". It is not, not by a unit test, and `php -l` is a syntax check
-and not a test. What follows is what covers which half, what the remaining gap
-is, and what closes it.
+PHP half tested?". For three phases that answer was no, not by a unit test, and
+`php -l` is a syntax check and not a test. Since plans 05-15 and 05-16 there is
+a PHPUnit suite and the answer is yes, which is why this file no longer carries
+a gap section. The twelve behaviours that gap was made of are still listed
+further down, now each with the test that holds it.
+
+What follows is what covers which half, and, for every gate, the sentence that
+is worth more than the green tick: what it deliberately does not prove. A gate
+read as proving more than it does is worse than no gate, and the failure this
+file exists to prevent is a later reader quoting a green run for a claim nobody
+ever measured.
 
 ## The two halves are not tested the same way
 
@@ -24,8 +32,10 @@ the two integration jobs end to end, and the textual gates below, which read the
 PHP sources with a Python parser and judge them. The last group is the part that
 grew with phase 4: the admin page added a second route class, a design contract
 and a second path space, and each of those is a property no syntax check and no
-end to end job can see. What is still missing is a PHPUnit suite, and the gap
-section further down names the twelve behaviours that would fill it.
+end to end job can see. The PHPUnit suite that used to be missing arrived with
+plans 05-15 and 05-16 and grew again in plan 06.1-08; the twelve behaviours it
+was written against, and the test that holds each of them, are the table further
+down.
 
 ## The textual gates over the PHP sources
 
@@ -90,15 +100,20 @@ acceptance test that is read as proving more than it does is worse than none.
 **Gate B over the whole OCR corpus** (`readonly-gate`). The corpus is indexed
 with the OCR track switched on, and file list, checksums, modification times and
 sizes are frozen before and compared afterwards. What it proves: neither the
-download path nor the renderer nor the engine writes to a user file, over
-thirty three files including twelve broken PDFs, five pictures and a nine
-gigapixel page. What it does not prove: that nothing is written anywhere else on
-the instance. It watches the corpus directory, not the data directory.
+download path nor the renderer nor the engine writes to a user file, over every
+file of the reference corpus, which is broken PDFs, pictures, a nine gigapixel
+page and, since the launch hardening, a decompression bomb and five well formed
+PDFs that want something. How many files that is, and what each of them is for,
+is the business of `testdata/CORPUS.md` and is deliberately not counted a second
+time here: the corpus grows, and a number kept in seven places is a number that
+is wrong in six of them. What it does not prove: that nothing is written
+anywhere else on the instance. It watches the corpus directory, not the data
+directory.
 
 Its second half is the verdict counter, and it exists because the first half can
 be green for the wrong reason. A comparison only measures the files the run
-touched, so a pass that never reached the pictures would compare thirty three
-untouched files with thirty three untouched files and say nothing at all. The
+touched, so a pass that never reached the pictures would hold the same untouched
+files against themselves and say nothing at all. The
 counter therefore asserts, file by file, the verdict `testdata/CORPUS.md` names,
 and it counts the caps of the OCR cascade separately. What it does not prove:
 that the recognised text is any good. It only knows that a file was judged and
@@ -150,62 +165,122 @@ says that on its own.
 | Offline step (`docker.yml`, 06-10) | That no network is needed. The published image starts with `--network none`, embeds a small stock of its own making and answers a paraphrase out of it, on amd64 and on arm64, with a control run that finds nothing without the stock. | That no network is attempted. `HF_HUB_OFFLINE=1` is a net and not a proof, and `onnxruntime` writes "Failed to persist telemetry device ID" to stderr in every run with the network cut as well: a failed local file system write, not traffic, measured in plan 06-03 and named here because it is the line that gets read the wrong way round. |
 | Model-gone step (`docker.yml`, 06-10) | Criterion 3 on the level of the image: with an empty directory mounted over the model directory the ordinary query answers the same hits as a run without any semantics, carries the degraded mark, and is neither empty nor an error. The step ends by running its own verdict against a deliberately empty index and requiring it to come back red. | That every way a model can fail behaves like this. It covers the model that is not there; the model that loads and then raises is `test_semantic_search.py`. |
 
-## The gap
+## The gates of the launch hardening, and the boundary of each one
 
-These behaviours of the PHP half have no test at all today. They are pure logic,
-they are the parts a unit test covers well, and they are exactly the parts that
-were added or changed by the security audit follow up, which is why they are
-listed by name rather than summarised:
+Phase 06.1 was the phase that tested everything except the happy path, and it
+left behind a row of gates that are easy to over read. Each of them is listed
+with what it prevents and with what it does not prove, and the second column is
+the one that will be quoted wrongly if it is missing. Where a plan summary named
+a reservation, the reservation is copied here rather than smoothed over.
 
-1. `ExAppService::filterCandidates` drops a candidate whose `fileId` is absent or
-   is not an integer.
-2. It drops a candidate with a non positive `fileId` whose title is not the
-   canary.
-3. It strips `title` and `snippet` off every candidate with a positive `fileId`,
-   so nothing the container volunteers before the recheck can be displayed.
-4. `Provider::search` drops a candidate whose node cannot be resolved through the
-   user's own folder, and takes title and link from the resolved node.
-5. It returns an empty result, not unchecked hits, when the user has no home
-   folder.
-6. `PlainText::bounded` replaces control characters with a single space, keeps
-   the tab, caps at the given length, cuts on character boundaries and refuses
-   invalid UTF-8. The replacement is one character for one character, and that
-   the length is preserved is the property number 12 relies on.
-7. `ExAppService::searchCandidates` refuses an empty term without a round trip
-   and clamps the limit into 1..100.
-8. The answer body is refused above one megabyte, before it reaches
-   `json_decode`.
-9. `GatewayController::getFileContents` answers 403 when `EX-APP-ID` is not
-   `findling_backend`.
-10. `Provider::search` asks at most three times, resolves at most
-    `min(64, limit * 2)` nodes per search, and stops asking when the wall clock
-    of two and a half seconds is used up.
-11. It requests excerpts only after the recheck, only for the surviving file
-    ids, and not at all when the budget is gone, in which case the subline is
-    the path.
-12. `ExAppService::filterSnippets` drops an excerpt for a file id that was not
-    asked for, and drops the highlight ranges of a text the cleaning made
-    shorter, because every offset behind the cut would point elsewhere. A text
-    that only changed characters without changing its length keeps them.
+| Gate | What it prevents | What it does not prove |
+|---|---|---|
+| The arming mark and its two steps in `resilience.yml` (06.1-01) | A container that was switched on stops indexing after a restart, because the arming lived only in the process. The negative control beside it shows the gate can go red: the same restart without the mark indexes nothing. | That the mark survives a lost volume. It is state next to `state.db`, so an installation that loses the volume loses the mark with it, which is the same case as a lost index. |
+| One engine and one constituent list per process (`resilience.yml`, 06.1-02 and 06.1-04) | A second embedding engine or a second copy of the constituent list inside one process, which is the shape that costs the memory budget on a small box. The ratchet counts loads and reads, not bytes. | A ceiling on resident memory. The difference around the first search is printed and left unjudged on purpose: plan 06.1-04 measured that the guarded step does not load a model at all, so a cap there could not go red for the reason it would name (DI-06.1-04). |
+| `test_extract_edge_paths.py` (06.1-05) | A lying file extension, a byte order mark that becomes a character, a byte sequence without text indexed as if it were text, and a second place in the code that writes on the file path. | That a half readable file is repaired. The file with the encoding change is pinned as it is, because repairing it would mean guessing at a text that could not be read once already. |
+| The corpus files 34 to 39 with their verdict table (06.1-06) | A decompression bomb or a PDF that wants an action travelling the road of a user document unnoticed. They lie in the directory `readonly-gate` freezes, so every one of them is measured by the read only invariant as well. | That a PDF viewer elsewhere refuses the action. The gate knows the verdict of the container and that not one byte moved. What another program would do with an open action is not a question this repository can answer. |
+| Scenarios 7, 8 and 9 of `search-parity`, and the file that changes while it is read (`index-search-e2e`, 06.1-07) | A deleted file that stays findable, a version rollback that loses the file, a link share that quietly widens the access list, and a verdict written for content that no longer exists. | Ranking or hit counts. Parity is a statement about sets of fileids and about nothing else, and scenario 8 compares only over the name marker, because the native term filter never looks at a text layer. |
+| `php/tests/Unit/GroupEventListenerTest.php` and scenario 10 (06.1-08) | A user who joins a group waiting for the nightly reconcile before the team folder becomes findable. The scenario also reads the prefilter rows, so a build on which only the PHP recheck works cannot carry it green. | The same for an ordinary share that goes to a group. That one reaches its members over the mount provider of `files_sharing` and still falls to the crawl; DI-06.1-02 names that rest. |
+| `test_lockstep_versions.py` with the version window, and the drift step in `deploy-harp.yml` (06.1-09) | A version window that says one thing in the two `info.xml` and another in the CI matrix, in either direction: an entry outside the window and a promised version without an entry are both findings. | That a server outside the window works. The drift step proves the opposite politely, in both directions: the answer is empty and carries a success status, checked with the status code rather than with `curl -sf`, which would throw the two cases together. |
+| `disk-full` in `resilience.yml` (06.1-11) | A full volume met with a crash or with a work stock written off, instead of with a pause the second track returns from. The counter probe forces a real ENOSPC and shows the volume really ends where the loop image ends. | The behaviour of the index write itself at ENOSPC. The free space floor exists so that case never arrives, which is why the pause in front of it is the subject and not the fault behind it. |
+| Both sides of the budget edge in `walking-skeleton`, and `scripts/ops/search_load.py` (06.1-11) | A slow backend costing the search rather than one result group, and a load tool that can only measure the machine it was born on. | A concurrency promise. The tool deliberately makes none, and says so in its own module header; the number is a measurement and belongs to plan 06.1-18. |
+| The install path out of the release archives in `deploy-harp.yml` (06.1-12) | An installation that only works from a checkout. Both halves arrive as the signed archives, the image comes out of the registry the archive names, and an anonymous pull is attempted before anything is installed. | That the app management web interface installs it. That is a click path, it is measured on no route, and it is written down as an uncovered area rather than left to be assumed (DI-06.1-16). |
+| `scripts/dev/validate_info_xml.sh` and the store assertions in `test_store_metadata.py` (06.1-13) | A submission that fails on the store schema, an image of the wrong size, a category that does not exist, and a word the owner's vocabulary rule forbids. The pin of the schema stands in exactly two places and an assertion holds them equal. | That the store accepts the app. Only the store can say that, and it says it in phase 6. |
+| `findling.extract.ocr_quality` with `testdata/corpus-truth.json` (06.1-14) | An OCR regression noticed only as a search hit that happens to still work. The measurement is a character error rate against a truth the generator wrote, and three counter probes show the rate moves. | Quality on foreign material, and it currently proves nothing on every run: the tool is driven by hand and by no job, so the total failure it was built to catch would surface at the next manual measurement and not before (DI-06.1-11). |
+| `scripts/dev/aio_install_check.sh` and `docs/install-check.md` (06.1-16) | An install path measured only by CI. The script takes an address, a login and two archives, reaches into no working tree, and drives the same schedule on a machine set up the way a selfhoster sets one up. | The arm64 and all-in-one half in the same run. That is a second run on the box, in plan 06.1-18, with the image tag and the platform as the only two knobs that change. |
 
-Number 9 is reachable over HTTP but not from the integration job as it stands: it
-would need a second registered ExApp to call the gateway under a foreign app id.
-The other eleven are unit test material, and number 9 turned out to be unit test
-material too: doubled, it is a header on a request object and four cases, which
-is what `php/tests/Unit/GatewayControllerTest.php` does since plan 05-16.
+## The guest user probe, which is deliberately not a gate
 
-**State of this list.** All twelve have a test. Numbers 1 to 6 arrived with plan
-05-15 and numbers 7 to 12 with plan 05-16, in
-`php/tests/Unit/ExAppServiceTest.php`, `php/tests/Unit/ProviderTest.php`,
-`php/tests/Unit/PlainTextTest.php` and
-`php/tests/Unit/GatewayControllerTest.php`. Which number is asserted by which
-test name is a table in `05-16-SUMMARY.md`, and plan 05-19 is the one that
-rewrites this section around it. The list itself is deliberately left whole
-rather than trimmed: it is
-the specification these tests are read against, and a specification that shrinks
-as it is implemented cannot be used to check the implementation afterwards.
+`scripts/dev/guest_parity.sh` is the second half of scenario 6. Decision D-22
+gives that scenario two bodies: the groupless minimal user, in the CI job since
+plan 05-09, and a real guest user over the `guests` app. The same decision keeps
+that app out of the CI matrix, and the reason is worth repeating because it
+looks like laziness and is not one: the app is a foreign dependency with a
+release window of its own, and a matrix that goes red because somebody else's
+app has no release yet says nothing at all about Findling.
 
-## What closes it
+A promise like that is worth what holds it, so it is held by a test rather than
+by good intentions. `backend/tests/test_guest_parity.py` counts the mentions of
+that app over every workflow and every composite action, comments filtered out
+first, and a single one turns the suite red.
+
+The probe itself is a script and not a memory. It raises
+`unified_search_max_results_per_request` and puts it back, asks with an explicit
+`limit`, and hands both answers to `scripts/ci/parity_diff.py`, which is the
+same judge the CI job uses. It asks three questions, because none of them is a
+statement on its own: the guest finds his one shared file, he finds the other
+marker in neither provider, and the owner still finds that other marker. It
+removes the guest, the share and the two files on every way out.
+
+```
+scripts/dev/guest_parity.sh \
+  --url http://localhost:8080 \
+  --exec "docker exec -i -u www-data -w /var/www/html findling-nc" \
+  --creator alice:the-password \
+  --log guest-parity.log
+```
+
+The app is not installed by the probe. A test tool does not bring a foreign app
+onto an instance, so the script names the two `occ` commands and stops.
+
+**State: outstanding.** The tool exists since plan 06.1-15, the run belongs to
+plan 06.1-19 on the fresh instance of the owner sight check. Until that run has
+happened this line says outstanding and not passed, and when it has happened it
+will carry the version of the `guests` app it ran against, because a snapshot
+without the version of the thing it looked at cannot be repeated. Two limits
+hold for the result either way: it is a snapshot and not a standing gate, and it
+holds for that one version.
+
+## The twelve behaviours of the PHP half, and the test that holds each one
+
+This section used to be called "The gap", and it was one: these twelve
+behaviours are pure logic, they are the parts a unit test covers well, and they
+are exactly the parts the security audit follow up added or changed. They had no
+test at all until plan 05-15, and all twelve have one since plan 05-16.
+
+The list is deliberately kept whole rather than trimmed. It is the specification
+these tests are read against, and a specification that shrinks as it is
+implemented cannot be used to check the implementation afterwards. What changed
+is the last column: every line now names the file that holds it.
+
+Every file below lives in `php/tests/Unit/` and runs in the `phpunit` job of
+`php.yml`. Which test name asserts which half of a line is a table in
+`05-16-SUMMARY.md`; this one stays at the level of the property, because the
+property is what a reader is looking for.
+
+| No | The behaviour | Held by | Since |
+|---|---|---|---|
+| 1 | `ExAppService::filterCandidates` drops a candidate whose `fileId` is absent or is not an integer. | `ExAppServiceTest.php` | 05-15 |
+| 2 | It drops a candidate with a non positive `fileId` whose title is not the canary. | `ExAppServiceTest.php` | 05-15 |
+| 3 | It strips `title` and `snippet` off every candidate with a positive `fileId`, so nothing the container volunteers before the recheck can be displayed. | `ExAppServiceTest.php` | 05-15 |
+| 4 | `Provider::search` drops a candidate whose node cannot be resolved through the user's own folder, and takes title and link from the resolved node. | `ProviderTest.php` | 05-15 |
+| 5 | It returns an empty result, not unchecked hits, when the user has no home folder. | `ProviderTest.php` | 05-15 |
+| 6 | `PlainText::bounded` replaces control characters with a single space, keeps the tab, caps at the given length, cuts on character boundaries and refuses invalid UTF-8. The replacement is one character for one character, and the preserved length is what number 12 relies on. | `PlainTextTest.php` | 05-15 |
+| 7 | `ExAppService::searchCandidates` refuses an empty term without a round trip and clamps the limit into 1..100. | `ExAppServiceTest.php` | 05-16 |
+| 8 | The answer body is refused above one megabyte, before it reaches `json_decode`. | `ExAppServiceTest.php` | 05-16 |
+| 9 | `GatewayController::getFileContents` answers 403 when `EX-APP-ID` is not `findling_backend`. | `GatewayControllerTest.php` | 05-16 |
+| 10 | `Provider::search` asks at most three times, resolves at most `min(64, limit * 2)` nodes per search, and stops asking when the wall clock of two and a half seconds is used up. | `ProviderTest.php` | 05-16 |
+| 11 | It requests excerpts only after the recheck, only for the surviving file ids, and not at all when the budget is gone, in which case the subline is the path. | `ProviderTest.php` and `ExAppServiceTest.php` | 05-16 |
+| 12 | `ExAppService::filterSnippets` drops an excerpt for a file id that was not asked for, and drops the highlight ranges of a text the cleaning made shorter, because every offset behind the cut would point elsewhere. A text that only changed characters without changing its length keeps them. | `ExAppServiceTest.php` | 05-16 |
+
+Number 9 is the one that took a detour worth recording. It is reachable over
+HTTP but not from the integration job as it stands, which would need a second
+registered ExApp calling the gateway under a foreign app id. Doubled, it turned
+out to be unit test material after all: a header on a request object and four
+cases.
+
+What these twelve do not prove is the same thing for all of them: they are mocks
+and they say nothing about the behaviour against a real instance. That is what
+the two integration jobs are for, and the division of labour is the point rather
+than a shortcoming.
+
+Three more PHP test files stand beside them and are not part of this list,
+because the list is a specification of one audit follow up and not an index of
+the suite: `BootstrapTest.php` and `AdminViewServiceTest.php`, which arrived with
+the scaffold in plan 05-15 and grew in plan 05-20, and
+`GroupEventListenerTest.php` from plan 06.1-08.
+
+## What closed it
 
 A PHPUnit job in `php.yml`, CI only, following the pattern every Nextcloud app
 uses: check out `nextcloud/server` at the same branch the integration jobs use,
