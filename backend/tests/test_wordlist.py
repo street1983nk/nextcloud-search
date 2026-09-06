@@ -28,11 +28,13 @@ from pathlib import Path
 import pytest
 
 from findling.index.wordlist import (
+    DIGEST_SUFFIX,
     FUGEN,
     MAX_LEN,
     MIN_LEN,
     build_artifact,
     load_constituents,
+    read_count,
     wordlist_hash,
 )
 
@@ -223,3 +225,89 @@ def test_the_two_variants_produce_different_digests(source: Path, tmp_path: Path
     # The variant is part of the tokenisation, so it has to be part of what the
     # metadata table compares against.
     assert full.digest != nouns.digest
+
+
+# ---------------------------------------------------------------------------
+# The cache in front of the artifact (plan 06.1-04). The list is 276496 Python
+# strings in the container, roughly 21.9 MB by the start up measurement of
+# 2026-09-05, and the allocator does not hand them back. Reading it a second
+# time at the first search is a second copy of that, so these cases assert the
+# reads and not the bytes: a counter tells a cache hit from a cheap rebuild,
+# an assertion on resident memory does not.
+#
+# test_a_tampered_artifact_is_rebuilt_from_the_source above belongs to this
+# group. It runs after the same list has already been through the cache, so it
+# also holds that a file edited behind an unchanged digest file is not answered
+# out of memory.
+# ---------------------------------------------------------------------------
+
+
+def place_artifact(target: Path, entries: list[str]) -> str:
+    """Put a constituent list and its digest on the volume, as a start does."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(entries) + "\n", encoding="utf-8")
+    digest = wordlist_hash(entries)
+    target.with_name(target.name + DIGEST_SUFFIX).write_text(digest + "\n", encoding="utf-8")
+    return digest
+
+
+def test_the_list_on_the_volume_is_read_once_per_process(source: Path, tmp_path: Path) -> None:
+    target = tmp_path / "dict" / "de.txt"
+    place_artifact(target, load_constituents(source))
+
+    first = build_artifact(source, target)
+    reads = read_count()
+    second = build_artifact(source, target)
+
+    assert read_count() == reads
+    assert second.rebuilt is False
+    assert second.digest == first.digest
+    # The same object, not an equal one: a copy would be the second 21.9 MB
+    # this cache exists to prevent.
+    assert second.entries is first.entries
+
+
+def test_a_changed_list_on_the_volume_is_read_again(source: Path, tmp_path: Path) -> None:
+    target = tmp_path / "dict" / "de.txt"
+    place_artifact(target, load_constituents(source))
+    first = build_artifact(source, target)
+
+    source.write_text("\n".join([*SOURCE_WORDS, "Sitzung"]) + "\n", encoding="utf-8")
+    place_artifact(target, load_constituents(source))
+    reads = read_count()
+    second = build_artifact(source, target)
+
+    # T-06.1-13: the cache hangs on the identity of the list, not on the
+    # lifetime of the process. An exchanged list has to arrive.
+    assert read_count() > reads
+    assert second.digest != first.digest
+    assert "sitzung" in second.entries
+
+
+def test_the_cache_never_answers_for_a_missing_artifact(source: Path, tmp_path: Path) -> None:
+    target = tmp_path / "dict" / "de.txt"
+    first = build_artifact(source, target)
+
+    target.unlink()
+    target.with_name(target.name + DIGEST_SUFFIX).unlink()
+    reads = read_count()
+    second = build_artifact(source, target)
+
+    # T-06.1-14: absence is never cached. A volume that lost the file gets the
+    # recipe again and a written artifact, not a ghost out of memory.
+    assert read_count() > reads
+    assert second.rebuilt is True
+    assert second.digest == first.digest
+    assert target.is_file()
+
+
+def test_a_rebuild_is_counted_like_a_read(source: Path, tmp_path: Path) -> None:
+    target = tmp_path / "dict" / "de.txt"
+    reads = read_count()
+
+    build_artifact(source, target)
+
+    # Both paths put the whole list into the process, so both are one read. The
+    # counter answers how many copies this process has paid for, which is the
+    # question the cache was added for.
+    assert read_count() == reads + 1
