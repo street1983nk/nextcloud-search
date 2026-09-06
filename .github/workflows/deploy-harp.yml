@@ -597,30 +597,44 @@ jobs:
           #!/bin/sh
           set -eu
           out="$1"
+          # Way one, and the one that works without a browser: an app password from
+          # occ, used as basic auth. Nextcloud treats an app password as token auth,
+          # which is exactly the credential a script is supposed to hold. The form
+          # login below stays as the fallback and as the diagnosis if this way dies.
+          apppw=""
+          if NC_PASS=password timeout 60 php occ user:add-app-password admin \
+            --password-from-env > "${RUNNER_TEMP}/apppw.txt" 2>&1; then
+            apppw=$(grep -oE '[A-Za-z0-9+/=._-]{40,}' "${RUNNER_TEMP}/apppw.txt" | tail -1)
+          fi
+          echo "app password: ${apppw:+obtained (length ${#apppw})}${apppw:-not available}"
+          if [ -n "${apppw}" ]; then
+            code=$(curl -s -u "admin:${apppw}" \
+              -H 'Accept: application/json' \
+              -w '%{http_code}' -o "${out}" \
+              http://localhost:8080/index.php/apps/findling/admin/overview)
+            echo "overview via app password: HTTP ${code}"
+            if [ "${code}" = "200" ]; then
+              if jq -e '.lockstep | has("state")' "${out}" > /dev/null; then exit 0; fi
+              echo "200 without a lockstep verdict:"; head -c 400 "${out}"; echo
+            fi
+          fi
+          # Way two, the session of the login form, with every stage on record: a
+          # bare curl exit code on this throwaway instance costs a fifteen-minute
+          # run to diagnose (learned three runs in a row).
           jar="${RUNNER_TEMP}/admin-cookies.txt"
           rm -f "${jar}"
-          # The throwaway administrator of this instance: user and password are
-          # the defaults of .github/actions/setup-test-nc, and they die with the
-          # runner like every other credential in this job.
-          # Every stage prints its verdict: a bare curl exit code on this
-          # throwaway instance costs a full fifteen-minute run to diagnose
-          # (learned three runs in a row).
           code=$(curl -s -c "${jar}" -o "${RUNNER_TEMP}/login-get.html" \
             -w '%{http_code}' http://localhost:8080/index.php/login)
           token=$(grep -o 'data-requesttoken="[^"]*"' "${RUNNER_TEMP}/login-get.html" \
             | head -1 | cut -d'"' -f2)
           echo "login page: HTTP ${code}, token length ${#token}"
-          code=$(curl -s -b "${jar}" -c "${jar}" -o /dev/null -w '%{http_code}' \
+          redirect=$(curl -s -b "${jar}" -c "${jar}" -o /dev/null \
+            -w '%{http_code} %{redirect_url}' \
             --data-urlencode "user=admin" \
             --data-urlencode "password=password" \
             --data-urlencode "requesttoken=${token}" \
             http://localhost:8080/index.php/login)
-          echo "login post: HTTP ${code}"
-          whoami=$(curl -s -b "${jar}" -H 'OCS-APIRequest: true' \
-            -H 'Accept: application/json' \
-            http://localhost:8080/ocs/v2.php/cloud/user \
-            | grep -o '"id":"[^"]*"' | head -1 || true)
-          echo "session belongs to: ${whoami:-nobody}"
+          echo "login post: ${redirect}"
           code=$(curl -s -b "${jar}" -c "${jar}" -o "${RUNNER_TEMP}/settings.html" \
             -w '%{http_code}' http://localhost:8080/index.php/settings/admin)
           token=$(grep -o 'data-requesttoken="[^"]*"' "${RUNNER_TEMP}/settings.html" \
@@ -631,7 +645,7 @@ jobs:
             -H 'Accept: application/json' \
             -w '%{http_code}' -o "${out}" \
             http://localhost:8080/index.php/apps/findling/admin/overview)
-          echo "overview: HTTP ${code}"
+          echo "overview via session: HTTP ${code}"
           if [ "${code}" != "200" ]; then
             echo "overview body head:"; head -c 400 "${out}" || true; echo
             exit 1
