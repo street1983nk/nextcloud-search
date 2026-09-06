@@ -58,7 +58,13 @@ env:
   # validation path is only evidence if it is the same path in both places.
   # Deliberately not master, so an unrelated commit upstream cannot turn this
   # build red or, worse, silently stop catching what it used to catch.
-  APPSTORE_SHA: 5c4373d7d026a8f7c7838cc9990fecaf19e8e682
+  #
+  # That "same value" is not left to care any more. The app-metadata job of
+  # php.yml compares the two occurrences on every run, and php.yml is triggered
+  # by a change to this file for exactly that reason. Both were raised together
+  # on 06.09.2026; the reading of the difference stands at the pin in php.yml,
+  # which is the one place where it belongs and not two.
+  APPSTORE_SHA: eda850ba61407c6e4da3e23316614c6126406652
 
   # The branch whose occ signs the companion app, same value as the phpunit job
   # of php.yml.

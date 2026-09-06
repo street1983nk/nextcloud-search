@@ -25,11 +25,52 @@ the store schema and of one measured trap of the sister project:
 * and the whole file, like every public artefact of this project, carries no em
   dash, no en dash and no emoji.
 
+Three more rules of the store arrived with plan 06.1-13, and until then they
+lived in a documentation table where nobody could trip over them:
+
+* no image under ``store/media`` is over the store's limit of two mebibytes,
+* every ``category`` of both halves is one of the fifteen the store knows,
+* the ``licence`` is one of the values the schema accepts.
+
+They sit in this file rather than in a second gate next to it, because they
+answer the same question as everything above: what the store would refuse
+without a schema saying so. The address to file mapping of the images is not
+among them, because it already exists: ``_local_image`` has judged every
+screenshot address against the media directory since plan 05-18, and the
+mapping there is mechanical rather than guessed by matching names.
+
+**The vocabulary rule, and how far it reaches.** The owner keeps one German
+word out of the texts this project puts in front of readers, the word for a
+place where things are kept. Until plan 06.1-13 this repository held no gate for
+it, and the finding that made the question unavoidable is DI-05-32 of phase 5:
+the English technical term stands in a comment in ``backend/appinfo/info.xml``,
+in the paragraph about the release package, and that comment travels inside the
+package.
+
+Decision E-H2 of 06.09.2026 answers it, and the reach is written here rather
+than in a summary nobody reads twice: **the rule is about German prose in the
+public facing texts.** The English technical term in a technical comment of a
+delivered file is **exempt**, and the comment stays as it is. A silent exception
+would be the same finding reopened in half a year, so the exception is not only
+allowed here, it is exercised: one case below proves the term is still standing
+in that comment and that this gate deliberately says nothing about it.
+
+Which brings the counting hygiene with it, because two different counts are in
+play and mixing them silently would make this gate unreadable:
+
+* the prose rule counts **without** comment lines, and every case that uses it
+  says so in its name or in its message,
+* the exception is proven with a count **including** the comments, and that case
+  says so too.
+
 One more thing is checked that is not a schema rule at all. The measured
 sentence of plan 06-11 lives in three places: ``README.md`` and the English
 description of both halves. Three places for one number drift apart, and the
 store description is the one where nobody would notice; so the equality is
-mechanical here rather than remembered.
+mechanical here rather than remembered. The privacy paragraph of D-12 is checked
+in the same spirit and with the same modesty: it has to stand in all three
+languages of both descriptions, and whether the three say the same thing is a
+reading and not a comparison this file can make.
 
 **What this gate does not claim.** It says nothing about whether a translation
 is good, whether it says the same thing as the other two, or whether the German
@@ -60,10 +101,19 @@ PHP_INFO = REPO_ROOT / "php" / "appinfo" / "info.xml"
 BACKEND_INFO = REPO_ROOT / "backend" / "appinfo" / "info.xml"
 README = REPO_ROOT / "README.md"
 
+# The six store texts in one German document, side by side in three languages.
+# The rule of E-H2 reaches it too: it is German prose that a reader reads.
+STORE_LISTING = REPO_ROOT / "docs" / "store-listing.md"
+
 # Where the images of the store page live. The store keeps addresses and not
 # files, so the images are in this repository and are linked over https; this
 # directory is the other end of every one of those addresses.
 MEDIA = REPO_ROOT / "store" / "media"
+
+# The file a human reads before adding a fourth image. It is held against the
+# directory it describes below, because a size written down once is a size that
+# stops being true the first time an image is replaced.
+MEDIA_README = MEDIA / "README.md"
 
 # An em dash and an en dash, written as escapes rather than as themselves, so
 # that this file does not carry the two characters it exists to keep out. Same
@@ -109,6 +159,115 @@ RAW_MEDIA_PREFIX = "https://raw.githubusercontent.com/street1983nk/nextcloud-sea
 # them would have been red over a tree that was correct; plan 05-18 adds the
 # images and therefore the number.
 SCREENSHOT_MINIMUM = 1
+
+# The blocked term of the owner's vocabulary rule, lowercase and as a stem, so
+# that the German word and every compound built on it are caught by the same
+# comparison. Assembled from two halves for the same reason the dashes above are
+# escapes: a gate must not carry the thing it exists to keep out.
+#
+# The reach of the rule is decision E-H2 of 06.09.2026, stated in the module
+# docstring: German prose in the public facing texts, and the English technical
+# term in a technical comment of a delivered file is exempt.
+BLOCKED_TERM = "arch" + "iv"
+
+# Every XML comment of a document. Used to say out loud which of the two counts
+# a case is making, rather than relying on the fact that an XML parser drops
+# comments on its own.
+_XML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+# How the privacy paragraph of D-12 opens in each of the three languages. The
+# French one is matched without its colon because French typography puts a space
+# in front of it, and that space is not what this rule is about.
+PRIVACY_MARKERS = {
+    DEFAULT_LANGUAGE: "Privacy:",
+    "de": "Datenschutz:",
+    "fr": "Confidentialité",
+}
+
+# The store's limit per image, in bytes so that the comparison below reads as a
+# comparison and not as arithmetic. Two mebibytes, and it is a limit of the
+# upload rather than a recommendation: an image over it ends the submission.
+MEDIA_MAX_BYTES = 2 * 1024 * 1024
+
+# How the limit is spelled where a human reads it. The media README has to name
+# it, because the person who adds a fourth image reads that file and not this
+# one.
+MEDIA_LIMIT_PHRASE = "2 MiB"
+
+# The fifteen categories the store knows, read on 06.09.2026 out of
+# nextcloudappstore/core/fixtures/categories.json at the commit that
+# .github/workflows/php.yml pins. The date is part of the constant: when the pin
+# is raised, this list is what has to be read again.
+#
+# Deliberately a constant and not a fetch. A gate that asks the network turns the
+# build red the day somebody else rebuilds a page, and green again for reasons
+# that have nothing to do with this repository.
+#
+# info.xsd carries the same enumeration, so a wrong value does fail the store
+# validation path too. This exists next to it because that path needs a network
+# fetch and a runner, and because its message is about an enumeration in a
+# normalised document, whereas this one names the file and the value.
+STORE_CATEGORIES = frozenset(
+    {
+        "ai",
+        "customization",
+        "dashboard",
+        "files",
+        "games",
+        "integration",
+        "monitoring",
+        "multimedia",
+        "office",
+        "organization",
+        "search",
+        "security",
+        "social",
+        "tools",
+        "workflow",
+    }
+)
+
+# The licence values info.xsd accepts, from the same file at the same commit and
+# read on the same day. The four short ones are marked "Deprecated" in the schema
+# and are still accepted; the SPDX spellings above them carry the schema comment
+# "Requires Nextcloud minVersion >= 31".
+#
+# This entry ships "agpl", which is one of the deprecated four. That is valid and
+# stays valid, and the move to AGPL-3.0-or-later is a change to both halves at
+# once rather than a fix inside this gate, so it is written down as a deferred
+# item instead of being done here in passing.
+STORE_LICENCES = frozenset(
+    {
+        "0BSD",
+        "AGPL-3.0-only",
+        "AGPL-3.0-or-later",
+        "Apache-2.0",
+        "BSD-2-Clause",
+        "BSD-3-Clause",
+        "BSD-3-Clause-Clear",
+        "CC0-1.0",
+        "EUPL-1.2",
+        "FSFAP",
+        "GPL-2.0-or-later",
+        "GPL-3.0-only",
+        "GPL-3.0-or-later",
+        "LGPL-2.1-only",
+        "LGPL-2.1-or-later",
+        "LGPL-3.0-only",
+        "LGPL-3.0-or-later",
+        "MIT",
+        "MPL-2.0",
+        "OLDAP-2.7",
+        "PDDL-1.0",
+        "SAX-PD",
+        "Unlicense",
+        "X11",
+        "agpl",
+        "apache",
+        "mit",
+        "mpl",
+    }
+)
 
 # The sentence of plan 06-11 (the semantic full run, superseding 05-14), quoted and
 # not paraphrased. It is compared after
@@ -296,6 +455,169 @@ def _local_image(name: str, url: str) -> list[str]:
         return [absent]
 
     return []
+
+
+def media_files() -> list[Path]:
+    """Every image of the store entry, the README of the directory excluded."""
+    return sorted(path for path in MEDIA.glob("*") if path.is_file() and path != MEDIA_README)
+
+
+def judge_image_size(name: str, size: int) -> list[str]:
+    """Whether one image is inside the store's limit per image.
+
+    A pure comparison rather than a look at the disk, so that the sample which
+    has to make this fire is a number and not a file of two megabytes staged in
+    a repository that would then carry it forever.
+    """
+    if size > MEDIA_MAX_BYTES:
+        return [f"store/media/{name}: is {size} bytes, over the store limit of {MEDIA_MAX_BYTES} bytes per image"]
+
+    return []
+
+
+def scan_media_sizes() -> list[str]:
+    """Every image of the directory, held against the limit."""
+    return [message for path in media_files() for message in judge_image_size(path.name, path.stat().st_size)]
+
+
+def scan_catalogue(name: str, source: str) -> list[str]:
+    """The category and licence values of one info.xml.
+
+    Both are enumerations, both are in info.xsd, and both are therefore caught
+    on the store validation path as well. The reason they are here too is what
+    that path costs: a runner, a network fetch of two pinned files, and a
+    message about an enumeration in a document that no longer looks like the one
+    that was edited. This says the same thing in a second, and it names the file
+    and the value.
+
+    A file without a category is a finding of its own and not a silent pass.
+    Without that clause a document whose category elements were all deleted
+    would report nothing at all, which is how a gate over an empty list looks
+    healthy.
+    """
+    try:
+        info = ElementTree.fromstring(source)  # noqa: S314
+    except ElementTree.ParseError as broken:
+        return [f"{name}: is not well formed XML ({broken})"]
+
+    violations: list[str] = []
+
+    categories = [(element.text or "").strip() for element in info.findall("category")]
+    if not categories:
+        violations.append(f"{name}: carries no category, so the store has no shelf to file the entry on")
+    violations += [
+        f"{name}: the category {category!r} is not one of the {len(STORE_CATEGORIES)} the store knows"
+        for category in categories
+        if category not in STORE_CATEGORIES
+    ]
+
+    licences = [(element.text or "").strip() for element in info.findall("licence")]
+    if len(licences) != 1:
+        violations.append(f"{name}: carries {len(licences)} licence elements and the store expects exactly one")
+    violations += [
+        f"{name}: the licence {licence!r} is not one the store accepts"
+        for licence in licences
+        if licence not in STORE_LICENCES
+    ]
+
+    return violations
+
+
+def scan_media_readme(source: str) -> list[str]:
+    """Whether the media README names every image with the size it really has.
+
+    The size of an image is written down for one reason: so that the person who
+    is about to add a fourth one knows how much room is left before the store
+    refuses the upload. A number that was true when it was typed is worse than
+    no number, so the file is held against the directory it describes rather
+    than trusted.
+    """
+    violations: list[str] = []
+
+    if MEDIA_LIMIT_PHRASE not in source:
+        violations.append(f"store/media/README.md: does not name the limit ({MEDIA_LIMIT_PHRASE}) at all")
+
+    for path in media_files():
+        size = str(path.stat().st_size)
+        if path.name not in source:
+            violations.append(f"store/media/README.md: says nothing about {path.name}, which lies in the directory")
+        elif size not in source:
+            violations.append(
+                f"store/media/README.md: does not name the size of {path.name}, which is {size} bytes today"
+            )
+
+    return violations
+
+
+def strip_xml_comments(source: str) -> str:
+    """The document without any of its comments."""
+    return _XML_COMMENT.sub("", source)
+
+
+def count_blocked_term(text: str) -> int:
+    """How often the blocked term stands in a text, upper and lower case alike."""
+    return text.lower().count(BLOCKED_TERM)
+
+
+def scan_german_prose_of_an_info(name: str, source: str) -> list[str]:
+    """The blocked term in the German store texts of one info.xml.
+
+    **This count leaves comment lines out.** The comments are removed from the
+    document before it is parsed, which an XML parser would do anyway; it is
+    done here in the open so that the claim is a line of code and not a property
+    of somebody else's library. The reason is E-H2: the rule is about the prose
+    a reader reads, and the English technical term in a technical comment of a
+    delivered file is exempt.
+    """
+    try:
+        info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
+    except ElementTree.ParseError as broken:
+        return [f"{name}: is not well formed XML ({broken})"]
+
+    return [
+        f"{name}: the German {kind} carries the blocked term of the owner's vocabulary rule "
+        f"(comment lines are not counted here, the rule is about prose, E-H2)"
+        for kind in L10N_ELEMENTS
+        for element in info.findall(kind)
+        if element.get("lang") == "de" and count_blocked_term(element.text or "")
+    ]
+
+
+def scan_german_document(name: str, source: str) -> list[str]:
+    """The blocked term anywhere in a German document.
+
+    **This count includes every line of the file.** A markdown document has no
+    comment syntax to exempt, and the six store texts quoted inside it are the
+    same prose the rule is about. If an English wording ever needs the term as a
+    file type, that is a decision to take against E-H2 and not a line to slip in
+    here.
+    """
+    if count_blocked_term(source):
+        finding = (
+            f"{name}: carries the blocked term of the owner's vocabulary rule "
+            f"(every line of the file is counted here, comments included, E-H2)"
+        )
+        return [finding]
+
+    return []
+
+
+def scan_privacy_paragraph(name: str, source: str) -> list[str]:
+    """Whether the privacy paragraph of D-12 stands in all three languages.
+
+    It says nothing about what the three paragraphs say. Comparing translations
+    is a reading, and the reading happens against ``docs/store-listing.md``. What
+    this can see is the one failure nobody would notice: a description that was
+    rewritten in one language and lost the paragraph on the way.
+    """
+    info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
+
+    return [
+        f"{name}: the description for {_named(language)} has lost the privacy paragraph of D-12"
+        for element in info.findall("description")
+        for language in [element.get("lang", DEFAULT_LANGUAGE)]
+        if language in PRIVACY_MARKERS and PRIVACY_MARKERS[language] not in (element.text or "")
+    ]
 
 
 def scan_measured_sentence(name: str, source: str) -> list[str]:
@@ -547,3 +869,273 @@ def test_a_text_without_the_measured_sentence_is_reported() -> None:
     # And a line break inside the sentence is not a difference: README.md wraps
     # at a different width than an info.xml, and that must not be a finding.
     assert scan_measured_sentence("sample.md", MEASURED_SENTENCE.replace(" ", "\n", 4)) == []
+
+
+# -- the store rules that no schema of ours states: images and the two lists --
+
+
+def test_no_image_of_the_store_entry_is_over_the_store_limit() -> None:
+    assert scan_media_sizes() == []
+
+
+def test_the_media_directory_is_not_empty_before_the_sizes_are_judged() -> None:
+    # The anti vacuity clause of the size rule. scan_media_sizes returns an
+    # empty list over an empty directory, which is exactly what it returns over
+    # a directory of correct images, and the two have to be told apart.
+    assert media_files() != []
+
+
+def test_both_info_files_carry_a_known_category_and_an_accepted_licence() -> None:
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_catalogue(f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8"))
+    ]
+
+    assert violations == []
+
+
+def test_the_media_readme_names_every_image_with_its_size_and_the_limit() -> None:
+    assert MEDIA_README.is_file()
+    assert scan_media_readme(MEDIA_README.read_text(encoding="utf-8")) == []
+
+
+# -- self tests for the three rules above ------------------------------------
+
+_CLEAN_CATALOGUE = """<?xml version="1.0"?>
+<info>
+\t<id>findling</id>
+\t<category>search</category>
+\t<category>files</category>
+\t<licence>agpl</licence>
+</info>
+"""
+
+
+def _readme_sample() -> str:
+    """A media README that says the truth about every image lying there now."""
+    described = [f"`{path.name}`: {path.stat().st_size} bytes" for path in media_files()]
+
+    return "\n".join([f"the limit is {MEDIA_LIMIT_PHRASE} per image", *described])
+
+
+def test_the_clean_catalogue_sample_is_clean() -> None:
+    # The counter sample, for the same reason the one above the screenshots has
+    # one: a scanner that reported every document would pass every failure test.
+    assert scan_catalogue("sample.xml", _CLEAN_CATALOGUE) == []
+
+
+def test_an_image_over_the_limit_is_reported_and_one_exactly_on_it_is_not() -> None:
+    over = judge_image_size("header.png", MEDIA_MAX_BYTES + 1)
+
+    assert len(over) == 1
+    assert "over the store limit" in over[0]
+    assert str(MEDIA_MAX_BYTES + 1) in over[0]
+    # The limit itself passes. "At most two mebibytes" is what the store says,
+    # and a gate that refused the boundary would be a different rule.
+    assert judge_image_size("header.png", MEDIA_MAX_BYTES) == []
+
+
+def test_a_category_the_store_does_not_know_is_reported() -> None:
+    violations = scan_catalogue(
+        "sample.xml", _CLEAN_CATALOGUE.replace("<category>files</category>", "<category>fulltext</category>")
+    )
+
+    assert len(violations) == 1
+    assert "'fulltext'" in violations[0]
+
+
+def test_an_entry_without_a_category_is_reported() -> None:
+    without = _CLEAN_CATALOGUE.replace("\t<category>search</category>\n", "").replace(
+        "\t<category>files</category>\n", ""
+    )
+    violations = scan_catalogue("sample.xml", without)
+
+    assert len(violations) == 1
+    assert "carries no category" in violations[0]
+
+
+def test_a_licence_the_store_does_not_accept_is_reported() -> None:
+    violations = scan_catalogue(
+        "sample.xml", _CLEAN_CATALOGUE.replace("<licence>agpl</licence>", "<licence>wtfpl</licence>")
+    )
+
+    assert len(violations) == 1
+    assert "'wtfpl'" in violations[0]
+
+
+def test_a_missing_licence_is_reported() -> None:
+    violations = scan_catalogue("sample.xml", _CLEAN_CATALOGUE.replace("\t<licence>agpl</licence>\n", ""))
+
+    assert len(violations) == 1
+    assert "carries 0 licence elements" in violations[0]
+
+
+def test_a_catalogue_document_that_is_not_well_formed_is_a_finding_and_not_an_error() -> None:
+    violations = scan_catalogue("sample.xml", _CLEAN_CATALOGUE.replace("</info>", ""))
+
+    assert len(violations) == 1
+    assert "not well formed" in violations[0]
+
+
+def test_the_clean_readme_sample_is_clean() -> None:
+    assert scan_media_readme(_readme_sample()) == []
+
+
+def test_a_readme_without_the_limit_is_reported() -> None:
+    violations = scan_media_readme(_readme_sample().replace(MEDIA_LIMIT_PHRASE, "some size or other"))
+
+    assert len(violations) == 1
+    assert "does not name the limit" in violations[0]
+
+
+def test_a_readme_whose_size_stopped_being_true_is_reported() -> None:
+    # The failure this rule exists for: an image is replaced and the number next
+    # to it stays. Nothing but a comparison against the directory can see it.
+    first = media_files()[0]
+    stale = _readme_sample().replace(f"{first.stat().st_size} bytes", "1 byte")
+    violations = scan_media_readme(stale)
+
+    assert len(violations) == 1
+    assert first.name in violations[0]
+    assert "does not name the size" in violations[0]
+
+
+def test_a_readme_that_forgot_an_image_entirely_is_reported() -> None:
+    first = media_files()[0]
+    violations = scan_media_readme(_readme_sample().replace(f"`{first.name}`", "`something-else.png`"))
+
+    assert len(violations) == 1
+    assert "says nothing about" in violations[0]
+
+
+# -- the vocabulary rule of E-H2, with its reach, and the paragraph of D-12 ---
+
+
+def test_the_german_store_texts_avoid_the_blocked_term_without_counting_comments() -> None:
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_german_prose_of_an_info(
+            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert violations == []
+
+
+def test_the_store_listing_document_avoids_the_blocked_term_counting_every_line() -> None:
+    assert STORE_LISTING.is_file()
+    assert scan_german_document("docs/store-listing.md", STORE_LISTING.read_text(encoding="utf-8")) == []
+
+
+def test_the_exception_of_e_h2_is_exercised_and_not_only_claimed() -> None:
+    """The English term still stands in the comment, and this gate lets it stand.
+
+    **This is the count that includes the comments**, and it is the whole point
+    of the case. Without it the exception would be indistinguishable from an
+    absence: a tree in which somebody had quietly removed the word would look
+    exactly like a tree in which the exception works.
+
+    If this case ever goes red, one of two things happened, and both want a
+    decision rather than an edit. Either the comment was reworded, in which case
+    the exception has lost its example and this case goes with it, or the gate
+    was tightened to read the raw file, in which case E-H2 has to be re-read
+    before anything else is touched.
+    """
+    delivered = BACKEND_INFO.read_text(encoding="utf-8")
+
+    assert count_blocked_term(delivered) >= 1
+    assert count_blocked_term(strip_xml_comments(delivered)) == 0
+    assert scan_german_prose_of_an_info("backend/appinfo/info.xml", delivered) == []
+
+
+def test_the_privacy_paragraph_of_d_12_stands_in_all_three_languages_of_both_halves() -> None:
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_privacy_paragraph(
+            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert violations == []
+
+
+# -- self tests for the vocabulary rule and the privacy paragraph ------------
+
+_CLEAN_PRIVACY = (
+    _CLEAN_INFO.replace("What it does, in English.", "What it does. Privacy: no file content leaves the server.")
+    .replace("Was sie tut, auf Deutsch.", "Was sie tut. Datenschutz: kein Dateiinhalt geht vom Server fort.")
+    .replace("Ce qu'elle fait, en francais.", "Ce qu'elle fait. Confidentialité : rien ne quitte le serveur.")
+)
+
+
+def test_the_blocked_term_in_a_german_store_text_is_reported() -> None:
+    # The prose count, which is the one that leaves comments out.
+    violations = scan_german_prose_of_an_info(
+        "sample.xml", _CLEAN_INFO.replace("Was sie tut, auf Deutsch.", f"Ein {BLOCKED_TERM} voller Dateien.")
+    )
+
+    assert len(violations) == 1
+    assert "comment lines are not counted" in violations[0]
+
+
+def test_the_blocked_term_in_an_english_store_text_is_not_the_business_of_this_rule() -> None:
+    # E-H2 draws the line at German prose. An English wording is judged by the
+    # store and by a reader, not by this gate, and pretending otherwise here
+    # would be a rule nobody decided.
+    assert (
+        scan_german_prose_of_an_info(
+            "sample.xml", _CLEAN_INFO.replace("What it does, in English.", f"A release {BLOCKED_TERM}e.")
+        )
+        == []
+    )
+
+
+def test_the_blocked_term_inside_a_comment_is_not_reported_by_the_prose_count() -> None:
+    # The staged twin of the delivered file: the term stands in the document,
+    # inside a comment, and the prose count says nothing. This is the mechanical
+    # form of the exception in E-H2.
+    commented = _CLEAN_INFO.replace(
+        '<?xml version="1.0"?>\n',
+        f'<?xml version="1.0"?>\n<!-- the release {BLOCKED_TERM}e carries this file unchanged -->\n',
+    )
+
+    assert count_blocked_term(commented) == 1
+    assert count_blocked_term(strip_xml_comments(commented)) == 0
+    assert scan_german_prose_of_an_info("sample.xml", commented) == []
+
+
+def test_the_blocked_term_in_a_german_document_is_reported_with_every_line_counted() -> None:
+    violations = scan_german_document("sample.md", f"Ein Satz ueber ein {BLOCKED_TERM} und seine Dateien.")
+
+    assert len(violations) == 1
+    assert "every line of the file is counted" in violations[0]
+
+
+def test_a_document_that_is_not_well_formed_is_a_finding_of_the_vocabulary_scan_too() -> None:
+    violations = scan_german_prose_of_an_info("sample.xml", _CLEAN_INFO.replace("</info>", ""))
+
+    assert len(violations) == 1
+    assert "not well formed" in violations[0]
+
+
+def test_the_clean_privacy_sample_is_clean() -> None:
+    assert scan_privacy_paragraph("sample.xml", _CLEAN_PRIVACY) == []
+
+
+def test_a_description_that_lost_the_privacy_paragraph_is_reported_by_language() -> None:
+    violations = scan_privacy_paragraph("sample.xml", _CLEAN_PRIVACY.replace("Datenschutz: ", ""))
+
+    assert len(violations) == 1
+    assert "lang=de" in violations[0]
+
+
+def test_the_privacy_scan_says_nothing_about_what_the_three_paragraphs_mean() -> None:
+    # The modesty clause, as a case rather than as a sentence in a docstring: a
+    # German paragraph that says something else entirely still passes, because
+    # judging that is a reading and this file does not read.
+    rewritten = _CLEAN_PRIVACY.replace("kein Dateiinhalt geht vom Server fort.", "etwas ganz anderes.")
+
+    assert scan_privacy_paragraph("sample.xml", rewritten) == []
