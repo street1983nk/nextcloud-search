@@ -58,8 +58,13 @@ jobs:
     runs-on: ubuntu-24.04
     # A job that hangs must cost minutes, not the default six hours. The number
     # is the measured runtime with a margin and not a guess; the measurement is
-    # written down at the matrix below.
-    timeout-minutes: 15
+    # written down at the matrix below. It was 15 while the job ended after the
+    # search and the uninstall assertions. The drift probe of plan 06.1-09 adds
+    # three redeployments of the kind this job has already measured, so the
+    # margin over the measurement would have shrunk rather than the runtime
+    # having been reconsidered, which is why the number is 20 and still nowhere
+    # near the default of 360.
+    timeout-minutes: 20
     # The one entry that may fail is the one for a server version that is not
     # released yet, and which one that is stands at the entry itself.
     continue-on-error: ${{ matrix.tolerate-failure }}
@@ -97,10 +102,11 @@ jobs:
         # Measured on 2026-09-03 in the first green run over the four entries of the
         # time (run 33757405755): 3 m 47 s to 4 m 29 s per entry, of which 60 s are
         # the image build and about 50 s the observation window of assertion 6. The
-        # entries run in parallel, so that is the wall clock as well.
-        # timeout-minutes above is 15, roughly three times the measurement and far
-        # away from the default of 360, which is the number that lets a hung
-        # handshake burn an afternoon.
+        # entries run in parallel, so that is the wall clock as well. That
+        # measurement predates the drift probe of plan 06.1-09 and does not
+        # include its three redeployments, which is what timeout-minutes above
+        # answers with 20 rather than 15; the next green run replaces the figures
+        # of this paragraph with the ones it measures.
         include:
           - server-version: stable33
             php-version: '8.2'
@@ -483,6 +489,274 @@ jobs:
           jq -e '.ocs.data.entries[0].title == "findling-canary"' out.json
           jq -e '.ocs.data.entries[0].subline | startswith("produced inside container ")' out.json
           jq -e '.ocs.data.entries[0].subline | endswith("for user testuser")' out.json
+
+      # The four steps below are the runtime half of the lockstep promise of
+      # D-11, and they sit here rather than anywhere else on purpose: the step
+      # above has just shown what an agreeing pair does, which is the counter
+      # sample every assertion from here on is measured against, and the
+      # uninstall proof below needs the installation intact, which the last of
+      # the four hands back.
+      #
+      # What is being proven is the half of D-11 that had no evidence. The
+      # repository side is held by backend/tests/test_lockstep_versions.py: both
+      # info.xml and the image tag carry one version. Nobody had measured what
+      # an instance does when the two halves are nevertheless apart, which is
+      # what every instance looks like for the minutes between updating one half
+      # and the other, and in both orders.
+      #
+      # The lever is the version in the info.xml handed to app_api:app:register.
+      # AppAPI passes it to the container as APP_VERSION, the container reports
+      # it as appVersion out of backend/src/findling/api/status.py, and
+      # php/lib/Service/ExAppService.php compares major and minor of it against
+      # its own. Nothing in the repository moves for this, which is the reason
+      # this lever was chosen over editing a version and rebuilding: a proof
+      # that needs the tree changed cannot run on the tree it is proving. That
+      # AppAPI really carries the value through is not assumed either, the
+      # helper below reads it back off the running container.
+      #
+      # And what is expressly NOT expected anywhere here is an error status. The
+      # unified search calls every provider in parallel, so a provider that
+      # throws costs the user the whole search rather than one result group
+      # (T-06.1-36). The promise is an honest empty answer, and an empty answer
+      # is only worth anything next to the step above, where the same call with
+      # the same term returns a hit.
+      - name: The drift probe both directions share
+        run: |
+          companion=$(sed -n 's|.*<version>\([^<]*\)</version>.*|\1|p' \
+            findling-src/php/appinfo/info.xml | head -1)
+          if [ -z "${companion}" ]; then
+            echo "no version in php/appinfo/info.xml, so there is nothing to drift away from"
+            exit 1
+          fi
+          major=${companion%%.*}
+          rest=${companion#*.}
+          minor=${rest%%.*}
+          # A minor apart in each direction, because that is the distance the
+          # release policy of D-11 attaches the protocol to: a patch is
+          # deliberately not a drift, so a probe built on one would assert the
+          # opposite of the promise.
+          newer="${major}.$((minor + 1)).0"
+          if [ "${minor}" -gt 0 ]; then
+            older="${major}.$((minor - 1)).0"
+          elif [ "${major}" -gt 0 ]; then
+            older="$((major - 1)).9.0"
+          else
+            echo "the companion is at ${companion}, and there is no version below it to drift to"
+            exit 1
+          fi
+          {
+            echo "COMPANION_VERSION=${companion}"
+            echo "DRIFT_NEWER=${newer}"
+            echo "DRIFT_OLDER=${older}"
+          } >> "${GITHUB_ENV}"
+          echo "companion ${companion}, probing against ${newer} and ${older}"
+
+          # The redeploy helper. One file rather than the same twenty lines in
+          # three steps, and it fails on its own if the value it was asked for is
+          # not the value the container ended up with.
+          cat > "${RUNNER_TEMP}/redeploy.sh" <<'SH'
+          #!/bin/sh
+          set -eu
+          version="$1"
+          sed -e "s|<version>[^<]*</version>|<version>${version}</version>|" \
+            "${RUNNER_TEMP}/info-citest.xml" > "${RUNNER_TEMP}/info-drift.xml"
+          # Exactly one version element, or the sed above rewrote something it
+          # was not aimed at and the rest of this script would be measuring a
+          # file nobody meant to produce.
+          if [ "$(grep -c '<version>' "${RUNNER_TEMP}/info-drift.xml")" != "1" ]; then
+            echo "info-drift.xml does not carry exactly one version element"
+            exit 1
+          fi
+          timeout 300 ./occ app_api:app:unregister findling_backend
+          timeout 600 ./occ app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${RUNNER_TEMP}/info-drift.xml" --wait-finish
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -z "${container}" ]; then
+            echo "the registration at ${version} left no running container"
+            docker ps -a
+            exit 1
+          fi
+          running=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' \
+            "${container}" | sed -n 's/^APP_VERSION=//p' | head -1)
+          if [ "${running}" != "${version}" ]; then
+            echo "the container runs APP_VERSION '${running}' while the registration asked for '${version}', so this probe would prove nothing"
+            exit 1
+          fi
+          echo "${container} redeployed at APP_VERSION ${running}"
+          SH
+
+          # The overview helper. The verdict lives behind an admin frontpage
+          # route, and that route answers 401 without a session, 403 to an
+          # ordinary user and 412 to an admin without the request token, all
+          # three measured in plan 04-03. Basic auth is no way past it, which is
+          # what the two round trips below are for. This call is also what puts
+          # the container version on record at all: ExAppService::lockstep is
+          # reached through the page and nowhere else, and the search path reads
+          # what it wrote (KEY_BACKEND_VERSION).
+          cat > "${RUNNER_TEMP}/overview.sh" <<'SH'
+          #!/bin/sh
+          set -eu
+          out="$1"
+          jar="${RUNNER_TEMP}/admin-cookies.txt"
+          rm -f "${jar}"
+          # The throwaway administrator of this instance: user and password are
+          # the defaults of .github/actions/setup-test-nc, and they die with the
+          # runner like every other credential in this job.
+          token=$(curl -s -c "${jar}" http://localhost:8080/login \
+            | grep -o 'data-requesttoken="[^"]*"' | head -1 | cut -d'"' -f2)
+          curl -s -b "${jar}" -c "${jar}" -o /dev/null \
+            --data-urlencode "user=admin" \
+            --data-urlencode "password=password" \
+            --data-urlencode "requesttoken=${token}" \
+            http://localhost:8080/login
+          token=$(curl -s -b "${jar}" -c "${jar}" http://localhost:8080/settings/admin \
+            | grep -o 'data-requesttoken="[^"]*"' | head -1 | cut -d'"' -f2)
+          curl -sf -b "${jar}" -c "${jar}" \
+            -H "requesttoken: ${token}" \
+            -H 'Accept: application/json' \
+            http://localhost:8080/apps/findling/admin/overview > "${out}"
+          if ! jq -e '.lockstep | has("state")' "${out}" > /dev/null; then
+            echo "the overview carries no lockstep verdict, so the session or the route is not what this probe assumes"
+            head -c 400 "${out}"
+            exit 1
+          fi
+          SH
+
+          chmod +x "${RUNNER_TEMP}/redeploy.sh" "${RUNNER_TEMP}/overview.sh"
+
+          # The counter sample, and it is the reason the two steps below say
+          # anything at all: with the installation untouched the verdict is
+          # match, and both numbers are the one version of this release.
+          sh "${RUNNER_TEMP}/overview.sh" lockstep-match.json
+          jq '.lockstep' lockstep-match.json
+          if ! jq -e --arg v "${companion}" \
+            '.lockstep.state == "match" and .lockstep.companion == $v and .lockstep.container == $v' \
+            lockstep-match.json > /dev/null; then
+            echo "the untouched installation does not report a matching pair at ${companion}, so a drift verdict below would be the state it was in all along"
+            exit 1
+          fi
+          echo "baseline: both halves at ${companion}, verdict match"
+
+      # Direction one: the container is a minor ahead of the companion, which is
+      # the instance where the ExApp was updated first.
+      - name: Drift 1, the container is newer than the companion
+        run: |
+          sh "${RUNNER_TEMP}/redeploy.sh" "${DRIFT_NEWER}"
+          sh "${RUNNER_TEMP}/overview.sh" lockstep-newer.json
+          jq '.lockstep' lockstep-newer.json
+          if ! jq -e --arg c "${COMPANION_VERSION}" --arg b "${DRIFT_NEWER}" \
+            '.lockstep.state == "drift" and .lockstep.companion == $c and .lockstep.container == $b' \
+            lockstep-newer.json > /dev/null; then
+            echo "the state answer does not name the drift between ${COMPANION_VERSION} and ${DRIFT_NEWER}"
+            exit 1
+          fi
+
+          # The status code is asserted rather than left to curl -sf, because
+          # the distinction between an honest empty answer and a failure is the
+          # whole assertion here and -sf would collapse the two.
+          code=$(curl -s -o drift-newer.json -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary')
+          cat drift-newer.json
+          if [ "${code}" != "200" ]; then
+            echo "the search answered HTTP ${code} while the halves disagree; a provider that fails costs the user every other provider too (T-06.1-36)"
+            exit 1
+          fi
+          if ! jq -e '.ocs.meta.status == "ok" and .ocs.meta.statuscode == 200' drift-newer.json > /dev/null; then
+            echo "the OCS envelope reports a failure, which is the same finding one layer down"
+            exit 1
+          fi
+          # The same term that returned the canary two steps ago. No hit may
+          # come out of a protocol the other half no longer speaks (T-06.1-37),
+          # and the term is what makes the emptiness mean something.
+          if ! jq -e '.ocs.data.entries | length == 0' drift-newer.json > /dev/null; then
+            echo "the search returned hits although the two halves disagree about what they mean to each other"
+            exit 1
+          fi
+          echo "container ahead: HTTP 200, no hits, verdict drift"
+
+      # Direction two: the companion is a minor ahead of the container, which is
+      # the instance where the app store half was updated first. Both directions
+      # are run because the comparison is symmetric in ExAppService and a check
+      # that only ever saw one of them would not have shown that.
+      - name: Drift 2, the container is older than the companion
+        run: |
+          sh "${RUNNER_TEMP}/redeploy.sh" "${DRIFT_OLDER}"
+          sh "${RUNNER_TEMP}/overview.sh" lockstep-older.json
+          jq '.lockstep' lockstep-older.json
+          if ! jq -e --arg c "${COMPANION_VERSION}" --arg b "${DRIFT_OLDER}" \
+            '.lockstep.state == "drift" and .lockstep.companion == $c and .lockstep.container == $b' \
+            lockstep-older.json > /dev/null; then
+            echo "the state answer does not name the drift between ${COMPANION_VERSION} and ${DRIFT_OLDER}"
+            exit 1
+          fi
+
+          code=$(curl -s -o drift-older.json -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary')
+          cat drift-older.json
+          if [ "${code}" != "200" ]; then
+            echo "the search answered HTTP ${code} while the halves disagree; a provider that fails costs the user every other provider too (T-06.1-36)"
+            exit 1
+          fi
+          if ! jq -e '.ocs.meta.status == "ok" and .ocs.meta.statuscode == 200' drift-older.json > /dev/null; then
+            echo "the OCS envelope reports a failure, which is the same finding one layer down"
+            exit 1
+          fi
+          if ! jq -e '.ocs.data.entries | length == 0' drift-older.json > /dev/null; then
+            echo "the search returned hits although the two halves disagree about what they mean to each other"
+            exit 1
+          fi
+          echo "container behind: HTTP 200, no hits, verdict drift"
+
+      # The way back, and it is an assertion rather than a cleanup. The uninstall
+      # proof below is about the installation this job made, so it has to be that
+      # installation again: the same file, the same container name, the same
+      # volume, a matching verdict and a search that finds the canary a second
+      # time. A drift the job left behind would be inherited by every step after
+      # it, silently, because none of them looks at a version.
+      - name: Drift 3, the right version is back and the search answers again
+        run: |
+          sh "${RUNNER_TEMP}/redeploy.sh" "${COMPANION_VERSION}"
+          # The restored file has to be the installed one byte for byte, not
+          # merely a file that carries the same number somewhere.
+          diff "${RUNNER_TEMP}/info-citest.xml" "${RUNNER_TEMP}/info-drift.xml"
+
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ "${container}" != "${EXAPP_CONTAINER}" ]; then
+            echo "the container is called '${container}' and the uninstall assertions look for '${EXAPP_CONTAINER}', which they would find missing for the wrong reason (T-05-29)"
+            exit 1
+          fi
+          volume=$(docker volume ls --filter "name=${EXAPP_VOLUME}" --format '{{.Name}}')
+          if [ "${volume}" != "${EXAPP_VOLUME}" ]; then
+            echo "the volume ${EXAPP_VOLUME} did not survive the three redeployments, found '${volume}'"
+            docker volume ls
+            exit 1
+          fi
+
+          sh "${RUNNER_TEMP}/overview.sh" lockstep-restored.json
+          jq '.lockstep' lockstep-restored.json
+          if ! jq -e --arg v "${COMPANION_VERSION}" \
+            '.lockstep.state == "match" and .lockstep.companion == $v and .lockstep.container == $v' \
+            lockstep-restored.json > /dev/null; then
+            echo "the halves still disagree after the restore, so every step below would run on a drifted instance"
+            exit 1
+          fi
+
+          curl -sf -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary' | tee restored.json
+          if ! jq -e '.ocs.data.entries | length == 1' restored.json > /dev/null; then
+            echo "the search does not find the canary again, so the emptiness above was not the drift"
+            exit 1
+          fi
+          jq -e '.ocs.data.entries[0].title == "findling-canary"' restored.json
+          echo "restored at ${COMPANION_VERSION}, verdict match, canary found again"
 
       # From here to the teardown runs the uninstall proof, the second half of
       # success criterion 3 of this phase. It falls into assertions that are
