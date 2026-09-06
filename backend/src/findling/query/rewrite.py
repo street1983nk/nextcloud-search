@@ -32,6 +32,7 @@ from typing import Final
 from tantivy import Index, Occur, Query
 
 from findling.config import SEARCH_QUERY_MAX_DEPTH
+from findling.index.analyzer import normalize
 from findling.index.schema import FIELD_BODY_DE, FIELD_BODY_EN, FIELD_EXT, FIELD_NAME, FIELD_TITLE
 
 LOGGER = logging.getLogger("findling.query")
@@ -235,7 +236,14 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
             extensions=(),
             errors=[f"the query nests brackets deeper than {SEARCH_QUERY_MAX_DEPTH} levels"],
         )
-    residual, extensions = extract_filters(text)
+    # The second of the two calls of the normalisation helper, and it stands
+    # after the depth guard on purpose: that guard is counted on the raw input so
+    # that nothing can walk past it, and composing a string cannot open a bracket
+    # anyway. Everything below this line therefore works in the one Unicode
+    # spelling the write side put into the index; without it a name a Mac client
+    # wrote shares no term with the same name typed into the search bar. The
+    # reasoning is at findling.index.analyzer.normalize.
+    residual, extensions = extract_filters(normalize(text))
     rewritten = add_umlaut_variants(residual).strip()
     if not rewritten:
         # No term, no engine. A search line that holds nothing but a filter would

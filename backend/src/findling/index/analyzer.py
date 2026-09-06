@@ -56,6 +56,7 @@ with itself, and the only correct answer to that is a visible reindex.
 import gc
 import logging
 import time
+import unicodedata
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -104,6 +105,42 @@ _BUILD_COUNT = 0
 def build_count() -> int:
     """Return how many German automata this process has built."""
     return _BUILD_COUNT
+
+
+def normalize(text: str) -> str:
+    """Return the one Unicode spelling this index uses. Called on both sides.
+
+    A file name with an umlaut has two spellings that look identical on screen.
+    macOS clients hand the name over decomposed, as a letter followed by a
+    combining diaeresis (NFD), while Linux clients and the web interface hand it
+    over composed, as one character (NFC). tantivy compares bytes, and the
+    folding filter of the file name chain folds ASCII only, so a combining
+    diaeresis survives every filter this module has.
+
+    Measured, and it is worse than "the two tokenise differently": the simple
+    tokenizer splits on the combining character, so ``Kündigung.pdf`` written by
+    a Mac becomes ``ku``, ``ndigung``, ``pdf`` while the same name typed into the
+    search bar of the web interface becomes ``kundigung``, ``pdf``. The two share
+    no term at all. The user sees an empty result list with no reason in it,
+    which is the one kind of defect nobody reports, because it looks like the
+    file simply is not there.
+
+    NFC and not NFD, because NFC is the form Nextcloud and its web interface
+    deliver, so the composed spelling is the majority of the stock and the
+    cheaper of the two to converge on.
+
+    It lives here, next to the analysers, because it belongs to the tokenisation
+    chain: it decides what a term is, exactly as the filters above do. It is
+    called from two places and a test holds that number. Two callers, one helper;
+    a third normalisation somewhere else would be a third text space, and a text
+    space that disagrees with the index is the failure this whole module is
+    arranged against.
+
+    It is deliberately not a filter of the chains above. A filter runs after the
+    tokenizer, and the tokenizer is what splits on the combining character in the
+    first place, so a filter would arrive one step too late.
+    """
+    return unicodedata.normalize("NFC", text)
 
 
 def german_analyzer(constituents: Sequence[str]) -> TextAnalyzer:
