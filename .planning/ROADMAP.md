@@ -108,7 +108,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 06-11-PLAN.md , ARM-Volllauf mit Semantik, neue RSS-Zahl, gemessene Kennzahl (Kriterium 4 und 5, D-17)
+- [x] 06-11-PLAN.md , ARM-Volllauf mit Semantik, neue RSS-Zahl, gemessene Kennzahl (Kriterium 4 und 5, D-17)
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
@@ -314,7 +314,7 @@ Phasen laufen in numerischer Reihenfolge: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Aktualität und OCR | 14/14 | Complete   | 2026-09-01 |
 | 4. Admin-Sichtbarkeit und Diagnose | 10/10 | Verification pending |  |
 | 5. Härtung und Store-Einreichung v1.0 | 20/21 | In Progress|  |
-| 6. Semantische Suche | 10/12 | In Progress|  |
+| 6. Semantische Suche | 11/12 | In Progress|  |
 
 ## Requirement Coverage
 
