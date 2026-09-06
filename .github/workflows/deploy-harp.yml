@@ -606,9 +606,13 @@ jobs:
             --password-from-env > "${RUNNER_TEMP}/apppw.txt" 2>&1; then
             apppw=$(grep -oE '[A-Za-z0-9+/=._-]{40,}' "${RUNNER_TEMP}/apppw.txt" | tail -1)
           fi
-          echo "app password: ${apppw:+obtained (length ${#apppw})}${apppw:-not available}"
+          if [ -n "${apppw}" ]; then echo "app password: obtained (length ${#apppw})"; else echo "app password: not available"; fi
           if [ -n "${apppw}" ]; then
-            code=$(curl -s -u "admin:${apppw}" \
+            # index.php routes sit behind the strict cookie check (HTTP 412 without
+          # it); the two SameSite cookies are the documented way a script passes
+          # it, and they carry no session.
+          samesite='__Host-nc_sameSiteCookielax=true; __Host-nc_sameSiteCookiestrict=true'
+          code=$(curl -s -u "admin:${apppw}" -b "${samesite}" \
               -H 'Accept: application/json' \
               -w '%{http_code}' -o "${out}" \
               http://localhost:8080/index.php/apps/findling/admin/overview)
