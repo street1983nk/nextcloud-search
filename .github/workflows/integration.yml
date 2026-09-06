@@ -429,7 +429,7 @@ jobs:
       - name: Install the OCR engine, so the scan track really runs
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-osd
+          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-osd
           tesseract --version | head -1
           tesseract --list-langs
 
@@ -1079,7 +1079,7 @@ jobs:
       - name: Install the OCR engine, so the scan track really runs
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-osd
+          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-osd
           tesseract --version | head -1
 
       # Every file on the instance is crawled, so every file on the instance is
@@ -1846,7 +1846,7 @@ jobs:
       - name: Install the OCR engine, so the scan track really runs
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-osd
+          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-osd
           tesseract --version | head -1
 
       - name: Empty the instance and add the two users

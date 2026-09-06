@@ -215,18 +215,33 @@ OCR_ENABLED = True
 # The languages tesseract is asked for, in the order it is asked for them: the
 # first one weighs more, so this is an argument order, not the schema field
 # order of DEFAULT_LANGUAGES above.
-OCR_DEFAULT_LANGUAGES = ("deu", "eng")
+#
+# French is third since 2026-09-06 (owner decision). It is a default rather than
+# an option because the promise of this product is that nobody has to open a
+# form: an admin who never learns the setting exists would have French scans
+# indexed as noise forever. Third rather than first, because German is the
+# language of the target audience and the leading language is the one the engine
+# weighs most. An instance whose scans are mostly French says so through
+# FINDLING_OCR_LANGUAGES, and that order is kept.
+#
+# This is the OCR half and only the OCR half. DEFAULT_LANGUAGES above is still
+# ("de", "en"): stemming, stopwords and compound splitting stay German and
+# English, so a French document is found by its words rather than by its stems.
+OCR_DEFAULT_LANGUAGES = ("deu", "eng", "fra")
 
 # What the image actually carries, and therefore the only values that may ever
 # reach the command line (T-03-502). Measured on 2026-09-01,
-# `tesseract --list-langs` in the built image answers deu, eng and osd; osd is
-# an orientation model, not a text language, so it is not offered here.
+# `tesseract --list-langs` in the built image answered deu, eng and osd, and
+# fra joined them with the apt line added on 2026-09-06; osd is an orientation
+# model, not a text language, so it is not offered here.
 #
-# This set is maintained together with the apt block in backend/Dockerfile.
+# This set is maintained together with the apt block in backend/Dockerfile, and
+# backend/tests/test_ocr_french.py compares the two in both directions, so the
+# pair cannot drift apart silently any more.
 # Switching on the Fraktur option means uncommenting tesseract-ocr-frk there and
 # adding "frk" here, in the same change. Adding it here alone would produce a
 # call that tesseract rejects on every page.
-OCR_LANGUAGE_ALLOWLIST = frozenset({"deu", "eng"})
+OCR_LANGUAGE_ALLOWLIST = frozenset({"deu", "eng", "fra"})
 
 # Pages per document before the OCR loop stops and the state becomes truncated.
 # 30, not the 100 that STACK.md names, and the deviation is deliberate: an OCR

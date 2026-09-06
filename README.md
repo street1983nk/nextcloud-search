@@ -14,8 +14,11 @@ neben Dateien, Kontakten und Kalendereinträgen.
 - **Wörter, die im Dokument stehen**, mit der deutschen Behandlung, die eine
   Suche braucht: Komposita über einen ihrer Bestandteile, Flexion, die
   ausgeschriebene Umlautvariante, Phrasen, Ausschlüsse und ein Dateityp-Filter.
-- **Text auf gescannten Seiten**, per OCR, auf Deutsch, Englisch und in den
-  DACH-Schreibweisen.
+- **Text auf gescannten Seiten**, per OCR, auf Deutsch, Englisch,
+  Französisch und in den DACH-Schreibweisen. Die drei Sprachen sind ab Werk
+  an, es ist keine Einstellung nötig. Die Suche selbst bleibt auf Deutsch und
+  Englisch abgestimmt: eine französische Seite wird gelesen und gefunden, aber
+  ohne französische Stammformen.
 - **Dokumente, die Sie beschreiben statt zitieren.** Eine Anfrage, deren Wörter
   nicht im Dokument stehen, kann es trotzdem zurückbringen, weil ein lokales
   Embedding-Modell nach Bedeutung rankt, neben dem Wortindex.

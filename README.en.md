@@ -14,8 +14,10 @@ calendar entries.
 - **Words that stand in the document**, with German handling that a search needs:
   compounds through one of their parts, inflection, the written out umlaut,
   phrases, exclusions and a file type filter.
-- **Text inside scanned pages**, through OCR, in German, English and the DACH
-  spellings.
+- **Text inside scanned pages**, through OCR, in German, English, French and
+  the DACH spellings. All three are on out of the box, no setting has to be
+  touched. The search itself stays tuned for German and English: a French page
+  is read and found, but without French stemming.
 - **Documents you describe instead of quote.** A query whose words do not stand
   in the document can still bring it back, because a local embedding model
   ranks by meaning next to the word index.

@@ -99,7 +99,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 PHP_INFO = REPO_ROOT / "php" / "appinfo" / "info.xml"
 BACKEND_INFO = REPO_ROOT / "backend" / "appinfo" / "info.xml"
-README = REPO_ROOT / "README.md"
+README = REPO_ROOT / "README.en.md"  # the English edition; README.md is German since 2026-09-06
 
 # The six store texts in one German document, side by side in three languages.
 # The rule of E-H2 reaches it too: it is German prose that a reader reads.
@@ -682,7 +682,7 @@ def test_both_info_files_keep_the_schema_edges_and_all_three_languages() -> None
 
 
 def test_the_measured_sentence_reads_the_same_in_all_three_places() -> None:
-    violations = scan_measured_sentence("README.md", README.read_text(encoding="utf-8"))
+    violations = scan_measured_sentence("README.en.md", README.read_text(encoding="utf-8"))
     for path in (PHP_INFO, BACKEND_INFO):
         name = f"{path.parent.parent.name}/appinfo/info.xml"
         violations += scan_measured_sentence(name, _english_description(path.read_text(encoding="utf-8")))

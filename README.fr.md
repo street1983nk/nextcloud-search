@@ -16,8 +16,11 @@ calendrier.
   l'allemand exige d'une recherche : les mots composés via l'un de leurs
   éléments, la flexion, la variante avec umlaut écrite en toutes lettres, les
   phrases, les exclusions et un filtre de type de fichier.
-- **Le texte des pages scannées**, via l'OCR, en allemand, en anglais et dans
-  les graphies DACH.
+- **Le texte des pages scannées**, via l'OCR, en allemand, en anglais, en
+  français et dans les graphies DACH. Les trois langues sont actives d'origine,
+  aucun réglage n'est nécessaire. La recherche elle-même reste accordée sur
+  l'allemand et l'anglais : une page française est lue et retrouvée, mais sans
+  racinisation française.
 - **Les documents que vous décrivez au lieu de les citer.** Une requête dont
   les mots ne figurent pas dans le document peut quand même le faire
   remonter, parce qu'un modèle d'embedding local classe par sens, à côté de
