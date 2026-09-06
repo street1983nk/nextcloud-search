@@ -161,3 +161,48 @@ unbeurteilte Beobachtung im Protokoll. Rot-Faehigkeit dreifach belegt
 (`backend/tests/test_one_load.py`) plus einem roten Containerlauf. Commits
 0366a3b und d22c8ec. Fuer 06.1-18 bleibt nur noch die einmalige Nachmessung der
 Grundlast auf der arm64-Box; der Dauerwaechter haengt nicht mehr an ihr.
+
+---
+
+## DI-06.1-05 (Plan 06.1-13): Der Lizenzwert `agpl` ist in der Store-XSD als veraltet gefuehrt
+
+**Gefunden:** Plan 06.1-13, Task 2, beim Lesen der Aufzaehlung `licence` in
+`info.xsd` am gehobenen Pin `eda850ba`.
+
+**Was:** Beide `info.xml` tragen `<licence>agpl</licence>`. Die XSD nimmt den
+Wert an, fuehrt ihn aber unter der Ueberschrift `Deprecated`, zusammen mit
+`mit`, `mpl` und `apache`. Die nicht veralteten Schreibweisen darueber tragen
+den Kommentar `Requires Nextcloud minVersion >= 31`; fuer dieses Projekt waere
+das `AGPL-3.0-or-later`.
+
+**Warum es kein Fehler von heute ist:** Der Wert ist gueltig, die Validierung
+ist gruen, und das neue Gate laesst ihn ausdruecklich durch. Es ist eine
+Schreibweise, die der Store selbst als ueberholt markiert, mehr nicht.
+
+**Warum nicht hier behoben:** Die Umstellung beruehrt beide Haelften
+gleichzeitig, und `php/appinfo/info.xml` steht nicht in den `files_modified`
+dieses Plans. Eine Aenderung an nur einer Haelfte waere genau die Art halber
+Bewegung, gegen die das Lockstep-Gate existiert. Dazu kommt die Voraussetzung
+`minVersion >= 31`: sie ist mit E-H1 (min-version 33) erfuellt, aber diese
+Hebung faehrt in Plan 06.1-09, nicht hier.
+
+**Wohin es gehoert:** in den Plan, der beide `info.xml` ohnehin zusammen
+anfasst (06.1-09 oder der Abschlussplan 06.1-19), oder ausdruecklich nach v1.0.
+Der Aufwand ist eine Zeile je Haelfte plus ein Lauf ueber
+`scripts/dev/validate_info_xml.sh`.
+
+---
+
+## DI-05-32 ist mit E-H2 geschlossen (Vermerk aus Plan 06.1-13)
+
+Kein neuer Befund, sondern der Abschluss eines alten. `DI-05-32` in
+`.planning/phases/05-h-rtung-und-store-einreichung-v1-0/deferred-items.md`
+fragte, ob die Vokabularregel des Owners den englischen Fachausdruck in einem
+Kommentar von `backend/appinfo/info.xml` trifft. Entscheidung E-H2 vom
+06.09.2026 sagt nein: die Regel gilt fuer deutsche Prosa in den oeffentlichen
+Texten, der englische Fachausdruck im technischen Kommentar ist ausgenommen.
+Plan 06.1-13 hat die Entscheidung umgesetzt, die Ausnahme steht im Kopf des
+Gates in `backend/tests/test_store_metadata.py` und wird von einem eigenen Fall
+belegt. Der Kommentar in `backend/appinfo/info.xml` bleibt unveraendert. Die
+Eintragung in die Deferred Items der Phase 5 steht aus, weil jene Datei nicht in
+den `files_modified` dieses Plans steht.
