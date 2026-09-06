@@ -434,3 +434,42 @@ schuetzt den unsignierten Weg nicht so, wie die info.xml es nahelegt.
 kanonische Routen-Form in einen kleinen Folgeplan oder zusammen mit der
 info.xml-Aenderung von DI-06.1-05 (Lizenz-Schreibweise), weil beide dieselbe
 Datei anfassen und das Lockstep-Gate beide Haelften zusammen sehen will.
+
+---
+
+## DI-06.1-14 (Plan 06.1-16): docs/dev-setup.md fuehrt beim lokalen Store-Weg in eine haengende Registrierung
+
+**Was:** Der Abschnitt "Der Store-Installationsweg lokal" beschreibt die
+compose-Einrichtung ohne Frontproxy und mit http://harp:8780 als nextcloud_url.
+Ohne Frontproxy vor Nextcloud und HaRP kann der Container
+PUT /ocs/v1.php/apps/app_api/ex-app/status nicht absetzen (404), weil AppAPI
+nextcloud_url in zwei Richtungen braucht. Wer der Anleitung folgt, sucht den
+Fehler bei der App. deploy-harp.yml loest die Topologie seit 03.09.2026 anders.
+
+**Wohin:** Doku-Plaene 06.1-15/17.
+
+---
+
+## DI-06.1-15 (Plan 06.1-16): ein auf Windows gebautes Release-Paket traegt CRLF
+
+**Was:** Ein auf einem Windows-Arbeitsbaum gebautes Paket ist byteweise ein
+anderes als das aus release.yml. Heute harmlos, weil release.yml der einzige
+Erzeuger ist. Ein warnender Satz in scripts/release/store-archive.sh oder eine
+Weigerung bei CRLF haelt es harmlos.
+
+---
+
+## DI-06.1-16 (Plan 06.1-16): die ExApps-Verwaltungsoberflaeche ist auf keinem Weg gemessen
+
+**Was:** Weder CI noch Handlauf pruefen den Klickpfad der Verwaltungsseite,
+den die meisten Admins gehen. Steht als Nichtabdeckung in docs/install-check.md.
+
+---
+
+## ERLEDIGT-Vermerk zu DI-06.1-11-Meldung aus Plan 06.1-16
+
+Plan 06.1-16 meldete den root.crt-Zeilenumbruch (END/BEGIN verschmolzen,
+splitCerts verliert die CI-CA) als eigenen Befund samt lokaler Reproduktion.
+Zum Merge-Zeitpunkt war die Ursache bereits auf main behoben (8a20a1f:
+printf-Newline-Wache plus verankerte Zaehlung). Die unabhaengige
+Zweitreproduktion bestaetigt Diagnose und Fix; kein offener Rest.
