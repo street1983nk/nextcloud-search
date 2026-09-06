@@ -731,13 +731,91 @@ jobs:
           docker rm -f findling_measure
 
           # The only failure this part knows: a measurement that did not happen.
-          # A bad number is a result, an absent one is a broken job.
+          # A bad number is a result, an absent one is a broken job. The figures
+          # have to exist before the difference below can be stated at all.
           if [ "${first}" != "200" ] || [ "${second}" != "200" ]; then
             echo "the container did not answer both searches (${first}, ${second}), so there is nothing to compare"
             exit 1
           fi
           if [ -z "${before}" ] || [ -z "${after_first}" ] || [ -z "${after_second}" ]; then
             echo "docker stats returned nothing, so the memory figures do not exist"
+            exit 1
+          fi
+
+          # docker stats prints "123.4MiB / 3.8GiB": the resident set of the
+          # container first, the ceiling of the machine second. Only the first
+          # figure belongs to this measurement. One named function turns it into
+          # bytes, so that the comparison below reads as a comparison instead of
+          # as a chain of string surgery.
+          to_bytes() {
+            reading="${1%%/*}"
+            reading="${reading// /}"
+            number="${reading%%[A-Za-z]*}"
+            unit="${reading##*[0-9.]}"
+            case "${unit}" in
+              B) factor=1 ;;
+              kB|KB|KiB) factor=1024 ;;
+              MB|MiB) factor=1048576 ;;
+              GB|GiB) factor=1073741824 ;;
+              *)
+                echo "docker stats reported the unit '${unit}', which this step cannot turn into bytes" >&2
+                return 1
+                ;;
+            esac
+            awk -v number="${number}" -v factor="${factor}" 'BEGIN { print int(number * factor) }'
+          }
+
+          before_bytes=$(to_bytes "${before}")
+          after_first_bytes=$(to_bytes "${after_first}")
+          growth=$(( after_first_bytes - before_bytes ))
+          echo "${MEASURE_PREFIX} rss first-search-growth-bytes ${growth}"
+
+          # That number is reported and never judged, and the reason is the whole
+          # argument behind the step that follows. Plan 06.1-04 was written to
+          # put a ceiling here, on the premise that this step loads the second
+          # embedding instance because EMBED_ENABLED is on and the model sits in
+          # the image. Measured on 2026-09-06 on amd64 with the state after plan
+          # 06.1-02, the difference is 241172 bytes in one run and 503316 in the
+          # next, and the reason is not that the fix is that good: this container
+          # starts on an empty APP_PERSISTENT_STORAGE, so state.db and the index
+          # directory do not exist, read_side() returns None, and the search
+          # turns back before it reaches the word list, the automaton or the
+          # model. A ceiling over that difference would be a gate that cannot go
+          # red for the thing it names.
+          #
+          # So the series stays as an observation, the runs of this workflow
+          # collect it, and the gate over the two savings is a counter in the
+          # step below. An inherited ceiling would have been worse than none: the
+          # 276 MB of report 06-11 were measured on the arm64 box, and a ceiling
+          # taken from another machine measures the wrong machine.
+
+      # The ratchet, and it is a counter rather than a byte. Two savings have to
+      # hold for the life of this product: one embedding engine per process
+      # (plan 06.1-02, 276 MB) and one read of the constituent list per process
+      # (plan 06.1-04, 21.9 MB). Both are invisible from the outside and both
+      # would come back through an ordinary refactoring, so they get a gate that
+      # runs on every push instead of a memory number somebody remembers.
+      #
+      # findling.tools.one_load builds its own volume, indexes one document,
+      # runs one real search round and then wires the second track, in that
+      # order. The order is the anti-vacuity clause: the search side has to
+      # bring the engine loads to one on its own, so a run that never reaches
+      # the model reports a zero and fails rather than passing quietly, which is
+      # exactly the shape the ceiling above would have shipped. The tool exits
+      # non zero with a named finding for every counter that is not one, and its
+      # ability to go red is proven in backend/tests/test_one_load.py by three
+      # cases that bring the two regressions back through monkeypatch.
+      - name: One engine and one constituent list per process
+        run: |
+          status=0
+          docker run --rm --entrypoint python findling_backend:measure \
+            -m findling.tools.one_load > one-load.txt 2>&1 || status=$?
+          sed "s/^/${MEASURE_PREFIX} one-load /" one-load.txt
+          if [ "${status}" -ne 0 ]; then
+            echo "a counter above is not one, and that is a finding and not a threshold to raise:"
+            echo "either the search side and the second track stopped sharing the engine of"
+            echo "findling.embed.engine, or the cache in findling.index.wordlist.build_artifact"
+            echo "stopped holding, or this measurement never reached the model at all."
             exit 1
           fi
 

@@ -55,6 +55,7 @@ ersetzt die Zahl nach der Nachmessung an denselben drei Stellen plus Konstante.
 
 ---
 
+<<<<<<< HEAD
 ## DI-06.1-02 (gefunden in Plan 06.1-08): ein gewoehnlicher Share auf eine Gruppe faellt weiterhin nur dem Crawl zu
 
 **Gefunden:** beim Bau von `GroupEventListener`, also beim Schliessen von
@@ -131,3 +132,32 @@ Datei aus einem eigenen Grund oeffnet. `docs/uninstall.md` gehoert zu
 Plan 06.1-19, der die ROADMAP wegen E-H1 und E-H5 ohnehin nachzieht, und die
 Zahl der Laeufe steht dort ohnehin erst nach dem naechsten gruenen CI-Lauf
 wieder belegt da.
+=======
+## DI-06.1-02 (gefunden in Plan 06.1-04): der Dauerwaechter ueber die zweite Modellinstanz fehlt weiterhin
+
+**Was offen ist:** Plan 06.1-04 sollte in `resilience.yml` eine Obergrenze ueber
+die Differenz zwischen `before-first-search` und `after-first-search` setzen. Sie
+wurde nicht gesetzt, weil die Praemisse des Plans bei der Messung fiel: der
+Messcontainer startet auf leerem `APP_PERSISTENT_STORAGE`, `read_side()` gibt
+`None` zurueck, und die erste Suche kehrt um, bevor sie Wortliste, Automat oder
+Modell erreicht. Gemessen auf amd64 am 06.09.2026: 241.172 und 503.316 Bytes in
+zwei Laeufen desselben Schrittkoerpers. Eine Grenze darueber koennte fuer die
+Rueckkehr der zweiten Modellinstanz nicht rot werden.
+
+**Was geliefert wurde:** die Differenz steht ab jetzt als Zahl im Protokoll des
+Schritts, damit die Reihe entsteht, aus der eine Grenze kommen kann.
+
+**Wohin es gehoert:** eine Entscheidung zwischen drei Wegen, ausgefuehrt in
+`06.1-04-SUMMARY.md`. Empfehlung dort: ein Messeinstieg, der
+`embed.model.load_count()` prueft, statt einer Speichermessung.
+
+**GESCHLOSSEN (Checkpoint-Entscheidung des Orchestrators, 06.09.2026):** Weg 2
+wurde gewaehlt und in Plan 06.1-04 gebaut. `findling.tools.one_load` treibt
+Indexseite, Suchseite und zweites Gleis in einem Prozess an und prueft
+`load_count()` und `read_count()`; `resilience.yml` faehrt ihn im Abbild und
+faerbt den Job rot, wenn ein Zaehler nicht eins ist. Die RSS-Differenz bleibt als
+unbeurteilte Beobachtung im Protokoll. Rot-Faehigkeit dreifach belegt
+(`backend/tests/test_one_load.py`) plus einem roten Containerlauf. Commits
+0366a3b und d22c8ec. Fuer 06.1-18 bleibt nur noch die einmalige Nachmessung der
+Grundlast auf der arm64-Box; der Dauerwaechter haengt nicht mehr an ihr.
+>>>>>>> worktree-agent-a57b59a259749bb24
