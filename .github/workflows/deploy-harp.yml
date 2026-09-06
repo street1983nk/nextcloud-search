@@ -551,6 +551,15 @@ jobs:
           } >> "${GITHUB_ENV}"
           echo "companion ${companion}, probing against ${newer} and ${older}"
 
+          # The overview route sits behind the CSRF middleware, and neither an
+          # app password nor the form login carries it on the built-in server
+          # (measured: 412 with token auth, 401 after a form login that never
+          # builds a session). Nextcloud's own acceptance tests answer this with
+          # the documented switch below; it disables the CSRF check only, on a
+          # throwaway instance that dies with the runner, and authentication
+          # stays fully enforced (an anonymous call still answers 401).
+          timeout 60 ./occ config:system:set csrf.disabled --type boolean --value true
+
           # The redeploy helper. One file rather than the same twenty lines in
           # three steps, and it fails on its own if the value it was asked for is
           # not the value the container ended up with.
