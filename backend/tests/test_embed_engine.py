@@ -333,9 +333,7 @@ def _flaky_session(monkeypatch: pytest.MonkeyPatch, attempts: dict[str, int]) ->
     monkeypatch.setattr(model_module, "_open_session", flaky)
 
 
-def test_a_load_that_threw_is_tried_again_after_the_cooldown(
-    model_home: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_load_that_threw_is_tried_again_after_the_cooldown(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # The coupling trap of the phase research, seen from the load path. With one
     # engine for both halves a single transient failure used to cost the whole
     # container its semantics until somebody restarted it, and nothing said so.
