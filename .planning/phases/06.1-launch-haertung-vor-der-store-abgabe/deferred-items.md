@@ -6,7 +6,7 @@ Befund und der Ort, an den er gehoert.
 
 ---
 
-## DI-06.1-01 (gefunden in Plan 06.1-01): der Store-Satz steht nicht mehr in der README
+## DI-06.1-01 (gefunden in den Plaenen 06.1-01, 06.1-02 und 06.1-05, unabhaengig voneinander): der Store-Satz steht nicht mehr in der README
 
 **Gefunden:** beim vollstaendigen Backend-Lauf vor dem Abschluss von Plan
 06.1-01, also nicht durch dessen Aenderungen. Betroffen ist keine der vier
@@ -39,46 +39,9 @@ Zahlen nach der Nachmessung anfasst (Pflichtpunkt 7), zusammen mit der
 Dreisprachigkeit und dem Vokabular-Gate. Das Gate bleibt bis dahin rot und ist
 damit die Erinnerung an genau diesen Schritt.
 
-
-<!-- merged from worktree-agent-aafc87dfd0da36800 -->
-
-# Zurückgestellte Funde der Phase 06.1
-
-Befunde, die während der Ausführung auffielen, aber nicht zum jeweiligen Plan
-gehören. Nicht gefixt, damit eine Ersparnis oder ein Fix seinen Posten behält.
-
-## 06.1-02 (06.09.2026)
-
-**`tests/test_store_metadata.py::test_the_measured_sentence_reads_the_same_in_all_three_places` ist rot.**
-
-- Meldung: `README.md: does not carry the measured sentence of 05-14`
-- Zustand vor Plan 06.1-02, nicht von ihm verursacht: der Plan fasst nur
-  `backend/src/findling/embed/`, `api/resources.py` und `worker/poller.py` an,
-  der Test liest ausschließlich `README.md` und die beiden `appinfo/info.xml`.
-- Wahrscheinliche Ursache: Commit `80e93c1` ("die Zahlen des Semantiklaufs
-  eingesetzt, RSS-Store-Zahl ersetzt") hat den gemessenen Satz im README
-  geändert, ohne die beiden `info.xml` nachzuziehen.
-- Zuständig: Pflichtpunkt 7 dieser Phase (Store-Vorgaben, dreisprachige Texte
-  konsistent). Die Zahl muss dort ohnehin nach der Nachmessung aus 06.1-18 neu
-  gesetzt werden, also gehört die Korrektur in denselben Griff und nicht hierhin.
-- Restlicher Suitenstand am selben Baum: 1372 grün, 13 übersprungen, 1 rot.
-
-
-<!-- merged from worktree-agent-ad8e6dc70eb379132 -->
-
-# Zurueckgestellte Befunde der Phase 06.1
-
-Befunde, die waehrend der Ausfuehrung aufgefallen sind und ausserhalb des Plans
-liegen, in dem sie gefunden wurden. Sie werden hier notiert und nicht nebenbei
-behoben, weil eine Korrektur ausserhalb des Plans in keinem Commit steht, den
-jemand spaeter suchen wuerde.
-
-## Aus Plan 06.1-05 (Randpfade der Extraktion)
-
-- **`tests/test_store_metadata.py::test_the_measured_sentence_reads_the_same_in_all_three_places` ist rot,
-  bereits auf dem Basiscommit `e40dc51` und ohne Bezug zu diesem Plan.**
-  Meldung: `README.md: does not carry the measured sentence of 05-14`.
-  Betroffen sind `README.md` und die beiden `appinfo/info.xml`, also der
-  Store-Text, nicht der Extraktions- oder Indexpfad. Gehoert zu den
-  Store-Vorgaben (Pflichtpunkt 7) und damit in einen der Plaene, die den
-  Store-Text bearbeiten. Der Rest der Suite ist gruen (1403 passed, 13 skipped).
+**Nachtrag der Orchestrierung (Welle 1, 06.09.2026):** Alle drei Executoren der
+Welle haben denselben roten Test gemeldet, jeder auf dem Basiscommit `e40dc51`
+und ohne Bezug zu seinem Plan (Suitenstaende 1372 bzw. 1403 gruen, 13
+uebersprungen, 1 rot). Der Test bleibt als Erinnerung rot, bis Pflichtpunkt 7
+die Zahl nach der Nachmessung aus Plan 06.1-18 in allen drei Dateien neu setzt
+(Plan 06.1-13 fuer die Formalien, Plan 06.1-18 Task 4 fuer die Zahl).
