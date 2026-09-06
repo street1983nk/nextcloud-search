@@ -76,6 +76,16 @@ on:
           end red, and red in the counter step, not in the checksum step.
         type: boolean
         default: false
+      mutation_skip_probe:
+        description: >-
+          Leave the file that changes under the container alone: the overwriting
+          step is skipped and the step after it has to go red. It is the
+          falsification of that step, and it answers the one question a green
+          run cannot answer by itself, namely whether the step could be green
+          merely because the search finds nothing at all. The run must end red,
+          and red in the step that asks for the new content.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -942,6 +952,36 @@ jobs:
       # rather than assumes.
       PARAPHRASE_FILE: '10-kuendigung.docx'
       PARAPHRASE_TERM: 'Wann darf ich meinen Job aufgeben und wie lange muss ich vorher warten'
+      # The file that changes between the fetch and the verdict, and everything
+      # that describes it. It is not part of the corpus and it arrives after the
+      # counters of the corpus have been asserted, for that exact reason: the
+      # three EXPECTED numbers above are the same statement as the table in
+      # testdata/CORPUS.md, and a file that is not in that table has no business
+      # moving them.
+      MUTATION_FILE: 'mutating.txt'
+      # Two invented ASCII tokens, one per revision, and neither of them stands
+      # in the corpus. Lower case and without an umlaut for the reason the parity
+      # markers are: a token has to be a question about the index and not about a
+      # collation or about the query side umlaut variant.
+      MUTATION_TERM_BEFORE: 'mutationalpha'
+      MUTATION_TERM_AFTER: 'mutationbeta'
+      # How many times the file is rewritten while the container works on it.
+      # Every write raises NodeWrittenEvent and refreshes the queue row, so the
+      # container is asked to fetch a file that is being replaced underneath it,
+      # which is the window this case is about. Eight rather than one, because
+      # one write and one fetch may simply not overlap and a case that only
+      # sometimes happens is a case that never gets measured.
+      MUTATION_ROUNDS: '8'
+      # Ceiling of the wait for the index to catch up with the last write, and it
+      # comes from one clock: RETREAT_MAX_SECONDS in
+      # backend/src/findling/worker/poller.py, the cap of the poller retreat, is
+      # three hundred seconds. The write lands in the queue of Nextcloud at once
+      # and the container fetches it on its next poll, so one full retreat is the
+      # longest honest wait. The nightly reconcile is NOT the carrier here: its
+      # minimum interval is hours, so a run that only became green through it
+      # would be a run that waited for the wrong clock. Exceeding this deadline
+      # is a finding and not a number to raise (pitfall 4).
+      MUTATION_TIMEOUT: '300'
 
     steps:
       # Same order and the same reason as in the two jobs above: the server
@@ -1515,6 +1555,178 @@ jobs:
           fi
           echo "the queue is empty on ${{ matrix.database }}, so every claimed row was acknowledged and no transaction was aborted underneath it"
 
+      # The file that changes between the fetch and the verdict, in three steps
+      # so that the middle one can be switched off and the last one has to go
+      # red. It is not a permission case, which is why it sits in this job and
+      # not in the parity job, and it is not part of the corpus, which is why it
+      # arrives after the counters of the corpus have been asserted: those three
+      # numbers are the same statement as testdata/CORPUS.md and a file outside
+      # that table must not move them.
+      #
+      # What the case is about. The container fetches the bytes into a scratch
+      # file, judges them and stores a content_hash next to the etag it fetched
+      # under. Between the fetch and the verdict the file can be replaced, and
+      # then a verdict stands over content that no longer exists. The etag
+      # comparison is supposed to carry that, and until now nobody had measured
+      # it. If it does not carry it, that is the finding of this step and it goes
+      # into the summary; it is not something to be healed by asking a softer
+      # question here.
+      #
+      # The file is a megabyte and not a line, and that is not decoration: the
+      # window this case is about is the time the fetch takes, and a file that is
+      # read in a single packet has almost no window at all.
+      - name: Put a file that will change under the container
+        run: |
+          cat > "${{ runner.temp }}/mutation.sh" <<'SH'
+          # One revision of the moving file, as bytes on disk. The token stands
+          # in the first line, because a text longer than FINDLING_MAX_TEXT_CHARS
+          # is truncated and a token behind the cut would be a question about the
+          # truncation instead of one about the etag.
+          #
+          # $1 token, $2 a word that makes this revision differ from the one
+          # before it, $3 output file. The second argument is what moves the etag:
+          # two identical writes are one file to Nextcloud and to the container
+          # alike, and the whole point here is that every write is a change.
+          revision() {
+            {
+              printf '%s the file that changes under the container, revision %s\n' "$1" "$2"
+              seq 1 60000 | sed 's/^/filler line /'
+            } > "$3"
+          }
+
+          # One search as the owner, and the number of hits as the answer.
+          # $1 term, $2 output file.
+          hits_for() {
+            curl -sfS -G -u "${OWNER_USER}:${OWNER_PASS}" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              --data-urlencode "term=$1" \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "$2"
+            jq -r '.ocs.data.entries | length' "$2"
+          }
+
+          # Waits until one term answers with one number, and never sleeps on
+          # suspicion: every round is a real search and the log carries its
+          # count. $1 term, $2 expected number of hits, $3 output file.
+          # Overrunning the deadline is a finding, see MUTATION_TIMEOUT.
+          await_hits() {
+            deadline=$(( $(date +%s) + MUTATION_TIMEOUT ))
+            while :; do
+              found=$(hits_for "$1" "$3")
+              echo "the search answers ${found} hit(s) for ${1}, ${2} expected"
+              if [ "${found}" -eq "$2" ]; then
+                return 0
+              fi
+              if [ "$(date +%s)" -ge "${deadline}" ]; then
+                echo "::error::${1} still answers ${found} hit(s) instead of ${2} after ${MUTATION_TIMEOUT} seconds"
+                cat "$3"
+                return 1
+              fi
+              sleep 5
+            done
+          }
+          SH
+          . "${{ runner.temp }}/mutation.sh"
+
+          # Over WebDAV and not into the data directory, because only this route
+          # raises the node events the container listens to, and the events are
+          # what makes the rest of this case work without a second crawl.
+          revision "${MUTATION_TERM_BEFORE}" 0 "${{ runner.temp }}/mutating-0.txt"
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" \
+            -T "${{ runner.temp }}/mutating-0.txt" \
+            "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MUTATION_FILE}"
+
+          # The control of the whole case, and it is asked in both directions
+          # here as well: the first content is findable and the second one, which
+          # has not been written yet, is not. Without this pair the two questions
+          # at the end would also be answered by a container that had never seen
+          # this file at all.
+          await_hits "${MUTATION_TERM_BEFORE}" 1 mutation-before.json
+          await_hits "${MUTATION_TERM_AFTER}" 0 mutation-after-early.json
+          echo "the file is in the index with its first content"
+
+      # Off by default in the sense that it is on by default and can be switched
+      # off: mutation_skip_probe leaves the file alone, and then the step below
+      # has to go red. That is the falsification this case needs, because its
+      # last assertion is that a term is NOT found any more, and a step that only
+      # asserted an absence would be green on a search that answers nothing.
+      - name: Overwrite it eight times while the container is working
+        if: ${{ ! inputs.mutation_skip_probe }}
+        run: |
+          . "${{ runner.temp }}/mutation.sh"
+          for round in $(seq 1 "${MUTATION_ROUNDS}"); do
+            revision "${MUTATION_TERM_BEFORE}" "${round}" "${{ runner.temp }}/mutating-${round}.txt"
+            curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" \
+              -T "${{ runner.temp }}/mutating-${round}.txt" \
+              "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MUTATION_FILE}"
+            echo "revision ${round} written"
+          done
+          # The last write is the only one that carries the second token, so the
+          # state the run has to end in is unambiguous no matter which of the
+          # revisions above the container managed to fetch.
+          revision "${MUTATION_TERM_AFTER}" final "${{ runner.temp }}/mutating-final.txt"
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" \
+            -T "${{ runner.temp }}/mutating-final.txt" \
+            "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MUTATION_FILE}"
+          echo "the final revision is written, and it is the only one that carries ${MUTATION_TERM_AFTER}"
+
+      - name: The moved file is found by its last content and carries no failed verdict
+        run: |
+          . "${{ runner.temp }}/mutation.sh"
+
+          # Both directions, and they are the two halves of one statement: the
+          # index has caught up with the last write AND it does not still carry
+          # an earlier one. Only asking the first would let an index through that
+          # holds both revisions of the same file.
+          await_hits "${MUTATION_TERM_AFTER}" 1 mutation-after.json
+          await_hits "${MUTATION_TERM_BEFORE}" 0 mutation-before-final.json
+
+          file_id=$(jq -r 'first(.ocs.data.entries[].attributes.fileId) // empty' mutation-after.json)
+          case "${file_id}" in
+            ''|*[!0-9]*)
+              echo "::error::the hit on ${MUTATION_TERM_AFTER} carries no usable fileid, so its verdict cannot be looked up"
+              cat mutation-after.json
+              exit 1
+              ;;
+          esac
+
+          # The second half of this step, and the one the case is really named
+          # after. A file that moved under the container must not end as failed:
+          # a verdict of "this document is broken" over a file whose only sin was
+          # being written twice is the second finding this step can produce, and
+          # it is as much a defect as a stale verdict would be.
+          python3 - "${{ runner.temp }}/findling/state.db" "${file_id}" <<'PY'
+          import sqlite3
+          import sys
+          from pathlib import Path
+
+          database = Path(sys.argv[1])
+          if not database.is_file():
+              print("::error::the state database is not where this job put it")
+              raise SystemExit(1)
+          connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+          row = connection.execute(
+              "SELECT state, reason, attempts, deleted_at FROM files WHERE file_id = ?",
+              (int(sys.argv[2]),),
+          ).fetchone()
+          connection.close()
+
+          if row is None:
+              print(f"::error::fileid {sys.argv[2]} answers the search but has no verdict at all")
+              raise SystemExit(1)
+          state, reason, attempts, deleted_at = row
+          print(f"the moved file ended as state={state} reason={reason} attempts={attempts} deleted_at={deleted_at}")
+          if state != "indexed":
+              print(
+                  f"::error::the file that changed under the container ended as {state}({reason}) "
+                  "instead of indexed, which means a write during the fetch costs the document its verdict"
+              )
+              raise SystemExit(1)
+          if deleted_at is not None:
+              print("::error::the file that changed under the container carries a tombstone while it exists")
+              raise SystemExit(1)
+          PY
+          echo "a file that changed under the container is found by its last content, by nothing else, and is not marked as broken"
+
       - name: Everything the failure had to say
         if: failure()
         run: |
@@ -1527,7 +1739,9 @@ jobs:
           echo "--- the last search answers ---"
           for answer in compound.json frist.json umlaut.json flexion.json phrase.json both.json \
                         excluded.json filetype.json colleague-shared.json colleague-denied.json delayed.json \
-                        paraphrase-lexical.json paraphrase-semantic.json; do
+                        paraphrase-lexical.json paraphrase-semantic.json \
+                        mutation-before.json mutation-after-early.json mutation-after.json \
+                        mutation-before-final.json; do
             if [ -f "${answer}" ]; then
               echo "== ${answer} =="
               cat "${answer}"
