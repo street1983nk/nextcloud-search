@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: executing
 stopped_at: Completed 06-10-PLAN.md
-last_updated: "2026-09-06T11:11:08.391Z"
+last_updated: "2026-09-06T20:04:41.831Z"
 last_activity: 2026-09-06 -- Phase 06.1 execution started
 progress:
   total_phases: 3
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 06.1 (launch-haertung-vor-der-store-abgabe) — EXECUTING
-Plan: 1 of 19
-Status: Executing Phase 06.1
-Last activity: 2026-09-06 -- Phase 06.1 execution started
+Plan: 14 of 21 complete
+Status: Executing Phase 06.1 (Welle 3 gemergt: 06/10/12/13/21; naechste Welle 11/14/16)
+Last activity: 2026-09-06 -- Welle 3 gemergt bis 96d798b, franzoesische OCR per Owner-Entscheid als 06.1-21 dazu, README dreisprachig DE/EN/FR
 
 **Zwischenstand 06-11, 2026-09-05T10:57Z.** Der Volllauf mit Semantik ist um
 10:47:54Z angestossen und laeuft unbeaufsichtigt auf der AWS-Box
