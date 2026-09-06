@@ -4,17 +4,30 @@ name: PHP and store metadata gates
 # commit must not spend runner minutes on the companion app. backend/appinfo is
 # in the list because the store metadata job below validates both info.xml
 # files, and the ExApp one lives on the backend side.
+#
+# release.yml and the local validator are in the list although neither is PHP,
+# and the reason is the pin below. The two APPSTORE_SHA values only prove
+# anything as long as they are the same value, and the job that compares them
+# runs here. Without these two paths a commit that moves the pin in release.yml
+# alone would move it unwatched: release.yml itself runs on a tag, which is the
+# worst possible moment to learn that the two halves check against different
+# versions of the schema. The price is that a release.yml edit also pays for the
+# lint and phpunit jobs, and that is the cheaper half of the trade.
 on:
   push:
     paths:
       - 'php/**'
       - 'backend/appinfo/**'
       - '.github/workflows/php.yml'
+      - '.github/workflows/release.yml'
+      - 'scripts/dev/validate_info_xml.sh'
   pull_request:
     paths:
       - 'php/**'
       - 'backend/appinfo/**'
       - '.github/workflows/php.yml'
+      - '.github/workflows/release.yml'
+      - 'scripts/dev/validate_info_xml.sh'
 
 permissions:
   contents: read
@@ -30,7 +43,20 @@ env:
   # fetched below decide whether this gate is green, so pulling them from a
   # moving branch would mean an unrelated commit upstream can turn our build red
   # or, worse, silently stop catching what it used to catch.
-  APPSTORE_SHA: 5c4373d7d026a8f7c7838cc9990fecaf19e8e682
+  #
+  # Raised on 06.09.2026 from 5c4373d7, which had stood since phase 2, to the
+  # head of master of that day. A pin is right, a pin nobody ever moves is a
+  # promise about a version of the rules that the store stopped applying, and
+  # the submission is the wrong place to find that out. The whole difference at
+  # the two files fetched below is one addition, and it is additive in both:
+  # info.xsd gained an optional "video" element of type secure-url, maxOccurs 10,
+  # in the sequence between "repository" and "screenshot", and pre-info.xslt
+  # gained the line that copies it. Nothing was tightened and nothing was
+  # removed, so no rule this repository lives under changed with the raise. What
+  # the addition does say is that the position matters if a video is ever added:
+  # it is an xs:sequence, so a video element belongs before the screenshots and
+  # not after them.
+  APPSTORE_SHA: eda850ba61407c6e4da3e23316614c6126406652
 
 jobs:
   lint:
@@ -89,6 +115,16 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Before anything is fetched, and deliberately so: everything below rests
+      # on the assumption that this file and release.yml name the same commit of
+      # nextcloud/appstore. Two values that drifted apart make both validations
+      # meaningless at once, and neither of the two runs can see it, because each
+      # one only ever reads its own. The check lives in the local validator so
+      # that it is one piece of logic and not two, and it is run here so that
+      # nobody has to remember to run it.
+      - name: Both halves have to pin the same store commit
+        run: scripts/dev/validate_info_xml.sh --check-pins
 
       - name: Install xsltproc and xmllint
         run: |
