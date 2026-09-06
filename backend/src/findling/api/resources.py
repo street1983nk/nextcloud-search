@@ -42,7 +42,7 @@ from findling.embed.model import EmbeddingModel
 from findling.index.open import expected_versions, open_index, open_reader
 from findling.index.wordlist import build_artifact
 from findling.store.repo import EMBEDDING_MARK, VECTOR_ONLY_MARKS, Store, open_read_only
-from findling.store.vectors import VectorStore, embedding_mark, open_vectors
+from findling.store.vectors import EMBEDDING_MODEL, VectorStore, embedding_mark, open_vectors
 
 LOGGER = logging.getLogger("findling.api.resources")
 
@@ -51,21 +51,21 @@ LOGGER = logging.getLogger("findling.api.resources")
 # exactly as much as a proven mismatch (pitfall 14).
 UNPROVEN_WORDLIST = "wordlist_hash"
 
-# The one half of the embedding mark that is not a property of the vector store
-# and not a setting either, spelled out here because this is where the mark is
-# composed.
-#
-# The full value is model, quantisation, dimensions and token cap. Two of the
-# four come from findling.store.vectors, which owns them, the token cap comes
-# from the settings below, and only the name of the artifact is a constant of
-# this build. A change to any of the four makes a stored vector incomparable
-# with a freshly computed query vector, and the mark is what turns that into a
-# visible drift instead of into quietly worse results.
+# The full value of the embedding mark is model, quantisation, dimensions and
+# token cap. Three of the four come from findling.store.vectors, which owns
+# them, and the token cap comes from the settings. A change to any of the four
+# makes a stored vector incomparable with a freshly computed query vector, and
+# the mark is what turns that into a visible drift instead of into quietly worse
+# results.
 #
 # The cap is read rather than written out, which it used to be, so that an
 # operator who raises it sees the drift the raise really causes instead of a
 # mark that keeps claiming 1024.
-EMBEDDING_MODEL: Final = "multilingual-e5-small"
+#
+# EMBEDDING_MODEL was a constant of this module until plan 06.1-10 and moved to
+# findling.store.vectors when the poller became the second place that composes
+# the mark. It is imported rather than spelled again, because two spellings of
+# one model name is exactly the drift this mark exists to make visible.
 
 # How long a degraded verdict stays valid before it is measured again.
 #

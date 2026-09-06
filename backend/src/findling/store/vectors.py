@@ -243,6 +243,17 @@ ORDER BY v.distance
 # docs/embeddings.md).
 _DISTANCE_EXPRESSION: Final = "vec_distance_l2(v.embedding, vec_int8(?))"
 
+# The name of the artifact whose output this stock holds.
+#
+# It lives here, next to :func:`embedding_mark`, because the mark is composed in
+# two places since plan 06.1-10: the read side asks for it to report a drift,
+# and the poller asks for it to answer one. Two of the four parts of the value
+# are constants of this module already, the token cap is a setting, and leaving
+# the fourth in the read side would mean the write side had to import from
+# ``findling.api`` to learn the name of its own model. It stood in
+# ``api/resources.py`` until then and moved without changing.
+EMBEDDING_MODEL: Final = "multilingual-e5-small"
+
 
 def embedding_mark(model: str, *, tokens: int) -> str:
     """The value of the ``embedding_version`` mark for one build.
