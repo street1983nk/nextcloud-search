@@ -209,6 +209,32 @@ def extract_filters(text: str) -> tuple[str, tuple[str, ...]]:
     return residual, tuple(dict.fromkeys(extensions))
 
 
+def carries_one_term(text: str) -> bool:
+    """Whether the raw search line holds exactly one term, the file type aside.
+
+    **A single word is answered by the word index alone.** The reason is a
+    measurement and not a preference. The report of plan 06.1-20
+    (``docs/measurements/2026-09-06-vektordistanzen/README.md``) put both
+    distributions on one scale, and they overlap: the one word probes of the
+    reference corpus sit 68 to 77 away from their nearest chunk, while the
+    paraphrase reaches the document it paraphrases only at 79.5487. So no
+    ceiling can hold "one word brings back nothing unrelated" and "the
+    paraphrase still finds its document" at the same time, and the second of the
+    two is the case the vector half exists for. One word gives the model no
+    context to read a meaning out of, and on the lexical side that same word
+    already gets the compound splitter, the stemmer and the umlaut variant.
+
+    Counted on the raw line, like :func:`carried_operators`, and after the file
+    type prefix is cut out, because that prefix is not a term: ``type:pdf
+    vertrag`` asks for one word in a narrower place and not for two words.
+    Nought terms is not one: a line that holds nothing but a filter never
+    reaches the engine, and this function answers what stood on the line rather
+    than what its caller does with the answer.
+    """
+    residual, _ = extract_filters(text)
+    return len(residual.split()) == 1
+
+
 def add_umlaut_variants(text: str) -> str:
     """Turn every plain token with a written out umlaut form into an alternative.
 
@@ -256,6 +282,11 @@ class RewrittenQuery:
     # not ask a second time with a second opinion: two readings of what an
     # operator is drift apart, and the drift would be invisible.
     operators: frozenset[str] = frozenset()
+    # Whether that same raw line held exactly one term, read once by
+    # carries_one_term() and carried along for the same reason. Both fields
+    # answer the one question of the caller: is this a line the vector half has
+    # anything to add to.
+    one_term: bool = False
 
 
 def _extension_query(index: Index, extensions: tuple[str, ...]) -> Query:
@@ -307,6 +338,7 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
     # about to be cut out and the umlaut variants are about to insert an OR, and
     # after either of those the question is not answerable any more.
     operators = carried_operators(text)
+    one_term = carries_one_term(text)
     # The second of the two calls of the normalisation helper, and it stands
     # after the depth guard on purpose: that guard is counted on the raw input so
     # that nothing can walk past it, and composing a string cannot open a bracket
@@ -319,7 +351,14 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
     if not rewritten:
         # No term, no engine. A search line that holds nothing but a filter would
         # otherwise ask for every PDF on the instance in no meaningful order.
-        return RewrittenQuery(query=None, text="", extensions=extensions, errors=[], operators=operators)
+        return RewrittenQuery(
+            query=None,
+            text="",
+            extensions=extensions,
+            errors=[],
+            operators=operators,
+            one_term=one_term,
+        )
 
     parsed, errors = index.parse_query_lenient(
         rewritten,
@@ -340,4 +379,5 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
         extensions=extensions,
         errors=list(errors),
         operators=operators,
+        one_term=one_term,
     )

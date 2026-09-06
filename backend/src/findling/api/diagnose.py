@@ -174,6 +174,14 @@ def _origin_of(file_id: int, text: str) -> str | None:
             # A line that held only a file type filter, for instance. No search
             # ran, so there is no origin, and nought found is not the answer.
             return None
+        # Both lists, on every line, and the two rules of the search path
+        # (operators, one term) are deliberately not read here. This route is a
+        # magnifying glass and not a search: an admin who types one word or a
+        # phrase is asking whether the stock holds anything near that line at
+        # all, and that question has an answer even where the search would not
+        # use it. The gate of plan 06.1-20 does travel in, through _sides, and
+        # that is a different matter: it decides what "near" means, and the two
+        # answers would otherwise describe two different holdings.
         semantic = None
         if side.vectors is not None and settings().embed_enabled:
             semantic = SemanticSide(vectors=side.vectors, model=resources.query_model(), text=text)
