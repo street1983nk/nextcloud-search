@@ -184,10 +184,12 @@ WORKDIR /app
 #
 # Why it is not distilled in a build stage and thrown away: preparing the list is
 # a start up step, not a build decision. findling.index.wordlist reduces it once
-# to the length window, writes $APP_PERSISTENT_STORAGE/dict/de.txt and records
-# its SHA-256 in the meta table, so the tokenisation hangs on an artifact whose
-# digest can be checked against the index that was built with it. A file baked in
-# at build time would hang on a build nobody can inspect afterwards (T-02-71).
+# to the length window, writes $APP_PERSISTENT_STORAGE/dict/de-<variant>.txt and
+# records its SHA-256 in the meta table, so the tokenisation hangs on an artifact
+# whose digest can be checked against the index that was built with it. The
+# variant is in the name because FINDLING_COMPOUND_DICT chooses between two
+# recipes and a shared name would hand the other one back. A file baked in at
+# build time would hang on a build nobody can inspect afterwards (T-02-71).
 #
 # Nothing here is fetched at run time. The word list is the reason zero-config
 # survives a firewall, a proxy and an offline installation, and it would be a

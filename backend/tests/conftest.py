@@ -39,7 +39,7 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
-from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, wordlist_hash
+from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, artifact_path, wordlist_hash
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
 from findling.store.vectors import open_vectors
@@ -88,8 +88,14 @@ def write_wordlist(root: Path) -> str:
     With the artifact and its digest in place ``build_artifact`` reads the file
     instead of running the recipe, so nothing here depends on a Debian package
     being installed on the machine that runs the suite.
+
+    The name comes from ``artifact_path`` and is not spelled here: it carries the
+    variant since bug audit H2 of plan 06.1-17, and a second spelling would leave
+    the suite green while every container ran the recipe on every start. The root
+    is passed in rather than read from the settings, because a fixture builds the
+    volume before anything points at it.
     """
-    target = root / "dict" / "de.txt"
+    target = root / "dict" / artifact_path().name
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("\n".join(CONSTITUENTS) + "\n", encoding=ENCODING)
     digest = wordlist_hash(CONSTITUENTS)

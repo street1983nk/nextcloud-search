@@ -143,6 +143,24 @@ def wordlist_hash(entries: Sequence[str]) -> str:
     return digest.hexdigest()
 
 
+def artifact_path(variant: str | None = None) -> Path:
+    """Where the artifact of a variant lives on the volume.
+
+    One spelling of the name, because there are two readers of it: the build
+    below and the test fixture that puts a list on a volume so that the suite
+    does not need a Debian package. Two literals would drift apart, and the
+    symptom would be a container that runs the recipe on every start while every
+    test still passes.
+
+    The variant is part of the name since bug audit H2 of plan 06.1-17. The check
+    in :func:`build_artifact` compares a stored artifact against its own digest,
+    so one name for both recipes would hand back the list of whichever variant
+    happened to be written first.
+    """
+    resolved = settings()
+    return resolved.dict_dir / f"de-{variant or resolved.compound_dict}.txt"
+
+
 def _digest_path(target: Path) -> Path:
     """Return the path of the digest file that belongs to an artifact."""
     return target.with_name(target.name + DIGEST_SUFFIX)
@@ -226,7 +244,7 @@ def build_artifact(
     source: Path = SYSTEM_WORDLIST,
     target: Path | None = None,
     *,
-    variant: str = DEFAULT_COMPOUND_DICT,
+    variant: str | None = None,
 ) -> Artifact:
     """Return the constituent list, reading it at most once per process.
 
@@ -239,9 +257,24 @@ def build_artifact(
     object back and touches neither the artifact nor the recipe. ``rebuilt`` is
     False for such a call, because nothing was built; :func:`read_count` is the
     number that says nothing was read either.
+
+    **The variant comes from the settings and the file name carries it**, both
+    since bug audit H2 of plan 06.1-17. Until then the default was the constant
+    and no caller in the running app passed anything else, so
+    ``FINDLING_COMPOUND_DICT`` was declared in ``backend/appinfo/info.xml`` with
+    a display name and a measured promise and changed nothing at all. Passing
+    the setting alone would not have been enough either: the check below compares
+    a stored artifact against its OWN digest, not against the recipe that was
+    asked for, so an operator who switched the variant would have got the other
+    list back from the volume and seen no change. The name is therefore part of
+    the artifact. An older volume carries a ``de.txt`` that nothing reads any
+    more; it costs one rebuild of a tenth of a second at the next start and a
+    file of a few megabytes that no longer has a reader.
     """
+    if variant is None:
+        variant = settings().compound_dict
     if target is None:
-        target = settings().dict_dir / "de.txt"
+        target = artifact_path(variant)
 
     digest_path = _digest_path(target)
     with _CACHE_LOCK:
