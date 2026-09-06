@@ -161,3 +161,63 @@ unbeurteilte Beobachtung im Protokoll. Rot-Faehigkeit dreifach belegt
 (`backend/tests/test_one_load.py`) plus einem roten Containerlauf. Commits
 0366a3b und d22c8ec. Fuer 06.1-18 bleibt nur noch die einmalige Nachmessung der
 Grundlast auf der arm64-Box; der Dauerwaechter haengt nicht mehr an ihr.
+
+---
+
+## DI-06.1-05 (gefunden in Plan 06.1-06): sechs Stellen nennen den Korpus noch mit dreiunddreissig Dateien
+
+**Gefunden:** beim Nachziehen der Zahlen fuer Task 3. Der Korpus hat mit diesem
+Plan 39 Dateien statt 33, und 24 PDFs statt 19.
+
+**Was offen ist:** Innerhalb der `files_modified` dieses Plans wurde jede Zahl
+mitgezogen (`testdata/CORPUS.md`, `.github/workflows/integration.yml`).
+Ausserhalb steht die alte Zahl weiter als Prosa in:
+
+- `docs/testing.md` Z. 94, 100 und 101 ("thirty three files including twelve
+  broken PDFs", und zweimal in der Begruendung des Verdikt-Zaehlers)
+- `docs/dev-setup.md` Z. 238 ("33 files, the four image types")
+- `docs/ocr.md` Z. 261 ("dem Referenzkorpus dieses Repositories, 33 Dateien,
+  davon 19 PDFs"), wo auch die PDF-Zahl nicht mehr stimmt
+- `docs/performance.md` Z. 2223 ("Korpus von 33 Dateien")
+- `scripts/dev/build_load_corpus.py` Z. 4, 11 und 1167, im Docstring des
+  Lastkorpus
+
+Keine dieser Stellen wird maschinell gelesen, keine faerbt einen Lauf rot. Es
+sind Saetze fuer Leser, und sie sind ab jetzt falsch.
+
+**Warum nicht hier behoben:** Alle sechs liegen ausserhalb der `files_modified`
+dieses Plans. `docs/testing.md` gehoert nach dem Wellenplan den Plaenen 06.1-15
+und 06.1-19, und zwei Plaene derselben Welle teilen sich keine Datei.
+
+**Wohin es gehoert:** in den Plan, der `docs/testing.md` ohnehin anfasst, also
+06.1-15 oder 06.1-19. Die uebrigen vier Dateien sind je eine Zeile und koennen
+dort mitlaufen. Empfehlung fuer die Gelegenheit: die Zahl aus
+`testdata/CORPUS.md` zitieren statt sie ein siebtes Mal zu schreiben, damit die
+naechste Korpuserweiterung nicht wieder sechs Stellen suchen muss.
+
+---
+
+## DI-06.1-06 (gefunden in Plan 06.1-06): der Deckel gegen Archivbomben zaehlt je Mitglied und nie die Summe
+
+**Gefunden:** beim Bau der Korpusdatei `34-zip-bombe.docx`.
+
+**Was offen ist:** `_oversized_part` in `backend/src/findling/extract/office.py`
+und die gleichnamige Pruefung in `extract/odf.py` fragen
+`any(info.file_size > EXTRACT_ARCHIVE_MEMBER_MAX_BYTES ...)`, also je Mitglied.
+Ein Paket mit hundert Teilen von je 63 MiB kommt an dieser Pruefung vorbei. Ob
+es danach wirklich schadet, haengt am Loader: python-docx liest
+`word/document.xml`, python-pptx die Folien, openpyxl im Read-only-Modus zeilen-
+weise. Ein Paket, dessen einzelnes gelesenes Teil unter dem Deckel bleibt, ist
+also nicht automatisch gefaehrlich, aber die Aussage des Deckels ist enger als
+sie klingt.
+
+**Warum nicht hier behoben:** Das ist keine Korrektur an dieser Stelle, sondern
+eine Aenderung der Semantik des Deckels (Summe statt Maximum, oder ein zweiter
+Deckel daneben), mit Folgen fuer jedes gueltige grosse Dokument. Nach den
+Abweichungsregeln ist das Regel 4 und braucht eine Entscheidung, keinen
+Schnellschuss im Randpfad-Plan.
+
+**Wohin es gehoert:** in das Sicherheitsaudit dieser Phase. Dort mit einer
+Messung entscheiden: wie viel liest jeder der drei Loader tatsaechlich, und
+reicht ein Summendeckel oder braucht es einen Deckel auf der Gesamtgroesse des
+entpackten Pakets.
