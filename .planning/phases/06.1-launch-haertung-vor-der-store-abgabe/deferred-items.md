@@ -52,3 +52,48 @@ gegen den 06-11-Satz, die Suite ist gruen. Grund fuer den Eingriff ausserhalb
 eines Plans: ohne ihn waere die CI der Hauptlinie bis Welle 7 rot gewesen und
 haette jede echte Regression der Wellen 2 bis 6 verdeckt. Plan 06.1-18 Task 4
 ersetzt die Zahl nach der Nachmessung an denselben drei Stellen plus Konstante.
+
+---
+
+## DI-06.1-02 (gefunden in Plan 06.1-09): fuenf weitere Stellen nennen noch das alte Versionsfenster
+
+**Gefunden:** beim Nachziehen von E-H1 (`min-version` 32 auf 33). Der Plan
+fuehrt fuenf Fundstellen, und die sind gesetzt. Beim Gegensuchen nach `32` im
+uebrigen Baum sind funf weitere aufgetaucht, alle ausserhalb der
+`files_modified` dieses Plans.
+
+**Was, einzeln:**
+
+- `CLAUDE.md`, drei Stellen: die Zeile "Nextcloud-Fenster" der Tabelle
+  "Kernentscheidungen auf einen Blick" (**min-version 32, max-version 35**), der
+  Abschnitt "Nextcloud-Versionsfenster" und die Zeile "PHP-App" der Tabelle
+  "Version Compatibility" (`NC 32 bis 34 (max-version 35)`).
+- `.planning/REQUIREMENTS.md`, PKG-03, im Anforderungstext und in der
+  Rueckverfolgungstabelle. Beide Stellen nennt E-H1 ausdruecklich als
+  dokumentarisch mitzuziehen.
+- `php/lib/Service/StorageService.php:19` und `php/lib/Settings/Section.php:16`:
+  beide Kommentare sagen woertlich "the app declares min-version 32". Die
+  Begruendung dahinter bleibt gueltig, ein hoeherer Boden macht die dort
+  gezogenen Schluesse eher staerker; falsch ist nur die genannte Zahl.
+- `.github/workflows/integration.yml:111`: der Kommentar nennt "the full
+  stable32 / stable33 / stable34 matrix" als das, was `deploy-harp` faehrt. Seit
+  diesem Plan sind es stable33, stable34 und stable35.
+- `docs/uninstall.md`, Abschnitte um Z. 65, 168, 279, 283 und 338: der
+  Deinstallations-Nachweis wird dort als "vier Laeufe" beschrieben, mit
+  Nextcloud 32 als Beispiel und mit dem Hinweis auf den Schalter "Daten
+  loeschen" in Nextcloud 32 und 33. Die Matrix faehrt jetzt drei Laeufe.
+
+**Warum nicht hier behoben:** keine dieser Dateien steht in den
+`files_modified` von Plan 06.1-09, und zwei davon sind PHP, dessen Gates dieser
+Plan nicht faehrt. Die ausgelieferte Zusage, also beide `info.xml`, die Matrix
+und die README, ist vollstaendig gesetzt und durch das neue Gate in
+`backend/tests/test_lockstep_versions.py` gehalten; die Liste hier ist
+Dokumentation, die der Zusage hinterherlaeuft.
+
+**Wohin es gehoert:** `CLAUDE.md` und `REQUIREMENTS.md` in die Nachfuehrung der
+Orchestrierung, die die Dokumente dieser Phase ohnehin anfasst. Die beiden
+PHP-Kommentare und `integration.yml` in den naechsten Plan, der die jeweilige
+Datei aus einem eigenen Grund oeffnet. `docs/uninstall.md` gehoert zu
+Plan 06.1-19, der die ROADMAP wegen E-H1 und E-H5 ohnehin nachzieht, und die
+Zahl der Laeufe steht dort ohnehin erst nach dem naechsten gruenen CI-Lauf
+wieder belegt da.
