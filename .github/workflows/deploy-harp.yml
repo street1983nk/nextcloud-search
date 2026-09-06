@@ -1115,6 +1115,26 @@ jobs:
       # they read no route list out of an archive. A step below that reached for
       # either of them would prove nothing about the store path, and the warning
       # sign is a path into findling-src where a registry address belongs.
+      #
+      # And the question plan 06.1-12 had to answer rather than leave open: does
+      # the developer pass above stay now that this one exists? It stays, and the
+      # reason is not habit. The two passes prove different things and only one
+      # of them can prove either.
+      #
+      #   The developer pass installs the image built from THIS commit. It is the
+      #   only pass that can, because a store install by definition pulls a
+      #   published image, and on a branch that image is whatever main published
+      #   last. Delete the developer pass and no run ever exercises the container
+      #   code under review.
+      #
+      #   The store pass installs what a stranger installs and can say nothing
+      #   about the commit under review. Delete it and the release archive, the
+      #   route list inside it, the code signature and the anonymous pull go back
+      #   to being untested.
+      #
+      # A silent side by side of two installation paths would be the one
+      # unacceptable answer, so the difference is written here: above is the
+      # commit, below is the release.
       # =====================================================================
 
       # The archives are built here rather than downloaded, and the reason is
@@ -1632,6 +1652,292 @@ jobs:
             echo "- image: \`${running_image}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
 
+      # The promise of this whole project, and the one thing above did not test:
+      # after the installation nobody configures anything, and the search finds
+      # the content of a document anyway.
+      #
+      # Everything in this step is deliberately not an occ command. The file
+      # arrives over WebDAV as the ordinary user, which is what a user does and
+      # what puts it into the file cache without occ files:scan. The engine is
+      # driven with "php -f cron.php", which is the identical command a system
+      # cron runs and is therefore not a shortcut: it is the mechanism, at a
+      # cadence this job controls because a runner has no cron daemon. What is
+      # NOT here, and must never be, is occ findling:index, occ
+      # background-job:worker or any occ config:app:set. Those are the
+      # development shortcuts of integration.yml, and a zero config proof that
+      # uses one of them proves the opposite of its name (T-06.1-51).
+      #
+      # php/lib/Repair/AppInstallStep.php is what makes this possible at all: it
+      # is registered under repair-steps/install and puts SchedulerJob into the
+      # job list when the app is enabled, once, guarded by a mark in the app
+      # config. So the chain that has to run by itself is enable, SchedulerJob,
+      # StorageCrawlJob, the container polling the queue, and a hit.
+      #
+      # The list of occ calls between the installation and the hit is printed and
+      # has to be empty. It is produced by the wrapper every step of this pass
+      # calls, not by a human writing down what they think they ran.
+      - name: Store install 7, a search finds content without anybody configuring anything
+        run: |
+          marker=$(wc -l < "${OCC_LOG}")
+          echo "every occ call of the store install path up to here:"
+          cat -n "${OCC_LOG}"
+          echo "the installation is complete after ${marker} occ calls, and nothing below may add one"
+
+          # An invented word, and invented on purpose. The analyzer splits German
+          # compounds against a dictionary, so a real compound could be indexed
+          # as its parts and a miss would say nothing about the index. This one
+          # is in no dictionary, in no skeleton file and in no other test of this
+          # repository, so a hit for it can only come out of the file below.
+          printf 'The findling zero config proof word is florpel.\n' > "${RUNNER_TEMP}/zero-config.txt"
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -T "${RUNNER_TEMP}/zero-config.txt" \
+            -u "testuser:${TESTUSER_PASS}" \
+            'http://localhost:8080/remote.php/dav/files/testuser/findling-zero-config.txt')
+          case "${code}" in
+            201|204) echo "the file was uploaded over WebDAV, HTTP ${code}" ;;
+            *)
+              echo "the upload answered HTTP ${code}, so there is no document to find"
+              exit 1
+              ;;
+          esac
+
+          # The loop leaves the moment the hit is there and never sleeps a fixed
+          # pause. That is the 52 second lesson of plan 06-11 turned into code: a
+          # probe that waits a fixed time measures its own guess, and that guess
+          # was wrong by 52 seconds in the direction that declares a healthy run
+          # dead.
+          deadline=$(( $(date +%s) + ZERO_CONFIG_BUDGET_SECONDS ))
+          found=""
+          rounds=0
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            rounds=$(( rounds + 1 ))
+            timeout 300 php -f cron.php > "${RUNNER_TEMP}/cron-${rounds}.log" 2>&1 || true
+            code=$(curl -s -o zero-config.json -w '%{http_code}' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=florpel')
+            if [ "${code}" = "200" ] && jq -e '.ocs.data.entries | length >= 1' zero-config.json > /dev/null 2>&1; then
+              found="yes"
+              break
+            fi
+            echo "round ${rounds}: HTTP ${code}, no hit yet, $(( deadline - $(date +%s) ))s of the budget left"
+            sleep 10
+          done
+
+          if [ -z "${found}" ]; then
+            echo "::error::no content hit within ZERO_CONFIG_BUDGET_SECONDS=${ZERO_CONFIG_BUDGET_SECONDS} after ${rounds} cron rounds"
+            echo "This is a finding and not a reason to raise the budget (T-06.1-52)."
+            cat zero-config.json || true
+            tail -n 40 "${RUNNER_TEMP}/cron-${rounds}.log" || true
+            docker logs "${STORE_CONTAINER}" 2>&1 | tail -n 60 || true
+            exit 1
+          fi
+          cat zero-config.json
+          jq -e '.ocs.data.entries[0].title == "findling-zero-config.txt"' zero-config.json
+          echo "content hit after ${rounds} cron rounds, with nothing configured"
+
+          # The claim of this step, checked against the record rather than
+          # asserted. Two commands ran in the window above and they are named
+          # here: "php -f cron.php" and the OCS search. Neither is an occ call,
+          # so the tail of the log has to be empty.
+          tail -n +$(( marker + 1 )) "${OCC_LOG}" > "${RUNNER_TEMP}/occ-since-install.txt"
+          echo "occ calls between the installation and the hit:"
+          cat "${RUNNER_TEMP}/occ-since-install.txt"
+          if [ -s "${RUNNER_TEMP}/occ-since-install.txt" ]; then
+            echo "an occ call ran between the installation and the hit, so this was not a zero config proof"
+            exit 1
+          fi
+          echo "none, which is what zero config means"
+          {
+            echo ""
+            echo "Zero config on ${{ matrix.server-version }}: content hit after ${rounds} cron rounds,"
+            echo "no occ call between the installation and the hit."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      # =====================================================================
+      # The six uninstall promises a second time, against the installation the
+      # archive produced.
+      #
+      # Why they are here in full and not shared with the six steps above. The
+      # duplication is real and is the price of two things this phase wants at
+      # once: the six steps above stay untouched, because they are the reference
+      # and a refactor of a green proof is a refactor of the evidence, and each
+      # assertion keeps its own step with its own message, which is what makes a
+      # failure readable at all. Sharing them would collapse twelve named steps
+      # into two loops and would trade the readability of every future failure
+      # for the tidiness of one file. The cost is named rather than hidden: a
+      # seventh promise has to be added twice, and a change to any of the six has
+      # to be made twice.
+      #
+      # Why they are not academic. An installation out of the archive puts
+      # different files into apps/findling than a move out of the working tree
+      # does, it carries a signature.json the other one has no idea about, and
+      # its container was created from a registry image rather than from a local
+      # one. A cleanup that only ever saw the developer case leaves remains in
+      # the other, and remains after an uninstall are what decision D-16 is
+      # about.
+      # =====================================================================
+
+      - name: Store uninstall 1, an unregister without the flag keeps the volume
+        run: |
+          if [ -z "${STORE_VOLUME}" ] || [ -z "${STORE_CONTAINER}" ]; then
+            echo "the store install step handed over no container or volume name, so this assertion would pass without looking at anything"
+            exit 1
+          fi
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:unregister findling_backend
+          still_there=$(docker ps -a --filter "name=${STORE_CONTAINER}" --format '{{.Names}}')
+          if [ -n "${still_there}" ]; then
+            echo "the container ${STORE_CONTAINER} survived the unregister, so the deregistration removed nothing"
+            docker ps -a
+            exit 1
+          fi
+          kept=$(docker volume ls --filter "name=${STORE_VOLUME}" --format '{{.Name}}')
+          if [ "${kept}" != "${STORE_VOLUME}" ]; then
+            echo "the volume ${STORE_VOLUME} is gone after an unregister without --rm-data, and the documented default is that it stays; found '${kept}'"
+            docker volume ls
+            exit 1
+          fi
+          echo "container gone, volume ${kept} kept"
+
+      - name: Store uninstall 2, a second registration picks up the volume it left
+        run: |
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${STORE_INFO_XML}" --wait-finish
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -z "${container}" ]; then
+            echo "the second registration out of the archive created no running container"
+            docker ps -a
+            exit 1
+          fi
+          volume=$(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}')
+          if [ "${volume}" != "${STORE_VOLUME}" ]; then
+            echo "the second registration did not take the volume of the first one, expected ${STORE_VOLUME} and found '${volume}'"
+            docker volume ls
+            exit 1
+          fi
+          echo "registered again as ${container} on the kept volume ${volume}"
+
+      - name: Store uninstall 3, an unregister with --rm-data removes the volume
+        run: |
+          if [ -z "${STORE_VOLUME}" ]; then
+            echo "no volume name from the store install step, so an empty filter result would be a false green (T-05-29)"
+            exit 1
+          fi
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:unregister findling_backend --rm-data
+          left=$(docker volume ls --filter "name=${STORE_VOLUME}" --format '{{.Name}}')
+          if [ -n "${left}" ]; then
+            echo "the volume ${STORE_VOLUME} survived an unregister with --rm-data, found '${left}'"
+            docker volume ls
+            exit 1
+          fi
+          container=$(docker ps -a --filter "name=${STORE_CONTAINER}" --format '{{.Names}}')
+          if [ -n "${container}" ]; then
+            echo "the container ${STORE_CONTAINER} survived the unregister with --rm-data"
+            docker ps -a
+            exit 1
+          fi
+          echo "container and volume ${STORE_VOLUME} both gone"
+
+      # The order is the same as above and for the same reason: the intent mark
+      # is a one shot flag, so the only way to show that a disable clears nothing
+      # is to disable while no mark is set (T-05-31).
+      - name: Store uninstall 4, a disable without intent keeps tables and settings
+        run: |
+          expected='oc_findling_file_state oc_findling_queue oc_findling_scan_stats'
+          tables=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          echo "before the disable: tables [${tables}], settings ${settings}"
+          if [ "${tables}" != "${expected}" ]; then
+            echo "the three tables of the app are not all there before the disable, expected [${expected}] and found [${tables}]"
+            exit 1
+          fi
+          "${RUNNER_TEMP}/nc-occ.sh" app:disable findling
+          tables=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          echo "after the disable: tables [${tables}], settings ${settings}"
+          if [ "${tables}" != "${expected}" ]; then
+            echo "the disable removed tables although no intent was armed, expected [${expected}] and found [${tables}]"
+            exit 1
+          fi
+          if [ "${settings}" -lt 1 ]; then
+            echo "the disable emptied the settings of the app although no intent was armed, ${settings} values left"
+            exit 1
+          fi
+
+      # The registration in the middle belongs to assertion 6: that one needs a
+      # live container while the companion goes away, so the deployment handshake
+      # has to happen while the installation is still complete.
+      #
+      # The one thing this assertion adds over its twin above: the companion it
+      # removes is the one the archive delivered, so this is where a leftover of
+      # the archive installation would show. apps/findling is looked at
+      # afterwards for exactly that reason.
+      - name: Store uninstall 5, a remove with intent clears tables and settings
+        run: |
+          "${RUNNER_TEMP}/nc-occ.sh" app:enable findling
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${STORE_INFO_XML}" --wait-finish
+          "${RUNNER_TEMP}/nc-occ.sh" findling:purge --arm --no-interaction
+          "${RUNNER_TEMP}/nc-occ.sh" app:remove findling
+          tables=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'oc_findling_%' ORDER BY name;" | tr '\n' ' ' | sed -e 's/ *$//')
+          settings=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" "SELECT COUNT(*) FROM oc_appconfig WHERE appid = 'findling';")
+          echo "after the remove with intent: tables [${tables}], settings ${settings}"
+          if [ -n "${tables}" ]; then
+            echo "the remove with intent left tables behind: [${tables}]"
+            exit 1
+          fi
+          if [ "${settings}" -ne 0 ]; then
+            echo "the remove with intent left ${settings} settings behind"
+            exit 1
+          fi
+          if [ -e apps/findling ]; then
+            echo "the remove left the extracted archive behind in apps/findling, which a developer installation would not have shown"
+            find apps/findling -maxdepth 2 -mindepth 1 -printf '  %P\n' | sort
+            exit 1
+          fi
+          echo "no tables, no settings, no directory"
+
+      - name: Store uninstall 6, the container without a companion retreats
+        run: |
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -z "${container}" ]; then
+            echo "no running container after the companion was removed, so the container did not survive the half removal"
+            docker ps -a
+            exit 1
+          fi
+          noisy_lines() {
+            docker logs "${container}" 2>&1 | grep -cE '^(WARNING|ERROR|CRITICAL):' || true
+          }
+          before=$(noisy_lines)
+          entered=""
+          for _ in $(seq 1 24); do
+            if docker logs "${container}" 2>&1 | grep -q 'the queue has not answered for'; then
+              entered="yes"
+              break
+            fi
+            sleep 10
+          done
+          if [ -z "${entered}" ]; then
+            echo "the container never announced the retreat, so it is either still polling pass by pass or it is not polling at all"
+            docker logs "${container}" 2>&1 | tail -n 40
+            exit 1
+          fi
+          alive=$(docker ps --filter "name=${container}" --format '{{.Status}}')
+          if [ -z "${alive}" ]; then
+            echo "the container stopped during the retreat instead of waiting it out"
+            docker ps -a
+            exit 1
+          fi
+          after=$(noisy_lines)
+          grew=$((after - before))
+          if [ "${grew}" -gt 5 ]; then
+            echo "the container wrote ${grew} new warning or error lines while its caller was gone, which is an error loop and not a retreat"
+            docker logs "${container}" 2>&1 | grep -E '^(WARNING|ERROR|CRITICAL):' | tail -n 20
+            exit 1
+          fi
+          echo "container ${container} is ${alive}, retreat announced, ${grew} new warning or error lines"
+
       - name: Collect the logs and tear the deployment down
         if: always()
         run: |
@@ -1642,6 +1948,15 @@ jobs:
           fi
           docker logs appapi-harp > "${RUNNER_TEMP}/harp-logs/harp.log" 2>&1 || true
           docker logs exapps-proxy > "${RUNNER_TEMP}/harp-logs/proxy.log" 2>&1 || true
+          # The evidence of the store install pass, saved rather than left in the
+          # step log where it scrolls away: the recorded occ calls, the registry
+          # manifests and the three integrity verdicts.
+          for evidence in occ-calls.txt manifest-released.txt manifest-dev.txt \
+            integrity-clean.txt integrity-tampered.txt integrity-restored.txt; do
+            if [ -f "${RUNNER_TEMP}/${evidence}" ]; then
+              cp "${RUNNER_TEMP}/${evidence}" "${RUNNER_TEMP}/harp-logs/${evidence}"
+            fi
+          done
           docker rm -f appapi-harp registry exapps-proxy 2>/dev/null || true
           # The ExApp container outlives the assertions since assertion 6 keeps
           # it alive on purpose, so the teardown takes it along. Its log is
