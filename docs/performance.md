@@ -2962,9 +2962,11 @@ gemessen und im Bericht aufgeschlüsselt:
 
 Der letzte Posten ist der Befund dieses Laufs: `api/resources.py` und
 `worker/poller.py` halten je eine eigene `EmbeddingModel`-Instanz im selben
-Prozess, die erste Suche lädt Tokenizer und onnxruntime-Sitzung ein zweites Mal,
-und dazu einen zweiten deutschen Zerlegungsautomaten. Ein Container, der
-indexiert und gesucht wird, was jede Installation ist, trägt zwei Sätze davon.
+Prozess, die erste Suche lädt Tokenizer und onnxruntime-Sitzung ein zweites Mal
+und liest die Wortliste erneut (der Zerlegungsautomat selbst ist prozessweit
+gecacht, Korrektur vom 06.09. nach dem Research zu Phase 06.1). Ein Container,
+der indexiert und gesucht wird, was jede Installation ist, trägt zwei Sätze
+Modellgewichte und Tokenizer.
 Aufgenommen für die Härtungsphase vor der Abgabe; in diesem Lauf nicht geändert,
 weil die Zahl so gemessen ist, wie das Produkt heute ausgeliefert würde.
 

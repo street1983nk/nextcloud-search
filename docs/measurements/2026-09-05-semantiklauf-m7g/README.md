@@ -301,11 +301,17 @@ Tokenizer und onnxruntime-Sitzung ein zweites Mal, und der Preis bleibt liegen:
 **gemessen +276 MB dauerhaft** (1.562,7 nach 1.837,8 MB, Spitze), rund 1.750 MB
 noch eine Stunde spaeter im Leerlauf. Dazu liest die Suchseite bei der ersten
 Anfrage die Wortliste erneut (`constituent list read from the volume` um
-05:15Z, ein zweiter deutscher Automat, laut Aufschluesselung oben 64 MB).
+05:15Z; `build_artifact` in `index/wordlist.py` hat keinen Cache). **Korrektur
+06.09., Research zu Phase 06.1:** der deutsche Zerlegungsautomat selbst wird NICHT
+zweimal gebaut, `_CACHED_GERMAN` in `index/analyzer.py` ist ein prozessweiter
+Cache mit Zaehler und Test. Doppelt liegen Tokenizer und onnxruntime-Sitzung,
+dazu das zweite Lesen der Wortliste (21,9 MB laut Aufschluesselung), nicht die
+42 MB des Automaten. Die erste Fassung dieses Absatzes hatte die Log-Zeile als
+Automatenbeweis gelesen.
 
 Das ist der wichtigste Befund dieses Laufs fuer die Haertung vor der Abgabe:
 ein Container, der indexiert UND gesucht wird, was der Normalfall jeder
-Installation ist, traegt zwei Saetze Modellgewichte und zwei Automaten. Eine
+Installation ist, traegt zwei Saetze Modellgewichte und Tokenizer. Eine
 gemeinsame Engine fuer beide Seiten, oder ein Entladen der Suchseite nach
 Leerlauf, spart auf dieser Box einen dreistelligen MB-Betrag gegen eine harte
 Grenze, an der 210 MB uebrig sind. Aufgenommen fuer die Launch-Haertungsphase
