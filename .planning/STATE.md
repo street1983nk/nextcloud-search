@@ -42,6 +42,11 @@ Einbettung bei 46.853/51.961, Ende gegen 05:45Z erwartet. Waechter-Leser
 manuell gefahren (p95 1.129 ms, haelt), Waechter korrigiert neu gestartet.
 memory.events zeigt max=1504 bei oom=0, anon-Spitze bisher 1.562,7 MB.
 Weckwort weiterhin: **semantiklauf pruefen**.
+**Owner-Anweisung 06.09.:** Vor der Store-Abgabe (06-12) kommt eine eigene
+Launch-Haertungsphase mit ausgiebigen Tests jenseits des Happy Path (siehe
+CLAUDE.md, Owner-Regeln). Bei 'semantiklauf pruefen' nach 06-11: diese Phase
+per /gsd:phase vor 06-12 einfuegen und planen, 06-12 NICHT direkt starten.
+
 
 Fertigmeldung der Box: `/home/ubuntu/work/semantiklauf/00-FERTIG`.
 

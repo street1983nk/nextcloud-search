@@ -82,6 +82,7 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 | Baustart SOFORT (Owner-Entscheid 15.08. abends, ersetzt "nach MCP-Abgabe") | Arbeit liegt bei Claude, Sessions laufen unabhängig; Phasen werden am Stück durchgezogen, Releases ggf. zusammen eingereicht; fertig zur Nextcloud Conference = bester Launch | , Pending |
 | Release-Staffelung v1.0/v1.1 wird zur Einreichungs-Option | Wenn beim Einreichen alles fertig ist, gemeinsame oder direkt aufeinanderfolgende Abgabe; Entscheid bei Store-Einreichung | ENTSCHIEDEN durch D-08 vom 03.09.2026: gemeinsame Abgabe als EIN Erstrelease 1.0.0 |
 | App-ID und Name VOR dem ersten Bau-Commit einfrieren | Zertifikat ist ID-gebunden (Lehre aus MCP-Connector-Research) | , Pending (Naming-Task in Phase 1) |
+| Vor der Store-Abgabe eine eigene Launch-Haertungsphase: ausgiebige Tests jenseits des Happy Path (Fehlerpfade, Rechte, Grenzen, Upgrade/Neustart, Schadfaelle, Fremdinstallation), alle erdenklichen Massnahmen fuer das beste Ergebnis; Abgabe erst nach Owner-Abnahme dieser Phase | Owner-Anweisung 06.09.2026: "ein perfektes Findling, nicht nur den Happy Path"; Termin bleibt hart, aber Qualitaet der Abgabe geht vor Reihenfolge | Pending, Phase vor 06-12 einzuplanen |
 
 ## Evolution
 
