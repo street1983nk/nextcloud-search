@@ -48,7 +48,10 @@ external app. The container owns the heavy lifting.
 
 ## Requirements
 
-- Nextcloud 32 to 35 (`min-version` 32, `max-version` 35)
+- Nextcloud 33 to 35 (`min-version` 33, `max-version` 35). Nextcloud 32 left the
+  window with the decision of 2026-09-06: it goes out of support in September 2026,
+  this app is submitted in December, and an app that claims a server nobody
+  supports any more claims something it cannot make good on.
 - The AppAPI app, with HaRP as the deploy target
 - Target hardware: 4 to 8 GB RAM, ARM64 and AMD64, CPU only, no GPU required
 

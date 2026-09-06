@@ -219,8 +219,22 @@ pas chiffré au repos, ce qui relève de l'hôte sur lequel il tourne.]]></descr
 		bare address.
 	-->
 	<donation type="paypal">https://paypal.me/KhaledCherifDev</donation>
+	<!--
+		The server window, and the lower bound is a decision rather than a
+		default. E-H1 of 2026-09-06 moves min-version from 32 to 33: Nextcloud 32
+		leaves support in September 2026, this app is submitted in December, and a
+		store entry that names a server nobody supports any more is a promise that
+		cannot be kept in the one case where it matters. max-version stays at 35.
+
+		The same window stands in php/appinfo/info.xml, in the matrix of
+		.github/workflows/deploy-harp.yml and in the requirements of README.md, and
+		it is only true when it is true in all of them. backend/tests/
+		test_lockstep_versions.py compares the two info.xml against each other and
+		both against the matrix on every ordinary run, so a window that moves in
+		one file alone goes red instead of going unnoticed.
+	-->
 	<dependencies>
-		<nextcloud min-version="32" max-version="35"/>
+		<nextcloud min-version="33" max-version="35"/>
 	</dependencies>
 	<external-app>
 		<docker-install>

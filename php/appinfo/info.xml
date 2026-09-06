@@ -228,9 +228,24 @@ repos, ce qui relève de l'hôte sur lequel il tourne.]]></description>
 		bare address.
 	-->
 	<donation type="paypal">https://paypal.me/KhaledCherifDev</donation>
+	<!--
+		The server window of E-H1 of 2026-09-06, and it is the same one the other
+		half declares: min-version moves from 32 to 33 because Nextcloud 32 leaves
+		support in September 2026 while this app is submitted in December, and
+		max-version stays at 35. Two entries in the store that named different
+		servers would be two different promises about one app, which is why
+		backend/tests/test_lockstep_versions.py compares this element with the one
+		in backend/appinfo/info.xml and both with the matrix of
+		.github/workflows/deploy-harp.yml.
+
+		The PHP floor is untouched by that decision. It follows lib/versioncheck.php
+		of the servers in the window, and 8.2 is the floor of 33 and 34; the entry
+		for 35 in the matrix carries 8.3 for the same reason, which is a statement
+		about the run and not about this app.
+	-->
 	<dependencies>
 		<php min-version="8.2"/>
-		<nextcloud min-version="32" max-version="35"/>
+		<nextcloud min-version="33" max-version="35"/>
 	</dependencies>
 	<!--
 		The two blocks below sit in the order the store schema prescribes, which
