@@ -52,3 +52,25 @@ gegen den 06-11-Satz, die Suite ist gruen. Grund fuer den Eingriff ausserhalb
 eines Plans: ohne ihn waere die CI der Hauptlinie bis Welle 7 rot gewesen und
 haette jede echte Regression der Wellen 2 bis 6 verdeckt. Plan 06.1-18 Task 4
 ersetzt die Zahl nach der Nachmessung an denselben drei Stellen plus Konstante.
+
+---
+
+## DI-06.1-02 (gefunden in Plan 06.1-04): der Dauerwaechter ueber die zweite Modellinstanz fehlt weiterhin
+
+**Was offen ist:** Plan 06.1-04 sollte in `resilience.yml` eine Obergrenze ueber
+die Differenz zwischen `before-first-search` und `after-first-search` setzen. Sie
+wurde nicht gesetzt, weil die Praemisse des Plans bei der Messung fiel: der
+Messcontainer startet auf leerem `APP_PERSISTENT_STORAGE`, `read_side()` gibt
+`None` zurueck, und die erste Suche kehrt um, bevor sie Wortliste, Automat oder
+Modell erreicht. Gemessen auf amd64 am 06.09.2026: 241.172 und 503.316 Bytes in
+zwei Laeufen desselben Schrittkoerpers. Eine Grenze darueber koennte fuer die
+Rueckkehr der zweiten Modellinstanz nicht rot werden.
+
+**Was geliefert wurde:** die Differenz steht ab jetzt als Zahl im Protokoll des
+Schritts, damit die Reihe entsteht, aus der eine Grenze kommen kann.
+
+**Wohin es gehoert:** eine Owner-Entscheidung zwischen drei Wegen, ausgefuehrt in
+`06.1-04-SUMMARY.md`, Abschnitt "Offene Entscheidung fuer den Owner". Empfehlung
+dort: ein Messeinstieg, der `embed.engine.load_count()` ausgibt, statt einer
+Speichermessung. Beruehrt Plan 06.1-18 (Nachmessung) und die Frage, ob die
+arm64-Box zwischen zwei Messreihen der einzige Zeuge bleibt.
