@@ -207,6 +207,32 @@ Schätzung, die die Messung fast getroffen hat, und sie wird hier trotzdem durch
 die Messung ersetzt, weil eine Zahl, die man nachrechnen kann, keine Schätzung
 bleiben muss.
 
+### Nachtrag vom 06.09.2026: im Volllauf gemessen, die Kennzahl ist 1.321,0 Byte je Dokument
+
+Der Semantik-Volllauf auf der 4-GB-ARM-Box (Plan 06-11, Bericht unter
+[`docs/measurements/2026-09-05-semantiklauf-m7g/`](measurements/2026-09-05-semantiklauf-m7g/README.md))
+hat die Kennzahl gemessen, im Container, nach dem Lauf, Datei und WAL zusammen.
+**Die gemessene Zahl ersetzt die gerechnete.** Die gerechnete bleibt daneben
+stehen, weil eine Rechnung, die daneben lag, eine Warnung für das nächste Mal ist.
+
+| Grösse | gerechnet (05.09., oben) | **gemessen (06.09., Volllauf)** | Abweichung |
+|---|---|---|---|
+| Dokumente mit Vektor | 50.068 | 51.961 | |
+| Chunks je Dokument | 2 (Boden), 2 bis 3 (Nachtrag) | **2,807** | |
+| Chunks insgesamt | 100.136 | **145.854** | |
+| `vectors.db` mit WAL | 43.859.968 Byte | **68.642.504 Byte** | |
+| Byte je Chunk | 438,0 | 470,6 | +7,4 Prozent, der WAL-Anteil ist mit drin |
+| **Byte je Dokument** | 876,0 (Schätzung der Recherche: 864) | **1.321,0** | **+50,8 Prozent** gegen 876,0, +52,9 Prozent gegen 864 |
+| Zuwachs gegenüber dem Tantivy-Index | 5,8 Prozent | **8,74 Prozent** (785.308.851 Byte Index) | |
+
+Woran die Rechnung scheiterte, ist die Zeile, die der Nachtrag vom 05.09. schon
+als Boden markiert hatte: die Chunks je Dokument. 2,807 statt 2 erklärt fast den
+ganzen Unterschied; der Rest ist der nicht zurückgeschriebene WAL, der in einem
+laufenden Container zur Grösse auf der Platte gehört. Erfolgskriterium 4 hält
+mit der grösseren Zahl: 145.854 Chunks liegen innerhalb des Bereichs, für den die
+Scan-Latenz oben interpoliert ist, und die gemessene p95 einer Nutzersuche nach
+dem Lauf lag bei 524 ms gegen ein Budget von 2.500 ms.
+
 ### Die Kommandozeile
 
 Gemessen wurde gegen genau das Schema, das ausgeliefert wird, über die drei
@@ -440,6 +466,28 @@ gepinnte Neoverse-N2-Kerne sind schneller als zwei geteilte vCPU einer kleinen
 Box, und um wie viel, ist ungemessen. Der Store-Text trägt diese Stunden
 deshalb nicht (D-17a); was der Bericht belegt, ist, dass die Größe, an der die
 Phase hängen könnte, sie nicht zum Kippen bringt.
+
+**Was die zweite Spur auf der Zielbox gekostet hat, gemessen am 05. und
+06.09.2026.** Der Volllauf mit Semantik (Plan 06-11) hat die Dauer gemessen, die
+die Tabelle oben nur hochrechnen konnte, auf der Hardware, für die die
+Store-Aussage gilt: AWS m7g.large, 2 vCPU Graviton3, auf 4 GB begrenzt, harte
+Containergrenze 2 GB, `INDEX_WORKERS=1`.
+
+| Grösse | gemessen |
+|---|---|
+| Dokumente eingebettet | 51.961, jedes indexierte |
+| Einbettung neben der laufenden OCR-Spur | rund 43 Dokumente je Minute |
+| Einbettung allein, nach dem Ende der ersten Spur | rund 170 Dokumente je Minute |
+| Verlängerung der ersten Spur durch die Einbettung nebenher | 12 h 49 min auf 18 h 04 min, +41 Prozent |
+| Dauer bis zum letzten Vektor | 18 h 56 min nach dem Anstoss |
+| p95 einer Nutzersuche, während die zweite Spur lief | 1.129 ms gegen 2.500 ms Budget |
+
+Die 4 h 03 min der Tabelle oben waren also die Rechenzeit der Einbettung auf
+schnellen Kernen; auf der Zielbox verteilt sich dieselbe Arbeit über den ganzen
+Lauf und verlängert ihn um gut fünf Stunden. **Das ist die Zahl, die der
+Store-Text nach D-17a trägt**, mit der Hardware daneben. Rohdaten und die Grenze
+zwischen den beiden Spuren, abgelesen aus dem Statusbeobachter:
+[`docs/measurements/2026-09-05-semantiklauf-m7g/`](measurements/2026-09-05-semantiklauf-m7g/README.md).
 
 **Was ein Admin währenddessen sieht.** Die Admin-Seite führt seit Plan 06-09
 zwei Deckungszahlen mit demselben Nenner:

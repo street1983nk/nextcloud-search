@@ -57,27 +57,32 @@ not for a search cluster.
 
 ## What it costs in memory, measured
 
-**A full index and OCR run over 50,000 files and 20 GB on a 4-GB ARM64 box peaked
-at 422 MB of resident anonymous memory, under a hard 2 GB limit enforced by the
-kernel, with no OOM kill.** The run took 12 hours 49 minutes, wrote a 726 MB index
-and left every one of the 50,049 files with a verdict: 50,021 indexed, 28 skipped
-for a named reason, **none failed**.
+**A full index, OCR and embedding run over 50,000 files and 20 GB on a 4-GB ARM64
+box peaked at 1,838 MB of resident anonymous memory, under a hard 2 GB limit
+enforced by the kernel, with no OOM kill and no restart.** The run took 18 hours
+56 minutes until the last vector, wrote a 785 MB word index and a 69 MB vector
+store, and left every file with a verdict: 51,961 indexed and embedded, 37
+skipped for a named reason, **none failed**. A user search during the run
+answered in 1.1 seconds at the 95th percentile, after the run in 0.5 seconds.
 
 That is a measurement and not an estimate. It was taken on arm64 with 2 cores and
-4 GB, which is the hardware this app is built for, and the whole run was carried
-out under a memory ceiling the kernel enforced: `memory.events` reports zero for
-every counter that would indicate memory pressure, so the limit was not merely
-respected on average, it was never touched.
+4 GB, which is the hardware this app is built for. Two honest sentences belong
+next to it. First: the kernel counters for memory damage (`oom`, `oom_kill`,
+`oom_group_kill`) are zero, but the `max` counter is not, because the file cache
+of the index pressed against the 2 GB limit 2,796 times while the semantic search
+held 1.5 to 1.8 GB of its own; the limit was respected, it was not left untouched.
+Second: most of that memory is the semantic search, not the indexing. The same
+run without embeddings peaked at 422 MB and took 12 hours 49 minutes on the same
+machine, and about 276 MB of the difference is a second copy of the model that the
+search side loads next to the one the indexer holds. That is a known finding and
+it is being addressed in the hardening before the first release.
 
-The same run was made first on a 4-GB x86 box as a rehearsal, and both series are
-in the report side by side. The short version of the comparison: the ARM machine
-is 25 percent slower and 1.5 percent smaller in peak memory.
-
-Method, the full curve, the corpus, the four part OOM proof, four failure drills
+Method, both full curves, the corpus, the four part OOM proof, four failure drills
 on the same machine (`docker kill` during OCR, a reboot of the whole machine,
-backend gone, disk nearly full) and a side measurement with a second index worker
-are in [docs/performance.md](docs/performance.md), including what each of them
-does not prove.
+backend gone, disk nearly full), the breakdown of what the semantic search costs
+at idle and a side measurement with a second index worker are in
+[docs/performance.md](docs/performance.md), including what each of them does not
+prove.
 
 ## Privacy
 

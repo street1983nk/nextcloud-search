@@ -142,6 +142,13 @@ zwei Reihen auf zwei Architekturen mehr sagen als eine.
 | Kosten des ARM-Laufs | gerechnet, aus Laufzeit und belegten Sätzen | 2026-09-05 |
 | Abnahme durch den Betreiber | erteilt, ohne Nacharbeiten | 2026-09-05 |
 | Verbleib der ARM-Box | **angehalten statt abgebaut**, Korpus und Index bleiben für Phase 6 | 2026-09-05 |
+| Semantik-Abbild auf der ARM-Box | gebaut, Baumhash beider Hälften nachgerechnet, Modellprüfsumme wie in Plan 06-03 | 2026-09-05 |
+| Grundlast der Semantik im Leerlauf | gemessen, 595 MB, A/B am selben Volumen, aufgeschlüsselt nach Posten | 2026-09-05 |
+| **Findling im Volllauf mit Semantik, 50.000 Dateien, ARM m7g.large** | **gemessen, 1.837,8 MB Spitze, 18 h 56 min, kein Speichertod, 0 Fehlschläge; `memory.events` mit `max` 2796 bei `oom` 0** | 2026-09-06 |
+| Kennzahl Byte je Dokument, Vektoren | **gemessen, 1.321,0 Byte**, 145.854 Chunks für 51.961 Dokumente | 2026-09-06 |
+| Suche während des Nachlaufs | gemessen, p95 1.129 ms gegen 2.500 ms Budget | 2026-09-06 |
+| Kosten des Semantiklaufs | aus den Sätzen dieses Kontos, 2,37 USD netto | 2026-09-06 |
+| Verbleib der ARM-Box nach dem Semantiklauf | **wieder angehalten**, für die Launch-Härtung vor der Abgabe | 2026-09-06 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -1374,7 +1381,7 @@ falsch.
 | Zahl | Trockenlauf | Volllauf | Was sie ist |
 |---|---|---|---|
 | **Grenzwert** | 2,0 GB | 2,0 GB | eine Festlegung. Der Volllauf besteht oder besteht nicht gegen sie. Sie wird nicht gemessen und sie ändert sich nicht mit dem Ergebnis. |
-| **gemessener Spitzenwert `anon`** | 381 MB | **422,2 MB** (ARM), 428,6 MB (Generalprobe) | eine Messung. Der Wert des ARM-Volllaufs ist die Zahl der Store-Aussage. |
+| **gemessener Spitzenwert `anon`** | 381 MB | **1.837,8 MB** (ARM, mit Semantik); 422,2 MB (ARM, ohne Semantik), 428,6 MB (Generalprobe) | eine Messung. Seit dem 06.09.2026 ist der Wert des Semantiklaufs die Zahl der Store-Aussage (D-17c); die beiden anderen bleiben als Vergleich stehen. |
 | **`memory.peak`** | 455 MB | **970,9 MB** (ARM), 957,7 MB (Generalprobe) | dieselbe cgroup, anderer Maßstab: hier zählt der Dateicache mit. |
 
 Warum die Store-Zahl aus `anon` kommt und nicht aus `memory.peak`: der Index ist
@@ -2876,6 +2883,110 @@ Notiert als DI-05-37: dass `INDEX_WORKERS` nichts steuert, ist im Quelltext
 nicht falsch beschrieben, aber es steht auch nirgends. Ein Leser, der die Zeile
 findet, hält sie für einen Schalter.
 
+## Der Semantik-Volllauf: dieselbe Box, mit der zweiten Spur
+
+Der Lauf, der die Store-Zahl seit dem 06.09.2026 trägt. Dieselbe Maschine, derselbe
+Korpus (Listen-Prüfsumme `bcbef9b2...` nachgerechnet, bitgleich mit dem Lauf oben),
+dasselbe Verfahren, mit einem Unterschied: das Abbild `06-11-arm` trägt das
+Embedding-Modell, und jede indexierte Datei reist als zweite Zeile durch die
+Einbettung. Vollständiger Bericht mit allen Rohdaten, der Aufschlüsselung der
+Grundlast und der Korrektur, die am Morgen des zweiten Tages nötig war:
+[`docs/measurements/2026-09-05-semantiklauf-m7g/`](measurements/2026-09-05-semantiklauf-m7g/README.md).
+Dieser Abschnitt stellt die Zahlen neben die des Volltextlaufs, und die Zeilen
+oben bleiben unverändert stehen.
+
+### Was der Lauf gemessen hat
+
+| Größe | Volltextlauf (05-21) | **Semantiklauf (06-11)** |
+|---|---|---|
+| indexiert | 50.021 (PHP-Zählung) / 51.961 im Index | **51.961** |
+| eingebettet, mit mindestens einem Vektor | | **51.961**, also jedes indexierte Dokument |
+| fehlgeschlagen | 0 | **0** |
+| übersprungen | 28 | 37: `too_large` 21, `empty_text` 14, `image_not_ocrable` 2 |
+| Dauer der ersten Spur, Volltext und OCR | 12 h 49 min | **18 h 04 min** (Einbettung lief nebenher) |
+| Dauer bis zum letzten Vektor | | **18 h 56 min** |
+| Einbettung neben der OCR | | rund 43 Dokumente je Minute |
+| Einbettung allein, nach dem Ende der ersten Spur | | rund 170 Dokumente je Minute |
+| Tantivy-Index | 761.082.220 Byte | 785.308.851 Byte, 15.113 Byte je Dokument |
+| Vektorbestand, `vectors.db` mit WAL | | 68.642.504 Byte, 145.854 Chunks, **1.321,0 Byte je Dokument** |
+| Versionsgleichstand | `match` | `match`, 1.0.0 beidseitig |
+
+Die erste Spur ist um 5 h 15 min länger geworden, das sind 41 Prozent, weil
+`INDEX_WORKERS=1` beide Spuren durch denselben Arbeiter zieht und jede
+`embed`-Zeile OCR-Zeit kostet. Der Nachlauf der zweiten Spur nach dem Ende der
+ersten war mit 52 Minuten kurz, weil der größte Teil der Einbettung schon
+parallel erledigt war. **Das ist die gemessene Embedding-Dauer aus D-17a:** auf
+dieser Box, 2 vCPU Graviton3 und 4 GB, braucht die Einbettung von 51.961
+Dokumenten neben der OCR den ganzen Lauf und allein rund 5 Stunden.
+
+### Der OOM-Beweis, und warum er diesmal zwei Sätze braucht
+
+`07-oom-beweis.txt`, erhoben vom Wächter um 06:15:32Z am 06.09., vor jedem
+Eingriff:
+
+| Zähler | Volltextlauf | **Semantiklauf** |
+|---|---|---|
+| `oom`, `oom_kill`, `oom_group_kill` | 0, 0, 0 | **0, 0, 0** |
+| `low`, `high` | 0, 0 | 0, 0 |
+| `max` | 0 | **2796** |
+| `OOMKilled`, `RestartCount` | false, 0 | **false, 0** |
+| höchster `anon` | 422,2 MB | **1.837,8 MB** um 05:34:05Z |
+| höchster `anon`, Phase Volltext und OCR | 422,2 MB | 1.562,7 MB um 01:49:29Z |
+| höchster `anon`, Phase nur Einbettung | | 1.837,8 MB |
+| Aufnahmen mit `memory.current` an der Grenze | 0 | 61 von 13.981, also 5,1 Minuten |
+
+**Die Grenze war 2,0 GB, gemessen sind 1.837,8 MB, das sind 89,7 Prozent.** Kein
+Prozess wurde getötet, kein Neustart, beide Spuren vollständig. Aber der Satz des
+Volltextlaufs, die Grenze sei "nie berührt" worden, gilt für diesen Lauf nicht
+mehr: `max` zählt 2796 Rückforderungen der cgroup an der harten Grenze, weil der
+Dateicache des Index bei einem `anon` von 1,5 bis 1,8 GB gegen die 2 GB anlag. Das
+Roadmap-Kriterium 5 verlangte `memory.events` mit lauter Nullen; der Bericht
+führt diesen Teil als **nicht erfüllt** und der Betreiber hat am 06.09.2026
+entschieden, die Store-Aussage auf die drei Schadenszähler und die anon-Spitze
+zu stellen und `max` als Kennzahl mit auszuweisen. Was die Zahl für einen Admin
+heißt: auf einer 4-GB-Box mit AIO bleiben dem Container rund 210 MB Abstand zur
+harten Grenze, und das ist wenig.
+
+### Wo die 1,4 GB Unterschied herkommen
+
+Nicht aus der OCR, und nicht aus der Einbettung selbst. Drei Posten, jeder
+gemessen und im Bericht aufgeschlüsselt:
+
+| Posten | Wert | Woher |
+|---|---|---|
+| Grundlast der Semantik im Leerlauf, vor der ersten Datei | **595 MB** | A/B am selben Volumen: 688,0 MB gegen 93,5 MB ohne Semantik |
+| davon Tokenizer | 268,8 MB | `VmRSS` nach jedem Startschritt |
+| davon Chunker | 272,8 MB | dieselbe Reihe |
+| Modellgewichte, geladen bei der ersten Einbettung | 397,1 MB | dieselbe Reihe, Dauerlast während der OCR-Spitze (IDX-08) |
+| **zweite Modellinstanz der Suchseite** | **+276 MB dauerhaft** | Sprung von 1.562,7 auf 1.837,8 MB, auf die Sekunde mit der ersten semantischen Suche um 05:15:11Z |
+
+Der letzte Posten ist der Befund dieses Laufs: `api/resources.py` und
+`worker/poller.py` halten je eine eigene `EmbeddingModel`-Instanz im selben
+Prozess, die erste Suche lädt Tokenizer und onnxruntime-Sitzung ein zweites Mal,
+und dazu einen zweiten deutschen Zerlegungsautomaten. Ein Container, der
+indexiert und gesucht wird, was jede Installation ist, trägt zwei Sätze davon.
+Aufgenommen für die Härtungsphase vor der Abgabe; in diesem Lauf nicht geändert,
+weil die Zahl so gemessen ist, wie das Produkt heute ausgeliefert würde.
+
+### Die Suche während und nach dem Lauf
+
+| Probe | p50 | **p95** | max | Budget |
+|---|---|---|---|---|
+| während des Nachlaufs, zweite Spur läuft | 735,5 ms | **1.129,0 ms** | 2.065 ms | 2.500 ms, hält |
+| nach dem Lauf, voller Vektorbestand | 478,5 ms | **524,0 ms** | 525 ms | 2.500 ms, hält |
+
+Je 30 echte Nutzersuchen über die OCS-Route, gemischt wörtlich und umschreibend.
+`memory.current` neben `anon` während der Suchlast nach dem Lauf: 1.936,5 MB
+neben 1.748,7 MB; der Dateicache-Posten des Vektorscans ist klein gegen den des
+Index.
+
+### Was dieser Lauf nicht belegt
+
+Den Vergleich der Verdikte gegen die Endungsverteilung des Generators, Endung für
+Endung, wie ihn der Volltextlauf oben führt; er steht im Bericht als fehlend. Und
+eine Nachmessung nach der Zusammenlegung der beiden Modellinstanzen, die erst in
+der Härtungsphase entsteht.
+
 ## Was der Test gekostet hat
 
 ### Die Generalprobe, Hetzner
@@ -2955,6 +3066,20 @@ Verfügbarkeit aus, und die Alternative wäre kein Lauf gewesen.
 **Auch diese Summe ist klein gegen das, was sie trägt.** 2,32 USD decken den
 gesamten Messteil der Store-Aussage auf der Zielarchitektur: 50.000 Dateien,
 20 GB, vier Störfall-Drills und eine Zusatzmessung.
+
+### Der Semantik-Volllauf, AWS
+
+Dieselbe Rechnung wie oben, mit denselben Sätzen, abgelesen aus
+`aws_box.sh status` unmittelbar vor dem Anhalten am 06.09.2026:
+
+| Posten | Laufzeit | Satz je Stunde | Kosten |
+|---|---|---|---|
+| m7g.large, Systemplatte, Adresse, Datenträger | 20,5 h seit 2026-09-05T10:21:13Z | 0,1158 USD zusammen | **2,37 USD, netto** |
+
+Davon entfallen 18 h 56 min auf den Lauf selbst (2,19 USD), der Rest auf Abbild,
+Neuaufsatz, Grundlastmessungen und den Abschluss. Die Box ist danach wieder
+angehalten und nicht abgebaut; die Begründung steht im Abschnitt über den
+Verbleib.
 
 ### Der Abbau der Generalprobe
 
@@ -3059,6 +3184,19 @@ Kostentabelle oben sind der Stand am Ende der Messungen. Zwischen diesem
 Zeitpunkt und dem Anhalten lief die Instanz noch, mit 0,0019 USD je Minute. Die
 Endsumme liegt damit knapp über der genannten und unter 2,40 USD; genauer wird
 sie nicht, weil die Sekunde des Anhaltens außerhalb dieses Berichts liegt.
+
+### Der zweite Verbleib: nach dem Semantiklauf wieder angehalten
+
+**Entschieden am 06.09.2026, nach der Abnahme des Semantiklauf-Berichts:
+angehalten, nicht abgebaut.** Der Plan hatte den Abbau vorgesehen; der
+Betreiber hat stattdessen der Empfehlung des Berichts gefolgt, weil am selben
+Tag eine Launch-Härtungsphase vor der Store-Abgabe beschlossen wurde und die
+Box mit Korpus (20 GB), beiden Indizes und den drei Abbildern dafür die
+schnellste Zielhardware ist. Angehalten kostet sie rund 0,31 USD je Tag. Beim
+nächsten Start wechselt die Adresse (`3.77.150.91` ist dann nicht mehr diese
+Box), `BOX_IP`, die SSH-Regel der Security Group auf die Betreiber-IP und der
+Eintrag `loadtest.infranode.dev` sind nachzuziehen, und der Container muss über
+AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 
 ## Reproduzieren
 
