@@ -606,6 +606,14 @@ jobs:
             --password-from-env > "${RUNNER_TEMP}/apppw.txt" 2>&1; then
             apppw=$(grep -oE '[A-Za-z0-9+/=._-]{40,}' "${RUNNER_TEMP}/apppw.txt" | tail -1)
           fi
+          # occ user:add-app-password does not exist on every server of the
+          # matrix (stable33 answered 'not available'); the OCS endpoint below
+          # is the portable way to the same credential and exists on all three.
+          if [ -z "${apppw}" ]; then
+            apppw=$(curl -s -u admin:password -H 'OCS-APIRequest: true' \
+              'http://localhost:8080/ocs/v2.php/core/getapppassword?format=json' \
+              | grep -o '"apppassword":"[^"]*"' | cut -d'"' -f4 || true)
+          fi
           if [ -n "${apppw}" ]; then echo "app password: obtained (length ${#apppw})"; else echo "app password: not available"; fi
           if [ -n "${apppw}" ]; then
             # Request.php::passesCSRFCheck() (stable34, line 455) lets any request
