@@ -49,8 +49,8 @@ durchschnittlichen Dokuments dieses Korpus" schon.
 ### Wann die zweite Liste überhaupt mitredet
 
 Der Abschnitt darüber sagt, *was* die semantische Suche abdeckt. Dieser sagt,
-*wann* sie antwortet, denn zwei Regeln halten sie zurück. Beide sind still: auf
-der Admin-Seite wird keine davon beworben (D-12).
+*wann* sie antwortet, denn drei Regeln halten sie zurück. Alle drei sind still:
+auf der Admin-Seite wird keine davon beworben (D-12).
 
 **Erstens der Distanzriegel.** Eine kNN-Abfrage antwortet immer mit k Nachbarn,
 auch wenn keiner davon etwas mit der Anfrage zu tun hat. Auf einem kleinen
@@ -78,7 +78,8 @@ Dokument" nicht zugleich erfüllen: die erste verlangt eine Obergrenze unter
 68,4544, die zweite eine über 79,5487. Der Riegel schliesst also das ferne Feld,
 und er macht aus einer kurzen Anfrage auf einem kleinen Bestand keine Antwort mit
 genau einer Datei. Das ist eine Produktentscheidung und keine Stellschraube; die
-Einzelheiten stehen im Bericht.
+Einzelheiten stehen im Bericht. Die Folgerung daraus ist die dritte Regel weiter
+unten: was keine Zahl trennen kann, trennt die Zeile selbst.
 
 **Zweitens die Operatorregel.** Trägt die Suchzeile einen Operator, wird gar
 keine Vektorliste gebaut, und die Antwort ist die rein lexikalische. Erkannt wird
@@ -101,8 +102,37 @@ Anführungszeichen setzt, ein Minus schreibt, ein Feld nennt oder einen Dateityp
 verlangt, hat um Genauigkeit gebeten, und eine zweite Liste, die diese Bitte
 nicht kennt, kann sie nur unterlaufen.
 
+**Drittens die Einwortregel.** Trägt die Suchzeile nach dem Herausschneiden des
+Dateitypfilters genau ein Wort und keinen Operator, wird ebenfalls keine
+Vektorliste gebaut. `Genehmigung` ist so eine Zeile, `Kündigungsfrist Vertrag`
+ist es nicht.
+
+Der Grund steht in denselben zwei Messreihen wie der Riegel, und er ist der
+Befund von oben, zu Ende gedacht: die einwörtigen Proben des Referenzkorpus
+liegen 68 bis 77 von ihrem nächsten Abschnitt entfernt, die Umschreibung
+erreicht ihr eigenes Dokument erst bei 79,5487. Die zwei Verteilungen
+überlappen sich also, und keine Obergrenze der Welt hält beides zugleich:
+"ein einzelnes Wort zieht nicht den halben Bestand herein" und "die Umschreibung
+findet ihr Dokument weiterhin". Von den beiden ist die zweite der Fall, für den
+die Vektorseite überhaupt existiert, deshalb geht die erste an die lexikalische
+Seite. Das kostet nichts, was die Semantik leisten könnte: für ein einzelnes
+Wort liefern Kompositazerlegung, Stemmer und Umlautvariante bereits die
+Verwandten, und ein Wort ohne Satz gibt dem Modell keinen Zusammenhang, aus dem
+es eine Bedeutung lesen könnte.
+
 **Eine mehrwortige Anfrage ohne Operator bleibt hybrid.** Sie ist der Fall, für
-den die Semantik gebaut wurde.
+den die Semantik gebaut wurde, und die Grenze liegt bei zwei Wörtern, nicht bei
+einer Satzlänge.
+
+**Wo die drei Regeln nicht gelten, und warum.** Die Diagnose-Route der
+Admin-Seite fragt beide Listen auch dort, wo die Suche nur eine fragt: sie ist
+eine Lupe auf eine einzelne, bereits benannte Datei, und die Frage "liegt im
+Bestand überhaupt etwas nahe an dieser Zeile" hat auch dann eine Antwort, wenn
+die Suche sie nicht verwendet. Der Distanzriegel gilt dort sehr wohl, denn er
+legt fest, was "nahe" heisst, und zwei Antworten darauf wären zwei Bestände. Der
+Textausschnitt eines Treffers wird ebenfalls weiter über die Vektorseite
+gewählt: er entscheidet über keinen Kandidaten, sondern zitiert ein Dokument,
+das die Suche schon ausgegeben und die PHP-Seite schon bestätigt hat (D-13).
 
 ## 2. Das Modell
 

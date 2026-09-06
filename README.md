@@ -27,6 +27,16 @@ it. The details, the measured quality in three languages and the two proofs that
 the container needs no network for any of it are in
 [docs/embeddings.md](docs/embeddings.md).
 
+Not every query gets that second list, and the two exceptions are deliberate. A
+query with quotation marks, a minus, a field prefix, a file type or one of the
+grammar words AND, OR and NOT is answered by the word index alone: whoever
+searches like that has asked for exactness, and a list ranked by meaning does not
+know about that request. A query of a single word is answered the same way,
+because a single word is measurably no nearer to the document it means than an
+unrelated one is, and the compound splitter, the stemmer and the umlaut variant
+already cover it. A query of two words or more without such an operator is
+answered by both halves together.
+
 **Status: hardening before the first store release, not submitted yet.** Indexing,
 OCR and search work and are measured on rented hardware, see below. The release
 artefacts of both apps are being prepared; until they are in the store, do not
