@@ -2162,7 +2162,12 @@ async def test_the_loop_stops_on_the_stop_event_without_running_while_silenced(
     assert queue.claims == 0
 
 
+@pytest.mark.usefixtures("volume")
 def test_the_enabled_handler_arms_and_silences_the_poller() -> None:
+    # Its own volume, because the handler now leaves the arming mark of DI-05-36
+    # behind. Without the fixture the mark would land in the shared fallback
+    # directory, and a run that ended between the enable and the disable would
+    # hand every later lifespan of this machine an armed poller.
     with TestClient(APP):
         poller = active_poller()
 
