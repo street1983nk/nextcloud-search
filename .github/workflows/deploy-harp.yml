@@ -602,19 +602,40 @@ jobs:
           # The throwaway administrator of this instance: user and password are
           # the defaults of .github/actions/setup-test-nc, and they die with the
           # runner like every other credential in this job.
-          token=$(curl -s -c "${jar}" http://localhost:8080/index.php/login \
-            | grep -o 'data-requesttoken="[^"]*"' | head -1 | cut -d'"' -f2)
-          curl -s -b "${jar}" -c "${jar}" -o /dev/null \
+          # Every stage prints its verdict: a bare curl exit code on this
+          # throwaway instance costs a full fifteen-minute run to diagnose
+          # (learned three runs in a row).
+          code=$(curl -s -c "${jar}" -o "${RUNNER_TEMP}/login-get.html" \
+            -w '%{http_code}' http://localhost:8080/index.php/login)
+          token=$(grep -o 'data-requesttoken="[^"]*"' "${RUNNER_TEMP}/login-get.html" \
+            | head -1 | cut -d'"' -f2)
+          echo "login page: HTTP ${code}, token length ${#token}"
+          code=$(curl -s -b "${jar}" -c "${jar}" -o /dev/null -w '%{http_code}' \
             --data-urlencode "user=admin" \
             --data-urlencode "password=password" \
             --data-urlencode "requesttoken=${token}" \
-            http://localhost:8080/index.php/login
-          token=$(curl -s -b "${jar}" -c "${jar}" http://localhost:8080/index.php/settings/admin \
-            | grep -o 'data-requesttoken="[^"]*"' | head -1 | cut -d'"' -f2)
-          curl -sf -b "${jar}" -c "${jar}" \
+            http://localhost:8080/index.php/login)
+          echo "login post: HTTP ${code}"
+          whoami=$(curl -s -b "${jar}" -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            http://localhost:8080/ocs/v2.php/cloud/user \
+            | grep -o '"id":"[^"]*"' | head -1 || true)
+          echo "session belongs to: ${whoami:-nobody}"
+          code=$(curl -s -b "${jar}" -c "${jar}" -o "${RUNNER_TEMP}/settings.html" \
+            -w '%{http_code}' http://localhost:8080/index.php/settings/admin)
+          token=$(grep -o 'data-requesttoken="[^"]*"' "${RUNNER_TEMP}/settings.html" \
+            | head -1 | cut -d'"' -f2)
+          echo "settings page: HTTP ${code}, token length ${#token}"
+          code=$(curl -s -b "${jar}" -c "${jar}" \
             -H "requesttoken: ${token}" \
             -H 'Accept: application/json' \
-            http://localhost:8080/index.php/apps/findling/admin/overview > "${out}"
+            -w '%{http_code}' -o "${out}" \
+            http://localhost:8080/index.php/apps/findling/admin/overview)
+          echo "overview: HTTP ${code}"
+          if [ "${code}" != "200" ]; then
+            echo "overview body head:"; head -c 400 "${out}" || true; echo
+            exit 1
+          fi
           if ! jq -e '.lockstep | has("state")' "${out}" > /dev/null; then
             echo "the overview carries no lockstep verdict, so the session or the route is not what this probe assumes"
             head -c 400 "${out}"
