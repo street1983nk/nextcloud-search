@@ -28,7 +28,18 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
-from findling.query.rewrite import RewrittenQuery, build_query, extract_filters, umlaut_variants
+from findling.query.rewrite import (
+    BOOLEAN,
+    EXCLUSION,
+    FIELD,
+    FILETYPE,
+    PHRASE,
+    RewrittenQuery,
+    build_query,
+    carried_operators,
+    extract_filters,
+    umlaut_variants,
+)
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt"
 CONSTITUENTS = FIXTURE.read_text(encoding="utf-8").split()
@@ -270,3 +281,68 @@ def test_unbalanced_closers_do_not_inflate_the_depth() -> None:
     assert _max_bracket_depth(")))))") == 0
     assert _max_bracket_depth("(a) (b) (c)") == 1
     assert _max_bracket_depth("((a))") == 2
+
+
+# ---------------------------------------------------------------------------
+# The operators a search line carries, read on the raw line
+# ---------------------------------------------------------------------------
+#
+# The model sees words and no operators. Somebody who puts quotation marks
+# around two words, writes a minus, names a field or asks for a file type has
+# asked for precision, and a second list that does not know that request can
+# only undercut it. So the request is recognised here, once, in the file where
+# the grammar already lives, and the caller acts on it.
+
+
+def test_quotation_marks_are_a_phrase_query() -> None:
+    assert carried_operators('"drei Monate"') == frozenset({PHRASE})
+
+
+def test_a_leading_minus_is_an_exclusion() -> None:
+    assert carried_operators("bescheid -frist") == frozenset({EXCLUSION})
+
+
+def test_a_minus_inside_a_word_is_not_an_exclusion() -> None:
+    # E-Mail, Baden-Baden, Nord-Sued: a hyphen inside a word is spelling and
+    # not grammar, and the parser reads it the same way.
+    assert carried_operators("E-Mail Baden-Baden") == frozenset()
+
+
+def test_a_field_prefix_is_a_field_query() -> None:
+    assert carried_operators("name:vertrag") == frozenset({FIELD})
+
+
+def test_a_file_type_prefix_is_a_file_type_filter() -> None:
+    # The file type prefix is the one that is cut out of the line rather than
+    # parsed, so it gets a mark of its own instead of being read as a field.
+    assert carried_operators("type:pdf bescheid") == frozenset({FILETYPE})
+
+
+def test_a_grammar_word_of_the_parser_is_a_boolean_query() -> None:
+    for line in ("haus AND hof", "haus OR hof", "haus NOT hof"):
+        assert carried_operators(line) == frozenset({BOOLEAN}), line
+
+
+def test_an_ordinary_line_carries_no_operator() -> None:
+    assert carried_operators("bescheid") == frozenset()
+    assert carried_operators("kuendigung im mietverhaeltnis") == frozenset()
+
+
+def test_the_umlaut_line_carries_no_operator_because_it_is_read_raw() -> None:
+    # add_umlaut_variants turns this line into "(kuendigung OR kuendigung)" with
+    # the character, so a recognition that ran after the rewriting would report
+    # a boolean query for a line the user typed as one word. This case is the
+    # proof that the reading happens before any of the three steps.
+    assert carried_operators("kuendigung") == frozenset()
+    assert BOOLEAN not in carried_operators("Mueller")
+
+
+def test_the_marks_are_reported_together_when_a_line_carries_several() -> None:
+    assert carried_operators('type:pdf "drei Monate" -frist') == frozenset({FILETYPE, PHRASE, EXCLUSION})
+
+
+def test_the_rewritten_query_carries_the_marks_of_its_raw_line(index: Index) -> None:
+    # One caller and one reading: the API layer asks the rewriting what it saw
+    # rather than looking at the line a second time with a second opinion.
+    assert build_query(index, "bescheid -frist").operators == frozenset({EXCLUSION})
+    assert build_query(index, "bescheid").operators == frozenset()

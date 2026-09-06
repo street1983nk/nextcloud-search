@@ -47,7 +47,7 @@ from tantivy import DocAddress, Document, Index, Occur, Query, Schema, Searcher,
 
 from findling.config import SEARCH_SCAN_MAX, settings
 from findling.embed.model import EmbedOutcome, to_int8
-from findling.index.fusion import ChunkHit, documents_from_chunks, reciprocal_rank_fusion
+from findling.index.fusion import ChunkHit, documents_from_chunks, near_enough, reciprocal_rank_fusion
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_MTIME
 from findling.store.repo import Store
 from findling.store.vectors import BestChunk, VectorStore
@@ -182,8 +182,23 @@ def _permit(store: Store, uid: str, ranked: Sequence[Candidate]) -> list[Candida
     return [candidate for candidate in ranked if candidate.file_id in visible]
 
 
-def _semantic_documents(semantic: SemanticSide | None, *, window: int, scan_max: int) -> list[int]:
+def _semantic_documents(
+    semantic: SemanticSide | None,
+    *,
+    window: int,
+    scan_max: int,
+    ceiling: float,
+    band: float,
+) -> list[int]:
     """The vector ranking of one query as file ids, or an empty list.
+
+    **The distance gate runs in here, before the aggregation.** A kNN query
+    answers k neighbours whether or not any of them is near, so without it every
+    document of a small holding becomes a semantic candidate of every search
+    (CI run 34031891300). Gating the chunks rather than the documents is
+    equivalent, because the value the aggregation keeps per document is its
+    smallest distance, and it is the cheaper of the two: it works on the list
+    that is already in hand and leaves D-11 untouched.
 
     **The try below is the point of this function, and its position is the point
     of the try.** ``one_round`` in the API layer already catches everything, and
@@ -219,12 +234,19 @@ def _semantic_documents(semantic: SemanticSide | None, *, window: int, scan_max:
         # of the engine scan gives.
         LOGGER.info("the vector scan hit its own ceiling and answered a truncated neighbour list")
 
-    documents = documents_from_chunks(
+    # The ceiling line above is decided against the RAW neighbour list on
+    # purpose: it says something about the scan and not about the gate, and a
+    # truncated scan is a truncated scan whether or not anything survived the
+    # distance afterwards.
+    near = near_enough(
         [
             ChunkHit(file_id=neighbour.file_id, chunk_id=neighbour.chunk_id, distance=neighbour.distance)
             for neighbour in neighbours
-        ]
+        ],
+        ceiling=ceiling,
+        band=band,
     )
+    documents = documents_from_chunks(near)
     return [document.file_id for document in documents[:window]]
 
 
@@ -249,6 +271,8 @@ def _sides(
     window: int,
     semantic: SemanticSide | None,
     scan_max: int,
+    ceiling: float,
+    band: float,
 ) -> tuple[list[tuple[int, float, int]], list[int], int]:
     """Both rankings of one query, plus the number of raw engine hits behind them.
 
@@ -265,7 +289,7 @@ def _sides(
     """
     hits = searcher.search(query, window).hits
     lexical = _ranked(searcher, hits)
-    documents = _semantic_documents(semantic, window=window, scan_max=scan_max)
+    documents = _semantic_documents(semantic, window=window, scan_max=scan_max, ceiling=ceiling, band=band)
     return (lexical, documents, len(hits))
 
 
@@ -290,6 +314,8 @@ def ranked_sides(index: Index, query: Query, *, semantic: SemanticSide | None = 
         window=window,
         semantic=semantic,
         scan_max=resolved.vector_scan_max,
+        ceiling=resolved.vector_max_distance,
+        band=resolved.vector_distance_band,
     )
     return RankedSides(lexical=[file_id for file_id, _, _ in lexical], semantic=documents)
 
@@ -386,6 +412,8 @@ def candidates(
         window=window,
         semantic=semantic,
         scan_max=resolved.vector_scan_max,
+        ceiling=resolved.vector_max_distance,
+        band=resolved.vector_distance_band,
     )
     fused = reciprocal_rank_fusion(
         [file_id for file_id, _, _ in lexical],

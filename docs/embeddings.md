@@ -46,6 +46,64 @@ Der Anteil gehört als Anteil in jeden Text und nie als Tokenzahl. "1.024 Token"
 sagt niemandem etwas, "der Anfang jedes Dokuments, gemessen 12,5 Prozent eines
 durchschnittlichen Dokuments dieses Korpus" schon.
 
+### Wann die zweite Liste überhaupt mitredet
+
+Der Abschnitt darüber sagt, *was* die semantische Suche abdeckt. Dieser sagt,
+*wann* sie antwortet, denn zwei Regeln halten sie zurück. Beide sind still: auf
+der Admin-Seite wird keine davon beworben (D-12).
+
+**Erstens der Distanzriegel.** Eine kNN-Abfrage antwortet immer mit k Nachbarn,
+auch wenn keiner davon etwas mit der Anfrage zu tun hat. Auf einem kleinen
+Bestand wird damit jedes sichtbare Dokument zum semantischen Kandidaten jeder
+Anfrage. Seit Plan 06.1-20 muss ein Nachbar deshalb zweierlei sein, um Kandidat
+zu werden: näher als die **Obergrenze von 86,5** und nicht weiter als das **Band
+von 14,0** hinter dem besten Nachbarn derselben Anfrage. Beide Zahlen leben auf
+der int8-L2-Skala des Vektorbestands (0 identisch, 179,6 orthogonal, 254
+entgegengesetzt) und sind gemessen, nicht gewählt:
+[`docs/measurements/2026-09-06-vektordistanzen/README.md`](measurements/2026-09-06-vektordistanzen/README.md),
+06.09.2026. Sie stehen als `VECTOR_MAX_DISTANCE` und `VECTOR_DISTANCE_BAND` in
+`backend/src/findling/config.py`.
+
+Was der Riegel kostet, ehrlich: eine Anfrage, deren gemeintes Dokument jenseits
+der Obergrenze liegt, findet es über die Vektorseite nicht mehr. Die Zahl, an der
+das gemessen ist, ist die Trefferquote des dreisprachigen Testsets, und sie
+bewegt sich bei diesen zwei Werten nicht: Recall@1, Recall@5 und MRR sind mit
+Riegel in allen drei Sprachen genau die Werte ohne Riegel, während zwischen 11,1
+und 30,8 Prozent der Ablenker die Kandidatenliste verlassen.
+
+**Der Bericht trägt dazu einen Befund, und er gehört hierher.** Auf dem
+e2e-Korpus lassen sich die zwei Anforderungen "eine einwörtige Anfrage erzeugt
+gar keinen semantischen Kandidaten" und "die Umschreibung findet weiterhin ihr
+Dokument" nicht zugleich erfüllen: die erste verlangt eine Obergrenze unter
+68,4544, die zweite eine über 79,5487. Der Riegel schliesst also das ferne Feld,
+und er macht aus einer kurzen Anfrage auf einem kleinen Bestand keine Antwort mit
+genau einer Datei. Das ist eine Produktentscheidung und keine Stellschraube; die
+Einzelheiten stehen im Bericht.
+
+**Zweitens die Operatorregel.** Trägt die Suchzeile einen Operator, wird gar
+keine Vektorliste gebaut, und die Antwort ist die rein lexikalische. Erkannt wird
+auf der rohen Zeile, vor jedem Umschreiben:
+
+| Marke | Beispiel |
+|---|---|
+| Phrase | `"drei Monate"` |
+| Ausschluss | `bescheid -frist` |
+| Feld | `name:vertrag` |
+| Dateityp | `type:pdf bescheid` |
+| Boolesch | `haus AND hof` |
+
+Dazu kommt der Nextcloud-Filter `titleOnly`, aus demselben Grund und aus einem
+zweiten: der Vektorbestand liegt über dem Text und nicht über dem Namen, also
+wäre jeder semantische Treffer dort die Antwort auf eine andere Frage.
+
+Der Grund in einem Satz: **das Modell sieht Wörter und keine Operatoren.** Wer
+Anführungszeichen setzt, ein Minus schreibt, ein Feld nennt oder einen Dateityp
+verlangt, hat um Genauigkeit gebeten, und eine zweite Liste, die diese Bitte
+nicht kennt, kann sie nur unterlaufen.
+
+**Eine mehrwortige Anfrage ohne Operator bleibt hybrid.** Sie ist der Fall, für
+den die Semantik gebaut wurde.
+
 ## 2. Das Modell
 
 `intfloat/multilingual-e5-small`, MIT-Lizenz, 384 Dimensionen, im Abbild als

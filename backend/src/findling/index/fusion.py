@@ -104,6 +104,54 @@ def documents_from_chunks(hits: Sequence[ChunkHit]) -> list[DocumentHit]:
     return sorted(best.values(), key=lambda document: (document.distance, document.file_id))
 
 
+def near_enough(hits: Sequence[ChunkHit], *, ceiling: float, band: float) -> list[ChunkHit]:
+    """Keep the neighbours that are actually near, in the order they arrived.
+
+    **A kNN query answers k neighbours whatever it was asked.** That is the
+    property this function exists for, and it is not a defect of the store: the
+    vec0 table is asked for the nearest k rows and it delivers the nearest k
+    rows, even when not one of them has anything to do with the query. On a
+    holding of twenty files that turns every visible document into a semantic
+    candidate of every search, and the merged answer fills up with documents the
+    search term does not occur in (CI run 34031891300, plan 06.1-20).
+
+    Two numbers, because neither of them is enough on its own, and both of them
+    come out of docs/measurements/2026-09-06-vektordistanzen/README.md.
+
+    ``ceiling`` answers "there is nothing near here". Measured at 86.5 on the
+    int8 L2 scale, half a unit above the widest relevant pair of the three
+    language test set. It alone would let the whole middle field in on a good
+    query: with the measured ceiling, eighteen of the twenty two documents of
+    the reference corpus stand under it for the probe that means exactly one of
+    them.
+
+    ``band`` answers "one of them is clearly the best". Measured at 14.0, half a
+    unit above the widest gap between a relevant pair and its own best
+    neighbour. It alone would mistake the best unrelated neighbour for the hit
+    on a query nothing matches, because a band always starts counting behind the
+    best entry and there is always a best entry.
+
+    **The band is measured against the smallest distance of the list and not
+    against its first element.** The store answers ascending, so the two are the
+    same today, and the day this function is handed an unsorted list from
+    anywhere the difference would be a filter that keeps a different set without
+    telling anybody. A pure function does not get to depend on who sorted its
+    argument.
+
+    An empty list stays empty, which is what makes this safe to put in front of
+    :func:`documents_from_chunks`: the vector half then contributes nothing, the
+    merge becomes the identity on the lexical ranking, and the user gets full
+    text results (D-19, criterion 3 of phase 6).
+    """
+    if not hits:
+        return []
+    under = [hit for hit in hits if hit.distance <= ceiling]
+    if not under:
+        return []
+    best = min(hit.distance for hit in under)
+    return [hit for hit in under if hit.distance <= best + band]
+
+
 def reciprocal_rank_fusion(
     lexical: Sequence[int],
     semantic: Sequence[int],

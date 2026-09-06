@@ -69,6 +69,8 @@ ENVIRONMENT = (
     "FINDLING_SEARCH_LEXICAL_WEIGHT",
     "FINDLING_SEARCH_SEMANTIC_WEIGHT",
     "FINDLING_VECTOR_SCAN_MAX",
+    "FINDLING_VECTOR_MAX_DISTANCE",
+    "FINDLING_VECTOR_DISTANCE_BAND",
 )
 
 
@@ -538,7 +540,10 @@ def test_a_chunk_size_above_the_context_window_falls_back(
     assert current.embed_chunk_tokens == EMBED_CHUNK_TOKENS
     assert current.embed_chunk_tokens + EMBED_SPECIAL_TOKENS <= EMBED_CONTEXT_TOKENS
     assert "FINDLING_EMBED_CHUNK_TOKENS" in caplog.text
-    assert value not in caplog.text
+    # Read on the messages and not on caplog.text: the latter carries the source
+    # line number of the warning, so a value of "0" matched a line number of 701
+    # and the case failed the day an unrelated screw was added above it.
+    assert not [message for message in caplog.messages if value in message]
 
 
 def test_a_smaller_chunk_size_is_taken(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -796,6 +801,62 @@ def test_a_vector_ceiling_outside_the_range_falls_back(monkeypatch: pytest.Monke
     settings.cache_clear()
 
     assert settings().vector_scan_max == 300
+
+
+def test_the_two_distance_screws_carry_the_measured_numbers() -> None:
+    current = settings()
+
+    # docs/measurements/2026-09-06-vektordistanzen/README.md, 06.09.2026, on the
+    # int8 L2 scale: 0 identical, 179.6 orthogonal, 254 opposite. 86.5 is half a
+    # unit above the widest relevant pair of the three language test set, 14.0
+    # half a unit above the widest gap of a relevant pair to its best neighbour.
+    assert current.vector_max_distance == 86.5
+    assert current.vector_distance_band == 14.0
+
+
+def test_the_distance_ceiling_can_be_moved(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_VECTOR_MAX_DISTANCE", "70")
+    settings.cache_clear()
+
+    assert settings().vector_max_distance == 70.0
+
+
+@pytest.mark.parametrize("value", ["-1", "255", "nan", "inf", "sechsundachtzig"])
+def test_a_distance_ceiling_outside_the_metric_falls_back(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_VECTOR_MAX_DISTANCE", value)
+    settings.cache_clear()
+
+    # 254 is the maximum of the metric, so nothing above it is a setting; nan
+    # and inf are in this list because float() parses both without complaint,
+    # and either would open the gate completely.
+    assert settings().vector_max_distance == 86.5
+
+
+def test_the_distance_band_can_be_narrowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_VECTOR_DISTANCE_BAND", "2.5")
+    settings.cache_clear()
+
+    assert settings().vector_distance_band == 2.5
+
+
+@pytest.mark.parametrize("value", ["-0.5", "255", "nan", "inf", "vierzehn"])
+def test_a_distance_band_outside_the_metric_falls_back(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("FINDLING_VECTOR_DISTANCE_BAND", value)
+    settings.cache_clear()
+
+    assert settings().vector_distance_band == 14.0
+
+
+def test_a_wide_open_distance_gate_is_a_setting_and_not_a_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The upper end of both ranges is the maximum of the metric, where the gate
+    # is open and the behaviour is the one of the defect this plan closed. That
+    # it is reachable is deliberate, and the comment in config.py says so.
+    monkeypatch.setenv("FINDLING_VECTOR_MAX_DISTANCE", "254")
+    monkeypatch.setenv("FINDLING_VECTOR_DISTANCE_BAND", "254")
+    settings.cache_clear()
+
+    assert settings().vector_max_distance == 254.0
+    assert settings().vector_distance_band == 254.0
 
 
 def test_a_broken_weight_warns_without_naming_its_value(

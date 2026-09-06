@@ -202,8 +202,22 @@ def one_round(uid: str, text: str, limit: int, offset: int, title_only: bool) ->
         # and Provider.php does not learn that anything changed (D-20). The raw
         # text goes along because the model needs words and the rewritten query
         # is not text any more.
+        # The operator rule. A line with quotation marks, a minus, a field, a
+        # file type or a grammar word of the parser is a request for precision,
+        # and the model cannot honour one: it sees words. A second list that
+        # does not know about the request can only undercut it, so it is not
+        # built at all. titleOnly is here for the same reason and for a second
+        # one: the vector stock lies over the text and not over the name, so
+        # every semantic hit under that filter would answer a different question
+        # than the one that was asked.
+        #
+        # Nothing else moves. The merge, the prefilter and the shape of a
+        # candidate are untouched (D-20, D-14); the vector branch simply does
+        # not happen, which is the path a missing model already takes and which
+        # criterion 3 covers.
         semantic = None
-        if side.vectors is not None and settings().embed_enabled:
+        wants_precision = bool(rewritten.operators) or title_only
+        if not wants_precision and side.vectors is not None and settings().embed_enabled:
             semantic = SemanticSide(vectors=side.vectors, model=resources.query_model(), text=text)
         page = candidate_round(side.index, side.store, uid, rewritten.query, limit, offset, semantic=semantic)
     # Deliberately every exception, for the reason in the docstring above.

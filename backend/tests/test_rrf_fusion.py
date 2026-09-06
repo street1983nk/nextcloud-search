@@ -36,6 +36,7 @@ from findling.index.fusion import (
     SEMANTIC,
     ChunkHit,
     documents_from_chunks,
+    near_enough,
     origins,
     reciprocal_rank_fusion,
 )
@@ -259,6 +260,78 @@ def test_the_origin_marks_stay_out_of_the_search_path() -> None:
     source = Path(MODULE.parent / "search.py").read_text(encoding="utf-8")
 
     assert "origins" not in source
+
+
+# ---------------------------------------------------------------------------
+# The distance gate, before the aggregation
+# ---------------------------------------------------------------------------
+
+# The two numbers of docs/measurements/2026-09-06-vektordistanzen/README.md,
+# written out here rather than imported from the settings for the reason K is
+# written out above: a case that reads the value under test out of the code
+# under test asserts nothing.
+CEILING = 86.5
+BAND = 14.0
+
+
+def gated(distances: list[float]) -> list[int]:
+    """The chunk ids the gate keeps, in the order they were handed in."""
+    hits = [ChunkHit(file_id=index, chunk_id=index, distance=distance) for index, distance in enumerate(distances)]
+    return [hit.chunk_id for hit in near_enough(hits, ceiling=CEILING, band=BAND)]
+
+
+def test_a_neighbour_inside_both_numbers_stays_a_candidate() -> None:
+    assert gated([70.0]) == [0]
+
+
+def test_a_neighbour_beyond_the_ceiling_falls_away_even_as_the_best_of_the_list() -> None:
+    # The case the whole plan is about. A kNN query answers k neighbours
+    # whatever the query was, so the best of a list says nothing about whether
+    # anything in it is close.
+    assert gated([90.0, 95.0]) == []
+
+
+def test_a_neighbour_under_the_ceiling_but_outside_the_band_falls_away() -> None:
+    # 70 is the best, the band reaches to 84, and 85.5 is under the ceiling and
+    # still beiwerk.
+    assert gated([70.0, 80.0, 85.5]) == [0, 1]
+
+
+def test_a_list_entirely_beyond_the_ceiling_becomes_the_empty_list() -> None:
+    # And with it the merge becomes the identity on the lexical ranking, which
+    # is criterion 3 of phase 6 arriving through a second door.
+    assert gated([120.0, 130.0, 179.6]) == []
+
+
+def test_the_band_is_measured_against_the_smallest_and_not_against_the_first() -> None:
+    # The list is handed in unsorted on purpose, and the smallest entry is the
+    # second one. Counted from the smallest, the band reaches to 84 and 86.0
+    # falls out; counted from the first entry it would reach to 96 and keep all
+    # three. The answer would then depend on who sorted the list.
+    assert gated([82.0, 70.0, 86.0]) == [0, 1]
+
+
+def test_an_empty_neighbour_list_stays_empty() -> None:
+    assert near_enough([], ceiling=CEILING, band=BAND) == []
+
+
+def test_the_gate_keeps_the_hits_it_was_given_rather_than_copies_of_them() -> None:
+    # The aggregation runs on the result, so a gate that rebuilt its hits could
+    # quietly drop the chunk id and with it the excerpt of D-13.
+    hits = [ChunkHit(file_id=7, chunk_id=100, distance=1.0), ChunkHit(file_id=9, chunk_id=200, distance=99.0)]
+
+    kept = near_enough(hits, ceiling=CEILING, band=BAND)
+
+    assert kept == [hits[0]]
+
+
+def test_the_gate_names_both_of_its_measured_numbers() -> None:
+    # The docstring carries the reasoning for both halves and the sentence why
+    # neither of them is enough on its own, with the numbers of the report.
+    source = MODULE.read_text(encoding="utf-8")
+
+    assert "2026-09-06-vektordistanzen" in source
+    assert "near_enough" in source
 
 
 # ---------------------------------------------------------------------------

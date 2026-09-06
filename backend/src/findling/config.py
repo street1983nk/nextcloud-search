@@ -558,6 +558,42 @@ SEARCH_SEMANTIC_WEIGHT_RANGE = (0.0, 10.0)
 VECTOR_SCAN_MAX = 300
 VECTOR_SCAN_MAX_RANGE = (1, SEARCH_SCAN_MAX)
 
+# The largest distance at which a chunk is still a candidate, and the width of
+# the band around the best one. Both live on the int8 L2 scale of the vector
+# stock and on no other: to_int8 scales a normalised model vector by 127, so the
+# metric runs from 0 for identical over 179.6051 for orthogonal to 254 for
+# opposite, and every number here is a point on that line.
+#
+# Both are measurements and not preferences. They come out of
+# docs/measurements/2026-09-06-vektordistanzen/README.md, taken on 06.09.2026
+# against the same model file the integration run measures against, and they are
+# the tightest pair on a raster of 0.5 under which Recall@1, Recall@5 and MRR of
+# the three language test set do not fall in any of the three languages. 86.5
+# sits half a unit above the widest relevant pair of that set (86.3597), 14.0
+# half a unit above the widest gap of a relevant pair to its own best neighbour
+# (13.5796). At that pair the merge loses between 11.1 and 30.8 percent of all
+# distractors without losing a single relevant pair.
+#
+# **The report also carries a finding, and it belongs at this line.** The one
+# word probes of the integration run would need a ceiling below 68.4544 to
+# produce no candidate at all, and the paraphrase of the same run needs one above
+# 79.5487 to keep its document. Both at once is impossible, which is why these
+# two numbers close the far field and do not, on their own, make a small corpus
+# answer one file per query. That is a product decision and not a screw.
+#
+# The upper end of both ranges is the maximum of the metric, and there the gate
+# stands open: every neighbour a kNN query answers becomes a candidate again,
+# which is exactly the behaviour of CI run 34031891300 that this gate closed.
+# That is a return of the defect and not a setting, and it is reachable on
+# purpose, because an operator who has to prove that the gate is what changed
+# their results needs a way to switch it off.
+#
+# Both stay silent screws and are not advertised on the admin page (D-12).
+VECTOR_MAX_DISTANCE = 86.5
+VECTOR_MAX_DISTANCE_RANGE = (0.0, 254.0)
+VECTOR_DISTANCE_BAND = 14.0
+VECTOR_DISTANCE_BAND_RANGE = (0.0, 254.0)
+
 # Subdirectory used when APP_PERSISTENT_STORAGE is absent, which is the case in
 # tests and in a bare local run, never in a container deployed by AppAPI.
 FALLBACK_STORAGE_DIRNAME = "findling"
@@ -620,6 +656,8 @@ class Settings:
     search_lexical_weight: float
     search_semantic_weight: float
     vector_scan_max: int
+    vector_max_distance: float
+    vector_distance_band: float
 
     ocr_enabled: bool
     ocr_languages: tuple[str, ...]
@@ -964,6 +1002,12 @@ def settings() -> Settings:
         ),
         vector_scan_max=_bounded_int_from_environment(
             "FINDLING_VECTOR_SCAN_MAX", VECTOR_SCAN_MAX, VECTOR_SCAN_MAX_RANGE
+        ),
+        vector_max_distance=_bounded_float_from_environment(
+            "FINDLING_VECTOR_MAX_DISTANCE", VECTOR_MAX_DISTANCE, VECTOR_MAX_DISTANCE_RANGE
+        ),
+        vector_distance_band=_bounded_float_from_environment(
+            "FINDLING_VECTOR_DISTANCE_BAND", VECTOR_DISTANCE_BAND, VECTOR_DISTANCE_BAND_RANGE
         ),
         ocr_enabled=_bool_from_environment("FINDLING_OCR_ENABLED", OCR_ENABLED),
         ocr_languages=_ocr_languages(),

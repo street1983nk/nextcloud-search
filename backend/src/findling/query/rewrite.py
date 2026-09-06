@@ -72,6 +72,29 @@ _OPERATORS: Final = frozenset({"AND", "OR", "NOT", "IN", "TO"})
 
 _QUOTE: Final = '"'
 
+# The five marks a search line can carry. Named constants rather than string
+# literals at two call sites, for the reason every allowlist in this project is
+# one: a literal spelled differently at the second site is a difference nobody
+# sees. They are marks and not a grammar; what they mean to the caller is
+# "this person asked for precision", and nothing more.
+PHRASE: Final = "phrase"
+EXCLUSION: Final = "exclusion"
+FIELD: Final = "field"
+FILETYPE: Final = "filetype"
+BOOLEAN: Final = "boolean"
+
+# A token that begins a negation: a minus or an exclamation mark in front of a
+# word. Both are negation in the parser's grammar, and both are somebody asking
+# for a document without a word in it. The word character behind the sign is
+# what keeps a hyphen inside a word out: "E-Mail" and "Baden-Baden" are spelling
+# and not grammar, and the parser reads them the same way.
+_NEGATED_TOKEN: Final = re.compile(r"(?:^|\s)[-!]+\w")
+
+# A token that names a field. The same shape the rewriting below recognises, so
+# the two cannot drift apart, minus the type prefix, which gets a mark of its
+# own because it is cut out of the line instead of parsed.
+_FIELD_TOKEN: Final = re.compile(r"(?:^|\s)[+\-!]*([a-z_]+):\w")
+
 # Splits a run into words and the whitespace between them, keeping both. Joining
 # on single spaces instead would look identical in every ordinary case and would
 # still be wrong: measured, `kaputt "` loses its space, the parser then reads
@@ -102,6 +125,45 @@ def umlaut_variants(term: str) -> list[str]:
     for written, umlaut in UMLAUTS:
         variant = re.sub(written, umlaut, variant, flags=re.IGNORECASE)
     return [term] if variant == term else [term, variant]
+
+
+def carried_operators(text: str) -> frozenset[str]:
+    """Which marks of precision the raw search line carries, if any.
+
+    **The model sees words and it does not see operators.** Somebody who puts
+    quotation marks around two words, writes a minus in front of one, names a
+    field or asks for a file type has asked for exactness, and a second list
+    that does not know about that request can only undercut it: it answers the
+    documents that feel close to the words, which is the opposite of what was
+    asked. So the caller drops the vector half for such a line, and this
+    function is where that decision gets its facts.
+
+    **It reads the raw line, before every one of the three steps below.**
+    Afterwards the question cannot be answered any more: ``extract_filters`` has
+    cut the type prefix out, and ``add_umlaut_variants`` has inserted an ``OR``
+    of its own, so a line somebody typed as one word would come back as a
+    boolean query. That is the case ``kuendigung`` covers in the tests, and it
+    is the only reason this function is not simply called on the finished
+    string.
+
+    Recognition and nothing else. What a mark costs is decided by the caller
+    (``api/search.py::one_round``), which is also where ``titleOnly`` belongs,
+    because that one is not a property of the line at all.
+    """
+    marks: set[str] = set()
+    if _QUOTE in text:
+        marks.add(PHRASE)
+    if _NEGATED_TOKEN.search(text):
+        marks.add(EXCLUSION)
+    for token in _WHITESPACE.split(text):
+        if token in _OPERATORS:
+            marks.add(BOOLEAN)
+        if token.lower().startswith(TYPE_PREFIX) and len(token) > len(TYPE_PREFIX):
+            marks.add(FILETYPE)
+    for match in _FIELD_TOKEN.finditer(text):
+        if match.group(1) != TYPE_PREFIX.removesuffix(":"):
+            marks.add(FIELD)
+    return frozenset(marks)
 
 
 def _segments(text: str) -> list[tuple[bool, str]]:
@@ -189,6 +251,11 @@ class RewrittenQuery:
     text: str
     extensions: tuple[str, ...]
     errors: list[object]
+    # What the raw line asked for, read once by carried_operators() before any
+    # of the three steps ran. It rides along here so that the one caller does
+    # not ask a second time with a second opinion: two readings of what an
+    # operator is drift apart, and the drift would be invisible.
+    operators: frozenset[str] = frozenset()
 
 
 def _extension_query(index: Index, extensions: tuple[str, ...]) -> Query:
@@ -236,6 +303,10 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
             extensions=(),
             errors=[f"the query nests brackets deeper than {SEARCH_QUERY_MAX_DEPTH} levels"],
         )
+    # On the raw line, and therefore above every step below: the type prefix is
+    # about to be cut out and the umlaut variants are about to insert an OR, and
+    # after either of those the question is not answerable any more.
+    operators = carried_operators(text)
     # The second of the two calls of the normalisation helper, and it stands
     # after the depth guard on purpose: that guard is counted on the raw input so
     # that nothing can walk past it, and composing a string cannot open a bracket
@@ -248,7 +319,7 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
     if not rewritten:
         # No term, no engine. A search line that holds nothing but a filter would
         # otherwise ask for every PDF on the instance in no meaningful order.
-        return RewrittenQuery(query=None, text="", extensions=extensions, errors=[])
+        return RewrittenQuery(query=None, text="", extensions=extensions, errors=[], operators=operators)
 
     parsed, errors = index.parse_query_lenient(
         rewritten,
@@ -263,4 +334,10 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
         LOGGER.debug("the query parser reported %d issue(s)", len(errors))
     if extensions:
         parsed = Query.boolean_query([(Occur.Must, parsed), (Occur.Must, _extension_query(index, extensions))])
-    return RewrittenQuery(query=parsed, text=rewritten, extensions=extensions, errors=list(errors))
+    return RewrittenQuery(
+        query=parsed,
+        text=rewritten,
+        extensions=extensions,
+        errors=list(errors),
+        operators=operators,
+    )
