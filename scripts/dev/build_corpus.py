@@ -1053,6 +1053,96 @@ def build_page_tree_cycle() -> bytes:
 
 
 # --------------------------------------------------------------------------
+# The edge paths of the launch hardening. Everything above this line is a file
+# that is broken; everything below it is a file that wants something.
+# --------------------------------------------------------------------------
+
+# The declared size a single archive member may reach before the extractor
+# refuses to hand it to a loader. Mirrored from
+# backend/src/findling/config.py, EXTRACT_ARCHIVE_MEMBER_MAX_BYTES, and
+# deliberately a second spelling instead of an import: this script has no
+# dependency on the backend package, and a corpus file that silently followed a
+# changed cap would stop being a test of the cap. The two numbers are compared
+# in backend/tests/test_extract_documents.py, so the duplicate cannot drift.
+ARCHIVE_MEMBER_CAP_BYTES = 64 * 1024 * 1024
+
+_BOMB_HEAD = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+    "<w:p><w:r><w:t>"
+).encode("ascii")
+
+_BOMB_TAIL = b"</w:t></w:r></w:p></w:body></w:document>"
+
+# One mebibyte of the same byte, written over and over. Deflate needs to see the
+# repetition inside its 32 kB window, so any block size well above that gives the
+# same ratio; a megabyte keeps the number of write calls small.
+_BOMB_BLOCK = b"A" * (1 << 20)
+
+
+def build_zip_bomb_docx() -> bytes:
+    """A DOCX whose single part expands to one byte more than the cap allows.
+
+    The part is written as a stream and never as one string, so building the
+    corpus does not hold the unpacked 64 MiB in memory at any moment; the deflate
+    window does the work and the file that lands in the repository is 65 kB.
+
+    Those 65 kB are a floor and not a choice. Deflate cannot beat 1032 to 1: a
+    length code carries at most 258 bytes and costs at least two bits (RFC 1951),
+    so a member of 64 MiB plus one byte cannot compress below roughly 65 kB.
+    The two ZIP methods that would do better were measured on 2026-09-06 and
+    rejected: bzip2 lands at 410 bytes and LZMA at 9848, but neither is a
+    compression method an OPC package may carry, so the file would stop being a
+    document a reader can open, and both would stake the byte for byte
+    reproducibility of the corpus on a compressor this repository has never
+    staked it on, where zlib already carries the PNG and the PDF streams above.
+
+    The two small parts beside it are what makes this a package rather than a
+    ZIP with one entry: the guard walks the whole directory, and a bomb that
+    arrived without the parts a DOCX has would be refused for the wrong reason.
+    """
+    filler = ARCHIVE_MEMBER_CAP_BYTES + 1 - len(_BOMB_HEAD) - len(_BOMB_TAIL)
+    parts = {
+        "[Content_Types].xml": (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument'
+            '.wordprocessingml.document.main+xml"/>'
+            "</Types>"
+        ),
+        "_rels/.rels": (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+            '/officeDocument" Target="word/document.xml"/>'
+            "</Relationships>"
+        ),
+    }
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, text in parts.items():
+            info = zipfile.ZipInfo(name, date_time=ZIP_TIMESTAMP)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, text)
+
+        info = zipfile.ZipInfo("word/document.xml", date_time=ZIP_TIMESTAMP)
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = 0o644 << 16
+        with archive.open(info, "w") as member:
+            member.write(_BOMB_HEAD)
+            written = 0
+            while written < filler:
+                block = _BOMB_BLOCK[: min(len(_BOMB_BLOCK), filler - written)]
+                member.write(block)
+                written += len(block)
+            member.write(_BOMB_TAIL)
+    return buffer.getvalue()
+
+
+# --------------------------------------------------------------------------
 # The rule that carries every assertion of the integration job: one term, one
 # file. It is checked here rather than trusted, because the words below are now
 # spread over pixels, over compressed streams and over ZIP members, and no
@@ -1105,7 +1195,14 @@ def _searchable_text(name: str, payload: bytes) -> str:
     parts = [" ".join(RENDERED_TEXT.get(name, ()))]
     if payload[:2] == b"PK":
         with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-            parts.extend(archive.read(member).decode("utf-8", "ignore") for member in archive.namelist())
+            for info in archive.infolist():
+                if info.file_size > ARCHIVE_MEMBER_CAP_BYTES:
+                    # The one member the extractor refuses to read. Reading it
+                    # here would materialise exactly the 64 MiB that the cap
+                    # exists to keep out of memory, and a word inside a part
+                    # nothing ever opens is not a word a search can find.
+                    continue
+                parts.append(archive.read(info).decode("utf-8", "ignore"))
     else:
         parts.append(payload.decode("cp1252", "ignore"))
     return " ".join(parts).lower()
@@ -1163,6 +1260,10 @@ FILES: dict[str, bytes] = {
     "31-riesenformat.pdf": build_odd_page_size(),
     "32-startxref-ins-leere.pdf": build_startxref_into_nothing(),
     "33-seitenbaum-zyklus.pdf": build_page_tree_cycle(),
+    # The edge paths of the launch hardening. Not broken files: files that want
+    # something. The first one is the decompression bomb the cap of phase 2 has
+    # been holding against a 65 byte fixture until now.
+    "34-zip-bombe.docx": build_zip_bomb_docx(),
 }
 
 

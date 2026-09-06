@@ -1,6 +1,6 @@
 # Reference corpus for the read only invariant (IDX-07), the German search proof and OCR
 
-Thirty three small files with three jobs.
+Thirty four small files with four jobs.
 
 **Job one, since phase 1.** The CI job `readonly-gate` copies them into a
 throwaway Nextcloud, lets the container read every one of them through the
@@ -19,6 +19,14 @@ reach the OCR engine, and ten more PDFs that are broken in ten different ways.
 Without them every acceptance statement about OCR would be a claim about two
 files, one of which is 814 bytes.
 
+**Job four, since the launch hardening.** The file `34` is not broken, it wants
+something: it is a decompression bomb, an OOXML package whose one part declares
+one byte more than the archive member cap of
+`backend/src/findling/config.py` allows. Until it existed, that cap was measured
+against a fixture of 65 bytes with the cap lowered to 64, which proves the
+comparison and nothing else. This one travels the road a user document travels
+and lies in the directory `readonly-gate` freezes.
+
 Because of job two the files must be neither moved nor renamed nor split into
 subdirectories, and no word may be added to one of them without checking the
 tables below: `readonly-gate` resolves the file ids over the basename in a flat
@@ -27,9 +35,11 @@ file. Since phase 3 that rule is not a promise any more but a check:
 `build_corpus.py` refuses to write the corpus if one of the terms of the second
 table stands in a second file.
 
-Total size is 302 KB, of which 295 KB are the rendered pages of job three. That
-is the price of being able to prove anything at all about OCR; the twelve files
-of the first two jobs still weigh under 7 KB together.
+Total size is 366 KB. 295 KB of that are the rendered pages of job three, which
+is the price of being able to prove anything at all about OCR, and 65 KB are the
+one compressed part of the bomb of job four, which is the floor deflate allows
+for a member of that declared size and is worked out in `build_corpus.py`. The
+twelve files of the first two jobs still weigh under 7 KB together.
 
 ## The files
 
@@ -86,8 +96,9 @@ change here in the same commit.
 | `31-riesenformat.pdf` | A page of 14400 by 14400 points, the largest the format allows | `skipped(empty_text)`, handed over, and the nine gigapixel page comes back without readable text | none |
 | `32-startxref-ins-leere.pdf` | Correct objects, and a `startxref` that points past the end of the file | `indexed`, pdfium recovers | none |
 | `33-seitenbaum-zyklus.pdf` | A page tree that contains itself | `failed(corrupt)`, and above all: no hang | none |
+| `34-zip-bombe.docx` | An OOXML package whose `word/document.xml` declares 64 MiB plus one byte and is 65 kB on disk | `skipped(too_large)`, decided on the archive directory, without opening a single member | none |
 
-Twenty two indexed, five skipped, six failed. None of the caps of the OCR
+Twenty two indexed, six skipped, six failed. None of the caps of the OCR
 cascade is reached on this corpus: no `indexed(truncated)`, no `failed(timeout)`
 and no `failed(out_of_memory)`, and the same job that counts the verdicts counts
 those three separately, because a corpus that starts hitting a cap is a corpus
