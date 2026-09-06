@@ -112,7 +112,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 06-12-PLAN.md , Die gebuendelte Abgabe des Erstrelease 1.0.0 (D-08 aus 05-CONTEXT.md)
+- [ ] 06-12-PLAN.md , Die gebuendelte Abgabe des Erstrelease 1.0.0 (D-08 aus 05-CONTEXT.md) , **WARTET auf Phase 06.1 (Launch-Haertung), Owner-Regel 06.09.2026**
 
 ### Phase 3: Aktualität und OCR
 
@@ -351,3 +351,20 @@ Etablierte Muster, Research kann entfallen: Event-Listener und Reconcile (Phase 
 
 ---
 *Created: 2026-08-15*
+
+### Phase 06.1: Launch-Haertung vor der Store-Abgabe (INSERTED)
+
+**Goal:** Findling ist vor der ersten Store-Abgabe so robust und fehlerfrei, wie es mit allen erdenklichen Massnahmen geht: Fehler- und Randpfade, Rechte-Grenzen, Betriebsuebergaenge, Ressourcengrenzen, Fremdinstallation ueber den Store-Weg und die Store-Vorgaben sind getestet statt angenommen, die drei Audits sind erneut gefahren und gefixt, und die Speicherzahl der Store-Aussage ist nach dem Fix der zweiten Modellinstanz neu gemessen (Owner-Regel 06.09.2026).
+**Requirements**: SEM-01, SEM-03, PKG-05 (Haertung der bestehenden Anforderungen, keine neuen Features); Kontext in 06.1-CONTEXT.md
+**Depends on:** Phase 6 bis Plan 06-11. **Plan 06-12 (Store-Abgabe) laeuft erst NACH der Owner-Abnahme dieser Phase.**
+**Plans:** 0 plans
+
+**Success Criteria** (what must be TRUE):
+  1. Jede in 06.1-CONTEXT.md benannte Massnahme hat einen Test, der rot sein kann, und einen Beleg im Repo; keine Massnahme ist nur "manuell geprueft"
+  2. Suchseite und Arbeiter teilen eine Embedding-Engine (oder die Suchseite entlaedt), und die Nachmessung auf der ARM-Box zeigt eine anon-Spitze unter der aus 06-11 (1.837,8 MB) bei oom/oom_kill/oom_group_kill = 0
+  3. Eine frische Nextcloud (AIO und docker-compose, NC 32 bis 35, amd64 und arm64) installiert beide Apps aus den Release-Artefakten und findet ohne Handgriff Inhalte, und die Deinstallation raeumt auf
+  4. Security-, Bug- und Performance-Audit sind erneut gefahren, alle Befunde ab MEDIUM gefixt, LOW dokumentiert entschieden
+  5. Der Owner hat die Phase nach eigener Sichtprobe abgenommen; erst danach beginnt Plan 06-12
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 06.1 to break down)

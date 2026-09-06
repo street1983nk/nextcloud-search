@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
-status: executing
-stopped_at: 06-11 abgeschlossen; Launch-Haertungsphase vor 06-12 einfuegen und planen
-last_updated: "2026-09-05T10:03:23.582Z"
+status: "06-11 abgenommen (Owner 06.09.), Box angehalten; NAECHSTER SCHRITT: Launch-Haertungsphase per /gsd:phase VOR 06-12 einfuegen und planen, 06-12 nicht starten"
+stopped_at: Completed 06-10-PLAN.md
+last_updated: "2026-09-06T06:57:41.092Z"
 last_activity: 2026-09-05
 progress:
-  total_phases: 2
+  total_phases: 3
   completed_phases: 0
   total_plans: 33
-  completed_plans: 30
+  completed_plans: 31
   percent: 0
 ---
 
@@ -21,11 +21,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 6 — Semantische Suche
+**Current focus:** Phase 06.1 — Launch-Haertung vor der Store-Abgabe (eingefuegt 06.09.); Phase 6 bleibt bei 11/12, Plan 06-12 wartet
 
 ## Current Position
 
-Phase: 6 (Semantische Suche) — EXECUTING
+Phase: 06.1 (Launch-Haertung vor der Store-Abgabe) — NOT PLANNED, naechster Schritt /gsd:plan-phase 06.1
 Plan: 11 of 12 complete
 Status: 06-11 abgenommen (Owner 06.09.), Box angehalten; NAECHSTER SCHRITT: Launch-Haertungsphase per /gsd:phase VOR 06-12 einfuegen und planen, 06-12 nicht starten
 Last activity: 2026-09-05
@@ -53,7 +53,6 @@ Box laeuft weiter bis "bericht abgenommen, box abbauen".
 Launch-Haertungsphase mit ausgiebigen Tests jenseits des Happy Path (siehe
 CLAUDE.md, Owner-Regeln). Bei 'semantiklauf pruefen' nach 06-11: diese Phase
 per /gsd:phase vor 06-12 einfuegen und planen, 06-12 NICHT direkt starten.
-
 
 Fertigmeldung der Box: `/home/ubuntu/work/semantiklauf/00-FERTIG`.
 
@@ -118,6 +117,10 @@ Progress: [█████████░] 88%
 | Phase 6 P10 | 32min | 3 tasks | 7 files |
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 06.1 inserted after Phase 6: Launch-Haertung vor der Store-Abgabe (Owner-Regel 06.09.2026): ausgiebige Tests jenseits des Happy Path, laeuft VOR Plan 06-12 (URGENT)
 
 ### Decisions
 
