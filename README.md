@@ -1,128 +1,146 @@
+Deutsch | [English](README.en.md) | [Français](README.fr.md)
+
 # Findling
 
-Zero-config full text and semantic search for Nextcloud.
+Zero-Config-Volltextsuche und semantische Suche für Nextcloud.
 
-Findling makes the Nextcloud search find what is inside your documents, including
-scanned PDFs, without an Elasticsearch cluster and without a single required setting.
-Results appear in the regular unified search bar, next to files, contacts and
-calendar entries.
+Findling sorgt dafür, dass die Nextcloud-Suche findet, was in Ihren Dokumenten
+steht, auch in gescannten PDFs, ohne Elasticsearch-Cluster und ohne eine einzige
+Pflichteinstellung. Die Treffer erscheinen in der normalen Unified-Search-Leiste,
+neben Dateien, Kontakten und Kalendereinträgen.
 
-## What it finds
+## Was sie findet
 
-- **Words that stand in the document**, with German handling that a search needs:
-  compounds through one of their parts, inflection, the written out umlaut,
-  phrases, exclusions and a file type filter.
-- **Text inside scanned pages**, through OCR, in German, English and the DACH
-  spellings.
-- **Documents you describe instead of quote.** A query whose words do not stand
-  in the document can still bring it back, because a local embedding model
-  ranks by meaning next to the word index.
+- **Wörter, die im Dokument stehen**, mit der deutschen Behandlung, die eine
+  Suche braucht: Komposita über einen ihrer Bestandteile, Flexion, die
+  ausgeschriebene Umlautvariante, Phrasen, Ausschlüsse und ein Dateityp-Filter.
+- **Text auf gescannten Seiten**, per OCR, auf Deutsch, Englisch und in den
+  DACH-Schreibweisen.
+- **Dokumente, die Sie beschreiben statt zitieren.** Eine Anfrage, deren Wörter
+  nicht im Dokument stehen, kann es trotzdem zurückbringen, weil ein lokales
+  Embedding-Modell nach Bedeutung rankt, neben dem Wortindex.
 
-The honest sentence about the third one, and it is the same one in both store
-descriptions: **semantic search covers the beginning of every document, full
-text search still covers all of it.** How much "the beginning" is depends on the
-document, and on the measured corpus it is 12.5 percent of an average one. The
-model runs inside the container, on the CPU, and no text leaves the machine for
-it. The details, the measured quality in three languages and the two proofs that
-the container needs no network for any of it are in
-[docs/embeddings.md](docs/embeddings.md).
+Der ehrliche Satz zum dritten Punkt, und es ist derselbe Satz in beiden
+Store-Beschreibungen: **die semantische Suche deckt den Anfang jedes Dokuments
+ab, die Volltextsuche weiterhin alles davon.** Wie viel „der Anfang“ ist, hängt
+vom Dokument ab, und auf dem gemessenen Korpus sind es 12,5 Prozent eines
+durchschnittlichen Dokuments. Das Modell läuft im Container, auf der CPU, und
+dafür verlässt kein Text die Maschine. Die Details, die gemessene Qualität in
+drei Sprachen und die beiden Belege, dass der Container dafür kein Netzwerk
+braucht, stehen in [docs/embeddings.md](docs/embeddings.md).
 
-Not every query gets that second list, and the two exceptions are deliberate. A
-query with quotation marks, a minus, a field prefix, a file type or one of the
-grammar words AND, OR and NOT is answered by the word index alone: whoever
-searches like that has asked for exactness, and a list ranked by meaning does not
-know about that request. A query of a single word is answered the same way,
-because a single word is measurably no nearer to the document it means than an
-unrelated one is, and the compound splitter, the stemmer and the umlaut variant
-already cover it. A query of two words or more without such an operator is
-answered by both halves together.
+Nicht jede Anfrage bekommt diese zweite Liste, und die beiden Ausnahmen sind
+Absicht. Eine Anfrage mit Anführungszeichen, einem Minus, einem Feldpräfix,
+einem Dateityp oder einem der Grammatikwörter AND, OR und NOT wird allein vom
+Wortindex beantwortet: wer so sucht, hat um Exaktheit gebeten, und eine nach
+Bedeutung gerankte Liste weiß davon nichts. Auch eine Anfrage aus einem
+einzigen Wort wird genauso beantwortet, weil ein einzelnes Wort messbar nicht
+näher am Dokument liegt, das es meint, als ein unverwandtes Wort, und der
+Kompositazerleger, der Stemmer und die Umlautvariante decken das bereits ab.
+Zwei oder mehr Wörter ohne einen solchen Operator werden von beiden Hälften
+zusammen beantwortet.
 
-**Status: hardening before the first store release, not submitted yet.** Indexing,
-OCR and search work and are measured on rented hardware, see below. The release
-artefacts of both apps are being prepared; until they are in the store, do not
-install this on a production server.
+**Status: Härtung vor der ersten Store-Veröffentlichung, noch nicht
+eingereicht.** Indexierung, OCR und Suche funktionieren und sind auf
+gemieteter Hardware gemessen, siehe unten. Die Auslieferungsdateien beider
+Apps werden vorbereitet, bis sie im Store stehen, bitte nicht auf einem
+Produktivserver installieren.
 
-## The two app model
+## Das Zwei-App-Modell
 
-Findling ships as two store entries that belong together:
+Findling wird als zwei zusammengehörige Store-Einträge ausgeliefert:
 
-| Part | App id | Store section | What it does |
+| Teil | App-ID | Store-Bereich | Was er macht |
 |------|--------|---------------|--------------|
-| PHP companion | `findling` | Apps | Registers the search provider and proxies queries to the backend |
-| Python ExApp | `findling_backend` | External Apps | Runs extraction, OCR and the search index inside a container |
+| PHP-Companion | `findling` | Apps | Registriert den Suchanbieter und leitet Anfragen an das Backend weiter |
+| Python-ExApp | `findling_backend` | External Apps | Führt Extraktion, OCR und den Suchindex im Container aus |
 
-Both entries must be installed, and both always carry the same major and minor
-version. The companion is tiny on purpose: it owns the Nextcloud side, including the
-permission check, because Nextcloud cannot register a search provider from an
-external app. The container owns the heavy lifting.
+Beide Einträge müssen installiert sein und tragen immer dieselbe Major- und
+Minor-Version. Der Companion ist bewusst winzig: er gehört zur Nextcloud-Seite,
+samt Berechtigungsprüfung, weil Nextcloud keinen Suchanbieter aus einer
+externen App registrieren kann. Der Container übernimmt die schwere Arbeit.
 
-## Requirements
+## Voraussetzungen
 
-- Nextcloud 33 to 35 (`min-version` 33, `max-version` 35). Nextcloud 32 left the
-  window with the decision of 2026-09-06: it goes out of support in September 2026,
-  this app is submitted in December, and an app that claims a server nobody
-  supports any more claims something it cannot make good on.
-- The AppAPI app, with HaRP as the deploy target
-- Target hardware: 4 to 8 GB RAM, ARM64 and AMD64, CPU only, no GPU required
+- Nextcloud 33 bis 35 (`min-version` 33, `max-version` 35). Nextcloud 32 ist
+  mit der Entscheidung vom 2026-09-06 aus dem unterstützten Fenster
+  herausgefallen: es verliert im September 2026 den Support, diese App wird im
+  Dezember eingereicht, und eine App, die einen Server für sich beansprucht,
+  den niemand mehr unterstützt, behauptet damit etwas, das sie nicht einlösen
+  kann.
+- Die AppAPI-App, mit HaRP als Deploy-Ziel
+- Zielhardware: 4 bis 8 GB RAM, ARM64 und AMD64, nur CPU, keine GPU nötig
 
-The project is built for self hosters and small organisations on ordinary hardware,
-not for a search cluster.
+Das Projekt ist für Selfhoster und kleine Organisationen auf gewöhnlicher
+Hardware gebaut, nicht für einen Suchcluster.
 
-## What it costs in memory, measured
+## Was es an Speicher kostet, gemessen
 
-**A full index, OCR and embedding run over 50,000 files and 20 GB on a 4-GB ARM64
-box peaked at 1,838 MB of resident anonymous memory, under a hard 2 GB limit
-enforced by the kernel, with no OOM kill and no restart.** The run took 18 hours
-56 minutes until the last vector, wrote a 785 MB word index and a 69 MB vector
-store, and left every file with a verdict: 51,961 indexed and embedded, 37
-skipped for a named reason, **none failed**. A user search during the run
-answered in 1.1 seconds at the 95th percentile, after the run in 0.5 seconds.
+**Ein vollständiger Indexierungs-, OCR- und Embedding-Lauf über 50.000 Dateien
+und 20 GB auf einer 4-GB-ARM64-Box erreichte einen Spitzenwert von 1.838 MB
+residentem anonymem Speicher, unter einem harten, vom Kernel durchgesetzten
+2-GB-Limit, ohne OOM-Kill und ohne Neustart.** Der Lauf brauchte 18 h 56 min
+bis zum letzten Vektor, schrieb einen 785 MB großen Wortindex und einen 69 MB
+großen Vektorspeicher, und ließ jede Datei mit einem Befund zurück: 51.961
+indexiert und mit Embeddings versehen, 37 übersprungen mit benanntem Grund,
+**keine einzige fehlgeschlagen**. Eine Nutzersuche während des Laufs
+antwortete beim 95. Perzentil in 1,1 Sekunden, nach dem Lauf in 0,5 Sekunden.
 
-That is a measurement and not an estimate. It was taken on arm64 with 2 cores and
-4 GB, which is the hardware this app is built for. Two honest sentences belong
-next to it. First: the kernel counters for memory damage (`oom`, `oom_kill`,
-`oom_group_kill`) are zero, but the `max` counter is not, because the file cache
-of the index pressed against the 2 GB limit 2,796 times while the semantic search
-held 1.5 to 1.8 GB of its own; the limit was respected, it was not left untouched.
-Second: most of that memory is the semantic search, not the indexing. The same
-run without embeddings peaked at 422 MB and took 12 hours 49 minutes on the same
-machine, and about 276 MB of the difference is a second copy of the model that the
-search side loads next to the one the indexer holds. That is a known finding and
-it is being addressed in the hardening before the first release.
+Das ist eine Messung und keine Schätzung. Sie wurde auf arm64 mit 2 Kernen und
+4 GB genommen, der Hardware, für die diese App gebaut ist. Diese Laufzeiten
+stammen von der kleinsten unterstützten Zielhardware (arm64, 2 Kerne, 4 GB
+RAM) und sind bewusst die Untergrenze: auf moderner, leistungsstarker Hardware
+läuft die Indexierung erheblich schneller, dafür liegt aber keine eigene
+Messung vor. Zwei ehrliche Sätze gehören daneben. Erstens: die Kernel-Zähler
+für Speicherschaden (`oom`, `oom_kill`, `oom_group_kill`) stehen bei null,
+aber der `max`-Zähler nicht, weil der Dateicache des Index 2.796-mal gegen das
+2-GB-Limit drückte, während die semantische Suche 1,5 bis 1,8 GB für sich
+hielt: das Limit wurde eingehalten, aber nicht unberührt gelassen. Zweitens:
+der größte Teil dieses Speichers ist die semantische Suche, nicht die
+Indexierung. Derselbe Lauf ohne Embeddings erreichte einen Spitzenwert von
+422 MB und brauchte 12 h 49 min auf derselben Maschine, und rund 276 MB des
+Unterschieds sind eine zweite Kopie des Modells, die die Suchseite zusätzlich
+zu der lädt, die der Indexierer hält. Das ist ein bekannter Befund, und er
+wird in der Härtung vor der ersten Veröffentlichung angegangen.
 
-Method, both full curves, the corpus, the four part OOM proof, four failure drills
-on the same machine (`docker kill` during OCR, a reboot of the whole machine,
-backend gone, disk nearly full), the breakdown of what the semantic search costs
-at idle and a side measurement with a second index worker are in
-[docs/performance.md](docs/performance.md), including what each of them does not
-prove.
+Methode, beide vollständigen Kurven, der Korpus, der vierteilige OOM-Beleg,
+vier Ausfalltests auf derselben Maschine (`docker kill` während der OCR, ein
+Neustart der gesamten Maschine, Backend weg, Festplatte fast voll), die
+Aufschlüsselung dessen, was die semantische Suche im Leerlauf kostet, und
+eine Nebenmessung mit einem zweiten Index-Worker stehen in
+[docs/performance.md](docs/performance.md), einschließlich dessen, was jede
+davon nicht beweist.
 
-## Privacy
+## Datenschutz
 
-- No file content leaves the server. Extraction, OCR, indexing and search all run
-  inside the container on your own machine.
-- What is stored is the extracted text. The text of every indexed document is kept
-  in the backend app's own volume, because the excerpts shown under a search result
-  are cut out of it on demand. A backup of that volume therefore contains the text
-  of your indexed documents, and the index is not encrypted at rest, which is a
-  matter for the host it runs on. The same paragraph stands in both store
-  descriptions, in all three languages.
-- No telemetry. The app does not phone home, not even for version checks.
-- User files are never modified. Every file access goes through a read only content
-  gateway, and a checksum gate in CI proves the invariant on a reference corpus.
-- Permissions are enforced by Nextcloud itself. The final result filter runs in PHP
-  against the user folder, so the index never becomes a second permission model.
+- Kein Dateiinhalt verlässt den Server. Extraktion, OCR, Indexierung und Suche
+  laufen alle im Container auf Ihrer eigenen Maschine.
+- Gespeichert wird der extrahierte Text. Der Text jedes indexierten Dokuments
+  liegt im eigenen Datenbereich der Backend-App, weil die Ausschnitte, die
+  unter einem Suchtreffer angezeigt werden, bei Bedarf daraus herausgeschnitten
+  werden. Eine Sicherung dieses Datenbereichs enthält deshalb den Text Ihrer
+  indexierten Dokumente, und der Index ist nicht verschlüsselt gespeichert,
+  was Sache des Hosts ist, auf dem er läuft. Derselbe Absatz steht in beiden
+  Store-Beschreibungen, in allen drei Sprachen.
+- Keine Telemetrie. Die App telefoniert nicht nach Hause, nicht einmal für
+  Versionsprüfungen.
+- Nutzerdateien werden nie verändert. Jeder Dateizugriff läuft über ein nur
+  lesendes Content-Gateway, und ein Prüfsummen-Gate in der CI belegt diese
+  Invariante an einem Referenzkorpus.
+- Berechtigungen werden von Nextcloud selbst durchgesetzt. Der finale
+  Ergebnisfilter läuft in PHP gegen den Benutzerordner, damit der Index nie zu
+  einem zweiten Berechtigungsmodell wird.
 
-## Repository layout
+## Repository-Aufbau
 
 ```
-php/               PHP companion app, mapped to apps/findling in CI
-backend/           Python ExApp, package under backend/src/findling/
-testdata/corpus/   Reference corpus for the read only checksum gate
-docs/              Process and operations documentation
+php/               PHP-Companion-App, in der CI auf apps/findling gemappt
+backend/           Python-ExApp, Paket unter backend/src/findling/
+testdata/corpus/   Referenzkorpus für das nur lesende Prüfsummen-Gate
+docs/              Prozess- und Betriebsdokumentation
 .github/workflows/ CI: python, php, integration, docker
 ```
 
-## License
+## Lizenz
 
-AGPL-3.0-or-later. See [LICENSE](LICENSE).
+AGPL-3.0-or-later. Siehe [LICENSE](LICENSE).
