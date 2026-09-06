@@ -47,6 +47,7 @@ from fastapi.testclient import TestClient
 from tantivy import Document, Index, Query
 
 from conftest import Corpus
+from findling.api import search as api_search
 from findling.config import settings
 from findling.embed.model import DIMENSIONS, EmbedOutcome, to_int8
 from findling.index.open import open_index
@@ -739,3 +740,105 @@ def test_a_missing_model_leaves_the_full_text_answer_unchanged(
     ids = [hit["fileId"] for hit in with_vectors["candidates"]]
     assert ids != []
     assert ids == [hit["fileId"] for hit in without_embedding["candidates"]]
+
+
+# ---------------------------------------------------------------------------
+# The operator rule: who asks for precision gets precision
+# ---------------------------------------------------------------------------
+
+
+def _watch_the_semantic_side(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record every search line a SemanticSide is built for, and build it anyway.
+
+    Watched at the constructor rather than at the answer, because the rule is
+    about whether the vector half is asked at all. On a machine without the
+    model every semantic answer is empty anyway, so a case that only looked at
+    the result would be green with the rule and without it.
+    """
+    seen: list[str] = []
+    original = api_search.SemanticSide
+
+    def record(*, vectors: VectorStore, model: Any, text: str) -> SemanticSide:
+        seen.append(text)
+        return original(vectors=vectors, model=model, text=text)
+
+    monkeypatch.setattr(api_search, "SemanticSide", record)
+    return seen
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        '"drei Monate"',
+        "bescheid -frist",
+        "name:vertrag",
+        "type:pdf bescheid",
+        "haus AND hof",
+    ],
+    ids=["phrase", "exclusion", "field", "filetype", "boolean"],
+)
+@pytest.mark.usefixtures("appapi_environment")
+def test_a_line_with_an_operator_is_answered_without_the_vector_half(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    line: str,
+) -> None:
+    seen = _watch_the_semantic_side(monkeypatch)
+
+    api_search.one_round(indexed_volume.bob, line, 20, 0, False)
+
+    assert seen == []
+
+
+@pytest.mark.usefixtures("appapi_environment")
+def test_a_multi_word_line_without_an_operator_stays_hybrid(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The decision of this plan, and the case the semantics were built for: the
+    # paraphrase of the integration run is exactly a line of this shape.
+    seen = _watch_the_semantic_side(monkeypatch)
+    line = "wann darf ich den vertrag beenden"
+
+    api_search.one_round(indexed_volume.bob, line, 20, 0, False)
+
+    assert seen == [line]
+
+
+@pytest.mark.usefixtures("appapi_environment")
+def test_a_title_only_search_is_answered_without_the_vector_half(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The vector stock lies over the text and not over the name, so a semantic
+    # hit here would be an answer to a different question than the one the
+    # filter asked.
+    seen = _watch_the_semantic_side(monkeypatch)
+
+    api_search.one_round(indexed_volume.bob, TERM, 20, 0, True)
+    assert seen == []
+
+    api_search.one_round(indexed_volume.bob, TERM, 20, 0, False)
+    assert seen == [TERM]
+
+
+@pytest.mark.usefixtures("appapi_environment")
+def test_an_operator_query_answers_what_a_container_without_a_vector_stock_answers(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nothing else changes: not the merge, not the prefilter, not the candidate.
+
+    The vector branch simply does not happen, which is the same path a missing
+    model takes, and that path is covered by criterion 3 already (D-19, D-20).
+    """
+    line = "bescheid -frist"
+    with_rule = api_search.one_round(indexed_volume.bob, line, 20, 0, False)
+
+    monkeypatch.setenv("FINDLING_EMBED_ENABLED", "false")
+    settings.cache_clear()
+    without_vectors = api_search.one_round(indexed_volume.bob, line, 20, 0, False)
+
+    assert [hit.file_id for hit in with_rule.candidates] == [hit.file_id for hit in without_vectors.candidates]
+    assert with_rule.has_more == without_vectors.has_more
+    assert with_rule.next_offset == without_vectors.next_offset
