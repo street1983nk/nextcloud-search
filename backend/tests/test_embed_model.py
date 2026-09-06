@@ -48,6 +48,7 @@ from findling.embed.model import (
     PASSAGE_PREFIX,
     QUERY_PREFIX,
     EmbeddingModel,
+    load_count,
     to_int8,
 )
 
@@ -278,9 +279,85 @@ def test_a_failed_load_is_not_retried_on_every_call(tmp_path: Path, caplog: pyte
     assert caplog.text.count("embedding") == 1
 
 
+def test_a_missing_model_is_looked_for_once_and_not_once_per_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The permanent half of the distinction of 06.1-RESEARCH.md, pitfall 2. A
+    # directory without the two files is a property of the installation, it is
+    # true for the whole life of the process, and looking again would be a stat
+    # call per document over tens of thousands of them. Counted at the seam
+    # instead of in the log, because the log only says how often it was said.
+    looks: list[Path] = []
+    real = model_module._artifacts_present
+
+    def counting(directory: Path) -> bool:
+        looks.append(directory)
+        return real(directory)
+
+    monkeypatch.setattr(model_module, "_artifacts_present", counting)
+    engine = _model(tmp_path)
+
+    engine.embed_passages(["eins"])
+    engine.embed_passages(["zwei"])
+    engine.embed_query("drei")
+
+    assert looks == [tmp_path]
+
+
+def test_a_run_that_throws_does_not_switch_the_model_off_for_good(
+    model_dir: Path, stand_in: StandIn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The temporary half of the same distinction, and the reason it had to be
+    # made before the engine became a shared one. Until 06.1-02 a single batch
+    # that threw set _engine to None with _tried still True, so the wrapper was
+    # dead for the rest of the process. Shared, that one batch of the worker
+    # would have cost the search side its semantics until the next restart, and
+    # the symptom is a container that suddenly answers lexically after hours
+    # with nothing having changed.
+    engine = _model(model_dir)
+    real_run = stand_in.session.run
+    thrown = 0
+
+    def failing_once(outputs: list[str], feed: dict[str, Any]) -> list[Any]:
+        nonlocal thrown
+        if thrown == 0:
+            thrown += 1
+            raise RuntimeError("the batch could not be run")
+        return real_run(outputs, feed)
+
+    monkeypatch.setattr(stand_in.session, "run", failing_once)
+
+    first = engine.embed_passages(["eins"])
+    second = engine.embed_passages(["zwei"])
+
+    assert first.verdict == EMBEDDING_UNAVAILABLE
+    assert second.available, "a thrown run is a state of one batch, not of the installation"
+    assert len(second.vectors) == 1
+
+
 # ---------------------------------------------------------------------------
 # Loading, batching and the empty case
 # ---------------------------------------------------------------------------
+
+
+def test_the_load_counter_says_how_often_the_weights_were_read(model_dir: Path, stand_in: StandIn) -> None:
+    # The counter exists so that the proof of the shared engine needs no timing
+    # and no byte, in the shape analyzer.build_count() established for the
+    # automaton. Two calls on one wrapper read the artifacts once.
+    before = load_count()
+    engine = _model(model_dir)
+
+    engine.embed_passages(["eins"])
+    engine.embed_passages(["zwei"])
+
+    assert load_count() - before == 1
+    assert stand_in.session.batches == [1, 1]
+
+    # And the counterpart, without which the assertion above would also hold for
+    # a number that never moves: a second wrapper really does read them again.
+    _model(model_dir).embed_passages(["drei"])
+
+    assert load_count() - before == 2
 
 
 def test_importing_the_module_loads_no_model(model_dir: Path, stand_in: StandIn) -> None:

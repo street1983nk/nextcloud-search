@@ -22,17 +22,34 @@ different item, it costs about 21.9 MB, and it belongs to plan 06.1-04. It is
 deliberately not touched here, because one change that fixes two items reports
 one number for both.
 
-**What this file does not do.** It measures no bytes. A peak difference is not
-the sum of the loads that produced it, and a test that counts resident memory on
-a shared runner is a random number generator with an assertion attached.
-Everything below is a counter or an object identity.
+**What the second half of this file is about.** The holder in
+``embed/engine.py``: two callers, one object, one load. The measured item is a
+counter and an object identity, never a byte. A peak difference is not the sum
+of the loads that produced it, and a test that counts resident memory on a
+shared runner is a random number generator with an assertion attached.
 """
 
 from __future__ import annotations
 
+import contextlib
+import threading
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+import numpy
+import pytest
+
 from conftest import CONSTITUENTS, Corpus
 from findling.api import resources
+from findling.config import settings
+from findling.embed import model as model_module
+from findling.embed.engine import shared_model
+from findling.embed.model import DIMENSIONS, EmbeddingModel, load_count
 from findling.index.analyzer import build_count, cached_german_analyzer
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 # Digests of this file only, and three of them for two cases. The cache keeps
 # exactly one entry, so a case that reused the digest of the case before it
@@ -41,6 +58,19 @@ from findling.index.analyzer import build_count, cached_german_analyzer
 DIGEST_ONE = "06.1-02-falsification-one"
 DIGEST_TWO = "06.1-02-falsification-two"
 DIGEST_THREE = "06.1-02-falsification-three"
+
+# How long the second thread of the concurrency case is given to arrive inside
+# the load path. It is a barrier timeout and not a sleep on suspicion: when the
+# load path is serialised the second thread can never get there, so the wait
+# runs out and the case is green in one second; when it is not serialised both
+# threads meet at once, the barrier releases immediately and the case is red
+# without waiting for anything.
+RACE_WINDOW_SECONDS = 1.0
+
+
+# ---------------------------------------------------------------------------
+# The falsification
+# ---------------------------------------------------------------------------
 
 
 def test_a_search_side_open_does_not_build_the_automaton_again(indexed_volume: Corpus) -> None:
@@ -76,3 +106,161 @@ def test_a_different_word_list_does_build_a_second_automaton() -> None:
     cached_german_analyzer(DIGEST_THREE, CONSTITUENTS)
 
     assert build_count() - before == 2
+
+
+# ---------------------------------------------------------------------------
+# The stand in. Two objects that look like a tokenizer and a session from the
+# inside of _run_batch and read nothing from disk, in the shape test_embed_model
+# established: only the two functions that touch the artifacts are replaced, so
+# everything above them is the real code path.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _FakeEncoding:
+    ids: list[int]
+    attention_mask: list[int]
+
+
+class _FakeEncoder:
+    """One token per text, which is everything the pooling below needs."""
+
+    def encode_batch(self, texts: list[str]) -> list[_FakeEncoding]:
+        return [_FakeEncoding(ids=[1], attention_mask=[1]) for _ in texts]
+
+
+@dataclass
+class _FakeInput:
+    name: str
+
+
+class _FakeSession:
+    """A graph that answers a constant hidden state of the declared width."""
+
+    def get_inputs(self) -> list[_FakeInput]:
+        return [_FakeInput("input_ids"), _FakeInput("attention_mask")]
+
+    def get_outputs(self) -> list[_FakeInput]:
+        return [_FakeInput("last_hidden_state")]
+
+    def run(self, _outputs: list[str], feed: dict[str, Any]) -> list[Any]:
+        ids = feed["input_ids"]
+        return [numpy.ones((ids.shape[0], ids.shape[1], DIMENSIONS), dtype=numpy.float32)]
+
+
+@pytest.fixture
+def model_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+    """A model directory the settings point at, empty until a case fills it.
+
+    The settings cache is cleared on both sides, the way the volume fixture of
+    conftest does it: they are resolved once per process by design, and a case
+    that changed the environment without clearing would hand its paths to the
+    next one.
+    """
+    home = tmp_path / "model"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", str(home))
+    settings.cache_clear()
+    yield home
+    settings.cache_clear()
+
+
+def _pretend_a_model(home: Path) -> None:
+    """Put the two file names in place that the load path looks for."""
+    (home / "model.onnx").write_bytes(b"not a real graph")
+    (home / "tokenizer.json").write_text("{}", encoding="utf-8")
+
+
+def _stand_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    def open_encoder(_directory: Path, *, sequence_len: int) -> _FakeEncoder:
+        assert sequence_len >= 1
+        return _FakeEncoder()
+
+    def open_session(_path: Path, *, threads: int) -> _FakeSession:
+        assert threads >= 1
+        return _FakeSession()
+
+    monkeypatch.setattr(model_module, "_open_encoder", open_encoder)
+    monkeypatch.setattr(model_module, "_open_session", open_session)
+
+
+# ---------------------------------------------------------------------------
+# The holder
+# ---------------------------------------------------------------------------
+
+
+def test_the_search_and_the_track_get_the_same_engine(model_home: Path) -> None:
+    # The whole point of the plan in one line. Two callers in one process, one
+    # object, so the tokenizer and the session are read once and not twice
+    # (06-11: +276 MB that stayed resident, against 210 MB of headroom).
+    assert model_home.is_dir()
+
+    first = shared_model()
+    second = shared_model()
+
+    assert first is second
+
+
+def test_another_model_directory_gets_another_engine(
+    model_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = shared_model()
+    first.embed_passages(["ein Text"])
+
+    # Keyed on the directory for the reason the read side caches are keyed on
+    # their path: one container has one model directory, but a suite has one per
+    # test, and the remembered refusal of the previous directory would be handed
+    # to a test that has a model.
+    other = tmp_path / "another-model"
+    other.mkdir(parents=True)
+    monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", str(other))
+    settings.cache_clear()
+
+    second = shared_model()
+
+    assert second is not first
+    assert second.loaded is False
+
+
+def test_two_threads_get_one_engine_and_pay_for_one_load(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+
+    # The barrier is the proof, not a sleep on suspicion. Two threads can only
+    # meet in here when nothing serialises the load path, so an unserialised one
+    # releases the barrier at once and builds twice, and a serialised one lets a
+    # single thread in, runs the wait out and builds once.
+    barrier = threading.Barrier(2)
+    real_open_session = model_module._open_session
+
+    def gated_open_session(path: Path, *, threads: int) -> Any:
+        with contextlib.suppress(threading.BrokenBarrierError):
+            barrier.wait(timeout=RACE_WINDOW_SECONDS)
+        return real_open_session(path, threads=threads)
+
+    monkeypatch.setattr(model_module, "_open_session", gated_open_session)
+
+    seen: list[EmbeddingModel] = []
+    guard = threading.Lock()
+    gate = threading.Event()
+
+    def ask() -> None:
+        gate.wait(30)
+        engine = shared_model()
+        engine.embed_passages(["ein Text"])
+        with guard:
+            seen.append(engine)
+
+    before = load_count()
+    workers = [threading.Thread(target=ask) for _ in range(2)]
+    for worker in workers:
+        worker.start()
+    gate.set()
+    for worker in workers:
+        worker.join(60)
+
+    assert len(seen) == 2, "both threads have to have answered"
+    assert seen[0] is seen[1], "two threads, one engine"
+    assert load_count() - before == 1, "a second session would be the doubled load this plan removes"
