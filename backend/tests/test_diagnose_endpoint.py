@@ -395,6 +395,34 @@ def test_a_purely_semantic_hit_is_named_semantic_and_a_hit_of_both_halves_is_nam
     assert both[ORIGIN] == BOTH
 
 
+def test_the_one_term_rule_of_the_search_path_does_not_reach_into_the_diagnosis(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The decision of the addendum to plan 06.1-20, written down as a case.
+
+    On the search path a line of one word gets no vector half. Here it does, and
+    deliberately: this route is a magnifying glass and not a search. An admin
+    who types one word is asking whether the stock holds anything near it at
+    all, and that question has an answer even where the search would not use it.
+    The mark says which list a document stands in, and both lists are built for
+    this one question about this one named file (D-14).
+
+    Both lines below hold a single word, so a diagnosis that had adopted the
+    rule would answer "lexical" to the first and nothing at all to the second.
+    """
+    _stock_chunks(indexed_volume.root, STOCKED_FILE, 1)
+    monkeypatch.setattr(resources, "query_model", _Model)
+
+    assert len(PARAPHRASE.split()) == 1
+    assert len(TERM.split()) == 1
+
+    assert _diagnose(client, sign("admin"), STOCKED_FILE, query=PARAPHRASE)[ORIGIN] == SEMANTIC
+    assert _diagnose(client, sign("admin"), STOCKED_FILE, query=TERM)[ORIGIN] == BOTH
+
+
 def test_a_document_only_the_engine_found_is_named_lexical(
     client: TestClient,
     sign: Sign,

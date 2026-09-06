@@ -37,6 +37,7 @@ from findling.query.rewrite import (
     RewrittenQuery,
     build_query,
     carried_operators,
+    carries_one_term,
     extract_filters,
     umlaut_variants,
 )
@@ -346,3 +347,53 @@ def test_the_rewritten_query_carries_the_marks_of_its_raw_line(index: Index) -> 
     # rather than looking at the line a second time with a second opinion.
     assert build_query(index, "bescheid -frist").operators == frozenset({EXCLUSION})
     assert build_query(index, "bescheid").operators == frozenset()
+
+
+# ---------------------------------------------------------------------------
+# One term on the line, counted on the raw line as well
+# ---------------------------------------------------------------------------
+#
+# The measurement of plan 06.1-20 turned the assumption of that plan around: a
+# single word does not stand far away from an arbitrary document, it stands
+# nearer to one (68 to 77 on the int8 L2 scale) than a paraphrase stands to the
+# passage it paraphrases (79.5487). No pair of distances holds both ends, so a
+# line that carries exactly one term is answered lexically. For one word the
+# compound splitter, the stemmer and the umlaut variant already do what the
+# second list was meant to add, and one word gives the model no context at all.
+
+
+def test_a_line_of_one_word_carries_one_term() -> None:
+    assert carries_one_term("Genehmigung") is True
+    assert carries_one_term("Mueller") is True
+
+
+def test_a_line_of_two_words_does_not_carry_one_term() -> None:
+    # The counter case of the rule, and the reason it counts terms rather than
+    # characters: two words are the shortest line a relation can be read out of,
+    # and the paraphrase of the integration run is a longer one of exactly these.
+    assert carries_one_term("drei Monate") is False
+    assert carries_one_term("wann darf ich den vertrag beenden") is False
+
+
+def test_the_whitespace_around_a_word_does_not_make_a_second_term() -> None:
+    assert carries_one_term("  Genehmigung  ") is True
+    assert carries_one_term("Genehmigung\tBescheid") is False
+
+
+def test_the_file_type_filter_is_not_a_term_of_its_own() -> None:
+    # Counted after the filter is cut out, the way the query is built as well,
+    # so that a filter cannot silently turn a one word line into a two word one.
+    assert carries_one_term("type:pdf Genehmigung") is True
+
+
+def test_a_line_that_holds_nothing_but_a_filter_carries_no_term() -> None:
+    # Nought is not one. Such a line never reaches the engine anyway, and this
+    # answer says what was on the line rather than what the caller does with it.
+    assert carries_one_term("type:pdf") is False
+    assert carries_one_term("   ") is False
+
+
+def test_the_rewritten_query_carries_whether_its_raw_line_held_one_term(index: Index) -> None:
+    # One caller and one reading, exactly as with the operator marks above.
+    assert build_query(index, "Genehmigung").one_term is True
+    assert build_query(index, "wann darf ich den vertrag beenden").one_term is False
