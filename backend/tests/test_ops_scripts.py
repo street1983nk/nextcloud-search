@@ -18,10 +18,21 @@ remembered:
 * Neither box tool ever puts a credential into an output, and both label every
   resource they create, because a label is the only way to find a forgotten
   resource in an account that holds other things (T-05-17, T-05-19).
+
+Since plan 06.1-11 the directory also holds a Python tool, search_load.py, and
+the same three promises are asked of it plus a fourth that belongs to it alone:
+no path of one particular machine in its source. That fourth one is why it
+exists in scripts/ops at all rather than beside the measurement it grew out of.
+The reference it was built from, 45-suchlast.py of the semantic run, put a
+directory of the load test box into sys.path and imported a helper that lives
+only there, which makes a tool that measures one machine and cannot be pointed
+at another.
 """
 
 from __future__ import annotations
 
+import ast
+import sys
 from pathlib import Path
 
 import pytest
@@ -30,6 +41,7 @@ OPS_DIR = Path(__file__).resolve().parents[2] / "scripts" / "ops"
 RSS_SAMPLER = OPS_DIR / "rss_sampler.sh"
 HETZNER_BOX = OPS_DIR / "hetzner_box.sh"
 AWS_BOX = OPS_DIR / "aws_box.sh"
+SEARCH_LOAD = OPS_DIR / "search_load.py"
 
 # Assembled from code points so that this file does not carry the characters it
 # forbids and fail on itself.
@@ -38,6 +50,42 @@ DASHES = (chr(0x2014), chr(0x2013))
 # The two words the sampler may not contain, for the reason in the module
 # docstring. Assembled for the same reason as the dashes.
 DOCKER_MEMORY_SHORTCUT = "docker" + " " + "stats"
+
+# The route a user takes. A load sample that called the container directly would
+# leave out the two halves that decide what a search costs on a small box: the
+# PHP process pool of the instance and the permission recheck of every candidate.
+OCS_SEARCH_ROUTE = "/ocs/v2.php/search/providers/findling/search"
+
+# The two headers a call into the container would carry, and their absence is
+# what keeps the measurement on the route above.
+CONTAINER_ONLY_HEADERS = ("EX-APP-ID", "AUTHORIZATION-APP-API")
+
+# The shapes that tie a tool to one machine. A directory under a home and an
+# entry pushed into sys.path are what the reference sample needed to reach its
+# helper module on the load test box, and they are exactly what makes a tool
+# unusable anywhere else.
+MACHINE_SHAPES = ("/home/", "sys.path.insert", "sys.path.append", "drillhelfer")
+
+
+def machine_shapes(text: str) -> list[str]:
+    """Every machine shape the text carries, sorted, empty when it carries none."""
+    return sorted(shape for shape in MACHINE_SHAPES if shape in text)
+
+
+def imported_packages(text: str) -> set[str]:
+    """The top level package of every import in the file.
+
+    Read out of the syntax tree rather than out of the lines, because an import
+    inside a function is still an import and a text search for "import " finds
+    the word in every second docstring of this repository.
+    """
+    packages: set[str] = set()
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, ast.Import):
+            packages.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            packages.add(node.module.split(".")[0])
+    return packages
 
 
 @pytest.fixture(params=[RSS_SAMPLER, HETZNER_BOX, AWS_BOX], ids=lambda path: path.name)
@@ -336,3 +384,144 @@ def test_the_box_tool_verifies_the_deletion_and_keeps_the_state_out_of_the_repo(
     # a test uses. Neither is inside the working tree.
     assert 'STATE_DIR="${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}"' in text
     assert "umask 077" in text
+
+
+# The load tool of plan 06.1-11. Its own block rather than an entry in the
+# fixture above, because that fixture asks every script for a POSIX shebang and
+# for "set -eu", and neither sentence means anything in Python.
+
+
+def test_the_load_tool_starts_with_a_python_shebang() -> None:
+    """Read as bytes, so a carriage return behind the shebang cannot hide.
+
+    The tool is run on a Linux box as ./search_load.py, and a CR at the end of
+    that first line fails with an error that names an invisible character. The
+    checkout rule that keeps it out lives in .gitattributes; this is the gate
+    that notices when it stops working.
+    """
+    assert SEARCH_LOAD.read_bytes().startswith(b"#!/usr/bin/env python3\n")
+
+
+def test_the_load_tool_carries_neither_a_dash_nor_a_carriage_return() -> None:
+    raw = SEARCH_LOAD.read_bytes()
+    assert b"\r" not in raw
+    text = raw.decode("utf-8")
+    for dash in DASHES:
+        assert dash not in text, f"{dash!r} in {SEARCH_LOAD.name}"
+
+
+def test_the_load_tool_asks_over_the_ocs_route_and_not_into_the_container() -> None:
+    """The route a user takes, with an explicit limit, and nothing else.
+
+    A sample that spoke to the container port would measure the search engine.
+    What this tool is for is the other question: what the whole chain costs when
+    several people search at once, and the PHP process pool and the permission
+    recheck are the halves of it that only the OCS route contains.
+    """
+    text = SEARCH_LOAD.read_text(encoding="utf-8")
+    assert OCS_SEARCH_ROUTE in text
+    assert "OCS-APIRequest" in text
+    assert '"limit"' in text
+    for header in CONTAINER_ONLY_HEADERS:
+        assert header not in text, header
+
+
+def test_the_load_tool_reads_the_cgroup_instead_of_asking_the_client() -> None:
+    """Same rule as the sampler, same reason: the client reports memory.current.
+
+    That figure counts the page cache of the mmap index, and a brute force vector
+    scan under load pulls the whole stock into the page cache of the very same
+    cgroup. Both numbers are read here on purpose, anon and current, because the
+    distance between them is what the load does to the file cache.
+    """
+    text = SEARCH_LOAD.read_text(encoding="utf-8")
+    assert DOCKER_MEMORY_SHORTCUT not in text
+    assert "memory.stat" in text
+    assert "memory.current" in text
+    assert "anon" in text
+    # Both cgroup driver layouts, as in rss_sampler.sh. Guessing one is a coin
+    # toss between Ubuntu and everything else.
+    assert "system.slice/docker-" in text
+    assert "/docker/" in text
+
+
+def test_the_load_tool_reads_the_memory_before_during_and_after() -> None:
+    """Three readings, because one of them alone answers a different question."""
+    text = SEARCH_LOAD.read_text(encoding="utf-8")
+    for phase in ('"before"', '"during"', '"after"'):
+        assert phase in text, phase
+
+
+def test_the_machine_path_gate_fires_on_a_staged_sample() -> None:
+    """The self test of the gate below, in the shape every textual gate here has.
+
+    A gate whose only assertion is "the current tree is clean" stays green on the
+    day somebody deletes its body. The sample is the shape of the reference this
+    tool was built from.
+    """
+    staged = 'import sys\nsys.path.insert(0, "/home/ubuntu/work")\nfrom drillhelfer import suche\n'
+    assert machine_shapes(staged) == ["/home/", "drillhelfer", "sys.path.insert"]
+
+
+def test_the_load_tool_carries_no_path_of_one_machine() -> None:
+    """A tool with a machine path in it is a tool for one machine."""
+    assert machine_shapes(SEARCH_LOAD.read_text(encoding="utf-8")) == []
+
+
+def test_the_load_tool_brings_no_third_party_library() -> None:
+    """Standard library only, and the point is what is NOT installed for it.
+
+    A third load test tool in this project would be a foreign body for one loop,
+    with an installation of its own in an environment that is supposed to work
+    offline. The concurrency is a thread pool out of the standard library, and
+    backend/uv.lock does not move for this file.
+    """
+    outside = sorted(imported_packages(SEARCH_LOAD.read_text(encoding="utf-8")) - set(sys.stdlib_module_names))
+    assert not outside, outside
+
+
+def test_the_load_tool_keeps_the_credential_inside_one_function() -> None:
+    """The value exists under one name, in one function, and reaches no output.
+
+    Same rule as the two box tools (T-05-17) and the same reason: an output of an
+    operating tool ends up in a terminal that is being logged somewhere, and a
+    credential that got there once cannot be taken back.
+    """
+    tree = ast.parse(SEARCH_LOAD.read_text(encoding="utf-8"))
+    holders = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+        and any(isinstance(inner, ast.Name) and inner.id == "secret" for inner in ast.walk(node))
+    }
+    assert holders == {"_authorization"}, holders
+
+    printing = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "print"
+        and any(isinstance(inner, ast.Name) and inner.id == "secret" for inner in ast.walk(node))
+    ]
+    assert not printing, printing
+
+
+def test_the_load_tool_promises_no_concurrency_number() -> None:
+    """It measures, it does not undertake. The number follows in plan 06.1-18.
+
+    A concurrency figure written down before it was measured would be exactly the
+    sort of number this project refuses everywhere else, so the module header has
+    to say both things: where the number comes from, and what a run of this tool
+    does not prove.
+    """
+    text = SEARCH_LOAD.read_text(encoding="utf-8")
+    assert "06.1-18" in text
+    assert "does not prove" in text
+
+
+def test_the_load_tool_names_its_three_knobs_in_the_usage() -> None:
+    """Concurrency, rounds and target, because --help is the whole manual."""
+    text = SEARCH_LOAD.read_text(encoding="utf-8")
+    for option in ("--concurrency", "--rounds", "--base-url"):
+        assert f'"{option}"' in text, option
