@@ -66,35 +66,42 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Four server versions, and an include list rather than a cross product,
+        # Three server versions, and an include list rather than a cross product,
         # because every version brings its own PHP floor.
         #
-        # PHP 8.2 covers the floors of 32, 33 and 34 completely: lib/versioncheck.php
-        # asks for at least 8.1 on stable32 and for at least 8.2 on stable33 and
-        # stable34 (read out of the four branches through the GitHub API on
-        # 2026-09-03). Nextcloud 35 asks for at least 8.3 in the same file, so that
-        # entry carries 8.3. A cross product over PHP versions would produce twelve
-        # runs for a statement that four runs make.
+        # The declared window decides this list and not the other way round. E-H1 of
+        # 2026-09-06 sets min-version 33 and max-version 35 in both info.xml, so the
+        # entries are 33, 34 and 35, and there is no entry outside them. stable32 ran
+        # here until that decision and left with it: Nextcloud 32 goes out of support
+        # in September 2026, the app no longer claims it, and a green run against a
+        # server nobody claims is a statement nobody asked for.
+        # backend/tests/test_lockstep_versions.py holds the two sides together, in
+        # both directions: an entry outside the window and a version the window
+        # promises while this list skips it are both findings there.
+        #
+        # PHP 8.2 covers the floors of 33 and 34 completely: lib/versioncheck.php asks
+        # for at least 8.2 on stable33 and on stable34 (read out of the branches
+        # through the GitHub API on 2026-09-03, when the entry for stable32 was still
+        # here and that branch asked for at least 8.1). Nextcloud 35 asks for at least
+        # 8.3 in the same file, so that entry carries 8.3. A cross product over PHP
+        # versions would produce nine runs for a statement that three runs make.
         #
         # The backend image is built once per entry and not built once and shared,
         # and that is a measurement rather than a preference: build plus push into
         # the local registry took 60 s in run 33743374344, and the image is about
-        # 390 MB. Handing it to four entries through an artifact would move that
-        # much data eight times, once out and once back per entry, to save four
-        # minutes of runner time. The entries run in parallel, so the wall clock
-        # would get worse rather than better.
+        # 390 MB. Handing it to the entries through an artifact would move that much
+        # data twice per entry, once out and once back, to save a minute of runner
+        # time each. The entries run in parallel, so the wall clock would get worse
+        # rather than better.
         #
-        # Measured on 2026-09-03 in the first green run over all four entries
-        # (run 33757405755): 3 m 47 s to 4 m 29 s per entry, of which 60 s are the
-        # image build and about 50 s the observation window of assertion 6. The
-        # four entries run in parallel, so that is the wall clock as well.
-        # timeout-minutes above is 15, roughly three times the measurement and
-        # far away from the default of 360, which is the number that lets a hung
+        # Measured on 2026-09-03 in the first green run over the four entries of the
+        # time (run 33757405755): 3 m 47 s to 4 m 29 s per entry, of which 60 s are
+        # the image build and about 50 s the observation window of assertion 6. The
+        # entries run in parallel, so that is the wall clock as well.
+        # timeout-minutes above is 15, roughly three times the measurement and far
+        # away from the default of 360, which is the number that lets a hung
         # handshake burn an afternoon.
         include:
-          - server-version: stable32
-            php-version: '8.2'
-            tolerate-failure: false
           - server-version: stable33
             php-version: '8.2'
             tolerate-failure: false
@@ -115,6 +122,13 @@ jobs:
             # server version is finished would be a statement about the state of a
             # branch and not about Findling. The result lands in the log either way,
             # which is what makes it a statement instead of a hope.
+            #
+            # E-H1 of 2026-09-06 confirms the flag and names the day it falls rather
+            # than leaving it to somebody noticing: Nextcloud 35 becomes final on
+            # 2026-09-16, so the condition above is met from that day, and plan
+            # 06.1-19 removes this flag together with this paragraph. Until then the
+            # condition stands here word for word, because a flag whose reason has
+            # been paraphrased away is a flag nobody dares to take out.
             tolerate-failure: true
 
     env:
@@ -478,9 +492,11 @@ jobs:
       #
       # What this proof does not cover, and it says so where an admin reads it
       # (docs/uninstall.md): it never touches the web interface, so the "delete
-      # data" switch of Nextcloud 32 and 33 stays unproven, and it does not check
+      # data" switch of the app management stays unproven, and it does not check
       # that the pulled image is gone, because the unregister path of AppAPI
-      # removes containers and volumes and never an image.
+      # removes containers and volumes and never an image. Nextcloud 33 is the
+      # version in this window that still has that switch; Nextcloud 32 had it as
+      # well and left the window with E-H1.
       #
       # Assertion 1: without the flag the data stay. That is the promise decision
       # D-16 rests on, and once assertion 3 has run it cannot be made any more.
@@ -557,7 +573,9 @@ jobs:
       # writes to the same sqlite file for it, so the plain client walked into
       # "in prepare, database is locked (5)" on Nextcloud 32 (run 33756788051)
       # while the other three versions happened to read between two writes. A
-      # busy timeout turns a race into a wait.
+      # busy timeout turns a race into a wait. That entry has since left the
+      # matrix with E-H1, and the timeout stays: the race belongs to two writers
+      # on one sqlite file and not to that version.
       #
       # Assertions 4 and 5 ask the same two questions of the database, and they
       # ask the database rather than occ on purpose: there is no occ command that
