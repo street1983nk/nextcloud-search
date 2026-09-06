@@ -29,7 +29,12 @@ def main() -> int:
         print("unklar unklar unklar")
         return 0
     vorrat = int(d.get("scheduled", 0)) + int(d.get("running", 0))
-    print(vorrat, int(d.get("indexed", 0)), int(d.get("embedded", 0)))
+    # The counters of the second track live under "backend"; the top-level
+    # "indexed" is the PHP half and stays 0 by design (see 00-start.txt).
+    b = d.get("backend") or {}
+    indexed = b.get("indexed", d.get("indexed", 0))
+    embedded = b.get("embedded")
+    print(vorrat, int(indexed or 0), "unklar" if embedded is None else int(embedded))
     return 0
 
 

@@ -267,6 +267,58 @@ urteilen wird, und weil die Lehre allgemein ist: eine Wartefrist muss gegen die
 langsamste beteiligte Uhr bemessen sein und nicht gegen die, an die man gerade
 gedacht hat.
 
+## Die Korrektur waehrend des Laufs, am Morgen des 06.09.
+
+Der Waechter hat die Nacht durchgehalten und dabei in jeder Runde dieselbe
+falsche Zahl protokolliert: `indexed=0 embedded=0`, waehrend der Container
+laengst bei 47.000 Vektoren stand. Ursache ist `42c-lesen.py`, das beide Zahlen
+auf der obersten Ebene der Aufnahme gesucht hat; dort steht `indexed` der
+PHP-Haelfte, das per Bauart 0 bleibt, und `embedded` gar nicht. Beide leben
+unter `backend`. Zwei Folgen, beide um 05:12Z beim ersten Blick des Morgens
+gefunden:
+
+1. Die Suchlastprobe im Nachlauf (Bedingung `embedded > 200`) ist nie
+   gefahren. Sie wurde um 05:15:09Z von Hand gestartet, mit demselben Skript
+   `45-suchlast.py`, waehrend die zweite Spur noch lief (Vorrat 4.775, 47.186
+   von 51.961 eingebettet). Ergebnis in `46-suchlast-nachlauf.json`:
+   30 Suchen, p50 735,5 ms, p95 **1.129,0 ms**, max 2.065 ms, Budget 2.500 ms,
+   haelt.
+2. Das Ende haette der Waechter nie erkannt (`SUCHLAST_GEFAHREN` blieb 0), er
+   waere erst am Deckel von 340 Runden, rund neun Stunden nach dem echten Ende,
+   in den Abschluss gelaufen. Der Leser wurde auf der Box gepatcht (Original als
+   `42c-lesen.py.orig`), der alte Waechter per PID beendet und als
+   `42b-wachter-neu.sh` mit `SUCHLAST_GEFAHREN=1` neu gestartet. Der neue
+   Waechter las in Runde 1 richtig: `vorrat=4775 indexed=51961 embedded=47186`.
+
+Der Lauf selbst war zu keinem Zeitpunkt betroffen; Sampler und Statusbeobachter
+liefen unveraendert weiter. Die Korrektur steht auf der Box in
+`42e-korrektur.txt` und im Waechterlog mit Zeitstempel. Die Fassung von
+`42c-lesen.py` unter `skripte/` ist die korrigierte.
+
+**Lehre:** ein Waechter, der eine Zahl in jeder Runde protokolliert, muss beim
+Scharfstellen einmal gegen eine bekannte Zahl gelesen werden. `embedded=0` in
+Runde 10, neun Minuten nach 14 Poller-Durchgaengen mit `requeued=32`, war zu
+sehen gewesen. Die 52 Sekunden der Gegenprobe weiter oben und diese Zeile sind
+dieselbe Lehre in zwei Kleidern: die Pruefung des Laufs gehoert selbst geprueft.
+
+### Zwischenstand der Nacht, gelesen um 05:13Z
+
+| Groesse | Wert |
+|---|---|
+| Volltext und OCR | fertig, 51.961 indexiert, 0 fehlgeschlagen, 37 uebersprungen (21 too_large, 14 empty_text, 2 image_not_ocrable) |
+| Einbettung | 46.853 von 51.961, Vorrat 5.103, rund 170 je Minute seit die erste Spur frei ist |
+| anon-Spitze bisher | 1.562,7 MB um 01:49:29Z |
+| memory.current-Spitze | 2.047,9 MB um 11:46:16Z am 05.09., an der harten Grenze |
+| memory.events | low 0, high 0, **max 1504**, oom 0, oom_kill 0, oom_group_kill 0 |
+| Container | RestartCount 0, OOMKilled false, StartedAt unveraendert 10:44:39Z |
+
+`max 1504` ist kein OOM und kein Neustart, aber es ist auch keine Null: die
+cgroup hat 1.504-mal an der harten Grenze zurueckfordern muessen, waehrend
+`memory.current` mit dem Dateicache des Index an den 2 GB anlag. Was das fuer
+Kriterium 5 ("memory.events mit lauter Nullen") bedeutet, entscheidet die
+Abnahme nach dem Ende des Laufs, mit den vollstaendigen Reihen; der Befund wird
+hier nicht kleingeredet.
+
 ## Die Beobachter
 
 | Datei | Was darin steht | Abstand |

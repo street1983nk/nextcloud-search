@@ -36,6 +36,13 @@ Last activity: 2026-09-05
 nichts haengt an einer lebenden Sitzung. Erwartete Dauer 16 bis 18 Stunden.
 
 Weckwort fuer die Fortsetzung: **semantiklauf pruefen**.
+**Morgenblick 06.09., 05:13Z.** Erste Spur fertig (51.961 indexiert, 0 failed),
+Einbettung bei 46.853/51.961, Ende gegen 05:45Z erwartet. Waechter-Leser
+`42c-lesen.py` las embedded falsch (immer 0): Suchlast im Nachlauf um 05:15Z
+manuell gefahren (p95 1.129 ms, haelt), Waechter korrigiert neu gestartet.
+memory.events zeigt max=1504 bei oom=0, anon-Spitze bisher 1.562,7 MB.
+Weckwort weiterhin: **semantiklauf pruefen**.
+
 Fertigmeldung der Box: `/home/ubuntu/work/semantiklauf/00-FERTIG`.
 
 Belegt vor dem Anstoss: das Abbild `06-11-arm` traegt den Stand des
