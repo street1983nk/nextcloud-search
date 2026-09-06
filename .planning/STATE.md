@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 06.1 (launch-haertung-vor-der-store-abgabe) — EXECUTING
-Plan: 17 of 21 complete
-Status: Executing Phase 06.1 (Wellen 3+4 fast fertig; 16 laeuft, dann 15, 17, Checkpoints 18/19)
-Last activity: 2026-09-06 abends -- ALLE CI-GATES GRUEN auf 9132d29 inkl. HaRP-Store-Weg Ende-zu-Ende; 4 Debug-Funde gefixt (root.crt-Newline, DI-05-36-Falsch-Rot inkl. uv-pidfile, Routes-Annahme widerlegt -> differenzielle Probe, disk-full-Abbau-Rennen)
+Plan: 20 of 21 complete
+Status: Executing Phase 06.1 (nur noch Checkpoints 18/19, warten auf Owner: Anfahrt-Freigabe + Kostendeckel fuer die Box)
+Last activity: 2026-09-07 frueh -- Audit-Merge 98e6d79, ALLE 6 WORKFLOWS GRUEN; Audits: Sec 0/0/1/3, Bugs 0/2/2/2, Perf 0/0/1/1, alles ab MEDIUM gefixt (stiller Semantik-Totalausfall bei MemoryError, FINDLING_COMPOUND_DICT-Zusage, Summendeckel DI-06.1-08, Wartezeit 0,561s->0,001s); DIs bis 18
 
 **Zwischenstand 06-11, 2026-09-05T10:57Z.** Der Volllauf mit Semantik ist um
 10:47:54Z angestossen und laeuft unbeaufsichtigt auf der AWS-Box
