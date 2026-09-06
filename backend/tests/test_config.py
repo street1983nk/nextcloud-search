@@ -540,7 +540,10 @@ def test_a_chunk_size_above_the_context_window_falls_back(
     assert current.embed_chunk_tokens == EMBED_CHUNK_TOKENS
     assert current.embed_chunk_tokens + EMBED_SPECIAL_TOKENS <= EMBED_CONTEXT_TOKENS
     assert "FINDLING_EMBED_CHUNK_TOKENS" in caplog.text
-    assert value not in caplog.text
+    # Read on the messages and not on caplog.text: the latter carries the source
+    # line number of the warning, so a value of "0" matched a line number of 701
+    # and the case failed the day an unrelated screw was added above it.
+    assert not [message for message in caplog.messages if value in message]
 
 
 def test_a_smaller_chunk_size_is_taken(monkeypatch: pytest.MonkeyPatch) -> None:

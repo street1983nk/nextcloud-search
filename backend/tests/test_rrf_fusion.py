@@ -304,10 +304,11 @@ def test_a_list_entirely_beyond_the_ceiling_becomes_the_empty_list() -> None:
 
 
 def test_the_band_is_measured_against_the_smallest_and_not_against_the_first() -> None:
-    # The list is handed in unsorted on purpose. A band counted from the first
-    # entry would keep 95.0 here, because 82 plus 14 is 96, and it would drop
-    # 70.0 nowhere: the answer would depend on who sorted the list.
-    assert gated([82.0, 70.0, 86.0]) == [1]
+    # The list is handed in unsorted on purpose, and the smallest entry is the
+    # second one. Counted from the smallest, the band reaches to 84 and 86.0
+    # falls out; counted from the first entry it would reach to 96 and keep all
+    # three. The answer would then depend on who sorted the list.
+    assert gated([82.0, 70.0, 86.0]) == [0, 1]
 
 
 def test_an_empty_neighbour_list_stays_empty() -> None:
