@@ -241,7 +241,12 @@ geloeschte Dokumente unter ihrem letzten Verdikt weitergezaehlt werden. Die
 zweite Fassung ist die billigere und die ehrlichere.
 ---
 
-## DI-06.1-07 (gefunden in Plan 06.1-06): sechs Stellen nennen den Korpus noch mit dreiunddreissig Dateien
+## DI-06.1-07 (gefunden in Plan 06.1-06, TEILERLEDIGT durch 06.1-15): sechs Stellen nennen den Korpus noch mit dreiunddreissig Dateien
+
+**Teilerledigung 07.09. (Plan 06.1-15):** docs/testing.md ist erledigt (Zahl durch
+Verweis auf testdata/CORPUS.md ersetzt). Offen: docs/dev-setup.md Z. 238,
+docs/ocr.md Z. 261, docs/performance.md Z. 2223, scripts/dev/build_load_corpus.py
+Z. 4/11/1167.
 
 **Gefunden:** beim Nachziehen der Zahlen fuer Task 3. Der Korpus hat mit diesem
 Plan 39 Dateien statt 33, und 24 PDFs statt 19.
@@ -473,3 +478,14 @@ splitCerts verliert die CI-CA) als eigenen Befund samt lokaler Reproduktion.
 Zum Merge-Zeitpunkt war die Ursache bereits auf main behoben (8a20a1f:
 printf-Newline-Wache plus verankerte Zaehlung). Die unabhaengige
 Zweitreproduktion bestaetigt Diagnose und Fix; kein offener Rest.
+
+---
+
+## DI-06.1-17 (Plan 06.1-15): die Gastnutzer-Probe prueft ihre eigene Voraussetzung nicht
+
+**Was:** Eine Instanz mit stillgelegtem Container hat ebenfalls eine leere
+Warteschlange; der Vergleich meldet dann missing statt "die Probe konnte nicht
+stattfinden". Abhilfe: Eigentuemer-Vergleich ueber den freigegebenen Marker vor
+dem ersten Gastvergleich.
+
+**Wohin:** Plan 06.1-19 (Owner-Sichtprobe), wo die Probe ohnehin gefahren wird.
