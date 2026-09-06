@@ -59,6 +59,7 @@ from typing import TYPE_CHECKING, Final
 from tantivy import Document, Index, IndexWriter, Query, Schema
 
 from findling.config import settings
+from findling.index.analyzer import normalize
 from findling.index.schema import (
     FIELD_BODY_DE,
     FIELD_BODY_EN,
@@ -226,6 +227,21 @@ class IndexBatchWriter:
         queue redelivers a batch that was interrupted after the commit and before
         the acknowledgement, and without the deletion that redelivery would leave
         the same file in the index twice.
+
+        **The three text values are normalised here, and this is one of the two
+        places that call the helper.** A file name with an umlaut arrives in two
+        Unicode spellings depending on the client that wrote it, and two
+        spellings are two names for an engine that compares bytes. The whole
+        reasoning, with the measurement, stands at
+        :func:`findling.index.analyzer.normalize`; what matters here is that the
+        write side and the question side call the same function, because a
+        normalisation on one side only moves the empty result list to the other
+        client instead of removing it.
+
+        The extension is not normalised. It is a suffix taken off the name, it
+        goes into the raw tokenizer, and it is ASCII in every case this app
+        accepts. The path is not normalised either: its analyzer produces no
+        token at all, so there is nothing there to compare.
         """
         writer = self._require_open()
         # Through the schema, so the term carries the type of the field. The
@@ -235,20 +251,24 @@ class IndexBatchWriter:
         # with a lower opstamp only, so the insert right below survives this.
         writer.delete_documents_by_query(Query.term_query(self._schema, FIELD_FILE_ID, record.file_id))
 
+        name = normalize(record.name)
+        title = normalize(record.title)
+        body = normalize(record.body)
+
         document = Document()
         document.add_unsigned(FIELD_FILE_ID, record.file_id)
         document.add_unsigned(FIELD_STORAGE_ID, record.storage_id)
-        document.add_text(FIELD_NAME, record.name)
-        document.add_text(FIELD_TITLE, record.title)
+        document.add_text(FIELD_NAME, name)
+        document.add_text(FIELD_TITLE, title)
         document.add_text(FIELD_PATH, record.path)
         document.add_text(FIELD_EXT, record.ext)
         # body_de is the only stored copy of the text in the whole system, so it
         # carries the content whatever the language setting says. The setting
         # decides about the second, index only pipeline: with FINDLING_LANGUAGES
         # set to de the English field stays empty and the index shrinks by it.
-        document.add_text(FIELD_BODY_DE, record.body)
+        document.add_text(FIELD_BODY_DE, body)
         if self._index_english:
-            document.add_text(FIELD_BODY_EN, record.body)
+            document.add_text(FIELD_BODY_EN, body)
         document.add_integer(FIELD_MTIME, record.mtime)
         writer.add_document(document)
 
@@ -257,8 +277,11 @@ class IndexBatchWriter:
         # ascii document gets its exact length for free; everything else gets the
         # four byte per code point ceiling of UTF-8. The reasoning behind the
         # bound, its direction and why it does not move the flush point stands at
-        # the pending_bytes property.
-        self._pending_bytes += len(record.body) if record.body.isascii() else _MAX_UTF8_BYTES * len(record.body)
+        # the pending_bytes property. Counted on the normalised text, because
+        # that is the string the writer holds: composition can shorten a document
+        # by one code point per umlaut, and a bound must not describe a value
+        # that was never written.
+        self._pending_bytes += len(body) if body.isascii() else _MAX_UTF8_BYTES * len(body)
 
     def drop_document(self, file_id: int) -> None:
         """Take one file out of the index and out of the vector stock.
