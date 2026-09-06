@@ -45,3 +45,10 @@ und ohne Bezug zu seinem Plan (Suitenstaende 1372 bzw. 1403 gruen, 13
 uebersprungen, 1 rot). Der Test bleibt als Erinnerung rot, bis Pflichtpunkt 7
 die Zahl nach der Nachmessung aus Plan 06.1-18 in allen drei Dateien neu setzt
 (Plan 06.1-13 fuer die Formalien, Plan 06.1-18 Task 4 fuer die Zahl).
+
+**ZWISCHENSTAND GESCHLOSSEN (Orchestrator, Welle 1, 06.09.2026):** Beide info.xml
+tragen jetzt den 06-11-Satz in EN/DE/FR in der D-H2-Form, das Gate vergleicht
+gegen den 06-11-Satz, die Suite ist gruen. Grund fuer den Eingriff ausserhalb
+eines Plans: ohne ihn waere die CI der Hauptlinie bis Welle 7 rot gewesen und
+haette jede echte Regression der Wellen 2 bis 6 verdeckt. Plan 06.1-18 Task 4
+ersetzt die Zahl nach der Nachmessung an denselben drei Stellen plus Konstante.

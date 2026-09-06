@@ -357,7 +357,7 @@ Etablierte Muster, Research kann entfallen: Event-Listener und Reconcile (Phase 
 **Goal:** Findling ist vor der ersten Store-Abgabe so robust und fehlerfrei, wie es mit allen erdenklichen Massnahmen geht: Fehler- und Randpfade, Rechte-Grenzen, Betriebsuebergaenge, Ressourcengrenzen, Fremdinstallation ueber den Store-Weg und die Store-Vorgaben sind getestet statt angenommen, die drei Audits sind erneut gefahren und gefixt, und die Speicherzahl der Store-Aussage ist nach dem Fix der zweiten Modellinstanz neu gemessen (Owner-Regel 06.09.2026).
 **Requirements**: SEM-01, SEM-03, PKG-05 (Haertung der bestehenden Anforderungen, keine neuen Features); Kontext in 06.1-CONTEXT.md
 **Depends on:** Phase 6 bis Plan 06-11. **Plan 06-12 (Store-Abgabe) laeuft erst NACH der Owner-Abnahme dieser Phase.**
-**Plans:** 19 plans in 8 Wellen
+**Plans:** 5/19 plans executed
 
 **Success Criteria** (what must be TRUE):
   1. Jede in 06.1-CONTEXT.md benannte Massnahme hat einen Test, der rot sein kann, und einen Beleg im Repo; keine Massnahme ist nur "manuell geprueft"
@@ -367,13 +367,13 @@ Etablierte Muster, Research kann entfallen: Event-Listener und Reconcile (Phase 
   5. Der Owner hat die Phase nach eigener Sichtprobe abgenommen; erst danach beginnt Plan 06-12
 
 Plans:
-- [ ] 06.1-01-PLAN.md , Welle 1 , Bewaffnung ueberlebt den Neustart (DI-05-36), mit Gegenprobe in CI
-- [ ] 06.1-02-PLAN.md , Welle 1 , eine Embedding-Engine fuer Suchseite und Arbeiter statt zweier Instanzen
-- [ ] 06.1-03-PLAN.md , Welle 1 , Checkpoint: die sechs Owner-Entscheidungen E-H1 bis E-H6
+- [x] 06.1-01-PLAN.md , Welle 1 , Bewaffnung ueberlebt den Neustart (DI-05-36), mit Gegenprobe in CI
+- [x] 06.1-02-PLAN.md , Welle 1 , eine Embedding-Engine fuer Suchseite und Arbeiter statt zweier Instanzen
+- [x] 06.1-03-PLAN.md , Welle 1 , Checkpoint: die sechs Owner-Entscheidungen E-H1 bis E-H6
 - [ ] 06.1-04-PLAN.md , Welle 2 , Wortlisten-Cache und die RSS-Ratsche als Dauerwaechter in CI
-- [ ] 06.1-05-PLAN.md , Welle 1 , Randpfade der Extraktion: Encodings, falsche Endungen, Unicode-Namen
+- [x] 06.1-05-PLAN.md , Welle 1 , Randpfade der Extraktion: Encodings, falsche Endungen, Unicode-Namen
 - [ ] 06.1-06-PLAN.md , Welle 3 , Randpfade im Korpus: Dekompressionsbombe und boesartige PDF-Strukturen
-- [ ] 06.1-07-PLAN.md , Welle 1 , Paritaet um Papierkorb, Versionen, Link-Share und die Datei, die sich aendert
+- [x] 06.1-07-PLAN.md , Welle 1 , Paritaet um Papierkorb, Versionen, Link-Share und die Datei, die sich aendert
 - [ ] 06.1-08-PLAN.md , Welle 2 , Gruppenbeitritt: Listener und Paritaets-Szenario (DI-05-11)
 - [ ] 06.1-09-PLAN.md , Welle 2 , Versionsfenster an allen Fundstellen, CI-Matrix und Drift zur Laufzeit
 - [ ] 06.1-10-PLAN.md , Welle 3 , der Stempel der Einbettungsmarke (DI-06-02, DI-06-03)
