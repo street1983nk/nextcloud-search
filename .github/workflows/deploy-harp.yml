@@ -407,10 +407,17 @@ jobs:
 
       # Only for the registration. The release archive carries
       # backend/appinfo/info.xml unchanged, because AppAPI reads the route list
-      # out of the archive at installation time: an archive with a rewritten
-      # info.xml would install an app without its search route and without an
-      # error message. The comment head of that file says the same thing next to
-      # the block it concerns.
+      # out of the file the registration is handed and writes it into
+      # oc_ex_apps_routes, and the store database never sees that block at all
+      # (pre-info.xslt drops it). An archive with a rewritten info.xml therefore
+      # installs an app whose declared surface is not the one this repository
+      # declares.
+      #
+      # What it does NOT do, corrected on 2026-09-06 after run 34059434556
+      # measured the opposite on all three server versions: it does not stop the
+      # search. Store install 5 below carries the measurement and the two code
+      # paths that explain it. The comment head of backend/appinfo/info.xml still
+      # carries the old wording and is corrected in its own change.
       - name: Build the temporary info.xml that points at the local registry
         run: |
           sed -e "s|<registry>ghcr.io</registry>|<registry>${LOCAL_REGISTRY}</registry>|" \
@@ -1517,24 +1524,60 @@ jobs:
             echo "ARCHIVE_INFO_XML=${archive_info}"
           } >> "${GITHUB_ENV}"
 
-      # The falsification of the whole ExApp half, and it runs before the real
-      # registration on purpose: an empty search after a stripped archive means
-      # nothing on its own, and the step after this one is where the same call
-      # with the same term comes back with a hit.
+      # What an archive without its routes block really produces, and it runs
+      # before the real registration on purpose: the step after this one
+      # registers the same app with the block in place and counts the same table
+      # again, so the two together are one differential measurement.
       #
-      # What is being falsified: pre-info.xslt drops the routes block, so the
-      # store database never sees the five routes of this container and AppAPI
-      # reads them out of the archive at installation time. If that were not so,
-      # an archive without the block would install and search exactly like one
-      # with it, and the byte for byte copy in scripts/release/store-archive.sh
-      # would be a superstition.
+      # This step asserted something else until 2026-09-06, and the correction is
+      # written down rather than quietly swapped, because the same claim was
+      # copied into two other comments: "an archive whose info.xml lost the block
+      # installs an app with no search route and no error message, so its search
+      # finds nothing". Run 34059434556 measured the opposite on all three server
+      # versions: HTTP 200 with the canary, ten seconds after the registration.
+      # The reason is that there are two paths into the container and the block
+      # governs only one of them.
       #
-      # Both outcomes of the registration are a finding rather than an error: an
-      # archive whose info.xml lost the block may fail to install, or it may
-      # install into an app with no search route and no error message. The second
-      # is the one this project is afraid of, and it is the one that must not
-      # produce a hit.
-      - name: Store install 5, an archive without its routes block finds nothing
+      #   The companion never uses the route list. ExAppService::proxyRequest
+      #   calls OCA\AppAPI\PublicFunctions::exAppRequest, AppAPI signs the call
+      #   with EX-APP-ID, EX-APP-VERSION, AUTHORIZATION-APP-API, harp-shared-key,
+      #   ex-app-host and ex-app-port (AppAPICommonService::
+      #   buildAppAPIAuthHeaders) and sends it to
+      #   {nextcloud_url}/exapps/findling_backend/search
+      #   (DockerActions::resolveExAppUrl). HaRP sees all six headers and takes
+      #   the branch "route_allowed = True  # We skip routes checking for AppAPI
+      #   signed requests" (haproxy_agent.py of the image pinned in HARP_IMAGE,
+      #   HARP_VERSION 0.4.5). Neither AppAPIService::requestToExApp nor HaRP
+      #   looks at the route table on that path.
+      #
+      #   The route list governs the other path: a request that arrives at
+      #   /exapps/findling_backend/... without those headers, from a browser
+      #   session, an app password or basic auth. There HaRP matches
+      #   re.match(route.url, target_path) and answers 404 when nothing matches.
+      #
+      # So the block is not what makes the search work, and the archive rule
+      # needs the reason it actually has: AppAPI reads the routes out of the
+      # info.xml the registration is handed, and out of nothing else, and writes
+      # them into oc_ex_apps_routes (ExAppService::getAppInfo does
+      # file_get_contents on --info-xml and only asks the store when that option
+      # is absent; registerExApp then calls registerExAppRoutes). That table is
+      # what this step measures, because it is the only place where the
+      # difference between the two archives is observable at all.
+      #
+      # And why this step does not measure the second path over HTTP, which would
+      # have been the obvious repair: the five route urls of this container are
+      # bare paths ("search", "status"), HaRP matches them against a target path
+      # that starts with a slash, and re.match("search", "/search") is None. That
+      # path therefore answers 404 with the block and 404 without it, and a probe
+      # built on it would measure nothing. The Nextcloud side proxy has a legacy
+      # bare path fallback for exactly this case (ExAppProxyController), HaRP has
+      # none. That is a finding of its own, it belongs in the backlog and not in
+      # this step: the route urls want the canonical "^/search$" form.
+      #
+      # Both outcomes of the registration remain a finding rather than an error:
+      # an archive whose info.xml lost the block may fail to install, or it may
+      # install with an empty route table. The second is the one measured here.
+      - name: Store install 5, an archive without its routes block registers without them
         run: |
           sed '/<routes>/,/<\/routes>/d' "${STORE_INFO_XML}" > "${RUNNER_TEMP}/info-noroutes.xml"
           routes=$(grep -c '<route>' "${RUNNER_TEMP}/info-noroutes.xml" || true)
@@ -1550,6 +1593,29 @@ jobs:
           if [ "${status}" -ne 0 ]; then
             echo "an archive without its routes block does not even install (exit ${status}), which is the same finding one layer earlier"
           else
+            # Measurement 1, the load bearing one. The table AppAPI fills from
+            # the file it was handed has to be empty, because the file carries no
+            # route. A row here would mean the routes came from somewhere else
+            # than the registration file, and the byte for byte copy in
+            # scripts/release/store-archive.sh would be guarding the wrong thing.
+            rows=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+              "SELECT COUNT(*) FROM oc_ex_apps_routes WHERE appid = 'findling_backend';")
+            echo "oc_ex_apps_routes carries ${rows} row(s) for findling_backend"
+            if [ "${rows}" != "0" ]; then
+              echo "the registration produced ${rows} route rows although the info.xml it was handed carries none, so AppAPI takes the routes from somewhere else than the file"
+              sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+                "SELECT url, verb, access_level FROM oc_ex_apps_routes WHERE appid = 'findling_backend' ORDER BY url;"
+              exit 1
+            fi
+            echo "no route row: the registration took the routes from the file and the file had none"
+
+            # Measurement 2, the one that used to be the assertion and is now the
+            # observation. The search has to keep working, because the companion
+            # reaches the container over the signed AppAPI path that HaRP exempts
+            # from route checking. If this ever goes empty or unreadable, either
+            # AppAPI or HaRP changed that behaviour, and the paragraph above this
+            # step plus the comment head of backend/appinfo/info.xml have to be
+            # measured again before anything else is believed.
             code=$(curl -s -o noroutes.json -w '%{http_code}' \
               -u "testuser:${TESTUSER_PASS}" \
               -H 'OCS-APIRequest: true' \
@@ -1558,16 +1624,16 @@ jobs:
             cat noroutes.json
             echo "the search answered HTTP ${code}"
             # Fail closed, and the order of the branches is what makes it fail
-            # closed: only an answer that is a valid OCS envelope with no entries
-            # passes. An unparsable body falls into the last branch rather than
-            # into the middle one, so a broken answer cannot be read as an empty
-            # one.
+            # closed: only a valid OCS envelope carrying exactly one canary entry
+            # passes. An unparsable body makes jq exit non zero and falls into the
+            # last branch, so a broken answer cannot be read as a good one.
             if [ "${code}" != "200" ]; then
-              echo "the app is installed and the search answers HTTP ${code}, so the missing route breaks the search outright"
-            elif jq -e '.ocs.data.entries | length == 0' noroutes.json > /dev/null; then
-              echo "installed without a search route, and the search stays empty, which is exactly the silent failure the archive rule prevents"
+              echo "the search answers HTTP ${code} although the signed path does not depend on the route table, so something other than the missing block is broken"
+              exit 1
+            elif jq -e '[.ocs.data.entries[] | select(.title == "findling-canary")] | length == 1' noroutes.json > /dev/null; then
+              echo "installed with an empty route table, and the search still answers with the canary: the routes block does not gate the signed path"
             else
-              echo "the search answered 200 with entries or with something jq cannot read, although the archive carries no search route; either AppAPI does not read the routes out of the archive or this probe is measuring the wrong answer"
+              echo "the search answered 200 without exactly one canary entry, or with something jq cannot read; the signed path was expected to answer independently of the route table, so this is a change in AppAPI or HaRP and not a finding about the archive"
               exit 1
             fi
           fi
@@ -1647,12 +1713,40 @@ jobs:
             exit 1
           fi
 
+          # The other half of the measurement of Store install 5, and the reason
+          # that step means anything: the same table, the same app, the same
+          # instance, one registration later with the block in place. The five
+          # routes of backend/appinfo/info.xml have to be there with their verbs
+          # and their access levels (PUBLIC 0, USER 1, ADMIN 2, see
+          # ExAppService::mapExAppRouteAccessLevelNameToNumber), because that is
+          # what "AppAPI reads the routes out of the file the registration is
+          # handed" means when it is measured instead of asserted. Compared as
+          # one string so that a missing row, a changed verb and a widened access
+          # level all show up as the same failure. The order comes from sort and
+          # not from the query, because group_concat has no defined order and a
+          # comparison that depends on one would be flaky rather than strict.
+          #
+          # A sixth route turns this step red, and that is the point: widening
+          # the reachable surface of the container is a decision, and it has to
+          # be made here as well as in backend/appinfo/info.xml.
+          routes_now=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT url || ':' || verb || ':' || access_level FROM oc_ex_apps_routes WHERE appid = 'findling_backend';" \
+            | sort | tr '\n' ' ' | sed -e 's/ *$//')
+          echo "oc_ex_apps_routes after the archive registration: ${routes_now}"
+          routes_want='diagnose:GET:2 rates:GET:2 search:POST:1 snippets:POST:1 status:GET:2'
+          if [ "${routes_now}" != "${routes_want}" ]; then
+            echo "the archive registration produced '${routes_now}' instead of '${routes_want}', so the routes of the installed app are not the ones the archive declares"
+            exit 1
+          fi
+          echo "the five routes of the archive arrived with their verbs and access levels, and Store install 5 measured zero rows for the same file without the block"
+
           # The same canary call the developer path makes, and the same three
           # assertions: exactly one entry, the title, and a subline that carries
           # the host name and the timestamp of the process that produced it plus
           # the user id that only the signed AppAPI header could have carried
-          # into the backend. A hard coded hit in PHP cannot pass this, and
-          # neither can an installation whose search route never arrived.
+          # into the backend. A hard coded hit in PHP cannot pass this. What it
+          # does not prove, and what Store install 5 measured instead, is
+          # anything about the route table: the signed path does not consult it.
           curl -sf -u "testuser:${TESTUSER_PASS}" \
             -H 'OCS-APIRequest: true' \
             -H 'Accept: application/json' \
