@@ -49,13 +49,16 @@ along accordingly. Switching this instance to the system cron is the difference
 between hours and weeks. "occ findling:index --status" shows how far it has
 come.
 
-What it costs in memory, measured: A full index and OCR run over 50,000 files
-and 20 GB on a 4-GB ARM64 box peaked at 422 MB of resident anonymous memory,
-under a hard 2 GB limit enforced by the kernel, with no OOM kill. That is the
-target hardware and not a stand in, and the run was carried out under a
-ceiling the kernel enforced, so the limit was never merely respected on
-average. The report docs/performance.md in the source code carries the method,
-the curve, the corpus and the x86 rehearsal next to it.
+What it costs in memory, measured: A full index, OCR and embedding run over
+50,000 files and 20 GB on a 4-GB ARM64 box peaked at 1,838 MB of resident
+anonymous memory, under a hard 2 GB limit enforced by the kernel, with no OOM
+kill and no restart. That is the target hardware and not a stand in. Two
+honest sentences belong next to the number: the kernel counters for memory
+damage stayed at zero, but the file cache of the index pressed against the
+limit repeatedly, so the limit was respected and not left untouched; and most
+of that memory is the semantic search, since the same run without embeddings
+peaked at 422 MB. The report docs/performance.md in the source code carries
+the method, the curve, the corpus and the x86 rehearsal next to it.
 
 Privacy: everything runs locally in your own instance. No file content ever
 leaves the server, and there is no telemetry of any kind, not even a version
@@ -82,13 +85,17 @@ Umstellung dieser Instanz auf den System-Cron ist der Unterschied zwischen
 Stunden und Wochen. "occ findling:index --status" zeigt, wie weit er gekommen
 ist.
 
-Was es an Arbeitsspeicher kostet, gemessen: Ein vollständiger Index- und
-Texterkennungslauf über 50.000 Dateien und 20 GB auf einer 4-GB-Box mit ARM64
-hatte seine Spitze bei 422 MB anonymem Arbeitsspeicher, unter einer harten
-Grenze von 2 GB, die der Kernel durchsetzt, und ohne einen einzigen Abschuss
-wegen Speichermangels. Das ist die Zielhardware und kein Ersatz, und die
-Grenze wurde nicht nur im Mittel eingehalten, sondern kein einziges Mal
-berührt. Der Bericht docs/performance.md im Quellcode nennt die Methode, die
+Was es an Arbeitsspeicher kostet, gemessen: Ein vollständiger Index-,
+Texterkennungs- und Einbettungslauf über 50.000 Dateien und 20 GB auf einer
+4-GB-Box mit ARM64 hatte seine Spitze bei 1.838 MB anonymem Arbeitsspeicher,
+unter einer harten Grenze von 2 GB, die der Kernel durchsetzt, ohne einen
+einzigen Abschuss wegen Speichermangels und ohne Neustart. Das ist die
+Zielhardware und kein Ersatz. Zwei ehrliche Sätze gehören neben die Zahl: Die
+Kernel-Zähler für Speicherschäden blieben bei null, aber der Dateicache des
+Index drückte wiederholt gegen die Grenze, sie wurde also eingehalten und
+nicht unberührt gelassen; und der größte Teil dieses Speichers ist die
+semantische Suche, denn derselbe Lauf ohne Einbettungen hatte seine Spitze bei
+422 MB. Der Bericht docs/performance.md im Quellcode nennt die Methode, die
 Kurve, den Korpus und daneben die x86-Generalprobe.
 
 Datenschutz: Alles läuft lokal in Ihrer eigenen Instanz. Kein Dateiinhalt
@@ -118,13 +125,17 @@ Basculer cette instance sur le cron système, c'est la différence entre des
 heures et des semaines. "occ findling:index --status" montre où elle en est.
 
 Ce que cela coûte en mémoire, mesuré : une indexation complète avec
-reconnaissance optique portant sur 50 000 fichiers et 20 Go sur une machine
-ARM64 de 4 Go a culminé à 422 Mo de mémoire anonyme résidente, sous une limite
-stricte de 2 Go imposée par le noyau, et sans la moindre interruption pour
-manque de mémoire. C'est le matériel cible et non un remplaçant, et la limite
-n'a pas seulement été respectée en moyenne : elle n'a jamais été atteinte. Le
-rapport docs/performance.md dans le code source donne la méthode, la courbe,
-le corpus et, à côté, la répétition sur x86.
+reconnaissance optique et plongements portant sur 50 000 fichiers et 20 Go sur
+une machine ARM64 de 4 Go a culminé à 1 838 Mo de mémoire anonyme résidente,
+sous une limite stricte de 2 Go imposée par le noyau, sans la moindre
+interruption pour manque de mémoire et sans redémarrage. C'est le matériel
+cible et non un remplaçant. Deux phrases honnêtes accompagnent ce chiffre :
+les compteurs du noyau pour les dommages mémoire sont restés à zéro, mais le
+cache de fichiers de l'index a pressé la limite à plusieurs reprises, elle a
+donc été respectée et non laissée intacte ; et l'essentiel de cette mémoire
+revient à la recherche sémantique, puisque la même exécution sans plongements
+a culminé à 422 Mo. Le rapport docs/performance.md dans le code source donne
+la méthode, la courbe, le corpus et, à côté, la répétition sur x86.
 
 Confidentialité : tout fonctionne localement dans votre propre instance. Aucun
 contenu de fichier ne quitte le serveur, et il n'y a aucune télémétrie, pas même

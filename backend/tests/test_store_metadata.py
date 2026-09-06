@@ -26,7 +26,7 @@ the store schema and of one measured trap of the sister project:
   dash, no en dash and no emoji.
 
 One more thing is checked that is not a schema rule at all. The measured
-sentence of plan 05-14 lives in three places: ``README.md`` and the English
+sentence of plan 06-11 lives in three places: ``README.md`` and the English
 description of both halves. Three places for one number drift apart, and the
 store description is the one where nobody would notice; so the equality is
 mechanical here rather than remembered.
@@ -110,13 +110,15 @@ RAW_MEDIA_PREFIX = "https://raw.githubusercontent.com/street1983nk/nextcloud-sea
 # images and therefore the number.
 SCREENSHOT_MINIMUM = 1
 
-# The sentence of plan 05-14, quoted and not paraphrased. It is compared after
+# The sentence of plan 06-11 (the semantic full run, superseding 05-14), quoted and
+# not paraphrased. It is compared after
 # the whitespace of every side has been collapsed, because README.md wraps its
 # lines at a different width than an info.xml does and a line break is not a
 # difference in what the sentence says.
 MEASURED_SENTENCE = (
-    "A full index and OCR run over 50,000 files and 20 GB on a 4-GB ARM64 box peaked at 422 MB of "
-    "resident anonymous memory, under a hard 2 GB limit enforced by the kernel, with no OOM kill."
+    "A full index, OCR and embedding run over 50,000 files and 20 GB on a 4-GB ARM64 box peaked at "
+    "1,838 MB of resident anonymous memory, under a hard 2 GB limit enforced by the kernel, with no OOM "
+    "kill and no restart."
 )
 
 
@@ -306,7 +308,7 @@ def scan_measured_sentence(name: str, source: str) -> list[str]:
     comparison collapses whitespace first, because the three files wrap their
     lines differently and a line break says nothing.
     """
-    return [] if MEASURED_SENTENCE in collapse(source) else [f"{name}: does not carry the measured sentence of 05-14"]
+    return [] if MEASURED_SENTENCE in collapse(source) else [f"{name}: does not carry the measured sentence of 06-11"]
 
 
 def _sources() -> list[tuple[str, str]]:
