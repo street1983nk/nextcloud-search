@@ -125,3 +125,32 @@ reicht, ist eine bewusste Entscheidung mit einem Satz in `docs/embeddings.md`:
 ein Modellwechsel verlangt `occ findling:index --restart`, und die App sagt das,
 statt es zu können. Auch diese Alternative ist eine Entscheidung und keine
 Lücke, aber sie muss getroffen und aufgeschrieben werden.
+
+**Geschlossen am 06.09.2026 (Plan 06.1-10), gilt für DI-06-02 und DI-06-03.**
+Der Owner hat als Entscheid E-H4 die teurere Form gewählt: es wird gestempelt,
+die billige Alternative wurde ausdrücklich nicht genommen und auch nicht
+angefangen. Umgesetzt im Poller neben `_stamp_if_rebuilt`, auf dem leeren
+Durchgang und in keiner Statusroute:
+
+- **DI-06-03:** eine nie geschriebene Marke wird beansprucht, sobald
+  `embedded == indexed` bei `indexed > 0` gilt, gezählt über
+  `VectorStore.document_count()` gegen das neue `Store.indexed_alive()`. Bei
+  `indexed == 0` wird nicht gestempelt.
+- **DI-06-02:** ein Drift der Marke ruft `VectorStore.forget_all()`, dann die
+  neue Marke, dann die Wiedervorlage der Dokumente in Bändern von 500 hinter
+  einem Zeiger in `meta` (`embedding_backlog_at`). Damit ist der zweite Zweig
+  der oben genannten Schliessform gewählt: "die `embedding_version`-Marke
+  bekommt beim Drift einen eigenen Weg, der `forget_all` ruft".
+- `reset_for_reindex` bleibt bewusst ohne Aufrufer im Produktivcode, und das ist
+  eine Entscheidung und kein Rest. Die Methode löscht Verdikte älter als eine
+  Generation, und genau das wäre auf dem Vektorweg falsch: mitten in einem
+  laufenden Volltext-Neuaufbau würde `verdicts_older_than` danach null melden,
+  und `stamp_after_rebuild` erklärte den Neuaufbau für durch, obwohl er es nicht
+  ist (T-05-48). Der Vektorweg braucht das Leeren des Bestands und nicht das
+  Vergessen von Verdikten, also ruft er `forget_all` direkt.
+- `expected_versions()` ist unverändert, `VECTOR_ONLY_MARKS` trennt weiter, und
+  ein Testfall hält beides fest.
+
+Zusicherungen in `backend/tests/test_embedding_track.py`, Abschnitt "the
+embedding mark"; der Weg für einen Verwalter in `docs/embeddings.md`,
+Abschnitt 8.
