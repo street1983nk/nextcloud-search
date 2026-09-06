@@ -489,3 +489,14 @@ stattfinden". Abhilfe: Eigentuemer-Vergleich ueber den freigegebenen Marker vor
 dem ersten Gastvergleich.
 
 **Wohin:** Plan 06.1-19 (Owner-Sichtprobe), wo die Probe ohnehin gefahren wird.
+
+---
+
+## DI-06.1-18 (Plan 06.1-17, Security-Audit, LOW): Passwoerter stehen in der Argumentliste zweier Dev-Skripte
+
+**Was:** scripts/dev/guest_parity.sh und scripts/dev/aio_install_check.sh nehmen
+Passwoerter als Kommandozeilenargument; auf einem Mehrbenutzersystem sind sie
+damit in der Prozessliste lesbar. Schliessform laut Audit: Umgebungsvariable
+oder stdin-Abfrage. Nur Dev-Werkzeuge, keine Auslieferung, deshalb LOW.
+
+**Wohin:** kleiner Folge-Fix oder zusammen mit Plan 06.1-19.
