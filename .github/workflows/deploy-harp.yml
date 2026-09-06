@@ -523,7 +523,7 @@ jobs:
       - name: The drift probe both directions share
         run: |
           companion=$(sed -n 's|.*<version>\([^<]*\)</version>.*|\1|p' \
-            findling-src/php/appinfo/info.xml | head -1)
+            apps/findling/appinfo/info.xml | head -1)
           if [ -z "${companion}" ]; then
             echo "no version in php/appinfo/info.xml, so there is nothing to drift away from"
             exit 1
