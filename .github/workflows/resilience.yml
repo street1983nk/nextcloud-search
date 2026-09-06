@@ -731,7 +731,8 @@ jobs:
           docker rm -f findling_measure
 
           # The only failure this part knows: a measurement that did not happen.
-          # A bad number is a result, an absent one is a broken job.
+          # A bad number is a result, an absent one is a broken job. The figures
+          # have to exist before the difference below can be stated at all.
           if [ "${first}" != "200" ] || [ "${second}" != "200" ]; then
             echo "the container did not answer both searches (${first}, ${second}), so there is nothing to compare"
             exit 1
@@ -740,6 +741,56 @@ jobs:
             echo "docker stats returned nothing, so the memory figures do not exist"
             exit 1
           fi
+
+          # docker stats prints "123.4MiB / 3.8GiB": the resident set of the
+          # container first, the ceiling of the machine second. Only the first
+          # figure belongs to this measurement. One named function turns it into
+          # bytes, so that the comparison below reads as a comparison instead of
+          # as a chain of string surgery.
+          to_bytes() {
+            reading="${1%%/*}"
+            reading="${reading// /}"
+            number="${reading%%[A-Za-z]*}"
+            unit="${reading##*[0-9.]}"
+            case "${unit}" in
+              B) factor=1 ;;
+              kB|KB|KiB) factor=1024 ;;
+              MB|MiB) factor=1048576 ;;
+              GB|GiB) factor=1073741824 ;;
+              *)
+                echo "docker stats reported the unit '${unit}', which this step cannot turn into bytes" >&2
+                return 1
+                ;;
+            esac
+            awk -v number="${number}" -v factor="${factor}" 'BEGIN { print int(number * factor) }'
+          }
+
+          before_bytes=$(to_bytes "${before}")
+          after_first_bytes=$(to_bytes "${after_first}")
+          growth=$(( after_first_bytes - before_bytes ))
+          echo "${MEASURE_PREFIX} rss first-search-growth-bytes ${growth}"
+
+          # Why there is no ceiling on that number here, although plan 06.1-04
+          # was written to put one here. The plan assumed that this step loads
+          # the second embedding instance, because EMBED_ENABLED is on and the
+          # model sits in the image. Measured on 2026-09-06 on amd64 with the
+          # state after plan 06.1-02, the difference is 241172 bytes, and the
+          # reason is not that the fix is that good: this container starts on an
+          # empty APP_PERSISTENT_STORAGE, so state.db and the index directory do
+          # not exist, read_side() returns None, and the search leaves before it
+          # reaches the word list, the automaton or the model. A ceiling over
+          # that difference would be a gate that cannot go red for the thing it
+          # names, which is the one shape this repository refuses everywhere
+          # else. Making it real means seeding a state database, an index and a
+          # vector store into this container, and that is a decision about what
+          # this job is, not a line of shell. It is written up in the summary of
+          # plan 06.1-04 and belongs to the owner.
+          #
+          # Until then the number is reported and not judged, so that the runs
+          # of this workflow collect the series the ceiling would have to come
+          # from. An inherited ceiling would be worse than none: the 276 MB of
+          # report 06-11 were measured on the arm64 box, and a ceiling taken
+          # from another machine measures the wrong machine.
 
       - name: Remove the measurement container
         if: always()
