@@ -8,9 +8,14 @@ mistake cannot reach a commit unnoticed.
 
 The last claim keeps the nc_py_api seam honest at the file level, which is the
 same property Gate A proves through the AST.
+
+The block at the end of this file is the contract of the arming mark (DI-05-36).
+It is the memory a container keeps of its own enable, and it is what decides
+whether a start that AppAPI did not order comes up indexing or comes up idle.
 """
 
 import asyncio
+import logging
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any, cast
@@ -19,7 +24,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import Corpus
-from findling.config import settings
+from findling.config import ARMED_MARKER_NAME, settings
 from findling.main import (
     APP,
     active_poller,
@@ -51,9 +56,13 @@ def test_enabled_handler_is_a_coroutine_function() -> None:
     assert asyncio.iscoroutinefunction(enabled_handler)
 
 
+@pytest.mark.usefixtures("volume")
 async def test_enabled_handler_reports_no_error_when_enabled() -> None:
     # AppAPI reads the return value as an error text; the empty string means "fine".
     # The handler must not touch nc, so passing None through a cast is safe here.
+    # The volume fixture is not decoration: since the handler leaves the arming
+    # mark behind, a test without its own volume would write into the shared
+    # fallback directory and hand the next process an armed container.
     result = await enabled_handler(True, cast("AsyncNextcloudApp", None))
 
     assert result == ""
@@ -213,6 +222,7 @@ def test_failing_reconcile_does_not_stop_the_poller(monkeypatch: pytest.MonkeyPa
         assert poller is not None
 
 
+@pytest.mark.usefixtures("volume")
 async def test_the_enabled_handler_arms_and_silences_the_reconcile(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _install(monkeypatch, _FakeReconcile())
 
@@ -244,6 +254,159 @@ def test_the_search_answers_while_a_reconcile_round_is_running(
 
     assert answer["candidates"]
     assert fake.rounds > 0
+
+
+# ---------------------------------------------------------------------------
+# The arming mark in the volume (DI-05-36). Until this existed, every start of
+# the container that did not come from AppAPI left a backend that answers
+# searches, reports its version, looks reachable on the status page and never
+# indexes another file again. Measured on the box: a machine restart, ten
+# minutes and forty seconds, zero passes of the poller, 130 rows waiting.
+#
+# The mark is the memory the container keeps of its own enable, and these tests
+# are the whole contract: it is written by the enable and by nothing else, it is
+# gone after a disable, it decides the arming at the next start, and no failure
+# of the volume it lives on may cost the start.
+# ---------------------------------------------------------------------------
+
+
+class _FakePoller(_FakeReconcile):
+    """A poller that records the arming and hands nothing back."""
+
+    async def unlock_held(self) -> int:
+        return 0
+
+
+def _install_poller(monkeypatch: pytest.MonkeyPatch, replacement: _FakePoller) -> _FakePoller:
+    # The real poller would open the index and the state database as soon as it
+    # is armed, and these tests are about the arming and not about a pass.
+    monkeypatch.setattr("findling.main.default_poller", lambda: replacement)
+    return replacement
+
+
+@pytest.mark.usefixtures("volume")
+async def test_enabling_leaves_a_mark_in_the_volume() -> None:
+    await enabled_handler(True, cast("AsyncNextcloudApp", None))
+
+    assert settings().armed_marker.is_file()
+
+
+@pytest.mark.usefixtures("volume")
+async def test_enabling_twice_leaves_the_same_single_mark() -> None:
+    # AppAPI sends the enable again after every update of the ExApp, so the
+    # second call is the normal case and not an edge case.
+    await enabled_handler(True, cast("AsyncNextcloudApp", None))
+    result = await enabled_handler(True, cast("AsyncNextcloudApp", None))
+
+    assert result == ""
+    assert settings().armed_marker.is_file()
+
+
+@pytest.mark.usefixtures("volume")
+async def test_disabling_removes_the_mark() -> None:
+    # The one property that keeps a switched off app switched off across a
+    # restart. If the mark survived the disable, the next start would arm a
+    # backend whose admin turned it off.
+    await enabled_handler(True, cast("AsyncNextcloudApp", None))
+    await enabled_handler(False, cast("AsyncNextcloudApp", None))
+
+    assert not settings().armed_marker.exists()
+
+
+@pytest.mark.usefixtures("volume")
+async def test_disabling_without_a_mark_is_harmless() -> None:
+    result = await enabled_handler(False, cast("AsyncNextcloudApp", None))
+
+    assert result == ""
+    assert not settings().armed_marker.exists()
+
+
+@pytest.mark.usefixtures("volume")
+async def test_the_mark_is_taken_from_the_settings_and_lands_beside_the_databases(volume: Path) -> None:
+    await enabled_handler(True, cast("AsyncNextcloudApp", None))
+
+    assert settings().armed_marker.parent == volume
+    assert settings().armed_marker == volume / ARMED_MARKER_NAME
+
+
+def test_no_file_name_is_spelled_out_in_the_entry_point() -> None:
+    # The path comes from settings(), like every other path of the volume. A
+    # literal here would be the second place the layout is decided, and the two
+    # would drift the first time the volume is rearranged.
+    source = (PACKAGE_ROOT / "main.py").read_text(encoding="utf-8")
+
+    assert f'"{ARMED_MARKER_NAME}"' not in source
+    assert f"'{ARMED_MARKER_NAME}'" not in source
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_lifespan_arms_both_tasks_when_the_mark_is_there(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The whole point of DI-05-36: a container that was enabled comes up
+    # enabled, without anybody switching the app off and on again.
+    poller = _install_poller(monkeypatch, _FakePoller())
+    reconcile = _install(monkeypatch, _FakeReconcile())
+    settings().armed_marker.write_text("", encoding="utf-8")
+
+    with TestClient(APP):
+        assert poller.armed is True
+        assert reconcile.armed is True
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_lifespan_stays_silent_without_a_mark(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The other half, and it is the reason the mark exists rather than a switch:
+    # a container that was deployed but never enabled holds no tantivy lock and
+    # touches no volume, exactly as before.
+    poller = _install_poller(monkeypatch, _FakePoller())
+    reconcile = _install(monkeypatch, _FakeReconcile())
+
+    with TestClient(APP):
+        assert poller.armed is False
+        assert reconcile.armed is False
+
+
+def test_a_volume_that_cannot_be_written_costs_neither_the_enable_nor_the_start(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    # A directory where the file belongs, because that fails with an OSError on
+    # every platform this suite runs on, while permission bits on a directory
+    # are not honoured for its owner on Windows. What it stands for is a volume
+    # that is full, read only or gone.
+    monkeypatch.setenv("APP_PERSISTENT_STORAGE", str(tmp_path))
+    settings.cache_clear()
+    poller = _install_poller(monkeypatch, _FakePoller())
+    try:
+        settings().armed_marker.mkdir()
+        with caplog.at_level(logging.WARNING, logger="findling"):
+            assert asyncio.run(enabled_handler(True, cast("AsyncNextcloudApp", None))) == ""
+            assert asyncio.run(enabled_handler(False, cast("AsyncNextcloudApp", None))) == ""
+            with TestClient(APP):
+                assert poller.armed is False
+    finally:
+        settings.cache_clear()
+
+    # The rule of this module: the class name of the failure and nothing that was
+    # read, which includes the path it was read from.
+    assert caplog.records
+    assert not any(str(tmp_path) in record.getMessage() for record in caplog.records)
+
+
+def test_a_root_that_does_not_exist_yet_starts_the_container_unarmed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # The first start of a fresh deployment: AppAPI has created the volume, but
+    # nothing in it. A start that raised here would be a container that never
+    # comes up at all, which is worse than the fault it would report.
+    poller = _install_poller(monkeypatch, _FakePoller())
+    monkeypatch.setenv("APP_PERSISTENT_STORAGE", str(tmp_path / "not-created-yet"))
+    settings.cache_clear()
+    try:
+        with TestClient(APP):
+            assert poller.armed is False
+    finally:
+        settings.cache_clear()
 
 
 def test_only_the_client_module_imports_nc_py_api() -> None:
