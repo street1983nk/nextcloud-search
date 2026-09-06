@@ -1142,6 +1142,403 @@ def build_zip_bomb_docx() -> bytes:
     return buffer.getvalue()
 
 
+WINANSI_FONT = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
+
+
+def _winansi_content(lines: Sequence[str]) -> bytes:
+    """A content stream of German lines for a page 420 by 160 points.
+
+    Same construction as build_german_pdf above and for the same reason: the
+    bytes of the literal string and the encoding declared on the font agree by
+    construction instead of by the leniency of the parser.
+    """
+    content = bytearray()
+    baseline = 120
+    for line in lines:
+        content += f"BT /F1 11 Tf 20 {baseline} Td (".encode("ascii")
+        content += line.encode("cp1252")
+        content += b") Tj ET\n"
+        baseline -= 22
+    return bytes(content)
+
+
+def build_open_action_javascript_pdf() -> bytes:
+    """A document that asks a reader to run a script the moment it is opened.
+
+    ``/OpenAction`` plus a name tree of document level JavaScript is the shape
+    that carried a decade of PDF malware, and it is the reason the text route of
+    this project goes through pypdf and pypdfium2 rather than through a viewer:
+    neither of them carries a script engine, and nothing in this repository ever
+    looks at ``/OpenAction``. The word Skriptmarke stands inside the script and
+    nowhere else, so a test can say the difference between "the script did not
+    run" and "the script ran and left no trace".
+    """
+    content = _winansi_content(
+        (
+            "Startaktion mit einem Skriptobjekt",
+            "Diese Seite wird gelesen, das Skript wird nie ausgeführt.",
+        )
+    )
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R /OpenAction 6 0 R /Names << /JavaScript 7 0 R >> >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 160] /Resources << /Font << /F1 5 0 R >> >>"
+            b" /Contents 4 0 R >>"
+        ),
+        _stream_object("", content),
+        WINANSI_FONT,
+        b'<< /Type /Action /S /JavaScript /JS (app.alert\\("Skriptmarke"\\);) >>',
+        b"<< /Names [(start) 6 0 R] >>",
+    ]
+    return build_pdf(objects)
+
+
+def build_embedded_file_pdf() -> bytes:
+    """A document with a second file inside it.
+
+    An attachment is the quiet half of the same threat as the archive bomb: a
+    reader that unpacks one puts an attacker chosen name on the disk of the
+    container, and an extractor that reads one puts the content of a document
+    nobody attached into the index of the document somebody did attach. The
+    marker word sits in the attachment alone.
+    """
+    attachment = b"Anlagenmarke: this attachment must never be unpacked and never be indexed.\n"
+    content = _winansi_content(
+        (
+            "Eine Anlage hängt an dieser Seite",
+            "Die eingebettete Datei wird beim Lesen nicht ausgepackt.",
+        )
+    )
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [(anlage.txt) 6 0 R] >> >> >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 160] /Resources << /Font << /F1 5 0 R >> >>"
+            b" /Contents 4 0 R >>"
+        ),
+        _stream_object("", content),
+        WINANSI_FONT,
+        b"<< /Type /Filespec /F (anlage.txt) /UF (anlage.txt) /EF << /F 7 0 R >> >>",
+        _stream_object("/Type /EmbeddedFile /Subtype /text#2Fplain", attachment),
+    ]
+    return build_pdf(objects)
+
+
+def build_uri_action_pdf() -> bytes:
+    """A document with a link annotation that names an address.
+
+    The address is data and has to stay data. It points at the discard port of
+    the loopback interface, so even a run that did try to reach it would fail
+    fast and locally instead of touching anything outside the machine, and the
+    marker word inside the address is what a test can look for in the index.
+    """
+    content = _winansi_content(
+        (
+            "Verweis auf eine Netzadresse",
+            "Die Adresse bleibt eine Zeichenkette und wird nie aufgerufen.",
+        )
+    )
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 160] /Resources << /Font << /F1 5 0 R >> >>"
+            b" /Contents 4 0 R /Annots [6 0 R] >>"
+        ),
+        _stream_object("", content),
+        WINANSI_FONT,
+        (
+            b"<< /Type /Annot /Subtype /Link /Rect [20 110 400 130] /Border [0 0 0]"
+            b" /A << /Type /Action /S /URI /URI (http://127.0.0.1:9/Netzmarke) >> >>"
+        ),
+    ]
+    return build_pdf(objects)
+
+
+# How deep the nested structure of file 39 goes.
+#
+# Measured on 2026-09-06 with pypdfium2 5.13.0 at the depths 100, 400, 500, 512,
+# 600, 1000, 5000 and 50000, once nested into the page dictionary and once into
+# the catalog: every single one of them ends in `indexed`, because the parser
+# refuses the nested object past its own recursion limit and reads the page
+# regardless, and the whole run takes 13 to 38 milliseconds, growing with the
+# size of the file and not with the depth.
+#
+# A thousand is the value this file carries because the case has to sit
+# unambiguously on one side of the caps and never near them: a thousand levels
+# are far more than any document a person produces, the verdict arrives four
+# orders of magnitude inside the extraction timeout of 120 seconds, and the file
+# stays under three kilobytes. A depth that landed near a cap would be a coin
+# toss between a fast machine and a loaded CI runner rather than a test.
+NESTING_DEPTH = 1000
+
+
+def build_deeply_nested_pdf() -> bytes:
+    """A page dictionary with a thousand levels of nested arrays inside it.
+
+    Inline and not behind an indirect reference, which is the whole point: an
+    object nobody dereferences is never parsed, so a nested blob in an object of
+    its own would measure nothing at all. Written into the page dictionary, the
+    structure is on the road the parser has to walk to reach the page.
+    """
+    nest = b"[" * NESTING_DEPTH + b"0" + b"]" * NESTING_DEPTH
+    content = _winansi_content(
+        (
+            "Tief verschachtelte Objektstruktur",
+            "Der Text dieser Seite bleibt trotzdem lesbar.",
+        )
+    )
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 160] /Resources << /Font << /F1 5 0 R >> >>"
+        b" /Contents 4 0 R /FindlingNest " + nest + b" >>",
+        _stream_object("", content),
+        WINANSI_FONT,
+    ]
+    return build_pdf(objects)
+
+
+# --------------------------------------------------------------------------
+# AES, in the standard library alone, for the one corpus file that needs it.
+#
+# The corpus has carried RC4 with 40 bits since phase 1, which is what a decade
+# old document looks like. What it lacked is what a current office suite writes,
+# and that is AES with 256 bits under revision 6 of the standard security
+# handler. Building one means encrypting, and no dependency of this project can
+# do it: the lock file carries neither cryptography nor pycryptodome, on purpose,
+# because this app never decrypts anything, and adding a package to build a test
+# fixture is the kind of supply chain growth the phase forbids outright.
+#
+# So AES stands here, in about a hundred lines, and it is checked rather than
+# trusted: _assert_aes_matches_the_standard runs the two known answer vectors of
+# FIPS 197 appendix C, which are published test data and not something this file
+# produced. Measured on 2026-09-06, the hash of algorithm 2.B computed here also
+# agrees byte for byte with the implementation pypdf carries, driven by the AES
+# below. Two independent implementations of two different layers, which is what
+# makes the agreement mean something.
+# --------------------------------------------------------------------------
+
+
+def _aes_substitution_box() -> bytes:
+    """The AES substitution box, computed rather than typed out.
+
+    A table of 256 hand written hexadecimal numbers is a table with a typo in
+    it, and the typo would show up as a corpus file nobody can open. The
+    generator loop below is the one from the standard: walk the multiplicative
+    group of GF(2^8) and apply the affine transformation.
+    """
+    table = bytearray(256)
+    table[0] = 0x63
+    pointer = inverse = 1
+    while True:
+        # pointer is multiplied by three, inverse is divided by three, so the two
+        # walk the group in opposite directions and meet at every pair.
+        pointer = (pointer ^ ((pointer << 1) & 0xFF) ^ (0x1B if pointer & 0x80 else 0)) & 0xFF
+        inverse = (inverse ^ (inverse << 1)) & 0xFF
+        inverse = (inverse ^ (inverse << 2)) & 0xFF
+        inverse = (inverse ^ (inverse << 4)) & 0xFF
+        if inverse & 0x80:
+            inverse ^= 0x09
+        rotated = [((inverse << bits) | (inverse >> (8 - bits))) & 0xFF for bits in (1, 2, 3, 4)]
+        table[pointer] = (inverse ^ rotated[0] ^ rotated[1] ^ rotated[2] ^ rotated[3] ^ 0x63) & 0xFF
+        if pointer == 1:
+            return bytes(table)
+
+
+AES_SBOX = _aes_substitution_box()
+
+
+def _xtime(value: int) -> int:
+    """Multiplication by two in GF(2^8), the one field operation AES needs."""
+    doubled = value << 1
+    return (doubled ^ 0x1B) & 0xFF if doubled & 0x100 else doubled
+
+
+def _aes_key_schedule(key: bytes) -> list[list[int]]:
+    """The round keys of an AES key of 128 or 256 bits, as four byte words."""
+    words_in_key = len(key) // 4
+    rounds = words_in_key + 6
+    words = [list(key[4 * index : 4 * index + 4]) for index in range(words_in_key)]
+    round_constant = 1
+    for index in range(words_in_key, 4 * (rounds + 1)):
+        word = list(words[index - 1])
+        if index % words_in_key == 0:
+            word = [AES_SBOX[byte] for byte in word[1:] + word[:1]]
+            word[0] ^= round_constant
+            round_constant = _xtime(round_constant)
+        elif words_in_key > 6 and index % words_in_key == 4:
+            word = [AES_SBOX[byte] for byte in word]
+        words.append([left ^ right for left, right in zip(words[index - words_in_key], word, strict=True)])
+    return words
+
+
+def _aes_encrypt_block(block: bytes, words: list[list[int]], rounds: int) -> bytes:
+    """One sixteen byte block through the four steps of every AES round."""
+    state = list(block)
+
+    def add_round_key(number: int) -> None:
+        for column in range(4):
+            word = words[number * 4 + column]
+            for row in range(4):
+                state[row + 4 * column] ^= word[row]
+
+    add_round_key(0)
+    for number in range(1, rounds + 1):
+        state[:] = [AES_SBOX[byte] for byte in state]
+        shifted = list(state)
+        for row in range(1, 4):
+            for column in range(4):
+                shifted[row + 4 * column] = state[row + 4 * ((column + row) % 4)]
+        state[:] = shifted
+        if number != rounds:
+            # MixColumns, written out over the column rather than as a matrix
+            # multiplication: the sum of the four bytes plus one doubled
+            # difference is the same thing and needs no second table.
+            for column in range(4):
+                cell = state[4 * column : 4 * column + 4]
+                total = cell[0] ^ cell[1] ^ cell[2] ^ cell[3]
+                for row in range(4):
+                    state[4 * column + row] = cell[row] ^ total ^ _xtime(cell[row] ^ cell[(row + 1) % 4])
+        add_round_key(number)
+    return bytes(state)
+
+
+def aes_cbc_encrypt(key: bytes, iv: bytes, data: bytes) -> bytes:
+    """AES in cipher block chaining mode, without padding of its own."""
+    words = _aes_key_schedule(key)
+    rounds = len(key) // 4 + 6
+    out = bytearray()
+    previous = iv
+    for offset in range(0, len(data), 16):
+        block = bytes(left ^ right for left, right in zip(data[offset : offset + 16], previous, strict=True))
+        previous = _aes_encrypt_block(block, words, rounds)
+        out += previous
+    return bytes(out)
+
+
+def aes_ecb_encrypt(key: bytes, data: bytes) -> bytes:
+    """AES block by block, which is what the /Perms entry of the PDF asks for."""
+    words = _aes_key_schedule(key)
+    rounds = len(key) // 4 + 6
+    return b"".join(_aes_encrypt_block(data[offset : offset + 16], words, rounds) for offset in range(0, len(data), 16))
+
+
+# FIPS 197, appendix C.1 and C.3: one plaintext, two keys, two published
+# ciphertexts. Nothing in this file produced these numbers.
+FIPS_197_PLAINTEXT = bytes.fromhex("00112233445566778899aabbccddeeff")
+FIPS_197_VECTORS: tuple[tuple[bytes, str], ...] = (
+    (bytes(range(16)), "69c4e0d86a7b0430d8cdb78070b4c55a"),
+    (bytes(range(32)), "8ea2b7ca516745bfeafc49904b496089"),
+)
+
+
+def _assert_aes_matches_the_standard() -> None:
+    """Refuse to build a corpus with an AES that is off by one bit.
+
+    An encryption that is subtly wrong produces a file that looks encrypted, is
+    committed, and can never be opened by anybody with the password this
+    repository publishes. That is a fixture that lies, and a lying fixture is
+    worse than a missing one.
+    """
+    for key, expected in FIPS_197_VECTORS:
+        produced = aes_ecb_encrypt(key, FIPS_197_PLAINTEXT).hex()
+        if produced != expected:
+            message = f"AES with a {len(key) * 8} bit key produced {produced}, FIPS 197 says {expected}"
+            raise SystemExit(message)
+
+
+def _hash_revision_6(password: bytes, salt: bytes, extra: bytes) -> bytes:
+    """Algorithm 2.B of ISO 32000-2, the hardened password hash of revision 6.
+
+    Deliberately expensive, and it is the reason building this one file takes
+    about four seconds: the loop runs at least sixty four rounds, and every round
+    encrypts forty times the password block. ``extra`` is empty for the user
+    password and carries the /U entry for the owner password.
+    """
+    digest = hashlib.sha256(password + salt + extra).digest()
+    round_number = 0
+    while True:
+        block = (password + digest + extra) * 64
+        encrypted = aes_cbc_encrypt(digest[:16], digest[16:32], block)
+        chosen = (hashlib.sha256, hashlib.sha384, hashlib.sha512)[sum(encrypted[:16]) % 3]
+        digest = chosen(encrypted).digest()
+        round_number += 1
+        if round_number >= 64 and encrypted[-1] <= round_number - 32:
+            return digest[:32]
+
+
+# Every value that a real encryptor would draw at random, derived from a fixed
+# string instead. A random salt or a random initialisation vector would make the
+# file different on every build, and a corpus that is not byte identical is a
+# corpus readonly-gate cannot measure. Nothing here is protected by any of them.
+AES_FILE_KEY = hashlib.sha256(b"findling-corpus-aes-file-key").digest()
+AES_USER_VALIDATION_SALT = hashlib.sha256(b"findling-corpus-user-validation").digest()[:8]
+AES_USER_KEY_SALT = hashlib.sha256(b"findling-corpus-user-key").digest()[:8]
+AES_OWNER_VALIDATION_SALT = hashlib.sha256(b"findling-corpus-owner-validation").digest()[:8]
+AES_OWNER_KEY_SALT = hashlib.sha256(b"findling-corpus-owner-key").digest()[:8]
+AES_STREAM_IV = hashlib.sha256(b"findling-corpus-aes-stream-iv").digest()[:16]
+
+
+def build_aes_encrypted_pdf() -> bytes:
+    """A PDF encrypted the way a current office suite encrypts one.
+
+    Standard security handler, version 5, revision 6, AES with 256 bits on both
+    strings and streams. The passwords are the same two the RC4 file of phase 1
+    carries and testdata/CORPUS.md publishes, so a reviewer needs one password
+    for both encrypted files.
+
+    Algorithms 8, 9 and 10 of ISO 32000-2 in order: /U and /UE from the user
+    password, /O and /OE from the owner password over the finished /U, and
+    /Perms as the permission bits encrypted with the file key so that a reader
+    can tell a tampered permission set from an honest one.
+    """
+    user_password = USER_PASSWORD.encode("utf-8")
+    owner_password = OWNER_PASSWORD.encode("utf-8")
+
+    user_entry = _hash_revision_6(user_password, AES_USER_VALIDATION_SALT, b"")
+    user_entry += AES_USER_VALIDATION_SALT + AES_USER_KEY_SALT
+    user_key = aes_cbc_encrypt(_hash_revision_6(user_password, AES_USER_KEY_SALT, b""), bytes(16), AES_FILE_KEY)
+
+    owner_entry = _hash_revision_6(owner_password, AES_OWNER_VALIDATION_SALT, user_entry)
+    owner_entry += AES_OWNER_VALIDATION_SALT + AES_OWNER_KEY_SALT
+    owner_key = aes_cbc_encrypt(
+        _hash_revision_6(owner_password, AES_OWNER_KEY_SALT, user_entry), bytes(16), AES_FILE_KEY
+    )
+
+    permissions = -1
+    # Algorithm 10: the permission bits, four filler bytes the specification
+    # prescribes as 0xFF, the flag that the metadata is encrypted too, the magic
+    # word adb, and four bytes a writer may choose.
+    perms_block = struct.pack("<i", permissions) + b"\xff\xff\xff\xffTadb" + b"find"
+
+    content = _winansi_content(
+        (
+            "Hinter AES 256 und Revision 6",
+            "Dieser Satz wird nie im Index landen.",
+        )
+    )
+    padding = 16 - len(content) % 16
+    padded = content + bytes([padding]) * padding
+    encrypted_content = AES_STREAM_IV + aes_cbc_encrypt(AES_FILE_KEY, AES_STREAM_IV, padded)
+
+    objects = _page_objects("<< /Font << /F1 5 0 R >> >>", encrypted_content, "[0 0 420 160]")
+    objects.append(WINANSI_FONT)
+    # The strings of the encryption dictionary itself are never encrypted.
+    objects.append(
+        (
+            "<< /Filter /Standard /V 5 /R 6 /Length 256"
+            " /CF << /StdCF << /CFM /AESV3 /AuthEvent /DocOpen /Length 32 >> >>"
+            " /StmF /StdCF /StrF /StdCF"
+            f" /O <{owner_entry.hex()}> /U <{user_entry.hex()}>"
+            f" /OE <{owner_key.hex()}> /UE <{user_key.hex()}>"
+            f" /P {permissions} /Perms <{aes_ecb_encrypt(AES_FILE_KEY, perms_block).hex()}> >>"
+        ).encode("ascii")
+    )
+    return build_pdf(objects, extra_trailer=f" /Encrypt 6 0 R /ID [<{DOC_ID.hex()}> <{DOC_ID.hex()}>]")
+
+
 # --------------------------------------------------------------------------
 # The rule that carries every assertion of the integration job: one term, one
 # file. It is checked here rather than trusted, because the words below are now
@@ -1264,6 +1661,14 @@ FILES: dict[str, bytes] = {
     # something. The first one is the decompression bomb the cap of phase 2 has
     # been holding against a 65 byte fixture until now.
     "34-zip-bombe.docx": build_zip_bomb_docx(),
+    # Five PDF structures that describe an action. Not one of them is broken:
+    # every one of them is a well formed document, and the question each of them
+    # asks is whether anything of the action happens on the way to the verdict.
+    "35-startaktion-javascript.pdf": build_open_action_javascript_pdf(),
+    "36-eingebettete-datei.pdf": build_embedded_file_pdf(),
+    "37-verweis-ins-netz.pdf": build_uri_action_pdf(),
+    "38-aes256-verschluesselt.pdf": build_aes_encrypted_pdf(),
+    "39-tief-verschachtelt.pdf": build_deeply_nested_pdf(),
 }
 
 
@@ -1313,6 +1718,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # replacement box in it, or with a search term in two files, is worse than
     # no corpus: it turns green assertions into statements about nothing.
     _assert_every_glyph_exists(GLYPH_PROBE)
+    _assert_aes_matches_the_standard()
     _assert_terms_stand_in_one_file(FILES)
 
     if "--check" in list(sys.argv[1:] if argv is None else argv):

@@ -1,0 +1,39 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 160] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R /Annots [6 0 R] >>
+endobj
+4 0 obj
+<<  /Length 152 >>
+stream
+BT /F1 11 Tf 20 120 Td (Verweis auf eine Netzadresse) Tj ET
+BT /F1 11 Tf 20 98 Td (Die Adresse bleibt eine Zeichenkette und wird nie aufgerufen.) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Annot /Subtype /Link /Rect [20 110 400 130] /Border [0 0 0] /A << /Type /Action /S /URI /URI (http://127.0.0.1:9/Netzmarke) >> >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000263 00000 n 
+0000000467 00000 n 
+0000000564 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+719
+%%EOF

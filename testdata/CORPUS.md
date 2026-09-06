@@ -1,6 +1,6 @@
 # Reference corpus for the read only invariant (IDX-07), the German search proof and OCR
 
-Thirty four small files with four jobs.
+Thirty nine small files with four jobs.
 
 **Job one, since phase 1.** The CI job `readonly-gate` copies them into a
 throwaway Nextcloud, lets the container read every one of them through the
@@ -19,13 +19,16 @@ reach the OCR engine, and ten more PDFs that are broken in ten different ways.
 Without them every acceptance statement about OCR would be a claim about two
 files, one of which is 814 bytes.
 
-**Job four, since the launch hardening.** The file `34` is not broken, it wants
-something: it is a decompression bomb, an OOXML package whose one part declares
-one byte more than the archive member cap of
-`backend/src/findling/config.py` allows. Until it existed, that cap was measured
+**Job four, since the launch hardening.** The files `34` to `39` are not broken,
+they want something. `34` is a decompression bomb, an OOXML package whose one
+part declares a byte more than the archive member cap of
+`backend/src/findling/config.py` allows; until it existed, that cap was measured
 against a fixture of 65 bytes with the cap lowered to 64, which proves the
-comparison and nothing else. This one travels the road a user document travels
-and lies in the directory `readonly-gate` freezes.
+comparison and nothing else. The five behind it are well formed PDFs that
+describe an action: a script on open, an embedded file, an address, an
+encryption a current office suite writes, and a thousand levels of nesting. All
+six travel the road a user document travels and lie in the directory
+`readonly-gate` freezes.
 
 Because of job two the files must be neither moved nor renamed nor split into
 subdirectories, and no word may be added to one of them without checking the
@@ -35,7 +38,7 @@ file. Since phase 3 that rule is not a promise any more but a check:
 `build_corpus.py` refuses to write the corpus if one of the terms of the second
 table stands in a second file.
 
-Total size is 366 KB. 295 KB of that are the rendered pages of job three, which
+Total size is 373 KB. 295 KB of that are the rendered pages of job three, which
 is the price of being able to prove anything at all about OCR, and 65 KB are the
 one compressed part of the bomb of job four, which is the floor deflate allows
 for a member of that declared size and is worked out in `build_corpus.py`. The
@@ -97,8 +100,13 @@ change here in the same commit.
 | `32-startxref-ins-leere.pdf` | Correct objects, and a `startxref` that points past the end of the file | `indexed`, pdfium recovers | none |
 | `33-seitenbaum-zyklus.pdf` | A page tree that contains itself | `failed(corrupt)`, and above all: no hang | none |
 | `34-zip-bombe.docx` | An OOXML package whose `word/document.xml` declares 64 MiB plus one byte and is 65 kB on disk | `skipped(too_large)`, decided on the archive directory, without opening a single member | none |
+| `35-startaktion-javascript.pdf` | A document with `/OpenAction` and a JavaScript name tree | `indexed`, the page text and not one character of the script | none |
+| `36-eingebettete-datei.pdf` | A document with a file attached inside it | `indexed`, the page text; the attachment is neither unpacked nor read | none |
+| `37-verweis-ins-netz.pdf` | A link annotation with a `/URI` action | `indexed`, the page text; the address stays a string and no socket is opened | none |
+| `38-aes256-verschluesselt.pdf` | Standard security handler, version 5, revision 6, AES with 256 bits | `skipped(encrypted)`, the same verdict as the RC4 file and over a different road through pypdf | none |
+| `39-tief-verschachtelt.pdf` | A page dictionary with a thousand levels of nested arrays in it | `indexed`, the parser refuses the nesting and reads the page | none |
 
-Twenty two indexed, six skipped, six failed. None of the caps of the OCR
+Twenty six indexed, seven skipped, six failed. None of the caps of the OCR
 cascade is reached on this corpus: no `indexed(truncated)`, no `failed(timeout)`
 and no `failed(out_of_memory)`, and the same job that counts the verdicts counts
 those three separately, because a corpus that starts hitting a cap is a corpus
@@ -182,9 +190,50 @@ verdict, and never to be modified, deleted or rewritten. That last part is what
 `readonly-gate` measures, and it is the reason the broken files exist at all.
 
 The user password of `07-password-protected.pdf` is `findling`, the owner
-password is `findling-owner`. Both are published here on purpose, because a
-reviewer has to be able to open the file, and because nothing in this repository
-is protected by them.
+password is `findling-owner`, and `38-aes256-verschluesselt.pdf` carries the same
+two. Both are published here on purpose, because a reviewer has to be able to
+open the files, and because nothing in this repository is protected by them.
+
+## The six files that want something
+
+The ten broken PDFs above are accidents: a truncated copy, a wrong offset, a tree
+that points at itself. The six files of job four are not broken at all. Every one
+of them is a well formed document, and the question each of them asks is not
+whether the parser survives it but whether anything of what it asks for happens.
+
+That difference is why each of them is asserted twice in
+`backend/tests/test_extract_documents.py`: once that the structure really stands
+in the file, and once that the verdict came back without it doing anything. A
+test that only checked the verdict would stay green on the day the generator
+stops writing the structure, which is the quietest way a security fixture can
+die. Three of the files carry a marker word that stands inside the dangerous part
+alone, `Skriptmarke`, `Anlagenmarke` and `Netzmarke`, so "it did not run" can be
+told apart from "it ran and left no trace".
+
+Two of them are worth a sentence of their own.
+
+`38` is the second encrypted file and not a duplicate of the first. `07` is RC4
+with 40 bits, which is what a decade old document looks like, and pypdf answers
+`is_encrypted` for it without raising. `38` is what a current office suite
+writes, and it takes a different road: pypdf tries the empty password while the
+reader is still being built, reaches for an AES provider this lock file
+deliberately does not carry and raises `DependencyError`, which descends from
+`Exception` and not from `PdfReadError`. Before the launch hardening that
+exception escaped the extractor and the document was recorded as
+`failed(corrupt)`, which is the wrong word twice: the file is intact, and an
+admin would have gone looking for a broken document instead of for a password.
+Both roads now end in `skipped(encrypted)`, because the two are the same document
+to whoever reads the status page.
+
+`39` is measured rather than guessed. Nesting depths of 100, 400, 500, 512, 600,
+1000, 5000 and 50000 were run through the text route on 2026-09-06: every one of
+them ends in a verdict, the parser refuses the nested object past its own
+recursion limit and reads the page regardless, and the whole range takes 13 to 38
+milliseconds. A thousand is the depth the file carries because it sits
+unambiguously on one side of every cap, four orders of magnitude inside the
+extraction timeout, and keeps the file under three kilobytes. A depth that landed
+near a cap would be a coin toss between a fast machine and a loaded runner rather
+than a test.
 
 ## Regenerating
 
