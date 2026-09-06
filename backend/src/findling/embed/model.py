@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
@@ -108,6 +109,27 @@ FALLBACK_PAD_MARKER: Final = "[PAD]"
 # has two shared vCPU, INDEX_WORKERS is one for the same reason, and a third
 # thread would only take turns with itself.
 THREADS: Final = 2
+
+# How long an open that threw is left alone before it is tried again.
+#
+# Not a setting, for the reason THREADS is none: it is a property of the two
+# failures it stands between, and neither of them is a decision an operator
+# makes. A directory without the artifacts is a state of the installation and is
+# remembered for ever; an open that threw is a state of the moment, and the one
+# that really happens on the target box is a MemoryError while 118 MB of weights
+# arrive under a hard 2 GB limit (the load run of 2026-09-05 measured
+# memory.events max at 2796). Until the audit of plan 06.1-17 both ended in the
+# same permanent "no", and with the shared engine of plan 06.1-02 that cost the
+# whole container its semantics until somebody restarted it, which is exactly
+# the warning sign of pitfall 2 of the phase research.
+#
+# Five minutes is the trade between the two costs. Retrying at once would read a
+# broken graph once per document over tens of thousands of them, which is the
+# reason the permanent flag existed in the first place; at five minutes a
+# genuinely broken graph is opened twelve times an hour and an instance that
+# merely ran out of air for a moment is whole again before anybody has finished
+# reading the log line.
+LOAD_RETRY_SECONDS: Final = 300.0
 
 # How often the artifacts were really read in this process. The counter exists
 # for the same reason ``index/analyzer.build_count()`` does: from the outside a
