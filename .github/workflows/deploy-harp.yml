@@ -12,21 +12,35 @@ name: HaRP deploy
 # the ordinary OCS route comes back with a hit that can only have been produced
 # inside that container. Every one of those three is asserted separately, and an
 # empty result is red rather than green (the warning sign of pitfall 3).
+#
+# Since plan 06.1-12 the job walks that path twice. The first pass is the one
+# described above and builds the container image locally. The second pass is the
+# path a stranger walks: both halves out of the release archives, the image out
+# of ghcr, the integrity check of the instance over the companion, and a search
+# that finds the content of a file nobody configured anything for.
 on:
   push:
     paths:
       - 'backend/**'
-      - 'php/appinfo/**'
+      # The whole companion and not only its appinfo, because the store install
+      # path of this job packs php/ into the release archive and then lets the
+      # instance verify every file in it. A change in php/lib is a change to what
+      # this job installs and to what the integrity check hashes.
+      - 'php/**'
       - '.github/workflows/deploy-harp.yml'
       # The instance this job installs comes out of the composite action, so a
       # change there is a change to this workflow.
       - '.github/actions/setup-test-nc/**'
+      # The archives are built by this script, in this job and in release.yml
+      # alike, so a change to it changes what a stranger would install.
+      - 'scripts/release/**'
   pull_request:
     paths:
       - 'backend/**'
-      - 'php/appinfo/**'
+      - 'php/**'
       - '.github/workflows/deploy-harp.yml'
       - '.github/actions/setup-test-nc/**'
+      - 'scripts/release/**'
   workflow_dispatch:
 
 permissions:
@@ -64,7 +78,21 @@ jobs:
     # margin over the measurement would have shrunk rather than the runtime
     # having been reconsidered, which is why the number is 20 and still nowhere
     # near the default of 360.
-    timeout-minutes: 20
+    #
+    # Plan 06.1-12 raises it to 45, and the number is named as an estimate rather
+    # than dressed up as a measurement, because the store install path it adds
+    # has never run. What it is derived from, using figures this job already
+    # measured: the archive build is seconds, the anonymous ghcr pull is the same
+    # order as the local registry push that measured 60 s, and every deployment
+    # of the ExApp measured about 60 s in the drift probe. The second pass adds
+    # two of them for the routes probe and the real registration, two more inside
+    # its uninstall promises, the observation window of assertion 6 at about 50 s
+    # a second time, and the zero config budget of ZERO_CONFIG_BUDGET_SECONDS
+    # below, which is 600 in the worst case. That sums to roughly 20 further
+    # minutes over the 4 to 5 the job measures today, and 45 leaves the same kind
+    # of margin the 20 had. The first green run replaces this paragraph with
+    # measured figures.
+    timeout-minutes: 45
     # The one entry that may fail is the one for a server version that is not
     # released yet, and which one that is stands at the entry itself.
     continue-on-error: ${{ matrix.tolerate-failure }}
@@ -146,6 +174,27 @@ jobs:
       TESTUSER_PASS: 'findling-ci-canary-2026'
       LOCAL_REGISTRY: 'localhost:5000'
       LOCAL_IMAGE_TAG: 'citest'
+
+      # The budget of the zero config proof, in seconds, and a named variable
+      # because threat T-06.1-52 is about somebody raising exactly this number
+      # until a run goes green. Raising it is a decision and needs a reason next
+      # to it; overrunning it is a finding and not an accident.
+      #
+      # Where the number comes from. The slowest clock involved on a real
+      # instance is the system cron, which runs every five minutes, and the first
+      # pass of it queues the crawl rather than finishing it, so a user waits two
+      # cron rounds before anything is searchable. Ten minutes is those two
+      # rounds. This job has no cron daemon and drives cron.php itself, which is
+      # the identical command a system cron runs, so its own wall clock is much
+      # shorter; the budget is nevertheless dimensioned against the five minute
+      # cadence, because that is the clock the promise is made to.
+      #
+      # And the lesson that decides the shape of the wait rather than its size:
+      # in plan 06-11 a counter probe declared a run dead and was 52 seconds off,
+      # because it measured against the fastest clock in sight instead of the
+      # slowest. So the loop below leaves the moment the hit is there and never
+      # sleeps a fixed pause.
+      ZERO_CONFIG_BUDGET_SECONDS: '600'
 
     steps:
       # Actions are pinned to commit SHAs, never to tags: a moved tag would be
@@ -1043,6 +1092,278 @@ jobs:
             exit 1
           fi
           echo "container ${container} is ${alive}, retreat announced, ${grew} new warning or error lines"
+
+      # =====================================================================
+      # The store install path, added by plan 06.1-12
+      #
+      # Everything above installs the two halves the way a developer does: the
+      # companion is moved into apps/ out of the working tree by the composite
+      # action, and the ExApp is registered with an info.xml this job rewrites so
+      # that it points at a registry on localhost. Both are legitimate for what
+      # they prove, and neither of them is the path a stranger walks.
+      #
+      # From here on the job walks that path. It starts where "Uninstall 5" left
+      # the instance, which is the cheapest clean slate this job can reach: the
+      # companion is removed, its tables and settings are gone, and the only
+      # thing still standing is the container of assertion 6. So the first step
+      # takes that container away as well, and then both halves come back out of
+      # the release archives.
+      #
+      # Pitfall 8, written here because this is where it would be walked into:
+      # scripts/dev/register-exapp.sh and .github/actions/setup-test-nc are
+      # manual-install paths. They pull no image, they create no container, and
+      # they read no route list out of an archive. A step below that reached for
+      # either of them would prove nothing about the store path, and the warning
+      # sign is a path into findling-src where a registry address belongs.
+      # =====================================================================
+
+      # The archives are built here rather than downloaded, and the reason is
+      # release.yml itself: it runs on a tag or on a manual dispatch and it holds
+      # both signing keys, so it does not run on a push and cannot run on a pull
+      # request at all (docs/certificates.md forbids exactly that). An artifact
+      # from it would therefore be missing on every event this job has, or would
+      # come from a different commit, which is worse.
+      #
+      # What is emphatically NOT done is a second packing path. The staging rules
+      # and the tar options are in scripts/release/store-archive.sh and both
+      # workflows call the same subcommands, so an archive built here is an
+      # archive built the way the released one is built. The content proof runs
+      # here too, over the archives this job is about to install from.
+      #
+      # The signature is the one place where this job cannot be the real thing,
+      # and the substitute is named rather than hidden. The release key lives in
+      # secrets.APP_PRIVATE_KEY, and docs/certificates.md forbids a workflow with
+      # a pull_request trigger from reaching it, which this workflow has. So the
+      # job mints its own throwaway code signing identity: a CA that exists for
+      # the length of this run, and a leaf certificate whose CN is the app id,
+      # because Checker::verify compares the CN against the app id and rejects
+      # anything else. The CA is appended to resources/codesigning/root.crt of
+      # the throwaway server checkout, which works because Checker splits that
+      # file into individual certificates and loads every one of them.
+      #
+      # What that substitute proves: that the archive carries a signature over
+      # the exact file list it ships, that the instance recomputes the hashes of
+      # every one of those files and finds them unchanged, and that a single
+      # altered byte turns the verdict red. That is the mechanism the store
+      # relies on.
+      #
+      # What it expressly does not prove: that the certificate comes from the
+      # Nextcloud Code Signing Root Authority. Nothing here can prove that,
+      # because nothing here may hold the key. release.yml proves the other half
+      # instead, by fetching both certificates and comparing their public key
+      # fingerprints against docs/certificates.md before it signs anything.
+      - name: Store install 1, build both release archives and sign the companion
+        run: |
+          # Every occ call of the store install path goes through this wrapper,
+          # and the reason is the zero config proof further down: it has to be
+          # able to state which commands ran between the installation and the
+          # first hit, and a list somebody maintains by hand is a list that goes
+          # stale. The wrapper records and then runs. What it cannot see is a
+          # direct ./occ call somebody adds later without it, and that limit is
+          # stated here rather than left to be discovered.
+          echo "OCC_LOG=${RUNNER_TEMP}/occ-calls.txt" >> "${GITHUB_ENV}"
+          : > "${RUNNER_TEMP}/occ-calls.txt"
+          cat > "${RUNNER_TEMP}/nc-occ.sh" <<'SH'
+          #!/bin/sh
+          set -eu
+          printf '%s\n' "occ $*" >> "${OCC_LOG}"
+          exec timeout 600 ./occ "$@"
+          SH
+          chmod +x "${RUNNER_TEMP}/nc-occ.sh"
+
+          # The throwaway code signing identity. Two days of validity, because a
+          # certificate that expired between signing and checking would fail with
+          # a message about a signature and not about a clock.
+          mkdir -p "${RUNNER_TEMP}/ci-pki"
+          (
+            umask 077
+            openssl req -x509 -newkey rsa:4096 -sha256 -days 2 -nodes \
+              -keyout "${RUNNER_TEMP}/ci-pki/root.key" \
+              -out "${RUNNER_TEMP}/ci-pki/root.crt" \
+              -subj "/CN=Findling CI Code Signing Root"
+            openssl req -new -newkey rsa:4096 -sha256 -nodes \
+              -keyout "${RUNNER_TEMP}/ci-pki/findling.key" \
+              -out "${RUNNER_TEMP}/ci-pki/findling.csr" \
+              -subj "/CN=findling"
+            openssl x509 -req -sha256 -days 2 \
+              -in "${RUNNER_TEMP}/ci-pki/findling.csr" \
+              -CA "${RUNNER_TEMP}/ci-pki/root.crt" \
+              -CAkey "${RUNNER_TEMP}/ci-pki/root.key" \
+              -CAcreateserial \
+              -out "${RUNNER_TEMP}/ci-pki/findling.crt"
+          )
+          openssl x509 -in "${RUNNER_TEMP}/ci-pki/findling.crt" -noout -subject -issuer -nameopt RFC2253
+
+          # The trust anchor of this run, appended and not replaced: the
+          # Nextcloud Root Authority stays in the file, so the only difference to
+          # a released archive is which of the two certificates in it signed the
+          # app.
+          before=$(grep -c 'BEGIN CERTIFICATE' resources/codesigning/root.crt)
+          cat "${RUNNER_TEMP}/ci-pki/root.crt" >> resources/codesigning/root.crt
+          after=$(grep -c 'BEGIN CERTIFICATE' resources/codesigning/root.crt)
+          echo "root.crt carried ${before} certificate(s) and now carries ${after}"
+          if [ "${after}" -ne $((before + 1)) ]; then
+            echo "the CI root was not appended as exactly one certificate, so the integrity check below would fail for the wrong reason"
+            exit 1
+          fi
+
+          # Stage, sign, pack, in that order and for the same reason release.yml
+          # keeps it: the code signature has to be inside the tarball.
+          rm -rf "${RUNNER_TEMP}/store-php" "${RUNNER_TEMP}/store-backend" "${RUNNER_TEMP}/store-dist"
+          ( cd findling-src && sh scripts/release/store-archive.sh stage-companion "${RUNNER_TEMP}/store-php" )
+          ( cd findling-src && sh scripts/release/store-archive.sh stage-backend "${RUNNER_TEMP}/store-backend" )
+
+          timeout 120 ./occ integrity:sign-app \
+            --privateKey="${RUNNER_TEMP}/ci-pki/findling.key" \
+            --certificate="${RUNNER_TEMP}/ci-pki/findling.crt" \
+            --path="${RUNNER_TEMP}/store-php/findling"
+          test -s "${RUNNER_TEMP}/store-php/findling/appinfo/signature.json"
+          echo "appinfo/signature.json was written and is not empty"
+
+          ( cd findling-src && sh scripts/release/store-archive.sh pack \
+              "${RUNNER_TEMP}/store-php" findling "${RUNNER_TEMP}/store-dist/findling.tar.gz" )
+          ( cd findling-src && sh scripts/release/store-archive.sh pack \
+              "${RUNNER_TEMP}/store-backend" findling_backend "${RUNNER_TEMP}/store-dist/findling_backend.tar.gz" )
+
+          # The same content proof release.yml runs, over the archives this job
+          # is about to install from. An archive with a tests directory in it is
+          # a different product from the one that was reviewed, and this is the
+          # place where that would surface before it is installed.
+          fail=0
+          ( cd findling-src && sh scripts/release/store-archive.sh assert-contents \
+              "${RUNNER_TEMP}/store-dist/findling.tar.gz" findling 1 ) || fail=1
+          ( cd findling-src && sh scripts/release/store-archive.sh assert-contents \
+              "${RUNNER_TEMP}/store-dist/findling_backend.tar.gz" findling_backend 0 ) || fail=1
+          exit "${fail}"
+
+      # The clean slate. Assertion 6 deliberately left a container running
+      # without its caller, and an archive installation on top of that would
+      # inherit a volume and a registration from the developer path, which is
+      # precisely the confusion this whole second pass exists to avoid.
+      #
+      # --rm-data on purpose: the volume of the first pass must not survive into
+      # the second, otherwise the zero config proof further down could be reading
+      # an index the first pass built.
+      - name: Store install 2, take the developer installation away completely
+        run: |
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:unregister findling_backend --rm-data
+          left=$(docker ps -a --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -n "${left}" ]; then
+            echo "a container named ${left} survived the unregister, so the second pass would not start from a clean instance"
+            docker ps -a
+            exit 1
+          fi
+          volume=$(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}')
+          if [ -n "${volume}" ]; then
+            echo "the volume ${volume} survived the unregister with --rm-data, so an index of the first pass could be read as a result of the second"
+            docker volume ls
+            exit 1
+          fi
+          # "Uninstall 5" removed the companion with occ app:remove, which takes
+          # the directory with it. Asserted rather than assumed, because an
+          # archive extracted over leftovers would be a mixture of two
+          # installations and the integrity check would report the leftovers as
+          # extra files, which reads like an archive defect.
+          if [ -e apps/findling ]; then
+            echo "apps/findling still exists after occ app:remove, so the archive installation would be laid over leftovers"
+            find apps/findling -maxdepth 2 -mindepth 1 -printf '  %P\n' | sort
+            exit 1
+          fi
+          echo "no container, no volume, no companion directory"
+
+      # The half this step is about is the one the store checks: the companion is
+      # PHP that the instance itself loads, so the instance itself can say
+      # whether what it loads is what was signed.
+      #
+      # Why occ integrity:check-app is more than "the directory is there": it
+      # reads appinfo/signature.json, validates the certificate against
+      # resources/codesigning/root.crt, verifies the RSA-PSS signature over the
+      # hash list, and then recomputes the SHA-512 of every single file it ships
+      # and compares. No network and no store are involved in any of that, which
+      # is why it works on this instance at all.
+      #
+      # And the trap that makes a naive version of this step a false green, which
+      # is exactly the class of mistake this phase exists to remove: CheckApp
+      # skips an app that ships no signature.json and returns 0 while printing
+      # "App signature not found, skipping app integrity check". A step that only
+      # looks at the exit code would be green for an unsigned archive. So the
+      # file is asserted to be there, that sentence is asserted to be absent, and
+      # the output is asserted to be empty on top.
+      - name: Store install 3, the companion out of the archive, verified by the instance
+        run: |
+          tar -xzf "${RUNNER_TEMP}/store-dist/findling.tar.gz" -C apps
+          test -d apps/findling
+          # Not a single path into the working tree: the whole companion arrives
+          # through the archive, which is what the composite action does not do.
+          if [ ! -f apps/findling/appinfo/signature.json ]; then
+            echo "the extracted companion carries no appinfo/signature.json, and integrity:check-app would skip it and answer 0"
+            exit 1
+          fi
+          "${RUNNER_TEMP}/nc-occ.sh" app:enable findling
+
+          # The verdict is wanted together with the exit code, so the call goes
+          # into a file and the status is caught with "|| status=$?" rather than
+          # with a pipeline: a pipeline would hand this step the status of the
+          # last stage and hide the one that matters.
+          check() {
+            "${RUNNER_TEMP}/nc-occ.sh" integrity:check-app findling > "$1" 2>&1
+          }
+
+          status=0
+          check "${RUNNER_TEMP}/integrity-clean.txt" || status=$?
+          cat "${RUNNER_TEMP}/integrity-clean.txt"
+          if [ "${status}" -ne 0 ]; then
+            echo "occ integrity:check-app findling answered ${status} on an untouched archive installation"
+            exit 1
+          fi
+          if grep -q 'skipping app integrity check' "${RUNNER_TEMP}/integrity-clean.txt"; then
+            echo "the check skipped the app instead of verifying it, so the exit code above says nothing"
+            exit 1
+          fi
+          if [ -s "${RUNNER_TEMP}/integrity-clean.txt" ]; then
+            echo "occ integrity:check-app findling printed something, and a clean verdict is an empty answer"
+            exit 1
+          fi
+          echo "occ integrity:check-app findling: empty answer, verdict clean"
+
+          # The falsification, and the reason the step above means anything. One
+          # appended line in one shipped file, and the verdict has to turn. If it
+          # does not, the empty answer above was the answer of a check that was
+          # not looking.
+          probe=apps/findling/lib/AppInfo/Application.php
+          test -f "${probe}"
+          cp "${probe}" "${RUNNER_TEMP}/integrity-probe-original"
+          printf '\n// a single line appended by the tamper probe of plan 06.1-12\n' >> "${probe}"
+          status=0
+          check "${RUNNER_TEMP}/integrity-tampered.txt" || status=$?
+          cat "${RUNNER_TEMP}/integrity-tampered.txt"
+          if [ "${status}" -eq 0 ]; then
+            echo "one altered file did not change the verdict, so the integrity check of this instance is not checking"
+            exit 1
+          fi
+          if ! grep -q 'INVALID_HASH' "${RUNNER_TEMP}/integrity-tampered.txt"; then
+            echo "the check failed but did not name the altered file as an invalid hash, so it failed for another reason"
+            exit 1
+          fi
+          echo "tamper probe: one altered line, verdict INVALID_HASH, exit ${status}"
+
+          # And back, because everything after this step runs against the
+          # installation the archive produced and not against a tampered one.
+          cp "${RUNNER_TEMP}/integrity-probe-original" "${probe}"
+          status=0
+          check "${RUNNER_TEMP}/integrity-restored.txt" || status=$?
+          cat "${RUNNER_TEMP}/integrity-restored.txt"
+          if [ "${status}" -ne 0 ] || [ -s "${RUNNER_TEMP}/integrity-restored.txt" ]; then
+            echo "the restored file does not verify again, so the probe left the installation behind in a state nobody meant"
+            exit 1
+          fi
+          echo "restored: empty answer, verdict clean again"
+          {
+            echo ""
+            echo "Store install on ${{ matrix.server-version }}: the companion was installed from"
+            echo "\`findling.tar.gz\` and verified by \`occ integrity:check-app\`, and a single altered"
+            echo "line turned that verdict into INVALID_HASH."
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Collect the logs and tear the deployment down
         if: always()
