@@ -39,11 +39,38 @@ among them, because it already exists: ``_local_image`` has judged every
 screenshot address against the media directory since plan 05-18, and the
 mapping there is mechanical rather than guessed by matching names.
 
+**The vocabulary rule, and how far it reaches.** The owner keeps one German
+word out of the texts this project puts in front of readers, the word for a
+place where things are kept. Until plan 06.1-13 this repository held no gate for
+it, and the finding that made the question unavoidable is DI-05-32 of phase 5:
+the English technical term stands in a comment in ``backend/appinfo/info.xml``,
+in the paragraph about the release package, and that comment travels inside the
+package.
+
+Decision E-H2 of 06.09.2026 answers it, and the reach is written here rather
+than in a summary nobody reads twice: **the rule is about German prose in the
+public facing texts.** The English technical term in a technical comment of a
+delivered file is **exempt**, and the comment stays as it is. A silent exception
+would be the same finding reopened in half a year, so the exception is not only
+allowed here, it is exercised: one case below proves the term is still standing
+in that comment and that this gate deliberately says nothing about it.
+
+Which brings the counting hygiene with it, because two different counts are in
+play and mixing them silently would make this gate unreadable:
+
+* the prose rule counts **without** comment lines, and every case that uses it
+  says so in its name or in its message,
+* the exception is proven with a count **including** the comments, and that case
+  says so too.
+
 One more thing is checked that is not a schema rule at all. The measured
 sentence of plan 06-11 lives in three places: ``README.md`` and the English
 description of both halves. Three places for one number drift apart, and the
 store description is the one where nobody would notice; so the equality is
-mechanical here rather than remembered.
+mechanical here rather than remembered. The privacy paragraph of D-12 is checked
+in the same spirit and with the same modesty: it has to stand in all three
+languages of both descriptions, and whether the three say the same thing is a
+reading and not a comparison this file can make.
 
 **What this gate does not claim.** It says nothing about whether a translation
 is good, whether it says the same thing as the other two, or whether the German
@@ -73,6 +100,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PHP_INFO = REPO_ROOT / "php" / "appinfo" / "info.xml"
 BACKEND_INFO = REPO_ROOT / "backend" / "appinfo" / "info.xml"
 README = REPO_ROOT / "README.md"
+
+# The six store texts in one German document, side by side in three languages.
+# The rule of E-H2 reaches it too: it is German prose that a reader reads.
+STORE_LISTING = REPO_ROOT / "docs" / "store-listing.md"
 
 # Where the images of the store page live. The store keeps addresses and not
 # files, so the images are in this repository and are linked over https; this
@@ -128,6 +159,30 @@ RAW_MEDIA_PREFIX = "https://raw.githubusercontent.com/street1983nk/nextcloud-sea
 # them would have been red over a tree that was correct; plan 05-18 adds the
 # images and therefore the number.
 SCREENSHOT_MINIMUM = 1
+
+# The blocked term of the owner's vocabulary rule, lowercase and as a stem, so
+# that the German word and every compound built on it are caught by the same
+# comparison. Assembled from two halves for the same reason the dashes above are
+# escapes: a gate must not carry the thing it exists to keep out.
+#
+# The reach of the rule is decision E-H2 of 06.09.2026, stated in the module
+# docstring: German prose in the public facing texts, and the English technical
+# term in a technical comment of a delivered file is exempt.
+BLOCKED_TERM = "arch" + "iv"
+
+# Every XML comment of a document. Used to say out loud which of the two counts
+# a case is making, rather than relying on the fact that an XML parser drops
+# comments on its own.
+_XML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+# How the privacy paragraph of D-12 opens in each of the three languages. The
+# French one is matched without its colon because French typography puts a space
+# in front of it, and that space is not what this rule is about.
+PRIVACY_MARKERS = {
+    DEFAULT_LANGUAGE: "Privacy:",
+    "de": "Datenschutz:",
+    "fr": "Confidentialité",
+}
 
 # The store's limit per image, in bytes so that the comparison below reads as a
 # comparison and not as arithmetic. Two mebibytes, and it is a limit of the
@@ -492,6 +547,77 @@ def scan_media_readme(source: str) -> list[str]:
             )
 
     return violations
+
+
+def strip_xml_comments(source: str) -> str:
+    """The document without any of its comments."""
+    return _XML_COMMENT.sub("", source)
+
+
+def count_blocked_term(text: str) -> int:
+    """How often the blocked term stands in a text, upper and lower case alike."""
+    return text.lower().count(BLOCKED_TERM)
+
+
+def scan_german_prose_of_an_info(name: str, source: str) -> list[str]:
+    """The blocked term in the German store texts of one info.xml.
+
+    **This count leaves comment lines out.** The comments are removed from the
+    document before it is parsed, which an XML parser would do anyway; it is
+    done here in the open so that the claim is a line of code and not a property
+    of somebody else's library. The reason is E-H2: the rule is about the prose
+    a reader reads, and the English technical term in a technical comment of a
+    delivered file is exempt.
+    """
+    try:
+        info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
+    except ElementTree.ParseError as broken:
+        return [f"{name}: is not well formed XML ({broken})"]
+
+    return [
+        f"{name}: the German {kind} carries the blocked term of the owner's vocabulary rule "
+        f"(comment lines are not counted here, the rule is about prose, E-H2)"
+        for kind in L10N_ELEMENTS
+        for element in info.findall(kind)
+        if element.get("lang") == "de" and count_blocked_term(element.text or "")
+    ]
+
+
+def scan_german_document(name: str, source: str) -> list[str]:
+    """The blocked term anywhere in a German document.
+
+    **This count includes every line of the file.** A markdown document has no
+    comment syntax to exempt, and the six store texts quoted inside it are the
+    same prose the rule is about. If an English wording ever needs the term as a
+    file type, that is a decision to take against E-H2 and not a line to slip in
+    here.
+    """
+    if count_blocked_term(source):
+        finding = (
+            f"{name}: carries the blocked term of the owner's vocabulary rule "
+            f"(every line of the file is counted here, comments included, E-H2)"
+        )
+        return [finding]
+
+    return []
+
+
+def scan_privacy_paragraph(name: str, source: str) -> list[str]:
+    """Whether the privacy paragraph of D-12 stands in all three languages.
+
+    It says nothing about what the three paragraphs say. Comparing translations
+    is a reading, and the reading happens against ``docs/store-listing.md``. What
+    this can see is the one failure nobody would notice: a description that was
+    rewritten in one language and lost the paragraph on the way.
+    """
+    info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
+
+    return [
+        f"{name}: the description for {_named(language)} has lost the privacy paragraph of D-12"
+        for element in info.findall("description")
+        for language in [element.get("lang", DEFAULT_LANGUAGE)]
+        if language in PRIVACY_MARKERS and PRIVACY_MARKERS[language] not in (element.text or "")
+    ]
 
 
 def scan_measured_sentence(name: str, source: str) -> list[str]:
@@ -881,3 +1007,135 @@ def test_a_readme_that_forgot_an_image_entirely_is_reported() -> None:
 
     assert len(violations) == 1
     assert "says nothing about" in violations[0]
+
+
+# -- the vocabulary rule of E-H2, with its reach, and the paragraph of D-12 ---
+
+
+def test_the_german_store_texts_avoid_the_blocked_term_without_counting_comments() -> None:
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_german_prose_of_an_info(
+            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert violations == []
+
+
+def test_the_store_listing_document_avoids_the_blocked_term_counting_every_line() -> None:
+    assert STORE_LISTING.is_file()
+    assert scan_german_document("docs/store-listing.md", STORE_LISTING.read_text(encoding="utf-8")) == []
+
+
+def test_the_exception_of_e_h2_is_exercised_and_not_only_claimed() -> None:
+    """The English term still stands in the comment, and this gate lets it stand.
+
+    **This is the count that includes the comments**, and it is the whole point
+    of the case. Without it the exception would be indistinguishable from an
+    absence: a tree in which somebody had quietly removed the word would look
+    exactly like a tree in which the exception works.
+
+    If this case ever goes red, one of two things happened, and both want a
+    decision rather than an edit. Either the comment was reworded, in which case
+    the exception has lost its example and this case goes with it, or the gate
+    was tightened to read the raw file, in which case E-H2 has to be re-read
+    before anything else is touched.
+    """
+    delivered = BACKEND_INFO.read_text(encoding="utf-8")
+
+    assert count_blocked_term(delivered) >= 1
+    assert count_blocked_term(strip_xml_comments(delivered)) == 0
+    assert scan_german_prose_of_an_info("backend/appinfo/info.xml", delivered) == []
+
+
+def test_the_privacy_paragraph_of_d_12_stands_in_all_three_languages_of_both_halves() -> None:
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_privacy_paragraph(
+            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert violations == []
+
+
+# -- self tests for the vocabulary rule and the privacy paragraph ------------
+
+_CLEAN_PRIVACY = (
+    _CLEAN_INFO.replace("What it does, in English.", "What it does. Privacy: no file content leaves the server.")
+    .replace("Was sie tut, auf Deutsch.", "Was sie tut. Datenschutz: kein Dateiinhalt geht vom Server fort.")
+    .replace("Ce qu'elle fait, en francais.", "Ce qu'elle fait. Confidentialité : rien ne quitte le serveur.")
+)
+
+
+def test_the_blocked_term_in_a_german_store_text_is_reported() -> None:
+    # The prose count, which is the one that leaves comments out.
+    violations = scan_german_prose_of_an_info(
+        "sample.xml", _CLEAN_INFO.replace("Was sie tut, auf Deutsch.", f"Ein {BLOCKED_TERM} voller Dateien.")
+    )
+
+    assert len(violations) == 1
+    assert "comment lines are not counted" in violations[0]
+
+
+def test_the_blocked_term_in_an_english_store_text_is_not_the_business_of_this_rule() -> None:
+    # E-H2 draws the line at German prose. An English wording is judged by the
+    # store and by a reader, not by this gate, and pretending otherwise here
+    # would be a rule nobody decided.
+    assert (
+        scan_german_prose_of_an_info(
+            "sample.xml", _CLEAN_INFO.replace("What it does, in English.", f"A release {BLOCKED_TERM}e.")
+        )
+        == []
+    )
+
+
+def test_the_blocked_term_inside_a_comment_is_not_reported_by_the_prose_count() -> None:
+    # The staged twin of the delivered file: the term stands in the document,
+    # inside a comment, and the prose count says nothing. This is the mechanical
+    # form of the exception in E-H2.
+    commented = _CLEAN_INFO.replace(
+        '<?xml version="1.0"?>\n',
+        f'<?xml version="1.0"?>\n<!-- the release {BLOCKED_TERM}e carries this file unchanged -->\n',
+    )
+
+    assert count_blocked_term(commented) == 1
+    assert count_blocked_term(strip_xml_comments(commented)) == 0
+    assert scan_german_prose_of_an_info("sample.xml", commented) == []
+
+
+def test_the_blocked_term_in_a_german_document_is_reported_with_every_line_counted() -> None:
+    violations = scan_german_document("sample.md", f"Ein Satz ueber ein {BLOCKED_TERM} und seine Dateien.")
+
+    assert len(violations) == 1
+    assert "every line of the file is counted" in violations[0]
+
+
+def test_a_document_that_is_not_well_formed_is_a_finding_of_the_vocabulary_scan_too() -> None:
+    violations = scan_german_prose_of_an_info("sample.xml", _CLEAN_INFO.replace("</info>", ""))
+
+    assert len(violations) == 1
+    assert "not well formed" in violations[0]
+
+
+def test_the_clean_privacy_sample_is_clean() -> None:
+    assert scan_privacy_paragraph("sample.xml", _CLEAN_PRIVACY) == []
+
+
+def test_a_description_that_lost_the_privacy_paragraph_is_reported_by_language() -> None:
+    violations = scan_privacy_paragraph("sample.xml", _CLEAN_PRIVACY.replace("Datenschutz: ", ""))
+
+    assert len(violations) == 1
+    assert "lang=de" in violations[0]
+
+
+def test_the_privacy_scan_says_nothing_about_what_the_three_paragraphs_mean() -> None:
+    # The modesty clause, as a case rather than as a sentence in a docstring: a
+    # German paragraph that says something else entirely still passes, because
+    # judging that is a reading and this file does not read.
+    rewritten = _CLEAN_PRIVACY.replace("kein Dateiinhalt geht vom Server fort.", "etwas ganz anderes.")
+
+    assert scan_privacy_paragraph("sample.xml", rewritten) == []

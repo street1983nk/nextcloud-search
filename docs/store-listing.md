@@ -32,17 +32,24 @@ verletzen.
 
 ## Zum Vokabular öffentlicher Artefakte
 
-Dieses Repository führt kein Vokabular-Gate. Gesucht wurde am 04.09.2026 in
-`backend/tests` und in `scripts/ci`: es gibt Gate A bis Gate C, das
-Lockstep-Gate, das Paritäts-Gate und die Wortlisten-Prüfung des deutschen
-Kompositum-Wörterbuchs, aber keine Prüfung gegen eine Liste verbotener
-Projektbegriffe. Es gilt daher die Regel des Owners für öffentliche Artefakte.
-Der dort gesperrte Projektbegriff für einen Aufbewahrungsort kommt in der
-deutschen und in der französischen Fassung unten nicht vor: sie sprechen von
-einer Sicherung, von komprimierten Dateien und vom Quellcode, wo eine
-naheliegende Formulierung ihn benutzt hätte. Die englische Fassung bräuchte ihn
-als Dateityp-Bezeichnung, kommt unten aber ebenfalls ohne aus, weil keiner der
-sechs Texte einzelne Dateitypen aufzählt.
+Seit Plan 06.1-13 führt dieses Repository ein Vokabular-Gate. Es steht in
+`backend/tests/test_store_metadata.py` neben den übrigen Store-Zusicherungen,
+und seine Reichweite ist Entscheidung E-H2 vom 06.09.2026: Die Regel gilt für
+deutsche Prosa in den öffentlichen Texten, der englische Fachausdruck in einem
+technischen Kommentar einer ausgelieferten Datei ist ausdrücklich ausgenommen.
+Die Ausnahme steht im Kopf des Gates und wird von einem eigenen Fall belegt,
+damit sie beim nächsten Streit nicht nur behauptet ist. Bis zum 04.09.2026 gab
+es keine solche Prüfung; das war der Befund DI-05-32, und er ist mit E-H2
+geschlossen.
+
+Der gesperrte Projektbegriff für einen Aufbewahrungsort kommt in der deutschen
+und in der französischen Fassung unten nicht vor: sie sprechen von einer
+Sicherung, von komprimierten Dateien und vom Quellcode, wo eine naheliegende
+Formulierung ihn benutzt hätte. Die englische Fassung bräuchte ihn als
+Dateityp-Bezeichnung, kommt unten aber ebenfalls ohne aus, weil keiner der
+sechs Texte einzelne Dateitypen aufzählt. Diese Datei zählt im Gate mit jeder
+Zeile, nicht nur mit ihren deutschen Absätzen; welche Zählung ein Fall benutzt,
+sagt er selbst.
 
 ## Die gemessene Zahl
 
