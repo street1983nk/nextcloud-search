@@ -82,12 +82,18 @@ stage_companion() {
 # info.xml is copied byte for byte and is never filtered or rewritten, and that
 # is a hard requirement rather than tidiness. pre-info.xslt drops the routes
 # block silently, so the store database never sees the five routes of this
-# container; AppAPI reads them back out of this archive at installation time. An
-# archive with a rewritten info.xml installs an app with no search route and no
-# error message. The app-metadata job of php.yml holds that finding as a step
-# that goes red if the transform ever stops dropping them, and the HaRP deploy
-# job holds the other end: it registers the ExApp out of this very file and
-# proves with a stripped copy that the search goes silent without the block.
+# container; AppAPI reads them back out of this archive at installation time and
+# writes them into oc_ex_apps_routes. An archive with a rewritten info.xml
+# installs an app whose route table is empty, and nothing anywhere says so. The
+# app-metadata job of php.yml holds that finding as a step that goes red if the
+# transform ever stops dropping them, and the HaRP deploy job holds the other
+# end: it registers the ExApp out of this very file and counts the rows the
+# registration produced, once with a stripped copy and once with this one.
+#
+# It counts rows and not search hits, and that correction is from 07.09.2026:
+# HaRP 0.4.5 skips route checking for AppAPI signed requests, which is the path
+# the companion uses, so the search answers with the block and without it. The
+# route table is the only place where the two archives differ.
 #
 # This archive carries metadata and not code. The container image is not in it:
 # info.xml names it, and AppAPI pulls it from ghcr at installation time. LICENSE

@@ -292,9 +292,19 @@ accompany the work.
 The backend `info.xml` is copied byte for byte and is never filtered or rewritten. That
 is a hard requirement: `pre-info.xslt` drops the `routes` block silently, so the store
 database never sees the five routes of the container, and AppAPI reads them back out of
-this archive at installation time. An archive with a rewritten `info.xml` installs an app
-with no search route and no error message. The `app-metadata` job of `php.yml` holds that
-finding as a step that goes red if the transform ever stops dropping them.
+this archive at installation time into `oc_ex_apps_routes`. An archive with a rewritten
+`info.xml` installs an app whose route table is empty, and nothing anywhere says so. The
+`app-metadata` job of `php.yml` holds that finding as a step that goes red if the
+transform ever stops dropping them.
+
+**What an empty route table does not do** (corrected on 07.09.2026, probe of plan
+06.1-12, named again in the security audit of plan 06.1-17): it does not silence the
+search. The companion reaches the container over the AppAPI signed path, and HaRP 0.4.5
+skips route checking for signed requests. Measured on all three matrix legs: an archive
+without the block still answers the search, and an unsigned `/search` answers 404 with
+the block and without it, because HaRP matches with `re.match(route.url, target_path)`
+and the five urls are bare paths. `Store install 5` therefore measures the route table
+and not the search, which is the only place where the two archives differ.
 
 ### How to run it
 
