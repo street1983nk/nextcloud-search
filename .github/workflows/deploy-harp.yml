@@ -551,15 +551,6 @@ jobs:
           } >> "${GITHUB_ENV}"
           echo "companion ${companion}, probing against ${newer} and ${older}"
 
-          # The overview route sits behind the CSRF middleware, and neither an
-          # app password nor the form login carries it on the built-in server
-          # (measured: 412 with token auth, 401 after a form login that never
-          # builds a session). Nextcloud's own acceptance tests answer this with
-          # the documented switch below; it disables the CSRF check only, on a
-          # throwaway instance that dies with the runner, and authentication
-          # stays fully enforced (an anonymous call still answers 401).
-          timeout 60 ./occ config:system:set csrf.disabled --type boolean --value true
-
           # The redeploy helper. One file rather than the same twenty lines in
           # three steps, and it fails on its own if the value it was asked for is
           # not the value the container ended up with.
@@ -617,11 +608,11 @@ jobs:
           fi
           if [ -n "${apppw}" ]; then echo "app password: obtained (length ${#apppw})"; else echo "app password: not available"; fi
           if [ -n "${apppw}" ]; then
-            # index.php routes sit behind the strict cookie check (HTTP 412 without
-          # it); the two SameSite cookies are the documented way a script passes
-          # it, and they carry no session.
-          samesite='__Host-nc_sameSiteCookielax=true; __Host-nc_sameSiteCookiestrict=true'
-          code=$(curl -s -u "admin:${apppw}" -b "${samesite}" \
+            # Request.php::passesCSRFCheck() (stable34, line 455) lets any request
+          # with the OCS-APIRequest header through, and cookieCheckRequired()
+          # waives the strict cookie check for it as well. That header is the
+          # scriptable way past the 412 this route answered without it.
+          code=$(curl -s -u "admin:${apppw}" -H 'OCS-APIRequest: true' \
               -H 'Accept: application/json' \
               -w '%{http_code}' -o "${out}" \
               http://localhost:8080/index.php/apps/findling/admin/overview)
@@ -654,7 +645,7 @@ jobs:
             | head -1 | cut -d'"' -f2)
           echo "settings page: HTTP ${code}, token length ${#token}"
           code=$(curl -s -b "${jar}" -c "${jar}" \
-            -H "requesttoken: ${token}" \
+            -H "requesttoken: ${token}" -H 'OCS-APIRequest: true' \
             -H 'Accept: application/json' \
             -w '%{http_code}' -o "${out}" \
             http://localhost:8080/index.php/apps/findling/admin/overview)
