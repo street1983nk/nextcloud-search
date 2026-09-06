@@ -20,6 +20,12 @@ Dockerfile text eol=lf
 # because these PDFs contain no NUL byte and would be treated as text.
 testdata/corpus/** -text
 
+# The ground truth of the OCR quality measurement. The generator writes it with a
+# plain newline and compares it byte for byte on the next run, so a checkout that
+# turned those newlines into carriage return pairs would make build_corpus.py
+# --check fail on a machine where nothing is wrong.
+testdata/corpus-truth.json text eol=lf
+
 # The typeface the corpus is rendered with, and the licence text that has to
 # travel with it. The font decides what OCR reads, so its checksum is pinned in
 # scripts/dev/build_corpus.py and a checkout that rewrote a byte of it would

@@ -111,7 +111,7 @@ def _pages() -> list[ocr_quality.RenderedPage]:
     ]
 
 
-def _engine_that_makes(mistakes: dict[str, str]):  # noqa: ANN202 - a local stub, typed by its use
+def _engine_that_makes(mistakes: dict[str, str]) -> ocr_quality.Engine:
     """Stand in for the shipped engine call: it answers from a table, page by page."""
     answers = iter(mistakes.values())
 

@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import struct
 import sys
 import zipfile
@@ -1641,6 +1642,56 @@ UNIQUE_TERMS: dict[str, str] = {
 }
 
 
+# --------------------------------------------------------------------------
+# The ground truth of the OCR quality measurement. Not a second corpus and not a
+# second set of words: the very same rendered prose, written out once in a form
+# that a measuring tool can read without importing this script.
+#
+# Only documents whose every page is a rendered image belong in here.
+# 14-pacht-mit-anhang.pdf has three rendered annex pages, but its first two pages
+# carry a real text layer, so page 0 of the PDF and page 0 of the truth would not
+# be the same page. A measurement whose page numbering is off by two measures the
+# wrong page and says nothing about it.
+#
+# The variant is the one label besides numbers that the measuring tool is allowed
+# to print. It says which spelling a page carries, de, ch or at, so the report can
+# be broken down by language variant without a file name or a line of prose ever
+# leaving the tool.
+# --------------------------------------------------------------------------
+
+GROUND_TRUTH_PATH = CORPUS_DIR.parent / "corpus-truth.json"
+
+
+def _ground_truth_documents() -> tuple[tuple[str, str, tuple[tuple[str, ...], ...]], ...]:
+    """Name, language variant and the pages of prose, for every fully rendered file."""
+    return (
+        ("13-ratsvorlage-scan.pdf", "de", RATSVORLAGE_PAGES),
+        ("15-schweiz-baubewilligung.pdf", "ch", (SCHWEIZ_PAGE,)),
+        ("16-oesterreich-mitteilung.pdf", "at", (OESTERREICH_PAGE,)),
+        ("30-nur-ein-bild.pdf", "de", (ZAHLUNGSERINNERUNG_PAGE,)),
+    )
+
+
+def build_ground_truth() -> bytes:
+    """The rendered prose per page as UTF-8 JSON, byte for byte the same every run.
+
+    Three decisions make it reproducible rather than merely tidy: the documents
+    are sorted by name, the keys are sorted, and the line separator is written as
+    a plain newline instead of being left to the platform. The measurement is
+    compared across machines and across months, and a truth file that differs in
+    its byte order would turn every such comparison into a question about the
+    file rather than about the engine.
+    """
+    payload = {
+        "generated_by": "scripts/dev/build_corpus.py",
+        "documents": [
+            {"name": name, "variant": variant, "pages": ["\n".join(lines) for lines in pages]}
+            for name, variant, pages in sorted(_ground_truth_documents())
+        ],
+    }
+    return f"{json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)}\n".encode()
+
+
 def _all_rendered_characters() -> str:
     """Every character this corpus draws, the probe line included.
 
@@ -1769,6 +1820,19 @@ def _check() -> int:
         if target.is_file() and target.name not in FILES:
             problems.append(f"{target.name} lies in the corpus and comes out of no builder")
 
+    # The ground truth is checked in the same breath as the pages it describes.
+    # A truth file that drifted from the pixels is worse than a missing one: the
+    # character error rate would then be measured against prose that no page
+    # carries, and it would come back high for a reason nobody could find.
+    truth = build_ground_truth()
+    if not GROUND_TRUTH_PATH.is_file():
+        problems.append(f"{GROUND_TRUTH_PATH.name} is missing")
+    elif GROUND_TRUTH_PATH.read_bytes() != truth:
+        problems.append(
+            f"{GROUND_TRUTH_PATH.name} differs from a fresh build,"
+            f" rebuilt {len(truth)} bytes sha256={hashlib.sha256(truth).hexdigest()}"
+        )
+
     for problem in problems:
         print(f"check failed: {problem}")
     if problems:
@@ -1797,6 +1861,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         digest = hashlib.sha256(payload).hexdigest()
         print(f"{name} bytes={len(payload)} sha256={digest}")
     print(f"files={len(FILES)} total bytes={sum(len(payload) for payload in FILES.values())}")
+
+    # Outside the corpus directory on purpose: readonly-gate copies that
+    # directory into a throwaway Nextcloud and counts what is in it, and a file
+    # that is not a document under test has no business being counted.
+    truth = build_ground_truth()
+    GROUND_TRUTH_PATH.write_bytes(truth)
+    print(f"{GROUND_TRUTH_PATH.name} bytes={len(truth)} sha256={hashlib.sha256(truth).hexdigest()}")
     return 0
 
 
