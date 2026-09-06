@@ -12,6 +12,11 @@ Run it from anywhere:
 
     python scripts/dev/build_corpus.py
 
+With ``--check`` it builds the very same files in memory and compares them with
+the bytes that lie in testdata/corpus, without writing a single one of them. That
+is the reproducibility promise as a measurement rather than as a sentence, and it
+is what the verification of a plan that touches this script runs.
+
 Two files are broken on purpose. The zero byte PDF and the password protected
 PDF are the error path, and the error path is where the predecessor app
 (files_fulltextsearch_tesseract) destroyed user data. A corpus of well formed
@@ -55,6 +60,7 @@ from __future__ import annotations
 import hashlib
 import io
 import struct
+import sys
 import zipfile
 import zlib
 from collections.abc import Sequence
@@ -1160,12 +1166,56 @@ FILES: dict[str, bytes] = {
 }
 
 
-def main() -> int:
+def _check() -> int:
+    """Rebuild every file in memory and compare it with the bytes on disk.
+
+    The reproducibility promise of this script is the load bearing part of the
+    corpus, because ``readonly-gate`` compares committed checksums: a builder
+    whose output drifts turns that gate from a statement about the read path
+    into a statement about the weather. Reading the claim out of the docstring
+    is not the same as measuring it, so this mode measures it, and it writes
+    nothing at all while doing so. A verification that repairs what it finds
+    would be green on the second run of a broken build.
+    """
+    problems: list[str] = []
+    for name, payload in FILES.items():
+        target = CORPUS_DIR / name
+        if not target.is_file():
+            problems.append(f"{name} is missing from {CORPUS_DIR}")
+            continue
+        on_disk = target.read_bytes()
+        if on_disk != payload:
+            problems.append(
+                f"{name} differs: on disk {len(on_disk)} bytes"
+                f" sha256={hashlib.sha256(on_disk).hexdigest()},"
+                f" rebuilt {len(payload)} bytes sha256={hashlib.sha256(payload).hexdigest()}"
+            )
+    # The other direction, and it is not symmetry for its own sake: a file that
+    # nothing builds any more is exactly the downloaded sample the corpus rules
+    # forbid, and comparing only the built names would never see it.
+    for target in sorted(CORPUS_DIR.iterdir()):
+        if target.is_file() and target.name not in FILES:
+            problems.append(f"{target.name} lies in the corpus and comes out of no builder")
+
+    for problem in problems:
+        print(f"check failed: {problem}")
+    if problems:
+        return 1
+
+    total = sum(len(payload) for payload in FILES.values())
+    print(f"check ok: {len(FILES)} files, {total} bytes, every one of them byte identical with a fresh build")
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
     # Both checks run before the first byte is written. A corpus with a
     # replacement box in it, or with a search term in two files, is worse than
     # no corpus: it turns green assertions into statements about nothing.
     _assert_every_glyph_exists(GLYPH_PROBE)
     _assert_terms_stand_in_one_file(FILES)
+
+    if "--check" in list(sys.argv[1:] if argv is None else argv):
+        return _check()
 
     CORPUS_DIR.mkdir(parents=True, exist_ok=True)
     for name, payload in FILES.items():
