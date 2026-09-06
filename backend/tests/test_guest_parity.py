@@ -141,11 +141,18 @@ def test_the_probe_carries_neither_a_dash_nor_a_carriage_return() -> None:
         assert dash not in text, f"{dash!r} in {PROBE.name}"
 
 
-def test_this_gate_carries_neither_a_dash_nor_a_carriage_return() -> None:
-    """The gate is held to the rule it holds the script to."""
-    raw = Path(__file__).read_bytes()
-    assert b"\r" not in raw
-    text = raw.decode("utf-8")
+def test_this_gate_carries_no_dash_either() -> None:
+    """The gate is held to the typography rule it holds the script to.
+
+    The carriage return half of that rule is deliberately not asserted here.
+    ``.gitattributes`` pins ``*.sh`` to a line feed because a shell reads those
+    files and an invisible character behind a shebang is a start that fails; the
+    Python of ``backend/`` is imported and never started by its shebang, so it
+    is left to the checkout, and on the development machine of this project that
+    checkout writes carriage returns. A gate that went red on every fresh clone
+    would be switched off within a week.
+    """
+    text = Path(__file__).read_text(encoding="utf-8")
     for dash in DASHES:
         assert dash not in text, f"{dash!r} in {Path(__file__).name}"
 
