@@ -37,6 +37,7 @@ from typing import Final
 from tantivy import Index
 
 from findling.config import settings
+from findling.embed.engine import shared_model
 from findling.embed.model import EmbeddingModel
 from findling.index.open import expected_versions, open_index, open_reader
 from findling.index.wordlist import build_artifact
@@ -99,9 +100,8 @@ class ReadSide:
 _OPEN: ReadSide | None = None
 _MARKS: tuple[Path, dict[str, str]] | None = None
 _DEGRADED: tuple[Path, float, bool] | None = None
-_MODEL: tuple[Path, EmbeddingModel] | None = None
 
-# One lock for the four caches above, and it is not a precaution.
+# One lock for the three caches above, and it is not a precaution.
 #
 # Every search runs its round in asyncio.to_thread and the unified search asks
 # all providers at the same moment, so two requests really do arrive in here at
@@ -252,30 +252,22 @@ def _read_only_vectors(path: Path) -> VectorStore | None:
 
 
 def query_model() -> EmbeddingModel:
-    """The embedding model of the read side, built once and loaded on first use.
+    """The embedding engine of this process, which the read side shares.
 
-    Built once for the reason the handles above are cached: the weights are
-    118 MB and the wrapper remembers a failed load, so a container without a
-    model looks for it once instead of once per search. Constructing the object
-    loads nothing, which is why this may be called before it is known whether
-    there is a model at all.
+    A pass through and no longer a cache of its own. It used to hold one keyed
+    on the model directory, exactly like the handles above, and the second track
+    of the poller held another, so a container that indexes and searches, which
+    is every installation, carried two tokenizers and two onnxruntime sessions:
+    276 MB that stayed resident after the first semantic search, measured on
+    2026-09-05 against 210 MB of headroom.
 
-    Keyed on the model directory like the other caches are keyed on their path,
-    so a suite that points a test at another directory gets another wrapper
-    instead of the remembered failure of the previous one.
+    The holder moved to :mod:`findling.embed.engine` rather than staying here,
+    with the reasoning at that module. The short version is the dependency
+    direction: this is the reading half of the container, and the worker must
+    not import from the API to get an engine. Two halves that draw from one
+    holder need it to belong to neither of them.
     """
-    global _MODEL
-    resolved = settings()
-    with _LOCK:
-        if _MODEL is not None and _MODEL[0] == resolved.embed_model_dir:
-            return _MODEL[1]
-        model = EmbeddingModel(
-            resolved.embed_model_dir,
-            batch_size=resolved.embed_batch_size,
-            sequence_len=resolved.embed_sequence_len,
-        )
-        _MODEL = (resolved.embed_model_dir, model)
-        return model
+    return shared_model()
 
 
 def read_side() -> ReadSide | None:
