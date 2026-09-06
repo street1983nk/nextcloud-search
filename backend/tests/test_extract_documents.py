@@ -14,6 +14,7 @@ the test they are visible in the diff, which is where a reviewer looks.
 
 from __future__ import annotations
 
+import socket
 import time
 import tracemalloc
 from collections.abc import Callable, Sequence
@@ -32,6 +33,7 @@ from pypdf.errors import EmptyFileError, FileNotDecryptedError
 
 from findling import config
 from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
+from findling.extract import sandbox
 from findling.extract.dispatch import ALLOWED_MIMETYPES, IMAGE_MIMETYPES, Route, extract
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.odf import extract_odf
@@ -393,6 +395,11 @@ CORPUS_PDF_VERDICTS: dict[str, tuple[State, Reason | None]] = {
     "31-riesenformat.pdf": (State.SKIPPED, Reason.NO_TEXT_LAYER),
     "32-startxref-ins-leere.pdf": (State.INDEXED, None),
     "33-seitenbaum-zyklus.pdf": (State.FAILED, Reason.CORRUPT),
+    "35-startaktion-javascript.pdf": (State.INDEXED, None),
+    "36-eingebettete-datei.pdf": (State.INDEXED, None),
+    "37-verweis-ins-netz.pdf": (State.INDEXED, None),
+    "38-aes256-verschluesselt.pdf": (State.SKIPPED, Reason.ENCRYPTED),
+    "39-tief-verschachtelt.pdf": (State.INDEXED, None),
 }
 
 
@@ -413,6 +420,133 @@ def test_every_pdf_of_the_corpus_keeps_the_verdict_that_is_documented_for_it() -
         assert outcome.reason is reason, f"{name} came back with reason {outcome.reason}"
 
     assert time.monotonic() - started < 30
+
+
+# ---------------------------------------------------------------------------
+# Five PDF structures that want something.
+#
+# The ten broken files above are accidents: a truncated copy, a wrong offset, a
+# tree that points at itself. These five are not broken at all. Each of them is
+# a well formed document that describes an action, and the question is never
+# whether the parser survives it but whether anything of that action happens.
+#
+# Each test therefore asserts two things and not one: that the structure really
+# stands in the file, and that the verdict came back without it doing anything.
+# Without the first half the test would stay green on the day the generator
+# stops writing the structure, which is the quietest way a security fixture can
+# die.
+# ---------------------------------------------------------------------------
+
+SCRIPT_FILE = "35-startaktion-javascript.pdf"
+ATTACHMENT_FILE = "36-eingebettete-datei.pdf"
+LINK_FILE = "37-verweis-ins-netz.pdf"
+AES_FILE = "38-aes256-verschluesselt.pdf"
+NESTED_FILE = "39-tief-verschachtelt.pdf"
+
+
+def test_a_pdf_that_asks_for_javascript_on_open_is_read_as_text_and_never_runs_it() -> None:
+    # pypdf reads the trailer and pypdfium2 renders text; neither carries a
+    # script engine, and no code of this repository looks at /OpenAction. The
+    # marker inside the script is what turns that from a claim into a
+    # measurement: if the script were ever evaluated, or if its source were
+    # simply swept into the text, the marker would be in the index.
+    payload = (CORPUS / SCRIPT_FILE).read_bytes()
+    assert b"/OpenAction" in payload
+    assert b"/JavaScript" in payload
+    assert b"Skriptmarke" in payload
+
+    outcome = extract_pdf(str(CORPUS / SCRIPT_FILE))
+
+    assert outcome.state is State.INDEXED
+    assert "Startaktion" in outcome.text
+    assert "Skriptmarke" not in outcome.text
+    assert "app.alert" not in outcome.text
+
+
+def test_a_pdf_with_an_embedded_file_never_unpacks_it() -> None:
+    # An attachment is a file inside a file. Unpacking it would put an attacker
+    # chosen name on the disk of the container and its content into the index of
+    # a document nobody attached it to.
+    path = CORPUS / ATTACHMENT_FILE
+    payload = path.read_bytes()
+    assert b"/EmbeddedFile" in payload
+    assert b"Anlagenmarke" in payload
+
+    before = sorted((entry.name, entry.stat().st_size) for entry in CORPUS.iterdir())
+    outcome = extract_pdf(str(path))
+    after = sorted((entry.name, entry.stat().st_size) for entry in CORPUS.iterdir())
+
+    assert outcome.state is State.INDEXED
+    assert "Anlage" in outcome.text
+    assert "Anlagenmarke" not in outcome.text
+    assert before == after, "reading the document wrote something next to it"
+
+
+def test_a_pdf_with_a_uri_action_opens_no_socket(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The address is data, not an instruction. docker.yml runs the whole suite
+    # once with the network switched off, which proves that no network is
+    # needed; this proves that none is attempted, and it is the cheaper half to
+    # keep green because it fails with a name instead of with a timeout.
+    def unreachable(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("the extraction opened a socket")
+
+    payload = (CORPUS / LINK_FILE).read_bytes()
+    assert b"/URI" in payload
+    assert b"Netzmarke" in payload
+
+    monkeypatch.setattr(socket, "socket", unreachable)
+    monkeypatch.setattr(socket, "create_connection", unreachable)
+
+    outcome = extract_pdf(str(CORPUS / LINK_FILE))
+
+    assert outcome.state is State.INDEXED
+    assert "Verweis" in outcome.text
+    assert "Netzmarke" not in outcome.text
+
+
+def test_an_aes_256_encrypted_pdf_is_skipped_encrypted_like_the_rc4_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The corpus has carried RC4 with 40 bits since phase 1, which is what a
+    # decade old document looks like. This is what a document encrypted by a
+    # current office suite looks like, and the two take different roads through
+    # pypdf: the old one answers is_encrypted, the new one makes pypdf reach for
+    # an AES provider that this lock file deliberately does not carry.
+    payload = (CORPUS / AES_FILE).read_bytes()
+    assert b"/V 5" in payload
+    assert b"/R 6" in payload
+    assert b"/CFM /AESV3" in payload
+    # The content stream really is encrypted rather than dressed up as such.
+    assert b"Revision" not in payload
+
+    def unreachable(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("pdfium was asked to open an encrypted document")
+
+    monkeypatch.setattr(pypdfium2, "PdfDocument", unreachable)
+
+    outcome = extract_pdf(str(CORPUS / AES_FILE))
+
+    assert outcome == ExtractionOutcome.skipped(Reason.ENCRYPTED)
+
+
+def test_a_deeply_nested_pdf_ends_in_a_verdict_inside_the_caps_of_the_sandbox() -> None:
+    # Not the library against a real bomb, but our own guards against a small
+    # structure of exactly known size. The child of extract/sandbox.py carries
+    # both caps that could be hit here: the extraction timeout and, on Linux,
+    # RLIMIT_AS. A verdict coming back out of that child is the statement, and
+    # the wall clock bound of this test is two orders of magnitude under the
+    # timeout so that a slow runner cannot turn it into a coin toss.
+    payload = (CORPUS / NESTED_FILE).read_bytes()
+    assert b"[" * 1000 in payload, "the nesting the file exists for is not in it"
+
+    started = time.monotonic()
+    outcome = sandbox.extract_guarded(
+        str(CORPUS / NESTED_FILE),
+        "application/pdf",
+        (CORPUS / NESTED_FILE).stat().st_size,
+    )
+    elapsed = time.monotonic() - started
+
+    assert outcome.state is State.INDEXED, f"the nested document came back as {outcome.state}/{outcome.reason}"
+    assert elapsed < 30, f"the verdict took {elapsed:.1f} seconds"
 
 
 def test_the_dispatcher_reaches_the_pdf_route() -> None:
