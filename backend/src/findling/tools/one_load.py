@@ -93,7 +93,10 @@ DOCUMENT_TITLE: Final = "Akte 1"
 DOCUMENT_NAME: Final = "Akte-1.pdf"
 DOCUMENT_PATH: Final = "/Akten/Akte-1.pdf"
 DOCUMENT_BODY: Final = "Für alle Beschäftigten gilt: die Kündigungsfrist im Vertrag beträgt drei Monate."
-QUERY: Final = "vertrag"
+# Two words on purpose: since the 06.1-20 addendum a single-word line stays
+# lexical and would never reach the engine, so a one-word probe here would
+# measure the rule instead of the load. Both words stand in DOCUMENT_BODY.
+QUERY: Final = "Vertrag Monate"
 
 FILE_ID: Final = 1
 STORAGE_ID: Final = 1
