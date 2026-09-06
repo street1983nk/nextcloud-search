@@ -6,6 +6,24 @@ Repository und werden über `raw.githubusercontent.com` verlinkt. Welches Elemen
 auf welches Bild zeigt, steht in beiden `appinfo/info.xml` mit der Begründung
 daneben; die sechs Texte des Eintrags stehen in `docs/store-listing.md`.
 
+## Größe und Grenze, Bild für Bild
+
+Der Store nimmt je Bild höchstens 2 MiB an, also 2097152 Bytes. Ein Bild
+darüber beendet die Einreichung, deshalb steht die Zahl hier neben jedem Bild
+und nicht als Faustregel darunter.
+
+| Bild | Größe | Grenze |
+|---|---|---|
+| `header.png` | 168515 Bytes (165 KiB) | 2 MiB je Bild |
+| `screenshot-admin.png` | 157081 Bytes (153 KiB) | 2 MiB je Bild |
+| `screenshot-search.png` | 113724 Bytes (111 KiB) | 2 MiB je Bild |
+
+Die Zahlen sind nicht gepflegt, sondern geprüft: `backend/tests/test_store_metadata.py`
+hält jede von ihnen gegen die Datei, die wirklich in diesem Verzeichnis liegt.
+Wer ein Bild austauscht und die Zahl stehen lässt, bekommt ein rotes Gate mit
+der heutigen Größe in der Meldung. Eine Zahl, die beim Tippen stimmte, ist
+schlechter als gar keine.
+
 ## Warum die Bilder aus der Entwicklungsinstanz kommen und nicht aus CI
 
 Die naheliegende Quelle wäre der Referenzkorpus, den die
@@ -82,7 +100,7 @@ geholt.
 | Regel | Warum |
 |---|---|
 | PNG, verlustfrei | Text in einem JPEG wird unscharf, und diese Bilder sind fast nur Text |
-| je unter 2 MiB | Grenze des Stores je Bild; alle drei liegen unter 200 KiB |
+| je unter 2 MiB | Grenze des Stores je Bild, geprüft von `backend/tests/test_store_metadata.py`; die Zahlen stehen oben |
 | Breite 1440 | auf einer Store-Seite noch lesbar, ohne dass die Datei groß wird |
 | Adresse über `https`, höchstens 256 Zeichen | `secure-url` der Store-XSD, geprüft von `backend/tests/test_store_metadata.py` |
 | kein Personenname, keine Adresse, kein fremder Dateiname | ein Store-Bild ist ein öffentliches Artefakt, und ein Bestand aus einer echten Instanz gehört nicht hinein |
