@@ -1,0 +1,47 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [(anlage.txt) 6 0 R] >> >> >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 160] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<<  /Length 152 >>
+stream
+BT /F1 11 Tf 20 120 Td (Eine Anlage h‰ngt an dieser Seite) Tj ET
+BT /F1 11 Tf 20 98 Td (Die eingebettete Datei wird beim Lesen nicht ausgepackt.) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Filespec /F (anlage.txt) /UF (anlage.txt) /EF << /F 7 0 R >> >>
+endobj
+7 0 obj
+<< /Type /EmbeddedFile /Subtype /text#2Fplain /Length 75 >>
+stream
+Anlagenmarke: this attachment must never be unpacked and never be indexed.
+
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000126 00000 n 
+0000000183 00000 n 
+0000000309 00000 n 
+0000000513 00000 n 
+0000000610 00000 n 
+0000000699 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+867
+%%EOF

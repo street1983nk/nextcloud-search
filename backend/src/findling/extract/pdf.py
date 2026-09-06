@@ -5,8 +5,15 @@ pypdf is pure Python and answers whether a file is encrypted without touching a
 single page; pypdfium2 wraps the PDF engine of Chrome and is the fast one. Asking
 the cheap library first is what keeps a password protected document a deliberate
 skipped(encrypted) instead of a failure: measured against the reference corpus,
-``PdfReader(path)`` does not raise on such a file at all, the error only arrives
+``PdfReader(path)`` does not raise on an RC4 file at all, the error only arrives
 when the pages are read, and by then the verdict would already be the wrong one.
+
+An AES encrypted document takes the second road through the same library, and it
+was measured on 2026-09-06: pypdf tries the empty password while the reader is
+being built, reaches for a crypt provider that this lock file does not carry and
+raises DependencyError, which descends from Exception rather than from
+PdfReadError. Both roads end in the same verdict here, and they have to, because
+the two are the same document to whoever reads the status page.
 
 The second reason for this order is that pdfium is a C library. Everything it
 hands out is a C resource, so every page and every text page is closed in a
@@ -35,7 +42,7 @@ from __future__ import annotations
 
 import pypdf
 import pypdfium2
-from pypdf.errors import EmptyFileError, PdfReadError
+from pypdf.errors import DependencyError, EmptyFileError, PdfReadError
 
 from findling import config
 from findling.extract.dispatch import cap_text
@@ -105,6 +112,24 @@ def extract_pdf(path: str) -> ExtractionOutcome:
         # truncated or scrambled file lands here. EmptyFileError is a subclass as
         # well, which is why it is caught first.
         return ExtractionOutcome.failed(Reason.CORRUPT)
+    except DependencyError:
+        # An AES encrypted document, and it never reaches the is_encrypted
+        # question below: pypdf tries the empty password while the reader is
+        # still being built, and for AES it asks a crypt provider that this lock
+        # file deliberately does not carry. DependencyError descends straight
+        # from Exception and not from PdfReadError, so before this clause the
+        # exception left the extractor and from_exception turned it into
+        # failed(corrupt), which is the wrong word twice over: the document is
+        # intact, and an admin reading the status page would go looking for a
+        # broken file instead of for a password. Measured on 2026-09-06 against
+        # 38-aes256-verschluesselt.pdf, and it is not an exotic case: AES is what
+        # every current office suite writes.
+        #
+        # Catching it here and only here is what keeps the clause narrow. The two
+        # calls inside this block are the reader and the encryption question, and
+        # the one dependency either of them can miss is the cipher, so the
+        # verdict is the same one the RC4 file gets one line further down.
+        return ExtractionOutcome.skipped(Reason.ENCRYPTED)
 
     if protected:
         return ExtractionOutcome.skipped(Reason.ENCRYPTED)

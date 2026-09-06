@@ -624,7 +624,7 @@ jobs:
       # The step that makes this gate mean something, and the reason it exists is
       # worth spelling out. A checksum comparison measures the files the run
       # touched. A run that never reached the pictures and the scans compares
-      # thirty three unchanged files with thirty three unchanged files and ends
+      # thirty nine unchanged files with thirty nine unchanged files and ends
       # green while proving nothing at all (pitfall 13). So every file is looked
       # up by name, and the expected verdict comes out of testdata/CORPUS.md
       # rather than out of a constant in here: the document that describes the
@@ -894,7 +894,7 @@ jobs:
       OVERVIEW_FILE: '11-uebersicht.odt'
       MEMO_FILE: '12-aktenvermerk.txt'
       # What the container has to end up with, measured against the corpus and
-      # not guessed. All thirty three entries of the directory reach the
+      # not guessed. All thirty nine entries of the directory reach the
       # container since plan 03-10: the four picture formats are on the mimetype
       # allowlist of the crawl, so nothing is left without a verdict any more.
       #
@@ -910,10 +910,16 @@ jobs:
       # others are broken in ways pdfium repairs. Asserting the exact numbers is
       # the point; "failed is small" would hide the day a working document
       # starts failing.
-      EXPECTED_INDEXED: '22'
-      EXPECTED_SKIPPED: '5'
+      #
+      # skipped is seven since the launch hardening while failed did not move
+      # with it, and that is the whole point of the six files of job four: a
+      # decompression bomb and an AES encrypted document are refusals and not
+      # failures, and the four PDFs that describe an action are read like any
+      # other document.
+      EXPECTED_INDEXED: '26'
+      EXPECTED_SKIPPED: '7'
       EXPECTED_FAILED: '6'
-      # Ceiling of the wait for an empty queue. Thirty three small files, but a
+      # Ceiling of the wait for an empty queue. Thirty nine small files, but a
       # dozen rendered pages go through the OCR engine on the way, and that is
       # minutes rather than seconds. Still only a bound whose job is to end a
       # broken run with counters instead of with a reaped runner.
@@ -935,12 +941,12 @@ jobs:
       # the second track cuts into chunks. The two move together, and a
       # divergence is a finding about the second track rather than a number to
       # be lowered until the run is green (T-06-51).
-      EXPECTED_EMBEDDED: '22'
+      EXPECTED_EMBEDDED: '26'
       # Ceiling of the extra wait for the second track, derived and not guessed.
       # The measured rate is 3519 tokens per second p95 on two pinned aarch64
       # cores (docs/measurements/2026-09-05-welle0-arm64/, measurement B), the
-      # cap of D-01 is 1024 tokens per document, so twenty two documents are
-      # 6.4 seconds of model time in the worst derived case. What the rest of
+      # cap of D-01 is 1024 tokens per document, so twenty six documents are
+      # 7.6 seconds of model time in the worst derived case. What the rest of
       # this budget pays for is queue latency: the rows travel a trailing track
       # in claims of eight (EMBED_CLAIM_BATCH), so the wait is dominated by
       # worker passes and not by the model. Three hundred seconds is roughly
@@ -1221,7 +1227,7 @@ jobs:
             if [ "$(date +%s)" -ge "${deadline}" ]; then
               echo "::error::the second track wrote vectors for ${carrying} of ${EXPECTED_EMBEDDED} documents within ${EMBED_TIMEOUT} seconds"
               echo "This is a finding about the second track, not a deadline to raise: the budget is fifty times"
-              echo "the model time the measured rate says twenty two documents cost."
+              echo "the model time the measured rate says twenty six documents cost."
               ./occ findling:index || true
               tail -n 100 "${{ runner.temp }}/exapp.log" || true
               exit 1
@@ -1341,7 +1347,7 @@ jobs:
             jq -e '.ocs.data.entries | length == 0' colleague-denied.json > /dev/null \
               || fail "the second user found a file that was never shared with him, searching for ${term}" colleague-denied.json
           done
-          echo "the second user sees one file out of thirty three, and it is the shared one"
+          echo "the second user sees one file out of thirty nine, and it is the shared one"
 
       # Criterion 1 of phase 6, through the whole stack instead of only in the
       # python suite: a query whose content words do not stand in a document
@@ -1512,7 +1518,7 @@ jobs:
             exit 1
           fi
           if [ "${skipped}" -ne "${EXPECTED_SKIPPED}" ]; then
-            echo "::error::${skipped} files were skipped, ${EXPECTED_SKIPPED} were expected: the encrypted PDF and six documents without a text layer"
+            echo "::error::${skipped} files were skipped, ${EXPECTED_SKIPPED} were expected: two encrypted PDFs, the decompression bomb, two images below the plausibility threshold and two documents the engine read no text on"
             exit 1
           fi
           if [ "${failed}" -ne "${EXPECTED_FAILED}" ]; then
@@ -1807,10 +1813,10 @@ jobs:
       # measures byte for byte, and a test that rewrites one of them would take
       # that measurement apart.
       WORK_DIR: 'abgleich'
-      # Thirty three corpus files plus the two files of the work folder. The
+      # Thirty nine corpus files plus the two files of the work folder. The
       # third one is created later, past the event path, and is the point of the
       # whole exercise.
-      EXPECTED_JUDGED: '35'
+      EXPECTED_JUDGED: '41'
       DRAIN_TIMEOUT: '900'
 
     steps:
