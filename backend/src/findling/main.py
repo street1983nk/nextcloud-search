@@ -11,6 +11,14 @@ The startup log names the chosen binding mode. That single line is worth its
 space: under HaRP the server binds a unix socket instead of a TCP port, and a
 container that binds the wrong one looks perfectly healthy in its own log while
 being unreachable from Nextcloud.
+
+The lifespan also decides whether this start indexes at all. AppAPI sends
+``PUT /enabled?enabled=1`` once, when it enables the ExApp, and never again, so
+the arming cannot come from that call alone: a restart of the machine or a
+restart by the docker policy after an out of memory kill would leave a container
+that answers searches and never indexes another file (DI-05-36). The enable is
+therefore remembered on the persistent volume, and the read of that mark sits in
+the lifespan with the whole reasoning beside it.
 """
 
 import asyncio
@@ -104,6 +112,50 @@ def active_reconcile() -> Reconcile | None:
     return _RECONCILE
 
 
+def _remember_the_enable() -> None:
+    """Leave the mark that lets the next start of this container arm itself.
+
+    A failure here is a warning and never an error to AppAPI. The enable itself
+    has succeeded at this point, and refusing it because a file could not be
+    written would trade a container that forgets its state across a restart for
+    one that cannot be switched on at all. Only the class name of the failure is
+    logged, by the rule of this module: the message of an OSError carries the
+    path it was raised on, and the path of the volume is not ours to print.
+
+    The root is not created here, and that is a decision rather than an
+    oversight. This module is the one that holds an AsyncNextcloudApp, so Gate A
+    judges a directory creating call in it by the same rule as a write into a
+    Nextcloud node, and the exemption the four local modules have does not carry
+    over to this one. AppAPI creates the volume before it starts the container,
+    so the directory is there in every deployment; where it is not, the touch
+    fails, the warning says so, and the next start comes up silenced, which is
+    the state this container was in before the mark existed.
+    """
+    try:
+        settings().armed_marker.touch()
+    except OSError as error:
+        LOGGER.warning("the enable could not be written to the volume, an %s", type(error).__name__)
+
+
+def _forget_the_enable() -> None:
+    """Remove the mark, so a container that was switched off comes up switched off."""
+    try:
+        settings().armed_marker.unlink(missing_ok=True)
+    except OSError as error:
+        LOGGER.warning("the disable could not be written to the volume, an %s", type(error).__name__)
+
+
+def _was_enabled_before_this_start() -> bool:
+    """True when this container was already enabled when it last stopped.
+
+    ``is_file`` answers False for everything it cannot stat, a volume that is not
+    there yet and one that cannot be read alike, and that is exactly the answer
+    that belongs here: a container that cannot read its own mark starts silenced,
+    the way every container started before this mark existed.
+    """
+    return settings().armed_marker.is_file()
+
+
 async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
     """Report the result of enabling or disabling the app; empty means success.
 
@@ -116,8 +168,16 @@ async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
     admin switched off. The reconcile is armed with the same call and for the same
     reason: a backend that is off but keeps reading the file list of the instance
     is the same mistake with a different verb.
+
+    The mark on the volume is written before the arming and removed after the
+    silencing, and the order is the whole safety of it. A crash between the two
+    steps then leaves a mark and no running task, which the next start repairs by
+    arming; the other order would leave a running task and no mark, which no
+    start repairs at all.
     """
     del nc
+    if enabled:
+        _remember_the_enable()
     for task in (active_poller(), active_reconcile()):
         if task is None:
             continue
@@ -125,6 +185,8 @@ async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
             task.arm()
         else:
             task.silence()
+    if not enabled:
+        _forget_the_enable()
     LOGGER.info("findling backend %s", "enabled" if enabled else "disabled")
     return ""
 
@@ -200,6 +262,41 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         repairing = asyncio.create_task(_guarded_reconcile(_RECONCILE, stop_reconcile))
     else:
         LOGGER.info("findling reconcile is switched off, the index follows events only")
+
+    # The mark from the last enable, read after both tasks exist so that one
+    # decision arms both of them, exactly like the AppAPI handler does.
+    #
+    # This reverses a decision that was taken on purpose, so the whole reasoning
+    # belongs here. The container used to start silenced under every
+    # circumstance, because a container that is deployed but not yet enabled must
+    # hold no tantivy lock and must touch no volume. That property is untouched:
+    # without a mark nothing is armed, and a container that was never enabled has
+    # no mark. The mark only changes the case of a container that WAS enabled,
+    # and holding the lock is right in exactly that case.
+    #
+    # What it buys is DI-05-36. The arming used to come from PUT /enabled and
+    # from nothing else, and AppAPI sends that call once, when it enables the
+    # ExApp; none of its three background jobs ever sends it again. So every
+    # start that AppAPI did not order, a restart of the machine after an update
+    # and a restart by the docker policy after an out of memory kill, left a
+    # container that answers searches, reports its version, looks reachable on
+    # the status page and never indexes another file. Measured on the box: ten
+    # minutes and forty seconds, zero passes of the poller, 130 rows waiting.
+    #
+    # The objection to a mark is the stale state: the app was disabled while this
+    # container was not running, so the mark is still there and this start arms a
+    # backend that Nextcloud considers off. It does not carry. A disabled
+    # companion app has no routes, the queue does not answer, and the poller goes
+    # into the retreat it already has ("the queue did not answer, next attempt in
+    # 15 s", up to five minutes), which is the measured and documented behaviour
+    # since plan 05-08. The cost of the stale case is one unanswered request per
+    # five minutes; the cost of the case without the mark is an index that
+    # silently stops growing.
+    if _was_enabled_before_this_start():
+        for task in (active_poller(), active_reconcile()):
+            if task is not None:
+                task.arm()
+        LOGGER.info("findling backend was enabled before this start, indexing continues without a switch")
 
     try:
         yield

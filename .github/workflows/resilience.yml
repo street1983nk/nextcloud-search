@@ -58,7 +58,13 @@ jobs:
     # says anything. A deadline under that would kill runs the job itself still
     # considers healthy and would report an infrastructure verdict as a code
     # verdict. Forty minutes is those twenty five plus the installation.
-    timeout-minutes: 40
+    #
+    # Raised to fifty five with the two DI-05-36 steps of plan 06.1-01: they add
+    # two waits of UNARMED_TIMEOUT (300 s each, and the negative control always
+    # waits its full period) plus two restarts of the container. Forty would
+    # have left the sum of the ceilings above the deadline again, which is the
+    # exact mistake the paragraph above warns about.
+    timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
@@ -84,6 +90,21 @@ jobs:
       # held come back exactly then. This number is what turns pitfall 7 into a
       # test: a lock timeout of a day would blow it every single time.
       DRAIN_TIMEOUT: '1200'
+      # The wait of the two DI-05-36 steps below, and the clock it is taken from
+      # is named rather than guessed: RETREAT_MAX_SECONDS in
+      # backend/src/findling/worker/poller.py, the ceiling of the retreat a
+      # poller goes into when the queue does not answer, is 300 seconds. That is
+      # the slowest clock a first pass after a restart can sit behind, so a
+      # shorter wait would declare a container dead that is only waiting.
+      #
+      # The counter proof stops as soon as it has its pass; the negative control
+      # waits the whole period out, because a control that stops early only says
+      # that nothing has happened yet.
+      #
+      # Going over this number is a finding and not a reason to raise it until
+      # the step passes. A first pass that needs more than the retreat ceiling
+      # means something else is wrong, and raising the wait would hide it.
+      UNARMED_TIMEOUT: '300'
 
     steps:
       # Actions are pinned to commit SHAs, never to tags: a moved tag would be
@@ -261,6 +282,197 @@ jobs:
         run: |
           ./occ app_api:app:disable findling_backend
           ./occ app_api:app:enable findling_backend
+
+      # The counter proof to the step above, and it asks a different question.
+      # That step restarted the container AND armed it again by hand, because a
+      # restarted process used to come up silenced under every circumstance.
+      # This one leaves exactly that handle away, which is what a user gets
+      # after a restart of the machine or after the docker policy restarted the
+      # container following an out of memory kill: AppAPI sends
+      # PUT /enabled?enabled=1 once, when it enables the ExApp, and none of its
+      # three background jobs ever sends it again.
+      #
+      # The counted quantity is the log line "pass finished" of the poller
+      # (backend/src/findling/worker/poller.py), the same one the box was read
+      # with on 05.09.2026: zero passes while unarmed, fourteen after the
+      # registration (docs/measurements/2026-09-05-semantiklauf-m7g).
+      #
+      # SIGTERM and not SIGKILL, deliberately. The kill earlier in this job is
+      # the subject of the resume test; here the restart is only the vehicle,
+      # and a hard kill would lock the rows this process holds for another
+      # LOCK_TIMEOUT and push the drain below over its own ceiling.
+      - name: A restart that nobody armed keeps indexing (DI-05-36)
+        run: |
+          log="${{ runner.temp }}/exapp.log"
+          pidfile="${{ runner.temp }}/exapp.pid"
+
+          # SIGTERM, and then wait for the process to be gone rather than for
+          # the port to go quiet. The shutdown of the lifespan is allowed 30
+          # seconds for the poller and 30 more for the reconcile
+          # (POLLER_STOP_SECONDS, RECONCILE_STOP_SECONDS), and a pass that is
+          # still running in there writes its own "pass finished" line on the
+          # way out. Starting the count before that line lands would credit the
+          # restarted container with a pass of its predecessor.
+          previous=$(cat "${pidfile}")
+          kill "${previous}" 2>/dev/null || true
+          for _ in $(seq 1 90); do
+            if ! kill -0 "${previous}" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          if kill -0 "${previous}" 2>/dev/null; then
+            echo "the process ignored SIGTERM for 90 seconds, taking it down hard"
+            kill -9 "${previous}" 2>/dev/null || true
+            sleep 5
+          fi
+
+          # After the process is gone, never before: every line the armed
+          # process still wrote between here and its death would otherwise be
+          # counted as a pass of the restarted one.
+          before=$(wc -l < "${log}")
+
+          (
+            cd findling-src/backend || exit 1
+            export APP_ID=findling_backend
+            export APP_SECRET="${EXAPP_SECRET}"
+            export APP_PORT="${EXAPP_PORT}"
+            export APP_VERSION=0.1.0
+            export APP_HOST=127.0.0.1
+            export NEXTCLOUD_URL=http://localhost:8080
+            # The same volume as before, which is where the mark of the last
+            # enable lies. A fresh directory here would make this step green
+            # for the wrong reason twice over.
+            export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+            uv run python -m findling.main >> "${log}" 2>&1 &
+            echo $! > "${pidfile}"
+          )
+          for _ in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          # Said separately from the count below, because the two failures mean
+          # different things: a container that never came back is an
+          # infrastructure verdict, and reporting it as DI-05-36 would send the
+          # next reader after the wrong defect.
+          if ! curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+            echo "the container did not come back after the restart, so this step judges nothing"
+            tail -n 50 "${log}" || true
+            exit 1
+          fi
+
+          started=$(date +%s)
+          deadline=$(( started + UNARMED_TIMEOUT ))
+          while :; do
+            passes=$(tail -n "+$(( before + 1 ))" "${log}" | grep -c 'pass finished' || true)
+            if [ "${passes}" -gt 0 ]; then
+              echo "the restarted container indexed by itself: ${passes} passes after $(( $(date +%s) - started )) seconds"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "the container came up unarmed and stayed that way for ${UNARMED_TIMEOUT} seconds (DI-05-36)"
+              echo "what a user gets in this state: a container that answers searches, reports its version,"
+              echo "looks reachable on the status page and never indexes another file until somebody"
+              echo "disables and enables the app by hand"
+              tail -n 50 "${log}" || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+      # Without this control the step above is worth nothing. A restart test
+      # that would also be green if the mark did nothing measures the presence
+      # of a container, not the repair of DI-05-36. So the same procedure runs
+      # once more with the mark removed, and it has to produce exactly zero
+      # passes.
+      #
+      # The path of the mark is read out of the settings rather than spelled
+      # here, so a rename in the code cannot leave this control silently
+      # pointing at a file that no longer exists, which would make it pass for
+      # the worst possible reason.
+      - name: The same restart without the mark indexes nothing (negative control)
+        run: |
+          log="${{ runner.temp }}/exapp.log"
+          pidfile="${{ runner.temp }}/exapp.pid"
+          export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
+          marker=$( cd findling-src/backend && uv run python -c \
+            'from findling.config import settings; print(settings().armed_marker)' )
+          echo "the mark of the last enable: ${marker}"
+          if [ ! -f "${marker}" ]; then
+            echo "there is no mark to remove, so the step above proved something other than the mark"
+            exit 1
+          fi
+
+          # SIGTERM, and then wait for the process to be gone rather than for
+          # the port to go quiet. The shutdown of the lifespan is allowed 30
+          # seconds for the poller and 30 more for the reconcile
+          # (POLLER_STOP_SECONDS, RECONCILE_STOP_SECONDS), and a pass that is
+          # still running in there writes its own "pass finished" line on the
+          # way out. Starting the count before that line lands would credit the
+          # restarted container with a pass of its predecessor.
+          previous=$(cat "${pidfile}")
+          kill "${previous}" 2>/dev/null || true
+          for _ in $(seq 1 90); do
+            if ! kill -0 "${previous}" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          if kill -0 "${previous}" 2>/dev/null; then
+            echo "the process ignored SIGTERM for 90 seconds, taking it down hard"
+            kill -9 "${previous}" 2>/dev/null || true
+            sleep 5
+          fi
+
+          rm "${marker}"
+          before=$(wc -l < "${log}")
+
+          (
+            cd findling-src/backend || exit 1
+            export APP_ID=findling_backend
+            export APP_SECRET="${EXAPP_SECRET}"
+            export APP_PORT="${EXAPP_PORT}"
+            export APP_VERSION=0.1.0
+            export APP_HOST=127.0.0.1
+            export NEXTCLOUD_URL=http://localhost:8080
+            uv run python -m findling.main >> "${log}" 2>&1 &
+            echo $! > "${pidfile}"
+          )
+          for _ in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          # A container that is not running would produce zero passes for the
+          # most useless of reasons, and this control would call that a success.
+          if ! curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
+            echo "the container did not come back after the restart, so zero passes would prove nothing"
+            tail -n 50 "${log}" || true
+            exit 1
+          fi
+
+          # The whole period, not the first sign of life: this half asserts an
+          # absence, and an absence is only worth the time it was watched for.
+          sleep "${UNARMED_TIMEOUT}"
+          passes=$(tail -n "+$(( before + 1 ))" "${log}" | grep -c 'pass finished' || true)
+          if [ "${passes}" -ne 0 ]; then
+            echo "the container indexed ${passes} times without the mark, so the mark is not what arms it"
+            echo "and the step before this one is green for a reason nobody knows"
+            exit 1
+          fi
+          echo "without the mark: zero passes in ${UNARMED_TIMEOUT} seconds, the gate can be red"
+
+          # Back to the ordinary way, so every step after this one keeps the
+          # precondition it was written with: an armed container.
+          ./occ app_api:app:disable findling_backend
+          ./occ app_api:app:enable findling_backend
+          if [ ! -f "${marker}" ]; then
+            echo "the enable did not write the mark back, the steps after this one have no armed container"
+            exit 1
+          fi
 
       - name: Wait until nothing is open any more
         run: |

@@ -562,6 +562,15 @@ VECTOR_SCAN_MAX_RANGE = (1, SEARCH_SCAN_MAX)
 # tests and in a bare local run, never in a container deployed by AppAPI.
 FALLBACK_STORAGE_DIRNAME = "findling"
 
+# The file that remembers an enable across a restart of the container (DI-05-36).
+# It is state and not a setting, so it gets no environment switch: nothing about
+# it is meant to be chosen by an admin, it is written by the AppAPI enable and
+# removed by the AppAPI disable. It sits under the same root as state.db and
+# vectors.db so that it shares their lifetime exactly: a volume that is kept over
+# an update keeps the enable, and an unregister with --rm-data takes it along
+# with the index it belongs to.
+ARMED_MARKER_NAME = "armed.marker"
+
 
 @dataclass(frozen=True, slots=True)
 class Settings:
@@ -580,6 +589,11 @@ class Settings:
     vectors_db: Path
     dict_dir: Path
     tmp_dir: Path
+    # The memory of the last enable, beside the databases rather than inside one
+    # of them: it has to be readable before the process opens anything, and a
+    # container that was never enabled must be able to answer the question
+    # without creating a database first.
+    armed_marker: Path
 
     languages: tuple[str, ...]
     compound_dict: str
@@ -912,6 +926,7 @@ def settings() -> Settings:
         vectors_db=root / "vectors.db",
         dict_dir=root / "dict",
         tmp_dir=root / "tmp",
+        armed_marker=root / ARMED_MARKER_NAME,
         languages=_languages(),
         compound_dict=_compound_dict(),
         max_file_bytes=_int_from_environment("FINDLING_MAX_FILE_BYTES", MAX_FILE_BYTES),
