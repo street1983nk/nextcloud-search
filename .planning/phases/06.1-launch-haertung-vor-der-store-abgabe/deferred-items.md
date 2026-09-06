@@ -408,3 +408,29 @@ Phasenrecherche aus. Es ist eine eigene Entscheidung und keine Nebenaufgabe.
 seit dem 15.08.2026 genau fuer fotografierte Belege fuehrt. Bis dahin gilt, was
 `docs/measurements/2026-09-06-ocr-dach/README.md` unter "Was diese Zahl nicht
 sagt" schreibt: die Null gilt fuer gerenderte Seiten und fuer nichts anderes.
+
+---
+
+## DI-06.1-13 (Debug-Session store-install-5, 06.09.): die widerlegte Routes-Behauptung steht noch an drei Stellen, und die Routen-URLs sind bare paths
+
+**Gefunden:** beim Debuggen der Falsifikationsprobe Store install 5. HaRP (0.4.5,
+haproxy_agent.py Z. 529-531) ueberspringt die Routenpruefung fuer AppAPI-signierte
+Anfragen; der <routes>-Block regiert nur den unsignierten Direktzugriff. Die alte
+Behauptung, ohne den Block verstumme die Suche, ist damit widerlegt (Beleg:
+.planning/debug/store-install-5-routes-probe.md).
+
+**Was noch falsch dasteht:** backend/appinfo/info.xml Z. 8-15 (Kommentar),
+docs/certificates.md Z. 294-297, scripts/release/store-archive.sh Z. 82-91
+(woertlich "proves with a stripped copy that the search goes silent without the
+block").
+
+**Zweiter Befund:** Findlings fuenf Routen-URLs sind bare paths (search, status).
+HaRP matcht mit re.match(route.url, target_path) gegen /search, das ist None.
+Kanonisch waere ^/search$ usw. Heute folgenlos (der signierte Weg fragt die
+Tabelle nicht), aber der Block ist bei HaRP-Installationen wirkungslos und
+schuetzt den unsignierten Weg nicht so, wie die info.xml es nahelegt.
+
+**Wohin es gehoert:** die drei Textstellen in den Doku-Plan 06.1-15/17; die
+kanonische Routen-Form in einen kleinen Folgeplan oder zusammen mit der
+info.xml-Aenderung von DI-06.1-05 (Lizenz-Schreibweise), weil beide dieselbe
+Datei anfassen und das Lockstep-Gate beide Haelften zusammen sehen will.
