@@ -52,6 +52,7 @@ prefixes we have to set ourselves anyway.
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
@@ -107,6 +108,19 @@ FALLBACK_PAD_MARKER: Final = "[PAD]"
 # has two shared vCPU, INDEX_WORKERS is one for the same reason, and a third
 # thread would only take turns with itself.
 THREADS: Final = 2
+
+# How often the artifacts were really read in this process. The counter exists
+# for the same reason ``index/analyzer.build_count()`` does: from the outside a
+# cache hit and a cheap second load look identical, and the whole claim of plan
+# 06.1-02 is that there is exactly one load per process. A counter proves that
+# without timing anything and without measuring a byte, which on a shared runner
+# is the difference between a test and a random number generator.
+_LOAD_COUNT = 0
+
+
+def load_count() -> int:
+    """Return how often this process has read tokenizer and weights."""
+    return _LOAD_COUNT
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +182,17 @@ def open_tokenizer(model_dir: Path) -> Tokenizer:
     return Loader.from_file(str(model_dir / TOKENIZER_FILE))
 
 
+def _artifacts_present(model_dir: Path) -> bool:
+    """True when both files a load needs are in the directory.
+
+    Its own function because it is the seam the permanent half of the failure
+    distinction hangs on: a directory without them is a property of the
+    installation and is looked at once, and a test can count that from here
+    rather than from the log, which only says how often it was mentioned.
+    """
+    return (model_dir / MODEL_FILE).is_file() and (model_dir / TOKENIZER_FILE).is_file()
+
+
 def _open_encoder(model_dir: Path, *, sequence_len: int) -> Tokenizer:
     """The tokenizer the session is fed with: truncated and padded.
 
@@ -222,9 +247,24 @@ class _Engine:
 class EmbeddingModel:
     """The wrapper: prefixes in front, caps around, one honest verdict underneath.
 
-    Not a module level singleton. The second track owns one of these for the
-    length of its run and the search side may hold another, and a global would
-    make the moment of the first load depend on which import ran first.
+    Still not a module level singleton, and the reason has not changed: a global
+    in here would make the moment of the first load depend on which import ran
+    first. Which instance the two callers of this process use is decided one
+    layer up, in :mod:`findling.embed.engine`, where it can be decided once and
+    on purpose.
+
+    **Two failures, and they are not the same failure.** A directory without
+    ``model.onnx`` and ``tokenizer.json`` is a property of the installation: it
+    is the ordinary state of a container built without the model stage, it stays
+    true for the whole life of the process, and looking again would be a pair of
+    stat calls per document over tens of thousands of them. That one is
+    remembered. A batch that threw is not a property of anything. Until plan
+    06.1-02 both ended in the same permanently remembered "no", which cost one
+    side of the container its semantics; with the single shared instance of that
+    plan it would have cost both, and the symptom is a container that suddenly
+    answers lexically after hours of service with nothing having changed
+    (06.1-RESEARCH.md, pitfall 2). So a thrown run keeps the engine and the next
+    call runs again.
     """
 
     def __init__(self, model_dir: Path, *, batch_size: int, sequence_len: int) -> None:
@@ -232,10 +272,35 @@ class EmbeddingModel:
         self._batch_size = batch_size
         self._sequence_len = sequence_len
         self._engine: _Engine | None = None
-        # Three states and not two: never tried, tried and failed, loaded. The
-        # middle one is what keeps a missing model from being looked for once
-        # per document over tens of thousands of them.
-        self._tried = False
+        # The permanent half of the distinction above: the artifacts are not in
+        # this directory, or they are there and could not be opened. Both are
+        # states of the installation and neither changes while the process runs.
+        self._absent = False
+        # One warning for the temporary half, then silence at debug level. A
+        # thrown run is retried by design, and the second track walks tens of
+        # thousands of documents, so a warning per row would be the log flood
+        # the load path avoids with the flag above.
+        self._run_failure_warned = False
+        # One lock around the load and around the run, and it is the smaller
+        # half of two answers.
+        #
+        # The load path needs it whatever else is true: without it two threads
+        # of the same pool enter _load at once, both build a session, and the
+        # doubled load that plan 06.1-02 removes comes straight back. That is
+        # the argument api/resources.py makes for its own lock.
+        #
+        # The run is inside it because the tokenizers maintainer will not
+        # promise thread safety ("if the threads just don't share the tokenizer
+        # its better", huggingface/tokenizers#1726), while the onnxruntime
+        # maintainer does promise it for Run(). The price of not relying on the
+        # weaker of the two is computable and small: EMBED_BATCH_SIZE of 2 at
+        # EMBED_SEQUENCE_LEN of 512 is at most 1020 tokens per run, and wave 0
+        # measured 3581 tokens per second p95 on two aarch64 cores, so a search
+        # that waits behind exactly one running batch loses about 0.29 s against
+        # a budget of 2500 ms in which a whole search measured 524 ms p95. Re
+        # entrant because it is cheaper than proving that no path below ever
+        # takes it twice.
+        self._lock = threading.RLock()
 
     @property
     def loaded(self) -> bool:
@@ -264,34 +329,55 @@ class EmbeddingModel:
             # 118 MB of weights arrive.
             return EmbedOutcome.ready(())
 
-        engine = self._load()
-        if engine is None:
-            return EmbedOutcome.unavailable()
+        # The load and the run under the same lock, for the two reasons stated
+        # beside it in __init__.
+        with self._lock:
+            engine = self._load()
+            if engine is None:
+                return EmbedOutcome.unavailable()
 
-        try:
-            vectors: list[list[float]] = []
-            for start in range(0, len(texts), self._batch_size):
-                window = [f"{prefix}{text}" for text in texts[start : start + self._batch_size]]
-                vectors.extend(_run_batch(engine, window))
-        except Exception as error:  # a broken graph is a state, see the module head
-            _warn(error)
-            self._engine = None
-            return EmbedOutcome.unavailable()
+            try:
+                vectors: list[list[float]] = []
+                for start in range(0, len(texts), self._batch_size):
+                    window = [f"{prefix}{text}" for text in texts[start : start + self._batch_size]]
+                    vectors.extend(_run_batch(engine, window))
+            except Exception as error:  # a thrown batch is a state, see the class head
+                # The engine stays. Dropping it would pay 118 MB of weights again
+                # for a failure that is usually about the one text that went in,
+                # and it was that drop together with the permanent flag that made
+                # a single bad batch outlive the batch.
+                self._warn_run(error)
+                return EmbedOutcome.unavailable()
         return EmbedOutcome.ready(vectors)
 
+    def _warn_run(self, error: BaseException) -> None:
+        """Say once that a run failed, then keep saying it at debug level."""
+        if self._run_failure_warned:
+            LOGGER.debug("the embedding engine failed on a batch again (%s)", type(error).__name__)
+            return
+        self._run_failure_warned = True
+        _warn(error)
+
     def _load(self) -> _Engine | None:
-        """Load once, on first use, and remember a failure as a failure."""
+        """Load once, on first use, and remember an absent model as absent.
+
+        Called under the lock, never on its own. The caller holds it for the run
+        as well, so what is guarded here is not only the assignment below but the
+        whole window between the check and it.
+        """
+        global _LOAD_COUNT
+
         if self._engine is not None:
             return self._engine
-        if self._tried:
+        if self._absent:
             return None
-        self._tried = True
 
         model_path = self._model_dir / MODEL_FILE
-        if not model_path.is_file() or not (self._model_dir / TOKENIZER_FILE).is_file():
+        if not _artifacts_present(self._model_dir):
             # Not an exception and not a path in the log: this is the ordinary
             # state of a container built without the model stage, and the answer
             # to it is a lexical search, not a stack trace.
+            self._absent = True
             LOGGER.warning("no embedding model in the configured directory, the search stays lexical")
             return None
 
@@ -301,9 +387,16 @@ class EmbeddingModel:
             accepted = frozenset(item.name for item in session.get_inputs())
             outputs = tuple(item.name for item in session.get_outputs()[:1])
         except Exception as error:  # see the module head: every failure is one verdict
+            # Remembered like an absent model and not like a thrown run: files
+            # that are there and cannot be opened are as much a property of this
+            # installation as files that are not there at all, and retrying the
+            # open per document would read a broken graph tens of thousands of
+            # times.
+            self._absent = True
             _warn(error)
             return None
 
+        _LOAD_COUNT += 1
         self._engine = _Engine(encoder=encoder, session=session, accepted=accepted, outputs=outputs)
         return self._engine
 

@@ -222,9 +222,7 @@ def test_another_model_directory_gets_another_engine(
     assert second.loaded is False
 
 
-def test_two_threads_get_one_engine_and_pay_for_one_load(
-    model_home: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_two_threads_get_one_engine_and_pay_for_one_load(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _pretend_a_model(model_home)
     _stand_in(monkeypatch)
 
