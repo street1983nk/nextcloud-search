@@ -492,6 +492,12 @@ A4_PIXELS = (1240, 1754)
 # The line that has to come out of the renderer without a single replacement
 # box. Every character class this corpus depends on stands in it: the Swiss ss,
 # the Austrian umlaut and a long compound with both.
+#
+# It is no longer the whole probe. Since the launch hardening the check runs over
+# every character this corpus draws (see _all_rendered_characters), because a
+# hand written probe only covers the characters somebody remembered to put in it,
+# and the apostrophe of CHF 1'234.56 was exactly the kind of character nobody
+# remembers. The line stays as the readable statement of what the corpus is for.
 GLYPH_PROBE = "Strasse Jänner Grundstücksverkehrsgenehmigung"
 
 
@@ -746,6 +752,21 @@ PACHT_SCAN_PAGES: tuple[tuple[str, ...], ...] = (
     ),
 )
 
+# The seven case groups the launch hardening added to the two DACH pages, and
+# why they sit inside the existing files instead of in a new one. The generator
+# enforces that a search term stands in exactly one file, so every word that
+# lands anywhere in this corpus has to be checked against UNIQUE_TERMS below. A
+# new file would have needed a row in testdata/CORPUS.md, an entry in the verdict
+# map of backend/tests/test_extract_documents.py and a file id in the readonly
+# gate, and it would have moved the file count that three documents quote. The
+# cases are material for the character error rate of
+# findling.extract.ocr_quality, not for the acceptance gate: the gate stays a
+# search hit, which is the whole argument of docs/testing.md.
+#
+# Swiss half: a numeric date, the Swiss apostrophe as a thousands separator, and
+# a line of capitals with three umlauts in it. Capitals are the case tesseract is
+# documented to lose first at low resolution, so they are the one line here that
+# is expected to cost characters rather than to come back clean.
 SCHWEIZ_PAGE: tuple[str, ...] = (
     "Gemeinde Musterikon, Kanton Zürich",
     "Bauamt",
@@ -761,21 +782,34 @@ SCHWEIZ_PAGE: tuple[str, ...] = (
     "betragen 1200 Franken und sind mit separater Rechnung zu",
     "begleichen.",
     "",
+    "Die Ersatzabgabe beträgt CHF 1'234.56 und ist bis zum",
+    "01.03.2026 auf das Konto der Gemeindekasse zu überweisen.",
+    "",
+    "ÄNDERUNGEN AN DER AUSSENHÜLLE BENÖTIGEN EINE ZUSTIMMUNG",
+    "",
     "Die Rechtsmittelbelehrung steht auf der Rückseite.",
 )
 
+# Austrian half: a file reference with two slashes, the German thousands and
+# decimal separators the Swiss line above deliberately spells the other way, a
+# written out date, and two more Austrian words next to Jänner.
 OESTERREICH_PAGE: tuple[str, ...] = (
     "Stadtgemeinde Musterdorf",
     "Bezirkshauptmannschaft Musterkreis",
     "",
     "Mitteilung vom 15. Jänner 2026",
+    "Geschäftszahl BH/MU/2026/0042-7",
     "",
     "Der Grundbuchsauszug zur Liegenschaft im Ortsteil Hangfeld",
     "liegt dieser Mitteilung bei. Die Erledigung der Anzeige",
     "erfolgt noch im Jänner, sobald die Vermessung vorliegt.",
     "",
+    "Die Verwaltungsabgabe von 1.234,56 Euro ist mit dem",
+    "beiliegenden Erlagschein bis zum 1. März 2026 einzuzahlen.",
+    "",
     "Allfällige Rückfragen richten Sie bitte an die Kanzlei. Die",
     "Amtsstunden sind Montag bis Donnerstag von 8 bis 12 Uhr.",
+    "Der Parteienverkehr endet jeweils um 11 Uhr.",
     "",
     "Der Bezirkshauptmann",
 )
@@ -928,12 +962,22 @@ def build_pacht_with_annex() -> bytes:
 
 
 def build_schweiz_scan() -> bytes:
-    """The Swiss spelling, and only here: Strasse instead of Straße."""
+    """The Swiss spelling, and only here: Strasse instead of Straße.
+
+    Since the launch hardening the page also carries a numeric date, an amount
+    with the Swiss apostrophe as a thousands separator and a line of capitals
+    with umlauts, so the character error rate has something to be measured on.
+    """
     return _assemble_document([_render_page(SCHWEIZ_PAGE)])
 
 
 def build_oesterreich_scan() -> bytes:
-    """The Austrian month name, and only here: Jänner."""
+    """The Austrian month name, and only here: Jänner.
+
+    Since the launch hardening the page also carries a file reference with
+    slashes, an amount in the German notation, a written out date and two more
+    Austrian words, Erlagschein and Parteienverkehr.
+    """
     return _assemble_document([_render_page(OESTERREICH_PAGE)])
 
 
@@ -1565,6 +1609,13 @@ RENDERED_TEXT: dict[str, tuple[str, ...]] = {
 # Term, and the one file it may stand in. Compared case insensitively, so a
 # compound counts: "genehmigung" inside Grundstücksverkehrsgenehmigung is what
 # the search actually finds.
+#
+# The list is a superset of what CI asserts, and since the launch hardening it
+# says so out loud. Ersatzabgabe, Erlagschein and Parteienverkehr arrived with
+# the DACH format cases and no workflow searches for them; they stand here
+# because a word that is unique today and quietly duplicated tomorrow is exactly
+# the kind of drift this check exists for, and because a later plan that wants to
+# assert one of them should not first have to prove it is unique.
 UNIQUE_TERMS: dict[str, str] = {
     "Genehmigung": "09-bescheid.pdf",
     "Frist": "10-kuendigung.docx",
@@ -1575,8 +1626,11 @@ UNIQUE_TERMS: dict[str, str] = {
     "Pachtvereinbarung": "14-pacht-mit-anhang.pdf",
     "Strasse": "15-schweiz-baubewilligung.pdf",
     "Baubewilligung": "15-schweiz-baubewilligung.pdf",
+    "Ersatzabgabe": "15-schweiz-baubewilligung.pdf",
     "Jänner": "16-oesterreich-mitteilung.pdf",
     "Grundbuchsauszug": "16-oesterreich-mitteilung.pdf",
+    "Erlagschein": "16-oesterreich-mitteilung.pdf",
+    "Parteienverkehr": "16-oesterreich-mitteilung.pdf",
     "Zahlungsavis": "17-beleg.jpg",
     "Sperrmüllabfuhr": "18-aushang.png",
     "Übermittlungsprotokoll": "19-uebermittlung.tif",
@@ -1585,6 +1639,18 @@ UNIQUE_TERMS: dict[str, str] = {
     "Lieferschein": "23-gedreht.jpg",
     "Zahlungserinnerung": "30-nur-ein-bild.pdf",
 }
+
+
+def _all_rendered_characters() -> str:
+    """Every character this corpus draws, the probe line included.
+
+    ``RENDERED_TEXT`` is the one place that already knows which lines end up as
+    pixels, so deriving the glyph check from it means a page cannot add a
+    character without the check seeing it. That is the difference between a probe
+    that is maintained and a probe that is remembered.
+    """
+    drawn = " ".join(line for lines in RENDERED_TEXT.values() for line in lines)
+    return f"{GLYPH_PROBE} {drawn}"
 
 
 def _searchable_text(name: str, payload: bytes) -> str:
@@ -1717,7 +1783,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Both checks run before the first byte is written. A corpus with a
     # replacement box in it, or with a search term in two files, is worse than
     # no corpus: it turns green assertions into statements about nothing.
-    _assert_every_glyph_exists(GLYPH_PROBE)
+    _assert_every_glyph_exists(_all_rendered_characters())
     _assert_aes_matches_the_standard()
     _assert_terms_stand_in_one_file(FILES)
 
