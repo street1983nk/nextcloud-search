@@ -1365,6 +1365,273 @@ jobs:
             echo "line turned that verdict into INVALID_HASH."
           } >> "${GITHUB_STEP_SUMMARY}"
 
+      # Annahme A6 of the research, answered by doing it rather than by reasoning
+      # about it: can the published image be pulled without any credentials, the
+      # way a stranger would pull it? The step sets DOCKER_CONFIG to an empty
+      # directory of its own, so a credential that some earlier step might have
+      # left in the default config cannot be used by accident. That is the whole
+      # point of threat T-06.1-50: a stranger install test that measures our own
+      # registry access measures nothing.
+      #
+      # The second half of this step is the precondition nobody had checked. The
+      # archive names registry, image and image-tag, which today is
+      # ghcr.io/street1983nk/findling_backend at the released version, and AppAPI
+      # pulls exactly that reference. docker.yml publishes that version tag only
+      # on a v tag push and otherwise only :dev and the commit SHA, so on an
+      # ordinary branch the reference the archive names does not exist yet. That
+      # is not a reason to skip quietly:
+      #
+      #   on main and on a release tag it is a hard failure, because there the
+      #   missing tag is the store install failing at a user's instance;
+      #   anywhere else it is a named finding, printed and written into the job
+      #   summary, and the run continues against the moving tag docker.yml
+      #   publishes from main, with the one changed line shown as a diff.
+      - name: Store install 4, pull the image without any credentials
+        run: |
+          mkdir -p "${RUNNER_TEMP}/store-extract"
+          tar -xzf "${RUNNER_TEMP}/store-dist/findling_backend.tar.gz" -C "${RUNNER_TEMP}/store-extract"
+          archive_info="${RUNNER_TEMP}/store-extract/findling_backend/appinfo/info.xml"
+          test -f "${archive_info}"
+
+          registry=$(sed -n 's:.*<registry>\(.*\)</registry>.*:\1:p' "${archive_info}" | head -1)
+          image=$(sed -n 's:.*<image>\(.*\)</image>.*:\1:p' "${archive_info}" | head -1)
+          tag=$(sed -n 's:.*<image-tag>\(.*\)</image-tag>.*:\1:p' "${archive_info}" | head -1)
+          if [ -z "${registry}" ] || [ -z "${image}" ] || [ -z "${tag}" ]; then
+            echo "the archive info.xml does not name registry, image and image-tag, so nothing here knows what to pull"
+            exit 1
+          fi
+          echo "the archive asks for ${registry}/${image}:${tag}"
+
+          # An empty docker configuration, created here and used by every docker
+          # command of this step and of the deploy below. Not a flag on one call:
+          # the deploy daemon pulls through the docker socket of this runner, so
+          # the credential store the daemon reads has to be the empty one too.
+          export DOCKER_CONFIG="${RUNNER_TEMP}/docker-anonymous"
+          mkdir -p "${DOCKER_CONFIG}"
+          echo "DOCKER_CONFIG=${DOCKER_CONFIG}" >> "${GITHUB_ENV}"
+          echo "docker configuration directory contents:"
+          ls -la "${DOCKER_CONFIG}"
+
+          released="${registry}/${image}:${tag}"
+          store_info="${archive_info}"
+          probe=0
+          docker buildx imagetools inspect "${released}" > "${RUNNER_TEMP}/manifest-released.txt" 2>&1 || probe=$?
+          cat "${RUNNER_TEMP}/manifest-released.txt"
+          if [ "${probe}" -eq 0 ]; then
+            reference="${released}"
+            echo "the tag the archive names exists, so the archive info.xml is used byte for byte"
+          else
+            echo "the tag the archive names does not exist in the registry"
+            case "${GITHUB_REF}" in
+              refs/heads/main|refs/tags/v*)
+                echo "::error::${released} does not exist, and on ${GITHUB_REF} that is a store installation that would fail at a user's instance"
+                exit 1
+                ;;
+            esac
+            reference="${registry}/${image}:dev"
+            docker buildx imagetools inspect "${reference}" > "${RUNNER_TEMP}/manifest-dev.txt" 2>&1
+            cat "${RUNNER_TEMP}/manifest-dev.txt"
+            store_info="${RUNNER_TEMP}/info-store.xml"
+            sed -e "s|<image-tag>[^<]*</image-tag>|<image-tag>dev</image-tag>|" \
+              "${archive_info}" > "${store_info}"
+            # Exactly one line differs, and it is shown rather than described.
+            # Everything else, the routes block above all, comes out of the
+            # archive unchanged.
+            diff "${archive_info}" "${store_info}" || true
+            changed=$(diff "${archive_info}" "${store_info}" | grep -c '^[<>]' || true)
+            if [ "${changed}" -ne 2 ]; then
+              echo "the substitution changed ${changed} lines instead of the one image-tag line"
+              exit 1
+            fi
+            {
+              echo ""
+              echo "**Finding on ${{ matrix.server-version }}:** the archive names \`${released}\`,"
+              echo "which does not exist in the registry on this ref. The store install path ran"
+              echo "against \`${reference}\` instead, with only the \`image-tag\` line replaced."
+              echo "On \`main\` and on a release tag the same situation is a hard failure."
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+          # The pull itself, and it is the answer to A6. No login anywhere in
+          # this workflow, an empty credential store, and the platform spelled
+          # out so that the index resolves to the half this runner can start.
+          docker pull --platform linux/amd64 "${reference}"
+          digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "${reference}")
+          echo "pulled anonymously: ${digest}"
+
+          # And away again, so that the deploy daemon has to fetch it itself.
+          # Leaving it here would let the installation below find a local image
+          # and never touch the registry, which is the difference between
+          # proving the path and assuming it.
+          docker rmi "${reference}" > /dev/null
+          echo "the local copy is gone, the deploy daemon has to pull it again"
+
+          {
+            echo "STORE_IMAGE_REFERENCE=${reference}"
+            echo "STORE_IMAGE_PATH=${registry}/${image}"
+            echo "STORE_INFO_XML=${store_info}"
+            echo "ARCHIVE_INFO_XML=${archive_info}"
+          } >> "${GITHUB_ENV}"
+
+      # The falsification of the whole ExApp half, and it runs before the real
+      # registration on purpose: an empty search after a stripped archive means
+      # nothing on its own, and the step after this one is where the same call
+      # with the same term comes back with a hit.
+      #
+      # What is being falsified: pre-info.xslt drops the routes block, so the
+      # store database never sees the five routes of this container and AppAPI
+      # reads them out of the archive at installation time. If that were not so,
+      # an archive without the block would install and search exactly like one
+      # with it, and the byte for byte copy in scripts/release/store-archive.sh
+      # would be a superstition.
+      #
+      # Both outcomes of the registration are a finding rather than an error: an
+      # archive whose info.xml lost the block may fail to install, or it may
+      # install into an app with no search route and no error message. The second
+      # is the one this project is afraid of, and it is the one that must not
+      # produce a hit.
+      - name: Store install 5, an archive without its routes block finds nothing
+        run: |
+          sed '/<routes>/,/<\/routes>/d' "${STORE_INFO_XML}" > "${RUNNER_TEMP}/info-noroutes.xml"
+          routes=$(grep -c '<route>' "${RUNNER_TEMP}/info-noroutes.xml" || true)
+          if [ "${routes}" -ne 0 ]; then
+            echo "the stripped copy still carries ${routes} route elements, so this probe would prove nothing"
+            exit 1
+          fi
+          echo "the stripped copy carries no route element"
+
+          status=0
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${RUNNER_TEMP}/info-noroutes.xml" --wait-finish || status=$?
+          if [ "${status}" -ne 0 ]; then
+            echo "an archive without its routes block does not even install (exit ${status}), which is the same finding one layer earlier"
+          else
+            code=$(curl -s -o noroutes.json -w '%{http_code}' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary')
+            cat noroutes.json
+            echo "the search answered HTTP ${code}"
+            # Fail closed, and the order of the branches is what makes it fail
+            # closed: only an answer that is a valid OCS envelope with no entries
+            # passes. An unparsable body falls into the last branch rather than
+            # into the middle one, so a broken answer cannot be read as an empty
+            # one.
+            if [ "${code}" != "200" ]; then
+              echo "the app is installed and the search answers HTTP ${code}, so the missing route breaks the search outright"
+            elif jq -e '.ocs.data.entries | length == 0' noroutes.json > /dev/null; then
+              echo "installed without a search route, and the search stays empty, which is exactly the silent failure the archive rule prevents"
+            else
+              echo "the search answered 200 with entries or with something jq cannot read, although the archive carries no search route; either AppAPI does not read the routes out of the archive or this probe is measuring the wrong answer"
+              exit 1
+            fi
+          fi
+
+          # Away completely, including the volume, so the real installation below
+          # starts where a stranger starts.
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:unregister findling_backend --rm-data || true
+          docker rm -f "$(docker ps -aq --filter 'name=findling_backend')" 2> /dev/null || true
+          leftover=$(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}')
+          if [ -n "${leftover}" ]; then
+            echo "the probe left the volume ${leftover} behind, and the installation below would inherit it"
+            docker volume ls
+            exit 1
+          fi
+
+      # The registration a store install performs, with the file a store install
+      # reads. --wait-finish makes the handshake synchronous, so the assertions
+      # that follow measure a finished installation and not a race.
+      #
+      # The info.xml comes out of the unpacked archive and from nowhere else. Not
+      # a preference: pre-info.xslt drops the routes block, the store database
+      # never sees it, and AppAPI reads it back out of this file at installation
+      # time. A path into findling-src here would be the warning sign of pitfall
+      # 8 and would turn this into a manual-install test wearing a store install
+      # costume.
+      - name: Store install 6, the ExApp out of the archive, image out of the registry
+        run: |
+          echo "registering with ${STORE_INFO_XML}"
+          grep -E '<registry>|<image>|<image-tag>' "${STORE_INFO_XML}"
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${STORE_INFO_XML}" --wait-finish
+
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -z "${container}" ]; then
+            echo "no running container matches findling_backend, so the deploy daemon created nothing out of the archive"
+            docker ps -a
+            exit 1
+          fi
+          docker ps --filter "name=${container}" --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
+
+          volume=$(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}')
+          if [ -z "${volume}" ]; then
+            echo "no volume matches findling_backend, so the archive installation has no data volume"
+            docker volume ls
+            exit 1
+          fi
+          echo "exapp volume: ${volume}"
+
+          # The image the container really runs, read off the container rather
+          # than off the registration, and compared against the reference the
+          # archive named. This is where an installation that quietly used some
+          # other image would show.
+          running_image=$(docker inspect --format '{{.Config.Image}}' "${container}")
+          echo "the container runs image ${running_image}"
+          # The repository path and not the whole reference, because AppAPI may
+          # address the image by digest once it has resolved the tag. What has to
+          # hold is that the image comes from the registry the archive names and
+          # never from localhost:5000, which is the address the developer path
+          # uses one pass earlier.
+          case "${running_image}" in
+            *"${STORE_IMAGE_PATH}"*) ;;
+            *)
+              echo "the container runs '${running_image}' while the archive named '${STORE_IMAGE_PATH}'"
+              exit 1
+              ;;
+          esac
+          case "${running_image}" in
+            *"${LOCAL_REGISTRY}"*)
+              echo "the container runs the image of the local registry, so this pass measured the developer path again"
+              exit 1
+              ;;
+          esac
+
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:list | tee store-app-list.txt
+          if ! grep -q 'findling_backend' store-app-list.txt; then
+            echo "app_api:app:list does not know findling_backend, so the registration out of the archive did not survive"
+            exit 1
+          fi
+
+          # The same canary call the developer path makes, and the same three
+          # assertions: exactly one entry, the title, and a subline that carries
+          # the host name and the timestamp of the process that produced it plus
+          # the user id that only the signed AppAPI header could have carried
+          # into the backend. A hard coded hit in PHP cannot pass this, and
+          # neither can an installation whose search route never arrived.
+          curl -sf -u "testuser:${TESTUSER_PASS}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary' | tee store-out.json
+          if ! jq -e '.ocs.data.entries | length == 1' store-out.json > /dev/null; then
+            echo "the search did not return exactly one hit, so nothing answered out of the container the archive installed"
+            exit 1
+          fi
+          jq -e '.ocs.data.entries[0].title == "findling-canary"' store-out.json
+          jq -e '.ocs.data.entries[0].subline | startswith("produced inside container ")' store-out.json
+          jq -e '.ocs.data.entries[0].subline | endswith("for user testuser")' store-out.json
+
+          {
+            echo "STORE_CONTAINER=${container}"
+            echo "STORE_VOLUME=${volume}"
+          } >> "${GITHUB_ENV}"
+          {
+            echo ""
+            echo "- store install container: \`${container}\`"
+            echo "- store install volume: \`${volume}\`"
+            echo "- image: \`${running_image}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Collect the logs and tear the deployment down
         if: always()
         run: |
