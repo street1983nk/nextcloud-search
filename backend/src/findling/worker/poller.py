@@ -65,7 +65,8 @@ from tantivy import Index
 
 from findling.config import settings
 from findling.embed.chunker import ChunkSpan, chunk_spans, make_splitter
-from findling.embed.model import EMBEDDING_UNAVAILABLE, EmbeddingModel, EmbedOutcome, open_tokenizer, to_int8
+from findling.embed.engine import shared_model
+from findling.embed.model import EMBEDDING_UNAVAILABLE, EmbedOutcome, open_tokenizer, to_int8
 from findling.extract.dispatch import Route, extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.sandbox import extract_guarded
@@ -1370,11 +1371,20 @@ class Poller:
         the volume has no vector database and cannot get one, or there is no
         model directory, which is the ordinary case outside the shipping image.
 
-        Nothing is loaded. Building :class:`EmbeddingModel` reads no weights,
-        which is why it may be built before it is known whether there are any;
-        the tokenizer, on the other hand, is read here on purpose, because
-        handing 17 MB of it across the language boundary once per document is
-        the cost ``make_splitter`` exists to avoid.
+        Nothing is loaded. Asking :func:`findling.embed.engine.shared_model` for
+        the engine reads no weights, which is why it may be asked before it is
+        known whether there are any; the tokenizer, on the other hand, is read
+        here on purpose, because handing 17 MB of it across the language
+        boundary once per document is the cost ``make_splitter`` exists to
+        avoid.
+
+        The engine is shared with the search side since plan 06.1-02, so the
+        container carries one tokenizer and one session instead of two. What
+        that means for failures is stated at
+        :class:`findling.embed.model.EmbeddingModel`: a batch of this track that
+        throws is temporary and costs the search side nothing lasting, while an
+        absent model directory switches the semantic half off for the whole
+        process, which it was going to do for both halves anyway.
 
         It runs on the first pass, off the event loop with the rest of ``_open``.
         """
@@ -1409,11 +1419,7 @@ class Poller:
 
         self._vectors = stock
         self._chunker = cut
-        self._model = EmbeddingModel(
-            resolved.embed_model_dir,
-            batch_size=resolved.embed_batch_size,
-            sequence_len=resolved.embed_sequence_len,
-        )
+        self._model = shared_model()
 
     @property
     def _embed_ready(self) -> bool:

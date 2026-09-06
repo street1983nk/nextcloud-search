@@ -47,6 +47,7 @@ from findling.embed import model as model_module
 from findling.embed.engine import shared_model
 from findling.embed.model import DIMENSIONS, EmbeddingModel, load_count
 from findling.index.analyzer import build_count, cached_german_analyzer
+from findling.worker import poller as poller_module
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -262,3 +263,29 @@ def test_two_threads_get_one_engine_and_pay_for_one_load(model_home: Path, monke
     assert len(seen) == 2, "both threads have to have answered"
     assert seen[0] is seen[1], "two threads, one engine"
     assert load_count() - before == 1, "a second session would be the doubled load this plan removes"
+
+
+def test_the_second_track_and_the_read_side_wire_the_same_object(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The two real callers, not two calls of the holder. The read side asks
+    # through resources.query_model and the worker wires its track in
+    # _wire_the_second_track, and the whole plan is that those two lines end at
+    # one object. Everything the wiring touches besides the engine is replaced,
+    # because the vector stock and the 17 MB tokenizer have nothing to do with
+    # the question.
+    _pretend_a_model(model_home)
+
+    class _Stock:
+        def close(self) -> None:
+            """Nothing was opened, so nothing has to be released."""
+
+    monkeypatch.setattr(poller_module, "open_vectors", lambda _path: _Stock())
+    monkeypatch.setattr(poller_module, "open_tokenizer", lambda _directory: object())
+    monkeypatch.setattr(poller_module, "make_splitter", lambda *_args, **_kwargs: object())
+
+    worker = poller_module.Poller()
+    worker._wire_the_second_track()
+
+    assert worker._model is not None, "the track has to have been wired"
+    assert worker._model is resources.query_model()
