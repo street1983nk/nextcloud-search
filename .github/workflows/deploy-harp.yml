@@ -1218,9 +1218,24 @@ jobs:
           # Nextcloud Root Authority stays in the file, so the only difference to
           # a released archive is which of the two certificates in it signed the
           # app.
-          before=$(grep -c 'BEGIN CERTIFICATE' resources/codesigning/root.crt)
+          #
+          # The newline is the whole trick. root.crt ships from the server repo
+          # without a trailing newline on every branch this job runs against, so
+          # a plain append glues "-----END CERTIFICATE-----" and the following
+          # "-----BEGIN CERTIFICATE-----" onto one line, and Checker::splitCerts
+          # then walks past the CI root instead of returning it. The instance
+          # answers that with "Certificate is not valid.", which reads like a bad
+          # certificate and is really a missing trust anchor.
+          #
+          # The count is anchored for the same reason: an unanchored
+          # 'BEGIN CERTIFICATE' matches the glued line too and reports three
+          # certificates for a file that splits into two.
+          if [ -n "$(tail -c 1 resources/codesigning/root.crt)" ]; then
+            printf '\n' >> resources/codesigning/root.crt
+          fi
+          before=$(grep -c '^-----BEGIN CERTIFICATE-----$' resources/codesigning/root.crt)
           cat "${RUNNER_TEMP}/ci-pki/root.crt" >> resources/codesigning/root.crt
-          after=$(grep -c 'BEGIN CERTIFICATE' resources/codesigning/root.crt)
+          after=$(grep -c '^-----BEGIN CERTIFICATE-----$' resources/codesigning/root.crt)
           echo "root.crt carried ${before} certificate(s) and now carries ${after}"
           if [ "${after}" -ne $((before + 1)) ]; then
             echo "the CI root was not appended as exactly one certificate, so the integrity check below would fail for the wrong reason"
