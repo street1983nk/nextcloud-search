@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 06.1 (launch-haertung-vor-der-store-abgabe) — EXECUTING
-Plan: 14 of 21 complete
-Status: Executing Phase 06.1 (Welle 3 gemergt: 06/10/12/13/21; naechste Welle 11/14/16)
-Last activity: 2026-09-06 -- Welle 3 gemergt bis 96d798b, franzoesische OCR per Owner-Entscheid als 06.1-21 dazu, README dreisprachig DE/EN/FR
+Plan: 17 of 21 complete
+Status: Executing Phase 06.1 (Wellen 3+4 fast fertig; 16 laeuft, dann 15, 17, Checkpoints 18/19)
+Last activity: 2026-09-06 abends -- ALLE CI-GATES GRUEN auf 9132d29 inkl. HaRP-Store-Weg Ende-zu-Ende; 4 Debug-Funde gefixt (root.crt-Newline, DI-05-36-Falsch-Rot inkl. uv-pidfile, Routes-Annahme widerlegt -> differenzielle Probe, disk-full-Abbau-Rennen)
 
 **Zwischenstand 06-11, 2026-09-05T10:57Z.** Der Volllauf mit Semantik ist um
 10:47:54Z angestossen und laeuft unbeaufsichtigt auf der AWS-Box
