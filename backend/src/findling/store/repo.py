@@ -78,6 +78,17 @@ STORE_SCHEMA_MARK: Final = "store_schema_version"
 # :func:`findling.store.vectors.embedding_mark`.
 EMBEDDING_MARK: Final = "embedding_version"
 
+# Where the redelivery of the vector stock has got to, or an empty value when no
+# redelivery is running.
+#
+# It is a meta key and not a member of the marks above, because it says nothing
+# about a version: it is the position of a sweep. It is written down rather than
+# kept in the poller for one reason, and it is the reason ``rebuild_pending``
+# next to the index generation is written down as well: a container restarts in
+# the middle of the work, and a cursor that lived only in a process would leave
+# the rest of the stock unwritten with nothing anywhere saying so.
+EMBEDDING_BACKLOG_MARK: Final = "embedding_backlog_at"
+
 # The marks that say nothing about the tantivy index.
 #
 # :meth:`Store.version_mismatch` reports every divergence it finds, including
@@ -268,6 +279,28 @@ _ACL_DOCUMENTS_SQL: Final = "SELECT COUNT(*) FROM (SELECT DISTINCT file_id FROM 
 # a file it never will, so it must not hold the rebuild open forever.
 _VERDICTS_OLDER_THAN_SQL: Final = """
 SELECT COUNT(*) FROM files WHERE index_version < ? AND deleted_at IS NULL
+"""
+
+# How many living documents are in the index, and which ones they are.
+#
+# Both exclude tombstoned rows, and that exclusion is the whole reason they
+# exist next to :meth:`Store.counts`. That method groups by state without
+# looking at ``deleted_at``, because the status page wants the verdict of every
+# row it ever wrote; a deleted document keeps the state ``indexed`` and loses
+# its vectors in the same call. Counting it here would mean the two figures can
+# never be equal again on any instance where somebody removed a file, and the
+# one condition that says the vector stock is complete would be unreachable for
+# ever. :meth:`Store.verdicts_older_than` leaves tombstones out for exactly this
+# reason and says so in the same words.
+_INDEXED_ALIVE_SQL: Final = """
+SELECT COUNT(*) FROM files WHERE state = 'indexed' AND deleted_at IS NULL
+"""
+
+_INDEXED_FILE_IDS_SQL: Final = """
+SELECT file_id FROM files
+ WHERE state = 'indexed' AND deleted_at IS NULL AND file_id > ?
+ ORDER BY file_id
+ LIMIT ?
 """
 
 _IS_UNCHANGED_SQL: Final = """
@@ -909,6 +942,41 @@ class Store:
         """
         row = self._conn.execute(_VERDICTS_OLDER_THAN_SQL, (generation,)).fetchone()
         return int(row[0]) if row else 0
+
+    def indexed_alive(self) -> int:
+        """How many documents this container has in the index and has not buried.
+
+        The other half of the one condition that says the vector stock is
+        complete: ``embedded == indexed`` at ``indexed > 0``, with
+        :meth:`findling.store.vectors.VectorStore.document_count` counting the
+        first number and this method the second. Both count documents, never
+        chunks, which is the decision of plan 06-09 and stands in full at
+        ``document_count``.
+
+        Deliberately not :meth:`counts`, and the reasoning stands at
+        :data:`_INDEXED_ALIVE_SQL`: that one keeps tombstoned rows, this one has
+        to drop them, or the condition stops being reachable after the first
+        deletion.
+        """
+        row = self._conn.execute(_INDEXED_ALIVE_SQL).fetchone()
+        return int(row[0]) if row else 0
+
+    def indexed_file_ids(self, *, after: int = 0, limit: int) -> list[int]:
+        """One band of living indexed documents, ascending, ids above ``after``.
+
+        The redelivery of the vector stock reads the instance through this, one
+        band per idle pass, and never as one list: a model change on a box with
+        fifty thousand documents would otherwise put fifty thousand ids into one
+        request body, and the answer to that is a band and a cursor rather than a
+        larger request.
+
+        Ascending and above a cursor rather than an offset, because an offset
+        over a table that is being written moves under the sweep and skips rows.
+        The primary key is the cursor, so the sweep terminates: every band ends
+        above the one before it.
+        """
+        rows = self._conn.execute(_INDEXED_FILE_IDS_SQL, (after, limit))
+        return [int(row[0]) for row in rows]
 
     def reset_for_reindex(self, index_version: int) -> int:
         """Forget every verdict older than this generation, return how many.

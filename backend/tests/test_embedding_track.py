@@ -25,6 +25,7 @@ replace is arithmetic, and what stays real is every decision this plan is about.
 from __future__ import annotations
 
 import logging
+import sqlite3
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -39,16 +40,25 @@ from findling.embed.model import DIMENSIONS, EMBEDDING_UNAVAILABLE, EmbedOutcome
 from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
 from findling.extract.errors import ExtractionOutcome, Reason
-from findling.index.open import open_index
+from findling.index.open import expected_versions, open_index
 from findling.index.writer import IndexBatchWriter, IndexRecord
 from findling.nc.client import AsyncNextcloudApp
-from findling.nc.queue import CallResult, ClaimResult, QueueJob, QueueStats
-from findling.store.repo import Store, open_store
-from findling.store.vectors import Chunk, VectorStore, open_vectors
+from findling.nc.queue import KIND_EMBED, CallResult, ClaimResult, QueueJob, QueueStats
+from findling.store.repo import (
+    EMBEDDING_BACKLOG_MARK,
+    EMBEDDING_MARK,
+    UNKNOWN_VERSION,
+    VECTOR_ONLY_MARKS,
+    FileMeta,
+    Store,
+    open_store,
+)
+from findling.store.vectors import EMBEDDING_MODEL, Chunk, VectorStore, embedding_mark, open_vectors
 from findling.worker.poller import (
     EMBED_INCOMPLETE,
     EMBED_NO_STORED_TEXT,
     EMBED_WRITTEN,
+    ROUND_EMPTY,
     ROUND_PAUSED_LOW_DISK,
     ROUND_WORKED,
     Poller,
@@ -948,3 +958,320 @@ def test_no_module_of_the_delete_path_carries_the_forbidden_identifier() -> None
     """
     for module in (PACKAGE_ROOT / "index" / "writer.py", PACKAGE_ROOT / "store" / "repo.py"):
         assert "def delete" not in module.read_text(encoding="utf-8")
+
+
+# -- the embedding mark -----------------------------------------------------
+#
+# The write half of DI-06-02 and DI-06-03, decided as E-H4 on 06.09.2026: the
+# mark is stamped rather than described. Everything below runs the real poller
+# against a real state database and a real stock, and the pass it runs is the
+# idle one, because a statement about the whole instance may only be made by a
+# pass that found nothing left to do.
+
+
+def _judged(store: Store, file_id: int, state: str = "indexed") -> None:
+    """One row in the state database, the way a text pass leaves it behind."""
+    store.record(
+        file_id,
+        FileMeta(
+            storage_id=3,
+            root_id=2,
+            path=f"Vertraege/{file_id}.txt",
+            title=TITLE,
+            mime="text/plain",
+            size=len(BODY_BYTES),
+            mtime=1_756_600_000,
+        ),
+        state,
+        content_hash="5d41402abc4b2a76b9719d911017c592",
+        text_chars=len(BODY),
+    )
+
+
+def _wanted_mark() -> str:
+    """The value this build computes, asked the way the poller asks for it."""
+    return embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap)
+
+
+# A value of the same shape that this build did not compute. Another model, and
+# therefore a stock of numbers with the right width and no meaning.
+ANOTHER_MARK = "another-model/int8/384/1024"
+
+
+def _watched(monkeypatch: pytest.MonkeyPatch, store: Store, vectors: VectorStore, queue: _FakeQueue) -> list[str]:
+    """Record the three steps of the drift chain in the order they happen.
+
+    The order is the whole assertion, so it is observed at the three objects
+    that carry it and never derived from the state afterwards: a stock that is
+    empty and a mark that is current look identical whichever way round they
+    were written, which is exactly what makes the wrong order invisible without
+    this.
+    """
+    events: list[str] = []
+    forget_all = vectors.forget_all
+    write_meta = store.write_meta
+    requeue = queue.requeue
+
+    def watched_forget_all() -> None:
+        events.append("forget_all")
+        forget_all()
+
+    def watched_write_meta(key: str, value: str) -> None:
+        events.append(f"write:{key}")
+        write_meta(key, value)
+
+    async def watched_requeue(file_ids: Any, *, kind: str) -> CallResult:
+        events.append(f"requeue:{kind}")
+        return await requeue(file_ids, kind=kind)
+
+    monkeypatch.setattr(vectors, "forget_all", watched_forget_all)
+    monkeypatch.setattr(store, "write_meta", watched_write_meta)
+    monkeypatch.setattr(queue, "requeue", watched_requeue)
+    return events
+
+
+async def test_the_mark_is_written_once_every_indexed_document_carries_a_vector(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # DI-06-03. The mark stood on unknown because nobody wrote it, and the
+    # condition that lets somebody write it is a number since plan 06-09:
+    # embedded == indexed at indexed > 0, counted over documents.
+    _judged(store, 4711)
+    _judged(store, 4712)
+    _fill(vectors, 4711)
+    _fill(vectors, 4712)
+    queue = _FakeQueue()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
+
+    await poller.run_once()
+
+    assert store.read_meta()[EMBEDDING_MARK] == _wanted_mark()
+
+    # Once per transition and not once per pass: the second idle pass finds the
+    # mark it wrote and has nothing left to say.
+    await poller.run_once()
+
+    assert store.read_meta()[EMBEDDING_MARK] == _wanted_mark()
+    assert queue.requeues == []
+
+
+async def test_a_container_without_documents_claims_nothing(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # T-06.1-41. At indexed == 0 the equality would hold as 0 == 0, and a
+    # container that has never seen a document would declare its stock whole.
+    # The mark would then survive the first crawl and stand over vectors of a
+    # model nobody ever asked about.
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue(), vectors=vectors)
+
+    await poller.run_once()
+
+    assert store.read_meta()[EMBEDDING_MARK] == UNKNOWN_VERSION
+
+
+async def test_a_stock_that_is_still_filling_is_not_claimed(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # The direction to be late in, the same one stamp_after_rebuild argues for
+    # one file over: a mark written too early says a stock is whole while the
+    # second track is still hours from the end of it.
+    _judged(store, 4711)
+    _judged(store, 4712)
+    _fill(vectors, 4711)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue(), vectors=vectors)
+
+    await poller.run_once()
+
+    assert store.read_meta()[EMBEDDING_MARK] == UNKNOWN_VERSION
+
+
+async def test_a_deleted_document_does_not_hold_the_mark_back_for_ever(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # Store.counts keeps a tombstoned row under its old verdict, because the
+    # status page wants every verdict this container ever wrote. The condition
+    # cannot use that figure: a tombstone loses its vectors in the same call, so
+    # counting it would put the two numbers one apart for good and leave the
+    # mark unwritten on every instance where somebody removed a file.
+    store.attach_vectors(vectors)
+    _judged(store, 4711)
+    _judged(store, 4712)
+    _fill(vectors, 4711)
+    _fill(vectors, 4712)
+    store.tombstone(4712)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue(), vectors=vectors)
+
+    await poller.run_once()
+
+    assert store.counts()["indexed"] == 2
+    assert store.indexed_alive() == 1
+    assert store.read_meta()[EMBEDDING_MARK] == _wanted_mark()
+
+
+async def test_a_drift_empties_the_stock_before_it_writes_the_mark_and_asks_for_the_documents_back(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T-06.1-39 and DI-06-02 in one pass. The order is not interchangeable: a
+    # mark written before the emptying stands over a stock of the old model, and
+    # from that moment nothing in this container can tell that its semantic
+    # answers are computed against numbers that mean nothing.
+    store.write_meta(EMBEDDING_MARK, ANOTHER_MARK)
+    _judged(store, 4711)
+    _judged(store, 4712)
+    _fill(vectors, 4711)
+    _fill(vectors, 4712)
+    queue = _FakeQueue()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
+    events = _watched(monkeypatch, store, vectors, queue)
+
+    await poller.run_once()
+
+    chain = [event for event in events if event in ("forget_all", f"write:{EMBEDDING_MARK}", f"requeue:{KIND_EMBED}")]
+    assert chain == ["forget_all", f"write:{EMBEDDING_MARK}", f"requeue:{KIND_EMBED}"]
+    assert vectors.chunk_count() == 0
+    assert vectors.vector_count() == 0
+    assert store.read_meta()[EMBEDDING_MARK] == _wanted_mark()
+    assert queue.requeues == [([4711, 4712], KIND_EMBED)]
+
+
+async def test_a_drift_of_the_vector_mark_leaves_the_full_text_index_alone(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path
+) -> None:
+    # T-06.1-40 and D-21. The remedy for a vector stock of another model is a
+    # rebuild of that stock, never one of the tantivy index, which costs hours on
+    # the box this app targets. This pass may therefore move neither the index
+    # generation nor the verdict the reindex banner is built from.
+    store.write_meta(EMBEDDING_MARK, ANOTHER_MARK)
+    _judged(store, 4711)
+    _fill(vectors, 4711)
+    expected = expected_versions("a-digest")
+    generation = store.index_version
+    before = store.version_mismatch(expected)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue(), vectors=vectors)
+
+    await poller.run_once()
+
+    assert store.index_version == generation
+    assert store.version_mismatch(expected) == before
+
+
+async def test_an_abort_between_the_emptying_and_the_mark_leaves_the_drift_repeatable(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A container is killed in the middle of the chain, which on a box that
+    # restarts nightly is an ordinary event and not an exotic one. The next pass
+    # has to find the same drift, empty an empty stock and carry on, and the
+    # documents may be asked for once and not twice.
+    store.write_meta(EMBEDDING_MARK, ANOTHER_MARK)
+    _judged(store, 4711)
+    _fill(vectors, 4711)
+    queue = _FakeQueue()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
+    write_meta = store.write_meta
+
+    def refusing_write_meta(key: str, value: str) -> None:
+        if key == EMBEDDING_MARK:
+            raise sqlite3.OperationalError("database is locked")
+        write_meta(key, value)
+
+    monkeypatch.setattr(store, "write_meta", refusing_write_meta)
+
+    await poller.run_once()
+
+    assert vectors.chunk_count() == 0
+    assert store.read_meta()[EMBEDDING_MARK] == ANOTHER_MARK
+    assert queue.requeues == []
+
+    monkeypatch.setattr(store, "write_meta", write_meta)
+
+    await poller.run_once()
+
+    assert store.read_meta()[EMBEDDING_MARK] == _wanted_mark()
+    assert queue.requeues == [([4711], KIND_EMBED)]
+
+
+async def test_the_redelivery_carries_on_in_the_next_process(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The cursor lives in the meta table and not in the poller, so a restart in
+    # the middle of a model change does not leave the rest of the stock unwritten
+    # with nothing anywhere saying so. One document per band here, so that the
+    # sweep needs three passes for two documents and the third one ends it.
+    monkeypatch.setattr("findling.worker.poller.VECTOR_BACKLOG_BAND", 1)
+    store.write_meta(EMBEDDING_MARK, ANOTHER_MARK)
+    _judged(store, 4711)
+    _judged(store, 4712)
+    queue = _FakeQueue()
+    first = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
+
+    await first.run_once()
+
+    assert queue.requeues == [([4711], KIND_EMBED)]
+    assert store.read_meta()[EMBEDDING_BACKLOG_MARK] == "4711"
+
+    # A second process on the same volume, which is what a restart is.
+    second = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
+
+    await second.run_once()
+
+    assert queue.requeues[-1] == ([4712], KIND_EMBED)
+
+    await second.run_once()
+
+    assert store.read_meta()[EMBEDDING_BACKLOG_MARK] == ""
+    assert len(queue.requeues) == 2
+
+
+async def test_a_container_without_the_second_track_writes_no_mark(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The ordinary state of a container without the model files, and of every
+    # instance whose admin switched the embedding off. A mark about a stock
+    # nothing reads semantically would be a statement about something nobody can
+    # reach.
+    _judged(store, 4711)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue())
+
+    await poller.run_once()
+
+    assert store.read_meta()[EMBEDDING_MARK] == UNKNOWN_VERSION
+
+
+async def test_a_pass_that_cannot_settle_the_mark_still_ends(
+    store: Store,
+    writer: IndexBatchWriter,
+    vectors: VectorStore,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Bookkeeping about the stock is not the stock. A locked database here must
+    # not end a pass whose documents are durable, and the type name is the whole
+    # of what the line about it may say.
+    def locked() -> int:
+        raise sqlite3.OperationalError("database is locked")
+
+    _judged(store, 4711)
+    _fill(vectors, 4711)
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue(), vectors=vectors)
+    monkeypatch.setattr(store, "indexed_alive", locked)
+
+    with caplog.at_level(logging.WARNING, logger="findling.worker.poller"):
+        result = await poller.run_once()
+
+    assert result.state == ROUND_EMPTY
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("OperationalError" in message for message in messages)
+    assert all("database is locked" not in message for message in messages)
+
+
+def test_the_embedding_mark_is_not_a_mark_of_the_full_text_index() -> None:
+    """The separation D-21 rests on, held where the second writer was added.
+
+    Said as a property of the two sets and not only through a pass, because the
+    day somebody adds the mark to ``expected_versions()`` the drift case above
+    would still be green: it would raise the index generation, force a full text
+    rebuild that costs hours, and look exactly like a working drift answer.
+    """
+    assert EMBEDDING_MARK in VECTOR_ONLY_MARKS
+    assert EMBEDDING_MARK not in expected_versions("a-digest")

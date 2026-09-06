@@ -237,7 +237,9 @@ Zustand liegt: Modell, Quantisierung, Dimensionszahl und Tokendeckel, zum
 Beispiel `multilingual-e5-small/int8/384/1024`. Ändert sich eine der vier
 Grössen, passt ein gespeicherter Vektor nicht mehr zu einem frisch gerechneten
 Anfragevektor. Ihr Drift wird gemeldet und löst **keinen** Volltext-Reindex aus;
-die Folge gehört in den Vektorweg.
+die Folge gehört in den Vektorweg. Seit dem 06.09.2026 wird die Marke auch
+geschrieben und ihr Drift beantwortet, und was dabei geschieht, steht in
+Abschnitt 8.
 
 ## 4. Die Kennzahl: Byte je Dokument (Erfolgskriterium 4)
 
@@ -610,3 +612,122 @@ und sucht, und dass es mit fehlendem Modell Volltexttreffer statt einer leeren
 Antwort liefert, sind zwei Schritte in `.github/workflows/docker.yml`, die auf
 beiden Architekturen laufen. Was jeder von beiden beweist und was nicht, steht in
 [`docs/testing.md`](testing.md).
+
+## 8. Ein Modellwechsel: was von selbst passiert
+
+**Die Entscheidung.** Am **06.09.2026** hat der Owner als Entscheid E-H4
+festgelegt, dass die Marke `embedding_version` gestempelt wird, statt dass ein
+Satz in dieser Datei einen Verwalter um Handarbeit bittet. Die billigere
+Möglichkeit stand ausdrücklich zur Wahl und wurde ausdrücklich nicht gewählt.
+Damit sind die beiden offenen Punkte aus Phase 6 geschlossen, die vor der
+Fassung v1.0.0 zu entscheiden waren: die Marke wird geschrieben, und der
+Vektorbestand wird beim Drift geleert.
+
+**Was ein Verwalter tun muss: nichts.** Ein Modellwechsel heisst in der Praxis,
+dass ein neues Abbild ein anderes Modell mitbringt oder dass jemand den
+Tokendeckel `FINDLING_EMBED_TOKEN_CAP` verstellt. In beiden Fällen läuft nach
+dem Neustart des Containers diese Kette ab, und ihre Reihenfolge ist der Kern
+der Sache:
+
+1. Der Container merkt beim ersten leeren Durchgang, dass die gespeicherte Marke
+   nicht die ist, die dieser Bau rechnet.
+2. **Der Vektorbestand wird geleert**, ganz und nicht nach Alter. Er trägt keine
+   eigene Generation, also gibt es keine Hälfte, die man behalten könnte.
+3. **Danach** wird die neue Marke geschrieben. Umgekehrt stünde die Marke der
+   neuen Fassung über einem Bestand der alten, und von da an hätte nichts im
+   Container mehr eine Möglichkeit zu erkennen, dass seine semantischen
+   Antworten gegen Zahlen gerechnet werden, die nichts bedeuten.
+4. **Danach** werden die indexierten Dokumente wieder vorgelegt, in Bändern von
+   500 je leerem Durchgang, hinter einem Zeiger in der `meta`-Tabelle. Der
+   Zeiger steht dort und nicht im Prozess, damit ein Neustart mitten in der
+   Arbeit sie fortsetzt statt sie zu verlieren.
+
+Der Volltextindex wird dabei **nicht** angefasst. Die Marke gehört bewusst nicht
+zu der Menge, die die Indexgeneration anhebt, denn ein Sprung dort erzwänge den
+stundenlangen Neuaufbau des Tantivy-Index, den D-21 ausschliesst. Das
+Reindex-Banner der Verwaltungsseite bleibt aus, und die Suche antwortet die ganze
+Zeit über lexikalisch weiter.
+
+**Woran man es sieht.** Im Protokoll steht eine Zeile, dass der Bestand von einem
+anderen Bau geschrieben war, geleert wurde und neu geschrieben wird. Auf der
+Verwaltungsseite fällt die Zahl "auffindbar nach Bedeutung" auf 0 und steigt
+wieder, während "indexiert" stillsteht; der Container meldet sich in dieser Zeit
+als `degraded`, was eine Aussage über Vollständigkeit ist und nicht über einen
+Fehler.
+
+**Was es kostet.** Die ganze zweite Spur noch einmal, und diese Dauer ist
+gemessen und nicht geschätzt. Auf der Zielbox (AWS m7g.large, 2 vCPU Graviton3,
+auf 4 GB begrenzt) lief die Einbettung allein mit rund **170 Dokumenten je
+Minute**; für die 51.961 Dokumente des Messkorpus sind das rund **fünf Stunden**,
+in denen die Suche benutzbar bleibt und nur semantisch unvollständig antwortet.
+Rohdaten:
+[`docs/measurements/2026-09-05-semantiklauf-m7g/README.md`](measurements/2026-09-05-semantiklauf-m7g/README.md).
+Auf zwei gepinnten Neoverse-N2-Kernen wäre dieselbe Rechenarbeit in **4 h 03 min**
+durch:
+[`docs/measurements/2026-09-05-welle0-arm64/README.md`](measurements/2026-09-05-welle0-arm64/README.md).
+
+**Wann `occ findling:index --restart` trotzdem nötig ist.** In genau einem Fall,
+und er kann nur einmal je Instanz auftreten. Eine Instanz, die von einer Fassung
+kommt, die die Marke noch nie geschrieben hat, trägt sie als `unknown`. Dieser
+Wert sagt "niemand hat das Modell benannt" und nicht "ein anderes Modell hat es
+geschrieben", also wird der Bestand dort **nicht** weggeworfen, sondern erst dann
+beansprucht, wenn er nachweislich vollständig ist: jedes indexierte Dokument
+trägt einen Vektor. Wer auf einer solchen Instanz vor dem Aufstieg den
+Tokendeckel verstellt hatte, bekommt eine Marke über einem Bestand, der zu ihr
+nicht passt. Der Handgriff dagegen ist `occ findling:index --restart`, und er ist
+für die Fassung v1.0.0 gegenstandslos, weil es keine ältere Fassung im Feld gibt.
+
+## 9. Die Skalen: der Deckel des Vektorscans ist keine Störung
+
+**Die Zeile, um die es geht.** Im Protokoll steht bei jeder semantischen Anfrage
+eines gefüllten Bestands:
+
+```
+the vector scan hit its own ceiling and answered a truncated neighbour list
+```
+
+**Das ist eine erwartete Betriebsmeldung und kein Befund.** Ein Audit, das sie
+als Fehler führt, sucht eine Behebung, die es nicht gibt. Sie sagt, dass der
+Scan seinen eigenen Deckel erreicht hat und die Nachbarliste gekappt zurückgab,
+und dieser Deckel ist eine Entscheidung: `VECTOR_SCAN_MAX` in
+`backend/src/findling/config.py` steht auf **300** Chunks je Anfrage, gegen ein
+Verschmelzungsfenster von 100 Dokumenten (`SEARCH_RRF_WINDOW`).
+
+**Die Schwelle, ab der die Zeile dauerhaft steht.** Sobald der Bestand mehr als
+300 Chunks hält. Ein Dokument trägt unter dem Tokendeckel zwei bis drei Chunks
+(gemessen am 05.09.2026 in Plan 06-05, Rechenweg im Nachtrag von Abschnitt 4),
+also ab rund **100 bis 150 Dokumenten**. Jede Instanz
+im Betrieb liegt darüber, und der reale Lauf mit **145.854 Vektoren** lief bei
+jeder semantischen Anfrage in den Deckel und hielt trotzdem mit **p95 524 ms**
+gegen ein Budget von 2.500 ms:
+[`docs/measurements/2026-09-05-semantiklauf-m7g/README.md`](measurements/2026-09-05-semantiklauf-m7g/README.md).
+
+**Was die Zeile trotzdem sagt.** Sie ist eine Qualitätsaussage und keine
+Fehlermeldung: der Scan hat 300 Nachbarn angesehen und nicht alle, also kann ein
+guter Treffer jenseits von Platz 300 verlorengehen. Der Preis dafür ist gemessen
+und niedrig, und die Gegenprobe ist der lexikalische Zweig, der danebensteht und
+in der Verschmelzung genau die Fälle gewinnt, die die Semantik verfehlt.
+
+**Die Latenzzusage, gegen den kalten 250k-Wert geprüft.** Die Tabelle in
+Abschnitt 4 ist eine Aussage über **100.000 Chunks auf nativem aarch64**, und sie
+ist in dieser Form richtig; sie gilt warm wie kalt. Was danebengehört, ist die
+nächste Stützstelle, damit niemand von 100.000 nach oben verlängert:
+
+| Chunks | int8 warm p95 | int8 kalt p95 | gegen 300 ms je Runde |
+|---|---|---|---|
+| 100.000 (aarch64) | 37,8 ms | 153,5 ms | beide halten |
+| 250.000 (aarch64) | 93,6 ms | 251,1 ms | beide halten |
+| 250.000 (x86-Notebook, WSL2) | 106,0 ms | **372,7 ms** | **kalt gerissen** |
+
+Der Unterschied bei 250.000 liegt nicht im Prozessor, sondern in der Platte: der
+aarch64-Läufer hat eine NVMe-SSD, das Notebook eine WSL2-Datei darauf. Die
+vorsichtige Lesart bleibt deshalb die des Berichts: **250.000 Chunks sind der
+Grenzpunkt**, und eine von zwei gemessenen Maschinen reisst ihn kalt. Vollständige
+Reihen beider Maschinen:
+[`docs/measurements/2026-09-05-welle0-arm64/README.md`](measurements/2026-09-05-welle0-arm64/README.md).
+
+Für diese Phase ist die Aussage davon nicht betroffen: der reale Lauf liegt mit
+145.854 Vektoren unter dem Grenzpunkt. Ein Betreiber, der den Deckel aus D-01 auf
+volles Embedding aufdreht, landet in der Nähe einer Million Chunks und reisst das
+Kriterium auch warm; der Ausweg dafür ist Abschnitt 5 und nicht diese Zeile im
+Protokoll.

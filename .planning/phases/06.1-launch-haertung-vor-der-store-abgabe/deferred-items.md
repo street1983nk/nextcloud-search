@@ -206,3 +206,36 @@ Gates in `backend/tests/test_store_metadata.py` und wird von einem eigenen Fall
 belegt. Der Kommentar in `backend/appinfo/info.xml` bleibt unveraendert. Die
 Eintragung in die Deferred Items der Phase 5 steht aus, weil jene Datei nicht in
 den `files_modified` dieses Plans steht.
+---
+
+## DI-06.1-06 (gefunden in Plan 06.1-10): die Zahl "indexiert" der Verwaltungsseite zaehlt Grabsteine mit
+
+**Gefunden:** beim Bau der Bedingung "der Vektorbestand ist vollstaendig".
+Betroffen ist keine Datei dieses Plans, sondern die Leseseite aus Plan 06-09.
+
+**Was:** `Store.counts()` gruppiert nach `state` ohne `deleted_at` anzusehen, und
+`Store.tombstone` laesst den Verdikt-Wert stehen. Ein geloeschtes Dokument bleibt
+also unter `indexed` gezaehlt und verliert im selben Aufruf seine Vektoren. Auf
+der Verwaltungsseite stehen die zwei Deckungszahlen damit nach der ersten
+Loeschung dauerhaft auseinander: "auffindbar nach Bedeutung" kann "indexiert"
+nicht mehr einholen, und ein Verwalter liest daraus einen Rueckstand der zweiten
+Spur, den es nicht gibt.
+
+**Was in diesem Plan trotzdem geschah:** nur die Stempelbedingung wurde geheilt.
+`Store.indexed_alive()` zaehlt lebende indexierte Dokumente, und der Stempel
+rechnet gegen diese Zahl. Haette er gegen `counts()` gerechnet, waere die Marke
+auf jeder Instanz mit einer Loeschung fuer immer ungeschrieben geblieben; ein
+Testfall haelt das fest
+(`test_a_deleted_document_does_not_hold_the_mark_back_for_ever`).
+
+**Warum nicht hier behoben:** die Zahl der Verwaltungsseite zu aendern heisst,
+die Leseseite aus 06-09 samt ihrer Zusicherungen und dem Gate anzufassen, das
+"ein Aufruf derselben Methode mit einem anderen Zaehler" prueft. Das liegt
+ausserhalb der zwei Aufgaben dieses Plans und ist keine Korrektheitsfrage,
+sondern eine Anzeigefrage.
+
+**Wohin es gehoert:** eine Entscheidung vor dem Tag oder danach. Entweder zaehlt
+`counts()` fuer die Seite kuenftig lebende Zeilen (dann aendert sich auch die
+Fehlerliste), oder die Seite nennt neben "indexiert" ausdruecklich, dass
+geloeschte Dokumente unter ihrem letzten Verdikt weitergezaehlt werden. Die
+zweite Fassung ist die billigere und die ehrlichere.

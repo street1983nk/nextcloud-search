@@ -82,8 +82,16 @@ from findling.nc.client import (
     new_gateway_client,
 )
 from findling.nc.queue import KIND_ACL, KIND_DELETE, KIND_EMBED, KIND_METADATA, KIND_OCR, DocumentQueue, QueueJob
-from findling.store.repo import ACL_ANY_USER, FileMeta, Store, open_store
-from findling.store.vectors import Chunk, VectorStore, open_vectors
+from findling.store.repo import (
+    ACL_ANY_USER,
+    EMBEDDING_BACKLOG_MARK,
+    EMBEDDING_MARK,
+    UNKNOWN_VERSION,
+    FileMeta,
+    Store,
+    open_store,
+)
+from findling.store.vectors import EMBEDDING_MODEL, Chunk, VectorStore, embedding_mark, open_vectors
 
 LOGGER = logging.getLogger("findling.worker.poller")
 
@@ -108,6 +116,20 @@ ROUND_PAUSED_LOW_DISK: Final = "paused_low_disk"
 EMBED_WRITTEN: Final = "embedded"
 EMBED_NO_STORED_TEXT: Final = "no_stored_text"
 EMBED_INCOMPLETE: Final = "embedding_incomplete"
+
+# How many documents one idle pass hands back to the embedding track while the
+# vector stock is being written again after a model change.
+#
+# Five hundred, and the number is a trade between two request sizes. The
+# redelivery is one POST carrying file ids, so the whole instance in one call
+# would mean fifty thousand ids in one body on the box this app targets, and the
+# companion half writes them in bands of a thousand anyway. Below about a
+# hundred the sweep would need an idle pass per band and a model change would
+# take a day of cooldowns rather than an hour of work.
+#
+# It costs nothing on an instance that never drifted: the sweep only runs while
+# the cursor beside the mark says a redelivery is unfinished.
+VECTOR_BACKLOG_BAND: Final = 500
 
 # Suffix of the scratch files under tmp_dir. Named so that the cleanup on start
 # can recognise its own leftovers and touches nothing else in the volume.
@@ -509,6 +531,11 @@ class Poller:
             # idle poll of the process.
             if self._marks_unproven:
                 self._marks_unproven = not await asyncio.to_thread(self._stamp_if_rebuilt)
+            # The same moment, asked for the other stock. It stands here for the
+            # reason above it does: the vector mark is a statement about the
+            # whole instance, and the only pass that may make one is a pass that
+            # found nothing left to do.
+            await self._keep_the_vector_stock_in_step(queue)
             self._back_off()
             return RoundResult(ROUND_EMPTY)
 
@@ -1483,6 +1510,164 @@ class Poller:
         except Exception as error:
             LOGGER.warning("could not refresh the version marks, %s", type(error).__name__)
             return False
+
+    async def _keep_the_vector_stock_in_step(self, queue: DocumentQueue) -> None:
+        """Hold the embedding mark and the vector stock to the same statement.
+
+        The write half of DI-06-02 and DI-06-03, and the decision behind it is
+        E-H4 of 06.09.2026: the mark gets stamped rather than a sentence in the
+        documentation asking an admin to do it by hand.
+
+        **Why it is here and not in a status route.** Both halves are writes on
+        the index path, and a route that stamped something while answering a
+        read would be exactly the side effect this project rules out in three
+        places (``open_read_only``, ``PRAGMA query_only``, and the case "asking
+        for the status changes nothing"). The neighbour above it is the
+        precedent: the marks of the full text index are written on an idle pass
+        by the container that owns the index, by nobody else and never on a read.
+
+        **What it costs on an ordinary instance.** One read of the meta table,
+        which holds under a dozen rows, on an idle pass at most every fifteen
+        seconds. The two counts behind it are only asked while the mark is still
+        unwritten, and the band behind that only while a redelivery is running.
+
+        Nothing happens on a container without the second track. An instance
+        whose admin switched the embedding off, and the ordinary instance
+        without the model files, has a stock nothing reads semantically, so a
+        mark about it would be a statement about something nobody can reach.
+        """
+        if not (self._embed_enabled and self._embed_ready):
+            return
+        band = await asyncio.to_thread(self._vector_mark_step)
+        # The third step of the drift chain, and the last by construction: the
+        # stock was emptied and the mark was written before this list existed.
+        # A failure here is a number and not an exception, the rule of every
+        # handover in this module, and the cursor beside the mark makes the next
+        # idle pass ask for the same band again.
+        await self._hand_over(queue, band, kind=KIND_EMBED)
+
+    def _vector_mark_step(self) -> list[int]:
+        """One step of the mark, returning the documents to hand back, if any.
+
+        A failure is swallowed for the reason :meth:`_stamp_if_rebuilt` swallows
+        one: this is bookkeeping about the stock and not the stock, and a locked
+        database must not end a pass whose documents are durable.
+        """
+        try:
+            return self._step_of_the_vector_mark()
+        except Exception as error:
+            LOGGER.warning("could not keep the embedding mark in step, %s", type(error).__name__)
+            return []
+
+    def _step_of_the_vector_mark(self) -> list[int]:
+        """The three cases of the mark, in the order they exclude each other.
+
+        *Never written.* The mark is ``unknown``, which says nobody named the
+        model of this stock rather than that another model wrote it. The stock
+        is therefore not thrown away; it is claimed once it is provably whole,
+        and "whole" is a number and not a guess: ``embedded == indexed`` at
+        ``indexed > 0``, counted over documents (decision of plan 06-09).
+
+        *Drift.* The mark carries a real value and it is not the one this build
+        computes. Then the stored vectors were produced by another model,
+        another quantisation or another token cap, and they are not vectors any
+        more but numbers of the right width. The chain is emptying, marking,
+        redelivery, and its order is the whole point: a mark written before the
+        emptying would stand over a stock that nothing recognises as stale
+        afterwards.
+
+        *Current.* Nothing to decide, except carrying on a redelivery that an
+        earlier pass or an earlier process started.
+
+        **The mark deliberately does not go into expected_versions().** That set
+        is the mark of the full text index, and a difference in it raises the
+        index generation, which forces a rebuild of the tantivy index that costs
+        hours on the box this app targets and that D-21 rules out for a vector
+        problem. ``VECTOR_ONLY_MARKS`` keeps the two apart, the read side keeps
+        the embedding mark out of ``reindexRequired``, and this method writes the
+        mark without ever touching that set.
+        """
+        store = self._store_or_die()
+        vectors = self._vectors
+        if vectors is None:  # pragma: no cover - _embed_ready answered otherwise
+            return []
+
+        wanted = embedding_mark(EMBEDDING_MODEL, tokens=settings().embed_token_cap)
+        meta = store.read_meta()
+        stored = meta.get(EMBEDDING_MARK, UNKNOWN_VERSION)
+
+        if stored == UNKNOWN_VERSION:
+            self._claim_a_whole_stock(store, vectors, wanted)
+            return []
+        if stored != wanted:
+            return self._answer_the_vector_drift(store, vectors, wanted)
+        return self._next_backlog_band(store, meta.get(EMBEDDING_BACKLOG_MARK, ""))
+
+    def _claim_a_whole_stock(self, store: Store, vectors: VectorStore, wanted: str) -> None:
+        """Write the mark once every indexed document carries a vector.
+
+        **An empty container claims nothing.** At ``indexed == 0`` there is
+        nothing for the stock to be complete about, and ``0 == 0`` would let a
+        container that has never seen a document declare its stock whole. The
+        mark would then survive the first crawl and say that vectors written
+        later belong to a model that was never asked (T-06.1-41).
+
+        The comparison is "at least" and not "equal", although the condition is
+        written as an equality everywhere it is stated. The two differ in one
+        direction only, a stock holding a document the state database has
+        forgotten, and in that direction "equal" would leave the mark unwritten
+        for ever while "at least" answers the question that was asked.
+        """
+        indexed = store.indexed_alive()
+        if indexed <= 0 or vectors.document_count() < indexed:
+            return
+        store.write_meta(EMBEDDING_MARK, wanted)
+        LOGGER.info("every indexed document carries a vector, the embedding mark is current")
+
+    def _answer_the_vector_drift(self, store: Store, vectors: VectorStore, wanted: str) -> list[int]:
+        """Empty the stock, then mark it, then ask for the documents back.
+
+        The order is the mitigation of T-06.1-39 and it is not interchangeable.
+        Marking first would leave a stock of the old model under the mark of the
+        new one, and from that moment nothing in this container has any way of
+        telling that the answers it gives semantically are computed against
+        vectors that mean nothing.
+
+        **An abort anywhere in here is repeatable and costs no double counting.**
+        Between the emptying and the mark the next pass finds the same drift,
+        empties an empty stock and writes the mark; between the mark and the
+        redelivery the cursor beside the mark says where the sweep stands, and
+        it survives a restart because it lives in the meta table rather than in
+        this process. The redelivery itself is idempotent on the other side: a
+        file that already carries an embedding row gets its kind and its attempt
+        counter set again rather than a second row.
+        """
+        vectors.forget_all()
+        store.write_meta(EMBEDDING_MARK, wanted)
+        LOGGER.warning(
+            "the vector stock was written by another build, it was emptied and is being written again",
+        )
+        return self._next_backlog_band(store, "0")
+
+    def _next_backlog_band(self, store: Store, cursor: str) -> list[int]:
+        """One band of the redelivery, and the cursor moved on behind it.
+
+        An empty cursor means no redelivery is running, which is the state of
+        every instance that never changed its model. The band is written back as
+        the position of its last document, and an empty band clears the cursor,
+        which is what ends the sweep: the ids ascend and the primary key is the
+        cursor, so every band lies above the one before it.
+
+        A value that is not a number restarts the sweep rather than raising.
+        Nothing writes one, and the answer to a meta row somebody edited by hand
+        is one repeated sweep and not a container that stops handing work out.
+        """
+        if not cursor:
+            return []
+        after = int(cursor) if cursor.isdigit() else 0
+        band = store.indexed_file_ids(after=after, limit=VECTOR_BACKLOG_BAND)
+        store.write_meta(EMBEDDING_BACKLOG_MARK, str(band[-1]) if band else "")
+        return band
 
     def _store_or_die(self) -> Store:
         if self._store is None:  # pragma: no cover - _open sets it
