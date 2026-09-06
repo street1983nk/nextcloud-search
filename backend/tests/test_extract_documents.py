@@ -15,6 +15,7 @@ the test they are visible in the diff, which is where a reviewer looks.
 from __future__ import annotations
 
 import time
+import tracemalloc
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from zipfile import ZipFile
@@ -30,6 +31,7 @@ from pptx.util import Emu
 from pypdf.errors import EmptyFileError, FileNotDecryptedError
 
 from findling import config
+from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
 from findling.extract.dispatch import ALLOWED_MIMETYPES, IMAGE_MIMETYPES, Route, extract
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.odf import extract_odf
@@ -615,6 +617,80 @@ def test_the_dispatcher_reaches_the_three_ooxml_routes(tmp_path: Path) -> None:
 
         assert outcome.state is State.INDEXED
         assert needle in outcome.text
+
+
+# ---------------------------------------------------------------------------
+# The decompression bomb of the corpus.
+#
+# The cap against it has stood since phase 2, and until now the only fixture
+# behind it was a ZIP entry of 65 bytes against a cap lowered to 64. That proves
+# the comparison and nothing else. A file that really declares more than the cap
+# is a different statement: it travels the whole way a user document travels, it
+# lies in the directory the read only gate freezes, and it costs the repository
+# what a real one costs.
+# ---------------------------------------------------------------------------
+
+BOMB = "34-zip-bombe.docx"
+
+
+def test_the_bomb_of_the_corpus_declares_more_than_the_cap_and_still_weighs_nothing() -> None:
+    # Both halves matter. Without the first the file would be an ordinary DOCX
+    # and the guard would never fire; without the second the corpus would carry
+    # 64 MiB of padding in a repository whose whole corpus is under 400 kB.
+    path = CORPUS / BOMB
+    with ZipFile(path) as archive:
+        declared = max(info.file_size for info in archive.infolist())
+
+    assert declared > EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
+    assert path.stat().st_size < 128 * 1024
+
+
+def test_the_bomb_of_the_corpus_is_skipped_too_large() -> None:
+    outcome = extract_docx(str(CORPUS / BOMB))
+
+    assert outcome == ExtractionOutcome.skipped(Reason.TOO_LARGE)
+
+
+def test_the_verdict_on_the_bomb_is_reached_without_reading_a_single_member(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The guard reads the archive directory and nothing else. A test that only
+    # asserted the verdict would keep passing on the day somebody replaces the
+    # directory read with a streaming reader that decompresses "just a bit", and
+    # that day is the day the cap stops protecting anything.
+    def unreachable(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("a member of the bomb was read")
+
+    monkeypatch.setattr(ZipFile, "read", unreachable)
+    monkeypatch.setattr(ZipFile, "open", unreachable)
+    monkeypatch.setattr(ZipFile, "extractall", unreachable)
+    monkeypatch.setattr(ZipFile, "testzip", unreachable)
+
+    outcome = extract_docx(str(CORPUS / BOMB))
+
+    assert outcome == ExtractionOutcome.skipped(Reason.TOO_LARGE)
+
+
+def test_judging_the_bomb_costs_no_more_memory_than_judging_a_plain_document() -> None:
+    # The number the cap exists for. Unpacked the member is 64 MiB, so a verdict
+    # that materialised it would show up here as a peak in the tens of megabytes.
+    # One megabyte is two orders of magnitude below that and three above what a
+    # plain DOCX measures, which is the room a future loader may take without
+    # this becoming a test about the allocator.
+    tracemalloc.start()
+    try:
+        tracemalloc.reset_peak()
+        extract_docx(str(CORPUS / "03-document.docx"))
+        _, plain_peak = tracemalloc.get_traced_memory()
+
+        tracemalloc.reset_peak()
+        outcome = extract_docx(str(CORPUS / BOMB))
+        _, bomb_peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert outcome.reason is Reason.TOO_LARGE
+    assert bomb_peak < 1024 * 1024, f"the verdict cost {bomb_peak} bytes, a plain document costs {plain_peak}"
 
 
 # ---------------------------------------------------------------------------
