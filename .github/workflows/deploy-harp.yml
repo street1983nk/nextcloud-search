@@ -1462,11 +1462,15 @@ jobs:
           else
             echo "the tag the archive names does not exist in the registry"
             case "${GITHUB_REF}" in
-              refs/heads/main|refs/tags/v*)
-                echo "::error::${released} does not exist, and on ${GITHUB_REF} that is a store installation that would fail at a user's instance"
+              refs/tags/v*)
+                echo "::error::${released} does not exist, and on a release tag that is a store installation that would fail at a user's instance"
                 exit 1
                 ;;
             esac
+            # On main the tag cannot exist before the release tag is pushed
+            # (docker.yml publishes it on refs/tags/v*), so main takes the
+            # loud dev fallback below instead of staying red for months.
+            # The release tag lane keeps the hard guarantee.
             reference="${registry}/${image}:dev"
             docker buildx imagetools inspect "${reference}" > "${RUNNER_TEMP}/manifest-dev.txt" 2>&1
             cat "${RUNNER_TEMP}/manifest-dev.txt"
@@ -1487,7 +1491,8 @@ jobs:
               echo "**Finding on ${{ matrix.server-version }}:** the archive names \`${released}\`,"
               echo "which does not exist in the registry on this ref. The store install path ran"
               echo "against \`${reference}\` instead, with only the \`image-tag\` line replaced."
-              echo "On \`main\` and on a release tag the same situation is a hard failure."
+              echo "On a release tag the same situation is a hard failure; before the"
+              echo "release the tag cannot exist, so this finding is expected on \`main\`."
             } >> "${GITHUB_STEP_SUMMARY}"
           fi
 
