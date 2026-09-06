@@ -69,8 +69,16 @@ Rueckkehr der zweiten Modellinstanz nicht rot werden.
 **Was geliefert wurde:** die Differenz steht ab jetzt als Zahl im Protokoll des
 Schritts, damit die Reihe entsteht, aus der eine Grenze kommen kann.
 
-**Wohin es gehoert:** eine Owner-Entscheidung zwischen drei Wegen, ausgefuehrt in
-`06.1-04-SUMMARY.md`, Abschnitt "Offene Entscheidung fuer den Owner". Empfehlung
-dort: ein Messeinstieg, der `embed.engine.load_count()` ausgibt, statt einer
-Speichermessung. Beruehrt Plan 06.1-18 (Nachmessung) und die Frage, ob die
-arm64-Box zwischen zwei Messreihen der einzige Zeuge bleibt.
+**Wohin es gehoert:** eine Entscheidung zwischen drei Wegen, ausgefuehrt in
+`06.1-04-SUMMARY.md`. Empfehlung dort: ein Messeinstieg, der
+`embed.model.load_count()` prueft, statt einer Speichermessung.
+
+**GESCHLOSSEN (Checkpoint-Entscheidung des Orchestrators, 06.09.2026):** Weg 2
+wurde gewaehlt und in Plan 06.1-04 gebaut. `findling.tools.one_load` treibt
+Indexseite, Suchseite und zweites Gleis in einem Prozess an und prueft
+`load_count()` und `read_count()`; `resilience.yml` faehrt ihn im Abbild und
+faerbt den Job rot, wenn ein Zaehler nicht eins ist. Die RSS-Differenz bleibt als
+unbeurteilte Beobachtung im Protokoll. Rot-Faehigkeit dreifach belegt
+(`backend/tests/test_one_load.py`) plus einem roten Containerlauf. Commits
+0366a3b und d22c8ec. Fuer 06.1-18 bleibt nur noch die einmalige Nachmessung der
+Grundlast auf der arm64-Box; der Dauerwaechter haengt nicht mehr an ihr.
