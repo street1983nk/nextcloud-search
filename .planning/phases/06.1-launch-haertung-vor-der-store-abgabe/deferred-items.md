@@ -206,3 +206,62 @@ Gates in `backend/tests/test_store_metadata.py` und wird von einem eigenen Fall
 belegt. Der Kommentar in `backend/appinfo/info.xml` bleibt unveraendert. Die
 Eintragung in die Deferred Items der Phase 5 steht aus, weil jene Datei nicht in
 den `files_modified` dieses Plans steht.
+
+---
+
+## DI-06.1-06 (Plan 06.1-21, BLOCKIEREND fuer die CI nach dem Merge): die Integrationslaeufer installieren `tesseract-ocr-fra` nicht
+
+**Gefunden:** beim Durchsehen der Sprachnennungen im Repo, waehrend Plan 06.1-21
+den OCR-Standard auf `deu+eng+fra` gehoben hat.
+
+**Was:** `.github/workflows/integration.yml` startet die ExApp nicht im gebauten
+Image, sondern nativ auf dem Runner (`uv run python -m findling.main`), und
+installiert die Sprachpakete dort selbst. Drei Stellen tun das, Z. 432, Z. 1076
+und Z. 1843, und alle drei lauten heute:
+
+```
+sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-osd
+```
+
+`FINDLING_OCR_LANGUAGES` wird in dieser Datei nirgends gesetzt, der Lauf nimmt
+also den eingebauten Standard. Der lautet seit Plan 06.1-21 `deu+eng+fra`, und
+`tesseract -l deu+eng+fra` bricht auf einem Runner ohne `fra.traineddata` bei
+jeder einzelnen Seite ab. Der OCR-Zweig der Integration wird nach dem Merge also
+rot, und zwar ohne dass irgendetwas am Produkt kaputt waere: das gelieferte Image
+bringt `fra` mit, nur der Runner nicht.
+
+**Warum nicht hier gefixt:** `integration.yml` gehoert zu den `files_modified`
+von Plan 06.1-06, der zeitgleich in einem eigenen Worktree laeuft. Eine Aenderung
+von zwei Seiten an derselben Datei ist genau der Konflikt, den die Wellen-
+Aufteilung vermeiden soll.
+
+**Wohin es gehoert:** in denselben Merge wie Plan 06.1-21, spaetestens vor dem
+naechsten gruenen CI-Lauf. Der Fix ist ein Wort in drei Zeilen: hinter
+`tesseract-ocr-eng` ein `tesseract-ocr-fra`. Wer es macht, prueft danach, dass
+`tesseract --list-langs` in dem Schritt darunter `fra` ausgibt.
+
+---
+
+## DI-06.1-07 (Plan 06.1-21): zwei weitere Stellen nennen noch zwei OCR-Sprachen
+
+**Gefunden:** beim abschliessenden `grep` ueber `deu+eng` in Plan 06.1-21.
+
+**Was:** zwei Stellen ausserhalb der `files_modified` behaupten weiterhin den
+alten Zweiersatz:
+
+1. `docs/performance.md:1169` zeigt die Aufrufform mit `-l deu+eng`. Das ist
+   ein Messkommando aus dem Lauf von 06-11 und insofern historisch richtig, aber
+   es steht dort ohne Datumsvermerk und liest sich wie die aktuelle Aufrufform.
+   `docs/ocr.md` hat diesen Vermerk in Plan 06.1-21 bekommen, `docs/performance.md`
+   nicht.
+2. `CLAUDE.md:37` fuehrt in der Stack-Tabelle `Tesseract 5.5.0 (deu+eng+osd)`.
+   Die Datei ist generiert, die Quelle ist die Stack-Recherche, also gehoert die
+   Korrektur dorthin und nicht in die erzeugte Datei.
+
+**Warum nicht hier gefixt:** beide liegen ausserhalb der `files_modified` von
+Plan 06.1-21, und `docs/performance.md` ist eine Messschrift, in der eine
+nebenbei geaenderte Kommandozeile den Beleg von seiner Messung trennen wuerde.
+
+**Wohin es gehoert:** in den Abschlussplan der Phase (06.1-19) oder in den Plan,
+der `docs/performance.md` nach der Box-Nachmessung 06.1-18 ohnehin anfasst. Ein
+Satz mit Datum reicht in beiden Faellen.

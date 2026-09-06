@@ -14,10 +14,15 @@ niemand dieselbe Annahme noch einmal trifft.
 ## Die Aufrufform
 
 ```
-tesseract - - -l deu+eng --oem 1 --psm 3 -c tessedit_do_invert=0
+tesseract - - -l deu+eng+fra --oem 1 --psm 3 -c tessedit_do_invert=0
 ```
 
 Umgebung: `OMP_THREAD_LIMIT=1`, verpflichtend, siehe Messung 3.
+
+Die Sprachliste ist seit dem 06.09.2026 dreiteilig, siehe den Nachtrag weiter
+unten. Jede gemessene Zahl auf dieser Seite stammt aus Läufen mit `-l deu+eng`
+vom 01.09.2026, und die Messkommandos stehen deshalb unverändert so da, wie sie
+gelaufen sind.
 
 Ein- und Ausgabe laufen über stdin und stdout, deshalb die beiden Striche. Das
 spart je Seite eine Datei mit Nutzerinhalt auf der Platte und eine ganze Klasse
@@ -27,6 +32,34 @@ Die Seite wird vorher mit pypdfium2 gerastert:
 `page.render(scale=dpi/72, grayscale=True, draw_annots=False)`. Graustufen statt
 BGRA, weil tesseract intern ohnehin binarisiert und Farbe das Vierfache an
 Speicher kostet.
+
+## Nachtrag 06.09.2026: Französisch kommt dazu
+
+Der Standard ist seit dem 06.09.2026 `deu+eng+fra`, nicht mehr `deu+eng`. Das
+Image installiert `tesseract-ocr-fra` in derselben gepinnten Version 1:4.1.0-2
+wie die beiden anderen Sprachpakete, und `OCR_LANGUAGE_ALLOWLIST` in
+`backend/src/findling/config.py` lässt `fra` seither auf die Kommandozeile.
+Französisch steht an dritter Stelle, weil die führende Sprache im Ranking von
+tesseract am stärksten wiegt und Deutsch die Sprache der Zielgruppe bleibt; eine
+Instanz mit überwiegend französischen Scans dreht die Reihenfolge über
+`FINDLING_OCR_LANGUAGES`.
+
+Zwei Abgrenzungen, damit diese Seite nicht mehr behauptet, als gemessen wurde:
+
+1. **Alle Kommandozeilen und alle Zahlen auf dieser Seite sind mit `-l deu+eng`
+   entstanden**, am 01.09.2026, und bleiben deshalb unverändert stehen. Eine
+   dritte Sprache lädt eine weitere `traineddata` und verändert damit sowohl
+   die Laufzeit je Seite als auch die Speicherspitze. Wie stark, ist an dieser
+   Stelle nicht gemessen, und eine stillschweigende Umdeutung der alten Zahlen
+   auf drei Sprachen wäre eine Behauptung ohne Beleg. Die Nachmessung auf der
+   Box (Plan 06.1-18) fährt mit `deu+eng+fra`, und erst deren Ergebnis darf
+   diese Tabellen ersetzen.
+2. **Der Index hat keine dritte Sprache gelernt.** Die Analysekette von Tantivy
+   bleibt Deutsch und Englisch, also kein französisches Stemming, keine
+   französischen Stoppwörter, keine französische Kompositazerlegung. OCR
+   macht aus Pixeln Wörter, die Analysekette macht aus Wörtern einen Index,
+   und nur die erste Hälfte ist heute dreisprachig. Ein französisches Dokument
+   wird gelesen und über seine Wörter gefunden, nicht über seine Stammformen.
 
 ## Die Deckel-Kaskade
 
