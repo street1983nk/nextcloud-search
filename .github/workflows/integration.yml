@@ -76,6 +76,16 @@ on:
           end red, and red in the counter step, not in the checksum step.
         type: boolean
         default: false
+      mutation_skip_probe:
+        description: >-
+          Leave the file that changes under the container alone: the overwriting
+          step is skipped and the step after it has to go red. It is the
+          falsification of that step, and it answers the one question a green
+          run cannot answer by itself, namely whether the step could be green
+          merely because the search finds nothing at all. The run must end red,
+          and red in the step that asks for the new content.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -942,6 +952,36 @@ jobs:
       # rather than assumes.
       PARAPHRASE_FILE: '10-kuendigung.docx'
       PARAPHRASE_TERM: 'Wann darf ich meinen Job aufgeben und wie lange muss ich vorher warten'
+      # The file that changes between the fetch and the verdict, and everything
+      # that describes it. It is not part of the corpus and it arrives after the
+      # counters of the corpus have been asserted, for that exact reason: the
+      # three EXPECTED numbers above are the same statement as the table in
+      # testdata/CORPUS.md, and a file that is not in that table has no business
+      # moving them.
+      MUTATION_FILE: 'mutating.txt'
+      # Two invented ASCII tokens, one per revision, and neither of them stands
+      # in the corpus. Lower case and without an umlaut for the reason the parity
+      # markers are: a token has to be a question about the index and not about a
+      # collation or about the query side umlaut variant.
+      MUTATION_TERM_BEFORE: 'mutationalpha'
+      MUTATION_TERM_AFTER: 'mutationbeta'
+      # How many times the file is rewritten while the container works on it.
+      # Every write raises NodeWrittenEvent and refreshes the queue row, so the
+      # container is asked to fetch a file that is being replaced underneath it,
+      # which is the window this case is about. Eight rather than one, because
+      # one write and one fetch may simply not overlap and a case that only
+      # sometimes happens is a case that never gets measured.
+      MUTATION_ROUNDS: '8'
+      # Ceiling of the wait for the index to catch up with the last write, and it
+      # comes from one clock: RETREAT_MAX_SECONDS in
+      # backend/src/findling/worker/poller.py, the cap of the poller retreat, is
+      # three hundred seconds. The write lands in the queue of Nextcloud at once
+      # and the container fetches it on its next poll, so one full retreat is the
+      # longest honest wait. The nightly reconcile is NOT the carrier here: its
+      # minimum interval is hours, so a run that only became green through it
+      # would be a run that waited for the wrong clock. Exceeding this deadline
+      # is a finding and not a number to raise (pitfall 4).
+      MUTATION_TIMEOUT: '300'
 
     steps:
       # Same order and the same reason as in the two jobs above: the server
@@ -1515,6 +1555,178 @@ jobs:
           fi
           echo "the queue is empty on ${{ matrix.database }}, so every claimed row was acknowledged and no transaction was aborted underneath it"
 
+      # The file that changes between the fetch and the verdict, in three steps
+      # so that the middle one can be switched off and the last one has to go
+      # red. It is not a permission case, which is why it sits in this job and
+      # not in the parity job, and it is not part of the corpus, which is why it
+      # arrives after the counters of the corpus have been asserted: those three
+      # numbers are the same statement as testdata/CORPUS.md and a file outside
+      # that table must not move them.
+      #
+      # What the case is about. The container fetches the bytes into a scratch
+      # file, judges them and stores a content_hash next to the etag it fetched
+      # under. Between the fetch and the verdict the file can be replaced, and
+      # then a verdict stands over content that no longer exists. The etag
+      # comparison is supposed to carry that, and until now nobody had measured
+      # it. If it does not carry it, that is the finding of this step and it goes
+      # into the summary; it is not something to be healed by asking a softer
+      # question here.
+      #
+      # The file is a megabyte and not a line, and that is not decoration: the
+      # window this case is about is the time the fetch takes, and a file that is
+      # read in a single packet has almost no window at all.
+      - name: Put a file that will change under the container
+        run: |
+          cat > "${{ runner.temp }}/mutation.sh" <<'SH'
+          # One revision of the moving file, as bytes on disk. The token stands
+          # in the first line, because a text longer than FINDLING_MAX_TEXT_CHARS
+          # is truncated and a token behind the cut would be a question about the
+          # truncation instead of one about the etag.
+          #
+          # $1 token, $2 a word that makes this revision differ from the one
+          # before it, $3 output file. The second argument is what moves the etag:
+          # two identical writes are one file to Nextcloud and to the container
+          # alike, and the whole point here is that every write is a change.
+          revision() {
+            {
+              printf '%s the file that changes under the container, revision %s\n' "$1" "$2"
+              seq 1 60000 | sed 's/^/filler line /'
+            } > "$3"
+          }
+
+          # One search as the owner, and the number of hits as the answer.
+          # $1 term, $2 output file.
+          hits_for() {
+            curl -sfS -G -u "${OWNER_USER}:${OWNER_PASS}" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              --data-urlencode "term=$1" \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "$2"
+            jq -r '.ocs.data.entries | length' "$2"
+          }
+
+          # Waits until one term answers with one number, and never sleeps on
+          # suspicion: every round is a real search and the log carries its
+          # count. $1 term, $2 expected number of hits, $3 output file.
+          # Overrunning the deadline is a finding, see MUTATION_TIMEOUT.
+          await_hits() {
+            deadline=$(( $(date +%s) + MUTATION_TIMEOUT ))
+            while :; do
+              found=$(hits_for "$1" "$3")
+              echo "the search answers ${found} hit(s) for ${1}, ${2} expected"
+              if [ "${found}" -eq "$2" ]; then
+                return 0
+              fi
+              if [ "$(date +%s)" -ge "${deadline}" ]; then
+                echo "::error::${1} still answers ${found} hit(s) instead of ${2} after ${MUTATION_TIMEOUT} seconds"
+                cat "$3"
+                return 1
+              fi
+              sleep 5
+            done
+          }
+          SH
+          . "${{ runner.temp }}/mutation.sh"
+
+          # Over WebDAV and not into the data directory, because only this route
+          # raises the node events the container listens to, and the events are
+          # what makes the rest of this case work without a second crawl.
+          revision "${MUTATION_TERM_BEFORE}" 0 "${{ runner.temp }}/mutating-0.txt"
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" \
+            -T "${{ runner.temp }}/mutating-0.txt" \
+            "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MUTATION_FILE}"
+
+          # The control of the whole case, and it is asked in both directions
+          # here as well: the first content is findable and the second one, which
+          # has not been written yet, is not. Without this pair the two questions
+          # at the end would also be answered by a container that had never seen
+          # this file at all.
+          await_hits "${MUTATION_TERM_BEFORE}" 1 mutation-before.json
+          await_hits "${MUTATION_TERM_AFTER}" 0 mutation-after-early.json
+          echo "the file is in the index with its first content"
+
+      # Off by default in the sense that it is on by default and can be switched
+      # off: mutation_skip_probe leaves the file alone, and then the step below
+      # has to go red. That is the falsification this case needs, because its
+      # last assertion is that a term is NOT found any more, and a step that only
+      # asserted an absence would be green on a search that answers nothing.
+      - name: Overwrite it eight times while the container is working
+        if: ${{ ! inputs.mutation_skip_probe }}
+        run: |
+          . "${{ runner.temp }}/mutation.sh"
+          for round in $(seq 1 "${MUTATION_ROUNDS}"); do
+            revision "${MUTATION_TERM_BEFORE}" "${round}" "${{ runner.temp }}/mutating-${round}.txt"
+            curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" \
+              -T "${{ runner.temp }}/mutating-${round}.txt" \
+              "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MUTATION_FILE}"
+            echo "revision ${round} written"
+          done
+          # The last write is the only one that carries the second token, so the
+          # state the run has to end in is unambiguous no matter which of the
+          # revisions above the container managed to fetch.
+          revision "${MUTATION_TERM_AFTER}" final "${{ runner.temp }}/mutating-final.txt"
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" \
+            -T "${{ runner.temp }}/mutating-final.txt" \
+            "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MUTATION_FILE}"
+          echo "the final revision is written, and it is the only one that carries ${MUTATION_TERM_AFTER}"
+
+      - name: The moved file is found by its last content and carries no failed verdict
+        run: |
+          . "${{ runner.temp }}/mutation.sh"
+
+          # Both directions, and they are the two halves of one statement: the
+          # index has caught up with the last write AND it does not still carry
+          # an earlier one. Only asking the first would let an index through that
+          # holds both revisions of the same file.
+          await_hits "${MUTATION_TERM_AFTER}" 1 mutation-after.json
+          await_hits "${MUTATION_TERM_BEFORE}" 0 mutation-before-final.json
+
+          file_id=$(jq -r 'first(.ocs.data.entries[].attributes.fileId) // empty' mutation-after.json)
+          case "${file_id}" in
+            ''|*[!0-9]*)
+              echo "::error::the hit on ${MUTATION_TERM_AFTER} carries no usable fileid, so its verdict cannot be looked up"
+              cat mutation-after.json
+              exit 1
+              ;;
+          esac
+
+          # The second half of this step, and the one the case is really named
+          # after. A file that moved under the container must not end as failed:
+          # a verdict of "this document is broken" over a file whose only sin was
+          # being written twice is the second finding this step can produce, and
+          # it is as much a defect as a stale verdict would be.
+          python3 - "${{ runner.temp }}/findling/state.db" "${file_id}" <<'PY'
+          import sqlite3
+          import sys
+          from pathlib import Path
+
+          database = Path(sys.argv[1])
+          if not database.is_file():
+              print("::error::the state database is not where this job put it")
+              raise SystemExit(1)
+          connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+          row = connection.execute(
+              "SELECT state, reason, attempts, deleted_at FROM files WHERE file_id = ?",
+              (int(sys.argv[2]),),
+          ).fetchone()
+          connection.close()
+
+          if row is None:
+              print(f"::error::fileid {sys.argv[2]} answers the search but has no verdict at all")
+              raise SystemExit(1)
+          state, reason, attempts, deleted_at = row
+          print(f"the moved file ended as state={state} reason={reason} attempts={attempts} deleted_at={deleted_at}")
+          if state != "indexed":
+              print(
+                  f"::error::the file that changed under the container ended as {state}({reason}) "
+                  "instead of indexed, which means a write during the fetch costs the document its verdict"
+              )
+              raise SystemExit(1)
+          if deleted_at is not None:
+              print("::error::the file that changed under the container carries a tombstone while it exists")
+              raise SystemExit(1)
+          PY
+          echo "a file that changed under the container is found by its last content, by nothing else, and is not marked as broken"
+
       - name: Everything the failure had to say
         if: failure()
         run: |
@@ -1527,7 +1739,9 @@ jobs:
           echo "--- the last search answers ---"
           for answer in compound.json frist.json umlaut.json flexion.json phrase.json both.json \
                         excluded.json filetype.json colleague-shared.json colleague-denied.json delayed.json \
-                        paraphrase-lexical.json paraphrase-semantic.json; do
+                        paraphrase-lexical.json paraphrase-semantic.json \
+                        mutation-before.json mutation-after-early.json mutation-after.json \
+                        mutation-before-final.json; do
             if [ -f "${answer}" ]; then
               echo "== ${answer} =="
               cat "${answer}"
@@ -2061,12 +2275,52 @@ jobs:
       MARKER_REVOKED: 'parityrevoked'
       MARKER_MINIMAL: 'parityminimal'
       MARKER_TEAM: 'parityteam'
-      # Four folders in the home of the owner plus one team folder, three files
-      # each. A number rather than a duration, because the drain loop waits for a
-      # verdict per file, and because a team folder that never reached the crawl
-      # is exactly the failure this number catches.
-      EXPECTED_JUDGED: '15'
+      # Scenario 7, the trash bin. Three files so that the deletion of one of
+      # them leaves a non empty set on both sides: a comparison that drops from
+      # three to nought would also be satisfied by a search that stopped working.
+      MARKER_TRASH: 'paritytrash'
+      # Scenario 8, the versions. One file, and three tokens rather than one,
+      # because this is the one scenario whose substance the native search
+      # cannot answer at all.
+      #
+      # MARKER_VERSION stands in the name and in the content of both versions,
+      # and it is the token the symmetric comparison is made of: the file has to
+      # stay visible, once, on both sides, across a version rollback.
+      #
+      # The two content tokens stand in the content only, one per version, and
+      # they are asked of findling alone. That is not a gap in the comparison, it
+      # is the fixture rule of this job read backwards: the native term filter is
+      # a LIKE over the name column and never looks at a text layer, so a token
+      # that only a content search can see has no native counterpart to be
+      # compared against. A version rollback cannot rename the file, so there is
+      # no way to give the content of the newer version a name, and asking the
+      # native side about it would compare a hit against a blind side.
+      MARKER_VERSION: 'parityversion'
+      MARKER_VERSION_OLD: 'parityversionold'
+      MARKER_VERSION_NEW: 'parityversionnew'
+      # Five folders in the home of the owner plus one team folder plus the one
+      # file of the version scenario. A number rather than a duration, because
+      # the drain loop waits for a verdict per file, and because a team folder
+      # that never reached the crawl is exactly the failure this number catches.
+      #
+      # Nineteen and not fifteen since the trash bin and the version scenario
+      # joined: three marker files in parity-trash and one uploaded
+      # parityversion-1.txt. Every new file is one more verdict, and a number
+      # left behind would let the drain loop finish before the new fixtures were
+      # judged.
+      EXPECTED_JUDGED: '19'
       DRAIN_TIMEOUT: '600'
+      # The deadline of every scenario that changes the instance after the
+      # crawl, and it comes from one clock: RETREAT_MAX_SECONDS in
+      # backend/src/findling/worker/poller.py, the cap of the poller retreat, is
+      # three hundred seconds. A file event lands in the queue of Nextcloud at
+      # once and the container fetches it on its next poll, so the longest
+      # honest wait is one full retreat. It is the same three hundred seconds
+      # scenario 3 and scenario 5 pass to drain() as a literal, and it is a
+      # variable here because the three new scenarios share it and because a
+      # deadline that gets raised until a run is green is a finding and not an
+      # adjustment (pitfall 4).
+      EVENT_DEADLINE: '300'
 
     steps:
       # Same order and the same reason as in the four jobs above: the server
@@ -2156,9 +2410,40 @@ jobs:
           write_three parity-shared "${MARKER_SHARED}"
           write_three parity-revoked "${MARKER_REVOKED}"
           write_three parity-minimal "${MARKER_MINIMAL}"
+          # Scenario 7. Same shape as the four above, and the deletion of
+          # scenario 7 happens later over WebDAV so that the trash bin really
+          # sees it.
+          write_three parity-trash "${MARKER_TRASH}"
           ./occ files:scan --all
           find "data/${OWNER_USER}/files" -type f -printf '%P\n' | sort
           echo "fixture files: $(find "data/${OWNER_USER}/files" -type f | wc -l)"
+
+      # Scenario 8 needs its fixture to arrive over WebDAV, and that is the
+      # whole difference to the step above: files_versions keeps a version when
+      # a file is written a second time THROUGH Nextcloud, and a file copied
+      # into the data directory and scanned in has never been written through
+      # Nextcloud at all. So this one file goes in over the same route a desktop
+      # client uses, and the second write in the scenario below is what turns
+      # this first one into a version.
+      #
+      # The trash bin and the version app are asked for rather than assumed. A
+      # deletion on an instance without files_trashbin raises no MoveToTrashEvent
+      # and there would be nothing to restore, and a second write without
+      # files_versions keeps no older revision; either way the scenario would
+      # test the absence of an app and still be able to look green.
+      - name: The version fixture, over WebDAV, and the two apps it needs
+        run: |
+          ./occ app:enable files_trashbin
+          ./occ app:enable files_versions
+          ./occ app:list | grep -E 'files_trashbin|files_versions'
+
+          printf '%s marker file 1 of the parity fixture, in the name and in the content. %s\n' \
+            "${MARKER_VERSION}" "${MARKER_VERSION_OLD}" > "${{ runner.temp }}/${MARKER_VERSION}-1.txt"
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" \
+            -T "${{ runner.temp }}/${MARKER_VERSION}-1.txt" \
+            "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MARKER_VERSION}-1.txt"
+          ./occ files:scan --all
+          echo "fixture files after the version fixture: $(find "data/${OWNER_USER}/files" -type f | wc -l)"
 
       # Before the crawl, and that order is the point rather than a detail: the
       # access list of a file is written while the file is indexed. A share
@@ -2494,6 +2779,300 @@ jobs:
             compare "restricted-user-denied-${marker}" \
               "${MINIMAL_USER}" "${MINIMAL_PASS}" "${marker}" 0
           done
+
+      # Scenario 7, the trash bin, and it is asked in both directions because
+      # only the pair is a statement. A deleted file that stays findable in
+      # findling is the case IDX-05 rules out and D-10 gives the wording for: for
+      # the search the trash bin is a deletion, so the file has to stop being
+      # findable at once and not in thirty days. A restored file that never comes
+      # back is the other half, and a run that only checked the first half would
+      # be green on a container that simply drops everything.
+      #
+      # One of three is thrown away and not all three, so that both comparisons
+      # are made of a non empty set: three against three, then two against two,
+      # then three against three again. A set that fell to nought would also be
+      # what a search that stopped working answers.
+      #
+      # The one file is followed by its fileid rather than by its name, because
+      # the comparison is made of fileids and a statement about "this one" has to
+      # be made in the same currency. That the id survives the way through the
+      # trash bin is part of what is asserted here: the trash bin keeps the cache
+      # entry, so a restored file is the same file, and if it ever were not, the
+      # last two lines of this step are where it would show.
+      - name: Scenario 7, the trash bin and the way back
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+
+          # Before the deletion, so that its effect is a change and not a state
+          # that was there all along.
+          compare trashbin-before "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_TRASH}" 3
+
+          victim=$(jq -r --arg name "${MARKER_TRASH}-1.txt" \
+            'first(.ocs.data.entries[] | select(.title == $name) | .attributes.fileId) // empty' \
+            native-trashbin-before.json)
+          case "${victim}" in
+            ''|*[!0-9]*)
+              echo "::error::the fileid of ${MARKER_TRASH}-1.txt could not be read out of the native answer, so the deletion could not be followed"
+              jq -c '[.ocs.data.entries[] | {title, id: .attributes.fileId}]' native-trashbin-before.json
+              exit 1
+              ;;
+          esac
+          echo "the file that goes into the trash bin has fileid ${victim}"
+
+          # Over WebDAV and not with rm, because only this route raises
+          # MoveToTrashEvent and NodeDeletedEvent, and those two events are the
+          # thing under test.
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" -X DELETE \
+            "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/parity-trash/${MARKER_TRASH}-1.txt"
+          drain "${EVENT_DEADLINE}"
+
+          compare trashbin-deleted "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_TRASH}" 2
+          for answer in native-trashbin-deleted.json findling-trashbin-deleted.json; do
+            jq -e --arg id "${victim}" \
+              '[.ocs.data.entries[].attributes.fileId | tostring] | index($id) == null' "${answer}" > /dev/null \
+              || { echo "::error::fileid ${victim} is in the trash bin and ${answer} still offers it"; \
+                   jq -c '[.ocs.data.entries[].attributes.fileId]' "${answer}"; exit 1; }
+          done
+          echo "the trashed file is gone from both answers, and the other two are still there"
+
+          # The way back, over the trash bin endpoint of the DAV tree: the item
+          # is listed under trash/ under a name of its own (the original name
+          # plus the deletion timestamp), and a MOVE into restore/ puts it back
+          # where it came from. The href is read out of the listing rather than
+          # built from the name, because that suffix is Nextcloud's business and
+          # not ours.
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" -X PROPFIND -H 'Depth: 1' \
+            "http://localhost:8080/remote.php/dav/trashbin/${OWNER_USER}/trash/" -o trash-list.xml
+          href=$(tr '<' '\n' < trash-list.xml | sed -n 's#^[a-zA-Z0-9]*:\{0,1\}href>##p' \
+            | grep "${MARKER_TRASH}-1\.txt" | head -1)
+          if [ -z "${href}" ]; then
+            echo "::error::the deleted file is not in the trash bin listing, so there is nothing to restore"
+            cat trash-list.xml
+            exit 1
+          fi
+          echo "the trash bin holds the file"
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" -X MOVE \
+            -H "Destination: http://localhost:8080/remote.php/dav/trashbin/${OWNER_USER}/restore/file" \
+            "http://localhost:8080${href}"
+          # Asked back rather than assumed: a MOVE that answered without moving
+          # anything would leave the comparison below to explain it.
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" -X PROPFIND -H 'Depth: 0' \
+            "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/parity-trash/${MARKER_TRASH}-1.txt" \
+            -o restored-head.xml
+          echo "the file lies where it was before"
+          drain "${EVENT_DEADLINE}"
+
+          compare trashbin-restored "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_TRASH}" 3
+          for answer in native-trashbin-restored.json findling-trashbin-restored.json; do
+            jq -e --arg id "${victim}" \
+              '[.ocs.data.entries[].attributes.fileId | tostring] | index($id) != null' "${answer}" > /dev/null \
+              || { echo "::error::the restored file does not carry fileid ${victim} in ${answer}, so the way through the trash bin did not preserve it"; \
+                   jq -c '[.ocs.data.entries[].attributes.fileId]' "${answer}"; exit 1; }
+          done
+          echo "the restored file is back in both answers under the same fileid ${victim}"
+
+      # Scenario 8, the version that is rolled back, and the one scenario of this
+      # job whose substance the native search cannot answer.
+      #
+      # Two questions are asked of both sides and four are asked of findling
+      # alone, and the split is not a shortcut. The symmetric half is about
+      # visibility: the file has to stay visible, exactly once, on both sides,
+      # across a second write and across a rollback. The asymmetric half is about
+      # content, and the native term filter is a LIKE over the name column which
+      # never looks at a text layer. A rollback cannot rename a file, so the
+      # content of the newer version has no name to be found under, and asking
+      # the native side about it would compare a hit against a blind side. The
+      # fixture rule of this job says the same thing from the other end: a marker
+      # that stands only in the content makes the native side blind.
+      #
+      # Both directions again, and here they are the whole point: after the
+      # rollback the token of the old version has to be findable AND the token of
+      # the newer one must not be. Only checking the first would let an index
+      # through that carries both versions of the same file, which is exactly
+      # what T-06.1-28 is about. The two questions before the rollback are what
+      # make the two after it worth anything: they establish that the newer token
+      # really was in the index, so its disappearance is a change and not a token
+      # that never arrived.
+      - name: Scenario 8, the version that is rolled back
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+
+          # $1 term, $2 how many hits findling has to answer with, $3 name of the
+          # answer file. Findling alone, for the reason in the comment above.
+          content_hits() {
+            ask 'providers/findling/search' "${OWNER_USER}" "${OWNER_PASS}" "$1" "findling-$3.json"
+            count=$(jq -r '.ocs.data.entries | length' "findling-$3.json")
+            echo "content question ${3}: findling answers ${count} hit(s) for ${1}, ${2} expected"
+            if [ "${count}" -ne "$2" ]; then
+              echo "::error::the content question ${3} answered ${count} hits for ${1} and not ${2}"
+              jq -c '[.ocs.data.entries[] | .title]' "findling-$3.json"
+              exit 1
+            fi
+          }
+
+          compare versions-before "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_VERSION}" 1
+          file_id=$(jq -r --arg name "${MARKER_VERSION}-1.txt" \
+            'first(.ocs.data.entries[] | select(.title == $name) | .attributes.fileId) // empty' \
+            native-versions-before.json)
+          case "${file_id}" in
+            ''|*[!0-9]*)
+              echo "::error::the fileid of ${MARKER_VERSION}-1.txt could not be read, so the version endpoint cannot be addressed"
+              jq -c '[.ocs.data.entries[] | {title, id: .attributes.fileId}]' native-versions-before.json
+              exit 1
+              ;;
+          esac
+          echo "the file of the version scenario has fileid ${file_id}"
+
+          content_hits "${MARKER_VERSION_OLD}" 1 versions-old-before
+          content_hits "${MARKER_VERSION_NEW}" 0 versions-new-before
+
+          # Three seconds before the second write, and the number is not
+          # decoration: files_versions expires versions that are younger than a
+          # couple of seconds, so two writes inside the same second leave nothing
+          # to roll back to and the scenario would fail on its own setup rather
+          # than on the index.
+          sleep 3
+          printf '%s marker file 1 of the parity fixture, in the name and in the content. %s\n' \
+            "${MARKER_VERSION}" "${MARKER_VERSION_NEW}" > "${{ runner.temp }}/${MARKER_VERSION}-2.txt"
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" \
+            -T "${{ runner.temp }}/${MARKER_VERSION}-2.txt" \
+            "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MARKER_VERSION}-1.txt"
+          drain "${EVENT_DEADLINE}"
+
+          # The control of the whole scenario: the newer content really is in the
+          # index and the older one is not. Without this pair the two questions
+          # after the rollback would also be answered by an index that never saw
+          # the second write at all.
+          content_hits "${MARKER_VERSION_NEW}" 1 versions-new-written
+          content_hits "${MARKER_VERSION_OLD}" 0 versions-old-written
+          compare versions-updated "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_VERSION}" 1
+
+          # The rollback, over the versions endpoint of the DAV tree: the
+          # versions of one file are listed under versions/<fileid>/, and a MOVE
+          # into restore/ makes one of them current again. That write goes
+          # through the same View every other write goes through, so it raises
+          # NodeWrittenEvent, which is the event this scenario is really about.
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" -X PROPFIND -H 'Depth: 1' \
+            "http://localhost:8080/remote.php/dav/versions/${OWNER_USER}/versions/${file_id}/" \
+            -o versions-list.xml
+          version_href=$(tr '<' '\n' < versions-list.xml | sed -n 's#^[a-zA-Z0-9]*:\{0,1\}href>##p' \
+            | grep "/versions/${file_id}/." | head -1)
+          if [ -z "${version_href}" ]; then
+            echo "::error::no stored version of fileid ${file_id} was listed, so there is nothing to roll back to"
+            echo "Either files_versions kept no version of the second write, which is a finding about the"
+            echo "expiry rule and not a reason to weaken this scenario, or the listing has a shape this step"
+            echo "does not read."
+            cat versions-list.xml
+            exit 1
+          fi
+          echo "the file has a stored version"
+          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" -X MOVE \
+            -H "Destination: http://localhost:8080/remote.php/dav/versions/${OWNER_USER}/restore/target" \
+            "http://localhost:8080${version_href}"
+          drain "${EVENT_DEADLINE}"
+
+          # The statement of the scenario, in both directions.
+          content_hits "${MARKER_VERSION_OLD}" 1 versions-old-restored
+          content_hits "${MARKER_VERSION_NEW}" 0 versions-new-restored
+          compare versions-restored "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_VERSION}" 1
+          echo "the rolled back content is findable, the newer one is not, and the file is still one file on both sides"
+
+      # Scenario 9, the public link, and its value is the NON change. This is
+      # worth spelling out because a scenario whose expectation is "nothing
+      # happens" reads like an idle case and gets deleted at the next rewrite.
+      #
+      # A link share hands a file to anybody who has the URL. It hands it to
+      # nobody who is logged in. So the set of files a logged in user finds must
+      # be exactly what it was before, and the acl table of the container must
+      # not have gained a row. The failure this catches is the quiet one: a share
+      # event that walks into the prefilter and writes an entry for a user, which
+      # would show up here as extra, the direction parity_diff calls a security
+      # defect. T-06.1-26 is the same sentence as a threat.
+      #
+      # A nought that is only a nought proves nothing, so the non change is
+      # measured three ways: the two sets that have to stay empty, the two sets
+      # that have to stay full, and the acl rows of the shared file itself, read
+      # out of the container by fileid and compared name by name.
+      - name: Scenario 9, the public link that must change nothing
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+
+          # The uids the container lets find one file, read out of the prefilter
+          # table over the read only connection. A count alone would not do: a
+          # row that is exchanged for another one keeps the count.
+          acl_users() {
+            python3 - "${{ runner.temp }}/findling/state.db" "$1" <<'PY'
+          import sqlite3
+          import sys
+          from pathlib import Path
+
+          database = Path(sys.argv[1])
+          if not database.is_file():
+              print("no-state-database")
+              raise SystemExit(0)
+          connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+          rows = connection.execute("SELECT uid FROM acl WHERE file_id = ? ORDER BY uid", (int(sys.argv[2]),)).fetchall()
+          connection.close()
+          print(",".join(str(row[0]) for row in rows) or "none")
+          PY
+          }
+
+          compare link-share-before-owner "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_OWN}" 3
+          compare link-share-before-colleague "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_OWN}" 0
+          compare link-share-before-minimal "${MINIMAL_USER}" "${MINIMAL_PASS}" "${MARKER_OWN}" 0
+
+          shared_id=$(jq -r --arg name "${MARKER_OWN}-1.txt" \
+            'first(.ocs.data.entries[] | select(.title == $name) | .attributes.fileId) // empty' \
+            native-link-share-before-owner.json)
+          case "${shared_id}" in
+            ''|*[!0-9]*)
+              echo "::error::the fileid of ${MARKER_OWN}-1.txt could not be read, so the acl rows of the linked file cannot be followed"
+              jq -c '[.ocs.data.entries[] | {title, id: .attributes.fileId}]' native-link-share-before-owner.json
+              exit 1
+              ;;
+          esac
+          before_users=$(acl_users "${shared_id}")
+          echo "before the link: fileid ${shared_id} is in the prefilter for [${before_users}]"
+
+          # shareType=3 is a public link, permissions=1 is read only. Without -f
+          # on purpose, for the reason the share step above gives: a refused
+          # share answers with a body that says why.
+          curl -s -u "${OWNER_USER}:${OWNER_PASS}" \
+            -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+            -d "path=/parity-own/${MARKER_OWN}-1.txt" \
+            -d 'shareType=3' \
+            -d 'permissions=1' \
+            'http://localhost:8080/ocs/v2.php/apps/files_sharing/api/v1/shares' | tee link-share.json > /dev/null
+          jq -e '.ocs.meta.statuscode == 200' link-share.json > /dev/null \
+            || { echo "::error::the link share was not created, so this scenario would measure the absence of an event"; cat link-share.json; exit 1; }
+          # The token and not the whole answer: the answer carries the path of the
+          # file, and this log is the log of a public repository.
+          echo "the public link exists, token $(jq -r '.ocs.data.token' link-share.json)"
+          drain "${EVENT_DEADLINE}"
+
+          # The three sets again, and every one of them has to answer the same
+          # number as before. parity_diff prints the number it compared, so the
+          # non change stands in the log as a figure and not as a claim.
+          compare link-share-owner "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_OWN}" 3
+          compare link-share-colleague "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_OWN}" 0
+          compare link-share-minimal "${MINIMAL_USER}" "${MINIMAL_PASS}" "${MARKER_OWN}" 0
+          # The half that keeps the two noughts honest: the colleague still finds
+          # the three files that really are shared with him, so "he finds nothing
+          # of the linked folder" is a statement about permissions and not about
+          # a search that stopped answering.
+          compare link-share-control "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_SHARED}" 3
+
+          after_users=$(acl_users "${shared_id}")
+          echo "after the link: fileid ${shared_id} is in the prefilter for [${after_users}]"
+          if [ "${before_users}" != "${after_users}" ]; then
+            echo "::error::the link share changed who the container lets find fileid ${shared_id}, from [${before_users}] to [${after_users}]"
+            exit 1
+          fi
+          if [ "${after_users}" != "${OWNER_USER}" ]; then
+            echo "::error::fileid ${shared_id} is in the prefilter for [${after_users}] and not for ${OWNER_USER} alone"
+            exit 1
+          fi
+          echo "the public link moved neither set and not one prefilter row: it is a link for the world and for no account"
 
       # The falsification of everything above, and the reason the comparisons are
       # worth anything at all: a gate that has never been seen failing is not
