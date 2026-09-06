@@ -417,6 +417,12 @@ class Poller:
         # running code. True until an idle pass proved otherwise, so a container
         # asks the question once per start rather than once per poll (DI-04-04).
         self._marks_unproven = True
+        # Whether the "armed and idle" line has been said since the last arming.
+        # One line per arming and not one per idle pass: the pass repeats every
+        # cooldown for as long as the instance has nothing to do, and a line per
+        # pass would be a log that fills up while the container is doing nothing
+        # at all.
+        self._idle_announced = False
         self._armed = asyncio.Event()
 
     # -- lifecycle -------------------------------------------------------
@@ -432,7 +438,13 @@ class Poller:
         return self._cooldown
 
     def arm(self) -> None:
-        """Let the task collect work again."""
+        """Let the task collect work again.
+
+        The idle announcement is due again after every arming. A container that
+        was switched off and on has to say what state it came back in, and the
+        line of the previous arming is not an answer about this one.
+        """
+        self._idle_announced = False
         self._armed.set()
 
     def silence(self) -> None:
@@ -536,6 +548,16 @@ class Poller:
             # whole instance, and the only pass that may make one is a pass that
             # found nothing left to do.
             await self._keep_the_vector_stock_in_step(queue)
+            # Said once per arming, and this is the only line an armed container
+            # with nothing to do ever writes. Without it "armed and idle" and
+            # "silenced" look exactly the same from the outside: both are a
+            # container that answers /heartbeat and logs nothing, which is the
+            # state DI-05-36 is about. "pass finished" cannot fill that gap
+            # because it is written above only for a pass that claimed rows, so
+            # it says something about the work stock and nothing about the task.
+            if not self._idle_announced:
+                self._idle_announced = True
+                LOGGER.info("indexing is armed and the work stock is empty, the next file is picked up as it arrives")
             self._back_off()
             return RoundResult(ROUND_EMPTY)
 

@@ -1656,6 +1656,47 @@ async def test_an_empty_queue_grows_the_cooldown_from_fifteen_to_at_most_one_hun
     assert seen == [15, 30, 60, 120, 120, 120]
 
 
+async def test_an_armed_container_with_an_empty_work_stock_says_so_once_per_arming(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """DI-05-36, the observability half: armed and idle must not look silenced.
+
+    Reproduced from run 34056709826. The resilience gate decides whether a
+    restarted container arms itself by counting "pass finished" lines, and that
+    line is written only for a pass that claimed rows. The whole corpus had
+    reached a terminal verdict before the restart, so the correctly armed
+    container had nothing to claim, wrote nothing at all, and the gate reported
+    the very defect it was written to catch.
+
+    One line per arming and not one per pass: an instance with an empty work
+    stock polls for ever, and a line per poll would fill the log of a four
+    gigabyte box exactly the way the retreat announcement must not (T-05-30).
+    """
+    queue = _FakeQueue()
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller.arm()
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        for _ in range(4):
+            assert (await poller.run_once()).state == ROUND_EMPTY
+
+    idle = [line for line in _poller_lines(caplog) if "armed and the work stock is empty" in line]
+
+    assert len(idle) == 1
+    # And nothing that a reader could mistake for work that was done.
+    assert not [line for line in _poller_lines(caplog) if line.startswith("pass finished")]
+
+    # A container that is switched off and on again owes the answer a second
+    # time, because the line of the previous arming says nothing about this one.
+    poller.silence()
+    poller.arm()
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        await poller.run_once()
+
+    assert len([line for line in _poller_lines(caplog) if "armed and the work stock is empty" in line]) == 2
+
+
 async def test_a_full_volume_ends_the_pass_and_hands_the_rows_back(
     index: Index, index_dir: Path, store: Store, tmp_path: Path
 ) -> None:

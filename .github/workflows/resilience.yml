@@ -259,7 +259,11 @@ jobs:
           # would leave the test asserting against a fresh index, and it would be
           # green for the wrong reason.
           export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
-          uv run python -m findling.main >> "${{ runner.temp }}/exapp.log" 2>&1 &
+          # Resolved first and started directly: $! after "uv run ... &" names
+          # uv, not the server. See the same two lines in
+          # .github/actions/setup-test-nc/action.yml for the whole reasoning.
+          server_python=$(uv run python -c 'import sys; print(sys.executable)')
+          "${server_python}" -m findling.main >> "${{ runner.temp }}/exapp.log" 2>&1 &
           echo $! > "${{ runner.temp }}/exapp.pid"
           for _ in $(seq 1 30); do
             if curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null; then
@@ -292,10 +296,13 @@ jobs:
       # PUT /enabled?enabled=1 once, when it enables the ExApp, and none of its
       # three background jobs ever sends it again.
       #
-      # The counted quantity is the log line "pass finished" of the poller
-      # (backend/src/findling/worker/poller.py), the same one the box was read
-      # with on 05.09.2026: zero passes while unarmed, fourteen after the
-      # registration (docs/measurements/2026-09-05-semantiklauf-m7g).
+      # The counted quantity is either of the two lines an armed poller writes
+      # (backend/src/findling/worker/poller.py): "pass finished" when it had
+      # rows to claim, which is how the box was read on 05.09.2026 (zero passes
+      # while unarmed, fourteen after the registration,
+      # docs/measurements/2026-09-05-semantiklauf-m7g), and "armed and the work
+      # stock is empty" when it had none. A silenced poller writes neither,
+      # because it never enters a pass.
       #
       # SIGTERM and not SIGKILL, deliberately. The kill earlier in this job is
       # the subject of the resume test; here the restart is only the vehicle,
@@ -344,7 +351,9 @@ jobs:
             # enable lies. A fresh directory here would make this step green
             # for the wrong reason twice over.
             export APP_PERSISTENT_STORAGE="${{ runner.temp }}/findling"
-            uv run python -m findling.main >> "${log}" 2>&1 &
+            # Resolved first and started directly, so that $! is the server.
+            server_python=$(uv run python -c 'import sys; print(sys.executable)')
+            "${server_python}" -m findling.main >> "${log}" 2>&1 &
             echo $! > "${pidfile}"
           )
           for _ in $(seq 1 30); do
@@ -363,12 +372,26 @@ jobs:
             exit 1
           fi
 
+          # Two lines and not one, because "pass finished" alone is a statement
+          # about the work stock and not about the indexing task: the poller
+          # writes it only for a pass that claimed rows, and returns silently
+          # from a pass that found the queue empty. The corpus of this job
+          # reaches a terminal verdict for every one of its files while the kill
+          # step is still waiting, so by the time this step runs there is
+          # regularly nothing left to claim, and a correctly armed container
+          # wrote not a single line. That is what turned this gate red on
+          # 06.09.2026 (run 34056709826) while the restarted container had
+          # logged "was enabled before this start" three lines earlier.
+          # "armed and the work stock is empty" is the counterpart: an armed
+          # poller writes it once per arming, a silenced one never enters the
+          # pass at all, so together the two cover both states the gate is about.
+          armed='pass finished|armed and the work stock is empty'
           started=$(date +%s)
           deadline=$(( started + UNARMED_TIMEOUT ))
           while :; do
-            passes=$(tail -n "+$(( before + 1 ))" "${log}" | grep -c 'pass finished' || true)
+            passes=$(tail -n "+$(( before + 1 ))" "${log}" | grep -cE "${armed}" || true)
             if [ "${passes}" -gt 0 ]; then
-              echo "the restarted container indexed by itself: ${passes} passes after $(( $(date +%s) - started )) seconds"
+              echo "the restarted container armed itself: ${passes} lines after $(( $(date +%s) - started )) seconds"
               break
             fi
             if [ "$(date +%s)" -ge "${deadline}" ]; then
@@ -437,7 +460,9 @@ jobs:
             export APP_VERSION=0.1.0
             export APP_HOST=127.0.0.1
             export NEXTCLOUD_URL=http://localhost:8080
-            uv run python -m findling.main >> "${log}" 2>&1 &
+            # Resolved first and started directly, so that $! is the server.
+            server_python=$(uv run python -c 'import sys; print(sys.executable)')
+            "${server_python}" -m findling.main >> "${log}" 2>&1 &
             echo $! > "${pidfile}"
           )
           for _ in $(seq 1 30); do
@@ -457,13 +482,18 @@ jobs:
           # The whole period, not the first sign of life: this half asserts an
           # absence, and an absence is only worth the time it was watched for.
           sleep "${UNARMED_TIMEOUT}"
-          passes=$(tail -n "+$(( before + 1 ))" "${log}" | grep -c 'pass finished' || true)
+          # The same two lines the step above counts. Watching only for
+          # "pass finished" would let this control pass on an empty work stock
+          # even if the mark did nothing at all, which is the very way a control
+          # goes green without controlling anything.
+          armed='pass finished|armed and the work stock is empty'
+          passes=$(tail -n "+$(( before + 1 ))" "${log}" | grep -cE "${armed}" || true)
           if [ "${passes}" -ne 0 ]; then
-            echo "the container indexed ${passes} times without the mark, so the mark is not what arms it"
+            echo "the container armed itself ${passes} times without the mark, so the mark is not what arms it"
             echo "and the step before this one is green for a reason nobody knows"
             exit 1
           fi
-          echo "without the mark: zero passes in ${UNARMED_TIMEOUT} seconds, the gate can be red"
+          echo "without the mark: nothing armed in ${UNARMED_TIMEOUT} seconds, the gate can be red"
 
           # Back to the ordinary way, so every step after this one keeps the
           # precondition it was written with: an armed container.
