@@ -357,7 +357,7 @@ Etablierte Muster, Research kann entfallen: Event-Listener und Reconcile (Phase 
 **Goal:** Findling ist vor der ersten Store-Abgabe so robust und fehlerfrei, wie es mit allen erdenklichen Massnahmen geht: Fehler- und Randpfade, Rechte-Grenzen, Betriebsuebergaenge, Ressourcengrenzen, Fremdinstallation ueber den Store-Weg und die Store-Vorgaben sind getestet statt angenommen, die drei Audits sind erneut gefahren und gefixt, und die Speicherzahl der Store-Aussage ist nach dem Fix der zweiten Modellinstanz neu gemessen (Owner-Regel 06.09.2026).
 **Requirements**: SEM-01, SEM-03, PKG-05 (Haertung der bestehenden Anforderungen, keine neuen Features); Kontext in 06.1-CONTEXT.md
 **Depends on:** Phase 6 bis Plan 06-11. **Plan 06-12 (Store-Abgabe) laeuft erst NACH der Owner-Abnahme dieser Phase.**
-**Plans:** 5/19 plans executed
+**Plans:** 5/20 plans executed
 
 **Success Criteria** (what must be TRUE):
   1. Jede in 06.1-CONTEXT.md benannte Massnahme hat einen Test, der rot sein kann, und einen Beleg im Repo; keine Massnahme ist nur "manuell geprueft"
@@ -386,3 +386,4 @@ Plans:
 - [ ] 06.1-17-PLAN.md , Welle 6 , die drei Audits (Security, Bugs, Performance) und ihre Befunde
 - [ ] 06.1-18-PLAN.md , Welle 7 , Nachmessung auf der ARM-Box, Nebenlaeufigkeit, Endungsvergleich, Store-Zahl
 - [ ] 06.1-19-PLAN.md , Welle 8 , Owner-Sichtprobe, Abnahme, APPSTORE_TOKEN-Rotation, Box-Abbau
+- [ ] 06.1-20-PLAN.md , Welle 2 , Distanzriegel der Vektorseite und Operatorregel gegen die semantische Flut
