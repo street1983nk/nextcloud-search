@@ -418,7 +418,17 @@ runs:
         export NEXTCLOUD_URL=http://localhost:8080
         export APP_PERSISTENT_STORAGE="${RUNNER_TEMP_DIR}/findling"
         mkdir -p "${APP_PERSISTENT_STORAGE}"
-        uv run python -m findling.main > "${RUNNER_TEMP_DIR}/exapp.log" 2>&1 &
+        # The interpreter is resolved first and then started directly, because
+        # $! after "uv run ... &" is the pid of uv and not of the server. uv
+        # starts python as a child of its own, so every kill against that pid
+        # takes uv down and leaves the server holding the port and the tantivy
+        # lock. The kill-resume job of resilience.yml ran against that pid for
+        # its whole life: after "kill -9" the heartbeat kept answering for the
+        # full thirty seconds of the wait loop, every following start failed
+        # with EADDRINUSE, and the job was measuring the process it believed it
+        # had replaced (run 34056709826).
+        server_python=$(uv run python -c 'import sys; print(sys.executable)')
+        "${server_python}" -m findling.main > "${RUNNER_TEMP_DIR}/exapp.log" 2>&1 &
         echo $! > "${RUNNER_TEMP_DIR}/exapp.pid"
 
     - name: Wait for the ExApp heartbeat
