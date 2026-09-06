@@ -54,6 +54,7 @@ provenance ship in the image, see docs/german-analyzer.md.
 
 import hashlib
 import logging
+import threading
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -152,42 +153,142 @@ def _read_artifact(target: Path) -> list[str]:
     return target.read_text(encoding=ENCODING).split()
 
 
+# ---------------------------------------------------------------------------
+# The cache in front of the artifact. Per process, at most one entry, keyed on
+# the identity of the file on the volume.
+#
+# Why it is here: the search side calls build_artifact again on its first
+# request, so the whole list travelled into the process a second time. It is
+# 276496 Python strings in the container, roughly 21.9 MB by the start up
+# measurement of 2026-09-05 (docs/measurements/2026-09-05-semantiklauf-m7g,
+# step 08 to step 09 of 52-woher-die-grundlast.txt), and the allocator does not
+# hand that back to the operating system. A dictionary in front of the read is
+# the smallest change that ends it. The log line "constituent list read from
+# the volume" at the first search was the evidence the report of plan 06-11
+# read as a second decomposition automaton; the automaton has had its own cache
+# in analyzer.py all along, and this was the real second item.
+#
+# The key is the identity of the artifact, not its path alone: the recorded
+# digest plus the size and the modification time of the file that carries it.
+# The digest catches an exchanged list, which changes the tokenisation and has
+# to arrive (T-02-11, T-06.1-13). Size and modification time catch a file
+# edited behind a digest file that was left alone, so the fail closed check
+# below still runs on a tampered artifact instead of being answered out of
+# memory. Absence is never a key, so a volume that lost the file gets the
+# recipe again and never a ghost of a list that is no longer there (T-06.1-14).
+_CacheKey = tuple[str, str, int, int]
+
+_CACHED_ENTRIES: dict[_CacheKey, list[str]] = {}
+
+# One lock around the whole read. Two threads arriving together would otherwise
+# both read the file, and one of the two copies would be paid for nothing.
+_CACHE_LOCK = threading.Lock()
+
+# How often this process really put the list into memory, by reading the
+# artifact or by running the recipe. Both pay for the whole list, so both count.
+# The counter is what makes the cache checkable from the outside: it tells a
+# cache hit from a cheap rebuild, which no resident memory measurement on a
+# shared runner can do. Same purpose as analyzer.build_count() next door.
+_READ_COUNT = 0
+
+
+def read_count() -> int:
+    """Return how often this process has read the constituent list into memory."""
+    return _READ_COUNT
+
+
+def _artifact_key(target: Path, digest_path: Path) -> _CacheKey | None:
+    """Return the identity of the stored artifact, or None when there is none."""
+    if not target.is_file() or not digest_path.is_file():
+        return None
+    try:
+        status = target.stat()
+        recorded = digest_path.read_text(encoding=ENCODING).strip()
+    except OSError:
+        return None
+    if not recorded:
+        return None
+    return (str(target), recorded, status.st_size, status.st_mtime_ns)
+
+
+def _remember(target: Path, digest_path: Path, entries: list[str]) -> None:
+    """Put the list into the cache under the identity it now has on the volume."""
+    key = _artifact_key(target, digest_path)
+    if key is None:
+        return
+    # At most one entry. A changed list frees the old one instead of stacking a
+    # second 21.9 MB next to it, which is the shape the automaton cache has.
+    _CACHED_ENTRIES.clear()
+    _CACHED_ENTRIES[key] = entries
+
+
 def build_artifact(
     source: Path = SYSTEM_WORDLIST,
     target: Path | None = None,
     *,
     variant: str = DEFAULT_COMPOUND_DICT,
 ) -> Artifact:
-    """Return the constituent list, building the artifact only when it has to.
+    """Return the constituent list, reading it at most once per process.
 
     Fail closed on the stored artifact: it is used only when the digest file next
     to it describes exactly the file that is there. Anything else, a truncated
     write, a half finished container start, an edited file, runs the recipe again
     rather than feeding a mystery list into the index.
+
+    A second call that finds the same file on the volume gets the same list
+    object back and touches neither the artifact nor the recipe. ``rebuilt`` is
+    False for such a call, because nothing was built; :func:`read_count` is the
+    number that says nothing was read either.
     """
     if target is None:
         target = settings().dict_dir / "de.txt"
 
     digest_path = _digest_path(target)
+    with _CACHE_LOCK:
+        key = _artifact_key(target, digest_path)
+        if key is not None:
+            cached = _CACHED_ENTRIES.get(key)
+            if cached is not None:
+                return Artifact(entries=cached, digest=key[1], rebuilt=False)
+        return _load_artifact(source, target, digest_path, variant=variant)
+
+
+def _load_artifact(source: Path, target: Path, digest_path: Path, *, variant: str) -> Artifact:
+    """Read the stored artifact or run the recipe, and cache whichever ran.
+
+    Called with the cache lock held, so the counter below is raised under the
+    same lock that decides whether anything is read at all.
+    """
+    global _READ_COUNT
+
     if target.is_file() and digest_path.is_file():
         entries = _read_artifact(target)
+        _READ_COUNT += 1
         recorded = digest_path.read_text(encoding=ENCODING).strip()
         if recorded and recorded == wordlist_hash(entries):
-            LOGGER.info("constituent list read from the volume, %d entries", len(entries))
+            LOGGER.info(
+                "constituent list read from the volume, %d entries, read %d in this process",
+                len(entries),
+                _READ_COUNT,
+            )
+            _remember(target, digest_path, entries)
             return Artifact(entries=entries, digest=recorded, rebuilt=False)
         LOGGER.warning("stored constituent list does not match its digest, rebuilding it from the source")
 
     started = time.perf_counter()
     entries = load_constituents(source, variant=variant)
+    _READ_COUNT += 1
     digest = wordlist_hash(entries)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("\n".join(entries) + "\n", encoding=ENCODING)
     digest_path.write_text(digest + "\n", encoding=ENCODING)
     LOGGER.info(
-        "constituent list built, %d entries in %.3f s",
+        "constituent list built, %d entries in %.3f s, read %d in this process",
         len(entries),
         time.perf_counter() - started,
+        _READ_COUNT,
     )
+    _remember(target, digest_path, entries)
     return Artifact(entries=entries, digest=digest, rebuilt=True)
 
 
