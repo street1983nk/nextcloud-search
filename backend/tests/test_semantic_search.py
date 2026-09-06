@@ -95,6 +95,12 @@ OTHER_PARAPHRASE = "Raumfahrtzentrum"
 # rather than about the semantics.
 TERM = "Kündigungsfrist"
 
+# The same line with a second word on it. Every case that needs a line the one
+# term rule leaves alone takes this one: both words stand in every document of
+# the fixture, so it matches exactly what TERM matches and differs from it in
+# the only property the rule reads, the number of terms.
+TWO_WORD_TERM = "Kündigungsfrist Vertrag"
+
 Sign = Callable[[str], dict[str, str]]
 
 
@@ -812,14 +818,75 @@ def test_a_title_only_search_is_answered_without_the_vector_half(
 ) -> None:
     # The vector stock lies over the text and not over the name, so a semantic
     # hit here would be an answer to a different question than the one the
-    # filter asked.
+    # filter asked. The control line carries two words, because a line of one
+    # word is held back by the rule below and this case is about the filter.
     seen = _watch_the_semantic_side(monkeypatch)
 
-    api_search.one_round(indexed_volume.bob, TERM, 20, 0, True)
+    api_search.one_round(indexed_volume.bob, TWO_WORD_TERM, 20, 0, True)
     assert seen == []
 
+    api_search.one_round(indexed_volume.bob, TWO_WORD_TERM, 20, 0, False)
+    assert seen == [TWO_WORD_TERM]
+
+
+# ---------------------------------------------------------------------------
+# The one term rule: a single word is answered by the word index
+# ---------------------------------------------------------------------------
+#
+# The addendum to plan 06.1-20, on the measurement of that plan. Its report
+# shows the two distributions overlapping: the one word probes of the reference
+# corpus sit at 68 to 77 from their nearest chunk, and the paraphrase reaches
+# its own document only at 79.5487. No ceiling holds "a single word brings back
+# nothing unrelated" and "the paraphrase still finds its document" at once, and
+# the second of those is what the second list exists for. So the line of one
+# word is answered lexically, where the compound splitter, the stemmer and the
+# umlaut variant already do the work, and the line of two or more stays hybrid.
+
+
+@pytest.mark.usefixtures("appapi_environment")
+def test_a_line_of_one_word_is_answered_without_the_vector_half(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen = _watch_the_semantic_side(monkeypatch)
+
     api_search.one_round(indexed_volume.bob, TERM, 20, 0, False)
-    assert seen == [TERM]
+
+    assert seen == []
+
+
+@pytest.mark.usefixtures("appapi_environment")
+def test_a_two_word_line_without_an_operator_keeps_the_vector_half(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The boundary of the rule, on the shortest line that lies above it, and the
+    # pair to the case above: both lines match the same documents of the fixture
+    # and differ in the one property the rule reads.
+    seen = _watch_the_semantic_side(monkeypatch)
+
+    api_search.one_round(indexed_volume.bob, TWO_WORD_TERM, 20, 0, False)
+
+    assert seen == [TWO_WORD_TERM]
+
+
+@pytest.mark.usefixtures("appapi_environment")
+def test_a_one_word_query_answers_what_a_container_without_a_vector_stock_answers(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The same guarantee the operator rule carries: only the building of the
+    # vector half is skipped, and the merge, the prefilter and the shape of a
+    # candidate stay exactly as they are (D-20, D-14).
+    with_rule = api_search.one_round(indexed_volume.bob, TERM, 20, 0, False)
+
+    monkeypatch.setenv("FINDLING_EMBED_ENABLED", "false")
+    settings.cache_clear()
+    without_vectors = api_search.one_round(indexed_volume.bob, TERM, 20, 0, False)
+
+    assert [hit.fileId for hit in with_rule.candidates] == [hit.fileId for hit in without_vectors.candidates]
+    assert with_rule.has_more == without_vectors.has_more
+    assert with_rule.next_offset == without_vectors.next_offset
 
 
 @pytest.mark.usefixtures("appapi_environment")

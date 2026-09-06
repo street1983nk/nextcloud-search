@@ -140,6 +140,14 @@ def excerpts(uid: str, text: str, file_ids: list[int], title_only: bool) -> list
         # rewritten query is not text any more, and it is the line the user
         # typed rather than a stored one, so no log line of this module or of
         # snippets_for may carry it (T-06-39).
+        #
+        # The two rules of the search path (operators, one term) are not read
+        # here, for the reason D-13 already gives the distance gate: this call
+        # quotes documents the search has already handed out and the PHP side
+        # has already confirmed. It chooses no candidate, so holding the vector
+        # half back would take a confirmed hit its excerpt away and hand back
+        # nothing in return. The rules decide who gets into the list; this
+        # decides what the entry reads like.
         semantic = None
         if side.vectors is not None and settings().embed_enabled:
             semantic = index_search.SemanticSide(vectors=side.vectors, model=resources.query_model(), text=text)

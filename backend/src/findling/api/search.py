@@ -211,13 +211,24 @@ def one_round(uid: str, text: str, limit: int, offset: int, title_only: bool) ->
         # every semantic hit under that filter would answer a different question
         # than the one that was asked.
         #
+        # The one term rule, on the same switch and out of the measurement of
+        # plan 06.1-20: a line that holds a single word is answered by the word
+        # index alone. The report of that plan measured both distributions on
+        # one scale and they overlap, the one word probes at 68 to 77 and the
+        # paraphrase at 79.5487 from its own document, so no distance gate can
+        # keep one word from dragging the whole holding in without also losing
+        # the paraphrase. For one word the compound splitter, the stemmer and
+        # the umlaut variant already do the work of the second list, and one
+        # word gives the model nothing to read a meaning out of. Two words and
+        # more stay hybrid: that is the case the semantics were built for.
+        #
         # Nothing else moves. The merge, the prefilter and the shape of a
         # candidate are untouched (D-20, D-14); the vector branch simply does
         # not happen, which is the path a missing model already takes and which
         # criterion 3 covers.
         semantic = None
-        wants_precision = bool(rewritten.operators) or title_only
-        if not wants_precision and side.vectors is not None and settings().embed_enabled:
+        lexical_only = bool(rewritten.operators) or rewritten.one_term or title_only
+        if not lexical_only and side.vectors is not None and settings().embed_enabled:
             semantic = SemanticSide(vectors=side.vectors, model=resources.query_model(), text=text)
         page = candidate_round(side.index, side.store, uid, rewritten.query, limit, offset, semantic=semantic)
     # Deliberately every exception, for the reason in the docstring above.
