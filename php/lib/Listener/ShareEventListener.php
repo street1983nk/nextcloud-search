@@ -51,6 +51,21 @@ use Psr\Log\LoggerInterface;
  * decision instead of turning into a gap behind a listener list that looks
  * complete.
  *
+ * **And where that boundary is covered since plan 06.1-08.** The paragraph above
+ * stays because the question it raises is still the right question to ask of
+ * this file; what changed is the answer. GroupEventListener subscribes to
+ * UserAddedEvent and UserRemovedEvent and turns a membership change into acl
+ * subtrees over the Team Folder mounts the group hands out, which is the fix
+ * E-H3 decided for DI-05-11. It is a listener of its own rather than a third
+ * branch in here, for the reason the third loop in Application.php gives: it
+ * answers the same question over a different set of mounts, and a listener that
+ * answered both would stop being countable. One correction to the paragraph
+ * above while it stands: the ETag reconcile does NOT carry the case, because it
+ * acts on changed etags and a membership changes none. Until plan 06.1-08 the
+ * carrier was the next crawl pass alone. An ordinary share held by a group,
+ * as opposed to a Team Folder, still travels that way; the reasoning is in the
+ * docblock of GroupEventListener.
+ *
  * Nothing here logs a path, a file name or a user id, only the type name of an
  * error. A log line is the one place where the content of a private instance
  * leaves the permission model, and a share event is made entirely of names.
