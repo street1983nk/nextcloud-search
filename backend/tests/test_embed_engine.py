@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import contextlib
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -45,7 +46,7 @@ from findling.api import resources
 from findling.config import settings
 from findling.embed import model as model_module
 from findling.embed.engine import shared_model
-from findling.embed.model import DIMENSIONS, EmbeddingModel, load_count
+from findling.embed.model import DIMENSIONS, LOAD_RETRY_SECONDS, EmbeddingModel, load_count
 from findling.index.analyzer import build_count, cached_german_analyzer
 from findling.worker import poller as poller_module
 
@@ -289,3 +290,181 @@ def test_the_second_track_and_the_read_side_wire_the_same_object(
 
     assert worker._model is not None, "the track has to have been wired"
     assert worker._model is resources.query_model()
+
+
+# ---------------------------------------------------------------------------
+# The two halves the audit of plan 06.1-17 found open: the load path and the
+# reach of the lock. Both belong to the shared engine, both were left over from
+# a distinction that plan 06.1-02 made for the run path only.
+# ---------------------------------------------------------------------------
+
+
+def _gated_stand_in(monkeypatch: pytest.MonkeyPatch, session: Any) -> None:
+    """The stand in of this file, with a session the case brought along."""
+
+    def open_encoder(_directory: Path, *, sequence_len: int) -> _FakeEncoder:
+        assert sequence_len >= 1
+        return _FakeEncoder()
+
+    def open_session(_path: Path, *, threads: int) -> Any:
+        assert threads >= 1
+        return session
+
+    monkeypatch.setattr(model_module, "_open_encoder", open_encoder)
+    monkeypatch.setattr(model_module, "_open_session", open_session)
+
+
+def _flaky_session(monkeypatch: pytest.MonkeyPatch, attempts: dict[str, int]) -> None:
+    """A session that throws on the first open and answers on every later one.
+
+    MemoryError and not a made up exception: the container runs under a hard 2 GB
+    limit, the open pulls 118 MB of weights, and the load run of 2026-09-05
+    measured memory.events max at 2796. This is the failure that really happens.
+    """
+    _stand_in(monkeypatch)
+    real_open_session = model_module._open_session
+
+    def flaky(path: Path, *, threads: int) -> Any:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise MemoryError("the box was full for a moment")
+        return real_open_session(path, threads=threads)
+
+    monkeypatch.setattr(model_module, "_open_session", flaky)
+
+
+def test_a_load_that_threw_is_tried_again_after_the_cooldown(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The coupling trap of the phase research, seen from the load path. With one
+    # engine for both halves a single transient failure used to cost the whole
+    # container its semantics until somebody restarted it, and nothing said so.
+    _pretend_a_model(model_home)
+    attempts = {"count": 0}
+    _flaky_session(monkeypatch, attempts)
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(model_module.time, "monotonic", lambda: clock["now"])
+
+    engine = EmbeddingModel(model_home, batch_size=2, sequence_len=512)
+
+    assert engine.embed_query("bauantrag").available is False, "the throw has to be honest while it is fresh"
+
+    clock["now"] += LOAD_RETRY_SECONDS + 1
+
+    assert engine.embed_query("bauantrag").available is True, "a moment is not a property of the installation"
+    assert attempts["count"] == 2, "exactly one retry, and only after the cooldown"
+
+
+def test_a_load_that_threw_is_not_tried_again_within_the_cooldown(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The other half, and the reason a plain retry would be worse than the bug:
+    # the second track walks tens of thousands of documents, so an open per row
+    # would read a broken graph tens of thousands of times.
+    _pretend_a_model(model_home)
+    attempts = {"count": 0}
+    _flaky_session(monkeypatch, attempts)
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(model_module.time, "monotonic", lambda: clock["now"])
+
+    engine = EmbeddingModel(model_home, batch_size=2, sequence_len=512)
+    for _ in range(5):
+        clock["now"] += LOAD_RETRY_SECONDS / 10
+        assert engine.embed_passages(["ein Text"]).available is False
+
+    assert attempts["count"] == 1, "five rows inside one cooldown are one open and not five"
+
+
+def test_a_directory_without_the_artifacts_is_never_looked_at_again(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The half that is right to remember for ever, and that the cooldown above
+    # must not turn into a pair of stat calls per cooldown: a container built
+    # without the model stage never grows one while it runs.
+    looks = {"count": 0}
+    real_present = model_module._artifacts_present
+
+    def counted(directory: Path) -> bool:
+        looks["count"] += 1
+        return real_present(directory)
+
+    monkeypatch.setattr(model_module, "_artifacts_present", counted)
+
+    engine = EmbeddingModel(model_home, batch_size=2, sequence_len=512)
+    for _ in range(5):
+        assert engine.embed_passages(["ein Text"]).available is False
+
+    assert looks["count"] == 1, "an absent model is a property of the installation and is asked once"
+
+
+def test_the_graph_runs_outside_the_lock_so_a_search_does_not_wait_for_a_document(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Measured before the change (07.09.2026, 06.1-AUDIT-PERF.md M1): a search
+    # waits 0.561 s behind one document at the default token cap and 2.562 s at
+    # the ceiling of the range, because the lock is held over the whole call and
+    # not over one batch. The graph does not need it: the onnxruntime maintainer
+    # promises thread safety for Run(), the tokenizers maintainer promises
+    # nothing, and the tokenizer is one line of the batch.
+    _pretend_a_model(model_home)
+    inside = threading.Event()
+    release = threading.Event()
+
+    class _GatedSession(_FakeSession):
+        def run(self, outputs: list[str], feed: dict[str, Any]) -> list[Any]:
+            inside.set()
+            release.wait(RACE_WINDOW_SECONDS)
+            return super().run(outputs, feed)
+
+    _gated_stand_in(monkeypatch, _GatedSession())
+    engine = EmbeddingModel(model_home, batch_size=2, sequence_len=512)
+
+    track = threading.Thread(target=lambda: engine.embed_passages(["eins", "zwei", "drei"]))
+    track.start()
+    try:
+        assert inside.wait(30), "the track has to have reached the graph"
+        taken = engine._lock.acquire(timeout=RACE_WINDOW_SECONDS)
+    finally:
+        release.set()
+        track.join(30)
+    if taken:
+        engine._lock.release()
+
+    assert taken, "a search must not wait for a whole document of the second track"
+
+
+def test_the_tokenizer_is_never_entered_twice_at_once(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The property the lock exists for, and the one the change above must not
+    # spend: huggingface/tokenizers#1726 gives no promise for a shared
+    # tokenizer, so the encoding stays serialised whatever else moves out.
+    _pretend_a_model(model_home)
+
+    class _JealousEncoder(_FakeEncoder):
+        def __init__(self) -> None:
+            self.busy = False
+            self.overlapped = False
+
+        def encode_batch(self, texts: list[str]) -> list[_FakeEncoding]:
+            if self.busy:
+                self.overlapped = True
+            self.busy = True
+            time.sleep(0.005)
+            self.busy = False
+            return super().encode_batch(texts)
+
+    encoder = _JealousEncoder()
+    monkeypatch.setattr(model_module, "_open_encoder", lambda _directory, *, sequence_len: encoder)
+    monkeypatch.setattr(model_module, "_open_session", lambda _path, *, threads: _FakeSession())
+
+    engine = EmbeddingModel(model_home, batch_size=2, sequence_len=512)
+    engine.embed_query("aufwaermen")
+
+    def ask() -> None:
+        for _ in range(20):
+            engine.embed_passages(["eins", "zwei", "drei", "vier"])
+
+    askers = [threading.Thread(target=ask) for _ in range(4)]
+    for asker in askers:
+        asker.start()
+    for asker in askers:
+        asker.join(60)
+
+    assert encoder.overlapped is False, "two threads in one tokenizer is the promise nobody made"

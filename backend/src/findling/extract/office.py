@@ -39,7 +39,7 @@ from docx.opc.exceptions import PackageNotFoundError as DocxPackageNotFound
 from pptx.exc import PackageNotFoundError as PptxPackageNotFound
 
 from findling import config
-from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES
+from findling.config import EXTRACT_ARCHIVE_MEMBER_MAX_BYTES, EXTRACT_ARCHIVE_TOTAL_MAX_BYTES
 from findling.extract.dispatch import cap_text
 from findling.extract.errors import ExtractionOutcome, Reason
 
@@ -49,7 +49,7 @@ from findling.extract.errors import ExtractionOutcome, Reason
 _BROKEN_PACKAGE = (BadZipFile, DocxPackageNotFound, PptxPackageNotFound)
 
 
-def _oversized_part(path: str) -> ExtractionOutcome | None:
+def _too_large_to_read(path: str, *, every_part_is_read: bool) -> ExtractionOutcome | None:
     """The bomb check, before any loader touches the package.
 
     The archive directory declares the uncompressed size of every part, and the
@@ -58,13 +58,26 @@ def _oversized_part(path: str) -> ExtractionOutcome | None:
     (security audit M4). zipfile enforces the declared size on read, so the
     declaration cannot be lied past. A package that will not even open is left
     to the loader, whose exception carries the better diagnosis.
+
+    **Two questions and not one, since the audit of plan 06.1-17.** The first is
+    about one member and is the old one. The second is about the sum, and which
+    loader is asked it is not a matter of taste: ``docx.Document`` and
+    ``pptx.Presentation`` walk the relationship graph and hold a blob for every
+    part they reach, so for them the sum is what really arrives in memory, and a
+    hundred parts of 63 MiB each used to pass a cap of 64 MiB (DI-06.1-08).
+    ``openpyxl`` in read only mode streams the sheets instead, so asking it the
+    second question would refuse ordinary large exports and prevent nothing.
     """
     try:
         with ZipFile(path) as archive:
-            if any(info.file_size > EXTRACT_ARCHIVE_MEMBER_MAX_BYTES for info in archive.infolist()):
-                return ExtractionOutcome.skipped(Reason.TOO_LARGE)
+            declared = [info.file_size for info in archive.infolist()]
     except (BadZipFile, OSError):
         return None
+
+    if any(size > EXTRACT_ARCHIVE_MEMBER_MAX_BYTES for size in declared):
+        return ExtractionOutcome.skipped(Reason.TOO_LARGE)
+    if every_part_is_read and sum(declared) > EXTRACT_ARCHIVE_TOTAL_MAX_BYTES:
+        return ExtractionOutcome.skipped(Reason.TOO_LARGE)
     return None
 
 
@@ -74,9 +87,9 @@ def extract_docx(path: str) -> ExtractionOutcome:
     Defined at module level, like every extractor here, so it survives the
     process boundary of the extraction child.
     """
-    oversized = _oversized_part(path)
-    if oversized is not None:
-        return oversized
+    too_large = _too_large_to_read(path, every_part_is_read=True)
+    if too_large is not None:
+        return too_large
 
     try:
         document = docx.Document(path)
@@ -97,9 +110,9 @@ def extract_pptx(path: str) -> ExtractionOutcome:
     them for text raises rather than returning nothing, which is why the question
     is asked before the text is taken.
     """
-    oversized = _oversized_part(path)
-    if oversized is not None:
-        return oversized
+    too_large = _too_large_to_read(path, every_part_is_read=True)
+    if too_large is not None:
+        return too_large
 
     try:
         presentation = pptx.Presentation(path)
@@ -130,9 +143,9 @@ def extract_xlsx(path: str) -> ExtractionOutcome:
     happens without them. The workbook is closed in a finally, because the read
     only mode keeps file handles on the archive open.
     """
-    oversized = _oversized_part(path)
-    if oversized is not None:
-        return oversized
+    too_large = _too_large_to_read(path, every_part_is_read=False)
+    if too_large is not None:
+        return too_large
 
     limit = config.settings().max_cells
     parts: list[str] = []

@@ -80,7 +80,7 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
-from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, wordlist_hash
+from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, artifact_path, wordlist_hash
 from findling.store.repo import open_store
 from findling.store.vectors import Chunk, open_vectors
 
@@ -170,7 +170,7 @@ def write_volume(root: Path, passages: Sequence[Passage]) -> None:
     with, or every run would report a version drift and the degraded mark would
     be true for a reason this probe is not about.
     """
-    target = root / "dict" / "de.txt"
+    target = root / "dict" / artifact_path().name
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("\n".join(CONSTITUENTS) + "\n", encoding=ENCODING)
     digest = wordlist_hash(CONSTITUENTS)

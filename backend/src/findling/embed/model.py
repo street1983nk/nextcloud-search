@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
@@ -108,6 +109,27 @@ FALLBACK_PAD_MARKER: Final = "[PAD]"
 # has two shared vCPU, INDEX_WORKERS is one for the same reason, and a third
 # thread would only take turns with itself.
 THREADS: Final = 2
+
+# How long an open that threw is left alone before it is tried again.
+#
+# Not a setting, for the reason THREADS is none: it is a property of the two
+# failures it stands between, and neither of them is a decision an operator
+# makes. A directory without the artifacts is a state of the installation and is
+# remembered for ever; an open that threw is a state of the moment, and the one
+# that really happens on the target box is a MemoryError while 118 MB of weights
+# arrive under a hard 2 GB limit (the load run of 2026-09-05 measured
+# memory.events max at 2796). Until the audit of plan 06.1-17 both ended in the
+# same permanent "no", and with the shared engine of plan 06.1-02 that cost the
+# whole container its semantics until somebody restarted it, which is exactly
+# the warning sign of pitfall 2 of the phase research.
+#
+# Five minutes is the trade between the two costs. Retrying at once would read a
+# broken graph once per document over tens of thousands of them, which is the
+# reason the permanent flag existed in the first place; at five minutes a
+# genuinely broken graph is opened twelve times an hour and an instance that
+# merely ran out of air for a moment is whole again before anybody has finished
+# reading the log line.
+LOAD_RETRY_SECONDS: Final = 300.0
 
 # How often the artifacts were really read in this process. The counter exists
 # for the same reason ``index/analyzer.build_count()`` does: from the outside a
@@ -253,18 +275,24 @@ class EmbeddingModel:
     layer up, in :mod:`findling.embed.engine`, where it can be decided once and
     on purpose.
 
-    **Two failures, and they are not the same failure.** A directory without
-    ``model.onnx`` and ``tokenizer.json`` is a property of the installation: it
-    is the ordinary state of a container built without the model stage, it stays
-    true for the whole life of the process, and looking again would be a pair of
-    stat calls per document over tens of thousands of them. That one is
-    remembered. A batch that threw is not a property of anything. Until plan
-    06.1-02 both ended in the same permanently remembered "no", which cost one
-    side of the container its semantics; with the single shared instance of that
-    plan it would have cost both, and the symptom is a container that suddenly
-    answers lexically after hours of service with nothing having changed
-    (06.1-RESEARCH.md, pitfall 2). So a thrown run keeps the engine and the next
-    call runs again.
+    **Three failures, and no two of them are the same failure.** A directory
+    without ``model.onnx`` and ``tokenizer.json`` is a property of the
+    installation: it is the ordinary state of a container built without the
+    model stage, it stays true for the whole life of the process, and looking
+    again would be a pair of stat calls per document over tens of thousands of
+    them. That one is remembered for ever. A batch that threw is not a property
+    of anything, so it keeps the engine and the next call runs again. An open
+    that threw is neither: the files are there, nothing was computed, and the
+    failure that really happens on the target box is a MemoryError while 118 MB
+    of weights arrive under a hard 2 GB limit. It is remembered with a timestamp
+    and tried again after :data:`LOAD_RETRY_SECONDS`.
+
+    Until plan 06.1-02 the first two ended in the same permanently remembered
+    "no", which cost one side of the container its semantics; the third went on
+    doing it until the audit of plan 06.1-17. With the single shared instance
+    since 06.1-02 either of them costs **both** halves, and the symptom is a
+    container that suddenly answers lexically after hours of service with
+    nothing having changed (06.1-RESEARCH.md, pitfall 2).
     """
 
     def __init__(self, model_dir: Path, *, batch_size: int, sequence_len: int) -> None:
@@ -272,33 +300,45 @@ class EmbeddingModel:
         self._batch_size = batch_size
         self._sequence_len = sequence_len
         self._engine: _Engine | None = None
-        # The permanent half of the distinction above: the artifacts are not in
-        # this directory, or they are there and could not be opened. Both are
-        # states of the installation and neither changes while the process runs.
+        # The permanent half of the distinction above, and since the audit of
+        # plan 06.1-17 it is only the half it says: the artifacts are not in this
+        # directory. That is a state of the installation and does not change
+        # while the process runs. An open that threw used to land in here as
+        # well, which made a moment permanent; it has its own field below.
         self._absent = False
+        # The temporary half of the load path: when an open last threw, on the
+        # monotonic clock. None means never, or not since the last success.
+        self._load_failed_at: float | None = None
         # One warning for the temporary half, then silence at debug level. A
         # thrown run is retried by design, and the second track walks tens of
         # thousands of documents, so a warning per row would be the log flood
         # the load path avoids with the flag above.
         self._run_failure_warned = False
-        # One lock around the load and around the run, and it is the smaller
-        # half of two answers.
+        # One lock, around the load and around the tokenizer, and around
+        # nothing else.
         #
         # The load path needs it whatever else is true: without it two threads
         # of the same pool enter _load at once, both build a session, and the
         # doubled load that plan 06.1-02 removes comes straight back. That is
         # the argument api/resources.py makes for its own lock.
         #
-        # The run is inside it because the tokenizers maintainer will not
+        # The tokenizer needs it because the tokenizers maintainer will not
         # promise thread safety ("if the threads just don't share the tokenizer
-        # its better", huggingface/tokenizers#1726), while the onnxruntime
-        # maintainer does promise it for Run(). The price of not relying on the
-        # weaker of the two is computable and small: EMBED_BATCH_SIZE of 2 at
-        # EMBED_SEQUENCE_LEN of 512 is at most 1020 tokens per run, and wave 0
-        # measured 3581 tokens per second p95 on two aarch64 cores, so a search
-        # that waits behind exactly one running batch loses about 0.29 s against
-        # a budget of 2500 ms in which a whole search measured 524 ms p95. Re
-        # entrant because it is cheaper than proving that no path below ever
+        # its better", huggingface/tokenizers#1726).
+        #
+        # **The graph does not, and until the audit of plan 06.1-17 it was inside
+        # anyway.** The onnxruntime maintainer promises Run() on one session from
+        # several threads without any external synchronisation, and this build
+        # runs the CPU provider alone, which is the case that promise covers. The
+        # old shape held the lock over the whole call, so a search waited for
+        # every batch of a document of the second track and not for one:
+        # measured 0.561 s at the default token cap and 2.562 s at the ceiling of
+        # its range, against a budget of 2500 ms for a whole search
+        # (06.1-AUDIT-PERF.md M1). The tokenizer is one line of a batch, so
+        # holding the lock for that line alone keeps the promise nobody made and
+        # gives back the rest.
+        #
+        # Re entrant because it is cheaper than proving that no path below ever
         # takes it twice.
         self._lock = threading.RLock()
 
@@ -329,25 +369,29 @@ class EmbeddingModel:
             # 118 MB of weights arrive.
             return EmbedOutcome.ready(())
 
-        # The load and the run under the same lock, for the two reasons stated
-        # beside it in __init__.
+        # The load under the lock, for the reason stated beside it in __init__.
         with self._lock:
             engine = self._load()
-            if engine is None:
-                return EmbedOutcome.unavailable()
+        if engine is None:
+            return EmbedOutcome.unavailable()
 
-            try:
-                vectors: list[list[float]] = []
-                for start in range(0, len(texts), self._batch_size):
-                    window = [f"{prefix}{text}" for text in texts[start : start + self._batch_size]]
-                    vectors.extend(_run_batch(engine, window))
-            except Exception as error:  # a thrown batch is a state, see the class head
-                # The engine stays. Dropping it would pay 118 MB of weights again
-                # for a failure that is usually about the one text that went in,
-                # and it was that drop together with the permanent flag that made
-                # a single bad batch outlive the batch.
-                self._warn_run(error)
-                return EmbedOutcome.unavailable()
+        try:
+            vectors: list[list[float]] = []
+            for start in range(0, len(texts), self._batch_size):
+                window = [f"{prefix}{text}" for text in texts[start : start + self._batch_size]]
+                # The tokenizer inside, the graph outside, and the batch is the
+                # unit of both. Whatever else waits here waits for one encoding
+                # and never for a whole document.
+                with self._lock:
+                    encoded = _encode_batch(engine, window)
+                vectors.extend(_run_encoded(engine, encoded))
+        except Exception as error:  # a thrown batch is a state, see the class head
+            # The engine stays. Dropping it would pay 118 MB of weights again
+            # for a failure that is usually about the one text that went in,
+            # and it was that drop together with the permanent flag that made
+            # a single bad batch outlive the batch.
+            self._warn_run(error)
+            return EmbedOutcome.unavailable()
         return EmbedOutcome.ready(vectors)
 
     def _warn_run(self, error: BaseException) -> None:
@@ -359,17 +403,24 @@ class EmbeddingModel:
         _warn(error)
 
     def _load(self) -> _Engine | None:
-        """Load once, on first use, and remember an absent model as absent.
+        """Load once, on first use, and tell the two failures apart.
 
-        Called under the lock, never on its own. The caller holds it for the run
-        as well, so what is guarded here is not only the assignment below but the
-        whole window between the check and it.
+        Called under the lock, never on its own, so what is guarded is not only
+        the assignment below but the whole window between the check and it.
+
+        Two ways to say no, and they are not the same no. A directory without
+        the artifacts is answered once and for ever. An open that threw is
+        answered until :data:`LOAD_RETRY_SECONDS` have passed and then tried
+        again, because the failure that really happens on the target box is a
+        moment and not a property (see the constant).
         """
         global _LOAD_COUNT
 
         if self._engine is not None:
             return self._engine
         if self._absent:
+            return None
+        if self._load_failed_at is not None and time.monotonic() - self._load_failed_at < LOAD_RETRY_SECONDS:
             return None
 
         model_path = self._model_dir / MODEL_FILE
@@ -387,15 +438,18 @@ class EmbeddingModel:
             accepted = frozenset(item.name for item in session.get_inputs())
             outputs = tuple(item.name for item in session.get_outputs()[:1])
         except Exception as error:  # see the module head: every failure is one verdict
-            # Remembered like an absent model and not like a thrown run: files
-            # that are there and cannot be opened are as much a property of this
-            # installation as files that are not there at all, and retrying the
-            # open per document would read a broken graph tens of thousands of
-            # times.
-            self._absent = True
+            # Neither of the two other answers. Not an absent model, because the
+            # files are there; not a thrown batch either, because nothing was
+            # computed. It is remembered with a timestamp and retried after the
+            # cooldown: a broken graph is then opened twelve times an hour
+            # instead of once per document, and a container that ran out of air
+            # for a moment gets its semantics back without a restart
+            # (06.1-AUDIT-BUGS.md H1).
+            self._load_failed_at = time.monotonic()
             _warn(error)
             return None
 
+        self._load_failed_at = None
         _LOAD_COUNT += 1
         self._engine = _Engine(encoder=encoder, session=session, accepted=accepted, outputs=outputs)
         return self._engine
@@ -406,7 +460,18 @@ def _warn(error: BaseException) -> None:
     LOGGER.warning("the embedding engine failed and the search stays lexical (%s)", type(error).__name__)
 
 
-def _run_batch(engine: _Engine, texts: list[str]) -> list[list[float]]:
+def _encode_batch(engine: _Engine, texts: list[str]) -> list[Any]:
+    """The one line of a batch that touches the tokenizer.
+
+    Its own function so that the lock can be exactly this long. Everything
+    around it is numpy and onnxruntime, and for the second of those the
+    maintainer promises what the first of these does not (see the lock in
+    ``EmbeddingModel.__init__``).
+    """
+    return engine.encoder.encode_batch(texts)
+
+
+def _run_encoded(engine: _Engine, encodings: list[Any]) -> list[list[float]]:
     """One rectangle of tokens through the graph, pooled and normalised.
 
     Mean pooling over the attention mask and an L2 normalisation afterwards, in
@@ -414,10 +479,14 @@ def _run_batch(engine: _Engine, texts: list[str]) -> list[list[float]]:
     the mask or the padding of the shortest text in the batch would dilute its
     own vector, and the result would depend on which texts happened to travel
     together.
+
+    Runs outside the lock. ``Run()`` on one session out of several threads is
+    safe without external synchronisation by the promise of the onnxruntime
+    maintainer, and this build uses the CPU provider alone, which is the case
+    that promise covers.
     """
     import numpy
 
-    encodings = engine.encoder.encode_batch(texts)
     ids = numpy.asarray([encoding.ids for encoding in encodings], dtype=numpy.int64)
     mask = numpy.asarray([encoding.attention_mask for encoding in encodings], dtype=numpy.int64)
     feed = {

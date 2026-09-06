@@ -23,10 +23,14 @@ deliberate: these tests assert the recipe, not the Debian package. The package i
 measured by scripts/dev/measure_wordlist.sh in a throwaway container.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
+from findling.config import settings
 from findling.index.wordlist import (
     DIGEST_SUFFIX,
     FUGEN,
@@ -37,6 +41,9 @@ from findling.index.wordlist import (
     read_count,
     wordlist_hash,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 # A miniature stand in for /usr/share/dict/ngerman. Mixed case like the original,
 # with one entry per class the filter has to decide about.
@@ -68,6 +75,17 @@ def source(tmp_path: Path) -> Path:
     path = tmp_path / "ngerman"
     path.write_text("\n".join(SOURCE_WORDS) + "\n", encoding="utf-8")
     return path
+
+
+@pytest.fixture
+def storage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+    """A volume the settings point at, with the settings cache cleared on both sides."""
+    root = tmp_path / "volume"
+    root.mkdir(parents=True)
+    monkeypatch.setenv("APP_PERSISTENT_STORAGE", str(root))
+    settings.cache_clear()
+    yield root
+    settings.cache_clear()
 
 
 def test_the_window_and_the_alphabetic_test_decide_what_stays(source: Path) -> None:
@@ -225,6 +243,56 @@ def test_the_two_variants_produce_different_digests(source: Path, tmp_path: Path
     # The variant is part of the tokenisation, so it has to be part of what the
     # metadata table compares against.
     assert full.digest != nouns.digest
+
+
+# ---------------------------------------------------------------------------
+# From the setting to the list (bug audit H2 of plan 06.1-17). The two cases
+# above prove the recipes; these prove that the recipe an operator asked for is
+# the one the index gets. Until the audit no production caller passed the
+# variant at all, so FINDLING_COMPOUND_DICT was declared in the info.xml with a
+# display name and a promise of roughly two thirds less memory for the
+# splitting automaton, and it changed nothing.
+# ---------------------------------------------------------------------------
+
+
+def test_the_setting_decides_which_recipe_the_index_gets(
+    source: Path, storage: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FINDLING_COMPOUND_DICT", "nouns")
+    settings.cache_clear()
+
+    artifact = build_artifact(source)
+
+    assert "abrechnen" not in artifact.entries, "the frugal recipe keeps the capitalised source entries alone"
+    assert "abschluss" in artifact.entries
+    assert artifact.digest == build_artifact(source, storage / "gegenprobe" / "de.txt", variant="nouns").digest
+
+
+def test_the_default_stays_the_full_recipe(source: Path, storage: Path) -> None:
+    # The counterpart, so that the case above cannot be green against a setting
+    # that is simply always read as "nouns".
+    artifact = build_artifact(source)
+
+    assert "abrechnen" in artifact.entries
+    assert artifact.digest == build_artifact(source, storage / "gegenprobe" / "de.txt", variant="full").digest
+
+
+def test_the_two_variants_do_not_share_one_artifact_on_the_volume(
+    source: Path, storage: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The second half of the same finding, and the one a passed through setting
+    # alone would not fix: the stored artifact is checked against its own digest
+    # and not against the recipe that is asked for, so a switched setting would
+    # read back the list of the other variant and the operator would see no
+    # change at all.
+    full = build_artifact(source)
+
+    monkeypatch.setenv("FINDLING_COMPOUND_DICT", "nouns")
+    settings.cache_clear()
+    nouns = build_artifact(source)
+
+    assert nouns.digest != full.digest
+    assert "abrechnen" not in nouns.entries
 
 
 # ---------------------------------------------------------------------------

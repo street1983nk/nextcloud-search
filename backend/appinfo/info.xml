@@ -10,9 +10,24 @@
 
 	That has one consequence worth stating here, next to the block it concerns:
 	because the store database never sees the routes, AppAPI reads them back out
-	of the release archive at installation time. The tarball has to carry this
-	file unchanged. Filtering or rewriting it during packaging would leave the
-	installed app without its search route and without an error message.
+	of the release archive at installation time and writes them into
+	oc_ex_apps_routes. The tarball has to carry this file unchanged. An archive
+	with a filtered or rewritten info.xml installs an app whose route table is
+	empty, and nothing anywhere says so.
+
+	What an empty route table does NOT do, corrected on 07.09.2026 after the
+	falsification probe of plan 06.1-12 and named again in the security audit of
+	plan 06.1-17: it does not silence the search. The companion reaches this
+	container over the AppAPI signed path, and HaRP 0.4.5 skips route checking
+	for signed requests (haproxy_agent.py, "We skip routes checking for AppAPI
+	signed requests"). The block governs unsigned direct access alone. Measured:
+	an unsigned /search answers 404 with the block and without it, because HaRP
+	compares with re.match(route.url, target_path) and the five urls below are
+	bare paths, so re.match("search", "/search") is None. The block is therefore
+	inert on a HaRP installation, and inert in the fail closed direction. The
+	canonical form would be ^/search$; it is not changed here, because a route
+	pattern can only be proven against a running HaRP and the path the product
+	uses never asks the table.
 
 	The version is kept identical to php/appinfo/info.xml, and to the image-tag
 	below. Both halves are released together, so a user cannot end up with two

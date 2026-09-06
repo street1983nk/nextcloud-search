@@ -910,6 +910,70 @@ def test_an_office_package_with_an_oversized_part_is_skipped_before_any_loader_r
         assert outcome.reason is Reason.TOO_LARGE
 
 
+def _many_small_parts(target: Path, *, parts: int, size: int) -> str:
+    """A package whose parts are each harmless and whose sum is not."""
+    with ZipFile(target, "w") as archive:
+        for ordinal in range(parts):
+            archive.writestr(f"word/media/bild{ordinal}.bin", "x" * size)
+    return str(target)
+
+
+def test_many_parts_under_the_member_cap_are_still_too_large(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # DI-06.1-08, and the reason the sum matters is a property of the loaders and
+    # not a precaution: docx/opc/pkgreader.py walks the relationship graph and
+    # holds a blob for every part it finds, pptx/opc/package.py does the same. A
+    # hundred parts of 63 MiB each pass a per member cap of 64 MiB and are then
+    # all in memory at once, against an address space of 512 MB.
+    monkeypatch.setattr("findling.extract.office.EXTRACT_ARCHIVE_MEMBER_MAX_BYTES", 64)
+    monkeypatch.setattr("findling.extract.office.EXTRACT_ARCHIVE_TOTAL_MAX_BYTES", 100)
+    target = _many_small_parts(tmp_path / "viele-teile.docx", parts=5, size=40)
+
+    for extractor in (extract_docx, extract_pptx):
+        outcome = extractor(target)
+
+        assert outcome.state is State.SKIPPED
+        assert outcome.reason is Reason.TOO_LARGE
+
+
+def test_a_spreadsheet_is_judged_by_its_parts_and_never_by_their_sum(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The deliberate asymmetry, and it is measured off the loader as well:
+    # openpyxl in read only mode streams the sheets instead of holding the
+    # package, so a sum cap here would refuse a large but perfectly ordinary
+    # export. A spreadsheet whose XML expands tenfold is normal, a document
+    # package that does is not.
+    # The member cap stays high enough for an ordinary workbook, the sum cap is
+    # set below what one weighs. Only the second of the two may be ignored here.
+    monkeypatch.setattr("findling.extract.office.EXTRACT_ARCHIVE_MEMBER_MAX_BYTES", 100_000)
+    monkeypatch.setattr("findling.extract.office.EXTRACT_ARCHIVE_TOTAL_MAX_BYTES", 200)
+    target = _xlsx(tmp_path, rows=2, columns=2)
+    with ZipFile(target, "a") as archive:
+        for ordinal in range(5):
+            archive.writestr(f"xl/media/bild{ordinal}.bin", "x" * 40)
+
+    outcome = extract_xlsx(target)
+
+    assert outcome.state is State.INDEXED, "the sum is not the measure of a streamed workbook"
+    assert "Zelle 0-0" in outcome.text
+
+
+def test_an_open_document_is_judged_on_the_one_part_it_reads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The other half of DI-06.1-08, and it is refuted rather than fixed: odf.py
+    # reads content.xml and nothing else, so the per member cap is exact there
+    # and a sum would only refuse packages nobody ever opens.
+    monkeypatch.setattr("findling.extract.odf.EXTRACT_ARCHIVE_MEMBER_MAX_BYTES", 64)
+    target = tmp_path / "viele-teile.odt"
+    with ZipFile(target, "w") as archive:
+        archive.writestr("content.xml", "<x/>")
+        for ordinal in range(5):
+            archive.writestr(f"Pictures/bild{ordinal}.bin", "x" * 40)
+
+    outcome = extract_odf(str(target))
+
+    assert outcome.reason is not Reason.TOO_LARGE, "the parts nobody reads are not the measure"
+
+
 @pytest.mark.parametrize("name", ["tabelle.ods", "praesentation.odp"])
 def test_ods_and_odp_run_through_the_very_same_path(name: str, tmp_path: Path) -> None:
     outcome = extract_odf(_odf(tmp_path, name, ODF_HEADER + ODF_BODY + ODF_FOOTER))
