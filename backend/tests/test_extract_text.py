@@ -19,7 +19,7 @@ import pytest
 from findling import config
 from findling.extract.dispatch import extract
 from findling.extract.errors import ExtractionOutcome, Reason, State
-from findling.extract.text import extract_html, extract_plain, extract_rtf
+from findling.extract.text import BYTE_ORDER_MARK, extract_html, extract_plain, extract_rtf
 
 GERMAN = (
     "Sehr geehrte Damen und Herren, die Kündigungsfrist für das Mietverhältnis "
@@ -61,6 +61,80 @@ def test_the_legacy_encoding_file_of_the_reference_corpus_is_readable() -> None:
 
     assert outcome.state is State.INDEXED
     assert "�" not in outcome.text
+
+
+@pytest.mark.parametrize(
+    ("label", "payload"),
+    [
+        ("utf-8 with a byte order mark", GERMAN.encode("utf-8-sig")),
+        ("utf-16 little endian", b"\xff\xfe" + GERMAN.encode("utf-16-le")),
+        ("utf-16 big endian", b"\xfe\xff" + GERMAN.encode("utf-16-be")),
+        ("cp1252 without any mark", GERMAN.encode("cp1252")),
+    ],
+    ids=["utf8-bom", "utf16-le", "utf16-be", "cp1252-unmarked"],
+)
+def test_a_byte_order_mark_is_read_and_never_becomes_a_character(label: str, payload: bytes, tmp_path: Path) -> None:
+    # Four spellings of one document, and the table asks the same question from
+    # both sides. A mark has to be read as an announcement and never as a
+    # character: U+FEFF in the text is a zero width character glued to the first
+    # word, so the first word of the file is findable under a term nobody can
+    # type. The unmarked cp1252 row is the counterweight, it shows that the rule
+    # which removes a mark does not touch a file that carries none.
+    #
+    # Windows writes the utf-8 mark by default and macOS clients hand over
+    # utf-16, so neither row is exotic on an instance with mixed clients.
+    outcome = extract_plain(_write(tmp_path, "brief.txt", payload))
+
+    assert outcome.state is State.INDEXED, label
+    assert outcome.text == GERMAN, label
+    assert BYTE_ORDER_MARK not in outcome.text, label
+
+
+def test_a_file_that_changes_encoding_halfway_ends_in_one_named_state(tmp_path: Path) -> None:
+    # A file whose second half carries another encoding than its first is one
+    # file for charset-normalizer, and it answers with one codec. The measured
+    # result is pinned here rather than repaired: one half reads correctly and
+    # the other becomes mojibake, so the document stays findable under the words
+    # of the readable half.
+    #
+    # The alternative would be to refuse the file, and it costs more than it
+    # buys: refusing means detecting mojibake, and a mojibake detector is a guess
+    # about a text this code already failed to read once. What the pin buys is
+    # that a future version of the library cannot move this answer silently.
+    #
+    # The line where noise really is refused stands one test below. A decoding
+    # that is mostly replacement characters is failed(encoding_unknown), because
+    # noise in the index is worse than a named refusal: a user sees the refusal
+    # in the diagnosis of the file and never sees the noise.
+    payload = GERMAN.encode("utf-8") + GERMAN.encode("cp1252")
+
+    outcome = extract_plain(_write(tmp_path, "gemischt.txt", payload))
+
+    assert outcome.state is State.INDEXED
+    assert outcome.reason is None
+    # Exactly one of the two halves survives as German, and it is one of them
+    # rather than neither: the file is half readable and half noise, not empty.
+    assert outcome.text.count("Kündigungsfrist") == 1
+
+
+@pytest.mark.parametrize(
+    ("label", "payload"),
+    [
+        ("nothing but nul bytes", b"\x00" * 400),
+        ("a word and then nul bytes", b"Aktenvermerk" + b"\x00" * 400),
+    ],
+    ids=["only-nul", "word-then-nul"],
+)
+def test_a_file_of_nul_bytes_never_becomes_an_index_entry(label: str, payload: bytes, tmp_path: Path) -> None:
+    # The case that walked past every guard this module had. A run of nul bytes
+    # decodes cleanly under every codec, so the replacement share says nothing
+    # about it, and cap_text does not catch it either: str.strip() removes
+    # whitespace, and nul is not whitespace. The result was an index entry made
+    # of 400 control characters, which is precisely the noise the module
+    # docstring refuses.
+    outcome = extract_plain(_write(tmp_path, "binaer.txt", payload))
+
+    assert outcome == ExtractionOutcome.failed(Reason.ENCODING_UNKNOWN), label
 
 
 def test_bytes_that_are_no_text_at_all_end_as_encoding_unknown(tmp_path: Path) -> None:
