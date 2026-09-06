@@ -81,7 +81,16 @@ from findling.nc.client import (
     fetch_file_stream,
     new_gateway_client,
 )
-from findling.nc.queue import KIND_ACL, KIND_DELETE, KIND_EMBED, KIND_METADATA, KIND_OCR, DocumentQueue, QueueJob
+from findling.nc.queue import (
+    KIND_ACL,
+    KIND_DELETE,
+    KIND_EMBED,
+    KIND_METADATA,
+    KIND_OCR,
+    CallResult,
+    DocumentQueue,
+    QueueJob,
+)
 from findling.store.repo import (
     ACL_ANY_USER,
     EMBEDDING_BACKLOG_MARK,
@@ -130,6 +139,12 @@ EMBED_INCOMPLETE: Final = "embedding_incomplete"
 # It costs nothing on an instance that never drifted: the sweep only runs while
 # the cursor beside the mark says a redelivery is unfinished.
 VECTOR_BACKLOG_BAND: Final = 500
+
+# Where a redelivery starts, as the cursor spells it. A named value because it
+# is written in one place and read in another, and because "0" and "" are two
+# different states of the same meta row: "0" is a sweep that has not handed
+# anything back yet, "" is no sweep at all.
+BACKLOG_START: Final = "0"
 
 # Suffix of the scratch files under tmp_dir. Named so that the cleanup on start
 # can recognise its own leftovers and touches nothing else in the volume.
@@ -624,8 +639,8 @@ class Poller:
         #     first, because a scan has to be read before there is a text of it
         #     to embed; the two lists are disjoint for the same reason, since a
         #     verdict is either skipped(no_text_layer) or indexed.
-        requeued = await self._hand_over(queue, handover, kind=KIND_OCR)
-        requeued += await self._hand_over(queue, embedding, kind=KIND_EMBED)
+        requeued = (await self._hand_over(queue, handover, kind=KIND_OCR)).count
+        requeued += (await self._hand_over(queue, embedding, kind=KIND_EMBED)).count
 
         # 4. The acknowledgement, the last step by construction. Everything it
         #    reports is already durable, so losing it costs one repetition and
@@ -1115,12 +1130,18 @@ class Poller:
         done.append(job.queue_id)
         return EMBED_WRITTEN
 
-    async def _hand_over(self, queue: DocumentQueue, file_ids: Sequence[int], *, kind: str) -> int:
-        """Move the rows of this pass to a trailing track, and count what moved.
+    async def _hand_over(self, queue: DocumentQueue, file_ids: Sequence[int], *, kind: str) -> CallResult:
+        """Move the rows of this pass to a trailing track, and say what happened.
 
-        A failure is a number and never an exception: the rows stay claimed, run
+        A failure is an answer and never an exception: the rows stay claimed, run
         into the lock timeout and are handed over by a later pass. The pass
         itself has to finish, because index and verdicts are already durable.
+
+        The whole answer and not only the number, since bug audit M1 of plan
+        06.1-17. A caller that has to know whether the hand back happened cannot
+        read that off the count: zero is what a failure returns and zero is also
+        what a band that found nothing to move returns, and the redelivery of the
+        vector stock has to tell those two apart before it moves its cursor.
 
         The kind is an argument since plan 06-07, because there are two tracks
         and the call is otherwise the same one. It comes from the closed list in
@@ -1128,15 +1149,14 @@ class Poller:
         line below without carrying anything of a user with it.
         """
         if not file_ids:
-            return 0
+            return CallResult(ok=True)
 
         result = await queue.requeue(file_ids, kind=kind)
         if not result.ok:
             LOGGER.warning(
                 "could not move %d files to the %s track, they run into the lock timeout", len(file_ids), kind
             )
-            return 0
-        return result.count
+        return result
 
     async def _forget(self, job: QueueJob, done: list[int]) -> None:
         """Take one file out of the index, out of the prefilter and mark it gone.
@@ -1561,12 +1581,23 @@ class Poller:
         if not (self._embed_enabled and self._embed_ready):
             return
         band = await asyncio.to_thread(self._vector_mark_step)
+        if not band:
+            return
         # The third step of the drift chain, and the last by construction: the
         # stock was emptied and the mark was written before this list existed.
         # A failure here is a number and not an exception, the rule of every
-        # handover in this module, and the cursor beside the mark makes the next
-        # idle pass ask for the same band again.
-        await self._hand_over(queue, band, kind=KIND_EMBED)
+        # handover in this module.
+        #
+        # **The cursor moves here and not one step earlier, and that is the whole
+        # of bug audit M1 of plan 06.1-17.** It used to be written while the band
+        # was being read, so a hand back that did not reach Nextcloud left the
+        # cursor past a band nobody had taken: up to VECTOR_BACKLOG_BAND
+        # documents kept no vectors after a model change while the mark said the
+        # stock was current. Judged on ``ok`` and never on ``count``, because a
+        # hand back that found nothing to move still happened, and judging it by
+        # the number would turn such a band into an endless one.
+        if (await self._hand_over(queue, band, kind=KIND_EMBED)).ok:
+            await asyncio.to_thread(self._store_or_die().write_meta, EMBEDDING_BACKLOG_MARK, str(band[-1]))
 
     def _vector_mark_step(self) -> list[int]:
         """One step of the mark, returning the documents to hand back, if any.
@@ -1665,19 +1696,30 @@ class Poller:
         counter set again rather than a second row.
         """
         vectors.forget_all()
+        # The cursor before the mark, and in that order for the reason the
+        # emptying comes before both: an abort between them has to leave a state
+        # the next pass can read. Cursor first means the next pass finds the
+        # drift again, empties an empty stock and writes both; mark first would
+        # mean a current mark over a stock with no sweep pointing at it, and the
+        # rest of the instance would stay unwritten with nothing saying so.
+        store.write_meta(EMBEDDING_BACKLOG_MARK, BACKLOG_START)
         store.write_meta(EMBEDDING_MARK, wanted)
         LOGGER.warning(
             "the vector stock was written by another build, it was emptied and is being written again",
         )
-        return self._next_backlog_band(store, "0")
+        return self._next_backlog_band(store, BACKLOG_START)
 
     def _next_backlog_band(self, store: Store, cursor: str) -> list[int]:
-        """One band of the redelivery, and the cursor moved on behind it.
+        """One band of the redelivery, read and not yet acknowledged.
 
         An empty cursor means no redelivery is running, which is the state of
-        every instance that never changed its model. The band is written back as
-        the position of its last document, and an empty band clears the cursor,
-        which is what ends the sweep: the ids ascend and the primary key is the
+        every instance that never changed its model. An empty band ends the
+        sweep and clears the cursor here, because there is nothing left to hand
+        back and therefore nobody who could confirm it; a band that carries
+        documents leaves the cursor alone until they have really been handed
+        back (bug audit M1 of plan 06.1-17, and the caller does it).
+
+        The sweep terminates because the ids ascend and the primary key is the
         cursor, so every band lies above the one before it.
 
         A value that is not a number restarts the sweep rather than raising.
@@ -1688,7 +1730,8 @@ class Poller:
             return []
         after = int(cursor) if cursor.isdigit() else 0
         band = store.indexed_file_ids(after=after, limit=VECTOR_BACKLOG_BAND)
-        store.write_meta(EMBEDDING_BACKLOG_MARK, str(band[-1]) if band else "")
+        if not band:
+            store.write_meta(EMBEDDING_BACKLOG_MARK, "")
         return band
 
     def _store_or_die(self) -> Store:

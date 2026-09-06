@@ -1222,6 +1222,36 @@ async def test_the_redelivery_carries_on_in_the_next_process(
     assert len(queue.requeues) == 2
 
 
+async def test_a_failed_hand_back_leaves_the_cursor_where_it_was(
+    store: Store, writer: IndexBatchWriter, vectors: VectorStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Bug-Audit M1 of plan 06.1-17. The comment beside the chain promised that a
+    # failed hand back makes the next idle pass ask for the same band again, and
+    # the cursor was written before the hand back ran, so it asked for the next
+    # one instead. Up to five hundred documents lost their vectors after a model
+    # change while the mark said the stock was current, and the failure that
+    # produces it is the ordinary one: a locked database on the Nextcloud side.
+    monkeypatch.setattr("findling.worker.poller.VECTOR_BACKLOG_BAND", 1)
+    store.write_meta(EMBEDDING_MARK, ANOTHER_MARK)
+    _judged(store, 4711)
+    _judged(store, 4712)
+    queue = _FakeQueue()
+    queue.requeue_fails = True
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue, vectors=vectors)
+
+    await poller.run_once()
+
+    assert queue.requeues == [([4711], KIND_EMBED)]
+    assert store.read_meta()[EMBEDDING_BACKLOG_MARK] == "0", "a band nobody took may not move the cursor"
+
+    queue.requeue_fails = False
+
+    await poller.run_once()
+
+    assert queue.requeues == [([4711], KIND_EMBED), ([4711], KIND_EMBED)], "the same band, not the next one"
+    assert store.read_meta()[EMBEDDING_BACKLOG_MARK] == "4711"
+
+
 async def test_a_container_without_the_second_track_writes_no_mark(
     store: Store, writer: IndexBatchWriter, tmp_path: Path
 ) -> None:
