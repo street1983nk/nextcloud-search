@@ -15,7 +15,7 @@ Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Containe
 - **Tech stack**: Python 3.13 + uv (lokales System-Python defekt), ExApp via AppAPI/nc_py_api, plus kleine PHP-Companion-App; Docker/WSL2 für Test-Nextcloud
 - **Lizenz**: AGPL-3.0 (Ghostscript/OCRmyPDF-AGPL im Container damit kompatibel)
 - **Repo**: public auf GitHub street1983nk (privates Konto, NICHT Akara-GitLab)
-- **Sprache**: Code/README Englisch, Projektkommunikation Deutsch; keine Em-Dashes; echte Umlaute nur in deutscher Prosa, nie in Code
+- **Sprache**: Code weiterhin Englisch; README dreisprachig, Deutsch als Standard (README.md), Englisch (README.en.md) und Französisch (README.fr.md), alle drei werden gepflegt; Projektkommunikation Deutsch; keine Em-Dashes; echte Umlaute nur in deutscher Prosa, nie in Code
 - **Qualitätsgates**: globale Python-Regel (ruff-Vollregelsatz, pyright basic, vulture, CI-Gates, lokal grün vor Commit)
 - **Security/Privacy**: Berechtigungs-Durchgriff strikt; keine Inhalte verlassen den Server; kein Telemetrie-Phoning
 <!-- GSD:project-end -->
