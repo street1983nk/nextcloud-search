@@ -202,6 +202,26 @@ SEARCH_QUERY_MAX_DEPTH = 32
 # it as too_large is the honest verdict at the price of a directory read.
 EXTRACT_ARCHIVE_MEMBER_MAX_BYTES = 64 * 1024 * 1024
 
+# Upper bound on the DECLARED uncompressed size of a WHOLE package, for the two
+# loaders that read every part of one (DI-06.1-08, security audit of plan
+# 06.1-17). The cap above asks about one member, and that is exactly as far as
+# it protects: measured off the loaders rather than assumed, docx/opc/pkgreader
+# walks the relationship graph and keeps a blob for every part it reaches, and
+# pptx/opc/package.py builds the same dictionary. A package with a hundred parts
+# of 63 MiB each passes the member cap and is then held in memory at once.
+#
+# 256 MiB, and both halves of that number are arguments. It is half of
+# EXTRACT_ADDRESS_SPACE_BYTES, so the reading alone cannot exhaust the address
+# space of the extraction child. And it is five times MAX_FILE_BYTES, the
+# largest file the crawl ever queues, so a legitimate package is refused only
+# when its parts expand more than fivefold, which is the bomb this cap is about
+# and not a document somebody wrote.
+#
+# It deliberately does not apply to spreadsheets: openpyxl in read only mode
+# streams the sheets, so a workbook whose XML expands tenfold costs nothing, and
+# a sum here would refuse ordinary large exports for no gain.
+EXTRACT_ARCHIVE_TOTAL_MAX_BYTES = 256 * 1024 * 1024
+
 # ---------------------------------------------------------------------------
 # OCR. Every number below was measured on 2026-09-01 in the shipping image and
 # is written up, with its command line, in docs/ocr.md.
