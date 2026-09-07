@@ -209,7 +209,9 @@ The probe itself is a script and not a memory. It raises
 `limit`, and hands both answers to `scripts/ci/parity_diff.py`, which is the
 same judge the CI job uses. It asks three questions, because none of them is a
 statement on its own: the guest finds his one shared file, he finds the other
-marker in neither provider, and the owner still finds that other marker. It
+marker in neither provider, and the owner still finds that other marker. A fourth
+comparison stands in front of the three and is not one of them, see the
+precondition below. It
 removes the guest, the share and the two files on every way out.
 
 ```
@@ -229,13 +231,60 @@ the security audit of plan 06.1-17 found it (DI-06.1-18).
 The app is not installed by the probe. A test tool does not bring a foreign app
 onto an instance, so the script names the two `occ` commands and stops.
 
-**State: outstanding.** The tool exists since plan 06.1-15, the run belongs to
-plan 06.1-19 on the fresh instance of the owner sight check. Until that run has
-happened this line says outstanding and not passed, and when it has happened it
-will carry the version of the `guests` app it ran against, because a snapshot
-without the version of the thing it looked at cannot be repeated. Two limits
-hold for the result either way: it is a snapshot and not a standing gate, and it
-holds for that one version.
+### The precondition, which used to be missing
+
+Before the first guest question the probe asks the OWNER for his own shared
+marker, and it stops with exit code 2 if he does not find it. That step was added
+by plan 06.1-19 and it closes DI-06.1-17. Without it the probe cannot tell its
+two failure modes apart: an instance whose container is stopped has an empty work
+stock as well, so the wait for the queue returns satisfied, and the first guest
+comparison then reports a missing hit. Read literally that says "the guest does
+not find a document he is allowed to see", which is a functional defect. What
+really happened is that the probe could not take place. One of the two readings
+says fix the permission chain, the other says start the container, and a probe
+that cannot separate them sends its reader to the wrong place.
+
+The shared marker and not the private one, because it is the file the guest is
+asked about next, so its absence for its own owner is the narrowest statement
+that the index does not carry the material of this probe. The exit code is 2 and
+not 1 so that a caller can tell not performed from failed.
+
+### State: passed, 07.09.2026
+
+The run belongs to plan 06.1-19 and it happened, on the fresh instance of the
+owner sight check.
+
+| What | Value |
+|---|---|
+| Instance | Nextcloud 34.0.3, SQLite, docker compose behind a front proxy, port 8097 |
+| Both halves | out of the archives of the release rehearsal, run 34116531030 |
+| `guests` app | 4.9.0 |
+| Guest account | `findling-guest-probe`, created by `testuser`, removed again |
+| Protocol | `.dev/sichtprobe/guest-parity-sichtprobe.log` of that run |
+
+Four comparisons, all passed, each one over the same judge the CI job uses:
+
+| Scenario | Question | Native | Findling | Verdict |
+|---|---|---|---|---|
+| `owner-precondition` | does the owner find his own shared marker | 177 | 177 | passed |
+| `guest-received-share` | does the guest find the one file he was given | 177 | 177 | passed |
+| `guest-denied` | does he find the other marker in either provider | none | none | passed |
+| `owner-still-finds` | does the owner still find that other marker | 178 | 178 | passed |
+
+The two limits of this result, stated because they are the whole point of D-22:
+it is a snapshot and not a standing gate, and it holds for version 4.9.0 of the
+`guests` app and for no other. A second run against a later version of that app
+is a second snapshot, not a confirmation of this one.
+
+One property of the host rather than of the probe, written down because it cost a
+run: the Git shell of Windows rewrites any argument that looks like a unix path,
+and that includes the value of an option written as one word. `-d
+path=/parityguest-1.txt` reached curl as a windows directory, so the share API
+answered "Wrong path, file/folder does not exist" about a file that had just been
+uploaded successfully. On such a host `MSYS2_ARG_CONV_EXCL` has to name the
+container path and that OCS argument, and a blanket `*` is not the way out
+because the probe hands curl its configuration through a path under `/tmp` of the
+shell. Finding 7 of `docs/install-check.md` now covers this probe too.
 
 ## The twelve behaviours of the PHP half, and the test that holds each one
 

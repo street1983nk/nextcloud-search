@@ -32,6 +32,16 @@
 # means he is shown something the native search does not show him, and that is
 # the one case of this phase that would be a security finding (T-06.1-62).
 #
+# Before the first guest question the owner is asked for his own shared marker,
+# and the probe stops if he does not find it. That is the precondition of the
+# whole thing rather than a fourth question: a stopped container leaves an empty
+# work stock as well, the wait for the queue returns satisfied, and the first
+# guest comparison then reports a missing hit that reads like a permission
+# defect. "The probe could not take place" and "the guest sees too little" send
+# a reader to two unrelated places, so they are told apart here instead of being
+# left to be guessed (DI-06.1-17, plan 06.1-19). The exit code of the
+# precondition is 2, so a caller can tell not performed from failed.
+#
 # Two pitfalls of the CI job apply here word for word and are handled the same
 # way. SearchQuery::LIMIT_DEFAULT is five and the instance cap
 # unified_search_max_results_per_request is twenty five, so the cap is raised
@@ -95,7 +105,10 @@ guest_parity.sh, the guest user probe of decision D-22.
 It creates a guest user over the guests app, gives him exactly one file with a
 marker, asks the native provider and Findling the same questions as that guest,
 and lets scripts/ci/parity_diff.py decide whether the two answers describe the
-same set of files. It removes the guest, the share and the two files again, and
+same set of files. Before the first guest question it asks the owner for his own
+shared marker and stops with exit code 2 if he does not find it, because a probe
+that could not take place must not report a permission finding. It removes the
+guest, the share and the two files again, and
 it writes a protocol.
 
 This script is deliberately not run in CI: D-22 keeps the guests app out of the
@@ -473,7 +486,38 @@ occ background-job:worker 'OCA\Findling\BackgroundJobs\StorageCrawlJob' --stop_a
 drain "${DRAIN_TIMEOUT}"
 
 # ---------------------------------------------------------------------------
-# Step 5, the three questions
+# Step 5a, the precondition of the whole probe
+#
+# The owner is asked for the SHARED marker first, and the probe stops here if he
+# does not find it. Without this step the probe cannot tell its two failure modes
+# apart, which is DI-06.1-17: an instance whose container is stopped has an empty
+# work stock too, the wait above returns satisfied, and the first guest
+# comparison then reports a missing hit. Read literally that says "the guest does
+# not find a document he is allowed to see", which is a functional defect. What
+# really happened is that the probe could not take place. One of the two says fix
+# the permission chain, the other says start the container.
+#
+# The shared marker and not the private one on purpose: it is the file the guest
+# is asked about next, so its absence for its own owner is the narrowest possible
+# statement that the index does not carry the material of this probe. The exit
+# code is 2 and not 1, so that a caller can tell not performed from failed.
+# ---------------------------------------------------------------------------
+before_precondition="${FINDINGS}"
+compare owner-precondition "${CREATOR_UID}" "${CREATOR_CONF}" "${MARKER_SHARED}" 1
+if [ "${FINDINGS}" -ne "${before_precondition}" ]; then
+	log "Ergebnis: DIE PROBE KONNTE NICHT STATTFINDEN. Der Eigentuemer findet seinen"
+	log "eigenen freigegebenen Marker nicht, also traegt der Index das Material dieser"
+	log "Probe nicht. Das ist KEIN Rechtebefund: die drei Fragen unten sind damit gar"
+	log "nicht gestellt worden. Zu pruefen sind der Container, der Arbeitsvorrat und"
+	log "das Protokoll oben, nicht die Rechtekette (DI-06.1-17)."
+	log "Der Lauf wurde abgebrochen."
+	exit 2
+fi
+log "Voraussetzung erfuellt: der Eigentuemer findet den freigegebenen Marker, in"
+log "beiden Providern dieselbe Menge. Erst damit sind die drei Fragen unten stellbar."
+
+# ---------------------------------------------------------------------------
+# Step 5b, the three questions
 #
 # One statement needs all three. The first alone would also be satisfied by an
 # instance that shows everything to everybody, the second alone by a search that

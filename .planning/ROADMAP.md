@@ -362,7 +362,10 @@ Etablierte Muster, Research kann entfallen: Event-Listener und Reconcile (Phase 
 **Success Criteria** (what must be TRUE):
   1. Jede in 06.1-CONTEXT.md benannte Massnahme hat einen Test, der rot sein kann, und einen Beleg im Repo; keine Massnahme ist nur "manuell geprueft"
   2. Suchseite und Arbeiter teilen eine Embedding-Engine (oder die Suchseite entlaedt), und die Nachmessung auf der ARM-Box zeigt eine anon-Spitze unter der aus 06-11 (1.837,8 MB) bei oom/oom_kill/oom_group_kill = 0
-  3. Eine frische Nextcloud (AIO und docker-compose, NC 32 bis 35, amd64 und arm64) installiert beide Apps aus den Release-Artefakten und findet ohne Handgriff Inhalte, und die Deinstallation raeumt auf
+  3. Eine frische Nextcloud (docker-compose, NC 33 bis 35, amd64 **und** arm64) installiert beide Apps aus den Release-Artefakten und findet ohne Handgriff Inhalte, und die Deinstallation raeumt auf. Nicht abgedeckt und ausdruecklich benannt: all-in-one als Installationsweg. Fassung nach E-H5 und E-H1, vollzogen in Plan 06.1-19; Belege und Nichtabdeckungen in `docs/install-check.md`, Abschnitte 1, 3 und 5
+     - Urspruengliche Fassung, damit sichtbar bleibt, dass hier etwas kleiner geworden ist und nicht immer schon so stand: ~~"Eine frische Nextcloud (AIO und docker-compose, NC 32 bis 35, amd64 und arm64) installiert beide Apps aus den Release-Artefakten und findet ohne Handgriff Inhalte, und die Deinstallation raeumt auf"~~
+     - Was sich geaendert hat, Stueck fuer Stueck: **NC 32 fiel weg**, weil E-H1 min-version auf 33 gehoben hat; ein Kriterium, das eine Fassung verspricht, die das Versionsfenster nicht mehr traegt, verspricht etwas, das niemand einloesen kann. **AIO fiel weg**, weil beide Handlaeufe ueber `--flavour compose` gefahren sind: der amd64-Lauf vom 06.09. und der arm64-Lauf vom 07.09., letzterer aus drei benannten Gruenden (Vergleichbarkeit, Speicher der Box, all-in-one auf arm64 ist als Betrieb ohnehin belegt), nachzulesen in `docs/install-check.md`, Abschnitt 5, "Die Abweichung von E-H5". **amd64 und arm64 blieben beide stehen**, weil E-H5 Option A gewaehlt hat und beide Laeufe erfolgt sind
+     - Was das fuer einen Nutzer heisst: der Weg aus dem Store auf eine compose-Instanz ist gefahren und protokolliert, auf beiden Architekturen. Wer all-in-one benutzt, bekommt eine App, deren Betrieb auf all-in-one seit Plan 05-21 auf der Box laeuft und deren **Installationsweg** dort nicht von Hand gefahren wurde. Die CI-Matrix von `deploy-harp.yml` fuehrt den Installationsweg aus den Release-Archiven auf stable33, stable34 und stable35 bei jedem Lauf, aber ebenfalls nicht ueber all-in-one
   4. Security-, Bug- und Performance-Audit sind erneut gefahren, alle Befunde ab MEDIUM gefixt, LOW dokumentiert entschieden
   5. Der Owner hat die Phase nach eigener Sichtprobe abgenommen; erst danach beginnt Plan 06-12
 
@@ -387,3 +390,13 @@ Plans:
 - [x] 06.1-18-PLAN.md , Welle 7 , Nachmessung auf der ARM-Box, Nebenlaeufigkeit, Endungsvergleich, Store-Zahl
 - [ ] 06.1-19-PLAN.md , Welle 8 , Owner-Sichtprobe, Abnahme, APPSTORE_TOKEN-Rotation, Box-Abbau
 - [x] 06.1-20-PLAN.md , Welle 2 , Distanzriegel der Vektorseite und Operatorregel gegen die semantische Flut
+- [x] 06.1-21-PLAN.md , Welle 3 , Franzoesisch in der OCR
+- [x] 06.1-22-PLAN.md , Welle 6 , Gap-Closure der vier kleinen Befunde
+- [x] 06.1-23-PLAN.md , Welle 7 , die Doku-Warnung und die Instanz-Marke (DI-06.1-22)
+
+Diese Liste nennt 23 Plaene und nicht die 19, von denen Plan 06.1-19 in seinem
+eigenen Text spricht. Die Zahl 19 stammt aus dem Stand der Planung vom
+06.09.2026; die Plaene 20 bis 23 sind danach aus Befunden entstanden, die die
+Wellen 2, 3, 6 und 7 aufgeworfen haben. Aufgeschrieben statt stillschweigend
+korrigiert, weil eine Liste, die auf eine Zahl gesetzt wird, die kleiner ist als
+der Bestand auf der Platte, drei ausgefuehrte Plaene unsichtbar macht.

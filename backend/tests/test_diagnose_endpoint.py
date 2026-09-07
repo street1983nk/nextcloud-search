@@ -584,7 +584,12 @@ def test_the_route_keeps_the_access_level_it_was_declared_with() -> None:
     # else. ADMIN guards the AppAPI proxy path; the effective guard of the path
     # this app walks is the admin only PHP route in front of it (pitfall 10).
     manifest = BACKEND_INFO.read_text(encoding="utf-8")
-    block = manifest[manifest.index("<url>diagnose</url>") :]
+    # The anchored form since 07.09.2026 (plan 06.1-19, DI-06.1-13): HaRP matches
+    # the url as a regular expression against a path that begins with a slash, so
+    # a bare "diagnose" matched nothing. Asserted as the literal the file really
+    # carries, because a lookup that falls back to a bare name would go on
+    # passing over an entry that no longer exists.
+    block = manifest[manifest.index("<url>^/diagnose$</url>") :]
 
     assert "<access_level>ADMIN</access_level>" in block[: block.index("</route>")]
 

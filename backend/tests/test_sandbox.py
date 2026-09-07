@@ -348,6 +348,61 @@ def test_the_child_hardens_itself_before_the_parsers_load() -> None:
     assert body.index("os.setsid()") < body.index("_shed_secrets()")
 
 
+def test_the_native_thread_pools_are_pinned_to_one_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The fix of the bug the owner sight check of plan 06.1-19 found: every DOCX,
+    # XLSX and PPTX came back as failed(corrupt) on a twelve core host, because
+    # openpyxl imports numpy, numpy loads OpenBLAS, and OpenBLAS starts one thread
+    # per CPU inside an address space that RLIMIT_AS has just capped at 512 MB.
+    # All four names, because they are one class of library reading one class of
+    # variable and pinning only the one that fired leaves the rest waiting.
+    for name in sandbox._NATIVE_THREAD_POOL_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+
+    sandbox._pin_native_thread_pools()
+
+    for name in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        assert os.environ[name] == "1"
+
+
+def test_the_thread_pools_are_pinned_before_the_parsers_load() -> None:
+    # Order is the property, exactly as with the shedding above: these variables
+    # are read while a native library initialises, so a pin after the dispatcher
+    # import would change nothing and this test would be the only thing left
+    # saying it works.
+    body = SANDBOX_SOURCE.read_text(encoding="utf-8").split("def _child_main", 1)[1]
+
+    assert body.index("_pin_native_thread_pools()") < body.index("from findling.extract.dispatch import ")
+    assert body.index("_limit_address_space(") < body.index("_pin_native_thread_pools()")
+
+
+def test_an_office_document_survives_the_guarded_path(tmp_path: Path) -> None:
+    """A DOCX through the real child, which is where the corrupt verdict came from.
+
+    The limit of this test, stated rather than left to be discovered: it is only a
+    ratchet on a machine with enough cores. OpenBLAS starts one thread per CPU, so
+    on the two vCPU measurement box and on a four vCPU runner the threads fit
+    under the cap and this assertion holds even without the pin above. That is
+    precisely why the bug survived five phases of tests and measurements, and it
+    is why the two tests above assert the mechanism instead of the outcome. This
+    one is here because it is the assertion the sight check actually saw fail.
+    """
+    import docx
+
+    document = docx.Document()
+    document.add_paragraph("Aktenvermerk der Gemeinde zur Winterdienstpauschale.")
+    path = tmp_path / "vermerk.docx"
+    document.save(str(path))
+
+    outcome = sandbox.extract_guarded(
+        str(path),
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        path.stat().st_size,
+    )
+
+    assert outcome.state is State.INDEXED, f"reason {outcome.reason}"
+    assert outcome.text_chars > 0
+
+
 def test_every_kill_goes_through_the_group_kill() -> None:
     # Today the child spawns nothing; phase 3 runs tesseract, and a plain
     # kill() would orphan a hung grandchild that keeps the worker slot (audit

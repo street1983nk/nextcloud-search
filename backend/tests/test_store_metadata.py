@@ -232,10 +232,12 @@ STORE_CATEGORIES = frozenset(
 # and are still accepted; the SPDX spellings above them carry the schema comment
 # "Requires Nextcloud minVersion >= 31".
 #
-# This entry ships "agpl", which is one of the deprecated four. That is valid and
-# stays valid, and the move to AGPL-3.0-or-later is a change to both halves at
-# once rather than a fix inside this gate, so it is written down as a deferred
-# item instead of being done here in passing.
+# Both halves shipped "agpl" until 07.09.2026 and now ship "AGPL-3.0-or-later".
+# The deprecated four stay in this set on purpose: the schema still accepts them,
+# so a gate that rejected them would be stricter than the store and would fail a
+# submission the store would take. Plan 06.1-19 raised both halves in one commit
+# (DI-06.1-05), because two entries of one product naming two licences is the
+# contradiction the deferred item refused to risk by moving one side alone.
 STORE_LICENCES = frozenset(
     {
         "0BSD",
@@ -457,8 +459,23 @@ def _local_image(name: str, url: str) -> list[str]:
 
 
 def media_files() -> list[Path]:
-    """Every image of the store entry, the README of the directory excluded."""
-    return sorted(path for path in MEDIA.glob("*") if path.is_file() and path != MEDIA_README)
+    """Every image of the store entry, the README of the directory excluded.
+
+    Dot files are excluded as well, and that is a fix and not a convenience.
+    This helper feeds the rule "a file in this directory that the README does
+    not name is a finding", which exists so that an added image cannot ship
+    undocumented. A dot file is never one of those images: the addresses in both
+    info.xml name .png files, and nothing hidden can be a store screenshot. What
+    a dot file can be is an artefact somebody else's tooling drops next to the
+    images. On 07.09.2026 the worktree tooling of this project put a git-ignored
+    .claude-active here and turned this gate red, which is a gate reporting on
+    the working directory of a machine instead of on the contents of the
+    repository (plan 06.1-19, Rule 1). An editor swap file would have done the
+    same thing.
+    """
+    return sorted(
+        path for path in MEDIA.glob("*") if path.is_file() and path != MEDIA_README and not path.name.startswith(".")
+    )
 
 
 def judge_image_size(name: str, size: int) -> list[str]:
