@@ -1,0 +1,151 @@
+arm64-vorbereiten-start 2026-09-07T06:23:10Z
+=== 1. The checkout the archives come from ===
+93c021f chore(06.1): state after gap plan 22
+-- the proof that this tree has LF endings --
+php/appinfo/info.xml carries no carriage return
+=== 2. The throwaway CA and the leaf certificate CN=findling ===
+subject=CN = findling
+issuer=CN = findling-arm64-throwaway-ca
+=== 3. Stage the companion, sign it with the occ of the running instance ===
+staged tree:
+  LICENSE
+  THIRD-PARTY.md
+  appinfo
+  css
+  img
+  js
+  l10n
+  lib
+  templates
+findling
+Successfully signed "/tmp/sign-findling"
+appinfo/signature.json was written and is not empty
+=== 4. Pack both archives ===
+no carriage return in any staged text file
+-rw-rw-r-- 1 ubuntu ubuntu 233982 Sep  7 06:23 /home/ubuntu/work/arm64/dist/findling.tar.gz
+/home/ubuntu/work/arm64/dist/findling.tar.gz, 68 entries
+findling/
+findling/THIRD-PARTY.md
+findling/l10n/
+findling/l10n/de.json
+findling/l10n/de.js
+findling/templates/
+findling/templates/admin.php
+findling/lib/
+findling/lib/AppInfo/
+findling/lib/AppInfo/Application.php
+findling/lib/Command/
+findling/lib/Command/PurgeCommand.php
+findling/lib/Command/IndexCommand.php
+findling/lib/Command/DiagnoseCommand.php
+findling/lib/Listener/
+findling/lib/Listener/GroupEventListener.php
+findling/lib/Listener/ShareEventListener.php
+findling/lib/Listener/FileEventListener.php
+findling/lib/Settings/
+findling/lib/Settings/Section.php
+findling/lib/Settings/Admin.php
+findling/lib/Search/
+findling/lib/Search/Provider.php
+findling/lib/Migration/
+findling/lib/Migration/Version001000Date20260816000000.php
+findling/lib/Migration/Version001000Date20260904000000.php
+findling/lib/Migration/Version001000Date20260903000000.php
+findling/lib/Migration/Version001000Date20260901000000.php
+findling/lib/Migration/Version001000Date20260902000000.php
+findling/lib/Text/
+findling/lib/Text/PlainText.php
+findling/lib/BackgroundJobs/
+findling/lib/BackgroundJobs/SubtreeExpandJob.php
+findling/lib/BackgroundJobs/SchedulerJob.php
+findling/lib/BackgroundJobs/StorageCrawlJob.php
+findling/lib/Repair/
+findling/lib/Repair/AppUninstallStep.php
+findling/lib/Repair/AppInstallStep.php
+findling/lib/Db/
+findling/lib/Db/QueueMapper.php
+findling/lib/Db/QueueFile.php
+findling/lib/Service/
+findling/lib/Service/SettingsService.php
+findling/lib/Service/PathResolverService.php
+findling/lib/Service/FileStateService.php
+findling/lib/Service/ExclusionService.php
+findling/lib/Service/ExAppService.php
+findling/lib/Service/QueueService.php
+findling/lib/Service/ScanStatsService.php
+findling/lib/Service/AdminViewService.php
+findling/lib/Service/StorageService.php
+findling/lib/Service/PurgeService.php
+findling/lib/Controller/
+findling/lib/Controller/GatewayController.php
+findling/lib/Controller/SettingsController.php
+findling/lib/Controller/QueueController.php
+findling/lib/Controller/ReconcileController.php
+findling/img/
+findling/img/app-dark.svg
+findling/appinfo/
+findling/appinfo/routes.php
+findling/appinfo/signature.json
+findling/appinfo/info.xml
+findling/css/
+findling/css/admin.css
+findling/js/
+findling/js/admin.js
+findling/LICENSE
+/home/ubuntu/work/arm64/dist/findling.tar.gz: appinfo/info.xml is present
+/home/ubuntu/work/arm64/dist/findling.tar.gz: carries appinfo/signature.json, as the integrity check of the instance requires
+info.xml is byte identical to the working tree, so AppAPI will read the routes it expects
+no carriage return in any staged text file
+-rw-rw-r-- 1 ubuntu ubuntu 29031 Sep  7 06:23 /home/ubuntu/work/arm64/dist/findling_backend.tar.gz
+/home/ubuntu/work/arm64/dist/findling_backend.tar.gz, 5 entries
+findling_backend/
+findling_backend/THIRD-PARTY.md
+findling_backend/appinfo/
+findling_backend/appinfo/info.xml
+findling_backend/LICENSE
+/home/ubuntu/work/arm64/dist/findling_backend.tar.gz: appinfo/info.xml is present
+/home/ubuntu/work/arm64/dist/findling_backend.tar.gz: carries no code signature, which is correct for a container half
+09963ad6bcc1d12cdc66ac76a4a1939583ff88a40d9f3f22a9e2cfec4039c65d  /home/ubuntu/work/arm64/dist/findling.tar.gz
+b22d38e1f2462c7f0c19dfbe4b62a3f220644246f8c7c479092ca680b53ac5f3  /home/ubuntu/work/arm64/dist/findling_backend.tar.gz
+=== 5. The fresh instance: pull the images for arm64 ===
+3c05fe2c9f22a14e9ff46a8702796f51a441b832f478cb7dc16cb84b98feadf6
+Status: Downloaded newer image for nextcloud:34.0.3-apache
+docker.io/library/nextcloud:34.0.3-apache
+Status: Downloaded newer image for ghcr.io/nextcloud/nextcloud-appapi-harp:release
+ghcr.io/nextcloud/nextcloud-appapi-harp:release
+Status: Downloaded newer image for nginx:1.27-alpine
+docker.io/library/nginx:1.27-alpine
+nextcloud arch=arm64
+harp arch=arm64
+=== 6. Start the instance and install it with SQLite ===
+Nextcloud was successfully installed
+System config value trusted_domains => 1 set to string findling-arm64-proxy
+System config value overwrite.cli.url set to string http://findling-arm64-proxy
+  - installed: true
+  - version: 34.0.3.2
+  - versionstring: 34.0.3
+  - edition: 
+  - maintenance: false
+  - needsDbUpgrade: false
+  - productname: Nextcloud
+  - extendedSupport: false
+the instance knows neither half of findling, as required
+=== 7. HaRP and the front proxy ===
+findling-arm64-proxy nginx:1.27-alpine Up 6 seconds
+findling-arm64-harp ghcr.io/nextcloud/nextcloud-appapi-harp:release Up 6 seconds (health: starting)
+findling-arm64-nc nextcloud:34.0.3-apache Up 40 seconds
+proxy=200
+{"installed":true,"maintenance":false,"needsDbUpgrade":false,"version":"34.0.3.2","versionstring":"34.0.3","edition":"","productname":"Nextcloud","extendedSupport":false}
+=== 8. The CA into root.crt, WITH the newline that finding 3 is about ===
+sh: 1: xxd: not found
+-- certificates in root.crt, counted with a line anchor --
+3
+=== 9. The deploy daemon over HaRP ===
+Daemon config successfully registered.
+Registered ExApp daemon configs:
++-----+------------+------------------------+----------------+----------+--------------------------+-----------------------------+---------+--------------------------+-------------------------+
+| Def | Name       | Display name           | Deploy ID      | Protocol | Host                     | NC Url                      | Is HaRP | HaRP FRP Address         | HaRP Docker Socket Port |
++-----+------------+------------------------+----------------+----------+--------------------------+-----------------------------+---------+--------------------------+-------------------------+
+| *   | harp_arm64 | Harp Proxy (arm64 box) | docker-install | http     | findling-arm64-harp:8780 | http://findling-arm64-proxy | yes     | findling-arm64-harp:8782 | 24000                   |
++-----+------------+------------------------+----------------+----------+--------------------------+-----------------------------+---------+--------------------------+-------------------------+
+arm64-vorbereiten-ende 2026-09-07T06:24:18Z

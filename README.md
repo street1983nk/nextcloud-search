@@ -79,32 +79,52 @@ Hardware gebaut, nicht für einen Suchcluster.
 
 ## Was es an Speicher kostet, gemessen
 
-**Ein vollständiger Indexierungs-, OCR- und Embedding-Lauf über 50.000 Dateien
-und 20 GB auf einer 4-GB-ARM64-Box erreichte einen Spitzenwert von 1.838 MB
+**Auf einer 4-GB-ARM64-Box mit 51.961 indexierten Dokumenten und aktiver
+semantischer Suche erreichte der Container einen Spitzenwert von 1.813 MB
 residentem anonymem Speicher, unter einem harten, vom Kernel durchgesetzten
-2-GB-Limit, ohne OOM-Kill und ohne Neustart.** Der Lauf brauchte 18 h 56 min
-bis zum letzten Vektor, schrieb einen 785 MB großen Wortindex und einen 69 MB
-großen Vektorspeicher, und ließ jede Datei mit einem Befund zurück: 51.961
-indexiert und mit Embeddings versehen, 37 übersprungen mit benanntem Grund,
-**keine einzige fehlgeschlagen**. Eine Nutzersuche während des Laufs
-antwortete beim 95. Perzentil in 1,1 Sekunden, nach dem Lauf in 0,5 Sekunden.
+2-GB-Limit. Die drei Kernel-Zähler für Speicherschaden (`oom`, `oom_kill`,
+`oom_group_kill`) stehen auf null, und der vierte Zähler `max`, der zählt, wie
+oft der Kernel den Container gegen sein Limit zurückdrängen musste, steht
+ebenfalls auf null.** Gemessen am 07.09.2026
+([docs/measurements/2026-09-nachmessung-m7g](docs/measurements/2026-09-nachmessung-m7g/)).
 
-Das ist eine Messung und keine Schätzung. Sie wurde auf arm64 mit 2 Kernen und
+`max` wird hier ausgewiesen und nicht verschwiegen, weil er in der vorigen
+Messung nicht null war: der Dateicache des Index drückte damals 2.796-mal gegen
+das 2-GB-Limit. Kein Prozess wurde getötet, aber der Kernel musste arbeiten.
+Diesmal musste er das kein einziges Mal.
+
+**Die vorige Zahl, als Vergleich:** 1.838 MB, gemessen am 05.09.2026 im
+Semantik-Volllauf
+([docs/measurements/2026-09-05-semantiklauf-m7g](docs/measurements/2026-09-05-semantiklauf-m7g/)),
+mit `max 2.796`. Der Grund der Differenz ist keine Messstreuung: die Suchseite
+lud damals eine zweite Kopie des Modells zusätzlich zu der, die der Indexierer
+hielt. Diese Kopie ist beseitigt, und die Suchphase ist dadurch von 1.838 MB auf
+1.125 MB gefallen. Dass die Gesamtspitze nur um 25 MB gesunken ist, hat einen
+eigenen Grund: sie entsteht inzwischen in der OCR-Phase und nicht mehr in der
+Suche, und die OCR arbeitet seit dem 06.09.2026 mit drei Sprachen statt zwei.
+Beide Zahlen stehen mit ihrem Datum und ihrer Begründung im Messbericht.
+
+**Gleichzeitige Suchen:** bis zu **acht** halten auf dieser Box das Zeitbudget
+von 2,5 Sekunden ein (95. Perzentil 1,9 s über 410 Anfragen). Ab zwölf reißt es.
+Das ist eine Zahl über diese Box und diese Instanz: die Nextcloud-Suche fragt
+alle Anbieter gleichzeitig, also setzt auch der PHP-Prozesspool der Instanz eine
+Grenze, und der ist überall anders groß.
+
+**Der Volllauf, aus dem der Bestand stammt:** 50.000 Dateien und 20 GB, 18 h
+56 min bis zum letzten Vektor, ein 785 MB großer Wortindex und ein 69 MB großer
+Vektorspeicher, und jede Datei mit einem Befund: 51.961 indexiert und mit
+Embeddings versehen, 37 übersprungen mit benanntem Grund, **keine einzige
+fehlgeschlagen**. Eine Nutzersuche während des Laufs antwortete beim 95.
+Perzentil in 1,1 Sekunden, nach dem Lauf in 0,5 Sekunden.
+
+Das sind Messungen und keine Schätzungen. Sie wurden auf arm64 mit 2 Kernen und
 4 GB genommen, der Hardware, für die diese App gebaut ist. Diese Laufzeiten
-stammen von der kleinsten unterstützten Zielhardware (arm64, 2 Kerne, 4 GB
-RAM) und sind bewusst die Untergrenze: auf moderner, leistungsstarker Hardware
-läuft die Indexierung erheblich schneller, dafür liegt aber keine eigene
-Messung vor. Zwei ehrliche Sätze gehören daneben. Erstens: die Kernel-Zähler
-für Speicherschaden (`oom`, `oom_kill`, `oom_group_kill`) stehen bei null,
-aber der `max`-Zähler nicht, weil der Dateicache des Index 2.796-mal gegen das
-2-GB-Limit drückte, während die semantische Suche 1,5 bis 1,8 GB für sich
-hielt: das Limit wurde eingehalten, aber nicht unberührt gelassen. Zweitens:
-der größte Teil dieses Speichers ist die semantische Suche, nicht die
-Indexierung. Derselbe Lauf ohne Embeddings erreichte einen Spitzenwert von
-422 MB und brauchte 12 h 49 min auf derselben Maschine, und rund 276 MB des
-Unterschieds sind eine zweite Kopie des Modells, die die Suchseite zusätzlich
-zu der lädt, die der Indexierer hält. Das ist ein bekannter Befund, und er
-wird in der Härtung vor der ersten Veröffentlichung angegangen.
+stammen von der kleinsten unterstützten Zielhardware und sind bewusst die
+Untergrenze: auf moderner, leistungsstarker Hardware läuft die Indexierung
+erheblich schneller, dafür liegt aber keine eigene Messung vor. Ein ehrlicher
+Satz gehört noch daneben: der größte Teil dieses Speichers ist die semantische
+Suche, nicht die Indexierung. Derselbe Volllauf ohne Embeddings erreichte einen
+Spitzenwert von 422 MB und brauchte 12 h 49 min auf derselben Maschine.
 
 Methode, beide vollständigen Kurven, der Korpus, der vierteilige OOM-Beleg,
 vier Ausfalltests auf derselben Maschine (`docker kill` während der OCR, ein

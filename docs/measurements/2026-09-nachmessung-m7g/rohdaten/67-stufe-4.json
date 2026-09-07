@@ -1,0 +1,119 @@
+{
+ "started": "2026-09-07T05:39:01Z",
+ "target": "https://loadtest.infranode.dev",
+ "user": "lasttest",
+ "concurrency": 4,
+ "rounds": 10,
+ "limit": 5,
+ "requests": 40,
+ "answered": 40,
+ "failures": 0,
+ "failure_kinds": {},
+ "hits_total": 180,
+ "budget_ms": 2500,
+ "memory": {
+  "before": {
+   "at": "2026-09-07T05:39:01Z",
+   "anon": 1183027200,
+   "file": 84742144,
+   "slab": 1425280,
+   "memory.current": 1273032704,
+   "memory.peak": 1284292608
+  },
+  "during": [
+   {
+    "at": "2026-09-07T05:39:02Z",
+    "anon": 1183027200,
+    "file": 84742144,
+    "slab": 1425280,
+    "memory.current": 1273307136,
+    "memory.peak": 1284292608
+   },
+   {
+    "at": "2026-09-07T05:39:03Z",
+    "anon": 1183027200,
+    "file": 84742144,
+    "slab": 1425280,
+    "memory.current": 1273393152,
+    "memory.peak": 1284292608
+   },
+   {
+    "at": "2026-09-07T05:39:04Z",
+    "anon": 1183109120,
+    "file": 84742144,
+    "slab": 1437016,
+    "memory.current": 1272963072,
+    "memory.peak": 1284292608
+   },
+   {
+    "at": "2026-09-07T05:39:05Z",
+    "anon": 1183109120,
+    "file": 84742144,
+    "slab": 1437016,
+    "memory.current": 1273221120,
+    "memory.peak": 1284292608
+   },
+   {
+    "at": "2026-09-07T05:39:06Z",
+    "anon": 1183166464,
+    "file": 84742144,
+    "slab": 1449504,
+    "memory.current": 1273217024,
+    "memory.peak": 1284292608
+   },
+   {
+    "at": "2026-09-07T05:39:07Z",
+    "anon": 1183166464,
+    "file": 84742144,
+    "slab": 1449504,
+    "memory.current": 1273487360,
+    "memory.peak": 1284292608
+   },
+   {
+    "at": "2026-09-07T05:39:08Z",
+    "anon": 1183174656,
+    "file": 84742144,
+    "slab": 1449504,
+    "memory.current": 1273229312,
+    "memory.peak": 1284292608
+   },
+   {
+    "at": "2026-09-07T05:39:09Z",
+    "anon": 1183174656,
+    "file": 84742144,
+    "slab": 1449504,
+    "memory.current": 1273225216,
+    "memory.peak": 1284292608
+   },
+   {
+    "at": "2026-09-07T05:39:10Z",
+    "anon": 1183174656,
+    "file": 84742144,
+    "slab": 1449504,
+    "memory.current": 1272979456,
+    "memory.peak": 1284292608
+   },
+   {
+    "at": "2026-09-07T05:39:11Z",
+    "anon": 1183174656,
+    "file": 84742144,
+    "slab": 1449504,
+    "memory.current": 1273536512,
+    "memory.peak": 1284292608
+   }
+  ],
+  "after": {
+   "at": "2026-09-07T05:39:11Z",
+   "anon": 1183174656,
+   "file": 84742144,
+   "slab": 1449504,
+   "memory.current": 1273536512,
+   "memory.peak": 1284292608
+  }
+ },
+ "ended": "2026-09-07T05:39:11Z",
+ "p50_ms": 885.1,
+ "p95_ms": 1009.4,
+ "max_ms": 1058.8,
+ "p95_within_budget": true
+}

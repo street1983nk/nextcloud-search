@@ -579,6 +579,28 @@ Store-Text nach D-17a trägt**, mit der Hardware daneben. Rohdaten und die Grenz
 zwischen den beiden Spuren, abgelesen aus dem Statusbeobachter:
 [`docs/measurements/2026-09-05-semantiklauf-m7g/`](measurements/2026-09-05-semantiklauf-m7g/README.md).
 
+**Nachtrag vom 07.09.2026: die Grundlast nach dem Fix an der zweiten
+Modellinstanz.** Plan 06.1-02 hat die zweite Instanz der Modellgewichte
+beseitigt, und die Nachmessung auf derselben Box
+([`docs/measurements/2026-09-nachmessung-m7g/`](measurements/2026-09-nachmessung-m7g/README.md))
+hat die Aufschlüsselung wiederholt, mit denselben beiden Hilfsskripten. Die
+Aufschlüsselung aus 06-11 gilt weiter, Posten für Posten:
+
+| Posten der Grundlast | 06-11, 05./06.09.2026 | **Nachmessung, 07.09.2026** | Differenz |
+|---|---|---|---|
+| `anon` im Leerlauf, Modell nie geladen | 691,8 MB | **693,4 MB** | +1,6 MB |
+| Tokenizer gelesen | +268,8 MB | +269,4 MB | +0,6 MB |
+| Chunker gebaut und gefahren | +272,8 MB | +274,3 MB | +1,5 MB |
+| Gewichte bei der ersten Einbettung | +397,1 MB | +391,9 MB | -5,2 MB |
+| Aktivierungen einer langen Einbettung | nicht getrennt gemessen | +26,4 MB | |
+
+**Die Grundlast hat der Fix nicht zurückgegeben, und das ist erwartbar.** Die
+zweite Instanz war faul geladen: sie entstand erst, wenn eine Einbettung lief,
+also nicht im Leerlauf. Wo der Posten der zweiten Instanz wirklich weg ist, ist
+die Suchphase: sie fiel von 1.837,8 MB auf 1.125,2 MB, und die erste semantische
+Suche kostet jetzt einmal +422,3 MB statt zweimal. Beide Zahlen mit ihrem Datum
+in [`docs/performance.md`](performance.md), Abschnitt "Die Nachmessung".
+
 **Was ein Admin währenddessen sieht.** Die Admin-Seite führt seit Plan 06-09
 zwei Deckungszahlen mit demselben Nenner:
 

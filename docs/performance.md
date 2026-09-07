@@ -1381,7 +1381,7 @@ falsch.
 | Zahl | Trockenlauf | Volllauf | Was sie ist |
 |---|---|---|---|
 | **Grenzwert** | 2,0 GB | 2,0 GB | eine Festlegung. Der Volllauf besteht oder besteht nicht gegen sie. Sie wird nicht gemessen und sie ändert sich nicht mit dem Ergebnis. |
-| **gemessener Spitzenwert `anon`** | 381 MB | **1.837,8 MB** (ARM, mit Semantik); 422,2 MB (ARM, ohne Semantik), 428,6 MB (Generalprobe) | eine Messung. Seit dem 06.09.2026 ist der Wert des Semantiklaufs die Zahl der Store-Aussage (D-17c); die beiden anderen bleiben als Vergleich stehen. |
+| **gemessener Spitzenwert `anon`** | 381 MB | **1.812,7 MB** (ARM, mit Semantik, Nachmessung 07.09.2026); 1.837,8 MB (dieselbe Box, Semantiklauf 05.09.2026, vor dem Fix an der zweiten Modellinstanz); 422,2 MB (ARM, ohne Semantik), 428,6 MB (Generalprobe) | eine Messung. Seit dem 07.09.2026 ist der Wert der Nachmessung die Zahl der Store-Aussage (D-17c in der Form aus D-H2); die drei anderen bleiben als Vergleich stehen, jede mit ihrem Datum. |
 | **`memory.peak`** | 455 MB | **970,9 MB** (ARM), 957,7 MB (Generalprobe) | dieselbe cgroup, anderer Maßstab: hier zählt der Dateicache mit. |
 
 Warum die Store-Zahl aus `anon` kommt und nicht aus `memory.peak`: der Index ist
@@ -2989,6 +2989,144 @@ Den Vergleich der Verdikte gegen die Endungsverteilung des Generators, Endung f�
 Endung, wie ihn der Volltextlauf oben führt; er steht im Bericht als fehlend. Und
 eine Nachmessung nach der Zusammenlegung der beiden Modellinstanzen, die erst in
 der Härtungsphase entsteht.
+
+Beides ist am 07.09.2026 nachgeholt worden, im Abschnitt darunter.
+
+## Die Nachmessung: dieselbe Box, nach dem Fix an der zweiten Modellinstanz
+
+Dieser Abschnitt steht **neben** dem des Semantiklaufs und nicht an seiner
+Stelle. Der Semantiklauf bleibt unverändert oben stehen, mit allen seinen Zahlen,
+denn ersetzt wird die Aussage und nicht die Geschichte.
+
+Messreihe: [`docs/measurements/2026-09-nachmessung-m7g/`](measurements/2026-09-nachmessung-m7g/).
+Dieselbe Instanz `i-06b1d913f5c6f669b`, derselbe Datenträger, derselbe Bestand
+aus 51.961 Dokumenten, dieselbe harte Grenze von 2,0 GiB aus der cgroup gelesen.
+Gemessenes Abbild: `ghcr.io/street1983nk/findling_backend:dev`, Digest
+`sha256:00111fd090f437a00678f6fc0a562807a5ad0b35082db235ea52ee86c63454c9`,
+Baumhash `backend/src/findling` zeichengleich mit dem Arbeitsbaum
+(`278fab52c60b7697a747ac4b434800bf9cdb5ed0e929c08e6c4929336ecd3d9a`, 53 Dateien).
+
+### Die Store-Aussage in der Form aus D-H2
+
+| Kennzahl | Semantiklauf 05.09.2026 | Nachmessung 07.09.2026 | Differenz |
+|---|---|---|---|
+| **anon-Spitze des Laufs** | **1.837,8 MB** | **1.812,7 MB** | **-25,1 MB** |
+| `oom` | 0 | 0 | unverändert null |
+| `oom_kill` | 0 | 0 | unverändert null |
+| `oom_group_kill` | 0 | 0 | unverändert null |
+| **`max`** | **2.796** | **0** | **-2.796** |
+| `low`, `high`, `sock_throttled` | nicht ausgewiesen | 0, 0, 0 | |
+| `OOMKilled` | false | false | |
+| `RestartCount` | 0 | 0 | |
+| `memory.peak` des Containers | 970,9 MB (Volltextlauf) | 1.990,3 MB | anderer Maßstab, Dateicache zählt mit |
+
+`max` ist die Kennzahl, die zählt, wie oft der Kernel den Container gegen seine
+Grenze zurückdrängen musste. Sie wird hier ausgewiesen und nicht verschwiegen:
+im Semantiklauf lag der Dateicache des Index bei 1,5 bis 1,8 GB anon gegen die
+2-GB-Grenze an, und der Kernel hat 2.796-mal zurückgedrängt. Keine Tötung, aber
+Arbeit, die der Container nicht sieht und der Nutzer als Verzögerung merkt. In
+der Nachmessung ist das kein einziges Mal passiert. **Das ist der eigentliche
+Gewinn dieses Laufs, nicht die 25,1 MB an der Spitze.**
+
+### Die Spitze hat den Besitzer gewechselt
+
+| Phase | Semantiklauf | Nachmessung | Differenz |
+|---|---|---|---|
+| Grundlast im Leerlauf, Modell nie geladen | 691,8 MB | 693,4 MB | +1,6 MB |
+| Phase der ersten semantischen Suche | **1.837,8 MB** | **1.125,2 MB** | **-712,6 MB** |
+| Phase mit OCR | 1.562,7 MB | **1.812,7 MB** | +250,0 MB |
+
+Die Spitze aus 06-11 begann auf die Sekunde mit der ersten semantischen Suche,
+weil dort eine zweite Instanz der Modellgewichte entstand. Dieser Zusammenhang
+ist weg und als Ereignis geprüft: `anon` steht unmittelbar vor der ersten Suche
+auf 694,3 MB und unmittelbar danach auf 1.116,6 MB, also kostet die erste Suche
++422,3 MB, und das sind die Gewichte, einmal.
+
+Die Gesamtspitze entsteht jetzt in der OCR-Phase und ist dort um 250,0 MB
+gestiegen. Zwei Gründe, und beide gehören genannt: die dritte OCR-Sprache
+(`deu+eng+fra` seit dem 06.09.2026, Preis siehe unten), und die Reihenfolge der
+Phasen, denn in der Nachmessung lief die OCR **nach** der ersten Suche, also auf
+einer Grundlinie, die die Gewichte schon trug (1.136,1 MB). Der Aufschlag der
+OCR selbst ist gesunken, die Grundlinie darunter gestiegen, und die Summe ist
+trotzdem höher. Die Zahl 1.812,7 MB ist damit der ungünstigste Fall des Laufs,
+und genau den muss die Store-Aussage tragen.
+
+Die OCR-Phase wurde an einer frischen Charge von 120 Scans gemessen, über WebDAV
+geladen: 120 indexiert, 0 übersprungen, 0 fehlgeschlagen, 8 min 36 s, rund 4,3 s
+je Datei einschliesslich Abholen, OCR, Einbettung und Schreiben. Der Bestand
+selbst trägt einen Inhaltshash und überspringt die Kette, an ihm ist eine
+OCR-Phase nicht messbar.
+
+### Die Nebenläufigkeitszusage, und woraus sie folgt
+
+Gemessen mit `scripts/ops/search_load.py` über die OCS-Route, zehn Runden je
+Stufe, 410 Anfragen, keine einzige fehlerhaft. Messreihe:
+[`docs/measurements/2026-09-nachmessung-m7g/`](measurements/2026-09-nachmessung-m7g/),
+Rohdaten `rohdaten/67-stufe-*.json`.
+
+| Nebenläufigkeit | Anfragen | p50 | **p95** | max | Budget 2.500 ms | anon | `memory.current` |
+|---|---|---|---|---|---|---|---|
+| 1 | 10 | 376,4 ms | **481,6 ms** | 481,6 ms | hält | 1.127,3 MB | 1.213,1 MB |
+| 4 | 40 | 885,1 ms | **1.009,4 ms** | 1.058,8 ms | hält | 1.128,4 MB | 1.214,5 MB |
+| 8 | 80 | 1.792,9 ms | **1.915,0 ms** | 2.042,2 ms | **hält** | 1.129,2 MB | 1.215,1 MB |
+| 12 | 120 | 2.724,0 ms | **3.045,4 ms** | 3.117,7 ms | reißt | 1.132,7 MB | 1.219,7 MB |
+| 16 | 160 | 3.476,0 ms | **3.782,7 ms** | 4.070,2 ms | reißt | 1.133,7 MB | 1.219,8 MB |
+
+**Die Zusage: acht gleichzeitige Suchen.** Das ist die höchste Stufe, deren p95
+unter dem Budget von 2.500 ms bleibt, mit 1.915 ms also bei 76,6 Prozent des
+Budgets, und in der alle drei Schadenszähler auf null geblieben sind. Ab zwölf
+reißt das Budget.
+
+Die Zahl wurde **nach** der Messung festgelegt und nicht vorher. Das war Open
+Question 5 aus Plan 06.1-11, und der Modulkopf von `scripts/ops/search_load.py`
+hat ausdrücklich nichts zugesagt, bis diese Reihe vorlag.
+
+**Der Vorbehalt, und er ist nicht klein.** Die Unified Search fragt alle Provider
+gleichzeitig und wartet auf alle. Damit setzt der PHP-Prozesspool der Instanz
+genauso eine Grenze wie diese App, und dieser Pool ist in jeder Installation
+anders groß. Acht ist eine Zahl über *diese* Box (zwei Graviton3-Kerne) und
+*diese* Instanz (All-in-One mit ihrem eigenen Pool, 51.961 Dokumente, 145.854
+Chunks). Eine Instanz mit mehr Kernen trägt mehr, eine mit einem kleineren
+PHP-Pool weniger, und im zweiten Fall ist nicht diese App die Grenze.
+
+`memory.current` steht neben `anon`, weil ein Brute-Force-Scan den Vektorbestand
+in den Seitencache derselben cgroup zieht und `anon` ihn nicht zählt. Der Abstand
+ist über alle Stufen rund 86 MB und wächst mit der Nebenläufigkeit nicht: der
+Scan liest denselben Bestand, egal wie viele gerade lesen.
+
+### Was die dritte OCR-Sprache kostet, auf dieser Box
+
+Dieselbe Seite, dieselben Engine-Optionen wie `findling.extract.ocr`, dieselbe
+Auflösung, fünf Läufe je Satz, abwechselnd. Rohdaten `rohdaten/70-ocr.txt`.
+
+| Sprachsatz | Median je Seite | Spitzen-RSS des Kindprozesses | Zeichen |
+|---|---|---|---|
+| `deu+eng` | 3.473,7 ms | 90,6 MB | 3.472 |
+| `deu+eng+fra` | **3.556,9 ms** | **106,1 MB** | 3.472 |
+| **Aufschlag** | **+83,2 ms (+2,4 %)** | **+15,5 MB** | 0 |
+
+Die Sekunden je Seite aus `docs/ocr.md` (Median 1.984 ms) gelten auf dieser Box
+nicht: dort ist eine amd64-Entwicklungsmaschine gemessen. Der Unterschied ist der
+Preis der Zielhardware und nicht der Preis der dritten Sprache, und die alte Zahl
+behält deshalb ihr Datum und ihre Maschine.
+
+### Der Endungsvergleich, nachgeholt
+
+Der Vergleich, den der Semantiklauf oben als fehlend ausweist, ist gefahren:
+dreizehn Endungen, Generator gegen Bestand, deckungsgleich, ohne eine einzige
+unerklärte Abweichung. Die einzige Abweichung sind 20 CSV-Dateien mit
+`too_large`, und das ist die Kategorie `oversize` des Generators, also Absicht.
+Die 37 übersprungenen Dateien aus 06-11 sind vollständig zugeordnet: 20 davon im
+Lasttest-Korpus, 17 im Drill-Korpus. Tabellen und Wege im Messbericht,
+Abschnitt 7.
+
+### Was diese Nachmessung nicht belegt
+
+1. Eine OCR-Phase in Korpusgröße mit drei Sprachen. Gemessen sind 120 Scans in
+   einer Charge und der Preis je Seite; die 9.916 Scans von 06-11 wurden nicht
+   wiederholt.
+2. Eine zweite Instanzform. Alles hier ist All-in-One.
+3. Deckungsgrad und Trefferqualität. Der Bestand ist der aus 06-11, unverändert.
 
 ## Was der Test gekostet hat
 

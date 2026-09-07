@@ -1,0 +1,102 @@
+nebenlaeufigkeit-start 2026-09-07T05:38:33Z
+=== memory.events, read BEFORE this series ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== The sampler beside it ===
+rss_sampler: container=nc_app_findling_backend cgroup=/sys/fs/cgroup/system.slice/docker-fa166e48fbe561462b6b93298f357a58ab4dc78be9c53073626671ccaee8bd03.scope interval=2s
+=== Concurrency 1 over 10 rounds ===
+stufe-1-vor 2026-09-07T05:38:37Z
+stufe-1-nach 2026-09-07T05:38:41Z
+anon 1182031872
+file 84742144
+slab 1428920
+memory.current=1272074240 memory.peak=1284292608
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 4 over 10 rounds ===
+stufe-4-vor 2026-09-07T05:39:01Z
+stufe-4-nach 2026-09-07T05:39:11Z
+anon 1183174656
+file 84742144
+slab 1449504
+memory.current=1273016320 memory.peak=1284292608
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 8 over 10 rounds ===
+stufe-8-vor 2026-09-07T05:39:31Z
+stufe-8-nach 2026-09-07T05:39:49Z
+anon 1184010240
+file 84746240
+slab 1477864
+memory.current=1273860096 memory.peak=1284292608
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 12 over 10 rounds ===
+stufe-12-vor 2026-09-07T05:40:09Z
+stufe-12-nach 2026-09-07T05:40:38Z
+anon 1187708928
+file 85417984
+slab 1536216
+memory.current=1278377984 memory.peak=1284292608
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 16 over 10 rounds ===
+stufe-16-vor 2026-09-07T05:40:58Z
+stufe-16-nach 2026-09-07T05:41:35Z
+anon 1188794368
+file 84893696
+slab 1549568
+memory.current=1278980096 memory.peak=1284292608
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== The sampler down ===
+findling-rss 1788759713,1188798464,84893696,1502352,1279455232,1284292608
+findling-rss 1788759715,1188798464,84893696,1502352,1279455232,1284292608
+findling-rss summary samples=101 max_anon=1188798464 peak=1284292608 events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=0] oom_killed=false
+=== The table this promise is read off ===
+ conc   req  fail       p50       p95       max  budget   anon MB  current MB
+    1    10     0     376.4     481.6     481.6    True    1127.3      1213.1
+    4    40     0     885.1    1009.4    1058.8    True    1128.4      1214.5
+    8    80     0    1792.9    1915.0    2042.2    True    1129.2      1215.1
+   12   120     0    2724.0    3045.4    3117.7   False    1132.7      1219.7
+   16   160     0    3476.0    3782.7    4070.2   False    1133.7      1219.8
+=== memory.events, all six counters, at the end of the series ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+OOMKilled=false RestartCount=0
+nebenlaeufigkeit-ende 2026-09-07T05:41:58Z

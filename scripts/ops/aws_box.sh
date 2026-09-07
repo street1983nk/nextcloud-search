@@ -21,14 +21,24 @@
 # the cloud image have to survive), and it is read back before every run:
 # free -h says 3.9Gi, nproc says 2, uname -m says aarch64.
 #
-# Five subcommands, and none of them creates a machine by itself:
+# Seven subcommands, and none of them creates a machine by itself:
 #
 #     prices    what this account is charged for the box and the volume
 #     create    what created the box, said in words, and a refusal to do it again
 #     volume    the 60 GB data volume: create, tag, attach
 #     status    what is running, for how long, and what it has cost so far
+#     stop      park the box and write the closing figures of the uptime down
+#     start     wake it, read the new address, move the ssh rule onto the
+#               current address of the owner, and name what is left to pull along
 #     destroy   volume, instance and security group, with a check that all
 #               three are gone and a sweep by tag
+#
+# stop and start were missing until 2026-09-07, and the box lived exactly between
+# them: parked after the run of 06-11, woken by hand for the one of 06.1-18. A
+# box that is driven past this script is also driven past its cost arithmetic,
+# which is why the two are here now and why stop writes the uptime it closes into
+# the state file. A stopped instance keeps a LaunchTime, so the figure has to be
+# taken before the call that stops it or it is simply wrong.
 #
 # The two credentials come out of the environment and are never printed, never
 # written into the state file and never handed to a command line: the CLI reads
@@ -45,7 +55,7 @@
 # because a diagnostic run that asked a foreign API sixty times a minute is what
 # earned this repository the rule.
 #
-# Usage: AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... aws_box.sh <prices|create|volume|status|destroy>
+# Usage: AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... aws_box.sh <prices|create|volume|status|stop|start|destroy>
 
 set -eu
 
@@ -125,11 +135,13 @@ PRICE_CURRENCY='USD'
 HOURS_PER_MONTH=730
 
 usage() {
-    echo "usage: aws_box.sh <prices|create|volume|status|destroy>" >&2
+    echo "usage: aws_box.sh <prices|create|volume|status|stop|start|destroy>" >&2
     echo "  prices   the facts of the instance type and the pinned rates" >&2
     echo "  create   how the box was created, and why this refuses to repeat it" >&2
     echo "  volume   create the ${VOLUME_SIZE_GB} GB data volume and attach it" >&2
     echo "  status   state, run time and the cost so far" >&2
+    echo "  stop     park the box, then write the uptime and its cost down" >&2
+    echo "  start    wake it, print the new address, move the ssh rule along" >&2
     echo "  destroy  delete volume, instance and security group, then verify" >&2
     printf 'the credentials are read from the environment: %s and %s\n' \
         'AWS_ACCESS_KEY_ID' 'AWS_SECRET_ACCESS_KEY' >&2
@@ -423,6 +435,180 @@ print('spent     %.2f %s so far, net, from the pinned public rates' % (
     echo "the run time, and the source of the rate is aws_box.sh prices"
 }
 
+cmd_stop() {
+    require_credentials
+    require_tools
+    require_state
+
+    # Read before the call that parks it. A stopped instance still answers with a
+    # LaunchTime, but the uptime that time belongs to is over by then, so an
+    # arithmetic that reads afterwards reports the wrong number and keeps
+    # reporting it, because the state file is what the next report quotes.
+    instance=$(ec2 describe-instances --instance-ids "$BOX_INSTANCE_ID")
+    volumes=$(ec2 describe-volumes --filters "Name=attachment.instance-id,Values=$BOX_INSTANCE_ID")
+    now=$(date -u +%s)
+    parked_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    figures=$(printf '[%s,%s]' "$instance" "$volumes" | json "
+import datetime
+import json
+import sys
+
+answers = json.load(sys.stdin)
+instance = answers[0]['Reservations'][0]['Instances'][0]
+volumes = answers[1]['Volumes']
+
+launched = instance['LaunchTime']
+if isinstance(launched, str):
+    launched = datetime.datetime.fromisoformat(launched)
+hours = ($now - launched.timestamp()) / 3600.0
+gigabytes = sum(volume['Size'] for volume in volumes)
+
+instance_hourly = float('$PRICE_INSTANCE_HOURLY')
+storage_hourly = float('$PRICE_GP3_GB_MONTH') * gigabytes / $HOURS_PER_MONTH
+# Same rule as in status: the address is only charged while the box has one.
+ipv4_hourly = float('$PRICE_IPV4_HOURLY') if instance.get('PublicIpAddress') else 0.0
+print('%s %.2f %.4f %.4f %s' % (
+    instance['State']['Name'],
+    hours,
+    hours * (instance_hourly + storage_hourly + ipv4_hourly),
+    storage_hourly * 24.0,
+    gigabytes,
+))
+")
+    state_before=$(printf '%s' "$figures" | cut -d' ' -f1)
+    uptime_hours=$(printf '%s' "$figures" | cut -d' ' -f2)
+    uptime_cost=$(printf '%s' "$figures" | cut -d' ' -f3)
+    parked_per_day=$(printf '%s' "$figures" | cut -d' ' -f4)
+    gigabytes=$(printf '%s' "$figures" | cut -d' ' -f5)
+
+    echo "aws_box: instance $BOX_INSTANCE_ID is $state_before, stopping it"
+    ec2 stop-instances --instance-ids "$BOX_INSTANCE_ID" >/dev/null
+    "$AWS_BIN" --region "$REGION" ec2 wait instance-stopped --instance-ids "$BOX_INSTANCE_ID"
+    echo "aws_box: instance $BOX_INSTANCE_ID is stopped, verified by the waiter"
+    echo "aws_box: this uptime ran $uptime_hours hours and cost $uptime_cost $PRICE_CURRENCY net"
+    echo "aws_box: parked it keeps only its $gigabytes GB of disks, about"
+    echo "$parked_per_day $PRICE_CURRENCY per day, and it keeps corpus, index and images"
+
+    (
+        umask 077
+        {
+            echo "# stopped by aws_box.sh stop at $parked_iso, uptime and cost from the pinned rates"
+            echo "BOX_STOPPED_ISO=$parked_iso"
+            echo "BOX_LAST_UPTIME_HOURS=$uptime_hours"
+            echo "BOX_LAST_UPTIME_COST_USD=$uptime_cost"
+            echo "BOX_PARKED_COST_USD_PER_DAY=$parked_per_day"
+        } >>"$STATE_FILE"
+    )
+    echo "aws_box: the closing figures are appended to $STATE_FILE"
+    echo "aws_box: a stop releases the public address, so BOX_IP in that file and"
+    echo "the A record of the load test are stale until the next start"
+}
+
+cmd_start() {
+    require_credentials
+    require_tools
+    require_state
+    # The security group is the one piece start cannot do without: without it the
+    # box comes up and nobody can reach it, which looks like a broken box.
+    : "${BOX_SECURITY_GROUP:?security group fehlt in $STATE_FILE}"
+    if ! command -v curl >/dev/null 2>&1; then
+        echo "aws_box: start needs curl, to read the current address of the owner" >&2
+        exit 1
+    fi
+
+    echo "aws_box: starting instance $BOX_INSTANCE_ID"
+    ec2 start-instances --instance-ids "$BOX_INSTANCE_ID" >/dev/null
+    "$AWS_BIN" --region "$REGION" ec2 wait instance-running --instance-ids "$BOX_INSTANCE_ID"
+    started_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    address=$(ec2 describe-instances --instance-ids "$BOX_INSTANCE_ID" | json '
+import json
+import sys
+
+instance = json.load(sys.stdin)["Reservations"][0]["Instances"][0]
+print(instance.get("PublicIpAddress") or "")
+')
+    if [ -z "$address" ]; then
+        echo "aws_box: the box is running but the api reports no public address" >&2
+        exit 1
+    fi
+    echo "aws_box: instance $BOX_INSTANCE_ID is running at $address since $started_iso"
+
+    # The address of the owner changes with the carrier lease, and the ssh rule
+    # that points at the old one is an open port for whoever holds it now
+    # (T-06.1-78). Revoke first and authorize afterwards: the other order leaves
+    # both open for the duration of one api call, and that is the state a mistake
+    # would leave behind for good.
+    owner=$(curl -sS --max-time 20 https://api.ipify.org)
+    owner=$(printf '%s' "$owner" | json '
+import ipaddress
+import sys
+
+candidate = sys.stdin.read().strip()
+print(ipaddress.IPv4Address(candidate))
+')
+    stale=$(ec2 describe-security-group-rules \
+        --filters "Name=group-id,Values=$BOX_SECURITY_GROUP" | json "
+import json
+import sys
+
+wanted = '$owner/32'
+rules = json.load(sys.stdin)['SecurityGroupRules']
+print(' '.join(
+    rule['SecurityGroupRuleId']
+    for rule in rules
+    if not rule.get('IsEgress')
+    and rule.get('IpProtocol') == 'tcp'
+    and rule.get('FromPort') == 22
+    and rule.get('ToPort') == 22
+    and rule.get('CidrIpv4') != wanted
+))
+")
+    for rule in $stale; do
+        echo "aws_box: revoking the ssh rule $rule, it points at a foreign address"
+        ec2 revoke-security-group-ingress --group-id "$BOX_SECURITY_GROUP" \
+            --security-group-rule-ids "$rule" >/dev/null
+    done
+    response=$(ec2_soft authorize-security-group-ingress \
+        --group-id "$BOX_SECURITY_GROUP" \
+        --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=$owner/32,Description=owner}]")
+    case "$response" in
+    *InvalidPermission.Duplicate*)
+        echo "aws_box: ssh was already open to $owner/32 and to nothing else"
+        ;;
+    *error*)
+        echo "aws_box: the ssh rule was not set: $response" >&2
+        exit 1
+        ;;
+    *)
+        echo "aws_box: ssh is open to $owner/32 and to nothing else"
+        ;;
+    esac
+
+    (
+        umask 077
+        {
+            echo "# started by aws_box.sh start at $started_iso, new address and ssh rule set by it"
+            echo "BOX_IP=$address"
+            echo "BOX_STARTED_ISO=$started_iso"
+            echo "BOX_SSH_FROM=$owner/32"
+        } >>"$STATE_FILE"
+    )
+
+    # The three things a start by hand forgot every single time. Two of them are
+    # done above, and this says which, because a tool that claims to have done
+    # something is worse than one that says what is left.
+    echo "aws_box: three things do not follow from a start, and here is their state:"
+    echo "  1. BOX_IP: done, $address is appended to $STATE_FILE"
+    echo "  2. the ssh rule of the security group for port 22: done, $owner/32"
+    echo "  3. the A record loadtest.infranode.dev: OPEN, point it at $address"
+    echo "aws_box: and two that belong to the container rather than to the box:"
+    echo "  4. after a machine start the container is not started by AppAPI and"
+    echo "     does not index (DI-05-36): occ app_api:app:disable findling_backend"
+    echo "     followed by occ app_api:app:enable findling_backend"
+    echo "  5. after every app_api:app:register the hard memory limit is gone:"
+    echo "     docker update --memory=2g --memory-swap=2g on the container"
+}
+
 # Gone has three shapes here and none of them is Hetzner's not_found:
 #
 #   instance: a terminated instance keeps answering for up to an hour before it
@@ -593,9 +779,11 @@ case "$COMMAND" in
     create) cmd_create ;;
     volume) cmd_volume ;;
     status) cmd_status ;;
+    stop) cmd_stop ;;
+    start) cmd_start ;;
     destroy) cmd_destroy "$@" ;;
     '')
-        echo "aws_box: one of the five subcommands is required" >&2
+        echo "aws_box: one of the seven subcommands is required" >&2
         usage
         exit 2
         ;;

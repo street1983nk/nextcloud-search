@@ -21,6 +21,28 @@ written down afterwards, in plan 06.1-18 and in the report that comes out of it.
 A figure decided before the measurement would be exactly the sort of figure this
 project refuses everywhere else.
 
+**The measurement happened, on 07.09.2026, and here is what it says.** Ten rounds
+per level over the OCS route on the arm box of this phase (m7g.large, 2 vCPU
+Graviton3, 4 GB, All-in-One, 51.961 documents, 145.854 chunks), 410 requests in
+all, not one of them failed:
+
+    conc   requests   p50        p95          budget 2500 ms
+       1         10   376.4 ms     481.6 ms   held
+       4         40   885.1 ms   1,009.4 ms   held
+       8         80   1,792.9 ms  1,915.0 ms  held
+      12        120   2,724.0 ms  3,045.4 ms  broken
+      16        160   3,476.0 ms  3,782.7 ms  broken
+
+So the promise is **eight concurrent searches**: the highest level whose p95 stays
+under the budget, at 76.6 percent of it, with oom, oom_kill and oom_group_kill all
+still at zero. The series is in
+docs/measurements/2026-09-nachmessung-m7g/ and the promise is written down in
+docs/performance.md, section "Die Nachmessung".
+
+That promise is still a promise about one box and one instance, for the reason in
+the paragraph below, and this module header is not the place it is enforced: this
+tool takes the concurrency as an argument and measures whatever it is handed.
+
 **And what a run of it does not prove.** A number taken on a CI instance with the
 PHP development server says nothing about a production instance. The unified
 search asks every provider at once and waits for all of them, so the PHP process

@@ -1,0 +1,96 @@
+spitze-start 2026-09-07T05:35:50Z
+=== memory.events, read BEFORE the first search of this run ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+-- and the two figures next to it, as the zero point of the peak --
+anon 728018944
+file 21938176
+slab 3064224
+memory.current=755179520 memory.peak=755576832
+=== The sampler beside it, two seconds, so the second of the peak is readable ===
+sampler-pid 29987
+rss_sampler: container=nc_app_findling_backend cgroup=/sys/fs/cgroup/system.slice/docker-fa166e48fbe561462b6b93298f357a58ab4dc78be9c53073626671ccaee8bd03.scope interval=2s
+=== The very first semantic search of this container start, alone ===
+erste-suche-vor 2026-09-07T05:35:56Z
+erste-suche-nach 2026-09-07T05:35:59Z
+-- the cgroup right after the first search --
+anon 1170829312
+file 24539136
+slab 3546544
+memory.current=1202696192 memory.peak=1284292608
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 4 ===
+stufe-4-vor 2026-09-07T05:35:59Z
+stufe-4-nach 2026-09-07T05:36:02Z
+-- the cgroup after concurrency 4 --
+anon 1172295680
+file 33890304
+slab 3603848
+memory.current=1213333504 memory.peak=1284292608
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 8 ===
+stufe-8-vor 2026-09-07T05:36:02Z
+stufe-8-nach 2026-09-07T05:36:08Z
+-- the cgroup after concurrency 8 --
+anon 1177399296
+file 33890304
+slab 3660672
+memory.current=1218551808 memory.peak=1284292608
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 16 ===
+stufe-16-vor 2026-09-07T05:36:08Z
+stufe-16-nach 2026-09-07T05:36:20Z
+-- the cgroup after concurrency 16 --
+anon 1180045312
+file 82313216
+slab 1565016
+memory.current=1267662848 memory.peak=1284292608
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== The sampler down, and its closing line is the OOM proof ===
+findling-rss 1788759373,1177686016,90398720,1462816,1273393152,1284292608
+findling-rss 1788759375,1177788416,79036416,1502624,1262243840,1284292608
+findling-rss 1788759377,1179529216,80662528,1536104,1265889280,1284292608
+findling-rss 1788759379,1179873280,82309120,1565016,1267814400,1284292608
+findling-rss summary samples=15 max_anon=1179873280 peak=1284292608 events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=0] oom_killed=false
+=== memory.events, the full set of six counters, at the end ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+OOMKilled=false
+RestartCount=0
+=== The highest anon of this run, out of the csv ===
+anon-spitze 1179873280 bytes = 1125.2 MB at 2026-09-07T05:36:19+00:00
+spitze-ende 2026-09-07T05:36:23Z
