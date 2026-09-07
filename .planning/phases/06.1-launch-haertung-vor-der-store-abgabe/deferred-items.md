@@ -623,7 +623,7 @@ Die Luecke, durch die Befund 8 fuenf Phasen fiel: Referenzkorpus ueberwiegend
 PDF, Runner zu klein fuer die Adressraumgrenze. Owner-Entscheid 07.09.: wird
 VOR der Abgabe geschlossen (Plan 06.1-24, Task 2, RLIMIT_AS-Ansatz).
 
-## DI-06.1-32 (Plan 06.1-19): docs/dev-setup.md fuehrt beim lokalen Store-Weg weiter ohne Frontproxy
+## DI-06.1-32 (GESCHLOSSEN 07.09., ohne Aenderung): docs/dev-setup.md fuehrt den Store-Weg MIT Frontproxy
 
 Als DI-06.1-14 erledigt vermerkt, aber der Abschnitt beschreibt weiterhin
 http://harp:8780 als nextcloud_url; die Sichtprobe brauchte die Frontproxy-
@@ -631,10 +631,22 @@ Topologie. Kleiner Doku-Nachzug. (Hinweis Orchestrator: Widerspruch zur
 Richtigstellung in DI-06.1-24 pruefen; moeglicherweise zwei verschiedene
 Abschnitte derselben Datei.)
 
-## DI-06.1-33 (Plan 06.1-19): Deckung meldet "indexable 0" waehrend des Erstlaufs
+Schliessung 07.09.: Nachgeprueft im Zuge von 06-12. Der Abschnitt (Z. 350-460)
+registriert mit dem Frontproxy als nextcloud_url und erklaert es ausdruecklich
+(Plan 22 hat es gezogen, die Richtigstellung in DI-06.1-24 stimmt). harp:8780
+kommt nur noch als Docker-Engine-Route und nginx-proxy_pass vor, beides richtig.
+
+## DI-06.1-33 (GESCHLOSSEN 07.09., ohne Aenderung): Deckung meldet "indexable 0" waehrend des Erstlaufs
 
 Im Zero-Config-Nachweis stand "indexed 41 of 0 indexable"; Endzustand korrekt,
 waehrenddessen unbrauchbar. Verwaltungsseiten-Nachzug, klein.
+
+Schliessung 07.09.: Die Verwaltungsseite verhaelt sich bereits richtig: ohne
+Nenner zeigt sie den Satz "No numbers yet" statt einer Zahl (Regel: kein
+Prozentwert ohne benannten Nenner), die Kacheln zaehlen live, und je fertig
+gezaehltem Storage erscheint der Nenner als vorlaeufige Zahl. Die Zeile
+"indexed 41 of 0 indexable" stammte vom Mess-Leseskript, das rohes Status-JSON
+druckt, nicht von der Seite. Keine Aenderung noetig.
 
 ## DI-06.1-34 (ERLEDIGT durch 06.1-24): ein failed-Urteil der PHP-Haelfte wird jetzt von spaeterem Erfolg widerrufen (nur content/ocr, skipped bleibt; siehe DI-06.1-36)
 
@@ -650,21 +662,37 @@ der Runde 2.
 
 ---
 
-## DI-06.1-36 (Plan 06.1-24): skipped wird nicht widerrufen
+## DI-06.1-36 (GESCHLOSSEN 07.09. als bewusste Grenze): skipped wird nicht widerrufen
 
 Der Widerruf gilt nur failed(content/ocr). Eine skipped-Zeile, deren Grund
 spaeter entfaellt (z.B. OCR-Erfolg nach Konfigurationsaenderung), bleibt stehen.
 Bewusste Grenze, klein.
 
-## DI-06.1-37 (Plan 06.1-24): erschoepfter Adressraum meldet sich als corrupt statt out_of_memory
+Schliessung 07.09.: bleibt als dokumentierte Grenze; ein Widerruf von skipped
+braeuchte eine Neubewertung des Grundes je Konfigurationsaenderung und steht in
+keinem Verhaeltnis zum Nutzen. Wiedervorlage nur bei echtem Nutzerbericht.
+
+## DI-06.1-37 (ERLEDIGT 07.09.): SIGINT im Kind urteilt jetzt out_of_memory
 
 OpenBLAS raist bei pthread_create-Fehlschlag SIGINT -> KeyboardInterrupt
 (BaseException) -> Kind stirbt -> Recyclingregel 4 urteilt corrupt. Ehrlicher
 waere out_of_memory. Kandidat v1.0.1.
 
-## DI-06.1-38 (Plan 06.1-24): Sprachmischung docs/testing.md (EN) vs docs/admin-page.md (DE)
+Erledigt 07.09.: Das Kind faengt KeyboardInterrupt im Job-Rahmen und antwortet
+failed(out_of_memory) (sandbox.py), Recyclingregel 3 ersetzt das Kind. Neue
+Probe-Art "interrupt" + Testfall test_a_sigint_in_the_child_is_out_of_memory_
+not_corrupt. Der wortlose Tod auf sehr vielen Kernen bleibt corrupt, das kann
+der Elternprozess nicht unterscheiden (im Fallen-Test dokumentiert).
+
+## DI-06.1-38 (GESCHLOSSEN 07.09. als Entscheidung): Sprachmischung der Doku ist Absicht
 
 Doku-Konsistenzfrage fuer einen spaeteren Nachzug.
+
+Schliessung 07.09. als Entscheidung: Die Mischung ist Absicht und folgt der
+Sprachregel des Projekts: Entwickler- und Gate-Doku englisch (testing.md,
+Kommentare, Code), Betriebs- und Messprosa deutsch (admin-page.md,
+performance.md, dev-setup.md), READMEs dreisprachig. Eine Uebersetzungsrunde
+haette keinen Leser, dem sie hilft.
 
 ## KORREKTUR-VERMERK (Plan 06.1-24) zu zwei Aussagen der 06.1-19-SUMMARY
 
