@@ -53,28 +53,28 @@ sagt er selbst.
 
 ## Die gemessene Zahl
 
-Der Satz mit der Messung stammt aus Plan 05-14 und ist mit Plan 05-21 auf die
-ARM-Messung umgestellt. Er wird hier zitiert, nicht neu formuliert, und steht an
-drei Orten in derselben Form: in `README.md`, in `php/appinfo/info.xml` und in
+Der Satz mit der Messung stammt aus dem Semantik-Volllauf von Plan 06-11 und
+ist mit der Nachmessung von Plan 06.1-18 auf die Zahl vom 07.09.2026 gezogen.
+Er wird hier zitiert, nicht neu formuliert, und steht an drei Orten in
+derselben Form: in `README.en.md`, in `php/appinfo/info.xml` und in
 `backend/appinfo/info.xml`, jeweils in der englischen Fassung. Das Gate prüft
 diese Gleichheit, weil drei Orte für eine Zahl sonst auseinanderlaufen und die
 Store-Beschreibung der Ort ist, an dem es niemandem auffällt.
 
-> A full index and OCR run over 50,000 files and 20 GB on a 4-GB ARM64 box
-> peaked at 422 MB of resident anonymous memory, under a hard 2 GB limit
-> enforced by the kernel, with no OOM kill.
+> On a 4-GB ARM64 box with 51,961 indexed documents and the semantic search
+> active, the container peaked at 1,813 MB of resident anonymous memory, under
+> a hard 2 GB limit enforced by the kernel.
 
-Warum die Zahl kleiner geworden ist, obwohl die Maschine schwächer ist: sie
-stammt jetzt aus dem Lauf auf arm64 mit zwei Kernen und 4 GB, also auf der
-Hardware, für die die Aussage gilt, statt aus der x86-Generalprobe. Die
-Generalprobe lag bei 429 MB, der ARM-Lauf bei 422 MB. Beide Reihen stehen in
-`docs/performance.md` nebeneinander.
+Neben der Zahl stehen in jeder Sprache zwei ehrliche Sätze: Alle vier
+Kernel-Zähler für Speicherdruck stehen auf null, auch der, der in der Messung
+vom 05.09.2026 mit ihrer Spitze von 1.838 MB noch bei 2.796 stand; und der
+größte Teil des Speichers ist inzwischen die Texterkennung, die drei Sprachen
+liest, während die Suchphase 1.125 MB kostet.
 
-Der Zusatz, der in jeder Sprache dazugehört, hat sich mit der Zahl geändert. Er
-lautete "die Maschine war x86, die Wiederholung auf ARM steht aus"; er lautet
-jetzt, dass die Messung auf der Zielhardware gemacht wurde und dass der Bericht
-im Quelltext die Methode, die Kurve und beide Läufe trägt. Eine zweite Zahl
-kommt nicht dazu, und gerundet wird nichts.
+Seit Plan 06-12 tragen die Texte dazu die zwei Zusagen aus D-17: die gemessene
+Einbettungsdauer und die Abdeckungsaussage. Ihre Zahlen kommen aus
+`docs/performance.md` und `docs/embeddings.md` und werden hier nicht neu
+gerechnet; gerundet wird nichts, und eine Hochrechnung kommt nicht vor.
 
 ---
 
@@ -120,13 +120,28 @@ along accordingly. Switching this instance to the system cron is the difference
 between hours and weeks. "occ findling:index --status" shows how far it has
 come.
 
-What it costs in memory, measured: A full index and OCR run over 50,000 files
-and 20 GB on a 4-GB ARM64 box peaked at 422 MB of resident anonymous memory,
-under a hard 2 GB limit enforced by the kernel, with no OOM kill. That is the
-target hardware and not a stand in, and the run was carried out under a
-ceiling the kernel enforced, so the limit was never merely respected on
-average. The report docs/performance.md in the source code carries the method,
-the curve, the corpus and the x86 rehearsal next to it.
+The search also finds documents through a paraphrase instead of only exact
+words: a query that describes a notice period finds the document even if the
+word never occurs in it. The semantic search covers the beginning of each
+document, and the full text search still covers everything; that beginning is,
+measured, 12.5 percent of an average document of the measurement corpus. What
+it costs in time, measured on the same box: embedding the 51,961 documents ran
+alongside the OCR for the whole run and was finished 52 minutes after it, and
+the full run took 18 h 04 min for full text and OCR and 18 h 56 min until the
+last vector.
+
+What it costs in memory, measured: On a 4-GB ARM64 box with 51,961 indexed
+documents and the semantic search active, the container peaked at 1,813 MB of
+resident anonymous memory, under a hard 2 GB limit enforced by the kernel. That
+is the target hardware and not a stand in, and it was measured on 07.09.2026.
+Two honest sentences belong next to the number: all four kernel counters for
+memory pressure are zero, including the one that counts how often the kernel had
+to push the container back against its limit, which stood at 2,796 in the
+previous measurement of 05.09.2026 with its peak of 1,838 MB; and the largest
+part of this memory is now the optical character recognition, which reads three
+languages since 06.09.2026, while the search phase costs 1,125 MB. The report
+docs/performance.md in the source code carries the method, the curve, the corpus
+and the x86 rehearsal next to it.
 
 Privacy: everything runs locally in your own instance. No file content ever
 leaves the server, and there is no telemetry of any kind, not even a version
@@ -136,6 +151,13 @@ short excerpts shown under a search result are cut out of it on demand. A
 backup of that volume therefore contains the text of your indexed documents,
 and the index is not encrypted at rest, which is a matter for the host it runs
 on.
+
+The semantic model ships inside the container image, and nothing is
+downloaded on first start. Two network libraries, huggingface-hub and
+requests, came into the container with the embedding library; the build
+pipeline starts the image with the network switched off and runs a search
+against it, which is the proof that none of this ever needs a connection. No
+text, no vector and no query leaves the server.
 
 ## `<description lang="de">`
 
@@ -156,13 +178,27 @@ Umstellung dieser Instanz auf den System-Cron ist der Unterschied zwischen
 Stunden und Wochen. "occ findling:index --status" zeigt, wie weit er gekommen
 ist.
 
-Was es an Arbeitsspeicher kostet, gemessen: Ein vollständiger Index- und
-Texterkennungslauf über 50.000 Dateien und 20 GB auf einer 4-GB-Box mit ARM64
-hatte seine Spitze bei 422 MB anonymem Arbeitsspeicher, unter einer harten
-Grenze von 2 GB, die der Kernel durchsetzt, und ohne einen einzigen Abschuss
-wegen Speichermangels. Das ist die Zielhardware und kein Ersatz, und die
-Grenze wurde nicht nur im Mittel eingehalten, sondern kein einziges Mal
-berührt. Der Bericht docs/performance.md im Quellcode nennt die Methode, die
+Die Suche findet Dokumente auch über eine Umschreibung statt nur über exakte
+Wörter: Eine Anfrage, die eine Kündigungsfrist beschreibt, findet das Dokument
+auch dann, wenn das Wort darin nicht vorkommt. Die semantische Suche deckt den
+Anfang jedes Dokuments ab, die Volltextsuche weiterhin alles. Der Anfang
+heißt, gemessen, 12,5 Prozent eines durchschnittlichen Dokuments des
+Messkorpus. Was es an Zeit kostet, gemessen auf derselben Box: Die Einbettung
+der 51.961 Dokumente lief den ganzen Lauf neben der Texterkennung mit und war
+52 Minuten nach ihr fertig, und der Volllauf brauchte 18 h 04 min für Volltext
+und Texterkennung und 18 h 56 min bis zum letzten Vektor.
+
+Was es an Arbeitsspeicher kostet, gemessen: Auf einer 4-GB-Box mit ARM64,
+51.961 indexierten Dokumenten und aktiver semantischer Suche hatte der Container
+seine Spitze bei 1.813 MB anonymem Arbeitsspeicher, unter einer harten Grenze
+von 2 GB, die der Kernel durchsetzt. Das ist die Zielhardware und kein Ersatz,
+gemessen am 07.09.2026. Zwei ehrliche Sätze gehören neben die Zahl: Alle vier
+Kernel-Zähler für Speicherdruck stehen auf null, auch der, der zählt, wie oft
+der Kernel den Container gegen seine Grenze zurückdrängen musste, und der stand
+in der vorigen Messung vom 05.09.2026 mit ihrer Spitze von 1.838 MB noch bei
+2.796; und der größte Teil dieses Speichers ist inzwischen die Texterkennung,
+die seit dem 06.09.2026 drei Sprachen liest, während die Suchphase 1.125 MB
+kostet. Der Bericht docs/performance.md im Quellcode nennt die Methode, die
 Kurve, den Korpus und daneben die x86-Generalprobe.
 
 Datenschutz: Alles läuft lokal in Ihrer eigenen Instanz. Kein Dateiinhalt
@@ -173,6 +209,13 @@ Backend-App, weil die kurzen Auszüge unter einem Suchtreffer bei Bedarf daraus
 geschnitten werden. Eine Sicherung dieses Datenspeichers enthält damit den Text
 Ihrer indexierten Dokumente, und der Index ist im Ruhezustand nicht
 verschlüsselt, was Sache des Wirtssystems ist.
+
+Das semantische Modell liegt im Abbild des Containers, und beim ersten Start
+wird nichts heruntergeladen. Mit der Einbettungsbibliothek sind zwei
+Netzwerkbibliotheken in den Container gekommen, huggingface-hub und requests;
+der Bauablauf startet das Abbild mit abgeschaltetem Netzwerk und fährt eine
+Suche dagegen, und das ist der Beleg, dass nichts davon je eine Verbindung
+braucht. Kein Text, kein Vektor und keine Anfrage verlässt den Server.
 
 ## `<description lang="fr">`
 
@@ -194,14 +237,29 @@ sert de l'interface web, et la première indexation avance au compte-gouttes.
 Basculer cette instance sur le cron système, c'est la différence entre des
 heures et des semaines. "occ findling:index --status" montre où elle en est.
 
-Ce que cela coûte en mémoire, mesuré : une indexation complète avec
-reconnaissance optique portant sur 50 000 fichiers et 20 Go sur une machine
-ARM64 de 4 Go a culminé à 422 Mo de mémoire anonyme résidente, sous une limite
-stricte de 2 Go imposée par le noyau, et sans la moindre interruption pour
-manque de mémoire. C'est le matériel cible et non un remplaçant, et la limite
-n'a pas seulement été respectée en moyenne : elle n'a jamais été atteinte. Le
-rapport docs/performance.md dans le code source donne la méthode, la courbe,
-le corpus et, à côté, la répétition sur x86.
+La recherche trouve aussi les documents par une périphrase et non seulement
+par les mots exacts : une requête qui décrit un délai de préavis trouve le
+document même si le mot n'y figure pas. La recherche sémantique couvre le
+début de chaque document, et la recherche plein texte couvre toujours tout ;
+ce début représente, mesuré, 12,5 pour cent d'un document moyen du corpus de
+mesure. Ce que cela coûte en temps, mesuré sur la même machine : le calcul
+des vecteurs des 51 961 documents a accompagné la reconnaissance optique
+pendant tout le passage et s'est achevé 52 minutes après elle, et le passage
+complet a demandé 18 h 04 min pour le plein texte et la reconnaissance
+optique, et 18 h 56 min jusqu'au dernier vecteur.
+
+Ce que cela coûte en mémoire, mesuré : sur une machine ARM64 de 4 Go, avec
+51 961 documents indexés et la recherche sémantique active, le conteneur a
+culminé à 1 813 Mo de mémoire anonyme résidente, sous une limite stricte de 2 Go
+imposée par le noyau. C'est le matériel cible et non un remplaçant, mesuré le
+07.09.2026. Deux phrases honnêtes accompagnent ce chiffre : les quatre compteurs
+du noyau pour la pression mémoire sont à zéro, y compris celui qui compte
+combien de fois le noyau a dû repousser le conteneur contre sa limite, qui était
+à 2 796 lors de la mesure précédente du 05.09.2026 et de son pic de 1 838 Mo ;
+et l'essentiel de cette mémoire revient désormais à la reconnaissance optique,
+qui lit trois langues depuis le 06.09.2026, tandis que la phase de recherche
+coûte 1 125 Mo. Le rapport docs/performance.md dans le code source donne la
+méthode, la courbe, le corpus et, à côté, la répétition sur x86.
 
 Confidentialité : tout fonctionne localement dans votre propre instance. Aucun
 contenu de fichier ne quitte le serveur, et il n'y a aucune télémétrie, pas même
@@ -211,6 +269,14 @@ propre de l'application backend, parce que les courts extraits affichés sous un
 résultat de recherche y sont découpés à la demande. Une sauvegarde de ce volume
 contient donc le texte de vos documents indexés, et l'index n'est pas chiffré au
 repos, ce qui relève de l'hôte sur lequel il tourne.
+
+Le modèle sémantique est contenu dans l'image du conteneur, et rien n'est
+téléchargé au premier démarrage. Deux bibliothèques réseau, huggingface-hub
+et requests, sont entrées dans le conteneur avec la bibliothèque de calcul
+des vecteurs ; la chaîne de construction démarre l'image sans aucun réseau et
+lance une recherche contre elle, ce qui prouve que rien de tout cela n'a
+jamais besoin d'une connexion. Aucun texte, aucun vecteur et aucune requête ne
+quitte le serveur.
 
 ---
 
@@ -250,13 +316,28 @@ bar and is the only caller of this backend. Once both are there, nothing has to
 be configured: the first index starts by itself, and scanned documents are read
 with OCR without a setting being touched.
 
-What it costs in memory, measured: A full index and OCR run over 50,000 files
-and 20 GB on a 4-GB ARM64 box peaked at 422 MB of resident anonymous memory,
-under a hard 2 GB limit enforced by the kernel, with no OOM kill. That is the
-target hardware and not a stand in, and the run was carried out under a
-ceiling the kernel enforced, so the limit was never merely respected on
-average. The report docs/performance.md in the source code carries the method,
-the curve, the corpus and the x86 rehearsal next to it.
+The search also finds documents through a paraphrase instead of only exact
+words: a query that describes a notice period finds the document even if the
+word never occurs in it. The semantic search covers the beginning of each
+document, and the full text search still covers everything; that beginning is,
+measured, 12.5 percent of an average document of the measurement corpus. What
+it costs in time, measured on the same box: embedding the 51,961 documents ran
+alongside the OCR for the whole run and was finished 52 minutes after it, and
+the full run took 18 h 04 min for full text and OCR and 18 h 56 min until the
+last vector.
+
+What it costs in memory, measured: On a 4-GB ARM64 box with 51,961 indexed
+documents and the semantic search active, the container peaked at 1,813 MB of
+resident anonymous memory, under a hard 2 GB limit enforced by the kernel. That
+is the target hardware and not a stand in, and it was measured on 07.09.2026.
+Two honest sentences belong next to the number: all four kernel counters for
+memory pressure are zero, including the one that counts how often the kernel had
+to push the container back against its limit, which stood at 2,796 in the
+previous measurement of 05.09.2026 with its peak of 1,838 MB; and the largest
+part of this memory is now the optical character recognition, which reads three
+languages since 06.09.2026, while the search phase costs 1,125 MB. The report
+docs/performance.md in the source code carries the method, the curve, the corpus
+and the x86 rehearsal next to it.
 
 Privacy: everything runs locally in this container on your own machine. No file
 content ever leaves the server, and there is no telemetry of any kind, not even
@@ -266,6 +347,13 @@ excerpts shown under a search result are cut out of it on demand. A backup of
 that volume, including the ones an all-in-one setup takes, therefore contains
 the text of your indexed documents, and the index is not encrypted at rest,
 which is a matter for the host it runs on.
+
+The semantic model ships inside the container image, and nothing is
+downloaded on first start. Two network libraries, huggingface-hub and
+requests, came into the container with the embedding library; the build
+pipeline starts the image with the network switched off and runs a search
+against it, which is the proof that none of this ever needs a connection. No
+text, no vector and no query leaves the server.
 
 ## `<description lang="de">`
 
@@ -283,13 +371,27 @@ beide vorhanden, muss nichts eingerichtet werden: Der erste Indexlauf beginnt
 von selbst, und gescannte Dokumente werden per Texterkennung gelesen, ohne dass
 eine Einstellung angefasst wird.
 
-Was es an Arbeitsspeicher kostet, gemessen: Ein vollständiger Index- und
-Texterkennungslauf über 50.000 Dateien und 20 GB auf einer 4-GB-Box mit ARM64
-hatte seine Spitze bei 422 MB anonymem Arbeitsspeicher, unter einer harten
-Grenze von 2 GB, die der Kernel durchsetzt, und ohne einen einzigen Abschuss
-wegen Speichermangels. Das ist die Zielhardware und kein Ersatz, und die
-Grenze wurde nicht nur im Mittel eingehalten, sondern kein einziges Mal
-berührt. Der Bericht docs/performance.md im Quellcode nennt die Methode, die
+Die Suche findet Dokumente auch über eine Umschreibung statt nur über exakte
+Wörter: Eine Anfrage, die eine Kündigungsfrist beschreibt, findet das Dokument
+auch dann, wenn das Wort darin nicht vorkommt. Die semantische Suche deckt den
+Anfang jedes Dokuments ab, die Volltextsuche weiterhin alles. Der Anfang
+heißt, gemessen, 12,5 Prozent eines durchschnittlichen Dokuments des
+Messkorpus. Was es an Zeit kostet, gemessen auf derselben Box: Die Einbettung
+der 51.961 Dokumente lief den ganzen Lauf neben der Texterkennung mit und war
+52 Minuten nach ihr fertig, und der Volllauf brauchte 18 h 04 min für Volltext
+und Texterkennung und 18 h 56 min bis zum letzten Vektor.
+
+Was es an Arbeitsspeicher kostet, gemessen: Auf einer 4-GB-Box mit ARM64,
+51.961 indexierten Dokumenten und aktiver semantischer Suche hatte der Container
+seine Spitze bei 1.813 MB anonymem Arbeitsspeicher, unter einer harten Grenze
+von 2 GB, die der Kernel durchsetzt. Das ist die Zielhardware und kein Ersatz,
+gemessen am 07.09.2026. Zwei ehrliche Sätze gehören neben die Zahl: Alle vier
+Kernel-Zähler für Speicherdruck stehen auf null, auch der, der zählt, wie oft
+der Kernel den Container gegen seine Grenze zurückdrängen musste, und der stand
+in der vorigen Messung vom 05.09.2026 mit ihrer Spitze von 1.838 MB noch bei
+2.796; und der größte Teil dieses Speichers ist inzwischen die Texterkennung,
+die seit dem 06.09.2026 drei Sprachen liest, während die Suchphase 1.125 MB
+kostet. Der Bericht docs/performance.md im Quellcode nennt die Methode, die
 Kurve, den Korpus und daneben die x86-Generalprobe.
 
 Datenschutz: Alles läuft lokal in diesem Container auf Ihrer eigenen Maschine.
@@ -301,6 +403,13 @@ geschnitten werden. Eine Sicherung dieses Datenspeichers, auch die einer
 All-in-One-Installation, enthält damit den Text Ihrer indexierten Dokumente, und
 der Index ist im Ruhezustand nicht verschlüsselt, was Sache des Wirtssystems
 ist.
+
+Das semantische Modell liegt im Abbild des Containers, und beim ersten Start
+wird nichts heruntergeladen. Mit der Einbettungsbibliothek sind zwei
+Netzwerkbibliotheken in den Container gekommen, huggingface-hub und requests;
+der Bauablauf startet das Abbild mit abgeschaltetem Netzwerk und fährt eine
+Suche dagegen, und das ist der Beleg, dass nichts davon je eine Verbindung
+braucht. Kein Text, kein Vektor und keine Anfrage verlässt den Server.
 
 ## `<description lang="fr">`
 
@@ -319,14 +428,29 @@ appelant de ce service. Une fois les deux en place, il n'y a rien à configurer 
 la première indexation démarre d'elle-même, et les documents numérisés sont lus
 par reconnaissance optique sans qu'un seul réglage soit touché.
 
-Ce que cela coûte en mémoire, mesuré : une indexation complète avec
-reconnaissance optique portant sur 50 000 fichiers et 20 Go sur une machine
-ARM64 de 4 Go a culminé à 422 Mo de mémoire anonyme résidente, sous une limite
-stricte de 2 Go imposée par le noyau, et sans la moindre interruption pour
-manque de mémoire. C'est le matériel cible et non un remplaçant, et la limite
-n'a pas seulement été respectée en moyenne : elle n'a jamais été atteinte. Le
-rapport docs/performance.md dans le code source donne la méthode, la courbe,
-le corpus et, à côté, la répétition sur x86.
+La recherche trouve aussi les documents par une périphrase et non seulement
+par les mots exacts : une requête qui décrit un délai de préavis trouve le
+document même si le mot n'y figure pas. La recherche sémantique couvre le
+début de chaque document, et la recherche plein texte couvre toujours tout ;
+ce début représente, mesuré, 12,5 pour cent d'un document moyen du corpus de
+mesure. Ce que cela coûte en temps, mesuré sur la même machine : le calcul
+des vecteurs des 51 961 documents a accompagné la reconnaissance optique
+pendant tout le passage et s'est achevé 52 minutes après elle, et le passage
+complet a demandé 18 h 04 min pour le plein texte et la reconnaissance
+optique, et 18 h 56 min jusqu'au dernier vecteur.
+
+Ce que cela coûte en mémoire, mesuré : sur une machine ARM64 de 4 Go, avec
+51 961 documents indexés et la recherche sémantique active, le conteneur a
+culminé à 1 813 Mo de mémoire anonyme résidente, sous une limite stricte de 2 Go
+imposée par le noyau. C'est le matériel cible et non un remplaçant, mesuré le
+07.09.2026. Deux phrases honnêtes accompagnent ce chiffre : les quatre compteurs
+du noyau pour la pression mémoire sont à zéro, y compris celui qui compte
+combien de fois le noyau a dû repousser le conteneur contre sa limite, qui était
+à 2 796 lors de la mesure précédente du 05.09.2026 et de son pic de 1 838 Mo ;
+et l'essentiel de cette mémoire revient désormais à la reconnaissance optique,
+qui lit trois langues depuis le 06.09.2026, tandis que la phase de recherche
+coûte 1 125 Mo. Le rapport docs/performance.md dans le code source donne la
+méthode, la courbe, le corpus et, à côté, la répétition sur x86.
 
 Confidentialité : tout fonctionne localement dans ce conteneur, sur votre propre
 machine. Aucun contenu de fichier ne quitte le serveur, et il n'y a aucune
@@ -337,6 +461,14 @@ affichés sous un résultat de recherche y sont découpés à la demande. Une
 sauvegarde de ce volume, y compris celle que prend une installation
 tout-en-un, contient donc le texte de vos documents indexés, et l'index n'est
 pas chiffré au repos, ce qui relève de l'hôte sur lequel il tourne.
+
+Le modèle sémantique est contenu dans l'image du conteneur, et rien n'est
+téléchargé au premier démarrage. Deux bibliothèques réseau, huggingface-hub
+et requests, sont entrées dans le conteneur avec la bibliothèque de calcul
+des vecteurs ; la chaîne de construction démarre l'image sans aucun réseau et
+lance une recherche contre elle, ce qui prouve que rien de tout cela n'a
+jamais besoin d'une connexion. Aucun texte, aucun vecteur et aucune requête ne
+quitte le serveur.
 
 ---
 
@@ -351,10 +483,10 @@ Gegenstand verschweigt, von niemandem nachgeprüft werden kann.
   ist. Der Trigger dafür liegt im Backlog des Connectors, nicht hier.
 - **Kein Vergleich mit einer anderen Suchlösung.** Eine App, die sich über die
   Konkurrenz definiert, sagt nichts über sich selbst.
-- **Keine Zusage über semantische Suche.** Sie kommt mit Phase 6 in denselben
-  Store-Eintrag; ein Text, der sie heute verspricht, wäre eine Zusage ohne
-  Beleg.
-- **Keine zweite Messzahl und keine gerundete Verbesserung.** Es gibt einen
-  gemessenen Satz, und der steht oben.
-- **Keine Screenshot-Zeilen.** Die Bilder entstehen in Plan 05-18; ein leeres
-  `screenshot`-Element würde den Upload mit einem Serverfehler beenden.
+- **Kein beworbenes Tokenlimit.** Die Abdeckungsaussage steht als Anteil im
+  Text; der Deckel selbst ist keine beworbene Einstellung (D-01), und eine
+  Tokenzahl sagt niemandem etwas.
+- **Keine gerundete Verbesserung und keine Hochrechnung.** Jede Zahl in den
+  Texten ist gemessen und steht mit ihrer Messreihe in `docs/performance.md`
+  oder `docs/embeddings.md`; die datierte Vergleichszahl vom 05.09.2026 ist
+  Teil der zwei ehrlichen Sätze und keine zweite Zusage.

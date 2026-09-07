@@ -49,6 +49,16 @@ along accordingly. Switching this instance to the system cron is the difference
 between hours and weeks. "occ findling:index --status" shows how far it has
 come.
 
+The search also finds documents through a paraphrase instead of only exact
+words: a query that describes a notice period finds the document even if the
+word never occurs in it. The semantic search covers the beginning of each
+document, and the full text search still covers everything; that beginning is,
+measured, 12.5 percent of an average document of the measurement corpus. What
+it costs in time, measured on the same box: embedding the 51,961 documents ran
+alongside the OCR for the whole run and was finished 52 minutes after it, and
+the full run took 18 h 04 min for full text and OCR and 18 h 56 min until the
+last vector.
+
 What it costs in memory, measured: On a 4-GB ARM64 box with 51,961 indexed
 documents and the semantic search active, the container peaked at 1,813 MB of
 resident anonymous memory, under a hard 2 GB limit enforced by the kernel. That
@@ -69,7 +79,14 @@ every indexed document is kept in the backend app's own volume, because the
 short excerpts shown under a search result are cut out of it on demand. A
 backup of that volume therefore contains the text of your indexed documents,
 and the index is not encrypted at rest, which is a matter for the host it runs
-on.]]></description>
+on.
+
+The semantic model ships inside the container image, and nothing is
+downloaded on first start. Two network libraries, huggingface-hub and
+requests, came into the container with the embedding library; the build
+pipeline starts the image with the network switched off and runs a search
+against it, which is the proof that none of this ever needs a connection. No
+text, no vector and no query leaves the server.]]></description>
 	<description lang="de"><![CDATA[Findling findet den Inhalt Ihrer Dokumente über die gewöhnliche Suchleiste.
 
 Diese App verändert Ihre Dateien nie, und kein Inhalt verlässt Ihren Server.
@@ -86,6 +103,16 @@ Weboberfläche benutzt, und der erste Indexlauf tröpfelt entsprechend dahin. Di
 Umstellung dieser Instanz auf den System-Cron ist der Unterschied zwischen
 Stunden und Wochen. "occ findling:index --status" zeigt, wie weit er gekommen
 ist.
+
+Die Suche findet Dokumente auch über eine Umschreibung statt nur über exakte
+Wörter: Eine Anfrage, die eine Kündigungsfrist beschreibt, findet das Dokument
+auch dann, wenn das Wort darin nicht vorkommt. Die semantische Suche deckt den
+Anfang jedes Dokuments ab, die Volltextsuche weiterhin alles. Der Anfang
+heißt, gemessen, 12,5 Prozent eines durchschnittlichen Dokuments des
+Messkorpus. Was es an Zeit kostet, gemessen auf derselben Box: Die Einbettung
+der 51.961 Dokumente lief den ganzen Lauf neben der Texterkennung mit und war
+52 Minuten nach ihr fertig, und der Volllauf brauchte 18 h 04 min für Volltext
+und Texterkennung und 18 h 56 min bis zum letzten Vektor.
 
 Was es an Arbeitsspeicher kostet, gemessen: Auf einer 4-GB-Box mit ARM64,
 51.961 indexierten Dokumenten und aktiver semantischer Suche hatte der Container
@@ -107,7 +134,14 @@ indexierten Dokument gewonnene Text liegt im eigenen Datenspeicher der
 Backend-App, weil die kurzen Auszüge unter einem Suchtreffer bei Bedarf daraus
 geschnitten werden. Eine Sicherung dieses Datenspeichers enthält damit den Text
 Ihrer indexierten Dokumente, und der Index ist im Ruhezustand nicht
-verschlüsselt, was Sache des Wirtssystems ist.]]></description>
+verschlüsselt, was Sache des Wirtssystems ist.
+
+Das semantische Modell liegt im Abbild des Containers, und beim ersten Start
+wird nichts heruntergeladen. Mit der Einbettungsbibliothek sind zwei
+Netzwerkbibliotheken in den Container gekommen, huggingface-hub und requests;
+der Bauablauf startet das Abbild mit abgeschaltetem Netzwerk und fährt eine
+Suche dagegen, und das ist der Beleg, dass nichts davon je eine Verbindung
+braucht. Kein Text, kein Vektor und keine Anfrage verlässt den Server.]]></description>
 	<description lang="fr"><![CDATA[Findling trouve le contenu de vos documents depuis la barre de recherche
 habituelle.
 
@@ -125,6 +159,17 @@ par défaut, les tâches de fond ne s'exécutent que pendant qu'une personne se
 sert de l'interface web, et la première indexation avance au compte-gouttes.
 Basculer cette instance sur le cron système, c'est la différence entre des
 heures et des semaines. "occ findling:index --status" montre où elle en est.
+
+La recherche trouve aussi les documents par une périphrase et non seulement
+par les mots exacts : une requête qui décrit un délai de préavis trouve le
+document même si le mot n'y figure pas. La recherche sémantique couvre le
+début de chaque document, et la recherche plein texte couvre toujours tout ;
+ce début représente, mesuré, 12,5 pour cent d'un document moyen du corpus de
+mesure. Ce que cela coûte en temps, mesuré sur la même machine : le calcul
+des vecteurs des 51 961 documents a accompagné la reconnaissance optique
+pendant tout le passage et s'est achevé 52 minutes après elle, et le passage
+complet a demandé 18 h 04 min pour le plein texte et la reconnaissance
+optique, et 18 h 56 min jusqu'au dernier vecteur.
 
 Ce que cela coûte en mémoire, mesuré : sur une machine ARM64 de 4 Go, avec
 51 961 documents indexés et la recherche sémantique active, le conteneur a
@@ -146,7 +191,15 @@ deviner : le texte extrait de chaque document indexé est gardé dans le volume
 propre de l'application backend, parce que les courts extraits affichés sous un
 résultat de recherche y sont découpés à la demande. Une sauvegarde de ce volume
 contient donc le texte de vos documents indexés, et l'index n'est pas chiffré au
-repos, ce qui relève de l'hôte sur lequel il tourne.]]></description>
+repos, ce qui relève de l'hôte sur lequel il tourne.
+
+Le modèle sémantique est contenu dans l'image du conteneur, et rien n'est
+téléchargé au premier démarrage. Deux bibliothèques réseau, huggingface-hub
+et requests, sont entrées dans le conteneur avec la bibliothèque de calcul
+des vecteurs ; la chaîne de construction démarre l'image sans aucun réseau et
+lance une recherche contre elle, ce qui prouve que rien de tout cela n'a
+jamais besoin d'une connexion. Aucun texte, aucun vecteur et aucune requête ne
+quitte le serveur.]]></description>
 	<!--
 		Both halves of Findling carry the same major and minor version, so that
 		nobody ends up with a companion app and a backend that disagree about
