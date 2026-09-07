@@ -465,6 +465,36 @@ if occ app_api:app:list 2>/dev/null | grep -q 'findling_backend'; then
 fi
 log "the instance knows neither half yet"
 
+# The address a HUMAN gets, which is not the address this script uses.
+#
+# Every check below goes through basic authentication against --url, and basic
+# authentication carries the whole address in every request. A browser does not:
+# it follows the redirect Nextcloud sends after the login, and Nextcloud builds
+# that redirect from overwrite.cli.url and overwritehost. The official server
+# image leaves overwrite.cli.url at "http://localhost" without a port when the
+# compose file does not set OVERWRITECLIURL, so an instance published on any
+# other port sends the browser to port 80.
+#
+# Measured on 07.09.2026 during the owner sight check of plan 06.1-19: every API
+# assertion of this script passed, the search answered, the admin page answered,
+# and the owner got ERR_CONNECTION_REFUSED after logging in. A run that is green
+# on an instance no person can use is exactly the shape of finding this phase
+# exists to remove, so it is named here.
+#
+# A finding and not a die: the mismatch breaks nothing this script measures, and
+# an instance that is only ever driven by API is legitimately configured this
+# way. The remedy is one line in the compose file (OVERWRITECLIURL) or one occ
+# call, and it belongs to whoever set the instance up.
+overwrite_url=$(occ config:system:get overwrite.cli.url 2>/dev/null | tr -d '\r\n' || true)
+instance_authority=${INSTANCE_URL#*://}
+if [ -z "${overwrite_url}" ]; then
+	finding "the instance has no overwrite.cli.url, so a browser may be redirected somewhere other than ${INSTANCE_URL} after a login"
+elif [ "${overwrite_url#*://}" != "${instance_authority}" ]; then
+	finding "overwrite.cli.url is '${overwrite_url}' while this run drives ${INSTANCE_URL}; every check below still holds, but a browser is redirected to '${overwrite_url}' after a login and a person may land on a refused connection"
+else
+	log "overwrite.cli.url is '${overwrite_url}', so a browser lands where this run drives"
+fi
+
 # The clock. This is read and named rather than assumed, because every wait of
 # this script is a multiple of it (pitfall 4).
 cron_mode=$(occ config:app:get core backgroundjobs_mode 2>/dev/null | tr -d '\r\n' || true)

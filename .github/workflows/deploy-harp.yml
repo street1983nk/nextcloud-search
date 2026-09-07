@@ -1754,9 +1754,53 @@ jobs:
             "SELECT url || ':' || verb || ':' || access_level FROM oc_ex_apps_routes WHERE appid = 'findling_backend';" \
             | sort | tr '\n' ' ' | sed -e 's/ *$//')
           echo "oc_ex_apps_routes after the archive registration: ${routes_now}"
-          routes_want='diagnose:GET:2 rates:GET:2 search:POST:1 snippets:POST:1 status:GET:2'
-          if [ "${routes_now}" != "${routes_want}" ]; then
-            echo "the archive registration produced '${routes_now}' instead of '${routes_want}', so the routes of the installed app are not the ones the archive declares"
+
+          # Two comparisons and not one, and the reason is a red run of
+          # 2026-09-07 (run 34126702669, all three legs). Plan 06.1-19 put the
+          # five urls into their anchored form (DI-06.1-13), AppAPI wrote exactly
+          # that into the table, and this step failed anyway because the expected
+          # string here still spelled the bare names. The measurement was right
+          # and the expectation was stale, which is the one failure mode a single
+          # hard coded literal cannot tell apart from a real one.
+          #
+          # So the expectation is now read out of the archive that was just
+          # installed, and the literal stays as a second, independent question:
+          #
+          #   1. does the table match what the archive declares? That is what
+          #      this step was built for: AppAPI reads the routes out of the file
+          #      the registration is handed, and a dropped or rewritten row shows
+          #      here.
+          #   2. does the archive declare exactly the five reviewed routes? That
+          #      is the ratchet. A sixth route or a widened access level is a
+          #      decision and has to be made here as well as in
+          #      backend/appinfo/info.xml. A derived expectation on its own would
+          #      accept a widened surface without a word.
+          #
+          # The access level crosses from a name in the XML to a number in the
+          # table, PUBLIC 0, USER 1, ADMIN 2, see
+          # ExAppService::mapExAppRouteAccessLevelNameToNumber.
+          routes_declared=$(awk '
+            /<url>/          { s = $0; sub(/.*<url>/, "", s); sub(/<\/url>.*/, "", s); url = s }
+            /<verb>/         { s = $0; sub(/.*<verb>/, "", s); sub(/<\/verb>.*/, "", s); verb = s }
+            /<access_level>/ { s = $0; sub(/.*<access_level>/, "", s); sub(/<\/access_level>.*/, "", s); lvl = s }
+            /<\/route>/      {
+              n = 2
+              if (lvl == "PUBLIC") { n = 0 }
+              if (lvl == "USER")   { n = 1 }
+              print url ":" verb ":" n
+              url = ""; verb = ""; lvl = ""
+            }
+          ' "${ARCHIVE_INFO_XML}" | sort | tr '\n' ' ' | sed -e 's/ *$//')
+          echo "the archive declares: ${routes_declared}"
+
+          routes_want='^/diagnose$:GET:2 ^/rates$:GET:2 ^/search$:POST:1 ^/snippets$:POST:1 ^/status$:GET:2'
+          if [ "${routes_declared}" != "${routes_want}" ]; then
+            echo "the archive declares '${routes_declared}' instead of the five reviewed routes '${routes_want}'"
+            echo "widening or renaming the reachable surface of the container is a decision, and it has to be made here too"
+            exit 1
+          fi
+          if [ "${routes_now}" != "${routes_declared}" ]; then
+            echo "the archive registration produced '${routes_now}' while the archive declares '${routes_declared}', so the routes of the installed app are not the ones the archive declares"
             exit 1
           fi
           echo "the five routes of the archive arrived with their verbs and access levels, and Store install 5 measured zero rows for the same file without the block"
