@@ -1,0 +1,64 @@
+{
+ "seed": "phase5-full",
+ "files": 50000,
+ "je_kategorie": {
+  "scan_single": 9916,
+  "scan_multi": 100,
+  "text_pdf": 22536,
+  "ooxml": 10016,
+  "opendocument": 5008,
+  "plain_text": 2304,
+  "image": 100,
+  "oversize": 20
+ },
+ "je_endung": {
+  "csv": 768,
+  "docx": 3327,
+  "jpg": 27,
+  "md": 775,
+  "ods": 2504,
+  "odt": 2504,
+  "pdf": 32552,
+  "png": 23,
+  "pptx": 3344,
+  "tif": 23,
+  "txt": 781,
+  "webp": 27,
+  "xlsx": 3345
+ },
+ "je_kategorie_und_endung": {
+  "scan_single": {
+   "pdf": 9916
+  },
+  "scan_multi": {
+   "pdf": 100
+  },
+  "text_pdf": {
+   "pdf": 22536
+  },
+  "ooxml": {
+   "docx": 3327,
+   "pptx": 3344,
+   "xlsx": 3345
+  },
+  "opendocument": {
+   "ods": 2504,
+   "odt": 2504
+  },
+  "plain_text": {
+   "csv": 748,
+   "md": 775,
+   "txt": 781
+  },
+  "image": {
+   "jpg": 27,
+   "png": 23,
+   "tif": 23,
+   "webp": 27
+  },
+  "oversize": {
+   "csv": 20
+  }
+ },
+ "summe": 50000
+}

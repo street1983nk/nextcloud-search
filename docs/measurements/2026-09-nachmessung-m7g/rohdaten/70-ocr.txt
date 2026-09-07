@@ -1,0 +1,48 @@
+ocr-start 2026-09-07T05:42:58Z
+=== The file, and the proof it is a scan ===
+-rw-r--r-- 1 www-data www-data 352953 Sep  4 16:37 /mnt/findling/ncdata/lasttest/files/loadtest/00001-bescheid.pdf
+=== The page, rendered with the library and the resolution of the pipeline ===
+ocr_dpi: 300
+ocr_languages of this image: ('deu', 'eng', 'fra')
+pages: 1
+png bytes: 1079986
+=== The two language sets against each other, five runs each, alternating ===
+{
+ "bild": "/tmp/seite.png",
+ "laeufe": 5,
+ "je_satz": {
+  "deu+eng": {
+   "median_ms": 3473.7,
+   "min_ms": 3467.7,
+   "max_ms": 3511.8,
+   "median_rss_kb": 92764,
+   "max_rss_kb": 92804,
+   "zeichen_median": 3472
+  },
+  "deu+eng+fra": {
+   "median_ms": 3556.9,
+   "min_ms": 3547.3,
+   "max_ms": 3585.8,
+   "median_rss_kb": 108644,
+   "max_rss_kb": 108644,
+   "zeichen_median": 3472
+  }
+ },
+ "aufschlag_der_dritten_sprache": {
+  "dauer_prozent": 2.4,
+  "dauer_ms": 83.2,
+  "spitzen_rss_kb": 15840
+ }
+}
+=== The traineddata this image carries, with their sizes ===
+total 16952
+drwxr-xr-x 4 root root     4096 Sep  6 20:02 .
+drwxr-xr-x 3 root root     4096 Sep  6 20:02 ..
+drwxr-xr-x 2 root root     4096 Sep  6 20:02 configs
+-rw-r--r-- 1 root root  1525436 Oct 30  2019 deu.traineddata
+-rw-r--r-- 1 root root  4113088 Oct 30  2019 eng.traineddata
+-rw-r--r-- 1 root root  1130365 Oct 30  2019 fra.traineddata
+-rw-r--r-- 1 root root 10562727 Oct 30  2019 osd.traineddata
+-rw-r--r-- 1 root root      572 Mar 14  2025 pdf.ttf
+drwxr-xr-x 2 root root     4096 Sep  6 20:02 tessconfigs
+ocr-ende 2026-09-07T05:43:34Z

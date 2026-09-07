@@ -1,0 +1,474 @@
+<?xml version="1.0"?>
+<!--
+	Store metadata of the External App half of Findling.
+
+	The store does not validate this file as it stands. It first runs it through
+	pre-info.xslt, which rebuilds the document and copies only the elements it
+	knows; inside external-app that is docker-install, scopes, system and
+	environment-variables. The routes block below is therefore dropped silently,
+	not rejected, and the result is what gets validated against info.xsd.
+
+	That has one consequence worth stating here, next to the block it concerns:
+	because the store database never sees the routes, AppAPI reads them back out
+	of the release archive at installation time and writes them into
+	oc_ex_apps_routes. The tarball has to carry this file unchanged. An archive
+	with a filtered or rewritten info.xml installs an app whose route table is
+	empty, and nothing anywhere says so.
+
+	What an empty route table does NOT do, corrected on 07.09.2026 after the
+	falsification probe of plan 06.1-12 and named again in the security audit of
+	plan 06.1-17: it does not silence the search. The companion reaches this
+	container over the AppAPI signed path, and HaRP 0.4.5 skips route checking
+	for signed requests (haproxy_agent.py, "We skip routes checking for AppAPI
+	signed requests"). The block governs unsigned direct access alone. Measured:
+	an unsigned /search answers 404 with the block and without it, because HaRP
+	compares with re.match(route.url, target_path) and the five urls below are
+	bare paths, so re.match("search", "/search") is None. The block is therefore
+	inert on a HaRP installation, and inert in the fail closed direction. The
+	canonical form would be ^/search$; it is not changed here, because a route
+	pattern can only be proven against a running HaRP and the path the product
+	uses never asks the table.
+
+	The version is kept identical to php/appinfo/info.xml, and to the image-tag
+	below. Both halves are released together, so a user cannot end up with two
+	versions that disagree about the protocol between them, and the release step
+	in docker.yml compares all three against the git tag before it builds. Phase
+	2 raises both halves from 0.1.0 to 0.2.0: the container gained a second and a
+	third route, and the PHP side now calls them. Phase 4 raises them to 0.3.0
+	for the same reason: the container gained a fourth route, and the admin page
+	of the PHP side reads it.
+
+	The fifth route, /diagnose, arrived in the same release and the version was
+	deliberately NOT raised again for it. Plan 04-05 already moved both halves to
+	0.3.0 and both plans shipped together, so a second bump would have left
+	docker.yml comparing an image tag against a git tag that was never cut.
+	Written down here rather than remembered, because the next plan that widens
+	the surface has to know which of the two rules it is under.
+
+	Phase 5 raises both halves to 1.0.0, and that bump is under neither rule. It
+	is a decision: D-11 names 1.0.0 as the version the two entries are submitted
+	under, and plan 05-17 is the only place in this phase that performs it. No
+	route was added for it and nothing about the protocol changed.
+-->
+<info>
+	<id>findling_backend</id>
+	<!--
+		The three languages of D-12, in the order the store schema prescribes:
+		every name, then every summary, then every description. The English
+		wording sits in an element WITHOUT a lang attribute, because the schema
+		defaults that attribute to "en"; spelling it out would be a second "en"
+		and would break the uniqueness constraint on the element kind.
+
+		Not one of these elements may be empty. An empty element in an
+		info.xml ends the store upload in a server error rather than in a
+		validation message, which is the most expensive known trap of the
+		sister project, and the cheapest to walk into while translating.
+
+		The wording is not maintained here. docs/store-listing.md holds all
+		three languages of both halves side by side, which is what the
+		translation follow up rule of D-12 needs, and
+		backend/tests/test_store_metadata.py holds the mechanical part of that
+		rule: a language that goes missing from one element kind is a red test.
+	-->
+	<name>Findling Backend</name>
+	<name lang="de">Findling Backend</name>
+	<name lang="fr">Findling Backend</name>
+	<summary>Search backend for Findling: text extraction, OCR and the index</summary>
+	<summary lang="de">Suchdienst für Findling: Textauszug, Texterkennung und der Index</summary>
+	<summary lang="fr">Service de recherche pour Findling : extraction de texte, OCR et index</summary>
+	<description><![CDATA[This is the External App behind the Findling search app.
+
+It extracts text from documents, runs OCR on scanned pages and maintains the
+search index. All of that happens inside your own instance: no file content
+ever leaves the server, and nothing is ever written back to your files.
+
+This app does nothing on its own. It needs the app "AppAPI", which installs and
+runs it, and the app "Findling", which puts the results into the normal search
+bar and is the only caller of this backend. Once both are there, nothing has to
+be configured: the first index starts by itself, and scanned documents are read
+with OCR without a setting being touched.
+
+What it costs in memory, measured: A full index, OCR and embedding run over
+50,000 files and 20 GB on a 4-GB ARM64 box peaked at 1,838 MB of resident
+anonymous memory, under a hard 2 GB limit enforced by the kernel, with no OOM
+kill and no restart. That is the target hardware and not a stand in. Two
+honest sentences belong next to the number: the kernel counters for memory
+damage stayed at zero, but the file cache of the index pressed against the
+limit repeatedly, so the limit was respected and not left untouched; and most
+of that memory is the semantic search, since the same run without embeddings
+peaked at 422 MB. The report docs/performance.md in the source code carries
+the method, the curve, the corpus and the x86 rehearsal next to it.
+
+Privacy: everything runs locally in this container on your own machine. No file
+content ever leaves the server, and there is no telemetry of any kind, not even
+a version check. What is stored, so that nobody has to guess: the text extracted
+from every indexed document is kept in this app's own volume, because the short
+excerpts shown under a search result are cut out of it on demand. A backup of
+that volume, including the ones an all-in-one setup takes, therefore contains
+the text of your indexed documents, and the index is not encrypted at rest,
+which is a matter for the host it runs on.]]></description>
+	<description lang="de"><![CDATA[Dies ist die External App hinter der Such-App Findling.
+
+Sie gewinnt Text aus Dokumenten, liest gescannte Seiten per Texterkennung und
+pflegt den Suchindex. All das geschieht innerhalb Ihrer eigenen Instanz: kein
+Dateiinhalt verlässt den Server, und in Ihre Dateien wird nie etwas
+zurückgeschrieben.
+
+Diese App tut von sich aus nichts. Sie braucht die App "AppAPI", die sie
+installiert und betreibt, und die App "Findling", die die Ergebnisse in die
+gewöhnliche Suchleiste bringt und der einzige Aufrufer dieses Dienstes ist. Sind
+beide vorhanden, muss nichts eingerichtet werden: Der erste Indexlauf beginnt
+von selbst, und gescannte Dokumente werden per Texterkennung gelesen, ohne dass
+eine Einstellung angefasst wird.
+
+Was es an Arbeitsspeicher kostet, gemessen: Ein vollständiger Index-,
+Texterkennungs- und Einbettungslauf über 50.000 Dateien und 20 GB auf einer
+4-GB-Box mit ARM64 hatte seine Spitze bei 1.838 MB anonymem Arbeitsspeicher,
+unter einer harten Grenze von 2 GB, die der Kernel durchsetzt, ohne einen
+einzigen Abschuss wegen Speichermangels und ohne Neustart. Das ist die
+Zielhardware und kein Ersatz. Zwei ehrliche Sätze gehören neben die Zahl: Die
+Kernel-Zähler für Speicherschäden blieben bei null, aber der Dateicache des
+Index drückte wiederholt gegen die Grenze, sie wurde also eingehalten und
+nicht unberührt gelassen; und der größte Teil dieses Speichers ist die
+semantische Suche, denn derselbe Lauf ohne Einbettungen hatte seine Spitze bei
+422 MB. Der Bericht docs/performance.md im Quellcode nennt die Methode, die
+Kurve, den Korpus und daneben die x86-Generalprobe.
+
+Datenschutz: Alles läuft lokal in diesem Container auf Ihrer eigenen Maschine.
+Kein Dateiinhalt verlässt den Server, und es gibt keinerlei Telemetrie, nicht
+einmal eine Versionsabfrage. Was gespeichert wird, damit niemand raten muss: Der
+aus jedem indexierten Dokument gewonnene Text liegt im eigenen Datenspeicher
+dieser App, weil die kurzen Auszüge unter einem Suchtreffer bei Bedarf daraus
+geschnitten werden. Eine Sicherung dieses Datenspeichers, auch die einer
+All-in-One-Installation, enthält damit den Text Ihrer indexierten Dokumente, und
+der Index ist im Ruhezustand nicht verschlüsselt, was Sache des Wirtssystems
+ist.]]></description>
+	<description lang="fr"><![CDATA[Ceci est l'External App qui se trouve derrière l'application de recherche
+Findling.
+
+Elle extrait le texte des documents, lit les pages numérisées par reconnaissance
+optique de caractères et tient à jour l'index de recherche. Tout cela se passe
+à l'intérieur de votre propre instance : aucun contenu de fichier ne quitte le
+serveur, et rien n'est jamais réécrit dans vos fichiers.
+
+Cette application ne fait rien d'elle-même. Elle a besoin de l'application
+"AppAPI", qui l'installe et la fait tourner, et de l'application "Findling", qui
+place les résultats dans la barre de recherche habituelle et qui est le seul
+appelant de ce service. Une fois les deux en place, il n'y a rien à configurer :
+la première indexation démarre d'elle-même, et les documents numérisés sont lus
+par reconnaissance optique sans qu'un seul réglage soit touché.
+
+Ce que cela coûte en mémoire, mesuré : une indexation complète avec
+reconnaissance optique et plongements portant sur 50 000 fichiers et 20 Go sur
+une machine ARM64 de 4 Go a culminé à 1 838 Mo de mémoire anonyme résidente,
+sous une limite stricte de 2 Go imposée par le noyau, sans la moindre
+interruption pour manque de mémoire et sans redémarrage. C'est le matériel
+cible et non un remplaçant. Deux phrases honnêtes accompagnent ce chiffre :
+les compteurs du noyau pour les dommages mémoire sont restés à zéro, mais le
+cache de fichiers de l'index a pressé la limite à plusieurs reprises, elle a
+donc été respectée et non laissée intacte ; et l'essentiel de cette mémoire
+revient à la recherche sémantique, puisque la même exécution sans plongements
+a culminé à 422 Mo. Le rapport docs/performance.md dans le code source donne
+la méthode, la courbe, le corpus et, à côté, la répétition sur x86.
+
+Confidentialité : tout fonctionne localement dans ce conteneur, sur votre propre
+machine. Aucun contenu de fichier ne quitte le serveur, et il n'y a aucune
+télémétrie, pas même une vérification de version. Ce qui est conservé, pour que
+personne n'ait à le deviner : le texte extrait de chaque document indexé est
+gardé dans le volume propre de cette application, parce que les courts extraits
+affichés sous un résultat de recherche y sont découpés à la demande. Une
+sauvegarde de ce volume, y compris celle que prend une installation
+tout-en-un, contient donc le texte de vos documents indexés, et l'index n'est
+pas chiffré au repos, ce qui relève de l'hôte sur lequel il tourne.]]></description>
+	<version>1.0.0</version>
+	<licence>agpl</licence>
+	<author>street1983nk</author>
+	<!--
+		The same three categories as the companion half, and for the same
+		measured reason: the store "search" category carries 15 apps and no
+		featured one, "files" carries 142 of which 7 are featured and therefore
+		sit above anything this app can do. Both halves are listed separately in
+		the store, so both need the category, and the sister projects show the
+		pattern is normal rather than a trick: recognize and recognize_backend,
+		context_chat and context_chat_backend each stand next to each other.
+	-->
+	<category>search</category>
+	<category>files</category>
+	<category>tools</category>
+	<website>https://github.com/street1983nk/nextcloud-search</website>
+	<bugs>https://github.com/street1983nk/nextcloud-search/issues</bugs>
+	<repository type="git">https://github.com/street1983nk/nextcloud-search.git</repository>
+	<!--
+		The images of the store page. The store keeps addresses and not files,
+		so they live in this public repository and are linked over https. The
+		schema type is secure-url: https and at most 256 characters, which is
+		what backend/tests/test_store_metadata.py checks, together with the one
+		thing the schema cannot: that every address points at a file that
+		actually exists under store/media. An address without an image behind
+		it is an empty frame on the store page, and that is worse than no image.
+
+		The branch and not a tag, on purpose. The images have to be reachable
+		while the entry is reviewed and for as long as it stands, and a broken
+		image should be fixable with a commit rather than with a new release.
+
+		The order is the order the store shows them in, so the header image
+		comes first. There is no separate field for it: a store page has
+		screenshots and nothing else, and the first one is the one everybody
+		sees.
+
+		This half gets the header and the admin image, and deliberately not the
+		search image. Nobody searches with this half: it is the container an
+		administrator installs, and the page in the admin image is the page that
+		reports on it. The search image belongs to the companion entry, which is
+		where a user arrives.
+
+		store/media/README.md says what each image shows, how it was taken, and
+		why it comes from the development instance rather than from CI.
+	-->
+	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/header.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/screenshot-admin.png</screenshot>
+	<!--
+		The same donation link as the sister project of this author. The
+		platform is named in the type attribute because the schema knows the
+		value, which lets the store show the right destination instead of a
+		bare address.
+	-->
+	<donation type="paypal">https://paypal.me/KhaledCherifDev</donation>
+	<!--
+		The server window, and the lower bound is a decision rather than a
+		default. E-H1 of 2026-09-06 moves min-version from 32 to 33: Nextcloud 32
+		leaves support in September 2026, this app is submitted in December, and a
+		store entry that names a server nobody supports any more is a promise that
+		cannot be kept in the one case where it matters. max-version stays at 35.
+
+		The same window stands in php/appinfo/info.xml, in the matrix of
+		.github/workflows/deploy-harp.yml and in the requirements of README.md, and
+		it is only true when it is true in all of them. backend/tests/
+		test_lockstep_versions.py compares the two info.xml against each other and
+		both against the matrix on every ordinary run, so a window that moves in
+		one file alone goes red instead of going unnoticed.
+	-->
+	<dependencies>
+		<nextcloud min-version="33" max-version="35"/>
+	</dependencies>
+	<external-app>
+		<docker-install>
+			<registry>ghcr.io</registry>
+			<image>street1983nk/findling_backend</image>
+			<!--
+				The deploy daemon pulls registry/image:tag at installation time,
+				so this exact tag has to exist in the registry before a release
+				is published, not after.
+			-->
+			<image-tag>dev</image-tag>
+		</docker-install>
+		<routes>
+			<!--
+				Five routes, and that is the whole reachable surface of this
+				container. /enabled, /heartbeat and /init need no entry: AppAPI
+				addresses those directly instead of going through the proxy, so
+				declaring them would only widen it for nothing. No route is
+				reachable without a Nextcloud login (T-02-72).
+
+				Brute force protection is limited to 401 and nothing else.
+				Adding 500 would mean that a backend defect blocks the instance
+				address at the Nextcloud end, turning a bug into an outage for
+				every user behind that address.
+			-->
+			<route>
+				<url>search</url>
+				<verb>POST</verb>
+				<access_level>USER</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+			<!--
+				Why the excerpts are a second call and not part of the first
+				one: an excerpt is document content, and it may only be built
+				for a hit that survived the permission recheck, which happens in
+				PHP after the search answered. One call would mean the container
+				hands out text for hits that PHP is about to drop.
+			-->
+			<route>
+				<url>snippets</url>
+				<verb>POST</verb>
+				<access_level>USER</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+			<!--
+				The status route is filled in phase 2 and read in phase 4, which
+				builds the admin page on top of it. It answers with counters and
+				versions, never with a path and never with a search term
+				(T-02-73), and it is the one route with ADMIN instead of the
+				USER baseline of the other two: how far the indexing has come is
+				an operator's business, not every user's.
+			-->
+			<route>
+				<url>status</url>
+				<verb>GET</verb>
+				<access_level>ADMIN</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+			<!--
+				The throughput route, added in phase 4 for the estimate of the
+				first index. It reports how many documents were finished in a
+				window, text apart from OCR, and how much one document costs on
+				disk, and the admin page extrapolates the time left from those.
+				It carries no row, no name and no path, although it counts over
+				the one table that holds both. ADMIN like /status above, and for
+				the same reason: how fast the indexing is going is an operator's
+				business, not every user's.
+			-->
+			<route>
+				<url>rates</url>
+				<verb>GET</verb>
+				<access_level>ADMIN</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+			<!--
+				The per file diagnosis, added in phase 4 for ADM-02. It is asked
+				for one file id and answers with the verdict this container holds
+				for it: the state, the reason code, whether OCR ran, when it was
+				indexed, how many attempts it took and whether a tombstone is on
+				the row. It answers with no path and no title, although the table
+				it reads holds both for every row, and with no text at all: a
+				snippet is file content and stays bound to SRCH-02 (T-04-39,
+				T-04-40). ADMIN like the two routes above, and for the same
+				reason: why one file is not searchable is an operator's business.
+			-->
+			<route>
+				<url>diagnose</url>
+				<verb>GET</verb>
+				<access_level>ADMIN</access_level>
+				<headers_to_exclude>[]</headers_to_exclude>
+				<bruteforce_protection>[401]</bruteforce_protection>
+			</route>
+		</routes>
+		<!--
+			These are the settings, and there is no settings page. Every name
+			below is spelled exactly as backend/src/findling/config.py reads it;
+			a variable that is renamed on one side and not on the other is
+			simply ignored, with no error anywhere. An unusable value never
+			stops the container either: config.py falls back to the default
+			shown here and logs the name of the variable (T-02-74).
+		-->
+		<environment-variables>
+			<variable>
+				<name>FINDLING_LOG_LEVEL</name>
+				<display-name>Log level</display-name>
+				<description>One of debug, info, warning, error. Anything else falls back to info.</description>
+				<default>info</default>
+			</variable>
+			<variable>
+				<name>FINDLING_LANGUAGES</name>
+				<display-name>Index languages</display-name>
+				<description>Comma separated, currently de and en. Changing this changes how text is broken into words, so the index has to be built again afterwards: until it is, older documents answer differently from newer ones, which looks like "my hits are gone". An empty or unknown value keeps de,en.</description>
+				<default>de,en</default>
+			</variable>
+			<variable>
+				<name>FINDLING_COMPOUND_DICT</name>
+				<display-name>German compound word list</display-name>
+				<description>full or nouns. Measured: full has 276496 entries and finds 14 of 16 test compounds through one of their parts; nouns has 86345 entries, finds 12 of 16 and needs roughly two thirds less memory for the splitting automaton, which is worth having on a small box. Like the language list, this changes how text is broken into words and requires the index to be built again.</description>
+				<default>full</default>
+			</variable>
+			<variable>
+				<name>FINDLING_MAX_FILE_BYTES</name>
+				<display-name>Largest file that gets indexed</display-name>
+				<description>In bytes, 52428800 is 50 MB. Larger files are skipped while the file list is walked, so they never cost the container anything. Raising this raises the peak memory of one extraction. Anything that is not a positive whole number falls back to the default.</description>
+				<default>52428800</default>
+			</variable>
+			<!--
+				The OCR settings. Nothing here has to be touched to get OCR:
+				the engine and the German, English and French models are
+				inside the image and switched on. These exist for the two
+				cases where the defaults are wrong for an instance: a box too
+				slow to afford OCR at all, and a document stock that needs
+				different limits.
+
+				Every default below is a measured number, and the measurement
+				that produced it, with its command line, is in docs/ocr.md.
+			-->
+			<variable>
+				<name>FINDLING_OCR_ENABLED</name>
+				<display-name>Read scanned documents (OCR)</display-name>
+				<description>true or false. When this is off, scanned PDFs and images are still listed by name but their content is not read, and everything else about the indexing stays exactly as it is. Turn it off on a very slow machine where the indexing queue never catches up. Anything that is not a yes or no value keeps OCR on.</description>
+				<default>true</default>
+			</variable>
+			<variable>
+				<name>FINDLING_OCR_LANGUAGES</name>
+				<display-name>OCR languages</display-name>
+				<description>Joined with a plus sign, in the order of importance, for example deu+eng+fra or deu. Only the languages this image carries are accepted, which today are deu (German), eng (English) and fra (French); anything else is ignored with a warning in the log and never reaches the engine. The leading language weighs most, so an instance whose scans are mostly French is served by putting fra first. Note that this is not the same setting as the index languages above: this one decides how a scan is read, that one decides how any text is broken into words, and the index side is tuned for German and English only.</description>
+				<default>deu+eng+fra</default>
+			</variable>
+			<variable>
+				<name>FINDLING_OCR_MAX_PAGES</name>
+				<display-name>Pages read per scanned document</display-name>
+				<description>A whole number between 1 and 500. Beyond it the document is indexed with the pages read so far and marked as shortened, rather than skipped: a 200 page scan stays findable through its first 30 pages. The default of 30 keeps one batch of the indexing queue below its lock timeout, so raising it a lot without also raising that timeout makes large scans look stuck. Anything outside the range falls back to the default.</description>
+				<default>30</default>
+			</variable>
+			<variable>
+				<name>FINDLING_OCR_PAGE_SECONDS</name>
+				<display-name>Seconds allowed per page</display-name>
+				<description>A whole number between 1 and 300. A page that takes longer is dropped and the next one is read. Measured on a laptop core, a clean A4 page at 300 dpi takes about two seconds; the default of 30 is meant to cut off the outlier on a slow ARM board, not the normal page.</description>
+				<default>30</default>
+			</variable>
+			<variable>
+				<name>FINDLING_OCR_JOB_SECONDS</name>
+				<display-name>Seconds allowed per scanned document</display-name>
+				<description>A whole number between 1 and 780. When the budget is spent the document is indexed with what was read so far and marked as shortened. The hard limit at which the whole job is abandoned is always this value plus 60 seconds, so that the partial text has a window to be handed over; that is why it is not a setting of its own. The ceiling of 780 keeps a claimed batch of two OCR jobs safely under the 1800 second queue lock; anything outside the range falls back to the default.</description>
+				<default>600</default>
+			</variable>
+			<variable>
+				<name>FINDLING_OCR_DPI</name>
+				<display-name>Resolution used to read a scanned page</display-name>
+				<description>A whole number between 72 and 600. 300 is what the engine works best with. Lower values are faster and read worse; higher ones cost memory with the square of the number, which is why the ceiling exists at all. Anything outside the range falls back to the default.</description>
+				<default>300</default>
+			</variable>
+			<!--
+				The nightly comparison. Nothing here has to be touched
+				either: the defaults walk the file list once a day, in the
+				small hours, and only while the indexing queue is quiet.
+				These exist for the two cases where that is wrong for an
+				instance: a box whose quiet hour is a different one, and an
+				instance so large that a daily walk is too much.
+
+				What the comparison is for, and why it cannot be replaced by
+				the maintenance window of Nextcloud, is written up in
+				docs/reconcile.md.
+			-->
+			<variable>
+				<name>FINDLING_RECONCILE_ENABLED</name>
+				<display-name>Check the index against the file list</display-name>
+				<description>true or false. When this is on, Findling walks the file list once a day and repairs whatever the live updates missed: files that were added or changed without an event reaching the app, and files that were removed while it was not running. Turning it off means the index is only ever as good as the stream of events, and a lost event then stays lost until the next full re-index. Anything that is not a yes or no value keeps the check on.</description>
+				<default>true</default>
+			</variable>
+			<variable>
+				<name>FINDLING_RECONCILE_HOUR</name>
+				<display-name>Preferred hour for the check</display-name>
+				<description>A whole number between 0 and 23, in the time zone of the container. The check waits for this hour before it starts a full walk. If the container is switched off at that hour, the walk starts anyway once twice the pause below has gone by, so that the guarantee is not lost on a machine that only runs during the day. Anything outside the range falls back to 2.</description>
+				<default>2</default>
+			</variable>
+			<variable>
+				<name>FINDLING_RECONCILE_MIN_INTERVAL_HOURS</name>
+				<display-name>Hours between two full checks</display-name>
+				<description>A whole number of hours. At most one full walk over the file list happens in this span. Raising it on a very large instance makes the check cheaper and the repair slower; lowering it below a day rarely pays, because live updates already carry the day to day changes. Anything that is not a positive whole number falls back to 24.</description>
+				<default>24</default>
+			</variable>
+			<variable>
+				<name>FINDLING_RECONCILE_QUIET_MAX</name>
+				<display-name>Queue length the check tolerates</display-name>
+				<description>A whole number of waiting queue entries. Above it the check stands down and tries again later, so that it never competes with a first indexing run or a backlog of scanned documents. The default of 100 is about three batches of the indexing worker. Raising it makes the check more insistent on a busy instance; lowering it to 1 means it only ever runs on a completely empty queue.</description>
+				<default>100</default>
+			</variable>
+			<variable>
+				<name>FINDLING_RECONCILE_SLICE</name>
+				<display-name>Files per page of the check</display-name>
+				<description>A whole number between 1 and 2000. The file list is read in pages of this size, with a short breather between them, which is what keeps the check bearable outside the quiet hours. Larger pages are faster and heavier on the Nextcloud database; the server side caps this at 2000 in any case. Anything outside the range falls back to 500.</description>
+				<default>500</default>
+			</variable>
+		</environment-variables>
+	</external-app>
+</info>

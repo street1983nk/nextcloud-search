@@ -1,0 +1,166 @@
+ocrphase-start 2026-09-07T05:45:41Z
+=== memory.events, read BEFORE the batch ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+anon 1191264256
+file 131715072
+slab 2359984
+memory.current=1329348608 memory.peak=1433088000
+=== The batch: 120 files of the scan_single category ===
+120 /tmp/ocrdrei-namen.txt
+=== The sampler beside it, two seconds ===
+rss_sampler: container=nc_app_findling_backend cgroup=/sys/fs/cgroup/system.slice/docker-fa166e48fbe561462b6b93298f357a58ab4dc78be9c53073626671ccaee8bd03.scope interval=2s
+=== Upload over WebDAV, the path a user takes ===
+upload-vor 2026-09-07T05:45:47Z
+    120 201
+upload-nach 2026-09-07T05:46:11Z
+=== The background jobs, so the crawl picks the folder up ===
+Starting scan for user 1 out of 1 (lasttest)
++---------+-------+-----+---------+---------+--------+--------------+
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 1       | 120   | 0   | 0       | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
+Work stock
+  scheduled            120
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              37
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-05 13:06:52 (2439 minutes ago)
+=== The OCR phase, watched for at most twelve minutes ===
+05:46:12Z runde=1 anon=1191264256 MB=1136.1 pass_finished=0
+05:46:32Z runde=2 anon=1191264256 MB=1136.1 pass_finished=0
+05:46:52Z runde=3 anon=1191264256 MB=1136.1 pass_finished=0
+05:47:13Z runde=4 anon=1191264256 MB=1136.1 pass_finished=0
+05:47:33Z runde=5 anon=1429827584 MB=1363.6 pass_finished=3
+05:47:53Z runde=6 anon=1570910208 MB=1498.1 pass_finished=6
+05:48:13Z runde=7 anon=1648369664 MB=1572.0 pass_finished=8
+05:48:33Z runde=8 anon=1765748736 MB=1683.9 pass_finished=10
+05:48:53Z runde=9 anon=1783533568 MB=1700.9 pass_finished=13
+05:49:13Z runde=10 anon=1806213120 MB=1722.5 pass_finished=15
+05:49:33Z runde=11 anon=1736863744 MB=1656.4 pass_finished=18
+05:49:53Z runde=12 anon=1847779328 MB=1762.2 pass_finished=20
+05:50:13Z runde=13 anon=1857462272 MB=1771.4 pass_finished=22
+05:50:33Z runde=14 anon=1857372160 MB=1771.3 pass_finished=25
+05:50:53Z runde=15 anon=1836531712 MB=1751.5 pass_finished=27
+05:51:13Z runde=16 anon=1885556736 MB=1798.2 pass_finished=29
+05:51:33Z runde=17 anon=1887563776 MB=1800.1 pass_finished=32
+05:51:53Z runde=18 anon=1885970432 MB=1798.6 pass_finished=34
+05:52:13Z runde=19 anon=1795440640 MB=1712.3 pass_finished=37
+05:52:33Z runde=20 anon=1827872768 MB=1743.2 pass_finished=39
+05:52:53Z runde=21 anon=1873936384 MB=1787.1 pass_finished=41
+05:53:13Z runde=22 anon=1805811712 MB=1722.2 pass_finished=44
+05:53:33Z runde=23 anon=1880760320 MB=1793.6 pass_finished=46
+05:53:54Z runde=24 anon=1880698880 MB=1793.6 pass_finished=48
+05:54:14Z runde=25 anon=1880866816 MB=1793.7 pass_finished=51
+05:54:34Z runde=26 anon=1784487936 MB=1701.8 pass_finished=53
+05:54:54Z runde=27 anon=1889386496 MB=1801.9 pass_finished=55
+05:55:14Z runde=28 anon=1889316864 MB=1801.8 pass_finished=58
+05:55:34Z runde=29 anon=1876557824 MB=1789.6 pass_finished=60
+05:55:54Z runde=30 anon=1900707840 MB=1812.7 pass_finished=62
+05:56:14Z runde=31 anon=1755504640 MB=1674.2 pass_finished=64
+05:56:34Z runde=32 anon=1755504640 MB=1674.2 pass_finished=64
+05:56:54Z runde=33 anon=1755504640 MB=1674.2 pass_finished=64
+05:57:14Z runde=34 anon=1755504640 MB=1674.2 pass_finished=64
+05:57:34Z runde=35 anon=1755504640 MB=1674.2 pass_finished=64
+05:57:54Z runde=36 anon=1755504640 MB=1674.2 pass_finished=64
+=== The verdicts of the batch ===
+{
+ "datenbank": "/mnt/findling/docker/volumes/nc_app_findling_backend_data/_data/state.db",
+ "praefix": "ocrdrei",
+ "spalten_von_files": [
+  "file_id",
+  "storage_id",
+  "root_id",
+  "path",
+  "title",
+  "mime",
+  "size",
+  "mtime",
+  "etag",
+  "content_hash",
+  "text_chars",
+  "state",
+  "reason",
+  "attempts",
+  "ocr_used",
+  "indexed_at",
+  "index_version",
+  "deleted_at"
+ ],
+ "zeilen_gesamt": 52118,
+ "zeilen_ausserhalb_des_praefix": 51998,
+ "zeilen_im_praefix": 120,
+ "je_endung": {
+  "pdf": {
+   "indexed": 120
+  }
+ },
+ "gruende_je_endung": {}
+}
+=== The log of the phase, the OCR lines among them ===
+2026-09-07T05:54:33.860321139Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52209?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:54:38.160767750Z INFO:findling.index.writer:committed 2 documents
+2026-09-07T05:54:38.236576629Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+2026-09-07T05:54:38.347318741Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52210?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:54:42.173564782Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52211?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:54:46.736559015Z INFO:findling.index.writer:committed 2 documents
+2026-09-07T05:54:46.815698476Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+2026-09-07T05:54:46.923837167Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52212?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:54:51.011385762Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52213?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:54:55.513553513Z INFO:findling.index.writer:committed 2 documents
+2026-09-07T05:54:55.595652028Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+2026-09-07T05:54:55.701009575Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52214?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:54:59.589574491Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52215?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:03.938418154Z INFO:findling.index.writer:committed 2 documents
+2026-09-07T05:55:04.025785300Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+2026-09-07T05:55:04.148982631Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52216?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:08.010179236Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52217?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:12.475582497Z INFO:findling.index.writer:committed 2 documents
+2026-09-07T05:55:12.556375534Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+2026-09-07T05:55:12.668889976Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52218?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:16.519569563Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52219?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:20.971591662Z INFO:findling.index.writer:committed 2 documents
+2026-09-07T05:55:21.050189514Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+2026-09-07T05:55:21.154844956Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52220?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:24.954807775Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52221?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:29.458727527Z INFO:findling.index.writer:committed 2 documents
+2026-09-07T05:55:29.540999182Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+2026-09-07T05:55:29.652582273Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52222?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:33.560932515Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52223?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:38.228695164Z INFO:findling.index.writer:committed 2 documents
+2026-09-07T05:55:38.306271503Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+2026-09-07T05:55:38.412175510Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52224?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:42.234612184Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52225?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:46.703153035Z INFO:findling.index.writer:committed 2 documents
+2026-09-07T05:55:46.787714829Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+2026-09-07T05:55:46.899176387Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52226?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:50.889280318Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/52227?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-07T05:55:55.334563570Z INFO:findling.index.writer:committed 2 documents
+2026-09-07T05:55:55.415541244Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+2026-09-07T05:55:56.022197366Z INFO:findling.worker.poller:pass finished, claimed=2 indexed=0 skipped=0 failed=0 unchanged=0 requeued=0 embedded=2 committed=0
+=== The sampler down ===
+findling-rss 1788760691,1755504640,174202880,5418640,1940570112,2086940672
+findling-rss 1788760693,1755504640,174202880,5418640,1940570112,2086940672
+findling-rss summary samples=375 max_anon=1900707840 peak=2086940672 events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=0] oom_killed=false
+=== memory.events, all six counters, after the phase ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+OOMKilled=false RestartCount=0
+ocrphase-ende 2026-09-07T05:58:17Z

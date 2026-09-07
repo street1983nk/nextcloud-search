@@ -1,0 +1,85 @@
+{
+ "datenbank": "/mnt/findling/docker/volumes/nc_app_findling_backend_data/_data/state.db",
+ "praefix": "",
+ "spalten_von_files": [
+  "file_id",
+  "storage_id",
+  "root_id",
+  "path",
+  "title",
+  "mime",
+  "size",
+  "mtime",
+  "etag",
+  "content_hash",
+  "text_chars",
+  "state",
+  "reason",
+  "attempts",
+  "ocr_used",
+  "indexed_at",
+  "index_version",
+  "deleted_at"
+ ],
+ "zeilen_gesamt": 52148,
+ "zeilen_ausserhalb_des_praefix": 0,
+ "zeilen_im_praefix": 52148,
+ "je_endung": {
+  "csv": {
+   "indexed": 774,
+   "skipped": 21
+  },
+  "docx": {
+   "indexed": 3424
+  },
+  "jpg": {
+   "indexed": 29,
+   "skipped": 14
+  },
+  "md": {
+   "indexed": 810
+  },
+  "odp": {
+   "indexed": 22
+  },
+  "ods": {
+   "indexed": 2588
+  },
+  "odt": {
+   "indexed": 2604
+  },
+  "pdf": {
+   "indexed": 34084
+  },
+  "png": {
+   "indexed": 24,
+   "skipped": 2
+  },
+  "pptx": {
+   "indexed": 3452
+  },
+  "tif": {
+   "indexed": 23
+  },
+  "txt": {
+   "indexed": 805
+  },
+  "webp": {
+   "indexed": 29
+  },
+  "xlsx": {
+   "indexed": 3443
+  }
+ },
+ "gruende_je_endung": {
+  "csv": {
+   "skipped:too_large": 21
+  },
+  "jpg": {
+   "skipped:empty_text": 14
+  },
+  "png": {
+   "skipped:image_not_ocrable": 2
+  }
+ }
+}

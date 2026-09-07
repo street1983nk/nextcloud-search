@@ -1,0 +1,95 @@
+neustart-nachher 2026-09-07T06:00:02Z
+=== The machine, freshly booted ===
+ 06:00:02 up 0 min,  1 user,  load average: 1.56, 0.34, 0.11
+=== The container, and NOT one occ call was made before this line ===
+Image=ghcr.io/street1983nk/findling_backend:dev Memory=2147483648 StartedAt=2026-09-07T05:59:55.71868932Z RestartCount=0
+=== The armed marker, survived or not ===
+total 83104
+drwxr-xr-x 5 ubuntu ubuntu     4096 Sep  7 05:59 .
+drwx-----x 3 root   root       4096 Sep  5 10:30 ..
+-rw-r--r-- 1 ubuntu ubuntu        0 Sep  7 05:35 armed.marker
+drwxr-xr-x 2 ubuntu ubuntu     4096 Sep  7 05:08 dict
+drwxr-xr-x 2 ubuntu ubuntu     4096 Sep  7 05:55 index
+-rw-r--r-- 1 ubuntu ubuntu 16375808 Sep  7 05:59 state.db
+-rw-r--r-- 1 ubuntu ubuntu    32768 Sep  7 05:59 state.db-shm
+-rw-r--r-- 1 ubuntu ubuntu        0 Sep  7 05:59 state.db-wal
+drwxr-xr-x 2 ubuntu ubuntu     4096 Sep  7 05:55 tmp
+-rw-r--r-- 1 ubuntu ubuntu 64114688 Sep  7 05:48 vectors.db
+-rw-r--r-- 1 ubuntu ubuntu    32768 Sep  7 05:59 vectors.db-shm
+-rw-r--r-- 1 ubuntu ubuntu  4511432 Sep  7 05:55 vectors.db-wal
+container-start 2026-09-07T05:59:55.71868932Z
+=== The passes, watched for at most eight minutes, bounded ===
+06:00:03Z runde=1 pass_finished=0 anon=721342464 MB=687.9
+06:00:23Z runde=2 pass_finished=0 anon=721354752 MB=687.9
+06:00:43Z runde=3 pass_finished=0 anon=721354752 MB=687.9
+06:01:03Z runde=4 pass_finished=0 anon=721354752 MB=687.9
+06:01:23Z runde=5 pass_finished=0 anon=721354752 MB=687.9
+06:01:43Z runde=6 pass_finished=0 anon=721354752 MB=687.9
+06:02:03Z runde=7 pass_finished=0 anon=721362944 MB=687.9
+06:02:23Z runde=8 pass_finished=0 anon=721362944 MB=687.9
+06:02:43Z runde=9 pass_finished=0 anon=721362944 MB=687.9
+06:03:03Z runde=10 pass_finished=0 anon=721362944 MB=687.9
+06:03:23Z runde=11 pass_finished=0 anon=721362944 MB=687.9
+06:03:43Z runde=12 pass_finished=0 anon=721362944 MB=687.9
+06:04:03Z runde=13 pass_finished=0 anon=721371136 MB=688.0
+06:04:23Z runde=14 pass_finished=0 anon=721371136 MB=688.0
+06:04:43Z runde=15 pass_finished=0 anon=721371136 MB=688.0
+06:05:04Z runde=16 pass_finished=0 anon=721371136 MB=688.0
+06:05:24Z runde=17 pass_finished=0 anon=721371136 MB=688.0
+06:05:44Z runde=18 pass_finished=0 anon=721371136 MB=688.0
+06:06:04Z runde=19 pass_finished=0 anon=721371136 MB=688.0
+06:06:24Z runde=20 pass_finished=0 anon=721371136 MB=688.0
+06:06:44Z runde=21 pass_finished=0 anon=721371136 MB=688.0
+06:07:04Z runde=22 pass_finished=0 anon=721371136 MB=688.0
+06:07:24Z runde=23 pass_finished=0 anon=721371136 MB=688.0
+06:07:44Z runde=24 pass_finished=0 anon=721371136 MB=688.0
+=== The log of this start ===
+2026-09-07T05:59:56.380125039Z harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+2026-09-07T05:59:56.381542725Z entrypoint: binding mode tcp 0.0.0.0:23000
+2026-09-07T05:59:56.381787204Z init: no HaRP tunnel in this deployment, watching the application only
+2026-09-07T05:59:58.728682356Z INFO:     Started server process [8]
+2026-09-07T05:59:58.728724648Z INFO:     Waiting for application startup.
+2026-09-07T05:59:58.730878352Z INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+2026-09-07T05:59:58.792187532Z INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries, read 1 in this process
+2026-09-07T05:59:58.796854130Z INFO:findling:findling backend was enabled before this start, indexing continues without a switch
+2026-09-07T05:59:58.805657269Z INFO:     Application startup complete.
+2026-09-07T05:59:59.714812954Z INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+2026-09-07T05:59:59.717171290Z WARNING:findling.nc.queue:could not count the queue
+2026-09-07T06:00:00.428578602Z INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.286 s, build 1 in this process
+2026-09-07T06:00:00.505732818Z WARNING:findling.worker.poller:the queue did not answer, next attempt in 15 s
+2026-09-07T06:00:15.507757993Z WARNING:findling.worker.poller:the queue did not answer, next attempt in 30 s
+2026-09-07T06:00:45.509403757Z WARNING:findling.worker.poller:the queue has not answered for 3 passes, backing off to at most one attempt every 300 s; the Nextcloud half looks removed and the container keeps answering searches
+pass-finished lines since the machine start: 0
+=== The verdicts of the thirty ===
+{
+ "datenbank": "/mnt/findling/docker/volumes/nc_app_findling_backend_data/_data/state.db",
+ "praefix": "neustart",
+ "spalten_von_files": [
+  "file_id",
+  "storage_id",
+  "root_id",
+  "path",
+  "title",
+  "mime",
+  "size",
+  "mtime",
+  "etag",
+  "content_hash",
+  "text_chars",
+  "state",
+  "reason",
+  "attempts",
+  "ocr_used",
+  "indexed_at",
+  "index_version",
+  "deleted_at"
+ ],
+ "zeilen_gesamt": 52118,
+ "zeilen_ausserhalb_des_praefix": 52118,
+ "zeilen_im_praefix": 0,
+ "je_endung": {},
+ "gruende_je_endung": {}
+}
+=== The hard limit after the machine start, read out of the cgroup ===
+memory.max=2147483648
+neustart-nachher-ende 2026-09-07T06:08:04Z

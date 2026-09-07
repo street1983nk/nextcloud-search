@@ -1,0 +1,72 @@
+bestand 2026-09-07T05:06:27Z
+=== The machine ===
+arch=aarch64 cores=2
+               total        used        free      shared  buff/cache   available
+Mem:           3.8Gi       1.1Gi       1.1Gi       257Mi       2.1Gi       2.7Gi
+-- the memory cap that makes the parity, read back --
+BOOT_IMAGE=/vmlinuz-7.0.0-1012-aws root=PARTUUID=c5b109a8-81d8-4d10-8ddb-fe7c835a13a0 ro console=tty1 console=ttyS0 nvme_core.io_timeout=4294967295 mem=4G panic=-1
+=== The container, as the machine start left it ===
+Image=localhost:5000/findling_backend:06-11-arm StartedAt=2026-09-07T05:00:11.607103573Z Memory=2147483648 MemorySwap=2147483648
+=== memory.events, read BEFORE any intervention ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+-- memory.events.local, for completeness --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== memory.stat and the two counters ===
+anon 62005248
+file 58617856
+slab 5467112
+memory.current=126595072
+memory.peak=147492864
+memory.max=2147483648
+=== DI-05-36, counter proof on the OLD image: passes since the machine start ===
+container-start 2026-09-07T05:00:11.607103573Z
+pass-finished lines: 0
+-- the whole log of this start, so the zero is readable and not asserted --
+2026-09-07T05:00:12.159444595Z entrypoint: binding mode tcp 0.0.0.0:23000
+2026-09-07T05:00:12.160723385Z harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+2026-09-07T05:00:12.160736330Z init: no HaRP tunnel in this deployment, watching the application only
+2026-09-07T05:00:14.757188886Z INFO:     Started server process [8]
+2026-09-07T05:00:14.757230184Z INFO:     Waiting for application startup.
+2026-09-07T05:00:14.757413612Z INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+2026-09-07T05:00:14.815181587Z INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries
+2026-09-07T05:00:14.828513867Z INFO:     Application startup complete.
+2026-09-07T05:00:14.828860439Z INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+=== The volume: corpus, index and the two databases ===
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme1n1     59G   30G   26G  54% /mnt/findling
+total 83052
+drwxr-xr-x 5 ubuntu ubuntu     4096 Sep  7 05:05 .
+drwx-----x 3 root   root       4096 Sep  5 10:30 ..
+drwxr-xr-x 2 ubuntu ubuntu     4096 Sep  5 10:30 dict
+drwxr-xr-x 2 ubuntu ubuntu     4096 Sep  6 04:51 index
+-rw-r--r-- 1 ubuntu ubuntu 16338944 Sep  7 05:00 state.db
+-rw-r--r-- 1 ubuntu ubuntu    32768 Sep  7 05:05 state.db-shm
+-rw-r--r-- 1 ubuntu ubuntu        0 Sep  7 05:05 state.db-wal
+drwxr-xr-x 2 ubuntu ubuntu     4096 Sep  6 04:51 tmp
+-rw-r--r-- 1 ubuntu ubuntu 64098304 Sep  6 05:42 vectors.db
+-rw-r--r-- 1 ubuntu ubuntu    32768 Sep  6 05:45 vectors.db-shm
+-rw-r--r-- 1 ubuntu ubuntu  4511432 Sep  6 05:43 vectors.db-wal
+=== The marks in state.db, embedding_version among them ===
+  analyzer_version = 1
+  created_at = 1788604238
+  embedding_version = unknown
+  index_version = 1
+  instance_id = 534096a4678148f6b0e24328b406e9c1
+  schema_version = 1
+  store_schema_version = 2
+  tantivy_version = tantivy v0.26.0, index_format v7
+  wordlist_hash = b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396edc808dde0
+  files by state: [('indexed', 51961), ('skipped', 37)]
+bestand-ende 2026-09-07T05:06:28Z

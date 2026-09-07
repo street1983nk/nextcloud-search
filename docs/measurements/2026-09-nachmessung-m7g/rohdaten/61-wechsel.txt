@@ -1,0 +1,34 @@
+wechsel-start 2026-09-07T05:07:35Z
+=== The image, its digest and its architecture ===
+Id=sha256:00111fd090f437a00678f6fc0a562807a5ad0b35082db235ea52ee86c63454c9 Arch=arm64 Created=2026-09-06T23:27:11.298216716Z Digest=ghcr.io/street1983nk/findling_backend@sha256:00111fd090f437a00678f6fc0a562807a5ad0b35082db235ea52ee86c63454c9
+=== The tree hash of the package INSIDE the image ===
+=== What the image brings for the semantic half and for the OCR ===
+-- the model directory --
+total 136992
+drwxr-xr-x 2 root root      4096 Sep  6 23:27 .
+drwxr-xr-x 1 root root      4096 Sep  6 23:27 ..
+-rw-r--r-- 1 root root       653 Sep  6 23:27 config.json
+-rw-r--r-- 1 root root 118101091 Sep  6 23:27 model.onnx
+-rw-r--r-- 1 root root   5069051 Sep  6 23:27 sentencepiece.bpe.model
+-rw-r--r-- 1 root root       167 Sep  6 23:27 special_tokens_map.json
+-rw-r--r-- 1 root root  17082730 Sep  6 23:27 tokenizer.json
+-rw-r--r-- 1 root root       443 Sep  6 23:27 tokenizer_config.json
+-- sha256 of the int8 file --
+8da4c9ba0ad59f58e8566839425d7fd6339d31414d0ce5cba2d7d0afb75dd8b6  /usr/local/share/findling/model/model.onnx
+-- the tesseract languages that are really installed --
+List of available languages in "/usr/share/tesseract-ocr/5/tessdata/" (4):
+deu
+eng
+fra
+osd
+-- the environment defaults --
+FINDLING_EMBED_MODEL_DIR=/usr/local/share/findling/model
+FINDLING_VEC0_PATH=/usr/local/lib/findling/vec0.so
+HF_HUB_OFFLINE=1
+=== The data store before the swap ===
+nc_app_findling_backend_data
+=== unregister without --rm-data, then register on the ghcr image ===
+			<registry>ghcr.io</registry>
+			<image>street1983nk/findling_backend</image>
+			<image-tag>dev</image-tag>
+Error during disabling findling_backend ExApp.

@@ -1,0 +1,193 @@
+grundlast 2026-09-07T05:33:09Z
+=== The hard limit, set again after the register, read out of the cgroup ===
+memory.max=2147483648
+memory.swap.max=0
+Image=ghcr.io/street1983nk/findling_backend:dev Memory=2147483648 MemorySwap=2147483648 StartedAt=2026-09-07T05:32:01.425118905Z
+=== memory.events, read BEFORE the measurement touches anything ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== A. The base line of the container, model never loaded in this start ===
+anon 728031232
+file 10375168
+slab 3960904
+memory.current=744525824
+memory.peak=744833024
+-- the processes of the cgroup and their RSS in kB --
+sh: 1: ps: not found
+-- the log of this start, so the arming is readable --
+2026-09-07T05:32:01.528678020Z harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+2026-09-07T05:32:01.528964983Z entrypoint: binding mode tcp 0.0.0.0:23000
+2026-09-07T05:32:01.529404320Z init: no HaRP tunnel in this deployment, watching the application only
+2026-09-07T05:32:02.495019256Z INFO:     Started server process [8]
+2026-09-07T05:32:02.495051092Z INFO:     Waiting for application startup.
+2026-09-07T05:32:02.496973914Z INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+2026-09-07T05:32:02.534557931Z INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries, read 1 in this process
+2026-09-07T05:32:02.535390151Z INFO:     Application startup complete.
+2026-09-07T05:32:02.535968248Z INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+2026-09-07T05:32:02.636708347Z INFO:     172.18.0.8:35216 - "GET /heartbeat HTTP/1.1" 200 OK
+2026-09-07T05:32:02.648773371Z INFO:findling:findling backend enabled
+2026-09-07T05:32:02.648867480Z INFO:     172.18.0.8:35216 - "PUT /enabled?enabled=1 HTTP/1.1" 200 OK
+2026-09-07T05:32:04.199459357Z INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.308 s, build 1 in this process
+2026-09-07T05:32:04.571655001Z INFO:findling.worker.poller:every indexed document carries a vector, the embedding mark is current
+2026-09-07T05:32:04.571751035Z INFO:findling.worker.poller:indexing is armed and the work stock is empty, the next file is picked up as it arrives
+pass-finished lines since this start: 0
+=== B. The footprint of the weights alone, in a process of their own ===
+[0;93m2026-09-07 05:33:10.690925777 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+{
+ "vor_dem_import_kb": 13192,
+ "nach_dem_import_kb": 25456,
+ "nach_dem_bau_kb": 25456,
+ "nach_einer_einbettung_kb": 486936,
+ "verfuegbar": true,
+ "dimension": 384,
+ "nach_langer_einbettung_kb": 512772,
+ "dimension2": 384,
+ "gewichte_kb": 0,
+ "aktivierungen_kb": 487316
+}
+=== The cgroup right after B, so the share is visible ===
+anon 728031232
+file 11251712
+slab 4395280
+memory.current=746262528
+=== C. Which step of the startup buys it, step by step ===
+[0;93m2026-09-07 05:33:14.536831277 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+{
+ "schritte": [
+  {
+   "schritt": "00-leerer-prozess",
+   "rss_kb": 13168,
+   "rss_mb": 12.9
+  },
+  {
+   "schritt": "01-config-importiert",
+   "rss_kb": 16384,
+   "rss_mb": 16.0
+  },
+  {
+   "schritt": "02-settings-gelesen",
+   "rss_kb": 16384,
+   "rss_mb": 16.0
+  },
+  {
+   "schritt": "03-index-module-importiert",
+   "rss_kb": 23612,
+   "rss_mb": 23.1
+  },
+  {
+   "schritt": "04-embed-module-importiert",
+   "rss_kb": 25716,
+   "rss_mb": 25.1
+  },
+  {
+   "schritt": "05-store-vectors-importiert",
+   "rss_kb": 27520,
+   "rss_mb": 26.9
+  },
+  {
+   "schritt": "06-poller-importiert",
+   "rss_kb": 69664,
+   "rss_mb": 68.0
+  },
+  {
+   "schritt": "07-api-resources-importiert",
+   "rss_kb": 69684,
+   "rss_mb": 68.1
+  },
+  {
+   "schritt": "08-findling-main-importiert",
+   "rss_kb": 72008,
+   "rss_mb": 70.3
+  },
+  {
+   "schritt": "09-wortliste-gelesen-276496",
+   "rss_kb": 94440,
+   "rss_mb": 92.2
+  },
+  {
+   "schritt": "10-deutscher-automat-gebaut",
+   "rss_kb": 137560,
+   "rss_mb": 134.3
+  },
+  {
+   "schritt": "11-tokenizer-gelesen",
+   "rss_kb": 413472,
+   "rss_mb": 403.8
+  },
+  {
+   "schritt": "12-chunker-gebaut-und-gefahren-2",
+   "rss_kb": 694320,
+   "rss_mb": 678.0
+  },
+  {
+   "schritt": "13-modell-objekt-gebaut-lazy",
+   "rss_kb": 694320,
+   "rss_mb": 678.0
+  },
+  {
+   "schritt": "14-erste-einbettung-gewichte-geladen",
+   "rss_kb": 1095600,
+   "rss_mb": 1069.9
+  },
+  {
+   "schritt": "15-lange-einbettung-aktivierungen",
+   "rss_kb": 1122596,
+   "rss_mb": 1096.3
+  }
+ ],
+ "zuwaechse_ueber_10_mb": [
+  {
+   "von": "05-store-vectors-importiert",
+   "nach": "06-poller-importiert",
+   "delta_mb": 41.2
+  },
+  {
+   "von": "08-findling-main-importiert",
+   "nach": "09-wortliste-gelesen-276496",
+   "delta_mb": 21.9
+  },
+  {
+   "von": "09-wortliste-gelesen-276496",
+   "nach": "10-deutscher-automat-gebaut",
+   "delta_mb": 42.1
+  },
+  {
+   "von": "10-deutscher-automat-gebaut",
+   "nach": "11-tokenizer-gelesen",
+   "delta_mb": 269.4
+  },
+  {
+   "von": "11-tokenizer-gelesen",
+   "nach": "12-chunker-gebaut-und-gefahren-2",
+   "delta_mb": 274.3
+  },
+  {
+   "von": "13-modell-objekt-gebaut-lazy",
+   "nach": "14-erste-einbettung-gewichte-geladen",
+   "delta_mb": 391.9
+  },
+  {
+   "von": "14-erste-einbettung-gewichte-geladen",
+   "nach": "15-lange-einbettung-aktivierungen",
+   "delta_mb": 26.4
+  }
+ ],
+ "verfuegbar": true,
+ "vectors_modul": "findling.store.vectors",
+ "poller_modul": "findling.worker.poller",
+ "haupt_modul": "findling.main"
+}
+=== memory.events again, after B and C, so the two readings bracket them ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+grundlast-ende 2026-09-07T05:33:15Z

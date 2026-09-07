@@ -1,0 +1,59 @@
+neustart-nachtrag 2026-09-07T06:09:24Z
+=== Why the first observation counted zero passes, and whose fault it is ===
+The A record of the load test could not be set in this run, so the name was
+pinned in /etc/hosts of the box to the address of the apache container. A
+machine restart reassigns the addresses of the docker bridge, apache moved
+from 172.18.0.6 to 172.18.0.4, and the pin kept pointing at the old one.
+That is a defect of the measuring environment and not of the product.
+172.18.0.4 loadtest.infranode.dev
+apache=172.18.0.4
+=== The arming itself DID survive the machine restart ===
+-rw-r--r-- 1 ubuntu ubuntu 0 Sep  7 05:35 /mnt/findling/docker/volumes/nc_app_findling_backend_data/_data/armed.marker
+=== And with the name reachable again, a plain docker restart, no occ call ===
+StartedAt=2026-09-07T06:08:51.072585359Z Memory=2147483648 RestartCount=0
+2026-09-07T06:08:52.119757835Z INFO:findling:findling backend was enabled before this start, indexing continues without a switch
+2026-09-07T06:08:57.220146350Z INFO:findling.worker.poller:pass finished, claimed=30 indexed=0 skipped=30 failed=0 unchanged=0 requeued=30 embedded=0 committed=0
+2026-09-07T06:09:05.309698068Z INFO:findling.worker.poller:pass finished, claimed=2 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=0 committed=2
+2026-09-07T06:09:15.205074063Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+2026-09-07T06:09:23.564936407Z INFO:findling.worker.poller:pass finished, claimed=4 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=2 committed=2
+pass-finished lines: 4
+=== The verdicts of the thirty ===
+{
+ "datenbank": "/mnt/findling/docker/volumes/nc_app_findling_backend_data/_data/state.db",
+ "praefix": "neustart",
+ "spalten_von_files": [
+  "file_id",
+  "storage_id",
+  "root_id",
+  "path",
+  "title",
+  "mime",
+  "size",
+  "mtime",
+  "etag",
+  "content_hash",
+  "text_chars",
+  "state",
+  "reason",
+  "attempts",
+  "ocr_used",
+  "indexed_at",
+  "index_version",
+  "deleted_at"
+ ],
+ "zeilen_gesamt": 52148,
+ "zeilen_ausserhalb_des_praefix": 52118,
+ "zeilen_im_praefix": 30,
+ "je_endung": {
+  "pdf": {
+   "indexed": 6,
+   "skipped": 24
+  }
+ },
+ "gruende_je_endung": {
+  "pdf": {
+   "skipped:no_text_layer": 24
+  }
+ }
+}
+neustart-nachtrag-ende 2026-09-07T06:09:24Z
