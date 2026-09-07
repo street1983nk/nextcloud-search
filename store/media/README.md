@@ -24,6 +24,50 @@ Wer ein Bild austauscht und die Zahl stehen lässt, bekommt ein rotes Gate mit
 der heutigen Größe in der Meldung. Eine Zahl, die beim Tippen stimmte, ist
 schlechter als gar keine.
 
+## Die Live-Bestätigung der Adressen, 07.09.2026
+
+Der Store speichert keine Bilder, sondern Adressen. Eine Adresse, hinter der
+nichts liegt, besteht jede Schemaprüfung und ergibt auf der Store-Seite einen
+leeren Rahmen, und das ist schlechter als kein Bild. `test_store_metadata.py`
+prüft deshalb, dass jede `screenshot`-Adresse beider `info.xml` auf eine Datei
+zeigt, die in diesem Verzeichnis liegt, und es prüft das bewusst **ohne Netz**:
+ein Gate, das eine fremde Seite braucht, färbt den Bau rot, wenn jemand anderes
+sie umbaut. Die Bestätigung, dass die Adresse auch von aussen antwortet, ist
+deshalb einmalig und von Hand, und hier steht ihr Ergebnis.
+
+Fünf Adressen, drei Dateien: die Companion-Hälfte nennt Kopfbild, Suchbild und
+Verwaltungsbild, die Backend-Hälfte nennt Kopfbild und Verwaltungsbild. Geprüft
+wurde je Datei, denn zwei gleiche Adressen sind eine Abfrage.
+
+| Bild | Status | Inhaltstyp | Größe laut Antwort | Größe laut Tabelle oben | Maße |
+|---|---|---|---|---|---|
+| `header.png` | 200 | `image/png` | 168515 Bytes | 168515 Bytes | 1440 x 810 |
+| `screenshot-admin.png` | 200 | `image/png` | 157081 Bytes | 157081 Bytes | 1440 x 1100 |
+| `screenshot-search.png` | 200 | `image/png` | 113724 Bytes | 113724 Bytes | 1440 x 700 |
+
+Abgerufen am 07.09.2026 um 11:19 UTC über `curl` gegen den Zweig `main` bei
+Stand `94420f7`, also gegen genau die Adressen, die in beiden `info.xml` stehen.
+
+Über den Statuscode hinaus ist noch zweierlei geprüft, weil ein Statuscode allein
+nur sagt, dass etwas geantwortet hat:
+
+1. **Es ist wirklich ein Bild.** Jede der drei Antworten beginnt mit der
+   PNG-Signatur, und die Maße aus dem `IHDR`-Block stimmen mit den Maßen
+   überein, die weiter unten je Bild stehen.
+2. **Es ist wirklich dieses Bild.** Die heruntergeladenen Bytes haben dieselbe
+   SHA-256-Summe wie die Dateien in diesem Verzeichnis:
+   `511f7bb3...` für `header.png`, `c1c3f9aa...` für `screenshot-admin.png`,
+   `c644294c...` für `screenshot-search.png`. Damit ist nicht nur belegt, dass
+   die Adresse antwortet, sondern dass sie das Bild ausliefert, das hier
+   besprochen wird.
+
+Was diese Bestätigung nicht ist: ein Dauerzustand. Die Adressen zeigen auf den
+Zweig `main` und nicht auf einen Tag, und das ist Absicht (die Begründung steht
+in beiden `info.xml` neben den Elementen): ein kaputtes Bild soll mit einem
+Commit zu reparieren sein und nicht mit einem neuen Release. Der Preis dieser
+Wahl ist, dass ein Umbau von `main` die Bilder verschieben kann. Wer
+`store/media` umbaut, prüft die drei Adressen danach erneut.
+
 ## Warum die Bilder aus der Entwicklungsinstanz kommen und nicht aus CI
 
 Die naheliegende Quelle wäre der Referenzkorpus, den die
