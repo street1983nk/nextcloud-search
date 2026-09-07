@@ -162,6 +162,12 @@ class QueueController extends OCSController {
 	 * ever taking it out again, because `indexed` is the container's number and
 	 * is never written into this table.
 	 *
+	 * Since plan 06.1-24 there is one thing this route takes BACK rather than
+	 * writes, and the answer carries it as `revoked`: a `failed` verdict of a
+	 * file that arrives in `files` as processed is deleted, because a success
+	 * outranks it (DI-06.1-34). That is a repair of `failed` alone, so the
+	 * paragraph above stands unchanged for the OCR handover, which is a skip.
+	 *
 	 * All three lists are processed in one transaction: rows removed without
 	 * their reason recorded would disappear from the queue and from the diagnosis
 	 * at the same moment.

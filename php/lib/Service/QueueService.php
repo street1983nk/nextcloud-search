@@ -64,6 +64,28 @@ class QueueService {
 	public const MAX_DELIVERIES = 3;
 
 	/**
+	 * The kinds of row whose completion means "the text of this file is in the
+	 * index now", and therefore the only kinds that may take a verdict back.
+	 *
+	 * Two of six, and the four that are missing are the point (DI-06.1-34). A row
+	 * comes back in the done list of an acknowledgement for six different
+	 * reasons, and only these two of them ran an extraction: content is the
+	 * ordinary indexing job, ocr is the second track for a scan. The other four
+	 * say nothing about the text at all. acl writes permissions and nothing else,
+	 * so an unshare of a file that really is corrupt would erase a true failure if
+	 * it counted here, which is the one way this repair could hide something.
+	 * metadata rewrites an etag. embed writes vectors and reports done even when
+	 * there was no stored text to embed. delete drops the document out of the
+	 * index, which is the opposite of a success.
+	 *
+	 * @var list<string>
+	 */
+	private const EXTRACTION_KINDS = [
+		QueueMapper::KIND_CONTENT,
+		QueueMapper::KIND_OCR,
+	];
+
+	/**
 	 * How many users of one file travel in a work order (perf audit M5).
 	 *
 	 * Without a ceiling an instance wide team folder puts the complete user list
@@ -300,34 +322,55 @@ class QueueService {
 	 * writes nothing. The batch is still acknowledged, because a defective code
 	 * for one file must not leave thirty one healthy rows locked.
 	 *
-	 * What this does NOT do is take a verdict back. A file that was skipped and
-	 * is indexed later keeps its row until something writes over it, exactly as a
-	 * file that failed and succeeded later does today. The container therefore
-	 * never reports a verdict for a file it handed over to the OCR track, which
-	 * is the one case where that staleness would be the normal path rather than
-	 * an edge of it.
+	 * There is a fourth list, and it is not reported but derived: the failed
+	 * verdicts this call takes BACK. Until plan 06.1-24 this method took nothing
+	 * back at all, and DI-06.1-34 is what that cost. A file that once failed had
+	 * no writer that could contradict it, because this side never writes
+	 * `indexed`, so the four Office documents the fix of finding 8 repaired kept
+	 * their failed(corrupt) row: the page counted them as failures and told the
+	 * admin to upload them again while the same files were findable through their
+	 * content. An extraction row that comes back done and brings no verdict IS
+	 * the success report, so it is read as one here. Which rows may say that is
+	 * the whole subtlety, and it lives in revocableFileIds below.
+	 *
+	 * A skipped verdict is still never taken back, and that is deliberate rather
+	 * than pending: a skip is a decision and not an error, and skipped
+	 * (no_text_layer) is the memo that a file was handed to the OCR track.
 	 *
 	 * @param int[] $queueIds rows that are done
 	 * @param array<int, string> $failures queue row id to reason code
 	 * @param array<int, string> $skips file id to reason code
-	 * @return array{acknowledged:int, recorded:int}
+	 * @return array{acknowledged:int, recorded:int, revoked:int}
 	 */
 	public function acknowledge(array $queueIds, array $failures, array $skips = []): array {
 		$failedIds = array_keys($failures);
 		$allIds = array_values(array_unique(array_merge($queueIds, $failedIds)));
 		if ($allIds === [] && $skips === []) {
-			return ['acknowledged' => 0, 'recorded' => 0];
+			return ['acknowledged' => 0, 'recorded' => 0, 'revoked' => 0];
 		}
 
 		// The container knows queue ids, the state table knows file ids. The
 		// translation has to happen before the rows are deleted, because after
 		// the delete the connection between the two is gone.
+		//
+		// Asked for the whole batch and not only for the failures since plan
+		// 06.1-24: the revocation needs the file id behind a row that came back
+		// done, and it needs the kind of that row. One IN query over up to
+		// thirty two ids instead of two of them, and the same query that was
+		// already here.
 		$fileIds = [];
-		foreach ($this->queueMapper->findByIds($failedIds) as $row) {
+		$extractionFileIds = [];
+		foreach ($this->queueMapper->findByIds($allIds) as $row) {
 			$fileIds[$row->getId()] = $row->getFileId();
+			if (in_array($row->getKind(), self::EXTRACTION_KINDS, true)) {
+				$extractionFileIds[$row->getId()] = $row->getFileId();
+			}
 		}
 
+		$revocable = self::revocableFileIds($queueIds, $extractionFileIds, $failures, $skips);
+
 		$recorded = 0;
+		$revoked = 0;
 		$this->db->beginTransaction();
 		try {
 			foreach ($failures as $queueId => $reason) {
@@ -353,6 +396,14 @@ class QueueService {
 				}
 			}
 
+			// The revocation, in the same transaction as the two writes above and
+			// as the delete below, and after them rather than before: the set it
+			// works on excludes every file this call judged, so the order cannot
+			// change the outcome, and standing here it reads in the order it
+			// happens. Half of this would be the worst outcome again, a verdict
+			// gone whose row is still queued.
+			$revoked = $revocable === [] ? 0 : $this->fileStateService->revokeFailures($revocable);
+
 			$acknowledged = $allIds === [] ? 0 : $this->queueMapper->acknowledge($allIds);
 			$this->db->commit();
 		} catch (\Throwable $e) {
@@ -367,7 +418,86 @@ class QueueService {
 			$this->logger->info('Findling: recorded verdicts the container reported', ['count' => $recorded]);
 		}
 
-		return ['acknowledged' => $acknowledged, 'recorded' => $recorded];
+		if ($revoked > 0) {
+			// Its own line and not a second field on the one above, because this
+			// one is rare and interesting: it says that files which were counted
+			// as failures are in the index now. On an instance where nothing was
+			// ever repaired it never appears at all.
+			$this->logger->info(
+				'Findling: took back failed verdicts of files the container has now processed',
+				['count' => $revoked],
+			);
+		}
+
+		return ['acknowledged' => $acknowledged, 'recorded' => $recorded, 'revoked' => $revoked];
+	}
+
+	/**
+	 * Which files of one acknowledgement had their failed verdict outlived by a
+	 * success, expressed as a set of file ids.
+	 *
+	 * Static and public for the same reason AdminViewService::progressStamp is:
+	 * this is the arithmetic of DI-06.1-34 and nothing else, and the alternative
+	 * to reaching it directly is a unit test that builds a queue, a database and
+	 * a state table in order to ask which of four ids is left in a set. The
+	 * reading and the writing stay in acknowledge above, where they cannot be
+	 * tested without a Nextcloud anyway.
+	 *
+	 * The rule, in one sentence: an extraction row that the container reports as
+	 * done and does not judge in the same breath is a success report, and a
+	 * success outranks any failed verdict this side is still holding for that
+	 * file.
+	 *
+	 * The three subtractions, each of which is a way to get this wrong:
+	 *
+	 * - A row of a kind that never extracted anything is not in
+	 *   ``$extractionFileIds`` at all, so an unshare cannot revoke the verdict of
+	 *   a file that is genuinely corrupt. The list of kinds is EXTRACTION_KINDS
+	 *   above and the four exclusions are written out there.
+	 * - A file this very call judged is left alone. A skipped file travels in the
+	 *   done list as well, which is what makes this subtraction necessary rather
+	 *   than theoretical: without it the skip that was just recorded would be
+	 *   deleted by the same transaction that wrote it. Failures are keyed by
+	 *   queue row id, so they are translated through the same map first.
+	 * - A row whose queue id resolves to no file id is skipped rather than
+	 *   guessed. That is the row whose lock expired and that somebody else
+	 *   finished; the connection between the two ids is gone with it. The
+	 *   redelivery will report the file again and the next acknowledgement
+	 *   revokes it, so the answer here is "not yet" and never "probably".
+	 *
+	 * @param int[] $doneQueueIds the queue rows the container reported as done
+	 * @param array<int, int> $extractionFileIds queue row id to file id, extraction kinds only
+	 * @param array<int, string> $failures queue row id to reason code
+	 * @param array<int, string> $skips file id to reason code
+	 * @return list<int> file ids whose failed verdict may be taken back
+	 */
+	public static function revocableFileIds(
+		array $doneQueueIds,
+		array $extractionFileIds,
+		array $failures,
+		array $skips,
+	): array {
+		$judged = [];
+		foreach (array_keys($failures) as $queueId) {
+			$fileId = $extractionFileIds[$queueId] ?? 0;
+			if ($fileId > 0) {
+				$judged[$fileId] = true;
+			}
+		}
+		foreach (array_keys($skips) as $fileId) {
+			$judged[(int)$fileId] = true;
+		}
+
+		$revocable = [];
+		foreach ($doneQueueIds as $queueId) {
+			$fileId = $extractionFileIds[(int)$queueId] ?? 0;
+			if ($fileId <= 0 || isset($judged[$fileId])) {
+				continue;
+			}
+			$revocable[$fileId] = true;
+		}
+
+		return array_map(static fn (int|string $fileId): int => (int)$fileId, array_keys($revocable));
 	}
 
 	/**

@@ -212,6 +212,23 @@ antwortet, gewinnt:
    Abwesenheit. "Nicht indexiert, Grund unbekannt" ist der Satz, den diese App
    unmöglich machen soll.
 
+**Was ein Fehlurteil überlebt und was nicht.** Ein `failed`-Urteil dieser Seite
+gilt nur so lange, bis dieselbe Datei erfolgreich verarbeitet gemeldet wird.
+Genau dann nimmt die Bestätigung der Warteschlange es zurück und löscht die
+Zeile, und die Datei steht danach auf Stufe 5, also beim Container, der als
+einziger "ist auffindbar" kennt. Das ist die Reparatur eines Widerspruchs, den
+die Sichtprobe vor der Abgabe gezeigt hat: nach einem behobenen Extraktionsfehler
+zählten die Kacheln vier Dateien als fehlgeschlagen und die Fehlergruppe riet
+"Datei neu hochladen", während alle vier über ihren Inhalt zu finden waren. Diese
+Seite schreibt `indexed` nie, deshalb konnte eine einmal geschriebene
+`failed`-Zeile vorher von niemandem widerrufen werden, und sie wäre auch nicht
+von selbst verfallen. Zurückgenommen wird ausschließlich `failed` und nur durch
+eine Zeile, die wirklich extrahiert hat, also Inhalt oder OCR: eine reine
+Rechte- oder Metadatenänderung derselben Datei sagt nichts über ihren Text und
+darf ein echtes Fehlurteil nicht verschwinden lassen. Ein `skipped`-Urteil bleibt
+bewusst stehen, denn es ist eine Entscheidung und kein Fehler, und
+`skipped(no_text_layer)` ist der Vermerk über die Übergabe an die OCR-Spur.
+
 **Was ein Grabstein bedeutet und was nicht.** Der Container markiert eine Zeile,
 deren Datei den Index verlassen hat. Diese Marke darf nur in Stufe 1 als Löschung
 gelesen werden, also genau dort, wo überhaupt kein Cache-Eintrag mehr gefunden
