@@ -159,10 +159,31 @@ jobs:
             #
             # E-H1 of 2026-09-06 confirms the flag and names the day it falls rather
             # than leaving it to somebody noticing: Nextcloud 35 becomes final on
-            # 2026-09-16, so the condition above is met from that day, and plan
-            # 06.1-19 removes this flag together with this paragraph. Until then the
+            # 2026-09-16, so the condition above is met from that day. Until then the
             # condition stands here word for word, because a flag whose reason has
             # been paraphrased away is a flag nobody dares to take out.
+            #
+            # Decided on 2026-09-07 by plan 06.1-19, which was written to remove this
+            # flag and did not, because the condition it carries is not met yet. The
+            # decision is the vollzug of E-H1 and not a postponement of it, and it
+            # rests on a reading rather than on a calendar guess: on 2026-09-07
+            # "gh api repos/nextcloud/server/releases" answered with v35.0.0rc3 of
+            # 2026-09-03 as the newest 35 tag, marked prerelease, and with v34.0.3 as
+            # the newest release that is not a prerelease. Nextcloud 35 is therefore
+            # still under development on the day this phase is accepted, and a leg
+            # that has to be green against a branch under development would be a
+            # statement about that branch.
+            #
+            # RE-CHECK DATE: 2026-09-16. On that day this flag and this whole
+            # paragraph come out, the leg becomes must-be-green, and a red run is a
+            # finding rather than a reason to put the flag back. The plan that holds
+            # the follow-through is 06-12, the store submission, because it is the
+            # next plan after that date and no plan of phase 06.1 runs past it.
+            #
+            # What is already known about that day: on 2026-09-07 this leg ran green
+            # on its own (run 34114937751, all three legs success), so flipping the
+            # flag carries no known risk. What is not known is whether the final
+            # 35.0.0 behaves like rc3.
             tolerate-failure: true
 
     env:
