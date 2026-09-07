@@ -5,6 +5,12 @@ Deutsch | [English](README.en.md) | [Français](README.fr.md)
 Volltextsuche, Texterkennung und semantische Suche für Nextcloud, ohne
 Konfiguration. Treffer erscheinen in der normalen Suchleiste.
 
+**Findling + Nextcloud MCP Connector = die Retrieval-Schicht für Ihr eigenes RAG.**
+Der [MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) reicht Findlings Treffer an jeden MCP-Client weiter, mit
+genau den Rechten des fragenden Nutzers; gemessen im
+[Fidelity-Test](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/tests/integration/test_content_hit_fidelity.py).
+Das Modell bringen Sie mit, kein Inhalt verlässt Ihren Server.
+
 ## Was Findling kann
 
 - Volltextsuche mit deutscher Wortbehandlung: Komposita, Flexion, Umlaute,

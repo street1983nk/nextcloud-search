@@ -5,6 +5,12 @@
 Full text search, OCR and semantic search for Nextcloud, with zero
 configuration. Results appear in the normal search bar.
 
+**Findling + Nextcloud MCP Connector = the retrieval layer for your own RAG.**
+The [MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) hands Findling's hits to any MCP client, with exactly the
+rights of the asking user; measured by the
+[fidelity test](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/tests/integration/test_content_hit_fidelity.py).
+You bring the model, and no content leaves your server.
+
 ## What Findling does
 
 - Full text search with German word handling: compounds, inflection, umlauts,
