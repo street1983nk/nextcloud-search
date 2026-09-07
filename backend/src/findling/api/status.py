@@ -73,6 +73,7 @@ from pydantic import BaseModel, Field
 
 from findling.api import resources
 from findling.config import settings
+from findling.instance import volume_is_shared
 from findling.store.repo import Store, index_bytes, open_read_only
 from findling.store.vectors import VectorStoreError, open_vectors
 
@@ -89,6 +90,13 @@ STATE_UNREADABLE = "the state database exists but could not be opened"
 # the answer is missing.
 NO_VECTORS_YET = "no vector database yet, the second track has not written anything"
 VECTORS_UNREADABLE = "the vector database exists but could not be read"
+# The one note that outranks the four above (DI-06.1-22). It is not a state of
+# one storage, it is the statement that none of the counters below describes
+# work this container is allowed to do: the volume carries the marker of another
+# Nextcloud instance, so the indexing is off and the numbers belong to somebody
+# else's index. It names the page that explains the constellation because a
+# reader of this line cannot be expected to know how AppAPI names a volume.
+VOLUME_SHARED = "this volume belongs to another Nextcloud instance, indexing is off, see docs/uninstall.md"
 
 
 class StatusResponse(BaseModel):
@@ -316,6 +324,24 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
 
 def report() -> StatusResponse:
     """The state of this container. Runs in a worker thread, never raises.
+
+    Two steps, and the split exists for one reason: the shared volume of
+    DI-06.1-22 is the only finding that outranks all four notes of the counting
+    half, and a check woven into that half would have had to be repeated in each
+    of its three exits. So the counters are gathered first, unchanged, and the
+    note is overwritten afterwards if the volume turns out not to be this
+    instance's. The counters stay in the answer on purpose: they are true, they
+    are simply the numbers of another instance's index, and hiding them would
+    take away the very evidence that shows the sharing.
+    """
+    answer = _counted()
+    if volume_is_shared():
+        return answer.model_copy(update={"note": VOLUME_SHARED})
+    return answer
+
+
+def _counted() -> StatusResponse:
+    """Everything this container can count, with the note of the counting half.
 
     The whole function runs off the event loop, which is what lets it sum the
     size of the index directory: that walk grows with the number of segments and

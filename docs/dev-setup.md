@@ -318,6 +318,13 @@ der Datei wäre ein geteiltes Geheimnis im Repository. Die Instanz hört auf
 `http://localhost:8096`; `FINDLING_HARP_PORT` überschreibt den Port. Der
 Alltagsstack behält seinen eigenen Port, damit beide gleichzeitig laufen können.
 
+**Eine Warnung, wenn auf dieser Maschine noch eine Nextcloud mit Findling
+steht:** zwei Instanzen am selben Docker-Dienst teilen das Datenvolume der
+ExApp, weil sein Name allein aus der App-Kennung folgt. Ein `--rm-data` beim
+Abbauen dieses Stacks nimmt dann den Index der anderen Instanz mit. Die
+Begründung und die Auswege stehen in `docs/uninstall.md`, Abschnitt "Zwei
+Instanzen an einem Docker-Dienst teilen das Volume".
+
 ### Image bauen und in eine lokale Registry legen
 
 Der Daemon zieht `registry/image:image-tag` aus `backend/appinfo/info.xml`, also

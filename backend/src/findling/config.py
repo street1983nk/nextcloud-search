@@ -642,6 +642,17 @@ FALLBACK_STORAGE_DIRNAME = "findling"
 # with the index it belongs to.
 ARMED_MARKER_NAME = "armed.marker"
 
+# The file that says which Nextcloud instance this volume belongs to
+# (DI-06.1-22). State for the same reason the mark above is state, and it sits
+# in the same root for a second reason on top of that: the whole finding it
+# carries is "this volume is shared", so the marker has to travel with the
+# volume and never with the container.
+#
+# JSON rather than a bare line, because the file is written once and read by
+# every later version of this app: an object with a named field can gain a
+# second field without turning the first one into a guess.
+INSTANCE_MARKER_NAME = "instance.json"
+
 
 @dataclass(frozen=True, slots=True)
 class Settings:
@@ -665,6 +676,11 @@ class Settings:
     # container that was never enabled must be able to answer the question
     # without creating a database first.
     armed_marker: Path
+    # Which instance this volume belongs to, beside the databases for the same
+    # reason: it is read before the process opens anything, and it is the one
+    # file whose whole purpose is to be found by a container that did not write
+    # it.
+    instance_marker: Path
 
     languages: tuple[str, ...]
     compound_dict: str
@@ -1000,6 +1016,7 @@ def settings() -> Settings:
         dict_dir=root / "dict",
         tmp_dir=root / "tmp",
         armed_marker=root / ARMED_MARKER_NAME,
+        instance_marker=root / INSTANCE_MARKER_NAME,
         languages=_languages(),
         compound_dict=_compound_dict(),
         max_file_bytes=_int_from_environment("FINDLING_MAX_FILE_BYTES", MAX_FILE_BYTES),

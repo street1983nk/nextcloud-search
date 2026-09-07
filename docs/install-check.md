@@ -350,6 +350,13 @@ Deploy-Daemon, die beiden Archive und die Vertrauenskette für ihre Signatur. Er
 baut nichts und er holt nichts aus einem Arbeitsbaum, und genau das ist der
 Grund, warum sein Ergebnis über eine Store-Installation etwas aussagt.
 
+**Eine Warnung, bevor die frische Instanz entsteht:** hängt sie am selben
+Docker-Dienst wie eine Instanz, deren Bestand gebraucht wird, dann teilen sich
+beide das Datenvolume der ExApp, und die Deinstallations-Feststellungen dieses
+Laufs nehmen den Index der anderen Instanz mit. Warum das so ist und was
+dagegen hilft, steht in `docs/uninstall.md`, Abschnitt "Zwei Instanzen an einem
+Docker-Dienst teilen das Volume".
+
 ## 5. Der Lauf vom 07.09.2026, arm64
 
 Dieser Abschnitt ist die zweite Hälfte von Entscheidung E-H5. Er ist bewusst in

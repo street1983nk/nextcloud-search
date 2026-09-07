@@ -188,6 +188,51 @@ vor ungemessen. Dass `--rm-data` das Volume wirklich mitnimmt und dass es
 ohne das Kennzeichen wirklich liegen bleibt, stellt der Job aus Abschnitt 5 auf
 jeder der vier Serverversionen fest.
 
+### Zwei Instanzen an einem Docker-Dienst teilen das Volume
+
+**Eine Warnung, und sie ist mit Schaden belegt.** Der Name des Volumes leitet
+sich allein aus der App-Kennung ab: AppAPI legt es als
+`nc_app_findling_backend_data` an, ohne einen Bestandteil, der die Instanz
+nennt. Hängen zwei Nextcloud-Instanzen am **selben Docker-Dienst**, benutzen
+beide dasselbe Volume unter demselben Namen. Ein
+`occ app_api:app:unregister findling_backend --rm-data` in der einen Instanz
+entfernt damit den Bestand der anderen: Suchindex, Zustandsdatenbank,
+Vektordatenbank und Wortliste.
+
+Genau das ist am 7. September 2026 passiert und hat den Index eines
+Messvolumens gelöscht. Der Vorfall steht mit Zeitpunkt und Umfang in
+`docs/measurements/2026-09-nachmessung-m7g/README.md`, Abschnitt 12a; hier wird
+er nicht ein zweites Mal erzählt.
+
+**Was daraus folgt, für eine Testinstanz neben einer Instanz, deren Bestand
+gebraucht wird:**
+
+- Entweder ein **eigener Docker-Dienst** für die Testinstanz, also eine zweite
+  Maschine oder eine zweite Docker-Installation.
+- Oder ein **eigener Deploy-Daemon** je Instanz, dessen Container und Volumes
+  nicht im selben Docker-Namensraum liegen.
+- Oder kein `--rm-data`: ohne das Kennzeichen bleibt das Volume liegen, und ein
+  liegen gebliebener Bestand ist billiger als ein Neuaufbau des Index über
+  Stunden.
+
+Der Container merkt die Lage inzwischen selbst. Beim Start hinterlässt er im
+Volume eine Marke mit der Kennung seiner Instanz und vergleicht sie beim
+nächsten Start. Findet er die Marke einer **anderen** Instanz, fängt er nicht
+an zu indexieren, sondern schreibt eine Zeile ins Protokoll und nennt den Grund
+auf der Statusseite. Das ist eine Warnung und keine Rettung: die Löschung
+selbst kann Findling nicht abfangen, weil AppAPI sie ausführt und nicht diese
+App.
+
+**Die Grenze dieser Marke, und der Ausweg.** Die Kennung ist die Adresse der
+Instanz, so wie AppAPI sie dem Container gibt (`NEXTCLOUD_URL`), als Prüfsumme
+und nicht im Klartext, weil der andere Container dasselbe Volume liest. Wer die
+Adresse seiner Nextcloud ändert, etwa von einer IP auf einen Namen oder von
+`http` auf `https`, hat für den Container damit eine andere Instanz, und der
+nächste Start hält die eigene Marke für die einer fremden. Das ist eine
+Fehlmeldung mit einem Handgriff dagegen: die Datei `instance.json` im Volume
+löschen, der nächste Start schreibt sie mit der neuen Adresse neu. Ein Neustart,
+ein Upgrade und ein erneutes Registrieren derselben Instanz lösen sie nicht aus.
+
 ## 3. Was auch mit `--rm-data` liegen bleibt
 
 Eine ehrliche Deinstallationsseite nennt die Reste, und es gibt drei:
