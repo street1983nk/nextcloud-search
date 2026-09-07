@@ -642,7 +642,7 @@ Befund 9 der Sichtprobe, vom Owner live gesehen (Kacheln "4 Fehlgeschlagen"
 und "Datei beschaedigt, 4" samt Neu-hochladen-Rat bei findbaren Dateien).
 Owner-Entscheid 07.09.: Fix VOR der Abgabe (Plan 06.1-24, Task 1).
 
-## DI-06.1-35 (Plan 06.1-19): der gruene deploy-harp-Lauf ueber die neue Routenpruefung steht aus
+## DI-06.1-35 (ERLEDIGT 07.09.): der gruene deploy-harp-Lauf ueber die neue Routenpruefung liegt vor (success auf 2f6f95b)
 
 Befund 10 behoben (Erwartung auf die verankerte Routenform gezogen), die
 Bestaetigung liefert der naechste deploy-harp-Lauf auf main nach dem Merge
