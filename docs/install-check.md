@@ -539,3 +539,270 @@ Einstellungen, und danach war alles auf null.
 **Keine einzige Feststellung des amd64-Laufs kippt auf arm64.** Die Architektur
 ist an dieser Stelle kein Unterschied, und das ist die Aussage, die Kriterium 3
 der ROADMAP gebraucht hat.
+
+## 6. Die Sichtprobe des Owners vom 07.09.2026 (D-H5)
+
+Dieser Abschnitt ist das Protokoll des Abnahmegates der Phase 06.1. Die beiden
+Läufe oben sind Fahrpläne, die eine Maschine abgeht. Dieser Schritt stellt die
+Frage, die kein Gate stellt: sieht das aus wie etwas, das man installieren will,
+und tut es, was es verspricht.
+
+### Die Archive: aus dem Probelauf, nicht aus dem Arbeitsbaum
+
+Das ist der Kern von D-H5, deshalb steht es zuerst.
+
+| Was | Wert |
+|---|---|
+| Probelauf | `release.yml` über `workflow_dispatch`, Lauf `34116531030`, Zweig `main` bei Stand `94420f7`, gestartet am 07.09.2026 um 11:35 UTC |
+| Erzeugtes Release | **keines**. `create_release` stand auf seiner Vorgabe `false`, und der Release-Schritt verlangt zusätzlich einen `v`-Tag (T-05-77) |
+| Companion-Archiv | `findling.tar.gz`, 234090 Bytes, SHA-256 `5f83ea92c15ce0ab5657d97c8c9aa2e86ea810c79dd4e446f8482c7ac7ba2bc3` |
+| Backend-Archiv | `findling_backend.tar.gz`, 29112 Bytes, SHA-256 `8ea9a88f3bc57d956694627c6fac84b241c8e2d5aa22386d08e5bc61ac1303cc` |
+| Signaturdateien | `findling.tar.gz.sig` und `findling_backend.tar.gz.sig`, je 684 Bytes |
+
+**Was dieser Lauf gegenüber dem 06.09. neu belegt, und es ist die eine Hälfte,
+die keine CI belegen kann:** die Code-Signatur trägt hier **keine
+Ersatzidentität**. Das Zertifikat in `findling/appinfo/signature.json` lautet
+
+```
+subject: CN=findling
+issuer:  CN=Nextcloud Code Signing Intermediate Authority, O=Nextcloud GmbH,
+         ST=Baden-Wuerttemberg, C=DE
+gueltig: 19.08.2026 bis 24.11.2036
+```
+
+Die frische Instanz hat es gegen die `resources/codesigning/root.crt` geprüft,
+die Nextcloud 34.0.3 selbst mitbringt, **ohne dass an dieser Datei etwas
+angehängt wurde**. Befund 3 des amd64-Laufs entfällt damit für diesen Lauf, und
+Befund 2 ebenfalls: `occ integrity:check-app findling` antwortet leer, also
+sauber, und eine einzige geänderte Zeile in `lib/AppInfo/Application.php` kippt
+das Urteil auf `INVALID_HASH`. Danach ist die Datei zurückgestellt und das Urteil
+wieder sauber.
+
+### Die Instanz
+
+| Was | Wert |
+|---|---|
+| Wirt | Windows 11, Docker Engine 29.5.2, WSL2, **12 CPUs** |
+| Nextcloud | 34.0.3.2, Abbild `nextcloud:34.0.3-apache`, SQLite |
+| Weg | docker compose, drei Dienste: Nextcloud, HaRP, ein Frontproxy (`nginx:1.27-alpine`) |
+| Port | **8097**. 8090 trägt den Alltagsstack dieser Maschine, 8080 gehört einer anderen Sitzung; beide sind unberührt |
+| AppAPI | 34.0.0, mit dem Server ausgeliefert |
+| HaRP | `ghcr.io/nextcloud/nextcloud-appapi-harp`, festgenagelt auf `sha256:603fdf5c...`, dieselbe Zeichenkette wie in `deploy-harp.yml` |
+| Deploy-Daemon | `harp_sicht_compose`, `docker-install`, HaRP an `harp:8780`, `nextcloud_url` auf den Frontproxy |
+| Abbild | `ghcr.io/street1983nk/findling_backend:dev`, Digest `sha256:f32af191ca87ff1dbe071c6c545300619f2a8e7ef8e9aeda9b193ebe8a6bcc79` |
+| Konten | `admin` für die Verwaltungsseite, `testuser` für Hochladen und Suchen |
+| Lockstep | `match`, Companion 1.0.0, Container 1.0.0 |
+
+Die **zwölf CPUs des Wirts** stehen nicht aus Ordnungsliebe in dieser Tabelle.
+Sie sind die Ursache des Befundes 8 weiter unten, und sie sind der Grund, warum
+dieser Befund fünf Phasen lang unentdeckt blieb.
+
+### Zwei Instanzen, und warum es zwei sein mussten
+
+Es sind zwei Instanzen nacheinander entstanden, jede aus einem leeren
+Docker-Zustand (`compose down -v`, danach `compose up`).
+
+1. **Die Fahrplan-Instanz.** Auf ihr lief `scripts/dev/aio_install_check.sh`
+   vollständig: Vorprüfung, anonymer Pull, Companion aus dem Archiv samt
+   Fälschungsprobe, ExApp aus dem Archiv, Zero-Config-Nachweis und **alle sechs
+   Deinstallations-Zusagen**. Ergebnis: `SUMMARY: all six uninstall promises hold
+   on this instance`. Protokoll: `.dev/sichtprobe/install-check-sichtprobe.log`.
+2. **Die Instanz des Owners.** Auf ihr laufen nur die Schritte 2 und 3 desselben
+   Fahrplans, wörtlich in ihren Befehlen. Die Deinstallations-Zusagen sind hier
+   bewusst **nicht** wiederholt: sie reissen die Installation ab und bauen sie
+   wieder auf, und eine abgerissene und wieder aufgebaute Instanz ist nicht die
+   Instanz, nach der D-H5 fragt.
+
+Vor der Installation ist geprüft und nicht angenommen worden, dass kein anderes
+`nc_app_findling_backend_data`-Volume auf dieser Maschine existiert. Es existiert
+keines: der Alltagsstack auf Port 8090 läuft über `manual-install` und legt kein
+ExApp-Volume an. Das ist die Warnung aus `docs/uninstall.md`, Abschnitt "Zwei
+Instanzen an einem Docker-Dienst teilen das Volume", und sie ist hier abgehakt
+statt überlesen.
+
+### Der Zero-Config-Nachweis, als Zahlenreihe
+
+Auf der Fahrplan-Instanz, mit `--cron-driver script` und 300 s Takt:
+
+| Runde | Zeit | Deckung |
+|---|---|---|
+| 0, vor der ersten Cron-Runde | 12:00:38Z | indexed 0, embedded 0 |
+| 1 | 12:01:19Z | indexed 41, embedded 41 |
+
+**Inhaltstreffer nach einer Cron-Runde, 42 s Wanduhr.** Zwischen dem Ende der
+Installation und dem ersten Treffer: `occ calls between the installation and the
+hit: none, which is what zero config means`. Zehn occ-Aufrufe brauchte die
+Installation, danach keiner.
+
+### Die fünf Dokumente, die der Owner durchsucht
+
+Nicht aus dem Referenzkorpus, und das ist Absicht: dessen Dateien heissen
+`09-bescheid.pdf` bis `39-...` und zehn von ihnen sind absichtlich beschädigt,
+weil der Fehlerweg das ist, worauf dieses Projekt geprüft wird. Eine Sichtprobe
+braucht das Gegenteil. Erzeugt von
+`.dev/sichtprobe/stack/build_sichtprobe_docs.py`, jedes Dokument erfunden, kein
+Name und keine Adresse darin echt.
+
+Jedes Suchwort steht **nur im Inhalt** und in keinem Dateinamen. Ein Wort, das
+auch im Namen stünde, ergäbe einen Treffer der Dateiliste und keinen dieser App.
+
+| Datei | Art | Suchwort | Gefunden am 07.09. |
+|---|---|---|---|
+| `protokoll-hausversammlung.txt` | Klartext | `Fahrradstellplatzsatzung` | **ja**, mit Auszug |
+| `angebot-heizungstausch.pdf` | PDF mit Textschicht | `Heizlastberechnung` | **ja**, mit Auszug |
+| `scan-bescheid.pdf` | PDF **ohne** Textschicht, ein Bild einer Seite | `Zweitwohnungsteuer` | **ja**, mit Auszug, also über OCR |
+| `2026-04-mietvertrag.docx` | DOCX | `Winterdienstpauschale` | **nein**, siehe Befund 8 |
+| `nebenkosten-2025.xlsx` | XLSX | `Grundsteuermessbetrag` | **nein**, siehe Befund 8 |
+
+Der Scan ist mit `pypdfium2` gegengeprüft: er liefert **0 Textzeichen**, die
+Textschicht-Datei 345. Der Treffer auf dem Scan kann also nur aus der
+Texterkennung kommen und aus nichts anderem.
+
+Die Deckung am Ende, aus der Verwaltungsseite gelesen:
+
+```
+coverage: indexed 85 von 100 indexierbar, 85 Prozent, embedded 83
+skipped 16: empty_text 14 (die Beispielfotos), image_not_ocrable 2
+failed  4: corrupt 4 (siehe Befund 8)
+indexBytes 743426, runState idle, backendReachable true
+```
+
+### Die Gastnutzer-Probe
+
+Gefahren auf derselben Instanz, vor dem Hochladen der fünf Dokumente, weil die
+Probe den Index ausdrücklich antreibt und die Zero-Config-Aussage über die
+Dokumente des Owners eine Aussage über den gewöhnlichen Cron-Weg bleiben soll.
+Ergebnis: **bestanden**, vier Vergleiche, `guests` 4.9.0. Der Vorab-Vergleich des
+Eigentümers ist neu und schliesst DI-06.1-17. Die Einzelheiten stehen in
+`docs/testing.md`, Abschnitt "The guest user probe".
+
+### Befund 8: Jedes Office-Dokument meldet sich als beschädigt, ab genügend CPU-Kernen
+
+**Der wichtigste Fund dieser Phase, und genau der Fund, für den D-H5 existiert.**
+Er ist von keinem Test und von keiner Messung dieser oder der vier vorigen Phasen
+gesehen worden.
+
+**Was zu sehen ist:** Auf einer frischen Nextcloud melden
+`2026-04-mietvertrag.docx` und `nebenkosten-2025.xlsx` den Endzustand `failed`,
+Grund `corrupt`, Beschriftung "File damaged". Und nicht nur die beiden: **auch
+`Documents/Welcome to Nextcloud Hub.docx`, das Nextcloud selbst mitbringt.** Das
+Erste, was ein Selfhoster nach der Installation auf der Verwaltungsseite sieht,
+ist also eine Fehlergruppe über sein eigenes Willkommensdokument.
+
+**Die Ursache, gemessen und nicht erschlossen:**
+
+1. `findling/extract/office.py` importiert `openpyxl` auf Modulebene.
+2. `openpyxl.compat.numbers` importiert `numpy` bedingungslos.
+3. `numpy` lädt OpenBLAS.
+4. OpenBLAS startet **einen Arbeitsthread je CPU**, hier also zwölf.
+5. Jeder dieser Threads will einen Stapel im Adressraum, den
+   `_limit_address_space` unmittelbar davor über `RLIMIT_AS` auf 512 MB begrenzt
+   hat. `pthread_create` scheitert.
+6. Der `numpy`-Import bricht mitten drin ab, und `dispatch` bildet die unbekannte
+   Ausnahme auf `failed(corrupt)` ab.
+
+Der Container hat es selbst protokolliert, und OpenBLAS nennt darin seine eigene
+Abhilfe:
+
+```
+OpenBLAS blas_thread_init: pthread_create failed for thread 10 of 12:
+  Resource temporarily unavailable
+OpenBLAS blas_thread_init: ensure that your address space and process count
+  limits are big enough (ulimit -a)
+OpenBLAS blas_thread_init: or set a smaller OPENBLAS_NUM_THREADS
+```
+
+Nachgestellt in drei Stufen, jede im laufenden Container:
+
+| Stufe | Ergebnis |
+|---|---|
+| `office.extract_docx` direkt, ohne Prozessgrenze | `indexed`, 495 Zeichen |
+| `extract_guarded` mit `RLIMIT_AS` 512 MB | `failed(corrupt)`, 0 Zeichen |
+| `import numpy` unter `RLIMIT_AS` 512 MB mit `OPENBLAS_NUM_THREADS=1` | Import gelingt, danach `indexed`, 495 Zeichen |
+
+**Warum es fünf Phasen überlebt hat:** die Threadzahl folgt der CPU-Zahl. Auf der
+Messbox mit zwei vCPU und auf einem Runner mit vier passen die Stapel unter die
+Grenze, also ist jeder Test und jede Messung grün geblieben, während derselbe
+Code auf einer gewöhnlichen Entwicklermaschine und auf jedem selbst gehosteten
+Server mit genügend Kernen scheitert. Kein Gate war falsch; die Maschinen waren
+zu klein, um die Grenze zu erreichen.
+
+**Der Fix** steht im Repository und ist am laufenden Container bewiesen:
+`_pin_native_thread_pools()` in `findling/extract/sandbox.py` setzt
+`OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`, `MKL_NUM_THREADS` und
+`NUMEXPR_NUM_THREADS` auf 1, **nach** der Adressraumgrenze und **vor** dem Import
+des Dispatchers, weil diese Variablen beim Initialisieren der Bibliothek gelesen
+werden. Drei Tests in `backend/tests/test_sandbox.py` halten ihn: die Variablen,
+die Reihenfolge, und ein DOCX über den echten Kindprozess. Der dritte trägt seine
+eigene Grenze im Text: er ist nur auf einer Maschine mit genügend Kernen eine
+Ratsche, und genau deshalb prüfen die ersten zwei den Mechanismus statt des
+Ergebnisses.
+
+**Was der Owner auf dieser Instanz sieht, und warum:** der Fix liegt im Quellcode
+und **nicht im veröffentlichten Abbild**. Das Abbild
+`ghcr.io/street1983nk/findling_backend:dev` entsteht in `docker.yml` beim Push auf
+`main`, also erst nach dem Merge dieses Plans. Die Instanz des Owners läuft
+deshalb bewusst auf dem **unveränderten** Abbild: sie zeigt, was das
+veröffentlichte Abbild heute tut, und nicht, was der Arbeitsbaum kann. Ein von
+Hand in den Container kopierter Fix hätte die Sichtprobe zu einer Probe über
+einen Arbeitsbaum gemacht, und das ist genau das, was D-H5 ausschliesst. Der
+Container ist nach der Nachstellung aus dem Abbild neu erzeugt worden;
+`docker diff` zeigt am Paket `findling` keine einzige Änderung.
+
+### Was diese Sichtprobe nicht abdeckt
+
+Die Liste in Abschnitt 3 gilt unverändert weiter. Dazu kommen zwei Punkte, die
+nur diesen Lauf betreffen:
+
+1. **Der Tag `1.0.0` existiert noch nicht.** Wie im amd64-Lauf ist gegen `dev`
+   installiert worden, mit genau einer ersetzten Zeile in der `info.xml` des
+   Archivs. Befund 1 gilt fort: erst der Lauf nach dem Release-Tag geht den Weg
+   vollständig.
+2. **Die beiden `info.xml`-Änderungen dieses Plans sind in diesen Archiven nicht
+   enthalten.** Der Probelauf lief auf `main` bei `94420f7`, also vor der
+   Umstellung der Lizenz auf `AGPL-3.0-or-later` und vor der verankerten
+   Routenform `^/<name>$`. Die Archive tragen nachweislich noch
+   `<licence>agpl</licence>` und die nackten Routennamen. Beide Änderungen
+   berühren nichts auf dem Weg, den der Owner besieht: die Lizenz ist
+   Store-Metadatum, und der Routenblock regiert allein den unsignierten
+   Direktzugriff, den kein Teil des Produkts benutzt (DI-06.1-13). Der Ort, an dem
+   die verankerte Form gemessen wird, ist der `deploy-harp`-Job des CI-Laufs nach
+   dem Merge; bis dahin ist "der Block passt jetzt zu dem, was er nennt" eine
+   Aussage über einen regulären Ausdruck und keine Messung.
+
+### APPSTORE_TOKEN: rotiert am 07.09.2026 um 11:01:21Z
+
+Pflichtpunkt 8 der Launch-Haertung, und er ist erledigt, bevor irgendetwas
+eingereicht wird. Das Token stand einmal im Gespraech und war damit im Umlauf.
+Der Betreiber hat es am 07.09.2026 ersetzt und das alte widerrufen; ein
+ersetztes Token, das noch gilt, waere kein rotiertes Token.
+
+Nachgeprueft und nicht geglaubt: `gh secret list` fuehrt `APPSTORE_TOKEN` mit
+dem Zeitstempel `2026-09-07T11:01:21Z`, also mit dem Zeitpunkt der Rotation und
+nicht mit einem aelteren. Der Wert selbst existiert ausschliesslich im
+Secret-Store von GitHub und steht in keinem Artefakt dieses Repositories, auch
+nicht in einer Zusammenfassung.
+
+### Wie diese Sichtprobe zu wiederholen ist
+
+Die Skripte liegen unter `.dev/sichtprobe/stack/` und sind nicht Teil der
+Auslieferung:
+
+| Datei | Aufgabe |
+|---|---|
+| `compose.yaml` | die drei Dienste, ohne jeden Bind in einen Arbeitsbaum |
+| `exapps-proxy.conf` | der Frontproxy, `/exapps/` in den Tunnel, alles andere an den Server |
+| `prepare.sh` | Erstlauf-Assistent aus, `testuser`, `guests`, Deploy-Daemon, Tabellenleser |
+| `run-install-check.sh` | der vollständige Fahrplan aus `scripts/dev/aio_install_check.sh` |
+| `install-for-owner.sh` | nur die Schritte 2 und 3, für die Instanz des Owners |
+| `build_sichtprobe_docs.py` | die fünf deutschen Dokumente |
+| `upload-docs.sh` | die Dokumente über WebDAV als `testuser` |
+| `run-guest-parity.sh` | die Gastnutzer-Probe |
+| `drive-cron.sh` | `cron.php` in Runden, mit einer Zahlenreihe je Runde |
+
+Jedes Passwort steht in `.env` und in keiner Argumentliste (DI-06.1-18).
+`MSYS2_ARG_CONV_EXCL` nennt in jedem dieser Skripte genau die Pfade, die dem
+Container gehören, und nicht `*`: eine pauschale Ausnahme lässt die
+Konfigurationsdateien scheitern, die das native curl dieses Wirts unter `/tmp`
+der Shell liest. Befund 7 gilt hier zweimal, und die zweite Ausprägung
+(`path=/...` als Optionswert) hat einen Lauf der Gastnutzer-Probe gekostet.

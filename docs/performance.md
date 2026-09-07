@@ -149,6 +149,7 @@ zwei Reihen auf zwei Architekturen mehr sagen als eine.
 | Suche während des Nachlaufs | gemessen, p95 1.129 ms gegen 2.500 ms Budget | 2026-09-06 |
 | Kosten des Semantiklaufs | aus den Sätzen dieses Kontos, 2,37 USD netto | 2026-09-06 |
 | Verbleib der ARM-Box nach dem Semantiklauf | **wieder angehalten**, für die Launch-Härtung vor der Abgabe | 2026-09-06 |
+| Verbleib der ARM-Box nach der Launch-Härtung | **angehalten, kein Abbau** (Betreiberentscheid 07.09.); Abbaukriterium: nach der v1.1-Messung | 2026-09-07 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -3338,6 +3339,46 @@ nächsten Start wechselt die Adresse (`3.77.150.91` ist dann nicht mehr diese
 Box), `BOX_IP`, die SSH-Regel der Security Group auf die Betreiber-IP und der
 Eintrag `loadtest.infranode.dev` sind nachzuziehen, und der Container muss über
 AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
+
+### Der dritte Verbleib: nach der Launch-Härtung erneut angehalten, kein Abbau
+
+**Entschieden am 07.09.2026 vom Betreiber, im Abnahmegate der Phase 06.1:
+angehalten bleiben, nicht abbauen.** Plan 06.1-19 hatte den **Abbau** vorgesehen,
+mit Freigabe, `scripts/ops/aws_box.sh destroy` und einer Nichtexistenz-Prüfung
+für Instanz, Datenträger und Security Group. Das ist **nicht** ausgeführt worden,
+und es ist keine offene Aufgabe, sondern eine Entscheidung. Sie steht hier als
+dokumentierte Abweichung zum Plan, damit niemand später eine Zusage sucht, die
+zurückgenommen wurde.
+
+| Punkt | Stand |
+|---|---|
+| Instanz | `i-06b1d913f5c6f669b`, **gestoppt** seit 07.09.2026, 06:56:42Z, per API geprüft |
+| Datenträger | `vol-04c5b59fe9417babd`, bleibt, mit Korpus, beiden Indizes und den Abbildern |
+| Security Group | `sg-0e782f5233d73a847`, bleibt |
+| Parkkosten | rund **0,3130 USD je Tag**, nur die Datenträger; die Recheneinheit kostet gestoppt nichts |
+| Zustandsdatei | `~/.findling-loadtest/box.env`, unverändert weitergeführt; `aws_box.sh` entfernt sie erst beim Abbau |
+
+**Das Abbaukriterium, damit der Verbleib ein Ende hat und keine Gewohnheit
+wird:** abgebaut wird **nach der v1.1-Messung**. v1.1 ist die semantische Stufe,
+sie liegt vier bis sechs Wochen nach v1.0, und ihre Messreihe gehört auf dieselbe
+Maschine wie die von 06-11 und 06.1-18, sonst vergleicht sie zwei Maschinen statt
+zweier Fassungen. Erst wenn diese Messung abgenommen ist, fällt die Box, und dann
+mit derselben Nichtexistenz-Prüfung, die dieser Plan beschrieben hat.
+
+**Ein zweiter Grund, der am 07.09. hinzugekommen ist und den Abbau ohnehin
+verschoben hätte:** der Index auf dem Datenträger ist seit dem Volumenvorfall
+nicht mehr vorhanden. Ein Start der Box zöge deshalb rund 19 Stunden Neuaufbau
+nach sich, bevor überhaupt gemessen werden könnte. Ein Abbau, der einen leeren
+Index wegwirft, spart 0,31 USD je Tag und kostet beim nächsten Bedarf einen
+zweiten Aufbau von 19 Stunden, dazu die Bewaffnung des Containers über AppAPI
+(DI-05-36). Deshalb ist in diesem Plan **kein AWS-Kontakt** erfolgt: die
+Feststellung des gestoppten Zustands stammt aus der API-Abfrage vom Morgen des
+07.09., und danach ist die Box nicht mehr angefasst worden.
+
+Beim nächsten Start gilt weiter, was schon beim zweiten Verbleib stand: die
+öffentliche Adresse wechselt, `BOX_IP`, die SSH-Regel der Security Group auf die
+Betreiber-IP und der Eintrag `loadtest.infranode.dev` sind nachzuziehen, und der
+Container muss über AppAPI neu bewaffnet werden, sonst indexiert er nicht.
 
 ## Reproduzieren
 
