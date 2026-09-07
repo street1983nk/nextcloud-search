@@ -223,6 +223,16 @@ auf der Statusseite. Das ist eine Warnung und keine Rettung: die Löschung
 selbst kann Findling nicht abfangen, weil AppAPI sie ausführt und nicht diese
 App.
 
+**Die Grenze dieser Marke, und der Ausweg.** Die Kennung ist die Adresse der
+Instanz, so wie AppAPI sie dem Container gibt (`NEXTCLOUD_URL`), als Prüfsumme
+und nicht im Klartext, weil der andere Container dasselbe Volume liest. Wer die
+Adresse seiner Nextcloud ändert, etwa von einer IP auf einen Namen oder von
+`http` auf `https`, hat für den Container damit eine andere Instanz, und der
+nächste Start hält die eigene Marke für die einer fremden. Das ist eine
+Fehlmeldung mit einem Handgriff dagegen: die Datei `instance.json` im Volume
+löschen, der nächste Start schreibt sie mit der neuen Adresse neu. Ein Neustart,
+ein Upgrade und ein erneutes Registrieren derselben Instanz lösen sie nicht aus.
+
 ## 3. Was auch mit `--rm-data` liegen bleibt
 
 Eine ehrliche Deinstallationsseite nennt die Reste, und es gibt drei:
