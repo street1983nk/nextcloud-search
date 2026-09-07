@@ -189,6 +189,9 @@ a reservation, the reservation is copied here rather than smoothed over.
 | `findling.extract.ocr_quality` with `testdata/corpus-truth.json` (06.1-14) | An OCR regression noticed only as a search hit that happens to still work. The measurement is a character error rate against a truth the generator wrote, and three counter probes show the rate moves. | Quality on foreign material, and it currently proves nothing on every run: the tool is driven by hand and by no job, so the total failure it was built to catch would surface at the next manual measurement and not before (DI-06.1-11). |
 | `scripts/dev/aio_install_check.sh` and `docs/install-check.md` (06.1-16) | An install path measured only by CI. The script takes an address, a login and two archives, reaches into no working tree, and drives the same schedule on a machine set up the way a selfhoster sets one up. | The arm64 and all-in-one half in the same run. That is a second run on the box, in plan 06.1-18, with the image tag and the platform as the only two knobs that change. |
 
+| `test_an_office_document_survives_the_many_core_trap_no_runner_could_reach` and the step of its own name in `python.yml` (06.1-24) | The many core trap of the Office path becoming invisible again: OpenBLAS starts one thread per CPU inside the capped address space of the extraction child, and no job in this repository could reach that, because a runner has two to four CPUs. The case lowers the cap and widens the thread stack so that two CPUs are enough, and it carries its own counterfactual: a child in the state before commit debb395 has to fail. | That the production cap of 512 MB is enough on a machine with many cores. The case runs at 192 MB with a 64 MB thread stack, which is a scaled model of the trap and not the production configuration. At how many cores the real cap breaks without the pin was measured once, at twelve, and is not a gate. |
+| `QueueServiceTest.php` and the revocation in `QueueService::acknowledge` (06.1-24) | A `failed` verdict of the Nextcloud side outliving the later success of the same file, which is the contradiction of the sight check: the tiles count four files as failed and the error group advises "upload the file again" while the same files are findable. The test holds the set arithmetic including the exception that would silently delete a true failure, namely a permission change on the same file. | That the revocation works against a running instance. It is a unit test over a pure function; the wiring into the transaction and the database cannot be tested without a Nextcloud and belongs to the integration jobs. |
+
 ## The guest user probe, which is deliberately not a gate
 
 `scripts/dev/guest_parity.sh` is the second half of scenario 6. Decision D-22
@@ -329,11 +332,12 @@ and they say nothing about the behaviour against a real instance. That is what
 the two integration jobs are for, and the division of labour is the point rather
 than a shortcoming.
 
-Three more PHP test files stand beside them and are not part of this list,
+Four more PHP test files stand beside them and are not part of this list,
 because the list is a specification of one audit follow up and not an index of
 the suite: `BootstrapTest.php` and `AdminViewServiceTest.php`, which arrived with
-the scaffold in plan 05-15 and grew in plan 05-20, and
-`GroupEventListenerTest.php` from plan 06.1-08.
+the scaffold in plan 05-15 and grew in plan 05-20,
+`GroupEventListenerTest.php` from plan 06.1-08, and `QueueServiceTest.php` from
+plan 06.1-24, which holds the arithmetic of the verdict revocation.
 
 ## What closed it
 
