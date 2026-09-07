@@ -74,28 +74,49 @@ not for a search cluster.
 
 ## What it costs in memory, measured
 
-**A full index, OCR and embedding run over 50,000 files and 20 GB on a 4-GB ARM64
-box peaked at 1,838 MB of resident anonymous memory, under a hard 2 GB limit
-enforced by the kernel, with no OOM kill and no restart.** The run took 18 hours
-56 minutes until the last vector, wrote a 785 MB word index and a 69 MB vector
-store, and left every file with a verdict: 51,961 indexed and embedded, 37
-skipped for a named reason, **none failed**. A user search during the run
-answered in 1.1 seconds at the 95th percentile, after the run in 0.5 seconds.
+**On a 4-GB ARM64 box with 51,961 indexed documents and the semantic search
+active, the container peaked at 1,813 MB of resident anonymous memory, under a
+hard 2 GB limit enforced by the kernel. The three kernel counters for memory
+damage (`oom`, `oom_kill`, `oom_group_kill`) are zero, and the fourth counter
+`max`, which counts how often the kernel had to push the container back against
+its limit, is zero as well.** Measured on 07.09.2026
+([docs/measurements/2026-09-nachmessung-m7g](docs/measurements/2026-09-nachmessung-m7g/)).
 
-That is a measurement and not an estimate. It was taken on arm64 with 2 cores and
-4 GB, which is the hardware this app is built for. These runtimes are the smallest
-supported target hardware and a deliberate lower bound: on modern, powerful
-hardware indexing runs considerably faster, but no dedicated measurement for that
-exists yet. Two honest sentences belong
-next to it. First: the kernel counters for memory damage (`oom`, `oom_kill`,
-`oom_group_kill`) are zero, but the `max` counter is not, because the file cache
-of the index pressed against the 2 GB limit 2,796 times while the semantic search
-held 1.5 to 1.8 GB of its own; the limit was respected, it was not left untouched.
-Second: most of that memory is the semantic search, not the indexing. The same
-run without embeddings peaked at 422 MB and took 12 hours 49 minutes on the same
-machine, and about 276 MB of the difference is a second copy of the model that the
-search side loads next to the one the indexer holds. That is a known finding and
-it is being addressed in the hardening before the first release.
+`max` is disclosed here rather than left out, because it was not zero in the
+previous measurement: the file cache of the index pressed against the 2 GB limit
+2,796 times back then. No process was killed, but the kernel had to work. This
+time it did not have to, not once.
+
+**The previous figure, as a comparison:** 1,838 MB, measured on 05.09.2026 in the
+full semantic run
+([docs/measurements/2026-09-05-semantiklauf-m7g](docs/measurements/2026-09-05-semantiklauf-m7g/)),
+with `max 2,796`. The difference is not measurement noise: the search side loaded
+a second copy of the model next to the one the indexer held. That copy is gone,
+and the search phase fell from 1,838 MB to 1,125 MB because of it. That the
+overall peak fell by only 25 MB has a reason of its own: it now arises in the OCR
+phase rather than in the search, and the OCR has worked with three languages
+instead of two since 06.09.2026. Both figures carry their date and their reason
+in the measurement report.
+
+**Concurrent searches:** up to **eight** hold the time budget of 2.5 seconds on
+this box (95th percentile 1.9 s over 410 requests). At twelve it breaks. That is a
+figure about this box and this instance: the Nextcloud search asks every provider
+at once, so the PHP process pool of the instance sets a limit just as much, and
+that pool is a different size everywhere.
+
+**The full run the stock comes from:** 50,000 files and 20 GB, 18 hours 56 minutes
+until the last vector, a 785 MB word index and a 69 MB vector store, and every
+file with a verdict: 51,961 indexed and embedded, 37 skipped for a named reason,
+**none failed**. A user search during the run answered in 1.1 seconds at the 95th
+percentile, after the run in 0.5 seconds.
+
+These are measurements and not estimates. They were taken on arm64 with 2 cores
+and 4 GB, which is the hardware this app is built for. These runtimes are the
+smallest supported target hardware and a deliberate lower bound: on modern,
+powerful hardware indexing runs considerably faster, but no dedicated measurement
+for that exists yet. One honest sentence belongs next to it: most of that memory
+is the semantic search, not the indexing. The same full run without embeddings
+peaked at 422 MB and took 12 hours 49 minutes on the same machine.
 
 Method, both full curves, the corpus, the four part OOM proof, four failure drills
 on the same machine (`docker kill` during OCR, a reboot of the whole machine,
