@@ -29,6 +29,9 @@
 #
 # Every subcommand is run from the root of this repository, except
 # assert-contents, which only reads the archive it is given.
+#
+# pack refuses to build an archive out of a stage directory whose text files
+# carry a carriage return. The reason is written out at assert_no_crlf below.
 
 set -eu
 
@@ -110,6 +113,62 @@ stage_backend() {
 	echo "info.xml is byte identical to the working tree, so AppAPI will read the routes it expects"
 }
 
+# No carriage return in anything that ships as text. A working tree checked out
+# with core.autocrlf enabled, which is what the development machine of this
+# project does, hands a carriage return to every text file that .gitattributes
+# does not pin: the rules there cover the shell scripts, the YAML, the corpus and
+# scripts/ops, and deliberately not php/. So php/lib, php/templates, php/js,
+# php/css, the two info.xml and THIRD-PARTY.md all arrive with CRLF, and a pack
+# run on that tree produces an archive that is byte for byte a different product
+# from the one release.yml builds on its Linux runner, under the same version
+# number and with the same code signature over different bytes.
+#
+# Refusing rather than warning, and that is the whole point of the check: a
+# warning in a build log is read after the upload, and the archive is the thing a
+# reviewer downloads. Today this is latent because release.yml is the only
+# publisher, and refusing here is what keeps it latent (DI-06.1-15).
+#
+# An allowlist of extensions rather than a content sniff, and an allowlist rather
+# than an exclusion list. A font, an icon, a model or any other binary that
+# legitimately carries a 0x0D byte can never fail this check, because it is never
+# looked at, and a new kind of text file has to be named here before it can
+# travel unchecked. LICENSE is matched by name because it carries no extension.
+#
+# tr and cmp rather than grep, because grep decides on its own that a file is
+# binary and then answers about that decision instead of about the byte.
+assert_no_crlf() {
+	stage="$1"
+	app="$2"
+	offenders=$(
+		find "${stage}/${app}" -type f \
+			\( -name '*.php' -o -name '*.xml' -o -name '*.xslt' \
+			-o -name '*.js' -o -name '*.json' -o -name '*.css' \
+			-o -name '*.md' -o -name '*.sh' -o -name '*.py' \
+			-o -name '*.svg' -o -name '*.txt' -o -name 'LICENSE' \) \
+			-exec sh -c '
+				for file do
+					tr -d "\r" < "${file}" | cmp -s - "${file}" ||
+						printf "%s\n" "${file}"
+				done
+			' sh {} +
+	)
+
+	if [ -z "${offenders}" ]; then
+		echo "no carriage return in any staged text file"
+		return 0
+	fi
+
+	echo "these staged text files carry a carriage return:"
+	printf '%s\n' "${offenders}" | sed 's/^/  /'
+	echo "refusing to pack ${stage}/${app}: this working tree was checked out with"
+	echo "core.autocrlf enabled, and the archive would be byte for byte a different"
+	echo "product from the one .github/workflows/release.yml builds."
+	echo "Build the release on a checkout with LF, for example with"
+	echo "'git -c core.autocrlf=false clone' or 'git config core.autocrlf input'"
+	echo "followed by a fresh checkout, or let release.yml build it."
+	return 1
+}
+
 # --numeric-owner with owner and group zero because the uid of a GitHub runner
 # has no business inside a public artefact, and because it removes one source of
 # difference between two builds of the same commit.
@@ -121,6 +180,7 @@ pack() {
 	stage="$1"
 	app="$2"
 	archive="$3"
+	assert_no_crlf "${stage}" "${app}"
 	mkdir -p "$(dirname "${archive}")"
 	tar --numeric-owner --owner=0 --group=0 \
 		-czf "${archive}" -C "${stage}" "${app}"
