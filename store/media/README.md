@@ -15,8 +15,8 @@ und nicht als Faustregel darunter.
 | Bild | Größe | Grenze |
 |---|---|---|
 | `header.png` | 168515 Bytes (165 KiB) | 2 MiB je Bild |
-| `screenshot-admin.png` | 157081 Bytes (153 KiB) | 2 MiB je Bild |
-| `screenshot-search.png` | 113724 Bytes (111 KiB) | 2 MiB je Bild |
+| `screenshot-admin.png` | 159786 Bytes (156 KiB) | 2 MiB je Bild |
+| `screenshot-search.png` | 277061 Bytes (271 KiB) | 2 MiB je Bild |
 
 Die Zahlen sind nicht gepflegt, sondern geprüft: `backend/tests/test_store_metadata.py`
 hält jede von ihnen gegen die Datei, die wirklich in diesem Verzeichnis liegt.
@@ -42,11 +42,18 @@ wurde je Datei, denn zwei gleiche Adressen sind eine Abfrage.
 | Bild | Status | Inhaltstyp | Größe laut Antwort | Größe laut Tabelle oben | Maße |
 |---|---|---|---|---|---|
 | `header.png` | 200 | `image/png` | 168515 Bytes | 168515 Bytes | 1440 x 810 |
-| `screenshot-admin.png` | 200 | `image/png` | 157081 Bytes | 157081 Bytes | 1440 x 1100 |
-| `screenshot-search.png` | 200 | `image/png` | 113724 Bytes | 113724 Bytes | 1440 x 700 |
+| `screenshot-admin.png` | 200 | `image/png` | 157081 Bytes | siehe Vermerk unten | 1440 x 1100 |
+| `screenshot-search.png` | 200 | `image/png` | 113724 Bytes | siehe Vermerk unten | 1440 x 700 |
 
 Abgerufen am 07.09.2026 um 11:19 UTC über `curl` gegen den Zweig `main` bei
 Stand `94420f7`, also gegen genau die Adressen, die in beiden `info.xml` stehen.
+
+**Vermerk vom 07.09.2026, Plan 06-12:** Die beiden Screenshots wurden am selben
+Tag nach dieser Bestätigung neu erzeugt (Semantik im Bild, zweite Deckungszahl,
+siehe die Abschnitte unten). Die Maße sind unverändert, die Größen laut Antwort
+oben sind die der abgelösten Dateien. Die Adressen zeigen auf `main`; sobald der
+Stand mit den neuen Bildern dort liegt, ist die Abfrage je Datei zu wiederholen
+und diese Tabelle nachzuziehen. Für `header.png` gilt die Bestätigung unverändert.
 
 Über den Statuscode hinaus ist noch zweierlei geprüft, weil ein Statuscode allein
 nur sagt, dass etwas geantwortet hat:
@@ -55,11 +62,13 @@ nur sagt, dass etwas geantwortet hat:
    PNG-Signatur, und die Maße aus dem `IHDR`-Block stimmen mit den Maßen
    überein, die weiter unten je Bild stehen.
 2. **Es ist wirklich dieses Bild.** Die heruntergeladenen Bytes haben dieselbe
-   SHA-256-Summe wie die Dateien in diesem Verzeichnis:
-   `511f7bb3...` für `header.png`, `c1c3f9aa...` für `screenshot-admin.png`,
-   `c644294c...` für `screenshot-search.png`. Damit ist nicht nur belegt, dass
-   die Adresse antwortet, sondern dass sie das Bild ausliefert, das hier
-   besprochen wird.
+   SHA-256-Summe wie die Dateien, die zum Zeitpunkt der Abfrage in diesem
+   Verzeichnis lagen: `511f7bb3...` für `header.png` (unverändert gültig),
+   `c1c3f9aa...` für das abgelöste Verwaltungsbild, `c644294c...` für das
+   abgelöste Suchbild. Die heutigen Dateien tragen `1258e50a...`
+   (`screenshot-admin.png`) und `568b0748...` (`screenshot-search.png`); gegen
+   diese Summen läuft die Wiederholung der Abfrage nach dem nächsten Stand auf
+   `main`.
 
 Was diese Bestätigung nicht ist: ein Dauerzustand. Die Adressen zeigen auf den
 Zweig `main` und nicht auf einen Tag, und das ist Absicht (die Begründung steht
@@ -87,25 +96,36 @@ einzige Kennung, die in einem Bild vorkommt, ist das Konto `Verwaltung`.
 
 ### `screenshot-search.png` (1440 x 700)
 
-**Wofür:** das Produktversprechen in einem Bild. Die gewöhnliche Unified Search
-von Nextcloud, darin eine Ergebnisgruppe `File contents` mit zwei Treffern und
-je einem Auszug aus dem Text des Dokuments.
+**Wofür:** das Produktversprechen in einem Bild, seit Plan 06-12 das der
+semantischen Suche. Die gewöhnliche Unified Search von Nextcloud, darin die
+Ergebnisgruppe `File contents`; der oberste Treffer ist ein Dokument, das über
+eine Umschreibung gefunden wurde und nicht über eines seiner Wörter.
 
 **Wie es entstand:** Anmeldung als `Verwaltung`, die Suche der Kopfzeile
-geöffnet, das Wort `Kündigungsfrist` getippt, gewartet, bis die Gruppe
-erscheint, dann aufgenommen. Das Werkzeug ist Playwright (Chromium, ohne
-Fenster), das Skript liegt nicht im Repository, weil es einen Stack braucht, den
-es hier nicht gibt; die Schritte stehen unten vollständig.
+geöffnet, die Frage `Wann muss ich spätestens absagen, damit es nicht
+weiterläuft?` getippt, gewartet, bis die Gruppe erscheint, dann aufgenommen.
+Das Werkzeug ist Playwright (Chromium, ohne Fenster), das Skript liegt nicht im
+Repository, weil es einen Stack braucht, den es hier nicht gibt; die Schritte
+stehen unten vollständig.
 
-**Warum genau dieses Wort:** `Kündigungsfrist` steht im Inhalt von zwei
-Dokumenten und in keinem Dateinamen. Ein Wort, das auch im Namen stünde, würde
-ein Bild der Dateiliste ergeben und nicht eines dieser App.
+**Warum genau diese Frage:** Kein inhaltstragendes Wort der Frage steht im
+gefundenen Dokument `Kuendigung-Lagerflaeche-Sued.docx`, das von der
+Kündigungsfrist zum Quartalsende spricht; das ist dieselbe Regel, nach der
+`testdata/semantik` gebaut ist. Belegt vor der Aufnahme mit zwei Gegenproben
+auf demselben Stack: dieselben Wörter als Phrase und dieselben inhaltstragenden
+Wörter mit einem Minus-Operator (beides schaltet nach der Operatorregel aus
+Plan 06.1-20 die Vektorseite ab) finden **nichts**. Der Treffer kann also nur
+aus der semantischen Suche stammen. Die weiteren Einträge der Gruppe sind die
+näheren Nachbarn des kleinen Bestands in Rangfolge, so antwortet das Produkt
+wirklich.
 
 ### `screenshot-admin.png` (1440 x 1100)
 
-**Wofür:** was ein Selfhoster sehen will, bevor er etwas installiert. Der
-Deckungsgrad mit seinem Nenner, die vier Zähler, die Liste der nicht
-indexierten Dateien mit ihrem Grund, und die Einzelabfrage einer Datei.
+**Wofür:** was ein Selfhoster sehen will, bevor er etwas installiert. **Beide**
+Deckungszahlen seit Plan 06-09: der Deckungsgrad der Volltextsuche mit seinem
+Nenner und darunter die zweite Zahl `Findable by meaning`, dazu die vier
+Zähler, die Liste der nicht indexierten Dateien mit ihrem Grund, und die
+Einzelabfrage einer Datei.
 
 **Wie es entstand:** Anmeldung als Verwalter, Aufruf von
 `/settings/admin/findling`, aufgenommen nach dem ersten Statusabruf. Ebenfalls
@@ -115,8 +135,10 @@ Playwright.
 hundert Prozent über einen Bestand ohne einen einzigen Fehler sagt über die
 Diagnose nichts, und die Diagnose ist der Teil, den diese Seite leistet. Der
 Bestand enthält deshalb eine kennwortgeschützte PDF-Datei, die als
-`Übersprungen` mit dem Grund `Password protected` erscheint. Der Deckungsgrad
-im Bild ist damit 87 Prozent und nicht 100, und das ist die Absicht.
+`Übersprungen` mit dem Grund `Password protected` erscheint. Beide
+Deckungszahlen im Bild sind damit 87 Prozent und nicht 100, und das ist die
+Absicht; dass die zweite Zahl der ersten gleicht, sagt dem Betrachter genau
+das Richtige, nämlich dass jedes indexierte Dokument auch einen Vektor trägt.
 
 ### `header.png` (1440 x 810)
 
