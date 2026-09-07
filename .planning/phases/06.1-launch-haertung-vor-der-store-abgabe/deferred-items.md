@@ -521,7 +521,7 @@ eigenes Testmodul waere die saubere Adresse.
 
 ---
 
-## DI-06.1-22 (Plan 06.1-18, Befund arm64-4, ECHTER PRODUKTBEFUND): zwei Instanzen am selben Docker-Dienst teilen den ExApp-Volumennamen
+## DI-06.1-22 (BEARBEITET durch 06.1-23 + Upstream, Plan 06.1-18, Befund arm64-4): zwei Instanzen am selben Docker-Dienst teilen den ExApp-Volumennamen
 
 **Was:** Der Volumenname folgt allein aus der App-Kennung
 (nc_app_findling_backend_data). Laufen zwei Nextcloud-Instanzen am selben
@@ -583,3 +583,29 @@ Zwischenstaende. Ein Hinweis gehoert an die Stelle, die diese Tabelle beschreibt
 **Was:** Solange der Nenner (indexierbare Dateien) 0 ist und der Zaehler schon
 springt, meldet die Anzeige "unbekannt". Auf einer frischen Instanz mit einer
 Datei sieht das wie ein Fehler aus und ist keiner.
+
+**Bearbeitungsstand 07.09. (Plan 06.1-23 + Orchestrator):** Doku-Warnung an drei
+Stellen (uninstall.md eigener Abschnitt, install-check.md und dev-setup.md je
+ein Zeiger) und Instanz-Marke im Volumen (instance.py: fremde Kennung = kein
+Indexstart, VOLUME_SHARED in /status, Server bleibt oben; kaputte Marke heilt
+sich). Upstream gemeldet als nextcloud/app_api#1021 plus Kommentar an #523.
+Restrisiko bleibt bis zum Upstream-Fix bestehen und ist dokumentiert.
+
+---
+
+## DI-06.1-28 (Plan 06.1-23): die note aus /status erreicht das Auge des Verwalters nicht
+
+**Was:** AdminViewService traegt die note (z.B. VOLUME_SHARED) in die Nutzlast,
+aber admin.php und admin.js rendern sie nirgends. Der Grund erreicht Protokoll
+und JSON, nicht die Verwaltungsseite. Gilt genauso fuer die vier schon
+vorhandenen Notizen, ist also ein Bestandsbefund. UI-Umbau mit l10n-String,
+gehoert in einen eigenen kleinen Plan oder v1.0.1.
+
+---
+
+## DI-06.1-29 (ERLEDIGT 07.09.): der echte Fix der Volumenkollision liegt Upstream
+
+**Was:** Als nextcloud/app_api#1021 eingereicht (Uebernahme- und Loeschpfad
+pruefen keine Eigentuemerschaft; Label-Vorschlag als backportfaehiger Fix),
+dazu Kommentar an #523 (Sechs-Stellen-Korrektur des Maintainer-Plans, HaRP
+seit v0.2.0 fertig). Auf Reaktionen achten.
