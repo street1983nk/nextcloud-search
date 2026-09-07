@@ -39,6 +39,17 @@
 # Without both halves this probe would hold two truncated lists side by side and
 # report agreement (pitfall 6, T-06.1-63).
 #
+# No password on the command line and none in the argument list of a call this
+# script makes. The security audit of plan 06.1-17 found the password of the
+# creator standing in the argument list of this script, where any account on the
+# same machine reads it out of the process list while the probe runs, and it
+# would have been no better to take it out of one argument list and put it into
+# the next: curl -u puts it there once per call. So the password comes out of
+# the environment variable FINDLING_CREATOR_PASS, a --creator argument that
+# still carries one is refused rather than quietly used, and every call goes
+# through a curl configuration file in the working directory of the run, which
+# is removed with that directory (DI-06.1-18).
+#
 # The limit of the method, stated rather than left to be found: the throwaway
 # password of the guest travels as an environment assignment into the instance,
 # so it is visible in the process list of that container for the moment the
@@ -57,7 +68,7 @@ PARITY_DIFF="${SCRIPT_DIR}/../ci/parity_diff.py"
 
 INSTANCE_URL=""
 EXEC_PREFIX=""
-CREATOR_CREDENTIALS=""
+CREATOR_UID=""
 GUEST_UID="findling-guest-probe"
 GUEST_MAIL="findling-guest-probe@example.invalid"
 LOG_FILE=""
@@ -96,10 +107,21 @@ Required:
                         server user and with the Nextcloud web root as the
                         working directory. Example:
                           "docker exec -i -u www-data -w /var/www/html findling-nc"
-  --creator USER:PASS   an ordinary user of the instance. He owns the two marker
-                        files, he creates the guest and he shares one file with
-                        him. Not the administrator, unless the instance has no
-                        other account.
+  --creator USER        an ordinary user of the instance, account name only. He
+                        owns the two marker files, he creates the guest and he
+                        shares one file with him. Not the administrator, unless
+                        the instance has no other account.
+
+Environment:
+  FINDLING_CREATOR_PASS the password of that account. It is read from the
+                        environment and never from the command line, because an
+                        argument is readable in the process list of the machine
+                        for as long as the probe runs. A --creator value that
+                        carries a colon is refused for the same reason.
+
+                        Example:
+                          FINDLING_CREATOR_PASS=secret \
+                            scripts/dev/guest_parity.sh --creator testuser ...
 
 Options:
   --guest-uid UID       account name of the guest (default: findling-guest-probe)
@@ -123,7 +145,7 @@ while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--url) INSTANCE_URL="$2"; shift 2 ;;
 		--exec) EXEC_PREFIX="$2"; shift 2 ;;
-		--creator) CREATOR_CREDENTIALS="$2"; shift 2 ;;
+		--creator) CREATOR_UID="$2"; shift 2 ;;
 		--guest-uid) GUEST_UID="$2"; shift 2 ;;
 		--guest-mail) GUEST_MAIL="$2"; shift 2 ;;
 		--crawl-seconds) CRAWL_SECONDS="$2"; shift 2 ;;
@@ -135,7 +157,7 @@ while [ "$#" -gt 0 ]; do
 	esac
 done
 
-for required in INSTANCE_URL EXEC_PREFIX CREATOR_CREDENTIALS; do
+for required in INSTANCE_URL EXEC_PREFIX CREATOR_UID; do
 	eval "value=\${$required}"
 	if [ -z "${value}" ]; then
 		echo "missing argument for ${required}" >&2
@@ -144,7 +166,26 @@ for required in INSTANCE_URL EXEC_PREFIX CREATOR_CREDENTIALS; do
 	fi
 done
 
-CREATOR_UID=${CREATOR_CREDENTIALS%%:*}
+# The refusal of the audit finding, and it refuses rather than accepts and warns.
+# A caller who writes the old USER:PASS form has a password in the process list
+# at the moment the message would be printed, so accepting it and printing a
+# note would be a warning about something that already happened.
+case "${CREATOR_UID}" in
+	*:*)
+		echo "--creator takes the account name only, and this value carries a colon." >&2
+		echo "The password belongs in the environment variable FINDLING_CREATOR_PASS," >&2
+		echo "because an argument is readable in the process list of this machine." >&2
+		exit 2
+		;;
+esac
+
+CREATOR_PASSWORD="${FINDLING_CREATOR_PASS:-}"
+if [ -z "${CREATOR_PASSWORD}" ]; then
+	echo "FINDLING_CREATOR_PASS is empty or unset, so the probe has no password for ${CREATOR_UID}." >&2
+	echo "Set it in the environment of the call, never as an argument." >&2
+	exit 2
+fi
+
 [ -n "${LOG_FILE}" ] || LOG_FILE="./guest-parity-$(date -u +%Y%m%dT%H%M%SZ).log"
 WORK_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t findling-guest-parity)
 : > "${LOG_FILE}"
@@ -156,6 +197,30 @@ if command -v openssl >/dev/null 2>&1; then
 else
 	GUEST_PASSWORD=$(od -vAn -N16 -tx1 /dev/urandom | tr -d ' \n')
 fi
+
+# One credentials file per account, and every curl call of this script reads its
+# login out of one of them with -K. The alternative, curl -u "user:password",
+# would put the password into the argument list of curl on every single call,
+# which is the finding this script was changed for and not a smaller version of
+# it. The files live in the working directory of the run, they are created with
+# no permission for anybody but the owner, and the cleanup takes the directory
+# and both of them with it.
+#
+# curl reads a double quoted value with backslash escapes, so a password that
+# carries a backslash or a quotation mark is escaped here rather than left to
+# break the file in a way that would look like a wrong password.
+CREATOR_CONF="${WORK_DIR}/creator.curlrc"
+GUEST_CONF="${WORK_DIR}/guest.curlrc"
+
+write_credentials() {  # $1 target file, $2 account, $3 password
+	escaped=$(printf '%s' "$3" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+	: > "$1"
+	chmod 600 "$1"
+	printf 'user = "%s:%s"\n' "$2" "${escaped}" >> "$1"
+}
+
+write_credentials "${CREATOR_CONF}" "${CREATOR_UID}" "${CREATOR_PASSWORD}"
+write_credentials "${GUEST_CONF}" "${GUEST_UID}" "${GUEST_PASSWORD}"
 
 # ---------------------------------------------------------------------------
 # Protocol. German, because a person reads it, and a run without a file is a
@@ -182,12 +247,12 @@ occ_with_password() { $EXEC_PREFIX env OC_PASS="${GUEST_PASSWORD}" php occ "$@";
 # The limit is sent on every call, and it is the same number the cap is raised
 # to below.
 # ---------------------------------------------------------------------------
-ask() {  # $1 provider, $2 user, $3 password, $4 term, $5 output file
-	curl -sfS -G -u "$2:$3" \
+ask() {  # $1 provider, $2 credentials file, $3 term, $4 output file
+	curl -sfS -G -K "$2" \
 		-H 'OCS-APIRequest: true' -H 'Accept: application/json' \
-		--data-urlencode "term=$4" \
+		--data-urlencode "term=$3" \
 		--data-urlencode "limit=${RESULT_LIMIT}" \
-		"${INSTANCE_URL}/ocs/v2.php/search/providers/$1/search" -o "$5"
+		"${INSTANCE_URL}/ocs/v2.php/search/providers/$1/search" -o "$4"
 }
 
 # The fileids of one answer, for the protocol and for nothing else.
@@ -203,9 +268,9 @@ answer_ids() {  # $1 answer file
 
 FINDINGS=0
 
-compare() {  # $1 scenario, $2 user, $3 password, $4 term, $5 expected minimum
-	ask files "$2" "$3" "$4" "${WORK_DIR}/native-$1.json"
-	ask findling "$2" "$3" "$4" "${WORK_DIR}/findling-$1.json"
+compare() {  # $1 scenario, $2 user, $3 credentials file, $4 term, $5 expected minimum
+	ask files "$3" "$4" "${WORK_DIR}/native-$1.json"
+	ask findling "$3" "$4" "${WORK_DIR}/findling-$1.json"
 	log "Szenario $1, Begriff $4, Konto $2"
 	log "  fileids nativ:   $(answer_ids "${WORK_DIR}/native-$1.json")"
 	log "  fileids Findling: $(answer_ids "${WORK_DIR}/findling-$1.json")"
@@ -263,7 +328,7 @@ cleanup() {
 		log "Aufraeumen: --keep war gesetzt, Gastkonto und Freigabe bleiben stehen"
 	else
 		if [ -n "${SHARE_ID}" ]; then
-			curl -s -u "${CREATOR_CREDENTIALS}" -X DELETE \
+			curl -s -K "${CREATOR_CONF}" -X DELETE \
 				-H 'OCS-APIRequest: true' -H 'Accept: application/json' \
 				"${INSTANCE_URL}/ocs/v2.php/apps/files_sharing/api/v1/shares/${SHARE_ID}" >/dev/null 2>&1
 			log "Aufraeumen: Freigabe ${SHARE_ID} entfernt"
@@ -274,7 +339,7 @@ cleanup() {
 		fi
 		if [ "${FILES_CREATED}" -eq 1 ]; then
 			for name in "${MARKER_SHARED}-1.txt" "${MARKER_PRIVATE}-1.txt"; do
-				curl -s -u "${CREATOR_CREDENTIALS}" -X DELETE \
+				curl -s -K "${CREATOR_CONF}" -X DELETE \
 					"${INSTANCE_URL}/remote.php/dav/files/${CREATOR_UID}/${name}" >/dev/null 2>&1
 			done
 			log "Aufraeumen: die beiden Markerdateien entfernt"
@@ -365,7 +430,7 @@ printf '%s Markerdatei der Gastprobe, im Namen und im Inhalt.\n' "${MARKER_SHARE
 printf '%s Markerdatei der Gastprobe, im Namen und im Inhalt.\n' "${MARKER_PRIVATE}" \
 	> "${WORK_DIR}/${MARKER_PRIVATE}-1.txt"
 for name in "${MARKER_SHARED}-1.txt" "${MARKER_PRIVATE}-1.txt"; do
-	curl -sfS -u "${CREATOR_CREDENTIALS}" -T "${WORK_DIR}/${name}" \
+	curl -sfS -K "${CREATOR_CONF}" -T "${WORK_DIR}/${name}" \
 		"${INSTANCE_URL}/remote.php/dav/files/${CREATOR_UID}/${name}" \
 		|| die "Die Datei ${name} konnte nicht hochgeladen werden"
 done
@@ -375,7 +440,7 @@ log "Zwei Markerdateien im Heimatverzeichnis von ${CREATOR_UID} angelegt"
 # permissions=1 is read only, shareType=0 is a share with a single account, and
 # a guest is an account. Without -f on purpose: a refused share answers with a
 # body that says why, and -f would throw exactly that body away.
-curl -s -u "${CREATOR_CREDENTIALS}" \
+curl -s -K "${CREATOR_CONF}" \
 	-H 'OCS-APIRequest: true' -H 'Accept: application/json' \
 	-d "path=/${MARKER_SHARED}-1.txt" \
 	-d 'shareType=0' \
@@ -414,9 +479,9 @@ drain "${DRAIN_TIMEOUT}"
 # instance that shows everything to everybody, the second alone by a search that
 # stopped working, and the third is what keeps the second honest.
 # ---------------------------------------------------------------------------
-compare guest-received-share "${GUEST_UID}" "${GUEST_PASSWORD}" "${MARKER_SHARED}" 1
-compare guest-denied "${GUEST_UID}" "${GUEST_PASSWORD}" "${MARKER_PRIVATE}" 0
-compare owner-still-finds "${CREATOR_UID}" "${CREATOR_CREDENTIALS#*:}" "${MARKER_PRIVATE}" 1
+compare guest-received-share "${GUEST_UID}" "${GUEST_CONF}" "${MARKER_SHARED}" 1
+compare guest-denied "${GUEST_UID}" "${GUEST_CONF}" "${MARKER_PRIVATE}" 0
+compare owner-still-finds "${CREATOR_UID}" "${CREATOR_CONF}" "${MARKER_PRIVATE}" 1
 
 # ---------------------------------------------------------------------------
 # Step 6, the verdict
