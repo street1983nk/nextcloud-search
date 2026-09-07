@@ -21,9 +21,21 @@
 #      (assumption A6, threat T-06.1-66).
 #
 # The script builds nothing and fetches nothing from a checkout: it takes the
-# address of the instance, the administrator login and the two archives as
-# arguments. Building and signing the archives is the release process and lives
-# in scripts/release/store-archive.sh and .github/workflows/release.yml.
+# address of the instance, the account names of the administrator and the
+# ordinary user, and the two archives as arguments. Building and signing the
+# archives is the release process and lives in scripts/release/store-archive.sh
+# and .github/workflows/release.yml.
+#
+# The two passwords are NOT arguments. The security audit of plan 06.1-17 found
+# them in the argument list, where any account on the same machine reads them
+# out of the process list for as long as the run lasts, and a run of this script
+# lasts the better part of an hour. They come out of FINDLING_ADMIN_PASS and
+# FINDLING_USER_PASS, a --admin or --user value that still carries a colon is
+# refused rather than quietly used, and every call that needs a login reads it
+# from a curl configuration file in the working directory of the run, which is
+# removed with that directory. Refusing rather than accepting and warning,
+# because by the time the warning is printed the password has already stood in
+# the process list (DI-06.1-18).
 #
 # It is written for both environments. The difference between the amd64 run and
 # the arm64 run on the box is --aio-image-tag plus --platform, and nothing else.
@@ -40,8 +52,8 @@ set -eu
 # protocol that does not say what it assumed is a protocol nobody can repeat.
 # ---------------------------------------------------------------------------
 INSTANCE_URL=""
-ADMIN_CREDENTIALS=""
-USER_CREDENTIALS=""
+ADMIN_UID=""
+USER_UID=""
 EXEC_PREFIX=""
 COMPANION_ARCHIVE=""
 BACKEND_ARCHIVE=""
@@ -108,7 +120,7 @@ ZERO_CONFIG_FILE="findling-zero-config.txt"
 
 usage() {
 	cat <<'USAGE'
-usage: aio_install_check.sh --url URL --admin USER:PASS --exec CMD
+usage: aio_install_check.sh --url URL --admin USER --exec CMD
                             --companion FILE --backend FILE --version X.Y.Z
                             --daemon NAME [options]
 
@@ -117,7 +129,7 @@ line per step with the result and the duration.
 
 Required:
   --url URL             address of the instance, for instance http://localhost:8097
-  --admin USER:PASS     administrator login of that instance
+  --admin USER          administrator of that instance, account name only
   --exec CMD            how to run a command inside the instance, as the web
                         server user and with the Nextcloud web root as the
                         working directory. Examples:
@@ -128,9 +140,22 @@ Required:
   --version X.Y.Z       the version both archives are expected to carry
   --daemon NAME         the AppAPI deploy daemon to install into
 
+Environment:
+  FINDLING_ADMIN_PASS   password of the administrator. Read from the environment
+                        and never from the command line, because an argument is
+                        readable in the process list of the machine for as long
+                        as the run lasts. A --admin or --user value that carries
+                        a colon is refused for the same reason.
+  FINDLING_USER_PASS    password of the ordinary user
+                        (default: FINDLING_ADMIN_PASS)
+
+                        Example:
+                          FINDLING_ADMIN_PASS=secret \
+                            scripts/dev/aio_install_check.sh --admin admin ...
+
 Options:
-  --user USER:PASS      ordinary user for the upload and the search
-                        (default: the administrator login)
+  --user USER           ordinary user for the upload and the search, account
+                        name only (default: the administrator)
   --apps-dir DIR        app directory inside the instance, relative to the web
                         root (default: custom_apps)
   --stage-dir DIR       staging directory inside the instance for the backend
@@ -172,8 +197,8 @@ USAGE
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--url) INSTANCE_URL="$2"; shift 2 ;;
-		--admin) ADMIN_CREDENTIALS="$2"; shift 2 ;;
-		--user) USER_CREDENTIALS="$2"; shift 2 ;;
+		--admin) ADMIN_UID="$2"; shift 2 ;;
+		--user) USER_UID="$2"; shift 2 ;;
 		--exec) EXEC_PREFIX="$2"; shift 2 ;;
 		--companion) COMPANION_ARCHIVE="$2"; shift 2 ;;
 		--backend) BACKEND_ARCHIVE="$2"; shift 2 ;;
@@ -200,7 +225,7 @@ while [ "$#" -gt 0 ]; do
 	esac
 done
 
-for required in INSTANCE_URL ADMIN_CREDENTIALS EXEC_PREFIX COMPANION_ARCHIVE \
+for required in INSTANCE_URL ADMIN_UID EXEC_PREFIX COMPANION_ARCHIVE \
 	BACKEND_ARCHIVE ARCHIVE_VERSION DAEMON_NAME; do
 	eval "value=\${$required}"
 	if [ -z "${value}" ]; then
@@ -209,11 +234,75 @@ for required in INSTANCE_URL ADMIN_CREDENTIALS EXEC_PREFIX COMPANION_ARCHIVE \
 		exit 2
 	fi
 done
-[ -n "${USER_CREDENTIALS}" ] || USER_CREDENTIALS="${ADMIN_CREDENTIALS}"
+
+# The refusal of the audit finding. See the header: a password that reached this
+# point as an argument has already stood in the process list, so accepting it
+# and printing a note would be a warning about something that already happened.
+for named in ADMIN_UID USER_UID; do
+	eval "value=\${$named}"
+	case "${value}" in
+		*:*)
+			echo "--admin and --user take the account name only, and ${named} carries a colon." >&2
+			echo "The passwords belong in FINDLING_ADMIN_PASS and FINDLING_USER_PASS," >&2
+			echo "because an argument is readable in the process list of this machine." >&2
+			exit 2
+			;;
+	esac
+done
+
+ADMIN_PASSWORD="${FINDLING_ADMIN_PASS:-}"
+if [ -z "${ADMIN_PASSWORD}" ]; then
+	echo "FINDLING_ADMIN_PASS is empty or unset, so the run has no password for ${ADMIN_UID}." >&2
+	echo "Set it in the environment of the call, never as an argument." >&2
+	exit 2
+fi
+USER_PASSWORD="${FINDLING_USER_PASS:-}"
+if [ -z "${USER_UID}" ]; then
+	USER_UID="${ADMIN_UID}"
+	USER_PASSWORD="${ADMIN_PASSWORD}"
+fi
+if [ -z "${USER_PASSWORD}" ]; then
+	echo "FINDLING_USER_PASS is empty or unset, so the run has no password for ${USER_UID}." >&2
+	echo "Set it in the environment of the call, never as an argument." >&2
+	exit 2
+fi
+
 [ -n "${LOG_FILE}" ] || LOG_FILE="./install-check-$(date -u +%Y%m%dT%H%M%SZ).log"
 
 WORK_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t findling-install-check)
 : > "${LOG_FILE}"
+
+# One credentials file per account, and every curl call that needs a login reads
+# it with -K. curl -u "user:password" would take the password out of the
+# argument list of this script only to put it into the argument list of curl,
+# once per call, which is the finding and not a smaller version of it. The files
+# live in the working directory of the run, they are created with no permission
+# for anybody but the owner, and the cleanup takes the directory with them.
+#
+# curl reads a double quoted value with backslash escapes, so a password
+# carrying a backslash or a quotation mark is escaped here rather than left to
+# break the file in a way that reads like a wrong password.
+ADMIN_CONF="${WORK_DIR}/admin.curlrc"
+USER_CONF="${WORK_DIR}/user.curlrc"
+ADMIN_PASSWORD_FILE="${WORK_DIR}/admin.password"
+
+write_credentials() {  # $1 target file, $2 account, $3 password
+	escaped=$(printf '%s' "$3" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+	: > "$1"
+	chmod 600 "$1"
+	printf 'user = "%s:%s"\n' "$2" "${escaped}" >> "$1"
+}
+
+write_credentials "${ADMIN_CONF}" "${ADMIN_UID}" "${ADMIN_PASSWORD}"
+write_credentials "${USER_CONF}" "${USER_UID}" "${USER_PASSWORD}"
+
+# The session login further down posts the password as a form field rather than
+# as an authorization header, and --data-urlencode "name@file" is how curl reads
+# such a field out of a file. Without a trailing newline, because curl sends the
+# content of the file verbatim and a newline would be part of the password.
+: > "${ADMIN_PASSWORD_FILE}"
+chmod 600 "${ADMIN_PASSWORD_FILE}"
+printf '%s' "${ADMIN_PASSWORD}" >> "${ADMIN_PASSWORD_FILE}"
 
 # Every occ call of this run goes through one function, and that function
 # records before it runs. The zero config proof further down has to be able to
@@ -619,10 +708,10 @@ log "every occ call of this run up to here:"
 cat -n "${OCC_LOG}" >> "${LOG_FILE}"
 log "the installation is complete after ${OCC_MARKER} occ calls, and nothing below may add one"
 
-user_name=${USER_CREDENTIALS%%:*}
+user_name=${USER_UID}
 printf 'The findling zero config proof word is %s.\n' "${ZERO_CONFIG_WORD}" > "${WORK_DIR}/zero-config.txt"
 code=$(curl -s -o /dev/null -w '%{http_code}' -T "${WORK_DIR}/zero-config.txt" \
-	-u "${USER_CREDENTIALS}" \
+	-K "${USER_CONF}" \
 	"${INSTANCE_URL}/remote.php/dav/files/${user_name}/${ZERO_CONFIG_FILE}")
 case "${code}" in
 	201|204) log "the file was uploaded over WebDAV as ${user_name}, HTTP ${code}" ;;
@@ -650,8 +739,8 @@ admin_session() {
 	# and / and =, and a plain -d sends the + as a space, which the CSRF check
 	# refuses. Measured on 06.09.2026.
 	curl -s -o /dev/null -L -b "${COVERAGE_COOKIES}" -c "${COVERAGE_COOKIES}" \
-		--data-urlencode "user=${ADMIN_CREDENTIALS%%:*}" \
-		--data-urlencode "password=${ADMIN_CREDENTIALS#*:}" \
+		--data-urlencode "user=${ADMIN_UID}" \
+		--data-urlencode "password@${ADMIN_PASSWORD_FILE}" \
 		--data-urlencode "requesttoken=${token}" "${INSTANCE_URL}/login" || return 1
 	COVERAGE_TOKEN=$(curl -s -b "${COVERAGE_COOKIES}" -c "${COVERAGE_COOKIES}" \
 		"${INSTANCE_URL}/settings/admin" \
@@ -660,7 +749,7 @@ admin_session() {
 }
 coverage_line() {
 	out="${WORK_DIR}/overview.json"
-	code=$(curl -s -o "${out}" -w '%{http_code}' -u "${ADMIN_CREDENTIALS}" \
+	code=$(curl -s -o "${out}" -w '%{http_code}' -K "${ADMIN_CONF}" \
 		-H 'OCS-APIRequest: true' -H 'Accept: application/json' \
 		"${INSTANCE_URL}/apps/findling/admin/overview" || true)
 	if [ "${code}" != "200" ] && [ "${COVERAGE_SESSION_TRIED}" -eq 0 ]; then
@@ -724,7 +813,7 @@ while [ "${ROUNDS}" -lt "${ZERO_CONFIG_CRON_ROUNDS}" ]; do
 	fi
 	log "round ${ROUNDS}: $(coverage_line)"
 	code=$(curl -s -o "${WORK_DIR}/search.json" -w '%{http_code}' \
-		-u "${USER_CREDENTIALS}" -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+		-K "${USER_CONF}" -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
 		"${INSTANCE_URL}/ocs/v2.php/search/providers/findling/search?term=${ZERO_CONFIG_WORD}" || true)
 	# An entries list that begins with an object is a hit, an empty list is not.
 	# The pattern is narrow on purpose and the assertion on the file name below

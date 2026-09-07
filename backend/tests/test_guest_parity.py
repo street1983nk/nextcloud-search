@@ -9,7 +9,7 @@ which is why the probe is a script under ``scripts/dev`` and not a job.
 
 A probe that nobody can run is a reminder, and a reminder is what this phase
 forbids. So the probe is a tool, and the promises the tool carries are checked
-here rather than remembered. Six of them are mechanical:
+here rather than remembered. Eight of them are mechanical:
 
 1. The verdict comes from ``scripts/ci/parity_diff.py`` and from nowhere else.
    The probe must not grow a set comparison of its own, because two ways of
@@ -31,6 +31,19 @@ here rather than remembered. Six of them are mechanical:
 6. No em dash, no en dash and no carriage return, which are the typography rule
    of this project and the reason a POSIX shell refuses a script with an
    invisible character behind its shebang.
+7. Neither probe takes a password in its argument list. Both read it out of the
+   environment and hand it to curl through a configuration file, because an
+   argument stands in the process list of the machine for as long as the run
+   lasts (security audit of plan 06.1-17, DI-06.1-18).
+8. Both refuse a login argument that still carries a colon rather than using it
+   and printing a note. By the time such a note could be printed the password
+   has already stood in the process list, so accepting it would be a warning
+   about something that has already happened.
+
+Rules 7 and 8 are held over ``scripts/dev/aio_install_check.sh`` as well. That
+script has no gate of its own, the audit named both scripts in one breath, and a
+rule that covers one of two identical call sites is the shape in which the other
+one comes back.
 
 The counter of rule 5 filters full line comments before it counts, and the two
 staged samples below are what prove it does both halves of that: it fires on a
@@ -251,3 +264,105 @@ def test_the_d22_counter_stays_quiet_on_a_comment_that_names_the_guests_app() ->
     """
     sample = "      # the guests app is deliberately not a dependency of this matrix\n      - run: ./occ status\n"
     assert guests_mentions(sample) == []
+
+
+INSTALL_CHECK = REPO_ROOT / "scripts" / "dev" / "aio_install_check.sh"
+
+# The two scripts of the audit finding, each with the environment variables it
+# reads a password out of. The install check has two accounts, the probe one.
+PASSWORD_ENVIRONMENT = {
+    PROBE: ("FINDLING_CREATOR_PASS",),
+    INSTALL_CHECK: ("FINDLING_ADMIN_PASS", "FINDLING_USER_PASS"),
+}
+
+# The shape of the finding itself. curl puts the value of -u into its own
+# argument list, so taking a password out of the script and handing it to curl
+# that way moves it from one process list entry to the next and nowhere else.
+_CURL_LOGIN_ARGUMENT = re.compile(r"(?:^|\s)-u(?:\s|=)")
+
+# The other road to the same place: a password spliced into a form field. The
+# file form that replaces it, "password@file", does not match this.
+_INLINE_PASSWORD_FIELD = re.compile(r"password=\$")
+
+
+def logical_lines(text: str) -> list[str]:
+    """The lines of a shell script with backslash continuations joined.
+
+    A curl call in this repository is spread over four or five lines, and the
+    option that carries a login is rarely on the line that names curl. Judging
+    the physical lines would be judging the calls somebody happened to write on
+    a single one.
+    """
+    joined: list[str] = []
+    buffer = ""
+    for line in code_lines(text):
+        if line.endswith("\\"):
+            buffer += line[:-1] + " "
+            continue
+        joined.append(buffer + line)
+        buffer = ""
+    if buffer:
+        joined.append(buffer)
+    return joined
+
+
+def password_arguments(text: str) -> list[str]:
+    """Every call of the text that would put a password into an argument list."""
+    offenders = []
+    for line in logical_lines(text):
+        stripped = line.strip()
+        carries_login = "curl" in stripped and _CURL_LOGIN_ARGUMENT.search(stripped)
+        if carries_login or _INLINE_PASSWORD_FIELD.search(stripped):
+            offenders.append(stripped)
+    return offenders
+
+
+def test_neither_probe_takes_a_password_in_its_argument_list() -> None:
+    """Rule 7, over both scripts and over every call each of them makes."""
+    for script, variables in PASSWORD_ENVIRONMENT.items():
+        assert script.is_file(), f"{script} does not exist, so this rule has no subject"
+        text = script.read_text(encoding="utf-8")
+        for variable in variables:
+            assert variable in text, f"{script.name} does not read {variable}"
+        assert password_arguments(text) == [], f"a password reaches an argument list in {script.name}"
+        code = "\n".join(code_lines(text))
+        assert "USER:PASS" not in code, f"{script.name} still asks for a password on the command line"
+
+
+def test_both_probes_refuse_a_login_argument_that_carries_a_colon() -> None:
+    """Rule 8. Refusing and not accepting, and the message names the way out."""
+    for script, variables in PASSWORD_ENVIRONMENT.items():
+        text = script.read_text(encoding="utf-8")
+        assert "*:*)" in text, f"{script.name} does not look at the shape of its login argument"
+        echoed = [line for line in text.splitlines() if line.strip().startswith("echo ")]
+        assert any(any(variable in line for variable in variables) for line in echoed), (
+            f"{script.name} refuses without naming the environment variable the caller has to use"
+        )
+
+
+def test_the_password_counter_fires_on_a_curl_call_that_carries_a_login() -> None:
+    """The staged sample of rule 7. A gate that cannot go red is not a gate."""
+    sample = 'code=$(curl -s -o "${out}" \\\n  -u "${ADMIN_CREDENTIALS}" \\\n  "${URL}")\n'
+    offenders = password_arguments(sample)
+    assert len(offenders) == 1
+    assert "-u" in offenders[0]
+
+
+def test_the_password_counter_fires_on_a_password_spliced_into_a_form_field() -> None:
+    """The second staged sample, which is how the install check used to log in."""
+    sample = '  --data-urlencode "password=${ADMIN_CREDENTIALS#*:}" \\\n  "${URL}/login"\n'
+    assert len(password_arguments(sample)) == 1
+
+
+def test_the_password_counter_stays_quiet_on_the_configuration_file_form() -> None:
+    """The shape both scripts use now, so that the gate says yes to the answer.
+
+    Without this sample the rule would be satisfied by a script that makes no
+    call at all, and the two ways out that were actually taken, a curl
+    configuration file and a form field read out of a file, would be untested.
+    """
+    sample = (
+        'code=$(curl -s -o "${out}" \\\n  -K "${ADMIN_CONF}" \\\n  "${URL}")\n'
+        '  --data-urlencode "password@${ADMIN_PASSWORD_FILE}" \\\n  "${URL}/login"\n'
+    )
+    assert password_arguments(sample) == []

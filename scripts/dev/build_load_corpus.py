@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """Write the synthetic load corpus of phase 5: 50.000 files, about 20 GB.
 
-The reference corpus under testdata/corpus is 33 files that a reviewer can read.
-This is its opposite: a set nobody will ever look at, whose only job is to keep a
-4 GB ARM box busy for the better part of a day while the resident memory of the
-indexer is measured. Both are generated, and for the same reason, but the scale
-changes the design in one decisive place.
+The reference corpus under testdata/corpus is the few dozen files a reviewer can
+read, and testdata/CORPUS.md is the one place it is counted. This is its
+opposite: a set nobody will ever look at, whose only job is to keep a 4 GB ARM
+box busy for the better part of a day while the resident memory of the indexer
+is measured. Both are generated, and for the same reason, but the scale changes
+the design in one decisive place.
 
 scripts/dev/build_corpus.py builds a dict of finished payloads and writes it at
-the end. At 33 files of a few kilobytes that is the clearest possible shape. At
-50.000 files and 20 GB it is impossible, so this script streams: one file at a
-time, written to a temporary neighbour, hashed while it is written, renamed when
-it is complete. Nothing is collected but the running checksum, and an abort
-therefore leaves no half written file that looks finished.
+the end. At a few dozen files of a few kilobytes that is the clearest possible
+shape. At 50.000 files and 20 GB it is impossible, so this script streams: one
+file at a time, written to a temporary neighbour, hashed while it is written,
+renamed when it is complete. Nothing is collected but the running checksum, and
+an abort therefore leaves no half written file that looks finished.
 
 Everything else is inherited from build_corpus.py rather than invented: the
 typeface pinned by SHA-256 and the glyph assert that runs before the first byte,
@@ -1164,10 +1165,10 @@ def build_oversize(rng: Rng, extension: str, target: int) -> Iterator[bytes]:
     """The twenty files above the size cap, written a megabyte at a time.
 
     They are the reason the coverage figure of the admin page can be judged under
-    load at all: on 33 files there was never a denominator large enough to see
-    what a handful of too_large verdicts does to it. Streamed, because holding
-    55 MB in memory to write 55 MB is exactly the habit this script exists to
-    break.
+    load at all: on the reference corpus, 33 files when this was written, there
+    was never a denominator large enough to see what a handful of too_large
+    verdicts does to it. Streamed, because holding 55 MB in memory to write
+    55 MB is exactly the habit this script exists to break.
     """
     del extension
     header = "nummer,vorgang,stelle,betrag,vermerk\n"

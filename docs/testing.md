@@ -213,12 +213,18 @@ marker in neither provider, and the owner still finds that other marker. It
 removes the guest, the share and the two files on every way out.
 
 ```
-scripts/dev/guest_parity.sh \
+FINDLING_CREATOR_PASS=the-password \
+  scripts/dev/guest_parity.sh \
   --url http://localhost:8080 \
   --exec "docker exec -i -u www-data -w /var/www/html findling-nc" \
-  --creator alice:the-password \
+  --creator alice \
   --log guest-parity.log
 ```
+
+The password is an environment variable and not an argument, and the probe
+refuses a `--creator` value that still carries a colon. An argument stands in
+the process list of the machine for as long as the run lasts, which is where
+the security audit of plan 06.1-17 found it (DI-06.1-18).
 
 The app is not installed by the probe. A test tool does not bring a foreign app
 onto an instance, so the script names the two `occ` commands and stops.

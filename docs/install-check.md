@@ -324,10 +324,12 @@ folgt aus E-H1 und betrifft nur die Fassungsspanne (NC 33 bis 35 statt 32 bis
 ## 4. Wie dieser Lauf zu wiederholen ist
 
 ```
-scripts/dev/aio_install_check.sh \
+FINDLING_ADMIN_PASS=PASSWORT \
+FINDLING_USER_PASS=PASSWORT \
+  scripts/dev/aio_install_check.sh \
   --url http://localhost:8097 \
-  --admin admin:PASSWORT \
-  --user testuser:PASSWORT \
+  --admin admin \
+  --user testuser \
   --exec "docker exec -i -u www-data -w /var/www/html findling-store-nc" \
   --companion dist/findling.tar.gz \
   --backend dist/findling_backend.tar.gz \
@@ -340,6 +342,12 @@ scripts/dev/aio_install_check.sh \
 
 `--help` beschreibt jede Option. Solange kein `v1.0.0`-Tag steht, braucht der
 Lauf zusätzlich `--substitute-tag dev`, und das ist Befund 1.
+
+Die beiden Passwörter sind Umgebungsvariablen und keine Argumente, und das
+Skript weist ein `--admin` oder `--user` mit Doppelpunkt ab. Ein Argument
+steht so lange in der Prozessliste der Maschine, wie der Lauf dauert, und der
+dauert hier fast eine Stunde; dort hat das Sicherheitsaudit aus Plan 06.1-17
+die Passwörter gefunden (DI-06.1-18).
 
 Was der Lauf voraussetzt und selbst nicht herstellt: eine frische Instanz, einen
 Deploy-Daemon, die beiden Archive und die Vertrauenskette für ihre Signatur. Er
