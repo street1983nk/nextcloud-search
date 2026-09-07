@@ -806,3 +806,199 @@ Container gehören, und nicht `*`: eine pauschale Ausnahme lässt die
 Konfigurationsdateien scheitern, die das native curl dieses Wirts unter `/tmp`
 der Shell liest. Befund 7 gilt hier zweimal, und die zweite Ausprägung
 (`path=/...` als Optionswert) hat einen Lauf der Gastnutzer-Probe gekostet.
+
+## 7. Die Wiederholung am neuen Abbild, 07.09.2026 (Weg B des Owners)
+
+Der Owner hat am Checkpoint Weg **B** gewählt: erst das neue Abbild, dann die
+Sichtprobe. Die Phase wird also auf dem Zustand abgenommen, den der Fix wirklich
+erreicht hat, und nicht auf einem, der ihn nur im Quellcode hat. Dieser Abschnitt
+ist das Protokoll dieser zweiten Runde.
+
+### Was sich zwischen den beiden Runden geändert hat
+
+| Was | Runde 1 (Abschnitt 6) | Runde 2 |
+|---|---|---|
+| Merge | offen | `main` bei `569f0a6`, konfliktfrei |
+| Laufzeit-Abbild | `sha256:f32af191...`, ohne den Fix | neu gebaut von `docker.yml`, gezogen als `sha256:025ced73...` |
+| Companion-Archiv | `findling.tar.gz` 234090 B, SHA-256 `5f83ea92...` | 234349 B, SHA-256 `1540dce4232e5313ca8d4c774246af3ea6e493c879783fc1f64f1b300e1fdaed` |
+| Backend-Archiv | 29112 B, SHA-256 `8ea9a88f...` | 29604 B, SHA-256 `52c4bcff9f480e6e6417242b1e2e4512c1fd299cb954f7bd033c2e01920a0dbe` |
+| Probelauf | `34116531030` auf `94420f7` | `34127041571` auf `569f0a6`, ebenfalls ohne Release |
+| Lizenz im Archiv | `agpl` | **`AGPL-3.0-or-later`** |
+| Routen im Archiv | nackte Namen | **`^/search$` bis `^/diagnose$`** |
+
+Damit ist die zweite Nichtabdeckung aus Abschnitt 6 erledigt: die Instanz trägt
+jetzt genau die beiden `info.xml`-Änderungen dieses Plans, und die Sichtprobe
+findet auf dem Zustand statt, der eingereicht wird.
+
+Das alte Abbild ist vor der Neuinstallation lokal gelöscht worden
+(`docker rmi`, bestätigt mit dem Digest `f32af191...`), damit der Deploy-Daemon
+das neue selbst ziehen muss und nicht eine liegengebliebene Kopie benutzt. Der
+Fix ist im laufenden Container nachgezählt: `_pin_native_thread_pools` kommt in
+`sandbox.py` des Containers zweimal vor, als Funktion und als Aufruf.
+
+Beide Hälften sind ersetzt, nicht nur der Container. Die Companion-Hälfte ist
+abgeschaltet, das Verzeichnis entfernt, aus dem neuen Archiv entpackt und wieder
+eingeschaltet; `occ integrity:check-app findling` antwortet danach wieder leer,
+also sauber. Bewusst kein `occ app:remove`: das räumt Tabellen und Einstellungen
+(Deinstallations-Zusage 5), und hier ging es um einen neuen Bau auf einer
+laufenden Instanz und nicht um eine Erstinstallation. Die Aussage über die
+Erstinstallation steht in Abschnitt 6 und bleibt dort.
+
+Der Index ist mit `occ findling:index --restart` neu aufgebaut, dem Befehl, den
+die Verwaltungsseite selbst als `rules.restartCommand` nennt. Das ist ein
+getriebener Schritt und keine Zero-Config-Aussage: ohne ihn wären die Urteile des
+alten Baus stehen geblieben, einschliesslich der vier `corrupt`, die diese Runde
+widerlegen soll.
+
+### Kontrollergebnis 1: die Suche
+
+`occ findling:index --restart`, danach `cron.php` in Runden. Die Zahlenreihe, je
+Runde ein Treffer pro Suchwort:
+
+| Runde | Zeit | Warteschlange | Gefunden |
+|---|---|---|---|
+| 1 | 13:26:39Z | 0 | 0 von 5 |
+| 2 | 13:27:04Z | 103 | 0 von 5 |
+| 3 | 13:27:34Z | 93 | 4 von 5 |
+| 4 | 13:28:31Z | 15 | 4 von 5 |
+| 5 | 13:28:55Z | 0 | **5 von 5** |
+
+| Suchwort | Datei | Runde 1 (altes Abbild) | Runde 2 (neues Abbild) |
+|---|---|---|---|
+| `Winterdienstpauschale` | `2026-04-mietvertrag.docx` | **kein Treffer** | **1 Treffer** |
+| `Grundsteuermessbetrag` | `nebenkosten-2025.xlsx` | **kein Treffer** | **1 Treffer** |
+| `Fahrradstellplatzsatzung` | `protokoll-hausversammlung.txt` | 1 Treffer | 1 Treffer |
+| `Heizlastberechnung` | `angebot-heizungstausch.pdf` | 1 Treffer | 1 Treffer |
+| `Zweitwohnungsteuer` | `scan-bescheid.pdf` (OCR) | 1 Treffer | 1 Treffer |
+
+**Befund 8 ist damit am veröffentlichten Abbild widerlegt.** Die beiden
+Office-Dokumente, die vorher "File damaged" meldeten, sind über ihren Inhalt
+findbar, und die drei Wege, die schon vorher trugen, tragen weiter.
+
+### Kontrollergebnis 2: die Verwaltungsseite
+
+| Zahl | Runde 1 | Runde 2 |
+|---|---|---|
+| indexiert | 85 | **87** |
+| indexierbar | 100 | 103 |
+| Deckung | 85 Prozent | 84 Prozent |
+| eingebettet | 83 | **87** |
+| übersprungen | 16 | 16 |
+| **fehlgeschlagen (Container)** | **4** | **0** |
+| Fehlergründe des Containers | `corrupt 4` | **keine** |
+| Indexgrösse | 743.426 Byte | 851.188 Byte |
+| Lockstep | `match`, 1.0.0 / 1.0.0 | `match`, 1.0.0 / 1.0.0 |
+
+Die Deckung sinkt um einen Prozentpunkt und steigt in absoluten Zahlen, und beides
+ist richtig: der Nenner ist von 100 auf 103 gewachsen, weil die Markerdateien der
+Gastnutzer-Probe und ihr Gastkonto zwischen den Runden entstanden und wieder
+entfernt wurden. `87 von 103` sind 84,5 Prozent.
+
+**Die Gruppe "4 beschädigte Dateien" steht auf der Seite weiter, und das ist der
+nächste Befund.**
+
+### Befund 9: ein einmal gefälltes Fehlurteil der PHP-Hälfte wird von einem späteren Erfolg nicht widerrufen
+
+**Was zu sehen ist:** Die Zähler oben sagen `fehlgeschlagen 0`, die Fehlergruppe
+darunter sagt `File damaged, 4`. Beide Zahlen kommen aus verschiedenen Hälften:
+die Zähler aus dem Container, die Gruppen aus `oc_findling_file_state` der
+PHP-Hälfte. Die Einzelabfrage bestätigt es:
+
+```
+GET /apps/findling/admin/diagnose?ref=183
+  path      2026-04-mietvertrag.docx
+  state     failed
+  reason    corrupt
+  checkedAt 1788783247   (12:14:07Z, also aus dem alten Bau)
+```
+
+Die Datei ist zu diesem Zeitpunkt über ihren Inhalt findbar. Der Zeitstempel der
+Zeile ist der alte; der erfolgreiche Lauf um 13:28Z hat sie nicht angefasst.
+
+**Warum es so gebaut ist:** Die PHP-Hälfte schreibt `indexed` bewusst nie, das
+sagt `occ findling:index` selbst ("indexed is counted by the backend container
+and never written here"). Sie hält nur die Endzustände `skipped` und `failed`.
+Eine Zeile, die einmal `failed` sagt, hat damit niemanden, der sie widerruft.
+
+**Was daran mildert:** Die vier Zeilen sind als `resolved` markiert, und
+`rules.cleanupLatencyHours` steht auf 24. Die Aufräumung entfernt sie also
+spätestens nach einem Tag. Was nicht geprüft ist: ob diese Aufräumung eine Zeile
+auch dann entfernt, wenn die Datei noch existiert und inzwischen erfolgreich
+indexiert ist, oder nur dann, wenn sie verschwunden ist.
+
+**Warum es hier nicht behoben wird:** Die Abhilfe liegt in der PHP-Hälfte und ist
+eine Verhaltensänderung: entweder meldet der Container die erfolgreichen
+Dateikennungen zurück, damit die PHP-Hälfte die Zeile löschen kann, oder die
+Zeile fällt schon beim Wiedereinreihen einer Datei, weil ihr Endzustand dann
+nicht mehr aktuell ist. Das ist die zweite Möglichkeit und die kleinere, aber
+beide sind mehr als ein Fix am Rand einer Abnahme. Der Befund ist deshalb
+benannt, nicht stillschweigend behoben.
+
+**Was ein Nutzer davon merkt:** Wer die Abhilfe befolgt, die die Seite selbst
+nennt ("Check the file outside of Nextcloud and upload it again"), findet die
+Datei danach über die Suche und liest auf der Verwaltungsseite weiter, sie sei
+beschädigt. Auf der Seite, deren Aufgabe die Diagnose ist, ist das die falsche
+Aussage.
+
+### Befund 10: die Routenprüfung der CI war nicht falsch, ihre Erwartung war alt
+
+Der `deploy-harp`-Lauf nach dem Merge (`34126702669`) war auf allen drei Zeilen
+rot, und der Ort war genau der, den dieser Plan als Beweisort benannt hatte.
+Gemessen hat er das Richtige:
+
+```
+oc_ex_apps_routes after the archive registration:
+  ^/diagnose$:GET:2 ^/rates$:GET:2 ^/search$:POST:1 ^/snippets$:POST:1 ^/status$:GET:2
+```
+
+Das ist die verankerte Form, aus dem Archiv gelesen und von AppAPI in die Tabelle
+geschrieben, also **die Bestätigung, dass die Umstellung ankommt**. Rot war der
+Schritt, weil die erwartete Zeichenkette daneben noch die nackten Namen trug: sie
+steht als Literal im Workflow, und dieser Plan hat sie beim Umstellen der Routen
+nicht mitgezogen.
+
+Der Fix ist mehr als das Nachziehen des Literals, weil ein einzelnes Literal
+genau diese Verwechslung nicht auffangen kann. Der Schritt stellt jetzt zwei
+Fragen:
+
+1. Stimmt die Tabelle mit dem überein, was das Archiv erklärt? Die Erwartung wird
+   dafür aus dem eben installierten Archiv gelesen. Das ist die Frage, für die der
+   Schritt gebaut wurde.
+2. Erklärt das Archiv genau die fünf geprüften Routen? Das bleibt ein Literal,
+   damit eine sechste Route oder eine gelockerte Zugriffsstufe eine Entscheidung
+   bleibt, die auch hier getroffen werden muss.
+
+Beide Richtungen sind vor dem Commit an echten Archiven durchgespielt: das Archiv
+des gemergten `main` trifft, das ältere mit den nackten Namen fällt durch.
+
+**Was noch offen ist:** die Bestätigung, dass der Schritt danach grün läuft. Sie
+kann nur aus dem nächsten `deploy-harp`-Lauf kommen, also nach dem Merge dieser
+Runde. Bis dahin ist der Beweis der verankerten Routenform vollständig für "die
+Form kommt in der Tabelle an" und offen für "der Job ist darüber grün".
+
+### Befund 11: die Instanz war für Menschen unbenutzbar, während jede API-Prüfung grün war
+
+Gefunden, als der Owner sich anmeldete: nach dem Login leitete Nextcloud den
+Browser auf Port 80 um, und er sah `ERR_CONNECTION_REFUSED`. Gleichzeitig
+antworteten die Suche, die Verwaltungsseite und jede Prüfung dieses Protokolls,
+weil sie über Basic Authentication laufen und die vollständige Adresse in jeder
+Anfrage mitführen.
+
+Die Ursache liegt nicht bei Findling und nicht bei
+`scripts/dev/aio_install_check.sh`, sondern im Aufbau: das Server-Abbild lässt
+`overwrite.cli.url` auf `http://localhost` **ohne Port** stehen, wenn die
+compose-Datei `OVERWRITECLIURL` nicht setzt, und ein Browser folgt genau dieser
+Adresse. Auf der Instanz stehen jetzt `overwrite.cli.url`,
+`overwritehost` und `overwriteprotocol` auf `localhost:8097`; das ist eine
+Einstellung des Testbetts und berührt keine Findling-Datei.
+
+Zwei Stellen sind trotzdem nachgezogen, weil ein Lauf, der grün ist und dessen
+Instanz kein Mensch benutzen kann, genau die Form von Befund ist, die diese Phase
+beseitigen soll:
+
+- `scripts/dev/aio_install_check.sh` liest in der Vorprüfung
+  `overwrite.cli.url` und meldet einen **Befund**, wenn er nicht zu `--url` passt.
+  Ausdruecklich kein Abbruch: eine Instanz, die nur über API gefahren wird, ist so
+  zulässig eingerichtet, und die Abhilfe gehört dem, der sie aufgesetzt hat.
+- der Wegwerf-Stack der Sichtprobe setzt `OVERWRITECLIURL`, `OVERWRITEHOST` und
+  `OVERWRITEPROTOCOL` aus dem Port, damit dieselbe Falle sich nicht wiederholt.
