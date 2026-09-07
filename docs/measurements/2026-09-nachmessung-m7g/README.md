@@ -470,14 +470,53 @@ von Hand auch an der Kostenrechnung vorbeiging.
 | Was | Wert |
 |---|---|
 | Start | 2026-09-07T05:00:15Z |
-| Anhalten | siehe `~/.findling-loadtest/box.env`, Zeile `BOX_STOPPED_ISO` |
-| Laufzeit und Kosten dieser Laufzeit | siehe `BOX_LAST_UPTIME_HOURS` und `BOX_LAST_UPTIME_COST_USD` in derselben Datei |
-| Kosten angehalten | rund 0,31 USD je Tag, nur die Datenträger |
+| Anhalten | 2026-09-07T06:56:42Z |
+| Laufzeit | **1,95 Stunden** |
+| Kosten dieser Laufzeit | **0,2254 USD netto**, aus den festgenagelten Sätzen |
+| Kosten angehalten | 0,3130 USD je Tag, nur die Datenträger (100 GB) |
+| Owner-Deckel | 8 Stunden. Genutzt wurden 1,95, also 24 Prozent. |
 | Verbleib | **angehalten, nicht abgebaut.** Owner-Entscheid vom 07.09.2026: die Box bleibt bis nach der v1.1-Messung bestehen. Der Abbau ist Sache von Plan 06.1-19 und braucht dort eine eigene Freigabe (D-H3). |
 
-Der Datenträger bleibt mit ihr erhalten, und damit Korpus, Index, `state.db`,
-`vectors.db` und die Abbilder. Der Endungsvergleich aus Abschnitt 7 wäre nach
-einem Abbau unmöglich; er ist deshalb hier gefahren und nicht später.
+Die Zahlen stehen in `~/.findling-loadtest/box.env` als `BOX_STOPPED_ISO`,
+`BOX_LAST_UPTIME_HOURS`, `BOX_LAST_UPTIME_COST_USD` und
+`BOX_PARKED_COST_USD_PER_DAY`, geschrieben von `aws_box.sh stop`.
+
+## 12a. Was dieser Lauf zerstört hat, und was davon zu retten war
+
+Dieser Abschnitt steht hier und nicht in einer Fussnote, weil er der teuerste
+Vorfall des Laufs ist.
+
+**Der arm64-Installationslauf hat das Messvolumen gelöscht.** Er lief auf einer
+zweiten, frischen Nextcloud auf derselben Box, also am **selben Docker-Dienst**.
+Seine Deinstallations-Zusage 3 führt `app_api:app:unregister --rm-data` aus, und
+der Volumenname leitet sich allein aus der App-Kennung ab. Um 06:46:03Z hat der
+Lauf damit `nc_app_findling_backend_data` der **ersten** Instanz entfernt: mit
+`state.db`, `vectors.db`, dem 785 MB grossen Tantivy-Index und der Wortliste.
+
+**Verloren:** der Index und die beiden Datenbanken des Semantiklaufs aus 06-11.
+
+**Nicht verloren, und das ist der Punkt, an dem eine Reihenfolge sich bezahlt
+hat:**
+
+| Was | Zustand | Warum |
+|---|---|---|
+| Alle Messzahlen dieses Laufs | erhalten | Sie waren um 06:23Z im Repository committet, bevor der arm64-Lauf begann. |
+| Der Endungsvergleich | erhalten | Er ist um 05:45Z gefahren und seine Ausgabe liegt als JSON in `rohdaten/`. Genau das ist die Entschärfung von Bedrohung T-06.1-79: er gehört vor den Abbau und nicht danach, und "vor den Abbau" hat sich hier als "vor 06:46Z" ausgezahlt. |
+| Der Korpus | erhalten | 50.000 Dateien und 20 GB unter `/mnt/findling/ncdata/lasttest/files/loadtest`, im Datenspeicher von Nextcloud und nicht im Volumen der ExApp. Das ist der teure Teil: Erzeugung und Hochladen kosteten in Plan 05-21 mehrere Stunden. |
+| Die Nextcloud-Hälfte | erhalten | `oc_findling_file_state` trug ohnehin nur 37 Zeilen, also keine widersprüchliche Buchführung. |
+
+**Der Wiederaufsatz, ausgeführt vor dem Anhalten:** die ExApp ist neu registriert
+(ein `--force` beim `unregister` war nötig, weil die AppAPI-Zeile ohne Container
+zurückblieb, siehe Befund arm64-5 in `docs/install-check.md`), die harte Grenze
+von 2 GiB ist neu gesetzt und aus der cgroup geprüft, die App ist bewaffnet
+(`indexing is armed`), und `occ findling:index --restart` ist eingestellt. Beim
+nächsten Start der Box fährt damit ein vollständiger Neuaufbau des Index an, rund
+19 Stunden. Für die v1.1-Messung ist das kein Verlust, sondern der Zustand, den
+sie ohnehin braucht; für eine Wiederholung **dieser** Nachmessung wäre es einer.
+
+**Die Lehre, in einem Satz:** eine zweite Nextcloud zum Testen darf nie am
+selben Docker-Dienst hängen wie eine Instanz, deren Datenbestand gebraucht wird,
+weil der Volumenname einer ExApp allein aus ihrer App-Kennung folgt.
 
 ---
 
