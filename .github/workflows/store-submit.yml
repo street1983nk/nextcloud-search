@@ -1,0 +1,130 @@
+# Submits the release metadata of both halves to apps.nextcloud.com.
+#
+# Manual only, and that is the point: the submission is an outward action and
+# runs when the owner (or a session the owner instructed) dispatches it, never
+# on a push. The workflow exists so that APPSTORE_TOKEN and both signing keys
+# never leave the GitHub secret store: registering an app id requires a
+# signature made with the app key, and posting a release requires the token,
+# and doing either on a workstation would mean copying secrets around.
+#
+# Two steps, matching the two store endpoints:
+#   1. POST /api/v1/apps       registers an app id with its certificate and a
+#                              signature over the id (first submission only,
+#                              behind the register input; a repeat answers 400
+#                              and the step says so without failing the run).
+#   2. POST /api/v1/apps/releases  registers one release: the download URL of
+#                              the GitHub release asset and the signature that
+#                              was uploaded next to it. The store fetches the
+#                              archive itself and verifies the signature
+#                              against the certificate it has on file.
+#
+# Nothing here prints a secret: the token and the keys travel through
+# environment variables into files under RUNNER_TEMP, and the cleanup step
+# runs even when the job fails.
+
+name: Store submission
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag whose assets are submitted (for example v1.0.0)'
+        required: true
+        type: string
+      register:
+        description: 'Also register both app ids first (only for the very first submission)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: store-submit
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    name: Register and submit both halves
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      # The checkout is not read by any step below; it exists because every
+      # workflow of this repository carries at least one pinned uses line and
+      # the pin gate (backend/tests/test_workflow_pins.py) holds that shape.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Refuse to run outside this repository
+        run: |
+          if [ "${GITHUB_REPOSITORY}" != "street1983nk/nextcloud-search" ]; then
+            echo "this workflow submits with the store token of street1983nk/nextcloud-search and must not run elsewhere"
+            exit 1
+          fi
+
+      - name: Register both app ids
+        if: inputs.register
+        env:
+          APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          BACKEND_PRIVATE_KEY: ${{ secrets.BACKEND_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          register() {
+            app="$1"
+            key_var="$2"
+            printf '%s' "${!key_var}" > "${RUNNER_TEMP}/${app}.key"
+            test -s "${RUNNER_TEMP}/${app}.key" || { echo "${key_var} is empty; the secret is missing"; exit 1; }
+            curl -sfL "https://raw.githubusercontent.com/nextcloud/app-certificate-requests/master/${app}/${app}.crt" \
+              -o "${RUNNER_TEMP}/${app}.crt"
+            signature=$(printf '%s' "${app}" | openssl dgst -sha512 -sign "${RUNNER_TEMP}/${app}.key" | openssl base64 -A)
+            code=$(jq -n --rawfile certificate "${RUNNER_TEMP}/${app}.crt" --arg signature "${signature}" \
+                     '{certificate: $certificate, signature: $signature}' \
+                   | curl -s -o "${RUNNER_TEMP}/${app}.register.json" -w '%{http_code}' \
+                       -X POST 'https://apps.nextcloud.com/api/v1/apps' \
+                       -H "Authorization: Token ${APPSTORE_TOKEN}" \
+                       -H 'Content-Type: application/json' \
+                       --data @-)
+            echo "register ${app}: HTTP ${code}"
+            cat "${RUNNER_TEMP}/${app}.register.json"; echo
+            case "${code}" in
+              200|201) echo "${app} is registered" ;;
+              400) echo "${app}: the store answered 400, which is also the answer for an id that is already registered; the release step will settle it" ;;
+              *) echo "${app}: unexpected answer"; exit 1 ;;
+            esac
+          }
+          register findling APP_PRIVATE_KEY
+          register findling_backend BACKEND_PRIVATE_KEY
+
+      - name: Submit both releases
+        env:
+          APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          submit() {
+            app="$1"
+            base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+            signature=$(curl -sfL "${base}/${app}.tar.gz.sig")
+            test -n "${signature}" || { echo "${app}: the signature asset of ${TAG} is missing"; exit 1; }
+            code=$(jq -n --arg download "${base}/${app}.tar.gz" --arg signature "${signature}" \
+                     '{download: $download, signature: $signature}' \
+                   | curl -s -o "${RUNNER_TEMP}/${app}.release.json" -w '%{http_code}' \
+                       -X POST 'https://apps.nextcloud.com/api/v1/apps/releases' \
+                       -H "Authorization: Token ${APPSTORE_TOKEN}" \
+                       -H 'Content-Type: application/json' \
+                       --data @-)
+            echo "release ${app} ${TAG}: HTTP ${code}"
+            cat "${RUNNER_TEMP}/${app}.release.json"; echo
+            case "${code}" in
+              200|201) echo "${app} ${TAG} is in the store" ;;
+              *) echo "${app}: the submission failed"; exit 1 ;;
+            esac
+          }
+          submit findling
+          submit findling_backend
+
+      - name: Remove the key files
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/findling.key" "${RUNNER_TEMP}/findling_backend.key"
