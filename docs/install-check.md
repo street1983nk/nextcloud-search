@@ -1002,3 +1002,31 @@ beseitigen soll:
   zulässig eingerichtet, und die Abhilfe gehört dem, der sie aufgesetzt hat.
 - der Wegwerf-Stack der Sichtprobe setzt `OVERWRITECLIURL`, `OVERWRITEHOST` und
   `OVERWRITEPROTOCOL` aus dem Port, damit dieselbe Falle sich nicht wiederholt.
+
+### Die Abnahme, 07.09.2026
+
+**Der Owner hat die Launch-Haertung abgenommen.** Der Wortlaut, zitiert und nicht
+zusammengefasst:
+
+> ok abgenommen weiter der rest wie deine empfehlung
+
+Damit ist **D-H5 erfuellt**: der Owner hat auf einer frisch installierten
+Nextcloud, die beide Haelften ueber den Store-Weg aus den Release-Archiven
+bekommen hat, selbst gesucht und gefunden. Er hat die Treffer der fuenf Suchwoerter
+einschliesslich der beiden Office-Dokumente und die Verwaltungsseite im Browser
+gesehen, in der zweiten Runde und damit auf dem Abbild, das den Fix des Befundes 8
+wirklich traegt. Die Bildschirmaufnahmen liegen beim Orchestrator.
+
+Zwei Punkte hat er im selben Zug mitentschieden, und beide sind damit von der
+Abnahme gedeckt statt Nacharbeit hinter ihr:
+
+| Punkt | Entscheidung |
+|---|---|
+| Befund 9, das stehengebliebene `failed`-Urteil der PHP-Haelfte | wird **vor der Abgabe** behoben, in einem eigenen Plan |
+| Die Regressionsluecke, durch die Befund 8 fuenf Phasen fiel (kein Integrationsjob fuehrt ein Office-Dokument ueber den bewachten Pfad auf einer vielkernigen Maschine) | wird **vor der Abgabe** geschlossen, im selben Plan |
+
+Beides legt der Orchestrator als Plan 06.1-24 an. Erst danach beginnt Plan 06-12,
+die gebuendelte Abgabe des Erstrelease.
+
+Die Instanz auf Port 8097 bleibt zunaechst stehen, damit der Owner weiter
+ausprobieren kann; ihr Abbau ist Sache des Orchestrators und nicht dieses Plans.
