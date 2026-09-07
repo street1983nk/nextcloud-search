@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
 status: milestone_complete
-stopped_at: Milestone complete (Phase 06.1 was final phase)
+stopped_at: Milestone complete (06-12 Store-Abgabe DONE, Findling 1.0.0 im Store 2026-09-07)
 last_updated: 2026-09-07T14:54:33.731Z
-last_activity: 2026-09-06 -- Phase 06.1 execution started
+last_activity: 2026-09-07 -- 06-12 Store-Abgabe: v1.0.0 eingereicht und im Store
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 52
-  completed_plans: 101
+  completed_plans: 102
   percent: 0
 ---
 
@@ -24,6 +24,16 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 **Current focus:** Milestone complete
 
 ## Current Position
+
+**STORE-ABGABE ERLEDIGT 07.09.2026 ~16:34Z (Plan 06-12).** Tag v1.0.0 auf
+160a289 (Owner-Entscheid tag-nach-phase-6), alle 7 Workflows gruen, beide
+Archive signiert und ueber die heruntergeladenen Assets verifiziert, beide
+Apps registriert und beide Releases gemeldet (4x HTTP 201, Lauf 34143894059,
+via .github/workflows/store-submit.yml auf Owner-Auftrag). Store-Seiten live:
+apps.nextcloud.com/apps/findling + /apps/findling_backend. Details:
+.planning/phases/06-semantische-suche/06-12-SUMMARY.md. Milestone v1.0 ist
+damit WIRKLICH komplett.
+
 
 Phase: 06.1
 Plan: Not started
