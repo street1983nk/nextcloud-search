@@ -1,0 +1,135 @@
+2026-09-07T06:42:02Z STEP 0 preflight, the instance and the two archives: start
+2026-09-07T06:42:02Z instance url http://localhost:8097
+2026-09-07T06:42:02Z instance exec sudo docker exec -i --user www-data -w /var/www/html findling-arm64-nc
+2026-09-07T06:42:02Z flavour compose, aio image tag latest, platform linux/arm64
+2026-09-07T06:42:02Z archives /home/ubuntu/work/arm64/dist/findling.tar.gz and /home/ubuntu/work/arm64/dist/findling_backend.tar.gz, expected version 1.0.0
+2026-09-07T06:42:02Z deploy daemon harp_arm64
+2026-09-07T06:42:02Z every occ call is limited to 1800s
+2026-09-07T06:42:02Z the backend archive says version 1.0.0, the companion archive says 1.0.0
+2026-09-07T06:42:02Z the companion archive carries appinfo/signature.json
+2026-09-07T06:42:03Z occ status:   - installed: true   - version: 34.0.3.2   - versionstring: 34.0.3   - edition:    - maintenance: false   - needsDbUpgrade: false   - productname: Nextcloud   - extendedSupport: false 
+2026-09-07T06:42:03Z the instance knows neither half yet
+2026-09-07T06:42:04Z the background job mode of this instance is 'unset, which Nextcloud reads as ajax'
+2026-09-07T06:42:04Z the cron interval used for every wait below is 300s, driven by the script
+2026-09-07T06:42:04Z the zero config budget is 6 cron rounds, which is 1800s of system cron time
+2026-09-07T06:42:04Z the flavour is compose, so the all-in-one image tag latest is recorded and not checked
+2026-09-07T06:42:04Z STEP 0 preflight, the instance and the two archives: ok after 2s
+2026-09-07T06:42:04Z STEP 1 the anonymous pull, assumption A6: start
+2026-09-07T06:42:04Z the archive asks for ghcr.io/street1983nk/findling_backend:1.0.0
+2026-09-07T06:42:04Z docker configuration directory /tmp/tmp.7ogR696TBN/docker-anonymous, contents: 
+ERROR: ghcr.io/street1983nk/findling_backend:1.0.0: not found
+2026-09-07T06:42:04Z FINDING: ghcr.io/street1983nk/findling_backend:1.0.0 does not exist in the registry; this run installs against the tag dev instead, on the same terms deploy-harp.yml uses on a branch
+263c263
+< 			<image-tag>1.0.0</image-tag>
+---
+> 			<image-tag>dev</image-tag>
+2026-09-07T06:42:05Z the substitution changed exactly the image-tag line
+dev: Pulling from street1983nk/findling_backend
+Digest: sha256:00111fd090f437a00678f6fc0a562807a5ad0b35082db235ea52ee86c63454c9
+Status: Image is up to date for ghcr.io/street1983nk/findling_backend:dev
+ghcr.io/street1983nk/findling_backend:dev
+2026-09-07T06:42:06Z pulled anonymously: ghcr.io/street1983nk/findling_backend@sha256:00111fd090f437a00678f6fc0a562807a5ad0b35082db235ea52ee86c63454c9
+2026-09-07T06:42:06Z the local copy is gone, the deploy daemon has to pull it again
+2026-09-07T06:42:06Z STEP 1 the anonymous pull, assumption A6: ok, A6 confirmed for ghcr.io/street1983nk/findling_backend:dev after 2s
+2026-09-07T06:42:06Z STEP 2 the companion out of the archive: start
+findling 1.0.0 enabled
+2026-09-07T06:42:07Z the companion is unpacked and enabled, and not one path led into a working tree
+2026-09-07T06:42:07Z occ integrity:check-app findling: empty answer, verdict clean
+findling: 1 errors found:
+  - INVALID_HASH:
+    - lib/AppInfo/Application.php:
+      - expected: b08a159b94bbaf172e367b14aeb809ebc6cf1f80d786b446d3b4ad96ba3686e6428ddb349ac9e03cb1778a46fee2e6cf477e4cdfe029d48e51b02c789dbe47e0
+      - current: 6acd88d8e8e2248238ab712b94d4743f5f2e366afbb0950dd005f36ab95792ed107a98b70fd9a7abd5359502d81b2139fe1283a3f0b7abbbd23f784d27503431
+2026-09-07T06:42:08Z tamper probe: one altered line, verdict INVALID_HASH, exit 1
+2026-09-07T06:42:08Z restored: empty answer, verdict clean again
+2026-09-07T06:42:08Z STEP 2 the companion out of the archive: ok after 2s
+2026-09-07T06:42:08Z STEP 3 the ExApp out of the archive: start
+			<registry>ghcr.io</registry>
+			<image>street1983nk/findling_backend</image>
+			<image-tag>dev</image-tag>
+2026-09-07T06:42:09Z the info.xml this registration uses carries 5 route elements out of the archive
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+2026-09-07T06:42:51Z container nc_app_findling_backend, volume nc_app_findling_backend_data, image ghcr.io/street1983nk/findling_backend:dev
+ExApps:
+findling_backend (Array): 1.0.0 [enabled]
+2026-09-07T06:42:52Z STEP 3 the ExApp out of the archive: ok after 44s
+2026-09-07T06:42:52Z STEP 4 the zero config proof: start
+2026-09-07T06:42:52Z every occ call of this run up to here:
+     1	occ status
+     2	occ app:list
+     3	occ app_api:app:list
+     4	occ config:app:get core backgroundjobs_mode
+     5	occ app:enable findling
+     6	occ integrity:check-app findling
+     7	occ integrity:check-app findling
+     8	occ integrity:check-app findling
+     9	occ app_api:app:register findling_backend harp_arm64 --info-xml /tmp/findling-store-check/findling_backend/appinfo/info.xml --wait-finish
+    10	occ app_api:app:list
+2026-09-07T06:42:52Z the installation is complete after 10 occ calls, and nothing below may add one
+2026-09-07T06:42:53Z the file was uploaded over WebDAV as admin, HTTP 201
+2026-09-07T06:42:53Z round 0, before the first cron round: coverage unknown per cent, indexed 0 of 0 indexable, 0 embedded
+2026-09-07T06:44:46Z round 1: coverage unknown per cent, indexed 1 of 0 indexable, 1 embedded
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"findling-zero-config.txt","subline":"The findling zero config proof word is florpel","resourceUrl":"\/f\/76","icon":"icon-search","rounded":false,"attributes":{"fileId":"76","highlights":"[[39,46]]"}}],"cursor":null}}}2026-09-07T06:44:46Z content hit after 1 cron rounds, 113s of wall clock, which is 300s of system cron time
+2026-09-07T06:44:46Z at the hit: coverage unknown per cent, indexed 1 of 0 indexable, 1 embedded
+2026-09-07T06:44:46Z occ calls between the installation and the hit:
+2026-09-07T06:44:46Z none, which is what zero config means
+2026-09-07T06:44:46Z STEP 4 the zero config proof: ok after 114s
+2026-09-07T06:44:46Z STEP 5 uninstall promise 1, an unregister without the flag keeps the volume: start
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully removed
+ExApp findling_backend successfully unregistered.
+2026-09-07T06:44:48Z container gone, volume nc_app_findling_backend_data kept
+2026-09-07T06:44:48Z STEP 5 uninstall promise 1, an unregister without the flag keeps the volume: ok after 2s
+2026-09-07T06:44:48Z STEP 5 uninstall promise 2, a second registration picks up the volume it left: start
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+2026-09-07T06:45:22Z registered again as nc_app_findling_backend on the kept volume nc_app_findling_backend_data
+2026-09-07T06:45:22Z STEP 5 uninstall promise 2, a second registration picks up the volume it left: ok after 34s
+2026-09-07T06:45:22Z STEP 5 uninstall promise 3, an unregister with --rm-data removes the volume: start
+ExApp findling_backend successfully disabled.
+ExApp findling_backend successfully removed
+ExApp findling_backend successfully unregistered.
+2026-09-07T06:45:27Z container and volume nc_app_findling_backend_data both gone
+2026-09-07T06:45:27Z STEP 5 uninstall promise 3, an unregister with --rm-data removes the volume: ok after 5s
+2026-09-07T06:45:27Z STEP 5 uninstall promise 4, a disable without intent keeps tables and settings: start
+2026-09-07T06:45:28Z before the disable: tables [oc_findling_file_state oc_findling_queue oc_findling_scan_stats], settings 7
+findling 1.0.0 disabled
+2026-09-07T06:45:28Z after the disable: tables [oc_findling_file_state oc_findling_queue oc_findling_scan_stats], settings 8
+2026-09-07T06:45:28Z STEP 5 uninstall promise 4, a disable without intent keeps tables and settings: ok after 1s
+2026-09-07T06:45:28Z STEP 5 uninstall promise 5, a remove with intent clears tables and settings: start
+findling 1.0.0 enabled
+ExApp findling_backend deployed successfully.
+ExApp findling_backend successfully registered.
+The intent is set. The next "occ app:disable findling" or "occ app:remove findling" removes what is listed below.
+
+What a removal would take with it
+  background jobs
+    SchedulerJob         no
+    StorageCrawlJob      no
+    SubtreeExpandJob     no
+  tables
+    findling_queue       yes
+    findling_scan_stats  yes
+    findling_file_state  yes
+  schema
+    migration records    5
+  settings
+    stored values        10
+
+The intent is set. The next disable or remove of this app removes the above.
+"occ findling:purge --disarm" takes that back.
+Disabled app 'findling' (uninstall steps executed).
+Removed app 'findling' (version 1.0.0).
+2026-09-07T06:46:03Z after the remove with intent: tables [], settings 0
+2026-09-07T06:46:03Z no tables, no settings, no directory
+2026-09-07T06:46:03Z STEP 5 uninstall promise 5, a remove with intent clears tables and settings: ok after 35s
+2026-09-07T06:46:03Z STEP 5 uninstall promise 6, the container without a companion retreats: start
+2026-09-07T06:46:53Z container nc_app_findling_backend is Up About a minute, retreat announced, 3 new warning or error lines
+2026-09-07T06:46:53Z STEP 5 uninstall promise 6, the container without a companion retreats: ok after 50s
+2026-09-07T06:46:53Z SUMMARY: image ghcr.io/street1983nk/findling_backend:dev at ghcr.io/street1983nk/findling_backend@sha256:00111fd090f437a00678f6fc0a562807a5ad0b35082db235ea52ee86c63454c9
+2026-09-07T06:46:53Z SUMMARY: version 1.0.0, content hit after 1 cron rounds of 300s, no occ call in between
+2026-09-07T06:46:53Z SUMMARY: all six uninstall promises hold on this instance
+2026-09-07T06:46:53Z cleanup: taking the installation off the instance
+2026-09-07T06:46:55Z cleanup: done
+2026-09-07T06:46:55Z the protocol of this run is /home/ubuntu/work/nachmessung/81-arm64-lauf.txt

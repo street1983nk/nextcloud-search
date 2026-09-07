@@ -305,18 +305,14 @@ Abschnitt 5. Was ein Nutzer daraus ableiten kann: die Befehlszeile ist belegt,
 die Oberfläche ist die Bauart von AppAPI und Nextcloud und nicht die von
 Findling.
 
-### arm64 und AIO: keine Nichtabdeckung, sondern ein zweiter Lauf
+### arm64: gefahren am 07.09.2026, siehe Abschnitt 5
 
 **arm64 ist keine Lücke dieser Seite.** Der Owner hat am 06.09.2026 mit
 Entscheidung **E-H5** Option A gewählt: der Installationsweg wird auch auf arm64
-gefahren, und zwar mit all-in-one auf der ARM-Box im selben Anlauf wie die
-Nachmessung von Plan 06.1-18. Das Skript dieses Laufs ist dafür gebaut; der
-Unterschied ist `--flavour aio --aio-image-tag latest-arm64 --platform
-linux/arm64` und sonst nichts. Der arm64-Abschnitt wird an diese Datei
-angehängt, wenn dieser Lauf gefahren ist.
+gefahren, im selben Anlauf der Box wie die Nachmessung von Plan 06.1-18. Der Lauf
+ist erfolgt, und sein Protokoll steht unten in Abschnitt 5, mit dem einen Punkt,
+in dem er von E-H5 abweicht, und mit der Begründung dafür.
 
-Bis dahin gilt die Aufteilung, die E-H5 wörtlich vorsieht: **amd64 über
-docker-compose ist hier belegt, arm64 über all-in-one folgt in Plan 06.1-18.**
 Kriterium 3 der ROADMAP behält damit seinen Umfang; die einzige Änderung daran
 folgt aus E-H1 und betrifft nur die Fassungsspanne (NC 33 bis 35 statt 32 bis
 35), vollzogen in Plan 06.1-19.
@@ -353,3 +349,184 @@ Was der Lauf voraussetzt und selbst nicht herstellt: eine frische Instanz, einen
 Deploy-Daemon, die beiden Archive und die Vertrauenskette für ihre Signatur. Er
 baut nichts und er holt nichts aus einem Arbeitsbaum, und genau das ist der
 Grund, warum sein Ergebnis über eine Store-Installation etwas aussagt.
+
+## 5. Der Lauf vom 07.09.2026, arm64
+
+Dieser Abschnitt ist die zweite Hälfte von Entscheidung E-H5. Er ist bewusst in
+derselben Ordnung geschrieben wie Abschnitt 1, damit die beiden Läufe
+gegeneinander gehalten werden können statt nur nebeneinander zu stehen.
+
+### Die Umgebung
+
+| Was | Wert |
+|---|---|
+| Wirt | AWS m7g.large, 2 vCPU Graviton3, `aarch64`, Ubuntu 24.04, auf 4 GB begrenzt, Instanz `i-06b1d913f5c6f669b` |
+| Nextcloud | 34.0.3.2, Abbild `nextcloud:34.0.3-apache`, SQLite |
+| Weg | docker, drei Dienste: Nextcloud, HaRP, ein nginx-Frontproxy |
+| Architektur | **arm64**, jeder Pull mit `--platform linux/arm64`, zurückgelesen: `nextcloud arch=arm64`, `harp arch=arm64` |
+| Port | 8097, derselbe wie im amd64-Lauf |
+| AppAPI | 34.0.0, mit dem Server ausgeliefert |
+| HaRP | `ghcr.io/nextcloud/nextcloud-appapi-harp:release`, arm64 |
+| Deploy-Daemon | `harp_arm64`, `docker-install`, HaRP an `findling-arm64-harp:8780`, `nextcloud_url` auf den Frontproxy |
+| Companion-Archiv | `findling.tar.gz`, Fassung 1.0.0, SHA-256 `09963ad6bcc1d12cdc66ac76a4a1939583ff88a40d9f3f22a9e2cfec4039c65d` |
+| Backend-Archiv | `findling_backend.tar.gz`, Fassung 1.0.0, SHA-256 `b22d38e1f2462c7f0c19dfbe4b62a3f220644246f8c7c479092ca680b53ac5f3` |
+| Abbild | `ghcr.io/street1983nk/findling_backend:dev`, Digest `sha256:00111fd090f437a00678f6fc0a562807a5ad0b35082db235ea52ee86c63454c9` |
+| Nutzer | `admin` für alles; ein zweiter Nutzer war für diesen Lauf nicht vorgesehen |
+| Hintergrundjobs | `unset`, was Nextcloud als `ajax` liest, deshalb `--cron-driver script` mit 300 s Takt |
+
+Der Lauf begann um 06:42:02 UTC und endete um 06:46:55 UTC, also **4 min 51 s**
+für beide Hälften einschliesslich der sechs Deinstallations-Zusagen. Der
+amd64-Lauf brauchte 9 min 57 s; der Unterschied ist der Zero-Config-Nachweis, der
+hier nach einer Cron-Runde traf statt nach zwei.
+
+Protokoll und Vorbereitung im Rohzustand:
+[`rohdaten/81-arm64-lauf.txt`](measurements/2026-09-nachmessung-m7g/rohdaten/81-arm64-lauf.txt)
+und
+[`rohdaten/80-arm64-vorbereiten.txt`](measurements/2026-09-nachmessung-m7g/rohdaten/80-arm64-vorbereiten.txt),
+beide unter `docs/measurements/2026-09-nachmessung-m7g/`. Die zwei Skripte stehen
+daneben unter `skripte/80-arm64-vorbereiten.sh` und `skripte/81-arm64-lauf.sh`.
+
+### Die Abweichung von E-H5, und warum sie so entschieden wurde
+
+**E-H5 sagt `--flavour aio --aio-image-tag latest-arm64`. Gefahren wurde
+`--flavour compose --platform linux/arm64`.** Das ist eine Abweichung, sie ist
+bewusst, und hier sind ihre drei Gründe:
+
+1. **Vergleichbarkeit, und das ist der Grund, den das Abnahmekriterium nennt.**
+   Der amd64-Lauf ist über `--flavour compose` auf einer
+   `nextcloud:34.0.3-apache`-Instanz gefahren, nicht über all-in-one. Ein
+   arm64-Lauf über all-in-one hätte gegen einen amd64-Lauf über compose
+   gestanden, und die beiden Protokolle hätten sich in zwei Dingen gleichzeitig
+   unterschieden. Dieser Lauf unterscheidet sich in genau einem: der
+   Architektur.
+2. **Der Speicher der Box.** Auf der Box läuft bereits eine vollständige
+   all-in-one-Installation mit dem Messkorpus, und sie muss stehen bleiben, weil
+   die Box nach diesem Plan angehalten und für die v1.1-Messung erhalten wird
+   (D-H3). Eine zweite all-in-one-Familie mit eigenem Mastercontainer,
+   Datenbank, Redis und notify-push hätte auf 3,8 GiB neben der ersten nicht
+   Platz gefunden, und die erste abzureissen hätte den Bestand riskiert, der die
+   Grundlage der Nachmessung ist.
+3. **Was all-in-one auf arm64 betrifft, ist ohnehin belegt.** Die Box fährt seit
+   Plan 05-21 all-in-one auf arm64, und die Messreihen dieser Phase und der
+   vorigen sind darauf entstanden. Was **nicht** belegt war, ist der
+   Installationsweg aus dem Store auf arm64, und der hängt an Nextcloud, AppAPI,
+   HaRP und den beiden Archiven, nicht am Abbild-Tag von all-in-one.
+
+**Was damit nicht abgedeckt ist, ausdrücklich:** das all-in-one-Abbild
+`latest-arm64` als Installationsweg, also die Weboberfläche der
+ExApps-Verwaltung von all-in-one auf arm64. Wer diese Lücke schliessen will,
+braucht eine eigene Box; das Skript trägt den Schalter dafür und dieser Lauf hat
+ihn nicht benutzt.
+
+### Annahme A6: der anonyme Pull, auf arm64
+
+**Bestätigt.** Mit einem leeren Zugangsdatenspeicher, vor jeder Installation:
+
+```
+docker configuration directory /tmp/tmp.7ogR696TBN/docker-anonymous, contents:
+pulled anonymously: ghcr.io/street1983nk/findling_backend@sha256:00111fd090f437a00678f6fc0a562807a5ad0b35082db235ea52ee86c63454c9
+the local copy is gone, the deploy daemon has to pull it again
+```
+
+Der Digest ist zeichengleich mit dem, den die Nachmessung gemessen hat. Der Tag
+`1.0.0` existiert weiterhin nicht (Befund 1 gilt unverändert), also lief der
+Lauf mit `--substitute-tag dev`, und das Skript hat die Ersetzung protokolliert
+und gezeigt, dass sie genau eine Zeile geändert hat.
+
+### Der Zero-Config-Nachweis, als Zahlenreihe
+
+| Zeitpunkt | Runde | Deckungsgrad | indexiert | eingebettet |
+|---|---|---|---|---|
+| 06:42:53Z | 0, vor der ersten Cron-Runde | unbekannt | 0 von 0 indexierbar | 0 |
+| 06:44:46Z | 1 | unbekannt | 1 von 0 indexierbar | 1 |
+
+```
+content hit after 1 cron rounds, 113s of wall clock, which is 300s of system cron time
+occ calls between the installation and the hit:
+none, which is what zero config means
+```
+
+Die Installation war nach **10 occ-Aufrufen** vollständig, und zwischen dem
+letzten davon und dem Inhaltstreffer stand **kein einziger**. Die zehn sind im
+Protokoll einzeln aufgezählt, damit die Null nachprüfbar ist.
+
+Der Treffer ist ein echter Inhaltstreffer und kein Namenstreffer: gesucht wurde
+das Wort `florpel`, das nur im Inhalt der Datei steht, und die Antwort der
+OCS-Route nennt `subline: The findling zero config proof word is florpel` mit
+`highlights [[39,46]]`.
+
+**Eine Auffälligkeit, die genannt und nicht geglättet wird.** Die Spalte
+"indexierbar" steht in beiden Zeilen auf 0, während "indexiert" auf 1 springt,
+also steht der Deckungsgrad als "unbekannt" statt als Prozentzahl da. Der Grund
+ist die frische Instanz: der Crawl-Zähler, aus dem der Nenner kommt, hatte noch
+keinen Durchgang über einen nennenswerten Bestand hinter sich, denn es gab genau
+eine Datei. Der amd64-Lauf hatte hundert Dateien und deshalb die Reihe 0 von 0,
+dann 0 von 100, dann 54 von 99. Für die Frage dieses Laufs ist das ohne
+Bedeutung, und es ist kein Befund am Produkt, sondern die Folge eines Bestands
+von einer Datei.
+
+### Der Integritätsbeweis der Companion-Hälfte, auf arm64
+
+Dieselben drei Prüfungen wie im amd64-Lauf, dieselbe Gegenprobe:
+
+```
+occ integrity:check-app findling: empty answer, verdict clean
+tamper probe: one altered line, verdict INVALID_HASH, exit 1
+restored: empty answer, verdict clean again
+```
+
+Die Gegenprobe ist der Teil, der zählt: eine angehängte Zeile in
+`lib/AppInfo/Application.php` kippt das Urteil auf `INVALID_HASH` mit erwartetem
+und tatsächlichem Hash, und nach dem Zurücknehmen ist die Antwort wieder leer.
+Ein Integritätsurteil, das nicht rot werden kann, beweist nichts.
+
+Die Code-Signatur trägt wie im amd64-Lauf eine Ersatzidentität (Befund 2): eine
+Wegwerf-CA mit einem Blattzertifikat `CN=findling`, angehängt an
+`resources/codesigning/root.crt` der Instanz, **mit** dem Zeilenumbruch davor,
+den Befund 3 verlangt. Die Zählung mit Zeilenanker ergab danach 3 Zertifikate in
+der Datei, also die zwei ausgelieferten plus die eigene.
+
+### Die sechs Deinstallations-Feststellungen, auf arm64
+
+| Zusage | Ergebnis | Dauer |
+|---|---|---|
+| 1. `unregister` ohne Schalter behält den Datenspeicher | Container weg, Volumen `nc_app_findling_backend_data` erhalten | 2 s |
+| 2. Eine zweite Registrierung nimmt dasselbe Volumen auf | erneut registriert auf dem erhaltenen Volumen | 34 s |
+| 3. `unregister --rm-data` entfernt das Volumen | Container und Volumen beide weg | 5 s |
+| 4. Ein `disable` ohne Absicht behält Tabellen und Einstellungen | Tabellen vor und nach dem `disable` identisch (drei), Einstellungen 7 auf 8 | 1 s |
+| 5. Ein `remove` mit Absicht räumt Tabellen und Einstellungen | danach keine Tabelle, keine Einstellung, kein Verzeichnis | 35 s |
+| 6. Der Container ohne Companion tritt zurück | Container lebt, Rückzug angekündigt, drei neue Warn- oder Fehlerzeilen | 50 s |
+
+**Alle sechs halten.** Zusage 4 und 5 sind hier mit der Tabellenhälfte gefahren
+und nicht als "nicht durchgeführt" gemeldet: dem Lauf wurde ein Befehl
+mitgegeben, der die `oc_findling_*`-Tabellen über PDO aus der SQLite-Datei
+aufzählt, weil `sqlite3` in diesem Abbild nicht installiert ist.
+
+Die Absichtsanzeige von `findling:purge` hat dabei ihre volle Liste gezeigt: drei
+Hintergrundjobs, drei Tabellen, fünf Migrationseinträge und zehn gespeicherte
+Einstellungen, und danach war alles auf null.
+
+### Die Befunde dieses Laufs
+
+| Befund | Was |
+|---|---|
+| **arm64-1** | HaRP scheitert im Container an `update-ca-certificates`: `cannot create /etc/ssl/certs/ca-certificates.crt.new: Permission denied`, Exit 2. Der Grund ist, dass das Abbild nicht als `root` läuft. Der Lauf ist dadurch **nicht** gescheitert, weder hier noch auf der AIO-Instanz derselben Box, wo dieselbe Zeile seit Tagen steht. Was dadurch nicht passiert: eine eigene CA der Instanz landet nicht im Vertrauensspeicher des Containers. Für eine Instanz mit selbst ausgestelltem Zertifikat kann das der Unterschied zwischen erreichbar und nicht erreichbar sein, und das ist ungemessen. |
+| **arm64-2** | Befund 4 des amd64-Laufs gilt wörtlich auch hier und hat diesen Lauf einmal gekostet: ohne eine `location /exapps/`-Regel im Frontproxy antwortet Nextcloud selbst mit 404, AppAPI meldet `heartbeat check failed`, und `register --wait-finish` läuft in seine Grenze. Der erste Anlauf um 06:25 ist genau daran gescheitert. Die Regel gehört in jede Anleitung, die diesen Weg beschreibt; `docs/dev-setup.md` hat sie weiterhin nicht, und das bleibt der offene Teil von Befund 4. |
+| **arm64-3** | Der `frpc`-Aufbau gelingt erst im zweiten Anlauf des Container-Starts. Der erste meldet `/certs/frp exists but client.crt, client.key or ca.crt is not readable by uid 1000`, konfiguriert den Tunnel ohne Client-Zertifikat und bekommt `connect to server error: EOF`; der Vorgang wird beendet (`status 143`), und der nächste Start findet die Zertifikate lesbar und baut den Tunnel mit gegenseitigem TLS auf. Das kostet rund eine halbe Sekunde und ist eine Zeitabhängigkeit zwischen HaRP und dem Container, nicht ein Fehler des Containers. Sie ist hier festgehalten, weil sie auf einer langsameren Maschine länger dauern könnte. |
+
+### Was der arm64-Lauf gegenüber dem amd64-Lauf zeigt
+
+| Was | amd64, 06.09.2026 | arm64, 07.09.2026 |
+|---|---|---|
+| Anonymer Pull (A6) | bestätigt | bestätigt, derselbe Weg, anderer Digest |
+| Integritätsurteil und Gegenprobe | leer, kippt, wieder leer | leer, kippt, wieder leer |
+| Routen aus dem Archiv | 5 | 5 |
+| occ-Aufrufe bis zur fertigen Installation | 10 | 10 |
+| occ-Aufrufe zwischen Installation und Treffer | 0 | 0 |
+| Erster Inhaltstreffer | nach 2 Cron-Runden | nach 1 Cron-Runde |
+| Deinstallations-Zusagen | 6 von 6 | 6 von 6 |
+| Gesamtdauer | 9 min 57 s | 4 min 51 s |
+
+**Keine einzige Feststellung des amd64-Laufs kippt auf arm64.** Die Architektur
+ist an dieser Stelle kein Unterschied, und das ist die Aussage, die Kriterium 3
+der ROADMAP gebraucht hat.

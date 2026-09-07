@@ -436,9 +436,11 @@ gefahren.
 
 ## 11. Was nicht abgedeckt ist
 
-1. **Der arm64-Installationslauf nach E-H5.** Siehe
-   `docs/install-check.md`, Abschnitt zum arm64-Lauf, für den Stand und die
-   Begründung.
+1. **Das all-in-one-Abbild `latest-arm64` als Installationsweg.** Der
+   arm64-Installationslauf nach E-H5 ist **gefahren und bestanden**, aber in der
+   Form des amd64-Laufs (`--flavour compose --platform linux/arm64`) und nicht
+   über all-in-one. Protokoll, die drei Gründe für diese Abweichung und die drei
+   Befunde stehen in `docs/install-check.md`, Abschnitt 5.
 2. **Der A-Record `loadtest.infranode.dev`.** Er zeigt weiter auf die alte
    Adresse `3.77.150.91`; die Box lief in diesem Lauf auf `3.70.17.245`. Die
    Zugangsdaten für die DNS-Zone lagen dieser Ausführung nicht vor. Ersatz war
@@ -496,6 +498,8 @@ Alle Skripte liegen unter `skripte/`, alle Rohdaten unter `rohdaten/`.
 | `70-ocr.sh` | Die Seite rendern und die beiden Sprachsätze gegeneinander fahren |
 | `71-ocrphase.sh` | Die OCR-Phase an einer frischen Charge über WebDAV |
 | `72-neustart.sh` | Die Nachher-Hälfte von DI-05-36, über einen Maschinenneustart |
+| `80-arm64-vorbereiten.sh` | Die frische arm64-Instanz und die beiden Release-Archive samt Wegwerf-CA |
+| `81-arm64-lauf.sh` | Der Fahrplan der Fremdinstallation auf arm64, protokolliert in `docs/install-check.md` Abschnitt 5 |
 
 | Rohdatei | Inhalt |
 |---|---|
