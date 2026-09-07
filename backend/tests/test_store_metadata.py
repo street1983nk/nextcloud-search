@@ -275,9 +275,8 @@ STORE_LICENCES = frozenset(
 # lines at a different width than an info.xml does and a line break is not a
 # difference in what the sentence says.
 MEASURED_SENTENCE = (
-    "A full index, OCR and embedding run over 50,000 files and 20 GB on a 4-GB ARM64 box peaked at "
-    "1,838 MB of resident anonymous memory, under a hard 2 GB limit enforced by the kernel, with no OOM "
-    "kill and no restart."
+    "On a 4-GB ARM64 box with 51,961 indexed documents and the semantic search active, the container "
+    "peaked at 1,813 MB of resident anonymous memory, under a hard 2 GB limit enforced by the kernel."
 )
 
 
@@ -865,7 +864,7 @@ def test_a_document_that_is_not_well_formed_is_a_finding_and_not_an_error() -> N
 
 
 def test_a_text_without_the_measured_sentence_is_reported() -> None:
-    assert scan_measured_sentence("sample.md", f"nothing {MEASURED_SENTENCE} here".replace("50,000", "60,000")) != []
+    assert scan_measured_sentence("sample.md", f"nothing {MEASURED_SENTENCE} here".replace("1,813", "1,913")) != []
     # And a line break inside the sentence is not a difference: README.md wraps
     # at a different width than an info.xml, and that must not be a finding.
     assert scan_measured_sentence("sample.md", MEASURED_SENTENCE.replace(" ", "\n", 4)) == []
