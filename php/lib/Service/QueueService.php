@@ -525,10 +525,44 @@ class QueueService {
 	 * reconcile of plan 03-12 knows nothing else at all: a file it discovers as
 	 * missing has no queue row yet.
 	 *
+	 * One kind of handover is also a success report, and this is the second half
+	 * of DI-06.1-34. A file only reaches the embedding track once its text is in
+	 * the index: the poller puts it there for an outcome of `indexed`, the cheap
+	 * exit puts it there for a file whose bytes did not change and whose vectors
+	 * are missing, and the backlog band after a model change is read out of the
+	 * indexed documents of the store. So `embed` arriving here means "the text of
+	 * this file is findable", and any failed verdict this side is still holding
+	 * for it is stale by the same argument the acknowledgement uses.
+	 *
+	 * Without this the repair had a hole in exactly the configuration the sight
+	 * check ran in: a file the container had indexed while this side still said
+	 * failed comes back unchanged, takes the cheap exit, and travels to the
+	 * embedding track instead of into the done list, so the acknowledgement never
+	 * sees it. The stale row would then outlive every further pass, because
+	 * nothing touches a complete file again.
+	 *
+	 * `ocr` is deliberately not in this: that handover carries
+	 * skipped(no_text_layer), which is a file on its way into the index and not
+	 * one that arrived. The requeue itself runs first, because it is the work
+	 * this call exists for and it is idempotent, so a revocation that fails costs
+	 * a retry and never the handover.
+	 *
 	 * @param int[] $fileIds
 	 */
 	public function requeue(array $fileIds, string $kind): int {
-		return $this->queueMapper->requeueAs($fileIds, $kind);
+		$moved = $this->queueMapper->requeueAs($fileIds, $kind);
+
+		if ($kind === QueueMapper::KIND_EMBED) {
+			$revoked = $this->fileStateService->revokeFailures($fileIds);
+			if ($revoked > 0) {
+				$this->logger->info(
+					'Findling: took back failed verdicts of files the container handed to the embedding track',
+					['count' => $revoked],
+				);
+			}
+		}
+
+		return $moved;
 	}
 
 	/**
