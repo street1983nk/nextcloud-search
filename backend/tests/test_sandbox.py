@@ -24,6 +24,7 @@ before it the child spawned nothing at all.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import time
 from collections.abc import Iterator
@@ -47,6 +48,32 @@ ONLY_POSIX = pytest.mark.skipif(
     sys.platform == "win32",
     reason="RLIMIT_AS is a POSIX limit; the container this ships in is Linux",
 )
+
+# The one mimetype that carries the trap of DI-06.1-31, because office.py is the
+# module that imports openpyxl and openpyxl is what pulls numpy and OpenBLAS in.
+OFFICE_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+# The two numbers of the many core trap case, derived at the bottom of its
+# docstring: an address space cap that one pinned thread fits under and a thread
+# stack wide enough that a single unpinned neighbour does not.
+TRAP_ADDRESS_SPACE_BYTES = 192 * 1024 * 1024
+TRAP_THREAD_STACK_BYTES = 64 * 1024 * 1024
+
+# The child of the counterfactual: the three steps of _child_main that decide the
+# trap, in the order it does them, with the pin as the one switched line. It
+# calls the real functions of the real module, so it cannot drift away from the
+# mechanism it is about, and it deliberately does not import anything else of
+# _child_main: the pipe protocol has nothing to do with this question.
+_BARE_CHILD = """
+from findling.extract import sandbox
+sandbox._limit_address_space({cap})
+{pin}
+try:
+    from findling.extract.dispatch import extract
+    print(extract({document!r}, {mime!r}, {size}, None).state)
+except BaseException as error:
+    print(type(error).__name__)
+"""
 
 
 @pytest.fixture
@@ -375,6 +402,107 @@ def test_the_thread_pools_are_pinned_before_the_parsers_load() -> None:
     assert body.index("_limit_address_space(") < body.index("_pin_native_thread_pools()")
 
 
+def _an_office_document(tmp_path: Path) -> Path:
+    """One small DOCX on disk. The content is irrelevant, the route is the point."""
+    import docx
+
+    document = docx.Document()
+    document.add_paragraph("Aktenvermerk der Gemeinde zur Winterdienstpauschale.")
+    path = tmp_path / "vermerk.docx"
+    document.save(str(path))
+    return path
+
+
+def _usable_cpus() -> int:
+    """How many CPUs this process may use, which is the thread count OpenBLAS takes.
+
+    The allowance and not the count of the machine, asked the way
+    findling.embed.bench asks it: OpenBLAS reads the affinity mask, so a
+    container pinned to two of twelve cores starts two threads and not twelve.
+    """
+    affinity = getattr(os, "sched_getaffinity", None)
+    return len(affinity(0)) if affinity is not None else os.cpu_count() or 1
+
+
+def _thread_stack_limit() -> tuple[int, int]:
+    """The soft and the hard limit on the thread stack, zeroes on Windows."""
+    if sys.platform == "win32":
+        return (0, 0)
+    import resource
+
+    return resource.getrlimit(resource.RLIMIT_STACK)
+
+
+def _set_thread_stack_limit(soft: int, hard: int) -> None:
+    """Set the thread stack limit, and do nothing at all on Windows."""
+    if sys.platform == "win32":
+        return
+    import resource
+
+    resource.setrlimit(resource.RLIMIT_STACK, (soft, hard))
+
+
+def _widen_the_thread_stack() -> None:
+    """Raise the soft limit on the thread stack, keeping the hard one as it is.
+
+    Runs between fork and exec of the bare child, which is the only window in
+    which a limit can be set that the new process reads while it starts. The
+    hard limit is carried over unchanged because raising it is a privilege this
+    process does not have and does not need.
+    """
+    _set_thread_stack_limit(TRAP_THREAD_STACK_BYTES, _thread_stack_limit()[1])
+
+
+def _the_thread_stack_can_be_widened() -> bool:
+    """Whether this machine allows the stack the trap case needs."""
+    if sys.platform == "win32":
+        return False
+    import resource
+
+    _soft, hard = _thread_stack_limit()
+    return hard == resource.RLIM_INFINITY or hard >= TRAP_THREAD_STACK_BYTES
+
+
+def _extract_in_a_bare_child(document: Path, *, pinned: bool) -> str:
+    """Extract one document in a fresh interpreter, with or without the pin.
+
+    A plain subprocess and not a worker of this module: the question is what the
+    three steps of the child do to a document, and the parent side of the pipe
+    would only add a way for the answer to be a timeout instead of a verdict.
+    """
+    code = _BARE_CHILD.format(
+        cap=TRAP_ADDRESS_SPACE_BYTES,
+        pin="sandbox._pin_native_thread_pools()" if pinned else "",
+        document=str(document),
+        mime=OFFICE_MIME,
+        size=document.stat().st_size,
+    )
+    environment = dict(os.environ)
+    # Whatever the machine running the suite carries in its environment, this
+    # child starts from the state the container starts from: nothing set, so
+    # OpenBLAS asks the kernel how many CPUs it may use. Without this an
+    # OPENBLAS_NUM_THREADS in the shell of a developer would silently turn the
+    # unpinned run into a pinned one and the whole case green for the wrong
+    # reason.
+    for name in sandbox._NATIVE_THREAD_POOL_VARIABLES:
+        environment.pop(name, None)
+
+    answer = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=300,
+        check=False,
+        preexec_fn=_widen_the_thread_stack,
+    )
+    lines = answer.stdout.strip().splitlines()
+    # The last line, because a native library may write to stdout before python
+    # gets to say anything. A child that never spoke at all is reported by its
+    # exit code, which is a verdict of its own and never mistaken for indexed.
+    return lines[-1] if lines else f"exit {answer.returncode}"
+
+
 def test_an_office_document_survives_the_guarded_path(tmp_path: Path) -> None:
     """A DOCX through the real child, which is where the corrupt verdict came from.
 
@@ -385,22 +513,101 @@ def test_an_office_document_survives_the_guarded_path(tmp_path: Path) -> None:
     precisely why the bug survived five phases of tests and measurements, and it
     is why the two tests above assert the mechanism instead of the outcome. This
     one is here because it is the assertion the sight check actually saw fail.
+
+    The test below it is the one that removes that limit and makes the trap
+    reachable on any runner (DI-06.1-31).
     """
-    import docx
+    document = _an_office_document(tmp_path)
 
-    document = docx.Document()
-    document.add_paragraph("Aktenvermerk der Gemeinde zur Winterdienstpauschale.")
-    path = tmp_path / "vermerk.docx"
-    document.save(str(path))
-
-    outcome = sandbox.extract_guarded(
-        str(path),
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        path.stat().st_size,
-    )
+    outcome = sandbox.extract_guarded(str(document), OFFICE_MIME, document.stat().st_size)
 
     assert outcome.state is State.INDEXED, f"reason {outcome.reason}"
     assert outcome.text_chars > 0
+
+
+@ONLY_POSIX
+def test_an_office_document_survives_the_many_core_trap_no_runner_could_reach(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The trap of the sight check, made reachable on a runner with two CPUs.
+
+    **The gap this closes.** The Office bug of plan 06.1-19 fell through five
+    phases because no job in this repository could reach it. It needs
+    ``pthread_create`` to fail inside the capped address space of the extraction
+    child, the thread count follows the CPU count, and a runner has two to four
+    CPUs while the owner's machine has twelve. The test above therefore holds on
+    every runner with or without the fix, which is worth exactly nothing as a
+    ratchet. The reference corpus could not help either: it is mostly PDF, and
+    the PDF route never imports openpyxl and therefore never loads numpy.
+
+    **Why the thread count cannot simply be raised.** Measured before this case
+    was written, in the release image on a container pinned to two CPUs:
+    OpenBLAS clamps ``OPENBLAS_NUM_THREADS`` to the CPUs it may actually use, so
+    asking for 12, 24 or 128 threads on a two CPU box yields two threads and a
+    green run every time. The environment variable cannot manufacture the trap.
+    The only lever left is the one the address space is made of, which is why
+    this case lowers ``RLIMIT_AS`` and widens the thread stack instead.
+
+    **The two numbers, and both are measurements.** With a 64 MiB thread stack a
+    single extra thread already costs 64 MiB of address space, so two CPUs are
+    enough to break a cap that one thread fits under, and every larger machine
+    breaks it further. In the release image the pinned child was measured green
+    from 160 MiB upwards and the unpinned child red from 240 MiB downwards, so
+    192 MiB sits between the two with roughly 32 MiB of room below and 48 above.
+    Verified at 2, 4 and 12 usable CPUs; the shape of the failure differs with
+    the core count, from the OpenBLAS message and a SIGINT at two CPUs to a
+    child that dies without a word at twelve, which is why the assertion below
+    asks for "not indexed" and never for one particular exception.
+
+    **The three runs, and each of them answers a different question.** The
+    guarded path has to survive the trap, which is the ratchet on the production
+    code: remove the pin from ``_child_main`` or make it ineffective and this
+    goes red on any runner. The bare child with the pin has to survive it too,
+    which proves the harness of the third run is sound rather than merely
+    hostile. The bare child without the pin has to fail, and that is the state
+    of this repository before commit debb395: the same three steps in the same
+    order, minus the one line that fixed it. So the case carries its own
+    falsification and does not need a dispatch switch to be trusted.
+    """
+    if _usable_cpus() < 2:
+        pytest.skip("the trap needs two usable CPUs, with one OpenBLAS starts one thread and there is nothing to trap")
+    if not _the_thread_stack_can_be_widened():
+        pytest.skip("the hard limit on the thread stack is below the size this case needs")
+
+    document = _an_office_document(tmp_path)
+
+    # The cap travels through the documented setting rather than a test hook, so
+    # what runs here is the ordinary worker of the container with an ordinary
+    # configuration. The cache is cleared on both sides of the run for the reason
+    # the volume fixture of conftest clears it: it is resolved once per process.
+    monkeypatch.setenv("FINDLING_EXTRACT_ADDRESS_SPACE_BYTES", str(TRAP_ADDRESS_SPACE_BYTES))
+    config.settings.cache_clear()
+    soft, hard = _thread_stack_limit()
+    # Before the child is started and never after: glibc reads this limit once,
+    # while a process starts, and takes the default thread stack size from it.
+    # Raised in the parent because that is the only place a spawned child can
+    # inherit it from, and put back in the finally, because a wide stack left
+    # behind would follow every later test of the session.
+    _set_thread_stack_limit(TRAP_THREAD_STACK_BYTES, hard)
+    worker = sandbox.ExtractionWorker(max_files=200, timeout_seconds=120)
+    try:
+        assert worker.address_space_bytes == TRAP_ADDRESS_SPACE_BYTES, "the lowered cap has to reach the worker"
+        outcome = worker.run(str(document), OFFICE_MIME, document.stat().st_size)
+    finally:
+        worker.stop()
+        _set_thread_stack_limit(soft, hard)
+        config.settings.cache_clear()
+
+    assert outcome.state is State.INDEXED, f"the pin has to hold under the trap, reason {outcome.reason}"
+    assert outcome.text_chars > 0
+
+    pinned = _extract_in_a_bare_child(document, pinned=True)
+    unpinned = _extract_in_a_bare_child(document, pinned=False)
+
+    assert pinned == str(State.INDEXED), f"the harness itself has to be survivable, it answered {pinned}"
+    assert unpinned != str(State.INDEXED), (
+        "the state before debb395 has to fail under this trap, otherwise this case proves nothing"
+    )
 
 
 def test_every_kill_goes_through_the_group_kill() -> None:

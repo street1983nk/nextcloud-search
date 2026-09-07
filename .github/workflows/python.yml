@@ -72,6 +72,18 @@ jobs:
       - name: Dead code
         run: uv run vulture src tests --min-confidence 80
 
+      # The gate of DI-06.1-31, named after what it prevents and run before the
+      # suite it is also part of. The duplication is the point: the Office bug of
+      # plan 06.1-19 was a "File damaged" verdict on every DOCX, XLSX and PPTX of
+      # a machine with enough cores, it survived five phases because no job here
+      # could reach it, and a case that reappears in a line reading "212 passed"
+      # is a case that can be dropped again without anybody noticing. This step
+      # carries its own falsification: the case fails on purpose in a child that
+      # runs the state before commit debb395, so a green step means the trap is
+      # reachable AND the fix holds, not merely that nothing was tried.
+      - name: The many core address space trap of the Office path (DI-06.1-31)
+        run: uv run pytest -q tests/test_sandbox.py -k many_core_trap --no-header
+
       - name: Tests
         run: uv run pytest -q
 

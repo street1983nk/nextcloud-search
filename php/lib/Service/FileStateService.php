@@ -38,6 +38,12 @@ use Psr\Log\LoggerInterface;
  * file is ever queued, and the acknowledgement endpoint writes whatever the
  * container reports it could not process.
  *
+ * There is one movement in the other direction, and it is the only deletion of
+ * this table: the same acknowledgement takes a failed verdict BACK when the
+ * container reports the very same file as processed (revokeFailures below,
+ * DI-06.1-34). Without it a row that once said failed had no writer at all that
+ * could contradict it, because this side never writes `indexed`.
+ *
  * The state and the reason are checked against a closed list here. The
  * container is trusted, but a trusted component with a defect must not be able
  * to write a file name into a database column, and free text as a reason is
@@ -268,6 +274,61 @@ class FileStateService {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Take back the failed verdicts of these files, because they are indexed now.
+	 *
+	 * The one writer of this class that deletes, and the reason it exists is a
+	 * contradiction the owner saw on a fresh instance (DI-06.1-34, finding 9 of
+	 * the sight check in plan 06.1-19). This side writes `indexed` never, on
+	 * purpose: the number belongs to the container, and one row per indexed file
+	 * would be a second copy of the index. The price of that decision was that a
+	 * row which once said `failed` had nobody to take it back, so the four Office
+	 * documents that were repaired by the fix of finding 8 kept their
+	 * failed(corrupt) verdict from before it. The status page counted them under
+	 * "failed" and offered the remedy "upload the file again" while the same
+	 * files were findable through their content. Nothing aged that row out
+	 * either: `cleanupLatencyHours` on the page is the latency of an exclusion
+	 * that was taken back and has nothing to do with this table, and no job of
+	 * this app deletes from it. The contradiction was therefore permanent and not
+	 * a matter of waiting a day.
+	 *
+	 * Deleted rather than overwritten with `indexed`, for the reason above: the
+	 * absence of a row is exactly what this side means by "the container owns
+	 * this verdict", and it is the state a file has before it is ever judged. A
+	 * reader that finds no row answers "not judged here" and asks the container,
+	 * which is the honest answer for a file that was just indexed by it.
+	 *
+	 * Only `failed` is taken back and never `skipped`. A skip is a decision and
+	 * not an error: it is not counted as a failure on the status page, it carries
+	 * no remedy that contradicts a findable file, and one of the skip reasons,
+	 * no_text_layer, is the handover to the OCR track, where the row is the memo
+	 * that the handover happened. Widening this to skips would delete that memo.
+	 *
+	 * The band exists for the dialects and not for the size of the answer, the
+	 * same reason verdictsFor bands its lookup: every database has a ceiling on
+	 * bound parameters and they differ.
+	 *
+	 * @param int[] $fileIds
+	 * @return int how many verdicts were taken back
+	 */
+	public function revokeFailures(array $fileIds): int {
+		$wanted = array_values(array_unique(array_filter($fileIds, static fn (int $fileId): bool => $fileId > 0)));
+		if ($wanted === []) {
+			return 0;
+		}
+
+		$revoked = 0;
+		foreach (array_chunk($wanted, self::MAX_LOOKUP) as $band) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->delete(self::TABLE_NAME)
+				->where($qb->expr()->eq('state', $qb->createNamedParameter('failed', IQueryBuilder::PARAM_STR)))
+				->andWhere($qb->expr()->in('file_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)));
+			$revoked += $qb->executeStatement();
+		}
+
+		return $revoked;
 	}
 
 	/**
