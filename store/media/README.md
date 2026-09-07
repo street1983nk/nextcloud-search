@@ -14,7 +14,7 @@ und nicht als Faustregel darunter.
 
 | Bild | Größe | Grenze |
 |---|---|---|
-| `header.png` | 168515 Bytes (165 KiB) | 2 MiB je Bild |
+| `header.png` | 327635 Bytes (320 KiB) | 2 MiB je Bild |
 | `screenshot-admin.png` | 159786 Bytes (156 KiB) | 2 MiB je Bild |
 | `screenshot-search.png` | 277061 Bytes (271 KiB) | 2 MiB je Bild |
 
@@ -41,7 +41,7 @@ wurde je Datei, denn zwei gleiche Adressen sind eine Abfrage.
 
 | Bild | Status | Inhaltstyp | Größe laut Antwort | Größe laut Tabelle oben | Maße |
 |---|---|---|---|---|---|
-| `header.png` | 200 | `image/png` | 168515 Bytes | 168515 Bytes | 1440 x 810 |
+| `header.png` | 200 | `image/png` | 168515 Bytes (abgeloeste Datei) | 327635 Bytes | 1440 x 810 |
 | `screenshot-admin.png` | 200 | `image/png` | 157081 Bytes | siehe Vermerk unten | 1440 x 1100 |
 | `screenshot-search.png` | 200 | `image/png` | 113724 Bytes | siehe Vermerk unten | 1440 x 700 |
 
@@ -53,7 +53,9 @@ Tag nach dieser Bestätigung neu erzeugt (Semantik im Bild, zweite Deckungszahl,
 siehe die Abschnitte unten). Die Maße sind unverändert, die Größen laut Antwort
 oben sind die der abgelösten Dateien. Die Adressen zeigen auf `main`; sobald der
 Stand mit den neuen Bildern dort liegt, ist die Abfrage je Datei zu wiederholen
-und diese Tabelle nachzuziehen. Für `header.png` gilt die Bestätigung unverändert.
+und diese Tabelle nachzuziehen. `header.png` wurde am 07.09.2026 abends auf
+Owner-Anweisung ebenfalls ersetzt (visuell statt textlastig, Abnahme im Chat);
+die Wiederholung der Abfrage gilt damit für alle drei Dateien.
 
 Über den Statuscode hinaus ist noch zweierlei geprüft, weil ein Statuscode allein
 nur sagt, dass etwas geantwortet hat:
@@ -63,9 +65,10 @@ nur sagt, dass etwas geantwortet hat:
    überein, die weiter unten je Bild stehen.
 2. **Es ist wirklich dieses Bild.** Die heruntergeladenen Bytes haben dieselbe
    SHA-256-Summe wie die Dateien, die zum Zeitpunkt der Abfrage in diesem
-   Verzeichnis lagen: `511f7bb3...` für `header.png` (unverändert gültig),
+   Verzeichnis lagen: `511f7bb3...` für das abgelöste Titelbild,
    `c1c3f9aa...` für das abgelöste Verwaltungsbild, `c644294c...` für das
-   abgelöste Suchbild. Die heutigen Dateien tragen `1258e50a...`
+   abgelöste Suchbild. Die heutigen Dateien tragen `22cc597d...`
+   (`header.png`), `1258e50a...`
    (`screenshot-admin.png`) und `568b0748...` (`screenshot-search.png`); gegen
    diese Summen läuft die Wiederholung der Abfrage nach dem nächsten Stand auf
    `main`.
@@ -148,11 +151,18 @@ das Richtige, nämlich dass jedes indexierte Dokument auch einen Vektor trägt.
 ebenfalls über Playwright. Kein erzeugtes Bild und keine Bildbearbeitung: jedes
 Element ist Text oder ein Vektor.
 
+**Was es zeigt (Fassung vom 07.09.2026, Owner-Abnahme im Chat):** der Name
+gross in der Mitte mit dem Lupen-Symbol, darunter ein einziger Satz ("Finds
+what is in your documents. Scans included.") und eine Schloss-Plakette
+"100% local". Links eine gescannte Seite, ueber die ein blauer Lesebalken
+laeuft (verwaschene Zeilen darueber, erkannte darunter, Plakette "OCR");
+rechts der Fund-Moment, die Lupe ueber einer gelb markierten Zeile mit
+gruenem Haken. Kein weiterer Text: die Bedeutung haengt an den Bildelementen,
+nicht an Beschriftung.
+
 **Die Regeln, nach denen es gebaut ist** (Bildpost-Linie des Owners):
-visuell zuerst, eine Überschrift und eine Zeile darunter, Space Grotesk als
-Schrift, echte SVG-Logos, keine Emojis, ruhiger Hintergrund. Die Überschrift
-sagt, was die App tut, und nicht, wie sie heißt; der Name steht klein als
-Wortmarke daneben.
+visuell zuerst, wenig Text, Space Grotesk als Schrift, echte SVG-Formen,
+keine Emojis, ruhiger Hintergrund.
 
 **Das Zeichen darin** ist das Symbol dieser App aus `php/img/app-dark.svg`, also
 Material Design Icons "magnify" von Pictogrammers unter Apache-2.0, mit dem
