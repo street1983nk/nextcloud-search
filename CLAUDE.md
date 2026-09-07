@@ -23,6 +23,8 @@ Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Containe
 <!-- GSD:stack-start source:research/STACK.md -->
 ## Owner-Regeln (verbindlich)
 
+- **Kurze Produkttexte (07.09.2026):** Store-Beschreibungen und READMEs sind kurze Faktenlisten: was die App kann, welche Dateitypen, welche Anforderungen (RAM/CPU/Versionen). Keine Messgeschichten und keine Erzaehlabsaetze; hoechstens eine Zahl im Text, Details nur als Verweis auf docs/. Vor einem Release den Textentwurf dem Owner zeigen (Store-Text reist mit dem Release, nicht editierbar). Vorher vergleichbare Store-Apps als Laengen-Massstab ansehen.
+
 - **Launch-Haertung vor der Store-Abgabe (06.09.2026):** Wenn alle Features fertig sind, wird VOR der Abgabe ausgiebig getestet, nicht nur der Happy Path. Alle erdenklichen Massnahmen fuer das beste Ergebnis: Fehler- und Randpfade, Rechte-Grenzen, Neustart/Upgrade/Migration, kaputte und boesartige Dateien, Ressourcengrenzen, Fremdinstallation auf frischer Nextcloud, Store-Vorgaben, alle Audits (Security/Bugs/Performance) erneut. Die Abgabe (Plan 06-12) startet erst nach Owner-Abnahme dieser Haertung.
 - **Nach jeder Phase Security-, Bug- und Performance-Audit (15.08.2026),** Befunde vor Phase-Abschluss fixen.
 
