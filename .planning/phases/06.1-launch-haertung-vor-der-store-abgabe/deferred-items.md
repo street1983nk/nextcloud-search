@@ -241,7 +241,7 @@ geloeschte Dokumente unter ihrem letzten Verdikt weitergezaehlt werden. Die
 zweite Fassung ist die billigere und die ehrlichere.
 ---
 
-## DI-06.1-07 (gefunden in Plan 06.1-06, TEILERLEDIGT durch 06.1-15): sechs Stellen nennen den Korpus noch mit dreiunddreissig Dateien
+## DI-06.1-07 (ERLEDIGT durch 06.1-15 + 06.1-22): sechs Stellen nennen den Korpus noch mit dreiunddreissig Dateien
 
 **Teilerledigung 07.09. (Plan 06.1-15):** docs/testing.md ist erledigt (Zahl durch
 Verweis auf testdata/CORPUS.md ersetzt). Offen: docs/dev-setup.md Z. 238,
@@ -442,7 +442,7 @@ Datei anfassen und das Lockstep-Gate beide Haelften zusammen sehen will.
 
 ---
 
-## DI-06.1-14 (Plan 06.1-16): docs/dev-setup.md fuehrt beim lokalen Store-Weg in eine haengende Registrierung
+## DI-06.1-14 (ERLEDIGT durch 06.1-22, Plan 06.1-16): docs/dev-setup.md fuehrt beim lokalen Store-Weg in eine haengende Registrierung
 
 **Was:** Der Abschnitt "Der Store-Installationsweg lokal" beschreibt die
 compose-Einrichtung ohne Frontproxy und mit http://harp:8780 als nextcloud_url.
@@ -455,7 +455,7 @@ Fehler bei der App. deploy-harp.yml loest die Topologie seit 03.09.2026 anders.
 
 ---
 
-## DI-06.1-15 (Plan 06.1-16): ein auf Windows gebautes Release-Paket traegt CRLF
+## DI-06.1-15 (ERLEDIGT durch 06.1-22, Plan 06.1-16): ein auf Windows gebautes Release-Paket traegt CRLF
 
 **Was:** Ein auf einem Windows-Arbeitsbaum gebautes Paket ist byteweise ein
 anderes als das aus release.yml. Heute harmlos, weil release.yml der einzige
@@ -492,7 +492,7 @@ dem ersten Gastvergleich.
 
 ---
 
-## DI-06.1-18 (Plan 06.1-17, Security-Audit, LOW): Passwoerter stehen in der Argumentliste zweier Dev-Skripte
+## DI-06.1-18 (ERLEDIGT durch 06.1-22, Plan 06.1-17, Security-Audit): Passwoerter stehen in der Argumentliste zweier Dev-Skripte
 
 **Was:** scripts/dev/guest_parity.sh und scripts/dev/aio_install_check.sh nehmen
 Passwoerter als Kommandozeilenargument; auf einem Mehrbenutzersystem sind sie
@@ -500,3 +500,21 @@ damit in der Prozessliste lesbar. Schliessform laut Audit: Umgebungsvariable
 oder stdin-Abfrage. Nur Dev-Werkzeuge, keine Auslieferung, deshalb LOW.
 
 **Wohin:** kleiner Folge-Fix oder zusammen mit Plan 06.1-19.
+
+---
+
+## DI-06.1-19 (Plan 06.1-22): die compose-Fassung des Frontproxys in docs/dev-setup.md ist ungefahren
+
+**Was:** Das Rezept ist aus deploy-harp.yml abgeleitet, auf dem compose-Stack
+selbst aber nicht gefahren. Drei offene Details: Host: app, Namensaufloesung,
+curl im Nextcloud-Image. Ehrlich als Messstand-Absatz gekennzeichnet.
+
+## DI-06.1-20 (Plan 06.1-22): die CRLF-Wache greift erst beim Packen, nicht beim Stagen
+
+**Was:** assert_no_crlf laeuft im pack-Schritt. Heute nicht erreichbar, weil
+release.yml auf Linux laeuft; ein Stage-seitiger Check waere frueher.
+
+## DI-06.1-21 (Plan 06.1-22): aio_install_check.sh hat kein eigenes Gate
+
+**Was:** Die Hausordnung des Skripts liegt in test_guest_parity.py mit; ein
+eigenes Testmodul waere die saubere Adresse.
