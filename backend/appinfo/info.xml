@@ -20,14 +20,20 @@
 	plan 06.1-17: it does not silence the search. The companion reaches this
 	container over the AppAPI signed path, and HaRP 0.4.5 skips route checking
 	for signed requests (haproxy_agent.py, "We skip routes checking for AppAPI
-	signed requests"). The block governs unsigned direct access alone. Measured:
-	an unsigned /search answers 404 with the block and without it, because HaRP
-	compares with re.match(route.url, target_path) and the five urls below are
-	bare paths, so re.match("search", "/search") is None. The block is therefore
-	inert on a HaRP installation, and inert in the fail closed direction. The
-	canonical form would be ^/search$; it is not changed here, because a route
-	pattern can only be proven against a running HaRP and the path the product
-	uses never asks the table.
+	signed requests"). The block governs unsigned direct access alone.
+
+	The five urls below are regular expressions and not path names, and they were
+	bare path names until 07.09.2026. HaRP compares with
+	re.match(route.url, target_path), and target_path carries a leading slash, so
+	re.match("search", "/search") is None and every one of the five entries missed
+	the very path it was written for. Measured before the change: an unsigned
+	/search answered 404 with the block and without it, which is fail closed and
+	is why nothing broke, but it also means the block protected nothing it claimed
+	to protect. Plan 06.1-19 put the five entries into the canonical form ^/<name>$
+	(DI-06.1-13). The signed path the product uses never asks this table, so the
+	change cannot be measured from the product side; the place where it is measured
+	is the deploy-harp job, which installs from the archive and then reaches the
+	container through a real HaRP.
 
 	The version is kept identical to php/appinfo/info.xml, and to the image-tag
 	below. Both halves are released together, so a user cannot end up with two
@@ -183,7 +189,20 @@ sauvegarde de ce volume, y compris celle que prend une installation
 tout-en-un, contient donc le texte de vos documents indexés, et l'index n'est
 pas chiffré au repos, ce qui relève de l'hôte sur lequel il tourne.]]></description>
 	<version>1.0.0</version>
-	<licence>agpl</licence>
+	<!--
+		The SPDX spelling and not the short one. info.xsd accepts both, but it
+		lists agpl, mit, mpl and apache under the heading Deprecated, and the
+		spellings above them carry the schema comment "Requires Nextcloud
+		minVersion >= 31". E-H1 of 2026-09-06 put min-version at 33, so that
+		condition is met and the deprecated spelling has nothing left to buy.
+		Raised on 07.09.2026 by plan 06.1-19, closing DI-06.1-05.
+
+		This element moves in lockstep with the same element in the other half.
+		Two store entries of one product that name different licences is the
+		kind of contradiction the deferred item refused to risk by changing one
+		side alone, so both were changed in one commit.
+	-->
+	<licence>AGPL-3.0-or-later</licence>
 	<author>street1983nk</author>
 	<!--
 		The same three categories as the companion half, and for the same
@@ -276,9 +295,15 @@ pas chiffré au repos, ce qui relève de l'hôte sur lequel il tourne.]]></descr
 				Adding 500 would mean that a backend defect blocks the instance
 				address at the Nextcloud end, turning a bug into an outage for
 				every user behind that address.
+
+				Every url below is anchored, ^/<name>$ and not <name>. That is not
+				decoration: HaRP matches with re.match against a target path that
+				begins with a slash, so an unanchored name matches nothing at all.
+				The reasoning is at the top of this file; do not shorten these five
+				back into plain names.
 			-->
 			<route>
-				<url>search</url>
+				<url>^/search$</url>
 				<verb>POST</verb>
 				<access_level>USER</access_level>
 				<headers_to_exclude>[]</headers_to_exclude>
@@ -292,7 +317,7 @@ pas chiffré au repos, ce qui relève de l'hôte sur lequel il tourne.]]></descr
 				hands out text for hits that PHP is about to drop.
 			-->
 			<route>
-				<url>snippets</url>
+				<url>^/snippets$</url>
 				<verb>POST</verb>
 				<access_level>USER</access_level>
 				<headers_to_exclude>[]</headers_to_exclude>
@@ -307,7 +332,7 @@ pas chiffré au repos, ce qui relève de l'hôte sur lequel il tourne.]]></descr
 				an operator's business, not every user's.
 			-->
 			<route>
-				<url>status</url>
+				<url>^/status$</url>
 				<verb>GET</verb>
 				<access_level>ADMIN</access_level>
 				<headers_to_exclude>[]</headers_to_exclude>
@@ -324,7 +349,7 @@ pas chiffré au repos, ce qui relève de l'hôte sur lequel il tourne.]]></descr
 				business, not every user's.
 			-->
 			<route>
-				<url>rates</url>
+				<url>^/rates$</url>
 				<verb>GET</verb>
 				<access_level>ADMIN</access_level>
 				<headers_to_exclude>[]</headers_to_exclude>
@@ -342,7 +367,7 @@ pas chiffré au repos, ce qui relève de l'hôte sur lequel il tourne.]]></descr
 				reason: why one file is not searchable is an operator's business.
 			-->
 			<route>
-				<url>diagnose</url>
+				<url>^/diagnose$</url>
 				<verb>GET</verb>
 				<access_level>ADMIN</access_level>
 				<headers_to_exclude>[]</headers_to_exclude>

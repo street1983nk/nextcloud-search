@@ -301,10 +301,19 @@ transform ever stops dropping them.
 06.1-12, named again in the security audit of plan 06.1-17): it does not silence the
 search. The companion reaches the container over the AppAPI signed path, and HaRP 0.4.5
 skips route checking for signed requests. Measured on all three matrix legs: an archive
-without the block still answers the search, and an unsigned `/search` answers 404 with
+without the block still answers the search, and an unsigned `/search` answered 404 with
 the block and without it, because HaRP matches with `re.match(route.url, target_path)`
-and the five urls are bare paths. `Store install 5` therefore measures the route table
-and not the search, which is the only place where the two archives differ.
+and the five urls were bare paths, so `re.match("search", "/search")` is `None`.
+`Store install 5` therefore measures the route table and not the search, which is the
+only place where the two archives differ.
+
+That second half is history since 07.09.2026. Plan 06.1-19 put the five urls into the
+anchored form `^/<name>$`, which is what `re.match` needs against a path that begins
+with a slash (DI-06.1-13). The signed path the product uses never asks the table, so the
+change cannot be measured from the product side; the place it is measured is the
+`deploy-harp` job, which installs from the archive and then reaches the container
+through a real HaRP. Until that job has run on the merged state, the sentence "the block
+now matches what it names" is a claim about a regular expression and not a measurement.
 
 ### How to run it
 

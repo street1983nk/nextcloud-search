@@ -168,7 +168,20 @@ repos, ce qui relève de l'hôte sur lequel il tourne.]]></description>
 		which is the cheap half of the same guard.
 	-->
 	<version>1.0.0</version>
-	<licence>agpl</licence>
+	<!--
+		The SPDX spelling and not the short one. info.xsd accepts both, but it
+		lists agpl, mit, mpl and apache under the heading Deprecated, and the
+		spellings above them carry the schema comment "Requires Nextcloud
+		minVersion >= 31". E-H1 of 2026-09-06 put min-version at 33, so that
+		condition is met and the deprecated spelling has nothing left to buy.
+		Raised on 07.09.2026 by plan 06.1-19, closing DI-06.1-05.
+
+		This element moves in lockstep with the same element in the other half.
+		Two store entries of one product that name different licences is the
+		kind of contradiction the deferred item refused to risk by changing one
+		side alone, so both were changed in one commit.
+	-->
+	<licence>AGPL-3.0-or-later</licence>
 	<author>street1983nk</author>
 	<namespace>Findling</namespace>
 	<!--
