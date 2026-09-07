@@ -609,3 +609,41 @@ gehoert in einen eigenen kleinen Plan oder v1.0.1.
 pruefen keine Eigentuemerschaft; Label-Vorschlag als backportfaehiger Fix),
 dazu Kommentar an #523 (Sechs-Stellen-Korrektur des Maintainer-Plans, HaRP
 seit v0.2.0 fertig). Auf Reaktionen achten.
+
+---
+
+## DI-06.1-30 (ERLEDIGT, Plan 06.1-19): der Office-Fix ist im veroeffentlichten Abbild
+
+Runde 2 der Sichtprobe hat den Fix am neu gebauten :dev-Abbild belegt (5/5
+Suchproben, 0 fehlgeschlagen im Container).
+
+## DI-06.1-31 (Plan 06.1-19 -> Plan 06.1-24): kein CI-Job erreicht die Vielkern-Falle des Office-Pfads
+
+Die Luecke, durch die Befund 8 fuenf Phasen fiel: Referenzkorpus ueberwiegend
+PDF, Runner zu klein fuer die Adressraumgrenze. Owner-Entscheid 07.09.: wird
+VOR der Abgabe geschlossen (Plan 06.1-24, Task 2, RLIMIT_AS-Ansatz).
+
+## DI-06.1-32 (Plan 06.1-19): docs/dev-setup.md fuehrt beim lokalen Store-Weg weiter ohne Frontproxy
+
+Als DI-06.1-14 erledigt vermerkt, aber der Abschnitt beschreibt weiterhin
+http://harp:8780 als nextcloud_url; die Sichtprobe brauchte die Frontproxy-
+Topologie. Kleiner Doku-Nachzug. (Hinweis Orchestrator: Widerspruch zur
+Richtigstellung in DI-06.1-24 pruefen; moeglicherweise zwei verschiedene
+Abschnitte derselben Datei.)
+
+## DI-06.1-33 (Plan 06.1-19): Deckung meldet "indexable 0" waehrend des Erstlaufs
+
+Im Zero-Config-Nachweis stand "indexed 41 of 0 indexable"; Endzustand korrekt,
+waehrenddessen unbrauchbar. Verwaltungsseiten-Nachzug, klein.
+
+## DI-06.1-34 (Plan 06.1-19 -> Plan 06.1-24): ein failed-Urteil der PHP-Haelfte wird von spaeterem Erfolg nicht widerrufen
+
+Befund 9 der Sichtprobe, vom Owner live gesehen (Kacheln "4 Fehlgeschlagen"
+und "Datei beschaedigt, 4" samt Neu-hochladen-Rat bei findbaren Dateien).
+Owner-Entscheid 07.09.: Fix VOR der Abgabe (Plan 06.1-24, Task 1).
+
+## DI-06.1-35 (Plan 06.1-19): der gruene deploy-harp-Lauf ueber die neue Routenpruefung steht aus
+
+Befund 10 behoben (Erwartung auf die verankerte Routenform gezogen), die
+Bestaetigung liefert der naechste deploy-harp-Lauf auf main nach dem Merge
+der Runde 2.
