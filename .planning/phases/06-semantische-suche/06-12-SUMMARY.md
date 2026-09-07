@@ -128,3 +128,32 @@ kein Browser im Namen des Owners.
 - Beide Signaturen ueber die heruntergeladenen Assets: Verified OK.
 - Store-Antworten: 4x HTTP 201; beide Store-Seiten HTTP 200.
 - Kein Em-Dash und kein En-Dash in den geaenderten Textdateien.
+
+## Nachtrag 07.09. abends: 1.0.1, die Kurztext-Fassung (Owner-Feedback)
+
+Der Owner verwarf die 1.0.0-Texte nach Sichtung im Store ("wer hat Zeit so
+ein Buch zu lesen") und gab die Form vor: kurze Faktenliste, nur was die App
+kann, welche Dateitypen, welche Hardware; ein kurzer Satz und ein
+Sicherheitszeichen im Titelbild; READMEs genauso. Da ein Store-Text mit dem
+Release reist, ging die Fassung als 1.0.1 raus (Tag auf b5aed7c):
+
+- Beschreibungen beider Haelften EN/DE/FR: drei Bloecke (Faehigkeiten,
+  Dateitypen aus der dispatch.py-Allowlist, Anforderungen), einzige Zahl die
+  4-GB/2-GB-Zusage. Kurze Summaries mit den drei Suchbegriffen, Kategorie ai
+  ergaenzt (11 Apps, legitime Einsortierung ueber das Embedding-Modell).
+- READMEs dreisprachig auf dieselbe Form (~50 Zeilen); der Messsatz von 06-11
+  lebt nur noch in README.en.md, das Gate test_store_metadata bindet ihn dort
+  (Umbau dokumentiert im Gate-Docstring, _english_description entfernt).
+- Neues Titelbild (Owner-Abnahme im Chat): Name gross mittig, ein Satz,
+  Schloss-Plakette "100% local", links OCR-Lesebalken, rechts Fundzeile unter
+  der Lupe. store/media/README.md nachgezogen.
+- Einreichung 1.0.1 um 17:15Z, beide HTTP 201 (Lauf 34146823898). Die
+  Store-API lieferte danach zeitweise noch den 1.0.0-Text (ETag-Cache vom
+  16:34Z-Stand); das Archiv selbst traegt nachweislich den Kurztext.
+- Neue Owner-Regel dauerhaft festgehalten (Projekt-CLAUDE.md, globale
+  CLAUDE.md, Memory): Produkttexte als Faktenliste, Vergleichsapps als
+  Massstab, Entwurf vor dem Einfrieren zeigen.
+
+Geplant direkt danach: Ankuendigung im Nextcloud-Forum (Text vom Owner
+abgenommen, Discourse-User-API-Key-Autorisierung laeuft), sobald der Store
+den Kurztext ausliefert.
