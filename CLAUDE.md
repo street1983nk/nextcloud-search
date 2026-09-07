@@ -40,7 +40,7 @@ Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Containe
 | Office-Text | **python-docx, python-pptx, openpyxl (read_only); ODF direkt via zipfile + lxml** | HIGH |
 | ExApp-Geruest | **nc_py_api[app] >= 0.30.3 (Async-API!) + FastAPI 0.141.x + uvicorn** | HIGH |
 | Basis-Image | **python:3.13-slim-trixie** (Python 3.13.15, Tesseract 5.5.0 aus Debian trixie) | HIGH |
-| Nextcloud-Fenster | **min-version 32, max-version 35** (NC 31 ist Ende 2026 nicht mehr relevant) | HIGH |
+| Nextcloud-Fenster | **min-version 33, max-version 35** (E-H1 vom 06.09.2026: NC 32 verliert im September 2026 den Support) | HIGH |
 | PHP-Companion | Minimal-App, `registerSearchProvider` + `IFilteringProvider`, Proxy via `OCA\AppAPI\PublicFunctions::exAppRequest` | HIGH |
 ## 1. Suchmaschine: Tantivy statt FTS5 oder Meilisearch
 ### Entscheidung
@@ -233,7 +233,7 @@ Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Containe
 | fastembed 0.8.0 | numpy >= 2.1.0 (bei Python 3.13) | numpy 1.x scheidet aus |
 | nc-py-api 0.30.3 | fastapi >= 0.133, starlette >= 1.0.1 | Sicherheitsboden, nicht unterlaufen |
 | nc-py-api 0.30.x | AppAPI 32.x bis 34.x | Sync-Entry-Points fallen in 0.31.0 weg |
-| PHP-App | PHP >= 8.2, NC 32 bis 34 (max-version 35) | `IFilteringProvider` gibt es seit NC 28, also unkritisch |
+| PHP-App | PHP >= 8.2, NC 33 bis 35 | `IFilteringProvider` gibt es seit NC 28, also unkritisch |
 | sqlite-vec 0.1.9 | Python-`sqlite3` mit `enable_load_extension` | im offiziellen `python:3.13-slim-trixie` gegeben, in manchen Distro-Builds nicht |
 | tantivy 0.26.0 | Index-Format nicht versionsstabil | Tantivy-Upgrades koennen einen Reindex erzwingen: Indexversion persistieren und beim Start pruefen |
 ## Offene Punkte fuer die Bauphasen

@@ -89,7 +89,7 @@ Szenario 10 mit einem Gruppen-Share statt einem Team Folder.
 
 ---
 
-## DI-06.1-03 (gefunden in Plan 06.1-09): fuenf weitere Stellen nennen noch das alte Versionsfenster
+## DI-06.1-03 (ERLEDIGT 07.09. beim Phase-Abschluss): fuenf weitere Stellen nannten noch das alte Versionsfenster
 
 **Gefunden:** beim Nachziehen von E-H1 (`min-version` 32 auf 33). Der Plan
 fuehrt fuenf Fundstellen, und die sind gesetzt. Beim Gegensuchen nach `32` im

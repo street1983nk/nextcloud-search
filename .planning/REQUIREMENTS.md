@@ -54,7 +54,7 @@ v1 = ein Produkt, ein Store-Erstrelease: **1.0.0** mit Volltext, OCR und semanti
 
 - [ ] **PKG-01**: Multi-Arch-Image (amd64 + arm64), Debian-slim-Basis (keine musl-Wheels für tantivy/onnxruntime), Modell eingebacken
 - [ ] **PKG-02**: Beide App-IDs (`findling` ExApp + Companion) vor dem ersten Bau-Commit eingefroren, beide CSRs sofort bei Baustart eingereicht
-- [ ] **PKG-03**: Lauffähig auf einer 4-GB-ARM-Box (Lasttest belegt), Nextcloud 32-34 (max-version 35), HaRP-Deploy auf docker-compose UND AIO getestet
+- [ ] **PKG-03**: Lauffähig auf einer 4-GB-ARM-Box (Lasttest belegt), Nextcloud 33-35 (E-H1 vom 06.09.2026), HaRP-Deploy auf docker-compose UND AIO getestet
 - [ ] **PKG-04**: Uninstall-Cleanup: Unregister entfernt Queue-Tabellen, Preferences und (nach Bestätigung) das Index-Volume
 - [ ] **PKG-05**: v1.0-Store-Einreichung (Volltext + OCR) vor Jahresende 2026; signierte Releases, info.xml XSD-validiert
 
@@ -114,7 +114,7 @@ Release-Schnitt: Phasen 1 bis 6 bilden gemeinsam das Store-Erstrelease 1.0.0 (D-
 | ADM-04 | Ausschluss-Regeln und Toggles | Phase 4 (Admin-Sichtbarkeit und Diagnose) | v1.0 | Pending |
 | PKG-01 | Multi-Arch-Image auf Debian-slim, Modell eingebacken | Phase 1 (Integrationsbeweis) | v1.0 | Pending |
 | PKG-02 | Beide App-IDs eingefroren, beide CSRs eingereicht | Phase 1 (Integrationsbeweis) | v1.0 | Pending |
-| PKG-03 | Lauffähig auf 4-GB-ARM, NC 32-34, HaRP auf compose und AIO | Phase 5 (Härtung und Store-Einreichung v1.0) | v1.0 | Pending |
+| PKG-03 | Lauffähig auf 4-GB-ARM, NC 33-35, HaRP auf compose und AIO | Phase 5 (Härtung und Store-Einreichung v1.0) | v1.0 | Pending |
 | PKG-04 | Uninstall-Cleanup | Phase 5 (Härtung und Store-Einreichung v1.0) | v1.0 | Pending |
 | PKG-05 | v1.0-Store-Einreichung vor Jahresende 2026 | Phase 5 (Härtung und Store-Einreichung v1.0) | v1.0 | Pending |
 
