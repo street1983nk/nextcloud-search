@@ -518,3 +518,68 @@ release.yml auf Linux laeuft; ein Stage-seitiger Check waere frueher.
 
 **Was:** Die Hausordnung des Skripts liegt in test_guest_parity.py mit; ein
 eigenes Testmodul waere die saubere Adresse.
+
+---
+
+## DI-06.1-22 (Plan 06.1-18, Befund arm64-4, ECHTER PRODUKTBEFUND): zwei Instanzen am selben Docker-Dienst teilen den ExApp-Volumennamen
+
+**Was:** Der Volumenname folgt allein aus der App-Kennung
+(nc_app_findling_backend_data). Laufen zwei Nextcloud-Instanzen am selben
+Docker-Dienst, loescht `app_api:app:unregister --rm-data` in der einen den
+Bestand der anderen: state.db, vectors.db und den Tantivy-Index.
+
+**Belegt durch Schaden:** genau das ist am 07.09. um 06:46Z passiert und hat das
+Messvolumen dieses Laufs zerstoert (keine Messzahl verloren, alle waren
+committet; der Korpus mit 50.000 Dateien blieb erhalten, der Index ist weg und
+faehrt beim naechsten Boxstart einen Neuaufbau von rund 19 Stunden an).
+
+**Wohin:** als Warnung in docs/uninstall.md und in jede Anleitung fuer einen
+Testlauf neben einer echten Instanz. Vor der Store-Abgabe entscheiden, ob der
+Loeschweg zusaetzlich die Instanz-Kennung in den Volumennamen aufnehmen soll,
+das ist eine Produktentscheidung und keine Doku-Frage.
+
+## DI-06.1-23 (Plan 06.1-18, Befund arm64-1): HaRP scheitert im Container an update-ca-certificates
+
+**Was:** Permission denied, Exit 2, weil das Abbild nicht als root laeuft. Folge:
+eine eigene CA der Instanz landet nicht im Vertrauensspeicher des Containers.
+Fuer eine Instanz mit selbst ausgestelltem Zertifikat kann das der Unterschied
+zwischen erreichbar und nicht erreichbar sein, und das ist ungemessen.
+Auf beiden Instanzen der Box beobachtet.
+
+## DI-06.1-24 (Plan 06.1-18, Befund arm64-2, MIT RICHTIGSTELLUNG des Orchestrators)
+
+**Gemeldet wurde:** docs/dev-setup.md beschreibe den Store-Installationsweg
+weiterhin ohne Frontproxy mit `location /exapps/`, Befund 4 aus 06.1-16 sei
+weiterhin offen.
+
+**Richtigstellung (07.09., am Repo geprueft):** Plan 06.1-22 Task 4 hat genau das
+eingebaut, docs/dev-setup.md Z. 350-440 enthaelt die Zwei-Richtungen-Bedingung,
+den 404-Fallstrick, den nginx-Block mit `location /exapps/` und die
+Aufraeumzeile. DI-06.1-14 ist also zu Recht als erledigt gefuehrt. Der Executor
+hat den Fallstrick auf der Box offenbar unabhaengig wiederentdeckt statt die
+Anleitung zu lesen.
+
+**Was daraus BLEIBT:** DI-06.1-19 fuehrt das Rezept als ungefahren. Dieser Lauf
+hat den Fallstrick auf einer echten Instanz bestaetigt; ob die dort gefahrene
+Loesung mit dem Rezept in der Anleitung uebereinstimmt, ist EIN Abgleich in Plan
+06.1-19 wert (Messbericht 2026-09-nachmessung-m7g gegen docs/dev-setup.md
+Z. 350-440).
+
+## DI-06.1-25 (Plan 06.1-18, Befund arm64-3): der frpc-Aufbau gelingt erst im zweiten Anlauf
+
+**Was:** Der erste Anlauf findet /certs/frp vorhanden, aber client.crt,
+client.key oder ca.crt nicht lesbar fuer uid 1000, faellt auf einen Tunnel ohne
+Client-Zertifikat zurueck und bekommt EOF. Eine Zeitabhaengigkeit zwischen HaRP
+und dem Container, die auf einer langsameren Maschine laenger dauern koennte.
+
+## DI-06.1-26 (Plan 06.1-18, Bericht Abschnitt 7): no_text_layer ist ein voruebergehendes Verdikt
+
+**Was:** Es steht in state.db, bis der OCR-Durchgang die Datei wieder vorlegt.
+Wer die Verdikttabelle liest, waehrend Arbeitsvorrat da ist, liest
+Zwischenstaende. Ein Hinweis gehoert an die Stelle, die diese Tabelle beschreibt.
+
+## DI-06.1-27 (Plan 06.1-18, docs/install-check.md Abschnitt 5): Deckungsgrad meldet "unbekannt" bei Nenner 0
+
+**Was:** Solange der Nenner (indexierbare Dateien) 0 ist und der Zaehler schon
+springt, meldet die Anzeige "unbekannt". Auf einer frischen Instanz mit einer
+Datei sieht das wie ein Fehler aus und ist keiner.
