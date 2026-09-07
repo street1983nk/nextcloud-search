@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
-status: executing
-stopped_at: Completed 06-10-PLAN.md
-last_updated: "2026-09-06T20:04:41.831Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 06.1 was final phase)
+last_updated: 2026-09-07T14:54:33.731Z
 last_activity: 2026-09-06 -- Phase 06.1 execution started
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 52
-  completed_plans: 31
+  completed_plans: 101
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 06.1 — launch-haertung-vor-der-store-abgabe
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 06.1 (launch-haertung-vor-der-store-abgabe) — EXECUTING
-Plan: 20 of 22 complete
-Status: Executing Phase 06.1 (NUR NOCH Checkpoint 19: Owner-Sichtprobe, info.xml-Punkte; Token-Rotation schon erledigt)
-Last activity: 2026-09-07 frueh -- Audit-Merge 98e6d79, ALLE 6 WORKFLOWS GRUEN; Audits: Sec 0/0/1/3, Bugs 0/2/2/2, Perf 0/0/1/1, alles ab MEDIUM gefixt (stiller Semantik-Totalausfall bei MemoryError, FINDLING_COMPOUND_DICT-Zusage, Summendeckel DI-06.1-08, Wartezeit 0,561s->0,001s); DIs bis 18
+Phase: 06.1
+Plan: Not started
+Status: Milestone complete
+Last activity: 2026-09-07
 
 **Zwischenstand 06-11, 2026-09-05T10:57Z.** Der Volllauf mit Semantik ist um
 10:47:54Z angestossen und laeuft unbeaufsichtigt auf der AWS-Box
@@ -76,7 +76,7 @@ Progress: [█████████░] 88%
 
 **Velocity:**
 
-- Total plans completed: 46
+- Total plans completed: 70
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -88,6 +88,7 @@ Progress: [█████████░] 88%
 | 02 | 14 | - | - |
 | 03 | 14 | - | - |
 | 04 | 10 | - | - |
+| 06.1 | 24 | - | - |
 
 **Recent Trend:**
 

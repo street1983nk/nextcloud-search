@@ -56,7 +56,7 @@ v1 = ein Produkt, ein Store-Erstrelease: **1.0.0** mit Volltext, OCR und semanti
 - [ ] **PKG-02**: Beide App-IDs (`findling` ExApp + Companion) vor dem ersten Bau-Commit eingefroren, beide CSRs sofort bei Baustart eingereicht
 - [ ] **PKG-03**: Lauffähig auf einer 4-GB-ARM-Box (Lasttest belegt), Nextcloud 33-35 (E-H1 vom 06.09.2026), HaRP-Deploy auf docker-compose UND AIO getestet
 - [ ] **PKG-04**: Uninstall-Cleanup: Unregister entfernt Queue-Tabellen, Preferences und (nach Bestätigung) das Index-Volume
-- [ ] **PKG-05**: v1.0-Store-Einreichung (Volltext + OCR) vor Jahresende 2026; signierte Releases, info.xml XSD-validiert
+- [x] **PKG-05**: v1.0-Store-Einreichung (Volltext + OCR) vor Jahresende 2026; signierte Releases, info.xml XSD-validiert
 
 ## v2 Requirements
 
