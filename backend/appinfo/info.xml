@@ -88,6 +88,8 @@
 - Never modifies your files
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
 
+Works together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector): AI assistants receive these search results with exactly the rights of the asking user.
+
 Supported file types:
 - PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP
 - HTML, RTF, TXT, Markdown, CSV
@@ -102,6 +104,8 @@ Requirements:
 - Läuft komplett in Ihrer eigenen Instanz und tut ohne die App Findling nichts
 - Verändert nie Ihre Dateien
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+
+Arbeitet mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) zusammen: KI-Assistenten erhalten diese Suchtreffer mit genau den Rechten des fragenden Nutzers.
 
 Unterstützte Dateitypen:
 - PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP
@@ -118,6 +122,8 @@ Anforderungen:
 - Ne modifie jamais vos fichiers
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
 
+Fonctionne avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) : les assistants IA reçoivent ces résultats avec exactement les droits de l'utilisateur qui demande.
+
 Types de fichiers pris en charge :
 - PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP
 - HTML, RTF, TXT, Markdown, CSV
@@ -127,7 +133,7 @@ Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
 - RAM : 4 Go suffisent, le conteneur reste sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64]]></description>
-	<version>1.0.1</version>
+	<version>1.0.2</version>
 	<!--
 		The SPDX spelling and not the short one. info.xsd accepts both, but it
 		lists agpl, mit, mpl and apache under the heading Deprecated, and the
@@ -221,7 +227,7 @@ Prérequis :
 				so this exact tag has to exist in the registry before a release
 				is published, not after.
 			-->
-			<image-tag>1.0.1</image-tag>
+			<image-tag>1.0.2</image-tag>
 		</docker-install>
 		<routes>
 			<!--

@@ -23,7 +23,7 @@ sich daran mechanisch prüfen lässt.
 | Kein Element bleibt leer | ein leeres Element löst beim Upload einen Serverfehler aus, gemessen am Schwesterprojekt |
 | Keine Backticks und keine Tabellen in einer Beschreibung | der Store rendert Markdown anders als das Repository |
 | Keine Gedankenstriche, keine Emojis, echte Umlaute, echte Akzente | die Typografie-Regel dieses Projekts |
-| Kein Querverweis auf den MCP Connector | D-12, erst nach dem Content-Hit-Fidelity-Test |
+| Genau EIN Satz Querverweis auf den MCP Connector | D-12 erfuellt seit 07.09.2026: der Content-Hit-Fidelity-Test (Connector-PR #2) misst die Rechte-Treue |
 
 Die englische Fassung steht in einem Element **ohne** `lang`-Attribut. Die XSD
 setzt für ein fehlendes Attribut den Vorgabewert `en` ein, ein zusätzliches
@@ -106,6 +106,8 @@ What Findling does:
 - No configuration: the first index run starts on its own
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
 
+Works together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector): AI assistants receive these search results with exactly the rights of the asking user.
+
 Supported file types:
 - PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP
 - HTML, RTF, TXT, Markdown, CSV
@@ -126,6 +128,8 @@ Was Findling kann:
 - Keine Konfiguration: der erste Indexlauf startet von selbst
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
 
+Arbeitet mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) zusammen: KI-Assistenten erhalten diese Suchtreffer mit genau den Rechten des fragenden Nutzers.
+
 Unterstützte Dateitypen:
 - PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP
 - HTML, RTF, TXT, Markdown, CSV
@@ -145,6 +149,8 @@ Ce que Findling sait faire :
 - Chaque résultat est vérifié par Nextcloud selon vos droits
 - Aucune configuration : la première indexation démarre d'elle-même
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+
+Fonctionne avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) : les assistants IA reçoivent ces résultats avec exactement les droits de l'utilisateur qui demande.
 
 Types de fichiers pris en charge :
 - PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP
@@ -188,6 +194,8 @@ What Findling Backend is:
 - Never modifies your files
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
 
+Works together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector): AI assistants receive these search results with exactly the rights of the asking user.
+
 Supported file types:
 - PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP
 - HTML, RTF, TXT, Markdown, CSV
@@ -205,6 +213,8 @@ Was Findling Backend ist:
 - Läuft komplett in Ihrer eigenen Instanz und tut ohne die App Findling nichts
 - Verändert nie Ihre Dateien
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
+
+Arbeitet mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) zusammen: KI-Assistenten erhalten diese Suchtreffer mit genau den Rechten des fragenden Nutzers.
 
 Unterstützte Dateitypen:
 - PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP
@@ -224,6 +234,8 @@ Ce qu'est Findling Backend :
 - Ne modifie jamais vos fichiers
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
 
+Fonctionne avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) : les assistants IA reçoivent ces résultats avec exactement les droits de l'utilisateur qui demande.
+
 Types de fichiers pris en charge :
 - PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP
 - HTML, RTF, TXT, Markdown, CSV
@@ -242,9 +254,11 @@ Dieser Abschnitt ist die Begründung und gehört nicht in eine `info.xml`. Er
 nennt den ausgeschlossenen Gegenstand beim Namen, weil eine Regel, die ihren
 Gegenstand verschweigt, von niemandem nachgeprüft werden kann.
 
-- **Kein Querverweis auf den MCP Connector.** D-12 verbietet die
-  Synergie-Behauptung, solange der Content-Hit-Fidelity-Test nicht bestanden
-  ist. Der Trigger dafür liegt im Backlog des Connectors, nicht hier.
+- **Nur EIN Satz zum MCP Connector, und keine RAG-Wortwahl.** Der
+  Querverweis ist seit 07.09.2026 erlaubt (Fidelity-Test bestanden und
+  gemergt), bleibt im Store aber ein einzelner Satz in schlichter Sprache;
+  das RAG-Vokabular gehoert in die READMEs, nicht in den Store (Begruendung
+  im Connector-BACKLOG BL-01).
 - **Kein Vergleich mit einer anderen Suchlösung.** Eine App, die sich über die
   Konkurrenz definiert, sagt nichts über sich selbst.
 - **Kein beworbenes Tokenlimit.** Die Abdeckungsaussage steht als Anteil im

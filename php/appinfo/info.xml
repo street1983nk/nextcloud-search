@@ -41,6 +41,8 @@
 - No configuration: the first index run starts on its own
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
 
+Works together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector): AI assistants receive these search results with exactly the rights of the asking user.
+
 Supported file types:
 - PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP
 - HTML, RTF, TXT, Markdown, CSV
@@ -58,6 +60,8 @@ Requirements:
 - Keine Konfiguration: der erste Indexlauf startet von selbst
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
 
+Arbeitet mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) zusammen: KI-Assistenten erhalten diese Suchtreffer mit genau den Rechten des fragenden Nutzers.
+
 Unterstützte Dateitypen:
 - PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP
 - HTML, RTF, TXT, Markdown, CSV
@@ -74,6 +78,8 @@ Anforderungen:
 - Chaque résultat est vérifié par Nextcloud selon vos droits
 - Aucune configuration : la première indexation démarre d'elle-même
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
+
+Fonctionne avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) : les assistants IA reçoivent ces résultats avec exactement les droits de l'utilisateur qui demande.
 
 Types de fichiers pris en charge :
 - PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP
@@ -104,7 +110,7 @@ Prérequis :
 		test_lockstep_versions.py asks the same question on every ordinary run,
 		which is the cheap half of the same guard.
 	-->
-	<version>1.0.1</version>
+	<version>1.0.2</version>
 	<!--
 		The SPDX spelling and not the short one. info.xsd accepts both, but it
 		lists agpl, mit, mpl and apache under the heading Deprecated, and the
