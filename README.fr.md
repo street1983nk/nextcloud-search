@@ -6,6 +6,12 @@ Recherche plein texte, reconnaissance optique et recherche sémantique pour
 Nextcloud, sans configuration. Les résultats apparaissent dans la barre de
 recherche normale.
 
+**Findling + Nextcloud MCP Connector = la couche de récupération de votre propre RAG.**
+Le [MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) transmet les résultats de Findling à tout client MCP, avec
+exactement les droits de l'utilisateur qui demande ; mesuré par le
+[test de fidélité](https://github.com/street1983nk/nextcloud-mcp-connector/blob/main/tests/integration/test_content_hit_fidelity.py).
+Le modèle, c'est vous qui l'apportez, et aucun contenu ne quitte votre serveur.
+
 ## Ce que Findling sait faire
 
 - Recherche plein texte avec traitement des mots allemands : mots composés,

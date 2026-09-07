@@ -20,6 +20,13 @@ lexikalischen Index mit OCR.
 (`nextcloud-mcp-connector/.planning/BACKLOG.md`). Dort steht der Wortlaut ausführlich
 begründet; dieser Eintrag ist die Findling-Seite derselben Sache.
 
+**STAND 07.09.2026:** Alle drei Blocker sind gefallen (BL-02 gemergt und in CI
+gemessen, BL-15 im Connector-PR #3, D-12 damit erfuellt). Die README-Haelfte ist
+umgesetzt (Branch feat/bl-f01-connector-banner, Banner in allen drei READMEs mit
+Link auf den Fidelity-Test). OFFEN NUR NOCH: der eine Schluss-Satz in den
+Store-Texten beider Haelften, der faehrt mit dem naechsten regulaeren Release mit
+(Store-Text reist mit dem Release; kein Release nur fuer einen Satz).
+
 **Blockiert durch drei Dinge:**
 
 1. **D-12 dieser Phase:** Die Synergie darf im Store-Text nicht behauptet werden,
