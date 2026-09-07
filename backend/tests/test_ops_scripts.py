@@ -249,17 +249,72 @@ def test_the_deletion_does_not_call_an_empty_answer_a_failure() -> None:
     assert "the server was not deleted: $(delete_error" in text
 
 
-def test_the_aws_tool_names_its_five_subcommands_in_the_usage() -> None:
-    """Five and not four: the data volume is its own step on this provider.
+def test_the_aws_tool_names_its_seven_subcommands_in_the_usage() -> None:
+    """Seven and not five: the box lives between stop and start.
 
     The box of the ARM run was created by hand, so create is a record of what
     happened and refuses to make a second machine, while the volume that the
-    corpus lives on is created by the tool and has to be findable in it.
+    corpus lives on is created by the tool and has to be findable in it. stop
+    and start came late, in 06.1-18, because until then the box was parked and
+    woken by hand, which meant past the cost arithmetic of this script.
     """
     text = AWS_BOX.read_text(encoding="utf-8")
-    for subcommand in ("prices", "create", "volume", "status", "destroy"):
+    for subcommand in ("prices", "create", "volume", "status", "stop", "start", "destroy"):
         assert f"    {subcommand})" in text, subcommand
-    assert "usage: aws_box.sh <prices|create|volume|status|destroy>" in text
+    assert "usage: aws_box.sh <prices|create|volume|status|stop|start|destroy>" in text
+
+
+def test_the_aws_stop_writes_the_uptime_it_closes_into_the_state_file() -> None:
+    """A parked box cannot be asked afterwards what it cost while it ran.
+
+    The figure has to be taken from the api before the call that stops it, and
+    it has to land in the state file, because the state file is what the next
+    report quotes. Both are asserted here, and the order is the point: reading
+    the LaunchTime after the stop yields a number that looks right and is not.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    assert "BOX_LAST_UPTIME_HOURS=$uptime_hours" in text
+    assert "BOX_LAST_UPTIME_COST_USD=$uptime_cost" in text
+    assert "BOX_PARKED_COST_USD_PER_DAY=$parked_per_day" in text
+    assert "ec2 wait instance-stopped" in text
+    body = text.split("cmd_stop() {", 1)[1].split("\ncmd_start() {", 1)[0]
+    assert body.index("describe-instances") < body.index("stop-instances")
+
+
+def test_the_aws_start_moves_the_ssh_rule_and_revokes_before_it_authorizes() -> None:
+    """An ssh rule on a lease that moved on is an open port for its new holder.
+
+    The address of the owner comes from a carrier lease and it changed between
+    every single run of this phase. start reads the current one and moves the
+    rule, and it revokes the stale rule before it authorizes the new one: the
+    other order leaves both open for the duration of one api call (T-06.1-78).
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    assert "api.ipify.org" in text
+    body = text.split("cmd_start() {", 1)[1].split("\n# Gone has three shapes", 1)[0]
+    assert "ec2 wait instance-running" in body
+    assert body.index("revoke-security-group-ingress") < body.index("authorize-security-group-ingress")
+    # The address is validated as an address rather than pasted into a filter.
+    assert "ipaddress.IPv4Address(candidate)" in body
+
+
+def test_the_aws_start_names_the_three_things_a_start_does_not_do_by_itself() -> None:
+    """The assurance that goes red when start stops saying what is left.
+
+    Three handles were forgotten at every wake up of this box: the address in
+    the state file, the ssh rule of the security group, and the A record of the
+    load test. start does the first two and has to name all three, otherwise the
+    next person reads them out of a note in a planning file again.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    body = text.split("cmd_start() {", 1)[1].split("\n# Gone has three shapes", 1)[0]
+    assert "BOX_IP: done" in body
+    assert "the ssh rule of the security group for port 22: done" in body
+    assert "the A record loadtest.infranode.dev: OPEN" in body
+    # The two that belong to the container, and that cost a run each when they
+    # were missed: DI-05-36 and the limit that a register throws away.
+    assert "DI-05-36" in body
+    assert "docker update --memory=2g --memory-swap=2g" in body
 
 
 def test_the_aws_tool_demands_both_credentials_and_never_prints_them() -> None:
