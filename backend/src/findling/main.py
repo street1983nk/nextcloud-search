@@ -19,6 +19,13 @@ restart by the docker policy after an out of memory kill would leave a container
 that answers searches and never indexes another file (DI-05-36). The enable is
 therefore remembered on the persistent volume, and the read of that mark sits in
 the lifespan with the whole reasoning beside it.
+
+One thing outranks that mark: whose volume this is (DI-06.1-22). AppAPI names
+the data volume after the app alone, so two Nextcloud instances on one docker
+service mount the same one. A start that finds the marker of another instance
+keeps the indexing off and says so, and the server stays up so that the status
+page can carry the reason, which is the shape every degraded verdict of this
+app has.
 """
 
 import asyncio
@@ -41,6 +48,7 @@ from findling.api.search import ROUTER as SEARCH_ROUTER
 from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
 from findling.api.status import ROUTER as STATUS_ROUTER
 from findling.config import settings
+from findling.instance import claim_the_volume, volume_is_shared
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp, run_app, set_handlers
 from findling.worker.poller import POLLER_STOP_SECONDS, Poller, default_poller
 from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_reconcile
@@ -178,13 +186,33 @@ async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
     del nc
     if enabled:
         _remember_the_enable()
+    # The second half of the shared volume guard (DI-06.1-22), and without it
+    # the first half would be decoration. AppAPI deploys the container, the
+    # lifespan finds the foreign marker, and then this call arrives and arms the
+    # poller anyway: that is the exact order of a fresh registration on a docker
+    # service that already carries another instance's volume, which is the
+    # constellation the guard exists for.
+    #
+    # The enable itself is not refused. Its return value is an error text to
+    # AppAPI, and a failing enable would leave an admin with an app that cannot
+    # be switched on and one line to explain it. The mark is written, so the
+    # start after the volume has been sorted out arms by itself.
+    #
+    # Read here rather than carried over from the lifespan, because a volume can
+    # be shared after the start as well: the other instance registers second.
+    shared_volume = enabled and volume_is_shared()
+    if shared_volume:
+        LOGGER.warning(
+            "the enable is remembered but nothing is armed: this volume belongs to another Nextcloud instance, "
+            "see docs/uninstall.md"
+        )
     for task in (active_poller(), active_reconcile()):
         if task is None:
             continue
-        if enabled:
-            task.arm()
-        else:
+        if not enabled:
             task.silence()
+        elif not shared_volume:
+            task.arm()
     if not enabled:
         _forget_the_enable()
     LOGGER.info("findling backend %s", "enabled" if enabled else "disabled")
@@ -233,15 +261,44 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.findling_handlers_registered = True
     LOGGER.info("findling backend starting, binding mode: %s", binding_mode())
 
-    # Stated once at startup, and decided nowhere. An existing index whose
-    # version marks differ from the ones this build produces answers queries with
-    # a different tokenisation than it was written with, so hits disappear
-    # without anything saying why. What follows from that, resetting one storage
-    # or rebuilding everything, is the poller's decision; the only unacceptable
-    # outcome is nobody hearing about it. In a worker thread because it opens a
-    # database and may read the constituent list, neither of which belongs on the
-    # event loop while the server is still coming up.
-    await asyncio.to_thread(resources.report_version_drift)
+    # Whose volume this is (DI-06.1-22). Asked before anything is read out of
+    # it, because everything below this line assumes the volume belongs to this
+    # instance: AppAPI names it after the app alone, so two Nextclouds on one
+    # docker service share it, and the ordinary consequence is that the
+    # unregister of one deletes the index of the other.
+    #
+    # In a worker thread for the reason the drift report is: it reads and may
+    # write a file, and neither belongs on the event loop while the server is
+    # still coming up.
+    #
+    # A shared volume is degraded and not fatal, exactly like the absent model
+    # of plan 06.1-17: the server stays up so that the status page can show the
+    # reason, and only the indexing is kept off. Anything stronger would be a
+    # container that cannot report the one thing it found out.
+    shared_volume = await asyncio.to_thread(claim_the_volume)
+    if shared_volume.other:
+        LOGGER.warning(
+            "this volume already carries the marker of another Nextcloud instance (%s, this container is %s); "
+            "two instances on one docker service share it, indexing stays off, see docs/uninstall.md",
+            shared_volume.other,
+            shared_volume.own,
+        )
+    else:
+        # Stated once at startup, and decided nowhere. An existing index whose
+        # version marks differ from the ones this build produces answers queries
+        # with a different tokenisation than it was written with, so hits
+        # disappear without anything saying why. What follows from that,
+        # resetting one storage or rebuilding everything, is the poller's
+        # decision; the only unacceptable outcome is nobody hearing about it. In
+        # a worker thread because it opens a database and may read the
+        # constituent list, neither of which belongs on the event loop while the
+        # server is still coming up.
+        #
+        # Skipped on a shared volume, and that is the same decision as the one
+        # about the indexing: the marks in that state describe the index of
+        # another instance, and a reindex banner about somebody else's index is
+        # noise pointing the wrong way.
+        await asyncio.to_thread(resources.report_version_drift)
 
     # Exactly one indexing task, started silenced. It opens neither the index nor
     # the state database before it is armed, so a container that is deployed but
@@ -292,7 +349,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # since plan 05-08. The cost of the stale case is one unanswered request per
     # five minutes; the cost of the case without the mark is an index that
     # silently stops growing.
-    if _was_enabled_before_this_start():
+    #
+    # The shared volume of DI-06.1-22 overrides the mark, and it is the only
+    # thing that does. The mark says this container was enabled, which is true
+    # and beside the point: the rows it would claim and the index it would write
+    # belong to another instance, so an armed poller here would add its own
+    # damage to the one the sharing already causes.
+    was_enabled = _was_enabled_before_this_start()
+    if shared_volume.other and was_enabled:
+        LOGGER.warning(
+            "this container was enabled before this start and stays silenced anyway, because the volume it would "
+            "index into belongs to another instance"
+        )
+    elif was_enabled:
         for task in (active_poller(), active_reconcile()):
             if task is not None:
                 task.arm()

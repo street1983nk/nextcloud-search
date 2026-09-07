@@ -38,7 +38,6 @@ type names rather than contents everywhere else for exactly that reason.
 import asyncio
 import json
 import logging
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -75,8 +74,7 @@ class _FakePoller:
         self.armed = False
 
     async def run(self, stop_event: asyncio.Event) -> None:
-        while not stop_event.is_set():
-            await asyncio.sleep(0.001)
+        await stop_event.wait()
 
     async def unlock_held(self) -> int:
         return 0
@@ -86,10 +84,10 @@ class _FakePoller:
 
 
 @pytest.fixture
-def own_instance(volume: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+def own_instance(volume: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """An empty volume plus the identity AppAPI hands a deployed container."""
     monkeypatch.setenv("NEXTCLOUD_URL", OWN_URL)
-    yield volume
+    return volume
 
 
 @pytest.fixture
@@ -402,14 +400,16 @@ def test_no_file_name_is_spelled_out_beside_the_settings() -> None:
 def test_the_foreign_verdict_goes_red_when_the_comparison_stops_comparing(
     own_instance: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Red capability of the third claim, shown rather than asserted. With a
-    # digest that ignores its input every instance looks like the same instance,
-    # the foreign marker turns into our own and the finding disappears. So the
-    # claim above fails when the comparison is broken, which is what makes it a
-    # test and not a decoration.
-    _plant(settings().instance_marker, OTHER_URL)
+    # Red capability of the third claim, shown rather than asserted. The
+    # mutation is a digest that ignores its input: every instance then has the
+    # same identity, the marker another instance left looks exactly like our
+    # own, and the finding disappears without a single line of the claim above
+    # changing. So that claim really does rest on the comparison, which is what
+    # makes it a test and not a decoration.
     monkeypatch.setattr(instance, "fingerprint_of", lambda url: "the same for everybody")
+    _plant(settings().instance_marker, OTHER_URL)
 
     claim = instance.claim_the_volume()
 
     assert claim.other == ""
+    assert instance.volume_is_shared() is False
