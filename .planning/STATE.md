@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 
 Phase: 06.1 (launch-haertung-vor-der-store-abgabe) — EXECUTING
 Plan: 20 of 22 complete
-Status: Executing Phase 06.1 (18 ABGENOMMEN, 23 laeuft, dann nur noch Checkpoint 19)
+Status: Executing Phase 06.1 (NUR NOCH Checkpoint 19: Owner-Sichtprobe, info.xml-Punkte; Token-Rotation schon erledigt)
 Last activity: 2026-09-07 frueh -- Audit-Merge 98e6d79, ALLE 6 WORKFLOWS GRUEN; Audits: Sec 0/0/1/3, Bugs 0/2/2/2, Perf 0/0/1/1, alles ab MEDIUM gefixt (stiller Semantik-Totalausfall bei MemoryError, FINDLING_COMPOUND_DICT-Zusage, Summendeckel DI-06.1-08, Wartezeit 0,561s->0,001s); DIs bis 18
 
 **Zwischenstand 06-11, 2026-09-05T10:57Z.** Der Volllauf mit Semantik ist um
