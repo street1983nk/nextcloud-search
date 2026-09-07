@@ -637,14 +637,15 @@ def scan_privacy_paragraph(name: str, source: str) -> list[str]:
 
 
 def scan_measured_sentence(name: str, source: str) -> list[str]:
-    """The one sentence that has to read the same in three files.
+    """The one sentence whose number must not drift away from the measurement.
 
-    Why this is mechanical rather than remembered: the number comes out of a
-    measurement that took ten hours on rented hardware, it lives in README.md
-    and in the English description of both halves, and the store description is
-    the place where a drift would be seen by nobody who could notice it. The
-    comparison collapses whitespace first, because the three files wrap their
-    lines differently and a line break says nothing.
+    Until 07.09.2026 the sentence stood in three files, README.en.md and the
+    English description of both halves, and this gate held them equal. The
+    owner decided on 07.09.2026 that the store descriptions are short fact
+    lists and carry no measurement narrative, so the sentence lives in
+    README.en.md alone now and the numbers stay in docs/performance.md. The
+    comparison still collapses whitespace first, because a line break says
+    nothing about what the sentence says.
     """
     return [] if MEASURED_SENTENCE in collapse(source) else [f"{name}: does not carry the measured sentence of 06-11"]
 
@@ -652,13 +653,6 @@ def scan_measured_sentence(name: str, source: str) -> list[str]:
 def _sources() -> list[tuple[str, str]]:
     """The three files this gate reads, as (name, source)."""
     return [(path.name, path.read_text(encoding="utf-8")) for path in (PHP_INFO, BACKEND_INFO, README)]
-
-
-def _english_description(source: str) -> str:
-    """The description without a lang attribute, which is the English one."""
-    info = ElementTree.fromstring(source)  # noqa: S314
-
-    return "".join(element.text or "" for element in info.findall("description") if element.get("lang") is None)
 
 
 # -- the real tree ---------------------------------------------------------
@@ -697,13 +691,11 @@ def test_both_info_files_keep_the_schema_edges_and_all_three_languages() -> None
     assert violations == []
 
 
-def test_the_measured_sentence_reads_the_same_in_all_three_places() -> None:
-    violations = scan_measured_sentence("README.en.md", README.read_text(encoding="utf-8"))
-    for path in (PHP_INFO, BACKEND_INFO):
-        name = f"{path.parent.parent.name}/appinfo/info.xml"
-        violations += scan_measured_sentence(name, _english_description(path.read_text(encoding="utf-8")))
-
-    assert violations == []
+def test_the_measured_sentence_stands_in_the_readme() -> None:
+    # Owner decision of 07.09.2026: the store descriptions are short fact
+    # lists, so the measured sentence is bound to README.en.md alone and the
+    # store texts carry only the plain hardware claim next to it.
+    assert scan_measured_sentence("README.en.md", README.read_text(encoding="utf-8")) == []
 
 
 # -- self tests: the gate has to report every shape it judges --------------
