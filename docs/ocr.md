@@ -291,8 +291,11 @@ gerastert und durch tesseract geschickt wird, kostet nach der Deckel-Kaskade
 oben bis zu 600 Sekunden CPU, für einen Text, der schon dastand.
 
 **Datum:** 2026-09-01
-**Womit:** dem Referenzkorpus dieses Repositories, 33 Dateien, davon 19 PDFs,
-gelesen mit der `pypdfium2` 5.13.0 aus `backend/uv.lock`.
+**Womit:** dem Referenzkorpus dieses Repositories im Stand des Messtags,
+33 Dateien, davon 19 PDFs, gelesen mit der `pypdfium2` 5.13.0 aus
+`backend/uv.lock`. Die Tabelle unten ist die Messung von damals und bleibt
+es; der Korpus ist seither gewachsen, und wie gross er heute ist, steht in
+`testdata/CORPUS.md` und nirgends sonst.
 
 ```
 cd backend && uv run python -c "

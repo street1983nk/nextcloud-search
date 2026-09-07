@@ -234,12 +234,16 @@ docker compose exec -T -u www-data app php occ findling:index
 
 The first command is the Nextcloud side: `scheduled` and `handed to the worker`
 both have to reach zero. The second is the container side and answers with JSON;
-it is done when `indexed` is 22, `skipped` is 5 and `failed` is 6. Those three
-numbers are the corpus of phase 3 doing its job: 33 files, the four image types
-are on the allowlist since the OCR work, scans without a text layer get indexed
-through the OCR lane, and the deliberate failure cases fail. The table in
-`testdata/CORPUS.md` names the expected verdict for every single file, and the
-CI reads that column.
+it is done when the three verdict counters add up to the size of the corpus.
+Do not take those numbers from this page. `testdata/CORPUS.md` names the
+expected verdict of every single file and is the one place the corpus is
+counted, and `.github/workflows/integration.yml` carries the three sums as
+`EXPECTED_INDEXED`, `EXPECTED_SKIPPED` and `EXPECTED_FAILED`, which is what
+the CI compares against. At the time of writing that is 26 indexed, 7 skipped
+and 6 failed. Those counters are the corpus doing its job: the four image
+types are on the allowlist since the OCR work, scans without a text layer get
+indexed through the OCR lane, and the deliberate failure and refusal cases
+fail and get refused.
 
 If nothing is indexed at all, read `.dev/exapp.log` first. A `FileNotFoundError`
 on `/usr/share/dict/ngerman` means the artifact step above was skipped.

@@ -2219,8 +2219,9 @@ die Kachel rundet ab.
 Drei Störfälle, auf derselben Maschine, mit demselben Index von 50.068 Dokumenten
 hinter sich, jeder mit Ausgangszustand, Eingriff, Beobachtung, Wiederherstellung
 und mit dem Satz, den er ausdrücklich **nicht** beweist. Der Unterschied zu den
-gleichnamigen Aufträgen in CI ist der Gegenstand: dort ein leerer Index und ein
-Korpus von 33 Dateien, hier 20 GB und eine Maschine, die seit zwölf Stunden
+gleichnamigen Aufträgen in CI ist der Gegenstand: dort ein leerer Index und der
+Referenzkorpus, am Messtag 33 Dateien und heute mehr, siehe
+`testdata/CORPUS.md`, hier 20 GB und eine Maschine, die seit zwölf Stunden
 arbeitet.
 
 Für den Kill-Drill und den Platten-Drill wird Arbeit gebraucht, die im Augenblick
