@@ -304,6 +304,25 @@ def test_a_job_over_the_address_space_cap_is_out_of_memory(worker: sandbox.Extra
     assert worker.pid != doomed_pid
 
 
+@ONLY_POSIX
+def test_a_sigint_in_the_child_is_out_of_memory_not_corrupt(worker: sandbox.ExtractionWorker) -> None:
+    # DI-06.1-37: OpenBLAS answers an exhausted address space with SIGINT, and
+    # before this rule the child died wordless and recycling rule 4 judged
+    # corrupt. The probe raises the KeyboardInterrupt directly; the many core
+    # trap below builds the real thread storm where the machine allows it.
+    worker.probe("sleep", 0.0)
+    doomed_pid = worker.pid
+    outcome = worker.probe("interrupt", 0.0)
+
+    assert outcome == ExtractionOutcome.failed(Reason.OUT_OF_MEMORY)
+    # Same consequence as the MemoryError path: that address space is spent.
+    assert worker.pid is None
+
+    worker.probe("sleep", 0.0)
+
+    assert worker.pid != doomed_pid
+
+
 def test_an_unexpected_child_death_is_a_verdict_and_not_a_hang(worker: sandbox.ExtractionWorker) -> None:
     worker.probe("sleep", 0.0)
     doomed_pid = worker.pid

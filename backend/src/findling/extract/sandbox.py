@@ -135,6 +135,14 @@ def _run_probe(kind: str, amount: float) -> ExtractionOutcome:
         # which the loop below turns into failed(out_of_memory).
         blob = bytearray(int(amount))
         del blob
+    elif kind == "interrupt":
+        # The shape OpenBLAS gives an exhausted address space: pthread_create
+        # fails, the library raises SIGINT, Python turns it into
+        # KeyboardInterrupt (DI-06.1-37). Raised directly rather than through a
+        # real thread storm, because the storm needs a machine shape most
+        # runners do not have; the many core trap in test_sandbox.py builds the
+        # real one where the machine allows it.
+        raise KeyboardInterrupt
     elif kind == "die":
         # No unwinding, no answer on the pipe: the parent sees the boundary break.
         os._exit(70)
@@ -258,6 +266,15 @@ def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
                 # Reported rather than raised: the parent has to tell an exhausted
                 # address space apart from a hang, and it can only do that if the
                 # child still manages to say which one it was.
+                answer = ExtractionOutcome.failed(Reason.OUT_OF_MEMORY)
+            except KeyboardInterrupt:
+                # DI-06.1-37: in this non interactive child a SIGINT has one
+                # known source, native code failing pthread_create inside the
+                # capped address space (OpenBLAS raises it and names its own
+                # remedy in the message). The honest verdict is the spent
+                # address space, not a corrupt file. An operator's Ctrl+C in a
+                # dev terminal reaches the parent too, which ends the worker
+                # anyway, so nothing is swallowed that mattered.
                 answer = ExtractionOutcome.failed(Reason.OUT_OF_MEMORY)
             except Exception as error:
                 answer = ExtractionOutcome.from_exception(error)
