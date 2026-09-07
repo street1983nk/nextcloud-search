@@ -617,7 +617,7 @@ seit v0.2.0 fertig). Auf Reaktionen achten.
 Runde 2 der Sichtprobe hat den Fix am neu gebauten :dev-Abbild belegt (5/5
 Suchproben, 0 fehlgeschlagen im Container).
 
-## DI-06.1-31 (Plan 06.1-19 -> Plan 06.1-24): kein CI-Job erreicht die Vielkern-Falle des Office-Pfads
+## DI-06.1-31 (ERLEDIGT durch 06.1-24): kein CI-Job erreichte die Vielkern-Falle des Office-Pfads
 
 Die Luecke, durch die Befund 8 fuenf Phasen fiel: Referenzkorpus ueberwiegend
 PDF, Runner zu klein fuer die Adressraumgrenze. Owner-Entscheid 07.09.: wird
@@ -636,7 +636,7 @@ Abschnitte derselben Datei.)
 Im Zero-Config-Nachweis stand "indexed 41 of 0 indexable"; Endzustand korrekt,
 waehrenddessen unbrauchbar. Verwaltungsseiten-Nachzug, klein.
 
-## DI-06.1-34 (Plan 06.1-19 -> Plan 06.1-24): ein failed-Urteil der PHP-Haelfte wird von spaeterem Erfolg nicht widerrufen
+## DI-06.1-34 (ERLEDIGT durch 06.1-24): ein failed-Urteil der PHP-Haelfte wird jetzt von spaeterem Erfolg widerrufen (nur content/ocr, skipped bleibt; siehe DI-06.1-36)
 
 Befund 9 der Sichtprobe, vom Owner live gesehen (Kacheln "4 Fehlgeschlagen"
 und "Datei beschaedigt, 4" samt Neu-hochladen-Rat bei findbaren Dateien).
@@ -647,3 +647,29 @@ Owner-Entscheid 07.09.: Fix VOR der Abgabe (Plan 06.1-24, Task 1).
 Befund 10 behoben (Erwartung auf die verankerte Routenform gezogen), die
 Bestaetigung liefert der naechste deploy-harp-Lauf auf main nach dem Merge
 der Runde 2.
+
+---
+
+## DI-06.1-36 (Plan 06.1-24): skipped wird nicht widerrufen
+
+Der Widerruf gilt nur failed(content/ocr). Eine skipped-Zeile, deren Grund
+spaeter entfaellt (z.B. OCR-Erfolg nach Konfigurationsaenderung), bleibt stehen.
+Bewusste Grenze, klein.
+
+## DI-06.1-37 (Plan 06.1-24): erschoepfter Adressraum meldet sich als corrupt statt out_of_memory
+
+OpenBLAS raist bei pthread_create-Fehlschlag SIGINT -> KeyboardInterrupt
+(BaseException) -> Kind stirbt -> Recyclingregel 4 urteilt corrupt. Ehrlicher
+waere out_of_memory. Kandidat v1.0.1.
+
+## DI-06.1-38 (Plan 06.1-24): Sprachmischung docs/testing.md (EN) vs docs/admin-page.md (DE)
+
+Doku-Konsistenzfrage fuer einen spaeteren Nachzug.
+
+## KORREKTUR-VERMERK (Plan 06.1-24) zu zwei Aussagen der 06.1-19-SUMMARY
+
+Die "24-h-Aufraeumung" der failed-Zeilen existierte nicht (cleanupLatencyHours
+ist etwas anderes); der Widerspruch der Verwaltungsseite war DAUERHAFT, der
+Fix von DI-06.1-34 also noetiger als gedacht. Und failed(corrupt) beim
+Office-Befund kam nicht von dispatch, sondern via OpenBLAS-SIGINT und
+Recyclingregel 4 (siehe DI-06.1-37).
