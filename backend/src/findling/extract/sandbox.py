@@ -158,8 +158,58 @@ def _shed_secrets() -> None:
         os.environ.pop(name, None)
 
 
+# The native thread pools of the numeric libraries, pinned to one thread each.
+#
+# This is not a performance setting, it is the fix for a bug that made every
+# DOCX, XLSX and PPTX on a twelve core host report "File damaged" (plan 06.1-19,
+# found by the owner sight check). The chain, measured rather than reasoned:
+# findling/extract/office.py imports openpyxl at module level,
+# openpyxl.compat.numbers imports numpy unconditionally, numpy loads OpenBLAS,
+# and OpenBLAS starts one worker thread per CPU. Every one of those threads wants
+# a stack inside the address space that _limit_address_space just capped at
+# 512 MB, so on a machine with enough cores pthread_create fails, the numpy
+# import dies half way, and dispatch maps the unknown exception to
+# failed(corrupt). The container said
+# "OpenBLAS blas_thread_init: pthread_create failed for thread 10 of 12" and
+# "ensure that your address space and process count limits are big enough",
+# which is OpenBLAS naming its own remedy.
+#
+# Why it stayed hidden for five phases: the thread count follows the CPU count.
+# On the two vCPU measurement box and on a four vCPU runner the threads fit under
+# the cap, so every test and every measurement passed while the same code failed
+# on an ordinary developer machine and would fail on any self hosted server with
+# enough cores. The first thing a fresh Nextcloud showed was its own
+# "Welcome to Nextcloud Hub.docx" marked as damaged.
+#
+# One thread and not two: this child extracts one document at a time, in a
+# container that runs a single index worker on purpose, and there is no matrix
+# multiplication in reading a spreadsheet. numpy is in this process because
+# openpyxl imports it, not because anything on this path computes with it.
+#
+# All four names rather than only the one that fired. They are the same class of
+# library reading the same class of variable, and pinning only OpenBLAS would
+# leave the identical failure waiting behind whichever backend a future wheel
+# ships with.
+_NATIVE_THREAD_POOL_VARIABLES = (
+    "OPENBLAS_NUM_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+)
+
+
+def _pin_native_thread_pools() -> None:
+    """Pin every native thread pool to one thread, before any of them is loaded.
+
+    Order is the whole point: these variables are read while the library
+    initialises, so setting them after the import would change nothing at all.
+    """
+    for name in _NATIVE_THREAD_POOL_VARIABLES:
+        os.environ[name] = "1"
+
+
 def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
-    """The child: shed credentials and cap the address space first, then answer jobs.
+    """The child: shed credentials, cap the address space, pin the pools, then answer jobs.
 
     The dispatcher is imported here rather than at module level so that the cap is
     already in place while the extraction libraries are being loaded, and so that
@@ -173,6 +223,10 @@ def _child_main(pipe: PipeEnd, address_space_bytes: int) -> None:
         os.setsid()
     _shed_secrets()
     _limit_address_space(address_space_bytes)
+    # Before the import below and not after it: the cap is in place now, and the
+    # numeric libraries the dispatcher pulls in read these variables while they
+    # initialise. The paragraph above the function says what happens without it.
+    _pin_native_thread_pools()
 
     from findling.extract.dispatch import Route, extract
 
