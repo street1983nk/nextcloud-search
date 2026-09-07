@@ -343,6 +343,89 @@ trägt `backend/appinfo/info.xml` unverändert, weil AppAPI die Routenliste beim
 Installieren aus dem Archiv liest: ein Tarball mit ersetzten Werten wäre eine App
 ohne Suchroute, und zwar ohne Fehlermeldung.
 
+### Eine Adresse vor Nextcloud und HaRP
+
+Das Feld `nextcloud_url` des Daemons wird von AppAPI **zweimal** benutzt, und die
+beiden Verwendungen ziehen in entgegengesetzte Richtungen. `resolveExAppUrl`
+baut daraus die Adresse der ExApp als `{nextcloud_url}/exapps/{appId}`, dieser
+Wert muss also **HaRP** erreichen. Derselbe Wert wird dem Container als
+`NEXTCLOUD_URL` mitgegeben, er muss also **die Instanz** erreichen
+(`DockerActions.php`, beides am 03.09.2026 nachgelesen).
+
+Der Fallstrick, und er sieht aus wie ein Fehler der App: HaRP beantwortet nur
+Pfade, die `/exapps/{appId}` enthalten, und weist alles andere mit
+`Invalid request path, cannot find AppID` ab (`haproxy_agent.py`).
+`NC_INSTANCE_URL` sagt HaRP nur, wo die Instanz steht; es macht HaRP nicht zum
+Vorproxy für alle übrigen Pfade. Steht in `nextcloud_url` also die Adresse von
+HaRP, dann kann der Container das Ende seiner Initialisierung nicht melden: das
+`PUT /ocs/v1.php/apps/app_api/ex-app/status` läuft in einen 404, und
+`app_api:app:register --wait-finish` wartet genau auf diese Meldung
+(`ExAppService::waitInitStepFinish`). Der Aufruf läuft in seinen Zeitdeckel,
+obwohl der Container gesund ist und die Suche antwortet. Wer das nicht weiss,
+sucht den Fehler in Findling. Steht dort umgekehrt die Instanz selbst, gehen die
+Heartbeats an den Webserver, der ebenfalls mit 404 antwortet.
+
+Beides zugleich kann nur eine Adresse **vor** beiden. Genau das ist die
+Topologie, für die HaRP gebaut ist: eine Nextcloud hinter Apache leistet es mit
+einem `location`-Block, und all-in-one bringt es mit.
+`.github/workflows/deploy-harp.yml` stellt seit dem 03.09.2026 dafür einen
+kleinen nginx davor, und für diesen Stack sieht dasselbe so aus:
+
+```bash
+cat > .dev/harp/exapps-proxy.conf <<'CONF'
+server {
+  listen 8098;
+  # Alles, was die ExApp-Seite spricht, geht in den Tunnel.
+  location /exapps/ {
+    proxy_pass http://harp:8780;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_read_timeout 1800s;
+    proxy_send_timeout 1800s;
+  }
+  # Alles andere ist Nextcloud, und das ist die Richtung, die der Container
+  # fuer seinen Status und fuer seine Warteschlangenaufrufe braucht. Der
+  # Host-Kopf wird dabei auf den Dienstnamen gesetzt, weil die Instanz mit
+  # ihrer Warnung ueber nicht vertraute Domaenen antwortet, wenn sie einen
+  # unbekannten Namen sieht, und "app" steht in NEXTCLOUD_TRUSTED_DOMAINS.
+  location / {
+    proxy_pass http://app:80;
+    proxy_http_version 1.1;
+    proxy_set_header Host app;
+    proxy_read_timeout 300s;
+    client_max_body_size 512M;
+  }
+}
+CONF
+
+docker run -d --name findling-harp-frontproxy \
+  --network findling-harp_default \
+  -v "$(pwd)/.dev/harp/exapps-proxy.conf:/etc/nginx/conf.d/default.conf:ro" \
+  nginx:1.27-alpine
+```
+
+Beide Richtungen prüfen, bevor irgendetwas registriert wird. Ein Vorproxy, der
+die eine Hälfte weiterleitet und die andere nicht, erzeugt genau den Fehlschlag,
+den dieser Schritt beseitigen soll, nur später und an einer Stelle, die sich wie
+ein Fehler der App liest:
+
+```bash
+docker compose exec -T app curl -s -o /dev/null -w '%{http_code}\n' \
+  http://findling-harp-frontproxy:8098/status.php
+docker compose exec -T app curl -s -o /dev/null -w '%{http_code}\n' \
+  -H "harp-shared-key: $HP_SHARED_KEY" -H 'docker-engine-port: 24000' \
+  http://findling-harp-frontproxy:8098/exapps/app_api/v1.44/_ping
+```
+
+Zweimal `200` heisst, dass eine Adresse beide Hälften bedient. Der Vorproxy ist
+kein Bestandteil von `compose-harp.yaml`, weil er kein Bestandteil des Produkts
+ist: er ersetzt hier nur das, was auf einer echten Instanz der Webserver vor
+Nextcloud ohnehin tut.
+
+**Messstand:** Die Zwei-Richtungen-Bedingung und der 404 sind in CI gemessen
+(Lauf 33747191689, 03.09.2026). Die compose-Fassung dieses Vorproxys ist aus
+`deploy-harp.yml` abgeleitet und auf diesem Stack noch nicht gefahren worden.
+
 ### Registrieren
 
 ```bash
@@ -353,7 +436,8 @@ occ app:enable app_api
 occ app:enable findling
 
 occ app_api:daemon:register \
-  harp_proxy_compose "Harp Proxy (compose)" docker-install http harp:8780 http://harp:8780 \
+  harp_proxy_compose "Harp Proxy (compose)" docker-install http harp:8780 \
+  http://findling-harp-frontproxy:8098 \
   --harp --harp_frp_address harp:8782 --harp_shared_key "$HP_SHARED_KEY" \
   --net findling-harp_default --set-default
 
@@ -361,15 +445,10 @@ occ app_api:app:register findling_backend harp_proxy_compose \
   --info-xml /findling-harp/info-local.xml --wait-finish
 ```
 
-Die letzte Adresse ist die von HaRP und nicht die von Nextcloud, und das ist die
-Stelle, an der dieser Weg beim ersten Mal gescheitert ist. Im HaRP-Betrieb bildet
-AppAPI die Adresse der ExApp als `{nextcloud_url}/exapps/{appId}`
-(`DockerActions::resolveExAppUrl`), weil HaRP der Eingang ist: es leitet
-`/exapps` in den Tunnel und alles andere an `NC_INSTANCE_URL` weiter. Steht dort
-die Instanz selbst, gehen alle Heartbeats an den Webserver, der mit 404 antwortet,
-und die Installation endet mit `heartbeat check failed`, während daneben ein
-gesunder Container läuft. Denselben Wert bekommt der Container als
-`NEXTCLOUD_URL`, der Rückweg läuft also ebenfalls über HaRP.
+Die fünfte Angabe ist die Docker-Engine-Route und bleibt die von HaRP: darüber
+erzeugt AppAPI den Container. Die sechste ist `nextcloud_url` und ist deshalb
+weder `harp:8780` noch `app`, sondern der Vorproxy von oben, der beide Hälften
+bedient. Das ist die Stelle, an der dieser Weg beim ersten Mal gescheitert ist.
 
 `harp` ist der Dienstname aus der compose-Datei und damit die Adresse im
 compose-Netz; `findling-harp_default` ist das Netz dieses Projekts, in das der
@@ -428,7 +507,7 @@ den der Daemon gebaut hat, und nicht mehr ein Prozess auf dem Rechner.
 ```bash
 occ app_api:app:unregister findling_backend --rm-data
 docker compose down -v
-docker rm -f findling-harp-registry
+docker rm -f findling-harp-registry findling-harp-frontproxy
 ```
 
 `--rm-data` entfernt das Datenvolume mit; ohne die Angabe bleibt der Index
