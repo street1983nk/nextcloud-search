@@ -79,7 +79,7 @@ Plans:
 **Goal**: Ein Nutzer, der ein Teilwort eintippt, findet die Dokumente mit dem zusammengesetzten Wort, und die Wortliste dahinter ist lizenzrechtlich sauber und dokumentiert.
 **Depends on**: Phase 7 (die Analyzer-Kette liegt im selben Prozess wie die Engine; erst ist der Speicherweg geklaert, dann wird an der Tokenisierung gedreht)
 **Requirements**: QUAL-01, QUAL-02, QUAL-03
-**Bestand aus v1.0**: `backend/src/findling/index/wordlist.py` traegt Rezept A aus dem Debian-Paket `wngerman` (276.496 Eintraege, GPL-2+ und damit AGPL-3.0-vertraeglich, Herkunft in `docs/german-analyzer.md`), `index/analyzer.py` ruft `Filter.split_compound`. Der Endungsvergleich aus QUAL-03 ist in `docs/measurements/2026-09-nachmessung-m7g/` Abschnitt 7 gefahren. Die Phase klaert zuerst, was davon im ausgelieferten Suchweg wirklich greift und wo noch ein Prefix-Behelf steht; nur die Luecke wird gebaut.
+**Bestand aus v1.0**: `backend/src/findling/index/wordlist.py` traegt Rezept A aus dem Debian-Paket `wngerman` (276.496 Eintraege, GPL-2+ und damit AGPL-3.0-vertraeglich, Herkunft in `docs/german-analyzer.md`), `index/analyzer.py` ruft `Filter.split_compound`. Der Endungsvergleich aus QUAL-03 ist in `docs/measurements/2026-09-nachmessung-m7g/` Abschnitt 7 gefahren. Die Recherche vom 08.09.2026 (08-RESEARCH.md) hat den Suchweg Datei fuer Datei geprueft: es gibt keinen Prefix-Behelf, `split_compound` greift auf Index- und Frageseite, und die Kriterien 3 und 4 sind gebaut. Die Phase belegt den Bestand, verbreitert das CI-Sprachfall-Set und schliesst die zwei offenen Saetze aus QUAL-03; eine Rezeptaenderung ist gemessen ausgeschlossen.
 **Success Criteria** (what must be TRUE):
 
   1. Ein Nutzer sucht "Genehmigung" und findet Dokumente, in denen nur "Baugenehmigung" steht; dieser Fall und die weiteren Kompositafaelle stehen im CI-Sprachfall-Set und koennen rot werden
@@ -88,7 +88,25 @@ Plans:
   4. Ein Wechsel der Wortliste erzwingt sichtbar einen Reindex (Digest neben `schema_version` und `analyzer_version`), statt Index und Query-Parser still auseinanderlaufen zu lassen
   5. Der Endungsvergleich der Verdikte gegen den Generator ist abgeschlossen dokumentiert, jede Abweichung hat einen Namen, und jeder Befund ist als Testfall eingezogen oder als bewusst offen benannt
 
-**Plans**: TBD
+**Plans**: 5 Plaene in 4 Wellen
+
+Plans:
+**Wave 1**
+
+- [ ] 08-01-PLAN.md , Messgrundlage gegen die echte Wortliste plus Owner-Entscheid zum Wortlaut von Erfolgskriterium 1 (Welle 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 08-02-PLAN.md , der Wegbeweis fuer Erfolgskriterium 2: Negativkontrolle, Praefix-Gegenprobe, Strukturwaechter (Welle 2)
+- [ ] 08-03-PLAN.md , Lizenz und Wortlistenfassung im veroeffentlichten Abbild, Variantenwechsel Ende zu Ende (Welle 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 08-04-PLAN.md , Regressionswaechter ueber gewonnene und verlorene Zerlegungen, drei neue CI-Sprachfaelle (Welle 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 08-05-PLAN.md , QUAL-03 formal schliessen und die gemessenen Grenzen in die Doku ziehen (Welle 4)
 
 ### Phase 9: Eigene Ergebnisseite
 
@@ -143,7 +161,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
-| 8. Deutsche Komposita ohne Behelf | 0/? | Not started | - |
+| 8. Deutsche Komposita ohne Behelf | 0/5 | Planned     | - |
 | 9. Eigene Ergebnisseite | 0/? | Not started | - |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
