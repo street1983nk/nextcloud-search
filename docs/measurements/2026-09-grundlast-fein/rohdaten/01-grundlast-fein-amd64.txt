@@ -1,0 +1,60 @@
+grundlast-fein-amd64 2026-09-08T10:52:42Z
+host=Docker Desktop 29.5.2, linux/amd64, nativ
+run=lokal, kein GitHub-Runner, --network none
+
+[0;93m2026-09-08 10:52:51.713137368 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+date=2026-09-08T10:52:54Z
+arch=x86_64
+python=3.13.15
+image_digest=sha256:8e1f64bd068819dc6447513bc6ee14c78c93d3a03cd5ffdfdf2aba8e95183a6b
+image_ref=ghcr.io/street1983nk/findling_backend:dev
+runner_role=comparison
+tokenizers_version=0.23.2
+vocab_size=250002
+chunk_tokens=510 overlap=0 token_cap=1024
+embedding_available=True
+module_seen=findling.store.vectors,findling.worker.poller,findling.main
+
+-- schritt rss_kb --
+00-leerer-prozess 13652
+01-config-importiert 16940
+02-settings-gelesen 17068
+03-index-module-importiert 24748
+04-embed-module-importiert 27052
+05-store-vectors-importiert 28696
+06-poller-importiert 71344
+07-api-resources-importiert 71344
+08-findling-main-importiert 73672
+09-wortliste-gelesen-276496 96340
+10-deutscher-automat-gebaut 139948
+11a-tokenizers-modul-importiert 144300
+11b-erste-tokenizer-instanz 416428
+12a-splitter-gebaut 696504
+12b-erster-chunkerlauf-2 697272
+12c-zweiter-chunkerlauf-2 697272
+13-modell-objekt-gebaut-lazy 697272
+14-erste-einbettung-gewichte-geladen 1102172
+15-lange-einbettung-aktivierungen 1143004
+16-zweite-tokenizer-instanz-informativ 1364828
+
+-- zuwachs je schritt --
+von                                    nach                                    delta_mb    rss_mb
+00-leerer-prozess                      01-config-importiert                         3.2      16.5
+01-config-importiert                   02-settings-gelesen                          0.1      16.7
+02-settings-gelesen                    03-index-module-importiert                   7.5      24.2
+03-index-module-importiert             04-embed-module-importiert                   2.2      26.4
+04-embed-module-importiert             05-store-vectors-importiert                  1.6      28.0
+05-store-vectors-importiert            06-poller-importiert                        41.6      69.7
+06-poller-importiert                   07-api-resources-importiert                  0.0      69.7
+07-api-resources-importiert            08-findling-main-importiert                  2.3      71.9
+08-findling-main-importiert            09-wortliste-gelesen-276496                 22.1      94.1
+09-wortliste-gelesen-276496            10-deutscher-automat-gebaut                 42.6     136.7
+10-deutscher-automat-gebaut            11a-tokenizers-modul-importiert              4.2     140.9
+11a-tokenizers-modul-importiert        11b-erste-tokenizer-instanz                265.8     406.7
+11b-erste-tokenizer-instanz            12a-splitter-gebaut                        273.5     680.2
+12a-splitter-gebaut                    12b-erster-chunkerlauf-2                     0.8     680.9
+12b-erster-chunkerlauf-2               12c-zweiter-chunkerlauf-2                    0.0     680.9
+12c-zweiter-chunkerlauf-2              13-modell-objekt-gebaut-lazy                 0.0     680.9
+13-modell-objekt-gebaut-lazy           14-erste-einbettung-gewichte-geladen       395.4    1076.3
+14-erste-einbettung-gewichte-geladen   15-lange-einbettung-aktivierungen           39.9    1116.2
+15-lange-einbettung-aktivierungen      16-zweite-tokenizer-instanz-informativ     216.6    1332.8
