@@ -3357,6 +3357,134 @@ und ohne Zahlen. Die Nachmessung liefert die Zahlen nach:
 **Die Modell-Entladung bleibt damit in "Future Requirements" und wird in diesem
 Milestone nicht mehr geplant.**
 
+### Die amd64-Zahl: derselbe Vorgang auf der anderen Architektur
+
+Die 1.332,1 ms oben sind auf arm64 gemessen. Erfolgskriterium 4 dieser Phase
+verlangt die amd64-Entsprechung, und sie entsteht seit Plan 07-02 bei jedem
+Integrationslauf, ohne dass dafür eine Box angefahren wird.
+
+**Der Weg, Zeile für Zeile nachvollziehbar.** Der Job `index-search-e2e` in
+`.github/workflows/integration.yml` läuft auf `ubuntu-24.04`, also amd64, mit
+einer echten Nextcloud, der PHP-Companion-App, AppAPI und beiden Hälften des
+Containers. Sein Schritt "The paraphrase finds the document with the second
+track" stoppt das Backend, startet es neu, wartet auf den Heartbeat und setzt
+danach genau eine semantische Suche über die OCS-Route ab. Der Neustart nimmt
+die Modulglobale des Engine-Halters mit, also ist diese eine Suche eine kalte
+Suche im Sinne des Abschnitts darüber: sie lädt die Gewichte. Seit Plan 07-02
+steht eine Wanduhr um genau diesen einen `curl` und um nichts sonst, weder um
+den Neustart noch um das Warten auf den Heartbeat.
+
+| Größe | Wert |
+|---|---|
+| Workflow, Job | `integration.yml`, `index-search-e2e` |
+| Schritt | "The paraphrase finds the document with the second track" |
+| Runner, Architektur | `ubuntu-24.04`, amd64 |
+| Matrixzeile | `database` aus `sqlite`, `mysql`, `pgsql`, je eine Zahl je Zeile |
+| Bestand | 26 Dokumente mit Vektoren (`EXPECTED_EMBEDDED`) |
+| Suchzeile | `PARAPHRASE_TERM`, dreizehn Wörter, keines davon im Zieldokument |
+| Protokollzeile | beginnt mit `cold semantic search over apache, the ocs route, the php provider and both halves:` |
+| **Gemessene Kaltstartdauer, amd64** | **steht aus: wird aus dem ersten Lauf dieses Workflows auf `main` nach Plan 07-02 nachgetragen, mit Laufnummer, Datum und Matrixzeile** |
+
+**Warum die Zahl hier noch fehlt und nicht geschätzt ist.** Ein Lauf von
+`integration.yml` ist erst nach dem Zusammenführen des Plans möglich; der
+Messweg ist gebaut und lokal gegengelesen, die Zahl selbst entsteht auf dem
+Runner. Eine geratene Zahl in dieser Zeile wäre schlimmer als eine leere: der
+ganze Abschnitt lebt davon, dass jede Zahl ihre Rohdatei oder ihren Lauf nennt.
+Der Nachtrag ist als `DI-07-01` festgehalten.
+
+**Was die beiden Zahlen nicht vergleichbar macht.** Die arm64-Zahl und die
+amd64-Zahl messen denselben Vorgang, aber nicht denselben Aufbau, und drei
+Unterschiede sind groß genug, dass eine Differenz zwischen ihnen keine Aussage
+über die Architektur trägt:
+
+1. **Der Bestand.** Der Integrationslauf hat 26 Dokumente, die Box hatte 51.961
+   Dokumente und 145.854 Chunks. Die CI-Zahl misst im Wesentlichen das Laden der
+   Gewichte, die Box-Zahl das Laden plus einen Brute-Force-Scan über den vollen
+   Bestand.
+2. **Die Hardware.** Die Box hatte 2 vCPU und 4 GB und ist die Zielhardware. Ein
+   GitHub-Runner ist größer und wird geteilt.
+3. **Die Statistik.** Der Integrationslauf macht genau eine kalte Anfrage je
+   Matrixzeile. Eine Anfrage ist kein p95, und drei Anfragen sind es auch nicht.
+   **Was CI liefert, ist eine Kaltstartdauer und wird ausschließlich so
+   benannt.** Das p95 über den vollen Bestand gehört Phase 10.
+
+**Was gegen den stillen Rückschritt steht.** Kein Millisekundendeckel: ein
+Zeittor auf einem geteilten Runner wird für Runnerlast rot und nicht für die
+Sache, die es benennt, und dieses Repository hat dieselbe Falle für den Speicher
+bereits ausgeschlagen (`resilience.yml`, Kommentar vor dem Ratschenschritt).
+Rotfähig sind stattdessen drei Strukturaussagen:
+
+| Tor | Wo | Was es rot macht |
+|---|---|---|
+| Die Suchzeile bleibt mehrwortig | `integration.yml`, derselbe Schritt | eine einwortige `PARAPHRASE_TERM`-Zeile, die seit dem Nachtrag 06.1-20 lexikalisch bliebe (`api/search.py`, `rewritten.one_term`) und die Regel statt des Ladens messen würde |
+| Die kalte Suche liefert ein Ergebnis, und zwar `10-kuendigung.docx` | ebenda, vier vorhandene Zusicherungen | eine kalte Suche, die nichts findet, unabhängig davon, wie schnell sie nichts gefunden hat |
+| Der Kaltstart kostet genau einen Ladevorgang | `resilience.yml`, Schritt "One engine and one constituent list per process" | `engine_loads_after_search` oder `engine_loads_after_worker` ungleich 1 |
+
+Dazu die billige Reihe: `findling.tools.one_load` meldet seit Plan 07-02 die
+Dauer der einen Suchrunde als siebte Zahl seines Reports (`cold-search-ms=`,
+`backend/src/findling/tools/one_load.py`). Sie läuft auf jedem Push im Job
+`measurements` von `resilience.yml` mit, misst aber das Laden innerhalb eines
+Prozesses und nicht den Weg über Apache, AppAPI und PHP. Zwei Zahlen über zwei
+Wege, und keine von beiden gibt vor, die andere zu sein. Auch diese Zahl wird
+berichtet und nie beurteilt: `findings()` liest die sechs Zähler und die Dauer
+nicht.
+
+### Wo der Speicherunterschied zum Stand 1.0.x anfällt
+
+Erfolgskriterium 4 verlangt neben der Zahl die Aussage, an welcher Stelle der
+Unterschied entsteht. Nach heutigem Stand, alle drei Zahlen aus der Nachmessung
+vom 07.09.2026 auf arm64:
+
+| Stelle | Unterschied | Zahlen |
+|---|---|---|
+| Phase der ersten semantischen Suche | **minus 712,6 MB** | 1.837,8 gegen 1.125,2 MB |
+| Grundlast | **unverändert** | 0,0 MB für das Modellobjekt, Schritt `13-modell-objekt-gebaut-lazy` in `rohdaten/63-grundlast.txt` |
+| Gesamtspitze des Laufs | **minus 25,1 MB** | 1.837,8 gegen 1.812,7 MB |
+
+Die Spitze bewegt sich kaum, weil sie inzwischen der OCR-Phase gehört und nicht
+mehr der Suchphase. Der Unterschied fällt dort an, wo vorher die zweite
+Modellinstanz stand: in der Phase, in der die Suche das Modell zum ersten Mal
+braucht.
+
+### Zwei Befunde über die Zeitkette, mit Datei und Zeile
+
+Beide sind beim Bau des Messwegs aufgefallen, beide betreffen den PHP-Weg, und
+für beide gilt dieselbe Regel: behoben wird hier nur, was klein ist. Klein heißt
+keine Änderung an der Berechtigungskette, keine Änderung am Suchweg, höchstens
+eine Konstante oder ein Kommentar. Keiner der beiden ist in diesem Sinne klein,
+beide sind deshalb abgelegt statt behoben, jeder mit seinem Zielort.
+
+**Befund 1: Die Grenze, gegen die eine kalte Suche zuerst läuft, ist 1,5 s und
+nicht 2,5 s.** `REQUEST_TIMEOUT_SECONDS = 1.5` steht in
+`php/lib/Service/ExAppService.php:89` und deckelt einen einzelnen
+Containeraufruf. Der Kaltstartaufschlag fällt vollständig in genau diesen einen
+Aufruf, denn das Laden steht unter dem Lock
+(`backend/src/findling/embed/model.py:369`), und gleichzeitige Suchen warten
+hinter demselben Laden. Das 2.500-ms-Gruppenbudget aus
+`php/lib/Search/Provider.php:57` ist die Wanduhr der ganzen Ergebnisgruppe und
+kann einen Aufruf nur verkürzen, nie verlängern. Die 1.332,1 ms der Box liegen
+unter beiden Zahlen, aber die Marge zur kleineren ist 167,9 ms und nicht
+1.167,9 ms. **Abgelegt als `DI-07-02`, Zielort Phase 10:** die Entscheidung, ob
+diese Decke steigen muss, braucht eine Messung des Kaltstarts unter
+Nebenläufigkeit auf der Zielhardware, und die Konstante zu heben, ohne diese
+Messung zu haben, hieße die Unified Search aller Nutzer für einen unbelegten
+Fall länger warten zu lassen.
+
+**Befund 2: Eine Suche macht zwei Containeraufrufe, und der erste steht in einer
+Schleife.** `searchCandidates` wird in `php/lib/Search/Provider.php:258`
+gerufen, innerhalb der Schleife über `MAX_ROUNDS = 3` (`Provider.php:247`);
+`snippets` wird danach einmal gerufen (`Provider.php:411`). Die Schleife läuft
+mehr als einmal, wenn der Rechteabgleich Treffer einer Seite entfernt und noch
+Recheck-Budget übrig ist (`Provider.php:248-258`). Im ungünstigsten Fall zahlt
+eine einzige Suche also vier Containeraufrufe gegen ein Gruppenbudget, das
+schon zwei volle Aufrufe dieser Decke nur knapp deckt, und jeder dieser Aufrufe
+bekommt nur noch das, was `secondsLeft($deadline)` übrig lässt
+(`Provider.php:504`). Der Kaltstartaufschlag trifft davon nur den ersten.
+**Abgelegt als `DI-07-03`, Zielort Phase 10, mit einer Grenze zu Phase 11:** wie
+oft die Schleife in echten Beständen mehr als eine Runde dreht, ist eine
+Messfrage; sie zu verkürzen hieße den Rechteabgleich anzufassen, und das ist
+eine Frage für das Audit und nicht für einen Messplan.
+
 ### Der Stand der Zahlen, und was hier nicht steht
 
 Die Ersparnis der gemeinsamen Engine ist an zwei Stellen gemessen, und die
@@ -3367,10 +3495,12 @@ Phase der ersten semantischen Suche sind es **712,6 MB** (1.837,8 gegen
 inzwischen der OCR-Phase. Beide Zahlen stammen aus der Nachmessung vom
 07.09.2026 auf arm64 und sind auf eine Nachkommastelle gerundet.
 
-Was dieser Abschnitt nicht belegt: alle Zahlen hier, die Speicherzahlen wie die
-Latenzzahlen, sind auf arm64 gemessen. Die amd64-Entsprechung liefert Plan
-07-02, und der Vergleich Zeile für Zeile gegen die v1.0-Grundlinie, mit einem
-p95 über den vollen Bestand, gehört Phase 10.
+Was dieser Abschnitt nicht belegt: alle gemessenen Zahlen hier, die
+Speicherzahlen wie die Latenzzahlen, sind auf arm64 gemessen. Den Messweg für
+die amd64-Entsprechung hat Plan 07-02 gebaut, sie steht im Abschnitt "Die
+amd64-Zahl" darüber und wird aus dem ersten Integrationslauf nachgetragen; der
+Vergleich Zeile für Zeile gegen die v1.0-Grundlinie, mit einem p95 über den
+vollen Bestand, gehört Phase 10.
 
 ## Was der Test gekostet hat
 
