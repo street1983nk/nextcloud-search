@@ -22,10 +22,16 @@ import ast
 from pathlib import Path
 
 import pytest
-from tantivy import Document, Index
+from tantivy import Document, Filter, Index, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
 from findling.config import INDEX_VERSION, SCHEMA_VERSION, settings
-from findling.index.analyzer import ANALYZER_VERSION, build_count
+from findling.index.analyzer import (
+    ANALYZER_VERSION,
+    MAX_TOKEN_CHARS,
+    TOKENIZER_DE,
+    build_count,
+    cached_german_analyzer,
+)
 from findling.index.open import (
     TANTIVY_VERSION,
     expected_versions,
@@ -47,6 +53,7 @@ from findling.index.schema import (
     FIELDS,
     build_schema,
 )
+from findling.index.wordlist import FUGEN, wordlist_hash
 from findling.store.repo import FileMeta, Store, open_store
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
@@ -223,6 +230,105 @@ def test_the_registered_german_chain_splits_compounds(index_dir: Path) -> None:
 
     assert _hits(index, "frist") == 1
     assert _hits(index, "kündigung") == 1
+
+
+# -- the way and not the result (QUAL-02) ------------------------------------
+#
+# The test above counts a hit, and a hit counter alone proves nothing about the
+# way it came: a prefix, wildcard or fuzzy rewrite in query/rewrite.py would
+# answer "frist" with the very same 1 and leave that test green while the
+# splitter is gone. The three tests below make the statements that only the
+# decomposition can satisfy: without the splitter the constituent finds nothing,
+# a mere prefix of the compound finds nothing, and both sides of the search
+# produce exactly the same terms and no others.
+
+# The sentence every test in this section writes. Named once, because a test
+# that asserts about tokens has to be asking about the text it wrote.
+COMPOUND_SENTENCE = "Die Kündigungsfrist beträgt drei Monate."
+
+# A real prefix of "Kündigungsfrist" that is no constituent of it. Measured
+# against the full Debian list: it stays the single token "kundigungsf", so the
+# shipped way cannot answer it, while any prefix query would.
+MERE_PREFIX = "kündigungsf"
+
+# The measured tokens of the shipped chain, both sides of the search.
+COMPOUND_TERMS = ["kundig", "frist"]
+CONSTITUENT_TERMS = ["frist"]
+
+
+def _splitterless_german() -> TextAnalyzer:
+    """The shipped German chain minus Filter.split_compound, filter for filter.
+
+    Everything else stays: lowercase, the linking elements as custom stopwords,
+    the built in German stopwords, the length limit and the Snowball stemmer, in
+    the shipped order. That is what makes it a control and not a second recipe.
+    MAX_TOKEN_CHARS and FUGEN are imported rather than copied, so the control
+    cannot drift away from the chain it is a control for.
+    """
+    return (
+        TextAnalyzerBuilder(Tokenizer.simple())
+        .filter(Filter.lowercase())
+        .filter(Filter.custom_stopword(list(FUGEN)))
+        .filter(Filter.stopword("german"))
+        .filter(Filter.remove_long(MAX_TOKEN_CHARS))
+        .filter(Filter.stemmer("german"))
+        .build()
+    )
+
+
+def test_without_the_splitter_the_constituent_finds_nothing(index_dir: Path) -> None:
+    # The negative control, both halves in one test so that neither can be read
+    # on its own. The chain is overwritten under the name the schema persists
+    # BEFORE anything is written, so the write side and the question side both
+    # run on the splitterless chain; overwriting afterwards would only ask a
+    # differently tokenised question of a correctly written index.
+    without = open_index(index_dir, CONSTITUENTS)
+    without.register_tokenizer(TOKENIZER_DE, _splitterless_german())
+    _write(without, body=COMPOUND_SENTENCE)
+
+    assert _hits(without, "frist") == 0
+
+    # The same text, the same question, the shipped chain. The difference
+    # between the two numbers is the work Filter.split_compound does, and
+    # nothing else differs between them.
+    shipped = open_index(index_dir.parent / "shipped", CONSTITUENTS)
+    _write(shipped, body=COMPOUND_SENTENCE)
+
+    assert _hits(shipped, "frist") == 1
+
+
+def test_a_mere_prefix_of_the_compound_does_not_hit(index_dir: Path) -> None:
+    # The guard against a prefix crutch. This test goes red the day somebody
+    # rewrites a question into a prefix, wildcard or fuzzy query in
+    # query/rewrite.py: such a query answers "kündigungsf" with a hit, while the
+    # decomposition answers it with nothing, because the fragment is a prefix of
+    # the compound and no constituent of it. The other half of the same promise
+    # is allow_regexes=False in query/rewrite.py::build_query, which keeps a
+    # regular expression from reaching the parser in the first place.
+    index = open_index(index_dir, CONSTITUENTS)
+    _write(index, body=COMPOUND_SENTENCE)
+
+    assert _hits(index, MERE_PREFIX) == 0
+    assert _hits(index, "frist") == 1
+
+
+def test_the_question_side_produces_the_same_terms_as_the_index_side(index_dir: Path) -> None:
+    # A hit says the two sides met somewhere; this says they meet on exactly the
+    # same terms and on no others. Both sides go through open_index, which
+    # registers the analyser cached_german_analyzer hands out for this digest, so
+    # asking the cache for it again returns the very object the index answers
+    # with. The build counter proves that: an object built a second time here
+    # would raise it, and the assertion below would be about a different chain.
+    index = open_index(index_dir, CONSTITUENTS)
+    _write(index, body=COMPOUND_SENTENCE)
+    before = build_count()
+
+    analyzer = cached_german_analyzer(wordlist_hash(CONSTITUENTS), CONSTITUENTS)
+
+    assert build_count() == before
+    assert analyzer.analyze("Kündigungsfrist") == COMPOUND_TERMS
+    assert analyzer.analyze("Frist") == CONSTITUENT_TERMS
+    assert _hits(index, "frist") == 1
 
 
 def test_the_registered_name_chain_folds_umlauts_and_does_not_stem(index_dir: Path) -> None:
