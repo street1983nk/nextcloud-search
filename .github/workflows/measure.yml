@@ -294,6 +294,37 @@ jobs:
             echo "every cold query ran on an empty page cache"
           fi
 
+      # Measurement D, the base load of the startup, one candidate per step.
+      #
+      # The follow up measurement of 06.1 put 543,7 MB of 678 MB into two lines,
+      # 11-tokenizer-gelesen and 12-chunker-gebaut-und-gefahren, and neither of
+      # them is the model weights. Two lines that big are an owner nobody has
+      # named, so this step takes them apart into five separately named ones and
+      # reads VmRSS after each.
+      #
+      # The script is mounted rather than built into the image on purpose: it is
+      # a measuring tool and not part of the product, and the artefacts it needs
+      # (the tokenizer and the model directory) are in the image already. It runs
+      # with the python of the venv the image carries, so the versions it reports
+      # are the ones users get.
+      #
+      # --network none is not a detail here. It is the mechanical assurance that
+      # a measurement walking through the tokenizer and the model sends nothing,
+      # which is the privacy rule of this project rather than a preference.
+      - name: D, the base load step by step
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          docker run --rm --network none \
+            -e FINDLING_MEASURE_DIGEST="${DIGEST}" \
+            -e FINDLING_MEASURE_IMAGE="${TARGET}" \
+            -e FINDLING_MEASURE_ROLE="${{ matrix.role }}" \
+            -v "${GITHUB_WORKSPACE}/docs/measurements/2026-09-grundlast-fein/skripte:/skripte:ro" \
+            --entrypoint /app/.venv/bin/python "${TARGET}" \
+            /skripte/01-grundlast-fein.py \
+            | tee "${OUT}/01-grundlast-fein-${{ matrix.arch }}.txt"
+
       - name: Hand the raw output over
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

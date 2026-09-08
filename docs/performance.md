@@ -3502,6 +3502,50 @@ amd64-Zahl" darüber und wird aus dem ersten Integrationslauf nachgetragen; der
 Vergleich Zeile für Zeile gegen die v1.0-Grundlinie, mit einem p95 über den
 vollen Bestand, gehört Phase 10.
 
+### Der größte Posten der Grundlast heißt Tokenizer und Splitter
+
+Die Nachmessung vom 07.09.2026 hatte 543,7 MB von 678 MB Grundlast in genau zwei
+Schritten liegen, ohne sagen zu können, wofür. Die Feinmessung vom 08.09.2026
+(`docs/measurements/2026-09-grundlast-fein/`) hat dieselben zwei Schritte in
+fünf einzeln benannte Posten zerlegt, im selben Abbild, auf amd64 nativ und auf
+arm64 unter Emulation. Die Antwort ist eindeutig:
+
+| Posten | amd64 | arm64 (emuliert) |
+|---|---:|---:|
+| Modulimport `tokenizers`, ohne Instanz | 4,2 MB | 6,0 MB |
+| erste Tokenizer-Instanz aus `tokenizer.json` | 265,8 MB | 246,6 MB |
+| Bau des Splitters (`from_huggingface_tokenizer`) | 273,5 MB | 294,0 MB |
+| erster Chunkerlauf über 3.720 Zeichen | 0,8 MB | 3,5 MB |
+| zweiter Chunkerlauf über denselben Text | 0,0 MB | 0,0 MB |
+| **Summe** | **544,3 MB** | **550,1 MB** |
+
+Der Modulimport ist es also nicht, und die Chunkerläufe sind es auch nicht. Es
+sind zwei Materialisierungen desselben Tokenizers: eine in Python und eine, die
+der Bau des Splitters über die Sprachgrenze auf die Rust-Seite reicht. Das
+Vokabular des Modells hat 250.002 Einträge, und die materialisierte Form davon
+ist rund das Fünfzehnfache der 17 MB, die die Datei auf der Platte wiegt.
+
+**Was das für das RAM-Budget bedeutet.** Die Budget-Tabelle in `CLAUDE.md` kennt
+einen Posten "onnxruntime und e5-small int8" und einen Posten "Tantivy Writer".
+Einen Posten "Tokenizer und Splitter" kennt sie nicht, obwohl er mit gemessenen
+544 MB größer ist als das Modell und, anders als das Modell, bis zu Plan 07-03
+nicht faul geladen wurde. Ob die Tabelle nachgezogen wird, entscheidet der
+Owner; dieser Bericht ändert `CLAUDE.md` nicht.
+
+Alle fünf Posten gehören allein dem Arbeiter. Die Leseseite fasst weder den
+Splitter noch diesen Tokenizer an, und ein Container, dessen zweite Spur
+durchgelaufen ist und der seither nur noch sucht, trug sie bis dahin ohne
+Gegenwert mit. Gegen die vor der Messung festgelegte Schwelle von 100 MB ist der
+faule Bau damit freigegeben worden; die Zahlen, die Schwelle und der Entscheid
+stehen im Bericht des Messverzeichnisses.
+
+**Nachgemessen nach dem Bau:** der erste Durchlauf des Pollers kostete im
+veröffentlichten Abbild 575,6 MB und kostet mit dem faulen Bau noch 0,6 MB, und
+diese 0,6 MB sind der Vektorbestand, der wegen des Löschpfads absichtlich eifrig
+bleibt. Die Ersparnis eines Containers, der nur noch sucht, ist damit gemessene
+**575,0 MB**. Ein Container, dessen zweite Spur läuft, kommt auf dieselbe Zahl
+wie vorher, nur später: der faule Bau verschiebt und senkt nicht.
+
 ## Was der Test gekostet hat
 
 ### Die Generalprobe, Hetzner

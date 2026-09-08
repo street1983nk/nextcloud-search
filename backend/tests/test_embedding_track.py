@@ -54,6 +54,7 @@ from findling.store.repo import (
     open_store,
 )
 from findling.store.vectors import EMBEDDING_MODEL, Chunk, VectorStore, embedding_mark, open_vectors
+from findling.worker import poller as poller_module
 from findling.worker.poller import (
     EMBED_INCOMPLETE,
     EMBED_NO_STORED_TEXT,
@@ -1305,3 +1306,238 @@ def test_the_embedding_mark_is_not_a_mark_of_the_full_text_index() -> None:
     """
     assert EMBEDDING_MARK in VECTOR_ONLY_MARKS
     assert EMBEDDING_MARK not in expected_versions("a-digest")
+
+
+# -- the lazy half of the second track --------------------------------------
+#
+# Plan 07-03 measured what the eager wiring costs and split it in two. The
+# tokenizer and the splitter are 544,3 MB of resident memory
+# (docs/measurements/2026-09-grundlast-fein/), they belong to the worker alone,
+# and a container whose second track has caught up and which only searches from
+# then on used to carry them for nothing. The vector stock stays eager, because
+# the delete path of the state database needs the same handle (D-21).
+
+
+def _cut_spans(text: str, *, tokenizer: object, splitter: object, token_cap: int) -> list[ChunkSpan]:
+    """The stand-in the lazy build closes over, in the shape of chunk_spans."""
+    assert tokenizer is not None
+    assert splitter is not None
+    assert token_cap > 0
+    return _cut(text)
+
+
+@dataclass
+class _Built:
+    """How often each half of the wiring really ran in this process."""
+
+    tokenizer: int = 0
+    splitter: int = 0
+    engine: int = 0
+
+
+@pytest.fixture
+def lazy_track(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Built]:
+    """A volume, a pretended model directory, and counters over the expensive half.
+
+    The two artifacts are written empty on purpose: nothing below opens them,
+    and what the eager half is allowed to do with them is a stat and not a read.
+    """
+    home = tmp_path / "model"
+    home.mkdir(parents=True)
+    (home / "model.onnx").write_bytes(b"not a real graph")
+    (home / "tokenizer.json").write_text("{}", encoding="utf-8")
+    volume = tmp_path / "volume"
+    volume.mkdir(parents=True)
+
+    monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", str(home))
+    monkeypatch.setenv("APP_PERSISTENT_STORAGE", str(volume))
+    settings.cache_clear()
+
+    built = _Built()
+
+    def tokenizer(_directory: Path) -> object:
+        built.tokenizer += 1
+        return object()
+
+    def splitter(*_args: Any, **_kwargs: Any) -> object:
+        built.splitter += 1
+        return object()
+
+    def engine() -> _FakeModel:
+        built.engine += 1
+        return _FakeModel()
+
+    monkeypatch.setattr(poller_module, "open_tokenizer", tokenizer)
+    monkeypatch.setattr(poller_module, "make_splitter", splitter)
+    monkeypatch.setattr(poller_module, "shared_model", engine)
+    monkeypatch.setattr(poller_module, "chunk_spans", _cut_spans)
+
+    yield built
+    settings.cache_clear()
+
+
+def test_a_first_pass_without_an_embedding_row_builds_no_tokenizer_and_no_splitter(lazy_track: _Built) -> None:
+    # The whole point of the split. A container that has the model but no row to
+    # embed pays neither of the two posts the measurement named.
+    worker = Poller()
+    worker._wire_the_second_track()
+    try:
+        assert lazy_track.tokenizer == 0, "the tokenizer is 265,8 MB and no row asked for it yet"
+        assert lazy_track.splitter == 0, "the splitter is another 273,5 MB and no row asked for it yet"
+        assert worker._chunker is None
+        assert worker._model is None
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
+
+
+def test_the_vector_stock_is_open_although_the_cutter_is_not_built(lazy_track: _Built) -> None:
+    # The half that must NOT travel to the back. attach_vectors takes this
+    # handle in _open, and the delete path of the state database takes vectors
+    # off a file through it: a tombstone has to take the vectors of its file
+    # with it (D-21). A stock opened as late as the tokenizer would leave that
+    # path pointing at None, and nothing would fail until a deleted file kept
+    # answering semantic queries.
+    worker = Poller()
+    worker._wire_the_second_track()
+    try:
+        assert worker._vectors is not None, "the vector stock stays eager for the delete path of D-21"
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
+    assert lazy_track.tokenizer == 0
+
+
+def test_a_tombstone_takes_the_vectors_although_no_embedding_row_ever_arrived(
+    lazy_track: _Built, store: Store, writer: IndexBatchWriter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # D-21 over the whole opening path rather than over the state database
+    # alone: _open has to hand the handle to attach_vectors even in a process
+    # that never builds the cutter.
+    monkeypatch.setattr(poller_module, "_open_state", lambda: store)
+    monkeypatch.setattr(poller_module, "_open_writer", lambda _store, *, vectors: writer)
+    worker = Poller(
+        client_factory=lambda: cast("AsyncNextcloudApp", object()),
+        gateway_factory=lambda: cast("Any", _FakeGatewayClient()),
+        queue_factory=lambda nc: cast("Any", _FakeQueue(ClaimResult(jobs=()))),
+    )
+    try:
+        worker._open()
+        stock = worker._vectors
+        assert stock is not None
+        _fill(stock, 4711)
+
+        store.tombstone(4711)
+
+        assert stock.chunks_of([4711]) == {}, "the delete path found no handle, which is D-21"
+        assert lazy_track.tokenizer == 0
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
+
+
+async def test_the_first_embedding_row_builds_the_cutter_and_is_worked(
+    lazy_track: _Built, store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # The other side of the promise: the row that does arrive pays for the
+    # tokenizer and the splitter once, and it is answered like any other.
+    _index_the_body(writer)
+    queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller._wire_the_second_track()
+    try:
+        assert lazy_track.tokenizer == 0
+
+        result = await poller.run_once()
+
+        assert result.state == ROUND_WORKED
+        assert result.embedded == 1
+        assert lazy_track.tokenizer == 1
+        assert lazy_track.splitter == 1
+        assert lazy_track.engine == 1
+        stock = poller._vectors
+        assert stock is not None
+        assert stock.chunks_of([4711]) != {}
+    finally:
+        if poller._vectors is not None:
+            poller._vectors.close()
+
+
+def test_a_container_that_can_build_the_cutter_promises_the_track_before_it_is_built(
+    lazy_track: _Built,
+) -> None:
+    # _embed_ready is asked before a row is handed over, and the new state it
+    # has to answer for is "can be built" rather than "is built". Answering
+    # false here would stop the handover for good on a container that never
+    # embedded anything, and the track would never start.
+    worker = Poller()
+    worker._wire_the_second_track()
+    try:
+        assert worker._embed_ready is True
+        assert lazy_track.tokenizer == 0
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
+
+
+def test_a_container_without_the_artifacts_promises_nothing_and_keeps_no_stock(
+    lazy_track: _Built, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The ordinary container outside the shipping image. The eager half is
+    # allowed one stat and has to use it: a track that promised readiness here
+    # would hand rows to a spur that cannot run, and they would be claimed,
+    # answered, claimed again and written off as failed(repeatedly_stuck).
+    empty = tmp_path / "no-model"
+    empty.mkdir()
+    monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", str(empty))
+    settings.cache_clear()
+
+    worker = Poller()
+    worker._wire_the_second_track()
+
+    assert worker._embed_ready is False, "no artifacts, so no row may be handed over"
+    assert worker._vectors is None
+    assert lazy_track.tokenizer == 0
+
+
+async def test_a_build_that_fails_at_the_first_row_acknowledges_it_and_stops_the_handover(
+    lazy_track: _Built, store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The artifacts were there when the pass started and are gone by the time
+    # the first row arrives. The row leaves the queue with a name of its own,
+    # and the track switches off so the next row is never handed over: that is
+    # the difference between one answered row and a repeatedly_stuck loop.
+    def gone(_directory: Path) -> object:
+        raise FileNotFoundError("tokenizer.json")
+
+    _index_the_body(writer)
+    queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller._wire_the_second_track()
+    monkeypatch.setattr(poller_module, "open_tokenizer", gone)
+    try:
+        result = await poller.run_once()
+
+        assert result.state == ROUND_WORKED
+        assert result.embedded == 0
+        assert queue.acknowledged == [([91], {})]
+        assert poller._embed_ready is False, "a second row must not be handed over after this"
+    finally:
+        if poller._vectors is not None:
+            poller._vectors.close()
+
+
+def test_the_two_tokenizer_instances_are_not_merged() -> None:
+    """The locked decision of STATE.md:159, held as a property of the source.
+
+    ``Tokenizer.enable_truncation`` is a property of the object, so one shared
+    instance would carry the 512 token window of the inference session into
+    ``chunker._first_tokens`` and would silently halve the 1024 token cap of
+    D-01. The measurement of plan 07-03 put a number on the second instance
+    (216,6 MB) and that number changes nothing here.
+    """
+    source = POLLER_SOURCE.read_text(encoding="utf-8")
+    model_source = (PACKAGE_ROOT / "embed" / "model.py").read_text(encoding="utf-8")
+
+    assert "open_tokenizer(" in source, "the track builds its own instance, without truncation"
+    assert "_open_encoder(" in model_source, "the session builds its own, with truncation"

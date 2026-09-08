@@ -85,3 +85,34 @@ ist nirgends gemessen.
 eine Runde dreht und was die Runden kosten. Ergibt die Messung, dass der
 Rechteabgleich selbst geaendert werden muesste, gehoert diese Entscheidung
 Phase 11, denn sie ist eine Frage fuer das Audit und nicht fuer einen Messplan.
+
+---
+
+## DI-07-04 (gefunden in Plan 07-03, Task 1): die native arm64-Rohdatei der Feinmessung kann erst nach dem Zusammenfuehren entstehen
+
+**Gefunden:** beim Fahren der feineren Grundlastmessung, unmittelbar nachdem der
+Messschritt in `.github/workflows/measure.yml` gebaut war.
+
+**Was:** `docs/measurements/2026-09-grundlast-fein/rohdaten/01-grundlast-fein-arm64.txt`
+traegt eine Messung unter QEMU-Emulation und nicht auf nativer ARM-Hardware. Der
+Kopf der Datei und Abschnitt 1 des Berichts sagen das ausdruecklich. Die
+Grundlinie ist dadurch um rund 30 MB nach oben verschoben (Schritt 00: 43,2 MB
+statt 13,3 MB); die Zuwaechse der fuenf gemessenen Posten liegen in der Summe
+1,2 Prozent neben der nativen groben Messung derselben Schritte aus
+`2026-09-nachmessung-m7g/rohdaten/63-grundlast.txt`.
+
+**Warum nicht hier behoben:** Ein Lauf von `measure.yml` auf `ubuntu-24.04-arm`
+braucht einen GitHub-Runner und einen `workflow_dispatch`, und der Zweig dieses
+Plans steht noch nicht auf `main`. Der Executor arbeitet in einem Worktree und
+pusht nicht. Die AWS-Box ist angehalten, ihr Datentraeger ist teilweise zerstoert
+und sie gehoert Phase 10; sie wird dafuer nicht angefahren. Der Entscheid des
+Plans haengt nicht daran: er faellt gegen 544,3 MB nativ gemessen auf amd64, und
+die Schwelle liegt bei 100 MB.
+
+**Wohin es gehoert:** in den ersten `workflow_dispatch` von `measure.yml` nach
+dem Zusammenfuehren von Plan 07-03. Der Schritt heisst "D, the base load step by
+step", er laeuft in beiden Matrixaesten aus derselben Skriptdatei, und sein
+Artefakt `01-grundlast-fein-arm64.txt` ersetzt die emulierte Datei ohne weitere
+Aenderung. Danach sind die arm64-Spalten in Abschnitt 1, 2, 4 und 7 des Berichts
+und die arm64-Spalte in `docs/performance.md` gegen die native Datei
+nachzuziehen.

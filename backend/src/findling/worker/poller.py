@@ -66,7 +66,7 @@ from tantivy import Index
 from findling.config import settings
 from findling.embed.chunker import ChunkSpan, chunk_spans, make_splitter
 from findling.embed.engine import shared_model
-from findling.embed.model import EMBEDDING_UNAVAILABLE, EmbedOutcome, open_tokenizer, to_int8
+from findling.embed.model import EMBEDDING_UNAVAILABLE, EmbedOutcome, artifacts_present, open_tokenizer, to_int8
 from findling.extract.dispatch import Route, extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.sandbox import extract_guarded
@@ -406,6 +406,11 @@ class Poller:
         self._vectors = vectors
         self._chunker = chunker
         self._model = model
+        # "Can be built" and not "is built", and the difference is the whole of
+        # the lazy half below. It is raised by the eager wiring once the stock is
+        # open and the artifacts are in the directory, and lowered again the
+        # moment a build really fails.
+        self._can_build_the_cutter = False
         self._owns_vectors = vectors is None
         self._embed_enabled = resolved.embed_enabled
         self._ocr_enabled = resolved.ocr_enabled
@@ -1070,6 +1075,13 @@ class Poller:
         if self._writer_or_die().disk_is_tight():
             raise _DiskTight
 
+        # The first row of the process pays for the tokenizer and the splitter
+        # here, in a thread, because the read of the 17 MB artifact and the
+        # 544,3 MB behind it must not sit on the event loop that answers
+        # searches. Every row after it finds them built and returns at the top
+        # of the method.
+        await asyncio.to_thread(self._build_the_cutter)
+
         vectors, chunker, model = self._vectors, self._chunker, self._model
         if vectors is None or chunker is None or model is None:
             # A row left over from before the admin switched the embedding off,
@@ -1431,29 +1443,35 @@ class Poller:
         return self._queue
 
     def _wire_the_second_track(self) -> None:
-        """Open the vector stock and build the chunker and the model, or do neither.
+        """Open the vector stock, and promise the cutter without building it.
 
-        All three or none, and a failure of any one of them switches the track
-        off for this process instead of ending the pass. Three things can go
-        wrong here and every one of them is a state of an installation rather
-        than a defect: the sqlite-vec extension is not loadable on this build,
-        the volume has no vector database and cannot get one, or there is no
-        model directory, which is the ordinary case outside the shipping image.
+        The eager half. It opens the stock and answers one cheap question about
+        the model directory, and it does not read a single artifact. Two things
+        can go wrong here and both are a state of an installation rather than a
+        defect: the sqlite-vec extension is not loadable on this build or the
+        volume has no vector database and cannot get one, and the third, a
+        missing model directory, is the ordinary case outside the shipping
+        image. Any of them switches the track off for this process instead of
+        ending the pass.
 
-        Nothing is loaded. Asking :func:`findling.embed.engine.shared_model` for
-        the engine reads no weights, which is why it may be asked before it is
-        known whether there are any; the tokenizer, on the other hand, is read
-        here on purpose, because handing 17 MB of it across the language
-        boundary once per document is the cost ``make_splitter`` exists to
-        avoid.
+        **The stock stays here and does not travel to the back.** ``_open``
+        hands this handle to ``attach_vectors`` one line further down, and the
+        delete path of the state database takes vectors off a file through it: a
+        tombstone has to take the vectors of its file with it (D-21). A stock
+        opened as late as the tokenizer would leave that path pointing at None,
+        and nothing would fail until a deleted file kept answering semantic
+        queries.
 
-        The engine is shared with the search side since plan 06.1-02, so the
-        container carries one tokenizer and one session instead of two. What
-        that means for failures is stated at
-        :class:`findling.embed.model.EmbeddingModel`: a batch of this track that
-        throws is temporary and costs the search side nothing lasting, while an
-        absent model directory switches the semantic half off for the whole
-        process, which it was going to do for both halves anyway.
+        **The tokenizer and the splitter do not stay here, and that is plan
+        07-03.** They cost 265,8 MB and 273,5 MB of resident memory on amd64,
+        544,3 MB together with the two chunker runs, measured in
+        ``docs/measurements/2026-09-grundlast-fein/rohdaten/01-grundlast-fein-amd64.txt``.
+        They belong to this track alone, the read side never touches either of
+        them, and a container whose second track has caught up and which only
+        searches from then on used to carry them for nothing. So they are built
+        at the first row that needs them, in :meth:`_build_the_cutter`, which is
+        the third application in this container of the rule
+        ``EmbeddingModel._load`` already follows for the weights.
 
         It runs on the first pass, off the event loop with the rest of ``_open``.
         """
@@ -1461,12 +1479,11 @@ class Poller:
         stock: VectorStore | None = None
         try:
             stock = open_vectors(resolved.vectors_db)
-            tokenizer = open_tokenizer(resolved.embed_model_dir)
-            splitter = make_splitter(
-                tokenizer,
-                chunk_tokens=resolved.embed_chunk_tokens,
-                overlap=resolved.embed_chunk_overlap,
-            )
+            if not artifacts_present(resolved.embed_model_dir):
+                # Two stats, and they are what keeps the promise of
+                # _embed_ready honest now that having built the cutter is no
+                # longer the thing that proves it can be built.
+                raise FileNotFoundError(resolved.embed_model_dir)
         except Exception as error:
             if stock is not None:
                 stock.close()
@@ -1478,6 +1495,60 @@ class Poller:
             )
             return
 
+        self._vectors = stock
+        self._can_build_the_cutter = True
+
+    def _build_the_cutter(self) -> bool:
+        """Build the tokenizer, the splitter and the engine, at the first row that needs them.
+
+        The lazy half, and it runs once per process: the second call finds the
+        two attributes set and returns at the top. Sequential by construction
+        rather than by a lock, because the rows of a pass are worked one after
+        the other; :func:`findling.embed.engine.shared_model` carries its own
+        lock for the case that the read side asks at the same moment.
+
+        Nothing about the weights is loaded here. Asking ``shared_model`` for
+        the engine reads no artifact, which is why it may be asked before it is
+        known whether there are any; the tokenizer, on the other hand, is read
+        here on purpose, because handing 17 MB of it across the language
+        boundary once per document is the cost ``make_splitter`` exists to
+        avoid. Both together are the 544,3 MB the eager half no longer pays.
+
+        **The two tokenizer instances of this container are NOT merged, whatever
+        the second one costs.** The measurement of plan 07-03 put 216,6 MB on a
+        second instance out of the same file, and that number is a finding and
+        not an invitation: ``Tokenizer.enable_truncation`` is a property of the
+        object, so one shared instance would carry the 512 token window of the
+        inference session into ``chunker._first_tokens`` and would silently
+        halve the 1024 token cap of D-01. The second half of every document
+        would stop existing with nothing failing anywhere.
+
+        A build that fails lowers the flag rather than raising, so the row that
+        asked for it leaves the queue with a name of its own and no further row
+        is ever handed over: a row kept back for a spur that cannot run is the
+        failed(repeatedly_stuck) loop this track exists to avoid.
+        """
+        if self._chunker is not None and self._model is not None:
+            return True
+        if not self._can_build_the_cutter:
+            return False
+
+        resolved = settings()
+        try:
+            tokenizer = open_tokenizer(resolved.embed_model_dir)
+            splitter = make_splitter(
+                tokenizer,
+                chunk_tokens=resolved.embed_chunk_tokens,
+                overlap=resolved.embed_chunk_overlap,
+            )
+        except Exception as error:
+            self._can_build_the_cutter = False
+            LOGGER.warning(
+                "the embedding track stays off in this container, %s; the search answers lexically",
+                type(error).__name__,
+            )
+            return False
+
         def cut(text: str) -> list[ChunkSpan]:
             return chunk_spans(
                 text,
@@ -1486,21 +1557,31 @@ class Poller:
                 token_cap=resolved.embed_token_cap,
             )
 
-        self._vectors = stock
         self._chunker = cut
         self._model = shared_model()
+        return True
 
     @property
     def _embed_ready(self) -> bool:
-        """True when all three parts of the second track are here.
+        """True when the track can run, which since plan 07-03 is not the same as built.
 
         Asked before a row is handed over, never after. A container whose stock
         could not be opened must not put rows on a track it cannot run: they
         would be claimed, answered with a verdict, claimed again by the next
         pass and eventually written off as failed(repeatedly_stuck) for a track
         that does not exist on this instance.
+
+        What changed with the lazy build is the second half of the sentence, not
+        the promise. The stock is still open or the answer is false. The cutter
+        may be built or merely buildable, and the flag says which: it is raised
+        only after the eager half has seen the artifacts in the directory, and
+        it is lowered again the moment a build really fails, so the window in
+        which a row can be handed over to a spur that cannot run is one row
+        wide and that row is acknowledged rather than kept.
         """
-        return self._vectors is not None and self._chunker is not None and self._model is not None
+        if self._vectors is None:
+            return False
+        return self._can_build_the_cutter or (self._chunker is not None and self._model is not None)
 
     async def _abort(
         self,
