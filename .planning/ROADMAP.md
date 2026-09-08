@@ -68,7 +68,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 07-03-PLAN.md , die Grundlast-Restluecke aus Tokenizer und Splitter, gemessen mit Abbruchbedingung (Welle 3)
+- [x] 07-03-PLAN.md , die Grundlast-Restluecke aus Tokenizer und Splitter, gemessen mit Abbruchbedingung (Welle 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -142,7 +142,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 7. Gemeinsame Embedding-Engine | 2/4 | In Progress|  |
+| 7. Gemeinsame Embedding-Engine | 3/4 | In Progress|  |
 | 8. Deutsche Komposita ohne Behelf | 0/? | Not started | - |
 | 9. Eigene Ergebnisseite | 0/? | Not started | - |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
