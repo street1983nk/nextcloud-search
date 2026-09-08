@@ -64,7 +64,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 07-02-PLAN.md , die amd64-Kaltstartzahl ueber den echten PHP-Weg und das Rueckschritt-Tor (Welle 2)
+- [x] 07-02-PLAN.md , die amd64-Kaltstartzahl ueber den echten PHP-Weg und das Rueckschritt-Tor (Welle 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -142,7 +142,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 7. Gemeinsame Embedding-Engine | 1/4 | In Progress|  |
+| 7. Gemeinsame Embedding-Engine | 2/4 | In Progress|  |
 | 8. Deutsche Komposita ohne Behelf | 0/? | Not started | - |
 | 9. Eigene Ergebnisseite | 0/? | Not started | - |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
