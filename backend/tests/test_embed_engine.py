@@ -44,9 +44,26 @@ import pytest
 from conftest import CONSTITUENTS, Corpus
 from findling.api import resources
 from findling.config import settings
+from findling.embed import engine as engine_module
 from findling.embed import model as model_module
-from findling.embed.engine import shared_model
-from findling.embed.model import DIMENSIONS, LOAD_RETRY_SECONDS, EmbeddingModel, load_count
+from findling.embed.engine import (
+    ENGINE_COLD,
+    ENGINE_DISABLED,
+    ENGINE_LOADED,
+    ENGINE_MISSING,
+    ENGINE_RETRY_PENDING,
+    ENGINE_STATES,
+    engine_state,
+    shared_model,
+)
+from findling.embed.model import (
+    DIMENSIONS,
+    LOAD_RETRY_SECONDS,
+    MODEL_FILE,
+    TOKENIZER_FILE,
+    EmbeddingModel,
+    load_count,
+)
 from findling.index.analyzer import build_count, cached_german_analyzer
 from findling.worker import poller as poller_module
 
@@ -473,3 +490,176 @@ def test_the_tokenizer_is_never_entered_twice_at_once(model_home: Path, monkeypa
         asker.join(60)
 
     assert encoder.overlapped is False, "two threads in one tokenizer is the promise nobody made"
+
+
+# ---------------------------------------------------------------------------
+# The state of the engine as one word, for the admin page of plan 07-04.
+#
+# Five states, and the whole point of the field is that they ask different things
+# of an admin: a missing model is a rebuild of the image, a load that threw is a
+# wait of five minutes, and cold is the ordinary state of a container nobody has
+# asked anything yet. On the page the three used to look identical, because
+# "nought per cent findable by meaning" is true in every one of them.
+#
+# What is measured here is a word and never a byte, for the reason the holder
+# above is measured with a counter: a peak difference is not the sum of the
+# loads that produced it, and a byte on a shared runner is a random number.
+# ---------------------------------------------------------------------------
+
+
+def _held_for(directory: Path) -> EmbeddingModel | None:
+    """The instance the holder carries for that directory, and never a new one.
+
+    Reaches into the holder on purpose. The claim of one case below is that
+    asking for the state leaves the holder as it found it, and there is no way
+    to see that from the outside: every public way of looking would build the
+    very instance whose absence is the assertion.
+    """
+    held = engine_module._ENGINE
+    if held is not None and held[0] == directory:
+        return held[1]
+    return None
+
+
+def test_a_container_with_the_second_half_switched_off_says_so_and_not_cold(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The order of the verdicts, held at its first step. Cold reads as "the
+    # model arrives on first demand, which is the normal state", and on a
+    # container whose semantic half is switched off that demand never comes.
+    # The two need different words or the setting is invisible on the page.
+    _pretend_a_model(model_home)
+    monkeypatch.setenv("FINDLING_EMBED_ENABLED", "false")
+    settings.cache_clear()
+
+    assert engine_state() == ENGINE_DISABLED
+
+
+def test_a_container_that_has_never_built_an_instance_is_cold(model_home: Path) -> None:
+    # The ordinary state of a container that has just started: the artifacts are
+    # in the image, nothing has asked for a vector yet, and since plan 07-03 the
+    # second track does not build the engine before the first row that needs it
+    # either.
+    _pretend_a_model(model_home)
+
+    assert _held_for(model_home) is None
+    assert engine_state() == ENGINE_COLD
+
+
+def test_an_instance_that_was_built_but_never_loaded_is_cold(model_home: Path) -> None:
+    # Building the wrapper reads nothing, which is the promise shared_model
+    # makes in its own docstring. An instance in the holder is therefore not a
+    # loaded engine, and the page must not report one.
+    _pretend_a_model(model_home)
+
+    built = shared_model()
+
+    assert built.loaded is False
+    assert engine_state() == ENGINE_COLD
+
+
+def test_a_container_that_has_embedded_something_reports_loaded(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+
+    shared_model().embed_query("bauantrag")
+
+    assert engine_state() == ENGINE_LOADED
+
+
+def test_a_directory_without_the_artifacts_is_reported_as_missing(model_home: Path) -> None:
+    # The state the field exists for. Nought documents with a loaded engine means
+    # the track is starting up, nought documents without a model means nothing
+    # is coming, and the two used to be one sentence on the page.
+    #
+    # Asserted twice, before and after an attempt, because the answer has two
+    # sources: without an instance it is the artifact question, with one it is
+    # the refusal the load path remembered for ever.
+    assert engine_state() == ENGINE_MISSING
+
+    shared_model().embed_query("bauantrag")
+
+    assert engine_state() == ENGINE_MISSING
+
+
+def test_a_load_that_threw_is_reported_as_waiting_until_the_cooldown_is_over(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The third answer of the load path, and the only one an admin can do
+    # nothing about except wait. Saying "missing" here would send somebody
+    # rebuilding an image that is perfectly whole.
+    _pretend_a_model(model_home)
+    attempts = {"count": 0}
+    _flaky_session(monkeypatch, attempts)
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(model_module.time, "monotonic", lambda: clock["now"])
+
+    engine = shared_model()
+
+    assert engine.embed_query("bauantrag").available is False
+    assert engine_state() == ENGINE_RETRY_PENDING
+
+    clock["now"] += LOAD_RETRY_SECONDS + 1
+
+    # The cooldown is over and nothing has retried yet, which is cold and not
+    # loaded: the next row or the next search is what pays for the load.
+    assert engine_state() == ENGINE_COLD
+    assert attempts["count"] == 1, "asking for the state is not an attempt"
+
+
+def test_asking_for_the_state_neither_builds_an_instance_nor_loads_one(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T-07-04. The admin page polls every few seconds, so a status answer that
+    # loaded the engine on the way would be the loading trigger of a container
+    # nobody is searching on, and it would report the number it caused itself.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    before = load_count()
+
+    for _ in range(5):
+        assert engine_state() == ENGINE_COLD
+
+    assert _held_for(model_home) is None, "the question must not build the instance it asks about"
+    assert load_count() == before
+
+    shared_model().embed_query("bauantrag")
+    for _ in range(5):
+        assert engine_state() == ENGINE_LOADED
+
+    assert load_count() - before == 1, "five more questions are still one load"
+
+
+def test_no_state_of_the_closed_set_names_a_place_on_disk() -> None:
+    # T-07-01, and the rule of api/status.py one module over: every note of that
+    # answer names a state of this container and never a location. These five
+    # words travel in the same answer and are held to the same rule.
+    assert len(ENGINE_STATES) == 5
+
+    for state in ENGINE_STATES:
+        assert state == state.strip()
+        assert "/" not in state
+        assert "\\" not in state
+        assert "." not in state
+        assert MODEL_FILE not in state
+        assert TOKENIZER_FILE not in state
+
+
+def test_every_answer_of_the_state_comes_out_of_the_closed_set(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The anti vacuity clause of the case above: a set nothing is drawn from
+    # would keep every promise of this file while the answer said whatever it
+    # liked.
+    assert engine_state() in ENGINE_STATES
+
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+
+    assert engine_state() in ENGINE_STATES
+
+    shared_model().embed_query("bauantrag")
+
+    assert engine_state() in ENGINE_STATES

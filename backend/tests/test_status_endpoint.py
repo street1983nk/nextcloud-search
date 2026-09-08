@@ -20,6 +20,15 @@ differently from what either half believes. Three properties are asserted for
 it: it comes out of the environment, it is there for a container that has no
 index yet, and it is not derived from the two index format marks next to it.
 
+The fifth claim arrives with phase 7 and it is the other half of that one.
+``engineState`` says which of five states the embedding engine is in, and it is
+here because ``embedded`` alone cannot say: nought documents is the same figure
+for a model that is missing, for a load that threw and for a track that has not
+started, and those three ask completely different things of an admin. Three
+properties are asserted for it: it is one of the closed set of words and never a
+location on disk, it is answered by a container that has no state database
+either, and asking for it does not load the engine it describes (T-07-04).
+
 The fourth claim arrives with phase 6 and it is the second track. ``embedded``
 counts the documents that carry a vector, and it exists because the semantic
 half fills up for hours after the full text half is already usable: without a
@@ -40,7 +49,9 @@ from fastapi.testclient import TestClient
 
 from conftest import APP_VERSION, Corpus
 from findling.api.status import NO_VECTORS_YET, STATE_UNREADABLE, VECTORS_UNREADABLE, report
-from findling.config import MAX_FILE_BYTES
+from findling.config import MAX_FILE_BYTES, settings
+from findling.embed.engine import ENGINE_COLD, ENGINE_DISABLED, ENGINE_MISSING, ENGINE_STATES
+from findling.embed.model import load_count
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
 from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
@@ -70,6 +81,7 @@ FIELDS = {
     "diskTotalBytes",
     "indexBytes",
     "maxFileBytes",
+    "engineState",
     "note",
 }
 
@@ -604,3 +616,115 @@ def test_asking_for_the_status_changes_nothing(
     _status(client, sign("admin"))
 
     assert database.read_bytes() == before
+
+
+def _model_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, complete: bool) -> Path:
+    """Point the settings at a model directory, with or without the artifacts.
+
+    Named apart from the volume of the fixture on purpose. The model does not
+    live on the persistent volume in a deployed container, it is baked into the
+    image, and a directory inside the volume would tie this file to a layout
+    that only the test suite has.
+    """
+    home = tmp_path / "engine-model"
+    home.mkdir(exist_ok=True)
+    if complete:
+        (home / "model.onnx").write_bytes(b"not a real graph")
+        (home / "tokenizer.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", str(home))
+    settings.cache_clear()
+    return home
+
+
+def test_the_answer_names_the_state_of_the_engine(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A container with the model in the image that nobody has searched on yet.
+    # Cold is the honest word for it and it is not an error: the artifacts are
+    # read on the first text that reaches the engine, which since plan 07-03 is
+    # true of the second track as well.
+    _model_directory(tmp_path, monkeypatch, complete=True)
+
+    answer = _status(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    assert answer["engineState"] == ENGINE_COLD
+
+
+def test_a_container_without_the_model_says_so_next_to_a_complete_full_text_index(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The pair the page is built out of, in one answer: every full text counter
+    # is true, the semantic figure is nought, and the reason is that there is no
+    # model in this image. Without the second field those two lines read as
+    # "the second track has not got there yet", which is a wait that never ends.
+    _model_directory(tmp_path, monkeypatch, complete=False)
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["indexed"] == indexed_volume.documents
+    assert answer["embedded"] == 0
+    assert answer["engineState"] == ENGINE_MISSING
+
+
+def test_a_container_with_the_semantic_half_switched_off_says_so_and_not_cold(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A setting is not a defect, and the page has to be able to tell them apart:
+    # cold says the model arrives on first demand, and on this container that
+    # demand never comes.
+    _model_directory(tmp_path, monkeypatch, complete=True)
+    monkeypatch.setenv("FINDLING_EMBED_ENABLED", "false")
+    settings.cache_clear()
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["engineState"] == ENGINE_DISABLED
+
+
+def test_the_state_of_the_engine_is_reported_without_a_state_database(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # The minutes after a deployment, which is exactly when this field is asked
+    # for: an admin who installed the app a minute ago wants to know whether the
+    # semantic half is going to work at all, and there is no index to read.
+    assert not (volume / "state.db").exists()
+
+    answer = _status(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    assert answer["engineState"] in ENGINE_STATES
+
+
+def test_asking_for_the_status_does_not_load_the_engine(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # T-07-04. This page polls every few seconds while an admin has it open, so
+    # a status answer that loaded the engine on the way would be the loading
+    # trigger of a container nobody is searching on, and it would report the
+    # 118 MB it caused itself.
+    _model_directory(tmp_path, monkeypatch, complete=True)
+    before = load_count()
+
+    for _ in range(3):
+        assert _status(client, sign("admin"))["engineState"] == ENGINE_COLD
+
+    assert load_count() == before

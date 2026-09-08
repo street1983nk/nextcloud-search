@@ -167,6 +167,16 @@ final class AdminViewService {
 	private const MAX_TEXT_LENGTH = 500;
 
 	/**
+	 * The five states of the engine the container may report, as a closed list.
+	 *
+	 * The words are the protocol and they are decided one repository half over,
+	 * in backend/src/findling/embed/engine.py. This side only judges whether the
+	 * value is one of them; which sentence an admin reads for which of them is
+	 * decided in the template and in the script, in the language of the admin.
+	 */
+	private const ENGINE_STATES = ['loaded', 'cold', 'disabled', 'missing', 'waiting_for_retry'];
+
+	/**
 	 * What a reason code may look like before it is passed on. The taxonomy of
 	 * FileStateService::REASONS is lower case and underscores, and a code that
 	 * does not fit that shape has no row in the display table anyway. Filtering
@@ -1759,19 +1769,22 @@ final class AdminViewService {
 	}
 
 	/**
-	 * The eighteen status fields of the container, rebuilt one by one.
+	 * The nineteen status fields of the container, rebuilt one by one.
 	 *
-	 * Called with null as well, and then it returns the same eighteen keys as
-	 * zeros, false and empty strings. That is what keeps the caller free of a
-	 * second code path: a page that renders "container silent" out of the same
-	 * shape it renders a healthy container from cannot forget one of the two.
+	 * Called with null as well, and then it returns the same nineteen keys as
+	 * zeros, false, null and empty strings. That is what keeps the caller free
+	 * of a second code path: a page that renders "container silent" out of the
+	 * same shape it renders a healthy container from cannot forget one of the
+	 * two.
 	 *
-	 * ``embedded`` is the one exception to that rule and it is deliberate. It is
-	 * null when the container did not report it, which is what a container older
-	 * than this app looks like, and null is the only value that keeps that state
-	 * apart from a container whose second track has not started. Nought would
-	 * merge the two into "no document is findable by meaning", which is a claim
-	 * about an instance nobody asked (D-16).
+	 * ``embedded`` and ``engineState`` are the two exceptions to that rule and
+	 * both of them are deliberate. Each is null when the container did not
+	 * report it, which is what a container older than this app looks like, and
+	 * null is the only value that keeps that apart from a container that did
+	 * report. Nought would merge the first into "no document is findable by
+	 * meaning" and "cold" would merge the second into "the model arrives on
+	 * first demand", and both are claims about an instance nobody asked
+	 * (D-16, T-07-03).
 	 *
 	 * @param array<mixed>|null $answer the decoded body, or null when there was none
 	 * @return array<string,mixed>
@@ -1797,6 +1810,7 @@ final class AdminViewService {
 			'diskTotalBytes' => $this->counter($answer, 'diskTotalBytes'),
 			'indexBytes' => $this->counter($answer, 'indexBytes'),
 			'maxFileBytes' => $this->counter($answer, 'maxFileBytes'),
+			'engineState' => self::engineState($answer['engineState'] ?? null),
 			'note' => $this->text($answer, 'note'),
 		];
 	}
@@ -1835,6 +1849,32 @@ final class AdminViewService {
 		$value = $answer[$key] ?? null;
 
 		return is_int($value) && $value >= 0 ? $value : null;
+	}
+
+	/**
+	 * The state of the embedding engine of the container, or null when it did
+	 * not say.
+	 *
+	 * Judged against a closed list and never cast. Every other free text field
+	 * of this answer goes through text(), which cleans and cuts a sentence
+	 * somebody may read; this one is not a sentence at all, it is one of five
+	 * words, and it decides which sentence the page shows. A value from outside
+	 * the list is refused rather than shortened, because there is no honest
+	 * shortening of a state that does not exist (T-07-02).
+	 *
+	 * Null and not the cold state for the reason optionalCounter() exists: a
+	 * container older than this app leaves the key out, and an update in the
+	 * wrong order would otherwise have the page claim a state nobody reported.
+	 * Cold reads as "the model arrives on first demand", which is a promise
+	 * about a container that has not said a word (T-07-03).
+	 *
+	 * Static and public for the reason coverageShare() above is: it is the
+	 * judgement and nothing else, and the alternative is a unit test that builds
+	 * a whole admin view out of twelve doubles in order to ask what becomes of a
+	 * word that is not in a list of five.
+	 */
+	public static function engineState(mixed $value): ?string {
+		return is_string($value) && in_array($value, self::ENGINE_STATES, true) ? $value : null;
 	}
 
 	/**

@@ -9,6 +9,13 @@ inline script, no literal colour in the stylesheet, no removed focus ring, no
 dash that is not a hyphen, no emoji, and none of the five Nextcloud APIs the
 contract retired.
 
+Two agreements between the halves of the page are held here as well, and they
+are not prohibitions but pairs: the second coverage figure (D-16) and the state
+of the embedding engine (plan 07-04). Both are rendered once server side and
+rewritten on every poll, so a half that loses one of them produces no error at
+all. It produces a line that never moves, or one that changes its wording three
+seconds after the page opened with nothing having happened.
+
 **Why a Python gate over PHP, CSS and JavaScript sources.** There is no PHP and
 no npm on the development machine and none in this repository; the PHP side is
 checked with ``php -l`` inside a container and nothing else, and there is no
@@ -36,6 +43,8 @@ import json
 import re
 from collections.abc import Callable
 from pathlib import Path
+
+from findling.embed.engine import ENGINE_STATES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -192,6 +201,52 @@ def scan_coverage_keys(name: str, source: str) -> list[str]:
         for key in COVERAGE_KEYS
         if re.search(rf"\b{key}\b", source) is None
     ]
+
+
+# The three places the state of the engine has to appear in, and what each of
+# them has to carry (plan 07-04). AdminViewService judges the word, the template
+# renders the sentence for it on the first paint, and the script rewrites the
+# same line on every poll. The identifier is spelled once here and matched in
+# all three, because the failure this catches is a half that stops naming it.
+ENGINE_MARKERS = {
+    ADMIN_VIEW.name: ("engineState",),
+    TEMPLATE.name: ("engineState", "findling-semantic-engine"),
+    SCRIPT.name: ("engineState", "findling-semantic-engine"),
+}
+
+# The sentence for the sixth situation, the one that is not a state of the
+# engine at all: the container did not report one. Written out because it is the
+# one of the six that no mapping below can produce, both halves reach it through
+# their default, and a half that lost it would silently show one of the five.
+ENGINE_UNKNOWN_SENTENCE = "This container does not report the state of the model yet."
+
+
+def scan_engine_state(name: str, source: str) -> list[str]:
+    """Findings of one half of the page: a marker of the engine line it lost."""
+    markers = ENGINE_MARKERS.get(name)
+    if markers is None:
+        return [f"{name}: is not one of the three files the state of the engine lives in"]
+    return [
+        f"{name}: does not carry {marker} of the engine state line"
+        for marker in markers
+        if re.search(rf"\b{re.escape(marker)}\b", source) is None
+    ]
+
+
+def engine_sentences_of_the_template(source: str) -> dict[str, str]:
+    """The word to sentence mapping the template renders the first paint from."""
+    block = re.search(r"\$engineSentences = \[(.*?)\];", source, re.DOTALL)
+    if block is None:
+        return {}
+    return dict(re.findall(r"'([a-z_]+)' => \$l->t\('([^']+)'\)", block.group(1)))
+
+
+def engine_sentences_of_the_script(source: str) -> dict[str, str]:
+    """The same mapping as the script writes it on every poll."""
+    block = re.search(r"function engineSentence \(state\) \{(.*?)\n  \}", source, re.DOTALL)
+    if block is None:
+        return {}
+    return dict(re.findall(r"case '([a-z_]+)':\s*\n\s*return t\('findling', '([^']+)'\)", block.group(1)))
 
 
 Scanner = Callable[[str, str], list[str]]
@@ -420,6 +475,79 @@ def test_the_second_figure_is_a_second_call_and_not_a_second_calculation() -> No
     # that guard a container older than this app would be shown as nought per
     # cent semantic coverage, which is a claim about something nobody asked.
     assert "$backendReachable && $embeddedKnown" in php
+
+
+def test_every_half_of_the_page_carries_the_state_of_the_engine() -> None:
+    """Plan 07-04 as a gate, in the shape the second coverage figure has one.
+
+    The same failure mode, one field further on: the state of the engine is
+    rendered server side and rewritten on every poll, and a half that loses it
+    breaks nothing. The service stops sending a word, or the template stops
+    holding a line, or the script stops writing one, and in all three cases the
+    page keeps looking healthy while it no longer says whether the semantic half
+    is going to work at all.
+    """
+    findings = [
+        message
+        for path in (ADMIN_VIEW, TEMPLATE, SCRIPT)
+        for message in scan_engine_state(path.name, path.read_text(encoding="utf-8"))
+    ]
+
+    assert findings == []
+
+
+def test_a_half_that_lost_the_state_of_the_engine_is_reported() -> None:
+    # The gate has to be able to go red, and a file that is not one of the three
+    # has to be a finding rather than a clean answer: a scanner that returned an
+    # empty list for an unknown name would report a renamed file as perfect.
+    assert len(scan_engine_state(TEMPLATE.name, '<p id="findling-semantic"></p>')) == 2
+    assert len(scan_engine_state(ADMIN_VIEW.name, "'note' => $this->text($answer, 'note'),")) == 1
+    assert scan_engine_state(SCRIPT.name, "backend.engineState findling-semantic-engine") == []
+    assert len(scan_engine_state("somewhere-else.php", "engineState findling-semantic-engine")) == 1
+
+
+def test_both_halves_of_the_page_map_the_same_state_to_the_same_sentence() -> None:
+    """The pair itself, and not only the presence of the two names.
+
+    The template paints the sentence once and the script rewrites the very same
+    element on the first poll. Two halves that agree on the identifier and
+    disagree on the wording are worse than a half that lost the line: the page
+    opens with one sentence and replaces it with another three seconds later,
+    with nothing having happened on the instance.
+    """
+    template = engine_sentences_of_the_template(TEMPLATE.read_text(encoding="utf-8"))
+    script = engine_sentences_of_the_script(SCRIPT.read_text(encoding="utf-8"))
+
+    assert template != {}, "the mapping is no longer where this gate looks for it"
+    assert script != {}, "the mapping is no longer where this gate looks for it"
+    assert template == script
+    # And the words are the ones the container really sends. The set is imported
+    # from the container half rather than spelled again here, because a second
+    # spelling of a closed set is a second thing to forget (T-07-02).
+    assert set(template) == set(ENGINE_STATES)
+
+
+def test_the_six_sentences_of_the_engine_line_are_in_the_german_catalogue() -> None:
+    """IN-02 for the new line: a sentence in one catalogue only is half German.
+
+    The sixth is the one for a container that reports no state at all. It is
+    reached through the default of both halves, so no mapping carries it and
+    nothing but this line would notice its absence.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    catalogue = json.loads(L10N_JSON.read_text(encoding="utf-8"))["translations"]
+    sentences = set(engine_sentences_of_the_template(template).values()) | {ENGINE_UNKNOWN_SENTENCE}
+
+    assert len(sentences) == 6
+
+    missing = [f"de.json: {sentence}" for sentence in sorted(sentences) if sentence not in catalogue]
+    if ENGINE_UNKNOWN_SENTENCE not in template:
+        missing.append(f"admin.php: {ENGINE_UNKNOWN_SENTENCE}")
+    if ENGINE_UNKNOWN_SENTENCE not in script:
+        missing.append(f"admin.js: {ENGINE_UNKNOWN_SENTENCE}")
+
+    assert missing == []
 
 
 def test_the_two_translation_files_carry_the_same_keys() -> None:
