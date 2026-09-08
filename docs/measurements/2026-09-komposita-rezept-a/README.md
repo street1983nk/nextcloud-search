@@ -353,23 +353,59 @@ CI-Schritt wandern, fehlte er.
 
 `rohdaten/fixture-subset.txt` traegt **194 Eintraege**. Es sind genau die
 Eintraege der 276496 Zeilen langen Liste, die als Teilzeichenkette in mindestens
-einem der 46 kleingeschriebenen Eingabewoerter vorkommen. Ein Eintrag, der in
+einem der 48 kleingeschriebenen Eingabewoerter vorkommen. Ein Eintrag, der in
 keiner Eingabe als Teilzeichenkette steht, kann vom Splitter nie getroffen
 werden, also kann sein Wegfall kein einziges Token aendern.
 
 Das ist die Begruendung. Der **Beweis** ist Teil des Laufs und keine Handarbeit:
 die Sonde baut eine zweite Kette ueber die Teilmenge und vergleicht fuer **jede
-der 46 Eingaben** die Token beider Ketten. Bei einer einzigen Abweichung
+der 48 Eingaben** die Token beider Ketten. Bei einer einzigen Abweichung
 schreibt sie die betroffenen Woerter nach stderr und endet mit Rueckgabewert 1.
 Dieser Lauf endete mit 0, also liefert die Teilmenge fuer jede Eingabe dieselben
 Token wie die echte Liste.
 
 Damit ist Pitfall 5 mechanisch erledigt statt durch Aufmerksamkeit: Die
-bestehende Fixture `backend/tests/fixtures/constituents_de.txt` mit 172
-Eintraegen ist einmalig von Hand entstanden und enthaelt zum Beispiel weder
+Fixture `backend/tests/fixtures/constituents_de.txt` hatte **vor Plan 08-04**
+172 Eintraege, war einmalig von Hand entstanden und enthielt zum Beispiel weder
 `bau` noch `baugenehmigung`. Ab jetzt ist die Teilmenge ein Erzeugnis des
 Messlaufs, und wer einen Fall hinzufuegt, laesst den Lauf neu fahren statt eine
 Zeile in eine Fixture zu schreiben.
+
+### 6.1 Nachtrag 08-04: die ausgelieferte Fixture hat 223 Eintraege
+
+Die Datei, die heute im Repositorium liegt, ist nicht die 172er und auch nicht
+die 194er Teilmenge, sondern die **Vereinigung** beider: **223 Eintraege**. Das
+ist kein Schoenheitsfehler der Buchfuehrung, sondern der Grund, warum es
+Abschnitt 6 gibt: **mehr Eintraege sind nicht automatisch besser.** Die Liste
+wird leftmost-longest abgeglichen, ein einziger zusaetzlicher Eintrag kann eine
+Zerlegung, die vorher aufging, in eine Sackgasse schicken. Eine Vereinigung ist
+also nicht automatisch mindestens so gut wie ihre Teile, sie muss gemessen
+werden.
+
+Genau dafuer traegt `compound_probe.py` die Option `--against`. Der Beleg lag
+bisher nur in `.planning/phases/08-.../08-04-SUMMARY.md`; hier steht er, weil
+dieser Bericht die Quelle ist, auf die der Docstring von `test_analyzer.py` und
+`docs/german-analyzer.md` verweisen.
+
+Lauf vom 08.09.2026, dasselbe Abbild, dieselben Pins, derselbe
+`wordlist_hash`, ueber alle 48 Faelle:
+
+```sh
+MSYS_NO_PATHCONV=1 sh scripts/dev/measure_compounds.sh     --against backend/tests/fixtures/constituents_de.txt
+```
+
+```
+compound_probe: /opt/findling/against.txt tokenises like the full list, 223 entries
+compound_probe: 48 cases, 276496 entries, 194 in the subset
+```
+
+Rueckgabewert 0. Die ausgelieferte Fixture liefert also fuer jede der 48
+Eingaben byteweise dieselben Token wie die 276496 Eintraege lange Debian-Liste.
+Der Lauf vom 08.09.2026 zu Plan 08-04 hatte dasselbe Ergebnis ueber die
+damaligen 46 Faelle.
+
+Wer die Fixture erweitert, laesst diesen Lauf neu fahren. Ein Eintrag, den er
+nicht besteht, gehoert nicht hinein, egal wie plausibel er aussieht.
 
 Die kuerzesten Eintraege der Teilmenge sind `n`, `s`, `en`, `er`, `es` und `ns`,
 also genau die sechs Fugenelemente aus `FUGEN`. Sie sind kuerzer als MIN_LEN und

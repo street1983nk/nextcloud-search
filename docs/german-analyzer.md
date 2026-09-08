@@ -356,3 +356,10 @@ against the full measured case collection in both directions, gained and lost
 splits. `scripts/dev/measure_compounds.sh --against LIST` is the run that
 answers this question, and `COMPOUNDS` in `backend/tests/test_analyzer.py` is the
 collection.
+
+The shipped test fixture `backend/tests/fixtures/constituents_de.txt` went
+through exactly that run. It carries **223 entries**, the union of the 194 the
+probe generated with the 172 the suite already had, and the union was measured
+rather than assumed: over all 48 cases it produces byte for byte the same tokens
+as the full 276496 entry list. Output line and command stand in section 6.1 of
+`docs/measurements/2026-09-komposita-rezept-a/`.

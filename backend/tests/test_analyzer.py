@@ -13,7 +13,9 @@ cases of tests/fixtures/compound_cases_de.txt, and the entries the suite already
 carried. The union is not believed, it is measured: scripts/dev/measure_compounds.sh
 --against tests/fixtures/constituents_de.txt runs the shipped chain over the
 fixture and over the full list and exits non zero on the first case whose tokens
-differ. So the table below is the behaviour of the real list, not of a convenient
+differ. The run and its output line stand in section 6.1 of
+docs/measurements/2026-09-komposita-rezept-a/, 223 entries over 48 cases, return
+code 0. So the table below is the behaviour of the real list, not of a convenient
 miniature. A developer machine has no Debian word list, and a test that skips
 itself when the list is missing is a test that never runs.
 
