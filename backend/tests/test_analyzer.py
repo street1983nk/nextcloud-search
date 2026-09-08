@@ -8,11 +8,14 @@ the naive recipe passed review elsewhere.
 Every expectation below was measured against the real Debian list
 (/usr/share/dict/ngerman, 276496 entries after recipe A) inside the container
 image the app ships on. The fixture in tests/fixtures/constituents_de.txt is the
-subset of that list whose entries occur inside the test inputs; the generator
-verified that the subset produces byte identical tokens for every input here, so
-the table is the behaviour of the real list, not of a convenient miniature. A
-developer machine has no Debian word list, and a test that skips itself when the
-list is missing is a test that never runs.
+union of two things: the entries of that list which occur inside one of the
+cases of tests/fixtures/compound_cases_de.txt, and the entries the suite already
+carried. The union is not believed, it is measured: scripts/dev/measure_compounds.sh
+--against tests/fixtures/constituents_de.txt runs the shipped chain over the
+fixture and over the full list and exits non zero on the first case whose tokens
+differ. So the table below is the behaviour of the real list, not of a convenient
+miniature. A developer machine has no Debian word list, and a test that skips
+itself when the list is missing is a test that never runs.
 
 Umlauts appear only inside string literals. They are data here, the words the
 product has to handle; the identifiers stay ASCII as the project rules require.
@@ -45,6 +48,11 @@ from findling.query.rewrite import build_query
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt"
 
+# The measured case list. Every word this module makes a claim about has to
+# stand in here, because a claim about a word that was never fed to the probe is
+# a claim about nothing.
+CASES = Path(__file__).resolve().parent / "fixtures" / "compound_cases_de.txt"
+
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 
 # The two places the normalisation helper may be called from, and no third. One
@@ -63,9 +71,21 @@ NAME_NFD = unicodedata.normalize("NFD", "Kündigung Grüße.pdf")
 # empty token list and the document becomes unfindable under any of its parts.
 RINDFLEISCH = "Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz"
 
-# Sixteen real administrative compounds with the tokens the full Debian list
-# produces. Fourteen of them become findable through one of their parts; the last
-# two are the honest limit of the recipe and are listed for exactly that reason.
+# The ASCII transcription of the first compound. Its own name because the two
+# spellings are one word to a reader and two different token lists to the index.
+GRUNDSTUECK_ASCII = "Grundstuecksverkehrsgenehmigung"
+
+# The twenty one everyday administrative compounds, with the tokens the full
+# Debian list produces for each of them. This is the regression guard, and it
+# guards both directions: a split that gets lost fails here just as loudly as a
+# split that gets invented, because every line names the tokens instead of
+# counting them. The seven single token lines are not decoration and not a
+# comment either, they are the honest limit of the recipe written down as an
+# assertion, so that a change which makes one of them splittable also has to say
+# so out loud. UNSPLIT below cannot do this work: in every one of the four
+# recipe variants measured in docs/measurements/2026-09-komposita-rezept-a/ all
+# ten of its words survive whole, so a suite that only checks precision waves
+# each of those variants through while recall falls apart.
 COMPOUNDS = [
     ("Grundstücksverkehrsgenehmigung", ["grundstuck", "verkehr", "genehm"]),
     ("Kündigungsfrist", ["kundig", "frist"]),
@@ -81,11 +101,20 @@ COMPOUNDS = [
     ("Dampfschifffahrt", ["dampfschiff", "fahrt"]),
     ("Aufenthaltserlaubnis", ["aufenthalt", "erlaubnis"]),
     ("Gewerbeanmeldung", ["gewerb", "anmeld"]),
-    # Eleven and thirteen characters, both stand in the list themselves, and a
-    # compound in the list is never split. "Mietvertrag" is not findable through
-    # "Vertrag". Documented in docs/german-analyzer.md, not a defect.
+    # The seven that do not come apart today, each with the one token it really
+    # produces. Six of them stand in the filtered list themselves, and an entry
+    # is never split, so "Mietvertrag" is not findable through "Vertrag".
     ("Mietvertrag", ["mietvertrag"]),
     ("Bebauungsplan", ["bebauungsplan"]),
+    ("Baugenehmigung", ["baugenehm"]),
+    ("Bauantrag", ["bauantrag"]),
+    # The seventh one is the case that does not explain itself through the list
+    # at all: "Baukosten" is no entry, but "bau" has three characters and MIN_LEN
+    # is four, so the lower bound alone keeps the word whole. Two independent
+    # locks, and reading only the entry column misses this one.
+    ("Baukosten", ["baukost"]),
+    ("Arbeitsvertrag", ["arbeitsvertrag"]),
+    ("Steuerbescheid", ["steuerbescheid"]),
 ]
 
 # Ten everyday words that must survive whole. A recipe that splits any of them
@@ -117,7 +146,7 @@ def german(constituents: list[str]) -> TextAnalyzer:
 
 
 @pytest.mark.parametrize(("text", "expected"), COMPOUNDS, ids=[text for text, _ in COMPOUNDS])
-def test_the_sixteen_compounds_produce_the_measured_tokens(
+def test_the_twenty_one_compounds_produce_the_measured_tokens(
     german: TextAnalyzer, text: str, expected: list[str]
 ) -> None:
     assert german.analyze(text) == expected
@@ -186,6 +215,36 @@ def test_documented_limit_d3_spelled_out_umlaut_does_not_meet_the_umlaut(german:
     assert german.analyze("Mueller") == ["muell"]
     assert german.analyze("Müller") == ["mull"]
     assert german.analyze("Mueller") != german.analyze("Müller")
+
+
+def test_the_transcribed_umlaut_costs_the_split_not_only_the_term(german: TextAnalyzer) -> None:
+    # The same word twice, once with the character and once with the two letters
+    # a keyboard without umlauts produces. Measured: the umlaut spelling comes
+    # apart into three parts, the transcription stays one thirty one character
+    # token, because the constituent list carries "grundstück" and not
+    # "grundstueck" and the splitter compares exactly.
+    #
+    # add_umlaut_variants of plan 02-09 does not reach this: it widens the
+    # question, and the index side has no counterpart to it. So a document that
+    # spells the compound this way is findable under the whole word only. Open
+    # question 5 of the phase research, and a named limit rather than a defect.
+    assert german.analyze(GRUNDSTUECK_ASCII) == ["grundstuecksverkehrsgenehm"]
+    assert german.analyze("Grundstücksverkehrsgenehmigung") == ["grundstuck", "verkehr", "genehm"]
+
+
+def test_every_asserted_word_stands_in_the_measured_case_list() -> None:
+    # The guard over the guard. Every word this module makes a claim about has to
+    # be a word the probe of plan 08-01 really ran, otherwise the table could
+    # grow a line that was never measured against the real Debian list and would
+    # still look exactly like the measured ones.
+    measured = set(CASES.read_text(encoding="utf-8").split())
+    asserted = [text for text, _ in COMPOUNDS] + [text for text, _ in UNSPLIT] + [GRUNDSTUECK_ASCII]
+
+    missing = sorted(word for word in asserted if word not in measured)
+
+    assert missing == [], (
+        f"asserted here but never measured, add to {CASES.name} and rerun scripts/dev/measure_compounds.sh: {missing}"
+    )
 
 
 def test_the_english_analyzer_folds_where_the_german_one_must_not(german: TextAnalyzer) -> None:

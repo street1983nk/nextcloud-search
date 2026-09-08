@@ -15,17 +15,26 @@ as ``fixture-subset.txt``, a second chain is built over exactly that subset, and
 the tokens of both chains are compared for every case. One difference and the
 probe fails, so a fixture that is not the list can no longer pass unnoticed.
 
-Security rule, carried unchanged from T-02-14: the probe reads exactly two
-files, the case list from the repository and the Debian word list of the image.
-It never reads state.db, never an index and never a user file, so nothing it
-prints can be user content. The words it prints are the cases of the repository
-and the entries of a published spelling dictionary.
+``--against LIST`` extends that comparison to a list the caller names, which is
+how the fixture of the test suite is checked rather than believed. The fixture
+is not the generated subset: it is the union of the subset with the entries the
+suite already carried, and adding entries to a constituent list is not a
+monotone operation. One more entry can send a split that used to succeed into a
+dead end, so the union has to be measured, and the only measurement that counts
+is one against the real Debian list inside the image the app ships on.
+
+Security rule, carried unchanged from T-02-14: the probe reads the case list of
+the repository, the Debian word list of the image, and with ``--against`` one
+further list that the caller names. It never reads state.db, never an index and
+never a user file, so nothing it prints can be user content. The words it prints
+are the cases of the repository and the entries of a published spelling
+dictionary.
 
 Run it through scripts/dev/measure_compounds.sh. A developer machine has no
 Debian word list, and a measurement that quietly falls back to a fixture is a
 measurement of the fixture.
 
-Usage: compound_probe.py CASES OUTPUT_DIR
+Usage: compound_probe.py [--against LIST] CASES OUTPUT_DIR
 """
 
 import sys
@@ -45,6 +54,10 @@ SUBSET_FILE = "fixture-subset.txt"
 NUMBERS_FILE = "kennzahlen.txt"
 
 HEADER = ("word", "chars", "in_ngerman", "entry_in_list", "tokens")
+
+AGAINST = "--against"
+
+USAGE = "compound_probe: usage: compound_probe.py [--against LIST] CASES OUTPUT_DIR"
 
 
 def _tokenise(constituents: Sequence[str], words: Sequence[str]) -> list[list[str]]:
@@ -109,14 +122,40 @@ def _numbers(
     return "\n".join(f"{name}={value}" for name, value in figures.items()) + "\n"
 
 
+def _differing(words: Sequence[str], left: Sequence[Sequence[str]], right: Sequence[Sequence[str]]) -> list[str]:
+    """Return the cases whose two token lists are not the same list."""
+    return [word for word, one, other in zip(words, left, right, strict=True) if one != other]
+
+
+def _report(words: Sequence[str], headline: str) -> None:
+    """Write a difference to stderr, headline first and then case by case."""
+    print(f"compound_probe: {headline}", file=sys.stderr)
+    for word in words:
+        print(f"compound_probe: differing case: {word}", file=sys.stderr)
+
+
+def _split_arguments(argv: Sequence[str]) -> tuple[Path | None, Path, Path] | None:
+    """Return the optional list to check, the case list and the output directory."""
+    rest = list(argv)
+    against: Path | None = None
+    if rest and rest[0] == AGAINST:
+        if len(rest) < 2:
+            return None
+        against = Path(rest[1])
+        rest = rest[2:]
+    if len(rest) != 2:
+        return None
+    return against, Path(rest[0]), Path(rest[1])
+
+
 def main(argv: Sequence[str]) -> int:
     """Write the three measurement files and prove the subset equals the list."""
-    if len(argv) != 2:
-        print("compound_probe: usage: compound_probe.py CASES OUTPUT_DIR", file=sys.stderr)
+    parsed = _split_arguments(argv)
+    if parsed is None:
+        print(USAGE, file=sys.stderr)
         return 2
 
-    cases_path = Path(argv[0])
-    out_dir = Path(argv[1])
+    against_path, cases_path, out_dir = parsed
     out_dir.mkdir(parents=True, exist_ok=True)
 
     words = cases_path.read_text(encoding=ENCODING).split()
@@ -133,16 +172,21 @@ def main(argv: Sequence[str]) -> int:
     (out_dir / SUBSET_FILE).write_text("\n".join(subset) + "\n", encoding=ENCODING)
     (out_dir / NUMBERS_FILE).write_text(_numbers(len(raw_lines), entries, subset, full_tokens), encoding=ENCODING)
 
-    differing = [
-        word
-        for word, produced, from_subset in zip(words, full_tokens, subset_tokens, strict=True)
-        if produced != from_subset
-    ]
+    differing = _differing(words, full_tokens, subset_tokens)
     if differing:
-        print("compound_probe: the subset does not tokenise like the full list", file=sys.stderr)
-        for word in differing:
-            print(f"compound_probe: differing case: {word}", file=sys.stderr)
+        _report(differing, "the subset does not tokenise like the full list")
         return 1
+
+    if against_path is not None:
+        # The named list, held against the real one case by case. Adding entries
+        # is not monotone, so a fixture that carries more than the subset has to
+        # be measured rather than assumed to be at least as good.
+        named = against_path.read_text(encoding=ENCODING).split()
+        named_differing = _differing(words, full_tokens, _tokenise(named, words))
+        if named_differing:
+            _report(named_differing, f"{against_path} does not tokenise like the full list")
+            return 1
+        print(f"compound_probe: {against_path} tokenises like the full list, {len(named)} entries")
 
     print(f"compound_probe: {len(words)} cases, {len(entries)} entries, {len(subset)} in the subset")
     return 0
