@@ -18,7 +18,22 @@ ever measured.
 | Half | Gates | Runs where |
 |---|---|---|
 | Python backend | ruff, ruff format, pyright basic, vulture, pytest | locally before every commit, and in `python.yml` |
+| Dev and CI scripts under `scripts/` | ruff and ruff format only, with `--config backend/pyproject.toml` | `python.yml`, same job as the backend gates |
 | PHP companion | `php -l`, the textual gates in `backend/tests/`, plus both integration jobs end to end | `php.yml` and `integration.yml`, CI only |
+
+The middle row is a **named limit**, added by the audit of phase 8. Until then
+`scripts/` fell through all four Python gates, because they run with
+`working-directory: backend` and because `[tool.pyright] include` and the
+`vulture` arguments name `src` and `tests`. That mattered: `scripts/dev` carries
+`build_corpus.py`, which the suite loads at run time, and `compound_probe.py`,
+whose output is the measurement ground of the German analysis chain.
+
+pyright and vulture are deliberately **not** part of that row. A dev script
+reaches its dependencies over `sys.path` instead of over an installed package,
+so pyright reports unresolved imports that say nothing about the code, and
+vulture would flag every entry point a human calls by hand. Whoever turns
+`scripts/` into a package should revisit both; until then the limit is written
+down here rather than discovered again.
 
 The reason for the difference is not a decision, it is the development machine:
 there is no PHP and no composer on it, and the local system Python is broken

@@ -6,19 +6,22 @@ on:
   push:
     paths:
       - 'backend/**'
-      - 'scripts/dev/build_corpus.py'
+      - 'scripts/**'
+      # Two reasons for the second line, and both are load bearing.
       # backend/tests/test_corpus_terms.py and backend/tests/test_ocr_quality.py
       # load scripts/dev/build_corpus.py at run time and read FILES,
       # _searchable_text and UNIQUE_TERMS out of it, so a commit that touches
       # only that script can turn the suite red. integration.yml has carried the
       # file in its path list since phase 3 for the same reason. Without this
       # line the breakage surfaces on the next commit that happens to touch
-      # backend/** and is blamed on the wrong one.
+      # backend/** and is blamed on the wrong one. And since this workflow also
+      # lints scripts/ with the rule set of the backend, a filter narrower than
+      # the thing it checks would be a gate that cannot see its own subject.
       - '.github/workflows/python.yml'
   pull_request:
     paths:
       - 'backend/**'
-      - 'scripts/dev/build_corpus.py'
+      - 'scripts/**'
       - '.github/workflows/python.yml'
   # The measurement job below runs on these two only. It costs minutes and it
   # guards no regression, it produces a number, so it has no business in the loop
@@ -80,6 +83,35 @@ jobs:
 
       - name: Dead code
         run: uv run vulture src tests --min-confidence 80
+
+      # The gates above all run with working-directory: backend, and
+      # [tool.pyright] include and the vulture arguments name src and tests, so
+      # until this step existed the Python files under scripts/ fell through
+      # every one of the four. That is not a small corner: scripts/dev carries
+      # build_corpus.py, which the suite loads at run time, and
+      # compound_probe.py, whose output is the measurement ground of the German
+      # analysis chain. A typo in either of them reached the documentation
+      # before anything looked at it.
+      #
+      # --config is not decoration. ruff resolves its configuration by walking
+      # up from the file it is checking, there is no pyproject.toml at the
+      # repository root, and without the option ruff would silently fall back to
+      # its own small default rule set: the step would be green and would mean
+      # almost nothing. Naming the file the backend already uses is what makes
+      # this the same rule set, not a second one that can drift.
+      #
+      # Deliberately ruff only, no pyright and no vulture, and that is a
+      # documented limit rather than an oversight. A dev script reaches its
+      # dependencies over sys.path rather than over an installed package, so
+      # pyright reports unresolved imports for scripts/dev/vector_distances.py
+      # that say nothing about the code, and vulture would flag every entry
+      # point a human calls by hand. Both are worth revisiting if scripts/ ever
+      # grows a package; ruff and the formatter are what these files need today.
+      - name: Lint the scripts, with the rule set of the backend
+        run: uv run ruff check --config pyproject.toml ../scripts
+
+      - name: Format check the scripts
+        run: uv run ruff format --config pyproject.toml --check ../scripts
 
       # The gate of DI-06.1-31, named after what it prevents and run before the
       # suite it is also part of. The duplication is the point: the Office bug of
