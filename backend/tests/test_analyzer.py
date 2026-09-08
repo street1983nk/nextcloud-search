@@ -428,3 +428,155 @@ def test_the_implementation_of_the_helper_is_not_counted_as_a_caller() -> None:
     source = 'def normalize(text):\n    return unicodedata.normalize("NFC", text)\n'
 
     assert normalize_callers("index/analyzer.py", source) == []
+
+
+# -- the order of the filters, read off the syntax tree ----------------------
+#
+# The table at the top of this file asserts what the chain produces today. It
+# goes red when the splitter disappears, and it would also go red for a hundred
+# other reasons, so it never says which position of the chain moved. The guard
+# below says exactly that: it reads the chain out of the source of
+# index/analyzer.py and holds its order, so pulling a filter past its neighbour
+# is a failure of its own and not a puzzle in a token table.
+#
+# Reading the tree rather than the text is what makes the guard trustworthy. A
+# comment that names a filter is not part of the tree, so prose about the chain
+# cannot hold the guard green while the chain itself is gone.
+
+# The source the guard reads. The file and not the imported module, because a
+# built analyser tells nobody in which order it was built.
+ANALYZER_SOURCE = PACKAGE_ROOT / "index" / "analyzer.py"
+
+# The shipped German order. Three of its neighbourships are load bearing, and
+# every one of them was measured; the test below names them.
+EXPECTED_GERMAN_CHAIN = [
+    "lowercase",
+    "split_compound",
+    "custom_stopword",
+    "stopword",
+    "remove_long",
+    "stemmer",
+]
+
+# The file name chain, held so that the guard has to tell two chains apart.
+EXPECTED_NAME_CHAIN = ["lowercase", "ascii_fold", "remove_long"]
+
+
+def _factory_names(build: ast.Call) -> list[str]:
+    """Walk a builder chain from its build() call inwards and name the filters.
+
+    The chain is one nested expression, so the outermost call is ``build()`` and
+    the innermost is the builder itself. Walking outside in and reversing at the
+    end is what turns that nesting back into the order the filters run in.
+    """
+    names: list[str] = []
+    node: ast.expr = build
+    while isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        if node.func.attr == "filter" and node.args:
+            factory = node.args[0]
+            if isinstance(factory, ast.Call) and isinstance(factory.func, ast.Attribute):
+                names.append(factory.func.attr)
+        node = node.func.value
+    names.reverse()
+    return names
+
+
+def filter_chain(source: str, function: str) -> list[str]:
+    """Return the filters of one analyser factory, in the order they run.
+
+    ``Filter.lowercase()`` becomes ``"lowercase"``. Only the syntax tree is read,
+    exactly as :func:`normalize_callers` above does it, so neither a docstring
+    nor a comment that names a filter can put one into the list. A function this
+    source does not define, or one that builds no chain, gives the empty list.
+    """
+    for definition in ast.walk(ast.parse(source)):
+        if not isinstance(definition, ast.FunctionDef) or definition.name != function:
+            continue
+        for call in ast.walk(definition):
+            if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.func.attr == "build":
+                return _factory_names(call)
+    return []
+
+
+def test_the_german_chain_stands_in_the_measured_order() -> None:
+    # Three positions carry the recipe, and each of them was measured rather
+    # than reasoned about.
+    # lowercase before the splitter: everything after it compares strings byte
+    # for byte and the constituent list is lowercase, so without it the splitter
+    # does not fire at all, and it fails silently while shallow tests stay green.
+    # remove_long after the splitter: in front of it the 63 character compound
+    # becomes the empty token list and the document is findable under none of its
+    # six parts, which is the mistake tantivy's own default analyzer makes.
+    # stemmer last: a stemmed compound matches no entry of the list any more, so
+    # a splitter behind it would have nothing left to find.
+    chain = filter_chain(ANALYZER_SOURCE.read_text(encoding="utf-8"), "german_analyzer")
+
+    assert chain == EXPECTED_GERMAN_CHAIN
+
+
+def test_the_guard_tells_two_chains_apart() -> None:
+    # Without this, a guard that always returned the same list would look green
+    # for the German chain and prove nothing at all.
+    chain = filter_chain(ANALYZER_SOURCE.read_text(encoding="utf-8"), "name_analyzer")
+
+    assert chain == EXPECTED_NAME_CHAIN
+
+
+def test_the_guard_sees_a_missing_splitter() -> None:
+    source = (
+        "def german_analyzer(constituents):\n"
+        "    return (\n"
+        "        TextAnalyzerBuilder(Tokenizer.simple())\n"
+        "        .filter(Filter.lowercase())\n"
+        "        .filter(Filter.custom_stopword(list(FUGEN)))\n"
+        '        .filter(Filter.stopword("german"))\n'
+        "        .filter(Filter.remove_long(MAX_TOKEN_CHARS))\n"
+        '        .filter(Filter.stemmer("german"))\n'
+        "        .build()\n"
+        "    )\n"
+    )
+
+    chain = filter_chain(source, "german_analyzer")
+
+    assert "split_compound" not in chain
+    assert chain != EXPECTED_GERMAN_CHAIN
+
+
+def test_the_guard_sees_remove_long_pulled_in_front_of_the_splitter() -> None:
+    # The anti pattern with a name. The token table alone would report this as
+    # "the 63 character compound is suddenly empty" and leave the reader to work
+    # out why; the guard reports the filter that moved.
+    source = (
+        "def german_analyzer(constituents):\n"
+        "    return (\n"
+        "        TextAnalyzerBuilder(Tokenizer.simple())\n"
+        "        .filter(Filter.lowercase())\n"
+        "        .filter(Filter.remove_long(MAX_TOKEN_CHARS))\n"
+        "        .filter(Filter.split_compound(list(constituents)))\n"
+        "        .filter(Filter.custom_stopword(list(FUGEN)))\n"
+        '        .filter(Filter.stopword("german"))\n'
+        '        .filter(Filter.stemmer("german"))\n'
+        "        .build()\n"
+        "    )\n"
+    )
+
+    chain = filter_chain(source, "german_analyzer")
+
+    assert chain.index("remove_long") < chain.index("split_compound")
+    assert chain != EXPECTED_GERMAN_CHAIN
+
+
+def test_a_comment_that_names_a_filter_does_not_enter_the_chain() -> None:
+    source = (
+        "def german_analyzer(constituents):\n"
+        "    # split_compound used to stand here, see Filter.split_compound below.\n"
+        "    return (\n"
+        "        TextAnalyzerBuilder(Tokenizer.simple())\n"
+        "        .filter(Filter.lowercase())\n"
+        "        .build()\n"
+        "    )\n"
+    )
+
+    chain = filter_chain(source, "german_analyzer")
+
+    assert chain == ["lowercase"]
