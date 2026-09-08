@@ -55,7 +55,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Faellt die Engine aus oder fehlt das Modell, liefert die Suche unveraendert Volltexttreffer statt eines Fehlers, und der Admin sieht den Zustand in der Diagnose
   4. Der Speicherunterschied zum Stand 1.0.x ist auf amd64 als Zahl belegt und benennt ausdruecklich, an welcher Stelle er anfaellt (Grundlast, Suchphase oder Gesamtspitze)
 
-**Plans**: TBD
+**Plans**: 4 Plaene in 4 Wellen
+
+Plans:
+- [ ] 07-01-PLAN.md , Beleg EFF-01 und EFF-02 im Messbericht, ohne Produktionscode (Welle 1)
+- [ ] 07-02-PLAN.md , die amd64-Kaltstartzahl ueber den echten PHP-Weg und das Rueckschritt-Tor (Welle 2)
+- [ ] 07-03-PLAN.md , die Grundlast-Restluecke aus Tokenizer und Splitter, gemessen mit Abbruchbedingung (Welle 3)
+- [ ] 07-04-PLAN.md , der Engine-Zustand in der Diagnose, Kriterium 3 ganz statt halb (Welle 4)
 
 ### Phase 8: Deutsche Komposita ohne Behelf
 
@@ -125,7 +131,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 7. Gemeinsame Embedding-Engine | 0/? | Not started | - |
+| 7. Gemeinsame Embedding-Engine | 0/4 | Planned | - |
 | 8. Deutsche Komposita ohne Behelf | 0/? | Not started | - |
 | 9. Eigene Ergebnisseite | 0/? | Not started | - |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
