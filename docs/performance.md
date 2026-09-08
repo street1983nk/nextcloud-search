@@ -3129,14 +3129,16 @@ Abschnitt 7.
 2. Eine zweite Instanzform. Alles hier ist All-in-One.
 3. Deckungsgrad und Trefferqualität. Der Bestand ist der aus 06-11, unverändert.
 
-## Die eine Engine: der Beleg zu EFF-01
+## Die eine Engine: der Beleg zu EFF-01 und EFF-02
 
 Der Abschnitt darüber misst, was der Fix an der zweiten Modellinstanz gebracht
 hat. Was dort fehlt, ist der Beleg selbst: welche Aufrufstellen im
 ausgelieferten Container eine Embedding-Instanz brauchen, woher jede von ihnen
 sie zieht, und woran die Aussage "pro Prozess höchstens einmal geladen" hängt.
 Dieser Abschnitt schreibt das zusammen, mit Datei und Zeile gegen den Stand vom
-08.09.2026, und er sagt am Ende ausdrücklich, was die Zusage **nicht** umfasst.
+08.09.2026. Danach stellt er die Kaltstartzahl aus EFF-02 neben die Grenze,
+gegen die sie wirklich läuft, und er sagt an beiden Stellen ausdrücklich, was
+die Zusage **nicht** umfasst.
 
 ### Wer im Container eine Engine braucht, und woher sie kommt
 
@@ -3226,10 +3228,10 @@ Dass dieses Tor rot werden kann, ist bewiesen und nicht behauptet.
 `test_it_goes_red_when_the_word_list_is_read_a_second_time` (Zeile 198) und
 `test_it_goes_red_when_the_search_never_reaches_the_model` (Zeile 212).
 
-### Was "eine Engine" nicht heisst
+### Was "eine Engine" nicht heißt
 
-"Eine Engine" heisst **eine `EmbeddingModel`-Instanz**, also ein Satz Gewichte
-und eine onnxruntime-Sitzung. Es heisst **nicht** "ein Tokenizer-Objekt im
+"Eine Engine" heißt **eine `EmbeddingModel`-Instanz**, also ein Satz Gewichte
+und eine onnxruntime-Sitzung. Es heißt **nicht** "ein Tokenizer-Objekt im
 Prozess". Davon gibt es mindestens zwei, und zwar mit voller Absicht.
 
 `Tokenizer.enable_truncation` ist eine Eigenschaft des Objekts. Eine geteilte
@@ -3245,19 +3247,130 @@ Wer diese Trennung aufhebt, spart ein Tokenizer-Objekt und halbiert dafür jedes
 Dokument über 512 Token. Der Beleg oben deckt diesen Fall nicht ab, weil er ihn
 nicht abdecken soll.
 
+### Die erste Suche nach einem Containerstart: der Beleg zu EFF-02
+
+Die erste Handlung des Laufs `64-spitze.sh` war genau eine semantische Suche
+gegen einen Container, der in diesem Start noch nie eine gesehen hatte. Sie lief
+über die OCS-Route, also über Apache, HaRP und AppAPI, und damit über den Weg
+eines Nutzers und nicht über einen Aufruf in den Container hinein.
+
+| Größe | Wert | Rohdatei |
+|---|---|---|
+| Anfragen | 3, davon die erste kalt | `rohdaten/64-stufe-01.json` |
+| Fehler | 0 | ebenda |
+| p50 | 465,3 ms | ebenda |
+| **p95, hier gleich max** | **1.332,1 ms** | ebenda |
+| Budget | 2.500 ms, `p95_within_budget: true` | ebenda |
+| Warme Entsprechung, gleiche Box, 10 Runden, 10 Anfragen, 0 Fehler | p95 481,6 ms | `rohdaten/67-stufe-1.json` |
+
+**Der Kaltstartaufschlag von rund 850 ms ist eine Rechnung und keine Messung.**
+Die Rechnung steht hier, damit sie prüfbar bleibt: 1.332,1 ms minus 481,6 ms
+sind 850,5 ms. Auf der einen Seite stehen drei kalte Anfragen, auf der anderen
+zehn warme, aus zwei Läufen im Abstand von knapp drei Minuten. Die Richtung
+dieser Zahl ist belastbar, die zweite Nachkommastelle ist es nicht.
+
+Der Aufschlag passt zur Speicherbeobachtung derselben Sekunde. `anon` steht
+unmittelbar vor der ersten Suche auf 694,3 MB und unmittelbar danach auf
+1.116,6 MB, springt also um 422,3 MB (`rohdaten/64-spitze.txt`), und das sind die
+Gewichte, einmal.
+
+### Was "nach Leerlauf" heute bedeuten kann
+
+EFF-02 spricht von der ersten semantischen Suche "nach Leerlauf". Es gibt im
+Code keinen Pfad, der eine geladene Engine wieder freigibt: `_ENGINE` wird nur
+ersetzt, wenn sich `embed_model_dir` ändert
+(`backend/src/findling/embed/engine.py:74`), und `EmbeddingModel._engine` wird
+nach einem erfolgreichen Laden nie wieder auf `None` gesetzt, denn selbst ein
+geworfener Lauf behält die Engine ausdrücklich
+(`backend/src/findling/embed/model.py:385-392`).
+
+**Deshalb hat "erste Suche nach Leerlauf" heute genau eine nichttriviale Lesart:
+die erste Suche nach einem Containerstart.** Genau die ist oben gemessen. Ohne
+diese Festlegung misst das Kriterium einen Zustand, den das Produkt nicht kennt.
+
+Eine zweite, kleinere Lesart bleibt benannt: nach langem Leerlauf können der
+Tantivy-Index und die `vectors.db` aus dem Seitencache gefallen sein, und der
+Brute-Force-Scan liest sie neu. Dafür gibt es das Kaltscan-Muster aus
+`.github/workflows/measure.yml`, Schritt "C, scan latency", das kalte und warme
+Scanlatenz mit `drop_caches` bereits trennt. Diese Lesart ist in dieser Phase
+nicht gemessen.
+
+### Die Grenze, an der eine kalte Suche zuerst reißt
+
+Das 2.500-ms-Budget ist nicht die Schranke, gegen die der Kaltstartaufschlag
+zuerst läuft. Es sind zwei Zahlen, und sie messen verschiedene Dinge:
+
+| Konstante | Datei und Zeile | Was sie deckelt |
+|---|---|---|
+| `BUDGET_NANOSECONDS = 2_500_000_000` | `php/lib/Search/Provider.php:57` | die Wanduhr der **ganzen Ergebnisgruppe** |
+| `REQUEST_TIMEOUT_SECONDS = 1.5` | `php/lib/Service/ExAppService.php:89` | die Decke **eines einzelnen** Containeraufrufs |
+
+Zusätzlich schrumpft jeder Aufruf auf das, was von der Wanduhr übrig ist:
+`secondsLeft($deadline)` reist als Argument mit (`Provider.php:258` für die
+Kandidaten, `:412` für die Ausschnitte, die Methode selbst bei `:504`), und
+`ExAppService::call` nimmt davon das Minimum gegen die eigene Decke
+(`ExAppService.php:616`). Eine Suche macht zwei Aufrufe, und der erste steht in
+einer Schleife, die mehrfach laufen kann, wenn der Rechteabgleich Treffer einer
+Seite entfernt (`Provider.php:248-258`).
+
+Das Laden steht unter dem Lock (`backend/src/findling/embed/model.py:369`), also
+warten gleichzeitige Suchen hinter genau einem Laden und nicht jede hinter ihrem
+eigenen. Die 1.332,1 ms oben sind einschließlich PHP-Weg gemessen, der Aufruf
+ist also nicht abgeschnitten worden. Die Marge zur Aufrufdecke ist aber kleiner
+als die Marge zum Gruppenbudget, und sie schrumpft mit der Nebenläufigkeit:
+
+| Stufe | warm p95, gemessen | plus 850 ms Laden | gegen 2.500 ms |
+|---|---|---|---|
+| 1 | 481,6 ms | 1.332,1 ms (**gemessen**) | hält |
+| 4 | 1.009,4 ms | rund 1.859 ms | hält knapp |
+| 8 | 1.915,0 ms | rund 2.765 ms | **gerissen** |
+
+**Diese Tabelle ist eine Rechnung und keine Messreihe.** Gemessen ist allein die
+erste Zeile; die warmen p95 stammen aus `rohdaten/67-stufe-4.json` und
+`rohdaten/67-stufe-8.json`, der Aufschlag ist die gerechnete Zahl von oben. Und
+sie beschreibt keinen heutigen Fehler: weil das Modell genau einmal je
+Prozessleben lädt, trifft der Fall "kalt und acht gleichzeitige Suchen" nur den
+ersten Augenblick nach einem Containerstart. Sie ist aber die entscheidende Zahl
+gegen jede Form von Modell-Entladung.
+
+### Modell-Entladung nach Leerlauf: nein, mit drei Zahlen
+
+Die Idee steht in `.planning/REQUIREMENTS.md` unter "Future Requirements" als
+Alternative zu EFF-01, "nur falls die gemeinsame Engine nicht reicht". Sie wurde
+in Plan 06.1-02 schon einmal als Bauform B verworfen, damals mit einem Argument
+und ohne Zahlen. Die Nachmessung liefert die Zahlen nach:
+
+1. **Sie senkt die Gesamtspitze nicht.** Die Spitze des Laufs liegt bei
+   1.812,7 MB und gehört der OCR-Phase, und in dieser Phase läuft die Einbettung
+   mit: die 4,3 s je Datei sind einschließlich Abholen, OCR, Einbettung und
+   Schreiben gemessen. Ein Entladetimer entlädt genau dann nichts.
+2. **Sie senkt die Grundlast kaum.** Von den 693,4 MB Grundlast gehören null MB
+   den Modellgewichten: Schritt `13-modell-objekt-gebaut-lazy` der
+   Aufschlüsselung kostet 0,0 MB (`rohdaten/63-grundlast.txt`), und die Gewichte
+   kommen erst bei der ersten Einbettung. Was entladbar wäre, ist nicht das, was
+   im Leerlauf liegt.
+3. **Sie kostet EFF-02 unmittelbar.** Jedes Entladen macht die nächste Suche
+   wieder zur kalten Suche, mit rund 850 ms Aufschlag, unter einem Lock, gegen
+   eine Aufrufdecke von 1,5 s und ein Gruppenbudget von 2.500 ms. Die Tabelle
+   darüber rechnet für acht gleichzeitige Suchen ein gerissenes Budget aus.
+
+**Die Modell-Entladung bleibt damit in "Future Requirements" und wird in diesem
+Milestone nicht mehr geplant.**
+
 ### Der Stand der Zahlen, und was hier nicht steht
 
 Die Ersparnis der gemeinsamen Engine ist an zwei Stellen gemessen, und die
-beiden Zahlen sind verschieden gross, weil sie verschiedene Dinge messen: in der
+beiden Zahlen sind verschieden groß, weil sie verschiedene Dinge messen: in der
 Phase der ersten semantischen Suche sind es **712,6 MB** (1.837,8 gegen
 1.125,2 MB), an der Gesamtspitze des Laufs nur **25,1 MB** (1.837,8 gegen
 1.812,7 MB). Der Grund steht im Abschnitt darüber: die Gesamtspitze gehört
 inzwischen der OCR-Phase. Beide Zahlen stammen aus der Nachmessung vom
 07.09.2026 auf arm64 und sind auf eine Nachkommastelle gerundet.
 
-Was dieser Abschnitt nicht belegt: die amd64-Entsprechung dieser Zahlen liefert
-Plan 07-02, und der Vergleich Zeile für Zeile gegen die v1.0-Grundlinie gehört
-Phase 10.
+Was dieser Abschnitt nicht belegt: alle Zahlen hier, die Speicherzahlen wie die
+Latenzzahlen, sind auf arm64 gemessen. Die amd64-Entsprechung liefert Plan
+07-02, und der Vergleich Zeile für Zeile gegen die v1.0-Grundlinie, mit einem
+p95 über den vollen Bestand, gehört Phase 10.
 
 ## Was der Test gekostet hat
 
