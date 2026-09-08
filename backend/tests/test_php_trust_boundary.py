@@ -514,6 +514,123 @@ def test_exapp_required_on_an_admin_route_is_reported() -> None:
     assert "index()" in violations[0]
 
 
+# -- self tests: the third class, the user page ----------------------------
+
+_USER_PAGE = """<?php
+
+class PageController extends Controller {
+\t/**
+\t * A docblock, so that the attribute walk has a wall to stop at.
+\t */
+\t#[\\OCP\\AppFramework\\Http\\Attribute\\NoAdminRequired]
+\t#[\\OCP\\AppFramework\\Http\\Attribute\\NoCSRFRequired]
+\t#[\\OCP\\AppFramework\\Http\\Attribute\\FrontpageRoute(verb: 'GET', url: '/')]
+\tpublic function index(): TemplateResponse {
+\t\treturn new TemplateResponse(Application::APP_ID, 'search');
+\t}
+}
+"""
+
+
+def _user_page_without(attribute: str) -> str:
+    """The clean user page sample with one of its two mandatory attributes gone."""
+    line = f"\t#[\\OCP\\AppFramework\\Http\\Attribute\\{attribute}]\n"
+    assert line in _USER_PAGE, f"{attribute} is not spelled the way this helper removes it"
+    return _USER_PAGE.replace(line, "", 1)
+
+
+def _user_page_carrying(attribute: str) -> str:
+    """The clean user page sample with one more attribute above the same method."""
+    marker = "\t#[\\OCP\\AppFramework\\Http\\Attribute\\FrontpageRoute"
+    replacement = f"\t#[\\OCP\\AppFramework\\Http\\Attribute\\{attribute}]\n{marker}"
+    return _USER_PAGE.replace(marker, replacement, 1)
+
+
+def test_a_clean_user_page_route_is_clean() -> None:
+    # The counter sample of the four below, and the proof that the class is
+    # entered at all: without it a gate that reported every user page as broken
+    # would pass all four failure tests as well.
+    routes = routes_of("PageController.php", _USER_PAGE)
+
+    assert scan_source("PageController.php", _USER_PAGE) == []
+    assert len(routes) == 1
+    assert routes[0].kind == "userpage"
+
+
+def test_a_user_page_without_no_admin_required_is_reported() -> None:
+    # This is the shape the admin class erodes in, and the reason both lowering
+    # attributes are mandatory rather than merely allowed. The sample carries
+    # FrontpageRoute and NoCSRFRequired, so the attribute combination already
+    # puts it in the third class, and the rule that fires is the new one: a
+    # mandatory attribute is missing, so this is a half lowered admin route and
+    # not a page. Whichever of the two rules catches it, it is never green.
+    routes = routes_of("PageController.php", _user_page_without("NoAdminRequired"))
+    violations = scan_source("PageController.php", _user_page_without("NoAdminRequired"))
+
+    assert len(routes) == 1
+    assert len(violations) == 1
+    assert "NoAdminRequired" in violations[0]
+    assert "half lowered admin route" in violations[0]
+    assert "index()" in violations[0]
+
+
+def test_a_user_page_without_no_csrf_required_is_reported() -> None:
+    # The mirror image, and the one that would otherwise look harmless: a page
+    # that keeps the token requirement is not a security problem, it is a page
+    # that is half in one class and half in the other, and the gate has no rule
+    # it could judge such a route by. So it names the missing half.
+    violations = scan_source("PageController.php", _user_page_without("NoCSRFRequired"))
+
+    assert len(violations) == 1
+    assert "NoCSRFRequired" in violations[0]
+    assert "half lowered admin route" in violations[0]
+    assert "index()" in violations[0]
+
+
+def test_public_page_on_a_user_page_route_is_reported() -> None:
+    # The one attribute the third class shares with the admin class as a
+    # prohibition. NoAdminRequired lowers the page from an admin to any logged
+    # in account, which is what it is for; PublicPage lowers it past the login
+    # altogether, and the result page renders what one account may read.
+    violations = scan_source("PageController.php", _user_page_carrying("PublicPage"))
+
+    assert len(violations) == 1
+    assert "PublicPage" in violations[0]
+    assert "index()" in violations[0]
+
+
+def test_exapp_required_on_a_user_page_route_is_reported() -> None:
+    # Pitfall 7 again, one class further along: the attribute would point the
+    # protection the wrong way round here too, locking out the browser session
+    # the page exists for and letting in every registered container instead.
+    violations = scan_source("PageController.php", _user_page_carrying("ExAppRequired"))
+
+    assert len(violations) == 1
+    assert "ExAppRequired" in violations[0]
+    assert "index()" in violations[0]
+
+
+def test_the_admin_class_did_not_get_softer() -> None:
+    """The claim the third class was built on, held against the list itself.
+
+    The class is a construction of the phase 9 research (assumption A6), and its
+    whole justification is that it adds a class instead of shortening the admin
+    list. That sentence is worth exactly as much as the test that goes red when
+    somebody shortens the list anyway, which is a one line diff that reads like
+    a tidy up and unlocks every settings route of this app.
+
+    The expectation is written out here rather than derived from the constant,
+    because a comparison of a constant against itself passes whatever it says.
+    """
+    assert set(FORBIDDEN_ON_ADMIN_ROUTE) == {
+        "NoAdminRequired",
+        "PublicPage",
+        "NoCSRFRequired",
+        "ExAppRequired",
+    }
+    assert len(FORBIDDEN_ON_ADMIN_ROUTE) == 4
+
+
 def test_a_method_without_the_route_attribute_is_not_judged() -> None:
     # The private helpers of every controller are methods too, and they carry
     # neither attribute nor guard. Judging them would make the gate unusable and
