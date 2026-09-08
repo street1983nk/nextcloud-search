@@ -1464,12 +1464,19 @@ class Poller:
 
         The eager half. It opens the stock and answers one cheap question about
         the model directory, and it does not read a single artifact. Two things
-        can go wrong here and both are a state of an installation rather than a
-        defect: the sqlite-vec extension is not loadable on this build or the
-        volume has no vector database and cannot get one, and the third, a
-        missing model directory, is the ordinary case outside the shipping
-        image. Any of them switches the track off for this process instead of
-        ending the pass.
+        can go wrong here and neither is a defect: the sqlite-vec extension is
+        not loadable on this build or the volume has no vector database and
+        cannot get one, and separately from both, the model directory is empty,
+        which is the ordinary case outside the shipping image.
+
+        **The two failures are not the same failure, and since bug audit
+        MEDIUM-5 of plan 07-05 they do not share an answer either.** A stock
+        that cannot be opened switches the whole track off; there is nothing to
+        write vectors into and nothing to take them out of. A missing model
+        locks the cutter and nothing else: the stock is opened, it stays open,
+        and the delete path keeps reaching it. Before that the missing model
+        closed the stock as well, and this docstring already promised the
+        opposite one paragraph down.
 
         **The stock stays here and does not travel to the back.** ``_open``
         hands this handle to ``attach_vectors`` one line further down, and the
@@ -1477,7 +1484,10 @@ class Poller:
         tombstone has to take the vectors of its file with it (D-21). A stock
         opened as late as the tokenizer would leave that path pointing at None,
         and nothing would fail until a deleted file kept answering semantic
-        queries.
+        queries. The same sentence is what makes the missing model a lock on the
+        cutter and not a reason to close the handle: an instance that carried
+        vectors from an image with a model, and then ran an image without one,
+        would otherwise keep answering semantic queries for files that are gone.
 
         **The tokenizer and the splitter do not stay here, and that is plan
         07-03.** They cost 265,8 MB and 273,5 MB of resident memory on amd64,
@@ -1493,17 +1503,9 @@ class Poller:
         It runs on the first pass, off the event loop with the rest of ``_open``.
         """
         resolved = settings()
-        stock: VectorStore | None = None
         try:
             stock = open_vectors(resolved.vectors_db)
-            if not artifacts_present(resolved.embed_model_dir):
-                # Two stats, and they are what keeps the promise of
-                # _embed_ready honest now that having built the cutter is no
-                # longer the thing that proves it can be built.
-                raise FileNotFoundError(resolved.embed_model_dir)
         except Exception as error:
-            if stock is not None:
-                stock.close()
             # The type name and nothing else, the rule of every log line in this
             # module. Once per process, because this runs once per process.
             LOGGER.warning(
@@ -1513,6 +1515,19 @@ class Poller:
             return
 
         self._vectors = stock
+
+        # Two stats, outside the try because they are not a failure of anything.
+        # They keep the promise of _embed_ready honest now that having built the
+        # cutter is no longer the thing that proves it can be built, and the
+        # answer they give locks the cutter alone: the stock above stays open
+        # for the delete path of D-21.
+        if not artifacts_present(resolved.embed_model_dir):
+            LOGGER.warning(
+                "no embedding model in this container, the second track stays off and the search answers "
+                "lexically; the vector stock stays open so a deletion still takes its vectors with it"
+            )
+            return
+
         self._cutter_absent = False
 
     def _build_the_cutter(self) -> bool:

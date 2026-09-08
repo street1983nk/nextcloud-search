@@ -1480,13 +1480,20 @@ def test_a_container_that_can_build_the_cutter_promises_the_track_before_it_is_b
             worker._vectors.close()
 
 
-def test_a_container_without_the_artifacts_promises_nothing_and_keeps_no_stock(
+def test_a_container_without_the_artifacts_promises_nothing_and_keeps_the_stock(
     lazy_track: _Built, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The ordinary container outside the shipping image. The eager half is
     # allowed one stat and has to use it: a track that promised readiness here
     # would hand rows to a spur that cannot run, and they would be claimed,
     # answered, claimed again and written off as failed(repeatedly_stuck).
+    #
+    # And the stock stays open all the same, which is bug audit MEDIUM-5 of plan
+    # 07-05. The missing model locks the cutter and nothing else: an instance
+    # that carried vectors from an image with a model and then ran an image
+    # without one would otherwise keep answering semantic queries for files that
+    # have been deleted, because the delete path of D-21 reaches the stock
+    # through this very handle.
     empty = tmp_path / "no-model"
     empty.mkdir()
     monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", str(empty))
@@ -1494,10 +1501,48 @@ def test_a_container_without_the_artifacts_promises_nothing_and_keeps_no_stock(
 
     worker = Poller()
     worker._wire_the_second_track()
+    try:
+        assert worker._embed_ready is False, "no artifacts, so no row may be handed over"
+        assert worker._vectors is not None, "the stock stays open for the delete path of D-21"
+        assert worker._cutter_absent is True, "and the no about the cutter is the permanent one"
+        assert lazy_track.tokenizer == 0
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
 
-    assert worker._embed_ready is False, "no artifacts, so no row may be handed over"
-    assert worker._vectors is None
-    assert lazy_track.tokenizer == 0
+
+def test_a_container_without_the_artifacts_still_takes_the_vectors_off_a_tombstone(
+    lazy_track: _Built, store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The reason the case above asserts a handle rather than a field: D-21 over
+    # the container that has no model at all. Nothing here can embed anything,
+    # and a deletion still has to take the vectors of its file with it, or a
+    # file that is gone keeps answering semantic queries on the next instance
+    # that does have a model.
+    empty = tmp_path / "no-model"
+    empty.mkdir()
+    monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", str(empty))
+    settings.cache_clear()
+    monkeypatch.setattr(poller_module, "_open_state", lambda: store)
+    monkeypatch.setattr(poller_module, "_open_writer", lambda _store, *, vectors: writer)
+
+    worker = Poller(
+        client_factory=lambda: cast("AsyncNextcloudApp", object()),
+        gateway_factory=lambda: cast("Any", _FakeGatewayClient()),
+        queue_factory=lambda nc: cast("Any", _FakeQueue(ClaimResult(jobs=()))),
+    )
+    try:
+        worker._open()
+        stock = worker._vectors
+        assert stock is not None
+        _fill(stock, 4711)
+
+        store.tombstone(4711)
+
+        assert stock.chunks_of([4711]) == {}, "the delete path found no handle, which is D-21"
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
 
 
 async def test_a_build_that_fails_at_the_first_row_acknowledges_it_and_stops_the_handover(
