@@ -1,16 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: "**Goal**: Die Betriebsversprechen sind auf echter Zielhardware belegt statt behauptet, und v1.0"
-status: milestone_complete
-stopped_at: Milestone complete (06-12 Store-Abgabe DONE, Findling 1.0.0 im Store 2026-09-07)
-last_updated: 2026-09-07T14:54:33.731Z
-last_activity: 2026-09-07 -- 06-12 Store-Abgabe: v1.0.0 eingereicht und im Store
+milestone: v1.1
+milestone_name: Qualitaet und Effizienz
+status: planning
+last_updated: "2026-09-08T08:57:24.398Z"
+last_activity: 2026-09-08
 progress:
-  total_phases: 3
+  total_phases: 0
   completed_phases: 0
-  total_plans: 52
-  completed_plans: 102
+  total_plans: 0
+  completed_plans: 0
   percent: 0
 ---
 
@@ -25,62 +24,10 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 
 ## Current Position
 
-**STORE-ABGABE ERLEDIGT 07.09.2026 ~16:34Z (Plan 06-12).** Tag v1.0.0 auf
-160a289 (Owner-Entscheid tag-nach-phase-6), alle 7 Workflows gruen, beide
-Archive signiert und ueber die heruntergeladenen Assets verifiziert, beide
-Apps registriert und beide Releases gemeldet (4x HTTP 201, Lauf 34143894059,
-via .github/workflows/store-submit.yml auf Owner-Auftrag). Store-Seiten live:
-apps.nextcloud.com/apps/findling + /apps/findling_backend. Details:
-.planning/phases/06-semantische-suche/06-12-SUMMARY.md. Milestone v1.0 ist
-damit WIRKLICH komplett.
-
-
-Phase: 06.1
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-09-07
-
-**Zwischenstand 06-11, 2026-09-05T10:57Z.** Der Volllauf mit Semantik ist um
-10:47:54Z angestossen und laeuft unbeaufsichtigt auf der AWS-Box
-(m7g.large, 4 GB, aarch64). Beobachter, Waechter und Meldekette sind scharf,
-nichts haengt an einer lebenden Sitzung. Erwartete Dauer 16 bis 18 Stunden.
-
-Weckwort fuer die Fortsetzung: **semantiklauf pruefen**.
-**Morgenblick 06.09., 05:13Z.** Erste Spur fertig (51.961 indexiert, 0 failed),
-Einbettung bei 46.853/51.961, Ende gegen 05:45Z erwartet. Waechter-Leser
-`42c-lesen.py` las embedded falsch (immer 0): Suchlast im Nachlauf um 05:15Z
-manuell gefahren (p95 1.129 ms, haelt), Waechter korrigiert neu gestartet.
-memory.events zeigt max=1504 bei oom=0, anon-Spitze bisher 1.562,7 MB.
-Weckwort weiterhin: **semantiklauf pruefen**.
-**Lauf FERTIG 06.09. 06:15Z, Bericht vollstaendig (bis auf Endungsvergleich).**
-Kriterium 5: anon-Spitze 1.837,8 MB (erfuellt), memory.events max=2796 bei
-oom=0 (NICHT erfuellt wie formuliert, Owner-Bewertung). Hauptbefund: Suchseite
-laedt zweites Modell (+276 MB dauerhaft), fuer die Launch-Haertung vorgemerkt.
-Byte je Dokument 1.321 (06-04: 876). p95 1.129 ms im Nachlauf, 524 ms danach.
-Box laeuft weiter bis "bericht abgenommen, box abbauen".
-
-**Owner-Anweisung 06.09.:** Vor der Store-Abgabe (06-12) kommt eine eigene
-Launch-Haertungsphase mit ausgiebigen Tests jenseits des Happy Path (siehe
-CLAUDE.md, Owner-Regeln). Bei 'semantiklauf pruefen' nach 06-11: diese Phase
-per /gsd:phase vor 06-12 einfuegen und planen, 06-12 NICHT direkt starten.
-
-Fertigmeldung der Box: `/home/ubuntu/work/semantiklauf/00-FERTIG`.
-
-Belegt vor dem Anstoss: das Abbild `06-11-arm` traegt den Stand des
-Arbeitsbaums (Baumhash `c83b5d7f`), das Modell im Abbild ist dasselbe wie in
-Plan 06-03 (`8da4c9ba`), der Korpus ist bitgleich mit dem aus 05-21
-(`bcbef9b2`), und DI-05-36 ist in beiden Teilen gemessen: null
-Poller-Durchgaenge im unbewaffneten Zustand, vierzehn nach der Registrierung
-ueber AppAPI.
-
-Ein Befund, der schon feststeht und den Bericht traegt: die Semantik kostet
-rund 595 MB Grundlast im Leerlauf (688,0 MB gegen 93,5 MB anon, A/B am selben
-Volumen). Sie gehoert nicht dem Modell, sondern dem Tokenizer (268,8 MB) und
-dem Chunker (272,8 MB); die Modellgewichte kommen mit 397,1 MB erst bei der
-ersten Einbettung dazu. Messreihe:
-`docs/measurements/2026-09-05-semantiklauf-m7g/`.
-
-Progress: [█████████░] 88%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-09-08 — Milestone v1.1 started
 
 ## Performance Metrics
 

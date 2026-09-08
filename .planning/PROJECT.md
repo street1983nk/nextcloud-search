@@ -84,6 +84,19 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 | App-ID und Name VOR dem ersten Bau-Commit einfrieren | Zertifikat ist ID-gebunden (Lehre aus MCP-Connector-Research) | , Pending (Naming-Task in Phase 1) |
 | Vor der Store-Abgabe eine eigene Launch-Haertungsphase: ausgiebige Tests jenseits des Happy Path (Fehlerpfade, Rechte, Grenzen, Upgrade/Neustart, Schadfaelle, Fremdinstallation), alle erdenklichen Massnahmen fuer das beste Ergebnis; Abgabe erst nach Owner-Abnahme dieser Phase | Owner-Anweisung 06.09.2026: "ein perfektes Findling, nicht nur den Happy Path"; Termin bleibt hart, aber Qualitaet der Abgabe geht vor Reihenfolge | Pending, Phase vor 06-12 einzuplanen |
 
+## Current Milestone: v1.1 Qualitaet und Effizienz
+
+**Goal:** Die Suche wird spuerbar besser und schlanker, belegt durch einen Vergleichslauf gegen die v1.0-Baseline auf derselben Zielhardware.
+
+**Target features:**
+- Gemeinsame Embedding-Engine fuer Suche und Indexer (Hauptbefund Semantiklauf: zwei Modellinstanzen kosten ~276 MB RSS)
+- Lizenzkonforme deutsche Komposita-Wortliste fuer Tantivys split_compound (bisher Prefix-Query-Behelf)
+- Eigene Ergebnisseite mit Paginierung (Unified-Search-Liste geht beim Oeffnen eines Treffers verloren)
+- Offener Endungsvergleich der Verdikte aus dem v1.0-Messbericht
+- Abschluss: Vergleichsmessung auf der AWS-Box (Korpus liegt dort, Box angehalten) gegen docs/measurements v1.0
+
+**Key context:** Kill-Kriterium bleibt aktiv (NC-Conference Sept.: kuendigt Nextcloud ES-freie Volltextsuche mit OCR an, Stopp/Pivot). Store-Texte fuer v1.1 nach der kurze-produkttexte-Regel, Entwurf dem Owner zeigen.
+
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
@@ -102,4 +115,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-15 after initialization*
+*Last updated: 2026-09-08 after starting milestone v1.1*
