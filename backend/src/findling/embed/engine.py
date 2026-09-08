@@ -155,6 +155,40 @@ def _cutter_cooling_down() -> bool:
     return stamp is not None and time.monotonic() - stamp < LOAD_RETRY_SECONDS
 
 
+def reset() -> None:
+    """Forget the engine of this process, for a test suite and for one tool.
+
+    Named as what it is and used by nobody in the container: the holder is a
+    property of a process, and a running container has exactly one interest in
+    it, which is that it stays. Two callers have the opposite interest, and both
+    of them run outside a container.
+
+    ``tools/one_load.py`` is the one that needs it (bug audit LOW-7 of plan
+    07-05). Its gate asserts that one process pays for exactly one load, and it
+    measures that by driving the search side and the second track for real. A
+    second call of ``measure()`` in the same process used to find the engine of
+    the first one in the holder, take the cache hit, count nought loads and
+    report "green for nothing" about a tool that was working perfectly.
+
+    A test suite is the other. It is one process with one model directory per
+    case, so the holder is keyed away from most of the trouble, but a case that
+    reuses a directory would inherit whatever the case before it loaded.
+
+    **What it does not reset is the load counter.** Every caller of
+    :func:`~findling.embed.model.load_count` reads it as a difference against a
+    baseline it took itself, so nothing needs it zeroed, and a counter that can
+    be zeroed is one a gate could zero itself green with. The evidence of "one
+    load per process" stays monotonic for the life of the process.
+    """
+    global _ENGINE
+
+    with _LOCK:
+        _ENGINE = None
+        # The notice of the second track goes with it: it says something about
+        # this process, and this is the call that says the process starts over.
+        note_cutter_failure(None)
+
+
 def _held(model_dir: Path) -> EmbeddingModel | None:
     """The engine of this process if there is one, and never a new one.
 
