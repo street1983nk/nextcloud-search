@@ -1549,9 +1549,51 @@ jobs:
             || { echo "::error::the paraphrase matched lexically, so it is not a paraphrase on this corpus and a hit below would prove nothing about the vector half"; exit 1; }
           echo "the lexical half answers nothing to this query, so anything it finds below came out of the vector half"
 
+      # This step is also the cold start measurement of the phase, and it is the
+      # only one in this repository that measures a semantic search the way a
+      # user makes one: through Apache, the OCS route, the PHP provider, the
+      # AppAPI proxy and both halves of the container, on amd64. It is cold
+      # because the restart below takes the module global of the engine holder
+      # with it, so the round it makes is the round that loads the weights.
+      #
+      # The duration is printed and never compared against a bound, in any step
+      # of this job. A millisecond ceiling on a shared GitHub runner goes red for
+      # runner load and not for the thing it names, and the next reader raises
+      # the lid instead of reading the finding. The same argument is written out
+      # in resilience.yml in the comment before the ratchet step, where a
+      # resident memory ceiling was turned down for the identical reason. What
+      # may go red here is what already does: a cold search that finds nothing.
+      #
+      # Two preconditions carry the number, and both are structural rather than
+      # hoped for.
+      #
+      # One, the line has to keep more than one word, and the step counts them.
+      # Since the 06.1-20 addendum a single word line stays lexical
+      # (backend/src/findling/api/search.py, rewritten.one_term), so a one word
+      # probe would measure that rule instead of the load and would report a fast
+      # search that never reached the model. Quotation marks, a leading minus, a
+      # field, a file type and titleOnly switch the semantic half off in the same
+      # way; the gate asks about the word count alone, because that is the only
+      # one of them a later edit of the PARAPHRASE_TERM line can bring about by
+      # accident.
+      #
+      # Two, the stock has to carry vectors, or there is nothing to load for.
+      # The step "Wait until the second track has written its vectors" above
+      # waits for COUNT(DISTINCT file_id) >= EXPECTED_EMBEDDED and is what buys
+      # that. The two steps belong in this order: pulling them apart or turning
+      # them around takes the meaning out of the number without turning anything
+      # red.
       - name: The paraphrase finds the document with the second track
         working-directory: findling-src/backend
         run: |
+          # The structural gate of the measurement, before anything is restarted:
+          # a one word line would leave the semantic half out, and the number
+          # below would be a lexical search wearing the name of a semantic one.
+          words=$(printf '%s' "${PARAPHRASE_TERM}" | wc -w)
+          if [ "${words}" -lt 2 ]; then
+            echo "::error::PARAPHRASE_TERM holds ${words} word, and this step needs at least two. Since the 06.1-20 addendum a single word line stays lexical (rewritten.one_term in backend/src/findling/api/search.py), so it never reaches the model, and the cold start duration below would measure that rule instead of the load."
+            exit 1
+          fi
           kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
           for _ in $(seq 1 20); do
             curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null || break
@@ -1571,10 +1613,21 @@ jobs:
             sleep 1
           done
           answer="${{ github.workspace }}/paraphrase-semantic.json"
+          # The wall clock of one cold semantic search, around the request and
+          # nothing else, so that neither the restart nor the heartbeat wait
+          # counts into it.
+          start=$(date +%s%N)
           curl -sfS -G -u "${OWNER_USER}:${OWNER_PASS}" \
             -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
             --data-urlencode "term=${PARAPHRASE_TERM}" \
             'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "${answer}"
+          elapsed_ms=$(( ( $(date +%s%N) - start ) / 1000000 ))
+          echo "cold semantic search over apache, the ocs route, the php provider and both halves:" \
+            "${elapsed_ms} ms on amd64, runner ubuntu-24.04, database ${{ matrix.database }}," \
+            "corpus of ${EXPECTED_EMBEDDED} documents with vectors."
+          echo "the two ceilings this number runs against, printed for the reader and asserted nowhere:" \
+            "1500 ms for one single container call (ExAppService::REQUEST_TIMEOUT_SECONDS) and" \
+            "2500 ms for the whole result group (Provider::BUDGET_NANOSECONDS)."
           # The whole ranking into the log, with the resource url of every entry.
           # A gate whose evidence is a boolean makes the next reader rerun it.
           jq -r '.ocs.data.entries[] | "  \(.title)  \(.resourceUrl)"' "${answer}" || true

@@ -40,6 +40,23 @@ wrote itself.
 document, one permission row and an empty vector stock. That is exactly what the
 measurement container lacks, and it costs one tantivy commit and one query.
 
+**The seventh number is a duration, and it is reported and never judged.** The
+one search round this tool drives is the round that brings the engine loads from
+zero to one, so the wall clock around it is a cold start duration and it costs
+one line. A millisecond ceiling over that line would be the mirror image of the
+memory ceiling this repository already turned down: on a shared runner it goes
+red for runner load and not for the thing it names, and the argument is written
+out in ``resilience.yml`` in the comment before the ratchet step. So the number
+travels in the report, the runs collect the series, and ``findings()`` does not
+look at it.
+
+**Why that series is worth having next to the integration run.** This tool runs
+on every push and its number is a load inside one process, without Apache, the
+AppAPI and the PHP half. The figure that carries the report comes from the cold
+semantic search of the ``index-search-e2e`` job in ``integration.yml``, which
+goes the whole way a user goes. Two numbers over two ways, and neither of them
+pretends to be the other.
+
 Run it with::
 
     uv run python -m findling.tools.one_load
@@ -54,6 +71,7 @@ import argparse
 import logging
 import os
 import tempfile
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -116,12 +134,18 @@ EXPECTED: Final = 1
 
 @dataclass(frozen=True, slots=True)
 class Report:
-    """The six numbers one run of the measurement comes to.
+    """The six counters one run of the measurement comes to, and one duration.
 
     Two counters per side rather than one at the end, because the difference
     between them is the statement: the constituent list may only be read by the
     side that seeded the volume, and the engine has to be loaded by the search
     side and then not again by the track.
+
+    The seventh field is the odd one out: it is an observation and not a gate.
+    ``findings()`` reads the six counters and never the duration, because a
+    millisecond ceiling on a shared runner would go red for runner load instead
+    of for the load path it names, which is the same argument the comment before
+    the ratchet step of ``resilience.yml`` makes for the resident memory series.
     """
 
     wordlist_reads_after_index: int
@@ -130,6 +154,7 @@ class Report:
     engine_loads_after_worker: int
     candidates: int
     passage_vectors: int
+    cold_search_ms: float
 
     def lines(self) -> list[str]:
         """The report as plain key=value lines, for a log a shell can read."""
@@ -140,6 +165,7 @@ class Report:
             f"engine-loads-after-worker={self.engine_loads_after_worker}",
             f"candidates={self.candidates}",
             f"passage-vectors={self.passage_vectors}",
+            f"cold-search-ms={round(self.cold_search_ms, 1)}",
         ]
 
 
@@ -267,7 +293,13 @@ def measure(root: Path, *, source: Path = SYSTEM_WORDLIST) -> Report:
     seed_volume(source)
     reads_after_index = read_count() - reads_at_start
 
+    # The clock sits in the caller and not in the driver, because the driver is
+    # the thing under measurement: a stopwatch inside it would time its own
+    # unpacking as well. This round is the one that brings the engine loads from
+    # zero to one, so what it times is a cold start.
+    started = time.perf_counter()
     candidates = drive_the_search_side()
+    cold_search_ms = (time.perf_counter() - started) * 1000.0
     reads_after_search = read_count() - reads_at_start
     loads_after_search = load_count() - loads_at_start
 
@@ -280,6 +312,7 @@ def measure(root: Path, *, source: Path = SYSTEM_WORDLIST) -> Report:
         engine_loads_after_worker=load_count() - loads_at_start,
         candidates=candidates,
         passage_vectors=passages,
+        cold_search_ms=cold_search_ms,
     )
 
 
@@ -289,6 +322,9 @@ def findings(report: Report) -> list[str]:
     A list and not a boolean, because the two regressions this gate watches for
     are different findings with different remedies, and a run that hit both has
     to say both.
+
+    ``cold_search_ms`` is deliberately absent from every branch below. It is
+    reported and not judged, for the reason the module docstring gives.
     """
     found: list[str] = []
     if report.wordlist_reads_after_index != EXPECTED:

@@ -8,7 +8,7 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 ### Effizienz
 
 - [x] **EFF-01**: Suche und Indexer nutzen eine gemeinsame Embedding-Engine-Instanz; das Modell wird pro Prozess hoechstens einmal geladen (v1.0-Befund: zweite Instanz kostet ~276 MB RSS dauerhaft) (belegt in docs/performance.md, Abschnitt "Die eine Engine", mit Zaehler load_count() und CI-Tor findling.tools.one_load)
-- [ ] **EFF-02**: Die erste semantische Suche nach Leerlauf haelt das p95-Suchbudget von 2,5 s weiterhin ein (kein Kaltstart-Rueckschritt durch die gemeinsame Engine)
+- [x] **EFF-02**: Die erste semantische Suche nach Leerlauf haelt das p95-Suchbudget von 2,5 s weiterhin ein (kein Kaltstart-Rueckschritt durch die gemeinsame Engine) (belegt in docs/performance.md, Abschnitte "Die erste Suche nach einem Containerstart" und "Die amd64-Zahl": gemessen auf arm64, der Zielhardware, mit 1.332,1 ms p95 gegen 2.500 ms ueber den OCS-Weg; die amd64-Entsprechung ueber denselben Weg misst seit Plan 07-02 jeder Lauf von integration.yml, ihre Zahl wird nach dem ersten Lauf auf main nachgetragen, offen als DI-07-01)
 
 ### Suchqualitaet
 
@@ -50,7 +50,7 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
 | EFF-01 | Phase 7 | Done |
-| EFF-02 | Phase 7 | Pending |
+| EFF-02 | Phase 7 | Done |
 | QUAL-01 | Phase 8 | Pending |
 | QUAL-02 | Phase 8 | Pending |
 | QUAL-03 | Phase 8 | Pending |
