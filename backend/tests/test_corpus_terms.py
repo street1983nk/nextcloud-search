@@ -32,6 +32,13 @@ nothing about the decomposition, which is exactly what the language case for
 ``Vereinbarung`` did until it was replaced. So every CI term is analysed a second
 time through the shipped chain minus the splitter, and it has to find nothing.
 
+Above all three sits a fourth statement, and it is about this file rather than
+about the corpus: every word this module claims anything about has to stand in
+``fixtures/compound_cases_de.txt``, the list that
+``scripts/dev/measure_compounds.sh`` really ran against the Debian list of the
+image. A claim about a word nobody measured is a claim about the fixture, and
+the claims here travel straight into a CI step.
+
 Umlauts appear only inside string literals, as data. The identifiers stay ASCII
 as the project rules require.
 """
@@ -50,6 +57,10 @@ from findling.index.wordlist import FUGEN
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_CORPUS = REPO_ROOT / "scripts" / "dev" / "build_corpus.py"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt"
+# The list of words scripts/dev/measure_compounds.sh really ran against the
+# Debian list of the image. Read here for the same reason test_analyzer.py reads
+# it: a claim about a word that was never measured is a claim about nothing.
+CASES = Path(__file__).resolve().parent / "fixtures" / "compound_cases_de.txt"
 
 # The three constituents the workflow searches for since phase 8, and the file
 # each one has to bring back on its own. Every one of them is the second part of
@@ -91,7 +102,9 @@ AMBIGUOUS = "Rechnung"
 # gate exists.
 LETTER_TRAPS: dict[str, str] = {
     # Grundstuecksverkehrsgenehmigung stands in 09-bescheid.pdf, but
-    # Parteienverkehr stands in the Austrian notice.
+    # Parteienverkehr stands in the Austrian notice. Measured as case 47 since
+    # the audit of phase 8: one token "verkehr", entry of the list, so the claim
+    # about it below stands on a line of the TSV like every other one.
     "Verkehr": "16-oesterreich-mitteilung.pdf",
     # Ersatzabgabe stands in the Swiss permit, Verwaltungsabgabe in the Austrian
     # notice. Measured as finding 1 of the phase measurement.
@@ -102,6 +115,13 @@ LETTER_TRAPS: dict[str, str] = {
 # in the shipping image on 2026-09-01 and written down in docs/ocr.md: the two
 # dots over the capital letter are gone. The word the generator draws is next to
 # it. This pair is why "Protokoll" is not among the three terms above.
+#
+# Both spellings are cases of compound_cases_de.txt, the transcribed one since
+# the audit of phase 8 as case 48. That matters more than it looks: the decision
+# not to build "Protokoll" as a language case rests on the transcription staying
+# one token, and until it was measured that rested on the fixture alone. Against
+# the real Debian list it is the single token "ubermittlungsprotokoll", so the
+# decision now stands on a measurement.
 HEADLINE_AS_DRAWN = "Übermittlungsprotokoll"
 HEADLINE_AS_READ = "Ubermittlungsprotokoll"
 
@@ -285,6 +305,31 @@ def test_the_headline_the_engine_really_reads_does_not_come_apart(german: TextAn
     # and only the second one is ever indexed.
     assert len(german.analyze(HEADLINE_AS_DRAWN)) == 2
     assert german.analyze(HEADLINE_AS_READ) == [HEADLINE_AS_READ.lower()]
+
+
+def test_every_word_this_module_claims_about_was_measured() -> None:
+    # The guard over the guards, mirrored from
+    # test_analyzer.py::test_every_asserted_word_stands_in_the_measured_case_list.
+    # Everything above is a statement about a word, every statement travels
+    # straight into a CI step, and a statement about a word that was never run
+    # against the real Debian list is a statement about the fixture. Without this
+    # test a fourth entry could walk into CI_TERMS, be green here and turn main
+    # red, which is exactly what the whole module is arranged against.
+    measured = set(CASES.read_text(encoding="utf-8").split())
+    asserted = [
+        *CI_TERMS,
+        *SPLIT_INDEPENDENT,
+        AMBIGUOUS,
+        *LETTER_TRAPS,
+        HEADLINE_AS_DRAWN,
+        HEADLINE_AS_READ,
+    ]
+
+    missing = sorted(word for word in asserted if word not in measured)
+
+    assert missing == [], (
+        f"asserted here but never measured, add to {CASES.name} and rerun scripts/dev/measure_compounds.sh: {missing}"
+    )
 
 
 def test_every_ci_term_is_carried_by_the_uniqueness_check_of_the_generator(corpus_generator: ModuleType) -> None:

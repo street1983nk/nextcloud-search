@@ -44,3 +44,5 @@ Auszug
 Abgabe
 Belehrung
 Abfuhr
+Verkehr
+Ubermittlungsprotokoll

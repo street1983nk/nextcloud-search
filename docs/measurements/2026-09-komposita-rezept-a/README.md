@@ -24,11 +24,17 @@ misst und nicht sich selbst.
 | Quelle | `/usr/share/dict/ngerman`, **356010** Zeilen |
 | Liste nach Rezept A | **276496** Eintraege |
 | `wordlist_hash` der gefilterten Liste | `b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396edc808dde0` |
-| Faelle in der Eingabeliste | 46 |
+| Faelle in der Eingabeliste | 48 |
 | Faelle mit mehr als einem Token | 21 |
-| Faelle mit genau einem Token | 25 |
+| Faelle mit genau einem Token | 27 |
 | Faelle mit leerer Tokenliste | 0 |
 | Eintraege der Fixture-Teilmenge | 194 |
+
+Die Faelle 47 und 48 sind der Nachtrag vom Audit der Phase 8, siehe Abschnitt
+5.1. Der Lauf ist derselbe Lauf: gleiches Abbild, gleiche Pins, gleicher
+`wordlist_hash`, nur zwei Zeilen mehr in der Eingabeliste. Die Teilmenge blieb
+dabei unveraendert bei 194 Eintraegen, weil beide neuen Woerter nur Teilketten
+enthalten, die schon vorher aus anderen Faellen in die Teilmenge kamen.
 
 Eingabe war `backend/tests/fixtures/compound_cases_de.txt`, eine Zeile je Wort.
 Die Rohdaten liegen unveraendert in `rohdaten/`, nichts davon ist von Hand
@@ -102,7 +108,7 @@ Kein einziger Fall hat eine leere Tokenliste. Das ist die Stelle, an der
 Wort kommt mit sechs Token durch, waehrend es bei umgekehrter Reihenfolge
 vollstaendig aus dem Index fiele.
 
-### 3.2 Zerfaellt nicht (25 Faelle)
+### 3.2 Zerfaellt nicht (27 der 48 Eingaben)
 
 | Wort | Zeichen | in_ngerman | entry_in_list | Token |
 |---|---|---|---|---|
@@ -131,8 +137,10 @@ vollstaendig aus dem Index fiele.
 | Abgabe | 6 | 1 | 1 | abgab |
 | Belehrung | 9 | 1 | 1 | belehr |
 | Abfuhr | 6 | 1 | 1 | abfuhr |
+| Verkehr | 7 | 1 | 1 | verkehr |
+| Ubermittlungsprotokoll | 22 | 0 | 0 | ubermittlungsprotokoll |
 
-Diese Tabelle enthaelt drei Gruppen, die man nicht verwechseln darf.
+Diese Tabelle enthaelt vier Gruppen, die man nicht verwechseln darf.
 
 **Die zehn Alltagswoerter** von `Information` bis `Genehmigung` und die sieben
 Suchbegriffe von `Vereinbarung` bis `Abfuhr` **sollen** hier stehen. Ein Rezept,
@@ -143,7 +151,12 @@ Praezision von Rezept A ist in diesem Lauf einwandfrei.
 der Verlust. Zwei davon sind in `docs/german-analyzer.md` bereits als Grenze
 dokumentiert, fuenf nicht.
 
-**Zwei Sonderfaelle** stehen in dieser Tabelle, obwohl sie keinen Listeneintrag
+**Die zwei Nachtragsfaelle** `Verkehr` und `Ubermittlungsprotokoll` stehen hier,
+weil `backend/tests/test_corpus_terms.py` Behauptungen ueber genau diese beiden
+Woerter aufstellt und der Audit der Phase 8 diese Behauptungen ohne Messzeile
+vorgefunden hat. Siehe Abschnitt 5.1.
+
+**Drei Sonderfaelle** stehen in dieser Tabelle, obwohl sie keinen Listeneintrag
 bilden:
 
 `Baukosten` hat neun Zeichen, steht **nicht** in `ngerman` und ist **kein**
@@ -161,6 +174,16 @@ Umlauten trifft deshalb keinen einzigen Eintrag. Fuer deutsche Altbestaende und
 fuer OCR-Laeufe mit verlorenen Umlautpunkten ist das eine reale Luecke. Sie
 gehoert entweder als Testfall oder als benannter Grenzfall in die Doku; dieser
 Bericht stellt nur fest, dass sie gemessen ist.
+
+`Ubermittlungsprotokoll`, die Fassung ohne die zwei Punkte ueber dem grossen
+Buchstaben, ist derselbe Fall an einer zweiten Stelle und traegt deshalb ein
+eigenes Gewicht: es ist nicht eine Transkription, die jemand tippt, sondern das,
+was die OCR-Engine des Abbilds von der fetten Ueberschrift in
+`19-uebermittlung.tif` wirklich liest (gemessen am 01.09.2026, festgehalten in
+`docs/ocr.md`). Die Fassung mit Umlaut zerfaellt in `ubermittl, protokoll`, die
+gelesene bleibt ein Token von 22 Zeichen. Genau deshalb ist `Protokoll` kein
+CI-Sprachfall: der Index bekommt die gelesene Fassung, und eine Suche nach dem
+zweiten Teil faende nichts.
 
 ## 4. Warum Erfolgskriterium 1 im Wortlaut nicht baubar ist
 
@@ -270,6 +293,46 @@ gemessen wie alle anderen.
 Fuer alle sieben gilt: keiner von ihnen ist ein Listeneintrag, keiner liegt
 unter MIN_LEN, und keiner hat die Falle aus Abschnitt 4. Sie sind die Faelle,
 die gemessen halten.
+
+### 5.1 Nachtrag vom 08.09.2026: die Faelle 47 und 48
+
+Der Audit der Phase 8 (Befund M-07) hat zwei Behauptungen in
+`backend/tests/test_corpus_terms.py` gefunden, die ueber Woerter sprechen, die
+in dieser Messung nicht vorkamen. Eine Behauptung ueber ein nie gemessenes Wort
+ist eine Behauptung ueber die Fixture und nicht ueber das Produkt, also wurden
+die zwei Woerter nachgemessen statt umformuliert.
+
+| Fall | Wort | Warum das Modul darueber redet |
+|---|---|---|
+| 47 | `Verkehr` | Abgelehnter CI-Kandidat: `Grundstuecksverkehrsgenehmigung` steht in `09-bescheid.pdf`, `Parteienverkehr` in der oesterreichischen Mitteilung. Das Modul behauptet, dass er das Token-Gatter passiert und am Buchstabengatter scheitert. |
+| 48 | `Ubermittlungsprotokoll` | Was tesseract von der Ueberschrift in `19-uebermittlung.tif` wirklich liest. Das Modul behauptet, dass diese Fassung ein einziger Token bleibt, und darauf beruht die Entscheidung, `Protokoll` **nicht** als CI-Sprachfall zu bauen. |
+
+Gemessen mit demselben Skript, demselben Abbild und denselben Pins:
+
+```
+compound_probe: /opt/findling/against.txt tokenises like the full list, 223 entries
+compound_probe: 48 cases, 276496 entries, 194 in the subset
+```
+
+```
+Verkehr	7	1	1	verkehr
+Ubermittlungsprotokoll	22	0	0	ubermittlungsprotokoll
+```
+
+Beide Behauptungen halten. `Verkehr` ist Listeneintrag und bleibt ein Token,
+`Ubermittlungsprotokoll` ist kein Listeneintrag, steht auch nicht in `ngerman`
+und bleibt trotzdem ein Token von 22 Zeichen, weil die Liste ihre Umlaute
+behaelt. Der `wordlist_hash` ist unveraendert, die Fixture-Teilmenge blieb bei
+194 Eintraegen, und `cases_more_than_one_token` blieb bei 21: die zwei neuen
+Faelle zerfallen nicht und verschieben deshalb keine der Aussagen der
+Abschnitte 3 und 4.
+
+Ein Waechter haelt das ab jetzt fest:
+`test_every_word_this_module_claims_about_was_measured` in
+`backend/tests/test_corpus_terms.py` prueft jedes Wort, ueber das das Modul eine
+Aussage macht, gegen `fixtures/compound_cases_de.txt`. Der Zwilling dazu in
+`test_analyzer.py` gab es schon; im Modul, dessen Aussagen direkt in einen
+CI-Schritt wandern, fehlte er.
 
 ## 6. Die Fixture-Teilmenge
 
