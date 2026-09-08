@@ -49,4 +49,18 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| (wird vom Roadmapper gefuellt) | | |
+| EFF-01 | Phase 7 | Pending |
+| EFF-02 | Phase 7 | Pending |
+| QUAL-01 | Phase 8 | Pending |
+| QUAL-02 | Phase 8 | Pending |
+| QUAL-03 | Phase 8 | Pending |
+| UI-01 | Phase 9 | Pending |
+| UI-02 | Phase 9 | Pending |
+| UI-03 | Phase 9 | Pending |
+| MESS-01 | Phase 10 | Pending |
+| MESS-02 | Phase 10 | Pending |
+| MESS-03 | Phase 10 | Pending |
+| REL-01 | Phase 11 | Pending |
+
+12 von 12 Requirements zugeordnet, keine Waisen, keine Doppelungen.
+Phasen 7 bis 11 stehen in .planning/ROADMAP.md.
