@@ -3129,6 +3129,249 @@ Abschnitt 7.
 2. Eine zweite Instanzform. Alles hier ist All-in-One.
 3. Deckungsgrad und Trefferqualität. Der Bestand ist der aus 06-11, unverändert.
 
+## Die eine Engine: der Beleg zu EFF-01 und EFF-02
+
+Der Abschnitt darüber misst, was der Fix an der zweiten Modellinstanz gebracht
+hat. Was dort fehlt, ist der Beleg selbst: welche Aufrufstellen im
+ausgelieferten Container eine Embedding-Instanz brauchen, woher jede von ihnen
+sie zieht, und woran die Aussage "pro Prozess höchstens einmal geladen" hängt.
+Dieser Abschnitt schreibt das zusammen, mit Datei und Zeile gegen den Stand vom
+08.09.2026. Danach stellt er die Kaltstartzahl aus EFF-02 neben die Grenze,
+gegen die sie wirklich läuft, und er sagt an beiden Stellen ausdrücklich, was
+die Zusage **nicht** umfasst.
+
+### Wer im Container eine Engine braucht, und woher sie kommt
+
+| Pfad | Datei und Zeile | Woher die Engine kommt |
+|---|---|---|
+| Suche, Kandidatenrunde | `backend/src/findling/api/search.py:232` | `resources.query_model()` |
+| Ausschnitte | `backend/src/findling/api/snippets.py:153` | `resources.query_model()` |
+| Diagnose, Herkunft eines Treffers | `backend/src/findling/api/diagnose.py:187` | `resources.query_model()` |
+| Weiterreicher der Leseseite | `backend/src/findling/api/resources.py:270` | `return shared_model()` |
+| Arbeiter, zweite Spur | `backend/src/findling/worker/poller.py:1491` | `self._model = shared_model()` |
+
+Die ersten drei Zeilen laufen über die vierte, und die vierte und die fünfte
+enden beide in `shared_model()`
+(`backend/src/findling/embed/engine.py:58`). Der Halter dort ist eine
+Modulglobale `_ENGINE` (Zeile 51), geschlüsselt auf das Modellverzeichnis aus
+den Einstellungen und geschützt von einem `threading.RLock` (Zeile 55). Die
+einzige Konstruktion von `EmbeddingModel` in der Auslieferung steht in den
+Zeilen 76 bis 80.
+
+Der Aufruf lädt nichts. `EmbeddingModel.__init__`
+(`backend/src/findling/embed/model.py:298`) setzt nur Felder, die Artefakte
+werden erst in `_load()` (Zeile 405) gelesen, und `_load()` wird erst aus
+`_embed()` gerufen (Zeile 369). Ein Container ohne Modell zahlt also nichts
+dafür, dass der Halter existiert.
+
+**Es gibt keine sechste Stelle.** Ein `grep` nach `EmbeddingModel(` über
+`backend/src/findling/` findet ausser dem Halter nichts. Die übrigen
+Konstruktionen im Baum stehen in `backend/tests/` und in
+`scripts/dev/vector_distances.py:812`, und beide laufen nie im ausgelieferten
+Container: `backend/Dockerfile` kopiert aus dem Backend nur `src` in die
+Build-Stufe (Zeile 50), und `scripts/` erreicht das Laufzeit-Abbild überhaupt
+nicht. Die einzige Datei aus `scripts/`, die der Bau anfasst, ist
+`dev/quantize_model.py`, und sie wird in derselben `RUN`-Anweisung wieder
+gelöscht, in der sie gebraucht wird (Zeile 115 und Zeile 134).
+
+**Der Extraktions-Kindprozess trägt keine Gewichte.** In
+`backend/src/findling/extract/` gibt es keinen Import aus `findling.embed` und
+keine Konstruktion von `EmbeddingModel`. Der im Semantiklauf beobachtete
+Kindprozess mit 69 MB ist damit erklärt, und er ist keine zweite Engine.
+
+### Warum der Beleg ein Zähler ist und keine Speichermessung
+
+`load_count()` (`backend/src/findling/embed/model.py:143`) sagt, wie oft dieser
+Prozess Tokenizer und Gewichte wirklich gelesen hat. Hochgezählt wird genau
+einmal je gelesenem Artefaktpaar, in `_load()` und erst nach dem erfolgreichen
+Öffnen (`backend/src/findling/embed/model.py:453`).
+
+Der Grund für diese Bauform steht neben dem Zähler und ist der eigentliche Punkt
+dieses Abschnitts: von aussen sehen ein Cache-Treffer und ein billiges zweites
+Laden gleich aus. Ein Zähler trennt die beiden, ohne eine Uhr zu lesen und ohne
+ein Byte zu messen. Eine Messung des Speicherbedarfs auf einem geteilten Läufer
+kann das nicht, und der Beleg dafür steht im Projekt selbst: der Messschritt in
+`.github/workflows/resilience.yml` startet den Container auf einem leeren
+`APP_PERSISTENT_STORAGE`, also kehrt die Suche um, bevor sie Wortliste, Automat
+oder Modell erreicht, und der Unterschied vor und nach der ersten Suche lag am
+06.09.2026 bei 241.172 Byte im einen und 503.316 Byte im nächsten Lauf. Ein
+Deckel über dieser Zahl wäre ein Tor, das für die Sache, die es benennt, gar
+nicht rot werden kann.
+
+Vier Fälle in `backend/tests/test_embed_engine.py` prüfen die Zusage direkt:
+
+| Fall | Zeile | Was er festhält |
+|---|---|---|
+| `test_the_search_and_the_track_get_the_same_engine` | 194 | Leseseite und zweite Spur bekommen dasselbe Objekt |
+| `test_another_model_directory_gets_another_engine` | 206 | der Schlüssel auf das Modellverzeichnis wirkt |
+| `test_two_threads_get_one_engine_and_pay_for_one_load` | 227 | zwei Threads zahlen zusammen ein Laden |
+| `test_the_second_track_and_the_read_side_wire_the_same_object` | 269 | die Verdrahtung des Arbeiters greift denselben Halter |
+
+Über diesen Tests steht ein Tor, das auf jedem Push läuft:
+`findling.tools.one_load` baut ein eigenes Volumen, indexiert ein Dokument,
+fährt eine echte Suchrunde über `api/search.py::one_round` und verdrahtet
+**danach** die zweite Spur über `Poller._wire_the_second_track`. Vier Zähler
+müssen dabei auf eins stehen; jeder andere Wert ist ein benannter Befund mit
+Exit 1 (`backend/src/findling/tools/one_load.py:286-326`). Aufgehängt ist das
+Tor in `.github/workflows/resilience.yml`, Schritt "One engine and one
+constituent list per process" (Zeile 1420), im Job `measurements` auf
+`ubuntu-24.04`, also auf amd64.
+
+**Die Reihenfolge im Tor ist kein Zufall, sondern die Sperre gegen ein leeres
+Grün.** Die Suchseite muss die Ladezahl allein auf eins bringen. Ein Lauf, der
+das Modell nie erreicht, meldet dort eine Null, und eine Null ist ein Befund mit
+Exit 1 und kein stilles Bestehen (`one_load.py`, Modulkopf Zeile 22 bis 38).
+
+Dass dieses Tor rot werden kann, ist bewiesen und nicht behauptet.
+`backend/tests/test_one_load.py` holt die Rückschritte per Monkeypatch zurück:
+`test_it_goes_red_when_the_search_side_builds_its_own_engine` (Zeile 173),
+`test_it_goes_red_when_the_word_list_is_read_a_second_time` (Zeile 198) und
+`test_it_goes_red_when_the_search_never_reaches_the_model` (Zeile 212).
+
+### Was "eine Engine" nicht heißt
+
+"Eine Engine" heißt **eine `EmbeddingModel`-Instanz**, also ein Satz Gewichte
+und eine onnxruntime-Sitzung. Es heißt **nicht** "ein Tokenizer-Objekt im
+Prozess". Davon gibt es mindestens zwei, und zwar mit voller Absicht.
+
+`Tokenizer.enable_truncation` ist eine Eigenschaft des Objekts. Eine geteilte
+Instanz hätte die 512 Token der Sitzung in den Zerleger getragen, und der
+1.024-Token-Deckel aus D-01 wäre still auf 512 gefallen: die zweite Hälfte jedes
+langen Dokuments hätte aufgehört zu existieren, ohne dass irgendwo etwas
+fehlschlägt. Die Entscheidung steht als gesetzt in `.planning/STATE.md:160`, der
+Grund noch einmal im Code neben `open_tokenizer`
+(`backend/src/findling/embed/model.py:192`), und das Projekt hinter
+`semantic-text-splitter` warnt vor derselben Sache.
+
+Wer diese Trennung aufhebt, spart ein Tokenizer-Objekt und halbiert dafür jedes
+Dokument über 512 Token. Der Beleg oben deckt diesen Fall nicht ab, weil er ihn
+nicht abdecken soll.
+
+### Die erste Suche nach einem Containerstart: der Beleg zu EFF-02
+
+Die erste Handlung des Laufs `64-spitze.sh` war genau eine semantische Suche
+gegen einen Container, der in diesem Start noch nie eine gesehen hatte. Sie lief
+über die OCS-Route, also über Apache, HaRP und AppAPI, und damit über den Weg
+eines Nutzers und nicht über einen Aufruf in den Container hinein.
+
+| Größe | Wert | Rohdatei |
+|---|---|---|
+| Anfragen | 3, davon die erste kalt | `rohdaten/64-stufe-01.json` |
+| Fehler | 0 | ebenda |
+| p50 | 465,3 ms | ebenda |
+| **p95, hier gleich max** | **1.332,1 ms** | ebenda |
+| Budget | 2.500 ms, `p95_within_budget: true` | ebenda |
+| Warme Entsprechung, gleiche Box, 10 Runden, 10 Anfragen, 0 Fehler | p95 481,6 ms | `rohdaten/67-stufe-1.json` |
+
+**Der Kaltstartaufschlag von rund 850 ms ist eine Rechnung und keine Messung.**
+Die Rechnung steht hier, damit sie prüfbar bleibt: 1.332,1 ms minus 481,6 ms
+sind 850,5 ms. Auf der einen Seite stehen drei kalte Anfragen, auf der anderen
+zehn warme, aus zwei Läufen im Abstand von knapp drei Minuten. Die Richtung
+dieser Zahl ist belastbar, die zweite Nachkommastelle ist es nicht.
+
+Der Aufschlag passt zur Speicherbeobachtung derselben Sekunde. `anon` steht
+unmittelbar vor der ersten Suche auf 694,3 MB und unmittelbar danach auf
+1.116,6 MB, springt also um 422,3 MB (`rohdaten/64-spitze.txt`), und das sind die
+Gewichte, einmal.
+
+### Was "nach Leerlauf" heute bedeuten kann
+
+EFF-02 spricht von der ersten semantischen Suche "nach Leerlauf". Es gibt im
+Code keinen Pfad, der eine geladene Engine wieder freigibt: `_ENGINE` wird nur
+ersetzt, wenn sich `embed_model_dir` ändert
+(`backend/src/findling/embed/engine.py:74`), und `EmbeddingModel._engine` wird
+nach einem erfolgreichen Laden nie wieder auf `None` gesetzt, denn selbst ein
+geworfener Lauf behält die Engine ausdrücklich
+(`backend/src/findling/embed/model.py:385-392`).
+
+**Deshalb hat "erste Suche nach Leerlauf" heute genau eine nichttriviale Lesart:
+die erste Suche nach einem Containerstart.** Genau die ist oben gemessen. Ohne
+diese Festlegung misst das Kriterium einen Zustand, den das Produkt nicht kennt.
+
+Eine zweite, kleinere Lesart bleibt benannt: nach langem Leerlauf können der
+Tantivy-Index und die `vectors.db` aus dem Seitencache gefallen sein, und der
+Brute-Force-Scan liest sie neu. Dafür gibt es das Kaltscan-Muster aus
+`.github/workflows/measure.yml`, Schritt "C, scan latency", das kalte und warme
+Scanlatenz mit `drop_caches` bereits trennt. Diese Lesart ist in dieser Phase
+nicht gemessen.
+
+### Die Grenze, an der eine kalte Suche zuerst reißt
+
+Das 2.500-ms-Budget ist nicht die Schranke, gegen die der Kaltstartaufschlag
+zuerst läuft. Es sind zwei Zahlen, und sie messen verschiedene Dinge:
+
+| Konstante | Datei und Zeile | Was sie deckelt |
+|---|---|---|
+| `BUDGET_NANOSECONDS = 2_500_000_000` | `php/lib/Search/Provider.php:57` | die Wanduhr der **ganzen Ergebnisgruppe** |
+| `REQUEST_TIMEOUT_SECONDS = 1.5` | `php/lib/Service/ExAppService.php:89` | die Decke **eines einzelnen** Containeraufrufs |
+
+Zusätzlich schrumpft jeder Aufruf auf das, was von der Wanduhr übrig ist:
+`secondsLeft($deadline)` reist als Argument mit (`Provider.php:258` für die
+Kandidaten, `:412` für die Ausschnitte, die Methode selbst bei `:504`), und
+`ExAppService::call` nimmt davon das Minimum gegen die eigene Decke
+(`ExAppService.php:616`). Eine Suche macht zwei Aufrufe, und der erste steht in
+einer Schleife, die mehrfach laufen kann, wenn der Rechteabgleich Treffer einer
+Seite entfernt (`Provider.php:248-258`).
+
+Das Laden steht unter dem Lock (`backend/src/findling/embed/model.py:369`), also
+warten gleichzeitige Suchen hinter genau einem Laden und nicht jede hinter ihrem
+eigenen. Die 1.332,1 ms oben sind einschließlich PHP-Weg gemessen, der Aufruf
+ist also nicht abgeschnitten worden. Die Marge zur Aufrufdecke ist aber kleiner
+als die Marge zum Gruppenbudget, und sie schrumpft mit der Nebenläufigkeit:
+
+| Stufe | warm p95, gemessen | plus 850 ms Laden | gegen 2.500 ms |
+|---|---|---|---|
+| 1 | 481,6 ms | 1.332,1 ms (**gemessen**) | hält |
+| 4 | 1.009,4 ms | rund 1.859 ms | hält knapp |
+| 8 | 1.915,0 ms | rund 2.765 ms | **gerissen** |
+
+**Diese Tabelle ist eine Rechnung und keine Messreihe.** Gemessen ist allein die
+erste Zeile; die warmen p95 stammen aus `rohdaten/67-stufe-4.json` und
+`rohdaten/67-stufe-8.json`, der Aufschlag ist die gerechnete Zahl von oben. Und
+sie beschreibt keinen heutigen Fehler: weil das Modell genau einmal je
+Prozessleben lädt, trifft der Fall "kalt und acht gleichzeitige Suchen" nur den
+ersten Augenblick nach einem Containerstart. Sie ist aber die entscheidende Zahl
+gegen jede Form von Modell-Entladung.
+
+### Modell-Entladung nach Leerlauf: nein, mit drei Zahlen
+
+Die Idee steht in `.planning/REQUIREMENTS.md` unter "Future Requirements" als
+Alternative zu EFF-01, "nur falls die gemeinsame Engine nicht reicht". Sie wurde
+in Plan 06.1-02 schon einmal als Bauform B verworfen, damals mit einem Argument
+und ohne Zahlen. Die Nachmessung liefert die Zahlen nach:
+
+1. **Sie senkt die Gesamtspitze nicht.** Die Spitze des Laufs liegt bei
+   1.812,7 MB und gehört der OCR-Phase, und in dieser Phase läuft die Einbettung
+   mit: die 4,3 s je Datei sind einschließlich Abholen, OCR, Einbettung und
+   Schreiben gemessen. Ein Entladetimer entlädt genau dann nichts.
+2. **Sie senkt die Grundlast kaum.** Von den 693,4 MB Grundlast gehören null MB
+   den Modellgewichten: Schritt `13-modell-objekt-gebaut-lazy` der
+   Aufschlüsselung kostet 0,0 MB (`rohdaten/63-grundlast.txt`), und die Gewichte
+   kommen erst bei der ersten Einbettung. Was entladbar wäre, ist nicht das, was
+   im Leerlauf liegt.
+3. **Sie kostet EFF-02 unmittelbar.** Jedes Entladen macht die nächste Suche
+   wieder zur kalten Suche, mit rund 850 ms Aufschlag, unter einem Lock, gegen
+   eine Aufrufdecke von 1,5 s und ein Gruppenbudget von 2.500 ms. Die Tabelle
+   darüber rechnet für acht gleichzeitige Suchen ein gerissenes Budget aus.
+
+**Die Modell-Entladung bleibt damit in "Future Requirements" und wird in diesem
+Milestone nicht mehr geplant.**
+
+### Der Stand der Zahlen, und was hier nicht steht
+
+Die Ersparnis der gemeinsamen Engine ist an zwei Stellen gemessen, und die
+beiden Zahlen sind verschieden groß, weil sie verschiedene Dinge messen: in der
+Phase der ersten semantischen Suche sind es **712,6 MB** (1.837,8 gegen
+1.125,2 MB), an der Gesamtspitze des Laufs nur **25,1 MB** (1.837,8 gegen
+1.812,7 MB). Der Grund steht im Abschnitt darüber: die Gesamtspitze gehört
+inzwischen der OCR-Phase. Beide Zahlen stammen aus der Nachmessung vom
+07.09.2026 auf arm64 und sind auf eine Nachkommastelle gerundet.
+
+Was dieser Abschnitt nicht belegt: alle Zahlen hier, die Speicherzahlen wie die
+Latenzzahlen, sind auf arm64 gemessen. Die amd64-Entsprechung liefert Plan
+07-02, und der Vergleich Zeile für Zeile gegen die v1.0-Grundlinie, mit einem
+p95 über den vollen Bestand, gehört Phase 10.
+
 ## Was der Test gekostet hat
 
 ### Die Generalprobe, Hetzner
