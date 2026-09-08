@@ -56,6 +56,7 @@ import asyncio
 import contextlib
 import hashlib
 import logging
+import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -66,7 +67,14 @@ from tantivy import Index
 from findling.config import settings
 from findling.embed.chunker import ChunkSpan, chunk_spans, make_splitter
 from findling.embed.engine import shared_model
-from findling.embed.model import EMBEDDING_UNAVAILABLE, EmbedOutcome, artifacts_present, open_tokenizer, to_int8
+from findling.embed.model import (
+    EMBEDDING_UNAVAILABLE,
+    LOAD_RETRY_SECONDS,
+    EmbedOutcome,
+    artifacts_present,
+    open_tokenizer,
+    to_int8,
+)
 from findling.extract.dispatch import Route, extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.sandbox import extract_guarded
@@ -406,11 +414,20 @@ class Poller:
         self._vectors = vectors
         self._chunker = chunker
         self._model = model
-        # "Can be built" and not "is built", and the difference is the whole of
-        # the lazy half below. It is raised by the eager wiring once the stock is
-        # open and the artifacts are in the directory, and lowered again the
-        # moment a build really fails.
-        self._can_build_the_cutter = False
+        # Three answers about the cutter and never two, in the shape
+        # ``EmbeddingModel._load`` already uses for the weights (bug audit
+        # HIGH-1 of plan 07-05). The permanent one: the directory has no
+        # artifacts, which is a property of the installation and does not change
+        # while the process runs. It starts true, because nothing has looked
+        # yet, and the eager wiring lowers it once it has seen the two files.
+        self._cutter_absent = True
+        # The temporary one: when a build last threw, on the monotonic clock.
+        # None means never, or not since the last success. A build that threw is
+        # a state of the moment on the target box, a MemoryError while 544,3 MB
+        # of tokenizer and splitter arrive under a hard 2 GB limit, and a
+        # permanent no to that costs the container its semantic half until
+        # somebody restarts it.
+        self._cutter_failed_at: float | None = None
         self._owns_vectors = vectors is None
         self._embed_enabled = resolved.embed_enabled
         self._ocr_enabled = resolved.ocr_enabled
@@ -1496,7 +1513,7 @@ class Poller:
             return
 
         self._vectors = stock
-        self._can_build_the_cutter = True
+        self._cutter_absent = False
 
     def _build_the_cutter(self) -> bool:
         """Build the tokenizer, the splitter and the engine, at the first row that needs them.
@@ -1523,14 +1540,28 @@ class Poller:
         halve the 1024 token cap of D-01. The second half of every document
         would stop existing with nothing failing anywhere.
 
-        A build that fails lowers the flag rather than raising, so the row that
-        asked for it leaves the queue with a name of its own and no further row
-        is ever handed over: a row kept back for a spur that cannot run is the
-        failed(repeatedly_stuck) loop this track exists to avoid.
+        **A build that fails answers false and never raises**, so the row that
+        asked for it leaves the queue with a name of its own: a row kept back
+        for a spur that cannot run is the failed(repeatedly_stuck) loop this
+        track exists to avoid.
+
+        **How long that no lasts is the second question, and there are two
+        answers to it** (bug audit HIGH-1 of plan 07-05). A directory without
+        the artifacts is a property of the installation, is seen by the eager
+        half and is answered for ever. A build that threw is a property of the
+        moment: the failure that really happens on the target box is a
+        MemoryError while 544,3 MB arrive under a hard 2 GB limit, and it is
+        remembered with a timestamp and tried again after
+        :data:`~findling.embed.model.LOAD_RETRY_SECONDS`. The same constant and
+        the same three way split as ``EmbeddingModel._load``, because it is the
+        same failure one layer up: before this, one bad moment cost the second
+        track of this container everything until somebody restarted it.
         """
         if self._chunker is not None and self._model is not None:
             return True
-        if not self._can_build_the_cutter:
+        if self._cutter_absent:
+            return False
+        if self._cutter_cooling_down:
             return False
 
         resolved = settings()
@@ -1542,10 +1573,14 @@ class Poller:
                 overlap=resolved.embed_chunk_overlap,
             )
         except Exception as error:
-            self._can_build_the_cutter = False
+            # The moment, not the property: the stamp is what the cooldown is
+            # measured against, and the next row after it runs the build again.
+            self._cutter_failed_at = time.monotonic()
             LOGGER.warning(
-                "the embedding track stays off in this container, %s; the search answers lexically",
+                "the second track could not build its cutter, %s; it is tried again in %d s "
+                "and the search answers lexically until then",
                 type(error).__name__,
+                int(LOAD_RETRY_SECONDS),
             )
             return False
 
@@ -1559,7 +1594,26 @@ class Poller:
 
         self._chunker = cut
         self._model = shared_model()
+        self._cutter_failed_at = None
         return True
+
+    @property
+    def _cutter_cooling_down(self) -> bool:
+        """True while a build that threw is still inside its cooldown.
+
+        A property and not a field for the reason
+        :attr:`~findling.embed.model.EmbeddingModel.load_cooling_down` is one:
+        the state is not the timestamp, it is the timestamp measured against
+        :data:`~findling.embed.model.LOAD_RETRY_SECONDS`, and that comparison
+        has one home. :meth:`_build_the_cutter` and :attr:`_embed_ready` ask the
+        same question through here, so the gate that stops the handover and the
+        gate that stops the build can never drift into two spellings of one
+        rule.
+
+        Reading it has no side effect. The clock is read, nothing else.
+        """
+        stamp = self._cutter_failed_at
+        return stamp is not None and time.monotonic() - stamp < LOAD_RETRY_SECONDS
 
     @property
     def _embed_ready(self) -> bool:
@@ -1573,15 +1627,22 @@ class Poller:
 
         What changed with the lazy build is the second half of the sentence, not
         the promise. The stock is still open or the answer is false. The cutter
-        may be built or merely buildable, and the flag says which: it is raised
-        only after the eager half has seen the artifacts in the directory, and
-        it is lowered again the moment a build really fails, so the window in
-        which a row can be handed over to a spur that cannot run is one row
-        wide and that row is acknowledged rather than kept.
+        may be built or merely buildable, and the two fields of the build say
+        which: no artifacts is a no for the life of the process, and a build
+        that threw is a no until its cooldown runs out. The window in which a
+        row can be handed over to a spur that cannot run is therefore one row
+        wide, and that row is acknowledged rather than kept.
+
+        **It asks the same property the build asks** (bug audit HIGH-1 of plan
+        07-05). Before that the failed build lowered a flag for good, so one
+        MemoryError in one thread stopped the handover of this container for
+        ever, and the page said the second track was merely filling up.
         """
         if self._vectors is None:
             return False
-        return self._can_build_the_cutter or (self._chunker is not None and self._model is not None)
+        if self._chunker is not None and self._model is not None:
+            return True
+        return not self._cutter_absent and not self._cutter_cooling_down
 
     async def _abort(
         self,

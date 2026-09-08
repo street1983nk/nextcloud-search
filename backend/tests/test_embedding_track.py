@@ -36,7 +36,7 @@ from tantivy import Index
 
 from findling.config import settings
 from findling.embed.chunker import ChunkSpan
-from findling.embed.model import DIMENSIONS, EMBEDDING_UNAVAILABLE, EmbedOutcome
+from findling.embed.model import DIMENSIONS, EMBEDDING_UNAVAILABLE, LOAD_RETRY_SECONDS, EmbedOutcome
 from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
 from findling.extract.errors import ExtractionOutcome, Reason
@@ -1521,10 +1521,54 @@ async def test_a_build_that_fails_at_the_first_row_acknowledges_it_and_stops_the
         assert result.state == ROUND_WORKED
         assert result.embedded == 0
         assert queue.acknowledged == [([91], {})]
-        assert poller._embed_ready is False, "a second row must not be handed over after this"
+        assert poller._embed_ready is False, "a second row must not be handed over inside the cooldown"
+        # And the no is a moment and not a property: the stamp is what the
+        # cooldown is measured against, and the artifacts were never the
+        # problem here.
+        assert poller._cutter_failed_at is not None
+        assert poller._cutter_absent is False
     finally:
         if poller._vectors is not None:
             poller._vectors.close()
+
+
+def test_a_build_that_threw_is_tried_again_after_the_cooldown(
+    lazy_track: _Built, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Bug audit HIGH-1 of plan 07-05, and the case the old flag could not have.
+    # A build that threw used to switch the second track off for the life of the
+    # process, and the failure that really happens on the target box is a
+    # MemoryError while 544,3 MB arrive under a hard 2 GB limit: a moment, not a
+    # property. One of those cost the whole container its semantic half until
+    # somebody restarted it, which is pitfall 2 of the phase research.
+    def out_of_air(_directory: Path) -> object:
+        raise MemoryError
+
+    worker = Poller()
+    worker._wire_the_second_track()
+    try:
+        monkeypatch.setattr(poller_module, "open_tokenizer", out_of_air)
+
+        assert worker._build_the_cutter() is False
+        assert worker._embed_ready is False, "no row is handed over while the build is cooling down"
+        assert lazy_track.tokenizer == 0, "the build threw before it counted"
+
+        # The clock and nothing else. Moving the stamp back past the cooldown is
+        # the same statement as waiting it out, and it is the one this suite can
+        # make without sleeping for five minutes.
+        stamp = worker._cutter_failed_at
+        assert stamp is not None
+        worker._cutter_failed_at = stamp - LOAD_RETRY_SECONDS - 1.0
+
+        assert worker._embed_ready is True, "after the cooldown the track promises again"
+
+        monkeypatch.setattr(poller_module, "open_tokenizer", lambda _directory: object())
+
+        assert worker._build_the_cutter() is True
+        assert worker._cutter_failed_at is None, "a build that worked forgets the moment that did not"
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
 
 
 def test_the_two_tokenizer_instances_are_not_merged() -> None:
