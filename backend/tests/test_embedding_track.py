@@ -1682,6 +1682,32 @@ def test_a_build_that_threw_is_tried_again_after_the_cooldown(
             worker._vectors.close()
 
 
+def test_an_engine_that_throws_leaves_no_half_built_cutter_behind(
+    lazy_track: _Built, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Bug audit LOW-6. Asking the holder for the engine reads no artifact, but
+    # it is still a constructor and it is still code. The assignment used to
+    # stand outside the try, so a throw there left the splitter in place and the
+    # engine at None: the one shape the three parts of this track are never
+    # allowed to have, because _embed_ready reads the pair and the top of the
+    # build reads it too.
+    def no_engine() -> _FakeModel:
+        raise RuntimeError("the holder said no")
+
+    worker = Poller()
+    worker._wire_the_second_track()
+    try:
+        monkeypatch.setattr(poller_module, "shared_model", no_engine)
+
+        assert worker._build_the_cutter() is False
+        assert worker._chunker is None, "no half built cutter, the three parts travel together"
+        assert worker._model is None
+        assert worker._cutter_failed_at is not None, "and it is the cooldown, not the permanent no"
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
+
+
 def test_the_two_tokenizer_instances_are_not_merged() -> None:
     """The locked decision of STATE.md:159, held as a property of the source.
 

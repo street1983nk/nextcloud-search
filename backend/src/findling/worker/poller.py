@@ -1599,6 +1599,13 @@ class Poller:
                 chunk_tokens=resolved.embed_chunk_tokens,
                 overlap=resolved.embed_chunk_overlap,
             )
+            # Inside the try and not below it (bug audit LOW-6). Asking the
+            # holder for the engine builds a wrapper and reads no artifact, but
+            # a wrapper is still an object and its constructor is still code: a
+            # throw there left the splitter assigned and the engine at None,
+            # which is the one shape the three parts of this track are never
+            # allowed to have. The three travel together or none of them does.
+            model = shared_model()
         except Exception as error:
             # The moment, not the property: the stamp is what the cooldown is
             # measured against, and the next row after it runs the build again.
@@ -1624,8 +1631,11 @@ class Poller:
                 token_cap=resolved.embed_token_cap,
             )
 
+        # Both attributes after the last thing that can throw, and never one of
+        # them before it. _embed_ready and the top of this method read the pair,
+        # and a half built cutter would answer "built" to both.
         self._chunker = cut
-        self._model = shared_model()
+        self._model = model
         self._cutter_failed_at = None
         note_cutter_failure(None)
         return True
