@@ -153,6 +153,20 @@ def test_one_process_pays_for_one_engine_and_one_word_list(prepared: Path) -> No
     assert report.engine_loads_after_worker == 1, "the track shares what the search side loaded"
     assert report.candidates == 1, "the seeded document has to be findable, or nothing above was measured"
     assert report.passage_vectors == 1
+    assert report.cold_search_ms > 0.0, "the round that loaded the engine took measurable time"
+
+
+def test_the_cold_start_duration_is_a_line_of_its_own(prepared: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # Weg A of the phase research: the wall clock around the one round that
+    # brings the engine loads from zero to one. It travels in the report the
+    # measurement step of resilience.yml already prints in full, so it needs no
+    # step of its own.
+    code = one_load.main(["--volume", str(prepared), "--source", str(FIXTURE_LIST)])
+
+    printed = capsys.readouterr().out
+    assert code == 0
+    duration = next(line for line in printed.splitlines() if line.startswith("cold-search-ms="))
+    assert float(duration.removeprefix("cold-search-ms=")) > 0.0
 
 
 def test_the_entry_point_prints_its_numbers_and_exits_zero(prepared: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -236,6 +250,7 @@ def test_every_counter_that_is_not_one_is_named() -> None:
         engine_loads_after_worker=2,
         candidates=0,
         passage_vectors=0,
+        cold_search_ms=12.5,
     )
 
     assert len(one_load.findings(report)) == 6
@@ -249,7 +264,27 @@ def test_a_clean_report_names_nothing() -> None:
         engine_loads_after_worker=1,
         candidates=1,
         passage_vectors=1,
+        cold_search_ms=12.5,
     )
 
     assert one_load.findings(report) == []
     assert "candidates=1" in report.lines()
+
+
+def test_the_duration_is_reported_and_never_judged() -> None:
+    # The mirror image of the memory ceiling resilience.yml turned down: a
+    # millisecond ceiling on a shared runner goes red for runner load and not
+    # for the thing it names. So a report whose counters are all one has no
+    # finding, however long the round took.
+    report = one_load.Report(
+        wordlist_reads_after_index=1,
+        wordlist_reads_after_search=1,
+        engine_loads_after_search=1,
+        engine_loads_after_worker=1,
+        candidates=1,
+        passage_vectors=1,
+        cold_search_ms=900_000.0,
+    )
+
+    assert one_load.findings(report) == []
+    assert "cold-search-ms=900000.0" in report.lines()
