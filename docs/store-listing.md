@@ -106,7 +106,7 @@ What Findling does:
 - No configuration: the first index run starts on its own
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
 
-Works together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector): AI assistants receive these search results with exactly the rights of the asking user.
+Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
 
 Supported file types:
 - PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP
@@ -128,7 +128,7 @@ Was Findling kann:
 - Keine Konfiguration: der erste Indexlauf startet von selbst
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
 
-Arbeitet mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) zusammen: KI-Assistenten erhalten diese Suchtreffer mit genau den Rechten des fragenden Nutzers.
+Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
 
 Unterstützte Dateitypen:
 - PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP
@@ -150,7 +150,7 @@ Ce que Findling sait faire :
 - Aucune configuration : la première indexation démarre d'elle-même
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
 
-Fonctionne avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) : les assistants IA reçoivent ces résultats avec exactement les droits de l'utilisateur qui demande.
+Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
 
 Types de fichiers pris en charge :
 - PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP
@@ -194,7 +194,7 @@ What Findling Backend is:
 - Never modifies your files
 - Privacy: everything runs locally, no telemetry, nothing leaves your server
 
-Works together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector): AI assistants receive these search results with exactly the rights of the asking user.
+Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly the rights of the asking user, and no content leaves your server.
 
 Supported file types:
 - PDF (scanned too), DOCX, PPTX, XLSX, ODT, ODS, ODP
@@ -214,7 +214,7 @@ Was Findling Backend ist:
 - Verändert nie Ihre Dateien
 - Datenschutz: alles läuft lokal, keine Telemetrie, nichts verlässt den Server
 
-Arbeitet mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) zusammen: KI-Assistenten erhalten diese Suchtreffer mit genau den Rechten des fragenden Nutzers.
+Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server.
 
 Unterstützte Dateitypen:
 - PDF (auch gescannt), DOCX, PPTX, XLSX, ODT, ODS, ODP
@@ -234,7 +234,7 @@ Ce qu'est Findling Backend :
 - Ne modifie jamais vos fichiers
 - Confidentialité : tout fonctionne localement, aucune télémétrie, rien ne quitte votre serveur
 
-Fonctionne avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) : les assistants IA reçoivent ces résultats avec exactement les droits de l'utilisateur qui demande.
+Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre serveur.
 
 Types de fichiers pris en charge :
 - PDF (numérisés aussi), DOCX, PPTX, XLSX, ODT, ODS, ODP
