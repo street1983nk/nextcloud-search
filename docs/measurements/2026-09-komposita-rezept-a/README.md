@@ -70,7 +70,14 @@ Eintrag der Konstituentenliste ist. Die zweite Spalte ist die entscheidende:
 Erwartung an eine Zerlegung von vornherein unerfuellbar, und zwar unabhaengig
 davon, wie plausibel der Fall klingt.
 
-### 3.1 Zerfaellt (21 Faelle)
+### 3.1 Zerfaellt (21 der 48 Eingaben)
+
+Die 21 dieser Ueberschrift sind **nicht** die 21 aus Abschnitt 4. Hier stehen
+die Eingaben dieses Laufs, die mehr als ein Token liefern
+(`kennzahlen.txt: cases_more_than_one_token=21`); dort steht die Waechtertabelle
+`COMPOUNDS` aus `backend/tests/test_analyzer.py`, die ebenfalls 21 Zeilen hat und
+eine andere Menge ist. Dass beide Zahlen gleich sind, ist Zufall und war die
+Falle, ueber die Befund M-04 des Audits gestolpert ist.
 
 | Wort | Zeichen | in_ngerman | entry_in_list | Token |
 |---|---|---|---|---|
@@ -230,10 +237,18 @@ netto schlechter: `Sitzungsvorlage` zerfaellt dann nicht mehr,
 63 Zeichen lange Wort ergibt die leere Tokenliste, faellt also vollstaendig aus
 dem Index.
 
-Die Reichweite: von den 21 alltaeglichen Verwaltungskomposita dieser Messung
-zerfallen sieben nicht. Die Doku spricht von "14 von 16", aber ihre sechzehn
-sind die langen, seltenen Woerter. Die kurzen, haeufigen sind die, die Nutzer
-tippen, und genau die stehen mit hoher Wahrscheinlichkeit selbst in `ngerman`.
+Die Reichweite: von den **21 Verwaltungskomposita der Waechtertabelle**
+`COMPOUNDS` in `backend/tests/test_analyzer.py` zerfallen sieben nicht. Diese 21
+sind 16 aus der Recherche der Phase 2 (die 14 zerfallenden plus `Mietvertrag`
+und `Bebauungsplan`, beide seit damals dokumentiert) und 5 aus der Recherche
+dieser Phase (`Baugenehmigung`, `Bauantrag`, `Baukosten`, `Arbeitsvertrag`,
+`Steuerbescheid`). Sie sind nicht dieselbe Menge wie die 21 aus Abschnitt 3.1,
+die nur zufaellig ebenso gross ist.
+
+Die Doku spricht von "14 von 16", aber ihre sechzehn sind ueberwiegend die
+langen, seltenen Woerter. Die kurzen, haeufigen sind die, die Nutzer tippen, und
+genau die stehen mit hoher Wahrscheinlichkeit selbst in `ngerman`; genau sie
+sind auch die fuenf, die diese Phase neu dazugestellt hat.
 
 Bemerkenswert und in `docs/german-analyzer.md` festzuhalten: **in keiner der
 gemessenen Varianten zerfaellt eines der zehn Alltagswoerter.** Ein Test, der

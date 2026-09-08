@@ -33,12 +33,20 @@ The list keeps its umlauts and its sharp s; it is never folded to plain letters.
 | C: nouns only, window 4 to 14 | 86345 | 12 of 16 | 0 |
 | D: nouns only, window 4 to 12 | 65693 | 12 of 16 | 0, but over-splits: `betrieb` + `kost` + `abrechn` |
 
-The third column counts the sixteen **long** compounds the phase research
-measured, and it is not a rate for German in general. Measured again on a wider
-set in `docs/measurements/2026-09-komposita-rezept-a/`: of twenty one everyday
-administrative compounds, seven do not come apart at all under recipe A, and
-they are the short, frequent ones. "14 of 16" is therefore a statement about
-long, rare words; "Known limits" below names the seven short ones.
+The third column counts the sixteen compounds the phase 2 research measured,
+and it is not a rate for German in general. Measured again on a wider set in
+`docs/measurements/2026-09-komposita-rezept-a/`: of the **twenty one
+administrative compounds of the guard table** in
+`backend/tests/test_analyzer.py`, seven do not come apart at all under recipe A.
+Those twenty one are the sixteen of the phase 2 research plus five short ones
+this phase added: `Baugenehmigung`, `Bauantrag`, `Baukosten`, `Arbeitsvertrag`
+and `Steuerbescheid`. They are deliberately **not** the twenty one of section
+3.1 of the measurement report, which counts the inputs of that run producing
+more than one token and is the same size by coincidence.
+
+"14 of 16" is therefore a statement about the sixteen words of the earlier
+research, most of them long and rare; "Known limits" below names the seven that
+stay whole, and those are the short, frequent ones.
 
 Recipe B is the one that suggests itself and the measurably worst one. It fails
 precisely on the long administrative compounds the whole feature is about.
@@ -287,9 +295,14 @@ D measures. `backend/tests/test_analyzer.py` asserts this limit in both
 directions rather than leaving it as folklore.
 
 This limit is wider than it used to read here. Measured in
-`docs/measurements/2026-09-komposita-rezept-a/`, section 3.2: of twenty one
-everyday administrative compounds, **seven** do not come apart, and they are the
-short, frequent ones that people actually type:
+`docs/measurements/2026-09-komposita-rezept-a/`, section 3.2: of the twenty one
+administrative compounds of the guard table `COMPOUNDS`, **seven** do not come
+apart, and those seven are the short, frequent ones that people actually type.
+"Everyday" belongs to these seven and not to the whole table: sixteen of the
+twenty one are the long, rare words the paragraph on the recipes above calls
+exactly that, and
+`Rindfleischetikettierungsueberwachungsaufgabenuebertragungsgesetz` is nobody's
+everyday compound.
 
 | Compound | Characters | Token | Why it stays whole |
 |---|---|---|---|
