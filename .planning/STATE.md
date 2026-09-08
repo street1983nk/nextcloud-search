@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 08 — deutsche-komposita-ohne-behelf
+**Current focus:** Phase 08: deutsche-komposita-ohne-behelf
 
 ## Current Position
 
@@ -30,7 +30,7 @@ Plan: 1 of 5
 Status: Executing Phase 08
 Last activity: 2026-09-08 -- Phase 08 execution started
 
-**Naechster Schritt:** `/gsd:plan-phase 7`
+**Naechster Schritt:** Phase-08-Verifikation, danach `/gsd:ui-phase 9`
 
 ## Performance Metrics
 
