@@ -28,14 +28,25 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag whose assets are submitted (for example v1.0.0)'
-        required: true
+        description: 'Release tag whose assets are submitted (for example v1.0.0); ignored in direct mode'
+        required: false
         type: string
+        default: ''
       register:
         description: 'Also register both app ids first (only for the very first submission)'
         required: false
         type: boolean
         default: false
+      direct_download:
+        description: 'Direct mode: submit this one download URL instead of the Findling pair (for another app of the same account)'
+        required: false
+        type: string
+        default: ''
+      direct_signature:
+        description: 'Direct mode: the base64 release signature belonging to direct_download'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -97,7 +108,33 @@ jobs:
           register findling APP_PRIVATE_KEY
           register findling_backend BACKEND_PRIVATE_KEY
 
+      - name: Submit one direct release
+        if: inputs.direct_download != ''
+        env:
+          APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+          DOWNLOAD: ${{ inputs.direct_download }}
+          SIGNATURE: ${{ inputs.direct_signature }}
+        run: |
+          set -euo pipefail
+          # The token belongs to the account, not to this repository, so a
+          # sibling app of the same account (the MCP Connector) submits here
+          # rather than copying the token into a second secret store. The
+          # signature is made on the owner machine, where that app's key lives.
+          case "${DOWNLOAD}" in
+            https://github.com/street1983nk/*) ;;
+            *) echo "direct mode submits only assets of this account"; exit 1 ;;
+          esac
+          test -n "${SIGNATURE}" || { echo "direct mode needs direct_signature"; exit 1; }
+          code=$(jq -n --arg download "${DOWNLOAD}" --arg signature "${SIGNATURE}"                    '{download: $download, signature: $signature}'                  | curl -s -o "${RUNNER_TEMP}/direct.release.json" -w '%{http_code}'                      -X POST 'https://apps.nextcloud.com/api/v1/apps/releases'                      -H "Authorization: Token ${APPSTORE_TOKEN}"                      -H 'Content-Type: application/json'                      --data @-)
+          echo "direct release: HTTP ${code}"
+          cat "${RUNNER_TEMP}/direct.release.json"; echo
+          case "${code}" in
+            200|201) echo "the direct release is in the store" ;;
+            *) echo "the direct submission failed"; exit 1 ;;
+          esac
+
       - name: Submit both releases
+        if: inputs.direct_download == ''
         env:
           APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
           TAG: ${{ inputs.tag }}
