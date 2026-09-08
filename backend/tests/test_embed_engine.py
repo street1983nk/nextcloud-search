@@ -55,6 +55,7 @@ from findling.embed.engine import (
     ENGINE_STATES,
     engine_state,
     note_cutter_failure,
+    reset,
     shared_model,
 )
 from findling.embed.model import (
@@ -698,6 +699,89 @@ def test_asking_for_the_state_neither_builds_an_instance_nor_loads_one(
         assert engine_state() == ENGINE_LOADED
 
     assert load_count() - before == 1, "five more questions are still one load"
+
+
+def test_a_container_without_a_model_asks_the_file_system_once_and_not_once_per_poll(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Perf audit PERF-F2. The empty holder is the state in which nobody else
+    # answers the artifact question, and it is also the permanent state of a
+    # container built without the model stage: the page polls every few seconds
+    # for as long as it is open, and every poll was a pair of stats for an
+    # answer that cannot change until another image is deployed.
+    asked = {"count": 0}
+    real = engine_module.artifacts_present
+
+    def counting(directory: Path) -> bool:
+        asked["count"] += 1
+        return real(directory)
+
+    monkeypatch.setattr(engine_module, "artifacts_present", counting)
+
+    for _ in range(5):
+        assert engine_state() == ENGINE_MISSING
+
+    assert asked["count"] == 1, "the no is remembered, the way EmbeddingModel remembers its own"
+
+    # And the handle of the tools takes the memory with it, so a process that is
+    # deliberately started over asks again.
+    reset()
+
+    assert engine_state() == ENGINE_MISSING
+    assert asked["count"] == 2
+
+
+def test_a_container_with_a_model_keeps_asking_because_a_model_can_be_taken_away(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The other half of the asymmetry, and the reason the cache above is not
+    # simply a cache: a directory that has the two files may lose them, and that
+    # has to become visible on the page. The two stats it costs are paid on the
+    # state that resolves itself, which is the one worth paying for.
+    _pretend_a_model(model_home)
+    asked = {"count": 0}
+    real = engine_module.artifacts_present
+
+    def counting(directory: Path) -> bool:
+        asked["count"] += 1
+        return real(directory)
+
+    monkeypatch.setattr(engine_module, "artifacts_present", counting)
+
+    for _ in range(3):
+        assert engine_state() == ENGINE_COLD
+
+    assert asked["count"] == 3
+
+    (model_home / MODEL_FILE).unlink()
+
+    assert engine_state() == ENGINE_MISSING, "a model taken out of a running container is not remembered as present"
+
+
+def test_a_cutter_build_that_worked_forgets_the_remembered_absence(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The consistency clause between PERF-F2 and the notice of the second track.
+    # A build that worked read both artifacts, so a remembered "no" about that
+    # directory is out of date by the moment the notice arrives, and the page
+    # must not go on saying "missing" about a track that is embedding.
+    asked = {"count": 0}
+    real = engine_module.artifacts_present
+
+    def counting(directory: Path) -> bool:
+        asked["count"] += 1
+        return real(directory)
+
+    monkeypatch.setattr(engine_module, "artifacts_present", counting)
+
+    assert engine_state() == ENGINE_MISSING
+    assert asked["count"] == 1
+
+    _pretend_a_model(model_home)
+    note_cutter_failure(None)
+
+    assert engine_state() == ENGINE_COLD
+    assert asked["count"] == 2
 
 
 def test_no_state_of_the_closed_set_names_a_place_on_disk() -> None:

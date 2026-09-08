@@ -81,6 +81,17 @@ _LOCK = threading.RLock()
 # as the field its own gates read: this one is the diagnosis and never the gate.
 _CUTTER_FAILED_AT: float | None = None
 
+# The directory the artifact question was answered "no" for, once, in this
+# process. The same remembered refusal as ``EmbeddingModel._absent`` and for the
+# same reason (perf audit PERF-F2): a directory without the two files is a
+# property of the installation and not of the moment, the admin page polls every
+# few seconds for as long as it is open, and an empty holder is exactly the
+# state in which nobody else answers that question. Only the "no" is
+# remembered. A "yes" stays a question, because a model that is taken out of a
+# running container has to become visible, and because the two stats it costs
+# are paid on the state that resolves itself.
+_ABSENT: Path | None = None
+
 # The closed set of answers :func:`engine_state` gives, as named constants in
 # the shape of the notes of ``api/status.py``: every one of them names a state
 # of this container and none of them names a place on disk (T-07-01). The words
@@ -139,8 +150,17 @@ def note_cutter_failure(stamp: float | None) -> None:
     """
     global _CUTTER_FAILED_AT
 
+    global _ABSENT
+
     with _LOCK:
         _CUTTER_FAILED_AT = stamp
+        if stamp is None:
+            # A build that worked read both artifacts, so a remembered "no"
+            # about that directory is out of date by the time this arrives. The
+            # two facts are kept consistent here rather than by a comment,
+            # because they come from the same directory and would otherwise
+            # contradict each other on the page.
+            _ABSENT = None
 
 
 def _cutter_cooling_down() -> bool:
@@ -184,9 +204,33 @@ def reset() -> None:
 
     with _LOCK:
         _ENGINE = None
-        # The notice of the second track goes with it: it says something about
+        # The notice of the second track goes with it, and the remembered
+        # refusal about the artifacts with that: all three say something about
         # this process, and this is the call that says the process starts over.
         note_cutter_failure(None)
+
+
+def _artifacts_absent(model_dir: Path) -> bool:
+    """True when the two files are not in that directory, asked at most once.
+
+    The seam of perf audit PERF-F2, in the shape ``EmbeddingModel._load`` uses
+    for the same question: the "no" is remembered for the life of the process
+    and the "yes" is not. What makes the asymmetry right is what each answer
+    describes. A directory without the artifacts is a container built without
+    the model stage, which is the ordinary case outside the shipping image and
+    stays true until somebody deploys another image; asking again is a pair of
+    stats per poll of an admin page, for ever, for an answer that cannot change.
+    A directory with them may lose them, and that has to become visible.
+    """
+    global _ABSENT
+
+    with _LOCK:
+        if model_dir == _ABSENT:
+            return True
+        if artifacts_present(model_dir):
+            return False
+        _ABSENT = model_dir
+        return True
 
 
 def _held(model_dir: Path) -> EmbeddingModel | None:
@@ -249,7 +293,7 @@ def engine_state() -> str:
     # A container without a model would otherwise report cold for its whole
     # life, and cold reads as "the model arrives on first demand", which is the
     # one sentence an admin must not be given in that situation.
-    absent = held.artifacts_absent if held is not None else not artifacts_present(resolved.embed_model_dir)
+    absent = held.artifacts_absent if held is not None else _artifacts_absent(resolved.embed_model_dir)
     if absent:
         return ENGINE_MISSING
     if (held is not None and held.load_cooling_down) or _cutter_cooling_down():
