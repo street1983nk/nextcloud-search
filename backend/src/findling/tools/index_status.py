@@ -108,6 +108,13 @@ def documents_in_index(directory: Path) -> tuple[int, bool]:
     # query matches. Nothing here queries, it counts, so the empty list is both
     # correct and cheap: building the real automaton costs 0.44 s and roughly
     # 23 MB, and a waiting loop calls this every few seconds.
+    #
+    # That is a promise and not a coincidence, so it is held from the outside:
+    # this tool counts and never asks, and a guard in tests/test_index_open.py
+    # walks the package and says that no question is asked here and that no other
+    # module opens an index without a list. A question asked on this index would
+    # be answered out of a tokenisation nothing was ever written with, which
+    # returns an empty result list and no reason for it.
     index = open_index(directory, ())
     return index.searcher().num_docs, True
 

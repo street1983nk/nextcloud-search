@@ -62,6 +62,16 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 # because opening is registering.
 OPENING_MODULE = "index/open.py"
 
+# The single module that may open an index with an empty constituent list. It
+# reads a document count and nothing else, so the automaton nobody needs is not
+# built; the guard below holds that it stays a counter.
+COUNTING_MODULE = "tools/index_status.py"
+
+# What a module that only counts must never call. parse_query and its lenient
+# sibling are the tantivy side, build_query is ours, and search is where an
+# answer would leave the process.
+QUESTION_CALLS = frozenset({"parse_query", "parse_query_lenient", "build_query", "search"})
+
 # The same fixture the analyzer table runs on: the subset of the real Debian list
 # that occurs inside the test inputs, proven token identical to the full list.
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt"
@@ -433,6 +443,54 @@ def test_only_the_opening_module_opens_an_index() -> None:
                 offenders.append(f"{relative}:{node.lineno}")
 
     assert offenders == [], "only " + OPENING_MODULE + " may open an index:\n" + "\n".join(offenders)
+
+
+def _opens_without_a_word_list(node: ast.Call) -> bool:
+    """True for an open_index call whose second argument is an empty collection.
+
+    An empty literal and an empty ``tuple()`` or ``list()`` are the same thing to
+    the reader and to the analyser, so both count; a name that happens to hold an
+    empty sequence is out of reach of a syntax tree and stays out of reach here.
+    """
+    if len(node.args) < 2:
+        return False
+    second = node.args[1]
+    if isinstance(second, ast.Tuple | ast.List):
+        return not second.elts
+    return isinstance(second, ast.Call) and isinstance(second.func, ast.Name) and second.func.id in {"tuple", "list"}
+
+
+def test_the_only_index_opened_without_a_word_list_is_never_asked_a_question() -> None:
+    # tools/index_status.py opens the index with an empty constituent list on
+    # purpose: it reads num_docs and building the real automaton would cost
+    # 0.44 s and 23 MB on every round of a waiting loop. That is only safe as
+    # long as nothing there asks, because a question against that index runs
+    # through a chain the documents were never written with and comes back empty
+    # with no reason in it. So the exemption is held from two sides: this file
+    # asks no question, and no second file takes the same shortcut.
+    questions: list[str] = []
+    openers: list[str] = []
+    for path in sorted(PACKAGE_ROOT.rglob("*.py")):
+        relative = path.relative_to(PACKAGE_ROOT).as_posix()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=relative)):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if isinstance(func, ast.Attribute):
+                name = func.attr
+            elif isinstance(func, ast.Name):
+                name = func.id
+            else:
+                continue
+            if relative == COUNTING_MODULE and name in QUESTION_CALLS:
+                questions.append(f"{relative}:{node.lineno}")
+            if name == "open_index" and _opens_without_a_word_list(node):
+                openers.append(f"{relative}:{node.lineno}")
+
+    assert questions == [], COUNTING_MODULE + " counts and must never ask:\n" + "\n".join(questions)
+    assert [entry.rsplit(":", 1)[0] for entry in openers] == [COUNTING_MODULE], (
+        "only " + COUNTING_MODULE + " may open an index without a constituent list:\n" + "\n".join(openers)
+    )
 
 
 # -- the marks after a rebuild (DI-04-04) ------------------------------------
