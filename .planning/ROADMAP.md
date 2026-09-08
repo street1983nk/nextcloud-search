@@ -82,7 +82,7 @@ Plans:
 **Bestand aus v1.0**: `backend/src/findling/index/wordlist.py` traegt Rezept A aus dem Debian-Paket `wngerman` (276.496 Eintraege, GPL-2+ und damit AGPL-3.0-vertraeglich, Herkunft in `docs/german-analyzer.md`), `index/analyzer.py` ruft `Filter.split_compound`. Der Endungsvergleich aus QUAL-03 ist in `docs/measurements/2026-09-nachmessung-m7g/` Abschnitt 7 gefahren. Die Recherche vom 08.09.2026 (08-RESEARCH.md) hat den Suchweg Datei fuer Datei geprueft: es gibt keinen Prefix-Behelf, `split_compound` greift auf Index- und Frageseite, und die Kriterien 3 und 4 sind gebaut. Die Phase belegt den Bestand, verbreitert das CI-Sprachfall-Set und schliesst die zwei offenen Saetze aus QUAL-03; eine Rezeptaenderung ist gemessen ausgeschlossen.
 **Success Criteria** (what must be TRUE):
 
-  1. Ein Nutzer sucht "Genehmigung" und findet Dokumente, in denen nur "Baugenehmigung" steht; dieser Fall und die weiteren Kompositafaelle stehen im CI-Sprachfall-Set und koennen rot werden
+  1. Ein Nutzer sucht ein Teilwort und findet Dokumente, in denen nur das zusammengesetzte Wort steht: "Vereinbarung" findet "Pachtvereinbarung", "Auszug" findet "Grundbuchsauszug", "Erinnerung" findet "Zahlungserinnerung"; diese Faelle und die weiteren Kompositafaelle stehen im CI-Sprachfall-Set und koennen rot werden. Der frueher an dieser Stelle genannte Fall ("Genehmigung" findet "Baugenehmigung") ist gemessen nicht baubar, weil "Baugenehmigung" selbst ein Eintrag der Wortliste ist, und wird als benannte Grenze in `docs/german-analyzer.md` gefuehrt (Owner-Entscheid a vom 08.09.2026, Messung in `docs/measurements/2026-09-komposita-rezept-a/`)
   2. Die Zerlegung laeuft im ausgelieferten Suchweg ueber `split_compound` mit der mitgelieferten Wortliste, nicht ueber eine Prefix-Query; ein Test belegt den Weg statt nur das Ergebnis
   3. Lizenz, Herkunft und Fassung der Wortliste stehen im Repo und im Abbild, und die Vertraeglichkeit mit AGPL-3.0 ist begruendet aufgeschrieben
   4. Ein Wechsel der Wortliste erzwingt sichtbar einen Reindex (Digest neben `schema_version` und `analyzer_version`), statt Index und Query-Parser still auseinanderlaufen zu lassen
@@ -132,7 +132,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
 
   1. Ein Lauf auf der AWS-Box mit dem vorhandenen v1.0-Korpus (51.961 Dokumente) weist die RSS-Ersparnis der gemeinsamen Engine gegen die v1.0-Baseline aus, mit dem Beleg, dass Abbild und Arbeitsbaum derselbe Stand sind
-  2. Der Lauf zeigt keine Regression: p95-Suchlatenz und die sieben deutschen CI-Sprachfaelle bleiben im v1.0-Rahmen, und jede Verschlechterung ist benannt statt weggelassen
+  2. Der Lauf zeigt keine Regression: p95-Suchlatenz und die zehn deutschen CI-Sprachfaelle bleiben im v1.0-Rahmen, und jede Verschlechterung ist benannt statt weggelassen
   3. Der Messbericht liegt in `docs/measurements` in der Struktur des v1.0-Berichts, sodass jede Zahl neben ihrer Entsprechung steht und Zeile fuer Zeile vergleichbar ist
   4. Die Rohdaten und Skripte des Laufs liegen im Repo, der Lauf ist wiederholbar beschrieben, und die Box ist danach wieder angehalten
 

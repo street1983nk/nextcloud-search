@@ -13,7 +13,7 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 ### Suchqualitaet
 
 - [ ] **QUAL-01**: Deutsche Komposita werden ueber eine lizenzkonforme Wortliste zerlegt (Tantivy split_compound); die Lizenz der Liste ist AGPL-kompatibel und dokumentiert
-- [ ] **QUAL-02**: Suchen nach Teilwoertern finden zusammengesetzte Woerter, belegt durch Testfaelle im CI-Sprachfall-Set (z. B. "Genehmigung" findet "Baugenehmigung")
+- [ ] **QUAL-02**: Suchen nach Teilwoertern finden zusammengesetzte Woerter, belegt durch Testfaelle im CI-Sprachfall-Set (z. B. "Vereinbarung" findet "Pachtvereinbarung"); das frueher hier genannte Beispiel "Genehmigung" findet "Baugenehmigung" ist gemessen nicht baubar und steht als benannte Grenze in docs/german-analyzer.md (Owner-Entscheid a vom 08.09.2026)
 - [ ] **QUAL-03**: Der offene Endungsvergleich der Verdikte gegen den Generator (v1.0-Messbericht "Was noch fehlt") ist durchgefuehrt und dokumentiert; Befunde fliessen als Testfaelle ein
 
 ### Ergebnisseite
@@ -25,7 +25,7 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 ### Messung
 
 - [ ] **MESS-01**: Ein Vergleichslauf auf der AWS-Box (vorhandener v1.0-Korpus, 51.961 Docs) belegt die RSS-Ersparnis der gemeinsamen Engine gegen die v1.0-Baseline (docs/measurements)
-- [ ] **MESS-02**: Der Vergleichslauf zeigt keine Regression: p95-Suchlatenz und die 7 deutschen CI-Sprachfaelle bleiben im v1.0-Rahmen
+- [ ] **MESS-02**: Der Vergleichslauf zeigt keine Regression: p95-Suchlatenz und die 10 deutschen CI-Sprachfaelle bleiben im v1.0-Rahmen
 - [ ] **MESS-03**: Der Messbericht liegt in docs/measurements mit identischer Struktur wie der v1.0-Bericht (vergleichbar Zeile fuer Zeile)
 
 ### Release
