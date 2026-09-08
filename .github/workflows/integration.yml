@@ -1604,6 +1604,28 @@ jobs:
             exit 1
           fi
 
+          # The rest of the same rule, and it is the mirror of carried_operators
+          # in backend/src/findling/query/rewrite.py (bug audit LOW-8 of plan
+          # 07-05). The comment above used to name these marks and then ask
+          # about the word count alone, on the argument that only the count can
+          # be broken by accident. That argument covers the edit somebody makes
+          # to the line; it does not cover the paraphrase they replace it with,
+          # and a line with one of these marks in it never reaches the model, so
+          # the number below would again be a lexical search under the name of a
+          # semantic one. Three cheap questions, one message each.
+          if printf '%s' "${PARAPHRASE_TERM}" | grep -q '"'; then
+            echo "::error::PARAPHRASE_TERM carries a quotation mark, and a quoted line asks for exactness: carried_operators() reports PHRASE, one_round drops the vector half, and the duration below would time a lexical search."
+            exit 1
+          fi
+          if printf '%s' "${PARAPHRASE_TERM}" | grep -Eq '(^|[[:space:]])-'; then
+            echo "::error::PARAPHRASE_TERM carries a leading minus, and an excluded word asks for exactness: carried_operators() reports EXCLUSION, one_round drops the vector half, and the duration below would time a lexical search."
+            exit 1
+          fi
+          if printf '%s' "${PARAPHRASE_TERM}" | grep -q ':'; then
+            echo "::error::PARAPHRASE_TERM carries a colon, which is a field or a file type: carried_operators() reports FIELD or FILETYPE, one_round drops the vector half, and the duration below would time a lexical search."
+            exit 1
+          fi
+
           # The second structural gate, and it is about the moment rather than
           # about the line (bug audit MEDIUM-4 of plan 07-05). The restart below
           # is only allowed to happen once the second track has run dry: a
