@@ -143,4 +143,60 @@ Spur durchgelaufen ist und der seither nur noch sucht, trägt die 544 MB also
 ohne Gegenwert. Das ist der Normalfall einer laufenden Installation und nicht
 der Randfall.
 
-Der Entscheid gegen die Schwelle folgt im nächsten Schritt dieses Plans.
+---
+
+## 4. Der Entscheid, gegen die Schwelle von 100 MB
+
+Die Schwelle stand vor der Messung fest und steht in `07-03-PLAN.md`, Task 2:
+**liegt die realistische Ersparnis eines faulen Baus unter 100 MB, wird nicht
+gebaut**, und der faule Bau bekommt einen Eintrag in `deferred-items.md` statt
+einer Zeile im Baum.
+
+Die realistische Ersparnis ist die Summe der Posten, die ein Container, der nur
+noch sucht, dann nicht mehr bezahlt. Das sind genau die fünf Kandidaten:
+
+| Posten | amd64 | arm64 emuliert |
+|---|---:|---:|
+| 11a-tokenizers-modul-importiert | 4,2 MB | 6,0 MB |
+| 11b-erste-tokenizer-instanz | 265,8 MB | 246,6 MB |
+| 12a-splitter-gebaut | 273,5 MB | 294,0 MB |
+| 12b-erster-chunkerlauf | 0,8 MB | 3,5 MB |
+| 12c-zweiter-chunkerlauf | 0,0 MB | 0,0 MB |
+| **Summe** | **544,3 MB** | **550,1 MB** |
+
+Nicht dazu gehört der Vektorbestand: `open_vectors` bleibt eifrig, weil
+`attach_vectors` und der Löschpfad der Zustandsdatenbank denselben Handle
+brauchen (D-21). Er steht in keiner der fünf Zeilen und wird von keiner
+verschoben. Nicht dazu gehören ferner die Modellgewichte: die werden schon heute
+faul geladen und fallen erst mit Schritt 14 an.
+
+> **Entschieden wird gegen 544,3 MB auf amd64 und 550,1 MB auf emuliertem arm64,
+> gegen eine Schwelle von 100 MB. Die Ersparnis liegt beim Fünffachen der
+> Schwelle. Der faule Bau wird gebaut.**
+
+Der zweite Ast der Abbruchbedingung ist ebenfalls geprüft und trägt nicht: das
+`one_load`-Tor ruft `_wire_the_second_track()` direkt und liest danach
+`worker._model`, `worker._chunker` und `worker._vectors`
+(`backend/src/findling/tools/one_load.py:220-247`). Ein fauler Chunker macht
+diese Stelle rot, wenn sie unverändert bleibt, aber sie lässt sich mitziehen,
+ohne eine der vier Erwartungen von eins zu lockern und ohne einen der drei
+Rotbeweise anzufassen. Ein Tor, das für einen Speicherfix aufgeweicht wird, wäre
+teurer als der Fix; hier muss es nicht aufgeweicht werden.
+
+---
+
+## 5. Was das für das RAM-Budget des Projekts heißt
+
+Die Budget-Tabelle in `CLAUDE.md` kennt einen Posten "onnxruntime + e5-small
+int8" mit "0 bei lazy_load, 250 bis 400 MB Spitze" und einen Posten "Tantivy
+Writer". Einen Posten "Tokenizer und Splitter" kennt sie nicht. Gemessen ist
+dieser Posten mit 544 MB **größer als das Modell**, und er ist heute nicht
+faul. Ob die Tabelle nachgezogen wird, entscheidet der Owner; dieser Bericht
+ändert `CLAUDE.md` nicht.
+
+---
+
+## 6. Nach dem Bau
+
+Die tatsächliche Ersparnis wird mit demselben Skript nachgemessen und hier neben
+die erwartete Zahl gestellt. Siehe Abschnitt 7.
