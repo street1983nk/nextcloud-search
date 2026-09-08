@@ -48,10 +48,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import APP_VERSION, Corpus
+from findling.api import resources
 from findling.api.status import NO_VECTORS_YET, STATE_UNREADABLE, VECTORS_UNREADABLE, report
 from findling.config import MAX_FILE_BYTES, settings
 from findling.embed.engine import ENGINE_COLD, ENGINE_DISABLED, ENGINE_MISSING, ENGINE_STATES
 from findling.embed.model import load_count
+from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, artifact_path, wordlist_hash
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
 from findling.store.vectors import EMBEDDING_DIMENSIONS, Chunk, open_vectors
@@ -394,6 +396,88 @@ def test_a_version_drift_is_reported_as_reindex_required(
     answer = _status(client, sign("admin"))
 
     assert answer["reindexRequired"] is True
+
+
+# The constituents the nouns variant gets on the volume below. Deliberately not
+# the fixture list: the two digests have to differ, otherwise a switch of the
+# variant would look exactly like no switch at all and the test would stay green
+# on a container that ignores the setting.
+NOUNS_CONSTITUENTS = ("bauamt", "genehmigung", "vertrag", "kuendigung", "frist", "beschaeftigte")
+
+
+def test_switching_the_dictionary_variant_asks_for_a_reindex(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The road an admin really takes, end to end: FINDLING_COMPOUND_DICT is
+    # turned from full to nouns and the admin page is asked afterwards. The test
+    # above reaches the same flag by writing a mark into the state database by
+    # hand, which proves the reporting but not the path that leads to it.
+    #
+    # The first half is not decoration. Without it a green second half would be
+    # green on a container that asks for a reindex always.
+    assert _status(client, sign("admin"))["reindexRequired"] is False
+
+    monkeypatch.setenv("FINDLING_COMPOUND_DICT", "nouns")
+    settings.cache_clear()
+
+    # The artifact of the new variant has to be on the volume before the route is
+    # asked again. Without it build_artifact would fall back to the recipe over
+    # /usr/share/dict/ngerman, which no development machine has, expected_marks
+    # would return None and version_drift would answer UNPROVEN_WORDLIST: the
+    # right verdict for the wrong reason.
+    artifact = artifact_path()
+    full_artifact = artifact_path("full")
+    # And it has to land on a file of its own. artifact_path carries the variant
+    # since bug audit H2 of plan 06.1-17, and this line is what keeps the test
+    # honest: without it the write below would overwrite the very list the index
+    # was built from, and the drift measured afterwards would be the drift of an
+    # edited file instead of the drift of a switched setting. Measured while
+    # writing this test: with the switch removed and this assertion missing, the
+    # test stayed green.
+    assert artifact != full_artifact
+    artifact.write_text("\n".join(NOUNS_CONSTITUENTS) + "\n", encoding=ENCODING)
+    nouns_digest = wordlist_hash(NOUNS_CONSTITUENTS)
+    artifact.with_name(artifact.name + DIGEST_SUFFIX).write_text(nouns_digest + "\n", encoding=ENCODING)
+    # The list of the old variant is still where it was, so the index and its
+    # mark are untouched and the only thing that changed is the setting.
+    recorded = full_artifact.with_name(full_artifact.name + DIGEST_SUFFIX)
+    assert recorded.read_text(encoding=ENCODING).strip() == indexed_volume.digest
+
+    # A variant switch is a container restart in reality, and the marks cache has
+    # exactly the lifetime of a process. It is keyed on the dictionary directory,
+    # which does not move when only the variant changes, so without this the
+    # route would answer out of the marks of the variant before it.
+    monkeypatch.setattr(resources, "_MARKS", None)
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["reindexRequired"] is True
+
+    # Not the substitute answer. expected_marks really read the new list, so the
+    # drift is a measured difference between two digests and not the report of a
+    # container that can read no list at all, which carries the same flag for a
+    # completely different reason.
+    marks = resources.expected_marks()
+    assert marks is not None
+    assert marks["wordlist_hash"] == nouns_digest
+    store = open_store(indexed_volume.root / "state.db")
+    try:
+        assert "wordlist_hash" in store.version_mismatch(marks)
+        assert resources.version_drift(store) == ["wordlist_hash"]
+    finally:
+        store.close()
+
+    # wordlistHash keeps naming the list the index was built with and not the one
+    # that is configured now. It sits next to indexVersion and analyzerVersion
+    # and all three say how the existing index was made; the disagreement between
+    # that and the setting is what reindexRequired is for. Both sides of the
+    # comparison are computed here, so neither is a string copied out of an
+    # earlier run.
+    assert answer["wordlistHash"] == indexed_volume.digest
+    assert answer["wordlistHash"] != nouns_digest
 
 
 def test_the_answer_names_the_version_this_container_was_registered_under(
