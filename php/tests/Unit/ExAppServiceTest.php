@@ -366,6 +366,78 @@ final class ExAppServiceTest extends TestCase {
 		self::assertSame([], $service->snippets('alice', 'quarterly report', [11, 22], false, $floor / 2));
 	}
 
+	// -- the per call ceiling, so a larger page budget can do anything ---------
+
+	/**
+	 * The timeout that really reached the transport for one candidate call.
+	 *
+	 * The ceiling is left out of the call entirely when it is null, because
+	 * "the caller said nothing" is one of the three cases below and passing the
+	 * default in by hand would test the caller instead of the method.
+	 */
+	private function timeoutThatReachedTheContainer(float $secondsLeft, ?float $ceiling = null): float {
+		$service = $this->service();
+		$seen = null;
+
+		$service->method('proxyRequest')->willReturnCallback(
+			function (string $path, string $userId, string $method, array $params, float $timeout) use (&$seen): IResponse {
+				$seen = $timeout;
+
+				return $this->answer('{"candidates":[],"hasMore":false,"nextOffset":0}');
+			},
+		);
+
+		if ($ceiling === null) {
+			$service->searchCandidates('alice', 'quarterly report', 20, 0, false, $secondsLeft);
+		} else {
+			$service->searchCandidates('alice', 'quarterly report', 20, 0, false, $secondsLeft, $ceiling);
+		}
+
+		self::assertIsFloat($seen, 'the container was never asked, so no timeout reached it');
+
+		return $seen;
+	}
+
+	public function testACallerThatNamesNoCeilingKeepsTheDialogCeiling(): void {
+		// The unified search is that caller, and this is the half of the change
+		// that has to stay invisible: the dialog waits for every provider in
+		// parallel, so its number is a property of the dialog and must not move
+		// because a second caller wanted a larger one.
+		$dialog = $this->constantFloat('REQUEST_TIMEOUT_SECONDS');
+
+		self::assertSame($dialog, $this->timeoutThatReachedTheContainer($dialog * 4));
+	}
+
+	public function testTheCeilingOfThePageReachesTheContainerWhenTheBudgetIsLarger(): void {
+		// The measured number of docs/measurements/2026-09-seitenbudget/ is 1.5
+		// and therefore the same as the dialog's today, which would make this
+		// test unable to fail on its own. The second assertion is what keeps it
+		// honest: an arbitrary raised ceiling has to travel too, so the case
+		// really is "what the caller handed in" and not "the constant that the
+		// default would have produced anyway".
+		$page = $this->constantFloat('PAGE_REQUEST_TIMEOUT_SECONDS');
+
+		self::assertSame($page, $this->timeoutThatReachedTheContainer($page * 4, $page));
+
+		$raised = $this->constantFloat('REQUEST_TIMEOUT_SECONDS') * 2;
+		self::assertSame($raised, $this->timeoutThatReachedTheContainer($raised * 4, $raised));
+	}
+
+	public function testARemainingBudgetBelowTheCeilingBeatsTheCeiling(): void {
+		// The two numbers say different things and the smaller one always wins.
+		// Without this the raised ceiling of the page would undo perf audit H5:
+		// a caller with 0.4 s left would wait its full ceiling and the wall
+		// clock of the whole request would be the ceiling plus what was already
+		// spent.
+		$page = $this->constantFloat('PAGE_REQUEST_TIMEOUT_SECONDS');
+		$floor = $this->constantFloat('MIN_CALL_SECONDS');
+		$budget = ($page + $floor) / 2;
+
+		self::assertLessThan($page, $budget, 'the budget of this case has to be the smaller number');
+		self::assertGreaterThan($floor, $budget, 'below the floor no call is placed at all');
+		self::assertSame($budget, $this->timeoutThatReachedTheContainer($budget, $page));
+	}
+
 	// -- behaviour 8: the cap on the answer body, before the parser -----------
 
 	/**

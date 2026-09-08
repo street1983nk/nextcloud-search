@@ -89,6 +89,33 @@ class ExAppService {
 	private const REQUEST_TIMEOUT_SECONDS = 1.5;
 
 	/**
+	 * The ceiling per call of the own result page, measured on 2026-09-09.
+	 *
+	 * One and a half seconds, and it is the same number as the search dialog
+	 * above by measurement and not by copy. docs/measurements/2026-09-seitenbudget/
+	 * timed a candidate call with limit=100 twenty times against the running
+	 * container: p95 0.022 s, highest value 0.024 s, an eightieth of this
+	 * ceiling. The rule of that report is "p95 plus half of it, rounded up to
+	 * half seconds, but never below 1.5", and on those numbers the lower bound
+	 * is what decides. A higher number would be an invented one.
+	 *
+	 * The page owns a number of its own all the same, and that is the point of
+	 * this constant. The dialog waits for every provider in parallel, so 1.5 s
+	 * is a property of the dialog; the page waits for nobody. When a later
+	 * measurement on a real instance finds a slow candidate call, this line
+	 * moves and the dialog does not, which is exactly what could not be done
+	 * before: call() used to clamp every call to REQUEST_TIMEOUT_SECONDS, so a
+	 * larger page budget bought more rounds and never more patience per round.
+	 *
+	 * Why a parameter and not a second call path: the research of this phase
+	 * preferred a second method next to adminGet(), and the decision went the
+	 * other way on purpose. A second path would have duplicated the four
+	 * failure cases of call(), and a duplicated failure path is precisely the
+	 * place where two branches drift apart.
+	 */
+	public const PAGE_REQUEST_TIMEOUT_SECONDS = 1.5;
+
+	/**
 	 * Two seconds for a reading call of the admin page, and the arithmetic is a
 	 * different one from the search above.
 	 *
@@ -355,9 +382,12 @@ class ExAppService {
 	 * asking. An empty list means the index has nothing more to offer for this
 	 * page, which is an ordinary result.
 	 *
+	 * @param float $ceilingSeconds how long this caller waits for the one call
+	 *                              this method makes; the remaining budget still
+	 *                              wins whenever it is the smaller number
 	 * @return array{candidates:list<array{fileId:int,title?:string,snippet?:string}>,hasMore:bool,nextOffset:int,degraded:bool}|null
 	 */
-	public function searchCandidates(string $userId, string $term, int $limit, int $offset, bool $titleOnly, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS): ?array {
+	public function searchCandidates(string $userId, string $term, int $limit, int $offset, bool $titleOnly, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS, float $ceilingSeconds = self::REQUEST_TIMEOUT_SECONDS): ?array {
 		// An empty term is not an error, it is what the unified search sends
 		// while the user is still typing, and it can only ever produce a 422
 		// over there. A round trip per keystroke for a request that cannot
@@ -375,7 +405,7 @@ class ExAppService {
 			'limit' => $limit,
 			'offset' => $offset,
 			'titleOnly' => $titleOnly,
-		], $secondsLeft);
+		], $secondsLeft, $ceilingSeconds);
 		if ($decoded === null) {
 			return null;
 		}
@@ -421,9 +451,12 @@ class ExAppService {
 	 * an excerpt. A hit without a snippet beats no hit at all.
 	 *
 	 * @param list<int> $fileIds file ids that have passed the permission recheck
+	 * @param float $ceilingSeconds how long this caller waits for the one call
+	 *                              this method makes; the remaining budget still
+	 *                              wins whenever it is the smaller number
 	 * @return array<int,array{text:string,highlights:list<array{int,int}>}>
 	 */
-	public function snippets(string $userId, string $term, array $fileIds, bool $titleOnly, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS): array {
+	public function snippets(string $userId, string $term, array $fileIds, bool $titleOnly, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS, float $ceilingSeconds = self::REQUEST_TIMEOUT_SECONDS): array {
 		$term = trim($term);
 		if ($term === '') {
 			return [];
@@ -444,7 +477,7 @@ class ExAppService {
 			'query' => $term,
 			'fileIds' => array_values($wanted),
 			'titleOnly' => $titleOnly,
-		], $secondsLeft);
+		], $secondsLeft, $ceilingSeconds);
 		if ($decoded === null) {
 			return [];
 		}
@@ -607,13 +640,24 @@ class ExAppService {
 	 * bounded string, a body that does not parse into an array. None of them
 	 * throws, every one of them ends in a null.
 	 *
+	 * Two numbers bound the timeout and they say different things. The ceiling
+	 * is how patient this caller is with a single call, a property of the
+	 * caller: the dialog waits for every provider at once and stays at
+	 * REQUEST_TIMEOUT_SECONDS, the result page waits for nobody and hands in
+	 * PAGE_REQUEST_TIMEOUT_SECONDS instead. The remaining budget is what is left
+	 * of that caller's wall clock across all of its calls. The smaller of the
+	 * two always wins, so a caller whose budget has run further down than its
+	 * ceiling still waits only for its budget.
+	 *
 	 * @param array<string,mixed> $body
 	 * @param float $secondsLeft what is left of the caller's wall clock; the
 	 *                           timeout of this call never exceeds it
+	 * @param float $ceilingSeconds how long this caller is willing to wait for
+	 *                              one call, never longer than $secondsLeft
 	 * @return array<mixed>|null
 	 */
-	private function call(string $path, string $userId, array $body, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS): ?array {
-		$timeout = min(self::REQUEST_TIMEOUT_SECONDS, $secondsLeft);
+	private function call(string $path, string $userId, array $body, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS, float $ceilingSeconds = self::REQUEST_TIMEOUT_SECONDS): ?array {
+		$timeout = min($ceilingSeconds, $secondsLeft);
 		if ($timeout < self::MIN_CALL_SECONDS) {
 			// Not an error: the budget is spent, and the caller shows what it
 			// already has instead of waiting for an answer nobody displays.
