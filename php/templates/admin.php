@@ -52,6 +52,26 @@ $percent = is_int($coverage['percent'] ?? null) ? $coverage['percent'] : null;
 // semantic half nobody could ask (D-16).
 $embedded = $whole($coverage['embedded'] ?? 0);
 $embeddedPercent = is_int($coverage['embeddedPercent'] ?? null) ? $coverage['embeddedPercent'] : null;
+// The state of the engine behind that figure, as one of five words, and the
+// sentence the page shows for it. Six sentences for five words, because a
+// container older than this app reports no state at all and AdminViewService
+// hands that over as null: "the container has not said" is not "the model
+// arrives on first demand" (T-07-03).
+//
+// Word for word the six sentences of js/admin.js, which rewrites this line on
+// every poll, and a gate in backend/tests/test_admin_ui_contract.py holds the
+// pair together. Which sentence belongs to which word is decided here and in
+// the script and nowhere else: the container reports a state, never a text an
+// admin reads, so nothing it sends can become the wording of this page.
+$engineSentences = [
+	'loaded' => $l->t('The model is in memory, the semantic search is answering.'),
+	'cold' => $l->t('The model is read when it is first needed. That is the normal state.'),
+	'disabled' => $l->t('The semantic half is switched off in the settings of the container.'),
+	'missing' => $l->t('There is no model in this image. The search keeps answering with full text hits, the semantic half stays empty.'),
+	'waiting_for_retry' => $l->t('Reading the model failed once and is tried again shortly. Until then the search answers with full text hits.'),
+];
+$engineState = is_string($backend['engineState'] ?? null) ? $backend['engineState'] : '';
+$engineSentence = $engineSentences[$engineState] ?? $l->t('This container does not report the state of the model yet.');
 $provisional = ($coverage['provisional'] ?? false) === true;
 $mountsTotal = $whole($coverage['mountsTotal'] ?? 0);
 $mountsFinished = $whole($coverage['mountsFinished'] ?? 0);
@@ -294,6 +314,22 @@ $banners = [
 		<p class="settings-hint" id="findling-semantic-subline"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('%1$s of %2$s indexable files can also be found by meaning', [$count($embedded), $count($indexable)])); ?></p>
 
 		<p class="settings-hint" id="findling-semantic-unknown"<?php if ($hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.')); ?></p>
+
+		<?php
+		/*
+		 * The state of the engine, and it is a plain sentence rather than a
+		 * second progress bar: the figure above is a number, this is a
+		 * situation. Nought per cent is equally true for a model that is not in
+		 * the image, for a load that threw and for a track that has not got
+		 * there yet, and the three ask completely different things of the
+		 * person reading the page.
+		 *
+		 * No hidden attribute and no rule of its own: one of the six sentences
+		 * is always the right one, so this line has nothing to hide. It
+		 * disappears with the block around it when there is no denominator.
+		 */
+		?>
+		<p class="settings-hint" id="findling-semantic-engine"><?php p($engineSentence); ?></p>
 
 		<p class="settings-hint" id="findling-semantic-hint"><?php p($l->t('The full text search covers every indexed document. The semantic search covers the beginning of each document, and this second figure fills up after the first index has finished.')); ?></p>
 	</div>

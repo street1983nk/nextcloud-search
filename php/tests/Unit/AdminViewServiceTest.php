@@ -10,8 +10,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The two pieces of arithmetic of the status page that can be asked without a
- * Nextcloud: the stall verdict (DI-05-22) and the coverage figures (D-16).
+ * The three judgements of the status page that can be asked without a
+ * Nextcloud: the stall verdict (DI-05-22), the coverage figures (D-16) and the
+ * state of the embedding engine (plan 07-04).
  *
  * Both are static and public for the same reason, and the reason is written out
  * at each of them: they are the arithmetic and nothing else, and the
@@ -190,5 +191,71 @@ final class AdminViewServiceTest extends TestCase {
 		// bar with a negative value renders as an empty bar and says nothing.
 		self::assertSame(0, AdminViewService::coverageShare(-5, 200, true));
 		self::assertSame(100, AdminViewService::coverageShare(300, 200, true));
+	}
+
+	// -- the state of the engine: five words, and null for everything else ----
+
+	/**
+	 * The five words the container may send, each of them passed through.
+	 *
+	 * They are the protocol and they are decided in the container, in
+	 * backend/src/findling/embed/engine.py. This side does not translate them
+	 * and does not shorten them; it decides whether the value is one of them,
+	 * and the page picks the sentence an admin reads.
+	 *
+	 * @return array<string,array{string}>
+	 */
+	public static function everyStateOfTheEngine(): array {
+		return [
+			'the weights are in memory' => ['loaded'],
+			'nothing has asked for a vector yet' => ['cold'],
+			'the semantic half is switched off' => ['disabled'],
+			'there is no model in the image' => ['missing'],
+			'a load threw and the cooldown is running' => ['waiting_for_retry'],
+		];
+	}
+
+	#[DataProvider('everyStateOfTheEngine')]
+	public function testAWordOfTheClosedListIsPassedThrough(string $state): void {
+		self::assertSame($state, AdminViewService::engineState($state));
+	}
+
+	public function testAContainerThatDoesNotReportTheStateDoesNotProduceColdOnThePage(): void {
+		// T-07-03, and the reason this judgement answers null rather than a
+		// word. A container older than this app leaves the key out, so what
+		// arrives here is null, and cold would promise a load on first demand
+		// on an instance that has not said anything at all. An update in the
+		// wrong order is the ordinary way to be in this state, and the page has
+		// a sentence of its own for it.
+		self::assertNull(AdminViewService::engineState(null));
+	}
+
+	/**
+	 * Everything that is not one of the five words, and none of it is cast.
+	 *
+	 * The last three rows are the ones a cast would ruin quietly: (string)3 is
+	 * "3", (string)true is "1", and both would look like a value this side
+	 * decided rather than like a value it refused.
+	 *
+	 * @return array<string,array{mixed}>
+	 */
+	public static function everythingThatIsNotAStateOfTheEngine(): array {
+		return [
+			'a word from a later release' => ['unloading'],
+			'the empty string' => [''],
+			'a sentence instead of a state' => ['the model is fine'],
+			'markup' => ['<b>cold</b>'],
+			'a word of the list in the wrong case' => ['Cold'],
+			'a number' => [3],
+			'a boolean' => [true],
+			'a list' => [['cold']],
+		];
+	}
+
+	#[DataProvider('everythingThatIsNotAStateOfTheEngine')]
+	public function testAValueOutsideTheClosedListIsRefusedAndNeverCast(mixed $value): void {
+		// T-07-02. This value decides which sentence an admin reads as a
+		// recommendation, and it comes from across the trust boundary.
+		self::assertNull(AdminViewService::engineState($value));
 	}
 }

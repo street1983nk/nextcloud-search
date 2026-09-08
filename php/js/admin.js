@@ -293,6 +293,10 @@
       // half stands still, so every other value in here is unchanged from poll
       // to poll and the render would be skipped (D-16).
       coverage.embedded, coverage.embeddedPercent,
+      // And the state of the engine behind that figure, for the same reason:
+      // it changes on the poll where the first load succeeds or fails, and
+      // during that pass nothing else in this line moves at all.
+      (view.backend || {}).engineState,
       coverage.provisional, coverage.mountsFinished,
       coverage.mountsTotal, estimate.ocrMeasured, estimate.secondsLeft,
       estimate.bytesExpected, estimate.startupValues, estimate.spaceWarning,
@@ -359,7 +363,7 @@
     shown('findling-coverage-provisional', hasDenominator && coverage.provisional === true)
     shown('findling-coverage-empty', !hasDenominator)
 
-    semanticBlock(coverage, hasDenominator)
+    semanticBlock(coverage, hasDenominator, (view.backend || {}).engineState)
   }
 
   /**
@@ -377,7 +381,7 @@
    * the value it had when the page was opened, next to a first figure that is
    * live, which is the shape of a page that lies while looking healthy.
    */
-  function semanticBlock (coverage, hasDenominator) {
+  function semanticBlock (coverage, hasDenominator, engineState) {
     const indexable = whole(coverage.indexable)
     const embedded = whole(coverage.embedded)
     // Null and not zero for the reason the first figure is: nought per cent is
@@ -396,11 +400,46 @@
       bar.setAttribute('value', String(percent === null ? 0 : percent))
     }
 
+    text('findling-semantic-engine', engineSentence(engineState))
+
     shown('findling-semantic', hasDenominator)
     shown('findling-semantic-figure', hasFraction)
     shown('findling-semantic-bar', hasFraction)
     shown('findling-semantic-subline', hasFraction)
     shown('findling-semantic-unknown', !hasFraction)
+  }
+
+  /**
+   * The six sentences about the state of the engine, one of them always right.
+   *
+   * Word for word the six of the template, which renders this line server side
+   * on the first paint. The two halves have to agree or the sentence changes
+   * three seconds after the page opened with nothing having happened, and a
+   * gate in backend/tests/test_admin_ui_contract.py holds them together.
+   *
+   * The container sends one of five words and never a sentence, so nothing an
+   * admin reads here comes from across the boundary: the mapping from a word to
+   * a sentence lives on this side, in the language of the admin.
+   */
+  function engineSentence (state) {
+    switch (state) {
+      case 'loaded':
+        return t('findling', 'The model is in memory, the semantic search is answering.')
+      case 'cold':
+        return t('findling', 'The model is read when it is first needed. That is the normal state.')
+      case 'disabled':
+        return t('findling', 'The semantic half is switched off in the settings of the container.')
+      case 'missing':
+        return t('findling', 'There is no model in this image. The search keeps answering with full text hits, the semantic half stays empty.')
+      case 'waiting_for_retry':
+        return t('findling', 'Reading the model failed once and is tried again shortly. Until then the search answers with full text hits.')
+      default:
+        // Everything that is not one of the five, which is what a container
+        // older than this app looks like: it sends no state at all and
+        // AdminViewService turns that into null. Saying "cold" here would
+        // promise a load that nobody announced (T-07-03).
+        return t('findling', 'This container does not report the state of the model yet.')
+    }
   }
 
   /**

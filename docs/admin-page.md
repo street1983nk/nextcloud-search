@@ -119,6 +119,55 @@ Ein fehlender oder unlesbarer Vektorspeicher ist ebenfalls ein Zustand und nie
 ein Fehler: die Statusantwort trägt dann `embedded` gleich 0 und eine Notiz, und
 jede Volltextzahl derselben Antwort bleibt gültig.
 
+## Die Zeile darunter: in welchem Zustand die Engine steht
+
+Unter der zweiten Zahl steht ein Satz, und er ist bewusst kein zweiter
+Fortschrittsbalken: die Deckung ist eine Zahl, der Zustand der Engine ist eine
+Lage. Der Container meldet ihn als `engineState`, als eines von fünf Wörtern,
+und die Seite macht daraus einen Satz, der sagt, was zu tun ist.
+
+| Meldung des Containers | Was auf der Seite steht | Was ein Admin tun kann |
+|---|---|---|
+| `loaded` | Das Modell liegt im Speicher, die semantische Suche antwortet. | nichts |
+| `cold` | Das Modell wird beim ersten Bedarf geladen. Das ist der Normalfall. | nichts, warten |
+| `disabled` | Die semantische Hälfte ist in den Einstellungen des Containers abgeschaltet. | `FINDLING_EMBED_ENABLED` setzen, wenn das nicht gewollt war |
+| `missing` | In diesem Abbild liegt kein Modell. | ein Abbild mit Modell einsetzen |
+| `waiting_for_retry` | Das Laden ist einmal gescheitert und wird in Kürze erneut versucht. | fünf Minuten warten, danach das Protokoll lesen |
+| kein Feld | Dieser Container meldet den Zustand des Modells noch nicht. | die beiden Hälften auf denselben Stand bringen |
+
+Die sechste Zeile ist der Container, der älter ist als diese App. Sie ist aus
+demselben Grund eine eigene Lage wie `embedded` auf der PHP-Seite `null` ist und
+nicht 0: "hat nichts gesagt" ist etwas anderes als "ist kalt". Eine
+Aktualisierung in der falschen Reihenfolge darf auf der Seite keinen Zustand
+behaupten, den niemand gemeldet hat.
+
+### Warum "0 Prozent" allein keine Auskunft über die Engine ist
+
+Drei sehr verschiedene Lagen zeigen dieselbe zweite Zahl:
+
+- Das Modell fehlt im Abbild. Die Zahl bleibt für immer bei 0, die Suche liefert
+  weiterhin Volltexttreffer, und kein Warten ändert daran etwas.
+- Das Laden ist gescheitert und wird in 300 Sekunden erneut versucht. Die Zahl
+  steht still und läuft danach von selbst weiter.
+- Die zweite Spur ist einfach noch nicht so weit. Die Zahl steigt, nur langsam.
+
+Ohne diese Zeile verlangen alle drei dieselbe Fehlersuche, und zwei von drei
+Malen ist sie überflüssig. Mit ihr sind es drei verschiedene Sätze.
+
+### Was die Auskunft kostet
+
+Nichts, was ein Admin bezahlen müsste. Die Frage nach dem Zustand baut keine
+Engine und lädt kein Modell: sie liest den Halter des Prozesses und, wenn dort
+nichts steht, zweimal das Dateisystem. Das ist Absicht und mit einem Testfall
+festgehalten. Die Seite fragt im Sekundentakt, solange sie offen ist, und eine
+Statusantwort, die dabei das Modell lädt, würde die 118 MB melden, die sie
+gerade selbst verursacht hat.
+
+Die fünf Wörter sind eine geschlossene Menge und nennen nie einen Pfad und nie
+einen Dateinamen, wie jede andere Notiz dieser Antwort auch. Ein Wort, das nicht
+in der Menge steht, wird auf der PHP-Seite verworfen und nicht umgewandelt; die
+Seite zeigt dann die sechste Zeile.
+
 ## Was nicht im Nenner steht, und warum
 
 Nicht im Nenner stehen: Ordner, Dateien eines nicht unterstützten Typs, Dateien
@@ -152,8 +201,9 @@ Fünf Quellen, und die Aufteilung ist eine Entscheidung und kein Zufall:
   Nextcloud kennt Mounts und Besitzer.
 - Aus dem Container, unter dem Schlüssel `backend`: `indexed`, `truncated`, die
   Dokumentzahl, die ACL-Zeilen, die Index- und Analyzer-Versionsmarken, der Hash
-  der Wortliste, Platz und Indexgröße, der wirklich durchgesetzte Größen-Cap und
-  der Durchsatz. Nur der Container weiß, was im Index steht.
+  der Wortliste, Platz und Indexgröße, der wirklich durchgesetzte Größen-Cap,
+  der Durchsatz und der Zustand der Engine. Nur der Container weiß, was im
+  Index steht und in welcher Lage seine zweite Hälfte ist.
 - Aus `findling_queue`: `scheduled` und `running`. Bewusst nicht über die
   HTTP-Routen der Warteschlange, denn die tragen das ExApp-Attribut und sind aus
   einer Admin-Sitzung nicht erreichbar; den Arbeitsvorrat dieser Seite beim
