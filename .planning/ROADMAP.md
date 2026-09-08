@@ -60,7 +60,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 **Wave 1**
 
-- [ ] 07-01-PLAN.md , Beleg EFF-01 und EFF-02 im Messbericht, ohne Produktionscode (Welle 1)
+- [x] 07-01-PLAN.md , Beleg EFF-01 und EFF-02 im Messbericht, ohne Produktionscode (Welle 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -142,7 +142,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 7. Gemeinsame Embedding-Engine | 0/4 | Planned | - |
+| 7. Gemeinsame Embedding-Engine | 1/4 | In Progress|  |
 | 8. Deutsche Komposita ohne Behelf | 0/? | Not started | - |
 | 9. Eigene Ergebnisseite | 0/? | Not started | - |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
