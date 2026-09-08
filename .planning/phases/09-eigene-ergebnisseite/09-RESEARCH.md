@@ -949,7 +949,16 @@ Diese Phase ist keine Umbenennung und keine Migration, aber sie beruehrt drei St
 | A6 | Eine dritte Routenklasse in Gate B verwaessert die Admin-Klasse nicht | Gate B | Die vorgeschlagene Erkennung ueber die Attributkombination ist eine Konstruktion dieser Recherche, kein Bestand. Sie muss im Plan mit ihren Selbsttests stehen, sonst ist die Behauptung ungeprueft |
 | A7 | Der Paritaetsjob kann sich per Cookie-Login anmelden und die Seitenroute als HTML abrufen | Paritaetstest | Falls die Login-Automatisierung im Job an einem Detail scheitert (Zwei-Faktor-Vorgabe, Rate-Limit), braucht Erfolgskriterium 4 einen anderen Weg. **Vor der Implementierung mit einem Wegwerf-Skript gegen die lokale Instanz probieren** |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Alle fuenf Fragen sind durch die Plaene der Phase beantwortet (Stand 08.09.2026):
+Q1 Offset-Decke -> 09-03 (PHP-Clamp MAX_CONTAINER_OFFSET + Lockstep-Gate, Container unangetastet);
+Q2 Per-Call-Deckel/Zeitbudget -> 09-01 (ceilingSeconds-Parameter, Budget aus fuenf Messreihen);
+Q3 fr.json -> 09-08 (vertagt, 24 Wortlaute nach docs/l10n-french.md, ROADMAP-Zeiger bei Phase 11);
+Q4 Sichtprobe 5 / Rueckkehrvertrag -> 09-05/09-08 (JS-Fallback tragend, UI-SPEC-Umformulierung);
+Q5 Paritaets-Einstieg -> 09-07 (--findling-html-Modus, Cookie-Login).
+(Die urspruenglichen Fragen stehen darunter im Wortlaut.)
+
 
 1. **Wie wird die Offset-Decke behandelt: PHP-Clamp oder hoehere `SEARCH_OFFSET_MAX`?**
    - Was wir wissen: Der Container lehnt Offsets ueber 1200 mit 422 ab, PHP macht daraus einen Fehlerblock mit falschem Wortlaut. Die Konstante hat eine eigene Sicherheitsbegruendung (security audit C1).
