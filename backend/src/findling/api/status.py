@@ -23,6 +23,16 @@ stock, which is the only place that holds it, and a stock that is absent or
 unreadable is a state of this container with a note, exactly like a state
 database that is.
 
+That figure has a companion since phase 7, and the two are not the same kind of
+value. ``embedded`` counts documents, ``engineState`` names the state of the
+engine that produces them, and the two take every combination: nought documents
+with a loaded engine is a track that is starting up, nought documents without a
+model in the image is a track that never starts. The page used to show one line
+for both. The state is read out of the holder in ``embed/engine.py``, and
+reading it builds nothing and loads nothing, which is a property this route
+depends on: an admin page polls, and an answer that loaded the engine on the way
+would report the memory it had just spent itself (T-07-04).
+
 *And one value that is neither a counter nor a measurement*: ``appVersion``, the
 version AppAPI registered this container under. It is here because D-11 has both
 halves carry the same major and minor and the other half compare them, and this
@@ -73,6 +83,7 @@ from pydantic import BaseModel, Field
 
 from findling.api import resources
 from findling.config import settings
+from findling.embed.engine import engine_state
 from findling.instance import volume_is_shared
 from findling.store.repo import Store, index_bytes, open_read_only
 from findling.store.vectors import VectorStoreError, open_vectors
@@ -159,6 +170,18 @@ class StatusResponse(BaseModel):
     # enforced it. Reported so that the setting on the page can be clamped to it
     # instead of displaying a number that does not apply (pitfall 2).
     maxFileBytes: int = 0
+    # Which of five states the embedding engine is in, out of embed/engine.py.
+    # The other half of ``embedded`` above and never a second spelling of it:
+    # that counter counts documents, this one describes the process, and no
+    # combination of the two is impossible. Nought documents with a loaded
+    # engine says the track is starting up, nought documents with no model says
+    # nothing is coming, and one figure alone cannot tell those apart.
+    #
+    # Defaulted to the empty string like every other field of this answer, and
+    # deliberately not to one of the five words: a default that named a state
+    # would be a claim this module makes without having asked. Nothing in this
+    # container produces it, because _volume() fills the field on every path.
+    engineState: str = ""
     note: str = ""
 
 
@@ -217,11 +240,19 @@ def _volume() -> StatusResponse:
     and it is the one whose version the other half most needs to be able to
     check: the minutes after an update are when a protocol mismatch is either
     seen or mistaken for a slow first pass.
+
+    ``engineState`` belongs here for the same kind of reason and it is asked in
+    the same minutes: a container that was deployed a minute ago is the one
+    whose admin wants to know whether the semantic half is going to work at all,
+    and there is no index yet to read that out of. It comes out of the process
+    and not out of a file, so it is available whether or not anything has been
+    counted.
     """
     resolved = settings()
     free, total = resources.disk_bytes()
     return StatusResponse(
         appVersion=_app_version(),
+        engineState=engine_state(),
         lowDisk=resources.low_disk(),
         diskFreeBytes=free,
         diskTotalBytes=total,
@@ -313,6 +344,10 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         # reason: they come out of another file, so a healthy state database
         # neither produces them nor clears them.
         embedded=volume.embedded,
+        # Carried over like the version above: the state of the engine is a
+        # property of this process and the state database has nothing to say
+        # about it, so it is asked once, in the branch that runs either way.
+        engineState=volume.engineState,
         note=volume.note,
         lowDisk=volume.lowDisk,
         diskFreeBytes=volume.diskFreeBytes,

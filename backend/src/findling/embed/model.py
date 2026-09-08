@@ -364,6 +364,37 @@ class EmbeddingModel:
         """True once the weights are in memory. False before the first use."""
         return self._engine is not None
 
+    @property
+    def artifacts_absent(self) -> bool:
+        """True once the load path found the directory without the artifacts.
+
+        The permanent half of the three answers of :meth:`_load`, made readable
+        without asking for a vector first. Nothing is looked at here: the flag
+        was set when the load path looked, and looking again would be the pair
+        of stat calls per question that the flag exists to avoid.
+
+        Read by :func:`findling.embed.engine.engine_state` for the admin page,
+        which needs the difference between "there is no model in this image" and
+        "nothing has been embedded yet". Both look like nought documents.
+        """
+        return self._absent
+
+    @property
+    def load_cooling_down(self) -> bool:
+        """True while an open that threw is still inside its cooldown.
+
+        The temporary half of the same three answers, and the reason it is a
+        property rather than a field: the state is not the timestamp, it is the
+        timestamp measured against :data:`LOAD_RETRY_SECONDS`, and that
+        comparison has one home. :meth:`_load` asks the same question through
+        this property, so the two can never drift into two spellings of one
+        rule.
+
+        Reading it has no side effect. The clock is read, nothing else.
+        """
+        stamp = self._load_failed_at
+        return stamp is not None and time.monotonic() - stamp < LOAD_RETRY_SECONDS
+
     def embed_passages(self, texts: Sequence[str]) -> EmbedOutcome:
         """One vector per document chunk, each one prefixed as a passage."""
         return self._embed(texts, prefix=PASSAGE_PREFIX)
@@ -437,7 +468,7 @@ class EmbeddingModel:
             return self._engine
         if self._absent:
             return None
-        if self._load_failed_at is not None and time.monotonic() - self._load_failed_at < LOAD_RETRY_SECONDS:
+        if self.load_cooling_down:
             return None
 
         model_path = self._model_dir / MODEL_FILE
