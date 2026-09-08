@@ -574,6 +574,30 @@ class QueueMapper extends QBMapper {
 	 * excluded in the WHERE clause, the second one for the row that becomes a
 	 * deletion between the two statements.
 	 *
+	 * **A dirty row is not moved to a trailing track, it is handed back.** The
+	 * mark says that the file changed while the container was holding the row,
+	 * so the text that pass produced is already stale. The embedding track never
+	 * reads the file: it cuts the stored text of the index into chunks, so a
+	 * dirty row carried over to it embeds bytes nobody has any more and then
+	 * acknowledges itself away, and the write that arrived is lost until the
+	 * nightly reconcile finds it hours later. That is the H4 defect of the phase
+	 * 2 audit rebuilt through the trailing track, and it is what made the
+	 * mutation case of integration.yml go red on 08.09.2026 with an empty work
+	 * stock and an index carrying an earlier revision.
+	 *
+	 * So those rows keep the kind they have, lose their claim and lose their
+	 * mark: the next content pass fetches the new bytes, indexes them, and hands
+	 * the row over then. The attempt counter goes back to zero with them for the
+	 * reason it does above, and it is the stronger reason here: the pass that
+	 * just ran did its work and finished, the row comes back because somebody
+	 * wrote to the file, and eight writes in a row would otherwise walk a
+	 * perfectly healthy file into failed(repeatedly_stuck).
+	 *
+	 * The two statements decide on the mark themselves rather than on the list
+	 * read above, and the switch runs first: a write landing between them finds
+	 * a row that is free and is merged by refreshExisting, which raises the kind
+	 * back to content on its own.
+	 *
 	 * The rows that are there are read before they are written, rather than
 	 * trusting the number of affected rows: MySQL reports changed rows and not
 	 * matched ones, so a row that already carries the kind and a zero counter
@@ -607,9 +631,32 @@ class QueueMapper extends QBMapper {
 					// once instead of after the lock timeout of its old kind.
 					->set('locked_at', $switch->createNamedParameter($this->freeMark(), IQueryBuilder::PARAM_DATE))
 					->where($switch->expr()->in('file_id', $switch->createNamedParameter($switchable, IQueryBuilder::PARAM_INT_ARRAY)))
-					->andWhere($switch->expr()->neq('kind', $switch->createNamedParameter(self::KIND_DELETE)));
+					->andWhere($switch->expr()->neq('kind', $switch->createNamedParameter(self::KIND_DELETE)))
+					// The whole of the paragraph above, as a condition and not
+					// as a read: a row whose file changed under the container
+					// goes nowhere near a track that does not fetch.
+					->andWhere($switch->expr()->eq('dirty', $switch->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
 				$switch->executeStatement();
-				$requeued += count($switchable);
+
+				// The rows that were dirty are freed where they are, with their
+				// mark cleared, because being handed back IS the answer to it:
+				// the next claim of their own kind reads the file again.
+				$stale = $this->db->getQueryBuilder();
+				$stale->update(self::TABLE_NAME)
+					->set('retries', $stale->createNamedParameter(0, IQueryBuilder::PARAM_INT))
+					->set('locked_at', $stale->createNamedParameter($this->freeMark(), IQueryBuilder::PARAM_DATE))
+					->set('dirty', $stale->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+					->where($stale->expr()->in('file_id', $stale->createNamedParameter($switchable, IQueryBuilder::PARAM_INT_ARRAY)))
+					->andWhere($stale->expr()->neq('kind', $stale->createNamedParameter(self::KIND_DELETE)))
+					->andWhere($stale->expr()->eq('dirty', $stale->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
+				$stale->executeStatement();
+
+				// Counted off rows that were read rather than off statements,
+				// for the reason the read above exists: MySQL reports changed
+				// rows and not matched ones. A row that was handed back does not
+				// carry the requested kind because of this call, so it does not
+				// count towards the answer either.
+				$requeued += count($switchable) - count(array_intersect($switchable, $this->dirtyFileIds($band)));
 			}
 
 			foreach (array_diff($band, array_keys($present)) as $fileId) {
@@ -635,6 +682,34 @@ class QueueMapper extends QBMapper {
 		}
 
 		return $requeued;
+	}
+
+	/**
+	 * The file ids of this band whose row carries the dirty mark right now.
+	 *
+	 * Read for the answer of requeueAs and never for its effect: both statements
+	 * there decide on the mark themselves, in the database, because a write can
+	 * land between a read and an update and the mark is exactly what that write
+	 * sets. What this list is for is the number the method returns.
+	 *
+	 * @param int[] $band
+	 * @return int[]
+	 */
+	private function dirtyFileIds(array $band): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('file_id')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->in('file_id', $qb->createNamedParameter($band, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('dirty', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
+
+		$ids = [];
+		$result = $qb->executeQuery();
+		while (($row = $result->fetch()) !== false) {
+			$ids[] = (int)$row['file_id'];
+		}
+		$result->closeCursor();
+
+		return $ids;
 	}
 
 	/**
