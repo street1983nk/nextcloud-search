@@ -1638,6 +1638,7 @@ UNIQUE_TERMS: dict[str, str] = {
     "Strasse": "15-schweiz-baubewilligung.pdf",
     "Baubewilligung": "15-schweiz-baubewilligung.pdf",
     "Ersatzabgabe": "15-schweiz-baubewilligung.pdf",
+    "Rechtsmittelbelehrung": "15-schweiz-baubewilligung.pdf",
     "Jänner": "16-oesterreich-mitteilung.pdf",
     "Grundbuchsauszug": "16-oesterreich-mitteilung.pdf",
     "Erlagschein": "16-oesterreich-mitteilung.pdf",
@@ -1649,9 +1650,15 @@ UNIQUE_TERMS: dict[str, str] = {
     "Sendebericht": "21-sendebericht.tif",
     "Lieferschein": "23-gedreht.jpg",
     "Zahlungserinnerung": "30-nur-ein-bild.pdf",
-    # The three constituents of phase 8, in the order of the files they belong
-    # to: Pachtvereinbarung, Grundbuchsauszug, Zahlungserinnerung.
+    # The constituents of phase 8, in the order of the files they belong to:
+    # Pachtvereinbarung, Rechtsmittelbelehrung, Grundbuchsauszug,
+    # Zahlungserinnerung. Three of the four are language cases of
+    # .github/workflows/integration.yml; "Vereinbarung" is not, because this file
+    # also writes the word out on its own and the case would then be green
+    # without the splitter it exists for. It stays under the uniqueness check
+    # anyway: it is still a term the corpus promises to carry exactly once.
     "Vereinbarung": "14-pacht-mit-anhang.pdf",
+    "Belehrung": "15-schweiz-baubewilligung.pdf",
     "Auszug": "16-oesterreich-mitteilung.pdf",
     "Erinnerung": "30-nur-ein-bild.pdf",
 }

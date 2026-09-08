@@ -13,7 +13,7 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 ### Suchqualitaet
 
 - [ ] **QUAL-01**: Deutsche Komposita werden ueber eine lizenzkonforme Wortliste zerlegt (Tantivy split_compound); die Lizenz der Liste ist AGPL-kompatibel und dokumentiert
-- [ ] **QUAL-02**: Suchen nach Teilwoertern finden zusammengesetzte Woerter, belegt durch Testfaelle im CI-Sprachfall-Set (z. B. "Vereinbarung" findet "Pachtvereinbarung"); das frueher hier genannte Beispiel "Genehmigung" findet "Baugenehmigung" ist gemessen nicht baubar und steht als benannte Grenze in docs/german-analyzer.md (Owner-Entscheid a vom 08.09.2026)
+- [ ] **QUAL-02**: Suchen nach Teilwoertern finden zusammengesetzte Woerter, belegt durch Testfaelle im CI-Sprachfall-Set (z. B. "Belehrung" findet "Rechtsmittelbelehrung"); jeder dieser Faelle muss ohne `Filter.split_compound` rot werden, sonst belegt er die Zerlegung nicht. Das frueher hier genannte Beispiel "Vereinbarung" findet "Pachtvereinbarung" ist zurueckgezogen, weil dieselbe Datei "Vereinbarung" auch eigenstaendig fuehrt; das davor genannte "Genehmigung" findet "Baugenehmigung" ist gemessen nicht baubar und steht als benannte Grenze in docs/german-analyzer.md (Owner-Entscheid a vom 08.09.2026, Audit-Fix H-01 vom 08.09.2026)
 - [ ] **QUAL-03**: Der offene Endungsvergleich der Verdikte gegen den Generator (v1.0-Messbericht "Was noch fehlt") ist durchgefuehrt und dokumentiert; Befunde fliessen als Testfaelle ein
 
 ### Ergebnisseite

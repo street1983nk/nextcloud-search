@@ -81,14 +81,23 @@ language list. The two files that did not change, `13` and `30`, came back with
 not move what the engine reads on these pages.
 
 The last column carried whole words of a document until phase 8. Since then it
-also carries **constituents**: `Vereinbarung`, `Auszug` and `Erinnerung` are the
-second parts of `Pachtvereinbarung`, `Grundbuchsauszug` and
+also carries **constituents**: `Belehrung`, `Auszug` and `Erinnerung` are the
+second parts of `Rechtsmittelbelehrung`, `Grundbuchsauszug` and
 `Zahlungserinnerung`, and each of them is unique here in the same sense as the
 whole words, in the letters of the document and in the tokens the German chain
 produces from it. The workflow searches for them, so they belong under the same
 uniqueness check as every other term of this column; the check itself lives in
 `UNIQUE_TERMS` of `scripts/dev/build_corpus.py` and its counterpart over tokens
 in `backend/tests/test_corpus_terms.py`.
+
+`Vereinbarung` stands in this column as well and is deliberately **not** a
+language case. `14-pacht-mit-anhang.pdf` writes the word out twice on its own
+next to `Pachtvereinbarung`, so a search for it finds the file with or without
+`Filter.split_compound` and proves the decomposition nothing. That is the reason
+the audit of phase 8 replaced it with `Belehrung`, whose constituent stands in
+the whole corpus only inside its compound. The distinction is asserted rather
+than described: `test_a_ci_term_finds_nothing_once_the_splitter_is_taken_out`
+and `test_a_split_independent_term_is_kept_out_of_the_ci_set` hold both halves.
 
 **This column is read by a machine.** The `readonly-gate` job of
 `.github/workflows/integration.yml` parses the first backticked token of every
@@ -114,7 +123,7 @@ change here in the same commit.
 | `12-aktenvermerk.txt` | A short file note in Windows-1252 | `indexed` | Müller |
 | `13-ratsvorlage-scan.pdf` | Three A4 pages of council prose as greyscale images, no text object on any page | `indexed` through the OCR track, 1593 characters over three pages | Bebauungsplan |
 | `14-pacht-mit-anhang.pdf` | Five pages: two with a real text layer, three scanned annex pages | `indexed` on the text pass, the three annex pages stay unread on purpose | Pachtvereinbarung, Vereinbarung |
-| `15-schweiz-baubewilligung.pdf` | One scanned A4 page in Swiss spelling, ss instead of the sharp s, with a numeric date, an amount carrying the Swiss apostrophe and a line of capitals with umlauts | `indexed` through the OCR track, 664 characters | Strasse, Baubewilligung, Ersatzabgabe |
+| `15-schweiz-baubewilligung.pdf` | One scanned A4 page in Swiss spelling, ss instead of the sharp s, with a numeric date, an amount carrying the Swiss apostrophe and a line of capitals with umlauts | `indexed` through the OCR track, 664 characters | Strasse, Baubewilligung, Ersatzabgabe, Rechtsmittelbelehrung, Belehrung |
 | `16-oesterreich-mitteilung.pdf` | One scanned A4 page in Austrian wording, with a file reference of two slashes, an amount in German notation and a written out date | `indexed` through the OCR track, 594 characters | Jänner, Grundbuchsauszug, Auszug, Erlagschein, Parteienverkehr |
 | `17-beleg.jpg` | A slip with readable text as JPEG, the format phone uploads arrive in | `indexed`, the picture track of plan 03-10 | Zahlungsavis |
 | `18-aushang.png` | A notice with readable text as PNG | `indexed`, the picture track | Sperrmüllabfuhr |

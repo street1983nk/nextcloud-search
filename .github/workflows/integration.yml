@@ -24,7 +24,8 @@ name: Integration
 # The third job, added in phase 2, is the product promise itself: the same corpus
 # is indexed and then searched through the ordinary Nextcloud search route, with
 # ten German language cases, five of them a compound found through one of its
-# parts, a second user who sees exactly the one file that was shared with him, a
+# parts and every one of those five red without Filter.split_compound, a second
+# user who sees exactly the one file that was shared with him, a
 # probe of the time budget against an artificially slow backend, and all of it on
 # two database dialects.
 on:
@@ -1046,11 +1047,11 @@ jobs:
       NOTICE_FILE: '10-kuendigung.docx'
       OVERVIEW_FILE: '11-uebersicht.odt'
       MEMO_FILE: '12-aktenvermerk.txt'
-      # The three files of the compound cases added in phase 8. The last two are
+      # The three files of the compound cases added in phase 8. All three are
       # scanned pages, so their text exists as pixels and in no other form; the
-      # OCR measurement of 2026-09-06 read both of them without a single wrong
-      # character.
-      LEASE_FILE: '14-pacht-mit-anhang.pdf'
+      # OCR measurement of 2026-09-06 read all three of them without a single
+      # wrong character (pages 4, 5 and 6, cer=0.000000).
+      SWISS_FILE: '15-schweiz-baubewilligung.pdf'
       AUSTRIAN_FILE: '16-oesterreich-mitteilung.pdf'
       REMINDER_FILE: '30-nur-ein-bild.pdf'
       # What the container has to end up with, measured against the corpus and
@@ -1417,6 +1418,13 @@ jobs:
       # these three assertions and it runs in every python suite; this step runs
       # on main and on pull requests only, so it is the second half and not the
       # first.
+      #
+      # A fourth gate joined that module in the audit fix of phase 8, and it is
+      # the one that keeps this comment honest: every term of cases 1, 2, 8, 9
+      # and 10 has to find nothing at all once Filter.split_compound is taken
+      # out of the chain. A compound case whose word also stands on its own
+      # somewhere in the corpus is green without the filter it is meant to
+      # prove, and case 8 used to be exactly that.
       - name: The ten German language cases, as the owner
         run: |
           search() {
@@ -1497,25 +1505,38 @@ jobs:
           jq -e --arg name "${SHARED_FILE}" '.ocs.data.entries[0].title == $name' filetype.json > /dev/null \
             || fail "the file type filter kept the wrong file" filetype.json
 
-          # 8. The third compound, and the first one in a document that is a
-          # lease. The text layer says Pachtvereinbarung, the search says
-          # Vereinbarung, and split_compound is what makes the second part of the
-          # word a term of its own. The same file also writes the constituent out
-          # once on its own, so this is the case of the three that stands on the
-          # widest ground; cases 9 and 10 are the two that only the split can
-          # answer at all.
-          search 'Vereinbarung' vereinbarung.json
-          jq -e '.ocs.data.entries | length == 1' vereinbarung.json > /dev/null \
-            || fail "Vereinbarung did not bring back exactly the lease of the corpus" vereinbarung.json
-          jq -e --arg name "${LEASE_FILE}" '.ocs.data.entries[0].title == $name' vereinbarung.json > /dev/null \
-            || fail "the Vereinbarung hit is not the lease with the scanned annex" vereinbarung.json
+          # 8. The third compound, in the scanned Swiss permit. The page says
+          # Rechtsmittelbelehrung, the search says Belehrung, and split_compound
+          # is what makes the second part of the word a term of its own.
+          #
+          # This case replaced a search for "Vereinbarung" in the lease of the
+          # corpus, and the reason is the whole point of the case: that file
+          # writes "Vereinbarung" out twice on its own as well, so the hit stood
+          # with or without the splitter and the case proved the decomposition
+          # not at all. "Belehrung" stands in the whole corpus only inside its
+          # compound. Measured on 2026-09-08 against the real Debian list, the
+          # shipped chain once with and once without Filter.split_compound:
+          # with the splitter exactly 15-schweiz-baubewilligung.pdf, without it
+          # no file at all. The same run says the same about cases 1, 2, 9 and
+          # 10, so all five compound cases of this set are now red without the
+          # filter they exist for. The lease keeps its own guard in
+          # backend/tests/test_corpus_terms.py, where "Vereinbarung" is now the
+          # named counter example of a term that survives without the splitter.
+          search 'Belehrung' belehrung.json
+          jq -e '.ocs.data.entries | length == 1' belehrung.json > /dev/null \
+            || fail "Belehrung did not bring back exactly the scanned Swiss permit" belehrung.json
+          jq -e --arg name "${SWISS_FILE}" '.ocs.data.entries[0].title == $name' belehrung.json > /dev/null \
+            || fail "the Belehrung hit is not the Swiss permit of the corpus" belehrung.json
           # The excerpt, as in case 1, and this is the assertion that separates a
           # hit from a hit with content. The fallback subline is the path, and the
           # path does not carry the word, so a broken excerpt path fails here.
-          jq -e '.ocs.data.entries[0].subline | ascii_downcase | contains("vereinbarung")' vereinbarung.json > /dev/null \
-            || fail "the Vereinbarung hit carries no excerpt from the document" vereinbarung.json
-          jq -e '.ocs.data.entries[0].subline | contains("<") | not' vereinbarung.json > /dev/null \
-            || fail "the Vereinbarung excerpt carries markup, which the search dialog would show verbatim" vereinbarung.json
+          # Measured locally on 2026-09-08 that the snippet generator produces a
+          # fragment for a hit that exists only through the splitter: the
+          # fragment carries the whole word "Rechtsmittelbelehrung".
+          jq -e '.ocs.data.entries[0].subline | ascii_downcase | contains("belehrung")' belehrung.json > /dev/null \
+            || fail "the Belehrung hit carries no excerpt from the document" belehrung.json
+          jq -e '.ocs.data.entries[0].subline | contains("<") | not' belehrung.json > /dev/null \
+            || fail "the Belehrung excerpt carries markup, which the search dialog would show verbatim" belehrung.json
 
           # 9. A compound that exists as pixels and in no other form. The scanned
           # Austrian notice says Grundbuchsauszug, the search says Auszug, and

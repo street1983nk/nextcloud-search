@@ -7,7 +7,7 @@ here, before the case is written, rather than in a red run on ``main`` twenty
 minutes later. The workflow itself runs on ``main`` and on pull requests only;
 this module is the local half of the same statement and it runs in every suite.
 
-Two gates, and the second one is the one that earns its place.
+Three gates, and the second and the third are the ones that earn their place.
 
 The first gate runs over **tokens**, because tokens are the question the search
 really asks: the term is analysed, every corpus file is analysed, and the term
@@ -24,6 +24,14 @@ the letters of the term, some word list can split it there, and the term is
 rejected. That is a deliberately conservative rule and it is the rule that
 throws out ``Verkehr`` and ``Abgabe`` below.
 
+The third gate runs over the **splitter** and it was added by the audit of phase
+8. The first two only ask whether a term is unique; neither of them asks whether
+the term needs ``Filter.split_compound`` to find its file at all. A term whose
+word also stands on its own in the same document is unique, is green, and proves
+nothing about the decomposition, which is exactly what the language case for
+``Vereinbarung`` did until it was replaced. So every CI term is analysed a second
+time through the shipped chain minus the splitter, and it has to find nothing.
+
 Umlauts appear only inside string literals, as data. The identifiers stay ASCII
 as the project rules require.
 """
@@ -36,9 +44,10 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from tantivy import TextAnalyzer
+from tantivy import Filter, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
-from findling.index.analyzer import german_analyzer
+from findling.index.analyzer import MAX_TOKEN_CHARS, german_analyzer
+from findling.index.wordlist import FUGEN
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_CORPUS = REPO_ROOT / "scripts" / "dev" / "build_corpus.py"
@@ -51,13 +60,27 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt"
 # the two scanned ones sit on pages that the OCR measurement of 2026-09-06 read
 # with a character error rate of zero.
 CI_TERMS: dict[str, str] = {
-    # Pachtvereinbarung, in the text layer of the file.
-    "Vereinbarung": "14-pacht-mit-anhang.pdf",
+    # Rechtsmittelbelehrung, pixels only.
+    "Belehrung": "15-schweiz-baubewilligung.pdf",
     # Grundbuchsauszug, pixels only.
     "Auszug": "16-oesterreich-mitteilung.pdf",
     # Zahlungserinnerung, pixels only.
     "Erinnerung": "30-nur-ein-bild.pdf",
 }
+
+# The term that was a language case until the audit of phase 8 and is not one
+# any more, kept here as the named counter example rather than deleted.
+# "Pachtvereinbarung" stands in the lease, so the search looked like the other
+# two, but the very same file also writes "Vereinbarung" out twice on its own:
+#
+#     'Sonnenhang wird die nachstehende Vereinbarung geschlossen.'
+#     'Die Anlagen 1 bis 3 dieser Vereinbarung liegen als Kopie der'
+#
+# The hit therefore stood with or without Filter.split_compound, and a case that
+# is green without the filter it exists for proves the filter nothing. This is
+# the shape that must never become a CI term again, and the test below is what
+# says so out loud.
+SPLIT_INDEPENDENT: dict[str, str] = {"Vereinbarung": "14-pacht-mit-anhang.pdf"}
 
 # The counter proof. Without a term that fails, a gate which is always green
 # looks exactly like a gate that works. This word stands in three files of the
@@ -103,6 +126,28 @@ def german() -> TextAnalyzer:
 
 
 @pytest.fixture(scope="module")
+def splitterless() -> TextAnalyzer:
+    """The shipped German chain minus Filter.split_compound, filter for filter.
+
+    Everything else stays, in the shipped order: lowercase, the linking elements
+    as custom stopwords, the built in German stopwords, the length limit and the
+    Snowball stemmer. MAX_TOKEN_CHARS and FUGEN are imported rather than copied,
+    so the control cannot drift away from the chain it is a control for. The same
+    construction stands in test_index_open.py, where it carries the index level
+    proof for one term; here it carries the corpus level proof for all of them.
+    """
+    return (
+        TextAnalyzerBuilder(Tokenizer.simple())
+        .filter(Filter.lowercase())
+        .filter(Filter.custom_stopword(list(FUGEN)))
+        .filter(Filter.stopword("german"))
+        .filter(Filter.remove_long(MAX_TOKEN_CHARS))
+        .filter(Filter.stemmer("german"))
+        .build()
+    )
+
+
+@pytest.fixture(scope="module")
 def searchable() -> dict[str, str]:
     """Everything a search could find in each corpus file, pixels included.
 
@@ -118,6 +163,12 @@ def searchable() -> dict[str, str]:
 def tokens_per_file(german: TextAnalyzer, searchable: dict[str, str]) -> dict[str, set[str]]:
     """The token set of every corpus file, which is what the index really holds."""
     return {name: set(german.analyze(text)) for name, text in searchable.items()}
+
+
+@pytest.fixture(scope="module")
+def tokens_per_file_unsplit(splitterless: TextAnalyzer, searchable: dict[str, str]) -> dict[str, set[str]]:
+    """The same token sets, produced by the chain without the splitter."""
+    return {name: set(splitterless.analyze(text)) for name, text in searchable.items()}
 
 
 def _carriers(german: TextAnalyzer, tokens_per_file: dict[str, set[str]], term: str) -> list[str]:
@@ -162,6 +213,47 @@ def test_a_ci_term_survives_the_list_independent_gate(searchable: dict[str, str]
         f"{term!r} has to be the only file spelling those letters, "
         f"but they stand in {_letter_carriers(searchable, term)}"
     )
+
+
+@pytest.mark.parametrize(("term", "owner"), sorted(CI_TERMS.items()))
+def test_a_ci_term_finds_nothing_once_the_splitter_is_taken_out(
+    splitterless: TextAnalyzer, tokens_per_file_unsplit: dict[str, set[str]], term: str, owner: str
+) -> None:
+    # The gate the audit of phase 8 added, and the only one of the three that
+    # asks what the language case is actually for. A term that still finds its
+    # file without Filter.split_compound is carried by something else, most
+    # likely by the word standing on its own somewhere in the same document, and
+    # the CI case built on it would stay green if the filter were deleted
+    # tomorrow. Measured against the real Debian list on 2026-09-08, all three
+    # terms of CI_TERMS come back empty here and the two older compound cases
+    # (Genehmigung, Frist) do as well.
+    carriers = _carriers(splitterless, tokens_per_file_unsplit, term)
+
+    assert carriers == [], (
+        f"{term!r} still finds {carriers} without Filter.split_compound, "
+        f"so the language case for {owner} does not prove the decomposition"
+    )
+
+
+@pytest.mark.parametrize(("term", "owner"), sorted(SPLIT_INDEPENDENT.items()))
+def test_a_split_independent_term_is_kept_out_of_the_ci_set(
+    german: TextAnalyzer,
+    splitterless: TextAnalyzer,
+    tokens_per_file: dict[str, set[str]],
+    tokens_per_file_unsplit: dict[str, set[str]],
+    term: str,
+    owner: str,
+) -> None:
+    # The positive control of the gate above. Without a term that survives the
+    # removal of the splitter, a gate that always reported "nothing found" would
+    # look exactly like a gate that works, and it would report nothing found for
+    # a chain that is simply broken. This term finds its file both ways, which is
+    # precisely why it is no language case any more.
+    assert _carriers(german, tokens_per_file, term) == [owner]
+    assert _carriers(splitterless, tokens_per_file_unsplit, term) == [owner], (
+        f"{term!r} was expected to stand on its own in {owner} and to be findable without the splitter"
+    )
+    assert term not in CI_TERMS
 
 
 def test_an_ambiguous_term_is_rejected_by_the_same_gate(
