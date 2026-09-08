@@ -204,6 +204,23 @@ def open_tokenizer(model_dir: Path) -> Tokenizer:
     return Loader.from_file(str(model_dir / TOKENIZER_FILE))
 
 
+def artifacts_present(model_dir: Path) -> bool:
+    """The same question from outside this module, and the only way to ask it.
+
+    Two stats and nothing else, which is what makes it usable where the answer
+    has to be cheap. The embedding track of the poller asks it before it
+    promises a row that it can be embedded: since plan 07-03 the tokenizer and
+    the splitter are built at the first row rather than at the first pass, so
+    the promise of ``_embed_ready`` can no longer be a side effect of having
+    built them, and a promise made on a directory without artifacts would send
+    rows to a spur that cannot run.
+
+    A delegation rather than a rename, so that the two suites which count this
+    question through :func:`_artifacts_present` keep counting the same calls.
+    """
+    return _artifacts_present(model_dir)
+
+
 def _artifacts_present(model_dir: Path) -> bool:
     """True when both files a load needs are in the directory.
 

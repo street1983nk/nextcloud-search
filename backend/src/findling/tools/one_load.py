@@ -250,9 +250,17 @@ def drive_the_second_track() -> int:
     The three attributes are read rather than rebuilt, because the wiring is the
     thing under measurement: ``_embed_document`` reads exactly these three on
     every row, and a copy of the wiring here would measure the copy.
+
+    Both halves of the wiring are driven, in the order a pass drives them. Since
+    plan 07-03 the first one opens the vector stock and promises the rest, and
+    the second one builds the tokenizer, the splitter and the engine at the
+    first row that needs them; a tool that called only the first would read
+    ``_chunker`` as None and report a track that stayed off, which is a
+    measurement of this function and not of the container.
     """
     worker = poller_module.Poller()
     worker._wire_the_second_track()
+    worker._build_the_cutter()
     model = worker._model
     chunker = worker._chunker
     stock = worker._vectors

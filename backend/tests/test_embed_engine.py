@@ -271,10 +271,14 @@ def test_the_second_track_and_the_read_side_wire_the_same_object(
 ) -> None:
     # The two real callers, not two calls of the holder. The read side asks
     # through resources.query_model and the worker wires its track in
-    # _wire_the_second_track, and the whole plan is that those two lines end at
-    # one object. Everything the wiring touches besides the engine is replaced,
-    # because the vector stock and the 17 MB tokenizer have nothing to do with
-    # the question.
+    # _wire_the_second_track and _build_the_cutter, and the whole plan is that
+    # those two lines end at one object. Everything the wiring touches besides
+    # the engine is replaced, because the vector stock and the 17 MB tokenizer
+    # have nothing to do with the question.
+    #
+    # Both halves are driven since plan 07-03 split them: the first one opens
+    # the stock and promises the rest, the second one builds the cutter and asks
+    # the holder for the engine, at the first row that needs it.
     _pretend_a_model(model_home)
 
     class _Stock:
@@ -287,6 +291,7 @@ def test_the_second_track_and_the_read_side_wire_the_same_object(
 
     worker = poller_module.Poller()
     worker._wire_the_second_track()
+    worker._build_the_cutter()
 
     assert worker._model is not None, "the track has to have been wired"
     assert worker._model is resources.query_model()
