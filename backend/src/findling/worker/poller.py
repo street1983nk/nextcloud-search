@@ -56,6 +56,7 @@ import asyncio
 import contextlib
 import hashlib
 import logging
+import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -65,8 +66,15 @@ from tantivy import Index
 
 from findling.config import settings
 from findling.embed.chunker import ChunkSpan, chunk_spans, make_splitter
-from findling.embed.engine import shared_model
-from findling.embed.model import EMBEDDING_UNAVAILABLE, EmbedOutcome, artifacts_present, open_tokenizer, to_int8
+from findling.embed.engine import note_cutter_failure, shared_model
+from findling.embed.model import (
+    EMBEDDING_UNAVAILABLE,
+    LOAD_RETRY_SECONDS,
+    EmbedOutcome,
+    artifacts_present,
+    open_tokenizer,
+    to_int8,
+)
 from findling.extract.dispatch import Route, extension_of, judge
 from findling.extract.errors import ExtractionOutcome, Reason, State
 from findling.extract.sandbox import extract_guarded
@@ -406,11 +414,20 @@ class Poller:
         self._vectors = vectors
         self._chunker = chunker
         self._model = model
-        # "Can be built" and not "is built", and the difference is the whole of
-        # the lazy half below. It is raised by the eager wiring once the stock is
-        # open and the artifacts are in the directory, and lowered again the
-        # moment a build really fails.
-        self._can_build_the_cutter = False
+        # Three answers about the cutter and never two, in the shape
+        # ``EmbeddingModel._load`` already uses for the weights (bug audit
+        # HIGH-1 of plan 07-05). The permanent one: the directory has no
+        # artifacts, which is a property of the installation and does not change
+        # while the process runs. It starts true, because nothing has looked
+        # yet, and the eager wiring lowers it once it has seen the two files.
+        self._cutter_absent = True
+        # The temporary one: when a build last threw, on the monotonic clock.
+        # None means never, or not since the last success. A build that threw is
+        # a state of the moment on the target box, a MemoryError while 544,3 MB
+        # of tokenizer and splitter arrive under a hard 2 GB limit, and a
+        # permanent no to that costs the container its semantic half until
+        # somebody restarts it.
+        self._cutter_failed_at: float | None = None
         self._owns_vectors = vectors is None
         self._embed_enabled = resolved.embed_enabled
         self._ocr_enabled = resolved.ocr_enabled
@@ -1078,9 +1095,21 @@ class Poller:
         # The first row of the process pays for the tokenizer and the splitter
         # here, in a thread, because the read of the 17 MB artifact and the
         # 544,3 MB behind it must not sit on the event loop that answers
-        # searches. Every row after it finds them built and returns at the top
-        # of the method.
-        await asyncio.to_thread(self._build_the_cutter)
+        # searches.
+        #
+        # **Every row after it pays two attribute reads and nothing else** (perf
+        # audit PERF-F1). The question "is it built" is answered on the loop,
+        # where it costs nothing, and the thread is entered only when there is
+        # really something to build. Before this the hop itself was per row:
+        # tens of thousands of trips into the pool over an instance, each one to
+        # be told at the top of the method that the cutter was already there.
+        #
+        # The cooldown of a build that threw is asked here as well, and for the
+        # same reason: inside it the build would return false at its own second
+        # gate, so hopping into a thread to hear that would be the same cost for
+        # the same nothing, once per row for five minutes.
+        if (self._chunker is None or self._model is None) and not self._cutter_cooling_down:
+            await asyncio.to_thread(self._build_the_cutter)
 
         vectors, chunker, model = self._vectors, self._chunker, self._model
         if vectors is None or chunker is None or model is None:
@@ -1447,12 +1476,19 @@ class Poller:
 
         The eager half. It opens the stock and answers one cheap question about
         the model directory, and it does not read a single artifact. Two things
-        can go wrong here and both are a state of an installation rather than a
-        defect: the sqlite-vec extension is not loadable on this build or the
-        volume has no vector database and cannot get one, and the third, a
-        missing model directory, is the ordinary case outside the shipping
-        image. Any of them switches the track off for this process instead of
-        ending the pass.
+        can go wrong here and neither is a defect: the sqlite-vec extension is
+        not loadable on this build or the volume has no vector database and
+        cannot get one, and separately from both, the model directory is empty,
+        which is the ordinary case outside the shipping image.
+
+        **The two failures are not the same failure, and since bug audit
+        MEDIUM-5 of plan 07-05 they do not share an answer either.** A stock
+        that cannot be opened switches the whole track off; there is nothing to
+        write vectors into and nothing to take them out of. A missing model
+        locks the cutter and nothing else: the stock is opened, it stays open,
+        and the delete path keeps reaching it. Before that the missing model
+        closed the stock as well, and this docstring already promised the
+        opposite one paragraph down.
 
         **The stock stays here and does not travel to the back.** ``_open``
         hands this handle to ``attach_vectors`` one line further down, and the
@@ -1460,7 +1496,10 @@ class Poller:
         tombstone has to take the vectors of its file with it (D-21). A stock
         opened as late as the tokenizer would leave that path pointing at None,
         and nothing would fail until a deleted file kept answering semantic
-        queries.
+        queries. The same sentence is what makes the missing model a lock on the
+        cutter and not a reason to close the handle: an instance that carried
+        vectors from an image with a model, and then ran an image without one,
+        would otherwise keep answering semantic queries for files that are gone.
 
         **The tokenizer and the splitter do not stay here, and that is plan
         07-03.** They cost 265,8 MB and 273,5 MB of resident memory on amd64,
@@ -1476,17 +1515,9 @@ class Poller:
         It runs on the first pass, off the event loop with the rest of ``_open``.
         """
         resolved = settings()
-        stock: VectorStore | None = None
         try:
             stock = open_vectors(resolved.vectors_db)
-            if not artifacts_present(resolved.embed_model_dir):
-                # Two stats, and they are what keeps the promise of
-                # _embed_ready honest now that having built the cutter is no
-                # longer the thing that proves it can be built.
-                raise FileNotFoundError(resolved.embed_model_dir)
         except Exception as error:
-            if stock is not None:
-                stock.close()
             # The type name and nothing else, the rule of every log line in this
             # module. Once per process, because this runs once per process.
             LOGGER.warning(
@@ -1496,7 +1527,20 @@ class Poller:
             return
 
         self._vectors = stock
-        self._can_build_the_cutter = True
+
+        # Two stats, outside the try because they are not a failure of anything.
+        # They keep the promise of _embed_ready honest now that having built the
+        # cutter is no longer the thing that proves it can be built, and the
+        # answer they give locks the cutter alone: the stock above stays open
+        # for the delete path of D-21.
+        if not artifacts_present(resolved.embed_model_dir):
+            LOGGER.warning(
+                "no embedding model in this container, the second track stays off and the search answers "
+                "lexically; the vector stock stays open so a deletion still takes its vectors with it"
+            )
+            return
+
+        self._cutter_absent = False
 
     def _build_the_cutter(self) -> bool:
         """Build the tokenizer, the splitter and the engine, at the first row that needs them.
@@ -1523,14 +1567,28 @@ class Poller:
         halve the 1024 token cap of D-01. The second half of every document
         would stop existing with nothing failing anywhere.
 
-        A build that fails lowers the flag rather than raising, so the row that
-        asked for it leaves the queue with a name of its own and no further row
-        is ever handed over: a row kept back for a spur that cannot run is the
-        failed(repeatedly_stuck) loop this track exists to avoid.
+        **A build that fails answers false and never raises**, so the row that
+        asked for it leaves the queue with a name of its own: a row kept back
+        for a spur that cannot run is the failed(repeatedly_stuck) loop this
+        track exists to avoid.
+
+        **How long that no lasts is the second question, and there are two
+        answers to it** (bug audit HIGH-1 of plan 07-05). A directory without
+        the artifacts is a property of the installation, is seen by the eager
+        half and is answered for ever. A build that threw is a property of the
+        moment: the failure that really happens on the target box is a
+        MemoryError while 544,3 MB arrive under a hard 2 GB limit, and it is
+        remembered with a timestamp and tried again after
+        :data:`~findling.embed.model.LOAD_RETRY_SECONDS`. The same constant and
+        the same three way split as ``EmbeddingModel._load``, because it is the
+        same failure one layer up: before this, one bad moment cost the second
+        track of this container everything until somebody restarted it.
         """
         if self._chunker is not None and self._model is not None:
             return True
-        if not self._can_build_the_cutter:
+        if self._cutter_absent:
+            return False
+        if self._cutter_cooling_down:
             return False
 
         resolved = settings()
@@ -1541,11 +1599,27 @@ class Poller:
                 chunk_tokens=resolved.embed_chunk_tokens,
                 overlap=resolved.embed_chunk_overlap,
             )
+            # Inside the try and not below it (bug audit LOW-6). Asking the
+            # holder for the engine builds a wrapper and reads no artifact, but
+            # a wrapper is still an object and its constructor is still code: a
+            # throw there left the splitter assigned and the engine at None,
+            # which is the one shape the three parts of this track are never
+            # allowed to have. The three travel together or none of them does.
+            model = shared_model()
         except Exception as error:
-            self._can_build_the_cutter = False
+            # The moment, not the property: the stamp is what the cooldown is
+            # measured against, and the next row after it runs the build again.
+            self._cutter_failed_at = time.monotonic()
+            # And the same moment travels to the diagnosis, because the holder
+            # of the engine cannot see this failure: the build throws before it
+            # ever asks for one, so the admin page would report a cold container
+            # for a track that is lying dead (bug audit MEDIUM-2 of plan 07-05).
+            note_cutter_failure(self._cutter_failed_at)
             LOGGER.warning(
-                "the embedding track stays off in this container, %s; the search answers lexically",
+                "the second track could not build its cutter, %s; it is tried again in %d s "
+                "and the search answers lexically until then",
                 type(error).__name__,
+                int(LOAD_RETRY_SECONDS),
             )
             return False
 
@@ -1557,9 +1631,32 @@ class Poller:
                 token_cap=resolved.embed_token_cap,
             )
 
+        # Both attributes after the last thing that can throw, and never one of
+        # them before it. _embed_ready and the top of this method read the pair,
+        # and a half built cutter would answer "built" to both.
         self._chunker = cut
-        self._model = shared_model()
+        self._model = model
+        self._cutter_failed_at = None
+        note_cutter_failure(None)
         return True
+
+    @property
+    def _cutter_cooling_down(self) -> bool:
+        """True while a build that threw is still inside its cooldown.
+
+        A property and not a field for the reason
+        :attr:`~findling.embed.model.EmbeddingModel.load_cooling_down` is one:
+        the state is not the timestamp, it is the timestamp measured against
+        :data:`~findling.embed.model.LOAD_RETRY_SECONDS`, and that comparison
+        has one home. :meth:`_build_the_cutter` and :attr:`_embed_ready` ask the
+        same question through here, so the gate that stops the handover and the
+        gate that stops the build can never drift into two spellings of one
+        rule.
+
+        Reading it has no side effect. The clock is read, nothing else.
+        """
+        stamp = self._cutter_failed_at
+        return stamp is not None and time.monotonic() - stamp < LOAD_RETRY_SECONDS
 
     @property
     def _embed_ready(self) -> bool:
@@ -1573,15 +1670,22 @@ class Poller:
 
         What changed with the lazy build is the second half of the sentence, not
         the promise. The stock is still open or the answer is false. The cutter
-        may be built or merely buildable, and the flag says which: it is raised
-        only after the eager half has seen the artifacts in the directory, and
-        it is lowered again the moment a build really fails, so the window in
-        which a row can be handed over to a spur that cannot run is one row
-        wide and that row is acknowledged rather than kept.
+        may be built or merely buildable, and the two fields of the build say
+        which: no artifacts is a no for the life of the process, and a build
+        that threw is a no until its cooldown runs out. The window in which a
+        row can be handed over to a spur that cannot run is therefore one row
+        wide, and that row is acknowledged rather than kept.
+
+        **It asks the same property the build asks** (bug audit HIGH-1 of plan
+        07-05). Before that the failed build lowered a flag for good, so one
+        MemoryError in one thread stopped the handover of this container for
+        ever, and the page said the second track was merely filling up.
         """
         if self._vectors is None:
             return False
-        return self._can_build_the_cutter or (self._chunker is not None and self._model is not None)
+        if self._chunker is not None and self._model is not None:
+            return True
+        return not self._cutter_absent and not self._cutter_cooling_down
 
     async def _abort(
         self,

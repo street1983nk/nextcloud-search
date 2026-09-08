@@ -38,6 +38,7 @@ from findling.api import resources
 from findling.config import settings
 from findling.embed import model as model_module
 from findling.embed.chunker import ChunkSpan
+from findling.embed.engine import shared_model
 from findling.embed.model import DIMENSIONS, EmbeddingModel
 from findling.index import wordlist as wordlist_module
 from findling.tools import one_load
@@ -207,6 +208,27 @@ def test_it_goes_red_when_the_search_side_builds_its_own_engine(
     assert code == 1
     assert "engine-loads-after-worker=2" in printed
     assert "no longer share the holder" in printed
+
+
+def test_a_second_run_in_the_same_process_measures_a_load_and_not_a_cache_hit(prepared: Path) -> None:
+    # Bug audit LOW-7 of plan 07-05. The holder of the engine is a module
+    # global, so it outlives a call of measure() and the second call used to
+    # find the engine of the first one in it: the search side took the cache
+    # hit, the load counter did not move and the tool reported "green for
+    # nothing" about a run in which nothing was wrong. In the container that
+    # never happens, because the container runs this tool once; the CI step and
+    # this suite are the two places where it does.
+    #
+    # A loaded engine in the holder is the whole of the precondition, and it is
+    # built here through the same call the search side uses rather than by
+    # reaching into the module.
+    shared_model().embed_query("bauantrag")
+
+    report = _measure(prepared)
+
+    assert report.engine_loads_after_search == 1, "the run has to bring the loads from nought to one again"
+    assert report.engine_loads_after_worker == 1, "and the track still shares what the search side loaded"
+    assert one_load.findings(report) == []
 
 
 def test_it_goes_red_when_the_word_list_is_read_a_second_time(prepared: Path, monkeypatch: pytest.MonkeyPatch) -> None:

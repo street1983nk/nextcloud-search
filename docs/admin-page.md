@@ -126,6 +126,11 @@ Fortschrittsbalken: die Deckung ist eine Zahl, der Zustand der Engine ist eine
 Lage. Der Container meldet ihn als `engineState`, als eines von fünf Wörtern,
 und die Seite macht daraus einen Satz, der sagt, was zu tun ist.
 
+Die Zeile hängt nicht am Nenner. Sobald der Container ein Wort meldet, steht sie
+da, auch wenn noch nichts indexiert ist: gerade auf einer frischen Installation
+entscheidet sie, ob Warten überhaupt etwas bringt. Der Satz über den fehlenden
+Anteil bleibt dagegen am Nenner, denn ohne Nenner gibt es nichts auszurechnen.
+
 | Meldung des Containers | Was auf der Seite steht | Was ein Admin tun kann |
 |---|---|---|
 | `loaded` | Das Modell liegt im Speicher, die semantische Suche antwortet. | nichts |
@@ -134,6 +139,14 @@ und die Seite macht daraus einen Satz, der sagt, was zu tun ist.
 | `missing` | In diesem Abbild liegt kein Modell. | ein Abbild mit Modell einsetzen |
 | `waiting_for_retry` | Das Laden ist einmal gescheitert und wird in Kürze erneut versucht. | fünf Minuten warten, danach das Protokoll lesen |
 | kein Feld | Dieser Container meldet den Zustand des Modells noch nicht. | die beiden Hälften auf denselben Stand bringen |
+
+`waiting_for_retry` hat zwei Quellen und bleibt ein Wort. Gescheitert sein kann
+das Laden der Gewichte, und gescheitert sein kann der Bau von Zerleger und
+Aufteiler, den die zweite Spur bei der ersten Zeile bezahlt. Der Halter der
+Engine sieht nur das erste davon, denn der zweite Fehlschlag passiert, bevor
+überhaupt nach einer Engine gefragt wird; deshalb meldet die Spur ihren
+Zeitstempel an `embed/engine.py`. Für einen Admin sind beide derselbe Satz,
+nämlich warten und noch einmal nachsehen, also gibt es dafür kein sechstes Wort.
 
 Die sechste Zeile ist der Container, der älter ist als diese App. Sie ist aus
 demselben Grund eine eigene Lage wie `embedded` auf der PHP-Seite `null` ist und
@@ -147,8 +160,8 @@ Drei sehr verschiedene Lagen zeigen dieselbe zweite Zahl:
 
 - Das Modell fehlt im Abbild. Die Zahl bleibt für immer bei 0, die Suche liefert
   weiterhin Volltexttreffer, und kein Warten ändert daran etwas.
-- Das Laden ist gescheitert und wird in 300 Sekunden erneut versucht. Die Zahl
-  steht still und läuft danach von selbst weiter.
+- Das Laden oder der Bau des Zerlegers ist gescheitert und wird in 300 Sekunden
+  erneut versucht. Die Zahl steht still und läuft danach von selbst weiter.
 - Die zweite Spur ist einfach noch nicht so weit. Die Zahl steigt, nur langsam.
 
 Ohne diese Zeile verlangen alle drei dieselbe Fehlersuche, und zwei von drei

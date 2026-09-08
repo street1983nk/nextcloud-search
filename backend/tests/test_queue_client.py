@@ -648,6 +648,44 @@ def test_both_halves_know_the_same_kinds_of_work() -> None:
     assert values == set(KINDS)
 
 
+def test_a_dirty_row_is_never_moved_to_the_embedding_track() -> None:
+    """The handover of this module, held at the end that decides what it means.
+
+    The container hands a row over by file id and by kind, and what happens to
+    the row is decided in ``QueueMapper::requeueAs``. One rule of that method
+    cannot be seen from this side at all, and it is the reason this gate exists:
+    a row whose file changed while the container was holding it carries the
+    dirty mark, and that mark says the text the pass produced is already stale.
+
+    The embedding track never fetches. It cuts the stored text of the index into
+    chunks, so a dirty row carried onto it embeds bytes nobody has any more and
+    then acknowledges itself away, and the write that arrived is lost until the
+    reconcile finds it hours later. That is the H4 defect of the phase 2 audit
+    rebuilt through the trailing track, and it is what turned the mutation case
+    of integration.yml red on 08.09.2026: an empty work stock, no pass left to
+    run, and an index carrying a revision nobody could search for any more.
+
+    Textual for the reason every gate over the other half in this file is
+    textual: there is no database and no Nextcloud in this process, and the rule
+    is a condition inside a statement rather than a value anybody can read back.
+    """
+    source = PHP_QUEUE_MAPPER.read_text(encoding="utf-8")
+    block = re.search(r"public function requeueAs\(.*?\n\t\}", source, re.DOTALL)
+    assert block is not None, "the handover is no longer where this gate looks for it"
+    body = block.group(0)
+
+    # The switch takes rows that are not dirty ...
+    assert "$switch->expr()->eq('dirty', $switch->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))" in body
+    # ... and the dirty ones are freed where they are, with the mark cleared and
+    # their kind untouched, so the next content pass fetches what arrived.
+    assert "$stale->expr()->eq('dirty', $stale->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))" in body
+    assert "$stale->createNamedParameter($this->freeMark(), IQueryBuilder::PARAM_DATE)" in body
+    assert "->set('dirty', $stale->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))" in body
+    assert "->set('kind'" not in body.split("$stale = $this->db->getQueryBuilder();")[1], (
+        "the handed back row keeps the kind it has, or it lands on the track that does not fetch after all"
+    )
+
+
 def test_the_receiving_half_validates_a_requeue_against_that_same_list() -> None:
     """The other end of the handover: an unknown kind is refused, not stored.
 

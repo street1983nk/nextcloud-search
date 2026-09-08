@@ -81,6 +81,7 @@ from tantivy import Document
 
 from findling.api.search import one_round
 from findling.config import settings
+from findling.embed.engine import reset as forget_the_engine
 from findling.embed.model import load_count
 from findling.index.open import expected_versions, open_index
 from findling.index.schema import (
@@ -291,9 +292,18 @@ def measure(root: Path, *, source: Path = SYSTEM_WORDLIST) -> Report:
     raw counter. In the container the two are the same, because nothing has run
     before this function; inside a test suite they are not, and a tool whose
     gate only holds in a virgin process cannot be proven able to go red.
+
+    **The engine holder is emptied for the same reason, and a difference cannot
+    do it** (bug audit LOW-7 of plan 07-05). The second phase below has to bring
+    the loads from nought to one, and that is a statement about a load and not
+    about a counter: a second run in the same process used to find the engine of
+    the first one in the holder, take the cache hit and report "green for
+    nothing" about a tool that was working perfectly. Emptying it is the only
+    way to ask the question again, and it is why ``engine.reset()`` exists.
     """
     os.environ["APP_PERSISTENT_STORAGE"] = str(root)
     settings.cache_clear()
+    forget_the_engine()
 
     reads_at_start = read_count()
     loads_at_start = load_count()

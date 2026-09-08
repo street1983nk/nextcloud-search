@@ -170,6 +170,13 @@ $hasFraction = $hasDenominator && $percent !== null;
 // first figure: the two tracks become available at different moments, and a
 // shared rule would hide a figure that exists or show one that does not.
 $hasEmbeddedFraction = $hasDenominator && $embeddedPercent !== null;
+// And the third question of that block, which is not about a figure at all: has
+// the container said anything about its engine (bug audit MEDIUM-3 of plan
+// 07-05). The line hung behind the denominator with the two figures, so it was
+// invisible on exactly the installation it says the most to, the fresh one:
+// nothing indexed yet, nothing findable by meaning yet, and the one sentence
+// that says whether a model is even in this image was hidden.
+$hasEngineWord = $engineState !== '';
 
 $tiles = [
 	['id' => 'findling-tile-indexed', 'label' => $l->t('Indexed'), 'value' => $indexed],
@@ -295,9 +302,16 @@ $banners = [
 	 * and the ones that do not apply carry the hidden attribute, each with its
 	 * own rule, because a specific display rule beats the user agent rule of
 	 * the attribute. The script flips attributes and writes text nodes.
+	 *
+	 * The block appears with a denominator OR with a word about the engine, and
+	 * the second half of that is bug audit MEDIUM-3 of plan 07-05: on a fresh
+	 * installation there is no denominator for hours, and the sentence that
+	 * says whether there is a model in this image at all was hidden behind one.
+	 * The share line inside keeps the denominator rule of its own, so a block
+	 * that appears for the engine alone does not claim that a figure is missing.
 	 */
 	?>
-	<div id="findling-semantic"<?php if (!$hasDenominator) { ?> hidden<?php } ?>>
+	<div id="findling-semantic"<?php if (!$hasDenominator && !$hasEngineWord) { ?> hidden<?php } ?>>
 		<h3 class="findling-subheading" id="findling-semantic-heading"><?php p($l->t('Findable by meaning')); ?></h3>
 
 		<p class="findling-figure" id="findling-semantic-figure"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>>
@@ -313,7 +327,7 @@ $banners = [
 		<progress id="findling-semantic-bar" max="100" value="<?php p((string)($embeddedPercent ?? 0)); ?>" aria-labelledby="findling-semantic-heading"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>></progress>
 		<p class="settings-hint" id="findling-semantic-subline"<?php if (!$hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('%1$s of %2$s indexable files can also be found by meaning', [$count($embedded), $count($indexable)])); ?></p>
 
-		<p class="settings-hint" id="findling-semantic-unknown"<?php if ($hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.')); ?></p>
+		<p class="settings-hint" id="findling-semantic-unknown"<?php if (!$hasDenominator || $hasEmbeddedFraction) { ?> hidden<?php } ?>><?php p($l->t('The semantic share cannot be worked out right now. The backend does not answer, or it does not report this figure yet.')); ?></p>
 
 		<?php
 		/*
@@ -325,8 +339,10 @@ $banners = [
 		 * person reading the page.
 		 *
 		 * No hidden attribute and no rule of its own: one of the six sentences
-		 * is always the right one, so this line has nothing to hide. It
-		 * disappears with the block around it when there is no denominator.
+		 * is always the right one, so this line has nothing to hide. What it
+		 * needs instead is a block that is there, and since bug audit MEDIUM-3
+		 * of plan 07-05 the block around it appears for this line alone when
+		 * the container has named its state and nothing is indexed yet.
 		 */
 		?>
 		<p class="settings-hint" id="findling-semantic-engine"><?php p($engineSentence); ?></p>

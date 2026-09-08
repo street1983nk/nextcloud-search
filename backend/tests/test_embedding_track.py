@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,7 +37,7 @@ from tantivy import Index
 
 from findling.config import settings
 from findling.embed.chunker import ChunkSpan
-from findling.embed.model import DIMENSIONS, EMBEDDING_UNAVAILABLE, EmbedOutcome
+from findling.embed.model import DIMENSIONS, EMBEDDING_UNAVAILABLE, LOAD_RETRY_SECONDS, EmbedOutcome
 from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
 from findling.extract.errors import ExtractionOutcome, Reason
@@ -1463,6 +1464,71 @@ async def test_the_first_embedding_row_builds_the_cutter_and_is_worked(
             poller._vectors.close()
 
 
+async def test_only_the_row_that_finds_no_cutter_goes_into_a_thread_for_it(
+    lazy_track: _Built, store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Perf audit PERF-F1. The build is idempotent and answers at its own first
+    # line, so a second call is cheap, but reaching it was not: every row of the
+    # instance hopped into the thread pool to be told that the cutter was there.
+    # The question is two attribute reads and it belongs on the loop.
+    _index_the_body(writer)
+    queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)), ClaimResult(jobs=(_job(kind="embed"),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller._wire_the_second_track()
+    builds = {"count": 0}
+    really = poller._build_the_cutter
+
+    def counted() -> bool:
+        builds["count"] += 1
+        return really()
+
+    monkeypatch.setattr(poller, "_build_the_cutter", counted)
+    try:
+        assert (await poller.run_once()).embedded == 1
+        assert builds["count"] == 1, "the first row builds"
+
+        assert (await poller.run_once()).embedded == 1
+
+        assert builds["count"] == 1, "the second row finds it built and never leaves the loop"
+        assert lazy_track.tokenizer == 1
+    finally:
+        if poller._vectors is not None:
+            poller._vectors.close()
+
+
+async def test_a_row_inside_the_cooldown_does_not_go_into_a_thread_either(
+    lazy_track: _Built, store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The other half of PERF-F1. Inside the cooldown the build answers false at
+    # its own second gate, so a hop into the pool to hear that is the same cost
+    # for the same nothing, once per row for five minutes. The row still leaves
+    # the queue with a name of its own.
+    _index_the_body(writer)
+    queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller._wire_the_second_track()
+    builds = {"count": 0}
+    really = poller._build_the_cutter
+
+    def counted() -> bool:
+        builds["count"] += 1
+        return really()
+
+    monkeypatch.setattr(poller, "_build_the_cutter", counted)
+    poller._cutter_failed_at = time.monotonic()
+    try:
+        result = await poller.run_once()
+
+        assert result.state == ROUND_WORKED
+        assert result.embedded == 0
+        assert builds["count"] == 0, "nothing to build and nothing to ask a thread about"
+        assert queue.acknowledged == [([91], {})], "the row leaves the queue, it is never kept back"
+        assert lazy_track.tokenizer == 0
+    finally:
+        if poller._vectors is not None:
+            poller._vectors.close()
+
+
 def test_a_container_that_can_build_the_cutter_promises_the_track_before_it_is_built(
     lazy_track: _Built,
 ) -> None:
@@ -1480,13 +1546,20 @@ def test_a_container_that_can_build_the_cutter_promises_the_track_before_it_is_b
             worker._vectors.close()
 
 
-def test_a_container_without_the_artifacts_promises_nothing_and_keeps_no_stock(
+def test_a_container_without_the_artifacts_promises_nothing_and_keeps_the_stock(
     lazy_track: _Built, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The ordinary container outside the shipping image. The eager half is
     # allowed one stat and has to use it: a track that promised readiness here
     # would hand rows to a spur that cannot run, and they would be claimed,
     # answered, claimed again and written off as failed(repeatedly_stuck).
+    #
+    # And the stock stays open all the same, which is bug audit MEDIUM-5 of plan
+    # 07-05. The missing model locks the cutter and nothing else: an instance
+    # that carried vectors from an image with a model and then ran an image
+    # without one would otherwise keep answering semantic queries for files that
+    # have been deleted, because the delete path of D-21 reaches the stock
+    # through this very handle.
     empty = tmp_path / "no-model"
     empty.mkdir()
     monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", str(empty))
@@ -1494,10 +1567,48 @@ def test_a_container_without_the_artifacts_promises_nothing_and_keeps_no_stock(
 
     worker = Poller()
     worker._wire_the_second_track()
+    try:
+        assert worker._embed_ready is False, "no artifacts, so no row may be handed over"
+        assert worker._vectors is not None, "the stock stays open for the delete path of D-21"
+        assert worker._cutter_absent is True, "and the no about the cutter is the permanent one"
+        assert lazy_track.tokenizer == 0
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
 
-    assert worker._embed_ready is False, "no artifacts, so no row may be handed over"
-    assert worker._vectors is None
-    assert lazy_track.tokenizer == 0
+
+def test_a_container_without_the_artifacts_still_takes_the_vectors_off_a_tombstone(
+    lazy_track: _Built, store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The reason the case above asserts a handle rather than a field: D-21 over
+    # the container that has no model at all. Nothing here can embed anything,
+    # and a deletion still has to take the vectors of its file with it, or a
+    # file that is gone keeps answering semantic queries on the next instance
+    # that does have a model.
+    empty = tmp_path / "no-model"
+    empty.mkdir()
+    monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", str(empty))
+    settings.cache_clear()
+    monkeypatch.setattr(poller_module, "_open_state", lambda: store)
+    monkeypatch.setattr(poller_module, "_open_writer", lambda _store, *, vectors: writer)
+
+    worker = Poller(
+        client_factory=lambda: cast("AsyncNextcloudApp", object()),
+        gateway_factory=lambda: cast("Any", _FakeGatewayClient()),
+        queue_factory=lambda nc: cast("Any", _FakeQueue(ClaimResult(jobs=()))),
+    )
+    try:
+        worker._open()
+        stock = worker._vectors
+        assert stock is not None
+        _fill(stock, 4711)
+
+        store.tombstone(4711)
+
+        assert stock.chunks_of([4711]) == {}, "the delete path found no handle, which is D-21"
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
 
 
 async def test_a_build_that_fails_at_the_first_row_acknowledges_it_and_stops_the_handover(
@@ -1521,10 +1632,80 @@ async def test_a_build_that_fails_at_the_first_row_acknowledges_it_and_stops_the
         assert result.state == ROUND_WORKED
         assert result.embedded == 0
         assert queue.acknowledged == [([91], {})]
-        assert poller._embed_ready is False, "a second row must not be handed over after this"
+        assert poller._embed_ready is False, "a second row must not be handed over inside the cooldown"
+        # And the no is a moment and not a property: the stamp is what the
+        # cooldown is measured against, and the artifacts were never the
+        # problem here.
+        assert poller._cutter_failed_at is not None
+        assert poller._cutter_absent is False
     finally:
         if poller._vectors is not None:
             poller._vectors.close()
+
+
+def test_a_build_that_threw_is_tried_again_after_the_cooldown(
+    lazy_track: _Built, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Bug audit HIGH-1 of plan 07-05, and the case the old flag could not have.
+    # A build that threw used to switch the second track off for the life of the
+    # process, and the failure that really happens on the target box is a
+    # MemoryError while 544,3 MB arrive under a hard 2 GB limit: a moment, not a
+    # property. One of those cost the whole container its semantic half until
+    # somebody restarted it, which is pitfall 2 of the phase research.
+    def out_of_air(_directory: Path) -> object:
+        raise MemoryError
+
+    worker = Poller()
+    worker._wire_the_second_track()
+    try:
+        monkeypatch.setattr(poller_module, "open_tokenizer", out_of_air)
+
+        assert worker._build_the_cutter() is False
+        assert worker._embed_ready is False, "no row is handed over while the build is cooling down"
+        assert lazy_track.tokenizer == 0, "the build threw before it counted"
+
+        # The clock and nothing else. Moving the stamp back past the cooldown is
+        # the same statement as waiting it out, and it is the one this suite can
+        # make without sleeping for five minutes.
+        stamp = worker._cutter_failed_at
+        assert stamp is not None
+        worker._cutter_failed_at = stamp - LOAD_RETRY_SECONDS - 1.0
+
+        assert worker._embed_ready is True, "after the cooldown the track promises again"
+
+        monkeypatch.setattr(poller_module, "open_tokenizer", lambda _directory: object())
+
+        assert worker._build_the_cutter() is True
+        assert worker._cutter_failed_at is None, "a build that worked forgets the moment that did not"
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
+
+
+def test_an_engine_that_throws_leaves_no_half_built_cutter_behind(
+    lazy_track: _Built, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Bug audit LOW-6. Asking the holder for the engine reads no artifact, but
+    # it is still a constructor and it is still code. The assignment used to
+    # stand outside the try, so a throw there left the splitter in place and the
+    # engine at None: the one shape the three parts of this track are never
+    # allowed to have, because _embed_ready reads the pair and the top of the
+    # build reads it too.
+    def no_engine() -> _FakeModel:
+        raise RuntimeError("the holder said no")
+
+    worker = Poller()
+    worker._wire_the_second_track()
+    try:
+        monkeypatch.setattr(poller_module, "shared_model", no_engine)
+
+        assert worker._build_the_cutter() is False
+        assert worker._chunker is None, "no half built cutter, the three parts travel together"
+        assert worker._model is None
+        assert worker._cutter_failed_at is not None, "and it is the cooldown, not the permanent no"
+    finally:
+        if worker._vectors is not None:
+            worker._vectors.close()
 
 
 def test_the_two_tokenizer_instances_are_not_merged() -> None:

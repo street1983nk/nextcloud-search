@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 from tantivy import Document
 
 from findling.config import settings
+from findling.embed.engine import note_cutter_failure
 from findling.index.open import expected_versions, open_index
 from findling.index.schema import (
     FIELD_BODY_DE,
@@ -159,6 +160,22 @@ def _meta_of(file_id: int) -> FileMeta:
         size=1024,
         mtime=1_700_000_000 + file_id,
     )
+
+
+@pytest.fixture(autouse=True)
+def forget_the_cutter_notice() -> Iterator[None]:
+    """No case inherits the failed cutter build of the case before it.
+
+    The notice of ``embed/engine.py`` is a module global, because it describes
+    this process the way the engine holder does. In a container that is one
+    fact; in a suite it is a fact that outlives the test which produced it, and
+    a poller case that lets a build throw would otherwise decide what the admin
+    page reports three files later. Cleared on both sides, so the order the
+    suite happens to run in cannot be read off any answer.
+    """
+    note_cutter_failure(None)
+    yield
+    note_cutter_failure(None)
 
 
 @pytest.fixture
