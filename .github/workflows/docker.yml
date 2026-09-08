@@ -220,6 +220,80 @@ jobs:
             --entrypoint python \
             "${IMAGE}@${DIGEST}" /probe/test_vec_extension_probe.py
 
+      # Criterion 3 of phase 8, asked of the artefact and not of the recipe.
+      # backend/Dockerfile already runs test -s on the word list and on its
+      # licence, and that check stays where it is: it is what makes an image
+      # without them unbuildable. This step is the other half, because a build
+      # plan is not an artefact: it checks the manifest this run just pushed, the
+      # bytes a user actually receives. And the GPL-2+ obligation of wngerman
+      # hangs on the distributed image, not on the file that describes how to
+      # build one.
+      #
+      # Four checks with four messages, because four failures mean four different
+      # things: a moved package version, a changed word list, a missing licence
+      # text, and a licence text some later build step made writable.
+      - name: The word list, its version and its licence in this image
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          docker run --rm --network none --entrypoint sh \
+            "${IMAGE}@${DIGEST}" -c '
+            set -eu
+            licence=/usr/local/share/findling/COPYING.wngerman
+
+            # 1. The pinned package version. The list decides how a compound
+            # falls apart, so a move of it retokenises every German document in
+            # every index. That has to be a build event somebody records, not a
+            # silent apt side effect.
+            version=$(dpkg-query -W -f=\${Version} wngerman)
+            echo "wngerman version ${version}"
+            if [ "${version}" != "20161207-15" ]; then
+              echo "the word list package is ${version} and not the pinned 20161207-15"
+              echo "record the new numbers in THIRD-PARTY.md before changing this step"
+              exit 1
+            fi
+
+            # 2. The two numbers THIRD-PARTY.md and docs/german-analyzer.md state
+            # about the list itself. The package is Architecture: all, so both
+            # platforms of this matrix have to read the same bytes.
+            lines=$(wc -l < /usr/share/dict/ngerman | tr -d " ")
+            bytes=$(wc -c < /usr/share/dict/ngerman | tr -d " ")
+            echo "ngerman ${lines} lines, ${bytes} bytes"
+            if [ "${lines}" != "356010" ] || [ "${bytes}" != "4725887" ]; then
+              echo "the word list is ${lines} lines and ${bytes} bytes"
+              echo "THIRD-PARTY.md says 356010 and 4725887, so one of the two is wrong"
+              exit 1
+            fi
+
+            # 3. The licence text. The two strings below are not guessed: they
+            # were read with head -20 out of a container built from the apt line
+            # of backend/Dockerfile on 2026-09-08, where line 2 carries the
+            # upstream name and line 7 the licence of the Files: * stanza.
+            if [ ! -s "${licence}" ]; then
+              echo "the GPL-2+ licence text is missing from ${licence}"
+              echo "the image is what is distributed, so the text has to travel in it"
+              exit 1
+            fi
+            if ! grep -q "Upstream-Name: igerman98" "${licence}"; then
+              echo "${licence} does not name igerman98, so it is not the wngerman copyright"
+              exit 1
+            fi
+            if ! grep -q "License: GPL-2+" "${licence}"; then
+              echo "${licence} carries no GPL-2+ line, which is the obligation it exists for"
+              exit 1
+            fi
+            head -7 "${licence}"
+
+            # 4. The mode from the install line of backend/Dockerfile. A licence
+            # text a later build step can rewrite is evidence of nothing.
+            mode=$(stat -c %a "${licence}")
+            echo "licence mode ${mode}"
+            if [ "${mode}" != "444" ]; then
+              echo "the licence text is mode ${mode} and not 0444, so something made it writable"
+              exit 1
+            fi
+            '
+
       # The offline proof of plan 06-10, and the only check in this repository
       # that carries the zero-config promise for the semantic half.
       #

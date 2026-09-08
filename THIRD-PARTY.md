@@ -253,6 +253,14 @@ is not part of any release artifact.
 
 ## How to check this file against reality
 
+The first of the commands below no longer waits for somebody to remember it: the
+step **"The word list, its version and its licence in this image"** in
+`.github/workflows/docker.yml` asks the same four questions of the image this
+run just pushed, on both architectures, and fails the build when the package
+version, the line count, the byte count, the licence text or its read only mode
+do not match what this file states. The hand version stays here because a reader
+of this file should be able to check it without a pipeline.
+
 ```bash
 # the word list and its licence, inside the built image
 docker run --rm ghcr.io/street1983nk/findling_backend:dev \
