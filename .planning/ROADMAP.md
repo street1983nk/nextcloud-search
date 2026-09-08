@@ -35,7 +35,8 @@ Die Phasen sind bewusst klein und einzeln nutzbar geschnitten. Grund ist das Kil
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 7: Gemeinsame Embedding-Engine** - Das Modell liegt pro Prozess genau einmal im Speicher, ohne dass die erste Suche nach Leerlauf langsamer wird (completed 2026-09-08)
-- [x] **Phase 8: Deutsche Komposita ohne Behelf** - Wer ein Teilwort sucht, findet das zusammengesetzte Wort, ueber eine lizenzgeklaerte Wortliste statt ueber einen Prefix-Behelf (completed 2026-09-08)
+- [x] **Phase 8: Deutsche Komposita ohne Behelf** - Wer ein Teilwort sucht, findet das zusammengesetzte Wort, ueber eine lizenzgeklaerte Wortliste statt ueber einen Prefix-Behelf
+ (completed 2026-09-08)
 - [ ] **Phase 9: Eigene Ergebnisseite** - Der Nutzer verliert die Trefferliste nicht mehr, wenn er einen Treffer oeffnet
 - [ ] **Phase 10: Vergleichsmessung auf der AWS-Box** - Die Verbesserung steht als Zahl neben der v1.0-Baseline, Zeile fuer Zeile
 - [ ] **Phase 11: Haertung und Store-Einreichung v1.1** - v1.1 ist getestet jenseits des Happy Path und als signiertes App-Paar im Store
@@ -121,8 +122,38 @@ Plans:
   4. Die Ergebnisseite zeigt genau die Dateien, die die Unified Search zeigt: derselbe ACL-Vorfilter, derselbe finale PHP-Recheck, keine zweite Sicherheitsflaeche; der bestehende Paritaetstest deckt die neue Route mit ab
   5. Ist das Backend gestoppt oder antwortet es nicht, zeigt die Seite eine klare Meldung statt einer leeren Liste oder eines Fehlers
 
-**Plans**: TBD
+**Plans**: 8 Plaene in 7 Wellen
 **UI hint**: yes
+
+Plans:
+**Wave 1**
+
+- [ ] 09-01-PLAN.md , Zeitbudget der Seitenroute messen und den Per-Call-Deckel parametrieren (Welle 1)
+- [ ] 09-02-PLAN.md , Gate B lernt die Nutzerseiten-Routenklasse, Gate C die drei fehlenden Verbote (Welle 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 09-03-PLAN.md , der geteilte Recheck-Dienst, der Zaehl-Gate und die Offset-Decke (Welle 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 09-04-PLAN.md , PageController mit dem URL-Vertrag und der Highlight-Zerleger (Welle 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 09-05-PLAN.md , Template, Stil, Skript und die 24 Copy-Elemente (Welle 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 09-06-PLAN.md , Navigationseintrag, Einstieg aus dem Suchdialog, Gate C auf die Seitendateien (Welle 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 09-07-PLAN.md , der Paritaetstest deckt die neue Route mit (Welle 6)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 09-08-PLAN.md , Sichtproben, UI-SPEC-Nachzug, vertagte FR-Wortlaute und die drei Audits (Welle 7)
 
 ### Phase 10: Vergleichsmessung auf der AWS-Box
 
@@ -162,7 +193,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 |-------|----------------|--------|-----------|
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
-| 9. Eigene Ergebnisseite | 0/? | Not started | - |
+| 9. Eigene Ergebnisseite | 0/8 | Planned     | - |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
 
