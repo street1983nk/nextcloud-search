@@ -984,7 +984,26 @@ Kategorien sind schmal, aber nicht leer.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Alle fuenf Fragen sind mit Abschluss der Phase 08 beantwortet (Stand 08.09.2026):
+
+1. RESOLVED: Owner-Entscheid a am 08.09.2026 (08-01-SUMMARY.md, Task 3): Kriterium 1 wurde
+   auf die messbar zerlegbaren Faelle umformuliert, keine Rezeptaenderung. "Baugenehmigung"
+   steht als benannte Grenze in docs/german-analyzer.md.
+2. RESOLVED: 08-04 hat das Set von 7 auf 10 Faelle erweitert (Belehrung nach Audit-Fix H-01
+   statt Vereinbarung, Auszug, Erinnerung), alle vorher gegen die echte Liste gemessen;
+   test_corpus_terms.py haelt die CI-Begriffe gegen Korpus und Fallliste.
+3. RESOLVED: Der Schritt fehlte; 08-03 hat ihn in docker.yml gebaut (Lizenz, Fassung
+   20161207-15, 356010 Zeilen, Modus 444 im veroeffentlichten Abbild).
+4. RESOLVED: 08-03 belegt den Variantenwechsel Ende zu Ende bis reindexRequired
+   (test_switching_the_dictionary_variant_asks_for_a_reindex), inkl. Audit-Korrektur
+   der Fixture-Falle (Test war zunaechst aus dem falschen Grund gruen).
+5. RESOLVED: 08-04 traegt den ASCII-Transkriptionsfall im COMPOUNDS-Waechter, 08-05
+   dokumentiert die Grenze als "Spelled out umlauts on the index side" in
+   docs/german-analyzer.md; der OCR-Fall Ubermittlungsprotokoll ist als Fall 48 gemessen.
+
+(Die urspruenglichen Fragen bleiben darunter im Wortlaut stehen.)
 
 1. **Soll Erfolgskriterium 1 woertlich gelten?**
    - Was wir wissen: "Genehmigung findet Baugenehmigung" ist mit Rezept A gemessen
