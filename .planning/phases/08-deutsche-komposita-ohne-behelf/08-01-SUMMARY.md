@@ -254,6 +254,15 @@ Keine. Der Lauf braucht nur Docker, das auf der Maschine vorhanden ist (29.5.2).
 schreibt der Orchestrator nach der Welle, nicht dieser Worktree-Agent. Die
 Umformulierung der Roadmap-Zeile fuer Erfolgskriterium 1 ist damit noch offen.
 
+## Self-Check: PASSED
+
+- Alle sieben erzeugten Dateien plus dieses Summary liegen auf der Platte.
+- Beide Task-Commits sind in `git log`: `0f1eb2d`, `ad4e822`. Summary-Commit
+  `b648372`.
+- Arbeitsbaum sauber, keine Aenderung an `STATE.md` oder `ROADMAP.md`.
+- Alle drei Commits als `street1983nk <k.cherif@outlook.de>`, keine
+  Claude-Trailer.
+
 ---
 *Phase: 08-deutsche-komposita-ohne-behelf*
 *Completed: 2026-09-08*
