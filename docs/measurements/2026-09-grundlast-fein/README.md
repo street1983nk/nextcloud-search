@@ -190,13 +190,48 @@ teurer als der Fix; hier muss es nicht aufgeweicht werden.
 Die Budget-Tabelle in `CLAUDE.md` kennt einen Posten "onnxruntime + e5-small
 int8" mit "0 bei lazy_load, 250 bis 400 MB Spitze" und einen Posten "Tantivy
 Writer". Einen Posten "Tokenizer und Splitter" kennt sie nicht. Gemessen ist
-dieser Posten mit 544 MB **größer als das Modell**, und er ist heute nicht
-faul. Ob die Tabelle nachgezogen wird, entscheidet der Owner; dieser Bericht
-ändert `CLAUDE.md` nicht.
+dieser Posten mit 544 MB **größer als das Modell**, und er war bis zu diesem
+Plan nicht faul. Ob die Tabelle nachgezogen wird, entscheidet der Owner; dieser
+Bericht ändert `CLAUDE.md` nicht.
 
 ---
 
-## 6. Nach dem Bau
+## 6. Nach dem Bau: die tatsächliche Ersparnis, neben der erwarteten
 
-Die tatsächliche Ersparnis wird mit demselben Skript nachgemessen und hier neben
-die erwartete Zahl gestellt. Siehe Abschnitt 7.
+Der faule Bau ist gebaut. `_wire_the_second_track` öffnet nur noch den
+Vektorbestand und prüft mit zwei `stat`-Aufrufen, ob die Artefakte da sind;
+Tokenizer, Splitter und Engine entstehen in `_build_the_cutter` an der ersten
+Einbettungszeile.
+
+Nachgemessen wird auf dem Weg, den der Arbeiter wirklich geht, und nicht mehr
+auf dem Startweg: Skript 01 ruft `open_tokenizer` und `make_splitter` selbst
+auf, misst also den Preis der beiden Posten und nicht die Entscheidung darüber,
+wann er anfällt. Skript `02-nachmessung-fauler-bau.py` misst die Entscheidung.
+Es läuft zweimal im selben Abbild, einmal gegen den veröffentlichten Code und
+einmal gegen den geänderten, Rohdatei
+`rohdaten/02-nachmessung-fauler-bau-amd64.txt`:
+
+| Station | eifrig (Abbild) | faul (dieser Plan) |
+|---|---:|---:|
+| 00-leerer-prozess | 13,4 MB | 13,3 MB |
+| 06-poller-importiert | 69,2 MB | 69,3 MB |
+| **20-zweite-spur-verdrahtet** | **644,7 MB** | **69,9 MB** |
+| 21-schneider-gebaut | 644,7 MB | 644,9 MB |
+
+Der Zuwachs an Station 20, also das, was der erste Durchlauf des Pollers kostet,
+fällt von **575,6 MB auf 0,6 MB**. Die 0,6 MB sind der Vektorbestand, der
+absichtlich eifrig bleibt. **Die nachgemessene Ersparnis eines Containers, der
+nur noch sucht, ist damit 575,0 MB**, gegen eine erwartete Ersparnis von
+544,3 MB aus Abschnitt 4 und gegen eine Schwelle von 100 MB.
+
+Die nachgemessene Zahl liegt 30,7 MB über der erwarteten, und das ist kein
+Widerspruch, sondern ein Unterschied der Vorgeschichte: Skript 01 baut vorher
+die Wortliste und den deutschen Automaten (64,7 MB), Skript 02 nicht, und die
+Speicherverwaltung der C-Bibliothek gibt für dieselbe Anforderung verschieden
+viel neu an das Betriebssystem zurück, je nachdem was vorher schon angefordert
+war. Beide Zahlen sagen dasselbe: der Posten ist verschoben, und zwar ganz.
+
+Was der Container an Station 21 zahlt, ist unverändert. Der faule Bau spart
+nichts ein, er verschiebt: ein Container, dessen zweite Spur läuft, kommt auf
+dieselbe Zahl wie vorher, nur später. Genau das war der Hebel, und die
+Nachmessung bestätigt ihn an beiden Enden.

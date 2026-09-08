@@ -1,0 +1,42 @@
+nachmessung-fauler-bau-amd64 2026-09-08T11:22:23Z
+host=Docker Desktop 29.5.2, linux/amd64, nativ, --network none
+
+=== A. das veroeffentlichte Abbild, eifriger Bau ===
+date=2026-09-08T11:22:29Z
+arch=x86_64
+variante=eifrig-abbild
+image_ref=ghcr.io/street1983nk/findling_backend:dev
+hat_faulen_bau=False
+schneider_gebaut=False
+vektorbestand_offen=True
+
+-- schritt rss_kb --
+00-leerer-prozess 13696
+06-poller-importiert 70820
+20-zweite-spur-verdrahtet 660208
+21-schneider-gebaut 660208
+
+-- zuwachs je schritt --
+00-leerer-prozess            06-poller-importiert              55.8      69.2
+06-poller-importiert         20-zweite-spur-verdrahtet        575.6     644.7
+20-zweite-spur-verdrahtet    21-schneider-gebaut                0.0     644.7
+
+=== B. derselbe Container mit dem geaenderten Quellcode, fauler Bau ===
+date=2026-09-08T11:22:35Z
+arch=x86_64
+variante=faul-worktree
+image_ref=ghcr.io/street1983nk/findling_backend:dev
+hat_faulen_bau=True
+schneider_gebaut=True
+vektorbestand_offen=True
+
+-- schritt rss_kb --
+00-leerer-prozess 13668
+06-poller-importiert 70968
+20-zweite-spur-verdrahtet 71608
+21-schneider-gebaut 660364
+
+-- zuwachs je schritt --
+00-leerer-prozess            06-poller-importiert              56.0      69.3
+06-poller-importiert         20-zweite-spur-verdrahtet          0.6      69.9
+20-zweite-spur-verdrahtet    21-schneider-gebaut              575.0     644.9

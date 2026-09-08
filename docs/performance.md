@@ -3539,6 +3539,13 @@ Gegenwert mit. Gegen die vor der Messung festgelegte Schwelle von 100 MB ist der
 faule Bau damit freigegeben worden; die Zahlen, die Schwelle und der Entscheid
 stehen im Bericht des Messverzeichnisses.
 
+**Nachgemessen nach dem Bau:** der erste Durchlauf des Pollers kostete im
+veröffentlichten Abbild 575,6 MB und kostet mit dem faulen Bau noch 0,6 MB, und
+diese 0,6 MB sind der Vektorbestand, der wegen des Löschpfads absichtlich eifrig
+bleibt. Die Ersparnis eines Containers, der nur noch sucht, ist damit gemessene
+**575,0 MB**. Ein Container, dessen zweite Spur läuft, kommt auf dieselbe Zahl
+wie vorher, nur später: der faule Bau verschiebt und senkt nicht.
+
 ## Was der Test gekostet hat
 
 ### Die Generalprobe, Hetzner
