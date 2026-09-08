@@ -36,6 +36,17 @@ and it is the one function in this module that must build nothing: an admin
 page polls, so a question that loaded the engine on the way would be the
 loading trigger of a container nobody is searching on.
 
+**The one thing this module is told rather than reads.** The second track needs
+a tokenizer and a splitter next to the weights, it builds them at the first row
+that needs one, and that build can throw for the same reason a load can: 544,3
+MB arriving under a hard 2 GB limit. The holder knows nothing of it, because the
+build never gets as far as asking for the engine, so before this the page said
+"cold" for a track that was lying dead in its cooldown (bug audit MEDIUM-2 of
+plan 07-05). :func:`note_cutter_failure` is how the poller says it, and the
+stamp it hands over is its own, so the two halves cannot drift into two clocks.
+It is a fact about this process, like the holder itself, and it is remembered
+in the same place for the same reason.
+
 **What this does not do.** It does not make the engine thread safe. That belongs
 to the object, holds for every caller including the ones that build their own,
 and lives in :class:`~findling.embed.model.EmbeddingModel` with the arithmetic
@@ -45,10 +56,11 @@ that justifies the lock.
 from __future__ import annotations
 
 import threading
+import time
 from typing import TYPE_CHECKING, Final
 
 from findling.config import settings
-from findling.embed.model import EmbeddingModel, artifacts_present
+from findling.embed.model import LOAD_RETRY_SECONDS, EmbeddingModel, artifacts_present
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -60,6 +72,14 @@ _ENGINE: tuple[Path, EmbeddingModel] | None = None
 # Re-entrant for the reason the read side lock is: the cost of proving that no
 # path below ever takes it twice is higher than the cost of the flag inside it.
 _LOCK = threading.RLock()
+
+# When the second track last failed to build its cutter, on the monotonic clock,
+# and None when it never did or not since the last success. Written by the
+# poller through :func:`note_cutter_failure` and read by :func:`engine_state`
+# alone. A plain module global next to the holder because it describes the same
+# thing the holder does, this process, and because the poller keeps its own copy
+# as the field its own gates read: this one is the diagnosis and never the gate.
+_CUTTER_FAILED_AT: float | None = None
 
 # The closed set of answers :func:`engine_state` gives, as named constants in
 # the shape of the notes of ``api/status.py``: every one of them names a state
@@ -104,6 +124,37 @@ def shared_model() -> EmbeddingModel:
         return model
 
 
+def note_cutter_failure(stamp: float | None) -> None:
+    """The second track says when its cutter build last threw, or that it did not.
+
+    One writer, one reader, one clock. The stamp is the poller's own
+    ``_cutter_failed_at``, handed over rather than taken here, so the cooldown
+    the track runs on and the state the page shows can never be two different
+    moments. None is the whole of the other message: the build worked, or the
+    track never got to one.
+
+    Called from ``worker/poller.py`` and from nowhere else. The dependency
+    direction of this module holds: ``worker/`` imports from ``embed/``, and
+    nothing here knows that a poller exists.
+    """
+    global _CUTTER_FAILED_AT
+
+    with _LOCK:
+        _CUTTER_FAILED_AT = stamp
+
+
+def _cutter_cooling_down() -> bool:
+    """True while the failed cutter build of the second track is inside its cooldown.
+
+    The same comparison as
+    :attr:`~findling.embed.model.EmbeddingModel.load_cooling_down`, against the
+    same constant, because it is the same failure one layer up. Reading it has
+    no side effect: the clock is read, nothing else.
+    """
+    stamp = _CUTTER_FAILED_AT
+    return stamp is not None and time.monotonic() - stamp < LOAD_RETRY_SECONDS
+
+
 def _held(model_dir: Path) -> EmbeddingModel | None:
     """The engine of this process if there is one, and never a new one.
 
@@ -140,26 +191,38 @@ def engine_state() -> str:
     one that is about to begin. Then the missing model, the one state that does
     not resolve itself. Then the cooldown, then the loaded engine, and cold
     last, as the state that is left when nothing else is true.
+
+    **The cooldown has two sources and one answer** (bug audit MEDIUM-2 of plan
+    07-05). A load of the weights that threw is one of them and the holder knows
+    it. A cutter build of the second track that threw is the other, and the
+    holder cannot know it: that build fails before it ever asks for the engine,
+    so the holder stays empty and the page used to say "cold", which reads as
+    "the model arrives on first demand" for a track that is lying dead for five
+    minutes. Both are the same sentence to an admin, wait and look again, so
+    both give the same word and no sixth one is invented for it.
     """
     resolved = settings()
     if not resolved.embed_enabled:
         return ENGINE_DISABLED
 
     held = _held(resolved.embed_model_dir)
-    if held is not None:
-        if held.artifacts_absent:
-            return ENGINE_MISSING
-        if held.load_cooling_down:
-            return ENGINE_RETRY_PENDING
-        if held.loaded:
-            return ENGINE_LOADED
 
-    # Nothing is in memory, so the answer is about what is going to happen, and
-    # the artifact question is what decides it: with the two files in place the
-    # load is still ahead, without them it never comes. Asked here rather than
-    # left at cold, because since plan 07-03 neither half of this container
+    # The missing model, asked of whichever source can answer it. With an
+    # instance in the holder that is the refusal its load path remembered for
+    # ever; without one it is the pair of stats, and it is asked here rather
+    # than left at cold because since plan 07-03 neither half of this container
     # builds the engine before the first row or the first search that needs one.
     # A container without a model would otherwise report cold for its whole
     # life, and cold reads as "the model arrives on first demand", which is the
     # one sentence an admin must not be given in that situation.
-    return ENGINE_COLD if artifacts_present(resolved.embed_model_dir) else ENGINE_MISSING
+    absent = held.artifacts_absent if held is not None else not artifacts_present(resolved.embed_model_dir)
+    if absent:
+        return ENGINE_MISSING
+    if (held is not None and held.load_cooling_down) or _cutter_cooling_down():
+        return ENGINE_RETRY_PENDING
+    if held is not None and held.loaded:
+        return ENGINE_LOADED
+
+    # What is left when nothing else is true: the artifacts are there, nothing
+    # threw, and nothing has been read yet.
+    return ENGINE_COLD

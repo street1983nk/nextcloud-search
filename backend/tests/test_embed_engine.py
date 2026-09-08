@@ -54,6 +54,7 @@ from findling.embed.engine import (
     ENGINE_RETRY_PENDING,
     ENGINE_STATES,
     engine_state,
+    note_cutter_failure,
     shared_model,
 )
 from findling.embed.model import (
@@ -609,6 +610,63 @@ def test_a_load_that_threw_is_reported_as_waiting_until_the_cooldown_is_over(
     assert attempts["count"] == 1, "asking for the state is not an attempt"
 
 
+def test_a_cutter_build_that_threw_is_reported_as_waiting_and_not_as_cold(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Bug audit MEDIUM-2 of plan 07-05. The second track builds a tokenizer and
+    # a splitter next to the weights, and that build throws before it ever asks
+    # for the engine, so the holder stays empty and every source this function
+    # reads says "cold". Cold reads as "the model arrives on first demand", and
+    # the demand it promises is exactly the one that has just failed.
+    _pretend_a_model(model_home)
+    clock = {"now": 5000.0}
+    monkeypatch.setattr(engine_module.time, "monotonic", lambda: clock["now"])
+
+    assert engine_state() == ENGINE_COLD
+
+    note_cutter_failure(clock["now"])
+
+    assert engine_state() == ENGINE_RETRY_PENDING
+    assert _held_for(model_home) is None, "the diagnosis still builds nothing"
+
+    clock["now"] += LOAD_RETRY_SECONDS + 1
+
+    # The cooldown is over and nothing has retried yet, which is the same cold
+    # the load path falls back to: the next row is what pays for the build.
+    assert engine_state() == ENGINE_COLD
+
+
+def test_a_cutter_build_that_worked_takes_the_waiting_state_back(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The anti vacuity half: a notice that could only ever be set would leave
+    # the page in the waiting state for the life of the container, and the row
+    # that repaired the track would change nothing an admin can see.
+    _pretend_a_model(model_home)
+    clock = {"now": 7000.0}
+    monkeypatch.setattr(engine_module.time, "monotonic", lambda: clock["now"])
+    note_cutter_failure(clock["now"])
+
+    assert engine_state() == ENGINE_RETRY_PENDING
+
+    note_cutter_failure(None)
+
+    assert engine_state() == ENGINE_COLD
+
+
+def test_a_container_without_a_model_says_missing_although_the_cutter_failed(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The order of the verdicts, held where the two new sources meet. A missing
+    # model does not resolve itself and a cooldown does, so the sentence that
+    # sends an admin to rebuild the image has to outrank the one that says wait.
+    clock = {"now": 9000.0}
+    monkeypatch.setattr(engine_module.time, "monotonic", lambda: clock["now"])
+    note_cutter_failure(clock["now"])
+
+    assert engine_state() == ENGINE_MISSING
+
+
 def test_asking_for_the_state_neither_builds_an_instance_nor_loads_one(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -623,6 +681,16 @@ def test_asking_for_the_state_neither_builds_an_instance_nor_loads_one(
         assert engine_state() == ENGINE_COLD
 
     assert _held_for(model_home) is None, "the question must not build the instance it asks about"
+    assert load_count() == before
+
+    # And the same promise with the notice of the second track set, because that
+    # branch is the newest one and it is asked before the holder is read.
+    note_cutter_failure(time.monotonic())
+    for _ in range(5):
+        assert engine_state() == ENGINE_RETRY_PENDING
+    note_cutter_failure(None)
+
+    assert _held_for(model_home) is None
     assert load_count() == before
 
     shared_model().embed_query("bauantrag")

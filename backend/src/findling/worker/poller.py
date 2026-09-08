@@ -66,7 +66,7 @@ from tantivy import Index
 
 from findling.config import settings
 from findling.embed.chunker import ChunkSpan, chunk_spans, make_splitter
-from findling.embed.engine import shared_model
+from findling.embed.engine import note_cutter_failure, shared_model
 from findling.embed.model import (
     EMBEDDING_UNAVAILABLE,
     LOAD_RETRY_SECONDS,
@@ -1576,6 +1576,11 @@ class Poller:
             # The moment, not the property: the stamp is what the cooldown is
             # measured against, and the next row after it runs the build again.
             self._cutter_failed_at = time.monotonic()
+            # And the same moment travels to the diagnosis, because the holder
+            # of the engine cannot see this failure: the build throws before it
+            # ever asks for one, so the admin page would report a cold container
+            # for a track that is lying dead (bug audit MEDIUM-2 of plan 07-05).
+            note_cutter_failure(self._cutter_failed_at)
             LOGGER.warning(
                 "the second track could not build its cutter, %s; it is tried again in %d s "
                 "and the search answers lexically until then",
@@ -1595,6 +1600,7 @@ class Poller:
         self._chunker = cut
         self._model = shared_model()
         self._cutter_failed_at = None
+        note_cutter_failure(None)
         return True
 
     @property
