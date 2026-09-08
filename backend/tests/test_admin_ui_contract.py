@@ -506,6 +506,33 @@ def test_a_half_that_lost_the_state_of_the_engine_is_reported() -> None:
     assert len(scan_engine_state("somewhere-else.php", "engineState findling-semantic-engine")) == 1
 
 
+def test_the_engine_line_is_not_hidden_behind_a_denominator_that_does_not_exist_yet() -> None:
+    """Bug audit MEDIUM-3 of plan 07-05, as a gate over both halves.
+
+    The line sat inside the block of the second coverage figure, and that block
+    is shown only when there is a denominator. A fresh installation has none for
+    hours, which is exactly the installation the line says the most to: whether
+    there is a model in this image at all decides whether waiting is worth
+    anything. It was invisible in the one situation it was written for.
+
+    Held as the rule and not as the rendering, because there is no DOM here. The
+    template hides the block on two conditions and the script shows it on two,
+    and the second of them is the word about the engine in both.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert "$hasEngineWord = $engineState !== '';" in template
+    assert "if (!$hasDenominator && !$hasEngineWord) { ?> hidden" in template
+    assert "const hasEngineWord = typeof engineState === 'string' && engineState !== ''" in script
+    assert "shown('findling-semantic', hasDenominator || hasEngineWord)" in script
+    # And the share line inside keeps the denominator of its own, in both
+    # halves: a block that appears for the engine line alone must not claim
+    # that a figure could not be worked out.
+    assert 'id="findling-semantic-unknown"<?php if (!$hasDenominator || $hasEmbeddedFraction)' in template
+    assert "shown('findling-semantic-unknown', hasDenominator && !hasFraction)" in script
+
+
 def test_both_halves_of_the_page_map_the_same_state_to_the_same_sentence() -> None:
     """The pair itself, and not only the presence of the two names.
 

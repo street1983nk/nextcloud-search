@@ -126,6 +126,11 @@ Fortschrittsbalken: die Deckung ist eine Zahl, der Zustand der Engine ist eine
 Lage. Der Container meldet ihn als `engineState`, als eines von fünf Wörtern,
 und die Seite macht daraus einen Satz, der sagt, was zu tun ist.
 
+Die Zeile hängt nicht am Nenner. Sobald der Container ein Wort meldet, steht sie
+da, auch wenn noch nichts indexiert ist: gerade auf einer frischen Installation
+entscheidet sie, ob Warten überhaupt etwas bringt. Der Satz über den fehlenden
+Anteil bleibt dagegen am Nenner, denn ohne Nenner gibt es nichts auszurechnen.
+
 | Meldung des Containers | Was auf der Seite steht | Was ein Admin tun kann |
 |---|---|---|
 | `loaded` | Das Modell liegt im Speicher, die semantische Suche antwortet. | nichts |

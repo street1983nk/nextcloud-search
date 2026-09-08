@@ -380,6 +380,12 @@
    * page that moves. A block that were rendered once server side would sit at
    * the value it had when the page was opened, next to a first figure that is
    * live, which is the shape of a page that lies while looking healthy.
+   *
+   * Its visibility has two sources since bug audit MEDIUM-3 of plan 07-05: a
+   * denominator, or a word about the engine. The second one is what makes the
+   * engine line visible on a fresh installation, which is where it says the
+   * most and where it used to be hidden behind a figure that does not exist
+   * yet.
    */
   function semanticBlock (coverage, hasDenominator, engineState) {
     const indexable = whole(coverage.indexable)
@@ -389,6 +395,12 @@
     // sentence for that case rather than a number.
     const percent = Number.isInteger(coverage.embeddedPercent) ? coverage.embeddedPercent : null
     const hasFraction = hasDenominator && percent !== null
+    // The third question of this block, and it is not about a figure. A word
+    // about the engine is enough to show the block, because the line that word
+    // becomes says the most on the installation that has no denominator yet
+    // (bug audit MEDIUM-3 of plan 07-05). AdminViewService hands over null for
+    // a container that did not say, and null is not a word.
+    const hasEngineWord = typeof engineState === 'string' && engineState !== ''
 
     text('findling-semantic-percent', numbers.format(percent === null ? 0 : percent) + '\u00a0%')
     text('findling-semantic-subline', t('findling', '%1$s of %2$s indexable files can also be found by meaning')
@@ -402,11 +414,15 @@
 
     text('findling-semantic-engine', engineSentence(engineState))
 
-    shown('findling-semantic', hasDenominator)
+    shown('findling-semantic', hasDenominator || hasEngineWord)
     shown('findling-semantic-figure', hasFraction)
     shown('findling-semantic-bar', hasFraction)
     shown('findling-semantic-subline', hasFraction)
-    shown('findling-semantic-unknown', !hasFraction)
+    // The denominator belongs in this rule as well, exactly as it does in the
+    // first block: a block that appeared for the engine line alone must not
+    // claim that a share could not be worked out. There is nothing to work out
+    // yet, and the empty block below says so in its own words.
+    shown('findling-semantic-unknown', hasDenominator && !hasFraction)
   }
 
   /**
