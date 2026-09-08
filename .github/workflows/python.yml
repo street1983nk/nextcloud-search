@@ -6,10 +6,19 @@ on:
   push:
     paths:
       - 'backend/**'
+      - 'scripts/dev/build_corpus.py'
+      # backend/tests/test_corpus_terms.py and backend/tests/test_ocr_quality.py
+      # load scripts/dev/build_corpus.py at run time and read FILES,
+      # _searchable_text and UNIQUE_TERMS out of it, so a commit that touches
+      # only that script can turn the suite red. integration.yml has carried the
+      # file in its path list since phase 3 for the same reason. Without this
+      # line the breakage surfaces on the next commit that happens to touch
+      # backend/** and is blamed on the wrong one.
       - '.github/workflows/python.yml'
   pull_request:
     paths:
       - 'backend/**'
+      - 'scripts/dev/build_corpus.py'
       - '.github/workflows/python.yml'
   # The measurement job below runs on these two only. It costs minutes and it
   # guards no regression, it produces a number, so it has no business in the loop
