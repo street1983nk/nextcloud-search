@@ -1351,8 +1351,15 @@ jobs:
       # measured rate, see the comment at the variable.
       - name: Wait until the second track has written its vectors
         run: |
+          # Written to a file rather than kept in this step, because the cold
+          # start measurement below asks the same question again just before it
+          # restarts the container: a restart in the middle of the embedding
+          # would take a working track down and leave the number below measuring
+          # a container that is busy catching up (bug audit MEDIUM-4 of plan
+          # 07-05). Two steps, one counter, one definition of "carrying".
+          cat > "${{ runner.temp }}/embedded.sh" <<'SH'
           embedded() {
-            python3 - "${{ runner.temp }}/findling/vectors.db" <<'PY'
+            python3 - "${RUNNER_TEMP}/findling/vectors.db" <<'PY'
           import sqlite3
           import sys
           from pathlib import Path
@@ -1367,6 +1374,8 @@ jobs:
           print(int(row[0]) if row else 0)
           PY
           }
+          SH
+          . "${{ runner.temp }}/embedded.sh"
 
           deadline=$(( $(date +%s) + EMBED_TIMEOUT ))
           while :; do
@@ -1594,6 +1603,31 @@ jobs:
             echo "::error::PARAPHRASE_TERM holds ${words} word, and this step needs at least two. Since the 06.1-20 addendum a single word line stays lexical (rewritten.one_term in backend/src/findling/api/search.py), so it never reaches the model, and the cold start duration below would measure that rule instead of the load."
             exit 1
           fi
+
+          # The second structural gate, and it is about the moment rather than
+          # about the line (bug audit MEDIUM-4 of plan 07-05). The restart below
+          # is only allowed to happen once the second track has run dry: a
+          # container taken down mid embedding comes back up with rows waiting
+          # for it, and the wall clock further down would then time a search
+          # against a worker that is building a 544,3 MB cutter next to it. The
+          # step above already waited for this number; it is asked again here
+          # because a step stands between the two, and because the restart is
+          # the one thing in this job that cannot be taken back.
+          . "${{ runner.temp }}/embedded.sh"
+          backlog_deadline=$(( $(date +%s) + 60 ))
+          while :; do
+            carrying=$(embedded)
+            if [ "${carrying}" -ge "${EXPECTED_EMBEDDED}" ]; then
+              echo "the second track carries ${carrying} of ${EXPECTED_EMBEDDED} documents and has nothing left to do, so the container may be restarted"
+              break
+            fi
+            if [ "$(date +%s)" -ge "${backlog_deadline}" ]; then
+              echo "::error::the second track still owes vectors for $(( EXPECTED_EMBEDDED - carrying )) documents, so this container must not be restarted for the cold start measurement"
+              exit 1
+            fi
+            sleep 5
+          done
+
           kill "$(cat "${{ runner.temp }}/exapp.pid")" 2>/dev/null || true
           for _ in $(seq 1 20); do
             curl -sf "http://127.0.0.1:${EXAPP_PORT}/heartbeat" > /dev/null || break
@@ -1613,6 +1647,33 @@ jobs:
             sleep 1
           done
           answer="${{ github.workspace }}/paraphrase-semantic.json"
+
+          # Cold is asserted and never assumed (bug audit MEDIUM-4 of plan
+          # 07-05). The restart takes the module global of the engine holder
+          # with it, so the container SHOULD answer "cold" here, and everything
+          # that could have made it warm in the meantime is invisible from the
+          # outside: one row of the second track arriving between the restart
+          # and this line loads the very engine whose first load is being timed.
+          # The question goes to the container itself, through the route the
+          # admin page reads, and reading it builds nothing and loads nothing
+          # (T-07-04), so the gate cannot spoil the number it guards.
+          #
+          # A container that is not cold does not fail this step. What it
+          # produced is still a real search through the whole stack, it is
+          # simply not a cold start, and it is printed with that word instead of
+          # the other one: going red here would turn a number nobody asserts
+          # into a deadline, which is the shape this job turns down everywhere.
+          auth=$(printf 'cold:%s' "${EXAPP_SECRET}" | base64 -w0)
+          status_answer=$(curl -sf -m 10 "http://127.0.0.1:${EXAPP_PORT}/status" \
+            -H 'EX-APP-ID: findling_backend' \
+            -H "EX-APP-VERSION: ${APP_VERSION}" \
+            -H "AUTHORIZATION-APP-API: ${auth}" || true)
+          engine_state=$(printf '%s' "${status_answer}" | jq -r '.engineState // empty' || true)
+          if [ -z "${engine_state}" ]; then
+            engine_state='unreported'
+          fi
+          echo "the restarted container reports engineState=${engine_state} before the search"
+
           # The wall clock of one cold semantic search, around the request and
           # nothing else, so that neither the restart nor the heartbeat wait
           # counts into it.
@@ -1622,9 +1683,17 @@ jobs:
             --data-urlencode "term=${PARAPHRASE_TERM}" \
             'http://localhost:8080/ocs/v2.php/search/providers/findling/search' -o "${answer}"
           elapsed_ms=$(( ( $(date +%s%N) - start ) / 1000000 ))
-          echo "cold semantic search over apache, the ocs route, the php provider and both halves:" \
-            "${elapsed_ms} ms on amd64, runner ubuntu-24.04, database ${{ matrix.database }}," \
-            "corpus of ${EXPECTED_EMBEDDED} documents with vectors."
+          if [ "${engine_state}" = "cold" ]; then
+            echo "cold semantic search over apache, the ocs route, the php provider and both halves:" \
+              "${elapsed_ms} ms on amd64, runner ubuntu-24.04, database ${{ matrix.database }}," \
+              "corpus of ${EXPECTED_EMBEDDED} documents with vectors."
+          else
+            echo "semantic search over apache, the ocs route, the php provider and both halves:" \
+              "${elapsed_ms} ms on amd64, runner ubuntu-24.04, database ${{ matrix.database }}," \
+              "corpus of ${EXPECTED_EMBEDDED} documents with vectors." \
+              "WARM, NOT COMPARABLE: the engine reported ${engine_state} and not cold before this search," \
+              "so this number does not belong in the cold start series of the phase."
+          fi
           echo "the two ceilings this number runs against, printed for the reader and asserted nowhere:" \
             "1500 ms for one single container call (ExAppService::REQUEST_TIMEOUT_SECONDS) and" \
             "2500 ms for the whole result group (Provider::BUDGET_NANOSECONDS)."
