@@ -1617,6 +1617,16 @@ RENDERED_TEXT: dict[str, tuple[str, ...]] = {
 # because a word that is unique today and quietly duplicated tomorrow is exactly
 # the kind of drift this check exists for, and because a later plan that wants to
 # assert one of them should not first have to prove it is unique.
+#
+# The last three arrived with phase 8 and they are a different kind of entry:
+# they are not whole words of a document, they are constituents. Each one is the
+# second part of a compound that stands in the file next to it, and the condition
+# for the hit is the split of that compound in the German chain. They stand here
+# because the workflow asserts on them, and an assertion on a term nothing checks
+# for uniqueness is an assertion that can rot without anyone noticing.
+# backend/tests/test_corpus_terms.py is the other half of that check: it measures
+# the split and the uniqueness before a case is written, this map keeps them
+# unique afterwards.
 UNIQUE_TERMS: dict[str, str] = {
     "Genehmigung": "09-bescheid.pdf",
     "Frist": "10-kuendigung.docx",
@@ -1639,6 +1649,11 @@ UNIQUE_TERMS: dict[str, str] = {
     "Sendebericht": "21-sendebericht.tif",
     "Lieferschein": "23-gedreht.jpg",
     "Zahlungserinnerung": "30-nur-ein-bild.pdf",
+    # The three constituents of phase 8, in the order of the files they belong
+    # to: Pachtvereinbarung, Grundbuchsauszug, Zahlungserinnerung.
+    "Vereinbarung": "14-pacht-mit-anhang.pdf",
+    "Auszug": "16-oesterreich-mitteilung.pdf",
+    "Erinnerung": "30-nur-ein-bild.pdf",
 }
 
 

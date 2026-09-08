@@ -80,6 +80,16 @@ language list. The two files that did not change, `13` and `30`, came back with
 2026-09-01, so the run compares with the earlier one and the third language did
 not move what the engine reads on these pages.
 
+The last column carried whole words of a document until phase 8. Since then it
+also carries **constituents**: `Vereinbarung`, `Auszug` and `Erinnerung` are the
+second parts of `Pachtvereinbarung`, `Grundbuchsauszug` and
+`Zahlungserinnerung`, and each of them is unique here in the same sense as the
+whole words, in the letters of the document and in the tokens the German chain
+produces from it. The workflow searches for them, so they belong under the same
+uniqueness check as every other term of this column; the check itself lives in
+`UNIQUE_TERMS` of `scripts/dev/build_corpus.py` and its counterpart over tokens
+in `backend/tests/test_corpus_terms.py`.
+
 **This column is read by a machine.** The `readonly-gate` job of
 `.github/workflows/integration.yml` parses the first backticked token of every
 verdict cell and asserts it file by file against the state database after its
@@ -103,9 +113,9 @@ change here in the same commit.
 | `11-uebersicht.odt` | OpenDocument text, the format the office trio was missing | `indexed` | Verträge |
 | `12-aktenvermerk.txt` | A short file note in Windows-1252 | `indexed` | Müller |
 | `13-ratsvorlage-scan.pdf` | Three A4 pages of council prose as greyscale images, no text object on any page | `indexed` through the OCR track, 1593 characters over three pages | Bebauungsplan |
-| `14-pacht-mit-anhang.pdf` | Five pages: two with a real text layer, three scanned annex pages | `indexed` on the text pass, the three annex pages stay unread on purpose | Pachtvereinbarung |
+| `14-pacht-mit-anhang.pdf` | Five pages: two with a real text layer, three scanned annex pages | `indexed` on the text pass, the three annex pages stay unread on purpose | Pachtvereinbarung, Vereinbarung |
 | `15-schweiz-baubewilligung.pdf` | One scanned A4 page in Swiss spelling, ss instead of the sharp s, with a numeric date, an amount carrying the Swiss apostrophe and a line of capitals with umlauts | `indexed` through the OCR track, 664 characters | Strasse, Baubewilligung, Ersatzabgabe |
-| `16-oesterreich-mitteilung.pdf` | One scanned A4 page in Austrian wording, with a file reference of two slashes, an amount in German notation and a written out date | `indexed` through the OCR track, 594 characters | Jänner, Grundbuchsauszug, Erlagschein, Parteienverkehr |
+| `16-oesterreich-mitteilung.pdf` | One scanned A4 page in Austrian wording, with a file reference of two slashes, an amount in German notation and a written out date | `indexed` through the OCR track, 594 characters | Jänner, Grundbuchsauszug, Auszug, Erlagschein, Parteienverkehr |
 | `17-beleg.jpg` | A slip with readable text as JPEG, the format phone uploads arrive in | `indexed`, the picture track of plan 03-10 | Zahlungsavis |
 | `18-aushang.png` | A notice with readable text as PNG | `indexed`, the picture track | Sperrmüllabfuhr |
 | `19-uebermittlung.tif` | A one page TIFF with readable text, deflate compressed | `indexed`, the picture track | Übermittlungsprotokoll |
@@ -119,7 +129,7 @@ change here in the same commit.
 | `27-nullbytes-im-kopf.pdf` | A PDF header followed by 512 NUL bytes | `failed(corrupt)` | none |
 | `28-ohne-seiten.pdf` | Valid structure, correct cross reference table, zero pages | `failed(corrupt)` | none |
 | `29-doppelt-komprimiert.pdf` | A content stream behind two chained Flate filters | `indexed`, pdfium applies both filters | none |
-| `30-nur-ein-bild.pdf` | One A4 page, one image, no text object in the whole file | `indexed` through the OCR track, 332 characters | Zahlungserinnerung |
+| `30-nur-ein-bild.pdf` | One A4 page, one image, no text object in the whole file | `indexed` through the OCR track, 332 characters | Zahlungserinnerung, Erinnerung |
 | `31-riesenformat.pdf` | A page of 14400 by 14400 points, the largest the format allows | `skipped(empty_text)`, handed over, and the nine gigapixel page comes back without readable text | none |
 | `32-startxref-ins-leere.pdf` | Correct objects, and a `startxref` that points past the end of the file | `indexed`, pdfium recovers | none |
 | `33-seitenbaum-zyklus.pdf` | A page tree that contains itself | `failed(corrupt)`, and above all: no hang | none |
