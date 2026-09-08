@@ -26,12 +26,19 @@ The list keeps its umlauts and its sharp s; it is never folded to plain letters.
 
 ### Recipes that were measured and rejected
 
-| Recipe | Entries | Compounds findable through a part | Mis-splits |
+| Recipe | Entries | Of the sixteen long compounds, findable through a part | Mis-splits |
 |---|---|---|---|
 | **A: all words, window 4 to 14, linking elements as own entries** | **276496** | **14 of 16** | **0** |
 | B: nouns only, linking forms appended to each word, folded to plain ASCII | 222708 | 7 of 16 | yes, e.g. `haushaltss` + `atzung` |
 | C: nouns only, window 4 to 14 | 86345 | 12 of 16 | 0 |
 | D: nouns only, window 4 to 12 | 65693 | 12 of 16 | 0, but over-splits: `betrieb` + `kost` + `abrechn` |
+
+The third column counts the sixteen **long** compounds the phase research
+measured, and it is not a rate for German in general. Measured again on a wider
+set in `docs/measurements/2026-09-komposita-rezept-a/`: of twenty one everyday
+administrative compounds, seven do not come apart at all under recipe A, and
+they are the short, frequent ones. "14 of 16" is therefore a statement about
+long, rare words; "Known limits" below names the seven short ones.
 
 Recipe B is the one that suggests itself and the measurably worst one. It fails
 precisely on the long administrative compounds the whole feature is about.
@@ -89,12 +96,21 @@ list, which carries umlauts, unmatchable. English and the file name branch do
 keep the folding, because there a different algorithm stems or nothing stems at
 all.
 
-## The sixteen test compounds
+## The twenty one measured compounds
+
+The table below is the one `backend/tests/test_analyzer.py` asserts as
+`COMPOUNDS` since plan 08-04, line for line, with the tokens measured in
+`docs/measurements/2026-09-komposita-rezept-a/rohdaten/tokens-rezept-a.tsv`
+against the real Debian list. It guards **both** directions: a split that gets
+lost fails here as loudly as a split that gets invented, because every line
+names its tokens instead of counting them. The words are written with their real
+umlauts, because the transcription with spelled out umlauts is a different word
+to the index, see "Known limits" below.
 
 | Input | Expected tokens |
 |---|---|
-| Grundstuecksverkehrsgenehmigung | `grundstuck, verkehr, genehm` |
-| Kuendigungsfrist | `kundig, frist` |
+| Grundstücksverkehrsgenehmigung | `grundstuck, verkehr, genehm` |
+| Kündigungsfrist | `kundig, frist` |
 | Sitzungsvorlage | `sitzung, vorlag` |
 | Haushaltssatzung | `haushalt, satzung` |
 | Jahresabschluss | `jahr, abschluss` |
@@ -102,13 +118,24 @@ all.
 | Krankenversicherung | `krank, versicher` |
 | Rechnungsnummer | `rechnung, numm` |
 | Datenschutzgrundverordnung | `datenschutz, grund, verordn` |
-| Bundesausbildungsfoerderungsgesetz | `bund, ausbild, forder, gesetz` |
-| Rindfleischetikettierungsueberwachungsaufgabenuebertragungsgesetz | `rindfleisch, etikettier, uberwach, aufgab, ubertrag, gesetz` |
+| Bundesausbildungsförderungsgesetz | `bund, ausbild, forder, gesetz` |
+| Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz | `rindfleisch, etikettier, uberwach, aufgab, ubertrag, gesetz` |
 | Dampfschifffahrt | `dampfschiff, fahrt` |
+| Aufenthaltserlaubnis | `aufenthalt, erlaubnis` |
+| Gewerbeanmeldung | `gewerb, anmeld` |
 | Mietvertrag | `mietvertrag`, whole only |
 | Bebauungsplan | `bebauungsplan`, whole only |
-| Strasse (with sharp s) | `strass` |
-| Muell (with umlaut) | folded by the stemmer |
+| Baugenehmigung | `baugenehm`, whole only |
+| Bauantrag | `bauantrag`, whole only |
+| Baukosten | `baukost`, whole only |
+| Arbeitsvertrag | `arbeitsvertrag`, whole only |
+| Steuerbescheid | `steuerbescheid`, whole only |
+
+Two spellings stand outside this table because they say something about the
+stemmer rather than about the splitter: `Strasse` with and without the sharp s
+both become `strass`, and `Müller` and `Muller` both become `mull`. Both are
+asserted in `test_analyzer.py`, in `test_nominal_inflection_collapses_into_one_term`
+and `test_the_stemmer_folds_umlauts_without_a_folding_filter`.
 
 ## The ten words that must not fall apart
 
@@ -158,8 +185,9 @@ The resident memory of the running image is measured and recorded again in plan
 02-13, against the real container rather than a measurement harness.
 
 Admins who cannot afford the `full` variant set `FINDLING_COMPOUND_DICT=nouns`.
-That is a measured trade, not a guess: two of sixteen compounds stop being
-findable through one of their parts, and about 34 MiB come back.
+That is a measured trade, not a guess: two of the sixteen long compounds of the
+recipe table stop being findable through one of their parts, and about 34 MiB
+come back.
 
 ## The DACH cases (D-09)
 
@@ -196,9 +224,30 @@ Rohtextvergleich wäre ein Test gegen die Version der Engine und beim nächsten
 Debian-Punktrelease rot. `docs/ocr.md` führt dieselbe Begründung an der Stelle,
 an der die Engine beschrieben wird.
 
+## What splitting costs at ranking time
+
+When the splitter succeeds, the original token is **thrown away**: the whole
+compound does not stand in the index, only its parts do. Measured in
+`docs/measurements/2026-09-komposita-rezept-a/`: `Kündigungsfrist` yields
+`kundig, frist` and nothing else, so there is no term for the whole word left to
+match.
+
+A search for the whole word still works, because the query side runs the same
+analyser and produces the same parts. It works as a **conjunction over the
+parts**, however, not as one term: the query parser of
+`backend/src/findling/query/rewrite.py` is built with
+`conjunction_by_default=True`. A document that happens to carry all the parts in
+unrelated places therefore competes with the document that carries the whole
+word, and nothing in the scoring knows that the parts stood next to each other
+in one of them.
+
+That is the price of splitting. It is paid deliberately, because the alternative
+is not finding the document at all, and it is written down here so that a later
+ranking complaint has a cause to look at rather than a mystery.
+
 ## Known limits
 
-These four are measured, documented and deliberately not fixed here.
+These six are measured, documented and deliberately not fixed here.
 
 **D2, verb forms.** The Snowball stemmer unifies the infinitive and the noun but
 not the past tense or the participle: `suchen` and `Suche` both become `such`,
@@ -236,3 +285,61 @@ and is therefore **not** findable through `Vertrag`. Shrinking the window would
 split more of these and start over-splitting others, which is exactly what recipe
 D measures. `backend/tests/test_analyzer.py` asserts this limit in both
 directions rather than leaving it as folklore.
+
+This limit is wider than it used to read here. Measured in
+`docs/measurements/2026-09-komposita-rezept-a/`, section 3.2: of twenty one
+everyday administrative compounds, **seven** do not come apart, and they are the
+short, frequent ones that people actually type:
+
+| Compound | Characters | Token | Why it stays whole |
+|---|---|---|---|
+| `Mietvertrag` | 11 | `mietvertrag` | entry of the list |
+| `Bebauungsplan` | 13 | `bebauungsplan` | entry of the list |
+| `Baugenehmigung` | 14 | `baugenehm` | entry of the list, at the upper edge of the window |
+| `Bauantrag` | 9 | `bauantrag` | entry of the list |
+| `Arbeitsvertrag` | 14 | `arbeitsvertrag` | entry of the list |
+| `Steuerbescheid` | 14 | `steuerbescheid` | entry of the list |
+| `Baukosten` | 9 | `baukost` | **no** entry: `bau` has three characters and `MIN_LEN` is four, so the splitter never reaches the second part |
+
+`Baukosten` is the one that does not explain itself through list membership at
+all. The lower bound is a second, independent lock, and whoever reads only the
+entry column misses half of the cases. All seven stand in
+`backend/tests/test_analyzer.py` as `COMPOUNDS` lines with exactly one token, so
+a change that makes one of them splittable has to say so out loud instead of
+sliding through. `Baugenehmigung` in particular is the reason the phase success
+criterion was reworded: a search for `Genehmigung` produces `genehm`, the
+document produces `baugenehm`, and the two terms share nothing.
+
+**Spelled out umlauts on the index side.** The ASCII transcription of a compound
+is split by none of the measured recipes.
+`Grundstuecksverkehrsgenehmigung` stays the single token
+`grundstuecksverkehrsgenehm`, while `Grundstücksverkehrsgenehmigung` with real
+umlauts comes apart into `grundstuck, verkehr, genehm`
+`[docs/measurements/2026-09-komposita-rezept-a/, section 3.2]`. The constituent
+list carries its umlauts and the splitter compares exactly, so a transcribed
+word matches no entry at all. This is not the same thing as D3 above: D3 costs a
+term, this costs the whole split. `add_umlaut_variants` of plan 02-09 does not
+reach it either, because it widens the **question** and the index side has no
+counterpart. A document out of a legacy system or out of an OCR run that lost
+its umlaut dots is therefore findable under its whole word only.
+`test_the_transcribed_umlaut_costs_the_split_not_only_the_term` in
+`backend/tests/test_analyzer.py` nails both spellings down side by side.
+
+**More entries can mean less splitting.** The list is not monotonic: adding
+entries can take a split away. Measured with `remove_long` switched off so that
+the cause is unambiguous, recipe A splits the 63 character compound into its
+parts, while recipe A3, which does nothing but lower the window to three
+characters and therefore only adds entries, leaves it as one 63 character token
+`[docs/measurements/2026-09-komposita-rezept-a/, section 4, and
+.planning/phases/08-deutsche-komposita-ohne-behelf/08-RESEARCH.md]`. The split
+does not become different, it **fails**, because a longer match further left can
+lead the leftmost-longest walk into a dead end it cannot back out of. With
+`remove_long(48)` switched on again the token is then dropped and the document is
+findable under none of its six parts.
+
+The rule that follows: **a change to the list is a data migration, not a
+tweak.** It moves `wordlist_hash`, it forces a reindex, and it may only be run
+against the full measured case collection in both directions, gained and lost
+splits. `scripts/dev/measure_compounds.sh --against LIST` is the run that
+answers this question, and `COMPOUNDS` in `backend/tests/test_analyzer.py` is the
+collection.
