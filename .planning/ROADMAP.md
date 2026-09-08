@@ -34,7 +34,7 @@ Die Phasen sind bewusst klein und einzeln nutzbar geschnitten. Grund ist das Kil
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 7: Gemeinsame Embedding-Engine** - Das Modell liegt pro Prozess genau einmal im Speicher, ohne dass die erste Suche nach Leerlauf langsamer wird
+- [x] **Phase 7: Gemeinsame Embedding-Engine** - Das Modell liegt pro Prozess genau einmal im Speicher, ohne dass die erste Suche nach Leerlauf langsamer wird (completed 2026-09-08)
 - [ ] **Phase 8: Deutsche Komposita ohne Behelf** - Wer ein Teilwort sucht, findet das zusammengesetzte Wort, ueber eine lizenzgeklaerte Wortliste statt ueber einen Prefix-Behelf
 - [ ] **Phase 9: Eigene Ergebnisseite** - Der Nutzer verliert die Trefferliste nicht mehr, wenn er einen Treffer oeffnet
 - [ ] **Phase 10: Vergleichsmessung auf der AWS-Box** - Die Verbesserung steht als Zahl neben der v1.0-Baseline, Zeile fuer Zeile
@@ -72,7 +72,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 07-04-PLAN.md , der Engine-Zustand in der Diagnose, Kriterium 3 ganz statt halb (Welle 4)
+- [x] 07-04-PLAN.md , der Engine-Zustand in der Diagnose, Kriterium 3 ganz statt halb (Welle 4)
 
 ### Phase 8: Deutsche Komposita ohne Behelf
 
@@ -142,7 +142,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 7. Gemeinsame Embedding-Engine | 3/4 | In Progress|  |
+| 7. Gemeinsame Embedding-Engine | 4/4 | Complete   | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 0/? | Not started | - |
 | 9. Eigene Ergebnisseite | 0/? | Not started | - |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |

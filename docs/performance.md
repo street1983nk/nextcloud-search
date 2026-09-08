@@ -3383,7 +3383,7 @@ den Neustart noch um das Warten auf den Heartbeat.
 | Bestand | 26 Dokumente mit Vektoren (`EXPECTED_EMBEDDED`) |
 | Suchzeile | `PARAPHRASE_TERM`, dreizehn Wörter, keines davon im Zieldokument |
 | Protokollzeile | beginnt mit `cold semantic search over apache, the ocs route, the php provider and both halves:` |
-| **Gemessene Kaltstartdauer, amd64** | **steht aus: wird aus dem ersten Lauf dieses Workflows auf `main` nach Plan 07-02 nachgetragen, mit Laufnummer, Datum und Matrixzeile** |
+| **Gemessene Kaltstartdauer, amd64** | **1.299 ms (sqlite) und 1.392 ms (mysql), Lauf 34221154596 vom 08.09.2026, Workflow integration.yml, Job index-search-e2e, Schritt "The paraphrase finds the document with the second track", runner ubuntu-24.04, Korpus 26 Dokumente mit Vektoren; beide unter den 1.500 ms eines einzelnen Container-Aufrufs und unter dem 2.500-ms-Budget** |
 
 **Warum die Zahl hier noch fehlt und nicht geschätzt ist.** Ein Lauf von
 `integration.yml` ist erst nach dem Zusammenführen des Plans möglich; der

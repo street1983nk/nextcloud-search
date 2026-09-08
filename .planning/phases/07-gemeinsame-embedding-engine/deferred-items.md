@@ -13,6 +13,10 @@ passt in denselben Lauf, in dem er gefunden wurde.
 
 ## DI-07-01 (gefunden in Plan 07-02, Task 3): die amd64-Kaltstartzahl kann erst nach dem Zusammenfuehren entstehen
 
+**GESCHLOSSEN 08.09.2026:** Erster integration.yml-Lauf auf main (34221154596) lieferte
+1.299 ms (sqlite) und 1.392 ms (mysql); in docs/performance.md nachgetragen, Erfolgs-
+kriterium 4 damit erfuellt. EFF-02 bleibt abgehakt, jetzt auf beiden Architekturen belegt.
+
 **Gefunden:** beim Schreiben des Messberichts, unmittelbar nachdem der Messweg
 in `.github/workflows/integration.yml` gebaut war.
 
