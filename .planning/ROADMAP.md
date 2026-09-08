@@ -58,9 +58,20 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 4 Plaene in 4 Wellen
 
 Plans:
+**Wave 1**
+
 - [ ] 07-01-PLAN.md , Beleg EFF-01 und EFF-02 im Messbericht, ohne Produktionscode (Welle 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 07-02-PLAN.md , die amd64-Kaltstartzahl ueber den echten PHP-Weg und das Rueckschritt-Tor (Welle 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 07-03-PLAN.md , die Grundlast-Restluecke aus Tokenizer und Splitter, gemessen mit Abbruchbedingung (Welle 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 07-04-PLAN.md , der Engine-Zustand in der Diagnose, Kriterium 3 ganz statt halb (Welle 4)
 
 ### Phase 8: Deutsche Komposita ohne Behelf
