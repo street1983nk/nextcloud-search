@@ -9,6 +9,16 @@ everyday words that must not fall apart:
     276496 entries, 0.44 s to build the automaton, roughly 23 MB of resident
     memory, 14 of 16 compounds findable through one of their parts, 0 mis-splits
 
+Those sixteen are the compounds of the phase 2 research, and the guard table has
+grown past them since. Measured again in
+docs/measurements/2026-09-komposita-rezept-a/ over the twenty one compounds of
+COMPOUNDS in backend/tests/test_analyzer.py: fourteen come apart, seven stay
+whole, and all seven are named limits rather than surprises. Six of the seven
+are entries of the list themselves, the seventh is Baukosten, which the lower
+bound of the window keeps whole. The number in the line above is therefore the
+older and narrower statement, kept because the three recipe comparisons below
+were measured against exactly those sixteen.
+
 Three recipes were measured against it and all three are worse:
 
     B  nouns only, linking forms appended to every word, letters folded to
