@@ -294,6 +294,21 @@ Abweichung.
 |---|---|---|---|
 | `csv` übersprungen | 20 | `too_large` | **Absicht.** Das ist die Kategorie `oversize` des Generators: 20 CSV-Dateien bewusst über dem 50-MB-Deckel, damit `too_large` und der gesenkte Nenner des Deckungsgrads geprüft werden. |
 
+Entscheidung: diese Abweichung ist **als Testfall eingezogen**, nicht nur
+dokumentiert. Zwei Tests tragen den Befund, und sie tragen ihn an den beiden
+Stellen, an denen er entsteht.
+`backend/tests/test_load_corpus.py::test_exactly_twenty_files_lie_above_the_size_cap`
+hält die eine Hälfte: die Kategorie `oversize` ist die einzige des Generators,
+deren Zieldateigröße über `MAX_FILE_BYTES` liegt, und sie erzeugt in einem
+50.000-Dateien-Korpus genau 20 Dateien. Wer die Verteilung anfasst, macht diese
+Zeile rot, statt stillschweigend eine andere Zahl in einen späteren Bericht zu
+schreiben.
+`backend/tests/test_extract_errors.py::test_a_file_over_the_size_cap_is_skipped_a_second_time`
+hält die andere Hälfte: eine Datei über dem Deckel bekommt
+`skipped(too_large)`, bevor ein einziges Byte gelesen wird. Damit hängt die
+Abweichung an zwei Tests, die rot werden, und nicht an der Aufmerksamkeit des
+nächsten Lesers.
+
 ### Die 37 Verdikte aus 06-11, vollständig zugeordnet
 
 Der Bericht aus 06-11 nennt 37 übersprungene Dateien: 21 `too_large`, 14
@@ -321,6 +336,35 @@ Wer die Verdikttabelle liest, während Arbeitsvorrat da ist, liest also
 Zwischenstände. Der Endungsvergleich oben ist bei leerem Arbeitsvorrat gelesen
 und davon nicht betroffen; der Befund steht hier, damit der nächste Leser nicht
 über dieselbe Stelle stolpert.
+
+Entscheidung: das Verhalten ist **als Testfall eingezogen**, die daraus folgende
+Messregel bleibt **bewusst offen**. Eingezogen ist der Teil, den Code halten
+kann:
+`backend/tests/test_poller.py::test_no_text_layer_is_requeued_and_not_acknowledged`
+hält fest, dass eine Zeile mit diesem Verdikt wieder als OCR-Arbeit vorgelegt
+und dabei **nicht** quittiert wird, denn Quittieren heißt Löschen, und die
+gelöschte Zeile wäre genau die, auf die der Requeue Arbeit gelegt hat.
+`backend/tests/test_poller.py::test_a_stored_no_text_layer_verdict_does_not_block_the_handover`
+hält die zweite Hälfte: ein bereits gespeichertes `no_text_layer` darf nach
+einem Neustart nicht zum Endzustand werden, sondern muss die Übergabe erneut
+auslösen. `backend/tests/test_reconcile.py` benutzt dasselbe Verdikt als
+Übergabepunkt und nicht als Endverdikt, und `testdata/CORPUS.md` sagt vor der
+Dateitabelle ausdrücklich, dass `skipped(no_text_layer)` seit Phase 3 kein
+Endzustand mehr ist.
+Bewusst offen bleibt die Messregel: es gibt keinen Mechanismus, der ein
+Leseskript daran hindert, die Verdikttabelle bei vollem Arbeitsvorrat zu lesen,
+und es soll auch keinen geben. Die Tabelle ist während der Arbeit nicht falsch,
+sie ist ein Zwischenstand, und ein Schloss davor würde den laufenden Betrieb
+bezahlen lassen für einen Fehler, den nur ein Messender machen kann. An die
+Stelle des Mechanismus tritt deshalb eine Regel für den Messenden: **Verdikte
+nur bei leerem Arbeitsvorrat lesen.** Der Endungsvergleich dieses Abschnitts ist
+so gelesen worden.
+
+**Damit ist QUAL-03 geschlossen.** Der Endungsvergleich ist gefahren und
+bestanden, dreizehn Endungen ohne eine einzige unerklärte Abweichung, die eine
+Abweichung, die es gibt, hat einen Namen und zwei Tests, und der Nebenbefund
+trägt seine zwei Tests und die ausdrückliche Erklärung, welcher Teil bewusst
+offen bleibt. Kein Befund dieses Abschnitts steht mehr ohne Zuordnung da.
 
 ---
 
