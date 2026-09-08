@@ -17,10 +17,8 @@ run without saying so.
 
 from __future__ import annotations
 
-import importlib.util
 import io
 import json
-import sys
 from contextlib import redirect_stdout
 from pathlib import Path
 from types import ModuleType
@@ -29,19 +27,10 @@ import pytest
 
 from findling.extract import ocr_quality
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BUILD_CORPUS = REPO_ROOT / "scripts" / "dev" / "build_corpus.py"
-
-
-def _load_build_corpus() -> ModuleType:
-    """The corpus generator as a module, because it is a script and not a package."""
-    specification = importlib.util.spec_from_file_location("build_corpus_under_test", BUILD_CORPUS)
-    if specification is None or specification.loader is None:
-        pytest.skip("the corpus generator is not where it is expected to be")
-    module = importlib.util.module_from_spec(specification)
-    sys.modules[specification.name] = module
-    specification.loader.exec_module(module)
-    return module
+# The corpus generator arrives through the session fixture ``corpus_generator``
+# of conftest.py. It used to be loaded by a private helper in this module and in
+# test_corpus_terms.py, once per test that asked for it; loading it builds all
+# thirty nine corpus files and cost about 5.9 s each time.
 
 
 # --------------------------------------------------------------------------
@@ -210,27 +199,21 @@ def test_a_missing_input_is_refused_without_printing_a_path(tmp_path: Path) -> N
 # --------------------------------------------------------------------------
 
 
-def test_the_generator_writes_the_same_ground_truth_twice() -> None:
-    generator = _load_build_corpus()
-
-    first = generator.build_ground_truth()
-    second = generator.build_ground_truth()
+def test_the_generator_writes_the_same_ground_truth_twice(corpus_generator: ModuleType) -> None:
+    first = corpus_generator.build_ground_truth()
+    second = corpus_generator.build_ground_truth()
 
     assert first == second
     assert first.endswith(b"\n")
     assert b"\r\n" not in first
 
 
-def test_the_committed_ground_truth_is_the_one_the_generator_builds() -> None:
-    generator = _load_build_corpus()
-
-    assert generator.GROUND_TRUTH_PATH.read_bytes() == generator.build_ground_truth()
+def test_the_committed_ground_truth_is_the_one_the_generator_builds(corpus_generator: ModuleType) -> None:
+    assert corpus_generator.GROUND_TRUTH_PATH.read_bytes() == corpus_generator.build_ground_truth()
 
 
-def test_the_ground_truth_names_a_variant_and_pages_for_every_document() -> None:
-    generator = _load_build_corpus()
-
-    payload = json.loads(generator.build_ground_truth().decode("utf-8"))
+def test_the_ground_truth_names_a_variant_and_pages_for_every_document(corpus_generator: ModuleType) -> None:
+    payload = json.loads(corpus_generator.build_ground_truth().decode("utf-8"))
 
     assert payload["documents"]
     for document in payload["documents"]:

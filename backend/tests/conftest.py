@@ -18,10 +18,13 @@ exercise the same path a proxied request takes, including the empty user name of
 the unauthorized case.
 """
 
+import importlib.util
+import sys
 from base64 import b64encode
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from fastapi.testclient import TestClient
@@ -54,6 +57,39 @@ APP_CREDENTIAL = "unit-test-credential"
 CONSTITUENTS = (
     (Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt").read_text(encoding=ENCODING).split()
 )
+
+# The corpus generator, which is a script and not a package, so it has to be
+# loaded by path. Two test modules read FILES, _searchable_text, UNIQUE_TERMS and
+# build_ground_truth out of it.
+BUILD_CORPUS = Path(__file__).resolve().parents[2] / "scripts" / "dev" / "build_corpus.py"
+BUILD_CORPUS_MODULE = "build_corpus_under_test"
+
+
+@pytest.fixture(scope="session")
+def corpus_generator() -> ModuleType:
+    """``scripts/dev/build_corpus.py`` as a module, executed once per session.
+
+    Importing it is not cheap and it is not a detail: ``FILES`` is built at
+    module level, so every load produces all thirty nine corpus files, AES
+    encryption, zip bomb and deeply nested PDF included. Measured with
+    ``--durations`` before this fixture existed, the suite paid roughly 5.9
+    seconds for each of five loads, about 35 s of a 180 s run, because two test
+    modules each carried their own loader and called it once per test that
+    needed it.
+
+    One session scoped fixture is the whole fix, and the session scope is the
+    part that matters: a module scoped one would still load it twice. Sharing
+    one module object across tests is safe here because nothing in the generator
+    keeps mutable state that a test writes to; the tests read constants and call
+    pure builders.
+    """
+    specification = importlib.util.spec_from_file_location(BUILD_CORPUS_MODULE, BUILD_CORPUS)
+    if specification is None or specification.loader is None:
+        pytest.skip("the corpus generator is not where it is expected to be")
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[specification.name] = module
+    specification.loader.exec_module(module)
+    return module
 
 
 @dataclass(frozen=True, slots=True)

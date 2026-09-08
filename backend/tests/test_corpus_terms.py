@@ -38,8 +38,6 @@ as the project rules require.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -57,8 +55,8 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt"
 # each one has to bring back on its own. Every one of them is the second part of
 # a compound that stands in that file, every one of them has a measured line in
 # docs/measurements/2026-09-komposita-rezept-a/rohdaten/tokens-rezept-a.tsv, and
-# the two scanned ones sit on pages that the OCR measurement of 2026-09-06 read
-# with a character error rate of zero.
+# all three sit on scanned pages that the OCR measurement of 2026-09-06 read with
+# a character error rate of zero (pages 4, 5 and 6).
 CI_TERMS: dict[str, str] = {
     # Rechtsmittelbelehrung, pixels only.
     "Belehrung": "15-schweiz-baubewilligung.pdf",
@@ -108,17 +106,6 @@ HEADLINE_AS_DRAWN = "Übermittlungsprotokoll"
 HEADLINE_AS_READ = "Ubermittlungsprotokoll"
 
 
-def _load_build_corpus() -> ModuleType:
-    """The corpus generator as a module, because it is a script and not a package."""
-    specification = importlib.util.spec_from_file_location("build_corpus_terms_under_test", BUILD_CORPUS)
-    if specification is None or specification.loader is None:
-        pytest.skip("the corpus generator is not where it is expected to be")
-    module = importlib.util.module_from_spec(specification)
-    sys.modules[specification.name] = module
-    specification.loader.exec_module(module)
-    return module
-
-
 @pytest.fixture(scope="module")
 def german() -> TextAnalyzer:
     """One German analyser for the whole module; building it is not free."""
@@ -148,15 +135,18 @@ def splitterless() -> TextAnalyzer:
 
 
 @pytest.fixture(scope="module")
-def searchable() -> dict[str, str]:
+def searchable(corpus_generator: ModuleType) -> dict[str, str]:
     """Everything a search could find in each corpus file, pixels included.
 
     Taken from the generator rather than from the built files, because the text
     of a scanned page exists as pixels and a reader of the bytes would find
     nothing there. The generator is the ground truth of that prose.
+
+    The generator arrives through the session fixture of conftest.py. Loading it
+    builds all thirty nine corpus files, so a second load in this module would
+    cost another six seconds for nothing.
     """
-    module = _load_build_corpus()
-    return {name: module._searchable_text(name, payload) for name, payload in module.FILES.items()}
+    return {name: corpus_generator._searchable_text(name, payload) for name, payload in corpus_generator.FILES.items()}
 
 
 @pytest.fixture(scope="module")
@@ -297,14 +287,12 @@ def test_the_headline_the_engine_really_reads_does_not_come_apart(german: TextAn
     assert german.analyze(HEADLINE_AS_READ) == [HEADLINE_AS_READ.lower()]
 
 
-def test_every_ci_term_is_carried_by_the_uniqueness_check_of_the_generator() -> None:
+def test_every_ci_term_is_carried_by_the_uniqueness_check_of_the_generator(corpus_generator: ModuleType) -> None:
     # The generator has its own uniqueness check and it runs on every build of
     # the corpus. A term that the workflow asserts on but that check does not
     # know is a term that can quietly become ambiguous with the next corpus file.
-    module = _load_build_corpus()
-
-    missing = sorted(term for term in CI_TERMS if term not in module.UNIQUE_TERMS)
+    missing = sorted(term for term in CI_TERMS if term not in corpus_generator.UNIQUE_TERMS)
 
     assert missing == [], f"add to UNIQUE_TERMS in {BUILD_CORPUS.name}: {missing}"
     for term, owner in CI_TERMS.items():
-        assert module.UNIQUE_TERMS[term] == owner
+        assert corpus_generator.UNIQUE_TERMS[term] == owner
