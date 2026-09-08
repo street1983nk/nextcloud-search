@@ -3495,12 +3495,18 @@ Phase der ersten semantischen Suche sind es **712,6 MB** (1.837,8 gegen
 inzwischen der OCR-Phase. Beide Zahlen stammen aus der Nachmessung vom
 07.09.2026 auf arm64 und sind auf eine Nachkommastelle gerundet.
 
-Was dieser Abschnitt nicht belegt: alle gemessenen Zahlen hier, die
-Speicherzahlen wie die Latenzzahlen, sind auf arm64 gemessen. Den Messweg für
-die amd64-Entsprechung hat Plan 07-02 gebaut, sie steht im Abschnitt "Die
-amd64-Zahl" darüber und wird aus dem ersten Integrationslauf nachgetragen; der
-Vergleich Zeile für Zeile gegen die v1.0-Grundlinie, mit einem p95 über den
-vollen Bestand, gehört Phase 10.
+Was dieser Abschnitt nicht belegt: die gemessenen Zahlen HIER, Speicher wie
+Latenz, sind auf arm64 gemessen. Die amd64-Entsprechungen stehen an zwei
+anderen Stellen dieses Dokuments und sind beide aus echten Läufen belegt: die
+Latenzzahl im Abschnitt "Die amd64-Zahl" darüber (1.299 und 1.392 ms, Lauf
+34221154596), und der Speicherunterschied zum Verhalten des Standes 1.0.x im
+Abschnitt "Der größte Posten der Grundlast" darunter: der erste
+Poller-Durchlauf kostete im veröffentlichten Abbild (eifriger Bau, das
+Verhalten aller 1.0.x-Releases) auf amd64 nativ 575,6 MB und kostet mit dem
+faulen Bau noch 0,6 MB, gemessene Ersparnis 575,0 MB (Rohdaten:
+docs/measurements/2026-09-grundlast-fein/, Datei
+02-nachmessung-fauler-bau-amd64.txt). Der Vergleich Zeile für Zeile gegen die
+v1.0-Grundlinie, mit einem p95 über den vollen Bestand, gehört Phase 10.
 
 ### Der größte Posten der Grundlast heißt Tokenizer und Splitter
 
