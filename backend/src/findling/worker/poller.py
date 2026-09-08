@@ -1095,9 +1095,21 @@ class Poller:
         # The first row of the process pays for the tokenizer and the splitter
         # here, in a thread, because the read of the 17 MB artifact and the
         # 544,3 MB behind it must not sit on the event loop that answers
-        # searches. Every row after it finds them built and returns at the top
-        # of the method.
-        await asyncio.to_thread(self._build_the_cutter)
+        # searches.
+        #
+        # **Every row after it pays two attribute reads and nothing else** (perf
+        # audit PERF-F1). The question "is it built" is answered on the loop,
+        # where it costs nothing, and the thread is entered only when there is
+        # really something to build. Before this the hop itself was per row:
+        # tens of thousands of trips into the pool over an instance, each one to
+        # be told at the top of the method that the cutter was already there.
+        #
+        # The cooldown of a build that threw is asked here as well, and for the
+        # same reason: inside it the build would return false at its own second
+        # gate, so hopping into a thread to hear that would be the same cost for
+        # the same nothing, once per row for five minutes.
+        if (self._chunker is None or self._model is None) and not self._cutter_cooling_down:
+            await asyncio.to_thread(self._build_the_cutter)
 
         vectors, chunker, model = self._vectors, self._chunker, self._model
         if vectors is None or chunker is None or model is None:

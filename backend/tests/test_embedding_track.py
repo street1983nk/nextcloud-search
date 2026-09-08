@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1458,6 +1459,71 @@ async def test_the_first_embedding_row_builds_the_cutter_and_is_worked(
         stock = poller._vectors
         assert stock is not None
         assert stock.chunks_of([4711]) != {}
+    finally:
+        if poller._vectors is not None:
+            poller._vectors.close()
+
+
+async def test_only_the_row_that_finds_no_cutter_goes_into_a_thread_for_it(
+    lazy_track: _Built, store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Perf audit PERF-F1. The build is idempotent and answers at its own first
+    # line, so a second call is cheap, but reaching it was not: every row of the
+    # instance hopped into the thread pool to be told that the cutter was there.
+    # The question is two attribute reads and it belongs on the loop.
+    _index_the_body(writer)
+    queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)), ClaimResult(jobs=(_job(kind="embed"),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller._wire_the_second_track()
+    builds = {"count": 0}
+    really = poller._build_the_cutter
+
+    def counted() -> bool:
+        builds["count"] += 1
+        return really()
+
+    monkeypatch.setattr(poller, "_build_the_cutter", counted)
+    try:
+        assert (await poller.run_once()).embedded == 1
+        assert builds["count"] == 1, "the first row builds"
+
+        assert (await poller.run_once()).embedded == 1
+
+        assert builds["count"] == 1, "the second row finds it built and never leaves the loop"
+        assert lazy_track.tokenizer == 1
+    finally:
+        if poller._vectors is not None:
+            poller._vectors.close()
+
+
+async def test_a_row_inside_the_cooldown_does_not_go_into_a_thread_either(
+    lazy_track: _Built, store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The other half of PERF-F1. Inside the cooldown the build answers false at
+    # its own second gate, so a hop into the pool to hear that is the same cost
+    # for the same nothing, once per row for five minutes. The row still leaves
+    # the queue with a name of its own.
+    _index_the_body(writer)
+    queue = _FakeQueue(ClaimResult(jobs=(_job(kind="embed"),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller._wire_the_second_track()
+    builds = {"count": 0}
+    really = poller._build_the_cutter
+
+    def counted() -> bool:
+        builds["count"] += 1
+        return really()
+
+    monkeypatch.setattr(poller, "_build_the_cutter", counted)
+    poller._cutter_failed_at = time.monotonic()
+    try:
+        result = await poller.run_once()
+
+        assert result.state == ROUND_WORKED
+        assert result.embedded == 0
+        assert builds["count"] == 0, "nothing to build and nothing to ask a thread about"
+        assert queue.acknowledged == [([91], {})], "the row leaves the queue, it is never kept back"
+        assert lazy_track.tokenizer == 0
     finally:
         if poller._vectors is not None:
             poller._vectors.close()
