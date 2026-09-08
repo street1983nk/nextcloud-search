@@ -3129,6 +3129,136 @@ Abschnitt 7.
 2. Eine zweite Instanzform. Alles hier ist All-in-One.
 3. Deckungsgrad und Trefferqualität. Der Bestand ist der aus 06-11, unverändert.
 
+## Die eine Engine: der Beleg zu EFF-01
+
+Der Abschnitt darüber misst, was der Fix an der zweiten Modellinstanz gebracht
+hat. Was dort fehlt, ist der Beleg selbst: welche Aufrufstellen im
+ausgelieferten Container eine Embedding-Instanz brauchen, woher jede von ihnen
+sie zieht, und woran die Aussage "pro Prozess höchstens einmal geladen" hängt.
+Dieser Abschnitt schreibt das zusammen, mit Datei und Zeile gegen den Stand vom
+08.09.2026, und er sagt am Ende ausdrücklich, was die Zusage **nicht** umfasst.
+
+### Wer im Container eine Engine braucht, und woher sie kommt
+
+| Pfad | Datei und Zeile | Woher die Engine kommt |
+|---|---|---|
+| Suche, Kandidatenrunde | `backend/src/findling/api/search.py:232` | `resources.query_model()` |
+| Ausschnitte | `backend/src/findling/api/snippets.py:153` | `resources.query_model()` |
+| Diagnose, Herkunft eines Treffers | `backend/src/findling/api/diagnose.py:187` | `resources.query_model()` |
+| Weiterreicher der Leseseite | `backend/src/findling/api/resources.py:270` | `return shared_model()` |
+| Arbeiter, zweite Spur | `backend/src/findling/worker/poller.py:1491` | `self._model = shared_model()` |
+
+Die ersten drei Zeilen laufen über die vierte, und die vierte und die fünfte
+enden beide in `shared_model()`
+(`backend/src/findling/embed/engine.py:58`). Der Halter dort ist eine
+Modulglobale `_ENGINE` (Zeile 51), geschlüsselt auf das Modellverzeichnis aus
+den Einstellungen und geschützt von einem `threading.RLock` (Zeile 55). Die
+einzige Konstruktion von `EmbeddingModel` in der Auslieferung steht in den
+Zeilen 76 bis 80.
+
+Der Aufruf lädt nichts. `EmbeddingModel.__init__`
+(`backend/src/findling/embed/model.py:298`) setzt nur Felder, die Artefakte
+werden erst in `_load()` (Zeile 405) gelesen, und `_load()` wird erst aus
+`_embed()` gerufen (Zeile 369). Ein Container ohne Modell zahlt also nichts
+dafür, dass der Halter existiert.
+
+**Es gibt keine sechste Stelle.** Ein `grep` nach `EmbeddingModel(` über
+`backend/src/findling/` findet ausser dem Halter nichts. Die übrigen
+Konstruktionen im Baum stehen in `backend/tests/` und in
+`scripts/dev/vector_distances.py:812`, und beide laufen nie im ausgelieferten
+Container: `backend/Dockerfile` kopiert aus dem Backend nur `src` in die
+Build-Stufe (Zeile 50), und `scripts/` erreicht das Laufzeit-Abbild überhaupt
+nicht. Die einzige Datei aus `scripts/`, die der Bau anfasst, ist
+`dev/quantize_model.py`, und sie wird in derselben `RUN`-Anweisung wieder
+gelöscht, in der sie gebraucht wird (Zeile 115 und Zeile 134).
+
+**Der Extraktions-Kindprozess trägt keine Gewichte.** In
+`backend/src/findling/extract/` gibt es keinen Import aus `findling.embed` und
+keine Konstruktion von `EmbeddingModel`. Der im Semantiklauf beobachtete
+Kindprozess mit 69 MB ist damit erklärt, und er ist keine zweite Engine.
+
+### Warum der Beleg ein Zähler ist und keine Speichermessung
+
+`load_count()` (`backend/src/findling/embed/model.py:143`) sagt, wie oft dieser
+Prozess Tokenizer und Gewichte wirklich gelesen hat. Hochgezählt wird genau
+einmal je gelesenem Artefaktpaar, in `_load()` und erst nach dem erfolgreichen
+Öffnen (`backend/src/findling/embed/model.py:453`).
+
+Der Grund für diese Bauform steht neben dem Zähler und ist der eigentliche Punkt
+dieses Abschnitts: von aussen sehen ein Cache-Treffer und ein billiges zweites
+Laden gleich aus. Ein Zähler trennt die beiden, ohne eine Uhr zu lesen und ohne
+ein Byte zu messen. Eine Messung des Speicherbedarfs auf einem geteilten Läufer
+kann das nicht, und der Beleg dafür steht im Projekt selbst: der Messschritt in
+`.github/workflows/resilience.yml` startet den Container auf einem leeren
+`APP_PERSISTENT_STORAGE`, also kehrt die Suche um, bevor sie Wortliste, Automat
+oder Modell erreicht, und der Unterschied vor und nach der ersten Suche lag am
+06.09.2026 bei 241.172 Byte im einen und 503.316 Byte im nächsten Lauf. Ein
+Deckel über dieser Zahl wäre ein Tor, das für die Sache, die es benennt, gar
+nicht rot werden kann.
+
+Vier Fälle in `backend/tests/test_embed_engine.py` prüfen die Zusage direkt:
+
+| Fall | Zeile | Was er festhält |
+|---|---|---|
+| `test_the_search_and_the_track_get_the_same_engine` | 194 | Leseseite und zweite Spur bekommen dasselbe Objekt |
+| `test_another_model_directory_gets_another_engine` | 206 | der Schlüssel auf das Modellverzeichnis wirkt |
+| `test_two_threads_get_one_engine_and_pay_for_one_load` | 227 | zwei Threads zahlen zusammen ein Laden |
+| `test_the_second_track_and_the_read_side_wire_the_same_object` | 269 | die Verdrahtung des Arbeiters greift denselben Halter |
+
+Über diesen Tests steht ein Tor, das auf jedem Push läuft:
+`findling.tools.one_load` baut ein eigenes Volumen, indexiert ein Dokument,
+fährt eine echte Suchrunde über `api/search.py::one_round` und verdrahtet
+**danach** die zweite Spur über `Poller._wire_the_second_track`. Vier Zähler
+müssen dabei auf eins stehen; jeder andere Wert ist ein benannter Befund mit
+Exit 1 (`backend/src/findling/tools/one_load.py:286-326`). Aufgehängt ist das
+Tor in `.github/workflows/resilience.yml`, Schritt "One engine and one
+constituent list per process" (Zeile 1420), im Job `measurements` auf
+`ubuntu-24.04`, also auf amd64.
+
+**Die Reihenfolge im Tor ist kein Zufall, sondern die Sperre gegen ein leeres
+Grün.** Die Suchseite muss die Ladezahl allein auf eins bringen. Ein Lauf, der
+das Modell nie erreicht, meldet dort eine Null, und eine Null ist ein Befund mit
+Exit 1 und kein stilles Bestehen (`one_load.py`, Modulkopf Zeile 22 bis 38).
+
+Dass dieses Tor rot werden kann, ist bewiesen und nicht behauptet.
+`backend/tests/test_one_load.py` holt die Rückschritte per Monkeypatch zurück:
+`test_it_goes_red_when_the_search_side_builds_its_own_engine` (Zeile 173),
+`test_it_goes_red_when_the_word_list_is_read_a_second_time` (Zeile 198) und
+`test_it_goes_red_when_the_search_never_reaches_the_model` (Zeile 212).
+
+### Was "eine Engine" nicht heisst
+
+"Eine Engine" heisst **eine `EmbeddingModel`-Instanz**, also ein Satz Gewichte
+und eine onnxruntime-Sitzung. Es heisst **nicht** "ein Tokenizer-Objekt im
+Prozess". Davon gibt es mindestens zwei, und zwar mit voller Absicht.
+
+`Tokenizer.enable_truncation` ist eine Eigenschaft des Objekts. Eine geteilte
+Instanz hätte die 512 Token der Sitzung in den Zerleger getragen, und der
+1.024-Token-Deckel aus D-01 wäre still auf 512 gefallen: die zweite Hälfte jedes
+langen Dokuments hätte aufgehört zu existieren, ohne dass irgendwo etwas
+fehlschlägt. Die Entscheidung steht als gesetzt in `.planning/STATE.md:160`, der
+Grund noch einmal im Code neben `open_tokenizer`
+(`backend/src/findling/embed/model.py:192`), und das Projekt hinter
+`semantic-text-splitter` warnt vor derselben Sache.
+
+Wer diese Trennung aufhebt, spart ein Tokenizer-Objekt und halbiert dafür jedes
+Dokument über 512 Token. Der Beleg oben deckt diesen Fall nicht ab, weil er ihn
+nicht abdecken soll.
+
+### Der Stand der Zahlen, und was hier nicht steht
+
+Die Ersparnis der gemeinsamen Engine ist an zwei Stellen gemessen, und die
+beiden Zahlen sind verschieden gross, weil sie verschiedene Dinge messen: in der
+Phase der ersten semantischen Suche sind es **712,6 MB** (1.837,8 gegen
+1.125,2 MB), an der Gesamtspitze des Laufs nur **25,1 MB** (1.837,8 gegen
+1.812,7 MB). Der Grund steht im Abschnitt darüber: die Gesamtspitze gehört
+inzwischen der OCR-Phase. Beide Zahlen stammen aus der Nachmessung vom
+07.09.2026 auf arm64 und sind auf eine Nachkommastelle gerundet.
+
+Was dieser Abschnitt nicht belegt: die amd64-Entsprechung dieser Zahlen liefert
+Plan 07-02, und der Vergleich Zeile für Zeile gegen die v1.0-Grundlinie gehört
+Phase 10.
+
 ## Was der Test gekostet hat
 
 ### Die Generalprobe, Hetzner
