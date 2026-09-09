@@ -133,7 +133,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 09-03-PLAN.md , der geteilte Recheck-Dienst, der Zaehl-Gate und die Offset-Decke (Welle 2)
+- [x] 09-03-PLAN.md , der geteilte Recheck-Dienst, der Zaehl-Gate und die Offset-Decke (Welle 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -193,7 +193,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 |-------|----------------|--------|-----------|
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
-| 9. Eigene Ergebnisseite | 2/8 | In Progress|  |
+| 9. Eigene Ergebnisseite | 3/8 | In Progress|  |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
 
