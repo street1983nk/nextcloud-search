@@ -149,7 +149,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 09-07-PLAN.md , der Paritaetstest deckt die neue Route mit (Welle 6)
+- [x] 09-07-PLAN.md , der Paritaetstest deckt die neue Route mit (Welle 6)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -193,7 +193,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 |-------|----------------|--------|-----------|
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
-| 9. Eigene Ergebnisseite | 6/8 | In Progress|  |
+| 9. Eigene Ergebnisseite | 7/8 | In Progress|  |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
 

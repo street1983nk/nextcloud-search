@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Completed 09-06-PLAN.md
-last_updated: "2026-09-09T03:41:58.590Z"
-last_activity: 2026-09-09 -- Plan 09-06 abgeschlossen (Navigationseintrag, Einstiegs-Eintrag, Gate C ueber sechs Dateien)
+stopped_at: Completed 09-07-PLAN.md
+last_updated: "2026-09-09T04:09:48.661Z"
+last_activity: 2026-09-09 -- Plan 09-07 abgeschlossen (dritter Eingabemodus des Vergleichers, Anmeldeschritt und dritter Vergleich je Szenario)
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 17
-  completed_plans: 15
+  completed_plans: 16
   percent: 40
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 09 (eigene-ergebnisseite) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
-Last activity: 2026-09-09 -- Plan 09-06 abgeschlossen (Navigationseintrag, Einstiegs-Eintrag, Gate C ueber sechs Dateien)
+Last activity: 2026-09-09 -- Plan 09-07 abgeschlossen (dritter Eingabemodus des Vergleichers, Anmeldeschritt und dritter Vergleich je Szenario)
 
-**Naechster Schritt:** Plan 09-07 (Paritaetsjob und Paritaetsvergleicher lernen die Seitenroute)
+**Naechster Schritt:** Plan 09-08 (Abschluss der Phase: Sichtproben, Doku und offene Punkte)
 
 ## Performance Metrics
 
@@ -79,6 +79,7 @@ Last activity: 2026-09-09 -- Plan 09-06 abgeschlossen (Navigationseintrag, Einst
 | Phase 6 P10 | 32min | 3 tasks | 7 files |
 | Phase 09 P05 | 55min | 3 tasks | 5 files |
 | Phase 09 P06 | 40min | 3 tasks | 8 files |
+| Phase 09 P07 | 50min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -193,6 +194,8 @@ Recent decisions affecting current work:
 - [Phase 09]: 09-06: php/img/app.svg ist eine byte-identische Kopie von app-dark.svg statt eines zweiten Symbols. currentColor loest in einem Bildverweis auf Schwarz auf, der Server themt per CSS-Filter, und eine Kopie stellt keine zweite Lizenzfrage
 - [Phase 09]: 09-06: Der Einstiegs-Eintrag traegt kein fileId-Attribut und wird an genau einem Merkmal erkannt, seiner Zieladresse. Ein pauschales Ueberspringen aller Eintraege ohne Attribut wuerde den Schutz aufheben, den der Paritaetsvergleicher haelt
 - [Phase 09]: 09-06: Gate C liest sechs Dateien, aber die Sondertests der Verwaltungsseite bleiben woertlich auf admin.js. Das Seitenskript bekommt stattdessen zwei eigene Aussagen ueber die Abwesenheit derselben Marker
+- [Phase 09]: 09-07: Der Einstiegs-Eintrag wird im JSON-Auszieher an seiner Zieladresse uebersprungen, nie am fehlenden fileId-Attribut. Ein Eintrag ohne Attribut, der diese Adresse nicht traegt, macht die Antwort weiterhin unlesbar
+- [Phase 09]: 09-07: Der Paritaetsjob meldet sich per Cookie-Behaelter an und liest die Seite als HTML. Der Origin-Kopf ist Pflicht: LoginController von Nextcloud 34 weist eine Anmeldung ohne vertrauenswuerdigen Ursprung ab, bevor er das Passwort ansieht, und zwar mit derselben Umleitung wie bei einem falschen Passwort
 
 ### Pending Todos
 
@@ -220,6 +223,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-09T03:41:58.574Z
-Stopped at: Completed 09-06-PLAN.md
+Last session: 2026-09-09T04:09:48.645Z
+Stopped at: Completed 09-07-PLAN.md
 Resume file: None
