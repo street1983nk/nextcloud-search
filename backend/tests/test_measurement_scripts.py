@@ -36,10 +36,13 @@ promises that only a new script can keep are asked of the new scripts.
 from __future__ import annotations
 
 import ast
+import importlib.util
+import json
 import re
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -49,6 +52,32 @@ RUN_DIR = MEASUREMENTS_DIR / "2026-09-vergleichsmessung-m7g" / "skripte"
 TREE_HASH = RUN_DIR / "40b-baumhash.py"
 TREE_HASH_PROOF = RUN_DIR / "40b-baumhash.sh"
 OPS_GATE = Path(__file__).resolve().parent / "test_ops_scripts.py"
+
+# The two files of the full run that can be held to a promise without a box: the
+# reader the watchman decides on, and the observer whose recordings are checked
+# into this repository.
+READER = RUN_DIR / "96c-lesen.py"
+OBSERVER = RUN_DIR / "96d-statusbeobachter.py"
+
+# The keys one recording of the observer may carry, and no others. Nine on the
+# top level plus the nested one, which is where the counters of both tracks live.
+# Written down here rather than read out of the observer, because a gate that
+# asks the tool for its own contract agrees with it no matter what it writes.
+RECORDING_KEYS = frozenset(
+    {
+        "at",
+        "runState",
+        "indexed",
+        "indexedPercent",
+        "embedded",
+        "embeddedPercent",
+        "scheduled",
+        "running",
+        "backendReachable",
+        "backend",
+    }
+)
+BACKEND_RECORDING_KEYS = frozenset({"indexed", "embedded"})
 
 # The two kinds of file that are run. A directory of measurement scripts also
 # holds other things, for instance the .claude-active of the semantic run, and a
@@ -302,6 +331,198 @@ def test_the_proof_checks_its_own_raw_file_for_three_tree_hashes() -> None:
     assert "40b-baumhash.txt" in text
     assert "baumhash:" in text
     assert "baumhash-gleich" in text
+
+
+# The reader of the watchman of the full run. These assertions are pitfall 8 of
+# the research turned into a gate: 42c-lesen.py of the semantic run looked for
+# indexed and embedded on the top level of the recording, where the indexed of
+# the PHP half stands and stays 0 by design and where embedded does not stand at
+# all. The watchman logged zeroes for a whole night while the container held
+# 47.000 vectors, the search load sample of the trailing run never ran because
+# its condition is embedded > 200, and the end of both tracks would have been
+# noticed at the round cap some nine hours late. The lesson of the research is to
+# drive the reader once against a known number before the run is triggered; here
+# it is five known numbers, and none of them needs a box.
+
+
+def read_a_recording(recording: str) -> list[str]:
+    """The reader as a subprocess, fed one recording, split like the shell does.
+
+    Not imported, for the two reasons the recipe above gives as well: the file
+    name begins with a digit and is therefore no module name, and what the
+    watchman consumes is three whitespace separated words on standard output.
+    """
+    answer = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [sys.executable, str(READER)],
+        input=recording,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    assert answer.returncode == 0, answer.stderr
+    return answer.stdout.split()
+
+
+def read_without_standard_input() -> list[str]:
+    """The same call with standard input closed, which must not wait for a line."""
+    answer = subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [sys.executable, str(READER)],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    assert answer.returncode == 0, answer.stderr
+    return answer.stdout.split()
+
+
+def a_recording(**changes: object) -> str:
+    """One recording of the admin page, in the shape the observer writes it.
+
+    The two figures under "backend" are the ones the semantic run really stood
+    at while its watchman logged zeroes, so a reader that reads the wrong level
+    fails against the very numbers that failure cost.
+    """
+    recording: dict[str, object] = {
+        "at": "2026-09-09T12:00:00Z",
+        "runState": "running",
+        "indexed": 0,
+        "indexedPercent": 0,
+        "embedded": 0,
+        "embeddedPercent": 0,
+        "scheduled": 1200,
+        "running": 1,
+        "backendReachable": True,
+        "backend": {"indexed": 47000, "embedded": 12000},
+    }
+    recording.update(changes)
+    return json.dumps(recording)
+
+
+def test_the_reader_reads_indexed_and_embedded_under_backend() -> None:
+    """The one reading the whole night of the semantic run turned on."""
+    assert read_a_recording(a_recording()) == ["1201", "47000", "12000"]
+
+
+def test_the_reader_never_reports_the_indexed_of_the_php_half() -> None:
+    """The gate that goes red the moment somebody reads the top level again.
+
+    The recording carries an indexed of eight on the top level and no backend at
+    all. A reader that falls back to the top level answers "8" here, which is the
+    number of the PHP half and not of the index; the honest answer is that both
+    counters are unknown. The work stock stays a number, because scheduled and
+    running really do live on the top level.
+    """
+    without_backend: dict[str, object] = json.loads(a_recording())
+    del without_backend["backend"]
+    without_backend["indexed"] = 8
+    assert read_a_recording(json.dumps(without_backend)) == ["1201", "unklar", "unklar"]
+
+
+def test_the_reader_answers_unklar_three_times_for_every_unusable_recording() -> None:
+    """Not known and zero are two different answers, and the watchman acts on both.
+
+    Three shapes of nothing: no line at all, because the observer has not written
+    one yet; a line that is not JSON, because a recording can be cut in half by a
+    kill; and a recording that carries the error key of a failed request, which
+    is the shape the observer writes rather than leaving a gap.
+    """
+    assert read_a_recording("") == ["unklar", "unklar", "unklar"]
+    assert read_a_recording('{"scheduled": 3, "runni') == ["unklar", "unklar", "unklar"]
+    error = json.dumps({"at": "2026-09-09T12:00:00Z", "fehler": "HTTPError"})
+    assert read_a_recording(error) == ["unklar", "unklar", "unklar"]
+
+
+def test_the_reader_adds_scheduled_and_running_to_the_work_stock() -> None:
+    """The stock is the sum of the two, and an empty stock is a zero and not a gap."""
+    assert read_a_recording(a_recording(scheduled=3, running=1))[0] == "4"
+    assert read_a_recording(a_recording(scheduled=0, running=0))[0] == "0"
+    # Neither of the two is a number: an assumed zero here would let the watchman
+    # declare the end of a run whose stock it never saw.
+    assert read_a_recording(a_recording(scheduled=None, running=None))[0] == "unklar"
+
+
+def test_the_reader_does_not_block_without_standard_input() -> None:
+    """A reader that waits for a line it will never get hangs the whole watchman."""
+    assert read_without_standard_input() == ["unklar", "unklar", "unklar"]
+
+
+def observer_module() -> ModuleType:
+    """The observer, loaded from its path under a name that is a valid module name.
+
+    Loaded rather than run, because the projection of one answer into one
+    recording is the part of it that can be held to a promise without an
+    instance to log in to.
+    """
+    specification = importlib.util.spec_from_file_location("statusbeobachter", OBSERVER)
+    assert specification is not None, OBSERVER
+    assert specification.loader is not None, OBSERVER
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
+
+
+def test_the_recording_of_the_observer_carries_no_name_carrier() -> None:
+    """T-10-21: the admin page knows example paths, and this file is checked in.
+
+    The answer staged here carries three of them, in the three places the page
+    really puts them: the error list of the container, the examples of the
+    coverage block and an error list on the top level. None of the three may
+    reach the recording, and the way that is kept is a projection onto a closed
+    set of keys rather than a list of keys to drop.
+    """
+    module = observer_module()
+    answer = {
+        "at": "2026-09-09T11:59:00Z",
+        "runState": "running",
+        "indexed": 5,
+        "indexedPercent": 1,
+        "embedded": 3,
+        "embeddedPercent": 1,
+        "scheduled": 7,
+        "running": 1,
+        "backendReachable": True,
+        "backend": {
+            "indexed": 47000,
+            "embedded": 12000,
+            "errors": [{"path": "corpus/09-bescheid.pdf", "reason": "ocr_failed"}],
+        },
+        "coverage": {"examples": ["lasttest/files/loadtest/000001.pdf"]},
+        "errorList": [{"path": "/lasttest/files/geheim.pdf", "fileid": 4711}],
+    }
+
+    recording = module.recording_of(answer)
+
+    assert set(recording) == set(RECORDING_KEYS)
+    assert set(recording["backend"]) == set(BACKEND_RECORDING_KEYS)
+    text = json.dumps(recording)
+    assert ".pdf" not in text
+    assert "lasttest" not in text
+    assert "/" not in text
+    # The figures themselves have to survive the projection, or the observer
+    # would be safe and useless at the same time.
+    assert recording["backend"] == {"indexed": 47000, "embedded": 12000}
+    assert recording["scheduled"] == 7
+    assert recording["runState"] == "running"
+
+
+def test_the_observer_writes_an_error_recording_instead_of_a_gap() -> None:
+    """A failed request has to be visible in the row, because a gap is not.
+
+    The watchman reads the last line and only the last line. An answer that is
+    not the shape of the overview must therefore produce a recording with the
+    error key, which is exactly what the reader above turns into three times
+    unklar, and never a line that looks like a measurement.
+    """
+    module = observer_module()
+
+    recording = module.recording_of("<html>a login form</html>")
+
+    assert "fehler" in recording
+    assert set(recording) <= set(RECORDING_KEYS) | {"fehler"}
+    assert "indexed" not in recording
 
 
 # The wide scope. Every .py and .sh under docs/measurements/**/skripte/, read out
