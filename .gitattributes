@@ -22,6 +22,19 @@ Dockerfile text eol=lf
 # repository would renormalise files this reason does not cover.
 scripts/ops/*.py text eol=lf
 
+# The Python measurement scripts of docs/measurements are started on the load
+# test box by their own shebang, exactly like the operating tools above, which
+# puts them under the same rule for the same reason. The comment of the block
+# above narrows its rule to scripts/ops with the argument that the Python of
+# backend/ is imported and never executed by its shebang. That argument does
+# not hold for these files: they are copied onto a Linux box and run there as
+# ./<name>.py. The rule prevents the next case, and the run plan of a
+# measurement additionally calls every script as python3 <file>, which
+# survives the current one. Both are wanted and not one of the two, because
+# five files were already in the tree with a carriage return behind the
+# shebang before this rule existed.
+docs/measurements/**/skripte/*.py text eol=lf
+
 # The reference corpus is byte exact test data. Its checksums are the evidence
 # of the read only invariant, so no checkout may ever rewrite a byte in it. Two
 # of the files would not merely change their hash: a carriage return inside a
