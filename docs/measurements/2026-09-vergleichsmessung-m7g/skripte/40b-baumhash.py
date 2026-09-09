@@ -40,7 +40,22 @@ def tree_hash(root: Path, pattern: str) -> tuple[int, str]:
     """The number of files and the hex digest of the recipe above, over one root."""
     digest = hashlib.sha256()
     count = 0
-    for path in sorted(root.glob(pattern)):
+    # Sorted by the relative posix path, which is the string the hash is built
+    # from, and NOT by the Path object. That distinction is the whole recipe:
+    # comparing Path objects compares a platform dependent form, because the
+    # Windows flavour folds case and the posix one does not. Measured on
+    # 2026-09-09 against php with its 58 files, whose content is byte identical
+    # on both machines: Windows put tests/bootstrap.php before tests/Unit/... and
+    # produced 26b55908..., the box put tests/Unit/... first and produced
+    # 4a4c6f62..., and the box was right about the recipe. The tree hash is the
+    # only proof that the image and the working tree are the same state, so a
+    # hash that depends on the machine that computes it turns that proof into a
+    # coin toss, and it had CI red on ubuntu since this file was added.
+    # Nothing that was ever reported changes: the python package yields
+    # 6c47cd21... under both sort keys on both platforms, so the comparability
+    # against 278fab52 of the follow up measurement is untouched. The only figure
+    # that moves is the php one, and it was never valid on more than one machine.
+    for path in sorted(root.glob(pattern), key=lambda candidate: candidate.relative_to(root).as_posix()):
         # Only a regular file carries bytes. This guard cannot change the hash of
         # a python package or a php tree, it keeps a directory whose name happens
         # to end in the extension from ending the step with a stack trace.

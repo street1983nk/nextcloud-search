@@ -36,6 +36,7 @@ promises that only a new script can keep are asked of the new scripts.
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
 import json
 import re
@@ -112,7 +113,16 @@ DEFAULT_ASSIGNMENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*="?\$\{[A-Za-z_][A-Za-z
 PACKAGE_FILES = 54
 PACKAGE_TREE_HASH = "6c47cd219c430bccc9d5d57b1de1d2ff9f8672fa4f42b1160d0a31efb9367476"
 PHP_FILES = 58
-PHP_TREE_HASH = "26b55908b12f8139b86d8c8a7c391457c550b2584fb8d639a3957e8b6feb91ae"
+# Corrected on 2026-09-09, on the box, and the old value is named here rather
+# than dropped: 26b55908... was this same tree hashed on Windows, where the
+# comparison of two Path objects folds case and put tests/bootstrap.php in front
+# of tests/Unit/..., while the box and every ubuntu runner sorted the other way.
+# The 58 files are byte identical on both machines, file by file, so only the
+# order differed. 40b-baumhash.py now sorts by the relative posix path, which is
+# the string it hashes and what its own docstring always specified, and this is
+# the figure both platforms produce. PACKAGE_TREE_HASH is unaffected: the python
+# package yields 6c47cd21... under either sort key on either platform.
+PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9ed"
 
 # Assembled from code points so that this file does not carry the characters it
 # forbids and fail on itself. Same construction as in test_ops_scripts.py.
@@ -272,6 +282,45 @@ def test_the_recipe_reproduces_the_tree_hash_of_the_php_half() -> None:
     count, hexdigest = reading(run_the_recipe(REPO_ROOT / "php", "**/*.php"))
     assert count == PHP_FILES
     assert hexdigest == PHP_TREE_HASH
+
+
+def test_the_recipe_sorts_by_the_posix_path_and_not_by_the_path_object(tmp_path: Path) -> None:
+    """The same content must hash the same on Windows and on the box.
+
+    Two Path objects compare in a platform dependent form: the Windows flavour
+    folds case, the posix one does not. So a root that holds both an upper case
+    directory and a lower case file beside it is ordered differently on the two
+    machines, and the recipe hashes the order it walks. That is not a detail. The
+    tree hash is the only proof that the image and the working tree are the same
+    state, and it was measured on 2026-09-09 that php came out as 26b55908... on
+    Windows and 4a4c6f62... on the box while all 58 files were byte identical.
+    CI on ubuntu had been red on exactly this since the recipe was added.
+
+    Staged here with the two names that caused it, Unit/ and bootstrap, and the
+    expectation is computed with the posix ordering the docstring of the recipe
+    specifies, so this test fails on either platform if the sort key goes back.
+    """
+    root = tmp_path / "halb"
+    (root / "tests" / "Unit").mkdir(parents=True)
+    members = {
+        "tests/Unit/AlphaTest.php": b"<?php // eins\n",
+        "tests/bootstrap.php": b"<?php // zwei\n",
+        "lib/Service/Beta.php": b"<?php // drei\n",
+    }
+    for relative, content in members.items():
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+
+    expected = hashlib.sha256()
+    # Sorted by the string, which is what the recipe promises to hash.
+    for relative in sorted(members):
+        body = hashlib.sha256(members[relative]).hexdigest().encode()
+        expected.update(relative.encode() + b"\0" + body + b"\n")
+
+    count, hexdigest = reading(run_the_recipe(root, "**/*.php"))
+    assert count == len(members)
+    assert hexdigest == expected.hexdigest()
 
 
 def test_the_recipe_refuses_a_root_that_does_not_exist(tmp_path: Path) -> None:
