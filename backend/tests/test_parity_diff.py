@@ -76,32 +76,124 @@ def _answer(file_ids: list[str]) -> str:
     )
 
 
+def _with_entry_point(answer: str, term: str = "parityown") -> str:
+    """The same answer with the last entry the search dialog shows since 09-06.
+
+    It is a door into the result page and not a hit, so it carries no fileId
+    attribute, and its attribute list is the empty JSON list PHP serialises an
+    empty array to. Written out here in the shape the real answer has, because
+    the whole point of the case below is that a reader recognises this entry by
+    its address and never by the attribute it does not carry.
+    """
+    document = json.loads(answer)
+    document["ocs"]["data"]["entries"].append(
+        {
+            "thumbnailUrl": "",
+            "title": "Show all results",
+            "subline": "Opens the Findling results page",
+            "resourceUrl": f"http://localhost:8080/index.php/apps/findling/?query={term}",
+            "icon": "icon-search",
+            "attributes": [],
+        }
+    )
+    return json.dumps(document)
+
+
+def _page(file_ids: list[str]) -> str:
+    """The result page with one hit row per fileid, in the shape it renders in.
+
+    The path and the title are in the row for the same reason they are in the
+    JSON fixture: they are what a careless message would leak into a public log.
+    """
+    rows = "\n".join(
+        f'\t\t\t\t<li class="findling-hit" id="findling-hit-{file_id}">\n'
+        f'\t\t\t\t\t<a class="findling-hit__link" href="/index.php/apps/files/files/{file_id}">\n'
+        f'\t\t\t\t\t\t<span class="findling-hit__title">{PRIVATE_TITLE}</span>\n'
+        f'\t\t\t\t\t\t<span class="findling-hit__path">{PRIVATE_PATH}</span>\n'
+        "\t\t\t\t\t</a>\n"
+        "\t\t\t\t</li>"
+        for file_id in file_ids
+    )
+    return (
+        '<div class="findling-search">\n'
+        '\t<h1 class="findling-search__title">Results for "parityown"</h1>\n'
+        '\t<ol class="findling-hits" aria-label="Search results">\n'
+        f"{rows}\n"
+        "\t</ol>\n"
+        "</div>\n"
+    )
+
+
+def _page_empty_state() -> str:
+    """The page that was asked and answers nothing, which is a legal empty set."""
+    return (
+        '<div class="findling-search">\n'
+        '\t<h1 class="findling-search__title">Results for "parityown"</h1>\n'
+        '\t<div class="findling-empty">\n'
+        '\t\t<h2 class="findling-empty__heading">No file contains "parityown"</h2>\n'
+        '\t\t<p class="findling-empty__text">Try another word.</p>\n'
+        "\t</div>\n"
+        "</div>\n"
+    )
+
+
+def _page_error_block() -> str:
+    """The page that could not ask, with the empty state below it, as it renders."""
+    return (
+        '<div class="findling-search">\n'
+        '\t<div class="findling-banner findling-banner--error">\n'
+        '\t\t<p class="findling-banner__heading">The search is not answering right now</p>\n'
+        "\t</div>\n"
+        '\t<div class="findling-empty">\n'
+        '\t\t<h2 class="findling-empty__heading">No file contains "parityown"</h2>\n'
+        "\t</div>\n"
+        "</div>\n"
+    )
+
+
 def _run(
     tmp_path: Path,
     scenario: str,
     native: str,
     findling: str,
     expect_min: int,
+    page: str | None = None,
+    page_file: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Write both answers next to each other and run the tool over them."""
+    """Write the answers next to each other and run the tool over them.
+
+    ``page`` is the HTML answer of the result page and is written to a file of
+    its own; ``page_file`` names a path instead, which is how the case of a file
+    that cannot be read is driven. Without either of them the tool is called the
+    way it was called before phase 9, with two answers and no third comparison.
+    """
     native_file = tmp_path / f"{scenario}-native.json"
     findling_file = tmp_path / f"{scenario}-findling.json"
     native_file.write_text(native, encoding="utf-8")
     findling_file.write_text(findling, encoding="utf-8")
 
+    arguments = [
+        sys.executable,
+        str(TOOL),
+        "--scenario",
+        scenario,
+        "--native",
+        str(native_file),
+        "--findling",
+        str(findling_file),
+        "--expect-min",
+        str(expect_min),
+    ]
+
+    if page is not None:
+        page_path = tmp_path / f"{scenario}-page.html"
+        page_path.write_text(page, encoding="utf-8")
+        arguments += ["--findling-html", str(page_path)]
+    elif page_file is not None:
+        arguments += ["--findling-html", str(tmp_path / page_file)]
+
     return subprocess.run(  # noqa: S603 - an argument list, never a shell
-        [
-            sys.executable,
-            str(TOOL),
-            "--scenario",
-            scenario,
-            "--native",
-            str(native_file),
-            "--findling",
-            str(findling_file),
-            "--expect-min",
-            str(expect_min),
-        ],
+        arguments,
         capture_output=True,
         text=True,
         check=False,
@@ -243,6 +335,214 @@ def test_no_output_of_any_case_carries_a_path_or_a_title(tmp_path: Path) -> None
         # Every one of the five said something about the scenario, so a run that
         # never got as far as producing a message cannot pass this case by
         # having produced nothing to leak.
+        assert "own-files" in output, output
+        assert PRIVATE_PATH not in output, output
+        assert PRIVATE_TITLE not in output, output
+        assert "Personal" not in output, output
+
+
+def test_a_page_with_three_hit_rows_compares_as_three_fileids(tmp_path: Path) -> None:
+    # The third comparison of success criterion 4 of phase 9: same user, same
+    # question, and the same set of files over the dialog and over the page.
+    result = _run(
+        tmp_path,
+        "own-files",
+        _answer(["11", "12", "13"]),
+        _answer(["13", "12", "11"]),
+        3,
+        page=_page(["12", "13", "11"]),
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == EXIT_OK, output
+    # Two verdicts and not one, and the second one names the page as its own
+    # side: a red run has to say which of the two ways into the search differs.
+    assert "identical on both sides" in output
+    assert "the result page compared 3 fileids" in output
+
+
+def test_a_page_with_the_empty_state_is_an_empty_set_and_not_an_unreadable_answer(tmp_path: Path) -> None:
+    # The page was asked, it answered, and its answer is nothing. That is the one
+    # case in which no hit row is a result rather than a failure to read, and the
+    # empty state is what makes the difference.
+    result = _run(tmp_path, "revoked-share", _answer([]), _answer([]), 0, page=_page_empty_state())
+
+    output = result.stdout + result.stderr
+    assert result.returncode == EXIT_OK, output
+    assert "the result page compared 0 fileids" in output
+
+
+def test_a_page_without_the_list_and_without_the_empty_state_is_unreadable(tmp_path: Path) -> None:
+    # A login form, a proxy error, a redirect body: every one of them is an
+    # answer a naive reader turns into "no hits", and a page that shows neither
+    # a list nor an empty state is not the result page at all.
+    result = _run(
+        tmp_path,
+        "own-files",
+        _answer(["11"]),
+        _answer(["11"]),
+        1,
+        page="<!DOCTYPE html><html><body><form action='/login'></form></body></html>",
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == EXIT_MALFORMED, output
+    assert result.returncode != EXIT_OK, output
+    assert "page" in output
+
+
+def test_a_page_with_the_error_block_is_unreadable_and_never_an_empty_set(tmp_path: Path) -> None:
+    # The failure mode this whole reader exists for. The page renders its empty
+    # state below the error block, so an answer that only counted rows would
+    # read a silent backend as an empty result, and two empty sets agree.
+    result = _run(tmp_path, "own-files", _answer([]), _answer([]), 0, page=_page_error_block())
+
+    output = result.stdout + result.stderr
+    assert result.returncode == EXIT_MALFORMED, output
+    assert "error block" in output
+
+
+def test_a_page_answer_that_cannot_be_read_is_unreadable(tmp_path: Path) -> None:
+    # The file the job would have written if the curl before it had failed.
+    result = _run(
+        tmp_path,
+        "own-files",
+        _answer(["11"]),
+        _answer(["11"]),
+        1,
+        page_file="a-page-that-was-never-written.html",
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == EXIT_MALFORMED, output
+    assert "could not be read" in output
+
+
+def test_the_entry_point_of_the_dialog_is_skipped_by_its_address(tmp_path: Path) -> None:
+    # T-09-22. Since 09-06 the findling group ends with a door into the result
+    # page: no fileId attribute, and an address that points at the app path. It
+    # must not be counted as a hit and it must not make the answer unreadable.
+    result = _run(
+        tmp_path,
+        "own-files",
+        _answer(["11", "12", "13"]),
+        _with_entry_point(_answer(["11", "12", "13"])),
+        3,
+        page=_page(["11", "12", "13"]),
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == EXIT_OK, output
+    # Three and not four: the door is not a file.
+    assert "compared 3 fileids" in output
+
+
+def test_an_ordinary_entry_without_the_attribute_still_makes_the_answer_unreadable(tmp_path: Path) -> None:
+    # The other half of the same threat, and the reason the entry above is
+    # recognised by its address. A rule that skipped every entry without the
+    # attribute would switch off the guard the reader exists for: an entry that
+    # lost its fileid would shrink one set and be read as a parity violation of
+    # the other.
+    without_attribute = json.dumps(
+        {
+            "ocs": {
+                "data": {
+                    "entries": [
+                        {
+                            "title": PRIVATE_TITLE,
+                            "resourceUrl": "http://localhost:8080/index.php/apps/files/files/11",
+                        }
+                    ]
+                }
+            }
+        }
+    )
+    result = _run(tmp_path, "own-files", _answer(["11"]), without_attribute, 1)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == EXIT_MALFORMED, output
+    assert "fileId" in output
+
+
+def test_a_page_that_differs_from_the_dialog_fails_in_both_directions(tmp_path: Path) -> None:
+    # A hit the dialog shows and the page does not: the same search answers two
+    # different sets, which is a functional defect of the page.
+    missing = _run(
+        tmp_path,
+        "team-folder",
+        _answer(["11", "12"]),
+        _answer(["11", "12"]),
+        2,
+        page=_page(["11"]),
+    )
+    output = missing.stdout + missing.stderr
+    assert missing.returncode == EXIT_PARITY, output
+    assert "page-missing" in output
+    assert "12" in output
+    assert "functional" in output
+
+    # And the other direction, which is the one that touches the permission
+    # boundary: the page shows a file the dialog does not show this user.
+    extra = _run(
+        tmp_path,
+        "team-folder",
+        _answer(["11"]),
+        _answer(["11"]),
+        1,
+        page=_page(["11", "99"]),
+    )
+    output = extra.stdout + extra.stderr
+    assert extra.returncode == EXIT_PARITY, output
+    assert "page-extra" in output
+    assert "99" in output
+    assert "security" in output
+
+
+def test_the_expected_minimum_holds_for_the_page_as_well(tmp_path: Path) -> None:
+    # Two agreeing sets below the expectation are a vacuous comparison, and the
+    # third set is no exception: a page that answers one row where the scenario
+    # was built for three has not compared what it claims to compare.
+    result = _run(
+        tmp_path,
+        "own-files",
+        _answer(["11", "12", "13"]),
+        _answer(["11", "12", "13"]),
+        3,
+        page=_page(["11", "12", "13"]),
+    )
+    assert result.returncode == EXIT_OK, result.stdout + result.stderr
+
+    thin = _run(tmp_path, "own-files", _answer(["11"]), _answer(["11"]), 1, page=_page(["11"]))
+    assert thin.returncode == EXIT_OK, thin.stdout + thin.stderr
+
+    # The dialog agrees with the native search over three, the page shows the
+    # same three, and the expectation is four: the comparison is thinner than the
+    # question it answers, on all three sets at once.
+    vacuous = _run(
+        tmp_path,
+        "own-files",
+        _answer(["11", "12", "13"]),
+        _answer(["11", "12", "13"]),
+        4,
+        page=_page(["11", "12", "13"]),
+    )
+    output = vacuous.stdout + vacuous.stderr
+    assert vacuous.returncode == EXIT_VACUOUS, output
+    assert "own-files" in output
+
+
+def test_no_output_of_the_page_comparison_carries_a_path_or_a_title(tmp_path: Path) -> None:
+    # The page fixture carries the path and the title in every row, so this is a
+    # measurement of the same privacy contract the JSON side is held to.
+    runs = [
+        _run(tmp_path, "own-files", _answer(["11", "12"]), _answer(["11", "12"]), 2, page=_page(["11", "12"])),
+        _run(tmp_path, "own-files", _answer(["11", "12"]), _answer(["11", "12"]), 2, page=_page(["11"])),
+        _run(tmp_path, "own-files", _answer(["11"]), _answer(["11"]), 1, page=_page(["11", "12"])),
+        _run(tmp_path, "own-files", _answer([]), _answer([]), 0, page=_page_error_block()),
+    ]
+
+    for result in runs:
+        output = result.stdout + result.stderr
         assert "own-files" in output, output
         assert PRIVATE_PATH not in output, output
         assert PRIVATE_TITLE not in output, output
