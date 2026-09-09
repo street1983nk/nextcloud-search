@@ -145,7 +145,7 @@ Nicht Akzent: die `h1`, der Dateiname, die Paginierungsknöpfe (tertiär), der P
 
 ## Copywriting Contract
 
-Quell-Strings sind englisch und laufen durch `$l->t()`. Die deutsche Spalte ist der Inhalt von `php/l10n/de.json` und `php/l10n/de.js`. Die französische Spalte ist heute **nicht** ausgeliefert (die App führt nur einen deutschen Katalog); sie steht hier, damit `fr.json` ein mechanischer Nachzug bleibt und keine zweite Textrunde. Deutsche Texte tragen echte Umlaute, keinen Em-Dash und kein Emoji.
+Quell-Strings sind englisch und laufen durch `$l->t()`. Die deutsche Spalte ist der Inhalt von `php/l10n/de.json` und `php/l10n/de.js`, und seit dem 09.09.2026 zusätzlich von `php/l10n/de_DE.json` und `php/l10n/de_DE.js`: Nextcloud führt `de` und `de_DE` als zwei Sprachen, und die Sie-Form dieser Tabelle gehört unter beide (Befund B der Abnahme, Gate `test_the_german_catalogue_covers_both_german_language_codes`). Die französische Spalte ist heute **nicht** ausgeliefert (die App führt nur einen deutschen Katalog); sie steht hier, damit `fr.json` ein mechanischer Nachzug bleibt und keine zweite Textrunde. Deutsche Texte tragen echte Umlaute, keinen Em-Dash und kein Emoji.
 
 | Element | EN (Quelle) | DE | FR |
 |---------|-------------|----|----|

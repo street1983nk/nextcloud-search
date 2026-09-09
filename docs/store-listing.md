@@ -19,6 +19,7 @@ sich daran mechanisch prüfen lässt.
 | `name` und `summary` sind höchstens 128 Zeichen lang | `l10n-string` in der Store-XSD |
 | `description` hat keine Längengrenze, darf aber nicht leer sein | `l10n-text` über `non-empty-string` |
 | Sprachcode ist `de`, `fr` oder gar keiner; `de_DE` ist kein gültiger Wert | die Liste in `l10n-code` |
+| Diese Regel gilt für die Store-Texte in `info.xml` und **nicht** für die Übersetzungskataloge unter `php/l10n/`. Dort ist `de_DE` gültig und seit dem 09.09.2026 auch vorhanden: Nextcloud führt `de` und `de_DE` als zwei Sprachen im Nutzerprofil, und eine App ohne `de_DE` ist für jeden untranslated, der die Sie-Form gewählt hat | die zwei Listen sind zwei Dinge; Befund B der Abnahme von Phase 9 |
 | Je Elementart darf ein Sprachcode nur einmal vorkommen | `uniqueNameL10n`, `uniqueSummaryL10n`, `uniqueDescriptionL10n` |
 | Kein Element bleibt leer | ein leeres Element löst beim Upload einen Serverfehler aus, gemessen am Schwesterprojekt |
 | Keine Backticks und keine Tabellen in einer Beschreibung | der Store rendert Markdown anders als das Repository |

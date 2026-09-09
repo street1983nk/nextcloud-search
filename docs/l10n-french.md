@@ -1,9 +1,12 @@
 # Französische Wortlaute der Ergebnisseite, vorbereitet und vertagt
 
-Die App liefert heute genau einen Übersetzungskatalog, Deutsch, in `php/l10n/de.json`
-und `php/l10n/de.js`. Die französischen Wortlaute der Ergebnisseite aus Phase 9 sind
-trotzdem vollständig geschrieben und stehen hier, damit ein französischer Katalog
-später ein mechanischer Nachzug bleibt und keine zweite Textrunde.
+Die App liefert heute genau eine Übersetzungssprache, Deutsch, und zwar unter beiden
+deutschen Sprachcodes: `php/l10n/de.json`, `php/l10n/de.js`, `php/l10n/de_DE.json` und
+`php/l10n/de_DE.js`, vier Dateien mit demselben Wortlaut (Begründung im Kopf von
+`backend/tests/test_admin_ui_contract.py`, Abschnitt `L10N_DE_DE_JSON`). Die
+französischen Wortlaute der Ergebnisseite aus Phase 9 sind trotzdem vollständig
+geschrieben und stehen hier, damit ein französischer Katalog später ein mechanischer
+Nachzug bleibt und keine zweite Textrunde.
 
 Diese Datei ist die Ablage einer bewussten Vertagung, kein Rückstand: die Entscheidung
 steht als offener Punkt 3 in `.planning/phases/09-eigene-ergebnisseite/09-UI-SPEC.md`
@@ -14,8 +17,8 @@ worden, wie sie unten begründet ist.
 
 Reihenfolge und Elementnamen sind die der Copy-Tabelle in `09-UI-SPEC.md`, Abschnitt
 "Copywriting Contract". Der englische Quellstring ist der Schlüssel: er steht wörtlich
-so im Template, läuft dort durch `$l->t()` und ist in `php/l10n/de.json` und
-`php/l10n/de.js` bereits der Schlüssel der deutschen Übersetzung.
+so im Template, läuft dort durch `$l->t()` und ist in allen vier deutschen
+Katalogdateien bereits der Schlüssel der deutschen Übersetzung.
 
 | # | Element | EN (Quellstring) | FR |
 |---|---------|------------------|----|
@@ -68,10 +71,14 @@ Vollständig oder gar nicht, und vor der Store-Abgabe. Im Einzelnen:
 2. **Beide Dateiformate**, `php/l10n/fr.json` und `php/l10n/fr.js`. Der Browser-Teil
    liest den Katalog aus der `.js`-Fassung; nur `fr.json` anzulegen ergäbe eine
    Oberfläche, die je nach Herkunft der Zeile die Sprache wechselt.
-3. **Der Schlüsselvergleich wird auf zwei Sprachpaare erweitert.**
-   `backend/tests/test_admin_ui_contract.py::test_the_two_translation_files_carry_the_same_keys`
-   hält heute genau ein Paar (`de.json` gegen `de.js`). Mit einem zweiten Katalog muss
-   er beide Paare halten, sonst kann Französisch auseinanderlaufen, ohne rot zu werden.
+3. **Der Schlüsselvergleich wird auf die französische Sprache erweitert.**
+   `test_the_two_translation_files_carry_the_same_keys` hält das Paar `de.json` gegen
+   `de.js`, `test_the_german_catalogue_covers_both_german_language_codes` hält die vier
+   deutschen Dateien gegeneinander (beide in `backend/tests/test_admin_ui_contract.py`).
+   Französisch braucht dieselbe Klammer, sonst kann es auseinanderlaufen, ohne rot zu
+   werden. Anders als bei Deutsch ist es dort **keine** Gleichheit der Dateien: `fr` und
+   `fr_CA` wären zwei Wortlaute, wenn die App sie je beide führt, und Französisch kennt
+   die Du-Sie-Teilung der beiden deutschen Codes nicht.
 4. **Echte Akzente und Guillemets**, so wie die deutschen Werte echte Umlaute tragen.
    Die Wortlaute oben sind bereits in dieser Form geschrieben und können wörtlich
    übernommen werden.

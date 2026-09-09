@@ -82,6 +82,29 @@ PAGE_SCRIPT = REPO_ROOT / "php" / "js" / "search.js"
 # the two agreements this app has no tooling to enforce (IN-02 and DI-04-03).
 L10N_JSON = REPO_ROOT / "php" / "l10n" / "de.json"
 L10N_JS = REPO_ROOT / "php" / "l10n" / "de.js"
+
+# The second German language code, and why the app ships the same words twice.
+#
+# Nextcloud treats ``de`` and ``de_DE`` as two languages and offers both in the
+# personal settings: ``core/l10n/`` carries a catalogue for each of them. An app
+# that ships only ``de`` is therefore untranslated for everybody who picked the
+# other one, and that was this app until 09.09.2026: acceptance probe 20 of
+# phase 9 found the result page and the administration page in English for a
+# user on ``de_DE``, which is the entry the instance had set by default.
+#
+# The two codes are the informal and the formal address, du and Sie. Every
+# sentence of this catalogue is written in the Sie form ("Grenzen Sie die Suche
+# ein", "Versuchen Sie ein anderes Wort"), so its words belong under ``de_DE``
+# and are at worst a shade too polite under ``de``. Writing a second, informal
+# catalogue would be a translation round nobody asked for, and half of it would
+# drift within a phase; the same argument that parks the French catalogue in
+# docs/l10n-french.md rather than translating 24 of 173 strings.
+#
+# Hence: the same words under both codes, and a gate that holds the sameness
+# instead of a comment that asks for it. Whoever wants to tell du from Sie later
+# changes this test on purpose, which is the right amount of friction.
+L10N_DE_DE_JSON = REPO_ROOT / "php" / "l10n" / "de_DE.json"
+L10N_DE_DE_JS = REPO_ROOT / "php" / "l10n" / "de_DE.js"
 ADMIN_VIEW = REPO_ROOT / "php" / "lib" / "Service" / "AdminViewService.php"
 FILE_STATE = REPO_ROOT / "php" / "lib" / "Service" / "FileStateService.php"
 
@@ -561,7 +584,12 @@ def test_the_empty_state_of_the_page_does_not_speak_over_a_banner() -> None:
     # And on the half measure: the branch is there, the decision forgets the
     # hint, so the ceiling would go on contradicting itself while the error
     # block behaved.
-    half = '<?php $showEmpty = $hits === [] && !$hasError; ?>\n<?php } elseif ($showEmpty) { ?>\n\t<div class="findling-empty"></div>\n<?php } ?>\n'
+    half = (
+        "<?php $showEmpty = $hits === [] && !$hasError; ?>\n"
+        "<?php } elseif ($showEmpty) { ?>\n"
+        '\t<div class="findling-empty"></div>\n'
+        "<?php } ?>\n"
+    )
     assert scan_page_template_for_an_unguarded_empty_state("sample.php", half) == [
         "sample.php: the $showEmpty decision does not read $hasHint, $hasQuery"
     ]
@@ -885,6 +913,46 @@ def test_the_two_translation_files_carry_the_same_keys() -> None:
     # absence is asserted by name, so that a revert is a red test and not a
     # silent return.
     assert "Indexing, about %s left" not in keys
+
+
+def test_the_german_catalogue_covers_both_german_language_codes() -> None:
+    """Abweichung B of the phase 9 acceptance: de alone leaves de_DE in English.
+
+    Four files, two languages, one set of words. The two ``de_DE`` catalogues
+    carry the same text as the two ``de`` ones, and this test is what keeps them
+    from drifting: a key added to one German catalogue and forgotten in the
+    other is a page that is German for one half of the German speaking users and
+    English for the other, and nothing in a diff would show it.
+
+    Compared as text and not only as key sets, because that is the invariant
+    that costs nothing to keep and catches a translated value as well as a
+    missing key. The comparison runs over the text as Python reads it, so a
+    different line ending in a working copy on Windows is not a finding.
+    """
+    for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
+        assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
+        assert twin.read_text(encoding="utf-8") == language.read_text(encoding="utf-8"), (
+            f"{twin.name} and {language.name} have drifted apart"
+        )
+
+    # And the key set once more from the reading end, because that is the shape
+    # Nextcloud actually loads: the JSON from PHP, the object out of the
+    # register call from the browser.
+    keys_of = {
+        path.name: set(json.loads(path.read_text(encoding="utf-8"))["translations"])
+        if path.suffix == ".json"
+        else set(
+            json.loads(
+                path.read_text(encoding="utf-8")[
+                    path.read_text(encoding="utf-8").index("{") : path.read_text(encoding="utf-8").rindex("}") + 1
+                ]
+            )
+        )
+        for path in (L10N_JSON, L10N_JS, L10N_DE_DE_JSON, L10N_DE_DE_JS)
+    }
+
+    assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
+    assert len(keys_of["de.json"]) == 173
 
 
 def test_every_reason_of_the_closed_list_has_a_label_and_a_remedy() -> None:
