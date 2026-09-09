@@ -53,8 +53,16 @@ use Psr\Log\LoggerInterface;
  * the two callers are allowed to be differently patient. What does not arrive
  * from outside are the two character ceilings below: they are properties of the
  * file system this class reads, not of whoever is asking.
+ *
+ * @final This class is not meant to be extended, and the keyword is gone for
+ *        the same one reason it is gone on ExAppService: PHPUnit cannot create
+ *        a test double of a final class, and both callers take this class by
+ *        its concrete type. Without a double, "the provider hands its own
+ *        constants down and renders what comes back" could not be asserted at
+ *        all. The annotation is what static analysis and a reader go by;
+ *        nothing in this repository extends this class, and nothing should.
  */
-final class SearchService {
+class SearchService {
 	/**
 	 * The deepest paging offset the container accepts, mirrored here so that a
 	 * cursor beyond it ends the run with a reason of its own instead of with a

@@ -100,7 +100,7 @@ class QueueService {
 	 * reserved collective row instead of the shortened list, and the prefilter
 	 * treats the file as a candidate for anybody. The prefilter may be more
 	 * generous than the truth and never stricter, because the security boundary
-	 * is the final recheck in Provider (COMP-04); writing the first five hundred
+	 * is the final recheck in SearchService (COMP-04); writing the first five hundred
 	 * names as if they were the whole list would be the strict direction and
 	 * would hide the file from everybody behind the cap.
 	 */
@@ -668,7 +668,7 @@ class QueueService {
 		//
 		// What this branch is worth, and what it is not: nothing leaks while an
 		// acl row waits in the queue. A hit becomes a snippet only after the
-		// recheck in Provider, and that recheck resolves the file through
+		// recheck in SearchService, and that recheck resolves the file through
 		// getUserFolder()->getFirstNodeById(). A stale prefilter costs result
 		// quality and compute time, not confidentiality. That is the reason this
 		// kind is cheap and first in the claim order (D-04) rather than a reason

@@ -326,14 +326,14 @@ property is what a reader is looking for.
 | 1 | `ExAppService::filterCandidates` drops a candidate whose `fileId` is absent or is not an integer. | `ExAppServiceTest.php` | 05-15 |
 | 2 | It drops a candidate with a non positive `fileId` whose title is not the canary. | `ExAppServiceTest.php` | 05-15 |
 | 3 | It strips `title` and `snippet` off every candidate with a positive `fileId`, so nothing the container volunteers before the recheck can be displayed. | `ExAppServiceTest.php` | 05-15 |
-| 4 | `Provider::search` drops a candidate whose node cannot be resolved through the user's own folder, and takes title and link from the resolved node. | `ProviderTest.php` | 05-15 |
-| 5 | It returns an empty result, not unchecked hits, when the user has no home folder. | `ProviderTest.php` | 05-15 |
+| 4 | `SearchService::run` drops a candidate whose node cannot be resolved through the user's own folder, and takes title, path and mime type from the resolved node. | `SearchServiceTest.php` | 05-15, moved 09-03 |
+| 5 | It returns no hits, not unchecked ones, when the user has no home folder. | `SearchServiceTest.php` | 05-15, moved 09-03 |
 | 6 | `PlainText::bounded` replaces control characters with a single space, keeps the tab, caps at the given length, cuts on character boundaries and refuses invalid UTF-8. The replacement is one character for one character, and the preserved length is what number 12 relies on. | `PlainTextTest.php` | 05-15 |
 | 7 | `ExAppService::searchCandidates` refuses an empty term without a round trip and clamps the limit into 1..100. | `ExAppServiceTest.php` | 05-16 |
 | 8 | The answer body is refused above one megabyte, before it reaches `json_decode`. | `ExAppServiceTest.php` | 05-16 |
 | 9 | `GatewayController::getFileContents` answers 403 when `EX-APP-ID` is not `findling_backend`. | `GatewayControllerTest.php` | 05-16 |
-| 10 | `Provider::search` asks at most three times, resolves at most `min(64, limit * 2)` nodes per search, and stops asking when the wall clock of two and a half seconds is used up. | `ProviderTest.php` | 05-16 |
-| 11 | It requests excerpts only after the recheck, only for the surviving file ids, and not at all when the budget is gone, in which case the subline is the path. | `ProviderTest.php` and `ExAppServiceTest.php` | 05-16 |
+| 10 | `SearchService::run` asks at most as often as its caps allow, resolves at most `min(recheckAbsolute, pageSize * recheckPerHit)` nodes per run, and stops asking when the wall clock of its caps is used up. The dialog still hands down three rounds, 64 resolutions and two and a half seconds. | `SearchServiceTest.php` | 05-16, parametrised 09-03 |
+| 11 | It requests excerpts only after the recheck, only for the surviving file ids, and not at all when the budget is gone, in which case the caller falls back to the path of the hit. | `SearchServiceTest.php`, `ProviderTest.php` and `ExAppServiceTest.php` | 05-16 |
 | 12 | `ExAppService::filterSnippets` drops an excerpt for a file id that was not asked for, and drops the highlight ranges of a text the cleaning made shorter, because every offset behind the cut would point elsewhere. A text that only changed characters without changing its length keeps them. | `ExAppServiceTest.php` | 05-16 |
 
 Number 9 is the one that took a detour worth recording. It is reachable over

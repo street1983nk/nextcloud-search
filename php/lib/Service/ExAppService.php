@@ -62,8 +62,8 @@ use Psr\Log\LoggerInterface;
  *
  * @final This class is not meant to be extended, and the keyword is gone for one
  *        reason only: PHPUnit cannot create a test double of a final class, and
- *        Provider takes this class by its concrete type. Behaviours 4 and 5 of
- *        docs/testing.md are statements about Provider::search over a controlled
+ *        SearchService takes this class by its concrete type. Behaviours 4 and 5 of
+ *        docs/testing.md are statements about SearchService::run over a controlled
  *        answer of this service, so without a double they cannot be asserted at
  *        all. The annotation is what static analysis and a reader go by; nothing
  *        in this repository extends this class, and nothing should.
@@ -85,8 +85,14 @@ class ExAppService {
 	 * only checked BEFORE a call let 2.49 s of spent budget plus a full 1.5 s
 	 * timeout add up to four real seconds, and the unified search waits for
 	 * every provider.
+	 *
+	 * Public since plan 09-03, and only because the number moved out of reach:
+	 * the search dialog builds its own SearchCaps and has to name the ceiling it
+	 * wants, so the value it names is this one and not a copy of it. It stays
+	 * the default of every method below, so nothing changes for a caller that
+	 * says nothing.
 	 */
-	private const REQUEST_TIMEOUT_SECONDS = 1.5;
+	public const REQUEST_TIMEOUT_SECONDS = 1.5;
 
 	/**
 	 * The ceiling per call of the own result page, measured on 2026-09-09.

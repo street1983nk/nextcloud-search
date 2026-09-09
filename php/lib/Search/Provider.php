@@ -5,11 +5,8 @@ declare(strict_types=1);
 namespace OCA\Findling\Search;
 
 use OCA\Findling\Service\ExAppService;
-use OCA\Findling\Text\PlainText;
-use OCP\Files\Cache\IFileAccess;
-use OCP\Files\Config\IUserMountCache;
-use OCP\Files\File;
-use OCP\Files\IRootFolder;
+use OCA\Findling\Service\SearchCaps;
+use OCA\Findling\Service\SearchService;
 use OCP\IL10N;
 use OCP\IURLGenerator;
 use OCP\IUser;
@@ -21,7 +18,15 @@ use OCP\Search\SearchResultEntry;
 use Psr\Log\LoggerInterface;
 
 /**
- * The search provider, and the security boundary of the whole product.
+ * The search provider of the unified search dialog, and since plan 09-03 it
+ * decides nothing.
+ *
+ * Three jobs are left and they are all translations. It turns an ISearchQuery
+ * into the language of the shared service, it writes out the ceilings the
+ * dialog wants, and it renders what comes back into SearchResultEntry. Who may
+ * see a file is answered in OCA\Findling\Service\SearchService and nowhere
+ * else, because the own result page of phase 9 asks the same question and two
+ * answers to one question are one answer too many (UI-03).
  *
  * IFilteringProvider rather than plain IProvider, and deliberately not
  * IExternalProvider: an external provider is a provider that asks a third
@@ -29,16 +34,12 @@ use Psr\Log\LoggerInterface;
  * That would break the zero-config promise on the first search a user ever
  * runs.
  *
- * The search runs in two stages. The container answers with candidates that
- * carry a file id and nothing else, this class decides which of them this user
- * may actually see, and only then does it ask for the text excerpts of the
- * survivors. The order is not an optimisation. An excerpt is file content, and
- * file content for a file the user cannot open must never enter this process in
- * the first place.
- *
  * The whole group runs against a wall clock of two and a half seconds. The
  * unified search asks every provider and waits for all of them, so a slow
- * provider does not cost its own result group, it costs the search.
+ * provider does not cost its own result group, it costs the search. That is
+ * also why this caller stays the impatient one of the two: its per call ceiling
+ * is the unchanged ExAppService::REQUEST_TIMEOUT_SECONDS, while the result page
+ * waits for nobody and may name a larger one of its own.
  *
  * Since phase 5 there is one more way for this group to be empty, and it is a
  * decision rather than a failure. When the two halves of this app report
@@ -50,11 +51,15 @@ use Psr\Log\LoggerInterface;
  */
 final class Provider implements IFilteringProvider {
 	/**
-	 * The wall clock for one result group, in nanoseconds. It is measured with
-	 * hrtime() and not with microtime(), because a clock adjustment during a
-	 * search would otherwise either double the budget or end it immediately.
+	 * The wall clock for one result group, in seconds.
+	 *
+	 * The number is unchanged since plan 05-16 and only its unit moved: the
+	 * conversion into the nanoseconds of hrtime() now happens in the shared
+	 * service, together with the clock it is compared against. hrtime() and not
+	 * microtime() stays the rule over there, because a clock adjustment during
+	 * a search would otherwise either double the budget or end it immediately.
 	 */
-	private const BUDGET_NANOSECONDS = 2_500_000_000;
+	private const BUDGET_SECONDS = 2.5;
 
 	/**
 	 * At most three rounds of asking, each with four times the display limit.
@@ -69,59 +74,27 @@ final class Provider implements IFilteringProvider {
 	 * The ceiling on node resolutions per search, and the arithmetic that
 	 * forces it.
 	 *
-	 * Every resolution below is a query against oc_filecache. With a limit of
-	 * 20, an overfetch of four and three rounds there would be up to 240 of
-	 * them in a single search, and on a small box the time budget is gone
-	 * before the first excerpt has even been requested. Two per displayed hit
-	 * leaves room for a user whose candidates are mostly revoked shares, and
-	 * the absolute ceiling keeps a large limit from reopening the same hole.
+	 * Every resolution in the shared service is a query against oc_filecache.
+	 * With a limit of 20, an overfetch of four and three rounds there would be
+	 * up to 240 of them in a single search, and on a small box the time budget
+	 * is gone before the first excerpt has even been requested. Two per
+	 * displayed hit leaves room for a user whose candidates are mostly revoked
+	 * shares, and the absolute ceiling keeps a large limit from reopening the
+	 * same hole.
 	 *
 	 * What is capped is how many candidates are examined. Whether a displayed
-	 * hit was examined is not capped and cannot be: the loop below stops
+	 * hit was examined is not capped and cannot be: the service stops
 	 * approving, it never approves without asking.
 	 */
 	private const MAX_RECHECKS_PER_HIT = 2;
 	private const MAX_RECHECKS_ABSOLUTE = 64;
 
-	/**
-	 * Ceilings in characters for the two fields that come out of the file
-	 * system. A file name from an external storage is not more trustworthy than
-	 * a container answer.
-	 */
-	private const MAX_TITLE_LENGTH = 255;
-	private const MAX_PATH_LENGTH = 255;
-
-	/**
-	 * The monotonic clock of a search, in nanoseconds, as a callable.
-	 *
-	 * A property and not a bare hrtime() call for exactly one reason: the wall
-	 * clock above is a behaviour of this class (number 10 of docs/testing.md),
-	 * and a test of it that waited two and a half real seconds would make the
-	 * suite slow and would go flaky on a loaded runner. This is the smallest
-	 * seam that removes the wait: one optional constructor argument, no new
-	 * interface, no new service, and nothing in the app passes it.
-	 *
-	 * Nextcloud resolves the argument to its default, because the container
-	 * cannot build a Closure and falls back to the declared default when it
-	 * cannot. hrtime() and not microtime() stays the rule: a clock adjustment
-	 * during a search would otherwise either double the budget or end it at
-	 * once.
-	 *
-	 * @var \Closure(): float
-	 */
-	private \Closure $clock;
-
 	public function __construct(
 		private IL10N $l10n,
 		private IURLGenerator $urlGenerator,
-		private ExAppService $exApp,
-		private IRootFolder $rootFolder,
-		private IUserMountCache $mountCache,
-		private IFileAccess $fileAccess,
+		private SearchService $searchService,
 		private LoggerInterface $logger,
-		?\Closure $clock = null,
 	) {
-		$this->clock = $clock ?? static fn (): float => (float)hrtime(true);
 	}
 
 	#[\Override]
@@ -182,10 +155,7 @@ final class Provider implements IFilteringProvider {
 
 	#[\Override]
 	public function search(IUser $user, ISearchQuery $query): SearchResult {
-		$deadline = ($this->clock)() + self::BUDGET_NANOSECONDS;
-		$uid = $user->getUID();
 		$term = trim($query->getTerm());
-		$limit = max(1, $query->getLimit());
 
 		// An empty search line is not asked about at all. It is what the dialog
 		// sends while the user is still typing, and it cannot produce a hit.
@@ -193,316 +163,58 @@ final class Provider implements IFilteringProvider {
 			return SearchResult::complete($this->getName(), []);
 		}
 
-		// D-11: the two halves have to agree on their major and minor, and when
-		// the last answer of the container said otherwise this group stays
-		// empty. Same shape as a missing backend one screen below, and for a
-		// sharper reason: a protocol break is the one case in which a hit would
-		// be a guess dressed up as a finding, because neither half can say what
-		// the other one meant by its answer. So the search costs a result group
-		// and says so in the log, the admin page names the state with both
-		// version numbers, and nothing here throws: a mismatch between two
-		// installed apps is an operating state and never an error of the search.
-		//
-		// No round trip is spent on the question. What is read is the version the
-		// container reported the last time anything asked it, which is what the
-		// settings page does whenever it is open; see
-		// ExAppService::KEY_BACKEND_VERSION for what follows from that.
-		$drift = $this->exApp->driftOnRecord();
-		if ($drift !== null) {
-			// Both numbers in the line, because "the versions differ" without
-			// them is a sentence an admin cannot act on. Neither of them is user
-			// content: both passed the version pattern of ExAppService, and
-			// anything that did not is treated as unknown rather than as drift.
-			$this->logger->warning('Findling: the two halves report different versions, answering with no hits', [
-				'companion' => $drift['companion'],
-				'backend' => $drift['container'],
-			]);
+		$outcome = $this->searchService->run(
+			$user,
+			$term,
+			$this->titleOnly($query),
+			$this->startOffset($query),
+			$this->caps(max(1, $query->getLimit())),
+		);
+
+		if ($outcome->hits === []) {
+			if ($outcome->failure !== null) {
+				// One line and no more. The four reasons are a closed set of
+				// constants and never user content, and the two that an admin
+				// can act on have already been logged with their detail inside
+				// the service; this is the trace that says which of them ended
+				// this particular group.
+				$this->logger->debug('Findling: the shared search returned no hits', ['reason' => $outcome->failure]);
+			}
 
 			return SearchResult::complete($this->getName(), []);
 		}
 
-		$titleOnly = $this->titleOnly($query);
+		$entries = $this->toEntries($outcome->hits, $outcome->excerpts);
 
-		try {
-			$userFolder = $this->rootFolder->getUserFolder($uid);
-		} catch (\Throwable $e) {
-			// Every failure is caught on purpose. getUserFolder() signals a
-			// missing user with a class from the private namespace of the
-			// server and a missing home directory with a different one again;
-			// both mean the same thing here, and neither may reach the unified
-			// search as an exception. Without a home folder no permission
-			// decision is possible, and handing out unchecked hits instead
-			// would be the actual bug.
-			$this->logger->warning('Findling: no home folder for this user, dropping every hit', ['exception' => $e]);
-			return SearchResult::complete($this->getName(), []);
-		}
-
-		$storageIds = $this->storageIdsOfUser($user);
-		$recheckBudget = min(self::MAX_RECHECKS_ABSOLUTE, $limit * self::MAX_RECHECKS_PER_HIT);
-		$rechecks = 0;
-		$offset = $this->startOffset($query);
-		$exhausted = true;
-		$approved = [];
-
-		for ($round = 0; $round < self::MAX_ROUNDS; $round++) {
-			if (count($approved) >= $limit || $rechecks >= $recheckBudget || ($this->clock)() >= $deadline) {
-				break;
-			}
-
-			// Fetching more than the recheck budget could ever examine buys
-			// nothing (perf audit M4): the overfetch is capped at what is left
-			// of the budget plus one display page for the candidates that cost
-			// no recheck. The remaining wall clock travels with the call, so
-			// the request timeout can never overdraw the deadline (perf H5).
-			$fetchLimit = min($limit * self::OVERFETCH, $recheckBudget - $rechecks + $limit);
-			$page = $this->exApp->searchCandidates($uid, $term, $fetchLimit, $offset, $titleOnly, $this->secondsLeft($deadline));
-			if ($page === null) {
-				break;
-			}
-
-			if ($page['degraded']) {
-				// The backend answered from a reduced state, for instance while
-				// the index is still being built. Worth a line, not worth
-				// hiding the hits it did find.
-				$this->logger->debug('Findling: backend answered in a degraded state');
-			}
-
-			$candidates = $page['candidates'];
-			if ($candidates === []) {
-				// An empty page is only the end when the backend says so. The
-				// cheap reduction over there can empty a page whose successors
-				// still hold this user's hits, and breaking here would silently
-				// swallow every hit behind it; the round counter above bounds
-				// how often this is retried.
-				$exhausted = !$page['hasMore'];
-				if ($exhausted) {
-					break;
-				}
-				$offset = $page['nextOffset'];
-				continue;
-			}
-
-			$keptIds = $this->reduceIds($candidates, $storageIds);
-
-			// The one and only permission decision of this product. A candidate
-			// becomes a hit when this user's own folder resolves its file id to
-			// a file, and it is dropped otherwise: never visible, no longer
-			// visible, moved into the trash and deleted are deliberately the
-			// same outcome, so a hit cannot be used to probe for files this
-			// user is not allowed to see.
-			//
-			// The two counters above this loop cap how many candidates are
-			// examined, never whether a displayed one was. A hit that reaches
-			// the screen without having passed this line does not exist.
-			//
-			// $consumed counts the candidates this loop has decided about, and
-			// only those. When a budget ends the page early, the cursor resumes
-			// exactly behind the last decided candidate, so the better ranked
-			// remainder of the page shows up on the next unified search page
-			// instead of vanishing between two cursors.
-			$consumed = 0;
-			$stopped = false;
-			foreach ($candidates as $candidate) {
-				if (count($approved) >= $limit) {
-					$stopped = true;
-					break;
-				}
-
-				if ($candidate['fileId'] <= 0) {
-					// The diagnostic path of phase 1. There is no file behind
-					// this id, so there is nothing to resolve: the text was
-					// composed inside the container out of host name,
-					// timestamp and the user id of the signed header and
-					// carries no user content. The proxy accepts it under one
-					// exact title and under no other.
-					$consumed++;
-					$approved[] = [
-						'fileId' => 0,
-						'title' => $candidate['title'] ?? '',
-						'subline' => $candidate['snippet'] ?? '',
-					];
-					continue;
-				}
-
-				if ($keptIds !== null && !isset($keptIds[$candidate['fileId']])) {
-					// Decided, not skipped: the file lives on a storage this
-					// user has no mount on, so the recheck could only repeat
-					// the verdict at a higher price.
-					$consumed++;
-					continue;
-				}
-
-				if ($rechecks >= $recheckBudget) {
-					$stopped = true;
-					break;
-				}
-
-				$rechecks++;
-				$consumed++;
-				$node = $userFolder->getFirstNodeById($candidate['fileId']);
-				if (!$node instanceof File) {
-					continue;
-				}
-
-				// The stricter question, asked right after the type check
-				// (security audit L5). Resolving a node through this user's own
-				// folder answers "is it reachable for them", and on an ordinary
-				// share that is the same as "may they read it". On a team folder
-				// it is not: the ACL wrapper of groupfolders can hand out a node
-				// that resolves perfectly well while the per folder rules take
-				// the read bit away, and a hit for a document whose content the
-				// user may not open is the one outcome this class exists to
-				// prevent. This recheck is the security boundary of the whole
-				// product, so the stricter question belongs here rather than
-				// anywhere further down: two lines later a title and a path of
-				// that node would already have been read, and one call later a
-				// snippet of its content would exist.
-				if (!$node->isReadable()) {
-					continue;
-				}
-
-				$title = PlainText::bounded($node->getName(), self::MAX_TITLE_LENGTH);
-				$path = PlainText::bounded(
-					ltrim((string)$userFolder->getRelativePath($node->getPath()), '/'),
-					self::MAX_PATH_LENGTH,
-				);
-				if ($title === null || $path === null) {
-					continue;
-				}
-
-				// Title and link come out of the confirmed node, never out of
-				// the container answer. A confused or compromised backend can
-				// otherwise put the name of a foreign file in front of the
-				// user.
-				$approved[] = [
-					'fileId' => $candidate['fileId'],
-					'title' => $title,
-					'subline' => $path,
-				];
-			}
-
-			if ($stopped) {
-				$offset += $consumed;
-				$exhausted = false;
-				break;
-			}
-
-			$offset = $page['nextOffset'];
-			$exhausted = !$page['hasMore'];
-			if ($exhausted) {
-				break;
-			}
-		}
-
-		if ($approved === []) {
-			return SearchResult::complete($this->getName(), []);
-		}
-
-		// Only now, and only for the survivors. If the budget is used up the
-		// hits are shown with their path as the subline instead: a hit without
-		// an excerpt beats no hit at all.
-		$fileIds = [];
-		foreach ($approved as $hit) {
-			if ($hit['fileId'] > 0) {
-				$fileIds[] = $hit['fileId'];
-			}
-		}
-
-		$excerpts = $fileIds !== []
-			? $this->exApp->snippets($uid, $term, $fileIds, $titleOnly, $this->secondsLeft($deadline))
-			: [];
-
-		$entries = $this->toEntries($approved, $excerpts);
-
-		return $exhausted
-			? SearchResult::complete($this->getName(), $entries)
-			: SearchResult::paginated($this->getName(), $entries, $offset);
+		// A run that hit the paging ceiling is complete() with the hits it has,
+		// and that is the honest shape rather than a concession: complete()
+		// means "there is no next page from here", which is exactly what a
+		// cursor the container refuses amounts to. The result page of this
+		// phase says the same thing in a sentence, because it has room for one.
+		return $outcome->hasMore
+			? SearchResult::paginated($this->getName(), $entries, $outcome->nextCursor)
+			: SearchResult::complete($this->getName(), $entries);
 	}
 
 	/**
-	 * The cheap reduction that runs before the first node is resolved.
+	 * The ceilings of a dialog search, written out rather than defaulted.
 	 *
-	 * Two queries instead of one per candidate: the mounts of this user were
-	 * fetched once for the whole search, and the cache entries of a whole page
-	 * of candidates are fetched in a single call. Whatever lives on a storage
-	 * this user has no mount on cannot be theirs, and is dropped before it can
-	 * cost a resolution.
-	 *
-	 * This is a reduction and not a boundary, and the difference matters. It is
-	 * an over-approximation: a storage can carry files of a mount this user
-	 * does not have, and a team folder with per folder permissions is not
-	 * resolved here at all. Everything it lets through is still decided by the
-	 * recheck.
-	 *
-	 * Null and an empty array are two different answers. Null means the
-	 * reduction cannot decide anything, so every candidate goes to the capped
-	 * recheck; the caps and the recheck are both still in force, so falling
-	 * back is safe. An array is a verdict per positive file id: present means
-	 * "worth a recheck", absent means "cannot be this user's file".
-	 *
-	 * @param list<array{fileId:int,title?:string,snippet?:string}> $candidates
-	 * @param array<int,true> $storageIds
-	 * @return array<int,true>|null
+	 * Every number here belongs to the dialog and to no other caller. The page
+	 * size is what the dialog asked for, the four caps are the constants above,
+	 * and the per call ceiling is the unchanged one of ExAppService: the unified
+	 * search waits for every provider in parallel, so this caller is the
+	 * impatient one and stays it.
 	 */
-	private function reduceIds(array $candidates, array $storageIds): ?array {
-		$fileIds = [];
-		foreach ($candidates as $candidate) {
-			if ($candidate['fileId'] > 0) {
-				$fileIds[] = $candidate['fileId'];
-			}
-		}
-
-		if ($fileIds === [] || $storageIds === []) {
-			return null;
-		}
-
-		try {
-			$entries = $this->fileAccess->getByFileIds($fileIds);
-		} catch (\Throwable $e) {
-			$this->logger->debug('Findling: bulk cache lookup failed, falling back to the capped recheck', ['exception' => $e]);
-			return null;
-		}
-
-		$kept = [];
-		foreach ($fileIds as $fileId) {
-			$entry = $entries[$fileId] ?? null;
-			if ($entry !== null && isset($storageIds[$entry->getStorageId()])) {
-				$kept[$fileId] = true;
-			}
-		}
-
-		return $kept;
-	}
-
-	/**
-	 * The numeric storage ids this user has a mount on, fetched once per
-	 * search and keyed by id for the lookup in the reduction. An empty map
-	 * means the reduction is skipped, not that the user sees nothing.
-	 *
-	 * @return array<int,true>
-	 */
-	private function storageIdsOfUser(IUser $user): array {
-		try {
-			$mounts = $this->mountCache->getMountsForUser($user);
-		} catch (\Throwable $e) {
-			$this->logger->debug('Findling: mount list unavailable, skipping the cheap reduction', ['exception' => $e]);
-			return [];
-		}
-
-		$storageIds = [];
-		foreach ($mounts as $mount) {
-			$storageIds[$mount->getStorageId()] = true;
-		}
-
-		return $storageIds;
-	}
-
-	/**
-	 * What is left of the wall clock, in seconds. Negative once the deadline
-	 * has passed, which the callee reads as "do not call at all".
-	 */
-	private function secondsLeft(int|float $deadline): float {
-		return ((float)$deadline - ($this->clock)()) / 1_000_000_000.0;
+	private function caps(int $limit): SearchCaps {
+		return new SearchCaps(
+			$limit,
+			self::MAX_ROUNDS,
+			self::OVERFETCH,
+			self::MAX_RECHECKS_PER_HIT,
+			self::MAX_RECHECKS_ABSOLUTE,
+			self::BUDGET_SECONDS,
+			ExAppService::REQUEST_TIMEOUT_SECONDS,
+		);
 	}
 
 	/**
@@ -542,7 +254,7 @@ final class Provider implements IFilteringProvider {
 	 * therefore travel as character offsets in the attributes and are never
 	 * translated into tags here.
 	 *
-	 * @param list<array{fileId:int,title:string,subline:string}> $approved
+	 * @param list<\OCA\Findling\Service\ApprovedHit> $approved
 	 * @param array<int,array{text:string,highlights:list<array{int,int}>}> $excerpts
 	 * @return list<SearchResultEntry>
 	 */
@@ -550,13 +262,13 @@ final class Provider implements IFilteringProvider {
 		$entries = [];
 
 		foreach ($approved as $hit) {
-			$fileId = $hit['fileId'];
+			$fileId = $hit->fileId;
 			$excerpt = $excerpts[$fileId] ?? null;
 
 			$entry = new SearchResultEntry(
 				thumbnailUrl: '',
-				title: $hit['title'],
-				subline: $excerpt === null ? $hit['subline'] : $excerpt['text'],
+				title: $hit->title,
+				subline: $excerpt === null ? $hit->path : $excerpt['text'],
 				resourceUrl: $this->resourceUrl($fileId),
 				icon: 'icon-search',
 			);
