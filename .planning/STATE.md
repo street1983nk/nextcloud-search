@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
-status: executing
+status: verifying
 stopped_at: Completed 09-07-PLAN.md
-last_updated: "2026-09-09T04:09:48.661Z"
-last_activity: 2026-09-09 -- Plan 09-07 abgeschlossen (dritter Eingabemodus des Vergleichers, Anmeldeschritt und dritter Vergleich je Szenario)
+last_updated: "2026-09-09T05:48:59.786Z"
+last_activity: 2026-09-09 -- Plan 09-08 abgeschlossen (22 Abnahme-Sichtproben, drei Vertragsnachzuege, de_DE-Katalog, die drei Audits)
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 17
-  completed_plans: 16
-  percent: 40
+  completed_plans: 17
+  percent: 60
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 09 — eigene-ergebnisseite
+**Current focus:** Phase 10, Vergleichsmessung auf der AWS-Box
 
 ## Current Position
 
-Phase: 09 (eigene-ergebnisseite) — EXECUTING
+Phase: 09 (eigene-ergebnisseite): COMPLETE
 Plan: 8 of 8
-Status: Ready to execute
-Last activity: 2026-09-09 -- Plan 09-07 abgeschlossen (dritter Eingabemodus des Vergleichers, Anmeldeschritt und dritter Vergleich je Szenario)
+Status: Phase abgeschlossen, bereit zur Verifikation
+Last activity: 2026-09-09 -- Plan 09-08 abgeschlossen (22 Abnahme-Sichtproben, drei Vertragsnachzuege, de_DE-Katalog, die drei Audits)
 
-**Naechster Schritt:** Plan 09-08 (Abschluss der Phase: Sichtproben, Doku und offene Punkte)
+**Naechster Schritt:** `/gsd:plan-phase 10` (Vergleichsmessung auf der AWS-Box). Vorher steht der Push dieser Welle: `php.yml` und `integration.yml` haben noch keinen Lauf gegen den Stand der Phase 9 gesehen.
 
 ## Performance Metrics
 
@@ -80,6 +80,7 @@ Last activity: 2026-09-09 -- Plan 09-07 abgeschlossen (dritter Eingabemodus des 
 | Phase 09 P05 | 55min | 3 tasks | 5 files |
 | Phase 09 P06 | 40min | 3 tasks | 8 files |
 | Phase 09 P07 | 50min | 3 tasks | 4 files |
+| Phase 09 P08 | 75min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -196,6 +197,10 @@ Recent decisions affecting current work:
 - [Phase 09]: 09-06: Gate C liest sechs Dateien, aber die Sondertests der Verwaltungsseite bleiben woertlich auf admin.js. Das Seitenskript bekommt stattdessen zwei eigene Aussagen ueber die Abwesenheit derselben Marker
 - [Phase 09]: 09-07: Der Einstiegs-Eintrag wird im JSON-Auszieher an seiner Zieladresse uebersprungen, nie am fehlenden fileId-Attribut. Ein Eintrag ohne Attribut, der diese Adresse nicht traegt, macht die Antwort weiterhin unlesbar
 - [Phase 09]: 09-07: Der Paritaetsjob meldet sich per Cookie-Behaelter an und liest die Seite als HTML. Der Origin-Kopf ist Pflicht: LoginController von Nextcloud 34 weist eine Anmeldung ohne vertrauenswuerdigen Ursprung ab, bevor er das Passwort ansieht, und zwar mit derselben Umleitung wie bei einem falschen Passwort
+- [Phase 09]: 09-08: Der Leerzustand mit Suchbegriff schweigt unter jedem Banner (Fehlerblock, Obergrenze, Index im Aufbau); ohne Suchbegriff bleibt er stehen, weil eine Einladung nie eine Behauptung ist
+- [Phase 09]: 09-08: Deutsch laeuft unter beiden Sprachcodes, de und de_DE, mit byte-identischen Katalogen und einem Gate auf die Gleichheit; der Katalog ist in Sie-Form geschrieben und gehoert damit unter de_DE
+- [Phase 09]: 09-08: Der franzoesische Katalog bleibt vertagt, vollstaendig oder gar nicht, vor der Store-Abgabe; die 24 Wortlaute liegen in docs/l10n-french.md, die ROADMAP zeigt bei Phase 11 darauf
+- [Phase 09]: 09-08: Sichtprobe 5 sagt die Scrollposition nicht mehr zu; Stufe 2 des Rueckkehrvertrags ist browserabhaengig und in Firefox praktisch abgeschaltet, Stufe 3 ist der tragende Teil
 
 ### Pending Todos
 
@@ -223,6 +228,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-09T04:09:48.645Z
+Last session: 2026-09-09T05:48:04.181Z
 Stopped at: Completed 09-07-PLAN.md
 Resume file: None

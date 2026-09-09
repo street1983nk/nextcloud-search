@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: Gemeinsame Embedding-Engine** - Das Modell liegt pro Prozess genau einmal im Speicher, ohne dass die erste Suche nach Leerlauf langsamer wird (completed 2026-09-08)
 - [x] **Phase 8: Deutsche Komposita ohne Behelf** - Wer ein Teilwort sucht, findet das zusammengesetzte Wort, ueber eine lizenzgeklaerte Wortliste statt ueber einen Prefix-Behelf
  (completed 2026-09-08)
-- [ ] **Phase 9: Eigene Ergebnisseite** - Der Nutzer verliert die Trefferliste nicht mehr, wenn er einen Treffer oeffnet
+- [x] **Phase 9: Eigene Ergebnisseite** - Der Nutzer verliert die Trefferliste nicht mehr, wenn er einen Treffer oeffnet (completed 2026-09-09)
 - [ ] **Phase 10: Vergleichsmessung auf der AWS-Box** - Die Verbesserung steht als Zahl neben der v1.0-Baseline, Zeile fuer Zeile
 - [ ] **Phase 11: Haertung und Store-Einreichung v1.1** - v1.1 ist getestet jenseits des Happy Path und als signiertes App-Paar im Store
 
@@ -153,7 +153,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 09-08-PLAN.md , Sichtproben, UI-SPEC-Nachzug, vertagte FR-Wortlaute und die drei Audits (Welle 7)
+- [x] 09-08-PLAN.md , Sichtproben, UI-SPEC-Nachzug, vertagte FR-Wortlaute und die drei Audits (Welle 7)
 
 ### Phase 10: Vergleichsmessung auf der AWS-Box
 
@@ -194,7 +194,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 |-------|----------------|--------|-----------|
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
-| 9. Eigene Ergebnisseite | 7/8 | In Progress|  |
+| 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
 
