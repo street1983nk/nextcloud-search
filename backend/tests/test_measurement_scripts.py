@@ -333,6 +333,88 @@ def test_the_proof_checks_its_own_raw_file_for_three_tree_hashes() -> None:
     assert "baumhash-gleich" in text
 
 
+# The count that guards --rm-data. Pitfall 5 of the research turned into a gate,
+# and it is the one assertion of this file that was written after a run had
+# already been paid for: the default counted the images of the docker hub, this
+# box runs its All-in-One instance from a release channel, and so the count came
+# out 0 with exactly one server running. Refusing on 0 was safe. What is not safe
+# is the other direction, and it is the reason this test exists: with the second,
+# hand rolled Nextcloud of 07.09. on the daemon the old pattern counted exactly
+# 1 and would have let --rm-data through, in precisely the situation the count
+# was put there to stop.
+
+# The nine images that really ran on the box on 2026-09-09, read out of docker ps.
+RUNNING_IMAGES_OF_THE_BOX = (
+    "ghcr.io/street1983nk/findling_backend:dev",
+    "registry:2",
+    "ghcr.io/nextcloud-releases/aio-apache:latest",
+    "ghcr.io/nextcloud-releases/aio-nextcloud:latest",
+    "ghcr.io/nextcloud-releases/aio-redis:latest",
+    "ghcr.io/nextcloud-releases/aio-postgresql:latest",
+    "ghcr.io/nextcloud-releases/aio-harp:latest",
+    "ghcr.io/nextcloud-releases/aio-notify-push:latest",
+    "nextcloud/all-in-one:latest",
+)
+# The shape the second instance had: a hand rolled server, straight from the hub.
+THE_SECOND_INSTANCE_OF_07_09 = "nextcloud:34.0.3-apache"
+
+
+def server_image_pattern(script: Path) -> str:
+    """The SERVER_IMAGES default of a script, as the script really carries it."""
+    text = script.read_text(encoding="utf-8")
+    found = re.search(r'SERVER_IMAGES="\$\{SERVER_IMAGES:-(.*?)\}"', text)
+    assert found is not None, f"{script.name} carries no SERVER_IMAGES default"
+    return found.group(1)
+
+
+@pytest.mark.parametrize("name", ["90-bestand.sh", "92-wechsel.sh"])
+def test_the_server_count_finds_the_one_instance_of_this_box(name: str) -> None:
+    """One server running has to count as one, on the registry path of this box.
+
+    Both scripts carry the same default and both gate a step on it: 90-bestand.sh
+    ends the inventory with 5, and 92-wechsel.sh refuses --rm-data with 5. A
+    pattern that names one registry path counts the instance of another one as
+    absent.
+    """
+    pattern = re.compile(server_image_pattern(RUN_DIR / name))
+    hits = [image for image in RUNNING_IMAGES_OF_THE_BOX if pattern.search(image)]
+    assert hits == ["ghcr.io/nextcloud-releases/aio-nextcloud:latest"], hits
+
+
+@pytest.mark.parametrize("name", ["90-bestand.sh", "92-wechsel.sh"])
+def test_the_server_count_sees_the_second_instance_that_did_the_damage(name: str) -> None:
+    """Two servers have to count as two, or the guard passes the disaster.
+
+    On 07.09. a second, hand rolled Nextcloud on the same docker daemon ran an
+    unregister --rm-data and took the volume of the FIRST one with it, because the
+    volume name of an ExApp follows from its app id alone. The count exists to
+    stop exactly that, so the hand rolled shape stays in the pattern next to the
+    All-in-One one, and two of them must not read as one.
+    """
+    pattern = re.compile(server_image_pattern(RUN_DIR / name))
+    images = [*RUNNING_IMAGES_OF_THE_BOX, THE_SECOND_INSTANCE_OF_07_09]
+    assert len([image for image in images if pattern.search(image)]) == 2
+
+
+@pytest.mark.parametrize("name", ["90-bestand.sh", "92-wechsel.sh"])
+def test_the_server_count_leaves_the_companion_containers_out(name: str) -> None:
+    """The other AIO containers carry the word nextcloud and are not servers.
+
+    Counting the mastercontainer, the AppAPI daemon or the notify-push helper as
+    an instance would refuse every step of this run on a box that is set up
+    correctly, which is the same outage as the bug above with the sign flipped.
+    """
+    pattern = re.compile(server_image_pattern(RUN_DIR / name))
+    for image in (
+        "nextcloud/all-in-one:latest",
+        "ghcr.io/nextcloud/nextcloud-appapi-harp:release",
+        "ghcr.io/nextcloud-releases/aio-notify-push:latest",
+        "ghcr.io/nextcloud-releases/aio-harp:latest",
+        "ghcr.io/nextcloud-releases/aio-domaincheck:latest",
+    ):
+        assert not pattern.search(image), image
+
+
 # The reader of the watchman of the full run. These assertions are pitfall 8 of
 # the research turned into a gate: 42c-lesen.py of the semantic run looked for
 # indexed and embedded on the top level of the recording, where the indexed of

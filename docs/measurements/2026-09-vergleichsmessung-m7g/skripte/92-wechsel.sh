@@ -60,7 +60,14 @@ DAEMON="${DAEMON:-harp_aio}"
 APP_ID="${APP_ID:-findling_backend}"
 PHP_APP="${PHP_APP:-findling}"
 # The image that carries the Nextcloud server itself, for the count of change 3.
-SERVER_IMAGES="${SERVER_IMAGES:-nextcloud/aio-nextcloud|(^|/)nextcloud:}"
+# Anchored on the repository name and not on one registry path: this box runs its
+# All-in-One instance as ghcr.io/nextcloud-releases/aio-nextcloud:latest, and the
+# docker hub spelling counted 0 servers with exactly one running (measured
+# 2026-09-09). A count of 0 in front of --rm-data refuses the step, so the error
+# was safe and it was still an error. The second alternative keeps the hand rolled
+# nextcloud:<tag> in the count, which is the shape the second instance of 07.09.
+# had, and it is the whole reason this count exists.
+SERVER_IMAGES="${SERVER_IMAGES:-(^|/)aio-nextcloud:|(^|/)nextcloud:}"
 
 # The digest plan 10-02 noted, in both shapes it can be read in. The runner gets
 # the manifest index after a pull on the tag, docker image inspect on a local

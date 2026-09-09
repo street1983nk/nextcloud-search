@@ -36,12 +36,18 @@ OUT="${OUT:-$SKRIPTE/../rohdaten}"
 DATA_ROOT="${DATA_ROOT:-/mnt/findling}"
 VOLUME="${VOLUME:-$DATA_ROOT/docker/volumes/nc_app_findling_backend_data/_data}"
 CONTAINER="${CONTAINER:-nc_app_findling_backend}"
-# A Nextcloud server container is one whose image carries the server itself:
-# nextcloud/aio-nextcloud for an All-in-One instance, library/nextcloud for a
-# hand rolled one. The other AIO containers (database, redis, apache,
-# notify-push, imaginary, borgbackup, and the AppAPI daemon) carry other images
-# and are not counted.
-SERVER_IMAGES="${SERVER_IMAGES:-nextcloud/aio-nextcloud|(^|/)nextcloud:}"
+# A Nextcloud server container is one whose image carries the server itself, and
+# this default was measured wrong until 2026-09-09: an All-in-One instance runs
+# under the name its release channel gives it, and on this box that name is
+# ghcr.io/nextcloud-releases/aio-nextcloud:latest and not the
+# nextcloud/aio-nextcloud of the docker hub. The count came out 0 with exactly one
+# server running, which reads like an empty box and refuses the step. So the
+# pattern anchors on the repository name and not on one registry path, and the
+# second alternative keeps the hand rolled nextcloud:<tag> of 07.09. in the count,
+# because that is the shape the second instance had. The other AIO containers
+# (database, redis, apache, notify-push, harp, domaincheck, the mastercontainer
+# and the AppAPI daemon) carry other images and are not counted.
+SERVER_IMAGES="${SERVER_IMAGES:-(^|/)aio-nextcloud:|(^|/)nextcloud:}"
 # The memory cap that makes the comparison with the 4 GB box possible.
 CMDLINE_CAP="${CMDLINE_CAP:-mem=4G}"
 
