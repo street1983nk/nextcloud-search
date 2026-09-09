@@ -167,7 +167,38 @@ Plans:
   3. Der Messbericht liegt in `docs/measurements` in der Struktur des v1.0-Berichts, sodass jede Zahl neben ihrer Entsprechung steht und Zeile fuer Zeile vergleichbar ist
   4. Die Rohdaten und Skripte des Laufs liegen im Repo, der Lauf ist wiederholbar beschrieben, und die Box ist danach wieder angehalten
 
-**Plans**: TBD
+**Plans**: 7 Plaene in 7 Wellen
+
+Die Wellen 1 bis 4 kosten keine Box-Minute und stehen bewusst vor der Anfahrt: sie schliessen die zwei Werkzeugluecken, die die Recherche belegt hat (der leere Baumhash-Beweis in beiden Vorlaeuferberichten, die fehlende Zeilenende-Regel fuer die Python-Messskripte), holen die native arm64-Feinmessung ohne Box nach (DI-07-04) und bauen das vollstaendige Skriptset. Die Box wird einmal angeschaltet (Sequenz-Zwang 2), und der Neuaufbau des Index nach dem Volumenvorfall vom 07.09. ist nicht Ruestzeit, sondern die Messung selbst.
+
+Plans:
+**Wave 1**
+
+- [ ] 10-01-PLAN.md , die zwei gefundenen Werkzeugluecken: Zeilenende-Regel und Baumhash-Beweis mit eigener Rohdatei (Welle 1, ohne Box-Zeit)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 10-02-PLAN.md , DI-07-04: die native arm64-Feinmessung per workflow_dispatch, und die vier Spalten nachgezogen (Welle 2, ohne Box-Zeit)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 10-03-PLAN.md , Ablaufplan und das Skriptset vor dem Volllauf: Bestand, Korpus, Abbildwechsel, Nullstand, Grundlast, erste Suche, Lastreihe (Welle 3, ohne Box-Zeit)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 10-04-PLAN.md , das Skriptset des abgesetzten Laufs plus die drei neuen Messbloecke: Sprachfaelle, Seitenroute, Rundenzaehlung (Welle 4, ohne Box-Zeit)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 10-05-PLAN.md , Anfahrt-Freigabe, die Zahlen vor dem Volllauf, und der Lauf abgesetzt angestossen (Welle 5, Checkpoint-Plan)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 10-06-PLAN.md , die Messungen nach dem Lauf, DI-07-02 und DI-07-03, das Kernaussage-Blatt, Abnahme der Zahlen, Box angehalten (Welle 6, Checkpoint-Plan)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 10-07-PLAN.md , der Messbericht in 19 Abschnitten, die Nachzuege in den Projektdokumenten, die drei Audits, Berichtsabnahme (Welle 7, Checkpoint-Plan)
 
 ### Phase 11: Haertung und Store-Einreichung v1.1
 
@@ -195,7 +226,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
-| 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
+| 10. Vergleichsmessung auf der AWS-Box | 0/7 | Planned     | - |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
 
 ## Requirement Coverage

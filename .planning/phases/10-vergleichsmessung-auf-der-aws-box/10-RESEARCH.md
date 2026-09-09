@@ -500,7 +500,7 @@ Sätze, festgenagelt in `scripts/ops/aws_box.sh` aus der Preisliste eu-central-1
 
 ---
 
-## Offene Fragen für Discuss und Owner
+## Offene Fragen für Discuss und Owner (RESOLVED: Empfehlungen als Default geplant; die Owner-Fragen kehren als blockierende Checkpoints in 10-05 Task 1, 10-06 Task 4 und 10-07 Task 4 wieder)
 
 ### 1. Umfang des Laufs: Volllauf oder Kurzlauf
 
