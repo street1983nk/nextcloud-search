@@ -130,6 +130,16 @@ früh für tot.
 | Zwischen den Stufen der Nebenläufigkeitsreihe | 20 s | Damit die folgende Stufe sich selbst misst und nicht den Nachlauf der vorigen. |
 | Nach dem Start des Samplers, bevor die erste Suche läuft | 6 s | Das Intervall des Samplers ist 2 s; drei Aufnahmen vor dem Ereignis sind der Nullpunkt, gegen den die Spitze gelesen wird. |
 
+**Was zu tun ist, wenn der Arbeitsvorrat nach den 360 Sekunden auf null steht.**
+Das ist kein Erfolg und kein Abbruch, sondern Annahme A2 der Recherche:
+`occ findling:index --restart` stand auf der Box eingestellt, die Notiz war zwei
+Tage alt und die Box war seither aus. `93-nullstand.sh` schreibt in diesem Fall
+`arbeitsvorrat-da nein` und endet mit 10. Dann wird der Befehl **erneut**
+abgesetzt, wieder mit `-n`, und die Frist läuft von vorn. Erst wenn der Vorrat
+nach einer zweiten Frist auf null bleibt, ist das ein Befund über die Box und
+gehört in den Bericht. Die Grundlast darf in keinem der beiden Fälle so gelesen
+werden, als sei der Lauf angefahren.
+
 **Das Urteil des Skripts bleibt stehen, und der Nachtrag wird darunter
 geschrieben.** Ein Skript, dessen Urteil nachträglich überschrieben wird,
 erzeugt eine Rohdatei, die nicht mehr belegt, was gemessen wurde.
