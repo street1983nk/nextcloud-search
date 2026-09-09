@@ -261,4 +261,29 @@ Prérequis :
 		a bump on one side alone fails the release before it builds.
 	-->
 	<settings><admin>OCA\Findling\Settings\Admin</admin><admin-section>OCA\Findling\Settings\Section</admin-section></settings>
+	<!--
+		The entry in the app menu, and it stands here at the end of the file
+		because that is the one place the store schema allows: the sequence of
+		the root type runs commands, settings, activity, dashboard,
+		fulltextsearch, navigations, contactsmenu, so anywhere above the
+		settings block is an ordering error, and an ordering error in a sequence
+		is reported against some other element than the misplaced one.
+
+		Unlike the settings block above, this one survives the store transform
+		unchanged: pre-info.xslt copies navigations and every child of it one by
+		one, so what the store validates is what stands here.
+
+		An instance that already has this app installed sees the entry only
+		after an app update. Nextcloud reads the navigation out of the INSTALLED
+		appinfo/info.xml in AppManager::loadApp(), the same way it reads the
+		settings classes above, so a changed file in a working tree is not a
+		changed menu until the app is updated.
+
+		The name goes through the l10n catalogue of the app, the route is the
+		one FrontpageRoute of PageController, and the icon is php/img/app.svg,
+		which is why that file exists at all: the icon lookup of the server asks
+		for findling.svg and app.svg, and until this plan php/img held only the
+		dark variant, so the menu showed the generic placeholder of the core.
+	-->
+	<navigations><navigation><id>findling</id><name>Findling</name><route>findling.page.index</route><icon>app.svg</icon><order>10</order><type>link</type></navigation></navigations>
 </info>

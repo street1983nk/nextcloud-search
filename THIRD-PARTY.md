@@ -194,11 +194,12 @@ the closure.
 `uv` 0.11.7 and the build stage tools (`curl`, `ca-certificates`) are build time
 only. They are not part of the runtime image and are therefore not distributed.
 
-## The icon path data of the admin page
+## The icon path data of the two pages of the companion app
 
-Added in phase 4. This one is not in the container image, it travels in the app
-store archive of the PHP companion app, which is why it is listed among the
-distributed material and not further down.
+Added in phase 4 for the administration page and grown in phase 9 by the three
+icons of the result page. This one is not in the container image, it travels in
+the app store archive of the PHP companion app, which is why it is listed among
+the distributed material and not further down.
 
 | Item | Value |
 |---|---|
@@ -206,8 +207,8 @@ distributed material and not further down.
 | Source repository | `github.com/Templarian/MaterialDesign-SVG` |
 | Pinned commit | `9e04201d4557e729822fb57f62a316c3dea1d4a8` (tag `v7.4.47`), read on 2026-09-02 |
 | Licence | **Apache-2.0** (`LICENSE` of the repository), compatible with the AGPL-3.0 of Findling |
-| What is used | the `d` attribute of nine icons and nothing else: `magnify`, `alert-circle-outline`, `clock-outline`, `minus-circle-outline`, `content-cut`, `folder-off-outline`, `check-circle-outline`, `information-outline` and `close` |
-| Where it lands | `php/img/app-dark.svg` carries `magnify` as the section icon. `php/templates/admin.php` carries the other eight: `alert-circle-outline` in the banners of the coverage block and the failed chip, `clock-outline` in the chip of the waiting queue and the queued chip of the lookup, `minus-circle-outline` for skipped, `content-cut` for a truncated document, `folder-off-outline` for an excluded file, `check-circle-outline` for an indexed one, `information-outline` in the hint banners and the unknown chip, and `close` on the button that removes one folder exclusion |
+| What is used | the `d` attribute of twelve icons and nothing else: `magnify`, `alert-circle-outline`, `clock-outline`, `minus-circle-outline`, `content-cut`, `folder-off-outline`, `check-circle-outline`, `information-outline`, `close`, `chevron-left`, `chevron-right` and `file-search-outline` |
+| Where it lands | `php/img/app-dark.svg` and `php/img/app.svg` carry `magnify`, the first as the section icon of the settings, the second as the icon of the app menu; the two files are byte identical copies of one glyph, because the icon lookup of the server asks for the dark name in a dark theme and for the plain one everywhere else. `php/templates/admin.php` carries eight: `alert-circle-outline` in the banners of the coverage block and the failed chip, `clock-outline` in the chip of the waiting queue and the queued chip of the lookup, `minus-circle-outline` for skipped, `content-cut` for a truncated document, `folder-off-outline` for an excluded file, `check-circle-outline` for an indexed one, `information-outline` in the hint banners and the unknown chip, and `close` on the button that removes one folder exclusion. `php/templates/search.php` carries six, three of them new here: `chevron-left` and `chevron-right` on the two pagination buttons, `file-search-outline` in the empty state without a hit, and `magnify`, `alert-circle-outline` and `information-outline` a second time, in the search button and the empty state without a term, in the error block and in the hint line |
 
 The commit is pinned instead of `master` because a path is data, and data that
 is quoted has to be quotable. Every string in this repository is byte identical
@@ -223,13 +224,22 @@ is a control. An attribution table that lags behind the markup by two plans is a
 table nobody can check, so the whole list is named here at once.
 
 No package, no icon font, no build step and no runtime dependency. What is
-copied here is nine hundred characters of curve data, which is why the app has
-no `package.json` at all: the design contract of phase 4 forbids a bundler in
-the companion app, and an icon set was the only reason to want one.
+copied here is roughly two and a half thousand characters of curve data, which
+is why the app has no `package.json` at all: the design contract of phase 4
+forbids a bundler in the companion app, and an icon set was the only reason to
+want one.
 
-A tenth icon would need no new row either, only a new name in the table above:
-the licence, the repository and the pinned commit are the same for all of them,
-and what is copied is the curve data of one glyph.
+A thirteenth icon would need no new row either, only a new name in the table
+above: the licence, the repository and the pinned commit are the same for all of
+them, and what is copied is the curve data of one glyph.
+
+The data is written in two spellings, and the command below has to know both.
+The two SVG files and `admin.php` carry it as a `d` attribute; `search.php`
+holds it in six PHP variables at the top of the file, because the template
+renders the same glyph in more than one place and a value with a name is read
+once. Matching on the leading `M` of a path rather than on `d="` covers both,
+and it also keeps `id="` out of the answer, which the old form of the command
+matched as well.
 
 ## Material in the repository that is not in the image
 
@@ -277,9 +287,17 @@ grep -A 20 '^dependencies' backend/pyproject.toml
 mdi=9e04201d4557e729822fb57f62a316c3dea1d4a8
 for icon in magnify alert-circle-outline clock-outline minus-circle-outline \
             content-cut folder-off-outline check-circle-outline \
-            information-outline close; do
+            information-outline close chevron-left chevron-right \
+            file-search-outline; do
     curl -sf "https://raw.githubusercontent.com/Templarian/MaterialDesign-SVG/${mdi}/svg/${icon}.svg" \
-        | grep -o 'd="[^"]*"'
-done
-grep -o 'd="[^"]*"' php/img/app-dark.svg php/templates/admin.php
+        | grep -oE '"M[0-9][^"]*' | tr -d '"'
+done | sort -u
+
+# and the same twelve as this repository ships them, in both spellings
+grep -ohE "[\"']M[0-9][^\"']*" php/img/app.svg php/img/app-dark.svg \
+    php/templates/admin.php php/templates/search.php | tr -d "\"'" | sort -u
 ```
+
+Both halves print one path per line and nothing else, so the two outputs are
+compared with `diff` rather than by eye. Twelve lines on each side, and the same
+twelve.
