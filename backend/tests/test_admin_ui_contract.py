@@ -30,6 +30,14 @@ decoration. A gate whose only assertion is "the current tree is clean" stays
 green on the day somebody deletes its body, so both a clean sample and a dirty
 one are staged here and the gate has to tell them apart.
 
+**One scan that is not about the three files.** Since phase 9 this file also
+reads every PHP source of the companion app for a single interface name,
+``IInAppSearch``. It is not a prohibition of the page contract but of the app,
+it has no file of its own to live in, and it is the same kind of check: a
+literal string that must not appear. It is written here rather than in a fourth
+gate for that reason, with its own anti vacuity clause, because a scan over zero
+files reports zero findings and looks exactly like a clean tree.
+
 **What this gate does not claim.** It says nothing about how the page looks, how
 it reads or whether the spacing follows the grid. Those are the six dimensions
 the design checker signed off on, and they are judged by a human looking at the
@@ -126,6 +134,16 @@ def scan_script(name: str, source: str) -> list[str]:
         violations.append(f"{name}: assigns markup from a string instead of replacing a text node")
     if "outerHTML" in source:
         violations.append(f"{name}: assigns markup from a string instead of replacing a text node")
+
+    # The same mistake in two more spellings. Neither is an assignment, so the
+    # two tests above cannot see them, and both build markup out of a string
+    # that arrived from the container: a path, a reason code, a snippet of a
+    # document. document.write on a page that has finished loading also replaces
+    # the whole document, which is the second reason it is never right here.
+    if "insertAdjacentHTML" in source:
+        violations.append(f"{name}: builds markup from a string with insertAdjacentHTML instead of a text node")
+    if "document.write" in source:
+        violations.append(f"{name}: builds markup from a string with document.write instead of a text node")
 
     return violations + _deprecated(name, source)
 
@@ -249,15 +267,55 @@ def engine_sentences_of_the_script(source: str) -> dict[str, str]:
     return dict(re.findall(r"case '([a-z_]+)':\s*\n\s*return t\('findling', '([^']+)'\)", block.group(1)))
 
 
+# The tree of PHP sources of the companion app, and the one interface name that
+# must not appear anywhere in it. SearchComposer switches a button "Search in
+# Findling" into the unified search dialog for a provider that implements it,
+# and that button has neither a click handler nor an href in stable33, stable34,
+# stable35 or master. A dead button is worse than no button, so the entry point
+# to the result page is an ordinary result entry at the end of the group and
+# this interface is implemented nowhere (09-UI-SPEC, verification table).
+APP_PHP_ROOT = REPO_ROOT / "php" / "lib"
+IN_APP_SEARCH = "IInAppSearch"
+
+
+def scan_app_php_sources(name: str, source: str) -> list[str]:
+    """Findings of one PHP source of the app: the interface that draws a dead button."""
+    if IN_APP_SEARCH in source:
+        return [
+            (
+                f"{name}: names {IN_APP_SEARCH}, which switches a button without a click handler "
+                "and without an href into the search dialog"
+            )
+        ]
+    return []
+
+
+def _app_php_sources() -> list[tuple[str, str]]:
+    """Every PHP source of the app below ``php/lib``, as (path below php, source)."""
+    return [
+        (path.relative_to(REPO_ROOT / "php").as_posix(), path.read_text(encoding="utf-8"))
+        for path in sorted(APP_PHP_ROOT.glob("**/*.php"))
+    ]
+
+
 Scanner = Callable[[str, str], list[str]]
 
 
 def _sources() -> list[tuple[str, str, Scanner]]:
-    """The three files of the page, as (name, source, scanner).
+    """The three files of the admin page, as (name, source, scanner).
 
     The scanner is typed as what it is rather than as an object. With ``object``
     the call in the comprehension below is not a call any type checker can
     verify, and the gate would only fail on the release that starts to care.
+
+    Three files and not six: the template, stylesheet and script of the result
+    page do not exist yet, and every scanner returns an empty list for a file it
+    cannot read, so naming them here early would mean a red gate over missing
+    files. Plan 09-06 adds them once they are on disk, and it adds them to this
+    list alone. The three tests below that read ``SCRIPT`` directly stay on
+    admin.js: the administration page watches a running process, a result page
+    answers one question and then stands still, so neither the token nor the
+    polite polling has anything to hold on the new script (pitfall 4).
     """
     return [
         (TEMPLATE.name, TEMPLATE.read_text(encoding="utf-8"), scan_template),
@@ -287,6 +345,23 @@ def test_no_file_of_the_page_carries_a_dash_or_an_emoji() -> None:
     violations = [message for name, source, _ in _sources() for message in scan_prose(name, source)]
 
     assert violations == []
+
+
+def test_no_php_source_of_the_app_names_the_in_app_search_interface() -> None:
+    violations = [message for name, source in _app_php_sources() for message in scan_app_php_sources(name, source)]
+
+    assert violations == []
+
+
+def test_the_scan_over_the_php_sources_reads_files() -> None:
+    # The anti vacuity clause of the scan above. A glob that stopped matching,
+    # or a root that moved, would report nothing over nothing and look like the
+    # cleanest tree in the world. The controllers are named as well, because an
+    # empty list is not the only way to read the wrong tree.
+    names = [name for name, _ in _app_php_sources()]
+
+    assert names != []
+    assert [name for name in names if name.startswith("lib/Controller/")] != []
 
 
 def test_the_script_reads_the_token_inside_the_call() -> None:
@@ -355,6 +430,37 @@ def test_markup_built_in_the_script_is_reported() -> None:
 
     assert len(violations) == 1
     assert "text node" in violations[0]
+
+
+def test_markup_built_with_insert_adjacent_html_is_reported() -> None:
+    source = _CLEAN_SCRIPT.replace("return response.json()", "document.body.insertAdjacentHTML('beforeend', path)")
+
+    violations = scan_script("sample.js", source)
+
+    assert len(violations) == 1
+    assert "insertAdjacentHTML" in violations[0]
+
+
+def test_markup_written_with_document_write_is_reported() -> None:
+    source = _CLEAN_SCRIPT.replace("return response.json()", "document.write(path)")
+
+    violations = scan_script("sample.js", source)
+
+    assert len(violations) == 1
+    assert "document.write" in violations[0]
+
+
+def test_a_php_source_naming_the_in_app_search_interface_is_reported() -> None:
+    # The dirty sample of the scan over php/lib, and the shape it would really
+    # arrive in: one more interface on the provider that is already there.
+    dirty = "<?php\n\nfinal class Provider implements IProvider, " + IN_APP_SEARCH + " {\n}\n"
+
+    assert scan_app_php_sources("lib/Search/Provider.php", "<?php\n\nfinal class Provider {\n}\n") == []
+    violations = scan_app_php_sources("lib/Search/Provider.php", dirty)
+
+    assert len(violations) == 1
+    assert IN_APP_SEARCH in violations[0]
+    assert "lib/Search/Provider.php" in violations[0]
 
 
 def test_unescaped_output_in_the_template_is_reported() -> None:

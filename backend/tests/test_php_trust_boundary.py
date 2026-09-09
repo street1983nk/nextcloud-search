@@ -46,6 +46,19 @@ CSRF token, and with any of those three it does not. This gate is the regression
 lock for that sentence, which is why the admin class is judged by what it must
 *not* carry.
 
+**A third class since phase 9.** The result page of phase 9 is neither of the
+two: it is a page of the browser session, but of *any* logged in session and not
+only an admin one, and it is a reading route, so there is no state a forged
+request could change. It therefore carries ``FrontpageRoute`` together with
+``NoAdminRequired`` and ``NoCSRFRequired``, which is two violations of the admin
+rule above. The answer is not to shorten that rule, because shortening it would
+unlock every settings route of this app in a single line. The answer is a third
+class with its own, shorter list of prohibitions, recognised by the attribute
+combination on the method and never by the name of the file. What keeps the two
+apart is that both lowering attributes are *mandatory* on the new class: an
+admin route somebody hangs ``NoAdminRequired`` on does not quietly move into the
+looser class, it becomes an incomplete user page and stays red.
+
 **What this gate does not claim.** It says nothing about whether AppAPI
 authenticated the caller before the request arrived. That residual risk is
 written down at every ``rejectForeignCaller`` in the PHP sources: whoever can
@@ -59,6 +72,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CONTROLLER_ROOT = Path(__file__).resolve().parents[2] / "php" / "lib" / "Controller"
+
+# The controller of the user page class, named here for one purpose: the anti
+# vacuity bound at the bottom counts one route more once this file is on disk.
+# This gate learns the class before the controller exists, which is the order
+# phase 4 chose for the admin class and for the same reason, so the bound cannot
+# demand the route before the plan that writes it has run.
+PAGE_CONTROLLER = CONTROLLER_ROOT / "PageController.php"
 
 # The two attributes that make a method a route. Everything else in this file
 # hangs off finding one of them: a method without either is not reachable from
@@ -81,6 +101,18 @@ GUARD_CALL = "rejectForeignCaller"
 # checked as a whole and every hit is named.
 FORBIDDEN_ON_ADMIN_ROUTE = ("NoAdminRequired", "PublicPage", "NoCSRFRequired", EXAPP_ATTRIBUTE)
 
+# What a user page route must carry, and what it may never carry. The first list
+# is the reason the second one can be this short and the admin list above could
+# stay untouched: a route of this class is not an admin route with two
+# attributes removed, it is a class that is only entered by carrying *both* of
+# them. Whoever hangs one of the two on an admin method has not found a gap
+# between the classes, they have written an incomplete user page, and the gate
+# says so. ``PublicPage`` would drop the logged in session this page is written
+# for, and ``ExAppRequired`` would hand it to every registered container while
+# locking out the browser it exists for.
+USER_PAGE_REQUIRED = ("NoAdminRequired", "NoCSRFRequired")
+FORBIDDEN_ON_USER_PAGE_ROUTE = ("PublicPage", EXAPP_ATTRIBUTE)
+
 _FUNCTION = re.compile(r"^\s*(?:public|protected|private)\s+(?:static\s+)?function\s+(\w+)\s*\(")
 
 # Lines that are not a statement: blank, and the three comment shapes PHP uses.
@@ -94,8 +126,8 @@ _NOT_A_STATEMENT = ("//", "/*", "*", "#")
 class Route:
     """One method that is reachable over HTTP, with where it stands.
 
-    ``kind`` is ``"exapp"`` or ``"admin"`` and decides which of the two rules
-    below judges the method.
+    ``kind`` is ``"exapp"``, ``"admin"`` or ``"userpage"`` and decides which of
+    the three rules below judges the method.
     """
 
     file: str
@@ -140,9 +172,16 @@ def _first_statement(lines: list[str], start: int) -> str:
 def routes_of(relative_path: str, source: str) -> list[Route]:
     """Every method of one controller that carries one of the route attributes.
 
-    A method that carries both attribute names counts as ``admin``, which is the
-    safe direction: the admin class is the stricter of the two, so a mixed
-    method is reported rather than waved through.
+    A method that carries both route attribute names counts as ``admin``, which
+    is the safe direction: the admin class is the stricter of the two old ones,
+    so a method that mixes ``ApiRoute`` and ``FrontpageRoute`` is reported rather
+    than waved through, and the third class does not lift that rule.
+
+    A method that carries ``FrontpageRoute`` together with at least one attribute
+    of ``USER_PAGE_REQUIRED`` is the third class, ``userpage``; with none of them
+    it stays ``admin``. The class is read off the attributes of the method and
+    never off the name of the file, so no controller can be declared harmless by
+    being called something reassuring.
     """
     lines = source.splitlines()
     routes: list[Route] = []
@@ -151,9 +190,14 @@ def routes_of(relative_path: str, source: str) -> list[Route]:
         if match is None:
             continue
         attributes = _attributes_above(lines, index)
-        if any(ADMIN_ROUTE_ATTRIBUTE in attribute for attribute in attributes):
+        carries_admin_route = any(ADMIN_ROUTE_ATTRIBUTE in attribute for attribute in attributes)
+        carries_exapp_route = any(ROUTE_ATTRIBUTE in attribute for attribute in attributes)
+        lowered = any(required in attribute for required in USER_PAGE_REQUIRED for attribute in attributes)
+        if carries_admin_route and carries_exapp_route:
             kind = "admin"
-        elif any(ROUTE_ATTRIBUTE in attribute for attribute in attributes):
+        elif carries_admin_route:
+            kind = "userpage" if lowered else "admin"
+        elif carries_exapp_route:
             kind = "exapp"
         else:
             continue
@@ -173,6 +217,24 @@ def scan_source(relative_path: str, source: str) -> list[str]:
 
     for route in routes_of(relative_path, source):
         attributes = _attributes_above(lines, route.line - 1)
+
+        if route.kind == "userpage":
+            violations += [
+                f"{route.file}:{route.line}: {route.method}() is a user page route carrying {forbidden}, "
+                "so it no longer needs the logged in session it is written for"
+                for forbidden in FORBIDDEN_ON_USER_PAGE_ROUTE
+                if any(forbidden in attribute for attribute in attributes)
+            ]
+            violations += [
+                f"{route.file}:{route.line}: {route.method}() is a user page route without {required}, "
+                "so it is a half lowered admin route and not a page of the third class"
+                for required in USER_PAGE_REQUIRED
+                if not any(required in attribute for attribute in attributes)
+            ]
+            # No rejectForeignCaller here on purpose, for the same reason as on
+            # an admin route: there is no ExApp caller on a page a browser
+            # session reaches, so there is nothing for the comparison to reject.
+            continue
 
         if route.kind == "admin":
             violations += [
@@ -239,8 +301,19 @@ def test_the_gate_sees_every_route_the_sources_declare() -> None:
     # plan 04-08 and the reading preview of plan 04-09 that names how many
     # documents a new exclusion removes. A lower number means the parser lost
     # something. Every plan that adds a route raises this bound with it, admin
-    # routes included, otherwise the clause stops being a ratchet.
-    assert len(routes) >= 12
+    # and user page routes included, otherwise the clause stops being a ratchet.
+    #
+    # The thirteenth is ``index()`` of the PageController of plan 09-04, the
+    # first route of the user page class. It cannot be demanded before that plan
+    # has run, or this gate would stand red for every plan in between, which is
+    # the very state the class was added early to avoid. So the bound arms
+    # itself: the moment the controller is on disk the ratchet stands at 13, and
+    # a page route that is lost or silently unclassified is a red test from then
+    # on.
+    if PAGE_CONTROLLER.is_file():
+        assert len(routes) >= 13
+    else:
+        assert len(routes) >= 12
 
 
 def test_every_controller_of_the_app_carries_at_least_one_route() -> None:
@@ -364,10 +437,18 @@ def test_an_admin_route_needs_no_reject_foreign_caller() -> None:
 
 
 def test_no_admin_required_on_an_admin_route_is_reported() -> None:
+    # Since phase 9 this sample is judged by the third class and no longer by
+    # the admin list, because FrontpageRoute plus NoAdminRequired is the
+    # attribute combination of a user page. That is the clause that makes the
+    # third class safe rather than a loophole in the admin one: the route is now
+    # an INCOMPLETE user page, NoCSRFRequired is missing, and it is reported for
+    # that. A half lowered admin route is red either way, which is the whole
+    # point of making both lowering attributes mandatory.
     violations = scan_source("AdminSettingsController.php", _admin_route_carrying("NoAdminRequired"))
 
     assert len(violations) == 1
-    assert "NoAdminRequired" in violations[0]
+    assert "NoCSRFRequired" in violations[0]
+    assert "half lowered admin route" in violations[0]
     assert "AdminSettingsController.php" in violations[0]
     assert "index()" in violations[0]
 
@@ -382,14 +463,43 @@ def test_public_page_on_an_admin_route_is_reported() -> None:
 
 def test_no_csrf_required_on_an_admin_route_is_reported() -> None:
     # Harmless on an ExApp route, where the credential is the signed AppAPI
-    # header and no session is involved, and the opposite here: this route is
-    # reached by a browser session, so the token is the only thing that keeps a
-    # foreign page from acting as the logged in admin.
+    # header and no session is involved, and the opposite on a settings page:
+    # that route is reached by a browser session, so the token is the only thing
+    # that keeps a foreign page from acting as the logged in admin.
+    #
+    # The exemption of the third class does not contradict that. It is granted
+    # to a route that only reads, so there is no state a forged request could
+    # change, and it is granted only together with NoAdminRequired, which is why
+    # this sample is reported: it is a user page missing the other half.
     violations = scan_source("AdminSettingsController.php", _admin_route_carrying("NoCSRFRequired"))
 
     assert len(violations) == 1
-    assert "NoCSRFRequired" in violations[0]
+    assert "NoAdminRequired" in violations[0]
+    assert "half lowered admin route" in violations[0]
     assert "index()" in violations[0]
+
+
+def test_a_route_that_mixes_the_two_old_classes_stays_admin() -> None:
+    # The rule that predates the third class and is not lifted by it: a method
+    # carrying both route attributes is judged as admin, the stricter of the
+    # two. Without this the new class would be a way around the admin list, by
+    # hanging FrontpageRoute and one lowering attribute on an ExApp route. It is
+    # also the case that keeps the first two entries of FORBIDDEN_ON_ADMIN_ROUTE
+    # reachable, so the list is checked here and not only spelled out.
+    mixed = _admin_route_carrying("NoAdminRequired").replace(
+        "\t#[\\OCP\\AppFramework\\Http\\Attribute\\FrontpageRoute",
+        "\t#[\\OCP\\AppFramework\\Http\\Attribute\\ApiRoute(verb: 'GET', url: '/mixed')]\n"
+        "\t#[\\OCP\\AppFramework\\Http\\Attribute\\FrontpageRoute",
+        1,
+    )
+
+    routes = routes_of("AdminSettingsController.php", mixed)
+    violations = scan_source("AdminSettingsController.php", mixed)
+
+    assert len(routes) == 1
+    assert routes[0].kind == "admin"
+    assert len(violations) == 1
+    assert "NoAdminRequired" in violations[0]
 
 
 def test_exapp_required_on_an_admin_route_is_reported() -> None:
@@ -402,6 +512,123 @@ def test_exapp_required_on_an_admin_route_is_reported() -> None:
     assert len(violations) == 1
     assert "ExAppRequired" in violations[0]
     assert "index()" in violations[0]
+
+
+# -- self tests: the third class, the user page ----------------------------
+
+_USER_PAGE = """<?php
+
+class PageController extends Controller {
+\t/**
+\t * A docblock, so that the attribute walk has a wall to stop at.
+\t */
+\t#[\\OCP\\AppFramework\\Http\\Attribute\\NoAdminRequired]
+\t#[\\OCP\\AppFramework\\Http\\Attribute\\NoCSRFRequired]
+\t#[\\OCP\\AppFramework\\Http\\Attribute\\FrontpageRoute(verb: 'GET', url: '/')]
+\tpublic function index(): TemplateResponse {
+\t\treturn new TemplateResponse(Application::APP_ID, 'search');
+\t}
+}
+"""
+
+
+def _user_page_without(attribute: str) -> str:
+    """The clean user page sample with one of its two mandatory attributes gone."""
+    line = f"\t#[\\OCP\\AppFramework\\Http\\Attribute\\{attribute}]\n"
+    assert line in _USER_PAGE, f"{attribute} is not spelled the way this helper removes it"
+    return _USER_PAGE.replace(line, "", 1)
+
+
+def _user_page_carrying(attribute: str) -> str:
+    """The clean user page sample with one more attribute above the same method."""
+    marker = "\t#[\\OCP\\AppFramework\\Http\\Attribute\\FrontpageRoute"
+    replacement = f"\t#[\\OCP\\AppFramework\\Http\\Attribute\\{attribute}]\n{marker}"
+    return _USER_PAGE.replace(marker, replacement, 1)
+
+
+def test_a_clean_user_page_route_is_clean() -> None:
+    # The counter sample of the four below, and the proof that the class is
+    # entered at all: without it a gate that reported every user page as broken
+    # would pass all four failure tests as well.
+    routes = routes_of("PageController.php", _USER_PAGE)
+
+    assert scan_source("PageController.php", _USER_PAGE) == []
+    assert len(routes) == 1
+    assert routes[0].kind == "userpage"
+
+
+def test_a_user_page_without_no_admin_required_is_reported() -> None:
+    # This is the shape the admin class erodes in, and the reason both lowering
+    # attributes are mandatory rather than merely allowed. The sample carries
+    # FrontpageRoute and NoCSRFRequired, so the attribute combination already
+    # puts it in the third class, and the rule that fires is the new one: a
+    # mandatory attribute is missing, so this is a half lowered admin route and
+    # not a page. Whichever of the two rules catches it, it is never green.
+    routes = routes_of("PageController.php", _user_page_without("NoAdminRequired"))
+    violations = scan_source("PageController.php", _user_page_without("NoAdminRequired"))
+
+    assert len(routes) == 1
+    assert len(violations) == 1
+    assert "NoAdminRequired" in violations[0]
+    assert "half lowered admin route" in violations[0]
+    assert "index()" in violations[0]
+
+
+def test_a_user_page_without_no_csrf_required_is_reported() -> None:
+    # The mirror image, and the one that would otherwise look harmless: a page
+    # that keeps the token requirement is not a security problem, it is a page
+    # that is half in one class and half in the other, and the gate has no rule
+    # it could judge such a route by. So it names the missing half.
+    violations = scan_source("PageController.php", _user_page_without("NoCSRFRequired"))
+
+    assert len(violations) == 1
+    assert "NoCSRFRequired" in violations[0]
+    assert "half lowered admin route" in violations[0]
+    assert "index()" in violations[0]
+
+
+def test_public_page_on_a_user_page_route_is_reported() -> None:
+    # The one attribute the third class shares with the admin class as a
+    # prohibition. NoAdminRequired lowers the page from an admin to any logged
+    # in account, which is what it is for; PublicPage lowers it past the login
+    # altogether, and the result page renders what one account may read.
+    violations = scan_source("PageController.php", _user_page_carrying("PublicPage"))
+
+    assert len(violations) == 1
+    assert "PublicPage" in violations[0]
+    assert "index()" in violations[0]
+
+
+def test_exapp_required_on_a_user_page_route_is_reported() -> None:
+    # Pitfall 7 again, one class further along: the attribute would point the
+    # protection the wrong way round here too, locking out the browser session
+    # the page exists for and letting in every registered container instead.
+    violations = scan_source("PageController.php", _user_page_carrying("ExAppRequired"))
+
+    assert len(violations) == 1
+    assert "ExAppRequired" in violations[0]
+    assert "index()" in violations[0]
+
+
+def test_the_admin_class_did_not_get_softer() -> None:
+    """The claim the third class was built on, held against the list itself.
+
+    The class is a construction of the phase 9 research (assumption A6), and its
+    whole justification is that it adds a class instead of shortening the admin
+    list. That sentence is worth exactly as much as the test that goes red when
+    somebody shortens the list anyway, which is a one line diff that reads like
+    a tidy up and unlocks every settings route of this app.
+
+    The expectation is written out here rather than derived from the constant,
+    because a comparison of a constant against itself passes whatever it says.
+    """
+    assert set(FORBIDDEN_ON_ADMIN_ROUTE) == {
+        "NoAdminRequired",
+        "PublicPage",
+        "NoCSRFRequired",
+        "ExAppRequired",
+    }
+    assert len(FORBIDDEN_ON_ADMIN_ROUTE) == 4
 
 
 def test_a_method_without_the_route_attribute_is_not_judged() -> None:
