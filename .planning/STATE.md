@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Completed 09-07-PLAN.md
-last_updated: "2026-09-09T07:15:31.057Z"
-last_activity: 2026-09-09 -- Phase 10 execution started
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-09-09T07:36:06.801Z"
+last_activity: 2026-09-09
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 24
-  completed_plans: 17
+  completed_plans: 18
   percent: 60
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 10 (vergleichsmessung-auf-der-aws-box) — EXECUTING
-Plan: 1 of 7
-Status: Executing Phase 10
-Last activity: 2026-09-09 -- Phase 10 execution started
+Plan: 2 of 7
+Status: Ready to execute
+Last activity: 2026-09-09
 
 **Naechster Schritt:** `/gsd:plan-phase 10` (Vergleichsmessung auf der AWS-Box). Vorher steht der Push dieser Welle: `php.yml` und `integration.yml` haben noch keinen Lauf gegen den Stand der Phase 9 gesehen.
 
@@ -82,6 +82,7 @@ Last activity: 2026-09-09 -- Phase 10 execution started
 | Phase 09 P06 | 40min | 3 tasks | 8 files |
 | Phase 09 P07 | 50min | 3 tasks | 4 files |
 | Phase 09 P08 | 75min | 3 tasks | 16 files |
+| Phase 10 P01 | 42min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -202,6 +203,9 @@ Recent decisions affecting current work:
 - [Phase 09]: 09-08: Deutsch laeuft unter beiden Sprachcodes, de und de_DE, mit byte-identischen Katalogen und einem Gate auf die Gleichheit; der Katalog ist in Sie-Form geschrieben und gehoert damit unter de_DE
 - [Phase 09]: 09-08: Der franzoesische Katalog bleibt vertagt, vollstaendig oder gar nicht, vor der Store-Abgabe; die 24 Wortlaute liegen in docs/l10n-french.md, die ROADMAP zeigt bei Phase 11 darauf
 - [Phase 09]: 09-08: Sichtprobe 5 sagt die Scrollposition nicht mehr zu; Stufe 2 des Rueckkehrvertrags ist browserabhaengig und in Firefox praktisch abgeschaltet, Stufe 3 ist der tragende Teil
+- [Phase 10]: 10-01: Der Baumhash reist als Argument in das Abbild, nicht als Heredoc auf stdin. 40-abbild.sh ist an einem fehlenden -i gescheitert, 61-wechsel.sh hat es ergaenzt und die Ausgabe fehlt trotzdem; ein Argument braucht kein stdin, also entfaellt die Fehlerklasse. Das Skript prueft seine eigene Rohdatei auf drei verankerte baumhash-Zeilen und bricht sonst ab, denn der Vorlaeuferfehler war nicht das -i, sondern dass niemand in die Datei gesehen hat
+- [Phase 10]: 10-01: Das Gate ueber die Messskripte hat zwei Geltungsbereiche. Weit (kein Wagenruecklauf, kein Gedankenstrich) ueber alle .py und .sh unter docs/measurements/**/skripte/, weil der Bestand das nach der Renormalisierung erfuellt. Eng (Shebang, kein Maschinenpfad, kein Passwort im Argument) nur ueber das Verzeichnis dieses Laufs, weil 45-suchlast.py sys.path.insert auf /home/ubuntu/work und drillhelfer traegt und Geschichte mit Rohdaten daneben ist. MACHINE_SHAPES wird per ast aus test_ops_scripts.py gelesen, damit es eine Definition fuer beide Gates gibt
+- [Phase 10]: 10-01: Die fuenf renormalisierten Messskripte haben keinen Commit-Inhalt: git hatte sie mit LF gespeichert, das CRLF kam aus core.autocrlf beim Auschecken. Committed ist nur die .gitattributes-Regel, und genau sie war die Luecke. Die Altbestaende unter docs/measurements bleiben ruff-unbehandelt, weil CI dort nie laeuft und ein Reformatieren die Herkunft der daneben liegenden Rohdaten verwischen wuerde
 
 ### Pending Todos
 
@@ -229,6 +233,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-09T05:48:04.181Z
-Stopped at: Completed 09-07-PLAN.md
+Last session: 2026-09-09T07:36:06.783Z
+Stopped at: Completed 10-01-PLAN.md
 Resume file: None
