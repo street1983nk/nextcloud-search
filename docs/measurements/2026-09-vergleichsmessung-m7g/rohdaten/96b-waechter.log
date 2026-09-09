@@ -1,0 +1,34 @@
+waechter-start 2026-09-09T10:04:43Z
+aufnahmen: /home/ubuntu/work/repo0918/docs/measurements/2026-09-vergleichsmessung-m7g/skripte/../rohdaten/96-statusseite.jsonl
+leser: /home/ubuntu/work/repo0918/docs/measurements/2026-09-vergleichsmessung-m7g/skripte/96c-lesen.py
+lastwerkzeug: /home/ubuntu/work/repo0918/scripts/ops/search_load.py
+deckel: 340 runden a 300 s
+vergleichswerte der Suchlast: 1.129,0 ms p95 im Nachlauf, 524,0 ms p95 bei vollem Bestand
+=== The transition from the first to the second track, reading 9 of the list ===
+-- cgroup-lesung am-uebergang-der-spuren --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+anon 1650995200
+file 47837184
+slab 2423992
+memory.current=1706311680 memory.peak=1706311680 memory.max=2147483648
+suchlast-nachlauf-start 2026-09-09T10:04:43Z
+suchlast-nachlauf-ende 2026-09-09T10:04:47Z
+-- cgroup-lesung nach-der-suchlast-im-nachlauf --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+anon 1652019200
+file 48091136
+slab 2426664
+memory.current=1707753472 memory.peak=1707753472 memory.max=2147483648
+waechter runde=1 vorrat=1768 indexed=1679 embedded=280 gesehen=1 still=0 leer=0 2026-09-09T10:04:47Z

@@ -20,6 +20,34 @@ Zwei Dinge stehen vorweg, weil sie den ganzen Rest tragen:
 
 ---
 
+## 0. Der Lauf vom 09.09.2026, wie er wirklich abgesetzt wurde
+
+Diese Zeilen sind nachgetragen, als der Lauf lief, damit die Datei nicht nur
+beschreibt, was geschehen soll, sondern auch belegt, was geschehen ist.
+
+| Sache | Wert |
+|---|---|
+| **Anstoss des Volllaufs** | **2026-09-09T09:58:42Z**, über `96-volllauf.sh`, abgesetzt mit `setsid nohup` |
+| Gegenprobe | 2026-09-09T10:04:43Z, also nach 361 s, Urteil `arbeitsvorrat-da ja` |
+| Erwartete Laufzeit | rund 19 Stunden für den Neuaufbau, Gesamtlaufzeit der Box 22 bis 26 Stunden |
+| **Kostendeckel** | **30 Stunden und 3,50 USD netto**, vom Owner am 09.09. bestätigt; laufend 0,1158 USD je Stunde |
+| Box | `i-06b1d913f5c6f669b`, angefahren 2026-09-09T09:20:06Z, Adresse 3.69.147.2 |
+| Startpunkt des Laufs | `vorrat=2040 indexed=1653 embedded=264`, aus der Trockenprobe des Lesers |
+| Laufzeit-Vorbehalt | `indexed` stand beim Anstoss über null, also ist die gemessene Laufzeit eine **Untergrenze** und wird als eine berichtet |
+| Beobachter | Sampler 5 s (vier Aufnahmen vor dem Anstoss), Statusbeobachter 120 s, Wächter mit Rundendeckel 340, Meldekette im Wartemodus |
+| Meldekette | `http=200` beim Anstoss. Der 403 vom 05.09. ist nicht wiedergekehrt, der Vertrag bleibt trotzdem die Datei `00-FERTIG` |
+
+Warum der Startpunkt nicht null ist, in zwei Sätzen: Schritt 4 füllt die
+Warteschlange mit `findling:index --restart -n`, und weil Schritt 3 die PHP-App
+einschaltet, hat der Poller sie sofort zu bedienen begonnen. Für die Grundlast
+in Schritt 5 ist die App deshalb wieder abgeschaltet und der Container neu
+gestartet worden, damit "Modell nie geladen, noch keine Suche" auch stimmt;
+eingeschaltet wurde sie erst wieder unmittelbar vor dem Anstoss. Die 1.653
+Dateien, die dabei schon im Index lagen, sind der Preis dafür, und er steht
+hier statt in einer Fussnote.
+
+---
+
 ## 1. Die Anfahrt, und was `aws_box.sh start` ausdrücklich nicht erledigt
 
 `scripts/ops/aws_box.sh start` startet die Instanz, liest die neue öffentliche
