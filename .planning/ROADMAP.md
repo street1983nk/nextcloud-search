@@ -145,7 +145,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 09-06-PLAN.md , Navigationseintrag, Einstieg aus dem Suchdialog, Gate C auf die Seitendateien (Welle 5)
+- [x] 09-06-PLAN.md , Navigationseintrag, Einstieg aus dem Suchdialog, Gate C auf die Seitendateien (Welle 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Completed 09-05-PLAN.md
-last_updated: "2026-09-09T03:26:28.005Z"
-last_activity: 2026-09-09 -- Plan 09-05 abgeschlossen (Template, Stil, Skript, 24 Copy-Elemente)
+stopped_at: Completed 09-06-PLAN.md
+last_updated: "2026-09-09T03:41:58.590Z"
+last_activity: 2026-09-09 -- Plan 09-06 abgeschlossen (Navigationseintrag, Einstiegs-Eintrag, Gate C ueber sechs Dateien)
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 17
-  completed_plans: 14
+  completed_plans: 15
   percent: 40
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 09 (eigene-ergebnisseite) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
-Last activity: 2026-09-09 -- Plan 09-05 abgeschlossen (Template, Stil, Skript, 24 Copy-Elemente)
+Last activity: 2026-09-09 -- Plan 09-06 abgeschlossen (Navigationseintrag, Einstiegs-Eintrag, Gate C ueber sechs Dateien)
 
-**Naechster Schritt:** Plan 09-06 (Gates ueber Template, CSS und Skript der neuen Seite)
+**Naechster Schritt:** Plan 09-07 (Paritaetsjob und Paritaetsvergleicher lernen die Seitenroute)
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ Last activity: 2026-09-09 -- Plan 09-05 abgeschlossen (Template, Stil, Skript, 2
 | Phase 6 P09 | 33min | 3 tasks | 15 files |
 | Phase 6 P10 | 32min | 3 tasks | 7 files |
 | Phase 09 P05 | 55min | 3 tasks | 5 files |
+| Phase 09 P06 | 40min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -188,6 +189,10 @@ Recent decisions affecting current work:
 - [Phase 09]: 09-05: Der Erneut-versuchen-Link nimmt die eigene Adresse nur, wenn sie mit genau einem Schraegstrich beginnt. Eine protokollrelative Referenz haette jemanden, der eine Suche wiederholen wollte, auf einen fremden Host geschickt; sonst tritt die Formularadresse an ihre Stelle
 - [Phase 09]: 09-05: Stufe 3 des Rueckkehrvertrags ist tragend statt Zugabe gebaut. Der pageshow-Handler fragt nicht nach dem Back-Forward-Cache, weil no-store die Seite in Firefox davon ausschliesst, und scrollIntoView auf der Zeile scrollt #app-content und ist damit der eigentliche Traeger der Position
 - [Phase 09]: 09-05: Die Paginierungsknoepfe ruhen ohne eigene Flaeche auf dem Streifen und nehmen im Hover den Seitengrund. Der Streifen traegt laut 09-UI-SPEC bereits die Hover-Farbe, ein Aufhellen in derselben Farbe waere kein Zustandswechsel; zwei Farben aus dem Budget, keine dritte erfunden
+- [Phase 09]: 09-06: Der Navigationsblock steht am Dateiende hinter dem Einstellungsblock, weil die Wurzel-Sequenz des Store-Schemas ihn dort erwartet; pre-info.xslt kopiert navigations unveraendert durch, waehrend settings geleert wird
+- [Phase 09]: 09-06: php/img/app.svg ist eine byte-identische Kopie von app-dark.svg statt eines zweiten Symbols. currentColor loest in einem Bildverweis auf Schwarz auf, der Server themt per CSS-Filter, und eine Kopie stellt keine zweite Lizenzfrage
+- [Phase 09]: 09-06: Der Einstiegs-Eintrag traegt kein fileId-Attribut und wird an genau einem Merkmal erkannt, seiner Zieladresse. Ein pauschales Ueberspringen aller Eintraege ohne Attribut wuerde den Schutz aufheben, den der Paritaetsvergleicher haelt
+- [Phase 09]: 09-06: Gate C liest sechs Dateien, aber die Sondertests der Verwaltungsseite bleiben woertlich auf admin.js. Das Seitenskript bekommt stattdessen zwei eigene Aussagen ueber die Abwesenheit derselben Marker
 
 ### Pending Todos
 
@@ -215,6 +220,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-09T03:25:38.718Z
-Stopped at: Completed 09-05-PLAN.md
+Last session: 2026-09-09T03:41:58.574Z
+Stopped at: Completed 09-06-PLAN.md
 Resume file: None
