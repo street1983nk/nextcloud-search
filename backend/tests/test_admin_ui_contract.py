@@ -347,6 +347,54 @@ def _app_php_sources() -> list[tuple[str, str]]:
     ]
 
 
+# The empty state of the result page, and the banner it must not contradict.
+#
+# Block 4 of ``search.php`` used to render whenever the hit list was empty, and
+# with a term it says "no file contains X". That is a statement about a search
+# that happened and came back with nothing, so it is untrue in every state where
+# a banner above it says that the search did not happen at all (silent backend,
+# version drift, no home folder) or that it did not go all the way (the paging
+# ceiling, an index still being built). Both blocks on one screen then tell the
+# user two different things to do, wait and retype, and only one of them can be
+# right. Reachable without any hand editing: a stopped backend, and the ceiling
+# after a dozen clicks on "next page".
+#
+# The template therefore decides once, in ``$showEmpty``, next to the banner
+# decision it depends on, and this gate holds that decision. The variant without
+# a term is an invitation and never a claim, which is why the decision has to
+# read ``$hasQuery`` as well: a page that a hint reached before the user typed
+# anything must still say what it is for. Bug audit A of phase 9, 09.09.2026.
+_EMPTY_STATE = re.compile(r'class="findling-empty"')
+_EMPTY_STATE_BRANCH = re.compile(r"\}\s*elseif\s*\(\$showEmpty\)\s*\{")
+_EMPTY_STATE_DECISION = re.compile(r"\$showEmpty\s*=(?P<body>[^;]*);", re.DOTALL)
+
+
+def scan_page_template_for_an_unguarded_empty_state(name: str, source: str) -> list[str]:
+    """Findings of the result page template: an empty state that speaks over a banner."""
+    if not _EMPTY_STATE.search(source):
+        return []
+
+    findings: list[str] = []
+    if not _EMPTY_STATE_BRANCH.search(source):
+        findings.append(
+            f"{name}: the empty state does not sit behind elseif ($showEmpty), so it renders "
+            "under a banner that has already explained the emptiness"
+        )
+
+    decision = _EMPTY_STATE_DECISION.search(source)
+    if decision is None:
+        findings.append(
+            f"{name}: no $showEmpty decision, so nothing keeps the sentence about a search "
+            "that came back empty away from a page whose search never happened"
+        )
+    else:
+        missing = [marker for marker in ("$hasError", "$hasHint", "$hasQuery") if marker not in decision.group("body")]
+        if missing:
+            findings.append(f"{name}: the $showEmpty decision does not read {', '.join(missing)}")
+
+    return findings
+
+
 Scanner = Callable[[str, str], list[str]]
 
 
@@ -488,6 +536,35 @@ def test_the_page_script_does_not_intercept_a_click() -> None:
     assert findings == []
     dirty = "link.addEventListener('click', function (event) { event.preventDefault() })\n"
     assert len(scan_page_script_for_interception("sample.js", dirty)) == 1
+
+
+def test_the_empty_state_of_the_page_does_not_speak_over_a_banner() -> None:
+    """The page says one thing about why a list is empty, not two.
+
+    Probed on the running instance on 09.09.2026, in all five states: hits, a
+    real empty result, no term, past the paging ceiling and a version drift. The
+    two that produced the finding this gate now holds were the error block and
+    the ceiling, both of which carried "no file contains X" underneath them.
+    """
+    findings = scan_page_template_for_an_unguarded_empty_state(
+        PAGE_TEMPLATE.name, PAGE_TEMPLATE.read_text(encoding="utf-8")
+    )
+
+    assert findings == []
+
+    # And it goes red on the shape it replaced, which is what makes this a gate
+    # and not a decoration: a bare else that renders the empty state whatever
+    # the banner above it says, and no decision anywhere.
+    dirty = '<?php } else { ?>\n\t<div class="findling-empty">\n\t</div>\n<?php } ?>\n'
+    assert len(scan_page_template_for_an_unguarded_empty_state("sample.php", dirty)) == 2
+
+    # And on the half measure: the branch is there, the decision forgets the
+    # hint, so the ceiling would go on contradicting itself while the error
+    # block behaved.
+    half = '<?php $showEmpty = $hits === [] && !$hasError; ?>\n<?php } elseif ($showEmpty) { ?>\n\t<div class="findling-empty"></div>\n<?php } ?>\n'
+    assert scan_page_template_for_an_unguarded_empty_state("sample.php", half) == [
+        "sample.php: the $showEmpty decision does not read $hasHint, $hasQuery"
+    ]
 
 
 # -- self tests: the gate has to report every shape it judges --------------

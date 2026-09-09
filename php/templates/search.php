@@ -77,6 +77,25 @@ $ceiling = $failure === \OCA\Findling\Service\SearchOutcome::FAILURE_OFFSET_CEIL
 $hasError = $silent || $drift || $noHome;
 $hasHint = !$hasError && ($ceiling || $degraded);
 
+// Whether the empty state is allowed to speak, decided here next to the banner
+// it depends on (bug audit A of phase 9, 09.09.2026).
+//
+// With a term the empty state says "no file contains X", and that is a statement
+// about a search that happened and came back with nothing. If a banner above it
+// already says that the search did not happen at all (silent backend, version
+// drift, no home folder) or that it did not go all the way (the paging ceiling,
+// an index still being built), then the sentence is not true, and the two blocks
+// contradict each other on one screen: "the search is not answering right now"
+// over "no file contains X, try another word". The first asks the user to wait,
+// the second sends them off to rewrite their term. Whichever of the two they
+// believe, the page has misled them.
+//
+// Without a term the empty state is an invitation and never a claim, so it
+// stands under either banner. That is why this is not simply the absence of a
+// banner: a page that a hint reached before the user typed anything must still
+// say what it is for.
+$showEmpty = $hits === [] && (!$hasQuery || (!$hasError && !$hasHint));
+
 // Where "try again" points. The address of this request, asked of the framework
 // rather than read out of the server array, and only when it is a path of this
 // instance: a reference that begins with two slashes is a protocol relative
@@ -216,12 +235,14 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 				</li>
 			<?php } ?>
 		</ol>
-	<?php } else { ?>
+	<?php } elseif ($showEmpty) { ?>
 		<?php /* Block 4: the empty state. It replaces the list and never stands
-		         beside it. Not one word about permissions: a hit the recheck
-		         dropped never existed for this page. Without a term the heading
-		         of this block is the h1 above, which is what keeps the page at
-		         exactly one first level heading. */ ?>
+		         beside it, and it stays away entirely when a banner above has
+		         already explained the emptiness: see $showEmpty. Not one word
+		         about permissions: a hit the recheck dropped never existed for
+		         this page. Without a term the heading of this block is the h1
+		         above, which is what keeps the page at exactly one first level
+		         heading. */ ?>
 		<div class="findling-empty">
 			<?php if ($hasQuery) { ?>
 				<svg class="findling-empty__icon" viewBox="0 0 24 24" width="64" height="64" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($fileSearchIcon); ?>"/></svg>
