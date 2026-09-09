@@ -97,6 +97,8 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 **Key context:** Kill-Kriterium bleibt aktiv (NC-Conference Sept.: kuendigt Nextcloud ES-freie Volltextsuche mit OCR an, Stopp/Pivot). Store-Texte fuer v1.1 nach der kurze-produkttexte-Regel, Entwurf dem Owner zeigen.
 
+**Stand:** Phasen 7, 8 und 9 komplett (Phase 9 Eigene Ergebnisseite abgeschlossen 2026-09-09: Seitenroute mit Paginierung und Rueckkehrvertrag, Paritaetstest deckt die neue Route, deutscher Katalog unter de und de_DE, Verification 5/5). Offen: Phase 10 Vergleichsmessung auf der AWS-Box, Phase 11 Haertung und Store-Einreichung v1.1.
+
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
@@ -115,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-08 after starting milestone v1.1*
+*Last updated: 2026-09-09 after completing phase 9 (eigene Ergebnisseite)*
