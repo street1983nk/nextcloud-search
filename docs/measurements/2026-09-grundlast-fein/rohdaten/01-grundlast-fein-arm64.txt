@@ -1,17 +1,15 @@
-grundlast-fein-arm64 2026-09-08T10:53:12Z
-host=Docker Desktop 29.5.2 auf amd64, linux/arm64 unter QEMU-Emulation
-hinweis=EMULIERT. Die Grundlinie ist um den QEMU-Aufschlag verschoben, die Zuwaechse sind es nicht.
+grundlast-fein-arm64 2026-09-09T07:45:21Z
+lauf=34325000302, https://github.com/street1983nk/nextcloud-search/actions/runs/34325000302, commit=b6426ed8818459d7b2bef60ce51305f5775e8433
+runner=ubuntu-24.04-arm, uname -m=aarch64, ARM-Hardware, kein QEMU, --network none
+digest=sha256:eed6a5fcb152373e7bf6d7725da774844d4012cfe0cbe02b261f31a865e4cce3 (Manifestindex von ghcr.io/street1983nk/findling_backend:dev, arm64-Haelfte sha256:ae58d93005dc18849c3bd128cef51bea0530c143f5719a284fd694b6f9e09d44)
 gegenprobe=63-grundlast.txt der Nachmessung, nativ auf m7g.large
-run=lokal, kein GitHub-Runner, --network none
 
-onnxruntime cpuid_info warning: Unknown CPU vendor. cpuinfo_vendor value: 0
-[0;93m2026-09-08 10:53:56.934533286 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
-date=2026-09-08T10:55:49Z
+date=2026-09-09T07:45:21Z
 arch=aarch64
 python=3.13.15
-image_digest=sha256:8d49814ce631cd226da40785b8aaed0384b4ce933965a31b3bcdf236c9fa428b
+image_digest=ghcr.io/street1983nk/findling_backend@sha256:eed6a5fcb152373e7bf6d7725da774844d4012cfe0cbe02b261f31a865e4cce3
 image_ref=ghcr.io/street1983nk/findling_backend:dev
-runner_role=target-emuliert
+runner_role=target
 tokenizers_version=0.23.2
 vocab_size=250002
 chunk_tokens=510 overlap=0 token_cap=1024
@@ -19,45 +17,45 @@ embedding_available=True
 module_seen=findling.store.vectors,findling.worker.poller,findling.main
 
 -- schritt rss_kb --
-00-leerer-prozess 44220
-01-config-importiert 50120
-02-settings-gelesen 50120
-03-index-module-importiert 61896
-04-embed-module-importiert 64072
-05-store-vectors-importiert 65480
-06-poller-importiert 120264
-07-api-resources-importiert 120264
-08-findling-main-importiert 123592
-09-wortliste-gelesen-276496 164340
-10-deutscher-automat-gebaut 194296
-11a-tokenizers-modul-importiert 200436
-11b-erste-tokenizer-instanz 452984
-12a-splitter-gebaut 754008
-12b-erster-chunkerlauf-2 757592
-12c-zweiter-chunkerlauf-2 757592
-13-modell-objekt-gebaut-lazy 757592
-14-erste-einbettung-gewichte-geladen 1278704
-15-lange-einbettung-aktivierungen 1322852
-16-zweite-tokenizer-instanz-informativ 1564132
+00-leerer-prozess 13268
+01-config-importiert 16648
+02-settings-gelesen 16716
+03-index-module-importiert 23996
+04-embed-module-importiert 26108
+05-store-vectors-importiert 27764
+06-poller-importiert 70072
+07-api-resources-importiert 70088
+08-findling-main-importiert 72436
+09-wortliste-gelesen-276496 94864
+10-deutscher-automat-gebaut 137944
+11a-tokenizers-modul-importiert 142284
+11b-erste-tokenizer-instanz 413856
+12a-splitter-gebaut 693788
+12b-erster-chunkerlauf-2 694696
+12c-zweiter-chunkerlauf-2 694696
+13-modell-objekt-gebaut-lazy 694696
+14-erste-einbettung-gewichte-geladen 1105152
+15-lange-einbettung-aktivierungen 1132140
+16-zweite-tokenizer-instanz-informativ 1362756
 
 -- zuwachs je schritt --
 von                                    nach                                    delta_mb    rss_mb
-00-leerer-prozess                      01-config-importiert                         5.8      48.9
-01-config-importiert                   02-settings-gelesen                          0.0      48.9
-02-settings-gelesen                    03-index-module-importiert                  11.5      60.4
-03-index-module-importiert             04-embed-module-importiert                   2.1      62.6
-04-embed-module-importiert             05-store-vectors-importiert                  1.4      63.9
-05-store-vectors-importiert            06-poller-importiert                        53.5     117.4
-06-poller-importiert                   07-api-resources-importiert                  0.0     117.4
-07-api-resources-importiert            08-findling-main-importiert                  3.2     120.7
-08-findling-main-importiert            09-wortliste-gelesen-276496                 39.8     160.5
-09-wortliste-gelesen-276496            10-deutscher-automat-gebaut                 29.3     189.7
-10-deutscher-automat-gebaut            11a-tokenizers-modul-importiert              6.0     195.7
-11a-tokenizers-modul-importiert        11b-erste-tokenizer-instanz                246.6     442.4
-11b-erste-tokenizer-instanz            12a-splitter-gebaut                        294.0     736.3
-12a-splitter-gebaut                    12b-erster-chunkerlauf-2                     3.5     739.8
-12b-erster-chunkerlauf-2               12c-zweiter-chunkerlauf-2                    0.0     739.8
-12c-zweiter-chunkerlauf-2              13-modell-objekt-gebaut-lazy                 0.0     739.8
-13-modell-objekt-gebaut-lazy           14-erste-einbettung-gewichte-geladen       508.9    1248.7
-14-erste-einbettung-gewichte-geladen   15-lange-einbettung-aktivierungen           43.1    1291.8
-15-lange-einbettung-aktivierungen      16-zweite-tokenizer-instanz-informativ     235.6    1527.5
+00-leerer-prozess                      01-config-importiert                         3.3      16.3
+01-config-importiert                   02-settings-gelesen                          0.1      16.3
+02-settings-gelesen                    03-index-module-importiert                   7.1      23.4
+03-index-module-importiert             04-embed-module-importiert                   2.1      25.5
+04-embed-module-importiert             05-store-vectors-importiert                  1.6      27.1
+05-store-vectors-importiert            06-poller-importiert                        41.3      68.4
+06-poller-importiert                   07-api-resources-importiert                  0.0      68.4
+07-api-resources-importiert            08-findling-main-importiert                  2.3      70.7
+08-findling-main-importiert            09-wortliste-gelesen-276496                 21.9      92.6
+09-wortliste-gelesen-276496            10-deutscher-automat-gebaut                 42.1     134.7
+10-deutscher-automat-gebaut            11a-tokenizers-modul-importiert              4.2     138.9
+11a-tokenizers-modul-importiert        11b-erste-tokenizer-instanz                265.2     404.2
+11b-erste-tokenizer-instanz            12a-splitter-gebaut                        273.4     677.5
+12a-splitter-gebaut                    12b-erster-chunkerlauf-2                     0.9     678.4
+12b-erster-chunkerlauf-2               12c-zweiter-chunkerlauf-2                    0.0     678.4
+12c-zweiter-chunkerlauf-2              13-modell-objekt-gebaut-lazy                 0.0     678.4
+13-modell-objekt-gebaut-lazy           14-erste-einbettung-gewichte-geladen       400.8    1079.2
+14-erste-einbettung-gewichte-geladen   15-lange-einbettung-aktivierungen           26.4    1105.6
+15-lange-einbettung-aktivierungen      16-zweite-tokenizer-instanz-informativ     225.2    1330.8
