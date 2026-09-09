@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Completed 10-03-PLAN.md
-last_updated: "2026-09-09T08:28:24.197Z"
+stopped_at: Completed 10-04-PLAN.md
+last_updated: "2026-09-09T09:08:40.505Z"
 last_activity: 2026-09-09
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 24
-  completed_plans: 20
+  completed_plans: 21
   percent: 60
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 10 (vergleichsmessung-auf-der-aws-box) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-09-09
 
-**Naechster Schritt:** Welle 4 der Phase 10 (Plan 10-04). Erledigt aus Welle 3: der Lauf ist als Reihenfolge beschrieben (`00-ablauf.md`, dreizehn Schritte, dreizehn Ablesestellen von `memory.events`, vier Abbruchpfade), und jeder Schritt vor dem Volllauf hat sein Skript: `90-bestand.sh`, `91-korpus.sh`, `92-wechsel.sh`, `93-nullstand.sh`, `94-grundlast.sh`, `95-spitze.sh` (zwei Rollen), `97-nebenlaeufigkeit.sh`. Fuer Welle 4: Plan 10-04 baut 96 bis 99b und muss den OOM-Beweis in `96-oom-beweis.txt` schreiben, weil `95-spitze.sh nachher` ohne diese Datei mit 12 abbricht. Weiter offen: MESS-01 bis MESS-03 brauchen den Lauf auf der Box.
+**Naechster Schritt:** Welle 5 der Phase 10 (Plan 10-05), und das ist die erste Welle, die Box-Minuten kostet. Erledigt aus Welle 4: das Skriptset des abgesetzten Laufs (`96-volllauf.sh`, `96b-waechter.sh`, `96c-lesen.py`, `96d-statusbeobachter.py`, `96e-ntfy-watch.sh`) und die drei neuen Messbloecke (`98-sprachfaelle.sh`, `99-seitenroute.sh`, `99b-runden.sh`); `00-ablauf.md` fuehrt jetzt alle dreizehn Schritte mit Rohdateinamen, Wartefristen, Abbruchbedingungen und einer Tabelle aller Rueckgabewerte. Der Waechter schreibt `96-oom-beweis.txt`, also ist die Schnittstelle zu `95-spitze.sh nachher` (Abbruch 12) erfuellt. Fuer Welle 5: die Anfahrt braucht den A-Record oder einen der zwei Rueckfaelle, den Owner-Checkpoint vor dem ersten `aws_box.sh start`, und `jq` auf der Box (`98-sprachfaelle.sh` und `99b-runden.sh` enden sonst mit 18). Weiter offen: MESS-01 bis MESS-03 brauchen den Lauf auf der Box.
 
 ## Performance Metrics
 
@@ -85,6 +85,7 @@ Last activity: 2026-09-09
 | Phase 10 P01 | 42min | 3 tasks | 4 files |
 | Phase 10 P02 | 25min | 2 tasks | 6 files |
 | Phase 10 P03 | 28min | 3 tasks | 8 files |
+| Phase 10 P04 | 34min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -215,6 +216,11 @@ Recent decisions affecting current work:
 - [Phase 10]: 10-03: Der Baumhash-Beweis wird in 92-wechsel.sh gerufen und seine Rohdatei zurueckgelesen, nicht nachgebaut: drei baumhash:-Zeilen und baumhash-gleich ja, sonst Abbruch mit 4
 - [Phase 10]: 10-03: 95-spitze.sh verweigert den Neustart der Rolle nachher, solange 96-oom-beweis.txt fehlt: die Reihenfolge OOM-Beweis vor Neustart ist erzwungen statt erinnert (T-10-17)
 - [Phase 10]: 10-03: Teil D der Grundlast prueft Mountquelle und Ausgabe, weil ein docker run fuer eine fehlende Mountquelle ein leeres Verzeichnis anlegt und das Werkzeug eine leere Datei schreibt (DI-10-01)
+- [Phase 10]: 10-04: Der Leser 96c-lesen.py liest indexed und embedded AUSSCHLIESSLICH unter backend und faellt nicht auf die oberste Ebene zurueck; fuenf Zusicherungen machen die falsche Ebene rot, ohne Box (Fallstrick 8)
+- [Phase 10]: 10-04: Die Aufnahme des Statusbeobachters ist eine Projektion auf zehn Schluessel und keine Filterliste; ein neues Feld der Verwaltungsseite kann durch eine Projektion nicht durchsickern, durch einen Filter schon (T-10-21)
+- [Phase 10]: 10-04: Der OOM-Beweis wird zweimal gelesen und beide Lesungen stehen beschriftet in derselben Rohdatei: bei erkanntem Ende vor jedem Eingriff, und nach den Nachlaufschritten. Eine Suchlastprobe hebt memory.peak
+- [Phase 10]: 10-04: Die Bilanzzeile der Sprachfaelle zaehlt FAELLE, die Liste darunter Zusicherungen; Fall 1 traegt vier davon, und vier rote Zusicherungen eines Falls sind ein roter Fall
+- [Phase 10]: 10-04: Das Skelett wird vor jedem user:add abgeschaltet und danach zurueckgesetzt, weil Handbuch und Fotoordner in der Heimat die Zaehlzusicherungen zu Aussagen ueber Dokumente machen wuerden, die niemand gewaehlt hat
 
 ### Pending Todos
 
@@ -242,6 +248,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-09T08:28:24.183Z
-Stopped at: Completed 10-03-PLAN.md
+Last session: 2026-09-09T09:08:10.006Z
+Stopped at: Completed 10-04-PLAN.md
 Resume file: None

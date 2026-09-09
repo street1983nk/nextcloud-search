@@ -186,7 +186,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 10-04-PLAN.md , das Skriptset des abgesetzten Laufs plus die drei neuen Messbloecke: Sprachfaelle, Seitenroute, Rundenzaehlung (Welle 4, ohne Box-Zeit)
+- [x] 10-04-PLAN.md , das Skriptset des abgesetzten Laufs plus die drei neuen Messbloecke: Sprachfaelle, Seitenroute, Rundenzaehlung (Welle 4, ohne Box-Zeit)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -226,7 +226,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
-| 10. Vergleichsmessung auf der AWS-Box | 2/7 | In Progress|  |
+| 10. Vergleichsmessung auf der AWS-Box | 4/7 | In Progress|  |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
 
 ## Requirement Coverage
