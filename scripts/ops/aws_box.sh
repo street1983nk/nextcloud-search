@@ -401,11 +401,20 @@ launched = instance['LaunchTime']
 if isinstance(launched, str):
     launched = datetime.datetime.fromisoformat(launched)
 hours = ($now - launched.timestamp()) / 3600.0
+state = instance['State']['Name']
+# The same trap cmd_stop is built around, one subcommand further along: a stopped
+# instance keeps answering with the LaunchTime of its last start, so the distance
+# from it to now counts every parked hour as an hour of uptime. On 2026-09-09 this
+# reported 52.3 hours and 5.80 USD for a box that had run 1.95 hours and been
+# parked since 2026-09-07T06:56:42Z. The figure looked right and was not, and it
+# is the figure a cost ceiling gets checked against, so it is only an uptime while
+# the instance is actually running.
+running = state == 'running'
 
 print('instance  %s %s %s in %s' % (
     instance['InstanceId'],
     instance['InstanceType'],
-    instance['State']['Name'],
+    state,
     instance['Placement']['AvailabilityZone'],
 ))
 print('address   %s' % instance.get('PublicIpAddress', 'none'))
@@ -416,7 +425,14 @@ for volume in sorted(volumes, key=lambda entry: entry['Size']):
         volume['VolumeId'], volume['Size'], volume['VolumeType'],
         volume.get('Iops', '?'), volume.get('Throughput', '?'),
     ))
-print('running   %.1f hours since %s' % (hours, launched.isoformat()))
+if running:
+    print('running   %.1f hours since %s' % (hours, launched.isoformat()))
+else:
+    print('running   no, this instance is %s' % state)
+    print('running   last launch %s, and the %.1f hours since it are NOT an uptime:' % (
+        launched.isoformat(), hours))
+    print('running   a stopped instance keeps its LaunchTime. The closing figures of')
+    print('running   the last uptime were written into box.env by aws_box.sh stop')
 
 instance_hourly = float('$PRICE_INSTANCE_HOURLY')
 storage_hourly = float('$PRICE_GP3_GB_MONTH') * gigabytes / $HOURS_PER_MONTH
@@ -425,8 +441,14 @@ storage_hourly = float('$PRICE_GP3_GB_MONTH') * gigabytes / $HOURS_PER_MONTH
 ipv4_hourly = float('$PRICE_IPV4_HOURLY') if instance.get('PublicIpAddress') else 0.0
 print('rate      %.6f %s per hour for the box, %.6f for %s GB of storage, %.6f for the address' % (
     instance_hourly, '$PRICE_CURRENCY', storage_hourly, gigabytes, ipv4_hourly))
-print('spent     %.2f %s so far, net, from the pinned public rates' % (
-    hours * (instance_hourly + storage_hourly + ipv4_hourly), '$PRICE_CURRENCY'))
+if running:
+    print('spent     %.2f %s so far, net, from the pinned public rates' % (
+        hours * (instance_hourly + storage_hourly + ipv4_hourly), '$PRICE_CURRENCY'))
+else:
+    print('spent     %.4f %s per day while parked, net, the disks and nothing else' % (
+        storage_hourly * 24.0, '$PRICE_CURRENCY'))
+    print('spent     this subcommand does not add the parked days up: the day the box')
+    print('spent     was parked stands in box.env as BOX_STOPPED_ISO')
 "
     echo "aws_box: the public address is its own item on an AWS invoice since"
     echo "2024-02-01 and it is counted above, because it is five percent of this"

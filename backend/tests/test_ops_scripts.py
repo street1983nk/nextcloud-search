@@ -281,6 +281,29 @@ def test_the_aws_stop_writes_the_uptime_it_closes_into_the_state_file() -> None:
     assert body.index("describe-instances") < body.index("stop-instances")
 
 
+def test_the_aws_status_calls_the_time_since_the_launch_an_uptime_only_while_running() -> None:
+    """The trap cmd_stop is built around, one subcommand further along.
+
+    A stopped instance keeps answering with the LaunchTime of its last start, so
+    the distance from it to now counts every parked hour as an hour of uptime.
+    On 2026-09-09 status reported 52.3 hours and 5.80 USD for a box that had run
+    1.95 hours and been parked since 2026-09-07T06:56:42Z. That is the figure a
+    cost ceiling gets checked against, so the arithmetic is gated on the state
+    and the parked case says what it is instead of adding days up.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    body = text.split("cmd_status() {", 1)[1].split("\ncmd_stop() {", 1)[0]
+    assert "running = state == 'running'" in body
+    assert "if running:" in body
+    # The two sentences that keep a reader from quoting the wrong number.
+    assert "are NOT an uptime" in body
+    assert "a stopped instance keeps its launchtime" in body.lower()
+    # The parked branch charges the disks and nothing else, and it refuses to
+    # pretend it knows how many days they have been parked for.
+    assert "per day while parked" in body
+    assert "does not add the parked days up" in body
+
+
 def test_the_aws_start_moves_the_ssh_rule_and_revokes_before_it_authorizes() -> None:
     """An ssh rule on a lease that moved on is an open port for its new holder.
 
