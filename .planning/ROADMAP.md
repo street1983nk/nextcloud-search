@@ -182,7 +182,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 10-03-PLAN.md , Ablaufplan und das Skriptset vor dem Volllauf: Bestand, Korpus, Abbildwechsel, Nullstand, Grundlast, erste Suche, Lastreihe (Welle 3, ohne Box-Zeit)
+- [x] 10-03-PLAN.md , Ablaufplan und das Skriptset vor dem Volllauf: Bestand, Korpus, Abbildwechsel, Nullstand, Grundlast, erste Suche, Lastreihe (Welle 3, ohne Box-Zeit)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -226,7 +226,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
-| 10. Vergleichsmessung auf der AWS-Box | 1/7 | In Progress|  |
+| 10. Vergleichsmessung auf der AWS-Box | 2/7 | In Progress|  |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
 
 ## Requirement Coverage

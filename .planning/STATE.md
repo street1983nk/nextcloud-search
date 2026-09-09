@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Completed 10-02-PLAN.md
-last_updated: "2026-09-09T08:00:23.715Z"
+stopped_at: Completed 10-03-PLAN.md
+last_updated: "2026-09-09T08:28:24.197Z"
 last_activity: 2026-09-09
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 24
-  completed_plans: 19
+  completed_plans: 20
   percent: 60
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 10 (vergleichsmessung-auf-der-aws-box) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-09-09
 
-**Naechster Schritt:** Welle 3 der Phase 10 (Plan 10-03). Erledigt aus Welle 2: der erste `workflow_dispatch` von `measure.yml` auf main (Lauf 34325000302) hat die native arm64-Feinmessung geliefert, DI-07-04 ist geschlossen, und der Digest, den der Lauf auf der Box in Welle 5 aufloesen muss, steht in der Rohdatei und im Bericht. Weiter offen: MESS-01 bis MESS-03 brauchen den Lauf auf der Box.
+**Naechster Schritt:** Welle 4 der Phase 10 (Plan 10-04). Erledigt aus Welle 3: der Lauf ist als Reihenfolge beschrieben (`00-ablauf.md`, dreizehn Schritte, dreizehn Ablesestellen von `memory.events`, vier Abbruchpfade), und jeder Schritt vor dem Volllauf hat sein Skript: `90-bestand.sh`, `91-korpus.sh`, `92-wechsel.sh`, `93-nullstand.sh`, `94-grundlast.sh`, `95-spitze.sh` (zwei Rollen), `97-nebenlaeufigkeit.sh`. Fuer Welle 4: Plan 10-04 baut 96 bis 99b und muss den OOM-Beweis in `96-oom-beweis.txt` schreiben, weil `95-spitze.sh nachher` ohne diese Datei mit 12 abbricht. Weiter offen: MESS-01 bis MESS-03 brauchen den Lauf auf der Box.
 
 ## Performance Metrics
 
@@ -84,6 +84,7 @@ Last activity: 2026-09-09
 | Phase 09 P08 | 75min | 3 tasks | 16 files |
 | Phase 10 P01 | 42min | 3 tasks | 4 files |
 | Phase 10 P02 | 25min | 2 tasks | 6 files |
+| Phase 10 P03 | 28min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -211,6 +212,9 @@ Recent decisions affecting current work:
 - [Phase 10]: 10-02: Die emulierte Rohdatei wird umbenannt statt geloescht (01-grundlast-fein-arm64-emuliert.txt), und jede nachgezogene Tabelle nennt die Vorlaeuferzahl mit ihrem Dateinamen. Eine Messreihe, die ihre Geschichte loescht, laesst niemanden nachvollziehen, warum ein Befund einmal anders aussah
 - [Phase 10]: 10-02: Der amd64-Ast desselben Laufs wird als 01-grundlast-fein-amd64-runner.txt abgelegt statt nur ausgerechnet. Die alte amd64-Datei bleibt unveraendert, weil der Entscheid von Plan 07-03 auf ihr steht, und die Zahlen der Kontrolle bekommen trotzdem ihre eigene Rohdatei
 - [Phase 10]: 10-02: MESS-01 bleibt offen. Dieser Plan hat null Box-Minuten gekostet und keinen Vergleichslauf gefahren; abhaken darf die Kennung der Plan, der die Zahlen auf der Box erzeugt
+- [Phase 10]: 10-03: Der Baumhash-Beweis wird in 92-wechsel.sh gerufen und seine Rohdatei zurueckgelesen, nicht nachgebaut: drei baumhash:-Zeilen und baumhash-gleich ja, sonst Abbruch mit 4
+- [Phase 10]: 10-03: 95-spitze.sh verweigert den Neustart der Rolle nachher, solange 96-oom-beweis.txt fehlt: die Reihenfolge OOM-Beweis vor Neustart ist erzwungen statt erinnert (T-10-17)
+- [Phase 10]: 10-03: Teil D der Grundlast prueft Mountquelle und Ausgabe, weil ein docker run fuer eine fehlende Mountquelle ein leeres Verzeichnis anlegt und das Werkzeug eine leere Datei schreibt (DI-10-01)
 
 ### Pending Todos
 
@@ -238,6 +242,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-09T08:00:23.699Z
-Stopped at: Completed 10-02-PLAN.md
+Last session: 2026-09-09T08:28:24.183Z
+Stopped at: Completed 10-03-PLAN.md
 Resume file: None
