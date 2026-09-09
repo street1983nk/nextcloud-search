@@ -1,0 +1,469 @@
+/*
+ * Only what the Nextcloud server CSS does not already deliver for the result
+ * page.
+ *
+ * Every colour is a variable of the theme, without a single literal value, so
+ * that light, dark and high contrast all work without a second rule and without
+ * a switch. Every distance of our own is a multiple of the four pixel grid
+ * baseline, written as a calculation so that the multiple is visible instead of
+ * being hidden in a rounded number. The three numbers that are not on that
+ * scale are named where they stand: the nine hundred pixels of the reading
+ * column, which is the width of the administration page so that the two pages
+ * of this app share one measure, and the forty four pixels of a coarse pointer,
+ * which is a rule of ours and not a token of the server.
+ *
+ * Three font sizes and no others: fifteen for body text, excerpt and file name,
+ * thirteen for the path, the page mark, the filter label and the hint line, and
+ * twenty for the one h1 and the heading of an empty state. Two weights, four
+ * hundred and seven hundred; the core uses seven hundred for headings, so there
+ * is no six hundred anywhere. The file name carries its rank in its weight and
+ * not in a fourth size.
+ *
+ * #app-content is not touched. It is the scroll container of the page and it
+ * belongs to the server; this file sets the inner padding and the reading width
+ * of its own block and nothing else.
+ *
+ * The focus ring is never touched. Nothing here removes an outline.
+ */
+
+.findling-search {
+	max-width: 900px;
+	margin-inline: auto;
+	padding-block: calc(var(--default-grid-baseline) * 6);
+	padding-inline: calc(var(--default-grid-baseline) * 8);
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: var(--default-font-size);
+	line-height: var(--default-line-height);
+}
+
+/* The display rules below would beat the user agent's [hidden] { display: none }
+   and turn the attribute into a no-op, which is exactly what happened on the
+   administration page in the visual check of plan 04-10. This one rule gives the
+   attribute its meaning back for the whole block, so no rule here has to think
+   about it again. The screen reader sentence of the return marker is the only
+   element switched this way, and the script clears the attribute rather than
+   adding a class of its own. */
+.findling-search [hidden] {
+	display: none !important;
+}
+
+/* -- block one, the head --------------------------------------------------- */
+
+.findling-search__title {
+	font-size: 20px;
+	font-weight: 700;
+	line-height: 1.2;
+	margin-block: 0 calc(var(--default-grid-baseline) * 4);
+	/* A search term is up to two hundred and fifty five characters and may
+	   carry no space at all. It wraps rather than widening the page. */
+	overflow-wrap: anywhere;
+}
+
+.findling-search__form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: calc(var(--default-grid-baseline) * 4);
+	margin-block-end: calc(var(--default-grid-baseline) * 6);
+}
+
+.findling-search__field {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: var(--default-grid-baseline);
+	min-width: 0;
+}
+
+.findling-search__field label {
+	font-size: var(--font-size-small);
+	font-weight: 400;
+}
+
+.findling-search__field input {
+	width: 100%;
+	min-height: var(--default-clickable-area);
+	font-size: var(--default-font-size);
+}
+
+.findling-search__filter {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: calc(var(--default-grid-baseline) * 2);
+	min-height: var(--default-clickable-area);
+}
+
+.findling-search__filter label {
+	font-size: var(--font-size-small);
+	font-weight: 400;
+}
+
+/* The one accented control of the page. Surface and text come from the core
+   class primary, so nothing about the accent is decided here. */
+.findling-search__submit {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	gap: var(--default-grid-baseline);
+	min-height: var(--default-clickable-area);
+	font-size: var(--default-font-size);
+	font-weight: 400;
+}
+
+/* -- block two, the banner line -------------------------------------------- */
+
+.findling-banner {
+	display: flex;
+	align-items: flex-start;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block: 0 calc(var(--default-grid-baseline) * 6);
+	padding: calc(var(--default-grid-baseline) * 6);
+	border-radius: var(--border-radius-container);
+	font-size: var(--default-font-size);
+}
+
+/* Surface and text always as the pair the theme ships, because the pair is what
+   carries the checked contrast. Colour is never the only carrier: every banner
+   also has an icon and a sentence. */
+.findling-banner--error {
+	background-color: var(--color-error);
+	color: var(--color-error-text);
+}
+
+.findling-banner--error .findling-banner__icon {
+	color: var(--color-element-error);
+}
+
+.findling-banner--info {
+	background-color: var(--color-info);
+	color: var(--color-info-text);
+}
+
+.findling-banner--info .findling-banner__icon {
+	color: var(--color-element-info);
+}
+
+.findling-banner__icon {
+	flex: 0 0 auto;
+	/* The icon sits on the first line of the sentence, not in the middle of the
+	   block, so it lines up with the text it belongs to. */
+	margin-block-start: calc(var(--default-grid-baseline) / 2);
+}
+
+.findling-banner__body {
+	min-width: 0;
+}
+
+.findling-banner__heading {
+	font-size: var(--default-font-size);
+	font-weight: 700;
+	margin-block: 0;
+}
+
+.findling-banner__body p {
+	margin-block: 0;
+}
+
+.findling-banner__body p + p {
+	margin-block-start: calc(var(--default-grid-baseline) * 2);
+}
+
+/* The retry link keeps the text colour of the surface it sits on rather than
+   the link colour of the theme: the pair error surface to error text is the one
+   the server checked for contrast, and a link colour on top of it is not. The
+   underline is what marks it as a link instead. */
+.findling-banner__retry {
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--default-clickable-area);
+	color: inherit;
+	text-decoration: underline;
+}
+
+/* -- block three, the hit list --------------------------------------------- */
+
+.findling-hits {
+	list-style: none;
+	margin-block: 0 calc(var(--default-grid-baseline) * 6);
+	margin-inline: 0;
+	padding: 0;
+}
+
+.findling-hit {
+	border-block-end: 1px solid var(--color-border);
+}
+
+.findling-hit:last-child {
+	border-block-end: none;
+}
+
+/* The whole row is one link, so a keyboard reaches a hit with one stop and a
+   middle click opens a tab. Grid rather than flex because the mobile rule below
+   moves the file name next to the icon and the path underneath both, and that
+   needs the three text lines to be items of this container. */
+.findling-hit__link {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	column-gap: calc(var(--default-grid-baseline) * 4);
+	align-items: start;
+	min-height: var(--default-clickable-area);
+	padding: calc(var(--default-grid-baseline) * 4);
+	border-radius: var(--border-radius-container);
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	text-decoration: none;
+}
+
+.findling-hit__link:hover,
+.findling-hit__link:focus {
+	background-color: var(--color-background-hover);
+}
+
+/* The return marker. The colour is the same surface as hover, and it is never
+   the only carrier: the row also gains the sentence "last opened" for a screen
+   reader, which is in the markup already and only loses its hidden attribute. */
+.findling-hit--returned .findling-hit__link {
+	background-color: var(--color-background-hover);
+}
+
+.findling-hit__icon {
+	flex: 0 0 auto;
+	/* Without this the file type icons of the server are black on black in the
+	   dark theme. The variable is "no" in the light theme, so the rule costs
+	   nothing there. */
+	filter: var(--background-invert-if-dark);
+}
+
+.findling-hit__text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.findling-hit__title {
+	font-size: var(--default-font-size);
+	font-weight: 700;
+	line-height: var(--default-line-height);
+	overflow-wrap: anywhere;
+}
+
+.findling-hit__path {
+	margin-block-start: var(--default-grid-baseline);
+	font-size: var(--font-size-small);
+	font-weight: 400;
+	line-height: var(--default-line-height);
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Two lines and then it stops. The full path is in the accessible name of the
+   row, so nothing the clamp cuts away is lost to a screen reader. */
+.findling-hit__excerpt {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	overflow: hidden;
+	margin-block-start: calc(var(--default-grid-baseline) * 2);
+	font-size: var(--default-font-size);
+	font-weight: 400;
+	line-height: var(--default-line-height);
+	overflow-wrap: anywhere;
+}
+
+/* The second of the three things the accent is spent on, and always as the pair
+   the theme ships. It is a mark element as well, so the highlight is a
+   highlight for a screen reader and not only a different colour. */
+.findling-hit__excerpt mark {
+	background-color: var(--color-primary-element-light);
+	color: var(--color-primary-element-light-text);
+	border-radius: var(--border-radius-small);
+	padding-inline: calc(var(--default-grid-baseline) / 2);
+}
+
+/* -- block four, the empty state ------------------------------------------- */
+
+.findling-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: calc(var(--default-grid-baseline) * 4);
+	margin-block: calc(var(--default-grid-baseline) * 12);
+	text-align: center;
+}
+
+.findling-empty__icon {
+	color: var(--color-text-maxcontrast);
+}
+
+.findling-empty__heading {
+	font-size: 20px;
+	font-weight: 700;
+	line-height: 1.2;
+	margin-block: 0;
+	overflow-wrap: anywhere;
+}
+
+.findling-empty__text {
+	margin-block: 0;
+	font-size: var(--default-font-size);
+	font-weight: 400;
+	line-height: var(--default-line-height);
+}
+
+/* -- block five, the pagination -------------------------------------------- */
+
+.findling-pager {
+	margin-block-start: calc(var(--default-grid-baseline) * 6);
+}
+
+.findling-pager__row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(var(--default-grid-baseline) * 2);
+	padding: calc(var(--default-grid-baseline) * 2);
+	border-radius: var(--border-radius-container);
+	background-color: var(--color-background-hover);
+}
+
+/* Ordinary links with the look of a tertiary button, so that they work without
+   a line of script and a middle click opens a tab. They rest on the strip
+   without a surface of their own and take the page ground when they are hovered
+   or focused: the strip already carries the hover colour, so lighting up in the
+   same colour would be no state change at all. Two colours, both of the theme,
+   and no third one invented for the occasion. */
+.findling-pager__step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--default-grid-baseline);
+	min-height: var(--default-clickable-area);
+	padding-inline: calc(var(--default-grid-baseline) * 4);
+	border-radius: var(--border-radius-container);
+	color: var(--color-main-text);
+	font-size: var(--default-font-size);
+	font-weight: 400;
+	text-decoration: none;
+}
+
+.findling-pager__step:hover,
+.findling-pager__step:focus {
+	background-color: var(--color-main-background);
+}
+
+/* Pushed to the right when there is no previous page, so that the next link
+   keeps its place at the end of the strip. */
+.findling-pager__step--next:first-child {
+	margin-inline-start: auto;
+}
+
+.findling-pager__mark {
+	font-size: var(--font-size-small);
+	font-weight: 400;
+	color: var(--color-text-maxcontrast);
+}
+
+/* The line that takes the place of the next link on the last page. The icon
+   carries the class of a banner icon because it is the same icon in the same
+   arrangement; only its colour is decided here. */
+.findling-pager__hint {
+	display: flex;
+	align-items: flex-start;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block: calc(var(--default-grid-baseline) * 2) 0;
+	font-size: var(--font-size-small);
+	font-weight: 400;
+	color: var(--color-text-maxcontrast);
+}
+
+.findling-pager__hint .findling-banner__icon {
+	color: var(--color-element-info);
+}
+
+/* -- the three breakpoints ------------------------------------------------- */
+
+/* Above a thousand and twenty four the reading column is nine hundred pixels
+   wide and centred, with thirty two pixels of side padding. */
+@media (min-width: 1024px) {
+	.findling-search {
+		max-width: 900px;
+		padding-inline: calc(var(--default-grid-baseline) * 8);
+	}
+}
+
+/* Below it the block takes the width it is given and the side padding halves. */
+@media (max-width: 1023px) {
+	.findling-search {
+		max-width: none;
+		padding-inline: calc(var(--default-grid-baseline) * 4);
+	}
+}
+
+/* Below six hundred and forty the form is one column with a full width button,
+   the icon and the file name of a hit share the first line and the path and the
+   excerpt run the full width underneath, and the two paging links take half the
+   strip each. */
+@media (max-width: 639px) {
+	.findling-search__form {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.findling-search__submit {
+		width: 100%;
+	}
+
+	/* The three text lines become items of the row itself, so that the grid can
+	   place the file name beside the icon and the other two across both
+	   columns. The element carries no meaning of its own, it is a wrapper. */
+	.findling-hit__text {
+		display: contents;
+	}
+
+	.findling-hit__link {
+		row-gap: calc(var(--default-grid-baseline) * 2);
+	}
+
+	.findling-hit__title {
+		grid-column: 2;
+	}
+
+	.findling-hit__path,
+	.findling-hit__excerpt {
+		grid-column: 1 / -1;
+		margin-block-start: 0;
+	}
+
+	.findling-pager__row {
+		flex-wrap: wrap;
+	}
+
+	.findling-pager__step {
+		flex: 1 1 50%;
+	}
+
+	.findling-pager__mark {
+		flex: 1 1 100%;
+		order: -1;
+		text-align: center;
+	}
+}
+
+/* A finger is not a mouse pointer. Thirty four pixels is enough for a cursor
+   and not for a thumb, so the two things a thumb aims at grow. Forty four is a
+   multiple of four and therefore still on the grid. */
+@media (pointer: coarse) {
+	.findling-hit__link {
+		min-height: 44px;
+	}
+
+	.findling-pager__step {
+		min-height: 44px;
+	}
+}
