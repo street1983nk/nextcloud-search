@@ -16,20 +16,66 @@ read EOF at once. The answer of plan 10-01 is a recipe in a file that is called
 with arguments, and these assertions are what keeps that recipe from drifting:
 the two figures of this commit are written down, and a hash over nothing is a
 failure rather than a result.
+
+The rest of this file has two scopes of different width, and the difference is
+the point rather than an oversight. Wide, over every .py and .sh under
+docs/measurements/**/skripte/: no carriage return and no dash. Both hold for the
+whole stock since plan 10-01 renormalised five files and added the checkout rule
+that keeps them normalised, so the wide scope is a statement about the tree and
+not a wager on it.
+
+Narrow, over the directory of this run alone: a shebang on the first line, no
+path of one machine, and no password on a command line. It is narrow because
+45-suchlast.py of the semantic run puts "/home/ubuntu/work" into sys.path and
+imports drillhelfer from it, drillhelfer does not live in this repository, and
+that file is history with its raw data lying next to it. A gate that demanded it
+be rewritten would blur the origin of those raw data to buy nothing, so the three
+promises that only a new script can keep are asked of the new scripts.
 """
 
 from __future__ import annotations
 
 import ast
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MEASUREMENTS_DIR = REPO_ROOT / "docs" / "measurements"
 RUN_DIR = MEASUREMENTS_DIR / "2026-09-vergleichsmessung-m7g" / "skripte"
 TREE_HASH = RUN_DIR / "40b-baumhash.py"
 TREE_HASH_PROOF = RUN_DIR / "40b-baumhash.sh"
+OPS_GATE = Path(__file__).resolve().parent / "test_ops_scripts.py"
+
+# The two kinds of file that are run. A directory of measurement scripts also
+# holds other things, for instance the .claude-active of the semantic run, and a
+# gate that read every file would fail on the first note somebody leaves there.
+SCRIPT_SUFFIXES = frozenset({".py", ".sh"})
+
+# The two shebangs a script of this run may carry.
+SHEBANGS = (b"#!/bin/sh\n", b"#!/usr/bin/env python3\n")
+
+# A password belongs in an environment variable, never in an argument, because an
+# argument stands in the process list of the box and in every log that records the
+# command. The permitted shape is the one search_load.py uses, --password-env,
+# which carries the name of the variable and not the value, and which is not
+# matched by either of these two because both demand a space or an equals sign
+# where it carries a hyphen.
+PASSWORD_OPTIONS = ("--password ", "--password=")
+
+# The short form is a different problem. Written as a bare substring, "-p " means
+# "create the parent directories" far more often than it means a password, and a
+# gate that goes red on mkdir -p is a gate somebody switches off inside a week. So
+# it counts only behind a program that really takes a password that way.
+PASSWORD_SHORT_FORM = re.compile(r"\b(?:mysql|mariadb|mysqldump|redis-cli|smbclient)\b[^\n]*?\s-p\s*\S")
+SHORT_FORM_NAME = "-p behind a program that takes a password"
+
+# A variable with a default is the one place a path of the box may be written
+# down, because it is the place a reader can change without reading the body.
+DEFAULT_ASSIGNMENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*="?\$\{[A-Za-z_][A-Za-z0-9_]*:-')
 
 # The state this commit measures, nachgerechnet on 2026-09-09. They are written
 # down here and not computed, because a test that recomputes the recipe it is
@@ -48,6 +94,29 @@ DASHES = (chr(0x2014), chr(0x2013))
 # so without it the two refusal assertions below would have been satisfied by the
 # absence of the very script they are about.
 DIAGNOSIS_PREFIX = "40b-baumhash:"
+
+
+def constant_of_the_ops_gate(name: str) -> tuple[str, ...]:
+    """One named tuple constant, read out of the syntax tree of test_ops_scripts.py.
+
+    Read rather than imported, because tests/ is not a package: an import would
+    work under pytest and not under pyright. Read rather than copied, because two
+    definitions of the same list are two definitions that drift apart, and the
+    whole point of taking it from there is that both gates forbid the same shapes.
+    """
+    tree = ast.parse(OPS_GATE.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == name for target in node.targets
+        ):
+            return tuple(ast.literal_eval(node.value))
+    message = f"{name} is not defined in {OPS_GATE.name}"
+    raise AssertionError(message)
+
+
+# The shapes that tie a tool to one machine, from the gate that first wrote them
+# down. Not a second copy: one definition, two gates.
+MACHINE_SHAPES = constant_of_the_ops_gate("MACHINE_SHAPES")
 
 
 def imported_packages(text: str) -> set[str]:
@@ -235,11 +304,200 @@ def test_the_proof_checks_its_own_raw_file_for_three_tree_hashes() -> None:
     assert "baumhash-gleich" in text
 
 
-def test_the_recipe_and_the_proof_carry_neither_a_dash_nor_a_carriage_return() -> None:
-    """Both files, as bytes, because a CR behind a shebang hides in a text read."""
-    for path in (TREE_HASH, TREE_HASH_PROOF):
-        raw = path.read_bytes()
-        assert b"\r" not in raw, path.name
-        text = raw.decode("utf-8")
-        for dash in DASHES:
-            assert dash not in text, f"{dash!r} in {path.name}"
+# The wide scope. Every .py and .sh under docs/measurements/**/skripte/, read out
+# of the directories rather than out of a list of file names: a gate over a list
+# covers the files somebody remembered to add to it, and the next measurement
+# brings a directory rather than an entry.
+
+
+def measurement_scripts() -> list[Path]:
+    """Every script of every measurement this repository holds."""
+    return sorted(path for path in MEASUREMENTS_DIR.glob("**/skripte/*") if path.suffix in SCRIPT_SUFFIXES)
+
+
+def scripts_of_this_run() -> list[Path]:
+    """Every script of the run of phase 10, which is the narrow scope."""
+    return sorted(path for path in RUN_DIR.glob("*") if path.suffix in SCRIPT_SUFFIXES)
+
+
+def carriage_returns_in(raw: bytes) -> int:
+    """How many carriage returns the bytes carry, which has to be none.
+
+    A CR behind the shebang makes the kernel look for an interpreter whose name
+    ends in an invisible character, and the error message does not name it.
+    """
+    return raw.count(b"\r")
+
+
+def dashes_in(text: str) -> list[str]:
+    """Every forbidden dash the text carries, sorted, empty when it carries none."""
+    return sorted(dash for dash in DASHES if dash in text)
+
+
+def machine_shapes_in_code(text: str) -> list[str]:
+    """Every machine shape the text carries in code, sorted.
+
+    A shape inside a comment is prose and stays allowed, and so is a variable
+    default with a comment over it. Those are the two places a path of the box may
+    be named: one explains, the other can be changed without reading the body.
+    Anywhere else it is a tool that measures one machine and cannot be pointed at
+    another, which is the lesson 45-suchlast.py cost.
+    """
+    lines = text.splitlines()
+    found: set[str] = set()
+    for index, line in enumerate(lines):
+        if line.lstrip().startswith("#") or _is_a_commented_default(lines, index):
+            continue
+        found.update(shape for shape in MACHINE_SHAPES if shape in line)
+    return sorted(found)
+
+
+def _is_a_commented_default(lines: list[str], index: int) -> bool:
+    """A variable default whose nearest non empty line above it is a comment."""
+    if not DEFAULT_ASSIGNMENT.match(lines[index].strip()):
+        return False
+    for earlier in reversed(lines[:index]):
+        stripped = earlier.strip()
+        if stripped:
+            return stripped.startswith("#")
+    return False
+
+
+def passwords_on_a_command_line(text: str) -> list[str]:
+    """Every shape that hands a password to an argument, sorted.
+
+    Found while writing this gate: the naive short form fired on mkdir -p "$OUT"
+    of the very script it was written for. A false positive on the most common
+    option in shell scripting is not a strict gate, it is one that gets deleted,
+    so the short form was narrowed to the programs it means something for.
+    """
+    found = [shape for shape in PASSWORD_OPTIONS if shape in text]
+    if PASSWORD_SHORT_FORM.search(text):
+        found.append(SHORT_FORM_NAME)
+    return sorted(found)
+
+
+@pytest.fixture(params=measurement_scripts(), ids=lambda path: f"{path.parent.parent.name}/{path.name}")
+def measurement_script(request: pytest.FixtureRequest) -> Path:
+    return Path(request.param)
+
+
+@pytest.fixture(params=scripts_of_this_run(), ids=lambda path: path.name)
+def script_of_this_run(request: pytest.FixtureRequest) -> Path:
+    return Path(request.param)
+
+
+def test_the_wide_scope_covers_every_measurement_and_skips_what_is_not_a_script() -> None:
+    """The gate reads directories, so this says which ones it found.
+
+    Four runs have scripts today. The assertion is a floor and not an equality,
+    because the next measurement is supposed to be picked up without an edit
+    here, and the named file is the one that proved the suffix filter is needed.
+    """
+    found = measurement_scripts()
+    directories = {path.parent.parent.name for path in found}
+    assert directories >= {
+        "2026-09-05-semantiklauf-m7g",
+        "2026-09-grundlast-fein",
+        "2026-09-nachmessung-m7g",
+        "2026-09-vergleichsmessung-m7g",
+    }
+    assert not [path for path in found if path.name == ".claude-active"]
+    assert TREE_HASH in found
+    assert TREE_HASH_PROOF in found
+
+
+def test_the_measurement_script_carries_no_carriage_return(measurement_script: Path) -> None:
+    """Read as bytes, because a carriage return hides in a text read.
+
+    True for the whole stock since plan 10-01: five files were renormalised and
+    .gitattributes now carries the rule that keeps the next checkout from putting
+    them back.
+    """
+    assert carriage_returns_in(measurement_script.read_bytes()) == 0, measurement_script.name
+
+
+def test_the_measurement_script_carries_no_dash(measurement_script: Path) -> None:
+    """The typography rule of this project, over the whole stock."""
+    text = measurement_script.read_text(encoding="utf-8")
+    assert dashes_in(text) == [], measurement_script.name
+
+
+def test_the_script_of_this_run_starts_with_a_shebang(script_of_this_run: Path) -> None:
+    """It is started on the box as ./<name>, so the first line decides."""
+    raw = script_of_this_run.read_bytes()
+    assert raw.startswith(SHEBANGS), (script_of_this_run.name, raw[:40])
+
+
+def test_the_script_of_this_run_carries_no_path_of_one_machine(script_of_this_run: Path) -> None:
+    """A tool with a machine path in it is a tool for one machine."""
+    text = script_of_this_run.read_text(encoding="utf-8")
+    assert machine_shapes_in_code(text) == [], script_of_this_run.name
+
+
+def test_the_script_of_this_run_puts_no_password_on_a_command_line(script_of_this_run: Path) -> None:
+    """An argument stands in the process list, and a log keeps it (T-10-03)."""
+    text = script_of_this_run.read_text(encoding="utf-8")
+    assert passwords_on_a_command_line(text) == [], script_of_this_run.name
+
+
+def test_the_machine_shapes_come_from_the_gate_of_scripts_ops() -> None:
+    """One definition for both gates, and this says what it currently reads.
+
+    The list lives in test_ops_scripts.py and is read from there. This assertion
+    pins what was read, so that widening or narrowing it over there is a decision
+    somebody makes here as well instead of a side effect.
+    """
+    assert MACHINE_SHAPES == ("/home/", "sys.path.insert", "sys.path.append", "drillhelfer")
+
+
+def test_the_carriage_return_gate_fires_on_a_staged_sample() -> None:
+    """A gate whose only assertion is that today is fine stays green when it dies.
+
+    The sample is the shape the five renormalised files had: a shebang that ends
+    in a carriage return, which is the failure this whole rule is about.
+    """
+    staged = b"#!/usr/bin/env python3\r\nprint('hi')\r\n"
+    assert carriage_returns_in(staged) == 2
+    assert carriage_returns_in(b"#!/usr/bin/env python3\nprint('hi')\n") == 0
+
+
+def test_the_dash_gate_fires_on_a_staged_sample() -> None:
+    """Both dashes, assembled from code points so the sample is not the file."""
+    staged = f"# a comment with an em dash {chr(0x2014)} in it\n"
+    assert dashes_in(staged) == [chr(0x2014)]
+    assert dashes_in(f"# and an en dash {chr(0x2013)} in this one\n") == [chr(0x2013)]
+    assert dashes_in("# a comment with a plain hyphen - in it\n") == []
+
+
+def test_the_machine_path_gate_fires_on_a_staged_sample() -> None:
+    """The sample is 45-suchlast.py of the semantic run, in three lines.
+
+    That file is why the narrow scope is narrow, and it is why the gate exists:
+    it reached its helper through a directory of the load test box and became a
+    tool that could not be pointed anywhere else.
+    """
+    staged = 'import sys\nsys.path.insert(0, "/home/ubuntu/work")\nfrom drillhelfer import suche\n'
+    assert machine_shapes_in_code(staged) == ["/home/", "drillhelfer", "sys.path.insert"]
+
+    # The two places the same shape stays allowed, and they have to stay allowed,
+    # or the only way to name the box would be to hide it.
+    assert machine_shapes_in_code("# the box keeps the repository under /home/ubuntu/work\n") == []
+    assert machine_shapes_in_code('# the default of the box\nREPO="${REPO:-/home/ubuntu/work}"\n') == []
+    # The same default without the comment over it is not exempt.
+    assert machine_shapes_in_code('REPO="${REPO:-/home/ubuntu/work}"\n') == ["/home/"]
+
+
+def test_the_password_gate_fires_on_a_staged_sample() -> None:
+    """The three forbidden shapes, the way through, and the false positive.
+
+    The last two lines are the ones that matter as much as the first three: the
+    permitted --password-env must not be caught, and neither must mkdir -p, which
+    is what the first draft of this gate did to the script it was written for.
+    """
+    assert passwords_on_a_command_line("occ user:resetpassword lasttest --password secret\n") == ["--password "]
+    assert passwords_on_a_command_line("occ user:resetpassword --password=secret\n") == ["--password="]
+    assert passwords_on_a_command_line('mysql -p "$PW" -e "select 1"\n') == [SHORT_FORM_NAME]
+
+    assert passwords_on_a_command_line("search_load.py --password-env LASTTEST_PW\n") == []
+    assert passwords_on_a_command_line('mkdir -p "$OUT"\n') == []
