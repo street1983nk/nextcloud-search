@@ -2932,16 +2932,50 @@ jobs:
               "http://localhost:8080/ocs/v2.php/search/$1" -o "$5"
           }
 
+          # $1 user, $2 term, $3 output file. The same question again, asked the
+          # way a user asks it in a browser: of the result page of findling,
+          # over the session cookie the login step put into the jar of this
+          # account, and as HTML.
+          #
+          # No basic auth and no OCS header, because the page is not an OCS
+          # route, and no request token on the GET, because PageController::
+          # index() carries NoCSRFRequired and changes nothing. The token is
+          # needed for the login POST alone, which is why it lives in the login
+          # step and not here.
+          ask_page() {
+            curl -sfS -G -b "cookies-$1.txt" -c "cookies-$1.txt" \
+              --data-urlencode "query=$2" \
+              'http://localhost:8080/apps/findling/' -o "$3"
+          }
+
           # $1 scenario, $2 user, $3 password, $4 term, $5 expected minimum of
           # fileids. One line per scenario in the log, with the name and the
           # number of compared fileids, and its own error message on the way out.
+          #
+          # Three answers and not two since phase 9, and the third one is the
+          # result page: success criterion 4 of that phase asks this job to cover
+          # the new route with the same user and the same question. Two sentences
+          # a later scenario has to know, both of them cheap to lose:
+          #
+          # The page shows PAGE_SIZE hits, which is twenty five. Every scenario
+          # of this job builds three marker files, the team folder holds three
+          # and the version scenario one, so page one is the whole answer here. A
+          # scenario with more than twenty five hits would report a difference
+          # where nothing but pagination happened, and would have to walk every
+          # page instead.
+          #
+          # The expected minimum holds for all three sets alike. It is the guard
+          # against a green statement over empty sets, and a third set that was
+          # exempt from it would be the hole in that guard.
           compare() {
             ask 'providers/files/search' "$2" "$3" "$4" "native-$1.json"
             ask 'providers/findling/search' "$2" "$3" "$4" "findling-$1.json"
+            ask_page "$2" "$4" "page-$1.html"
             if ! python3 findling-src/scripts/ci/parity_diff.py \
                 --scenario "$1" \
                 --native "native-$1.json" \
                 --findling "findling-$1.json" \
+                --findling-html "page-$1.html" \
                 --expect-min "$5"; then
               echo "::error::scenario $1 did not pass the parity comparison, see the message above"
               return 1
@@ -2974,7 +3008,69 @@ jobs:
             sleep 5
           }
           SH
-          echo "the two questions and the comparison are in place"
+          echo "the three questions and the comparison are in place"
+
+      # One logged in session per account, kept in a cookie jar in the workspace,
+      # because the third question of every comparison is asked of an ordinary
+      # page and not of an OCS route: the page answers a request without a
+      # session with a redirect to the login form and never with a result.
+      #
+      # The path is the one scripts/dev/probe_page_login.sh walks by hand, and it
+      # was walked against a running Nextcloud 34 before this step was written
+      # (assumption A7 of the phase 9 research). The Origin header is what that
+      # probe found: LoginController::tryLogin refuses a login whose origin is
+      # empty or not a trusted domain BEFORE it looks at the password, and it
+      # refuses it with the same redirect back to the form that a wrong password
+      # produces. A browser sets the header, curl does not.
+      #
+      # No new credentials. The four accounts and their passwords are the
+      # variables the whole job already runs on, and the jars die with the runner.
+      - name: Log every account in and keep its session
+        run: |
+          login() {  # $1 user, $2 password
+            jar="cookies-$1.txt"
+            rm -f "${jar}"
+
+            token=$(curl -sfS -c "${jar}" 'http://localhost:8080/login' \
+              | sed -n 's/.*data-requesttoken="\([^"]*\)".*/\1/p' | head -1)
+            if [ -z "${token}" ]; then
+              echo "::error::the login form carried no request token, so $1 cannot be logged in"
+              exit 1
+            fi
+
+            # Not followed: the answer is a redirect either way, and its target
+            # is what tells a session from a refusal.
+            redirect=$(curl -sS -b "${jar}" -c "${jar}" -o /dev/null -w '%{redirect_url}' \
+              -H 'Origin: http://localhost:8080' \
+              --data-urlencode "user=$1" \
+              --data-urlencode "password=$2" \
+              --data-urlencode "requesttoken=${token}" \
+              'http://localhost:8080/login')
+            case "${redirect}" in
+              ''|*/login|*/login\?*)
+                echo "::error::the login of $1 was refused, so every page answer of this account would be a login form"
+                exit 1
+                ;;
+            esac
+
+            # Asked back rather than assumed, and asked of the page this job
+            # compares against: a session that does not reach that route would
+            # otherwise surface as a scenario with an unreadable page answer,
+            # twenty minutes further into the run.
+            status=$(curl -sS -b "${jar}" -c "${jar}" -o "login-probe-$1.html" -w '%{http_code}' \
+              --get --data-urlencode 'query=parityloginprobe' \
+              'http://localhost:8080/apps/findling/')
+            if [ "${status}" != "200" ] || ! grep -q 'findling-search' "login-probe-$1.html"; then
+              echo "::error::the result page answered ${status} for $1 and not the page, so the session did not reach it"
+              exit 1
+            fi
+            echo "$1 is logged in and the result page answers this session"
+          }
+
+          login "${OWNER_USER}" "${OWNER_PASS}"
+          login "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}"
+          login "${MINIMAL_USER}" "${MINIMAL_PASS}"
+          login "${MEMBER_USER}" "${MEMBER_PASS}"
 
       - name: Queue and run the crawl
         run: |
@@ -3648,6 +3744,47 @@ jobs:
 
           echo "the parity gate goes red in both directions and names which one it is"
 
+          # The same falsification for the third comparison, and it needs one of
+          # its own: the page is read out of markup and not out of JSON, so a
+          # reader that quietly found no row in a page it could not read would be
+          # green over two empty sets. That is the failure the HTML reader exists
+          # to refuse, and this is where it is watched refusing it.
+          page_probe() {  # $1 name of the probe, $2 the word that has to appear, $3 the page
+            if python3 findling-src/scripts/ci/parity_diff.py \
+                --scenario "page-probe-$1" \
+                --native native-own-files.json \
+                --findling findling-own-files.json \
+                --findling-html "$3" \
+                --expect-min 1 > "page-probe-$1.log" 2>&1; then
+              cat "page-probe-$1.log"
+              echo "::error::the $1 page probe stayed green, so the page half of every comparison above proves nothing"
+              exit 1
+            fi
+            cat "page-probe-$1.log"
+            grep -q "$2" "page-probe-$1.log" \
+              || { echo "::error::the $1 page probe went red without naming the finding as $2"; exit 1; }
+          }
+
+          # One row more than the dialog shows: the page offers a file the search
+          # dialog does not show this user.
+          sed 's#</ol>#<li class="findling-hit" id="findling-hit-999999"></li></ol>#' \
+            page-own-files.html > page-probe-extra.html
+          page_probe extra page-extra page-probe-extra.html
+
+          # One row less: the two ways into the same search answer two different
+          # sets. The id of the first row is spelled without its number, so the
+          # row stays in the markup and drops out of the set.
+          sed '0,/id="findling-hit-[0-9]*"/s//id="findling-hit-dropped"/' \
+            page-own-files.html > page-probe-missing.html
+          page_probe missing page-missing page-probe-missing.html
+
+          # And the answer that is not the page at all, which is what a session
+          # that expired halfway through the job would produce.
+          printf '%s' '<html><body><form action="/login"></form></body></html>' > page-probe-unreadable.html
+          page_probe unreadable unreadable page-probe-unreadable.html
+
+          echo "the page half of the gate goes red in both directions and on an answer it cannot read"
+
       - name: Everything the failure had to say
         if: failure()
         run: |
@@ -3669,6 +3806,21 @@ jobs:
             if [ -f "${answer}" ]; then
               echo "== ${answer} =="
               jq -c '[.ocs.data.entries[]?.attributes.fileId]' "${answer}" || true
+            fi
+          done
+          # The third answer, under the same rule: the row ids of the page and
+          # nothing else. A page carries the file name in every row, and this log
+          # is the log of a public repository.
+          echo "--- the answers of the result page, as row ids ---"
+          for page in page-*.html; do
+            if [ -f "${page}" ]; then
+              echo "== ${page} =="
+              grep -o 'id="findling-hit-[0-9]*"' "${page}" | tr '\n' ' ' || true
+              echo
+              for marker in findling-hits findling-empty findling-banner--error; do
+                printf '%s: %s ' "${marker}" "$(grep -c "${marker}" "${page}" || true)"
+              done
+              echo
             fi
           done
           echo "--- exapp ---"
