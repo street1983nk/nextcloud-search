@@ -174,6 +174,7 @@ Plans:
 **Goal**: v1.1 steht als signiertes App-Paar im Nextcloud App Store, nachdem es jenseits des Happy Path getestet wurde und der Owner die Texte abgenommen hat.
 **Depends on**: Phase 10 (die Store-Aussage traegt Zahlen aus dem Messbericht und ist nach der Abgabe nicht mehr editierbar)
 **Requirements**: REL-01
+**Vorbedingung aus Phase 9**: Der vollstaendige franzoesische Katalog (alle Zeichenketten der App, `fr.json` **und** `fr.js`, Schluesselvergleich auf zwei Sprachpaare erweitert) ist Vorbedingung der Abgabe; die 24 vorbereiteten Wortlaute der Ergebnisseite und die Begruendung der Vertagung stehen in `docs/l10n-french.md`.
 **Success Criteria** (what must be TRUE):
 
   1. Beide Apps tragen dieselbe Version, sind signiert, und eine frische Nextcloud im Versionsfenster installiert sie aus den Release-Artefakten auf amd64 und arm64 und findet ohne Handgriff Inhalte

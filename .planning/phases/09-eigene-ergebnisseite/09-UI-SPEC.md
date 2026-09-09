@@ -1,10 +1,11 @@
 ---
 phase: 9
 slug: eigene-ergebnisseite
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-09-08
+approved: 2026-09-09
 ---
 
 # Phase 9: UI Design Contract
@@ -280,7 +281,7 @@ Fünf Blöcke, ein Formularfeld, ein Filter, ein Primärknopf. Das ist die ganze
 | Dateityp-Symbol | `IMimeTypeDetector::mimeTypeIcon($node->getMimetype())` als `<img alt="" aria-hidden="true">`, 32 × 32 | `filter: var(--background-invert-if-dark)`, damit es im dunklen Theme sichtbar bleibt. **Keine Vorschaubilder**: eine Miniatur kostet Serverarbeit pro Treffer und würde Dateiinhalt in einen zweiten Auslieferungsweg legen, den diese Phase nicht braucht |
 | Dateiname | `$node->getName()` des **bestätigten** Node, über `PlainText::bounded(…, 255)` | Nie aus der Container-Antwort. Wie im Provider: ein verwirrtes Backend darf keinen fremden Namen vor den Nutzer stellen |
 | Pfad | `$userFolder->getRelativePath(...)`, `PlainText::bounded(…, 255)` | Einzeilig mit `text-overflow: ellipsis`. Der vollständige Pfad steckt im Accessible Name der Zeile (`%1$s in %2$s`), damit die Kürzung nichts unterschlägt. Kein `title`-Tooltip als einziger Träger |
-| Snippet | `ExAppService::snippets()`, also erst **nach** dem Recheck geholt | Zwei Zeilen, `-webkit-line-clamp: 2` mit `overflow: hidden`. Fehlt das Snippet (Zeitbudget, stummes Backend), steht der Pfad an seiner Stelle, genau wie im Dialog. Ein Treffer ohne Auszug ist besser als kein Treffer |
+| Snippet | `ExAppService::snippets()`, also erst **nach** dem Recheck geholt | Zwei Zeilen, `-webkit-line-clamp: 2` mit `overflow: hidden`. Fehlt das Snippet (Zeitbudget, stummes Backend), entfällt diese dritte Zeile, und der Pfad bleibt in seiner eigenen zweiten Zeile stehen. Der Dialog hat nur eine Unterzeile und setzt dort den Pfad ein; die Seite hat zwei und braucht das nicht. Ein Treffer ohne Auszug ist besser als kein Treffer |
 | Hervorhebung | `highlights` als geprüfte Zeichen-Offsets aus `ExAppService::filterHighlights()` | Serverseitig in `<mark>` übersetzt: Text an den Offsets mit `mb_substr` zerlegt, **jedes** Stück einzeln escaped, dann zusammengesetzt. Der Renderer sortiert die Bereiche selbst nach Startwert und verwirft überlappende oder rückwärts laufende, weil `filterHighlights` Grenzen und Anzahl prüft, die Reihenfolge aber nur zusichert. Nie HTML aus der Container-Antwort übernehmen. Höchstens `MAX_HIGHLIGHTS` = 32 Bereiche |
 | Verlinkung | Die ganze Zeile ist **ein** Link auf `files.View.showFile` mit der `fileid`, `target="_self"` | Ein Link je Zeile, nicht drei. Der Dateiname ist der sichtbare Linktext, Pfad und Snippet liegen im selben Link |
 | Zeilen-Id | `id="findling-hit-<fileId>"` | Anker für die Rückkehr-Markierung |
@@ -307,13 +308,13 @@ Es gibt keine Seitenzahl-Gesamtangabe ("Seite 3 von 12"), keine Trefferzahl und 
 
 ## Positions- und Rückkehrvertrag (Erfolgskriterium 3)
 
-Drei Stufen, in dieser Reihenfolge, jede für sich ausreichend für "gleiche Suche, gleiche Seite".
+Drei Stufen, in dieser Reihenfolge. Für "gleiche Suche, gleiche Seite" reicht Stufe 1 allein. Für "gleiche Position" ist Stufe 3 der Träger, und Stufe 2 ist das, was der Browser dazugibt, wenn er es gibt.
 
 | Stufe | Träger | Was sie leistet | Ohne JavaScript |
 |-------|--------|-----------------|-----------------|
 | 1 | Die URL | Suchbegriff, Filter, Seite und Cursorpfad stehen in der Adresse. Zurück im Browser lädt exakt dieselbe Liste | funktioniert |
-| 2 | Der Browser | Die Seite ist ein gewöhnliches Dokument, also stellt der Browser die Scrollposition beim Zurück selbst wieder her. `history.scrollRestoration` wird **nicht** auf `manual` gesetzt | funktioniert |
-| 3 | Die Rückkehr-Markierung | Beim Klick auf eine Trefferzeile schreibt `search.js` `sessionStorage['findling:lasthit']` mit `{key, fileId}`, wobei `key` aus Suchbegriff, Filter und Seite gebildet wird. Der Klick wird nicht abgefangen, der Link folgt normal | entfällt, ohne Verlust der Stufen 1 und 2 |
+| 2 | Der Browser | Der Browser kann die Scrollposition beim Zurück wiederherstellen, und ihm wird nichts weggenommen: `history.scrollRestoration` wird **nicht** auf `manual` gesetzt. Verlassen kann sich die Seite darauf nicht. Gescrollt wird `#app-content`, ein eigener Scroll-Container innerhalb des fest positionierten `#content`, und die Wiederherstellung eines verschachtelten Containers ist nicht spezifiziert; dazu schließt `Cache-Control: no-store` an jeder AppFramework-Antwort die Seite in Firefox vom Back-Forward-Cache aus (`09-RESEARCH.md`, Befund 1 und Befund 2, 08.09.2026) | browserabhängig, in Firefox praktisch abgeschaltet |
+| 3 | Die Rückkehr-Markierung | Beim Klick auf eine Trefferzeile schreibt `search.js` `sessionStorage['findling:lasthit']` mit `{key, fileId}`, wobei `key` aus Suchbegriff, Filter und Seite gebildet wird. Der Klick wird nicht abgefangen, der Link folgt normal. **Diese Stufe ist der tragende Teil der Positionswiederherstellung und keine Zugabe:** `scrollIntoView` auf der Trefferzeile scrollt den nächsten scrollbaren Vorfahren, und das ist genau der Container, den Stufe 2 nicht verlässlich erreicht | entfällt. Stufe 1 bleibt vollständig, Stufe 2 bleibt, soweit der Browser sie gibt |
 
 Beim `pageshow` (auch aus dem Back-Forward-Cache) liest das Skript die Markierung und handelt nur, wenn `key` zur aktuellen Seite passt:
 
@@ -339,7 +340,7 @@ Beim `pageshow` (auch aus dem Back-Forward-Cache) liest das Skript die Markierun
 | Kein Home-Verzeichnis | `getUserFolder()` wirft | Fehlerblock "nicht suchbereit". Nie ungeprüfte Treffer, nie eine Exception in der Oberfläche |
 | Seite jenseits der Obergrenze | `page > 20` | Stille Rückkehr auf Seite 1 mit demselben Suchbegriff |
 | Ungültiger Cursorpfad | Länge, Reihenfolge oder Startwert passen nicht | Stille Rückkehr auf Seite 1 mit demselben Suchbegriff |
-| Snippet fehlt | Zeitbudget erschöpft oder Backend antwortet nur teilweise | Der Pfad steht an der Stelle des Snippets. Kein Platzhalter, kein "kein Auszug verfügbar" |
+| Snippet fehlt | Zeitbudget erschöpft oder Backend antwortet nur teilweise | Die Seite führt Pfad und Auszug in zwei eigenen Zeilen, anders als der Dialog mit seiner einen Unterzeile. Fehlt der Auszug, entfällt die dritte Zeile, und der Pfad bleibt an seinem Platz. Kein Platzhalter, keine Wiederholung des Pfads, kein Satz über einen fehlenden Auszug (nachgezogen am 09.09.2026: die frühere Fassung "der Pfad steht an der Stelle des Snippets" hätte wörtlich umgesetzt denselben Pfad zweimal untereinander ergeben) |
 
 ---
 
@@ -437,7 +438,9 @@ Gegen `docs/dev-setup.md` (Port 8090, `testuser`/`kollegin`, Testkorpus), zusät
 2. Suche mit wenigen Treffern: der Einstiegs-Eintrag erscheint **nicht**.
 3. Auf der Seite zweimal "Nächste Seite", dann zweimal "Vorherige Seite": dieselben Treffer in derselben Reihenfolge, keine Dublette, keine Lücke, der Suchbegriff steht unverändert im Feld.
 4. Auf Seite 3 einen Treffer öffnen, in der Dateiliste umsehen, Zurück: dieselbe Seite 3, dieselbe Suche, dieselbe Scrollposition, der geöffnete Treffer markiert, der Fokus auf ihm.
-5. Dasselbe mit abgeschaltetem JavaScript: dieselbe Seite 3, dieselbe Suche, Scrollposition vom Browser, keine Markierung, keine Fehlermeldung.
+5. Dasselbe mit abgeschaltetem JavaScript: dieselbe Seite 3, dieselbe Suche, keine Markierung, keine Fehlermeldung, und die Scrollposition ist das, was der Browser gibt.
+
+   *Nachgezogen am 09.09.2026.* Die frühere Fassung sagte "dieselbe Scrollposition, vom Browser" zu, und das ist nach der Recherche vom 08.09.2026 (`09-RESEARCH.md`, Befund 1 und Befund 2) browserabhängig: `#app-content` ist ein eigener Scroll-Container innerhalb des fest positionierten `#content`, und die Wiederherstellung eines verschachtelten Containers über eine Navigation hinweg ist nicht spezifiziert, und zusätzlich trägt jede AppFramework-Antwort `Cache-Control: no-store`, was Firefox vom Back-Forward-Cache ausschließt. Die Sichtprobe prüft deshalb das, was die Seite zusagen kann, und die Position selbst hängt an Stufe 3 des Rückkehrvertrags, die genau aus diesem Grund tragend ist und keine Zugabe.
 6. Die Adresse von Seite 3 als Lesezeichen speichern, Browser schließen, Lesezeichen öffnen: Seite 3 erscheint, ohne CSRF-Fehler.
 7. `cursors` in der Adresse von Hand verfälschen: Seite 1 derselben Suche, keine Fehlerseite, keine Ausnahme im Log.
 8. Zwei Nutzer, eine geteilte und eine nicht geteilte Datei mit demselben Suchwort: die Seite zeigt beiden genau das, was der Dialog ihnen zeigt, und sagt nirgends etwas über die fehlende Datei.
@@ -492,4 +495,8 @@ Keiner davon ist eine Gestaltungsfrage, alle sind Folgen dieses Vertrags.
 - [ ] Dimension 5 Spacing: PASS
 - [ ] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved (09.09.2026, Plan 09-08)
+
+Die zwei Nachzüge dieses Datums sind Teil der Abnahme und keine spätere Korrektur: Sichtprobe 5 nennt die Scrollposition nicht mehr als Zusage und trägt ihre Begründung bei sich, und die Zeile "Snippet fehlt" im Zustands-Inventar nennt die Zweizeiligkeit der Trefferzeile, die der Dialog nicht hat. Beide Änderungen beschreiben, was in Plan 09-05 gebaut wurde; keine von beiden ändert eine Zeile Code, und keine von beiden senkt eine Zusage, die die Seite je halten konnte.
+
+Die sechs Zeilen des Sign-Offs darüber bleiben offen, weil in dieser Phase kein eigener Checker-Lauf stattgefunden hat. Was von ihnen als Text prüfbar ist, hält Gate C über sechs Dateien (`backend/tests/test_admin_ui_contract.py`, Plan 09-06): kein Hexwert und keine Farbfunktion im eigenen Stil, kein Emoji, kein Em-Dash und kein En-Dash, kein Inline-Skript, kein `style`-Attribut, kein `outline: none`, kein Markup aus Zeichenketten im Seitenskript, und die drei neuen Symbolnamen stehen mit ihrem gepinnten Ursprung in `THIRD-PARTY.md`. Was Augenarbeit ist, steht im Sichtprobenprotokoll von Plan 09-08.
