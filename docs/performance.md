@@ -150,6 +150,7 @@ zwei Reihen auf zwei Architekturen mehr sagen als eine.
 | Kosten des Semantiklaufs | aus den Sätzen dieses Kontos, 2,37 USD netto | 2026-09-06 |
 | Verbleib der ARM-Box nach dem Semantiklauf | **wieder angehalten**, für die Launch-Härtung vor der Abgabe | 2026-09-06 |
 | Verbleib der ARM-Box nach der Launch-Härtung | **angehalten, kein Abbau** (Betreiberentscheid 07.09.); Abbaukriterium: nach der v1.1-Messung | 2026-09-07 |
+| **Feinmessung der Grundlast, nativ auf arm64** | **gemessen auf `ubuntu-24.04-arm`, Lauf 34325000302, fünf Posten 543,7 MB, 8 kB neben der groben nativen Messung; ersetzt die Messung unter QEMU, die 1,2 Prozent daneben lag** | 2026-09-09 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -3514,16 +3515,29 @@ Die Nachmessung vom 07.09.2026 hatte 543,7 MB von 678 MB Grundlast in genau zwei
 Schritten liegen, ohne sagen zu können, wofür. Die Feinmessung vom 08.09.2026
 (`docs/measurements/2026-09-grundlast-fein/`) hat dieselben zwei Schritte in
 fünf einzeln benannte Posten zerlegt, im selben Abbild, auf amd64 nativ und auf
-arm64 unter Emulation. Die Antwort ist eindeutig:
+arm64 zunächst unter Emulation. Die arm64-Spalte steht seit dem 09.09.2026 auf
+einer nativen Messung: der erste `workflow_dispatch` von `measure.yml` auf
+`main` (Lauf 34325000302) hat dieselbe Skriptdatei auf `ubuntu-24.04-arm`
+gefahren. Die Antwort ist eindeutig:
 
-| Posten | amd64 | arm64 (emuliert) |
+| Posten | amd64 | arm64 (nativ) |
 |---|---:|---:|
-| Modulimport `tokenizers`, ohne Instanz | 4,2 MB | 6,0 MB |
-| erste Tokenizer-Instanz aus `tokenizer.json` | 265,8 MB | 246,6 MB |
-| Bau des Splitters (`from_huggingface_tokenizer`) | 273,5 MB | 294,0 MB |
-| erster Chunkerlauf über 3.720 Zeichen | 0,8 MB | 3,5 MB |
+| Modulimport `tokenizers`, ohne Instanz | 4,2 MB | 4,2 MB |
+| erste Tokenizer-Instanz aus `tokenizer.json` | 265,8 MB | 265,2 MB |
+| Bau des Splitters (`from_huggingface_tokenizer`) | 273,5 MB | 273,4 MB |
+| erster Chunkerlauf über 3.720 Zeichen | 0,8 MB | 0,9 MB |
 | zweiter Chunkerlauf über denselben Text | 0,0 MB | 0,0 MB |
-| **Summe** | **544,3 MB** | **550,1 MB** |
+| **Summe** | **544,3 MB** | **543,7 MB** |
+
+Vorläufer der arm64-Spalte, gemessen unter QEMU und weiter lesbar in
+`docs/measurements/2026-09-grundlast-fein/rohdaten/01-grundlast-fein-arm64-emuliert.txt`:
+6,0 MB, 246,6 MB, 294,0 MB, 3,5 MB, 0,0 MB, Summe 550,1 MB. Die Emulation hatte
+die Grundlinie um rund 30 MB verschoben (Schritt 00 lag bei 43,2 MB statt bei
+13,0 MB nativ) und die Summe der fünf Posten 1,2 Prozent neben die grobe native
+Messung derselben Schritte gelegt. Die native Messung liegt 8 kB daneben, also
+0,001 Prozent. Der Entscheid über den faulen Bau ist am 08.09.2026 gegen die
+emulierte Summe gefallen und bleibt unberührt: die Schwelle war 100 MB, und
+beide Zahlen liegen beim Fünffachen davon.
 
 Der Modulimport ist es also nicht, und die Chunkerläufe sind es auch nicht. Es
 sind zwei Materialisierungen desselben Tokenizers: eine in Python und eine, die

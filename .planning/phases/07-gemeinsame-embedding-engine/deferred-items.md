@@ -94,6 +94,25 @@ Phase 11, denn sie ist eine Frage fuer das Audit und nicht fuer einen Messplan.
 
 ## DI-07-04 (gefunden in Plan 07-03, Task 1): die native arm64-Rohdatei der Feinmessung kann erst nach dem Zusammenfuehren entstehen
 
+**GESCHLOSSEN 09.09.2026:** Erster `workflow_dispatch` von `measure.yml` auf main
+(34325000302, Ast arm64 auf `ubuntu-24.04-arm`, Artefakt `welle0-arm64`) lieferte die
+native Rohdatei; gemessenes Abbild
+`sha256:eed6a5fcb152373e7bf6d7725da774844d4012cfe0cbe02b261f31a865e4cce3`
+(Manifestindex von :dev, arm64-Hälfte
+`sha256:ae58d93005dc18849c3bd128cef51bea0530c143f5719a284fd694b6f9e09d44`).
+Schritt 00 fällt von 43,2 MB auf 13,0 MB, die Summe der fünf Posten liegt mit 543,7 MB
+8 kB neben der groben nativen Messung aus 63-grundlast.txt statt 1,2 Prozent daneben.
+Nachgezogen sind die Abschnitte 1, 2, 3 und 4 von
+`docs/measurements/2026-09-grundlast-fein/README.md` und die Tabelle des Abschnitts
+"Der größte Posten der Grundlast" samt einer Zeile in "Stand dieses Berichts" in
+`docs/performance.md`. Die emulierte Datei ist nicht gelöscht, sondern umbenannt in
+`01-grundlast-fein-arm64-emuliert.txt` und unter jeder nachgezogenen Tabelle als
+Vorläufer genannt. Der Entscheid des Plans 07-03 bleibt unberührt.
+
+**Ein Zusatz gegen die Sprachfalle:** Dieser Eintrag nennt "Abschnitt 1, 2, 4 und 7" des
+Berichts. Der Bericht hat sechs Abschnitte; die vier Stellen mit arm64-Zahlen sind 1, 2,
+3 und 4. Nachgezogen sind diese vier.
+
 **Gefunden:** beim Fahren der feineren Grundlastmessung, unmittelbar nachdem der
 Messschritt in `.github/workflows/measure.yml` gebaut war.
 
