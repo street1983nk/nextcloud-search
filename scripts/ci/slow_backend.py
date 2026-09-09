@@ -67,6 +67,21 @@ DELAY_MS: Final = int(os.environ.get("FINDLING_SLOW_BACKEND_DELAY_MS", str(DELAY
 
 PORT: Final = int(os.environ.get("EXAPP_PORT", "10035"))
 
+# The bind address, and the default has not moved either: in the workflow the
+# stub and Nextcloud live on the same runner, so the loopback is both enough and
+# the narrower choice.
+#
+# It is a variable because of the other place this stub belongs, the acceptance
+# probes of the development setup: there Nextcloud runs in a container and reaches
+# this process under host.docker.internal, and a loopback bind is invisible from
+# in there. What arrives in the browser then is the error block of an unreachable
+# backend, which looks exactly like the probe of a stopped backend and proves
+# nothing about a slow one. Same trap, same wording, as in
+# scripts/dev/register-exapp.sh, which is where this was learned:
+#
+#     FINDLING_SLOW_BACKEND_HOST=0.0.0.0 EXAPP_PORT=10035 python scripts/ci/slow_backend.py
+HOST: Final = os.environ.get("FINDLING_SLOW_BACKEND_HOST", "127.0.0.1")
+
 # Frozen on both sides. filterCandidates() keeps a candidate with file id 0 only
 # under this exact title and only with a snippet, and drops everything else that
 # carries an id which cannot point at a file.
@@ -125,6 +140,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"slow_backend: 127.0.0.1:{PORT}, /search answers after {DELAY_MS}ms", flush=True)
+    print(f"slow_backend: {HOST}:{PORT}, /search answers after {DELAY_MS}ms", flush=True)
     # Threading, so the late answer does not block the heartbeat.
-    http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    http.server.ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
