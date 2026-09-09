@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Completed 10-04-PLAN.md
-last_updated: "2026-09-09T09:08:40.505Z"
+stopped_at: 10-05-PLAN.md Tasks 1 bis 3 fertig, Task 4 offen (Volllauf laeuft)
+last_updated: "2026-09-09T10:13:21.032Z"
 last_activity: 2026-09-09
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 24
-  completed_plans: 21
+  completed_plans: 22
   percent: 60
 ---
 
@@ -21,16 +21,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 10 — vergleichsmessung-auf-der-aws-box
+**Current focus:** Phase 10, vergleichsmessung-auf-der-aws-box
 
 ## Current Position
 
-Phase: 10 (vergleichsmessung-auf-der-aws-box) — EXECUTING
-Plan: 5 of 7
-Status: Ready to execute
+Phase: 10 (vergleichsmessung-auf-der-aws-box): EXECUTING
+Plan: 5 of 7 (Tasks 1 bis 3 fertig, Task 4 ist ein offener blockierender Checkpoint)
+Status: Der Volllauf laeuft abgesetzt auf der Box
 Last activity: 2026-09-09
 
-**Naechster Schritt:** Welle 5 der Phase 10 (Plan 10-05), und das ist die erste Welle, die Box-Minuten kostet. Erledigt aus Welle 4: das Skriptset des abgesetzten Laufs (`96-volllauf.sh`, `96b-waechter.sh`, `96c-lesen.py`, `96d-statusbeobachter.py`, `96e-ntfy-watch.sh`) und die drei neuen Messbloecke (`98-sprachfaelle.sh`, `99-seitenroute.sh`, `99b-runden.sh`); `00-ablauf.md` fuehrt jetzt alle dreizehn Schritte mit Rohdateinamen, Wartefristen, Abbruchbedingungen und einer Tabelle aller Rueckgabewerte. Der Waechter schreibt `96-oom-beweis.txt`, also ist die Schnittstelle zu `95-spitze.sh nachher` (Abbruch 12) erfuellt. Fuer Welle 5: die Anfahrt braucht den A-Record oder einen der zwei Rueckfaelle, den Owner-Checkpoint vor dem ersten `aws_box.sh start`, und `jq` auf der Box (`98-sprachfaelle.sh` und `99b-runden.sh` enden sonst mit 18). Weiter offen: MESS-01 bis MESS-03 brauchen den Lauf auf der Box.
+**Naechster Schritt:** Warten, bis der Volllauf durch ist, dann Task 4 von Plan 10-05 beantworten und Plan 10-06 fahren. Der Lauf ist am **2026-09-09T09:58:42Z** angestossen worden, erwartete Dauer rund 19 Stunden, Ende ist die Datei `00-FERTIG` im Rohdatenverzeichnis auf der Box. Die Box laeuft weiter (`i-06b1d913f5c6f669b`, Adresse **3.69.147.2**, 0,1158 USD je Stunde, Deckel 30 Stunden und 3,50 USD) und der Container darf NICHT angefasst werden, weil `memory.peak` und `memory.events` des ganzen Laufs sonst verloren sind.
+
+Erledigt aus Welle 5: die Anfahrt ueber `aws_box.sh start`, der Korpus als dieselben Bytes belegt (`korpus-gleich ja`, `bcbef9b2...`), der Baumhash-Beweis in einer NICHT leeren Rohdatei (Abbild und Arbeitsbaum je 54 Dateien `6c47cd21...`, `baumhash-gleich ja`), die harte Grenze aus der cgroup (`memory.max=2147483648`), der Nullstand, die **MESS-01-Kernzahl (Grundlast 103,2 MB gegen 691,8 MB)**, die erste Suche als Ereignis (plus 415,0 MB) und der Kaltstart (1.550,4 ms gegen die Decke von 1.500 ms). Alle Rohdaten sind committet, und zwar bevor der Lauf angestossen wurde.
+
+Drei Werkzeuge sind dabei korrigiert worden, jedes mit einer Zusicherung daneben: die Laufzeitrechnung von `aws_box.sh status` (zaehlte Parkstunden als Laufstunden), die Instanzzaehlung vor `--rm-data` (haette die zweite Nextcloud durchgelassen) und der Sortierschluessel des Baumhashes (plattformabhaengig, hatte **CI seit Welle 1 rot**; CI ist damit wieder gruen zu erwarten).
+
+**Ein Owner-Handgriff offen:** den A-Record `loadtest.infranode.dev` in der Cloudflare-Zone auf **3.69.147.2** ziehen. Der Lauf braucht ihn nicht, er beseitigt nur Fallstrick 7.
+
+Weiter offen: MESS-01 bis MESS-03 brauchen das Ende des Laufs und den Bericht.
 
 ## Performance Metrics
 
@@ -86,6 +94,7 @@ Last activity: 2026-09-09
 | Phase 10 P02 | 25min | 2 tasks | 6 files |
 | Phase 10 P03 | 28min | 3 tasks | 8 files |
 | Phase 10 P04 | 34min | 3 tasks | 10 files |
+| Phase 10 P05 | 55min | 3 tasks | 28 files |
 
 ## Accumulated Context
 
@@ -221,6 +230,11 @@ Recent decisions affecting current work:
 - [Phase 10]: 10-04: Der OOM-Beweis wird zweimal gelesen und beide Lesungen stehen beschriftet in derselben Rohdatei: bei erkanntem Ende vor jedem Eingriff, und nach den Nachlaufschritten. Eine Suchlastprobe hebt memory.peak
 - [Phase 10]: 10-04: Die Bilanzzeile der Sprachfaelle zaehlt FAELLE, die Liste darunter Zusicherungen; Fall 1 traegt vier davon, und vier rote Zusicherungen eines Falls sind ein roter Fall
 - [Phase 10]: 10-04: Das Skelett wird vor jedem user:add abgeschaltet und danach zurueckgesetzt, weil Handbuch und Fotoordner in der Heimat die Zaehlzusicherungen zu Aussagen ueber Dokumente machen wuerden, die niemand gewaehlt hat
+- [Phase 10]: 10-05: Der Baumhash sortiert nach dem relativen posix-Pfad und nicht nach dem Path-Objekt; die Windows-Variante faltet Gross- und Kleinschreibung, also ergab derselbe Baum zwei Hashes und CI war seit Welle 1 rot. Das Python-Paket bleibt bei 6c47cd21 unter beiden Schluesseln, also wird keine Vergleichszahl retiriert
+- [Phase 10]: 10-05: aws_box.sh status nennt die Zeit seit dem letzten Start nur bei laufender Instanz eine Laufzeit; geparkt zaehlte es 52,3 Stunden und 5,80 USD fuer 1,95 gelaufene Stunden, und an dieser Zahl haengt der Kostendeckel des Owners
+- [Phase 10]: 10-05: Die Instanzzaehlung vor --rm-data haengt am Repositoriumsnamen und nicht an einem Registry-Pfad; das alte Muster haette MIT der zweiten Nextcloud vom 07.09. genau 1 gezaehlt und den zerstoerenden Befehl durchgelassen
+- [Phase 10]: 10-05: MESS-01-Kernzahl gemessen: Grundlast im Leerlauf 103,2 MB gegen 691,8 MB (06-11) und 693,4 MB (Nachmessung), unter der gerechneten Erwartung von 118 bis 150 MB, mit null Poller-Durchgaengen als Beleg fuer den Leerlauf
+- [Phase 10]: 10-05: Kaltstart 1.550,4 ms gegen die Decke von 1.500 ms, Marge minus 50,4 ms gegen plus 167,9 ms des Vorwerts; DI-07-02 neigt damit zu ja, und die schlechtere Rolle nachher steht in Plan 10-06 noch aus
 
 ### Pending Todos
 
@@ -248,6 +262,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-09T09:08:10.006Z
-Stopped at: Completed 10-04-PLAN.md
+Last session: 2026-09-09T10:12:44.811Z
+Stopped at: 10-05-PLAN.md Tasks 1 bis 3 fertig, Task 4 offen (Volllauf laeuft abgesetzt seit 2026-09-09T09:58:42Z, Ende ist die Datei 00-FERTIG)
 Resume file: None
