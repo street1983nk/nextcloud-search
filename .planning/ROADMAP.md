@@ -128,8 +128,8 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 09-01-PLAN.md , Zeitbudget der Seitenroute messen und den Per-Call-Deckel parametrieren (Welle 1)
-- [ ] 09-02-PLAN.md , Gate B lernt die Nutzerseiten-Routenklasse, Gate C die drei fehlenden Verbote (Welle 1)
+- [x] 09-01-PLAN.md , Zeitbudget der Seitenroute messen und den Per-Call-Deckel parametrieren (Welle 1)
+- [x] 09-02-PLAN.md , Gate B lernt die Nutzerseiten-Routenklasse, Gate C die drei fehlenden Verbote (Welle 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -193,7 +193,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 |-------|----------------|--------|-----------|
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
-| 9. Eigene Ergebnisseite | 0/8 | Planned     | - |
+| 9. Eigene Ergebnisseite | 2/8 | In Progress|  |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
 
