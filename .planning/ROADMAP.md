@@ -178,7 +178,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 10-02-PLAN.md , DI-07-04: die native arm64-Feinmessung per workflow_dispatch, und die vier Spalten nachgezogen (Welle 2, ohne Box-Zeit)
+- [x] 10-02-PLAN.md , DI-07-04: die native arm64-Feinmessung per workflow_dispatch, und die vier Spalten nachgezogen (Welle 2, ohne Box-Zeit)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

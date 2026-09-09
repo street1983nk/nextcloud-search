@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-09-09T07:36:06.801Z"
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-09-09T08:00:23.715Z"
 last_activity: 2026-09-09
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 24
-  completed_plans: 18
+  completed_plans: 19
   percent: 60
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 10 (vergleichsmessung-auf-der-aws-box) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-09-09
 
-**Naechster Schritt:** `/gsd:plan-phase 10` (Vergleichsmessung auf der AWS-Box). Vorher steht der Push dieser Welle: `php.yml` und `integration.yml` haben noch keinen Lauf gegen den Stand der Phase 9 gesehen.
+**Naechster Schritt:** Welle 3 der Phase 10 (Plan 10-03). Erledigt aus Welle 2: der erste `workflow_dispatch` von `measure.yml` auf main (Lauf 34325000302) hat die native arm64-Feinmessung geliefert, DI-07-04 ist geschlossen, und der Digest, den der Lauf auf der Box in Welle 5 aufloesen muss, steht in der Rohdatei und im Bericht. Weiter offen: MESS-01 bis MESS-03 brauchen den Lauf auf der Box.
 
 ## Performance Metrics
 
@@ -83,6 +83,7 @@ Last activity: 2026-09-09
 | Phase 09 P07 | 50min | 3 tasks | 4 files |
 | Phase 09 P08 | 75min | 3 tasks | 16 files |
 | Phase 10 P01 | 42min | 3 tasks | 4 files |
+| Phase 10 P02 | 25min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -206,6 +207,10 @@ Recent decisions affecting current work:
 - [Phase 10]: 10-01: Der Baumhash reist als Argument in das Abbild, nicht als Heredoc auf stdin. 40-abbild.sh ist an einem fehlenden -i gescheitert, 61-wechsel.sh hat es ergaenzt und die Ausgabe fehlt trotzdem; ein Argument braucht kein stdin, also entfaellt die Fehlerklasse. Das Skript prueft seine eigene Rohdatei auf drei verankerte baumhash-Zeilen und bricht sonst ab, denn der Vorlaeuferfehler war nicht das -i, sondern dass niemand in die Datei gesehen hat
 - [Phase 10]: 10-01: Das Gate ueber die Messskripte hat zwei Geltungsbereiche. Weit (kein Wagenruecklauf, kein Gedankenstrich) ueber alle .py und .sh unter docs/measurements/**/skripte/, weil der Bestand das nach der Renormalisierung erfuellt. Eng (Shebang, kein Maschinenpfad, kein Passwort im Argument) nur ueber das Verzeichnis dieses Laufs, weil 45-suchlast.py sys.path.insert auf /home/ubuntu/work und drillhelfer traegt und Geschichte mit Rohdaten daneben ist. MACHINE_SHAPES wird per ast aus test_ops_scripts.py gelesen, damit es eine Definition fuer beide Gates gibt
 - [Phase 10]: 10-01: Die fuenf renormalisierten Messskripte haben keinen Commit-Inhalt: git hatte sie mit LF gespeichert, das CRLF kam aus core.autocrlf beim Auschecken. Committed ist nur die .gitattributes-Regel, und genau sie war die Luecke. Die Altbestaende unter docs/measurements bleiben ruff-unbehandelt, weil CI dort nie laeuft und ein Reformatieren die Herkunft der daneben liegenden Rohdaten verwischen wuerde
+- [Phase 10]: 10-02: Die native arm64-Feinmessung stammt aus dem measure.yml-Lauf 34325000302 gegen das Abbild sha256:eed6a5fcb152373e7bf6d7725da774844d4012cfe0cbe02b261f31a865e4cce3 (arm64-Haelfte sha256:ae58d930). Genau diesen Digest muss der Lauf auf der Box in Welle 5 aufloesen; der Runner nennt den Manifestindex, wo die aeltere amd64-Datei einen Plattform-Digest nennt
+- [Phase 10]: 10-02: Die emulierte Rohdatei wird umbenannt statt geloescht (01-grundlast-fein-arm64-emuliert.txt), und jede nachgezogene Tabelle nennt die Vorlaeuferzahl mit ihrem Dateinamen. Eine Messreihe, die ihre Geschichte loescht, laesst niemanden nachvollziehen, warum ein Befund einmal anders aussah
+- [Phase 10]: 10-02: Der amd64-Ast desselben Laufs wird als 01-grundlast-fein-amd64-runner.txt abgelegt statt nur ausgerechnet. Die alte amd64-Datei bleibt unveraendert, weil der Entscheid von Plan 07-03 auf ihr steht, und die Zahlen der Kontrolle bekommen trotzdem ihre eigene Rohdatei
+- [Phase 10]: 10-02: MESS-01 bleibt offen. Dieser Plan hat null Box-Minuten gekostet und keinen Vergleichslauf gefahren; abhaken darf die Kennung der Plan, der die Zahlen auf der Box erzeugt
 
 ### Pending Todos
 
@@ -233,6 +238,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-09T07:36:06.783Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-09-09T08:00:23.699Z
+Stopped at: Completed 10-02-PLAN.md
 Resume file: None
