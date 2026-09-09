@@ -129,6 +129,12 @@ occ() {
     # Called and not rebuilt. The step judges itself and ends with 3 or 4 if it
     # cannot; the readings below repeat the check because a called script that
     # was replaced by an older copy would otherwise pass unnoticed.
+    #
+    # Handed over and not left to agree by accident: both scripts carry the same
+    # defaults, so an unexported override here would have proven the tree hash
+    # against one image while the registration below used another. That is the
+    # T-10-13 failure with a green step in front of it.
+    export IMAGE OUT REPO
     baumhash_status=0
     sh "$SKRIPTE/40b-baumhash.sh" || baumhash_status=$?
     printf '40b-baumhash exit code: %s\n' "$baumhash_status"
