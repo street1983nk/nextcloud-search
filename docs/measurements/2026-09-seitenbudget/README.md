@@ -209,6 +209,61 @@ der Seitenroute übernimmt. `PAGE_REQUEST_TIMEOUT_SECONDS` = 1,5 Sekunden ist di
 Zahl, die als Konstante in `php/lib/Service/ExAppService.php` steht, mit diesem
 Bericht und diesem Messdatum im Kommentar.
 
+## 6.3 Nachtrag vom 09.09.2026: der Nachlauf gegen die fertige Seitenroute
+
+Dieser Abschnitt kommt aus dem Performance-Audit der Phase 9
+(`docs/audits/2026-09-phase-09/`) und korrigiert eine Zuordnung dieses Berichts.
+Er wurde nach der letzten Änderung der Seite gefahren, gegen dieselbe Instanz,
+denselben Zwei-Wort-Begriff (`Bescheid Antrag`) und mit denselben 20
+Wiederholungen und derselben Rangregel. Rohdaten in `raw/nachlauf-*.txt`.
+
+| Reihe | Weg | n | min | p50 | **p95** | max |
+|---|---|---|---|---|---|---|
+| Seite mit Suche, Sitzung | `GET /apps/findling/?query=...`, Cookie | 20 | 0,090 s | 0,104 s | **0,122 s** | 0,125 s |
+| Seite mit Suche, Basic-Auth | dieselbe Adresse, `-u testuser:...` | 20 | 0,386 s | 0,419 s | **0,445 s** | 0,457 s |
+| Dialogweg, Basic-Auth, `limit=100` | die OCS-Route dieses Berichts | 20 | 0,474 s | 0,507 s | **0,538 s** | 0,540 s |
+| Seite ohne Suche, Sitzung | `GET /apps/findling/`, kein Backend-Aufruf | 20 | 0,033 s | 0,044 s | **0,055 s** | 0,066 s |
+| Seite ohne Suche, Basic-Auth | dieselbe Adresse | 20 | 0,327 s | 0,343 s | **0,373 s** | 0,390 s |
+
+**Das Budget hält, mit Abstand.** Die Seitenroute antwortet auf dem Weg, den ein
+angemeldeter Nutzer wirklich geht, mit einem p95 von 0,122 Sekunden. Das sind
+vier Prozent von `PAGE_BUDGET_SECONDS` = 3,0 Sekunden. Auch mit den Kosten der
+Basic-Auth, die ein Browser nicht bezahlt, bleiben es 15 Prozent.
+
+**Die Erwartung der Recherche ist widerlegt, und zwar in die andere Richtung.**
+Erwartet war "wie der Dialog, plus ein Viertel", weil die Seite pro Runde bis zu
+100 Kandidaten holt statt bis zu 80. Gleich gemessen (beide mit Basic-Auth,
+dieselbe Instanz, dieselbe Minute) ist die Seite am p95 um 0,093 Sekunden
+**schneller** als der Dialogweg mit `limit=100`. Der Grund liegt in
+`SearchService`: `$fetchLimit` ist auf das gedeckelt, was das Recheck-Budget
+überhaupt prüfen kann, also holt die Seite für 25 Anzeigetreffer weniger
+Kandidaten als der Dialogaufruf mit `limit=100`.
+
+**Und die Korrektur an Abschnitt 5.2.** Dort steht, rund neun Zehntel der Zeit
+einer Suche lägen "auf der PHP-Seite: Anfragebau, Vorfilter, Rechteabgleich Datei
+für Datei, Zusammensetzen der Antwort". Das ist für die dort gemessene Reihe
+richtig gerechnet und in der Zuordnung zu großzügig: **0,318 Sekunden davon sind
+die Passwortprüfung der Messmethode.** Die beiden letzten Zeilen der Tabelle
+oben trennen das, weil sie dieselbe Adresse ohne Suchbegriff abrufen, also ohne
+einen einzigen Container-Aufruf und ohne Recheck: 0,055 s mit Sitzung gegen
+0,373 s mit Basic-Auth. Die Differenz ist der Preis von `-u`, den jede Reihe
+dieses Berichts zwanzigmal bezahlt hat und den kein angemeldeter Nutzer bezahlt.
+
+Was von 5.2 stehen bleibt: die Zeit liegt nicht im Container. Was zu korrigieren
+ist: sie liegt auch nicht in dem Umfang im Rechteabgleich, den 5.2 nahelegt. Der
+gemessene Anteil der ganzen Suche, also beide Container-Aufrufe plus der Recheck
+von 25 genehmigten Treffern plus das Rendern, ist die Differenz der ersten und
+der vierten Zeile: **0,067 Sekunden am p95.** Für Phase 10 heißt das: eine Zahl
+dieses Berichts mit einer Zahl von dort zu vergleichen, geht nur bei gleichem
+Anmeldeweg.
+
+**Was auch dieser Nachlauf nicht gemessen hat:** den hybriden Fall (auf dieser
+Instanz gibt es keine `vectors.db`, siehe 5.1), Nebenlast, und eine Seite jenseits
+der Offset-Decke unter Last. Der Korpus war ein anderer als in Abschnitt 3: die
+Instanz trug am 09.09.2026 abends 438 indexierte Dateien, und der benutzte
+Begriff liefert 12 volle Anzeigeseiten. Die Zahlen der Abschnitte 3 bis 6 sind
+deshalb nicht durch diesen Nachlauf ersetzt, sondern durch ihn ergänzt.
+
 ## 7. Nachstellen
 
 ```bash
