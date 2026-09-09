@@ -180,8 +180,14 @@ class ExAppService {
 	 * compound is split into parts and every part inherits the offsets of the
 	 * whole word, so a handful of ranges per snippet is normal and thirty two
 	 * is already generous.
+	 *
+	 * Public since plan 09-04, and the reason is that a second place has to
+	 * obey the same ceiling: OCA\Findling\Text\Highlighter walks the ranges of
+	 * one excerpt and stops marking at this number. It reads the constant
+	 * rather than carrying a copy, because two ceilings that are meant to be
+	 * the same and are written down twice are two ceilings that will differ.
 	 */
-	private const MAX_HIGHLIGHTS = 32;
+	public const MAX_HIGHLIGHTS = 32;
 
 	/**
 	 * The range the backend accepts, see the request models in
