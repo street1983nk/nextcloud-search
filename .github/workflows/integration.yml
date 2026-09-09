@@ -2942,10 +2942,24 @@ jobs:
           # index() carries NoCSRFRequired and changes nothing. The token is
           # needed for the login POST alone, which is why it lives in the login
           # step and not here.
+          #
+          # /index.php in front of the route, and that part is not decoration.
+          # The instance of this job is served by composer run serve, which is
+          # php -S, and the builtin server resolves a request path against the
+          # filesystem before anything else. setup-test-nc moves the companion
+          # to apps/findling, so that directory really exists and carries no
+          # index.php, and the builtin server answers such a path with its own
+          # 404 instead of falling back to the front controller. Addresses like
+          # /login and /ocs/v2.php work here because the first has no
+          # counterpart on disk and the second is a file. The bare form is
+          # nothing this instance ever hands out either: without a rewrite,
+          # IURLGenerator prepends /index.php to every route, which is what the
+          # navigation entry and the form action of the page carry. deploy-harp
+          # .yml asks the admin route of this same app the same way.
           ask_page() {
             curl -sfS -G -b "cookies-$1.txt" -c "cookies-$1.txt" \
               --data-urlencode "query=$2" \
-              'http://localhost:8080/apps/findling/' -o "$3"
+              'http://localhost:8080/index.php/apps/findling/' -o "$3"
           }
 
           # $1 scenario, $2 user, $3 password, $4 term, $5 expected minimum of
@@ -3057,9 +3071,14 @@ jobs:
             # compares against: a session that does not reach that route would
             # otherwise surface as a scenario with an unreadable page answer,
             # twenty minutes further into the run.
+            #
+            # The same address ask_page uses, front controller and all, and the
+            # reason is written out there: php -S answers /apps/findling/ with
+            # its own 404 because that directory exists on disk without an
+            # index.php, so the bare form never reaches Nextcloud at all.
             status=$(curl -sS -b "${jar}" -c "${jar}" -o "login-probe-$1.html" -w '%{http_code}' \
               --get --data-urlencode 'query=parityloginprobe' \
-              'http://localhost:8080/apps/findling/')
+              'http://localhost:8080/index.php/apps/findling/')
             if [ "${status}" != "200" ] || ! grep -q 'findling-search' "login-probe-$1.html"; then
               echo "::error::the result page answered ${status} for $1 and not the page, so the session did not reach it"
               exit 1
