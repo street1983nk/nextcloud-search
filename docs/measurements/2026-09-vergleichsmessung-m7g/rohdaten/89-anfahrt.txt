@@ -1,0 +1,139 @@
+anfahrt-start 2026-09-09T09:19:12Z
+
+Diese Datei ist das Protokoll der Anfahrt. Sie ist von Hand geschrieben und
+nicht von einem Skript, weil die Anfahrt von diesem Windows-Rechner aus laeuft
+und nicht auf der Box; jede Zeile darunter ist eine Ausgabe, die wirklich so
+gefallen ist. Die Schritte 1 bis 6 des Ablaufplans haben ihre eigenen
+Rohdateien, 90-bestand.txt bis 95-spitze-vorher.txt.
+
+=== Die Owner-Freigabe, die diesem Lauf zugrunde liegt (Checkpoint 1, 09.09.) ===
+1+2 Box starten: ja, VOLLLAUF. Woertliche Auswahl "Volllauf (Empfehlung)",
+    22 bis 26 Stunden abgesetzt ueber Nacht mit Meldekette ist gewollt.
+3   Kostendeckel: 30 Stunden und 3,50 USD netto (Empfehlung uebernommen).
+4   A-Record: der Owner zieht loadtest.infranode.dev selbst auf die neue
+    Adresse, sobald sie ihm genannt ist. Bis dahin darf nichts auf den alten
+    Eintrag laufen.
+5   Die zehn Sprachfaelle auf der Box: ja, rund 30 Minuten, im Bericht
+    ausdruecklich als Erstmessung neben dem CI-Beleg auszuweisen.
+6   DI-07-02 und DI-07-03: beide mitnehmen.
+7   Der Abbau der Box ist nicht Teil dieses Laufs; der Plan endet mit
+    laufender Box, das Anhalten steht in Plan 10-06.
+
+=== aws_box.sh status, VOR der Anfahrt, ohne Nebenwirkung ===
+Dies ist die erste Messung dieses Laufs und nicht die Bestaetigung von
+Annahme A10.
+  instance  i-06b1d913f5c6f669b m7g.large stopped in eu-central-1c
+  address   none
+  volume    vol-0f3bea6ca1dab68ab 40 G gp3 3000 IOPS 125 MB/s
+  volume    vol-04c5b59fe9417babd 60 G gp3 3000 IOPS 125 MB/s
+Annahme A10 ist damit gemessen: die Box ist noch da und noch gestoppt, beide
+Datentraeger haengen an ihr, zusammen 100 GB.
+
+BEFUND an dieser Ausgabe, und er ist der Grund fuer einen Commit dieses Plans:
+derselbe Aufruf nannte zusaetzlich "running 52.3 hours since 2026-09-07T04:59:58"
+und "spent 5.80 USD so far". Beide Zahlen waren falsch. Eine angehaltene Instanz
+antwortet weiter mit der LaunchTime ihres letzten Starts, also hat cmd_status
+jede Parkstunde als Laufstunde gezaehlt; die Box war 1,95 Stunden gelaufen und
+seit dem 07.09. 06:56:42Z geparkt. Genau die Falle, um die cmd_stop herum gebaut
+ist. An dieser Zahl haengt der Kostendeckel aus Punkt 3, deshalb ist sie
+korrigiert: die Rechnung ist jetzt an den Zustand geknuepft, und der geparkte
+Fall nennt die Tagesrate der Datentraeger statt einer Summe. Nach der Korrektur
+meldet der laufende Fall "running 0.0 hours since 2026-09-09T09:19:50" und
+"spent 0.00 USD".
+
+=== aws_box.sh prices, Abfragedatum 2026-09-09T09:19:40Z ===
+  type      m7g.large
+  cores     2 vCPU, arm64, 2.6 GHz sustained
+  memory    8192 MiB on the type, capped to 4096 MiB by the kernel
+  network   Up to 12.5 Gigabit
+  disk      40 GB gp3 root, 60 GB gp3 data volume
+  rate      0.0978 USD per hour for the box, net
+  rate      0.0952 USD per GB and month for gp3, net
+  rate      0.0050 USD per hour for the public address, net
+Die Saetze sind im Skript festgenagelt, mit ihrer Quelle: Preisliste
+eu-central-1, Fassung 20260903195206, gueltig ab 2026-09-01, und die VPC-Liste
+20260831092232. Dieses Konto darf die Preis-API nicht lesen
+(pricing:GetProducts fehlt in seiner Policy), also stammen sie aus der
+oeffentlichen Bulk-Liste. Laufend zusammen 0,1158 USD je Stunde.
+
+Parkkosten, die vor diesem Lauf schon angefallen waren: vom 07.09. 06:56:42Z
+bis zur Anfahrt sind 2,21 Tage zu 0,3130 USD je Tag, also rund 0,69 USD.
+
+=== aws_box.sh start, die Anfahrt ===
+Nicht "aws ec2 start-instances": eine Anfahrt von Hand geht an der
+Kostenrechnung und an der Zustandsdatei vorbei, und genau dafuer ist der
+Unterbefehl am 07.09. entstanden.
+  aws_box: starting instance i-06b1d913f5c6f669b
+  aws_box: instance i-06b1d913f5c6f669b is running at 3.69.147.2 since 2026-09-09T09:20:06Z
+  aws_box: revoking the ssh rule sgr-0a99cfbecf6999bc3, it points at a foreign address
+  aws_box: ssh is open to 77.3.136.241/32 and to nothing else
+
+  BOX_IP            3.69.147.2        (in box.env fortgeschrieben)
+  BOX_STARTED_ISO   2026-09-09T09:20:06Z
+  BOX_SSH_FROM      77.3.136.241/32   (vorher 77.3.122.35/32)
+Die Owner-Adresse hat also zwischen dem 07.09. und heute erneut gewechselt, und
+die alte Regel ist zurueckgenommen worden, bevor die neue gesetzt wurde
+(revoke vor authorize, T-06.1-78): Port 22 zeigt auf genau eine Adresse mit /32.
+
+=== Die drei Handgriffe, die ein Start nicht selbst erledigt ===
+1. BOX_IP: erledigt vom Skript.
+2. Die SSH-Regel: erledigt vom Skript.
+3. Der A-Record loadtest.infranode.dev: OFFEN und dem Owner gemeldet. Er zeigt
+   weiter auf 3.77.150.91, eine Adresse, die die Box seit dem 05.09. nicht mehr
+   hat. Der Owner zieht ihn auf 3.69.147.2.
+
+   Bis dahin der Rueckfall, und Fallstrick 7 hat dabei genau wie vorhergesagt
+   zugeschlagen: der /etc/hosts-Pin der Box stand auf 172.18.0.4, der Apache
+   dieser Maschine sitzt nach dem Start aber auf 172.18.0.9. Der Pin ist neu aus
+   docker inspect des Apache-Containers gebildet worden, und die gefundene
+   Adresse steht hier:
+     vorher   172.18.0.4 loadtest.infranode.dev
+     nachher  172.18.0.9 loadtest.infranode.dev
+   Gegenprobe ueber den Namen: GET /status.php antwortet 200 von remote_ip
+   172.18.0.9, Nextcloud 33.0.8.2, installed true, maintenance false.
+
+   Warum der Pin und nicht curl --resolve: der Pin ist Rueckfall 1 des
+   Ablaufplans, er erreicht dasselbe (nichts laeuft auf den alten Eintrag), und
+   er kostet keine Aenderung an sieben Messskripten, die alle nur BASE kennen
+   und mitten im Lauf nicht angefasst werden sollten. Der Preis ist bekannt und
+   steht hier: ueberlebt der Lauf einen Maschinenneustart nicht, ist der Pin
+   erneut stumpf, und der Pruefbefehl steht als Kommentar darueber in
+   /etc/hosts.
+
+4. Nach einem Maschinenstart ist der Container nicht bewaffnet (DI-05-36). In
+   diesem Lauf hat die Registrierung in Schritt 3 das uebernommen, sie ist
+   selbst die Bewaffnung.
+5. Nach jeder Registrierung ist die harte Grenze weg (Fallstrick 4). Schritt 3
+   setzt sie und liest sie aus der cgroup zurueck: 2147483648.
+
+=== Die drei Voraussetzungen aus der Uebergabe von Welle 10-04 ===
+Alle drei auf der Box geprueft, bevor ein Messskript lief:
+  jq                 DA, jq-1.7. Damit verweigern 98-sprachfaelle.sh und
+                     99b-runden.sh nicht mit 18.
+  Passwortdateien    /home/ubuntu/work/.pw/admin    -rw------- (600)
+                     /home/ubuntu/work/.pw/lasttest -rw------- (600)
+                     Genau die Stellen, die die PWFILE-Vorgaben erwarten.
+                     Daneben liegt arm64-admin aus dem Installationslauf vom
+                     07.09.; sie stoert nicht und wird nicht benutzt.
+  A-Record           siehe Punkt 3.
+
+=== Die Maschine, aus /proc/cmdline und nicht angenommen ===
+  aarch64, 2 vCPU, 3.9Gi, mem=4G auf der Kernel-Kommandozeile gefunden
+  /mnt/findling: 59G gross, 33G belegt, 24G frei (der neue Index braucht rund
+  0,85 GB)
+
+=== Der Arbeitsbaum, gegen den gemessen wird ===
+Auf der Box liegt ein Checkout unter /home/ubuntu/work/repo0918, gestellt auf
+5d325ed8ae2772687224104bde87e8e1cdcf267e, also genau den Stand, den die Wellen 1
+bis 4 gepusht haben. git status --porcelain ist leer, und alle Helfer, die die
+Skripte per Vorgabe erwarten, liegen darin (44-korpus-pruefsumme.py,
+49b-gewichte.py, 52-woher-die-grundlast.py, 01-grundlast-fein.py, 42d-bestand.py,
+rss_sampler.sh, rss_digest.py, search_load.py).
+
+Drei Skripte dieses Verzeichnisses sind waehrend des Laufs korrigiert und
+byteweise gegen den Commit geprueft auf die Box kopiert worden: 90-bestand.sh,
+92-wechsel.sh (die Instanzzaehlung vor --rm-data) und 40b-baumhash.py (der
+Sortierschluessel des Baumhashes). Die Gruende stehen in den Commits und in der
+Zusammenfassung dieses Plans.
+
+anfahrt-ende 2026-09-09T09:56:00Z
