@@ -141,7 +141,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 09-05-PLAN.md , Template, Stil, Skript und die 24 Copy-Elemente (Welle 4)
+- [x] 09-05-PLAN.md , Template, Stil, Skript und die 24 Copy-Elemente (Welle 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -193,7 +193,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 |-------|----------------|--------|-----------|
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
-| 9. Eigene Ergebnisseite | 4/8 | In Progress|  |
+| 9. Eigene Ergebnisseite | 5/8 | In Progress|  |
 | 10. Vergleichsmessung auf der AWS-Box | 0/? | Not started | - |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
 

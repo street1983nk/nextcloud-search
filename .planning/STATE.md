@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Phase 9 UI-SPEC approved
-last_updated: "2026-09-09T03:06:23.650Z"
-last_activity: 2026-09-09 -- Phase 09 execution started
+stopped_at: Completed 09-05-PLAN.md
+last_updated: "2026-09-09T03:26:28.005Z"
+last_activity: 2026-09-09 -- Plan 09-05 abgeschlossen (Template, Stil, Skript, 24 Copy-Elemente)
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 17
-  completed_plans: 13
+  completed_plans: 14
   percent: 40
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 09 (eigene-ergebnisseite) — EXECUTING
-Plan: 1 of 8
-Status: Executing Phase 09
-Last activity: 2026-09-09 -- Phase 09 execution started
+Plan: 6 of 8
+Status: Ready to execute
+Last activity: 2026-09-09 -- Plan 09-05 abgeschlossen (Template, Stil, Skript, 24 Copy-Elemente)
 
-**Naechster Schritt:** Phase-08-Verifikation, danach `/gsd:ui-phase 9`
+**Naechster Schritt:** Plan 09-06 (Gates ueber Template, CSS und Skript der neuen Seite)
 
 ## Performance Metrics
 
@@ -77,6 +77,7 @@ Last activity: 2026-09-09 -- Phase 09 execution started
 | Phase 6 P08 | 16min | 2 tasks | 6 files |
 | Phase 6 P09 | 33min | 3 tasks | 15 files |
 | Phase 6 P10 | 32min | 3 tasks | 7 files |
+| Phase 09 P05 | 55min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -180,6 +181,13 @@ Recent decisions affecting current work:
 - [Phase 6]: 06-10: Der Integrationslauf holt das int8-Modell aus dem veroeffentlichten Abbild (der Weg von measure.yml) und vergleicht seine sha256 gegen die in 06-03 dreimal gemessene; ein bewusster Modellwechsel muss Dockerfile, Messbericht und diese Zeile zusammen bewegen
 - [Phase 6]: 06-10: Der Umschreibungsfall im Integrationslauf behauptet Anwesenheit und nicht Rang; getragen wird die Aussage vom Kontrolllauf mit abgeschalteter Zweitspur, die Rangfrage beantworten der Offline-Schritt und der Messbericht aus 06-03
 - [Phase 6]: 06-10: Der Modell-weg-Fixture setzt die Versionsmarken und traegt keinen Vektorbestand, damit degraded von der vierten Ursache aus 06-06 getrieben ist und nicht von einer nie geschriebenen Marke
+- [Phase 09]: 09-05: Kein role=alert auf dem Fehlerblock der Ergebnisseite. Die 09-UI-SPEC fuehrt Live-Bereiche mit Keine, die Seite laedt vollstaendig neu, und der Block traegt ohnehin drei Traeger derselben Aussage (Symbol, Ueberschrift, Fliesstext)
+- [Phase 09]: 09-05: Der Filter nutzt ein natives Kaestchen ohne die Serverklasse checkbox. Jene Klasse schiebt das Eingabefeld aus dem Sichtfeld und zeichnet einen Ersatz ueber ein Pseudoelement des Labels; ob der Vertrag in stable33 bis stable35 gleich aussieht, ist offline nicht pruefbar, und ein unsichtbares Bedienelement ist teurer als ein ungestyltes
+- [Phase 09]: 09-05: Ohne Suchbegriff ist die h1 des Kopfes die Ueberschrift des Leerzustands. Beide Stellen zu fuellen haette denselben Satz zweimal untereinander gestellt; die 09-UI-SPEC laesst die eine h1 ausdruecklich Ergebnis- ODER Leerzustandstitel tragen
+- [Phase 09]: 09-05: Der Fehlerblock ohne Home-Verzeichnis traegt Symbol und Ueberschrift und keinen Satz. Die Copy-Tabelle ist geschlossen und haelt fuer diese Ueberschrift nur den Satz ueber Versionen; ihn hier zu zeigen hiesse, eine Administration hinter ein Problem zu schicken, das niemand hat
+- [Phase 09]: 09-05: Der Erneut-versuchen-Link nimmt die eigene Adresse nur, wenn sie mit genau einem Schraegstrich beginnt. Eine protokollrelative Referenz haette jemanden, der eine Suche wiederholen wollte, auf einen fremden Host geschickt; sonst tritt die Formularadresse an ihre Stelle
+- [Phase 09]: 09-05: Stufe 3 des Rueckkehrvertrags ist tragend statt Zugabe gebaut. Der pageshow-Handler fragt nicht nach dem Back-Forward-Cache, weil no-store die Seite in Firefox davon ausschliesst, und scrollIntoView auf der Zeile scrollt #app-content und ist damit der eigentliche Traeger der Position
+- [Phase 09]: 09-05: Die Paginierungsknoepfe ruhen ohne eigene Flaeche auf dem Streifen und nehmen im Hover den Seitengrund. Der Streifen traegt laut 09-UI-SPEC bereits die Hover-Farbe, ein Aufhellen in derselben Farbe waere kein Zustandswechsel; zwei Farben aus dem Budget, keine dritte erfunden
 
 ### Pending Todos
 
@@ -207,6 +215,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-08T20:21:14.077Z
-Stopped at: Phase 9 UI-SPEC approved
-Resume file: .planning/phases/09-eigene-ergebnisseite/09-UI-SPEC.md
+Last session: 2026-09-09T03:25:38.718Z
+Stopped at: Completed 09-05-PLAN.md
+Resume file: None

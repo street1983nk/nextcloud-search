@@ -18,8 +18,8 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 
 ### Ergebnisseite
 
-- [ ] **UI-01**: Nutzer koennen aus der Unified Search auf eine eigene Findling-Ergebnisseite wechseln, die alle Treffer mit Paginierung zeigt
-- [ ] **UI-02**: Nutzer koennen von der Ergebnisseite einen Treffer oeffnen und zurueckkehren, ohne die Trefferliste zu verlieren
+- [x] **UI-01**: Nutzer koennen aus der Unified Search auf eine eigene Findling-Ergebnisseite wechseln, die alle Treffer mit Paginierung zeigt
+- [x] **UI-02**: Nutzer koennen von der Ergebnisseite einen Treffer oeffnen und zurueckkehren, ohne die Trefferliste zu verlieren
 - [ ] **UI-03**: Die Ergebnisseite respektiert dieselbe Berechtigungsgrenze wie die Unified Search (ACL-Vorfilter + finaler PHP-Recheck, keine neue Sicherheitsflaeche)
 
 ### Messung
@@ -54,8 +54,8 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 | QUAL-01 | Phase 8 | Complete |
 | QUAL-02 | Phase 8 | Complete |
 | QUAL-03 | Phase 8 | Complete |
-| UI-01 | Phase 9 | Pending |
-| UI-02 | Phase 9 | Pending |
+| UI-01 | Phase 9 | Complete |
+| UI-02 | Phase 9 | Complete |
 | UI-03 | Phase 9 | Pending |
 | MESS-01 | Phase 10 | Pending |
 | MESS-02 | Phase 10 | Pending |
