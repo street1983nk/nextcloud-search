@@ -53,9 +53,9 @@ hier gegen die Box oder gegen die AWS-API läuft, muss dasselbe tun.
 ## 2. Die Schrittfolge
 
 Jede Zeile nennt das Skript, die Rohdatei, die es erzeugt, und die Aussage, an
-der der Schritt hängt. Die Schritte 96 bis 99b werden in Plan 10-04 gebaut; sie
-stehen hier schon, weil eine Reihenfolge nur als ganze eine Reihenfolge ist, und
-Plan 10-04 ergänzt ihre Rohdateinamen.
+der der Schritt hängt. Die Schritte 96 bis 99b sind mit Plan 10-04 gebaut, und
+ihre Rohdateinamen stehen seither hier: eine Reihenfolge ist nur als ganze eine
+Reihenfolge.
 
 | Nr | Skript | Rohdatei | Die Aussage, an der der Schritt hängt |
 |---|---|---|---|
@@ -65,13 +65,13 @@ Plan 10-04 ergänzt ihre Rohdateinamen.
 | 4 | `93-nullstand.sh` | `93-nullstand.txt` | Der Lauf startet auf einem Nullstand, der mit Zahlen belegt ist: Volumeninhalt, `oc_findling_file_state`, die Marken in `meta`, die Ausgabe von `occ findling:index`. Danach `findling:index --restart -n` und die Wartefrist aus Abschnitt 4. |
 | 5 | `94-grundlast.sh` | `94-grundlast.txt` | **Die MESS-01-Kernzahl.** Grundlast im Leerlauf: Container gestartet, bewaffnet, Modell nie geladen, noch keine Suche. Vier Teile: A die Grundlinie, B der Fussabdruck der Gewichte allein, C die Aufschlüsselung Schritt für Schritt aus `52-woher-die-grundlast.py`, D die feine Zerlegung in fünf benannte Posten aus `01-grundlast-fein.py`. |
 | 6 | `95-spitze.sh vorher` | `95-spitze-vorher.txt`, `95-vorher-stufe-<n>.json` | Die erste Suche als **Ereignis** auf leerem Vektorbestand: lesen, genau eine Suche gegen einen Container, der noch nie eine gesehen hat, wieder lesen. Danach die Stufen 1, 4 und 8. |
-| 7 | `96-volllauf.sh` mit Wächter (Plan 10-04) | Plan 10-04, darunter `96-oom-beweis.txt` | Kriterium 1 und 2: der Volllauf, rund 19 Stunden, abgesetzt. Sampler daneben, Wächter mit Rundendeckel, `00-FERTIG` als Vertrag. Die Gesamtspitze und die Laufzeit entstehen hier und nirgends sonst. Der OOM-Beweis am Ende beider Spuren geht in eine eigene Rohdatei `96-oom-beweis.txt`, weil Schritt 9 ohne diese Datei den Neustart verweigert. |
+| 7 | `96-volllauf.sh`, danach abgesetzt `96b-waechter.sh` und `96e-ntfy-watch.sh warten` | `96-volllauf-start.txt`, `96-volllauf.csv`, `96-statusseite.jsonl`, `96b-waechter.txt`, `96-suchlast-nachlauf.json`, `96-suchlast-danach.json`, `96-vektorbestand.txt`, **`96-oom-beweis.txt`**, `00-FERTIG`, `99-ntfy-watch.log` | Kriterium 1 und 2: der Volllauf, rund 19 Stunden, abgesetzt. Sampler (5 s) und Statusbeobachter (120 s) starten **vor** dem Anstoss, der Wächter hat einen Rundendeckel von 340 Runden à 300 s, und `00-FERTIG` ist der Vertrag. Die Gesamtspitze und die Laufzeit entstehen hier und nirgends sonst. Der OOM-Beweis am Ende beider Spuren geht in eine eigene Rohdatei `96-oom-beweis.txt`, weil Schritt 9 ohne diese Datei den Neustart verweigert. Wartefristen: 20 s nach dem Start der Beobachter, 360 s bis zur Gegenprobe. Abbruch: `96-volllauf.sh` endet mit 14, wenn nach der Frist kein Arbeitsvorrat da ist, und startet den Wächter dann **nicht**; der Wächter endet mit 13 am Rundendeckel (unvollständiger Lauf) und mit 14, wenn keine einzige brauchbare Aufnahme vorlag. |
 | 8 | `97-nebenlaeufigkeit.sh` | `97-nebenlaeufigkeit.txt`, `97-stufe-<n>.json` | **Die p95-Hälfte von MESS-02.** Fünf Stufen 1, 4, 8, 12, 16, zehn Runden je Stufe, 410 Anfragen, über die OCS-Route und damit über den finalen PHP-Recheck. Die Zusage steht auf Stufe 8. |
 | 9 | `95-spitze.sh nachher` | `95-spitze-nachher.txt`, `95-nachher-stufe-<n>.json` | DI-07-02: der Kaltstart auf **vollem** Vektorbestand, also der schlechtere der beiden Fälle. Setzt einen bewussten `docker restart` des Backendcontainers voraus, den das Skript selbst absetzt. **Die Reihenfolge ist zwingend: der OOM-Beweis wird VOR dem Neustart erhoben**, weil ein Neustart `memory.peak` und `memory.events` zurücksetzt. Erzwungen statt erinnert: ohne `96-oom-beweis.txt` bricht `95-spitze.sh nachher` mit 12 ab. |
-| 10 | `98-sprachfaelle.sh` (Plan 10-04) | Plan 10-04 | MESS-02, die zehn Sprachfälle. Sie brechen gegen den Lasttest-Nutzer, weil der Lastkorpus dieselben Wörter führt (Fallstrick 3), also **eigener Nutzer**, dessen Heimat nur `testdata/corpus` enthält, 39 Dateien über WebDAV, abgeschlossener OCR-Durchgang, Verdikte erst bei leerem Arbeitsvorrat. |
-| 11 | `99-seitenroute.sh` (Plan 10-04) | Plan 10-04 | DI-07-03 und T-09-29: die Anzeigeseite auf einer Instanz, die eine `vectors.db` **hat**. Erstmessung, kein Vergleich. Beide Anmeldewege getrennt, Sitzung und Basic-Auth, weil Basic-Auth 0,318 s je Anfrage kostet (Fallstrick 9). |
-| 12 | `99b-runden.sh` (Plan 10-04) | Plan 10-04 | Die Rundenzählung des Rechteabgleichs, gegen den Befund M-03 der Phase 9. |
-| 13 | Gegenproben: `68-bestand-endungen.py`, `42d-bestand.py`, Indexgrösse | Plan 10-04 | Kriterium 3: der Endungsvergleich, Chunks und Dokumente und Byte je Dokument, und die Grösse des Tantivy-Index auf der Platte. Sie laufen **vor** dem Abbau und nicht danach (T-06.1-79, und am 07.09. hat sich genau das ausgezahlt). |
+| 10 | `98-sprachfaelle.sh` | `98-sprachfaelle.txt` | MESS-02, die zehn Sprachfälle. Sie brechen gegen den Lasttest-Nutzer, weil der Lastkorpus dieselben Wörter führt (Fallstrick 3), also **eigener Nutzer** (Vorgabe `sprachfall`, ausdrücklich nicht `lasttest`), dessen Heimat nur `testdata/corpus` enthält, 39 Dateien über WebDAV, abgeschlossener OCR-Durchgang, Verdikte erst bei leerem Arbeitsvorrat. Bilanzzeile `sprachfaelle bestanden <n> von 10`. Wartefristen: 360 s vor der ersten Ablesung, danach bis zu 40 Runden à 60 s auf einen leeren Arbeitsvorrat. Abbruch: 15 (nicht 39 Dateien hochgeladen), 16 (Vorrat am Rundendeckel nicht leer), 17 (mindestens ein Fall rot), 18 (kein `jq` auf der Box). **Dieser Block ist abbrechbar und keine Vorbedingung des Berichts** (Annahme A7). |
+| 11 | `99-seitenroute.sh` | `99-seitenroute.txt`, `99-reihe-a.txt` bis `99-reihe-d.txt` (je ein Wert pro Zeile, Sekunden, unbearbeitet) | T-09-29: die Anzeigeseite auf einer Instanz, die eine `vectors.db` **hat**. Erstmessung, kein Vergleich. Vier Reihen à 20 Wiederholungen plus 5 Aufwärmanfragen, beide Anmeldewege getrennt (Sitzung und Basic-Auth), weil Basic-Auth 0,318 s je Anfrage kostet (Fallstrick 9), dazu eine tiefe Seite und der Dialogweg mit `limit=100`. Rangregel wie Abschnitt 2 des Seitenbudget-Berichts, ohne Interpolation. Abbruch: 19, wenn eine Reihe weniger als 20 brauchbare Werte hat. |
+| 12 | `99b-runden.sh` | `99b-runden.txt`, `99b-fall1.json`, `99b-fall2-vor-ruecknahme.json`, `99b-fall2.json` | DI-07-03: die Rundenzählung des Rechteabgleichs, in zwei getrennten Fällen. Fall 1 ist der Alltag (das Konto, das alle Dateien besitzt), Fall 2 der **absichtlich erzeugte** Driftfall (Freigabe zurückgenommen, gefragt bevor der Index davon weiss). Der Bericht muss beide Fälle mit ihrer Herstellung nennen. Wartefrist: 2 x 90 s mit gezähltem Poller-Durchgang, bevor die Rechte als aufgenommen gelten. Abbruch: 20 (das Zugriffsprotokoll trägt keine Anfragezeile, die Zählung wäre keine Messung), 21 (der Driftfall liess sich nicht erzeugen, ein Befund über die Box). |
+| 13 | Gegenproben: `68-bestand-endungen.py`, `42d-bestand.py`, Indexgrösse | `96-vektorbestand.txt` (Chunks, Dokumente, Byte je Dokument, aus Schritt 7), dazu die Ausgabe des Endungsvergleichs | Kriterium 3: der Endungsvergleich, Chunks und Dokumente und Byte je Dokument, und die Grösse des Tantivy-Index auf der Platte. `42d-bestand.py` und die Grössen des Datenspeichers erhebt der Wächter am Ende von Schritt 7 selbst; der Endungsvergleich über `68-bestand-endungen.py` wird hier von Hand nachgezogen. Sie laufen **vor** dem Abbau und nicht danach (T-06.1-79, und am 07.09. hat sich genau das ausgezahlt). |
 
 Danach: Rohdaten und Skripte herunterholen und committen, Owner-Checkpoint
 "Bericht abgenommen", dann `aws_box.sh stop`, das die Laufzeit und die Kosten in
@@ -95,12 +95,26 @@ wird in Abschnitt 13 des Berichts zur Tabelle, mit allen sechs Zählern je Zeile
 | 5 | Nach Teil B und C, damit die zwei Lesungen die Gewichte einklammern | `94-grundlast.sh` |
 | 6 | Vor der ersten Suche, Rolle `vorher` | `95-spitze.sh vorher` |
 | 7 | Nach der ersten Suche und nach jeder Stufe, Rolle `vorher` | `95-spitze.sh vorher` |
-| 8 | Vor dem Anstoss des Volllaufs | Plan 10-04 |
-| 9 | Am Uebergang von der ersten auf die zweite Spur | Plan 10-04 |
-| 10 | Am Ende beider Spuren, **vor** jedem Eingriff: der OOM-Beweis | Plan 10-04 |
+| 8 | Vor dem Anstoss des Volllaufs, also bevor die App eingeschaltet wird | `96-volllauf.sh` |
+| 9 | Am Übergang von der ersten auf die zweite Spur, und noch einmal nach der Suchlastprobe im Nachlauf | `96b-waechter.sh` |
+| 10 | Am Ende beider Spuren, **vor** jedem Eingriff: der OOM-Beweis nach `96-oom-beweis.txt` | `96b-waechter.sh` |
 | 11 | Vor der Nebenläufigkeitsreihe und nach jeder ihrer fünf Stufen | `97-nebenlaeufigkeit.sh` |
 | 12 | Vor der ersten Suche, Rolle `nachher`, nach dem bewussten Neustart | `95-spitze.sh nachher` |
-| 13 | Am Ende des Laufs, vor dem Abbau | Plan 10-04 |
+| 13 | Am Ende des Wächters, nach den Nachlaufschritten, als Nachtrag in dieselbe Datei `96-oom-beweis.txt` | `96b-waechter.sh` |
+
+Zwei Ablesestellen dieser Liste sind mit Plan 10-04 dazugekommen, weil sie sonst
+zwischen den Zeilen gestanden hätten:
+
+- **Nach der Suchlastprobe bei vollem Bestand** (Teil von Stelle 13). Der Wächter
+  liest die Zähler zweimal: Stelle 10 unmittelbar bei erkanntem Ende, **vor**
+  jedem Eingriff, und Stelle 13 am Ende seiner Nachlaufschritte. Beide Lesungen
+  stehen in derselben Rohdatei und sind beschriftet. Der Grund für die Teilung:
+  eine Suchlastprobe hebt `memory.peak`, und ein Spitzenwert, der nach ihr
+  gelesen wird, ist der Spitzenwert der Messung und nicht der des Laufs.
+- **Vor dem Neustart der Rolle `nachher`** ist keine eigene Stelle, sondern genau
+  Stelle 10: `95-spitze.sh nachher` liest die Zähler noch ein letztes Mal, bevor
+  es `docker restart` absetzt, und verweigert den Neustart mit 12, solange
+  `96-oom-beweis.txt` fehlt.
 
 Zu jeder Lesung gehört die Regel aus Muster 3: **anon und `memory.current`
 immer nebeneinander.** anon ist der Heap, `memory.current` zählt den
@@ -129,6 +143,11 @@ früh für tot.
 | Nach der Registrierung, bevor die Bewaffnung gezählt wird | 2 x 90 s | Der Poller-Durchgang wird im Protokoll **gezählt** und nicht als Zustand abgelesen: ein Zustand, der zum falschen Zeitpunkt abgelesen wird, sieht aus wie eine Bewegung (Lehre aus Drill 1b, 05-21). |
 | Zwischen den Stufen der Nebenläufigkeitsreihe | 20 s | Damit die folgende Stufe sich selbst misst und nicht den Nachlauf der vorigen. |
 | Nach dem Start des Samplers, bevor die erste Suche läuft | 6 s | Das Intervall des Samplers ist 2 s; drei Aufnahmen vor dem Ereignis sind der Nullpunkt, gegen den die Spitze gelesen wird. |
+| Nach dem Start von Sampler und Statusbeobachter, bevor der Volllauf angestossen wird | 20 s | Der Sampler muss seine Kopfzeile geschrieben und der Beobachter sich angemeldet und **eine** Aufnahme gemacht haben, denn gegen genau diese Aufnahme läuft die Trockenprobe des Lesers (Fallstrick 8). |
+| Nach dem Anstoss des Volllaufs, bevor die Gegenprobe ein Urteil ist | **mindestens 360 s** | Dieselben zwei Uhren wie oben: Poller-Backoff bis 300 s und zwei Runden des Fünf-Minuten-Systemcrons. |
+| Zwischen zwei Runden des Wächters | 300 s | 340 Runden à 300 s sind gut ein Tag und eine halbe Nacht. Das Ende gilt erst, wenn der Vorrat leer ist **und** `embedded` drei Aufnahmen lang stillsteht, also nach 15 Minuten Ruhe. |
+| Nach dem WebDAV-Upload der Sprachfälle, bevor Verdikte gelesen werden | 360 s, danach bis zu 40 x 60 s | Erst die Frist der beiden langsamen Uhren, dann Runde für Runde auf einen leeren Arbeitsvorrat. `skipped:no_text_layer` ist ein **vorübergehendes** Verdikt: es ist der Zustand einer Datei, die an die Scan-Spur übergeben wurde, und nicht der Zustand einer Datei ohne Text. |
+| Nach dem Anlegen der Freigaben der Rundenzählung, bevor die Rechte als aufgenommen gelten | 2 x 90 s | Der Poller-Durchgang wird gezählt, und die Kontrolle ist eine Suche des Driftkontos mit mehr als null Treffern: ein Zustand, der zum falschen Zeitpunkt abgelesen wird, sieht aus wie eine Bewegung. |
 
 **Was zu tun ist, wenn der Arbeitsvorrat nach den 360 Sekunden auf null steht.**
 Das ist kein Erfolg und kein Abbruch, sondern Annahme A2 der Recherche:
@@ -154,6 +173,26 @@ erzeugt eine Rohdatei, die nicht mehr belegt, was gemessen wurde.
 | **Baumhash** | `40b-baumhash.sh` schreibt `baumhash-gleich nein`, oder die Rohdatei `40b-baumhash.txt` trägt weniger als drei `baumhash:`-Zeilen | **Abbruch.** Kriterium 1 wäre nicht belegbar: jede Zahl nach dieser Zeile gehörte zu einem unbekannten Stand. Der Schritt beendet sich mit 4 (Ungleichstand) oder 3 (unvollständige Rohdatei), und `92-wechsel.sh` geht nicht weiter. Beide Vorläuferberichte haben an genau dieser Stelle eine leere Rohdatei hinterlassen und die Gleichheit trotzdem behauptet. |
 | **Rundendeckel des Wächters** | Der Wächter des Volllaufs erreicht seinen Rundendeckel, ohne dass beide Spuren fertig sind | **Kein Abbruch der Messung, sondern ein unvollständiger Lauf.** Die bis dahin erhobenen Zahlen werden gesichert (Sampler-CSV, `memory.events`, Zwischenstand des Bestands), und der Bericht weist den Lauf ausdrücklich als unvollständig aus. Eine Laufzeit ohne Ende ist keine Laufzeit, und sie darf nicht als eine berichtet werden. |
 | **Kostendeckel** | Die Box erreicht **30 Stunden** Laufzeit (Szenario A plus vier Stunden Reserve, rund 3,50 USD netto) | **Anhalten.** Der Deckel ist der Wert, den der Owner-Checkpoint vor der Anfahrt bestätigt. Was bis dahin erhoben ist, wird gesichert und berichtet; der Rest wird als offen benannt. Der laufende Satz ist 0,1158 USD je Stunde, angehalten 0,3130 USD je Tag. |
+
+Dazu die Rückgabewerte der Skripte, weil jeder von ihnen im Bericht auftauchen
+kann. Jeder steht auch im Kopf seiner Datei:
+
+| Wert | Skript | Bedeutung |
+|---|---|---|
+| 2 | `95-spitze.sh` | unbekannte Rolle |
+| 4, 3 | `92-wechsel.sh` | Baumhash ungleich, unvollständige Rohdatei |
+| 5 | `90-bestand.sh`, `92-wechsel.sh` | mehr als eine Nextcloud |
+| 6, 7 | `91-korpus.sh` | Korpus weicht ab, keine Lesung |
+| 8, 9 | `92-wechsel.sh` | unsauberer Arbeitsbaum, harte Grenze falsch |
+| 10 | `93-nullstand.sh` | kein Arbeitsvorrat |
+| 11 | `94-grundlast.sh` | Teil D leer |
+| 12 | `95-spitze.sh nachher` | `96-oom-beweis.txt` fehlt |
+| 13 | `96b-waechter.sh` | Rundendeckel erreicht, **unvollständiger Lauf** |
+| 14 | `96-volllauf.sh`, `96b-waechter.sh` | kein Arbeitsvorrat nach der Frist, beziehungsweise keine brauchbare Aufnahme |
+| 15, 16, 17, 18 | `98-sprachfaelle.sh` | Upload unvollständig, Vorrat nicht leer, Fall rot, kein `jq` |
+| 19 | `99-seitenroute.sh` | eine Reihe hat zu wenige brauchbare Werte |
+| 20, 21 | `99b-runden.sh` | Zugriffsprotokoll ohne Anfragezeile, Driftfall nicht erzeugbar |
+| 0 | `96e-ntfy-watch.sh` | **immer**: kein Schritt darf daran hängen, dass eine Nachricht ankommt |
 
 Zu jedem der vier Pfade gehört derselbe Satz: **die bis dahin erhobenen Zahlen
 werden committet, bevor irgendetwas abgebaut wird.** Am 07.09. war das der
