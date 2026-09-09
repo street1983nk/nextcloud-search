@@ -3,11 +3,18 @@
 The contract in ``.planning/phases/04-admin-sichtbarkeit-und-diagnose/04-UI-SPEC.md``
 ends in a list of prohibitions, and most of them are decisions a reader has to
 keep in mind. A few are not: they are the presence or absence of a literal
-string in one of three files, and those are the ones this gate holds. No markup
+string in one of six files, and those are the ones this gate holds. No markup
 built from a string in the script, no unescaped printing in the template, no
 inline script, no literal colour in the stylesheet, no removed focus ring, no
 dash that is not a hyphen, no emoji, and none of the five Nextcloud APIs the
 contract retired.
+
+Six files and not three since plan 09-06. The result page of phase 9 brought a
+template, a stylesheet and a script of its own, and the prohibitions marked
+**[G]** in ``09-UI-SPEC.md`` are the same ones with two additions of their own,
+so the three new files are judged by the same scanners rather than by a fourth
+gate. What did not travel with them are the special tests of the administration
+page, and the reason is written where the list of sources is.
 
 Two agreements between the halves of the page are held here as well, and they
 are not prohibitions but pairs: the second coverage figure (D-16) and the state
@@ -30,7 +37,7 @@ decoration. A gate whose only assertion is "the current tree is clean" stays
 green on the day somebody deletes its body, so both a clean sample and a dirty
 one are staged here and the gate has to tell them apart.
 
-**One scan that is not about the three files.** Since phase 9 this file also
+**One scan that is not about the six files.** Since phase 9 this file also
 reads every PHP source of the companion app for a single interface name,
 ``IInAppSearch``. It is not a prohibition of the page contract but of the app,
 it has no file of its own to live in, and it is the same kind of check: a
@@ -59,6 +66,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = REPO_ROOT / "php" / "templates" / "admin.php"
 STYLESHEET = REPO_ROOT / "php" / "css" / "admin.css"
 SCRIPT = REPO_ROOT / "php" / "js" / "admin.js"
+
+# The same three files of the result page of phase 9. They are judged by the
+# same scanners and by nothing else: the prohibitions marked [G] in the
+# 09-UI-SPEC are the ones of the phase 4 contract plus two spellings of built
+# markup, and everything beyond them is the human sight check over there as
+# much as it is here.
+PAGE_TEMPLATE = REPO_ROOT / "php" / "templates" / "search.php"
+PAGE_STYLESHEET = REPO_ROOT / "php" / "css" / "search.css"
+PAGE_SCRIPT = REPO_ROOT / "php" / "js" / "search.js"
 
 # The two hand written translation catalogues and the two PHP files that decide
 # what the error list of the page can say. They are not part of the three files
@@ -199,6 +215,39 @@ def _deprecated(name: str, source: str) -> list[str]:
     return [f"{name}: uses the retired {api}" for api in DEPRECATED_APIS if api in source]
 
 
+# The four identifiers a script that watches something cannot do without, and
+# the result page has none of them: "there is no polling on this page. The
+# administration page polls because it watches a running process; a search
+# result is an answer to a question, not an observation" (09-UI-SPEC,
+# interaction contract). Two of the four are the very markers
+# test_the_script_polls_politely demands of admin.js, which is the whole point:
+# the same word is a requirement on one page and a prohibition on the other.
+POLLING_MARKERS = ("AbortController", "visibilityState", "setInterval", "setTimeout")
+
+# The call that turns a link into a handler. The return mark of the page rests
+# on the click going through normally, so the script writes its note and lets
+# the browser navigate; a page that intercepted the click would own the
+# navigation, and with it the back button that the whole return contract is
+# built on.
+DEFAULT_PREVENTION = "preventDefault"
+
+
+def scan_page_script_for_polling(name: str, source: str) -> list[str]:
+    """Findings of the result page script: any sign that it watches something."""
+    return [
+        f"{name}: carries {marker}, and there is no polling on this page"
+        for marker in POLLING_MARKERS
+        if marker in source
+    ]
+
+
+def scan_page_script_for_interception(name: str, source: str) -> list[str]:
+    """Findings of the result page script: a click it took away from the browser."""
+    if DEFAULT_PREVENTION in source:
+        return [f"{name}: calls {DEFAULT_PREVENTION}, which takes the navigation away from the browser"]
+    return []
+
+
 # The two names the second coverage figure travels under, and every half of the
 # page has to carry both (D-16). The container reports ``embedded``,
 # AdminViewService turns it into ``embeddedPercent``, and the template and the
@@ -302,35 +351,57 @@ Scanner = Callable[[str, str], list[str]]
 
 
 def _sources() -> list[tuple[str, str, Scanner]]:
-    """The three files of the admin page, as (name, source, scanner).
+    """The six files of the two pages, as (name, source, scanner).
 
     The scanner is typed as what it is rather than as an object. With ``object``
     the call in the comprehension below is not a call any type checker can
     verify, and the gate would only fail on the release that starts to care.
 
-    Three files and not six: the template, stylesheet and script of the result
-    page do not exist yet, and every scanner returns an empty list for a file it
-    cannot read, so naming them here early would mean a red gate over missing
-    files. Plan 09-06 adds them once they are on disk, and it adds them to this
-    list alone. The three tests below that read ``SCRIPT`` directly stay on
-    admin.js: the administration page watches a running process, a result page
-    answers one question and then stands still, so neither the token nor the
-    polite polling has anything to hold on the new script (pitfall 4).
+    Six since plan 09-06, and the three of the result page were added the day
+    they were on disk and not earlier: every scanner returns an empty list for a
+    file it cannot read, so a name in this list without a file behind it is not
+    a red gate, it is a green one that reads nothing.
+
+    **What was deliberately not extended with it.** The special tests further
+    down stay literally on the administration files, and the three that would be
+    tempting to "make consistent" are
+    ``test_the_script_reads_the_token_inside_the_call``,
+    ``test_the_script_polls_politely`` and
+    ``test_both_halves_of_the_page_write_the_same_percent_separator``, together
+    with every pair test after them. All of them describe a page that watches a
+    running process: it reads a rotating token, it holds an abort controller, it
+    asks whether the tab is visible, and it renders one value twice, once server
+    side and once on every poll. The result page does none of that, because a
+    search result is an answer to a question and not an observation. Widening
+    those tests onto ``search.js`` turns the tree red for a property the new
+    file deliberately does not have (pitfall 4 of the phase 9 research). What
+    the new script has to hold instead is asserted in its own two tests, and
+    they assert the absence of exactly those markers.
     """
     return [
         (TEMPLATE.name, TEMPLATE.read_text(encoding="utf-8"), scan_template),
         (STYLESHEET.name, STYLESHEET.read_text(encoding="utf-8"), scan_stylesheet),
         (SCRIPT.name, SCRIPT.read_text(encoding="utf-8"), scan_script),
+        (PAGE_TEMPLATE.name, PAGE_TEMPLATE.read_text(encoding="utf-8"), scan_template),
+        (PAGE_STYLESHEET.name, PAGE_STYLESHEET.read_text(encoding="utf-8"), scan_stylesheet),
+        (PAGE_SCRIPT.name, PAGE_SCRIPT.read_text(encoding="utf-8"), scan_script),
     ]
 
 
 # -- the real tree ---------------------------------------------------------
 
 
-def test_the_three_files_of_the_page_exist() -> None:
+def test_the_six_files_of_the_two_pages_exist() -> None:
     # The anti vacuity clause. Every scanner below returns an empty list for a
     # file that is not there, so a gate that lost its files would look perfect.
-    missing = [path.name for path in (TEMPLATE, STYLESHEET, SCRIPT) if not path.is_file()]
+    # Six paths since plan 09-06, and the count is the point of the clause: a
+    # gate that reads nothing reports nothing, so the cleanest possible run of
+    # this file is also the one in which it has stopped judging anything at all.
+    missing = [
+        path.name
+        for path in (TEMPLATE, STYLESHEET, SCRIPT, PAGE_TEMPLATE, PAGE_STYLESHEET, PAGE_SCRIPT)
+        if not path.is_file()
+    ]
 
     assert missing == []
 
@@ -378,11 +449,45 @@ def test_the_script_reads_the_token_inside_the_call() -> None:
 
 def test_the_script_polls_politely() -> None:
     # The three halves of the interaction contract that keep a forgotten tab
-    # from questioning the instance for a week.
+    # from questioning the instance for a week. admin.js and no other file: the
+    # result page script is asserted to carry none of these markers, two tests
+    # below.
     source = SCRIPT.read_text(encoding="utf-8")
 
     assert "AbortController" in source
     assert "visibilityState" in source
+
+
+def test_the_page_script_does_no_polling() -> None:
+    """The other side of the test above, over the other script.
+
+    There is no polling on the result page, and the four markers are the ones
+    that would show it: an abort controller, the visibility of the tab and the
+    two timers. The page renders once, server side, and then stands still until
+    somebody asks another question.
+    """
+    findings = scan_page_script_for_polling(PAGE_SCRIPT.name, PAGE_SCRIPT.read_text(encoding="utf-8"))
+
+    assert findings == []
+    # And the assertion can go red. Without this line a scanner whose body was
+    # deleted would report a clean page over a script that polls every second.
+    dirty = "const controller = new AbortController()\nwindow.setInterval(ask, 3000)\n"
+    assert len(scan_page_script_for_polling("sample.js", dirty)) == 2
+
+
+def test_the_page_script_does_not_intercept_a_click() -> None:
+    """The return mark is written on the way out, and the link still travels.
+
+    The interaction contract allows the script to listen for a click and write
+    the mark, and forbids it to take the click away. A prevented default would
+    make the script the owner of the navigation, and everything the return
+    contract promises about the back button rests on the browser owning it.
+    """
+    findings = scan_page_script_for_interception(PAGE_SCRIPT.name, PAGE_SCRIPT.read_text(encoding="utf-8"))
+
+    assert findings == []
+    dirty = "link.addEventListener('click', function (event) { event.preventDefault() })\n"
+    assert len(scan_page_script_for_interception("sample.js", dirty)) == 1
 
 
 # -- self tests: the gate has to report every shape it judges --------------
