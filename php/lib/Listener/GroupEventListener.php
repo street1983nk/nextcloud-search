@@ -47,7 +47,7 @@ use Psr\Log\LoggerInterface;
  *
  * **What a delay here costs, and what it does not.** Nothing leaks while an acl
  * row waits, in either direction. A hit only becomes a snippet after the recheck
- * in Provider, and that recheck resolves the file through
+ * in SearchService, and that recheck resolves the file through
  * getUserFolder()->getFirstNodeById(), so a user who left a group sees nothing
  * whatever the prefilter still holds. A stale prefilter costs result quality and
  * compute time, not confidentiality. That sentence stands in ShareEventListener

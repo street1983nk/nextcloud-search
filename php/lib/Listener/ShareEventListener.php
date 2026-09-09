@@ -30,7 +30,7 @@ use Psr\Log\LoggerInterface;
  * while a long OCR backlog is being worked off.
  *
  * **What a delay here costs, and what it does not.** Nothing leaks while an acl
- * row waits. A hit only becomes a snippet after the recheck in Provider, and
+ * row waits. A hit only becomes a snippet after the recheck in SearchService, and
  * that recheck resolves the file through getUserFolder()->getFirstNodeById(),
  * so a user who lost a share sees nothing whatever the prefilter still holds. A
  * stale prefilter costs result quality and compute time, not confidentiality.
