@@ -1,0 +1,129 @@
+nullstand-start 2026-09-09T09:32:37Z
+volumen: /mnt/findling/docker/volumes/nc_app_findling_backend_data/_data
+=== memory.events, reading 3 of the run, BEFORE the restart is issued ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+anon 268468224
+file 29773824
+slab 5042416
+memory.current=305348608 memory.peak=336977920 memory.max=2147483648
+=== Source 1: the contents of the volume ===
+total 4260
+drwxr-xr-x 5 ubuntu ubuntu    4096 Sep  9 09:32 .
+drwx-----x 3 root   root      4096 Sep  9 09:32 ..
+-rw-r--r-- 1 ubuntu ubuntu       0 Sep  9 09:32 armed.marker
+drwxr-xr-x 2 ubuntu ubuntu    4096 Sep  9 09:32 dict
+drwxr-xr-x 2 ubuntu ubuntu    4096 Sep  9 09:32 index
+-rw-r--r-- 1 ubuntu ubuntu      80 Sep  9 09:32 instance.json
+-rw-r--r-- 1 ubuntu ubuntu   86016 Sep  9 09:32 state.db
+-rw-r--r-- 1 ubuntu ubuntu   32768 Sep  9 09:32 state.db-shm
+-rw-r--r-- 1 ubuntu ubuntu 4128272 Sep  9 09:32 state.db-wal
+drwxr-xr-x 2 ubuntu ubuntu    4096 Sep  9 09:32 tmp
+-rw-r--r-- 1 ubuntu ubuntu    4096 Sep  9 09:32 vectors.db
+-rw-r--r-- 1 ubuntu ubuntu   32768 Sep  9 09:32 vectors.db-shm
+-rw-r--r-- 1 ubuntu ubuntu   49472 Sep  9 09:32 vectors.db-wal
+state.db vorhanden, groesse in byte: 86016
+vectors.db vorhanden, groesse in byte: 4096
+tantivy-verzeichnis vorhanden, dateien: 22, groesse: 4.3M
+=== Source 2 and 4: the end states and the work stock, over occ ===
+Work stock
+  scheduled            2016
+  handed to the worker 32
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              37
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-09 09:25:28 (7 minutes ago)
+-- source 4, the work stock of the PHP half, as one number --
+arbeitsvorrat-vorher 2048
+-- source 2, the end states as Nextcloud recorded them --
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              37
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+=== Source 3: the marks in meta, but only if there is a state.db ===
+  analyzer_version = 1
+  created_at = 1788946328
+  embedding_version = unknown
+  index_version = 1
+  instance_id = 2bd6daea1f19451591e590954ed2b799
+  schema_version = 1
+  store_schema_version = 2
+  tantivy_version = tantivy v0.26.0, index_format v7
+  wordlist_hash = b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396edc808dde0
+  files by state: [('indexed', 240), ('skipped', 48)]
+=== The rebuild, queued with -n so the command does not ask back ===
+restart-start 2026-09-09T09:32:38Z
+The crawl was queued. It starts with the next run of the background jobs.
+
+Work stock
+  scheduled            2016
+  handed to the worker 32
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              37
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-09 09:25:28 (7 minutes ago)
+restart-ende 2026-09-09T09:32:39Z
+-- if the line above says 'Nothing was changed.' the -n did not take --
+=== The frist of 360 seconds, against the slowest clock involved ===
+-- 300 s poller backoff and two rounds of the five minute system cron --
+frist-ende 2026-09-09T09:38:39Z
+=== The work stock after the frist, which is the verdict of this step ===
+Work stock
+  scheduled            1854
+  handed to the worker 10
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              37
+  failed               0
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-09 09:35:28 (3 minutes ago)
+arbeitsvorrat-nachher 1864
+arbeitsvorrat-da ja
+-- the log of the container over the frist, so the poller is readable --
+2026-09-09T09:37:30.302897789Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/278?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:37:36.903298139Z INFO:findling.index.writer:committed 2 documents
+2026-09-09T09:37:37.005149840Z INFO:findling.worker.poller:pass finished, claimed=10 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=8 committed=2
+2026-09-09T09:37:37.143022940Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/284?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:37:41.264682454Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/300?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:37:47.780074326Z INFO:findling.index.writer:committed 2 documents
+2026-09-09T09:37:47.871984240Z INFO:findling.worker.poller:pass finished, claimed=10 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=8 committed=2
+2026-09-09T09:37:47.999601176Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/306?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:37:51.901901525Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/307?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:37:58.468852450Z INFO:findling.index.writer:committed 2 documents
+2026-09-09T09:37:58.559606258Z INFO:findling.worker.poller:pass finished, claimed=10 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=8 committed=2
+2026-09-09T09:37:58.687001832Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/308?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:38:02.467145617Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/312?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:38:09.314574322Z INFO:findling.index.writer:committed 2 documents
+2026-09-09T09:38:09.410405620Z INFO:findling.worker.poller:pass finished, claimed=10 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=8 committed=2
+2026-09-09T09:38:09.540556158Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/320?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:38:13.395883251Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/332?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:38:19.679842526Z INFO:findling.index.writer:committed 2 documents
+2026-09-09T09:38:19.780495226Z INFO:findling.worker.poller:pass finished, claimed=10 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=8 committed=2
+2026-09-09T09:38:19.908163720Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/338?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:38:23.819889153Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/341?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:38:30.549045570Z INFO:findling.index.writer:committed 2 documents
+2026-09-09T09:38:30.648502124Z INFO:findling.worker.poller:pass finished, claimed=10 indexed=2 skipped=0 failed=0 unchanged=0 requeued=2 embedded=8 committed=2
+2026-09-09T09:38:30.783473430Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/346?userId=lasttest "HTTP/1.1 200 OK"
+2026-09-09T09:38:34.602431141Z INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/367?userId=lasttest "HTTP/1.1 200 OK"
+nullstand-ende 2026-09-09T09:38:39Z

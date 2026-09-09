@@ -1,0 +1,18 @@
+baumhash-start 2026-09-09T09:54:55Z
+abbild: ghcr.io/street1983nk/findling_backend:dev
+digest=ghcr.io/street1983nk/findling_backend@sha256:78ab61d8a5ae4a0c68a1b0b04d2e4f2a96cd8c494325c7562a5d3c435f0be207 arch=arm64 created=2026-09-08T19:48:32.802643199Z
+repo: /home/ubuntu/work/repo0918
+=== The tree hash of the package INSIDE the image ===
+dateien: 54
+baumhash: 6c47cd219c430bccc9d5d57b1de1d2ff9f8672fa4f42b1160d0a31efb9367476
+=== The tree hash of the package in the working tree ===
+dateien: 54
+baumhash: 6c47cd219c430bccc9d5d57b1de1d2ff9f8672fa4f42b1160d0a31efb9367476
+=== The tree hash of the php half in the working tree ===
+dateien: 58
+baumhash: 4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9ed
+=== The verdict ===
+abbild-baumhash: 6c47cd219c430bccc9d5d57b1de1d2ff9f8672fa4f42b1160d0a31efb9367476
+arbeitsbaum-baumhash: 6c47cd219c430bccc9d5d57b1de1d2ff9f8672fa4f42b1160d0a31efb9367476
+baumhash-gleich ja
+baumhash-ende 2026-09-09T09:54:55Z

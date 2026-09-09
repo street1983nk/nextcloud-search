@@ -1,0 +1,108 @@
+spitze-vorher-start 2026-09-09T09:43:39Z
+rolle: vorher
+bestand: leer, vor dem Volllauf
+cgroup: /sys/fs/cgroup/system.slice/docker-e40bfb290cb323f8aa643fdc02527e33a37ebf9252eec0f8dfb9ae6d9e97af95.scope
+=== memory.events, read BEFORE the first search of this role ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+-- and the two figures next to it, as the zero point of the peak --
+anon 110342144
+file 106643456
+slab 1583904
+memory.current=219394048 memory.peak=1396486144 memory.max=2147483648
+=== The sampler beside it, two seconds, so the second of the peak is readable ===
+sampler-pid 25539
+rss_sampler: container=nc_app_findling_backend cgroup=/sys/fs/cgroup/system.slice/docker-e40bfb290cb323f8aa643fdc02527e33a37ebf9252eec0f8dfb9ae6d9e97af95.scope interval=2s
+=== The very first search of this container start, exactly one request ===
+erste-suche-vor 2026-09-09T09:43:45Z
+erste-suche-nach 2026-09-09T09:43:47Z
+-- the cgroup right after the first search --
+anon 543404032
+file 121413632
+slab 1700840
+memory.current=668790784 memory.peak=1396486144
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== The cold start of this role, against the ceiling and against 07-01 ===
+kaltstart-rolle              vorher
+kaltstart-anfragen           1 (davon fehlgeschlagen 0)
+kaltstart-gemessen           1.550,4 ms
+kaltstart-decke              1.500,0 ms (ExAppService::REQUEST_TIMEOUT_SECONDS = 1.5)
+kaltstart-marge              -50,4 ms
+kaltstart-vorwert            1.332,1 ms (Plan 07-01, ueber den OCS-Weg)
+kaltstart-abstand-zum-vorwert 218,3 ms
+Ueber die Konstante entscheidet dieses Skript nicht, es liefert die Zahl.
+=== Concurrency 1 ===
+stufe-1-vor 2026-09-09T09:43:47Z
+stufe-1-nach 2026-09-09T09:43:48Z
+-- the cgroup after concurrency 1 --
+anon 543686656
+file 122552320
+slab 1701432
+memory.current=669892608 memory.peak=1396486144
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 4 ===
+stufe-4-vor 2026-09-09T09:43:48Z
+stufe-4-nach 2026-09-09T09:43:51Z
+-- the cgroup after concurrency 4 --
+anon 545808384
+file 124923904
+slab 1731848
+memory.current=674459648 memory.peak=1396486144
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 8 ===
+stufe-8-vor 2026-09-09T09:43:51Z
+stufe-8-nach 2026-09-09T09:43:56Z
+-- the cgroup after concurrency 8 --
+anon 549961728
+file 125669376
+slab 1804512
+memory.current=679542784 memory.peak=1396486144
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== The sampler down, and its closing line is the OOM proof of this role ===
+findling-rss 1788947029,544571392,123174912,1717320,671682560,1396486144
+findling-rss 1788947032,545808384,124923904,1731848,674979840,1396486144
+findling-rss 1788947034,546803712,124923904,1741280,675934208,1396486144
+findling-rss 1788947036,547557376,124923904,1755008,676528128,1396486144
+findling-rss summary samples=9 max_anon=547557376 peak=1396486144 events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=0] oom_killed=false
+=== memory.events, the full set of counters, at the end of this role ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+OOMKilled=false
+RestartCount=0
+=== The highest anon of this role, out of the csv ===
+anon-spitze 547557376 bytes = 522.2 MB at 2026-09-09T09:43:56+00:00
+spitze-vorher-ende 2026-09-09T09:43:59Z

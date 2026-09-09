@@ -1,0 +1,17 @@
+korpus-start 2026-09-09T09:29:45Z
+korpus: /mnt/findling/ncdata/lasttest/files/loadtest
+rezept: /home/ubuntu/work/repo0918/docs/measurements/2026-09-05-semantiklauf-m7g/skripte/44-korpus-pruefsumme.py
+=== The reading, as the recipe printed it ===
+verify_load_corpus: dir=/mnt/findling/ncdata/lasttest/files/loadtest files=50000 bytes=20208046426 checksum=bcbef9b2cb067c2200df2a4a2e89408f690710983117d4e78328024046098a72
+=== The comparison, value by value ===
+pruefsumme-gemessen  bcbef9b2cb067c2200df2a4a2e89408f690710983117d4e78328024046098a72
+pruefsumme-erwartet  bcbef9b2cb067c2200df2a4a2e89408f690710983117d4e78328024046098a72
+byte-gemessen        20208046426
+byte-erwartet        20208046426
+dateien-gemessen     50000
+dateien-erwartet     50000
+-- the file count is informative: a different one would change the checksum --
+-- the x86 line c03a8803... is NOT the value this box is compared against --
+=== The verdict ===
+korpus-gleich ja
+korpus-ende 2026-09-09T09:29:45Z

@@ -1,0 +1,260 @@
+grundlast 2026-09-09T09:42:02Z
+=== The hard limit, set again after the register, read out of the cgroup ===
+memory.max=2147483648
+memory.swap.max=0
+Image=ghcr.io/street1983nk/findling_backend:dev StartedAt=2026-09-09T09:40:51.512974927Z RestartCount=0
+=== memory.events, reading 4 of the run, BEFORE the measurement touches anything ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== A. The base line of the container, model never loaded in this start ===
+anon 108199936
+file 10403840
+slab 1313688
+memory.current=120745984
+memory.peak=137326592
+-- the processes of the cgroup and their RSS in kB --
+sh: 1: ps: not found
+-- the log of this start, so the arming is readable --
+2026-09-09T09:40:51.625408508Z entrypoint: binding mode tcp 0.0.0.0:23000
+2026-09-09T09:40:51.625431259Z harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+2026-09-09T09:40:51.625815805Z init: no HaRP tunnel in this deployment, watching the application only
+2026-09-09T09:40:52.622720605Z INFO:     Started server process [8]
+2026-09-09T09:40:52.622744707Z INFO:     Waiting for application startup.
+2026-09-09T09:40:52.624950246Z INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+2026-09-09T09:40:52.672449028Z INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries, read 1 in this process
+2026-09-09T09:40:52.673163109Z INFO:findling:findling backend was enabled before this start, indexing continues without a switch
+2026-09-09T09:40:52.678274303Z INFO:     Application startup complete.
+2026-09-09T09:40:53.002620478Z INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.316 s, build 1 in this process
+2026-09-09T09:40:53.148901163Z INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+2026-09-09T09:40:53.384260824Z WARNING:findling.worker.poller:the queue did not answer, next attempt in 15 s
+2026-09-09T09:40:53.384282551Z WARNING:findling.nc.queue:could not count the queue
+2026-09-09T09:41:08.467558986Z WARNING:findling.worker.poller:the queue did not answer, next attempt in 30 s
+2026-09-09T09:41:38.506977903Z WARNING:findling.worker.poller:the queue has not answered for 3 passes, backing off to at most one attempt every 300 s; the Nextcloud half looks removed and the container keeps answering searches
+pass-finished lines since this start: 0
+=== B. The footprint of the weights alone, in a process of their own ===
+[0;93m2026-09-09 09:42:03.443349614 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+{
+ "vor_dem_import_kb": 13060,
+ "nach_dem_import_kb": 25208,
+ "nach_dem_bau_kb": 25208,
+ "nach_einer_einbettung_kb": 485048,
+ "verfuegbar": true,
+ "dimension": 384,
+ "nach_langer_einbettung_kb": 511668,
+ "dimension2": 384,
+ "gewichte_kb": 0,
+ "aktivierungen_kb": 486460
+}
+=== The cgroup right after B, so the share is visible ===
+anon 108199936
+file 118362112
+slab 1500504
+memory.current=229056512
+=== C. Which step of the startup buys it, step by step ===
+[0;93m2026-09-09 09:42:07.657239644 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+{
+ "schritte": [
+  {
+   "schritt": "00-leerer-prozess",
+   "rss_kb": 13140,
+   "rss_mb": 12.8
+  },
+  {
+   "schritt": "01-config-importiert",
+   "rss_kb": 16252,
+   "rss_mb": 15.9
+  },
+  {
+   "schritt": "02-settings-gelesen",
+   "rss_kb": 16252,
+   "rss_mb": 15.9
+  },
+  {
+   "schritt": "03-index-module-importiert",
+   "rss_kb": 23400,
+   "rss_mb": 22.9
+  },
+  {
+   "schritt": "04-embed-module-importiert",
+   "rss_kb": 25184,
+   "rss_mb": 24.6
+  },
+  {
+   "schritt": "05-store-vectors-importiert",
+   "rss_kb": 27024,
+   "rss_mb": 26.4
+  },
+  {
+   "schritt": "06-poller-importiert",
+   "rss_kb": 68376,
+   "rss_mb": 66.8
+  },
+  {
+   "schritt": "07-api-resources-importiert",
+   "rss_kb": 68388,
+   "rss_mb": 66.8
+  },
+  {
+   "schritt": "08-findling-main-importiert",
+   "rss_kb": 70728,
+   "rss_mb": 69.1
+  },
+  {
+   "schritt": "09-wortliste-gelesen-276496",
+   "rss_kb": 93156,
+   "rss_mb": 91.0
+  },
+  {
+   "schritt": "10-deutscher-automat-gebaut",
+   "rss_kb": 136140,
+   "rss_mb": 132.9
+  },
+  {
+   "schritt": "11-tokenizer-gelesen",
+   "rss_kb": 411516,
+   "rss_mb": 401.9
+  },
+  {
+   "schritt": "12-chunker-gebaut-und-gefahren-2",
+   "rss_kb": 692020,
+   "rss_mb": 675.8
+  },
+  {
+   "schritt": "13-modell-objekt-gebaut-lazy",
+   "rss_kb": 692020,
+   "rss_mb": 675.8
+  },
+  {
+   "schritt": "14-erste-einbettung-gewichte-geladen",
+   "rss_kb": 1097948,
+   "rss_mb": 1072.2
+  },
+  {
+   "schritt": "15-lange-einbettung-aktivierungen",
+   "rss_kb": 1124936,
+   "rss_mb": 1098.6
+  }
+ ],
+ "zuwaechse_ueber_10_mb": [
+  {
+   "von": "05-store-vectors-importiert",
+   "nach": "06-poller-importiert",
+   "delta_mb": 40.4
+  },
+  {
+   "von": "08-findling-main-importiert",
+   "nach": "09-wortliste-gelesen-276496",
+   "delta_mb": 21.9
+  },
+  {
+   "von": "09-wortliste-gelesen-276496",
+   "nach": "10-deutscher-automat-gebaut",
+   "delta_mb": 42.0
+  },
+  {
+   "von": "10-deutscher-automat-gebaut",
+   "nach": "11-tokenizer-gelesen",
+   "delta_mb": 268.9
+  },
+  {
+   "von": "11-tokenizer-gelesen",
+   "nach": "12-chunker-gebaut-und-gefahren-2",
+   "delta_mb": 273.9
+  },
+  {
+   "von": "13-modell-objekt-gebaut-lazy",
+   "nach": "14-erste-einbettung-gewichte-geladen",
+   "delta_mb": 396.4
+  },
+  {
+   "von": "14-erste-einbettung-gewichte-geladen",
+   "nach": "15-lange-einbettung-aktivierungen",
+   "delta_mb": 26.4
+  }
+ ],
+ "verfuegbar": true,
+ "vectors_modul": "findling.store.vectors",
+ "poller_modul": "findling.worker.poller",
+ "haupt_modul": "findling.main"
+}
+=== D. The fine decomposition into five named items, as measure.yml runs it ===
+date=2026-09-09T09:42:13Z
+arch=aarch64
+python=3.13.15
+image_digest=unknown
+image_ref=unknown
+runner_role=unknown
+tokenizers_version=0.23.2
+vocab_size=250002
+chunk_tokens=510 overlap=0 token_cap=1024
+embedding_available=True
+module_seen=findling.store.vectors,findling.worker.poller,findling.main
+
+-- schritt rss_kb --
+00-leerer-prozess 13104
+01-config-importiert 16536
+02-settings-gelesen 16604
+03-index-module-importiert 23764
+04-embed-module-importiert 25556
+05-store-vectors-importiert 27208
+06-poller-importiert 68424
+07-api-resources-importiert 68444
+08-findling-main-importiert 70780
+09-wortliste-gelesen-276496 93220
+10-deutscher-automat-gebaut 136168
+11a-tokenizers-modul-importiert 140232
+11b-erste-tokenizer-instanz 411452
+12a-splitter-gebaut 691140
+12b-erster-chunkerlauf-2 691952
+12c-zweiter-chunkerlauf-2 691952
+13-modell-objekt-gebaut-lazy 691952
+14-erste-einbettung-gewichte-geladen 1100180
+15-lange-einbettung-aktivierungen 1127936
+16-zweite-tokenizer-instanz-informativ 1356584
+
+-- zuwachs je schritt --
+von                                    nach                                    delta_mb    rss_mb
+00-leerer-prozess                      01-config-importiert                         3.4      16.1
+01-config-importiert                   02-settings-gelesen                          0.1      16.2
+02-settings-gelesen                    03-index-module-importiert                   7.0      23.2
+03-index-module-importiert             04-embed-module-importiert                   1.8      25.0
+04-embed-module-importiert             05-store-vectors-importiert                  1.6      26.6
+05-store-vectors-importiert            06-poller-importiert                        40.2      66.8
+06-poller-importiert                   07-api-resources-importiert                  0.0      66.8
+07-api-resources-importiert            08-findling-main-importiert                  2.3      69.1
+08-findling-main-importiert            09-wortliste-gelesen-276496                 21.9      91.0
+09-wortliste-gelesen-276496            10-deutscher-automat-gebaut                 41.9     133.0
+10-deutscher-automat-gebaut            11a-tokenizers-modul-importiert              4.0     136.9
+11a-tokenizers-modul-importiert        11b-erste-tokenizer-instanz                264.9     401.8
+11b-erste-tokenizer-instanz            12a-splitter-gebaut                        273.1     674.9
+12a-splitter-gebaut                    12b-erster-chunkerlauf-2                     0.8     675.7
+12b-erster-chunkerlauf-2               12c-zweiter-chunkerlauf-2                    0.0     675.7
+12c-zweiter-chunkerlauf-2              13-modell-objekt-gebaut-lazy                 0.0     675.7
+13-modell-objekt-gebaut-lazy           14-erste-einbettung-gewichte-geladen       398.7    1074.4
+14-erste-einbettung-gewichte-geladen   15-lange-einbettung-aktivierungen           27.1    1101.5
+15-lange-einbettung-aktivierungen      16-zweite-tokenizer-instanz-informativ     223.3    1324.8
+-- standard error of part D --
+  [0;93m2026-09-09 09:42:12.271475638 [W:onnxruntime:Default, telemetry.cc:800 operator()] Failed to persist telemetry device ID; using an in-memory identifier[m
+feinmessung-vollstaendig ja
+-- the native arm expectation of plan 10-02, for the report --
+erwartung-fein-arm64 543,7 MB over five items, base line 13,0 MB
+=== memory.events again, after B, C and D, so the readings bracket them ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== The plausibility line, and it is not an abort ===
+grundlast-gemessen            103.2 MB (anon of part A, 108199936 bytes)
+grundlast-erwartet            118 bis 150 MB (calculated, assumption A5)
+grundlast-vorwert-06-11       691,8 MB
+grundlast-vorwert-nachmessung 693,4 MB
+grundlast-erwartung getroffen: 103.2 MB liegt unter der Schwelle
+grundlast-ende 2026-09-09T09:42:14Z

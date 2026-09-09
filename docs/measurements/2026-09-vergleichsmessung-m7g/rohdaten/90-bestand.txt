@@ -1,0 +1,123 @@
+bestand 2026-09-09T09:26:49Z
+=== The machine ===
+arch=aarch64 cores=2
+               total        used        free      shared  buff/cache   available
+Mem:           3.9Gi       1.7Gi       1.1Gi       244Mi       1.5Gi       2.2Gi
+-- the memory cap that makes the parity, read back and not assumed --
+BOOT_IMAGE=/vmlinuz-7.0.0-1012-aws root=PARTUUID=c5b109a8-81d8-4d10-8ddb-fe7c835a13a0 ro console=tty1 console=ttyS0 nvme_core.io_timeout=4294967295 mem=4G panic=-1
+mem-cap-gefunden ja (mem=4G)
+=== The Nextcloud instances on this docker daemon ===
+-- every running container, so the count below can be checked --
+nc_app_findling_backend  ghcr.io/street1983nk/findling_backend:dev  Up 6 minutes
+findling-registry  registry:2  Up 6 minutes
+nextcloud-aio-apache  ghcr.io/nextcloud-releases/aio-apache:latest  Up 6 minutes (healthy)
+nextcloud-aio-nextcloud  ghcr.io/nextcloud-releases/aio-nextcloud:latest  Up 6 minutes (healthy)
+nextcloud-aio-redis  ghcr.io/nextcloud-releases/aio-redis:latest  Up 6 minutes (healthy)
+nextcloud-aio-database  ghcr.io/nextcloud-releases/aio-postgresql:latest  Up 6 minutes (healthy)
+nextcloud-aio-harp  ghcr.io/nextcloud-releases/aio-harp:latest  Up 6 minutes (healthy)
+nextcloud-aio-notify-push  ghcr.io/nextcloud-releases/aio-notify-push:latest  Up 6 minutes (healthy)
+nextcloud-aio-mastercontainer  nextcloud/all-in-one:latest  Up 6 minutes (healthy)
+nextcloud-instanzen 1
+nextcloud-einzahl ja
+=== The container, as the machine start left it ===
+Image=ghcr.io/street1983nk/findling_backend:dev StartedAt=2026-09-09T09:20:01.633144073Z Memory=2147483648 MemorySwap=2147483648 RestartCount=0 OOMKilled=false
+=== memory.events, read BEFORE any intervention ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+-- memory.events.local, for completeness --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== memory.stat and the counters, anon and memory.current side by side ===
+anon 721289216
+file 90927104
+slab 7143144
+memory.current=821645312
+memory.peak=821907456
+memory.max=2147483648
+memory.swap.max=0
+=== Whether the parked container was armed at all: passes since its start ===
+container-start 2026-09-09T09:20:01.633144073Z
+pass-finished lines: 0
+-- the tail of this start, so the number is readable and not asserted --
+2026-09-09T09:20:02.401541705Z entrypoint: binding mode tcp 0.0.0.0:23000
+2026-09-09T09:20:02.402373024Z harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+2026-09-09T09:20:02.402383234Z init: no HaRP tunnel in this deployment, watching the application only
+2026-09-09T09:20:05.035422923Z INFO:     Started server process [8]
+2026-09-09T09:20:05.035466035Z INFO:     Waiting for application startup.
+2026-09-09T09:20:05.037880278Z INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+2026-09-09T09:20:05.091080414Z INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries, read 1 in this process
+2026-09-09T09:20:05.091745071Z INFO:findling:findling backend was enabled before this start, indexing continues without a switch
+2026-09-09T09:20:05.100816311Z INFO:     Application startup complete.
+2026-09-09T09:20:06.012892785Z INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+2026-09-09T09:20:06.015423857Z WARNING:findling.nc.queue:could not count the queue
+2026-09-09T09:20:06.681557357Z INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.287 s, build 1 in this process
+2026-09-09T09:20:06.758488236Z WARNING:findling.worker.poller:the queue did not answer, next attempt in 15 s
+2026-09-09T09:20:21.762862099Z WARNING:findling.worker.poller:the queue did not answer, next attempt in 30 s
+2026-09-09T09:20:51.764234548Z WARNING:findling.worker.poller:the queue has not answered for 3 passes, backing off to at most one attempt every 300 s; the Nextcloud half looks removed and the container keeps answering searches
+=== The space on the data root, with a number ===
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme1n1     59G   33G   24G  59% /mnt/findling
+Filesystem     1G-blocks  Used Available Use% Mounted on
+/dev/nvme1n1         59G   33G       24G  59% /mnt/findling
+-- what the images occupy, the old 06-11-arm among them --
+ghcr.io/street1983nk/findling_backend:dev  1.05GB  00111fd090f4
+localhost:5000/findling_backend:06-11-arm  1.05GB  5703f8d208c4
+localhost:5000/findling_backend:05-21-arm-wegwerf-workers2  570MB  b0c3d9a1481d
+localhost:5000/findling_backend:05-21-arm  569MB  e7e5c3c1ca5f
+ghcr.io/nextcloud/nextcloud-appapi-harp:release  334MB  603fdf5ca280
+nextcloud:34.0.3-apache  2.21GB  b97df9e0e1ee
+ghcr.io/nextcloud-releases/aio-nextcloud:latest  1.74GB  8ab1de1ca1e5
+nextcloud/all-in-one:latest  384MB  8ef360995740
+ghcr.io/nextcloud-releases/aio-notify-push:latest  23.4MB  f990f8529d8f
+ghcr.io/nextcloud-releases/aio-redis:latest  160MB  664431f94510
+ghcr.io/nextcloud-releases/aio-postgresql:latest  427MB  a0c7abc15435
+ghcr.io/nextcloud-releases/aio-domaincheck:latest  27.9MB  34eb385af1da
+ghcr.io/nextcloud-releases/aio-apache:latest  289MB  d0fece673d23
+ghcr.io/nextcloud-releases/aio-harp:latest  311MB  d6d43f35088a
+nginx:1.27-alpine  76.8MB  65645c7bb6a0
+registry:2  36.3MB  a3d8aaa63ed8
+-- images, containers, volumes and build cache in one place --
+TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+Images          16        9         8.051GB   3.315GB (41%)
+Containers      9         9         966.7kB   0B (0%)
+Local Volumes   11        10        2.594GB   905.8MB (34%)
+Build Cache     42        0         2.681GB   1.422GB
+=== The volume of the ExApp, and what is left in it ===
+nc_app_findling_backend_data
+total 168
+drwxr-xr-x 5 ubuntu ubuntu  4096 Sep  9 09:20 .
+drwx-----x 3 root   root    4096 Sep  7 06:55 ..
+-rw-r--r-- 1 ubuntu ubuntu     0 Sep  7 06:55 armed.marker
+drwxr-xr-x 2 ubuntu ubuntu  4096 Sep  7 06:55 dict
+drwxr-xr-x 2 ubuntu ubuntu  4096 Sep  7 06:55 index
+-rw-r--r-- 1 ubuntu ubuntu 45056 Sep  7 06:56 state.db
+-rw-r--r-- 1 ubuntu ubuntu 32768 Sep  9 09:20 state.db-shm
+-rw-r--r-- 1 ubuntu ubuntu     0 Sep  9 09:20 state.db-wal
+drwxr-xr-x 2 ubuntu ubuntu  4096 Sep  7 06:55 tmp
+-rw-r--r-- 1 ubuntu ubuntu 40960 Sep  7 06:56 vectors.db
+-rw-r--r-- 1 ubuntu ubuntu 32768 Sep  9 09:20 vectors.db-shm
+-rw-r--r-- 1 ubuntu ubuntu     0 Sep  9 09:20 vectors.db-wal
+=== The corpus, which is the part that survived 07.09. ===
+19G	/mnt/findling/ncdata/lasttest/files/loadtest
+=== The marks in state.db, but only if there is a state.db ===
+  analyzer_version = 1
+  created_at = 1788764118
+  embedding_version = unknown
+  index_version = 1
+  instance_id = 0fd47715b7814081824765c3adf05ced
+  schema_version = 1
+  store_schema_version = 2
+  tantivy_version = tantivy v0.26.0, index_format v7
+  wordlist_hash = b1f64012ca7f5b6e57de2cb1bafa2521cb6606f3ccef5d6fd17396edc808dde0
+  files by state: []
+bestand-ende 2026-09-09T09:26:50Z
