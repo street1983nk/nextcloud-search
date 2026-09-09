@@ -339,6 +339,112 @@ final class ProviderTest extends TestCase {
 		self::assertSame('0', $entries[0]['attributes']['fileId']);
 	}
 
+	// -- the entry point onto the own result page ----------------------------
+
+	/**
+	 * A url generator that can be told apart by what it was asked to route, so
+	 * that a test can read the address of the entry point instead of asserting
+	 * against a fixed string that every route returns.
+	 */
+	private function routingUrls(): void {
+		$this->urlGenerator->method('linkToRoute')->willReturnCallback(
+			static function (string $route, array $arguments = []): string {
+				if ($route !== 'findling.page.index') {
+					return '/index.php/f/11';
+				}
+
+				return '/index.php/apps/findling/' . ($arguments === [] ? '' : '?' . http_build_query($arguments));
+			},
+		);
+	}
+
+	public function testAPaginatedGroupCarriesTheEntryPointAsItsLastEntry(): void {
+		// The limit is one and the group has two entries afterwards, which is the
+		// property in one line: the door is appended after the hits are built and
+		// never counts against what the dialog asked for.
+		$this->routingUrls();
+		$this->searchService->method('run')->willReturn($this->outcome(
+			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf')],
+			nextCursor: 137,
+			hasMore: true,
+		));
+
+		$result = $this->provider()->search($this->user(), $this->query(limit: 1, titleOnly: true));
+		$entries = $this->entriesOf($result);
+
+		self::assertCount(2, $entries);
+		self::assertSame('Show all results', $entries[1]['title']);
+		self::assertSame('Opens the Findling results page', $entries[1]['subline']);
+		self::assertSame('icon-search', $entries[1]['icon']);
+		self::assertSame('', $entries[1]['thumbnailUrl']);
+
+		// The term and the built in filter travel into the address, and nothing
+		// else does: the way in is always page one, so no page and no cursor path.
+		self::assertSame('/index.php/apps/findling/?query=quarterly+report&names=1', $entries[1]['resourceUrl']);
+
+		// And the answer stays the paginated one with its cursor, so the cursor
+		// semantics of the dialog are untouched by the extra entry.
+		self::assertTrue($result->jsonSerialize()['isPaginated']);
+		self::assertSame(137, $result->jsonSerialize()['cursor']);
+	}
+
+	public function testACompleteGroupHasNoEntryPointBecauseThePageWouldShowTheSameHits(): void {
+		$this->routingUrls();
+		$this->searchService->method('run')->willReturn($this->outcome(
+			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf')],
+			hasMore: false,
+		));
+
+		$entries = $this->entriesOf($this->provider()->search($this->user(), $this->query()));
+
+		self::assertCount(1, $entries);
+		self::assertSame('Report.pdf', $entries[0]['title']);
+	}
+
+	public function testAGroupWithoutASingleApprovedHitHasNoEntryPointEither(): void {
+		// Even when the service reports that there is more behind the cursor. A
+		// user whose candidates were all revoked shares is shown nothing at all,
+		// and a door into a page that would show them nothing is worse than no
+		// door: it would be the one visible sign that something was there.
+		$this->routingUrls();
+		$this->searchService->method('run')->willReturn($this->outcome(
+			hits: [],
+			nextCursor: 137,
+			hasMore: true,
+		));
+
+		$result = $this->provider()->search($this->user(), $this->query());
+
+		self::assertSame([], $this->entriesOf($result));
+		self::assertFalse($result->jsonSerialize()['isPaginated']);
+	}
+
+	public function testTheEntryPointCarriesNoFileIdWhileEveryHitCarriesOne(): void {
+		// The property the parity job depends on. Every entry of this group is
+		// read as a permission answer through its fileId attribute, so a door
+		// that carried one would be compared against the file list of a user as
+		// if it were a file.
+		$this->routingUrls();
+		$this->searchService->method('run')->willReturn($this->outcome(
+			hits: [
+				new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf'),
+				new ApprovedHit(12, 'Minutes.pdf', 'Board/Minutes.pdf', 'application/pdf'),
+			],
+			nextCursor: 137,
+			hasMore: true,
+		));
+
+		$entries = $this->entriesOf($this->provider()->search($this->user(), $this->query()));
+
+		self::assertCount(3, $entries);
+		self::assertSame('11', $entries[0]['attributes']['fileId']);
+		self::assertSame('12', $entries[1]['attributes']['fileId']);
+		self::assertArrayNotHasKey('fileId', $entries[2]['attributes']);
+		// And it is recognisable by the one mark a reader of this group may use
+		// to skip it, which is its address.
+		self::assertStringStartsWith('/index.php/apps/findling/', $entries[2]['resourceUrl']);
+	}
+
 	public function testTheProviderDeclaresBothBuiltinFiltersSoTheDialogNeverSkipsIt(): void {
 		// Not one of the twelve, and one line, because a provider that is skipped
 		// for an undeclared filter looks exactly like a broken backend: no error,

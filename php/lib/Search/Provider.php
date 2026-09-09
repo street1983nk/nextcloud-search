@@ -163,10 +163,12 @@ final class Provider implements IFilteringProvider {
 			return SearchResult::complete($this->getName(), []);
 		}
 
+		$titleOnly = $this->titleOnly($query);
+
 		$outcome = $this->searchService->run(
 			$user,
 			$term,
-			$this->titleOnly($query),
+			$titleOnly,
 			$this->startOffset($query),
 			$this->caps(max(1, $query->getLimit())),
 		);
@@ -185,6 +187,25 @@ final class Provider implements IFilteringProvider {
 		}
 
 		$entries = $this->toEntries($outcome->hits, $outcome->excerpts);
+
+		// The way out of the dialog and onto the own page, and it is offered at
+		// exactly one moment: when there is more behind this group than the
+		// dialog shows. A complete group adds nothing by sending somebody to a
+		// page that would show the same hits again, and a group without a single
+		// approved hit has already left this method above.
+		//
+		// It is appended after the entries are built, so it never counts against
+		// the limit the dialog asked for, and the answer stays the paginated one
+		// so that the cursor semantics of the dialog are untouched.
+		//
+		// Knowingly accepted: NC 33 and 34 show their own "load more" button when
+		// the number of results equals the limit, so the extra entry replaces
+		// that button with this one. That is the direction of this phase, one way
+		// of paging rather than two, and the page is the one that survives a
+		// bookmark.
+		if ($outcome->hasMore && $entries !== []) {
+			$entries[] = $this->entryPoint($term, $titleOnly);
+		}
 
 		// A run that hit the paging ceiling is complete() with the hits it has,
 		// and that is the honest shape rather than a concession: complete()
@@ -285,6 +306,37 @@ final class Provider implements IFilteringProvider {
 		}
 
 		return $entries;
+	}
+
+	/**
+	 * The last entry of the group, which is not a hit but a door.
+	 *
+	 * The address carries the term and, if it was set, the built in filter, and
+	 * nothing else: no page and no cursor path, because the way in is always page
+	 * one. Parameters that are not a placeholder of the route are appended as a
+	 * query string by the url generator, which is what the page reads.
+	 */
+	private function entryPoint(string $term, bool $titleOnly): SearchResultEntry {
+		$entry = new SearchResultEntry(
+			thumbnailUrl: '',
+			title: $this->l10n->t('Show all results'),
+			subline: $this->l10n->t('Opens the Findling results page'),
+			resourceUrl: $this->urlGenerator->linkToRoute(
+				'findling.page.index',
+				['query' => $term] + ($titleOnly ? ['names' => '1'] : []),
+			),
+			icon: 'icon-search',
+		);
+
+		// Deliberately no fileId attribute. This entry is not a hit, and it must
+		// never be counted as one: the parity job reads the attribute of every
+		// entry of this group as a permission answer, and a door with a file id
+		// would be compared against the file list of a user as if it were a file.
+		// Whoever teaches a reader of this group to skip it recognises it by its
+		// address, never by the missing attribute, because "no attribute means
+		// skip" would switch off the very check that guard exists for.
+
+		return $entry;
 	}
 
 	/**
