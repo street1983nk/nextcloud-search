@@ -32,8 +32,15 @@ at another.
 from __future__ import annotations
 
 import ast
+import importlib.util
+import json
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from collections.abc import Mapping
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -65,6 +72,11 @@ CONTAINER_ONLY_HEADERS = ("EX-APP-ID", "AUTHORIZATION-APP-API")
 # helper module on the load test box, and they are exactly what makes a tool
 # unusable anywhere else.
 MACHINE_SHAPES = ("/home/", "sys.path.insert", "sys.path.append", "drillhelfer")
+
+# The name the load tool is imported under. A name and not a path, because a
+# module whose name is not an identifier cannot be looked up in sys.modules,
+# which the dataclass in the tool needs; see search_load_module below.
+SEARCH_LOAD_MODULE = "findling_search_load"
 
 
 def machine_shapes(text: str) -> list[str]:
@@ -603,3 +615,292 @@ def test_the_load_tool_names_its_three_knobs_in_the_usage() -> None:
     text = SEARCH_LOAD.read_text(encoding="utf-8")
     for option in ("--concurrency", "--rounds", "--base-url"):
         assert f'"{option}"' in text, option
+
+
+# DI-10-01, the counting of an aborted container call. The block below asks the
+# tool what it decides rather than what its source says, because the finding was
+# never visible in the source: every line of it was doing what it said, and the
+# empty list was a list.
+
+
+def search_load_module() -> ModuleType:
+    """The load tool, loaded from its path under a name that is a valid one.
+
+    Loaded rather than run, in the shape test_measurement_scripts.py loads the
+    status observer. scripts/ops is not a package and never becomes one for a
+    test: the tool is run as ./search_load.py on a box and an __init__.py beside
+    it would be a file that exists for this file alone.
+
+    The entry in sys.modules is not decoration. Sample is a dataclass with
+    slots, and building one of those means building the class a second time,
+    for which dataclasses looks its own module up by name. Without the entry
+    the import ends in an AttributeError inside dataclasses.py that names
+    neither this file nor the tool.
+    """
+    specification = importlib.util.spec_from_file_location(SEARCH_LOAD_MODULE, SEARCH_LOAD)
+    assert specification is not None, SEARCH_LOAD
+    assert specification.loader is not None, SEARCH_LOAD
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[SEARCH_LOAD_MODULE] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+class StagedAnswer:
+    """What urlopen hands back: a context manager whose read gives bytes.
+
+    The body is staged as text and encoded here, because that is the way round
+    the real answer arrives and a test that handed over a dict would skip the
+    json.loads the tool really does.
+    """
+
+    def __init__(self, body: str) -> None:
+        self.body = body.encode("utf-8")
+
+    def __enter__(self) -> StagedAnswer:
+        return self
+
+    def __exit__(self, *_unused: object) -> None:
+        """Nothing to close: the body is a string that was in memory all along."""
+
+    def read(self) -> bytes:
+        return self.body
+
+
+def staged_group(hits: int) -> str:
+    """An OCS answer carrying that many entries, in the shape the route sends."""
+    entries = [{"title": f"treffer {number}", "subline": "gestellt"} for number in range(hits)]
+    return json.dumps({"ocs": {"meta": {"status": "ok"}, "data": {"entries": entries}}})
+
+
+def stage_one_answer(monkeypatch: pytest.MonkeyPatch, body: str) -> None:
+    """Point urlopen at one staged body, whatever it is asked for.
+
+    A monkeypatch on urllib.request.urlopen rather than a pure function pulled
+    out of _one_search: the decision under test is one comparison inside that
+    function, and a helper extracted for the test alone would be a second
+    abstraction in a tool whose whole point is that it has none.
+    """
+
+    def answer(request: object, **_unused: object) -> StagedAnswer:
+        return StagedAnswer(body)
+
+    monkeypatch.setattr(urllib.request, "urlopen", answer)
+
+
+def stage_hits_per_term(monkeypatch: pytest.MonkeyPatch, hits: Mapping[str, int]) -> None:
+    """Stage a hit count per search term, so a run is the same in any order.
+
+    The pool runs the terms concurrently. A staging that counted calls would
+    hand out its numbers in the order the threads happen to arrive and make the
+    assertion below a coin toss.
+    """
+
+    def answer(request: urllib.request.Request, **_unused: object) -> StagedAnswer:
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(request.full_url).query)
+        return StagedAnswer(staged_group(hits[query["term"][0]]))
+
+    monkeypatch.setattr(urllib.request, "urlopen", answer)
+
+
+def test_the_load_tool_counts_a_result_group_without_a_container_part_as_a_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DI-10-01: a 200 with an empty result group is an aborted container call.
+
+    The OCS route answers such a call with a status of 200 and a result group
+    that has no container part, so the tool used to see a search that found
+    nothing. On 10.09.2026 that put 17 aborted calls of level 16 into the
+    Nextcloud log next to "failures": 0 in
+    rohdaten/97-stufe-16.json.
+    """
+    module = search_load_module()
+    stage_one_answer(monkeypatch, staged_group(0))
+
+    elapsed_ms, hits, failure = module._one_search("http://localhost:8080/ocs?term=x", "Basic staged", 1)
+
+    assert failure == "EmptyResultGroup"
+    assert hits == 0
+    assert elapsed_ms >= 0
+
+
+def test_the_load_tool_takes_min_hits_zero_as_the_reading_from_before(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The way out for an instance whose stock does not carry the ten terms.
+
+    Same staged answer as above and the opposite verdict, because the switch is
+    the whole difference. Without this direction the fix would be a rule with
+    no exception, and an instance that legitimately finds nothing would report
+    a hundred percent failures while being perfectly healthy.
+    """
+    module = search_load_module()
+    stage_one_answer(monkeypatch, staged_group(0))
+
+    _, hits, failure = module._one_search("http://localhost:8080/ocs?term=x", "Basic staged", 0)
+
+    assert failure is None
+    assert hits == 0
+
+
+def test_the_load_tool_still_calls_a_body_of_the_wrong_shape_malformed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The older branch keeps its name and keeps standing in front of the new one.
+
+    Both readings of the switch are asked, because the order of the two
+    branches is what decides here: a broken route answering with a string where
+    the entries belong must not be filed under the empty result group of a
+    container that was too slow.
+    """
+    module = search_load_module()
+    stage_one_answer(monkeypatch, json.dumps({"ocs": {"data": {"entries": "kein Container"}}}))
+
+    for min_hits in (0, 1):
+        _, hits, failure = module._one_search("http://localhost:8080/ocs?term=x", "Basic staged", min_hits)
+        assert failure == "MalformedAnswer", min_hits
+        assert hits == 0, min_hits
+
+
+def test_the_load_tool_counts_a_full_result_group_as_answered(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The ordinary case, so that the new comparison cannot pass by failing everything."""
+    module = search_load_module()
+    stage_one_answer(monkeypatch, staged_group(5))
+
+    _, hits, failure = module._one_search("http://localhost:8080/ocs?term=x", "Basic staged", 1)
+
+    assert failure is None
+    assert hits == 5
+
+
+def test_the_load_tool_reports_a_transport_failure_under_its_own_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A request that never arrived is not an empty result group either.
+
+    Three kinds of failure now exist and each keeps its own name, because a
+    report that threw them together would say that something went wrong and
+    nothing about where to look.
+    """
+    module = search_load_module()
+
+    def refuse(request: object, **_unused: object) -> StagedAnswer:
+        raise urllib.error.URLError("no route to host")
+
+    monkeypatch.setattr(urllib.request, "urlopen", refuse)
+
+    _, hits, failure = module._one_search("http://localhost:8080/ocs?term=x", "Basic staged", 1)
+
+    assert failure == "URLError"
+    assert hits == 0
+
+
+def test_the_report_carries_the_hits_per_request_and_the_switch_it_counted_with(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The fingerprint of DI-10-01, readable without a Nextcloud log.
+
+    Three requests, two of them with five hits and one with none, so the
+    quotient is not a whole number and the rounding is part of the assertion.
+    The failure and the hits of the same request are both counted: an aborted
+    call contributed zero hits and it still happened.
+    """
+    module = search_load_module()
+    monkeypatch.setenv("FINDLING_LOAD_PASSWORD", "gestellt")
+    terms = module.TERMS
+    stage_hits_per_term(monkeypatch, {terms[0]: 5, terms[1]: 5, terms[2]: 0})
+    report_file = tmp_path / "report.json"
+
+    code = module.main(
+        [
+            "--base-url",
+            "http://localhost:8080",
+            "--user",
+            "lasttest",
+            "--concurrency",
+            "3",
+            "--rounds",
+            "1",
+            "--json",
+            str(report_file),
+        ]
+    )
+
+    report = json.loads(report_file.read_text(encoding="utf-8"))
+    assert code == 0
+    assert report["requests"] == 3
+    assert report["hits_total"] == 10
+    assert report["hits_per_request"] == 3.33
+    assert report["min_hits"] == 1
+    assert report["failures"] == 1
+    assert report["failure_kinds"] == {"EmptyResultGroup": 1}
+
+
+def test_the_report_says_zero_hits_per_request_and_keeps_the_switch_it_was_given(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A run with --min-hits 0 stays readable as such after the fact.
+
+    The value stands in the report, so a raw file found years later carries its
+    own reading and nobody has to guess which command line produced it. Nothing
+    failed here and nothing was found either, which is exactly the state the
+    switch exists for.
+    """
+    module = search_load_module()
+    monkeypatch.setenv("FINDLING_LOAD_PASSWORD", "gestellt")
+    stage_one_answer(monkeypatch, staged_group(0))
+    report_file = tmp_path / "report.json"
+
+    code = module.main(
+        [
+            "--base-url",
+            "http://localhost:8080",
+            "--user",
+            "lasttest",
+            "--concurrency",
+            "2",
+            "--rounds",
+            "1",
+            "--min-hits",
+            "0",
+            "--json",
+            str(report_file),
+        ]
+    )
+
+    report = json.loads(report_file.read_text(encoding="utf-8"))
+    assert code == 0
+    assert report["min_hits"] == 0
+    assert report["failures"] == 0
+    assert report["hits_total"] == 0
+    assert report["hits_per_request"] == 0.0
+
+
+def test_a_run_of_nothing_but_empty_result_groups_ends_with_an_exit_code(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Every request aborted is the one failure this tool has always known.
+
+    With the default switch such a run has no answered request left, and the
+    rule of the measuring steps holds: a bad number is a result, an absent one
+    is a broken run.
+    """
+    module = search_load_module()
+    monkeypatch.setenv("FINDLING_LOAD_PASSWORD", "gestellt")
+    stage_one_answer(monkeypatch, staged_group(0))
+    report_file = tmp_path / "report.json"
+
+    code = module.main(
+        [
+            "--base-url",
+            "http://localhost:8080",
+            "--user",
+            "lasttest",
+            "--concurrency",
+            "2",
+            "--rounds",
+            "1",
+            "--json",
+            str(report_file),
+        ]
+    )
+
+    report = json.loads(report_file.read_text(encoding="utf-8"))
+    assert code == 1
+    assert report["failures"] == 2
+    assert report["answered"] == 0
+    assert report["failure_kinds"] == {"EmptyResultGroup": 2}
