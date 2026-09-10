@@ -610,10 +610,19 @@ def test_the_load_tool_promises_no_concurrency_number() -> None:
     assert "does not prove" in text
 
 
-def test_the_load_tool_names_its_three_knobs_in_the_usage() -> None:
-    """Concurrency, rounds and target, because --help is the whole manual."""
+def test_the_load_tool_names_its_four_knobs_in_the_usage() -> None:
+    """Concurrency, rounds, limit and min hits, because --help is the manual.
+
+    The number in the name and the number in the tuple are the same one, and
+    that friction is the point of this test: the fourth knob arrived with the
+    fix of DI-10-01, and a knob that nobody can see in --help is a knob that
+    nobody sets. The address is not one of them; it is the target, and the
+    tests that stage a run pass it on every call.
+    """
     text = SEARCH_LOAD.read_text(encoding="utf-8")
-    for option in ("--concurrency", "--rounds", "--base-url"):
+    knobs = ("--concurrency", "--rounds", "--limit", "--min-hits")
+    assert len(knobs) == 4
+    for option in knobs:
         assert f'"{option}"' in text, option
 
 
@@ -904,3 +913,51 @@ def test_a_run_of_nothing_but_empty_result_groups_ends_with_an_exit_code(
     assert report["failures"] == 2
     assert report["answered"] == 0
     assert report["failure_kinds"] == {"EmptyResultGroup": 2}
+
+
+def report_keys(text: str) -> list[str]:
+    """The keys of the report dictionary of main, in the order they are written.
+
+    Read out of the syntax tree and not with a text search, which is the grep
+    hygiene this repository settled on in plan 06-10: the module header of this
+    tool discusses failures, hits and the switch at length, so a count of the
+    word would count the explanation of it. The tree carries the order too, and
+    the order is half of what is asserted below.
+    """
+    for node in ast.walk(ast.parse(text)):
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "report"
+            and isinstance(node.value, ast.Dict)
+        ):
+            written = node.value.keys
+            return [key.value for key in written if isinstance(key, ast.Constant) and isinstance(key.value, str)]
+    return []
+
+
+def test_the_report_key_reader_fires_on_a_staged_sample() -> None:
+    """The self test of the gate below, in the shape every reader here has.
+
+    A reader whose body was deleted would return the empty list and make the
+    assertions below fail closed, which is the wanted direction; the staged
+    sample says so rather than leaving it to be assumed.
+    """
+    staged = 'def main() -> int:\n    report: dict[str, object] = {"erst": 1, "dann": 2}\n    return 0\n'
+    assert report_keys(staged) == ["erst", "dann"]
+    assert report_keys("report = 5\n") == []
+
+
+def test_the_report_puts_the_hits_per_request_next_to_the_hits_total() -> None:
+    """The fingerprint stands beside the sum it is built from, and the switch with it.
+
+    Beside it and not somewhere in the document, because a reader who finds the
+    sum and has to hunt for the quotient will do the division by hand, which is
+    exactly how the table of 00-kernaussage.md came about. min_hits belongs in
+    the same dictionary for the other half of DI-10-01: a raw file has to carry
+    the reading it was written under.
+    """
+    keys = report_keys(SEARCH_LOAD.read_text(encoding="utf-8"))
+    assert "hits_total" in keys, keys
+    assert keys.index("hits_per_request") == keys.index("hits_total") + 1, keys
+    assert "min_hits" in keys, keys
