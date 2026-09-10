@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Phase 11 context gathered
-last_updated: "2026-09-10T18:32:46.193Z"
-last_activity: 2026-09-10 -- Phase 11 execution started
+stopped_at: Abgeschlossen 11-01-PLAN.md, Vorentscheide v1-a und v2-a
+last_updated: "2026-09-10T19:03:29.242Z"
+last_activity: 2026-09-10
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 37
-  completed_plans: 24
-  percent: 65
+  completed_plans: 25
+  percent: 68
 ---
 
 # Project State
@@ -26,12 +26,13 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 11 (Haertung und Store-Einreichung v1.1) — EXECUTING
-Plan: 1 of 13
-Status: Executing Phase 11
-Last activity: 2026-09-10 -- Phase 11 execution started
+Plan: 2 of 13
+Status: Ready to execute
+Last activity: 2026-09-10
 
-**Naechster Schritt:** Phase 11 planen (`/gsd:plan-phase 11`), Haertung und
-Store-Einreichung v1.1, Requirement REL-01.
+**Naechster Schritt:** Welle 2 der Phase 11. Plan 11-13 ist durch den
+Owner-Entscheid v1-a scharf; 11-04 und 11-11 fahren die Lesart v2-a, also ohne
+Aenderung am Versionsfenster.
 
 ## Was Phase 10 geliefert hat
 
@@ -151,6 +152,7 @@ ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 | Phase 10 P05 | 80min Sitzung, dazwischen 27h06m Lauf | 4 tasks | 33 files |
 | Phase 10 P06 | 2h10m | 5 tasks | 13 files |
 | Phase 10 P07 | 2h40m | 4 tasks | 12 files |
+| Phase 11 P01 | 30min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -302,6 +304,8 @@ Recent decisions affecting current work:
 - [Phase 10]: T-09-29 bleibt auf accept, jetzt mit Zahlen: der Vektorscan laeuft einmal je Anfrage und nicht je Seite (tiefe Seite 0,333 s gegen erste Seite 0,332 s)
 - [Phase 10]: DI-07-02 wird nicht geschlossen: Kaltstart 1.838,4 ms gegen die Aufrufdecke von 1.500 ms, Marge minus 338,4 ms, Entscheidung ueber REQUEST_TIMEOUT_SECONDS an Phase 11
 - [Phase 10]: Die AWS-Box ist angehalten und nicht abgebaut (Owner 10.09.); der Abbau ist ein eigener Entscheid mit eigenem Plan in Phase 11
+- [Phase 11]: 11-01: V-1 = v1-a, DI-07-03 wird in v1.1.0 gefixt (MEDIUM, Abhilfe von der Berechtigungskette getrennt); Plan 11-13 ist scharf, der Katalog steigt von 173 auf 174 Schluessel, Quellstring 'Other files contain this word, but none that you may open.'
+- [Phase 11]: 11-01: V-2 = v2-a, das Versionsfenster bleibt bei min-version 33 und max-version 35; beide info.xml, der stable35-Matrixeintrag und test_lockstep_versions.py bleiben unveraendert, RE-CHECK 16.09. bleibt eigener Merkposten, die Einreichung wartet nicht darauf
 
 ### Pending Todos
 
@@ -331,6 +335,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-10T16:55:59.770Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/11-haertung-und-store-einreichung-v1-1/11-CONTEXT.md
+Last session: 2026-09-10T19:03:19.994Z
+Stopped at: Abgeschlossen 11-01-PLAN.md, Vorentscheide v1-a und v2-a
+Resume file: .planning/phases/11-haertung-und-store-einreichung-v1-1/11-VORENTSCHEIDE.md
