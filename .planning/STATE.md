@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Abgeschlossen 11-03-PLAN.md, DI-10-02 Nachfolgefassung des Sprachfall-Skripts
-last_updated: "2026-09-10T19:55:30.893Z"
+stopped_at: Abgeschlossen 11-04-PLAN.md, deploy-harp mit nativem arm64-Ast und Release-Asset-Modus
+last_updated: "2026-09-10T21:10:00.000Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 37
-  completed_plans: 27
-  percent: 73
+  completed_plans: 28
+  percent: 76
 ---
 
 # Project State
@@ -26,13 +26,21 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 11 (Haertung und Store-Einreichung v1.1) — EXECUTING
-Plan: 4 of 13
+Plan: 5 of 13
 Status: Ready to execute
 Last activity: 2026-09-10
 
-**Naechster Schritt:** Rest der Welle 1 und dann Welle 2 der Phase 11. Plan
-11-13 ist durch den Owner-Entscheid v1-a scharf; 11-04 und 11-11 fahren die
-Lesart v2-a, also ohne Aenderung am Versionsfenster. Fuer jeden kuenftigen Lauf
+**Naechster Schritt:** Rest der Welle 2 der Phase 11, also 11-06 (die EINE
+Box-Anfahrt, Checkpoint-Plan) und 11-13. Plan
+11-13 ist durch den Owner-Entscheid v1-a scharf; 11-04 hat die
+Lesart v2-a vollzogen (Matrix und beide `info.xml` unveraendert, Entscheid als
+datierter Absatz in `deploy-harp.yml`), 11-11 faehrt sie weiter. Seit 11-04
+gilt fuer `deploy-harp.yml`: die Store-Install-Strecke faehrt auf vier Aesten,
+einer davon nativ auf `ubuntu-24.04-arm`, und `workflow_dispatch` nimmt eine
+Eingabe `release_tag`, die beide Archive vom GitHub-Release laedt statt sie zu
+bauen (leer = Alltagsfall, unveraendert). Die Nachverfolgung des
+`RE-CHECK DATE: 2026-09-16` am stable35-Ast liegt jetzt bei Plan 11-11.
+Fuer jeden kuenftigen Lauf
 des Lastwerkzeugs gilt seit 11-02: die Vorgabe von `--min-hits` ist 1, ein Lauf
 gegen einen Bestand ohne die zehn festen Begriffe braucht `--min-hits 0`, und
 der gefahrene Wert steht als `min_hits` im Bericht. Seit 11-03 gilt fuer die
@@ -164,6 +172,7 @@ ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 | Phase 11 P01 | 30min | 2 tasks | 1 files |
 | Phase 11 P02 | 25min | 3 tasks | 3 files |
 | Phase 11 P03 | 35min | 3 tasks | 3 files |
+| Phase 11 P04 | 70min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -350,6 +359,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-10T19:55:13.852Z
-Stopped at: Abgeschlossen 11-03-PLAN.md, DI-10-02 Nachfolgefassung des Sprachfall-Skripts
-Resume file: .planning/phases/11-haertung-und-store-einreichung-v1-1/11-03-SUMMARY.md
+Last session: 2026-09-10T21:10:00.000Z
+Stopped at: Abgeschlossen 11-04-PLAN.md, deploy-harp mit nativem arm64-Ast und Release-Asset-Modus
+Resume file: .planning/phases/11-haertung-und-store-einreichung-v1-1/11-04-SUMMARY.md

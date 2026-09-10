@@ -214,7 +214,7 @@ Plans:
 **Vorbedingung aus Phase 9**: Der vollstaendige franzoesische Katalog (alle Zeichenketten der App, `fr.json` **und** `fr.js`, Schluesselvergleich auf zwei Sprachpaare erweitert) ist Vorbedingung der Abgabe; die 24 vorbereiteten Wortlaute der Ergebnisseite und die Begruendung der Vertagung stehen in `docs/l10n-french.md`.
 **Success Criteria** (what must be TRUE):
 
-  1. Beide Apps tragen dieselbe Version, sind signiert, und eine frische Nextcloud im Versionsfenster installiert sie aus den Release-Artefakten auf amd64 und arm64 und findet ohne Handgriff Inhalte
+  1. Beide Apps tragen dieselbe Version, sind signiert, und eine frische Nextcloud im Versionsfenster installiert sie aus den Release-Artefakten auf amd64 und arm64 und findet ohne Handgriff Inhalte , **Stand 2026-09-10 (Plan 11-04): die Strecke steht.** `deploy-harp.yml` faehrt die Fremdinstallation auf amd64 **und nativ auf `ubuntu-24.04-arm`** (Lauf 34525240422, alle vier Aeste gruen) und kann die beiden Archive vom GitHub-Release laden statt sie lokal zu bauen (Lauf 34526436580 mit `release_tag=v1.0.3`, alle vier Aeste gruen, Zero-Config-Treffer nach einer cron-Runde). Offen bleibt nur, dass es die Artefakte von **v1.1.0** sind: das setzt Plan 11-11
   2. Ein Upgrade von 1.0.x auf 1.1.0 laesst den bestehenden Index entweder unangetastet oder verlangt sichtbar einen Reindex; ein stiller Verlust von Indexinhalt kommt nicht vor
   3. Security-, Bug- und Performance-Audit sind erneut gefahren, alle Befunde ab MEDIUM gefixt, LOW dokumentiert entschieden
   4. Die Store-Texte sind kurze Faktenlisten nach der Kurztext-Regel, der Owner hat den Entwurf vor der Einreichung gesehen und abgenommen
@@ -233,7 +233,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 11-04-PLAN.md , deploy-harp: nativer arm64-Ast und der Modus, der Release-Assets laedt (Welle 2)
+- [x] 11-04-PLAN.md , deploy-harp: nativer arm64-Ast und der Modus, der Release-Assets laedt (Welle 2)
 - [ ] 11-06-PLAN.md , die EINE Box-Anfahrt: Freigabe mit Deckel, Messblock A und B, Box wieder angehalten (Welle 2, Checkpoint-Plan)
 - [ ] 11-13-PLAN.md , SCHARF seit Entscheid v1-a vom 10.09.2026 (11-VORENTSCHEIDE.md): der Zustand "Kandidaten vom Recheck verworfen" im Dienst, auf der Ergebnisseite und als 174. Katalogschluessel (Welle 2)
 
