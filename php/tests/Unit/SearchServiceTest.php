@@ -827,4 +827,131 @@ final class SearchServiceTest extends TestCase {
 		self::assertSame('findling-canary', $outcome->hits[0]->title);
 		self::assertSame('', $outcome->hits[0]->mimeType);
 	}
+
+	// -- the run that had candidates and kept none, new with plan 11-13 ------
+
+	public function testARunTheContainerGaveNoCandidatesForKeepsTheOrdinaryEmptyAnswer(): void {
+		// The question: does the new reason swallow the honest empty answer?
+		// It must not. Nothing was decided, so there is nothing to report: a
+		// term nobody has a file for is answered with an empty list and with no
+		// reason at all, exactly as it was before plan 11-13.
+		$this->folderResolvingNothing();
+		$this->exApp->method('searchCandidates')->willReturn($this->page([]));
+		$this->exApp->expects(self::never())->method('snippets');
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+
+		self::assertSame([], $outcome->hits);
+		self::assertNull($outcome->failure);
+	}
+
+	public function testARunThatDecidedAboutCandidatesAndKeptNoneSaysThat(): void {
+		// The question: is "there was nothing" told apart from "there was
+		// something and none of it was yours"? This is the case of DI-07-03.
+		// The container found the word, the recheck dropped every candidate it
+		// found it in, and until now the user read an empty list without a
+		// word about why.
+		$this->folderResolvingNothing();
+		$this->exApp->method('searchCandidates')->willReturn($this->page($this->candidates(3)));
+		$this->exApp->expects(self::never())->method('snippets');
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+
+		self::assertSame([], $outcome->hits);
+		self::assertSame(SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED, $outcome->failure);
+	}
+
+	public function testThePagingCeilingOutranksTheRunThatKeptNoCandidate(): void {
+		// The question: which of two true statements about one run is said out
+		// loud? The older and the more precise one. The ceiling says the run
+		// stopped, the new reason says it finished, and a run that stopped did
+		// not finish.
+		$ceiling = $this->constantInt('MAX_CONTAINER_OFFSET');
+		$this->folderResolvingNothing();
+
+		// One page at the ceiling whose candidates are all dropped, pointing
+		// past the ceiling, so the second round never gets to ask.
+		$this->exApp->method('searchCandidates')->willReturn(
+			$this->pageWithMore($this->candidates(2), $ceiling + 1),
+		);
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, $ceiling, $this->caps());
+
+		self::assertSame([], $outcome->hits);
+		self::assertSame(SearchOutcome::FAILURE_OFFSET_CEILING, $outcome->failure);
+	}
+
+	public function testASilentBackendOutranksTheRunThatKeptNoCandidate(): void {
+		// The question: is a silence a verdict? It is not. The run that went
+		// quiet never decided about the candidates behind the page it got, so
+		// telling the user that none of them was theirs would claim more than
+		// this run knows.
+		$this->folderResolvingNothing();
+
+		$asked = 0;
+		$this->exApp->method('searchCandidates')->willReturnCallback(
+			function () use (&$asked): ?array {
+				$asked++;
+
+				return $asked === 1 ? $this->pageWithMore($this->candidates(2), 2) : null;
+			},
+		);
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+
+		self::assertSame(2, $asked);
+		self::assertSame([], $outcome->hits);
+		self::assertSame(SearchOutcome::FAILURE_BACKEND_SILENT, $outcome->failure);
+	}
+
+	public function testARunWithOneHitNeverCarriesTheRejectedReason(): void {
+		// The question: does a page that dropped some of its rows report the
+		// new reason? Never. Dropped candidates next to a hit are the ordinary
+		// shape of every search on a shared instance; the reason is about a run
+		// that ended with nothing at all.
+		$file = $this->readableFile();
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getFirstNodeById')->willReturnCallback(
+			static fn (int $fileId): ?File => $fileId === 11 ? $file : null,
+		);
+		$userFolder->method('getRelativePath')->willReturn('/Board/Report.pdf');
+
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->mountCache->method('getMountsForUser')->willReturn([]);
+		$this->exApp->method('searchCandidates')->willReturn(
+			$this->page([['fileId' => 12], ['fileId' => 11], ['fileId' => 13]]),
+		);
+		$this->exApp->method('snippets')->willReturn([]);
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+
+		self::assertCount(1, $outcome->hits);
+		self::assertNull($outcome->failure);
+	}
+
+	public function testTheRejectedReasonLeavesTheCursorAndTheNextPageWhereTheyWere(): void {
+		// The question: does the new reason cost the user the next page? It
+		// must not. It is a statement about the answer and not about the run,
+		// so the cursor still stands behind the last decided candidate and the
+		// run still reports what the container said about the pages behind it.
+		// That is what keeps the next page reachable for the user whose own
+		// files lie behind the foreign ones.
+		$this->folderResolvingNothing();
+
+		$asked = 0;
+		$this->exApp->method('searchCandidates')->willReturnCallback(
+			function () use (&$asked): array {
+				$asked++;
+
+				return $this->pageWithMore([['fileId' => 1000 + $asked]], $asked);
+			},
+		);
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(maxRounds: 3));
+
+		self::assertSame(3, $asked);
+		self::assertSame(SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED, $outcome->failure);
+		self::assertTrue($outcome->hasMore);
+		self::assertSame(3, $outcome->nextCursor);
+	}
 }
