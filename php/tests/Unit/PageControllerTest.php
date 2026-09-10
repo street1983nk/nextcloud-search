@@ -324,6 +324,25 @@ final class PageControllerTest extends TestCase {
 		self::assertNull($this->paramsOf(['query' => 'akte', 'page' => '2', 'cursors' => '0.40'])['nextUrl']);
 	}
 
+	public function testTheRunThatKeptNoCandidateStillOffersItsNextAddress(): void {
+		// The one reason that is not a failure of the run, and the one place
+		// where the difference is worth a line of code. The run finished, it
+		// just kept nothing, and the user's own files may be lying behind the
+		// foreign ones on the very next page. Taking the link away here would
+		// take it away in exactly the state DI-07-03 is about.
+		$this->answering($this->outcome(
+			nextCursor: 95,
+			hasMore: true,
+			failure: SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED,
+		));
+
+		$next = $this->paramsOf(['query' => 'akte', 'page' => '2', 'cursors' => '0.40'])['nextUrl'];
+
+		self::assertIsString($next);
+		self::assertStringContainsString('page=3', $next);
+		self::assertStringContainsString('cursors=0.40.95', $next);
+	}
+
 	public function testTheNextAddressExtendsTheCursorPath(): void {
 		// The ordinary case, and the one assertion that shows the path grows by
 		// exactly the cursor the run reported.
@@ -348,7 +367,7 @@ final class PageControllerTest extends TestCase {
 	// -- the states ----------------------------------------------------------
 
 	public function testEveryFailureReasonReachesTheTemplateUnchanged(): void {
-		// Four reasons, four different sentences on the page, and the controller
+		// Five reasons, five different sentences on the page, and the controller
 		// translates none of them: it hands the reason through and the template
 		// decides what a user reads.
 		$reasons = [
@@ -356,6 +375,7 @@ final class PageControllerTest extends TestCase {
 			SearchOutcome::FAILURE_VERSION_DRIFT,
 			SearchOutcome::FAILURE_NO_HOME_FOLDER,
 			SearchOutcome::FAILURE_OFFSET_CEILING,
+			SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED,
 		];
 
 		foreach ($reasons as $reason) {

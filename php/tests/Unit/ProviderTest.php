@@ -221,14 +221,15 @@ final class ProviderTest extends TestCase {
 	// -- mapping an outcome onto a result group ------------------------------
 
 	public function testEveryFailureOfTheServiceBecomesTheSameEmptyGroup(): void {
-		// Four reasons, one shape. The dialog has no room for a sentence of its
+		// Five reasons, one shape. The dialog has no room for a sentence of its
 		// own, so it declines the same way for all of them; the result page of
-		// this phase is where the four are told apart.
+		// this phase is where the five are told apart.
 		$reasons = [
 			SearchOutcome::FAILURE_BACKEND_SILENT,
 			SearchOutcome::FAILURE_VERSION_DRIFT,
 			SearchOutcome::FAILURE_NO_HOME_FOLDER,
 			SearchOutcome::FAILURE_OFFSET_CEILING,
+			SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED,
 		];
 
 		foreach ($reasons as $reason) {
@@ -241,6 +242,25 @@ final class ProviderTest extends TestCase {
 			self::assertSame([], $this->entriesOf($result), $reason . ' produced entries');
 			self::assertFalse($result->jsonSerialize()['isPaginated'], $reason . ' produced a paginated group');
 		}
+	}
+
+	public function testTheRunThatKeptNoCandidateIsAnEmptyGroupWithItsReasonInTheTrace(): void {
+		// The fifth reason from the dialog's end, spelled out rather than left
+		// to the enumeration above. It reaches the trace like the other four,
+		// and it earns no entry of its own: an entry in the dialog would be a
+		// hit that is none, and the sentence this reason exists for has no
+		// room here. The result page is where it is read (DI-07-03, V-1a).
+		$this->searchService->method('run')->willReturn(
+			$this->outcome(failure: SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED),
+		);
+		$this->logger->expects(self::once())
+			->method('debug')
+			->with(self::anything(), ['reason' => SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED]);
+
+		$result = $this->provider()->search($this->user(), $this->query());
+
+		self::assertSame([], $this->entriesOf($result));
+		self::assertFalse($result->jsonSerialize()['isPaginated']);
 	}
 
 	public function testAnOutcomeWithMoreBehindItBecomesAPaginatedGroupCarryingItsCursor(): void {
