@@ -107,6 +107,61 @@ Danach: Rohdaten und Skripte herunterholen und committen, Owner-Checkpoint
 
 ---
 
+## 2b. Was am 09. und 10.09.2026 wirklich gefahren wurde
+
+Dieser Abschnitt ist nachgetragen, nachdem die Reihenfolge durchlaufen war. Er
+beschreibt, was **gefahren** ist, und nicht, was geplant war; darauf beruht der
+Satz "wiederholbar beschrieben" aus Kriterium 4. Die Schritte 1 bis 7 liefen am
+09.09. wie oben beschrieben, die Schritte 8 bis 13 am 10.09. in Plan 10-06.
+
+| Nr | Schritt | Wann gefahren | Rohdatei, die wirklich entstand |
+|---|---|---|---|
+| 1 bis 7 | Anfahrt bis Volllauf | 09.09. 09:20Z bis 10.09. 13:05Z | wie in Abschnitt 2, unverändert |
+| , | der OOM-Beweis dieses Plans, **vor jedem Eingriff** | 10.09. 13:48:08Z | `07-oom-beweis.txt`, dritte Ablesung |
+| 8 | `97-nebenlaeufigkeit.sh` | 10.09. 13:48:36Z bis 13:52:05Z | `97-nebenlaeufigkeit.txt`, `97-nebenlaeufigkeit.csv`, `97-stufe-<n>.json` |
+| 13a | Endungsvergleich über `68-bestand-endungen.py` | 10.09. gegen 13:55Z | `68-bestand-endungen.json`, dazu lokal `66-generator-endungen.json` |
+| 13b | Bestand und Verdikte bei leerem Arbeitsvorrat | 10.09. gegen 14:00Z | `48-vektorbestand.txt` |
+| , | Laufzeit und Spitzen je Phase, gerechnet und nicht gemessen | 10.09., auf dem Rechner des Owners | `00-ende.txt` |
+| 9 | `95-spitze.sh nachher`, mit dem bewussten Neustart | 10.09. 14:04:38Z bis 14:05:31Z | `95-spitze-nachher.txt`, `95-nachher.csv`, `95-nachher-*.json` |
+| 11 | `99-seitenroute.sh` | 10.09. 14:06:28Z bis 14:07:26Z | `99-seitenroute.txt`, `99-reihe-a.txt` bis `99-reihe-d.txt` |
+| 12 | `99b-runden.sh` | 10.09. 14:08:04Z (Fall 1) und 14:10Z bis 14:14:24Z (beide Fälle) | `99b-runden.txt`, geteilt in `99b-runden-alltag.txt` und `99b-runden-drift.txt`, dazu `99b-fall*.json` |
+| 10 | `98-sprachfaelle.sh`, zweimal | 10.09. 14:19:12Z bis 14:25:37Z und 14:35:02Z bis 14:41:27Z | `98-sprachfaelle-erstlauf.txt` und `98-sprachfaelle.txt` |
+| , | die vierzehnte Ablesestelle von `memory.events` | 10.09. 14:46:22Z | `07-oom-beweis.txt`, vierte Ablesung |
+
+**Die Abweichungen gegen die geplante Reihenfolge, jede mit ihrem Grund:**
+
+- **Die Schritte 10 bis 12 liefen in der Reihenfolge 11, 12, 10 statt 10, 11,
+  12.** Grund: die Sprachfälle brauchen zwei Wartefristen von zusammen bis zu
+  46 Minuten, die Seitenroute und die Rundenzählung zusammen keine zehn. Der
+  Kostendeckel lief, und eine Reihenfolge, die den teuersten Schritt zuerst
+  fährt, hätte die beiden billigen an den Deckel gedrängt. Keine der drei
+  Messungen hängt von einer der anderen ab.
+- **Der OOM-Beweis wurde ein drittes Mal erhoben,** obwohl der Wächter ihn
+  bereits zweimal geschrieben hatte. Grund: zwischen der Ablesung des Wächters
+  (13:05:11Z) und dem Beginn dieses Plans (13:48:08Z) lagen 43 Minuten, in
+  denen der Container weiterlief. Eine Ablesung unmittelbar vor dem ersten
+  Eingriff ist billiger als die Frage, ob in diesen 43 Minuten etwas geschah.
+  `07-oom-beweis.txt` beginnt deshalb mit einer wortgleichen Kopie von
+  `96-oom-beweis.txt` und hängt die beiden neuen Ablesungen an.
+- **`98-sprachfaelle.sh` lief zweimal.** Grund: der erste Lauf endete mit vier
+  roten Fällen, und die Vermutung lag nahe, dass die Indexierung des
+  Referenzkorpus noch nicht durch war (Fallstrick 11). Die Wiederholung kam auf
+  dasselbe Ergebnis, und `state.db` belegt, dass alle 39 Dateien einen
+  Endzustand tragen. Beide Rohdateien liegen im Verzeichnis; der Erstlauf ist
+  nicht überschrieben worden.
+- **`99b-runden.sh` lief zweimal,** weil sein `occ`-Wrapper `OC_PASS` an nichts
+  weiterreichte und Fall 2 deshalb kein Konto bekam. Der Fehler ist in der
+  Datei unter `skripte/` behoben, mit einem Satz im Kopf; `98-sprachfaelle.sh`
+  trug denselben Fehler und ist auf demselben Weg behoben. Fall 1 war vom
+  Fehler nicht betroffen und lief in beiden Durchgängen gleich.
+- **Zwei Rohdateien tragen Namen, die kein Skript vergibt.** `00-ende.txt` und
+  `48-vektorbestand.txt` sind Auswertungen, die Plan 10-06 verlangt und für die
+  es kein Skript gibt; ihre Kopfzeile nennt jeweils, woraus sie gerechnet sind.
+  `99b-runden-alltag.txt` und `99b-runden-drift.txt` sind unveränderte Auszüge
+  aus `99b-runden.txt`, weil der Plan die beiden Fälle getrennt verlangt.
+
+---
+
 ## 3. Die Ablesestellen von `memory.events`
 
 An **jeder** dieser Stellen wird `memory.events` gelesen, und zwar **vor** dem
@@ -129,6 +184,17 @@ wird in Abschnitt 13 des Berichts zur Tabelle, mit allen sechs Zählern je Zeile
 | 11 | Vor der Nebenläufigkeitsreihe und nach jeder ihrer fünf Stufen | `97-nebenlaeufigkeit.sh` |
 | 12 | Vor der ersten Suche, Rolle `nachher`, nach dem bewussten Neustart | `95-spitze.sh nachher` |
 | 13 | Am Ende des Wächters, nach den Nachlaufschritten, als Nachtrag in dieselbe Datei `96-oom-beweis.txt` | `96b-waechter.sh` |
+| 14 | Nach den vier Messblöcken des Plans 10-06, als vierter Nachtrag in `07-oom-beweis.txt` | von Hand, Plan 10-06 Task 2 |
+
+**Die Liste ist mit dem Lauf vom 09./10.09. vollständig, und alle vierzehn
+Stellen sind gefahren worden.** Die Stellen 1 bis 10 und 13 stammen aus den
+Skripten und stehen in ihren Rohdateien; Stelle 11 steht in
+`97-nebenlaeufigkeit.txt` (einmal vor der Reihe und nach jeder der fünf
+Stufen, also sechs Lesungen); Stelle 12 steht in `95-spitze-nachher.txt`;
+Stelle 14 ist der vierte Abschnitt von `07-oom-beweis.txt`. Die Abschnitte 10
+und 13 liegen doppelt vor: einmal in `96-oom-beweis.txt`, wie der Wächter sie
+schrieb, und einmal in `07-oom-beweis.txt`, das mit einer Kopie dieser Datei
+beginnt und die Ablesungen dieses Plans anhängt.
 
 Zwei Ablesestellen dieser Liste sind mit Plan 10-04 dazugekommen, weil sie sonst
 zwischen den Zeilen gestanden hätten:
