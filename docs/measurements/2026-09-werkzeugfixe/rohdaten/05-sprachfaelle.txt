@@ -1,0 +1,121 @@
+sprachfaelle-start 2026-09-10T23:43:14Z
+konto: sprachfall (ausdruecklich nicht lasttest, siehe Kopf)
+korpus: /home/ubuntu/work/wf/repo/testdata/corpus
+ci-beleg: integration.yml Lauf 34530208024
+=== Abschnitt 0: die Vorpruefung des Fremdbestands (DI-10-02) ===
+-- gefragt wird jeder Begriff als das Konto, dem der Lastkorpus gehoert, ueber
+   dieselbe OCS-Route. Die Zahl daneben sagt, ob der Fall seine Aussage
+   ueberhaupt tragen kann; die Faelle selbst fragen danach als sprachfall --
+fremdbestand-konto:    lasttest
+fremdbestand-schwelle: 64 Treffer (MAX_RECHECKS_ABSOLUTE, siehe Kopf)
+fremdbestand-tiefe:    64
+fremdbestand Genehmigung 6 (Seite der Faelle), 26 (bis Tiefe 64), Fall 1
+fremdbestand Frist 6 (Seite der Faelle), 26 (bis Tiefe 64), Fall 2
+fremdbestand Mueller 0 (Seite der Faelle), 0 (bis Tiefe 64), Fall 3
+fremdbestand Vertrag 6 (Seite der Faelle), 26 (bis Tiefe 64), Fall 4
+fremdbestand "drei Monate" 0 (Seite der Faelle), 0 (bis Tiefe 64), Fall 5
+fremdbestand bescheid 6 (Seite der Faelle), 26 (bis Tiefe 64), Fall 6
+fremdbestand type:pdf bescheid 6 (Seite der Faelle), 26 (bis Tiefe 64), Fall 7
+fremdbestand Belehrung 0 (Seite der Faelle), 0 (bis Tiefe 64), Fall 8
+fremdbestand Auszug 0 (Seite der Faelle), 0 (bis Tiefe 64), Fall 9
+fremdbestand Erinnerung 0 (Seite der Faelle), 0 (bis Tiefe 64), Fall 10
+vorpruefung-gefahren ja
+=== Section 1: the account, whose home is to hold nothing but the corpus ===
+skeletondirectory vorher: (leer oder nicht gesetzt)
+System config value skeletondirectory set to empty string
+das Konto existiert schon, es wird nicht neu angelegt
+-- Achtung: seine Heimat muss NUR den Korpus enthalten, sonst sind die
+   Faelle rot aus dem falschen Grund. Dieser Block ist abbrechbar (A7). --
+Successfully reset password for sprachfall
+  - user_id: sprachfall
+  - display_name: sprachfall
+  - email: 
+  - cloud_id: sprachfall@loadtest.infranode.dev
+  - enabled: true
+  - groups:
+=== Section 2: the corpus over WebDAV, the path a user takes ===
+upload-vor 2026-09-10T23:43:28Z
+upload-nach 2026-09-10T23:43:44Z
+     39 204
+dateien-hochgeladen 39
+dateien-erwartet    39
+upload-vollstaendig ja
+Starting scan for user 1 out of 1 (sprachfall)
++---------+-------+-----+---------+---------+--------+--------------+
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 1       | 39    | 0   | 0       | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
+=== Section 3: the indexing, against the slowest clock ===
+-- 60 s first, because the poller backoff runs up to 300 s and the five
+   minute system cron needs two rounds before the first job of the app has
+   queued anything (pitfall 11) --
+indexierung runde=1 vorrat=0 2026-09-10T23:44:45Z
+arbeitsvorrat-leer ja
+-- and only NOW the verdicts, because skipped:no_text_layer is a temporary
+   verdict and reading it earlier would report the scan track as a failure --
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-09 09:40:29 (2284 minutes ago)
+=== Section 4: the ten cases, dreiwertig beurteilt ===
+eine gewoehnliche Suche antwortete nach 640ms
+sprachfall 1 ROT: a compound searched through one constituent did not bring back exactly one file (Fremdbestand 26 Treffer, Schwelle 64)
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 1 ROT: the compound hit is not the German PDF of the corpus (Fremdbestand 26 Treffer, Schwelle 64)
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 1 ROT: the subline carries no excerpt from the document (Fremdbestand 26 Treffer, Schwelle 64)
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 1 ROT: the excerpt carries markup, which the search dialog would show verbatim (Fremdbestand 26 Treffer, Schwelle 64)
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 2 ROT: Frist did not bring back exactly the notice of termination (Fremdbestand 26 Treffer, Schwelle 64)
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 2 ROT: the Frist hit is not the DOCX of the corpus (Fremdbestand 26 Treffer, Schwelle 64)
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 3 GRUEN (Fremdbestand 0 Treffer)
+sprachfall 4 ROT: the singular did not find the plural (Fremdbestand 26 Treffer, Schwelle 64)
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 4 ROT: the inflection hit is not the ODT of the corpus (Fremdbestand 26 Treffer, Schwelle 64)
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 5 GRUEN (Fremdbestand 0 Treffer)
+sprachfall 6 ROT: the word that stands in two files did not bring back two files (Fremdbestand 26 Treffer, Schwelle 64)
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"09-bescheid.pdf","subline":"Bescheid der unteren Verwaltungsbeh\u00f6rde  Die Grundst\u00fccksverkehrsgenehmigung wurde erteilt.  Dieser Bescheid ist kostenfrei","resourceUrl":"\/f\/52287","icon":"icon-search","rounded":false,"attributes":{"fileId":"52287","highlights":"[[0,8],[99,107]]"}}],"cursor":null}}}sprachfall 7 GRUEN (Fremdbestand 26 Treffer)
+sprachfall 8 GRUEN (Fremdbestand 0 Treffer)
+sprachfall 9 GRUEN (Fremdbestand 0 Treffer)
+sprachfall 10 GRUEN (Fremdbestand 0 Treffer)
+=== Die Bilanz der zehn Faelle, mit beiden Zahlen in einer Zeile ===
+sprachfaelle bestanden 6 von 10, davon 0 nicht messbar
+rote faelle 4, nicht messbare faelle 0, rote zusicherungen 9
+-- die roten Zusicherungen im Wortlaut, jede eine eigene Aussage --
+fall 1: a compound searched through one constituent did not bring back exactly one file
+fall 1: the compound hit is not the German PDF of the corpus
+fall 1: the subline carries no excerpt from the document
+fall 1: the excerpt carries markup, which the search dialog would show verbatim
+fall 2: Frist did not bring back exactly the notice of termination
+fall 2: the Frist hit is not the DOCX of the corpus
+fall 4: the singular did not find the plural
+fall 4: the inflection hit is not the ODT of the corpus
+fall 6: the word that stands in two files did not bring back two files
+-- die roten Faelle --
+fall 1
+fall 2
+fall 4
+fall 6
+=== Abschnitt 5: die Einordnung dieser Zahlen ===
+Fuer diese zehn Faelle gibt es KEINE v1.0-Entsprechung auf dieser Box:
+weder der Semantiklauf vom 05.09. noch die Nachmessung vom 07.09. hat sie
+gefahren. Die Zahl dieses Schrittes ist damit eine ERSTMESSUNG neben einem
+CI-Beleg und keine Vergleichszeile.
+ci-beleg: integration.yml Lauf 34530208024
+Genau dieser Lauf faehrt dieselben zehn Faelle auf einer FRISCHEN Instanz OHNE
+Fremdbestand, auf amd64, gegen den PHP-Entwicklungsserver (Job
+index-search-e2e). Er ist die Messung mit eigenem Index, nach der DI-10-02
+verlangt, und deshalb ist seine Laufnummer hier Pflicht und keine Notiz.
+Dieser Schritt misst dieselbe Aussage auf arm64 gegen eine All-in-One-Instanz
+mit vollem Vektorbestand und 52.111 Fremddokumenten. Gleich ist die Aussage,
+nicht die Umgebung, und wo der Fremdbestand die Aussage frisst, steht NICHT
+MESSBAR und kein Urteil.
+=== The skeleton setting, put back the way it was ===
+System config value skeletondirectory deleted
+(nicht gesetzt, wie vorher)
+sprachfaelle-ende 2026-09-10T23:44:50Z

@@ -1,0 +1,27 @@
+erhoben 2026-09-10T23:48:00Z
+gegenprobe zur vorpruefung des fremdbestands
+route: https://loadtest.infranode.dev/ocs/v2.php/search/providers/findling/search
+konto: lasttest, der Eigentuemer der 52.070 Dokumente
+schwelle der vorpruefung: 64 (MAX_RECHECKS_ABSOLUTE)
+
+-- die vier Begriffe der roten Faelle, mit wachsender Tiefe --
+   Genehmigung    tiefe5     treffer=6    tiefe64    treffer=26   tiefe200   treffer=26   tiefe2000  treffer=26  
+   Frist          tiefe5     treffer=6    tiefe64    treffer=26   tiefe200   treffer=26   tiefe2000  treffer=26  
+   Vertrag        tiefe5     treffer=6    tiefe64    treffer=26   tiefe200   treffer=26   tiefe2000  treffer=26  
+   bescheid       tiefe5     treffer=6    tiefe64    treffer=26   tiefe200   treffer=26   tiefe2000  treffer=26  
+
+-- fuenf Begriffe, die in keinem der zehn Faelle vorkommen --
+   Rechnung       tiefe5     treffer=6    tiefe64    treffer=26   tiefe200   treffer=26   tiefe2000  treffer=26  
+   Kuendigung     tiefe5     treffer=6    tiefe64    treffer=26   tiefe200   treffer=26   tiefe2000  treffer=26  
+   Beschluss      tiefe5     treffer=6    tiefe64    treffer=26   tiefe200   treffer=26   tiefe2000  treffer=26  
+   Antrag         tiefe5     treffer=6    tiefe64    treffer=26   tiefe200   treffer=26   tiefe2000  treffer=26  
+   Mitteilung     tiefe5     treffer=6    tiefe64    treffer=26   tiefe200   treffer=26   tiefe2000  treffer=26  
+
+-- was daraus folgt --
+Die Zahl haengt weder am Begriff noch an der Tiefe. Sie ist der Deckel
+der Antwort und nicht der Bestand dahinter. Eine Groesse, die bei 26
+stehen bleibt, kann die Schwelle 64 nicht ueberschreiten, und damit
+kann die Vorpruefung auf dieser Instanz kein einziges Urteil der
+dritten Art ausloesen. Das Skript urteilt wieder zweiwertig, und die
+vier Faelle sind rot wie am 10.09.2026. DI-10-02 ist damit NICHT
+geschlossen: der Fix greift, aber die Messgroesse traegt ihn nicht.

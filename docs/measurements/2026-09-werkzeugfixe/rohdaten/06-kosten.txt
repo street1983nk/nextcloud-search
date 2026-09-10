@@ -1,0 +1,47 @@
+kosten der werkzeug-anfahrt, plan 11-06
+erhoben 2026-09-10T23:50Z, nach aws_box.sh stop, aus box.env zurueckgelesen
+
+-- die freigabe --
+freigegeben        2026-09-10 durch den Owner
+deckel             4,00 h / 0,50 USD (D-01)
+
+-- diese anfahrt --
+gestartet          2026-09-10T21:51:06Z   (aws_box.sh start)
+angehalten         2026-09-10T23:49:11Z   (aws_box.sh stop)
+laufzeit           1,97 h                 BOX_LAST_UPTIME_HOURS
+kosten             0,2285 USD netto       BOX_LAST_UPTIME_COST_USD
+
+-- die bilanz gegen den deckel --
+laufzeit           1,97 h von 4,00 h      2,03 h blieben ungenutzt
+kosten             0,2285 USD von 0,50 USD 0,2715 USD blieben ungenutzt
+ueberschreitung    keine
+
+-- die saetze, aus denen die zahl gebildet ist --
+instanz            0,0978 USD je stunde   m7g.large, on demand, netto
+speicher           0,013041 USD je stunde 100 GB gp3 (40 wurzel, 60 korpus)
+adresse            0,0050 USD je stunde   oeffentliche IPv4, in benutzung
+summe              0,1158 USD je stunde
+Die Saetze sind in scripts/ops/aws_box.sh gepinnt, mit ihrer Quelle.
+
+-- was die anfahrt nicht ersetzt --
+geparkt            0,3130 USD je tag      die platten laufen weiter
+Die Anfahrt kommt zu diesen Kosten dazu, sie loest sie nicht ab. Der Abbau der
+Box ist Plan 11-12 mit eigener Bestaetigung (D-03) und war nicht Teil dieser
+Freigabe.
+
+-- der zustand danach, unabhaengig aus der api gelesen --
+aws_box.sh status  instance i-06b1d913f5c6f669b m7g.large stopped in eu-central-1c
+address            none
+volumes            vol-0f3bea6ca1dab68ab 40 G gp3, vol-04c5b59fe9417babd 60 G gp3
+Der Befehl weist ausdruecklich darauf hin, dass die 2,0 Stunden seit der letzten
+LaunchTime KEINE Laufzeit sind: eine angehaltene Instanz behaelt ihre LaunchTime.
+Die Schlusszahlen stehen deshalb in box.env und nicht in dieser Anzeige.
+
+-- eine anmerkung zur laufzeit, damit sie niemand falsch liest --
+Von den 1,97 Stunden entfielen rund 1,7 Stunden auf eine Rueckfrage an den
+Owner: die Zustandspruefung fand einen Bestand, der von der Abbruchbedingung
+abwich, und die Entscheidung darueber gehoert nach der Freigabe dem Owner. Die
+Messungen selbst brauchten rund 15 Minuten, die Ruestzeit rund 5 Minuten. Ein
+Anhalten waehrend der Rueckfrage haette mehr gekostet, als es gespart haette,
+weil ein Start die Adresse wechselt und die ganze Ruestfolge erneut faellig
+macht.
