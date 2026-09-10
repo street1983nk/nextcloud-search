@@ -1,0 +1,29 @@
+kaltstart-reproduktion 2026-09-10T15:39:48Z
+Plan 10-06, Nachmessung auf Owner-Entscheid vom 10.09.
+Frage: war hits_total 0 beim Kaltstart die Folge der gerissenen
+Aufrufdecke von 1500 ms, oder trifft der Begriff einfach nichts?
+Der OOM-Beweis des Volllaufs ist erhoben und committet, also ist ein
+weiterer Neustart erlaubt (Owner-Entscheid 10.09.).
+
+=== Durchgang 1, Begriff Bescheid ===
+-- memory.events vor dem Neustart, die Zaehler dieses Containerlebens --
+low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 sock_throttled 0 
+neustart-vor 2026-09-10T15:39:48Z
+neustart-nach 2026-09-10T15:39:48Z
+backend-bereit-nach-2s 2026-09-10T15:39:51Z
+RestartCount=0 memory.max-des-klienten=2147483648
+-- die harte Grenze aus der cgroup zurueckgelesen, nicht aus dem Klienten --
+2147483648
+-- die Marke im Nextcloud-Protokoll, damit die Zeilen danach zuzuordnen sind --
+  protokollmarke 1789054791
+-- genau eine Suche gegen den kalten Container --
+  kaltstart-1                begriff Bescheid       dauer   1598 ms  marge     -98 ms  treffer 6
+-- dieselbe Anfrage warm, dreimal --
+  warm-1a                    begriff Bescheid       dauer    560 ms  marge     940 ms  treffer 6
+  warm-1b                    begriff Bescheid       dauer    565 ms  marge     935 ms  treffer 6
+  warm-1c                    begriff Bescheid       dauer    566 ms  marge     934 ms  treffer 6
+-- was das Nextcloud-Protokoll seit der Marke ueber findling sagt --
+  File "<string>", line 15
+    print(f"    {zeit} {e.get(\"level\")} {e.get(\"app\")}: {text}")
+                               ^
+SyntaxError: unexpected character after line continuation character

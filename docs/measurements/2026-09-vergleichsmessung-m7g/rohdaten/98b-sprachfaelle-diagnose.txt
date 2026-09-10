@@ -1,0 +1,128 @@
+sprachfaelle-diagnose 2026-09-10T15:38:04Z
+Plan 10-06, Nachmessung auf Owner-Entscheid vom 10.09.: warum sind vier
+der zehn Sprachfaelle rot, obwohl die Dateien in state.db als indexed
+stehen? Gemessen auf der laufenden Box, ohne Neustart, ohne Eingriff in
+php/ oder backend/src/.
+
+############ 1. Die deutsche Analysekette an den Woertern der Faelle ############
+bestandteilliste: 276496 eintraege
+  Fall 1, was im Dokument steht          'Die Grundstuecksverkehrsgenehmigung wurde erteilt.' -> ['grundstuecksverkehrsgenehm', 'wurd', 'erteilt']
+  Fall 1, wonach gesucht wird            'Genehmigung'                              -> ['genehm']
+  Fall 1, das Kompositum allein          'Grundstuecksverkehrsgenehmigung'          -> ['grundstuecksverkehrsgenehm']
+  Fall 1, mit echtem Umlaut              'Grundstücksverkehrsgenehmigung'           -> ['grundstuck', 'verkehr', 'genehm']
+  Fall 2, wonach gesucht wird            'Frist'                                    -> ['frist']
+  Fall 2, das Kompositum                 'Kuendigungsfrist'                         -> ['kuendigungsfrist']
+  Fall 2, mit echtem Umlaut              'Kündigungsfrist'                          -> ['kundig', 'frist']
+  Fall 4, was im Dokument steht          'Vertraege'                                -> ['vertraeg']
+  Fall 4, mit echtem Umlaut              'Verträge'                                 -> ['vertrag']
+  Fall 4, wonach gesucht wird            'Vertrag'                                  -> ['vertrag']
+  Fall 3, gruen: Mueller                 'Mueller'                                  -> ['muell']
+  Fall 3, gruen: Mueller mit Umlaut      'Müller'                                   -> ['mull']
+  Fall 6, gruen: Bescheid                'Bescheid'                                 -> ['bescheid']
+
+Die Probe, auf die es ankommt: enthaelt die Zerlegung des Dokumentworts
+dasselbe Token wie die Zerlegung des Suchworts?
+  Fall 1: dokument ['genehm', 'grundstuck', 'verkehr'] anfrage ['genehm'] gemeinsam ['genehm']
+  Fall 2: dokument ['frist', 'kundig'] anfrage ['frist'] gemeinsam ['frist']
+  Fall 4: dokument ['vertrag'] anfrage ['vertrag'] gemeinsam ['vertrag']
+  Fall 3: dokument ['mull'] anfrage ['muell'] gemeinsam KEINS
+
+dieselbe Kette ueber den Zwischenspeicher, so wie die laufende App sie nimmt:
+  cached_german_analyzer('Genehmigung') -> ['genehm']
+
+############ 2. Der Index selbst, ueber die Wege, die die Suche nimmt ############
+dokumente im index: 52137
+
+== 09-bescheid.pdf: 0 Treffer ueber den Titel ==
+
+== 10-kuendigung.docx: 0 Treffer ueber den Titel ==
+
+== 11-uebersicht.odt: 0 Treffer ueber den Titel ==
+
+== 12-aktenvermerk.txt: 0 Treffer ueber den Titel ==
+
+
+== Was die Suche aus den Begriffen macht, und was sie findet ==
+  Genehmigung                        varianten ['Genehmigung']  treffer 10  ['28791-niederschrift.pdf', '19814-satzung.pdf', '41390-anlage.docx', '22701-mitteilung.pdf']
+  Grundstuecksverkehrsgenehmigung    varianten ['Grundstuecksverkehrsgenehmigung', 'Grundstücksverkehrsgenehmigung']  treffer 10  ['37538-vermerk.pptx', '42780-kostenaufstellung.odt', '33298-mitteilung.xlsx', '27809-zuwendung.pdf']
+  Grundstücksverkehrsgenehmigung     varianten ['Grundstücksverkehrsgenehmigung']  treffer 10  ['37538-vermerk.pptx', '42780-kostenaufstellung.odt', '33298-mitteilung.xlsx', '27809-zuwendung.pdf']
+  Frist                              varianten ['Frist']  treffer 10  ['10960-haushalt.pdf', '48937-vertrag.md', '17610-ausschreibung.pdf', '18304-mitteilung.pdf']
+  Kuendigungsfrist                   varianten ['Kuendigungsfrist', 'Kündigungsfrist']  treffer 10  ['11604-aktenvermerk.pdf', '31352-zuwendung.pdf', '27109-schriftwechsel.pdf', '20182-anlage.pdf']
+  Vertrag                            varianten ['Vertrag']  treffer 10  ['15052-vertrag.pdf', '18505-vertrag.pdf', '01076-vertrag.docx', '47127-vertrag.odt']
+  Vertraege                          varianten ['Vertraege', 'Verträge']  treffer 10  ['15052-vertrag.pdf', '18505-vertrag.pdf', '01076-vertrag.docx', '47127-vertrag.odt']
+  Verträge                           varianten ['Verträge']  treffer 10  ['15052-vertrag.pdf', '18505-vertrag.pdf', '01076-vertrag.docx', '47127-vertrag.odt']
+  Bescheid                           varianten ['Bescheid']  treffer 10  ['30053-bescheid.pdf', '31409-bescheid.pdf', '13970-bescheid.pdf', '01131-bescheid.docx']
+  Mueller                            varianten ['Mueller', 'Müller']  treffer 1  ['12-aktenvermerk.txt']
+
+
+== Die Gegenprobe auf der Indexseite: welches Token traegt das Dokument? ==
+  term body_de:genehm                         5 dokumente  ['12400-rechnung.pdf', '39471-anlage.docx', '32676-anlage.docx']
+  term body_de:grundstuck                     5 dokumente  ['40745-kostenaufstellung.pptx', '45731-uebersicht.odt', '25920-vermerk.pdf']
+  term body_de:verkehr                        5 dokumente  ['30325-schriftwechsel.pdf', '21722-niederschrift.pdf', '14960-uebersicht.pdf']
+  term body_de:grundstuecksverkehrsgenehm     0 dokumente  []
+  term body_de:frist                          5 dokumente  ['11604-aktenvermerk.pdf', '10906-bericht.pdf', '40465-haushalt.pptx']
+  term body_de:kundig                         5 dokumente  ['11604-aktenvermerk.pdf', '31352-zuwendung.pdf', '27109-schriftwechsel.pdf']
+  term body_de:kuendigungsfrist               0 dokumente  []
+  term body_de:vertrag                        5 dokumente  ['19730-bescheid.pdf', '36360-mitteilung.xlsx', '34939-gutachten.pptx']
+  term body_de:vertraeg                       0 dokumente  []
+  term body_de:bescheid                       5 dokumente  ['19574-aktenvermerk.pdf', '38291-ausschreibung.xlsx', '35584-beschluss.xlsx']
+
+############ 3. Die Kandidatenliste, aufgeteilt nach Speicher ############
+Fall           Begriff          top10 gesamt  davon sprachfall  rang des ersten
+Fall 1 rot     Genehmigung                10                 0                -
+Fall 2 rot     Frist                      10                 0                -
+Fall 4 rot     Vertrag                    10                 0                -
+Fall 6 rot     Bescheid                   10                 0                -
+Fall 3 gruen   Mueller                     1                 1                1
+
+Und die Gegenprobe: wie tief muesste die Kandidatenliste reichen, damit
+die Datei des Sprachfall-Kontos ueberhaupt darin vorkommt?
+  Genehmigung      unter den ersten 2000 Kandidaten kommt keine eigene Datei vor
+  Frist            unter den ersten 2000 Kandidaten kommt keine eigene Datei vor
+  Vertrag          unter den ersten 2000 Kandidaten kommt keine eigene Datei vor
+  Bescheid         rang  1925 von  2000 geprueften, das ist 09-bescheid.pdf
+  Mueller          rang     1 von     1 geprueften, das ist 12-aktenvermerk.txt
+sprachfaelle-diagnose-ende 2026-09-10T15:38:08Z
+
+############ Die Deutung, dreiteilig, damit sie nicht mehr sagt als sie darf ############
+
+1. DIE SPRACHVERARBEITUNG IST NICHT DER GRUND, und das ist gemessen und nicht
+   angenommen. Die deutsche Kette zerlegt das Kompositum und stemmt den Plural:
+   "Grundstuecksverkehrsgenehmigung" mit echtem Umlaut wird zu grundstuck,
+   verkehr, genehm, die Anfrage "Genehmigung" wird zu genehm, und beide teilen
+   dieses Token. Fuer "Kuendigungsfrist" gegen "Frist" und fuer "Vertraege"
+   gegen "Vertrag" gilt dasselbe. Alle drei Tokens stehen im Feld body_de des
+   Index, jedes mit Dokumenten daran. Jede der vier Suchen liefert im Index
+   zehn Treffer.
+
+2. DER GRUND IST DIE KANDIDATENLISTE, und der Messaufbau hat ihn erzeugt. Die
+   zehn Treffer gehoeren samt und sonders dem Lasttest-Konto mit seinen 52.111
+   Dokumenten und keiner davon dem Konto, das gefragt hat. Fuer "Genehmigung",
+   "Frist" und "Vertrag" kommt unter den ersten ZWEITAUSEND Kandidaten keine
+   einzige Datei des fragenden Kontos vor; fuer "Bescheid" steht sie auf Rang
+   1.925 von 2.000. Der Vorfilter rankt ueber den ganzen Index, der Recheck
+   filtert erst danach auf das, was der Fragende sehen darf, und dann ist
+   nichts mehr uebrig. Die sechs gruenen Faelle sind genau die, deren Begriffe
+   im Lastkorpus selten oder gar nicht vorkommen: "Mueller" hat im ganzen Index
+   genau einen Treffer, und das ist die eigene Datei.
+
+   Das ist Fallstrick 3 in einer Form, die der Skriptkopf nicht abdeckt. Er
+   fuehrt den eigenen Nutzer ein, weil der Lastkorpus dieselben Woerter traegt.
+   Ein eigener Nutzer trennt aber die BERECHTIGUNG und nicht den INDEX, und der
+   Vorfilter arbeitet vor dem Recheck ueber den ganzen Index.
+
+3. WAS TROTZDEM EIN BEFUND UEBER DAS ERZEUGNIS IST, und er gehoert zu DI-07-03.
+   Auf einer Instanz mit grossem Fremdbestand findet ein Nutzer mit wenigen
+   Dateien seine eigenen nicht, sobald seine Suchbegriffe im Fremdbestand
+   haeufig sind, und er bekommt dabei keine Fehlermeldung, sondern eine leere
+   Liste. Die Rundenzaehlung dieses Plans hat 1,0 Runde je Suche gemessen: die
+   Schleife holt keine zweite Runde nach, obwohl der Recheck alle Kandidaten
+   der ersten verworfen hat. Ob MAX_ROUNDS dafuer der richtige Hebel ist,
+   entscheidet dieser Plan nicht; er liefert die Zahl, nach der DI-07-03 fragt.
+
+WAS DIESE DIAGNOSE FUER DIE BILANZ 6 VON 10 BEDEUTET: die Zahl bleibt stehen,
+denn sie ist gemessen. Sie ist aber KEINE Aussage ueber die Sprachverarbeitung
+von v1.1 und darf im Bericht nicht als eine gefuehrt werden. Ein Lauf derselben
+zehn Faelle auf einer Instanz ohne Fremdbestand ist die Messung, die die Frage
+beantworten wuerde, und die gibt es hier nicht: der gruene CI-Lauf ist genau
+das, und er faehrt gegen eine frische Instanz.

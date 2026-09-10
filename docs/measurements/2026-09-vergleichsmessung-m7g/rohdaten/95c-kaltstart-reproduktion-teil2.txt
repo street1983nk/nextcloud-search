@@ -1,0 +1,122 @@
+kaltstart-reproduktion-teil2 2026-09-10T15:41:33Z
+
+=== Durchgang 2, Begriff: Vertrag beenden ===
+neustart-vor 2026-09-10T15:41:33Z
+backend-bereit-nach-2s 2026-09-10T15:41:37Z
+harte Grenze aus der cgroup: 2147483648
+-- genau eine Suche gegen den kalten Container --
+  kaltstart-2              begriff Vertrag beenden    dauer   1805 ms  marge    -305 ms  treffer 6
+-- dieselbe Anfrage warm, dreimal --
+  warm-2a                  begriff Vertrag beenden    dauer    674 ms  marge     826 ms  treffer 6
+  warm-2b                  begriff Vertrag beenden    dauer    662 ms  marge     838 ms  treffer 6
+  warm-2c                  begriff Vertrag beenden    dauer    669 ms  marge     831 ms  treffer 6
+
+=== Durchgang 3, Begriff: Kuendigung ===
+neustart-vor 2026-09-10T15:41:41Z
+backend-bereit-nach-0s 2026-09-10T15:41:41Z
+harte Grenze aus der cgroup: 2147483648
+-- genau eine Suche gegen den kalten Container --
+  kaltstart-3              begriff Kuendigung         dauer   2468 ms  marge    -968 ms  treffer 6
+-- dieselbe Anfrage warm, dreimal --
+  warm-3a                  begriff Kuendigung         dauer    565 ms  marge     935 ms  treffer 6
+  warm-3b                  begriff Kuendigung         dauer    562 ms  marge     938 ms  treffer 6
+  warm-3c                  begriff Kuendigung         dauer    553 ms  marge     947 ms  treffer 6
+
+=== Die Gegenprobe ohne Neustart: derselbe Begriff auf warmem Container ===
+  warm-ohne-neustart       begriff Vertrag beenden    dauer    659 ms  marge     841 ms  treffer 6
+  warm-kontrolle           begriff Bescheid           dauer    557 ms  marge     943 ms  treffer 6
+
+=== Was das Nextcloud-Protokoll zu findling und Zeitueberschreitung sagt ===
+(hier gekuerzt: die Rohzeilen des Nextcloud-Protokolls sind bis 15 KB lang
+und tragen Ausschnitte aus Nutzerdateien, die nicht committet werden duerfen.
+Die ausgewerteten Felder stehen unten unter "Der Beleg aus dem Protokoll".)
+
+=== Der Zustand, in dem dieses Skript den Container hinterlaesst ===
+Status=running RestartCount=0 StartedAt=2026-09-10T15:41:41.384439367Z
+memory.max=2147483648 memory.peak=626790400 memory.current=545447936
+memory.events: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 sock_throttled 0 
+-- die Bewaffnung, gezaehlt und nicht abgelesen (DI-05-36) --
+INFO:findling.worker.poller:indexing is armed and the work stock is empty, the next file is picked up as it arrives
+INFO:findling.worker.poller:indexing is armed and the work stock is empty, the next file is picked up as it arrives
+kaltstart-reproduktion-teil2-ende 2026-09-10T15:41:47Z
+
+=== Der Beleg aus dem Protokoll: abgebrochene Containeraufrufe ===
+Gezaehlt werden Zeilen mit 'cURL error 28' im Protokollfenster der letzten
+4.000 Zeilen. Sie kommen paarweise, einmal von app_api und einmal von
+findling, also ist die Zahl der betroffenen ANFRAGEN die Haelfte.
+zeilen-insgesamt 44, also 22 anfragen
+
+  zeitpunkt   zeilen  anfragen
+  05:15:11       2         1
+  08:32:30       2         1
+  08:32:34       2         1
+  08:32:39       2         1
+  08:32:46       2         1
+  08:32:48       2         1
+  13:51:11       2         1
+  13:51:16       2         1
+  13:51:29       8         4
+  13:51:33       6         3
+  13:51:37       6         3
+  13:51:42       6         3
+  14:05:17       2         1
+
+Ein Beispiel im Wortlaut, gekuerzt:
+  05:15:11: Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1501 milliseconds with 0 bytes received (see https://curl.se/libcurl/c/libcurl-errors.html) for https://loadtes
+
+############ Die Deutung, und sie faellt anders aus als die Reproduktion allein ############
+
+1. DIE REPRODUKTION ALLEIN WUERDE DIE FRAGE FALSCH BEANTWORTEN. Drei Neustarts,
+   drei Kaltstarts, Gesamtdauern 1.598, 1.805 und 2.468 ms, alle drei ueber der
+   Decke von 1.500 ms, und alle drei mit SECHS Treffern. Wer nur diese Tabelle
+   liest, schliesst daraus, die null Treffer seien ein Einzelfall gewesen und
+   die Decke schneide nichts ab. Beides waere falsch.
+
+2. DAS PROTOKOLL BEANTWORTET SIE RICHTIG, und zwar fuer genau die Anfrage, um
+   die es geht. Um 2026-09-10T14:05:17Z, dem Zeitpunkt der Kaltstartmessung von
+   95-spitze.sh nachher, mit dem Begriff "Vertrag beenden", den search_load.py
+   bei einer Runde und einer Nebenlaeufigkeit als TERMS[0] stellt, steht dort:
+
+     app_api:  cURL error 28: Operation timed out after 1501 milliseconds
+               with 0 bytes received ... /exapps/findling_backend/search
+     findling: Findling: backend unreachable
+
+   Der Containeraufruf ist in die Decke gelaufen, das Backend galt als nicht
+   erreichbar, und deshalb kamen null Treffer zurueck. Deutung A ist belegt.
+
+3. WARUM DIE REPRODUKTION TROTZDEM TREFFER LIEFERTE, und das ist der Grund, aus
+   dem die zwei Zahlen sich nicht widersprechen. Die 1.838,4 ms von
+   95-spitze.sh und die 1.598 bis 2.468 ms dieser Durchgaenge messen die GANZE
+   OCS-Anfrage: Anmeldung, PHP, Ergebnisgruppe, Containeraufruf. Die Decke von
+   1.501 ms gilt nur fuer den Containeraufruf DARIN. In den drei Durchgaengen
+   blieb er darunter, weil der Seitencache des Wirts die Modellgewichte von den
+   vorigen Starts noch hielt; um 14:05:17 lag der letzte Start 29 Stunden
+   zurueck. Eine Gesamtdauer ueber 1.500 ms ist also kein Beweis fuer einen
+   Abbruch, und eine unter 1.500 ms waere keiner fuer das Gegenteil.
+
+4. DER BEFUND, DER DABEI ABGEFALLEN IST, UND ER IST DER GROESSERE. Dasselbe
+   Protokoll zaehlt im Fenster von 13:51:11Z bis 13:51:42Z SIEBZEHN abgebrochene
+   Containeraufrufe. Dieses Fenster ist Stufe 16 der Nebenlaeufigkeitsreihe
+   (13:50:59Z bis 13:51:42Z), und 97-stufe-16.json meldet "failures": 0 fuer
+   160 Anfragen. Die Route antwortet bei einem abgebrochenen Containeraufruf mit
+   HTTP 200 und einer Ergebnisgruppe ohne Containerteil, also zaehlt das
+   Lastwerkzeug sie als beantwortet. Die Trefferzahl je Anfrage zeigt es:
+
+     stufe    anfragen   failures   treffer   treffer je anfrage   p95 ms
+         1          10          0        54                 5,40    464,3
+         4          40          0       216                 5,40  1.068,0
+         8          80          0       420                 5,25  2.125,5
+        12         120          0       577                 4,81  3.453,4
+        16         160          0       666                 4,16  4.446,2
+
+   Die Stufen 1 und 4 liefern 5,40 Treffer je Anfrage, Stufe 16 nur 4,16. In den
+   Fenstern der Stufen 1 bis 12 steht keine einzige Abbruchzeile, im Fenster von
+   Stufe 16 stehen siebzehn. Fuer 10,6 Prozent der Anfragen dieser Stufe hat die
+   gemessene Antwortzeit also nicht die Zeit einer vollstaendigen Antwort
+   gemessen.
+
+WAS DAS FUER DIE P95-REIHE BEDEUTET: die Zahlen der Stufen 1 bis 12 sind davon
+nicht beruehrt, und die Zusage steht auf Stufe 8. Die 4.446,2 ms der Stufe 16
+sind eher zu GUENSTIG als zu schlecht, weil ein Teil ihrer Anfragen ohne
+Containerteil beantwortet wurde. Die Reihe bleibt stehen, und dieser Vorbehalt
+gehoert neben ihre letzte Zeile.
