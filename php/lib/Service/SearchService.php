@@ -185,9 +185,24 @@ class SearchService {
 		$degraded = false;
 		$silent = false;
 		$ceilingReached = false;
+		// How many candidates this run has decided about, across every round:
+		// the sum of the per page $consumed below. It counts and it decides
+		// nothing. Without it a run that was handed candidates and kept none of
+		// them is indistinguishable from a run that was handed none at all, and
+		// those two are a different sentence for the user (DI-07-03, decided as
+		// V-1a on 10.09.2026).
+		$decided = 0;
 		/** @var list<ApprovedHit> $approved */
 		$approved = [];
 
+		// What this loop deliberately does not do, written here because the
+		// obvious fix for DI-07-03 is to do it: it does not fetch another round
+		// until something survives. The round cap stays at what the caps say,
+		// the recheck budget stays where it is, isReadable() below stays the one
+		// and only permission decision of this product, and nothing joined it.
+		// Buying the sentence of DI-07-03 with the permission chain is the one
+		// trade the roadmap rules out. This run reports the state it already
+		// had; it does not change it.
 		for ($round = 0; $round < $caps->maxRounds; $round++) {
 			if (count($approved) >= $pageSize || $rechecks >= $recheckBudget || ($this->clock)() >= $deadline) {
 				break;
@@ -344,6 +359,8 @@ class SearchService {
 				);
 			}
 
+			$decided += $consumed;
+
 			if ($stopped) {
 				$offset += $consumed;
 				$exhausted = false;
@@ -362,9 +379,18 @@ class SearchService {
 			// one case in which the silence is worth reporting. With hits on
 			// the table it is not: an incomplete list beats an error message
 			// printed over hits the user can see.
+			//
+			// Three answers in one order, and the order is the statement. A
+			// ceiling and a silence are statements about the run, the third is
+			// a statement about its result, and a statement about the run is
+			// the more pressing of the two: a run that stopped early never
+			// decided about the rest, so telling the user that nothing was
+			// left for them would claim more than this run knows.
 			$failure = $ceilingReached
 				? SearchOutcome::FAILURE_OFFSET_CEILING
-				: ($silent ? SearchOutcome::FAILURE_BACKEND_SILENT : null);
+				: ($silent
+					? SearchOutcome::FAILURE_BACKEND_SILENT
+					: ($decided > 0 ? SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED : null));
 
 			return new SearchOutcome([], [], $offset, !$exhausted && !$ceilingReached, $degraded, $failure);
 		}
