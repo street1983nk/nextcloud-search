@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: 10-05-PLAN.md Tasks 1 bis 3 fertig, Task 4 offen (Volllauf laeuft)
-last_updated: "2026-09-09T10:13:21.032Z"
-last_activity: 2026-09-09
+stopped_at: 10-05-PLAN.md vollstaendig (Volllauf durch, Task 4 beantwortet)
+last_updated: "2026-09-10T13:45:00.000Z"
+last_activity: 2026-09-10
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 24
-  completed_plans: 22
-  percent: 60
+  completed_plans: 23
+  percent: 63
 ---
 
 # Project State
@@ -26,19 +26,30 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 10 (vergleichsmessung-auf-der-aws-box): EXECUTING
-Plan: 5 of 7 (Tasks 1 bis 3 fertig, Task 4 ist ein offener blockierender Checkpoint)
-Status: Der Volllauf laeuft abgesetzt auf der Box
-Last activity: 2026-09-09
+Plan: 5 of 7 FERTIG, naechster Plan 6 of 7
+Status: Der Volllauf ist durch, die Box laeuft noch und der Container ist unangetastet
+Last activity: 2026-09-10
 
-**Naechster Schritt:** Warten, bis der Volllauf durch ist, dann Task 4 von Plan 10-05 beantworten und Plan 10-06 fahren. Der Lauf ist am **2026-09-09T09:58:42Z** angestossen worden, erwartete Dauer rund 19 Stunden, Ende ist die Datei `00-FERTIG` im Rohdatenverzeichnis auf der Box. Die Box laeuft weiter (`i-06b1d913f5c6f669b`, Adresse **3.69.147.2**, 0,1158 USD je Stunde, Deckel 30 Stunden und 3,50 USD) und der Container darf NICHT angefasst werden, weil `memory.peak` und `memory.events` des ganzen Laufs sonst verloren sind.
+**Naechster Schritt:** Plan 10-06 fahren, und zwar **sofort**. Der Volllauf ist am **2026-09-10T13:05:11Z** zu Ende gegangen (`00-FERTIG`, `stunden=27.0`, `ende-erkannt ja`), der Waechter hat in Runde 325 von 340 aus eigenem Urteil abgeschaltet. Der Container darf bis Task 2 von 10-06 NICHT angefasst werden: `memory.peak` und `memory.events` des ganzen Laufs leben in seiner cgroup, und Task 1 von 10-06 ist genau der Teil, der sie einsammelt.
 
-Erledigt aus Welle 5: die Anfahrt ueber `aws_box.sh start`, der Korpus als dieselben Bytes belegt (`korpus-gleich ja`, `bcbef9b2...`), der Baumhash-Beweis in einer NICHT leeren Rohdatei (Abbild und Arbeitsbaum je 54 Dateien `6c47cd21...`, `baumhash-gleich ja`), die harte Grenze aus der cgroup (`memory.max=2147483648`), der Nullstand, die **MESS-01-Kernzahl (Grundlast 103,2 MB gegen 691,8 MB)**, die erste Suche als Ereignis (plus 415,0 MB) und der Kaltstart (1.550,4 ms gegen die Decke von 1.500 ms). Alle Rohdaten sind committet, und zwar bevor der Lauf angestossen wurde.
+Erledigt aus Welle 5, Tasks 1 bis 3: die Anfahrt ueber `aws_box.sh start`, der Korpus als dieselben Bytes belegt (`korpus-gleich ja`, `bcbef9b2...`), der Baumhash-Beweis in einer NICHT leeren Rohdatei (Abbild und Arbeitsbaum je 54 Dateien `6c47cd21...`, `baumhash-gleich ja`), die harte Grenze aus der cgroup (`memory.max=2147483648`), der Nullstand, die **MESS-01-Kernzahl (Grundlast 103,2 MB gegen 691,8 MB)**, die erste Suche als Ereignis (plus 415,0 MB) und der Kaltstart (1.550,4 ms gegen die Decke von 1.500 ms). Alle Rohdaten sind committet, und zwar bevor der Lauf angestossen wurde.
 
-Drei Werkzeuge sind dabei korrigiert worden, jedes mit einer Zusicherung daneben: die Laufzeitrechnung von `aws_box.sh status` (zaehlte Parkstunden als Laufstunden), die Instanzzaehlung vor `--rm-data` (haette die zweite Nextcloud durchgelassen) und der Sortierschluessel des Baumhashes (plattformabhaengig, hatte **CI seit Welle 1 rot**; CI ist damit wieder gruen zu erwarten).
+Erledigt aus Task 4, die Zahlen des Laufs:
 
-**Ein Owner-Handgriff offen:** den A-Record `loadtest.infranode.dev` in der Cloudflare-Zone auf **3.69.147.2** ziehen. Der Lauf braucht ihn nicht, er beseitigt nur Fallstrick 7.
+- **52.111 indexiert und eingebettet, 37 uebersprungen, 0 fehlgeschlagen**, ohne OOM und ohne Neustart (`OOMKilled=false`, `RestartCount=0`)
+- **Laufzeit hoechstens 26 h 41 min bis zum letzten Vektor gegen 18 h 56 min in 06-11**, also plus 40,9 Prozent und **ueber** der Owner-Erwartung von 22 bis 26 Stunden; weiterhin eine Untergrenze, weil beim Anstoss 1.653 Dateien schon indexiert waren
+- **`memory.peak` gleich `memory.max`** (2.147,5 MB) und **`max` 21.939 gegen 2.796**; der Ablaufplan hatte hier die Null erwartet. Hoechster `anon` dagegen **1.764,2 MB gegen 1.837,8 MB**, also weniger Heap und mehr Seitencache
+- **Die 150 gegen 51.961 sind aufgeklaert:** die Verzeichnisse `ocrdrei` (120 Dateien) und `neustart` (30), angelegt am 07.09. bei den Haertungsdrills, liegen im Baum des indexierten Nutzers. 52.111 minus 150 ist 51.961 genau, und `skipped` steht in beiden Laeufen auf exakt 37
+- **Meldekette: vier Versuche, vier Mal `http=200`**, kein 403 und kein stiller Ausfall; die Fertigmeldung kam doppelt (Waechter und wartende Haelfte)
+- Alle Rohdaten des Laufs sind von der Box geholt, byteidentisch geprueft und committet
 
-Weiter offen: MESS-01 bis MESS-03 brauchen das Ende des Laufs und den Bericht.
+Drei Werkzeuge sind in Task 2 korrigiert worden, jedes mit einer Zusicherung daneben: die Laufzeitrechnung von `aws_box.sh status` (zaehlte Parkstunden als Laufstunden), die Instanzzaehlung vor `--rm-data` (haette die zweite Nextcloud durchgelassen) und der Sortierschluessel des Baumhashes (plattformabhaengig, hatte **CI seit Welle 1 rot**).
+
+**Erledigt:** der A-Record `loadtest.infranode.dev` zeigt auf **3.69.147.2**; der Lauf hat 27 Stunden ueber diesen Namen gearbeitet.
+
+**OFFENER OWNER-ENTSCHEID, eilig:** Die Box ist **27,9 h** gelaufen und hat **3,23 USD** gekostet. Der 30-Stunden-Deckel ist am **2026-09-10T15:19:50Z** erreicht, es bleiben also rund **2,1 Stunden**. Plan 10-06 braucht darunter Nebenlaeufigkeitsreihe, Bestand, Neustart mit Kaltstart, Seitenroute, Rundenzaehlung und zehn Sprachfaelle (allein rund 30 Minuten). Entweder 10-06 sofort und straff, notfalls ohne die Sprachfaelle, oder den Deckel auf 33 bis 34 Stunden und 4,00 USD anheben (Mehrkosten rund 0,47 USD).
+
+Weiter offen: MESS-01 bis MESS-03 brauchen den Bericht aus 10-07.
 
 ## Performance Metrics
 
@@ -94,7 +105,7 @@ Weiter offen: MESS-01 bis MESS-03 brauchen das Ende des Laufs und den Bericht.
 | Phase 10 P02 | 25min | 2 tasks | 6 files |
 | Phase 10 P03 | 28min | 3 tasks | 8 files |
 | Phase 10 P04 | 34min | 3 tasks | 10 files |
-| Phase 10 P05 | 55min | 3 tasks | 28 files |
+| Phase 10 P05 | 80min Sitzung, dazwischen 27h06m Lauf | 4 tasks | 33 files |
 
 ## Accumulated Context
 
@@ -235,6 +246,12 @@ Recent decisions affecting current work:
 - [Phase 10]: 10-05: Die Instanzzaehlung vor --rm-data haengt am Repositoriumsnamen und nicht an einem Registry-Pfad; das alte Muster haette MIT der zweiten Nextcloud vom 07.09. genau 1 gezaehlt und den zerstoerenden Befehl durchgelassen
 - [Phase 10]: 10-05: MESS-01-Kernzahl gemessen: Grundlast im Leerlauf 103,2 MB gegen 691,8 MB (06-11) und 693,4 MB (Nachmessung), unter der gerechneten Erwartung von 118 bis 150 MB, mit null Poller-Durchgaengen als Beleg fuer den Leerlauf
 - [Phase 10]: 10-05: Kaltstart 1.550,4 ms gegen die Decke von 1.500 ms, Marge minus 50,4 ms gegen plus 167,9 ms des Vorwerts; DI-07-02 neigt damit zu ja, und die schlechtere Rolle nachher steht in Plan 10-06 noch aus
+- [Phase 10]: 10-05 Task 4: Der Volllauf ist durch, 52.111 indexiert und eingebettet, 37 uebersprungen, 0 fehlgeschlagen, ohne OOM und ohne Neustart; der Waechter hat in Runde 325 von 340 aus eigenem Urteil abgeschaltet
+- [Phase 10]: 10-05 Task 4: Die Laufzeit wird gegen die vergleichbare Groesse gestellt: hoechstens 26 h 41 min bis zum letzten Vektor gegen 18 h 56 min (plus 40,9 Prozent), nicht die 27,0 h aus 00-FERTIG, die 25 Minuten Stillebestaetigung enthalten. Ueber der Owner-Erwartung von 22 bis 26 h, und weiterhin eine Untergrenze
+- [Phase 10]: 10-05 Task 4: memory.peak hat die harte Grenze erreicht (2.147,5 MB, erstmals 5 h nach dem Anstoss) und memory.events max steht auf 21.939 gegen 2.796; der Ablaufplan hatte hier die Null erwartet. anon dagegen 1.764,2 MB gegen 1.837,8 MB, also weniger Heap und mehr Seitencache
+- [Phase 10]: 10-05 Task 4: Der Durchsatz war ueber den ganzen Lauf stabil (32 bis 34 Dok/min), also erklaert kein schleichender Speicherdruck die Mehrlaufzeit; einziger von den Daten gestuetzter Kandidat ist der Zulauf, vorrat=0 in 62 von 325 Lesungen
+- [Phase 10]: 10-05 Task 4: 52.111 statt 51.961 ist erklaert und keine Verdiktverschiebung: ocrdrei (120) und neustart (30) vom 07.09. liegen im Baum des indexierten Nutzers, skipped steht in beiden Laeufen auf exakt 37, und der Korpus ist byteweise derselbe
+- [Phase 10]: 10-05 Task 4: Bei einer Mengenabweichung erst zaehlen, was auf der Platte liegt, dann die Verdikte befragen. Die Aufklaerung der 150 kam aus zwei Verzeichnisdaten und brauchte keinen einzigen Zugriff auf den Container
 
 ### Pending Todos
 
@@ -250,6 +267,8 @@ None yet.
 - RAM-Spitzen auf ARM sind bisher nur geschätzt, Messlauf steht in Phase 5 aus
 - Zwei benannte Luecken aus der Sichtprobe 04-10, beide in .planning/phases/04-admin-sichtbarkeit-und-diagnose/deferred-items.md mit ihrer Schliessform: DI-04-03 (Skip-Verdikte pro fileid uebergeben, damit die Fehlerliste die vier Container-Gruende gruppieren kann) und DI-04-04 (Versionsmarken nach abgeschlossenem Neuaufbau neu stempeln, sonst kann der Reindex-Banner die eigene Abhilfe nie einloesen)
 - Das Pruefsummen-Gate ueber das Referenzkorpus nach der Live-Raeumung steht aus und gehoert in die Phasen-Verifikation (Gate A auf Quellcode-Ebene ist gruen, die Write-Allowlist unveraendert bei drei Eintraegen)
+- **Kostendeckel fast erreicht (Stand 2026-09-10T13:14Z):** Die Box ist 27,9 h gelaufen und hat 3,23 USD gekostet; der 30-Stunden-Deckel greift am 2026-09-10T15:19:50Z, es bleiben rund 2,1 Stunden. Plan 10-06 braucht darunter Nebenlaeufigkeitsreihe, Bestand, Neustart mit Kaltstart, Seitenroute, Rundenzaehlung und zehn Sprachfaelle. Owner-Entscheid noetig: straff fahren und notfalls die Sprachfaelle opfern, oder Deckel auf 33 bis 34 h und 4,00 USD anheben
+- **Die Laufzeit ist die erste Zahl der Phase, die schlechter geworden ist**, und sie ist gross: plus 40,9 Prozent. Erfolgskriterium 2 der Phase verlangt, dass jede Verschlechterung benannt statt weggelassen wird; das gilt fuer die Laufzeit und fuer memory.events max 21.939. Der Bericht in 10-07 braucht dafuer einen eigenen Abschnitt, nicht eine Fussnote
 - Vor dem Tag v1.0.0 (Plan 06-12) zu entscheiden: DI-06-02 und DI-06-03 (embedding_version wird nicht gestempelt, reset_for_reindex hat keinen Aufrufer). Plan 06-09 hat die Bedingung geliefert (embedded == indexed bei indexed > 0); es fehlt ein Plan auf dem Indexweg oder eine bewusste Entscheidung in docs/embeddings.md, dass ein Modellwechsel occ findling:index --restart verlangt
 
 ## Deferred Items
@@ -262,6 +281,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-09T10:12:44.811Z
-Stopped at: 10-05-PLAN.md Tasks 1 bis 3 fertig, Task 4 offen (Volllauf laeuft abgesetzt seit 2026-09-09T09:58:42Z, Ende ist die Datei 00-FERTIG)
+Last session: 2026-09-10T13:45:00.000Z
+Stopped at: 10-05-PLAN.md vollstaendig (Volllauf durch am 2026-09-10T13:05:11Z, Task 4 mit den sechs Antworten beantwortet); naechster Plan ist 10-06 und er ist eilig, weil die Box noch rund 2,1 Stunden unter dem 30-Stunden-Deckel hat
 Resume file: None

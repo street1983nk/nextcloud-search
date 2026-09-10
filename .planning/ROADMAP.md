@@ -192,6 +192,8 @@ Plans:
 
 - [x] 10-05-PLAN.md , Anfahrt-Freigabe, die Zahlen vor dem Volllauf, und der Lauf abgesetzt angestossen (Welle 5, Checkpoint-Plan)
 
+**Stand nach Welle 5 (2026-09-10):** Der Volllauf ist durch. Grundlast im Leerlauf **103,2 MB gegen 691,8 MB**, **52.111 Dokumente** indexiert und eingebettet (37 uebersprungen, 0 fehlgeschlagen, ohne OOM, `RestartCount=0`), Laufzeit **hoechstens 26 h 41 min gegen 18 h 56 min**. Zwei Zahlen sind nicht besser geworden und werden im Bericht so gefuehrt: die Laufzeit (plus 40,9 Prozent) und `memory.events max` (**21.939 gegen 2.796**, mit `memory.peak` gleich der harten Grenze). Zu Erfolgskriterium 1: der Korpus ist byteweise derselbe (`korpus-gleich ja`), die 52.111 statt 51.961 sind zwei Drill-Verzeichnisse vom 07.09. im Baum des indexierten Nutzers (`ocrdrei` 120 plus `neustart` 30). **Die Box hat noch rund 2,1 Stunden unter dem 30-Stunden-Deckel**, also braucht Welle 6 entweder einen straffen Lauf oder einen angehobenen Deckel.
+
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [ ] 10-06-PLAN.md , die Messungen nach dem Lauf, DI-07-02 und DI-07-03, das Kernaussage-Blatt, Abnahme der Zahlen, Box angehalten (Welle 6, Checkpoint-Plan)
