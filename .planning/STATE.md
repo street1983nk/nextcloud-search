@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
-status: ready_to_plan
-stopped_at: Phase 10 complete (7/7) — ready to discuss Phase 11
-last_updated: 2026-09-10T16:38:25.092Z
+status: planning
+stopped_at: Phase 11 context gathered
+last_updated: "2026-09-10T16:55:59.786Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 5
@@ -45,10 +45,13 @@ Die Kernzahlen, jede gegen ihre Entsprechung aus 06-11:
 - **Grundlast im Leerlauf 103,2 MB gegen 691,8 MB**, minus 588,6 MB (MESS-01)
 - **anon-Spitze 1.764,2 MB gegen 1.837,8 MB**, alle drei Schadenszaehler auf
   null, `OOMKilled=false`, `RestartCount=0`
+
 - **`memory.events max` 21.939 gegen 2.796**, `memory.peak` gleich der harten
   Grenze; der Zaehler gehoert dem Indexaufbau und steht nach dem Neustart auf 0
+
 - **p95 Stufe 8 = 2.125,5 ms gegen 2.500 ms Budget**, die Zusage haelt, aber
   die Reserve faellt von 585,0 auf 374,5 ms (MESS-02)
+
 - **Laufzeit 26 h 37 min gegen 18 h 56 min**, plus 40,6 Prozent, Untergrenze
 - **52.111 indexiert**, 146.171 Chunks, 1.318,3 Byte je Dokument; 52.111 minus
   150 Drill-Dateien ergibt exakt die 51.961 der Grundlinie
@@ -328,6 +331,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-10T16:28:06.013Z
-Stopped at: Phase 10 abgeschlossen: 10-07 fertig, Bericht vom Owner abgenommen, Box angehalten (31,05 h / 3,5969 USD). Naechste Phase 11 (Haertung und Store-Einreichung), REL-01
-Resume file: None
+Last session: 2026-09-10T16:55:59.770Z
+Stopped at: Phase 11 context gathered
+Resume file: .planning/phases/11-haertung-und-store-einreichung-v1-1/11-CONTEXT.md
