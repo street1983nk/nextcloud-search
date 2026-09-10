@@ -98,7 +98,7 @@ L10N_JS = REPO_ROOT / "php" / "l10n" / "de.js"
 # and are at worst a shade too polite under ``de``. Writing a second, informal
 # catalogue would be a translation round nobody asked for, and half of it would
 # drift within a phase; the same argument that parks the French catalogue in
-# docs/l10n-french.md rather than translating 24 of 173 strings.
+# docs/l10n-french.md rather than translating 24 of 174 strings.
 #
 # Hence: the same words under both codes, and a gate that holds the sameness
 # instead of a comment that asks for it. Whoever wants to tell du from Sie later
@@ -928,6 +928,17 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     that costs nothing to keep and catches a translated value as well as a
     missing key. The comparison runs over the text as Python reads it, so a
     different line ending in a working copy on Windows is not a finding.
+
+    The hard number below stands at 174 and stood at 173 until 10.09.2026. It
+    rose by exactly one key, and the key is the sentence the result page says
+    for a run that was handed candidates and kept none of them: finding
+    DI-07-03 of phase 7, decided by the owner as V-1a on 10.09.2026 in
+    .planning/phases/11-haertung-und-store-einreichung-v1-1/11-VORENTSCHEIDE.md.
+    Without this paragraph the next reader takes a raised number for sloppiness
+    and lowers it again. It is raised here rather than in plan 11-08 because
+    the tree between the two plans would otherwise be red; 11-08 only reads it
+    afterwards, and so does the French table of docs/l10n-french.md, which
+    counts its coverage against exactly this key set.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -952,7 +963,7 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     }
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
-    assert len(keys_of["de.json"]) == 173
+    assert len(keys_of["de.json"]) == 174
 
 
 def test_every_reason_of_the_closed_list_has_a_label_and_a_remedy() -> None:

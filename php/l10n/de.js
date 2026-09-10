@@ -168,6 +168,7 @@ OC.L10N.register(
     "Type a word from a document. Findling searches the text inside your files, scanned PDFs included.": "Geben Sie ein Wort aus einem Dokument ein. Findling durchsucht den Text in Ihren Dateien, auch in gescannten PDFs.",
     "No file contains \"%s\"": "Keine Datei enthält „%s“",
     "Try another word, a part of a compound word, or check the spelling.": "Versuchen Sie ein anderes Wort, ein Teilwort oder prüfen Sie die Schreibweise.",
+    "Other files contain this word, but none that you may open.": "Andere Dateien enthalten dieses Wort, aber keine, die Sie öffnen dürfen.",
     "The search is not answering right now": "Die Suche antwortet gerade nicht",
     "Findling could not reach its backend. Your files are unchanged. Try again in a moment, and tell your administrator if it stays that way.": "Findling konnte sein Backend nicht erreichen. Ihre Dateien sind unverändert. Versuchen Sie es gleich noch einmal und sagen Sie der Administration Bescheid, wenn es dabei bleibt.",
     "Try again": "Erneut versuchen",
