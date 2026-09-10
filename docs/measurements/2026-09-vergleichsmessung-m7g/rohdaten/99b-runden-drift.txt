@@ -1,0 +1,68 @@
+Auszug aus 99b-runden.txt, dem Protokoll des gefahrenen Laufs vom
+2026-09-10. Die Quelldatei liegt unveraendert daneben; diese Datei traegt
+nur den Abschnitt des provozierten Driftfalls (Fall 2), weil Plan 10-06 die beiden Faelle getrennt
+verlangt. Kein Wert ist geaendert, keine Zeile geglaettet.
+-----------------------------------------------------------------------
+=== Fall 2, der provozierte Driftfall: Vorbereitung ===
+System config value skeletondirectory set to empty string
+The account "driftfall" was created successfully
+-- die 40 Dateien, die geteilt werden --
+40 /tmp/tmp.Xh0BvTUPhv/namen.txt
+freigaben-angelegt 20
++---------+-------+-----+---------+---------+--------+--------------+
+| 26      | 52207 | 0   | 29      | 0       | 0      | 00:00:10     |
++---------+-------+-----+---------+---------+--------+--------------+
+-- die Frist, gegen die langsamste Uhr, und der Durchgang wird GEZAEHLT --
+poller-durchgaenge vorher=2 nachher=2
+-- die Kontrolle: sieht das Driftkonto die Dateien, BEVOR zurueckgenommen wird --
+treffer-vor-ruecknahme 4
+rechte-aufgenommen ja
+=== Fall 2, der provozierte Driftfall: die Ruecknahme und die Messung ===
+-- die Freigaben zurueckgenommen, OHNE dem Poller Zeit zu geben --
+ruecknahme 2026-09-10T14:14:14Z
+-- eine Stichprobe des Protokollfensters, damit die Zaehlung nachlesbar ist --
+INFO:     172.18.0.5:47758 - "POST /search HTTP/1.1" 200 OK
+INFO:     172.18.0.5:47758 - "POST /search HTTP/1.1" 200 OK
+INFO:     172.18.0.5:47758 - "POST /search HTTP/1.1" 200 OK
+INFO:     172.18.0.5:47758 - "POST /search HTTP/1.1" 200 OK
+INFO:     172.18.0.5:47758 - "POST /search HTTP/1.1" 200 OK
+INFO:     172.18.0.5:47758 - "POST /search HTTP/1.1" 200 OK
+fall2 suchen-gefahren        10
+fall2 kandidatenaufrufe      10
+fall2 snippetaufrufe         0
+fall2 runden-je-suche        1,0
+fall2 snippets-je-suche      0,0
+fall2 containeraufrufe-je-suche 1,0
+fall2 befund                 eine Runde je Suche
+fall2 anfragen               10 (davon fehlgeschlagen 0)
+fall2 treffer-insgesamt      0
+fall2 p50                    444,2 ms
+fall2 p95                    681,6 ms
+fall2 max                    681,6 ms
+fall2 gruppenbudget          2.500,0 ms (Provider::BUDGET_SECONDS = 2.5)
+fall2 marge-zum-budget       1.818,4 ms
+fall2 aufrufdecke            1.500,0 ms (ExAppService::REQUEST_TIMEOUT_SECONDS = 1.5)
+fall2 hinweis                die Decke gilt JE AUFRUF, das Budget je Ergebnisgruppe;
+fall2                        bei mehr als einer Runde teilen sich mehrere Aufrufe
+fall2                        dasselbe Budget, und secondsLeft deckelt jeden weiteren
+treffer-nach-ruecknahme 0
+-- die dreiwertige Lesung dieses Falls, damit er nicht behauptet wird --
+   treffer > 0 nach der Ruecknahme: der Recheck hat NICHT entfernt, die
+   Freigabe war noch wirksam, und dieser Fall ist nicht der Driftfall.
+   treffer = 0 und mehr als eine Runde je Suche: der Driftfall ist erzeugt.
+   treffer = 0 und eine Runde je Suche: der Vorfilter wusste schon Bescheid,
+   die Drift war zu kurz, und die Zahl ist keine Aussage ueber die Schleife.
+=== Die Einordnung, die der Bericht uebernehmen muss ===
+Fall 1 ist der Alltag: ein Konto, das alle Dateien besitzt, und ein Recheck,
+der nichts entfernt. Fall 2 ist ABSICHTLICH erzeugt: eine Freigabe wurde
+zurueckgenommen und gefragt wurde, bevor der Index davon wusste. Der Bericht
+muss beide Faelle mit ihrer Herstellung nennen; eine Zahl aus dem
+provozierten Zustand als Alltagszahl zu berichten ist schlimmer als keine
+Zahl. Ueber MAX_ROUNDS entscheidet dieses Skript nicht, es liefert die Zahlen,
+nach denen DI-07-03 fragt.
+=== Die Aufraeumung, so weit sie folgenlos ist ===
+System config value skeletondirectory deleted
+das Konto driftfall bleibt stehen: ein user:delete loest eine Raeumung im
+Index aus, und die waere eine Bewegung mitten in einer Messreihe.
+protokoll-traegt-anfragen ja
+runden-ende 2026-09-10T14:14:24Z

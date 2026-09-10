@@ -1,0 +1,63 @@
+{
+ "started": "2026-09-10T14:05:22Z",
+ "target": "https://loadtest.infranode.dev",
+ "user": "lasttest",
+ "concurrency": 8,
+ "rounds": 3,
+ "limit": 5,
+ "requests": 24,
+ "answered": 24,
+ "failures": 0,
+ "failure_kinds": {},
+ "hits_total": 132,
+ "budget_ms": 2500,
+ "memory": {
+  "before": {
+   "at": "2026-09-10T14:05:22Z",
+   "anon": 546287616,
+   "file": 204718080,
+   "slab": 6217416,
+   "memory.current": 759623680,
+   "memory.peak": 831148032
+  },
+  "during": [
+   {
+    "at": "2026-09-10T14:05:24Z",
+    "anon": 547090432,
+    "file": 204718080,
+    "slab": 6230760,
+    "memory.current": 760885248,
+    "memory.peak": 831148032
+   },
+   {
+    "at": "2026-09-10T14:05:26Z",
+    "anon": 548298752,
+    "file": 204980224,
+    "slab": 6288640,
+    "memory.current": 762159104,
+    "memory.peak": 831148032
+   },
+   {
+    "at": "2026-09-10T14:05:28Z",
+    "anon": 550813696,
+    "file": 205045760,
+    "slab": 6277392,
+    "memory.current": 765014016,
+    "memory.peak": 831148032
+   }
+  ],
+  "after": {
+   "at": "2026-09-10T14:05:28Z",
+   "anon": 550813696,
+   "file": 205045760,
+   "slab": 6277392,
+   "memory.current": 765014016,
+   "memory.peak": 831148032
+  }
+ },
+ "ended": "2026-09-10T14:05:28Z",
+ "p50_ms": 1847.2,
+ "p95_ms": 1975.3,
+ "max_ms": 1989.8,
+ "p95_within_budget": true
+}

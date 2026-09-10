@@ -48,6 +48,19 @@
 # and the curl calls of the share api read their credential out of a config file
 # with mode 600 (T-10-27).
 #
+# **What changed on 10.09.2026, during the run of plan 10-06, and why.** The occ
+# wrapper handed OC_PASS to nothing. Two layers eat an environment variable on
+# the way into the container and the first draft crossed neither: sudo clears the
+# environment under env_reset, and docker exec does not pass one on of its own
+# accord. So OC_PASS="..." occ user:add --password-from-env answered
+# "--password-from-env given, but NC_PASS/OC_PASS is empty!" and case 2 never got
+# its account. The wrapper now crosses both layers, with --preserve-env=OC_PASS
+# at the sudo and -e OC_PASS at the docker exec, and it does so only when the
+# variable is set at all, so every other occ call keeps the smaller environment.
+# The VALUE still becomes an argument nowhere, which is the whole point of
+# T-10-27. Case 1 was unaffected and had already run; this file is the fassung
+# that produced both cases.
+#
 # The exit codes: 20 the access log carried no request line at all, so the count
 # is not a measurement; 21 the drift case could not be produced, which is a
 # finding about the box and not about the loop.
@@ -97,7 +110,18 @@ WORK=$(mktemp -d)
 chmod 700 "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 
-occ() { sudo docker exec --user www-data "$NEXTCLOUD" php occ "$@"; }
+# The wrapper carries OC_PASS across the two layers that would otherwise eat it,
+# and only when it is set: sudo clears the environment under env_reset, and
+# docker exec passes none on of its own accord. The value stays out of every
+# argument list, which is what T-10-27 asks for.
+occ() {
+    if [ -n "${OC_PASS:-}" ]; then
+        sudo --preserve-env=OC_PASS docker exec -e OC_PASS \
+            --user www-data "$NEXTCLOUD" php occ "$@"
+    else
+        sudo docker exec --user www-data "$NEXTCLOUD" php occ "$@"
+    fi
+}
 
 FINDLING_LOAD_PASSWORD=$(sudo cat "$PWFILE")
 export FINDLING_LOAD_PASSWORD

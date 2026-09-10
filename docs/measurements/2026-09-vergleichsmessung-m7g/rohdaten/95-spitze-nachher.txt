@@ -1,0 +1,140 @@
+spitze-nachher-start 2026-09-10T14:04:38Z
+rolle: nachher
+bestand: voll, nach dem OOM-Beweis und einem bewussten Neustart
+=== The deliberate restart, and it happens AFTER the OOM proof ===
+the OOM proof is on disk: /home/ubuntu/work/repo0918/docs/measurements/2026-09-vergleichsmessung-m7g/skripte/../rohdaten/96-oom-beweis.txt
+-rw-rw-r-- 1 ubuntu ubuntu 1042 Sep 10 13:05 /home/ubuntu/work/repo0918/docs/measurements/2026-09-vergleichsmessung-m7g/skripte/../rohdaten/96-oom-beweis.txt
+-- the counters one last time before they are cleared --
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+memory.peak=2147483648
+neustart-start 2026-09-10T14:04:38Z
+neustart-ende 2026-09-10T14:04:39Z
+Running=true StartedAt=2026-09-10T14:04:39.632302156Z RestartCount=0
+2026-09-10T14:04:39.330132558Z INFO:     Application shutdown complete.
+2026-09-10T14:04:39.330250652Z INFO:     Finished server process [8]
+2026-09-10T14:04:39.474556128Z init: stop requested, the application exited with status 143
+2026-09-10T14:04:39.778768630Z harp_connect: HP_SHARED_KEY is not set, no HaRP tunnel is opened, the app listens on APP_PORT
+2026-09-10T14:04:39.779162429Z init: no HaRP tunnel in this deployment, watching the application only
+2026-09-10T14:04:39.779446410Z entrypoint: binding mode tcp 0.0.0.0:23000
+2026-09-10T14:04:41.493675548Z INFO:     Started server process [8]
+2026-09-10T14:04:41.493706810Z INFO:     Waiting for application startup.
+2026-09-10T14:04:41.495800904Z INFO:findling:findling backend starting, binding mode: tcp 0.0.0.0:23000
+2026-09-10T14:04:41.556409038Z INFO:findling.index.wordlist:constituent list read from the volume, 276496 entries, read 1 in this process
+2026-09-10T14:04:41.560964427Z INFO:findling:findling backend was enabled before this start, indexing continues without a switch
+2026-09-10T14:04:41.567899350Z INFO:     Application startup complete.
+2026-09-10T14:04:41.915778050Z INFO:findling.index.analyzer:german automaton built from 276496 entries in 0.313 s, build 1 in this process
+2026-09-10T14:04:42.091325539Z INFO:     Uvicorn running on http://0.0.0.0:23000 (Press CTRL+C to quit)
+2026-09-10T14:04:42.307663293Z INFO:findling.worker.poller:indexing is armed and the work stock is empty, the next file is picked up as it arrives
+cgroup: /sys/fs/cgroup/system.slice/docker-e40bfb290cb323f8aa643fdc02527e33a37ebf9252eec0f8dfb9ae6d9e97af95.scope
+=== memory.events, read BEFORE the first search of this role ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+-- and the two figures next to it, as the zero point of the peak --
+anon 108244992
+file 39989248
+slab 5344328
+memory.current=154456064 memory.peak=168443904 memory.max=2147483648
+=== The sampler beside it, two seconds, so the second of the peak is readable ===
+sampler-pid 1375755
+rss_sampler: container=nc_app_findling_backend cgroup=/sys/fs/cgroup/system.slice/docker-e40bfb290cb323f8aa643fdc02527e33a37ebf9252eec0f8dfb9ae6d9e97af95.scope interval=2s
+=== The very first search of this container start, exactly one request ===
+erste-suche-vor 2026-09-10T14:05:15Z
+erste-suche-nach 2026-09-10T14:05:17Z
+-- the cgroup right after the first search --
+anon 541573120
+file 198799360
+slab 6143296
+memory.current=748703744 memory.peak=831148032
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== The cold start of this role, against the ceiling and against 07-01 ===
+kaltstart-rolle              nachher
+kaltstart-anfragen           1 (davon fehlgeschlagen 0)
+kaltstart-gemessen           1.838,4 ms
+kaltstart-decke              1.500,0 ms (ExAppService::REQUEST_TIMEOUT_SECONDS = 1.5)
+kaltstart-marge              -338,4 ms
+kaltstart-vorwert            1.332,1 ms (Plan 07-01, ueber den OCS-Weg)
+kaltstart-abstand-zum-vorwert 506,3 ms
+Dies ist die Zahl, nach der DI-07-02 fragt: der Kaltstart auf vollem
+Vektorbestand, also der schlechtere der beiden Faelle.
+Ueber die Konstante entscheidet dieses Skript nicht, es liefert die Zahl.
+=== Concurrency 1 ===
+stufe-1-vor 2026-09-10T14:05:17Z
+stufe-1-nach 2026-09-10T14:05:19Z
+-- the cgroup after concurrency 1 --
+anon 542060544
+file 200785920
+slab 6166384
+memory.current=751427584 memory.peak=831148032
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 4 ===
+stufe-4-vor 2026-09-10T14:05:19Z
+stufe-4-nach 2026-09-10T14:05:22Z
+-- the cgroup after concurrency 4 --
+anon 546287616
+file 204718080
+slab 6217416
+memory.current=759623680 memory.peak=831148032
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 8 ===
+stufe-8-vor 2026-09-10T14:05:22Z
+stufe-8-nach 2026-09-10T14:05:28Z
+-- the cgroup after concurrency 8 --
+anon 551403520
+file 205045760
+slab 6277392
+memory.current=765538304 memory.peak=831148032
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== The sampler down, and its closing line is the OOM proof of this role ===
+findling-rss 1789049121,545628160,203407360,6217416,757841920,831148032
+findling-rss 1789049124,547090432,204718080,6230760,760639488,831148032
+findling-rss 1789049126,547835904,204718080,6253920,761483264,831148032
+findling-rss 1789049128,550813696,205045760,6277392,765014016,831148032
+findling-rss summary samples=10 max_anon=550813696 peak=831148032 events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=0] oom_killed=false
+=== memory.events, the full set of counters, at the end of this role ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+OOMKilled=false
+RestartCount=0
+=== The highest anon of this role, out of the csv ===
+anon-spitze 550813696 bytes = 525.3 MB at 2026-09-10T14:05:28+00:00
+spitze-nachher-ende 2026-09-10T14:05:31Z

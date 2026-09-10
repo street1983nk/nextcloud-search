@@ -72,3 +72,30 @@ file 228331520
 slab 8640176
 -- 4. OOMKilled and the restart count of the container --
 OOMKilled=false RestartCount=0 Status=running StartedAt=2026-09-09T09:40:51.512974927Z
+ablesestelle-14 nach-den-vier-bloecken-des-plans-10-06 2026-09-10T14:46:22Z
+-- memory.events --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+-- memory.events.local --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+-- memory.max, memory.peak, memory.current --
+2147483648
+1889603584
+1679753216
+-- anon file slab --
+anon 1323929600
+file 339255296
+slab 11897176
+-- OOMKilled und RestartCount --
+OOMKilled=false RestartCount=0 Status=running StartedAt=2026-09-10T14:04:39.632302156Z

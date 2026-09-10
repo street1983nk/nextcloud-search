@@ -1,0 +1,38 @@
+Auszug aus 99b-runden.txt, dem Protokoll des gefahrenen Laufs vom
+2026-09-10. Die Quelldatei liegt unveraendert daneben; diese Datei traegt
+nur den Abschnitt des Alltagsfalls (Fall 1), weil Plan 10-06 die beiden Faelle getrennt
+verlangt. Kein Wert ist geaendert, keine Zeile geglaettet.
+-----------------------------------------------------------------------
+runden-start 2026-09-10T14:10:13Z
+container: nc_app_findling_backend
+suchen je fall: 10, geteilte dateien: 40
+gemessen wird die Zahl der Containeraufrufe je Nutzersuche, getrennt nach
+der Kandidatenroute und der Snippet-Route. Die Berechtigungskette wird nicht
+angefasst: keine Zeile in Provider.php, kein zweiter Recheck, kein Weg um den
+Vorfilter herum.
+=== Fall 1, der Alltag: das Konto, das alle Dateien besitzt ===
+-- eine Stichprobe des Protokollfensters, damit die Zaehlung nachlesbar ist --
+INFO:     172.18.0.5:39004 - "POST /search HTTP/1.1" 200 OK
+INFO:     172.18.0.5:39004 - "POST /snippets HTTP/1.1" 200 OK
+INFO:     172.18.0.5:39004 - "POST /search HTTP/1.1" 200 OK
+INFO:     172.18.0.5:39004 - "POST /snippets HTTP/1.1" 200 OK
+INFO:     172.18.0.5:39004 - "POST /search HTTP/1.1" 200 OK
+INFO:     172.18.0.5:39004 - "POST /snippets HTTP/1.1" 200 OK
+fall1 suchen-gefahren        10
+fall1 kandidatenaufrufe      10
+fall1 snippetaufrufe         9
+fall1 runden-je-suche        1,0
+fall1 snippets-je-suche      0,9
+fall1 containeraufrufe-je-suche 1,9
+fall1 befund                 eine Runde je Suche
+fall1 anfragen               10 (davon fehlgeschlagen 0)
+fall1 treffer-insgesamt      54
+fall1 p50                    589,4 ms
+fall1 p95                    683,6 ms
+fall1 max                    683,6 ms
+fall1 gruppenbudget          2.500,0 ms (Provider::BUDGET_SECONDS = 2.5)
+fall1 marge-zum-budget       1.816,4 ms
+fall1 aufrufdecke            1.500,0 ms (ExAppService::REQUEST_TIMEOUT_SECONDS = 1.5)
+fall1 hinweis                die Decke gilt JE AUFRUF, das Budget je Ergebnisgruppe;
+fall1                        bei mehr als einer Runde teilen sich mehrere Aufrufe
+fall1                        dasselbe Budget, und secondsLeft deckelt jeden weiteren

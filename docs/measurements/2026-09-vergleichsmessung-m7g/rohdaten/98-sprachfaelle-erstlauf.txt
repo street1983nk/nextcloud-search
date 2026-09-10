@@ -1,0 +1,90 @@
+sprachfaelle-start 2026-09-10T14:19:12Z
+konto: sprachfall (ausdruecklich nicht lasttest, siehe Kopf)
+korpus: /home/ubuntu/work/repo0918/testdata/corpus
+ci-beleg: integration.yml Lauf unbekannt
+=== Section 1: the account, whose home is to hold nothing but the corpus ===
+skeletondirectory vorher: (leer oder nicht gesetzt)
+System config value skeletondirectory set to empty string
+The account "sprachfall" was created successfully
+  - user_id: sprachfall
+  - display_name: sprachfall
+  - email: 
+  - cloud_id: sprachfall@loadtest.infranode.dev
+  - enabled: true
+  - groups:
+=== Section 2: the corpus over WebDAV, the path a user takes ===
+upload-vor 2026-09-10T14:19:15Z
+upload-nach 2026-09-10T14:19:30Z
+     39 201
+dateien-hochgeladen 39
+dateien-erwartet    39
+upload-vollstaendig ja
+Starting scan for user 1 out of 1 (sprachfall)
++---------+-------+-----+---------+---------+--------+--------------+
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 1       | 39    | 0   | 0       | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
+=== Section 3: the indexing, against the slowest clock ===
+-- 360 s first, because the poller backoff runs up to 300 s and the five
+   minute system cron needs two rounds before the first job of the app has
+   queued anything (pitfall 11) --
+indexierung runde=1 vorrat=0 2026-09-10T14:25:31Z
+arbeitsvorrat-leer ja
+-- and only NOW the verdicts, because skipped:no_text_layer is a temporary
+   verdict and reading it earlier would report the scan track as a failure --
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-09 09:40:29 (1725 minutes ago)
+=== Section 4: the ten cases, all of them, red ones counted ===
+eine gewoehnliche Suche antwortete nach 553ms
+sprachfall 1 ROT: a compound searched through one constituent did not bring back exactly one file
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 1 ROT: the compound hit is not the German PDF of the corpus
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 1 ROT: the subline carries no excerpt from the document
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 1 ROT: the excerpt carries markup, which the search dialog would show verbatim
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 2 ROT: Frist did not bring back exactly the notice of termination
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 2 ROT: the Frist hit is not the DOCX of the corpus
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 4 ROT: the singular did not find the plural
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 4 ROT: the inflection hit is not the ODT of the corpus
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[],"cursor":null}}}sprachfall 6 ROT: the word that stands in two files did not bring back two files
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"name":"File contents","isPaginated":false,"entries":[{"thumbnailUrl":"","title":"09-bescheid.pdf","subline":"Bescheid der unteren Verwaltungsbeh\u00f6rde  Die Grundst\u00fccksverkehrsgenehmigung wurde erteilt.  Dieser Bescheid ist kostenfrei","resourceUrl":"\/f\/52287","icon":"icon-search","rounded":false,"attributes":{"fileId":"52287","highlights":"[[0,8],[99,107]]"}}],"cursor":null}}}=== The balance of the ten cases ===
+sprachfaelle bestanden 6 von 10
+rote faelle 4, rote zusicherungen 9
+-- die roten Zusicherungen im Wortlaut, jede eine eigene Aussage --
+fall 1: a compound searched through one constituent did not bring back exactly one file
+fall 1: the compound hit is not the German PDF of the corpus
+fall 1: the subline carries no excerpt from the document
+fall 1: the excerpt carries markup, which the search dialog would show verbatim
+fall 2: Frist did not bring back exactly the notice of termination
+fall 2: the Frist hit is not the DOCX of the corpus
+fall 4: the singular did not find the plural
+fall 4: the inflection hit is not the ODT of the corpus
+fall 6: the word that stands in two files did not bring back two files
+-- die roten Faelle --
+fall 1
+fall 2
+fall 4
+fall 6
+=== Section 5: the classification of this number ===
+Fuer diese zehn Faelle gibt es KEINE v1.0-Entsprechung auf dieser Box:
+weder der Semantiklauf vom 05.09. noch die Nachmessung vom 07.09. hat sie
+gefahren. Die Zahl dieses Schrittes ist damit eine ERSTMESSUNG neben einem
+CI-Beleg und keine Vergleichszeile.
+ci-beleg: der letzte gruene integration.yml-Lauf ist unbekannt
+Der CI-Lauf misst dieselben zehn Faelle auf amd64 gegen eine frische Instanz
+mit dem PHP-Entwicklungsserver; dieser Schritt misst sie auf arm64 gegen eine
+All-in-One-Instanz mit vollem Vektorbestand. Gleich ist die Aussage, nicht die
+Umgebung.
+=== The skeleton setting, put back the way it was ===
+System config value skeletondirectory deleted
+(nicht gesetzt, wie vorher)
+sprachfaelle-ende 2026-09-10T14:25:37Z

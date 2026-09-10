@@ -1,0 +1,80 @@
+seitenroute-start 2026-09-10T14:06:28Z
+begriff: Bescheid+Antrag (zwei Woerter, siehe Kopf)
+wiederholungen je reihe: 20, davon aufwaermen: 5
+rangregel: Wert an Rang ceil(0,50 * n) bzw. ceil(0,95 * n) der sortierten
+Reihe, ohne Interpolation, wie Abschnitt 2 des Seitenbudget-Berichts
+erstmessung: diese Instanz HAT eine vectors.db mit 145.854 Vektoren, der
+Vorlaeuferbericht hatte keine; die Zahlen unten sind keine Vergleichszeile
+=== The cookie session, once, for rows A and C ===
+anmeldung-sitzung ja
+=== Reihe A: Seitenroute, Anmeldeweg SITZUNG, erste Seite ===
+adresse: https://loadtest.infranode.dev/apps/findling/?query=Bescheid+Antrag
+     20 200
+=== Reihe B: Seitenroute, Anmeldeweg BASIC-AUTH, erste Seite ===
+adresse: https://loadtest.infranode.dev/apps/findling/?query=Bescheid+Antrag
+     20 200
+=== Reihe C: Seitenroute, Anmeldeweg SITZUNG, Seite 3 ===
+adresse: https://loadtest.infranode.dev/apps/findling/?query=Bescheid+Antrag&page=3
+     20 200
+=== Reihe D: Dialogweg, Anmeldeweg BASIC-AUTH, limit=100 ===
+adresse: https://loadtest.infranode.dev/ocs/v2.php/search/providers/findling/search?term=Bescheid+Antrag&limit=100
+     20 200
+=== Die Auswertung, nach der Rangregel des Vorlaeuferberichts ===
+-- Reihe A: Seitenroute, SITZUNG, erste Seite --
+Reihe A anmeldeweg      sitzung
+Reihe A n                20
+Reihe A min              0,324 s
+Reihe A p50              0,328 s
+Reihe A p95              0,332 s
+Reihe A max              0,445 s
+Reihe A vorwert          0,122 s (Seitenbudget 6.3, gleicher Anmeldeweg)
+Reihe A abstand-vorwert  0,210 s
+Reihe A decke-aufruf     1,500 s, marge 1,168 s
+Reihe A decke-budget     3,000 s, marge 2,668 s
+Reihe A einordnung       teurer als der Vorlaeufer, und das ist die Erwartung:
+Reihe A                  jene Instanz hatte keine vectors.db (Fallstrick 10)
+-- Reihe B: Seitenroute, BASIC-AUTH, erste Seite --
+Reihe B anmeldeweg      basic-auth
+Reihe B n                20
+Reihe B min              0,750 s
+Reihe B p50              0,763 s
+Reihe B p95              0,775 s
+Reihe B max              0,780 s
+Reihe B vorwert          0,445 s (Seitenbudget 6.3, gleicher Anmeldeweg)
+Reihe B abstand-vorwert  0,330 s
+Reihe B decke-aufruf     1,500 s, marge 0,725 s
+Reihe B decke-budget     3,000 s, marge 2,225 s
+Reihe B einordnung       teurer als der Vorlaeufer, und das ist die Erwartung:
+Reihe B                  jene Instanz hatte keine vectors.db (Fallstrick 10)
+-- Reihe C: Seitenroute, SITZUNG, tiefe Seite --
+Reihe C anmeldeweg      sitzung
+Reihe C n                20
+Reihe C min              0,326 s
+Reihe C p50              0,329 s
+Reihe C p95              0,333 s
+Reihe C max              0,338 s
+Reihe C vorwert          0,122 s (Seitenbudget 6.3, gleicher Anmeldeweg)
+Reihe C abstand-vorwert  0,211 s
+Reihe C decke-aufruf     1,500 s, marge 1,167 s
+Reihe C decke-budget     3,000 s, marge 2,667 s
+Reihe C einordnung       teurer als der Vorlaeufer, und das ist die Erwartung:
+Reihe C                  jene Instanz hatte keine vectors.db (Fallstrick 10)
+-- Reihe D: Dialogweg, BASIC-AUTH, limit=100 --
+Reihe D anmeldeweg      basic-auth
+Reihe D n                20
+Reihe D min              0,734 s
+Reihe D p50              0,747 s
+Reihe D p95              0,769 s
+Reihe D max              0,825 s
+Reihe D vorwert          0,538 s (Seitenbudget 6.3, gleicher Anmeldeweg)
+Reihe D abstand-vorwert  0,231 s
+Reihe D decke-aufruf     1,500 s, marge 0,731 s
+Reihe D decke-budget     3,000 s, marge 2,231 s
+Reihe D einordnung       teurer als der Vorlaeufer, und das ist die Erwartung:
+Reihe D                  jene Instanz hatte keine vectors.db (Fallstrick 10)
+-- Die Trennung, die Befund M-03 verlangt --
+Der Preis des Anmeldewegs ist die Differenz der Reihen A und B am p95, und
+kein angemeldeter Nutzer bezahlt ihn. Auf der Vergleichsinstanz waren es
+0,318 s je Anfrage.
+seitenroute-vollstaendig ja
+seitenroute-ende 2026-09-10T14:07:26Z

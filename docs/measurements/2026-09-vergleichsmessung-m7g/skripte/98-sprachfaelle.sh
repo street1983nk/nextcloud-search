@@ -37,6 +37,19 @@
 # with mode 600 for the same reason, which is the shape aio_install_check.sh
 # uses.
 #
+# **What changed on 10.09.2026, during the run of plan 10-06, and why.** The occ
+# wrapper handed OC_PASS to nothing, exactly as in 99b-runden.sh, and the two
+# files carried the same first draft. Two layers eat an environment variable on
+# the way into the container and neither was crossed: sudo clears the
+# environment under env_reset, and docker exec does not pass one on of its own
+# accord. So occ user:add --password-from-env answered "--password-from-env
+# given, but NC_PASS/OC_PASS is empty!", the account never came into being, the
+# WebDAV upload had nowhere to go, and the script ended at its own check with 15
+# for the wrong reason. The wrapper now crosses both layers, with
+# --preserve-env=OC_PASS at the sudo and -e OC_PASS at the docker exec, and only
+# when the variable is set at all. The VALUE still becomes an argument nowhere,
+# which is what T-10-27 asks for.
+#
 # The corpus arrives over WebDAV, which is the path a user takes. A docker cp
 # into the data store would be faster and is expressly not the way: the user path
 # is the question.
@@ -104,7 +117,18 @@ trap 'rm -rf "$WORK"' EXIT
 : >"$WORK/fehler"
 : >"$WORK/fehlertexte"
 
-occ() { sudo docker exec --user www-data "$NEXTCLOUD" php occ "$@"; }
+# The wrapper carries OC_PASS across the two layers that would otherwise eat it,
+# and only when it is set: sudo clears the environment under env_reset, and
+# docker exec passes none on of its own accord. The value stays out of every
+# argument list, which is what T-10-27 asks for.
+occ() {
+    if [ -n "${OC_PASS:-}" ]; then
+        sudo --preserve-env=OC_PASS docker exec -e OC_PASS \
+            --user www-data "$NEXTCLOUD" php occ "$@"
+    else
+        sudo docker exec --user www-data "$NEXTCLOUD" php occ "$@"
+    fi
+}
 
 # The work stock out of one call of the status command. Two blocks of one output
 # rather than two calls, because asking twice would let two answers disagree.
