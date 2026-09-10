@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Was die Vorpruefung des Fremdbestands auf dieser Instanz wirklich misst.
 
 Der Lauf vom 10.09.2026 hat vier Faelle als ROT gemeldet, und DI-10-02 nennt

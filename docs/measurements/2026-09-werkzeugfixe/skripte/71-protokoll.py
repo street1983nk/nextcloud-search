@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Die Abbrueche im Nextcloud-Protokoll im Zeitfenster des Lastlaufs, gezaehlt.
 
 Zweite, vom Lastwerkzeug unabhaengige Zaehlung derselben Sache (DI-10-01). Sie
