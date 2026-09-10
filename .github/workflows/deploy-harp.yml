@@ -42,6 +42,18 @@ on:
       - '.github/actions/setup-test-nc/**'
       - 'scripts/release/**'
   workflow_dispatch:
+    inputs:
+      # Empty is the everyday case and the only case a push or a pull request
+      # can produce: the store install path builds both archives itself, out of
+      # the commit under test. Set to a release tag it installs the bytes that
+      # tag published instead, which is the only way to say anything about what
+      # a stranger actually downloads. Plan 11-07 uses the same input for the
+      # upgrade proof, so this is built once and used twice.
+      release_tag:
+        description: 'Install the store archives of this release tag (for example v1.0.3) instead of building them; empty builds them locally'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -257,6 +269,12 @@ jobs:
       TESTUSER_PASS: 'findling-ci-canary-2026'
       LOCAL_REGISTRY: 'localhost:5000'
       LOCAL_IMAGE_TAG: 'citest'
+
+      # The dispatch input, resolved once here so that every step below asks
+      # one name instead of reaching into the inputs context four times. On a
+      # push and on a pull request the context is empty and this renders to the
+      # empty string, which is the everyday case: build the archives locally.
+      RELEASE_TAG: ${{ inputs.release_tag }}
 
       # The budget of the zero config proof, in seconds, and a named variable
       # because threat T-06.1-52 is about somebody raising exactly this number
@@ -1227,12 +1245,52 @@ jobs:
       # commit, below is the release.
       # =====================================================================
 
+      # The occ recorder of the store pass, and it is a step of its own since
+      # plan 11-04 rather than the head of the step below. The reason is the
+      # release asset mode that plan adds: the step below runs only when the
+      # archives are built locally, and the wrapper is needed either way,
+      # because "Store install 7" states which commands ran between the
+      # installation and the first hit and reads this log to state it. A
+      # recorder that disappears with the build step would have made the zero
+      # config proof depend on how the archives arrived.
+      - name: Store install 0, the occ recorder every step of the store pass goes through
+        run: |
+          # Every occ call of the store install path goes through this wrapper,
+          # and the reason is the zero config proof further down: it has to be
+          # able to state which commands ran between the installation and the
+          # first hit, and a list somebody maintains by hand is a list that goes
+          # stale. The wrapper records and then runs. What it cannot see is a
+          # direct ./occ call somebody adds later without it, and that limit is
+          # stated here rather than left to be discovered.
+          echo "OCC_LOG=${RUNNER_TEMP}/occ-calls.txt" >> "${GITHUB_ENV}"
+          : > "${RUNNER_TEMP}/occ-calls.txt"
+          cat > "${RUNNER_TEMP}/nc-occ.sh" <<'SH'
+          #!/bin/sh
+          set -eu
+          printf '%s\n' "occ $*" >> "${OCC_LOG}"
+          exec timeout 600 ./occ "$@"
+          SH
+          chmod +x "${RUNNER_TEMP}/nc-occ.sh"
+
       # The archives are built here rather than downloaded, and the reason is
       # release.yml itself: it runs on a tag or on a manual dispatch and it holds
       # both signing keys, so it does not run on a push and cannot run on a pull
       # request at all (docs/certificates.md forbids exactly that). An artifact
       # from it would therefore be missing on every event this job has, or would
       # come from a different commit, which is worse.
+      #
+      # Plan 11-04 adds the one case where that reasoning does not hold, and it
+      # is an input rather than a rule change: with release_tag set, the two
+      # archives come from the GitHub release of that tag, which is the only
+      # way this job can install the bytes a stranger installs. That mode is
+      # never automatic. On every push and every pull request the input is
+      # empty and this step runs exactly as it always did, because a build
+      # strategy that changes with the weather is not evidence about either
+      # strategy. The two steps are mutually exclusive by construction, and the
+      # archive is never built twice: tar.gz is not byte reproducible (the
+      # sibling project measured 45710 bytes locally against 45546 published on
+      # its 0.1.8 release), so "build it too and compare" would produce a
+      # difference that says nothing.
       #
       # What is emphatically NOT done is a second packing path. The staging rules
       # and the tar options are in scripts/release/store-archive.sh and both
@@ -1262,25 +1320,17 @@ jobs:
       # because nothing here may hold the key. release.yml proves the other half
       # instead, by fetching both certificates and comparing their public key
       # fingerprints against docs/certificates.md before it signs anything.
+      #
+      # And the one case where the substitute is not needed at all: with
+      # release_tag set, the companion archive comes from the release and
+      # carries the signature release.yml made with the real app key, issued by
+      # the Nextcloud Code Signing Root Authority, which the server checkout
+      # already trusts. The throwaway identity below is therefore minted in the
+      # local build mode only, and the release mode verifies against the same
+      # anchor a user's instance verifies against.
       - name: Store install 1, build both release archives and sign the companion
+        if: env.RELEASE_TAG == ''
         run: |
-          # Every occ call of the store install path goes through this wrapper,
-          # and the reason is the zero config proof further down: it has to be
-          # able to state which commands ran between the installation and the
-          # first hit, and a list somebody maintains by hand is a list that goes
-          # stale. The wrapper records and then runs. What it cannot see is a
-          # direct ./occ call somebody adds later without it, and that limit is
-          # stated here rather than left to be discovered.
-          echo "OCC_LOG=${RUNNER_TEMP}/occ-calls.txt" >> "${GITHUB_ENV}"
-          : > "${RUNNER_TEMP}/occ-calls.txt"
-          cat > "${RUNNER_TEMP}/nc-occ.sh" <<'SH'
-          #!/bin/sh
-          set -eu
-          printf '%s\n' "occ $*" >> "${OCC_LOG}"
-          exec timeout 600 ./occ "$@"
-          SH
-          chmod +x "${RUNNER_TEMP}/nc-occ.sh"
-
           # The throwaway code signing identity. Two days of validity, because a
           # certificate that expired between signing and checking would fail with
           # a message about a signature and not about a clock.
@@ -1354,10 +1404,69 @@ jobs:
           ( cd findling-src && sh scripts/release/store-archive.sh pack \
               "${RUNNER_TEMP}/store-backend" findling_backend "${RUNNER_TEMP}/store-dist/findling_backend.tar.gz" )
 
-          # The same content proof release.yml runs, over the archives this job
-          # is about to install from. An archive with a tests directory in it is
-          # a different product from the one that was reviewed, and this is the
-          # place where that would surface before it is installed.
+      # The other way the two archives can arrive, and the only way that can say
+      # anything about what a stranger downloads. Everything after this step is
+      # identical in both modes, because the two modes differ in where the bytes
+      # came from and in nothing else.
+      #
+      # The URL is the one store-submit.yml hands the store
+      # (https://github.com/<repo>/releases/download/<tag>/<app>.tar.gz), spelled
+      # the same way and built from GITHUB_REPOSITORY for the same reason: a
+      # second way to name the same asset would be a second inventory, and the
+      # store fetches exactly this one.
+      #
+      # A failed download ends the job. There is deliberately no fallback to the
+      # local build, because a run that silently installs something other than
+      # what was asked for is worse than a red run: it would report a green
+      # store install for a tag whose assets are missing.
+      - name: Store install 1 from the release, load both archives instead of building them
+        if: env.RELEASE_TAG != ''
+        run: |
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}"
+          rm -rf "${RUNNER_TEMP}/store-php" "${RUNNER_TEMP}/store-backend" "${RUNNER_TEMP}/store-dist"
+          mkdir -p "${RUNNER_TEMP}/store-dist"
+          for app in findling findling_backend; do
+            url="${base}/${app}.tar.gz"
+            echo "loading ${url}"
+            # -f so that an HTML error page never lands in the file: without it
+            # a missing asset would fail three steps later with a message about
+            # tar and not about a missing release.
+            if ! curl -sfL --retry 3 --retry-delay 5 --retry-connrefused \
+                 -o "${RUNNER_TEMP}/store-dist/${app}.tar.gz" "${url}"; then
+              echo "::error::${url} could not be loaded, and a failed download is never a quiet fallback to the local build"
+              exit 1
+            fi
+            if [ ! -s "${RUNNER_TEMP}/store-dist/${app}.tar.gz" ]; then
+              echo "::error::${url} answered with an empty file"
+              exit 1
+            fi
+          done
+
+          # Which bytes were installed, in the log and in the summary. The
+          # upgrade proof of plan 11-07 installs a released version and then the
+          # next one, and a reader of either run has to be able to say which
+          # archive that was without trusting the tag to have stayed put.
+          ls -l "${RUNNER_TEMP}/store-dist"
+          sha256sum "${RUNNER_TEMP}/store-dist/findling.tar.gz" \
+                    "${RUNNER_TEMP}/store-dist/findling_backend.tar.gz"
+          {
+            echo ""
+            echo "Store install on ${{ matrix.server-version }} (${{ matrix.runner }}): the archives were"
+            echo "loaded from the release \`${RELEASE_TAG}\` and not built here."
+            sha256sum "${RUNNER_TEMP}/store-dist/findling.tar.gz" \
+                      "${RUNNER_TEMP}/store-dist/findling_backend.tar.gz" \
+              | sed 's|^|    |'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      # The content proof, and it runs over whichever archives arrived. That is
+      # the whole reason it is a step of its own since plan 11-04: a loaded
+      # archive is not correct because it was loaded, and the release mode would
+      # otherwise be the one path into an installation that nothing checked.
+      # An archive with a tests directory in it is a different product from the
+      # one that was reviewed, and this is the place where that surfaces before
+      # it is installed.
+      - name: Store install 1 content proof, over whichever archives arrived
+        run: |
           fail=0
           ( cd findling-src && sh scripts/release/store-archive.sh assert-contents \
               "${RUNNER_TEMP}/store-dist/findling.tar.gz" findling 1 ) || fail=1
