@@ -220,7 +220,47 @@ Plans:
   4. Die Store-Texte sind kurze Faktenlisten nach der Kurztext-Regel, der Owner hat den Entwurf vor der Einreichung gesehen und abgenommen
   5. v1.1 ist eingereicht, und die Release-Artefakte im Repo entsprechen dem, was eingereicht wurde
 
-**Plans**: TBD
+**Plans**: 13 Plaene in 8 Wellen
+
+Die Wellen 1 bis 3 kosten keine Box-Minute. Zwei Owner-Fragen stehen bewusst vorn (Plan 11-01): der Umfang von DI-07-03 entscheidet, ob der franzoesische Katalog 173 oder 174 Schluessel traegt, und die Lesart von D-11 entscheidet ueber ausgelieferte Metadaten. Die EINE Box-Anfahrt (D-01, Deckel rund 4 h / 0,50 USD) beweist nur die zwei Werkzeug-Fixe; der Upgrade-Beweis liegt in CI, weil eine zweite Nextcloud am Mess-Docker nach D-02 ausgeschlossen ist. Der Abbau der Box ist ein eigener Plan mit eigener Bestaetigung (D-03). Plan 11-13 ist bedingt: er baut die Abhilfe zu DI-07-03 und laeuft nur, wenn der Owner in 11-01 die Option v1-a waehlt; bei v1-b wird er dokumentiert uebersprungen. Weil er den 174. Katalogschluessel setzt, den 11-05 aus der Datei zaehlt, steht er vor 11-05, und die Wellen 3 bis 7 ruecken um eine Stelle nach hinten.
+
+Plans:
+**Wave 1**
+
+- [ ] 11-01-PLAN.md , Vorentscheide: DI-07-03-Umfang und die Lesart von D-11 zum Versionsfenster (Welle 1, Checkpoint-Plan)
+- [ ] 11-02-PLAN.md , Werkzeug-Fix DI-10-01 (--min-hits, hits_per_request) und die Ratsche gegen die D-04-Zusage (Welle 1)
+- [ ] 11-03-PLAN.md , DI-10-02: Nachfolgefassung des Sprachfall-Skripts mit Fremdbestand-Vorpruefung und dreiwertigem Urteil (Welle 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 11-04-PLAN.md , deploy-harp: nativer arm64-Ast und der Modus, der Release-Assets laedt (Welle 2)
+- [ ] 11-06-PLAN.md , die EINE Box-Anfahrt: Freigabe mit Deckel, Messblock A und B, Box wieder angehalten (Welle 2, Checkpoint-Plan)
+- [ ] 11-13-PLAN.md , bedingt bei Entscheid v1-a: der Zustand "Kandidaten vom Recheck verworfen" im Dienst, auf der Ergebnisseite und als 174. Katalogschluessel (Welle 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 11-05-PLAN.md , die vollstaendige FR-Uebersetzungstabelle und das FR-Gate, Teil 1 (Welle 3, Checkpoint-Plan)
+- [ ] 11-07-PLAN.md , der Upgrade-Beweis 1.0.3 auf 1.1.0 Ende zu Ende in deploy-harp, stable34 (Welle 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 11-08-PLAN.md , fr.json und fr.js aus der abgenommenen Tabelle, plus die vier Katalog-Gates (Welle 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 11-09-PLAN.md , Store-Texte mit den v1.1-Zahlen, Text-Abnahme und FR-Gate, Teil 2 (Welle 5, Checkpoint-Plan)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 11-10-PLAN.md , die drei Audits der Phase und die vier geerbten Befunde entschieden (Welle 6)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 11-11-PLAN.md , Versionsbump in einem Commit, Tag, ghcr-Pruefung, Store-Submission (Welle 7, Checkpoint-Plan)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 11-12-PLAN.md , EBS-Snapshot, gesicherte Historie und der Abbau der Box (Welle 8, Checkpoint-Plan)
 
 ## Progress
 
@@ -233,7 +273,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | 7/7 | Complete    | 2026-09-10 |
-| 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
+| 11. Haertung und Store-Einreichung v1.1 | 0/13 | Planned | - |
 
 ## Requirement Coverage
 

@@ -1448,9 +1448,15 @@ und im Report:
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Alle sechs Fragen sind in der Planung der Phase 11 geroutet. Jede traegt
+unter ihrer Ueberschrift die Zeile, die sagt, wohin sie gegangen ist.
 
 ### 1. D-06 gegen die Kurztext-Regel: wie viele Zahlen darf der Store-Text tragen?
+
+RESOLVED: geroutet nach Plan 11-09, der Text-Checkpoint legt dem Owner beide
+Fassungen vor.
 
 **Was wir wissen:** D-06 verlangt, dass in den v1.1-Store-Texten die neuen Messzahlen
 fuehren (Grundlast 103,2 MB, anon-Spitze 1.764,2 MB) und die v1.0-Zahlen als datierter
@@ -1478,6 +1484,9 @@ respektiert D-08 (Vorbehalte nur im Bericht).
 
 ### 2. `stable35` mit `tolerate-failure` und D-10
 
+RESOLVED: geroutet nach Plan 11-01 als Vorentscheid V-2; die Umsetzung des
+Entscheids liegt in 11-04 (Matrix und Lockstep-Test) und 11-11 (Versionsbump).
+
 **Was wir wissen:** `deploy-harp.yml` traegt am `stable35`-Eintrag einen ausfuehrlichen
 Kommentar mit **RE-CHECK DATE: 2026-09-16** und dem Satz: *"Der Plan, der die
 Nachverfolgung haelt, ist 06-12, die Store-Einreichung, weil es der naechste Plan nach
@@ -1498,6 +1507,10 @@ schon einmal gruen (Lauf 34114937751). **Das braucht eine Owner-Bestaetigung**, 
 gegen den Wortlaut des Kommentars ein Aufschub ist.
 
 ### 3. DI-07-03: bekommt der Nutzer eine Meldung statt einer leeren Liste?
+
+RESOLVED: geroutet nach Plan 11-01 als Vorentscheid V-1; bei v1-a baut der
+bedingte Plan 11-13 den Zustand und den Schluessel, bei v1-b wird 11-13
+dokumentiert uebersprungen und 11-10 entscheidet den Befund als LOW.
 
 **Was wir wissen:** Auf einer Instanz mit grossem Fremdbestand findet ein Nutzer mit
 wenigen Dateien seine eigenen nicht, sobald seine Begriffe im Fremdbestand haeufig sind.
@@ -1522,6 +1535,8 @@ liest ihn mit.
 
 ### 4. Wird der Messsatz dreisprachig?
 
+RESOLVED: geroutet nach Plan 11-09, Task 2, mit dem Gate ueber drei Wortlaute.
+
 **Was wir wissen:** `README.md` und `README.fr.md` tragen heute nur die qualitative
 Zusage, `README.en.md` den vollen Messsatz. Es gibt kein Gate, das die drei READMEs
 gegeneinander haelt. `CLAUDE.md` verlangt, dass alle drei gepflegt werden.
@@ -1536,6 +1551,9 @@ eine Luecke, die heute nur eine Regel ist, und sie faellt in dieselbe Textrunde,
 ohnehin verlangt. **Dem Owner am Text-Checkpoint mit vorlegen.**
 
 ### 5. Die vier Archive im Repository-Wurzelverzeichnis
+
+RESOLVED: geroutet nach Plan 11-10, Task 3, Herkunft feststellen und
+entscheiden.
 
 **Was wir wissen:** `findling.tar.gz` (238.827 Byte), `findling_backend.tar.gz`
 (30.976 Byte), `findling.crt`, `findling_backend.crt` liegen im Wurzelverzeichnis, alle
@@ -1556,6 +1574,9 @@ wiederholt sich das Problem beim naechsten Release. **Kleine Frage, aber sie ste
 in einem Erfolgskriterium.**
 
 ### 6. Zeitpunkt des Abbaus gegen die Nachvollziehbarkeit der Abgabe
+
+RESOLVED: geroutet nach Plan 11-12, Task 3, der Abbau-Checkpoint stellt die
+Frage nach Store-Stand und Wartezeit.
 
 **Was wir wissen:** D-03 setzt den Abbau ans Ende der Phase, nach Abgabe und
 Fix-Beweisen. Eine Store-Abgabe kann eine Rueckfrage der Store-Betreiber nach sich
