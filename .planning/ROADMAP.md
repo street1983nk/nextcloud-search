@@ -196,7 +196,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 10-06-PLAN.md , die Messungen nach dem Lauf, DI-07-02 und DI-07-03, das Kernaussage-Blatt, Abnahme der Zahlen, Box angehalten (Welle 6, Checkpoint-Plan)
+- [x] 10-06-PLAN.md , die Messungen nach dem Lauf, DI-07-02 und DI-07-03, das Kernaussage-Blatt, Abnahme der Zahlen, Box angehalten (Welle 6, Checkpoint-Plan)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -228,7 +228,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
-| 10. Vergleichsmessung auf der AWS-Box | 5/7 | In Progress|  |
+| 10. Vergleichsmessung auf der AWS-Box | 6/7 | In Progress|  |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
 
 ## Requirement Coverage
