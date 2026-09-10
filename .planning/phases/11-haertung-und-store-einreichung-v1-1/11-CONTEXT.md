@@ -41,10 +41,13 @@ Requirement: REL-01.
   per D-04 nicht vorgesehen.)
 
 ### Store-Texte und Franzoesisch
-- **D-06:** In den v1.1-Store-Texten fuehren die NEUEN Messzahlen (Grundlast 103,2 MB,
-  anon-Spitze 1.764,2 MB), die v1.0-Zahlen stehen als datierter Vergleich daneben
-  (Muster der 06.1-Korrektur b4a18c5). Drei-Stellen-Regel beachten: README.en.md +
-  beide info.xml (Gate haelt sie deckungsgleich), dazu README.fr.md in derselben Runde.
+- **D-06 (praezisiert 10.09. nach Research):** Der Store-Text traegt genau EINE
+  Kernzahl, die staerkste neue (Grundlast 103,2 MB); der datierte Alt-Neu-Vergleich
+  steht im README, auf das der Store-Text verweist. Damit bleiben Kurztext-Regel
+  ("hoechstens eine Zahl") und Fortschritts-Story beide intakt. Research-Befund
+  beachten: das Gate scan_measured_sentence bindet den Messsatz seit 07.09. an
+  README.en.md ALLEIN; beide info.xml tragen nur die qualitative 2-GB-Zusage.
+  README.fr.md in derselben Runde nachziehen.
 - **D-07:** FR-GATE: Der Owner (franzoesischer Muttersprachler) prueft ALLE
   franzoesischen Zeichenketten (fr.json/fr.js) und den franzoesischen Store-Text als
   eigenen blockierenden Checkpoint VOR der Einreichung.
@@ -60,6 +63,10 @@ Requirement: REL-01.
 - **D-10:** Einreichung SO FRUEH WIE MOEGLICH: sobald alle Gates gruen sind und der
   Owner Texte + FR-Gate abgenommen hat, wird eingereicht, ohne auf den ISV-Call
   (14.09.) zu warten. Das Zielfenster 16.-22.09. ist die Obergrenze, kein Startsignal.
+- **D-11 (10.09. nach Research):** Das Versionsfenster von v1.1.0 bleibt bei max
+  Nextcloud 34 (NC 35 ist rc4). Der stable35-RE-CHECK-Vermerk vom 16.09. in
+  deploy-harp.yml bleibt eigener Merkposten; ein spaeteres 1.1.x hebt das Fenster,
+  wenn 35 final ist. Die Einreichung wartet NICHT auf den RE-CHECK.
 
 ### Claude's Discretion
 - Reihenfolge und Wellenschnitt der Plaene; Zuschnitt der Haertungstests jenseits des
