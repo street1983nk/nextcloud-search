@@ -1,0 +1,103 @@
+erhoben 2026-09-10T23:38:26Z
+lauf: messblock A der werkzeug-anfahrt, plan 11-06
+STUFE16-BEGINN 2026-09-10T23:35:10Z
+STUFE16-ENDE 2026-09-10T23:36:06Z
+STUFE08-BEGINN 2026-09-10T23:36:23Z
+STUFE08-ENDE 2026-09-10T23:36:51Z
+
+zaehlung der abbrueche im nextcloud-protokoll
+muster: cURL error 28
+protokoll: /var/www/html/data/nextcloud.log
+gezaehlt wird nach reqId, also nach Vorgang, nicht nach Zeile
+
+=== fenster stufe16 ===
+beginn 2026-09-10T23:35:10Z
+ende   2026-09-10T23:36:06Z
+curl-error-28-vorgaenge 14
+curl-error-28-zeilen 28
+  davon zeilen app=app_api 14
+  davon zeilen app=findling 14
+-- die Vorgaenge, je einer mit seiner ersten Zeile --
+  2026-09-10T23:35:16Z reqId=TARhABoHn9bZycQvWcjo app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1501 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:16Z reqId=iBKipCM7nEtoMOZ5zFAM app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1502 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:16Z reqId=q6ZCF2zB5Ke8xvnNaivn app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1502 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:16Z reqId=I5vMFynNrX5KeatwQjFw app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1502 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:16Z reqId=93yuoR70hIsQmBTdkvUQ app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1503 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:16Z reqId=YueSRvPieC6uQ9waTHTk app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1503 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:16Z reqId=G6qmlyVPsDyAfK8uFHdR app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1503 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:16Z reqId=V9EqXFCZq9PkrcKl9MBT app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1502 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:16Z reqId=1PUY1yKQA8lzqM8GwzIg app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1503 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:16Z reqId=lG1y39bylbJE6VYhdmMV app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1504 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:16Z reqId=0o81cgyZ2cxaBuzreiyO app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1509 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:17Z reqId=lvgvMfR8JeMjRapl6A3R app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1501 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:17Z reqId=8xlsyyJnyri2kXUrJKSt app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1501 milliseconds with 0 bytes received (see https://c
+  2026-09-10T23:35:17Z reqId=Xcwn852k9oRB2LOr0gno app=app_api
+    Error during request to ExApp findling_backend: cURL error 28: Operation timed out after 1501 milliseconds with 0 bytes received (see https://c
+
+=== fenster stufe08 ===
+beginn 2026-09-10T23:36:23Z
+ende   2026-09-10T23:36:51Z
+curl-error-28-vorgaenge 0
+curl-error-28-zeilen 0
+-- die Vorgaenge, je einer mit seiner ersten Zeile --
+
+=== Warum die beiden Zaehlungen nicht dieselbe Zahl tragen, gemessen ===
+
+Der neue Zaehler des Werkzeugs meldet auf Stufe 16 dreissig Fehlschlaege, das
+Protokoll traegt im selben Fenster vierzehn abgebrochene Aufrufe. Die Luecke ist
+kein Zaehlfehler, sondern eine zweite Ursache derselben Erscheinung, und sie ist
+hier gemessen und nicht vermutet.
+
+-- Vorpruefung: jeder der zehn Begriffe einzeln, ohne Last, limit 5 --
+   Vertrag beenden        treffer=6   653 ms
+   Kuendigung             treffer=6   519 ms
+   Widerspruch einlegen   treffer=6   627 ms
+   Bescheid               treffer=6   525 ms
+   Rechnung bezahlen      treffer=6   616 ms
+   Mahnung                treffer=0   486 ms
+   Termin absagen         treffer=6   625 ms
+   Mitteilung             treffer=6   524 ms
+   Antrag stellen         treffer=6   617 ms
+   Beschluss              treffer=6   526 ms
+   erhoben 2026-09-10T23:41Z, gegen dieselbe Instanz, Konto lasttest
+
+Der Begriff "Mahnung" traegt im Lastkorpus keinen einzigen Treffer. Er faellt
+unter --min-hits 1 und wird als EmptyResultGroup gezaehlt, obwohl nichts
+abgebrochen ist. Die Suche antwortet in 486 ms und ist erfolgreich; sie findet
+nur nichts.
+
+-- wie oft jeder Begriff je Stufe an die Reihe kommt --
+Die Begriffe rotieren mit TERMS[(runde*nebenlaeufigkeit + platz) % 10]:
+   nebenlaeufigkeit 16, 10 runden:  Mahnung 16 mal von 160
+   nebenlaeufigkeit  8, 10 runden:  Mahnung  8 mal von  80
+   nebenlaeufigkeit  1, 10 runden:  Mahnung  1 mal von  10
+
+-- die Rechnung, je Stufe --
+   stufe 16:  16 (Begriff ohne Treffer) + 14 (Abbrueche im Protokoll) = 30
+              gemeldet vom Werkzeug: 30      DECKUNGSGLEICH
+   stufe 08:   8 (Begriff ohne Treffer) +  0 (Abbrueche im Protokoll) =  8
+              gemeldet vom Werkzeug:  9      EINE ANFRAGE MEHR
+   ruhe 01:    1 (Begriff ohne Treffer) +  0 (Abbrueche im Protokoll) =  1
+              gemeldet vom Werkzeug:  1      DECKUNGSGLEICH
+
+-- die eine Anfrage der Stufe 8, die offen bleibt --
+Das Protokoll traegt zwischen 23:36:06Z und 23:37:30Z, also im Fenster der
+Stufe 8 und ueber eine Minute darueber hinaus, KEINE einzige Zeile der Apps
+findling oder app_api. Diese eine Anfrage hat also eine leere Ergebnisgruppe
+bekommen, ohne dass irgendwo ein Abbruch entstanden ist. Vermutung, als
+Vermutung beschriftet: das ist der Befund DI-07-03, die Kandidatenschleife holt
+keine zweite Runde nach, und der Rechteabgleich verwirft unter Last die
+Kandidaten einer Runde vollstaendig. Nachgewiesen ist das hier nicht.
