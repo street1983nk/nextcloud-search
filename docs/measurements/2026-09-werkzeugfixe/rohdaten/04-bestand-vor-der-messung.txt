@@ -1,0 +1,92 @@
+bestand 2026-09-10T21:53:27Z
+=== Die Maschine ===
+arch=aarch64 cores=2
+               total        used        free      shared  buff/cache   available
+Mem:           3.8Gi       1.1Gi       1.9Gi       275Mi       1.2Gi       2.7Gi
+MemTotal:        3989432 kB
+-- die harte Speichergrenze des Kerns, zurueckgelesen --
+BOOT_IMAGE=/vmlinuz-7.0.0-1012-aws root=PARTUUID=c5b109a8-81d8-4d10-8ddb-fe7c835a13a0 ro console=tty1 console=ttyS0 nvme_core.io_timeout=4294967295 mem=4G panic=-1
+=== Nextcloud-Instanzen an diesem Docker-Dienst (D-02) ===
+nc_app_findling_backend  ghcr.io/street1983nk/findling_backend:dev  Up About a minute
+findling-registry  registry:2  Up 2 minutes
+nextcloud-aio-apache  ghcr.io/nextcloud-releases/aio-apache:latest  Up 2 minutes (healthy)
+nextcloud-aio-nextcloud  ghcr.io/nextcloud-releases/aio-nextcloud:latest  Up 2 minutes (healthy)
+nextcloud-aio-redis  ghcr.io/nextcloud-releases/aio-redis:latest  Up 2 minutes (healthy)
+nextcloud-aio-database  ghcr.io/nextcloud-releases/aio-postgresql:latest  Up 2 minutes (healthy)
+nextcloud-aio-harp  ghcr.io/nextcloud-releases/aio-harp:latest  Up 2 minutes (healthy)
+nextcloud-aio-notify-push  ghcr.io/nextcloud-releases/aio-notify-push:latest  Up 2 minutes (healthy)
+nextcloud-aio-mastercontainer  nextcloud/all-in-one:latest  Up 2 minutes (healthy)
+nextcloud-instanzen 1
+=== Der Container nach der DI-05-36-Heilung ===
+Image=ghcr.io/street1983nk/findling_backend:dev StartedAt=2026-09-10T21:52:07.601931454Z Memory=2147483648 MemorySwap=2147483648 RestartCount=0 OOMKilled=false
+-- die harte Grenze aus der cgroup, nicht aus der Zusage --
+memory.max=2147483648
+-- memory.events --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Der Pin auf den Apache-Container (wechselt bei JEDEM Start) ===
+172.18.0.4 loadtest.infranode.dev
+apache-jetzt 172.18.0.4
+=== Der Index, gezaehlt vom Container (die Abbruchbedingung) ===
+{
+ "vectors_db_pfad": "/nc_app_findling_backend_data/vectors.db",
+ "vectors_db_byte": 64126976,
+ "vectors_db_wal_byte": 32768,
+ "chunks": 146197,
+ "dokumente_mit_vektor": 52137,
+ "byte_je_dokument": 1230.6,
+ "chunks_je_dokument": 2.804,
+ "state_db_byte": 16338944,
+ "verdikte": {
+  "failed": 6,
+  "indexed": 52137,
+  "skipped": 44
+ },
+ "zeichen_gesamt": 1397880498,
+ "tantivy_pfad": "/nc_app_findling_backend_data/index",
+ "tantivy_byte": 786508818,
+ "vektor_anteil_am_tantivy_prozent": 8.16
+}
+=== Die Zaehlung der PHP-Haelfte, zum Vergleich ===
+-- indexed bleibt hier bauartbedingt 0, siehe den Hinweis des Befehls --
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-09 09:40:29 (2172 minutes ago)
+bestand-ende 2026-09-10T21:53:28Z
+
+=== Die Abweichung von der Abbruchbedingung, aufgeschluesselt ===
+-- erwartet nach Plan 11-06: 52.111 indexiert, 37 uebersprungen, 0 fehlgeschlagen
+-- gemessen:                 52.137 indexiert, 44 uebersprungen, 6 fehlgeschlagen
+-- Differenz:                     +26              +7                 +6  = 39
+-- Verdikte je Nutzer, ueber die acl-Tabelle --
+   admin        indexed  41
+   lasttest     indexed  52070
+   sprachfall   indexed  26
+-- die sechs fehlgeschlagenen Dateien, mit ihrem Grund --
+   corpus/06-zero-bytes.pdf                 empty_file
+   corpus/24-abgeschnittener-trailer.pdf    corrupt
+   corpus/26-riesige-seitenzahl.pdf         corrupt
+   corpus/27-nullbytes-im-kopf.pdf          corrupt
+   corpus/28-ohne-seiten.pdf                corrupt
+   corpus/33-seitenbaum-zyklus.pdf          corrupt
+-- der Lastkorpus selbst, unveraendert --
+   loadtest/ indexed  49980
+   loadtest/ skipped  20
+-- Befund: die 39 zusaetzlichen Enden gehoeren dem Konto sprachfall, also dem
+-- 39-Datei-Referenzkorpus, den der Lauf vom 10.09. nach der Vergleichsmessung
+-- hochgeladen hat. Die sechs fehlgeschlagenen sind die sechs absichtlich
+-- kaputten Dateien dieses Korpus. Der Lastkorpus ist unveraendert.
