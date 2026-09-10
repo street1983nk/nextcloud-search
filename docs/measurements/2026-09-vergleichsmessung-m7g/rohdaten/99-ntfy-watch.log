@@ -1,3 +1,8 @@
 2026-09-09T10:04:43Z meldekette scharf, modus=start
 2026-09-09T10:04:43Z meldekette scharf, modus=warten, prueft alle 300 s, deckel 20 h
 2026-09-09T10:04:43Z ntfy versucht, http=200, prio=default, titel=Findling 10-04 Volllauf gestartet
+2026-09-10T06:04:44Z ntfy versucht, http=200, prio=high, titel=Findling 10-04 Volllauf ueber 20 h
+2026-09-10T06:04:44Z DECKEL 20h ueberschritten
+2026-09-10T13:05:11Z ntfy versucht, http=200, prio=default, titel=Findling 10-04 Volllauf fertig
+2026-09-10T13:09:44Z 00-FERTIG gesehen nach 27.1h
+2026-09-10T13:09:45Z ntfy versucht, http=200, prio=default, titel=Findling 10-04 Volllauf fertig

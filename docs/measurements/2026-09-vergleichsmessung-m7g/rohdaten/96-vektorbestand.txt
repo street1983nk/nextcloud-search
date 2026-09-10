@@ -1,0 +1,46 @@
+vektorbestand 2026-09-10T13:05:10Z
+-- the files of the data store, with their sizes --
+total 87160
+drwxr-xr-x 5 findling findling     4096 Sep  9 09:40 .
+drwxr-xr-x 1 root     root         4096 Sep  9 09:42 ..
+-rw-r--r-- 1 findling findling        0 Sep  9 09:32 armed.marker
+drwxr-xr-x 2 findling findling     4096 Sep  9 09:32 dict
+drwxr-xr-x 2 findling findling    12288 Sep 10 12:36 index
+-rw-r--r-- 1 findling findling       80 Sep  9 09:32 instance.json
+-rw-r--r-- 1 findling findling 16330752 Sep 10 12:29 state.db
+-rw-r--r-- 1 findling findling    32768 Sep 10 12:35 state.db-shm
+-rw-r--r-- 1 findling findling  4152992 Sep 10 12:36 state.db-wal
+drwxr-xr-x 2 findling findling     4096 Sep 10 12:36 tmp
+-rw-r--r-- 1 findling findling 64126976 Sep 10 12:35 vectors.db
+-rw-r--r-- 1 findling findling    32768 Sep 10 12:35 vectors.db-shm
+-rw-r--r-- 1 findling findling  4536152 Sep 10 12:36 vectors.db-wal
+0	/nc_app_findling_backend_data/armed.marker
+3284251	/nc_app_findling_backend_data/dict
+786506160	/nc_app_findling_backend_data/index
+80	/nc_app_findling_backend_data/instance.json
+16330752	/nc_app_findling_backend_data/state.db
+32768	/nc_app_findling_backend_data/state.db-shm
+4152992	/nc_app_findling_backend_data/state.db-wal
+0	/nc_app_findling_backend_data/tmp
+64126976	/nc_app_findling_backend_data/vectors.db
+32768	/nc_app_findling_backend_data/vectors.db-shm
+4536152	/nc_app_findling_backend_data/vectors.db-wal
+-- chunks, documents and bytes per document, over 42d-bestand.py --
+{
+ "vectors_db_pfad": "/nc_app_findling_backend_data/vectors.db",
+ "vectors_db_byte": 64126976,
+ "vectors_db_wal_byte": 4568920,
+ "chunks": 146171,
+ "dokumente_mit_vektor": 52111,
+ "byte_je_dokument": 1318.3,
+ "chunks_je_dokument": 2.805,
+ "state_db_byte": 16330752,
+ "verdikte": {
+  "indexed": 52111,
+  "skipped": 37
+ },
+ "zeichen_gesamt": 1397874090,
+ "tantivy_pfad": "/nc_app_findling_backend_data/index",
+ "tantivy_byte": 786506160,
+ "vektor_anteil_am_tantivy_prozent": 8.73
+}
