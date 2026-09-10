@@ -97,7 +97,7 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 **Key context:** Kill-Kriterium bleibt aktiv (NC-Conference Sept.: kuendigt Nextcloud ES-freie Volltextsuche mit OCR an, Stopp/Pivot). Store-Texte fuer v1.1 nach der kurze-produkttexte-Regel, Entwurf dem Owner zeigen.
 
-**Stand:** Phasen 7, 8 und 9 komplett (Phase 9 Eigene Ergebnisseite abgeschlossen 2026-09-09: Seitenroute mit Paginierung und Rueckkehrvertrag, Paritaetstest deckt die neue Route, deutscher Katalog unter de und de_DE, Verification 5/5). Offen: Phase 10 Vergleichsmessung auf der AWS-Box, Phase 11 Haertung und Store-Einreichung v1.1.
+**Stand:** Phasen 7 bis 10 komplett (Phase 10 Vergleichsmessung auf der AWS-Box abgeschlossen 2026-09-10: 52.111 Dokumente unter harter 2-GiB-Grenze ohne einen getoeteten Prozess indexiert, Grundlast 691,8 auf 103,2 MB, Stufe-8-Zusage haelt mit 2.125,5 von 2.500 ms; Bericht in 19 Abschnitten inkl. 13 ehrlicher Verschlechterungs-Posten, Erfolgskriterium 2 bewusst "teilweise belegt" per Owner-Entscheid, Verification 10/10; Box angehalten, 31,05 h / 3,60 USD unter dem Deckel). Offen: Phase 11 Haertung und Store-Einreichung v1.1 (dorthin uebergeben: DI-07-02, DI-07-03, DI-10-01 bis DI-10-05, T-09-29; FR-Katalog docs/l10n-french.md ist Vorbedingung der Abgabe).
 
 ## Evolution
 
@@ -117,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-09 after completing phase 9 (eigene Ergebnisseite)*
+*Last updated: 2026-09-10 after completing phase 10 (Vergleichsmessung auf der AWS-Box)*
