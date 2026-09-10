@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Abgeschlossen 11-02-PLAN.md, Werkzeug-Fix DI-10-01 und D-04-Ratsche
-last_updated: "2026-09-10T19:21:22.530Z"
+stopped_at: Abgeschlossen 11-03-PLAN.md, DI-10-02 Nachfolgefassung des Sprachfall-Skripts
+last_updated: "2026-09-10T19:55:30.893Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 37
-  completed_plans: 26
-  percent: 70
+  completed_plans: 27
+  percent: 73
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 11 (Haertung und Store-Einreichung v1.1) — EXECUTING
-Plan: 3 of 13
+Plan: 4 of 13
 Status: Ready to execute
 Last activity: 2026-09-10
 
@@ -35,7 +35,13 @@ Last activity: 2026-09-10
 Lesart v2-a, also ohne Aenderung am Versionsfenster. Fuer jeden kuenftigen Lauf
 des Lastwerkzeugs gilt seit 11-02: die Vorgabe von `--min-hits` ist 1, ein Lauf
 gegen einen Bestand ohne die zehn festen Begriffe braucht `--min-hits 0`, und
-der gefahrene Wert steht als `min_hits` im Bericht.
+der gefahrene Wert steht als `min_hits` im Bericht. Seit 11-03 gilt fuer die
+Sprachfaelle: die Nachfolgefassung liegt unter
+`docs/measurements/2026-09-werkzeugfixe/skripte/98b-sprachfaelle.sh`, sie
+verlangt `CI_LAUF` als Pflichteingabe (sonst Rueckgabewert 22) und das
+Lasttest-Passwort fuer die Vorpruefung (sonst 19), und die gefahrene Fassung
+unter `2026-09-vergleichsmessung-m7g/` ist per sha256 gegen Bearbeitung
+verriegelt.
 
 ## Was Phase 10 geliefert hat
 
@@ -157,6 +163,7 @@ ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 | Phase 10 P07 | 2h40m | 4 tasks | 12 files |
 | Phase 11 P01 | 30min | 2 tasks | 1 files |
 | Phase 11 P02 | 25min | 3 tasks | 3 files |
+| Phase 11 P03 | 35min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -312,6 +319,8 @@ Recent decisions affecting current work:
 - [Phase 11]: 11-01: V-2 = v2-a, das Versionsfenster bleibt bei min-version 33 und max-version 35; beide info.xml, der stable35-Matrixeintrag und test_lockstep_versions.py bleiben unveraendert, RE-CHECK 16.09. bleibt eigener Merkposten, die Einreichung wartet nicht darauf
 - [Phase 11]: 11-02: DI-10-01 behoben, beide Wege zusammen: eine Ergebnisgruppe ohne Containerteil ist der Fehlschlag EmptyResultGroup, --min-hits (Vorgabe 1) macht die Umdeutung ausdruecklich, --min-hits 0 stellt das alte Verhalten her, hits_per_request und min_hits stehen im Bericht
 - [Phase 11]: 11-02: Die D-04-Zusage hat einen Waechter, backend/tests/test_upgrade_compatibility.py mit GOLD_V1_0_3 (schema/index/analyzer je 1, tantivy 0.26.0); tantivy_version wird gegen den Banner 'tantivy v0.26.0, index_format v7' gehalten statt gegen den nackten Wert, dazu Zusicherungen auf index_format v7, den Pin tantivy==0.26.0 und wngerman=20161207-15
+- [Phase 11]: 11-03: FREMD_SCHWELLE der Sprachfall-Vorpruefung ist 64 (MAX_RECHECKS_ABSOLUTE aus Provider.php) und nicht 1; die Vorpruefung zaehlt je Begriff zweimal, auf der Seite der Faelle und bis Tiefe 64
+- [Phase 11]: 11-03: Die gefahrene Fassung 98-sprachfaelle.sh ist per sha256 verriegelt; Fixe an Messskripten entstehen als neue Datei in einem neuen Laufverzeichnis
 
 ### Pending Todos
 
@@ -341,6 +350,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-10T19:21:22.514Z
-Stopped at: Abgeschlossen 11-02-PLAN.md, Werkzeug-Fix DI-10-01 und D-04-Ratsche
-Resume file: .planning/phases/11-haertung-und-store-einreichung-v1-1/11-02-SUMMARY.md
+Last session: 2026-09-10T19:55:13.852Z
+Stopped at: Abgeschlossen 11-03-PLAN.md, DI-10-02 Nachfolgefassung des Sprachfall-Skripts
+Resume file: .planning/phases/11-haertung-und-store-einreichung-v1-1/11-03-SUMMARY.md
