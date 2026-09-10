@@ -235,7 +235,7 @@ Plans:
 
 - [x] 11-04-PLAN.md , deploy-harp: nativer arm64-Ast und der Modus, der Release-Assets laedt (Welle 2)
 - [ ] 11-06-PLAN.md , die EINE Box-Anfahrt: Freigabe mit Deckel, Messblock A und B, Box wieder angehalten (Welle 2, Checkpoint-Plan)
-- [ ] 11-13-PLAN.md , SCHARF seit Entscheid v1-a vom 10.09.2026 (11-VORENTSCHEIDE.md): der Zustand "Kandidaten vom Recheck verworfen" im Dienst, auf der Ergebnisseite und als 174. Katalogschluessel (Welle 2)
+- [x] 11-13-PLAN.md , SCHARF seit Entscheid v1-a vom 10.09.2026 (11-VORENTSCHEIDE.md): der Zustand "Kandidaten vom Recheck verworfen" im Dienst, auf der Ergebnisseite und als 174. Katalogschluessel (Welle 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -273,7 +273,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | 7/7 | Complete    | 2026-09-10 |
-| 11. Haertung und Store-Einreichung v1.1 | 3/13 | In Progress|  |
+| 11. Haertung und Store-Einreichung v1.1 | 5/13 | In Progress|  |
 
 ## Requirement Coverage
 

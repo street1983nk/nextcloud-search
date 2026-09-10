@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Abgeschlossen 11-04-PLAN.md, deploy-harp mit nativem arm64-Ast und Release-Asset-Modus
-last_updated: "2026-09-10T21:10:00.000Z"
+stopped_at: Abgeschlossen 11-13-PLAN.md, der Satz zu DI-07-03 und der 174. Katalogschluessel (Entscheid v1-a)
+last_updated: "2026-09-10T21:20:17.161Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 37
-  completed_plans: 28
-  percent: 76
+  completed_plans: 29
+  percent: 78
 ---
 
 # Project State
@@ -31,8 +31,17 @@ Status: Ready to execute
 Last activity: 2026-09-10
 
 **Naechster Schritt:** Rest der Welle 2 der Phase 11, also 11-06 (die EINE
-Box-Anfahrt, Checkpoint-Plan) und 11-13. Plan
-11-13 ist durch den Owner-Entscheid v1-a scharf; 11-04 hat die
+Box-Anfahrt, Checkpoint-Plan), danach 11-05. Plan 11-13 ist am 10.09.2026
+gefahren und abgeschlossen: der Zustand
+`SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED` steht im Dienst, der Satz
+"Andere Dateien enthalten dieses Wort, aber keine, die Sie oeffnen duerfen."
+auf der Ergebnisseite, und `php/l10n/de.json` traegt 174 statt 173 Schluessel.
+Fuer 11-05 heisst das: die franzoesische Abdeckung zaehlt 174, und der 174.
+Schluessel ist `Other files contain this word, but none that you may open.`
+Fuer 11-08: das Gate steht bereits auf 174. Fuer 11-10: DI-07-03 ist
+MEDIUM-gefixt, die Berechtigungskette am Diff unveraendert. Der Planzaehler
+steht weiter bei 5, weil 11-13 als bedingter Plan der Welle 2 vorgezogen
+gefahren ist und 11-05 noch aussteht. 11-04 hat die
 Lesart v2-a vollzogen (Matrix und beide `info.xml` unveraendert, Entscheid als
 datierter Absatz in `deploy-harp.yml`), 11-11 faehrt sie weiter. Seit 11-04
 gilt fuer `deploy-harp.yml`: die Store-Install-Strecke faehrt auf vier Aesten,
@@ -173,6 +182,7 @@ ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 | Phase 11 P02 | 25min | 3 tasks | 3 files |
 | Phase 11 P03 | 35min | 3 tasks | 3 files |
 | Phase 11 P04 | 70min | 3 tasks | 1 files |
+| Phase 11 P13 | 35min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -330,6 +340,11 @@ Recent decisions affecting current work:
 - [Phase 11]: 11-02: Die D-04-Zusage hat einen Waechter, backend/tests/test_upgrade_compatibility.py mit GOLD_V1_0_3 (schema/index/analyzer je 1, tantivy 0.26.0); tantivy_version wird gegen den Banner 'tantivy v0.26.0, index_format v7' gehalten statt gegen den nackten Wert, dazu Zusicherungen auf index_format v7, den Pin tantivy==0.26.0 und wngerman=20161207-15
 - [Phase 11]: 11-03: FREMD_SCHWELLE der Sprachfall-Vorpruefung ist 64 (MAX_RECHECKS_ABSOLUTE aus Provider.php) und nicht 1; die Vorpruefung zaehlt je Begriff zweimal, auf der Seite der Faelle und bis Tiefe 64
 - [Phase 11]: 11-03: Die gefahrene Fassung 98-sprachfaelle.sh ist per sha256 verriegelt; Fixe an Messskripten entstehen als neue Datei in einem neuen Laufverzeichnis
+- [Phase 11]: 11-13: DI-07-03 ist gefixt. Der Dienst unterscheidet 'es gab keine Kandidaten' von 'es gab Kandidaten, und keiner blieb uebrig' (SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED), Vorrang Decke vor Schweigen vor neuem Zustand
+- [Phase 11]: 11-13: Der neue Zustand nimmt die naechste Seite nicht weg. PageController nimmt genau diesen einen Grund von der Nein-naechste-Seite-Regel aus, die vier alten verlieren sie weiterhin
+- [Phase 11]: 11-13: php/l10n/de.json traegt 174 statt 173 Schluessel. Der 174. ist 'Other files contain this word, but none that you may open.', deutsch 'Andere Dateien enthalten dieses Wort, aber keine, die Sie oeffnen duerfen.'; massgeblich fuer 11-05 (FR-Abdeckung) und 11-08 (Katalog-Gate)
+- [Phase 11]: 11-13: Die drei Entscheidungszeilen der Phase 9 ($hasError, $hasHint, $showEmpty) sind byteweise unveraendert; der neue Zustand steht als eigene Zeile daneben und geht in keine der beiden Summen ein
+- [Phase 11]: 11-13: PHP_TREE_HASH 4a4c6f62 bleibt als Rohmesswert vom 09.09. stehen und bekommt PHP_TREE_HASH_TODAY cf56a358 neben sich; eine berichtete Vergleichszahl wird nicht retiriert, wenn der Code weiterlaeuft
 
 ### Pending Todos
 
@@ -359,6 +374,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-10T21:10:00.000Z
+Last session: 2026-09-10T21:19:43.230Z
 Stopped at: Abgeschlossen 11-04-PLAN.md, deploy-harp mit nativem arm64-Ast und Release-Asset-Modus
-Resume file: .planning/phases/11-haertung-und-store-einreichung-v1-1/11-04-SUMMARY.md
+Resume file: None
