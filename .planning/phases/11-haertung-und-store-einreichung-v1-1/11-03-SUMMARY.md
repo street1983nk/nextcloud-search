@@ -106,9 +106,11 @@ Der Push auf `d9493de` hat die uebliche Runde von fuenf Workflows angestossen. D
 |---|---|---|
 | 34522959320 | Python gates | **success** |
 | 34522959144 | Multi-arch image | **success** |
-| 34522959094 | Integration | siehe unten |
-| 34522959093 | Resilience | siehe unten |
-| 34522959025 | HaRP deploy | siehe unten |
+| 34522959094 | Integration | **success** |
+| 34522959093 | Resilience | **success** |
+| 34522959025 | HaRP deploy | **success** |
+
+Alle fuenf gruen. Fuer Plan 11-06 heisst das zugleich: die Laufnummer, die dort als `CI_LAUF` uebergeben wird, ist die des juengsten gruenen `integration.yml`-Laufs, also derzeit **34522959094** (Commit `d9493de`) und nicht mehr die in MESS-02 zitierte 34339346666.
 
 ## Wie das dreiwertige Urteil konkret aussieht
 
