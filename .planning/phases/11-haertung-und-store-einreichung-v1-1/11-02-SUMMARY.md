@@ -91,6 +91,10 @@ Alle ueber das ganze Repo, lokal vor dem Push:
 | `uv run pyright` | 0 errors, 0 warnings, 0 informations |
 | `uv run vulture src tests --min-confidence 80` | keine Ausgabe |
 
+CI nach dem Push von `ba39880`, alle fuenf gruen: Python gates (34519607701),
+Multi-arch image (34519607749), Integration (34519607691), Resilience
+(34519607737), HaRP deploy (34519607753).
+
 Gegenprobe zur Ratsche, ohne Commit gefahren: mit `SCHEMA_VERSION = 2` und dem Banner `tantivy v0.27.0, index_format v8` meldet `drift_findings` genau zwei Befunde, beide mit Marke, Ist, Soll und `D-04`.
 
 ## Files Created/Modified
