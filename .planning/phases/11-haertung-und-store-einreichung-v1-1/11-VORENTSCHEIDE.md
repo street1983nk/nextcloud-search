@@ -111,7 +111,22 @@ und nicht eine Folge davon.
 MEDIUM mit der von der Berechtigungskette getrennten Abhilfe
 (`11-RESEARCH.md`, Abschnitt 5.3 und Open Question 3).
 
-Entscheidzeile folgt nach dem Checkpoint in Task 2 dieses Plans.
+### Entscheid
+
+**Entscheid 2026-09-10: v1-a.** DI-07-03 wird in v1.1.0 gefixt, als MEDIUM mit
+der von der Berechtigungskette getrennten Abhilfe. Plan 11-13 ist damit scharf
+und faehrt in Welle 2. Der Katalog steigt von 173 auf 174 Schluessel.
+
+Der Owner hat keinen eigenen Wortlaut genannt, also gilt der Vorschlag aus dem
+Dossier woertlich als der geltende Wortlaut des neuen Katalogschluessels:
+
+- englischer Quellstring: `Other files contain this word, but none that you may open.`
+- deutscher Wortlaut: `Andere Dateien enthalten dieses Wort, aber keine, die Sie öffnen dürfen.`
+
+Plan 11-13 schreibt den Schluessel ins Template und in die vier deutschen
+Kataloge, Plan 11-05 uebersetzt ihn ins Franzoesische, Plan 11-08 prueft den
+Katalog gegen 174 Schluessel, Plan 11-10 traegt DI-07-03 als MEDIUM-gefixt ins
+Audit.
 
 ---
 
@@ -192,4 +207,17 @@ editierbar.
 Fenster unveraendert bei 33 bis 35, mit ausdruecklicher Wiedervorlage am
 16.09.2026 (`11-RESEARCH.md`, Open Question 2).
 
-Entscheidzeile folgt nach dem Checkpoint in Task 2 dieses Plans.
+### Entscheid
+
+**Entscheid 2026-09-10: v2-a.** Das Versionsfenster von v1.1.0 bleibt
+unveraendert bei `min-version="33" max-version="35"`. Beide `info.xml` bleiben
+wie sie sind, der `stable35`-Matrixeintrag in `deploy-harp.yml` bleibt mit
+`tolerate-failure: true` stehen, `test_lockstep_versions.py` bleibt
+unveraendert. Der RE-CHECK am 16.09.2026 bleibt eigener Merkposten, und die
+Einreichung wartet nicht darauf (D-10). D-11 ist damit in der Lesart
+bestaetigt, die den Codebestand beschreibt und nicht das Fenster senkt; ein
+spaeteres 1.1.x hebt das Fenster, wenn 35 final ist.
+
+Fuer die wartenden Plaene heisst das: Plan 11-04 laesst die Matrix von
+`deploy-harp.yml` unveraendert und haelt nur die Wiedervorlage fest, Plan 11-11
+setzt den Versionsbump ohne Aenderung am Fenster.
