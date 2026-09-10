@@ -1,0 +1,146 @@
+ende-des-laufs-ausgewertet 2026-09-10T14:10:00Z
+Plan 10-06 Task 1, Punkte 2 und 3. Diese Datei rechnet, sie misst nicht: jede
+Zahl kommt aus einer Rohdatei dieses Verzeichnisses, und die Rohdatei steht
+daneben. Gerechnet wurde auf dem Rechner des Owners, nicht auf der Box, weil
+kein Wert dieser Auswertung fluechtig ist.
+
+== 1. Die Laufzeit beider Spuren ==
+
+Anstoss des Volllaufs        2026-09-09T09:58:42Z   (96-volllauf-start.txt)
+Letzte Runde mit Arbeit      2026-09-10T12:34:57Z   (96b-waechter.txt, Runde 319, vorrat=31)
+Erste Lesung indexed=embedded=52111
+                             2026-09-10T12:36:03Z   (96-statusseite.jsonl)
+Erste Waechterrunde mit vorrat=0 und 52111
+                             2026-09-10T12:39:57Z   (96b-waechter.txt, Runde 320)
+Ende beider Spuren erkannt   2026-09-10T13:04:57Z   (96b-waechter.txt, nach fuenf stillen Runden)
+00-FERTIG geschrieben        2026-09-10T13:05:11Z   (00-FERTIG)
+
+laufzeit-beide-spuren-gemessen   26 h 37 min 21 s   (Anstoss bis 12:36:03Z, feinste Marke)
+laufzeit-beide-spuren-obergrenze 26 h 41 min 15 s   (Anstoss bis Runde 320, grobe Marke)
+laufzeit-bis-00-FERTIG           27 h 06 min 29 s   (enthaelt 25 min Stillebestaetigung)
+
+Die Vergleichszahlen, und welche neben welcher steht:
+
+  erste Spur allein (Volltext plus OCR)   18 h 04 min (06-11), 12 h 49 min (05-21)
+  beide Spuren bis zum letzten Vektor     18 h 56 min (06-11)
+  dieser Lauf, beide Spuren               26 h 37 min, also plus 40,6 Prozent gegen 18 h 56 min
+
+erste-spur-allein-in-diesem-lauf  nicht messbar, und das ist der Befund
+  Eine Phasengrenze "Uebergang der Spuren" gibt es in diesem Lauf nicht. Die
+  Einbettung hat ab Waechterrunde 20 zur Indexierung aufgeschlossen und ist bis
+  zum Ende hoechstens einige hundert Dokumente zurueckgeblieben. Der Abstand
+  indexed minus embedded ueber alle 812 Lesungen: hoechstens 1.399, im Mittelwert
+  der Reihe 158, am Ende 0 (96-statusseite.jsonl). In 06-11 lief die erste Spur
+  18 h 04 min allein und ein Nachlauf von 52 min holte die Einbettung nach.
+
+== 2. Der Durchsatz ==
+
+Ueber den ganzen Lauf, aus 96-statusseite.jsonl, gerechnet gegen 1.597,3 min
+zwischen Anstoss und der ersten Lesung mit 52.111:
+
+  indexierung  50.458 Dokumente,  31,6 je Minute   (52.111 minus 1.653 Startbestand)
+  einbettung   51.847 Vektoren,   32,5 je Minute   (52.111 minus 264 Startbestand)
+
+Im Beharrungszustand, also von 2026-09-09T11:00Z bis 2026-09-10T09:00Z, je
+Stundenblock aus derselben Reihe:
+
+  indexierung  33,5 bis 34,6 je Minute, Median 34,1
+  einbettung   31,2 bis 34,2 je Minute, Median 32,9
+
+Die Vergleichszahlen aus 06-11:
+
+  einbettung neben der OCR          rund  43 Dokumente je Minute
+  einbettung allein, nach der OCR   rund 170 Dokumente je Minute
+  indexierung ueber den ganzen Lauf      45,7 je Minute (51.961 in 1.136 min)
+
+durchsatz-befund
+  Die Einbettung dieses Laufs liegt bei 32,5 je Minute gegen 43 je Minute
+  "neben der OCR" in 06-11, also 24,4 Prozent langsamer. Die Indexierung liegt
+  bei 31,6 gegen 45,7 je Minute, also 30,9 Prozent langsamer. Beide Spuren
+  wurden gleichzeitig langsamer, und zwar um denselben Faktor. Ein Nachlauf mit
+  170 Dokumenten je Minute, der in 06-11 die letzten 52 Minuten trug, kommt in
+  diesem Lauf nicht vor, weil es keine Spur gibt, die allein laeuft.
+
+durchsatz-verlauf
+  Der Durchsatz faellt NICHT schleichend ab. In Stundenbloecken steht er von
+  11:00Z am 09.09. bis 09:00Z am 10.09. auf einer Geraden bei 34 je Minute. Erst
+  die letzten drei Bloecke fallen: 30,9 (10h), 22,7 (11h), 8,5 (12h). Das ist
+  der Auslauf und nicht eine Verschlechterung. Speicherdruck als Erklaerung ist
+  damit ausgeschlossen: er wuerde mit der Zeit wachsen.
+
+== 3. Die Spitzen, getrennt nach Phase, mit ihrem Zeitpunkt ==
+
+Gerechnet ueber scripts/ops/rss_digest.py auf 96-volllauf.csv, mit
+Phasengrenzen aus 96-statusseite.jsonl und 96b-waechter.txt. Die Grenzen sind
+gemessen und nicht geschaetzt. anon und memory.current stehen nebeneinander,
+weil der Tantivy-Index ein mmap ist und anon ihn nicht zaehlt.
+
+Phase A, Anlauf, vor der ersten semantischen Suche
+  2026-09-09T09:58:22Z bis 2026-09-09T10:04:29Z, 74 Aufnahmen
+  mittel anon              614,5 MB
+  hoechster anon         1.479,4 MB um 2026-09-09T10:04:22Z
+  hoechster memory.current 1.540,7 MB um 2026-09-09T10:04:22Z
+
+Phase B, die erste semantische Suche des Laufs (Suchlastprobe des Waechters)
+  2026-09-09T10:04:30Z bis 2026-09-09T10:04:59Z, 6 Aufnahmen
+  mittel anon            1.574,4 MB
+  hoechster anon         1.623,0 MB um 2026-09-09T10:04:52Z
+  hoechster memory.current 1.701,1 MB um 2026-09-09T10:04:52Z
+
+Phase C, OCR, Indexierung und Einbettung gekoppelt
+  2026-09-09T10:05:00Z bis 2026-09-10T12:39:56Z, 19.102 Aufnahmen
+  mittel anon            1.583,0 MB
+  hoechster anon         1.764,2 MB um 2026-09-10T08:12:24Z
+  hoechster memory.current 2.048,0 MB um 2026-09-09T17:44:47Z
+
+Phase D, Nachlauf, beide Spuren durch
+  2026-09-10T12:39:57Z bis 2026-09-10T13:05:02Z, 301 Aufnahmen
+  mittel anon            1.521,5 MB
+  hoechster anon         1.521,5 MB um 2026-09-10T12:39:59Z
+  hoechster memory.current 1.751,5 MB um 2026-09-10T13:05:02Z
+
+GESAMT, 19.483 Aufnahmen
+  mittel anon            1.578,4 MB
+  hoechster anon         1.764,2 MB um 2026-09-10T08:12:24Z
+  hoechster memory.current 2.048,0 MB um 2026-09-09T17:44:47Z
+
+Die Vergleichszahlen, jede neben ihrer Entsprechung:
+
+  Posten                              06-11 (v1.0)           Nachmessung 07.09.     dieser Lauf
+  hoechster anon des ganzen Laufs     1.837,8 MB 05:34:05Z   1.812,7 MB 05:55:53Z   1.764,2 MB 08:12:24Z
+  Phase der ersten semantischen Suche 1.837,8 MB             1.125,2 MB             1.623,0 MB
+  Phase mit OCR                       1.562,7 MB             1.812,7 MB             1.764,2 MB
+  memory.current-Spitze               2.048,0 MB             1.219,8 MB             2.048,0 MB
+
+spitzen-befund-1
+  Der hoechste anon des Laufs ist der niedrigste der drei Laeufe: 1.764,2 MB
+  gegen 1.837,8 MB in 06-11, also 73,6 MB weniger. Er faellt in Phase C, also in
+  die OCR, und nicht mehr in die Phase der ersten Suche wie in 06-11.
+
+spitzen-befund-2
+  Der Besitzer der Spitze hat gewechselt, und zwar in dieselbe Richtung wie in
+  der Nachmessung: in 06-11 lag die Spitze in der Phase der ersten semantischen
+  Suche, hier liegt sie in der Phase mit OCR. Die Phase der ersten Suche liegt
+  mit 1.623,0 MB deutlich unter den 1.837,8 MB von 06-11, aber deutlich ueber
+  den 1.125,2 MB der Nachmessung. Der Grund fuer den Unterschied zur Nachmessung
+  steht im Aufbau: dort lief die erste Suche auf einer ruhenden Instanz, hier
+  faellt sie mitten in eine laufende Indexierung.
+
+spitzen-befund-3
+  memory.current erreicht 2.048,0 MB, genau wie in 06-11, und memory.peak hat
+  die harte Grenze von 2.147.483.648 Byte exakt erreicht. Der Dateicache des
+  Tantivy-Index lag gegen die Grenze an, der Kernel hat zurueckgedraengt, und
+  kein Prozess wurde getoetet. Der Beleg dafuer steht in 07-oom-beweis.txt:
+  oom, oom_kill und oom_group_kill stehen je auf null, max auf 21.939.
+
+== 4. Was diese Datei nicht beantwortet ==
+
+Die Ursache der Mehrlaufzeit ist mit diesen Zahlen eingegrenzt, aber nicht
+bewiesen. Die Kopplung der Spuren ist der Kandidat, den die Daten stuetzen:
+beide Spuren wurden gleichzeitig und um denselben Faktor langsamer, der
+Durchsatz war ueber 22 Stunden stabil, und ein Nachlauf mit 170 Dokumenten je
+Minute kommt nicht vor. Der zweite Kandidat aus Plan 10-05, die Zulauf-Luecken
+(vorrat=0 in 62 von 325 Lesungen), bleibt daneben stehen; er erklaert eine
+Wartezeit, aber nicht, warum beide Spuren im Gleichschritt langsamer wurden.
+Welcher der beiden traegt, entscheidet eine Messung, die dieser Plan nicht
+vorsieht. Die Frage gehoert in Plan 10-07 beziehungsweise in Phase 11.

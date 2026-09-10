@@ -1,0 +1,114 @@
+nebenlaeufigkeit-start 2026-09-10T13:48:32Z
+stufen: 1 4 8 12 16, runden je stufe: 10, pause: 20 s
+=== memory.events, read BEFORE this series ===
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+-- and the two figures next to it, as the zero point of the series --
+anon 1595363328
+file 228331520
+slab 8640176
+memory.current=1837322240 memory.peak=2147483648 memory.max=2147483648
+=== The sampler beside it ===
+sampler-pid 1362214
+rss_sampler: container=nc_app_findling_backend cgroup=/sys/fs/cgroup/system.slice/docker-e40bfb290cb323f8aa643fdc02527e33a37ebf9252eec0f8dfb9ae6d9e97af95.scope interval=2s
+=== Concurrency 1 over 10 rounds ===
+stufe-1-vor 2026-09-10T13:48:36Z
+stufe-1-nach 2026-09-10T13:48:40Z
+anon 1595363328
+file 228372480
+slab 8644088
+memory.current=1837371392 memory.peak=2147483648
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+=== Concurrency 4 over 10 rounds ===
+stufe-4-vor 2026-09-10T13:49:00Z
+stufe-4-nach 2026-09-10T13:49:09Z
+anon 1595367424
+file 160235520
+slab 6884848
+memory.current=1767751680 memory.peak=2147483648
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+=== Concurrency 8 over 10 rounds ===
+stufe-8-vor 2026-09-10T13:49:30Z
+stufe-8-nach 2026-09-10T13:49:49Z
+anon 1595387904
+file 139816960
+slab 3690032
+memory.current=1743933440 memory.peak=2147483648
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+=== Concurrency 12 over 10 rounds ===
+stufe-12-vor 2026-09-10T13:50:09Z
+stufe-12-nach 2026-09-10T13:50:39Z
+anon 1595420672
+file 84246528
+slab 3068488
+memory.current=1687564288 memory.peak=2147483648
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+=== Concurrency 16 over 10 rounds ===
+stufe-16-vor 2026-09-10T13:50:59Z
+stufe-16-nach 2026-09-10T13:51:42Z
+anon 1595678720
+file 106815488
+slab 3166296
+memory.current=1710931968 memory.peak=2147483648
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+=== The sampler down ===
+findling-rss 1789048320,1595682816,112656384,3118248,1717014528,2147483648
+findling-rss 1789048322,1595682816,112656384,3118248,1717014528,2147483648
+findling-rss summary samples=105 max_anon=1595691008 peak=2147483648 events=[low=0 high=0 max=21939 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=1997] oom_killed=false
+=== The table this promise is read off, and the regressions by name ===
+ conc   req  fail        p50        p95        max  budget   anon MB  current MB   p95 06.1
+    1    10     0      375,8      464,3      464,3    True   1.521,5     1.752,3      481,6
+    4    40     0      920,4    1.068,0    1.089,5    True   1.521,5     1.685,9    1.009,4
+    8    80     0    1.803,9    2.125,5    2.202,1    True   1.521,5     1.663,2    1.915,0
+   12   120     0    2.758,3    3.453,4    3.619,6   False   1.521,5     1.609,5    3.045,4
+   16   160     0    4.045,3    4.446,2    4.507,0   False   1.521,8     1.631,7    3.782,7
+
+regression stufe 4: 1.009,4 auf 1.068,0 ms (5.8 Prozent, ueber dem rauschband)
+regression stufe 8: 1.915,0 auf 2.125,5 ms (11.0 Prozent, ueber dem rauschband)
+regression stufe 12: 3.045,4 auf 3.453,4 ms (13.4 Prozent, ueber dem rauschband)
+regression stufe 16: 3.782,7 auf 4.446,2 ms (17.5 Prozent, ueber dem rauschband)
+=== memory.events, all counters, at the end of the series ===
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+OOMKilled=false RestartCount=0
+nebenlaeufigkeit-ende 2026-09-10T13:52:05Z

@@ -1,0 +1,74 @@
+oom-beweis ende-beider-spuren-vor-jedem-eingriff 2026-09-10T13:04:57Z
+-- 1. memory.events of the cgroup --
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+-- 2. memory.events.local --
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+-- 3. memory.max, memory.peak, memory.current --
+2147483648
+2147483648
+1762979840
+-- 4. OOMKilled and the restart count of the container --
+OOMKilled=false RestartCount=0 Status=running StartedAt=2026-09-09T09:40:51.512974927Z
+oom-beweis ende-des-waechters-nach-den-nachlaufschritten 2026-09-10T13:05:11Z
+-- 1. memory.events of the cgroup --
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+-- 2. memory.events.local --
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+-- 3. memory.max, memory.peak, memory.current --
+2147483648
+2147483648
+1837355008
+-- 4. OOMKilled and the restart count of the container --
+OOMKilled=false RestartCount=0 Status=running StartedAt=2026-09-09T09:40:51.512974927Z
+
+oom-beweis plan-10-06-vor-jedem-eingriff 2026-09-10T13:48:08Z
+-- 1. memory.events of the cgroup --
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+-- 2. memory.events.local --
+low 0
+high 0
+max 21939
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 1997
+-- 3. memory.max, memory.peak, memory.current --
+2147483648
+2147483648
+1837060096
+-- 3b. memory.stat anon/file/slab --
+anon 1595363328
+file 228331520
+slab 8640176
+-- 4. OOMKilled and the restart count of the container --
+OOMKilled=false RestartCount=0 Status=running StartedAt=2026-09-09T09:40:51.512974927Z

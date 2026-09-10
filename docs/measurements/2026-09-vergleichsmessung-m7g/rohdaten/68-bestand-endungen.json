@@ -1,0 +1,74 @@
+{
+ "datenbank": "/nc_app_findling_backend_data/state.db",
+ "praefix": "loadtest",
+ "spalten_von_files": [
+  "file_id",
+  "storage_id",
+  "root_id",
+  "path",
+  "title",
+  "mime",
+  "size",
+  "mtime",
+  "etag",
+  "content_hash",
+  "text_chars",
+  "state",
+  "reason",
+  "attempts",
+  "ocr_used",
+  "indexed_at",
+  "index_version",
+  "deleted_at"
+ ],
+ "zeilen_gesamt": 52148,
+ "zeilen_ausserhalb_des_praefix": 2148,
+ "zeilen_im_praefix": 50000,
+ "je_endung": {
+  "csv": {
+   "indexed": 748,
+   "skipped": 20
+  },
+  "docx": {
+   "indexed": 3327
+  },
+  "jpg": {
+   "indexed": 27
+  },
+  "md": {
+   "indexed": 775
+  },
+  "ods": {
+   "indexed": 2504
+  },
+  "odt": {
+   "indexed": 2504
+  },
+  "pdf": {
+   "indexed": 32552
+  },
+  "png": {
+   "indexed": 23
+  },
+  "pptx": {
+   "indexed": 3344
+  },
+  "tif": {
+   "indexed": 23
+  },
+  "txt": {
+   "indexed": 781
+  },
+  "webp": {
+   "indexed": 27
+  },
+  "xlsx": {
+   "indexed": 3345
+  }
+ },
+ "gruende_je_endung": {
+  "csv": {
+   "skipped:too_large": 20
+  }
+ }
+}
