@@ -50,6 +50,27 @@ pool of the instance sets the ceiling just as much as this app does, and that
 pool is a different size in every deployment. A number taken here is a number
 about this machine and this instance.
 
+**What "failures" counted until 10.09.2026, and why the figure was wrong.** A
+failure was a transport error or a body that is not the shape of an OCS answer,
+and nothing else. An aborted container call is neither of those: the OCS route
+answers it with HTTP 200 and a result group without a container part, so entries
+is the empty list, the request counts as answered, and its measured duration is
+the duration of an answer that carries nothing. The Nextcloud log of 10.09.2026
+holds 17 aborted calls with cURL error 28 in the window of level 16 of the
+concurrency series, while
+docs/measurements/2026-09-vergleichsmessung-m7g/rohdaten/97-stufe-16.json reports
+"failures": 0 over 160 requests. The only trace in the report was in the hits,
+4.16 per request against 5.40 at level 1, and that quotient had to be worked out
+by hand. It is written up as DI-10-01 in section 9.3 of
+docs/measurements/2026-09-vergleichsmessung-m7g/README.md.
+
+Since then a result group with fewer entries than --min-hits is a failure under
+a name of its own, EmptyResultGroup, and hits_per_request stands in the report
+next to hits_total. --min-hits 0 restores the reading from before that date, for
+an instance whose stock does not carry the ten fixed TERMS, and the value it ran
+with stands in the report as min_hits, so a raw file carries its own reading
+without the command line that produced it.
+
 **Where it comes from.** The sequential sample 45-suchlast.py of the semantic run
 of 05.09.2026 asked the same questions and read the same two memory figures. What
 it could not do is run several searches at the same time, and it reached its
@@ -181,13 +202,18 @@ def _search_url(base_url: str, term: str, limit: int) -> str:
     return f"{base_url.rstrip('/')}{OCS_ROUTE}?{query}"
 
 
-def _one_search(url: str, authorization: str) -> tuple[float, int, str | None]:
+def _one_search(url: str, authorization: str, min_hits: int) -> tuple[float, int, str | None]:
     """One request: milliseconds, hits, and the type name of a failure.
 
     A monotonic clock, because a wall clock adjustment during a load run would
     either double a duration or make it negative. The duration is measured around
     the whole call including a failure, so a failed request still contributes its
     time to the log even though it stays out of the percentiles.
+
+    ``min_hits`` decides where a search that found nothing ends and a request
+    that failed begins. It is handed in rather than read from a constant so
+    that the value has exactly one way through this file: the command line, the
+    report and this comparison.
     """
     request = urllib.request.Request(  # noqa: S310 - the scheme is checked in _checked_base_url
         url,
@@ -211,6 +237,12 @@ def _one_search(url: str, authorization: str) -> tuple[float, int, str | None]:
         # request and not a search that found nothing. Counting it as zero hits
         # would hide a broken route behind an empty result.
         return (elapsed_ms, 0, "MalformedAnswer")
+    if len(entries) < min_hits:
+        # The OCS route answers an aborted container call with HTTP 200 and a
+        # result group without a container part, so this is where the loss of a
+        # whole answer becomes visible at all: on 10.09.2026 the Nextcloud log
+        # held 17 aborted calls of level 16 next to "failures": 0 in the report.
+        return (elapsed_ms, len(entries), "EmptyResultGroup")
     return (elapsed_ms, len(entries), None)
 
 
@@ -347,6 +379,18 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
         help="Hits per search, handed to the route explicitly because it decides how much work a search is.",
     )
     parser.add_argument(
+        "--min-hits",
+        type=int,
+        default=1,
+        help=(
+            "How many hits an answer has to carry to count as answered (default 1). Fewer than that is "
+            "the failure EmptyResultGroup, because the OCS route answers an aborted container call with "
+            "a status of 200 and a result group without a container part. --min-hits 0 restores the "
+            "reading from before 10.09.2026, for an instance whose stock does not carry the ten fixed "
+            "terms; anything below zero reads the same way, since no answer can have fewer hits than none."
+        ),
+    )
+    parser.add_argument(
         "--container",
         default=None,
         help="Name or id of the backend container, for the memory readings. Without it they are left out.",
@@ -376,7 +420,12 @@ def main(argv: list[str] | None = None) -> int:
             first = round_number * arguments.concurrency
             terms = [TERMS[(first + slot) % len(TERMS)] for slot in range(arguments.concurrency)]
             futures = [
-                pool.submit(_one_search, _search_url(arguments.base_url, term, arguments.limit), authorization)
+                pool.submit(
+                    _one_search,
+                    _search_url(arguments.base_url, term, arguments.limit),
+                    authorization,
+                    arguments.min_hits,
+                )
                 for term in terms
             ]
             for term, future in zip(terms, futures, strict=True):
@@ -395,6 +444,11 @@ def main(argv: list[str] | None = None) -> int:
         if sample.failure is not None:
             failures[sample.failure] = failures.get(sample.failure, 0) + 1
 
+    # Next to hits_total and never instead of it, because the sum and the
+    # quotient answer different questions: the sum says how much was found, the
+    # quotient is the fingerprint of an answer that arrived empty (DI-10-01).
+    hits_total = sum(sample.hits for sample in samples)
+
     report: dict[str, object] = {
         "started": before.get("at"),
         "target": arguments.base_url,
@@ -402,11 +456,13 @@ def main(argv: list[str] | None = None) -> int:
         "concurrency": arguments.concurrency,
         "rounds": arguments.rounds,
         "limit": arguments.limit,
+        "min_hits": arguments.min_hits,
         "requests": len(samples),
         "answered": len(times),
         "failures": sum(failures.values()),
         "failure_kinds": failures,
-        "hits_total": sum(sample.hits for sample in samples),
+        "hits_total": hits_total,
+        "hits_per_request": round(hits_total / len(samples), 2) if samples else 0.0,
         "budget_ms": BUDGET_MS,
         "memory": {"before": before, "during": during, "after": after},
         "ended": _now(),
