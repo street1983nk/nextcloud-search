@@ -162,6 +162,33 @@ PHP_FILES = 58
 # package yields 6c47cd21... under either sort key on either platform.
 PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9ed"
 
+# The same recipe over the same directory, but over the working tree as it
+# stands after plan 11-13, and it is a second constant rather than a new value
+# in the first one. The figure above is a raw reading of the run of 09.09.2026;
+# it is quoted in rohdaten/40b-baumhash.txt and in the table of
+# docs/measurements/2026-09-vergleichsmessung-m7g/README.md, and overwriting it
+# would retire a reported measurement figure, which this project does not do.
+#
+# The two parted on 10.09.2026, when plan 11-13 built the sentence of DI-07-03
+# into the PHP half: eight of the 58 files changed their bytes and none of them
+# came or went, so the count above still holds and only the hash moved. The four
+# catalogue files of that plan are not in this reading at all, because the
+# recipe reads **/*.php. Nothing about the report becomes untrue with it. The
+# report says the hash of the working tree the report was written from, and
+# that tree is the one above; a hash of a tree that has since moved on is a
+# different statement and gets a different name.
+#
+# Both are asserted below, and each one asserts something the other cannot. The
+# figure above keeps this file honest against the raw data of the run. The
+# figure here keeps the recipe unchangeable against a real tree of 58 files,
+# which is what the assertion was for, and it is what the next change to the
+# PHP half has to move.
+PHP_TREE_HASH_TODAY = "cf56a358929b9d6205be84466ed7815eae2391d4ad8503e8d6cfe78df4a41a11"
+
+# The raw reading of the run, so that the constant above cannot drift away from
+# the file it was read out of.
+BAUMHASH_RAW = REPO_ROOT / "docs" / "measurements" / "2026-09-vergleichsmessung-m7g" / "rohdaten" / "40b-baumhash.txt"
+
 # Assembled from code points so that this file does not carry the characters it
 # forbids and fail on itself. Same construction as in test_ops_scripts.py.
 DASHES = (chr(0x2014), chr(0x2013))
@@ -316,10 +343,26 @@ def test_the_recipe_reproduces_the_tree_hash_of_the_python_package() -> None:
 
 
 def test_the_recipe_reproduces_the_tree_hash_of_the_php_half() -> None:
-    """The other half of the state, and it is measured with the same recipe."""
+    """The other half of the state, and it is measured with the same recipe.
+
+    Two figures since 10.09.2026, and the reason they are two is written at
+    their definition. The recipe is held against the tree as it stands today,
+    because a recipe held against a tree that no longer exists is held against
+    nothing. The figure of the run is held against the raw data it was read
+    out of, because a reported measurement figure is not rewritten when the
+    code moves on: plan 11-13 built the sentence of DI-07-03 into the PHP half,
+    which changed the bytes of eight of these 58 files and the count of none.
+    """
     count, hexdigest = reading(run_the_recipe(REPO_ROOT / "php", "**/*.php"))
     assert count == PHP_FILES
-    assert hexdigest == PHP_TREE_HASH
+    assert hexdigest == PHP_TREE_HASH_TODAY
+
+    # And the figure of the run against the file it was read out of, so that
+    # the constant and the report cannot part company unnoticed.
+    assert f"baumhash: {PHP_TREE_HASH}" in BAUMHASH_RAW.read_text(encoding="utf-8")
+    assert PHP_TREE_HASH != PHP_TREE_HASH_TODAY, (
+        "the two figures are the same again, so the second one has lost its reason to exist"
+    )
 
 
 def test_the_recipe_sorts_by_the_posix_path_and_not_by_the_path_object(tmp_path: Path) -> None:
