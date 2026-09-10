@@ -1,0 +1,93 @@
+kosten-und-verbleib 2026-09-10T15:55:00Z
+Plan 10-06 Task 5, im Umfang, den der Owner am 2026-09-10 entschieden hat.
+
+== 1. Der Owner-Entscheid, der diesen Task veraendert hat ==
+
+owner-entscheid-datum        2026-09-10
+owner-entscheid-anhalten     "die Box LAEUFT WEITER BIS ZUR BERICHTSABNAHME (10-07)"
+owner-entscheid-abbau        "NUR ANHALTEN, kein Abbau (0,3130 USD/Tag geparkt
+                             akzeptiert). Abbau ist ein eigener Entscheid in Phase 11."
+owner-entscheid-claude-md    "JA, Umsetzung in 10-07 wie vorgeschlagen; dieser Plan
+                             fasst CLAUDE.md nicht an."
+
+Damit faellt `aws_box.sh stop` NICHT in diesen Plan. Der Plan sieht diesen Fall
+ausdruecklich vor: "Hat der Owner in Task 4 fuer Weiterlaufen bis zur
+Berichtsabnahme entschieden, wird dieser Task erst nach jener Abnahme gefahren."
+Die Reihenfolge der Plaene bleibt unveraendert, nur die Ausfuehrung des
+Stop-Befehls wandert an Plan 10-07.
+
+== 2. Der Stand, aus der API und nicht aus der Erinnerung ==
+
+Abgefragt ueber `scripts/ops/aws_box.sh status` am 2026-09-10T15:52Z, mit der
+in Plan 10-05 korrigierten Laufzeitrechnung (Commit 5a1356f).
+
+instanz                      i-06b1d913f5c6f669b, m7g.large, eu-central-1c
+zustand                      running, NICHT stopped
+adresse                      3.69.147.2
+datentraeger                 vol-0f3bea6ca1dab68ab 40 G gp3
+datentraeger                 vol-04c5b59fe9417babd 60 G gp3
+laufzeit                     30,4 Stunden seit 2026-09-09T09:19:50Z
+satz-box                     0,097800 USD je Stunde
+satz-speicher                0,013041 USD je Stunde fuer 100 GB
+satz-adresse                 0,005000 USD je Stunde
+satz-gesamt                  0,115841 USD je Stunde, gerundet 0,1158
+kosten-bisher                3,53 USD netto
+abfragedatum-der-preise      2026-09-04, ueber `aws_box.sh prices`, seither gepinnt
+
+== 3. Der Vergleich gegen die Kostendeckel ==
+
+deckel-1-urspruenglich       30 Stunden und 3,50 USD netto
+deckel-1-freigabe            Owner am 2026-09-09, protokolliert in 89-anfahrt.txt
+deckel-1-erreicht            2026-09-10T15:20Z, also GERISSEN
+deckel-2-angehoben           34 Stunden und 4,00 USD netto
+deckel-2-freigabe            Owner am 2026-09-10, vor Beginn der Messungen dieses Plans
+deckel-2-greift              2026-09-10T19:20Z
+stand-gegen-deckel-2         30,4 von 34 Stunden, 3,53 von 4,00 USD, Rest 3,6 Stunden
+
+Wo die Zeit hingegangen ist, gegen den urspruenglichen Deckel von 30 Stunden:
+der Volllauf selbst brauchte 26 h 37 min statt der erwarteten rund 19 Stunden,
+also 7 h 37 min mehr als geplant (00-ende.txt). Die Anfahrt und die Messungen
+vor dem Lauf kosteten 38 Minuten, die Messungen nach dem Lauf einschliesslich
+der beiden vom Owner entschiedenen Nachmessungen rund 2 h 50 min. Der Deckel
+ist also nicht an den Messungen gerissen, sondern an der Laufzeit des
+Indexaufbaus, und die ist selbst einer der Befunde dieses Berichts.
+
+== 4. Die vier Schluessel aus box.env ==
+
+Diese vier Schluessel schreibt `aws_box.sh stop`. Sie tragen hier noch die
+Werte des VORIGEN Laufs vom 07.09., weil dieser Lauf nicht angehalten worden
+ist. Sie werden in Plan 10-07 nach dem Anhalten ueberschrieben und dort
+nachgetragen.
+
+BOX_STOPPED_ISO=2026-09-07T06:56:42Z          (Stand des vorigen Laufs)
+BOX_LAST_UPTIME_HOURS=1.95                    (Stand des vorigen Laufs)
+BOX_LAST_UPTIME_COST_USD=0.2254               (Stand des vorigen Laufs)
+BOX_PARKED_COST_USD_PER_DAY=0.3130            (gilt unveraendert)
+
+Der Zustand dieses Laufs ist ausdruecklich NICHT stopped, sondern running. Wer
+diese Datei liest, bevor 10-07 gefahren ist, liest die vier Schluessel als das,
+was sie sind: den letzten geschriebenen Stand und nicht den aktuellen.
+
+== 5. Was Plan 10-07 zu tun uebernimmt ==
+
+1. Nach der Abnahme des Berichts: `aws_box.sh stop`, nicht `aws ec2
+   stop-instances`, weil nur der Unterbefehl Zeitpunkt, Laufzeit und Kosten in
+   die Zustandsdatei schreibt.
+2. Die vier Schluessel oben mit den dann geschriebenen Werten nachtragen, hier
+   und im Kostenblock von 00-kernaussage.md.
+3. Die Feststellung des gestoppten Zustands aus der API holen, mit ihrem
+   Zeitpunkt, und nicht aus der Erinnerung.
+4. Die Zeile "Tokenizer und Splitter, 544 MB" in die RAM-Budget-Tabelle von
+   CLAUDE.md eintragen. Dieser Plan hat CLAUDE.md nicht angefasst.
+5. Der Abbau der Box gehoert NICHT dazu. Er bekommt einen eigenen Plan in
+   Phase 11, mit eigener Freigabe, der Nichtexistenz-Pruefung fuer Instanz,
+   Datentraeger und Security Group und dem Sweep nach dem Tag
+   purpose=findling-phase5.
+
+== 6. Was diese Datei nicht enthaelt ==
+
+Keinen Zugangsschluessel und kein Geheimnis. Die AWS-Zugangsdaten wurden fuer
+den `status`-Aufruf aus einer Datei ausserhalb des Arbeitsbaums in die
+Umgebung geladen; weder ihr Inhalt noch ihr Pfad steht in einer Rohdatei oder
+in einem Commit. box.env liegt weiter ausserhalb des Arbeitsbaums und ist
+nicht committet.

@@ -133,8 +133,45 @@ Instanz mit dem PHP-Entwicklungsserver; hier laufen sie auf arm64 gegen eine
 All-in-One-Instanz mit vollem Vektorbestand. Gleich ist die Aussage, nicht die
 Umgebung. Die Laufnummer des grünen CI-Laufs konnte das Skript nicht
 feststellen und schreibt das so hin (`ci-beleg: der letzte gruene
-integration.yml-Lauf ist unbekannt`). **Was diesen Unterschied verursacht,
-beantwortet dieser Plan nicht.**
+integration.yml-Lauf ist unbekannt`).
+
+### Und die Diagnose auf Owner-Entscheid vom 10.09.: es ist nicht die Sprache
+
+Der Owner hat entschieden, die roten Befunde nachzumessen, solange die Box
+läuft. Das Ergebnis steht in `rohdaten/98b-sprachfaelle-diagnose.txt` und es
+ändert die Deutung dieser sechs von zehn grundlegend.
+
+**Die deutsche Analysekette tut, was sie soll, und das ist gemessen.**
+`Grundstücksverkehrsgenehmigung` wird zu `grundstuck`, `verkehr`, `genehm`, die
+Anfrage `Genehmigung` wird zu `genehm`, und beide teilen dieses Token.
+Dasselbe gilt für `Kündigungsfrist` gegen `Frist` und für `Verträge` gegen
+`Vertrag`. Alle drei Tokens stehen im Feld `body_de` des Index mit Dokumenten
+daran, und jede der vier Suchen liefert im Index zehn Treffer.
+
+**Der Grund ist die Kandidatenliste, und der Messaufbau hat ihn erzeugt.** Die
+zehn Treffer gehören samt und sonders dem Lasttest-Konto mit seinen 52.111
+Dokumenten und keiner dem Konto, das gefragt hat. Für `Genehmigung`, `Frist`
+und `Vertrag` kommt unter den ersten **zweitausend** Kandidaten keine einzige
+Datei des fragenden Kontos vor; für `Bescheid` steht sie auf **Rang 1.925 von
+2.000**. Der Vorfilter rankt über den ganzen Index, der Recheck filtert erst
+danach auf das Erlaubte, und dann ist nichts mehr übrig. Die sechs grünen Fälle
+sind genau die, deren Begriffe im Lastkorpus selten sind: `Mueller` hat im
+ganzen Index einen einzigen Treffer, und das ist die eigene Datei.
+
+Das ist Fallstrick 3 in einer Form, die der Skriptkopf nicht abdeckt: er führt
+den eigenen Nutzer ein, weil der Lastkorpus dieselben Wörter trägt, aber ein
+eigener Nutzer trennt die Berechtigung und nicht den Index.
+
+**Was trotzdem ein Befund über das Erzeugnis ist,** und er gehört zu DI-07-03:
+auf einer Instanz mit großem Fremdbestand findet ein Nutzer mit wenigen Dateien
+seine eigenen nicht, sobald seine Begriffe im Fremdbestand häufig sind, und er
+bekommt keine Fehlermeldung, sondern eine leere Liste. Die Rundenzählung dieses
+Plans hat 1,0 Runde je Suche gemessen: die Schleife holt keine zweite Runde
+nach, obwohl der Recheck alle Kandidaten der ersten verworfen hat.
+
+**Die Bilanz 6 von 10 bleibt stehen, weil sie gemessen ist. Sie ist aber keine
+Aussage über die Sprachverarbeitung von v1.1 und darf im Bericht nicht als eine
+geführt werden.**
 
 ---
 
@@ -162,6 +199,59 @@ beantwortet dieser Plan nicht.**
 Vektorbestand nicht aus.** Die eine gemessene Anfrage brachte **null Treffer**,
 während dieselbe Route unmittelbar danach 18 Treffer auf drei Anfragen lieferte.
 Dieser Plan entscheidet nicht über die Konstante; er liefert die Zahl.
+
+### Die Reproduktion auf Owner-Entscheid vom 10.09., und was sie zutage fördert
+
+Drei weitere Neustarts mit drei Begriffen, dazu das Nextcloud-Protokoll
+(`rohdaten/95b-kaltstart-reproduktion.txt`,
+`rohdaten/95c-kaltstart-reproduktion-teil2.txt`).
+
+| Durchgang | Begriff | Kaltstart | Marge zu 1,5 s | Treffer | warm |
+|---|---|---|---|---|---|
+| 1 | Bescheid | 1.598 ms | minus 98 ms | **6** | 560 bis 566 ms |
+| 2 | Vertrag beenden | 1.805 ms | minus 305 ms | **6** | 662 bis 674 ms |
+| 3 | Kuendigung | 2.468 ms | minus 968 ms | **6** | 553 bis 565 ms |
+
+**Die null Treffer ließen sich nicht reproduzieren, aber das Protokoll belegt
+sie trotzdem.** Um `2026-09-10T14:05:17Z`, dem Zeitpunkt der Kaltstartmessung,
+mit dem Begriff `Vertrag beenden`, den `search_load.py` bei einer Runde als
+`TERMS[0]` stellt, steht dort:
+
+```
+app_api:  cURL error 28: Operation timed out after 1501 milliseconds
+          with 0 bytes received ... /exapps/findling_backend/search
+findling: Findling: backend unreachable
+```
+
+**Warum die Reproduktion trotzdem Treffer lieferte, und warum sich die Zahlen
+nicht widersprechen:** die 1.838,4 ms und die 1.598 bis 2.468 ms messen die
+ganze OCS-Anfrage, die Decke von 1.501 ms gilt nur für den Containeraufruf
+darin. In den drei Durchgängen blieb er darunter, weil der Seitencache des
+Wirts die Modellgewichte der vorigen Starts noch hielt; um 14:05:17Z lag der
+letzte Start 29 Stunden zurück. **Eine Gesamtdauer über 1,5 s ist also kein
+Beweis für einen Abbruch, und eine darunter keiner für das Gegenteil.**
+
+### Der Befund, der bei dieser Reproduktion abgefallen ist, und er ist der größere
+
+Dasselbe Protokoll zählt zwischen `13:51:11Z` und `13:51:42Z` **siebzehn
+abgebrochene Containeraufrufe**. Dieses Fenster ist **Stufe 16 der
+Nebenläufigkeitsreihe** (13:50:59Z bis 13:51:42Z), und `97-stufe-16.json`
+meldet `"failures": 0` für 160 Anfragen. Die Route antwortet bei einem
+abgebrochenen Containeraufruf mit HTTP 200 und einer Ergebnisgruppe ohne
+Containerteil, also zählt das Lastwerkzeug sie als beantwortet.
+
+| Stufe | Anfragen | failures | Treffer | Treffer je Anfrage | Abbrüche im Fenster |
+|---|---|---|---|---|---|
+| 1 | 10 | 0 | 54 | 5,40 | 0 |
+| 4 | 40 | 0 | 216 | 5,40 | 0 |
+| 8 | 80 | 0 | 420 | 5,25 | 0 |
+| 12 | 120 | 0 | 577 | 4,81 | 0 |
+| 16 | 160 | 0 | 666 | **4,16** | **17** |
+
+**Für 10,6 Prozent der Anfragen der Stufe 16 hat die gemessene Antwortzeit
+nicht die Zeit einer vollständigen Antwort gemessen.** Die Stufen 1 bis 12 sind
+davon nicht berührt, und die Zusage steht auf Stufe 8. Die 4.446,2 ms der Stufe
+16 sind eher zu günstig als zu schlecht.
 
 ### Seitenroute, Erstmessung (`rohdaten/99-seitenroute.txt`)
 
@@ -248,11 +338,14 @@ hier kommt aus einer Rohdatei dieses Verzeichnisses.
    gegen eine Decke von 1.500 ms, Marge minus 338,4 ms, gegen plus 167,9 ms in
    Plan 07-01. Die eine gemessene Anfrage brachte null Treffer
    (`rohdaten/95-spitze-nachher.txt`).
-5. **Vier von zehn Sprachfällen sind rot**, in zwei Läufen reproduziert, und die
-   Dateien, die sie brauchen, liegen im Index. Es gibt keine v1.0-Entsprechung
-   auf dieser Box, also ist es keine Verschlechterung gegen eine gemessene Zahl,
-   aber es ist auch nicht das, was der grüne CI-Lauf verspricht
-   (`rohdaten/98-sprachfaelle.txt`).
+5. **Ein Nutzer mit wenigen Dateien findet sie neben einem großen Fremdbestand
+   nicht**, und er bekommt dabei keine Fehlermeldung, sondern eine leere Liste.
+   Für drei von vier geprüften Begriffen kommt seine Datei unter den ersten
+   2.000 Kandidaten nicht vor, weil der Vorfilter über den ganzen Index rankt
+   und der Recheck erst danach filtert. Die Schleife holt keine zweite Runde
+   nach (1,0 Runde je Suche, gemessen). Das ist der Befund hinter den vier
+   roten Sprachfällen und er gehört zu DI-07-03
+   (`rohdaten/98b-sprachfaelle-diagnose.txt`, `rohdaten/99b-runden-alltag.txt`).
 6. **`memory.events max` ist von 2.796 auf 21.939 gestiegen**, also um das
    7,8-fache, und `memory.peak` hat die harte Grenze exakt erreicht statt sie
    wie in der Nachmessung um 157 MB zu unterschreiten. Kein Prozess wurde
@@ -269,6 +362,15 @@ hier kommt aus einer Rohdatei dieses Verzeichnisses.
    `98-sprachfaelle.sh` reichte `OC_PASS` an nichts weiter, weil `sudo` die
    Umgebung räumt und `docker exec` keine weitergibt. Beide Fassungen unter
    `skripte/` sind die gefahrenen, mit einem Satz im Kopf.
+10. **Das Lastwerkzeug meldet null Fehlschläge, wo siebzehn Containeraufrufe
+    abgebrochen sind.** In Stufe 16 der Reihe stehen im Nextcloud-Protokoll 17
+    Abbrüche mit `cURL error 28` bei 160 Anfragen, während
+    `97-stufe-16.json` `"failures": 0` schreibt. Die Route antwortet bei einem
+    abgebrochenen Containeraufruf mit HTTP 200 und ohne Containerteil. Der
+    Fingerabdruck steht in den Trefferzahlen: 5,40 je Anfrage auf den Stufen 1
+    und 4, nur 4,16 auf Stufe 16. Ein Messwerkzeug, das einen Ausfall als
+    Erfolg zählt, ist der unangenehmere Befund von beiden
+    (`rohdaten/95c-kaltstart-reproduktion-teil2.txt`).
 
 Was besser wurde, damit das Blatt nicht schief steht: die Grundlast um
 588,6 MB, die Gesamtspitze um 73,6 MB, Stufe 1 der Lastreihe um 3,6 Prozent,
@@ -281,22 +383,54 @@ dritten Mal in Folge auf null.
 
 | Größe | Wert | Quelle |
 |---|---|---|
-| Box angefahren | 2026-09-09T09:20:06Z | `box.env`, `BOX_STARTED_ISO` |
-| Stand dieses Blatts | 2026-09-10T14:50Z | , |
-| Laufzeit bis hierher | **29,5 Stunden** | gerechnet aus `BOX_STARTED_ISO` |
-| Kosten bis hierher | **3,42 USD netto** | 29,5 h mal 0,1158 USD je Stunde |
-| Satz laufend | 0,1158 USD je Stunde | `aws_box.sh prices`, abgefragt 2026-09-04 |
+| Box angefahren | 2026-09-09T09:19:50Z | `aws_box.sh status` |
+| Stand dieses Blatts | 2026-09-10T15:52Z | `aws_box.sh status` |
+| Laufzeit bis hierher | **30,4 Stunden** | `rohdaten/93-kosten-und-verbleib.txt` |
+| Kosten bis hierher | **3,53 USD netto** | dieselbe Datei, aus der API |
+| Satz laufend | 0,1158 USD je Stunde (0,0978 Box, 0,0130 Speicher, 0,0050 Adresse) | `aws_box.sh prices`, abgefragt 2026-09-04 |
 | Satz angehalten | 0,3130 USD je Tag | `box.env`, `BOX_PARKED_COST_USD_PER_DAY` |
 | Kostendeckel, ursprünglich | **30 Stunden und 3,50 USD** | Owner-Freigabe 09.09., `rohdaten/89-anfahrt.txt` |
 | Kostendeckel, angehoben | **34 Stunden und 4,00 USD** | Owner am 2026-09-10, greift 2026-09-10T19:20Z |
 
-Der ursprüngliche Deckel von 30 Stunden und 3,50 USD läuft am 2026-09-10 um
-15:20:06Z aus. Der angehobene Deckel von 34 Stunden und 4,00 USD läuft am
-2026-09-10 um 19:20:06Z aus. Jede weitere Stunde Laufzeit kostet 0,1158 USD.
+**Der ursprüngliche Deckel von 30 Stunden und 3,50 USD ist gerissen**, und zwar
+am 2026-09-10 um 15:20Z. Der Owner hat ihn vor Beginn der Messungen dieses
+Plans auf 34 Stunden und 4,00 USD angehoben; er greift am 2026-09-10 um
+19:20Z. Stand jetzt: 30,4 von 34 Stunden, 3,53 von 4,00 USD.
 
-**Ein Vorbehalt zu diesem Block, und er ist der Grund für eine Rückfrage:** die
-Zahlen dieses Abschnitts sind aus `BOX_STARTED_ISO` und dem Stundensatz
-gerechnet und nicht über `aws_box.sh status` von der API bestätigt. Die
-AWS-Zugangsdaten liegen ausschließlich in der Umgebung und nicht auf dieser
-Platte, also kann dieser Lauf weder `status` noch `stop` ausführen. Der
-Kostenblock wird nach dem Anhalten aus `box.env` nachgetragen.
+**Wo die Zeit hingegangen ist:** nicht in die Messungen, sondern in den
+Indexaufbau. Der Volllauf brauchte 26 h 37 min statt der erwarteten rund
+19 Stunden, also 7 h 37 min mehr als geplant. Die Anfahrt und die Messungen vor
+dem Lauf kosteten 38 Minuten, alle Messungen nach dem Lauf einschließlich der
+beiden vom Owner entschiedenen Nachmessungen rund 2 h 50 min.
+
+---
+
+## g. Die Entscheidungen des Owners vom 2026-09-10, wortgetreu
+
+Der Checkpoint dieses Plans ist am **2026-09-10** mit dem Signal "zahlen
+abgenommen" beantwortet worden. Die Antworten, wortgetreu und mit Datum:
+
+| Frage | Antwort des Owners, wortgetreu | Datum |
+|---|---|---|
+| Tragen die vier Kernzahlen? | "ZAHLEN ABGENOMMEN: die vier Kernzahlen tragen (Grundlast 103,2 MB, anon 1.764,2 MB, max=21.939 mit Einordnung Indexaufbau, p95 Stufe 8 = 2.125,5 ms)." | 2026-09-10 |
+| Offene Frage 5, `CLAUDE.md` | "JA, Umsetzung in 10-07 wie vorgeschlagen; dieser Plan fasst CLAUDE.md nicht an." | 2026-09-10 |
+| Offene Frage 7, Abbau der Box | "NUR ANHALTEN, kein Abbau (0,3130 USD/Tag geparkt akzeptiert). Abbau ist ein eigener Entscheid in Phase 11." | 2026-09-10 |
+| Zeitpunkt des Anhaltens | "die Box LAEUFT WEITER BIS ZUR BERICHTSABNAHME (10-07)." | 2026-09-10 |
+| Punkt 7, die roten Befunde | "JETZT NACHMESSEN, solange die Box laeuft." | 2026-09-10 |
+
+**Was daraus folgt, und was ausdrücklich nicht:**
+
+- `CLAUDE.md` ist von diesem Plan **nicht angefasst** worden. Die Zeile
+  "Tokenizer und Splitter, 544 MB" gehört in die RAM-Budget-Tabelle und wird in
+  **Plan 10-07** eingetragen.
+- Die Box ist **nicht angehalten**. `aws_box.sh stop` gehört nach der
+  Berichtsabnahme in **Plan 10-07**, zusammen mit dem Nachtrag der vier
+  Schlüssel aus `box.env`.
+- Der **Abbau ist als Auftrag für Phase 11 festgehalten**, mit Datum
+  2026-09-10, und er ist in diesem Plan nicht gefahren worden. Er braucht einen
+  eigenen Plan mit eigener Freigabe, der Nichtexistenz-Prüfung für Instanz,
+  Datenträger und Security Group und dem Sweep nach dem Tag
+  `purpose=findling-phase5`.
+- Die zwei Nachmessungen sind gefahren, ihre Rohdaten liegen im Verzeichnis,
+  und ihre Ergebnisse stehen oben in den Abschnitten d und e. **Beide haben die
+  Deutung der Zahlen verändert, keine von beiden die Zahlen selbst.**
