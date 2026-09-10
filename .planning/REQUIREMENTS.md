@@ -24,9 +24,9 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 
 ### Messung
 
-- [ ] **MESS-01**: Ein Vergleichslauf auf der AWS-Box (vorhandener v1.0-Korpus, 51.961 Docs) belegt die RSS-Ersparnis der gemeinsamen Engine gegen die v1.0-Baseline (docs/measurements)
-- [ ] **MESS-02**: Der Vergleichslauf zeigt keine Regression: p95-Suchlatenz und die 10 deutschen CI-Sprachfaelle bleiben im v1.0-Rahmen
-- [ ] **MESS-03**: Der Messbericht liegt in docs/measurements mit identischer Struktur wie der v1.0-Bericht (vergleichbar Zeile fuer Zeile)
+- [x] **MESS-01**: Ein Vergleichslauf auf der AWS-Box (vorhandener v1.0-Korpus, 51.961 Docs) belegt die RSS-Ersparnis der gemeinsamen Engine gegen die v1.0-Baseline (docs/measurements) (docs/measurements/2026-09-vergleichsmessung-m7g/README.md Abschnitt 5: Grundlast **103,2 MB gegen 691,8 MB**, minus 588,6 MB, fein bestaetigt mit 542,8 MB in den fuenf Tokenizer-Posten; Korpus und Codestand gegengeprueft, `korpus-gleich ja` und `baumhash-gleich ja`)
+- [x] **MESS-02**: Der Vergleichslauf zeigt keine Regression: p95-Suchlatenz und die 10 deutschen CI-Sprachfaelle bleiben im v1.0-Rahmen (docs/measurements/2026-09-vergleichsmessung-m7g/README.md Abschnitte 8 und 12: **p95 Stufe 8 = 2.125,5 ms** gegen 2.500 ms Budget, Zusage haelt; vier von fuenf Stufen regressiv und in Abschnitt 19 einzeln benannt. Sprachfaelle 6 von 10 auf der Box, **kein Sprachdefekt**: die Analysekette teilt die Tokens nachweislich, die Dateien des fragenden Kontos kommen unter den ersten 2.000 Kandidaten des 52.111er-Fremdbestands nicht vor. CI-Beleg gruen: Lauf 34339346666, Commit 0dd007d3)
+- [x] **MESS-03**: Der Messbericht liegt in docs/measurements mit identischer Struktur wie der v1.0-Bericht (vergleichbar Zeile fuer Zeile) (docs/measurements/2026-09-vergleichsmessung-m7g/README.md, **19 Abschnitte** in der Folge des v1.0-Berichts, drei bis vier Vergleichsspalten je Tabelle, **154 Verweise auf Rohdateien**, Abschnitt 19 "Was dieser Lauf nicht besser gemacht hat" in eigener Ueberschrift)
 
 ### Release
 
@@ -57,9 +57,9 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 | UI-01 | Phase 9 | Complete |
 | UI-02 | Phase 9 | Complete |
 | UI-03 | Phase 9 | Complete |
-| MESS-01 | Phase 10 | Pending |
-| MESS-02 | Phase 10 | Pending |
-| MESS-03 | Phase 10 | Pending |
+| MESS-01 | Phase 10 | Complete |
+| MESS-02 | Phase 10 | Complete |
+| MESS-03 | Phase 10 | Complete |
 | REL-01 | Phase 11 | Pending |
 
 12 von 12 Requirements zugeordnet, keine Waisen, keine Doppelungen.

@@ -165,6 +165,7 @@ Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Containe
 | Komponente | Ruhezustand | Spitze | Stellschraube |
 |---|---|---|---|
 | Python 3.13 + FastAPI + uvicorn + nc_py_api | 120-180 MB | n/a | ein Worker |
+| Tokenizer und Splitter (`tokenizers` 0.23.2, Vokabular 250.002) | 0 bei faulem Bau | **544 MB** (amd64 544,3 / arm64 nativ 543,7 / auf der Box 542,8) | zwei Materialisierungen desselben Tokenizers, Python- und Rust-Seite; faul gebaut seit Plan 07-03, faellt also erst beim ersten Chunkerlauf an. Belege: `docs/measurements/2026-09-grundlast-fein/`, `docs/measurements/2026-09-vergleichsmessung-m7g/` Abschnitt 5.2 |
 | Tantivy Suche (mmap) | ~0 RSS | ~0 | Index liegt im Page-Cache |
 | Tantivy Writer | n/a | 50-130 MB | `heap_size`, `num_threads=1` |
 | SQLite + sqlite-vec | ~10 MB | 80-120 MB bei vollem Vektorscan | `cache_size`, int8 statt float32 |

@@ -42,6 +42,59 @@ Solange die Zeile "steht aus" traegt, ist Erfolgskriterium 4 der Phase offen.
 
 ## DI-07-02 (gefunden in Plan 07-02, Task 3): die kalte Suche laeuft zuerst gegen 1,5 s und nicht gegen 2,5 s
 
+**GEMESSEN 10.09.2026, NICHT GESCHLOSSEN, an Phase 11 uebergeben.** Die Messung,
+nach der dieser Befund gefragt hat, ist gefahren: Plan 10-06 hat den Kaltstart
+auf **vollem** Vektorbestand auf der Zielhardware gemessen, dazu drei
+Reproduktionen und die Reihe unter Nebenlaeufigkeit. Die Marge ist negativ, also
+wird der Befund ausdruecklich nicht geschlossen.
+
+Die Zahlen, jede mit ihrer Rohdatei unter
+`docs/measurements/2026-09-vergleichsmessung-m7g/`:
+
+| Groesse | Wert | Marge zur Decke 1.500 ms | Rohdatei |
+|---|---:|---:|---|
+| Kaltstart, **voller** Bestand, 10.09. 14:05:17Z | **1.838,4 ms** | **minus 338,4 ms** | `rohdaten/95-spitze-nachher.txt` |
+| Kaltstart, **leerer** Bestand, 09.09. | 1.550,4 ms | minus 50,4 ms | `rohdaten/95-spitze-vorher.txt` |
+| Vorwert Plan 07-01 (leerer Bestand, amd64-Weg) | 1.332,1 ms | plus 167,9 ms | `docs/performance.md` |
+| Reproduktion 1, `Bescheid` | 1.598 ms | minus 98 ms | `rohdaten/95b-kaltstart-reproduktion.txt` |
+| Reproduktion 2, `Vertrag beenden` | 1.805 ms | minus 305 ms | dieselbe |
+| Reproduktion 3, `Kuendigung` | 2.468 ms | minus 968 ms | `rohdaten/95c-kaltstart-reproduktion-teil2.txt` |
+
+Die Reihe unter Nebenlaeufigkeit steht in `rohdaten/97-nebenlaeufigkeit.txt`:
+p95 464,3 / 1.068,0 / 2.125,5 / 3.453,4 / 4.446,2 ms ueber die Stufen 1, 4, 8,
+12 und 16, bei einem Gruppenbudget von 2.500 ms. Die Zusage steht auf Stufe 8,
+die Reserve dort faellt von 585,0 auf 374,5 ms.
+
+**Eine Methodik-Korrektur, ohne die keine dieser Zahlen richtig gelesen wird.**
+Die gemessenen Dauern sind die Dauer der **ganzen OCS-Anfrage**; die Decke von
+1.501 ms gilt nur fuer den **inneren Containeraufruf**. Diese Unterscheidung
+fehlte allen bisherigen Kaltstartzahlen dieses Projekts. Daraus folgt: eine
+Gesamtdauer ueber 1,5 s beweist keinen Abbruch, und eine darunter keinen
+Nichtabbruch. Die drei Reproduktionen liegen ueber 1,5 s und liefern **je sechs
+Treffer**, weil der Seitencache des Wirts die Modellgewichte noch hielt.
+
+**Der Abbruch ist trotzdem belegt, und zwar genau einmal.** Um
+`2026-09-10T14:05:17Z`, bei kaltem Wirtscache (letzter Start 29 Stunden zuvor),
+steht im Nextcloud-Protokoll `cURL error 28: Operation timed out after 1501
+milliseconds with 0 bytes received ... /exapps/findling_backend/search` und
+darunter `Findling: backend unreachable`. Diese eine Anfrage brachte null
+Treffer.
+
+**Was daraus folgt, in einem Satz:** die Decke von 1,5 s haelt den Kaltstart auf
+vollem Vektorbestand bei kaltem Wirtscache nicht aus, und der Nutzer sieht dann
+keine Fehlermeldung, sondern eine leere Ergebnisgruppe.
+
+**Warum der Befund trotzdem nicht hier entschieden wird:** eine hoehere Decke
+gilt fuer **jeden** Containeraufruf der App, und die Unified Search wartet auf
+jeden Provider. Sie laesst also jeden Nutzer bei jeder Suche laenger warten, um
+einen Fall zu retten, der genau einmal je Containerstart auftritt. Die
+Alternativen, die keine Konstante anfassen (Vorwaermen der Gewichte beim
+Containerstart, ein eigener Weg fuer den ersten Aufruf), sind nicht gemessen.
+
+**Wohin es gehoert: Phase 11**, in das Audit der Haertung, mit diesen Zahlen und
+mit dem Bericht
+`docs/measurements/2026-09-vergleichsmessung-m7g/README.md`, Abschnitt 9.
+
 **Gefunden:** beim Einordnen der Kaltstartdauer gegen die Decken des PHP-Wegs.
 
 **Was:** `REQUEST_TIMEOUT_SECONDS = 1.5` in
@@ -67,6 +120,53 @@ Rechnung und nicht als Messreihe markiert.
 ---
 
 ## DI-07-03 (gefunden in Plan 07-02, Task 3): eine Suche kostet zwei Containeraufrufe, und der erste steht in einer Schleife
+
+**MESSTEIL GESCHLOSSEN 10.09.2026.** Die Frage, wie oft die Schleife ueber
+`MAX_ROUNDS = 3` mehr als eine Runde dreht und was die Runden kosten, ist auf
+der Zielhardware gemessen (Plan 10-06, Schritt 12). Eine Aenderung am
+Rechteabgleich ist ausdruecklich **nicht** beschlossen: er ist die
+Berechtigungskette, und diese Entscheidung weist der Befund selbst Phase 11 zu.
+
+| Fall | Runden je Suche | Containeraufrufe je Suche | Treffer | p50 | p95 | Marge zu 2.500 ms | Rohdatei |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 1, der Alltag | **1,0** | **1,9** (10 Kandidaten-, 9 Snippetaufrufe) | 54 | 589,4 ms | **683,6 ms** | 1.816,4 ms | `rohdaten/99b-runden-alltag.txt` |
+| 2, provozierter Driftfall | 1,0 | 1,0 (10 Kandidaten-, 0 Snippetaufrufe) | 0 | 444,2 ms | 681,6 ms | 1.818,4 ms | `rohdaten/99b-runden-drift.txt` |
+
+Beide Rohdateien liegen unter
+`docs/measurements/2026-09-vergleichsmessung-m7g/`.
+
+**Wie die beiden Faelle hergestellt wurden**, weil eine Zahl aus einem
+provozierten Zustand ohne diesen Satz als Alltagszahl gelesen wird:
+
+- **Fall 1** ist das Konto, das alle Dateien besitzt, zehn Suchen, 40 geteilte
+  Dateien. Der Recheck entfernt nichts, die Schleife dreht genau eine Runde.
+  Gezaehlt wurden die Containeraufrufe im Protokoll (`POST /search`,
+  `POST /snippets`), nicht ein abgelesener Zustand.
+- **Fall 2** wurde absichtlich erzeugt: eigenes Konto `driftfall`, 20 Freigaben,
+  zwei gezaehlte Poller-Durchgaenge, Kontrolle vor der Ruecknahme lieferte vier
+  Treffer, dann Ruecknahme um 14:14:14Z ohne Wartezeit und sofort gefragt.
+  **Der Driftfall liess sich damit nicht herstellen.** Das Skript liest
+  dreiwertig, und gemessen wurde die dritte Lesart: null Treffer **und** eine
+  Runde je Suche heisst, der Vorfilter wusste schon Bescheid und die Drift war
+  zu kurz. **Die Alltagszahl traegt, die Driftzahl nicht.**
+
+**Gegen die Decken:** die Aufrufdecke `REQUEST_TIMEOUT_SECONDS` = 1,5 s gilt je
+Aufruf, das Gruppenbudget `BUDGET_SECONDS` = 2,5 s je Ergebnisgruppe. Bei 1,0
+Runde und 1,9 Aufrufen je Suche teilen sich im Alltag nie mehr als zwei Aufrufe
+dasselbe Budget, und der gemessene p95 von 683,6 ms laesst 1.816,4 ms Marge.
+**Der gerechnete Worst Case von vier Aufrufen gegen ein Budget ist im Alltag
+nicht eingetreten.**
+
+**Was offen bleibt und Phase 11 gehoert**, mit einem zweiten Befund aus
+demselben Lauf: die Schleife holt **keine zweite Runde nach**, auch dann nicht,
+wenn der Recheck alle Kandidaten der ersten Runde verworfen hat. Auf einer
+Instanz mit grossem Fremdbestand findet ein Nutzer mit wenigen Dateien seine
+eigenen deshalb nicht, sobald seine Begriffe im Fremdbestand haeufig sind, und
+er bekommt keine Fehlermeldung, sondern eine leere Liste. Fuer drei von vier
+geprueften Begriffen kam die Datei des fragenden Kontos unter den ersten 2.000
+Kandidaten nicht vor (`rohdaten/98b-sprachfaelle-diagnose.txt`). Das ist der
+Befund hinter den vier roten Sprachfaellen der Vergleichsmessung, und er ist
+eine Frage an den Rechteabgleich, also **Phase 11**.
 
 **Gefunden:** beim Nachlesen der Kandidatenschleife, waehrend Befund 1
 geschrieben wurde.

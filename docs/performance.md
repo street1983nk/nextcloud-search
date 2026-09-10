@@ -151,6 +151,8 @@ zwei Reihen auf zwei Architekturen mehr sagen als eine.
 | Verbleib der ARM-Box nach dem Semantiklauf | **wieder angehalten**, für die Launch-Härtung vor der Abgabe | 2026-09-06 |
 | Verbleib der ARM-Box nach der Launch-Härtung | **angehalten, kein Abbau** (Betreiberentscheid 07.09.); Abbaukriterium: nach der v1.1-Messung | 2026-09-07 |
 | **Feinmessung der Grundlast, nativ auf arm64** | **gemessen auf `ubuntu-24.04-arm`, Lauf 34325000302, fünf Posten 543,7 MB, 8 kB neben der groben nativen Messung; ersetzt die Messung unter QEMU, die 1,2 Prozent daneben lag** | 2026-09-09 |
+| **Vergleichsmessung v1.1 gegen v1.0, ARM m7g.large** | **gemessen, Grundlast 103,2 MB gegen 691,8 MB, anon-Spitze 1.764,2 MB, `oom`/`oom_kill`/`oom_group_kill` je 0 bei `max` 21.939, p95 Stufe 8 = 2.125,5 ms gegen 2.500 ms Budget, Laufzeit 26 h 37 min gegen 18 h 56 min; vier von fünf Laststufen regressiv, benannt in Abschnitt 19 des Berichts** | 2026-09-10 |
+| Verbleib der ARM-Box nach der Vergleichsmessung | **angehalten, kein Abbau** (Betreiberentscheid 10.09.); der Abbau bekommt einen eigenen Plan in Phase 11 | 2026-09-10 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -3407,7 +3409,10 @@ Unterschiede sind groß genug, dass eine Differenz zwischen ihnen keine Aussage
 3. **Die Statistik.** Der Integrationslauf macht genau eine kalte Anfrage je
    Matrixzeile. Eine Anfrage ist kein p95, und drei Anfragen sind es auch nicht.
    **Was CI liefert, ist eine Kaltstartdauer und wird ausschließlich so
-   benannt.** Das p95 über den vollen Bestand gehört Phase 10.
+   benannt.** Das p95 über den vollen Bestand **steht seit dem 10.09.2026 in
+   `docs/measurements/2026-09-vergleichsmessung-m7g/README.md`, Abschnitt 8**:
+   464,3 / 1.068,0 / 2.125,5 / 3.453,4 / 4.446,2 ms über die Stufen 1, 4, 8, 12
+   und 16. Bis dahin stand hier, es gehöre Phase 10.
 
 **Was gegen den stillen Rückschritt steht.** Kein Millisekundendeckel: ein
 Zeittor auf einem geteilten Runner wird für Runnerlast rot und nicht für die
@@ -3507,7 +3512,13 @@ Verhalten aller 1.0.x-Releases) auf amd64 nativ 575,6 MB und kostet mit dem
 faulen Bau noch 0,6 MB, gemessene Ersparnis 575,0 MB (Rohdaten:
 docs/measurements/2026-09-grundlast-fein/, Datei
 02-nachmessung-fauler-bau-amd64.txt). Der Vergleich Zeile für Zeile gegen die
-v1.0-Grundlinie, mit einem p95 über den vollen Bestand, gehört Phase 10.
+v1.0-Grundlinie, mit einem p95 über den vollen Bestand, **ist am 09. und
+10.09.2026 gefahren worden und steht in
+`docs/measurements/2026-09-vergleichsmessung-m7g/README.md`**; der eigene
+Abschnitt dieses Laufs steht weiter unten unter "Die Vergleichsmessung v1.1
+gegen v1.0". Bis zum 10.09.2026 stand an dieser Stelle der Satz, dieser
+Vergleich gehöre Phase 10; er ist mit dem Lauf abgelöst und zeigt jetzt auf den
+Bericht statt auf eine Phase.
 
 ### Der größte Posten der Grundlast heißt Tokenizer und Splitter
 
@@ -3547,10 +3558,13 @@ ist rund das Fünfzehnfache der 17 MB, die die Datei auf der Platte wiegt.
 
 **Was das für das RAM-Budget bedeutet.** Die Budget-Tabelle in `CLAUDE.md` kennt
 einen Posten "onnxruntime und e5-small int8" und einen Posten "Tantivy Writer".
-Einen Posten "Tokenizer und Splitter" kennt sie nicht, obwohl er mit gemessenen
+Einen Posten "Tokenizer und Splitter" kannte sie nicht, obwohl er mit gemessenen
 544 MB größer ist als das Modell und, anders als das Modell, bis zu Plan 07-03
-nicht faul geladen wurde. Ob die Tabelle nachgezogen wird, entscheidet der
-Owner; dieser Bericht ändert `CLAUDE.md` nicht.
+nicht faul geladen wurde. **Der Owner hat am 10.09.2026 für die Ergänzung
+entschieden, und die Zeile steht seit Plan 10-07 in der Tabelle**, mit
+"0 bei faulem Bau" im Ruhezustand und 544 MB als Spitze (amd64 544,3 MB,
+arm64 nativ 543,7 MB, auf der Box gemessen 542,8 MB). Die Frage ist damit
+entschieden und wird nicht ein drittes Mal gestellt.
 
 Alle fünf Posten gehören allein dem Arbeiter. Die Leseseite fasst weder den
 Splitter noch diesen Tokenizer an, und ein Container, dessen zweite Spur
@@ -3816,6 +3830,154 @@ Beim nächsten Start gilt weiter, was schon beim zweiten Verbleib stand: die
 öffentliche Adresse wechselt, `BOX_IP`, die SSH-Regel der Security Group auf die
 Betreiber-IP und der Eintrag `loadtest.infranode.dev` sind nachzuziehen, und der
 Container muss über AppAPI neu bewaffnet werden, sonst indexiert er nicht.
+
+**Das Abbaukriterium ist mit dem Lauf vom 09./10.09.2026 erfüllt.** Die
+v1.1-Messung ist gefahren, sie liegt in
+`docs/measurements/2026-09-vergleichsmessung-m7g/`, und sie ist auf derselben
+Maschine gelaufen wie 06-11 und 06.1-18. Damit wäre der Abbau nach dem
+Wortlaut dieses Kriteriums fällig.
+
+### Der vierte Verbleib: nach der Vergleichsmessung angehalten, Abbau eigener Plan in Phase 11
+
+**Entschieden am 10.09.2026 vom Betreiber, im Checkpoint des Plans 10-06:**
+
+> "NUR ANHALTEN, kein Abbau (0,3130 USD/Tag geparkt akzeptiert). Abbau ist ein
+> eigener Entscheid in Phase 11."
+
+> "die Box LAEUFT WEITER BIS ZUR BERICHTSABNAHME (10-07)."
+
+Das Abbaukriterium des dritten Verbleibs ist damit erfüllt und die Entscheidung
+daneben ist eine andere: **kein Abbau in dieser Phase.** Der Abbau braucht einen
+eigenen Plan in Phase 11, mit eigener Freigabe, der Nichtexistenz-Prüfung für
+Instanz, Datenträger und Security Group und dem Sweep nach dem Tag
+`purpose=findling-phase5`. Der Grund für den eigenen Plan: ein Abbau wirft den
+Korpus (20 GB), beide Indizes und die Abbilder weg, und ein zweiter Aufbau
+kostet nach diesem Lauf nicht mehr 19, sondern gemessene **26 h 37 min**
+(`docs/measurements/2026-09-vergleichsmessung-m7g/README.md`, Abschnitt 7).
+
+| Punkt | Stand |
+|---|---|
+| Instanz | `i-06b1d913f5c6f669b`, angefahren 2026-09-09T09:19:50Z |
+| Stoppzeitpunkt | wird nach der Berichtsabnahme nachgetragen, aus `box.env` nach `aws_box.sh stop` |
+| Laufzeit und Kosten dieses Laufs | 30,4 Stunden und 3,53 USD netto zum Stand 2026-09-10T15:52Z; die Endsumme steht mit dem Stoppzeitpunkt |
+| Kostendeckel | ursprünglich 30 h und 3,50 USD (Freigabe 09.09., gerissen am 10.09. um 15:20Z), angehoben auf **34 h und 4,00 USD**, greift 2026-09-10T19:20Z |
+| Datenträger | `vol-0f3bea6ca1dab68ab` 40 G und `vol-04c5b59fe9417babd` 60 G, bleiben beide |
+| Parkkosten | rund **0,3130 USD je Tag** |
+
+### Die Vergleichsmessung v1.1 gegen v1.0, 09. und 10.09.2026
+
+Dieser Abschnitt steht **neben** dem des Semantiklaufs und dem der Nachmessung
+und nicht anstelle. Jede Zahl nennt ihre Messreihe unter
+`docs/measurements/2026-09-vergleichsmessung-m7g/`; der Bericht dort nennt zu
+jeder Zahl zusätzlich ihre Rohdatei.
+
+**Die Kernaussage, in der Form aus D-H2** (Bericht Abschnitt 4):
+
+> Der Indexaufbau über 52.111 Dokumente hat unter einer harten Grenze von 2 GiB
+> keinen einzigen Prozess das Leben gekostet. Die drei Schadenszähler `oom`,
+> `oom_kill` und `oom_group_kill` stehen je auf null, die anon-Spitze des ganzen
+> Laufs lag bei **1.764,2 MB**, gemessen am 2026-09-10 um 08:12:24Z, und der
+> Zähler `max` steht auf **21.939**.
+
+Was `max` bedeutet: der Dateicache des Tantivy-Index lag gegen die Grenze an,
+der Kernel hat ihn 21.939 mal zurückgedrängt, und kein Prozess wurde dabei
+getötet. Der Zähler gehört zum Indexaufbau, nicht zum Suchbetrieb: nach dem
+Containerneustart steht er über alle vier Messblöcke des 10.09. auf 0. Die alten
+Zahlen bleiben daneben stehen: **1.837,8 MB** und `max` 2.796 aus 06-11,
+1.812,7 MB und `max` 0 aus der Nachmessung vom 07.09.
+
+**MESS-01, die Grundlast** (Bericht Abschnitt 5):
+
+| Posten | 06-11 | Nachmessung 07.09. | 05-21 | **Vergleichsmessung** |
+|---|---:|---:|---:|---:|
+| anon im Leerlauf, Modell nie geladen | 691,8 MB | 693,4 MB | 58,7 MB | **103,2 MB** |
+| Differenz gegen 06-11 | | | | **minus 588,6 MB** |
+
+Die gerechnete Erwartung lag bei 118 bis 150 MB (Annahme A5, eine Rechnung und
+keine Messung); der gemessene Wert liegt darunter. **Der Unterschied fällt
+ausschließlich in der Grundlast an:** die erste Suche kostet mit plus 415,0 MB
+dieselben Gewichte wie vorher, und die Gesamtspitze sinkt nur um 73,6 MB.
+
+**MESS-02, die p95-Reihe über fünf Stufen** (Bericht Abschnitt 8):
+
+| Nebenläufigkeit | p95 06-11 | **p95 Vergleichsmessung** | Differenz | Budget 2.500 ms |
+|---:|---:|---:|---:|---|
+| 1 | 481,6 ms | **464,3 ms** | minus 3,6 % | gehalten |
+| 4 | 1.009,4 ms | **1.068,0 ms** | plus 5,8 % | gehalten |
+| 8 | 1.915,0 ms | **2.125,5 ms** | plus 11,0 % | gehalten |
+| 12 | 3.045,4 ms | **3.453,4 ms** | plus 13,4 % | gerissen |
+| 16 | 3.782,7 ms | **4.446,2 ms** | plus 17,5 % | gerissen |
+
+**Die Zusage steht weiter auf Stufe 8, aber ihre Reserve fällt von 585,0 auf
+374,5 ms.** Vier von fünf Stufen sind regressiv, alle vier über dem Rauschband
+von fünf Prozent; der Bericht führt sie in Abschnitt 19. Der Vorbehalt: die
+Unified Search fragt alle Provider gleichzeitig, also setzt auch der
+PHP-Prozesspool der Instanz eine Grenze.
+
+**Die Antwort auf DI-07-02** (Bericht Abschnitt 9): der Kaltstart auf vollem
+Vektorbestand kostet **1.838,4 ms** über OCS, gegen eine Aufrufdecke von
+1.500 ms, Marge **minus 338,4 ms**. Auf leerem Bestand waren es 1.550,4 ms
+(Marge minus 50,4 ms), der Vorwert aus Plan 07-01 lag bei 1.332,1 ms.
+**Methodik-Korrektur, die für alle bisherigen Kaltstartzahlen dieses Dokuments
+gilt:** die gemessenen Dauern sind die Dauer der ganzen OCS-Anfrage, die Decke
+von 1.501 ms gilt nur für den inneren Containeraufruf. Eine Gesamtdauer über
+1,5 s beweist deshalb keinen Abbruch. Der Abbruch ist trotzdem belegt: um
+14:05:17Z steht im Nextcloud-Protokoll `cURL error 28: Operation timed out after
+1501 milliseconds`. Drei Reproduktionen mit warmem Wirtscache lieferten bei
+1.598, 1.805 und 2.468 ms je sechs Treffer. **Die Entscheidung über
+`REQUEST_TIMEOUT_SECONDS` gehört Phase 11.**
+
+**Die Antwort auf DI-07-03** (Bericht Abschnitt 10): der Rechteabgleich dreht im
+Alltagsfall **1,0 Runde je Suche** bei **1,9 Containeraufrufen** (10
+Kandidaten-, 9 Snippetaufrufe), p95 683,6 ms gegen ein Gruppenbudget von
+2.500 ms. Der provozierte Driftfall **ließ sich nicht herstellen**: null Treffer
+bei einer Runde je Suche heißt nach der dreiwertigen Lesart des Skripts, dass
+der Vorfilter schon Bescheid wusste. Die Alltagszahl trägt, die Driftzahl nicht.
+
+**Die Anzeigeseite mit Vektorbestand** (Bericht Abschnitt 11), Erstmessung: p95
+0,332 s (Sitzung, erste Seite), 0,333 s (Sitzung, Seite 3), 0,775 s
+(Basic-Auth), 0,769 s (Dialogweg mit `limit=100`). Der Vorwert auf einer Instanz
+**ohne** `vectors.db` lag bei 0,122 s. **Die Seitentiefe kostet nichts**, weil
+der Vektorscan einmal je Anfrage läuft und nicht je Seite; T-09-29 aus Phase 9
+bleibt damit auf `accept`, jetzt mit Zahlen statt mit deren Abwesenheit.
+
+**Die zehn deutschen Sprachfälle** (Bericht Abschnitt 12), Erstmessung mit
+Mess-Setup-Vorbehalt: `sprachfaelle bestanden 6 von 10` auf der Box, zweimal
+gefahren mit demselben Ergebnis. **Es ist kein Sprachdefekt.** Die deutsche
+Analysekette teilt die Tokens nachweislich (`grundstuck`, `verkehr`, `genehm`),
+und jede Suche liefert im Index zehn Treffer. Sie gehören aber alle dem
+Lasttest-Konto mit seinen 52.111 Dokumenten: für drei von vier geprüften
+Begriffen kommt die Datei des fragenden Kontos unter den ersten 2.000 Kandidaten
+nicht vor. **Der Befund über das Erzeugnis, der bleibt:** ein Nutzer mit wenigen
+Dateien findet sie neben einem großen Fremdbestand nicht und bekommt statt einer
+Meldung eine leere Liste; die Schleife holt keine zweite Runde nach. Derselbe
+CI-Lauf misst die zehn Fälle grün (Lauf 34339346666, Commit `0dd007d3`), aber
+auf amd64 gegen eine frische Instanz.
+
+**Die Laufzeit** (Bericht Abschnitt 7): **26 h 37 min 21 s** für beide Spuren
+gegen 18 h 56 min in 06-11, also **plus 40,6 Prozent** bei einem Mehrbestand von
+0,29 Prozent, und über der Erwartung von 22 bis 26 Stunden. Die Zahl ist eine
+**Untergrenze**, weil beim Anstoß 1.653 Dateien schon im Index lagen. Der
+Durchsatz fiel auf beiden Spuren gleichzeitig und um denselben Faktor
+(Indexierung 31,6 gegen 45,7 je Minute, Einbettung 32,5 gegen rund 43). Die
+Ursache ist eingegrenzt, aber nicht bewiesen: Kandidat 1 ist die Kopplung der
+Spuren, Kandidat 2 sind die Zulauf-Lücken (`vorrat=0` in 62 von 325 Lesungen).
+
+**Der Bestand** (Bericht Abschnitte 14 und 15): 52.111 indexiert, 37
+übersprungen, 0 fehlgeschlagen, 146.171 Chunks, 1.318,3 Byte je Dokument im
+Vektorspeicher und 15.093 Byte im Tantivy. Gegen 51.961 / 145.854 / 1.321,0 /
+15.113 aus 06-11. **52.111 minus 150 ergibt exakt 51.961**; die 150 sind der
+Drill-Ordner vom 07.09. Der Verdikt-Versatz von plus 34 ist vollständig
+aufgeklärt (49 Zeilen eines zweiten Speichers minus 15 Skelettdateien ohne
+einreihbare Endung) und in beiden Läufen derselbe.
+
+**Ein Werkzeugbefund, der zu diesen Zahlen gehört** (Bericht Abschnitt 9.3):
+Stufe 16 der Lastreihe trägt 17 abgebrochene Containeraufrufe bei gemeldeten
+`failures: 0`. Die Route antwortet bei einem abgebrochenen Containeraufruf mit
+HTTP 200 und ohne Containerteil, also zählt das Lastwerkzeug einen Ausfall als
+Erfolg. Der Fingerabdruck steht in den Trefferzahlen: 5,40 je Anfrage auf den
+Stufen 1 und 4, nur 4,16 auf Stufe 16. **Die Stufen 1 bis 12 sind nicht berührt,
+und die Zusage steht auf Stufe 8.** Geführt als DI-10-01.
 
 ## Reproduzieren
 

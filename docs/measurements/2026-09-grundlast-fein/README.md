@@ -285,10 +285,16 @@ teurer als der Fix; hier muss es nicht aufgeweicht werden.
 
 Die Budget-Tabelle in `CLAUDE.md` kennt einen Posten "onnxruntime + e5-small
 int8" mit "0 bei lazy_load, 250 bis 400 MB Spitze" und einen Posten "Tantivy
-Writer". Einen Posten "Tokenizer und Splitter" kennt sie nicht. Gemessen ist
+Writer". Einen Posten "Tokenizer und Splitter" kannte sie nicht. Gemessen ist
 dieser Posten mit 544 MB **größer als das Modell**, und er war bis zu diesem
-Plan nicht faul. Ob die Tabelle nachgezogen wird, entscheidet der Owner; dieser
-Bericht ändert `CLAUDE.md` nicht.
+Plan nicht faul.
+
+**Nachgetragen am 10.09.2026:** der Owner hat für die Ergänzung entschieden, und
+die Zeile "Tokenizer und Splitter" steht seit Plan 10-07 in der Budget-Tabelle
+von `CLAUDE.md`, mit "0 bei faulem Bau" im Ruhezustand und 544 MB als Spitze.
+Die Vergleichsmessung auf der Box hat dieselben fünf Posten mit 542,8 MB
+bestätigt (`docs/measurements/2026-09-vergleichsmessung-m7g/README.md`,
+Abschnitt 5.2). **Die Frage ist entschieden und nicht mehr offen.**
 
 ---
 
