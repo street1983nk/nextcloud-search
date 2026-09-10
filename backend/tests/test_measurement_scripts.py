@@ -24,13 +24,23 @@ whole stock since plan 10-01 renormalised five files and added the checkout rule
 that keeps them normalised, so the wide scope is a statement about the tree and
 not a wager on it.
 
-Narrow, over the directory of this run alone: a shebang on the first line, no
-path of one machine, and no password on a command line. It is narrow because
-45-suchlast.py of the semantic run puts "/home/ubuntu/work" into sys.path and
-imports drillhelfer from it, drillhelfer does not live in this repository, and
-that file is history with its raw data lying next to it. A gate that demanded it
-be rewritten would blur the origin of those raw data to buy nothing, so the three
-promises that only a new script can keep are asked of the new scripts.
+Narrow, over the run directories written under these rules: a shebang on the
+first line, no path of one machine, and no password on a command line. It is
+narrow because 45-suchlast.py of the semantic run puts "/home/ubuntu/work" into
+sys.path and imports drillhelfer from it, drillhelfer does not live in this
+repository, and that file is history with its raw data lying next to it. A gate
+that demanded it be rewritten would blur the origin of those raw data to buy
+nothing, so the three promises that only a new script can keep are asked of the
+new scripts. Two directories are new in that sense today, and the second one
+joined in plan 11-03: the successor fassung of the language case script lives in
+a run directory of its own, and it would have carried none of the three
+promises if the narrow scope had stayed a single directory.
+
+The youngest part of this file is the watchman over the DRIVEN fassung of that
+script. Scripts under docs/measurements/<lauf>/skripte/ are the fassungen that
+really ran, and their raw data lie next to them; a script that is corrected
+afterwards makes every figure beside it unsupported. That rule was a sentence in
+a head comment until plan 11-03 turned it into a digest.
 """
 
 from __future__ import annotations
@@ -39,7 +49,9 @@ import ast
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -50,9 +62,35 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MEASUREMENTS_DIR = REPO_ROOT / "docs" / "measurements"
 RUN_DIR = MEASUREMENTS_DIR / "2026-09-vergleichsmessung-m7g" / "skripte"
+FIX_RUN_DIR = MEASUREMENTS_DIR / "2026-09-werkzeugfixe" / "skripte"
 TREE_HASH = RUN_DIR / "40b-baumhash.py"
 TREE_HASH_PROOF = RUN_DIR / "40b-baumhash.sh"
 OPS_GATE = Path(__file__).resolve().parent / "test_ops_scripts.py"
+
+# The two directories the narrow scope covers. Written down as a pair rather
+# than globbed, because widening it is a decision and not a side effect of the
+# next directory somebody creates: the semantic run of 05.09. must stay outside
+# it, and the reason is in the docstring above.
+NARROW_SCOPE_DIRS = (RUN_DIR, FIX_RUN_DIR)
+
+# The driven fassung of the language cases and its successor. The first one is
+# evidence and must not move, the second one is the fix of DI-10-02.
+DRIVEN_LANGUAGE_CASES = RUN_DIR / "98-sprachfaelle.sh"
+SUCCESSOR_LANGUAGE_CASES = FIX_RUN_DIR / "98b-sprachfaelle.sh"
+
+# The state of the driven fassung, measured on 2026-09-10 out of the file
+# itself. Both figures are written down and neither is recomputed from the file
+# under test, because a watchman that asks the file for its own expectation
+# agrees with it no matter what it says. The bytes are the same on Windows and
+# on a runner: .gitattributes checks every .sh out with LF endings.
+DRIVEN_LANGUAGE_CASES_SHA256 = "5f9607fc6f00754b99eb9921aa6c3ce492e7eb3725f7efb2520be6c12f1ade1d"
+DRIVEN_LANGUAGE_CASES_BYTES = 23479
+
+# The sentence the watchman says when it goes red. It is a constant so that the
+# diagnosis cannot drift away from the rule it defends.
+DRIVEN_FASSUNG_RULE = (
+    "eine gefahrene Messfassung ist Teil des Belegs, und ein Fix entsteht als neue Datei in einem neuen Laufverzeichnis"
+)
 
 # The two files of the full run that can be held to a promise without a box: the
 # reader the watchman decides on, and the observer whose recordings are checked
@@ -668,8 +706,16 @@ def measurement_scripts() -> list[Path]:
 
 
 def scripts_of_this_run() -> list[Path]:
-    """Every script of the run of phase 10, which is the narrow scope."""
-    return sorted(path for path in RUN_DIR.glob("*") if path.suffix in SCRIPT_SUFFIXES)
+    """Every script of the run directories written under these rules.
+
+    Two directories since plan 11-03. The successor fassung of the language
+    cases lives in one of its own, and the three promises below have to reach
+    it: it creates an account, it reads a password and it is copied onto the
+    same box as the rest.
+    """
+    return sorted(
+        path for directory in NARROW_SCOPE_DIRS for path in directory.glob("*") if path.suffix in SCRIPT_SUFFIXES
+    )
 
 
 def carriage_returns_in(raw: bytes) -> int:
@@ -734,7 +780,7 @@ def measurement_script(request: pytest.FixtureRequest) -> Path:
     return Path(request.param)
 
 
-@pytest.fixture(params=scripts_of_this_run(), ids=lambda path: path.name)
+@pytest.fixture(params=scripts_of_this_run(), ids=lambda path: f"{path.parent.parent.name}/{path.name}")
 def script_of_this_run(request: pytest.FixtureRequest) -> Path:
     return Path(request.param)
 
@@ -853,3 +899,199 @@ def test_the_password_gate_fires_on_a_staged_sample() -> None:
 
     assert passwords_on_a_command_line("search_load.py --password-env LASTTEST_PW\n") == []
     assert passwords_on_a_command_line('mkdir -p "$OUT"\n') == []
+
+
+# The watchman over the driven fassung of the language cases, and the promises
+# of its successor. Plan 11-03, deferred item DI-10-02.
+#
+# The rule these assertions defend was prose until now: a script under
+# docs/measurements/<lauf>/skripte/ is the fassung that really ran, and the raw
+# data next to it are only worth as much as the certainty that the two belong
+# together. 98-sprachfaelle.sh of 10.09.2026 is the file that produced the
+# balance line "sprachfaelle bestanden 6 von 10", and correcting it in place
+# would have left that line standing next to a script that never produced it.
+
+
+def test_the_narrow_scope_covers_the_two_run_directories_written_under_these_rules() -> None:
+    """Widening the narrow scope is a decision, so it is pinned here.
+
+    The semantic run of 05.09. stays outside on purpose (45-suchlast.py reaches
+    its helper through a directory of the box), and the run directory of the
+    tool fixes joined in plan 11-03 because its script is new and can keep all
+    three promises.
+    """
+    assert NARROW_SCOPE_DIRS == (RUN_DIR, FIX_RUN_DIR)
+    found = scripts_of_this_run()
+    assert SUCCESSOR_LANGUAGE_CASES in found
+    assert DRIVEN_LANGUAGE_CASES in found
+    assert not [path for path in found if path.parent.parent.name == "2026-09-05-semantiklauf-m7g"]
+
+
+def test_the_driven_language_case_script_stays_byte_identical() -> None:
+    """The fassung of 10.09.2026 is evidence, and evidence does not get edited.
+
+    Its raw file rohdaten/98-sprachfaelle.txt carries the balance line of that
+    run and the four red cases DI-10-02 is about. A correction inside this file
+    would make every one of those figures a claim about a script that no longer
+    exists, so the fix of DI-10-02 is a new file in a new run directory and this
+    digest is what keeps it that way.
+    """
+    assert DRIVEN_LANGUAGE_CASES.is_file(), DRIVEN_LANGUAGE_CASES
+    raw = DRIVEN_LANGUAGE_CASES.read_bytes()
+    assert len(raw) == DRIVEN_LANGUAGE_CASES_BYTES, DRIVEN_FASSUNG_RULE
+    assert hashlib.sha256(raw).hexdigest() == DRIVEN_LANGUAGE_CASES_SHA256, DRIVEN_FASSUNG_RULE
+
+
+def test_the_watchman_of_the_driven_fassung_fires_on_a_single_added_character() -> None:
+    """A watchman whose only assertion is that today is fine stays green when it dies.
+
+    The staged sample is the smallest edit somebody could make to that file, a
+    single character, and the digest has to notice it. Measured against the real
+    bytes rather than against an invented sample, because what is being shown
+    here is that THIS digest separates THIS file from a changed one.
+    """
+    raw = DRIVEN_LANGUAGE_CASES.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == DRIVEN_LANGUAGE_CASES_SHA256
+    assert hashlib.sha256(raw + b" ").hexdigest() != DRIVEN_LANGUAGE_CASES_SHA256
+    assert hashlib.sha256(raw.replace(b"set -eu", b"set -e", 1)).hexdigest() != DRIVEN_LANGUAGE_CASES_SHA256
+
+
+def test_the_successor_points_at_the_driven_fassung_and_lives_beside_it() -> None:
+    """The successor names its original, and it does not lie in the same directory."""
+    text = SUCCESSOR_LANGUAGE_CASES.read_text(encoding="utf-8")
+    assert "2026-09-vergleichsmessung-m7g/skripte/98-sprachfaelle.sh" in text
+    assert "DI-10-02" in text
+    assert SUCCESSOR_LANGUAGE_CASES.parent != DRIVEN_LANGUAGE_CASES.parent
+    # The one sentence of the finding, in the words of the deferred item: the
+    # account separates the permission and not the index.
+    assert "PERMISSION and not the INDEX" in text
+
+
+def test_the_successor_checks_the_foreign_stock_before_the_first_case() -> None:
+    """The order of the two verdicts is the fix, so the order is asserted.
+
+    A pre check that ran after the cases would produce the same figures and none
+    of the meaning: the point is that a case which cannot carry a statement is
+    never given one.
+    """
+    text = SUCCESSOR_LANGUAGE_CASES.read_text(encoding="utf-8")
+    vorpruefung = text.index("Abschnitt 0: die Vorpruefung des Fremdbestands")
+    erster_fall = text.index("\n    FALL=1\n")
+    assert vorpruefung < erster_fall
+    # Every case asks the pre check first, and there are ten of them.
+    assert text.count("if messbar ") == 10
+    assert "fremdbestand %s %s (Seite der Faelle)" in text
+
+
+def test_the_successor_judges_three_valued_and_balances_with_two_figures() -> None:
+    """GRUEN, ROT and NICHT MESSBAR, and a balance line that carries both counts.
+
+    The last assertion is the one DI-10-02 asks for by name: the line the run of
+    10.09. printed carried a single figure, and a single figure is exactly the
+    misreading that turned four unmeasurable cases into four red ones.
+    """
+    text = SUCCESSOR_LANGUAGE_CASES.read_text(encoding="utf-8")
+    assert "NICHT MESSBAR (Fremdbestand %s Treffer)" in text
+    assert "sprachfall %s GRUEN" in text
+    assert "sprachfall %s ROT:" in text
+    assert "sprachfaelle bestanden %s von 10, davon %s nicht messbar" in text
+    # The count of cases and the count of assertions stay two different numbers,
+    # which is the reading plan 10-04 settled on.
+    assert "rote faelle %s, nicht messbare faelle %s, rote zusicherungen %s" in text
+    # A run whose CI proof is missing must not be able to say so in a raw file
+    # and carry on; it ends instead, so the word of that note has no place left.
+    assert "unbekannt" not in text
+
+
+def test_the_successor_keeps_the_defaults_the_box_plan_hands_over() -> None:
+    """Changed defaults would cost the comparability with the original.
+
+    Plan 11-06 hands over FRIST=60 RUNDEN=10, so both stay variables with the
+    defaults of the driven fassung. The threshold of the foreign stock is the
+    ceiling on examined candidates of php/lib/Search/Provider.php, and it is a
+    variable for the same reason: a figure a reader can change without reading
+    the body.
+    """
+    text = SUCCESSOR_LANGUAGE_CASES.read_text(encoding="utf-8")
+    for default in ('FRIST="${FRIST:-360}"', 'RUNDEN="${RUNDEN:-40}"', 'RUNDENFRIST="${RUNDENFRIST:-60}"'):
+        assert default in text, default
+    assert 'FREMD_SCHWELLE="${FREMD_SCHWELLE:-64}"' in text
+    assert 'FREMD_TIEFE="${FREMD_TIEFE:-64}"' in text
+    # The ceiling the threshold is taken from, read out of the PHP side so that
+    # the derivation in the head cannot quietly stop being true.
+    provider = (REPO_ROOT / "php" / "lib" / "Search" / "Provider.php").read_text(encoding="utf-8")
+    assert "MAX_RECHECKS_ABSOLUTE = 64;" in provider
+
+
+def a_run_of_the_successor(out: Path, ci_lauf: str | None) -> subprocess.CompletedProcess[str]:
+    """The successor as a program, with the run number set, empty or absent.
+
+    Run rather than read, because the refusal is half of what this script
+    promises and because a POSIX shell is the only reader that can tell whether
+    the head of the file survives a shell that is not bash. It never reaches a
+    network call: the run number is checked before anything else happens.
+    """
+    shell = shutil.which("sh")
+    assert shell is not None
+    environment = {**os.environ, "OUT": out.as_posix(), "PWFILE": (out / "kein-passwort").as_posix()}
+    for name in ("CI_LAUF", "FINDLING_LOAD_PASSWORD"):
+        environment.pop(name, None)
+    if ci_lauf is not None:
+        environment["CI_LAUF"] = ci_lauf
+    return subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [shell, SUCCESSOR_LANGUAGE_CASES.as_posix()],
+        # Closed on purpose: the pre check reads the load test password with
+        # sudo, and a sudo that finds a terminal would ask for a password and
+        # hang this test instead of failing it.
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+        env=environment,
+    )
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("ci_lauf", [None, "", "   ", "letzter", "34339346666x"])
+def test_the_successor_refuses_a_run_without_a_ci_run_number(tmp_path: Path, ci_lauf: str | None) -> None:
+    """No run number, no run, and the refusal comes before the first case.
+
+    Five shapes of nothing, because the note of 10.09. came out of exactly one
+    of them: the variable was never set. An empty value, a blank one and a value
+    that is no run number have to end the same way, or the required input would
+    be a required input in name only. The raw file must not even be created:
+    a run that ended before its first measurement has nothing to write down.
+    """
+    answer = a_run_of_the_successor(tmp_path, ci_lauf)
+    assert answer.returncode == 22, answer
+    assert "integration.yml" in answer.stderr
+    assert "98b-sprachfaelle:" in answer.stderr
+    assert answer.stdout == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.skipif(
+    shutil.which("sh") is None or shutil.which("jq") is None,
+    reason="no POSIX shell or no jq on this machine",
+)
+def test_the_successor_stops_when_the_foreign_stock_cannot_be_asked(tmp_path: Path) -> None:
+    """The other side of the refusal, and the second fail closed path.
+
+    A gate that fires on everything proves nothing about the input it is meant
+    to accept, so this run hands over a real run number and gets past the first
+    check. What it does not get is the password of the load test account: the
+    file PWFILE points at does not exist. Without it the pre check cannot ask
+    how much foreign stock stands in front of each term, and a verdict without
+    that number is the two valued verdict of 10.09. all over again. The run
+    therefore ends with 19, before the 39 files are uploaded, and it says so in
+    its own raw file.
+    """
+    answer = a_run_of_the_successor(tmp_path, "34339346666")
+    assert answer.returncode == 19, answer
+    assert "CI_LAUF" not in answer.stderr
+    raw = (tmp_path / "05-sprachfaelle.txt").read_text(encoding="utf-8")
+    assert "ci-beleg: integration.yml Lauf 34339346666" in raw
+    assert "Abschnitt 0: die Vorpruefung des Fremdbestands" in raw
+    # It ended before the account section, so nothing on any box was touched.
+    assert "Section 1: the account" not in raw
