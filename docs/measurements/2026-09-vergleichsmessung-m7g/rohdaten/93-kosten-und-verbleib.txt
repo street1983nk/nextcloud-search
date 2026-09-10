@@ -91,3 +91,73 @@ den `status`-Aufruf aus einer Datei ausserhalb des Arbeitsbaums in die
 Umgebung geladen; weder ihr Inhalt noch ihr Pfad steht in einer Rohdatei oder
 in einem Commit. box.env liegt weiter ausserhalb des Arbeitsbaums und ist
 nicht committet.
+
+== 7. NACHTRAG aus Plan 10-07, nach der Berichtsabnahme ==
+
+Dieser Abschnitt ist am 2026-09-10 angehaengt worden, nachdem der Owner den
+Bericht abgenommen hat. Die Abschnitte 1 bis 6 bleiben unveraendert stehen: sie
+belegen den Stand, den dieser Task erhoben hat, und ein nachtraeglich
+ueberschriebener Wert belegt nichts mehr.
+
+nachtrag-datum               2026-09-10
+anlass                       Owner-Signal "bericht abgenommen" zu Plan 10-07
+                             Task 4, danach `scripts/ops/aws_box.sh stop`
+
+-- Die vier Schluessel aus box.env, wie aws_box.sh stop sie geschrieben hat --
+
+BOX_STOPPED_ISO=2026-09-10T16:22:50Z
+BOX_LAST_UPTIME_HOURS=31.05
+BOX_LAST_UPTIME_COST_USD=3.5969
+BOX_PARKED_COST_USD_PER_DAY=0.3130
+
+Die Werte in Abschnitt 4 waren die des vorigen Laufs vom 07.09. Sie stehen dort
+weiter, mit ihrer Beschriftung, und diese hier sind die dieses Laufs.
+
+-- Die Feststellung des gestoppten Zustands, aus der API und nicht aus der
+   Erinnerung --
+
+abgefragt                    2026-09-10T16:23:15Z, ueber `aws_box.sh status`
+zustand                      stopped, NICHT running
+instanz                      i-06b1d913f5c6f669b, m7g.large, eu-central-1c
+adresse                      freigegeben; ein Stop gibt die oeffentliche
+                             Adresse zurueck, also sind BOX_IP in box.env und
+                             der A-Record loadtest.infranode.dev veraltet, bis
+                             die Box das naechste Mal startet
+datentraeger                 vol-0f3bea6ca1dab68ab 40 G und
+                             vol-04c5b59fe9417babd 60 G, beide bleiben, mit
+                             Korpus, beiden Indizes und den Abbildern
+hinweis-der-api              Eine gestoppte Instanz behaelt ihre LaunchTime.
+                             Die 31,1 Stunden, die `status` seit dem letzten
+                             Start zaehlt, sind KEINE Laufzeit; die
+                             Abschlusszahlen stehen oben.
+
+-- Der Vergleich gegen die Deckel, endgueltig --
+
+deckel-2-angehoben           34 Stunden und 4,00 USD netto
+endstand-laufzeit            31,05 von 34 Stunden, also 2,95 Stunden Rest
+endstand-kosten              3,5969 von 4,00 USD, also 0,4031 USD Rest
+deckel-2-gerissen            nein
+deckel-1-urspruenglich       30 Stunden und 3,50 USD, gerissen am
+                             2026-09-10T15:20Z, vom Owner vorher angehoben
+
+-- Der Verbleib --
+
+verbleib                     ANGEHALTEN, NICHT ABGEBAUT
+grundlage                    Owner-Entscheid 2026-09-10, wortgetreu in
+                             Abschnitt 1 dieser Datei
+parkkosten                   0,3130 USD je Tag, nur die Datentraeger; die
+                             Recheneinheit kostet gestoppt nichts
+abbau                        ausdruecklich NICHT gefahren. Er ist ein eigener
+                             Entscheid und braucht einen eigenen Plan in
+                             Phase 11, mit eigener Freigabe, der
+                             Nichtexistenz-Pruefung fuer Instanz, Datentraeger
+                             und Security Group und dem Sweep nach dem Tag
+                             purpose=findling-phase5.
+
+-- Was auch dieser Nachtrag nicht enthaelt --
+
+Keinen Zugangsschluessel und kein Geheimnis. Die AWS-Zugangsdaten wurden fuer
+den `stop`- und den `status`-Aufruf aus einer Datei ausserhalb des
+Arbeitsbaums in die Umgebung geladen; weder ihr Inhalt noch ihr Pfad steht in
+einer Rohdatei oder in einem Commit. box.env liegt weiter ausserhalb des
+Arbeitsbaums und ist nicht committet.

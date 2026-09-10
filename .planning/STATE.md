@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: "10-05-PLAN.md vollstaendig (Volllauf durch am 2026-09-10T13:05:11Z, Task 4 mit den sechs Antworten beantwortet); naechster Plan ist 10-06 und er ist eilig, weil die Box noch rund 2,1 Stunden unter dem 30-Stunden-Deckel hat"
-last_updated: "2026-09-10T15:50:19.901Z"
+stopped_at: "Phase 10 abgeschlossen: 10-07 fertig, Bericht vom Owner abgenommen, Box angehalten (31,05 h / 3,5969 USD). Naechste Phase 11 (Haertung und Store-Einreichung), REL-01"
+last_updated: "2026-09-10T16:35:00.000Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 24
-  completed_plans: 23
-  percent: 60
+  completed_plans: 24
+  percent: 80
 ---
 
 # Project State
@@ -25,31 +25,71 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 
 ## Current Position
 
-Phase: 10 (vergleichsmessung-auf-der-aws-box): EXECUTING
-Plan: 6 of 7 FERTIG, naechster Plan 6 of 7
-Status: Ready to execute
+Phase: 10 (vergleichsmessung-auf-der-aws-box): **COMPLETE** (2026-09-10)
+Plan: 7 of 7 FERTIG
+Status: Phase abgeschlossen, bereit fuer Phase 11
 Last activity: 2026-09-10
 
-**Naechster Schritt:** Plan 10-06 fahren, und zwar **sofort**. Der Volllauf ist am **2026-09-10T13:05:11Z** zu Ende gegangen (`00-FERTIG`, `stunden=27.0`, `ende-erkannt ja`), der Waechter hat in Runde 325 von 340 aus eigenem Urteil abgeschaltet. Der Container darf bis Task 2 von 10-06 NICHT angefasst werden: `memory.peak` und `memory.events` des ganzen Laufs leben in seiner cgroup, und Task 1 von 10-06 ist genau der Teil, der sie einsammelt.
+**Naechster Schritt:** Phase 11 planen (`/gsd:plan-phase 11`), Haertung und
+Store-Einreichung v1.1, Requirement REL-01.
 
-Erledigt aus Welle 5, Tasks 1 bis 3: die Anfahrt ueber `aws_box.sh start`, der Korpus als dieselben Bytes belegt (`korpus-gleich ja`, `bcbef9b2...`), der Baumhash-Beweis in einer NICHT leeren Rohdatei (Abbild und Arbeitsbaum je 54 Dateien `6c47cd21...`, `baumhash-gleich ja`), die harte Grenze aus der cgroup (`memory.max=2147483648`), der Nullstand, die **MESS-01-Kernzahl (Grundlast 103,2 MB gegen 691,8 MB)**, die erste Suche als Ereignis (plus 415,0 MB) und der Kaltstart (1.550,4 ms gegen die Decke von 1.500 ms). Alle Rohdaten sind committet, und zwar bevor der Lauf angestossen wurde.
+## Was Phase 10 geliefert hat
 
-Erledigt aus Task 4, die Zahlen des Laufs:
+Der Messbericht liegt in `docs/measurements/2026-09-vergleichsmessung-m7g/README.md`,
+19 Abschnitte, 1.070 Zeilen, 154 Verweise auf Rohdateien, in der Struktur des
+v1.0-Berichts. Der Owner hat ihn am **2026-09-10** abgenommen, ohne eine Zahl
+zu beanstanden.
 
-- **52.111 indexiert und eingebettet, 37 uebersprungen, 0 fehlgeschlagen**, ohne OOM und ohne Neustart (`OOMKilled=false`, `RestartCount=0`)
-- **Laufzeit hoechstens 26 h 41 min bis zum letzten Vektor gegen 18 h 56 min in 06-11**, also plus 40,9 Prozent und **ueber** der Owner-Erwartung von 22 bis 26 Stunden; weiterhin eine Untergrenze, weil beim Anstoss 1.653 Dateien schon indexiert waren
-- **`memory.peak` gleich `memory.max`** (2.147,5 MB) und **`max` 21.939 gegen 2.796**; der Ablaufplan hatte hier die Null erwartet. Hoechster `anon` dagegen **1.764,2 MB gegen 1.837,8 MB**, also weniger Heap und mehr Seitencache
-- **Die 150 gegen 51.961 sind aufgeklaert:** die Verzeichnisse `ocrdrei` (120 Dateien) und `neustart` (30), angelegt am 07.09. bei den Haertungsdrills, liegen im Baum des indexierten Nutzers. 52.111 minus 150 ist 51.961 genau, und `skipped` steht in beiden Laeufen auf exakt 37
-- **Meldekette: vier Versuche, vier Mal `http=200`**, kein 403 und kein stiller Ausfall; die Fertigmeldung kam doppelt (Waechter und wartende Haelfte)
-- Alle Rohdaten des Laufs sind von der Box geholt, byteidentisch geprueft und committet
+Die Kernzahlen, jede gegen ihre Entsprechung aus 06-11:
 
-Drei Werkzeuge sind in Task 2 korrigiert worden, jedes mit einer Zusicherung daneben: die Laufzeitrechnung von `aws_box.sh status` (zaehlte Parkstunden als Laufstunden), die Instanzzaehlung vor `--rm-data` (haette die zweite Nextcloud durchgelassen) und der Sortierschluessel des Baumhashes (plattformabhaengig, hatte **CI seit Welle 1 rot**).
+- **Grundlast im Leerlauf 103,2 MB gegen 691,8 MB**, minus 588,6 MB (MESS-01)
+- **anon-Spitze 1.764,2 MB gegen 1.837,8 MB**, alle drei Schadenszaehler auf
+  null, `OOMKilled=false`, `RestartCount=0`
+- **`memory.events max` 21.939 gegen 2.796**, `memory.peak` gleich der harten
+  Grenze; der Zaehler gehoert dem Indexaufbau und steht nach dem Neustart auf 0
+- **p95 Stufe 8 = 2.125,5 ms gegen 2.500 ms Budget**, die Zusage haelt, aber
+  die Reserve faellt von 585,0 auf 374,5 ms (MESS-02)
+- **Laufzeit 26 h 37 min gegen 18 h 56 min**, plus 40,6 Prozent, Untergrenze
+- **52.111 indexiert**, 146.171 Chunks, 1.318,3 Byte je Dokument; 52.111 minus
+  150 Drill-Dateien ergibt exakt die 51.961 der Grundlinie
 
-**Erledigt:** der A-Record `loadtest.infranode.dev` zeigt auf **3.69.147.2**; der Lauf hat 27 Stunden ueber diesen Namen gearbeitet.
+**MESS-01, MESS-02 und MESS-03 sind abgehakt** mit Belegpfad und Kernzahl.
+**Erfolgskriterium 2 der Phase steht ausdruecklich auf "teilweise belegt"** und
+ist nicht aufgerundet worden (Owner: "So lassen"): vier von fuenf Laststufen
+sind regressiv, und die Sprachfaelle stehen auf 6 von 10 mit
+Mess-Setup-Vorbehalt.
 
-**OFFENER OWNER-ENTSCHEID, eilig:** Die Box ist **27,9 h** gelaufen und hat **3,23 USD** gekostet. Der 30-Stunden-Deckel ist am **2026-09-10T15:19:50Z** erreicht, es bleiben also rund **2,1 Stunden**. Plan 10-06 braucht darunter Nebenlaeufigkeitsreihe, Bestand, Neustart mit Kaltstart, Seitenroute, Rundenzaehlung und zehn Sprachfaelle (allein rund 30 Minuten). Entweder 10-06 sofort und straff, notfalls ohne die Sprachfaelle, oder den Deckel auf 33 bis 34 Stunden und 4,00 USD anheben (Mehrkosten rund 0,47 USD).
+Das Audit-Gate der Owner-Regel vom 15.08.2026 ist gefahren
+(`docs/audits/2026-09-phase-10/README.md`): V2, V3, V4, V7 und V14 je mit
+Beleg, alle 47 Threats abgehakt, ein MEDIUM behandelt, fuenf LOW entschieden,
+kein CRITICAL und kein HIGH. Die Phase hat **keine Zeile Produktionscode**
+geaendert; `git diff af18542..HEAD` nennt keine Datei unter `php/` oder
+`backend/src/`.
 
-Weiter offen: MESS-01 bis MESS-03 brauchen den Bericht aus 10-07.
+## Die Box
+
+**Angehalten am 2026-09-10T16:22:50Z**, nicht abgebaut.
+`BOX_LAST_UPTIME_HOURS=31.05`, `BOX_LAST_UPTIME_COST_USD=3.5969`, also unter
+dem angehobenen Deckel von 34 Stunden und 4,00 USD. Zustand `stopped` um
+16:23:15Z aus der API geprueft. Parkkosten 0,3130 USD je Tag; beide
+Datentraeger bleiben, mit Korpus, beiden Indizes und den Abbildern.
+
+Beim naechsten Start: die oeffentliche Adresse wechselt, `BOX_IP` und der
+A-Record `loadtest.infranode.dev` sind nachzuziehen, und der Container muss
+ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
+
+## Was Phase 11 mitbekommt
+
+| ID | Was |
+|---|---|
+| **REL-01** | Store-Einreichung v1.1, und mit ihr der Nachzug der Messzahlen in `README.md` und `docs/store-listing.md` (DI-10-03). **Merker: eine Messzahl steht an drei Stellen**, `README.en.md` plus beide `info.xml`, und ein Gate haelt sie deckungsgleich |
+| **DI-07-02** | Die Entscheidung ueber `REQUEST_TIMEOUT_SECONDS`. Kaltstart auf vollem Bestand 1.838,4 ms gegen 1.500 ms, Marge minus 338,4 ms; der Abbruch ist bei kaltem Wirtscache belegt (`cURL error 28`). Eine hoehere Decke laesst jeden Nutzer laenger warten |
+| **DI-07-03** | Die Schleife des Rechteabgleichs holt keine zweite Runde nach; ein Nutzer mit wenigen Dateien findet sie neben grossem Fremdbestand nicht und bekommt eine leere Liste statt einer Meldung |
+| **DI-10-01** | `search_load.py` zaehlt abgebrochene Containeraufrufe als Erfolge (17 in Stufe 16 bei `failures: 0`) |
+| **DI-10-02** | Der Messaufbau der Sprachfaelle trennt die Berechtigung und nicht den Index |
+| **DI-10-04** | Welcher Kandidat die Mehrlaufzeit traegt: Kopplung der Spuren oder Zulauf-Luecken |
+| **DI-10-05** | Darf ein Messlauf gegen den wandernden Tag `:dev` pruefen? |
+| **T-09-29** | Wiedervorlage bei einem deutlich groesseren Vektorbestand als 146.171 Chunks |
 
 ## Performance Metrics
 
@@ -107,6 +147,7 @@ Weiter offen: MESS-01 bis MESS-03 brauchen den Bericht aus 10-07.
 | Phase 10 P04 | 34min | 3 tasks | 10 files |
 | Phase 10 P05 | 80min Sitzung, dazwischen 27h06m Lauf | 4 tasks | 33 files |
 | Phase 10 P06 | 2h10m | 5 tasks | 13 files |
+| Phase 10 P07 | 2h40m | 4 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -253,6 +294,11 @@ Recent decisions affecting current work:
 - [Phase 10]: 10-05 Task 4: Der Durchsatz war ueber den ganzen Lauf stabil (32 bis 34 Dok/min), also erklaert kein schleichender Speicherdruck die Mehrlaufzeit; einziger von den Daten gestuetzter Kandidat ist der Zulauf, vorrat=0 in 62 von 325 Lesungen
 - [Phase 10]: 10-05 Task 4: 52.111 statt 51.961 ist erklaert und keine Verdiktverschiebung: ocrdrei (120) und neustart (30) vom 07.09. liegen im Baum des indexierten Nutzers, skipped steht in beiden Laeufen auf exakt 37, und der Korpus ist byteweise derselbe
 - [Phase 10]: 10-05 Task 4: Bei einer Mengenabweichung erst zaehlen, was auf der Platte liegt, dann die Verdikte befragen. Die Aufklaerung der 150 kam aus zwei Verzeichnisdaten und brauchte keinen einzigen Zugriff auf den Container
+- [Phase 10]: Erfolgskriterium 2 der Phase 10 bleibt teilweise belegt statt aufgerundet (Owner 10.09.): vier von fuenf Laststufen regressiv, Sprachfaelle 6 von 10 mit Mess-Setup-Vorbehalt
+- [Phase 10]: Der Nachzug der Messzahlen in README.md und docs/store-listing.md faellt in Phase 11 mit der Store-Text-Abnahme, eine Textrunde statt zwei (DI-10-03); Merker: eine Messzahl steht an drei Stellen (README.en.md plus beide info.xml)
+- [Phase 10]: T-09-29 bleibt auf accept, jetzt mit Zahlen: der Vektorscan laeuft einmal je Anfrage und nicht je Seite (tiefe Seite 0,333 s gegen erste Seite 0,332 s)
+- [Phase 10]: DI-07-02 wird nicht geschlossen: Kaltstart 1.838,4 ms gegen die Aufrufdecke von 1.500 ms, Marge minus 338,4 ms, Entscheidung ueber REQUEST_TIMEOUT_SECONDS an Phase 11
+- [Phase 10]: Die AWS-Box ist angehalten und nicht abgebaut (Owner 10.09.); der Abbau ist ein eigener Entscheid mit eigenem Plan in Phase 11
 
 ### Pending Todos
 
@@ -282,6 +328,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-10T15:50:14.635Z
-Stopped at: 10-05-PLAN.md vollstaendig (Volllauf durch am 2026-09-10T13:05:11Z, Task 4 mit den sechs Antworten beantwortet); naechster Plan ist 10-06 und er ist eilig, weil die Box noch rund 2,1 Stunden unter dem 30-Stunden-Deckel hat
+Last session: 2026-09-10T16:28:06.013Z
+Stopped at: Phase 10 abgeschlossen: 10-07 fertig, Bericht vom Owner abgenommen, Box angehalten (31,05 h / 3,5969 USD). Naechste Phase 11 (Haertung und Store-Einreichung), REL-01
 Resume file: None

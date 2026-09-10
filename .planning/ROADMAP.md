@@ -38,7 +38,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 8: Deutsche Komposita ohne Behelf** - Wer ein Teilwort sucht, findet das zusammengesetzte Wort, ueber eine lizenzgeklaerte Wortliste statt ueber einen Prefix-Behelf
  (completed 2026-09-08)
 - [x] **Phase 9: Eigene Ergebnisseite** - Der Nutzer verliert die Trefferliste nicht mehr, wenn er einen Treffer oeffnet (completed 2026-09-09)
-- [ ] **Phase 10: Vergleichsmessung auf der AWS-Box** - Die Verbesserung steht als Zahl neben der v1.0-Baseline, Zeile fuer Zeile
+- [x] **Phase 10: Vergleichsmessung auf der AWS-Box** - Die Verbesserung steht als Zahl neben der v1.0-Baseline, Zeile fuer Zeile (abgeschlossen 2026-09-10; Kriterium 2 ausdruecklich nur teilweise belegt, siehe Phasenblock)
 - [ ] **Phase 11: Haertung und Store-Einreichung v1.1** - v1.1 ist getestet jenseits des Happy Path und als signiertes App-Paar im Store
 
 ## Phase Details
@@ -200,9 +200,11 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 10-07-PLAN.md , der Messbericht in 19 Abschnitten, die Nachzuege in den Projektdokumenten, die drei Audits, Berichtsabnahme (Welle 7, Checkpoint-Plan)
+- [x] 10-07-PLAN.md , der Messbericht in 19 Abschnitten, die Nachzuege in den Projektdokumenten, die drei Audits, Berichtsabnahme (Welle 7, Checkpoint-Plan)
 
-**Stand nach Welle 7 (2026-09-10):** Der Messbericht liegt unter `docs/measurements/2026-09-vergleichsmessung-m7g/README.md`, 19 Abschnitte, 154 Verweise auf Rohdateien, Abschnitt 19 "Was dieser Lauf nicht besser gemacht hat" mit dreizehn benannten Punkten. `docs/performance.md` fuehrt eine Zeile in "Stand dieses Berichts", einen eigenen Abschnitt "Die Vergleichsmessung v1.1 gegen v1.0" und den vierten Verbleib der Box; der Zeiger, der seit dem 08.09. auf Phase 10 zeigte, ist abgeloest. `CLAUDE.md` traegt seit dem Owner-Entscheid vom 10.09. die Zeile "Tokenizer und Splitter" in der RAM-Budget-Tabelle. **DI-07-02 ist gemessen und mit negativer Marge an Phase 11 uebergeben; der Messteil von DI-07-03 ist geschlossen.** Fuenf neue Befunde stehen in `deferred-items.md` dieser Phase, darunter **DI-10-01**: das Lastwerkzeug zaehlt 17 abgebrochene Containeraufrufe der Stufe 16 als Erfolge. **Erfolgskriterium 2 ist nur teilweise belegt** und oben als solches gefuehrt. Offen bis zum Abschluss: die Berichtsabnahme durch den Owner und danach das Anhalten der Box.
+**Stand nach Welle 7 (2026-09-10):** Der Messbericht liegt unter `docs/measurements/2026-09-vergleichsmessung-m7g/README.md`, 19 Abschnitte, 154 Verweise auf Rohdateien, Abschnitt 19 "Was dieser Lauf nicht besser gemacht hat" mit dreizehn benannten Punkten. `docs/performance.md` fuehrt eine Zeile in "Stand dieses Berichts", einen eigenen Abschnitt "Die Vergleichsmessung v1.1 gegen v1.0" und den vierten Verbleib der Box; der Zeiger, der seit dem 08.09. auf Phase 10 zeigte, ist abgeloest. `CLAUDE.md` traegt seit dem Owner-Entscheid vom 10.09. die Zeile "Tokenizer und Splitter" in der RAM-Budget-Tabelle. **DI-07-02 ist gemessen und mit negativer Marge an Phase 11 uebergeben; der Messteil von DI-07-03 ist geschlossen.** Fuenf neue Befunde stehen in `deferred-items.md` dieser Phase, darunter **DI-10-01**: das Lastwerkzeug zaehlt 17 abgebrochene Containeraufrufe der Stufe 16 als Erfolge. **Erfolgskriterium 2 ist nur teilweise belegt** und oben als solches gefuehrt.
+
+**Abgeschlossen am 2026-09-10.** Der Owner hat den Bericht abgenommen, ohne eine Zahl zu beanstanden, und drei Dinge entschieden: der Nachzug in `README.md` und `docs/store-listing.md` faellt in **Phase 11** zusammen mit der Store-Text-Abnahme (eine Textrunde statt zwei, gefuehrt als DI-10-03 mit dem Merker, dass eine Messzahl an drei Stellen steht); **Erfolgskriterium 2 bleibt "teilweise belegt"** und wird nicht schoengerechnet; keine Nacharbeit auf der Box noetig. Danach ist die Box angehalten worden: `BOX_STOPPED_ISO=2026-09-10T16:22:50Z`, **31,05 Stunden und 3,5969 USD netto**, also unter dem angehobenen Deckel von 34 Stunden und 4,00 USD. Zustand `stopped` um 16:23:15Z aus der API geprueft. **Angehalten, nicht abgebaut**; der Abbau ist ein eigener Entscheid mit eigenem Plan in Phase 11.
 
 ### Phase 11: Haertung und Store-Einreichung v1.1
 
@@ -230,7 +232,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 7. Gemeinsame Embedding-Engine | 4/4 | Complete    | 2026-09-08 |
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
-| 10. Vergleichsmessung auf der AWS-Box | 6/7 | In Progress|  |
+| 10. Vergleichsmessung auf der AWS-Box | 7/7 | Complete   | 2026-09-10 |
 | 11. Haertung und Store-Einreichung v1.1 | 0/? | Not started | - |
 
 ## Requirement Coverage

@@ -841,25 +841,41 @@ dieses Berichts (Abschnitt 19, Punkt 2).**
 | Abbau der Box | "NUR ANHALTEN, kein Abbau (0,3130 USD/Tag geparkt akzeptiert). Abbau ist ein eigener Entscheid in Phase 11." | 2026-09-10 |
 | Zeitpunkt des Anhaltens | "die Box LAEUFT WEITER BIS ZUR BERICHTSABNAHME (10-07)." | 2026-09-10 |
 
-**Der Stoppzeitpunkt der Box.**
+**Der Stoppzeitpunkt der Box.** Der Owner hat den Bericht am **2026-09-10**
+abgenommen; danach ist `scripts/ops/aws_box.sh stop` gefahren worden, und nicht
+`aws ec2 stop-instances`, weil nur der Unterbefehl Zeitpunkt, Laufzeit und
+Kosten in die Zustandsdatei schreibt.
 
 | Größe | Wert |
 |---|---|
-| `BOX_STOPPED_ISO` | wird nach der Berichtsabnahme nachgetragen |
-| `BOX_LAST_UPTIME_HOURS` | wird nach der Berichtsabnahme nachgetragen |
-| `BOX_LAST_UPTIME_COST_USD` | wird nach der Berichtsabnahme nachgetragen |
+| `BOX_STOPPED_ISO` | **2026-09-10T16:22:50Z** |
+| `BOX_LAST_UPTIME_HOURS` | **31.05** |
+| `BOX_LAST_UPTIME_COST_USD` | **3.5969** |
 | `BOX_PARKED_COST_USD_PER_DAY` | 0,3130, gilt unverändert |
 
-Diese vier Schlüssel schreibt `aws_box.sh stop` selbst, und sie tragen bis zum
-Anhalten noch die Werte des vorigen Laufs vom 07.09. Sie werden hier und in
-`rohdaten/93-kosten-und-verbleib.txt` nachgetragen, sobald der Stop gefahren
-ist. **Wer diese Tabelle vor dem Nachtrag liest, liest ausdrücklich keinen
-gestoppten Zustand.**
+**Die Feststellung des gestoppten Zustands stammt aus der API und nicht aus der
+Erinnerung:** abgefragt um **2026-09-10T16:23:15Z** über `aws_box.sh status`,
+Ergebnis `stopped`, nicht `running`. Eine gestoppte Instanz behält ihre
+`LaunchTime`, also sind die Stunden, die `status` seither zählt, ausdrücklich
+**keine** Laufzeit; die Abschlusszahlen stehen in der Tabelle darüber.
 
-Die harte Linie daneben, die unabhängig von der Abnahme greift: **erreicht die
+**Gegen den angehobenen Deckel: 31,05 von 34 Stunden und 3,5969 von 4,00 USD.
+Er ist nicht gerissen.** Der ursprüngliche Deckel von 30 Stunden und 3,50 USD
+war es, am 2026-09-10 um 15:20Z, und der Owner hatte ihn vorher angehoben.
+
+Die harte Linie, die daneben stand und nicht gebraucht wurde: **erreicht die
 Box den angehobenen Deckel, wird sie angehalten**, unabhängig davon, ob der
-Bericht abgenommen ist. Alle Rohdaten sind committet, und der Bericht braucht
-die Box nicht.
+Bericht abgenommen ist. Alle Rohdaten waren committet, und der Bericht brauchte
+die Box nicht. Die Abnahme kam vor dem Deckel, also ist die Linie nicht
+gezogen worden.
+
+**Der Verbleib: angehalten, nicht abgebaut.** Beide Datenträger bleiben, mit
+Korpus, beiden Indizes und den Abbildern. Ein Stop gibt die öffentliche Adresse
+zurück, also sind `BOX_IP` in `box.env` und der A-Record
+`loadtest.infranode.dev` bis zum nächsten Start veraltet, und der Container
+muss beim nächsten Start über AppAPI neu bewaffnet werden (DI-05-36). Der
+ausführliche Nachtrag steht in `rohdaten/93-kosten-und-verbleib.txt`,
+Abschnitt 7.
 
 ---
 

@@ -115,8 +115,20 @@ Store-Text nicht; die Uebersetzung von einem in den anderen ist eine eigene
 Arbeit.
 
 **Wohin es gehoert:** **Phase 11, REL-01**, zusammen mit der
-Store-Text-Abnahme, als **eine** Textrunde. Der Checkpoint des Plans 10-07 hat
-dem Owner genau diese Frage vorgelegt.
+Store-Text-Abnahme, als **eine** Textrunde. **Der Owner hat das am 2026-09-10
+im Checkpoint des Plans 10-07 so entschieden:** die Zahlen werden erst in
+Phase 11 nachgezogen, eine Textrunde statt zwei, und dieser Eintrag bleibt bis
+dahin stehen.
+
+**Der Merker fuer Phase 11, damit der Nachzug nicht auf halbem Weg liegen
+bleibt (Owner-Hinweis vom 10.09.2026):** wer eine Messzahl in einem nach aussen
+sichtbaren Text aendert, aendert **drei Stellen**, nicht eine. Die Zahl steht in
+`README.md`, in `README.en.md` und in **beiden** `info.xml` (Backend und
+PHP-Haelfte), und ein Gate haelt sie deckungsgleich. Wer nur `README.md`
+anfasst, macht das Gate rot und merkt es erst im CI. `README.fr.md` gehoert zur
+selben Runde, weil der dreisprachige Katalog gepflegt wird. Dazu die
+Kurztext-Regel: hoechstens eine Zahl im Text, Details nur als Verweis auf
+`docs/`.
 
 ---
 

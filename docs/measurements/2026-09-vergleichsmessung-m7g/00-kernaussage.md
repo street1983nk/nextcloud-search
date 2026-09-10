@@ -395,7 +395,32 @@ dritten Mal in Folge auf null.
 **Der ursprüngliche Deckel von 30 Stunden und 3,50 USD ist gerissen**, und zwar
 am 2026-09-10 um 15:20Z. Der Owner hat ihn vor Beginn der Messungen dieses
 Plans auf 34 Stunden und 4,00 USD angehoben; er greift am 2026-09-10 um
-19:20Z. Stand jetzt: 30,4 von 34 Stunden, 3,53 von 4,00 USD.
+19:20Z. Stand bei Abfassung dieses Blatts: 30,4 von 34 Stunden, 3,53 von
+4,00 USD.
+
+### Nachtrag vom 2026-09-10, nach der Berichtsabnahme: die Box ist angehalten
+
+Der Owner hat den Bericht am 2026-09-10 abgenommen. Danach ist
+`scripts/ops/aws_box.sh stop` gefahren worden. Die vier Schlüssel, die dieser
+Aufruf selbst in `box.env` schreibt, und die Abschlusszahlen:
+
+| Größe | Wert |
+|---|---|
+| `BOX_STOPPED_ISO` | **2026-09-10T16:22:50Z** |
+| `BOX_LAST_UPTIME_HOURS` | **31.05** |
+| `BOX_LAST_UPTIME_COST_USD` | **3.5969** |
+| `BOX_PARKED_COST_USD_PER_DAY` | 0.3130, gilt unverändert |
+| Zustand, aus der API um 16:23:15Z | **stopped**, nicht running |
+| gegen den angehobenen Deckel | **31,05 von 34 Stunden, 3,5969 von 4,00 USD**, also nicht gerissen |
+
+**Der Verbleib: angehalten, nicht abgebaut.** Beide Datenträger bleiben, mit
+Korpus, beiden Indizes und den Abbildern. Der Abbau ist ausdrücklich nicht
+gefahren worden; er ist ein eigener Entscheid und braucht einen eigenen Plan in
+Phase 11. Ein Stop gibt die öffentliche Adresse zurück, also sind `BOX_IP` und
+der A-Record `loadtest.infranode.dev` bis zum nächsten Start veraltet.
+
+Der ausführliche Nachtrag mit der API-Feststellung steht in
+`rohdaten/93-kosten-und-verbleib.txt`, Abschnitt 7.
 
 **Wo die Zeit hingegangen ist:** nicht in die Messungen, sondern in den
 Indexaufbau. Der Volllauf brauchte 26 h 37 min statt der erwarteten rund

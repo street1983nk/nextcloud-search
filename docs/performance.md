@@ -152,7 +152,7 @@ zwei Reihen auf zwei Architekturen mehr sagen als eine.
 | Verbleib der ARM-Box nach der Launch-Härtung | **angehalten, kein Abbau** (Betreiberentscheid 07.09.); Abbaukriterium: nach der v1.1-Messung | 2026-09-07 |
 | **Feinmessung der Grundlast, nativ auf arm64** | **gemessen auf `ubuntu-24.04-arm`, Lauf 34325000302, fünf Posten 543,7 MB, 8 kB neben der groben nativen Messung; ersetzt die Messung unter QEMU, die 1,2 Prozent daneben lag** | 2026-09-09 |
 | **Vergleichsmessung v1.1 gegen v1.0, ARM m7g.large** | **gemessen, Grundlast 103,2 MB gegen 691,8 MB, anon-Spitze 1.764,2 MB, `oom`/`oom_kill`/`oom_group_kill` je 0 bei `max` 21.939, p95 Stufe 8 = 2.125,5 ms gegen 2.500 ms Budget, Laufzeit 26 h 37 min gegen 18 h 56 min; vier von fünf Laststufen regressiv, benannt in Abschnitt 19 des Berichts** | 2026-09-10 |
-| Verbleib der ARM-Box nach der Vergleichsmessung | **angehalten, kein Abbau** (Betreiberentscheid 10.09.); der Abbau bekommt einen eigenen Plan in Phase 11 | 2026-09-10 |
+| Verbleib der ARM-Box nach der Vergleichsmessung | **angehalten seit 16:22:50Z, kein Abbau** (Betreiberentscheid 10.09.); Abschlusszahlen 31,05 h und 3,5969 USD netto, unter dem angehobenen Deckel von 34 h und 4,00 USD; der Abbau bekommt einen eigenen Plan in Phase 11 | 2026-09-10 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -3857,9 +3857,8 @@ kostet nach diesem Lauf nicht mehr 19, sondern gemessene **26 h 37 min**
 
 | Punkt | Stand |
 |---|---|
-| Instanz | `i-06b1d913f5c6f669b`, angefahren 2026-09-09T09:19:50Z |
-| Stoppzeitpunkt | wird nach der Berichtsabnahme nachgetragen, aus `box.env` nach `aws_box.sh stop` |
-| Laufzeit und Kosten dieses Laufs | 30,4 Stunden und 3,53 USD netto zum Stand 2026-09-10T15:52Z; die Endsumme steht mit dem Stoppzeitpunkt |
+| Instanz | `i-06b1d913f5c6f669b`, angefahren 2026-09-09T09:19:50Z, **gestoppt seit 2026-09-10T16:22:50Z**, per API geprüft um 16:23:15Z |
+| Laufzeit und Kosten dieses Laufs | **31,05 Stunden und 3,5969 USD netto**, aus `box.env` nach `aws_box.sh stop` |
 | Kostendeckel | ursprünglich 30 h und 3,50 USD (Freigabe 09.09., gerissen am 10.09. um 15:20Z), angehoben auf **34 h und 4,00 USD**, greift 2026-09-10T19:20Z |
 | Datenträger | `vol-0f3bea6ca1dab68ab` 40 G und `vol-04c5b59fe9417babd` 60 G, bleiben beide |
 | Parkkosten | rund **0,3130 USD je Tag** |
