@@ -228,7 +228,7 @@ Plans:
 **Wave 1**
 
 - [x] 11-01-PLAN.md , Vorentscheide: DI-07-03-Umfang und die Lesart von D-11 zum Versionsfenster (Welle 1, Checkpoint-Plan)
-- [ ] 11-02-PLAN.md , Werkzeug-Fix DI-10-01 (--min-hits, hits_per_request) und die Ratsche gegen die D-04-Zusage (Welle 1)
+- [x] 11-02-PLAN.md , Werkzeug-Fix DI-10-01 (--min-hits, hits_per_request) und die Ratsche gegen die D-04-Zusage (Welle 1)
 - [ ] 11-03-PLAN.md , DI-10-02: Nachfolgefassung des Sprachfall-Skripts mit Fremdbestand-Vorpruefung und dreiwertigem Urteil (Welle 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -273,7 +273,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | 7/7 | Complete    | 2026-09-10 |
-| 11. Haertung und Store-Einreichung v1.1 | 1/13 | In Progress|  |
+| 11. Haertung und Store-Einreichung v1.1 | 2/13 | In Progress|  |
 
 ## Requirement Coverage
 

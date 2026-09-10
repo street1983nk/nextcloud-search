@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Abgeschlossen 11-01-PLAN.md, Vorentscheide v1-a und v2-a
-last_updated: "2026-09-10T19:03:29.242Z"
+stopped_at: Abgeschlossen 11-02-PLAN.md, Werkzeug-Fix DI-10-01 und D-04-Ratsche
+last_updated: "2026-09-10T19:21:22.530Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 37
-  completed_plans: 25
-  percent: 68
+  completed_plans: 26
+  percent: 70
 ---
 
 # Project State
@@ -26,13 +26,16 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 11 (Haertung und Store-Einreichung v1.1) — EXECUTING
-Plan: 2 of 13
+Plan: 3 of 13
 Status: Ready to execute
 Last activity: 2026-09-10
 
-**Naechster Schritt:** Welle 2 der Phase 11. Plan 11-13 ist durch den
-Owner-Entscheid v1-a scharf; 11-04 und 11-11 fahren die Lesart v2-a, also ohne
-Aenderung am Versionsfenster.
+**Naechster Schritt:** Rest der Welle 1 und dann Welle 2 der Phase 11. Plan
+11-13 ist durch den Owner-Entscheid v1-a scharf; 11-04 und 11-11 fahren die
+Lesart v2-a, also ohne Aenderung am Versionsfenster. Fuer jeden kuenftigen Lauf
+des Lastwerkzeugs gilt seit 11-02: die Vorgabe von `--min-hits` ist 1, ein Lauf
+gegen einen Bestand ohne die zehn festen Begriffe braucht `--min-hits 0`, und
+der gefahrene Wert steht als `min_hits` im Bericht.
 
 ## Was Phase 10 geliefert hat
 
@@ -89,7 +92,7 @@ ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 | **REL-01** | Store-Einreichung v1.1, und mit ihr der Nachzug der Messzahlen in `README.md` und `docs/store-listing.md` (DI-10-03). **Merker: eine Messzahl steht an drei Stellen**, `README.en.md` plus beide `info.xml`, und ein Gate haelt sie deckungsgleich |
 | **DI-07-02** | Die Entscheidung ueber `REQUEST_TIMEOUT_SECONDS`. Kaltstart auf vollem Bestand 1.838,4 ms gegen 1.500 ms, Marge minus 338,4 ms; der Abbruch ist bei kaltem Wirtscache belegt (`cURL error 28`). Eine hoehere Decke laesst jeden Nutzer laenger warten |
 | **DI-07-03** | Die Schleife des Rechteabgleichs holt keine zweite Runde nach; ein Nutzer mit wenigen Dateien findet sie neben grossem Fremdbestand nicht und bekommt eine leere Liste statt einer Meldung |
-| **DI-10-01** | `search_load.py` zaehlt abgebrochene Containeraufrufe als Erfolge (17 in Stufe 16 bei `failures: 0`) |
+| **DI-10-01** | `search_load.py` zaehlt abgebrochene Containeraufrufe als Erfolge (17 in Stufe 16 bei `failures: 0`). **Werkzeugseitig behoben in 11-02** (`EmptyResultGroup`, `--min-hits`, `hits_per_request`); der Beweis gegen echte Last steht in 11-06 aus, das Schliessen im Audit 11-10 |
 | **DI-10-02** | Der Messaufbau der Sprachfaelle trennt die Berechtigung und nicht den Index |
 | **DI-10-04** | Welcher Kandidat die Mehrlaufzeit traegt: Kopplung der Spuren oder Zulauf-Luecken |
 | **DI-10-05** | Darf ein Messlauf gegen den wandernden Tag `:dev` pruefen? |
@@ -153,6 +156,7 @@ ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 | Phase 10 P06 | 2h10m | 5 tasks | 13 files |
 | Phase 10 P07 | 2h40m | 4 tasks | 12 files |
 | Phase 11 P01 | 30min | 2 tasks | 1 files |
+| Phase 11 P02 | 25min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -306,6 +310,8 @@ Recent decisions affecting current work:
 - [Phase 10]: Die AWS-Box ist angehalten und nicht abgebaut (Owner 10.09.); der Abbau ist ein eigener Entscheid mit eigenem Plan in Phase 11
 - [Phase 11]: 11-01: V-1 = v1-a, DI-07-03 wird in v1.1.0 gefixt (MEDIUM, Abhilfe von der Berechtigungskette getrennt); Plan 11-13 ist scharf, der Katalog steigt von 173 auf 174 Schluessel, Quellstring 'Other files contain this word, but none that you may open.'
 - [Phase 11]: 11-01: V-2 = v2-a, das Versionsfenster bleibt bei min-version 33 und max-version 35; beide info.xml, der stable35-Matrixeintrag und test_lockstep_versions.py bleiben unveraendert, RE-CHECK 16.09. bleibt eigener Merkposten, die Einreichung wartet nicht darauf
+- [Phase 11]: 11-02: DI-10-01 behoben, beide Wege zusammen: eine Ergebnisgruppe ohne Containerteil ist der Fehlschlag EmptyResultGroup, --min-hits (Vorgabe 1) macht die Umdeutung ausdruecklich, --min-hits 0 stellt das alte Verhalten her, hits_per_request und min_hits stehen im Bericht
+- [Phase 11]: 11-02: Die D-04-Zusage hat einen Waechter, backend/tests/test_upgrade_compatibility.py mit GOLD_V1_0_3 (schema/index/analyzer je 1, tantivy 0.26.0); tantivy_version wird gegen den Banner 'tantivy v0.26.0, index_format v7' gehalten statt gegen den nackten Wert, dazu Zusicherungen auf index_format v7, den Pin tantivy==0.26.0 und wngerman=20161207-15
 
 ### Pending Todos
 
@@ -335,6 +341,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-10T19:03:19.994Z
-Stopped at: Abgeschlossen 11-01-PLAN.md, Vorentscheide v1-a und v2-a
-Resume file: .planning/phases/11-haertung-und-store-einreichung-v1-1/11-VORENTSCHEIDE.md
+Last session: 2026-09-10T19:21:22.514Z
+Stopped at: Abgeschlossen 11-02-PLAN.md, Werkzeug-Fix DI-10-01 und D-04-Ratsche
+Resume file: .planning/phases/11-haertung-und-store-einreichung-v1-1/11-02-SUMMARY.md
