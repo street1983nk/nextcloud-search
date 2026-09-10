@@ -69,7 +69,13 @@ env:
 jobs:
   deploy-harp:
     name: deploy-harp
-    runs-on: ubuntu-24.04
+    # The runner comes out of the matrix since plan 11-04, because success
+    # criterion 1 of phase 11 asks for the store install path on amd64 AND on
+    # arm64, natively and not emulated. The value is a matrix column rather than
+    # a second job: a copy of this job would be a second place where the store
+    # install path is written down, and the whole point of the path is that
+    # there is exactly one of it.
+    runs-on: ${{ matrix.runner }}
     # A job that hangs must cost minutes, not the default six hours. The number
     # is the measured runtime with a margin and not a guess; the measurement is
     # written down at the matrix below. It was 15 while the job ended after the
@@ -99,8 +105,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Three server versions, and an include list rather than a cross product,
-        # because every version brings its own PHP floor.
+        # Three server versions on four legs, and an include list rather than a
+        # cross product, because every version brings its own PHP floor. The
+        # fourth leg is the second architecture and not a fourth version; the
+        # runner column below says which leg is which.
         #
         # The declared window decides this list and not the other way round. E-H1 of
         # 2026-09-06 sets min-version 33 and max-version 35 in both info.xml, so the
@@ -135,13 +143,47 @@ jobs:
         # include its three redeployments, which is what timeout-minutes above
         # answers with 20 rather than 15; the next green run replaces the figures
         # of this paragraph with the ones it measures.
+        # The runner column, added by plan 11-04. Three entries keep the runner
+        # they always had, and exactly ONE entry is added on arm64. Not six: six
+        # legs would be six instances of a statement that one leg carries, they
+        # would double the cost of every run of this workflow, and the second
+        # architecture is a statement about the architecture and not about the
+        # server version. stable34 carries it because it is the newest released
+        # Nextcloud on 2026-09-10 (v34.0.4) and therefore the version the
+        # statement stands on; stable33 is the floor and stable35 is not
+        # released yet, so neither is the one to hang it on.
+        #
+        # ubuntu-24.04-arm is the same label docker.yml (job build, matrix entry
+        # linux/arm64), python.yml (job extract-bench-arm) and measure.yml (job
+        # matrix entry arch arm64) already use, so the label is not new to this
+        # repository and the image behind it is a known quantity.
         include:
           - server-version: stable33
             php-version: '8.2'
             tolerate-failure: false
+            runner: ubuntu-24.04
           - server-version: stable34
             php-version: '8.2'
             tolerate-failure: false
+            runner: ubuntu-24.04
+          # The native arm64 leg. It runs the identical step list, and that is
+          # the point: an arm64 leg that skipped a step would prove the steps it
+          # kept and nothing about the ones it dropped. No continue-on-error and
+          # no tolerate-failure here on purpose, because this leg IS the second
+          # half of success criterion 1, and a tolerant leg is not a statement.
+          #
+          # Two places in the job had to learn about the architecture, and both
+          # are named here so that a reader of the matrix knows where to look:
+          # "Store install 4" pulls the published backend image for the platform
+          # of the runner instead of the hard wired linux/amd64 (the image index
+          # of ghcr.io/street1983nk/findling_backend carries linux/amd64 and
+          # linux/arm64 for :dev and for every released tag, checked on
+          # 2026-09-10), and HARP_IMAGE above is pinned by index digest rather
+          # than by a platform digest, which is why the same line works here.
+          - server-version: stable34
+            php-version: '8.2'
+            tolerate-failure: false
+            runner: ubuntu-24.04-arm
           # stable35 exists in both repositories this job checks out, and that was
           # not guessed: "gh api repos/nextcloud/server/branches/stable35" and
           # "gh api repos/nextcloud/app_api/branches/stable35" both answered with the
@@ -184,7 +226,27 @@ jobs:
             # on its own (run 34114937751, all three legs success), so flipping the
             # flag carries no known risk. What is not known is whether the final
             # 35.0.0 behaves like rc3.
+            #
+            # Decided on 2026-09-10 by phase 11, decision v2-a
+            # (.planning/phases/11-haertung-und-store-einreichung-v1-1/
+            # 11-VORENTSCHEIDE.md, section V-2): the declared window of v1.1.0
+            # stays at min-version 33 and max-version 35, both info.xml stay as
+            # they are, this entry stays with tolerate-failure: true, and
+            # backend/tests/test_lockstep_versions.py stays unchanged. D-11 of
+            # 11-CONTEXT.md is confirmed in the reading that describes the code
+            # base and not in the one that lowers the window; a later 1.1.x
+            # raises the ceiling once 35 is final.
+            #
+            # The follow-through of the RE-CHECK above moves with that decision.
+            # It named plan 06-12 of the previous phase, which is done, so from
+            # 2026-09-10 the plan that holds it is the store submission of phase
+            # 11 (plan 11-11). The RE-CHECK DATE of 2026-09-16 stands unchanged,
+            # and the submission does not wait for it (D-10, submit as early as
+            # possible): on 2026-09-10 the newest 35 tag is v35.0.0rc4, marked
+            # prerelease, and the newest release that is not a prerelease is
+            # v34.0.4.
             tolerate-failure: true
+            runner: ubuntu-24.04
 
     env:
       # Test-only values of a throwaway instance that is destroyed with the
@@ -1527,7 +1589,19 @@ jobs:
           # The pull itself, and it is the answer to A6. No login anywhere in
           # this workflow, an empty credential store, and the platform spelled
           # out so that the index resolves to the half this runner can start.
-          docker pull --platform linux/amd64 "${reference}"
+          #
+          # The platform is read off the runner since plan 11-04 and was the
+          # literal linux/amd64 before. On the arm64 leg that literal would have
+          # pulled the amd64 half of the index and the container would have run
+          # under emulation or not at all, and an emulated install is exactly
+          # the statement success criterion 1 does not want. dpkg
+          # --print-architecture answers amd64 and arm64, which are the two
+          # names the index uses, so no translation table is needed. Checked on
+          # 2026-09-10: the index of ghcr.io/street1983nk/findling_backend
+          # carries linux/amd64 and linux/arm64 for :dev and for :1.0.3.
+          platform="linux/$(dpkg --print-architecture)"
+          echo "this runner is ${platform}, and that is the half of the index that gets pulled"
+          docker pull --platform "${platform}" "${reference}"
           digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "${reference}")
           echo "pulled anonymously: ${digest}"
 
