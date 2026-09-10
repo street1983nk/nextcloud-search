@@ -175,11 +175,18 @@ final class Provider implements IFilteringProvider {
 
 		if ($outcome->hits === []) {
 			if ($outcome->failure !== null) {
-				// One line and no more. The four reasons are a closed set of
+				// One line and no more. The five reasons are a closed set of
 				// constants and never user content, and the two that an admin
 				// can act on have already been logged with their detail inside
 				// the service; this is the trace that says which of them ended
 				// this particular group.
+				//
+				// The fifth, all_candidates_rejected, is traced here like the
+				// other four and gets no entry of its own either. An entry in
+				// the dialog would be a hit that is none, and this dialog has
+				// no room for a sentence: the result page is the one place
+				// where the reasons are told apart, and that is the existing
+				// line of this product rather than a decision of plan 11-13.
 				$this->logger->debug('Findling: the shared search returned no hits', ['reason' => $outcome->failure]);
 			}
 

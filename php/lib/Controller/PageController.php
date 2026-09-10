@@ -421,10 +421,20 @@ final class PageController extends Controller {
 	 * the cursor behind that ceiling is one the container refuses, so a next
 	 * page would be a promise nobody can keep.
 	 *
+	 * Four of the five, and the fifth is the exception this method spells out.
+	 * A run that was handed candidates and kept none of them did not fall
+	 * short: it asked, it decided, and its answer is empty. Taking the next
+	 * page away from it would take it away in exactly the state in which the
+	 * user's own files may be lying behind the foreign ones, which is the
+	 * state DI-07-03 is about (decided as V-1a on 10.09.2026).
+	 *
 	 * @param list<int> $cursors
 	 */
 	private function nextUrl(string $query, bool $titleOnly, int $page, array $cursors, SearchOutcome $outcome): ?string {
-		if (!$outcome->hasMore || $page >= self::MAX_PAGE || $outcome->failure !== null) {
+		$runFellShort = $outcome->failure !== null
+			&& $outcome->failure !== SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED;
+
+		if (!$outcome->hasMore || $page >= self::MAX_PAGE || $runFellShort) {
 			return null;
 		}
 

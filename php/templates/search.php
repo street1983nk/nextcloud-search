@@ -74,6 +74,14 @@ $silent = $failure === \OCA\Findling\Service\SearchOutcome::FAILURE_BACKEND_SILE
 $drift = $failure === \OCA\Findling\Service\SearchOutcome::FAILURE_VERSION_DRIFT;
 $noHome = $failure === \OCA\Findling\Service\SearchOutcome::FAILURE_NO_HOME_FOLDER;
 $ceiling = $failure === \OCA\Findling\Service\SearchOutcome::FAILURE_OFFSET_CEILING;
+
+// The fifth state, and the one that deliberately enters neither of the two sums
+// below. It is the only reason that says the search happened and went all the
+// way, so a banner over it would ask the user to wait while the sentence under
+// it tells them there is nothing left to wait for. That contradiction on one
+// screen is exactly what the gate of phase 9 forbids, so this state speaks in
+// the empty block and nowhere else (DI-07-03, decided as V-1a on 10.09.2026).
+$allRejected = $failure === \OCA\Findling\Service\SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED;
 $hasError = $silent || $drift || $noHome;
 $hasHint = !$hasError && ($ceiling || $degraded);
 
@@ -238,16 +246,31 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 	<?php } elseif ($showEmpty) { ?>
 		<?php /* Block 4: the empty state. It replaces the list and never stands
 		         beside it, and it stays away entirely when a banner above has
-		         already explained the emptiness: see $showEmpty. Not one word
-		         about permissions: a hit the recheck dropped never existed for
-		         this page. Without a term the heading of this block is the h1
-		         above, which is what keeps the page at exactly one first level
-		         heading. */ ?>
+		         already explained the emptiness: see $showEmpty. Without a term
+		         the heading of this block is the h1 above, which is what keeps
+		         the page at exactly one first level heading.
+
+		         With a term the heading is true in both variants and therefore
+		         does not move; only the line under it does. The second variant
+		         belongs to $allRejected and is the whole of DI-07-03: this run
+		         was handed candidates and kept none of them, so the old line
+		         would send the user off to rewrite a term that was never the
+		         problem.
+
+		         Neither variant names a file, a path or a number. A count of
+		         the dropped candidates would let anybody measure a stranger's
+		         folder one term at a time (T-11-50); the sentence says only
+		         what every user of a shared instance knows anyway, and it says
+		         nothing at all about which files those are. */ ?>
 		<div class="findling-empty">
 			<?php if ($hasQuery) { ?>
 				<svg class="findling-empty__icon" viewBox="0 0 24 24" width="64" height="64" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($fileSearchIcon); ?>"/></svg>
 				<h2 class="findling-empty__heading"><?php p($l->t('No file contains "%s"', [$query])); ?></h2>
-				<p class="findling-empty__text"><?php p($l->t('Try another word, a part of a compound word, or check the spelling.')); ?></p>
+				<?php if ($allRejected) { ?>
+					<p class="findling-empty__text"><?php p($l->t('Other files contain this word, but none that you may open.')); ?></p>
+				<?php } else { ?>
+					<p class="findling-empty__text"><?php p($l->t('Try another word, a part of a compound word, or check the spelling.')); ?></p>
+				<?php } ?>
 			<?php } else { ?>
 				<svg class="findling-empty__icon" viewBox="0 0 24 24" width="64" height="64" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($magnifyIcon); ?>"/></svg>
 				<p class="findling-empty__text"><?php p($l->t('Type a word from a document. Findling searches the text inside your files, scanned PDFs included.')); ?></p>
