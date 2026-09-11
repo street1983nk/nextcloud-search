@@ -343,3 +343,41 @@ anboten, und sie sind **kein** Eintrag hier:
   keine von ihnen, `git log --all` nennt über keinen der vier Namen einen
   Commit, und `.gitignore` deckt sie mit `*.tar.gz` (Zeile 31) und `*.crt`
   (Zeile 5). Überbleibsel einer Handprobe, kein Befund.
+
+---
+
+## Aus Plan 11-12 (Snapshot und Abbau, 11.09.2026)
+
+- **Die Durchsicht des geretteten Systemplatten-Materials auf Geheimnisse.**
+  Beim Abbau der Box hat sich gezeigt, dass `/home/ubuntu/work` die gefahrenen
+  Skripte und Protokolle der Phasen 5, 6 und 6.1 trägt und dass **kein
+  Gegenstück im Repositorium existiert**: das älteste Messverzeichnis
+  `docs/measurements/2026-09-04-volllauf-m7g/` führt kein `skripte/`. Das
+  Material ist vor dem Abbau gesichert worden, aber **außerhalb** des
+  Arbeitsbaums, unter
+  `C:/Users/Student/.findling-loadtest/systemplatte-2026-09/` (435 Einträge,
+  3.971.065 Byte, sha256 `fad3e7ce...`). Warum nicht ins Repositorium: dieses
+  Repositorium ist öffentlich, und Protokolle einer Testinstanz brauchen vor
+  einer Veröffentlichung eine eigene Durchsicht auf Zugangsdaten, Adressen und
+  Sitzungsmarken. Das ist eine eigene Arbeit und war nicht der Auftrag von
+  11-12. Gehört in die v1.2-Messplanung, zusammen mit dem
+  Wiederaufbau-Runbook.
+- **Die vier Dateien `99-reihe-a..d.txt.codes` der Vergleichsmessung.** Sie
+  lagen nur auf der Box und belegen, dass alle 80 Antworten der vier
+  Seitenbudget-Reihen HTTP 200 waren, also gemessene erfolgreiche Seitenaufrufe
+  und keine Fehlerseiten. Der Bericht der Phase 10 sagt das so nicht. Inhalt und
+  Zählung stehen jetzt in
+  `docs/measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt`,
+  Abschnitt 4b; die Dateien selbst liegen in der lokalen Sicherung. Eine
+  Aufnahme in das abgenommene Messverzeichnis der Phase 10 wäre eine Änderung an
+  einem abgeschlossenen Beleg und ist deshalb nicht ohne Entscheid erfolgt.
+- **Wiedervorlage Snapshot `snap-03f1d1d9ad9262704`, nach der v1.2-Messung.**
+  Auflage des Betreibers vom 11.09.2026: der Snapshot bleibt dauerhaft, weil die
+  v1.2-Messung ihn braucht. Danach ist zu entscheiden: löschen (2,79 bis 2,99
+  USD je Monat gespart) oder in die Archivstufe legen (rund 0,70 USD je Monat,
+  dafür 90 Tage Mindestlaufzeit, rund 1,67 USD je Abruf und Stunden bis Tage
+  Wartezeit).
+- **Der A-Record `loadtest.infranode.dev` zeigt ins Leere.** Die Box ist
+  abgebaut, der Eintrag bleibt als Merkposten stehen. Kein Befund, sondern eine
+  Feststellung: er kostet nichts, er verweist auf nichts, und beim nächsten
+  Aufbau ist er neu zu setzen.

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Abgeschlossen 11-10-PLAN.md, das Audit-Gate der Phase ist gefahren. Welle 6 ist damit zu, Welle 7 offen
-last_updated: "2026-09-11T07:35:40.312Z"
+stopped_at: Abgeschlossen 11-12-PLAN.md, der Korpus liegt im Snapshot snap-03f1d1d9ad9262704 und die Box ist abgebaut. Welle 8 ist damit zu, alle Plaene der Phase 11 sind gefahren
+last_updated: "2026-09-11T09:50:00.000Z"
 last_activity: 2026-09-11
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 37
-  completed_plans: 36
-  percent: 80
+  completed_plans: 37
+  percent: 100
 ---
 
 # Project State
@@ -26,12 +26,22 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 11 (Haertung und Store-Einreichung v1.1) — EXECUTING
-Plan: 11 of 13
-Status: Ready to execute
+Plan: 12 of 13 (11-13 ist bereits gefahren, Belegstelle `11-13-SUMMARY.md`)
+Status: Plan 11-12 abgeschlossen
 Last activity: 2026-09-11
 
-**Naechster Schritt:** Welle 7, Plan 11-11 (Versionsbump in einem Commit, Tag,
-ghcr-Pruefung, Store-Submission; Checkpoint-Plan). Plan 11-10 ist am 11.09.2026
+**Naechster Schritt:** Welle 8 ist gefahren und damit sind alle Plaene der Phase
+11 abgeschlossen. Plan 11-12 hat am 11.09.2026 den Korpus in den Snapshot
+`snap-03f1d1d9ad9262704` gesichert (`completed`, 51,6 GiB, unabhaengig
+nachgelesen) und die Box danach abgebaut: Instanz `terminated`, beide
+Datentraeger und die Security Group `NotFound`, `destroy` mit Exit 0. Die
+Zustandsdatei `box.env` ist geloescht; ihr vollstaendiger Inhalt steht in
+`docs/measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt`.
+Laufende Kosten des Projekts: **2,79 bis 2,99 USD je Monat fuer den Snapshot und
+sonst nichts**, ueber alle 17 Regionen nach dem Abbau geprueft. Offen bleibt der
+Phasenabschluss.
+
+**Vorgeschichte dieses Standes:** Plan 11-10 ist am 11.09.2026
 gefahren und abgeschlossen, und damit ist **Welle 6 vollstaendig**. Der
 Auditbericht liegt unter `docs/audits/2026-09-phase-11/README.md`:
 `721bde6..HEAD`, **55 Dateien, 46 Commits**, und **anders als Phase 10 aendert
@@ -235,15 +245,35 @@ geaendert; `git diff af18542..HEAD` nennt keine Datei unter `php/` oder
 
 ## Die Box
 
-**Angehalten am 2026-09-10T16:22:50Z**, nicht abgebaut.
-`BOX_LAST_UPTIME_HOURS=31.05`, `BOX_LAST_UPTIME_COST_USD=3.5969`, also unter
-dem angehobenen Deckel von 34 Stunden und 4,00 USD. Zustand `stopped` um
-16:23:15Z aus der API geprueft. Parkkosten 0,3130 USD je Tag; beide
-Datentraeger bleiben, mit Korpus, beiden Indizes und den Abbildern.
+**Abgebaut am 2026-09-11** (Betreiberentscheid im Checkpoint von Plan 11-12,
+D-03). Die Box hat vom 04.09. bis zum 11.09.2026 bestanden.
 
-Beim naechsten Start: die oeffentliche Adresse wechselt, `BOX_IP` und der
-A-Record `loadtest.infranode.dev` sind nachzuziehen, und der Container muss
-ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
+| Punkt | Stand |
+|---|---|
+| Korpus und Index | im Snapshot `snap-03f1d1d9ad9262704`, `completed`, 100 Prozent, 51,6 GiB geschriebene Bloecke, unabhaengig nachgelesen |
+| Instanz `i-06b1d913f5c6f669b` | `state=terminated` |
+| Volume `vol-04c5b59fe9417babd` (60 GB) | `InvalidVolume.NotFound` |
+| Volume `vol-0f3bea6ca1dab68ab` (40 GB) | `InvalidVolume.NotFound` |
+| Security Group `sg-0e782f5233d73a847` | `InvalidGroup.NotFound` |
+| Zustandsdatei `box.env` | geloescht; Inhalt in `docs/measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt`, Abschnitt 5 |
+| Laufende Kosten | 2,79 bis 2,99 USD je Monat fuer den Snapshot, sonst nichts; vorher 9,39 USD je Monat geparkt |
+
+**Zwei Auflagen des Betreibers:** der Snapshot bleibt dauerhaft, weil die
+v1.2-Messung ihn braucht (Wiedervorlage danach: loeschen oder Archivstufe), und
+ausser ihm entstehen keine Kosten. Der Kostenueberblick ueber alle 17
+freigeschalteten Regionen ist nach dem Abbau erhoben: keine Instanz, kein
+Datentraeger, keine Elastic IP, keine eigene AMI, genau ein Snapshot.
+
+**Was ein Wiederaufbau braucht:** aus dem Snapshot entsteht in Minuten wieder
+ein Datentraeger, aber **das Runbook dafuer gehoert zur v1.2-Messplanung und
+existiert heute nicht.** Nicht im Snapshot liegt die Systemplatte mit
+`/home/ubuntu/work`; sie ist vor dem Abbau lokal gesichert
+(`C:/Users/Student/.findling-loadtest/systemplatte-2026-09/`), weil die
+gefahrenen Skripte der Phasen 5 bis 6.1 kein Gegenstueck im Repositorium haben.
+Die lokale Registry mit den Messabbildern lag auf dem Datentraeger und ist im
+Snapshot. Der A-Record `loadtest.infranode.dev` zeigt ins Leere und bleibt als
+Merkposten stehen. Beim naechsten Aufbau gilt weiter DI-05-36: der Container
+muss ueber AppAPI neu bewaffnet werden, sonst indexiert er nicht.
 
 ## Was Phase 11 mitbekommt
 
@@ -262,7 +292,7 @@ ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 
 **Velocity:**
 
-- Total plans completed: 94
+- Total plans completed: 95
 - Average duration: -
 - Total execution time: 0.0 hours
 

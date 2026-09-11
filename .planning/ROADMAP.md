@@ -13,7 +13,7 @@
 
 v1.1 baut kein neues Produkt, sondern macht das ausgelieferte spuerbar besser und schlanker, und belegt das mit einer Messung statt mit einer Behauptung. Die Nummerierung setzt v1.0 fort: dort endete die Arbeit bei Phase 06.1, hier beginnt sie bei Phase 7.
 
-Die Reihenfolge folgt einem Zwang, der nicht verhandelbar ist: **die Vergleichsmessung braucht die fertige Engine.** Alles, was den Speicherbedarf, die Tokenisierung oder den Suchweg veraendert (Phasen 7, 8, 9), steht deshalb vor dem Lauf auf der AWS-Box (Phase 10). Die Box ist angehalten, der Korpus liegt dort, und jeder Neustart kostet Laufzeit und Geld: sie wird einmal angeschaltet, wenn es nichts mehr zu messen gibt, das sich danach noch aendert. Die Store-Einreichung (Phase 11) ist der Abschluss, weil ein Store-Text die Zahlen aus dem Messbericht traegt und nach der Abgabe nicht mehr editierbar ist.
+Die Reihenfolge folgt einem Zwang, der nicht verhandelbar ist: **die Vergleichsmessung braucht die fertige Engine.** Alles, was den Speicherbedarf, die Tokenisierung oder den Suchweg veraendert (Phasen 7, 8, 9), steht deshalb vor dem Lauf auf der AWS-Box (Phase 10). Die Box ist am 11.09.2026 abgebaut worden, nachdem der Korpus in den Snapshot `snap-03f1d1d9ad9262704` gegangen war; solange sie bestand, kostete jeder Neustart Laufzeit und Geld, und sie wurde deshalb nur angeschaltet, wenn es nichts mehr zu messen gab, das sich danach noch aendert. Die Store-Einreichung (Phase 11) ist der Abschluss, weil ein Store-Text die Zahlen aus dem Messbericht traegt und nach der Abgabe nicht mehr editierbar ist.
 
 Die Phasen sind bewusst klein und einzeln nutzbar geschnitten. Grund ist das Kill-Kriterium: kuendigt Nextcloud auf der Conference im September eine Elasticsearch-freie Volltextsuche mit OCR an, wird das Projekt neu bewertet. Nach jeder einzelnen Phase steht ein Zustand, der fuer sich genommen ein Release wert waere, statt eines halben Umbaus.
 
@@ -39,7 +39,7 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-09-08)
 - [x] **Phase 9: Eigene Ergebnisseite** - Der Nutzer verliert die Trefferliste nicht mehr, wenn er einen Treffer oeffnet (completed 2026-09-09)
 - [x] **Phase 10: Vergleichsmessung auf der AWS-Box** - Die Verbesserung steht als Zahl neben der v1.0-Baseline, Zeile fuer Zeile (abgeschlossen 2026-09-10; Kriterium 2 ausdruecklich nur teilweise belegt, siehe Phasenblock)
-- [ ] **Phase 11: Haertung und Store-Einreichung v1.1** - v1.1 ist getestet jenseits des Happy Path und als signiertes App-Paar im Store
+- [x] **Phase 11: Haertung und Store-Einreichung v1.1** - v1.1 ist getestet jenseits des Happy Path und als signiertes App-Paar im Store (completed 2026-09-11)
 
 ## Phase Details
 
@@ -260,7 +260,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 11-12-PLAN.md , EBS-Snapshot, gesicherte Historie und der Abbau der Box (Welle 8, Checkpoint-Plan)
+- [x] 11-12-PLAN.md , EBS-Snapshot, gesicherte Historie und der Abbau der Box (Welle 8, Checkpoint-Plan)
 
 ## Progress
 
@@ -273,7 +273,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | 7/7 | Complete    | 2026-09-10 |
-| 11. Haertung und Store-Einreichung v1.1 | 12/13 | In Progress|  |
+| 11. Haertung und Store-Einreichung v1.1 | 13/13 | Complete   | 2026-09-11 |
 
 ## Requirement Coverage
 
