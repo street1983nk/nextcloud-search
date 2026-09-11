@@ -2833,59 +2833,109 @@ jobs:
           fi
           echo "three terms, one file each; no navigation entry; the state is on record in upgrade-before.json"
 
-      - name: Store upgrade 3b, the shipped apps this checkout does not carry
+      - name: Store upgrade 3b, the always enabled apps this checkout does not carry
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         run: |
-          # checkAppsRequirements() of lib/private/Updater.php throws
-          # UnexpectedValueException for an app that is enabled and listed in
-          # core/shipped.json but whose appinfo cannot be read, and it disables
-          # the app instead when it is not shipped. That method runs inside
-          # doUpgrade() only, which is why it never fired here before: until the
-          # release commit of plan 11-11 both sides carried 1.0.3, occ upgrade
-          # answered ERROR_UP_TO_DATE and left before reaching it. With
+          # checkAppsRequirements() of lib/private/Updater.php walks the enabled
+          # apps and, for one that is shipped and whose appinfo cannot be read,
+          # throws UnexpectedValueException instead of disabling it. It runs
+          # inside doUpgrade() only, which is why it never fired here before:
+          # until the release commit of plan 11-11 both sides carried 1.0.3, occ
+          # upgrade answered ERROR_UP_TO_DATE and left before reaching it. With
           # 1.0.3 -> 1.1.0 it gets there, and the instance died on "viewer".
           #
-          # The cause is the test instance and not Findling. apps/ of the
-          # stable34 branch carries 31 apps, and the bundle apps that
-          # core/shipped.json lists (viewer, text, photos and the rest) are not
-          # among them: a release tarball ships them, a git checkout does not.
-          # So this instance stands in a state no user installation is ever in,
-          # and it is repaired here with the same verdict Nextcloud itself passes
-          # on a non shipped app. The repair is loud, every app it touches is
-          # named, and a silent one would be worse than the failure it removes.
+          # Which app is "enabled" is not only what oc_appconfig says.
+          # AppManager::getAlwaysEnabledApps() reads core/shipped.json and treats
+          # every entry of alwaysEnabled as enabled regardless of the database,
+          # and such an app cannot be disabled either. stable34 lists viewer
+          # there while apps/ of the same branch does not carry it: the bundle
+          # apps live in their own repositories and only a release tarball brings
+          # them along. That is why the first attempt at this step found nothing
+          # to do in oc_appconfig and the upgrade died all the same.
           #
-          # Both halves of Findling are excluded by name and the exclusion is
-          # checked afterwards rather than trusted: disabling one of them is the
-          # single change that would quietly empty the proof below.
-          enabled=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
-            "SELECT appid FROM oc_appconfig WHERE configkey = 'enabled' AND configvalue <> 'no';")
-          touched=0
-          for app in ${enabled}; do
-            case "${app}" in
-              findling|findling_backend) continue ;;
-            esac
-            if [ -f "apps/${app}/appinfo/info.xml" ]; then
-              continue
+          # So the instance claims to ship an app it does not have, which is a
+          # state no user installation is ever in, and that claim is what is
+          # corrected here. Nothing is faked into place, no app is installed and
+          # no app is disabled: alwaysEnabled is reduced to the apps that are
+          # really in this checkout, and the one entry that goes is named.
+          #
+          # Only alwaysEnabled, and defaultEnabled deliberately not. That second
+          # list decides what a fresh installation switches on, it is not
+          # consulted by getAlwaysEnabledApps(), and it played no part in the
+          # failure; it names two dozen bundle apps this checkout does not carry
+          # either, so editing it would be a large change to the instance that
+          # nothing asked for. On stable34 the correction below therefore moves
+          # exactly one name.
+          #
+          # Neither half of Findling appears in shipped.json at all, and the
+          # assertion below says so rather than assuming it.
+          test -f core/shipped.json
+          # Two clauses before anything is edited, because the edit below is
+          # driven by a path test and a path test that is wrong about where it
+          # stands would answer "missing" for every app there is. Emptying
+          # alwaysEnabled would leave the instance without dav, files and
+          # settings, and it would do it quietly.
+          #
+          # The first clause is the anti vacuity one: files is in alwaysEnabled
+          # and in every Nextcloud that ever existed, so if it cannot be found
+          # here then this step is not standing in the server root and nothing
+          # it concludes is worth anything.
+          if [ ! -f "apps/files/appinfo/info.xml" ]; then
+            echo "::error::apps/files/appinfo/info.xml is not here, so this step is not in the Nextcloud root and must not edit shipped.json"
+            pwd
+            ls -1
+            exit 1
+          fi
+          missing=""
+          count=0
+          # tr -d '\r' for the same reason release.yml carries it at the signing
+          # keys: a name with a carriage return glued to it turns every path test
+          # into a miss, and the failure looks like a finding.
+          for app in $(jq -r '.alwaysEnabled[]' core/shipped.json | tr -d '\r'); do
+            if [ ! -f "apps/${app}/appinfo/info.xml" ]; then
+              missing="${missing} ${app}"
+              count=$((count + 1))
+              echo "core/shipped.json promises ${app}, but apps/${app}/appinfo/info.xml is not in this checkout"
             fi
-            echo "the app ${app} is enabled but this checkout carries no apps/${app}/appinfo/info.xml; disabling it before the upgrade"
-            "${RUNNER_TEMP}/nc-occ.sh" app:disable "${app}" \
-              || sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
-                   "UPDATE oc_appconfig SET configvalue = 'no' WHERE appid = '${app}' AND configkey = 'enabled';"
-            touched=$((touched + 1))
           done
-          echo "${touched} enabled app(s) without files were disabled before the upgrade"
+          # The second clause, an upper bound on how much this step is allowed to
+          # believe. On stable34 exactly one app answers this description and it
+          # is viewer; a handful would still be a checkout that moved its apps
+          # around, and everything above that is this step being wrong rather
+          # than the checkout being odd.
+          if [ "${count}" -gt 3 ]; then
+            echo "::error::${count} always enabled apps appear to be missing, which is not a checkout this step understands; refusing to edit shipped.json"
+            exit 1
+          fi
+          if [ -z "${missing}" ]; then
+            echo "every always enabled app of shipped.json is present; nothing to correct"
+          else
+            drop=$(printf '%s\n' ${missing} | jq -R . | jq -s .)
+            jq --argjson drop "${drop}" '.alwaysEnabled = (.alwaysEnabled - $drop)' \
+              core/shipped.json > "${RUNNER_TEMP}/shipped.json.new"
+            mv "${RUNNER_TEMP}/shipped.json.new" core/shipped.json
+            echo "removed from alwaysEnabled:${missing}"
+          fi
 
-          # The guard of this step: the repair must not have touched what the
-          # upgrade is about.
-          for half in findling findling_backend; do
-            state=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
-              "SELECT configvalue FROM oc_appconfig WHERE appid = '${half}' AND configkey = 'enabled';")
-            if [ "${state}" = "no" ] || [ -z "${state}" ]; then
-              echo "::error::${half} is '${state}' after the repair, so the upgrade below would prove nothing"
-              exit 1
-            fi
-          done
-          echo "both halves are still enabled"
+          # The guard of this step, in two parts. First: shipped.json is a list
+          # of Nextcloud's own apps and must never have named ours, because an
+          # entry there would put a half of Findling within reach of the edit
+          # above.
+          if jq -e '[.shippedApps[], .alwaysEnabled[], .defaultEnabled[]] | any(. == "findling" or . == "findling_backend")' \
+               core/shipped.json > /dev/null; then
+            echo "::error::shipped.json names a half of Findling, which this step must never be able to touch"
+            exit 1
+          fi
+          # Second: the companion is still enabled. The container half is not
+          # kept in oc_appconfig at all but in the ExApp tables of AppAPI, and
+          # the steps below check it far more thoroughly than a count could.
+          state=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'enabled';")
+          if [ "${state}" = "no" ] || [ -z "${state}" ]; then
+            echo "::error::findling is '${state}' after the correction, so the upgrade below would prove nothing"
+            exit 1
+          fi
+          echo "the companion is still enabled; shipped.json now lists only apps this checkout carries"
 
       - name: Store upgrade 4, the upgrade itself, in two halves
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
