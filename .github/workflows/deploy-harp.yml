@@ -3093,6 +3093,42 @@ jobs:
           done
           if [ -z "${ready}" ]; then
             echo "::error::the container after the upgrade does not answer the canary search, so the next step would measure a container that is not up"
+            # Diagnosis only. Nothing below changes the instance: a search is a
+            # read, and every occ call here reports rather than acts. The
+            # comparison above told us that the answer was not one entry and
+            # nothing else, which left the two interesting cases (no entry at
+            # all, or an instance that is not answering searches yet)
+            # indistinguishable. Each command may fail without ending the step,
+            # because a diagnosis that stops at its first gap is worth less than
+            # a noisy one.
+            echo "--- the canary search once more, status and body ---"
+            curl -s -o "${RUNNER_TEMP}/canary.json" -w 'HTTP %{http_code}\n' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary' || true
+            head -c 2000 "${RUNNER_TEMP}/canary.json" || true
+            echo
+            echo "--- the search providers this instance offers ---"
+            curl -s -o "${RUNNER_TEMP}/providers.json" -w 'HTTP %{http_code}\n' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+              'http://localhost:8080/ocs/v2.php/search/providers' || true
+            jq -r '.ocs.data[]?.id' "${RUNNER_TEMP}/providers.json" 2>/dev/null \
+              || head -c 2000 "${RUNNER_TEMP}/providers.json" || true
+            echo
+            echo "--- maintenance mode and status ---"
+            "${RUNNER_TEMP}/nc-occ.sh" maintenance:mode || true
+            "${RUNNER_TEMP}/nc-occ.sh" status --output=json || true
+            echo "--- the app list ---"
+            "${RUNNER_TEMP}/nc-occ.sh" app:list || true
+            echo "--- what oc_appconfig holds for findling ---"
+            sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+              "SELECT configkey || ' = ' || configvalue FROM oc_appconfig WHERE appid = 'findling';" || true
+            echo "--- the ExApp as AppAPI sees it ---"
+            "${RUNNER_TEMP}/nc-occ.sh" app_api:app:list || true
+            echo "--- the last lines of nextcloud.log ---"
+            tail -n 60 data/nextcloud.log || true
+            echo "--- the last lines of the container ---"
             docker logs "${container}" 2>&1 | tail -n 60
             exit 1
           fi
