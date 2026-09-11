@@ -78,6 +78,18 @@ env:
   # scripts/dev/compose-harp.yaml carries the identical string.
   HARP_IMAGE: ghcr.io/nextcloud/nextcloud-appapi-harp@sha256:603fdf5ca2802235fd4e40301476dd2fafff409e84a42f8cb3b8f2e17c22ce39
 
+  # The released version the upgrade proof of plan 11-07 starts from, as a
+  # variable rather than as a literal inside a URL, so that a later release is
+  # one line here and not a search through a step.
+  #
+  # v1.0.3 and not something newer, because on 2026-09-11 it IS the newest
+  # release of this repository: the tag list ends at v1.0.3 and the version in
+  # both info.xml is 1.0.3. So these are the bytes every existing installation
+  # really holds, they are the assets store-submit.yml hands the store, and
+  # "Store install 1 from the release" already loaded them in run 34526436580.
+  # A tag invented for the test would prove an upgrade nobody performs.
+  UPGRADE_FROM_TAG: v1.0.3
+
 jobs:
   deploy-harp:
     name: deploy-harp
@@ -296,6 +308,19 @@ jobs:
       # slowest. So the loop below leaves the moment the hit is there and never
       # sleeps a fixed pause.
       ZERO_CONFIG_BUDGET_SECONDS: '600'
+
+      # The budget the upgrade proof gives the first indexing pass over the
+      # reference corpus, in seconds, and a named variable for the same reason
+      # the one above is named: raising it is a decision and needs a reason next
+      # to it.
+      #
+      # The number is not new. integration.yml indexes the identical 39 file
+      # corpus and gives it DRAIN_TIMEOUT 900, measured there against 26
+      # indexed, 7 skipped and 6 failed documents, OCR included. The container
+      # here does the same work on the same files, so the same figure is used
+      # and named rather than a second one invented. An overrun is a finding
+      # about the indexing pass and not an invitation to raise the number.
+      UPGRADE_DRAIN_BUDGET_SECONDS: '900'
 
     steps:
       # Actions are pinned to commit SHAs, never to tags: a moved tag would be
@@ -2303,6 +2328,482 @@ jobs:
             exit 1
           fi
           echo "container ${container} is ${alive}, retreat announced, ${grew} new warning or error lines"
+
+      # =====================================================================
+      # The upgrade proof of plan 11-07, and success criterion 2 of phase 11:
+      # an installation that really came out of the v1.0.3 release assets is
+      # brought to the state of this commit, and the index it built survives
+      # that untouched.
+      #
+      # Why the block stands at the end of the job and not between the store
+      # install path and the six promises above it: those promises need the
+      # store installation intact, so an upgrade in the middle of them would
+      # take their subject away. Here the store pass has made every statement
+      # it has, and the instance is free.
+      #
+      # Why it is a recombination and not a new mechanism. "Store uninstall 1"
+      # shows that an app_api:app:unregister without the flag keeps the volume,
+      # "Store uninstall 2" that a second registration picks the same volume up
+      # again, and "Store install 1 from the release" that both archives can be
+      # loaded from a published tag. The upgrade is those three in one order,
+      # with a measurement before and a measurement after.
+      #
+      # Why exactly one leg. An upgrade path is a statement about the app and
+      # not about the server version, and six legs would buy six instances of a
+      # statement that one leg carries. stable34 on ubuntu-24.04 is that leg:
+      # the newest released Nextcloud on 2026-09-10 (v34.0.4), on the
+      # architecture the release is measured on. Every step below names both
+      # matrix values in its own if, because this file has no block condition
+      # and a step that lost its condition would run half an upgrade on the
+      # arm64 leg.
+      #
+      # And the third condition, RELEASE_TAG being empty. With that input set,
+      # the store pass above installed the archives of that very tag, so the new
+      # half here would be the same bytes as the old one: the proof would
+      # compare v1.0.3 with v1.0.3 and go green without having measured
+      # anything. That is the one shape this block must never have, so in that
+      # mode it does not run at all rather than run and mean nothing.
+      #
+      # What this block is emphatically not about is where the bytes of the new
+      # half come from. That is the subject of the store install path above,
+      # which asserts the registry, the anonymous pull and the integrity check.
+      # Here the subject is the index on the volume, and nothing else.
+      # =====================================================================
+
+      - name: Store upgrade 0, the store pass is taken away, and never with the flag
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        run: |
+          # "Store uninstall 5" registered the container once more and "Store
+          # uninstall 6" watched it retreat without its companion, so a container
+          # and a volume of the store pass are standing here. Both have to go:
+          # the proof below builds an index of its own, and a volume of the store
+          # pass would be a second possible source for the same numbers.
+          #
+          # The flag is deliberately absent, in this step and in every step of
+          # this block. A grep for --rm-data over the upgrade steps has to come
+          # back empty (T-11-26): a lost volume in an upgrade path would be the
+          # damage of 2026-09-07 in small, and the surest way to keep the flag
+          # out of an upgrade step is to leave no occurrence of it here to copy
+          # from. The volume of the store pass is therefore removed by name with
+          # docker, which is a teardown before the proof rather than a step of
+          # the upgrade path.
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:unregister findling_backend || true
+          leftover=$(docker ps -aq --filter 'name=findling_backend')
+          if [ -n "${leftover}" ]; then
+            echo "a container of the store pass survived the unregister and is removed here"
+            docker rm -f ${leftover} > /dev/null
+          fi
+          for volume in $(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}'); do
+            echo "removing the volume ${volume} of the store pass"
+            docker volume rm "${volume}" > /dev/null
+          done
+
+          left=$(docker ps -a --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -n "${left}" ]; then
+            echo "the container ${left} is still here, so the upgrade would start on top of the store pass"
+            docker ps -a
+            exit 1
+          fi
+          volume=$(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}')
+          if [ -n "${volume}" ]; then
+            echo "the volume ${volume} is still here, and the index below could then be one the store pass built"
+            docker volume ls
+            exit 1
+          fi
+          # "Store uninstall 5" removed the companion with occ app:remove, which
+          # takes the directory with it. Asserted rather than assumed, because
+          # the 1.0.3 archive would otherwise be extracted over the files of this
+          # commit and the installation would be a mixture of two versions.
+          if [ -e apps/findling ]; then
+            echo "apps/findling still exists, so the v1.0.3 archive would be laid over the files of this commit"
+            find apps/findling -maxdepth 2 -mindepth 1 -printf '  %P\n' | sort
+            exit 1
+          fi
+          echo "no container, no volume, no companion directory"
+
+      - name: Store upgrade 1, both halves out of the v1.0.3 release assets
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        run: |
+          # The same URL shape store-submit.yml hands the store, built from
+          # GITHUB_REPOSITORY for the same reason as in "Store install 1 from the
+          # release": a second way of naming the same asset would be a second
+          # inventory, and the store fetches exactly this one. The tag comes out
+          # of UPGRADE_FROM_TAG at the top of this file, where the reason for its
+          # value stands.
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${UPGRADE_FROM_TAG}"
+          from="${RUNNER_TEMP}/upgrade-from"
+          rm -rf "${from}"
+          mkdir -p "${from}/dist" "${from}/extract"
+          for app in findling findling_backend; do
+            url="${base}/${app}.tar.gz"
+            echo "loading ${url}"
+            # -f so that an HTML error page never lands in the file, and no
+            # fallback of any kind: an upgrade proof that quietly starts from
+            # something other than the released bytes would be worse than a red
+            # run.
+            if ! curl -sfL --retry 3 --retry-delay 5 --retry-connrefused \
+                 -o "${from}/dist/${app}.tar.gz" "${url}"; then
+              echo "::error::${url} could not be loaded, so there is no v1.0.3 installation to upgrade from"
+              exit 1
+            fi
+            if [ ! -s "${from}/dist/${app}.tar.gz" ]; then
+              echo "::error::${url} answered with an empty file"
+              exit 1
+            fi
+          done
+          # Which bytes the upgrade starts from, on record, so that a reader of
+          # this run can say what was installed without trusting the tag to have
+          # stayed put.
+          ls -l "${from}/dist"
+          sha256sum "${from}/dist/findling.tar.gz" "${from}/dist/findling_backend.tar.gz"
+
+          # The companion half. The signature in this archive is the real one
+          # release.yml made with the app key of the Nextcloud Code Signing Root
+          # Authority, which the server checkout trusts out of the box, so this
+          # is the file list a user's instance verifies as well.
+          tar -xzf "${from}/dist/findling.tar.gz" -C apps
+          test -f apps/findling/appinfo/signature.json
+          old_companion=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' apps/findling/appinfo/info.xml | head -1)
+          echo "the companion of the release carries version ${old_companion}"
+          # The navigation entry is the one visible difference between the two
+          # sides, and it is measured rather than believed: php/appinfo/info.xml
+          # grew the <navigations> block in plan 09-06, after v1.0.3 was
+          # published. A released archive that already carried it would make the
+          # assertion of "Store upgrade 5" green for the wrong reason, so the
+          # absence is asserted here, in the file, before anything is installed.
+          if grep -q '<navigations>' apps/findling/appinfo/info.xml; then
+            echo "the v1.0.3 companion already declares a navigation entry, so the change this upgrade shows is not the one plan 09-06 made"
+            exit 1
+          fi
+          echo "the v1.0.3 companion declares no navigation entry"
+          "${RUNNER_TEMP}/nc-occ.sh" app:enable findling
+
+          # The container half, out of the info.xml of the released archive and
+          # out of nothing else: registry, image and image-tag are what a user
+          # of v1.0.3 really runs. ghcr.io/street1983nk/findling_backend:1.0.3
+          # exists as an index with linux/amd64 and linux/arm64 (checked on
+          # 2026-09-10, see the matrix comment), and a missing tag would end this
+          # step rather than fall back to anything.
+          tar -xzf "${from}/dist/findling_backend.tar.gz" -C "${from}/extract"
+          old_info="${from}/extract/findling_backend/appinfo/info.xml"
+          test -f "${old_info}"
+          grep -E '<version>|<registry>|<image>|<image-tag>' "${old_info}"
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${old_info}" --wait-finish
+
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -z "${container}" ]; then
+            echo "the v1.0.3 registration created no running container"
+            docker ps -a
+            exit 1
+          fi
+          volume=$(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}')
+          if [ -z "${volume}" ]; then
+            echo "the v1.0.3 registration created no volume, and an upgrade that keeps nothing proves nothing"
+            docker volume ls
+            exit 1
+          fi
+          docker ps --filter "name=${container}" --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
+          echo "the v1.0.3 installation runs as ${container} on the volume ${volume}"
+          {
+            echo "UPGRADE_OLD_CONTAINER=${container}"
+            echo "UPGRADE_VOLUME=${volume}"
+            echo "UPGRADE_OLD_COMPANION=${old_companion}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Store upgrade 2, the corpus of a real installation, indexed and waited out
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        run: |
+          # The 39 file reference corpus, the same one integration.yml indexes,
+          # in the account of the ordinary user. It is what makes the three term
+          # assertions below possible at all: a hit count needs documents, and
+          # documents nobody chose would make the counts arbitrary.
+          mkdir -p data/testuser/files
+          cp -r findling-src/testdata/corpus data/testuser/files/corpus
+          "${RUNNER_TEMP}/nc-occ.sh" files:scan --all
+          echo "corpus entries: $(find data/testuser/files/corpus -type f | wc -l)"
+
+          # --restart and not a wait for the first crawl: the zero config chain
+          # ran when the app was enabled and may have walked the mount before the
+          # corpus was in it. --no-interaction because occ treats this shell as
+          # interactive and the confirmation would otherwise default to No and
+          # leave the queue empty (first run finding of the resilience gate).
+          "${RUNNER_TEMP}/nc-occ.sh" findling:index --restart --no-interaction
+
+          # The waiting shape of this job, not a second one: cron.php is the
+          # identical command a system cron runs, the loop leaves the moment the
+          # condition holds and never sleeps a fixed pause, and the condition is
+          # read out of two independent places. That is the 52 second lesson of
+          # plan 06-11, the same one "Store install 7" is built on.
+          #
+          # Two sources, because either alone would be a false green. The queue
+          # of Nextcloud says whether work is outstanding; the container says how
+          # many files have a verdict. An empty queue alone is also the state
+          # before the crawl has queued anything.
+          open_rows() {
+            "${RUNNER_TEMP}/nc-occ.sh" findling:index | awk '
+              $1 == "scheduled" { scheduled = $2 }
+              /^  handed to the worker/ { running = $NF }
+              END { print (scheduled + 0) + (running + 0) }'
+          }
+          container="${UPGRADE_OLD_CONTAINER}"
+          report() {
+            docker exec "${container}" sh -c 'python -m findling.tools.index_status --db "${APP_PERSISTENT_STORAGE}/state.db"'
+          }
+          # Every file of the account, because every one of them ends in one of
+          # the three end states. A lower bound and not an exact figure: the
+          # admin account carries files of its own and they are crawled as well,
+          # so the count may be exceeded and may never be undercut.
+          expected=$(find data/testuser/files -type f | wc -l)
+          echo "the account of testuser holds ${expected} files, and every one of them has to reach a verdict"
+
+          deadline=$(( $(date +%s) + UPGRADE_DRAIN_BUDGET_SECONDS ))
+          rounds=0
+          drained=""
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            rounds=$(( rounds + 1 ))
+            timeout 300 php -f cron.php > "${RUNNER_TEMP}/upgrade-cron-${rounds}.log" 2>&1 || true
+            state=$(report)
+            indexed=$(echo "${state}" | jq -r '.indexed')
+            skipped=$(echo "${state}" | jq -r '.skipped')
+            failed=$(echo "${state}" | jq -r '.failed')
+            open=$(open_rows)
+            judged=$(( indexed + skipped + failed ))
+            echo "round ${rounds}: open=${open} indexed=${indexed} skipped=${skipped} failed=${failed}, $(( deadline - $(date +%s) ))s of the budget left"
+            if [ "${open}" -eq 0 ] && [ "${judged}" -ge "${expected}" ]; then
+              drained="yes"
+              break
+            fi
+            sleep 5
+          done
+
+          if [ -z "${drained}" ]; then
+            echo "::error::the first indexing pass did not finish within UPGRADE_DRAIN_BUDGET_SECONDS=${UPGRADE_DRAIN_BUDGET_SECONDS} after ${rounds} cron rounds"
+            echo "This is a finding about the indexing pass and not a reason to raise the budget."
+            report || true
+            "${RUNNER_TEMP}/nc-occ.sh" findling:index || true
+            docker logs "${container}" 2>&1 | tail -n 60 || true
+            exit 1
+          fi
+          echo "the work stock is empty and every file has a verdict, after ${rounds} cron rounds"
+
+      - name: Store upgrade 3, the state of the v1.0.3 installation, before anything moves
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        run: |
+          # The probe both sides of the upgrade share, written once and sourced
+          # twice. Two implementations of "how many hits does this term have"
+          # would compare two measurements instead of two states, which is the
+          # one mistake a before and after proof cannot survive. The shape is the
+          # one of "The drift probe both directions share" further up.
+          cat > "${RUNNER_TEMP}/upgrade-probe.sh" <<'SH'
+          # The container is looked up on every call and never remembered: the
+          # upgrade replaces it, and a name captured before the upgrade would
+          # make the after state read a container that no longer exists.
+          findling_container() {
+            docker ps --filter 'name=findling_backend' --format '{{.Names}}' | head -n 1
+          }
+
+          # The five marks and the counters, read out of the volume by the
+          # container itself. Not over the /status route: that one sits behind
+          # the signed AppAPI header, and findling.tools.index_status exists for
+          # exactly this question. python and the package are on the PATH of the
+          # image, and the layout under APP_PERSISTENT_STORAGE is state.db with
+          # the index directory next to it.
+          index_report() {
+            container=$(findling_container)
+            if [ -z "${container}" ]; then
+              echo "no running findling_backend container, so there is nothing to read the index state from" >&2
+              return 1
+            fi
+            docker exec "${container}" sh -c 'python -m findling.tools.index_status --db "${APP_PERSISTENT_STORAGE}/state.db"'
+          }
+
+          # The hit count of one term over the ordinary OCS route, as the
+          # ordinary user. Fail closed in both directions: a status other than
+          # 200 and a body jq cannot read are findings, never a count of nought.
+          term_hits() {
+            body="${RUNNER_TEMP}/upgrade-term.json"
+            code=$(curl -s -o "${body}" -w '%{http_code}' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              "http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=$1")
+            if [ "${code}" != "200" ]; then
+              echo "the search for '$1' answered HTTP ${code}" >&2
+              cat "${body}" >&2
+              return 1
+            fi
+            count=$(jq -r '.ocs.data.entries | length' "${body}" 2> /dev/null || true)
+            case "${count}" in
+              ''|*[!0-9]*)
+                echo "the answer for '$1' carries no readable entry list" >&2
+                cat "${body}" >&2
+                return 1
+                ;;
+            esac
+            printf '%s\n' "${count}"
+          }
+
+          # The app menu of the instance, as ids. The list of a Nextcloud always
+          # carries more than one entry, so an empty answer is a broken call and
+          # never the absence of one entry.
+          navigation_ids() {
+            body="${RUNNER_TEMP}/upgrade-navigation.json"
+            code=$(curl -s -o "${body}" -w '%{http_code}' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              'http://localhost:8080/ocs/v2.php/core/navigation/apps')
+            if [ "${code}" != "200" ]; then
+              echo "the navigation route answered HTTP ${code}" >&2
+              cat "${body}" >&2
+              return 1
+            fi
+            ids=$(jq -r '[.ocs.data[].id] | sort | join(" ")' "${body}" 2> /dev/null || true)
+            if [ -z "${ids}" ]; then
+              echo "the navigation route answered with no entry at all, which is a broken call and not an absent entry" >&2
+              cat "${body}" >&2
+              return 1
+            fi
+            printf '%s\n' "${ids}"
+          }
+
+          # The reindex banner, read where it is decided. php/templates/admin.php
+          # shows the paragraph findling-banner-reindex when the overview says
+          # backend.reindexRequired, so the flag is the banner. The overview
+          # helper of the drift probe is what gets past the request token of that
+          # admin route, and it is reused rather than rebuilt.
+          #
+          # backendReachable is asked first, because a banner that is down
+          # because nobody answered is not a banner that is down.
+          reindex_banner() {
+            out="${RUNNER_TEMP}/upgrade-overview.json"
+            sh "${RUNNER_TEMP}/overview.sh" "${out}" >&2
+            if ! jq -e '.backendReachable == true' "${out}" > /dev/null; then
+              echo "the overview says the container did not answer, so its banner flag says nothing" >&2
+              head -c 400 "${out}" >&2
+              return 1
+            fi
+            if ! jq -e '.backend | has("reindexRequired")' "${out}" > /dev/null; then
+              echo "the overview carries no reindexRequired flag, so this probe is not looking at the banner" >&2
+              head -c 400 "${out}" >&2
+              return 1
+            fi
+            jq -r '.backend.reindexRequired' "${out}"
+          }
+
+          # Everything one state of this installation consists of, in one file.
+          snapshot() {
+            out="$1"
+            label="$2"
+
+            status_text="${RUNNER_TEMP}/upgrade-${label}-status.txt"
+            "${RUNNER_TEMP}/nc-occ.sh" findling:index --status > "${status_text}" 2>&1
+            cat "${status_text}"
+            # The end states as Nextcloud recorded them, next to the counters of
+            # the container. indexed is deliberately not read here: that counter
+            # belongs to the container and IndexCommand prints a sentence saying
+            # so, which $1 == "indexed" would otherwise pick up as a number.
+            scheduled=$(awk '$1 == "scheduled" && $2 ~ /^[0-9]+$/ { print $2; exit }' "${status_text}")
+            running=$(awk '/^  handed to the worker/ { print $NF; exit }' "${status_text}")
+            nc_skipped=$(awk '$1 == "skipped" && $2 ~ /^[0-9]+$/ { print $2; exit }' "${status_text}")
+            nc_failed=$(awk '$1 == "failed" && $2 ~ /^[0-9]+$/ { print $2; exit }' "${status_text}")
+            for pair in "scheduled=${scheduled}" "handed to the worker=${running}" \
+                        "skipped=${nc_skipped}" "failed=${nc_failed}"; do
+              case "${pair}" in
+                *=)
+                  echo "occ findling:index --status printed no number for ${pair%=}" >&2
+                  cat "${status_text}" >&2
+                  return 1
+                  ;;
+              esac
+            done
+
+            report=$(index_report)
+            belehrung=$(term_hits Belehrung)
+            auszug=$(term_hits Auszug)
+            erinnerung=$(term_hits Erinnerung)
+            ids=$(navigation_ids)
+            banner=$(reindex_banner)
+
+            jq -n \
+              --arg label "${label}" \
+              --argjson report "${report}" \
+              --argjson belehrung "${belehrung}" \
+              --argjson auszug "${auszug}" \
+              --argjson erinnerung "${erinnerung}" \
+              --argjson scheduled "${scheduled}" \
+              --argjson running "${running}" \
+              --argjson ncskipped "${nc_skipped}" \
+              --argjson ncfailed "${nc_failed}" \
+              --arg ids "${ids}" \
+              --arg banner "${banner}" \
+              '{
+                 label: $label,
+                 terms: {
+                   Belehrung: $belehrung,
+                   Auszug: $auszug,
+                   Erinnerung: $erinnerung
+                 },
+                 container: {
+                   docs: $report.docs,
+                   indexed: $report.indexed,
+                   skipped: $report.skipped,
+                   failed: $report.failed
+                 },
+                 marks: {
+                   schemaVersion: $report.schemaVersion,
+                   indexVersion: $report.indexVersion,
+                   analyzerVersion: $report.analyzerVersion,
+                   wordlistHash: $report.wordlistHash,
+                   tantivyVersion: $report.tantivyVersion
+                 },
+                 nextcloud: {
+                   scheduled: $scheduled,
+                   running: $running,
+                   skipped: $ncskipped,
+                   failed: $ncfailed
+                 },
+                 navigation: {
+                   ids: $ids,
+                   findling: ($ids | split(" ") | index("findling") != null)
+                 },
+                 reindexBanner: ($banner == "true")
+               }' > "${out}"
+          }
+          SH
+
+          . "${RUNNER_TEMP}/upgrade-probe.sh"
+
+          # The three terms are fixed values of the 39 file corpus and every one
+          # of them carries a measured statement in
+          # backend/tests/test_corpus_terms.py: Belehrung stands only inside
+          # Rechtsmittelbelehrung in 15-schweiz-baubewilligung.pdf, Auszug only
+          # inside Grundbuchsauszug in 16-oesterreich-mitteilung.pdf, and
+          # Erinnerung only inside Zahlungserinnerung in 30-nur-ein-bild.pdf.
+          # All three sit on scanned pages, so a hit is the whole chain: OCR,
+          # compound splitting, index, search. That test says each of them
+          # brings back exactly one file, which is why an unchanged count here
+          # is a statement about the index and not about an arbitrary number.
+          snapshot "${RUNNER_TEMP}/upgrade-before.json" before
+          echo "the state of the v1.0.3 installation:"
+          jq . "${RUNNER_TEMP}/upgrade-before.json"
+
+          # The two facts the before state has to carry, or the assertions after
+          # the upgrade would be measuring an installation that never worked.
+          if ! jq -e '[.terms[]] | all(. == 1)' "${RUNNER_TEMP}/upgrade-before.json" > /dev/null; then
+            echo "::error::not every one of the three terms brings back exactly one file on the v1.0.3 installation"
+            echo "An unchanged count after the upgrade would then be the unchanged absence of a hit."
+            jq '.terms' "${RUNNER_TEMP}/upgrade-before.json"
+            exit 1
+          fi
+          if jq -e '.navigation.findling' "${RUNNER_TEMP}/upgrade-before.json" > /dev/null; then
+            echo "::error::the app menu already carries the findling entry on the v1.0.3 installation"
+            echo "The entry appearing after the upgrade would then be no change at all."
+            jq '.navigation' "${RUNNER_TEMP}/upgrade-before.json"
+            exit 1
+          fi
+          echo "three terms, one file each; no navigation entry; the state is on record in upgrade-before.json"
 
       - name: Collect the logs and tear the deployment down
         if: always()
