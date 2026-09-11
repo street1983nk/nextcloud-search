@@ -22,6 +22,30 @@ name: Wave 0 measurements
 # arm64 runner below pulls the arm64 half of exactly the artefact users install,
 # addressed by its digest. Building here instead would cost the model download
 # and the quantisation twice per run and would measure an image nobody ships.
+#
+# Which identity of that image decides, and which one is only written down
+# (DI-10-05, decided on 2026-09-11 in the phase 11 audit, docs/audits/
+# 2026-09-phase-11/README.md, section 5). Three sentences, and they settle a
+# finding that has been open since plan 10-03:
+#
+#   1. The proof is the tree hash. scripts of the measurement runs write the
+#      `baumhash:` lines of rohdaten/40b-baumhash.txt over the files inside the
+#      image and over the working tree, and `baumhash-gleich ja` is what says
+#      the measured bytes are the bytes of the commit. A baumhash that differs
+#      stops a run; nothing below overrides that.
+#   2. The resolved digest is the note, not the proof. It is recorded so that a
+#      later reader can address the same bytes again, and a digest that moved
+#      while the baumhash held is a moved tag and not a changed image.
+#   3. A measuring run may therefore check against the wandering tag dev, which
+#      is the default of image_ref below, and the digest it resolves to is
+#      written along by the "Resolve the image to a digest" step rather than
+#      written down in a plan beforehand. A digest pinned in advance goes stale
+#      on the next push that touches backend/**, which is how DI-10-05 arose.
+#
+# None of this loosens the delivery path, which is a different question and is
+# nailed down elsewhere: on a tag run docker.yml refuses to go on unless the
+# git tag, both <version> entries and the <image-tag> agree. Measuring is
+# allowed a moving pointer; shipping is not.
 on:
   workflow_dispatch:
     inputs:
