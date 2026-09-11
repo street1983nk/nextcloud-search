@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Abgeschlossen 11-09-PLAN.md, der Owner hat Fassung B und den dreisprachigen Messsatz abgenommen. Welle 5 ist damit zu, Welle 6 offen
-last_updated: "2026-09-11T02:10:38.487Z"
+stopped_at: Abgeschlossen 11-10-PLAN.md, das Audit-Gate der Phase ist gefahren (1 MEDIUM gebaut, 10 LOW entschieden, 2 davon in diesem Lauf behoben). Welle 6 ist damit zu, Welle 7 offen
+last_updated: "2026-09-11T05:40:00.000Z"
 last_activity: 2026-09-11
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 37
-  completed_plans: 35
-  percent: 95
+  completed_plans: 36
+  percent: 97
 ---
 
 # Project State
@@ -26,12 +26,40 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 11 (Haertung und Store-Einreichung v1.1) — EXECUTING
-Plan: 9 of 13
-Status: 11-09 abgeschlossen, Welle 5 ist zu, Welle 6 steht an
+Plan: 10 of 13
+Status: 11-10 abgeschlossen, Welle 6 ist zu, Welle 7 steht an
 Last activity: 2026-09-11
 
-**Naechster Schritt:** Welle 6, Plan 11-10 (die drei Audits ueber den Diff der
-Phase, autonom). Plan 11-09 ist am 11.09.2026 gefahren und abgeschlossen, und
+**Naechster Schritt:** Welle 7, Plan 11-11 (Versionsbump in einem Commit, Tag,
+ghcr-Pruefung, Store-Submission; Checkpoint-Plan). Plan 11-10 ist am 11.09.2026
+gefahren und abgeschlossen, und damit ist **Welle 6 vollstaendig**. Der
+Auditbericht liegt unter `docs/audits/2026-09-phase-11/README.md`:
+`721bde6..HEAD`, **55 Dateien, 46 Commits**, und **anders als Phase 10 aendert
+diese Phase Produktionscode** (15 Dateien unter `php/`, acht davon gehen im
+Companion-Paket an jeden Nutzer, `backend/src/` mit null Dateien).
+**Bilanz: 0 CRITICAL, 0 HIGH, 1 MEDIUM, 10 LOW.** Der MEDIUM ist DI-07-03 und
+war bei Planbeginn schon gebaut (Plan 11-13, Entscheid v1-a vom 10.09.2026,
+Belegstelle `11-13-SUMMARY.md`); `fixed: [M-01, L-05, L-06]`,
+`still_open: [L-07, L-08, L-09, L-10]`, alle vier LOW, jeder mit Verdikt,
+Begruendung und Zieladresse. **Zwei Befunde sind in diesem Lauf behoben**, beide
+ohne Produktionscode: `ab39d37` vollzieht DI-10-05 im Kopf von `measure.yml`
+(Baumhash ist der Beweis, Digest ist die Notiz, `dev` ist erlaubt), `2e8502b`
+behebt DI-11-04 in `deploy-harp.yml` (der Runner steht jetzt im Artefaktnamen,
+weil zwei `stable34`-Aeste zwei gleichnamige Artefakte erzeugten und nur eines
+die Upgrade-Beweisdateien traegt). **Was 11-11 mitnimmt:** die Signaturkette ist
+unter V6 geprueft, bevor sie zum fuenften Mal benutzt wird; der Versionsbump
+betrifft **drei** Stellen (`php/appinfo/info.xml:113`,
+`backend/appinfo/info.xml:136`, `<image-tag>` in `:230`), die `docker.yml` auf
+einem Tag-Lauf zusammenhaelt; und Erfolgskriterium 5 hat jetzt eine
+Feststellung statt einer Vermutung, weil `git ls-files`, `git log --all` und
+`git check-ignore` die vier Dateien im Wurzelverzeichnis als ungetrackte
+Ueberbleibsel einer Handprobe ausweisen. **Was 11-12 erbt:** die Zieladresse
+"v1.2-Messplanung mit Box-Wiederaufbau-Runbook" fuer L-04 (die vier regressiven
+Laststufen), L-07 (DI-10-04), L-09 (DI-11-02) und L-10 (DI-11-03); alle vier
+brauchen eine Box. **DI-10-02 ist ehrlich als offen gefuehrt** und mit DI-11-01
+zusammengelegt. **REL-01 bleibt ungehakt:** dieser Plan liefert
+Erfolgskriterium 3, nicht das Requirement. Plan 11-09 ist am 11.09.2026
+gefahren und abgeschlossen, und
 damit ist **Welle 5 vollstaendig**. Der Owner hat den Entwurf vor der
 Einreichung gesehen und entschieden: **Fassung B, Messsatz dreisprachig, FR ok**,
 kein Einwand gegen die 85,1 Prozent. Die Abnahmezeile steht datiert in
@@ -467,6 +495,18 @@ Recent decisions affecting current work:
 - [Phase 11]: 11-05: Findling steht nicht in der Tabelle, wie der Plan es verlangt, aber mit Wortlaut in der benannten G2-Ausnahmenliste. Beides zusammen ist der einzige Weg, der die Abnahmekriterien von 11-05 und Gate G1 von 11-08 gleichzeitig haelt; eine Toleranzschwelle statt der Liste ist ausdruecklich ausgeschlossen
 - [Phase 11]: 11-05: Die drei Stellen, an denen docs/l10n-french.md noch 173 nannte, sind hier bearbeitet und nicht an 11-10 weitergereicht worden, weil die Datei in files_modified dieses Plans steht. Die beiden historischen Aussagen behalten ihre damalige Zahl und sind als Geschichte kenntlich, die vorwaertsgerichtete Bedingung nennt jetzt 174
 
+- [Phase 11]: 11-10: DI-07-02 ist LOW und wird hingenommen. Die einzige gemessene Option (die Decke heben) trifft jeden Aufruf jedes Nutzers, und die Unified Search wartet auf jeden Provider; Vorwaermen und ein eigener Weg fuer den ersten Aufruf sind ungemessen. Der belegte Abbruch trat genau einmal je Containerstart bei kaltem Wirtscache auf. Wiedervorlage als Bedingung: sobald ein Lauf mehr als einen Abbruch je Containerstart belegt
+- [Phase 11]: 11-10: DI-07-03 steht als MEDIUM mit `fixed` im Audit, Optionskennung v1-a vom 10.09.2026, Belegstelle 11-13-SUMMARY.md. Die Berechtigungskette ist am Diff unveraendert: MAX_ROUNDS bleibt 3, isReadable bleibt die einzige Berechtigungsfrage, reduceIds ist nicht angefasst, und der Diff von Provider.php enthaelt keine einzige ausfuehrbare Zeile
+- [Phase 11]: 11-10: T-09-29 bleibt accept, aus Phase 10 uebernommen und nicht neu verhandelt; Wiedervorlage bei deutlich mehr als 146.171 Chunks
+- [Phase 11]: 11-10: DI-10-05 ist entschieden UND vollzogen: der Baumhash ist der Beweis, der aufgeloeste Digest ist die Notiz, ein Messlauf darf gegen den wandernden Tag dev pruefen, und der Digest wird mitgeschrieben statt vorher aufgeschrieben. Steht im Kopf von .github/workflows/measure.yml; die Auslieferung bleibt unberuehrt, weil docker.yml auf einem Tag-Lauf Tag, beide version-Angaben und den image-tag zusammenhaelt
+- [Phase 11]: 11-10: DI-10-04 wird dokumentiert weitergereicht, Ziel v1.2-Messplanung mit dem Box-Wiederaufbau-Runbook. Die Frage entscheidet nur ein neuer Volllauf (26 Stunden, rund 3 USD), der Deckel dieser Phase war 4 Stunden und 0,50 USD, und der Befund beruehrt kein Erfolgskriterium
+- [Phase 11]: 11-10: Die vier regressiven Laststufen (plus 5,8 / 11,0 / 13,4 / 17,5 Prozent) werden fuer v1.1.0 hingenommen. Die Zusage steht auf Stufe 8 und haelt mit 2.125,5 gegen 2.500 ms, die Stufen 12 und 16 rissen schon in 06-11, und eine Untersuchung ohne neue Reihe waere eine Deutung und keine Ursache. Die schrumpfende Reserve (585,0 auf 374,5 ms) ist benannt und nicht kleiner gemacht. Damit ist die ROADMAP-Zuweisung aus Erfolgskriterium 2 der Phase 10 erfuellt
+- [Phase 11]: 11-10: DI-10-02 bleibt OFFEN und wird mit DI-11-01 zusammengelegt. Die Vorpruefung misst die Zahl der Treffer, die die OCS-Route herausgibt, und die liegt auf der Box fuer jeden Begriff bei exakt 26 bei jeder Tiefe; die Schwelle 64 ist damit unerreichbar. Ziel: ein eigener Plan ohne Box in der v1.2-Haertung. Was die Aussage traegt, ist weiterhin integration.yml, Job index-search-e2e, Lauf 34530208024
+- [Phase 11]: 11-10: DI-11-03 wird NICHT gefixt, und der Grund ist technisch: das Lastwerkzeug kann abgebrochen und leer aus eigener Sicht nicht trennen, weil die OCS-Route in beiden Faellen HTTP 200 und eine Gruppe ohne Containerteil liefert. Ein zweiter Fehlschlagname waere ein Name ohne Unterscheidungsmerkmal
+- [Phase 11]: 11-10: DI-11-04 ist behoben, der Artefaktname von deploy-harp.yml lautet jetzt harp-logs-<server-version>-<runner>. Der alte Name bleibt fuer die Laeufe gueltig, die ihn geschrieben haben; der Kommentar am Schritt sagt das
+- [Phase 11]: 11-10: Neuer Befund L-01, hingenommen: der Satz aus 11-13 ist ein binaeres Existenz-Orakel ueber den Fremdbestand. Er nennt weder Zahl noch Name noch Pfad, steht nur auf der eigenen Ergebnisseite und nicht im Suchdialog, kostet je Anfrage einen vollen Suchlauf, und der Owner hat den Wortlaut in Kenntnis der Wirkung abgenommen. Die Abhilfe waere, den Entscheid v1-a umzudrehen
+- [Phase 11]: 11-10: Erfolgskriterium 5 hat eine Feststellung statt einer Vermutung: findling.tar.gz, findling_backend.tar.gz, findling.crt und findling_backend.crt sind von git nicht verfolgt, haben ueber keinen Branch einen Commit und sind von .gitignore gedeckt (*.tar.gz Zeile 31, *.crt Zeile 5). Eingereicht werden die vier Assets am GitHub-Release, deren URLs store-submit.yml baut
+
 ### Pending Todos
 
 [From .planning/todos/pending/ , ideas captured during sessions]
@@ -495,6 +535,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-11T02:10:38.470Z
-Stopped at: Abgeschlossen 11-09-PLAN.md, der Owner hat Fassung B und den dreisprachigen Messsatz abgenommen. Welle 5 ist damit zu, Welle 6 offen
+Last session: 2026-09-11T05:40:00.000Z
+Stopped at: Abgeschlossen 11-10-PLAN.md, das Audit-Gate der Phase ist gefahren. Welle 6 ist damit zu, Welle 7 offen
 Resume file: None

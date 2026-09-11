@@ -216,7 +216,7 @@ Plans:
 
   1. Beide Apps tragen dieselbe Version, sind signiert, und eine frische Nextcloud im Versionsfenster installiert sie aus den Release-Artefakten auf amd64 und arm64 und findet ohne Handgriff Inhalte , **Stand 2026-09-10 (Plan 11-04): die Strecke steht.** `deploy-harp.yml` faehrt die Fremdinstallation auf amd64 **und nativ auf `ubuntu-24.04-arm`** (Lauf 34525240422, alle vier Aeste gruen) und kann die beiden Archive vom GitHub-Release laden statt sie lokal zu bauen (Lauf 34526436580 mit `release_tag=v1.0.3`, alle vier Aeste gruen, Zero-Config-Treffer nach einer cron-Runde). Offen bleibt nur, dass es die Artefakte von **v1.1.0** sind: das setzt Plan 11-11
   2. Ein Upgrade von 1.0.x auf 1.1.0 laesst den bestehenden Index entweder unangetastet oder verlangt sichtbar einen Reindex; ein stiller Verlust von Indexinhalt kommt nicht vor , **Stand 2026-09-11 (Plan 11-07): der Ende-zu-Ende-Beweis faehrt in CI.** `deploy-harp.yml` installiert auf dem Ast `stable34/ubuntu-24.04` beide Haelften aus den **echten v1.0.3-Release-Assets**, indexiert den 39-Datei-Korpus, bringt die Installation auf den HEAD-Stand (Dateitausch plus `occ upgrade`, Container ohne die Datenflagge neu registriert) und sichert sechs Dinge zu (Lauf **34546421219**, alle vier Aeste gruen): dieselben Trefferzahlen fuer `Belehrung`, `Auszug` und `Erinnerung` (je 1), dieselben fuenf Indexmarken, dieselben Dokumentzahlen (docs 29, indexed 29, skipped 7, failed 6), leerer Arbeitsvorrat, **kein Reindex-Banner**, **keine `start_rebuild_on_drift`-Zeile**, und als Gegenprobe der Navigationseintrag, der vorher fehlte und nachher da ist. Der Reindex-Zweig von D-05 wird bewusst NICHT gefahren; seine Abwesenheit ist die Zusicherung, und das steht im Workflow. Offen bleibt nur, dass die neue Haelfte die Version **1.1.0** traegt: bis Plan 11-11 steht in beiden `info.xml` weiterhin 1.0.3, und der Block hat fuer den Tag des Bumps bereits den zweiten Zweig
-  3. Security-, Bug- und Performance-Audit sind erneut gefahren, alle Befunde ab MEDIUM gefixt, LOW dokumentiert entschieden
+  3. Security-, Bug- und Performance-Audit sind erneut gefahren, alle Befunde ab MEDIUM gefixt, LOW dokumentiert entschieden , **ERFUELLT, Stand 2026-09-11 (Plan 11-10).** `docs/audits/2026-09-phase-11/README.md` faehrt alle sechs zutreffenden ASVS-Kategorien einzeln, auch die beiden nicht beruehrten, und belegt sie am Diff statt an einer Meinung: V4 mit drei Belegzeilen (`MAX_ROUNDS` unveraendert 3, `isReadable()` die einzige Berechtigungsfrage, `reduceIds` nicht angefasst) und dem maschinellen Schnitt, der im Diff von `Provider.php` **keine ausfuehrbare Zeile** findet; V5 mit 348 durchgesehenen FR-Werten und -Schluesseln (null spitze Klammern, null Ampersand, null Platzhalterabweichungen); V6 mit vier Zusicherungen ueber die Signaturkette; V14 mit arm64-Ast, Release-Asset-Modus, SHA-Pins und HaRP-Digest. **Der einzige Befund ab MEDIUM ist M-01 (DI-07-03) und war bei Planbeginn gebaut** (Plan 11-13, Entscheid v1-a vom 10.09.2026, Belegstelle `11-13-SUMMARY.md`). Zehn LOW sind dokumentiert entschieden: L-05 (DI-10-05) und L-06 (DI-11-04) in diesem Lauf behoben, L-01 bis L-04 hingenommen mit Wiedervorlagebedingung, L-07 bis L-10 mit Zieladresse weitergereicht. Darin enthalten: die von diesem Kriterium verlangte Entscheidung ueber die **vier regressiven Laststufen** (hingenommen fuer v1.1.0, untersucht in der v1.2-Messplanung) und die ehrliche Feststellung, dass **DI-10-02 nicht geschlossen ist**
   4. Die Store-Texte sind kurze Faktenlisten nach der Kurztext-Regel, der Owner hat den Entwurf vor der Einreichung gesehen und abgenommen
   5. v1.1 ist eingereicht, und die Release-Artefakte im Repo entsprechen dem, was eingereicht wurde
 
@@ -252,7 +252,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 11-10-PLAN.md , die drei Audits der Phase und die vier geerbten Befunde entschieden (Welle 6)
+- [x] 11-10-PLAN.md , die drei Audits der Phase und die vier geerbten Befunde entschieden (Welle 6). `docs/audits/2026-09-phase-11/README.md`, Umfang `721bde6..HEAD`, 55 Dateien, 46 Commits; **0 CRITICAL, 0 HIGH, 1 MEDIUM, 10 LOW**. Anders als Phase 10 aendert diese Phase Produktionscode (15 Dateien unter `php/`, acht davon im Companion-Paket). `fixed: [M-01, L-05, L-06]`, `still_open: [L-07, L-08, L-09, L-10]`, alle vier LOW mit Verdikt und Zieladresse. Zwei Fixe im eigenen Lauf, beide ohne Produktionscode: `ab39d37` vollzieht DI-10-05 im Kopf von `measure.yml`, `2e8502b` behebt DI-11-04 im Artefaktnamen von `deploy-harp.yml`. DI-10-02 bleibt ehrlich offen und ist mit DI-11-01 zusammengelegt
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -273,7 +273,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | 7/7 | Complete    | 2026-09-10 |
-| 11. Haertung und Store-Einreichung v1.1 | 10/13 | In Progress|  |
+| 11. Haertung und Store-Einreichung v1.1 | 11/13 | In Progress|  |
 
 ## Requirement Coverage
 
