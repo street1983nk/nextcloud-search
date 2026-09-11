@@ -56,7 +56,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from findling.embed.engine import ENGINE_STATES
@@ -105,6 +105,18 @@ L10N_JS = REPO_ROOT / "php" / "l10n" / "de.js"
 # changes this test on purpose, which is the right amount of friction.
 L10N_DE_DE_JSON = REPO_ROOT / "php" / "l10n" / "de_DE.json"
 L10N_DE_DE_JS = REPO_ROOT / "php" / "l10n" / "de_DE.js"
+
+# The third language, since plan 11-08. It is one language and not two codes, so
+# it brings two files and not four: French knows no split between du and Sie,
+# and ``fr_CA`` is not shipped. Both files are cast mechanically from the table
+# in ``docs/l10n-french.md``, which the owner read and accepted on 11.09.2026.
+L10N_FR_JSON = REPO_ROOT / "php" / "l10n" / "fr.json"
+L10N_FR_JS = REPO_ROOT / "php" / "l10n" / "fr.js"
+
+# All six catalogues in the order the gates below name them. Held as one tuple
+# so that a seventh file is added in one place and every gate sees it.
+L10N_CATALOGUES = (L10N_JSON, L10N_JS, L10N_DE_DE_JSON, L10N_DE_DE_JS, L10N_FR_JSON, L10N_FR_JS)
+
 ADMIN_VIEW = REPO_ROOT / "php" / "lib" / "Service" / "AdminViewService.php"
 FILE_STATE = REPO_ROOT / "php" / "lib" / "Service" / "FileStateService.php"
 
@@ -269,6 +281,115 @@ def scan_page_script_for_interception(name: str, source: str) -> list[str]:
     if DEFAULT_PREVENTION in source:
         return [f"{name}: calls {DEFAULT_PREVENTION}, which takes the navigation away from the browser"]
     return []
+
+
+# -- the four gates over the six catalogues (plan 11-08) -------------------
+#
+# The French catalogue arrives with plan 11-08 and brings a question the two
+# German codes never asked: how do you hold two catalogues together that must
+# not say the same thing? For German the answer is text equality, and it is
+# asserted below. For French it would be nonsense. What takes its place is the
+# placeholder parity of G3, the one invariant a translation can keep word for
+# word, and the reason it is worth a gate is that breaking it produces no error
+# message at all. It produces a sentence that no longer names the file it is
+# about.
+
+# The plural rule of the third language, and the one it must not be. The two
+# differ at n = 0: French puts the singular there ("0 jour"), German the plural.
+# A fr.json copied from de.js is wrong on exactly that one value and on nothing
+# else, which is why it survives every diff and every glance at the page.
+FRENCH_PLURAL_FORM = "nplurals=2; plural=(n > 1);"
+GERMAN_PLURAL_FORM = "nplurals=2; plural=(n != 1);"
+
+# The named exceptions of gate G2, taken from the section "Ausnahmen fuer das
+# Vollstaendigkeitsgate G2" of docs/l10n-french.md. A list and deliberately not
+# a threshold: a number that says "this many values may equal their key" covers
+# a forgotten wording exactly as well as an intended one, while a list names two
+# and nothing else. The reason travels with the key, so a third entry has to be
+# argued rather than counted.
+FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
+    "Findling": "the name of the app, the same word in all three languages",
+    "Page %s": "Page is the same word in French, and a difference would be a loss",
+}
+
+# The printf directives a value has to carry in the same number as its key: the
+# numbered form with the dollar sign, the plain one, the %n of the plural forms
+# and the doubled percent sign. Nextcloud fills them with vsprintf, so a lost
+# %2$s is not a typo but a call whose argument goes nowhere.
+PRINTF_DIRECTIVE = re.compile(r"%%|%\d+\$[sd]|%[sdn]")
+
+
+def forms_of(value: str | list[str]) -> list[str]:
+    """Every form of a catalogue value: one for a sentence, two for a plural."""
+    return value if isinstance(value, list) else [value]
+
+
+def catalogue_of(path: Path) -> dict[str, str | list[str]]:
+    """The mapping of one catalogue, read the way Nextcloud reads it.
+
+    The JSON straight from PHP, and out of the ``.js`` the object between the
+    first brace and the last, because the file is a call of ``OC.L10N.register``
+    and not an object. That cut is the one
+    ``test_the_two_translation_files_carry_the_same_keys`` already makes; a
+    second way of finding the same object would be a second thing to keep right.
+    """
+    source = path.read_text(encoding="utf-8")
+    if path.suffix == ".json":
+        return json.loads(source)["translations"]
+    return json.loads(source[source.index("{") : source.rindex("}") + 1])
+
+
+def scan_key_sets(keys_of: Mapping[str, frozenset[str]]) -> list[str]:
+    """Findings over the catalogues: a file whose key set differs from the first."""
+    reference_name = next(iter(keys_of))
+    reference = keys_of[reference_name]
+    return [
+        f"{name}: differs from {reference_name} in {sorted(keys ^ reference)}"
+        for name, keys in keys_of.items()
+        if keys != reference
+    ]
+
+
+def scan_french_completeness(name: str, catalogue: Mapping[str, str | list[str]]) -> list[str]:
+    """Findings of the French catalogue: a value empty or still in English.
+
+    The emptiness runs over every form, because an empty second plural form is
+    a blank line on the page for every number above one. The identity with the
+    source string is judged on the value and not on the single form, and that is
+    a decision rather than an oversight: the singular of ``%n minute`` is ``%n
+    minute`` in French, correctly so, and a per form comparison would demand a
+    third exception for a value that is translated. It is the same reading the
+    machine checks of docs/l10n-french.md take, where the count of values equal
+    to their source string is two, both of them named.
+    """
+    violations: list[str] = []
+    for key, value in catalogue.items():
+        violations.extend(f"{name}: {key!r} has an empty value" for form in forms_of(value) if form.strip() == "")
+        if value == key and key not in FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY:
+            violations.append(f"{name}: {key!r} is still the English source string")
+    return violations
+
+
+def scan_placeholder_parity(name: str, catalogue: Mapping[str, str | list[str]]) -> list[str]:
+    """Findings of a catalogue: a value whose directives are not those of its key."""
+    violations: list[str] = []
+    for key, value in catalogue.items():
+        expected = sorted(PRINTF_DIRECTIVE.findall(key))
+        for form in forms_of(value):
+            found = sorted(PRINTF_DIRECTIVE.findall(form))
+            if found != expected:
+                violations.append(f"{name}: {key!r} carries {found} where its key carries {expected}")
+    return violations
+
+
+def scan_french_plural_rule(name: str, plural_form: str) -> list[str]:
+    """Findings of a French catalogue: the plural rule it declares."""
+    violations: list[str] = []
+    if GERMAN_PLURAL_FORM in plural_form:
+        violations.append(f"{name}: carries the German plural rule, which answers n = 0 with the plural")
+    if plural_form != FRENCH_PLURAL_FORM:
+        violations.append(f"{name}: carries {plural_form!r} and not {FRENCH_PLURAL_FORM!r}")
+    return violations
 
 
 # The two names the second coverage figure travels under, and every half of the
@@ -484,7 +605,20 @@ def test_the_page_breaks_none_of_the_checkable_prohibitions() -> None:
 
 
 def test_no_file_of_the_page_carries_a_dash_or_an_emoji() -> None:
+    """The prohibition of the contract, over the six files of the pages and the six catalogues.
+
+    The catalogues joined this scan with plan 11-08, and French is the reason.
+    French typography brings guillemets and apostrophes with it and both are
+    harmless here, but the em dash is common in French typesetting and would
+    come in with the next wording, in a file that no gate of this repository had
+    ever read. The German catalogues are read along with them: a rule that holds
+    for one language and not for the others is the kind of asymmetry nobody
+    remembers a year later.
+    """
     violations = [message for name, source, _ in _sources() for message in scan_prose(name, source)]
+    violations += [
+        message for path in L10N_CATALOGUES for message in scan_prose(path.name, path.read_text(encoding="utf-8"))
+    ]
 
     assert violations == []
 
@@ -964,6 +1098,123 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
     assert len(keys_of["de.json"]) == 174
+
+
+def test_all_six_catalogues_carry_the_same_keys() -> None:
+    """G1 of plan 11-08: which sentences does every language of this app answer?
+
+    Six files since the French catalogue arrived, three language codes, one key
+    set. A key written into one language and forgotten in the others is half a
+    surface: the page speaks French in one line and English in the next, and a
+    user cannot tell which of the two is the complete one.
+
+    This gate stands next to
+    ``test_the_german_catalogue_covers_both_german_language_codes`` and does not
+    replace it. The text equality asserted there holds for the two German twins
+    and expressly not for French: ``fr`` against ``de`` would be a sameness
+    nobody wants, and docs/l10n-french.md says so in point 3 of "Bedingung,
+    unter der der franzoesische Katalog kommt". What takes its place for French
+    is the placeholder parity of G3.
+
+    A missing file is a failure that names it. Without that line the gate would
+    compare five files, or one, and report a clean tree over a catalogue that is
+    not shipped at all.
+    """
+    missing = [path.name for path in L10N_CATALOGUES if not path.is_file()]
+    assert missing == [], f"catalogues are missing: {missing}"
+
+    findings = scan_key_sets({path.name: frozenset(catalogue_of(path)) for path in L10N_CATALOGUES})
+
+    assert findings == []
+    # And the comparison can go red. A gate whose body was deleted would report
+    # six agreeing catalogues over a tree in which one of them lost a sentence.
+    drifted = {"a.json": frozenset({"one", "two"}), "b.js": frozenset({"one"})}
+    assert len(scan_key_sets(drifted)) == 1
+
+
+def test_every_french_value_carries_a_french_wording() -> None:
+    """G2 of plan 11-08: is there a key that never received its translation?
+
+    Empty or identical to the English source string are the two shapes an
+    untranslated entry takes, and both of them ship a catalogue that claims a
+    completeness it does not have. That is the outcome docs/l10n-french.md was
+    written to prevent: 24 of 174 strings produce a half French surface.
+
+    The two exceptions are named in ``FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY``
+    with their reason, and they are a list rather than a count on purpose.
+    """
+    findings = [
+        message
+        for path in (L10N_FR_JSON, L10N_FR_JS)
+        for message in scan_french_completeness(path.name, catalogue_of(path))
+    ]
+
+    assert findings == []
+    # The exceptions are exceptions of this tree and not of a former one: both
+    # keys still exist, so neither line of the list covers nothing.
+    french = catalogue_of(L10N_FR_JSON)
+    assert [key for key in FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY if key not in french] == []
+    # And the scan can go red, in both of its shapes.
+    dirty: dict[str, str | list[str]] = {"Reason": "Reason", "Files": "", "and %n more": ["et %n autre", ""]}
+    assert len(scan_french_completeness("sample.json", dirty)) == 3
+
+
+def test_no_french_value_loses_or_invents_a_placeholder() -> None:
+    """G3 of plan 11-08: does every value still name what it talks about?
+
+    The replacement for the text equality of the German twins, and the one
+    invariant a translation can keep word for word. Nextcloud fills these values
+    with ``vsprintf``: a value that lost its ``%2$s`` renders a sentence with the
+    file name missing, and a value that invented one renders an argument that
+    does not exist. Neither produces an error anybody sees.
+
+    Multisets and not sets, so two identical directives are two and not one, and
+    over every form of a plural value, because the second form is where a
+    dropped ``%n`` hides.
+    """
+    findings = [
+        message
+        for path in (L10N_FR_JSON, L10N_FR_JS)
+        for message in scan_placeholder_parity(path.name, catalogue_of(path))
+    ]
+
+    assert findings == []
+    # The anti vacuity clause: a catalogue without directives would be judged
+    # perfect by a scan that has nothing to compare.
+    assert [key for key in catalogue_of(L10N_FR_JSON) if PRINTF_DIRECTIVE.search(key)] != []
+    # And it can go red: a lost numbered placeholder, and a plural whose second
+    # form dropped its %n while the first one kept it.
+    dirty: dict[str, str | list[str]] = {"%1$s in %2$s": "%1$s dans", "%n day": ["%n jour", "jours"]}
+    assert len(scan_placeholder_parity("sample.json", dirty)) == 2
+
+
+def test_the_french_catalogues_carry_the_french_plural_rule() -> None:
+    """G4 of plan 11-08: which plural rule does French ship, in both files?
+
+    The rule stands twice, as ``pluralForm`` in fr.json and as the fourth
+    argument of ``OC.L10N.register`` in fr.js, and the two have to be the same
+    string. It is the value a copy of de.js gets wrong, and it is wrong at
+    exactly one number: at n = 0 French wants the singular and the German rule
+    answers with the plural.
+    """
+    rule = json.loads(L10N_FR_JSON.read_text(encoding="utf-8"))["pluralForm"]
+    script = L10N_FR_JS.read_text(encoding="utf-8")
+
+    assert scan_french_plural_rule(L10N_FR_JSON.name, rule) == []
+    assert rule in script, "fr.js does not carry the rule of fr.json"
+    assert GERMAN_PLURAL_FORM not in script
+
+    # The five plural keys, the same ones as in German, with two forms each.
+    french = catalogue_of(L10N_FR_JSON)
+    german = catalogue_of(L10N_JSON)
+    plural_keys = sorted(key for key, value in french.items() if isinstance(value, list))
+    assert plural_keys == sorted(key for key, value in german.items() if isinstance(value, list))
+    assert len(plural_keys) == 5
+    assert [key for key in plural_keys if len(french[key]) != 2] == []
+
+    # And the assertion can go red. The German rule is reported twice, once as
+    # itself and once as the rule that is not the French one.
+    assert len(scan_french_plural_rule("sample.json", GERMAN_PLURAL_FORM)) == 2
 
 
 def test_every_reason_of_the_closed_list_has_a_label_and_a_remedy() -> None:
