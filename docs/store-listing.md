@@ -269,3 +269,193 @@ Gegenstand verschweigt, von niemandem nachgeprüft werden kann.
   Texten ist gemessen und steht mit ihrer Messreihe in `docs/performance.md`
   oder `docs/embeddings.md`; die datierte Vergleichszahl vom 05.09.2026 ist
   Teil der zwei ehrlichen Sätze und keine zweite Zusage.
+
+---
+
+# Entwurf v1.1.0, zur Abnahme
+
+Dieser Abschnitt ist ein Entwurf und noch keine Fassung. Die geltenden Texte
+stehen unverändert darüber, und keine Zieldatei wird angefasst, bevor der Owner
+entschieden hat. Er gehört zu Plan 11-09 und legt genau zwei Entscheidungen vor,
+Teil 2 und Teil 3, dazu die französischen Texte als zweiten Teil des FR-Gates
+(D-07).
+
+Jede Zahl unten stammt aus `docs/measurements/2026-09-vergleichsmessung-m7g/`
+und nennt ihre Rohdatei. Gemessen am 09. und 10.09.2026 auf einer AWS
+`m7g.large` mit nativem arm64, 4 GB Maschinenspeicher, harte Containergrenze
+2 GiB.
+
+| Größe | Vorwert v1.0 (Lauf 06-11 vom 05.09.2026) | v1.1 (10.09.2026) | Rohdatei |
+|---|---|---|---|
+| indexierte Dokumente | Vorwert 51.961 | **52.111** | `rohdaten/48-vektorbestand.txt` |
+| Spitze des anonymen Speichers | Vorwert 1.813 MB | **1.764,2 MB** | `rohdaten/00-ende.txt`, aus `rohdaten/96-volllauf.csv` |
+| Grundlast im Leerlauf | Vorwert 691,8 MB | **103,2 MB** | `rohdaten/94-grundlast.txt` |
+| harte Grenze | 2 GiB | unverändert | `rohdaten/07-oom-beweis.txt` |
+
+Eine Einordnung, damit die 52.111 nicht als veralteter Wert gelesen wird: Plan
+11-06 hat auf derselben Box später 52.137 / 44 / 6 gemessen. Die Differenz von
+39 Dateien ist der Referenzkorpus des Sprachfall-Kontos, der **nach** der
+Vergleichsmessung hochgeladen wurde. Der Messsatz beschreibt den Lauf, den er
+beschreibt, und behält deshalb die 52.111.
+
+## Teil 1: Der Messsatz für README.en.md
+
+Kein Entscheid, nur zur Durchsicht. Der bestehende Satz mit zwei getauschten
+Werten, die harte Grenze bleibt. Diese Stelle ist die einzige maschinell
+gehaltene: `MEASURED_SENTENCE` in `backend/tests/test_store_metadata.py` wird in
+derselben Änderung nachgezogen, sonst ist das Gate rot.
+
+> On a 4-GB ARM64 box with 52,111 indexed documents and the semantic search
+> active, the container peaked at 1,764 MB of resident anonymous memory, under a
+> hard 2 GB limit enforced by the kernel.
+
+Darunter genau eine Zeile mit dem Vorher-Nachher der Grundlast, mit Datum und
+Verweis auf den Bericht:
+
+> Idle base load fell from 691.8 MB in v1.0 to 103.2 MB in v1.1, minus 85.1 per
+> cent (measured 2026-09-10, method and raw data in docs/performance.md).
+
+Zur Prozentzahl, damit sie nicht später auffällt: 588,6 von 691,8 MB sind
+85,1 Prozent. Der Plan nennt "minus 85 Prozent", die Herkunftsregel dieses
+Projekts rundet nichts, also steht hier 85,1. Wer die glatte Zahl vorzieht, sagt
+es an diesem Checkpoint.
+
+## Teil 2: Der Store-Text, Fassung A gegen Fassung B
+
+Die Frage in einem Satz: Trägt die `info.xml` die eine neue Kernzahl, oder steht
+sie nur im README, auf das der Store-Eintrag verweist?
+
+Der Unterschied betrifft **eine Zeile in sechs Texten**, nämlich die RAM-Zeile im
+Block Anforderungen beider Hälften, dreisprachig. Alles andere bleibt in beiden
+Fassungen Wort für Wort so, wie es oben steht: die Faktenliste, die Dateitypen,
+der eine Satz zum MCP Connector, der Datenschutzabsatz.
+
+Der Verweis auf das README ist in beiden Fassungen derselbe und schon vorhanden:
+der `<website>`-Eintrag beider `info.xml` zeigt auf das Repository und damit auf
+`README.en.md`. Eine zusätzliche Verweiszeile im Beschreibungstext wäre eine
+dritte Fassung und wird hier nicht vorgeschlagen.
+
+### Fassung A: beide `info.xml` bleiben unverändert
+
+Die eine Kernzahl steht im README, der Store-Eintrag verweist darauf. Das ist die
+auslegungsärmste Lesart des Owner-Entscheids vom 07.09.2026, nach dem die
+Store-Beschreibung eine kurze Faktenliste ohne Messgeschichte ist. Der Diff
+beider `info.xml` bleibt leer, und der Grund steht mit Datum in dieser Datei.
+
+Die RAM-Zeile, wörtlich, in beiden Hälften gleich:
+
+> Englisch: RAM: 4 GB is enough, the container runs under a hard 2 GB limit (measured)
+>
+> Deutsch: RAM: 4 GB genügen, der Container läuft unter einer harten 2-GB-Grenze (gemessen)
+>
+> Französisch: RAM : 4 Go suffisent, le conteneur reste sous une limite stricte de 2 Go (mesuré)
+
+### Fassung B: beide `info.xml` tragen die eine Kernzahl
+
+Die Zeile mit den Anforderungen nennt zusätzlich die Grundlast im Leerlauf,
+dreisprachig, und sonst ändert sich nichts. Die Kurztext-Regel bleibt gewahrt,
+weil es bei genau einer Zahl bleibt. `docs/store-listing.md` zieht als Vorlage
+nach, also stehen dieselben Worte in sechs Texten und in dieser Datei.
+
+Die RAM-Zeile, wörtlich, in beiden Hälften gleich:
+
+> Englisch: RAM: 4 GB is enough, 103.2 MB idle, under a hard 2 GB limit (measured)
+>
+> Deutsch: RAM: 4 GB genügen, 103,2 MB im Leerlauf, unter einer harten 2-GB-Grenze (gemessen)
+>
+> Französisch: RAM : 4 Go suffisent, 103,2 Mo au repos, sous une limite stricte de 2 Go (mesuré)
+
+## Teil 3: Wird der Messsatz dreisprachig?
+
+Heute trägt nur `README.en.md` den vollen Messsatz. `README.md` und
+`README.fr.md` tragen die qualitative Zusage, und kein Gate hält die drei READMEs
+gegeneinander: ihre Gleichläufigkeit ist heute eine Regel in `CLAUDE.md` und
+keine Maschine.
+
+Der Wortlaut für alle drei Sprachen, damit hier entschieden und nicht übersetzt
+wird. Englisch steht schon so da, siehe Teil 1.
+
+> Deutsch: Auf einer 4-GB-ARM64-Box mit 52.111 indexierten Dokumenten und
+> aktiver semantischer Suche lag die Spitze des Containers bei 1.764 MB
+> residentem anonymem Speicher, unter einer harten 2-GB-Grenze, die der Kernel
+> durchsetzt.
+>
+> Französisch: Sur une machine ARM64 de 4 Go avec 52 111 documents indexés et la
+> recherche sémantique active, le conteneur a atteint un pic de 1 764 Mo de
+> mémoire anonyme résidente, sous une limite stricte de 2 Go imposée par le
+> noyau.
+
+Die Folge, in einem Satz: Wird der Messsatz dreisprachig, bekommt
+`scan_measured_sentence` drei Wortlaute statt einem, je ein Aufruf je Datei, und
+die Gleichläufigkeit der drei READMEs ist danach eine Maschine statt einer Regel
+in `CLAUDE.md`. Bleibt er einsprachig, ändert sich am Gate nichts, und die
+beiden anderen READMEs behalten ihre qualitative Zusage.
+
+**Unabhängig von dieser Entscheidung** bekommen alle drei READMEs die datierte
+Vorher-Nachher-Zeile zur Grundlast, weil D-06 den datierten Vergleich im README
+verlangt:
+
+> Deutsch: Die Grundlast im Leerlauf ist von 691,8 MB in v1.0 auf 103,2 MB in
+> v1.1 gefallen, minus 85,1 Prozent (gemessen am 10.09.2026, Methode und
+> Rohdaten in docs/performance.md).
+>
+> Französisch: La charge de base au repos est passée de 691,8 Mo en v1.0 à
+> 103,2 Mo en v1.1, moins 85,1 pour cent (mesuré le 10.09.2026, méthode et
+> données brutes dans docs/performance.md).
+
+## Zum FR-Gate, zweiter Teil (D-07)
+
+Kein Entscheid über eine Fassung, sondern die Lesepflicht des Owners. Der erste
+Teil, der Katalog aus `fr.json` und `fr.js`, ist in Plan 11-05 abgenommen. Der
+zweite Teil sind die Texte, die mit dem Release nach außen gehen:
+
+- die beiden französischen `<summary>` oben, "Recherche plein texte, OCR et
+  recherche sémantique sans configuration" und "Service de recherche pour
+  Findling : extraction de texte, OCR et index"
+- die beiden französischen `<description>` oben, vollständig, mit dem Satz zum
+  MCP Connector und dem Absatz "Confidentialité"
+- die französische RAM-Zeile aus Teil 2, in der gewählten Fassung
+- `README.fr.md` vollständig, besonders "Prérequis", "Confidentialité" und
+  "Mesures"
+- die französische Grundlast-Zeile aus Teil 3, und bei "dreisprachig" auch der
+  französische Messsatz
+
+Die Wortwahl-Entscheide aus `docs/l10n-french.md` gelten unverändert: "le
+service" für das Backend, "passage" für einen Lauf, "Mo" statt "MB",
+"reconnaissance optique" für OCR.
+
+## Was in den Entwürfen der Store-Texte bewusst nicht steht (D-08)
+
+Dieser Abschnitt nennt die ausgeschlossenen Gegenstände beim Namen, weil eine
+Regel, die ihren Gegenstand verschweigt, von niemandem nachgeprüft werden kann.
+Er ist selbst kein Store-Text.
+
+- **Die zehn Sprachfälle mit ihrem Ergebnis 6 von 10.** Erstmessung ohne
+  v1.0-Entsprechung, und die Nachmessung vom 10.09. zeigt, dass der Messaufbau
+  und nicht die Sprachverarbeitung die vier roten Fälle erzeugt hat. Gehört in
+  den Bericht, Abschnitt d der Kernaussage, und in `docs/performance.md`.
+- **Die Laufzeit von 26 h 37 min.** Sie ist eine Untergrenze, weil beim Anstoß
+  schon 1.653 Dateien im Index lagen. Gehört in den Bericht.
+- **Vier von fünf Laststufen regressiv.** Die Zusage steht auf Stufe 8 und hält,
+  aber ihre Reserve fällt von 585,0 auf 374,5 ms. Gehört in den Bericht und in
+  `docs/performance.md`.
+- **`memory.events max` 21.939 und der Kaltstart über der Aufrufdecke.** Zwei
+  Zahlen, die ohne ihre Methode das Gegenteil dessen sagen, was sie bedeuten.
+  Gehören in den Bericht.
+
+## Gegengelesen: die RAM-Budget-Tabelle in CLAUDE.md
+
+Die Zeile "Tokenizer und Splitter, 544 MB" läuft **nicht** gegen die neue
+Grundlastaussage. Dieselbe Zeile führt im Ruhezustand den Wert "0 bei faulem
+Bau" und sagt im Klartext, dass die 544 MB erst beim ersten Chunkerlauf
+anfallen, faul gebaut seit Plan 07-03. Die 103,2 MB sind die Grundlast im
+Leerlauf mit nie geladenem Modell, also genau der Zustand, den die Spalte
+Ruhezustand beschreibt. Kein Widerspruch, keine Änderung nötig. `CLAUDE.md`
+wird in diesem Plan nicht angefasst: die Datei trägt GSD-verwaltete
+Abschnittsmarken.
+
+## Platz für die Abnahmezeile
+
+Hier trägt Plan 11-09 nach dem Checkpoint die Zeile mit Datum, gewählter
+Fassung, Entscheid zum Messsatz und dem Vermerk zum FR-Gate ein. Solange sie
+fehlt, ist dieser Abschnitt ein Entwurf und keine Vorlage.
