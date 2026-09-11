@@ -1,0 +1,332 @@
+snapshot des korpus-volumes und abbau der box, plan 11-12 (D-03)
+erhoben 2026-09-11, jede zahl unabhaengig aus der api gelesen
+werkzeug: scripts/ops/aws_box.sh, achter unterbefehl `snapshot` (neu in 11-12)
+
+die reihenfolge dieser datei ist die reihenfolge der handlungen, und sie ist die
+ganze sicherheit: erst sichern, dann pruefen, dann bestaetigen lassen, dann
+zerstoeren. jeder abschnitt steht hier, weil er vor dem naechsten fertig war.
+
+-- 0 der zustand vor dem snapshot --
+aws_box.sh status, 2026-09-11T07:45Z
+  instance  i-06b1d913f5c6f669b m7g.large stopped in eu-central-1c
+  address   none
+  volume    vol-0f3bea6ca1dab68ab 40 G gp3 3000 IOPS 125 MB/s
+  volume    vol-04c5b59fe9417babd 60 G gp3 3000 IOPS 125 MB/s
+  running   no, this instance is stopped
+  spent     0.3130 USD per day while parked, net, the disks and nothing else
+der zustand stopped ist die vorbedingung des unterbefehls und keine notiz: ein
+snapshot eines angehaengten, beschriebenen datentraegers ist nur
+absturzkonsistent. cmd_snapshot bricht ab, wenn der zustand nicht stopped ist.
+
+-- 1 der snapshot --
+aws_box.sh snapshot, 2026-09-11T07:47:07Z
+  aws_box: snapshotting vol-04c5b59fe9417babd, the data volume of i-06b1d913f5c6f669b
+  aws_box: snapshot snap-03f1d1d9ad9262704 is being taken, tag purpose=findling-corpus-keep
+tags: Name=findling-corpus-2026-09 und purpose=findling-corpus-keep.
+NICHT purpose=findling-phase5, und das ist der punkt: der tag-sweep von
+cmd_destroy meldet jede ressource mit findling-phase5 als ueberbleibsel und
+haette den abbau rot enden lassen (pitfall 6 der phasenrecherche).
+
+der waiter der cli gab vor dem snapshot auf, nach zehn minuten und bei 8 prozent:
+  aws: [ERROR]: Waiter SnapshotCompleted failed: Max attempts exceeded
+das ist eine grenze der cli und kein befund ueber den snapshot. cmd_snapshot
+faengt das ab, liest trotzdem nach, und verweigert genau hier den weitergang:
+  aws_box: snap-03f1d1d9ad9262704 is pending and not completed yet.
+  aws_box: nothing may be destroyed on this.
+der verlauf, alle fuenf minuten aus describe-snapshots gelesen:
+  07:58:41Z pending 16%   08:03:42Z pending 26%   08:08:44Z pending 35%
+  08:13:45Z pending 52%   08:18:46Z pending 61%   08:23:47Z pending 69%
+  08:28:48Z pending 78%   08:33:49Z pending 86%   08:38:50Z completed 100%
+dauer insgesamt rund 52 minuten.
+
+-- 2 die nachlese, unabhaengig --
+aws_box.sh snapshot snap-03f1d1d9ad9262704, 2026-09-11T08:39:03Z
+der waiter ist nicht die verifikation; diese abfrage ist es.
+  SnapshotId  snap-03f1d1d9ad9262704
+  State       completed
+  Progress    100%
+  VolumeId    vol-04c5b59fe9417babd
+  VolumeSize  60 GB, the size of the volume and not the billed size
+  FullSize    55415668736 bytes, 55.4 GB of written blocks
+  StartTime   2026-09-11T07:47:07.582000+00:00
+  OwnerId     450315222812
+  Encrypted   False
+  Description findling corpus and index, v1.1 comparison run 2026-09-10, 52111 documents
+erwartet war State=completed, Progress=100%, VolumeSize=60 und die VolumeId aus
+box.env. alle vier stimmen. der unterbefehl prueft zusaetzlich, dass der
+snapshot zu VOLUME_ID dieser box gehoert, und bricht sonst ab.
+
+-- 3 was der snapshot kostet, gemessen statt geschaetzt --
+die geschaetzten 25 bis 40 GB der phasenrecherche sind damit ERSETZT und nicht
+bestaetigt. gemessen sind 55.415.668.736 byte, also 51,6 GiB oder 55,4 GB
+dezimal. der grund fuer den abstand zur schaetzung: ein ebs-snapshot bezahlt
+jeden block, der auf dem datentraeger je geschrieben wurde, auch den eines
+geloeschten indexes. auf diesem datentraeger lagen nacheinander zwei
+indexaufbauten und der volumenvorfall vom 07.09.
+
+der satz kommt aus der oeffentlichen bulk-preisliste und nicht aus einer
+schaetzung (dieses konto darf pricing:GetProducts nicht lesen):
+  curl -sS https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/eu-central-1/index.csv
+  | grep -i "Storage Snapshot"
+  EUC1-EBS:SnapshotUsage           0.0540 USD je GB-monat, gueltig ab 2026-09-01
+  EUC1-EBS:SnapshotArchiveStorage  0.0135 USD je GB-monat
+  EUC1-EBS:SnapshotArchiveRetrieval 0.0324 USD je GB abruf
+
+  snapshot, standardstufe   2,79 bis 2,99 USD je monat
+    51,6 GiB x 0,054 = 2,79; 55,4 GB x 0,054 = 2,99. welche der beiden zahlen
+    gilt, entscheidet die rechnung: aws liest GB bei speicher ueblich binaer.
+  box geparkt               0,3130 USD je tag = 9,39 USD je monat (30 tage)
+                            gegengerechnet ueber den 730-stunden-monat: 9,52 USD
+  ersparnis durch den abbau 6,40 bis 6,60 USD je monat
+
+  die archivstufe waere 0,70 USD je monat, kostet aber 90 tage mindestlaufzeit,
+  rund 1,67 USD je abruf und stunden bis tage wartezeit. sie ist NICHT gewaehlt,
+  weil die v1.2-messung den snapshot in normaler frist braucht. wiedervorlage
+  nach der v1.2-messung: loeschen oder in die archivstufe legen.
+
+-- 4 die systemplatte, festgestellt und nicht angenommen --
+fuer diese feststellung musste die instanz laufen. sie lief 0,08 stunden
+(2026-09-11T08:40:05Z bis 08:44:54Z) und kostete 0,0098 USD netto, aus box.env
+nach aws_box.sh stop. danach ist sie wieder angehalten.
+
+belegung:
+  /dev/root     38G  3.0G benutzt   davon /home 91M, der rest betriebssystem
+  /dev/nvme1n1  59G   35G benutzt   /mnt/findling, im snapshot
+  docker root dir: /mnt/findling/docker
+  registry: {"repositories":["findling_backend"]}
+also liegen die messabbilder und die lokale registry auf dem DATENTRAEGER und
+sind im snapshot. auf der systemplatte liegt an projektmaterial nur
+/home/ubuntu/work mit 91 MB.
+
+die methode der feststellung, damit sie nachvollziehbar ist:
+  ssh ... 'find /home/ubuntu/work -type f -not -path "*/repo*/*" -printf "%f\n" | sort -u'
+  git ls-files | sed 's#.*/##' | sort -u
+  comm -23 <box> <repo>
+BEFUND: die antwort lautet NICHT nein. 174 dateien auf der systemplatte haben
+keinen gleichnamigen gegenpart im repositorium, zusammen 24,6 MB. davon sind
+22,9 MB zwei transportkopien des repositoriums selbst (repo.tar 9,5 MB,
+repo-06-11.tar 13,3 MB), die nichts eigenes tragen. es bleiben rund 1,7 MB, und
+das sind die GEFAHRENEN skripte und protokolle der phasen 5, 6 und 6.1
+(01-docker.sh bis 52-woher-die-grundlast.py, 20-lauf.log, 31-namen-a.txt und
+weitere). der grund ist einfach und war niemandem bewusst: das aelteste
+messverzeichnis docs/measurements/2026-09-04-volllauf-m7g/ fuehrt KEIN
+unterverzeichnis skripte/, erst ab dem semantiklauf gibt es eines.
+
+drei einzelbefunde dazu:
+  a) die fuenf skripte, die git im auscheck auf der box als geaendert meldet
+     (40b-baumhash.py, 90-bestand.sh, 92-wechsel.sh, 98-sprachfaelle.sh,
+     99b-runden.sh), sind byteweise dieselben wie im repositorium. sha256
+     beiderseits geprueft, alle fuenf gleich. hier geht nichts verloren.
+  b) das rohdatenverzeichnis der vergleichsmessung traegt auf der box 81
+     dateien gegen 62 im repositorium. 21 der 25 zusaetzlichen sind leere
+     fehlerstroeme (0 byte), also ohne aussage. vier tragen inhalt:
+     99-reihe-a..d.txt.codes, je 20 zeilen, 80 antworten insgesamt, davon
+     80 mal HTTP 200 und null mal etwas anderes. das ist der beleg, dass die
+     vier seitenbudget-reihen gemessene erfolgreiche seitenaufrufe sind und
+     keine fehlerseiten. der bericht der phase 10 sagt das so nicht.
+  c) /home/ubuntu/work/.pw enthaelt die passwoerter der testinstanz. sie sind
+     geheimnisse, sie gehoeren in kein repositorium, und sie verfallen mit der
+     instanz, die sie bedienen. NICHT gesichert, und das ist beabsichtigt.
+
+GESICHERT, bevor der abbau lief, ausserhalb des arbeitsbaums:
+  C:/Users/Student/.findling-loadtest/systemplatte-2026-09/home-ubuntu-work.tar.gz
+    435 eintraege, 3.971.065 byte
+    sha256 fad3e7ce6c7f73cc85a108ce6511941326435934e87cce0c6df5f2d0a6a3584a
+    ohne .pw, ohne die drei repo-auschecks, ohne die zwei transportkopien
+  C:/Users/Student/.findling-loadtest/systemplatte-2026-09/vergleichsmessung-nebendateien.tar.gz
+    die vier .codes, die leeren fehlerstroeme, zwei leere protokolle
+ausserhalb des repositoriums, weil eine aufnahme von protokollen einer
+testinstanz in ein oeffentliches repositorium eine eigene durchsicht auf
+geheimnisse braucht. diese durchsicht ist nicht teil dieses plans; sie ist als
+offener punkt vermerkt.
+
+-- 5 gesicherter inhalt von box.env --
+aws_box.sh destroy loescht diese datei. was hier steht, ist danach die einzige
+kosten- und schadenshistorie der box. stand 2026-09-11T08:45Z, also nach dem
+snapshot und nach der durchsicht der systemplatte, vollstaendig und unveraendert.
+cmd_destroy verlangt seit 11-12 den pfad einer nicht leeren sicherung und
+verweigert den abbau ohne sie (FINDLING_STATE_BACKUP).
+
+# findling-loadtest AWS-Box, angelegt 2026-09-04 (Ersatz fuer Hetzner CAX11)
+BOX_PROVIDER=aws
+BOX_INSTANCE_ID=i-06b1d913f5c6f669b
+BOX_TYPE=m7g.large
+BOX_REGION=eu-central-1
+BOX_AZ=eu-central-1c
+BOX_IP=3.77.150.91
+BOX_USER=ubuntu
+BOX_SSH_KEY=C:/Users/Student/.ssh/findling-loadtest
+BOX_AMI=ami-0e79e661e73ddfac9
+BOX_SECURITY_GROUP=sg-0e782f5233d73a847
+# SSH nur von 77.0.239.111/32 (oeffentliche IP des Owners am 04.09.)
+# Kernel: mem=4G via /etc/default/grub.d/99-mem4g.cfg (verifiziert: 3.9Gi, 2 vCPU, aarch64)
+# Systemplatte: 40 GB gp3 (bewusst, EBS-gp3-Drosselung ins Messprotokoll)
+# Credentials: C:/Users/Student/.findling-aws.env (IAM-User findling-loadtest, AmazonEC2FullAccess)
+VOLUME_ID=vol-04c5b59fe9417babd
+VOLUME_NAME=findling-corpus
+VOLUME_SIZE_GB=60
+VOLUME_TYPE=gp3
+VOLUME_CREATED_ISO=2026-09-04T15:25:40Z
+# --- Ergaenzt von Plan 05-21, 04.09. abends. Keine Geheimnisse in dieser Datei. ---
+# Security Group: UDP 443 zusaetzlich geoeffnet (sgr-07c4144000194d77d), weil der
+# Apache von AIO HTTP/3 per Alt-Svc ankuendigt und der HTTP-Klient des Containers
+# den gescheiterten Aufstieg sonst nach oben gibt. Siehe DI-05-35.
+# Datentraeger: /mnt/findling, ext4, per UUID in der fstab mit nofail.
+# Docker data-root und containerd-Wurzel liegen auf dem Volume.
+# Abbild des Laufs: localhost:5000/findling_backend:05-21-arm (Registry auf der Box).
+# Baumhash backend/src/findling: ad79c9c6bfe6755aa3072ebe6e7c77f39c32caf1d57c1f97843e7405c290caa6
+# Baumhash php: 00ecbb3bb4d51ecd0a4f7777d930dd55f36c6d7881286598b1fa1006f5a5bb8b
+# Nextcloud-Nutzer des Korpus: lasttest, Ordner files/loadtest, 50.000 Dateien.
+# Volllauf gestartet 2026-09-04T17:46:40Z (Indexierung), Beobachter unter ~/work.
+#
+# --- Ergaenzt von Plan 05-21, 05.09. mittags. Keine Geheimnisse in dieser Datei. ---
+# Volllauf FERTIG: 2026-09-04T17:46:36Z bis 2026-09-05T06:35:23Z, 12 h 48 min 47 s.
+#   50.021 indexiert, 28 uebersprungen, 0 fehlgeschlagen, anon-Spitze 422,2 MB.
+# Alle vier Drills gefahren, Zusatzmessung INDEX_WORKERS gefahren. Rohdaten im
+#   Repo unter docs/measurements/2026-09-04-volllauf-m7g/.
+# Zweites Abbild auf der Box: localhost:5000/findling_backend:05-21-arm-wegwerf-workers2
+#   (Wegwerf, nur INDEX_WORKERS=2, geht mit der Box). Registriert ist wieder
+#   05-21-arm, also das gemessene Abbild: nach der Zusatzmessung um 09:33Z
+#   zurueckgestellt mit ~/work/32-wechsel.sh 05-21-arm, harte Grenze neu gesetzt.
+# Ein Neustart der Maschine hat /tmp geraeumt und damit die Passwortdateien.
+#   Sie liegen jetzt unter /home/ubuntu/work/.pw/ (admin, lasttest), beide am
+#   05.09. per occ user:resetpassword neu gesetzt.
+# DI-05-36 gemessen: nach jedem Start des Containers, der nicht von AppAPI kommt
+#   (auch nach einem Neustart der Maschine), indexiert er nicht mehr. Heilung:
+#   occ app_api:app:disable findling_backend && occ app_api:app:enable findling_backend
+# Kosten bis zum Ende der Messungen: 2,3226 USD netto. Jede weitere Stunde 0,1158 USD.
+#
+# VERBLEIB DER BOX: offen, gehoert dem Betreiber. Empfehlung des Berichts ist
+#   ANHALTEN statt Abbauen (aws ec2 stop-instances), weil Phase 6 fuer den
+#   Semantik-Volllauf wieder eine ARM-Box braucht und Korpus, Index und Abbilder
+#   dann erhalten bleiben. Angehalten kostet die Box nur ihre Datentraeger, rund
+#   0,31 USD je Tag. Beim Anhalten gibt die Instanz ihre oeffentliche Adresse
+#   zurueck: BOX_IP oben und der DNS-Eintrag loadtest.infranode.dev sind dann
+#   nachzuziehen.
+
+# Gestoppt 2026-09-05 nach Abnahme 05-21 (Owner). Beim naechsten Start: IP wechselt,
+# BOX_IP + SG-Regel (Port 22, Owner-IP) + CF-A-Record loadtest nachziehen.
+# Neu gestartet 2026-09-05 fuer 06-11 (Owner-Freigabe); IP 3.65.24.222 -> 3.77.150.91, SG-22 auf 77.3.92.37/32.
+# 06.09. frueh: Owner-IP gewechselt 77.3.92.37 -> 77.3.232.67, SG-22 nachgezogen (revoke+authorize). Box laeuft, IP 3.77.150.91 unveraendert.
+# 06.09. 05:15Z: Waechter-Korrektur auf der Box (42c-lesen.py las embedded top-level statt backend.embedded); Suchlast im Nachlauf manuell gestartet, 42b-wachter-neu.sh laeuft. Details semantiklauf/42e-korrektur.txt.
+# 06.09. ~07:10Z: Semantiklauf 06-11 FERTIG (06:15Z), Bericht abgenommen (Owner: "nach deinen Empfehlungen"),
+#   Box ANGEHALTEN (stop-instances) statt abgebaut, fuer die Launch-Haertungsphase. Kosten des Laufs 2,37 USD netto
+#   (20,5 h). Beim naechsten Start: IP wechselt -> BOX_IP, SG-22 (Owner-IP), CF-A-Record loadtest nachziehen;
+#   Container nach Start NICHT von AppAPI gestartet -> app_api:app:disable/enable findling_backend (DI-05-36).
+# started by aws_box.sh start at 2026-09-07T05:00:15Z, new address and ssh rule set by it
+BOX_IP=3.70.17.245
+BOX_STARTED_ISO=2026-09-07T05:00:15Z
+BOX_SSH_FROM=77.3.122.35/32
+
+# --- Ergaenzt von Plan 06.1-18, 07.09. mittags. Keine Geheimnisse in dieser Datei. ---
+# Angefahren 2026-09-07T05:00:15Z ueber den neuen Unterbefehl `aws_box.sh start`,
+#   der die neue Adresse ausgibt und die SG-Regel fuer Port 22 auf die aktuelle
+#   Owner-Adresse nachzieht (revoke vor authorize). IP dieses Laufs: 3.70.17.245,
+#   Owner-Adresse 77.3.122.35/32. Angehalten ueber `aws_box.sh stop`, der Laufzeit
+#   und Kosten dieser Laufzeit unten in diese Datei schreibt.
+#
+# DER A-RECORD loadtest.infranode.dev WAR IN DIESEM LAUF NICHT SETZBAR (keine
+#   DNS-Zugaenge in der Ausfuehrung). Ersatz: ein Eintrag in /etc/hosts der Box
+#   auf die Adresse des Apache-Containers. ACHTUNG, das ist eine Falle: diese
+#   Adresse wechselt bei JEDEM Maschinenstart. Sie hat in diesem Lauf einmal
+#   zugeschlagen (Apache wanderte von 172.18.0.6 auf 172.18.0.4, der Poller fand
+#   die Warteschlange nicht mehr). In /etc/hosts steht der Pruefbefehl als
+#   Kommentar darueber. Wer den A-Record setzen kann, sollte den Pin entfernen.
+#
+# GEMESSEN: anon-Spitze 1.812,7 MB gegen 1.837,8 MB aus 06-11, alle sechs Zaehler
+#   von memory.events auf null (max von 2.796 auf 0), Nebenlaeufigkeitszusage
+#   acht gleichzeitige Suchen, Endungsvergleich bestanden, dritte OCR-Sprache
+#   kostet +2,4 Prozent Dauer und +15,5 MB. Bericht im Repository unter
+#   docs/measurements/2026-09-nachmessung-m7g/.
+#
+# DER SCHADEN DIESES LAUFS, damit ihn niemand suchen muss:
+#   Der arm64-Installationslauf (E-H5) hat auf einer ZWEITEN, frischen Nextcloud
+#   auf derselben Box gefahren, also am selben Docker-Dienst. Seine
+#   Deinstallations-Zusage 3 fuehrt `app_api:app:unregister --rm-data` aus, und
+#   der Volumenname leitet sich allein aus der App-Kennung ab. Damit hat der Lauf
+#   um 06:46Z das MESSVOLUMEN der ersten Instanz geloescht:
+#   nc_app_findling_backend_data mit state.db, vectors.db, dem Tantivy-Index und
+#   der Wortliste. VERLOREN. Alle Messergebnisse waren zu dem Zeitpunkt bereits
+#   im Repository, der Endungsvergleich ebenfalls, also ist keine Zahl verloren.
+#   ERHALTEN: der Korpus, 50.000 Dateien und 20 GB unter
+#   /mnt/findling/ncdata/lasttest/files/loadtest, und das ist der teure Teil.
+#   WIEDERAUFSATZ: die ExApp ist neu registriert (force-unregister war noetig,
+#   weil die AppAPI-Zeile ohne Container zurueckblieb), die harte Grenze von 2 GB
+#   ist neu gesetzt und aus der cgroup geprueft, die App ist bewaffnet, und
+#   `occ findling:index --restart` ist eingestellt. Beim naechsten Start faehrt
+#   also ein vollstaendiger Neuaufbau des Index an, rund 19 Stunden.
+#   LEHRE fuer die naechste Box: eine zweite Nextcloud zum Testen NIE am selben
+#   Docker-Dienst wie eine Instanz, deren Datenbestand gebraucht wird.
+#
+# Gestoppt: siehe BOX_STOPPED_ISO unten, geschrieben von aws_box.sh stop.
+# VERBLEIB: ANGEHALTEN, nicht abgebaut. Owner-Entscheid vom 07.09.2026: die Box
+#   bleibt bis nach der v1.1-Messung bestehen. Der Abbau ist Sache von Plan
+#   06.1-19 und braucht dort eine eigene Freigabe (D-H3).
+# stopped by aws_box.sh stop at 2026-09-07T06:56:42Z, uptime and cost from the pinned rates
+BOX_STOPPED_ISO=2026-09-07T06:56:42Z
+BOX_LAST_UPTIME_HOURS=1.95
+BOX_LAST_UPTIME_COST_USD=0.2254
+BOX_PARKED_COST_USD_PER_DAY=0.3130
+# started by aws_box.sh start at 2026-09-09T09:20:06Z, new address and ssh rule set by it
+BOX_IP=3.69.147.2
+BOX_STARTED_ISO=2026-09-09T09:20:06Z
+BOX_SSH_FROM=77.3.136.241/32
+# 10.09. frueh: Owner-IP gewechselt 77.3.136.241 -> 2.241.114.75, SG-22 nachgezogen (revoke+authorize, Claude-Session Phase 10). Box laeuft, IP 3.69.147.2 unveraendert.
+# stopped by aws_box.sh stop at 2026-09-10T16:22:50Z, uptime and cost from the pinned rates
+BOX_STOPPED_ISO=2026-09-10T16:22:50Z
+BOX_LAST_UPTIME_HOURS=31.05
+BOX_LAST_UPTIME_COST_USD=3.5969
+BOX_PARKED_COST_USD_PER_DAY=0.3130
+# started by aws_box.sh start at 2026-09-10T21:51:06Z, new address and ssh rule set by it
+BOX_IP=3.75.242.128
+BOX_STARTED_ISO=2026-09-10T21:51:06Z
+BOX_SSH_FROM=2.241.114.75/32
+# stopped by aws_box.sh stop at 2026-09-10T23:49:11Z, uptime and cost from the pinned rates
+BOX_STOPPED_ISO=2026-09-10T23:49:11Z
+BOX_LAST_UPTIME_HOURS=1.97
+BOX_LAST_UPTIME_COST_USD=0.2285
+BOX_PARKED_COST_USD_PER_DAY=0.3130
+# snapshot of the data volume by aws_box.sh snapshot at 2026-09-11T08:39:03Z
+CORPUS_SNAPSHOT_ID=snap-03f1d1d9ad9262704
+CORPUS_SNAPSHOT_ISO=2026-09-11T08:39:03Z
+# SnapshotId  snap-03f1d1d9ad9262704
+# State       completed
+# Progress    100%
+# VolumeId    vol-04c5b59fe9417babd
+# VolumeSize  60 GB, the size of the volume and not the billed size
+# FullSize    55415668736 bytes, 55.4 GB of written blocks
+# StartTime   2026-09-11T07:47:07.582000+00:00
+# OwnerId     450315222812
+# Encrypted   False
+# Description findling corpus and index, v1.1 comparison run 2026-09-10, 52111 documents
+# started by aws_box.sh start at 2026-09-11T08:40:05Z, new address and ssh rule set by it
+BOX_IP=3.78.93.96
+BOX_STARTED_ISO=2026-09-11T08:40:05Z
+BOX_SSH_FROM=77.0.16.6/32
+# stopped by aws_box.sh stop at 2026-09-11T08:44:54Z, uptime and cost from the pinned rates
+BOX_STOPPED_ISO=2026-09-11T08:44:54Z
+BOX_LAST_UPTIME_HOURS=0.08
+BOX_LAST_UPTIME_COST_USD=0.0098
+BOX_PARKED_COST_USD_PER_DAY=0.3130
+
+-- ende des gesicherten inhalts von box.env --
+
+die summe aller laufzeiten dieser box, aus den zeilen oben:
+  05-21 bis 06-11 (vor stop/start im werkzeug)   2,3226 + 2,37 USD
+  06.1-18   1,95 h   0,2254 USD
+  10-05     31,05 h  3,5969 USD
+  11-06     1,97 h   0,2285 USD
+  11-12     0,08 h   0,0098 USD
+  dazu die parkkosten von 0,3130 USD je tag zwischen den laeufen.
+
+-- 6 die bestaetigung des abbaus --
+Abbau bestaetigt: 2026-09-11 (D-03)
+der owner hat am 11.09.2026 auf die frage des checkpoints mit "Ja, abbauen"
+geantwortet, und zwei auflagen dazu gestellt:
+  1. der snapshot BLEIBT dauerhaft, weil die v1.2-messung ihn braucht.
+     wiedervorlage nach der v1.2-messung: loeschen oder in die archivstufe.
+  2. ausser dem snapshot entstehen keine weiteren kosten. dafuer laeuft nach
+     dem abbau ein kostenueberblick ueber die region, abschnitt 9.
+die frage des checkpoints nach der wartewoche (open question 6 der recherche,
+store-stand und rueckfrage der store-betreiber) ist damit vom owner entschieden
+und nicht von diesem plan.
