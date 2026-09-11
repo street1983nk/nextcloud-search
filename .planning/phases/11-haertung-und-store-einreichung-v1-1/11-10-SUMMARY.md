@@ -2,7 +2,7 @@
 phase: 11-haertung-und-store-einreichung-v1-1
 plan: 10
 subsystem: audit
-tags: [audit, asvs, di-07-02, di-07-03, t-09-29, di-10-04, di-10-05, di-10-02, di-11-01, di-11-02, di-11-03, di-11-04, rel-01]
+tags: [audit, asvs, di-07-02, di-07-03, t-09-29, di-10-04, di-10-05, di-10-02, di-11-01, di-11-02, di-11-03, di-11-04, di-11-05, rel-01]
 
 # Dependency graph
 requires:
@@ -18,7 +18,7 @@ requires:
     provides: T-09-29 und die drei Entscheidungszeilen des Leerzustands
 provides:
   - "docs/audits/2026-09-phase-11/README.md, der Auditbericht der Phase nach dem Schema der Phase 10"
-  - "das Verdikt zu fuenf geerbten und vier in dieser Phase entstandenen Befunden"
+  - "das Verdikt zu fuenf geerbten und fuenf in dieser Phase entstandenen Befunden"
   - "die Entscheidung ueber die vier regressiven Laststufen, die die ROADMAP dieser Phase zugewiesen hat"
   - "DI-10-05 vollzogen: die drei Saetze zu Baumhash, Digest und dev im Kopf von measure.yml"
   - "DI-11-04 behoben: der Runner steht im Artefaktnamen von deploy-harp.yml"
@@ -55,6 +55,7 @@ key-decisions:
   - "DI-10-02 wird ehrlich als offen gefuehrt. Plan 11-03 hat die Nachfolgefassung gebaut, Plan 11-06 hat sie gefahren, und die Vorpruefung misst einen Antwortdeckel (konstant 26 Treffer bei jeder Tiefe) statt des Bestands, kann die Schwelle 64 also nie erreichen. DI-11-01 ist dieselbe Frage und wird mit ihm zusammengelegt"
   - "DI-11-04 wird in diesem Lauf behoben statt weitergereicht: eine Zeile, nur ein CI-Artefaktname, kein Test liest ihn, und Plan 11-11 faehrt deploy-harp.yml auf dem Release-Tag ohnehin erneut. Der Upgrade-Block laeuft auf genau einem Ast, also trug nur eines der beiden gleichnamigen Artefakte die Beweisdateien"
   - "DI-11-03 wird NICHT gefixt, und der Grund ist technisch: das Werkzeug kann abgebrochen und leer aus seiner eigenen Sicht nicht trennen, weil die OCS-Route in beiden Faellen HTTP 200 und eine Gruppe ohne Containerteil liefert. Ein zweiter Fehlschlagname waere ein Name ohne Unterscheidungsmerkmal"
+  - "L-11 (DI-11-05) ist der zweite neue Befund dieses Audits: der Integration-Lauf 34555358815 auf 2838673 ist rot, und zwar nur im Job index-search-e2e (pgsql) mit HTTP 423 (Locked) nach dem achten Schreibvorgang. Der Commit ist rein dokumentarisch, kann es also nicht verursacht haben; die gefahrene Wiederholung ist gruen, ein roter Lauf auf dreizehn. Hingenommen als Flattern des Messaufbaus, mit einem Merker fuer 11-11: geht der pgsql-Ast auf dem Release-Commit rot, ist die erste Handlung eine Wiederholung"
   - "L-01 ist ein neuer Befund dieses Audits: der Satz aus 11-13 ist ein binaeres Existenz-Orakel ueber den Fremdbestand. LOW und hingenommen, weil er weder Zahl noch Name noch Pfad nennt, nur auf der eigenen Ergebnisseite steht, je Anfrage einen vollen Suchlauf kostet und der Owner den Wortlaut in Kenntnis der Wirkung abgenommen hat"
 
 patterns-established:
@@ -71,7 +72,7 @@ completed: 2026-09-11
 
 # Phase 11 Plan 10: Das Audit-Gate vor der Abgabe Summary
 
-**Das letzte Audit vor der Store-Einreichung ist gefahren, und es ist das erste dieses Milestones, das nicht sagen kann "diese Phase baut nicht": ein MEDIUM-Befund ist in der Phase gebaut, zehn LOW-Befunde sind entschieden, zwei davon in diesem Lauf behoben, vier mit Zieladresse weitergereicht, und kein Befund bleibt ohne Verdikt.**
+**Das letzte Audit vor der Store-Einreichung ist gefahren, und es ist das erste dieses Milestones, das nicht sagen kann "diese Phase baut nicht": ein MEDIUM-Befund ist in der Phase gebaut, elf LOW-Befunde sind entschieden, zwei davon in diesem Lauf behoben, fuenf mit Zieladresse weitergereicht, und kein Befund bleibt ohne Verdikt.**
 
 ## Die eine Frage, und warum sie diesmal anders ausgeht
 
@@ -129,17 +130,17 @@ Bericht, weil es die häufigste Fehlannahme dieses Repositoriums ist.
 | CRITICAL | 0 | |
 | HIGH | 0 | |
 | MEDIUM | 1 | M-01 (DI-07-03), von Plan 11-13 gebaut, Belegstelle `11-13-SUMMARY.md` |
-| LOW | 10 | L-01 bis L-10; zwei in diesem Lauf behoben, vier hingenommen, vier weitergereicht |
+| LOW | 11 | L-01 bis L-11; zwei in diesem Lauf behoben, vier hingenommen, fünf weitergereicht |
 
-`fixed: [M-01, L-05, L-06]`, `still_open: [L-07, L-08, L-09, L-10]`,
+`fixed: [M-01, L-05, L-06]`, `still_open: [L-07, L-08, L-09, L-10, L-11]`,
 `fix_run: 2026-09-11`, `fix_commits: ab39d37, 2e8502b`.
 
 **Warum `still_open` nicht leer ist und das Gate trotzdem gefahren ist:** alle
-vier sind **LOW**, jeder trägt Verdikt, Begründung und Zieladresse. Die
+fünf sind **LOW**, jeder trägt Verdikt, Begründung und Zieladresse. Die
 Owner-Regel vom 15.08.2026 verlangt, dass jeder Befund **ab MEDIUM** vor dem
 Phasenabschluss fällt; der einzige dieser Phase ist M-01, und er ist gebaut.
 
-## Die neun Befunde mit ihrem Verdikt
+## Die zwölf Befunde mit ihrem Verdikt
 
 | ID | Befund | Verdikt |
 |---|---|---|
@@ -154,6 +155,7 @@ Phasenabschluss fällt; der einzige dieser Phase ist M-01, und er ist gebaut.
 | **L-08** | DI-10-02 und DI-11-01, die Vorprüfung | weitergereicht, **DI-10-02 bleibt offen** |
 | **L-09** | DI-11-02, leere Antwort ohne Spur | weitergereicht, ohne Zusatzmessung beantwortbar |
 | **L-10** | DI-11-03, leer gegen abgebrochen | weitergereicht, Fix technisch nicht möglich |
+| **L-11** | DI-11-05, der pgsql-Ast flattert (HTTP 423) | hingenommen als Flattern, Merker für 11-11 |
 
 ### M-01, und warum `fixed` hier keine Behauptung ist
 
@@ -274,6 +276,31 @@ Basis-SHA liegt. Vier Patch-Bumps vorhandener Pakete, kein neuer Name.
 
 **Kein PHP-Gate nötig:** dieser Plan hat keine PHP-Datei angefasst.
 
+## CI
+
+| Workflow | Lauf | Commit | Ergebnis |
+|---|---|---|---|
+| HaRP deploy | **34557178548** | `4becbbc` | **success**, alle vier Äste (`stable33`/amd64, `stable34`/amd64, `stable34`/arm64, `stable35`/amd64) |
+| Integration, Wiederholung des flatternden Jobs | 34555358815 | `2838673` | **success** (L-11) |
+
+Nur `deploy-harp.yml` löst auf diesen Commits einen Lauf aus; die übrigen
+Workflows sind pfadgefiltert und wurden von einer Änderung an zwei
+Workflow-Köpfen und vier Markdown-Dateien nicht berührt.
+
+**Der Beweis, dass der Fix aus `2e8502b` wirkt**, ist die Artefaktliste des
+Laufs 34557178548:
+
+```
+harp-logs-stable34-ubuntu-24.04        13.823 Byte
+harp-logs-stable34-ubuntu-24.04-arm     7.826 Byte
+harp-logs-stable33-ubuntu-24.04         7.805 Byte
+harp-logs-stable35-ubuntu-24.04         7.815 Byte
+```
+
+Vier Namen, vier Artefakte, keine Kollision. Vor diesem Lauf hießen die ersten
+beiden gleich, und nur das große trägt die sieben Beweisdateien des
+Upgrade-Blocks.
+
 ## Deviations from Plan
 
 ### Auto-fixed Issues
@@ -312,7 +339,25 @@ Basis-SHA liegt. Vier Patch-Bumps vorhandener Pakete, kein neuer Name.
 - **Files modified:** `docs/audits/2026-09-phase-11/README.md`
 - **Commit:** `74b91ea`
 
-**3. [Rule 1 - Bug] `files_reviewed: 55` war ohne Zeitbezug nicht nachzählbar**
+**3. [Rule 1 - Bug] Ein roter Integration-Lauf auf dem Vorgängercommit, unbeachtet**
+
+- **Found during:** nach dem Push, beim Nachsehen des CI-Stands der Phase.
+- **Issue:** `gh run list` zeigt den Integration-Lauf **34555358815** auf
+  `2838673` als **failure**, Job `index-search-e2e (pgsql)`, HTTP **423**
+  (Locked) nach `revision 8 written`. Ein Audit, das den CI-Stand nicht ansieht,
+  hätte das an 11-11 durchgereicht, und ein roter Integration-Lauf unmittelbar
+  vor dem Release-Tag ist teuer.
+- **Fix:** kein Code. Die Ursache ist geprüft statt vermutet: der Commit ändert
+  nur `.planning/` und eine SUMMARY, kann also nichts am Erzeugnis bewirkt
+  haben, und `gh run rerun --failed` ist **grün**. Als **L-11** und **DI-11-05**
+  aufgenommen, mit dem Merker für 11-11.
+- **Warum kein Fix an `integration.yml`:** eine Änderung an der
+  Integrationsstrecke unmittelbar vor dem Release-Tag ersetzt ein seltenes
+  Flattern durch ein neues Risiko.
+- **Files modified:** `docs/audits/2026-09-phase-11/README.md`,
+  `.planning/phases/11-.../deferred-items.md`
+
+**4. [Rule 1 - Bug] `files_reviewed: 55` war ohne Zeitbezug nicht nachzählbar**
 
 - **Found during:** Task 3, beim Nachziehen des Frontmatters.
 - **Issue:** Die Zahl ist `git diff 721bde6..HEAD --name-only | wc -l` **vor**

@@ -165,6 +165,20 @@ Nachbardateien getrennt, die zu seiner Lesart gehören. Neue Form
 bleibt für die Läufe gültig, die ihn geschrieben haben; der Kommentar am Schritt
 sagt das.
 
+**Gemessen statt behauptet**, Lauf **34557178548** auf Commit `4becbbc`, alle
+vier Äste grün, und die Artefaktliste des Laufs:
+
+```
+harp-logs-stable34-ubuntu-24.04        13.823 Byte
+harp-logs-stable34-ubuntu-24.04-arm     7.826 Byte
+harp-logs-stable33-ubuntu-24.04         7.805 Byte
+harp-logs-stable35-ubuntu-24.04         7.815 Byte
+```
+
+Vier Namen, vier Artefakte, keine Kollision. Das große ist das des amd64-Astes
+und trägt die sieben Beweisdateien des Upgrade-Blocks; es ist jetzt an seinem
+Namen zu erkennen und nicht mehr nur an seiner Größe.
+
 ---
 
 ## DI-10-04 (übernommen aus Phase 10, hier entschieden): die Ursache der Mehrlaufzeit ist eingegrenzt und nicht bewiesen
@@ -201,6 +215,43 @@ jede Antwort auf diese Frage zuerst eine Box braucht. In derselben Anfahrt
 gehören dazu: die Entscheidung über die vier regressiven Laststufen (Audit
 L-04), DI-11-02 als eine Zeile im Ablaufplan und DI-11-03 als Fassung des
 Lastwerkzeugs.
+
+---
+
+## DI-11-05 (gefunden in Plan 11-10, beim Nachsehen des CI-Stands): der pgsql-Ast von `index-search-e2e` flattert
+
+**VERDIKT 11.09.2026: LOW, hingenommen als Flattern des Messaufbaus, mit
+Zieladresse** (Audit L-11).
+
+**Gefunden:** beim Nachsehen des CI-Stands der Phase, vor dem Abschluss des
+Audits.
+
+**Was:** Der Integration-Lauf **34555358815** auf Commit `2838673` ist rot, und
+zwar in genau einem Job von sieben: `index-search-e2e (pgsql)`. `sqlite` und
+`mysql` sind grün. Die Fehlerzeile lautet `curl: (22) The requested URL returned
+error: 423` nach `revision 8 written`, im Schritt "Overwrite it eight times while
+the container is working". **423 ist Locked**, also die WebDAV-Sperre von
+Nextcloud.
+
+**Warum es kein Produktbefund sein kann:** `2838673` ändert ausschließlich
+`.planning/ROADMAP.md`, `.planning/STATE.md` und `11-09-SUMMARY.md`. Kein
+ausführbares Zeichen hat sich gegenüber dem grünen Vorlauf bewegt.
+
+**Die Gegenprobe, gefahren statt vermutet:** `gh run rerun 34555358815 --failed`
+am 11.09.2026, Ergebnis **success**. In der Geschichte des Workflows ist das ein
+roter Lauf auf dreizehn.
+
+**Warum nicht hier behoben:** Der Schritt gehört `integration.yml` und nicht
+diesem Plan, der Fix ist eine Warteschleife auf 423 statt eines blinden neunten
+Schreibvorgangs, und eine Änderung an der Integrationsstrecke unmittelbar vor dem
+Release-Tag ersetzt ein seltenes Flattern durch ein neues Risiko.
+
+**Der Merker für Plan 11-11:** geht der pgsql-Ast auf dem Release-Commit rot, ist
+die erste Handlung eine **Wiederholung** und nicht eine Fehlersuche im Erzeugnis.
+Erst wenn die Wiederholung ebenfalls rot ist, ist es ein Befund.
+
+**Wohin es gehört:** die v1.2-Härtung, als kleiner Schritt am Mutationsblock von
+`integration.yml`.
 
 ---
 

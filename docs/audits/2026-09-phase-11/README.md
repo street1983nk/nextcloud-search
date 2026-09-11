@@ -7,13 +7,13 @@ findings:
   critical: 0
   high: 0
   medium: 1
-  low: 10
-  total: 11
+  low: 11
+  total: 12
 status: issues_found
 fix_run: 2026-09-11
 fix_commits: ab39d37, 2e8502b
 fixed: [M-01, L-05, L-06]
-still_open: [L-07, L-08, L-09, L-10]
+still_open: [L-07, L-08, L-09, L-10, L-11]
 ---
 
 # Phase 11: Security-, Bug- und Performance-Audit
@@ -78,8 +78,8 @@ und wird nicht ausgeliefert. `backend/src/` ist im Diff mit **null** Dateien
 vertreten; die Backend-Hälfte ist in dieser Phase nicht angefasst worden.
 
 **Bilanz vorweg:** ein MEDIUM-Befund, in dieser Phase von Plan 11-13 gebaut und
-mit Belegstelle geschlossen; zehn LOW-Befunde, davon zwei in diesem Lauf
-behoben, vier entschieden und hingenommen, vier mit Zieladresse
+mit Belegstelle geschlossen; elf LOW-Befunde, davon zwei in diesem Lauf
+behoben, vier entschieden und hingenommen, fünf mit Zieladresse
 weitergereicht; kein CRITICAL und kein HIGH.
 
 ---
@@ -933,6 +933,46 @@ v1.2-Messplanung, weil die Entscheidung zwischen den beiden Wegen (ein zweiter
 Name gegen eine Zeile im Bericht, die die Begriffe ohne Treffer benennt) einen
 Bestand braucht, gegen den sie geprüft wird. Kein Blocker, keine Box.
 
+### L-11 (LOW): der pgsql-Ast von `index-search-e2e` flattert (WEITERGEREICHT)
+
+**Gefunden von diesem Audit selbst**, beim Nachsehen des CI-Stands der Phase.
+
+**Was:** Der Integration-Lauf **34555358815** auf Commit `2838673`, dem letzten
+Commit vor diesem Plan, ist **rot**. Rot ist genau ein Job von sieben,
+`index-search-e2e (pgsql)`; `sqlite` und `mysql` sind grün, ebenso die fünf
+anderen Jobs. Die Fehlerzeile:
+
+```
+revision 8 written
+curl: (22) The requested URL returned error: 423
+```
+
+**423 ist Locked**, also die WebDAV-Sperre von Nextcloud, und sie fällt im
+Schritt "Overwrite it eight times while the container is working", der eine
+Datei achtmal im Sekundentakt überschreibt, während der Container arbeitet.
+
+**Warum es kein Produktbefund sein kann:** `2838673` ist der Commit
+`docs(11-09): die abgenommenen Store-Texte abschliessen` und ändert
+ausschließlich `.planning/ROADMAP.md`, `.planning/STATE.md` und
+`11-09-SUMMARY.md`. Kein ausführbares Zeichen hat sich gegenüber dem grünen
+Vorlauf bewegt.
+
+**Die Gegenprobe, gefahren statt vermutet:** `gh run rerun 34555358815 --failed`
+am 11.09.2026. **Ergebnis: success.** In der Geschichte des Workflows ist das
+1 roter Lauf auf 13, und die zwölf davor sind grün.
+
+**Entscheidung: hingenommen als Flattern des Messaufbaus, aber mit Zieladresse**,
+weil ein roter Integration-Lauf unmittelbar vor dem Release-Tag teuer ist. Der
+Schritt schreibt achtmal ohne auf die Sperre zu warten; ein neunter Schreibvorgang
+in dieselbe Sperre hinein ist ein Wettlauf, den der Schritt selbst erzeugt.
+
+**Der Merker für Plan 11-11:** geht der pgsql-Ast auf dem Release-Commit rot,
+ist die erste Handlung eine Wiederholung und nicht eine Fehlersuche im Erzeugnis.
+Erst wenn die Wiederholung ebenfalls rot ist, ist es ein Befund.
+
+**Ziel:** die v1.2-Härtung, als kleiner Schritt am Mutationsblock von
+`integration.yml` (auf 423 warten und wiederholen statt blind weiterzuschreiben).
+
 ---
 
 ## 6. Was ausdrücklich in Ordnung ist
@@ -995,7 +1035,7 @@ URL am Release und nie eine Datei aus dem Arbeitsbaum.
 | CRITICAL | 0 | |
 | HIGH | 0 | |
 | MEDIUM | 1 | M-01 (DI-07-03), in dieser Phase von Plan 11-13 gebaut, Belegstelle `11-13-SUMMARY.md` |
-| LOW | 10 | L-01 bis L-10, je mit Entscheidung und Wiedervorlage; L-05 und L-06 in diesem Lauf behoben |
+| LOW | 11 | L-01 bis L-11, je mit Entscheidung und Wiedervorlage; L-05 und L-06 in diesem Lauf behoben |
 
 **Der Fix-Lauf dieses Audits, 2026-09-11.** Zwei Befunde sind in ihm behoben
 worden, beide ohne Produktionscode:
@@ -1010,9 +1050,9 @@ Plan 11-13 am 10.09.2026. Seine sieben Commits stehen in Abschnitt 4; sie hier
 noch einmal unter `fix_commits` zu führen, hieße, einen fremden Lauf als eigenen
 auszugeben.
 
-**Zu `still_open`, und warum es nicht leer ist.** Vier Befunde stehen darin:
-L-07 (DI-10-04), L-08 (DI-10-02 und DI-11-01), L-09 (DI-11-02) und L-10
-(DI-11-03). **Alle vier sind LOW**, jeder trägt ein Verdikt, eine Begründung und
+**Zu `still_open`, und warum es nicht leer ist.** Fünf Befunde stehen darin:
+L-07 (DI-10-04), L-08 (DI-10-02 und DI-11-01), L-09 (DI-11-02), L-10
+(DI-11-03) und L-11 (der flatternde pgsql-Ast). **Alle fünf sind LOW**, jeder trägt ein Verdikt, eine Begründung und
 eine Zieladresse, und keiner von ihnen ist ein Befund ab MEDIUM. Die Owner-Regel
 vom 15.08.2026 verlangt, dass **jeder Befund ab MEDIUM vor dem Phasenabschluss
 fällt**; der einzige dieser Phase ist M-01, und er ist gebaut. `still_open`
@@ -1043,8 +1083,30 @@ Katalogwerte sind maschinell auf Markup durchgesehen, und kein Befund bleibt
 ohne Verdikt.
 
 **Die Gates des Repositoriums, gefahren am 2026-09-11 in `backend/`:**
-`uv run python -m pytest -q`, `uv run ruff check .`,
-`uv run ruff format --check .`, `uv run pyright` und
-`uv run vulture src tests --min-confidence 80`. Ihre Ergebnisse stehen im
-Ausführungsprotokoll des Plans 11-10. Dazu `php -l` über die PHP-Hälfte in CI
-und die YAML-Prüfung der beiden in diesem Lauf geänderten Workflows.
+`uv run python -m pytest -q` (**2020 passed, 15 skipped**, also genau die
+Grundlinie), `uv run ruff check .`, `uv run ruff format --check .`,
+`uv run pyright` und `uv run vulture src tests --min-confidence 80`, alle ohne
+Befund. Dazu die YAML-Prüfung der beiden in diesem Lauf geänderten Workflows.
+Kein PHP-Gate nötig: dieser Plan hat keine PHP-Datei angefasst.
+
+### Der CI-Stand nach dem Fix-Lauf
+
+| Workflow | Lauf | Commit | Ergebnis |
+|---|---|---|---|
+| HaRP deploy | **34557178548** | `4becbbc` | **success**, alle vier Äste (`stable33`/amd64, `stable34`/amd64, `stable34`/arm64, `stable35`/amd64) |
+| Integration, Wiederholung des flatternden Jobs | 34555358815 | `2838673` | **success** (L-11) |
+
+**Der Beweis, dass L-06 wirkt, und er ist die Artefaktliste des Laufs
+34557178548:**
+
+```
+harp-logs-stable34-ubuntu-24.04        13.823 Byte
+harp-logs-stable34-ubuntu-24.04-arm     7.826 Byte
+harp-logs-stable33-ubuntu-24.04         7.805 Byte
+harp-logs-stable35-ubuntu-24.04         7.815 Byte
+```
+
+**Vier Namen, vier Artefakte, keine Kollision.** Das große ist das des
+amd64-Astes und trägt die sieben Beweisdateien des Upgrade-Blocks; es ist jetzt
+an seinem Namen zu erkennen und nicht mehr nur an seiner Größe. Vor diesem Lauf
+hießen die ersten beiden gleich.

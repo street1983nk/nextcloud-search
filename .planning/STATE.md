@@ -37,10 +37,10 @@ Auditbericht liegt unter `docs/audits/2026-09-phase-11/README.md`:
 `721bde6..HEAD`, **55 Dateien, 46 Commits**, und **anders als Phase 10 aendert
 diese Phase Produktionscode** (15 Dateien unter `php/`, acht davon gehen im
 Companion-Paket an jeden Nutzer, `backend/src/` mit null Dateien).
-**Bilanz: 0 CRITICAL, 0 HIGH, 1 MEDIUM, 10 LOW.** Der MEDIUM ist DI-07-03 und
+**Bilanz: 0 CRITICAL, 0 HIGH, 1 MEDIUM, 11 LOW.** Der MEDIUM ist DI-07-03 und
 war bei Planbeginn schon gebaut (Plan 11-13, Entscheid v1-a vom 10.09.2026,
 Belegstelle `11-13-SUMMARY.md`); `fixed: [M-01, L-05, L-06]`,
-`still_open: [L-07, L-08, L-09, L-10]`, alle vier LOW, jeder mit Verdikt,
+`still_open: [L-07, L-08, L-09, L-10, L-11]`, alle fuenf LOW, jeder mit Verdikt,
 Begruendung und Zieladresse. **Zwei Befunde sind in diesem Lauf behoben**, beide
 ohne Produktionscode: `ab39d37` vollzieht DI-10-05 im Kopf von `measure.yml`
 (Baumhash ist der Beweis, Digest ist die Notiz, `dev` ist erlaubt), `2e8502b`
@@ -57,8 +57,16 @@ Ueberbleibsel einer Handprobe ausweisen. **Was 11-12 erbt:** die Zieladresse
 "v1.2-Messplanung mit Box-Wiederaufbau-Runbook" fuer L-04 (die vier regressiven
 Laststufen), L-07 (DI-10-04), L-09 (DI-11-02) und L-10 (DI-11-03); alle vier
 brauchen eine Box. **DI-10-02 ist ehrlich als offen gefuehrt** und mit DI-11-01
-zusammengelegt. **REL-01 bleibt ungehakt:** dieser Plan liefert
-Erfolgskriterium 3, nicht das Requirement. Plan 11-09 ist am 11.09.2026
+zusammengelegt. **Der CI-Stand:** HaRP deploy 34557178548 auf `4becbbc` ist gruen in allen vier
+Aesten, und die Artefaktliste belegt den Fix aus `2e8502b` (vier verschiedene
+Namen statt zweier gleicher). **Neuer Befund L-11 / DI-11-05:** der
+Integration-Lauf 34555358815 auf `2838673` war rot, nur im Job
+`index-search-e2e (pgsql)`, mit HTTP 423 (Locked) nach dem achten
+Schreibvorgang; der Commit ist rein dokumentarisch, die gefahrene Wiederholung
+ist gruen, ein roter Lauf auf dreizehn. **Merker fuer 11-11:** geht der
+pgsql-Ast auf dem Release-Commit rot, ist die erste Handlung eine Wiederholung
+und nicht eine Fehlersuche im Erzeugnis. **REL-01 bleibt ungehakt:** dieser Plan
+liefert Erfolgskriterium 3, nicht das Requirement. Plan 11-09 ist am 11.09.2026
 gefahren und abgeschlossen, und
 damit ist **Welle 5 vollstaendig**. Der Owner hat den Entwurf vor der
 Einreichung gesehen und entschieden: **Fassung B, Messsatz dreisprachig, FR ok**,
@@ -506,6 +514,9 @@ Recent decisions affecting current work:
 - [Phase 11]: 11-10: DI-11-04 ist behoben, der Artefaktname von deploy-harp.yml lautet jetzt harp-logs-<server-version>-<runner>. Der alte Name bleibt fuer die Laeufe gueltig, die ihn geschrieben haben; der Kommentar am Schritt sagt das
 - [Phase 11]: 11-10: Neuer Befund L-01, hingenommen: der Satz aus 11-13 ist ein binaeres Existenz-Orakel ueber den Fremdbestand. Er nennt weder Zahl noch Name noch Pfad, steht nur auf der eigenen Ergebnisseite und nicht im Suchdialog, kostet je Anfrage einen vollen Suchlauf, und der Owner hat den Wortlaut in Kenntnis der Wirkung abgenommen. Die Abhilfe waere, den Entscheid v1-a umzudrehen
 - [Phase 11]: 11-10: Erfolgskriterium 5 hat eine Feststellung statt einer Vermutung: findling.tar.gz, findling_backend.tar.gz, findling.crt und findling_backend.crt sind von git nicht verfolgt, haben ueber keinen Branch einen Commit und sind von .gitignore gedeckt (*.tar.gz Zeile 31, *.crt Zeile 5). Eingereicht werden die vier Assets am GitHub-Release, deren URLs store-submit.yml baut
+
+- [Phase 11]: 11-10: Neuer Befund L-11 (DI-11-05), hingenommen als Flattern: der Integration-Lauf 34555358815 auf 2838673 war rot, nur im Job index-search-e2e (pgsql), HTTP 423 (Locked) nach dem achten Schreibvorgang des Mutationsblocks. Der Commit ist rein dokumentarisch, die gefahrene Wiederholung ist gruen, ein roter Lauf auf dreizehn. MERKER FUER 11-11: geht der pgsql-Ast auf dem Release-Commit rot, ist die erste Handlung eine Wiederholung und nicht eine Fehlersuche im Erzeugnis
+- [Phase 11]: 11-10: Der Fix aus 2e8502b ist an der Artefaktliste des Laufs 34557178548 belegt: harp-logs-stable34-ubuntu-24.04 (13.823 Byte, mit den Upgrade-Beweisdateien), -ubuntu-24.04-arm, -stable33- und -stable35-; vier Namen, vier Artefakte, keine Kollision
 
 ### Pending Todos
 
