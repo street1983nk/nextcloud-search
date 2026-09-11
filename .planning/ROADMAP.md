@@ -256,7 +256,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 11-11-PLAN.md , Versionsbump in einem Commit, Tag, ghcr-Pruefung, Store-Submission (Welle 7, Checkpoint-Plan)
+- [x] 11-11-PLAN.md , Versionsbump in einem Commit, Tag, ghcr-Pruefung, Store-Submission (Welle 7, Checkpoint-Plan)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -273,7 +273,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | 7/7 | Complete    | 2026-09-10 |
-| 11. Haertung und Store-Einreichung v1.1 | 11/13 | In Progress|  |
+| 11. Haertung und Store-Einreichung v1.1 | 12/13 | In Progress|  |
 
 ## Requirement Coverage
 

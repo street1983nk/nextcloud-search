@@ -477,6 +477,26 @@ Textabnahme: 2026-09-11, Fassung B, Messsatz dreisprachig, FR-Gate Teil 2 von 2 
 
 Einreichung freigegeben: 2026-09-11 (D-10)
 
+Eingereicht: 2026-09-11, Tag v1.1.0 auf 891bc6d, Release-Lauf 34573687101,
+Submission-Lauf 34573857157, findling HTTP 201 und findling_backend HTTP 201
+
+Das Release trägt genau vier Assets: findling.tar.gz (282.432 Byte),
+findling.tar.gz.sig, findling_backend.tar.gz (28.524 Byte) und
+findling_backend.tar.gz.sig. Eingereicht wurden genau diese, weil
+store-submit.yml die Release-URL übergibt und nichts ein zweites Mal baut.
+
+Vor der Einreichung geprüft und nicht angenommen (Pitfall 10): der
+Manifestindex ghcr.io/street1983nk/findling_backend:1.1.0 liegt als
+application/vnd.oci.image.index.v1+json mit linux/amd64
+(sha256:a2b9aef78e321d582983…) und linux/arm64 (sha256:ae58d93005dc18849c3b…)
+in der Registry, anonym abgefragt.
+
+Gegenprobe von außen: apps.nextcloud.com/apps/findling und
+apps.nextcloud.com/apps/findling_backend nennen beide 1.1.0. Die große
+apps.json unter ?version=34.0.0 führte kurz nach der Einreichung noch bis
+1.0.3, das ist ihr Cache und kein Befund; sie wird nicht im Minutentakt
+abgefragt.
+
 Freigegeben auf dem Release-Commit 891bc6d, mit allen sechs Workflows grün
 (PHP 34571130182, Python 34571130132, Multi-arch 34571130185, Integration
 34571130129, Resilience 34571130176, HaRP 34571130221 mit allen vier Ästen).

@@ -30,7 +30,7 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 
 ### Release
 
-- [ ] **REL-01**: v1.1 ist im Nextcloud App Store eingereicht (beide Apps, signiert, Store-Texte nach der Kurztext-Regel, Entwurf vor Einreichung dem Owner gezeigt)
+- [x] **REL-01**: v1.1 ist im Nextcloud App Store eingereicht (beide Apps, signiert, Store-Texte nach der Kurztext-Regel, Entwurf vor Einreichung dem Owner gezeigt)
 
 ## Future Requirements
 
@@ -60,7 +60,7 @@ Neue Kategorien: EFF (Effizienz), QUAL (Suchqualitaet), UI (Ergebnisseite), MESS
 | MESS-01 | Phase 10 | Complete |
 | MESS-02 | Phase 10 | Complete |
 | MESS-03 | Phase 10 | Complete |
-| REL-01 | Phase 11 | Pending |
+| REL-01 | Phase 11 | Complete |
 
 12 von 12 Requirements zugeordnet, keine Waisen, keine Doppelungen.
 Phasen 7 bis 11 stehen in .planning/ROADMAP.md.
