@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Abgeschlossen 11-08-PLAN.md, fr.json und fr.js gegossen plus die vier Katalog-Gates und das ausgedehnte Dash-Gate. Welle 4 ist damit zu, Welle 5 offen
-last_updated: "2026-09-11T09:40:00.000Z"
+stopped_at: Abgeschlossen 11-09-PLAN.md, der Owner hat Fassung B und den dreisprachigen Messsatz abgenommen. Welle 5 ist damit zu, Welle 6 offen
+last_updated: "2026-09-11T02:10:38.487Z"
 last_activity: 2026-09-11
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 37
-  completed_plans: 34
-  percent: 92
+  completed_plans: 35
+  percent: 95
 ---
 
 # Project State
@@ -26,12 +26,39 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 11 (Haertung und Store-Einreichung v1.1) — EXECUTING
-Plan: 8 of 13
-Status: 11-08 abgeschlossen, Welle 4 ist zu, Welle 5 steht an
+Plan: 9 of 13
+Status: 11-09 abgeschlossen, Welle 5 ist zu, Welle 6 steht an
 Last activity: 2026-09-11
 
-**Naechster Schritt:** Welle 5, Plan 11-09 (Store-Texte mit den v1.1-Zahlen,
-Text-Abnahme und FR-Gate Teil 2, Checkpoint-Plan). Plan 11-08 ist am 11.09.2026
+**Naechster Schritt:** Welle 6, Plan 11-10 (die drei Audits ueber den Diff der
+Phase, autonom). Plan 11-09 ist am 11.09.2026 gefahren und abgeschlossen, und
+damit ist **Welle 5 vollstaendig**. Der Owner hat den Entwurf vor der
+Einreichung gesehen und entschieden: **Fassung B, Messsatz dreisprachig, FR ok**,
+kein Einwand gegen die 85,1 Prozent. Die Abnahmezeile steht datiert in
+`docs/store-listing.md` (`Textabnahme: 2026-09-11, Fassung B, Messsatz
+dreisprachig, FR-Gate Teil 2 von 2 abgenommen (D-06, D-07, D-08)`), und damit
+ist **D-07 in beiden Teilen erfuellt**. **Was dabei nach aussen sichtbar
+geworden ist:** beide `info.xml` tragen in der RAM-Zeile ihres
+Anforderungsblocks jetzt `103,2 MB im Leerlauf` in allen drei Sprachen, sonst
+ist an den sechs Texten kein Wort geaendert; alle drei READMEs tragen den
+Messsatz in ihrer Sprache mit **52.111 Dokumenten und 1.764 MB** und darunter
+die datierte Zeile **691,8 auf 103,2 MB, minus 85,1 Prozent, gemessen am
+10.09.2026**, mit Verweis auf `docs/performance.md`. **Fuer 11-10 und 11-11 gilt
+viererlei.** Erstens: der Store-Text ist ab jetzt eingefroren, er reist
+unveraenderlich mit dem Release. Zweitens: `scan_measured_sentence` nimmt den
+Wortlaut als Argument und wird dreimal gerufen, einmal je README, also zieht
+jede kuenftige Zahlenaenderung README **und** Konstante in derselben Aenderung
+nach; die neue Test-Grundlinie ist **2020 passed, 15 skipped**. Drittens: der
+Messsatz nennt **52.111** und nicht die 52.137 aus 11-06, weil er den Lauf
+beschreibt, den er beschreibt, und die 39 Dateien Unterschied der
+Sprachfall-Korpus nach jenem Lauf sind; wer das im Audit als Widerspruch liest,
+findet die Begruendung im Kommentar der Konstante und im Entwurf. Viertens: der
+ueberholte Drei-Stellen-Merker aus DI-10-03 ist **keine Regression** und ist
+nicht repariert worden, der Docstring des Scanners nennt jetzt beide Daten,
+07.09. und 11.09. `docs/performance.md` hat die Anfahrt aus 11-06 nachgezogen
+(DI-10-01 geschlossen, DI-10-02 offen), und **keine `version`- und keine
+`image-tag`-Zeile ist angefasst**: der Bump auf 1.1.0 bleibt Plan 11-11.
+**REL-01 bleibt ungehakt.** Plan 11-08 ist am 11.09.2026
 gefahren und abgeschlossen, und damit ist **Welle 4 vollstaendig**: `php/l10n/fr.json`
 und `php/l10n/fr.js` liegen im Baum, mechanisch aus der abgenommenen Tabelle
 gegossen, 174 Schluessel in der Reihenfolge von `de.json`, fuenf Pluralschluessel
@@ -468,6 +495,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-11T09:40:00.000Z
-Stopped at: Abgeschlossen 11-08-PLAN.md, fr.json und fr.js aus der abgenommenen Tabelle gegossen, vier Katalog-Gates plus das ausgedehnte Dash-Gate. Welle 4 ist damit zu
+Last session: 2026-09-11T02:10:38.470Z
+Stopped at: Abgeschlossen 11-09-PLAN.md, der Owner hat Fassung B und den dreisprachigen Messsatz abgenommen. Welle 5 ist damit zu, Welle 6 offen
 Resume file: None
