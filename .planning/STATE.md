@@ -39,9 +39,13 @@ Details: .planning/MILESTONES.md und .planning/milestones/v1.1-ROADMAP.md.
 Vollstaendige Liste in ROADMAP.md "Naechster Milestone". Kurzfassung:
 
 - DI-10-02/DI-11-01: Sprachfall-Messung ohne Fremdbestand (Route deckelt bei 26 < Schwelle 64)
-- DI-10-04: Analyse der Volllauf-Laufzeit (+40,9 Prozent)
+- DI-10-04: geklaert und gefixt 11.09. (Zulauf-Hunger; Top-up-Route 1d47563, CI gruen);
+  offen nur der Wirkungsbeleg-Volllauf, per Owner-Entscheid 11.09. gebuendelt mit der
+  Laststufen-Untersuchung in EINER Box-Anfahrt der v1.2-Messphase (Deckel-Vorschlag
+  26 h / 3,50 USD)
 - DI-11-02/03/05/06 (u.a. flatternder pgsql-Ast HTTP 423)
 - Vier regressive Laststufen: hingenommen fuer v1.1.0, untersuchen in der v1.2-Messplanung
+  (dieselbe Anfahrt wie der DI-10-04-Wirkungsbeleg)
 - Snapshot-Wiedervorlage snap-03f1d1d9ad9262704 nach v1.2 (loeschen oder Archive-Tier)
 - stable35-RE-CHECK am 16.09.2026 (Versionsfenster, Entscheid v2-a)
 - Wiederaufbau-Runbook der Messumgebung

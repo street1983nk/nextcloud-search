@@ -43,9 +43,9 @@ Details im Archiv: .planning/milestones/v1.1-ROADMAP.md
 Noch nicht geplant (Start ueber /gsd:new-milestone). Uebergeben aus v1.1:
 
 - DI-10-02/DI-11-01: Sprachfall-Messung ohne 52.111er-Fremdbestand (Vorpruefung misst Routen-Treffer, Deckel 26 < Schwelle 64)
-- DI-10-04: Analyse der Volllauf-Laufzeit (+40,9 Prozent gegen 06-11)
+- DI-10-04: GEKLAERT UND GEFIXT am 11.09.2026 (Zulauf-Hunger, 5,85 h ohne Vorrat; Top-up-Route + Scheiben-Lock, Commit 1d47563, alle 6 Workflows gruen). OFFEN bleibt nur der Wirkungsbeleg: ein Volllauf gegen den Korpus-Snapshot auf m7g.large. Owner-Entscheid 11.09.: KEINE eigene Anfahrt dafuer, sondern gebuendelt mit der Laststufen-Untersuchung in EINER Box-Anfahrt der v1.2-Messphase (Deckel-Vorschlag 26 h / 3,50 USD; zugleich Erstvollzug des Wiederaufbau-Runbooks)
 - DI-11-02/03/05/06 (u.a. flatternder pgsql-Ast HTTP 423: bei rot erst wiederholen)
-- Entscheidung zu den vier regressiven Laststufen (hingenommen fuer v1.1.0, untersucht in der v1.2-Messplanung)
+- Entscheidung zu den vier regressiven Laststufen (hingenommen fuer v1.1.0, untersucht in der v1.2-Messplanung; dieselbe Box-Anfahrt wie der DI-10-04-Wirkungsbeleg, siehe oben)
 - Snapshot-Wiedervorlage snap-03f1d1d9ad9262704 nach v1.2 (loeschen oder Archive-Tier, ~2,9 USD/Monat)
 - stable35-RE-CHECK am 16.09.2026 (NC-Versionsfenster, Entscheid v2-a)
 - Wiederaufbau-Runbook der Messumgebung
