@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Abgeschlossen 11-05-PLAN.md, die vollstaendige FR-Uebersetzungstabelle und das FR-Gate Teil 1 (abgenommen 2026-09-11, keine Korrektur). Welle 3 ist damit zu, Welle 4 offen
-last_updated: "2026-09-11T03:20:00.000Z"
+stopped_at: Abgeschlossen 11-08-PLAN.md, fr.json und fr.js gegossen plus die vier Katalog-Gates und das ausgedehnte Dash-Gate. Welle 4 ist damit zu, Welle 5 offen
+last_updated: "2026-09-11T09:40:00.000Z"
 last_activity: 2026-09-11
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 37
-  completed_plans: 33
-  percent: 89
+  completed_plans: 34
+  percent: 92
 ---
 
 # Project State
@@ -26,11 +26,38 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 11 (Haertung und Store-Einreichung v1.1) — EXECUTING
-Plan: 7 of 13
-Status: 11-05 abgeschlossen, Welle 3 ist zu, Welle 4 steht an
+Plan: 8 of 13
+Status: 11-08 abgeschlossen, Welle 4 ist zu, Welle 5 steht an
 Last activity: 2026-09-11
 
-**Naechster Schritt:** Welle 4. Plan 11-05 ist am 11.09.2026 gefahren und
+**Naechster Schritt:** Welle 5, Plan 11-09 (Store-Texte mit den v1.1-Zahlen,
+Text-Abnahme und FR-Gate Teil 2, Checkpoint-Plan). Plan 11-08 ist am 11.09.2026
+gefahren und abgeschlossen, und damit ist **Welle 4 vollstaendig**: `php/l10n/fr.json`
+und `php/l10n/fr.js` liegen im Baum, mechanisch aus der abgenommenen Tabelle
+gegossen, 174 Schluessel in der Reihenfolge von `de.json`, fuenf Pluralschluessel
+mit je zwei Formen und `nplurals=2; plural=(n > 1);` in beiden Dateien. Das
+Einwegskript hat sich vor dem Guss selbst geprueft, indem es `de.json` und
+`de.js` zeichengleich reproduziert hat; ohne diesen Schritt waere die einzeilige
+Schreibweise der Pluralliste verloren gegangen, die `json.dumps` mit `indent`
+nicht liefert. In `backend/tests/test_admin_ui_contract.py` stehen jetzt die
+vier Gates: **G1** Schluesselgleichheit ueber alle sechs Katalogdateien mit der
+fehlenden Datei als benanntem Fehlschlag, **G2** kein leerer und kein englisch
+gebliebener Wert gegen die Modulkonstante `FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY`
+(`Findling`, `Page %s`) statt gegen eine Schwelle, **G3** Platzhalter-Paritaet
+als Multimenge ueber alle Formen eines Pluralwerts, **G4** die franzoesische
+Pluralregel in beiden Dateien mit den fuenf Pluralschluesseln. Das Dash- und
+Emoji-Gate liest zusaetzlich die sechs Katalogdateien. Jedes Gate hat seinen
+Selbsttest, und alle fuenf sind einmal am echten Baum mutiert und rot geworden
+(zehn Mutationen, danach wiederhergestellt). **Eine Auslegung fuer 11-10:** G2
+prueft die Gleichheit mit dem Quellstring auf dem **Wert** und nicht auf der
+einzelnen Pluralform, weil der franzoesische Singular von `%n minute`
+zeichengleich `%n minute` lautet und eine Pruefung je Form eine dritte Ausnahme
+verlangt haette, die `docs/l10n-french.md` nicht nennt; die Leere wird weiter
+ueber jede Form geprueft. Die harte Zahl **174** ist geprueft und nicht
+angefasst worden. Kein Gate prueft auf Byte-Ebene den Wagenruecklauf: der Index
+fuehrt die Katalogdateien mit LF, diese Maschine checkt mit `core.autocrlf=true`
+aus, und eine Byte-Pruefung waere in CI gruen und in jeder Windows-Arbeitskopie
+rot. **REL-01 bleibt ungehakt.** Plan 11-05 ist am 11.09.2026 gefahren und
 abgeschlossen, und damit ist **Welle 3 vollstaendig**: `docs/l10n-french.md`
 traegt eine dreispaltige Tabelle ueber alle 174 Katalogschluessel (173 Zeilen
 plus `Findling` als benannte Ausnahme), 24 Wortlaute woertlich aus Phase 9 und
@@ -49,7 +76,6 @@ lautet `nplurals=2; plural=(n > 1);` und steht als Wortlaut in der Datei, die
 zweite G2-Ausnahme ist `Page %s`. Die drei Stellen, an denen die Datei noch 173
 nannte (Uebergabe aus 11-13), sind in 11-05 bearbeitet und **nicht** an 11-10
 weitergereicht worden. **REL-01 bleibt ungehakt.** Plan 11-07
-ist am 11.09.2026 gefahren und abgeschlossen: `deploy-harp.yml` faehrt auf dem
 ist am 11.09.2026 gefahren und abgeschlossen: `deploy-harp.yml` faehrt auf dem
 Ast `stable34/ubuntu-24.04` einen Upgrade-Block (`Store upgrade 0` bis
 `Store upgrade 5`), der beide Haelften aus den echten v1.0.3-Release-Assets
@@ -245,6 +271,10 @@ ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- 11-08: Der franzoesische Katalog wird mit einem Einwegskript aus `docs/l10n-french.md` gegossen, und das Skript beweist seinen Formatbegriff, indem es `de.json` und `de.js` zeichengleich reproduziert, bevor es etwas Neues schreibt
+- 11-08: Gate G2 vergleicht die Gleichheit mit dem englischen Quellstring auf dem Wert und nicht auf der einzelnen Pluralform (`%n minute` ist im Franzoesischen derselbe Singular); die Leere wird weiter ueber jede Form geprueft
+- 11-08: Kein Gate prueft den Wagenruecklauf auf Byte-Ebene. Der Index fuehrt die Katalogdateien mit LF, die Entwicklungsmaschine checkt mit `core.autocrlf=true` aus, und eine solche Pruefung waere in CI gruen und in jeder Windows-Arbeitskopie rot
+- 11-08: Das Dash- und Emoji-Gate liest alle sechs Katalogdateien und nicht nur die zwei franzoesischen, weil eine Regel fuer eine Sprache und nicht fuer die anderen die Asymmetrie ist, an die sich niemand erinnert
 - Roadmap: EIN Store-Erstrelease 1.0.0 mit Volltext, OCR und Semantik. Phasen 1 bis 5 stellen den einreichungsbereiten Zustand her (D-09), Phase 6 ergänzt die Semantik, die Abgabe ist Abschluss von Phase 6 (D-08), hart vor Jahresende 2026 (D-10). Die frühere Staffelung v1.0 jetzt und v1.1 vier bis sechs Wochen später ist überholt und nur noch Fallback
 - Roadmap: ACL-Tabelle liegt im ersten Storage-Schema (Phase 2), nicht nachgerüstet
 - Roadmap: Integrationsbeweis (IProvider + exAppRequest) steht vor jedem Feature, App-IDs und beide CSRs in Phase 1
@@ -438,6 +468,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-11T03:20:00.000Z
-Stopped at: Abgeschlossen 11-05-PLAN.md, die vollstaendige FR-Uebersetzungstabelle und das FR-Gate Teil 1 (abgenommen 2026-09-11, keine Korrektur). Welle 3 ist damit zu
+Last session: 2026-09-11T09:40:00.000Z
+Stopped at: Abgeschlossen 11-08-PLAN.md, fr.json und fr.js aus der abgenommenen Tabelle gegossen, vier Katalog-Gates plus das ausgedehnte Dash-Gate. Welle 4 ist damit zu
 Resume file: None

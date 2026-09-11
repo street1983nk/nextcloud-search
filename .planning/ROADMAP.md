@@ -211,7 +211,7 @@ Plans:
 **Goal**: v1.1 steht als signiertes App-Paar im Nextcloud App Store, nachdem es jenseits des Happy Path getestet wurde und der Owner die Texte abgenommen hat.
 **Depends on**: Phase 10 (die Store-Aussage traegt Zahlen aus dem Messbericht und ist nach der Abgabe nicht mehr editierbar)
 **Requirements**: REL-01
-**Vorbedingung aus Phase 9**: Der vollstaendige franzoesische Katalog (alle Zeichenketten der App, `fr.json` **und** `fr.js`, Schluesselvergleich auf zwei Sprachpaare erweitert) ist Vorbedingung der Abgabe; die 24 vorbereiteten Wortlaute der Ergebnisseite und die Begruendung der Vertagung stehen in `docs/l10n-french.md`. , **Stand 2026-09-11 (Plan 11-05): der Text ist geschrieben und abgenommen, die Dateien fehlen noch.** `docs/l10n-french.md` traegt eine dreispaltige Tabelle Schluessel/DE/FR ueber alle **174** Katalogschluessel (173 Zeilen plus `Findling` als benannte Ausnahme), 24 Wortlaute woertlich aus Phase 9 und **149 neu**, mit Wortwahl-, Typografie- und Pluralabschnitt davor und der benannten G2-Ausnahmenliste darunter. Der Owner hat sie als franzoesischer Muttersprachler am **2026-09-11 ohne eine einzige Korrektur** abgenommen; die Abnahmezeile steht datiert in derselben Datei und nennt sich ausdruecklich **Teil 1 von 2 (Katalog)** von D-07. Offen bleiben `fr.json` und `fr.js` samt der vier Gates G1 bis G4 (Plan 11-08) und die Textabnahme Teil 2 (Plan 11-09). Befund fuer 11-08: `Findling` ist Schluessel 1 von 174 in `de.json` und muss den Wert `Findling` tragen, sonst geht G1 rot.
+**Vorbedingung aus Phase 9**: Der vollstaendige franzoesische Katalog (alle Zeichenketten der App, `fr.json` **und** `fr.js`, Schluesselvergleich auf zwei Sprachpaare erweitert) ist Vorbedingung der Abgabe; die 24 vorbereiteten Wortlaute der Ergebnisseite und die Begruendung der Vertagung stehen in `docs/l10n-french.md`. , **Stand 2026-09-11 (Plan 11-05): der Text ist geschrieben und abgenommen, die Dateien fehlen noch.** `docs/l10n-french.md` traegt eine dreispaltige Tabelle Schluessel/DE/FR ueber alle **174** Katalogschluessel (173 Zeilen plus `Findling` als benannte Ausnahme), 24 Wortlaute woertlich aus Phase 9 und **149 neu**, mit Wortwahl-, Typografie- und Pluralabschnitt davor und der benannten G2-Ausnahmenliste darunter. Der Owner hat sie als franzoesischer Muttersprachler am **2026-09-11 ohne eine einzige Korrektur** abgenommen; die Abnahmezeile steht datiert in derselben Datei und nennt sich ausdruecklich **Teil 1 von 2 (Katalog)** von D-07. Offen bleiben `fr.json` und `fr.js` samt der vier Gates G1 bis G4 (Plan 11-08) und die Textabnahme Teil 2 (Plan 11-09). Befund fuer 11-08: `Findling` ist Schluessel 1 von 174 in `de.json` und muss den Wert `Findling` tragen, sonst geht G1 rot. , **Stand 2026-09-11 (Plan 11-08): die Vorbedingung ist eingeloest.** `php/l10n/fr.json` und `php/l10n/fr.js` liegen im Baum, mechanisch aus der Tabelle gegossen, mit `Findling` als Schluessel 1 und der franzoesischen Pluralregel in beiden Dateien. Der Schluesselvergleich umfasst jetzt sechs Katalogdateien (G1), dazu kommen G2 Vollstaendigkeit gegen eine benannte Ausnahmenliste, G3 Platzhalter-Paritaet als Multimenge ueber alle Pluralformen und G4 die Pluralregel; das Dash- und Emoji-Gate liest die Kataloge mit. Offen bleibt nur noch die Textabnahme Teil 2 (Plan 11-09).
 **Success Criteria** (what must be TRUE):
 
   1. Beide Apps tragen dieselbe Version, sind signiert, und eine frische Nextcloud im Versionsfenster installiert sie aus den Release-Artefakten auf amd64 und arm64 und findet ohne Handgriff Inhalte , **Stand 2026-09-10 (Plan 11-04): die Strecke steht.** `deploy-harp.yml` faehrt die Fremdinstallation auf amd64 **und nativ auf `ubuntu-24.04-arm`** (Lauf 34525240422, alle vier Aeste gruen) und kann die beiden Archive vom GitHub-Release laden statt sie lokal zu bauen (Lauf 34526436580 mit `release_tag=v1.0.3`, alle vier Aeste gruen, Zero-Config-Treffer nach einer cron-Runde). Offen bleibt nur, dass es die Artefakte von **v1.1.0** sind: das setzt Plan 11-11
@@ -244,7 +244,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 11-08-PLAN.md , fr.json und fr.js aus der abgenommenen Tabelle, plus die vier Katalog-Gates (Welle 4)
+- [x] 11-08-PLAN.md , fr.json und fr.js aus der abgenommenen Tabelle, plus die vier Katalog-Gates (Welle 4). Beide Dateien mechanisch gegossen, 174 Schluessel in der Reihenfolge von `de.json`, fuenf Pluralschluessel mit je zwei Formen und `nplurals=2; plural=(n > 1);` in beiden; G1 Schluesselgleichheit ueber sechs Dateien, G2 gegen eine benannte Ausnahmenliste, G3 Platzhalter-Paritaet als Multimenge, G4 die Pluralregel, dazu das auf die Kataloge ausgedehnte Dash-Gate; zehn Mutationen am echten Baum belegen die Rot-Faehigkeit
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -273,7 +273,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | 7/7 | Complete    | 2026-09-10 |
-| 11. Haertung und Store-Einreichung v1.1 | 8/13 | In Progress|  |
+| 11. Haertung und Store-Einreichung v1.1 | 9/13 | In Progress|  |
 
 ## Requirement Coverage
 
