@@ -355,6 +355,28 @@ def test_the_aws_snapshot_carries_a_tag_the_sweep_of_destroy_does_not_trip_over(
     assert "findling-corpus-keep" in text.split("cmd_snapshot() {", 1)[0]
 
 
+def test_the_aws_destroy_reads_every_tag_hit_back_before_it_calls_it_a_leftover() -> None:
+    """describe-tags lags, and a lagging index made a correct teardown end red.
+
+    On 2026-09-11 the sweep reported both volumes of the box as leftovers while
+    the api answered InvalidVolume.NotFound for each of them: the tags of a
+    resource deleted moments ago keep coming back, exactly as the tags of the
+    terminated instance do. A check that cries wolf is a check nobody reads, so
+    every hit is read back by its own type. What cannot be read stays a
+    leftover, because that is the direction an error has to fall in here.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    body = text.split("cmd_destroy() {", 1)[1]
+    assert "for hit in $remaining; do" in body
+    assert "the resource itself is gone" in body
+    # Read back by type, and an unknown type is not read back into innocence.
+    for kind in ("instance)", "volume)", "security-group)"):
+        assert kind in body, kind
+    assert "*) hit_state='there' ;;" in body
+    # The strict end is still there: something that answers is still a leftover.
+    assert body.index("for hit in $remaining; do") < body.index("something still carries the tag")
+
+
 def test_the_aws_destroy_refuses_to_remove_the_state_file_without_a_backup() -> None:
     """box.env is the whole cost and damage history of this box, and destroy deletes it.
 

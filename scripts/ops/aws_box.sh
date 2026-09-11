@@ -956,16 +956,42 @@ left = [
     tag for tag in tags
     if tag['ResourceId'] != '$instance_id' and tag['ResourceId'] not in keepers
 ]
-for tag in left:
-    print('%s %s' % (tag['ResourceType'], tag['ResourceId']))
+print(' '.join('%s:%s' % (tag['ResourceType'], tag['ResourceId']) for tag in left))
 ")
-    if [ -n "$remaining" ]; then
-        echo "aws_box: something still carries the tag $LABEL:" >&2
-        echo "$remaining" >&2
+    # A tag hit is a lead and not a verdict. describe-tags answers out of an
+    # index that lags behind, so the tags of a resource deleted moments ago keep
+    # coming back for a while, exactly as the tags of the terminated instance
+    # do. On 2026-09-11 this reported both volumes of the box as leftovers while
+    # the api answered InvalidVolume.NotFound for each of them, and a teardown
+    # that was correct in every step ended red. The rule that keeps the check
+    # strict without making it lie: read every hit back by its own type, and
+    # count only what still answers. Anything that cannot be read stays a
+    # leftover, which is the direction an error has to fall in here.
+    left_over=''
+    for hit in $remaining; do
+        kind=${hit%%:*}
+        resource=${hit#*:}
+        case "$kind" in
+        instance) hit_state=$(instance_gone "$resource") ;;
+        volume) hit_state=$(resource_gone "$(ec2_soft describe-volumes --volume-ids "$resource")") ;;
+        security-group) hit_state=$(resource_gone "$(ec2_soft describe-security-groups --group-ids "$resource")") ;;
+        # Anything else, a snapshot or an image under the tag of this run among
+        # them, is a leftover by default and is not read back into innocence.
+        *) hit_state='there' ;;
+        esac
+        if [ "$hit_state" = 'gone' ]; then
+            echo "aws_box: $kind $resource carries $LABEL, the resource itself is gone"
+        else
+            left_over="$left_over $kind $resource"
+        fi
+    done
+    if [ -n "$left_over" ]; then
+        echo "aws_box: something still carries the tag $LABEL and still exists:" >&2
+        echo "$left_over" >&2
         failed=1
     else
-        echo "aws_box: no resource but the terminated instance carries $LABEL"
-        echo "aws_box: its tags fall off the api within the hour, on their own"
+        echo "aws_box: nothing that carries $LABEL exists any more"
+        echo "aws_box: the tags of what was deleted fall off the api on their own"
     fi
 
     if [ "$failed" -ne 0 ]; then
