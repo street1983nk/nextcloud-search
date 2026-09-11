@@ -63,6 +63,14 @@ du modèle) est documenté avec sa méthode et ses données brutes dans
 [docs/performance.md](docs/performance.md) et
 [docs/embeddings.md](docs/embeddings.md).
 
+## Entreprise
+
+Findling est et reste sous AGPL. Des modules complémentaires payants et un
+support avec des délais de réponse convenus sont prévus, mais ne sont pas
+encore disponibles.
+
+Demande de devis : admin@infranode.dev
+
 ## Licence
 
 AGPL-3.0-or-later. Voir [LICENSE](LICENSE).

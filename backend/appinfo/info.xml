@@ -98,7 +98,9 @@ Supported file types:
 Requirements:
 - Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
 - RAM: 4 GB is enough, 103.2 MB idle, under a hard 2 GB limit (measured)
-- CPU: 2 cores are enough, amd64 and arm64]]></description>
+- CPU: 2 cores are enough, amd64 and arm64
+
+Enterprise support and paid add-ons: request a quote at admin@infranode.dev]]></description>
 	<description lang="de"><![CDATA[Was Findling Backend ist:
 - Die External App hinter der Such-App Findling: Textauszug, Texterkennung und der Suchindex
 - Läuft komplett in Ihrer eigenen Instanz und tut ohne die App Findling nichts
@@ -115,7 +117,9 @@ Unterstützte Dateitypen:
 Anforderungen:
 - Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
 - RAM: 4 GB genügen, 103,2 MB im Leerlauf, unter einer harten 2-GB-Grenze (gemessen)
-- CPU: 2 Kerne genügen, amd64 und arm64]]></description>
+- CPU: 2 Kerne genügen, amd64 und arm64
+
+Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev]]></description>
 	<description lang="fr"><![CDATA[Ce qu'est Findling Backend :
 - L'External App derrière l'application de recherche Findling : extraction de texte, reconnaissance optique et index
 - Fonctionne entièrement dans votre propre instance et ne fait rien sans l'application Findling
@@ -132,7 +136,9 @@ Types de fichiers pris en charge :
 Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
 - RAM : 4 Go suffisent, 103,2 Mo au repos, sous une limite stricte de 2 Go (mesuré)
-- CPU : 2 cœurs suffisent, amd64 et arm64]]></description>
+- CPU : 2 cœurs suffisent, amd64 et arm64
+
+Support entreprise et modules payants : demande de devis à admin@infranode.dev]]></description>
 	<version>1.1.0</version>
 	<!--
 		The SPDX spelling and not the short one. info.xsd accepts both, but it

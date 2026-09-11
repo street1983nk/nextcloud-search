@@ -57,6 +57,13 @@ Every number (memory, run times, search load, failure drills, model quality)
 lives with its method and raw data in [docs/performance.md](docs/performance.md)
 and [docs/embeddings.md](docs/embeddings.md).
 
+## Enterprise
+
+Findling is and stays AGPL. Paid add-ons and support with agreed response
+times are planned, but not available yet, for organisations that need them.
+
+Request a quote: admin@infranode.dev
+
 ## Licence
 
 AGPL-3.0-or-later. See [LICENSE](LICENSE).

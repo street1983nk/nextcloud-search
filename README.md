@@ -58,6 +58,14 @@ Alle Zahlen (Speicher, Laufzeiten, Suchlast, Ausfalltests, Modellqualität)
 stehen mit Methode und Rohdaten in [docs/performance.md](docs/performance.md)
 und [docs/embeddings.md](docs/embeddings.md).
 
+## Enterprise
+
+Findling ist und bleibt AGPL. Geplant, aber noch nicht verfügbar, sind
+kostenpflichtige Zusatzmodule und Support mit zugesagten Reaktionszeiten für
+Häuser, die das brauchen.
+
+Angebot anfordern: admin@infranode.dev
+
 ## Lizenz
 
 AGPL-3.0-or-later. Siehe [LICENSE](LICENSE).

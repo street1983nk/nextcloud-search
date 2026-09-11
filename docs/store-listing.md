@@ -482,3 +482,35 @@ die 52.111 bleibt die Zahl des Laufs, den der Satz beschreibt. Was damit nach
 außen geht, steht oben in den sechs Texten und in den drei READMEs; danach wird
 es nicht mehr angefasst, weil der Store-Text unveränderlich mit dem Release
 reist.
+
+## Nachtrag vom 11.09.2026: der Angebot-anfordern-Kontakt
+
+Nachtrag zu den Texten oben, auf ausdrücklichen Owner-Auftrag vom 11.09.2026
+und damit die einzige Änderung an der abgenommenen Fassung B, die nach der
+Abnahme noch vorgenommen wurde. Der Auftrag lautete wörtlich, einen
+Angebot-anfordern-Link einzubauen; entschieden wurden der Ort (Store-Text,
+die drei READMEs und das Store-Flag) und die Adresse admin@infranode.dev.
+
+Je eine Zeile steht als eigener Absatz am Ende aller sechs Store-Texte:
+
+- EN: Enterprise support and paid add-ons: request a quote at admin@infranode.dev
+- DE: Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
+- FR: Support entreprise et modules payants : demande de devis à admin@infranode.dev
+
+Die Adresse steht als Text und nicht als mailto-Verweis: der Store rendert
+zwar Markdown-Links, und ob er einen mailto-Verweis genauso sauber ausgibt,
+ist nicht geprüft. Eine Adresse, die als Text dasteht, funktioniert in jedem
+Fall.
+
+Dazu ein kurzer Abschnitt in allen drei READMEs, der sagt, was geplant ist,
+und nicht, was es schon gibt: Findling bleibt AGPL, die bezahlten
+Zusatzmodule und der Support mit zugesagten Reaktionszeiten sind geplant und
+noch nicht verfügbar. Ein Fake-Door-Text, der etwas als gebaut ausgäbe, wäre
+in dem Moment gelogen, in dem jemand darauf antwortet.
+
+Der Messsatz ist unberührt: die neue Zeile nennt keine Messgröße, und die
+85,1 Prozent und die 52.111 stehen unverändert dort, wo sie standen.
+
+Nicht im Repository zu erledigen und deshalb hier nur benannt: das Flag
+"Enterprise support" im Store-Konto, für beide Findling-Apps, nach der
+Einreichung zu setzen, nach dem Muster des Connectors vom 24.08.2026.
