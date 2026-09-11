@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Abgeschlossen 11-06-PLAN.md, die EINE Box-Anfahrt: DI-10-01 geschlossen, DI-10-02 nicht, Box angehalten
-last_updated: "2026-09-10T23:59:02.600Z"
-last_activity: 2026-09-10
+stopped_at: Abgeschlossen 11-07-PLAN.md, der Upgrade-Beweis Ende zu Ende in CI (Lauf 34546421219 gruen, Index unveraendert)
+last_updated: "2026-09-11T01:05:00.000Z"
+last_activity: 2026-09-11
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 37
-  completed_plans: 31
-  percent: 82
+  completed_plans: 32
+  percent: 86
 ---
 
 # Project State
@@ -27,10 +27,27 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 
 Phase: 11 (Haertung und Store-Einreichung v1.1) — EXECUTING
 Plan: 6 of 13
-Status: 11-06 abgeschlossen, 11-05 steht aus
-Last activity: 2026-09-10
+Status: 11-07 abgeschlossen, 11-05 steht aus
+Last activity: 2026-09-11
 
-**Naechster Schritt:** 11-05, der letzte offene Plan der Welle 2. Die EINE
+**Naechster Schritt:** 11-05, der einzige offene Plan vor Welle 4. Plan 11-07
+ist am 11.09.2026 gefahren und abgeschlossen: `deploy-harp.yml` faehrt auf dem
+Ast `stable34/ubuntu-24.04` einen Upgrade-Block (`Store upgrade 0` bis
+`Store upgrade 5`), der beide Haelften aus den echten v1.0.3-Release-Assets
+installiert, den 39-Datei-Korpus indexiert, auf den HEAD-Stand upgradet und
+sechs Dinge zusichert. Lauf **34546421219**, erster Anlauf gruen, alle vier
+Aeste: Treffer je 1 fuer Belehrung, Auszug und Erinnerung, `docs` 29,
+`indexed` 29, `skipped` 7, `failed` 6, Arbeitsvorrat 0, alle fuenf Marken
+identisch (schema/index/analyzer je 1, wordlistHash `b1f64012...`, tantivy
+v0.26.0 index_format v7), kein Reindex-Banner, keine
+`start_rebuild_on_drift`-Zeile, und der Navigationseintrag aus 09-06 vorher
+abwesend und nachher da. Damit ist **Erfolgskriterium 2 der Phase** mit einer
+Laufnummer belegt statt mit einer Code-Lesung. Der Block kostet 1 min 32 s bei
+32 min 21 s Abstand zu `timeout-minutes: 45`, das also unveraendert bleibt.
+Fuer 11-11 heisst das zweierlei: bis zum Versionsbump tragen beide `info.xml`
+weiterhin 1.0.3, `occ upgrade` antwortet deshalb `No upgrade required.`, und
+der Schritt haelt beide Zweige bereit; ab dem Bump verlangt er, dass
+`installed_version` wirklich nachzieht. **REL-01 bleibt ungehakt.** Die EINE
 Box-Anfahrt (11-06) ist am 10.09.2026 gefahren und abgeschlossen: DI-10-01 ist
 geschlossen (16 Anfragen ohne Treffer plus 14 Abbrueche ergeben die 30 des neuen
 Zaehlers, aufgerechnet gegen das Nextcloud-Protokoll), DI-10-02 ist NICHT
@@ -195,6 +212,7 @@ ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 | Phase 11 P03 | 35min | 3 tasks | 3 files |
 | Phase 11 P04 | 70min | 3 tasks | 1 files |
 | Phase 11 P13 | 35min | 3 tasks | 14 files |
+| Phase 11 P07 | 55min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -357,6 +375,12 @@ Recent decisions affecting current work:
 - [Phase 11]: 11-13: php/l10n/de.json traegt 174 statt 173 Schluessel. Der 174. ist 'Other files contain this word, but none that you may open.', deutsch 'Andere Dateien enthalten dieses Wort, aber keine, die Sie oeffnen duerfen.'; massgeblich fuer 11-05 (FR-Abdeckung) und 11-08 (Katalog-Gate)
 - [Phase 11]: 11-13: Die drei Entscheidungszeilen der Phase 9 ($hasError, $hasHint, $showEmpty) sind byteweise unveraendert; der neue Zustand steht als eigene Zeile daneben und geht in keine der beiden Summen ein
 - [Phase 11]: 11-13: PHP_TREE_HASH 4a4c6f62 bleibt als Rohmesswert vom 09.09. stehen und bekommt PHP_TREE_HASH_TODAY cf56a358 neben sich; eine berichtete Vergleichszahl wird nicht retiriert, wenn der Code weiterlaeuft
+- [Phase 11]: 11-07: Der Upgrade-Block liegt hinter den sechs Store-Deinstallationszusagen und faehrt auf genau einem Ast (stable34/ubuntu-24.04); jeder Schritt nennt beide Matrixwerte in seiner eigenen if-Bedingung, weil deploy-harp.yml keine Blockbedingung kennt
+- [Phase 11]: 11-07: Der Block laeuft NICHT mit gesetztem release_tag. In diesem Modus waere die neue Haelfte dieselben Bytes wie die alte, und der Beweis waere gruen ohne gemessen zu haben; lieber gar nicht laufen als nichts messen
+- [Phase 11]: 11-07: Die Datenflagge von app_api:app:unregister kommt im ganzen Upgrade-Block nicht vor, nicht einmal als Zeichenkette in einem Kommentar, damit ein grep darueber leer bleibt (T-11-26); das Volumen des Store-Durchgangs wird mit docker volume rm beim Namen entfernt
+- [Phase 11]: 11-07: Die neue Container-Haelfte wird mit info-citest.xml registriert (Abbild dieses Commits aus der lokalen Registratur), weil backend/appinfo/info.xml bis 11-11 weiterhin image-tag 1.0.3 nennt; der Schritt prueft ausdruecklich, dass altes und neues Abbild verschieden sind
+- [Phase 11]: 11-07: Jede Zusicherung ueber Unveraendertheit braucht eine Zusicherung ueber eine Aenderung neben sich. Hier ist das der Navigationseintrag aus 09-06, sonst waere ein Upgrade, das nichts bewirkt hat, das gruenste Ergebnis
+- [Phase 11]: 11-07: Der Reindex-Zweig von D-05 wird nicht gefahren, seine Abwesenheit wird zugesichert, und das steht als Kommentar im Workflow. Bewegt sich je eine Marke, faellt die Markenzusicherung vor den Abwesenheitszusicherungen, und die Frage gehoert dem Owner
 
 ### Pending Todos
 
@@ -386,6 +410,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-10T21:19:43.230Z
-Stopped at: Abgeschlossen 11-04-PLAN.md, deploy-harp mit nativem arm64-Ast und Release-Asset-Modus
+Last session: 2026-09-11T01:05:00.000Z
+Stopped at: Abgeschlossen 11-07-PLAN.md, der Upgrade-Beweis Ende zu Ende in deploy-harp (Lauf 34546421219 gruen)
 Resume file: None

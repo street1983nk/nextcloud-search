@@ -215,7 +215,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
 
   1. Beide Apps tragen dieselbe Version, sind signiert, und eine frische Nextcloud im Versionsfenster installiert sie aus den Release-Artefakten auf amd64 und arm64 und findet ohne Handgriff Inhalte , **Stand 2026-09-10 (Plan 11-04): die Strecke steht.** `deploy-harp.yml` faehrt die Fremdinstallation auf amd64 **und nativ auf `ubuntu-24.04-arm`** (Lauf 34525240422, alle vier Aeste gruen) und kann die beiden Archive vom GitHub-Release laden statt sie lokal zu bauen (Lauf 34526436580 mit `release_tag=v1.0.3`, alle vier Aeste gruen, Zero-Config-Treffer nach einer cron-Runde). Offen bleibt nur, dass es die Artefakte von **v1.1.0** sind: das setzt Plan 11-11
-  2. Ein Upgrade von 1.0.x auf 1.1.0 laesst den bestehenden Index entweder unangetastet oder verlangt sichtbar einen Reindex; ein stiller Verlust von Indexinhalt kommt nicht vor
+  2. Ein Upgrade von 1.0.x auf 1.1.0 laesst den bestehenden Index entweder unangetastet oder verlangt sichtbar einen Reindex; ein stiller Verlust von Indexinhalt kommt nicht vor , **Stand 2026-09-11 (Plan 11-07): der Ende-zu-Ende-Beweis faehrt in CI.** `deploy-harp.yml` installiert auf dem Ast `stable34/ubuntu-24.04` beide Haelften aus den **echten v1.0.3-Release-Assets**, indexiert den 39-Datei-Korpus, bringt die Installation auf den HEAD-Stand (Dateitausch plus `occ upgrade`, Container ohne die Datenflagge neu registriert) und sichert sechs Dinge zu (Lauf **34546421219**, alle vier Aeste gruen): dieselben Trefferzahlen fuer `Belehrung`, `Auszug` und `Erinnerung` (je 1), dieselben fuenf Indexmarken, dieselben Dokumentzahlen (docs 29, indexed 29, skipped 7, failed 6), leerer Arbeitsvorrat, **kein Reindex-Banner**, **keine `start_rebuild_on_drift`-Zeile**, und als Gegenprobe der Navigationseintrag, der vorher fehlte und nachher da ist. Der Reindex-Zweig von D-05 wird bewusst NICHT gefahren; seine Abwesenheit ist die Zusicherung, und das steht im Workflow. Offen bleibt nur, dass die neue Haelfte die Version **1.1.0** traegt: bis Plan 11-11 steht in beiden `info.xml` weiterhin 1.0.3, und der Block hat fuer den Tag des Bumps bereits den zweiten Zweig
   3. Security-, Bug- und Performance-Audit sind erneut gefahren, alle Befunde ab MEDIUM gefixt, LOW dokumentiert entschieden
   4. Die Store-Texte sind kurze Faktenlisten nach der Kurztext-Regel, der Owner hat den Entwurf vor der Einreichung gesehen und abgenommen
   5. v1.1 ist eingereicht, und die Release-Artefakte im Repo entsprechen dem, was eingereicht wurde
@@ -240,7 +240,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 11-05-PLAN.md , die vollstaendige FR-Uebersetzungstabelle und das FR-Gate, Teil 1 (Welle 3, Checkpoint-Plan)
-- [ ] 11-07-PLAN.md , der Upgrade-Beweis 1.0.3 auf 1.1.0 Ende zu Ende in deploy-harp, stable34 (Welle 3)
+- [x] 11-07-PLAN.md , der Upgrade-Beweis 1.0.3 auf 1.1.0 Ende zu Ende in deploy-harp, stable34 (Welle 3). Lauf 34546421219 gruen im ersten Anlauf, sechs Zusicherungen, Index Ziffer fuer Ziffer unveraendert, der Block kostet 1 min 32 s bei 32 min 21 s Abstand zu `timeout-minutes: 45`
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -273,7 +273,7 @@ Phasen laufen in numerischer Reihenfolge: 7 -> 8 -> 9 -> 10 -> 11
 | 8. Deutsche Komposita ohne Behelf | 5/5 | Complete   | 2026-09-08 |
 | 9. Eigene Ergebnisseite | 8/8 | Complete   | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | 7/7 | Complete    | 2026-09-10 |
-| 11. Haertung und Store-Einreichung v1.1 | 6/13 | In Progress|  |
+| 11. Haertung und Store-Einreichung v1.1 | 7/13 | In Progress|  |
 
 ## Requirement Coverage
 
