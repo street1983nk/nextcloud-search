@@ -475,6 +475,19 @@ Abschnittsmarken.
 
 Textabnahme: 2026-09-11, Fassung B, Messsatz dreisprachig, FR-Gate Teil 2 von 2 abgenommen (D-06, D-07, D-08)
 
+Einreichung freigegeben: 2026-09-11 (D-10)
+
+Freigegeben auf dem Release-Commit 891bc6d, mit allen sechs Workflows grün
+(PHP 34571130182, Python 34571130132, Multi-arch 34571130185, Integration
+34571130129, Resilience 34571130176, HaRP 34571130221 mit allen vier Ästen).
+Das Auditfrontmatter weist `critical: 0` und `high: 0` aus, offen sind nur
+LOW-Befunde. Zwei Punkte gehen ausdrücklich mit und sind keine Blocker:
+DI-10-02, weil die Vorprüfung an demselben Antwortdeckel hängt wie die Fälle,
+über die sie urteilen soll, und DI-11-06, das Fenster ohne Drift-Urteil
+zwischen einem Update und dem ersten Blick auf die Einstellungsseite, mit
+Zieladresse v1.2. Der stable35-RE-CHECK vom 16.09.2026 bleibt eigener
+Merkposten; die Einreichung wartet nach D-10 nicht darauf.
+
 Der Owner hat beide Fassungen im Wortlaut gesehen und Fassung B gewählt, den
 Messsatz dreisprachig entschieden und die französischen Texte ohne Änderung
 abgenommen. Zur Prozentzahl kam kein Einwand, es bleibt bei 85,1 Prozent, und
