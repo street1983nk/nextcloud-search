@@ -1211,20 +1211,39 @@ jobs:
             docker ps -a
             exit 1
           fi
-          # The number that separates a retreat from an error loop, and it is a
-          # growth rather than a total so that whatever the container logged
-          # while the companion was still there does not count: two ordinary
-          # lines for the two passes before the state, one for the state itself,
-          # and two spare. A loop per pass would be far above five within the
-          # four minutes of the budget above.
+          # The number that separates a retreat from an error loop, counted after
+          # the announcement and not from before the retreat, because the lines
+          # before it are two different things and only one of them measures
+          # anything.
+          #
+          # The ladder of worker/poller.py:1963 writes one line per unanswered
+          # pass up to RETREAT_AFTER_ROUNDS and then exactly one announcement,
+          # which is the documented behaviour of plan 05-08. The lines of
+          # nc/queue.py ("could not hand", "could not acknowledge") and of
+          # poller.py:1198 are one off reports about the work that was in flight
+          # when the caller vanished, so how many of them there are depends on
+          # what the container happened to be doing at that second and not on
+          # whether it behaves. Counting from before the retreat therefore held
+          # the container to a number that its own state decides: the same image
+          # produced three of those lines with nothing in flight and six with one
+          # file in flight, and the second reading failed a gate that the first
+          # one passed.
+          #
+          # What this step claims is that the retreat is a retreat, and that
+          # claim is about the silence that follows the announcement.
+          # RETREAT_MAX_SECONDS is 300 s, so a container that really retreated
+          # writes nothing at all in the minute below; one line is tolerated for
+          # the one that was already on its way when the snapshot was taken.
+          announced=$(noisy_lines)
+          sleep 60
           after=$(noisy_lines)
-          grew=$((after - before))
-          if [ "${grew}" -gt 5 ]; then
-            echo "the container wrote ${grew} new warning or error lines while its caller was gone, which is an error loop and not a retreat"
+          grew=$((after - announced))
+          if [ "${grew}" -gt 1 ]; then
+            echo "the container wrote ${grew} new warning or error lines in the 60 s after it announced the retreat, which is an error loop and not a retreat"
             docker logs "${container}" 2>&1 | grep -E '^(WARNING|ERROR|CRITICAL):' | tail -n 20
             exit 1
           fi
-          echo "container ${container} is ${alive}, retreat announced, ${grew} new warning or error lines"
+          echo "container ${container} is ${alive}, retreat announced after $((announced - before)) lines, ${grew} lines in the 60 s that followed"
 
       # =====================================================================
       # The store install path, added by plan 06.1-12
@@ -2320,14 +2339,22 @@ jobs:
             docker ps -a
             exit 1
           fi
+          # Counted after the announcement, for the reason written out at the
+          # same comparison in "Uninstall 6" above: the lines before it are the
+          # documented ladder plus one off reports about work that was in flight,
+          # and their number is decided by the state of the container rather than
+          # by its behaviour. The claim of this step is the silence that follows
+          # the announcement, and that is what is measured here.
+          announced=$(noisy_lines)
+          sleep 60
           after=$(noisy_lines)
-          grew=$((after - before))
-          if [ "${grew}" -gt 5 ]; then
-            echo "the container wrote ${grew} new warning or error lines while its caller was gone, which is an error loop and not a retreat"
+          grew=$((after - announced))
+          if [ "${grew}" -gt 1 ]; then
+            echo "the container wrote ${grew} new warning or error lines in the 60 s after it announced the retreat, which is an error loop and not a retreat"
             docker logs "${container}" 2>&1 | grep -E '^(WARNING|ERROR|CRITICAL):' | tail -n 20
             exit 1
           fi
-          echo "container ${container} is ${alive}, retreat announced, ${grew} new warning or error lines"
+          echo "container ${container} is ${alive}, retreat announced after $((announced - before)) lines, ${grew} lines in the 60 s that followed"
 
       # =====================================================================
       # The upgrade proof of plan 11-07, and success criterion 2 of phase 11:
@@ -2805,6 +2832,60 @@ jobs:
             exit 1
           fi
           echo "three terms, one file each; no navigation entry; the state is on record in upgrade-before.json"
+
+      - name: Store upgrade 3b, the shipped apps this checkout does not carry
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        run: |
+          # checkAppsRequirements() of lib/private/Updater.php throws
+          # UnexpectedValueException for an app that is enabled and listed in
+          # core/shipped.json but whose appinfo cannot be read, and it disables
+          # the app instead when it is not shipped. That method runs inside
+          # doUpgrade() only, which is why it never fired here before: until the
+          # release commit of plan 11-11 both sides carried 1.0.3, occ upgrade
+          # answered ERROR_UP_TO_DATE and left before reaching it. With
+          # 1.0.3 -> 1.1.0 it gets there, and the instance died on "viewer".
+          #
+          # The cause is the test instance and not Findling. apps/ of the
+          # stable34 branch carries 31 apps, and the bundle apps that
+          # core/shipped.json lists (viewer, text, photos and the rest) are not
+          # among them: a release tarball ships them, a git checkout does not.
+          # So this instance stands in a state no user installation is ever in,
+          # and it is repaired here with the same verdict Nextcloud itself passes
+          # on a non shipped app. The repair is loud, every app it touches is
+          # named, and a silent one would be worse than the failure it removes.
+          #
+          # Both halves of Findling are excluded by name and the exclusion is
+          # checked afterwards rather than trusted: disabling one of them is the
+          # single change that would quietly empty the proof below.
+          enabled=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT appid FROM oc_appconfig WHERE configkey = 'enabled' AND configvalue <> 'no';")
+          touched=0
+          for app in ${enabled}; do
+            case "${app}" in
+              findling|findling_backend) continue ;;
+            esac
+            if [ -f "apps/${app}/appinfo/info.xml" ]; then
+              continue
+            fi
+            echo "the app ${app} is enabled but this checkout carries no apps/${app}/appinfo/info.xml; disabling it before the upgrade"
+            "${RUNNER_TEMP}/nc-occ.sh" app:disable "${app}" \
+              || sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+                   "UPDATE oc_appconfig SET configvalue = 'no' WHERE appid = '${app}' AND configkey = 'enabled';"
+            touched=$((touched + 1))
+          done
+          echo "${touched} enabled app(s) without files were disabled before the upgrade"
+
+          # The guard of this step: the repair must not have touched what the
+          # upgrade is about.
+          for half in findling findling_backend; do
+            state=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+              "SELECT configvalue FROM oc_appconfig WHERE appid = '${half}' AND configkey = 'enabled';")
+            if [ "${state}" = "no" ] || [ -z "${state}" ]; then
+              echo "::error::${half} is '${state}' after the repair, so the upgrade below would prove nothing"
+              exit 1
+            fi
+          done
+          echo "both halves are still enabled"
 
       - name: Store upgrade 4, the upgrade itself, in two halves
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
