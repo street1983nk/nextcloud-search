@@ -154,6 +154,7 @@ zwei Reihen auf zwei Architekturen mehr sagen als eine.
 | **Vergleichsmessung v1.1 gegen v1.0, ARM m7g.large** | **gemessen, Grundlast 103,2 MB gegen 691,8 MB, anon-Spitze 1.764,2 MB, `oom`/`oom_kill`/`oom_group_kill` je 0 bei `max` 21.939, p95 Stufe 8 = 2.125,5 ms gegen 2.500 ms Budget, Laufzeit 26 h 37 min gegen 18 h 56 min; vier von fünf Laststufen regressiv, benannt in Abschnitt 19 des Berichts** | 2026-09-10 |
 | **Werkzeug-Anfahrt DI-10-01 und DI-10-02, ARM m7g.large** | **gefahren, 1,97 h von 4,00 h und 0,2285 USD von 0,50 USD; DI-10-01 geschlossen (30 gemeldete Fehlschläge rechnen gegen 14 Protokollabbrüche plus 16 trefferlose Begriffe auf), DI-10-02 offen (die Vorprüfung misst einen Antwortdeckel von 26, Bilanz unverändert 6 von 10)** | 2026-09-10 |
 | Verbleib der ARM-Box nach der Vergleichsmessung | **angehalten seit 16:22:50Z, kein Abbau** (Betreiberentscheid 10.09.); Abschlusszahlen 31,05 h und 3,5969 USD netto, unter dem angehobenen Deckel von 34 h und 4,00 USD; der Abbau bekommt einen eigenen Plan in Phase 11 | 2026-09-10 |
+| **Verbleib der ARM-Box, endgültig: abgebaut** | **Korpus im Snapshot `snap-03f1d1d9ad9262704` (completed, 100 %, 51,6 GiB geschriebene Blöcke), Instanz, beide Datenträger und die Security Group nachweislich gelöscht** (Betreiberentscheid 11.09.); laufende Kosten von 9,39 auf 2,79 bis 2,99 USD je Monat | 2026-09-11 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -3863,6 +3864,45 @@ kostet nach diesem Lauf nicht mehr 19, sondern gemessene **26 h 37 min**
 | Kostendeckel | ursprünglich 30 h und 3,50 USD (Freigabe 09.09., gerissen am 10.09. um 15:20Z), angehoben auf **34 h und 4,00 USD**, greift 2026-09-10T19:20Z |
 | Datenträger | `vol-0f3bea6ca1dab68ab` 40 G und `vol-04c5b59fe9417babd` 60 G, bleiben beide |
 | Parkkosten | rund **0,3130 USD je Tag** |
+
+### Der fünfte Verbleib: abgebaut, der Korpus liegt im Snapshot
+
+**Entschieden am 11.09.2026 vom Betreiber, im Abbau-Checkpoint des Plans 11-12:
+"Ja, abbauen", mit zwei Auflagen.** Damit endet die Kette der vier vorherigen
+Verbleibe. Die Box hat vom 04.09. bis zum 11.09.2026 bestanden.
+
+| Punkt | Stand |
+|---|---|
+| Snapshot | `snap-03f1d1d9ad9262704`, `State=completed`, `Progress=100 %`, angelegt 2026-09-11T07:47:07Z, fertig um 08:38Z, also rund 52 Minuten |
+| Größe | **55.415.668.736 Byte, also 51,6 GiB geschriebene Blöcke** auf einem 60-GB-Datenträger. Die Schätzung der Phasenrecherche (25 bis 40 GB) ist damit ersetzt und nicht bestätigt: ein EBS-Snapshot bezahlt jeden Block, der je geschrieben wurde, auch den eines gelöschten Index |
+| Kosten des Snapshots | **2,79 bis 2,99 USD je Monat**, Satz 0,054 USD je GB-Monat aus der öffentlichen Bulk-Preisliste (`EUC1-EBS:SnapshotUsage`, gültig ab 2026-09-01), nicht geschätzt |
+| Ersparnis | gegen 0,3130 USD je Tag geparkt, also 9,39 USD je Monat: **6,40 bis 6,60 USD je Monat** |
+| Instanz | `i-06b1d913f5c6f669b`, `state=terminated`, gegen die API gelesen |
+| Datenträger | `vol-04c5b59fe9417babd` (60 GB Korpus) und `vol-0f3bea6ca1dab68ab` (40 GB System, ging mit der Instanz), beide `InvalidVolume.NotFound` |
+| Security Group | `sg-0e782f5233d73a847`, `InvalidGroup.NotFound` |
+| Zustandsdatei | `~/.findling-loadtest/box.env` ist gelöscht; ihr vollständiger Inhalt steht in `docs/measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt`, Abschnitt 5 |
+| Kostenüberblick nach dem Abbau | über alle 17 freigeschalteten Regionen: keine Instanz, kein Datenträger, keine Elastic IP, keine eigene AMI, keine weitere Netzwerkschnittstelle. **Genau ein Snapshot, und das ist der Korpus** |
+
+**Die erste Auflage des Betreibers: der Snapshot bleibt dauerhaft.** Die
+v1.2-Messung braucht ihn, weil sie sonst zwei Maschinen statt zweier Fassungen
+vergleicht. Wiedervorlage nach der v1.2-Messung: löschen oder in die
+Archivstufe legen (0,0135 USD je GB-Monat, also rund 0,70 USD je Monat, dafür 90
+Tage Mindestlaufzeit, rund 1,67 USD je Abruf und Stunden bis Tage Wartezeit).
+
+**Die zweite Auflage: außer dem Snapshot entstehen keine Kosten.** Der
+Kostenüberblick oben ist der Beleg dafür, und er ist nach dem Abbau erhoben,
+nicht vorher.
+
+**Was ein Wiederaufbau kostet, und warum das kein Restposten ist:** aus dem
+Snapshot entsteht in Minuten wieder ein Datenträger, aber **das Runbook dafür
+gehört zur v1.2-Messplanung und existiert heute nicht.** Nicht im Snapshot liegt
+die Systemplatte, also `/home/ubuntu/work` mit den gefahrenen Skripten der
+Phasen 5 bis 6.1; sie ist vor dem Abbau lokal gesichert worden, außerhalb des
+Arbeitsbaums, weil Protokolle einer Testinstanz vor einer Aufnahme in ein
+öffentliches Repositorium eine eigene Durchsicht auf Geheimnisse brauchen. Die
+lokale Registry mit den Messabbildern lag dagegen auf dem Datenträger und ist
+im Snapshot. Der A-Record `loadtest.infranode.dev` zeigt seit dem Abbau ins
+Leere; er bleibt als Merkposten stehen.
 
 ### Die Vergleichsmessung v1.1 gegen v1.0, 09. und 10.09.2026
 

@@ -330,3 +330,86 @@ geantwortet, und zwei auflagen dazu gestellt:
 die frage des checkpoints nach der wartewoche (open question 6 der recherche,
 store-stand und rueckfrage der store-betreiber) ist damit vom owner entschieden
 und nicht von diesem plan.
+
+-- 7 der abbau und die drei nichtexistenz-nachweise --
+aws_box.sh destroy, 2026-09-11, mit FINDLING_STATE_BACKUP auf diese datei.
+der erste durchgang hat abgebaut und die drei ressourcen geprueft:
+  aws_box: the history of this box is backed up in docs/measurements/.../07-snapshot-und-abbau.txt
+  aws_box: the data volume goes after the instance, not before
+  aws_box: terminating instance i-06b1d913f5c6f669b
+  aws_box: deleting volume vol-04c5b59fe9417babd
+  aws_box: deleting security group sg-0e782f5233d73a847
+  aws_box: instance i-06b1d913f5c6f669b is gone, verified against the api
+  aws_box: volume vol-04c5b59fe9417babd is gone, verified against the api
+  aws_box: security group sg-0e782f5233d73a847 is gone, verified against the api
+er endete trotzdem mit exit 1, und der grund ist ein befund und kein fehler des
+abbaus: der tag-sweep meldete beide volumes als ueberbleibsel, waehrend die api
+fuer beide InvalidVolume.NotFound antwortete. describe-tags liest aus einem
+index, der nachlaeuft; die tags einer gerade geloeschten ressource kommen noch
+eine weile zurueck, genau wie die tags der terminierten instanz. das werkzeug
+ist daraufhin in diesem plan korrigiert worden: der sweep liest jeden treffer
+nach seiner art zurueck und zaehlt nur noch, was auch antwortet. was nicht
+gelesen werden kann, bleibt ein ueberbleibsel.
+
+die drei nachweise, jeder in der form, die aws_box.sh kennt, einzeln gegen die
+api gelesen am 2026-09-11:
+  instanz  i-06b1d913f5c6f669b   state=terminated
+  volume   vol-04c5b59fe9417babd InvalidVolume.NotFound
+  gruppe   sg-0e782f5233d73a847  InvalidGroup.NotFound
+und der vierte, den die zustandsdatei nie kannte, weil er mit der instanz ging
+(DeleteOnTermination auf der systemplatte):
+  volume   vol-0f3bea6ca1dab68ab InvalidVolume.NotFound
+
+der zweite durchgang, nach der korrektur, endete mit exit 0:
+  aws_box: expected to outlive this box, tagged purpose=findling-corpus-keep:
+    snap-03f1d1d9ad9262704
+  aws_box: volume vol-04c5b59fe9417babd carries purpose=findling-phase5, the resource itself is gone
+  aws_box: volume vol-0f3bea6ca1dab68ab carries purpose=findling-phase5, the resource itself is gone
+  aws_box: nothing that carries purpose=findling-phase5 exists any more
+  aws_box: every resource of this run is gone and box.env is removed
+exit 0 heisst hier zweierlei: kein ueberbleibsel, und der tag-sweep hat den
+snapshot nicht fuer eine leiche gehalten. die zustandsdatei ist damit geloescht;
+ihr inhalt steht in abschnitt 5 dieser datei.
+
+-- 8 der snapshot nach dem abbau --
+eigene abfrage nach dem destroy, 2026-09-11:
+  snap-03f1d1d9ad9262704  60  completed  2026-09-11T07:47:07Z
+  tags: Name=findling-corpus-2026-09, purpose=findling-corpus-keep
+der snapshot hat den abbau ueberlebt. er ist nach dem abbau die einzige
+verbindung zur grundlinie v1.0 und zum korpus der 52.111 dokumente.
+
+-- 9 der kostenueberblick, auflage 2 des owners --
+gelesen am 2026-09-11, nach dem abbau, ueber alle 17 freigeschalteten regionen
+dieses kontos (je region instanzen, volumes, eigene snapshots, elastic ips):
+  eu-central-1: instanzen=0 volumes=0 snapshots=1 eips=0
+  alle uebrigen 16 regionen: 0 0 0 0
+
+im einzelnen in eu-central-1:
+  instanzen              nur i-06b1d913f5c6f669b mit state=terminated, kostet
+                         nichts und faellt von selbst aus der api
+  volumes                keine
+  snapshots              genau einer: snap-03f1d1d9ad9262704
+  elastic ips            keine
+  netzwerkschnittstellen keine
+  eigene AMIs            keine
+  key pair               findling-loadtest (key-0ca35fb1b44e5cd72) besteht
+                         weiter. ein key pair kostet nichts; der private teil
+                         liegt unveraendert unter C:/Users/Student/.ssh/
+  security groups        nur die default-gruppe der VPC, kostenlos und nicht
+                         loeschbar
+
+laufende kosten dieses projekts nach dem abbau:
+  2,79 bis 2,99 USD je monat fuer den snapshot, und sonst nichts.
+vorher geparkt: 9,39 USD je monat. ersparnis 6,40 bis 6,60 USD je monat.
+
+-- 10 was ein wiederaufbau braucht, damit es niemand sucht --
+aus dem snapshot ein volume: aws ec2 create-volume --snapshot-id
+snap-03f1d1d9ad9262704 --availability-zone <zone> --volume-type gp3. das volume
+traegt danach wieder den tag des snapshots und muss auf purpose=findling-phase5
+umgetaggt werden, wenn es ein spaeteres destroy mitnehmen soll.
+was NICHT im snapshot liegt: die systemplatte, also /home/ubuntu/work, die
+lokale registry ist dagegen auf dem datentraeger und damit drin. das
+wiederaufbau-runbook gehoert zur v1.2-messplanung und existiert heute nicht.
+ein wiederaufbau kostet also zeit und nachdenken, nicht nur geld.
+der A-record loadtest.infranode.dev zeigt seit dem abbau ins leere. er bleibt
+als merkposten stehen und ist beim naechsten aufbau neu zu setzen.
