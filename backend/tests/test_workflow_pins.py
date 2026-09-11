@@ -250,15 +250,33 @@ def test_both_directories_exist_and_carry_files() -> None:
     assert len([name for name in names if name.startswith(".github/actions/")]) >= 1
 
 
+# The workflows that run no third party code at all, each with the reason it
+# may. An entry here is asserted twice below: it yields no uses line to the
+# scanner, and its source carries no "uses:" text either, so a file that starts
+# using an action has to leave this list before the pin rules apply to it.
+#
+#   issue-notify.yml   one curl against ntfy.sh, no checkout and no action; it
+#                      exists so that a new issue reaches the owner within a
+#                      minute instead of at the next digest triage (2026-09-11)
+NO_USES_FILES = frozenset({".github/workflows/issue-notify.yml"})
+
+
 def test_every_file_carries_at_least_one_uses_line() -> None:
     # The second half of the anti vacuity clause, one level down: a file that is
     # read but whose uses lines are not recognised produces no finding either.
-    # Every workflow of this repository checks something out, so an empty result
-    # means the pattern stopped matching and not that the file stopped using
-    # third party code.
-    without = [name for name, source in _sources() if not collect_uses(name, source)]
+    # Every workflow of this repository that runs third party code checks
+    # something out, so an empty result outside the named list means the pattern
+    # stopped matching and not that the file stopped using third party code.
+    without = {name for name, source in _sources() if not collect_uses(name, source)}
 
-    assert without == []
+    assert without == set(NO_USES_FILES)
+
+    # And the exception cannot hide a scanner defect: a listed file must be
+    # free of the very word the scanner looks for, otherwise it belongs under
+    # the pin rules and this line is what says so.
+    for name, source in _sources():
+        if name in NO_USES_FILES:
+            assert "uses:" not in source, name
 
 
 def test_no_pin_is_movable_and_every_pin_says_which_version_it_is() -> None:
