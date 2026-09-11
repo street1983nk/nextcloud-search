@@ -93,3 +93,31 @@ nachweislich abgebrochen ist, oder eine Zeile im Bericht, die die Begriffe ohne
 Treffer benennt. Kein Blocker, keine Box.
 
 ---
+
+## DI-11-04 (gefunden in Plan 11-07): zwei Log-Artefakte heissen "harp-logs-stable34"
+
+**Gefunden:** beim Ablegen der Upgrade-Beweisdateien in das Log-Artefakt von
+`deploy-harp.yml`.
+
+**Was:** Der Upload-Schritt nennt das Artefakt
+`harp-logs-${{ matrix.server-version }}`. Seit Plan 11-04 gibt es zwei Aeste mit
+`server-version: stable34` (amd64 und arm64), also zwei Artefakte gleichen
+Namens. Im Lauf 34546421219 sind es 13.833 Byte (der amd64-Ast, mit
+`upgrade-before.json`, `upgrade-after.json`, dem Urteil von `occ upgrade` und
+dem Containerprotokoll) und 7.825 Byte (der arm64-Ast). Der Upload schlaegt
+nicht fehl, beide liegen nebeneinander, aber wer "das Artefakt
+harp-logs-stable34" herunterlaedt, weiss nicht, welches der beiden er bekommt,
+und genau in diesem Namen liegen ab jetzt die Beweisdateien des
+Upgrade-Blocks.
+
+**Warum nicht dort behoben:** Der Name ist seit Plan 11-04 so, gehoert dem
+Upload-Schritt und nicht dem Upgrade-Block, und die Regel dieses Plans war,
+keinen bestehenden Schritt umzubauen. Die Aenderung ist eine Zeile
+(`harp-logs-${{ matrix.server-version }}-${{ matrix.runner }}`), aber sie
+aendert den Namen, unter dem jeder frueherer Bericht das Artefakt fuehrt.
+
+**Wohin es gehoert:** zum Audit der Phase 11 (Plan 11-10), gemeinsam mit der
+Frage, ob der Runner in den Artefaktnamen soll oder ob der Upgrade-Block ein
+eigenes Artefakt bekommt.
+
+---
