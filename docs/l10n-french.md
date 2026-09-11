@@ -333,7 +333,20 @@ zerfällt in zwei Teile: den Katalog (diese Datei) und die Texte drumherum
 (`docs/store-listing.md`, `README.fr.md`, die französischen Teile von `info.xml`, Plan
 11-09).
 
-<!-- Die Abnahmezeile traegt Plan 11-05, Task 2, nach dem Gate hier ein. -->
+**FR-Gate abgenommen: 2026-09-11, Teil 1 von 2 (Katalog), D-07**
+
+Der Owner, französischer Muttersprachler, hat die Tabelle vollständig gelesen und ohne
+Änderung abgenommen. Keine Zeile ist anders zu lauten, keine ist hinzugekommen und keine
+weggefallen; die Tabelle trägt vor und nach der Abnahme dieselben 173 Zeilen. Die drei
+Wortwahl-Entscheidungen, die eine Entscheidung und keine Übersetzung sind, sind dabei
+ausdrücklich bestätigt worden: `le service` für "the backend", `passage` für "run" und
+`un processus de traitement` für "a worker".
+
+Die maschinellen Prüfungen sind nach der Abnahme erneut gefahren worden und stehen
+unverändert so, wie sie im Abschnitt "Maschinelle Prüfungen" stehen.
+
+Teil 2 von 2 (Store-Text, `README.fr.md`, die französischen Teile von `info.xml`) steht
+aus und ist Gegenstand von Plan 11-09.
 
 ## Warum die Tabelle der Ergebnisseite 24 Zeilen hat
 
