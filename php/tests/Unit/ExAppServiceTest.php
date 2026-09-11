@@ -587,4 +587,54 @@ final class ExAppServiceTest extends TestCase {
 			'the cleaning stopped preserving the length, which is what these offsets rely on',
 		);
 	}
+
+	/**
+	 * The other half of migration Version001100Date20260911000000.
+	 *
+	 * That migration drops the recorded container version when this half is
+	 * updated, and the reason it drops it rather than replacing it is that a
+	 * real drift has to keep being a drift. These two tests are that sentence
+	 * as assertions: what a recorded version that disagrees still produces, and
+	 * that an answering container still gets recorded. They belong here and not
+	 * next to the migration, because this is the class that decides both.
+	 */
+	private function serviceWithVersions(string $own, IAppConfig $appConfig): ExAppService {
+		$appManager = $this->createMock(IAppManager::class);
+		$appManager->method('getAppVersion')->willReturn($own);
+
+		return new ExAppService(
+			$appManager,
+			$this->createMock(IUserManager::class),
+			$appConfig,
+			$this->createMock(LoggerInterface::class),
+		);
+	}
+
+	public function testARecordedVersionThatDisagreesIsStillADrift(): void {
+		// The negative case of the migration, and the one the release of 1.1.0
+		// must not have weakened: an instance that updated one half only still
+		// gets no hits, and both numbers travel with the verdict so that the
+		// admin can act on it.
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getValueString')->willReturn('1.0.3');
+
+		$drift = $this->serviceWithVersions('1.1.0', $appConfig)->driftOnRecord();
+
+		self::assertSame(['companion' => '1.1.0', 'container' => '1.0.3'], $drift);
+	}
+
+	public function testAnAnsweringContainerIsRecordedAgainAfterTheMigrationDroppedIt(): void {
+		// What refills the value the migration dropped, and the only thing that
+		// ever does: one answer of GET /status handed to lockstep.
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getValueString')->willReturn('');
+		$appConfig->expects(self::once())
+			->method('setValueString')
+			->with('findling', ExAppService::KEY_BACKEND_VERSION, '1.1.0');
+
+		$verdict = $this->serviceWithVersions('1.1.0', $appConfig)->lockstep(['appVersion' => '1.1.0']);
+
+		self::assertSame(ExAppService::LOCKSTEP_MATCH, $verdict['state']);
+		self::assertSame('1.1.0', $verdict['container']);
+	}
 }

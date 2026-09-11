@@ -180,10 +180,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 #
 # Both are asserted below, and each one asserts something the other cannot. The
 # figure above keeps this file honest against the raw data of the run. The
-# figure here keeps the recipe unchangeable against a real tree of 58 files,
-# which is what the assertion was for, and it is what the next change to the
-# PHP half has to move.
-PHP_TREE_HASH_TODAY = "cf56a358929b9d6205be84466ed7815eae2391d4ad8503e8d6cfe78df4a41a11"
+# figure here keeps the recipe unchangeable against a real tree, which is what
+# the assertion was for, and it is what the next change to the PHP half has to
+# move.
+#
+# Moved on 11.09.2026 by plan 11-11, and this time the count moved with it: the
+# migration Version001100Date20260911000000 and its test are two files that did
+# not exist on 10.09.2026. So the count needs the same split the hash has had
+# since the day before, for the same reason. PHP_FILES stays at the 58 of the
+# run because "dateien: 58" stands in rohdaten/40b-baumhash.txt and a reported
+# measurement figure is not rewritten when the code moves on.
+PHP_FILES_TODAY = 60
+PHP_TREE_HASH_TODAY = "5a7efed43af75aedc2145613484fc107e70cd2eb095b7ccd1798b6bbe48e0639"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
@@ -351,15 +359,18 @@ def test_the_recipe_reproduces_the_tree_hash_of_the_php_half() -> None:
     nothing. The figure of the run is held against the raw data it was read
     out of, because a reported measurement figure is not rewritten when the
     code moves on: plan 11-13 built the sentence of DI-07-03 into the PHP half,
-    which changed the bytes of eight of these 58 files and the count of none.
+    which changed the bytes of eight of these 58 files and the count of none,
+    and plan 11-11 then added two files that did not exist at all.
     """
     count, hexdigest = reading(run_the_recipe(REPO_ROOT / "php", "**/*.php"))
-    assert count == PHP_FILES
+    assert count == PHP_FILES_TODAY
     assert hexdigest == PHP_TREE_HASH_TODAY
 
-    # And the figure of the run against the file it was read out of, so that
-    # the constant and the report cannot part company unnoticed.
-    assert f"baumhash: {PHP_TREE_HASH}" in BAUMHASH_RAW.read_text(encoding="utf-8")
+    # And both figures of the run against the file they were read out of, so
+    # that the constants and the report cannot part company unnoticed.
+    raw = BAUMHASH_RAW.read_text(encoding="utf-8")
+    assert f"baumhash: {PHP_TREE_HASH}" in raw
+    assert f"dateien: {PHP_FILES}" in raw
     assert PHP_TREE_HASH != PHP_TREE_HASH_TODAY, (
         "the two figures are the same again, so the second one has lost its reason to exist"
     )

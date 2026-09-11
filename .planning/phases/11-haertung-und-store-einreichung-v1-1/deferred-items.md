@@ -248,6 +248,50 @@ Release-Tag ersetzt ein seltenes Flattern durch ein neues Risiko.
 
 **Der Merker für Plan 11-11:** geht der pgsql-Ast auf dem Release-Commit rot, ist
 die erste Handlung eine **Wiederholung** und nicht eine Fehlersuche im Erzeugnis.
+
+---
+
+## DI-11-06 (gefunden in Plan 11-11, im Upgrade-Beweis): die Suche kennt die Version des Containers nur vom Hörensagen
+
+**VERDIKT 11.09.2026: offen, Zieladresse v1.2** (Owner-Entscheid vom selben Tag,
+zusammen mit der Freigabe des Fixes unten).
+
+**Gefunden:** im Upgrade-Beweis von `deploy-harp.yml`, der mit dem Versionsbump
+auf 1.1.0 zum ersten Mal einen echten Minor-Sprung fuhr.
+
+**Was:** `SearchService` entscheidet über eine Versionsdrift, ohne den Container
+zu fragen. Gelesen wird `oc_appconfig.backend_app_version`, also die Antwort,
+die der Container gegeben hat, als ihn zuletzt etwas gefragt hat. Das Einzige,
+was ihn je fragt, ist die Einstellungsseite über `GET /status`; ein
+`php/lib/BackgroundJob/` gibt es nicht.
+
+**Was daraus in Plan 11-11 wurde:** Der Wert überlebte das App-Update und
+beschrieb einen Container von vorher. Gemessen: Companion 1.1.0, Marke 1.0.3,
+AppAPI meldet den Container als 1.1.0, und dreißig Kanariensuchen kamen leer
+zurück. Behoben ist das durch die Migration
+`Version001100Date20260911000000`, die die veraltete Marke verwirft statt sie zu
+raten.
+
+**Was offen bleibt:** Zwischen dem Update und dem ersten Öffnen der
+Einstellungsseite hat die Suche keine Marke und damit kein Drift-Urteil. Das ist
+kein Loch, das der Fix gerissen hat: Jede Instanz, deren Einstellungsseite nie
+geöffnet wurde, steht seit jeher so da. Es ist aber ein Fenster, in dem ein
+Nutzer, der nur eine Hälfte aktualisiert, Treffer über einen Protokollbruch
+hinweg bekommen könnte.
+
+**Der Weg, der es schließt:** die Version in der Antwort mitführen, die die Suche
+ohnehin holt, statt sie getrennt zu erfragen. Dann ist die Marke bei jeder Suche
+frisch und der Sonderfall verschwindet.
+
+**Warum nicht in dieser Phase:** Das ist eine Protokolländerung an beiden
+Hälften, drei Tage vor der Abgabe, und sie berührt genau den Pfad, auf dem der
+gerade gefundene Fehler saß.
+
+**Der Merker für die nächste Minor-Version:** Solange die Marke so gepflegt wird
+wie heute, braucht **jeder** Minor-Sprung eine Migration nach dem Muster von
+`Version001100Date20260911000000`. Der Satz steht auch im Klassenkommentar
+dieser Migration, weil das die Datei ist, die jemand liest, wenn er die nächste
+schreibt.
 Erst wenn die Wiederholung ebenfalls rot ist, ist es ein Befund.
 
 **Wohin es gehört:** die v1.2-Härtung, als kleiner Schritt am Mutationsblock von
