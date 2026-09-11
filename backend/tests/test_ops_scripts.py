@@ -314,6 +314,26 @@ def test_the_aws_snapshot_waits_with_the_waiter_and_reads_the_state_back_itself(
     assert "CORPUS_SNAPSHOT_ID=" in body
 
 
+def test_the_aws_snapshot_can_read_back_one_that_outlasted_the_waiter() -> None:
+    """The waiter gives up after ten minutes, and the snapshot of this box took hours.
+
+    It stood at 8 percent when the waiter gave up on 2026-09-11. A subcommand
+    that can only create would leave one way out of that state, and it would be
+    a second snapshot and a second invoice. So the id can be handed in, and
+    then the subcommand does only the part that was left over: the read back,
+    the check that the snapshot belongs to this volume, and the state file.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    body = text.split("cmd_snapshot() {", 1)[1].split("\n# Gone has three shapes", 1)[0]
+    assert 'snapshot_id="${1:-}"' in body
+    # Handed in means created nothing, so the creation sits inside the branch
+    # that only runs when no id was given.
+    assert body.index('snapshot_id="${1:-}"') < body.index("create-snapshot")
+    assert "was handed in, so nothing is created here" in body
+    assert '"$snapshot_volume" != "$VOLUME_ID"' in body
+    assert 'snapshot) cmd_snapshot "$@" ;;' in text
+
+
 def test_the_aws_snapshot_carries_a_tag_the_sweep_of_destroy_does_not_trip_over() -> None:
     """The snapshot is the one resource of this run that is meant to outlive the box.
 

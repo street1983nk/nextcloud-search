@@ -159,6 +159,7 @@ usage() {
     echo "  stop     park the box, then write the uptime and its cost down" >&2
     echo "  start    wake it, print the new address, move the ssh rule along" >&2
     echo "  snapshot snapshot the data volume of a stopped box, then read it back" >&2
+    echo "           snapshot <id> creates nothing and only reads that one back" >&2
     echo "  destroy  delete volume, instance and security group, then verify" >&2
     printf 'the credentials are read from the environment: %s and %s\n' \
         'AWS_ACCESS_KEY_ID' 'AWS_SECRET_ACCESS_KEY' >&2
@@ -654,34 +655,48 @@ cmd_snapshot() {
     require_state
     : "${VOLUME_ID:?volume id fehlt in $STATE_FILE}"
 
-    # The state is the precondition and not a note in a plan. A snapshot of an
-    # attached volume that is being written to is crash consistent and nothing
-    # more; at a stopped instance the filesystem is quiet and the copy is clean.
-    # This is also the one thing that cannot be made up for afterwards, because
-    # a broken snapshot looks exactly like a good one until it is restored.
-    state=$(ec2 describe-instances --instance-ids "$BOX_INSTANCE_ID" | json '
+    taken_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    # A snapshot of tens of gigabytes outlasts the waiter of the cli, which
+    # gives up after ten minutes: the first snapshot of this volume stood at 8
+    # percent when it did, on 2026-09-11, and it ran for hours. Running the
+    # subcommand again would be a second snapshot and a second invoice, so the
+    # id of an existing one can be handed in instead. Then this creates nothing
+    # and does only the part that was left over: read it back, check that it
+    # belongs to this volume, and write it into the state file.
+    snapshot_id="${1:-}"
+    if [ -n "$snapshot_id" ]; then
+        echo "aws_box: $snapshot_id was handed in, so nothing is created here"
+    else
+        # The state is the precondition and not a note in a plan. A snapshot of
+        # an attached volume that is being written to is crash consistent and
+        # nothing more; at a stopped instance the filesystem is quiet and the
+        # copy is clean. This is also the one thing that cannot be made up for
+        # afterwards, because a broken snapshot looks exactly like a good one
+        # until it is restored. It guards the moment of creation, which is the
+        # moment the content of the snapshot is fixed.
+        state=$(ec2 describe-instances --instance-ids "$BOX_INSTANCE_ID" | json '
 import json
 import sys
 
 instance = json.load(sys.stdin)["Reservations"][0]["Instances"][0]
 print(instance["State"]["Name"])
 ')
-    if [ "$state" != 'stopped' ]; then
-        echo "aws_box: instance $BOX_INSTANCE_ID is $state, and this refuses to" >&2
-        echo "snapshot a volume under a box that is not stopped: the copy would be" >&2
-        echo "crash consistent, and nothing would say so afterwards" >&2
-        exit 1
-    fi
+        if [ "$state" != 'stopped' ]; then
+            echo "aws_box: instance $BOX_INSTANCE_ID is $state, and this refuses to" >&2
+            echo "snapshot a volume under a box that is not stopped: the copy would be" >&2
+            echo "crash consistent, and nothing would say so afterwards" >&2
+            exit 1
+        fi
 
-    echo "aws_box: snapshotting $VOLUME_ID, the data volume of $BOX_INSTANCE_ID"
-    taken_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    snapshot_id=$(ec2 create-snapshot \
-        --volume-id "$VOLUME_ID" \
-        --description "$SNAPSHOT_DESCRIPTION" \
-        --tag-specifications \
-        "ResourceType=snapshot,Tags=[{Key=Name,Value=$SNAPSHOT_NAME},{Key=$TAG_KEY,Value=$KEEP_TAG_VALUE}]" \
-        | json 'import json,sys; print(json.load(sys.stdin)["SnapshotId"])')
-    echo "aws_box: snapshot $snapshot_id is being taken, tag $TAG_KEY=$KEEP_TAG_VALUE"
+        echo "aws_box: snapshotting $VOLUME_ID, the data volume of $BOX_INSTANCE_ID"
+        snapshot_id=$(ec2 create-snapshot \
+            --volume-id "$VOLUME_ID" \
+            --description "$SNAPSHOT_DESCRIPTION" \
+            --tag-specifications \
+            "ResourceType=snapshot,Tags=[{Key=Name,Value=$SNAPSHOT_NAME},{Key=$TAG_KEY,Value=$KEEP_TAG_VALUE}]" \
+            | json 'import json,sys; print(json.load(sys.stdin)["SnapshotId"])')
+        echo "aws_box: snapshot $snapshot_id is being taken, tag $TAG_KEY=$KEEP_TAG_VALUE"
+    fi
 
     # The waiter of the cli and no loop of our own, house rule since 2026-09-04.
     # It polls every 15 seconds and gives up after a bounded number of tries, so
@@ -713,6 +728,15 @@ print('Description %s' % snapshot.get('Description', ''))
 ")
     echo "$details"
     snapshot_state=$(printf '%s' "$details" | sed -n 's/^State  *//p')
+    # Only meaningful on the path where the id was handed in, and there it is
+    # the check that keeps a typo from verifying a stranger: a snapshot of some
+    # other volume would read back completed just as happily.
+    snapshot_volume=$(printf '%s' "$details" | sed -n 's/^VolumeId  *//p')
+    if [ "$snapshot_volume" != "$VOLUME_ID" ]; then
+        echo "aws_box: $snapshot_id belongs to $snapshot_volume and not to the data" >&2
+        echo "volume $VOLUME_ID of this box" >&2
+        exit 1
+    fi
     if [ "$waiter" -ne 0 ]; then
         echo "aws_box: the waiter gave up before the snapshot did, which is a limit"
         echo "of the cli and not a verdict: the read back above is the verdict"
@@ -966,7 +990,7 @@ case "$COMMAND" in
     status) cmd_status ;;
     stop) cmd_stop ;;
     start) cmd_start ;;
-    snapshot) cmd_snapshot ;;
+    snapshot) cmd_snapshot "$@" ;;
     destroy) cmd_destroy "$@" ;;
     '')
         echo "aws_box: one of the eight subcommands is required" >&2
