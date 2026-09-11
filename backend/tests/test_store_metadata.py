@@ -101,6 +101,14 @@ PHP_INFO = REPO_ROOT / "php" / "appinfo" / "info.xml"
 BACKEND_INFO = REPO_ROOT / "backend" / "appinfo" / "info.xml"
 README = REPO_ROOT / "README.en.md"  # the English edition; README.md is German since 2026-09-06
 
+# The other two editions. They are constants since 11.09.2026, because the
+# owner decided in plan 11-09 that the measured sentence is three-lingual:
+# until then these two files carried the qualitative claim alone and no gate
+# read them, so the equal footing of the three READMEs was a rule in CLAUDE.md
+# and nothing more.
+README_DE = REPO_ROOT / "README.md"
+README_FR = REPO_ROOT / "README.fr.md"
+
 # The six store texts in one German document, side by side in three languages.
 # The rule of E-H2 reaches it too: it is German prose that a reader reads.
 STORE_LISTING = REPO_ROOT / "docs" / "store-listing.md"
@@ -271,14 +279,37 @@ STORE_LICENCES = frozenset(
     }
 )
 
-# The sentence of plan 06-11 (the semantic full run, superseding 05-14), quoted and
-# not paraphrased. It is compared after
-# the whitespace of every side has been collapsed, because README.md wraps its
+# The sentence of the comparison measurement of 09. and 10.09.2026 (superseding the
+# semantic full run of plan 06-11), quoted and not paraphrased. It is compared after
+# the whitespace of every side has been collapsed, because a README wraps its
 # lines at a different width than an info.xml does and a line break is not a
 # difference in what the sentence says.
+#
+# Two of its numbers moved with v1.1, and each one has a raw file in
+# docs/measurements/2026-09-vergleichsmessung-m7g/: 51,961 documents became 52,111
+# (rohdaten/48-vektorbestand.txt) and the peak of 1,813 MB became 1,764 MB
+# (rohdaten/00-ende.txt). The hard limit is the kernel's and did not move. The
+# figure is the one of the run this sentence describes: plan 11-06 measured 52,137
+# later on the same box, after a corpus that was uploaded once the run was over.
 MEASURED_SENTENCE = (
-    "On a 4-GB ARM64 box with 51,961 indexed documents and the semantic search active, the container "
-    "peaked at 1,813 MB of resident anonymous memory, under a hard 2 GB limit enforced by the kernel."
+    "On a 4-GB ARM64 box with 52,111 indexed documents and the semantic search active, the container "
+    "peaked at 1,764 MB of resident anonymous memory, under a hard 2 GB limit enforced by the kernel."
+)
+
+# The same sentence in the other two languages, owner decision of 11.09.2026 in
+# plan 11-09. Each language writes the numbers the way it writes numbers: 52.111
+# and 1.764 MB in German, 52 111 and 1 764 Mo in French. The wordings are not
+# translations made here, they are the ones the owner took at the text checkpoint,
+# and the French one follows the wording decisions of docs/l10n-french.md.
+MEASURED_SENTENCE_DE = (
+    "Auf einer 4-GB-ARM64-Box mit 52.111 indexierten Dokumenten und aktiver semantischer Suche lag die "
+    "Spitze des Containers bei 1.764 MB residentem anonymem Speicher, unter einer harten 2-GB-Grenze, "
+    "die der Kernel durchsetzt."
+)
+MEASURED_SENTENCE_FR = (
+    "Sur une machine ARM64 de 4 Go avec 52 111 documents indexés et la recherche sémantique active, le "
+    "conteneur a atteint un pic de 1 764 Mo de mémoire anonyme résidente, sous une limite stricte de "
+    "2 Go imposée par le noyau."
 )
 
 
@@ -636,18 +667,26 @@ def scan_privacy_paragraph(name: str, source: str) -> list[str]:
     ]
 
 
-def scan_measured_sentence(name: str, source: str) -> list[str]:
+def scan_measured_sentence(name: str, source: str, sentence: str = MEASURED_SENTENCE) -> list[str]:
     """The one sentence whose number must not drift away from the measurement.
 
     Until 07.09.2026 the sentence stood in three files, README.en.md and the
     English description of both halves, and this gate held them equal. The
     owner decided on 07.09.2026 that the store descriptions are short fact
-    lists and carry no measurement narrative, so the sentence lives in
-    README.en.md alone now and the numbers stay in docs/performance.md. The
-    comparison still collapses whitespace first, because a line break says
+    lists and carry no measurement narrative, so the sentence lived in
+    README.en.md alone and the numbers stayed in docs/performance.md.
+
+    Since 11.09.2026 it stands in all three READMEs, one wording per language,
+    and the wording is an argument here: one call per file, so a README that
+    loses the sentence or keeps an old number is a red test rather than a
+    reading. The store descriptions are untouched by that. They carry the one
+    measured number of plan 11-09, the idle base load, inside their short fact
+    list and no sentence at all.
+
+    The comparison still collapses whitespace first, because a line break says
     nothing about what the sentence says.
     """
-    return [] if MEASURED_SENTENCE in collapse(source) else [f"{name}: does not carry the measured sentence of 06-11"]
+    return [] if sentence in collapse(source) else [f"{name}: does not carry the measured sentence of the v1.1 run"]
 
 
 def _sources() -> list[tuple[str, str]]:
@@ -691,11 +730,32 @@ def test_both_info_files_keep_the_schema_edges_and_all_three_languages() -> None
     assert violations == []
 
 
+def test_the_two_other_readmes_exist_before_their_sentences_are_judged() -> None:
+    # The anti vacuity clause of the three-lingual sentence. The scanner judges
+    # a text, and a file that is gone has no text to judge, so without this the
+    # two tests below would be green over a tree that lost both files.
+    missing = [path.name for path in (README_DE, README_FR) if not path.is_file()]
+
+    assert missing == []
+
+
 def test_the_measured_sentence_stands_in_the_readme() -> None:
     # Owner decision of 07.09.2026: the store descriptions are short fact
-    # lists, so the measured sentence is bound to README.en.md alone and the
-    # store texts carry only the plain hardware claim next to it.
+    # lists, so the measured sentence lives in the READMEs and not in an
+    # info.xml. Since 11.09.2026 it lives in all three of them.
     assert scan_measured_sentence("README.en.md", README.read_text(encoding="utf-8")) == []
+
+
+def test_the_measured_sentence_stands_in_the_german_readme() -> None:
+    source = README_DE.read_text(encoding="utf-8")
+
+    assert scan_measured_sentence("README.md", source, MEASURED_SENTENCE_DE) == []
+
+
+def test_the_measured_sentence_stands_in_the_french_readme() -> None:
+    source = README_FR.read_text(encoding="utf-8")
+
+    assert scan_measured_sentence("README.fr.md", source, MEASURED_SENTENCE_FR) == []
 
 
 # -- self tests: the gate has to report every shape it judges --------------
@@ -873,10 +933,28 @@ def test_a_document_that_is_not_well_formed_is_a_finding_and_not_an_error() -> N
 
 
 def test_a_text_without_the_measured_sentence_is_reported() -> None:
-    assert scan_measured_sentence("sample.md", f"nothing {MEASURED_SENTENCE} here".replace("1,813", "1,913")) != []
-    # And a line break inside the sentence is not a difference: README.md wraps
+    assert scan_measured_sentence("sample.md", f"nothing {MEASURED_SENTENCE} here".replace("1,764", "1,964")) != []
+    # And a line break inside the sentence is not a difference: a README wraps
     # at a different width than an info.xml, and that must not be a finding.
     assert scan_measured_sentence("sample.md", MEASURED_SENTENCE.replace(" ", "\n", 4)) == []
+
+
+def test_a_mutated_peak_is_reported_in_each_of_the_three_languages() -> None:
+    # One case per wording, because three gates that share a scanner would
+    # still be three gates if the scanner only ever saw English. Each language
+    # writes the peak its own way, so each mutation is written its own way too.
+    cases = (
+        (MEASURED_SENTENCE, "1,764", "1,964"),
+        (MEASURED_SENTENCE_DE, "1.764", "1.964"),
+        (MEASURED_SENTENCE_FR, "1 764", "1 964"),
+    )
+
+    for sentence, measured, mutated in cases:
+        assert scan_measured_sentence("sample.md", sentence, sentence) == []
+        assert scan_measured_sentence("sample.md", sentence.replace(measured, mutated), sentence) != []
+        # And the wordings do not stand in for one another: the German gate
+        # over the French file has to report, or a swap would pass unseen.
+        assert scan_measured_sentence("sample.md", MEASURED_SENTENCE, MEASURED_SENTENCE_DE) != []
 
 
 # -- the store rules that no schema of ours states: images and the two lists --

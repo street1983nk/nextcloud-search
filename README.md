@@ -28,8 +28,13 @@ Markdown, CSV sowie Bilder (JPEG, PNG, TIFF, WebP) per Texterkennung.
 ## Anforderungen
 
 - Nextcloud 33 bis 35 mit der App AppAPI (HaRP als Deploy-Ziel)
-- RAM: 4 GB genügen, der Container läuft unter einer harten 2-GB-Grenze
-  (gemessen)
+- RAM: 4 GB genügen. Auf einer 4-GB-ARM64-Box mit 52.111 indexierten
+  Dokumenten und aktiver semantischer Suche lag die Spitze des Containers bei
+  1.764 MB residentem anonymem Speicher, unter einer harten 2-GB-Grenze, die der
+  Kernel durchsetzt.
+- Die Grundlast im Leerlauf ist von 691,8 MB in v1.0 auf 103,2 MB in v1.1
+  gefallen, minus 85,1 Prozent (gemessen am 10.09.2026, Methode und Rohdaten in
+  [docs/performance.md](docs/performance.md)).
 - CPU: 2 Kerne genügen, amd64 und arm64, keine GPU
 
 ## Installation

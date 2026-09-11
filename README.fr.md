@@ -32,8 +32,13 @@ reconnaissance optique.
 
 - Nextcloud 33 à 35 avec l'application AppAPI (HaRP comme cible de
   déploiement)
-- RAM : 4 Go suffisent, le conteneur reste sous une limite stricte de 2 Go
-  (mesuré)
+- RAM : 4 Go suffisent. Sur une machine ARM64 de 4 Go avec 52 111 documents
+  indexés et la recherche sémantique active, le conteneur a atteint un pic de
+  1 764 Mo de mémoire anonyme résidente, sous une limite stricte de 2 Go imposée
+  par le noyau.
+- La charge de base au repos est passée de 691,8 Mo en v1.0 à 103,2 Mo en v1.1,
+  moins 85,1 pour cent (mesuré le 10.09.2026, méthode et données brutes dans
+  [docs/performance.md](docs/performance.md)).
 - CPU : 2 cœurs suffisent, amd64 et arm64, pas de GPU
 
 ## Installation

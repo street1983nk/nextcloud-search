@@ -28,9 +28,12 @@ CSV, and images (JPEG, PNG, TIFF, WebP) through OCR.
 ## Requirements
 
 - Nextcloud 33 to 35 with the AppAPI app (HaRP as the deploy target)
-- RAM: 4 GB is enough. On a 4-GB ARM64 box with 51,961 indexed documents and
-  the semantic search active, the container peaked at 1,813 MB of resident
+- RAM: 4 GB is enough. On a 4-GB ARM64 box with 52,111 indexed documents and
+  the semantic search active, the container peaked at 1,764 MB of resident
   anonymous memory, under a hard 2 GB limit enforced by the kernel.
+- Idle base load fell from 691.8 MB in v1.0 to 103.2 MB in v1.1, minus 85.1 per
+  cent (measured 2026-09-10, method and raw data in
+  [docs/performance.md](docs/performance.md)).
 - CPU: 2 cores are enough, amd64 and arm64, no GPU
 
 ## Installation
