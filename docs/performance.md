@@ -152,6 +152,7 @@ zwei Reihen auf zwei Architekturen mehr sagen als eine.
 | Verbleib der ARM-Box nach der Launch-Härtung | **angehalten, kein Abbau** (Betreiberentscheid 07.09.); Abbaukriterium: nach der v1.1-Messung | 2026-09-07 |
 | **Feinmessung der Grundlast, nativ auf arm64** | **gemessen auf `ubuntu-24.04-arm`, Lauf 34325000302, fünf Posten 543,7 MB, 8 kB neben der groben nativen Messung; ersetzt die Messung unter QEMU, die 1,2 Prozent daneben lag** | 2026-09-09 |
 | **Vergleichsmessung v1.1 gegen v1.0, ARM m7g.large** | **gemessen, Grundlast 103,2 MB gegen 691,8 MB, anon-Spitze 1.764,2 MB, `oom`/`oom_kill`/`oom_group_kill` je 0 bei `max` 21.939, p95 Stufe 8 = 2.125,5 ms gegen 2.500 ms Budget, Laufzeit 26 h 37 min gegen 18 h 56 min; vier von fünf Laststufen regressiv, benannt in Abschnitt 19 des Berichts** | 2026-09-10 |
+| **Werkzeug-Anfahrt DI-10-01 und DI-10-02, ARM m7g.large** | **gefahren, 1,97 h von 4,00 h und 0,2285 USD von 0,50 USD; DI-10-01 geschlossen (30 gemeldete Fehlschläge rechnen gegen 14 Protokollabbrüche plus 16 trefferlose Begriffe auf), DI-10-02 offen (die Vorprüfung misst einen Antwortdeckel von 26, Bilanz unverändert 6 von 10)** | 2026-09-10 |
 | Verbleib der ARM-Box nach der Vergleichsmessung | **angehalten seit 16:22:50Z, kein Abbau** (Betreiberentscheid 10.09.); Abschlusszahlen 31,05 h und 3,5969 USD netto, unter dem angehobenen Deckel von 34 h und 4,00 USD; der Abbau bekommt einen eigenen Plan in Phase 11 | 2026-09-10 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
@@ -3953,6 +3954,21 @@ Meldung eine leere Liste; die Schleife holt keine zweite Runde nach. Derselbe
 CI-Lauf misst die zehn Fälle grün (Lauf 34339346666, Commit `0dd007d3`), aber
 auf amd64 gegen eine frische Instanz.
 
+**Nachgemessen am 10.09.2026 abends, und die Bilanz bewegt sich nicht**
+(`docs/measurements/2026-09-werkzeugfixe/README.md`, Abschnitt 4): Das
+nachgebesserte Sprachfall-Skript sollte einen Fall, dessen Aussage im
+Fremdbestand ertrinkt, als **nicht messbar** kennzeichnen statt als rot. Gemessen
+wurde `sprachfaelle bestanden 6 von 10, davon 0 nicht messbar`, also dieselben
+vier roten Fälle wie am 10.09. mittags. Der Grund ist gemessen und nicht
+vermutet: die Vorprüfung zählt die Treffer, die die Route herausgibt, und diese
+Route liefert dem Konto `lasttest` für jeden geprüften Begriff exakt 26 Treffer,
+bei Tiefe 64, 200 und 2.000 gleichermaßen
+(`rohdaten/07-fremdbestand-gegenprobe.txt`). Die Messgröße hängt an einem Deckel
+der Antwort und nicht am Bestand dahinter, kann die Schwelle 64 also nie
+überschreiten, und das dritte Urteil kann auf dieser Instanz nicht ausgelöst
+werden. **DI-10-02 bleibt damit offen.** Was die Aussage trägt, ist weiterhin
+der CI-Lauf ohne Fremdbestand: zehn von zehn grün, Lauf 34530208024.
+
 **Die Laufzeit** (Bericht Abschnitt 7): **26 h 37 min 21 s** für beide Spuren
 gegen 18 h 56 min in 06-11, also **plus 40,6 Prozent** bei einem Mehrbestand von
 0,29 Prozent, und über der Erwartung von 22 bis 26 Stunden. Die Zahl ist eine
@@ -3977,6 +3993,17 @@ HTTP 200 und ohne Containerteil, also zählt das Lastwerkzeug einen Ausfall als
 Erfolg. Der Fingerabdruck steht in den Trefferzahlen: 5,40 je Anfrage auf den
 Stufen 1 und 4, nur 4,16 auf Stufe 16. **Die Stufen 1 bis 12 sind nicht berührt,
 und die Zusage steht auf Stufe 8.** Geführt als DI-10-01.
+
+**DI-10-01 ist seit dem 10.09.2026 abends geschlossen**
+(`docs/measurements/2026-09-werkzeugfixe/README.md`, Abschnitt 3): Das
+Lastwerkzeug zählt eine Ergebnisgruppe ohne Containerteil jetzt als Fehlschlag
+und schlüsselt sie unter `failure_kinds` auf. Auf Stufe 16 meldet es **30**
+solche Antworten, und die Zahl geht gegen das Nextcloud-Protokoll auf: 14
+abgebrochene Vorgänge plus 16 Anfragen mit einem Begriff ohne Treffer ergeben
+genau 30. Auf Stufe 8 und in der Gegenprobe auf Stufe 1 rechnet dieselbe Summe
+ebenso auf, bei null Abbrüchen. **Die p95-Zahlen oben bleiben, wie sie sind:**
+sie stammen aus dem Lauf vom 10.09. mittags, und die Nachmessung hat das
+Werkzeug geprüft und nicht die Zusage neu gemessen.
 
 ## Reproduzieren
 
