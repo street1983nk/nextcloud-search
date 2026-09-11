@@ -318,7 +318,7 @@ async def fetch_file_stream(
 # gate with "an unknown path": a violation for the three writing calls, and a
 # blind spot for all five. The duplication is deliberate and a test pins it.
 #
-# The three writing calls are the only writes this container performs against
+# The four writing calls are the only writes this container performs against
 # Nextcloud. They reach the two database tables the companion app owns and have no
 # code path into the file system; the reasoning and the threat ids sit at
 # OCS_WRITE_ALLOWLIST in the gate.
@@ -400,9 +400,9 @@ async def requeue_documents(nc: AsyncNextcloudApp, *, file_ids: Sequence[int], k
     callers know: the worker knows the file it just looked into, and the
     reconcile of plan 03-12 finds files that have no queue row at all.
 
-    This is the third and last write of the container. Like the other two it
-    reaches the tables of the companion app and nothing else; the reasoning and
-    the threat ids sit at OCS_WRITE_ALLOWLIST in the gate.
+    This is the third write of the container. Like the others it reaches the
+    tables of the companion app and nothing else; the reasoning and the threat
+    ids sit at OCS_WRITE_ALLOWLIST in the gate.
     """
     return await nc._session.ocs(
         "POST",
@@ -416,6 +416,27 @@ async def queue_stats(nc: AsyncNextcloudApp) -> object:
     return await nc._session.ocs(
         "GET",
         "/ocs/v2.php/apps/findling/queues/documents/stats",
+    )
+
+
+async def topup_documents(nc: AsyncNextcloudApp) -> object:
+    """Ask for the next crawl slice, because the work stock ran dry.
+
+    The finding behind it is the runtime half of the v1.1 comparison run: the
+    container starved for 5.85 of 26.6 hours because the crawl only advanced
+    when the system cron came around, and that cadence belongs to the instance,
+    not to this app. This call runs exactly one slice of the pending crawl job
+    inline and answers {"ran": bool, "pending": bool}; ran=false with
+    pending=false is the real "there is nothing left to crawl".
+
+    This is the fourth write of the container. Like the other three it reaches
+    the tables of the companion app (plus the crawl job's own row in the job
+    list) and has no code path into the file system; the reasoning and the
+    threat id sit at OCS_WRITE_ALLOWLIST in the gate.
+    """
+    return await nc._session.ocs(
+        "POST",
+        "/ocs/v2.php/apps/findling/queues/documents/topup",
     )
 
 

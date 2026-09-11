@@ -16,6 +16,8 @@ use OCP\BackgroundJob\IJobList;
 use OCP\BackgroundJob\QueuedJob;
 use OCP\IAppConfig;
 use OCP\IDBConnection;
+use OCP\Lock\ILockingProvider;
+use OCP\Lock\LockedException;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -60,6 +62,23 @@ class StorageCrawlJob extends QueuedJob {
 	 * monopolise consecutive cron runs.
 	 */
 	private const INTERVAL = 5;
+
+	/**
+	 * The one lock every slice of every mount runs under, whichever door it came
+	 * through. Two doors exist since the top-up route of the runtime finding of
+	 * the v1.1 comparison run (the work stock ran dry for 5.85 of 26.6 hours
+	 * because the system cron came around every 12 minutes): the cron, and a
+	 * starved container asking for the next slice itself. Without the lock the
+	 * two can meet on the same job row and crawl the same band twice, which the
+	 * merge-safe enqueue would survive but a 4 GB box should not have to pay.
+	 */
+	public const LOCK_NAME = 'findling/crawl-slice';
+
+	/**
+	 * The floor of the wall clock budget a caller may ask for. Below this a
+	 * slice would spend its whole life on the transaction it opens.
+	 */
+	private const MIN_BUDGET_SECONDS = 5;
 
 	/**
 	 * 50 MB, the extraction cap of the zero config guard rails. A file above it
@@ -118,9 +137,22 @@ class StorageCrawlJob extends QueuedJob {
 		private ExclusionService $exclusionService,
 		private IAppConfig $appConfig,
 		private IDBConnection $db,
+		private ILockingProvider $lockingProvider,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct($time);
+	}
+
+	/**
+	 * The wall clock budget of one slice, clamped between the floor and
+	 * MAX_SECONDS. The cron path carries no budget_seconds and gets the full
+	 * ceiling; the top-up route asks for less because its caller waits on an
+	 * OCS request with a 30 s client timeout, and a slice that answers after
+	 * the caller hung up helps nobody.
+	 */
+	public static function budgetSeconds(mixed $argument): int {
+		$asked = is_array($argument) ? (int)($argument['budget_seconds'] ?? self::MAX_SECONDS) : self::MAX_SECONDS;
+		return min(self::MAX_SECONDS, max(self::MIN_BUDGET_SECONDS, $asked));
 	}
 
 	protected function run($argument): void {
@@ -136,6 +168,34 @@ class StorageCrawlJob extends QueuedJob {
 			return;
 		}
 
+		try {
+			$this->lockingProvider->acquireLock(self::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE);
+		} catch (LockedException) {
+			// Another slice is crawling right now, through the other door (the
+			// cron and the top-up route can meet here). Nothing is crawled
+			// twice, and the chain survives: being a QueuedJob this row was
+			// removed before run(), so returning without the reschedule below
+			// would end the crawl of this mount for good.
+			$this->jobList->scheduleAfter(self::class, $this->time->getTime() + self::INTERVAL, [
+				'storage_id' => $storageId,
+				'root_id' => $rootId,
+				'overridden_root' => $overriddenRoot,
+				'last_file_id' => $lastFileId,
+			]);
+			return;
+		}
+
+		try {
+			$this->crawlSlice(self::budgetSeconds($argument), $storageId, $rootId, $overriddenRoot, $lastFileId);
+		} finally {
+			$this->lockingProvider->releaseLock(self::LOCK_NAME, ILockingProvider::LOCK_EXCLUSIVE);
+		}
+	}
+
+	/**
+	 * One slice of one mount, under the lock the caller holds.
+	 */
+	private function crawlSlice(int $budgetSeconds, int $storageId, int $rootId, int $overriddenRoot, int $lastFileId): void {
 		if ($lastFileId === 0) {
 			// This mount starts from the beginning: a fresh installation or occ
 			// findling:index --restart. The scan counters of this storage go
@@ -155,7 +215,7 @@ class StorageCrawlJob extends QueuedJob {
 		$cap = $this->settingsService->maxFileBytes();
 		$mountRoot = $this->storageService->mountRootPath($storageId, $overriddenRoot);
 
-		$deadline = $this->time->getTime() + self::MAX_SECONDS;
+		$deadline = $this->time->getTime() + $budgetSeconds;
 		$seen = 0;
 		$queued = 0;
 		$skipped = 0;

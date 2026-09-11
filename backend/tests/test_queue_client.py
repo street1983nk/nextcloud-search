@@ -34,7 +34,16 @@ from typing import Any, cast
 import pytest
 
 from findling.nc.client import AsyncNextcloudApp
-from findling.nc.queue import KIND_EMBED, KINDS, MAX_ACK_LIST, DocumentQueue, QueueJob
+from findling.nc.queue import (
+    KIND_EMBED,
+    KINDS,
+    MAX_ACK_LIST,
+    TOPUP_IDLE,
+    TOPUP_SUPPLIED,
+    TOPUP_UNAVAILABLE,
+    DocumentQueue,
+    QueueJob,
+)
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "findling"
 CLIENT_SOURCE = PACKAGE_ROOT / "nc" / "client.py"
@@ -51,6 +60,7 @@ ACK_PATH = "/ocs/v2.php/apps/findling/queues/documents"
 UNLOCK_PATH = "/ocs/v2.php/apps/findling/queues/documents/unlock"
 REQUEUE_PATH = "/ocs/v2.php/apps/findling/queues/documents/requeue"
 STATS_PATH = "/ocs/v2.php/apps/findling/queues/documents/stats"
+TOPUP_PATH = "/ocs/v2.php/apps/findling/queues/documents/topup"
 
 # One row exactly as QueueService::describe builds it, keys included. The queue
 # row id is the key of the map and arrives as a string, because that is what a
@@ -386,6 +396,39 @@ async def test_requeue_with_nothing_to_hand_over_does_not_call_nextcloud() -> No
 
     assert result.ok is True
     assert session.calls == []
+
+
+async def test_top_up_reads_a_ran_slice_as_supplied() -> None:
+    # The other side ran a crawl slice on our request (DI-10-04): more work is
+    # on its way, and the poller keeps the short pause.
+    session = _FakeSession({("POST", TOPUP_PATH): {"ran": True, "pending": True}})
+
+    assert await _queue(session).top_up() == TOPUP_SUPPLIED
+    assert session.calls[0][:2] == ("POST", TOPUP_PATH)
+
+
+async def test_top_up_reads_a_running_slice_as_supplied_too() -> None:
+    # ran=false with pending=true is the cron mid-slice at this very moment,
+    # and rows are arriving from that slice just the same.
+    session = _FakeSession({("POST", TOPUP_PATH): {"ran": False, "pending": True}})
+
+    assert await _queue(session).top_up() == TOPUP_SUPPLIED
+
+
+async def test_top_up_reads_no_crawl_job_as_idle() -> None:
+    # The real "there is nothing left to crawl": the ordinary backoff ladder is
+    # the right reaction, exactly as before this route existed.
+    session = _FakeSession({("POST", TOPUP_PATH): {"ran": False, "pending": False}})
+
+    assert await _queue(session).top_up() == TOPUP_IDLE
+
+
+async def test_top_up_survives_a_companion_without_the_route() -> None:
+    # The upgrade window: new container, old companion, 404 on this path. One
+    # defined answer, never an exception through the poller loop.
+    session = _FakeSession(error=OSError("no such route"))
+
+    assert await _queue(session).top_up() == TOPUP_UNAVAILABLE
 
 
 async def test_stats_returns_the_counters_of_the_queue() -> None:

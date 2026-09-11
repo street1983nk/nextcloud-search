@@ -44,6 +44,7 @@ from findling.nc.client import (
     claim_documents,
     queue_stats,
     requeue_documents,
+    topup_documents,
     unlock_documents,
 )
 
@@ -341,8 +342,20 @@ def _job(queue_id_raw: object, source: object) -> QueueJob | None:
     )
 
 
+# The three answers of a top-up, as the poller reads them. "supplied" says the
+# other side ran a crawl slice or one was running that very moment, so more work
+# is on its way and the short pause is the right one; "idle" says no crawl job
+# exists, which is the real "there is nothing left to do"; "unavailable" says
+# the question got no answer, an old companion without the route or a request
+# that never arrived, and the ordinary backoff ladder is the honest reaction to
+# both, because neither says anything about the work stock.
+TOPUP_SUPPLIED: Final = "supplied"
+TOPUP_IDLE: Final = "idle"
+TOPUP_UNAVAILABLE: Final = "unavailable"
+
+
 class DocumentQueue:
-    """The five queue calls, bound to one client for the whole run."""
+    """The six queue calls, bound to one client for the whole run."""
 
     def __init__(self, nc: AsyncNextcloudApp) -> None:
         self._nc = nc
@@ -458,6 +471,34 @@ class DocumentQueue:
 
         payload = _mapping(answer) or {}
         return CallResult(ok=True, count=_whole_number(payload.get("released")) or 0)
+
+    async def top_up(self) -> str:
+        """Ask for the next crawl slice, because a claim came back empty.
+
+        The runtime finding of the v1.1 comparison run: the container starved
+        for 5.85 of 26.6 hours because the crawl advanced only when the system
+        cron came around, every 12 minutes on that box. This call lets a starved
+        container fetch the next slice itself and answers with one of the three
+        module constants above.
+
+        Every exception becomes TOPUP_UNAVAILABLE for the same reason claim
+        catches everything: a companion of an older version answers 404 here,
+        and a route that does not exist yet must cost one debug line and the
+        ordinary backoff, never the poller.
+        """
+        try:
+            answer = await topup_documents(self._nc)
+        except Exception:
+            # Debug and not a warning, same policy as claim: during an upgrade
+            # window (new container, old companion) this fires once per idle
+            # pass, and the backoff ladder already caps how often that is.
+            LOGGER.debug("could not ask for a crawl slice")
+            return TOPUP_UNAVAILABLE
+
+        payload = _mapping(answer) or {}
+        if payload.get("ran") is True or payload.get("pending") is True:
+            return TOPUP_SUPPLIED
+        return TOPUP_IDLE
 
     async def requeue(self, file_ids: Sequence[int], *, kind: str) -> CallResult:
         """Put files on another kind of job, the handover to the second track.

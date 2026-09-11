@@ -201,15 +201,41 @@ LOCAL_RECEIVERS = frozenset({"ROUTER"})
 # the route, and rejectForeignCaller as the first statement of the controller
 # method is what answers it.
 #
-# This is the third and, on today's understanding, the last write this container
-# needs: take work, say what happened to it, hand it back, and move it to the
-# other track. A fourth entry has to argue for itself against
-# test_write_allowlist_has_exactly_three_entries, which is the point of that test.
+# Extended on 2026-09-11 with the fourth entry, again in a step of its own and
+# again for the reason above:
+#
+#   POST   .../queues/documents/topup   runs the next pending crawl slice inline,
+#                                       because the work stock ran dry while the
+#                                       crawl was unfinished
+#
+# Why it exists. The v1.1 comparison run (docs/measurements/
+# 2026-09-vergleichsmessung-m7g/) indexed the same corpus 40 percent slower than
+# v1.0, and the whole difference was supply: the container starved for 5.85 of
+# 26.6 hours because StorageCrawlJob only advanced when the system cron came
+# around, every 12 minutes on that box. The cadence of the system cron belongs
+# to the instance, not to this app, so the fix is that a starved container asks
+# for the next slice itself (carried as DI-10-04).
+#
+# What it can reach, which is the property that makes the exception defensible:
+# the same tables the cron path of StorageCrawlJob writes (findling_queue,
+# findling_file_state, findling_scan_stats) plus the crawl job's own row in
+# oc_jobs, and nothing else. It takes no parameters at all, so it cannot aim the
+# crawl anywhere; it executes the job that already exists, under the job's own
+# lock, with a shorter wall clock budget. No user file is reachable from it.
+#
+# The threat register carries this as T-11-01 (Tampering, "widening of the OCS
+# write allowlist"), disposition mitigate, with the same three duties: exactly
+# one additional literal path, the widening as its own step, and the negative
+# tests below that show the list is narrow rather than merely present.
+#
+# A fifth entry has to argue for itself against
+# test_write_allowlist_has_exactly_four_entries, which is the point of that test.
 OCS_WRITE_ALLOWLIST: frozenset[str] = frozenset(
     {
         "/ocs/v2.php/apps/findling/queues/documents",
         "/ocs/v2.php/apps/findling/queues/documents/unlock",
         "/ocs/v2.php/apps/findling/queues/documents/requeue",
+        "/ocs/v2.php/apps/findling/queues/documents/topup",
     }
 )
 
@@ -542,19 +568,59 @@ def test_writing_ocs_call_to_another_path_beside_the_requeue_route_is_a_violatio
     assert "an unknown path" in violations[0]
 
 
-def test_write_allowlist_has_exactly_three_entries() -> None:
+def test_write_allowlist_has_exactly_four_entries() -> None:
     # Not a tautology, a ratchet. Every entry of this list is a hole in IDX-07
     # that somebody argued for once, and the argument is in the comment block
-    # above the list. A fourth entry that arrives as a side effect of a feature
+    # above the list. A fifth entry that arrives as a side effect of a feature
     # fails here first, which is the moment at which the three duties (a named
     # threat, a statement of the reachable tables, a negative test) can still be
     # asked for.
-    assert len(OCS_WRITE_ALLOWLIST) == 3
+    assert len(OCS_WRITE_ALLOWLIST) == 4
     assert {
         "/ocs/v2.php/apps/findling/queues/documents",
         "/ocs/v2.php/apps/findling/queues/documents/unlock",
         "/ocs/v2.php/apps/findling/queues/documents/requeue",
+        "/ocs/v2.php/apps/findling/queues/documents/topup",
     } == OCS_WRITE_ALLOWLIST
+
+
+def test_writing_ocs_call_to_the_topup_path_is_not_a_violation() -> None:
+    # The fourth write of the return channel: a starved container asks for the
+    # next crawl slice itself instead of waiting out the system cron (DI-10-04,
+    # T-11-01).
+    topup = 'async def f(nc):\n    await nc._session.ocs("POST", "/ocs/v2.php/apps/findling/queues/documents/topup")\n'
+
+    assert scan_source(CLIENT_MODULE, topup) == []
+
+
+def test_writing_ocs_call_beside_the_topup_route_is_a_violation() -> None:
+    # The negative half of the entry above, the duty every entry carries: a
+    # neighbour, a longer spelling and the same path through a module constant
+    # all stay violations, otherwise the list is proven to exist but not to be
+    # narrow.
+    for path in (
+        "/ocs/v2.php/apps/findling/queues/documents/topup/all",
+        "/ocs/v2.php/apps/findling/queues/documents/topups",
+        "/ocs/v2.php/apps/findling/queues/documents/topup ",
+    ):
+        source = f'async def f(nc):\n    await nc._session.ocs("POST", "{path}")\n'
+
+        violations = scan_source(CLIENT_MODULE, source)
+
+        assert len(violations) == 1, path
+        assert "invariant 3" in violations[0]
+
+    hidden = (
+        'TOPUP = "/ocs/v2.php/apps/findling/queues/documents/topup"\n'
+        "\n"
+        "async def f(nc):\n"
+        '    await nc._session.ocs("POST", TOPUP)\n'
+    )
+
+    violations = scan_source(CLIENT_MODULE, hidden)
+
+    assert len(violations) == 1
+    assert "an unknown path" in violations[0]
 
 
 def test_a_reading_route_needs_no_allowlist_entry_and_gets_none() -> None:

@@ -44,7 +44,7 @@ from findling.extract.errors import ExtractionOutcome, Reason
 from findling.index.open import expected_versions, open_index
 from findling.index.writer import IndexBatchWriter, IndexRecord
 from findling.nc.client import AsyncNextcloudApp
-from findling.nc.queue import KIND_EMBED, CallResult, ClaimResult, QueueJob, QueueStats
+from findling.nc.queue import KIND_EMBED, TOPUP_IDLE, CallResult, ClaimResult, QueueJob, QueueStats
 from findling.store.repo import (
     EMBEDDING_BACKLOG_MARK,
     EMBEDDING_MARK,
@@ -142,6 +142,12 @@ class _FakeQueue:
         del limit, max_bytes
         self.claims += 1
         return self._batches.pop(0) if self._batches else ClaimResult()
+
+    async def top_up(self) -> str:
+        # A script that ran out is a finished crawl in every test of this file:
+        # the second track is about the stock behind the claim, never about the
+        # crawl in front of it.
+        return TOPUP_IDLE
 
     async def acknowledge(self, done: Any, failed: Any, skipped: Any = None) -> CallResult:
         del skipped

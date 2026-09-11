@@ -6,6 +6,7 @@ namespace OCA\Findling\Controller;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Db\QueueMapper;
+use OCA\Findling\Service\CrawlAdvanceService;
 use OCA\Findling\Service\FileStateService;
 use OCA\Findling\Service\QueueService;
 use OCP\AppFramework\Http;
@@ -17,18 +18,22 @@ use Psr\Log\LoggerInterface;
 /**
  * The work stock as seen from the container.
  *
- * Five endpoints: take work, acknowledge it, hand it back, move it to the other
- * track, count it. Nobody pushes anything into the container, it collects when
- * it can, and that single property is what gives this app back pressure for free
- * and lets a crashed container pile work up instead of losing it.
+ * Six endpoints: take work, acknowledge it, hand it back, move it to the other
+ * track, count it, and ask for the next crawl slice when the stock ran dry.
+ * Nobody pushes anything into the container, it collects when it can, and that
+ * single property is what gives this app back pressure for free and lets a
+ * crashed container pile work up instead of losing it. The top-up is not a
+ * push either: the container still decides when to ask, and the answer is a
+ * refill of its own queue, not work in flight.
  *
  * This is the only writing path from the ExApp into Nextcloud, and it writes
- * into the two tables this app owns and nowhere else. No method here touches a
+ * into the tables this app owns and nowhere else. No method here touches a
  * user file, and there is no code path from here into the file system at all.
  * Because of that the read only gate on the Python side gets an explicit, named
- * exception for the three write paths below: two of them added in their own step
- * in plan 02-10, the requeue added the same way in plan 03-07. Three write paths
- * are the whole return channel, and each of them is one entry of that allowlist,
+ * exception for the four write paths below: two of them added in their own step
+ * in plan 02-10, the requeue the same way in plan 03-07, the top-up as the
+ * runtime fix of the v1.1 comparison finding (DI-10-04). Four write paths are
+ * the whole return channel, and each of them is one entry of that allowlist,
  * with a named threat and a negative test of its own.
  *
  * Every method carries the ExApp attribute and the CSRF exemption, both spelled
@@ -79,6 +84,7 @@ class QueueController extends OCSController {
 	public function __construct(
 		IRequest $request,
 		private QueueService $queueService,
+		private CrawlAdvanceService $crawlAdvanceService,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -328,6 +334,44 @@ class QueueController extends OCSController {
 		} catch (\Throwable $e) {
 			// Same rule as above: no library message in the log.
 			$this->logger->error('Findling: could not count the queue', ['exception' => $e]);
+			return new DataResponse(['error' => 'Queue is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * POST /ocs/v2.php/apps/findling/queues/documents/topup
+	 *
+	 * The container found the work stock empty and asks whether that is "done"
+	 * or "starving". When a crawl job is pending, this runs exactly one slice of
+	 * it inline instead of waiting for the system cron, whose cadence is outside
+	 * this app's control and was measured at 12 minutes on the box of the v1.1
+	 * comparison run, where the container sat idle for 5.85 of 26.6 hours.
+	 *
+	 * Answers {"ran": bool, "pending": bool}. ran says a slice was executed,
+	 * pending says crawl jobs exist(ed); ran=false with pending=true means
+	 * another slice was running at this very moment, and ran=false with
+	 * pending=false is the real "there is nothing left to crawl".
+	 *
+	 * Writes only what the cron path writes: rows of findling_queue,
+	 * findling_file_state, findling_scan_stats and the crawl job's own row in
+	 * oc_jobs. No code path into the file system, no user file reachable. The
+	 * read only gate on the Python side carries this as its fourth allowlist
+	 * entry, with the negative tests every entry owes (T-11-01).
+	 */
+	#[\OCP\AppFramework\Http\Attribute\ExAppRequired]
+	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
+	#[\OCP\AppFramework\Http\Attribute\ApiRoute(verb: 'POST', url: '/queues/documents/topup')]
+	public function topUpDocuments(): DataResponse {
+		$foreign = $this->rejectForeignCaller();
+		if ($foreign !== null) {
+			return $foreign;
+		}
+
+		try {
+			return new DataResponse($this->crawlAdvanceService->advance());
+		} catch (\Throwable $e) {
+			// Same rule as above: no library message in the log.
+			$this->logger->error('Findling: could not advance the crawl', ['exception' => $e]);
 			return new DataResponse(['error' => 'Queue is not available.'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}

@@ -53,7 +53,15 @@ from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
 from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
 from findling.nc.client import AsyncNextcloudApp, NextcloudException
-from findling.nc.queue import CallResult, ClaimResult, QueueJob, QueueStats
+from findling.nc.queue import (
+    TOPUP_IDLE,
+    TOPUP_SUPPLIED,
+    TOPUP_UNAVAILABLE,
+    CallResult,
+    ClaimResult,
+    QueueJob,
+    QueueStats,
+)
 from findling.store.repo import FileMeta, Store, open_store
 from findling.worker.poller import (
     RETREAT_AFTER_ROUNDS,
@@ -157,11 +165,20 @@ class _FakeQueue:
         self.unlocked: list[list[int]] = []
         self.requeues: list[tuple[list[int], str]] = []
         self.requeue_fails = False
+        # What the top-up of an empty pass answers, and how often it was asked.
+        # Idle by default, because that is the state every existing test means:
+        # a queue whose script ran out has nothing left to crawl.
+        self.topups = 0
+        self.topup_answer = TOPUP_IDLE
 
     async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
         del limit, max_bytes
         self.claims += 1
         return self._batches.pop(0) if self._batches else ClaimResult()
+
+    async def top_up(self) -> str:
+        self.topups += 1
+        return self.topup_answer
 
     async def acknowledge(self, done: Any, failed: Any, skipped: Any = None) -> CallResult:
         self.acknowledged.append((list(done), dict(failed)))
@@ -1654,6 +1671,58 @@ async def test_an_empty_queue_grows_the_cooldown_from_fifteen_to_at_most_one_hun
         seen.append(poller.cooldown)
 
     assert seen == [15, 30, 60, 120, 120, 120]
+    # And every one of those empty passes asked whether the crawl was done,
+    # because "empty" alone cannot tell starving from finished (DI-10-04).
+    assert queue.topups == 6
+
+
+async def test_a_starved_container_asks_for_a_slice_and_keeps_the_short_pause(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The runtime finding of the v1.1 comparison run, DI-10-04.
+
+    The container sat starved for 5.85 of 26.6 hours because the crawl advanced
+    only with the system cron, and on top of every supply gap the empty-queue
+    ladder grew the pause to 120 s. When the top-up says a slice was run, the
+    pause has to stay at the start value: the rows it asked for are arriving
+    right now, and a rung of the ladder would be the old defect kept.
+    """
+    queue = _FakeQueue()
+    queue.topup_answer = TOPUP_SUPPLIED
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    poller.arm()
+
+    with caplog.at_level("INFO", logger="findling.worker.poller"):
+        for _ in range(4):
+            result = await poller.run_once()
+            assert result.state == ROUND_EMPTY
+            assert poller.cooldown == 15
+
+    assert queue.topups == 4
+    # One line per starvation streak, not one per pass (the T-05-30 rule), and
+    # no idle line at all: a waiting container is not an idle one.
+    starved = [line for line in _poller_lines(caplog) if "asked for the next slice" in line]
+    assert len(starved) == 1
+    assert not [line for line in _poller_lines(caplog) if "armed and the work stock is empty" in line]
+
+
+async def test_a_top_up_without_an_answer_walks_the_ordinary_ladder(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    # An old companion without the route answers 404 down there, and that must
+    # cost exactly what an idle answer costs: the backoff ladder, never a crash
+    # and never a short pause on a promise nobody made.
+    queue = _FakeQueue()
+    queue.topup_answer = TOPUP_UNAVAILABLE
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    seen: list[float] = []
+
+    for _ in range(4):
+        result = await poller.run_once()
+        assert result.state == ROUND_EMPTY
+        seen.append(poller.cooldown)
+
+    assert seen == [15, 30, 60, 120]
 
 
 async def test_an_armed_container_with_an_empty_work_stock_says_so_once_per_arming(
@@ -1830,6 +1899,11 @@ class _WorkStock:
         self._refunds = refunds
         self.written_off: list[int] = []
         self.claims = 0
+
+    async def top_up(self) -> str:
+        # The stock is the whole crawl in these tests: nothing is ever pending
+        # behind it.
+        return TOPUP_IDLE
 
     async def claim(self, *, limit: int, max_bytes: int) -> ClaimResult:
         del max_bytes

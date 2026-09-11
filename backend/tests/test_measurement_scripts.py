@@ -190,8 +190,22 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # since the day before, for the same reason. PHP_FILES stays at the 58 of the
 # run because "dateien: 58" stands in rohdaten/40b-baumhash.txt and a reported
 # measurement figure is not rewritten when the code moves on.
-PHP_FILES_TODAY = 60
-PHP_TREE_HASH_TODAY = "5a7efed43af75aedc2145613484fc107e70cd2eb095b7ccd1798b6bbe48e0639"
+# Moved on 2026-09-11 a second time, by the top-up route of the starvation fix
+# (DI-10-04): CrawlAdvanceService.php and the two test files of the route are
+# three files that did not exist before, and QueueController.php plus
+# StorageCrawlJob.php changed their bytes.
+PHP_FILES_TODAY = 63
+PHP_TREE_HASH_TODAY = "455470c51fe2831cc4adc92e31ab350f762f0b1143d13b72103f6a9adc1c752b"
+
+# The python package needed no such split until 2026-09-11: nothing under
+# backend/src/findling had changed since the run, so the figure of the run WAS
+# the figure of the tree. The starvation fix of DI-10-04 parted them (three of
+# the 54 files changed their bytes, none came or went: nc/client.py and
+# nc/queue.py learned the top-up call, worker/poller.py the starved branch), and
+# the split follows the same rule as the PHP one above: the figure of the run
+# stays because it is quoted in rohdaten/40b-baumhash.txt and in the report, and
+# this one is what the next change to the package has to move.
+PACKAGE_TREE_HASH_TODAY = "ac6b8bfd4a74a158552d69b82934b7adf23091cd71c2a2aaebad2a33c311e979"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
@@ -343,11 +357,20 @@ def test_the_recipe_reproduces_the_tree_hash_of_the_python_package() -> None:
 
     This is the assertion that makes the recipe unchangeable: an improvement to
     it would yield another hash and take the comparability against 278fab52 of
-    the follow up measurement with it.
+    the follow up measurement with it. Two figures since 2026-09-11, split for
+    the same reason the PHP pair below was: the recipe is held against the tree
+    as it stands today, and the figure of the run is held against the raw file
+    it was read out of.
     """
     count, hexdigest = reading(run_the_recipe(REPO_ROOT / "backend" / "src" / "findling", "**/*.py"))
     assert count == PACKAGE_FILES
-    assert hexdigest == PACKAGE_TREE_HASH
+    assert hexdigest == PACKAGE_TREE_HASH_TODAY
+
+    raw = BAUMHASH_RAW.read_text(encoding="utf-8")
+    assert f"baumhash: {PACKAGE_TREE_HASH}" in raw
+    assert PACKAGE_TREE_HASH != PACKAGE_TREE_HASH_TODAY, (
+        "the two figures are the same again, so the second one has lost its reason to exist"
+    )
 
 
 def test_the_recipe_reproduces_the_tree_hash_of_the_php_half() -> None:

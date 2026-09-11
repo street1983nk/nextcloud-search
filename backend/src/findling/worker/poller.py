@@ -95,6 +95,7 @@ from findling.nc.queue import (
     KIND_EMBED,
     KIND_METADATA,
     KIND_OCR,
+    TOPUP_SUPPLIED,
     CallResult,
     DocumentQueue,
     QueueJob,
@@ -460,6 +461,11 @@ class Poller:
         # pass would be a log that fills up while the container is doing nothing
         # at all.
         self._idle_announced = False
+        # Whether the "starved, asked for a slice myself" line has been said
+        # since the last claiming pass. Same policy as the idle line: during a
+        # long starvation streak the top-up repeats every short pause, and a
+        # line per repetition would be exactly the log the idle flag avoids.
+        self._starved_announced = False
         self._armed = asyncio.Event()
 
     # -- lifecycle -------------------------------------------------------
@@ -585,6 +591,19 @@ class Poller:
             # whole instance, and the only pass that may make one is a pass that
             # found nothing left to do.
             await self._keep_the_vector_stock_in_step(queue)
+            # An empty answer is two different situations, and this call is what
+            # tells them apart (the runtime finding of the v1.1 comparison run,
+            # DI-10-04: 5.85 of 26.6 hours starved because the crawl advanced
+            # only with the system cron). When the crawl is unfinished, the
+            # other side just ran the next slice for us: the pause is the short
+            # start value, not a rung of the ladder, and the idle line stays
+            # unsaid because the container is waiting, not idle.
+            if await queue.top_up() == TOPUP_SUPPLIED:
+                if not self._starved_announced:
+                    self._starved_announced = True
+                    LOGGER.info("the work stock ran dry while the crawl is unfinished, asked for the next slice myself")
+                self._cooldown = self._cooldown_start
+                return RoundResult(ROUND_EMPTY)
             # Said once per arming, and this is the only line an armed container
             # with nothing to do ever writes. Without it "armed and idle" and
             # "silenced" look exactly the same from the outside: both are a
@@ -1992,6 +2011,9 @@ class Poller:
     def _reset_cooldown(self) -> None:
         """A batch that worked means there is probably another one waiting."""
         self._cooldown = 0.0
+        # A claiming pass ends a starvation streak, so the next streak gets its
+        # own line.
+        self._starved_announced = False
 
 
 def default_poller() -> Poller:
