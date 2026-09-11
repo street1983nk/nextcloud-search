@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Abgeschlossen 11-13-PLAN.md, der Satz zu DI-07-03 und der 174. Katalogschluessel (Entscheid v1-a)
-last_updated: "2026-09-10T21:20:17.161Z"
+stopped_at: Abgeschlossen 11-06-PLAN.md, die EINE Box-Anfahrt: DI-10-01 geschlossen, DI-10-02 nicht, Box angehalten
+last_updated: "2026-09-10T23:59:02.600Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 37
-  completed_plans: 29
-  percent: 78
+  completed_plans: 31
+  percent: 82
 ---
 
 # Project State
@@ -26,12 +26,24 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 11 (Haertung und Store-Einreichung v1.1) — EXECUTING
-Plan: 5 of 13
-Status: Ready to execute
+Plan: 6 of 13
+Status: 11-06 abgeschlossen, 11-05 steht aus
 Last activity: 2026-09-10
 
-**Naechster Schritt:** Rest der Welle 2 der Phase 11, also 11-06 (die EINE
-Box-Anfahrt, Checkpoint-Plan), danach 11-05. Plan 11-13 ist am 10.09.2026
+**Naechster Schritt:** 11-05, der letzte offene Plan der Welle 2. Die EINE
+Box-Anfahrt (11-06) ist am 10.09.2026 gefahren und abgeschlossen: DI-10-01 ist
+geschlossen (16 Anfragen ohne Treffer plus 14 Abbrueche ergeben die 30 des neuen
+Zaehlers, aufgerechnet gegen das Nextcloud-Protokoll), DI-10-02 ist NICHT
+geschlossen (die Vorpruefung des Fremdbestands misst einen Antwortdeckel von 26
+und kann die Schwelle 64 nie erreichen, Beleg in
+docs/measurements/2026-09-werkzeugfixe/rohdaten/07-fremdbestand-gegenprobe.txt).
+Die Box ist angehalten, 1,97 h und 0,2285 USD gegen den Deckel 4 h / 0,50 USD.
+Drei neue Befunde stehen in der deferred-items.md der Phase: DI-11-01 (die
+Messgroesse der Vorpruefung), DI-11-02 (eine leere Antwort ohne Protokollspur,
+mit dem 11-13-Fix pruefbar) und DI-11-03 (der Zaehler unterscheidet leer nicht
+von abgebrochen). Fuer 11-11 heisst das: der Bestand auf der Box lautet jetzt
+52.137 / 44 / 6, nicht mehr 52.111 / 37 / 0, und die Differenz von 39 ist der
+Sprachfall-Korpus. Plan 11-13 ist am 10.09.2026
 gefahren und abgeschlossen: der Zustand
 `SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED` steht im Dienst, der Satz
 "Andere Dateien enthalten dieses Wort, aber keine, die Sie oeffnen duerfen."
