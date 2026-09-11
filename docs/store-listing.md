@@ -65,11 +65,27 @@ Dateitypenliste kommt aus der Allowlist in
 Messungen; wer die Zahlen will, findet sie in `docs/performance.md` und
 `docs/embeddings.md`.
 
-Der gemessene Satz von Plan 06-11 lebt seit diesem Entscheid nur noch in
-`README.en.md`, und das Gate `test_store_metadata.py` bindet ihn dort fest.
-Im Store-Text steht als einzige Zahl die schlichte Hardware-Zusage (4 GB
+Der gemessene Satz von Plan 06-11 lebte seit diesem Entscheid nur noch in
+`README.en.md`, und das Gate `test_store_metadata.py` band ihn dort fest.
+Im Store-Text stand als einzige Zahl die schlichte Hardware-Zusage (4 GB
 genügen, harte 2-GB-Grenze, gemessen), und die Herkunftsregel bleibt: keine
 Zahl im Text, die nicht im Quellcode belegt ist, gerundet wird nichts.
+
+## Nachtrag vom 11.09.2026: die eine Kernzahl im Store-Text
+
+Der Owner hat am 11.09.2026 die Fassung B des Entwurfs unten gewählt. Die
+RAM-Zeile beider Hälften nennt seitdem zusätzlich die Grundlast im Leerlauf mit
+103,2 MB, dreisprachig, und sonst ändert sich an den sechs Texten nichts. Die
+Kurztext-Regel bleibt gewahrt, weil es bei genau einer Zahl bleibt. Der datierte
+Alt-Neu-Vergleich (691,8 MB auf 103,2 MB, minus 85,1 Prozent, gemessen am
+10.09.2026) steht in allen drei READMEs und nicht im Store-Text, und die
+Mess-Vorbehalte stehen im Bericht und in `docs/performance.md` (D-06, D-08).
+
+Mit derselben Entscheidung ist der Messsatz dreisprachig geworden: er steht seit
+dem 11.09.2026 in `README.en.md`, `README.md` und `README.fr.md`, und
+`scan_measured_sentence` hält alle drei Wortlaute fest, je ein Aufruf je Datei.
+Die Gleichläufigkeit der drei READMEs ist damit eine Maschine und keine Regel
+mehr.
 
 ---
 
@@ -116,7 +132,7 @@ Supported file types:
 
 Requirements:
 - Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB is enough, the container runs under a hard 2 GB limit (measured)
+- RAM: 4 GB is enough, 103.2 MB idle, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
 ## `<description lang="de">`
@@ -138,7 +154,7 @@ Unterstützte Dateitypen:
 
 Anforderungen:
 - Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB genügen, der Container läuft unter einer harten 2-GB-Grenze (gemessen)
+- RAM: 4 GB genügen, 103,2 MB im Leerlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
 ## `<description lang="fr">`
@@ -160,7 +176,7 @@ Types de fichiers pris en charge :
 
 Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
-- RAM : 4 Go suffisent, le conteneur reste sous une limite stricte de 2 Go (mesuré)
+- RAM : 4 Go suffisent, 103,2 Mo au repos, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
 
 ---
@@ -204,7 +220,7 @@ Supported file types:
 
 Requirements:
 - Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB is enough, the container runs under a hard 2 GB limit (measured)
+- RAM: 4 GB is enough, 103.2 MB idle, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
 ## `<description lang="de">`
@@ -224,7 +240,7 @@ Unterstützte Dateitypen:
 
 Anforderungen:
 - Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB genügen, der Container läuft unter einer harten 2-GB-Grenze (gemessen)
+- RAM: 4 GB genügen, 103,2 MB im Leerlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
 ## `<description lang="fr">`
@@ -244,7 +260,7 @@ Types de fichiers pris en charge :
 
 Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
-- RAM : 4 Go suffisent, le conteneur reste sous une limite stricte de 2 Go (mesuré)
+- RAM : 4 Go suffisent, 103,2 Mo au repos, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
 
 ---
@@ -272,13 +288,14 @@ Gegenstand verschweigt, von niemandem nachgeprüft werden kann.
 
 ---
 
-# Entwurf v1.1.0, zur Abnahme
+# Entwurf v1.1.0, abgenommen am 11.09.2026
 
-Dieser Abschnitt ist ein Entwurf und noch keine Fassung. Die geltenden Texte
-stehen unverändert darüber, und keine Zieldatei wird angefasst, bevor der Owner
-entschieden hat. Er gehört zu Plan 11-09 und legt genau zwei Entscheidungen vor,
-Teil 2 und Teil 3, dazu die französischen Texte als zweiten Teil des FR-Gates
-(D-07).
+Dieser Abschnitt war der Entwurf, den der Owner vor der Einreichung gesehen hat.
+Er bleibt als Begründung stehen, weil eine Entscheidung ohne die Fassungen, die
+zur Wahl standen, später nicht nachvollziehbar ist. Er gehört zu Plan 11-09 und
+legte genau zwei Entscheidungen vor, Teil 2 und Teil 3, dazu die französischen
+Texte als zweiten Teil des FR-Gates (D-07). Die Abnahmezeile steht am Ende
+dieses Abschnitts; die sechs Texte oben sind nachgezogen.
 
 Jede Zahl unten stammt aus `docs/measurements/2026-09-vergleichsmessung-m7g/`
 und nennt ihre Rohdatei. Gemessen am 09. und 10.09.2026 auf einer AWS
@@ -454,8 +471,14 @@ Ruhezustand beschreibt. Kein Widerspruch, keine Änderung nötig. `CLAUDE.md`
 wird in diesem Plan nicht angefasst: die Datei trägt GSD-verwaltete
 Abschnittsmarken.
 
-## Platz für die Abnahmezeile
+## Die Abnahme
 
-Hier trägt Plan 11-09 nach dem Checkpoint die Zeile mit Datum, gewählter
-Fassung, Entscheid zum Messsatz und dem Vermerk zum FR-Gate ein. Solange sie
-fehlt, ist dieser Abschnitt ein Entwurf und keine Vorlage.
+Textabnahme: 2026-09-11, Fassung B, Messsatz dreisprachig, FR-Gate Teil 2 von 2 abgenommen (D-06, D-07, D-08)
+
+Der Owner hat beide Fassungen im Wortlaut gesehen und Fassung B gewählt, den
+Messsatz dreisprachig entschieden und die französischen Texte ohne Änderung
+abgenommen. Zur Prozentzahl kam kein Einwand, es bleibt bei 85,1 Prozent, und
+die 52.111 bleibt die Zahl des Laufs, den der Satz beschreibt. Was damit nach
+außen geht, steht oben in den sechs Texten und in den drei READMEs; danach wird
+es nicht mehr angefasst, weil der Store-Text unveränderlich mit dem Release
+reist.

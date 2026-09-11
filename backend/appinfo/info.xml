@@ -97,7 +97,7 @@ Supported file types:
 
 Requirements:
 - Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB is enough, the container runs under a hard 2 GB limit (measured)
+- RAM: 4 GB is enough, 103.2 MB idle, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64]]></description>
 	<description lang="de"><![CDATA[Was Findling Backend ist:
 - Die External App hinter der Such-App Findling: Textauszug, Texterkennung und der Suchindex
@@ -114,7 +114,7 @@ Unterstützte Dateitypen:
 
 Anforderungen:
 - Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB genügen, der Container läuft unter einer harten 2-GB-Grenze (gemessen)
+- RAM: 4 GB genügen, 103,2 MB im Leerlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64]]></description>
 	<description lang="fr"><![CDATA[Ce qu'est Findling Backend :
 - L'External App derrière l'application de recherche Findling : extraction de texte, reconnaissance optique et index
@@ -131,7 +131,7 @@ Types de fichiers pris en charge :
 
 Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
-- RAM : 4 Go suffisent, le conteneur reste sous une limite stricte de 2 Go (mesuré)
+- RAM : 4 Go suffisent, 103,2 Mo au repos, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64]]></description>
 	<version>1.0.3</version>
 	<!--
