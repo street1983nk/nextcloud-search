@@ -196,6 +196,22 @@ Aus `backend/`:
 Die PHP-Seite ist nicht beruehrt: die beiden neuen Dateien sind Katalogdaten,
 kein PHP-Quelltext, und kein PHPUnit-Test liest die Katalogdateien.
 
+### CI auf `1c5fea8`
+
+Alle sechs Workflows gruen, im ersten Anlauf:
+
+| Workflow | Lauf | Ergebnis |
+|---|---:|---|
+| Python gates | 34550586660 | success |
+| PHP and store metadata gates | 34550586533 | success |
+| Integration | 34550586469 | success |
+| Resilience | 34550586525 | success |
+| Multi-arch image | 34550586483 | success |
+| HaRP deploy | 34550586445 | success |
+
+Der Metadaten-Commit `f6c0282` beruehrt nur `.planning/` und loest deshalb
+keinen Lauf aus.
+
 ## Known Stubs
 
 Keine.
@@ -214,6 +230,7 @@ abgedeckt, T-11-31 durch G3, T-11-32 durch G1 und T-11-33 durch G4.
 | 7209146 | feat | `php/l10n/fr.json`, der Katalog fuer die Serverseite |
 | 888d6f8 | feat | `php/l10n/fr.js`, derselbe Katalog fuer den Browser |
 | 1c5fea8 | test | die vier Gates und das ausgedehnte Dash-Gate |
+| f6c0282 | docs | diese SUMMARY, STATE und ROADMAP |
 
 ## Self-Check: PASSED
 
