@@ -261,19 +261,97 @@ def test_the_deletion_does_not_call_an_empty_answer_a_failure() -> None:
     assert "the server was not deleted: $(delete_error" in text
 
 
-def test_the_aws_tool_names_its_seven_subcommands_in_the_usage() -> None:
-    """Seven and not five: the box lives between stop and start.
+def test_the_aws_tool_names_its_eight_subcommands_in_the_usage() -> None:
+    """Eight and not five: the box lives between stop and start, and it outlives itself.
 
     The box of the ARM run was created by hand, so create is a record of what
     happened and refuses to make a second machine, while the volume that the
     corpus lives on is created by the tool and has to be findable in it. stop
     and start came late, in 06.1-18, because until then the box was parked and
-    woken by hand, which meant past the cost arithmetic of this script.
+    woken by hand, which meant past the cost arithmetic of this script. snapshot
+    came last, in 11-12, because the corpus of the run has to survive the
+    machine that carried it, and a snapshot taken by hand is a snapshot whose
+    verification nobody keeps.
     """
     text = AWS_BOX.read_text(encoding="utf-8")
-    for subcommand in ("prices", "create", "volume", "status", "stop", "start", "destroy"):
+    for subcommand in ("prices", "create", "volume", "status", "stop", "start", "snapshot", "destroy"):
         assert f"    {subcommand})" in text, subcommand
-    assert "usage: aws_box.sh <prices|create|volume|status|stop|start|destroy>" in text
+    assert "usage: aws_box.sh <prices|create|volume|status|stop|start|snapshot|destroy>" in text
+
+
+def test_the_aws_snapshot_refuses_a_box_that_is_not_stopped() -> None:
+    """A snapshot of an attached, written volume is crash consistent and nothing more.
+
+    At a stopped instance the filesystem is quiet and the snapshot is clean, so
+    the state is a precondition of the subcommand rather than a sentence in a
+    plan. This is the one check that cannot be made up for afterwards: a broken
+    snapshot looks exactly like a good one until it is restored (T-11-54).
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    body = text.split("cmd_snapshot() {", 1)[1].split("\n# Gone has three shapes", 1)[0]
+    assert "!= 'stopped'" in body
+    # The refusal happens before anything is created, so the check stands in
+    # front of the call that makes the snapshot.
+    assert body.index("'stopped'") < body.index("create-snapshot")
+
+
+def test_the_aws_snapshot_waits_with_the_waiter_and_reads_the_state_back_itself() -> None:
+    """The waiter is the wait, the read back is the proof, and they are not the same.
+
+    A waiter that returns says the api stopped answering pending; it does not
+    say what the snapshot now is. The verification is therefore an independent
+    describe with the fields the report quotes, and the order matters, because a
+    read before the waiter would report a snapshot in progress as a result.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    body = text.split("cmd_snapshot() {", 1)[1].split("\n# Gone has three shapes", 1)[0]
+    assert "ec2 wait snapshot-completed" in body
+    assert body.index("wait snapshot-completed") < body.index("describe-snapshots")
+    for field in ("State", "Progress", "VolumeSize", "VolumeId", "StartTime", "OwnerId", "Encrypted"):
+        assert field in body, field
+    # The figure the report is written from lands in the state file, next to the
+    # id, because the state file is what the next reader quotes.
+    assert "CORPUS_SNAPSHOT_ID=" in body
+
+
+def test_the_aws_snapshot_carries_a_tag_the_sweep_of_destroy_does_not_trip_over() -> None:
+    """The snapshot is the one resource of this run that is meant to outlive the box.
+
+    The sweep of cmd_destroy lists every resource carrying purpose=findling-phase5
+    and calls it a leftover. A snapshot with that tag would make a correct
+    teardown end red and leave the state file lying around, so the snapshot
+    carries its own tag and destroy knows the survivor by name (T-11-52).
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    assert "KEEP_TAG_VALUE='findling-corpus-keep'" in text
+    snapshot = text.split("cmd_snapshot() {", 1)[1].split("\n# Gone has three shapes", 1)[0]
+    assert "{Key=$TAG_KEY,Value=$KEEP_TAG_VALUE}]" in snapshot
+    assert "Value=$TAG_VALUE}" not in snapshot
+    destroy = text.split("cmd_destroy() {", 1)[1]
+    # destroy asks for the survivor on purpose instead of relying on the filter
+    # not seeing it, because a resource that carried both tags would otherwise
+    # be reported as a leftover.
+    assert '"Name=tag:$TAG_KEY,Values=$KEEP_TAG_VALUE"' in destroy
+    assert "findling-corpus-keep" in text.split("cmd_snapshot() {", 1)[0]
+
+
+def test_the_aws_destroy_refuses_to_remove_the_state_file_without_a_backup() -> None:
+    """box.env is the whole cost and damage history of this box, and destroy deletes it.
+
+    Instance and volume, every stop and start with its run time and its cost,
+    the damage report of 2026-09-07 and the DI-05-36 finding live in that file
+    and nowhere else. destroy therefore demands the path of a backup, checks
+    that it exists and is not empty, and refuses before it terminates anything
+    rather than after it has removed the file (T-11-53).
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    body = text.split("cmd_destroy() {", 1)[1]
+    assert "FINDLING_STATE_BACKUP" in body
+    # Exists and is not empty, and both before the first destructive call.
+    assert '[ ! -f "$backup" ]' in body
+    assert '[ ! -s "$backup" ]' in body
+    assert body.index("FINDLING_STATE_BACKUP") < body.index("terminate-instances")
+    assert body.index('[ ! -s "$backup" ]') < body.index('rm -f "$STATE_FILE"')
 
 
 def test_the_aws_stop_writes_the_uptime_it_closes_into_the_state_file() -> None:
@@ -439,6 +517,12 @@ def test_the_aws_destroy_checks_all_three_resources_and_sweeps_by_tag() -> None:
     assert "if [ \"$state\" = 'terminated' ]; then" in text
     assert '--filters "Name=tag:$TAG_KEY,Values=$TAG_VALUE"' in text
     assert "something is left over" in text
+    # Since 11-12 the sweep has two expected survivors instead of one: the
+    # terminated instance, whose tags fall off within the hour, and the snapshot
+    # of the corpus, which is the point of the whole exercise.
+    body = text.split("cmd_destroy() {", 1)[1]
+    assert "keepers" in body
+    assert body.index("keepers") < body.index("something still carries the tag")
 
 
 def test_the_aws_tool_keeps_the_state_out_of_the_repo() -> None:
@@ -459,6 +543,7 @@ def test_the_aws_tool_waits_with_the_waiters_and_not_with_a_loop() -> None:
     assert "ec2 wait volume-available" in text
     assert "ec2 wait volume-in-use" in text
     assert "ec2 wait instance-terminated" in text
+    assert "ec2 wait snapshot-completed" in text
     # Only statements, because the prose above them may well contain the word.
     loops = [
         line for line in text.splitlines() if line.strip().startswith("while ") or line.strip().startswith("until ")
