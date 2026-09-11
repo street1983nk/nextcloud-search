@@ -3143,9 +3143,21 @@ jobs:
 
       - name: Upload the logs
         if: always()
+        # The runner belongs in the name, and it did not until 2026-09-11
+        # (DI-11-04, decided in the phase 11 audit, docs/audits/
+        # 2026-09-phase-11/README.md, section 5). Since plan 11-04 two legs run
+        # server-version stable34, one on ubuntu-24.04 and one on
+        # ubuntu-24.04-arm, so the old name produced two artefacts called
+        # harp-logs-stable34 in the same run: 13,833 bytes and 7,825 bytes in
+        # run 34546421219. Only one of the two carries the evidence files of
+        # the upgrade proof, because only one leg runs that block, and whoever
+        # downloaded "the artefact harp-logs-stable34" had no way of telling
+        # which one they got. Every earlier report names the old form; that
+        # name stays valid for the runs that wrote it, and this one applies
+        # from here on.
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: harp-logs-${{ matrix.server-version }}
+          name: harp-logs-${{ matrix.server-version }}-${{ matrix.runner }}
           path: ${{ runner.temp }}/harp-logs
           if-no-files-found: warn
           retention-days: 7
