@@ -514,3 +514,12 @@ Der Messsatz ist unberührt: die neue Zeile nennt keine Messgröße, und die
 Nicht im Repository zu erledigen und deshalb hier nur benannt: das Flag
 "Enterprise support" im Store-Konto, für beide Findling-Apps, nach der
 Einreichung zu setzen, nach dem Muster des Connectors vom 24.08.2026.
+
+Abnahme des Nachtrags: 2026-09-11, Wortlaute EN, DE und FR wie eingebaut,
+Commit fb371a0 (D-07)
+
+Der Owner hat die drei Store-Zeilen und die drei README-Abschnitte im
+Wortlaut gesehen und ohne Änderung abgenommen. Damit ist auch der
+französische Teil dieses Nachtrags abgenommen, in derselben Disziplin wie
+das FR-Gate vom selben Tag: keine französische Zeile geht ungesehen nach
+außen.
