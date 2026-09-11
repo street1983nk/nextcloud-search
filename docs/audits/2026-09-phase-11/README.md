@@ -10,10 +10,10 @@ findings:
   low: 10
   total: 11
 status: issues_found
-fix_run: pending
-fix_commits: pending
-fixed: pending
-still_open: pending
+fix_run: 2026-09-11
+fix_commits: ab39d37, 2e8502b
+fixed: [M-01, L-05, L-06]
+still_open: [L-07, L-08, L-09, L-10]
 ---
 
 # Phase 11: Security-, Bug- und Performance-Audit
@@ -988,6 +988,19 @@ URL am Release und nie eine Datei aus dem Arbeitsbaum.
 | HIGH | 0 | |
 | MEDIUM | 1 | M-01 (DI-07-03), in dieser Phase von Plan 11-13 gebaut, Belegstelle `11-13-SUMMARY.md` |
 | LOW | 10 | L-01 bis L-10, je mit Entscheidung und Wiedervorlage; L-05 und L-06 in diesem Lauf behoben |
+
+**Der Fix-Lauf dieses Audits, 2026-09-11.** Zwei Befunde sind in ihm behoben
+worden, beide ohne Produktionscode:
+
+| Befund | Commit | Datei | Was |
+|---|---|---|---|
+| L-05 (DI-10-05) | `ab39d37` | `.github/workflows/measure.yml` | die drei Sätze zu Baumhash, Digest und `dev` im Kopf, plus der Satz, warum die Auslieferung davon unberührt bleibt |
+| L-06 (DI-11-04) | `2e8502b` | `.github/workflows/deploy-harp.yml` | der Runner im Artefaktnamen, mit dem Kommentar, der den alten Namen für die alten Läufe gültig lässt |
+
+M-01 steht in `fixed`, ist aber nicht in diesem Lauf gebaut worden, sondern von
+Plan 11-13 am 10.09.2026. Seine sieben Commits stehen in Abschnitt 4; sie hier
+noch einmal unter `fix_commits` zu führen, hieße, einen fremden Lauf als eigenen
+auszugeben.
 
 **Zu `still_open`, und warum es nicht leer ist.** Vier Befunde stehen darin:
 L-07 (DI-10-04), L-08 (DI-10-02 und DI-11-01), L-09 (DI-11-02) und L-10
