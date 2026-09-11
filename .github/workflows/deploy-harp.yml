@@ -2379,9 +2379,10 @@ jobs:
           # the proof below builds an index of its own, and a volume of the store
           # pass would be a second possible source for the same numbers.
           #
-          # The flag is deliberately absent, in this step and in every step of
-          # this block. A grep for --rm-data over the upgrade steps has to come
-          # back empty (T-11-26): a lost volume in an upgrade path would be the
+          # The data removing flag of "Store uninstall 3" is deliberately absent,
+          # in this step and in every step of this block, and it is not even
+          # spelled out here: a grep for it over the upgrade steps has to come
+          # back empty (T-11-26). A lost volume in an upgrade path would be the
           # damage of 2026-09-07 in small, and the surest way to keep the flag
           # out of an upgrade step is to leave no occurrence of it here to copy
           # from. The volume of the store pass is therefore removed by name with
@@ -2805,6 +2806,306 @@ jobs:
           fi
           echo "three terms, one file each; no navigation entry; the state is on record in upgrade-before.json"
 
+      - name: Store upgrade 4, the upgrade itself, in two halves
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        run: |
+          # ---------------------------------------------------------------
+          # Half one, the companion: the files of this commit take the place of
+          # the files of v1.0.3, and the instance is asked to upgrade.
+          # ---------------------------------------------------------------
+          archive="${RUNNER_TEMP}/store-dist/findling.tar.gz"
+          if [ ! -s "${archive}" ]; then
+            echo "::error::${archive} is missing, so there is nothing of this commit to upgrade to"
+            exit 1
+          fi
+          echo "the new half is the archive Store install 1 built out of this commit:"
+          sha256sum "${archive}"
+
+          installed_before=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'installed_version';")
+          echo "the instance has findling installed at ${installed_before}"
+
+          # The directory goes and the new one takes its place, because that is
+          # what an update does: Installer::updateAppstoreApp removes the
+          # installed directory before it moves the downloaded one in. An
+          # extraction on top would leave files of 1.0.3 that the new version
+          # dropped, and the result would be a mixture no user ever has.
+          rm -rf apps/findling
+          tar -xzf "${archive}" -C apps
+          test -f apps/findling/appinfo/info.xml
+          new_companion=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' apps/findling/appinfo/info.xml | head -1)
+          echo "the companion of this commit carries version ${new_companion}"
+
+          # occ upgrade, with its verdict on record. Exit code 3 is
+          # ERROR_UP_TO_DATE and is a legitimate answer here, exit code 0 is the
+          # answer of a run that had something to do; anything else ends this
+          # step.
+          status=0
+          "${RUNNER_TEMP}/nc-occ.sh" upgrade > "${RUNNER_TEMP}/upgrade-occ.txt" 2>&1 || status=$?
+          cat "${RUNNER_TEMP}/upgrade-occ.txt"
+          case "${status}" in
+            0|3) echo "occ upgrade answered ${status}" ;;
+            *)
+              echo "::error::occ upgrade answered ${status}, which is neither success nor up-to-date"
+              exit 1
+              ;;
+          esac
+
+          installed_after=$(sqlite3 -cmd '.timeout 30000' "${FINDLING_DB}" \
+            "SELECT configvalue FROM oc_appconfig WHERE appid = 'findling' AND configkey = 'installed_version';")
+          echo "installed_version went from ${installed_before} to ${installed_after}"
+
+          # The two cases, both named, because which one runs depends on a plan
+          # that has not run yet and this block has to be right before and after
+          # it.
+          #
+          # The version step is plan 11-11: it bumps both info.xml and the image
+          # tag to 1.1.0 in one commit. Until that day the companion of this
+          # commit still carries 1.0.3, the server sees no newer version and does
+          # not perform an app update, and this run therefore measures the file
+          # exchange without a version step. That is stated rather than dressed
+          # up, and it costs the proof nothing that it is about: the index lives
+          # in the volume of the container, and the assertions of the next step
+          # are about the volume.
+          #
+          # From the day 11-11 lands, the first branch is the one that runs and
+          # it demands that the instance really performed the update. A silent
+          # "nothing happened" with a newer version on disk would be a store
+          # update that leaves a user on the old migrations.
+          if [ "${new_companion}" != "${installed_before}" ]; then
+            if [ "${installed_after}" != "${new_companion}" ]; then
+              echo "::error::the companion on disk is ${new_companion} and the instance still has ${installed_after} installed, so occ upgrade did not perform the app update"
+              exit 1
+            fi
+            echo "the instance performed the app update: ${installed_before} to ${installed_after}"
+          else
+            echo "::notice::the companion of this commit carries ${new_companion}, the same version v1.0.3 published, so this run measures the file exchange without a version step"
+            echo "The version bump to 1.1.0 is plan 11-11; from that day the branch above is the one that runs."
+            if [ "${installed_after}" != "${installed_before}" ]; then
+              echo "::error::installed_version moved from ${installed_before} to ${installed_after} although both sides carry the same version"
+              exit 1
+            fi
+          fi
+
+          # ---------------------------------------------------------------
+          # Half two, the container: away without the flag, and back on the very
+          # volume it left. This is "Store uninstall 1" and "Store uninstall 2"
+          # in one order, and the volume in between is what carries the index of
+          # 26 hours of work on a real installation.
+          # ---------------------------------------------------------------
+          old_image=$(docker inspect --format '{{.Config.Image}}' "${UPGRADE_OLD_CONTAINER}")
+          echo "the v1.0.3 container runs ${old_image}"
+
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:unregister findling_backend
+          gone=$(docker ps -a --filter "name=${UPGRADE_OLD_CONTAINER}" --format '{{.Names}}')
+          if [ -n "${gone}" ]; then
+            echo "::error::the container ${UPGRADE_OLD_CONTAINER} survived the unregister, so the new image would never be started"
+            docker ps -a
+            exit 1
+          fi
+          kept=$(docker volume ls --filter "name=${UPGRADE_VOLUME}" --format '{{.Name}}')
+          if [ "${kept}" != "${UPGRADE_VOLUME}" ]; then
+            echo "::error::the volume ${UPGRADE_VOLUME} is gone after an unregister without the flag, and with it the index of the installation being upgraded"
+            docker volume ls
+            exit 1
+          fi
+          echo "container gone, volume ${kept} kept, exactly as Store uninstall 1 promises"
+
+          # The new image, and it is the one this run built out of this commit.
+          # Why not the reference the archive of this commit names: until plan
+          # 11-11 bumps it, backend/appinfo/info.xml still says image-tag 1.0.3,
+          # which is the image the v1.0.3 half is already running. Registering
+          # that again would leave the container half of this upgrade a no-op,
+          # and the assertion below would be about an image that never changed.
+          # info-citest.xml is the file the developer pass of this job registered
+          # at the start, it names the image built from this commit, and where
+          # the bytes of a store install come from is the subject of the store
+          # install path above and not of this block.
+          "${RUNNER_TEMP}/nc-occ.sh" app_api:app:register findling_backend harp_proxy_host \
+            --info-xml "${RUNNER_TEMP}/info-citest.xml" --wait-finish
+
+          container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
+          if [ -z "${container}" ]; then
+            echo "::error::the registration after the upgrade created no running container"
+            docker ps -a
+            exit 1
+          fi
+          volume=$(docker volume ls --filter 'name=findling_backend' --format '{{.Name}}')
+          if [ "${volume}" != "${UPGRADE_VOLUME}" ]; then
+            echo "::error::the container after the upgrade runs on '${volume}' and not on the volume ${UPGRADE_VOLUME} of the installation it upgrades"
+            docker volume ls
+            exit 1
+          fi
+          new_image=$(docker inspect --format '{{.Config.Image}}' "${container}")
+          echo "the container after the upgrade runs ${new_image} on ${volume}"
+          if [ "${new_image}" = "${old_image}" ]; then
+            echo "::error::the upgrade put the same image back (${new_image}), so the container half moved nothing and the assertions below would be about an installation that was never upgraded"
+            exit 1
+          fi
+          docker ps --filter "name=${container}" --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
+
+          # The container answers again before the next step measures it. The
+          # canary is produced inside the container and never comes out of the
+          # index, so this waits for the process without touching the state the
+          # assertions are about. Bounded, and an expired budget here is a
+          # container that never came up rather than a difference in the index.
+          ready=""
+          for _ in $(seq 1 30); do
+            if curl -sf -u "testuser:${TESTUSER_PASS}" \
+                 -H 'OCS-APIRequest: true' -H 'Accept: application/json' \
+                 'http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=findling-canary' \
+                 | jq -e '.ocs.data.entries | length == 1' > /dev/null 2>&1; then
+              ready="yes"
+              break
+            fi
+            sleep 5
+          done
+          if [ -z "${ready}" ]; then
+            echo "::error::the container after the upgrade does not answer the canary search, so the next step would measure a container that is not up"
+            docker logs "${container}" 2>&1 | tail -n 60
+            exit 1
+          fi
+          echo "the container after the upgrade answers the canary search"
+
+          # The hard memory limit of scripts/ops/aws_box.sh is gone after every
+          # app_api:app:register, and it is named here because it is the kind of
+          # thing that gets forgotten: nothing in this job measures against such
+          # a limit, no docker update sets one anywhere in this file, so there is
+          # nothing to restore. The day a step here measures a limit, it has to
+          # be set again right at this point.
+          {
+            echo "UPGRADE_NEW_CONTAINER=${container}"
+            echo "UPGRADE_NEW_COMPANION=${new_companion}"
+          } >> "${GITHUB_ENV}"
+
+      # Five assurances about something that did NOT move and one about
+      # something that did, and the comment keeps them apart because the two
+      # kinds fail for opposite reasons. The five are the promise of D-04: an
+      # upgrade from 1.0.x leaves the index alone, and a user pays nothing for
+      # an update they did not ask for. The sixth is the change of plan 09-06
+      # arriving on an existing installation, which is the counter sample: an
+      # upgrade that changed nothing at all would pass five assertions and mean
+      # that the new files never took effect.
+      #
+      # The branch this test does NOT drive, named rather than left out. D-05
+      # asks that a reindex which IS needed starts visibly, and the mechanism for
+      # it exists on both sides: findling.index.open.start_rebuild_on_drift
+      # raises the local generation and writes the line this step greps for, the
+      # container reports reindexRequired, and php/templates/admin.php raises the
+      # paragraph findling-banner-reindex which names "occ findling:index
+      # --restart" as the remedy. This test does not drive that branch, because
+      # D-04 says no mark moves between 1.0.x and this version, and
+      # backend/tests/test_upgrade_compatibility.py holds that promise against
+      # the code. What is asserted here is the ABSENCE of the drift signal, and
+      # that is a statement and not a gap: the day a mark really moves,
+      # assertion 2 below turns red before the two absence assertions do, and the
+      # question that follows belongs to the owner and not to a test edit.
+      - name: Store upgrade 5, the six assurances after the upgrade
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        run: |
+          . "${RUNNER_TEMP}/upgrade-probe.sh"
+          snapshot "${RUNNER_TEMP}/upgrade-after.json" after
+          before="${RUNNER_TEMP}/upgrade-before.json"
+          after="${RUNNER_TEMP}/upgrade-after.json"
+          echo "the state after the upgrade:"
+          jq . "${after}"
+
+          fail=0
+          # One comparison, one sentence saying what it means, and every one of
+          # them runs: a step that stopped at the first difference would hide
+          # which of the six the upgrade broke.
+          unchanged() {
+            path="$1"
+            meaning="$2"
+            was=$(jq -r "${path}" "${before}")
+            now=$(jq -r "${path}" "${after}")
+            if [ "${was}" != "${now}" ]; then
+              echo "::error::${meaning}: ${path} was ${was} before the upgrade and is ${now} after it"
+              fail=1
+            else
+              echo "unchanged  ${path} = ${was}   (${meaning})"
+            fi
+          }
+
+          echo "--- 1, the same hits for the three terms of the corpus ---"
+          for term in Belehrung Auszug Erinnerung; do
+            unchanged ".terms.${term}" "the search for ${term} answers differently after the upgrade, so the upgrade changed what an existing index finds"
+          done
+
+          echo "--- 2, the same five marks (D-04) ---"
+          for mark in schemaVersion indexVersion analyzerVersion wordlistHash tantivyVersion; do
+            unchanged ".marks.${mark}" "a version mark moved, and a moved mark is a full reindex on every installation in the field (D-04)"
+          done
+
+          echo "--- 3, the same document counts ---"
+          unchanged '.container.docs' "the number of documents in the index changed, so the upgrade added or lost documents"
+          unchanged '.container.indexed' "the container counts a different number of indexed files after the upgrade"
+          unchanged '.container.skipped' "the container counts a different number of skipped files after the upgrade"
+          unchanged '.container.failed' "the container counts a different number of failed files after the upgrade"
+          unchanged '.nextcloud.skipped' "Nextcloud recorded a different number of skipped files after the upgrade"
+          unchanged '.nextcloud.failed' "Nextcloud recorded a different number of failed files after the upgrade"
+          unchanged '.nextcloud.scheduled' "the work stock is not empty after the upgrade, so something requeued work nobody asked for"
+          unchanged '.nextcloud.running' "a worker holds queue rows after the upgrade, so something requeued work nobody asked for"
+
+          echo "--- 4, no reindex banner ---"
+          if jq -e '.reindexBanner' "${after}" > /dev/null; then
+            echo "::error::the admin page raises the reindex banner after the upgrade, so the container found the index built by different code"
+            fail=1
+          else
+            echo "no reindex banner: backend.reindexRequired is false, and the container answered (backendReachable was asserted by the probe)"
+          fi
+
+          echo "--- 5, no drift line in the container log ---"
+          log="${RUNNER_TEMP}/upgrade-exapp.log"
+          docker logs "${UPGRADE_NEW_CONTAINER}" > "${log}" 2>&1
+          if [ ! -s "${log}" ]; then
+            echo "::error::the container after the upgrade wrote no log at all, so the absence of a drift line says nothing"
+            fail=1
+          else
+            # The sentence start_rebuild_on_drift writes when it raises the
+            # generation, matched on its stable half rather than on the whole
+            # line, which carries the new generation number.
+            drift=$(grep -c 'built by different code' "${log}" || true)
+            if [ "${drift}" != "0" ]; then
+              echo "::error::the container log carries ${drift} line(s) of start_rebuild_on_drift, so a rebuild of the whole index started"
+              grep -n 'built by different code' "${log}"
+              fail=1
+            else
+              echo "no start_rebuild_on_drift line in $(wc -l < "${log}") lines of container log"
+            fi
+          fi
+
+          echo "--- 6, the navigation entry, and this one HAS to have changed ---"
+          was=$(jq -r '.navigation.findling' "${before}")
+          now=$(jq -r '.navigation.findling' "${after}")
+          if [ "${was}" != "false" ] || [ "${now}" != "true" ]; then
+            echo "::error::the app menu carried findling=${was} before the upgrade and carries findling=${now} after it, and the change plan 09-06 made has to arrive on an existing installation"
+            jq -r '.navigation.ids' "${before}" "${after}"
+            fail=1
+          else
+            echo "the navigation entry was absent before the upgrade and is present after it"
+          fi
+
+          if [ "${fail}" -ne 0 ]; then
+            echo "the two states side by side:"
+            diff -u "${before}" "${after}" || true
+            exit 1
+          fi
+
+          echo "all six assurances hold"
+          {
+            echo ""
+            echo "### Upgrade from \`${UPGRADE_FROM_TAG}\` on ${{ matrix.server-version }} (${{ matrix.runner }})"
+            echo ""
+            echo "- companion \`${UPGRADE_OLD_COMPANION}\` out of the release assets, upgraded to \`${UPGRADE_NEW_COMPANION}\` of this commit"
+            echo "- the container was unregistered without the data removing flag and registered again on the volume \`${UPGRADE_VOLUME}\`"
+            echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, the five index marks, the document counts, the work stock"
+            echo "- no reindex banner, no \`start_rebuild_on_drift\` line in the container log"
+            echo "- the navigation entry of plan 09-06 was absent before and is present after"
+            echo ""
+            echo "The reindex branch of D-05 is deliberately not driven here; its absence is what this run asserts."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Collect the logs and tear the deployment down
         if: always()
         run: |
@@ -2818,8 +3119,16 @@ jobs:
           # The evidence of the store install pass, saved rather than left in the
           # step log where it scrolls away: the recorded occ calls, the registry
           # manifests and the three integrity verdicts.
+          # The last seven belong to the upgrade proof of plan 11-07 and are
+          # the whole point of it: two states of one installation, the verdict
+          # of occ upgrade between them, and the log of the container that came
+          # up on the volume of the old one. They exist on the one leg that runs
+          # that block, and the copy is guarded by the test below anyway.
           for evidence in occ-calls.txt manifest-released.txt manifest-dev.txt \
-            integrity-clean.txt integrity-tampered.txt integrity-restored.txt; do
+            integrity-clean.txt integrity-tampered.txt integrity-restored.txt \
+            upgrade-before.json upgrade-after.json upgrade-before-status.txt \
+            upgrade-after-status.txt upgrade-occ.txt upgrade-overview.json \
+            upgrade-exapp.log; do
             if [ -f "${RUNNER_TEMP}/${evidence}" ]; then
               cp "${RUNNER_TEMP}/${evidence}" "${RUNNER_TEMP}/harp-logs/${evidence}"
             fi
