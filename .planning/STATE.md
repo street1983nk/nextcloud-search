@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Qualitaet und Effizienz
 status: executing
-stopped_at: Abgeschlossen 11-07-PLAN.md, der Upgrade-Beweis Ende zu Ende in CI (Lauf 34546421219 gruen, Index unveraendert)
-last_updated: "2026-09-11T01:05:00.000Z"
+stopped_at: Abgeschlossen 11-05-PLAN.md, die vollstaendige FR-Uebersetzungstabelle und das FR-Gate Teil 1 (abgenommen 2026-09-11, keine Korrektur). Welle 3 ist damit zu, Welle 4 offen
+last_updated: "2026-09-11T03:20:00.000Z"
 last_activity: 2026-09-11
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 37
-  completed_plans: 32
-  percent: 86
+  completed_plans: 33
+  percent: 89
 ---
 
 # Project State
@@ -26,11 +26,30 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 11 (Haertung und Store-Einreichung v1.1) — EXECUTING
-Plan: 6 of 13
-Status: 11-07 abgeschlossen, 11-05 steht aus
+Plan: 7 of 13
+Status: 11-05 abgeschlossen, Welle 3 ist zu, Welle 4 steht an
 Last activity: 2026-09-11
 
-**Naechster Schritt:** 11-05, der einzige offene Plan vor Welle 4. Plan 11-07
+**Naechster Schritt:** Welle 4. Plan 11-05 ist am 11.09.2026 gefahren und
+abgeschlossen, und damit ist **Welle 3 vollstaendig**: `docs/l10n-french.md`
+traegt eine dreispaltige Tabelle ueber alle 174 Katalogschluessel (173 Zeilen
+plus `Findling` als benannte Ausnahme), 24 Wortlaute woertlich aus Phase 9 und
+149 neu, und der Owner hat sie als franzoesischer Muttersprachler am
+**2026-09-11 ohne eine einzige Korrektur** abgenommen. Die Abnahmezeile steht
+datiert in derselben Datei, die 11-08 giessen wird, und nennt sich ausdruecklich
+**Teil 1 von 2 (Katalog)**; Teil 2 (Store-Text, `README.fr.md`, die
+franzoesischen Teile von `info.xml`) ist Plan 11-09. **Fuer 11-08 gilt drei
+Dinge:** die FR-Spalte ist der Wert, ` / ` trennt Singular und Plural und kommt
+in genau den fuenf Pluralzeilen vor, und **`Findling` ist der 174. Wert und steht
+nicht in der Tabelle, sondern in der Ausnahmenliste** , wer nur die Tabelle
+liest, baut ein `fr.json` mit 173 Schluesseln und laesst Gate G1 rot werden. Der
+Grund ist ein in 11-05 benannter Befund: `Findling` ist entgegen der bisherigen
+Aussage der Datei Schluessel 1 von 174 in `de.json`. Die Pluralregel fuer G4
+lautet `nplurals=2; plural=(n > 1);` und steht als Wortlaut in der Datei, die
+zweite G2-Ausnahme ist `Page %s`. Die drei Stellen, an denen die Datei noch 173
+nannte (Uebergabe aus 11-13), sind in 11-05 bearbeitet und **nicht** an 11-10
+weitergereicht worden. **REL-01 bleibt ungehakt.** Plan 11-07
+ist am 11.09.2026 gefahren und abgeschlossen: `deploy-harp.yml` faehrt auf dem
 ist am 11.09.2026 gefahren und abgeschlossen: `deploy-harp.yml` faehrt auf dem
 Ast `stable34/ubuntu-24.04` einen Upgrade-Block (`Store upgrade 0` bis
 `Store upgrade 5`), der beide Haelften aus den echten v1.0.3-Release-Assets
@@ -213,6 +232,7 @@ ueber AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 | Phase 11 P04 | 70min | 3 tasks | 1 files |
 | Phase 11 P13 | 35min | 3 tasks | 14 files |
 | Phase 11 P07 | 55min | 2 tasks | 1 files |
+| Phase 11 P05 | 30min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -381,6 +401,14 @@ Recent decisions affecting current work:
 - [Phase 11]: 11-07: Die neue Container-Haelfte wird mit info-citest.xml registriert (Abbild dieses Commits aus der lokalen Registratur), weil backend/appinfo/info.xml bis 11-11 weiterhin image-tag 1.0.3 nennt; der Schritt prueft ausdruecklich, dass altes und neues Abbild verschieden sind
 - [Phase 11]: 11-07: Jede Zusicherung ueber Unveraendertheit braucht eine Zusicherung ueber eine Aenderung neben sich. Hier ist das der Navigationseintrag aus 09-06, sonst waere ein Upgrade, das nichts bewirkt hat, das gruenste Ergebnis
 - [Phase 11]: 11-07: Der Reindex-Zweig von D-05 wird nicht gefahren, seine Abwesenheit wird zugesichert, und das steht als Kommentar im Workflow. Bewegt sich je eine Marke, faellt die Markenzusicherung vor den Abwesenheitszusicherungen, und die Frage gehoert dem Owner
+- [Phase 11]: 11-05: Die Schluesselmenge ist aus php/l10n/de.json gezaehlt und nicht aus der Recherche uebernommen. 174 statt 173 ist kein Befund, sondern Entscheid v1-a, und die Datei nennt Plan 11-13 als Herkunft der gestiegenen Zahl, damit ein spaeterer Leser sie nicht fuer Nachlaessigkeit haelt und wieder senkt
+- [Phase 11]: 11-05: Die Datei nennt vier Zahlen statt drei, 34 Schluessel mit printf-Direktiven und 29 ohne die fuenf Pluralschluessel. Die Recherche zaehlt 29, eine naive Nachzaehlung findet 34, und ohne den Satz, der beide auseinanderhaelt, haelt die naechste Zaehlung eine der beiden fuer falsch
+- [Phase 11]: 11-05: Die Spalten Schluessel und DE der Uebersetzungstabelle werden aus de.json erzeugt und nicht abgetippt; nur die FR-Spalte ist Handarbeit. Damit kann eine Tabellenzeile nicht stillschweigend von dem abweichen, was die App tatsaechlich uebersetzt
+- [Phase 11]: 11-05: backend heisst im Franzoesischen durchgehend le service, nach dem seit Phase 9 abgenommenen Wortlaut der Ergebnisseite; wo der Eigenname gemeint ist, bleibt Findling Backend stehen. run heisst passage, a worker heisst un processus de traitement und nicht un travailleur, weil die deutsche Vorlage Arbeiter sagt und ein franzoesischer Leser dort an eine Person denkt. Alle drei vom Owner am 11.09. ausdruecklich bestaetigt
+- [Phase 11]: 11-05: Das Register folgt dem Deutschen zeilenweise, Verwaltungsseite im Infinitiv, Ergebnisseite im Vouvoiement. Ein einheitliches Register waere eine Textrunde gewesen, die niemand bestellt hat
+- [Phase 11]: 11-05: Vor : ; ? ! steht ein einfaches Leerzeichen und nicht U+00A0 oder U+202F. Das ist die Form des franzoesischen Bestands (README.fr.md, info.xml) und die einzige, die den Katalog nicht mit unsichtbaren Zeichen fuellt, die niemand in einem Diff sieht
+- [Phase 11]: 11-05: Findling steht nicht in der Tabelle, wie der Plan es verlangt, aber mit Wortlaut in der benannten G2-Ausnahmenliste. Beides zusammen ist der einzige Weg, der die Abnahmekriterien von 11-05 und Gate G1 von 11-08 gleichzeitig haelt; eine Toleranzschwelle statt der Liste ist ausdruecklich ausgeschlossen
+- [Phase 11]: 11-05: Die drei Stellen, an denen docs/l10n-french.md noch 173 nannte, sind hier bearbeitet und nicht an 11-10 weitergereicht worden, weil die Datei in files_modified dieses Plans steht. Die beiden historischen Aussagen behalten ihre damalige Zahl und sind als Geschichte kenntlich, die vorwaertsgerichtete Bedingung nennt jetzt 174
 
 ### Pending Todos
 
@@ -410,6 +438,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-11T01:05:00.000Z
-Stopped at: Abgeschlossen 11-07-PLAN.md, der Upgrade-Beweis Ende zu Ende in deploy-harp (Lauf 34546421219 gruen)
+Last session: 2026-09-11T03:20:00.000Z
+Stopped at: Abgeschlossen 11-05-PLAN.md, die vollstaendige FR-Uebersetzungstabelle und das FR-Gate Teil 1 (abgenommen 2026-09-11, keine Korrektur). Welle 3 ist damit zu
 Resume file: None
