@@ -103,6 +103,12 @@ Prérequis :
 		submitted under, and plan 05-17 is the only place in this phase that
 		performs it. Nothing about the protocol changed with it.
 
+		The bump from 1.0.3 to 1.1.0 is v1.1, and it is a minor and not a
+		patch because the release adds surface instead of repairing it: the
+		French half of the store listing and of the admin page, the icon and
+		the navigation entry. The protocol between the halves did not change
+		with it either, and plan 11-11 is the only place that performs it.
+
 		The three places that have to agree are unchanged: this element, the
 		<version> of backend/appinfo/info.xml and the <image-tag> next to it.
 		docker.yml compares all three against the git tag before it builds, so
@@ -110,7 +116,7 @@ Prérequis :
 		test_lockstep_versions.py asks the same question on every ordinary run,
 		which is the cheap half of the same guard.
 	-->
-	<version>1.0.3</version>
+	<version>1.1.0</version>
 	<!--
 		The SPDX spelling and not the short one. info.xsd accepts both, but it
 		lists agpl, mit, mpl and apache under the heading Deprecated, and the
