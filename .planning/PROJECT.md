@@ -97,7 +97,7 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 **Key context:** Kill-Kriterium bleibt aktiv (NC-Conference Sept.: kuendigt Nextcloud ES-freie Volltextsuche mit OCR an, Stopp/Pivot). Store-Texte fuer v1.1 nach der kurze-produkttexte-Regel, Entwurf dem Owner zeigen.
 
-**Stand:** Phasen 7 bis 10 komplett (Phase 10 Vergleichsmessung auf der AWS-Box abgeschlossen 2026-09-10: 52.111 Dokumente unter harter 2-GiB-Grenze ohne einen getoeteten Prozess indexiert, Grundlast 691,8 auf 103,2 MB, Stufe-8-Zusage haelt mit 2.125,5 von 2.500 ms; Bericht in 19 Abschnitten inkl. 13 ehrlicher Verschlechterungs-Posten, Erfolgskriterium 2 bewusst "teilweise belegt" per Owner-Entscheid, Verification 10/10; Box angehalten, 31,05 h / 3,60 USD unter dem Deckel). Offen: Phase 11 Haertung und Store-Einreichung v1.1 (dorthin uebergeben: DI-07-02, DI-07-03, DI-10-01 bis DI-10-05, T-09-29; FR-Katalog docs/l10n-french.md ist Vorbedingung der Abgabe).
+**Stand:** MILESTONE v1.1 KOMPLETT, alle Phasen 7 bis 11 abgeschlossen. Findling v1.1.0 ist am 11.09.2026 im Nextcloud App Store eingereicht (beide Haelften HTTP 201, Tag v1.1.0 auf 891bc6d, Verification 5/5). Kernzahlen: Grundlast 691,8 auf 103,2 MB, kein OOM-Kill unter harter 2-GiB-Grenze, Upgrade 1.0.3 auf 1.1.0 Ende zu Ende bewiesen (dabei echten Produktfehler stumme-Suche-nach-Minor-Upgrade gefunden und per Migration gefixt), FR-Katalog komplett (174 Schluessel, Owner-Muttersprachler-Gate), Enterprise-Kontakt admin@infranode.dev in allen Store-Texten. AWS-Box abgebaut, Korpus als Snapshot snap-03f1d1d9ad9262704 (~2,9 USD/Monat). Nach v1.2 uebergeben: DI-10-02/DI-11-01, DI-10-04, DI-11-02/03/05/06, Snapshot-Wiedervorlage, stable35-RE-CHECK 16.09.
 
 ## Evolution
 
@@ -117,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-10 after completing phase 10 (Vergleichsmessung auf der AWS-Box)*
+*Last updated: 2026-09-11 after completing phase 11 and milestone v1.1 (Store-Einreichung)*
