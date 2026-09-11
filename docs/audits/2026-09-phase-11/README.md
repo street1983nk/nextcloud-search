@@ -36,6 +36,14 @@ Dieser Bericht ist nach dem Muster von `docs/audits/2026-09-phase-10/README.md`
 geschrieben, das seinerseits auf `docs/audits/2026-09-phase-09/README.md` zeigt,
 und liegt nach der Owner-Regel vom 15.08.2026 vor dem Phasenabschluss.
 
+**Was `files_reviewed: 55` genau meint**, damit die Zahl nachzählbar bleibt: es
+ist `git diff 721bde6..HEAD --name-only | wc -l` zum Zeitpunkt des Audits, also
+vor dem ersten Commit dieses Plans. Die Dateien, die das Audit **selbst**
+schreibt (dieser Bericht, die `deferred-items.md` der Phase) und die zwei
+Workflow-Köpfe seines Fix-Laufs sind darin nicht enthalten und sind auch nicht
+ihr eigener Prüfgegenstand. `.github/workflows/deploy-harp.yml` steht schon in
+den 55, weil die Pläne 11-04 und 11-07 sie geändert haben.
+
 ## Die eine Frage am Anfang, und diesmal mit der anderen Antwort
 
 Das Phase-10-Audit begann mit einer Frage und beantwortete sie mit einem Wort:
