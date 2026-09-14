@@ -54,4 +54,30 @@
 
 ## Traceability
 
-(Wird vom Roadmapper gefüllt: REQ-ID -> Phase)
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| FILT-01 | Phase 13 | Pending |
+| FILT-02 | Phase 13 | Pending |
+| FILT-03 | Phase 13 | Pending |
+| FILT-04 | Phase 13 | Pending |
+| FILT-05 | Phase 13 | Pending |
+| MEM-01 | Phase 14 | Pending |
+| MEM-02 | Phase 14 | Pending |
+| MEM-03 | Phase 14 | Pending |
+| MEM-04 | Phase 14 | Pending |
+| MEM-05 | Phase 14 | Pending |
+| MESS-04 | Phase 12 | Pending |
+| MESS-05 | Phase 15 | Pending |
+| MESS-06 | Phase 12 | Pending |
+| HART-01 | Phase 16 | Pending |
+| HART-02 | Phase 16 | Pending |
+| HART-03 | Phase 12 | Pending |
+| REL-02 | Phase 16 | Pending |
+
+**Abdeckung:** 17 von 17 Requirements zugeordnet, keine Waise, keine Doppelzuordnung.
+
+**Zuordnungs-Anmerkungen:**
+
+- HART-03 (stable35-Fenster) liegt thematisch bei der Härtung, ist aber Phase 12 zugeordnet, weil die Frist der 16.09.2026 ist, also zwei Tage nach Milestone-Start. Das Ergebnis fließt in Phase 16 in die Release-Entscheidung ein, ohne dort noch einmal als eigene Anforderung zu zählen.
+- MESS-06 (Cron-Protokoll, Vergleichbarkeitsbedingungen) ist Phase 12 zugeordnet, weil es Runbook- und Werkzeugarbeit ist; die Anwendung erfolgt im Messlauf der Phase 15 und ist dort Bestandteil von Erfolgskriterium 2.
+- FILT-01 bis FILT-05 sind end-to-end formuliert (Backend-Feld plus Oberfläche plus Parität) und liegen deshalb geschlossen in Phase 13, mit verbindlicher Planreihenfolge Backend vor PHP.
