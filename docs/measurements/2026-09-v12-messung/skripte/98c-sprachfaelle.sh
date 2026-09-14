@@ -311,6 +311,102 @@ urteil() {
     # Zeile in einer Rohdatei, die niemand liest.
     cat "$WORK/vorpruefung-urteil"
 
+    echo "=== Abschnitt 1: das Konto, dessen Heimat nichts als den Korpus halten soll ==="
+    # Das Skelett wird zuerst abgeschaltet, und das ist keine Ordnungsliebe: ohne
+    # diesen Schritt legt Nextcloud in jede neue Heimat ein Handbuch, einen
+    # Bilderordner und eine Liesmich, und die Zaehlzusicherungen der zehn Faelle
+    # waeren Aussagen ueber Dokumente, die niemand gewaehlt hat. integration.yml
+    # macht genau das, aus genau diesem Grund. Der vorherige Wert wird zuerst
+    # gelesen und am Ende dieses Blocks zurueckgeschrieben.
+    SKELETON_VORHER=$(occ config:system:get skeletondirectory 2>/dev/null || true)
+    printf 'skeletondirectory vorher: %s\n' "${SKELETON_VORHER:-(leer oder nicht gesetzt)}"
+    occ config:system:set skeletondirectory --value='' 2>&1 || true
+
+    if occ user:info "$KONTO" >/dev/null 2>&1; then
+        echo "das Konto existiert schon, es wird nicht neu angelegt"
+        echo "-- Achtung: seine Heimat muss NUR den Korpus enthalten, sonst sind die"
+        echo "   Faelle rot aus dem falschen Grund. Dieser Block ist abbrechbar (A7). --"
+        # Das Passwort eines bestehenden Kontos ist hier unbekannt, es wird also
+        # aus der Umgebung neu gesetzt. Nie ueber ein Argument.
+        OC_PASS="$KONTOPW" occ user:resetpassword --password-from-env "$KONTO" 2>&1 || true
+    else
+        OC_PASS="$KONTOPW" occ user:add --password-from-env "$KONTO" 2>&1
+    fi
+    occ user:info "$KONTO" 2>&1 | sed -n '1,6p' || true
+
+    echo "=== Abschnitt 2: der Korpus ueber WebDAV, der Weg eines Nutzers ==="
+    ZIELORDNER="$BASE/remote.php/dav/files/$KONTO/$ORDNER"
+    curl -sS -o /dev/null -K "$CURLRC" -X MKCOL "$ZIELORDNER" || true
+    date -u +'upload-vor %Y-%m-%dT%H:%M:%SZ'
+    : >"$WORK/dateiids.txt"
+    for pfad in "$KORPUS"/*; do
+        name=$(basename "$pfad")
+        code=$(curl -sS -o /dev/null -D "$WORK/kopf.txt" -w '%{http_code}' -K "$CURLRC" \
+            -T "$pfad" "$ZIELORDNER/$name" || echo 000)
+        printf '%s %s\n' "$code" "$name" >>"$WORK/upload.txt"
+        # Die Kennung der eigenen Datei wird HIER erhoben und nicht spaeter: ein
+        # Rang ist erst messbar, wenn die Datei existiert, und ihre Kennung ist
+        # beim Hochladen ohne zweite Abfrage zu haben. Nextcloud gibt OC-FileId
+        # mit einem Instanz-Suffix aus (etwa 00000023oc9mn3rmbkgs); die
+        # Datei-Kennung ist allein der fuehrende Zifferblock, und seine
+        # fuehrenden Nullen gehoeren zur Auffuellung und nicht zur Zahl.
+        kennung=$(sed -n 's/^[Oo][Cc]-[Ff]ile[Ii]d:[[:space:]]*\([0-9][0-9]*\).*$/\1/p' \
+            "$WORK/kopf.txt" 2>/dev/null | tail -1 | sed 's/^0*//')
+        if [ -n "$kennung" ]; then
+            printf '%s %s\n' "$name" "$kennung" >>"$WORK/dateiids.txt"
+        fi
+    done
+    date -u +'upload-nach %Y-%m-%dT%H:%M:%SZ'
+    awk '{print $1}' "$WORK/upload.txt" | sort | uniq -c
+    HOCHGELADEN=$(awk '$1 ~ /^2/ {n++} END {print n + 0}' "$WORK/upload.txt")
+    KENNUNGEN=$(grep -c . "$WORK/dateiids.txt" 2>/dev/null || true)
+    printf 'dateien-hochgeladen %s\n' "$HOCHGELADEN"
+    printf 'dateien-erwartet    %s\n' "$ERWARTETE_DATEIEN"
+    printf 'datei-kennungen     %s (aus dem Antwortkopf OC-FileId)\n' "${KENNUNGEN:-0}"
+    if [ "$HOCHGELADEN" -eq "$ERWARTETE_DATEIEN" ]; then
+        echo 'upload-vollstaendig ja' >"$WORK/upload-urteil"
+    else
+        echo 'upload-vollstaendig nein' >"$WORK/upload-urteil"
+        grep -v '^2' "$WORK/upload.txt" || true
+    fi
+    cat "$WORK/upload-urteil"
+    occ files:scan --path="/$KONTO/files/$ORDNER" 2>&1 | tail -6 || true
+
+    echo "=== Abschnitt 3: die Indexierung, gegen die langsamste Uhr ==="
+    echo "-- zuerst $FRIST s, weil der Poller-Backoff bis zu 300 s laeuft und der"
+    echo "   Fuenf-Minuten-Systemcron zwei Runden braucht, bevor der erste Auftrag der"
+    echo "   Anwendung ueberhaupt in der Schlange steht (Pitfall 11) --"
+    sleep "$FRIST"
+    runde=0
+    vorrat=-1
+    while [ "$runde" -lt "$RUNDEN" ]; do
+        runde=$((runde + 1))
+        occ findling:index >"$WORK/status.txt" 2>&1 || true
+        vorrat=$(vorrat_von "$WORK/status.txt")
+        date -u +"indexierung runde=$runde vorrat=$vorrat %Y-%m-%dT%H:%M:%SZ"
+        if [ "$vorrat" -eq 0 ]; then
+            break
+        fi
+        sleep "$RUNDENFRIST"
+    done
+    if [ "$vorrat" -eq 0 ]; then
+        echo 'arbeitsvorrat-leer ja' >"$WORK/index-urteil"
+    else
+        echo 'arbeitsvorrat-leer nein' >"$WORK/index-urteil"
+    fi
+    cat "$WORK/index-urteil"
+    echo "-- und erst JETZT die Verdikte, weil skipped:no_text_layer ein vorlaeufiges"
+    echo "   Verdikt ist und ein frueheres Lesen die Scan-Spur als Fehlschlag meldete --"
+    cat "$WORK/status.txt"
+
+    echo "=== Die Skeletteinstellung, zurueckgeschrieben wie sie war ==="
+    if [ -n "${SKELETON_VORHER:-}" ]; then
+        occ config:system:set skeletondirectory --value="$SKELETON_VORHER" 2>&1 || true
+    else
+        occ config:system:delete skeletondirectory 2>&1 || true
+    fi
+    occ config:system:get skeletondirectory 2>&1 || echo "(nicht gesetzt, wie vorher)"
+
     date -u +'sprachfaelle-ende %Y-%m-%dT%H:%M:%SZ'
 } 2>&1 | tee "$ZIEL"
 
