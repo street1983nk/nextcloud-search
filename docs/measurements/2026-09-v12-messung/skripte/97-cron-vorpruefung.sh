@@ -114,6 +114,23 @@ SOLL_INTERVALL="${SOLL_INTERVALL:-300}"
 # zwoelf Minuten des v1.1-Befundes sicher draussen.
 TOLERANZ_PROZENT="${TOLERANZ_PROZENT:-10}"
 
+# Der Ableseabstand des Wirkungszweiges in Sekunden. 120 s, damit die Reihe
+# dieselbe Aufloesung hat wie 96d-statusbeobachter.py. Das ist kein Detail: die
+# Zahl "194 von 812 Lesungen" aus docs/performance.md und die Zahl
+# "vorrat=0 in 62 von 325 Lesungen" aus der Rohdatei desselben Laufs meinen
+# denselben Sachverhalt und ergeben rund 24 gegen 19 Prozent, weil sie aus zwei
+# verschiedenen Ableseintervallen stammen. Welche Reihe die Protokollzahl
+# liefert, muss deshalb im Protokoll stehen.
+INTERVALL="${INTERVALL:-120}"
+# Der Deckel in Runden. 810 Runden a 120 s sind 27 Stunden, also die Laufzeit
+# des v1.1-Laufs mit Rand; die feinere Reihe jenes Laufs hatte 812 Lesungen.
+DECKEL="${DECKEL:-810}"
+# Die obere Schranke fuer den gemessenen Scheibenabstand, in Sekunden: fuenf
+# Minuten Systemcron plus Spielraum fuer einen Cron-Lauf, der seine Scheibe noch
+# schreibt. Die gemessenen rund zwoelf Minuten des v1.1-Laufs, also rund 720 s,
+# liegen deutlich darueber und werden von diesem Deckel sicher gefangen.
+WIRKUNGS_DECKEL="${WIRKUNGS_DECKEL:-420}"
+
 mkdir -p "$OUT"
 ZIEL="${ZIEL:-$OUT/97-cron-vorpruefung-$ZWEIG.txt}"
 WORK=$(mktemp -d)
@@ -147,9 +164,19 @@ protokoll() {
 # dessen Skript cron.php ruft und zwischen zwei Runden schlaeft. Die Schlafdauer
 # in diesem Skript IST der Takt, und sie ist eine Konfiguration und keine
 # Messung.
+# Gelesen wird die erste sleep-Anweisung des Skripts, und zwar ueber einen
+# Ausdruck statt ueber Felder: in einer Schleife, die auf einer Zeile steht,
+# heisst das Feld hinter sleep "720;" und nicht "720". Eine Feldpruefung auf
+# reine Ziffern haette diese Quelle stumm uebersprungen und die langsamste
+# Quelle die Frist kosten lassen.
 quelle_aio_cron() {
     sudo docker exec "$CRON_CONTAINER" sh -c "cat $CRON_SKRIPT" 2>/dev/null |
-        awk '{for (i = 1; i < NF; i++) if ($i == "sleep" && $(i + 1) ~ /^[0-9]+$/) {print $(i + 1); exit}}'
+        awk '{if (match($0, /sleep[ \t]+[0-9]+/)) {
+                  gefunden = substr($0, RSTART, RLENGTH)
+                  gsub(/[^0-9]/, "", gefunden)
+                  print gefunden
+                  exit
+              }}'
 }
 
 # Quelle 3. Die Wette: die Instanz haengt an der crontab des Wirts, wie jede
@@ -250,7 +277,91 @@ if [ "$ZWEIG" = vorher ]; then
 else
     {
         date -u +'cron-vorpruefung-waehrend-start %Y-%m-%dT%H:%M:%SZ'
-        echo "Der Wirkungszweig entsteht in Aufgabe 2 dieses Plans."
+        printf 'deckel %s runden a %s s, wirkungs-deckel %s s\n' "$DECKEL" "$INTERVALL" "$WIRKUNGS_DECKEL"
+        echo "-- Eine Zulaufscheibe ist erkannt, wenn der Arbeitsvorrat gegenueber der vorigen"
+        echo "   Lesung STEIGT. Aus den Zeitpunkten dieser Anstiege entstehen die Abstaende, und"
+        echo "   aus den Abstaenden das Urteil dieses Zweiges. --"
+
+        RUNDE=0
+        LESUNGEN=0
+        NULL_LESUNGEN=0
+        SCHEIBEN=0
+        LETZTER_VORRAT=-1
+        LETZTE_SCHEIBE=0
+        : >"$WORK/abstaende"
+
+        while [ "$RUNDE" -lt "$DECKEL" ]; do
+            RUNDE=$((RUNDE + 1))
+            JETZT=$(date +%s)
+            # Genau ein occ findling:index je Runde, und beide Bloecke aus diesem
+            # einen Aufruf: zweimal zu fragen liesse die beiden Quellen einander
+            # widersprechen, und enges Polling waere eine Last, die dieser Zweig
+            # der Messung selbst antaete (T-12-29).
+            occ findling:index >"$WORK/status.txt" 2>&1 || true
+            # Eine Lesung ist nur auswertbar, wenn der Statusblock ueberhaupt da
+            # ist. Ohne diese Frage haette ein gescheiterter Aufruf die Summe 0
+            # geliefert und als leerer Arbeitsvorrat gezaehlt, also genau die
+            # Zahl verfaelscht, um die es hier geht.
+            if grep -q '^Work stock' "$WORK/status.txt" 2>/dev/null; then
+                VORRAT=$(vorrat_von "$WORK/status.txt")
+            else
+                VORRAT=unklar
+            fi
+            if [ "$VORRAT" != unklar ]; then
+                LESUNGEN=$((LESUNGEN + 1))
+                if [ "$VORRAT" -eq 0 ]; then
+                    NULL_LESUNGEN=$((NULL_LESUNGEN + 1))
+                fi
+                if [ "$LETZTER_VORRAT" -ge 0 ] && [ "$VORRAT" -gt "$LETZTER_VORRAT" ]; then
+                    SCHEIBEN=$((SCHEIBEN + 1))
+                    if [ "$LETZTE_SCHEIBE" -gt 0 ]; then
+                        printf '%s\n' "$((JETZT - LETZTE_SCHEIBE))" >>"$WORK/abstaende"
+                    fi
+                    LETZTE_SCHEIBE="$JETZT"
+                fi
+                LETZTER_VORRAT="$VORRAT"
+            fi
+            date -u +"wirkung runde=$RUNDE vorrat=$VORRAT scheiben=$SCHEIBEN lesungen=$LESUNGEN %Y-%m-%dT%H:%M:%SZ"
+            sleep "$INTERVALL"
+        done
+
+        echo "=== Die Wirkungszahlen dieses Zweiges ==="
+        printf '%s\n' "$SCHEIBEN" >"$WORK/scheiben"
+        sort -n "$WORK/abstaende" >"$WORK/abstaende-sortiert"
+        if [ "$SCHEIBEN" -ge 2 ] && [ -s "$WORK/abstaende-sortiert" ]; then
+            MIN=$(head -1 "$WORK/abstaende-sortiert")
+            MAX=$(tail -1 "$WORK/abstaende-sortiert")
+            # Der Median aus der sortierten Reihe. Bei gerader Anzahl das Mittel
+            # der beiden mittleren Werte, ganzzahlig: der Abstand ist in Sekunden
+            # gemessen, und eine Nachkommastelle waere hier Scheingenauigkeit.
+            MEDIAN=$(awk '{a[NR] = $1}
+                 END {m = int((NR + 1) / 2)
+                      if (NR % 2 == 0) print int((a[m] + a[m + 1]) / 2)
+                      else print a[m]}' "$WORK/abstaende-sortiert")
+        else
+            MIN=unbestimmbar
+            MAX=unbestimmbar
+            MEDIAN=unbestimmbar
+            echo "-- Weniger als zwei erkannte Scheiben: der Abstand ist nicht bestimmbar. Ein"
+            echo "   Wirkungszweig ohne Zahl ist kein Protokoll, und der Lauf endet unterhalb"
+            echo "   der Pipeline. --"
+        fi
+        printf '%s\n' "$MEDIAN" >"$WORK/median"
+
+        protokoll "scheiben-erkannt $SCHEIBEN"
+        protokoll "scheibenabstand-min $MIN"
+        protokoll "scheibenabstand-median $MEDIAN"
+        protokoll "scheibenabstand-max $MAX"
+        protokoll "vorrat-null-in $NULL_LESUNGEN-von-$LESUNGEN-lesungen"
+        # Diese Zeile ist Pflicht und keine Beigabe: zwei verschiedene
+        # Ableseintervalle haben in v1.1 zwei verschiedene Prozentzahlen fuer
+        # denselben Sachverhalt erzeugt. Das Protokoll muss sagen, welche Reihe
+        # die Zahl liefert.
+        protokoll "ablesereihe-intervall $INTERVALL"
+
+        echo "=== Der Protokollblock, als Block zitierbar ==="
+        cat "$WORK/protokollblock"
+
         date -u +'cron-vorpruefung-waehrend-ende %Y-%m-%dT%H:%M:%SZ'
     } 2>&1 | tee "$ZIEL"
 fi
@@ -275,6 +386,29 @@ if [ "$ZWEIG" = vorher ]; then
         echo "97-cron-vorpruefung: das gelesene Intervall $gelesen s liegt nicht zwischen $untere und $obere s" >&2
         echo "97-cron-vorpruefung: die Messbedingung aus D-07 ist damit nicht hergestellt" >&2
         exit 26
+    fi
+else
+    scheiben=$(cat "$WORK/scheiben" 2>/dev/null || echo 0)
+    median=$(cat "$WORK/median" 2>/dev/null || echo unbestimmbar)
+    case "$median" in
+    '' | *[!0-9]*)
+        echo "97-cron-vorpruefung: der Wirkungszweig hat keinen Scheibenabstand gemessen" >&2
+        echo "97-cron-vorpruefung: erkannte Scheiben: $scheiben, mindestens zwei sind noetig" >&2
+        echo "97-cron-vorpruefung: ein Wirkungszweig ohne Zahl ist kein Protokoll, und der" >&2
+        echo "97-cron-vorpruefung: Konfigurationszweig allein haette am 10.09.2026 gruen" >&2
+        echo "97-cron-vorpruefung: gemeldet, waehrend der Befund vorlag" >&2
+        exit 27
+        ;;
+    esac
+    # Exit 28 ist ein BEFUND und keine Stoerung. Die Anfahrt soll an dieser
+    # Stelle halten, statt eine unvergleichbare Laufzeit zu erzeugen: genau
+    # dieser Abstand hat den v1.1-Lauf 5,85 h von 26,6 h Leerlauf gekostet, und
+    # eine Laufzeit, die diesen Leerlauf enthaelt, vergleicht sich mit keiner
+    # anderen.
+    if [ "$median" -gt "$WIRKUNGS_DECKEL" ]; then
+        echo "97-cron-vorpruefung: der gemessene Scheibenabstand $median s liegt ueber dem Deckel von $WIRKUNGS_DECKEL s" >&2
+        echo "97-cron-vorpruefung: das ist der Befund aus v1.1 und keine Stoerung dieses Laufs" >&2
+        exit 28
     fi
 fi
 
