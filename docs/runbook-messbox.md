@@ -739,3 +739,270 @@ einer Rohdatei, die niemand liest.
 das während seines eigenen Laufs nachgebessert wird, macht jede Zahl daneben
 unbelegt. Fällt ein Werkzeug auf, wird der Befund notiert und der Lauf zu Ende
 gefahren oder abgebrochen; die Korrektur gehört in die Zeit nach dem Abbau.
+
+---
+
+## 8. Abbau-Checkliste
+
+**Die Reihenfolge ist Teil der Aussage.** Erst erheben, dann sichern, dann
+prüfen, dann zerstören, danach nachsehen. Ein `destroy`, das vor einem Schritt
+steht, der noch Zahlen erhebt, ist das Warnzeichen: was nach dem Abbau fehlt,
+fehlt endgültig, und der Abbau vom 11.09.2026 ist der Beleg, dass das nicht
+theoretisch ist.
+
+Die Platzhalter aus Abschnitt 4 gelten weiter. `<instanz>`, `<volume>` und
+`<sg>` stehen für die Kennungen der laufenden Box und kommen aus `box.env`
+beziehungsweise aus `aws_box.sh status`.
+
+### Schritt 1: Endmessungen und Gegenproben, VOR jedem zerstoerenden Schritt
+
+```sh
+ssh <box> 'sudo docker exec --user www-data nextcloud-aio-nextcloud \
+    php occ findling:index'
+ssh <box> 'docker exec nc_app_findling_backend cat /sys/fs/cgroup/memory.max'
+ssh <box> 'docker exec nc_app_findling_backend cat /sys/fs/cgroup/memory.peak'
+```
+
+Zuletzt erhoben wird alles, was an der laufenden Maschine hängt und danach nicht
+mehr erhebbar ist: die Schlussstände von `occ findling:index` (indexiert,
+übersprungen, fehlgeschlagen), der Vektorbestand, die Spitzenwerte der cgroup,
+die Gegenproben der Laststufen, die Protokollblöcke beider Cron-Zweige und der
+Baumhash des gemessenen Abbilds. Nach dem Abbau gibt es dafür keine zweite
+Gelegenheit, und eine nachgereichte Zahl wäre eine Schätzung.
+
+`Erwartete Ausgabe`: die Schlussstände stehen in den Rohdateien des
+Messverzeichnisses und sind committet. Marke: `in Phase 15 erstmals vollzogen`.
+
+### Schritt 2: Die Kosten- und Schadenshistorie fortschreiben
+
+```sh
+cat "${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/box.env" \
+    >> docs/measurements/<laufverzeichnis>/rohdaten/<nr>-abbau.txt
+git add docs/measurements/<laufverzeichnis>/rohdaten/<nr>-abbau.txt
+```
+
+`box.env` trägt die einzige Kosten- und Schadenshistorie dieser Box: jede
+Anhalte- und Startzeit mit Laufdauer und Kosten, den Schadensbericht vom
+07.09.2026, in dem eine zweite Nextcloud am selben Docker-Dienst das Messvolumen
+der ersten gelöscht hat, und den DI-05-36-Befund. `destroy` löscht die Datei im
+letzten Schritt. Sie wandert deshalb VOR dem Abbau in eine committete Rohdatei
+und geht vor dem Abbau auf `origin`, nicht danach. Geheimnisse gehören dabei
+nicht mit: Adressen und Kennungen werden beim Übernehmen durch Platzhalter
+ersetzt, wie es die Geheimnisregel im Kopf dieser Datei verlangt.
+
+`Erwartete Ausgabe`: die Rohdatei enthält alle `BOX_`- und `VOLUME_`-Zeilen der
+Zustandsdatei und den Schlusssatz mit verbrauchten Stunden, verbrauchten USD,
+freigegebenem Deckel und Differenz. Marke: `in Phase 15 erstmals vollzogen`.
+
+### Schritt 3: Box anhalten und den Snapshot ziehen
+
+```sh
+scripts/ops/aws_box.sh stop
+scripts/ops/aws_box.sh snapshot
+```
+
+**Der gestoppte Zustand ist Vorbedingung und keine Notiz.** Ein Snapshot eines
+angehängten, gerade beschriebenen Datenträgers ist absturzkonsistent und nichts
+weiter; bei angehaltener Instanz ist das Dateisystem ruhig und die Kopie sauber.
+`cmd_snapshot` bricht ab, wenn die Instanz nicht `stopped` ist, und zwar im
+Moment der Erzeugung, denn das ist der Moment, in dem der Inhalt festliegt. Ein
+kaputter Snapshot sieht bis zur Wiederherstellung genau wie ein guter aus.
+
+`Erwartete Ausgabe`: `stop` meldet die Laufzeit und die Kosten dieser Laufzeit
+und hängt sie an `box.env` an; `snapshot` meldet eine Snapshotkennung und das
+Tag `purpose=findling-corpus-keep`. Beleg des Laufs vom 11.09.2026:
+`docs/measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt`,
+Abschnitte 0 und 1.
+
+### Schritt 4: Snapshot unabhaengig nachlesen, nicht dem Waiter glauben
+
+```sh
+scripts/ops/aws_box.sh snapshot <snapshotkennung>
+```
+
+Mit einer Kennung als Argument erzeugt der Unterbefehl **nichts**. Er liest
+zurück, prüft, dass der Snapshot zum Datenträger dieser Box gehört, und schreibt
+das Ergebnis in die Zustandsdatei. Sechs Felder gehören in die Rohdatei:
+`State`, `Progress`, `VolumeSize`, `VolumeId`, `StartTime` und `Encrypted`.
+
+**Der Waiter der CLI gibt nach zehn Minuten auf, und das ist kein Fehler.** Am
+11.09.2026 stand der Snapshot dieser Box zu diesem Zeitpunkt bei 8 Prozent und
+brauchte insgesamt rund 52 Minuten. Ein zweiter Aufruf ohne Kennung wäre ein
+zweiter Snapshot und eine zweite Rechnung gewesen; deshalb gibt es die Form mit
+Argument. Der Waiter sagt nur, dass die API aufgehört hat, `pending` zu
+antworten; die Nachlese sagt, was der Snapshot ist.
+
+`Erwartete Ausgabe`: `State completed`, `Progress 100%`, `VolumeSize 60 GB`,
+`VolumeId` gleich dem Datenträger dieser Box, `Encrypted False`, dazu die
+Startzeit. Belegt am 11.09.2026, Abschnitt 2 derselben Rohdatei.
+
+### Schritt 5: Sicherung von box.env anlegen und den Pfad benennen
+
+```sh
+cp "${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/box.env" \
+   "${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/box.env.vor-abbau"
+export FINDLING_STATE_BACKUP="${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/box.env.vor-abbau"
+```
+
+`cmd_destroy` verlangt `FINDLING_STATE_BACKUP` als Pfad, die benannte Datei muss
+existieren und sie muss Inhalt haben. Alle drei Prüfungen stehen VOR dem ersten
+zerstörenden Aufruf und nicht hinter ihm: eine Verweigerung, die erst nach der
+Terminierung fällt, kommt für die Historie zu spät (T-11-53). Die Sicherung ist
+damit eine Vorbedingung und keine Gewohnheit.
+
+`Erwartete Ausgabe`: `destroy` meldet als erste Zeile, dass die Historie dieser
+Box in der benannten Datei gesichert ist. Fehlt der Pfad, existiert die Datei
+nicht oder ist sie leer, endet der Unterbefehl, ohne irgendetwas zu löschen.
+
+### Schritt 6: Der Abbau selbst
+
+```sh
+scripts/ops/aws_box.sh destroy
+```
+
+Der Unterbefehl terminiert die Instanz, löscht danach den Datenträger und
+zuletzt die Security Group; die Reihenfolge ist zwingend, weil ein benutzter
+Datenträger nicht löschbar ist und ein Abhängen unter laufendem Schreibzugriff
+das Dateisystem beschädigt. Danach liest er alle drei Ressourcen zurück: eine
+terminierte Instanz antwortet noch bis zu einer Stunde, deshalb gilt
+`state=terminated` als Beweis; Datenträger und Gruppe gelten erst mit
+`InvalidVolume.NotFound` beziehungsweise `InvalidGroup.NotFound` als weg. Was
+sich nicht lesen lässt, zählt als noch vorhanden.
+
+`Erwartete Ausgabe`: drei Zeilen "is gone, verified against the api" und
+Rückgabewert 0. Bleibt etwas übrig, bleibt auch die Zustandsdatei stehen, damit
+ein zweiter Lauf sie benutzen kann. Belegt am 11.09.2026 mit vier
+Nichtexistenz-Nachweisen, den beiden Datenträgern eingeschlossen.
+
+### Schritt 7: Tag-Sweep ueber die Regionen, ueber BEIDE Tagwerte
+
+```sh
+aws ec2 describe-tags --region eu-central-1 \
+    --filters "Name=tag:purpose,Values=findling-phase5"
+aws ec2 describe-tags --region eu-central-1 \
+    --filters "Name=tag:purpose,Values=findling-corpus-keep"
+```
+
+**Warum zwei Suchen und nicht eine.** Der Sweep von `cmd_destroy` sucht nach
+`purpose=findling-phase5`; der Keep-Tag `findling-corpus-keep` ist genau dafür
+erfunden worden, dieser Suche zu entgehen, damit der Snapshot den Abbau nicht rot
+enden lässt. Ein aus dem Snapshot erzeugter Datenträger erbt diesen Tag und
+entginge damit demselben Sweep, also der Suche, die verhindern soll, dass eine
+Ressource unbemerkt weiterläuft. Seit Plan 12-03 taggt `aws_box.sh restore` einen
+solchen Datenträger pflichtmässig auf `findling-phase5` um und liest das Tag
+zurück; der Sweep prüft es trotzdem unabhängig davon, weil ein von Hand
+erzeugter Datenträger dieselbe Falle hätte.
+
+**Ein Tag-Treffer ist ein Hinweis und kein Urteil.** Die Tag-Abfrage antwortet
+aus einem nachlaufenden Verzeichnis: am 11.09.2026 meldete sie beide Datenträger
+als Überbleibsel, während die API für beide `InvalidVolume.NotFound` antwortete.
+Jeder Treffer wird deshalb nach seiner Art zurückgelesen, und nur was noch
+antwortet, zählt als Überbleibsel.
+
+`Erwartete Ausgabe`: die erste Suche liefert höchstens die gerade terminierte
+Instanz, deren Tags noch bis zu einer Stunde nachhängen. Die zweite liefert genau
+einen Treffer, den Korpus-Snapshot, und dieser Treffer ist zugleich der Beweis,
+dass er den Abbau überlebt hat.
+
+### Schritt 8: Kostenueberblick nach dem Abbau
+
+```sh
+aws ec2 describe-instances --region eu-central-1 \
+    --filters "Name=instance-state-name,Values=pending,running,stopping,stopped"
+aws ec2 describe-volumes --region eu-central-1
+aws ec2 describe-snapshots --region eu-central-1 --owner-ids self
+aws ec2 describe-addresses --region eu-central-1
+```
+
+Nach einer zerstörenden Handlung wird der Kostenstand **erhoben und nicht
+behauptet**, und zwar über alle freigeschalteten Regionen, nicht nur über die
+eine, in der gearbeitet wurde. Daneben gehört die Schlussrechnung der Anfahrt:
+verbrauchte Stunden und USD aus `box.env` gegen den vom Owner freigegebenen
+Deckel, mit der Differenz in einer eigenen Zeile.
+
+`Erwartete Ausgabe`: keine laufende oder angehaltene Instanz, kein Datenträger,
+keine Elastic IP, keine eigene AMI, **genau ein Snapshot**. Das Schlüsselpaar und
+die Default-Gruppe der VPC bleiben bestehen und kosten nichts. Belegt am
+11.09.2026 über 17 Regionen.
+
+### Schritt 9: Was bewusst stehen bleibt
+
+Der Korpus-Snapshot `snap-03f1d1d9ad9262704` bleibt. Er kostet **2,79 bis 2,99
+USD je Monat**, gerechnet aus 51,6 GiB geschriebener Blöcke und dem öffentlichen
+Satz je GB-Monat, gegen 9,39 USD je Monat für die angehaltene Box. Er ist die
+Grundlage jeder weiteren Anfahrt, und ohne ihn kostet der Wiederaufbau des
+Korpus wieder mehrere Stunden Box-Zeit.
+
+Die Wiedervorlage steht nach v1.2 an: löschen oder auf eine günstigere
+Speicherklasse legen. Solange darüber nicht entschieden ist, läuft dieser Posten
+weiter, ob eine Anfahrt stattfindet oder nicht, und gehört deshalb in die
+Monatsrechnung und nicht in den Deckel einer Anfahrt.
+
+---
+
+## 9. Kostenfuehrung
+
+### 9.1 Die Felder der Zustandsdatei
+
+| Feld | Wann es geschrieben wird | Wer es schreibt |
+|---|---|---|
+| `BOX_INSTANCE_ID` | nach dem Anlegen der Instanz, einmalig | von Hand. `aws_box.sh create` legt nichts an, es druckt nur das Rezept |
+| `BOX_SECURITY_GROUP` | nach dem Anlegen der Security Group, einmalig | von Hand, aus der Antwort von `create-security-group`. `start` braucht das Feld, um die SSH-Regel nachzuziehen |
+| `VOLUME_ID` | beim Anlegen des Datenträgers | `aws_box.sh volume`, und beim Wiederaufbau `aws_box.sh restore` |
+| `VOLUME_NAME` | zusammen mit `VOLUME_ID` | dieselben beiden Unterbefehle, aus der gepinnten Konstante |
+| `VOLUME_SIZE_GB` | zusammen mit `VOLUME_ID` | dieselben beiden Unterbefehle |
+| `VOLUME_TYPE` | zusammen mit `VOLUME_ID` | dieselben beiden Unterbefehle |
+| `VOLUME_CREATED_ISO` | zusammen mit `VOLUME_ID` | dieselben beiden Unterbefehle, als UTC-Zeitstempel |
+| `VOLUME_FROM_SNAPSHOT` | nur auf dem Wiederaufbaupfad | `aws_box.sh restore`. Das Feld sagt, dass dieser Datenträger aus einem Snapshot stammt und den Keep-Tag geerbt hatte |
+| `CORPUS_SNAPSHOT_ID` | beim Ziehen oder Nachlesen des Snapshots | `aws_box.sh snapshot`, zusammen mit `CORPUS_SNAPSHOT_ISO` und der vollständigen Nachlese als Kommentarblock |
+| `BOX_LAST_UPTIME_COST_USD` | bei jedem Anhalten | `aws_box.sh stop`, aus den gepinnten Sätzen mal der gemessenen Laufzeit |
+| `BOX_LAST_UPTIME_HOURS` | bei jedem Anhalten | `aws_box.sh stop`, gelesen VOR dem Aufruf, der die Instanz parkt |
+| `BOX_PARKED_COST_USD_PER_DAY` | bei jedem Anhalten | `aws_box.sh stop`. Der Unterbefehl summiert die geparkten Tage ausdrücklich nicht auf |
+| `BOX_STOPPED_ISO`, `BOX_STARTED_ISO`, `BOX_IP` | bei jedem Anhalten und jedem Start | `aws_box.sh stop` und `aws_box.sh start`. `BOX_IP` ist nach einem Stopp veraltet, weil ein Stopp die öffentliche Adresse freigibt |
+
+Die Datei wird **angehängt und nicht überschrieben**, und sie entsteht unter
+`umask 077`. Jeder Block trägt eine Kommentarzeile mit Zeitstempel darüber, und
+deshalb ist die Datei zugleich die Chronik der Box.
+
+### 9.2 Wo die Zustandsdatei liegt, und warum dort
+
+`${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/box.env`, also ausserhalb
+des Arbeitsbaums. Der Grund ist nicht Ordnung, sondern Abstand: eine
+Zustandsdatei im Repositorium ist von einem unachtsamen `git add` genau einen
+Handgriff von einem öffentlichen Commit entfernt, und sie trägt Adressen,
+Ressourcenkennungen und die Chronik des Kontos. Derselbe Grund gilt für die
+AWS-Anmeldung und für die Sicherung der Systemplatte (Abschnitt 3, Zeilen 2 und
+3).
+
+Für den Weg in das Repositorium gibt es genau einen Pfad, und er führt über
+Schritt 2 der Abbau-Checkliste: übernehmen, Werte durch Platzhalter ersetzen,
+committen.
+
+### 9.3 Der Rueckfluss ins Deckel-Rechenblatt
+
+Die Spalte "Ist (Phase 15)" in Abschnitt 2.1 wird während und nach der Anfahrt
+gefüllt, Posten für Posten, aus den Zeitstempeln der Rohdateien und aus
+`BOX_LAST_UPTIME_HOURS`. Die nächste Anfahrt rechnet ihren Deckel dann aus den
+zuletzt GEMESSENEN Posten statt aus den heutigen Schätzungen; die Zeile
+"Handaufbau der Maschine" verliert dabei als erste ihren Schätzcharakter.
+
+Das ist der Kreis, den D-05 verlangt: gemessene Posten ergeben den nächsten
+Deckel, der nächste Lauf misst sie erneut, und keine Zahl dieses Rechenblatts
+stammt aus einer Erinnerung. Zum Rückfluss gehört auch die ehrliche Zeile, wenn
+der Deckel gerissen ist, mit der Differenz und dem Grund; die Deckel-Geschichte
+in Abschnitt 2.4 führt genau solche Zeilen.
+
+### 9.4 Was dieses Runbook nicht leisten kann
+
+**Der Snapshot-Pfad ist bis zum Erstvollzug in Phase 15 ungefahren.** Die
+Wiederherstellung eines Datenträgers aus `snap-03f1d1d9ad9262704`, sein
+Einhängen, die Rückspielung der Systemplatte und der gesamte Abbau als Kette
+sind aus Skripten, Rohdaten früherer Läufe und lesenden Proben zusammengetragen,
+aber nie als Ganzes durchlaufen worden.
+
+Jeder Block, der die Marke `in Phase 15 erstmals vollzogen` trägt, wird dort zum
+ersten Mal wörtlich validiert. Nach dem Erstvollzug werden die erwarteten
+Ausgaben durch die tatsächlichen ersetzt, und wo die tatsächliche Ausgabe von der
+erwarteten abweicht, bleibt die Abweichung als eigene Zeile stehen, statt
+stillschweigend überschrieben zu werden. Ein Runbook, das seine eigenen Irrtümer
+löscht, lehrt beim zweiten Mal dasselbe wie beim ersten.
