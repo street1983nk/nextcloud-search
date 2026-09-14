@@ -42,7 +42,7 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 ### Active
 
-(Nächster Milestone noch nicht geplant; Kandidaten siehe ROADMAP.md "Naechster Milestone" und Future Requirements des v1.1-Archivs: Dateityp-Filter/Sortierung auf der Ergebnisseite, Modell-Entladung nach Leerlauf, Index-Verschlüsselung, External Storage.)
+(Milestone v1.2 gestartet 14.09.2026; Requirements werden in REQUIREMENTS.md definiert: Messbeleg-Paket, Dateityp-Filter/Sortierung, Modell-Entladung im Leerlauf, Härtungen + Release v1.2.0. Weiter Future: Index-Verschlüsselung, External Storage.)
 
 ### Out of Scope
 
@@ -92,9 +92,17 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 | Team Folders default AN, External Storage default AUS | Mount-Crawl billig, External Storage unkalkulierbar | ✓ Good, keine Beschwerden, External Storage bleibt Future |
 | Ziel Reputation/Portfolio; Pro-Schiene offen ab v2 | Store hat kein Bezahlmodell |, Pending (Enterprise-Flag + Fake-Door seit 11.09. live, ISV-Spur läuft separat) |
 
-## Next Milestone Goals
+## Current Milestone: v1.2 Messbeleg und Ausbau
 
-Noch nicht geplant (/gsd:new-milestone). Übergabeliste aus v1.1 steht in ROADMAP.md "Naechster Milestone"; nächster fester Termin: stable35-RE-CHECK 16.09.2026, Nextcloud Conference im September (Kill-Kriterium).
+**Goal:** Die v1.1-Verbesserungen werden auf der Zielhardware belegt (Wirkungsbeleg, Laststufen, Sprachfälle) und die Suche baut sichtbar aus: Dateityp-Filter und Sortierung auf der Ergebnisseite plus Modell-Entladung im Leerlauf, abgeschlossen mit gehärteter Store-Einreichung v1.2.0.
+
+**Target features:**
+- Messphase in EINER Box-Anfahrt (Owner-Entscheid 11.09., Deckel-Vorschlag 26 h / 3,50 USD): DI-10-04-Wirkungsbeleg-Volllauf gegen den Korpus-Snapshot, Untersuchung der vier regressiven Laststufen, Sprachfall-Messung ohne 52.111er-Fremdbestand (DI-10-02/DI-11-01), zugleich Erstvollzug des Wiederaufbau-Runbooks
+- Ergebnisseite-Ausbau: Dateityp-Filter und Sortierung
+- Modell-Entladung im Leerlauf (Grundlast weiter senken; Wiederaufwärm-Kosten messen und ausweisen)
+- Härtungen DI-11-02/03/05/06, BL-F01-Schlusssatz in den Store-Texten beider Hälften, stable35-Fenster-Entscheid (RE-CHECK 16.09.), Store-Einreichung v1.2.0
+
+**Key context:** Index-Kompatibilität bzw. Migrations-Merker bei Minor-Sprung (Muster Version001100...); Snapshot-Entscheid snap-03f1d1d9ad9262704 fällt NACH v1.2; Kill-Kriterium Nextcloud Conference September bleibt aktiv.
 
 <details>
 <summary>Archiv: Milestone-Beschreibung v1.1 (abgeschlossen 2026-09-11)</summary>
@@ -125,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-11 after v1.1 milestone (archiviert, Full Evolution Review)*
+*Last updated: 2026-09-14 at v1.2 milestone start*

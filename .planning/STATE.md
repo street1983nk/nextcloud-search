@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Qualitaet und Effizienz
-status: Awaiting next milestone
-stopped_at: Milestone v1.1 abgeschlossen und archiviert
-last_updated: "2026-09-11T10:45:00.000Z"
-last_activity: 2026-09-11 - Milestone v1.1 completed and archived
+milestone: v1.2
+milestone_name: Messbeleg und Ausbau
+status: planning
+last_updated: "2026-09-14T12:24:45.764Z"
+last_activity: 2026-09-14
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 37
-  completed_plans: 37
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,14 +24,10 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 ## Current Position
 
-Phase: Milestone v1.1 complete (archiviert nach .planning/milestones/)
-Plan: -
-Status: Awaiting next milestone (/gsd:new-milestone)
-Last activity: 2026-09-11 - Milestone v1.1 completed and archived
-
-**Ausgeliefert:** Findling 1.1.0 im Nextcloud App Store (11.09.2026, beide Apps,
-je HTTP 201, Tag v1.1.0 auf 891bc6d). Kernzahl: Grundlast 691,8 auf 103,2 MB.
-Details: .planning/MILESTONES.md und .planning/milestones/v1.1-ROADMAP.md.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-09-14 — Milestone v1.2 started
 
 ## Uebergeben an den naechsten Milestone
 
@@ -43,9 +38,11 @@ Vollstaendige Liste in ROADMAP.md "Naechster Milestone". Kurzfassung:
   offen nur der Wirkungsbeleg-Volllauf, per Owner-Entscheid 11.09. gebuendelt mit der
   Laststufen-Untersuchung in EINER Box-Anfahrt der v1.2-Messphase (Deckel-Vorschlag
   26 h / 3,50 USD)
+
 - DI-11-02/03/05/06 (u.a. flatternder pgsql-Ast HTTP 423)
 - Vier regressive Laststufen: hingenommen fuer v1.1.0, untersuchen in der v1.2-Messplanung
   (dieselbe Anfahrt wie der DI-10-04-Wirkungsbeleg)
+
 - Snapshot-Wiedervorlage snap-03f1d1d9ad9262704 nach v1.2 (loeschen oder Archive-Tier)
 - stable35-RE-CHECK am 16.09.2026 (Versionsfenster, Entscheid v2-a)
 - Wiederaufbau-Runbook der Messumgebung
