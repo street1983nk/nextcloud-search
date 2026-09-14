@@ -195,6 +195,42 @@ vorrat_von() {
          END {print sum + 0}' "$1"
 }
 
+# Der kleinere der beiden Raenge aus der Zeile der Sonde ($1 der Begriff, $2 die
+# Ausgabedatei), oder das Wort ausserhalb. Der kleinere, weil die Fusion die
+# eigene Datei nicht schlechter stellt als ihre bessere der beiden Positionen,
+# und ausserhalb, sobald keine der beiden Angaben eine Zahl ist: ausserhalb und
+# keine-kennung sind Worte, und ein Wort gegen eine Schwelle zu rechnen waere
+# eine Rechnung, die kein Ergebnis hat. Der Schluessel traegt das ganze
+# geklammerte Feld, damit begriff='bescheid' nicht auch die Zeile von
+# begriff='type:pdf bescheid' trifft.
+rang_aus_sonde() {
+    awk -v schluessel="begriff='$1'" '
+        index($0, schluessel) == 0 { next }
+        {
+            lex = ""
+            sem = ""
+            for (i = 1; i <= NF; i++) {
+                if (substr($i, 1, 9) == "rang_lex=") { lex = substr($i, 10) }
+                if (substr($i, 1, 9) == "rang_sem=") { sem = substr($i, 10) }
+            }
+            lex_zahl = (lex ~ /^[0-9]+$/)
+            sem_zahl = (sem ~ /^[0-9]+$/)
+            if (lex_zahl && sem_zahl) {
+                if (lex + 0 < sem + 0) { print lex } else { print sem }
+            } else if (lex_zahl) {
+                print lex
+            } else if (sem_zahl) {
+                print sem
+            } else {
+                print "ausserhalb"
+            }
+            gefunden = 1
+            exit
+        }
+        END { if (gefunden != 1) { print "ausserhalb" } }
+    ' "$2"
+}
+
 # Das Passwort des Kontos. Hier erzeugt, aus der Umgebung und aus einer
 # curl-Konfigurationsdatei benutzt, nie in ein Argument oder eine Rohdatei
 # geschrieben.
@@ -399,6 +435,279 @@ urteil() {
     echo "   Verdikt ist und ein frueheres Lesen die Scan-Spur als Fehlschlag meldete --"
     cat "$WORK/status.txt"
 
+    echo "=== Abschnitt 3b: der Rang der eigenen Datei, im Prozess gemessen ==="
+    # Dieser Abschnitt steht zwischen der Indexierung und den Faellen und nicht
+    # in Abschnitt 0, und das ist die einzige strukturelle Aenderung gegenueber
+    # 98b: der Rang der eigenen Datei ist erst messbar, wenn die Datei existiert
+    # und indexiert ist. Der Bestand ist vorher messbar, deshalb misst Abschnitt
+    # 0 ihn und dieser Abschnitt den Rang.
+    echo 'rang-erhoben nein' >"$WORK/rang-urteil"
+    # Fall, Begriff und die Datei, die der Fall in der Antwort erwartet, an einer
+    # einzigen Stelle. Das Here-Document steht NICHT in Anfuehrungszeichen,
+    # anders als die Begriffsliste von 98b: die Dateinamen sind oben Variablen,
+    # damit eine Umbenennung an einer Stelle bricht, und dafuer muessen sie hier
+    # eingesetzt werden. Es wird einmal in eine Arbeitsdatei geschrieben, weil
+    # beide Schleifen dieses Abschnitts dieselbe Zuordnung lesen. Die Faelle 6
+    # und 7 fragen dieselbe Datei mit zwei verschiedenen Suchzeilen; das ist kein
+    # Versehen dieser Tabelle.
+    cat >"$WORK/zuordnung" <<ZUORDNUNG
+1|Genehmigung|$SHARED_FILE
+2|Frist|$NOTICE_FILE
+3|Mueller|$MEMO_FILE
+4|Vertrag|$OVERVIEW_FILE
+5|"drei Monate"|$NOTICE_FILE
+6|bescheid|$SHARED_FILE
+7|type:pdf bescheid|$SHARED_FILE
+8|Belehrung|$SWISS_FILE
+9|Auszug|$AUSTRIAN_FILE
+10|Erinnerung|$REMINDER_FILE
+ZUORDNUNG
+    DATEI_IDS=''
+    while IFS='|' read -r nummer begriff datei; do
+        [ -n "$nummer" ] || continue
+        kennung=$(awk -v gesucht="$datei" '$1 == gesucht {print $2}' \
+            "$WORK/dateiids.txt" 2>/dev/null | tail -1)
+        if [ -z "$kennung" ]; then
+            printf 'fall %s: keine Kennung fuer %s, der Fall gilt als ausserhalb\n' \
+                "$nummer" "$datei"
+            printf 'ausserhalb\n' >"$WORK/fremd/$nummer"
+            continue
+        fi
+        printf 'fall %s: %s traegt die Kennung %s\n' "$nummer" "$datei" "$kennung"
+        if [ -z "$DATEI_IDS" ]; then
+            DATEI_IDS="$begriff=$kennung"
+        else
+            DATEI_IDS="$DATEI_IDS,$begriff=$kennung"
+        fi
+    done <"$WORK/zuordnung"
+
+    if [ -z "$DATEI_IDS" ]; then
+        echo "keine einzige Datei-Kennung erhoben: entweder ist der Upload gescheitert,"
+        echo "oder der Antwortkopf trug kein OC-FileId. Ohne Kennung gibt es keinen Rang,"
+        echo "und ohne Rang faellt das Urteil auf zweiwertig zurueck (DI-10-02)."
+    else
+        # Die Kennungen reisen ausschliesslich in der Umgebung, nie in einem
+        # Argument: sudo raeumt unter env_reset auf, und docker exec gibt von
+        # sich aus nichts weiter, also wird beiden Schichten genau diese eine
+        # Variable genannt.
+        export DATEI_IDS
+        if ! sudo --preserve-env=DATEI_IDS docker exec -e DATEI_IDS "$CONTAINER" \
+                /app/.venv/bin/python /tmp/73-bestand-sonde.py \
+                >"$WORK/bestand-rang.txt" 2>"$WORK/rang.err"; then
+            echo "die Sonde ist im zweiten Lauf nicht durchgelaufen"
+            cat "$WORK/bestand-rang.txt" 2>/dev/null || true
+            cat "$WORK/rang.err" 2>/dev/null || true
+        else
+            cat "$WORK/bestand-rang.txt"
+            echo 'rang-erhoben ja' >"$WORK/rang-urteil"
+        fi
+    fi
+    cat "$WORK/rang-urteil"
+
+    if [ "$(cat "$WORK/rang-urteil")" = 'rang-erhoben ja' ]; then
+        echo "-- je Fall der kleinere der beiden Raenge, und genau diese Zahl liest das"
+        echo "   erste der beiden Urteile --"
+        while IFS='|' read -r nummer begriff datei; do
+            [ -n "$nummer" ] || continue
+            rang=$(rang_aus_sonde "$begriff" "$WORK/bestand-rang.txt")
+            printf '%s\n' "$rang" >"$WORK/fremd/$nummer"
+            printf 'rang fall %s begriff %s: %s (Schwelle %s), datei %s\n' \
+                "$nummer" "$begriff" "$rang" "$RANG_SCHWELLE" "$datei"
+        done <"$WORK/zuordnung"
+    fi
+
+    echo "=== Abschnitt 4: die zehn Faelle, dreiwertig beurteilt ==="
+    if [ "$(cat "$WORK/index-urteil")" != 'arbeitsvorrat-leer ja' ]; then
+        echo "der Arbeitsvorrat ist nicht leer, die Faelle 8 bis 10 haengen an der OCR-Spur"
+        echo "und wuerden hier aus dem falschen Grund rot sein; die Faelle laufen trotzdem,"
+        echo "und die Bilanz ist mit dieser Zeile daneben zu lesen"
+    fi
+
+    # 1. Das Kompositum ueber einen seiner Bestandteile. Die Datei sagt
+    # Grundstuecksverkehrsgenehmigung, die Suche sagt Genehmigung, und der
+    # Zerleger schliesst die Luecke.
+    FALL=1
+    if messbar 1; then
+        start=$(date +%s%N)
+        search 'Genehmigung' "$WORK/compound.json" || true
+        printf 'eine gewoehnliche Suche antwortete nach %sms\n' "$((($(date +%s%N) - start) / 1000000))"
+        jq -e '.ocs.data.entries | length == 1' "$WORK/compound.json" >/dev/null 2>&1 ||
+            fail "a compound searched through one constituent did not bring back exactly one file" "$WORK/compound.json"
+        jq -e --arg name "$SHARED_FILE" '.ocs.data.entries[0].title == $name' "$WORK/compound.json" >/dev/null 2>&1 ||
+            fail "the compound hit is not the German PDF of the corpus" "$WORK/compound.json"
+        # Der Auszug, und das ist die Zusicherung, die einen Treffer von einem
+        # Treffer mit Inhalt trennt: die Unterzeile muss das Kompositum aus dem
+        # Dokument tragen. Die Ersatzunterzeile ist der Pfad, und der Pfad
+        # enthaelt das Wort nicht.
+        jq -e '.ocs.data.entries[0].subline | ascii_downcase | contains("genehmigung")' "$WORK/compound.json" >/dev/null 2>&1 ||
+            fail "the subline carries no excerpt from the document" "$WORK/compound.json"
+        jq -e '.ocs.data.entries[0].subline | contains("<") | not' "$WORK/compound.json" >/dev/null 2>&1 ||
+            fail "the excerpt carries markup, which the search dialog would show verbatim" "$WORK/compound.json"
+        urteil 1
+    fi
+
+    # 2. Das zweite Kompositum, in einer anderen Datei und einem anderen Format.
+    FALL=2
+    if messbar 2; then
+        search 'Frist' "$WORK/frist.json" || true
+        jq -e '.ocs.data.entries | length == 1' "$WORK/frist.json" >/dev/null 2>&1 ||
+            fail "Frist did not bring back exactly the notice of termination" "$WORK/frist.json"
+        jq -e --arg name "$NOTICE_FILE" '.ocs.data.entries[0].title == $name' "$WORK/frist.json" >/dev/null 2>&1 ||
+            fail "the Frist hit is not the DOCX of the corpus" "$WORK/frist.json"
+        urteil 2
+    fi
+
+    # 3. Der ausgeschriebene Umlaut. Die Datei schreibt Mueller mit dem Zeichen,
+    # die Suche mit den zwei Buchstaben, und die Variante auf der Frageseite
+    # fuehrt beide zusammen.
+    FALL=3
+    if messbar 3; then
+        search 'Mueller' "$WORK/umlaut.json" || true
+        jq -e '.ocs.data.entries | length == 1' "$WORK/umlaut.json" >/dev/null 2>&1 ||
+            fail "the written out umlaut did not find the file that spells it with the character" "$WORK/umlaut.json"
+        jq -e --arg name "$MEMO_FILE" '.ocs.data.entries[0].title == $name' "$WORK/umlaut.json" >/dev/null 2>&1 ||
+            fail "the umlaut hit is not the file note of the corpus" "$WORK/umlaut.json"
+        urteil 3
+    fi
+
+    # 4. Die Beugung des Substantivs. Die Datei sagt Vertraege, die Suche sagt
+    # Vertrag, und der Stemmer schliesst diese Luecke.
+    FALL=4
+    if messbar 4; then
+        search 'Vertrag' "$WORK/flexion.json" || true
+        jq -e '.ocs.data.entries | length == 1' "$WORK/flexion.json" >/dev/null 2>&1 ||
+            fail "the singular did not find the plural" "$WORK/flexion.json"
+        jq -e --arg name "$OVERVIEW_FILE" '.ocs.data.entries[0].title == $name' "$WORK/flexion.json" >/dev/null 2>&1 ||
+            fail "the inflection hit is not the ODT of the corpus" "$WORK/flexion.json"
+        urteil 4
+    fi
+
+    # 5. Die Phrase. Nur die Datei mit den zwei Woertern in dieser Reihenfolge.
+    FALL=5
+    if messbar 5; then
+        search '"drei Monate"' "$WORK/phrase.json" || true
+        jq -e '.ocs.data.entries | length == 1' "$WORK/phrase.json" >/dev/null 2>&1 ||
+            fail "the phrase did not bring back exactly one file" "$WORK/phrase.json"
+        jq -e --arg name "$NOTICE_FILE" '.ocs.data.entries[0].title == $name' "$WORK/phrase.json" >/dev/null 2>&1 ||
+            fail "the phrase hit is not the DOCX of the corpus" "$WORK/phrase.json"
+        urteil 5
+    fi
+
+    # 6. Der Ausschluss, und die Kontrolle, die ihm seinen Sinn gibt. Bescheid
+    # steht mit Absicht in zwei Dateien; ohne die Kontrolle saehe ein Ausschluss,
+    # der nichts tut, genau wie einer aus, der wirkt, also laeuft die Kontrolle
+    # ZUERST.
+    FALL=6
+    if messbar 6; then
+        search 'bescheid' "$WORK/both.json" || true
+        jq -e '.ocs.data.entries | length == 2' "$WORK/both.json" >/dev/null 2>&1 ||
+            fail "the word that stands in two files did not bring back two files" "$WORK/both.json"
+        search 'bescheid -frist' "$WORK/excluded.json" || true
+        jq -e '.ocs.data.entries | length == 1' "$WORK/excluded.json" >/dev/null 2>&1 ||
+            fail "the minus did not remove the second file" "$WORK/excluded.json"
+        jq -e --arg name "$SHARED_FILE" '.ocs.data.entries[0].title == $name' "$WORK/excluded.json" >/dev/null 2>&1 ||
+            fail "the exclusion removed the wrong file" "$WORK/excluded.json"
+        urteil 6
+    fi
+
+    # 7. Der Dateityp. Nextcloud hat dafuer keinen eingebauten Filter, also
+    # reist er in der Suchzeile mit und wird zu einem Pflichtbegriff auf ext.
+    FALL=7
+    if messbar 7; then
+        search 'type:pdf bescheid' "$WORK/filetype.json" || true
+        jq -e '.ocs.data.entries | length == 1' "$WORK/filetype.json" >/dev/null 2>&1 ||
+            fail "the file type filter did not narrow the two hits down to the PDF" "$WORK/filetype.json"
+        jq -e --arg name "$SHARED_FILE" '.ocs.data.entries[0].title == $name' "$WORK/filetype.json" >/dev/null 2>&1 ||
+            fail "the file type filter kept the wrong file" "$WORK/filetype.json"
+        urteil 7
+    fi
+
+    # 8. Das dritte Kompositum, in der gescannten Schweizer Bewilligung. Die
+    # Seite sagt Rechtsmittelbelehrung, die Suche sagt Belehrung, und
+    # split_compound macht den zweiten Teil des Wortes zu einem eigenen Begriff.
+    # Belehrung steht im ganzen Korpus nur innerhalb seines Kompositums.
+    FALL=8
+    if messbar 8; then
+        search 'Belehrung' "$WORK/belehrung.json" || true
+        jq -e '.ocs.data.entries | length == 1' "$WORK/belehrung.json" >/dev/null 2>&1 ||
+            fail "Belehrung did not bring back exactly the scanned Swiss permit" "$WORK/belehrung.json"
+        jq -e --arg name "$SWISS_FILE" '.ocs.data.entries[0].title == $name' "$WORK/belehrung.json" >/dev/null 2>&1 ||
+            fail "the Belehrung hit is not the Swiss permit of the corpus" "$WORK/belehrung.json"
+        jq -e '.ocs.data.entries[0].subline | ascii_downcase | contains("belehrung")' "$WORK/belehrung.json" >/dev/null 2>&1 ||
+            fail "the Belehrung hit carries no excerpt from the document" "$WORK/belehrung.json"
+        jq -e '.ocs.data.entries[0].subline | contains("<") | not' "$WORK/belehrung.json" >/dev/null 2>&1 ||
+            fail "the Belehrung excerpt carries markup, which the search dialog would show verbatim" "$WORK/belehrung.json"
+        urteil 8
+    fi
+
+    # 9. Ein Kompositum, das als Pixel und in keiner anderen Form existiert. Die
+    # gescannte oesterreichische Mitteilung sagt Grundbuchsauszug, die Suche sagt
+    # Auszug, und ohne die OCR-Spur gaebe es gar nichts zu zerlegen.
+    FALL=9
+    if messbar 9; then
+        search 'Auszug' "$WORK/auszug.json" || true
+        jq -e '.ocs.data.entries | length == 1' "$WORK/auszug.json" >/dev/null 2>&1 ||
+            fail "Auszug did not bring back exactly the scanned Austrian notice" "$WORK/auszug.json"
+        jq -e --arg name "$AUSTRIAN_FILE" '.ocs.data.entries[0].title == $name' "$WORK/auszug.json" >/dev/null 2>&1 ||
+            fail "the Auszug hit is not the Austrian notice of the corpus" "$WORK/auszug.json"
+        urteil 9
+    fi
+
+    # 10. Dieselbe Form noch einmal, in der Datei, die ein Bild ist und sonst
+    # nichts. Sie sagt Zahlungserinnerung, die Suche sagt Erinnerung.
+    FALL=10
+    if messbar 10; then
+        search 'Erinnerung' "$WORK/erinnerung.json" || true
+        jq -e '.ocs.data.entries | length == 1' "$WORK/erinnerung.json" >/dev/null 2>&1 ||
+            fail "Erinnerung did not bring back exactly the one page reminder" "$WORK/erinnerung.json"
+        jq -e --arg name "$REMINDER_FILE" '.ocs.data.entries[0].title == $name' "$WORK/erinnerung.json" >/dev/null 2>&1 ||
+            fail "the Erinnerung hit is not the image only PDF of the corpus" "$WORK/erinnerung.json"
+        urteil 10
+    fi
+
+    echo "=== Die Bilanz der zehn Faelle, mit beiden Zahlen in einer Zeile ==="
+    # Faelle und Zusicherungen werden getrennt gezaehlt, weil sie zwei
+    # verschiedene Zahlen sind: die Bilanzzeile handelt von Faellen, die Liste
+    # darunter von Zusicherungen, von denen Fall 1 allein vier traegt. Die zweite
+    # Zahl der Bilanzzeile ist die, um die es DI-10-02 geht: eine Bilanz mit
+    # einer Zahl ist genau das Missverstaendnis, das aus vier nicht messbaren
+    # Faellen vier rote gemacht hat.
+    ROT=$(sort -u "$WORK/fehler" | grep -c . || true)
+    NICHTMESSBAR=$(sort -u "$WORK/nichtmessbar" | grep -c . || true)
+    ZEILEN=$(grep -c . "$WORK/fehlertexte" 2>/dev/null || true)
+    BESTANDEN=$((10 - ROT - NICHTMESSBAR))
+    [ "$BESTANDEN" -ge 0 ] || BESTANDEN=0
+    printf 'sprachfaelle bestanden %s von 10, davon %s nicht messbar\n' "$BESTANDEN" "$NICHTMESSBAR"
+    printf 'rote faelle %s, nicht messbare faelle %s, rote zusicherungen %s\n' \
+        "$ROT" "$NICHTMESSBAR" "${ZEILEN:-0}"
+    if [ "$ROT" -gt 0 ]; then
+        echo "-- die roten Zusicherungen im Wortlaut, jede eine eigene Aussage --"
+        cat "$WORK/fehlertexte"
+        echo "-- die roten Faelle --"
+        sort -u "$WORK/fehler"
+    fi
+    if [ "$NICHTMESSBAR" -gt 0 ]; then
+        echo "-- die nicht messbaren Faelle. Sie sind KEIN Sprachbefund: die eigene Datei"
+        echo "   steht in beiden Ranglisten ausserhalb der $RANG_SCHWELLE Rechecks oder gar"
+        echo "   nicht darin, und keine Fusion bringt sie von dort in Reichweite (DI-10-02) --"
+        sort -u "$WORK/nichtmessbar"
+    fi
+
+    echo "=== Abschnitt 5: die Einordnung dieser Zahlen ==="
+    echo "Fuer diese zehn Faelle gibt es KEINE v1.0-Entsprechung auf dieser Box:"
+    echo "weder der Semantiklauf vom 05.09. noch die Nachmessung vom 07.09. hat sie"
+    echo "gefahren. Die Zahl dieses Schrittes ist damit eine ERSTMESSUNG neben einem"
+    echo "CI-Beleg und keine Vergleichszeile."
+    printf 'ci-beleg: integration.yml Lauf %s\n' "$CI_LAUF"
+    echo "Genau dieser Lauf faehrt dieselben zehn Faelle auf einer FRISCHEN Instanz OHNE"
+    echo "Fremdbestand, auf amd64, gegen den PHP-Entwicklungsserver (Job"
+    echo "index-search-e2e). Er ist die Messung mit eigenem Index, nach der DI-10-02"
+    echo "verlangt, und deshalb ist seine Laufnummer hier Pflicht und keine Notiz."
+    echo "Dieser Schritt misst dieselbe Aussage auf arm64 gegen eine All-in-One-Instanz"
+    echo "mit vollem Vektorbestand und 52.111 Fremddokumenten. Gleich ist die Aussage,"
+    echo "nicht die Umgebung, und wo die eigene Datei ausserhalb beider Ranglisten"
+    echo "steht, steht NICHT MESSBAR und kein Urteil."
+
     echo "=== Die Skeletteinstellung, zurueckgeschrieben wie sie war ==="
     if [ -n "${SKELETON_VORHER:-}" ]; then
         occ config:system:set skeletondirectory --value="$SKELETON_VORHER" 2>&1 || true
@@ -411,14 +720,59 @@ urteil() {
 } 2>&1 | tee "$ZIEL"
 
 # Alles unterhalb der Pipeline, weil der Rueckgabewert einer Pipeline zu tee
-# gehoert: ein exit innerhalb des Blocks oben verliesse nur die Subshell.
+# gehoert: ein exit innerhalb des Blocks oben verliesse nur die Subshell, und die
+# Verweigerung waere eine Zeile in einer Rohdatei, die niemand liest.
 vorpruefung=$(cat "$WORK/vorpruefung-urteil" 2>/dev/null || echo 'vorpruefung-gefahren nein')
+rang=$(cat "$WORK/rang-urteil" 2>/dev/null || echo 'rang-erhoben nein')
+upload=$(cat "$WORK/upload-urteil" 2>/dev/null || echo 'upload-vollstaendig nein')
+index=$(cat "$WORK/index-urteil" 2>/dev/null || echo 'arbeitsvorrat-leer nein')
+rot=$(sort -u "$WORK/fehler" 2>/dev/null | grep -c . || true)
+nichtmessbar=$(sort -u "$WORK/nichtmessbar" 2>/dev/null | grep -c . || true)
 
 if [ "$vorpruefung" != 'vorpruefung-gefahren ja' ]; then
     echo "98c-sprachfaelle: die Vorpruefung des Fremdbestands konnte nicht gefahren werden" >&2
     echo "98c-sprachfaelle: ohne sie waere jedes Urteil wieder zweiwertig, und genau das" >&2
     echo "98c-sprachfaelle: ist der Inhalt von DI-10-02; $ZIEL sagt, woran es lag" >&2
     exit 19
+fi
+
+if [ "$rang" != 'rang-erhoben ja' ]; then
+    echo "98c-sprachfaelle: Abschnitt 3b konnte keine Datei-Kennungen erheben" >&2
+    echo "98c-sprachfaelle: ohne den Rang der eigenen Datei gibt es keine Messgroesse," >&2
+    echo "98c-sprachfaelle: die die Schwelle $RANG_SCHWELLE erreichen kann, und jeder Fall" >&2
+    echo "98c-sprachfaelle: hiesse NICHT MESSBAR aus dem falschen Grund; $ZIEL sagt, woran" >&2
+    echo "98c-sprachfaelle: es lag (kein OC-FileId im Antwortkopf oder keine Sonde)" >&2
+    exit 24
+fi
+
+if [ "$upload" != 'upload-vollstaendig ja' ]; then
+    echo "98c-sprachfaelle: der Upload hat nicht $ERWARTETE_DATEIEN Dateien geliefert" >&2
+    echo "98c-sprachfaelle: ein Fall ueber einen Korpus, der nicht ganz da ist, sagt nichts" >&2
+    exit 15
+fi
+
+if [ "$index" != 'arbeitsvorrat-leer ja' ]; then
+    echo "98c-sprachfaelle: der Arbeitsvorrat war am Rundendeckel noch nicht leer" >&2
+    echo "98c-sprachfaelle: die Faelle 8 bis 10 haengen an der OCR-Spur, ihre Urteile" >&2
+    echo "98c-sprachfaelle: handelten also von einem unfertigen Durchlauf; dieser Block" >&2
+    echo "98c-sprachfaelle: ist entwurfsgemaess abbrechbar (Annahme A7) und gehoert als" >&2
+    echo "98c-sprachfaelle: Luecke in den Bericht" >&2
+    exit 16
+fi
+
+if [ "${nichtmessbar:-0}" -ge 10 ]; then
+    echo "98c-sprachfaelle: nicht einer der zehn Faelle war auf dieser Instanz messbar" >&2
+    echo "98c-sprachfaelle: ein Lauf, in dem die eigene Datei zu jedem Begriff ausserhalb" >&2
+    echo "98c-sprachfaelle: beider Ranglisten steht, ist eine Aussage ueber die Instanz und" >&2
+    echo "98c-sprachfaelle: nicht ueber die Sprachkette; der in $ZIEL genannte CI-Lauf ist" >&2
+    echo "98c-sprachfaelle: der, der sie misst" >&2
+    exit 23
+fi
+
+if [ "${rot:-0}" -gt 0 ]; then
+    echo "98c-sprachfaelle: $rot der messbaren Faelle waren rot" >&2
+    echo "98c-sprachfaelle: jeder davon ist eine eigene Aussage, und $ZIEL hat sie" >&2
+    exit 17
 fi
 
 echo "98C-SPRACHFAELLE-FERTIG"
