@@ -261,22 +261,81 @@ def test_the_deletion_does_not_call_an_empty_answer_a_failure() -> None:
     assert "the server was not deleted: $(delete_error" in text
 
 
-def test_the_aws_tool_names_its_eight_subcommands_in_the_usage() -> None:
-    """Eight and not five: the box lives between stop and start, and it outlives itself.
+def test_the_aws_tool_names_its_nine_subcommands_in_the_usage() -> None:
+    """Nine and not five: the box lives between stop and start, and it outlives itself.
 
     The box of the ARM run was created by hand, so create is a record of what
     happened and refuses to make a second machine, while the volume that the
     corpus lives on is created by the tool and has to be findable in it. stop
     and start came late, in 06.1-18, because until then the box was parked and
     woken by hand, which meant past the cost arithmetic of this script. snapshot
-    came last, in 11-12, because the corpus of the run has to survive the
-    machine that carried it, and a snapshot taken by hand is a snapshot whose
-    verification nobody keeps.
+    came in 11-12, because the corpus of the run has to survive the machine that
+    carried it, and a snapshot taken by hand is a snapshot whose verification
+    nobody keeps.
+
+    restore is the ninth and it came in 12-03, because the corpus really did
+    outlive the machine and there was no way back: volume creates an empty one,
+    and the only path from the snapshot to a mounted corpus was a create-volume
+    typed by hand on the day the measurement box is paid for by the hour. The
+    rule of this phase is that no tool is touched during a paid run, so the way
+    back is built here and not there.
     """
     text = AWS_BOX.read_text(encoding="utf-8")
-    for subcommand in ("prices", "create", "volume", "status", "stop", "start", "snapshot", "destroy"):
+    for subcommand in ("prices", "create", "volume", "restore", "status", "stop", "start", "snapshot", "destroy"):
         assert f"    {subcommand})" in text, subcommand
-    assert "usage: aws_box.sh <prices|create|volume|status|stop|start|snapshot|destroy>" in text
+    assert "usage: aws_box.sh <prices|create|volume|restore|status|stop|start|snapshot|destroy>" in text
+
+
+def test_the_aws_restore_reads_the_snapshot_before_it_creates_anything() -> None:
+    """A volume out of an unfinished snapshot is missing blocks and says nothing about it.
+
+    The refusal therefore stands in front of the first call that costs money,
+    exactly as the stopped check does in the snapshot subcommand: State has to
+    read completed, and the size of the snapshot has to fit the size this script
+    asks for, because the api refuses the second one after the request rather
+    than before it. The zone is asserted with it: a volume can only be attached
+    inside its own zone and it cannot be moved afterwards (T-12-13).
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    body = text.split("cmd_restore() {", 1)[1].split("\ncmd_status() {", 1)[0]
+    assert "--snapshot-id" in body
+    assert '--availability-zone "$ZONE"' in body
+    # Read first, create second, and the refusal in between.
+    assert body.index("describe-snapshots") < body.index("create-volume")
+    assert body.index("!= 'completed'") < body.index("create-volume")
+    assert body.index("-gt") < body.index("create-volume")
+    # The waiters of the cli and no loop of its own, house rule since 2026-09-04.
+    assert "ec2 wait volume-available" in body
+    assert "ec2 wait volume-in-use" in body
+    assert body.index("wait volume-available") < body.index("attach-volume")
+    # The snapshot the corpus lands from is written down next to the volume,
+    # because a measurement against a restored corpus has to name the corpus.
+    assert "VOLUME_FROM_SNAPSHOT=$snapshot_id" in body
+
+
+def test_the_aws_restore_retags_the_volume_and_reads_the_tags_back() -> None:
+    """The inherited tag turns a restored volume into an invoice nobody looks for.
+
+    The snapshot carries purpose=findling-corpus-keep on purpose, because it is
+    the one resource of the run that is meant to outlive the box. A volume
+    restored from it inherits exactly that tag, and on a volume it is the
+    opposite of harmless: the sweep of cmd_destroy searches for
+    purpose=findling-phase5, so the volume survives a teardown that reports
+    itself clean and goes on being billed. The retagging is therefore a step of
+    the subcommand and not a line in a runbook, and the read back is what
+    decides, because an accepted api call does not say what the resource now
+    carries (T-12-10).
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    body = text.split("cmd_restore() {", 1)[1].split("\ncmd_status() {", 1)[0]
+    assert body.index("create-volume") < body.index("create-tags")
+    assert body.index("create-tags") < body.index("describe-tags")
+    assert '"Key=$TAG_KEY,Value=$TAG_VALUE"' in body
+    # The abort names the inherited value, so a volume that still carries it
+    # never reaches the attach.
+    assert "KEEP_TAG_VALUE" in body
+    assert body.index("KEEP_TAG_VALUE") < body.index("attach-volume")
+    assert "CORPUS_SNAPSHOT_DEFAULT='snap-03f1d1d9ad9262704'" in text
 
 
 def test_the_aws_snapshot_refuses_a_box_that_is_not_stopped() -> None:

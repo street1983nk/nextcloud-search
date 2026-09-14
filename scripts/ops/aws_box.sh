@@ -21,11 +21,14 @@
 # the cloud image have to survive), and it is read back before every run:
 # free -h says 3.9Gi, nproc says 2, uname -m says aarch64.
 #
-# Eight subcommands, and none of them creates a machine by itself:
+# Nine subcommands, and none of them creates a machine by itself:
 #
 #     prices    what this account is charged for the box and the volume
 #     create    what created the box, said in words, and a refusal to do it again
 #     volume    the 60 GB data volume: create, tag, attach
+#     restore   the same volume, but out of the corpus snapshot: read the
+#               snapshot back first, create, retag against the inherited tag of
+#               the snapshot, read the tags back, attach
 #     status    what is running, for how long, and what it has cost so far
 #     stop      park the box and write the closing figures of the uptime down
 #     start     wake it, read the new address, move the ssh rule onto the
@@ -62,7 +65,11 @@
 # because a diagnostic run that asked a foreign API sixty times a minute is what
 # earned this repository the rule.
 #
-# Usage: AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... aws_box.sh <prices|create|volume|status|stop|start|snapshot|destroy>
+# Usage: AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... aws_box.sh <subcommand>
+# where the subcommand is one of the nine, written here in the same order and the
+# same words that the usage function prints, so that the two cannot drift apart:
+#
+#     usage: aws_box.sh <prices|create|volume|restore|status|stop|start|snapshot|destroy>
 
 set -eu
 
@@ -112,6 +119,15 @@ SNAPSHOT_NAME='findling-corpus-2026-09'
 # test and the index built over it, in the shape the comparison measurement of
 # 2026-09-10 left behind.
 SNAPSHOT_DESCRIPTION='findling corpus and index, v1.1 comparison run 2026-09-10, 52111 documents'
+# The snapshot restore falls back to when neither an argument nor the state file
+# names one. It is the snapshot the run of 2026-09-11 left behind, it is the only
+# copy of the 52111 document corpus that exists anywhere, and it is pinned here
+# rather than looked up: a restore that searches for "the newest snapshot with
+# the keep tag" would silently build a volume out of whatever somebody took last.
+# Read back on 2026-09-14, completed, 100 percent, 60 GB, tag
+# purpose=findling-corpus-keep (docs/measurements/2026-09-v12-messung/rohdaten/
+# 01-aws-lesende-proben.txt).
+CORPUS_SNAPSHOT_DEFAULT='snap-03f1d1d9ad9262704'
 
 # Outside the working tree, same reason as in the Hetzner tool: a state file in
 # the repository is one careless git add away from a public commit.
@@ -151,10 +167,12 @@ PRICE_CURRENCY='USD'
 HOURS_PER_MONTH=730
 
 usage() {
-    echo "usage: aws_box.sh <prices|create|volume|status|stop|start|snapshot|destroy>" >&2
+    echo "usage: aws_box.sh <prices|create|volume|restore|status|stop|start|snapshot|destroy>" >&2
     echo "  prices   the facts of the instance type and the pinned rates" >&2
     echo "  create   how the box was created, and why this refuses to repeat it" >&2
     echo "  volume   create the ${VOLUME_SIZE_GB} GB data volume and attach it" >&2
+    echo "  restore  build that volume out of the corpus snapshot instead, retag" >&2
+    echo "           it and attach it; restore <id> uses that snapshot" >&2
     echo "  status   state, run time and the cost so far" >&2
     echo "  stop     park the box, then write the uptime and its cost down" >&2
     echo "  start    wake it, print the new address, move the ssh rule along" >&2
@@ -381,6 +399,172 @@ print(volumes[0]["VolumeId"] if len(volumes) == 1 else "")
     echo "aws_box: volume=$volume_id noted in $STATE_FILE, tag $LABEL"
     echo "aws_box: nitro exposes it as a nvme device and ignores $VOLUME_DEVICE,"
     echo "so find it by size on the box and mount it by uuid, never by name"
+}
+
+cmd_restore() {
+    require_credentials
+    require_tools
+    require_state
+
+    if [ -n "${VOLUME_ID:-}" ]; then
+        echo "aws_box: $STATE_FILE already names volume $VOLUME_ID" >&2
+        echo "run status, or destroy first: two volumes are two invoices" >&2
+        exit 1
+    fi
+
+    # Three sources for the id, in this order: the argument, the state file of
+    # the run that took the snapshot, and the pinned default. The argument comes
+    # first because a rebuild against a different snapshot has to be possible
+    # without editing this script, and the default comes last because a restore
+    # that has to be told the id every time is a restore that gets the id wrong.
+    snapshot_id="${1:-}"
+    if [ -z "$snapshot_id" ]; then
+        snapshot_id="${CORPUS_SNAPSHOT_ID:-$CORPUS_SNAPSHOT_DEFAULT}"
+        echo "aws_box: no snapshot was handed in, using $snapshot_id"
+    fi
+
+    # The read back stands in front of everything that costs money, and it is a
+    # refusal and not a note. A snapshot that is still pending restores into a
+    # volume whose blocks are not all there, and it looks exactly like a good one
+    # until something reads the missing ones. A snapshot of a larger volume
+    # cannot be restored into the size this script asks for at all, and the api
+    # would refuse after the request rather than before it.
+    details=$(ec2 describe-snapshots --snapshot-ids "$snapshot_id" | json "
+import json
+import sys
+
+snapshot = json.load(sys.stdin)['Snapshots'][0]
+print('SnapshotId  %s' % snapshot['SnapshotId'])
+print('State       %s' % snapshot['State'])
+print('Progress    %s' % snapshot.get('Progress', '?'))
+print('VolumeSize  %s' % snapshot['VolumeSize'])
+print('VolumeId    %s' % snapshot['VolumeId'])
+print('StartTime   %s' % snapshot['StartTime'])
+print('Encrypted   %s' % snapshot['Encrypted'])
+print('Description %s' % snapshot.get('Description', ''))
+")
+    echo "$details"
+    snapshot_state=$(printf '%s' "$details" | sed -n 's/^State  *//p')
+    snapshot_size=$(printf '%s' "$details" | sed -n 's/^VolumeSize  *//p')
+    if [ "$snapshot_state" != 'completed' ]; then
+        echo "aws_box: $snapshot_id is $snapshot_state and not completed, so this" >&2
+        echo "creates nothing: a volume out of an unfinished snapshot is missing" >&2
+        echo "blocks, and nothing says so until something reads them" >&2
+        exit 1
+    fi
+    if [ "$snapshot_size" -gt "$VOLUME_SIZE_GB" ]; then
+        echo "aws_box: $snapshot_id comes from a $snapshot_size GB volume and this" >&2
+        echo "script asks for $VOLUME_SIZE_GB GB, which the api refuses. Raise" >&2
+        echo "VOLUME_SIZE_GB deliberately or restore a different snapshot" >&2
+        exit 1
+    fi
+
+    # An unattached volume that already carries the tag is picked up instead of
+    # creating a second one. This is not convenience: the first run of the volume
+    # subcommand created the volume and then failed on the attach, and a retry
+    # that starts with a creation leaves the first one behind as an invoice
+    # nobody is watching. The search is limited to the zone of the box, because
+    # a volume in another zone could never be attached to it anyway.
+    volume_id=$(ec2 describe-volumes \
+        --filters "Name=tag:$TAG_KEY,Values=$TAG_VALUE" \
+        "Name=availability-zone,Values=$ZONE" \
+        "Name=status,Values=available" | json '
+import json
+import sys
+
+volumes = json.load(sys.stdin)["Volumes"]
+print(volumes[0]["VolumeId"] if len(volumes) == 1 else "")
+')
+    if [ -n "$volume_id" ]; then
+        echo "aws_box: an unattached volume with the tag exists, using $volume_id"
+    else
+        echo "aws_box: creating a ${VOLUME_SIZE_GB} GB $VOLUME_TYPE volume in $ZONE from $snapshot_id"
+        # The zone is required for a restore and it is not a default: a volume
+        # can only be attached inside its own zone and it cannot be moved
+        # afterwards. The size is written out rather than left to the snapshot,
+        # because a figure that is checked is worth more than one that is
+        # inherited, and the check above is what makes it safe.
+        response=$(ec2 create-volume \
+            --snapshot-id "$snapshot_id" \
+            --availability-zone "$ZONE" \
+            --size "$VOLUME_SIZE_GB" \
+            --volume-type "$VOLUME_TYPE" \
+            --tag-specifications \
+            "ResourceType=volume,Tags=[{Key=Name,Value=$VOLUME_NAME},{Key=$TAG_KEY,Value=$TAG_VALUE}]")
+        volume_id=$(printf '%s' "$response" | json 'import json,sys; print(json.load(sys.stdin)["VolumeId"])')
+    fi
+
+    # The retagging, and it runs on both paths rather than only on the creating
+    # one. A volume restored from this snapshot inherits its tags, and the
+    # snapshot carries purpose=findling-corpus-keep on purpose, because it is
+    # meant to outlive the box. On a volume that same tag is the opposite of
+    # harmless: the sweep of cmd_destroy searches for purpose=findling-phase5,
+    # so a volume under the keep tag survives a teardown that reports itself
+    # clean, and it goes on being billed at about 5.71 USD a month with nobody
+    # looking for it (T-12-10).
+    ec2 create-tags --resources "$volume_id" \
+        --tags "Key=$TAG_KEY,Value=$TAG_VALUE" "Key=Name,Value=$VOLUME_NAME" >/dev/null
+    # The read back, and it is this and not the create-tags call that decides.
+    # An api call that returns says the request was accepted, it does not say
+    # what the resource now carries, and this is the one tag in this script whose
+    # absence is invisible until the invoice arrives.
+    volume_tags=$(ec2 describe-tags --filters "Name=resource-id,Values=$volume_id" | json "
+import json
+import sys
+
+tags = json.load(sys.stdin)['Tags']
+print(' '.join('%s=%s' % (tag['Key'], tag['Value']) for tag in tags))
+")
+    echo "aws_box: tags of $volume_id after the retagging: $volume_tags"
+    case " $volume_tags " in
+    *" $TAG_KEY=$TAG_VALUE "*) ;;
+    *)
+        echo "aws_box: $volume_id does not carry $LABEL after create-tags, so the" >&2
+        echo "sweep of destroy would not find it. Retag it by hand before anything" >&2
+        echo "else, then run status" >&2
+        exit 1
+        ;;
+    esac
+    case " $volume_tags " in
+    *"=$KEEP_TAG_VALUE "*)
+        echo "aws_box: $volume_id still carries $TAG_KEY=$KEEP_TAG_VALUE, the tag it" >&2
+        echo "inherited from the snapshot. Under that tag the sweep of destroy" >&2
+        echo "reports it as a resource that is meant to stay, and it stays billed" >&2
+        exit 1
+        ;;
+    esac
+
+    # The waiters of the cli and no loop of our own, house rule since 2026-09-04.
+    echo "aws_box: waiting for volume $volume_id to become available"
+    "$AWS_BIN" --region "$REGION" ec2 wait volume-available --volume-ids "$volume_id"
+
+    echo "aws_box: attaching $volume_id to $BOX_INSTANCE_ID as $VOLUME_DEVICE"
+    ec2 attach-volume --volume-id "$volume_id" --instance-id "$BOX_INSTANCE_ID" \
+        --device "$VOLUME_DEVICE" >/dev/null
+    "$AWS_BIN" --region "$REGION" ec2 wait volume-in-use --volume-ids "$volume_id"
+
+    # Appended and not rewritten, same reason as in the volume subcommand: the
+    # instance id in this file is the only record of a machine that costs money.
+    # The snapshot the volume came out of is written down next to it, because a
+    # measurement against a restored corpus has to be able to name the corpus.
+    (
+        umask 077
+        {
+            echo "# volume restored from a snapshot by aws_box.sh restore"
+            echo "VOLUME_ID=$volume_id"
+            echo "VOLUME_NAME=$VOLUME_NAME"
+            echo "VOLUME_SIZE_GB=$VOLUME_SIZE_GB"
+            echo "VOLUME_TYPE=$VOLUME_TYPE"
+            echo "VOLUME_CREATED_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "VOLUME_FROM_SNAPSHOT=$snapshot_id"
+        } >>"$STATE_FILE"
+    )
+    echo "aws_box: volume=$volume_id noted in $STATE_FILE, tag $LABEL"
+    echo "aws_box: it came out of $snapshot_id and carries the corpus and the index"
+    echo "aws_box: nitro exposes it as a nvme device and ignores $VOLUME_DEVICE,"
+    echo "so find it by size on the box and mount it by uuid, never by name"
+    echo "aws_box: this subcommand ends at the attach. The mount is a handle on"
+    echo "the box and a numbered block of the runbook, not a call into this api"
 }
 
 cmd_status() {
@@ -1013,13 +1197,14 @@ case "$COMMAND" in
     prices) cmd_prices ;;
     create) cmd_create ;;
     volume) cmd_volume ;;
+    restore) cmd_restore "$@" ;;
     status) cmd_status ;;
     stop) cmd_stop ;;
     start) cmd_start ;;
     snapshot) cmd_snapshot "$@" ;;
     destroy) cmd_destroy "$@" ;;
     '')
-        echo "aws_box: one of the eight subcommands is required" >&2
+        echo "aws_box: one of the nine subcommands is required" >&2
         usage
         exit 2
         ;;
