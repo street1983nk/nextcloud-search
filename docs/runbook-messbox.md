@@ -228,3 +228,386 @@ ist.
 
 **Keine dieser neun Zeilen braucht eine laufende Box.** Wer eine von ihnen auf
 später verschiebt, verschiebt sie in die bezahlte Zeit.
+
+---
+
+## 4. Aufbau, in nummerierten Bloecken
+
+Jeder Block hat dieselbe Form: eine Überschrift mit Nummer und Zweck, ein
+Kommandoblock zum Kopieren, und darunter eine Zeile `Erwartete Ausgabe` mit
+dem, was zu sehen sein muss. Wo die erwartete Ausgabe in Phase 12 nicht trocken
+geprüft werden konnte, steht statt einer Gewissheit die Marke
+`in Phase 15 erstmals vollzogen`; sie bedeutet, dass die Ausgabe aus einem
+Skript oder einem früheren Bericht abgeleitet und nicht gegen diese Kette
+gefahren ist.
+
+**Die Platzhalter dieses Abschnitts**, damit kein Wert in dieser öffentlichen
+Datei steht:
+
+| Platzhalter | Woher der Wert kommt |
+|---|---|
+| `<eigene-adresse>/32` | die eigene öffentliche Adresse, genau ein Wirt, nicht ein Netz |
+| `<ganzes-netz>` | die CIDR-Schreibweise für das gesamte Internet: vier Nullen, Präfixlänge null |
+| `<vpc>`, `<sg>`, `<subnetz>` | aus der Antwort des jeweils vorigen Blocks |
+| `<box>` | der SSH-Zielname der Maschine, aus der eigenen SSH-Konfiguration |
+| `<uuid>` | aus `blkid` des Datenträgers, siehe Block 7 |
+
+### Die wiederkehrenden Handgriffe, die `aws_box.sh start` NICHT erledigt
+
+Diese Tabelle gilt nicht nur für den Erstaufbau, sondern nach **jedem**
+Maschinenstart. `aws_box.sh start` weckt die Instanz, liest die neue öffentliche
+Adresse und zieht die SSH-Regel der Security Group nach; alles Übrige bleibt
+offen und nennt sich selbst.
+
+| Offener Punkt | Handgriff | Warum |
+|---|---|---|
+| A-Record `loadtest.infranode.dev` | auf die neue Adresse setzen. Rückfall 1: den `/etc/hosts`-Pin nach JEDEM Maschinenneustart neu aus `docker inspect` des Apache-Containers bilden. Rückfall 2: mit `curl --resolve` arbeiten | Ein Neustart verteilt die Adressen der Docker-Brücke neu. Der Apache ist einmal von einer Brückenadresse auf eine andere gewandert, und der alte Pin liess den Poller 300 Sekunden ins Backoff laufen |
+| Der Container ist nach einem Maschinenstart nicht bewaffnet (DI-05-36) | `occ app_api:app:disable findling_backend`, danach `occ app_api:app:enable findling_backend` | Der Beweis der Bewaffnung ist ein GEZÄHLTER Poller-Durchgang im Protokoll und kein abgelesener Zustand. Ein abgelesener Zustand war schon einmal grün, während nichts lief |
+| Die harte Speichergrenze ist nach jeder Registrierung weg | `docker update --memory=2g --memory-swap=2g`, danach `memory.max` und `memory.swap.max` AUS DER CGROUP zurücklesen | Die Registrierung baut den Container neu und verliert die Grenze. Ohne sie misst der Lauf eine andere Maschine als v1.1 |
+| Nur EINE Nextcloud auf dem Docker-Dienst | `docker ps` zählt, und zwar VOR dem ersten `--rm-data` | Der Volumenname einer ExApp folgt allein aus ihrer App-Kennung. Am 07.09.2026 hat eine zweite, frische Nextcloud mit `app_api:app:unregister --rm-data` das Messvolumen der ERSTEN gelöscht |
+| Git für Windows schreibt Pfadargumente um | in jedem neuen Skript, das von dieser Maschine gegen die Box oder gegen die AWS-API läuft, die Pfadumschreibung für den eigenen Prozess abschalten, so wie `aws_box.sh` es tut | Aus `/dev/sdf` wurde ein Windows-Pfad unterhalb des Git-Installationsverzeichnisses. Der Aufruf lief durch und meinte etwas anderes, als er sagte |
+
+---
+
+### Block 1: Security Group anlegen
+
+```sh
+aws ec2 create-security-group --region eu-central-1 \
+    --group-name findling-loadtest \
+    --description "findling load test" --vpc-id <vpc>
+
+aws ec2 authorize-security-group-ingress --region eu-central-1 \
+    --group-id <sg> \
+    --ip-permissions \
+    'IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=<eigene-adresse>/32}]' \
+    'IpProtocol=tcp,FromPort=80,ToPort=80,IpRanges=[{CidrIp=<ganzes-netz>}]' \
+    'IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges=[{CidrIp=<ganzes-netz>}]' \
+    'IpProtocol=udp,FromPort=443,ToPort=443,IpRanges=[{CidrIp=<ganzes-netz>}]'
+```
+
+SSH steht ausschliesslich auf genau einer Adresse mit Präfixlänge 32, und zwar
+auf der des Owners. Die drei übrigen Regeln sind die einzigen, die offen sind.
+**UDP 443 ist neu gegenüber dem Rezept in `cmd_create`** und stammt aus DI-05-35:
+der Apache des AIO-Abbilds kündigt HTTP/3 über einen Alt-Svc-Kopf an, und ohne
+UDP 443 laufen Klienten, die dem Kopf folgen, in eine Zeitüberschreitung, bevor
+sie auf TCP zurückfallen.
+
+`Erwartete Ausgabe`: `create-security-group` liefert ein Feld `GroupId`, das ab
+hier `<sg>` ist; `authorize-security-group-ingress` liefert `"Return": true`
+und vier `SecurityGroupRules`-Einträge, davon einer mit `"IpProtocol": "udp"`.
+Marke: `in Phase 15 erstmals vollzogen`.
+
+### Block 2: Schluesselpaar anlegen
+
+```sh
+aws ec2 create-key-pair --region eu-central-1 \
+    --key-name findling-loadtest \
+    --query KeyMaterial --output text > ~/.ssh/findling-loadtest
+chmod 600 ~/.ssh/findling-loadtest
+```
+
+Der private Teil verlässt die Maschine nie, die ihn erzeugt hat. Er gehört in
+kein Repositorium, in keine Sicherung, die irgendwohin synchronisiert, und in
+keinen Kommandozeilenparameter.
+
+`Erwartete Ausgabe`: die Datei `~/.ssh/findling-loadtest` beginnt mit
+`-----BEGIN RSA PRIVATE KEY-----` beziehungsweise
+`-----BEGIN OPENSSH PRIVATE KEY-----` und ist grösser als null Byte; `ls -l`
+zeigt Rechte `-rw-------`. Marke: `in Phase 15 erstmals vollzogen`.
+
+### Block 3: Instanz erzeugen
+
+```sh
+aws ec2 run-instances --region eu-central-1 \
+    --image-id ami-0e79e661e73ddfac9 \
+    --instance-type m7g.large \
+    --key-name findling-loadtest \
+    --security-group-ids <sg> \
+    --subnet-id <subnetz> \
+    --block-device-mappings \
+    'DeviceName=/dev/sda1,Ebs={VolumeSize=40,VolumeType=gp3,DeleteOnTermination=true}' \
+    --tag-specifications \
+    'ResourceType=instance,Tags=[{Key=Name,Value=findling-loadtest},{Key=purpose,Value=findling-phase5}]'
+```
+
+Das Abbild ist arm64, der Typ ist `m7g.large` (Entscheid D-06, Vergleichbarkeit
+mit Baseline und v1.1), das Subnetz liegt in `eu-central-1c`, weil der
+Datenträger aus Block 6 nur in seiner eigenen Zone angehängt werden kann. Die
+Systemplatte hat 40 GB und `DeleteOnTermination=true`: sie steht für die
+40 GB der Hetzner-Maschine, die dieser Lauf vergleichen soll, und sie ist
+bewusst flüchtig, weil nichts Dauerhaftes auf ihr liegen darf.
+
+`Erwartete Ausgabe`: `Instances[0].InstanceId` und `Instances[0].Placement.AvailabilityZone`
+mit dem Wert `eu-central-1c`; `aws ec2 wait instance-running` kehrt ohne
+Ausgabe zurück. Marke: `in Phase 15 erstmals vollzogen`.
+
+### Block 4: box.env NEU schreiben
+
+```sh
+mkdir -p "${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}"
+umask 077
+cat >> "${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/box.env" <<'ENDE'
+BOX_INSTANCE_ID=<instanz-id aus Block 3>
+BOX_SECURITY_GROUP=<sg aus Block 1>
+ENDE
+```
+
+Die Zustandsdatei liegt **ausserhalb des Arbeitsbaums**, unter
+`${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/box.env`. Die Begründung
+steht im Skript selbst: eine Zustandsdatei im Repositorium ist ein unachtsames
+`git add` von einem öffentlichen Commit entfernt.
+
+Von Hand geschrieben werden genau zwei Felder, weil die Maschine von Hand
+entsteht: `BOX_INSTANCE_ID` (ohne sie bricht `require_state` ab) und
+`BOX_SECURITY_GROUP` (ohne sie brechen `start` und `destroy` ab). Alle übrigen
+Felder schreibt `aws_box.sh` selbst und immer anhängend, nie überschreibend:
+`VOLUME_ID`, `VOLUME_NAME`, `VOLUME_SIZE_GB`, `VOLUME_TYPE`,
+`VOLUME_CREATED_ISO`, `VOLUME_FROM_SNAPSHOT` aus `volume` und `restore`;
+`BOX_IP`, `BOX_STARTED_ISO`, `BOX_SSH_FROM` aus `start`; `BOX_STOPPED_ISO`,
+`BOX_LAST_UPTIME_HOURS`, `BOX_LAST_UPTIME_COST_USD`,
+`BOX_PARKED_COST_USD_PER_DAY` aus `stop`; `CORPUS_SNAPSHOT_ID` aus `snapshot`.
+
+`Erwartete Ausgabe`: `scripts/ops/aws_box.sh status` meldet den Zustand der
+Instanz aus der API statt "no state file at ...". Marke:
+`in Phase 15 erstmals vollzogen`.
+
+### Block 5: Harte Speichergrenze mem=4G
+
+```sh
+ssh <box> "echo 'GRUB_CMDLINE_LINUX_DEFAULT=\"\$GRUB_CMDLINE_LINUX_DEFAULT mem=4G\"' \
+    | sudo tee /etc/default/grub.d/99-mem4g.cfg"
+ssh <box> 'sudo update-grub && sudo reboot'
+# nach dem Neustart:
+ssh <box> 'free -h; nproc; uname -m; cat /proc/cmdline'
+```
+
+Der Drop-in **erweitert** die bestehende `GRUB_CMDLINE_LINUX_DEFAULT`, er
+ersetzt sie nicht. Eine ersetzende Zeile nimmt der Maschine Konsolen- und
+Netzparameter, die beim nächsten Start gebraucht werden.
+
+`Erwartete Ausgabe`: `free -h` zeigt `3.9Gi` als Gesamtspeicher, `nproc` sagt
+`2`, `uname -m` sagt `aarch64`, und `/proc/cmdline` enthält `mem=4G`. Diese drei
+Zahlen sind aus dem Rezept in `cmd_create` übernommen und in drei früheren
+Läufen so gemessen worden.
+
+### Block 6: Volume aus dem Snapshot
+
+```sh
+scripts/ops/aws_box.sh restore
+# oder, gegen eine andere Aufnahme:
+scripts/ops/aws_box.sh restore <snapshot-id>
+```
+
+Der Unterbefehl liest den Snapshot, bevor er irgendetwas erzeugt, bestellt ein
+Volume von 60 GB in der Zone der Box, taggt es pflichtmässig von
+`purpose=findling-corpus-keep` auf `purpose=findling-phase5` um, liest die Tags
+zurück und hängt es an. Ohne das Umtaggen überlebte das Volume den Tag-Sweep des
+Abbaus und würde weiter berechnet, ohne dass jemand danach sucht.
+
+`Erwartete Ausgabe`: der Kopf der Antwort steht in
+`docs/measurements/2026-09-v12-messung/rohdaten/01-aws-lesende-proben.txt`,
+Abschnitt 1, und lautet `State completed`, `Progress 100%`, `VolumeSize 60`,
+`Encrypted false`, dazu `Description` mit den 52111 Dokumenten und
+`VolumeId <Kennung des Ursprungsvolumes, siehe dieselbe Rohdatei>`. Danach
+folgen die Zeilen `tags of ... after the retagging: ... purpose=findling-phase5`,
+`waiting for volume ... to become available`, `attaching ...` und
+`this subcommand ends at the attach`. Der lesende Teil ist am 14.09.2026 so
+gefahren worden; der erzeugende Teil trägt die Marke
+`in Phase 15 erstmals vollzogen`.
+
+### Block 7: Datentraeger mounten
+
+```sh
+ssh <box> 'lsblk -b -o NAME,SIZE,TYPE'          # den 60-GB-Datentraeger finden
+ssh <box> 'sudo blkid /dev/nvme?n1'             # dessen UUID ablesen
+ssh <box> 'sudo mkdir -p /mnt/findling'
+ssh <box> "echo 'UUID=<uuid> /mnt/findling ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab"
+ssh <box> 'sudo mount -a && df -h /mnt/findling'
+```
+
+**Der Datenträger wird über seine GRÖSSE gefunden und über seine UUID
+gemountet, nie über seinen Namen.** Nitro-Instanzen ignorieren den Gerätenamen,
+den die API bekommt (`/dev/sdf`), und zeigen den Datenträger als
+`/dev/nvme?n1` in der Reihenfolge des Anhängens. Ein fstab-Eintrag über den
+Namen zeigt nach dem nächsten Neustart auf ein anderes Gerät oder ins Leere.
+`nofail` steht in der Zeile, weil eine Maschine, die wegen eines fehlenden
+Datenträgers nicht mehr hochkommt, nur noch über die serielle Konsole
+erreichbar ist.
+
+`Erwartete Ausgabe`: `lsblk` zeigt genau einen Datenträger mit rund 60 GB neben
+der 40-GB-Systemplatte; `df -h /mnt/findling` meldet 59G Gesamtgrösse und
+rund 35G belegt, und `ls /mnt/findling` zeigt `docker` und `ncdata`. Die Zahlen
+stammen aus `docs/measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt`,
+Abschnitt 4. Marke: `in Phase 15 erstmals vollzogen`.
+
+### Block 8: Docker-data-root, BEVOR der Daemon startet
+
+```sh
+ssh <box> 'sudo systemctl stop docker docker.socket containerd || true'
+ssh <box> "printf '%s\n' '{ \"data-root\": \"/mnt/findling/docker\" }' \
+    | sudo tee /etc/docker/daemon.json"
+ssh <box> 'sudo systemctl start docker && docker info | grep -i "docker root dir"'
+```
+
+**Die Reihenfolge ist die ganze Aussage dieses Blocks.** Startet der Daemon
+einmal ohne diese Datei, legt er seine Wurzel auf der Systemplatte an, zieht
+dort Abbilder hin und füllt eine 40-GB-Platte, während die 60 GB daneben
+ungenutzt bleiben. Der Snapshot trägt die `data-root` und die
+containerd-Wurzel; sie sind nur brauchbar, wenn der Daemon von Anfang an dort
+hinsieht.
+
+`Erwartete Ausgabe`: `docker info` meldet `Docker Root Dir: /mnt/findling/docker`,
+und `curl -s localhost:5000/v2/_catalog` antwortet
+`{"repositories":["findling_backend"]}`, also die lokale Registry aus dem
+Snapshot. Marke: `in Phase 15 erstmals vollzogen`.
+
+### Block 9: Systemplatte zurueckspielen
+
+```sh
+scp "${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/systemplatte-2026-09/home-ubuntu-work.tar.gz" \
+    <box>:/tmp/
+ssh <box> 'cd /home/ubuntu && tar xzf /tmp/home-ubuntu-work.tar.gz && rm /tmp/home-ubuntu-work.tar.gz'
+ssh <box> 'find /home/ubuntu/work -type f | wc -l; du -sh /home/ubuntu/work'
+```
+
+**Diese Datei trägt die Passwortdateien der Konten `admin` und `lasttest`.** Sie
+bleibt ausserhalb des Arbeitsbaums und wird nicht committet; eine Aufnahme ins
+Repositorium setzt eine eigene Durchsicht auf Geheimnisse voraus, die nicht
+Gegenstand dieses Runbooks ist. Die Kopie auf der Box wird nach dem Auspacken
+gelöscht, damit sie nicht in einer späteren Aufnahme landet.
+
+`Erwartete Ausgabe`: 435 Einträge und rund 3.971.065 Byte in der Sicherung,
+sha256 wie in `07-snapshot-und-abbau.txt`, Abschnitt 4 vermerkt; nach dem
+Auspacken zeigt `/home/ubuntu/work` rund 91 MB. Marke:
+`in Phase 15 erstmals vollzogen`.
+
+### Block 10: A-Record setzen
+
+```sh
+# beim Verwalter der Zone: loadtest.infranode.dev auf die neue Adresse setzen
+dig +short loadtest.infranode.dev
+# Rueckfall 1, nach JEDEM Maschinenneustart neu zu bilden:
+ssh <box> "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' nextcloud-aio-apache"
+ssh <box> 'sudo sed -i "/loadtest.infranode.dev/d" /etc/hosts'
+# dann die frisch gelesene Adresse mit dem Namen in /etc/hosts eintragen
+# Rueckfall 2, ganz ohne Namensdienst:
+curl --resolve 'loadtest.infranode.dev:443:<adresse>' https://loadtest.infranode.dev/status.php
+```
+
+Der Record zeigt seit dem Abbau ins Leere. Rückfall 1 ist **kein einmaliger
+Handgriff**: jeder Maschinenneustart verteilt die Adressen der Docker-Brücke
+neu, und ein alter Pin hat den Poller schon einmal 300 Sekunden ins Backoff
+laufen lassen. Rückfall 2 kommt ohne jede Datei aus und ist der Weg, wenn der
+Namensdienst noch nicht durchgereicht ist.
+
+`Erwartete Ausgabe`: `dig +short` liefert genau eine Adresse, und zwar die der
+neuen Instanz; `curl` gegen `status.php` antwortet mit HTTP 200 und einem JSON,
+das `"installed":true` enthält. Marke: `in Phase 15 erstmals vollzogen`.
+
+### Block 11: Bewaffnung nach DI-05-36
+
+```sh
+ssh <box> 'sudo docker exec --user www-data nextcloud-aio-nextcloud \
+    php occ app_api:app:disable findling_backend'
+ssh <box> 'sudo docker exec --user www-data nextcloud-aio-nextcloud \
+    php occ app_api:app:enable findling_backend'
+ssh <box> 'docker logs --since 5m nc_app_findling_backend 2>&1 | grep -c "poll"'
+```
+
+Nach einem Maschinenstart ist der Container registriert, aber nicht bewaffnet:
+er läuft, und der Poller holt sich nichts. Das Paar `disable` und `enable`
+stellt die Bewaffnung her.
+
+`Erwartete Ausgabe`: die Zählung im dritten Aufruf ist grösser als null, also
+ein GEZÄHLTER Poller-Durchgang im Protokoll. Ein abgelesener Zustand wie
+`app_api:app:list` zählt hier ausdrücklich nicht als Beweis; er war schon einmal
+grün, während nichts lief. Marke: `in Phase 15 erstmals vollzogen`.
+
+### Block 12: Harte Speichergrenze des Containers
+
+```sh
+ssh <box> 'docker update --memory=2g --memory-swap=2g nc_app_findling_backend'
+ssh <box> 'docker exec nc_app_findling_backend cat /sys/fs/cgroup/memory.max'
+ssh <box> 'docker exec nc_app_findling_backend cat /sys/fs/cgroup/memory.swap.max'
+```
+
+Die Grenze wird **aus der cgroup** zurückgelesen und nicht aus der Antwort von
+`docker update` oder aus `docker inspect`. Jede Registrierung baut den Container
+neu und nimmt die Grenze mit; dieser Block gehört daher hinter Block 11 und
+nicht davor.
+
+`Erwartete Ausgabe`: `memory.max` meldet `2147483648`, und `memory.swap.max`
+meldet ebenfalls `2147483648`. Jede andere Zahl bedeutet, dass die Messung auf
+einer anderen Maschine läuft als v1.1.
+
+### Block 13: Nur EINE Nextcloud auf dem Docker-Dienst
+
+```sh
+ssh <box> 'docker ps --format "{{.Names}}" | grep -c nextcloud-aio-nextcloud'
+ssh <box> 'docker volume ls --format "{{.Name}}" | grep findling'
+```
+
+Diese Zählung steht **vor** dem ersten `--rm-data` und wird unmittelbar davor
+wiederholt. Der Volumenname einer ExApp folgt allein aus ihrer App-Kennung: am
+07.09.2026 hat eine zweite, frische Nextcloud am selben Docker-Dienst mit
+`app_api:app:unregister --rm-data` das Messvolumen der ERSTEN Instanz gelöscht.
+Kein Installationslauf, kein Fremdtest, keine zweite Instanz auf dieser
+Maschine, solange gemessen wird.
+
+`Erwartete Ausgabe`: die Zählung liefert genau `1`. Liefert sie mehr, wird
+nichts weiter getan, bis geklärt ist, welche Instanz die Messinstanz ist.
+
+---
+
+## 5. Zustandspruefung mit Abbruchbedingung
+
+Dies ist der eine Block, der eine Anfahrt beendet, bevor sie nennenswert Geld
+kostet. Er steht nach dem Aufbau und vor jeder Messung.
+
+```sh
+ssh <box> 'sudo docker exec --user www-data nextcloud-aio-nextcloud \
+    php occ findling:index'
+ssh <box> 'free -h; nproc; uname -m'
+```
+
+Die Abbruchzeile, wörtlich aus
+`docs/measurements/2026-09-werkzeugfixe/skripte/00-ablauf.md`, Schritt 2:
+
+> Der Index ist intakt und die Box ist die, gegen die Phase 10 gemessen hat:
+> **52.111 indexiert, 37 übersprungen, 0 fehlgeschlagen**, 3.9Gi, 2 Kerne,
+> aarch64. Stimmt das nicht, endet die Anfahrt hier.
+
+Die Ablesestellen, jede einzeln:
+
+| Grösse | Ablesestelle | Sollwert |
+|---|---|---|
+| indexiert | `occ findling:index` | 52.111 |
+| übersprungen | `occ findling:index` | 37 |
+| fehlgeschlagen | `occ findling:index` | 0 |
+| Gesamtspeicher | `free -h` | 3.9Gi |
+| Kerne | `nproc` | 2 |
+| Rechnerarchitektur | `uname -m` | aarch64 |
+
+`Erwartete Ausgabe`: alle sechs Zeilen stimmen. Weicht eine einzige ab, geht der
+Ist-Stand in die Rohdatei des Laufs, die Anfahrt endet, und der Owner
+entscheidet neu. Unter einem Deckel dieser Grössenordnung wird kein Index neu
+aufgebaut.
+
+### 5.1 Die Resume-Falle, und warum sie ein Abbruchpfad ist
+
+**Der Snapshot trägt den FERTIGEN Index.** Wer ihn einspielt und danach einen
+"Volllauf" anstösst, misst einen Resume über rund 52.000 fertige Zeilen und
+meldet eine grandiose Verbesserung, die es nie gegeben hat. Der Snapshot ist als
+Korpusquelle gedacht, er trägt aber Korpus UND Index.
+
+Der Nullstand wird deshalb **vor** dem Anstoss mit Zahlen belegt, nach dem
+Muster von `docs/measurements/2026-09-vergleichsmessung-m7g/skripte/93-nullstand.sh`:
+Inhalt des Datenträgers, Zeilenstände in `oc_findling_file_state`, die Marken in
+`meta`, die Ausgabe von `occ findling:index`, danach `findling:index --restart -n`
+und die Wartefrist.
+
+**Das ist ein Abbruchpfad und keine Empfehlung.** Zeigt die Ablesung nach dem
+Zurücksetzen keinen Nullstand, wird nicht angestossen. Das Warnzeichen während
+des Laufs ist ein Durchsatz, der in den ersten Minuten unplausibel hoch liegt;
+er ist beim v1.1-Lauf auch deshalb eine Untergrenze geblieben, weil beim Anstoss
+bereits 1.653 Dateien im Index lagen.
