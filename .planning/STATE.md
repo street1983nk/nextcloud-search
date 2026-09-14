@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 12-06-PLAN.md
-last_updated: "2026-09-14T17:40:00.000Z"
-last_activity: 2026-09-14, Plan 12-06 abgeschlossen (97-cron-vorpruefung.sh mit beiden Zweigen, 00-ablauf.md)
+stopped_at: Completed 12-08-PLAN.md
+last_updated: "2026-09-14T17:48:00.000Z"
+last_activity: 2026-09-14, Plan 12-08 abgeschlossen (Runbook Abschnitte 6 bis 9, MESS-04 und MESS-06 erfuellt)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -26,15 +26,37 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 12 (messwerkzeug-runbook-und-terminentscheid), EXECUTING
-Plan: 12-01, 12-03, 12-04, 12-05, 12-06 und 12-07 abgeschlossen, 6 von 8 Plaenen des Milestones
+Plan: 12-01, 12-03, 12-04, 12-05, 12-06, 12-07 und 12-08 abgeschlossen, 7 von 8 Plaenen des Milestones
 Status: Ready to execute
-Progress: [████████░░] 75%
-Last activity: 2026-09-14, Plan 12-06 abgeschlossen (97-cron-vorpruefung.sh mit beiden Zweigen, 00-ablauf.md)
+Progress: [█████████░] 88%
+Last activity: 2026-09-14, Plan 12-08 abgeschlossen (Runbook Abschnitte 6 bis 9, MESS-04 und MESS-06 erfuellt)
+
+Offen in Phase 12 ist allein 12-02 (stable35-Vollzug am 16.09., HART-03).
 
 Hinweis zur Reihenfolge: 12-02 ist fristgebunden (stable35-Vollzug am 16.09.) und
 laeuft deshalb nach 12-03.
 
 ## Entscheide aus der Ausfuehrung
+
+- 12-08: Das Runbook ist vollstaendig. Abschnitt 6 macht fuenf
+  Vergleichbarkeitsgroessen protokollpflichtig (Zeilenstaende 52.111/37/0,
+  Cron-Intervall 300 s, m7g.large mit `2147483648`, Zeit seit dem letzten
+  Containerstart, Werkzeugstand als Baumhash), Abschnitt 7 gibt jedem der neun
+  Messschritte seinen Abbruchpfad und fuehrt alle zwoelf Rueckgabewerte,
+  Abschnitt 8 baut in neun Schritten ab (Endmessungen und Historie VOR jedem
+  zerstoerenden Schritt, `FINDLING_STATE_BACKUP` vor `destroy`, Tag-Sweep ueber
+  `findling-phase5` UND `findling-corpus-keep` danach), Abschnitt 9 fuehrt die
+  Kosten ueber `box.env` und schliesst den Kreis zum Deckel-Rechenblatt (D-05).
+
+- 12-08: Waehrend der bezahlten Anfahrt wird kein Werkzeug mehr geaendert. Ein
+  Skript, das waehrend seines eigenen Laufs nachgebessert wird, macht jede Zahl
+  daneben unbelegt; der Werkzeugstand steht als Baumhash unter den
+  protokollpflichtigen Groessen.
+
+- 12-08: MESS-04 und MESS-06 sind erfuellt und abgehakt. Beide sind als
+  Werkzeug- und Runbook-Anforderungen formuliert und liegen damit vollstaendig
+  in Phase 12; die Anwendung im gefahrenen Messlauf zaehlt in Phase 15 unter
+  MESS-05. HART-03 bleibt offen bis zum Vollzug durch 12-02 am 16.09.
 
 - 12-03: `aws_box.sh restore` nimmt die Snapshotkennung aus dem Argument, sonst
   aus `CORPUS_SNAPSHOT_ID` in `box.env`, sonst aus der gepinnten Konstante
@@ -165,6 +187,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-14T17:40:00.000Z
-Stopped at: Completed 12-06-PLAN.md
+Last session: 2026-09-14T17:47:20.805Z
+Stopped at: Completed 12-08-PLAN.md
 Resume file: None

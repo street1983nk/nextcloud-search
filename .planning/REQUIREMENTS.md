@@ -24,9 +24,9 @@
 
 ### Messphase (MESS, Fortsetzung der v1.1-Nummerierung)
 
-- [ ] **MESS-04**: Werkzeug und Runbook stehen VOR der bezahlten Anfahrt: die Fremdbestands-Vorprüfung misst über die Diagnose-Route (`ranked_sides`) statt der gedeckelten OCS-Route; `aws_box.sh` kann Volume-aus-Snapshot (`snap-03f1d1d9ad9262704`); `docs/runbook-messbox.md` als Erstfassung aus den drei bisherigen Berichten
+- [x] **MESS-04**: Werkzeug und Runbook stehen VOR der bezahlten Anfahrt: die Fremdbestands-Vorprüfung misst über die Diagnose-Route (`ranked_sides`) statt der gedeckelten OCS-Route; `aws_box.sh` kann Volume-aus-Snapshot (`snap-03f1d1d9ad9262704`); `docs/runbook-messbox.md` als Erstfassung aus den drei bisherigen Berichten
 - [ ] **MESS-05**: EINE Box-Anfahrt liefert: DI-10-04-Wirkungsbeleg (Volllauf gegen den Korpus-Snapshot mit Top-up-Fix), Untersuchung der vier regressiven Laststufen, Sprachfall-Messung ohne Fremdbestand (DI-10-02/DI-11-01, neue Messgröße), Wiederaufwärm-Kosten der Entladung (warm/kalt, mit/ohne Seitencache, A/B über den MEM-01-Schalter). Der Zeit-/Kostendeckel wird VOR der Anfahrt neu gerechnet und vom Owner freigegeben (der 26-h-Vorschlag reißt rechnerisch: letzter Volllauf allein 26 h 37 min plus ~3,5 h Rüstzeit; PITFALLS empfiehlt mindestens 31 h / ~3,59 USD oder bewusst Teilkorpus)
-- [ ] **MESS-06**: Das Cron-Intervall der Zielinstanz wird vor jedem Messlauf protokolliert (12 statt 5 Minuten haben in v1.1 rund 5,85 h Leerlauf und einen Teil der +40,6 % Laufzeit erzeugt); Vergleichbarkeitsbedingungen (Korpus, Werkzeugstand, Instanztyp) stehen im Runbook
+- [x] **MESS-06**: Das Cron-Intervall der Zielinstanz wird vor jedem Messlauf protokolliert (12 statt 5 Minuten haben in v1.1 rund 5,85 h Leerlauf und einen Teil der +40,6 % Laufzeit erzeugt); Vergleichbarkeitsbedingungen (Korpus, Werkzeugstand, Instanztyp) stehen im Runbook
 
 ### Härtung und Release (HART/REL, Fortsetzung ab REL-02)
 
@@ -66,9 +66,9 @@
 | MEM-03 | Phase 14 | Pending |
 | MEM-04 | Phase 14 | Pending |
 | MEM-05 | Phase 14 | Pending |
-| MESS-04 | Phase 12 | Pending |
+| MESS-04 | Phase 12 | Complete |
 | MESS-05 | Phase 15 | Pending |
-| MESS-06 | Phase 12 | Pending |
+| MESS-06 | Phase 12 | Complete |
 | HART-01 | Phase 16 | Pending |
 | HART-02 | Phase 16 | Pending |
 | HART-03 | Phase 12 | Pending |

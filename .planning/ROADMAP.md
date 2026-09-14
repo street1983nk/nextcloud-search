@@ -63,7 +63,7 @@ Details im Archiv: .planning/milestones/v1.1-ROADMAP.md
   4. Das Cron-Intervall der Zielinstanz ist Pflichtfeld im Messprotokoll: ein Lauf ohne protokolliertes Intervall gilt als unvollstaendig
   5. Der stable35-Fenster-Entscheid ist bis zum 16.09.2026 getroffen und mit Begruendung dokumentiert
 
-**Plans:** 6/8 plans executed
+**Plans:** 7/8 plans executed
 
 Plans:
 **Wave 1**
@@ -84,7 +84,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 12-08-PLAN.md: Runbook Teil 2: Vergleichbarkeitsbedingungen, Messreihenfolge, Abbau, Kostenfuehrung
+- [x] 12-08-PLAN.md: Runbook Teil 2: Vergleichbarkeitsbedingungen, Messreihenfolge, Abbau, Kostenfuehrung
 
 ### Phase 13: Filter und Sortierung auf der Ergebnisseite
 
@@ -158,7 +158,7 @@ Plans:
 | 9. Eigene Ergebnisseite | v1.1 | 8/8 | Complete | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | v1.1 | 7/7 | Complete | 2026-09-10 |
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
-| 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 6/8 | In Progress|  |
+| 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 7/8 | In Progress|  |
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 0/? | Not started | - |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 0/? | Not started | - |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
