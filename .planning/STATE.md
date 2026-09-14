@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 12-07-PLAN.md
+stopped_at: Completed 12-06-PLAN.md
 last_updated: "2026-09-14T17:40:00.000Z"
-last_activity: 2026-09-14, Plan 12-07 abgeschlossen (docs/runbook-messbox.md, Abschnitte 1 bis 5)
+last_activity: 2026-09-14, Plan 12-06 abgeschlossen (97-cron-vorpruefung.sh mit beiden Zweigen, 00-ablauf.md)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 12 (messwerkzeug-runbook-und-terminentscheid), EXECUTING
-Plan: 12-01, 12-03, 12-04, 12-05 und 12-07 abgeschlossen, 5 von 8 Plaenen des Milestones
+Plan: 12-01, 12-03, 12-04, 12-05, 12-06 und 12-07 abgeschlossen, 6 von 8 Plaenen des Milestones
 Status: Ready to execute
-Progress: [██████░░░░] 63%
-Last activity: 2026-09-14, Plan 12-07 abgeschlossen (docs/runbook-messbox.md, Abschnitte 1 bis 5)
+Progress: [████████░░] 75%
+Last activity: 2026-09-14, Plan 12-06 abgeschlossen (97-cron-vorpruefung.sh mit beiden Zweigen, 00-ablauf.md)
 
 Hinweis zur Reihenfolge: 12-02 ist fristgebunden (stable35-Vollzug am 16.09.) und
 laeuft deshalb nach 12-03.
@@ -87,6 +87,25 @@ laeuft deshalb nach 12-03.
   Pruefungen und Verweise auf sie zeigen; der Fliesstext traegt echte Umlaute,
   und der Kopf der Datei sagt das. Das Wort "Archiv" kommt in der Datei nicht
   vor (Vokabular-Gate, `docs/` ist oeffentlich).
+
+- 12-06: Das Cron-Intervall ist ab jetzt eine im Skript durchgesetzte
+  Messbedingung. `97-cron-vorpruefung.sh` hat zwei Zweige: `vorher` liest den
+  Takt aus drei Quellen der Reihe nach und schreibt die Pflichtzeile
+  `cron-intervall-ist` (Abbruch 25, wenn keine Quelle antwortet, 26 bei mehr als
+  zehn Prozent Abweichung vom Soll 300 s), `waehrend` misst den tatsaechlichen
+  Scheibenabstand (Abbruch 27 ohne Zahl, 28 ueber dem Deckel 420 s). Ein reiner
+  Konfigurationscheck haette am 10.09.2026 gruen gemeldet, waehrend der Befund
+  vorlag (D-07, D-08).
+
+- 12-06: Die Ablesereihe des Wirkungszweiges laeuft mit 120 s und nennt ihr
+  Intervall als Pflichtzeile. In v1.1 haben zwei Reihen (194 von 812 gegen 62
+  von 325 Lesungen) rund 24 gegen 19 Prozent fuer denselben Sachverhalt
+  ergeben; die Zuordnung der Reihen zu den beiden Beobachtern ist Annahme A1 und
+  ausdruecklich nicht gesichert.
+
+- 12-06: Der Exit-Code-Katalog des v1.2-Laufverzeichnisses steht bei 28; 12-08
+  und Phase 15 setzen bei 29 fort. Der Ablaufplan `00-ablauf.md` schreibt die
+  Erwartung E1 bis E7 vor der Anfahrt auf und wird danach nicht mehr angepasst.
 
 - 12-05: `rang-erhoben ja` steht erst nach einem erfolgreichen zweiten
   Sondenlauf. Beide Ursachen (keine Kennung, keine Sonde) enden mit Exit 24
@@ -147,5 +166,5 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 ## Session Continuity
 
 Last session: 2026-09-14T17:40:00.000Z
-Stopped at: Completed 12-07-PLAN.md
+Stopped at: Completed 12-06-PLAN.md
 Resume file: None
