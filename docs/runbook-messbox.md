@@ -611,3 +611,131 @@ Zurücksetzen keinen Nullstand, wird nicht angestossen. Das Warnzeichen während
 des Laufs ist ein Durchsatz, der in den ersten Minuten unplausibel hoch liegt;
 er ist beim v1.1-Lauf auch deshalb eine Untergrenze geblieben, weil beim Anstoss
 bereits 1.653 Dateien im Index lagen.
+
+---
+
+## 6. Vergleichbarkeitsbedingungen, protokollpflichtig
+
+Jede der fünf Grössen dieses Abschnitts wird vor dem Lauf **abgelesen** und
+nicht erinnert. Ein Lauf, dem eine davon fehlt, gilt als unvollständig: die
+Zahlen daneben sind dann nicht falsch, sie sind unbelegt, und für einen
+Vergleich ist das dasselbe.
+
+| Groesse | Woher sie kommt | Warum sie protokollpflichtig ist | Sollwert |
+|---|---|---|---|
+| Zeilenstände der Zustandstabelle (indexiert, übersprungen, fehlgeschlagen) | `occ findling:index`, abgelesen in Abschnitt 5 | Der Snapshot trägt den FERTIGEN Index. Wer ihn einspielt und danach einen "Volllauf" anstösst, misst einen Resume über rund 52.000 fertige Zeilen statt eines Neubaus. Beim v1.1-Anstoss lagen bereits 1.653 Dateien im Index, und genau deshalb ist dessen Durchsatz eine Untergrenze | **52.111** indexiert, **37** übersprungen, **0** fehlgeschlagen |
+| Cron-Intervall der Instanz | `./97-cron-vorpruefung.sh vorher`, Pflichtzeile `cron-intervall-ist` | Der Takt stand in v1.1 nominal auf fünf Minuten und lieferte effektiv rund alle zwölf. Das hat 5,85 h von 26,6 h ohne Arbeitsvorrat erzeugt, gegen eine Baseline von 0,10 h | **300** Sekunden, Toleranz zehn Prozent, also 270 bis 330 s |
+| Instanztyp und harte Containergrenze | Typ aus `aws_box.sh status`, Grenze aus der cgroup: `memory.max` und `memory.swap.max`, siehe Block 12 | Ein anderer Instanztyp misst eine andere Maschine. Die Speichergrenze geht bei jeder Registrierung verloren, weil sie den Container neu baut; ohne sie läuft die Messung auf einer Maschine, die v1.1 nie hatte | **m7g.large** (D-06) und **2147483648** in beiden cgroup-Feldern |
+| Zeit seit dem letzten Containerstart | `docker inspect --format '{{.State.StartedAt}}' nc_app_findling_backend`, dazu der Abstand zur ersten Messung | Der Seitencache des Wirts hat die Kaltstart-Reproduktion vom 10.09.2026 vollständig erklärt: 1.838 ms gegen 1.598 ms, weil der letzte Start einmal 29 h und einmal Minuten zurücklag. Ohne diese Zeile ist eine Kaltstartzahl nicht einzuordnen | kein Sollwert. Abgelesen und protokolliert werden der Zeitstempel und der Abstand in Stunden |
+| Werkzeugstand als Baumhash | `40b-baumhash.sh`, es vergleicht das Abbild gegen den Arbeitsbaum und schreibt `rohdaten/40b-baumhash.txt` | Ein korrigiertes Lastwerkzeug macht die v1.1-Stufenzahlen unvergleichbar. Der Baumhash ist der Beweis, der aufgelöste Abbild-Digest nur die Notiz daneben (Befund L-05 der Phase 11) | kein Sollwert. Abgelesen wird `baumhash-gleich` mit dem Hash selbst; steht dort `nein`, hält der Lauf an |
+
+### 6.1 Das Cron-Intervall ist Pflichtfeld
+
+**Drei Zeilen des Konfigurationszweiges gehören in jedes Messprotokoll**, und
+sie kommen aus `./97-cron-vorpruefung.sh vorher`: `cron-modus-ist`,
+`cron-intervall-quelle` und `cron-intervall-ist`. Die dritte ist die
+Pflichtzeile. Fehlt sie, weil keine der drei Quellen den Takt nennen konnte,
+endet der Schritt mit Rückgabewert **25**; weicht der gelesene Wert um mehr als
+zehn Prozent vom Soll ab, endet er mit **26**.
+
+**Eine Checkliste allein reicht dafür nicht.** Menschliche Schritte werden
+vergessen, und genau das war die v1.1-Falle: das Intervall stand in keiner
+Ausgabe, also hat niemand bemerkt, dass es nicht stimmte, bis der Lauf vorbei
+war. Deshalb ist die Bedingung im Skript durchgesetzt und nicht in diesem
+Runbook (D-07, D-08). Dieses Runbook sagt nur, dass sie im Protokoll stehen
+muss.
+
+### 6.2 Konfiguration reicht nicht, die Wirkung gehoert dazu
+
+**Sechs Zeilen des Wirkungszweiges gehören daneben**, aus
+`./97-cron-vorpruefung.sh waehrend`: `scheiben-erkannt`, `scheibenabstand-min`,
+`scheibenabstand-median`, `scheibenabstand-max`, `vorrat-null-in` und
+`ablesereihe-intervall`.
+
+**Warum die Konfiguration nicht genügt:** der v1.1-Befund war eine Diskrepanz
+zwischen Takt und Wirkung, nominal fünf Minuten gegen effektiv rund zwölf. Ein
+Vorprüfschritt, der nur `backgroundjobs_mode`, den Cron-Container oder die
+crontab liest, hätte am 10.09.2026 grün gemeldet, während der Befund vorlag.
+Gemessen wird deshalb der tatsächliche Abstand zwischen zwei Zulaufscheiben,
+mit dem Deckel 420 Sekunden und den Rückgabewerten **27** (keine Zahl) und
+**28** (über dem Deckel).
+
+**Das Protokoll muss benennen, WELCHE Ablesereihe die Prozentzahl liefert.** In
+v1.1 haben zwei Reihen zwei verschiedene Prozentzahlen für denselben Sachverhalt
+erzeugt: 194 von 812 Lesungen in `docs/performance.md` gegen 62 von 325 Lesungen
+in der Rohdatei desselben Laufs, also rund 24 gegen 19 Prozent. Welcher Reihe
+welcher Beobachter zugrunde liegt, ist plausibel, aber nicht belegt (Annahme
+A1). Die Zeile `ablesereihe-intervall` steht genau deshalb neben der Zahl: eine
+Prozentzahl ohne ihre Reihe ist Scheingenauigkeit.
+
+### 6.3 Der Korpus und das Lastwerkzeug
+
+**Der Volllauf läuft gegen den Vollkorpus mit 52.111 Dokumenten** (D-04). Er ist
+damit direkt vergleichbar mit der v1.0-Baseline und mit dem v1.1-Lauf. Ein
+Teilkorpus-Werkzeug gibt es in diesem Milestone ausdrücklich nicht: es würde
+Box-Zeit sparen und dafür die einzige Grösse aufgeben, um derentwillen die
+Anfahrt stattfindet. Wer Kosten sparen will, kürzt an anderer Stelle.
+
+**Die Zielinstanz bleibt m7g.large** (D-06, ARM). Sie ist die Maschine der
+Baseline und des v1.1-Laufs; ARM-Alternativen bei anderen Anbietern sind
+weiterhin nicht beschaffbar.
+
+**`scripts/ops/search_load.py` wird nicht mehr angefasst.** Das Lastwerkzeug ist
+seit dem 10.09.2026 gefixt und geeicht. Jede weitere Änderung daran macht die
+Stufenzahlen dieser Anfahrt gegen die von v1.1 unvergleichbar, und dann misst
+die Anfahrt das Werkzeug statt des Erzeugnisses.
+
+---
+
+## 7. Messreihenfolge mit Abbruchpfaden
+
+Die Reihenfolge ist bindend, und jeder Schritt nennt, woran er abbricht. Sie
+steht im Gleichschritt mit
+`docs/measurements/2026-09-v12-messung/skripte/00-ablauf.md`; dessen fünf
+Schrittnummern stehen unten in Klammern.
+
+| Nr | Schritt | Werkzeug | Rohdatei | Abbruchpfad |
+|---|---|---|---|---|
+| 1 | Zustandsprüfung und Nullstandsbeleg (00-ablauf Schritt 1) | `occ findling:index`, `free -h`, `nproc`, `uname -m`, danach das Muster von `93-nullstand.sh` und `findling:index --restart -n` | `rohdaten/04-bestand-vor-der-messung.txt`, `rohdaten/93-nullstand.txt` | kein Rückgabewert, sondern die Abbruchzeile aus Abschnitt 5: stimmen 52.111 / 37 / 0 / 3.9Gi / 2 / aarch64 nicht, endet die Anfahrt hier. Zeigt die Ablesung nach dem Zurücksetzen keinen Nullstand, wird nicht angestossen |
+| 2 | Cron-Konfigurationszweig, vor jedem Messblock (00-ablauf Schritt 2) | `./97-cron-vorpruefung.sh vorher` | `rohdaten/97-cron-vorpruefung-vorher.txt` | **25** keine Quelle lesbar, **26** Intervall weicht vom Soll ab |
+| 3 | Bestandsvorlauf der Sonde (00-ablauf Schritt 3) | `73-bestand-sonde.py`, per `docker cp` in den Container, gefahren als Abschnitt 0 von `98c-sprachfaelle.sh` | Abschnitt 0 in `rohdaten/05-sprachfaelle.txt` | **19** die Bestandsmessung im Container konnte nicht fahren. Der Abbruch kommt vor dem Hochladen der 39 Dateien |
+| 4 | Anstoss des Volllaufs gegen den Vollkorpus | Muster `96-volllauf.sh` mit dem Beobachter `96b-waechter.sh` | `rohdaten/96-volllauf.csv`, `rohdaten/96b-waechter.txt` | kein eigener Rückgabewert. Der Abbruch dieses Schritts liegt vor ihm, im Nullstandsbeleg von Schritt 1, und neben ihm, im Wirkungszweig von Schritt 5 |
+| 5 | Cron-Wirkungszweig, mit dem Volllauf gestartet und neben ihm laufend (00-ablauf Schritt 5) | `./97-cron-vorpruefung.sh waehrend` | `rohdaten/97-cron-vorpruefung-waehrend.txt` | **27** weniger als zwei Scheiben oder keine Zahl, **28** Scheibenabstand über 420 Sekunden |
+| 6 | Laststufen 1, 4, 8, 12 und 16, mit je einem Entscheid zu den vier regressiven Stufen (Befund L-04 der Phase 11) | Muster `95-spitze.sh` und `97-nebenlaeufigkeit.sh` über `scripts/ops/search_load.py`, unverändert | `rohdaten/95-*.json`, `rohdaten/95-*.csv` | kein Rückgabewert. Eine Stufe ohne Antwortzahlen wird als solche protokolliert und nicht geschätzt; abgebrochene Aufrufe zählen nicht als beantwortet (DI-10-01) |
+| 7 | Sprachfall-Lauf mit Abschnitt 3b (00-ablauf Schritt 4) | `CI_LAUF=<laufnummer> ./98c-sprachfaelle.sh`, mit der zweiten Sondenfahrt nach Upload und Indexierung | `rohdaten/05-sprachfaelle.txt` | **15**, **16**, **17**, **18**, **22**, **23** und **24**, siehe die Tabelle darunter |
+| 8 | Wiederaufwärm-Messung der Entladung in vier Ausprägungen, A/B über den MEM-01-Schalter | Muster `95b-kaltstart-reproduktion`, der Schalter selbst entsteht in Phase 14 | `rohdaten/95b-wiederaufwaermen-*.txt` | kein Rückgabewert. Vorbedingung ist die protokollierte Zeit seit dem letzten Containerstart aus Abschnitt 6; ohne sie ist der Vergleich warm gegen kalt unbelegt |
+| 9 | Endmessungen und Gegenproben, vor jedem zerstörenden Schritt | Muster `90-bestand.sh` und `96-vektorbestand`, dazu die Kostenzeilen aus `box.env` | `rohdaten/90-bestand.txt`, `rohdaten/96-vektorbestand.txt`, `rohdaten/93-kosten-und-verbleib.txt` | kein Rückgabewert. Dieser Schritt ist die Vorbedingung von Abschnitt 8: was hier nicht erhoben ist, ist nach dem Abbau nicht mehr erhebbar |
+
+**Zur Zählung:** `00-ablauf.md` nummeriert die fünf Schritte, die die zwei
+Messwerkzeuge und die eine Messbedingung beweisen. Diese Tabelle nummeriert die
+Anfahrt als Ganzes und ordnet nach dem Zeitpunkt des Starts. Deshalb steht der
+Wirkungszweig hier vor dem Sprachfall-Lauf: beide laufen neben dem Volllauf,
+aber der Wirkungszweig wird mit ihm gestartet. Werkzeuge, Rohdateien und
+Rückgabewerte sind in beiden Dateien dieselben.
+
+### 7.1 Die Rueckgabewerte, vollstaendig
+
+| Bedingung | Wo sie greift | Folge |
+|---|---|---|
+| Der Upload hat nicht 39 Dateien geliefert | Schritt 7 | Rückgabewert 15 (unvollständiger Upload) |
+| Der Arbeitsvorrat war am Rundendeckel noch nicht leer | Schritt 7 | Rückgabewert 16 für den nicht geleerten Vorrat. Die Fälle 8 bis 10 hängen an der OCR-Spur; dieser Block ist abbrechbar und keine Vorbedingung des Berichts |
+| Mindestens ein MESSBARER Fall war rot | Schritt 7 | Rückgabewert 17 für den roten Fall. Nicht messbare Fälle zählen hier ausdrücklich nicht mit |
+| `jq` liegt nicht auf dieser Box | Schritt 7 | Rückgabewert 18 für das fehlende Werkzeug. Die Vorbedingung dazu steht in Abschnitt 3, Zeile 7, weil dieser Abbruch sonst in der bezahlten Zeit fällt |
+| Die Vorprüfung des Fremdbestands konnte nicht gefahren werden | Schritt 3, Abschnitt 0 des Skripts | Rückgabewert 19 für die nicht gefahrene Sonde. Der Abbruch kommt vor dem Hochladen der 39 Dateien |
+| `CI_LAUF` trägt keine Laufnummer | Schritt 7, vor dem ersten Fall | Rückgabewert 22 für die fehlende Laufnummer. Die Vorbedingung dazu steht in Abschnitt 3, Zeile 1 |
+| Kein einziger Fall war messbar | Schritt 7 | Rückgabewert 23 für den durchweg nicht messbaren Lauf. Ein Lauf, in dem jeder Begriff im Fremdbestand ertrinkt, ist eine Aussage über die Instanz und keine über die Sprachkette |
+| Abschnitt 3b konnte keine Datei-Kennungen erheben | Schritt 7, zwischen Indexierung und Fällen | Rückgabewert 24 für die fehlenden Ränge. Ohne sie hiessen alle zehn Fälle nicht messbar, und zwar aus dem falschen Grund |
+| Die Cron-Konfiguration war auf keiner bekannten Quelle lesbar | Schritt 2, unterhalb der Pipeline | Rückgabewert 25 für das unlesbare Intervall. Ein Lauf ohne protokolliertes Intervall gilt als unvollständig (D-07) |
+| Das gelesene Intervall weicht vom Soll ab | Schritt 2, unterhalb der Pipeline | Rückgabewert 26 für die verfehlte Messbedingung. Sie ist dann nicht hergestellt, und der Laufzeitvergleich wäre unbelegt |
+| Der Wirkungszweig wurde nicht gefahren oder nicht protokolliert | Schritt 5, unterhalb der Pipeline | Rückgabewert 27 für den Zweig ohne Zahl. Weniger als zwei erkannte Scheiben ergeben keinen Abstand, und ein Wirkungszweig ohne Zahl ist kein Protokoll |
+| Der gemessene Scheibenabstand liegt ueber dem Deckel | Schritt 5, unterhalb der Pipeline | Rückgabewert 28 für den gerissenen Deckel von 420 Sekunden. Das ist ein Befund und keine Störung: die Anfahrt hält hier, statt eine unvergleichbare Laufzeit zu erzeugen |
+
+Alle vier neuen Abbrüche stehen **unterhalb** der `tee`-Pipeline ihres Skripts:
+der Rückgabewert einer Pipeline gehört zu `tee`, und ein Abbruch innerhalb des
+Blocks verliesse nur die Subshell. Die Verweigerung wäre dann eine Zeile in
+einer Rohdatei, die niemand liest.
+
+**Während der bezahlten Anfahrt wird kein Werkzeug mehr geändert.** Ein Skript,
+das während seines eigenen Laufs nachgebessert wird, macht jede Zahl daneben
+unbelegt. Fällt ein Werkzeug auf, wird der Befund notiert und der Lauf zu Ende
+gefahren oder abgebrochen; die Korrektur gehört in die Zeit nach dem Abbau.
