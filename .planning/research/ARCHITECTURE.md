@@ -1,811 +1,543 @@
-# Architecture Research
+# Architecture Research (Milestone v1.2 "Messbeleg und Ausbau")
 
-**Domain:** Nextcloud-ExApp für Datei-Suche (OCR + Volltext + Semantik), ein Container plus PHP-Companion
-**Researched:** 2026-08-15
-**Confidence:** HIGH für Integrationsprotokoll und Referenzmuster (direkt aus dem Quellcode von `nextcloud/context_chat`, `nextcloud/context_chat_backend`, `nextcloud/app_api`, `cloud-py-api/nc_py_api`, `nextcloud/server` verifiziert), MEDIUM für die Storage-Layout-Empfehlung (sqlite-vec ist noch Alpha)
+**Domain:** Nextcloud-ExApp für Datei-Suche (Python-Container + PHP-Companion), Ausbau einer ausgelieferten 1.1.0
+**Researched:** 2026-09-14
+**Confidence:** HIGH für alle Integrationspunkte (direkt am Quellcode dieses Repos gelesen, Dateien und Zeilen benannt), MEDIUM für zwei Punkte, die vor dem Bau am laufenden System zu verifizieren sind (tantivy `order_by_field`-Trefferform, tatsächlicher RAM-Gewinn der Entladung). Beide sind unten als VERIFIZIEREN markiert.
 
----
-
-## Executive Summary der Architektur-Entscheidungen
-
-Sechs Entscheidungen tragen dieses System. Alle sechs sind unten begründet.
-
-| # | Entscheidung | Kurzbegründung |
-|---|--------------|----------------|
-| 1 | **Pull statt Push**: der Container holt Arbeit aus einer OCS-Queue der PHP-App ab | Backpressure kommt gratis, PHP-Cron kann nicht timeouten, Absturz-Resume ist trivial |
-| 2 | **Crawl pro Mount, nicht pro Nutzer**, Cursor auf `fileid` | Groupfolder werden einmal statt N-mal indexiert, Resume ist ein Integer |
-| 3 | **Berechtigungen als Join-Tabelle im Index**, nicht als Rückfrage an Nextcloud zur Abfragezeit | Suchlatenz bleibt konstant, Zugriffsänderungen kosten keine Neuberechnung von Embeddings |
-| 4 | **Inhalts-Gateway in der PHP-App** (`GET /files/{fileId}?userId=`), kein WebDAV aus dem Container | Nextcloud löst die Rechte selbst auf, kein Passwort, kein App-Token, kein Impersonation-Bastel |
-| 5 | **Eine SQLite-Datei** für FTS5, Vektoren, Dokumentmapping und ACL | Der ACL-Filter wird zu einem SQL-Join statt zu einer Materialisierung in der Anwendungsschicht |
-| 6 | **`IProvider`, niemals `IExternalProvider`** in der PHP-App | `IExternalProvider` ist in der Unified-Search-UI standardmäßig ausgeschaltet, das zerstört Zero-Config |
+> Hinweis an den Orchestrator: diese Datei ersetzt die v1.0-Architekturrecherche vom 15.08.2026, die bis jetzt unter diesem Pfad lag. Der alte Inhalt ist über die Git-Historie erreichbar; wer ihn dauerhaft behalten will, archiviert ihn vor dem Commit nach `.planning/milestones/v1.0-ARCHITECTURE.md`.
 
 ---
 
-## Standard Architecture
+## Executive Summary
 
-### System Overview
+Alle drei v1.2-Vorhaben sind **Erweiterungen entlang bestehender Nahtstellen**, keines verlangt eine neue Komponente, keine neue Route, keine zweite Berechtigungsgrenze und keinen Reindex.
 
-```
-┌───────────────────────────────────────────────────────────────────────────┐
-│                     NEXTCLOUD (PHP-Prozess)                               │
-├───────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
-│  │ SearchProv.  │  │ Event-       │  │ Crawl-Jobs   │  │ Admin-        │  │
-│  │ (IProvider)  │  │ Listener     │  │ (BG-Jobs)    │  │ Settings      │  │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └───────┬───────┘  │
-│         │                 │                 │                  │          │
-│         │                 ▼                 ▼                  │          │
-│         │          ┌─────────────────────────────────┐         │          │
-│         │          │ QUEUE-TABELLEN in oc_ (files,   │         │          │
-│         │          │ actions) mit Lock-Spalte        │         │          │
-│         │          └────────────────┬────────────────┘         │          │
-│         │                           │                          │          │
-│         │          ┌────────────────▼────────────────┐         │          │
-│         │          │ OCS-API, alle #[ExAppRequired]  │◄────────┘          │
-│         │          │  GET/DELETE /queues/documents   │                    │
-│         │          │  GET/DELETE /queues/actions     │                    │
-│         │          │  GET /files/{fileId}?userId=    │  Inhalts-Gateway   │
-│         │          │  GET /queues/*/stats            │                    │
-│         │          └────────────────▲────────────────┘                    │
-└─────────┼───────────────────────────┼─────────────────────────────────────┘
-          │ exAppRequest(appId,       │ nc.ocs(...) mit
-          │   route, userId)          │ AUTHORIZATION-APP-API
-          ▼                           │
-┌───────────────────────────────────────────────────────────────────────────┐
-│                  AppAPI-TRANSPORT (Proxy /apps/app_api/proxy/*, HaRP)     │
-│  Header hin: AA-VERSION, EX-APP-ID, EX-APP-VERSION, AUTHORIZATION-APP-API │
-└───────────────────────────────────────────────────────────────────────────┘
-          │                           ▲
-          ▼                           │
-┌───────────────────────────────────────────────────────────────────────────┐
-│                     ExApp-CONTAINER (Python 3.13, FastAPI)                │
-├───────────────────────────────────────────────────────────────────────────┤
-│  HTTP-Ebene (schnell, synchron, unter 2 s)                                │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐              │
-│  │ /search    │ │ /enabled   │ │ /status    │ │ /heartbeat │              │
-│  └─────┬──────┘ └────────────┘ └─────┬──────┘ └────────────┘              │
-├────────┼──────────────────────────────┼──────────────────────────────────┤
-│  Worker-Ebene (langlebige Threads, unabhaengig von HTTP-Timeouts)         │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐              │
-│  │ Fetcher    │ │ Extract-   │ │ OCR-Pool   │ │ Embed-Pool │              │
-│  │ (Polling)  │→│ Pool       │→│ (RAM-Cap)  │→│ (ONNX)     │              │
-│  └────────────┘ └────────────┘ └────────────┘ └─────┬──────┘              │
-│  ┌────────────┐                                     │                     │
-│  │ Action-    │ (Zugriffs- und Loeschauftraege)     │                     │
-│  │ Fetcher    │─────────────────────────────────────┤                     │
-│  └────────────┘                                     ▼                     │
-├───────────────────────────────────────────────────────────────────────────┤
-│  Storage-Ebene: $APP_PERSISTENT_STORAGE                                   │
-│  ┌──────────────────────────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
-│  │ index.db (SQLite, WAL)       │ │ state.db │ │ models/  │ │ tmp/     │  │
-│  │  documents, chunks, fts,     │ │ Fortschr.│ │ ONNX     │ │ OCR-     │  │
-│  │  vec_chunks, acl             │ │ Fehler   │ │ Tessdata │ │ Scratch  │  │
-│  └──────────────────────────────┘ └──────────┘ └──────────┘ └──────────┘  │
-└───────────────────────────────────────────────────────────────────────────┘
-```
+1. **Dateityp-Filter und Sortierung** gehören vollständig in den Backend-Kandidatenpfad. Das Feld `ext` existiert seit v1.0 im Schema, `mtime` liegt als Fast-Field vor, und der Filter ist als `type:`-Präfix im Suchtext bereits implementiert. Der Ausbau ist: ein zusätzliches Request-Feld statt des Textpräfixes (Grund: das Präfix schaltet über `carried_operators` die semantische Hälfte ab), ein Sortierzweig in `index/search.py::candidates` und die Übertragung von Filter und Sortierung in den URL-Zustand der Ergebnisseite. Auf der PHP-Seite wird **nichts sortiert**: die Reihenfolge der Kandidaten ist der einzige Kanal, und sie wird durchgereicht.
+2. **Modell-Entladung** gehört an zwei Halter, nicht an einen: `EmbeddingModel._engine` (Gewichte plus Session-Tokenizer) und `Poller._chunker` (Tokenizer plus Splitter, der mit 544,3 MB **größere** der beiden Posten). Die bestehende Sperrenarchitektur trägt die Entladung ohne Umbau, weil `_embed` die `_Engine` in eine lokale Variable holt: ein laufender Stapel hält seine eigene Referenz, eine Freigabe kann ihn also nicht unter den Füßen wegziehen. Der Auslöser gehört in eine eigene Aufgabe im Lifespan von `main.py`, nicht in den Poller, weil ein stummgeschalteter Poller `run_once` nie wieder betritt.
+3. **Messphase** ist zu großen Teilen Wiederverwendung: `search_load.py` ist seit 10.09. gefixt und belegt, `aws_box.sh` kann `start/snapshot/destroy`, die Ablaufdatei-Form (`skripte/00-ablauf.md` mit vorher notierter Erwartung) ist etabliert und durch Gates geschützt. Genau **ein** Messwerkzeug muss inhaltlich geändert werden: die Fremdbestands-Vorprüfung in `98b-sprachfaelle.sh` misst einen Antwortdeckel statt des Bestands und kann die Schwelle 64 deshalb nie erreichen. Neu zu bauen ist nur die Wiederaufwärm-Messung für die Entladung.
 
-### Component Responsibilities
-
-| Component | Verantwortung | Typische Umsetzung |
-|-----------|---------------|--------------------|
-| **SearchProvider (PHP)** | Registriert sich in der Unified Search, übersetzt `ISearchQuery` in einen ExApp-Aufruf, baut `SearchResultEntry`-Objekte inklusive Snippet und Datei-Link | `OCP\Search\IProvider`, registriert via `$context->registerSearchProvider()`; Proxy via `IAppApiFunctions::exAppRequest($appId, '/search', $userId, 'POST', $params)` |
-| **Event-Listener (PHP)** | Fängt Datei- und Share-Ereignisse ab und schreibt Queue-Zeilen | `OCP\Files\Events\Node\*`, `OCP\Share\Events\ShareCreatedEvent`, `ShareDeletedEvent`, `UserMountAddedEvent`, `UserMountRemovedEvent`, `UserDeletedEvent` |
-| **Crawl-Jobs (PHP)** | Initialer Vollcrawl je Mount, Cursor auf `fileid`, plant sich selbst neu ein | `QueuedJob` plus `IJobList::scheduleAfter()` mit `last_file_id` im Job-Argument |
-| **Queue-Tabellen (PHP/DB)** | Persistenter, transaktionaler Arbeitsvorrat mit Lock-Spalte | Eigene `oc_*`-Tabellen mit `QBMapper`; getrennte Spuren für Dateien und für Aktionen |
-| **OCS-Queue-API (PHP)** | Der einzige Weg, auf dem der Container Arbeit und Inhalte bekommt | `OCSController` mit `#[ApiRoute]` und `#[ExAppRequired]` |
-| **Inhalts-Gateway (PHP)** | Liefert Dateibytes im Nutzerkontext als Stream | `IRootFolder->getUserFolder($userId)->getFirstNodeById($fileId)->fopen('r')` in einer `StreamResponse` |
-| **Fetcher-Thread (Python)** | Zieht Batches aus der Queue, verteilt sie, quittiert per DELETE | Endlosschleife mit `nc.ocs()` und `POLLING_COOLDOWN`, `ProcessPoolExecutor` für die CPU-Arbeit |
-| **Extract-Pool** | MIME-Erkennung, Text aus PDF/Office/Text, Entscheidung ob OCR nötig | Prozess-Pool, harte Zeit- und Speichergrenzen je Datei |
-| **OCR-Pool** | Eigene Spur, eigene Parallelität, eigenes RAM-Budget | Getrennter Pool, sonst blockiert ein 300-Seiten-Scan alles andere |
-| **Embed-Pool** | Chunking und Vektorisierung | ONNX/CPU, feste Batchgröße, Modell aus `models/` |
-| **Storage-Layer (Python)** | Einzige Schreib- und Lesestelle für `index.db` | Dünne Repository-Klasse, alle Statements handgeschrieben, kein ORM |
-| **Search-Endpoint (Python)** | Hybrid-Retrieval plus ACL-Filter plus Snippet-Erzeugung | Zwei Kandidatenlisten, RRF-Fusion, Snippet aus FTS5 `snippet()` |
-| **Admin-Status** | Fortschritt, Rückstand, Fehler | PHP-Settings-Seite liest `/queues/*/stats` lokal und `/status` per Proxy |
+Die Bauordnung ergibt sich zwingend: Backend-Parameter vor PHP-Oberfläche, Entladung vor der Messphase (sonst misst die eine Box-Anfahrt die Entladung nicht mit), Werkzeugfix vor der Anfahrt (ein Messskript, das während des eigenen Laufs nachgebessert wird, macht jede Zahl daneben unbelegt, so steht es im Bericht vom 10.09.).
 
 ---
 
-## Recommended Project Structure
+## Neu gegenüber geändert, auf einen Blick
 
-Ein Monorepo mit zwei Artefakten. Getrennte Repos kosten bei einem Solo-Entwickler nur Synchronisationsaufwand, und die Versionen beider Teile müssen ohnehin im Gleichschritt laufen. Context Chat erzwingt sogar Gleichheit von Major- und Minor-Version beider Hälften.
-
-```
-nextcloud-search/
-├── php/                              # Companion-App, Artefakt fuer den App Store
-│   ├── appinfo/
-│   │   ├── info.xml                  # App-ID, NC-Kompatibilitaet, Abhaengigkeit auf app_api
-│   │   └── routes.php                # nicht-OCS-Routen (Settings)
-│   ├── lib/
-│   │   ├── AppInfo/Application.php   # registerSearchProvider + registerEventListener
-│   │   ├── Search/Provider.php       # IProvider, ruft die ExApp
-│   │   ├── Controller/
-│   │   │   ├── QueueController.php   # #[ExAppRequired]: Queue + Inhalts-Gateway
-│   │   │   └── StatusController.php  # Admin-Statuszahlen
-│   │   ├── Listener/
-│   │   │   ├── FileListener.php      # Node-Events
-│   │   │   ├── ShareListener.php     # Share-Events
-│   │   │   └── UserDeletedListener.php
-│   │   ├── BackgroundJobs/
-│   │   │   ├── StorageCrawlJob.php   # ein Job je Mount, Cursor auf fileid
-│   │   │   ├── SchedulerJob.php      # startet fehlende Crawl-Jobs nach
-│   │   │   └── ReconcileJob.php      # periodischer Abgleich gegen Event-Verluste
-│   │   ├── Db/                       # QueueFile, QueueAction plus Mapper
-│   │   ├── Service/
-│   │   │   ├── StorageService.php    # Mounts, Dateien je Mount, Nutzer je fileId
-│   │   │   ├── QueueService.php      # Einfuegen, Deduplizieren, Zaehlen
-│   │   │   └── ExAppService.php      # der einzige Ort mit exAppRequest
-│   │   └── Migration/                # Tabellen + fehlende Indizes
-│   └── tests/
-│
-├── backend/                          # ExApp-Container
-│   ├── main.py                       # FastAPI-App, Lifespan, Thread-Start
-│   ├── src/ncsearch/
-│   │   ├── api/
-│   │   │   ├── search.py             # POST /search
-│   │   │   ├── lifecycle.py          # /enabled, /heartbeat, /init
-│   │   │   └── status.py             # GET /status fuer die Admin-Seite
-│   │   ├── workers/
-│   │   │   ├── fetcher.py            # Dokument-Queue-Polling
-│   │   │   ├── actions.py            # Zugriffs- und Loeschauftraege
-│   │   │   └── pools.py              # Pool-Groessen aus dem RAM-Budget
-│   │   ├── pipeline/
-│   │   │   ├── detect.py             # MIME, Groesse, OCR-Bedarf
-│   │   │   ├── extract.py            # PDF, Office, Text
-│   │   │   ├── ocr.py                # OCRmyPDF/Tesseract-Aufruf
-│   │   │   ├── chunk.py              # Chunking mit Overlap
-│   │   │   └── embed.py              # ONNX-Embeddings
-│   │   ├── storage/
-│   │   │   ├── schema.sql            # das Schema als Datei, nicht im Code
-│   │   │   ├── index_repo.py         # einzige Schreibstelle
-│   │   │   ├── acl_repo.py           # Zugriffs-Tabelle
-│   │   │   └── state_repo.py         # Fortschritt, Fehler, Retry-Zaehler
-│   │   ├── retrieval/
-│   │   │   ├── fts.py                # FTS5-Kandidaten
-│   │   │   ├── vector.py             # Vektor-Kandidaten
-│   │   │   ├── fuse.py               # RRF
-│   │   │   └── snippet.py            # Trefferausschnitt
-│   │   └── nc/
-│   │       ├── client.py             # nc_py_api-Session
-│   │       └── content.py            # Inhalts-Gateway-Abruf
-│   ├── Dockerfile                    # multi-arch, tesseract, ghostscript
-│   └── tests/
-│
-└── .planning/
-```
-
-### Structure Rationale
-
-- **`php/lib/Service/ExAppService.php`:** genau eine Datei darf `exAppRequest` aufrufen. Sonst verstreut sich die Fehlerbehandlung (Timeouts, 503, Retry-Header) über Provider, Controller und Jobs.
-- **`backend/src/ncsearch/storage/`:** die Storage-Schicht ist das einzige Modul, das SQL kennt. Wenn das Vektor-Backend später getauscht werden muss (sqlite-vec ist Alpha), ist das ein Modul und nicht das halbe Projekt.
-- **`backend/src/ncsearch/workers/` getrennt von `api/`:** die Worker leben in Threads mit eigener Lebensdauer, die API-Handler nicht. Diese Trennung im Code sichtbar zu machen verhindert, dass jemand langlaufende Arbeit in einen HTTP-Handler legt.
-- **`schema.sql` als Datei:** Migrationen und Schema-Diffs werden lesbar, und man kann das Schema in einem Review beurteilen, ohne Python zu lesen.
+| Komponente | Status | Datei |
+|---|---|---|
+| Request-Feld `types` und `sort` | **geändert** | `backend/src/findling/api/search.py` (`SearchRequest`) |
+| Filter aus dem Request statt nur aus dem Text | **geändert** | `backend/src/findling/query/rewrite.py` (`build_query`) |
+| Sortierzweig im Kandidatenlauf | **geändert** | `backend/src/findling/index/search.py` (`candidates`, `_sides`, `_ranked`) |
+| Sortier-Konstanten und Grenzen | **geändert** | `backend/src/findling/config.py` |
+| Filter im Auszugspfad in Gleichschritt | **geändert** | `backend/src/findling/api/snippets.py` (`SnippetsRequest`, `excerpts`) |
+| Filter und Sortierung im Seitenzustand | **geändert** | `php/lib/Controller/PageController.php` |
+| Durchreichen an den Container | **geändert** | `php/lib/Service/ExAppService.php` (`searchCandidates`, `snippets`) |
+| Signatur des einen Suchlaufs | **geändert** | `php/lib/Service/SearchService.php` (`run`) |
+| Filterleiste und Sortierwahl | **geändert** | `php/templates/search.php`, `php/css/search.css` |
+| Neue sichtbare Texte | **geändert** | `php/l10n/{de,de_DE,fr}.{json,js}` (sechs Dateien, vier Gates) |
+| Unified-Search-Dialog | **unverändert** | `php/lib/Search/Provider.php` (bewusst, siehe A.6) |
+| Freigabe der Gewichte | **NEU** | `EmbeddingModel.release()` in `backend/src/findling/embed/model.py` |
+| Leerlauf-Uhr des Modells | **NEU** | `EmbeddingModel._last_use` / `last_use` in derselben Datei |
+| Freigabe am Halter | **NEU** | `release_if_idle()` in `backend/src/findling/embed/engine.py` |
+| Freigabe des Cutters | **NEU** | `Poller.release_the_cutter()` in `backend/src/findling/worker/poller.py` |
+| Aufräumer-Aufgabe | **NEU** | Task im Lifespan von `backend/src/findling/main.py` |
+| Zustand und Zähler für die Admin-Sicht | **geändert** | `backend/src/findling/api/status.py`, `php/lib/Service/AdminViewService.php`, `php/templates/admin.php`, `php/js/admin.js` |
+| Fremdbestands-Messgröße | **geändert (neue Datei, alte bleibt byteidentisch)** | neues `docs/measurements/<lauf>/skripte/98c-sprachfaelle.sh` |
+| Wiederaufwärm-Messung | **NEU** | `docs/measurements/<lauf>/skripte/*-wiederaufwaermen.sh` |
+| Wiederaufbau-Runbook | **NEU** | `docs/measurements/<lauf>/skripte/00-ablauf.md` plus `docs/runbook-messbox.md` |
 
 ---
 
-## Architectural Patterns
+## Systemüberblick mit den v1.2-Eingriffspunkten
 
-### Pattern 1: Pull-basierte Indexierungs-Queue (Reverse Queue)
-
-**Was:** Nextcloud schiebt keine Arbeit in den Container. Die PHP-App füllt nur Queue-Tabellen. Der Container hat langlebige Worker-Threads, die per OCS einen Batch abholen, verarbeiten und danach per DELETE quittieren. Nicht quittierte Zeilen bleiben gesperrt und werden nach Ablauf des Locks erneut ausgeliefert.
-
-**Wann:** Immer, wenn die Verarbeitung teuer und in der Dauer schwankend ist. OCR einer 300-Seiten-Scan-PDF dauert Minuten. Das darf nie in einem HTTP-Request oder in einem PHP-Cron-Lauf hängen.
-
-**Trade-offs:**
-- Plus: Backpressure ist automatisch. Der Container zieht nur so viel, wie er schafft. Auf einer 4-GB-ARM-Box ist das der einzige Mechanismus, der wirklich hält.
-- Plus: Absturz-Resume ist trivial. Ein Kill mitten in der Verarbeitung bedeutet nur, dass ein Lock abläuft und die Zeile erneut kommt. Die Verarbeitung muss idempotent sein, was sie ohnehin sein sollte.
-- Plus: Keine AppAPI-Proxy-Timeouts auf dem heißen Pfad.
-- Minus: Polling erzeugt Grundlast, auch wenn nichts zu tun ist. Mit einer Abkühlzeit von 15 bis 30 Sekunden bei leerer Queue ist das vernachlässigbar.
-- Minus: Die Queue liegt in der Nextcloud-Datenbank, also zahlt der Admin ihre Größe mit. Bei 200k Dateien im Initialcrawl sind das kurzzeitig 200k Zeilen. Das ist trotzdem die richtige Stelle, weil es transaktional zum Dateisystem-Zustand passt.
-
-**So macht es Context Chat, verifiziert im Quellcode:**
-```python
-# context_chat_backend/task_fetcher.py, files_indexing_thread
-while True:
-    q_items_res = nc.ocs('GET', '/ocs/v2.php/apps/context_chat/queues/documents',
-                         params={'n': batch_size})
-    if not q_items.files and not q_items.content_providers:
-        sleep(POLLING_COOLDOWN)
-        continue
-    # ... verarbeiten im ProcessPoolExecutor ...
-    nc.ocs('DELETE', '/ocs/v2.php/apps/context_chat/queues/documents/',
-           json={'files': done_ids, 'content_providers': []})
 ```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Nextcloud (PHP)                                                          │
+│  ┌──────────────────┐    ┌──────────────────────┐   ┌─────────────────┐  │
+│  │ Search/Provider  │    │ Controller/Page      │   │ Settings/Admin  │  │
+│  │ (Dialog)         │    │ (eigene Seite) [A]   │   │ (Statusseite)[B]│  │
+│  └────────┬─────────┘    └──────────┬───────────┘   └────────┬────────┘  │
+│           └──────────────┬──────────┘                        │           │
+│                  ┌───────▼─────────┐                         │           │
+│                  │ SearchService   │  einzige Rechtegrenze    │           │
+│                  │ run() [A]       │  getFirstNodeById +      │           │
+│                  └───────┬─────────┘  isReadable              │           │
+│                  ┌───────▼─────────┐                 ┌────────▼────────┐  │
+│                  │ ExAppService[A] │                 │ AdminViewSvc[B] │  │
+│                  └───────┬─────────┘                 └────────┬────────┘  │
+└──────────────────────────┼────────────────────────────────────┼──────────┘
+                  exAppRequest (AppAPI, signiert)               │
+┌──────────────────────────┼────────────────────────────────────┼──────────┐
+│ Container (Python)       │                                    │          │
+│  ┌───────────────────────▼──────────┐  ┌──────────────────────▼───────┐  │
+│  │ api/search.py  api/snippets.py[A]│  │ api/status.py  [B]           │  │
+│  └───────────┬──────────────────────┘  └──────────────┬───────────────┘  │
+│  ┌───────────▼──────────┐  ┌────────────────────┐     │                  │
+│  │ query/rewrite.py [A] │  │ api/resources.py   │     │                  │
+│  └───────────┬──────────┘  │ read_side(), Cache │     │                  │
+│  ┌───────────▼───────────────────────────────┐  │     │                  │
+│  │ index/search.py::candidates [A]           │  │     │                  │
+│  │  RRF-Fenster + ACL-Vorfilter + Nachlauf   │  │     │                  │
+│  └───┬──────────────────────┬────────────────┘  │     │                  │
+│      │                      │                   │     │                  │
+│  ┌───▼──────┐  ┌────────────▼───┐  ┌────────────▼─────▼───────────────┐  │
+│  │ tantivy  │  │ store/repo.py  │  │ embed/engine.py  Halter      [C] │  │
+│  │ Index    │  │ ACL-Vorfilter  │  │ embed/model.py   Gewichte    [C] │  │
+│  └──────────┘  └────────────────┘  └──────────────▲───────────────────┘  │
+│  ┌──────────────────────────────────────────────┐ │                      │
+│  │ worker/poller.py  zweite Spur, _chunker  [C] ├─┘                      │
+│  └──────────────────────────────────────────────┘                        │
+│  ┌──────────────────────────────────────────────────────────────────┐    │
+│  │ main.py  Lifespan: Poller-Task, Reconcile-Task, NEU Reaper   [C] │    │
+│  └──────────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────────┘
 
-**Empfohlene Erweiterung für uns:** Der Batchbezug soll nach Kosten gewichtet sein, nicht nach Stückzahl. Ein Parameter `max_bytes` zusätzlich zu `n` verhindert, dass ein Batch aus 64 großen PDFs den Speicher sprengt. Context Chat hat das nicht und begrenzt nur die Einzeldateigröße auf 100 MB.
-
-### Pattern 2: Crawl pro Mount mit Integer-Cursor
-
-**Was:** Der Initialcrawl iteriert nicht über Nutzer, sondern über Einträge in `oc_mounts`. Je Mount läuft ein eigener Hintergrundjob, der `oc_filecache` mit `storage = ? AND fileid > ? ORDER BY fileid ASC LIMIT ?` liest und den zuletzt gesehenen `fileid` als Job-Argument für den nächsten Lauf zurückschreibt.
-
-**Wann:** Immer beim Initialcrawl und beim periodischen Abgleich.
-
-**Trade-offs:**
-- Plus: Ein Groupfolder, der 50 Nutzern gemountet ist, wird einmal gecrawlt, nicht 50-mal. Das ist der Unterschied zwischen brauchbar und unbrauchbar auf kleinen Instanzen.
-- Plus: Der Resume-Zustand ist ein einziger Integer je Mount. Kein Snapshot, keine Bloom-Filter, keine Marker-Dateien.
-- Plus: Die Ausschlüsse (`files_versions/`, `files_trashbin/`, MIME-Whitelist, Größengrenzen) laufen als SQL-Prädikat und nicht als Python-Filter nach dem Netzwerktransfer.
-- Minus: Man muss die relevanten Mount-Typen kennen. Context Chat pflegt dafür eine Whitelist `ALLOWED_MOUNT_TYPES` plus `HOME_MOUNT_TYPES` und muss bei Home-Mounts den Root auf den `files`-Ordner umbiegen, weil der Storage-Root darüber liegt.
-- Minus: External Storages, die nicht im Filecache stehen, werden nicht gefunden. Das ist die dokumentierte Grenze, nicht ein Fehler.
-
-**Struktur (aus `StorageCrawlJob`, verifiziert):**
-```php
-const BATCH_SIZE = 2000;
-protected function run($argument): void {
-    $lastFileId = $argument['last_file_id'] ?? 0;
-    foreach ($this->storageService->getFilesInMount($storageId, $rootId, $lastFileId, self::BATCH_SIZE) as $fileId) {
-        $this->queue->insertIntoQueue(/* ... */);
-    }
-    $this->jobList->scheduleAfter(self::class, $this->time->getTime() + $interval,
-        ['storage_id' => $storageId, 'root_id' => $rootId, 'last_file_id' => $lastSeenFileId]);
-}
+[A] Dateityp-Filter und Sortierung   [B] Sichtbarkeit der Entladung   [C] Entladung
 ```
-
-### Pattern 3: Berechtigungen als Join-Tabelle im Index
-
-Das ist die wichtigste Entscheidung des Projekts. Die vollständige Abwägung steht im eigenen Abschnitt weiter unten. Die Kurzform:
-
-**Was:** Der Index enthält neben Dokumenten und Chunks eine schmale Tabelle `acl(uid, source_id)`. Beim Indexieren liefert die PHP-App zu jeder Datei die vollständige Liste der Nutzer, die sie sehen können. Bei Zugriffsänderungen werden nur Zeilen dieser Tabelle gesetzt oder gelöscht, ohne Neuextraktion und ohne neue Embeddings.
-
-**Wann:** Bei jeder mandantenfähigen Suche über geteilte Inhalte.
-
-**Trade-offs:**
-- Plus: Zugriffsänderungen sind billig. Ein neuer Share auf einen Ordner mit 5.000 Dateien kostet 5.000 kleine Inserts, nicht 5.000 OCR-Läufe.
-- Plus: Die Suchlatenz ist konstant und unabhängig davon, wie viele Dateien der Nutzer sehen darf.
-- Minus: Fanout. Ein Groupfolder mit 100k Dateien und 20 Mitgliedern ergibt 2 Mio. ACL-Zeilen. In SQLite mit einem zusammengesetzten Primärschlüssel sind das grob 60 bis 80 MB. Für die Zielgröße tragbar, aber es ist die Tabelle, die zuerst groß wird.
-- Minus: Die Wahrheit liegt jetzt an zwei Orten. Ohne periodischen Abgleich driftet der Index gegen die Realität.
-
-### Pattern 4: Inhalts-Gateway statt WebDAV-Impersonation
-
-**Was:** Der Container lädt Dateibytes nicht per WebDAV, sondern von einem `#[ExAppRequired]`-Endpunkt der PHP-App, der `fileId` und `userId` entgegennimmt und den Inhalt als Stream zurückgibt. Nextcloud löst die Rechte dabei selbst auf, weil der Zugriff über `getUserFolder($userId)` läuft.
-
-**Wann:** Für jeden Inhaltsabruf im Indexierungspfad.
-
-**Trade-offs:**
-- Plus: Der Container braucht kein Nutzerpasswort, kein App-Token und keine WebDAV-Session. Der einzige Credential ist das AppAPI-Shared-Secret.
-- Plus: Wenn die Datei zwischen Enqueue und Abruf gelöscht oder der Share entzogen wurde, liefert der Endpunkt sauber 404 statt Bytes, auf die niemand mehr ein Anrecht hat. Das ist ein eingebauter Sicherheits-Recheck.
-- Plus: Der Zugriff über `fileId` ist umbenennungsfest. Pfade sind es nicht.
-- Minus: Der Bytestrom läuft durch den PHP-Prozess. Bei sehr großen Dateien belegt das einen PHP-Worker. Deswegen gehört eine harte Größenobergrenze in den Crawl-Filter und nicht erst in den Container.
-
-**Verifizierte Referenz (`QueueController::getFileContents`):**
-```php
-#[ExAppRequired]
-#[ApiRoute(verb: 'GET', url: '/files/{fileId}')]
-public function getFileContents(IRootFolder $rootFolder, int $fileId, string $userId) {
-    $file = $rootFolder->getUserFolder($userId)->getFirstNodeById($fileId);
-    if (!$file instanceof \OCP\Files\File) {
-        return new DataResponse(['error' => '...'], Http::STATUS_NOT_FOUND);
-    }
-    return new Http\StreamResponse($file->fopen('r'));
-}
-```
-
-### Pattern 5: Zweistufiges Retrieval mit RRF-Fusion
-
-**Was:** Zwei unabhängige Kandidatenlisten, eine aus FTS5 mit BM25, eine aus der Vektorsuche, werden mit Reciprocal Rank Fusion zusammengeführt: `score(d) = Summe über Methoden von 1 / (k + rang(d))`, `k` typischerweise 60. Der Berechtigungsfilter wird direkt in beide Teilabfragen gezogen, nicht erst danach angewendet.
-
-**Wann:** Sobald semantische Suche dazukommt. Vorher ist der FTS5-Zweig allein die vollständige Antwort.
-
-**Trade-offs:**
-- Plus: RRF braucht keine kalibrierten Scores. BM25-Werte und Kosinusdistanzen sind nicht vergleichbar, Ränge schon. Das erspart eine Gewichtungs-Einstellung, die man ohne Bruch des Zero-Config-Versprechens gar nicht anbieten könnte.
-- Plus: Fällt ein Zweig aus (Modell nicht geladen, Vektorindex noch im Aufbau), degradiert die Suche sauber auf den anderen Zweig. Genau das braucht man während des Initialcrawls.
-- Minus: RRF ignoriert die Stärke eines Treffers. Ein exakter Dateinamentreffer und ein mittelmäßiger Volltexttreffer können auf demselben Rang landen. Gegenmittel ist ein kleines, festes Feldgewicht (Titel und Pfad höher als Fließtext) innerhalb des BM25-Zweigs, nicht in der Fusion.
-
-**Skizze:**
-```sql
--- Zweig A: BM25, ACL direkt im Join
-SELECT c.chunk_id, bm25(fts) AS rank
-FROM fts JOIN chunks c ON c.rowid = fts.rowid
-         JOIN acl a ON a.source_id = c.source_id
-WHERE fts MATCH :q AND a.uid = :uid
-ORDER BY rank LIMIT :n;
-
--- Zweig B: Vektor, Ueberfetch plus ACL-Filter, danach Nachschlag falls unterbesetzt
-SELECT v.rowid, v.distance
-FROM vec_chunks v
-WHERE v.embedding_bit MATCH vec_quantize_binary(:qvec) AND k = :overfetch;
-```
-
-### Pattern 6: Suchproxy in der PHP-App
-
-**Was:** Der `IProvider` in der PHP-App ist dünn. Er nimmt `ISearchQuery`, ruft die ExApp und bildet die Antwort auf `SearchResultEntry` ab.
-
-**Wichtig und ehrlich:** Für diese konkrete Kombination gibt es **keine** Referenzimplementierung. Context Chat registriert selbst **keinen** Search-Provider (verifiziert in `lib/AppInfo/Application.php`, dort stehen ausschließlich `registerEventListener`-Aufrufe). Bewiesen sind nur die beiden Hälften getrennt: der Proxy-Aufruf `exAppRequest` in Context Chat und `registerSearchProvider` in rund zwanzig Standard-Apps. Die Verbindung beider ist unsere eigene Arbeit und damit das größte Integrationsrisiko des Projekts. Deswegen steht sie im Bauplan an erster Stelle.
-
-```php
-final class Provider implements IProvider {
-    public function getId(): string { return 'ncsearch'; }
-    public function getName(): string { return $this->l10n->t('File contents'); }
-    public function getOrder(string $route, array $routeParameters): int {
-        return str_starts_with($route, 'files.') ? -5 : 25;
-    }
-    public function search(IUser $user, ISearchQuery $query): SearchResult {
-        $res = $this->exApp->request('/search', $user->getUID(), [
-            'query'  => $query->getTerm(),
-            'limit'  => $query->getLimit(),
-            'cursor' => $query->getCursor(),
-        ]);
-        return SearchResult::paginated($this->getName(), $entries, $res['cursor']);
-    }
-}
-```
-
-`IExternalProvider` (seit Nextcloud 32) darf **nicht** implementiert werden. Das Interface markiert Provider, die Anfragen an Dritte weiterreichen, und solche Provider sind im Unified-Search-Dialog per Schalter standardmäßig **ausgeschaltet**. Unsere Daten verlassen den Server nicht, also ist `IProvider` sowohl sachlich richtig als auch die einzige Variante, bei der ein frisch installierter Nutzer sofort Treffer sieht.
 
 ---
 
-## Data Flow
+## Teil A: Dateityp-Filter und Sortierung
 
-### Fluss 1: Initiale Indexierung
+### A.1 Was schon da ist, und warum das die halbe Antwort ist
 
-```
-SchedulerJob
-   → je Mount aus oc_mounts ein StorageCrawlJob
-        → SELECT fileid FROM oc_filecache WHERE storage=? AND fileid>cursor
-             AND mimetype IN (...) AND size BETWEEN 1 AND MAX
-             AND path NOT LIKE '%files_versions/%' AND NOT LIKE '%files_trashbin/%'
-        → INSERT INTO oc_ncsearch_queue (storage_id, root_id, file_id)
-        → scheduleAfter(self, now + interval, ['last_file_id' => n])
-                                    │
-        Container-Fetcher ──────────┘
-   GET /queues/documents?n=64&max_bytes=64MB
-        → PHP sperrt die Zeilen, baut je Zeile ein Source-Objekt
-          {userIds[], sourceId, title, modified, mime, size, content: null}
-   GET /files/{fileId}?userId=<erster Nutzer mit Zugriff>   (Bytes)
-        → detect → extract → (OCR falls noetig) → chunk → embed
-        → BEGIN; upsert documents, chunks, fts, vec_chunks, acl; COMMIT
-   DELETE /queues/documents/  {files: [dbId, ...]}
-```
+| Baustein | Datei | Zustand |
+|---|---|---|
+| Feld `ext`, ein Term, `raw`-Tokenizer, `basic` | `backend/src/findling/index/schema.py:105` | vorhanden seit v1.0, **kein Reindex nötig** |
+| Befüllung der Endung, kleingeschrieben, ohne Punkt | `backend/src/findling/extract/dispatch.py:161` (`extension_of`), `worker/poller.py:2111` | vorhanden |
+| `type:pdf` aus dem Suchtext schneiden | `backend/src/findling/query/rewrite.py:185` (`extract_filters`) | vorhanden |
+| Pflichtklausel auf `ext` an die Query hängen | `backend/src/findling/query/rewrite.py:292` (`_extension_query`), `:374` | vorhanden |
+| Feld `mtime`, `fast=True`, `indexed=False` | `backend/src/findling/index/schema.py:114` | vorhanden, Kommentar dort sagt wörtlich "Display today, sorting and since/until later" |
+| `mtime` reist bereits im Kandidaten mit | `backend/src/findling/index/search.py:92`, `api/search.py:110` | vorhanden |
 
-Der `Source`-Datensatz enthält bewusst `content: null` für Dateien. Metadaten und Inhalt reisen getrennt. Das hält die Queue-Antwort klein und erlaubt, den teuren Byte-Abruf erst dann zu machen, wenn ein Worker frei ist.
+**Das Schema trägt beides schon.** Der Ausbau kostet keinen Reindex und fällt damit nicht unter den Migrationsmerker, den v1.1 gelernt hat. Die Indexmarken bleiben unverändert, `SCHEMA_VERSION` in `config.py` bleibt stehen.
 
-### Fluss 2: Suche
+### A.2 Der Filter: eigenes Request-Feld statt `type:` im Text
 
-```
-Nutzer tippt in der Unified Search
-   → Nextcloud ruft alle IProvider parallel
-   → unser Provider: exAppRequest('/search', userId, {query, limit, cursor})
-   → AppAPI-Proxy setzt AUTHORIZATION-APP-API = base64("<uid>:<secret>")
-   → Container liest die uid aus dem Header, nimmt sie NICHT aus dem Body
-        → FTS5-Zweig  (JOIN acl WHERE uid = ?)   ─┐
-        → Vektor-Zweig (Ueberfetch + ACL-Filter) ─┤→ RRF → Top-N
-        → snippet() je Treffer, Highlight-Marker
-   → Antwort: [{fileId, path, title, snippet, score, mtime}], cursor
-   → Provider baut SearchResultEntry mit Datei-Link und Vorschaubild-URL
-```
+Naheliegend wäre, die Filterleiste der Seite einfach `type:pdf` in den Suchtext zu hängen. **Das ist die falsche Lösung, und der Grund steht im Code.**
 
-Die Nutzer-Identität kommt **ausschließlich** aus dem AppAPI-Header. Ein `userId` im Request-Body wäre eine offene Rechteumgehung für jeden, der den Proxy erreicht.
-
-### Fluss 3: Zugriffsänderung
-
-```
-ShareCreatedEvent / ShareDeletedEvent / UserMountAdded / UserMountRemoved
-   → PHP ermittelt betroffene fileIds (bei Ordnern rekursiv, gebatcht)
-   → StorageService::getUsersForFileId() via IUserMountCache
-        (liefert die vollstaendige aktuelle Nutzerliste, nicht ein Delta)
-   → INSERT INTO oc_ncsearch_actions (type='access_decl', source_id, user_ids)
-                                    │
-   Container-Action-Fetcher ────────┘
-   GET /queues/actions?n=512
-        → DELETE FROM acl WHERE source_id=?;
-          INSERT INTO acl(uid, source_id) VALUES ... ON CONFLICT DO NOTHING;
-   DELETE /queues/actions/
-```
-
-**Deklarativ statt inkrementell.** Die Aktion transportiert den Sollzustand ("diese Nutzer dürfen"), nicht die Änderung ("Nutzer X kam dazu"). Context Chat nennt das `UpdateAccessOp` mit einer deklarativen Variante und hat genau dafür den eigenen Ereignistyp `access_update_decl`. Der Grund ist zwingend: inkrementelle Deltas gehen bei jedem verlorenen Ereignis dauerhaft schief und lassen sich nicht reparieren. Ein deklarativer Sollzustand heilt sich bei der nächsten Zustellung selbst.
-
-### Fluss 4: Löschung und Entzug
-
-```
-BeforeNodeDeletedEvent  (BEFORE, nicht AFTER!)
-   → fileIds einsammeln, solange der Knoten noch existiert
-   → Aktion 'delete' mit sourceIds, in Baenden zu 500
-        → DELETE FROM documents WHERE source_id IN (...)
-          (chunks, vec_chunks, acl folgen per ON DELETE CASCADE,
-           FTS5 braucht ein explizites Delete)
-
-Unshare  → nur acl-Zeilen fallen weg, das Dokument bleibt indexiert,
-           solange irgendein Nutzer es noch sehen darf
-Letzter Nutzer weg → verwaistes Dokument. Ein Aufraeumlauf loescht Dokumente
-                     ohne acl-Zeile, nicht der Unshare-Pfad selbst.
-UserDeletedEvent → Aktion 'delete_user', danach Verwaisten-Aufraeumung
-```
-
-Der `BeforeNodeDeletedEvent` statt `NodeDeletedEvent` ist kein Detail. Nach dem Löschen ist der Ordnerinhalt nicht mehr aufzählbar, und bei einem gelöschten Ordner braucht man die Kinder.
-
-### Fluss 5: Abgleich (der Fluss, den man gerne vergisst)
-
-```
-ReconcileJob, taeglich, mit Cursor wie der Crawl
-   → vergleicht je Mount-Fenster oc_filecache gegen /status/known?storage=&from=&to=
-   → im Filecache, nicht im Index      → in die Dokument-Queue
-   → im Index, nicht im Filecache      → in die Loesch-Queue
-   → mtime weicht ab                   → in die Dokument-Queue
-```
-
-Ereignisse sind verlustbehaftet. `occ files:scan`, direkte Manipulation des Storage, External Storages, ein Container, der beim Ereignis gerade unten war: alles erzeugt stille Lücken. Ohne diesen Job wird der Index still falsch, und "still falsch" ist bei einer Suche der schlimmste Zustand, weil niemand es merkt.
-
----
-
-## Permission-True Search: die Abwägung
-
-Die Frage ist, wo die Zugriffswahrheit lebt. Es gibt drei belegte Modelle.
-
-| Modell | Wer macht es | Index enthält | Kosten Suche | Kosten Zugriffsänderung | Risiko |
-|--------|--------------|---------------|--------------|-------------------------|--------|
-| **A: Denormalisierte Felder im Dokument** | fulltextsearch_elasticsearch | `owner`, `users[]`, `groups[]`, `circles[]`, `links[]` je Dokument | Ein boolescher Filter, sehr günstig | Dokument-Update je Änderung, in Elasticsearch ein Reindex des Dokuments | Gruppenwechsel eines Nutzers ist billig (die Gruppe steht im Dokument), aber jede Share-Änderung schreibt Dokumente neu |
-| **B: Separate Zugriffstabelle mit Join** | context_chat (`access_list(uid, source_id)`) | Chunks plus eine schmale ACL-Tabelle | Join, günstig, **wenn** er im SQL bleibt | Nur Zeilen setzen oder löschen, keine Neuberechnung | Fanout der Tabelle; Context Chats konkrete Umsetzung skaliert schlecht, siehe unten |
-| **C: Filter zur Abfragezeit gegen Nextcloud** | niemand in diesem Ökosystem | Nur Inhalte | Pro Suche ein Rückruf plus Nachschlagschleife | Null | Latenz und Nachschlag-Kaskaden; bei 100k Dateien unbrauchbar |
-
-**Modell C scheidet aus.** Um 20 sichtbare Treffer zu liefern, müsste man Kandidaten holen, Nextcloud fragen, verwerfen, nachholen. Bei einem Nutzer mit geringer Sichtbarkeitsquote läuft das in eine unbegrenzte Schleife. Zusätzlich ruft jede einzelne Suche zurück in den PHP-Prozess, der ohnehin der Engpass ist.
-
-**Modell A gegen Modell B.** Beide sind Denormalisierung zur Indexzeit, sie unterscheiden sich nur in der Granularität des Schreibvorgangs. In einer Engine ohne Teil-Update (Elasticsearch, Tantivy) muss man Modell A nehmen, weil ein Dokument-Update ohnehin ein vollständiges Neuschreiben ist. Dort ist die Auflösung von Gruppen und Circles sogar ein echter Vorteil: eine Gruppenmitgliedschaft ändert kein einziges Dokument.
-
-In SQLite ist Modell B klar besser: eine ACL-Zeile ist ein Insert, ein Dokument-Rewrite wäre ein Delete plus Reindex des FTS-Eintrags plus Vektorzeilen. Und weil FTS5, Vektoren und ACL in **derselben Datei** liegen, ist der Filter ein gewöhnlicher Join und nicht ein Datentransport zwischen zwei Systemen. Das ist das eigentliche Argument für das Einzeldatei-Layout.
-
-**Empfehlung: Modell B, mit einer expliziten Korrektur an Context Chats Umsetzung.**
-
-Context Chat macht in `pgvector.py::doc_search` folgendes, verifiziert im Quellcode:
+`query/rewrite.py:130` (`carried_operators`) vergibt die Marke `FILETYPE`, sobald ein Token mit `type:` beginnt. `api/search.py:230` liest das:
 
 ```python
-# 1. ALLE Chunk-IDs des Nutzers nach Python holen
-stmt = (sa.select(DocumentsStore.chunks)
-        .join(AccessListStore, AccessListStore.source_id == DocumentsStore.source_id)
-        .filter(AccessListStore.uid == user_id))
-chunk_ids = [str(c) for res in session.execute(stmt).fetchall() for c in res.chunks]
-# 2. Vektorsuche mit IN (...) ueber diese Liste, in Baenden,
-#    weil Postgres bei 65535 Query-Parametern die Grenze zieht
-for i in range(0, len(chunk_ids), PG_BATCH_SIZE):
-    ...
+lexical_only = bool(rewritten.operators) or rewritten.one_term or title_only
 ```
 
-Das ist der Anti-Pattern, den wir nicht kopieren dürfen. Ein Nutzer mit 100k sichtbaren Dateien und fünf Chunks je Datei materialisiert 500.000 UUIDs im Python-Speicher, bei jeder einzelnen Tastatureingabe in der Suchleiste. Die Batch-Schleife ist der sichtbare Beweis, dass das Muster an seine Grenze gestoßen ist. Für eine 4-GB-Box ist es sofort tödlich.
+Ein Filter aus dem Text schaltet also für **jede** gefilterte Suche die semantische Hälfte ab. Für den Tipp-Profi, der `type:pdf` selbst schreibt, ist das die dokumentierte und begründete Entscheidung ("eine Zeile mit einem Dateityp ist eine Bitte um Genauigkeit"). Für einen Klick auf eine Filterschaltfläche ist es etwas anderes: der Nutzer hat die Trefferart eingeschränkt und nicht um lexikalische Exaktheit gebeten. Ein Klick, der die Semantik still abschaltet, ist genau die Art unsichtbarer Verschlechterung, die dieses Projekt sonst überall vermeidet.
 
-**Unsere Fassung:** Der Filter bleibt im SQL.
+**Empfehlung:** ein eigenes Feld auf dem Request.
 
-```sql
--- Volltextzweig: der ACL-Join ist Teil derselben Abfrage
-SELECT c.source_id, c.chunk_no, snippet(fts, 0, '<b>', '</b>', '...', 24) AS snip,
-       bm25(fts, 3.0, 1.0) AS score
-FROM fts
-JOIN chunks c ON c.rowid = fts.rowid
-JOIN acl   a ON a.source_id = c.source_id AND a.uid = :uid
-WHERE fts MATCH :q
-ORDER BY score
-LIMIT :n;
+- `backend/src/findling/api/search.py`, `SearchRequest`: `types: list[str] = Field(default_factory=list, max_length=SEARCH_TYPES_MAX)`. camelCase ist hier nicht nötig, der Name ist neu und wird auf beiden Seiten gleich geschrieben; `extra="forbid"` bleibt und schützt weiter gegen untergeschobene Identitäten.
+- Validierung der Werte im Modell, nicht im Aufrufer: kleingeschrieben, führender Punkt entfernt, nur `[a-z0-9]{1,16}`, Duplikate raus, Deckel auf etwa acht Einträge. Alles andere fällt weg statt den Request scheitern zu lassen (Präzedenz: `PageController` klemmt statt zu verweigern).
+- `backend/src/findling/query/rewrite.py`, `build_query(index, text, *, title_only=False, extensions=())`: die übergebenen Endungen werden mit den aus dem Text geschnittenen **vereinigt** (`dict.fromkeys` wie schon in `extract_filters`), und `carried_operators` bleibt unverändert, weil es weiter nur den Rohtext liest. Damit gilt: Filter aus dem Text = Bitte um Genauigkeit = lexikalisch; Filter aus der Leiste = Einschränkung der Trefferart = Hybrid bleibt an. Diese Unterscheidung ist der eine Satz, der in den Docstring von `build_query` gehört.
+- `backend/src/findling/api/snippets.py`, `SnippetsRequest` und `excerpts`: dasselbe Feld, weitergereicht an dasselbe `build_query`. Notwendig ist es nicht für die Korrektheit des Auszugs (der Dokumentensatz ist dort bereits bestätigt), aber der Gleichschritt der beiden Aufrufe ist im Repo eine harte Regel; ein Query-Bau, der auf zwei Wegen unterschiedlich parametrisiert wird, ist der klassische Ort für stille Drift.
+
+**Was ausdrücklich nicht gebaut wird:** eine Facettenzählung ("PDF (23), DOCX (4)"). Eine Zahl vor dem Rechte-Recheck ist eine Aussage über Dokumente anderer Leute, genau das Zähl-Orakel aus T-02-93, gegen das `CandidatePage` bewusst kein Total trägt. Die Filterleiste zeigt feste Gruppen ohne Zahlen.
+
+### A.3 Die Sortierung: sie muss unter den Vorfilter, nicht über ihn
+
+Die Versuchung ist, auf der PHP-Seite die 25 bestätigten Treffer zu sortieren. Das ergäbe "innerhalb der Seite sortiert", also eine Liste, deren zweite Seite wieder ältere und neuere Dokumente mischt. Sortierung ist eine Eigenschaft der **Rangliste**, und die Rangliste entsteht in `index/search.py::candidates`, oberhalb des ACL-Vorfilters (`_permit`) und lange vor dem PHP-Recheck.
+
+Die Reihenfolge ist auch der einzige Kanal, der überlebt: `ExAppService::filterCandidates` wirft alles außer `fileId` weg, `SearchService::run` hängt die genehmigten Treffer in Ankunftsreihenfolge an, `PageController::rows` iteriert sie unverändert. Ein `score`-Feld im Kandidaten ist für die Anzeige belanglos. **Wer die Reihenfolge im Container setzt, setzt die Reihenfolge auf dem Schirm.**
+
+**Umfang für v1.2: zwei Sortierungen, nicht vier.**
+
+| Sortierung | Machbar ohne Reindex | Empfehlung |
+|---|---|---|
+| Relevanz (heute) | ja | Standard, unverändert |
+| Datum absteigend / aufsteigend | ja, `mtime` ist Fast-Field | **bauen** |
+| Name | nein, kein Fast-Text-Feld im Schema, verlangt Schemaänderung und Reindex | **nicht in v1.2** |
+| Größe | nein, Größe steht gar nicht im Index | **nicht in v1.2** |
+
+Die Namenssortierung wäre ein Reindex auf Bestandsinstallationen, also genau die Strafe, die D-04 für Minor-Sprünge ausschließt. Sie gehört in den Backlog mit dem Vermerk "kostet ein Fast-Feld im Schema und damit `SCHEMA_VERSION`".
+
+**Der Sortierzweig in `candidates()`.** Heute läuft die Funktion in zwei Abschnitten: das Fusionsfenster (RRF über lexikalische und semantische Liste) und der Nachlauf hinter dem Fenster (rein lexikalisch, Rang wird fortgezählt). Unter Datumssortierung gilt:
+
+- Im Fenster: die **Vereinigung** beider Listen wird nicht per RRF geordnet, sondern nach `mtime` sortiert. Die Zeitstempel liegen für beide Seiten bereits vor: die lexikalischen aus `_ranked`, die nur semantisch gefundenen aus `_mtimes_of` (`index/search.py:323`), das für genau diesen Zweck schon existiert. **Die semantische Hälfte bleibt also auch bei Datumssortierung Teil der Treffermenge.** Das ist wichtig: hätte man sie abgeschaltet, würde ein Umschalten der Sortierung Treffer verschwinden lassen statt sie umzuordnen, und das ist für einen Nutzer nicht erklärbar.
+- Im Nachlauf: `searcher.search(query, chunk_limit, offset=raw_cursor, order_by_field=FIELD_MTIME, order=Order.Desc)`. Die Ordnung ist monoton, der Nachlauf hängt also sauber hinter dem Fenster an, sofern die Fenstergrenze mitgeführt wird (der älteste im Fenster ausgelieferte Zeitstempel ist die Untergrenze des Nachlaufs). Bei aufsteigender Sortierung dreht sich das um.
+- **VERIFIZIEREN vor dem Bau:** unter `order_by_field` liefert tantivy-py im Trefferpaar den **Feldwert** statt des Scores (`hits: list[tuple[Any, DocAddress]]` im Stub `backend/.venv/Lib/site-packages/tantivy/tantivy.pyi:386`). `_ranked` (`index/search.py:142`) packt dieses erste Element heute ungeprüft in `score`. Das ist funktional harmlos, weil der Score nirgends angezeigt wird, aber es gehört in einen Test statt in eine Annahme. Zweitens ist zu prüfen, ob `order_by_field` zusammen mit `offset` in 0.26.0 dieselbe stabile Ordnung liefert; falls nicht, ist der Nachlauf über einen Bereichsfilter auf `mtime` statt über `offset` zu fahren.
+
+**Der Vorfilter bleibt, wo er ist.** `_permit` wird weiter bandweise auf die geordnete Liste angewendet, `_PREFILTER_BAND` bleibt 128, die Kommentarregel ("ein Test greppt diese Datei nach dem Namen des Vorfilters und erwartet ihn genau zweimal") gilt unverändert. Der Sortierzweig darf keinen dritten Aufrufer des Vorfilters erzeugen.
+
+### A.4 Cursor-Semantik: was trägt und was bricht
+
+Das Paginierungsmodell der Seite ist ein **Cursorpfad**: `cursors=0.25.57` sind die Container-Offsets, an denen jede bisher gezeigte Seite begann (`PageController::cursorPath`, `:274`). Der Offset zählt genehmigte Kandidaten, nie rohe Treffer (`index/search.py`, Modulkopf).
+
+Das trägt für Filter und Sortierung **unverändert**, solange gilt: der Cursorpfad ist nur innerhalb einer festen Kombination aus Suchbegriff, `names`, `types` und `sort` gültig. Daraus folgen drei Regeln, die in den Controller gehören:
+
+1. **Jede Änderung an Filter oder Sortierung springt auf Seite eins.** Das Formular trägt schon heute weder `page` noch `cursors` (`templates/search.php:142`), eine Filterleiste als Teil desselben Formulars erbt dieses Verhalten geschenkt. Eine Filterleiste als separater Link-Satz muss `page` und `cursors` aktiv weglassen.
+2. **`pageUrl()` muss die neuen Werte mitführen**, genau wie heute `names` (`PageController:455`). Fehlt das, fällt die zweite Seite auf ungefiltert zurück, und zwar lautlos.
+3. **Kein zusätzlicher Zustand im Cursor.** Die Versuchung, Filter und Sortierung in den Cursorstring zu kodieren, schafft einen zweiten Parser für eine URL, die schon einen hat. Sie stehen als eigene Query-Parameter daneben und werden wie `names` defensiv gelesen: was nicht zur geschlossenen Liste passt, ist nicht gesetzt, ohne Meldung (`PageController` Klassendoc, "ein Filter, der nicht das eine Wort ist, das diese Seite kennt, ist nicht gesetzt").
+
+**Was tatsächlich teurer wird:** ein enger Filter senkt die Trefferdichte pro Kandidatenseite. Die Ausbeute-Schleife in `SearchService::run` hat drei Runden (`MAX_ROUNDS`) und ein Recheck-Budget (`pageSize * recheckPerHit`, gedeckelt auf 64). Bei `type:xlsx` auf einem Bestand voller PDFs kann eine Seite leer zurückkommen, obwohl es Treffer gibt. Das ist **kein neuer Fehler**, sondern DI-07-03 unter Last, und die Seite hat dafür bereits den ehrlichen Text (`FAILURE_ALL_CANDIDATES_REJECTED`). Der Filter wirkt jedoch **im Container**, vor dem Fenster, nicht im PHP: die Klausel auf `ext` ist Teil der Query, also enthält eine Kandidatenseite bereits nur passende Dateitypen. Damit verschiebt der Filter die Trefferdichte in die richtige Richtung, nicht in die falsche. Das gehört als Satz in den Plan, weil die intuitive Sorge genau andersherum lautet.
+
+### A.5 Die PHP-Kette, Datei für Datei
+
+```
+GET /apps/findling/?query=...&names=1&types=pdf,docx&sort=date_desc&page=2&cursors=0.25
+        │
+PageController::index()                       [geaendert]
+   term(), pageNumber(), cursorPath()           unveraendert
+   NEU: types(), sortOrder()                    defensiv, geschlossene Listen
+   caps()                                       unveraendert (SearchCaps bleibt Ceilings-only)
+        │
+SearchService::run($user,$term,$titleOnly,$startCursor,$caps)   [Signatur geaendert]
+   NEU: ein Wert-Objekt SearchQueryShape($titleOnly,$types,$sort)
+   Rechtekette unveraendert: getFirstNodeById + isReadable, genau ein Aufrufort
+        │
+ExAppService::searchCandidates(...)           [geaendert: zwei Felder mehr im Body]
+ExAppService::snippets(...)                   [geaendert: types mit]
+        │
+POST /search  {query, limit, offset, titleOnly, types, sort}
 ```
 
-Für den Vektorzweig funktioniert dieser Join so nicht, weil `vec0` seine KNN-Abfrage selbst begrenzt. Drei Bausteine lösen das, in dieser Reihenfolge der Bevorzugung:
+**Zur Signatur von `SearchService::run`:** heute fünf Argumente, davon `bool $titleOnly`. Zwei weitere Skalare anzuhängen macht die Aufrufstelle unlesbar, und `SearchCaps` ist der falsche Ort dafür (dessen Klassendoc sagt ausdrücklich, es sei die Sammlung der **Deckel** eines Laufs, und jeder Wert darin ist eine Geduldsaussage des Aufrufers). Empfehlung: ein zweites kleines Wert-Objekt neben `SearchCaps`, etwa `SearchShape` mit `titleOnly`, `types`, `sort`, im selben Stil (`final class`, `readonly`, keine Defaults). Es wird an beiden Aufrufstellen ausgeschrieben, `Provider.php` übergibt die Standardform.
 
-1. **Überfetch und Nachfiltern.** `k = limit * 8` abfragen, dann per ACL-Join reduzieren. Wenn zu wenig übrig bleibt, `k` verdoppeln und wiederholen, höchstens zweimal. Im Regelfall, in dem ein Nutzer den größten Teil dessen sieht, was in seinen Mounts liegt, trifft die erste Runde.
-2. **Partition-Key auf `storage_id`.** `vec0` kann den Vektorindex intern nach einem Schlüssel sharden, ausdrücklich für mandantenfähige Abfragen gedacht. Da jede Datei genau einem Storage gehört und ein Nutzer nur eine Handvoll Mounts hat, lässt sich der Scan auf die Shards der eigenen Mounts begrenzen. Das ist die saubere Lösung des Selektivitätsproblems und passt exakt zu Nextclouds Mount-Modell.
-3. **Binärquantisierung für den Scan.** `vec0` unterstützt Bit-Vektoren mit Hamming-Distanz. Bei 384 Dimensionen sind das 48 Byte je Chunk statt 1.536 Byte. 500.000 Chunks belegen im Scan 24 MB statt 768 MB. Der lineare Scan (sqlite-vec hat keinen ANN-Index) wird dadurch erst tragbar. Die genaue Reihenfolge stellt ein Rerank der besten paar hundert Kandidaten gegen int8-quantisierte Vektoren her.
+**Gates, die dabei anschlagen:**
 
-Die Kombination aus 1 und 3 ist Pflicht für v1. Baustein 2 ist die dokumentierte Reserve, falls das Fanout in der Praxis weh tut.
+- `backend/tests/test_php_acl_boundary.py` zählt die Aufrufstellen von `getFirstNodeById` und `isReadable` über `php/lib` mit entfernten Kommentaren und Zeichenketten. Solange nichts an der Schleife angefasst wird, bleibt es grün; eine "schnelle Vorsortierung" mit einer zweiten Knotenauflösung wäre sofort rot, und das ist gewollt.
+- `backend/tests/test_php_trust_boundary.py` zählt die Routenattribute pro Controller-Datei. Es kommt **keine neue Route** hinzu, `index()` bekommt nur mehr Parameter. Das Anti-Leerlauf-Kriterium dieses Gates (Attributnamen dürfen nicht im Prosakommentar stehen) gilt für jeden neuen Kommentar in `PageController`.
+- `backend/tests/test_search_limits_lockstep.py` hält `SearchService::MAX_CONTAINER_OFFSET = 1200` gegen `SEARCH_LIMIT_MAX * SEARCH_OVERFETCH * SEARCH_ROUNDS` in `config.py`. Wer wegen dünnerer Trefferdichte die Rundenzahl anheben will, bewegt beide Seiten oder das Gate wird rot. Empfehlung: **nicht anheben**, der Deckel ist ein Sicherheitsargument.
+- `backend/tests/test_admin_ui_contract.py` prüft Template und Skript auf Bindestriche, Emojis, unescapte Ausgabe, im Skript gebautes Markup. Die Filterleiste ist reines Server-Markup in `templates/search.php`; `php/js/search.js` bleibt unangetastet (es darf weiterhin nicht pollen, nichts abfangen, kein Markup bauen).
+- Die Katalog-Gates: jeder neue sichtbare Text braucht Einträge in `php/l10n/de.json`, `de.js`, `de_DE.json`, `de_DE.js`, `fr.json`, `fr.js`. Sechs Dateien, kein Extraktor, von Hand. Für Französisch gilt die Owner-Abnahme aus `docs/l10n-french.md`.
 
-**Bei 100k Dateien und mehr, konkret:**
+### A.6 Der Unified-Search-Dialog bleibt außen vor
 
-| Größe | ACL-Zeilen (Annahme 3 Nutzer je Datei) | ACL-Tabelle | Bit-Vektoren (5 Chunks/Datei) | Verhalten |
-|-------|----------------------------------------|-------------|-------------------------------|-----------|
-| 10k Dateien | 30k | ca. 1 MB | 2,4 MB | Alles im Seiten-Cache, Suche unter 50 ms |
-| 100k Dateien | 300k | ca. 12 MB | 24 MB | Weiterhin unkritisch, Scan im zweistelligen Millisekundenbereich |
-| 1M Dateien | 3 Mio. | ca. 110 MB | 240 MB | Grenze des Einzeldatei-Ansatzes auf einer 4-GB-Box; Partition-Key wird Pflicht, sonst wird der lineare Scan sichtbar |
+`Provider::getSupportedFilters()` meldet heute `BUILTIN_TERM` und `BUILTIN_TITLE_ONLY`. Nextcloud kennt keinen eingebauten Dateityp-Filter, ein eigener braucht `getCustomFilters()` mit einer `FilterDefinition`, und der Kommentar im Code warnt zu Recht: ein Name ohne Definition macht die ganze Providerliste zum Fehler, ein nicht deklarierter Filter lässt den Provider wortlos überspringen. Ein eigener Filter erschiene außerdem global in der Suchleiste, auch für andere Provider.
 
-Der ehrliche Vorbehalt: die 1M-Zeile ist eine Hochrechnung aus Datenmengen, nicht aus einem Lasttest. Ein Benchmark mit synthetischen 100k Dokumenten gehört in die Phase, in der der Vektorindex gebaut wird, und zwar bevor das Schema festgezurrt wird.
+**Empfehlung: `Provider.php` in v1.2 nicht anfassen.** Die Brücke ist der ohnehin vorhandene Eintrittspunkt am Ende der Trefferliste (`Provider::entryPoint`, `:326`), der bereits `query` und `names` an die Seite weiterreicht. Filter und Sortierung sind Eigenschaften der eigenen Ergebnisseite, und genau das ist der Grund, warum es diese Seite gibt.
 
----
-
-## Storage Layout im Container-Volume
-
-Alles unter `$APP_PERSISTENT_STORAGE` (nc_py_api liefert den Pfad über `nc_py_api.ex_app.persistent_storage()`, mit einem Cache-Verzeichnis als Rückfallebene).
+### A.7 Datenfluss vorher und nachher
 
 ```
-$APP_PERSISTENT_STORAGE/
-├── index.db              # SQLite, WAL: der gesamte Suchindex
-├── index.db-wal
-├── index.db-shm
-├── state.db              # SQLite: Betriebszustand, getrennt vom Index
-├── models/
-│   ├── embed/            # ONNX-Modell + Tokenizer, beim ersten Start geholt
-│   └── .lock             # verhindert paralleles Nachladen bei mehreren Workern
-├── tmp/
-│   └── ocr/              # Scratch je OCR-Lauf, harte Gesamtgroessengrenze
-├── logs/                 # JSONL, rotierend
-└── _version.info         # Schema- und App-Version fuer Migrationen
+vorher:   Text ──► carried_operators ──► build_query ──► Query
+                                             │
+                       type:-Praefix ────────┘ (schaltet Semantik ab)
+
+nachher:  Text ──► carried_operators ──► build_query(extensions=types) ──► Query
+            │                                 ▲
+            │      type:-Praefix ─────────────┤ (schaltet Semantik weiter ab, Profipfad)
+            └──── Leiste ──► types ───────────┘ (Semantik bleibt an)
+
+candidates(..., sort=relevance)  ──►  RRF-Fenster ──► Vorfilter ──► lexikalischer Nachlauf
+candidates(..., sort=date_desc)  ──►  Vereinigung nach mtime ──► Vorfilter ──► order_by_field-Nachlauf
 ```
 
-### `index.db`, Tabellen
-
-| Tabelle | Inhalt | Warum hier |
-|---------|--------|------------|
-| `documents` | `source_id` (PK, z. B. `files__<fileId>`), `file_id`, `storage_id`, `path`, `title`, `mime`, `size`, `mtime`, `content_hash`, `indexed_at`, `ocr_used` | Die Zuordnung der Dokument-IDs. `content_hash` erlaubt, ein Neuschreiben ohne Inhaltsänderung zu überspringen |
-| `chunks` | `chunk_id` (PK), `source_id` (FK, CASCADE), `chunk_no`, `text`, `vec_i8` (BLOB für Rerank) | Chunk-Ebene, weil Treffer und Snippet auf Chunks liegen, Rechte aber auf Dokumenten |
-| `fts` | FTS5-Virtualtabelle, `external content` auf `chunks` | External Content spart die doppelte Textkopie; Preis ist, dass Deletes explizit gespiegelt werden müssen |
-| `vec_chunks` | `vec0`-Virtualtabelle, `embedding_bit bit[384]`, optional Partition-Key `storage_id` | Bit-Vektoren für den Scan, Rerank gegen `chunks.vec_i8` |
-| `acl` | `(uid, source_id)`, zusammengesetzter Primärschlüssel, zusätzlicher Index auf `source_id` | Der Index auf `source_id` ist für den Löschpfad nötig, der Primärschlüssel für den Suchpfad |
-
-### `state.db`, getrennt
-
-| Tabelle | Inhalt |
-|---------|--------|
-| `progress` | Je Mount: gesehen, indexiert, übersprungen, Zeitpunkt |
-| `failures` | `source_id`, Fehlerklasse, Versuche, `retry_after`, letzter Fehlertext |
-| `settings` | Effektive Laufzeitwerte (Poolgrößen, erkanntes RAM-Budget) |
-
-**Warum zwei Dateien.** Der Betriebszustand wird viel häufiger geschrieben als der Index. In derselben Datei würde jedes Fortschritts-Update das WAL des Index aufblähen und mit den Lesern der Suche konkurrieren. Getrennt kann man `state.db` zudem bedenkenlos löschen: ein Neuaufbau kostet einen Abgleichlauf, keinen Neuindex.
-
-**SQLite-Pragmas, nicht verhandelbar:** `journal_mode=WAL` (Leser blockieren Schreiber nicht, sonst hängt die Suche während des Crawls), `busy_timeout` großzügig (mehrere Worker-Threads schreiben), `synchronous=NORMAL` (unter WAL ausreichend, spart auf ARM-Boxen mit SD-Karte spürbar Ein- und Ausgabe).
-
-**Der eine Schreiber.** SQLite hat einen globalen Schreiblock je Datenbank. Alle Worker dürfen parallel rechnen, aber der Index-Commit gehört hinter eine einzige Schreiber-Queue mit Sammel-Transaktionen von 50 bis 200 Dokumenten. Ein Commit je Dokument bringt eine Box mit SD-Karte zum Kriechen.
-
-### Alternative, ehrlich benannt
-
-Tantivy statt FTS5 mit einem separaten Vektorspeicher wäre reifer als sqlite-vec (0.26.0 vom April 2026 gegenüber 0.1.10-alpha.4 vom Mai 2026). Der Preis ist genau die Eigenschaft, die dieses Projekt braucht: der ACL-Join ist dann nicht mehr eine SQL-Zeile, sondern eine Zusammenführung in der Anwendungsschicht über zwei Systeme, also der Context-Chat-Anti-Pattern per Konstruktion. Wenn die Alpha-Reife von sqlite-vec ein Ausschlusskriterium ist, dann ist die richtige Antwort nicht Tantivy, sondern FTS5 allein plus eine eigene, sehr kleine Bit-Vektor-Tabelle mit Hamming-Distanz als benutzerdefinierter SQLite-Funktion. Das ist überschaubar viel Code und hält den Join intakt. Die endgültige Wahl gehört in STACK.md, das Layout-Argument bleibt davon unberührt.
-
 ---
 
-## PHP-Companion zu ExApp: das Protokoll
+## Teil B: Modell-Entladung im Leerlauf
 
-### Richtung PHP zu ExApp
+### B.1 Wer hält heute was
 
-```php
-$this->appApi->exAppRequest(
-    'ncsearch',           // appId
-    '/search',            // Route, muss in info.xml <routes> deklariert sein
-    $userId,              // wird zu AUTHORIZATION-APP-API: base64("<uid>:<secret>")
-    'POST',
-    ['query' => $term, 'limit' => 20, 'cursor' => $cursor],
-);
+| Halter | Inhalt | Gemessenes Gewicht | Datei |
+|---|---|---|---|
+| `embed/engine.py::_ENGINE` | die eine `EmbeddingModel`-Hülle (Pfad plus Objekt) | winzig, hält aber alles darunter | `engine.py:70` |
+| `EmbeddingModel._engine` (`_Engine`) | onnxruntime-Session **plus** truncating/padding-Tokenizer | Gewichte 118 MB, Aktivierungsspitze 250 bis 400 MB | `model.py:319`, `:276` |
+| `Poller._chunker` (Closure) | zweiter Tokenizer plus `semantic-text-splitter` | **544,3 MB Spitze**, faul gebaut seit Plan 07-03 | `poller.py:1615`, RAM-Tabelle in `CLAUDE.md` |
+| `Poller._model` | Referenz auf dieselbe `EmbeddingModel` | keine eigene Last | `poller.py:1657` |
+
+**Das ist der wichtigste Befund dieses Teils.** Der große Posten ist nicht das Modell, sondern die Tokenizer-Materialisierung, und sie existiert zweimal: einmal als Session-Encoder in `_Engine`, einmal als Cutter-Tokenizer im Poller. Eine Entladung, die nur `EmbeddingModel._engine` freigibt, lässt den größeren Teil stehen. Die Belege stehen in `docs/measurements/2026-09-grundlast-fein/` und in `docs/measurements/2026-09-vergleichsmessung-m7g/`, Abschnitt 5.2.
+
+**VERIFIZIEREN:** wie viel von den 103,2 MB Grundlast nach v1.1 überhaupt auf Modell und Cutter entfällt. Nach der faulen Bauweise seit 07-03 ist die Grundlast **eines frisch gestarteten Containers** bereits ohne beides gemessen worden. Der Gewinn der Entladung ist also nicht "Grundlast minus X", sondern "Rückkehr zur Grundlast nach einem Indexlauf". Das ist eine andere Messgröße und die Messphase muss sie so benennen, sonst verspricht der Store-Text eine Zahl, die nicht die gemessene ist.
+
+### B.2 Wohin die Freigabe gehört
+
+Drei Ebenen, drei Verantwortungen, und die bestehende Abhängigkeitsrichtung bleibt unangetastet (`worker/` importiert aus `embed/`, `api/` importiert aus `embed/`, `embed/` kennt keinen von beiden, `main.py` kennt alle):
+
+1. **`embed/model.py`, `EmbeddingModel.release() -> bool`.** Setzt `self._engine = None` unter `self._lock` und meldet, ob wirklich etwas freigegeben wurde. **Was dabei stehen bleiben muss:** `_absent` (Eigenschaft der Installation), `_load_failed_at` (Eigenschaft des Moments, deren Cooldown weiterläuft), `_run_failure_warned` (Log-Dämpfung). Eine Freigabe ist kein Neustart des Objekts, und `reset()` in `engine.py` bleibt das, was es ist: ein Werkzeug für Tests und `one_load.py`.
+2. **`embed/engine.py`, `release_if_idle(seconds) -> bool`.** Liest den Halter ohne ihn zu füllen (`_held`, `:236`, existiert schon genau dafür), fragt die Leerlauf-Uhr des Modells und ruft `release()`. Zählt die Freigaben in einem Modulzähler neben `_LOAD_COUNT`-Vorbild, damit die Admin-Sicht eine Zahl hat.
+3. **`worker/poller.py`, `Poller.release_the_cutter() -> bool`.** Setzt `self._chunker = None` und `self._model = None`. `_build_the_cutter` baut beim nächsten Dokument neu, weil seine erste Zeile genau dieses Paar prüft (`:1606`). `_cutter_absent` und `_cutter_failed_at` bleiben stehen, aus demselben Grund wie oben. Wichtig ist die Bedingung "die drei reisen zusammen oder keiner von ihnen" aus dem Kommentar bei `:1653`: die Freigabe muss beide Felder setzen, nie nur eines.
+
+### B.3 Der Auslöser: eine eigene Aufgabe im Lifespan
+
+Der naheliegende Ort wäre der Leerlaufzweig des Pollers (`run_once`, `ROUND_EMPTY`, `poller.py:614`). **Das ist falsch, und zwar aus einem konkreten Grund:** ein stummgeschalteter Poller (`silence()`) wartet in `run()` auf `self._armed` und betritt `run_once` nie wieder (`poller.py:543`). Genau dieser Container, der nicht indexiert und nur gelegentlich durchsucht wird, ist der Fall, für den die Entladung gebaut wird.
+
+**Empfehlung:** eine dritte Aufgabe im Lifespan von `main.py`, neben `indexing` und `repairing` (`main.py:308`, `:319`), mit demselben Muster: `asyncio.create_task`, eigenes `stop_event`, im Shutdown-Block mit `wait_for(shield(...))` eingesammelt. Ein grober Takt von etwa 60 Sekunden reicht, die Aufgabe darf nichts öffnen und nichts laden; sie liest zwei Uhren und ruft im Zweifel zwei Freigaben.
+
+`main.py` ist die einzige Datei, die beide Hälften kennen darf, sie verdrahtet sie ohnehin (`_POLLER`, `resources`). Damit muss weder `embed/` vom Poller wissen noch `worker/` von einem Aufräumer.
+
+**Die Uhr.** Ein Zeitstempel, ein Schreiber: `EmbeddingModel._last_use = time.monotonic()` am Ende jedes erfolgreichen `_embed`, egal ob Passage oder Query. Damit deckt eine einzige Uhr beide Nutzer ab, und es entsteht keine zweite Meinung darüber, was "benutzt" heißt. Präzedenz im Repo ist `note_cutter_failure`: ein Wert, ein Schreiber, ein Leser.
+
+**Die zweite Bedingung.** Freigegeben wird nur, wenn der Poller gerade nichts in Arbeit hat. Sonst entlädt der Aufräumer mitten in einer Charge und der nächste Stapel baut alles neu auf, wieder und wieder. Der Poller hat den Zustand bereits: `self._held` ist zwischen Anspruch und Verdikt gefüllt. Eine schmale Nur-Lese-Eigenschaft (`Poller.busy`) genügt, und sie ist billiger und ehrlicher als ein Mitzählen im Modell.
+
+**Die Schwelle** gehört nach `config.py` in der dortigen Form: Konstante mit Begründung, Bereich, Umgebungsvariable, zum Beispiel `EMBED_IDLE_RELEASE_SECONDS = 900` mit `FINDLING_EMBED_IDLE_RELEASE_SECONDS` und `0` als "aus". Ein Abschaltwert ist Pflicht: er ist die Rückfallebene, wenn die Messphase zeigt, dass das Wiederaufwärmen teurer ist als der Gewinn.
+
+### B.4 Threadsicherheit: das Bestehende trägt, und das ist kein Zufall
+
+`EmbeddingModel._embed` (`model.py:406`) holt die Engine unter der Sperre in eine **lokale Variable** und läuft danach außerhalb der Sperre durch die Stapel:
+
+```python
+with self._lock:
+    engine = self._load()
+...
+    with self._lock:
+        encoded = _encode_batch(engine, window)
+    vectors.extend(_run_encoded(engine, encoded))
 ```
 
-Gesetzte Header (aus `nc_py_api/_session.py` und der AppAPI-Dokumentation verifiziert):
+Setzt der Aufräumer gleichzeitig `self._engine = None`, verliert der laufende Aufruf nichts: seine lokale Referenz hält Session und Tokenizer am Leben, bis die Funktion zurückkehrt. **Eine Freigabe kann also keinen laufenden Stapel zerstören, und es braucht keinen Umbau der Sperrenarchitektur.** Sie kann nur eines: nichts bewirken, solange noch jemand arbeitet. Genau deshalb ist die Leerlauf-Uhr die richtige Steuergröße und nicht ein Nutzungszähler mit Wartebedingung.
 
-| Header | Wert |
-|--------|------|
-| `AA-VERSION` | Mindestversion der AppAPI |
-| `EX-APP-ID` | App-ID, muss der eigenen entsprechen, sonst weist der Container ab |
-| `EX-APP-VERSION` | Version des Containers |
-| `AUTHORIZATION-APP-API` | `base64("<userid>:<app_secret>")`, leerer Nutzerteil bedeutet Systemkontext |
+Zwei Feinheiten gehören trotzdem in den Plan:
 
-Routen werden in `info.xml` unter `<external-app><routes>` deklariert, mit `url` (Regex), `verb`, `access_level` (PUBLIC, USER, ADMIN), `headers_to_exclude` und `bruteforce_protection`. Von außen laufen sie über `/apps/app_api/proxy/*`. Für uns: `/search` als USER, `/status` als ADMIN, nichts als PUBLIC.
+- Die Suche läuft über `asyncio.to_thread` (`api/search.py:260`), der Poller ebenfalls; der Aufräumer läuft auf dem Event-Loop. `release()` selbst nimmt nur die Sperre und setzt ein Feld, das ist mikroskopisch und darf auf dem Loop passieren. Die eigentliche Freigabe des Speichers geschieht beim Fallenlassen der letzten Referenz, also im Zweifel im Destruktor von onnxruntime, und das kann messbar dauern. Wenn die Messung das zeigt: `release()` in `asyncio.to_thread` verlagern, nicht die Sperre verbreitern.
+- `enable_cpu_mem_arena=False` ist bereits gesetzt (`model.py:272`). Das ist die Voraussetzung dafür, dass eine Freigabe dem Betriebssystem überhaupt etwas zurückgibt, und der Kommentar dort begründet es schon für die Aktivierungsspitze. Der Satz gilt für die Entladung doppelt und sollte dort ergänzt werden.
 
-**Antwortform `/search`:**
-```json
-{
-  "results": [
-    {"fileId": 12345, "sourceId": "files__12345",
-     "path": "Documents/contract.pdf", "title": "contract.pdf",
-     "snippet": "... a <b>notice period</b> of three months ...",
-     "score": 0.0312, "mtime": 1755200000, "matchType": "hybrid"}
-  ],
-  "cursor": "eyJvIjoyMH0=",
-  "degraded": {"vector": false, "reason": null}
-}
+### B.5 Wechselwirkung mit dem Ein-Ladung-pro-Prozess-Gate
+
+`embed/model.py::_LOAD_COUNT` und `tools/one_load.py` belegen die Zusage von Plan 06.1-02: **eine Ladung pro Prozess**. Mit der Entladung wird diese Zusage wörtlich falsch, und das muss bewusst und sichtbar geschehen, nicht als Nebenwirkung:
+
+- `backend/src/findling/tools/one_load.py` und `backend/tests/test_one_load.py`: die Aussage wird zu "eine Ladung pro Prozess **ohne zwischenzeitliche Freigabe**". Der Zähler bleibt monoton (der Kommentar in `engine.py::reset` verteidigt das zu Recht), aber der Beweis braucht die zusätzliche Bedingung.
+- `backend/tests/test_embed_engine.py` und `test_embed_model.py`: neue Fälle für Freigabe im Leerlauf, Freigabe bei laufender Arbeit (darf nichts kaputtmachen), Nachladen nach Freigabe, Erhalt von `_absent` und `_load_failed_at` über eine Freigabe hinweg.
+- `backend/tests/test_lifecycle.py`: die dritte Aufgabe muss im Shutdown eingesammelt werden wie die anderen beiden.
+
+### B.6 Sichtbarkeit für den Admin
+
+Heute: `engineState` aus `embed/engine.py` mit fünf Wörtern (`loaded`, `cold`, `disabled`, `missing`, `waiting_for_retry`), gespiegelt in `php/lib/Service/AdminViewService.php:177`, sechs Sätze in `php/templates/admin.php:66` und dieselben sechs in `php/js/admin.js`, zusammengehalten von `backend/tests/test_admin_ui_contract.py` (`test_both_halves_of_the_page_map_the_same_state_to_the_same_sentence`, `test_the_six_sentences_of_the_engine_line_are_in_the_german_catalogue`).
+
+Zwei Wege, und die Empfehlung ist der erste:
+
+**Empfohlen: ein sechstes Wort `unloaded`.** Der Milestone verlangt ausdrücklich, die Wiederaufwärm-Kosten zu "messen und auszuweisen". Ausweisen heißt: der Admin sieht den Unterschied zwischen "noch nie gelesen" (`cold`) und "zum Sparen freigegeben, die nächste Suche kostet das Nachladen". Beide Sätze sind wahr, aber sie sagen einem Admin Verschiedenes. Kosten: `ENGINE_STATES` in `engine.py`, `ENGINE_STATES` in `AdminViewService.php`, ein Satz in `admin.php`, derselbe Satz in `js/admin.js`, sechs Katalogdateien, dazu die Gate-Erwartung "sechs Sätze" wird "sieben".
+
+**Fallback: bei fünf Wörtern bleiben**, nach der Freigabe wieder `cold` melden und stattdessen zwei Zahlen in `api/status.py` ergänzen (`modelReleases`, `lastRewarmMs`). Billiger, aber die Statuszeile verschweigt genau die Eigenschaft, die v1.2 neu einführt.
+
+In beiden Fällen gilt die harte Regel aus dem Kopf von `api/status.py`: **die Statusabfrage baut und lädt nichts.** `engine_state()` liest den Halter ohne ihn zu füllen, und eine neue Zahl darf daran nichts ändern; die Admin-Seite pollt alle fünf Sekunden.
+
+### B.7 Was bei der Entladung ausdrücklich nicht angefasst wird
+
+- Der Vektorbestand (`store/vectors.py`) und dessen Lese-Handle in `api/resources.py::ReadSide.vectors`. Er ist SQLite auf Platte, er ist nicht die Last, und ein Schließen würde nur die nächste Suche verteuern.
+- Der tantivy-Reader (`open_reader`, einmal pro Index konfiguriert, 0,10 ms gegen 0,005 ms pro Suche). Der Index liegt im Page-Cache, nicht im Heap.
+- Die Wortliste und das 23-MB-Automat aus `index/wordlist.py`. Sie gehört zur lexikalischen Suche, also zu dem Teil, der immer antworten muss.
+- `EmbeddingModel` als Objekt. Freigegeben wird `_engine`, nie die Hülle; sonst verliert man die drei Merker und die Suche fängt an, eine Installation ohne Modell wieder und wieder zu befragen.
+
+---
+
+## Teil C: Was die Messphase wiederverwendet
+
+### C.1 Bestand und Änderungsbedarf
+
+| Artefakt | Zustand nach v1.1 | Verwendung in v1.2 | Änderung |
+|---|---|---|---|
+| `scripts/ops/search_load.py` | gefixt und am 10.09. belegt (`min_hits`, `hits_per_request`, `EmptyResultGroup`) | Laststufen 1/4/8/12/16, Untersuchung der vier regressiven Stufen | **keine.** Wird byteidentisch auf die Box gebracht, wie am 10.09. |
+| `scripts/ops/aws_box.sh` | acht Unterbefehle, `start` zieht die SSH-Regel nach, `snapshot` mit eigenem Tag `findling-corpus-keep` | Wiederanfahrt aus `snap-03f1d1d9ad9262704`, Kosten, Abbau | **klein:** ein Unterbefehl oder Abschnitt, der ein Volume **aus** einem Snapshot erzeugt. `volume` legt heute ein leeres an. Das ist die eine Lücke im Wiederaufbau. |
+| `scripts/ops/rss_sampler.sh`, `rss_digest.py` | cgroup-Abtastung, beide Treiberlayouts | Grundlast, Volllauf, Entladungs-Nachweis | **keine** |
+| `docs/measurements/.../skripte/96-volllauf.sh`, `96b-waechter.sh`, `96c-lesen.py`, `96d-statusbeobachter.py`, `96e-ntfy-watch.sh` | gefahren am 10.09. | Wirkungsbeleg-Volllauf DI-10-04 | **kopieren in neues Laufverzeichnis**, nicht editieren (siehe C.3) |
+| `docs/measurements/.../skripte/97-nebenlaeufigkeit.sh` | gefahren | vier regressive Laststufen | kopieren, Stufenliste anpassen |
+| `.../2026-09-werkzeugfixe/skripte/98b-sprachfaelle.sh` | gefahren, **Fix greift nicht** | Sprachfall-Messung DI-10-02/DI-11-01 | **inhaltliche Änderung nötig**, siehe C.2 |
+| `.../skripte/00-ablauf.md` (beide Läufe) | Muster: Ablauf plus vorher notierte Erwartung E1..En | Runbook-Erstvollzug | **Vorlage**, neue Datei je Anfahrt |
+| `.../skripte/40b-baumhash.py/.sh` | Baumhash der beiden Hälften, per Test reproduziert | Beweis, dass die Box den Repo-Stand trägt | **keine** |
+| `docs/performance.md` | trägt die Nachmessungs-Zusage (acht gleichzeitige Suchen) | wird von den neuen Zahlen fortgeschrieben | Text |
+| `README.en.md` plus beide `info.xml` | eine Messzahl an drei Stellen | falls die Entladung die ausgewiesene Zahl bewegt | drei Stellen im Gleichschritt, Store-Regel |
+
+### C.2 Die eine echte Werkzeugänderung: die Fremdbestands-Messgröße
+
+Der Bericht vom 10.09. (`docs/measurements/2026-09-werkzeugfixe/README.md`, Abschnitt 4) hat es sauber gemessen und benannt: die Vorprüfung fragt dieselbe OCS-Route, und die antwortet dem Lasttest-Konto für **jeden** Begriff exakt 26 Treffer bei Tiefe 64, 200 und 2000. Die Größe hängt weder am Begriff noch an der Tiefe, sie ist ein Deckel der Antwort. Damit kann sie die Schwelle 64 nie erreichen, das dreiwertige Urteil bleibt praktisch zweiwertig, und vier Fälle sind rot, ohne dass das eine Aussage über die deutsche Sprachkette wäre.
+
+Der Bericht nennt die Lösung bereits: **die Zahl der Dokumente im Index, die den Begriff tragen, statt der Zahl der Treffer, die die Route herausgibt.** Dafür gibt es im Container zwei gangbare Quellen:
+
+- `Searcher.doc_freq(field_name, field_value)` aus den tantivy-Bindings (im Stub vorhanden), also die Dokumentfrequenz eines Terms. Nächstliegend, aber sie zählt Terme nach Analyse, nicht Dokumente nach Suchzeile.
+- Die Diagnose-Route `backend/src/findling/api/diagnose.py` mit `ranked_sides` (`index/search.py:296`), die ausdrücklich **ohne** Vorfilter arbeitet und für genau solche Admin-Fragen gebaut ist.
+
+Die zweite ist die richtige: sie geht durch denselben Query-Bau wie die Suche, sie ist bereits als Admin-Frage begründet, und sie liefert die Rangliste, in der das eigene Dokument stehen müsste. **Empfehlung:** die Nachfolgefassung heißt `98c-sprachfaelle.sh`, liegt im neuen Laufverzeichnis, und ihre Vorprüfung fragt die Diagnose-Route statt der OCS-Route. Das ist ein eigener Planschritt **vor** der Anfahrt, denn: "ein Messskript, das während seines eigenen Laufs nachgebessert wird, macht jede Zahl daneben unbelegt" (ebenda).
+
+### C.3 Die Byte-Identitäts-Regel
+
+`backend/tests/test_measurement_scripts.py::test_the_driven_language_case_script_stays_byte_identical` pinnt Größe und SHA-256 der am 10.09. gefahrenen Fassung `docs/measurements/2026-09-vergleichsmessung-m7g/skripte/98-sprachfaelle.sh`, und ein zweiter Test beweist, dass der Wächter schon auf ein einzelnes zusätzliches Zeichen anschlägt. Daraus folgt die Arbeitsweise für die ganze Messphase: **gefahrene Skripte werden nie editiert, Nachfolgefassungen bekommen ein neues Laufverzeichnis.** Das gilt auch für `98b`, sobald es gefahren ist. Für jedes neue Skript greifen zusätzlich die Breitengates (`test_the_measurement_script_carries_no_dash`, `no_carriage_return`, `starts_with_a_shebang`, `carries_no_path_of_one_machine`).
+
+### C.4 Neu zu bauen: die Wiederaufwärm-Messung
+
+Für die Entladung fehlt ein Werkzeug, und es ist klein. Gebraucht werden drei Zahlen:
+
+1. Grundlast nach dem Indexlauf, vor der Freigabe (`rss_sampler.sh`, vorhanden).
+2. Grundlast nach der Freigabe, wenn der Aufräumer zugeschlagen hat (dasselbe Werkzeug plus die Log-Zeile der Freigabe als Zeitmarke).
+3. Die Dauer der **ersten** Suche danach, gegen die Dauer einer Suche im warmen Zustand.
+
+Für Punkt 3 gibt es bereits das Muster: `docs/measurements/2026-09-vergleichsmessung-m7g/rohdaten/95-nachher-erste-suche.json` ist genau eine solche Einzelmessung, erzeugt aus `search_load.py` mit `--concurrency 1 --rounds 1`. Damit braucht die Wiederaufwärm-Messung kein neues Lastwerkzeug, sondern ein Ablaufskript, das Freigabe erzwingt (Leerlaufschwelle per Umgebungsvariable herabgesetzt) und danach `search_load.py` einmal fährt. Das ist der zweite Grund, warum die Schwelle konfigurierbar sein muss.
+
+### C.5 Das Wiederaufbau-Runbook
+
+Es existiert heute **nicht** als Dokument; es existiert verstreut als Erfahrung in drei Berichten und in den Kommentaren von `aws_box.sh`. Der Erstvollzug ist Teil dieses Milestones. Was hineingehört, ist bereits belegt:
+
+- die drei Fallen der Anfahrtsliste vom 10.09.: der `/etc/hosts`-Pin auf die falsche Apache-Adresse, der von AppAPI nicht gestartete Container (DI-05-36-Heilung), die wechselnde Box-Adresse (`aws_box.sh start` zieht die SSH-Regel selbst nach).
+- die Speicherbegrenzung `mem=4G` im Kern und das Zurückmessen vor jedem Lauf (`free -h` sagt 3.9Gi, `nproc` sagt 2, `uname -m` sagt aarch64), aus dem Kopf von `aws_box.sh`.
+- das Volume aus dem Snapshot statt leer, die eine fehlende Fähigkeit aus C.1.
+- die Abbruchbedingung als prüfbare Zahl. Der Bericht vom 10.09. hält fest, dass `occ findling:index --status` für diese Prüfung untauglich ist (meldet `indexed` bauartbedingt als 0), die Zahl kommt aus der Container-Zählung. Das gehört wörtlich ins Runbook, es hat schon einmal 1,7 Stunden Laufzeit gekostet.
+- der Deckel (Owner-Vorschlag 26 h / 3,50 USD) und die Kostenrechnung inklusive der öffentlichen IPv4-Adresse, die in `cmd_prices` bereits als eigene Position geführt wird.
+
+Ablage: `docs/measurements/<neues-laufverzeichnis>/skripte/00-ablauf.md` für die konkrete Anfahrt (Pflicht, Muster vorhanden) und zusätzlich ein beständiges `docs/runbook-messbox.md`, auf das die Ablaufdatei verweist, damit der nächste Milestone nicht wieder in drei Berichten sucht.
+
+---
+
+## Bauvorschlag mit Abhängigkeiten
+
+```
+Phase M1  Werkzeug und Runbook (ohne Box)
+  ├─ 98c-sprachfaelle.sh: Vorpruefung auf Diagnose-Route umstellen   [DI-10-02]
+  ├─ aws_box.sh: Volume aus Snapshot                                  [Wiederaufbau]
+  └─ docs/runbook-messbox.md, Erstfassung aus den drei Berichten
+        │  (muss vor der Anfahrt fertig sein: Skript nicht waehrend des Laufs fixen)
+        ▼
+Phase M2  Backend: Filter und Sortierung
+  ├─ config.py: SEARCH_TYPES_MAX, Sortierwerte, Grenzen
+  ├─ rewrite.py: build_query(..., extensions=)
+  ├─ index/search.py: Sortierzweig, _sides/_ranked, order_by_field    [VERIFIZIEREN]
+  ├─ api/search.py + api/snippets.py: types, sort
+  └─ Tests: test_search_endpoint, test_search_library, test_rrf_fusion,
+            test_query_rewrite, test_acl_prefilter
+        │  (PHP kann erst danach etwas durchreichen)
+        ▼
+Phase M3  PHP: Ergebnisseite
+  ├─ SearchShape, SearchService::run, ExAppService
+  ├─ PageController: types(), sortOrder(), pageUrl()
+  ├─ templates/search.php + css, sechs l10n-Dateien
+  └─ Gates: acl_boundary, trust_boundary, admin_ui_contract, Kataloge
+        ▼
+Phase M4  Entladung  (unabhaengig von M2/M3, aber VOR M5)
+  ├─ model.py: _last_use, release()
+  ├─ engine.py: release_if_idle(), Freigabezaehler, ggf. sechstes Wort
+  ├─ poller.py: release_the_cutter(), busy
+  ├─ main.py: dritte Lifespan-Aufgabe + Shutdown
+  ├─ status.py + AdminViewService + admin.php + js/admin.js + Kataloge
+  └─ one_load.py und sein Gate nachziehen
+        │  (die Messphase soll die Entladung mitmessen, eine Anfahrt)
+        ▼
+Phase M5  Messphase, EINE Box-Anfahrt
+  ├─ Wiederaufbau aus dem Snapshot, Runbook-Erstvollzug
+  ├─ DI-10-04 Wirkungsbeleg-Volllauf
+  ├─ vier regressive Laststufen
+  ├─ Sprachfaelle mit der neuen Messgroesse
+  ├─ Wiederaufwaerm-Kosten der Entladung
+  └─ Kosten und Abbau, Snapshot-Entscheid
+        ▼
+Phase M6  Haertung und Store-Einreichung v1.2.0
+  ├─ DI-11-02/03/05/06, BL-F01-Schlusssatz, stable35-Entscheid
+  ├─ Messzahl an drei Stellen im Gleichschritt
+  └─ Migration Version001200Date... (Merker: jeder Minor-Sprung braucht eine)
 ```
 
-Das Snippet kommt **fertig markiert** aus dem Container, weil nur dort der Chunktext liegt. Die PHP-Seite darf es nicht neu berechnen, sonst braucht sie den Inhalt und die Trennung ist hinfällig. `degraded` sagt der Admin-Seite ehrlich, wenn gerade nur ein Zweig läuft, etwa während des Initialcrawls oder solange das Modell nicht geladen ist.
+**Die drei harten Abhängigkeiten:**
 
-### Richtung ExApp zu PHP
+1. M2 vor M3. Die Seite kann keinen Parameter senden, den der Container nicht kennt; ein `extra="forbid"`-Modell antwortet mit 422, und das kommt auf der PHP-Seite als "leer" an, also als stumme Suche.
+2. M1 vor M5. Belegt durch den Bericht vom 10.09.
+3. M4 vor M5. Sonst braucht die Entladung eine zweite Box-Anfahrt, und der Owner-Entscheid vom 11.09. lautet: eine Anfahrt.
 
-Der Container ruft ausschließlich die OCS-Endpunkte der eigenen PHP-App, alle mit `#[ExAppRequired]`. Dieses Attribut aus `OCP\AppFramework\Http\Attribute` ist die Zugangssperre: nur eine registrierte ExApp mit gültigem AppAPI-Secret kommt durch, kein Browser, kein normaler Nutzer.
-
-| Endpunkt | Verb | Zweck |
-|----------|------|-------|
-| `/queues/documents/` | GET | Batch holen, sperrt die Zeilen |
-| `/queues/documents/` | DELETE | Quittieren |
-| `/queues/actions/` | GET, DELETE | Zugriffs- und Löschaufträge |
-| `/files/{fileId}` | GET | Inhaltsstrom im Nutzerkontext |
-| `/queues/*/stats` | GET | Zähler für die Admin-Seite |
-
-### Fehler- und Rückstau-Signale
-
-Context Chat verwendet einen eigenen Antwortheader `cc-retry: true`, an dem die PHP-Seite erkennt, ob ein Fehler wiederholbar ist. Das ist ein sinnvolles Muster: HTTP-Statuscodes allein unterscheiden nicht zwischen "Datei kaputt, nie wieder versuchen" und "Container gerade überlastet". Für uns:
-
-| Signal | Bedeutung | Reaktion |
-|--------|-----------|----------|
-| `x-ncsearch-retry: true` bei 503 | Container überlastet oder Modell lädt | Zeile entsperren, `retry_after` setzen, Polling-Intervall verdoppeln |
-| 4xx ohne Retry-Header | Dokument dauerhaft unverarbeitbar | In `failures` schreiben, quittieren, nie erneut anfassen |
-| Timeout beim Inhaltsabruf | PHP-Seite unter Last | Zeile entsperren, exponentiell zurückziehen |
+M2/M3 und M4 sind gegeneinander unabhängig und könnten getauscht werden. Für die hier vorgeschlagene Reihenfolge spricht, dass der Filter der sichtbare Teil des Milestones ist und die Entladung im schlimmsten Fall per Umgebungsvariable auf Null gestellt ausgeliefert wird, ohne den Milestone zu gefährden.
 
 ---
 
-## Zugriff im Nutzerkontext und Ausbreitung von Löschungen
+## Anti-Patterns für diesen Milestone
 
-**Wie der Container an Inhalte kommt.** Nicht per WebDAV. Der Container hat kein Nutzer-Credential, und AppAPI stellt keine Impersonation im Sinne einer echten Nutzersession bereit: `AUTHORIZATION-APP-API` trägt eine Nutzer-ID, und AppAPI prüft nur, dass dieser Nutzer existiert und aktiv ist, bevor es ihn als aktiven Nutzer setzt. Das reicht für OCS-Aufrufe im Nutzerkontext. Für den Dateizugriff ist der eigene Gateway-Endpunkt trotzdem die bessere Wahl: er ist ein Aufruf statt eines WebDAV-Handshakes, er umgeht die Pfadauflösung über Namen komplett, weil er auf `fileId` arbeitet, und er ist die Stelle, an der der Rechte-Recheck kostenlos mitpassiert.
+**1. Sortieren auf der PHP-Seite.**
+Was naheliegt: `usort` über `$outcome->hits` in `PageController::rows`.
+Warum falsch: sortiert nur die 25 Treffer dieser Seite. Seite zwei beginnt wieder mit einem anderen Datumsbereich, und der Nutzer sieht eine Liste, die nirgends sortiert ist. Außerdem wäre die Sortierung im Dialog und auf der Seite verschieden.
+Stattdessen: die Reihenfolge entsteht in `index/search.py::candidates`, PHP reicht durch.
 
-Nebenbefund zur Klarstellung: `exAppRequestWithUserInit` ist seit AppAPI 3.0.0 als veraltet markiert und ruft intern dasselbe wie `exAppRequest` auf. Wer alte Beispiele findet, sollte sie nicht übernehmen.
+**2. Den UI-Filter als `type:`-Text schicken.**
+Warum falsch: `carried_operators` vergibt `FILETYPE`, `api/search.py` schaltet daraufhin die semantische Hälfte ab. Ein Klick auf eine Schaltfläche würde die Suchqualität still verändern.
+Stattdessen: eigenes Request-Feld, das die Operatorenmarke nicht setzt.
 
-**Als welcher Nutzer.** Die PHP-App wählt beim Bauen des Queue-Eintrags einen beliebigen Nutzer, der die Datei sehen kann. Context Chat nimmt dafür `getMountsForStorageId(...)[0]->getUser()->getUID()`. Das ist der Abrufkontext. Die Rechte-Wahrheit für die Suche steht davon unabhängig in `userIds` und landet in der `acl`-Tabelle. Diese Trennung ist wichtig: **wer lesen darf, um zu indexieren** und **wer finden darf** sind zwei verschiedene Fragen.
+**3. Ein Total oder Facettenzahlen ausliefern.**
+Warum falsch: Zahlen vor dem Rechte-Recheck sind Aussagen über fremde Dokumente (T-02-93). `CandidatePage` trägt aus genau diesem Grund kein Total.
+Stattdessen: feste Filtergruppen ohne Zahlen, `hasMore` bleibt die einzige Mengenaussage.
 
-**Wie Löschungen und Entzüge ankommen.**
+**4. Filter und Sortierung in den Cursorstring kodieren.**
+Warum falsch: zweiter Parser für dieselbe URL, und ein Cursorpfad, der bei jeder Filteränderung ungültig wird, sieht dann wie ein Fehler aus statt wie ein Neuanfang.
+Stattdessen: eigene Query-Parameter, Filteränderung springt auf Seite eins.
 
-| Ereignis | Quelle | Wirkung im Index |
-|----------|--------|------------------|
-| Datei gelöscht | `BeforeNodeDeletedEvent` | Dokument samt Chunks, FTS-Einträgen, Vektoren, ACL fällt weg |
-| Ordner gelöscht | `BeforeNodeDeletedEvent` plus rekursive Sammlung | wie oben, gebatcht zu 500 |
-| In den Papierkorb | erscheint als Rename in `files_trashbin/` | Pfadfilter greift, Dokument wird entfernt |
-| Aus dem Papierkorb zurück | Rename heraus | erneut in die Queue |
-| Umbenannt oder verschoben | `NodeRenamedEvent` | Pfad-Update, kein Reindex (die `fileId` bleibt), Rechte neu ermitteln |
-| Share entzogen | `ShareDeletedEvent`, `UserMountRemovedEvent` | Nur `acl`-Zeilen; das Dokument bleibt für andere Berechtigte |
-| Nutzer gelöscht | `UserDeletedEvent` | Alle `acl`-Zeilen des Nutzers, danach Verwaisten-Aufräumung |
-| Nichts davon ausgelöst (occ, External Storage, Container war unten) | keine | Erst der Abgleichlauf repariert es |
+**5. Die Entladung im Leerlaufzweig des Pollers aufhängen.**
+Warum falsch: ein stummgeschalteter Poller betritt `run_once` nie wieder, und genau der ruhende Container ist der Zielfall.
+Stattdessen: eigene Lifespan-Aufgabe in `main.py`, die beide Halter kennt.
 
-**Ein Punkt, der leicht übersehen wird:** Der AppAPI-Events-Listener ist für Freigabe-Ereignisse nutzlos. Er kennt nach aktuellem Stand der Dokumentation genau einen `eventType` `node_event` mit den Subtypen `NodeCreatedEvent`, `NodeTouchedEvent`, `NodeWrittenEvent`, `NodeDeletedEvent`, `NodeRenamedEvent`, `NodeCopiedEvent`. Die App `webhook_listeners` deckt dieselben Node-Ereignisse plus System-Tags und Kalender ab, aber **ebenfalls keine Share-Ereignisse**. Freigaben und Mount-Änderungen sind also nur über einen normalen PHP-`IEventListener` in der Companion-App zu bekommen. Das ist ein hartes Argument dafür, die gesamte Ereignisaufnahme in PHP zu machen und den AppAPI-Events-Listener gar nicht erst zu verwenden: zwei Ereigniswege mit unterschiedlicher Semantik und unterschiedlicher Zustellgarantie zu betreiben bedeutet mehr Fehlerquellen bei null Gewinn.
+**6. Nur `EmbeddingModel._engine` freigeben.**
+Warum falsch: der größere Posten (544,3 MB Spitze) ist der Cutter-Tokenizer im Poller. Eine halbe Entladung liefert eine halbe Zahl, und die steht dann im Store-Text.
+Stattdessen: beide Halter, eine Uhr.
 
----
+**7. Beim Entladen `_absent` oder `_load_failed_at` mit zurücksetzen.**
+Warum falsch: dann sucht ein Container ohne Modell nach jeder Freigabe wieder nach den Artefakten, und ein Cooldown nach einer MemoryError-Ladung wäre ausgehebelt. Genau diese Unterscheidung hat das Audit von 06.1-17 eingeführt.
+Stattdessen: `release()` setzt ausschließlich `_engine`.
 
-## Scaling Considerations
+**8. Ein gefahrenes Messskript nachbessern.**
+Warum falsch: Byte-Identitäts-Wächter wird rot, und jede Zahl daneben verliert ihren Beleg.
+Stattdessen: neues Laufverzeichnis, Nachfolgefassung mit neuem Namen.
 
-| Größe | Anpassungen |
-|-------|-------------|
-| **bis 10k Dateien, 1 bis 5 Nutzer** | Nichts. Ein Fetcher-Thread, zwei Extract-Prozesse, ein OCR-Prozess, ein Embed-Prozess. Der komplette Index passt in den Seiten-Cache. Initialcrawl unter einer Stunde, dominiert von OCR. |
-| **10k bis 200k Dateien, 5 bis 50 Nutzer** | Poolgrößen aus dem erkannten RAM-Budget ableiten, nicht aus der Zahl der Kerne. OCR bekommt eine eigene, kleinere Parallelität als die Textextraktion. Sammel-Commits von 100 Dokumenten. Crawl-Intervall drosselbar machen, damit der Admin die Erstindexierung über Nacht schieben kann. Das ist die Zielzone dieses Produkts. |
-| **ab 500k Dateien oder mehr als 100 Nutzer** | Der lineare Vektorscan wird sichtbar: Partition-Key auf `storage_id` aktivieren. Der ACL-Fanout wird zum größten Objekt: prüfen, ob ein mountbasiertes Modell den nutzerbasierten Join ersetzen sollte. Ehrlicher Hinweis für die Roadmap: diese Größe liegt außerhalb der Zielhardware, und der richtige Umgang damit ist eine dokumentierte Grenze, keine Architektur, die dafür im Voraus verbogen wird. |
-
-### Scaling Priorities
-
-1. **Erster Engpass: OCR-Durchsatz beim Initialcrawl.** Eine gescannte Seite kostet auf ARM leicht eine bis drei Sekunden. 10.000 Scan-Seiten sind Stunden. Die Lösung ist nicht mehr Parallelität, die verbietet das RAM-Budget, sondern Priorisierung: erst alle Dateien mit vorhandener Textschicht indexieren, damit die Suche schnell nützlich wird, und OCR als Nachzügler-Spur mit niedrigerer Priorität laufen lassen. Der Nutzer sieht dann nach Minuten erste Treffer statt nach Stunden.
-2. **Zweiter Engpass: SQLite-Schreiblock.** Sichtbar, wenn die Suche während des Crawls stockt. Lösung: WAL, ein einziger Schreiber-Thread, Sammel-Transaktionen. Nicht: eine zweite Datenbank.
-3. **Dritter Engpass: PHP-Worker beim Inhalts-Gateway.** Sichtbar bei vielen großen Dateien parallel. Lösung: Gleichzeitigkeit der Abrufe im Container per Semaphore begrenzen, nicht über die Poolgröße, und ein `max_bytes` je Batch.
-4. **Vierter Engpass: Vektorscan.** Erst jenseits der Zielgröße. Lösung: Partition-Key, dann Bit-Vektoren mit kleinerer Dimension über Matryoshka-Kürzung.
-
----
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Alle zugreifbaren IDs in die Anwendungsschicht holen
-
-**Was gemacht wird:** ACL-Join in SQL, Ergebnis nach Python, dann Vektorsuche mit `id IN (<500.000 Werte>)`. Genau das tut `context_chat` heute.
-**Warum falsch:** Speicherverbrauch und Latenz wachsen linear mit dem, was der Nutzer sehen darf, nicht mit dem, was er sucht. Die Batch-Schleife um die Parametergrenze herum ist das Eingeständnis.
-**Stattdessen:** Filter im SQL lassen, Überfetch plus Nachschlag für den KNN-Zweig, Partition-Key als Reserve.
-
-### Anti-Pattern 2: Push-Indexierung aus dem PHP-Prozess
-
-**Was gemacht wird:** Ein Hintergrundjob liest die Datei und schickt den Inhalt synchron per POST an den Container.
-**Warum falsch:** Kein Backpressure. Der Cron-Lauf blockiert an OCR. Timeouts im AppAPI-Proxy erzeugen halb verarbeitete Zustände, die niemand aufräumt. Bei einem Container-Neustart mitten im Lauf ist unklar, was ankam.
-**Stattdessen:** Pull, mit Lock und Quittung.
-
-### Anti-Pattern 3: Ausschließlich auf Ereignisse vertrauen
-
-**Was gemacht wird:** Nach dem Initialcrawl hält man den Index nur über Ereignisse aktuell.
-**Warum falsch:** `occ files:scan`, External Storages, direkte Manipulation des Storage und jeder Container-Ausfall erzeugen stille Lücken. Ein Suchindex, der still unvollständig ist, ist schlimmer als gar keiner, weil das Ausbleiben eines Treffers als "gibt es nicht" gelesen wird.
-**Stattdessen:** Täglicher Abgleichlauf mit demselben Mount-Cursor-Muster wie der Crawl.
-
-### Anti-Pattern 4: `IExternalProvider` implementieren
-
-**Was gemacht wird:** Man liest, dass das Backend "extern" ist, und implementiert das passend klingende Interface.
-**Warum falsch:** Das Interface bedeutet "fragt Dritte", nicht "läuft in einem anderen Prozess". Solche Provider sind im Unified-Search-Dialog per Schalter standardmäßig ausgeschaltet. Der Nutzer installiert und sieht nichts. Das ist der direkte Widerspruch zum Kernversprechen des Produkts.
-**Stattdessen:** `IProvider`. Wenn später Filter gewünscht sind, `IFilteringProvider` ergänzen.
-
-### Anti-Pattern 5: Ein zweiter Serverprozess im Container
-
-**Was gemacht wird:** Elasticsearch, Meilisearch oder Qdrant als Sidecar oder per Supervisor im selben Image.
-**Warum falsch:** Der Grundspeicherbedarf frisst das 4-GB-Budget auf, bevor eine Datei indexiert ist. AppAPI liefert einen Container mit einem Volume; ein zweites Serverleben darin bedeutet eigenen Lebenszyklus, eigene Migrationen, eigenes Backup, eigene Absturzursachen. Das ist exakt die Konfigurationslast, die das Produkt abschaffen will.
-**Stattdessen:** Eingebettete Engine im Prozess.
-
-### Anti-Pattern 6: Nutzer-ID aus dem Request-Body
-
-**Was gemacht wird:** Der `/search`-Endpunkt nimmt `{"userId": "...", "query": "..."}`.
-**Warum falsch:** Wer den Proxy erreicht, sucht als beliebiger Nutzer. Das ist ein vollständiger Bruch des Berechtigungs-Durchgriffs, und er fällt in keinem funktionalen Test auf.
-**Stattdessen:** Die Nutzer-ID ausschließlich aus `AUTHORIZATION-APP-API` lesen. Wenn eine Nutzer-ID im Body ankommt: 400 zurückgeben, nicht ignorieren, damit der Fehler früh sichtbar wird.
-
-### Anti-Pattern 7: OCR im selben Worker wie die Textextraktion
-
-**Was gemacht wird:** Ein Pool, der alles macht.
-**Warum falsch:** Head-of-Line-Blocking. Ein 300-Seiten-Scan hält alle Slots, während tausende billige Textdateien warten. Der Nutzer sieht stundenlang nichts.
-**Stattdessen:** Getrennte Spuren, getrennte Poolgrößen, Textdateien zuerst.
-
-### Anti-Pattern 8: OCR-Scratch außerhalb des Volumes und ohne Deckel
-
-**Was gemacht wird:** Ghostscript und Tesseract schreiben nach `/tmp` im Container-Dateisystem.
-**Warum falsch:** Die Zwischenprodukte einer großen Scan-PDF sind ein Vielfaches der Quelldatei. Ein volles Container-Dateisystem ist ein schwer zu diagnostizierender Ausfall, und der Admin sieht ihn nicht in Nextcloud.
-**Stattdessen:** `tmp/ocr/` im Volume, harte Gesamtgrößengrenze, Aufräumen im `finally`, und beim Start die Reste des letzten Absturzes löschen.
-
-### Anti-Pattern 9: Crawl pro Nutzer
-
-**Was gemacht wird:** Für jeden Nutzer dessen Home durchlaufen.
-**Warum falsch:** Geteilte Ordner und Groupfolder werden N-mal gelesen, N-mal per OCR verarbeitet und N-mal eingebettet. Bei 20 Nutzern auf einem gemeinsamen Ordner ist das ein Faktor 20 auf der teuersten Operation im System.
-**Stattdessen:** Pro Mount crawlen, Nutzerliste getrennt als ACL führen.
+**9. `SEARCH_ROUNDS` oder `MAX_CONTAINER_OFFSET` anheben, weil gefilterte Seiten dünner werden.**
+Warum falsch: der Deckel ist ein Sicherheitsargument (unbegrenzter Offset gleich unbegrenzte Arbeit pro Anfrage), und `test_search_limits_lockstep.py` hält beide Seiten zusammen.
+Stattdessen: der Filter wirkt im Container vor dem Fenster, die Trefferdichte steigt dadurch; wenn eine Seite trotzdem leer bleibt, ist das DI-07-03 und hat bereits seinen ehrlichen Text.
 
 ---
 
-## Integration Points
+## Integrationspunkte in Kurzform
 
-### Externe Berührungspunkte
+### Container, Leseseite
 
-| Punkt | Muster | Fallstricke |
-|-------|--------|-------------|
-| AppAPI-Registrierung und Handshake | `/init`, `/enabled`, `/heartbeat` per nc_py_api | Die App muss `/enabled` sauber beantworten, bevor irgendein anderer Endpunkt Sinn ergibt. Aktivieren und Deaktivieren muss die Worker-Threads schlafen legen, nicht nur eine Flagge setzen. |
-| AppAPI-Proxy und HaRP | `/apps/app_api/proxy/*` | HaRP ist der aktuelle Deploy-Weg; `context_chat_backend` bringt dafür ein `harp_connect.sh` mit. Ältere Anleitungen zum Deploy-Daemon sind überholt. |
-| Unified Search | `IProvider` in PHP | Alle Provider laufen parallel; ein langsamer Provider bremst die gesamte Suchleiste. Harte Obergrenze auf den ExApp-Aufruf, im Zweifel leeres Ergebnis statt Warten. |
-| Nextcloud-Datenbank | `oc_filecache`, `oc_mounts` über `IQueryBuilder` | Nur lesend, nie direkt schreiben. Neuere Server-Versionen bieten eine `IFileAccess`-Abstraktion, ältere nicht: beide Pfade vorhalten, wie es Context Chat mit `getMountsOld` und `getFilesInMountOld` tut. |
-| `IUserMountCache` | `getMountsForFileId`, `getMountsForStorageId` | Die einzige belastbare Quelle für "wer sieht diese Datei". Nicht über die Share-API rekonstruieren, das verfehlt Groupfolder und externe Mounts. |
-| App Store | `info.xml`, signiertes Release | Die App-ID ist an das Zertifikat gebunden und muss vor dem ersten Bau-Commit feststehen. Zwei Artefakte (PHP-App und ExApp) bedeuten zwei Store-Einträge mit gekoppelten Versionen. |
+| Datei | Eingriff |
+|---|---|
+| `backend/src/findling/api/search.py` | `SearchRequest.types`, `SearchRequest.sort`, Durchreichen in `one_round`, unveränderte Kanarienvogel- und Degradiert-Logik |
+| `backend/src/findling/api/snippets.py` | dasselbe Feldpaar, Gleichschritt beim Query-Bau |
+| `backend/src/findling/query/rewrite.py` | `build_query(..., extensions=())`, Vereinigung mit den aus dem Text geschnittenen Endungen, `carried_operators` unverändert |
+| `backend/src/findling/index/search.py` | Sortierzweig in `candidates`, `_sides` mit Ordnung, `_ranked` gegen die veränderte Trefferform, `_mtimes_of` wiederverwenden, `_permit` unverändert und weiterhin genau zweimal genannt |
+| `backend/src/findling/config.py` | Sortierwerte, Endungsdeckel, `EMBED_IDLE_RELEASE_SECONDS` plus Bereich und Umgebungsvariable |
+| `backend/src/findling/api/status.py` | Zähler der Freigaben, ggf. sechstes Zustandswort |
+| `backend/src/findling/api/resources.py` | **unverändert.** `query_model()` bleibt der reine Durchgriff |
 
-### Interne Grenzen
+### Container, Schreibseite und Lebenszyklus
 
-| Grenze | Kommunikation | Bemerkung |
-|--------|---------------|-----------|
-| PHP-App zu ExApp | HTTP über AppAPI-Proxy, ausschließlich in `ExAppService` gekapselt | Die einzige Stelle mit Timeout-, Retry- und Degradationslogik |
-| ExApp zu PHP-App | OCS, `#[ExAppRequired]`, ausschließlich in `nc/client.py` gekapselt | Alle Endpunkte idempotent, weil Quittungen verloren gehen können |
-| Fetcher zu Pipeline | Queue im Prozess mit Kostenbudget | Nicht nach Stückzahl begrenzen, sondern nach Bytes und geschätzter OCR-Last |
-| Pipeline zu Storage | Repository-Klasse, ein Schreiber-Thread | Die einzige Stelle mit SQL. Vektor-Backend austauschbar halten, sqlite-vec ist Alpha |
-| Retrieval zu Storage | Lesend, eigene Verbindung | Getrennte Verbindung mit `query_only`, damit ein Fehler im Suchpfad nie schreiben kann |
+| Datei | Eingriff |
+|---|---|
+| `backend/src/findling/embed/model.py` | `_last_use`, `release()`, `unload_count`, Erhalt der drei Merker |
+| `backend/src/findling/embed/engine.py` | `release_if_idle()`, Zähler, ggf. `ENGINE_UNLOADED` und `ENGINE_STATES` |
+| `backend/src/findling/worker/poller.py` | `release_the_cutter()`, `busy`, Freigabe auch in `silence()` |
+| `backend/src/findling/main.py` | dritte Aufgabe im Lifespan plus Shutdown nach dem Muster von `indexing`/`repairing` |
+| `backend/src/findling/tools/one_load.py` | Zusage präzisieren |
+
+### PHP-Companion
+
+| Datei | Eingriff |
+|---|---|
+| `php/lib/Controller/PageController.php` | vier auf sechs untrusted Werte, `pageUrl` trägt Filter und Sortierung, keine neue Route |
+| `php/lib/Service/SearchService.php` | Signatur nimmt `SearchShape`, Rechtekette unangetastet |
+| `php/lib/Service/SearchCaps.php` | unverändert (bleibt reine Deckel-Sammlung) |
+| `php/lib/Service/ExAppService.php` | zwei Felder im Body von `/search` und `/snippets` |
+| `php/templates/search.php` | Filterleiste und Sortierwahl im bestehenden GET-Formular, serverseitig gerendert, ohne Skriptbedarf |
+| `php/css/search.css` | Layout der Leiste, keine Literalfarben (Gate) |
+| `php/js/search.js` | **unverändert** |
+| `php/lib/Search/Provider.php` | **unverändert** |
+| `php/lib/Service/AdminViewService.php`, `php/templates/admin.php`, `php/js/admin.js` | Zustandsliste und Satztabelle für die Entladung |
+| `php/l10n/{de,de_DE,fr}.{json,js}` | alle neuen sichtbaren Texte, Handpflege, vier Gates |
+| `php/lib/Migration/Version001200Date...` | Merker aus v1.1: jeder Minor-Sprung braucht eine Migration, sonst stumme Suche |
+
+### Gates, die den Bau begleiten
+
+`test_php_acl_boundary.py` (Aufrufzählung der Rechtefragen), `test_php_trust_boundary.py` (Routenattribute), `test_search_limits_lockstep.py` (Deckel beiderseits), `test_admin_ui_contract.py` (Seiten, Skripte, Kataloge, Zustandssätze), `test_measurement_scripts.py` (Byte-Identität, Breitengates), `test_ops_scripts.py` (`aws_box.sh`-Unterbefehle in der Usage, Anmeldedaten nie im Klartext), `test_one_load.py`, `test_lifecycle.py`.
 
 ---
 
-## Build Order: der wandelnde Skelettbau
+## Offene Punkte, vor dem Bau zu klären
 
-Die Reihenfolge folgt einem Prinzip: **das unbewiesenste Stück zuerst, das teuerste Stück zuletzt.** Unbewiesen ist die Kombination aus `IProvider` und ExApp-Proxy, denn genau die macht keine bestehende App. Teuer, aber vollständig kalkulierbar sind OCR und Embeddings.
-
-| Reihenfolge | Baustein | Warum hier | Bewiesen zu Ende, wenn |
-|-------------|----------|------------|------------------------|
-| **1** | ExApp-Skeleton plus PHP-Companion plus `IProvider`, der einen **fest verdrahteten** Treffer aus dem Container zurückgibt | Das ist das einzige Integrationsrisiko ohne Vorbild. Es mit zwanzig Zeilen zu beantworten statt nach zehn Wochen ist der ganze Sinn eines Skeletts. Schließt zugleich Namensgebung und App-ID ab, die vor dem Zertifikat feststehen müssen. | In der Nextcloud-Suchleiste erscheint ein Treffer, der nachweislich aus dem Container kommt |
-| **2** | Queue-Tabellen, OCS-Queue-API, Inhalts-Gateway, Crawl-Job je Mount, Fetcher-Thread, der die Bytes nur zählt | Der komplette Transportweg, ohne jede Intelligenz. Danach ist die Frage beantwortet, ob Dateien vollständig und wiederaufsetzbar im Container ankommen. Die Admin-Statuszahlen fallen als Nebenprodukt ab. | Ein Crawl über 10.000 Dateien läuft durch, ein `docker restart` mittendrin verliert nichts und dupliziert nichts |
-| **3** | Storage-Schicht mit **vollständigem Schema inklusive `acl`**, Textextraktion, FTS5-Index, echter `/search`-Endpunkt mit ACL-Join und Snippet | Ab hier ist es ein benutzbares Produkt: Volltextsuche über Dateiinhalte. Die `acl`-Tabelle und der Filter gehören **hierhin und nicht später**: Berechtigungen nachträglich in ein Indexschema einzuziehen ist ein Neuschreiben, kein Feature. | Zwei Testnutzer mit überlappenden Freigaben finden genau das, was sie sehen dürfen, und nichts darüber hinaus |
-| **4** | Event-Listener (Node und Share), deklarative Zugriffsaktionen, Löschpfad, Abgleichlauf | Erst wenn der Index stimmt, lohnt es sich, ihn aktuell zu halten. Der Abgleichlauf gehört in dieselbe Phase wie die Ereignisse, sonst wird er nie gebaut. | Anlegen, Ändern, Umbenennen, Löschen, Teilen und Entziehen sind innerhalb einer Minute im Suchergebnis sichtbar; ein absichtlich verpasstes Ereignis wird vom Abgleich repariert |
-| **5** | OCR als eigene Worker-Spur, Priorität hinter der Textextraktion, RAM- und Zeitdeckel, Scratch im Volume | Rein additiv. Fällt OCR aus, funktioniert die Suche unverändert weiter. Genau deshalb kommt es nach dem Kern und nicht davor. | Eine gescannte PDF ist findbar; ein 300-Seiten-Scan blockiert die Indexierung normaler Dateien nachweislich nicht |
-| **6** | Embeddings, Vektortabelle, Hybrid-Ranking mit RRF, Degradation auf reine Volltextsuche | Der teuerste und am stärksten hardwareabhängige Teil. Er baut auf einem Schema auf, das sich in Phase 3 bis 5 bereits bewährt hat. Der Lasttest über 100k synthetische Dokumente gehört hierhin, bevor das Vektorschema fest ist. | Semantische Treffer erscheinen; bei fehlendem Modell degradiert die Suche sauber statt zu scheitern |
-| **7** | Multi-Arch-Image, RAM-Autoerkennung, Admin-Statusseite, Store-Einreichung (CSR, `info.xml`, signiertes Release) | Verpackung zum Schluss, aber die App-ID stand seit Phase 1 fest. Die Vorlaufzeit für die CSR ist früh einzuplanen. | Installation aus dem Store auf einer 4-GB-ARM-Box, kein Konfigurationsschritt nötig, erste Treffer innerhalb weniger Minuten |
-
-**Zwei Reihenfolge-Entscheidungen, die begründet gehören:**
-
-Die `acl`-Tabelle steht in Phase 3, nicht in Phase 4. Man könnte argumentieren, dass ein Einzelnutzer-Test ohne Rechtefilter schneller zu Ergebnissen führt. Er führt aber zu einem Schema ohne Zugriffsdimension, und jede Zeile Retrieval-Code, die danach entsteht, muss beim Nachziehen angefasst werden. Der Berechtigungs-Durchgriff ist zudem eine Sicherheitseigenschaft, und Sicherheitseigenschaften, die man nachrüstet, hat man in der Regel lückenhaft.
-
-OCR steht vor den Embeddings, obwohl OCR das aufwendigere Stück ist. Grund: OCR erweitert nur den Textkorpus und ändert am Schema nichts. Embeddings bringen eine neue Tabelle, einen neuen Abfragezweig, eine neue Ranking-Stufe und die größte Hardwareabhängigkeit mit. Das gehört auf einen Unterbau, der bereits durch echte Nutzung gelaufen ist.
-
----
-
-## Confidence und offene Punkte
-
-| Aussage | Confidence | Grundlage |
-|---------|------------|-----------|
-| Pull-basierte Queue ist das aktuelle Muster von Context Chat | HIGH | `task_fetcher.py` und `QueueController.php` im Quellcode gelesen |
-| AppAPI-Header und `exAppRequest`-Signatur | HIGH | `nc_py_api/_session.py`, `app_api/lib/PublicFunctions.php`, offizielle Dokumentation |
-| AppAPI kann keinen Search-Provider registrieren | HIGH | Kein entsprechender Controller in `app_api/lib/Controller`, kein Eintrag in der Fähigkeitsliste der ExApp-Dokumentation |
-| Context Chat registriert selbst keinen Search-Provider | HIGH | `context_chat/lib/AppInfo/Application.php` enthält nur `registerEventListener` |
-| `IExternalProvider` ist standardmäßig ausgeschaltet | HIGH | Quellkommentar in `lib/public/Search/IExternalProvider.php`, seit 32.0.0 |
-| Weder AppAPI-Events noch `webhook_listeners` liefern Share-Ereignisse | HIGH | Beide Ereignislisten in der offiziellen Dokumentation geprüft |
-| Crawl pro Mount mit `fileid`-Cursor | HIGH | `StorageCrawlJob.php` und `StorageService.php` gelesen |
-| Context Chats Vektor-ACL-Filter materialisiert alle Chunk-IDs | HIGH | `vectordb/pgvector.py::doc_search` gelesen, inklusive der Batch-Schleife um die Postgres-Parametergrenze |
-| fulltextsearch denormalisiert `owner`/`users`/`groups`/`circles` ins Dokument | HIGH | `fulltextsearch_elasticsearch/lib/Service/SearchMappingService.php::generateSearchQueryAccess` gelesen |
-| Einzeldatei-SQLite-Layout ist die richtige Wahl | MEDIUM | Logisch schlüssig aus dem ACL-Join-Argument, aber sqlite-vec steht bei 0.1.10-alpha.4 (Mai 2026); nicht durch eine Produktivinstallation belegt |
-| Bit-Vektoren machen den linearen Scan tragbar | MEDIUM | sqlite-vec dokumentiert Binärquantisierung und Hamming-Distanz; die Größenrechnung ist meine, nicht gemessen |
-| Partition-Key auf `storage_id` löst das Selektivitätsproblem | MEDIUM | `vec0`-Partition-Keys sind für Mandantenfähigkeit dokumentiert; die Abbildung auf Nextcloud-Mounts ist mein Vorschlag ohne Präzedenzfall |
-| Zahlen der Skalierungstabelle | LOW | Hochrechnung aus Datenmengen, kein Lasttest. Gehört in Phase 6 gemessen, bevor das Vektorschema fest wird |
-
-**Was in einer späteren, phasenspezifischen Recherche zu klären ist:**
-
-- Ob `SearchResultEntry` ein vorgerendertes Snippet mit Markup darstellen kann oder ob die Unified-Search-UI HTML in der Subline entfernt. Falls sie es entfernt, muss das Snippet unmarkiert geliefert werden, und die Hervorhebung entfällt oder wandert in ein Attribut.
-- Wie sich der AppAPI-Proxy bei parallelen Suchanfragen verhält und welche Timeout-Obergrenze in der Unified Search real gilt.
-- Ob `vec0`-Partition-Keys mit Bit-Vektoren kombinierbar sind. Beides sind vergleichsweise neue Funktionen derselben Alpha-Version.
-- Verhalten bei Groupfolders im Detail: ob `IUserMountCache` bei verschachtelten Groupfolder-Rechten die effektive Sichtbarkeit korrekt auflöst oder ob eine zusätzliche Abfrage der Groupfolder-App nötig ist.
+| Punkt | Warum offen | Wer klärt |
+|---|---|---|
+| Trefferform unter `order_by_field` in tantivy 0.26.0 | Stub sagt `tuple[Any, DocAddress]`, der Wert ist unter Sortierung der Feldwert statt des Scores; `_ranked` liest ihn heute als Score | Planschritt M2, ein Test gegen den realen Index |
+| Stabilität von `offset` zusammen mit `order_by_field` | falls instabil, Nachlauf über Bereichsfilter statt Offset | Planschritt M2 |
+| Tatsächlicher Gewinn der Entladung | die Grundlast von 103,2 MB ist bereits ohne Modell und Cutter gemessen; die richtige Größe ist "Rückkehr zur Grundlast nach einem Indexlauf" | Planschritt M4, Messphase M5 |
+| Fünf oder sechs Zustandswörter | Kosten gegen Aussagekraft, siehe B.6 | Owner-Entscheid vor M4 |
+| Standardwert der Leerlaufschwelle | 900 s ist ein Vorschlag, keine Messung | Messphase M5, Abschaltwert 0 bleibt Rückfallebene |
+| Ersatz-Messgröße für den Fremdbestand | Diagnose-Route empfohlen, Alternative `doc_freq` | Planschritt M1 |
+| Snapshot-Entscheid `snap-03f1d1d9ad9262704` | fällt laut PROJECT.md nach v1.2 | nach M5 |
 
 ---
 
 ## Sources
 
-**Quellcode, direkt gelesen (höchste Verlässlichkeit):**
-- `nextcloud/context_chat`: `lib/AppInfo/Application.php`, `lib/Controller/QueueController.php`, `lib/Service/LangRopeService.php`, `lib/Service/StorageService.php`, `lib/Service/ActionScheduler.php`, `lib/Listener/FileListener.php`, `lib/Listener/ShareListener.php`, `lib/BackgroundJobs/StorageCrawlJob.php`, `lib/Type/Source.php`, `lib/Type/FsEventType.php`
-- `nextcloud/context_chat_backend`: `context_chat_backend/task_fetcher.py`, `context_chat_backend/vectordb/pgvector.py`, `context_chat_backend/controller.py`
-- `nextcloud/fulltextsearch_elasticsearch`: `lib/Service/SearchMappingService.php`
-- `nextcloud/server`: `lib/public/Search/IProvider.php`, `IExternalProvider.php`, `IFilteringProvider.php`
-- `nextcloud/app_api`: `lib/PublicFunctions.php`, `lib/Controller/`
-- `cloud-py-api/nc_py_api`: `nc_py_api/_session.py`, `nc_py_api/ex_app/misc.py`, `nc_py_api/ex_app/defs.py`, `nc_py_api/files/__init__.py`
+Alle Aussagen über dieses System sind am Quellcode und an den Berichten dieses Repos gelesen, Stand 2026-09-14, Arbeitsbaum `C:\Users\Student\nextcloud-search`.
 
-**Offizielle Dokumentation:**
-- https://docs.nextcloud.com/server/stable/developer_manual/exapp_development/tech_details/Authentication.html
-- https://docs.nextcloud.com/server/stable/developer_manual/exapp_development/tech_details/api/events_listener.html
-- https://docs.nextcloud.com/server/stable/developer_manual/exapp_development/tech_details/api/routes.html
-- https://docs.nextcloud.com/server/stable/developer_manual/digging_deeper/search.html
-- https://docs.nextcloud.com/server/stable/admin_manual/webhook_listeners/index.html
-- https://docs.nextcloud.com/server/stable/admin_manual/ai/app_context_chat.html
-
-**Ergänzend (mittlere Verlässlichkeit):**
-- https://alexgarcia.xyz/sqlite-vec/guides/binary-quant.html
-- https://alexgarcia.xyz/blog/2024/sqlite-vec-metadata-release/index.html
-- https://alexgarcia.xyz/blog/2024/sqlite-vec-hybrid-search/index.html
-- https://simonwillison.net/2024/Oct/4/hybrid-full-text-search-and-vector-search-with-sqlite/
-- https://silvio-nextcloud-exapp-architecture.pgs.sh/
-- https://autoize.com/technical-deep-dive-into-nextcloud-context-chat/
+- `backend/src/findling/api/search.py`, `api/snippets.py`, `api/resources.py`, `api/status.py`
+- `backend/src/findling/index/search.py`, `index/schema.py`, `query/rewrite.py`, `store/repo.py`
+- `backend/src/findling/embed/model.py`, `embed/engine.py`, `worker/poller.py`, `main.py`, `config.py`
+- `backend/.venv/Lib/site-packages/tantivy/tantivy.pyi` (Signatur von `Searcher.search`, `fast_field_values`, `doc_freq`)
+- `php/lib/Controller/PageController.php`, `lib/Service/SearchService.php`, `lib/Service/ExAppService.php`, `lib/Service/SearchCaps.php`, `lib/Service/AdminViewService.php`, `lib/Search/Provider.php`, `templates/search.php`, `templates/admin.php`, `js/search.js`
+- `backend/tests/test_php_acl_boundary.py`, `test_php_trust_boundary.py`, `test_admin_ui_contract.py`, `test_search_limits_lockstep.py`, `test_measurement_scripts.py`, `test_ops_scripts.py`
+- `scripts/ops/search_load.py`, `scripts/ops/aws_box.sh`
+- `docs/measurements/2026-09-werkzeugfixe/README.md` und `skripte/98b-sprachfaelle.sh`
+- `docs/measurements/2026-09-vergleichsmessung-m7g/` (Skripte, Rohdaten, Abschnitt 5.2)
+- `.planning/PROJECT.md`, `.planning/STATE.md`, `CLAUDE.md` (RAM-Tabelle, Owner-Regeln)
 
 ---
-*Architecture research for: Nextcloud-Suche-ExApp (OCR + Volltext + Semantik)*
-*Researched: 2026-08-15*
+*Architecture research for: Findling v1.2, Integration von Dateityp-Filter/Sortierung, Modell-Entladung und Messphase*
+*Researched: 2026-09-14*

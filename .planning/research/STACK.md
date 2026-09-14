@@ -1,5 +1,587 @@
 # Stack Research
 
+Dieses Dokument hat zwei Teile. Oben steht die Recherche für **Milestone v1.2**,
+also für die beiden neuen Fähigkeiten. Darunter, ab "Stack-Bestand v1.0", steht
+unverändert die Stack-Recherche vom 15.08.2026, die den heutigen Container
+begründet. Der untere Teil bleibt gültig und wird von v1.2 nirgends widerrufen.
+
+---
+
+# Teil 1: Stack-Recherche v1.2 "Messbeleg und Ausbau"
+
+**Scope:** (a) Dateityp-Filter und Sortierung auf der eigenen Ergebnisseite,
+(b) Modell-Entladung im Leerlauf. Die Messphase auf der AWS-Box ist nur insoweit
+Gegenstand, als Werkzeug fehlen könnte.
+**Researched:** 2026-09-14
+**Confidence:** HIGH für die tantivy-Seite und die Versionsstände, MEDIUM für die
+Freigabekette der Speicherrückgabe, LOW für die Frage, wie viel RSS die
+Entladung auf der Zielhardware wirklich zurückgibt. Der letzte Punkt ist nicht
+recherchierbar, er ist messbar, und der Plan muss ihn messen statt ihn zu glauben.
+
+## Die eine Kernaussage
+
+**Beide Features brauchen null neue Laufzeit-Abhängigkeiten und null
+Schema-Änderung, also auch keinen Reindex und keine Indexversion.** Alles, was
+gebraucht wird, liegt bereits im Container: `tantivy` kann nach einem Fast Field
+sortieren, das `ext`-Feld ist seit v1.0 indexiert, die Entladung ist `del` plus
+`gc.collect()` plus ein `ctypes`-Aufruf, die Leerlauf-Erkennung ist eine dritte
+`asyncio`-Task in der bestehenden Lifespan, und die RSS-Messung existiert als
+`rss_bytes()` und `scripts/ops/rss_sampler.sh`. Wer in diesem Milestone ein
+Paket hinzufügt, hat vermutlich das falsche Problem gelöst.
+
+## Kernentscheidungen auf einen Blick
+
+| Frage | Entscheidung | Konfidenz |
+|-------|--------------|-----------|
+| Sortierung nach Datum | `Searcher.search(..., order_by_field="mtime", order=Order.Asc\|Desc, offset=...)` aus tantivy 0.26.0 | HIGH |
+| Braucht die Sortierung ein Schema-Feld? | **Nein.** `FIELD_MTIME` ist seit v1.0 `fast=True` (`index/schema.py:114`) | HIGH |
+| Dateityp-Filter | Bestehendes `FIELD_EXT` plus bestehende `_extension_query()`, nur über ein neues Wire-Feld statt über `type:` im Suchtext | HIGH |
+| Semantik unter Filter und Sortierung | Filter: bleibt an, über eine Must-Klausel in `_mtimes_of()`. Datums-Sortierung: **aus**, wie heute bei Operatoren | HIGH für die Mechanik, MEDIUM für den Produktentscheid |
+| Neue Backend-Pakete | **keine** | HIGH |
+| Neue PHP-Pakete, Vue, Build-Schritt | **keine**, die Seite bleibt serverseitig gerendert und skriptfrei | HIGH |
+| Entladeeinheit Suchseite | `EmbeddingModel._engine` (Encoder plus ORT-Session in einem frozen dataclass) auf `None` | HIGH |
+| Entladeeinheit Indexseite | `Poller._chunker` plus Tokenizer plus Splitter | HIGH |
+| Freigabekette | Referenzen fallen lassen, `gc.collect()`, `ctypes` `malloc_trim(0)` mit Schutzschalter | MEDIUM |
+| Leerlauf-Uhr | monotoner Zeitstempel plus dritte `asyncio`-Task in `main.lifespan` | HIGH |
+| Scheduler-Bibliothek (APScheduler und Verwandte) | **nein** | HIGH |
+| onnxruntime-Version | bei **1.29.0** bleiben, 1.30.0 nicht im Feature-Fenster ziehen | MEDIUM |
+
+---
+
+## A. Dateityp-Filter und Sortierung
+
+### A.1 Was der Index heute schon kann, belegt statt vermutet
+
+| Feld | Deklaration in `index/schema.py` | Taugt für |
+|---|---|---|
+| `mtime` | `add_integer_field(FIELD_MTIME, stored=True, indexed=False, fast=True)` (Zeile 114) | **Sortieren**, Bereichsfilter |
+| `ext` | `add_text_field(FIELD_EXT, stored=True, tokenizer_name="raw", index_option="basic")` (Zeile 105) | **Term-Filter**, nicht Sortieren |
+| `name`, `title`, `path`, `body_*` | Textfelder ohne `fast` | weder Sortieren noch Facettieren |
+
+Der Kommentar an Zeile 114 sagt es selbst: "Display today, sorting und
+since/until later." Die Vorarbeit ist da. `index/writer.py:272` schreibt
+`document.add_integer(FIELD_MTIME, record.mtime)` bedingungslos, und
+`extract/dispatch.py:161` liefert die Endung bereits kleingeschrieben
+(`PurePosixPath(name).suffix.removeprefix(".").lower()`), passend zum `.lower()`
+in `query/rewrite.py:204`. Es gibt hier keinen versteckten Gross-Klein-Bruch.
+
+**Folge: v1.2 bleibt index-kompatibel wie v1.1 (D-04).** Kein `SCHEMA_VERSION`,
+kein Reindex. Der Merker "jeder Minor-Sprung braucht eine Migration" gilt
+trotzdem weiter, aber für die PHP-Migration, nicht für den Index.
+
+### A.2 Sortierung: die verifizierte Signatur
+
+tantivy-py 0.26.0, `tantivy/tantivy.pyi` am Tag 0.26.0 und die API-Doku:
+
+```python
+def search(
+    self,
+    query: Query,
+    limit: int = 10,
+    count: bool = True,
+    order_by_field: str | None = None,
+    offset: int = 0,
+    order: Order = Order.Desc,
+    weight_by_field: str | None = None,
+) -> SearchResult: ...
+
+class Order(Enum):
+    Asc = 1
+    Desc = 2
+```
+
+Die Doku sagt wörtlich: "The field must be declared as a fast field when
+building the schema", unterstützt werden Text, Unsigned, Integer, Float, Boolean
+und Date, und `SearchResult.hits` ist eine Liste von `(order_key, DocAddress)`.
+
+Drei Konsequenzen, und alle drei sind Fallen:
+
+1. **Das erste Tupelglied ist unter `order_by_field` nicht mehr der Score,
+   sondern der Sortierschlüssel.** `index/search.py::_ranked` liest heute
+   `float(score)` aus genau diesem Platz. Unter Datums-Sortierung stünde dort
+   der `mtime`, und die RRF-Fortsetzungsarithmetik in Abschnitt 2 von
+   `candidates()` (`lexical_weight / (k + lexical_rank)`) würde stillschweigend
+   Unsinn rechnen. Der Datumspfad braucht deshalb einen eigenen Zweig und nicht
+   ein zusätzliches Argument an `_ranked`.
+2. **`offset` funktioniert zusammen mit `order_by_field`.** Der bestehende
+   Abschnitt-2-Nachlauf (`searcher.search(query, chunk_limit, offset=raw_cursor)`)
+   ist damit unverändert brauchbar: unter Datums-Sortierung entfällt Abschnitt 1
+   komplett und der Nachlauf wird zum ganzen Verfahren. Das ist weniger Code,
+   nicht mehr.
+3. **`count=True` ist der Default** und liefert eine Gesamtzahl vor dem
+   Rechtefilter. Diese Zahl darf den Container weiterhin nicht verlassen
+   (Zähl-Orakel T-02-93). Bei der Gelegenheit `count=False` setzen, das spart
+   den Vollzähler pro Suche.
+
+### A.3 Sortierung und Semantik vertragen sich nicht, und das ist kein Mangel
+
+RRF ordnet nach Rang in zwei Listen. "Neueste zuerst" ordnet nach einer Spalte
+über *alle* Treffer. Beides gleichzeitig gibt es nicht; was es gäbe, wäre "die
+neuesten aus den hundert relevantesten", und das ist die klassische Falle beim
+Sortieren eines abgeschnittenen Relevanzfensters: der Nutzer liest "neueste
+zuerst" und bekommt etwas anderes.
+
+**Empfehlung:** `sort=date` schaltet die Vektorhälfte ab, exakt wie es
+`api/search.py::one_round` heute schon für `rewritten.operators`, `one_term` und
+`title_only` tut (`lexical_only`). Ein Schalter mehr in derselben Zeile, keine
+neue Regel im Produkt, und die Semantik der Antwort ist ehrlich: "alle
+Dokumente, die Sie sehen dürfen und die passen, neueste zuerst".
+
+`sort=relevance` bleibt der Default und bleibt hybrid.
+
+### A.4 Der Dateityp-Filter darf die Semantik behalten, mit einer Klausel
+
+Heute markiert `carried_operators()` ein `type:` im Suchtext als `FILETYPE`, und
+`one_round` wirft daraufhin die Vektorhälfte weg. Das war für einen getippten
+Operator richtig; für eine Filterschaltfläche auf der Ergebnisseite ist es eine
+spürbare Qualitätsverschlechterung genau dann, wenn der Nutzer eingrenzt.
+
+Der Grund, warum es heute nötig ist, sitzt an einer anderen Stelle: die
+Endungs-Klausel wird in `build_query()` als `Occur.Must` an die *lexikalische*
+Query gehängt. Die Vektorliste kennt keine Endung und ginge daran vorbei, ein
+semantischer Treffer eines `.docx` erschiene also unter dem Filter "nur PDF".
+
+**Die Lösung liegt bereits im Code und kostet eine Klausel.**
+`index/search.py::_mtimes_of()` fragt die nur-semantischen Dokumente ohnehin mit
+einer Boolean-Query nach ihrem Zeitstempel ab, und `candidates()` verwirft
+anschliessend alles, was dabei nicht zurückkam
+(`merged = [... for ... if file_id in known]`). Wer in diese eine Query ein
+`(Occur.Must, _extension_query(...))` ergänzt, filtert die semantische Hälfte
+mit demselben Term, ohne einen einzigen Dokumentspeicher-Lesezugriff und ohne
+`ext` zu einem Fast Field zu machen. Kein Reindex, kein zweiter Suchlauf, kein
+zusätzliches Zeitbudget.
+
+Das ist der wichtigste Integrationsbefund dieses Teils.
+
+### A.5 Wire-Protokoll: zwei neue Felder, kein neuer Endpunkt
+
+`api/search.py::SearchRequest` trägt `model_config = ConfigDict(extra="forbid")`,
+und das ist dort ausdrücklich eine Sicherheitskontrolle. Zwei optionale Felder
+mit Defaults ändern daran nichts:
+
+```python
+# api/search.py, SearchRequest
+extensions: list[str] = []        # bereits die Vokabel von RewrittenQuery.extensions
+sort: Literal["relevance", "date_desc", "date_asc"] = "relevance"
+```
+
+Warum ein Feld und nicht "PHP hängt `type:pdf` an den Suchtext":
+
+- Der Suchtext reist auch in den Snippet-Aufruf. Ein angehängter Operator würde
+  dort mitfahren und die Ausschnittwahl verändern.
+- Die 255-Zeichen-Klammer von `PageController::MAX_QUERY_LENGTH` gilt für den
+  Text, nicht für eine Filterauswahl.
+- Der Filter würde sichtbar den Text umschreiben, den der Nutzer getippt hat.
+- Nur mit einem eigenen Feld lässt sich A.4 entscheiden, ohne die Bedeutung von
+  `type:` im getippten Text mit zu verschieben.
+
+**Der Versions-Lockstep deckt den Mischfall ab.** Ein PHP 1.2, das die neuen
+Felder an ein Backend 1.1 schickt, liefe in den 400 aus `extra="forbid"`. Genau
+das verhindert die Lockstep-Prüfung in `ExAppService` (Major und Minor aus
+`GET /status` gegen `IAppManager`) bereits seit v1.0: Mischstände suchen gar
+nicht. Umgekehrt akzeptiert Backend 1.2 ein altes PHP, weil beide Felder
+Defaults haben. Nichts Neues zu bauen, aber in den Plan schreiben.
+
+**Eingabehärtung für `extensions`** (der Endpunkt ist erreichbar, das Projekt
+auditiert nach jeder Phase): geschlossene Zeichenmenge `[a-z0-9]`, Länge je
+Endung deckeln (8 bis 16 Zeichen), Listenlänge deckeln (Startwert 16). Jede
+Endung mehr ist eine Should-Klausel mehr in der Query, und eine Liste ohne
+Deckel ist eine Query ohne Deckel. `pydantic` erledigt das über `Field(...)`,
+schon da.
+
+### A.6 PHP-Seite: zwei GET-Parameter, sonst nichts
+
+Die Ergebnisseite ist serverseitig gerendert, ohne Vue, ohne JSON-Route, ohne
+Teil-Nachladen, und das ist im Kopf von `templates/search.php` als Vertrag
+festgeschrieben. Filter und Sortierung fügen sich ohne Bruch ein:
+
+- `<select name="type">` und `<select name="sort">` im bestehenden
+  `<form method="get">`. Beide Werte werden serverseitig gegen eine geschlossene
+  Liste geprüft und fallen bei allem anderen stillschweigend auf den Default
+  zurück, genau wie `names`, `page` und `cursors` es heute tun.
+- `PageController::pageUrl()` muss beide Werte mitführen, sonst verliert jeder
+  Seitenwechsel den Filter.
+- **Der Cursorpfad muss bei jeder Änderung von Filter oder Sortierung auf `[0]`
+  zurückfallen.** Ein Cursor ist ein Offset in eine bestimmte Ergebnisliste;
+  wechselt die Sortierung, zeigt derselbe Offset in eine andere Liste. Am
+  billigsten und am robustesten: das Formular trägt weder `page` noch `cursors`
+  (so ist es heute schon gebaut), und jede Filteränderung geht über das
+  Formular. Zusätzlich ein Gurt in `cursorPath()`, weil eine editierte Adresse
+  beides kombinieren kann.
+- Die Gruppen-Vokabel ("PDF", "Dokumente", "Tabellen", "Präsentationen",
+  "Bilder", "Text") gehört **auf die PHP-Seite**: dort stehen die drei Kataloge
+  EN/DE/FR, und dort sitzt `IMimeTypeDetector` für die Symbole. Das Backend
+  bekommt die aufgelöste Endungsliste und bleibt ein dummer Filter, was genau
+  auf `RewrittenQuery.extensions` passt. Eine zweite Vokabel in Python wäre eine
+  Vokabel, die driften kann.
+- Drei Kataloge, vier Gates: jeder neue sichtbare String braucht EN/DE/FR im
+  Gleichstand. Das ist Aufwand, keine Technikfrage, aber es gehört in die
+  Phasenschätzung.
+
+**Keine Trefferzähler pro Dateityp.** `Searcher.aggregate()` gibt es in
+tantivy 0.26.0, und eine Facettenzahl wäre die naheliegende UI. Sie ist hier
+verboten: jede Zahl zählt vor dem Rechtefilter und ist damit exakt das
+Zähl-Orakel, das T-02-93 und die leere Seite in `templates/search.php`
+("Neither variant names a file, a path or a number") beide schon ausschliessen.
+Die Filterschaltflächen zeigen keine Zahlen.
+
+### A.7 Was ohne Reindex nicht geht, und deshalb nicht in v1.2 gehört
+
+| Wunsch | Warum nicht | Ausweg |
+|---|---|---|
+| Sortieren nach Dateiname | `FIELD_NAME` ist kein Fast Field | wäre `fast=True` plus Reindex plus Indexversion |
+| Sortieren nach Dateityp | `FIELD_EXT` ist kein Fast Field | dito, und der Nutzen ist gering |
+| Sortieren nach Dateigrösse | Es gibt gar kein Grössenfeld im Index | neues Feld plus Reindex |
+| Facettenzahlen je Typ | Zähl-Orakel vor dem Rechtefilter | keiner, das ist ein Produktentscheid |
+| Zeitraumfilter "letzte 30 Tage" | technisch heute schon möglich, `mtime` ist fast | eigenes Feature, nicht in diesen Milestone ziehen |
+
+---
+
+## B. Modell-Entladung im Leerlauf
+
+### B.1 Worum es in Zahlen geht, aus dem eigenen Messbericht
+
+`docs/measurements/2026-09-vergleichsmessung-m7g/README.md`, Abschnitt 5:
+
+| Posten | Messwert |
+|---|---|
+| Grundlast im Leerlauf, Modell nie geladen | **103,2 MB** anon |
+| Nach der ersten semantischen Suche | **518,2 MB** anon, also **plus 415,0 MB** |
+| Cutter der Indexseite, fünf Posten zusammen | **542,8 MB** (Tokenizer-Instanz 264,9 / Splitterbau 273,1 / Rest) |
+| Schritt "erste Einbettung, Gewichte geladen" in derselben Reihe | plus 398,7 MB |
+
+Die Entladung zielt also nicht auf ein Detail, sondern auf das Vier- bis
+Sechsfache der Grundlast. Wenn sie funktioniert, ist sie das grösste verbliebene
+RAM-Thema des Produkts. Wenn sie nur den Python-Zeiger löst und der Kernel die
+Seiten behält, ist sie wertlos, und genau deshalb ist der Messteil dieses
+Features nicht optional.
+
+### B.2 Zwei Entladeeinheiten, nicht eine
+
+**Suchseite:** `EmbeddingModel._engine` ist ein frozen dataclass mit genau
+`encoder` (Tokenizer-Instanz) und `session` (ORT). Ein `self._engine = None`
+löst beide zusammen. Die Klasse ist dafür fast schon gebaut.
+
+**Indexseite:** `Poller._chunker` plus die separate `open_tokenizer`-Instanz plus
+der `TextSplitter`. Die liegen *nicht* im Holder von `embed/engine.py` und werden
+von einem Entladen der Suchseite nicht berührt. Wer nur `_engine` entlädt, lässt
+auf einer Box, die einmal indexiert hat, den grösseren Posten liegen.
+
+Der Holder in `embed/engine.py` kennt beide Seiten bereits als Begriff
+(`note_cutter_failure`), er ist der richtige Ort für die Uhr und den Auslöser.
+Die Richtung der Abhängigkeiten bleibt dabei erhalten: `worker/` importiert aus
+`embed/`, nie umgekehrt. Der Entlader ruft also nicht in den Poller hinein,
+sondern der Poller fragt bei seinem Leerlaufdurchgang, ob er seinen Cutter
+fallen lassen soll. Diesen Durchgang hat er schon (`_idle_announced`,
+`run_once`).
+
+### B.3 Gibt Python den Speicher überhaupt an das Betriebssystem zurück
+
+Hier ist Ehrlichkeit wichtiger als eine gute Nachricht. Die Kette hat drei
+Glieder, und nur das erste ist sicher.
+
+**Glied 1, Python: `del` allein genügt nicht.** Ein onnxruntime-Contributor
+schreibt in microsoft/onnxruntime#14590 wörtlich: "You might need to trigger
+python garbage collection. `del` just removes a reference to it, sort of like
+assigning a null." Der Entlader braucht also ein `gc.collect()` nach dem Lösen
+der Referenzen, sonst hält ein Referenzzyklus im Python-Wrapper die native
+Session am Leben. **HIGH**, direkte Maintainer-Aussage.
+
+**Glied 2, onnxruntime: die Arena ist bei uns schon aus.**
+`embed/model.py::_open_session` setzt `options.enable_cpu_mem_arena = False`. Das
+ist für dieses Feature ein Glücksfall, den v1.0 aus einem anderen Grund eingebaut
+hat: ohne Arena gehen die Initializer direkt über `malloc`/`new` statt in einen
+Pool, der Speicher nie zurückgibt. Das ORT-Gegenstück dazu ist
+`session.use_device_allocator_for_initializers`, dessen Beschreibung genau diese
+Wirkung nennt ("allocation is made using malloc/new"). **Für unsere Konfiguration
+ist dieser Schalter deshalb überflüssig**, nicht zu ergänzen. **MEDIUM**,
+abgeleitet aus der Doku, nicht selbst gemessen.
+
+**Gegenbeleg, der im Plan stehen muss:** microsoft/onnxruntime#26831 ist offen
+und beschreibt den umgekehrten Fall: RSS wächst über wiederholtes Anlegen und
+Zerstören von Sessions, `ReleaseSession` und `ReleaseEnv` helfen nicht, und der
+Melder hat Arena an *und* aus, Memory-Pattern an *und* aus sowie mimalloc per
+`LD_PRELOAD` ohne Erfolg probiert (gemeldet gegen ORT 1.23.2). Das ist kein
+Beweis gegen unser Vorhaben, aber es ist der Beweis, dass die Behauptung
+"Session weg, Speicher weg" **nicht als gegeben angenommen werden darf**.
+**Status: unverifiziert, muss gemessen werden.**
+
+**Glied 3, glibc: der Allokator entscheidet, nicht wir.** Zwei dokumentierte
+Mechanismen aus den glibc-Manpages, beide HIGH:
+
+- `malloc_trim(0)` versucht, freien Speicher am oberen Ende des Heaps
+  zurückzugeben, und "since glibc 2.8 this function frees memory in all arenas
+  and in all chunks with whole free pages" (`malloc_trim(3)`). Es räumt also auch
+  innen liegende, vollständig freie Seiten und nicht nur den Heap-Gipfel. Das ist
+  genau der Fall eines am Stück fallengelassenen Tokenizers.
+- `M_MMAP_THRESHOLD` steht per Default auf 128 KiB und ist **dynamisch**: "When
+  blocks larger than the current threshold are freed, the threshold is adjusted
+  upward to the size of the freed block", gedeckelt auf
+  `DEFAULT_MMAP_THRESHOLD_MAX` (auf 64 Bit 32 MiB). Die Dynamik schaltet sich ab,
+  sobald `mallopt()` mit `M_TRIM_THRESHOLD`, `M_TOP_PAD`, `M_MMAP_THRESHOLD` oder
+  `M_MMAP_MAX` gerufen wird (`mallopt(3)`).
+
+Daraus folgt eine Vorhersage, die die Messung prüfen kann: sehr grosse
+Einzelblöcke (die Embedding-Matrix von e5-small liegt deutlich über 32 MiB)
+werden von glibc per `mmap` bedient und kommen beim `free` **immer** zurück. Die
+vielen kleinen Blöcke des Tokenizer-Vokabulars (250.002 Einträge) liegen im Heap
+und kommen nur mit `malloc_trim(0)` zurück. Wiederholte Lade-Entlade-Zyklen
+könnten durch die dynamische Schwelle mit der Zeit schlechter werden.
+
+**Die Rezeptur, die daraus folgt, ohne neue Abhängigkeit:**
+
+```python
+# stdlib, kein Paket
+import ctypes
+import gc
+
+gc.collect()
+try:
+    ctypes.CDLL("libc.so.6").malloc_trim(0)   # glibc, python:3.13-slim-trixie
+except (OSError, AttributeError):
+    pass                                      # fremde libc: stiller No-Op
+```
+
+Der Schutzschalter ist Pflicht und nicht Kosmetik: auf einer libc ohne
+`malloc_trim` darf der Entlader nicht die Suche mitnehmen. Das ist dieselbe
+Haltung, die `extract/ocr.py` gegenüber einem fehlenden tesseract einnimmt.
+
+### B.4 Thread-Sicherheit, und warum sie hier billiger ist als erwartet
+
+Die gefährliche Frage lautet: was passiert, wenn der Entlader die Session fallen
+lässt, während ein Suchthread mitten in `session.run()` steckt.
+
+**Antwort: nichts, und zwar wegen der bestehenden Codeform.**
+`EmbeddingModel._embed` bindet `engine = self._load()` an eine lokale Variable,
+bevor die Batch-Schleife läuft, und `_run_encoded(engine, ...)` hält diese
+Referenz. Ein `self._engine = None` aus einem anderen Thread nimmt nur die
+Referenz des Objekts weg; CPython zählt Referenzen, das `_Engine`-dataclass wird
+erst freigegeben, wenn der laufende Batch seine lokale Referenz loslässt. Kein
+Segfault, keine Sperre um `run()` nötig. Die Entladung ist in diesem Fall
+lediglich um einen Batch verzögert, was genau richtig ist.
+
+Was der Entlader trotzdem braucht:
+
+- `EmbeddingModel._lock` (das bestehende `RLock`) um das Nullsetzen, damit er
+  sich nicht mit `_load()` überkreuzt. Die Sperre liegt heute schon um den
+  Ladepfad, dieselbe Sperre, derselbe Grund.
+- Einen Generationszähler oder eine Prüfung "ist das noch dieselbe Instanz",
+  damit ein Entladen, das mit einem gleichzeitigen Laden kollidiert, nicht die
+  frisch geladene Engine wegwirft.
+- Der Aufruf aus der Lifespan-Task geht über `asyncio.to_thread`, damit ein kurz
+  blockierendes `gc.collect()` oder `malloc_trim` nie den Event Loop und damit
+  `/heartbeat` anhält. Das ist die Hausregel des Projekts und steht so im Kopf
+  von `worker/poller.py`.
+- `INDEX_WORKERS=1` ändert daran nichts: die beiden Nutzer sind der Poller und
+  der Suchpfad, nicht zwei Indexworker. Sie waren schon vor diesem Feature
+  gleichzeitig unterwegs, sonst bräuchte `EmbeddingModel` die Sperre nicht.
+
+`load_count()` bleibt monoton und wird **nicht** zurückgesetzt. Die Zählung "ein
+Laden pro Prozess" aus v1.1 wird durch dieses Feature bewusst ungültig und muss
+in `tools/one_load.py` und dessen Gate neu formuliert werden, sonst geht das Gate
+rot, ohne dass etwas kaputt ist. Das ist eine der wenigen Stellen, an der v1.2
+eine v1.1-Zusage anfasst, und sie gehört ausdrücklich in den Plan.
+
+### B.5 Leerlauf-Erkennung: die dritte Task, kein Scheduler
+
+`main.lifespan` startet heute zwei langlebige Tasks mit je einem `asyncio.Event`
+als Stoppsignal (`Poller.run`, `_guarded_reconcile`). Eine dritte, sehr kleine
+Task nach demselben Muster ist der billigste und im Repository bereits belegte
+Weg:
+
+- monotoner Zeitstempel `last_use`, gesetzt in `EmbeddingModel._embed` (deckt
+  Suche und Indexspur in einer Zeile ab, weil beide durch diese Methode gehen)
+- Takt alle 30 bis 60 Sekunden, `asyncio.sleep` gegen das Stopp-Event
+- Entladen, wenn `monotonic() - last_use > FINDLING_EMBED_IDLE_SECONDS` **und**
+  der Poller nicht gerade an Arbeit ist. Die zweite Bedingung ist keine Feinheit:
+  mitten in einem Indexlauf zu entladen, bedeutet, die Gewichte Sekunden später
+  wieder zu laden. Der Poller weiss das über seinen eigenen Leerlauf-Zustand, den
+  er schon führt.
+
+**Explizit nicht:** APScheduler, `threading.Timer`, ein Cron im Container, ein
+zweiter Prozess für die Uhr. Alle vier wären eine neue Abhängigkeit oder ein
+neuer Lebenszyklus für eine `while`-Schleife mit einem `sleep`.
+
+### B.6 Das grösste Risiko des Features hat nichts mit Speicher zu tun
+
+`ExAppService::REQUEST_TIMEOUT_SECONDS` steht bei **1,5 Sekunden** pro Aufruf, in
+der Unified Search wie auf der Ergebnisseite. Ein kaltes Laden der Gewichte
+kostet auf der ARM-Box Hunderte von Millisekunden bis Sekunden, und es passiert
+heute genau einmal pro Containerleben. **Mit Leerlauf-Entladung passiert es immer
+wieder, und zwar immer genau dann, wenn nach einer Pause jemand sucht**, also in
+dem Moment, in dem ein Nutzer wieder hinschaut.
+
+Läuft der Ladevorgang in den Timeout, bekommt der Nutzer keine schlechteren
+Treffer, sondern den Fehlerblock "Die Suche antwortet gerade nicht". Das wäre ein
+spürbarer Rückschritt, der als Speicheroptimierung verkauft würde.
+
+**Empfohlene Bauform, ohne neue Technik:** Der Suchpfad lädt die Engine nicht
+mehr synchron. Ist sie kalt, beantwortet `one_round` diese eine Suche rein
+lexikalisch (der Pfad existiert, ist getestet und heisst
+`EmbedOutcome.unavailable()` mit RRF als Identität auf der lexikalischen Liste)
+und stösst das Laden im Hintergrund an. Die erste Suche nach einer Pause ist dann
+minimal schlechter statt möglicherweise leer, die zweite ist voll da. Das ist
+eine Architekturentscheidung, kein Paket, und sie sollte vor dem Bau getroffen
+und nicht nach der ersten Beschwerde nachgerüstet werden.
+
+Die Messphase auf der Box muss dazu **eine** Zahl liefern: wie lange dauert ein
+kaltes Laden der Gewichte auf m7g.large. Ohne diese Zahl ist der Default für
+`FINDLING_EMBED_IDLE_SECONDS` geraten.
+
+### B.7 Option B, falls die Messung zeigt, dass der Speicher nicht zurückkommt
+
+Wenn `gc.collect()` plus `malloc_trim(0)` auf der Box nur einen Bruchteil der
+415 MB zurückgibt, ist die Antwort **nicht** eine Allokator-Bibliothek (jemalloc
+oder mimalloc per `LD_PRELOAD`), sondern die Prozessgrenze. Ein beendeter Prozess
+gibt garantiert 100 Prozent zurück, ohne Allokator-Theorie.
+
+Das Projekt hat dieses Muster bereits zweimal: OCR läuft als Subprozess
+(`extract/ocr.py`), und `extract/sandbox.py` setzt Adressraumgrenzen für
+Kindprozesse. Eine langlebige Embedding-Kindprozess-Instanz, die bei Leerlauf
+beendet und bei Bedarf neu gestartet wird, ist dieselbe Bauform.
+
+Der Preis ist hoch und ehrlich zu benennen: er widerruft teilweise EFF-01/02 aus
+v1.1 (eine Engine pro Prozess), er braucht einen Vektor-Transport über die
+Prozessgrenze, und der Kaltstart wird teurer statt billiger, was Abschnitt B.6
+verschärft. **Deshalb: Option B nur, wenn die Messung Option A widerlegt, und
+nicht als Parallelentwurf mitbauen.**
+
+### B.8 Messwerkzeug: alles da, nichts zu beschaffen
+
+| Werkzeug | Ort | Was es liefert |
+|---|---|---|
+| `rss_bytes()` | `index/wordlist.py:351`, liest `/proc/self/status` direkt statt psutil zu ziehen | anon RSS im Prozess, für Vorher und Nachher im Test |
+| `scripts/ops/rss_sampler.sh` | liest `memory.current` aus beiden cgroup-Layouts | Zeitreihe je Container auf der Box |
+| `scripts/ops/rss_digest.py` | fasst die CSVs mit Phasengrenzen zusammen | die Tabellen, die der Messbericht braucht |
+| `tools/one_load.py` | fährt Suchpfad und zweite Spur echt an | Ladezähler, muss für dieses Feature umformuliert werden (B.4) |
+
+**psutil bleibt draussen.** Der Kommentar in `wordlist.py:346` ("/proc/self/status
+is read directly instead of adding psutil for one number") ist weiterhin richtig,
+und dieses Feature braucht dieselbe eine Zahl.
+
+### B.9 Konfiguration
+
+Eine neue Variable im Muster von `config.py`, gelesen über das bestehende
+`_bounded_int_from_environment`:
+
+| Variable | Default-Vorschlag | Bedeutung |
+|---|---|---|
+| `FINDLING_EMBED_IDLE_SECONDS` | 900, `0` schaltet ab | Leerlauf bis zur Entladung |
+
+Ein einziger Schalter, kein zweiter für "nur Suchseite" oder "nur Indexspur".
+Die ExApp-`info.xml` führt Admin-Einstellungen über `<environment-variables>`,
+dort gehört die Variable dokumentiert.
+
+**Kein sechster Engine-Zustand.** Nach der Entladung liefert `engine_state()` von
+selbst wieder `cold`, weil `held.loaded` falsch wird und alle vorrangigen Zweige
+nicht greifen. Ein neues Wort "unloaded" hiesse: `ENGINE_STATES` erweitern, das
+Gate anfassen, drei Kataloge und die PHP-Seite nachziehen, für einen kosmetischen
+Unterschied auf der Adminseite. Nicht tun. Falls der Owner den Unterschied doch
+will, ist das ein eigener Posten mit eigenem Preis.
+
+---
+
+## Installation
+
+```bash
+# Backend: nichts. Keine Zeile in backend/pyproject.toml fuer diese zwei Features.
+# PHP:     nichts. Kein composer require, kein npm, kein Build-Schritt.
+```
+
+Zwei Aufräumbefunde, die bei der Gelegenheit auffielen und **nicht** Teil der
+Features sind (Härtungskandidaten, vor einem Eingriff selbst nachprüfen):
+
+- `fastembed==0.8.0` ist in `backend/pyproject.toml` gepinnt, wird aber in
+  `backend/src/` nirgends importiert; `embed/model.py` begründet ausdrücklich,
+  warum onnxruntime direkt benutzt wird. Die Abhängigkeit zieht huggingface-hub,
+  requests und weiteres in ein Image, das offline sein soll. Kandidat für den
+  Härtungsblock, mit `probe_image_search.py` als Gegenprobe.
+- `numpy` wird in `embed/model.py` direkt importiert, steht aber nicht als direkte
+  Kante in `pyproject.toml` (kommt über onnxruntime herein). Das ist genau der
+  Fall, den der Pillow-Kommentar in derselben Datei als "die Version, die still
+  verschwindet" beschreibt.
+
+## Alternatives Considered
+
+| Empfohlen | Alternative | Wann die Alternative besser ist |
+|---|---|---|
+| `order_by_field="mtime"` | Relevanzfenster ziehen und die Seite in Python nach `mtime` sortieren | Nie. Es sortiert die hundert relevantesten statt aller Treffer und verspricht dem Nutzer etwas anderes, als es liefert |
+| Filter über ein Wire-Feld | PHP hängt `type:pdf` an den Suchtext | Wenn absolut keine Backend-Änderung möglich wäre. Kostet die Semantik, verfälscht den Snippet-Aufruf und schreibt den Nutzertext um |
+| Endungsliste vom PHP | Gruppen-Vokabel im Backend, PHP schickt "documents" | Wenn ein zweiter Client denselben Filter bräuchte. Steht ausdrücklich nicht auf der Roadmap |
+| In-Prozess-Entladung plus `malloc_trim` | Embedding-Subprozess, der beendet wird | Nur wenn die Messung zeigt, dass der RSS nicht zurückkommt (B.7) |
+| In-Prozess-Entladung | jemalloc oder mimalloc per `LD_PRELOAD` | Nie hier. Ein fremder Allokator im Image betrifft tantivy, SQLite, tesseract und ORT gleichzeitig und macht jede bestehende Messung ungültig. ORT#26831 berichtet ausserdem, dass mimalloc dort nichts geholfen hat |
+| Dritte `asyncio`-Task | APScheduler, `threading.Timer` | Nie. Eine Schleife mit `sleep` braucht keine Bibliothek, und ein Timer-Thread umgeht die bestehende Stopp-Event-Mechanik der Lifespan |
+| onnxruntime 1.29.0 halten | 1.30.0 (10.09.2026) | Wenn die Messung zeigt, dass Session-Zerstörung Speicher hält. 1.30.0 enthält "Fixed prepacked-weight reference lifetimes" (#32040) und "Released external-data loaders after graph initialization" (#32502), beides Lebensdauer-Themen. Ein Runtime-Sprung erzwingt aber die Wiederholung der Modellqualitäts-Gates und der ARM-Wheel-Prüfung, also nicht im Feature-Fenster |
+
+## What NOT to Use
+
+| Vermeiden | Konkretes Problem | Stattdessen |
+|---|---|---|
+| `Searcher.aggregate()` für Typ-Zähler | Zählt vor dem Rechtefilter, ist das Zähl-Orakel T-02-93 | Filterschaltflächen ohne Zahlen |
+| `ext` oder `name` zu `fast=True` machen | Schema-Änderung, Indexversion, Reindex bei jeder Bestandsinstallation, widerspricht D-04 | Termfilter für `ext`, Sortierung nur nach `mtime` |
+| `psutil` für die RSS-Messung | Ein Paket für eine Zahl, die `/proc/self/status` hergibt | `rss_bytes()` in `index/wordlist.py` |
+| `del session` ohne `gc.collect()` | Referenzzyklen im Python-Wrapper halten die native Session (ORT#14590) | Referenzen lösen, dann `gc.collect()`, dann `malloc_trim(0)` |
+| `ctypes.CDLL("libc.so.6")` ohne Schutzschalter | Auf einer libc ohne `malloc_trim` nimmt der Entlader die Suche mit | `try/except (OSError, AttributeError)` mit stillem No-Op |
+| `session.use_device_allocator_for_initializers=1` | Wirkungslos, solange `enable_cpu_mem_arena=False` gesetzt ist: die Initializer laufen dann ohnehin über malloc/new | Nichts ergänzen |
+| Vue, `@nextcloud/vue`, eine JSON-Route für die Ergebnisseite | Bricht den Vertrag "vollständig ohne Skript" aus `templates/search.php` und führt einen Build-Schritt in die PHP-Hälfte ein | `<select>` im bestehenden GET-Formular |
+| Synchrones Laden der Gewichte im Suchpfad nach der Entladung | 1,5-s-Timeout je Aufruf, der Nutzer sieht den Fehlerblock statt schlechterer Treffer | Kalte Suche lexikalisch beantworten, im Hintergrund aufwärmen |
+| Cursorpfad über einen Filterwechsel hinweg mitschleppen | Derselbe Offset zeigt in eine andere Liste, der Nutzer springt in die Mitte | Bei Filter- oder Sortierwechsel auf `[0]` zurück |
+
+## Version Compatibility
+
+| Paket | Stand im Repo | Aktuell auf PyPI (14.09.2026) | Handlung |
+|---|---|---|---|
+| `tantivy` | 0.26.0 | 0.26.0 (29.04.2026) | keine, `order_by_field` ist in dieser Version vorhanden |
+| `onnxruntime` | 1.29.0 | 1.30.0 (10.09.2026), cp313 `manylinux_2_28_aarch64` vorhanden | halten, siehe Alternatives |
+| `tokenizers` | 0.23.x über die Kette | 0.23.2 (03.09.2026) | keine |
+| `sqlite-vec` | 0.1.9 | 0.1.9 (31.03.2026), danach nur Prereleases | keine |
+| `semantic-text-splitter` | 0.32.0 | 0.32.0 (16.06.2026) | keine |
+| `fastembed` | 0.8.0 | 0.8.0 (23.03.2026) | zur Entfernung prüfen, siehe Installation |
+| `python:3.13-slim-trixie` | Basis-Image | glibc, also `malloc_trim` vorhanden | keine, aber der Schutzschalter bleibt Pflicht |
+
+## Offene Punkte, die nur die Messung schliessen kann
+
+1. **Wie viel RSS gibt die Entladung wirklich zurück**, getrennt nach Gewichten
+   und Tokenizer, jeweils mit und ohne `malloc_trim(0)`. Ohne diese Zahl ist das
+   Feature eine Behauptung. Vier Messpunkte, ein Skript, gehört in die
+   Box-Anfahrt.
+2. **Wie teuer ist ein kaltes Laden auf m7g.large**, in Millisekunden, gegen die
+   1,5-Sekunden-Schranke des Proxy-Aufrufs. Entscheidet den Default von
+   `FINDLING_EMBED_IDLE_SECONDS` und die Frage aus B.6.
+3. **Verhalten über mehrere Lade-Entlade-Zyklen.** Die dynamische
+   `M_MMAP_THRESHOLD`-Anpassung von glibc lässt vermuten, dass Zyklus 5 nicht
+   aussieht wie Zyklus 1. Fünf Zyklen messen, nicht einen.
+4. **tantivy `order_by_field` und Dokumente ohne Wert in der Spalte.** Der Writer
+   schreibt `mtime` bedingungslos, das Risiko ist also theoretisch, aber der Plan
+   sollte einen Test haben, der ein Dokument ohne `mtime` in den Index legt und
+   prüft, ob es unter Datums-Sortierung verschwindet.
+5. **Kostet `order_by_field` messbar mehr als die Score-Sortierung** bei 52.111
+   Dokumenten. Erwartung: nein, es ist ein Spaltenlesevorgang. Eine Messung im
+   Rahmen der Box-Anfahrt ist billig.
+
+## Sources
+
+- `quickwit-oss/tantivy-py`, Tag `0.26.0`, `tantivy/tantivy.pyi` , exakte Signatur von `Searcher.search`, `Order`-Enum, `SearchResult.hits` als `(order_key, DocAddress)` (HIGH)
+- `/quickwit-oss/tantivy-py` über Context7, `docs/api/tantivy/tantivy.md` , "The field must be declared as a fast field", unterstützte Sortiertypen, `aggregate()` (HIGH)
+- microsoft/onnxruntime Issue #14590 , Maintainer-Aussage "del just removes a reference ... you might need to trigger python garbage collection" (HIGH)
+- microsoft/onnxruntime Issue #26831 (offen) , RSS wächst trotz `ReleaseSession` und `ReleaseEnv`, Arena an und aus ohne Wirkung, mimalloc ohne Wirkung, gemeldet gegen 1.23.2 (MEDIUM, Einzelmeldung, aber als Gegenbeleg belastbar)
+- microsoft/onnxruntime, `onnxruntime_session_options_config_keys.h` und Doku zu `session.use_device_allocator_for_initializers` , "allocation is made using malloc/new" (MEDIUM)
+- ONNX Runtime Release Notes v1.30.0 , #32040 prepacked-weight reference lifetimes, #32502 external-data loaders (MEDIUM)
+- man7.org, `malloc_trim(3)` , "since glibc 2.8 this function frees memory in all arenas and in all chunks with whole free pages" (HIGH)
+- man7.org, `mallopt(3)` , dynamische `M_MMAP_THRESHOLD`-Anpassung, `DEFAULT_MMAP_THRESHOLD_MAX`, Abschaltbedingung (HIGH)
+- PyPI JSON-API für tantivy, onnxruntime, tokenizers, sqlite-vec, semantic-text-splitter, fastembed , Versionen, Releasedaten, Wheel-Matrix, Stand 14.09.2026 (HIGH)
+- Eigener Bestand: `backend/src/findling/index/schema.py`, `index/search.py`, `index/writer.py`, `query/rewrite.py`, `api/search.py`, `embed/model.py`, `embed/engine.py`, `embed/chunker.py`, `worker/poller.py`, `main.py`, `config.py`, `extract/dispatch.py`, `php/lib/Controller/PageController.php`, `php/lib/Service/ExAppService.php`, `php/templates/search.php` (HIGH)
+- `docs/measurements/2026-09-vergleichsmessung-m7g/README.md`, Abschnitt 5 , 103,2 MB Grundlast, plus 415,0 MB bei der ersten Suche, 542,8 MB Cutter-Aufschlüsselung (HIGH, eigene Messung)
+
+---
+*Stack-Recherche v1.2 für: Dateityp-Filter, Sortierung, Modell-Entladung im Leerlauf*
+*Recherchiert: 2026-09-14*
+
+---
+---
+
+# Stack-Bestand v1.0 (Recherche vom 15.08.2026, weiterhin gültig)
+
 **Domain:** Nextcloud-ExApp fuer Volltext-, OCR- und Semantiksuche (Python, CPU-only, 4-8 GB RAM, amd64 + arm64)
 **Researched:** 2026-08-15
 **Confidence:** HIGH fuer Versionen, Lizenzen, Plattform-Wheels und die Nextcloud-Seite; MEDIUM fuer RAM-Schaetzungen und Qualitaetsaussagen zu deutschen Embeddings

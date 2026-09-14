@@ -1,195 +1,186 @@
 # Project Research Summary
 
-**Project:** Findling (Nextcloud Zero-Config-Suche ExApp)
-**Domain:** Nextcloud-ExApp fuer Volltext-, OCR- und Semantiksuche, Zielgruppe Selfhoster und kleine Organisationen auf 4-8 GB RAM (oft ARM)
-**Researched:** 2026-08-15
-**Confidence:** HIGH
+**Project:** Findling (Nextcloud-Such-ExApp)
+**Domain:** Ausbau einer ausgelieferten Nextcloud-ExApp (1.1.0 im Store) um Dateityp-Filter/Sortierung auf der eigenen Ergebnisseite, Modell-Entladung im Leerlauf und eine begleitende Messkampagne auf Zielhardware (ARM, 4 GB RAM)
+**Researched:** 2026-09-14
+**Confidence:** HIGH für Code-Integration und Versionsstände, MEDIUM für Freigabeketten-Theorie (Allokator/onnxruntime), LOW für alles, was nur eine Messung auf der Zielbox beantworten kann
 
 ## Executive Summary
 
-Findling repariert die kaputte Nextcloud-Suche mit einem einzigen ExApp-Container (OCR, deutsches Volltext-Stemming, semantische Suche) plus einer schlanken PHP-Companion-App, die den Unified-Search-Provider registriert und an den Container proxied. Das ist notwendig, weil AppAPI selbst keine Suchanbieter registrieren kann, wie die Recherche aus dem Nextcloud-Quellcode zweifelsfrei bestaetigt. Vorbild fuer das Proxy-Muster ist Context Chat, das aber selbst keinen Search-Provider registriert. Die Kombination "IProvider in PHP ruft eine ExApp per exAppRequest" existiert nirgends im Oekosystem als fertiges Beispiel und ist damit das groesste Integrationsrisiko des Projekts, weshalb sie im Bauplan konsequent an erster Stelle steht.
+Milestone v1.2 "Messbeleg und Ausbau" ist in allen vier Recherchen dasselbe Bild: drei Erweiterungen entlang bestehender Nahtstellen, keine neue Komponente, kein Reindex, keine neue Laufzeit-Abhängigkeit. Der Dateityp-Filter und die Datumssortierung sitzen auf Feldern, die seit v1.0 im Tantivy-Schema stehen (`ext` als Term, `mtime` als Fast-Field, `index/schema.py:105/114`); die Modell-Entladung ist `del`, `gc.collect()`, ein `ctypes`-`malloc_trim(0)` und eine dritte `asyncio`-Task im bestehenden Lifespan; die Messphase ist zu grossen Teilen Wiederverwendung von Werkzeug, das die letzte Anfahrt am 10.09.2026 bereits gefahren und geeicht hat. Wer hier ein Paket ergänzt, hat mit hoher Wahrscheinlichkeit das falsche Problem gelöst.
 
-Die Recherche empfiehlt eine embedded Volltext-Engine statt eines zweiten Serverprozesses. Nach Owner-Entscheid ist das Tantivy (deutsches Snowball-Stemming, Kompositabehandlung, eingebaute Snippets), nicht FTS5, weil FTS5 kein deutsches Stemming beherrscht und Meilisearch als Sidecar das Zero-Config-Versprechen bricht. Vektorspeicher und Zugriffsrechte bleiben in SQLite mit sqlite-vec: der ACL-Filter wird als Kandidaten-Vorfilter direkt in SQL gezogen, und die letzte Instanz ueber Sichtbarkeit bleibt ein finaler Recheck in der PHP-Companion-App gegen getUserFolder()->getFirstNodeById(). Das trennt sauber zwei Fragen: Tantivy und SQLite liefern schnelle Kandidaten, Nextcloud selbst entscheidet endgueltig, wer was sehen darf. OCR laeuft als direkter Tesseract-Subprozessaufruf auf pypdfium2-gerenderten Seiten, nie als Rueckschreib-Operation auf die Originaldatei, weil genau das die Vorgaenger-App (files_fulltextsearch_tesseract) zum Datenverlust gebracht hat. Embeddings sind lokal, CPU-only, quantisiert (multilingual-e5-small, int8, MIT-lizenziert, ins Image gebacken).
+Der rote Faden durch alle vier Dokumente ist zugleich die grösste Falle: naheliegende, schnell gebaute Lösungen brechen still eine v1.0/v1.1-Zusage, ohne dass ein Fehler sichtbar würde. Ein UI-Filter, der `type:pdf` in die Suchzeile schreibt, schaltet über `carried_operators`/`FILETYPE` die semantische Suchhälfte für jede gefilterte Anfrage ab (STACK.md A.4/A.5, FEATURES.md Anti-Features, ARCHITECTURE.md A.2, PITFALLS.md Pitfall 2) – die einzig saubere Lösung ist ein eigenes, strukturiertes Request-Feld, das denselben `Occur.Must`-Mechanismus nutzt, den `_mtimes_of()` für die semantische Hälfte ohnehin schon abfragt (STACK.md nennt das "den wichtigsten Integrationsbefund dieses Teils"). Sortierung nach Datum ist ohne Reindex möglich, weil `mtime` bereits `fast=True` ist; Sortierung nach Name oder Grösse ist es nicht und wird von allen vier Dokumenten übereinstimmend aus v1.2 herausgehalten. Die Modell-Entladung hat zwei Speicherhalter statt einem, und ihr grösstes Risiko ist nicht Speicher, sondern die 1,5-Sekunden-Aufrufdecke, an der bereits einmal (10.09.2026, 14:05:17Z) eine echte Suche mit null Treffern gescheitert ist.
 
-Das groesste Risiko ist nicht fehlende Funktionalitaet, sondern Betriebsrobustheit: Das offizielle fulltextsearch-Framework ist nicht an Features gestorben, sondern an haengenden Indexlaeufen ohne Fortschrittsspeicher, stillen Ausfaellen, Datenverlust durch die OCR-Zusatzapp und verpassten Nextcloud-Major-Releases. Diese Fehlermodi sind fuer Findling keine "Polish spaeter"-Punkte, sondern Kernfunktionalitaet: Fortschritt gehoert von Tag eins in eine Datenbank statt in den Prozessspeicher, jedes Ergebnis muss vor der Snippet-Ausgabe eine Rechtepruefung durchlaufen, und Events sind ein Beschleuniger, niemals die Wahrheitsquelle, sie muessen durch einen periodischen Abgleichlauf gegen oc_filecache abgesichert werden. Ein zweiter, gleichrangiger Risikoblock ist die Nextcloud-Produktentwicklung selbst: Das fulltextsearch-Oekosystem wurde am 12.08.2026 von Nextcloud GmbH reaktiviert (35.0.0beta1), womit "wir sind die einzige lebende Suche" als Positionierung entfaellt. Was traegt: kein Elasticsearch, eingebautes OCR, kleines RAM-Budget, sichtbarer Indexstatus und Pro-Datei-Diagnose, Punkte, die weder das reaktivierte Framework noch Context Chat (12 GB RAM-Bedarf, kein OCR, respektiert files_accesscontrol nicht) liefern.
+Das grösste ungelöste Spannungsfeld ist die Messphase selbst: der vorgeschlagene Zeit-/Kostendeckel für die eine bezahlte Box-Anfahrt ist kleiner als der zuletzt gemessene Volllauf allein, und ein unentdecktes Cron-Intervall hat in v1.1 rund 40 Prozent Laufzeit verschluckt, ohne dass eine der drei anderen Recherchen dieses Risiko im gleichen Detailgrad wie PITFALLS.md aufgreift. Der Plan muss diesen Deckel vor der Anfahrt neu rechnen, die Entladung hinter einen ab Werk ausgeschalteten Schalter legen (sonst lässt sich in einer Anfahrt kein A/B-Beleg führen) und die Bauordnung strikt einhalten: Werkzeug/Runbook, dann Backend-Filter/Sortierung, dann PHP-Oberfläche, dann Entladung hinter dem Schalter, erst dann die eine Box-Anfahrt, zuletzt die Härtung.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Die Engine-Entscheidung ist per Owner-Grilling final aufgeloest: Tantivy als Volltext-Engine im ExApp-Prozess (nicht FTS5, nicht Meilisearch), kombiniert mit einem SQLite-ACL-Vorfilter auf Kandidatenlisten und einem finalen PHP-Recheck als Sicherheitsgrenze. Die urspruengliche STACK-Empfehlung (Tantivy wegen deutschem Stemming) und die urspruengliche ARCHITECTURE-Empfehlung (FTS5 in einer Einzeldatei wegen des SQL-Joins fuer ACL) sind damit zusammengefuehrt: Tantivy liefert die Sprachqualitaet, SQLite bleibt Traeger von Vektoren, Metadaten und der ACL-Tabelle, und der ACL-Join findet als Vorfilter auf Kandidaten-IDs statt, nicht als Tantivy-interner Join. Alle anderen Architekturmuster (Pull-Queue, Mount-Crawl, Content-Gateway, deklarative Access-Aktionen, Bauteihenfolge) bleiben unveraendert gueltig.
+Keine neuen Pakete, weder Backend noch PHP (STACK.md, "Installation": "Backend: nichts... PHP: nichts"). Die Sortierung nutzt `Searcher.search(..., order_by_field="mtime", order=Order.Desc, offset=...)` aus der bereits installierten `tantivy` 0.26.0 (Signatur verifiziert gegen `tantivy/tantivy.pyi`). Die Modell-Entladung braucht nur Stdlib: `gc.collect()` gefolgt von `ctypes.CDLL("libc.so.6").malloc_trim(0)`, mit Schutzschalter gegen fremde libc (`try/except (OSError, AttributeError)`). `onnxruntime` bleibt bewusst bei 1.29.0 statt 1.30.0 (10.09.2026 erschienen), weil ein Runtime-Sprung die Modellqualitäts-Gates und die ARM-Wheel-Prüfung erneut auslösen würde und im Feature-Fenster nichts beiträgt, das nicht auch über die Freigabekette lösbar wäre.
 
-**Core technologies:**
-- Tantivy 0.26.0 (Python-Bindings): Volltext-Engine mit deutschem Snowball-Stemming, Stoppwoertern, Komposita-Filter und eingebautem SnippetGenerator, der einzige Kandidat, der deutsche Sprachqualitaet ohne Eigenbau liefert
-- SQLite + sqlite-vec 0.1.9: Vektorspeicher (int8, brute-force-KNN) plus ACL-Tabelle und Statusdaten, ein Datenbankfile, ACL-Filter als SQL-Join beziehungsweise Vorfilter, kein zweites Konsistenzsystem
-- fastembed 0.8.0 + intfloat/multilingual-e5-small (384 dim, MIT): lokale, CPU-only Embeddings, selbst int8-quantisiert und ins Image gebacken (kein Laufzeit-Download, HF_HUB_OFFLINE=1)
-- Tesseract 5.5.0 (Subprozess) + pypdfium2 5.13.0: OCR nur wo noetig (Text-Layer-Erkennung pro Seite), kein OCRmyPDF im Indexpfad, Original bleibt bitweise unveraendert
-- nc_py_api[app] >= 0.30.3 (async-only) + FastAPI + uvicorn: ExApp-Geruest, Sync-API faellt in 0.31.0 weg
-- python:3.13-slim-trixie (glibc, nicht Alpine): einziges Basisimage mit Wheels fuer alle Kernabhaengigkeiten auf aarch64 und cp313 ohne Compiler im Build
-- PHP-Companion-App (IProvider, nie IExternalProvider) + IFilteringProvider: einziger Weg zur Unified Search, da AppAPI selbst keine Suchanbieter registrieren kann
+**Kerntechnologien:**
+- `tantivy` 0.26.0 (unverändert) – liefert `order_by_field` und den Fast-Field-Mechanismus, den Sortierung und Filter brauchen, ohne Schema-Änderung
+- Stdlib `gc` + `ctypes` – die gesamte Freigabekette der Modell-Entladung, keine neue Abhängigkeit
+- `onnxruntime` 1.29.0 (gehalten) – `enable_cpu_mem_arena=False` ist bereits gesetzt und ist die Voraussetzung dafür, dass eine Freigabe dem Betriebssystem überhaupt etwas zurückgibt
+- `python:3.13-slim-trixie` (Basis-Image, unverändert) – glibc mit `malloc_trim`, das ist Pflicht für die Freigabekette
+
+Zwei Aufräumbefunde nebenbei, ausdrücklich nicht Teil des Milestones: `fastembed==0.8.0` ist gepinnt, wird aber nirgends importiert (Kandidat zur Entfernung); `numpy` ist eine indirekte, nicht deklarierte Abhängigkeit.
 
 ### Expected Features
 
-Das offizielle fulltextsearch-Framework wurde am 12.08.2026 reaktiviert, was die reine "wir leben noch"-Positionierung entwertet. Die verbleibenden Differenzierer sind eingebautes OCR ohne Originaldatei-Risiko, semantische Suche im 4-8-GB-Budget, und radikale Transparenz ueber den Indexstatus.
+**Must have (Launch v1.2):**
+- Typfilter mit geschlossener Gruppenliste (PDF, Dokumente, Tabellen, Präsentationen, Bilder, Text), ohne Trefferzähler, serverseitig ohne JavaScript
+- Ein Filtervokabular für UI-Gruppen und die bestehende `type:`-Textsyntax, nicht zwei
+- Sortierung Relevanz (Standard) und "Zuletzt geändert", mit Zweitschlüssel `file_id` gegen Zeitstempel-Gleichstand
+- Filter und Sortierung in der URL, defensiv gelesen, Cursorpfad wird bei jeder Änderung auf Seite 1 zurückgesetzt
+- Modell-Entladung nach Leerlauf, TTL als Umgebungsvariable, `0` schaltet ab, ab Werk aus für die Messphase
+- Erste Suche nach Entladung antwortet innerhalb der 1,5-Sekunden-Decke lexikalisch, Nachladen im Hintergrund
+- Wiederaufwärm-Kosten gemessen und ausgewiesen, nicht geschätzt
+- Migration für 1.2.0 (Pflicht, obwohl der Index kompatibel bleibt)
 
-**Must have (table stakes):**
-- Volltextsuche ueber PDF/Office/ODF/Text/Markdown inklusive Dateiname und Pfad
-- Berechtigungsfilter zur Suchzeit inklusive Nutzer-Shares, Gruppen-Shares, Team Folders, der haeufigste Funktionsbruch der Altapp
-- Inkrementelle Indexierung ueber Datei-Events inklusive Loeschen, Umbenennen, Verschieben, Papierkorb, Share-Aenderung
-- Sichtbarer Indexstatus (laeuft/pausiert/Fortschritt/Fehler) und Reindex-/Reset-Werkzeuge, fehlte bei der Altapp komplett
-- Ressourcendeckel (Worker-Anzahl, OCR-Drosselung, Resume nach Abbruch, kein OOM-Loop)
-- Minimale Query-Syntax (Phrase, +, -) und Unicode-/Umlaut-Robustheit
-
-**Should have (competitive):**
-- OCR automatisch, ohne Workflow-Konfiguration, Originaldatei bleibt unveraendert (starkes Vertrauensargument nach der Tesseract-App-Vorgeschichte)
-- Semantische Suche hybrid mit BM25 (RRF), findet Umschreibungen und deutsche Komposita
-- Zero-Config mit RAM-Deckel und ARM-Tauglichkeit als explizites Produktversprechen (Context Chat verlangt 12 GB)
-- Pro-Datei-Diagnose ("warum ist diese Datei nicht auffindbar") und Vorab-Schaetzung vor dem Erstindex
+**Should have (v1.x, nach Validierung):**
+- Zeitraumfilter `since`/`until` – repariert eine heute stumme Lücke (Unified-Search-Dialog verwirft Findling kommentarlos, sobald jemand dort einen Datumsfilter setzt, den `getSupportedFilters()` nicht anbietet)
+- "Älteste zuerst" als dritte Sortierung
+- Mimetype-Gruppen aus `files.mime` statt `ext`, falls Genauigkeit wichtiger wird als der bestehende Kommentar "no join against files"
 
 **Defer (v2+):**
-- Eigene Ergebnisseite mit Paginierung, Pfadfilter, Tags als Filter (v1.x, ausgeloest durch Nutzerfeedback)
-- Sprung zur Fundstelle im Viewer, weitere OCR-Sprachen, Mehrmandantenfaehigkeit, Federated Search (v2+)
-- Explizit Anti-Feature: RAG-Chat, Elasticsearch-Backend-Option, volle Lucene-Syntax, Rueckschreiben des OCR-Textlayers in die Originaldatei, Index komplett im RAM
+- Sortierung nach Name oder Grösse – kostet ein neues Fast-Field, `SCHEMA_VERSION`-Sprung, Vollreindex auf jeder Bestandsinstallation
+- Facettenzähler je Dateityp – wäre ein Zähl-Orakel vor dem Rechtefilter (T-02-93), von allen vier Dokumenten übereinstimmend ausgeschlossen
+- Personenfilter, Ordner-Einschränkung, geplantes Vorwärmen nach Zeitplan
 
 ### Architecture Approach
 
-Sechs Muster tragen das System: Pull- statt Push-Indexierung (Container holt Arbeit aus einer OCS-Queue ab, PHP-Cron kann nicht timeouten), Crawl pro Mount statt pro Nutzer mit Integer-Cursor auf fileid (Groupfolder werden einmal statt N-mal verarbeitet), Berechtigungen als schmale ACL-Tabelle im Index mit finalem PHP-Recheck (Zugriffsaenderungen kosten nur Zeilen-Inserts, keine Neuextraktion), ein Content-Gateway in der PHP-App statt WebDAV-Impersonation aus dem Container, sowie IProvider (nie IExternalProvider, das ist in der Unified Search standardmaessig ausgeschaltet).
+Alle drei Vorhaben hängen sich an bestehende Nahtstellen: der Filter/Sortier-Ausbau bleibt vollständig im Backend-Kandidatenpfad (`index/search.py::candidates`) und wird über zwei neue, optionale Felder in `SearchRequest`/`SnippetsRequest` transportiert; die PHP-Seite bleibt serverseitig gerendert, ohne Vue, ohne JSON-Route, ohne Build-Schritt. Die Modell-Entladung bekommt einen neuen, dritten Halter-Zustand in `embed/model.py`/`embed/engine.py` plus eine neue Freigabefunktion im Poller (`worker/poller.py`), ausgelöst von einer dritten Lifespan-Aufgabe in `main.py` (nicht vom Poller selbst, weil ein stummgeschalteter Poller `run_once` nie wieder betritt). Die Messphase ist überwiegend Wiederverwendung geeichter Skripte, mit genau einer inhaltlichen Werkzeugänderung (Fremdbestands-Messgrösse) und einem neuen Wiederaufwärm-Messwerkzeug.
 
-**Major components:**
-1. PHP-Companion-App (SearchProvider, Event-Listener, Crawl-Jobs, OCS-Queue-API, Content-Gateway), winzige, stabile Flaeche gegen NC-Major-Bruch
-2. ExApp-Container (Fetcher/Extract/OCR/Embed-Worker-Pools, getrennt von der HTTP-Ebene), Tantivy plus SQLite (Vektoren, ACL-Vorfilter, Status) im selben Prozess
-3. Reconcile-Job (periodischer ETag-/mtime-Abgleich), die Wahrheitsquelle, wenn Events verloren gehen
-4. Hybrid-Retrieval (Tantivy-Kandidaten + Vektor-Kandidaten, RRF-Fusion, ACL-Vorfilter, finaler PHP-Sichtbarkeitscheck vor jeder Snippet-Ausgabe)
+**Hauptkomponenten:**
+1. `query/rewrite.py::build_query(extensions=...)` – vereinigt Text-Operator und UI-Filter zu einer Query, ohne `carried_operators` zu berühren
+2. `index/search.py::candidates` – trägt sowohl den Sortierzweig (Fusionsfenster nach `mtime` statt RRF) als auch die Filterklausel; bleibt die einzige Stelle, an der Reihenfolge und Sichtbarkeit entstehen
+3. `embed/engine.py::release_if_idle()` + `worker/poller.py::release_the_cutter()` – zwei getrennte Freigabefunktionen für zwei getrennte Speicherhalter, orchestriert von einer neuen Lifespan-Aufgabe in `main.py`
+4. `php/lib/Controller/PageController.php` – erweitert um zwei defensiv gelesene, geschlossene Werte (`types`, `sort`), keine neue Route, kein neuer JSON-Kanal
 
 ### Critical Pitfalls
 
-1. Haengender Indexlauf ohne Fortschrittsspeicher: Fortschritt gehoert in eine Datenbank-Zustandsmaschine (pending/claimed/done/failed), nie in den Prozess-RAM; Stale-Claim-Reaper und harte Subprozess-Timeouts sind Pflicht, nicht Kuer
-2. OCR-Pipeline zerstoert Nutzerdaten: der Indexer darf Nutzerdateien ausschliesslich lesen, OCR arbeitet auf einer Scratch-Kopie und liefert Text statt einer neuen Datei; per Grep-Gate und Pruefsummenlauf ueber ein Korpus mit defekten PDFs durchsetzen
-3. Berechtigungsleck ueber Treffer, Snippets, Trefferzahlen: einziges K.-o.-Kriterium des Projekts, Snippet-Erzeugung erst nach bestandener Rechtepruefung, Trefferzahlen erst nach dem Filtern, Nutzer-ID ausschliesslich aus dem AppAPI-Header, nie aus dem Request-Body
-4. Event-Luecken erzeugen unbemerkten Index-Drift: AppAPI-Events sind laut Doku ausdruecklich asynchron ohne Zustellgarantie; ein periodischer Abgleichlauf gegen oc_filecache ist die Wahrheitsquelle, Events nur ein Beschleuniger
-5. Multi-Arch-Falle beim Image-Bau: Alpine/musl hat fuer Tantivy, onnxruntime und sqlite-vec keine Wheels; glibc-Basisimage (python:3.13-slim-trixie) und Modelle ins Image backen sind nicht verhandelbar
+1. **Filter wirkt hinter der Fusion statt in der Anfrage** – auf grossem Bestand (52.111 Dokumente) liefert das systematisch halbleere Seiten, weil das 100er-Fusionsfenster nur die relevantesten Dokumente aller Typen füllt. Vermeidung: Filter als `Occur.Must`-Klausel vor dem ersten `searcher.search`, exakt der Pfad, den `_mtimes_of()` schon für die semantische Hälfte anbietet.
+2. **UI-Filter als `type:`-Text geschickt** – schaltet über `carried_operators`/`FILETYPE` die Semantik für jede gefilterte Suche ab, unsichtbar. Vermeidung: eigenes Request-Feld, das die Operator-Marke nicht setzt.
+3. **Sortierung wird der Fusion als Argument untergeschoben** – tantivy liefert unter `order_by_field` den Feldwert statt des BM25-Scores im ersten Tupelglied; empirisch gemessen gegen die installierte 0.26.0 (500/300/200/100 statt 0,1363/0,1220). `Candidate.score` würde sonst einen Zeitstempel als Relevanz ausliefern. Vermeidung: Sortierung ist ein eigener, rein lexikalischer Modus wie `lexical_only` heute schon, Score wird unter Sortierung auf 0.0 gesetzt.
+4. **Nur ein Speicherhalter wird entladen** – der grössere Posten ist nicht die ONNX-Sitzung (250 bis 400 MB), sondern der Cutter-Tokenizer im Poller (542,8 bis 544,3 MB Spitze). Vermeidung: beide Halter, eine gemeinsame Leerlauf-Uhr.
+5. **Nachladen im Anfragepfad reisst die 1,5-Sekunden-Decke** – bereits einmal produktiv passiert (10.09.2026, `cURL error 28`, null Treffer). Vermeidung: kaltes Modell beantwortet die Suche sofort lexikalisch, Laden läuft im Hintergrund.
 
 ## Implications for Roadmap
 
-Die Bauteihenfolge aus der Architektur-Recherche folgt einem klaren Prinzip: das unbewiesenste Stueck zuerst (die IProvider-ExApp-Proxy-Kombination hat kein Vorbild im Oekosystem), das teuerste, aber gut kalkulierbare Stueck zuletzt (Embeddings). Diese Reihenfolge wird unten uebernommen und um Admin-Sichtbarkeit, Haertung und Store-Einreichung ergaenzt. Sie deckt sich mit dem Owner-Entscheid, v1.0 (Volltext + OCR) vor v1.1 (Semantik, 4-6 Wochen spaeter) auszuliefern: Phasen 1-4 plus 6-8 bilden v1.0, Phase 5 wird fuer v1.1 nachgezogen.
+Alle vier Dokumente konvergieren, mit unterschiedlicher Betonung, auf dieselbe Bauordnung. ARCHITECTURE.md liefert dafür bereits einen benannten Phasenvorschlag (M1 bis M6), PITFALLS.md liefert unabhängig davon dieselbe Reihenfolge über die Pitfall-Tabelle ("Filterphase und Entladephase vor der Messphase, Härtungsphase zuletzt"). Diese Übereinstimmung ist selbst ein Befund: keines der vier Dokumente schlägt eine andere Grobreihenfolge vor.
 
-### Phase 1: Foundations & Integrationsbeweis
-Rationale: Die Kombination IProvider (PHP) ruft exAppRequest (ExApp) existiert nirgends als fertiges Beispiel im Oekosystem, das groesste Integrationsrisiko muss zuerst entkraeftet werden, mit minimalem Code (fest verdrahteter Treffer).
-Delivers: ExApp-Skeleton (nc_py_api async, FastAPI, HaRP-Handshake), PHP-Companion-App mit registriertem IProvider, ein Treffer aus dem Container erscheint nachweislich in der Unified Search. App-ID und Anzeigename ("Findling") eingefroren vor dem ersten produktiven Commit. Basisimage-Entscheidung (glibc, python:3.13-slim-trixie) getroffen. Architekturinvariante "nur lesend auf Nutzerdateien" als Testgate verankert.
-Addresses: Zero-Config-Grundgeruest, PHP-Companion-App registriert den Unified-Search-Provider (aus PROJECT.md Requirements)
-Avoids: Pitfall 9 (Deployment/Deploy-Daemon: von Anfang an gegen HaRP, nicht DSP), Pitfall 11 (Multi-Arch-Falle), Pitfall 13 (Store-/Zertifikatspipeline: ID vor Bau-Commit), Pitfall 12 (Kompatibilitaetsspirale: PHP-Flaeche bewusst winzig halten)
+### Phase 1: Werkzeug und Runbook (ohne Box)
 
-### Phase 2: Indexkern
-Rationale: Der komplette Transportweg (Queue, Crawl, Content-Gateway) muss ohne jede Suchintelligenz beweisen, dass Dateien vollstaendig und wiederaufsetzbar ankommen, bevor Volltextsuche darauf aufbaut. Die ACL-Tabelle gehoert in diese Phase, nicht spaeter: Berechtigungen nachtraeglich in ein Schema zu ziehen ist ein Neuschreiben, kein Feature.
-Delivers: Queue-Tabellen, OCS-Queue-API, Content-Gateway (GET /files/{fileId}?userId=), Crawl-Job pro Mount mit fileid-Cursor, Fetcher-Thread mit Backpressure, Storage-Schema inklusive acl-Tabelle, Tantivy-Index mit deutschem/englischem Analyzer, funktionierender /search-Endpoint mit ACL-Vorfilter + finalem PHP-Recheck, Statuszaehler als Nebenprodukt.
-Uses: Tantivy 0.26.0, SQLite (WAL, ein Schreiber-Thread), pypdfium2/pypdf/python-docx/python-pptx/openpyxl/lxml fuer Textextraktion
-Implements: Pull-Queue, Mount-Crawl mit Integer-Cursor, ACL-Join-Tabelle, Content-Gateway
-Addresses: Volltextsuche ueber Dateiinhalte, Dateiname/Pfad-Gewichtung, Berechtigungsfilter, Ausschlussregeln (.noindex, Groessenlimit, Mimetype-Allowlist), minimale Query-Syntax
-Avoids: Pitfall 1 (haengender Indexlauf), Pitfall 6 (Berechtigungsleck, Grundgeruest), Pitfall 7 (Zero-Config-Defaults ohne Grenzen), Pitfall 8 (Index als nicht rekonstruierbarer Zustand)
+**Rationale:** Der Messbericht vom 10.09.2026 hält explizit fest: "ein Messskript, das während seines eigenen Laufs nachgebessert wird, macht jede Zahl daneben unbelegt" (PITFALLS.md Pitfall 15/18, ARCHITECTURE.md C.2/C.3). Das Werkzeug muss vor der bezahlten Anfahrt fertig sein.
+**Delivers:** Vorprüfung der Fremdbestands-Messgrösse auf die Diagnose-Route umgestellt (statt der gedeckelten OCS-Route, die nie über 26 Treffer hinauskommt), `aws_box.sh` um "Volume aus Snapshot" ergänzt, `docs/runbook-messbox.md` als Erstfassung aus drei bisherigen Berichten.
+**Addresses:** keine Feature-Zeile direkt, aber Voraussetzung für den Wirkungsbeleg (FEATURES.md, Differentiator "Wiederaufwärm-Zahl wird ausgewiesen statt versprochen").
+**Avoids:** Pitfall 15 (Messdeckel kleiner als der Lauf), Pitfall 16 (Vergleichbarkeit bricht an fünf Stellen), Pitfall 18 (Werkzeug zählt Ausfälle als Erfolge).
 
-### Phase 3: Event-Integration & Abgleich
-Rationale: Erst wenn der Index inhaltlich stimmt, lohnt es sich, ihn aktuell zu halten. Der Abgleichlauf gehoert zwingend in dieselbe Phase wie die Event-Listener, sonst wird er in der Praxis nie gebaut.
-Delivers: Node- und Share-Event-Listener (in PHP, da AppAPI-Events und webhook_listeners keine Share-Events kennen), deklarative Access-Aktionen (Soll- statt Delta-Zustand), Loeschpfad (BeforeNodeDeletedEvent), periodischer Reconcile-Job mit demselben Mount-Cursor-Muster wie der Crawl.
-Addresses: Inkrementelle Indexierung ueber Datei-Events, robust gegen Abbrueche
-Avoids: Pitfall 5 (Event-Luecken erzeugen unbemerkten Drift), Verifikation: Events komplett blockieren, nach einem Abgleichzyklus muss der Index korrekt sein
+### Phase 2: Backend – Filter und Sortierung
 
-### Phase 4: OCR
-Rationale: Rein additiv zum bestehenden Kern, faellt OCR aus, funktioniert die Suche unveraendert weiter. Deshalb erst hier, nicht davor, obwohl OCR fachlich der teuerste Baustein ist.
-Delivers: Eigene OCR-Worker-Spur (getrennt von Textextraktion, Head-of-Line-Blocking vermeiden), Text-Layer-Erkennung pro Seite (kein OCR auf digitalen PDFs), RAM-/Zeit-Deckel pro Job, Scratch-Verzeichnis im Volume mit Groessengrenze und Aufraeumung.
-Uses: Tesseract 5.5.0 (deu+eng+osd) als Subprozess, pypdfium2-Rasterung
-Addresses: OCR fuer gescannte PDFs/Bilder, automatisch, Originaldatei bleibt unveraendert
-Avoids: Pitfall 3 (OCR zerstoert Nutzerdaten, Grep-Gate + Pruefsummenlauf als Abnahme), Pitfall 4 (OCR frisst CPU/RAM bis zum Server-Stillstand)
+**Rationale:** "Die Seite kann keinen Parameter senden, den der Container nicht kennt" (ARCHITECTURE.md, harte Abhängigkeit 1). `extra="forbid"` in `SearchRequest` liefert sonst HTTP 400, was auf der PHP-Seite als stumme, leere Suche ankommt.
+**Delivers:** `SearchRequest.types`/`sort`, `SnippetsRequest` im Gleichschritt, `build_query(extensions=...)`, Sortierzweig in `candidates` (Fusionsfenster nach `mtime` bei aktiver Sortierung, `Occur.Must`-Filterklausel bereits im Fenster), Konstanten in `config.py`.
+**Uses:** `tantivy` `order_by_field`/`Order`, bestehendes `FIELD_EXT`/`FIELD_MTIME`.
+**Implements:** `index/search.py::candidates`, `query/rewrite.py::build_query`.
 
-### Phase 5: Semantik (v1.1, 4-6 Wochen nach v1.0)
-Rationale: Der teuerste und am staerksten hardwareabhaengige Teil baut auf einem Schema auf, das sich in den Phasen 2-4 bereits bewaehrt hat. Owner-Entscheid: als separates Release nach v1.0, damit fruehes Feedback moeglich ist, ohne auf die komplexeste Komponente zu warten.
-Delivers: Chunking (semantic-text-splitter), Embeddings (fastembed + multilingual-e5-small int8), sqlite-vec-Vektortabelle mit Ueberfetch-plus-ACL-Nachfilter, RRF-Hybrid-Ranking, saubere Degradation auf reine Tantivy-Suche bei fehlendem Modell.
-Uses: fastembed 0.8.0, onnxruntime 1.28.0, sqlite-vec 0.1.9, semantic-text-splitter 0.32.0
-Addresses: Semantische Suche lokal, CPU-only, Hybrid-Ranking Volltext+Vektor
-Avoids: Pitfall 10 (Vektorindex waechst schneller als die Box), Skalierungstest auf mindestens 50.000 synthetischen Dokumenten vor Freigabe, Kennzahl "Bytes pro Dokument" mitfuehren
+### Phase 3: PHP – Ergebnisseite
 
-### Phase 6: Admin-Sichtbarkeit & Diagnose
-Rationale: Fortschritts- und Fehlerdaten fallen aus Phase 2/3 bereits als Nebenprodukt an; diese Phase macht sie fuer den Admin sichtbar. Kann parallel zu Phase 4/5 laufen, wird hier aber als eigene Phase gefuehrt, weil sie ein eigenes Abnahmekriterium hat.
-Delivers: Statusseite (laeuft/pausiert/Fortschritt/Fehleranzahl/Indexgroesse), Pro-Datei-Diagnose mit Grund, Vorab-Schaetzung vor dem Erstindex, occ-Kommandos (Start/Stopp/Resume/Reset/Reindex-Pfad).
-Addresses: Admin-Sichtbarkeit, Diagnose pro Datei, Vorab-Schaetzung
-Avoids: Pitfall 2 (stiller Ausfall, den erst der Nutzer merkt), Deckungsgrad statt Konnektivitaet anzeigen, Kanarienvogel-Selbsttest
+**Rationale:** Kann erst beginnen, wenn Backend 1.2 die Felder kennt (harte Abhängigkeit M2 vor M3). Der Versions-Lockstep (`ExAppService`) verhindert ohnehin, dass ein PHP 1.2 gegen ein Backend 1.1 läuft.
+**Delivers:** Filterleiste und Sortierwahl im bestehenden GET-Formular, `PageController::pageUrl()` mit `types`/`sort`, Cursorpfad-Invalidierung bei jeder Änderung, sechs l10n-Dateien in EN/DE/FR im Gleichstand.
+**Addresses:** FEATURES.md Table Stakes (Typgruppen im Nextcloud-Vokabular, aktive Filter sichtbar/entfernbar, Filterwechsel setzt auf Seite 1 zurück).
+**Avoids:** Pitfall 6 (Cursorpfad überlebt Filterwechsel), Pitfall 7 (zweite Tür an der Berechtigungsgrenze), Pitfall 8 (MIME gegen Endung).
 
-### Phase 7: Haertung
-Rationale: Vor der Store-Einreichung muessen alle Betriebsrobustheits-Versprechen auf echter Zielhardware bewiesen sein, nicht nur dokumentiert, genau das hat das Vorgaenger-Oekosystem versaeumt.
-Delivers: Multi-Arch-Test auf echter ARM-Hardware (RSS-Kurve, kein OOM), Paritaetstest gegen die native Nextcloud-Suche fuer sechs Rechteszenarien als Dauergate, Disk-Full- und Restore-Simulation, Benchmark-Zahlen fuer die Store-Positionierung ("laeuft in X GB auf einem Raspberry Pi").
-Avoids: Pitfall 4 (OCR-Lasttest auf 4-GB-ARM), Pitfall 6 (Paritaetstest als Dauergate), Pitfall 8 (Restore-/Disk-Full-Test), Pitfall 14 (Wettbewerbsrisiko, belegbare Zahlen statt Behauptungen)
+### Phase 4: Modell-Entladung (hinter Schalter, ab Werk aus)
 
-### Phase 8: Store-Einreichung
-Rationale: Verpackung zum Schluss, aber App-ID und Naming standen bereits seit Phase 1 fest; die CSR-Vorlaufzeit fuer zwei getrennte App-Store-Eintraege (PHP-App + ExApp) muss frueh eingeplant werden.
-Delivers: Zwei CSR-Vorgaenge, zwei signierte Releases mit gekoppelter Versionierung, schemavalidierte info.xml, Store-Text mit expliziter Privacy-/Integritaetsaussage ("nichts verlaesst den Server, keine Datei wird veraendert, keine Telemetrie"), oeffentlich kommunizierter Wartungsrhythmus fuer NC-Kompatibilitaet.
-Avoids: Pitfall 13 (Store-/Zertifikatspipeline), Pitfall 12 (Kompatibilitaets-Todesspirale, Wartungsrhythmus im README)
+**Rationale:** Unabhängig von M2/M3, muss aber vor der Messphase stehen, sonst misst die eine bezahlte Anfahrt die Entladung gar nicht mit (harte Abhängigkeit M4 vor M5, Owner-Entscheid "eine Anfahrt"). Der Schalter ist zwingend, weil eine einzige Anfahrt sonst keine A/B-Zurechenbarkeit zwischen DI-10-04-Fix und Entladung herstellen kann (PITFALLS.md Pitfall 19).
+**Delivers:** `EmbeddingModel.release()`, `EmbeddingModel._last_use`, `embed/engine.py::release_if_idle()`, `worker/poller.py::release_the_cutter()`, dritte Lifespan-Aufgabe in `main.py`, Idle-Umgebungsvariable mit `0` als Abschaltwert (Namensfrage zwischen den Dokumenten, siehe Gaps), `tools/one_load.py` und dessen Gate neu formuliert.
+**Uses:** Stdlib `gc`/`ctypes`, bestehendes `RLock` in `EmbeddingModel`.
+**Implements:** die beiden Freigabeketten aus ARCHITECTURE.md Teil B.
+
+### Phase 5: Messphase – eine Box-Anfahrt
+
+**Rationale:** Wiederverwendung von Werkzeug aus M1, Auswertung von M2 bis M4 unter Realbedingungen (ARM, 4 GB). Muss nach M4 liegen, sonst bleibt die Entladung im Store unbelegt.
+**Delivers:** DI-10-04-Wirkungsbeleg-Volllauf, vier regressive Laststufen, Sprachfall-Messung mit der neuen Messgrösse, Wiederaufwärm-Kosten der Entladung (warm und kalt, mit und ohne Seitencache), Kosten- und Abbauentscheid.
+**Addresses:** FEATURES.md Differentiator "Die Wiederaufwärm-Zahl wird ausgewiesen statt versprochen".
+**Avoids:** Pitfall 9 (Datumssortierung auf grossem Fremdbestand liefert leere Seiten), Pitfall 10 (RSS kommt nicht zurück), Pitfall 12 (Kaltstart-Klippe), Pitfall 17 (Aufwärmphase statt Erzeugnis gemessen).
+
+### Phase 6: Härtung und Store-Einreichung v1.2.0
+
+**Rationale:** Muss zuletzt liegen, weil sie die Ergebnisse aus M2 bis M5 in Store-Texte, Kataloge und die Upgrade-Beweiskette überführt.
+**Delivers:** Migration `Version001200Date...` (Pflicht, auch ohne Schemaänderung – Merker aus v1.1, dort erst in der Härtungsphase gefunden), Ende-zu-Ende-Upgrade-Beweis 1.1.0 auf 1.2.0, Messzahl an drei Stellen im Gleichschritt (README.en.md, beide info.xml), ggf. sechstes `engineState`-Wort mit vier Katalog-Gates.
+**Addresses:** alle offenen Store-Zusagen.
+**Avoids:** Pitfall 13 (sechster Engine-Zustand bricht Vokabular), Pitfall 20 (Minor-Sprung ohne Migration).
 
 ### Phase Ordering Rationale
 
-- Die IProvider-ExApp-Kombination wird zuerst bewiesen, weil sie das einzige Integrationsmuster ohne Vorbild im Oekosystem ist; ein spaetes Scheitern hier waere am teuersten.
-- Die ACL-Tabelle steht in Phase 2, nicht spaeter, weil Berechtigungen eine Sicherheitseigenschaft sind, die man nicht sauber nachruestet.
-- Event-Integration folgt erst nach einem funktionierenden Suchkern, weil ein Abgleichlauf ohne funktionierenden Index nichts zu tun hat.
-- OCR steht vor Semantik, obwohl aufwendiger, weil OCR nur den Textkorpus erweitert und am Schema nichts aendert, waehrend Semantik eine neue Tabelle, einen neuen Retrieval-Zweig und die groesste Hardwareabhaengigkeit mitbringt, das gehoert auf einen bereits durch Nutzung erprobten Unterbau.
-- Diese Reihenfolge deckt sich mit dem Owner-Entscheid zur gestaffelten Auslieferung: v1.0 (Phasen 1-4, 6-8) liefert Volltext+OCR, v1.1 (Phase 5) liefert Semantik 4-6 Wochen spaeter, ohne Architektur-Umbau, weil das Schema von Anfang an embedding-faehig geschnitten ist.
+- M2 vor M3: `extra="forbid"` macht einen Mischstand zum HTTP-400-Fehler, der auf der PHP-Seite als stumme Suche ankommt.
+- M1 vor M5: belegt am Bericht vom 10.09.2026, ein während der Anfahrt korrigiertes Skript entwertet seine eigene Messung.
+- M4 vor M5: Owner-Entscheid "eine Anfahrt" verlangt, dass die Entladung in derselben Anfahrt mitgemessen wird, was einen Schalter voraussetzt.
+- M2/M3 und M4 sind gegeneinander vertauschbar; die vorgeschlagene Reihenfolge (Filter zuerst) liefert früher den sichtbaren Teil des Milestones und lässt die Entladung notfalls per Schalter ausgeliefert, ohne den Milestone zu gefährden.
 
 ### Research Flags
 
-Phasen, die waehrend der Planung tiefere Recherche brauchen (--research-phase):
-- Phase 1: Die IProvider-ExApp-Proxy-Kombination hat kein Vorbild; offene Fragen zum Snippet-Markup in SearchResultEntry (entfernt die Unified-Search-UI HTML?) und zur realen Timeout-Obergrenze im AppAPI-Proxy muessen vor dem Bau geklaert werden.
-- Phase 2: Zusammenfuehrung von Tantivy (Index) und SQLite (ACL/Vektoren/Status) im ACL-Vorfilter ist die vom Owner aufgeloeste Architekturentscheidung, aber die konkrete Umsetzung (Kandidatenmenge aus Tantivy, Abgleich gegen SQLite-ACL, finaler PHP-Recheck) ist ohne Praezedenzfall und braucht ein durchdachtes Interface-Design.
-- Phase 5: sqlite-vec ist pre-v1 (Alpha), die 250.000-Chunk-Schwelle fuer Brute-Force ist gerechnet, nicht gemessen; Kombination aus Partition-Key und Bit-Vektoren ist dokumentiert, aber ohne Praezedenzfall. Skalierungsbenchmark vor Schema-Fixierung noetig.
-- Phase 7: Reale RAM-Spitzen auf ARM sind Schaetzungen (STACK.md, MEDIUM confidence), ein Messlauf auf echter Hardware gehoert hierhin, bevor Defaults final festgezurrt werden.
+Phasen, die während der Planung vertiefte Recherche brauchen:
+- **Phase 2 (Backend Filter/Sortierung):** die Trefferform von `tantivy.Searcher.search` unter `order_by_field` ist zwar bereits empirisch geprüft (PITFALLS.md, eigene Probe gegen die installierte 0.26.0), die Stabilität von `offset` zusammen mit `order_by_field` bei 52.111 Dokumenten ist es nicht (ARCHITECTURE.md, "Offene Punkte"). Ein Test gegen den realen Index vor dem Bau ist Pflicht.
+- **Phase 4 (Entladung):** wie viel RSS die Freigabekette (`gc.collect()` + `malloc_trim(0)`) auf der Zielhardware tatsächlich zurückgibt, ist in keinem der vier Dokumente mehr als eine begründete Vermutung; STACK.md nennt es ausdrücklich "nicht recherchierbar, ... messbar". Der Vorprüflauf muss vor dem Rest der Phase feststehen.
+- **Phase 5 (Messphase):** der Zeit-/Kostendeckel braucht eine eigene Rechnung mit dem Owner, weil der vorgeschlagene Deckel (26 h) kleiner ist als der zuletzt gemessene Volllauf allein (26 h 37 min, PITFALLS.md Pitfall 15).
 
-Phasen mit etablierten Mustern (research-phase kann entfallen):
-- Phase 3: Event-Listener-Registrierung und Reconcile-Muster sind aus Context Chat vollstaendig im Quellcode verifiziert (HIGH confidence).
-- Phase 4: OCR-Subprozessaufruf, Text-Layer-Erkennung und Ressourcendeckel sind Standardmuster mit klarer Werkzeugkette (Tesseract, pypdfium2), gut dokumentiert.
-- Phase 6: Statusseiten- und Diagnose-Muster sind konzeptionell einfach, das Datenmodell faellt aus Phase 2/3 bereits ab.
-- Phase 8: Store-/Zertifikatsprozess ist im Schwesterprojekt (nextcloud-mcp-connector) bereits vollstaendig recherchiert und dokumentiert.
+Phasen mit etablierten Mustern (keine gesonderte Phasenrecherche nötig):
+- **Phase 3 (PHP-Oberfläche):** folgt exakt dem Formular-/Katalog-Muster, das v1.0/v1.1 bereits etabliert und mit Gates abgesichert haben.
+- **Phase 6 (Härtung):** Migrationsmuster, Upgrade-Beweis und Katalog-Gates sind aus v1.1 unverändert übertragbar.
+
+## Wo die vier Dokumente uneinig sind, statt gemittelt
+
+**(1) Der Dateityp-Filter muss ein Request-Feld sein, nicht `type:` im Text.** Kein Dissens, aber der zentralste Einzelbefund über alle vier Dokumente: STACK.md nennt es "den wichtigsten Integrationsbefund dieses Teils" (A.4), FEATURES.md führt es als V1/Anti-Feature, ARCHITECTURE.md als harte Abhängigkeit D1/D3, PITFALLS.md als Pitfall 2 mit der Warnung, dass eine Paraphrasensuche unter Filter ein vorhandenes Dokument nicht mehr findet. Grund: `carried_operators()` markiert jedes `type:`-Token als `FILETYPE`, `one_round()` setzt daraufhin `lexical_only = True` und schaltet die Vektorhälfte für die ganze Anfrage ab. Die Lösung ist ebenso einhellig: ein eigenes, optionales Feld in `SearchRequest`/`SnippetsRequest`, das dieselbe `Occur.Must`-Klausel erzeugt wie `_extension_query()`, aber `carried_operators` nicht berührt.
+
+**(2) Sortierung: Datum ja ohne Reindex, Name/Grösse nein – und der Score-wird-Sortierschlüssel-Fallstrick ist konkret gemessen.** `mtime` ist seit v1.0 `fast=True` (`index/schema.py:114`, Kommentar dort: "Display today, sorting and since/until later"), also kostet Datumssortierung keinen `SCHEMA_VERSION`-Sprung. Name (`FIELD_NAME`, Textfeld ohne Fast-Spalte) und Grösse (gar kein Feld im Schema) würden dagegen einen Vollreindex über 52.111 Dokumente erzwingen und sind von allen vier Dokumenten übereinstimmend aus v1.2 ausgeschlossen. Der Fallstrick, den nur PITFALLS.md und ARCHITECTURE.md mit einer eigenen Messung belegen: unter `order_by_field` liefert tantivy 0.26.0 im ersten Tupelglied nicht mehr den BM25-Score, sondern den Feldwert selbst – empirisch gegen die installierte Version geprüft, mit konkreten Zahlen (500/300/200/100 statt 0,1363/0,1220). `index/search.py::_ranked` liest dieses Element heute ungeprüft als `score`. STACK.md beschreibt denselben Mechanismus theoretisch ("das erste Tupelglied ist ... nicht mehr der Score"), ohne die Messung; die Empfehlung aller vier ist trotzdem gleich: Sortierung ist ein eigener, rein lexikalischer Modus, Score wird unter Sortierung auf 0.0 gesetzt, RRF wird nicht angewendet.
+
+**(3) Die Entladung hat zwei Speicherhalter, und das grösste Risiko ist die 1,5-Sekunden-Decke, nicht der Speicher selbst.** `EmbeddingModel._engine` (STACK.md, ARCHITECTURE.md B.1: Gewichte 118 MB, Aktivierungsspitze 250 bis 400 MB) ist der kleinere Posten. Der grössere ist `Poller._chunker` (ARCHITECTURE.md nennt 544,3 MB Spitze, STACK.md nennt aus demselben Messbericht 542,8 MB für "fünf Posten zusammen" – die beiden Zahlen stammen aus unterschiedlichen Messläufen/Plattformen desselben Berichts und sind keine echte Widersprüchlichkeit, aber die Dokumente runden sie leicht unterschiedlich). PITFALLS.md Pitfall 11 warnt zusätzlich vor einem doppelten Besitzer-Zustand: wird nur `embed/engine.py::reset()` (ursprünglich ein Test-/Werkzeug-Helfer) als Entladefunktion zweckentfremdet, bleibt der Poller mit einer eigenen Referenz zurück, und der Container trägt nach einem Nachladen zwei Sitzungen gleichzeitig – exakt die 276 MB Regression, die Plan 06.1-02 einmal beseitigt hat. Das grössere Risiko ist aber unabhängig vom Speicher: `ExAppService::REQUEST_TIMEOUT_SECONDS = 1,5 s` gilt für jeden Aufruf, ein Kaltstart hat bereits einmal produktiv (10.09.2026, 14:05:17Z, `cURL error 28`) eine Suche mit null Treffern erzeugt, ohne Fehlermeldung für den Nutzer. Alle vier Dokumente empfehlen unabhängig voneinander dieselbe Lösung: die erste Suche nach Entladung wird nicht auf das Nachladen warten gelassen, sondern sofort über den bestehenden Degradationspfad (`EmbedOutcome.unavailable()`, D-19) rein lexikalisch beantwortet, das Modell wärmt im Hintergrund. Zusätzliche, nur in ARCHITECTURE.md ausgesprochene Nuance: die gemessene Grundlast von 103,2 MB ist nach der seit Plan 07-03 faulen Bauweise vermutlich bereits *ohne* Modell und Cutter gemessen worden; die eigentlich interessante Grösse ist deshalb nicht "Grundlast minus 415 MB", sondern "Rückkehr zur Grundlast nach einem Indexlauf" – eine Unterscheidung, die STACK.md und FEATURES.md in ihrer Zahlentabelle nicht explizit machen und die vor der Store-Formulierung geklärt werden muss.
+
+**(4) Der Box-Budget-Konflikt ist nur in PITFALLS.md explizit durchgerechnet.** ARCHITECTURE.md nennt den Owner-Vorschlag "26 h / 3,50 USD" beiläufig als Runbook-Bestandteil, ohne ihn gegen die zuletzt gemessene Laufzeit zu prüfen. PITFALLS.md (Pitfall 15) rechnet explizit gegen: der letzte Volllauf allein hat bereits 26 Stunden 37 Minuten gedauert, dazu kommen aus v1.1 gemessene 38 Minuten Anfahrt plus rund 2 Stunden 50 Minuten Nachmessungen (zusammen gut 3,5 Stunden neben dem Lauf). Der vorgeschlagene 26-Stunden-Deckel reisst also rechnerisch am ersten Tag, genau wie der 30-Stunden-Deckel aus v1.1 bereits einmal gerissen ist (auf 34 Stunden angehoben). Empfehlung aus PITFALLS.md: Deckel auf mindestens 31 Stunden setzen (rund 3,59 USD bei 0,1158 USD/h) oder den Wirkungsbeleg bewusst auf einen Teilkorpus verkleinern, aber als Owner-Entscheidung vor der Anfahrt, nicht als stillschweigende Annahme im Plan. Eng verwandt und ebenfalls nur in PITFALLS.md (Pitfall 16) benannt: ein unentdecktes Cron-Intervall (12 statt 5 Minuten `StorageCrawlJob`) hat in v1.1 rund 5,85 Stunden Leerlauf erzeugt und einen Teil des gemessenen 40,6-Prozent-Laufzeitzuwachses verursacht, der eigentlich dem DI-10-04-Fix zugeschrieben wurde. Für v1.2 folgt daraus: das Cron-Intervall der Zielinstanz gehört vor jedem Lauf ins Runbook-Protokoll, sonst ist eine gemessene Verbesserung möglicherweise die Box und nicht der Fix.
+
+**(5) Das `one_load`-Gate und die `engineState`-Wortwahl sind ein echter, ungelöster Dissens zwischen den Dokumenten.** Alle vier sind sich einig, dass `tools/one_load.py`/`_LOAD_COUNT` inhaltlich umformuliert werden muss: die alte Zusage "ein Prozess lädt genau einmal" wird mit der Entladung wörtlich falsch, PITFALLS.md (Pitfall 14) verlangt eine neue Invariante ("zu keinem Zeitpunkt existieren zwei Engines, und innerhalb eines warmen Fensters wird genau einmal geladen") vor dem Bau. Uneinig sind sich die Dokumente aber bei der Frage, ob ein sechstes `engineState`-Wort ("unloaded"/"idle") eingeführt wird. STACK.md ist dagegen ("Kein sechster Engine-Zustand ... Nicht tun") und will stattdessen, dass `engine_state()` nach der Entladung wieder `cold` liefert. PITFALLS.md (Pitfall 13) empfiehlt ebenfalls ausdrücklich, `cold` wiederzuverwenden und die Information "war schon geladen" höchstens als separate Zahl auf der Admin-Seite zu führen. FEATURES.md dagegen listet ein "Sechstes `engineState`-Wort" als Teil des MVP-Umfangs (Launch-With-Checkliste), und ARCHITECTURE.md nennt "ein sechstes Wort `unloaded`" seine eigene Empfehlung ("Empfohlen"), mit dem expliziten Gegenargument, dass der Milestone verlangt, die Wiederaufwärm-Kosten "auszuweisen", und `cold` allein den Unterschied zwischen "nie gelesen" und "zum Sparen freigegeben" verwischt. Das ist keine Nuance, sondern eine Empfehlung, die zwischen den vier Dokumenten in zwei Richtungen zeigt, mit Kostenfolgen: ein sechstes Wort berührt sechs Stellen im Gleichstand (`engine.py`, `AdminViewService.php`, `admin.php`, `admin.js`, drei Katalogpaare) und vier Katalog-Gates. Dieser Punkt gehört als benannter Owner-Checkpoint in Phase 4, nicht als vorentschiedene Annahme in den Plan.
 
 ## Confidence Assessment
 
-| Area | Confidence | Notes |
+| Bereich | Konfidenz | Anmerkung |
 |------|------------|-------|
-| Stack | HIGH | Versionen, Lizenzen, Wheel-Verfuegbarkeit und API-Signaturen direkt aus PyPI, GitHub-Quellcode und Debian-Paketdaten verifiziert (Stand 15.08.2026). RAM-Schaetzungen und Retrieval-Qualitaet von e5-small int8 auf Deutsch bleiben MEDIUM. |
-| Features | MEDIUM-HIGH | Bestandsapp-Feature-Sets aus Quellcode/Doku verifiziert (HIGH); Nutzerwuensche und Schmerzpunkte aus Foren/Issues sind MEDIUM, aber durch viele unabhaengige Quellen gestuetzt. |
-| Architecture | HIGH fuer Protokoll/Muster (direkt aus context_chat-, app_api- und nc_py_api-Quellcode verifiziert), MEDIUM fuer das konkrete Storage-Layout, weil sqlite-vec noch Alpha ist und die ACL-Vorfilter-Kombination mit Tantivy kein Praezedenzfall im Oekosystem ist. |
-| Pitfalls | HIGH fuer die dokumentierten Fehlermodi des Vorgaenger-Oekosystems (Issue-Tracker, offizielle Doku, live gegen PyPI geprueft), MEDIUM fuer AIO-Backup-Abdeckung und die Wettbewerbseinschaetzung. |
+| Stack | HIGH | Alle Versionsstände (`tantivy` 0.26.0, `onnxruntime` 1.29.0, Basis-Image) gegen PyPI/Tag geprüft; die Freigabekette selbst ist MEDIUM (glibc-Mechanik dokumentiert, aber die tatsächliche Rückgabe auf der Zielbox ist LOW, siehe Gaps) |
+| Features | HIGH für alles aus eigenem Code/eigenen Messberichten, MEDIUM für die UX-Erwartungen, die aus Fremdprodukten (Files-App, Paperless-ngx, Immich, Ollama, LM Studio) abgeleitet und nicht am eigenen Nutzerverhalten gemessen sind | Quellenqualität ist im Dokument selbst so benannt |
+| Architektur | HIGH für alle Integrationspunkte (direkt am Quellcode mit Datei:Zeile belegt), MEDIUM für zwei Punkte, die vor dem Bau am laufenden System verifiziert werden müssen (tantivy-Trefferform unter `order_by_field`, tatsächlicher RAM-Gewinn) | beide MEDIUM-Punkte sind im Dokument selbst als VERIFIZIEREN markiert |
+| Pitfalls | HIGH für alles am eigenen Baum/den eigenen Rohdaten nachgelesene oder empirisch gemessene (inkl. eigener Tantivy-Sortierprobe gegen die installierte 0.26.0), MEDIUM für Allokator-/onnxruntime-Aussagen zur RSS-Rückgabe (Fremdquellen, ein offener Upstream-Bug), explizit LOW für nichts | Dokument benennt seine eigene Konfidenz differenziert je Aussage |
 
-Overall confidence: HIGH
+**Overall confidence:** HIGH für die Code-Integration und den Funktionsumfang, MEDIUM bis LOW für alles, was nur eine Messung auf der Zielhardware beantworten kann (RSS-Rückgabe, Kaltstartdauer, Vergleichbarkeit über mehrere Lade-/Entladezyklen).
 
 ### Gaps to Address
 
-- Reale RAM-Spitzen auf ARM-Hardware sind reine Schaetzungen, Messlauf auf einem Raspberry Pi 5 (4 GB) gehoert in Phase 1/7, bevor Worker-Defaults endgueltig festgezurrt werden.
-- Retrieval-Qualitaet von multilingual-e5-small nach int8-Quantisierung auf deutschen Texten ist nicht fuer dieses konkrete Modell belegt, kleines deutsches Testset in Phase 5 bauen, fp32 gegen int8 vergleichen.
-- Die 250.000-Chunk-Schwelle, ab der sqlite-vec-Brute-Force kippt, ist gerechnet, nicht gemessen, Benchmark mit synthetischen 100k-Dokumenten in Phase 5, bevor das Vektorschema fest ist.
-- Zuverlaessigkeit des AppAPI Events Listener unter Last ist unbekannt (Doku nennt die Zustellung ausdruecklich asynchron und benachrichtigungsartig), der periodische Abgleichlauf in Phase 3 ist deshalb Pflicht, nicht Kuer, und muss unter simulierter Event-Blockade getestet werden.
-- Deutsche Wortliste fuer Tantivys split_compound-Filter ist unbeschafft und unlizenziert, bewusst nicht in v1, Komposita-Behandlung laeuft ueber Prefix-Query, Nachbesserung als dokumentierter v1.1-Kandidat.
-- Snippet-Offsets mit ascii_fold() bei Umlauten sind ungetestet, vor der endgueltigen Analyzer-Festlegung in Phase 2 mit echten deutschen Dokumenten pruefen.
-- Store-Einreichungsprozess fuer zwei parallele Apps (PHP-Companion + ExApp) mit gekoppelter Versionierung ist ein bekanntes Terminrisiko aus dem Schwesterprojekt, Vorlaufzeiten fuer beide CSRs frueh klaeren.
-- Ob AIO-Borg-Sicherungen das ExApp-Volume automatisch erfassen, ist unklar (Doku deutet auf Opt-in hin), in Phase 7 am echten AIO nachstellen, Index bleibt als Cache konzipiert, damit das Ergebnis fuer die Roadmap nicht kritisch ist.
+- **Wie viel RSS die Entladung auf der Zielbox tatsächlich zurückgibt** – keines der vier Dokumente kann das recherchieren, nur messen. Ein Vorprüflauf muss am Anfang der Entladephase stehen und darüber entscheiden, ob die Funktion überhaupt gebaut wird oder als "gemessen, Ergebnis negativ" dokumentiert im Bericht landet (STACK.md B.7, PITFALLS.md Pitfall 10 nennen das ausdrücklich einen legitimen Ausgang).
+- **Wie teuer ein kaltes Laden auf der konkreten Zielhardware (m7g.large-Nachfolger) ist**, in Millisekunden gegen die 1,5-Sekunden-Decke, mit und ohne Seitencache – entscheidet den Standardwert der Leerlaufschwelle, der aktuell nur ein Vorschlag (900 s) ist.
+- **Namensinkonsistenz der Umgebungsvariable** zwischen STACK.md (`FINDLING_EMBED_IDLE_SECONDS`) und ARCHITECTURE.md (`EMBED_IDLE_RELEASE_SECONDS`/`FINDLING_EMBED_IDLE_RELEASE_SECONDS`) – vor dem Bau auf einen Namen festlegen.
+- **Sechstes `engineState`-Wort ja oder nein** (siehe Disagreement 5 oben) – als Owner-Checkpoint vor Phase 4 klären, nicht während des Baus entscheiden.
+- **Filterort ext-im-Index vs. mime-in-SQLite** (FEATURES.md D2/D3 führt das noch als offene Frage, obwohl STACK.md/ARCHITECTURE.md bereits eine konkrete, kostengünstigere Umsetzung ohne Join spezifizieren) – die Planung sollte die STACK/ARCHITECTURE-Lösung als Standard übernehmen und die SQLite-Variante nur bei nachgewiesenem Genauigkeitsbedarf (Pitfall 8: `.jpg` vs `.jpeg`, Dateien ohne Endung) nachziehen.
+- **Zeit-/Kostendeckel der Box-Anfahrt** – muss vor der Anfahrt neu gerechnet und vom Owner freigegeben werden (siehe Disagreement 4).
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- quickwit-oss/tantivy-py, Tag 0.26.0: Tokenizer/Filter/SnippetGenerator/IndexWriter direkt aus dem Quellcode
-- cloud-py-api/nc_py_api, CHANGELOG/README: Async-Migration, CVE-2026-48710, PROPFIND-Fix
-- nextcloud/server, Branch stable34, lib/public/Search/* und IRegistrationContext: IProvider/IFilteringProvider/IExternalProvider-Semantik
-- nextcloud/app_api, lib/PublicFunctions.php und README: exAppRequest, HaRP-Empfehlung
-- nextcloud/context_chat und nextcloud/context_chat_backend, vollstaendiger Quellcode: Zwei-App-Muster, Pull-Queue, Crawl-per-Mount, ACL-Anti-Pattern
-- nextcloud/fulltextsearch(_elasticsearch), Issue-Tracker (u.a. #311, #404, #597, #715, #769, #857, #950, #955, #956): dokumentierte Fehlermodi des Vorgaengers
-- nextcloud/files_fulltextsearch_tesseract Issue #30 plus Forum-Warnthread: OCR-Datenverlust
-- PyPI JSON-API fuer alle genannten Pakete, Stand 15.08.2026: Versionen, Wheel-Plattformen, requires_python
-- docs.nextcloud.com: Events-Listener-Semantik, ExApp-Deploy-Konfigurationen, Context-Chat-Admin-Doku (12 GB RAM, kein OCR, files_accesscontrol nicht befolgt)
+- Eigener Quellcode, Stand 2026-09-14: `backend/src/findling/index/schema.py`, `index/search.py`, `index/fusion.py`, `query/rewrite.py`, `api/search.py`, `api/snippets.py`, `api/status.py`, `embed/model.py`, `embed/engine.py`, `worker/poller.py`, `main.py`, `config.py`, `extract/dispatch.py`
+- `php/lib/Controller/PageController.php`, `lib/Service/{SearchService,ExAppService,AdminViewService,SearchCaps}.php`, `lib/Search/Provider.php`, `templates/{search,admin}.php`, `js/{search,admin}.js`
+- `docs/measurements/2026-09-vergleichsmessung-m7g/README.md` (Abschnitte 5, 5.2, 5.3, 6, 9) und Rohdaten, `docs/measurements/2026-09-werkzeugfixe/README.md`
+- `quickwit-oss/tantivy-py`, Tag `0.26.0`, `tantivy/tantivy.pyi`; eigene Probe gegen die installierte Version am 14.09.2026 (Score-wird-Feldwert, Fast-Field-Fehlermeldungen)
+- PyPI JSON-API für tantivy, onnxruntime, tokenizers, sqlite-vec, semantic-text-splitter, fastembed, Stand 14.09.2026
 
 ### Secondary (MEDIUM confidence)
-- Nextcloud-Forum-Threads (u.a. "OCR in Nextcloud, giving up after a month", "knowing index status", Snippetlaenge-Diskussionen): Nutzerwuensche und Schmerzpunkte
-- alexgarcia.xyz/sqlite-vec: Binaerquantisierung, Partition-Keys, Hybrid-Search-Guides
-- github.com/asg017/sqlite-vec Issue #25: ANN-Index als offenes Ziel, aktuell Brute-Force
+- microsoft/onnxruntime Issue #14590 (Maintainer-Aussage zu `del`/`gc.collect()`) und #26831 (offen, RSS wächst trotz `ReleaseSession`/`ReleaseEnv`)
+- man7.org `malloc_trim(3)`, `mallopt(3)` (glibc-Mechanik, HIGH für die Dokumentation selbst, MEDIUM für die Übertragung auf dieses Produkt)
+- Nextcloud Developer Manual (Search-Filter), `nextcloud/server` Quellcode (`UnifiedSearchModal.vue`, `FileListFilterType.vue`, `mimetypealiases.dist.json`)
+- Immich (`MACHINE_LEARNING_MODEL_TTL`), Ollama (`OLLAMA_KEEP_ALIVE`), LM Studio (Idle TTL), Paperless-ngx als UX-Erwartungsmassstab
 
 ### Tertiary (LOW confidence)
-- Alle RAM-Budgetzahlen (Planungsgroessen, kein Messwert)
-- Die 250.000-Chunk-Brute-Force-Schwelle (Hochrechnung)
-- Qualitaetsverlust durch int8-Quantisierung bei e5-small auf Deutsch (nicht modell-spezifisch belegt)
+- Keine tatsächliche RSS-Rückgabe-Zahl auf Zielhardware, keine Kaltstart-Zahl auf der konkreten v1.2-Zielinstanz – beides ausdrücklich als "nur messbar, nicht recherchierbar" markiert
 
 ---
-*Research completed: 2026-08-15*
+*Research completed: 2026-09-14*
 *Ready for roadmap: yes*

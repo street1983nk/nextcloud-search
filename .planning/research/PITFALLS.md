@@ -1,335 +1,456 @@
 # Pitfalls Research
 
-**Domain:** Nextcloud-ExApp für Suche (OCR + Volltext + Semantik, Zero-Config, kleine Selfhoster-Hardware)
-**Researched:** 2026-08-15
-**Confidence:** HIGH für die fulltextsearch-Fehlermodi, AppAPI-Mechanik und Wheel-/Multi-Arch-Fakten (Issue-Tracker, offizielle Doku, PyPI live geprüft); MEDIUM für Backup-Abdeckung in AIO und für die Wettbewerbseinschätzung
+**Domain:** Ausbau einer ausgelieferten Nextcloud-Such-ExApp (Findling 1.1.0): Dateityp-Filter und Sortierung auf der eigenen Ergebnisseite, Modell-Entladung im Leerlauf, Messkampagne auf Zielhardware
+**Researched:** 2026-09-14
+**Confidence:** HIGH fuer alles, was am Baum von `C:\Users\Student\nextcloud-search` und an den Rohdaten von `docs/measurements/2026-09-vergleichsmessung-m7g/` nachgelesen oder empirisch gemessen wurde (Tantivy-Sortierprobe gegen die installierte 0.26.0); MEDIUM fuer die Allokator- und onnxruntime-Aussagen zur RSS-Rueckgabe (Fremdquellen, ein offener Upstream-Bug); LOW fuer nichts, was hier als Tatsache steht
 
-> Leitsatz dieser Recherche: Das offizielle fulltextsearch-Ökosystem ist nicht an fehlenden Features gescheitert, sondern an Betriebsrobustheit. Hängende Indexläufe, stille Ausfälle nach Updates, Datenverlust in der OCR-Zusatzapp und fehlende Kompatibilitäts-Releases haben es getötet. Genau diese Punkte sind die Produktversprechen dieses Projekts, also dürfen sie nicht als "Polish später" behandelt werden, sondern sind Kernfunktionalität.
+> Leitsatz dieser Recherche: Alle drei v1.2-Vorhaben sind Ergaenzungen an einem System, dessen Zusagen bereits im App Store stehen. Kein einziger dieser Fallstricke ist "die Funktion geht nicht". Alle sind von der Sorte "die Funktion sieht aus, als ginge sie, und gibt dabei still eine Zusage von v1.0/v1.1 auf": die eine Berechtigungsgrenze, die Index-Kompatibilitaet ohne Reindex, die Antwort unter der 1,5-Sekunden-Aufrufdecke, die Vergleichbarkeit der Messzahlen, den Gleichstand der drei Kataloge.
+
+**Phasennamen in diesem Dokument sind Vorschlaege**, weil die v1.2-Roadmap noch nicht steht. Verwendet werden: **Filterphase** (Dateityp-Filter und Sortierung), **Entladephase** (Modell-Entladung im Leerlauf), **Messphase** (die eine Box-Anfahrt), **Haertungsphase** (DI-11-02/03/05/06, Store-Einreichung v1.2.0).
+
+---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Der hängende Indexlauf ohne Fortschrittsspeicher
+### Pitfall 1: Der Filter wirkt hinter der Fusion statt in der Anfrage, und das Fenster frisst ihn auf
 
 **What goes wrong:**
-Der Erstindexlauf läuft stundenlang, bleibt dann an einer Datei oder beim Wechsel auf den zweiten Nutzer stehen und wiederholt nur noch dieselbe Statuszeile. Der Speicher steigt bis zu einem Plateau, der Prozess macht keinen Fortschritt mehr, und ein Abbruch bedeutet: von vorne anfangen. Genau das ist bei fulltextsearch dokumentiert: Issue #311 (RAM wächst von 24 MB auf 566 MB, danach Endlosschleife mit identischer Zeile, ausgelöst beim Übergang auf den zweiten Nutzer, externe CIFS-Storage, offen seit 2018), Issue #404 ("becomes unresponsive at first file"), fulltextsearch_elasticsearch #346 (kein vollständiger Index möglich), plus mehrere Forumsthreads "Cannot complete initial FullTextSearch index".
+Der Dateityp-Filter wird dort angewendet, wo er am billigsten einzubauen ist: auf der fertigen Trefferliste, also hinter `reciprocal_rank_fusion` oder sogar erst in PHP hinter dem Recheck. Die Suche nach "Vertrag" mit Filter "PDF" liefert dann drei Treffer auf einer Seite, die fuenfundzwanzig fasst, die Blaetterung meldet trotzdem "weiter", und zwei Seiten spaeter kommt wieder eine halbleere Seite. Auf einem Bestand wie dem Messkorpus (52.111 Dokumente) liefert der Filter regelmaessig gar nichts, obwohl passende Dateien im Index stehen.
 
 **Why it happens:**
-Der Indexlauf ist ein einzelner, langlaufender, monolithischer Prozess ohne Persistenz des Fortschritts. Der Zustand liegt im Prozessspeicher, nicht in einer Tabelle. Blockierende Aufrufe (Netzwerk-Storage, externer Suchserver, Extraktionswerkzeug) haben kein Timeout, deshalb wird aus einer hängenden Einzeloperation ein hängender Gesamtlauf. Entwickler testen mit 200 sauberen Dateien auf lokaler Platte, nicht mit 500 GB über CIFS.
+`findling.index.search.candidates` arbeitet mit einem Fusionsfenster von `SEARCH_RRF_WINDOW = 100` Dokumenten je Quelle. Wer erst dieses Fenster fuellt und danach filtert, filtert die hundert relevantesten Dokumente aller Typen und nicht die hundert relevantesten PDFs. Derselbe Fehler eine Etage hoeher: der PHP-Recheck bekommt eine Kandidatenseite, `SearchService` zaehlt `$approved` gegen `$pageSize`, und ein Filter, der erst hier zuschlaegt, macht aus jeder Seite eine Stichprobe. Der Filter sieht dabei funktionsfaehig aus, denn was er zeigt, ist immer richtig; falsch ist nur, was fehlt.
 
 **How to avoid:**
-Der Index ist eine Queue-getriebene Zustandsmaschine, kein Skript. Konkret:
-- Jede Datei bekommt eine Zeile in einer Arbeitstabelle mit Zustand (`pending`, `claimed`, `done`, `failed`, `skipped`), `attempts`, `last_error`, `claimed_at`. Fortschritt liegt in der Datenbank, nicht im RAM.
-- Jeder Arbeitsschritt hat ein hartes Wanduhr-Timeout und läuft als Subprozess, den man töten kann. Ein Extraktionsprozess, der nicht kooperiert, wird per SIGKILL beendet, die Datei geht auf `failed` mit Grund.
-- Stale-Claim-Reaper: alles, was länger als N Minuten `claimed` ist, fällt zurück auf `pending` (mit Zähler). Damit überlebt der Index einen Container-Neustart mitten im Lauf.
-- Circuit Breaker pro Fehlerklasse: dreimal dieselbe Datei mit demselben Fehler bedeutet `failed` dauerhaft, nicht Endlosschleife.
-- Der Prozess muss jederzeit per SIGTERM sauber abbrechbar sein und beim nächsten Start dort weitermachen, wo er war. Das ist ein Testfall, kein Vorsatz.
+Der Filter gehoert in die Anfrage, nicht in die Antwort. Der Weg existiert bereits und ist gebaut: `query/rewrite.py::extract_filters` schneidet `type:` aus der Zeile, `_extension_query` haengt ihn als `Occur.Must` auf das Feld `ext` an die geparste Anfrage. Ein UI-Filter muss auf genau diesen Pfad einzahlen, also als zusaetzliche `Must`-Klausel vor dem ersten `searcher.search`, damit das Fusionsfenster von Anfang an nur aus dem gefilterten Bestand gefuellt wird.
+Die Vektorseite kann das nicht: `store/vectors.py` kennt keine Dateiendung, ein kNN-Lauf liefert Nachbarn aller Typen. Es gibt genau zwei ehrliche Auswege, und einer davon muss bewusst gewaehlt und im Bericht benannt werden:
+1. Unter Filter bleibt die Suche lexikalisch. Das ist die heutige Regel (`api/search.py::one_round`, `lexical_only = bool(rewritten.operators) or ...`, `FILETYPE` ist eine dieser Marken) und kostet nichts ausser einer Zeile in der Doku.
+2. Die Vektorliste wird nach der Aggregation gegen den Index auf den Typ zurueckgeschnitten, bevor sie in die Fusion geht. Dann schrumpft die semantische Haelfte unter Filter sichtbar, und `VECTOR_SCAN_MAX` muss entsprechend groesser gewaehlt werden, sonst bleibt nach dem Schnitt nichts uebrig.
 
 **Warning signs:**
-Fortschrittszahl steht länger als das Timeout still; RSS steigt monoton über einen Lauf; nach einem Neustart fängt der Lauf bei 0 an; ein einzelner Datei-Typ (großes TIFF, verschlüsseltes PDF, Netzwerk-Mount) taucht immer als letzte Logzeile auf.
+Eine gefilterte Seite liefert weniger als `PAGE_SIZE` Treffer, obwohl `hasMore` wahr ist. Ein Dokument, das ohne Filter auf Rang 4 steht, verschwindet mit passendem Filter ganz. Die Trefferzahl je Anfrage faellt unter Filter deutlich (derselbe Fingerabdruck, den Stufe 16 der v1.1-Lastreihe hatte: 4,16 statt 5,40 Treffer je Anfrage).
 
 **Phase to address:**
-Indexkern-Phase (Phase 2). Abnahmekriterium: `docker kill` mitten im Lauf, Neustart, Lauf setzt fort, keine Doppelarbeit außer der einen abgebrochenen Datei.
+Filterphase. Abnahme: ein Test, der dieselbe Anfrage mit und ohne Filter fuehrt und beweist, dass jedes gefilterte Dokument der ungefilterten Liste auch in der gefilterten steht, und zwar ueber die Fenstergrenze hinaus (Korpus mit mehr als 100 lexikalischen Treffern, von denen die passenden Typen weit hinten liegen).
 
 ---
 
-### Pitfall 2: Stiller Ausfall, den erst der Nutzer merkt
+### Pitfall 2: Der UI-Filter schreibt `type:` in die Suchzeile und schaltet damit still die Semantik ab
 
 **What goes wrong:**
-Die Indexierung läuft scheinbar, aber Inhalte fehlen. fulltextsearch-Belege: #597 (nach dem Update 19.0.6 auf 20.0.3 werden keine neuen Dokumente mehr indexiert, `fulltextsearch:test` meldet trotzdem überall "ok"), #857 (`fulltextsearch:reset` indexiert nur neue Dateien nach, alte bleiben unauffindbar, weil ein Zähler nicht mit zurückgesetzt wird), Forumsthread "Fulltextsearch:index runs, indexes files, no content". Der Admin erfährt es Monate später durch einen Nutzer, der ein Dokument nicht findet, das er sicher hochgeladen hat.
+Die billigste Bauform eines Dropdowns ist, die Auswahl an die Suchzeile anzuhaengen: aus "Vertrag" plus Auswahl "PDF" wird der Text `Vertrag type:pdf`, und der Rest der Kette bleibt unveraendert. Das funktioniert auf Anhieb, denn genau diesen Text versteht `extract_filters` schon. Was dabei passiert, sieht niemand: `carried_operators` setzt die Marke `FILETYPE`, `one_round` setzt daraufhin `lexical_only = True`, und die semantische Haelfte wird fuer jede gefilterte Suche abgeschaltet. Aus einem Filter wird ein Schalter fuer die Produktfunktion, mit der das Projekt wirbt.
 
 **Why it happens:**
-Der Statusreport misst die falsche Größe: "Verbindung steht" statt "Anteil der Dateien mit frischem Inhaltsindex". Fehler werden geloggt, aber nicht aggregiert. Es gibt keine Invariante, die man prüfen könnte, und keinen Selbsttest, der eine echte Suchanfrage gegen einen bekannten Testinhalt stellt.
+Die Marke `FILETYPE` wurde eingefuehrt, als der Typ ausschliesslich aus einer getippten Zeile kam. Dort war die Begruendung richtig: wer `type:` tippt, bittet um Genauigkeit, und das Modell sieht Woerter, keine Operatoren. Ein Dropdown ist aber keine Bitte um Genauigkeit im selben Sinn. Die Entscheidung, die in `rewrite.py` steht, wird durch die neue Oberflaeche stillschweigend auf einen Fall ausgedehnt, fuer den sie nie getroffen wurde.
 
 **How to avoid:**
-- Die Statusseite zeigt Deckung, nicht Konnektivität: Anzahl indexierbarer Dateien laut Nextcloud-Dateitabelle gegen Anzahl `done`-Zeilen, plus `failed`-Liste mit Grund und Beispielpfaden, plus Alter des ältesten `pending`-Eintrags.
-- Ein Deadman: wenn seit X Stunden `pending > 0` ist und die `done`-Zahl sich nicht bewegt, ist der Status "degraded" mit Klartextgrund. Nicht grün.
-- Selbsttest-Endpunkt: ein Kanarienvogel-Dokument mit bekanntem Zufallsstring wird indexiert und zurückgesucht. Schlägt der fehl, ist die Suche kaputt, egal was die Verbindungsprüfung sagt.
-- Schema- und Modellversion im Index verankern. Ändert sich Tokenizer, Chunking oder Embedding-Modell, wird die betroffene Menge automatisch als `pending` markiert. Ein "Reset", der nicht wirklich alles neu erfasst, ist die exakte Falle aus #857.
-- `failed` ist ein Erstklasse-Zustand mit Ursachencode, den die Admin-Seite gruppiert anzeigt ("142 Dateien: passwortgeschütztes PDF", "3 Dateien: Timeout OCR").
+Der Filter reist als eigener Parameter und niemals als Text in der Suchzeile. Konkret: ein Feld in `SearchRequest` (Achtung: `model_config = ConfigDict(extra="forbid")`, ein unbekanntes Feld wird als HTTP 400 abgewiesen, nicht ignoriert), das an `build_query` durchgereicht wird und dort dieselbe `Must`-Klausel erzeugt, ohne `carried_operators` zu beruehren. Danach ist die Frage "Semantik unter Filter ja oder nein" wieder eine bewusste Entscheidung und keine Nebenwirkung. Zusatzregel, die dazu gehoert: eine getippte `type:`-Zeile UND ein gesetzter Dropdown-Filter muessen eine definierte Semantik haben (Empfehlung: beide gelten, also UND-Verknuepfung, was leere Ergebnisse erzeugen kann und deshalb in der Oberflaeche sichtbar sein muss).
 
 **Warning signs:**
-Statusseite ist grün, aber die Trefferzahl für ein bekanntes Wort ist 0; `failed`-Tabelle existiert nicht oder ist immer leer; Deckungsgrad wird nie berechnet; nach einem eigenen Release ändert sich das Suchverhalten ohne Reindex.
+Eine Paraphrasensuche, die ohne Filter das Dokument findet, findet es mit Filter "PDF" nicht mehr, obwohl das Dokument ein PDF ist. Der Diagnosepfad (`api/diagnose.py`, `ranked_sides`) meldet fuer gefilterte Anfragen eine leere semantische Liste.
 
 **Phase to address:**
-Indexkern (Phase 2) für die Zähler, Admin-Sichtbarkeit (Phase 6) für die Darstellung. Das Deckungsmaß gehört in beide.
+Filterphase, und zwar als erste Entscheidung der Phase, weil sie die Signatur von `build_query` und damit alle vier Aufrufstellen (`/search`, `/snippets`, Diagnose, Tests) bestimmt.
 
 ---
 
-### Pitfall 3: Die OCR-Pipeline zerstört Nutzerdaten
+### Pitfall 3: Der neue Parameter erreicht `/search`, aber nicht `/snippets`
 
 **What goes wrong:**
-Der schlimmste dokumentierte Fehler des Vorgängerökosystems: files_fulltextsearch_tesseract löscht PDFs, die bei der Ghostscript-Konvertierung (über spatie/pdf-to-image) fehlschlagen. Issue #30 ist seit dem 25.09.2020 offen, das Nextcloud-Forum führt dazu einen Warnthread ("APP w/PDF enabled may delete your pdfs!"), Betroffene mussten auf Snapshots zurück. Ursache im Kern: Die Pipeline schreibt in den Nutzerdatenbereich und räumt bei einem Fehlerpfad das Original mit weg.
+Filter und Sortierung werden an der Kandidatenroute angebaut und funktionieren. Die Ausschnittsroute bekommt sie nicht, weil sie ja "nur Text schneidet". Ergebnis: der Textausschnitt wird mit einer anderen Anfrage erzeugt als die, die den Treffer gerankt hat. Bei einem reinen Typfilter faellt das nicht auf (er fuegt keine Terme hinzu), bei allem, was die Standardfelder oder die Termmenge veraendert, schon: die Hervorhebungen markieren Woerter, die im Ranking keine Rolle spielten, oder der Ausschnitt bleibt leer und die Seite faellt auf den Pfad zurueck.
 
 **Why it happens:**
-OCR-Werkzeugketten sind darauf ausgelegt, Dateien zu erzeugen und zu ersetzen (OCRmyPDF schreibt per Design ein neues PDF). Wer das naiv in einen Indexer einbaut, hat eine Schreiboperation im Datenpfad. Temporärdateien landen im selben Verzeichnis, Aufräumcode kennt den Unterschied zwischen Original und Zwischenprodukt nicht, und der Fehlerpfad ist der am wenigsten getestete Pfad.
+Die Zweistufigkeit des Protokolls ist bewusst asymmetrisch (Kandidaten ohne Text, Text nur fuer Bestaetigte), und dabei wirkt die zweite Stufe wie ein Anhaengsel. Tatsaechlich baut `api/snippets.py` ueber `build_query` dieselbe Anfrage nochmal auf. Der Praezedenzfall steht schon da: `titleOnly` reist zu beiden Routen, weil es die Standardfelder wechselt.
 
 **How to avoid:**
-- Harte Architekturregel: Der Indexer öffnet Nutzerdateien ausschließlich lesend. Es gibt im gesamten Code keinen Schreib- oder Löschpfad in den Nextcloud-Speicher. Das ist per Test durchsetzbar (Grep-Gate gegen Schreib-APIs des Nextcloud-Clients, plus Integrationstest, der nach einem Lauf über ein Korpus mit kaputten PDFs Prüfsummen aller Quelldateien vergleicht).
-- OCR arbeitet auf einer Kopie in einem Scratch-Verzeichnis im Container, das nach jedem Job vollständig geleert wird. Ergebnis ist Text, nicht ein neues PDF. Wir brauchen kein durchsuchbares PDF, wir brauchen Zeichen für den Index. Damit entfällt der komplette Rückschreibpfad und mit ihm die Ghostscript-Datenverlustklasse.
-- Kaputte Eingaben sind normal, nicht außergewöhnlich: Ghostscript-Fehler, passwortgeschützte PDFs, Nullbyte-Dateien. Alle enden als `failed` mit Grund, nie als Exception, die den Aufräumcode auslöst.
-- In README und Store-Beschreibung explizit: "Diese App verändert niemals Ihre Dateien." Das ist nach der Vorgeschichte ein echtes Verkaufsargument, das die Zielgruppe versteht.
+Jeder Parameter, der `build_query` beruehrt, wird in beide Request-Modelle aufgenommen und von `SearchService` an beide Aufrufe uebergeben (`ExAppService::searchCandidates` und `ExAppService::snippets`). Dazu ein Gleichstand-Test nach dem Muster von `backend/tests/test_search_limits_lockstep.py`: er liest beide Modelle als Text und wird rot, sobald eines ein Feld traegt, das dem anderen fehlt. Sortierung dagegen darf ausdruecklich NICHT an `/snippets` gehen: sie veraendert die Reihenfolge, nicht die Anfrage, und ein Sortierparameter im Schnitt waere ein Feld, das nichts tut und beim naechsten Umbau etwas tut.
 
 **Warning signs:**
-Irgendein Codepfad ruft eine Schreib-, Verschiebe- oder Löschmethode auf dem Nextcloud-Dateisystem auf; Temporärdateien werden neben dem Original abgelegt; OCR-Ergebnis ist eine Datei statt eines Strings; Testkorpus enthält keine absichtlich kaputten PDFs.
+Hervorhebungen stehen auf Woertern, die nicht gesucht wurden. Ausschnitte sind unter Filter systematisch leer, obwohl die Dokumente den Suchbegriff enthalten.
 
 **Phase to address:**
-OCR-Phase (Phase 3), Regel aber schon in der Foundations-Phase als Architekturinvariante festschreiben. Verifikation: Prüfsummenlauf über ein Korpus mit mindestens zehn bewusst defekten PDFs.
+Filterphase, zusammen mit Pitfall 2 (dieselbe Signaturaenderung).
 
 ---
 
-### Pitfall 4: OCR frisst CPU und RAM, bis der Server steht
+### Pitfall 4: Sortierung nach Datum wird in die Fusion gehaengt, und der Score wird zum Zeitstempel
 
 **What goes wrong:**
-Auf einer 4-GB-Box mit zwei Kernen läuft OCR eines mehrseitigen Scans, das Nextcloud-Webinterface wird unbenutzbar, oder der Container wird vom OOM-Killer beendet (Exit 137) und startet in einer Schleife neu. Bei OCRmyPDF ist das ein bekanntes Muster: ein 200-MB-PDF kann bei Parallelverarbeitung 10 GB ziehen, und die offizielle Empfehlung lautet, bei OOM mit `--jobs 1` zu wiederholen. Tesseract selbst hat dokumentierte Fälle hoher CPU- und RAM-Last bei großen Bildern. fulltextsearch #218 zeigt die andere Seite: große TIFFs werden gar nicht erst verarbeitet, ohne dass klar wird warum.
+Sortierung wird als Variante der bestehenden Suche gebaut: `searcher.search(query, window, order_by_field="mtime")` statt `searcher.search(query, window)`, alles andere bleibt. Zwei Dinge kippen dabei gleichzeitig und beide leise.
+Erstens: **der zurueckgegebene Score ist dann nicht mehr der BM25-Wert, sondern der Feldwert selbst.** Empirisch gegen die installierte tantivy 0.26.0 gemessen (Probe vom 14.09.2026): ohne `order_by_field` liefern die Treffer Scores wie 0,1363 und 0,1220, mit `order_by_field="mtime"` liefern dieselben Treffer die Werte 500, 300, 200, 100, also die Inhalte des Feldes. Dieser Wert wandert durch `_ranked` in `Candidate.score` und von dort ueber die Wire in die PHP-Haelfte. Nichts faellt um, und jede spaetere Auswertung des Scores ist Unsinn.
+Zweitens: nach Datum sortiert ist die Rangliste kein Relevanzrang mehr, und `reciprocal_rank_fusion` fusioniert dann eine Datumsliste mit einer Semantikliste zu etwas, das weder das eine noch das andere ist: "ueberwiegend neu, ein bisschen aehnlich". Die Fortsetzung hinter dem Fenster (Abschnitt 2 von `candidates`) rechnet weiter `lexical_weight / (k + rank)`, was unter Datumssortierung eine Zahl ohne Bedeutung ist.
 
 **Why it happens:**
-Zero-Config verleitet dazu, alle Kerne zu nutzen und alles zu verarbeiten. Der Aufwand von OCR ist nicht proportional zur Dateigröße, sondern zur Pixelfläche mal Seitenzahl, und beides ist aus den Metadaten nicht sichtbar. Auf ARM-Boxen ist die Rechenleistung nochmal um ein Vielfaches geringer, während die Defaults vom Entwicklerlaptop stammen.
+`order_by_field` ist ein Schluesselwortargument von `Searcher.search`, es steht direkt neben `offset`, es funktioniert sofort, und die Aenderung ist eine Zeile. Dass die Bedeutung des ersten Tupelelements mitwechselt, steht in keiner Signatur.
 
 **How to avoid:**
-- OCR läuft strikt seriell mit genau einem Worker und niedriger Priorität (`nice`, `ionice`). Parallelität ist eine Admin-Option, kein Default. Die Empfehlung "sqrt(N) Prozesse mit `--jobs sqrt(N)`" gilt für Batch-Server, nicht für eine Box, die gleichzeitig Nextcloud bedient.
-- Vorprüfung vor jedem OCR-Job: Seitenzahl, Pixeldimensionen, Dateigröße. Über der Schwelle wird herunterskaliert (Äquivalent zu `--tesseract-downsample-large-images`) oder nach N Seiten abgeschnitten. Erste Seiten enthalten fast immer die suchrelevanten Begriffe.
-- Hartes Zeit- und Speicherbudget pro Job als Subprozess-Limit (`RLIMIT_AS`, Wanduhr-Timeout). Überschreitung bedeutet `failed: ocr_timeout`, nicht Containertod.
-- Selbstkalibrierung statt Konfiguration: beim ersten Start Kerne und verfügbaren Speicher messen und Budgets daraus ableiten. Das ist der ehrliche Zero-Config-Weg, nicht "wir nehmen einfach alles".
-- Backpressure: OCR nur, wenn die Systemlast unter einer Schwelle liegt, und pausieren, wenn Nextcloud gerade beschäftigt ist. Ein Indexer, der den Server ausbremst, wird deinstalliert, egal wie gut er sucht.
-- Explizit dokumentieren, dass eine Erstindexierung auf ARM Tage dauern kann, mit Restzeitschätzung in der Admin-UI. Erwartungsmanagement verhindert die Hälfte der Supportfälle.
+Sortierung ist ein eigener Modus und keine Variante der Fusion. Empfehlung, opinionated: **unter "Neueste zuerst" laeuft die Suche lexikalisch, ohne RRF, ohne Vektorzweig, und die Oberflaeche sagt das** ("nach Datum sortiert"). Begruendung: eine Sortierung nach Datum wirft die Relevanzordnung ohnehin weg, und die semantische Haelfte existiert ausschliesslich, um Relevanz zu verbessern. Der Code-Weg dazu ist derselbe, den `lexical_only` heute schon geht, also kein neuer Zweig in der Sicherheitskette.
+Zusaetzlich: der Score, den `Candidate` unter Sortierung traegt, wird auf 0.0 gesetzt und nicht durchgereicht, damit kein Zeitstempel als Relevanz aus dem Container faellt.
 
 **Warning signs:**
-Containerneustarts ohne Absturzlog (das ist der OOM-Killer); Lastdurchschnitt dauerhaft über der Kernzahl; einzelne Dateien mit Verarbeitungszeit über mehreren Minuten; Speicherbedarf skaliert mit der Seitenzahl statt konstant zu bleiben.
+`Candidate.score` traegt Werte in der Groessenordnung 1.7e9. Die Diagnoseroute meldet unter Sortierung Herkunftsmarken, die sich mit der Reihenfolge nicht erklaeren lassen. Zwei Suchen mit denselben Treffern liefern unter verschiedenen Sortierungen unterschiedliche Treffermengen (nicht nur Reihenfolgen).
 
 **Phase to address:**
-OCR-Phase (Phase 3) für Budgets, Härtungsphase (Phase 7) für die Kalibrierung und den ARM-Lasttest auf echter 4-GB-Hardware.
+Filterphase. Abnahme: Testfall, der unter Sortierung die TrefferMENGE gegen die unsortierte Menge derselben Tiefe vergleicht; sie darf sich nur durch die Vektorhaelfte unterscheiden, und das muss benannt sein.
 
 ---
 
-### Pitfall 5: Event-Lücken erzeugen Index-Drift, ohne dass es jemand merkt
+### Pitfall 5: Sortierung nach Name oder Groesse wird zugesagt und braucht einen Reindex
 
 **What goes wrong:**
-Die inkrementelle Indexierung hängt an Datei-Events. Fehlt ein Event, fehlt die Datei dauerhaft im Index, weil nie wieder etwas passiert. fulltextsearch #769 zeigt den Fall in echt: Dateien, die über den Desktop-Client in einen synchronisierten Ordner kommen, lösen statt einer Indexierung eine Löschung aus, offen seit 2023. Genauso #715 und fulltextsearch_elasticsearch #15: gelöschte Dateien und Verzeichnisse bleiben im Index.
+Das Dropdown bekommt vier Eintraege: Relevanz, Datum, Name, Groesse. Drei davon sind billig, einer davon ist unmoeglich, und welcher, merkt man erst beim Bauen. Schlimmer: der naheliegende Fix ist eine Schemaaenderung, und eine Schemaaenderung bedeutet `SCHEMA_VERSION` hochziehen, Versionsmarke bricht, `version_drift` meldet `reindexRequired`, und 52.111 Dokumente werden auf einer 4-GB-ARM-Box neu indexiert. Das verletzt die Zusage D-04 aus v1.1 ("index-kompatibel, kein Reindex") in genau dem Milestone, der Bestandsinstallationen nicht bestrafen soll.
 
 **Why it happens:**
-Die Zustellung ist ausdrücklich unzuverlässig. Die AppAPI-Doku sagt für den Events Listener wörtlich, dass alle Informationen dem ExApp **asynchron** zugestellt werden, "more like a notification system in order to not slow down the server". Es sind nur wenige Ereignistypen abgedeckt (`node_event` mit created, touched, written, deleted, renamed, copied). Zu Retries, Reihenfolge oder Bestätigungen sagt die Doku nichts, also gibt es keine Zusicherung. Der klassische Webhook-Weg hängt zusätzlich an Hintergrundjobs, die per Default nur alle fünf Minuten laufen, wenn kein eigener Worker eingerichtet ist. Fehlt Cron, fehlen Events. Und Massenoperationen (Restore aus dem Papierkorb, Gruppenordner-Umbau, occ-Import, externer Speicher, der ohne Nextcloud-Schreibpfad befüllt wird) erzeugen überhaupt keine oder unvollständige Events.
+`index/schema.py` sagt es selbst: ein Feld, das spaeter hinzukommt, bedeutet einen Reindex. Nur `file_id`, `storage_id` und `mtime` sind `fast=True`. `name` ist ein Textfeld mit eigener Kette, `ext` ist `raw` mit `basic`, Groesse steht ueberhaupt nicht im Schema. Empirisch gemessen (dieselbe Probe): `order_by_field="mtime"` und `order_by_field="file_id"` funktionieren, `order_by_field="ext"` scheitert mit `ValueError: Field "ext" is not configured as fast field`, ein unbekanntes Feld mit `Field 'nope' is not defined in the schema`.
 
 **How to avoid:**
-- Events sind ein Beschleuniger, niemals die Wahrheitsqülle. Die Wahrheitsqülle ist ein periodischer Abgleichlauf gegen die Nextcloud-Dateiliste: alles mit neuerer `mtime` oder unbekannter `fileid` wird eingereiht, alles im Index ohne Entsprechung fliegt raus.
-- Der Abgleich muss billig sein, sonst wird er abgeschaltet. Deshalb inkrementell über ein Wasserzeichen (höchste gesehene `mtime` plus Sicherheitsfenster) und in Häppchen, mit einem vollständigen Tiefenabgleich in größerem Abstand.
-- Identität über `fileid` plus Inhaltshash oder ETag, nicht über den Pfad. Umbenennen und Verschieben sind dann Metadaten-Updates, keine Neuindexierung, und ein verpasstes Rename-Event heilt beim nächsten Abgleich.
-- Idempotenz: dasselbe Event zweimal darf nichts kaputt machen, ein unbekanntes `deleted` für eine nie indexierte Datei ist ein No-Op und kein Fehler (genau die Verwirrung aus #769).
-- Löschungen und Entzug von Freigaben brauchen einen synchronen, schnellen Pfad. Ein Treffer auf ein gelöschtes Dokument ist ein Bug, ein Treffer auf ein entzogenes Dokument ist ein Sicherheitsvorfall (siehe Pitfall 6).
-- Die Admin-UI zeigt "letzter erfolgreicher Abgleich vor X" und "seit dem Abgleich per Event verarbeitet: N". Driftet das auseinander, sieht man es.
+Die Sortierauswahl von v1.2 besteht aus genau zwei Eintraegen: **Relevanz und Datum.** Beides ist ohne Schemaaenderung und ohne Reindex zu haben. Alles andere wird als Future notiert und zusammen mit einer ohnehin faelligen Schemaaenderung gebuendelt.
+Dieselbe Regel gilt fuer eine Verlockung auf der Filterseite: **Trefferzahlen je Dateityp ("PDF (12)") brauchen ein Fast-Field auf `ext`**, also ebenfalls einen Reindex. Verzichten, oder nur die Typen der geladenen Seite zaehlen und das Label entsprechend ehrlich formulieren.
 
 **Warning signs:**
-Neue Dateien tauchen im Test nur auf, wenn man sie über die Weboberfläche hochlädt, aber nicht per Desktop-Client oder WebDAV; gelöschte Dateien erscheinen weiter in Treffern; die Event-Rate fällt auf 0, ohne dass jemand etwas merkt.
+Im Plan steht "Sortierung nach Name". Irgendwo taucht `SCHEMA_VERSION` in einem Diff auf, der eigentlich nur die Oberflaeche betrifft. Die Statusseite meldet nach einem Testupgrade `reindexRequired`.
 
 **Phase to address:**
-Indexkern (Phase 2) für das Abgleich-Design, Event-Integration (Phase 2 oder 3) für den schnellen Pfad. Verifikation: Testszenario, in dem alle Events blockiert werden, muss nach einem Abgleichzyklus denselben Indexzustand ergeben.
+Filterphase, als Vorpruefung VOR dem ersten Plan (die Probe dauert zehn Minuten und entscheidet den Funktionsumfang). Gegenprobe in der Haertungsphase: der Upgrade-Beweis 1.1.0 auf 1.2.0 in CI muss zeigen, dass die Indexmarken unveraendert bleiben.
 
 ---
 
-### Pitfall 6: Berechtigungsleck über Treffer, Snippets und Metadaten
+### Pitfall 6: Der Cursor-Pfad ueberlebt einen Filterwechsel und liefert eine falsche Seite ohne Fehler
 
 **What goes wrong:**
-Nutzer A findet Inhalt aus einem Dokument, das er nicht sehen darf. Das passiert in drei Abstufungen, alle drei sind real: die Datei erscheint in der Trefferliste (Existenz plus Dateiname plus Pfad verraten schon viel), das Snippet zeigt den relevanten Satz im Klartext (das ist echter Inhaltsabfluss, auch ohne Zugriff auf die Datei), oder der Treffer stammt aus einer längst entzogenen Freigabe. Nextcloud dokumentiert die verwandte Schwäche für Context Chat offen: Regeln der App files_accesscontrol werden nicht befolgt, wer per Files-App sieht, kommt per Context Chat ran. fulltextsearch_elasticsearch #15 und fulltextsearch #715 zeigen, dass gelöschte Objekte im Index bleiben, was dasselbe Muster für Entfreigaben nahelegt.
+Der Nutzer steht auf Seite 7, klickt "nur PDFs", und landet auf Seite 7 einer voellig anderen Ergebnismenge. Treffer werden uebersprungen, andere doppelt gezeigt, und nichts sagt etwas. Es gibt keine Fehlermeldung, weil die Adresse formal gueltig ist.
 
 **Why it happens:**
-Der Index ist global und deduplizierend (eine Datei, ein Eintrag), die Berechtigung dagegen ist pro Nutzer, pro Gruppe, pro Gruppenordner, pro Link, pro Zugriffsregel und ändert sich jederzeit. Wer Zugriffsrechte in den Index kopiert, hat einen Cache, der veraltet. Wer sie zur Suchzeit prüft, hat ein Performanceproblem und filtert oft erst nach dem Ranking, sodass die Trefferzahl schon leckt. Snippets werden aus dem Index erzeugt und dabei vergessen.
+`PageController::cursorPath` prueft die **Form** des Pfads und nicht seine **Herkunft**: genau `$page` Eintraege, lauter Ziffern, streng aufsteigend, erster Eintrag 0. Ein Pfad aus einer ungefilterten Suche erfuellt all das auch fuer eine gefilterte. Die Cursorwerte zaehlen erlaubte Kandidaten derselben Anfrage; aendert sich die Anfrage, zeigen dieselben Zahlen auf voellig andere Stellen. Das heutige Formular umgeht das Problem, indem es weder `page` noch `cursors` traegt, sodass jede neue Suche auf Seite eins beginnt. Ein Filter, der als Link gebaut wird ("nur PDFs" als `<a>` mit den aktuellen Parametern), nimmt den Cursor-Pfad aber genau mit.
 
 **How to avoid:**
-- Autoritative Prüfung zur Suchzeit gegen Nextcloud, nicht gegen den Index. Der Index liefert Kandidaten (`fileid`-Liste), Nextcloud entscheidet Sichtbarkeit für genau diesen Nutzer. Der Index darf als schneller Vorfilter eine Zugriffsmenge führen, aber das Ergebnis muss der Server bestätigen.
-- Snippet-Erzeugung ausschließlich nach bestandener Prüfung. Nie Text mitliefern, bevor der Zugriff bestätigt ist. Snippets dürfen niemals aus einem Vorschau-Cache stammen, der die Prüfung umgeht.
-- Auch Zähler und Facetten sind Daten. "142 Treffer" bei 3 sichtbaren verrät die Existenz der anderen 139. Nach dem Filtern zählen, notfalls "mehr als 20 Treffer" anzeigen.
-- Overfetch-Strategie: mehr Kandidaten holen als angezeigt werden, filtern, dann auffüllen, damit die Ergebnisliste nach dem Filtern nicht löchrig wird. Cursor-basierte Paginierung statt Offset, wie es die Nextcloud-Suchdoku empfiehlt, weil sich die Datenlage zwischen Seiten ändert.
-- Kein Abkürzen über ExApp-Systemrechte. Das ist dieselbe Falle wie im Schwesterprojekt (dort Pitfall 6): eine einzige Client-Fabrik, die zwingend eine Nutzeridentität verlangt, kein Systempfad, der Tool-Code erreichbar ist.
-- Entfreigabe- und Löschereignisse mit hoher Priorität, plus Ablauffrist auf zwischengespeicherten Zugriffsmengen (kurze TTL), damit ein verpasstes Event maximal Minuten wirkt, nicht Monate.
-- Automatisierter Paritätstest als Dauergate: derselbe Suchbegriff als Nutzer B über die normale Nextcloud-Suche und über unsere App muss dieselbe Dokumentmenge liefern. Der Test enthält mindestens: entzogene Freigabe, Gruppenordner mit Teilrechten, Link-Share, files_accesscontrol-Regel, gelöschte Datei im Papierkorb, Datei in externem Speicher.
-- files_accesscontrol bewusst behandeln und die Entscheidung dokumentieren. Nextcloud räumt für Context Chat öffentlich ein, dass diese Regeln nicht greifen. Wenn wir sie respektieren, ist das ein Differenzierungsmerkmal; wenn wir es nicht können, muss es in der Store-Beschreibung stehen, bevor es jemand als Sicherheitslücke meldet.
+Zwei Regeln, beide durchsetzbar:
+1. Jede Aenderung an Suchbegriff, `names`, Typfilter oder Sortierung setzt `page` auf 1 und `cursors` auf leer. Filter- und Sortiersteuerung werden deshalb als Formularfelder gebaut, die in demselben `<form>` liegen, das schon heute weder `page` noch `cursors` traegt; als Link gebaut, muessen sie beide Parameter ausdruecklich weglassen.
+2. Der Cursor-Pfad wird an die Anfrage gebunden, damit eine von Hand editierte Adresse nicht durchrutscht: ein kurzer Fingerabdruck ueber (Begriff, `names`, Filter, Sortierung) reist mit, und ein Pfad mit fremdem Fingerabdruck faellt auf Seite eins zurueck. Das ist genau die Behandlung, die `cursorPath` heute schon fuer jede Abweichung vorsieht, und sie bleibt stumm, wie der Kommentar dort es verlangt.
 
 **Warning signs:**
-Der Suchpfad enthält Zugriffslogik, die nicht Nextcloud fragt; Snippets werden vor dem Filtern gerendert; Trefferzahlen stammen aus der Engine; keine Testnutzer mit eingeschränkten Rechten in der Testsuite; Antwortzeit sinkt verdächtig, nachdem man "Rechte cachen" eingebaut hat.
+Ein Treffer erscheint auf Seite 3 und nochmal auf Seite 4. Die Seitennummer im Pager passt nicht zur Laenge des Cursor-Pfads in der Adresse. `nextUrl` ist `null`, obwohl `hasMore` wahr ist (die Pruefung `nextCursor <= end($cursors)` schlaegt zu, weil der Cursor aus einer anderen Anfrage stammt).
 
 **Phase to address:**
-Unified-Search-Integration (Phase 5) für die Prüfkette, Foundations (Phase 1) für die Client-Fabrik, Härtung (Phase 7) für die Paritätstestsuite. Dieser Punkt ist das einzige K.-o.-Kriterium des Projekts: alles andere kann man nachbessern, ein Inhaltsabfluss beendet die App im Store.
+Filterphase. Abnahme: PHP-Unit-Test, der einen Pfad aus einer ungefilterten Suche mit gesetztem Filter einreicht und Seite eins erwartet.
 
 ---
 
-### Pitfall 7: Zero-Config-Defaults, die kleine Server schmelzen
+### Pitfall 7: Der Filter oeffnet eine zweite Tuer an der Berechtigungsgrenze
 
 **What goes wrong:**
-"Startet von selbst und indexiert alles" bedeutet auf einer realen Instanz: 800 GB Videos, VM-Images, Backup-Archive, node_modules-Ordner aus Sync-Verzeichnissen, ein 4-GB-Archiv, das entpackt werden will, und ein 100.000-Seiten-Scan. Die Platte läuft voll, die CPU ist tagelang belegt, und der Admin deinstalliert. Kontext: Context Chat setzt eine harte Grenze bei 100 MB pro Datei und ignoriert verschlüsselte oder passwortgeschützte Dateien stillschweigend. Die Grenze ist richtig, das stille Ignorieren ist die Falle.
+Die naheliegendste Bauform einer Filterleiste mit Trefferzahlen oder einer Sortierumschaltung ohne Neuladen ist eine zweite Route, die Treffer als Daten liefert. Damit existiert eine zweite Stelle, die Kandidaten aufloest, eine zweite, die `isReadable()` fragt (oder es vergisst), und die Sicherheitsaussage des Produkts ist nicht mehr "eine Stelle im ganzen Baum".
 
 **Why it happens:**
-Zero-Config wird als "keine Grenzen" missverstanden statt als "gute Grenzen ohne Nachfragen". Außerdem ist die Versuchung groß, Vollständigkeit als Qualitätsmerkmal zu verkaufen.
+Die Ergebnisseite rendert heute alles serverseitig in ein Dokument, ohne Datenroute, ohne Formatumschalter, ohne Teilnachladung. Das ist ein Entwurfsvertrag und keine technische Schranke, also laesst er sich versehentlich brechen. Zusaetzlich steht in `PageController` ein Kommentar, der leicht zur Falle wird: die drei Route-Attribute duerfen im Fliesstext dieser Datei nicht genannt werden, weil `backend/tests/test_php_trust_boundary.py` die Zeilen zaehlt, die ein Route-Attribut erwaehnen. Ein gut gemeinter Kommentar ueber die neue Filterroute macht ein Gate rot, ohne dass sich eine Route geaendert hat.
 
 **How to avoid:**
-- Allowlist statt Blocklist für Dateitypen. Wir indexieren, was wir zuverlässig extrahieren können (PDF, Office-Formate, Text, Markdown, später Mail-Anhänge), alles andere ist `skipped: unsupported_type` und damit sichtbar, nicht unsichtbar. Eine Blocklist ist immer unvollständig, weil neue Endungen schneller entstehen, als man pflegt.
-- Typ über Inhaltserkennung, nicht über die Endung. Eine `.pdf`, die in Wahrheit ein 2-GB-Video ist, existiert in freier Wildbahn.
-- Harte Defaults, alle überschreibbar, alle in der Admin-UI sichtbar: maximale Dateigröße (Vorschlag 50 MB für Textextraktion, 20 MB für OCR), maximale Seitenzahl für OCR, maximale extrahierte Textlänge pro Dokument (Kappung mit Vermerk), Gesamtbudget für die Indexgröße in Prozent des freien Platzes.
-- Archive werden in v1 nicht ausgepackt. Rekursives Auspacken ist eine Zip-Bomben-Angriffsfläche und ein Ressourcenloch.
-- Nichts wird stillschweigend übersprungen. Jedes `skipped` hat einen Grund, ist zählbar und in der Admin-UI gruppiert sichtbar, inklusive Hinweis, welche Grenze man anheben müsste. Das ist der Unterschied zwischen "die App kann das nicht" und "die App hat es absichtlich gelassen und sagt es".
-- Vorschau vor dem Start: nach der Installation zuerst eine Zählung ("12.412 Dateien passen ins Profil, geschätzt 6 Stunden, geschätzt 900 MB Index"), dann automatischer Start. Kein Konfigurationszwang, aber Transparenz vor dem Ressourcenverbrauch.
-- Reihenfolge nach Nutzen: kleine, kürzlich geänderte Textdokumente zuerst, große Scans zuletzt. Dann ist die Suche nach 20 Minuten schon nützlich, statt nach 30 Stunden komplett.
+- Keine neue Route. Filter und Sortierung sind zwei zusaetzliche Werte in der bestehenden Adresse von `findling.page.index`, genau wie `query`, `names`, `page`, `cursors`. Die Seite bleibt eine Route, ein Dokument, kein Nachladen.
+- Der Filter wird niemals hinter dem Recheck angewendet (siehe Pitfall 1). Damit bleibt `SearchService::run` die einzige Stelle, die `getFirstNodeById` und `isReadable` fragt, und `backend/tests/test_php_acl_boundary.py` zaehlt weiter genau zwei Aufrufstellen.
+- Neue Parameter werden wie die vier bestehenden behandelt: still auf einen sicheren Wert zurueckfallen, niemals eine Meldung ueber die eigene Adresszeile erzeugen. Ein unbekannter Typwert bedeutet "kein Filter", eine unbekannte Sortierung bedeutet "Relevanz".
+- Auf der Containerseite: `SearchRequest` hat `extra="forbid"`. Der neue Parameter muss dort deklariert werden, sonst scheitert die Validierung und die Suche bricht komplett; und er darf nichts sein, was eine Identitaet transportieren koennte. Die Nutzerkennung kommt weiterhin ausschliesslich aus dem signierten AppAPI-Header.
+- Der Unified-Search-Dialog bleibt unangetastet: `getSupportedFilters` meldet `BUILTIN_TERM` und `BUILTIN_TITLE_ONLY`, `getCustomFilters` meldet nichts. Ein eigener Filter dort braucht eine `FilterDefinition`, und ein Name ohne Definition macht laut dem Kommentar in `Provider.php` die ganze Providerliste kaputt. Dateityp und Sortierung gehoeren in v1.2 ausschliesslich auf die eigene Seite.
 
 **Warning signs:**
-Kein Größenlimit im Code; Extraktion läuft über die Endung; `skipped` existiert nicht als Zustand; die Indexgröße wird nicht gemessen; die erste Nutzererfahrung ist eine leere Trefferliste, weil noch nichts fertig ist.
+Ein Diff fuegt `php/appinfo/routes.php` eine Zeile hinzu. `test_php_acl_boundary.py` oder `test_php_trust_boundary.py` wird rot. In `SearchService` taucht ein zweites `foreach` ueber Kandidaten auf.
 
 **Phase to address:**
-Indexkern (Phase 2) für Allowlist und Limits, Admin-Sichtbarkeit (Phase 6) für die Sichtbarmachung der Grenzen.
+Filterphase fuer den Bau, Haertungsphase fuer den Audit (die Launch-Haertung hat in v1.0 und v1.1 je echte Produktfehler an genau solchen Stellen gefunden).
 
 ---
 
-### Pitfall 8: Der Index ist Zustand, der nicht rekonstruierbar ist
+### Pitfall 8: MIME und Dateiendung sind zwei Wahrheiten, und der Filter waehlt die falsche
 
 **What goes wrong:**
-Die Platte läuft voll, während die Suchindexdatei geschrieben wird. Oder der Admin macht `occ app_api:app:unregister --rm-data`. Oder AIO stellt aus dem Borg-Backup wieder her, und die Nextcloud-Datenbank ist von gestern, während das ExApp-Volume von heute ist oder gar nicht im Backup war. Ergebnis: Index und Realität passen nicht zusammen, im schlimmsten Fall ist die Indexdatei beschädigt und die App startet nicht mehr.
+Die Filterkategorie heisst "Bilder" und wird in der Oberflaeche ueber den MIME-Typ gedacht, weil der Treffer sein Symbol schon ueber `IMimeTypeDetector::mimeTypeIcon($hit->mimeType)` bekommt. Im Index gibt es aber keinen MIME-Typ, nur `ext`. Ergebnis: Eine Datei mit Symbol "Bild" faellt aus dem Filter "Bilder" heraus, weil ihre Endung `.jpeg` und nicht `.jpg` ist, oder eine Datei ganz ohne Endung ist unter keinem Filter zu erreichen und auch nicht unter "Sonstige".
 
 **Why it happens:**
-AppAPI legt pro ExApp ein Docker-Volume `nc_app_<app_id>_data` an, erreichbar über `APP_PERSISTENT_STORAGE`. Beim Unregister wird es per Default absichtlich nicht gelöscht, das ist gut. Aber: Es liegt physisch im Docker-Storage (typisch `/var/lib/docker`), also oft auf der System-Partition und nicht dort, wo der Admin seinen Platz vermutet. Und die AIO-Sicherung deckt zusätzliche Volumes nur ab, wenn sie ausdrücklich eingetragen wurden. Das heißt, ein Restore trennt Index und Datenbank fast garantiert zeitlich (MEDIUM confidence, sollte in der Testphase am echten AIO verifiziert werden).
+Es gibt im Produkt zwei unabhaengige Klassifikationsquellen, und beide sind korrekt fuer ihren Zweck:
+- `ext` kommt aus `extract/dispatch.py::extension_of`, also aus dem **Dateinamen**: kleingeschriebenes Suffix ohne Punkt, leer wenn keines da ist. Es steht als `raw`-Token mit `basic`-Indexoption im Index und wird beim Indexieren geschrieben.
+- `mimeType` kommt in `SearchService` aus dem **bestaetigten Knoten** (`$node->getMimetype()`), also aus dem Nextcloud-Dateicache, und ist aktueller als alles, was der Index wissen kann.
+Sie stimmen fast immer ueberein und gelegentlich nicht: `.jpg` gegen `.jpeg`, `.tif` gegen `.tiff`, Office-Formate, die als ZIP erkannt werden, umbenannte Dateien zwischen zwei Indexlaeufen, Dateien ohne Endung. Ein leeres `ext` erzeugt ueberdies gar kein Token, also kann keine `term_query` es je treffen.
 
 **How to avoid:**
-- Grundhaltung: Der Index ist ein Cache, kein Datenspeicher. Er muss jederzeit aus Nextcloud vollständig neu erzeugbar sein, und dieser Weg wird regelmäßig getestet, nicht nur dokumentiert. Damit ist jedes Backup-Szenario unkritisch.
-- Instanzbindung: Nextcloud-Instanz-ID und ein Index-Epoch im Index speichern. Passt die Instanz-ID nicht oder ist die Nextcloud-Datenbank offensichtlich älter als der Index (kleinste Datei-ID rückwärts, Zählersprünge), wird ein voller Abgleich erzwungen statt weiterzuarbeiten. Das fängt den Restore-Fall automatisch.
-- Speicherplatz-Wache: vor jedem Schreibblock freien Platz prüfen. Unter der Schwelle geht der Indexer in den Zustand `paused: low_disk` und schreibt nichts mehr, statt eine halbe Transaktion zu hinterlassen. Suche bleibt lesend verfügbar.
-- Nur transaktionale Schreibwege verwenden (bei SQLite WAL plus korrektes Synchronisationsniveau, bei Tantivy sauberer Commit statt Halbzustand). Beim Start Integritätsprüfung; bei Beschädigung nicht raten, sondern den Index verwerfen, neu anlegen und den Wiederaufbau starten, sichtbar in der Admin-UI.
-- Index-Speicherort und Größe in der Admin-UI anzeigen, inklusive Hinweis auf das Docker-Volume und wie man es sichert oder verschiebt. Das erspart genau den Supportfall "meine Systempartition ist voll".
-- Zwei getrennte Admin-Aktionen anbieten: "Index neu aufbauen" (leert und startet neu) und "Abgleich erzwingen" (behält vorhandene Einträge). Die fulltextsearch-Falle aus #857 war ein Reset, der nur halb zurückgesetzt hat. Beide Aktionen müssen genau das tun, was sie versprechen, und den Deckungsgrad danach beweisen.
+- Die Filterkategorien werden **ueber Endungen definiert und ueber Endungen gefiltert**, weil nur die im Index steht. Die Kategorie "Bilder" ist eine Menge von Endungen und wird als `Should`-Gruppe uebersetzt, so wie `_extension_query` es fuer mehrere `type:`-Angaben schon tut.
+- Die Menge der anbietbaren Endungen kommt aus dem, was der Indexer ueberhaupt einreiht, nicht aus einer frei erfundenen Liste. Der Endungsvergleich aus v1.1 (13 Endungen, Generator gleich Bestand, eine benannte Abweichung) ist die Quelle dafuer.
+- Dateien ohne Endung bekommen eine bewusste Entscheidung: entweder sie sind unter keinem Filter erreichbar und das steht in der Doku, oder es gibt eine Kategorie fuer sie, die dann ein Index-Feld braucht, das es nicht gibt (also: Variante eins).
+- Wenn Symbol und Filterkategorie nebeneinander stehen, muss die Oberflaeche damit leben koennen, dass beide aus verschiedenen Quellen kommen. Kein Test darf die Gleichheit von `ext` und `mimeType` behaupten.
 
 **Warning signs:**
-Kein Integritätscheck beim Start; kein Schreib-Stopp bei wenig Platz; Instanz-ID wird nicht gespeichert; der Neuaufbauweg wurde nie getestet, weil "geht ja nicht kaputt".
+Ein Testkorpus enthaelt nur `.pdf`, `.docx`, `.txt`. Eine Kategorie in der Oberflaeche heisst wie ein MIME-Oberbegriff. Im PHP-Code taucht eine Abbildung von MIME auf Endung auf.
 
 **Phase to address:**
-Indexkern (Phase 2) für Transaktionen und Instanzbindung, Härtung (Phase 7) für Disk-Full- und Restore-Szenarien.
+Filterphase. Abnahme: Korpusfall mit `.jpeg`, `.JPG` (Grossschreibung), einer Datei ohne Endung und einer umbenannten Datei.
 
 ---
 
-### Pitfall 9: Die App ist auf dem Zielsystem gar nicht installierbar
+### Pitfall 9: Sortierung nach Datum auf grossem Fremdbestand liefert systematisch leere Seiten
 
 **What goes wrong:**
-Der Nutzer klickt im App Store auf Installieren und bekommt einen Fehler, weil kein Deploy-Daemon eingerichtet ist. ExApps brauchen einen Deploy-Daemon, der Container erzeugt. Auf Managed Hosting ohne Docker gibt es den nicht, und der Ausweg `manual_install` ist ein Entwickler- und Sonderfall, kein Klickpfad. Dazu kommen die Topologie-Klassiker: das Dreieck aus Nextcloud, Daemon und Container muss sich gegenseitig erreichen; AIO hat eigene Netzwerkeigenheiten; der alte Docker Socket Proxy ist abgekündigt und soll mit Nextcloud 35 verschwinden, HaRP ist der neue Weg; und AppAPI ist an Docker-API-Versionen gebunden, was in app_api #712 (November 2025) zu einem harten Ausfall führte: Docker 29 verlangt mindestens API 1.44, AppAPI sprach 1.41, damit ging Deployment weder mit DSP noch mit HaRP.
+Ein Nutzer mit dreissig eigenen Dateien auf einer Instanz mit 52.000 fremden Dokumenten waehlt "Neueste zuerst" und bekommt gar nichts, ohne Fehlermeldung. Unter Relevanz hatte er wenigstens manchmal Treffer.
 
 **Why it happens:**
-Die Zielgruppe ist heterogen (AIO, docker-compose, Snap, Managed Hosting, Synology, Raspberry Pi), und der Entwickler testet auf genau einer Topologie. Außerdem liegt der Fehler oft nicht bei uns, sondern in der Schicht darunter, was ihn nicht weniger tödlich für die Bewertung macht.
+Das ist DI-07-03 in verschaerfter Form, und der Messbericht hat den Mechanismus bereits belegt: der Vorfilter rankt ueber den ganzen Index, der Recheck filtert erst danach, und fuer drei von vier geprueften Begriffen kam die eigene Datei unter den ersten **2.000** Kandidaten nicht vor. Unter Relevanz hat ein seltener Begriff wenigstens eine Chance ("Mueller" hatte genau einen Treffer im ganzen Index, und das war die eigene Datei). Unter Datumssortierung gibt es diese Chance nicht mehr: die neuesten hundert Dokumente, die "Vertrag" enthalten, gehoeren auf einer solchen Instanz mit an Sicherheit grenzender Wahrscheinlichkeit jemand anderem. Die Schleife holt dabei genau eine Runde (gemessen: 1,0 Runde je Suche), also wird nicht nachgefasst.
 
 **How to avoid:**
-- Von Tag eins gegen HaRP entwickeln, nicht gegen den abgekündigten Docker Socket Proxy, und die AppAPI-Testbereitstellung dauerhaft grün halten. Das ist dieselbe Lehre wie im Schwesterprojekt (dort Pitfall 4).
-- Mindestens zwei Topologien im Test: schlichtes docker-compose und Nextcloud AIO. AIO ist die häufigste Selfhoster-Installation und hat die meisten Eigenheiten.
-- Voraussetzungen prominent und ehrlich in der Store-Beschreibung: "benötigt AppAPI und einen Deploy-Daemon (Docker), funktioniert nicht auf Shared Hosting ohne Container". Eine schlechte Bewertung wegen falscher Erwartung kostet mehr als der verlorene Nutzer.
-- Docker-API- und AppAPI-Versionsabhängigkeiten als bekanntes Risiko führen und in den Release-Notes eine Kompatibilitätsmatrix pflegen (Nextcloud-Version, AppAPI-Version, getestete Docker-Version). Wenn der nächste Docker-Sprung AppAPI bricht, sind wir vorbereitet und können sofort antworten.
-- Eine Diagnoseseite, die die drei Richtungen des Dreiecks aktiv testet und im Klartext sagt, welche Verbindung fehlt. Das verwandelt Supportfälle in Selbsthilfe.
+- Den Fall messen statt hoffen: die Sprachfall-Messung der Messphase muss beide Sortierungen fahren, sonst wird die Verschaerfung erst von Nutzern gefunden.
+- Die Seite muss den Unterschied zwischen "nichts gefunden" und "alle Kandidaten dieser Runde gehoerten anderen" weiterhin aussprechen. Der Mechanismus existiert: `SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED` und die Ausnahme in `nextUrl`, die genau in diesem Zustand die naechste Seite NICHT wegnimmt (Entscheid V-1a vom 10.09.2026). Unter Sortierung darf diese Ausnahme nicht verloren gehen, denn hier ist sie der Normalfall und nicht die Ausnahme.
+- Nicht kaufen, was verboten ist: eine zusaetzliche Runde, ein groesseres Fenster oder gar ein Vorfilter, der die Berechtigung schon beim Ranken beruecksichtigt, sind die naheliegenden Fixe. Die ersten beiden kosten Laufzeit unter einer 1,5-Sekunden-Decke, der dritte macht eine zweite Sicherheitsgrenze auf. Die Roadmap hat diesen Handel ausdruecklich ausgeschlossen.
 
 **Warning signs:**
-Nur eine Testumgebung; Handshake- oder Heartbeat-Code entsteht spät; keine Aussage zur Docker-Mindestversion; Bugreports der Form "geht bei mir nicht" ohne dass man Topologie unterscheiden kann.
+`FAILURE_ALL_CANDIDATES_REJECTED` haeuft sich in einem Testlauf unter Datumssortierung. Die gemessene Rundenzahl bleibt bei 1,0, waehrend die Trefferzahl auf null faellt.
 
 **Phase to address:**
-Foundations (Phase 1). Abnahmekriterium: grüne Testbereitstellung auf docker-compose und AIO, bevor Suchlogik entsteht.
+Filterphase (Verhalten), Messphase (Zahl auf Zielhardware), Haertungsphase (Formulierung auf der Seite in EN/DE/FR).
 
 ---
 
-### Pitfall 10: Der Vektorindex wächst schneller als die Box
+### Pitfall 10: Die Entladung gibt RSS nicht zurueck, und die Messung sagt trotzdem "erfolgreich"
 
 **What goes wrong:**
-Semantische Suche verlangt Chunking, und Chunking vervielfacht die Objektzahl. 50.000 Dokumente ergeben schnell 500.000 bis 2.000.000 Chunks. Bei 384 Dimensionen in float32 sind das rund 1,5 KB pro Chunk, also mehrere Gigabyte allein an Vektoren, plus den Chunk-Text für Snippets. Und die Suche wird linear langsamer: sqlite-vec macht per Design eine Brute-Force-Suche über alle Vektoren, ein ANN-Index ist erklärtes Ziel, aber noch nicht da (Tracking-Issue #25). Auf einer ARM-Box mit zwei Kernen ist eine Brute-Force-Suche über Millionen Vektoren pro Tastendruck nicht tragbar.
+Die Sitzung wird freigegeben, der Halter geleert, im Log steht "entladen", und `anon` im Container faellt um zwanzig Megabyte statt um vierhundert. Oder schlimmer: die Zahl faellt im Testfall und nicht auf der Box, weil die Testumgebung andere Allokatorbedingungen hat.
 
 **Why it happens:**
-Der Prototyp läuft mit 500 Dokumenten und antwortet in 20 Millisekunden. Die Linearität fällt erst beim echten Datenbestand auf, und dann ist die Architektur festgelegt.
+Drei Schichten geben Speicher unterschiedlich zurueck.
+- **glibc-malloc** gibt freigegebene Bloecke ueblicherweise nicht ans Betriebssystem zurueck, sondern behaelt sie in der Arena. Das Basisimage ist `python:3.13-slim-trixie`, also glibc, und `malloc_trim(0)` ist verfuegbar, muss aber ausdruecklich gerufen werden (per `ctypes`).
+- **onnxruntime** hat einen offenen Bericht genau zu diesem Verhalten beim Zerstoeren von Sitzungen (Issue 26831: Speicher wird von `ReleaseSession`/`ReleaseEnv` nicht zurueckgegeben). Der Arena-Allokator ist in diesem Projekt bereits abgeschaltet (`enable_cpu_mem_arena=False`, Hebel 6), was die Lage verbessert, aber keine Rueckgabe garantiert.
+- **Der groessere Block liegt gar nicht bei onnxruntime.** Die RAM-Tabelle in `CLAUDE.md` nennt Tokenizer und Splitter mit **544 MB** Spitze (amd64 544,3 / arm64 543,7 / auf der Box 542,8), gegen 250 bis 400 MB fuer onnxruntime plus Modell. Wer nur die ONNX-Sitzung entlaedt, laesst den groesseren Posten stehen. Der Tokenizer lebt ausserdem auf der Rust-Seite, also ausserhalb dessen, was Pythons Speicherverwaltung ueberhaupt beruehrt.
 
 **How to avoid:**
-- Vektoren quantisieren. int8 statt float32 senkt den Speicherbedarf um den Faktor 4 bei geringem Qualitätsverlust; binäre Quantisierung als grober Vorfilter mit anschließender Nachbewertung senkt ihn drastisch. Das ist der einzige Weg, Millionen Chunks auf 4 GB RAM ehrlich zu bedienen.
-- Keine reine Vektorsuche als Einstieg. Hybrid heißt hier zuerst Volltext (billig, exakt, skaliert), dann Vektorsuche auf einer vorgefilterten Kandidatenmenge statt auf dem Gesamtbestand. Damit ist die Brute-Force-Grenze kein Problem mehr, weil man nie über alles scannt.
-- Chunking konservativ: nicht jedes Dokument braucht 200 Chunks. Deckelung pro Dokument, Deduplizierung identischer Chunks (Kopfzeilen, Signaturen, Boilerplate), Mindestlänge für einen Chunk.
-- Modellgröße ist eine Produktentscheidung, keine Detailfrage. Ein kleines, quantisiertes Modell mit 384 Dimensionen ist auf dieser Hardware richtig; jede Verdopplung der Dimension verdoppelt Speicher und Suchzeit.
-- Messgröße von Anfang an mitführen: Bytes pro indexiertem Dokument. Das ist die Zahl, die dem Admin sagt, was ihn erwartet, und die uns sagt, wann wir zu gierig sind.
-- Ein Fallback-Schalter: semantische Suche deaktivierbar, Volltext bleibt. Wenn die Box zu klein ist, degradiert das Produkt, statt zu sterben.
+- Das Erfolgskriterium ist eine **gemessene Zahl auf der Zielbox**, nach demselben Ablesungsprotokoll wie in v1.1 (`anon` aus den cgroup-Werten, nicht RSS aus `ps`), und nicht "die Referenz ist weg".
+- Entladen wird, was zusammengehoert: die ONNX-Sitzung UND der Tokenizer/Splitter des zweiten Gleises (`poller._chunker`, `poller._model`). Sonst ist die Ersparnis der kleinere Teil der Rechnung.
+- `malloc_trim(0)` nach der Entladung ausprobieren und die Wirkung ausweisen. Wenn es nichts bringt, gehoert auch das in den Bericht.
+- Vorab eine Messung, die entscheidet, ob die Funktion sich lohnt: erst entladen, dann messen, dann bauen. v1.1 hat die Entladung nicht gebaut, weil die gemeinsame Engine 588,6 MB gebracht hat und die Entladung damit ein "Bedarfsfall" wurde. Wenn die Rueckgabe jetzt nur 40 MB betraegt, ist der Bedarfsfall nicht eingetreten und die Funktion faellt zugunsten der Messphase weg. Das ist ein legitimer Ausgang und muss vor dem Bau ausgesprochen sein.
 
 **Warning signs:**
-Antwortzeit steigt linear mit dem Bestand; Speicherbedarf des Suchprozesses wächst mit der Indexgröße statt konstant zu bleiben; keine Kennzahl "Bytes pro Dokument"; Tests nur mit Spielzeugkorpora.
+Die Entladung ist in Unit-Tests gruen, aber es gibt keine Zahl von der Box. Die Ersparnis wird aus der Differenz "geladen minus frisch gestartet" gerechnet statt aus "vor der Entladung minus nach der Entladung". Der Wert schwankt zwischen zwei Laeufen um mehr als die behauptete Ersparnis.
 
 **Phase to address:**
-Semantik-Phase (Phase 4), mit einem Skalierungstest auf mindestens 50.000 Dokumenten vor der Freigabe.
+Entladephase, aber mit einem Vorprueflauf ganz am Anfang, dessen Ergebnis ueber den Rest der Phase entscheidet.
 
 ---
 
-### Pitfall 11: Die Multi-Arch-Falle beim Image-Bau
+### Pitfall 11: Zwei Besitzer der Engine, und die Entladung tut deshalb nichts
 
 **What goes wrong:**
-Das Image wird auf Alpine gebaut, weil es klein ist, und dann gibt es für die zentralen Abhängigkeiten keine passenden Wheels. Live gegen PyPI geprüft am 15.08.2026: `tantivy` 0.26.0, `onnxruntime` 1.28.0 und `sqlite-vec` 0.1.9 liefern manylinux-Wheels für aarch64 und cp313, aber **keine** musl-Wheels. Auf Alpine bedeutet das: Rust- und C++-Toolchain im Image, Buildzeiten im Stundenbereich, und bei onnxruntime ein Bauvorhaben, das man auf einem Emulator nicht gewinnen will. Zweite Falle: QEMU-Emulation für arm64 im CI macht aus einem 5-Minuten-Build einen 90-Minuten-Build und produziert schwer diagnostizierbare Fehlschläge.
+`engine.reset()` wird gerufen, der Halter ist leer, die Diagnose sagt "cold", und der Speicher bleibt trotzdem belegt. Oder das Gegenteil: nach der Entladung baut der Suchpfad eine neue Engine, waehrend das zweite Gleis noch die alte haelt, und der Container traegt wieder zwei Tokenizer und zwei onnxruntime-Sitzungen. Das sind genau die 276 MB, die Plan 06.1-02 entfernt hat.
 
 **Why it happens:**
-Alpine gilt reflexhaft als "das schlanke Basisimage", und die Wheel-Frage stellt man erst, wenn der Build bricht. Die ARM-Frage stellt sich erst beim ersten Nutzer mit Raspberry Pi oder Ampere-VPS, also nach dem Release.
+Der Halter in `embed/engine.py` ist nicht der einzige Besitzer. Der Poller haelt in `_build_the_cutter` eine eigene Referenz (`self._model`, dazu `self._chunker`). `engine.reset()` leert ausdruecklich nur das Modulglobal, und die Docstring sagt selbst, dass die Funktion "von niemandem im Container" benutzt wird und fuer Testsuite und ein Werkzeug da ist. Wer sie als Entladefunktion wiederverwendet, bekommt genau diesen Zwei-Besitzer-Zustand.
+Die zweite Haelfte ist angenehmer, als sie klingt: Pythons Referenzzaehlung schuetzt einen laufenden Aufruf. `EmbeddingModel._embed` holt die Engine einmal unter dem Lock in eine lokale Variable und laesst `Run()` bewusst ausserhalb des Locks laufen (der onnxruntime-Maintainer sagt das zu). Wird `self._engine` in diesem Moment auf None gesetzt, lebt das `_Engine`-Objekt weiter, solange die lokale Referenz existiert. **Unsicher wird es erst, wenn die Entladung mehr tut als loslassen**: ein explizites `del session` plus `gc.collect()`, ein Aufruf einer Freigabefunktion der Bibliothek, oder ein Umbau, der die Engine nicht mehr in eine lokale Variable holt.
 
 **How to avoid:**
-- Basisimage auf glibc (Debian slim), nicht musl. Das ist die eine Entscheidung, die den ganzen Themenkomplex auflöst.
-- Multi-Arch von Anfang an bauen, nicht nachträglich. Native ARM-Runner nutzen, wenn verfügbar; sonst Emulation nur für den finalen Build und mit realistischem Zeitbudget einplanen.
-- Alle Abhängigkeiten exakt pinnen und vor jedem Upgrade prüfen, ob es für beide Architekturen und die Zielversion von Python noch Wheels gibt. tantivy-py #371 (kein Wheel für Python 3.13.0 bei Version 0.22) zeigt, dass diese Lücke real auftritt und Projekte blockiert.
-- Modellgewichte für die Embeddings ins Image backen, nicht beim ersten Start herunterladen. Ein Download beim Start bricht in Umgebungen ohne ausgehende Verbindung, kostet beim ersten Suchversuch Minuten und macht die Installation von einem fremden Dienst abhängig. Das kostet Imagegröße, aber es ist der Unterschied zwischen "funktioniert nach der Installation" und "funktioniert manchmal".
-- Imagegröße trotzdem im Blick behalten: OCR-Sprachdaten sind groß, deshalb nur eine sinnvolle Grundmenge mitliefern und weitere Sprachen als Option.
-- Tesseract- und Ghostscript-Versionen pinnen. Ein stiller Basis-Image-Sprung ändert sonst die OCR-Qualität zwischen zwei Releases, ohne dass sich unser Code geändert hat.
+- Genau ein Ort entscheidet ueber Laden und Entladen, und das ist der Halter in `embed/engine.py`. Der Poller fragt ihn bei jedem Bedarf neu, statt eine Referenz ueber Stunden zu halten. Das ist die gleiche Bewegung, die 06.1-02 fuer das Laden gemacht hat, jetzt fuer das Entladen.
+- Entladen heisst loslassen. Keine expliziten Destruktoren, kein erzwungener `gc.collect()` auf einem Objekt, das gerade in einem nativen Aufruf sein koennte. Wenn `malloc_trim` gerufen wird, dann nach einem Zaehlerstand, der belegt, dass kein Aufruf mehr laeuft.
+- Ein Zaehler fuer laufende Einbettungen (hoch beim Betreten von `_embed`, runter beim Verlassen), und die Entladung passiert nur bei Stand null. Der bestehende RLock reicht dafuer nicht, weil er den Graphlauf absichtlich nicht abdeckt.
+- Ein Test nach dem Muster des bestehenden: `load_count()` vor und nach einem Entlade- und Nachladezyklus mit gleichzeitiger Suche, und die Zusicherung, dass nie zwei Sitzungen gleichzeitig existieren.
 
 **Warning signs:**
-Der Dockerfile enthält einen Compiler; CI-Build dauert länger als 30 Minuten; das Image wurde nie auf echter ARM-Hardware gestartet; beim ersten Start geht Netzwerkverkehr nach draußen.
+`engine.reset()` taucht ausserhalb von Tests und `tools/one_load.py` im Produktionspfad auf. Der Poller haelt nach der Entladung noch `self._chunker`. Die Grundlast nach der Entladung liegt ueber der Grundlast vor dem ersten Laden.
 
 **Phase to address:**
-Foundations (Phase 1) für die Basisimage-Entscheidung, Härtung (Phase 7) für den Test auf echter ARM-Hardware.
+Entladephase.
 
 ---
 
-### Pitfall 12: Die Kompatibilitäts-Todesspirale
+### Pitfall 12: Die Kaltstart-Klippe wird vom Ausnahmefall zum Regelfall und reisst die 1,5-Sekunden-Decke
 
 **What goes wrong:**
-Genau das, was fulltextsearch umgebracht hat, und es kann uns identisch treffen. Nextcloud veröffentlicht ein neues Major-Release, die App deklariert es in `info.xml` nicht, verschwindet damit aus dem Store, wird beim Upgrade deaktiviert, und die Nutzer stehen ohne Suche da. Belege aus dem Tracker: #950 ("No update Version available for Nextcloud 34", Juni 2026), #955 ("Will there be a version for Nextcloud 34 and maybe next 35?", Juli 2026), #956 (die App lässt NC 34 hängen, Abhilfe war Deaktivieren), dazu Forumsthreads mit dem Tenor, dass die Volltextsuch-Apps für NC 34/35 nicht kompatibel sind. Jede unbeantwortete Kompatibilitätsfrage kostet Vertraün, und Vertraün ist bei einem Ein-Personen-Projekt das einzige Kapital.
+Nach der Entladung zahlt die naechste Suche das Nachladen. Die PHP-Haelfte ruft den Container mit einer harten Decke von `REQUEST_TIMEOUT_SECONDS = 1.5` Sekunden auf. Reisst der Aufruf, antwortet die Route mit **HTTP 200 und einer Ergebnisgruppe ohne Containerteil**: der Nutzer sieht null Treffer, keine Fehlermeldung, und im Nextcloud-Protokoll steht `cURL error 28`. Genau das ist am 10.09.2026 um 14:05:17Z passiert und in `rohdaten/95c-...` belegt. Eine Entladung im Leerlauf macht aus diesem einmaligen Vorfall ein taegliches Ereignis: jede erste Suche nach einer Ruhephase faellt hinein, und die Unified Search fragt bei jedem Tastendruck.
 
 **Why it happens:**
-Kompatibilitätspflege ist unsichtbare Arbeit ohne Erfolgserlebnis, sie fällt genau dann an, wenn man an Features arbeiten will, und der Zeitpunkt wird von außen bestimmt. Bei einem Solo-Entwickler kollidiert sie mit jedem anderen Vorhaben.
+Die gemessenen Zahlen lassen dafuer keinen Spielraum. Kaltstart ueber OCS auf vollem Bestand: **1.838,4 ms**, Marge zur Decke **minus 338,4 ms**. Drei Reproduktionen lagen bei 1.598, 1.805 und 2.468 ms, und dass sie trotzdem Treffer lieferten, lag am Seitencache des Wirts, der die Modellgewichte noch hielt. Die erste Suche kostet ausserdem gemessene **plus 415,0 MB** `anon`. Wer entlaedt, kauft Grundlast mit genau dieser Klippe.
 
 **How to avoid:**
-- Die Architektur so wählen, dass Kompatibilität billig ist. Der Großteil der Logik liegt im Container und ist von der Nextcloud-Version entkoppelt; die PHP-Companion-App bleibt bewusst winzig und benutzt nur öffentliche, stabile Schnittstellen (Suchanbieter-Registrierung plus Weiterleitung). Je kleiner die PHP-Fläche, desto billiger jeder Major-Sprung.
-- CI-Lauf gegen die Nextcloud-Entwicklungslinie, nicht nur gegen die aktuelle stabile Version. Bricht etwas, weiß man es Wochen vor dem Release und nicht durch ein Issue.
-- Kompatibilitäts-Release als feste, terminierte Aufgabe im Kalender, ausgerichtet am Nextcloud-Releaseplan, nicht als Reaktion auf Issues.
-- Öffentliche, ehrliche Kommunikation im README: welche Nextcloud-Versionen getestet sind und wann die nächste geplant ist. Die Vorgeschichte des Ökosystems macht diese Zielgruppe misstrauisch; ein sichtbarer Wartungsrhythmus ist ein Feature.
-- Vorsicht bei der Versionsdeklaration: nur bis zur nächsten Version voraus deklarieren, sonst greift man sich Ausfälle wie #956 ein, wo die App auf einer neuen Version zwar lädt, aber die Instanz lahmlegt.
+Die Entladung darf niemals dazu fuehren, dass ein Nutzer synchron auf das Nachladen wartet. Der Weg dafuer ist schon gebaut und kostet nichts: ein nicht geladenes Modell ist kein Fehler, sondern der Zustand `embedding_unavailable`, die Vektorliste ist leer, die RRF-Fusion wird zur Identitaet auf der lexikalischen Liste, und der Nutzer bekommt Volltexttreffer (D-19). Also:
+- Beim Nachladen antwortet die Suche **sofort lexikalisch** und stoesst das Laden im Hintergrund an. Die naechste Suche ist dann wieder vollstaendig.
+- Alternative, die ausdruecklich zu verwerfen ist: die Decke auf 3 Sekunden anheben. Sie gilt fuer den Dialog, der alle Provider parallel fragt, und ein Provider, der drei Sekunden blockiert, macht die ganze Suche traege.
+- Die Ruhefrist wird gross genug gewaehlt, dass sie in einem Arbeitstag nicht mehrfach greift, und der Wiederaufwaerm-Preis wird **gemessen und ausgewiesen**, wie der Milestone es verlangt: als Zahl mit Angabe des Seitencache-Zustands (siehe Pitfall 16).
+- Eine Alternative, die ernsthaft zu pruefen ist und die den ganzen Fallstrick umgeht: **nur das zweite Gleis entlaedt** (Tokenizer und Splitter, 544 MB, kein Nutzer wartet darauf), der Suchpfad behaelt seine Sitzung. Das ist der groessere Posten und der ungefaehrliche.
 
 **Warning signs:**
-Erstes Issue "Version für NC X?" kommt vor dem eigenen Release; CI kennt nur eine Nextcloud-Version; die PHP-App wächst und benutzt interne Klassen.
+Im Nextcloud-Protokoll haeufen sich `cURL error 28` auf `/exapps/findling_backend/search`. Die Trefferzahl je Anfrage faellt, waehrend das Messwerkzeug null Fehlschlaege meldet (siehe Pitfall 18). Nutzer berichten "die erste Suche findet nie etwas".
 
 **Phase to address:**
-Foundations (Phase 1) für die Schnittstellen-Disziplin, Store-Phase (Phase 8) für den Wartungsrhythmus.
+Entladephase fuer das Verhalten, Messphase fuer die Zahl, Haertungsphase fuer den Store-Text (die Zusage darf nicht besser klingen als die Messung).
 
 ---
 
-### Pitfall 13: Store- und Zertifikatspipeline (kurz, siehe Schwesterprojekt)
+### Pitfall 13: Der sechste Engine-Zustand bricht ein geschlossenes Vokabular an sechs Stellen
 
 **What goes wrong:**
-Späte Umbenennung entwertet das Zertifikat, weil es an die App-ID gebunden ist; die CSR hängt in der Warteschlange; das Docker-Image ist zum Zeitpunkt der Store-Freigabe noch nicht unter dem in `info.xml` deklarierten Tag abrufbar; `info.xml` fällt durch die Schema-Prüfung.
+Die Entladung braucht ein Wort fuer "war geladen, ist jetzt entladen, laedt bei Bedarf nach". Es wird im Container eingefuehrt, die Admin-Seite zeigt daraufhin "Dieser Container meldet den Zustand des Modells noch nicht", was wie ein kaputtes Backend aussieht, und in der franzoesischen Fassung fehlt der Satz ganz.
 
 **Why it happens:**
-Die Regeln stehen in Dokumenten, die man zuletzt liest, wenn App-ID, Tabellennamen und Containernamen schon feststehen.
+Der Zustand ist ein geschlossenes Vokabular, das an sechs Stellen im Gleichstand gehalten wird:
+1. `backend/src/findling/embed/engine.py`: die fuenf Konstanten und `ENGINE_STATES` als `frozenset`, ausdruecklich so gebaut, "dass eine sechste Antwort nicht ankommen kann, ohne dass diese Zeile sie sieht".
+2. `php/lib/Service/AdminViewService.php`: `private const ENGINE_STATES = ['loaded', 'cold', 'disabled', 'missing', 'waiting_for_retry']`. Ein unbekanntes Wort wird zu `null`.
+3. `php/templates/admin.php`: die Satzabbildung `$engineSentences` fuer die erste Darstellung.
+4. `php/js/admin.js`: der `switch` fuer jede weitere Abfrage.
+5. bis 6. die Kataloge `de.js/de.json`, `de_DE.js/de_DE.json`, `fr.js/fr.json` mit den vier Gates aus `backend/tests/test_admin_ui_contract.py`: gleiche Schluesselmengen, franzoesische Vollstaendigkeit, Platzhalter-Paritaet, franzoesische Pluralregel.
 
 **How to avoid:**
-Vollständig recherchiert und dokumentiert im Schwesterprojekt: `C:\Users\Student\nextcloud-mcp-connector\.planning\research\PITFALLS.md`, dort Pitfall 5 und Pitfall 8. Kernpunkte hier nur als Merkposten: App-ID und Anzeigename vor dem ersten Bau-Commit einfrieren (kein "Nextcloud" im Namen), CSR früh einreichen (gemessene Laufzeit im Juli und August 2026: etwa 1 bis 5 Tage, plus Puffer für Rückfragen), Signierschlüssel wie ein Produktionsgeheimnis behandeln, Multi-Arch-Image vor dem Store-Release veröffentlichen, `info.xml` lokal gegen das Schema prüfen, Deinstallation muss restlos aufräumen (hier zusätzlich: das Index-Volume, und die Frage beantworten, ob es beim Entfernen mitgeht oder bewusst bleibt).
-Projektspezifische Ergänzung: Diese App verarbeitet Dateiinhalte. Der Store-Text muss von Anfang an klarstellen, dass nichts den Server verlässt, dass keine Datei verändert wird und dass keine Telemetrie stattfindet. Das ist gleichzeitig Compliance und Marketing.
+- Zuerst pruefen, ob ueberhaupt ein sechstes Wort noetig ist. `cold` bedeutet heute "die Artefakte sind da, nichts hat geworfen, nichts wurde gelesen". Das beschreibt einen entladenen Container korrekt. Der Satz dahinter ("Das Modell wird gelesen, wenn es zuerst gebraucht wird. Das ist der normale Zustand.") passt ebenfalls. **Empfehlung: kein sechstes Wort, sondern `cold` wiederverwenden**, und die Information "es war schon einmal geladen" gehoert, wenn ueberhaupt, in eine getrennte Zahl auf der Admin-Seite.
+- Wenn es doch ein sechstes Wort wird: alle sechs Stellen in einem Plan, plus die Owner-Abnahme fuer den franzoesischen Wortlaut (Muttersprachler-Gate als blockierender Checkpoint, wie in v1.1).
+
+**Warning signs:**
+Die Admin-Seite zeigt den Ausweichsatz. Ein Katalog-Gate wird rot mit "differs from ... in [...]". `AdminViewService::engineState` liefert `null` fuer einen Zustand, den der Container gerade gemeldet hat.
 
 **Phase to address:**
-Foundations (Phase 1) für Naming und ID, Store-Phase (Phase 8) für Einreichung.
+Entladephase (Entscheid und Bau), Haertungsphase (Kataloge und Abnahme).
 
 ---
 
-### Pitfall 14: Wettbewerbsrisiko, ohne Alleinstellung zu bauen
+### Pitfall 14: Der one-load-Beweis wird durch die Entladung entwertet, ohne rot zu werden
 
 **What goes wrong:**
-Nextcloud baut Suche und KI-Kontext selbst aus (Context Chat, Context Agent, Assistant-Anbindung an die Unified Search in Hub 26). Wenn unser Produkt sich als "Context Chat, aber kleiner" positioniert, sind wir in dem Moment überflüssig, in dem Nextcloud eine Standardlösung mitliefert. Zusätzlich reales Risiko in die andere Richtung: fulltextsearch könnte einen Wartungsschub bekommen und die "verwaist"-Erzählung entwerten.
+`findling.tools.one_load` und der zugehoerige Schritt in `resilience.yml` beweisen seit 06.1-02, dass ein Prozess genau einmal laedt. Mit einer Entladung im Leerlauf ist diese Zusicherung nicht mehr wahr, und das Gate hat zwei moegliche Ausgaenge, die beide schlecht sind: es wird rot, obwohl das Produkt richtig arbeitet, oder es bleibt gruen, weil sein Messfenster kuerzer ist als die Ruhefrist, und beweist damit eine Eigenschaft, die das Produkt nicht mehr hat.
 
 **Why it happens:**
-Die Versuchung, in Richtung des sichtbaren Trends zu bauen (Chat, RAG, Antworten), ist groß, obwohl genau dort der Wettbewerber sitzt und mehr Ressourcen hat.
+`_LOAD_COUNT` ist absichtlich monoton und nicht zuruecksetzbar ("ein Zaehler, der genullt werden kann, ist einer, mit dem ein Gate sich selbst gruen nullen koennte"). Die Aussage "genau ein Laden je Prozess" war die richtige Formulierung fuer eine Welt ohne Entladung.
 
 **How to avoid:**
-- Die Positionierung liegt in den Lücken, die dokumentiert und dauerhaft sind: Context Chat braucht laut offizieller Doku bei reinem CPU-Betrieb mindestens 12 GB RAM, verlangt AVX und AVX2 (womit typische ARM-Boxen ausfallen), kann kein OCR, ignoriert Dateien über 100 MB und passwortgeschützte Dateien stillschweigend, befolgt files_accesscontrol nicht und liefert Antworten statt Treffer. Unser Anspruch ist das Gegenteil: läuft auf 4 GB, läuft auf ARM, kann OCR, respektiert Rechte, liefert Treffer mit Belegstelle.
-- Out of Scope ernst nehmen: kein RAG, keine Chat-Antworten. Jede Woche, die in Antwortgenerierung fließt, wird gegen einen Gegner investiert, der dort stärker ist, und nicht in OCR-Robustheit, wo niemand konkurriert.
-- Beweisbare Zahlen als Marketing: "Erstindex von 10.000 Dokumenten auf einem Raspberry Pi 5 mit 4 GB in X Stunden, Index Y MB, Suchantwort unter Z Millisekunden". Das kann der Wettbewerber nicht kopieren, ohne seine Architektur zu ändern.
-- Kompatibilität als Strategie: Wenn Nextcloud später eine eigene Suchlösung liefert, ist die Weiterexistenz an sauberen, öffentlichen Schnittstellen und an OCR gebunden, nicht an ein Alleinstellungsmerkmal, das per Server-Release verschwinden kann.
+Die Invariante wird umformuliert, bevor die Funktion gebaut wird, nicht danach:
+- alt: "ein Prozess laedt genau einmal"
+- neu: "zu keinem Zeitpunkt existieren zwei Engines, und innerhalb eines warmen Fensters wird genau einmal geladen"
+Dazu ein zweiter Zaehler fuer Entladungen, damit die Differenz `loads - unloads` die Aussage traegt, und die Rot-Faehigkeit des umgebauten Gates wird per Mutation am echten Baum bewiesen. Das ist der etablierte Standard dieses Projekts ("Beweis-Tests, deren Rot-Faehigkeit per Mutation belegt ist, sind die einzigen, deren Gruen etwas bedeutet").
 
 **Warning signs:**
-Feature-Diskussionen driften Richtung "Antwort auf eine Frage"; die Positionierung im README nennt keine harten Ressourcenzahlen; kein Benchmark auf Zielhardware.
+Das Gate wird flatterig statt deterministisch. Im Plan steht "Gate anpassen" ohne Angabe, welche Aussage es danach traegt.
 
 **Phase to address:**
-Durchgehend, konkret aber in der Store- und Launch-Phase (Phase 8) beim Verfassen der Positionierung, und in der Härtungsphase (Phase 7) beim Erzeugen der Benchmark-Zahlen.
+Entladephase, als erster Plan der Phase (die Invariante steht vor dem Bau fest).
+
+---
+
+### Pitfall 15: Der Messdeckel ist kleiner als der Lauf, den er decken soll
+
+**What goes wrong:**
+Der Deckelvorschlag lautet 26 Stunden und 3,50 USD fuer EINE Anfahrt, die den DI-10-04-Wirkungsbeleg-Volllauf, die Untersuchung der vier regressiven Laststufen, die Sprachfall-Messung ohne Fremdbestand und den Erstvollzug des Wiederaufbau-Runbooks traegt. Der letzte Volllauf allein hat **26 Stunden 37 Minuten** gedauert. Der Deckel reisst am ersten Tag, genau wie der 30-Stunden-Deckel in v1.1 gerissen ist (gerissen am 10.09. um 15:20Z, vom Owner auf 34 Stunden angehoben).
+
+**Why it happens:**
+Der Deckel wird aus der Erinnerung an die erwartete Laufzeit gebildet, nicht aus der gemessenen. Dazu kommen in v1.1 gemessene 38 Minuten Anfahrt und Vormessungen plus rund 2 Stunden 50 Minuten Nachmessungen, also gut 3,5 Stunden neben dem Lauf.
+
+**How to avoid:**
+Vor der Anfahrt eine Zeitrechnung aufstellen, die von der gemessenen Laufzeit ausgeht, nicht von der erhofften. Drei Stellschrauben, von denen mindestens eine gezogen werden muss:
+- Deckel auf mindestens 31 Stunden setzen (26h37 plus 3,5 h plus Reserve) und die Kosten entsprechend (bei 0,1158 USD/h sind 31 Stunden rund 3,59 USD).
+- Oder den Wirkungsbeleg auf einem Teilkorpus fahren und die Aussage entsprechend enger fassen. Das kostet Vergleichbarkeit gegen die 26h37 und muss der Owner entscheiden.
+- Oder den Volllauf detached ueber Nacht fahren (in v1.1 bewaehrt) und alle Messungen davor und danach so buendeln, dass keine Box-Stunde auf einen Menschen wartet.
+Der Deckel ist ein Owner-Checkpoint. Ein Vorschlag, der arithmetisch nicht aufgehen kann, gehoert nicht in einen Plan.
+
+**Warning signs:**
+Im Plan steht ein Deckel ohne eine Zeile, die die gemessene Vorlaufzeit nennt. Die Anfahrt beginnt ohne fertigen Ablaufplan als Datei.
+
+**Phase to address:**
+Messphase, im Checkpoint-Plan vor der Anfahrt.
+
+---
+
+### Pitfall 16: Die Vergleichbarkeit gegen die v1.1-Grundlinie bricht an fuenf Stellen gleichzeitig
+
+**What goes wrong:**
+Der neue Volllauf dauert 20 Stunden, die Freude ist gross, und die Zahl bedeutet nichts, weil sich neben dem gemessenen Fix noch vier andere Dinge geaendert haben.
+
+**Why it happens:**
+Der Bericht von v1.1 nennt die Stoerfaktoren selbst, und sie sind alle unauffaellig:
+1. **Startzustand.** Beim Anstoss des v1.1-Laufs lagen bereits **1.653 Dateien im Index**; ein Lauf von null haette laenger gebraucht. Der Snapshot `snap-03f1d1d9ad9262704` enthaelt Korpus **und** die fertigen Indizes. Wer ihn einspielt und "Volllauf" startet, misst unter Umstaenden einen Resume ueber 52.000 fertige Zeilen.
+2. **Cron-Intervall.** Der ganze Laufzeitzuwachs von 40,6 Prozent war Zulauf: das Arbeitsvorrat lief 5,85 Stunden lang trocken (194 von 812 Statuslesungen), weil `StorageCrawlJob` nur beim System-Cron vorrueckte und der auf jener Instanz **alle 12 Minuten** lief statt alle 5. Auf einer neu aufgebauten Box mit 5-Minuten-Cron waere ein Teil der Verbesserung die Box und nicht der Fix.
+3. **Der Fix selbst.** Die Top-up-Route fuehrt jetzt Crawl-Scheiben **inline** aus, mit 20 Sekunden Budget unter einem OCS-Aufruf. Die dabei verbrauchte PHP-Zeit steht im Leerlauf des Containers und gehoert in die Durchsatzrechnung.
+4. **Das Lastwerkzeug.** Wenn es fuer v1.2 korrigiert wird (und das muss es, siehe Pitfall 18), sind die v1.1-Stufenzahlen zu guenstig und die v1.2-Zahlen ehrlich. Ein direkter Vergleich stellt eine Verschlechterung dar, die eine Korrektur ist.
+5. **Der Seitencache des Wirts.** Er hat die Kaltstart-Reproduktion vom 10.09. vollstaendig erklaert: derselbe Vorgang lag einmal bei 1.838 ms und einmal bei 1.598 ms, weil der letzte Start einmal 29 Stunden und einmal Minuten zurueck lag.
+
+**How to avoid:**
+- Der Wiederaufbau-Runbook-Erstvollzug ist die Gelegenheit, jede dieser fuenf Groessen **abzulesen und zu protokollieren**, bevor der Lauf startet: Zeilenstaende von `state.db` (indexiert/uebersprungen/fehlgeschlagen), Cron-Intervall der Instanz, Instanztyp, harte Containergrenze, Zeit seit dem letzten Containerstart.
+- Der Wirkungsbeleg wird **mit derselben Schalterstellung wie v1.1** gefahren, also mit abgeschalteter Modell-Entladung. Sonst misst er zwei Aenderungen auf einmal (siehe Pitfall 19).
+- Wo Vergleichbarkeit nicht herstellbar ist, wird die Zahl als **Erstmessung** gefuehrt und nicht als Vergleichszeile. v1.1 hat das fuer die Sprachfaelle und die Seitenroute genau so gemacht, und es war der Grund, warum der Bericht ohne Beanstandung abgenommen wurde.
+
+**Warning signs:**
+Der Durchsatz liegt in den ersten Minuten unplausibel hoch (Resume statt Neubau). Im Bericht steht eine Prozentzahl ohne die Nennung des Startzustands. Das Wort "Grundlinie" steht neben einer Zahl, die mit einem anderen Werkzeug erhoben wurde.
+
+**Phase to address:**
+Messphase, und zwar im Runbook selbst, damit die Ablesungen erzwungen und nicht erinnert werden.
+
+---
+
+### Pitfall 17: Gemessen wird die Aufwaermphase, nicht das Erzeugnis
+
+**What goes wrong:**
+Die Wiederaufwaerm-Kosten der Entladung werden gemessen, sie betragen 300 ms, alle sind zufrieden. Auf einer Instanz, die das Modell nicht im Seitencache hat, sind es 1.800 ms und die Aufrufdecke reisst.
+
+**Why it happens:**
+Derselbe Mechanismus wie in Pitfall 16 Punkt 5, hier aber als eigenstaendige Falle, weil die Entladefunktion genau diese Groesse zur Kennzahl macht. Dazu kommt der Klassiker: die ersten Anfragen einer Lastreihe treffen einen Container, dessen Reader-Konfiguration, Analysekette (23-MB-Automat aus der Konstituentenliste) und Degradiert-Verdikt noch nicht gebaut sind. Die Verdikt-Zwischenspeicherung hat fuenf Sekunden TTL, was bei kurzen Stufen genau in die Messung faellt.
+
+**How to avoid:**
+- Jede Kaltstartzahl traegt den Zustand des Seitencaches mit sich: entweder wurde er geleert (dokumentierter Befehl im Runbook) oder es steht dabei, wie lange der letzte Start zurueckliegt. Der Bericht von v1.1 formuliert die Lehre bereits als Satz, der uebernommen werden kann: eine Gesamtdauer ueber 1,5 s ist kein Beweis fuer einen Abbruch, und eine darunter keiner fuer das Gegenteil.
+- Lastreihen bekommen Aufwaermrunden, die verworfen werden, und die Zahl der verworfenen Runden steht im Bericht.
+- Fuer die Entladung wird **beides** gemessen: warm (Seitencache haelt die Gewichte) und kalt (Seitencache geleert). Die Store-Aussage darf sich nur auf die schlechtere stuetzen.
+
+**Warning signs:**
+Zwei Laeufe derselben Messung unterscheiden sich um mehr als das Rauschband von fuenf Prozent. Eine Kaltstartzahl steht ohne Zeitangabe im Bericht.
+
+**Phase to address:**
+Messphase (Protokoll im Runbook), Entladephase (die zu messende Groesse ist definiert, bevor die Box angefahren wird).
+
+---
+
+### Pitfall 18: Das Messwerkzeug zaehlt Ausfaelle als Erfolge
+
+**What goes wrong:**
+Stufe 16 der Nebenlaeufigkeitsreihe meldet `"failures": 0` bei 160 Anfragen, waehrend das Nextcloud-Protokoll im selben Fenster **17 abgebrochene Containeraufrufe** mit `cURL error 28` verzeichnet. Die Route antwortet bei einem abgebrochenen Containeraufruf mit HTTP 200 und einer Ergebnisgruppe ohne Containerteil, also zaehlt das Werkzeug sie als beantwortet. Fuer 10,6 Prozent der Anfragen hat die gemessene Antwortzeit nicht die Zeit einer vollstaendigen Antwort gemessen.
+
+**Why it happens:**
+Das Werkzeug misst HTTP-Status, und der Status ist ehrlich: die Unified Search soll nicht die ganze Suche verlieren, wenn ein Provider schweigt. Die Messfrage ist eine andere als die Produktfrage, und das Werkzeug kennt nur die eine.
+
+**How to avoid:**
+- Jede Stufe wird gegen eine **unabhaengige Quelle** aufgerechnet: das Nextcloud-Protokoll im selben Zeitfenster. Das ist bereits als Lehre 3 in der Retrospektive festgehalten.
+- Der Fingerabdruck wird mitgefuehrt und ausgewertet: **Treffer je Anfrage.** 5,40 auf den Stufen 1 und 4, 4,16 auf Stufe 16. Eine Stufe, deren Trefferdichte faellt, ist verdaechtig, auch bei `failures: 0`.
+- Wird das Werkzeug korrigiert, gilt Pitfall 16 Punkt 4: die alten Stufenzahlen sind nicht mehr vergleichbar, und der Bericht sagt das, statt eine Korrektur als Regression darzustellen.
+- Und der zweite Teil derselben Lehre: **Skripte, die auf der Box laufen, muessen vorher auf der Box gelaufen sein.** In v1.1 mussten zwei Messskripte waehrend des Laufs korrigiert werden, weil `sudo` die Umgebung raeumt und `docker exec` keine weitergibt, sodass `OC_PASS` nirgends ankam. Das gehoert in die Wellen ohne Box-Zeit, vor die Anfahrt.
+
+**Warning signs:**
+`failures: 0` bei steigender Nebenlaeufigkeit und fallender Trefferdichte. Ein Messskript wird waehrend eines laufenden Deckels editiert.
+
+**Phase to address:**
+Messphase, in der Vorbereitungswelle ohne Box-Zeit.
+
+---
+
+### Pitfall 19: Eine Anfahrt, zwei Aenderungen, keine zurechenbare Zahl
+
+**What goes wrong:**
+Der Owner-Entscheid lautet: EINE Box-Anfahrt fuer alles. Wenn in diesem einen Lauf sowohl der DI-10-04-Fix als auch die Modell-Entladung und womoeglich noch der Filter aktiv sind, ist keine der drei Aenderungen zurechenbar. Der Lauf produziert eine Gesamtzahl und keinen Beleg.
+
+**Why it happens:**
+Der Kostendruck ist real und der Entscheid ist richtig. Falsch waere nur, aus "eine Anfahrt" auf "ein Lauf" zu schliessen. Eine Anfahrt kann mehrere Zustaende messen, wenn die Zustaende umschaltbar sind.
+
+**How to avoid:**
+- Die Modell-Entladung bekommt einen **Schalter, der ab Werk aus ist** (Umgebungsvariable, Muster `FINDLING_*`, wie alle anderen Stellschrauben). Damit kann dieselbe Box denselben Korpus in zwei Zustaenden messen, und der Wirkungsbeleg fuer DI-10-04 laeuft mit dem Schalter aus, also vergleichbar zu v1.1.
+- Der Filter aendert an Durchsatz und Grundlast nichts und darf mitlaufen, aber seine eigenen Messungen (gefilterte Suche, Sortierung, DI-07-03 unter Sortierung) sind eigene Messbloecke mit eigenen Rohdateien.
+- Daraus folgt eine Reihenfolge fuer die Roadmap: **Filter und Entladung werden VOR der Messphase gebaut**, die Entladung hinter dem Schalter, und die Messphase misst beide Zustaende in einer Anfahrt. Umgekehrt waere die Entladung ungemessen im Store.
+
+**Warning signs:**
+Im Messplan steht ein Lauf und drei Fragen. Es gibt keine Umgebungsvariable, mit der sich die Entladung abschalten laesst.
+
+**Phase to address:**
+Roadmap-Reihenfolge (Filterphase und Entladephase vor der Messphase), Entladephase fuer den Schalter, Messphase fuer den Ablaufplan.
+
+---
+
+### Pitfall 20: Der Minor-Sprung ohne Migration, zum zweiten Mal
+
+**What goes wrong:**
+v1.2 aendert die Datenbank nicht, also braucht es keine Migration. Bestandsinstallationen suchen nach dem Upgrade stumm ins Leere, und niemand merkt es, weil frische Installationen funktionieren.
+
+**Why it happens:**
+Genau dieser Fehler wurde in v1.1 gefunden, und zwar erst in der Haertungsphase durch den Ende-zu-Ende-Upgrade-Beweis 1.0.3 auf 1.1.0 in CI. Die Lehre steht als Muster in der Retrospektive: **jeder Minor-Versionssprung braucht eine PHP-Migration** (Muster `Version001100Date20260911000000`). Die Versuchung, sie wegzulassen, ist bei einem Milestone, der ausdruecklich index-kompatibel bleiben will, besonders gross, weil "keine Schemaaenderung" sich wie "keine Migration" anhoert.
+
+**How to avoid:**
+`Version001200Date2026....php` wird angelegt, auch wenn sie fachlich nichts tut, und der Upgrade-Beweis 1.1.0 auf 1.2.0 laeuft in `deploy-harp` Ende zu Ende, wie in v1.1. Dazu die uebrigen Release-Regeln des Projekts, die alle schon einmal Geld oder Zeit gekostet haben: beide Haelften fuehren dieselbe Major und Minor; eine Messzahl steht an genau drei Stellen (README.en.md und beide info.xml) und ein Gate haelt die Wortlaute zusammen; der Store-Tag wird nie verschoben; das Vokabular-Gate laeuft vor dem Push.
+
+**Warning signs:**
+Im Release-Plan fehlt eine Migrationsdatei. Der Upgrade-Workflow wird uebersprungen, weil "sich nichts an der Datenbank geaendert hat".
+
+**Phase to address:**
+Haertungsphase, als blockierender Schritt vor der Einreichung.
 
 ---
 
@@ -337,170 +458,165 @@ Durchgehend, konkret aber in der Store- und Launch-Phase (Phase 8) beim Verfasse
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Fortschritt nur im Prozessspeicher statt in der Datenbank | Indexer ist in einem Tag geschrieben | Genau der Fehlermodus aus fulltextsearch #311; jeder Neustart kostet Stunden; nicht nachrüstbar ohne Umbau | Nie. Das ist das Kernversprechen des Produkts |
-| Zugriffsrechte in den Index kopieren statt zur Suchzeit prüfen | Suche wird sehr schnell | Veralteter Rechte-Cache bedeutet Inhaltsabfluss nach Entfreigabe | Nur als Vorfilter mit kurzer Gültigkeit und autoritativer Nachprüfung |
-| OCR-Ergebnis als neues PDF zurückschreiben | Nutzer bekommen durchsuchbare PDFs geschenkt | Datenverlustrisiko wie files_fulltextsearch_tesseract #30; Vertraünsverlust ist irreversibel | Nie in v1. Falls je, dann als opt-in in ein separates Zielverzeichnis, niemals ersetzend |
-| Nur amd64 ausliefern, ARM später | Halbe CI-Zeit, schnellerer erster Release | Zielgruppe (Raspberry Pi, ARM-VPS) fällt weg, negative Bewertungen, nachträgliche Umstellung des Basisimages | Nur für interne Vorabversionen, nie für ein Store-Release |
-| Embedding-Modell beim ersten Start herunterladen | Kleineres Image | Erststart bricht offline; Abhängigkeit von einem fremden Dienst; widerspricht dem Privacy-Versprechen | Nur für optionale Zusatzmodelle, nie für das Standardmodell |
-| Semantik erst ausliefern, Volltext nachziehen | Klingt nach dem interessanteren Feature | Ohne exakte Suche nach Dateinamen und Zeichenketten wirkt das Produkt kaputt; Nutzer suchen Rechnungsnummern, keine Bedeutungen | Nie. Volltext ist die Basis, Semantik die Zugabe |
-| Einen Suchserver als Sidecar mitliefern, weil es schneller integriert ist | Weniger eigener Code | Zweiter Prozess, zweites Speicherbudget, zweite Fehlerquelle, genau die Setup-Qual, die das Produkt beseitigen soll | Nur als optionales Backend für große Instanzen, nach v1 |
-| Fehler nur ins Log schreiben statt in eine Fehlertabelle | Spart die Tabelle und die UI | Stiller Ausfall wie fulltextsearch #597; Admin merkt nichts; Support ohne Datenbasis | Nur während der ersten Prototypen-Iteration |
+| Dropdown schreibt `type:pdf` in die Suchzeile | eine Zeile Code, kein Protokollumbau | Semantik ist unter jedem Filter aus, unsichtbar; spaeterer Rueckbau beruehrt vier Aufrufstellen | nie |
+| Filter in PHP hinter dem Recheck | keine Containeraenderung, kein neuer Parameter | halbleere Seiten, luegender Pager, auf grossem Bestand systematisch leere Ergebnisse | nie |
+| Sortierung als zusaetzliches Argument in `_sides` durchgereicht | zwei Zeilen | `Candidate.score` traegt Zeitstempel, RRF fusioniert Datum mit Semantik | nie |
+| Trefferzahlen je Dateityp anzeigen | bessere Oberflaeche | Fast-Field auf `ext`, Schemaaenderung, Reindex von 52.000 Dokumenten, D-04 gebrochen | nur zusammen mit einer ohnehin faelligen Schemaaenderung, also fruehestens v2 |
+| `engine.reset()` als Entladefunktion wiederverwenden | die Funktion existiert schon | zweiter Besitzer im Poller, doppelte Engine, 276-MB-Regression von 06.1-02 zurueck | nie |
+| Entladung ohne Schalter ausliefern | eine Konfiguration weniger | die eine Box-Anfahrt kann A/B nicht messen, der Wirkungsbeleg wird unzurechenbar | nie in v1.2 |
+| Nur die ONNX-Sitzung entladen, Tokenizer behalten | einfacher, kein Poller-Umbau | der groessere Posten (544 MB) bleibt stehen, die Kennzahl enttaeuscht | als bewusst benannte erste Stufe, wenn die Zahl trotzdem ausgewiesen wird |
+| Aufrufdecke von 1,5 s anheben, statt lexikalisch zu antworten | Kaltstart reisst nicht mehr | der Dialog wartet auf einen Provider, die ganze Unified Search wird traege | nie fuer den Dialog; fuer die eigene Seite ist `PAGE_REQUEST_TIMEOUT_SECONDS` bereits getrennt und darf mit Messung bewegt werden |
+| Messzahl ohne Angabe des Startzustands in den Bericht | kuerzerer Bericht | die Zahl ist im naechsten Milestone unbrauchbar, der Vergleich muss neu erhoben werden | nie |
+
+---
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| AppAPI Events Listener | Events als zuverlässigen Datenstrom behandeln | Doku sagt explizit asynchron und nur wenige Ereignistypen, keine Retry-Zusage. Events beschleunigen, der periodische Abgleich garantiert |
-| webhook_listeners | Annehmen, Webhooks kommen sofort | Zustellung hängt an Hintergrundjobs, ohne eigenen Worker per Default im Minutenraster. Latenz einplanen und in der UI ausweisen |
-| Unified Search (IProvider) | Ergebnisse ungefiltert samt Snippet zurückgeben | Jeder Anbieter wird per eigenem HTTP-Request aufgerufen; Rechte pro Nutzer im `search()` durchsetzen, Snippet erst nach der Prüfung erzeugen, Cursor- statt Offset-Paginierung |
-| AppAPI Deploy-Daemon | Gegen Docker Socket Proxy entwickeln | DSP ist abgekündigt und soll mit NC 35 entfallen; HaRP ist der neue Standard, ExApp-Erreichbarkeit läuft über FRP-Tunnel |
-| Docker Engine API | Version als gegeben ansehen | app_api #712: Docker 29 verlangt API 1.44, AppAPI sprach 1.41, Deployment war komplett tot. Kompatibilitätsmatrix pflegen |
-| APP_PERSISTENT_STORAGE | Annehmen, das Volume sei gesichert und liege bei den Nutzerdaten | Volume `nc_app_<app_id>_data` liegt im Docker-Storage, bleibt beim Unregister per Default erhalten, ist in AIO-Sicherungen aber nur enthalten, wenn ausdrücklich eingetragen. Index muss rekonstruierbar sein |
-| Nextcloud-Dateizugriff aus dem Container | Direkt auf das Dateisystem des Hosts zugreifen | Nur über die Nextcloud-Schnittstellen im Nutzerkontext; externer Speicher, Verschlüsselung und Gruppenordner funktionieren sonst nicht |
-| Ghostscript und Tesseract | Als stabile Blackbox behandeln | Versionen pinnen, Ausgabe validieren, Fehlerausgänge als Normalfall behandeln, niemals Rückschreibpfad |
-| Nextcloud-Verschlüsselung (server-side encryption) | Ignorieren | Bei aktivierter Verschlüsselung kommt man nur über die Nextcloud-Schicht im Nutzerkontext an Klartext. Früh testen, sonst indexiert man Chiffrat |
+| Unified-Search-Dialog (`Provider.php`) | Dateityp als Filter deklarieren, weil er auf der eigenen Seite existiert | `getSupportedFilters` bleibt bei `BUILTIN_TERM` und `BUILTIN_TITLE_ONLY`; ein Name ohne `FilterDefinition` macht die ganze Providerliste kaputt, ein nicht deklarierter Filter laesst den Provider kommentarlos ueberspringen |
+| `SearchRequest` im Container | neues Feld nur auf der PHP-Seite senden | `extra="forbid"` weist unbekannte Felder als HTTP 400 ab, die Suche bricht komplett; das Feld muss im Modell deklariert sein, und die Nutzerkennung kommt weiter nur aus dem signierten Header |
+| `/snippets` | neuen Anfrageparameter vergessen | jeder Parameter, der `build_query` beruehrt, reist zu beiden Routen, mit Gleichstand-Test nach Muster `test_search_limits_lockstep.py` |
+| Tantivy `Searcher.search` | `order_by_field` setzen und Score weiterverwenden | gemessen: der Score wird zum Feldwert; unter Sortierung Score auf 0.0 setzen und RRF nicht anwenden |
+| Tantivy-Schema | Sortierfeld nachtraeglich auf `fast` setzen | gemessen: nur `mtime`, `file_id`, `storage_id` sind `fast`; `ext` scheitert mit "is not configured as fast field"; alles andere kostet `SCHEMA_VERSION` und einen Reindex |
+| `IMimeTypeDetector` gegen Index-`ext` | Filterkategorien ueber MIME denken | Kategorien als Endungsmengen definieren, weil nur `ext` im Index steht; `mimeType` bleibt fuer das Symbol zustaendig |
+| Nextcloud-Cron auf der Messbox | Intervall nicht ablesen | Intervall protokollieren; der v1.1-Laufzeitzuwachs war zu grossen Teilen ein 12-Minuten-Cron |
+| EBS-Snapshot `snap-03f1d1d9ad9262704` | einspielen und "Volllauf" starten | der Snapshot traegt Korpus UND fertige Indizes; Zeilenstaende aus `state.db` vor dem Start protokollieren, Index und `vectors.db` fuer einen echten Neubau entfernen |
+| huggingface-hub / onnxruntime beim Nachladen | `HF_HUB_OFFLINE=1` als Beweis nehmen | die Variable ist ein Netz, kein Beweis; der Offline-Nachweis ist der `--network none`-Lauf in `docker.yml`, und er muss um einen Entlade- und Nachladezyklus erweitert werden |
+| onnxruntime-Telemetriezeile | als Netzwerkverkehr lesen | "Failed to persist telemetry device ID" ist ein fehlgeschlagener lokaler Schreibvorgang, erscheint bei JEDER Sitzungserzeugung und taucht mit der Entladung nun wiederholt im Log auf; das gehoert dokumentiert, bevor ein Admin es meldet |
+
+---
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Brute-Force-Vektorsuche über den Gesamtbestand | Suchzeit steigt linear mit dem Bestand | Hybrid mit Volltext-Vorfilter, Quantisierung, Kandidatenmenge deckeln | Sprbar ab ca. 100.000 Chunks auf schwacher CPU, unbenutzbar im Millionenbereich |
-| Ein Commit pro indexierter Datei | Platten-I/O dominiert, Durchsatz bricht ein | Stapelverarbeitung mit Commit alle N Dokumente oder alle M Sekunden | Ab wenigen tausend Dateien, auf langsamem Speicher sofort |
-| Volle Parallelität für OCR | Nextcloud-Weboberfläche wird während der Indexierung zäh | Ein Worker, `nice`, Lastschwelle, Pausieren bei Nutzeraktivität | Auf 2-Kern-Boxen sofort |
-| Textextraktion ohne Längenkappung | Ein Dokument erzeugt hunderttausende Chunks und bläht Index und RAM | Kappung pro Dokument, Chunk-Deduplizierung, Mindestlänge | Beim ersten sehr großen Dokument, also unvermeidlich |
-| Rechteprüfung erst nach dem Ranking, dann Nachladen in einer Schleife | Suchanfrage macht dutzende Nextcloud-Aufrufe, Antwortzeit im Sekundenbereich | Gebündelte Prüfung für eine Kandidatenliste, ein Aufruf statt N | Ab etwa 20 Treffern pro Anfrage |
-| Vollständiger Abgleich bei jedem Durchlauf | CPU-Last alle paar Minuten, Platte läuft dauernd | Inkrementeller Abgleich über Wasserzeichen, Tiefenabgleich selten und nachts | Ab etwa 100.000 Dateien |
-| Snippet-Erzeugung durch erneutes Lesen der Originaldatei | Jede Suche löst Dateizugriffe und ggf. Entschlüsselung aus | Kurzen Kontext pro Chunk im Index halten (mit Rechteprüfung davor) | Sofort bei großen Dateien auf langsamem Speicher |
+| Filter hinter der Fusion | halbleere Seiten, `hasMore` trotzdem wahr | Filter als `Must`-Klausel vor dem ersten `searcher.search` | sobald die Treffermenge groesser ist als `SEARCH_RRF_WINDOW` = 100, also auf jeder echten Instanz |
+| Seltener Dateityp treibt die Fortsetzungsschleife | Seitenaufbau naehert sich dem 3-s-Budget, Containeraufruf naehert sich 1,5 s | Filter in der Anfrage (dann filtert die Engine selbst), nicht in der Antwort | ab einigen zehntausend Dokumenten, wenn der gefilterte Typ selten ist |
+| Datumssortierung auf grossem Fremdbestand | leere Seiten, 1,0 Runde je Suche, `FAILURE_ALL_CANDIDATES_REJECTED` | Verhalten messen und benennen; keine zweite Runde, kein groesseres Fenster kaufen | ab etwa dem Verhaeltnis des Messkorpus: wenige eigene Dateien gegen zehntausende fremde |
+| Nachladen im Anfragepfad | `cURL error 28`, HTTP 200 ohne Containerteil, null Treffer ohne Fehlermeldung | waehrend des Nachladens lexikalisch antworten (D-19-Pfad), Laden im Hintergrund | bei jeder ersten Suche nach der Ruhefrist; gemessener Kaltstart 1.838,4 ms gegen Decke 1.500 ms |
+| Entladung ohne Rueckgabe an das Betriebssystem | Grundlast faellt kaum, obwohl "entladen" | cgroup-`anon` vor und nach der Entladung messen, `malloc_trim(0)` pruefen, Tokenizer mit entladen | sofort, und es faellt nur auf der Box auf |
+| Wiederholtes Laden statt Zwischenspeichern | `memory.events max` steigt (v1.1: von 2.796 auf 21.939), `memory.peak` erreicht die harte Grenze | Ruhefrist gross genug, Entladung nur im echten Leerlauf, Zaehler fuer Laden und Entladen ausweisen | auf der 2-GiB-Containergrenze der Zielbox, wo die Spitze schon heute exakt anliegt |
+
+---
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Snippet vor der Rechteprüfung erzeugen oder ausliefern | Direkter Inhaltsabfluss zwischen Nutzern, auch ohne Dateizugriff | Prüfen, dann rendern. Ein einziger Testfall mit entzogener Freigabe im Dauergate |
-| Trefferzahl vor dem Filtern melden | Existenz und Umfang fremder Dokumente werden verraten | Erst filtern, dann zählen, oder unscharf ausweisen |
-| Systemrechte oder Impersonation im Suchpfad benutzen | Kompletter Umgehungspfad um das Rechtesystem, Store-relevanter Befund | Eine Client-Fabrik, die eine Nutzeridentität erzwingt; kein Systempfad im Suchcode |
-| files_accesscontrol-Regeln stillschweigend ignorieren | Genau die Schwäche, die Nextcloud für Context Chat offen dokumentiert | Entweder respektieren oder in der Store-Beschreibung ausweisen. Nicht verschweigen |
-| Extrahierten Text oder OCR-Ergebnisse in Logdateien schreiben | Dokumentinhalte landen im Nextcloud-Log, das andere Admins und Backups sehen | Nur Datei-IDs und Fehlercodes loggen, niemals Inhalte, auch nicht im Debug-Modus |
-| Papierkorb und Versionen mitindexieren | Gelöschte Dokumente bleiben auffindbar, Löschung wirkt nicht | Papierkorb und Versionshistorie ausschließen; Löschung entfernt sofort aus dem Index |
-| Link-Shares und föderierte Shares als vollwertige Nutzer behandeln | Öffentliche Links könnten Suchtreffer erzeugen | Suche nur für angemeldete Nutzer, kein Suchpfad ohne Nutzeridentität |
-| Ausgehende Verbindungen aus dem Container (Modell-Download, Update-Check, Telemetrie) | Bricht das Privacy-Versprechen und fällt bei der Store-Prüfung auf | Modelle im Image, keine ausgehenden Verbindungen im Normalbetrieb, dokumentiert |
-| Zip-Bomben und ressourcenintensive Eingaben verarbeiten | Denial of Service durch eine hochgeladene Datei | Archive nicht auspacken, Ressourcenlimits pro Job, Pixel- und Seitengrenzen |
+| Filter oder Sortierung erst hinter dem PHP-Recheck anwenden | eine zweite Stelle entscheidet ueber Sichtbarkeit; `test_php_acl_boundary.py` zaehlt Aufrufstellen und faellt, oder faellt nicht und die Grenze ist trotzdem doppelt | Filter in der Container-Anfrage, oberhalb des einen Vorfilters; die Zahl der Aufrufstellen bleibt zwei |
+| Zweite Route fuer Filterdaten oder Sortierung | `NoAdminRequired` und `NoCSRFRequired` muessten erneut begruendet werden; Trust-Boundary-Gate | eine Route, ein Dokument, Parameter in der bestehenden Adresse |
+| Trefferzahl je Typ oder Gesamtzahl anzeigen | ein Zaehler vor dem Recheck ist eine Aussage ueber Dokumente anderer Leute (Zaehl-Orakel T-02-93) | kein Total, wie bisher; `hasMore` genuegt; falls gezaehlt wird, dann nur ueber bestaetigte Treffer der geladenen Seite |
+| Neuer Parameter wird in `Candidate` mitgeschickt (etwa die Endung) | Aussage ueber ein Dokument vor dem Recheck; der Feldmengen-Test geht rot | `Candidate` bleibt bei drei Feldern; Endung und Name kommen aus dem bestaetigten Knoten |
+| Sortier- oder Filterwert landet in einer Logzeile | Filterwert ist zwar kein Suchbegriff, aber eine Fehlerzeile des Parsers zitiert die Eingabe | weiterhin nur Typnamen loggen, nie Eingaben; Parserfehler bleiben auf `debug` |
+| Nachladen des Modells oeffnet einen Socket | das Privacy-Versprechen des Store-Textes | Offline-Probe in `docker.yml` um einen Entlade- und Nachladezyklus erweitern, weiter mit `--network none` |
+| Entladung schreibt in den Nutzerdatenbereich (Zwischenspeicher, Cache-Datei) | Nur-Lesen-Invariante auf Nutzerdateien | die Entladung braucht keinen Speicherort; nichts wird ausgelagert |
+
+---
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Suche liefert während der Erstindexierung nichts, ohne Erklärung | Nutzer hält die App für kaputt und deinstalliert am ersten Tag | Trefferliste zeigt Hinweis "Indexierung läuft: 4.120 von 12.412 Dokumenten durchsucht" |
-| Fortschritt nur als Prozentzahl ohne Restzeit | Admin weiß nicht, ob 6 Stunden oder 6 Tage | Durchsatz messen und Restzeit schätzen, plus aktuell bearbeiteter Bereich |
-| Übersprungene Dateien unsichtbar lassen | Nutzer sucht ewig nach einem Dokument, das nie indexiert wurde | Gruppierte `skipped`- und `failed`-Liste mit Grund und der Angabe, welche Grenze das ändern würde |
-| Semantische Treffer ohne Belegstelle | Nutzer versteht nicht, warum ein Dokument getroffen wurde, und misstraut der Suche | Immer die passende Textstelle zeigen, bei semantischen Treffern kenntlich machen |
-| Volltext und Semantik als getrennte Ergebnislisten | Nutzer muss verstehen, was er will, bevor er sucht | Ein Ergebnis, hybrid gerankt, ohne Modus-Auswahl |
-| Exakte Suche (Rechnungsnummer, Dateiname) geht in der Semantik unter | Der häufigste reale Suchfall funktioniert schlechter als vorher | Exakte Treffer immer oben, Anführungszeichen als exakte Phrase unterstützen |
-| Einstellungsseite mit 20 Optionen | Widerspricht dem Zero-Config-Versprechen und verunsichert | Eine Statusseite, wenige Schalter, alles Weitere hinter "Erweitert" |
-| Deinstallation ohne Aussage zum Index | Admin weiß nicht, ob mehrere Gigabyte auf der Platte bleiben | Beim Entfernen ausdrücklich sagen, was mit dem Volume geschieht, und eine Aufräumaktion anbieten |
+| Filter ohne Suchbegriff | `build_query` gibt `query=None` zurueck, die Seite zeigt nichts, und das sieht kaputt aus | die Seite sagt in einem Satz, dass ein Suchbegriff noetig ist; ein Filter allein fragt nach allen PDFs der Instanz in keiner sinnvollen Reihenfolge und wird bewusst nicht beantwortet |
+| `<select onchange="this.form.submit()">` | ohne JavaScript ist die Seite unbedienbar; der Entwurfsvertrag sagt, dass Suchen, Blaettern, Filtern, Oeffnen und Zurueckkehren ohne Skript funktionieren | Auswahlfelder im bestehenden Formular plus sichtbare Absendeschaltflaeche, oder Links, die alle vier Adresswerte selbst setzen |
+| Filterwechsel behaelt die Seitennummer | Sprung mitten in eine fremde Ergebnismenge, ohne Hinweis | jeder Wechsel setzt `page=1` und leert `cursors` |
+| Sortierung wird angeboten, aber die Relevanz verschwindet ohne Hinweis | Nutzer glauben, die Suche sei schlechter geworden | die Seite benennt die aktive Sortierung; wenn unter Sortierung die Semantik entfaellt, steht das dort, wo es gelesen wird |
+| Leere gefilterte Seite ohne Unterscheidung | "kaputt" statt "in dieser Runde war nichts fuer Sie dabei" | die drei bestehenden Failure-Zustaende bleiben erhalten und bekommen unter Filter und Sortierung eigene Formulierungen in EN/DE/FR |
+| Neue Bedienelemente ohne Beschriftung fuer Screenreader | die Seite hat heute genau eine h1 und benannte Bereiche; eine unbeschriftete Auswahl faellt aus der Struktur | Beschriftungen wie bei `findling-search-names`, und die Kataloge im Gleichstand |
+
+---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Indexlauf:** Oft fehlt die Wiederaufnahme. Prüfen: `docker kill` mitten im Lauf, Neustart, Fortsetzung ohne Datenverlust und ohne Neubeginn
-- [ ] **Fehlerbehandlung:** Oft fehlt der Testkorpus mit kaputten Eingaben. Prüfen: defektes PDF, passwortgeschütztes PDF, 0-Byte-Datei, falsche Endung, 500-MB-Datei, Datei mit Sonderzeichen und Emojis im Namen, Datei auf externem Speicher
-- [ ] **Datenintegrität:** Oft fehlt der Beweis. Prüfen: Prüfsummen aller Quelldateien vor und nach einem vollen Indexlauf identisch
-- [ ] **Rechte:** Oft fehlt der Entzugsfall. Prüfen: Freigabe entziehen, danach darf weder Treffer noch Snippet noch Trefferzahl etwas verraten. Zusätzlich Gruppenordner mit Teilrechten und files_accesscontrol
-- [ ] **Löschung:** Oft bleibt der Indexeintrag. Prüfen: Datei löschen, Ordner rekursiv löschen, Papierkorb leeren, jeweils sofortige Unauffindbarkeit
-- [ ] **Events:** Oft nur über die Weboberfläche getestet. Prüfen: Upload per Desktop-Client, per WebDAV, per occ, per externem Speicher, jeweils mit anschließendem Treffer
-- [ ] **Abgleich:** Oft nie ohne Events getestet. Prüfen: Events komplett blockieren, Dateien ändern, nach einem Abgleichzyklus muss der Index korrekt sein
-- [ ] **Ressourcen:** Oft nur auf dem Entwicklerrechner gemessen. Prüfen: Vollindex auf 4-GB-ARM-Box, RSS-Kurve über die gesamte Laufzeit, kein OOM, Nextcloud bleibt bedienbar
-- [ ] **Speicherplatz:** Oft ungetestet. Prüfen: Platte künstlich füllen, Indexer muss pausieren statt zu beschädigen; danach Platz schaffen, Fortsetzung muss klappen
-- [ ] **Neuaufbau:** Oft nur dokumentiert. Prüfen: Index-Volume löschen, App startet, baut neu auf, erreicht denselben Deckungsgrad
-- [ ] **Multi-Arch:** Oft nur gebaut, nie gestartet. Prüfen: arm64-Image auf echter ARM-Hardware starten, Handshake, Index, Suche
-- [ ] **Deployment:** Oft nur eine Topologie. Prüfen: docker-compose und AIO, jeweils Installation, Update und Deinstallation
-- [ ] **Update:** Oft ungetestet. Prüfen: Version installieren, Daten indexieren, auf neue Version aktualisieren, Index muss erhalten und schemakompatibel sein
-- [ ] **Deinstallation:** Oft bleiben Reste. Prüfen: PHP-App-Tabellen, Einstellungen, registrierte Event-Listener, Suchanbieter, Volume
-- [ ] **Zero-Config:** Oft ist eine Einstellung doch nötig. Prüfen: frische Installation ohne einen einzigen Konfigurationsschritt, erste erfolgreiche Suche protokollieren
+- [ ] **Dateityp-Filter:** oft fehlt die Wirkung VOR dem Fusionsfenster; pruefen mit einem Korpus, in dem der gefilterte Typ jenseits von Rang 100 liegt
+- [ ] **Dateityp-Filter:** oft fehlt der Fall "Datei ohne Endung" und "Endung in Grossschreibung"; pruefen mit `.JPG` und einer Datei ohne Punkt im Namen
+- [ ] **Dateityp-Filter:** oft fehlt die Weitergabe an `/snippets`; pruefen, ob der Ausschnitt mit derselben Anfrage geschnitten wurde, die gerankt hat
+- [ ] **Sortierung:** oft fehlt, dass der Score zum Feldwert wird; pruefen, welchen Wert `Candidate.score` unter Sortierung traegt
+- [ ] **Sortierung:** oft fehlt der Fall "grosser Fremdbestand"; pruefen mit dem Messkorpus, nicht mit zwanzig Dateien
+- [ ] **Blaetterung:** oft fehlt die Entwertung des Cursor-Pfads bei Filterwechsel; pruefen mit einer von Hand zusammengesetzten Adresse
+- [ ] **Modell-Entladung:** oft fehlt die Zahl von der Box; pruefen mit cgroup-`anon` vor und nach der Entladung auf arm64
+- [ ] **Modell-Entladung:** oft fehlt der Tokenizer (544 MB); pruefen, ob `poller._chunker` nach der Entladung noch steht
+- [ ] **Modell-Entladung:** oft fehlt das Verhalten der ersten Suche danach; pruefen, ob sie lexikalisch antwortet oder auf das Laden wartet
+- [ ] **Modell-Entladung:** oft fehlt der Schalter; pruefen, ob die Funktion ab Werk aus ist und in einer Anfahrt A/B messbar bleibt
+- [ ] **Admin-Seite:** oft fehlt eine der sechs Gleichstand-Stellen des Engine-Zustands; pruefen, ob die Seite den Ausweichsatz zeigt
+- [ ] **Messung:** oft fehlt der Startzustand im Bericht; pruefen, ob Zeilenstaende, Cron-Intervall und Zeit seit letztem Start protokolliert sind
+- [ ] **Messung:** oft fehlt die Gegenrechnung gegen das Nextcloud-Protokoll; pruefen, ob jede Laststufe ihre Abbruchzahl traegt
+- [ ] **Release:** oft fehlt die Migration fuer den Minor-Sprung; pruefen mit dem Ende-zu-Ende-Upgrade 1.1.0 auf 1.2.0 in CI
+- [ ] **Release:** oft fehlt eine der drei Stellen fuer eine Messzahl; pruefen mit dem Wortlaut-Gate ueber README.en.md und beide info.xml
+
+---
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Hängender Indexlauf beim Nutzer | LOW, wenn vorgesorgt | Stale-Claim-Reaper greift automatisch; Admin-Aktion "Lauf zurücksetzen" setzt `claimed` auf `pending`; betroffene Datei landet mit Grund in der Fehlerliste |
-| Beschädigter Index | MEDIUM | Integritätsprüfung beim Start erkennt es, Index wird verworfen und neu aufgebaut, Suche meldet währenddessen degradierten Zustand statt Fehler |
-| Rechteleck bereits ausgeliefert | HIGH | Sofort Patch-Release, Sicherheitshinweis im Store und README, Snippet-Ausgabe notfalls per Serverkonfiguration abschaltbar machen. Deshalb ist Vorbeugung hier die einzige sinnvolle Strategie |
-| Datenverlust durch Schreibpfad | Nicht erstattbar | Existiert nur, wenn die Architekturregel gebrochen wurde. Kein Recovery, nur Prävention. Deshalb Prüfsummen-Gate in der CI |
-| OOM-Schleife auf kleiner Box | LOW bis MEDIUM | Beim Start erkennen, dass der letzte Job nicht abgeschlossen wurde, diesen als `failed: suspected_oom` markieren und überspringen statt erneut zu versuchen. Automatisches Herunterregeln der Budgets |
-| Index und Nextcloud nach Restore inkonsistent | LOW, wenn Instanzbindung vorhanden | Instanz-ID- und Epoch-Prüfung beim Start erzwingt vollen Abgleich; Admin sieht "Wiederherstellung erkannt, gleiche ab" |
-| Nextcloud-Major bricht die App | MEDIUM | Vorgezogene Erkennung durch CI gegen die Entwicklungslinie; Notfallplan ist ein Kompatibilitäts-Release der PHP-App allein, weil der Container versionsunabhängig ist |
-| AppAPI oder Docker-API-Bruch (Fall #712) | MEDIUM, extern | Kompatibilitätsmatrix im README, schnelle Kommunikation, Verweis auf die AppAPI-Version. Nicht unser Fehler, aber unser Supportaufkommen |
+| Filter wirkt hinter der Fusion (ausgeliefert) | MEDIUM | Filter in die Anfrage ziehen, Patch-Release; keine Datenaenderung, kein Reindex, aber eine neue Store-Einreichung mit Migration |
+| Sortierung schreibt Zeitstempel in `score` | LOW | Score unter Sortierung auf 0.0 setzen; nichts Persistentes betroffen |
+| Sortierung nach Name zugesagt, Fast-Field fehlt | HIGH | entweder Zusage zuruecknehmen (Store-Text reist mit dem Release und ist nicht editierbar, also nur per neuer Version) oder Schemaaenderung mit Reindex ueber den ganzen Bestand |
+| Cursor-Pfad ueberlebt Filterwechsel | LOW | Fingerabdruck einfuehren, Rueckfall auf Seite eins; rein serverseitig |
+| Entladung gibt nichts zurueck | LOW bis MEDIUM | Funktion hinter dem Schalter lassen, ab Werk aus, Zahl im Bericht ehrlich ausweisen; das ist ein legitimer Ausgang und kein Fehlschlag |
+| Entladung erzeugt zwei Engines | MEDIUM | Halter zur einzigen Quelle machen, Poller-Referenz entfernen, `load_count`-Differenz als Gate; Symptom ist Speicher, nicht Datenverlust |
+| Kaltstart-Klippe im Feld | MEDIUM | Schalter ab Werk aus schaltet die Funktion fuer alle Bestandsinstallationen ab, ohne Release; danach lexikalische Antwort waehrend des Ladens nachliefern |
+| Messdeckel gerissen | LOW | Owner entscheidet (in v1.1 auf 34 h angehoben); Voraussetzung ist, dass der Stand jederzeit ablesbar ist, also Kostenablesung im Runbook |
+| Volllauf misst einen Resume statt eines Neubaus | HIGH | zweite Anfahrt noetig, ausser die Zeilenstaende wurden protokolliert und erlauben eine Korrekturrechnung |
+| Minor-Sprung ohne Migration ausgeliefert | MEDIUM | in-place-Reparatur der Store-Version ueber den Update-Endpunkt plus zusaetzliche neue Version, damit Bestandsinstallationen das Update sehen; Tag nie verschieben |
+
+---
 
 ## Pitfall-to-Phase Mapping
 
-Phasennamen sind Vorschläge für den Roadmap-Zuschnitt.
-
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| 9 Deployment und Deploy-Daemon | Phase 1 Foundations (ExApp-Skelett, HaRP, Handshake) | Grüne AppAPI-Testbereitstellung auf docker-compose und AIO |
-| 11 Multi-Arch und Wheels | Phase 1 Foundations (Basisimage-Entscheidung) | arm64-Image startet auf echter ARM-Hardware, kein Compiler im Image |
-| 13 Store, App-ID, Zertifikat | Phase 1 (Naming) und Phase 8 (Einreichung) | App-ID eingefroren vor dem ersten Bau-Commit, `info.xml` schemavalidiert |
-| 3 Datenverlust durch OCR | Phase 1 (Architekturregel) und Phase 3 (OCR) | Prüfsummenlauf über Korpus mit defekten PDFs, Grep-Gate gegen Schreib-APIs |
-| 1 Hängender Indexlauf | Phase 2 Indexkern | Kill-und-Fortsetzungstest, Stale-Claim-Reaper unter Test |
-| 2 Stiller Ausfall | Phase 2 (Zähler) und Phase 6 (Admin-UI) | Kanarienvogel-Selbsttest, Deckungsgrad wird berechnet und angezeigt |
-| 5 Event-Lücken und Drift | Phase 2 Indexkern und Event-Anbindung | Index korrekt auch bei vollständig blockierten Events nach einem Abgleich |
-| 7 Zero-Config-Defaults | Phase 2 (Allowlist, Limits) und Phase 6 (Sichtbarkeit) | Vollindex auf einem realistischen Bestand ohne Ressourcenalarm, `skipped` mit Gründen |
-| 8 Index als nicht rekonstruierbarer Zustand | Phase 2 (Transaktionen, Instanzbindung) und Phase 7 (Härtung) | Disk-Full-Test, Volume-Lösch-Test, Restore-Simulation |
-| 4 OCR-Ressourcen | Phase 3 OCR und Phase 7 Härtung | Lasttest auf 4-GB-ARM, kein OOM, Nextcloud bleibt bedienbar |
-| 10 Vektorindex-Wachstum | Phase 4 Semantik | Skalierungstest 50.000 Dokumente, Kennzahl Bytes pro Dokument, Antwortzeit unter Zielwert |
-| 6 Berechtigungsleck | Phase 5 Unified Search, Phase 1 Client-Fabrik, Phase 7 Testsuite | Paritätstest gegen die native Nextcloud-Suche für sechs Rechteszenarien, als Dauergate |
-| 12 Kompatibilitätsspirale | Phase 1 (schmale PHP-Fläche) und Phase 8 (Wartungsrhythmus) | CI läuft gegen die Nextcloud-Entwicklungslinie, Kompatibilitätsmatrix im README |
-| 14 Wettbewerbsrisiko | durchgehend, konkret Phase 7 und 8 | Benchmark-Zahlen auf Zielhardware liegen vor dem Launch vor |
+| 1 Filter hinter der Fusion | Filterphase | Test mit Treffern jenseits von Rang 100; jedes gefilterte Dokument der ungefilterten Liste taucht auf |
+| 2 `type:` in der Suchzeile schaltet Semantik ab | Filterphase (erster Plan) | Diagnoseroute meldet unter Filter eine nicht leere semantische Liste, wenn so entschieden wurde |
+| 3 Parameter erreicht `/snippets` nicht | Filterphase | Gleichstand-Test ueber beide Request-Modelle, Rot-Faehigkeit per Mutation |
+| 4 Sortierung in der Fusion, Score wird Zeitstempel | Filterphase | Test auf `Candidate.score` unter Sortierung; Treffermengenvergleich sortiert gegen unsortiert |
+| 5 Sortierfeld braucht Reindex | Filterphase (Vorpruefung vor Plan 1) | Probe gegen tantivy 0.26.0; Upgrade-Beweis zeigt unveraenderte Indexmarken |
+| 6 Cursor-Pfad ueberlebt Filterwechsel | Filterphase | PHP-Unit-Test mit fremdem Cursor-Pfad erwartet Seite eins |
+| 7 Zweite Tuer an der Berechtigungsgrenze | Filterphase, Audit in der Haertungsphase | `test_php_acl_boundary.py` zaehlt weiter zwei Aufrufstellen; keine neue Zeile in `routes.php` |
+| 8 MIME gegen Endung | Filterphase | Korpusfall mit `.jpeg`, `.JPG`, ohne Endung, umbenannt |
+| 9 Sortierung auf Fremdbestand liefert leer | Filterphase (Verhalten), Messphase (Zahl) | Rundenzaehlung und Failure-Zustand unter beiden Sortierungen gemessen |
+| 10 RSS kommt nicht zurueck | Entladephase (Vorpruefung) | cgroup-`anon` vor und nach der Entladung auf arm64, mit Rohdatei |
+| 11 Zwei Besitzer der Engine | Entladephase | `load_count`-Differenz ueber einen Entlade- und Nachladezyklus mit gleichzeitiger Suche |
+| 12 Kaltstart-Klippe | Entladephase (Verhalten), Messphase (Zahl) | erste Suche nach der Ruhefrist antwortet lexikalisch und unter der Decke |
+| 13 Sechster Engine-Zustand | Entladephase (Entscheid), Haertungsphase (Kataloge) | vier Katalog-Gates gruen, Admin-Seite zeigt nie den Ausweichsatz |
+| 14 one-load-Beweis entwertet | Entladephase (erster Plan) | umformulierte Invariante, Rot-Faehigkeit per Mutation belegt |
+| 15 Messdeckel kleiner als der Lauf | Messphase (Checkpoint-Plan) | Zeitrechnung mit gemessener Vorlaufzeit im Plan, Owner-Freigabe |
+| 16 Vergleichbarkeit bricht | Messphase (Runbook) | fuenf Ablesungen protokolliert, bevor der Lauf startet |
+| 17 Messen in der Aufwaermphase | Messphase (Protokoll), Entladephase (Messgroesse) | jede Kaltstartzahl traegt den Seitencache-Zustand |
+| 18 Werkzeug zaehlt Ausfaelle als Erfolge | Messphase (Welle ohne Box-Zeit) | jede Laststufe mit Abbruchzahl aus dem Nextcloud-Protokoll und Trefferdichte |
+| 19 Eine Anfahrt, zwei Aenderungen | Roadmap-Reihenfolge, Entladephase (Schalter) | Entladung abschaltbar, Wirkungsbeleg mit Schalter aus gefahren |
+| 20 Minor-Sprung ohne Migration | Haertungsphase | Upgrade 1.1.0 auf 1.2.0 Ende zu Ende in `deploy-harp` |
+
+**Reihenfolge-Empfehlung, die sich aus der Tabelle ergibt:** Filterphase und Entladephase (Entladung hinter einem Schalter, ab Werk aus) VOR der Messphase, Haertungsphase zuletzt. Begruendung: die eine bezahlte Box-Anfahrt ist die einzige Gelegenheit, den Wiederaufwaerm-Preis und die vier regressiven Laststufen auf Zielhardware zu messen, und sie kann beide Schalterstellungen messen, wenn es den Schalter gibt. Umgekehrt ginge die Entladung ungemessen in den Store, und der DI-10-04-Wirkungsbeleg waere durch eine zweite gleichzeitige Aenderung entwertet.
+
+---
 
 ## Sources
 
-Issue-Tracker und Foren (Fehlermodi des Vorgängerökosystems):
-- https://github.com/nextcloud/fulltextsearch/issues/311: Indexlauf hängt, RAM-Plateau, Endlosschleife beim zweiten Nutzer (offen seit 2018) (HIGH)
-- https://github.com/nextcloud/fulltextsearch/issues/404: Index wird bei der ersten Datei unresponsive (HIGH)
-- https://github.com/nextcloud/fulltextsearch/issues/597: keine Indexierung mehr nach Update, Selbsttest meldet trotzdem "ok" (HIGH)
-- https://github.com/nextcloud/fulltextsearch/issues/715: Dateien bleiben nach Verzeichnislöschung im Index (HIGH)
-- https://github.com/nextcloud/fulltextsearch/issues/769: Upload über Desktop-Sync löst Löschung statt Indexierung aus (offen seit 2023) (HIGH)
-- https://github.com/nextcloud/fulltextsearch/issues/857: Reset indexiert alte Dateien nicht neu, Zähler bleibt stehen (HIGH)
-- https://github.com/nextcloud/fulltextsearch/issues/950: kein Release für Nextcloud 34 (Juni 2026) (HIGH)
-- https://github.com/nextcloud/fulltextsearch/issues/955: Frage nach NC 34/35, unbeantwortet (Juli 2026) (HIGH)
-- https://github.com/nextcloud/fulltextsearch/issues/956: App lässt NC 34 hängen, Abhilfe Deaktivieren (HIGH)
-- https://github.com/nextcloud/fulltextsearch/issues/218: große TIFF-Dateien werden nicht OCR-verarbeitet (MEDIUM)
-- https://github.com/nextcloud/fulltextsearch_elasticsearch/issues/15: gelöschte Dateien bleiben im Index (HIGH)
-- https://github.com/nextcloud/fulltextsearch_elasticsearch/issues/346: vollständiger Index nicht möglich (MEDIUM)
-- https://github.com/nextcloud/files_fulltextsearch_tesseract/issues/30: PDFs werden bei Ghostscript-Fehler gelöscht (offen seit 09/2020) (HIGH)
-- https://help.nextcloud.com/t/warning-full-text-search-files-tesseract-ocr-app-w-pdf-enabled-may-delete-your-pdfs/93151: Forum-Warnthread zum Datenverlust (HIGH)
-- https://help.nextcloud.com/t/cannot-complete-initial-fulltextsearch-index/187771: Erstindex lässt sich nicht abschließen (MEDIUM)
-- https://help.nextcloud.com/t/fulltextsearch-index-runs-indexes-files-no-content/78265: Index läuft, Inhalte fehlen (MEDIUM)
-- https://help.nextcloud.com/t/fulltextsearch-compatibility-for-nc-34-35/246992: Kompatibilitätslage NC 34/35 (MEDIUM)
+**Projektinterne Quellen (HIGH, am Baum gelesen am 14.09.2026):**
+- `backend/src/findling/index/search.py` (Fusionsfenster, Vorfilter-Baender, Fortsetzung hinter dem Fenster, Offset-Semantik, `snippets_for`)
+- `backend/src/findling/index/fusion.py` (RRF, Gewichte, Distanzriegel), `backend/src/findling/index/schema.py` (neun Felder, welche `fast` sind)
+- `backend/src/findling/query/rewrite.py` (`extract_filters`, `carried_operators`, `carries_one_term`, `_extension_query`)
+- `backend/src/findling/api/search.py` (`extra="forbid"`, `lexical_only`, `Candidate` mit drei Feldern), `backend/src/findling/api/snippets.py`, `backend/src/findling/api/resources.py`
+- `backend/src/findling/embed/model.py` (Lock-Grenzen, `LOAD_RETRY_SECONDS`, `_LOAD_COUNT`, `enable_cpu_mem_arena=False`), `backend/src/findling/embed/engine.py` (Halter, `reset()`, fuenf Zustaende), `backend/src/findling/worker/poller.py` (`_build_the_cutter`, zweite Referenz)
+- `php/lib/Service/SearchService.php` (die eine Berechtigungsentscheidung, Runden, Budgets), `php/lib/Controller/PageController.php` (`cursorPath`, `nextUrl`, `PAGE_SIZE`, `MAX_PAGE`), `php/lib/Search/Provider.php` (`getSupportedFilters`, `getCustomFilters`), `php/lib/Service/ExAppService.php` (`REQUEST_TIMEOUT_SECONDS = 1.5`), `php/lib/Service/CrawlAdvanceService.php` (DI-10-04-Analyse im Klassenkopf), `php/lib/Service/AdminViewService.php`, `php/templates/search.php`, `php/js/search.js`
+- `backend/tests/test_admin_ui_contract.py` (die vier Katalog-Gates), `.github/workflows/docker.yml` (Offline-Probe mit `--network none`, Telemetriezeile), `.github/workflows/resilience.yml` (one-load-Schritt)
+- `docs/measurements/2026-09-vergleichsmessung-m7g/00-kernaussage.md` (alle Messzahlen dieses Dokuments: Grundlast 103,2 MB, Spitze 1.764,2 MB, `memory.events max` 21.939, p95-Reihe ueber fuenf Stufen, Kaltstart 1.838,4 ms, 17 Abbrueche gegen `failures: 0`, Sprachfall-Diagnose, Laufzeit 26 h 37 min, Kostendeckel)
+- `.planning/RETROSPECTIVE.md`, `.planning/STATE.md`, `.planning/ROADMAP.md`, `.planning/PROJECT.md`, `CLAUDE.md` (RAM-Budget-Tabelle mit den 544 MB fuer Tokenizer und Splitter)
 
-Offizielle Nextcloud-Dokumentation:
-- https://docs.nextcloud.com/server/stable/developer_manual/exapp_development/tech_details/api/events_listener.html: Events sind asynchron, nur `node_event`, keine Retry-Zusage (HIGH)
-- https://docs.nextcloud.com/server/stable/admin_manual/webhook_listeners/index.html: Zustellung über Hintergrundjobs, Worker-Empfehlung (HIGH)
-- https://docs.nextcloud.com/server/stable/developer_manual/digging_deeper/search.html: IProvider, eigener HTTP-Request pro Anbieter, Cursor statt Offset, `SearchResultEntry` (HIGH)
-- https://docs.nextcloud.com/server/stable/admin_manual/ai/app_context_chat.html: 12 GB RAM CPU-only, AVX/AVX2 Pflicht, 100-MB-Grenze, passwortgeschützte Dateien werden still ignoriert, files_accesscontrol wird nicht befolgt (HIGH)
-- https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/ManagingExApps.html: `nc_app_<app_id>_data`, `APP_PERSISTENT_STORAGE`, Volume bleibt beim Unregister (HIGH)
-- https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/DeployConfigurations.html und ManagingDeployDaemons.html: HaRP als neuer Standard, DSP abgekündigt, Entfernung für NC 35 geplant, `manual_install` als Sonderfall (HIGH)
-- https://github.com/nextcloud/app_api/issues/712: Docker 29 verlangt API 1.44, AppAPI sprach 1.41, Deployment tot (11/2025) (HIGH)
+**Eigene Messung (HIGH):**
+- Probe gegen die installierte `tantivy 0.26.0` in `backend/.venv`, gefahren am 14.09.2026: `order_by_field="mtime"` funktioniert auf dem i64-Fast-Field, auch mit `offset` und `Order.Asc`; der zurueckgegebene Score ist der Feldwert (500/300/200/100) statt des BM25-Werts (0,1363/0,1220); `order_by_field="ext"` scheitert mit `Field "ext" is not configured as fast field`; ein unbekanntes Feld mit `Field 'nope' is not defined in the schema`
 
-Werkzeugkette und Abhängigkeiten:
-- https://ocrmypdf.readthedocs.io/en/latest/advanced.html: sqrt(N)-Regel, `--tesseract-downsample-large-images`, `--skip-big` (HIGH)
-- https://github.com/ocrmypdf/OCRmyPDF/discussions/1386 und issues/1385: Speicherlimits, OOM-Rückfall auf `--jobs 1` (MEDIUM)
-- https://github.com/tesseract-ocr/tesseract/issues/2973: hohe CPU- und RAM-Last mit ocrmypdf (MEDIUM)
-- https://github.com/asg017/sqlite-vec/issues/25: ANN-Index offen, aktuell reine Brute-Force-Suche (HIGH)
-- https://github.com/quickwit-oss/tantivy-py/issues/371: fehlendes Wheel für Python 3.13 bei Version 0.22 (HIGH)
-- PyPI-Abfrage am 15.08.2026: tantivy 0.26.0, onnxruntime 1.28.0, sqlite-vec 0.1.9 mit cp313-Wheels für manylinux aarch64, jeweils **ohne** musl-Wheels; fastembed 0.8.0 als reines py3-none-any (HIGH, live geprüft)
-
-Nextcloud-Produktlinie und Wettbewerb:
-- https://nextcloud.com/blog/nextcloud-hub26-spring/: Assistant nutzt Unified Search, Context Agent (MEDIUM)
-- https://github.com/nextcloud/context_chat: Positionierung und Grenzen (MEDIUM)
-
-Schwesterprojekt (Store- und Zertifikatspipeline, ExApp-Deployment, Rechtefallen):
-- C:\Users\Student\nextcloud-mcp-connector\.planning\research\PITFALLS.md: Pitfalls 4, 5, 6 und 8 (HIGH)
-
-Offene Punkte mit MEDIUM oder LOW confidence, in der Umsetzung zu verifizieren:
-- Ob AIO-Borg-Sicherungen die Volumes `nc_app_*` ohne ausdrückliche Konfiguration erfassen (Doku spricht von der Möglichkeit, externe Volumes einzutragen, was auf opt-in hindeutet)
-- Ob und wie `occ app_api:app:update` das Volume in allen Daemon-Typen erhält (Doku sagt ja für den Standardfall, praktisch am AIO nachstellen)
-- Verhalten von Nextcloud-Suchanbietern bei sehr langsamen Antworten (Doku nennt keine Timeouts; eigene harte Obergrenze setzen, Zielwert unter 500 Millisekunden)
+**Externe Quellen (MEDIUM):**
+- [Elasticsearch, Reciprocal rank fusion](https://www.elastic.co/docs/reference/elasticsearch/rest-apis/reciprocal-rank-fusion) (feste `rank_window_size` als Grundlage konsistenter Blaetterung)
+- [Paginating hybrid search on Postgres, and why the obvious fix is worse](https://dev.to/pavangupta352/paginating-hybrid-search-on-postgres-and-why-the-obvious-fix-is-worse-2kmd) (Limit je Quelle vor der Fusion; verschwundene und doppelte Zeilen ueber Seiten hinweg)
+- [OpenSearch, Introducing reciprocal rank fusion for hybrid search](https://opensearch.org/blog/introducing-reciprocal-rank-fusion-hybrid-search/)
+- [onnxruntime Issue 26831: memory not released by ReleaseSession or ReleaseEnv](https://github.com/microsoft/onnxruntime/issues/26831)
+- [malloc internals: why free() doesn't return memory to the system](https://dev.to/piotrek1372/malloc-internals-why-free-doesnt-return-memory-to-the-system-33pc) (glibc-Arena, `malloc_trim`)
+- [tantivy-py Tutorials](https://tantivy-py.readthedocs.io/en/latest/tutorials.html) und [tantivy::collector](https://docs.rs/tantivy/latest/tantivy/collector/index.html) (Sortierung ueber Fast-Fields)
 
 ---
-*Pitfalls research for: Nextcloud-ExApp für Suche (OCR + Volltext + Semantik, Zero-Config)*
-*Researched: 2026-08-15*
+*Pitfalls research for: Findling v1.2 (Messbeleg und Ausbau)*
+*Researched: 2026-09-14*
