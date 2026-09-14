@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
-status: "Roadmap steht, naechster Schritt /gsd:plan-phase 12"
+status: executing
 stopped_at: Phase 12 context gathered
-last_updated: "2026-09-14T15:03:30.393Z"
-last_activity: 2026-09-14 — Roadmap v1.2 erstellt (5 Phasen, 17 von 17 Requirements zugeordnet)
+last_updated: "2026-09-14T16:18:12.395Z"
+last_activity: 2026-09-14 -- Phase 12 planning complete
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 8
   completed_plans: 0
   percent: 0
 ---
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 Phase: 12 von 16 (Messwerkzeug, Runbook und Terminentscheid) - noch nicht geplant
 Plan: —
-Status: Roadmap steht, naechster Schritt /gsd:plan-phase 12
+Status: Ready to execute
 Progress: 0/5 Phasen des Milestones abgeschlossen [....................] 0%
-Last activity: 2026-09-14 — Roadmap v1.2 erstellt (5 Phasen, 17 von 17 Requirements zugeordnet)
+Last activity: 2026-09-14 -- Phase 12 planning complete
 
 ## Milestone-Reihenfolge v1.2
 

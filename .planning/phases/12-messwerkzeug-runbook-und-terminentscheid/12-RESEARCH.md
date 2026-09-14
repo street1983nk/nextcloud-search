@@ -1133,7 +1133,14 @@ ausdrueckliche Regel in den Kopf des Runbooks.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Alle fuenf Fragen sind in der Planung entschieden, jeweils entlang der
+Empfehlung: Q1 neue Datei `98c` in neuem Laufverzeichnis (Plan 12-05), Q2
+Laufverzeichnis plus Pfadfilter plus `NARROW_SCOPE_DIRS` (Plan 12-04), Q3
+Rangsemantik gegen `MAX_RECHECKS_ABSOLUTE` (Plaene 12-04/12-05), Q4 drei
+lesende AWS-Proben (Plan 12-03 Task 1), Q5 Unterbefehl endet beim Anhaengen,
+Mounten steht im Runbook (Plaene 12-03/12-07).
 
 1. **Wird `98b-sprachfaelle.sh` ersetzt oder erweitert?**
    - Bekannt: Die Hausregel verlangt eine neue Datei in einem neuen
