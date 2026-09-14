@@ -142,3 +142,126 @@ ohnehin stattfindet, und nicht an einem Kalendereintrag, den niemand liest.
 **Phase 12 gilt mit diesem dokumentierten Entscheid als erfüllt.** HART-03
 verlangt einen vollzogenen und belegten Entscheid, nicht ein bestimmtes
 Ergebnis.
+
+---
+
+## Die fertigen Ersatztexte für deploy-harp.yml
+
+Beide Texte sind wortwörtlich einsetzbar. Plan 12-02 kopiert den Text des
+greifenden Zweiges und ersetzt darin nur die spitz geklammerten Platzhalter
+durch die am Stichtag gelesenen Tatsachen. Die Sprache der YAML-Kommentare
+bleibt Englisch, wie der bestehende Block. Die Einrückung ist die des
+Ist-Zustands: zehn Leerzeichen vor dem Kommentarzeichen oberhalb des
+Matrixeintrags, zwölf Leerzeichen innerhalb des Eintrags.
+
+In BEIDEN Zweigen bleibt der Matrixeintrag `- server-version: stable35` stehen,
+und `php-version: '8.3'` sowie `runner: ubuntu-24.04` bleiben unverändert.
+
+### Ersatztext Option a
+
+Ersetzt den gesamten Bereich von Zeile 211 bis Zeile 273 der heutigen
+`.github/workflows/deploy-harp.yml`, also den einleitenden Zweig-Hinweis, den
+ganzen RE-CHECK-Absatz und den Matrixeintrag. Der lange Absatz entfällt und
+wird durch einen kurzen Vermerk ersetzt, der Datum, Plan, Aktenzeichen dieser
+Notiz, die gelesene Belegzeile und die Laufnummer des grünen Beweislaufs nennt.
+
+```yaml
+          # stable35 was the branch under development when this matrix was
+          # written, and it is not any more: <FINAL-TAG> of <FINAL-DATUM> is the
+          # first 35 tag that "gh api repos/nextcloud/server/releases" reports
+          # without the prerelease marker. The RE-CHECK paragraph that used to
+          # stand here named 2026-09-16 as the day it comes out, and this is that
+          # removal and not a paraphrase of it.
+          #
+          # Done on 2026-09-16 by plan 12-02 on the evidence D-02 asks for
+          # (.planning/phases/12-messwerkzeug-runbook-und-terminentscheid/
+          # 12-STABLE35-ENTSCHEID.md, option a): the release status alone was not
+          # enough, so this leg ran green against stable35 on the tree of that day
+          # in run <RUN-ID> before the flag came out. From here the leg is
+          # must-be-green, and a red run is a finding rather than a reason to put
+          # the flag back. The entry itself stays regardless, because
+          # backend/tests/test_lockstep_versions.py checks that the matrix covers
+          # every version of the declared window 33 to 35.
+          - server-version: stable35
+            php-version: '8.3'
+            tolerate-failure: false
+            runner: ubuntu-24.04
+```
+
+### Ersatztext Option b
+
+Das Flag bleibt. Der bestehende RE-CHECK-Absatz wird nach dem vorhandenen
+Fortschreibemuster ergänzt, und die Terminzeile wird umgeschrieben statt
+gelöscht, damit der Absatz seine Wirkung behält. Zwei Eingriffe:
+
+**Eingriff 1**, ersetzt den heutigen RE-CHECK-Block (Zeilen 243 bis 247):
+
+```yaml
+            # RE-CHECK DATE: <NEUER-RE-CHECK>. On that day this flag and this
+            # whole paragraph come out, the leg becomes must-be-green, and a red
+            # run is a finding rather than a reason to put the flag back. The plan
+            # that holds the follow-through is the store submission of phase 16,
+            # because it is the next step that cannot ship without a statement
+            # about the window it declares.
+```
+
+**Eingriff 2**, wird unmittelbar vor der Zeile `tolerate-failure: true`
+eingefügt, also als jüngster Eintrag am Ende der Vermerkskette:
+
+```yaml
+            #
+            # Decided on 2026-09-16 by plan 12-02, option b of
+            # .planning/phases/12-messwerkzeug-runbook-und-terminentscheid/
+            # 12-STABLE35-ENTSCHEID.md: Nextcloud 35 is still not final on the day
+            # the RE-CHECK falls due, so the date moves and the decision is
+            # written down rather than skipped. The reading behind it, from
+            # "gh api repos/nextcloud/server/releases" on 2026-09-16: the newest
+            # 35 tag is <NEUESTE-35-MARKE>, marked prerelease, and the newest
+            # release that is not a prerelease is <NEUESTE-FREIGABE>. The declared
+            # window stays at min-version 33 and max-version 35, both info.xml
+            # stay as they are, this entry stays, and
+            # backend/tests/test_lockstep_versions.py stays unchanged. The new
+            # RE-CHECK DATE above is <NEUER-RE-CHECK>, the day before the store
+            # submission of phase 16 begins, and that submission is the new
+            # address of the follow-through.
+            tolerate-failure: true
+            runner: ubuntu-24.04
+```
+
+---
+
+## Vollzug am 16.09.2026
+
+Dieser Abschnitt wird von Plan 12-02 gefüllt. Bis dahin stehen die Felder leer.
+
+- **Datum des Vollzugs:** (offen)
+- **Gelesener Releasestand,** `gh api repos/nextcloud/server/releases`:
+
+  ```
+  (Antwort hier eintragen: neueste 35er-Marke mit Prerelease-Kennzeichen,
+  neueste Freigabe ohne Prerelease-Kennzeichen, jeweils mit Datum)
+  ```
+
+- **Greifender Zweig (a oder b):** (offen)
+- **Beleg:** (offen)
+- **Laufnummer des Beweislaufs (nur Option a):** (offen)
+- **Vollzogen am / durch Plan:** (offen)
+
+### Vollzugs-Checkliste
+
+1. Datum prüfen: es ist der 16.09.2026 oder später, und der Entscheid ist noch
+   nicht vollzogen.
+2. Releasestand lesen mit `gh api repos/nextcloud/server/releases` und die
+   Antwort oben eintragen.
+3. Zweig bestimmen: 35er-Marke ohne Prerelease-Kennzeichen vorhanden gleich
+   Option a, sonst Option b.
+4. Bei Option a den Beweislauf von `deploy-harp.yml` starten, abwarten und die
+   Laufnummer notieren; ein roter Lauf ist ein Befund und wird gelesen, bevor
+   irgendetwas geändert wird.
+5. Ersatztext einsetzen: den Block des greifenden Zweiges nach
+   `.github/workflows/deploy-harp.yml` kopieren und die Platzhalter durch die
+   gelesenen Tatsachen ersetzen.
+6. Notiz füllen: die Felder dieses Abschnitts vollständig ausfüllen, damit der
+   Entscheid nicht nur im YAML-Kommentar lebt.
+7. Owner-Bestätigung einholen: den vollzogenen Entscheid mit Zweig, Beleg und
+   Laufnummer vorlegen.
