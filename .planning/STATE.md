@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Phase 12 context gathered
-last_updated: "2026-09-14T16:18:12.395Z"
-last_activity: 2026-09-14 -- Phase 12 planning complete
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-09-14T16:33:04.376Z"
+last_activity: 2026-09-14
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-11)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** v1.2 Messbeleg und Ausbau, Phasen 12 bis 16
+**Current focus:** Phase 12: messwerkzeug-runbook-und-terminentscheid
 
 ## Current Position
 
-Phase: 12 von 16 (Messwerkzeug, Runbook und Terminentscheid) - noch nicht geplant
-Plan: —
-Status: Ready to execute
-Progress: 0/5 Phasen des Milestones abgeschlossen [....................] 0%
-Last activity: 2026-09-14 -- Phase 12 planning complete
+Phase: 12 (messwerkzeug-runbook-und-terminentscheid), EXECUTING
+Plan: 2 of 8
+Status: Executing Phase 12
+Progress: 0/5 Phasen des Milestones abgeschlossen, 1/8 Plaene [█░░░░░░░░░] 13%
+Last activity: 2026-09-14, Plan 12-01 abgeschlossen (stable35-Entscheid beidseitig vorformuliert)
 
 ## Milestone-Reihenfolge v1.2
 
@@ -45,7 +45,11 @@ Harte Abhaengigkeiten: 12 vor 15, Backend vor PHP innerhalb 13, 14 vor 15, 16 zu
 
 ## Termine und Owner-Checkpoints
 
-- **16.09.2026**: stable35-Fenster-Entscheid (HART-03, Entscheid v2-a), verankert in Phase 12
+- **16.09.2026**: stable35-Fenster-Entscheid (HART-03, Entscheid v2-a), verankert in Phase 12.
+  Beide Zweige sind seit 14.09. fertig ausformuliert in
+  `.planning/phases/12-messwerkzeug-runbook-und-terminentscheid/12-STABLE35-ENTSCHEID.md`
+  (Plan 12-01); am Stichtag vollzieht Plan 12-02 nur noch nach der dortigen
+  siebenschrittigen Checkliste. HART-03 ist erst nach diesem Vollzug erfuellt.
 - **Vor der Box-Anfahrt**: neu gerechneter Zeit-/Kostendeckel vom Owner freigegeben (MESS-05, Phase 15); der 26-h-Vorschlag reisst rechnerisch, Empfehlung mindestens 31 h / rund 3,59 USD oder bewusst Teilkorpus
 - **Vor dem Bau des Zustandsteils**: engineState-Wortwahl `cold` vs sechstes Wort `unloaded` (MEM-05, Phase 14)
 - **Vor dem Bau der Entladung**: Vorprueflauf zur tatsaechlichen RSS-Rueckgabe auf Zielhardware (MEM-04, Phase 14); negatives Ergebnis ist ein legitimer Ausgang
@@ -79,6 +83,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-14T15:03:30.378Z
-Stopped at: Phase 12 context gathered
-Resume file: .planning/phases/12-messwerkzeug-runbook-und-terminentscheid/12-CONTEXT.md
+Last session: 2026-09-14T16:33:04.359Z
+Stopped at: Completed 12-01-PLAN.md
+Resume file: None
