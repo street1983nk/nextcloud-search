@@ -16,8 +16,15 @@ updates:
   # SHA, never a tag, because a moved tag is arbitrary code execution inside a job
   # that holds a Nextcloud instance and a registry token. Dependabot rewrites the
   # SHA and the trailing version comment together.
+  #
+  # "/" covers only .github/workflows. The composite action keeps its own uses:
+  # lines, and a bump that misses them splits the pin set and fails
+  # test_no_action_is_pinned_twice (so happened on 2026-09-14 with setup-uv), so
+  # its directory is listed explicitly.
   - package-ecosystem: github-actions
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/setup-test-nc"
     schedule:
       interval: weekly
       day: monday
