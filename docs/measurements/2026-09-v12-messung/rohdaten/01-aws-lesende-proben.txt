@@ -1,0 +1,109 @@
+lesende aws-proben vor dem bau des unterbefehls restore, plan 12-03 (task 1)
+erhoben 2026-09-14, region eu-central-1
+werkzeug: aws cli v2 und scripts/ops/aws_box.sh
+
+drei proben, alle lesend und alle kostenlos. hier entsteht keine ressource und
+hier wird keine verändert. die proben prüfen annahme a3 der phasenrecherche
+(der korpus-snapshot existiert weiterhin, ist completed und trägt
+purpose=findling-corpus-keep) und liefern zugleich die erwarteten ausgaben, an
+denen das runbook der messbox seine schritte misst. ohne diese proben stünde
+der hauptpfad des runbooks (entscheid d-09, wiederaufbau aus dem snapshot) auf
+einer vermutung.
+
+geheimnisregel dieser datei, verbindlich: sie liegt im öffentlichen
+repositorium. die aws-kontokennung steht als <konto> und nicht im klartext,
+adressen kommen nicht vor, und keine lebende instanz- oder volumekennung
+erscheint. die snapshotkennung bleibt im klartext, sie steht bereits in
+committeten dateien dieses repositoriums. die beiden anmeldewerte sind aus der
+umgebung gelesen worden und erscheinen in keinem argument, in keinem protokoll
+und nicht in dieser datei.
+
+-- 1 der snapshot selbst --
+kommando:
+  aws ec2 describe-snapshots --region eu-central-1 \
+      --snapshot-ids snap-03f1d1d9ad9262704
+
+antwort, die felder in der reihenfolge, in der der bericht sie zitiert:
+  SnapshotId              snap-03f1d1d9ad9262704
+  State                   completed
+  Progress                100%
+  VolumeSize              60
+  VolumeId                vol-04c5b59fe9417babd
+  StartTime               2026-09-11T07:47:07.582000+00:00
+  CompletionTime          2026-09-11T08:36:36.061000+00:00
+  FullSnapshotSizeInBytes 55415668736
+  Encrypted               false
+  StorageTier             standard
+  TransferType            standard
+  OwnerId                 <konto>
+  Description             findling corpus and index, v1.1 comparison run 2026-09-10, 52111 documents
+  Tags                    Name=findling-corpus-2026-09
+                          purpose=findling-corpus-keep
+
+zwei lesarten der zahlen, damit sie niemand später erfinden muss:
+  VolumeSize 60 ist die größe des ursprungsvolumes und nicht die abgerechnete.
+  FullSnapshotSizeInBytes 55415668736 sind rund 55,4 GB geschriebene blöcke,
+  also die 51,6 GiB, die der abbaubericht vom 11.09. nennt. das ist der grund,
+  warum ein volume aus diesem snapshot nicht kleiner als 60 GB bestellt werden
+  kann: --size unterhalb der VolumeSize weist die api ab.
+  VolumeId vol-04c5b59fe9417babd ist das datenvolume, das am 11.09. mit der box
+  abgebaut wurde. es lebt nicht mehr, und es steht bereits in
+  docs/measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt.
+
+was diese ausgabe beweist: annahme a3 ist bestätigt und keine vermutung mehr.
+der snapshot existiert, er steht auf completed bei 100 prozent, und der
+wiederaufbau aus dem snapshot bleibt der hauptpfad des runbooks.
+
+-- 2 die tags des snapshots --
+kommando:
+  aws ec2 describe-tags --region eu-central-1 \
+      --filters "Name=resource-id,Values=snap-03f1d1d9ad9262704"
+
+antwort:
+  snapshot  snap-03f1d1d9ad9262704  Name     findling-corpus-2026-09
+  snapshot  snap-03f1d1d9ad9262704  purpose  findling-corpus-keep
+
+was diese ausgabe beweist: der snapshot trägt purpose=findling-corpus-keep und
+ausdrücklich nicht purpose=findling-phase5. zwei folgen hängen daran, und beide
+sind für den neuen unterbefehl restore bindend:
+  1. der tag-sweep von cmd_destroy sucht nach purpose=findling-phase5 und sieht
+     diesen snapshot deshalb nicht als überbleibsel. so war es gewollt (11-12).
+  2. ein volume, das aus diesem snapshot entsteht, erbt genau diesen tag. es
+     entginge damit demselben sweep und wäre eine rechnung, die niemand sucht.
+     restore taggt das volume deshalb pflichtmäßig auf purpose=findling-phase5
+     um und liest die tags danach zurück.
+
+-- 3 die gepinnten kostensätze --
+kommando:
+  scripts/ops/aws_box.sh prices
+
+antwort:
+  type      m7g.large
+  cores     2 vCPU, arm64, 2.6 GHz sustained
+  memory    8192 MiB on the type, capped to 4096 MiB by the kernel
+  network   Up to 12.5 Gigabit
+  disk      40 GB gp3 root, 60 GB gp3 data volume
+  rate      0.0978 USD per hour for the box, net
+  rate      0.0952 USD per GB and month for gp3, net
+  rate      0.0050 USD per hour for the public address, net
+  aws_box: the two rates are pinned in this script, with their source
+  aws_box: this account cannot read the price api (pricing:GetProducts is
+  not in its policy), so they come from the public bulk price list:
+    curl -sS https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/eu-central-1/index.csv
+    | grep -E 'm7g[.]large|VolumeUsage[.]gp3' | grep OnDemand
+  aws_box: a gp3 volume carries 3000 IOPS and 125 MB/s at no extra charge,
+  and this run stays inside both, so nothing is added for them
+
+was diese ausgabe beweist: die zahlenbasis des deckel-rechenblatts steht, und
+sie steht ohne einen einzigen bezahlten aufruf. der einzige api-aufruf dieses
+unterbefehls ist describe-instance-types, und der ist kostenlos; die drei sätze
+selbst sind im skript gepinnt, weil die regionale preisliste über ein gigabyte
+groß ist. die stundensumme aus box, 100 GB platte und öffentlicher adresse
+beträgt 0.0978 + 0.0130 + 0.0050 = 0.1158 USD netto je stunde. das ist die
+zeile, gegen die der deckel der anfahrt gerechnet wird.
+
+-- befund --
+annahme a3: bestätigt. der snapshot snap-03f1d1d9ad9262704 existiert, ist
+completed und trägt purpose=findling-corpus-keep. die flag-datei
+SNAPSHOT-BEFUND-NEGATIV.txt ist deshalb nicht angelegt worden, und die tasks 2
+und 3 dieses plans laufen wie geplant weiter.
