@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 12-05-PLAN.md
-last_updated: "2026-09-14T17:07:03.546Z"
-last_activity: 2026-09-14, Plan 12-05 abgeschlossen (98c-sprachfaelle.sh mit Rangsemantik und Abschnitt 3b)
+stopped_at: Completed 12-07-PLAN.md
+last_updated: "2026-09-14T17:40:00.000Z"
+last_activity: 2026-09-14, Plan 12-07 abgeschlossen (docs/runbook-messbox.md, Abschnitte 1 bis 5)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 12 (messwerkzeug-runbook-und-terminentscheid), EXECUTING
-Plan: 12-01, 12-03, 12-04 und 12-05 abgeschlossen, 4 von 8 Plaenen des Milestones
+Plan: 12-01, 12-03, 12-04, 12-05 und 12-07 abgeschlossen, 5 von 8 Plaenen des Milestones
 Status: Ready to execute
-Progress: [█████░░░░░] 50%
-Last activity: 2026-09-14, Plan 12-05 abgeschlossen (98c-sprachfaelle.sh mit Rangsemantik und Abschnitt 3b)
+Progress: [██████░░░░] 63%
+Last activity: 2026-09-14, Plan 12-07 abgeschlossen (docs/runbook-messbox.md, Abschnitte 1 bis 5)
 
 Hinweis zur Reihenfolge: 12-02 ist fristgebunden (stable35-Vollzug am 16.09.) und
 laeuft deshalb nach 12-03.
@@ -71,6 +71,23 @@ laeuft deshalb nach 12-03.
   Uploads (ohne zweite Abfrage) und reisen ausschliesslich in der Umgebung
   (`DATEI_IDS`), nie in einem Argument.
 
+- 12-07: Der Deckel-Vorschlag fuer Phase 15 wird neu gerechnet statt uebernommen:
+  acht Zeitposten, Volllauf mit dem gemessenen Planwert 26 h 37 min und ohne
+  Vorwegnahme einer Top-up-Verbesserung, plus 15 Prozent Zuschlag. Ergebnis
+  **42 h und 4,90 USD netto**, ausgewiesene Untergrenze 31 h und 3,59 USD. Die
+  Freigabe faellt am Phase-15-Checkpoint, nicht im Runbook.
+
+- 12-07: Das Runbook nennt Pfade und Variablennamen, nie Werte. Die
+  Snapshotkennung bleibt im Klartext (steht bereits committet, ohne Konto
+  nutzlos); Adressen, Instanz- und Volumekennungen stehen als Platzhalter mit
+  einem Satz, woher der Wert kommt. Die CIDR-Schreibweise fuer das ganze
+  Internet ist deshalb `<ganzes-netz>`.
+
+- 12-07: Abschnittsueberschriften des Runbooks stehen bewusst ohne Umlaute, weil
+  Pruefungen und Verweise auf sie zeigen; der Fliesstext traegt echte Umlaute,
+  und der Kopf der Datei sagt das. Das Wort "Archiv" kommt in der Datei nicht
+  vor (Vokabular-Gate, `docs/` ist oeffentlich).
+
 - 12-05: `rang-erhoben ja` steht erst nach einem erfolgreichen zweiten
   Sondenlauf. Beide Ursachen (keine Kennung, keine Sonde) enden mit Exit 24
   unter der `tee`-Pipeline. Der Exit-Code-Katalog steht damit bei 24; 12-06
@@ -96,7 +113,7 @@ Harte Abhaengigkeiten: 12 vor 15, Backend vor PHP innerhalb 13, 14 vor 15, 16 zu
   (Plan 12-01); am Stichtag vollzieht Plan 12-02 nur noch nach der dortigen
   siebenschrittigen Checkliste. HART-03 ist erst nach diesem Vollzug erfuellt.
 
-- **Vor der Box-Anfahrt**: neu gerechneter Zeit-/Kostendeckel vom Owner freigegeben (MESS-05, Phase 15); der 26-h-Vorschlag reisst rechnerisch, Empfehlung mindestens 31 h / rund 3,59 USD oder bewusst Teilkorpus
+- **Vor der Box-Anfahrt**: neu gerechneter Zeit-/Kostendeckel vom Owner freigegeben (MESS-05, Phase 15); das Rechenblatt steht seit 14.09. in `docs/runbook-messbox.md` Abschnitt 2 und kommt auf **42 h / 4,90 USD netto**, Untergrenze 31 h / rund 3,59 USD. Der 26-h-Vorschlag reisst rechnerisch
 - **Vor dem Bau des Zustandsteils**: engineState-Wortwahl `cold` vs sechstes Wort `unloaded` (MEM-05, Phase 14)
 - **Vor dem Bau der Entladung**: Vorprueflauf zur tatsaechlichen RSS-Rueckgabe auf Zielhardware (MEM-04, Phase 14); negatives Ergebnis ist ein legitimer Ausgang
 
@@ -129,6 +146,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-14T17:07:03.530Z
-Stopped at: Completed 12-05-PLAN.md
+Last session: 2026-09-14T17:40:00.000Z
+Stopped at: Completed 12-07-PLAN.md
 Resume file: None
