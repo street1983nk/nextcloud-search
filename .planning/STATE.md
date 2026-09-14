@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 12-03-PLAN.md
-last_updated: "2026-09-14T16:43:54.235Z"
-last_activity: 2026-09-14
+stopped_at: Completed 12-04-PLAN.md
+last_updated: "2026-09-14T16:53:49.765Z"
+last_activity: 2026-09-14, Plan 12-04 abgeschlossen (Bestandssonde im Container, drei Gate-Stellen nachgezogen)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 12 (messwerkzeug-runbook-und-terminentscheid), EXECUTING
-Plan: 12-01 und 12-03 abgeschlossen, 2 von 8 Plaenen des Milestones
+Plan: 12-01, 12-03 und 12-04 abgeschlossen, 3 von 8 Plaenen des Milestones
 Status: Ready to execute
-Progress: 0/5 Phasen des Milestones abgeschlossen, 2/8 Plaene [███░░░░░░░] 25%
-Last activity: 2026-09-14, Plan 12-03 abgeschlossen (aws_box.sh restore, Annahme A3 lesend bestaetigt)
+Progress: [████░░░░░░] 38%
+Last activity: 2026-09-14, Plan 12-04 abgeschlossen (Bestandssonde im Container, drei Gate-Stellen nachgezogen)
 
 Hinweis zur Reihenfolge: 12-02 ist fristgebunden (stable35-Vollzug am 16.09.) und
 laeuft deshalb nach 12-03.
@@ -39,13 +39,28 @@ laeuft deshalb nach 12-03.
 - 12-03: `aws_box.sh restore` nimmt die Snapshotkennung aus dem Argument, sonst
   aus `CORPUS_SNAPSHOT_ID` in `box.env`, sonst aus der gepinnten Konstante
   `CORPUS_SNAPSHOT_DEFAULT`. Gesucht wird sie nie.
+
 - 12-03: Ein aus dem Snapshot erzeugtes Volume wird pflichtmaessig auf
   `purpose=findling-phase5` umgetaggt, mit `describe-tags`-Rueckleseprobe und
   Abbruch, solange der geerbte Keep-Tag noch haengt.
+
 - 12-03: `restore` endet beim Anhaengen; das Mounten bleibt ein Runbook-Block.
 - 12-03: Annahme A3 ist lesend bestaetigt (Snapshot completed, 100 Prozent,
   60 GB, Tag `purpose=findling-corpus-keep`), Beleg in
   `docs/measurements/2026-09-v12-messung/rohdaten/01-aws-lesende-proben.txt`.
+
+- 12-04: Die Fremdbestandszahl entsteht als
+  `searcher.search(query, 1, count=True).count` im Prozess des Containers. Keine
+  Route, keine Zahl ueber eine Prozessgrenze, kein Produktionscode angefasst; das
+  Zaehl-Orakel aus T-02-93 entsteht gar nicht erst.
+
+- 12-04: Nichtmessbarkeit wird am Rang der eigenen Datei entschieden (in BEIDEN
+  Ranglisten fehlend oder schlechter als 64). Bestand und Fensterbelegung stehen
+  erklaerend daneben und sind nicht das Urteil.
+
+- 12-04: `NARROW_SCOPE_DIRS` traegt drei Laufverzeichnisse, `98b-sprachfaelle.sh`
+  bekommt einen eigenen sha256-Waechter, und `docs/measurements/**` steht in
+  beiden Pfadlisten von `python.yml`.
 
 ## Milestone-Reihenfolge v1.2
 
@@ -100,6 +115,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-14T16:43:54.222Z
-Stopped at: Completed 12-03-PLAN.md
+Last session: 2026-09-14T16:53:39.085Z
+Stopped at: Completed 12-04-PLAN.md
 Resume file: None

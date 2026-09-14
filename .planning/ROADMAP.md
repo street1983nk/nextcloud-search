@@ -63,14 +63,14 @@ Details im Archiv: .planning/milestones/v1.1-ROADMAP.md
   4. Das Cron-Intervall der Zielinstanz ist Pflichtfeld im Messprotokoll: ein Lauf ohne protokolliertes Intervall gilt als unvollstaendig
   5. Der stable35-Fenster-Entscheid ist bis zum 16.09.2026 getroffen und mit Begruendung dokumentiert
 
-**Plans:** 2/8 plans executed
+**Plans:** 3/8 plans executed
 
 Plans:
 **Wave 1**
 
 - [x] 12-01-PLAN.md: stable35-Entscheid: beide Zweige vor der Frist ausformuliert
 - [x] 12-03-PLAN.md: aws_box.sh restore (Volume aus Snapshot) plus Usage-Gate und lesende AWS-Proben
-- [ ] 12-04-PLAN.md: In-Container-Bestandssonde, neues Laufverzeichnis, Gate- und CI-Pfadfilter-Erweiterung
+- [x] 12-04-PLAN.md: In-Container-Bestandssonde, neues Laufverzeichnis, Gate- und CI-Pfadfilter-Erweiterung
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -158,7 +158,7 @@ Plans:
 | 9. Eigene Ergebnisseite | v1.1 | 8/8 | Complete | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | v1.1 | 7/7 | Complete | 2026-09-10 |
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
-| 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 2/8 | In Progress|  |
+| 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 3/8 | In Progress|  |
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 0/? | Not started | - |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 0/? | Not started | - |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
