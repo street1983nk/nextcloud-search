@@ -18,11 +18,22 @@ on:
       # lints scripts/ with the rule set of the backend, a filter narrower than
       # the thing it checks would be a gate that cannot see its own subject.
       - '.github/workflows/python.yml'
+      # The same reasoning once more, for the measurement scripts. Since plan
+      # 12-04 backend/tests/test_measurement_scripts.py reads every script of
+      # every measurement run and holds three of those directories to a
+      # shebang, to a path of no single machine and to a password that never
+      # stands on a command line. A commit that only adds a script there would
+      # start nothing today, and the breakage would surface on the next commit
+      # that happens to touch backend/** and be blamed on the wrong one.
+      - 'docs/measurements/**'
   pull_request:
     paths:
       - 'backend/**'
       - 'scripts/**'
       - '.github/workflows/python.yml'
+      # Same reason as in the push list above: the gate of the measurement
+      # scripts has to see its own subject.
+      - 'docs/measurements/**'
   # The measurement job below runs on these two only. It costs minutes and it
   # guards no regression, it produces a number, so it has no business in the loop
   # that has to answer a pull request quickly.

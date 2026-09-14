@@ -63,20 +63,31 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 MEASUREMENTS_DIR = REPO_ROOT / "docs" / "measurements"
 RUN_DIR = MEASUREMENTS_DIR / "2026-09-vergleichsmessung-m7g" / "skripte"
 FIX_RUN_DIR = MEASUREMENTS_DIR / "2026-09-werkzeugfixe" / "skripte"
+V12_RUN_DIR = MEASUREMENTS_DIR / "2026-09-v12-messung" / "skripte"
 TREE_HASH = RUN_DIR / "40b-baumhash.py"
 TREE_HASH_PROOF = RUN_DIR / "40b-baumhash.sh"
 OPS_GATE = Path(__file__).resolve().parent / "test_ops_scripts.py"
 
-# The two directories the narrow scope covers. Written down as a pair rather
+# The directories the narrow scope covers. Written down as a tuple rather
 # than globbed, because widening it is a decision and not a side effect of the
 # next directory somebody creates: the semantic run of 05.09. must stay outside
 # it, and the reason is in the docstring above.
-NARROW_SCOPE_DIRS = (RUN_DIR, FIX_RUN_DIR)
+#
+# Three since plan 12-04, and the third one is such a decision rather than a
+# consequence of its existence: the run directory of v1.2 is written from
+# scratch under these rules, so every one of the three promises below can reach
+# it. Its first file is the stock probe, which measures inside the container
+# and therefore carries neither a route nor a password to begin with.
+NARROW_SCOPE_DIRS = (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR)
 
 # The driven fassung of the language cases and its successor. The first one is
 # evidence and must not move, the second one is the fix of DI-10-02.
 DRIVEN_LANGUAGE_CASES = RUN_DIR / "98-sprachfaelle.sh"
 SUCCESSOR_LANGUAGE_CASES = FIX_RUN_DIR / "98b-sprachfaelle.sh"
+
+# The probe of the v1.2 run: the foreign stock, counted in the process of the
+# container instead of over the capped OCS route (DI-10-02, DI-11-01).
+STOCK_PROBE = V12_RUN_DIR / "73-bestand-sonde.py"
 
 # The state of the driven fassung, measured on 2026-09-10 out of the file
 # itself. Both figures are written down and neither is recomputed from the file
@@ -85,6 +96,15 @@ SUCCESSOR_LANGUAGE_CASES = FIX_RUN_DIR / "98b-sprachfaelle.sh"
 # on a runner: .gitattributes checks every .sh out with LF endings.
 DRIVEN_LANGUAGE_CASES_SHA256 = "5f9607fc6f00754b99eb9921aa6c3ce492e7eb3725f7efb2520be6c12f1ade1d"
 DRIVEN_LANGUAGE_CASES_BYTES = 23479
+
+# The state of the second driven fassung, measured on 2026-09-14 out of the file
+# itself, and written down here for the same reason as the two figures above: a
+# watchman that recomputes its expectation from the file under test agrees with
+# that file whatever it comes to say. 98b-sprachfaelle.sh ran on 10.09.2026 and
+# its raw data lie under 2026-09-werkzeugfixe/rohdaten/, so it is evidence as
+# much as its predecessor is.
+SUCCESSOR_LANGUAGE_CASES_SHA256 = "ef74a070502c2d05feeeba3dfe3d3c35076c912d17358ac486d5f01487c85669"
+SUCCESSOR_LANGUAGE_CASES_BYTES = 35344
 
 # The sentence the watchman says when it goes red. It is a constant so that the
 # diagnosis cannot drift away from the rule it defends.
@@ -785,10 +805,11 @@ def measurement_scripts() -> list[Path]:
 def scripts_of_this_run() -> list[Path]:
     """Every script of the run directories written under these rules.
 
-    Two directories since plan 11-03. The successor fassung of the language
-    cases lives in one of its own, and the three promises below have to reach
-    it: it creates an account, it reads a password and it is copied onto the
-    same box as the rest.
+    Three directories since plan 12-04. The successor fassung of the language
+    cases lives in one of its own since plan 11-03, and the three promises below
+    have to reach it: it creates an account, it reads a password and it is
+    copied onto the same box as the rest. The run directory of v1.2 came third,
+    for the probe that counts the foreign stock inside the container.
     """
     return sorted(
         path for directory in NARROW_SCOPE_DIRS for path in directory.glob("*") if path.suffix in SCRIPT_SUFFIXES
@@ -989,18 +1010,21 @@ def test_the_password_gate_fires_on_a_staged_sample() -> None:
 # would have left that line standing next to a script that never produced it.
 
 
-def test_the_narrow_scope_covers_the_two_run_directories_written_under_these_rules() -> None:
+def test_the_narrow_scope_covers_the_three_run_directories_written_under_these_rules() -> None:
     """Widening the narrow scope is a decision, so it is pinned here.
 
     The semantic run of 05.09. stays outside on purpose (45-suchlast.py reaches
     its helper through a directory of the box), and the run directory of the
     tool fixes joined in plan 11-03 because its script is new and can keep all
-    three promises.
+    three promises. The run directory of v1.2 joined in plan 12-04 for the same
+    reason, and its probe is named here so that the widening is checked against
+    a file rather than against a directory that may still be empty.
     """
-    assert NARROW_SCOPE_DIRS == (RUN_DIR, FIX_RUN_DIR)
+    assert NARROW_SCOPE_DIRS == (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR)
     found = scripts_of_this_run()
     assert SUCCESSOR_LANGUAGE_CASES in found
     assert DRIVEN_LANGUAGE_CASES in found
+    assert STOCK_PROBE in found
     assert not [path for path in found if path.parent.parent.name == "2026-09-05-semantiklauf-m7g"]
 
 
@@ -1017,6 +1041,21 @@ def test_the_driven_language_case_script_stays_byte_identical() -> None:
     raw = DRIVEN_LANGUAGE_CASES.read_bytes()
     assert len(raw) == DRIVEN_LANGUAGE_CASES_BYTES, DRIVEN_FASSUNG_RULE
     assert hashlib.sha256(raw).hexdigest() == DRIVEN_LANGUAGE_CASES_SHA256, DRIVEN_FASSUNG_RULE
+
+
+def test_the_successor_language_case_script_stays_byte_identical() -> None:
+    """The second driven fassung is evidence too, and it did not carry a digest until now.
+
+    98b-sprachfaelle.sh ran on 10.09.2026 and wrote rohdaten/98b-sprachfaelle.txt
+    beside itself, the raw file DI-10-02 and DI-11-01 are read out of. The
+    correction of this phase is therefore 98c in a new run directory and not a
+    change inside 98b, exactly as the rule below says, and this digest is what
+    keeps the difference between the two from being a matter of good intentions.
+    """
+    assert SUCCESSOR_LANGUAGE_CASES.is_file(), SUCCESSOR_LANGUAGE_CASES
+    raw = SUCCESSOR_LANGUAGE_CASES.read_bytes()
+    assert len(raw) == SUCCESSOR_LANGUAGE_CASES_BYTES, DRIVEN_FASSUNG_RULE
+    assert hashlib.sha256(raw).hexdigest() == SUCCESSOR_LANGUAGE_CASES_SHA256, DRIVEN_FASSUNG_RULE
 
 
 def test_the_watchman_of_the_driven_fassung_fires_on_a_single_added_character() -> None:
