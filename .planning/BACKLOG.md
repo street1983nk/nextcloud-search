@@ -157,6 +157,14 @@ sie sind sehr unterschiedlich teuer:
   "Sprachausbau Sued/West" mit sauberer Migration; Baustein 3 dort mit
   entscheiden.
 
+**Erweiterung 15.09.2026 (EU-Outreach-Zusagen, Owner):** Zusaetzlich zu
+es/it/nl/pt kommen DAENISCH (dan) und ESTNISCH (est) in Baustein 1 (OCR):
+in den Outreach-Entwuerfen an OS2ai (DK), GovChat-NL (NL) und Buerokratt (EE)
+ist OCR fuer die jeweilige Sprache als "naechstes Release" zugesagt.
+tesseract-ocr-dan und tesseract-ocr-est existieren in derselben
+tesseract-lang-Quelle. Die Zusage bindet Baustein 1 an das naechste Release
+nach Versand der Mails.
+
 **Warum nicht mehr in v1.2:** Milestone ist mit 17 Requirements geschnitten
 und approved, stable35-Frist haengt drin, und eine Schema-Aenderung vor der
 Phase-15-Messung zerstoert den v1.1-Vergleich (D-04-Linie).
