@@ -146,6 +146,8 @@ Plans:
   4. Die neue Messzahl steht im Gleichschritt an drei Stellen (README.en.md und beide info.xml)
   5. v1.2.0 ist als signiertes App-Paar eingereicht, zweimal HTTP 201
 
+**Backlog-Kandidat (beim Planen pruefen, kein Requirement):** BL-F02 Baustein 1, OCR-Pakete spa/ita/nld/por. Nur NACH der Phase-15-Messanfahrt einbauen (Werkzeugstand ist Vergleichbarkeitsbedingung) und nur ohne Terminrisiko fuer die Einreichung; sonst Folgerelease.
+
 **Plans**: TBD
 
 ## Progress
