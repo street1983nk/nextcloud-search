@@ -120,3 +120,43 @@ anderen. Findling ohne Client ist ein Suchfeld, der Connector ohne Findling erz�
 jedem Assistenten, dass Inhalte nicht indexiert sind. Zusammen sind sie die
 Retrieval-Hälfte eines lokalen RAG, und zwar die Hälfte, die man schwer kaufen kann:
 die rechtekorrekte.
+
+## BL-F02: Sprachausbau Spanisch, Italienisch, Niederlaendisch, Portugiesisch
+
+**Anlass:** Reddit-Rueckmeldungen nach dem Findling-Post (14./15.09.2026),
+mehrere Nutzer wuenschen sich diese vier Sprachen. Ein Nutzer hat Hilfe
+angeboten und wurde vom Owner auf direkten Kontakt verwiesen; wenn es so weit
+ist, als Tester fuer echte Korpora in diesen Sprachen einplanen.
+
+**Ehrlicher Ist-Stand:** Die semantische Seite kann die vier Sprachen HEUTE
+schon, multilingual-e5-small ist mehrsprachig. Es fehlen drei Bausteine, und
+sie sind sehr unterschiedlich teuer:
+
+1. **OCR (klein, 1 bis 2 PT):** tesseract-ocr-spa/ita/nld/por im Dockerfile
+   (gleiche tesseract-lang-Quelle und Versionslogik wie deu/eng/fra, siehe
+   die dortigen Pin-Kommentare) plus `OCR_LANGUAGE_ALLOWLIST` und
+   `OCR_DEFAULT_LANGUAGES`-Entscheid in backend/src/findling/config.py plus
+   Tests. Fasst den Index NICHT an.
+2. **Lexikalische Suche (mittel, grob 5 bis 10 PT):** `DEFAULT_LANGUAGES`
+   ("de","en") sind Schema-Felder im Tantivy-Index. Neue Sprachfelder heissen
+   Schema-Aenderung, also Migration (Merker: jeder Minor-Sprung braucht eine
+   `Version00XX00Date...`-Migration, sonst stumme Suche) und faktisch
+   Reindex-Frage. Komposita-Zerlegung entfaellt, ist Deutsch-Spezifikum.
+3. **UI-Kataloge (klein je Sprache, niedrige Prioritaet):** je 174 Schluessel;
+   das FR-Gate war Muttersprachler-Abnahme, die fuer diese vier fehlt. Eher
+   maschinell plus Community-Review, getrennt entscheiden.
+
+**Einordnung (Owner-Entscheid 15.09.2026):**
+- **In v1.2.0 mitnehmbar:** NUR Baustein 1 (OCR), als Kandidat fuer Phase 16,
+  und dort erst NACH der Phase-15-Messanfahrt einbauen: der Werkzeugstand ist
+  protokollpflichtige Vergleichbarkeitsbedingung des Messlaufs (gleiche Logik,
+  aus der Dependabot-PR #9 gehalten wird). Beim Phase-16-Planen pruefen, ob es
+  ohne Terminrisiko fuer die Store-Einreichung passt; im Zweifel faellt es in
+  BL-F02-Folgerelease.
+- **v1.3 direkt nach v1.2.0:** Baustein 2 als eigener kleiner Milestone
+  "Sprachausbau Sued/West" mit sauberer Migration; Baustein 3 dort mit
+  entscheiden.
+
+**Warum nicht mehr in v1.2:** Milestone ist mit 17 Requirements geschnitten
+und approved, stable35-Frist haengt drin, und eine Schema-Aenderung vor der
+Phase-15-Messung zerstoert den v1.1-Vergleich (D-04-Linie).
