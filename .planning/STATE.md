@@ -4,13 +4,13 @@ milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
 stopped_at: Phase 13 UI-SPEC approved
-last_updated: "2026-09-16T16:58:28.553Z"
-last_activity: 2026-09-16 -- Phase 13 planning complete
+last_updated: "2026-09-16T17:52:00.000Z"
+last_activity: 2026-09-16 -- Plan 13-01 abgeschlossen (Filtervokabular und zwei Abfrageklauseln)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 8
+  completed_plans: 9
   percent: 20
 ---
 
@@ -21,21 +21,41 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-11)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 13 — filter und sortierung auf der ergebnisseite
+**Current focus:** Phase 13 — filter-und-sortierung-auf-der-ergebnisseite
 
 ## Current Position
 
-Phase: 13
-Plan: Not started
-Status: Ready to execute
-Progress: [██████████] 100%
-Last activity: 2026-09-16 -- Phase 13 planning complete
+Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
+Plan: 2 of 13 (13-01 abgeschlossen)
+Status: Executing Phase 13
+Progress: [█░░░░░░░░░] 8%
+Last activity: 2026-09-16 -- Plan 13-01 abgeschlossen (Filtervokabular und zwei Abfrageklauseln)
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 13-01: `TYPE_GROUPS` in `query/rewrite.py` ist die einzige Abbildung von
+  Gruppe auf Endung im ganzen Projekt, und die bestehende `type:`-Textsyntax
+  wurde an dieselbe Tabelle angeschlossen: `type:images` bedeutet ab jetzt
+  dasselbe wie der Chip. Ein Wort, das die Tabelle nicht kennt, bleibt wie
+  bisher eine rohe Endung.
+- 13-01: Textendungen und Gruppenendungen werden vereinigt und nicht
+  geschnitten. `type:pdf` plus Chip "Bilder" wäre als Schnittmenge garantiert
+  leer, und die Seite könnte das niemandem erklären.
+- 13-01: Der strukturierte Gruppenparameter setzt die Operator-Marke
+  `FILETYPE` nie; sie hängt ausschließlich am Text `type:`. Genau daran hängt
+  FILT-01, und ein eigener Testfall hält es fest.
+- 13-01: Die Bereichsabfrage auf `mtime` läuft über die Fast-Spalte,
+  `use_inverted_index` bleibt beim Vorgabewert `False`. Mit `True` antwortet
+  tantivy 0.26.0 mit einer leeren Trefferliste statt mit einem Fehler, was auf
+  der Seite wie "in diesem Zeitraum gibt es nichts" aussieht.
+- 13-01: Die Filterklausel liegt zusätzlich als `RewrittenQuery.filter_query`
+  bereit, damit Plan 13-02 dieselbe Klausel auf die semantische Hälfte legen
+  kann (`index/search.py::_mtimes_of`); ein Filter nur in `query` ließe
+  typfremde Vektortreffer durch.
 
 - 12-02: Zweig a greift: v35.0.0 vom 15.09.2026 ist die erste 35er-Marke ohne
   Prerelease-Kennzeichen (prerelease=false UND draft=false, am 16.09. live
