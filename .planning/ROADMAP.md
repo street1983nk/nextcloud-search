@@ -99,7 +99,55 @@ Plans:
   4. Filter und Sortierung stehen in der URL, sind sichtbar und einzeln entfernbar; jede Aenderung landet auf Seite 1, ein fremder Cursorpfad wird abgewiesen
   5. Der Paritaetstest deckt die neuen Parameter ab: kein gefilterter oder sortierter Treffer umgeht den ACL-Vorfilter oder den finalen PHP-Recheck
 
-**Plans**: TBD
+**Plans:** 13 plans
+
+Plans:
+**Welle 1**
+
+- [ ] 13-01-PLAN.md: Ein Filtervokabular und zwei Abfrageklauseln in query/rewrite.py
+
+**Welle 2** *(wartet auf Welle 1)*
+
+- [ ] 13-02-PLAN.md: Sortierzweig und Filter auf der semantischen Haelfte in index/search.py
+
+**Welle 3** *(wartet auf Welle 2)*
+
+- [ ] 13-03-PLAN.md: Wire-Felder, Grenzen, Moduswechsel und Gleichstands-Gate
+
+**Welle 4** *(wartet auf Welle 3)*
+
+- [ ] 13-04-PLAN.md: SearchFilters und die zwei Ruempfe an den Container
+
+**Welle 5** *(wartet auf Welle 4)*
+
+- [ ] 13-05-PLAN.md: Aenderungsdatum aus dem bestaetigten Knoten, Filter durch SearchService
+
+**Welle 6** *(wartet auf Welle 5)*
+
+- [ ] 13-06-PLAN.md: Datumsfilter des Unified-Search-Dialogs (getSupportedFilters)
+- [ ] 13-07-PLAN.md: Geschlossene Adresswerte, Schnellbereiche in der Nutzer-Zeitzone, Filterobjekt der Seite
+
+**Welle 7** *(wartet auf Welle 6)*
+
+- [ ] 13-08-PLAN.md: Adressen ohne Cursor, Fingerabdruck fp und die Bausteine der Filterleiste
+
+**Welle 8** *(wartet auf Welle 7)*
+
+- [ ] 13-09-PLAN.md: Filterleiste, Datumszeile und der vierte Leerzustand im Template
+
+**Welle 9** *(wartet auf Welle 8)*
+
+- [ ] 13-10-PLAN.md: Stil der Chips und die Text-Gates der neuen Bedienung
+- [ ] 13-12-PLAN.md: Paritaet: die neuen Parameter an der Rechtegrenze (FILT-05)
+
+**Welle 10** *(wartet auf Welle 9)*
+
+- [ ] 13-11-PLAN.md: Kataloge: 23 Schluessel, Gate-Zahl 197, drei G2-Ausnahmen
+
+**Welle 11** *(wartet auf Welle 10)*
+
+- [ ] 13-13-PLAN.md: Abnahme: Gesamtlauf, Audit und die 17 Sichtproben (Owner-Checkpoint)
+
 **UI hint**: yes
 
 ### Phase 14: Modell-Entladung im Leerlauf
@@ -161,7 +209,7 @@ Plans:
 | 10. Vergleichsmessung auf der AWS-Box | v1.1 | 7/7 | Complete | 2026-09-10 |
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
-| 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 0/? | Not started | - |
+| 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 0/13 | Planned | - |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 0/? | Not started | - |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |

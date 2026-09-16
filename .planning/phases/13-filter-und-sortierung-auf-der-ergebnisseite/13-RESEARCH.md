@@ -804,7 +804,14 @@ Aus `./CLAUDE.md` (verbindlich fuer jeden Plan dieser Phase):
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+RESOLVED am 2026-09-16 bei der Planung: alle fuenf Fragen sind entschieden, jede
+Empfehlung ist in einem Plan umgesetzt. (1) Zweitschluessel portionsweise mit
+benannter Grenze in 13-02, (2) type:<gruppenname> wird expandiert, ein Vokabular,
+in 13-01, (3) Vereinigung statt Schnittmenge von Text- und Chip-Filter in 13-01,
+(4) Paritaets-Weg 3 ohne Werkzeugaenderung in 13-12, (5) Diagnoseroute zieht mit
+in 13-03.
 
 1. **Zweitschluessel `file_id` an Portionsgrenzen**
    - Was feststeht: tantivy ordnet Gleichstaende nach Segment und Dokumentadresse; `offset` ist seitenstabil; eine portionsweise Nachsortierung erzeugt weder Duplikate noch Luecken.
