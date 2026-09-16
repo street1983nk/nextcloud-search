@@ -26,14 +26,22 @@ sensitive as a search term.
 
 import logging
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from tantivy import Index, Occur, Query
+from tantivy import FieldType, Index, Occur, Query
 
 from findling.config import SEARCH_QUERY_MAX_DEPTH
 from findling.index.analyzer import normalize
-from findling.index.schema import FIELD_BODY_DE, FIELD_BODY_EN, FIELD_EXT, FIELD_NAME, FIELD_TITLE
+from findling.index.schema import (
+    FIELD_BODY_DE,
+    FIELD_BODY_EN,
+    FIELD_EXT,
+    FIELD_MTIME,
+    FIELD_NAME,
+    FIELD_TITLE,
+)
 
 LOGGER = logging.getLogger("findling.query")
 
@@ -59,6 +67,49 @@ FIELD_BOOSTS: Final = {FIELD_NAME: 3.0, FIELD_TITLE: 2.0, FIELD_BODY_DE: 1.0, FI
 # SRCH-03 file type. Nextcloud has no built in filter for it, so it travels
 # inside the search line and is translated into a required term on the extension.
 TYPE_PREFIX: Final = "type:"
+
+# The one table from a type group to its extensions in this whole project. The
+# PHP side knows the six group names and not a single extension, and the text
+# syntax above is resolved through this very table rather than through a second
+# one: two vocabularies for the same six words drift apart without a test ever
+# turning red. Both "jpg" and "jpeg" stand here, and so do "tif" and "tiff",
+# because a file with the other spelling wears the same symbol in the file list
+# and would otherwise fall out of a filter it visibly belongs to.
+#
+# The limits of the table belong to docs/search-filters.md and not into it: an
+# extension that is not listed is reachable under no chip, and a file without an
+# extension is reachable under none of them either, because extension_of returns
+# the empty string for it and an empty raw field produces no term at all.
+TYPE_GROUPS: Final[Mapping[str, tuple[str, ...]]] = {
+    "pdf": ("pdf",),
+    "documents": ("docx", "odt", "rtf"),
+    "spreadsheets": ("xlsx", "ods", "csv"),
+    "presentations": ("pptx", "odp"),
+    "images": ("jpg", "jpeg", "jps", "mpo", "png", "tif", "tiff", "webp"),
+    "text": (
+        "txt",
+        "text",
+        "md",
+        "markdown",
+        "mdown",
+        "mdwn",
+        "mkd",
+        "htm",
+        "html",
+        "json",
+        "xml",
+        "yaml",
+        "yml",
+        "conf",
+        "cnf",
+        "eml",
+        "adoc",
+        "asciidoc",
+        "org",
+        "fb2",
+        "js",
+    ),
+}
 
 # A token this module is willing to rewrite: optional leading + - or !, an
 # optional field prefix, and a plain word. Everything else, phrases, wildcards,
@@ -287,6 +338,33 @@ class RewrittenQuery:
     # answer the one question of the caller: is this a line the vector half has
     # anything to add to.
     one_term: bool = False
+    # The same filter once more on its own, because the vector half knows
+    # neither an extension nor a time stamp: its hits never pass through the
+    # parser and can only be cut to the requested type by the index lookup in
+    # index/search.py::_mtimes_of, which is where this clause is meant to go. A
+    # filter that lives in ``query`` alone lets hits of a foreign type through
+    # the semantic side (13-RESEARCH finding 1). None when nothing was filtered.
+    filter_query: Query | None = None
+
+
+def extensions_of(groups: Sequence[str]) -> tuple[str, ...]:
+    """The extensions of the named type groups, free of duplicates and in order.
+
+    Every name is lowercased before it is looked up, and the reason is not
+    tidiness: extension_of writes the extension of a file in lower case, the raw
+    tokeniser normalises nothing afterwards, and a group name that arrives as
+    "PDF" would therefore be translated into a term that matches not one single
+    document.
+
+    A name that is not a group of the table contributes nothing, and it does not
+    raise. It reaches this function out of an address, and an address that
+    carries a word nobody knows is not an error worth an exception; it means
+    "no filter", the way every other value of that address is read.
+    """
+    found: list[str] = []
+    for group in groups:
+        found.extend(TYPE_GROUPS.get(group.lower(), ()))
+    return tuple(dict.fromkeys(found))
 
 
 def _extension_query(index: Index, extensions: tuple[str, ...]) -> Query:
@@ -295,6 +373,62 @@ def _extension_query(index: Index, extensions: tuple[str, ...]) -> Query:
     if len(terms) == 1:
         return terms[0]
     return Query.boolean_query([(Occur.Should, term) for term in terms])
+
+
+def _mtime_range_query(index: Index, since: int | None, until: int | None) -> Query | None:
+    """One range over the modification time, or None when neither bound is set.
+
+    ``use_inverted_index`` is left at its default of False and is deliberately
+    neither written out nor passed through. FIELD_MTIME carries
+    ``indexed=False`` (index/schema.py), and the reflex of reading that and
+    setting the parameter to True does not produce an error: measured against
+    the installed tantivy 0.26.0 on 16.09.2026, the very range that returns
+    three documents over the column returns an empty hit list through the
+    inverted index, without an exception and without a warning. On the result
+    page that reads as "there is nothing in this period", which is the kind of
+    defect that survives a release.
+
+    Both bounds are inclusive and either one may stand alone.
+    """
+    if since is None and until is None:
+        return None
+    return Query.range_query(
+        index.schema,
+        FIELD_MTIME,
+        FieldType.Integer,
+        lower_bound=since,
+        upper_bound=until,
+        include_lower=True,
+        include_upper=True,
+    )
+
+
+def _filter_clause(
+    index: Index,
+    extensions: tuple[str, ...],
+    since: int | None,
+    until: int | None,
+) -> Query | None:
+    """Extensions and period as exactly one clause, or None when neither is set.
+
+    One clause and not two, because the semantic half of the search receives
+    this same object in index/search.py::_mtimes_of: a filter that is assembled
+    a second time somewhere else is a filter that differs in one of the two
+    places on the day somebody changes it.
+    """
+    clauses = [
+        clause
+        for clause in (
+            _extension_query(index, extensions) if extensions else None,
+            _mtime_range_query(index, since, until),
+        )
+        if clause is not None
+    ]
+    if not clauses:
+        return None
+    if len(clauses) == 1:
+        return clauses[0]
+    return Query.boolean_query([(Occur.Must, clause) for clause in clauses])
 
 
 def _max_bracket_depth(text: str) -> int:
@@ -314,13 +448,29 @@ def _max_bracket_depth(text: str) -> int:
     return deepest
 
 
-def build_query(index: Index, text: str, *, title_only: bool = False) -> RewrittenQuery:
+def build_query(
+    index: Index,
+    text: str,
+    *,
+    title_only: bool = False,
+    groups: Sequence[str] = (),
+    since: int | None = None,
+    until: int | None = None,
+) -> RewrittenQuery:
     """Turn a search line into a query, its filters and the parser's complaints.
 
     Never raises on user input. A stray quotation mark, a regular expression, a
     field that does not exist: all of them come back as an entry in ``errors``
     together with a query that finds nothing, because an exception here is an
     HTTP 500 and a search bar that stays broken until somebody redeploys.
+
+    ``groups``, ``since`` and ``until`` are the structured half of the filter,
+    the one the result page sets. They are keyword arguments with a default so
+    that the callers who filter nothing stay exactly as they are, and ``groups``
+    is a list of group names rather than a piece of text on purpose: written
+    into the search line as ``type:``, the same request would set the mark
+    FILETYPE and switch the vector half off, which is the failure FILT-01 is
+    about.
     """
     # Bracket depth is checked before the parser is ever entered (security audit
     # C2): parse_query_lenient descends recursively on parentheses, so a deeply
@@ -347,10 +497,18 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
     # wrote shares no term with the same name typed into the search bar. The
     # reasoning is at findling.index.analyzer.normalize.
     residual, extensions = extract_filters(normalize(text))
+    # The union of what the line asked for and what the chips ask for, the ones
+    # from the line first. The union and not the intersection: "type:pdf"
+    # together with the chip for images would be guaranteed empty as an
+    # intersection, and the page has no way of explaining an empty list that is
+    # nobody's mistake.
+    extensions = tuple(dict.fromkeys(extensions + extensions_of(groups)))
     rewritten = add_umlaut_variants(residual).strip()
     if not rewritten:
         # No term, no engine. A search line that holds nothing but a filter would
         # otherwise ask for every PDF on the instance in no meaningful order.
+        # ``filter_query`` stays at None for the same reason: there is no list to
+        # narrow, and a clause without a query is a clause nobody can use.
         return RewrittenQuery(
             query=None,
             text="",
@@ -371,8 +529,12 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
         # Debug and nowhere else. These entries quote the input, so an info line
         # would put a search term into a log that operators read and ship.
         LOGGER.debug("the query parser reported %d issue(s)", len(errors))
-    if extensions:
-        parsed = Query.boolean_query([(Occur.Must, parsed), (Occur.Must, _extension_query(index, extensions))])
+    # Built once and used twice: required here, so that the lexical half is
+    # narrowed before the fusion window is filled, and handed out below, so that
+    # the semantic half is narrowed by the very same object.
+    filter_query = _filter_clause(index, extensions, since, until)
+    if filter_query is not None:
+        parsed = Query.boolean_query([(Occur.Must, parsed), (Occur.Must, filter_query)])
     return RewrittenQuery(
         query=parsed,
         text=rewritten,
@@ -380,4 +542,5 @@ def build_query(index: Index, text: str, *, title_only: bool = False) -> Rewritt
         errors=list(errors),
         operators=operators,
         one_term=one_term,
+        filter_query=filter_query,
     )
