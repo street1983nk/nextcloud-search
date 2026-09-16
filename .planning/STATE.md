@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: planning
-stopped_at: Phase 13 context gathered
-last_updated: "2026-09-16T13:25:21.806Z"
+stopped_at: Phase 13 UI-SPEC approved
+last_updated: "2026-09-16T13:58:05.086Z"
 last_activity: 2026-09-16
 progress:
   total_phases: 5
@@ -196,6 +196,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-16T13:25:21.789Z
-Stopped at: Phase 13 context gathered
-Resume file: .planning/phases/13-filter-und-sortierung-auf-der-ergebnisseite/13-CONTEXT.md
+Last session: 2026-09-16T13:58:05.070Z
+Stopped at: Phase 13 UI-SPEC approved
+Resume file: .planning/phases/13-filter-und-sortierung-auf-der-ergebnisseite/13-UI-SPEC.md
