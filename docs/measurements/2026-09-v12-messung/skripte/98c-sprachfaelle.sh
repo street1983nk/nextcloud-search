@@ -426,14 +426,25 @@ urteil() {
     while [ "$runde" -lt "$RUNDEN" ]; do
         runde=$((runde + 1))
         occ findling:index >"$WORK/status.txt" 2>&1 || true
-        vorrat=$(vorrat_von "$WORK/status.txt")
+        # Eine Lesung ist nur auswertbar, wenn der Statusblock ueberhaupt da
+        # ist. Ohne diese Frage haette ein gescheiterter Aufruf die Summe 0
+        # geliefert und als leerer Arbeitsvorrat gezaehlt, also genau die Zahl
+        # verfaelscht, um die es hier geht (97-cron-vorpruefung.sh haelt es
+        # ebenso).
+        if grep -q '^Work stock' "$WORK/status.txt" 2>/dev/null; then
+            vorrat=$(vorrat_von "$WORK/status.txt")
+        else
+            vorrat=unklar
+        fi
         date -u +"indexierung runde=$runde vorrat=$vorrat %Y-%m-%dT%H:%M:%SZ"
-        if [ "$vorrat" -eq 0 ]; then
+        if [ "$vorrat" != unklar ] && [ "$vorrat" -eq 0 ]; then
             break
         fi
         sleep "$RUNDENFRIST"
     done
-    if [ "$vorrat" -eq 0 ]; then
+    # Eine unklar-Endlage ist KEIN leerer Vorrat: sie heisst, der letzte Aufruf
+    # hat keinen Statusblock geliefert, und das Urteil bleibt fail-closed nein.
+    if [ "$vorrat" != unklar ] && [ "$vorrat" -eq 0 ]; then
         echo 'arbeitsvorrat-leer ja' >"$WORK/index-urteil"
     else
         echo 'arbeitsvorrat-leer nein' >"$WORK/index-urteil"
