@@ -130,6 +130,20 @@ DECKEL="${DECKEL:-810}"
 # schreibt. Die gemessenen rund zwoelf Minuten des v1.1-Laufs, also rund 720 s,
 # liegen deutlich darueber und werden von diesem Deckel sicher gefangen.
 WIRKUNGS_DECKEL="${WIRKUNGS_DECKEL:-420}"
+# Der Fruehabbruch des Wirkungszweiges, in aufeinanderfolgenden gemessenen
+# Abstaenden ueber dem Deckel. Zwei, weil ein einzelner Ausreisser ein Cron-Lauf
+# sein kann, der seine Scheibe noch schrieb; zwei in Folge sind der
+# v1.1-Befund. Auf ihn zu warten, bis alle DECKEL-Runden gefahren sind, hiesse,
+# die unvergleichbare Laufzeit erst zu erzeugen und dann zu melden, waehrend
+# Exit 28 zusichert, dass die Anfahrt an dieser Stelle HAELT.
+BEFUND_ABSTAENDE="${BEFUND_ABSTAENDE:-2}"
+# Das regulaere Schleifenende: bleibt der Vorrat so viele Runden in Folge auf
+# 0, nachdem mindestens eine Scheibe gesehen war, ist der beobachtete Lauf
+# vorbei, und Protokollblock und Urteil werden geschrieben, statt bis Runde
+# DECKEL weiterzupollen. 15 Runden a 120 s sind 30 Minuten, also das Doppelte
+# der rund 720 s des v1.1-Befundes: keine Scheibenluecke eines noch laufenden
+# Zulaufs wird damit fuer ein Ende gehalten.
+NULL_RUNDEN_ENDE="${NULL_RUNDEN_ENDE:-15}"
 
 mkdir -p "$OUT"
 ZIEL="${ZIEL:-$OUT/97-cron-vorpruefung-$ZWEIG.txt}"
@@ -278,6 +292,7 @@ else
     {
         date -u +'cron-vorpruefung-waehrend-start %Y-%m-%dT%H:%M:%SZ'
         printf 'deckel %s runden a %s s, wirkungs-deckel %s s\n' "$DECKEL" "$INTERVALL" "$WIRKUNGS_DECKEL"
+        printf 'befund-abstaende %s in folge, null-runden-ende %s runden\n' "$BEFUND_ABSTAENDE" "$NULL_RUNDEN_ENDE"
         echo "-- Eine Zulaufscheibe ist erkannt, wenn der Arbeitsvorrat gegenueber der vorigen"
         echo "   Lesung STEIGT. Aus den Zeitpunkten dieser Anstiege entstehen die Abstaende, und"
         echo "   aus den Abstaenden das Urteil dieses Zweiges. --"
@@ -285,9 +300,16 @@ else
         RUNDE=0
         LESUNGEN=0
         NULL_LESUNGEN=0
+        NULL_IN_FOLGE=0
+        UEBER_DECKEL=0
         SCHEIBEN=0
         LETZTER_VORRAT=-1
         LETZTE_SCHEIBE=0
+        # Warum die Schleife endete, als Wort im Protokoll: deckel-runden ist
+        # das alte Ende am Rundendeckel, befund-abstaende der Fruehabbruch als
+        # Befund, lauf-zuende das regulaere Ende, wenn der beobachtete Lauf
+        # vorbei ist.
+        GRUND=deckel-runden
         : >"$WORK/abstaende"
 
         while [ "$RUNDE" -lt "$DECKEL" ]; do
@@ -311,17 +333,45 @@ else
                 LESUNGEN=$((LESUNGEN + 1))
                 if [ "$VORRAT" -eq 0 ]; then
                     NULL_LESUNGEN=$((NULL_LESUNGEN + 1))
+                    NULL_IN_FOLGE=$((NULL_IN_FOLGE + 1))
+                else
+                    NULL_IN_FOLGE=0
                 fi
                 if [ "$LETZTER_VORRAT" -ge 0 ] && [ "$VORRAT" -gt "$LETZTER_VORRAT" ]; then
                     SCHEIBEN=$((SCHEIBEN + 1))
                     if [ "$LETZTE_SCHEIBE" -gt 0 ]; then
-                        printf '%s\n' "$((JETZT - LETZTE_SCHEIBE))" >>"$WORK/abstaende"
+                        ABSTAND=$((JETZT - LETZTE_SCHEIBE))
+                        printf '%s\n' "$ABSTAND" >>"$WORK/abstaende"
+                        if [ "$ABSTAND" -gt "$WIRKUNGS_DECKEL" ]; then
+                            UEBER_DECKEL=$((UEBER_DECKEL + 1))
+                        else
+                            UEBER_DECKEL=0
+                        fi
                     fi
                     LETZTE_SCHEIBE="$JETZT"
                 fi
                 LETZTER_VORRAT="$VORRAT"
             fi
             date -u +"wirkung runde=$RUNDE vorrat=$VORRAT scheiben=$SCHEIBEN lesungen=$LESUNGEN %Y-%m-%dT%H:%M:%SZ"
+            # Der Fruehabbruch als BEFUND: liegen BEFUND_ABSTAENDE gemessene
+            # Abstaende in Folge ueber dem Deckel, haelt die Anfahrt HIER, statt
+            # den v1.1-Befund erst nach den vollen DECKEL-Runden zu melden.
+            # Protokollblock und Median entstehen wie immer nach der Schleife,
+            # und die Marke unter $WORK traegt den Befund unter die Pipeline.
+            if [ "$UEBER_DECKEL" -ge "$BEFUND_ABSTAENDE" ]; then
+                GRUND=befund-abstaende
+                : >"$WORK/befund-frueh"
+                break
+            fi
+            # Das regulaere Ende: mindestens eine Scheibe war da, und der Vorrat
+            # blieb NULL_RUNDEN_ENDE Runden in Folge auf 0. Der beobachtete Lauf
+            # ist vorbei, und weiterzupollen bis Runde DECKEL erzeugte nur
+            # Lesungen ueber einen Lauf, den es nicht mehr gibt; wer dann
+            # abbraeche (kill), bekaeme weder Protokollblock noch Urteil.
+            if [ "$SCHEIBEN" -ge 1 ] && [ "$NULL_IN_FOLGE" -ge "$NULL_RUNDEN_ENDE" ]; then
+                GRUND=lauf-zuende
+                break
+            fi
             sleep "$INTERVALL"
         done
 
@@ -348,6 +398,7 @@ else
         fi
         printf '%s\n' "$MEDIAN" >"$WORK/median"
 
+        protokoll "schleifen-ende $GRUND nach-runde $RUNDE"
         protokoll "scheiben-erkannt $SCHEIBEN"
         protokoll "scheibenabstand-min $MIN"
         protokoll "scheibenabstand-median $MEDIAN"
@@ -405,6 +456,15 @@ else
     # dieser Abstand hat den v1.1-Lauf 5,85 h von 26,6 h Leerlauf gekostet, und
     # eine Laufzeit, die diesen Leerlauf enthaelt, vergleicht sich mit keiner
     # anderen.
+    # Der Fruehabbruch der Schleife ist derselbe Befund, auch wenn der Median
+    # ueber alle Abstaende noch unter dem Deckel laege: die Marke entsteht nur,
+    # wenn BEFUND_ABSTAENDE Abstaende in Folge darueber lagen.
+    if [ -f "$WORK/befund-frueh" ]; then
+        echo "97-cron-vorpruefung: $BEFUND_ABSTAENDE aufeinanderfolgende Scheibenabstaende lagen ueber dem Deckel von $WIRKUNGS_DECKEL s" >&2
+        echo "97-cron-vorpruefung: die Schleife hat als Befund frueh gehalten, statt die vollen $DECKEL Runden zu fahren" >&2
+        echo "97-cron-vorpruefung: das ist der Befund aus v1.1 und keine Stoerung dieses Laufs" >&2
+        exit 28
+    fi
     if [ "$median" -gt "$WIRKUNGS_DECKEL" ]; then
         echo "97-cron-vorpruefung: der gemessene Scheibenabstand $median s liegt ueber dem Deckel von $WIRKUNGS_DECKEL s" >&2
         echo "97-cron-vorpruefung: das ist der Befund aus v1.1 und keine Stoerung dieses Laufs" >&2
