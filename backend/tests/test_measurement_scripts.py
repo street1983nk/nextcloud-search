@@ -231,7 +231,14 @@ PHP_TREE_HASH_TODAY = "455470c51fe2831cc4adc92e31ab350f762f0b1143d13b72103f6a9ad
 # the split follows the same rule as the PHP one above: the figure of the run
 # stays because it is quoted in rohdaten/40b-baumhash.txt and in the report, and
 # this one is what the next change to the package has to move.
-PACKAGE_TREE_HASH_TODAY = "ac6b8bfd4a74a158552d69b82934b7adf23091cd71c2a2aaebad2a33c311e979"
+#
+# Moved on 2026-09-16 by plan 13-01, and the count did not move with it: exactly
+# one of the 54 files changed its bytes, query/rewrite.py, which learned the
+# table of the six type groups, the range over the modification time and the
+# three keyword arguments the result page filters with. No file came and none
+# went, so PACKAGE_FILES stays at 54 and only the hash is a different statement
+# than it was yesterday.
+PACKAGE_TREE_HASH_TODAY = "eb641c833671980668edf537841a8e569bd0bfbaf7b02aac95fc1631ba134335"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
