@@ -397,3 +397,138 @@ def test_the_rewritten_query_carries_whether_its_raw_line_held_one_term(index: I
     # One caller and one reading, exactly as with the operator marks above.
     assert build_query(index, "Genehmigung").one_term is True
     assert build_query(index, "wann darf ich den vertrag beenden").one_term is False
+
+
+# ---------------------------------------------------------------------------
+# The structured filter: type groups and a period
+# ---------------------------------------------------------------------------
+#
+# The same six groups the result page shows, as a parameter rather than as text
+# in the search line. Everything below is about the difference between those
+# two ways of asking the same question: the text sets a mark that switches the
+# vector half off, and the parameter must not.
+
+# The three documents of the fixture carry 1_700_000_000 plus their file id.
+MTIME_PDF = 1_700_000_001
+MTIME_DOCX = 1_700_000_002
+MTIME_TXT = 1_700_000_003
+
+
+def _filtered(index: Index, rewritten: RewrittenQuery) -> list[int]:
+    """Run the filter clause on its own and return the file ids it matches."""
+    assert rewritten.filter_query is not None
+    return _file_ids(index, rewritten.filter_query)
+
+
+def test_a_type_group_binds_its_extensions_and_leaves_the_text_alone(index: Index) -> None:
+    rewritten = build_query(index, "frist", groups=["pdf"])
+
+    # The line stays what the user typed. A group that ended up in the text
+    # would be searched for as a word and would find nothing at all.
+    assert rewritten.text == "frist"
+    assert rewritten.extensions == ("pdf",)
+    # Document 3 carries the word and is a txt file, so the group is what
+    # removes it rather than the ranking.
+    assert _found(index, rewritten) == [1]
+
+
+def test_a_group_filter_does_not_set_the_file_type_mark(index: Index) -> None:
+    # The case FILT-01 is about. api/search.py reads a non empty set of marks as
+    # "this line is answered lexically" and drops the vector half; if this
+    # assertion fell, a chip on the result page would switch the semantic search
+    # off and a paraphrase under an active filter would find nothing any more.
+    rewritten = build_query(index, "frist", groups=["pdf"], since=MTIME_PDF)
+
+    assert rewritten.operators == frozenset()
+    assert FILETYPE not in rewritten.operators
+    assert rewritten.one_term is True
+
+
+def test_several_type_groups_are_a_union_and_not_a_narrowing(index: Index) -> None:
+    # D-01: every chip switches its group on, and two chips show more rather
+    # than less. Document 1 is the pdf, document 2 the docx, and both carry the
+    # word.
+    assert _found(index, build_query(index, "vertrag", groups=["pdf"])) == [1]
+
+    assert _found(index, build_query(index, "vertrag", groups=["pdf", "documents"])) == [1, 2]
+
+
+def test_a_group_the_table_does_not_know_is_no_filter_and_no_error(index: Index) -> None:
+    # It reaches the rewriting out of an address, and an address with a word
+    # nobody knows means "no filter", the way every other value of that address
+    # is read.
+    rewritten = build_query(index, "frist", groups=["xyz"])
+
+    assert rewritten.extensions == ()
+    assert rewritten.filter_query is None
+    assert _found(index, rewritten) == _found(index, build_query(index, "frist"))
+
+
+def test_a_group_written_in_capitals_still_matches(index: Index) -> None:
+    # extension_of writes the extension in lower case and the raw tokeniser
+    # normalises nothing, so a group name that is not folded would produce a
+    # term that matches not one document.
+    assert _found(index, build_query(index, "frist", groups=["PDF"])) == [1]
+
+
+def test_the_text_syntax_and_the_group_parameter_are_united(index: Index) -> None:
+    # "type:pdf" plus the chip for documents finds both and not neither. As an
+    # intersection the answer would be guaranteed empty, and the page has no way
+    # of explaining an empty list that is nobody's mistake.
+    rewritten = build_query(index, "type:pdf vertrag", groups=["documents"])
+
+    assert rewritten.extensions == ("pdf", "docx", "odt", "rtf")
+    assert _found(index, rewritten) == [1, 2]
+
+
+def test_a_type_group_of_the_text_syntax_means_the_same_as_the_chip(index: Index) -> None:
+    # One vocabulary and not two: the word behind the prefix is resolved through
+    # the same table the parameter is resolved through.
+    assert build_query(index, "frist type:pdf").extensions == build_query(index, "frist", groups=["pdf"]).extensions
+
+
+def test_the_lower_bound_of_the_period_is_inclusive(index: Index) -> None:
+    # Both documents carry the word; the period is what removes the older one,
+    # and the younger one sits exactly on the bound.
+    assert _found(index, build_query(index, "frist")) == [1, 3]
+
+    assert _found(index, build_query(index, "frist", since=MTIME_TXT)) == [3]
+
+
+def test_the_upper_bound_of_the_period_is_inclusive(index: Index) -> None:
+    assert _found(index, build_query(index, "frist", until=MTIME_PDF)) == [1]
+
+
+def test_both_bounds_together_are_the_window_between_them(index: Index) -> None:
+    rewritten = build_query(index, "vertrag", since=MTIME_DOCX, until=MTIME_DOCX)
+
+    assert _found(index, rewritten) == [2]
+
+
+def test_a_period_that_lies_in_the_future_is_empty_and_not_an_error(index: Index) -> None:
+    # no_data, and at the same time the guard against the one silent failure of
+    # this feature: the range runs over the fast column, and with
+    # use_inverted_index set to True tantivy answers every period with an empty
+    # list instead of an error. This case would then be the only green one of
+    # the four above, which is the pattern to look for.
+    rewritten = build_query(index, "frist", since=2_000_000_000)
+
+    assert rewritten.query is not None
+    assert rewritten.errors == []
+    assert _found(index, rewritten) == []
+
+
+def test_without_a_group_and_without_a_bound_there_is_no_filter_clause(index: Index) -> None:
+    rewritten = build_query(index, "frist", groups=[], since=None, until=None)
+
+    assert rewritten.filter_query is None
+
+
+def test_the_filter_clause_carries_the_expected_set_on_its_own(index: Index) -> None:
+    # The clause is handed out separately because the semantic half knows
+    # neither an extension nor a time stamp: its hits never pass through the
+    # parser, and only this clause can cut them to the requested type. So it has
+    # to hold without the full text part as well.
+    assert _filtered(index, build_query(index, "frist", groups=["pdf"])) == [1]
+    assert _filtered(index, build_query(index, "frist", since=MTIME_TXT)) == [3]
+    assert _filtered(index, build_query(index, "frist", groups=["documents"], since=MTIME_DOCX)) == [2]
