@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 13-02-PLAN.md
-last_updated: "2026-09-16T18:39:00.000Z"
-last_activity: 2026-09-16 -- Plan 13-02 abgeschlossen (Sortierzweig und Filter auf der semantischen Haelfte)
+stopped_at: Completed 13-03-PLAN.md
+last_updated: "2026-09-16T19:43:00.000Z"
+last_activity: 2026-09-16 -- Plan 13-03 abgeschlossen (Wire-Felder, Grenzen, Moduswechsel und Gleichstands-Gate)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 10
-  percent: 22
+  completed_plans: 11
+  percent: 24
 ---
 
 # Project State
@@ -26,16 +26,46 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 3 of 13 (13-01 und 13-02 abgeschlossen)
+Plan: 4 of 13 (13-01 bis 13-03 abgeschlossen)
 Status: Executing Phase 13
-Progress: [██░░░░░░░░] 15%
-Last activity: 2026-09-16 -- Plan 13-02 abgeschlossen (Sortierzweig und Filter auf der semantischen Haelfte)
+Progress: [██░░░░░░░░] 23%
+Last activity: 2026-09-16 -- Plan 13-03 abgeschlossen (Wire-Felder, Grenzen, Moduswechsel und Gleichstands-Gate)
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 13-03: Die vier neuen Werte reisen als geschlossene Mengen. `types` ist
+  `list[Literal[...]]` ueber die sechs Gruppennamen, `sort` ein `Literal` ueber
+  die drei Sortiernamen, `since` und `until` sind `int` mit `ge=0` und
+  `le=SEARCH_MTIME_MAX`. Kein Freitext: die Routen tragen `access_level USER`,
+  und ein freier String waere ein zweiter Weg in den Abfragebau.
+- 13-03: `SEARCH_TYPE_GROUPS_MAX = 6` und `SEARCH_MTIME_MAX = 4_102_444_800`
+  (01.01.2100) stehen in `config.py`, je mit Begruendungsabsatz nach dem Muster
+  von `SEARCH_OFFSET_MAX`.
+- 13-03: Der Sortierterm haengt an derselben `lexical_only`-Zeile und nicht an
+  einer zweiten Weiche: `... or sort != "relevance"`. Unter Sortierung gibt es
+  keine Fusion, in die eine Vektorliste eingehen koennte.
+- 13-03: `sort` steht NICHT in `SnippetsRequest`, und ein `sort` im
+  Ausschnitts-Rumpf ist ein 422. Die Ausnahme ist im Gate
+  `backend/tests/test_search_fields_lockstep.py` benannt, nicht gezaehlt.
+- 13-03: `FIELDS_THAT_MAY_DIFFER` traegt vier Eintraege statt des einen aus dem
+  Plantext, weil `limit`, `offset` und `fileIds` schon vor der Phase einseitig
+  waren. Jeder Eintrag traegt seine Begruendung; eine Liste und keine Schwelle.
+- 13-03: Der Ausschnittsaufruf SCHNEIDET NICHT. `snippets_for` laeuft ueber die
+  bestaetigten Kennungen und waehlt keine Dokumente aus; die Filterklausel nennt
+  `ext` und `mtime` und markiert im Textfeld nichts. Die drei Felder stehen am
+  Modell, damit ein Rumpf beide Modelle passiert (`extra="forbid"` -> 422 -> auf
+  der PHP-Seite `null` -> Fehlerblock statt Ausschnitten).
+- 13-03: Die Diagnoseroute bekommt die drei Filter als Query-Parameter, aber
+  keine Trefferzahl je Typ und keinen Gesamtwert. Ihre Grenze steht im
+  Docstring: `ranked_sides` geht nicht durch `_mtimes_of`, sie sieht den Schnitt
+  der semantischen Haelfte also nicht.
+- 13-03: Der Container lehnt einen unbekannten Gruppen- oder Sortiernamen mit
+  422 ab, weil ihn nur die eigene Oberflaeche ruft. Der stille Rueckfall bei
+  einer von Hand editierten Adresse ist Aufgabe der PHP-Seite.
 
 - 13-02: Die Sortierung ist ein eigener, rein lexikalischer Zweig
   (`_sorted_round` in `index/search.py`) ohne RRF und ohne Vektorhaelfte, und
@@ -241,6 +271,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-16T18:39:00.000Z
-Stopped at: Completed 13-02-PLAN.md
+Last session: 2026-09-16T19:43:00.000Z
+Stopped at: Completed 13-03-PLAN.md
 Resume file: None
