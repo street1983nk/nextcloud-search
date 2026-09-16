@@ -220,8 +220,12 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # (DI-10-04): CrawlAdvanceService.php and the two test files of the route are
 # three files that did not exist before, and QueueController.php plus
 # StorageCrawlJob.php changed their bytes.
-PHP_FILES_TODAY = 63
-PHP_TREE_HASH_TODAY = "455470c51fe2831cc4adc92e31ab350f762f0b1143d13b72103f6a9adc1c752b"
+# Moved on 2026-09-16 by plan 13-04, and the count moved once more: SearchFilters
+# .php is a file that did not exist before, and ExAppService.php, SearchService
+# .php, ExAppServiceTest.php and SearchServiceTest.php changed their bytes with
+# the filter and sort fields of phase 13. So 63 becomes 64 and the hash follows.
+PHP_FILES_TODAY = 64
+PHP_TREE_HASH_TODAY = "fd8bd9de51cfcf708dd1b7dc7cc7745e9fe7e8c6c7a510c97ac6a8d3689d17fb"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
