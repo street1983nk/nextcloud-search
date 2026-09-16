@@ -32,7 +32,7 @@
 
 - [ ] **HART-01**: DI-11-02/03/05/06 abgearbeitet oder dokumentiert entschieden (u.a. flatternder pgsql-Ast HTTP 423: bei rot erst wiederholen)
 - [ ] **HART-02**: BL-F01-Schlusssatz zur Connector-Synergie in den Store-Texten beider Hälften (EN/DE/FR, Wortlaut-Basis in BACKLOG.md, Gate-konform: keine Em-Dashes, keine Backticks/Tabellen)
-- [ ] **HART-03**: stable35-Fenster-Entscheid (RE-CHECK 16.09.2026, Entscheid v2-a) vollzogen und dokumentiert
+- [x] **HART-03**: stable35-Fenster-Entscheid (RE-CHECK 16.09.2026, Entscheid v2-a) vollzogen und dokumentiert
 - [ ] **REL-02**: v1.2.0 eingereicht: Migration `Version001200Date...` (Pflicht bei jedem Minor-Sprung, auch ohne Schemaänderung), Ende-zu-Ende-Upgrade-Beweis 1.1.0 auf 1.2.0 in CI, Messzahl an drei Stellen im Gleichschritt (README.en.md + beide info.xml), Store-Submission mit 2x HTTP 201
 
 ## Future Requirements (deferred)
@@ -71,7 +71,7 @@
 | MESS-06 | Phase 12 | Complete |
 | HART-01 | Phase 16 | Pending |
 | HART-02 | Phase 16 | Pending |
-| HART-03 | Phase 12 | Pending |
+| HART-03 | Phase 12 | Complete |
 | REL-02 | Phase 16 | Pending |
 
 **Abdeckung:** 17 von 17 Requirements zugeordnet, keine Waise, keine Doppelzuordnung.

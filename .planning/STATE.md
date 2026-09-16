@@ -25,18 +25,27 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 ## Current Position
 
-Phase: 12 (messwerkzeug-runbook-und-terminentscheid), EXECUTING
-Plan: 12-01, 12-03, 12-04, 12-05, 12-06, 12-07 und 12-08 abgeschlossen, 7 von 8 Plaenen des Milestones
-Status: Ready to execute
-Progress: [█████████░] 88%
-Last activity: 2026-09-14, Plan 12-08 abgeschlossen (Runbook Abschnitte 6 bis 9, MESS-04 und MESS-06 erfuellt)
+Phase: 12 (messwerkzeug-runbook-und-terminentscheid), COMPLETE
+Plan: alle 8 Plaene abgeschlossen (12-01 bis 12-08)
+Status: Phase complete, naechste Phase 13
+Progress: [██████████] 100%
+Last activity: 2026-09-16, Plan 12-02 abgeschlossen (stable35-Vollzug, Zweig a,
+HART-03 erfuellt)
 
-Offen in Phase 12 ist allein 12-02 (stable35-Vollzug am 16.09., HART-03).
-
-Hinweis zur Reihenfolge: 12-02 ist fristgebunden (stable35-Vollzug am 16.09.) und
-laeuft deshalb nach 12-03.
+Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
+vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 12-02: Zweig a greift: v35.0.0 vom 15.09.2026 ist die erste 35er-Marke ohne
+  Prerelease-Kennzeichen (prerelease=false UND draft=false, am 16.09. live
+  gelesen). Nach D-02 trug der Release-Status allein nicht; der Beweislauf
+  35095805558 lief am 16.09. auf dem Baum des Stichtags mit allen vier
+  Matrixaesten gruen, ERST DANACH fiel `tolerate-failure` (Owner-Freigabe am
+  Checkpoint, Variante 1). Der stable35-Ast von deploy-harp ist ab jetzt
+  muss-gruen; ein roter Lauf ist ein Befund und kein Grund, das Flag
+  zurueckzudrehen. Beide info.xml blieben unberuehrt (Fenster steht auf
+  33 bis 35, D-01).
 
 - 12-08: Das Runbook ist vollstaendig. Abschnitt 6 macht fuenf
   Vergleichbarkeitsgroessen protokollpflichtig (Zeilenstaende 52.111/37/0,

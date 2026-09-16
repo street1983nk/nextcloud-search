@@ -267,9 +267,17 @@ Gefüllt von Plan 12-02 am Stichtag.
   trägt der Release-Status den Vollzug allein NICHT; dazu gehört der grüne
   `deploy-harp`-Lauf gegen `stable35` auf dem Stand des Baumes von heute, dessen
   Laufnummer unten einzutragen ist.
-- **Laufnummer des Beweislaufs (nur Option a):** (offen, Task 2 nach
-  Owner-Freigabe)
-- **Vollzogen am / durch Plan:** (offen, Task 2 nach Owner-Freigabe)
+- **Laufnummer des Beweislaufs (nur Option a):** 35095805558. Gestartet per
+  `gh workflow run deploy-harp.yml --ref main` am 16.09.2026 auf Commit
+  ae59435, also dem Baum des Stichtags mit dieser Notiz, gegen den finalen
+  Stand des stable35-Zweigs. Alle vier Matrixäste grün, der Ast
+  `deploy-harp (stable35, 8.3, true, ubuntu-24.04)` einzeln nachgelesen:
+  success. Erst danach fiel das Flag (Commit 795744f), der Kommentar im
+  Workflow nennt dieselbe Laufnummer.
+- **Vollzogen am / durch Plan:** 2026-09-16, Plan 12-02, nach Owner-Freigabe
+  am Checkpoint (Variante 1: Beweislauf vor dem Flip). HART-03 ist damit
+  vollzogen: NC-35-Terminereignis behandelt, Zweig a belegt, stable35 in
+  deploy-harp muss-grün.
 
 ### Vollzugs-Checkliste
 
