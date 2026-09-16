@@ -123,8 +123,11 @@ jobs:
     # of margin the 20 had. The first green run replaces this paragraph with
     # measured figures.
     timeout-minutes: 45
-    # The one entry that may fail is the one for a server version that is not
-    # released yet, and which one that is stands at the entry itself.
+    # Since plan 12-02 no entry tolerates a failure any more: every
+    # tolerate-failure below is false, because v35.0.0 is released and the
+    # stable35 leg is must-be-green (12-STABLE35-ENTSCHEID.md). The column and
+    # this line stay as the mechanism for the next server version that is not
+    # released yet, and a red leg anywhere in this matrix is a finding.
     continue-on-error: ${{ matrix.tolerate-failure }}
     strategy:
       fail-fast: false
