@@ -63,7 +63,7 @@ Details im Archiv: .planning/milestones/v1.1-ROADMAP.md
   4. Das Cron-Intervall der Zielinstanz ist Pflichtfeld im Messprotokoll: ein Lauf ohne protokolliertes Intervall gilt als unvollstaendig
   5. Der stable35-Fenster-Entscheid ist bis zum 16.09.2026 getroffen und mit Begruendung dokumentiert
 
-**Plans:** 7/8 plans executed
+**Plans:** 8/8 plans executed
 
 Plans:
 **Wave 1**
@@ -74,7 +74,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 12-02-PLAN.md: stable35-Entscheid am 16.09.2026 vollziehen (terminlich isoliert, Owner-Checkpoint)
+- [x] 12-02-PLAN.md: stable35-Entscheid am 16.09.2026 vollziehen (terminlich isoliert, Owner-Checkpoint)
 - [x] 12-05-PLAN.md: 98c-sprachfaelle.sh: Nachfolgefassung mit Rangsemantik und Abschnitt 3b
 - [x] 12-07-PLAN.md: Runbook Teil 1: Geltung, Deckel-Rechenblatt, Vorbedingungen, Aufbau, Zustandspruefung
 
