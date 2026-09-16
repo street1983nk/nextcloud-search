@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 13-04-PLAN.md
-last_updated: "2026-09-16T21:05:00.000Z"
-last_activity: 2026-09-16 -- Plan 13-04 abgeschlossen (SearchFilters und die zwei Ruempfe an den Container)
+stopped_at: Completed 13-05-PLAN.md
+last_updated: "2026-09-16T21:35:00.000Z"
+last_activity: 2026-09-16 -- Plan 13-05 abgeschlossen (run nimmt die Filter, das Datum kommt aus dem bestätigten Knoten)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 12
-  percent: 26
+  completed_plans: 13
+  percent: 28
 ---
 
 # Project State
@@ -26,16 +26,33 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 5 of 13 (13-01 bis 13-04 abgeschlossen)
+Plan: 6 of 13 (13-01 bis 13-05 abgeschlossen)
 Status: Executing Phase 13
-Progress: [███░░░░░░░] 26%
-Last activity: 2026-09-16 -- Plan 13-04 abgeschlossen (SearchFilters und die zwei Ruempfe an den Container)
+Progress: [███░░░░░░░] 28%
+Last activity: 2026-09-16 -- Plan 13-05 abgeschlossen (run nimmt die Filter, das Datum kommt aus dem bestätigten Knoten)
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 13-05: `SearchService::run` nimmt die Filter als sechsten Parameter, hinter
+  `SearchCaps` und ohne Vorgabewert, und reicht dasselbe Objekt an beide
+  Containeraufrufe weiter. Der Filter wird auf der PHP-Seite kein zweites Mal
+  angewendet: das würde aus jeder Seite eine Stichprobe machen und eine zweite
+  Stelle an der Rechtegrenze eröffnen (T-13-23).
+- 13-05: Das Änderungsdatum eines Treffers kommt aus `$node->getMTime()` am
+  bereits bestätigten Knoten, gelesen hinter der Typprüfung und hinter der
+  Leseprüfung. Der Kandidat des Containers trägt zwar ein eigenes `mtime`,
+  `filterCandidates()` verwirft es weiterhin, und ein Testfall mit zwei
+  absichtlich verschiedenen Zahlen belegt, welcher Wert gewinnt (T-13-22).
+- 13-05: `ApprovedHit` trägt fünf Felder; für den Kanarienvogel (`fileId` 0)
+  bleibt `mtime` bei 0, weil es dort keinen Knoten gibt. Das Feld ist ein
+  Pflichtargument geblieben, damit ein vergessener Aufrufer nicht wie einer
+  ohne Datum aussieht.
+- 13-05: Die Rechtegrenze ist in Zahl, Reihenfolge und Ort unverändert;
+  `test_php_acl_boundary.py` und `test_php_trust_boundary.py` sind grün.
 
 - 13-04: Filter und Sortierung reisen durch die PHP-Haelfte als EIN benanntes
   Wertobjekt `SearchFilters` (`types`, `sort`, `since`, `until`), nach der
@@ -300,6 +317,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-16T21:05:00.000Z
-Stopped at: Completed 13-04-PLAN.md
+Last session: 2026-09-16T21:35:00.000Z
+Stopped at: Completed 13-05-PLAN.md
 Resume file: None
