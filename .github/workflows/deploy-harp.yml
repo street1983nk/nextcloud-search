@@ -208,68 +208,25 @@ jobs:
             php-version: '8.2'
             tolerate-failure: false
             runner: ubuntu-24.04-arm
-          # stable35 exists in both repositories this job checks out, and that was
-          # not guessed: "gh api repos/nextcloud/server/branches/stable35" and
-          # "gh api repos/nextcloud/app_api/branches/stable35" both answered with the
-          # branch on 2026-09-03, so neither half falls back to master or main. The
-          # line has an expiry date: once Nextcloud 35 is released, stable35 stops
-          # being the branch under development and this comment stops being true.
+          # stable35 was the branch under development when this matrix was
+          # written, and it is not any more: v35.0.0 of 2026-09-15 is the
+          # first 35 tag that "gh api repos/nextcloud/server/releases" reports
+          # without the prerelease marker. The RE-CHECK paragraph that used to
+          # stand here named 2026-09-16 as the day it comes out, and this is that
+          # removal and not a paraphrase of it.
+          #
+          # Done on 2026-09-16 by plan 12-02 on the evidence D-02 asks for
+          # (.planning/phases/12-messwerkzeug-runbook-und-terminentscheid/
+          # 12-STABLE35-ENTSCHEID.md, option a): the release status alone was not
+          # enough, so this leg ran green against stable35 on the tree of that day
+          # in run 35095805558 before the flag came out. From here the leg is
+          # must-be-green, and a red run is a finding rather than a reason to put
+          # the flag back. The entry itself stays regardless, because
+          # backend/tests/test_lockstep_versions.py checks that the matrix covers
+          # every version of the declared window 33 to 35.
           - server-version: stable35
             php-version: '8.3'
-            # The only entry that may fail, and here is the condition for removing
-            # this flag: as soon as Nextcloud 35 is generally available. D-23 asks
-            # for a statement about NC 35, and a run that has to be green before the
-            # server version is finished would be a statement about the state of a
-            # branch and not about Findling. The result lands in the log either way,
-            # which is what makes it a statement instead of a hope.
-            #
-            # E-H1 of 2026-09-06 confirms the flag and names the day it falls rather
-            # than leaving it to somebody noticing: Nextcloud 35 becomes final on
-            # 2026-09-16, so the condition above is met from that day. Until then the
-            # condition stands here word for word, because a flag whose reason has
-            # been paraphrased away is a flag nobody dares to take out.
-            #
-            # Decided on 2026-09-07 by plan 06.1-19, which was written to remove this
-            # flag and did not, because the condition it carries is not met yet. The
-            # decision is the vollzug of E-H1 and not a postponement of it, and it
-            # rests on a reading rather than on a calendar guess: on 2026-09-07
-            # "gh api repos/nextcloud/server/releases" answered with v35.0.0rc3 of
-            # 2026-09-03 as the newest 35 tag, marked prerelease, and with v34.0.3 as
-            # the newest release that is not a prerelease. Nextcloud 35 is therefore
-            # still under development on the day this phase is accepted, and a leg
-            # that has to be green against a branch under development would be a
-            # statement about that branch.
-            #
-            # RE-CHECK DATE: 2026-09-16. On that day this flag and this whole
-            # paragraph come out, the leg becomes must-be-green, and a red run is a
-            # finding rather than a reason to put the flag back. The plan that holds
-            # the follow-through is 06-12, the store submission, because it is the
-            # next plan after that date and no plan of phase 06.1 runs past it.
-            #
-            # What is already known about that day: on 2026-09-07 this leg ran green
-            # on its own (run 34114937751, all three legs success), so flipping the
-            # flag carries no known risk. What is not known is whether the final
-            # 35.0.0 behaves like rc3.
-            #
-            # Decided on 2026-09-10 by phase 11, decision v2-a
-            # (.planning/phases/11-haertung-und-store-einreichung-v1-1/
-            # 11-VORENTSCHEIDE.md, section V-2): the declared window of v1.1.0
-            # stays at min-version 33 and max-version 35, both info.xml stay as
-            # they are, this entry stays with tolerate-failure: true, and
-            # backend/tests/test_lockstep_versions.py stays unchanged. D-11 of
-            # 11-CONTEXT.md is confirmed in the reading that describes the code
-            # base and not in the one that lowers the window; a later 1.1.x
-            # raises the ceiling once 35 is final.
-            #
-            # The follow-through of the RE-CHECK above moves with that decision.
-            # It named plan 06-12 of the previous phase, which is done, so from
-            # 2026-09-10 the plan that holds it is the store submission of phase
-            # 11 (plan 11-11). The RE-CHECK DATE of 2026-09-16 stands unchanged,
-            # and the submission does not wait for it (D-10, submit as early as
-            # possible): on 2026-09-10 the newest 35 tag is v35.0.0rc4, marked
-            # prerelease, and the newest release that is not a prerelease is
-            # v34.0.4.
-            tolerate-failure: true
+            tolerate-failure: false
             runner: ubuntu-24.04
 
     env:
