@@ -163,13 +163,21 @@ def excerpts(
     the subline falls back to the path on the PHP side, and that is a far better
     outcome than an exception that costs the user the whole search.
 
-    ``groups``, ``since`` and ``until`` travel through to the query builder, so
-    the query an excerpt is cut against carries the same filter clause the
-    candidate round was cut with. That is the whole of what this path needs: the
-    clause sits inside the query the snippet generator is created from, and the
-    second excerpt path never chooses a document, it only quotes ids the caller
-    already had confirmed. A second cut over those ids would refuse an excerpt
-    to a hit the search itself handed out.
+    ``groups``, ``since`` and ``until`` travel through to the query builder so
+    that both calls build one query out of one body, and it is worth saying
+    plainly what they do not do here: they do not select documents. This call
+    selects none. It quotes the ids the candidate call handed out and the PHP
+    recheck confirmed, and the filter clause rides inside the query the snippet
+    generator is created from, where it marks nothing because it names the
+    extension field and the mtime field rather than the text. A second cut over
+    the confirmed ids would take a hit that is already on the page its subline
+    away and hand back nothing for it.
+
+    They are here for a different reason, and it is the one the whole lockstep
+    gate is about: the result page sends one body, ``extra="forbid"`` refuses a
+    field it does not know, and a 422 arrives on the PHP side as null. A model
+    without these three would answer the filtered page with the error block
+    instead of excerpts, for hits it had already displayed.
     """
     try:
         side = resources.read_side()

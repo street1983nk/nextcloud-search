@@ -299,3 +299,90 @@ def test_an_unusable_delay_is_ignored(
     monkeypatch.setenv("FINDLING_ARTIFICIAL_DELAY_MS", "-1")
 
     assert _snippets(client, sign(indexed_volume.alice)) != {}
+
+
+# -- the structured filter, and the one field that is not here -------------
+#
+# This call builds the very same query a second time, so the three fields that
+# touch the query builder belong here as well. The fourth one does not, and the
+# case that proves it is the most important one of this section: a sort field
+# over here would be a field that does nothing today and something at the next
+# rebuild.
+
+
+def test_the_three_query_fields_are_accepted(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The corpus puts pdf on the odd file ids, and ALICE_FILE is one of them, so
+    # the excerpt survives a filter the document belongs to.
+    answer = _snippets(
+        client,
+        sign(indexed_volume.alice),
+        types=["pdf"],
+        since=1_700_000_000,
+        until=1_700_000_100,
+    )
+
+    assert set(answer) == {str(ALICE_FILE)}
+
+
+def test_a_sort_field_in_the_excerpt_body_is_refused(client: TestClient, sign: Sign) -> None:
+    # The whole point of the asymmetry, held as an HTTP case. An excerpt call
+    # asks about named fileIds and answers a mapping, so it has no order to
+    # change; sort is therefore the one named entry in FIELDS_THAT_MAY_DIFFER of
+    # tests/test_search_fields_lockstep.py, and extra="forbid" is what turns
+    # that decision into a refusal instead of a field nobody reads.
+    response = client.post(
+        "/snippets",
+        json={"query": TERM, "fileIds": [ALICE_FILE], "sort": "newest"},
+        headers=sign("alice"),
+    )
+
+    assert response.status_code == 422
+    assert "sort" in str(response.json()["detail"])
+
+
+def test_an_empty_group_list_behaves_like_no_filter_at_all(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The shape the page sends while no chip is set. It has to be the answer of
+    # a call without the field, or every unfiltered search would lose its
+    # excerpts the day the page starts sending the field always.
+    headers = sign(indexed_volume.alice)
+
+    assert _snippets(client, headers, types=[]) == _snippets(client, headers)
+
+
+def test_a_filter_the_document_does_not_match_still_leaves_it_its_excerpt(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The claim that says what the three fields are for, and what they are not
+    # for. They travel so that both calls build one query out of one body; they
+    # do not select documents, because this call selects none: it quotes the
+    # ids the search already handed out and the PHP recheck already confirmed.
+    # A second cut here would take a displayed hit its subline away and hand
+    # back nothing for it, which is the outcome the whole two call protocol
+    # exists to avoid. ALICE_FILE carries pdf, so "images" is a filter it is
+    # plainly outside of.
+    answer = _snippets(client, sign(indexed_volume.alice), types=["images"])
+
+    assert set(answer) == {str(ALICE_FILE)}
+
+
+def test_a_range_that_ends_before_it_starts_is_no_error_either(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # Same reading as the case above, and the same reading the candidate call
+    # gives an impossible period: this container does not judge whether a period
+    # makes sense, and over here it does not judge the excerpt by it at all.
+    answer = _snippets(client, sign(indexed_volume.alice), since=1_700_000_010, until=1_700_000_002)
+
+    assert set(answer) == {str(ALICE_FILE)}

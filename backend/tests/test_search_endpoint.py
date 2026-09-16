@@ -27,7 +27,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import Corpus
-from findling.api.search import CANARY_TITLE, Candidate, build_canary_hits
+from findling.api.search import CANARY_TITLE, Candidate, SearchRequest, build_canary_hits
+from findling.config import SEARCH_MTIME_MAX, SEARCH_TYPE_GROUPS_MAX
 from findling.store.repo import open_store
 
 pytestmark = pytest.mark.usefixtures("appapi_environment")
@@ -344,3 +345,138 @@ def test_canary_snippet_has_no_markup() -> None:
     # tag would reach the user literally instead of being rendered.
     assert "<" not in snippet
     assert ">" not in snippet
+
+
+# -- the structured filter and the sort order of the result page -----------
+#
+# Four new fields, and the negative cases carry the weight. The route lives
+# behind access_level USER, so the body is untrusted, and a value set that fell
+# back quietly instead of refusing would be a second way into the query builder
+# next to the search line.
+
+
+def test_the_four_new_fields_are_accepted_together(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    answer = _search(
+        client,
+        sign(indexed_volume.bob),
+        types=["pdf", "documents"],
+        sort="newest",
+        since=1_700_000_000,
+        until=1_700_000_100,
+    )
+
+    assert answer["candidates"] != []
+
+
+def test_a_body_without_the_new_fields_means_no_filter_and_relevance() -> None:
+    # The defaults are part of the wire contract: the PHP side sends the fields
+    # only when the user set one, so an absent field has to mean "no filter" and
+    # "the order this container had before the phase".
+    body = SearchRequest(query=TERM)
+
+    assert body.types == []
+    assert body.sort == "relevance"
+    assert body.since is None
+    assert body.until is None
+
+
+def test_a_type_group_narrows_the_answer_to_that_group(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The corpus carries pdf on the odd file ids and docx on the even ones, so
+    # the claim is visible in the numbers rather than in a count.
+    answer = _search(client, sign(indexed_volume.bob), types=["pdf"], limit=100)
+
+    found = [candidate["fileId"] for candidate in answer["candidates"]]
+    assert found != []
+    assert all(file_id % 2 == 1 for file_id in found)
+
+
+def test_the_newest_order_answers_by_date_and_not_by_score(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # Every document of the corpus carries a later mtime than the one before it,
+    # so the highest file id has to come first. The score is 0.0 under a sort,
+    # for the reason written at _ranked in findling.index.search.
+    answer = _search(client, sign(indexed_volume.bob), sort="newest", limit=100)
+
+    found = [candidate["mtime"] for candidate in answer["candidates"]]
+    assert found == sorted(found, reverse=True)
+    assert all(candidate["score"] == 0.0 for candidate in answer["candidates"])
+
+
+def test_an_unknown_group_name_is_refused_and_never_ignored(client: TestClient, sign: Sign) -> None:
+    # The division of labour, and it is worth naming because both halves look
+    # like the other one's bug. Falling back quietly is what the PHP side does
+    # with an address somebody edited: an unknown chip disappears and the page
+    # answers. The container refuses, because only its own page calls it, so an
+    # unknown group here is a defect in that page and not a user typing.
+    response = client.post(
+        "/search",
+        json={"query": TERM, "types": ["videos"]},
+        headers=sign("alice"),
+    )
+
+    assert response.status_code == 422
+
+
+def test_an_unknown_sort_name_is_refused(client: TestClient, sign: Sign) -> None:
+    # The engine falls back to relevance for a name it does not know, on
+    # purpose: a second exception down there would turn a typo into an HTTP 500.
+    # That fallback is only safe because this refusal happens first.
+    response = client.post(
+        "/search",
+        json={"query": TERM, "sort": "largest"},
+        headers=sign("alice"),
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("since", [-1, SEARCH_MTIME_MAX + 1])
+def test_a_time_edge_outside_its_bounds_is_refused(client: TestClient, sign: Sign, since: int) -> None:
+    response = client.post("/search", json={"query": TERM, "since": since}, headers=sign("alice"))
+
+    assert response.status_code == 422
+
+
+def test_the_documented_time_ceiling_is_accepted(client: TestClient, sign: Sign) -> None:
+    # The boundary itself is a legitimate edge and must answer normally, the
+    # same claim the offset ceiling makes one section up.
+    response = client.post("/search", json={"query": TERM, "until": SEARCH_MTIME_MAX}, headers=sign("alice"))
+
+    assert response.status_code == 200
+
+
+def test_more_group_names_than_the_vocabulary_holds_are_refused(client: TestClient, sign: Sign) -> None:
+    # A caller may repeat a name, and every arm grows the Should group the query
+    # builder assembles, so the list is bounded on top of its value set.
+    response = client.post(
+        "/search",
+        json={"query": TERM, "types": ["pdf"] * (SEARCH_TYPE_GROUPS_MAX + 1)},
+        headers=sign("alice"),
+    )
+
+    assert response.status_code == 422
+
+
+def test_a_range_that_ends_before_it_starts_answers_empty_and_not_with_an_error(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The container does not judge whether a period makes sense. An impossible
+    # range is a range with nothing in it, and "no data" is the honest answer;
+    # a 422 here would make the page explain a decision its user made.
+    answer = _search(client, sign(indexed_volume.bob), since=1_700_000_010, until=1_700_000_002)
+
+    assert answer["candidates"] == []
+    assert answer["hasMore"] is False
