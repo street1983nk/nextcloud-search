@@ -51,6 +51,13 @@ use Psr\Log\LoggerInterface;
  * excerpt is file content, and a result assertion would stay green if the two
  * calls swapped places.
  *
+ * Eight cases are new with plan 13-05 and are about two sentences. The filters
+ * of a run travel unchanged to both container calls, because this class decides
+ * nothing about them. And the modification date of a hit comes out of the
+ * confirmed node rather than out of the candidate, which is the same rule as for
+ * title, path and type and is asserted with a case in which the two numbers
+ * differ on purpose.
+ *
  * Four cases are new in this plan and are about the two states the own result
  * page has to tell apart: a cursor past the paging ceiling of the container,
  * which is not a broken backend, and a backend that really did answer nothing.
@@ -197,12 +204,17 @@ final class SearchServiceTest extends TestCase {
 		string $name = 'Report.pdf',
 		string $mimeType = 'application/pdf',
 		string $folder = 'Board',
+		int $mtime = 0,
 	): File&MockObject {
 		$file = $this->createMock(File::class);
 		$file->method('isReadable')->willReturn(true);
 		$file->method('getName')->willReturn($name);
 		$file->method('getPath')->willReturn('/testuser/files/' . $folder . '/' . $name);
 		$file->method('getMimetype')->willReturn($mimeType);
+		// The fourth field of a hit, new with plan 13-05. Zero is what a mock
+		// without a stub would answer anyway, so every case that says nothing
+		// about the date keeps saying nothing about it.
+		$file->method('getMTime')->willReturn($mtime);
 
 		return $file;
 	}
@@ -959,5 +971,218 @@ final class SearchServiceTest extends TestCase {
 		self::assertSame(SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED, $outcome->failure);
 		self::assertTrue($outcome->hasMore);
 		self::assertSame(3, $outcome->nextCursor);
+	}
+
+	// -- the filters of a run and the date of a hit, new with plan 13-05 ------
+
+	/**
+	 * The filter of a narrowed search: two type groups, the newest first and a
+	 * lower bound on the date. Three of the four fields carry a value on
+	 * purpose, because a case built around a single one would pass for a
+	 * service that handed down a fresh object with one field copied.
+	 */
+	private function narrowed(): SearchFilters {
+		return new SearchFilters(['pdf', 'documents'], 'newest', 1757980800, null);
+	}
+
+	/**
+	 * The four values of a filter at the place it arrived, rather than the
+	 * identity of the object: what the container finally reads is the four
+	 * values, and a service that rebuilt them faithfully would be right.
+	 */
+	private function assertFilterArrived(SearchFilters $expected, ?SearchFilters $arrived, string $where): void {
+		self::assertInstanceOf(SearchFilters::class, $arrived, 'no filter arrived at ' . $where);
+		self::assertSame($expected->types, $arrived->types, 'types at ' . $where);
+		self::assertSame($expected->sort, $arrived->sort, 'sort at ' . $where);
+		self::assertSame($expected->since, $arrived->since, 'since at ' . $where);
+		self::assertSame($expected->until, $arrived->until, 'until at ' . $where);
+	}
+
+	/**
+	 * One run with one surviving hit, and the filter each of the two container
+	 * calls was handed.
+	 *
+	 * @return array{candidates:?SearchFilters,excerpts:?SearchFilters}
+	 */
+	private function filtersHandedDownBy(SearchFilters $filters): array {
+		$file = $this->readableFile();
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getFirstNodeById')->willReturn($file);
+		$userFolder->method('getRelativePath')->willReturn('/Board/Report.pdf');
+
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->mountCache->method('getMountsForUser')->willReturn([]);
+
+		$handed = ['candidates' => null, 'excerpts' => null];
+		$this->exApp->method('searchCandidates')->willReturnCallback(
+			function (
+				string $userId,
+				string $term,
+				int $limit,
+				int $offset,
+				bool $titleOnly,
+				SearchFilters $arrived,
+			) use (&$handed): array {
+				$handed['candidates'] = $arrived;
+
+				return $this->page([['fileId' => 11]]);
+			},
+		);
+		$this->exApp->method('snippets')->willReturnCallback(
+			static function (
+				string $userId,
+				string $term,
+				array $fileIds,
+				bool $titleOnly,
+				SearchFilters $arrived,
+			) use (&$handed): array {
+				$handed['excerpts'] = $arrived;
+
+				return [];
+			},
+		);
+
+		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), $filters);
+
+		return $handed;
+	}
+
+	public function testTheFilterOfTheRunReachesTheCandidateCallUnchanged(): void {
+		// This class decides nothing about these four values: it carries them.
+		// Clamping happens one layer down in ExAppService and validation one
+		// layer up in the caller, so anything this service changed on the way
+		// would be a change nobody asked for and nobody would see.
+		$filters = $this->narrowed();
+
+		$this->assertFilterArrived($filters, $this->filtersHandedDownBy($filters)['candidates'], 'the candidate call');
+	}
+
+	public function testTheSameFilterReachesTheExcerptCall(): void {
+		// Both halves of one run have to speak about the same set of files. An
+		// excerpt call without the filter would ask the index for documents the
+		// candidate call had already ruled out, and the two answers would be
+		// about two different searches.
+		$filters = $this->narrowed();
+
+		$this->assertFilterArrived($filters, $this->filtersHandedDownBy($filters)['excerpts'], 'the excerpt call');
+	}
+
+	public function testAnUnnarrowedRunHandsDownTheUnnarrowedFilterToBothCalls(): void {
+		// The state of every caller before this phase, and the one that has to
+		// keep behaving exactly as it did: no type group, no bound, and the sort
+		// mode of a search nobody sorted.
+		$handed = $this->filtersHandedDownBy(SearchFilters::none());
+
+		$this->assertFilterArrived(SearchFilters::none(), $handed['candidates'], 'the candidate call');
+		$this->assertFilterArrived(SearchFilters::none(), $handed['excerpts'], 'the excerpt call');
+
+		// Written out once rather than only compared against none(), so that a
+		// day on which none() itself grew a value would be a red case here.
+		$atTheCandidateCall = $handed['candidates'];
+		self::assertInstanceOf(SearchFilters::class, $atTheCandidateCall);
+		self::assertSame([], $atTheCandidateCall->types);
+		self::assertSame(SearchFilters::SORT_DEFAULT, $atTheCandidateCall->sort);
+		self::assertNull($atTheCandidateCall->since);
+		self::assertNull($atTheCandidateCall->until);
+	}
+
+	public function testTheModificationDateComesOutOfTheNodeAndNotOutOfTheContainerAnswer(): void {
+		// T-13-22, and the case only proves something because the two numbers
+		// differ: a candidate that proposed a date of its own next to a node
+		// that knows a different one.
+		$onTheNode = 1757980800;
+		$proposedByTheContainer = 4102444800;
+		self::assertNotSame($onTheNode, $proposedByTheContainer, 'the case needs two different dates to prove anything');
+
+		$file = $this->readableFile(mtime: $onTheNode);
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getFirstNodeById')->willReturn($file);
+		$userFolder->method('getRelativePath')->willReturn('/Board/Report.pdf');
+
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->mountCache->method('getMountsForUser')->willReturn([]);
+		$this->exApp->method('searchCandidates')->willReturn($this->page([
+			['fileId' => 11, 'mtime' => $proposedByTheContainer],
+		]));
+		$this->exApp->method('snippets')->willReturn([]);
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), $this->narrowed());
+
+		self::assertCount(1, $outcome->hits);
+		self::assertSame($onTheNode, $outcome->hits[0]->mtime);
+		self::assertNotSame($proposedByTheContainer, $outcome->hits[0]->mtime);
+	}
+
+	public function testACandidateWhoseNodeIsGoneNeverBecomesAHitWithADateOfZero(): void {
+		// The tempting repair of a missing date is a hit with a zero in it. It
+		// would be a hit that never passed the permission decision, so the
+		// candidate is dropped here exactly as it was before this phase.
+		$this->folderResolvingNothing();
+		$this->exApp->method('searchCandidates')->willReturn($this->page([
+			['fileId' => 11, 'mtime' => 1757980800],
+		]));
+		$this->exApp->expects(self::never())->method('snippets');
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), $this->narrowed());
+
+		self::assertSame([], $outcome->hits);
+		self::assertSame(SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED, $outcome->failure);
+	}
+
+	public function testANodeWithoutTheReadBitIsDroppedBeforeItsDateIsEvenRead(): void {
+		// T-13-24: the order of the two questions, asserted over what is never
+		// read. A node that resolves without the read bit is the team folder
+		// case, and its date is as much file metadata as its name is.
+		$file = $this->createMock(File::class);
+		$file->method('isReadable')->willReturn(false);
+		$file->expects(self::never())->method('getName');
+		$file->expects(self::never())->method('getMTime');
+
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('getFirstNodeById')->willReturn($file);
+
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->mountCache->method('getMountsForUser')->willReturn([]);
+		$this->exApp->method('searchCandidates')->willReturn($this->page([['fileId' => 11]]));
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), $this->narrowed());
+
+		self::assertSame([], $outcome->hits);
+	}
+
+	public function testTheCanaryCarriesADateOfZeroBecauseItHasNoNode(): void {
+		// The named exception of ApprovedHit, now with a fourth field in it.
+		// There is no node behind file id 0, so there is nothing to ask, and a
+		// date out of the container answer is the one thing that field exists
+		// to keep out.
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->expects(self::never())->method('getFirstNodeById');
+
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+		$this->mountCache->method('getMountsForUser')->willReturn([]);
+		$this->exApp->method('searchCandidates')->willReturn($this->page([
+			['fileId' => 0, 'title' => 'findling-canary', 'snippet' => 'answered by findling-backend', 'mtime' => 1757980800],
+		]));
+		$this->exApp->expects(self::never())->method('snippets');
+
+		$outcome = $this->service()->run($this->user(), 'findling-canary', false, 0, $this->caps(), $this->narrowed());
+
+		self::assertCount(1, $outcome->hits);
+		self::assertSame(0, $outcome->hits[0]->fileId);
+		self::assertSame(0, $outcome->hits[0]->mtime);
+	}
+
+	public function testAnEmptyCandidateListUnderAFilterKeepsTheOrdinaryEmptyAnswer(): void {
+		// no_data under a narrowed search: a filter nothing matches is not a
+		// failure of anything, so the answer is the empty list with no reason at
+		// all, exactly as it is for a term nobody has a file for.
+		$this->folderResolvingNothing();
+		$this->exApp->method('searchCandidates')->willReturn($this->page([]));
+		$this->exApp->expects(self::never())->method('snippets');
+
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), $this->narrowed());
+
+		self::assertSame([], $outcome->hits);
+		self::assertNull($outcome->failure);
 	}
 }
