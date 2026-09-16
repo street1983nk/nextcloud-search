@@ -108,7 +108,7 @@ Plans:
 
 **Welle 2** *(wartet auf Welle 1)*
 
-- [ ] 13-02-PLAN.md: Sortierzweig und Filter auf der semantischen Haelfte in index/search.py
+- [x] 13-02-PLAN.md: Sortierzweig und Filter auf der semantischen Haelfte in index/search.py
 
 **Welle 3** *(wartet auf Welle 2)*
 
@@ -209,7 +209,7 @@ Plans:
 | 10. Vergleichsmessung auf der AWS-Box | v1.1 | 7/7 | Complete | 2026-09-10 |
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
-| 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 1/13 | In Progress|  |
+| 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 2/13 | In Progress|  |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 0/? | Not started | - |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |

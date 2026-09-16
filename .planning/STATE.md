@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Phase 13 UI-SPEC approved
-last_updated: "2026-09-16T17:52:00.000Z"
-last_activity: 2026-09-16 -- Plan 13-01 abgeschlossen (Filtervokabular und zwei Abfrageklauseln)
+stopped_at: Completed 13-02-PLAN.md
+last_updated: "2026-09-16T18:39:00.000Z"
+last_activity: 2026-09-16 -- Plan 13-02 abgeschlossen (Sortierzweig und Filter auf der semantischen Haelfte)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 9
-  percent: 20
+  completed_plans: 10
+  percent: 22
 ---
 
 # Project State
@@ -21,21 +21,46 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-11)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 13 — filter-und-sortierung-auf-der-ergebnisseite
+**Current focus:** Phase 13: filter-und-sortierung-auf-der-ergebnisseite
 
 ## Current Position
 
 Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 2 of 13 (13-01 abgeschlossen)
+Plan: 3 of 13 (13-01 und 13-02 abgeschlossen)
 Status: Executing Phase 13
-Progress: [█░░░░░░░░░] 8%
-Last activity: 2026-09-16 -- Plan 13-01 abgeschlossen (Filtervokabular und zwei Abfrageklauseln)
+Progress: [██░░░░░░░░] 15%
+Last activity: 2026-09-16 -- Plan 13-02 abgeschlossen (Sortierzweig und Filter auf der semantischen Haelfte)
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 13-02: Die Sortierung ist ein eigener, rein lexikalischer Zweig
+  (`_sorted_round` in `index/search.py`) ohne RRF und ohne Vektorhaelfte, und
+  jeder Treffer traegt `score = 0.0`. Unter `order_by_field` liefert tantivy im
+  ersten Tupelglied den Feldwert statt des Scores; ein uebernommener Feldwert
+  waere ein Zeitstempel als Relevanz.
+- 13-02: Der Zweitschluessel `file_id` ist Handarbeit und wird portionsweise
+  hergestellt. Gemessen und in diesem Plan nachgestellt: bei gleichem
+  Zeitstempel und Einfuegereihenfolge 7, 3, 9, 1 antwortet tantivy 7, 3, 9, 1.
+  Eine Gleichstandsgruppe, die an einer Portionsgrenze zerfaellt, ist
+  portionsweise sortiert; Duplikate oder Luecken entstehen dabei nicht.
+- 13-02: Ein unbekannter Wert in `sort` faellt still auf `relevance` zurueck
+  (`SORT_MODES.get`). Die Route prueft bereits am Wire-Modell; eine zweite
+  Ausnahme wuerde aus einem Tippfehler in einer Adresse einen HTTP 500 machen.
+- 13-02: Dieselbe Filterklausel wirkt jetzt an beiden Stellen. `_mtimes_of`
+  nimmt sie als `Occur.Must` ueber die `file_id`-Klauseln; was dort
+  herausfaellt, fehlt in `known` und verschwindet aus `merged`. Ohne diese
+  zweite Stelle stehen unter dem Chip "PDF" docx-Treffer der semantischen
+  Haelfte.
+- 13-02: `VECTOR_SCAN_MAX` wird nicht angehoben. Die semantische Haelfte
+  schrumpft unter einem engen Filter sichtbar, weil die Chunks VOR dem
+  Typschnitt gezogen werden; das ist eine Eigenschaft und kein Defekt.
+- 13-02: `semantic` ist im Sortierzweig wirkungslos statt verboten. Die
+  Abschaltung durch den Aufrufer folgt in 13-03; die Wirkungslosigkeit hier ist
+  die zweite, defensive Haelfte derselben Zusage.
 
 - 13-01: `TYPE_GROUPS` in `query/rewrite.py` ist die einzige Abbildung von
   Gruppe auf Endung im ganzen Projekt, und die bestehende `type:`-Textsyntax
@@ -216,6 +241,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-16T13:58:05.070Z
-Stopped at: Phase 13 UI-SPEC approved
-Resume file: .planning/phases/13-filter-und-sortierung-auf-der-ergebnisseite/13-UI-SPEC.md
+Last session: 2026-09-16T18:39:00.000Z
+Stopped at: Completed 13-02-PLAN.md
+Resume file: None
