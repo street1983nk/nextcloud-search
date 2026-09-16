@@ -37,13 +37,21 @@ over the raw search line and the vector stock and decides nothing itself.
 import asyncio
 import logging
 import os
-from typing import Annotated
+from collections.abc import Sequence
+from functools import partial
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from findling.api import resources
-from findling.config import SEARCH_LIMIT_MAX, SEARCH_QUERY_MAX_CHARS, settings
+from findling.config import (
+    SEARCH_LIMIT_MAX,
+    SEARCH_MTIME_MAX,
+    SEARCH_QUERY_MAX_CHARS,
+    SEARCH_TYPE_GROUPS_MAX,
+    settings,
+)
 from findling.index import search as index_search
 from findling.nc.client import AsyncNextcloudApp, anc_app, current_user_id
 from findling.query.rewrite import build_query
@@ -84,6 +92,24 @@ class SnippetsRequest(BaseModel):
     # camelCase because the wire format belongs to the PHP side; see the same
     # field in findling.api.search for the whole reason.
     titleOnly: bool = False
+    # The three fields that touch the query builder, and they are here because
+    # this call builds the very same query a second time. A field that reached
+    # only one of the two models would be an extra field to the other, and
+    # extra="forbid" answers that with a 422 that arrives in PHP as null: the
+    # page would then show the error block instead of excerpts, for hits it had
+    # already found. tests/test_search_fields_lockstep.py holds the two models
+    # together for exactly that reason. Same value set and same bounds as in
+    # findling.api.search, and the arguments for both stand over there.
+    types: list[Literal["pdf", "documents", "spreadsheets", "presentations", "images", "text"]] = Field(
+        default_factory=list, max_length=SEARCH_TYPE_GROUPS_MAX
+    )
+    since: int | None = Field(default=None, ge=0, le=SEARCH_MTIME_MAX)
+    until: int | None = Field(default=None, ge=0, le=SEARCH_MTIME_MAX)
+    # And there is deliberately no sort field. An excerpt call asks about named
+    # fileIds and answers a mapping, so it has no order to change; a sort field
+    # here would be a field that does nothing today and something at the next
+    # rebuild. It is the one named entry in FIELDS_THAT_MAY_DIFFER of the
+    # lockstep gate, so its absence is checked rather than merely intended.
 
 
 class Snippet(BaseModel):
@@ -116,7 +142,16 @@ def artificial_delay_seconds() -> float:
     return int(raw) / MILLISECONDS_PER_SECOND
 
 
-def excerpts(uid: str, text: str, file_ids: list[int], title_only: bool) -> list[index_search.SnippetText]:
+def excerpts(
+    uid: str,
+    text: str,
+    file_ids: list[int],
+    title_only: bool,
+    *,
+    groups: Sequence[str] = (),
+    since: int | None = None,
+    until: int | None = None,
+) -> list[index_search.SnippetText]:
     """Cut the excerpts this user is permitted to see. Runs in a worker thread.
 
     Synchronous and called through ``asyncio.to_thread`` for the same reason the
@@ -127,12 +162,20 @@ def excerpts(uid: str, text: str, file_ids: list[int], title_only: bool) -> list
     Every failure ends in an empty list. A hit without an excerpt is still a hit,
     the subline falls back to the path on the PHP side, and that is a far better
     outcome than an exception that costs the user the whole search.
+
+    ``groups``, ``since`` and ``until`` travel through to the query builder, so
+    the query an excerpt is cut against carries the same filter clause the
+    candidate round was cut with. That is the whole of what this path needs: the
+    clause sits inside the query the snippet generator is created from, and the
+    second excerpt path never chooses a document, it only quotes ids the caller
+    already had confirmed. A second cut over those ids would refuse an excerpt
+    to a hit the search itself handed out.
     """
     try:
         side = resources.read_side()
         if side is None:
             return []
-        rewritten = build_query(side.index, text, title_only=title_only)
+        rewritten = build_query(side.index, text, title_only=title_only, groups=groups, since=since, until=until)
         if rewritten.query is None:
             return []
         # The vector half, handed over as the same bundle the candidate round
@@ -177,7 +220,18 @@ async def snippets(
     # endpoint gives, including the empty ones.
     await asyncio.sleep(artificial_delay_seconds())
 
-    cut = await asyncio.to_thread(excerpts, user_id, body.query.strip(), body.fileIds, body.titleOnly)
+    cut = await asyncio.to_thread(
+        partial(
+            excerpts,
+            user_id,
+            body.query.strip(),
+            body.fileIds,
+            body.titleOnly,
+            groups=body.types,
+            since=body.since,
+            until=body.until,
+        )
+    )
     return SnippetsResponse(
         snippets={str(one.file_id): Snippet(text=one.text, highlights=one.highlights) for one in cut}
     )

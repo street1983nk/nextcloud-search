@@ -35,9 +35,11 @@ ordinary search never sees it.
 import asyncio
 import logging
 import socket
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Annotated
+from functools import partial
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -45,8 +47,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from findling.api import resources
 from findling.config import (
     SEARCH_LIMIT_MAX,
+    SEARCH_MTIME_MAX,
     SEARCH_OFFSET_MAX,
     SEARCH_QUERY_MAX_CHARS,
+    SEARCH_TYPE_GROUPS_MAX,
     settings,
 )
 from findling.index.search import SemanticSide
@@ -93,6 +97,29 @@ class SearchRequest(BaseModel):
     # are not part of the configured rule set, so a noqa directive would itself
     # be a lint error (RUF100); this comment carries the reason instead.
     titleOnly: bool = False
+    # A closed set and never free text. The route carries access_level USER, so
+    # any signed-in account reaches it with a body of its own making, and a
+    # str would be a second way into the query builder next to the search line.
+    # The six names are wire vocabulary: they travel English and lower case in
+    # the address bar of the result page, they are the keys of TYPE_GROUPS in
+    # findling.query.rewrite, and the PHP side keeps no extension table of its
+    # own. max_length bounds the list on top of the value set, because a caller
+    # may repeat a name and the Should group grows with every arm.
+    types: list[Literal["pdf", "documents", "spreadsheets", "presentations", "images", "text"]] = Field(
+        default_factory=list, max_length=SEARCH_TYPE_GROUPS_MAX
+    )
+    # The three names stand a second time in findling.index.search.SORT_MODES,
+    # and tests/test_search_fields_lockstep.py holds the two places together. A
+    # pair that drifted apart would not be an error anywhere: SORT_MODES.get
+    # answers None for a name it does not know, and None is the relevance
+    # branch, so the page would quietly go back to relevance while the address
+    # still says "newest".
+    sort: Literal["relevance", "newest", "oldest"] = "relevance"
+    # Both edges of the time range, inclusive, as the Unix epoch in seconds, and
+    # both bounded for the reason written at SEARCH_MTIME_MAX. None means no
+    # edge at all rather than "the epoch", which is why the default is not 0.
+    since: int | None = Field(default=None, ge=0, le=SEARCH_MTIME_MAX)
+    until: int | None = Field(default=None, ge=0, le=SEARCH_MTIME_MAX)
 
 
 class Candidate(BaseModel):
@@ -173,7 +200,18 @@ def build_canary_hits(user_id: str) -> list[CanaryCandidate]:
     ]
 
 
-def one_round(uid: str, text: str, limit: int, offset: int, title_only: bool) -> _Round:
+def one_round(
+    uid: str,
+    text: str,
+    limit: int,
+    offset: int,
+    title_only: bool,
+    *,
+    groups: Sequence[str] = (),
+    since: int | None = None,
+    until: int | None = None,
+    sort: str = "relevance",
+) -> _Round:
     """Ask the engine once, drop what the prefilter does not confirm, mark the page.
 
     Synchronous, and called through ``asyncio.to_thread``: tantivy releases the
@@ -185,13 +223,20 @@ def one_round(uid: str, text: str, limit: int, offset: int, title_only: bool) ->
     an HTTP status could usefully carry here: the unified search asks every
     provider at once, and the one that raises costs the user the whole search
     instead of one result group.
+
+    ``groups``, ``since``, ``until`` and ``sort`` are the structured half of the
+    result page. The first three are handed to the query builder, which turns
+    them into the one filter clause both halves of the search are cut with; the
+    fourth never reaches the query at all, because a sort order is not part of
+    the question. All four are keyword arguments with a default so that a caller
+    who filters and sorts nothing stays exactly as it was.
     """
     try:
         side = resources.read_side()
         if side is None:
             return _Round([], False, offset, True)
         is_degraded = resources.degraded(side)
-        rewritten = build_query(side.index, text, title_only=title_only)
+        rewritten = build_query(side.index, text, title_only=title_only, groups=groups, since=since, until=until)
         if rewritten.query is None:
             # Nothing left to search for, for instance a line that held only a
             # file type filter. A normal answer, and the engine was never asked.
@@ -226,11 +271,29 @@ def one_round(uid: str, text: str, limit: int, offset: int, title_only: bool) ->
         # candidate are untouched (D-20, D-14); the vector branch simply does
         # not happen, which is the path a missing model already takes and which
         # criterion 3 covers.
+        # A sort order joins that same line and gets no switch of its own. Under
+        # a date order there is no fusion for a vector list to enter: the sorted
+        # branch of the candidate round ranks by the mtime field and hands every
+        # hit a score of 0.0, so a semantic list could only be built, embedded
+        # and then dropped. Worse, a timestamp read as relevance is exactly the
+        # value that would appear on the page if it were not dropped. The engine
+        # side is deliberately indifferent to the bundle as well (plan 13-02);
+        # this line is the promise and that indifference is its second half.
         semantic = None
-        lexical_only = bool(rewritten.operators) or rewritten.one_term or title_only
+        lexical_only = bool(rewritten.operators) or rewritten.one_term or title_only or sort != "relevance"
         if not lexical_only and side.vectors is not None and settings().embed_enabled:
             semantic = SemanticSide(vectors=side.vectors, model=resources.query_model(), text=text)
-        page = candidate_round(side.index, side.store, uid, rewritten.query, limit, offset, semantic=semantic)
+        page = candidate_round(
+            side.index,
+            side.store,
+            uid,
+            rewritten.query,
+            limit,
+            offset,
+            semantic=semantic,
+            filter_query=rewritten.filter_query,
+            sort=sort,
+        )
     # Deliberately every exception, for the reason in the docstring above.
     except Exception as error:
         # The type name and nothing else: a traceback carries whatever a library
@@ -257,7 +320,20 @@ async def search(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="no user in the AppAPI header")
 
     text = body.query.strip()
-    found = await asyncio.to_thread(one_round, user_id, text, body.limit, body.offset, body.titleOnly)
+    found = await asyncio.to_thread(
+        partial(
+            one_round,
+            user_id,
+            text,
+            body.limit,
+            body.offset,
+            body.titleOnly,
+            groups=body.types,
+            since=body.since,
+            until=body.until,
+            sort=body.sort,
+        )
+    )
 
     hits: list[CanaryCandidate | Candidate] = []
     if text == CANARY_TERM:

@@ -193,6 +193,24 @@ SEARCH_QUERY_MAX_CHARS = 512
 # parser is even entered (security audit C2). Real queries never nest this deep.
 SEARCH_QUERY_MAX_DEPTH = 32
 
+# How many type groups one request may name. The vocabulary is a closed set of
+# six (TYPE_GROUPS in findling.query.rewrite), so six is not a policy but the
+# whole list, and asking for all of them is the same as asking for no filter at
+# all. The cap is still a denial-of-service control rather than tidiness: the
+# endpoints carry access_level USER, so any signed-in account reaches them with
+# a free JSON body, and every named group becomes another arm of the Should
+# group the query builder assembles. Without a ceiling a single request could
+# hand the engine an arbitrarily long disjunction of repeated names.
+SEARCH_TYPE_GROUPS_MAX = 6
+
+# Upper bound of the two time range edges a caller may request. mtime is the
+# Unix epoch in seconds and this value is 2100-01-01T00:00:00Z, which is past
+# any modification date a file on a running instance can carry. The lower bound
+# is 0, the epoch itself. Both edges together turn a hand edited address into a
+# refused request instead of a range query over an absurd span: the range runs
+# against the mtime fast field, so a span nobody meant is work nobody asked for.
+SEARCH_MTIME_MAX = 4_102_444_800
+
 # Upper bound on the DECLARED uncompressed size of a single archive member
 # before it is read (security audit M4). Office and OpenDocument files are ZIP
 # archives, and a decompression bomb declares its real size in the directory:

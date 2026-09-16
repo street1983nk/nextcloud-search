@@ -48,12 +48,15 @@ defence in depth for the path this app does not walk (pitfall 10).
 import asyncio
 import logging
 import sqlite3
+from collections.abc import Sequence
+from functools import partial
+from typing import Annotated, Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from findling.api import resources
-from findling.config import settings
+from findling.config import SEARCH_MTIME_MAX, SEARCH_TYPE_GROUPS_MAX, settings
 from findling.index.fusion import origins
 from findling.index.search import SemanticSide, ranked_sides
 from findling.query.rewrite import build_query
@@ -142,7 +145,14 @@ def _second_track(file_id: int) -> tuple[bool, int]:
     return (total > 0, total)
 
 
-def _origin_of(file_id: int, text: str) -> str | None:
+def _origin_of(
+    file_id: int,
+    text: str,
+    *,
+    groups: Sequence[str] = (),
+    since: int | None = None,
+    until: int | None = None,
+) -> str | None:
     """Which half of the search found this document for this line, or None.
 
     The two lists come from :func:`findling.index.search.ranked_sides`, which is
@@ -164,12 +174,28 @@ def _origin_of(file_id: int, text: str) -> str | None:
     mark would be a claim. The log line carries the type name and nothing else:
     the search line is user content and a library message quotes what it read
     (T-06-27).
+
+    The three filter arguments exist because this route is the one place where
+    "is the semantic half still there under a filter" can be observed at all: a
+    candidate answer carries three values and no mark, on purpose, so an admin
+    asking that question has nowhere else to ask it. What arrives is still one
+    word per file, never a hit count per type and never a total. A count would
+    be an oracle about documents this route does no permission check for, and
+    the whole of D-14 rests on the answer staying a mark about one named file.
+
+    One limit of that observation is named here rather than discovered later:
+    the filter reaches the lexical list through the query, and it does not reach
+    the semantic list at all, because ``ranked_sides`` does not go through
+    ``_mtimes_of``, which is where a candidate round cuts the vector half
+    (plan 13-02). A mark of ``semantic`` under a narrow filter therefore says
+    the vector stock holds something near this line, not that the candidate
+    round would have kept it.
     """
     try:
         side = resources.read_side()
         if side is None:
             return None
-        rewritten = build_query(side.index, text, title_only=False)
+        rewritten = build_query(side.index, text, title_only=False, groups=groups, since=since, until=until)
         if rewritten.query is None:
             # A line that held only a file type filter, for instance. No search
             # ran, so there is no origin, and nought found is not the answer.
@@ -195,7 +221,14 @@ def _origin_of(file_id: int, text: str) -> str | None:
     return origins(sides.lexical, sides.semantic).get(file_id, NO_ORIGIN)
 
 
-def _report(file_id: int, query: str) -> DiagnoseResponse:
+def _report(
+    file_id: int,
+    query: str,
+    *,
+    groups: Sequence[str] = (),
+    since: int | None = None,
+    until: int | None = None,
+) -> DiagnoseResponse:
     """The verdict of one file. Runs in a worker thread, never raises.
 
     A file id that cannot name a file, so nought or a negative number, is
@@ -220,7 +253,7 @@ def _report(file_id: int, query: str) -> DiagnoseResponse:
         fileId=file_id,
         embedded=embedded,
         chunks=chunks,
-        origin=_origin_of(file_id, query) if query else None,
+        origin=_origin_of(file_id, query, groups=groups, since=since, until=until) if query else None,
     )
 
     if not resolved.state_db.is_file():
@@ -273,7 +306,16 @@ def _report(file_id: int, query: str) -> DiagnoseResponse:
 
 
 @ROUTER.get("/diagnose", response_model_exclude_none=True)
-async def read_diagnosis(fileId: int, query: str = "") -> DiagnoseResponse:
+async def read_diagnosis(
+    fileId: int,
+    query: str = "",
+    types: Annotated[
+        tuple[Literal["pdf", "documents", "spreadsheets", "presentations", "images", "text"], ...],
+        Query(max_length=SEARCH_TYPE_GROUPS_MAX),
+    ] = (),
+    since: Annotated[int | None, Query(ge=0, le=SEARCH_MTIME_MAX)] = None,
+    until: Annotated[int | None, Query(ge=0, le=SEARCH_MTIME_MAX)] = None,
+) -> DiagnoseResponse:
     """Answer with the verdict of one file, by number, and where a hit came from.
 
     ``fileId`` is typed as an int, so FastAPI refuses anything else with a 422
@@ -290,5 +332,13 @@ async def read_diagnosis(fileId: int, query: str = "") -> DiagnoseResponse:
     null. It is safe to declare here because ``origin`` is the only field of the
     model that may be None; every other one defaults to a number, a flag or an
     empty string, so nothing else can disappear with it.
+
+    ``types``, ``since`` and ``until`` are the same three filters the search
+    route takes, with the same closed value set and the same bounds, so that an
+    admin can ask the origin question under the very filter a user complained
+    about. They are query parameters because this is a GET, and ``types`` is a
+    tuple rather than a list so that the default is an immutable empty one. The
+    answer gains nothing from them: still one mark for one named file, never a
+    count.
     """
-    return await asyncio.to_thread(_report, fileId, query.strip())
+    return await asyncio.to_thread(partial(_report, fileId, query.strip(), groups=types, since=since, until=until))
