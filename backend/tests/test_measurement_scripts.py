@@ -224,8 +224,15 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # .php is a file that did not exist before, and ExAppService.php, SearchService
 # .php, ExAppServiceTest.php and SearchServiceTest.php changed their bytes with
 # the filter and sort fields of phase 13. So 63 becomes 64 and the hash follows.
+# Moved on 2026-09-16 again, by plan 13-05, and this time the count stays at 64
+# because no file was added or removed. Seven files changed their bytes:
+# ApprovedHit.php got its fifth field, SearchService.php got the filters in its
+# signature and the modification date out of the confirmed node, PageController
+# .php and Provider.php hand the unnarrowed filter down until 13-06 and 13-07
+# fill it, and SearchServiceTest.php, ProviderTest.php and PageControllerTest
+# .php follow the two changed signatures.
 PHP_FILES_TODAY = 64
-PHP_TREE_HASH_TODAY = "fd8bd9de51cfcf708dd1b7dc7cc7745e9fe7e8c6c7a510c97ac6a8d3689d17fb"
+PHP_TREE_HASH_TODAY = "da750308c56f5c5c1e11ed96e85d6a37470ef3078280b35c571dbad636d7a2c4"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
