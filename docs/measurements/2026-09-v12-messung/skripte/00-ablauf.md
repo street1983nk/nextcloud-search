@@ -76,7 +76,11 @@ Lauf, den Schritt 4 nicht mehr verändern darf.
 sie sonst Box-Minuten kosten:** die Laufnummer aus `integration.yml`, ohne die
 das Skript mit **22** abbricht, und die Frage, ob die Sonde im Container
 gefahren werden kann, ohne die Abschnitt 3b keine Ränge erhebt und der Lauf mit
-**24** endet. Beide Abbrüche kommen früh und kosten Sekunden.
+**24** endet. Der Abbruch mit 22 kommt vor dem ersten Handgriff und kostet
+Sekunden; eine nicht fahrbare Sonde fällt schon in Abschnitt 0 als **19**, vor
+dem Hochladen der 39 Dateien. Nur **24** selbst fällt erst nach Upload und
+Indexierung, weil ein Rang vorher nicht existiert; genau deshalb gehört die
+Sondenfrage vor die Anfahrt.
 
 ---
 

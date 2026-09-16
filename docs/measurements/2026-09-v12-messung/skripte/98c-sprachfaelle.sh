@@ -342,10 +342,18 @@ urteil() {
         cat "$WORK/bestand-vorlauf.txt"
         echo 'vorpruefung-gefahren ja' >"$WORK/vorpruefung-urteil"
     fi
-    # Der Abbruch mit 19 steht NICHT hier, sondern unter der Pipeline: ein exit
-    # in diesem Block verliesse nur die Subshell, und die Verweigerung waere eine
-    # Zeile in einer Rohdatei, die niemand liest.
     cat "$WORK/vorpruefung-urteil"
+    # Der Rueckgabewert 19 faellt weiterhin UNTER der Pipeline, weil der Wert
+    # einer Pipeline zu tee gehoert. Der Block selbst endet hier trotzdem, wenn
+    # die Sonde nicht gefahren ist: das exit verlaesst nur die Subshell, und
+    # genau das ist gewollt, denn es ueberspringt die Abschnitte 1 bis 5, bevor
+    # ein Konto-Passwort neu gesetzt, das Skelett geaendert oder eine Datei
+    # hochgeladen ist. 98b haelt es genauso (der Abbruch dort steht vor dem
+    # Kontoabschnitt), und 00-ablauf.md wie runbook-messbox.md sichern zu, dass
+    # dieser Abbruch vor dem Hochladen der 39 Dateien kommt.
+    if [ "$(cat "$WORK/vorpruefung-urteil")" != 'vorpruefung-gefahren ja' ]; then
+        exit 1
+    fi
 
     echo "=== Abschnitt 1: das Konto, dessen Heimat nichts als den Korpus halten soll ==="
     # Das Skelett wird zuerst abgeschaltet, und das ist keine Ordnungsliebe: ohne
