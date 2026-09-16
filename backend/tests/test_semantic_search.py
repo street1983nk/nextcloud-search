@@ -324,6 +324,101 @@ def test_the_closer_vector_is_the_one_that_leads(
 
 
 # ---------------------------------------------------------------------------
+# Criterion 1 under a filter: the semantics stay on, the foreign type goes
+# ---------------------------------------------------------------------------
+#
+# SEMANTIC_FILE is odd and therefore carries pdf, HIDDEN_FILE is even and
+# carries docx. Both lie inside the gate and both come back unfiltered, so a
+# filter on pdf has to keep the first and drop the second. Neither of them is a
+# lexical hit of PARAPHRASE, which means the engine query cannot decide this on
+# its own: everything here travels through the index lookup of the vector half,
+# and without the clause in _mtimes_of the counter case below goes red.
+
+
+def _filtered(index: Index, text: str, groups: list[str]) -> tuple[Query, Query]:
+    """The engine query and the same filter once more, the way a route builds them."""
+    rewritten = build_query(index, text, groups=groups)
+    assert rewritten.query is not None
+    assert rewritten.filter_query is not None
+    return rewritten.query, rewritten.filter_query
+
+
+def test_a_paraphrase_under_a_type_filter_still_finds_its_document(
+    index: Index,
+    store: Store,
+    vectors: VectorStore,
+) -> None:
+    query, filter_query = _filtered(index, PARAPHRASE, ["pdf"])
+
+    page = candidates(
+        index,
+        store,
+        BOB,
+        query,
+        limit=DOCUMENTS,
+        semantic=_side(vectors, PARAPHRASE),
+        filter_query=filter_query,
+    )
+
+    # The whole point of the structured filter parameter: the vector half is
+    # still asked, so the line whose words occur in no document finds its
+    # document, and the type of that document is the one that was asked for.
+    assert _ids(page) == [SEMANTIC_FILE]
+
+
+def test_a_semantic_hit_of_the_wrong_type_does_not_reach_the_answer(
+    index: Index,
+    store: Store,
+    vectors: VectorStore,
+) -> None:
+    # Pitfall B, as a pair. Unfiltered both documents come back; under the
+    # filter the docx one is gone. A filter that lived in the engine query alone
+    # would leave it standing, which on the page reads as a docx result under
+    # the chip "PDF".
+    query, filter_query = _filtered(index, PARAPHRASE, ["pdf"])
+    unfiltered = candidates(
+        index, store, BOB, _query(index, PARAPHRASE), limit=DOCUMENTS, semantic=_side(vectors, PARAPHRASE)
+    )
+
+    page = candidates(
+        index,
+        store,
+        BOB,
+        query,
+        limit=DOCUMENTS,
+        semantic=_side(vectors, PARAPHRASE),
+        filter_query=filter_query,
+    )
+
+    assert HIDDEN_FILE in _ids(unfiltered)
+    assert HIDDEN_FILE not in _ids(page)
+
+
+def test_under_a_sort_the_vector_half_makes_no_difference(
+    index: Index,
+    store: Store,
+    vectors: VectorStore,
+) -> None:
+    # The sorted branch never asks the vector half, so the same call with and
+    # without the bundle has to answer the same sequence. The caller switches it
+    # off anyway; this is the second, defensive half of that promise.
+    without = candidates(index, store, BOB, _query(index), limit=DOCUMENTS, sort="newest")
+
+    with_side = candidates(
+        index,
+        store,
+        BOB,
+        _query(index),
+        limit=DOCUMENTS,
+        semantic=_side(vectors, PARAPHRASE),
+        sort="newest",
+    )
+
+    assert _ids(without) == list(range(DOCUMENTS, 0, -1))
+    assert _ids(with_side) == _ids(without)
+
+
+# ---------------------------------------------------------------------------
 # Criterion 2: the same permission chain
 # ---------------------------------------------------------------------------
 
