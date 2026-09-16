@@ -465,18 +465,40 @@ print('Description %s' % snapshot.get('Description', ''))
     # that starts with a creation leaves the first one behind as an invoice
     # nobody is watching. The search is limited to the zone of the box, because
     # a volume in another zone could never be attached to it anyway.
+    #
+    # And it is limited to volumes that came out of THIS snapshot, because the
+    # tag alone does not say where the blocks came from: a leftover of the
+    # volume subcommand is an empty volume with the same tag in the same zone,
+    # exactly the create-succeeded-attach-failed scenario above, and picking it
+    # up here would attach a corpus-less volume and then write
+    # VOLUME_FROM_SNAPSHOT=$snapshot_id into the state file, a provenance that
+    # was never true for it. The runbook quotes that line as the proof of which
+    # corpus was measured against, so the filter is what keeps it a proof.
     volume_id=$(ec2 describe-volumes \
         --filters "Name=tag:$TAG_KEY,Values=$TAG_VALUE" \
         "Name=availability-zone,Values=$ZONE" \
-        "Name=status,Values=available" | json '
+        "Name=status,Values=available" \
+        "Name=snapshot-id,Values=$snapshot_id" | json '
 import json
 import sys
 
 volumes = json.load(sys.stdin)["Volumes"]
-print(volumes[0]["VolumeId"] if len(volumes) == 1 else "")
+print(" ".join(volume["VolumeId"] for volume in volumes))
 ')
+    # More than one candidate is a refusal and not a coin toss, and quietly
+    # creating a third one would be a third invoice: the other refusals of this
+    # script name what they found, so this one does too.
+    case "$volume_id" in
+    *' '*)
+        echo "aws_box: more than one unattached volume out of $snapshot_id carries" >&2
+        echo "the tag $LABEL in $ZONE: $volume_id. This script cannot know which" >&2
+        echo "one is the right one, and creating another would be one more invoice." >&2
+        echo "Destroy or detag the spares first, then run restore again" >&2
+        exit 1
+        ;;
+    esac
     if [ -n "$volume_id" ]; then
-        echo "aws_box: an unattached volume with the tag exists, using $volume_id"
+        echo "aws_box: an unattached volume out of $snapshot_id exists, using $volume_id"
     else
         echo "aws_box: creating a ${VOLUME_SIZE_GB} GB $VOLUME_TYPE volume in $ZONE from $snapshot_id"
         # The zone is required for a restore and it is not a default: a volume
