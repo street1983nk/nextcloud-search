@@ -39,11 +39,11 @@ search is neither of them, it is the two proxy round trips and the recheck.
 """
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final, Protocol
 
-from tantivy import DocAddress, Document, Index, Occur, Query, Schema, Searcher, SnippetGenerator
+from tantivy import DocAddress, Document, Index, Occur, Order, Query, Schema, Searcher, SnippetGenerator
 
 from findling.config import SEARCH_SCAN_MAX, settings
 from findling.embed.model import EmbedOutcome, to_int8
@@ -71,6 +71,20 @@ _SCAN_CHUNK_MIN: Final = 128
 # who would otherwise pay the prefilter for six hundred documents on a page that
 # was full after twenty.
 _PREFILTER_BAND: Final = 128
+
+# The three orders a page can be asked for, and None does not mean "no order".
+# It means "the relevance order of the fusion", which is the order this module
+# has always produced and the only one that has a score behind it.
+#
+# This table is the one place the wire vocabulary is defined. The Literal values
+# of the request model in api/search.py are held against these keys rather than
+# written out a second time, because two lists of three words drift apart on the
+# day somebody adds a fourth (plan 13-03 builds the gate for it).
+SORT_MODES: Final[Mapping[str, Order | None]] = {
+    "relevance": None,
+    "newest": Order.Desc,
+    "oldest": Order.Asc,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,8 +153,22 @@ class SemanticSide:
     text: str
 
 
-def _ranked(searcher: Searcher, hits: Sequence[tuple[float, DocAddress]]) -> list[tuple[int, float, int]]:
-    """Turn engine hits into id, score and timestamp, dropping the unusable ones."""
+def _ranked(
+    searcher: Searcher,
+    hits: Sequence[tuple[float, DocAddress]],
+    *,
+    scored: bool = True,
+) -> list[tuple[int, float, int]]:
+    """Turn engine hits into id, score and timestamp, dropping the unusable ones.
+
+    ``scored=False`` puts 0.0 where the first element of the tuple would go, and
+    that is not a nicety. Under ``order_by_field`` tantivy hands back the field
+    value in that position instead of the score (measured 16.09.2026: 500, 400,
+    300 instead of 0.087), so a sorted round that took the value as it comes
+    would ship a timestamp in the order of 1.7e9 out of this container as a
+    relevance value. The sorted branch has no relevance to report, and 0.0 is the
+    honest way of saying so (D-04).
+    """
     # The columns, never the document store. searcher.doc() hands back the whole
     # stored document including the full text, and that read was 99.9% of the
     # candidate round: measured 20.5 ms per hit at the 512k cap against 0.02 ms
@@ -159,7 +187,7 @@ def _ranked(searcher: Searcher, hits: Sequence[tuple[float, DocAddress]]) -> lis
             continue
         # A missing modification time is a display detail, so it degrades to
         # zero rather than ending the search.
-        ranked.append((int(file_id), float(score), int(mtime) if mtime is not None else 0))
+        ranked.append((int(file_id), float(score) if scored else 0.0, int(mtime) if mtime is not None else 0))
     return ranked
 
 
@@ -320,7 +348,13 @@ def ranked_sides(index: Index, query: Query, *, semantic: SemanticSide | None = 
     return RankedSides(lexical=[file_id for file_id, _, _ in lexical], semantic=documents)
 
 
-def _mtimes_of(searcher: Searcher, schema: Schema, file_ids: Sequence[int]) -> dict[int, int]:
+def _mtimes_of(
+    searcher: Searcher,
+    schema: Schema,
+    file_ids: Sequence[int],
+    *,
+    filter_query: Query | None = None,
+) -> dict[int, int]:
     """Timestamps of the documents only the vector half contributed.
 
     One search for all of them rather than one per document: a term query per id
@@ -331,11 +365,29 @@ def _mtimes_of(searcher: Searcher, schema: Schema, file_ids: Sequence[int]) -> d
     but no longer in the index is a leftover of a delete path, and handing it
     out as a candidate would produce a hit that nothing on the other side can
     ever resolve.
+
+    ``filter_query`` is the third job, and it is the whole reason the clause of
+    query/rewrite.py is handed out separately. The vector stock knows neither an
+    extension nor a timestamp; its hits never pass through the parser, and this
+    lookup is the only place they meet the index at all. What falls out here is
+    missing from ``known`` and therefore drops out of ``merged`` a few lines
+    down. A filter that lives in the engine query alone lets hits of a foreign
+    type through the semantic side, which on the page reads as docx results under
+    the chip "PDF" (13-RESEARCH finding 1).
+
+    The price is worth naming, because it is visible rather than hidden:
+    ``VECTOR_SCAN_MAX`` pulls its chunks BEFORE this cut, so under a narrow
+    filter the semantic half shrinks noticeably and sometimes to nothing. That is
+    a property of a deadline on the scan, not a defect, and the value is not
+    raised in this phase.
     """
     if not file_ids:
         return {}
     clauses = [(Occur.Should, Query.term_query(schema, FIELD_FILE_ID, file_id)) for file_id in file_ids]
-    hits = searcher.search(Query.boolean_query(clauses), len(file_ids)).hits
+    wanted = Query.boolean_query(clauses)
+    if filter_query is not None:
+        wanted = Query.boolean_query([(Occur.Must, wanted), (Occur.Must, filter_query)])
+    hits = searcher.search(wanted, len(file_ids)).hits
     addresses = [address for _, address in hits]
     found = searcher.fast_field_values(FIELD_FILE_ID, addresses)
     times = searcher.fast_field_values(FIELD_MTIME, addresses)
@@ -355,6 +407,8 @@ def candidates(
     offset: int = 0,
     *,
     semantic: SemanticSide | None = None,
+    filter_query: Query | None = None,
+    sort: str = "relevance",
 ) -> CandidatePage:
     """Return one page of permitted candidates, engine and vectors merged into one.
 
@@ -424,7 +478,14 @@ def candidates(
     )
 
     known = {file_id: mtime for file_id, _, mtime in lexical}
-    known.update(_mtimes_of(searcher, index.schema, [file_id for file_id, _ in fused if file_id not in known]))
+    known.update(
+        _mtimes_of(
+            searcher,
+            index.schema,
+            [file_id for file_id, _ in fused if file_id not in known],
+            filter_query=filter_query,
+        )
+    )
     # Everything the merge produced is remembered, including what the index
     # could not resolve, so that the continuation below cannot deliver a
     # document this section already decided about a second time.
