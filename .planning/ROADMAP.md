@@ -116,7 +116,7 @@ Plans:
 
 **Welle 4** *(wartet auf Welle 3)*
 
-- [ ] 13-04-PLAN.md: SearchFilters und die zwei Ruempfe an den Container
+- [x] 13-04-PLAN.md: SearchFilters und die zwei Ruempfe an den Container
 
 **Welle 5** *(wartet auf Welle 4)*
 
@@ -209,7 +209,7 @@ Plans:
 | 10. Vergleichsmessung auf der AWS-Box | v1.1 | 7/7 | Complete | 2026-09-10 |
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
-| 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 3/13 | In Progress|  |
+| 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 4/13 | In Progress|  |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 0/? | Not started | - |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |

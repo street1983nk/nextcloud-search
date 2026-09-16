@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 13-03-PLAN.md
-last_updated: "2026-09-16T19:43:00.000Z"
-last_activity: 2026-09-16 -- Plan 13-03 abgeschlossen (Wire-Felder, Grenzen, Moduswechsel und Gleichstands-Gate)
+stopped_at: Completed 13-04-PLAN.md
+last_updated: "2026-09-16T21:05:00.000Z"
+last_activity: 2026-09-16 -- Plan 13-04 abgeschlossen (SearchFilters und die zwei Ruempfe an den Container)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 11
-  percent: 24
+  completed_plans: 12
+  percent: 26
 ---
 
 # Project State
@@ -26,16 +26,45 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 4 of 13 (13-01 bis 13-03 abgeschlossen)
+Plan: 5 of 13 (13-01 bis 13-04 abgeschlossen)
 Status: Executing Phase 13
-Progress: [██░░░░░░░░] 23%
-Last activity: 2026-09-16 -- Plan 13-03 abgeschlossen (Wire-Felder, Grenzen, Moduswechsel und Gleichstands-Gate)
+Progress: [███░░░░░░░] 26%
+Last activity: 2026-09-16 -- Plan 13-04 abgeschlossen (SearchFilters und die zwei Ruempfe an den Container)
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 13-04: Filter und Sortierung reisen durch die PHP-Haelfte als EIN benanntes
+  Wertobjekt `SearchFilters` (`types`, `sort`, `since`, `until`), nach der
+  Bauform von `SearchCaps`. Abweichung von jenem Vorbild: es gibt eine statische
+  `none()`, weil "nichts eingegrenzt" ein benannter Zustand des Produkts ist und
+  keine Zahl, ueber die niemand mehr nachdenkt. Die Begruendung steht im
+  Klassen-Docstring.
+- 13-04: Das neue Argument steht VOR den beiden Uhrwerten und nicht am Ende der
+  Parameterliste, wie der Plantext es vorsah. Beide Uhrwerte tragen einen
+  Vorgabewert, und ein Pflichtargument hinter einem optionalen ist seit PHP 8.0
+  abgekuendigt. Ohne Vorgabewert bleibt es trotzdem: ein vergessener Aufrufer
+  soll nicht aussehen wie einer ohne Filter.
+- 13-04: `typeGroupsWithin` laeuft ueber die geschlossene Sechser-Menge und
+  nicht ueber die Eingabe. Unbekannter Name, Dublette, Ueberlaenge und
+  Reihenfolge sind damit baulich erledigt (T-13-17, T-13-18) statt in vier
+  Pruefungen, die einzeln vergessen werden koennen.
+- 13-04: Ein Wert in seiner Vorgabe wird nicht in den Rumpf geschrieben. Eine
+  ungefilterte Suche schickt damit byteweise die Anfrage von vor dieser Phase,
+  und ein echter Wert geht nicht zwischen vier Konstanten unter.
+- 13-04: Der `/snippets`-Rumpf traegt `types`, `since` und `until` und an keiner
+  Stelle den Sortiermodus (FILT-02). Die Reihenfolge dieser Treffer steht fest,
+  bevor der Aufruf gestellt wird.
+- 13-04: `filterCandidates()` bleibt unangetastet und laesst weiterhin nur
+  `fileId` durch; der Docstring sagt jetzt ausdruecklich, dass das
+  Aenderungsdatum aus dem bestaetigten Knoten kommt (13-05) und nie aus der
+  Container-Antwort (T-13-20).
+- 13-04: `php -l` ist auf dieser Maschine doch moeglich, ueber das offizielle
+  Docker-Image `php:8.2-cli` (dieselbe Version wie der Lint-Job in CI). PHPUnit
+  bleibt CI-only, weil die Suite eine Auscheckung von nextcloud/server braucht.
 
 - 13-03: Die vier neuen Werte reisen als geschlossene Mengen. `types` ist
   `list[Literal[...]]` ueber die sechs Gruppennamen, `sort` ein `Literal` ueber
@@ -271,6 +300,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-16T19:43:00.000Z
-Stopped at: Completed 13-03-PLAN.md
+Last session: 2026-09-16T21:05:00.000Z
+Stopped at: Completed 13-04-PLAN.md
 Resume file: None
