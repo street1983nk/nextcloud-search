@@ -243,7 +243,14 @@ PHP_TREE_HASH_TODAY = "455470c51fe2831cc4adc92e31ab350f762f0b1143d13b72103f6a9ad
 # index/search.py, which learned the table of the three sort modes, the sorted
 # round over the fast column and the filter clause for the semantic half. No
 # file came and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "a67a22b81c94c9236e64f9637c637870fb4e3f062a43f0cc0516126277beaeba"
+# Moved on 2026-09-16 a third time, by plan 13-03, and this time four of the 54
+# files changed their bytes: config.py learned the two new ceilings
+# SEARCH_TYPE_GROUPS_MAX and SEARCH_MTIME_MAX, api/search.py the four wire
+# fields and the sort term on the lexical_only line, api/snippets.py the three
+# query fields without a sort, and api/diagnose.py the same three as query
+# parameters. No file came and none went, so PACKAGE_FILES stays at 54 and only
+# the hash is a different statement than it was an hour ago.
+PACKAGE_TREE_HASH_TODAY = "ae8f1684fb0603cf061777ee170a0ea476800a9a0a0530b064d8a8c881cfb4f1"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
