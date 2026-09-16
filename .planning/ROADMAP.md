@@ -30,7 +30,7 @@ Details im Archiv: .planning/milestones/v1.1-ROADMAP.md
 
 ### v1.2 Messbeleg und Ausbau (aktiv)
 
-- [ ] **Phase 12: Messwerkzeug, Runbook und Terminentscheid** - Werkzeug und Runbook stehen fest, bevor die bezahlte Box laeuft; stable35-Entscheid faellt fristgerecht
+- [x] **Phase 12: Messwerkzeug, Runbook und Terminentscheid** - Werkzeug und Runbook stehen fest, bevor die bezahlte Box laeuft; stable35-Entscheid faellt fristgerecht (completed 2026-09-16)
 - [ ] **Phase 13: Filter und Sortierung auf der Ergebnisseite** - Nutzer grenzt Treffer nach Typ und Zeitraum ein und sortiert nach Datum, ohne die Semantik oder die Rechtegrenze zu verlieren
 - [ ] **Phase 14: Modell-Entladung im Leerlauf** - Container gibt beide Speicherhalter nach Leerlauf frei, hinter einem ab Werk ausgeschalteten Schalter
 - [ ] **Phase 15: Messphase, eine Box-Anfahrt** - Wirkungsbeleg, Laststufen, Sprachfaelle und Wiederaufwaerm-Kosten in einer einzigen bezahlten Anfahrt
@@ -63,7 +63,7 @@ Details im Archiv: .planning/milestones/v1.1-ROADMAP.md
   4. Das Cron-Intervall der Zielinstanz ist Pflichtfeld im Messprotokoll: ein Lauf ohne protokolliertes Intervall gilt als unvollstaendig
   5. Der stable35-Fenster-Entscheid ist bis zum 16.09.2026 getroffen und mit Begruendung dokumentiert
 
-**Plans:** 8/8 plans executed
+**Plans:** 8/8 plans complete
 
 Plans:
 **Wave 1**
@@ -160,7 +160,7 @@ Plans:
 | 9. Eigene Ergebnisseite | v1.1 | 8/8 | Complete | 2026-09-09 |
 | 10. Vergleichsmessung auf der AWS-Box | v1.1 | 7/7 | Complete | 2026-09-10 |
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
-| 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 7/8 | In Progress|  |
+| 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 0/? | Not started | - |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 0/? | Not started | - |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |

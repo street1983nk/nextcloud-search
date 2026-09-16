@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
-status: executing
-stopped_at: Completed 12-08-PLAN.md
-last_updated: "2026-09-14T17:48:00.000Z"
+status: ready_to_plan
+stopped_at: Phase 12 complete (8/8) — ready to discuss Phase 13
+last_updated: 2026-09-16T13:15:27.019Z
 last_activity: 2026-09-14, Plan 12-08 abgeschlossen (Runbook Abschnitte 6 bis 9, MESS-04 und MESS-06 erfuellt)
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-11)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 12: messwerkzeug-runbook-und-terminentscheid
+**Current focus:** Phase 13 — filter und sortierung auf der ergebnisseite
 
 ## Current Position
 
-Phase: 12 (messwerkzeug-runbook-und-terminentscheid), COMPLETE
-Plan: alle 8 Plaene abgeschlossen (12-01 bis 12-08)
-Status: Phase complete, naechste Phase 13
+Phase: 13
+Plan: Not started
+Status: Ready to plan
 Progress: [██████████] 100%
-Last activity: 2026-09-16, Plan 12-02 abgeschlossen (stable35-Vollzug, Zweig a,
+Last activity: 2026-09-16
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
