@@ -406,8 +406,8 @@ final class PageControllerTest extends TestCase {
 		// empty list, and the template puts the path in that place.
 		$this->answering($this->outcome(
 			hits: [
-				new ApprovedHit(7, 'akte.pdf', 'Recht/akte.pdf', 'application/pdf'),
-				new ApprovedHit(8, 'notiz.txt', 'Recht/notiz.txt', 'text/plain'),
+				new ApprovedHit(7, 'akte.pdf', 'Recht/akte.pdf', 'application/pdf', 0),
+				new ApprovedHit(8, 'notiz.txt', 'Recht/notiz.txt', 'text/plain', 0),
 			],
 			excerpts: [7 => ['text' => 'Die Belehrung', 'highlights' => [[4, 13]]]],
 		));

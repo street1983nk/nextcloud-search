@@ -6,6 +6,7 @@ namespace OCA\Findling\Controller;
 
 use OCA\Findling\AppInfo\Application;
 use OCA\Findling\Service\SearchCaps;
+use OCA\Findling\Service\SearchFilters;
 use OCA\Findling\Service\SearchOutcome;
 use OCA\Findling\Service\SearchService;
 use OCA\Findling\Text\Highlighter;
@@ -319,7 +320,12 @@ final class PageController extends Controller {
 			return new SearchOutcome([], [], $startCursor, false, false, SearchOutcome::FAILURE_NO_HOME_FOLDER);
 		}
 
-		return $this->searchService->run($user, $query, $titleOnly, $startCursor, $this->caps());
+		// An intermediate step of plan 13-05 and nothing more. The page does not
+		// read its filters out of the address yet, so it hands down the one
+		// value that means "nothing is narrowed" and the request stays exactly
+		// the request it was. Plan 13-07 builds a SearchFilters out of the query
+		// string of this address, with a silent fallback, and passes it here.
+		return $this->searchService->run($user, $query, $titleOnly, $startCursor, $this->caps(), SearchFilters::none());
 	}
 
 	/**

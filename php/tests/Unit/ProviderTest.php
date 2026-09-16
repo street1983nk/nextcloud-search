@@ -266,7 +266,7 @@ final class ProviderTest extends TestCase {
 	public function testAnOutcomeWithMoreBehindItBecomesAPaginatedGroupCarryingItsCursor(): void {
 		$this->urlGenerator->method('linkToRoute')->willReturn('/index.php/f/11');
 		$this->searchService->method('run')->willReturn($this->outcome(
-			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf')],
+			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf', 0)],
 			nextCursor: 137,
 			hasMore: true,
 		));
@@ -283,7 +283,7 @@ final class ProviderTest extends TestCase {
 		// a cursor the container refuses amounts to.
 		$this->urlGenerator->method('linkToRoute')->willReturn('/index.php/f/11');
 		$this->searchService->method('run')->willReturn($this->outcome(
-			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf')],
+			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf', 0)],
 			nextCursor: 1200,
 			hasMore: false,
 			failure: SearchOutcome::FAILURE_OFFSET_CEILING,
@@ -299,7 +299,7 @@ final class ProviderTest extends TestCase {
 
 	public function testAnEntryIsBuiltOutOfTheApprovedHitAndItsExcerpt(): void {
 		$this->searchService->method('run')->willReturn($this->outcome(
-			hits: [new ApprovedHit(11, 'Quartalsbericht.pdf', 'Vorstand/Quartalsbericht.pdf', 'application/pdf')],
+			hits: [new ApprovedHit(11, 'Quartalsbericht.pdf', 'Vorstand/Quartalsbericht.pdf', 'application/pdf', 0)],
 			excerpts: [11 => ['text' => 'der Quartalsbericht des Vorstands', 'highlights' => [[4, 19]]]],
 		));
 
@@ -330,7 +330,7 @@ final class ProviderTest extends TestCase {
 		// rendering decision: a hit without an excerpt beats no hit at all.
 		$this->urlGenerator->method('linkToRoute')->willReturn('/index.php/f/11');
 		$this->searchService->method('run')->willReturn($this->outcome(
-			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf')],
+			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf', 0)],
 		));
 
 		$entries = $this->entriesOf($this->provider()->search($this->user(), $this->query()));
@@ -344,7 +344,7 @@ final class ProviderTest extends TestCase {
 		// There is no file behind the id 0, so a link to a fileid would resolve
 		// to nothing.
 		$this->searchService->method('run')->willReturn($this->outcome(
-			hits: [new ApprovedHit(0, 'findling-canary', 'answered by findling-backend', '')],
+			hits: [new ApprovedHit(0, 'findling-canary', 'answered by findling-backend', '', 0)],
 		));
 
 		$this->urlGenerator->expects(self::once())
@@ -384,7 +384,7 @@ final class ProviderTest extends TestCase {
 		// never counts against what the dialog asked for.
 		$this->routingUrls();
 		$this->searchService->method('run')->willReturn($this->outcome(
-			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf')],
+			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf', 0)],
 			nextCursor: 137,
 			hasMore: true,
 		));
@@ -411,7 +411,7 @@ final class ProviderTest extends TestCase {
 	public function testACompleteGroupHasNoEntryPointBecauseThePageWouldShowTheSameHits(): void {
 		$this->routingUrls();
 		$this->searchService->method('run')->willReturn($this->outcome(
-			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf')],
+			hits: [new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf', 0)],
 			hasMore: false,
 		));
 
@@ -447,8 +447,8 @@ final class ProviderTest extends TestCase {
 		$this->routingUrls();
 		$this->searchService->method('run')->willReturn($this->outcome(
 			hits: [
-				new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf'),
-				new ApprovedHit(12, 'Minutes.pdf', 'Board/Minutes.pdf', 'application/pdf'),
+				new ApprovedHit(11, 'Report.pdf', 'Board/Report.pdf', 'application/pdf', 0),
+				new ApprovedHit(12, 'Minutes.pdf', 'Board/Minutes.pdf', 'application/pdf', 0),
 			],
 			nextCursor: 137,
 			hasMore: true,

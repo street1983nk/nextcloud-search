@@ -6,6 +6,7 @@ namespace OCA\Findling\Search;
 
 use OCA\Findling\Service\ExAppService;
 use OCA\Findling\Service\SearchCaps;
+use OCA\Findling\Service\SearchFilters;
 use OCA\Findling\Service\SearchService;
 use OCP\IL10N;
 use OCP\IURLGenerator;
@@ -171,6 +172,13 @@ final class Provider implements IFilteringProvider {
 			$titleOnly,
 			$this->startOffset($query),
 			$this->caps(max(1, $query->getLimit())),
+			// An intermediate step of plan 13-05 and nothing more. The dialog
+			// offers no chips of its own, so nothing is narrowed here yet. Plan
+			// 13-06 reads the two date filters the dialog does have and builds
+			// them into this value; type groups and sort mode stay on the own
+			// result page, because a filter without a FilterDefinition breaks
+			// the provider list of the whole dialog.
+			SearchFilters::none(),
 		);
 
 		if ($outcome->hits === []) {

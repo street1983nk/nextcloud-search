@@ -248,7 +248,7 @@ final class SearchServiceTest extends TestCase {
 		]));
 		$this->exApp->method('snippets')->willReturn([]);
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertCount(1, $outcome->hits);
 		self::assertSame(11, $outcome->hits[0]->fileId);
@@ -274,7 +274,7 @@ final class SearchServiceTest extends TestCase {
 		]));
 		$this->exApp->method('snippets')->willReturn([]);
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertCount(1, $outcome->hits);
 		self::assertSame('Quartalsbericht.pdf', $outcome->hits[0]->title);
@@ -299,7 +299,7 @@ final class SearchServiceTest extends TestCase {
 		]));
 		$this->exApp->method('snippets')->willReturn([]);
 
-		$outcome = $this->service()->run($this->user(), 'vertrag', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'vertrag', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertCount(1, $outcome->hits);
 		self::assertSame('application/vnd.oasis.opendocument.text', $outcome->hits[0]->mimeType);
@@ -322,7 +322,7 @@ final class SearchServiceTest extends TestCase {
 		$this->mountCache->method('getMountsForUser')->willReturn([]);
 		$this->exApp->method('searchCandidates')->willReturn($this->page([['fileId' => 11]]));
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertSame([], $outcome->hits);
 	}
@@ -344,7 +344,7 @@ final class SearchServiceTest extends TestCase {
 		$this->exApp->expects(self::never())->method('searchCandidates');
 		$this->exApp->expects(self::never())->method('snippets');
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertSame([], $outcome->hits);
 		self::assertSame(SearchOutcome::FAILURE_NO_HOME_FOLDER, $outcome->failure);
@@ -362,7 +362,7 @@ final class SearchServiceTest extends TestCase {
 				self::callback(static fn (array $context): bool => array_keys($context) === ['exception']),
 			);
 
-		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 	}
 
 	public function testAVersionDriftOnRecordCostsTheRunAndIsNamedAsThat(): void {
@@ -383,7 +383,7 @@ final class SearchServiceTest extends TestCase {
 			null,
 		);
 
-		$outcome = $service->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$outcome = $service->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertSame([], $outcome->hits);
 		self::assertSame(SearchOutcome::FAILURE_VERSION_DRIFT, $outcome->failure);
@@ -408,7 +408,7 @@ final class SearchServiceTest extends TestCase {
 			},
 		);
 
-		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(maxRounds: $rounds));
+		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(maxRounds: $rounds), SearchFilters::none());
 
 		self::assertSame($rounds, $asked);
 	}
@@ -428,7 +428,7 @@ final class SearchServiceTest extends TestCase {
 			},
 		);
 
-		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(maxRounds: 1));
+		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(maxRounds: 1), SearchFilters::none());
 
 		self::assertSame(1, $asked);
 	}
@@ -451,7 +451,7 @@ final class SearchServiceTest extends TestCase {
 			},
 		);
 
-		$this->service()->run($this->user(), 'quarterly report', false, 0, $caps);
+		$this->service()->run($this->user(), 'quarterly report', false, 0, $caps, SearchFilters::none());
 
 		return $resolved;
 	}
@@ -517,6 +517,7 @@ final class SearchServiceTest extends TestCase {
 			false,
 			0,
 			$this->caps(maxRounds: 3, budgetSeconds: $budgetSeconds),
+			SearchFilters::none(),
 		);
 
 		// One question and not three, even though two rounds are left and the
@@ -559,7 +560,7 @@ final class SearchServiceTest extends TestCase {
 			},
 		);
 
-		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		// The order and not the result, which is the whole point of this case. An
 		// excerpt is file content, so it may not even exist before the permission
@@ -600,7 +601,7 @@ final class SearchServiceTest extends TestCase {
 			},
 		);
 
-		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertSame([11], $asked);
 	}
@@ -647,6 +648,7 @@ final class SearchServiceTest extends TestCase {
 			false,
 			0,
 			$this->caps(budgetSeconds: $budgetSeconds),
+			SearchFilters::none(),
 		);
 
 		// This class hands down what is left of its wall clock, and below the floor
@@ -717,6 +719,7 @@ final class SearchServiceTest extends TestCase {
 			false,
 			0,
 			$this->caps(requestCeilingSeconds: 4.5),
+			SearchFilters::none(),
 		);
 
 		self::assertSame([4.5, 4.5], $ceilings);
@@ -735,7 +738,7 @@ final class SearchServiceTest extends TestCase {
 		$this->rootFolder->method('getUserFolder')->willReturn($this->createMock(Folder::class));
 		$this->mountCache->method('getMountsForUser')->willReturn([]);
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, $ceiling + 1, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, $ceiling + 1, $this->caps(), SearchFilters::none());
 
 		self::assertSame(SearchOutcome::FAILURE_OFFSET_CEILING, $outcome->failure);
 		self::assertSame([], $outcome->hits);
@@ -761,7 +764,7 @@ final class SearchServiceTest extends TestCase {
 			},
 		);
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, $ceiling, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, $ceiling, $this->caps(), SearchFilters::none());
 
 		self::assertSame(1, $asked);
 		self::assertNull($outcome->failure);
@@ -772,7 +775,7 @@ final class SearchServiceTest extends TestCase {
 		$this->exApp->method('searchCandidates')->willReturn(null);
 		$this->exApp->expects(self::never())->method('snippets');
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertSame([], $outcome->hits);
 		self::assertSame(SearchOutcome::FAILURE_BACKEND_SILENT, $outcome->failure);
@@ -799,7 +802,7 @@ final class SearchServiceTest extends TestCase {
 		);
 		$this->exApp->method('snippets')->willReturn([]);
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		// An incomplete list beats an error message printed over hits the user
 		// can see, so the silence is swallowed and the hit is shown.
@@ -822,7 +825,7 @@ final class SearchServiceTest extends TestCase {
 		]));
 		$this->exApp->expects(self::never())->method('snippets');
 
-		$outcome = $this->service()->run($this->user(), 'findling-canary', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'findling-canary', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertCount(1, $outcome->hits);
 		self::assertInstanceOf(ApprovedHit::class, $outcome->hits[0]);
@@ -842,7 +845,7 @@ final class SearchServiceTest extends TestCase {
 		$this->exApp->method('searchCandidates')->willReturn($this->page([]));
 		$this->exApp->expects(self::never())->method('snippets');
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertSame([], $outcome->hits);
 		self::assertNull($outcome->failure);
@@ -858,7 +861,7 @@ final class SearchServiceTest extends TestCase {
 		$this->exApp->method('searchCandidates')->willReturn($this->page($this->candidates(3)));
 		$this->exApp->expects(self::never())->method('snippets');
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertSame([], $outcome->hits);
 		self::assertSame(SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED, $outcome->failure);
@@ -878,7 +881,7 @@ final class SearchServiceTest extends TestCase {
 			$this->pageWithMore($this->candidates(2), $ceiling + 1),
 		);
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, $ceiling, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, $ceiling, $this->caps(), SearchFilters::none());
 
 		self::assertSame([], $outcome->hits);
 		self::assertSame(SearchOutcome::FAILURE_OFFSET_CEILING, $outcome->failure);
@@ -900,7 +903,7 @@ final class SearchServiceTest extends TestCase {
 			},
 		);
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertSame(2, $asked);
 		self::assertSame([], $outcome->hits);
@@ -926,7 +929,7 @@ final class SearchServiceTest extends TestCase {
 		);
 		$this->exApp->method('snippets')->willReturn([]);
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps());
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(), SearchFilters::none());
 
 		self::assertCount(1, $outcome->hits);
 		self::assertNull($outcome->failure);
@@ -950,7 +953,7 @@ final class SearchServiceTest extends TestCase {
 			},
 		);
 
-		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(maxRounds: 3));
+		$outcome = $this->service()->run($this->user(), 'quarterly report', false, 0, $this->caps(maxRounds: 3), SearchFilters::none());
 
 		self::assertSame(3, $asked);
 		self::assertSame(SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED, $outcome->failure);

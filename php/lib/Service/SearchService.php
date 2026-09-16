@@ -127,8 +127,21 @@ class SearchService {
 	 * @param int $startCursor the container offset this run continues from
 	 * @param SearchCaps $caps every ceiling of this run, written out by the
 	 *                         caller
+	 * @param SearchFilters $filters every value that narrows or orders this
+	 *                               search, written out by the caller as well.
+	 *                               They travel to the container and are applied
+	 *                               there, in front of its own prefilter, and
+	 *                               they are deliberately not applied again on
+	 *                               this side of the wire. A second application
+	 *                               behind the recheck would turn every page
+	 *                               into a sample of itself, because this loop
+	 *                               pages over what the container ranked and
+	 *                               would then drop rows out of the middle of
+	 *                               that page, and it would open a second place
+	 *                               at the permission boundary where there is
+	 *                               exactly one.
 	 */
-	public function run(IUser $user, string $term, bool $titleOnly, int $startCursor, SearchCaps $caps): SearchOutcome {
+	public function run(IUser $user, string $term, bool $titleOnly, int $startCursor, SearchCaps $caps, SearchFilters $filters): SearchOutcome {
 		$deadline = ($this->clock)() + $caps->budgetSeconds * 1_000_000_000.0;
 		$uid = $user->getUID();
 		$pageSize = max(1, $caps->pageSize);
@@ -232,13 +245,13 @@ class SearchService {
 				$fetchLimit,
 				$offset,
 				$titleOnly,
-				// An intermediate step of plan 13-04 and nothing more. This
-				// service has no filters of its own yet, so it hands down the
-				// one value that means "nothing is narrowed", and the request
-				// stays exactly the request it was. Plan 13-05 gives run() its
-				// own SearchFilters argument and passes on what the page asked
-				// for, at this line and at the excerpt call below.
-				SearchFilters::none(),
+				// What the caller asked for, handed on unchanged and undecided
+				// about. The whole object travels; which of its four values ends
+				// up in which request body is the business of ExAppService and
+				// not of this file. The sort mode takes effect here, at /search,
+				// and only here: the excerpt call below asks for named file ids,
+				// and an answer to a list of names has no order to be given.
+				$filters,
 				$this->secondsLeft($deadline),
 				$caps->requestCeilingSeconds,
 			);
@@ -309,6 +322,11 @@ class SearchService {
 						$candidate['title'] ?? '',
 						$candidate['snippet'] ?? '',
 						'',
+						// No node, so no date. The canary is a statement about
+						// the container and not a file, and a timestamp out of
+						// the answer is the one thing this field exists to keep
+						// out.
+						0,
 					);
 					continue;
 				}
@@ -354,15 +372,25 @@ class SearchService {
 					continue;
 				}
 
-				// Title, path and type come out of the confirmed node, never
-				// out of the container answer. A confused or compromised
+				// Title, path, type and date come out of the confirmed node,
+				// never out of the container answer. A confused or compromised
 				// backend can otherwise put the name of a foreign file in front
 				// of the user.
+				//
+				// The date is read here and nowhere else, behind the type check
+				// and behind the readability question, so it is read off a node
+				// this user is allowed to open. The candidate of the container
+				// carries a modification date of its own, and it is a proposal
+				// from before the recheck; filterCandidates() drops it, and this
+				// line is what keeps that right. The node is also the more
+				// truthful of the two, because it is the file system now and the
+				// index is the file system when it was last read.
 				$approved[] = new ApprovedHit(
 					$candidate['fileId'],
 					$title,
 					$path,
 					PlainText::bounded($node->getMimetype(), self::MAX_MIME_LENGTH) ?? '',
+					(int)$node->getMTime(),
 				);
 			}
 
@@ -418,8 +446,11 @@ class SearchService {
 				$term,
 				$fileIds,
 				$titleOnly,
-				// The same intermediate step as at the candidate call above.
-				SearchFilters::none(),
+				// The same object as at the candidate call above, so that both
+				// halves of one run speak about the same set of files.
+				// ExAppService leaves the sort mode out of this body; the reason
+				// stands over there, at the line that builds it.
+				$filters,
 				$this->secondsLeft($deadline),
 				$caps->requestCeilingSeconds,
 			)
