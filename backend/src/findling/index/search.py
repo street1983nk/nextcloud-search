@@ -398,6 +398,60 @@ def _mtimes_of(
     }
 
 
+def _sorted_round(
+    searcher: Searcher,
+    query: Query,
+    *,
+    order: Order,
+    scan_cap: int,
+    needed: int,
+    store: Store,
+    uid: str,
+) -> tuple[list[Candidate], int]:
+    """One round by modification time: purely lexical, no merge, no score.
+
+    The order is built by the engine over the fast column and never by sorting a
+    ranked list afterwards. Re-sorting the hundred most relevant documents would
+    answer "the newest of the most relevant", which is a different question from
+    the one the user asked, and on a large holding it is a wrong answer rather
+    than an approximate one.
+
+    ``semantic`` has no place in here, and that is a decision rather than a
+    forgotten branch. Without a fusion there is no window to continue behind, and
+    a vector list put in date order would be a relevance list without relevance.
+    The caller switches the vector half off anyway (plan 13-03); this branch
+    simply never asks for it, which is the second, defensive half of the same
+    promise.
+    """
+    permitted: list[Candidate] = []
+    raw_cursor = 0
+    reverse = order is Order.Desc
+    while len(permitted) < needed and raw_cursor < scan_cap:
+        chunk_limit = min(max(needed, _SCAN_CHUNK_MIN), scan_cap - raw_cursor)
+        hits = searcher.search(query, chunk_limit, order_by_field=FIELD_MTIME, order=order, offset=raw_cursor).hits
+        if not hits:
+            break
+        portion = [
+            Candidate(file_id=file_id, score=score, mtime=mtime)
+            for file_id, score, mtime in _ranked(searcher, hits, scored=False)
+        ]
+        # The second key of FILT-02 is handwork. Measured on 16.09.2026 against
+        # the installed tantivy 0.26.0: a tie is handed back in segment and
+        # document address order, not by file id (insertion order 7, 3, 9, 1 came
+        # back as 7, 3, 9, 1). The honest limit of doing it per portion: a group
+        # of equal timestamps that falls apart exactly at a portion boundary is
+        # ordered within each portion and not across both. That produces neither
+        # duplicates nor gaps, because offset together with the engine order is
+        # stable across pages (measured over 20.000 documents in four segments,
+        # sixteen pages, sequence identical to one deep read).
+        portion.sort(key=lambda candidate: (candidate.mtime, candidate.file_id), reverse=reverse)
+        permitted.extend(_permit(store, uid, portion))
+        raw_cursor += len(hits)
+        if len(hits) < chunk_limit:
+            break
+    return permitted, raw_cursor
+
+
 def candidates(
     index: Index,
     store: Store,
@@ -444,6 +498,14 @@ def candidates(
     pathological case of a user who may see almost nothing on an instance where
     almost everything matches. Hitting the ceiling answers ``has_more=False``:
     an honestly truncated result, and the log line below is the trace it leaves.
+
+    ``sort`` replaces both sections with a single one (:func:`_sorted_round`),
+    and it brings one consequence that is the normal case of that mode rather
+    than a defect: on an instance with a large foreign holding, a user with few
+    files of their own gets systematically empty pages by date, because the
+    newest documents very probably belong to somebody else. There is no extra
+    round for it, no larger window and no permission aware prefilter; the answer
+    to it is the bounded repeat on the PHP side, exactly as under relevance.
     """
     resolved = settings()
     searcher = index.searcher()
@@ -456,6 +518,30 @@ def candidates(
     needed = offset + limit + 1
     scan_cap = SEARCH_SCAN_MAX
     window = min(resolved.search_rrf_window, scan_cap)
+
+    # The switch, and it is deliberately silent about a name it does not know:
+    # the route already holds its three values against the table, and a second
+    # exception in here would turn a typo in an address into an HTTP 500.
+    order = SORT_MODES.get(sort)
+    if order is not None:
+        sorted_hits, sorted_cursor = _sorted_round(
+            searcher,
+            query,
+            order=order,
+            scan_cap=scan_cap,
+            needed=needed,
+            store=store,
+            uid=uid,
+        )
+        if len(sorted_hits) < needed and sorted_cursor >= scan_cap:
+            # Only the fact, never the query or the counts: both are content.
+            LOGGER.info("the candidate scan hit its raw ceiling and answered a truncated page")
+        sorted_page = sorted_hits[offset : offset + limit]
+        return CandidatePage(
+            candidates=sorted_page,
+            has_more=len(sorted_hits) > offset + limit,
+            next_offset=offset + len(sorted_page),
+        )
 
     # Section 1, the fusion window. Both lists come out of the one function the
     # admin diagnosis asks as well, so the mark it hands an operator names the
