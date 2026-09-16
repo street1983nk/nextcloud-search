@@ -232,20 +232,44 @@ eingefügt, also als jüngster Eintrag am Ende der Vermerkskette:
 
 ## Vollzug am 16.09.2026
 
-Dieser Abschnitt wird von Plan 12-02 gefüllt. Bis dahin stehen die Felder leer.
+Gefüllt von Plan 12-02 am Stichtag.
 
-- **Datum des Vollzugs:** (offen)
-- **Gelesener Releasestand,** `gh api repos/nextcloud/server/releases`:
+- **Datum des Vollzugs:** 2026-09-16
+- **Gelesener Releasestand,** `gh api repos/nextcloud/server/releases --jq '.[] | "\(.tag_name) prerelease=\(.prerelease) \(.published_at)"' | head -12`, abgesetzt am 2026-09-16:
 
-  ```
-  (Antwort hier eintragen: neueste 35er-Marke mit Prerelease-Kennzeichen,
-  neueste Freigabe ohne Prerelease-Kennzeichen, jeweils mit Datum)
-  ```
+  | Marke | Prerelease | Veröffentlicht |
+  |---|---|---|
+  | v35.0.0 | **nein** | 2026-09-15T21:40:41Z |
+  | v35.0.0rc4 | ja | 2026-09-10T12:53:25Z |
+  | v34.0.4 | nein | 2026-09-10T13:16:15Z |
+  | v33.0.9 | nein | 2026-09-10T13:29:56Z |
+  | v32.0.15 | nein | 2026-09-10T13:54:33Z |
+  | v35.0.0rc3 | ja | 2026-09-03T12:29:49Z |
 
-- **Greifender Zweig (a oder b):** (offen)
-- **Beleg:** (offen)
-- **Laufnummer des Beweislaufs (nur Option a):** (offen)
-- **Vollzogen am / durch Plan:** (offen)
+  Nachgeprüft am selben Tag auf der Einzelmarke: `gh api
+  repos/nextcloud/server/releases --jq '.[] | select(.tag_name=="v35.0.0")'`
+  antwortet mit `prerelease=false` UND `draft=false`. Die Freigabe ist also
+  weder eine Vorabversion noch ein unveröffentlichter Entwurf.
+
+  Ebenfalls am 2026-09-16 nachgelesen, damit der CI-Ast nicht auf `master`
+  zurückfällt: `gh api repos/nextcloud/server/branches/stable35` antwortet mit
+  `5390633955c90e089680234e280c37a3f74d4a58`, `gh api
+  repos/nextcloud/app_api/branches/stable35` mit
+  `bc55cb4b1f93893dd8146d5c9663e658fd46e8c0`. Beide Zweige stehen.
+
+- **Greifender Zweig (a oder b):** a. Eingetragen als greifender Zweig a nach
+  der Regel aus D-01: die erste 35er-Marke ohne Prerelease-Kennzeichen ist da
+  (v35.0.0 vom 15.09.2026), also ist NC 35 am Stichtag final und der Zweig für
+  den nicht finalen Fall entfällt.
+- **Beleg:** Die Entscheidung ruht auf der gelesenen API-Antwort und nicht auf
+  dem Kalender: der Zeitplan nannte den 16.09.2026 mit dem Zusatz "date not
+  final", die Freigabe kam tatsächlich am Abend des 15.09.2026 (UTC). Nach D-02
+  trägt der Release-Status den Vollzug allein NICHT; dazu gehört der grüne
+  `deploy-harp`-Lauf gegen `stable35` auf dem Stand des Baumes von heute, dessen
+  Laufnummer unten einzutragen ist.
+- **Laufnummer des Beweislaufs (nur Option a):** (offen, Task 2 nach
+  Owner-Freigabe)
+- **Vollzogen am / durch Plan:** (offen, Task 2 nach Owner-Freigabe)
 
 ### Vollzugs-Checkliste
 
