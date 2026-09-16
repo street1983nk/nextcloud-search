@@ -7,6 +7,7 @@ namespace OCA\Findling\Tests\Unit;
 use OCA\Findling\Service\ApprovedHit;
 use OCA\Findling\Service\ExAppService;
 use OCA\Findling\Service\SearchCaps;
+use OCA\Findling\Service\SearchFilters;
 use OCA\Findling\Service\SearchOutcome;
 use OCA\Findling\Service\SearchService;
 use OCP\Files\Cache\IFileAccess;
@@ -633,7 +634,7 @@ final class SearchServiceTest extends TestCase {
 
 		$handedDown = null;
 		$this->exApp->method('snippets')->willReturnCallback(
-			static function (string $userId, string $term, array $fileIds, bool $titleOnly, float $secondsLeft) use (&$handedDown): array {
+			static function (string $userId, string $term, array $fileIds, bool $titleOnly, SearchFilters $filters, float $secondsLeft) use (&$handedDown): array {
 				$handedDown = $secondsLeft;
 
 				return [];
@@ -685,6 +686,7 @@ final class SearchServiceTest extends TestCase {
 				int $limit,
 				int $offset,
 				bool $titleOnly,
+				SearchFilters $filters,
 				float $secondsLeft,
 				float $ceilingSeconds,
 			) use (&$ceilings): array {
@@ -699,6 +701,7 @@ final class SearchServiceTest extends TestCase {
 				string $term,
 				array $fileIds,
 				bool $titleOnly,
+				SearchFilters $filters,
 				float $secondsLeft,
 				float $ceilingSeconds,
 			) use (&$ceilings): array {

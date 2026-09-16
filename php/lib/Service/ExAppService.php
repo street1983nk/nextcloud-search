@@ -394,12 +394,24 @@ class ExAppService {
 	 * asking. An empty list means the index has nothing more to offer for this
 	 * page, which is an ordinary result.
 	 *
+	 * @param SearchFilters $filters what this search narrows to and how it is
+	 *                               ordered, as one named value. It has no
+	 *                               default on purpose: a default would let a
+	 *                               caller that forgot its filters look exactly
+	 *                               like one that has none. It sits in front of
+	 *                               the two clock arguments rather than at the
+	 *                               end of the list because both of those carry
+	 *                               a default, and a required argument behind an
+	 *                               optional one has been deprecated since PHP
+	 *                               8.0; it also belongs with the arguments that
+	 *                               say what is being asked, not with the two
+	 *                               that say how long this caller waits
 	 * @param float $ceilingSeconds how long this caller waits for the one call
 	 *                              this method makes; the remaining budget still
 	 *                              wins whenever it is the smaller number
 	 * @return array{candidates:list<array{fileId:int,title?:string,snippet?:string}>,hasMore:bool,nextOffset:int,degraded:bool}|null
 	 */
-	public function searchCandidates(string $userId, string $term, int $limit, int $offset, bool $titleOnly, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS, float $ceilingSeconds = self::REQUEST_TIMEOUT_SECONDS): ?array {
+	public function searchCandidates(string $userId, string $term, int $limit, int $offset, bool $titleOnly, SearchFilters $filters, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS, float $ceilingSeconds = self::REQUEST_TIMEOUT_SECONDS): ?array {
 		// An empty term is not an error, it is what the unified search sends
 		// while the user is still typing, and it can only ever produce a 422
 		// over there. A round trip per keystroke for a request that cannot
@@ -412,11 +424,31 @@ class ExAppService {
 		$limit = max(self::MIN_LIMIT, min(self::MAX_LIMIT, $limit));
 		$offset = max(0, $offset);
 
+		// The four new values join the same row, under the rule MIN_LIMIT above
+		// already states: clamp, never refuse, and leave out what the container
+		// does not know. Outside the range the backend validates, a request
+		// fails over there with a 422, which arrives here as an empty result
+		// group and is indistinguishable from "nothing found". A value out of a
+		// hand edited address is worth an answer about what it asked for, and
+		// never an error page.
+		$types = $this->typeGroupsWithin($filters);
+		$sort = in_array($filters->sort, SearchFilters::SORTS, true) ? $filters->sort : SearchFilters::SORT_DEFAULT;
+		$since = $this->epochWithin($filters->since);
+		$until = $this->epochWithin($filters->until);
+
+		// Only the keys that carry something. A body that spells out every
+		// default drowns a real value in four constants, and it would also make
+		// an unfiltered search a different request from the one it was before
+		// this phase; this way that path stays byte for byte what it always was.
 		$decoded = $this->call('/search', $userId, [
 			'query' => $term,
 			'limit' => $limit,
 			'offset' => $offset,
 			'titleOnly' => $titleOnly,
+			...($types !== [] ? ['types' => $types] : []),
+			...($sort !== SearchFilters::SORT_DEFAULT ? ['sort' => $sort] : []),
+			...($since !== null ? ['since' => $since] : []),
+			...($until !== null ? ['until' => $until] : []),
 		], $secondsLeft, $ceilingSeconds);
 		if ($decoded === null) {
 			return null;
@@ -463,12 +495,18 @@ class ExAppService {
 	 * an excerpt. A hit without a snippet beats no hit at all.
 	 *
 	 * @param list<int> $fileIds file ids that have passed the permission recheck
+	 * @param SearchFilters $filters the same value the candidate call was given.
+	 *                               Three of its four fields travel with this
+	 *                               call and the fourth expressly does not, see
+	 *                               the comment at the body below. Without a
+	 *                               default and in the same position as above,
+	 *                               for the same two reasons
 	 * @param float $ceilingSeconds how long this caller waits for the one call
 	 *                              this method makes; the remaining budget still
 	 *                              wins whenever it is the smaller number
 	 * @return array<int,array{text:string,highlights:list<array{int,int}>}>
 	 */
-	public function snippets(string $userId, string $term, array $fileIds, bool $titleOnly, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS, float $ceilingSeconds = self::REQUEST_TIMEOUT_SECONDS): array {
+	public function snippets(string $userId, string $term, array $fileIds, bool $titleOnly, SearchFilters $filters, float $secondsLeft = self::REQUEST_TIMEOUT_SECONDS, float $ceilingSeconds = self::REQUEST_TIMEOUT_SECONDS): array {
 		$term = trim($term);
 		if ($term === '') {
 			return [];
@@ -485,10 +523,25 @@ class ExAppService {
 			return [];
 		}
 
+		$types = $this->typeGroupsWithin($filters);
+		$since = $this->epochWithin($filters->since);
+		$until = $this->epochWithin($filters->until);
+
+		// Three fields and not four, and the missing one is the mode that
+		// orders the hits. The order of these hits was settled before this call
+		// was placed: it runs over ids that already passed the recheck, so a
+		// field that reorders them would do nothing today and something nobody
+		// asked for at the next rebuild. The absence is a named exception on the
+		// other side as well, in FIELDS_THAT_MAY_DIFFER of
+		// backend/tests/test_search_fields_lockstep.py, which is the gate that
+		// turns a field forgotten in one of the two request models red.
 		$decoded = $this->call('/snippets', $userId, [
 			'query' => $term,
 			'fileIds' => array_values($wanted),
 			'titleOnly' => $titleOnly,
+			...($types !== [] ? ['types' => $types] : []),
+			...($since !== null ? ['since' => $since] : []),
+			...($until !== null ? ['until' => $until] : []),
 		], $secondsLeft, $ceilingSeconds);
 		if ($decoded === null) {
 			return [];
@@ -741,6 +794,47 @@ class ExAppService {
 	}
 
 	/**
+	 * The type groups of one request as the container may receive them.
+	 *
+	 * Walked over the closed set and not over what the caller handed in, and
+	 * that direction is the whole of it. The answer can then never carry a name
+	 * the container does not know (T-13-17), never the same name twice, never
+	 * more entries than the set has (T-13-18), and it always leaves in the order
+	 * of the surface, whatever order the address had. An unknown name is left
+	 * out in silence instead of refused, for the reason MIN_LIMIT names: a
+	 * refused request is an error page, a shortened list is an answer.
+	 *
+	 * array_values on the way out although this loop cannot leave a hole: a list
+	 * with holes is a JSON object and not a JSON array, and the wire model over
+	 * there takes a list.
+	 *
+	 * @return list<string>
+	 */
+	private function typeGroupsWithin(SearchFilters $filters): array {
+		$kept = [];
+
+		foreach (SearchFilters::TYPES as $group) {
+			if (in_array($group, $filters->types, true)) {
+				$kept[] = $group;
+			}
+		}
+
+		return array_values($kept);
+	}
+
+	/**
+	 * One time bound inside the range both halves agree on, or nothing at all.
+	 *
+	 * Clamped and never refused. SEARCH_MTIME_MAX over there answers a larger
+	 * number with a 422, and a 422 arrives here as an empty result group that
+	 * reads like "nothing found"; a bookmark somebody built by hand is worth an
+	 * answer about the range it asked for.
+	 */
+	private function epochWithin(?int $epoch): ?int {
+		return $epoch === null ? null : max(0, min(SearchFilters::EPOCH_MAX, $epoch));
+	}
+
+	/**
 	 * What survives of a candidate: its file id, and nothing else.
 	 *
 	 * The container has no way of knowing what this user may see, so what it
@@ -754,6 +848,14 @@ class ExAppService {
 	 * therefore never survive a recheck. It is accepted under its exact title
 	 * and under no other, and everything else with a file id that cannot point
 	 * at a file is a defect and is dropped.
+	 *
+	 * Phase 13 changed nothing about that, and the sentence is written down
+	 * rather than left to a diff: this app now sends type groups, a sort mode
+	 * and two time bounds, and it still lets exactly one field of a candidate
+	 * back in. The modification date the result page shows under a date sort
+	 * therefore comes out of the confirmed node in SearchService (plan 13-05)
+	 * and never out of the answer of the container, which proposes and has no
+	 * way of knowing what this user may see (T-13-20).
 	 *
 	 * @param array<mixed> $candidates
 	 * @return list<array{fileId:int,title?:string,snippet?:string}>

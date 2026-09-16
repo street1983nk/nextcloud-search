@@ -232,6 +232,13 @@ class SearchService {
 				$fetchLimit,
 				$offset,
 				$titleOnly,
+				// An intermediate step of plan 13-04 and nothing more. This
+				// service has no filters of its own yet, so it hands down the
+				// one value that means "nothing is narrowed", and the request
+				// stays exactly the request it was. Plan 13-05 gives run() its
+				// own SearchFilters argument and passes on what the page asked
+				// for, at this line and at the excerpt call below.
+				SearchFilters::none(),
 				$this->secondsLeft($deadline),
 				$caps->requestCeilingSeconds,
 			);
@@ -411,6 +418,8 @@ class SearchService {
 				$term,
 				$fileIds,
 				$titleOnly,
+				// The same intermediate step as at the candidate call above.
+				SearchFilters::none(),
 				$this->secondsLeft($deadline),
 				$caps->requestCeilingSeconds,
 			)
