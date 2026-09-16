@@ -364,6 +364,12 @@ urteil() {
     # gelesen und am Ende dieses Blocks zurueckgeschrieben.
     SKELETON_VORHER=$(occ config:system:get skeletondirectory 2>/dev/null || true)
     printf 'skeletondirectory vorher: %s\n' "${SKELETON_VORHER:-(leer oder nicht gesetzt)}"
+    # Der vorherige Wert liegt VOR dem Setzen unter $WORK, und die Ruecksetzung
+    # laeuft zusaetzlich unterhalb der Pipeline: jeder Abbruch in diesem Block
+    # (set -e) uebersprang sonst die Ruecksetzung am Blockende, und die
+    # Messinstanz behielte dauerhaft das geleerte Skelett.
+    printf '%s' "$SKELETON_VORHER" >"$WORK/skeleton-vorher"
+    : >"$WORK/skeleton-geaendert"
     occ config:system:set skeletondirectory --value='' 2>&1 || true
 
     if occ user:info "$KONTO" >/dev/null 2>&1; then
@@ -374,7 +380,15 @@ urteil() {
         # aus der Umgebung neu gesetzt. Nie ueber ein Argument.
         OC_PASS="$KONTOPW" occ user:resetpassword --password-from-env "$KONTO" 2>&1 || true
     else
-        OC_PASS="$KONTOPW" occ user:add --password-from-env "$KONTO" 2>&1
+        # Abgesichert wie die Nachbarn: schluege user:add unter set -e fehl,
+        # endete die Subshell ohne jede Aufraeumzeile. Der Block endet hier
+        # kontrolliert, und die Skelett-Ruecksetzung unterhalb der Pipeline
+        # greift trotzdem.
+        if ! OC_PASS="$KONTOPW" occ user:add --password-from-env "$KONTO" 2>&1; then
+            echo "das Konto $KONTO konnte nicht angelegt werden; ohne Konto gibt es"
+            echo "keinen Upload und keinen Rang, also endet der Lauf hier"
+            exit 1
+        fi
     fi
     occ user:info "$KONTO" 2>&1 | sed -n '1,6p' || true
 
@@ -747,6 +761,20 @@ upload=$(cat "$WORK/upload-urteil" 2>/dev/null || echo 'upload-vollstaendig nein
 index=$(cat "$WORK/index-urteil" 2>/dev/null || echo 'arbeitsvorrat-leer nein')
 rot=$(sort -u "$WORK/fehler" 2>/dev/null | grep -c . || true)
 nichtmessbar=$(sort -u "$WORK/nichtmessbar" 2>/dev/null | grep -c . || true)
+
+# Die Skeletteinstellung wird auch HIER zurueckgeschrieben, weil jeder Abbruch
+# im Block oben die Ruecksetzung am Blockende ueberspringt und die Instanz sonst
+# mit geleertem skeletondirectory zurueckbliebe. Doppelt zurueckschreiben ist
+# harmlos: es ist derselbe Wert oder dasselbe Loeschen. Die Marke entsteht erst
+# unmittelbar vor dem Setzen, ein Abbruch davor laesst die Instanz unberuehrt.
+if [ -f "$WORK/skeleton-geaendert" ]; then
+    skeleton_vorher=$(cat "$WORK/skeleton-vorher" 2>/dev/null || true)
+    if [ -n "$skeleton_vorher" ]; then
+        occ config:system:set skeletondirectory --value="$skeleton_vorher" >/dev/null 2>&1 || true
+    else
+        occ config:system:delete skeletondirectory >/dev/null 2>&1 || true
+    fi
+fi
 
 if [ "$vorpruefung" != 'vorpruefung-gefahren ja' ]; then
     echo "98c-sprachfaelle: die Vorpruefung des Fremdbestands konnte nicht gefahren werden" >&2
