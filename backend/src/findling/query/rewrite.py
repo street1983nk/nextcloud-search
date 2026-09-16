@@ -209,6 +209,12 @@ def carried_operators(text: str) -> frozenset[str]:
     for token in _WHITESPACE.split(text):
         if token in _OPERATORS:
             marks.add(BOOLEAN)
+        # The mark hangs on the text ``type:`` and on that text alone. The
+        # structured group parameter of build_query never sets it, and that is
+        # the whole line between the two: api/search.py reads a non empty set of
+        # marks as "drop the vector half", so a chip on the result page that
+        # arrived as text would switch the semantic search off, which is exactly
+        # the failure FILT-01 exists against.
         if token.lower().startswith(TYPE_PREFIX) and len(token) > len(TYPE_PREFIX):
             marks.add(FILETYPE)
     for match in _FIELD_TOKEN.finditer(text):
@@ -242,6 +248,14 @@ def extract_filters(text: str) -> tuple[str, tuple[str, ...]]:
 
     Quoted parts are left alone: inside quotation marks ``type:pdf`` is what the
     user is looking for, not how they are looking for it.
+
+    A word behind the prefix that names a group of :data:`TYPE_GROUPS` is
+    resolved through that same table, so ``type:images`` means what the chip for
+    images means and there is one vocabulary rather than two. The table is the
+    source and the text syntax is connected to it, not the other way round.
+    Everything else stays what it has always been, a raw extension: a word the
+    table does not know is not an error, it is a file type nobody put into a
+    group.
     """
     extensions: list[str] = []
     segments: list[tuple[bool, str]] = []
@@ -252,7 +266,8 @@ def extract_filters(text: str) -> tuple[str, tuple[str, ...]]:
         kept: list[str] = []
         for token in _WHITESPACE.split(part):
             if token.lower().startswith(TYPE_PREFIX) and len(token) > len(TYPE_PREFIX):
-                extensions.append(token[len(TYPE_PREFIX) :].lower().lstrip("."))
+                word = token[len(TYPE_PREFIX) :].lower().lstrip(".")
+                extensions.extend(TYPE_GROUPS.get(word, (word,)))
             else:
                 kept.append(token)
         segments.append((quoted, "".join(kept)))
@@ -281,6 +296,10 @@ def carries_one_term(text: str) -> bool:
     Nought terms is not one: a line that holds nothing but a filter never
     reaches the engine, and this function answers what stood on the line rather
     than what its caller does with the answer.
+
+    The structured group parameter of build_query does not touch this answer
+    either, for the same reason it does not set a mark: what is counted here is
+    the raw line, and a chip on the result page never stood on it.
     """
     residual, _ = extract_filters(text)
     return len(residual.split()) == 1
