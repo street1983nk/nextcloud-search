@@ -238,7 +238,12 @@ PHP_TREE_HASH_TODAY = "455470c51fe2831cc4adc92e31ab350f762f0b1143d13b72103f6a9ad
 # three keyword arguments the result page filters with. No file came and none
 # went, so PACKAGE_FILES stays at 54 and only the hash is a different statement
 # than it was yesterday.
-PACKAGE_TREE_HASH_TODAY = "eb641c833671980668edf537841a8e569bd0bfbaf7b02aac95fc1631ba134335"
+# Moved on 2026-09-16 a second time, by plan 13-02, and the count did not move
+# with it either: exactly one of the 54 files changed its bytes,
+# index/search.py, which learned the table of the three sort modes, the sorted
+# round over the fast column and the filter clause for the semantic half. No
+# file came and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "a67a22b81c94c9236e64f9637c637870fb4e3f062a43f0cc0516126277beaeba"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
