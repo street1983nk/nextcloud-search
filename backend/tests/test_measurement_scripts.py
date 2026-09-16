@@ -89,6 +89,12 @@ SUCCESSOR_LANGUAGE_CASES = FIX_RUN_DIR / "98b-sprachfaelle.sh"
 # container instead of over the capped OCS route (DI-10-02, DI-11-01).
 STOCK_PROBE = V12_RUN_DIR / "73-bestand-sonde.py"
 
+# The two refusal contracts of the v1.2 run that hold without a box: the
+# language case fassung checks CI_LAUF before the first sudo, docker or curl
+# call, and the cron precheck decides its branch before everything else.
+V12_LANGUAGE_CASES = V12_RUN_DIR / "98c-sprachfaelle.sh"
+V12_CRON_PRECHECK = V12_RUN_DIR / "97-cron-vorpruefung.sh"
+
 # The state of the driven fassung, measured on 2026-09-10 out of the file
 # itself. Both figures are written down and neither is recomputed from the file
 # under test, because a watchman that asks the file for its own expectation
@@ -1211,3 +1217,72 @@ def test_the_successor_stops_when_the_foreign_stock_cannot_be_asked(tmp_path: Pa
     assert "Abschnitt 0: die Vorpruefung des Fremdbestands" in raw
     # It ended before the account section, so nothing on any box was touched.
     assert "Section 1: the account" not in raw
+
+
+def a_boxless_run(
+    script: Path, out: Path, arguments: list[str], ci_lauf: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """A v1.2 script as a program, without a box, a container or a network.
+
+    Run rather than read, for the same reason as a_run_of_the_successor: the
+    refusal is half of what these scripts promise, and a POSIX shell is the
+    only reader that can tell whether the head of the file survives a shell
+    that is not bash. Neither refusal under test reaches a sudo, a docker or a
+    curl call, so no box is needed and none must be reachable.
+    """
+    shell = shutil.which("sh")
+    assert shell is not None
+    environment = {**os.environ, "OUT": out.as_posix()}
+    environment.pop("CI_LAUF", None)
+    if ci_lauf is not None:
+        environment["CI_LAUF"] = ci_lauf
+    return subprocess.run(  # noqa: S603 - an argument list, never a shell
+        [shell, script.as_posix(), *arguments],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+        env=environment,
+    )
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("ci_lauf", [None, "", "   ", "letzter", "34339346666x"])
+def test_the_v12_fassung_refuses_a_run_without_a_ci_run_number(tmp_path: Path, ci_lauf: str | None) -> None:
+    """The v1.2 fassung keeps the exit 22 contract of 98b, checked as behaviour.
+
+    The five shapes of nothing are the ones the 98b test pins, because the
+    contract is the same on purpose: no run number, no run, no raw file, and
+    the refusal comes before the first sudo, docker or curl call. Had this
+    test existed for 98c from the start, the missing early abort of section 0
+    would have stood out as a deviation from the 98b pattern (CR-01 of the
+    phase 12 review), which is why the refusal paths are tested and not only
+    the text gates.
+    """
+    answer = a_boxless_run(V12_LANGUAGE_CASES, tmp_path, [], ci_lauf)
+    assert answer.returncode == 22, answer
+    assert "integration.yml" in answer.stderr
+    assert "98c-sprachfaelle:" in answer.stderr
+    assert answer.stdout == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("zweig", [None, "", "beides", "nachher"])
+def test_the_cron_precheck_refuses_a_run_without_a_known_branch(tmp_path: Path, zweig: str | None) -> None:
+    """No branch, no run: the usage contract of 97, checked as behaviour.
+
+    The branch decides which of the two halves runs, and a run without a
+    protocolled interval counts as incomplete (D-07), so an absent, an empty
+    and an unknown branch all end with 2 and the usage on stderr, before
+    anything is measured and before any file is written.
+    """
+    arguments = [] if zweig is None else [zweig]
+    answer = a_boxless_run(V12_CRON_PRECHECK, tmp_path, arguments)
+    assert answer.returncode == 2, answer
+    assert "Benutzung: 97-cron-vorpruefung.sh" in answer.stderr
+    assert "vorher" in answer.stderr
+    assert "waehrend" in answer.stderr
+    assert answer.stdout == ""
+    assert list(tmp_path.iterdir()) == []
