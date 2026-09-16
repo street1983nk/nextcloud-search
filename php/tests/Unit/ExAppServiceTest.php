@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\Findling\Tests\Unit;
 
 use OCA\Findling\Service\ExAppService;
+use OCA\Findling\Service\SearchFilters;
 use OCP\App\IAppManager;
 use OCP\Http\Client\IResponse;
 use OCP\IAppConfig;
@@ -294,7 +295,7 @@ final class ExAppServiceTest extends TestCase {
 		// request that can only ever answer 422.
 		$service->expects(self::never())->method('proxyRequest');
 
-		self::assertNull($service->searchCandidates('alice', '   ', 20, 0, false));
+		self::assertNull($service->searchCandidates('alice', '   ', 20, 0, false, SearchFilters::none()));
 	}
 
 	/**
@@ -312,7 +313,7 @@ final class ExAppServiceTest extends TestCase {
 			},
 		);
 
-		$service->searchCandidates('alice', 'quarterly report', $requested, 0, false);
+		$service->searchCandidates('alice', 'quarterly report', $requested, 0, false, SearchFilters::none());
 
 		self::assertIsInt($seen, 'the container was never asked, so no limit reached it');
 
@@ -362,8 +363,8 @@ final class ExAppServiceTest extends TestCase {
 		$service = $this->service();
 		$service->expects(self::never())->method('proxyRequest');
 
-		self::assertNull($service->searchCandidates('alice', 'quarterly report', 20, 0, false, $floor / 2));
-		self::assertSame([], $service->snippets('alice', 'quarterly report', [11, 22], false, $floor / 2));
+		self::assertNull($service->searchCandidates('alice', 'quarterly report', 20, 0, false, SearchFilters::none(), $floor / 2));
+		self::assertSame([], $service->snippets('alice', 'quarterly report', [11, 22], false, SearchFilters::none(), $floor / 2));
 	}
 
 	// -- the per call ceiling, so a larger page budget can do anything ---------
@@ -388,9 +389,9 @@ final class ExAppServiceTest extends TestCase {
 		);
 
 		if ($ceiling === null) {
-			$service->searchCandidates('alice', 'quarterly report', 20, 0, false, $secondsLeft);
+			$service->searchCandidates('alice', 'quarterly report', 20, 0, false, SearchFilters::none(), $secondsLeft);
 		} else {
-			$service->searchCandidates('alice', 'quarterly report', 20, 0, false, $secondsLeft, $ceiling);
+			$service->searchCandidates('alice', 'quarterly report', 20, 0, false, SearchFilters::none(), $secondsLeft, $ceiling);
 		}
 
 		self::assertIsFloat($seen, 'the container was never asked, so no timeout reached it');
@@ -474,7 +475,7 @@ final class ExAppServiceTest extends TestCase {
 		$service->method('proxyRequest')->willReturn($this->answer($body));
 
 		return [
-			'result' => $service->searchCandidates('alice', 'quarterly report', 20, 0, false),
+			'result' => $service->searchCandidates('alice', 'quarterly report', 20, 0, false, SearchFilters::none()),
 			'warnings' => $warnings,
 		];
 	}
@@ -538,7 +539,7 @@ final class ExAppServiceTest extends TestCase {
 		self::assertIsString($body);
 		$service->method('proxyRequest')->willReturn($this->answer($body));
 
-		return $service->snippets('alice', 'quarterly report', $wanted, false);
+		return $service->snippets('alice', 'quarterly report', $wanted, false, SearchFilters::none());
 	}
 
 	public function testAnExcerptForAFileIdThatWasNotAskedForIsDropped(): void {
@@ -636,5 +637,200 @@ final class ExAppServiceTest extends TestCase {
 
 		self::assertSame(ExAppService::LOCKSTEP_MATCH, $verdict['state']);
 		self::assertSame('1.1.0', $verdict['container']);
+	}
+
+	// -- phase 13: what the four values of a narrowed search do to the body ---
+
+	/**
+	 * One SearchFilters without four hand written arguments at every case below.
+	 *
+	 * @param list<string> $types
+	 */
+	private function filters(array $types = [], string $sort = SearchFilters::SORT_DEFAULT, ?int $since = null, ?int $until = null): SearchFilters {
+		return new SearchFilters($types, $sort, $since, $until);
+	}
+
+	/**
+	 * The body that really left for the candidate call.
+	 *
+	 * Same shape and same reason as limitThatReachedTheContainer above: every
+	 * statement of this section is one about the array the transport was handed,
+	 * and none of them is one about what the caller meant. A body built out of
+	 * the filters by the test itself would assert the test.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function searchBodyFor(SearchFilters $filters): array {
+		$service = $this->service();
+		$seen = null;
+
+		$service->method('proxyRequest')->willReturnCallback(
+			function (string $path, string $userId, string $method, array $params, float $timeout) use (&$seen): IResponse {
+				$seen = $params;
+
+				return $this->answer('{"candidates":[],"hasMore":false,"nextOffset":0}');
+			},
+		);
+
+		$service->searchCandidates('alice', 'quarterly report', 20, 0, false, $filters);
+
+		self::assertIsArray($seen, 'the container was never asked, so no body reached it');
+
+		return $seen;
+	}
+
+	/**
+	 * The same for the excerpt call, and it is a separate helper on purpose:
+	 * the one field that tells the two bodies apart is the whole point of
+	 * FILT-02, and a shared helper with a path argument would be the place where
+	 * that difference gets lost.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function snippetBodyFor(SearchFilters $filters): array {
+		$service = $this->service();
+		$seen = null;
+
+		$service->method('proxyRequest')->willReturnCallback(
+			function (string $path, string $userId, string $method, array $params, float $timeout) use (&$seen): IResponse {
+				$seen = $params;
+
+				return $this->answer('{"snippets":{}}');
+			},
+		);
+
+		$service->snippets('alice', 'quarterly report', [11], false, $filters);
+
+		self::assertIsArray($seen, 'the container was never asked, so no body reached it');
+
+		return $seen;
+	}
+
+	public function testTwoChosenGroupsReachTheContainerAsAListOfExactlyThoseTwo(): void {
+		$body = $this->searchBodyFor($this->filters(['pdf', 'images']));
+
+		self::assertSame(['pdf', 'images'], $body['types']);
+	}
+
+	public function testTheChosenGroupsArriveInTheOrderOfTheSurfaceAndNotOfTheAddress(): void {
+		// The order is a property of the closed set and not of whatever somebody
+		// typed into the address bar. Two addresses that name the same two groups
+		// have to produce the same request, otherwise the cursor fingerprint of
+		// FILT-04 would send a user back to page one for reordering a selection
+		// he did not change.
+		$body = $this->searchBodyFor($this->filters(['text', 'pdf']));
+
+		self::assertSame(['pdf', 'text'], $body['types']);
+	}
+
+	public function testTheSortModeReachesTheContainerAsItWasChosen(): void {
+		$body = $this->searchBodyFor($this->filters([], 'newest'));
+
+		self::assertSame('newest', $body['sort']);
+	}
+
+	public function testBothTimeBoundsReachTheContainerAsWholeNumbers(): void {
+		$body = $this->searchBodyFor($this->filters([], SearchFilters::SORT_DEFAULT, 1757980800, 1758067200));
+
+		self::assertSame(1757980800, $body['since']);
+		self::assertSame(1758067200, $body['until']);
+	}
+
+	public function testAnUnfilteredSearchSendsTheBodyItAlwaysSent(): void {
+		// The guard against a default being written out. An unfiltered search is
+		// the request this app made before this phase, key for key and in the
+		// same order, and a body that spelled out four defaults would be a new
+		// request for every user who never touched a chip.
+		$body = $this->searchBodyFor(SearchFilters::none());
+
+		self::assertSame(['query', 'limit', 'offset', 'titleOnly'], array_keys($body));
+	}
+
+	public function testTheDefaultSortModeIsNotWrittenIntoTheBody(): void {
+		$body = $this->searchBodyFor($this->filters(['pdf'], SearchFilters::SORT_DEFAULT));
+
+		self::assertSame(['pdf'], $body['types'], 'the case only says something while the rest of the body travels');
+		self::assertArrayNotHasKey('sort', $body);
+	}
+
+	public function testASortModeOutsideTheClosedSetFallsBackInsteadOfTravelling(): void {
+		// The silent fallback of T-13-17 at this end. The container answers an
+		// unknown name with a 422, and a 422 arrives on this side as an empty
+		// result group, which is the error block of the result page instead of a
+		// chip that was dropped.
+		$body = $this->searchBodyFor($this->filters([], 'alphabetical'));
+
+		self::assertArrayNotHasKey('sort', $body);
+	}
+
+	public function testAnUnknownGroupNameIsLeftOutAndTheCallStillHappens(): void {
+		$body = $this->searchBodyFor($this->filters(['pdf', 'holograms']));
+
+		self::assertSame(['pdf'], $body['types']);
+		self::assertSame('quarterly report', $body['query'], 'the request was refused instead of narrowed');
+	}
+
+	public function testAFilterOfNothingButUnknownNamesSendsNoTypesKeyAtAll(): void {
+		$body = $this->searchBodyFor($this->filters(['holograms', 'cuneiform']));
+
+		self::assertArrayNotHasKey('types', $body);
+		self::assertSame('quarterly report', $body['query']);
+	}
+
+	public function testAGroupNamedTwiceArrivesOnceAndAsAJsonArray(): void {
+		$body = $this->searchBodyFor($this->filters(['pdf', 'images', 'pdf', 'images', 'pdf']));
+
+		self::assertSame(['pdf', 'images'], $body['types']);
+
+		// A list with holes is a JSON object over the wire and not a JSON array,
+		// and the wire model of the container takes a list. This is the one
+		// assertion that can tell the two apart.
+		self::assertSame('["pdf","images"]', json_encode($body['types']));
+	}
+
+	public function testAListLongerThanTheClosedSetCannotMakeTheBodyLonger(): void {
+		$tooMany = array_merge(SearchFilters::TYPES, SearchFilters::TYPES, ['holograms', 'cuneiform']);
+
+		$body = $this->searchBodyFor($this->filters($tooMany));
+
+		self::assertCount(count(SearchFilters::TYPES), $body['types']);
+		self::assertSame(SearchFilters::TYPES, $body['types']);
+	}
+
+	public function testATimeBoundBelowTheEpochArrivesClampedAndNotRefused(): void {
+		$body = $this->searchBodyFor($this->filters([], SearchFilters::SORT_DEFAULT, -1, null));
+
+		self::assertSame(0, $body['since']);
+	}
+
+	public function testATimeBoundAboveTheSharedCeilingArrivesClampedAndNotRefused(): void {
+		// The ceiling is read out of the class and not copied: it is the same
+		// number as SEARCH_MTIME_MAX in the container, and a copy in this file
+		// would keep passing after somebody moved one of the two.
+		$body = $this->searchBodyFor(
+			$this->filters([], SearchFilters::SORT_DEFAULT, null, SearchFilters::EPOCH_MAX + 1),
+		);
+
+		self::assertSame(SearchFilters::EPOCH_MAX, $body['until']);
+	}
+
+	public function testTheExcerptBodyCarriesTheNarrowingButNeverTheSortMode(): void {
+		// FILT-02 at this end, and it is the case this plan exists to hold. The
+		// three fields belong to the question and travel, because a body of the
+		// page has to pass both request models; the fourth orders hits that were
+		// ordered before this call was placed, and a field that does nothing
+		// today does something nobody asked for at the next rebuild.
+		$body = $this->snippetBodyFor($this->filters(['pdf'], 'newest', 1757980800, 1758067200));
+
+		self::assertSame(['pdf'], $body['types']);
+		self::assertSame(1757980800, $body['since']);
+		self::assertSame(1758067200, $body['until']);
+		self::assertArrayNotHasKey('sort', $body);
+	}
+
+	public function testAnUnfilteredExcerptCallSendsTheBodyItAlwaysSent(): void {
+		$body = $this->snippetBodyFor(SearchFilters::none());
+
+		self::assertSame(['query', 'fileIds', 'titleOnly'], array_keys($body));
 	}
 }
