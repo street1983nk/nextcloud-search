@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 13-07-PLAN.md
-last_updated: "2026-09-17T12:20:00.000Z"
-last_activity: 2026-09-17 -- Welle 6 abgeschlossen (13-06 Datumsfilter des Dialogs, 13-07 Adresswerte und Kalenderfenster), beide Worktrees gemergt
+stopped_at: Completed 13-08-PLAN.md
+last_updated: "2026-09-17T13:05:00.000Z"
+last_activity: 2026-09-17 -- Welle 7 abgeschlossen (13-08 Cursor-Bindung, Chips und Sortierlinks fuer das Template)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 15
-  percent: 33
+  completed_plans: 16
+  percent: 38
 ---
 
 # Project State
@@ -26,16 +26,26 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 8 of 13 (13-01 bis 13-07 abgeschlossen)
+Plan: 9 of 13 (13-01 bis 13-08 abgeschlossen)
 Status: Executing Phase 13
-Progress: [███░░░░░░░] 33%
-Last activity: 2026-09-17 -- Welle 6 abgeschlossen (13-06 und 13-07), Baumhash-Konflikt beider Plaene am Merge aufgeloest
+Progress: [████░░░░░░] 38%
+Last activity: 2026-09-17 -- Welle 7 abgeschlossen (13-08), Baumhash jetzt 104ba40f bei 64 Dateien
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 13-08: Der Fingerabdruck des Cursorpfads laeuft ueber die ROHEN Adresswerte `range`
+  und `since`, nicht ueber die daraus errechnete wirksame Untergrenze. Mit der
+  wirksamen Grenze wechselte er um Mitternacht und wuerfe jeden Blaetternden ohne
+  sichtbaren Grund auf Seite 1.
+- 13-08: Die acht Cursorfaelle der Tests binden ihre Adresse ueber einen Helfer
+  `bound()` an den von der Seite selbst berechneten Fingerabdruck. Der Plan wollte
+  sie unveraendert gruen, was mit der Bindung unvereinbar war: `filterUrl()` schreibt
+  nie ein `fp`, ein toleriertes Fehlen haette die Bindung genau im Zielfall
+  wirkungslos gemacht.
 
 - 13-06/13-07 (Merge): Beide Plaene zogen auf ihrem eigenen Branch den Baumhash der
   PHP-Haelfte nach, jeder gegen einen Baum mit nur seiner eigenen Aenderung. Der Hash
