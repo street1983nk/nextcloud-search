@@ -280,6 +280,11 @@ final class PageController extends Controller {
 				'sortMode' => $address['sort'],
 				'filtersActive' => $filters->hasAny(),
 				'showModified' => $this->showsModified($address['sort']),
+				// And the same filters once more, in the shape the search form
+				// needs them: a refined term keeps the narrowing instead of
+				// dropping it, and it does that without the template taking
+				// the address apart a second time.
+				'formFilters' => $this->formFilters($address),
 			],
 			TemplateResponse::RENDER_AS_USER,
 		);
@@ -888,6 +893,36 @@ final class PageController extends Controller {
 		}
 
 		return $arguments;
+	}
+
+	/**
+	 * The active filters as the hidden fields of the search form.
+	 *
+	 * The same list every address of this page is built from, minus the two
+	 * values the form already carries in front of the visitor: the term in its
+	 * field and the names switch in its checkbox. A hidden field next to either
+	 * of them would be a second control for one value, and the two would part
+	 * company on the first submit.
+	 *
+	 * The position is not in here, for the same reason it is not in
+	 * filterUrl(): a refined term is a new search, and the first screen of a new
+	 * result is the only screen that exists yet. So no page, no cursor path and
+	 * no fingerprint travel with the form, and somebody who makes their term
+	 * more precise keeps their narrowing and lands on page one.
+	 *
+	 * A value nobody set is not in the array at all rather than in it as an
+	 * empty string, so the template renders no field for it and the address
+	 * after the submit stays as short as the selection. The default sort mode
+	 * is absent for the same reason, because filterArguments() never writes it.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 * @return array<string,string>
+	 */
+	private function formFilters(array $address): array {
+		$fields = $this->filterArguments($address);
+		unset($fields['query'], $fields['names']);
+
+		return $fields;
 	}
 
 	/**

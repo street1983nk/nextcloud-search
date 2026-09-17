@@ -28,7 +28,7 @@ declare(strict_types=1);
  * changes under the reader, so an assertive region would announce a sentence
  * that was already in the document order the moment it was read.
  *
- * @var array<string,mixed> $_ the eighteen parameters of PageController::index(), verbatim
+ * @var array<string,mixed> $_ the nineteen parameters of PageController::index(), verbatim
  * @var \OCP\IL10N $l
  */
 
@@ -56,7 +56,7 @@ $alertIcon = 'M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 
 $infoIcon = 'M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z';
 $closeIcon = 'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z';
 
-// The parameter set, read defensively. The controller hands over eighteen keys
+// The parameter set, read defensively. The controller hands over nineteen keys
 // with checked types; reading them this way costs nothing and keeps a template
 // that is opened with a half filled array from turning a missing key into a
 // warning in the middle of the markup.
@@ -82,6 +82,19 @@ $sortLinks = is_array($_['sortLinks'] ?? null) ? $_['sortLinks'] : [];
 $resetUrl = is_string($_['resetUrl'] ?? null) ? $_['resetUrl'] : null;
 $filtersActive = ($_['filtersActive'] ?? false) === true;
 $showModified = ($_['showModified'] ?? false) === true;
+
+// The same filters once more, in the shape the search form needs: the five
+// values it carries as hidden fields, already canonicalised, already without
+// the ones nobody set and already without the default order. Read one by one
+// and not walked over, because the field names have to stand in this file as
+// literals: a loop would hide from every reader and from every gate which five
+// names this form can send.
+$formFilters = is_array($_['formFilters'] ?? null) ? $_['formFilters'] : [];
+$filterTypes = is_string($formFilters['types'] ?? null) ? $formFilters['types'] : '';
+$filterSort = is_string($formFilters['sort'] ?? null) ? $formFilters['sort'] : '';
+$filterRange = is_string($formFilters['range'] ?? null) ? $formFilters['range'] : '';
+$filterSince = is_string($formFilters['since'] ?? null) ? $formFilters['since'] : '';
+$filterUntil = is_string($formFilters['until'] ?? null) ? $formFilters['until'] : '';
 
 $hasQuery = $query !== '';
 
@@ -206,6 +219,35 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 				<input type="checkbox" id="findling-search-names" name="names" value="1"<?php if ($titleOnly) { ?> checked<?php } ?>>
 				<label for="findling-search-names"><?php p($l->t('Search file names only')); ?></label>
 			</div>
+
+			<?php /* The active filters travel with the term, as hidden fields and
+			         not as a second address. Somebody who makes their term more
+			         precise keeps their narrowing and lands on page one, which is
+			         where a new term belongs: the position is deliberately absent
+			         here, there is no page, no cursors and no fingerprint in this
+			         form, because the first screen of the new result is the only
+			         screen that exists yet.
+
+			         A value nobody set is not rendered at all rather than sent as
+			         an empty field, so the address after the submit stays as short
+			         as the selection. The controller decided which of the five
+			         that is; this file only asks whether there is anything to
+			         write. */ ?>
+			<?php if ($filterTypes !== '') { ?>
+				<input type="hidden" name="types" value="<?php p($filterTypes); ?>">
+			<?php } ?>
+			<?php if ($filterSort !== '') { ?>
+				<input type="hidden" name="sort" value="<?php p($filterSort); ?>">
+			<?php } ?>
+			<?php if ($filterRange !== '') { ?>
+				<input type="hidden" name="range" value="<?php p($filterRange); ?>">
+			<?php } ?>
+			<?php if ($filterSince !== '') { ?>
+				<input type="hidden" name="since" value="<?php p($filterSince); ?>">
+			<?php } ?>
+			<?php if ($filterUntil !== '') { ?>
+				<input type="hidden" name="until" value="<?php p($filterUntil); ?>">
+			<?php } ?>
 
 			<button type="submit" class="primary findling-search__submit">
 				<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($magnifyIcon); ?>"/></svg>
@@ -390,14 +432,32 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 				$iconUrl = is_string($hit['iconUrl'] ?? null) ? $hit['iconUrl'] : '';
 				$url = is_string($hit['url'] ?? null) ? $hit['url'] : '';
 				$segments = is_array($hit['segments'] ?? null) ? $hit['segments'] : [];
+				$modified = is_string($hit['modified'] ?? null) ? $hit['modified'] : '';
+				// Whether this row carries its date, and one answer serves the
+				// visible line and the spoken name alike. Under relevance the
+				// line does not exist, neither empty nor hidden, because a date
+				// under relevance would be the one number on this page a reader
+				// could mistake for a measure of how well a hit fits (D-04).
+				$dated = $showModified && $modified !== '';
 				?>
 				<li class="findling-hit" id="findling-hit-<?php p((string)$hitId); ?>">
+					<?php /* Two forms of one name, and the second one exists because
+					         an aria-label REPLACES the content for a screen reader:
+					         without the dated form the date would be inaudible under
+					         exactly the order that is about dates. */ ?>
 					<a class="findling-hit__link" href="<?php p($url); ?>" target="_self"
-						aria-label="<?php p($l->t('%1$s in %2$s', [$title, $path])); ?>">
+						aria-label="<?php p($dated ? $l->t('%1$s in %2$s, modified on %3$s', [$title, $path, $modified]) : $l->t('%1$s in %2$s', [$title, $path])); ?>">
 						<img class="findling-hit__icon" src="<?php p($iconUrl); ?>" width="32" height="32" alt="" aria-hidden="true">
 						<span class="findling-hit__text">
 							<span class="findling-hit__title"><?php p($title); ?></span>
 							<span class="findling-hit__path"><?php p($path); ?></span>
+							<?php /* A line of its own under the path and above the
+							         excerpt, never appended to the path: the path is
+							         one line with an ellipsis, so an appendix would be
+							         the first thing to be cut off. */ ?>
+							<?php if ($dated) { ?>
+								<span class="findling-hit__modified"><?php p($l->t('Modified on %s', [$modified])); ?></span>
+							<?php } ?>
 							<?php if ($segments !== []) { ?>
 								<span class="findling-hit__excerpt"><?php foreach ($segments as $segment) {
 									$text = is_string($segment['text'] ?? null) ? $segment['text'] : '';
