@@ -897,6 +897,49 @@ final class PageControllerTest extends TestCase {
 		self::assertIsString($this->paramsOf(['query' => 'akte', 'since' => '1757980800'])['resetUrl']);
 	}
 
+	public function testTheFormCarriesTheNarrowingAndNeverThePosition(): void {
+		// What the search form has to take along when somebody refines their
+		// term, and what it must not: the five filter values travel, the three
+		// values of the position do not. A form that carried the cursor path
+		// would answer a new term with the seventh screen of an old result.
+		$this->answering($this->outcome());
+
+		$fields = $this->paramsOf([
+			'query' => 'akte',
+			'names' => '1',
+			'types' => 'images,pdf',
+			'sort' => 'newest',
+			'range' => 'week',
+			'since' => '1757980800',
+			'until' => '1758585600',
+			'page' => '3',
+			'cursors' => '0.40.95',
+			'fp' => 'abcdef12',
+		])['formFilters'];
+
+		self::assertSame([
+			'types' => 'pdf,images',
+			'sort' => 'newest',
+			'range' => 'week',
+			'since' => '1757980800',
+			'until' => '1758585600',
+		], $fields);
+	}
+
+	public function testTheFormWritesNoFieldForAValueNobodySet(): void {
+		// Absent and not empty, so the address after the submit stays as short
+		// as the selection. The term and the names switch are absent as well:
+		// the form already carries both in front of the visitor, and a hidden
+		// field beside either of them would be a second control for one value.
+		$this->answering($this->outcome());
+
+		self::assertSame([], $this->paramsOf(['query' => 'akte'])['formFilters']);
+		self::assertSame(
+			['types' => 'pdf'],
+			$this->paramsOf(['query' => 'akte', 'names' => '1', 'types' => 'pdf', 'sort' => 'relevance'])['formFilters'],
+		);
+	}
+
 	// -- the fingerprint of the request state --------------------------------
 
 	public function testACursorPathOutOfAnotherSearchIsPageOne(): void {

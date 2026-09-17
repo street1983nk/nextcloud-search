@@ -259,8 +259,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # the template, and PageControllerTest.php follows it with the cases for all of
 # them. This plan ran alone in its wave, so the figure was measured against the
 # merged tree of the wave before it and needs no second correction.
+# Moved on 2026-09-17 a fourth time, by plan 13-09, and the count stays at 64 for
+# the fifth time running because no file was added or removed. Three files
+# changed their bytes. search.php grew its sixth block, the filter row, together
+# with the date line of a hit, the five hidden fields of the search form and the
+# fourth variant of the empty state. PageController.php gained formFilters(),
+# which is the filter list of an address in the shape the form needs it, and
+# PageControllerTest.php follows with the two cases for it. This plan ran alone
+# in its wave as well, so the figure was measured against the merged tree of the
+# wave before it and needs no second correction.
 PHP_FILES_TODAY = 64
-PHP_TREE_HASH_TODAY = "104ba40f1381a12e16b78dcd32ea85f8024ad53ae2e95a0b0fb1715cebd4c745"
+PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959cb4fe8a6"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
