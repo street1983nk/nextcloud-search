@@ -99,7 +99,7 @@ Plans:
   4. Filter und Sortierung stehen in der URL, sind sichtbar und einzeln entfernbar; jede Aenderung landet auf Seite 1, ein fremder Cursorpfad wird abgewiesen
   5. Der Paritaetstest deckt die neuen Parameter ab: kein gefilterter oder sortierter Treffer umgeht den ACL-Vorfilter oder den finalen PHP-Recheck
 
-**Plans:** 10/13 plans executed
+**Plans:** 11/13 plans executed
 
 Plans:
 **Welle 1**
@@ -142,7 +142,7 @@ Plans:
 
 **Welle 10** *(wartet auf Welle 9)*
 
-- [ ] 13-11-PLAN.md: Kataloge: 23 Schluessel, Gate-Zahl 197, drei G2-Ausnahmen
+- [x] 13-11-PLAN.md: Kataloge: 23 Schluessel, Gate-Zahl 197, drei G2-Ausnahmen
 
 **Welle 11** *(wartet auf Welle 10)*
 
@@ -209,7 +209,7 @@ Plans:
 | 10. Vergleichsmessung auf der AWS-Box | v1.1 | 7/7 | Complete | 2026-09-10 |
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
-| 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 10/13 | In Progress|  |
+| 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 11/13 | In Progress|  |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 0/? | Not started | - |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |

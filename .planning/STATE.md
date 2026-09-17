@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 13-10-PLAN.md
-last_updated: "2026-09-17T14:25:00.000Z"
-last_activity: 2026-09-17 -- Welle 9 abgeschlossen (13-10 Stil der Leiste und sechs neue Verbots-Gates)
+stopped_at: Completed 13-11-PLAN.md
+last_updated: "2026-09-17T15:40:00.000Z"
+last_activity: 2026-09-17 -- Welle 10 abgeschlossen (13-11 Kataloge, harte Schluesselzahl 174 auf 197)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 18
-  percent: 48
+  completed_plans: 19
+  percent: 52
 ---
 
 # Project State
@@ -26,16 +26,25 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 11 of 13 (13-01 bis 13-10 abgeschlossen)
+Plan: 12 of 13 (13-01 bis 13-11 abgeschlossen)
 Status: Executing Phase 13
-Progress: [█████░░░░░] 48%
-Last activity: 2026-09-17 -- Welle 9 abgeschlossen (13-10), Baumhash unveraendert abe36dc6 (kein PHP angefasst), Backend-Suite jetzt 2126 Faelle
+Progress: [█████░░░░░] 52%
+Last activity: 2026-09-17 -- Welle 10 abgeschlossen (13-11), Baumhash weiter abe36dc6 (keine .php angefasst)
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 13-11: Die franzoesischen Wortlaute der 23 neuen Schluessel sind NICHT
+  muttersprachlich geprueft. docs/l10n-french.md war am 11.09. vom Owner
+  abgenommen; ein datierter Nachtrag im Abschnitt Abnahme sagt jetzt ausdruecklich,
+  dass die neuen Zeilen ungeprueft sind, damit eine abgenommene Datei keine
+  ungelesenen Zeilen stillschweigend mittraegt. OFFEN fuer den Owner.
+- 13-11 (Lehre): Der erste Einfuegelauf schrieb die Katalogeintraege ohne
+  Trennkommas. Klammerbilanz und Diff-Durchsicht haetten das nicht gefunden, der
+  JSON-Parser meldete es sofort. Die Parser-Pruefung bleibt Pflichtschritt.
 
 - 13-10 (Planfehler, nicht Umsetzungsfehler): Der verify-Block wollte `grep -c '@media'
   == 2`, die Datei traegt aber seit Phase 9 vier Media Queries; der Plan hatte die zwei
