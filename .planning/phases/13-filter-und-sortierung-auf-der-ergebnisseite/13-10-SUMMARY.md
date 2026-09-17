@@ -310,3 +310,12 @@ beruehrt die Kataloge nicht.
 13-12 findet eine Seite vor, deren Leiste vollstaendig aussieht und sich
 vollstaendig bedienen laesst, und kann sich auf die Abnahme-Sichtproben
 beschraenken.
+
+## Self-Check: PASSED
+
+- `php/css/search.css` FOUND
+- `backend/tests/test_admin_ui_contract.py` FOUND
+- `.planning/phases/13-filter-und-sortierung-auf-der-ergebnisseite/13-10-SUMMARY.md` FOUND
+- Commit `0b6db57` FOUND
+- Commit `e33f254` FOUND
+- Commit `c92e7eb` FOUND (dieser Eintrag, Hash aus dem Log)
