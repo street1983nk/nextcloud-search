@@ -59,7 +59,7 @@ use Psr\Log\LoggerInterface;
  * requirement altogether: both are forbidden for this class of route by the
  * same gate, so a logged in session stays the price of admission (T-09-06).
  *
- * The page decides no permission question of its own. It reads nine values out
+ * The page decides no permission question of its own. It reads ten values out
  * of the address, checks them, and hands the numbers and the filters of this
  * page to the shared search service; who may see which file is answered there and in exactly one
  * place in the whole tree, which backend/tests/test_php_acl_boundary.py holds by
@@ -200,36 +200,48 @@ final class PageController extends Controller {
 	 * server with real values, so the page is complete before a single line of
 	 * script has run.
 	 *
-	 * Every one of the nine values in the address is untrusted input, and every
+	 * Every one of the ten values in the address is untrusted input, and every
 	 * one of them falls back silently rather than producing a message: a term
 	 * that is too long is clamped, a filter that is not the one word this page
 	 * knows is not set, a page number outside the range is page one, a cursor
 	 * path that does not check out is page one as well, a type group that is not
 	 * one of the six names is left out of the list, a sort mode that is not one
-	 * of the three is relevance, and a quick range or a time bound of the wrong
-	 * shape is simply not set. The page makes no statement about its own address
-	 * bar (T-09-09), because such a statement would only ever be read by
-	 * somebody who edited it.
+	 * of the three is relevance, a quick range or a time bound of the wrong
+	 * shape is simply not set, and a fingerprint that does not belong to this
+	 * request state sends the path back to page one. The page makes no statement
+	 * about its own address bar (T-09-09), because such a statement would only
+	 * ever be read by somebody who edited it.
 	 */
 	#[\OCP\AppFramework\Http\Attribute\NoAdminRequired]
 	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
 	#[\OCP\AppFramework\Http\Attribute\FrontpageRoute(verb: 'GET', url: '/')]
 	public function index(): TemplateResponse {
-		$query = $this->term();
-		$titleOnly = $this->request->getParam('names') === '1';
+		$address = $this->address();
+		$filters = $this->filters($address);
 		$page = $this->pageNumber();
+		$fingerprint = $this->fingerprint($address);
 
 		$raw = $this->request->getParam('cursors', '');
-		$cursors = is_string($raw) ? $this->cursorPath($raw, $page) : [0];
+		$bound = $this->fingerprintParam() === $fingerprint;
+		$cursors = is_string($raw) && $bound ? $this->cursorPath($raw, $page) : [0];
 		if ($cursors === [0]) {
 			// A path that did not check out is page one, and the page number
 			// follows it rather than the other way round: a cursor of zero on
 			// page seven would show the first hits under the seventh page
 			// number, which is the one outcome worse than starting over.
+			//
+			// Since the filter row exists there are two ways of not checking
+			// out, and the second one is the reason the first was never enough.
+			// The shape of a path is what cursorPath reads, its origin is what
+			// the fingerprint reads, and a path is only looked at once the
+			// fingerprint of the address matches the one this page computes for
+			// its own request state. A path that was pasted in out of another
+			// search therefore never reaches the shape test at all. Both
+			// verdicts are the same verdict, and both of them stay silent.
 			$page = 1;
 		}
 
-		$outcome = $this->outcome($query, $titleOnly, (int)end($cursors));
+		$outcome = $this->outcome($address['query'], $address['titleOnly'], (int)end($cursors), $filters);
 
 		if ($outcome->failure === SearchOutcome::FAILURE_BACKEND_SILENT
 			|| $outcome->failure === SearchOutcome::FAILURE_VERSION_DRIFT) {
@@ -244,20 +256,69 @@ final class PageController extends Controller {
 			Application::APP_ID,
 			'search',
 			[
-				'query' => $query,
-				'titleOnly' => $titleOnly,
+				'query' => $address['query'],
+				'titleOnly' => $address['titleOnly'],
 				'page' => $page,
 				'maxPage' => self::MAX_PAGE,
-				'hits' => $this->rows($outcome),
+				'hits' => $this->rows($outcome, $address['sort']),
 				'hasMore' => $outcome->hasMore,
 				'degraded' => $outcome->degraded,
 				'failure' => $outcome->failure,
-				'previousUrl' => $this->previousUrl($query, $titleOnly, $page, $cursors),
-				'nextUrl' => $this->nextUrl($query, $titleOnly, $page, $cursors, $outcome),
+				'previousUrl' => $this->previousUrl($address, $page, $cursors, $fingerprint),
+				'nextUrl' => $this->nextUrl($address, $page, $cursors, $fingerprint, $outcome),
 				'formAction' => $this->urlGenerator->linkToRoute('findling.page.index'),
+				// The filter row, finished down to the last address. The
+				// template puts the labels to these values and asks nothing:
+				// which chip is active, where it leads and whether the reset
+				// link exists at all are decisions of this class, and a
+				// template that decided any of them would be the second place
+				// where the state of the address is interpreted.
+				'typeChips' => $this->typeChips($address),
+				'rangeChips' => $this->rangeChips($address),
+				'sortLinks' => $this->sortLinks($address),
+				'resetUrl' => $this->resetUrl($address, $filters),
+				'sortMode' => $address['sort'],
+				'filtersActive' => $filters->hasAny(),
+				'showModified' => $this->showsModified($address['sort']),
 			],
 			TemplateResponse::RENDER_AS_USER,
 		);
+	}
+
+	/**
+	 * The seven values of the address that describe WHAT is being searched for,
+	 * read exactly once per request and handed on as one named value.
+	 *
+	 * Seven and not ten: the page number, the cursor path and the fingerprint
+	 * describe WHERE inside a result the visitor stands, and they are
+	 * deliberately not in here. Every one of the seven below goes into the
+	 * fingerprint and into every link of the filter row; not one of the other
+	 * three may. Keeping the two groups apart in the type is what makes that
+	 * rule readable rather than a sentence somebody has to remember.
+	 *
+	 * Read once and not per caller, for a reason that only shows itself at
+	 * midnight: the four quick ranges are calendar windows computed from the
+	 * moment of the request, and two readings of the same address a few
+	 * microseconds apart can fall on either side of a day boundary. One reading
+	 * per request means the filter that ran, the fingerprint that was compared
+	 * and the links that were built all describe the same search.
+	 *
+	 * @return array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int}
+	 */
+	private function address(): array {
+		return [
+			'query' => $this->term(),
+			'titleOnly' => $this->request->getParam('names') === '1',
+			'types' => $this->typeGroups(),
+			'sort' => $this->sortMode(),
+			'range' => $this->quickRange(),
+			// The raw bounds of the address and not the effective ones. What
+			// the effective lower bound is depends on the quick range, and a
+			// link that carried the computed value would freeze today's
+			// midnight into an address somebody bookmarks.
+			'since' => $this->epochParam('since'),
+			'until' => $this->epochParam('until'),
+		];
 	}
 
 	/**
@@ -458,18 +519,17 @@ final class PageController extends Controller {
 	 * bound has no quick range behind it and is therefore the raw value or
 	 * nothing.
 	 *
-	 * What this plan deliberately does not do is hand the computed state to the
-	 * template. The active groups, the sort mode, the active quick range and
-	 * the two effective bounds are all known here, and the chips, the sort
-	 * links and the reset link that display them are built in plan 13-08. Until
-	 * then the values travel into the search and nowhere else, which is the
-	 * order the phase chose: first the address narrows the search, then the
-	 * page shows what it narrowed.
+	 * The effective lower bound stays inside this method and never travels back
+	 * into a link. What a chip, a sort link and the reset link carry is the raw
+	 * state of the address, so that the quick range keeps meaning "since the
+	 * beginning of today" rather than the number today's midnight happened to
+	 * be when the page was drawn.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
 	 */
-	private function filters(): SearchFilters {
-		$range = $this->quickRange();
-		$quickSince = $range === null ? null : $this->quickRangeStart($range);
-		$since = $this->epochParam('since');
+	private function filters(array $address): SearchFilters {
+		$quickSince = $address['range'] === null ? null : $this->quickRangeStart($address['range']);
+		$since = $address['since'];
 
 		if ($quickSince !== null && $since !== null) {
 			$since = max($quickSince, $since);
@@ -478,10 +538,10 @@ final class PageController extends Controller {
 		}
 
 		return new SearchFilters(
-			$this->typeGroups(),
-			$this->sortMode(),
+			$address['types'],
+			$address['sort'],
 			$since,
-			$this->epochParam('until'),
+			$address['until'],
 		);
 	}
 
@@ -539,7 +599,7 @@ final class PageController extends Controller {
 	 * is asked against that user's own folder; the attributes of the route make
 	 * that case unreachable, and it is handled rather than assumed away.
 	 */
-	private function outcome(string $query, bool $titleOnly, int $startCursor): SearchOutcome {
+	private function outcome(string $query, bool $titleOnly, int $startCursor, SearchFilters $filters): SearchOutcome {
 		if ($query === '') {
 			return new SearchOutcome([], [], $startCursor, false, false, null);
 		}
@@ -549,7 +609,7 @@ final class PageController extends Controller {
 			return new SearchOutcome([], [], $startCursor, false, false, SearchOutcome::FAILURE_NO_HOME_FOLDER);
 		}
 
-		return $this->searchService->run($user, $query, $titleOnly, $startCursor, $this->caps(), $this->filters());
+		return $this->searchService->run($user, $query, $titleOnly, $startCursor, $this->caps(), $filters);
 	}
 
 	/**
@@ -576,8 +636,8 @@ final class PageController extends Controller {
 	}
 
 	/**
-	 * The hits of this page as the template wants them: six finished values per
-	 * row and no object the template would have to ask questions of.
+	 * The hits of this page as the template wants them: seven finished values
+	 * per row and no object the template would have to ask questions of.
 	 *
 	 * The excerpt becomes a list of text pieces and never a string with markup
 	 * in it, which is the whole construction of the highlighting on this page
@@ -585,9 +645,24 @@ final class PageController extends Controller {
 	 * the template puts the path in that place: a hit without an excerpt is
 	 * better than no hit.
 	 *
-	 * @return list<array{fileId:int,title:string,path:string,iconUrl:string,url:string,segments:list<array{text:string,mark:bool}>}>
+	 * The date is the seventh value and it is empty outside a date order. Not
+	 * hidden and not rendered as an empty line: the value is not there, because
+	 * a modification date shown under relevance would be the one number on this
+	 * page that a reader could mistake for a measure of how well a hit fits
+	 * (D-04, T-13-40). The page shows no score at all, and this is the reason
+	 * it can say so.
+	 *
+	 * The formatter takes the time zone and the language out of the settings of
+	 * the signed in user, which is why there is no date format here and no
+	 * format string in the catalogue: the catalogue carries the label and the
+	 * label alone. A date of zero is the canary of the walking skeleton, which
+	 * has no node behind it and therefore no date to ask for, and it stays
+	 * empty as well rather than becoming the first of January 1970.
+	 *
+	 * @return list<array{fileId:int,title:string,path:string,iconUrl:string,url:string,modified:string,segments:list<array{text:string,mark:bool}>}>
 	 */
-	private function rows(SearchOutcome $outcome): array {
+	private function rows(SearchOutcome $outcome, string $sort): array {
+		$showModified = $this->showsModified($sort);
 		$rows = [];
 
 		foreach ($outcome->hits as $hit) {
@@ -598,6 +673,9 @@ final class PageController extends Controller {
 				'path' => $hit->path,
 				'iconUrl' => $this->mimeTypes->mimeTypeIcon($hit->mimeType),
 				'url' => $this->fileUrl($hit->fileId),
+				'modified' => $showModified && $hit->mtime > 0
+					? $this->dateTimeFormatter->formatDate($hit->mtime, 'long')
+					: '',
 				'segments' => $excerpt === null ? [] : Highlighter::segments($excerpt['text'], $excerpt['highlights']),
 			];
 		}
@@ -624,14 +702,22 @@ final class PageController extends Controller {
 	 * of this one, and it needs nothing from the run: where the previous page
 	 * began was already known when this one was asked for.
 	 *
+	 * This one and its counterpart below are the only two links of this page
+	 * that hand a cursor path on, and therefore the only two that carry a
+	 * fingerprint. The asymmetry to filterUrl() is the whole mechanism rather
+	 * than an oversight: paging keeps the search and moves inside it, while a
+	 * chip changes the search, and a position inside one result set means
+	 * nothing inside another one.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
 	 * @param list<int> $cursors
 	 */
-	private function previousUrl(string $query, bool $titleOnly, int $page, array $cursors): ?string {
+	private function previousUrl(array $address, int $page, array $cursors, string $fingerprint): ?string {
 		if ($page <= 1) {
 			return null;
 		}
 
-		return $this->pageUrl($query, $titleOnly, $page - 1, array_slice($cursors, 0, -1));
+		return $this->pageUrl($address, $page - 1, array_slice($cursors, 0, -1), $fingerprint);
 	}
 
 	/**
@@ -658,9 +744,10 @@ final class PageController extends Controller {
 	 * user's own files may be lying behind the foreign ones, which is the
 	 * state DI-07-03 is about (decided as V-1a on 10.09.2026).
 	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
 	 * @param list<int> $cursors
 	 */
-	private function nextUrl(string $query, bool $titleOnly, int $page, array $cursors, SearchOutcome $outcome): ?string {
+	private function nextUrl(array $address, int $page, array $cursors, string $fingerprint, SearchOutcome $outcome): ?string {
 		$runFellShort = $outcome->failure !== null
 			&& $outcome->failure !== SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED;
 
@@ -672,25 +759,304 @@ final class PageController extends Controller {
 			return null;
 		}
 
-		return $this->pageUrl($query, $titleOnly, $page + 1, [...$cursors, $outcome->nextCursor]);
+		return $this->pageUrl($address, $page + 1, [...$cursors, $outcome->nextCursor], $fingerprint);
 	}
 
 	/**
-	 * One address of this route with all four values in it, built by the url
+	 * One address of the filter row, and it is a second method next to
+	 * pageUrl() rather than a flag on the first one.
+	 *
+	 * Every chip, every sort link and the reset link is built from here, and
+	 * the property that matters is a property of the method and not of a call
+	 * site: this one does not take a position inside a result, so it cannot
+	 * write one. A flag would have put the same promise into the hands of every
+	 * future caller, and a flag is what gets set wrong at the next rebuild,
+	 * quietly and with a link that still looks right.
+	 *
+	 * Why it has to be watertight: a chip is an ordinary link carrying the
+	 * values of the current address. If it took the position along, a click on
+	 * the seventh screen of one result would land on the seventh screen of
+	 * another one, which shows some hits twice and skips others, silently and
+	 * differently for every user (13-RESEARCH pitfall D).
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 */
+	private function filterUrl(array $address): string {
+		return $this->urlGenerator->linkToRoute('findling.page.index', $this->filterArguments($address));
+	}
+
+	/**
+	 * The fingerprint of one request state: eight hex characters over the seven
+	 * values that decide WHAT is searched for.
+	 *
+	 * This is a confusion lock and not a security feature. There is no secret,
+	 * no signature and nothing to forge: anybody can compute this value for any
+	 * address, and that is fine, because it answers the question "does this
+	 * position belong to this search" and no other question. A collision is
+	 * harmless for the same reason. The cursor counts approved candidates and
+	 * nothing else, so the worst a collision can buy is one screen further into
+	 * a result the visitor is allowed to see, never a hit, never a name and
+	 * never a count of anything.
+	 *
+	 * The canonicalisation stands BEFORE the hashing, and it is the half that
+	 * is easy to leave out. Two type groups picked in the other order are the
+	 * same search; hashed as written they would be two values, and a visitor
+	 * who reordered nothing would be thrown back to the first screen for a
+	 * reason nobody could see. The list arrives already canonicalised out of
+	 * typeGroups(), the two bounds arrive as numbers or as nothing, and the
+	 * three remaining values are words out of closed lists.
+	 *
+	 * The separator is the unit separator, and it is picked rather than found:
+	 * the shared text helper turns every control character except the tab into
+	 * a space before a term reaches this class, so this one character cannot
+	 * occur inside any of the seven values. A separator that could occur would
+	 * let two different states hash to one string without a collision being
+	 * involved at all.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 */
+	private function fingerprint(array $address): string {
+		$state = implode("\x1f", [
+			$address['query'],
+			$address['titleOnly'] ? '1' : '0',
+			implode(',', $address['types']),
+			$address['sort'],
+			$address['range'] ?? '',
+			$address['since'] === null ? '' : (string)$address['since'],
+			$address['until'] === null ? '' : (string)$address['until'],
+		]);
+
+		return substr(hash('sha256', $state), 0, 8);
+	}
+
+	/**
+	 * The fingerprint this address claims, or none for everything that does not
+	 * have the shape of one.
+	 *
+	 * Shape first and comparison afterwards, in the same order and for the same
+	 * reason as every other value of this address: a value that is not eight hex
+	 * characters was never written by this page, and a value that was never
+	 * written by this page cannot belong to a path this page handed out.
+	 */
+	private function fingerprintParam(): ?string {
+		$raw = $this->request->getParam('fp', '');
+		if (!is_string($raw) || preg_match('/^[0-9a-f]{8}$/', $raw) !== 1) {
+			return null;
+		}
+
+		return $raw;
+	}
+
+	/**
+	 * The part of an address that says what is being searched for, as arguments
+	 * for the url generator.
+	 *
+	 * Shared by both builders on purpose, so that a filter cannot be carried by
+	 * one of them and dropped by the other: a next link that lost the active
+	 * chips would page through a different result than the one on the screen.
+	 * What is not shared is the position, and it lives at exactly one of the
+	 * two call sites below.
+	 *
+	 * A value that is not set is not written as an empty parameter, it is not
+	 * written at all, and the default sort mode is not written either. The
+	 * address of an ordinary search therefore looks exactly as it did before
+	 * this phase.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 * @return array<string,string>
+	 */
+	private function filterArguments(array $address): array {
+		$arguments = ['query' => $address['query']];
+
+		if ($address['titleOnly']) {
+			$arguments['names'] = '1';
+		}
+		if ($address['types'] !== []) {
+			$arguments['types'] = implode(',', $address['types']);
+		}
+		if ($address['sort'] !== SearchFilters::SORT_DEFAULT) {
+			$arguments['sort'] = $address['sort'];
+		}
+		if ($address['range'] !== null) {
+			$arguments['range'] = $address['range'];
+		}
+		if ($address['since'] !== null) {
+			$arguments['since'] = (string)$address['since'];
+		}
+		if ($address['until'] !== null) {
+			$arguments['until'] = (string)$address['until'];
+		}
+
+		return $arguments;
+	}
+
+	/**
+	 * The six chips of the type row, finished, and all six of them every time.
+	 *
+	 * Each one carries the address of the search WITHOUT itself when it is
+	 * active and the address WITH itself when it is not, so one chip switches
+	 * one group and leaves the other five where they are (D-01). The row is a
+	 * set of switches and not a choice of one.
+	 *
+	 * All six are always in the list, including the ones behind which there is
+	 * not a single hit, and that is a decision rather than a simplification. A
+	 * chip that was greyed out or left out would tell the visitor that this
+	 * group holds nothing, and that is the same piece of information a counter
+	 * on the chip would give. It would be a counting oracle in front of the
+	 * permission decision, because what the page can see before the recheck is
+	 * the candidates of the index and not the files of this user (T-13-39). So
+	 * a chip over an empty group looks like every other chip and leads to the
+	 * empty state.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 * @return list<array{key:string,active:bool,url:string}>
+	 */
+	private function typeChips(array $address): array {
+		$chips = [];
+
+		foreach (SearchFilters::TYPES as $group) {
+			// The selection of the other address, built by walking the closed
+			// list rather than by adding to or removing from the current one:
+			// the outcome is then canonical because of how it was made, and a
+			// canonical list is what the fingerprint of that address is
+			// computed over on the way back in.
+			$toggled = [];
+			foreach (SearchFilters::TYPES as $name) {
+				$keep = in_array($name, $address['types'], true);
+				if ($name === $group) {
+					$keep = !$keep;
+				}
+				if ($keep) {
+					$toggled[] = $name;
+				}
+			}
+
+			$chips[] = [
+				'key' => $group,
+				'active' => in_array($group, $address['types'], true),
+				'url' => $this->filterUrl(['types' => $toggled] + $address),
+			];
+		}
+
+		return $chips;
+	}
+
+	/**
+	 * The four chips of the time row, finished, and at most one of them active.
+	 *
+	 * The one place where this row behaves differently from the one above it. A
+	 * click on another range REPLACES the one before it and a click on the
+	 * active one removes it, because two ranges at once give either the wider
+	 * of the two, and then the narrower one did nothing, or an empty set, and
+	 * then nobody can explain the page to the person looking at it.
+	 *
+	 * Not one of the four ever writes an upper bound. All four mean "since" and
+	 * never "between", so a visitor who picks a range can only ever see more of
+	 * the recent past and never lose the present out of the result.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 * @return list<array{key:string,active:bool,url:string}>
+	 */
+	private function rangeChips(array $address): array {
+		$chips = [];
+
+		foreach (self::QUICK_RANGES as $name) {
+			$active = $address['range'] === $name;
+
+			$chips[] = [
+				'key' => $name,
+				'active' => $active,
+				'url' => $this->filterUrl(['range' => $active ? null : $name] + $address),
+			];
+		}
+
+		return $chips;
+	}
+
+	/**
+	 * The three sort links, finished, and exactly one of them active.
+	 *
+	 * Three and never two: the default mode is a link like the other two, and
+	 * its address is the way back out of a sorted view. The link of the active
+	 * mode points at the view the visitor is already looking at, and that is
+	 * not a dead link but the ordinary state of a segmented switch: all three
+	 * segments stay operable so that the set of choices can be read off the row
+	 * itself instead of being remembered.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 * @return list<array{key:string,active:bool,url:string}>
+	 */
+	private function sortLinks(array $address): array {
+		$links = [];
+
+		foreach (SearchFilters::SORTS as $mode) {
+			$links[] = [
+				'key' => $mode,
+				'active' => $address['sort'] === $mode,
+				'url' => $this->filterUrl(['sort' => $mode] + $address),
+			];
+		}
+
+		return $links;
+	}
+
+	/**
+	 * The way out of every filter at once, or none when there is nothing to
+	 * come out of.
+	 *
+	 * The sort mode survives this link, and that is the whole difference
+	 * between the two halves of the row. Resetting takes away what is HIDING
+	 * results; an order hides nothing, it puts the same hits in another
+	 * sequence. D-06 says filters in as many words, and hasAny() is where that
+	 * distinction is already written down, so this method asks it rather than
+	 * deciding a second time.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 */
+	private function resetUrl(array $address, SearchFilters $filters): ?string {
+		if (!$filters->hasAny()) {
+			return null;
+		}
+
+		return $this->filterUrl([
+			'types' => [],
+			'range' => null,
+			'since' => null,
+			'until' => null,
+		] + $address);
+	}
+
+	/**
+	 * Whether the rows of this page carry their modification date.
+	 *
+	 * Everything that is not the default mode is a date order, and the sentence
+	 * is written that way round on purpose: the three names live in
+	 * SearchFilters and are read from there rather than repeated over here, the
+	 * same rule the type groups follow. An unknown mode never reaches this
+	 * method, because the address falls back to the default before it.
+	 */
+	private function showsModified(string $sort): bool {
+		return $sort !== SearchFilters::SORT_DEFAULT;
+	}
+
+	/**
+	 * One address of this route with the whole state in it, built by the url
 	 * generator rather than glued together, so that the query string is encoded
 	 * correctly and a rewritten web root is honoured.
 	 *
+	 * The three values this one adds to the filter arguments are the position
+	 * and the proof that the position belongs here. They travel together and
+	 * they are only ever written here.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
 	 * @param list<int> $cursors
 	 */
-	private function pageUrl(string $query, bool $titleOnly, int $page, array $cursors): string {
-		$arguments = [
-			'query' => $query,
+	private function pageUrl(array $address, int $page, array $cursors, string $fingerprint): string {
+		$arguments = $this->filterArguments($address) + [
 			'page' => (string)$page,
 			'cursors' => implode('.', $cursors),
+			'fp' => $fingerprint,
 		];
-		if ($titleOnly) {
-			$arguments['names'] = '1';
-		}
 
 		return $this->urlGenerator->linkToRoute('findling.page.index', $arguments);
 	}
