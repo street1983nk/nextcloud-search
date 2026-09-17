@@ -8,6 +8,7 @@ use OCA\Findling\Search\Provider;
 use OCA\Findling\Service\ApprovedHit;
 use OCA\Findling\Service\ExAppService;
 use OCA\Findling\Service\SearchCaps;
+use OCA\Findling\Service\SearchFilters;
 use OCA\Findling\Service\SearchOutcome;
 use OCA\Findling\Service\SearchService;
 use OCP\IL10N;
@@ -90,6 +91,38 @@ final class ProviderTest extends TestCase {
 	}
 
 	/**
+	 * A query whose filters are looked up by name, so that a date bound and the
+	 * file name switch can be set apart from one another. Every name that is
+	 * not in the map is a filter the dialog did not send, which is the null the
+	 * class under test reads as "not set".
+	 *
+	 * @param array<string,mixed> $values the value behind each filter name, and
+	 *                                    deliberately mixed: the point of half
+	 *                                    the cases below is a value of the
+	 *                                    wrong kind arriving from over there
+	 */
+	private function filteredQuery(array $values, string $term = 'quarterly report'): ISearchQuery&MockObject {
+		$query = $this->createMock(ISearchQuery::class);
+		$query->method('getTerm')->willReturn($term);
+		$query->method('getLimit')->willReturn(20);
+		$query->method('getCursor')->willReturn(null);
+		$query->method('getFilter')->willReturnCallback(
+			function (string $name) use ($values): ?IFilter {
+				if (!array_key_exists($name, $values)) {
+					return null;
+				}
+
+				$filter = $this->createMock(IFilter::class);
+				$filter->method('get')->willReturn($values[$name]);
+
+				return $filter;
+			},
+		);
+
+		return $query;
+	}
+
+	/**
 	 * @param list<ApprovedHit> $hits
 	 * @param array<int,array{text:string,highlights:list<array{int,int}>}> $excerpts
 	 */
@@ -141,6 +174,34 @@ final class ProviderTest extends TestCase {
 		$this->provider()->search($this->user(), $query);
 
 		return $caps;
+	}
+
+	/**
+	 * The filters the provider handed down for one query, or null when it never
+	 * asked at all. The counterpart of capsOf() above, and the only thing the
+	 * date cases below assert against: what the dialog set is read off the
+	 * object that left this class, never off a result a real run would produce.
+	 */
+	private function filtersOf(ISearchQuery&MockObject $query): ?SearchFilters {
+		$filters = null;
+		$this->searchService->method('run')->willReturnCallback(
+			function (
+				IUser $user,
+				string $term,
+				bool $titleOnly,
+				int $startCursor,
+				SearchCaps $caps,
+				SearchFilters $handed,
+			) use (&$filters): SearchOutcome {
+				$filters = $handed;
+
+				return $this->outcome();
+			},
+		);
+
+		$this->provider()->search($this->user(), $query);
+
+		return $filters;
 	}
 
 	// -- translating a query into a run --------------------------------------
@@ -465,13 +526,144 @@ final class ProviderTest extends TestCase {
 		self::assertStringStartsWith('/index.php/apps/findling/', $entries[2]['resourceUrl']);
 	}
 
-	public function testTheProviderDeclaresBothBuiltinFiltersSoTheDialogNeverSkipsIt(): void {
+	// -- the filters of the dialog, declared and read ------------------------
+
+	public function testTheProviderDeclaresAllFourBuiltinFiltersSoTheDialogNeverSkipsIt(): void {
 		// Not one of the twelve, and one line, because a provider that is skipped
 		// for an undeclared filter looks exactly like a broken backend: no error,
-		// no entry, no hint.
+		// no entry, no hint. Until the two dates joined this list, every search
+		// with a date set was such a search.
 		self::assertSame(
-			[IFilter::BUILTIN_TERM, IFilter::BUILTIN_TITLE_ONLY],
+			[
+				IFilter::BUILTIN_TERM,
+				IFilter::BUILTIN_TITLE_ONLY,
+				IFilter::BUILTIN_SINCE,
+				IFilter::BUILTIN_UNTIL,
+			],
 			$this->provider()->getSupportedFilters(),
 		);
+	}
+
+	public function testTheProviderDefinesNoFilterOfItsOwn(): void {
+		// D-05 as an assertion. A name of our own would need a FilterDefinition,
+		// and a name without one turns the whole provider list of the dialog
+		// into an error, so file type and sort mode are offered on the own
+		// result page and nowhere in here.
+		self::assertSame([], $this->provider()->getCustomFilters());
+	}
+
+	public function testADateInTheSinceFilterTravelsIntoTheRunAsItsEpoch(): void {
+		$filters = $this->filtersOf($this->filteredQuery([
+			IFilter::BUILTIN_SINCE => new \DateTimeImmutable('@1757980800'),
+		]));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertSame(1757980800, $filters->since);
+		self::assertNull($filters->until);
+	}
+
+	public function testADateInTheUntilFilterTravelsIntoTheRunAsItsEpoch(): void {
+		$filters = $this->filtersOf($this->filteredQuery([
+			IFilter::BUILTIN_UNTIL => new \DateTimeImmutable('@1760572800'),
+		]));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertNull($filters->since);
+		self::assertSame(1760572800, $filters->until);
+	}
+
+	public function testBothBoundsCarryTheirValueWhenBothAreSet(): void {
+		$filters = $this->filtersOf($this->filteredQuery([
+			IFilter::BUILTIN_SINCE => new \DateTimeImmutable('@1757980800'),
+			IFilter::BUILTIN_UNTIL => new \DateTimeImmutable('@1760572800'),
+		]));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertSame(1757980800, $filters->since);
+		self::assertSame(1760572800, $filters->until);
+	}
+
+	public function testAQueryWithoutADateFilterNarrowsNothingAtAll(): void {
+		// The state of every search the dialog sent before this plan, and it has
+		// to stay exactly that: an object that is none() in all four of its
+		// fields rather than one that merely looks empty in two of them.
+		$filters = $this->filtersOf($this->filteredQuery([]));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertEquals(SearchFilters::none(), $filters);
+		self::assertFalse($filters->hasAny());
+	}
+
+	public function testAFilterValueOfTheWrongKindCountsAsNotSetAndThrowsNothing(): void {
+		// The value of a date filter is a DateTimeImmutable over there, so
+		// anything else is a defect on that side. It costs the bound and never
+		// the search: somebody who picked a date is owed an answer about the
+		// term, not an empty result group and not a stack trace.
+		$wrong = ['2026-09-16', 1757980800, null, true, new \stdClass()];
+
+		foreach ($wrong as $index => $value) {
+			$searchService = $this->createMock(SearchService::class);
+			$handed = null;
+			$searchService->method('run')->willReturnCallback(
+				function (
+					IUser $user,
+					string $term,
+					bool $titleOnly,
+					int $startCursor,
+					SearchCaps $caps,
+					SearchFilters $filters,
+				) use (&$handed): SearchOutcome {
+					$handed = $filters;
+
+					return $this->outcome();
+				},
+			);
+
+			$provider = new Provider($this->l10n, $this->urlGenerator, $searchService, $this->logger);
+			$provider->search($this->user(), $this->filteredQuery([
+				IFilter::BUILTIN_SINCE => $value,
+				IFilter::BUILTIN_UNTIL => $value,
+			]));
+
+			self::assertInstanceOf(SearchFilters::class, $handed, 'value ' . $index . ' never reached the run');
+			self::assertNull($handed->since, 'value ' . $index . ' became a lower bound');
+			self::assertNull($handed->until, 'value ' . $index . ' became an upper bound');
+		}
+	}
+
+	public function testAnAbsurdlyLargeBoundIsClampedToTheCeilingBothHalvesAgreeOn(): void {
+		// Above SEARCH_MTIME_MAX the container answers with a 422, and a 422
+		// arrives here as an empty group that reads like "nothing found". The
+		// bound is clamped and the search still happens.
+		$filters = $this->filtersOf($this->filteredQuery([
+			IFilter::BUILTIN_UNTIL => new \DateTimeImmutable('@' . (SearchFilters::EPOCH_MAX + 86400)),
+		]));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertSame(SearchFilters::EPOCH_MAX, $filters->until);
+	}
+
+	public function testANegativeBoundIsClampedToZero(): void {
+		$filters = $this->filtersOf($this->filteredQuery([
+			IFilter::BUILTIN_SINCE => new \DateTimeImmutable('@-86400'),
+		]));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertSame(0, $filters->since);
+	}
+
+	public function testTheDialogNeverCarriesATypeGroupOrASortMode(): void {
+		// The guard against a type or a sort filter being smuggled into the
+		// dialog later. Both would need a FilterDefinition of their own, and
+		// what a name without a definition costs is the provider list of every
+		// app in the dialog, not only ours (D-05).
+		$filters = $this->filtersOf($this->filteredQuery([
+			IFilter::BUILTIN_SINCE => new \DateTimeImmutable('@1757980800'),
+			IFilter::BUILTIN_TITLE_ONLY => true,
+		]));
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+		self::assertSame([], $filters->types);
+		self::assertSame(SearchFilters::SORT_DEFAULT, $filters->sort);
 	}
 }
