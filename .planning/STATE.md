@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 13-09-PLAN.md
-last_updated: "2026-09-17T13:45:00.000Z"
-last_activity: 2026-09-17 -- Welle 8 abgeschlossen (13-09 Filterleiste im Template, Leerzustand, versteckte Formularfelder)
+stopped_at: Completed 13-10-PLAN.md
+last_updated: "2026-09-17T14:25:00.000Z"
+last_activity: 2026-09-17 -- Welle 9 abgeschlossen (13-10 Stil der Leiste und sechs neue Verbots-Gates)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 17
-  percent: 43
+  completed_plans: 18
+  percent: 48
 ---
 
 # Project State
@@ -26,16 +26,29 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 10 of 13 (13-01 bis 13-09 abgeschlossen)
+Plan: 11 of 13 (13-01 bis 13-10 abgeschlossen)
 Status: Executing Phase 13
-Progress: [████░░░░░░] 43%
-Last activity: 2026-09-17 -- Welle 8 abgeschlossen (13-09), Baumhash jetzt abe36dc6 bei 64 Dateien; die Leiste ist bedienbar, aber bis 13-10 unformatiert
+Progress: [█████░░░░░] 48%
+Last activity: 2026-09-17 -- Welle 9 abgeschlossen (13-10), Baumhash unveraendert abe36dc6 (kein PHP angefasst), Backend-Suite jetzt 2126 Faelle
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 13-10 (Planfehler, nicht Umsetzungsfehler): Der verify-Block wollte `grep -c '@media'
+  == 2`, die Datei traegt aber seit Phase 9 vier Media Queries; der Plan hatte die zwei
+  aus seinem eigenen interfaces-Abschnitt gezaehlt. Die pruefbare Absicht "keine neue
+  Media Query" ist eingehalten, die Zahl steht vor und nach dem Plan bei 4.
+- 13-10: Das Gate gegen ein Zaehl-Orakel sucht die Woerter des Zaehlens (`count`,
+  `total`, `badge`, `disabled`, `$l->n(`) statt einer Ziffernausgabe, weil "Last 7 days"
+  und "Last 30 days" selbst Ziffern tragen und ein Ziffern-Gate am ersten Tag rot
+  gewesen waere.
+- 13-10: Die Region der Leiste wird am Kommentar-Oeffner geschnitten und Blockkommentare
+  werden vor dem Scan entfernt, sonst waere das Gate an genau dem Kommentar rot
+  geworden, der erklaert, warum es keinen Zaehler gibt. Dieselbe Falle wie bei
+  `aria-current` in 13-09.
 
 - 13-09 (Scope-Erweiterung, Rule 3): Das Formular braucht `since` und `until` als
   versteckte Felder, 13-08 uebergibt dem Template aber keine Zeitgrenze und keine
