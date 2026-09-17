@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 13-08-PLAN.md
-last_updated: "2026-09-17T13:05:00.000Z"
-last_activity: 2026-09-17 -- Welle 7 abgeschlossen (13-08 Cursor-Bindung, Chips und Sortierlinks fuer das Template)
+stopped_at: Completed 13-09-PLAN.md
+last_updated: "2026-09-17T13:45:00.000Z"
+last_activity: 2026-09-17 -- Welle 8 abgeschlossen (13-09 Filterleiste im Template, Leerzustand, versteckte Formularfelder)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 16
-  percent: 38
+  completed_plans: 17
+  percent: 43
 ---
 
 # Project State
@@ -26,16 +26,28 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 9 of 13 (13-01 bis 13-08 abgeschlossen)
+Plan: 10 of 13 (13-01 bis 13-09 abgeschlossen)
 Status: Executing Phase 13
-Progress: [████░░░░░░] 38%
-Last activity: 2026-09-17 -- Welle 7 abgeschlossen (13-08), Baumhash jetzt 104ba40f bei 64 Dateien
+Progress: [████░░░░░░] 43%
+Last activity: 2026-09-17 -- Welle 8 abgeschlossen (13-09), Baumhash jetzt abe36dc6 bei 64 Dateien; die Leiste ist bedienbar, aber bis 13-10 unformatiert
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 13-09 (Scope-Erweiterung, Rule 3): Das Formular braucht `since` und `until` als
+  versteckte Felder, 13-08 uebergibt dem Template aber keine Zeitgrenze und keine
+  rohen Adresswerte, nur fertige Chips, Links und Flags. Neu ist deshalb
+  `PageController::formFilters()`, die `filterArguments()` nimmt und `query` plus
+  `names` entfernt; sie erbt damit drei Eigenschaften, statt sie einzeln zuzusichern.
+  Die Alternative, aus den aktiven Chips zurueckzurechnen, waere genau die zweite
+  Auslegung des Adresszustands gewesen, die diese Phase verbietet.
+- 13-09: Der Kommentar zur Begruendung von `aria-current` nennt die verbotene
+  Alternativauszeichnung nicht beim Namen, weil der Pruefblock und das kommende Gate
+  aus 13-10 die Datei genau auf diese Zeichenkette absuchen; ein woertlicher
+  Kommentar haette das eigene Gate rot gemacht.
 
 - 13-08: Der Fingerabdruck des Cursorpfads laeuft ueber die ROHEN Adresswerte `range`
   und `since`, nicht ueber die daraus errechnete wirksame Untergrenze. Mit der
