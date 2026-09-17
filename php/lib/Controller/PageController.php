@@ -57,9 +57,9 @@ use Psr\Log\LoggerInterface;
  * requirement altogether: both are forbidden for this class of route by the
  * same gate, so a logged in session stays the price of admission (T-09-06).
  *
- * The page decides no permission question of its own. It reads four values out
- * of the address, checks them, and hands the numbers of this page to the shared
- * search service; who may see which file is answered there and in exactly one
+ * The page decides no permission question of its own. It reads nine values out
+ * of the address, checks them, and hands the numbers and the filters of this
+ * page to the shared search service; who may see which file is answered there and in exactly one
  * place in the whole tree, which backend/tests/test_php_acl_boundary.py holds by
  * counting call sites (UI-03, T-09-04). There is no second round of resolving
  * nodes here, no second readability question and no call into the proxy of the
@@ -143,6 +143,25 @@ final class PageController extends Controller {
 	 */
 	public const MAX_QUERY_LENGTH = 255;
 
+	/**
+	 * The four quick time ranges of the chip row, in the order of the surface.
+	 *
+	 * The six type group names and the three sort mode names are deliberately
+	 * not repeated here. They are read out of SearchFilters::TYPES and
+	 * SearchFilters::SORTS, because two lists of the same vocabulary drift
+	 * apart in the direction nobody notices: a name this page still accepts
+	 * after the value object stopped carrying it, or a name the object carries
+	 * that this page silently drops.
+	 *
+	 * These four stand here for the opposite reason. They are no part of what a
+	 * narrowed search is: they are a shorthand this page offers for a lower
+	 * time bound it computes itself, and by the time the filters leave this
+	 * class there is no quick range left, only a number of seconds.
+	 *
+	 * @var list<string>
+	 */
+	public const QUICK_RANGES = ['today', 'week', 'month', 'year'];
+
 	public function __construct(
 		IRequest $request,
 		private SearchService $searchService,
@@ -163,13 +182,16 @@ final class PageController extends Controller {
 	 * server with real values, so the page is complete before a single line of
 	 * script has run.
 	 *
-	 * Every one of the four values in the address is untrusted input, and every
+	 * Every one of the nine values in the address is untrusted input, and every
 	 * one of them falls back silently rather than producing a message: a term
 	 * that is too long is clamped, a filter that is not the one word this page
-	 * knows is not set, a page number outside the range is page one, and a
-	 * cursor path that does not check out is page one as well. The page makes no
-	 * statement about its own address bar (T-09-09), because such a statement
-	 * would only ever be read by somebody who edited it.
+	 * knows is not set, a page number outside the range is page one, a cursor
+	 * path that does not check out is page one as well, a type group that is not
+	 * one of the six names is left out of the list, a sort mode that is not one
+	 * of the three is relevance, and a quick range or a time bound of the wrong
+	 * shape is simply not set. The page makes no statement about its own address
+	 * bar (T-09-09), because such a statement would only ever be read by
+	 * somebody who edited it.
 	 */
 	#[\OCP\AppFramework\Http\Attribute\NoAdminRequired]
 	#[\OCP\AppFramework\Http\Attribute\NoCSRFRequired]
@@ -254,6 +276,118 @@ final class PageController extends Controller {
 		$page = (int)$raw;
 
 		return $page >= 1 && $page <= self::MAX_PAGE ? $page : 1;
+	}
+
+	/**
+	 * The active type groups of this address, canonicalised, free of duplicates
+	 * and empty for everything that names no group at all.
+	 *
+	 * The names are checked against SearchFilters::TYPES and against nothing
+	 * else, so this page knows six words and not a single file extension: the
+	 * mapping from a group to the extensions behind it lives in the container,
+	 * and a second one over here would be the second filter vocabulary that the
+	 * value object refuses in as many words.
+	 *
+	 * Canonicalised into the order of that closed list rather than kept in the
+	 * order somebody wrote it, and the reason lies one plan further on: the
+	 * cursor path of a filtered search is bound to a fingerprint of the request
+	 * state (plan 13-08), and without this step a user who picks the same two
+	 * groups in the other order would produce another fingerprint and land back
+	 * on page one for no reason he could see.
+	 *
+	 * The loop over the closed list does four things at once, which is why
+	 * there is no sorting step, no deduplicating step and no counting step: it
+	 * leaves out what is unknown, it leaves out what is empty, it keeps a name
+	 * that was written twice exactly once, and it cannot yield more entries
+	 * than the closed list has, so six is the ceiling whatever arrives.
+	 *
+	 * @return list<string>
+	 */
+	private function typeGroups(): array {
+		$raw = $this->request->getParam('types', '');
+		if (!is_string($raw) || $raw === '') {
+			return [];
+		}
+
+		$asked = [];
+		foreach (explode(',', $raw) as $part) {
+			$asked[strtolower(trim($part))] = true;
+		}
+
+		$groups = [];
+		foreach (SearchFilters::TYPES as $group) {
+			if (isset($asked[$group])) {
+				$groups[] = $group;
+			}
+		}
+
+		return $groups;
+	}
+
+	/**
+	 * The sort mode of this address, and relevance for everything else.
+	 *
+	 * Relevance is the mode of a search nobody sorted, and it is the one mode
+	 * this page never writes into an address. A value that arrives here anyway
+	 * is either a mode somebody typed out or a word that was never a mode, and
+	 * both mean the same thing here: sort by relevance.
+	 */
+	private function sortMode(): string {
+		$raw = $this->request->getParam('sort', '');
+		if (!is_string($raw) || !in_array($raw, SearchFilters::SORTS, true)) {
+			return SearchFilters::SORT_DEFAULT;
+		}
+
+		return $raw;
+	}
+
+	/**
+	 * The quick range of this address, or none for everything that is not one
+	 * of the four names.
+	 *
+	 * One value and never a list, which is the one place where this row of
+	 * chips behaves differently from the row above it. Two time ranges at once
+	 * give either the larger of the two, and then the smaller one had no
+	 * effect, or an empty set, and then the page cannot be explained to the
+	 * person looking at it (13-UI-SPEC, D-01). So a click on another range
+	 * replaces the one before it, and the address carries at most one.
+	 */
+	private function quickRange(): ?string {
+		$raw = $this->request->getParam('range', '');
+		if (!is_string($raw) || !in_array($raw, self::QUICK_RANGES, true)) {
+			return null;
+		}
+
+		return $raw;
+	}
+
+	/**
+	 * One of the two time bounds of this address, in seconds of the Unix epoch,
+	 * or none for everything that is not such a number.
+	 *
+	 * Exactly the shape of pageNumber(), down to the digit test: a value that
+	 * is not a string of digits is not a bound, and neither is one above the
+	 * ceiling both halves of this app carry. A negative number never reaches
+	 * the range test at all, because the digit test refuses the sign, and that
+	 * is the intended verdict rather than a side effect.
+	 *
+	 * The ceiling matters more than it looks. A larger value is answered by the
+	 * container with a 422, which arrives over here as an empty result group
+	 * and looks exactly like "nothing found", so an address somebody built by
+	 * hand would get an empty page instead of an answer.
+	 */
+	private function epochParam(string $name): ?int {
+		$raw = $this->request->getParam($name, '');
+		if (!is_string($raw) || !ctype_digit($raw)) {
+			return null;
+		}
+
+		$value = (int)$raw;
+
+		// The digit test has already refused the sign, so the lower end of the
+		// interval needs no second look: zero is the smallest value that gets
+		// this far, and zero is a bound this app accepts.
+		return $value <= SearchFilters::EPOCH_MAX ? $value : null;
 	}
 
 	/**
