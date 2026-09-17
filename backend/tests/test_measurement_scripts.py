@@ -231,8 +231,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # .php and Provider.php hand the unnarrowed filter down until 13-06 and 13-07
 # fill it, and SearchServiceTest.php, ProviderTest.php and PageControllerTest
 # .php follow the two changed signatures.
+# Moved on 2026-09-17 by plan 13-06, and the count stays at 64 for the same
+# reason as the day before: no file came and none went. Two files changed their
+# bytes. Provider.php declares the two built in date filters of the unified
+# search dialog and reads them, which is the repair of FILT-03 on that side: an
+# undeclared exclusive filter costs the whole result group, either because the
+# surface stops asking this provider or because its group ends in a 400, and
+# both looked to the user like Findling being gone whenever a date was set.
+# ProviderTest.php follows with the cases for the four declared names, the two
+# bounds as epochs, the value of the wrong kind that counts as not set, and the
+# two clamps.
 PHP_FILES_TODAY = 64
-PHP_TREE_HASH_TODAY = "da750308c56f5c5c1e11ed96e85d6a37470ef3078280b35c571dbad636d7a2c4"
+PHP_TREE_HASH_TODAY = "b7a029ccc76f71b0f2dfc563d09ebcd442aa2f61fc2c5a210cd204d57c43d953"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
