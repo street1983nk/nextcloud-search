@@ -319,12 +319,23 @@ GERMAN_PLURAL_FORM = "nplurals=2; plural=(n != 1);"
 # The named exceptions of gate G2, taken from the section "Ausnahmen fuer das
 # Vollstaendigkeitsgate G2" of docs/l10n-french.md. A list and deliberately not
 # a threshold: a number that says "this many values may equal their key" covers
-# a forgotten wording exactly as well as an intended one, while a list names two
-# and nothing else. The reason travels with the key, so a third entry has to be
-# argued rather than counted.
+# a forgotten wording exactly as well as an intended one, while a list names each
+# of them and nothing else. The reason travels with the key, so a third entry has
+# to be argued rather than counted.
+#
+# With phase 13 the list grows from two entries to five, and the three that join
+# it are file type chips of the filter row: an abbreviation that is the proper
+# name of a format, and two words French writes exactly as English does. Each of
+# them is argued here rather than counted, which is what the shape of this list
+# is for. The alternative not taken is a threshold of five, and it would have
+# covered a fourth chip nobody translated exactly as quietly as it covers these
+# three.
 FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
     "Findling": "the name of the app, the same word in all three languages",
     "Page %s": "Page is the same word in French, and a difference would be a loss",
+    "PDF": "the proper name of a file format, the same abbreviation in all three languages",
+    "Documents": "the same word in French, and an invented difference would be a mistranslation",
+    "Images": "the same word in French, and an invented difference would be a mistranslation",
 }
 
 # The printf directives a value has to carry in the same number as its key: the
@@ -373,9 +384,9 @@ def scan_french_completeness(name: str, catalogue: Mapping[str, str | list[str]]
     source string is judged on the value and not on the single form, and that is
     a decision rather than an oversight: the singular of ``%n minute`` is ``%n
     minute`` in French, correctly so, and a per form comparison would demand a
-    third exception for a value that is translated. It is the same reading the
+    further exception for a value that is translated. It is the same reading the
     machine checks of docs/l10n-french.md take, where the count of values equal
-    to their source string is two, both of them named.
+    to their source string is five, every one of them named.
     """
     violations: list[str] = []
     for key, value in catalogue.items():
@@ -1450,7 +1461,7 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     missing key. The comparison runs over the text as Python reads it, so a
     different line ending in a working copy on Windows is not a finding.
 
-    The hard number below stands at 174 and stood at 173 until 10.09.2026. It
+    The hard number below stood at 173 until 10.09.2026 and then at 174. It
     rose by exactly one key, and the key is the sentence the result page says
     for a run that was handed candidates and kept none of them: finding
     DI-07-03 of phase 7, decided by the owner as V-1a on 10.09.2026 in
@@ -1460,6 +1471,22 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     the tree between the two plans would otherwise be red; 11-08 only reads it
     afterwards, and so does the French table of docs/l10n-french.md, which
     counts its coverage against exactly this key set.
+
+    It stands at 197 since 17.09.2026, and the rise of 23 is the copywriting
+    contract of phase 13, section "Copywriting Contract" of
+    .planning/phases/13-filter-und-sortierung-auf-der-ergebnisseite/13-UI-SPEC.md.
+    The 23 break down as ten chips (six file types and four time ranges), three
+    row labels (File type, Time range, Sort by), three sort links, two ways of
+    undoing a filter (the accessible name of one active chip and the link that
+    drops all of them), two shapes of a date (the line in a hit and the dated
+    accessible name of the same hit), and three sentences of the empty state
+    under an active filter. That is the visible surface of FILT-01 to FILT-04,
+    and every one of the 23 runs through the translation call of
+    php/templates/search.php.
+
+    This paragraph carries the same duty as the one above it: without it the
+    next reader takes the raised number for sloppiness and lowers it again.
+    Whoever raises it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -1484,7 +1511,7 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     }
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
-    assert len(keys_of["de.json"]) == 174
+    assert len(keys_of["de.json"]) == 197
 
 
 def test_all_six_catalogues_carry_the_same_keys() -> None:
@@ -1527,8 +1554,9 @@ def test_every_french_value_carries_a_french_wording() -> None:
     completeness it does not have. That is the outcome docs/l10n-french.md was
     written to prevent: 24 of 174 strings produce a half French surface.
 
-    The two exceptions are named in ``FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY``
-    with their reason, and they are a list rather than a count on purpose.
+    The five exceptions are named in ``FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY``
+    with their reason, and they are a list rather than a count on purpose: two
+    since plan 11-08, three more with the file type chips of phase 13.
     """
     findings = [
         message

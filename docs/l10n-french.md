@@ -23,11 +23,11 @@ gezählt:
 
 | Größe | Wert | Recherche (10.09.) |
 |---|---:|---:|
-| Schlüssel in `de.json` | **174** | 173 |
-| davon mit printf-Direktiven (`%s`, `%1$s`, `%n`) | **34** | |
-| davon mit Direktiven, ohne die Pluralschlüssel | **29** | 29 |
+| Schlüssel in `de.json` | **197** | 173 |
+| davon mit printf-Direktiven (`%s`, `%1$s`, `%n`) | **37** | |
+| davon mit Direktiven, ohne die Pluralschlüssel | **32** | 29 |
 | davon mit Pluralformen (Wert ist eine Liste) | **5** | 5 |
-| Zeilen in der Tabelle unten | **173** | |
+| Zeilen in der Tabelle unten | **196** | |
 
 **Die 174 statt 173 ist keine Abweichung, sondern der Entscheid V-1a vom 10.09.2026**
 (`11-VORENTSCHEIDE.md`, Abschnitt V-1, Zeile 116). Plan 11-13 hat den 174. Schlüssel in
@@ -35,14 +35,29 @@ Welle 2 in alle vier deutschen Kataloge geschrieben: englischer Quellstring
 `Other files contain this word, but none that you may open.`, deutscher Wortlaut
 `Andere Dateien enthalten dieses Wort, aber keine, die Sie öffnen dürfen.` Er steht in
 der Tabelle unten wie jeder andere. Die harte Zahl in
-`test_the_german_catalogue_covers_both_german_language_codes` steht bereits auf 174.
+`test_the_german_catalogue_covers_both_german_language_codes` stand damit auf 174.
+
+**Die 197 statt 174 ist der Copywriting Contract der Phase 13**, Abschnitt
+"Copywriting Contract" in
+`.planning/phases/13-filter-und-sortierung-auf-der-ergebnisseite/13-UI-SPEC.md`. Die
+Filter- und Sortierleiste der Ergebnisseite bringt 23 Schlüssel mit, und sie schlüsseln
+sich so auf: zehn Chips (sechs Dateitypen und vier Zeiträume), drei
+Zeilenbeschriftungen (Dateityp, Zeitraum, Sortieren nach), drei Sortierlinks, zwei
+Varianten des Aufhebens (der zugängliche Name eines aktiven Chips und der Link, der
+alle Filter auf einmal aufhebt), zwei Datumsformen (die Zeile im Treffer und der
+datierte zugängliche Name desselben Treffers) und drei Sätze des Leerzustands unter
+einem aktiven Filter. Das ist die sichtbare Oberfläche von FILT-01 bis FILT-04, und
+jeder der 23 läuft in `php/templates/search.php` durch den Übersetzungsaufruf. Die
+harte Zahl steht seit Plan 13-11 auf 197 und trägt dieselbe Aufschlüsselung als Absatz
+bei sich; ohne diese Begründung an beiden Stellen hält der nächste Leser eine erhöhte
+Zahl für Schlamperei und senkt sie wieder.
 
 Die zweite und die dritte Zeile sind zwei Messungen derselben Sache: die 29 der
 Recherche zählen die Schlüssel mit Platzhaltern **ohne** die fünf Pluralschlüssel, deren
 `%n` ebenfalls eine Direktive ist. Beide Zahlen stehen hier, damit die nächste Zählung
 nicht bei einer der beiden für falsch gehalten wird.
 
-**Die Tabelle hat 173 Zeilen und nicht 174.** Der fehlende Schlüssel ist `Findling`,
+**Die Tabelle hat 196 Zeilen und nicht 197.** Der fehlende Schlüssel ist `Findling`,
 und er steht als benannte Ausnahme unter der Tabelle, mit seinem Wortlaut. Siehe dort;
 der Grund ist ein Befund und keine Nachlässigkeit.
 
@@ -287,16 +302,44 @@ deutschen Übersetzung.
 | `Findling is not ready to search` | Findling ist nicht suchbereit | Findling n'est pas prêt à rechercher |
 | `The two halves of Findling report different versions. Your administrator has to update both together.` | Die beiden Hälften von Findling melden unterschiedliche Versionen. Die Administration muss beide zusammen aktualisieren. | Les deux moitiés de Findling annoncent des versions différentes. L'administration doit les mettre à jour ensemble. |
 | `The index is still being built, so results can be missing.` | Der Index wird noch aufgebaut, deshalb können Treffer fehlen. | L'index est encore en construction, des résultats peuvent donc manquer. |
+| `File type` | Dateityp | Type de fichier |
+| `PDF` | PDF | PDF |
+| `Documents` | Dokumente | Documents |
+| `Spreadsheets` | Tabellen | Feuilles de calcul |
+| `Presentations` | Präsentationen | Présentations |
+| `Images` | Bilder | Images |
+| `Text` | Text | Texte |
+| `Time range` | Zeitraum | Période |
+| `Today` | Heute | Aujourd'hui |
+| `Last 7 days` | Letzte 7 Tage | 7 derniers jours |
+| `Last 30 days` | Letzte 30 Tage | 30 derniers jours |
+| `This year` | Dieses Jahr | Cette année |
+| `Remove filter %s` | Filter %s entfernen | Retirer le filtre %s |
+| `Reset all filters` | Alle Filter zurücksetzen | Réinitialiser tous les filtres |
+| `Sort by` | Sortieren nach | Trier par |
+| `Relevance` | Relevanz | Pertinence |
+| `Last modified` | Zuletzt geändert | Dernière modification |
+| `Oldest first` | Älteste zuerst | Les plus anciens d'abord |
+| `Modified on %s` | Geändert am %s | Modifié le %s |
+| `%1$s in %2$s, modified on %3$s` | %1$s in %2$s, geändert am %3$s | %1$s dans %2$s, modifié le %3$s |
+| `No results with the active filters` | Keine Treffer mit den aktiven Filtern | Aucun résultat avec les filtres actifs |
+| `Remove a filter or widen the time range.` | Entfernen Sie einen Filter oder erweitern Sie den Zeitraum. | Retirez un filtre ou élargissez la période. |
+| `Reset filters` | Filter zurücksetzen | Réinitialiser les filtres |
 
 ## Ausnahmen für das Vollständigkeitsgate G2
 
 Gate G2 von Plan 11-08 fordert, dass kein FR-Wert leer und keiner mit dem englischen
-Quellstring identisch ist. Genau zwei Schlüssel sind es absichtlich. Das ist eine
-benannte Liste und ausdrücklich **keine** Toleranzschwelle: eine Schwelle würde einen
-vergessenen Wortlaut mitdecken, eine Liste nicht.
+Quellstring identisch ist. Genau fünf Schlüssel sind es absichtlich: zwei seit Plan
+11-08 und drei seit Plan 13-11. Das ist eine benannte Liste und ausdrücklich **keine**
+Toleranzschwelle: eine Schwelle würde einen vergessenen Wortlaut mitdecken, eine Liste
+nicht. Die Liste darf deshalb wachsen, die Zahl fünf ist keine Grenze, sondern das
+Ergebnis des Zählens, und jeder Eintrag trägt seinen Grund bei sich.
 
-- `Findling`: Eigenname der App, in allen drei Sprachen derselbe. Steht als Schluessel in de.json und muss deshalb in fr.json stehen, hat aber keinen eigenen Wortlaut.
-- `Page %s`: Das Wort Page ist im Franzoesischen dasselbe Wort. Eine Abweichung waere eine Verschlechterung.
+- `Findling`: Eigenname der App, in allen drei Sprachen derselbe. Steht als Schlüssel in de.json und muss deshalb in fr.json stehen, hat aber keinen eigenen Wortlaut.
+- `Page %s`: Das Wort Page ist im Französischen dasselbe Wort. Eine Abweichung wäre eine Verschlechterung.
+- `PDF`: Eigenname eines Dateiformats, in allen drei Sprachen dasselbe Kürzel.
+- `Documents`: Im Französischen dasselbe Wort wie im Englischen. Eine erfundene Abweichung wäre eine falsche Übersetzung.
+- `Images`: Im Französischen dasselbe Wort wie im Englischen. Eine erfundene Abweichung wäre eine falsche Übersetzung.
 
 **Befund zu `Findling`, weil diese Datei bisher das Gegenteil behauptet hat.** Der
 Abschnitt "Warum die Tabelle der Ergebnisseite 24 Zeilen hat" unten sagt, `Findling` sei
@@ -316,13 +359,13 @@ Gefahren über die Wortlaute dieser Tabelle, nicht per Augenmaß:
 | Prüfung | Ergebnis |
 |---|---|
 | Jeder Schlüssel aus `de.json` kommt in dieser Datei vor | fehlend: 0 |
-| Platzhalter-Parität Schlüssel gegen FR-Wert, über alle 34 Schlüssel mit Direktiven | 0 Abweichungen |
+| Platzhalter-Parität Schlüssel gegen FR-Wert, über alle 37 Schlüssel mit Direktiven | 0 Abweichungen |
 | Pluralschlüssel mit genau zwei Formen | 5 von 5 |
 | Pluralschlüssel im FR gleich der Menge im DE | ja |
 | U+2019 (typographischer Apostroph) | 0 |
 | U+2014 und U+2013 (Gedankenstriche) | 0 |
 | U+00A0 und U+202F (geschützte Leerzeichen) | 0 |
-| FR-Wert identisch mit dem englischen Quellstring | 2, beide oben benannt |
+| FR-Wert identisch mit dem englischen Quellstring | 5, alle fünf oben benannt |
 
 Was keine Maschine prüfen kann, ist die Sprache. Das ist der Gegenstand der Abnahme.
 
@@ -347,6 +390,13 @@ unverändert so, wie sie im Abschnitt "Maschinelle Prüfungen" stehen.
 
 Teil 2 von 2 (Store-Text, `README.fr.md`, die französischen Teile von `info.xml`) steht
 aus und ist Gegenstand von Plan 11-09.
+
+**Nachtrag 17.09.2026 (Phase 13, Plan 13-11).** Die Abnahme vom 11.09.2026 deckt die
+damaligen 173 Zeilen und nicht mehr. Die 23 Zeilen der Filter- und Sortierleiste sind
+danach hinzugekommen; sie stehen unten in der Tabelle, sind maschinell geprüft und
+**vom Owner noch nicht gelesen**. Sie gehören damit zur Abnahme der Phase 13 und nicht
+zu der vom 11.09.2026. Das steht hier, damit eine abgenommene Datei nicht stillschweigend
+Zeilen mitträgt, die niemand abgenommen hat.
 
 ## Warum die Tabelle der Ergebnisseite 24 Zeilen hat
 
