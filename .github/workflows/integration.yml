@@ -2956,15 +2956,48 @@ jobs:
           # IURLGenerator prepends /index.php to every route, which is what the
           # navigation entry and the form action of the page carry. deploy-harp
           # .yml asks the admin route of this same app the same way.
+          #
+          # Since phase 13 there is a fourth argument, and it is empty for every
+          # scenario written before it: further address parameters of the result
+          # page, in the wire form the page reads them in, such as types=text or
+          # types=text&sort=newest. They are appended to the address and nothing
+          # else about this function moves, and the answer is read out of the hit
+          # row ids findling-hit-<n> exactly as before.
+          #
+          # One sentence a reader needs before the new scenarios, because it
+          # decides which of them can be written at all: the filter and the sort
+          # live on the result page alone. Neither OCS route knows either of them,
+          # so ask() above always asks the unnarrowed question. A narrowing that
+          # really takes something away therefore leaves the page with a smaller
+          # set than the dialog, and parity_diff reports that as page-missing,
+          # which is correct of it: the two ways into the same search really did
+          # answer two different sets. Only a narrowing that takes nothing away can
+          # be compared symmetrically, which is why the two scenarios below stand
+          # on a fixture of text files, and why the removing one is measured a
+          # different way.
           ask_page() {
+            page_url='http://localhost:8080/index.php/apps/findling/'
+            if [ -n "${4:-}" ]; then
+              # curl -G appends its encoded query with an & when the address
+              # already carries one, so neither half has to know about the other.
+              page_url="${page_url}?$4"
+            fi
             curl -sfS -G -b "cookies-$1.txt" -c "cookies-$1.txt" \
               --data-urlencode "query=$2" \
-              'http://localhost:8080/index.php/apps/findling/' -o "$3"
+              "${page_url}" -o "$3"
           }
 
           # $1 scenario, $2 user, $3 password, $4 term, $5 expected minimum of
-          # fileids. One line per scenario in the log, with the name and the
-          # number of compared fileids, and its own error message on the way out.
+          # fileids, $6 further address parameters of the result page, optional
+          # and empty for every scenario of the phases before this one. One line
+          # per scenario in the log, with the name and the number of compared
+          # fileids, and its own error message on the way out.
+          #
+          # The sixth argument reaches the page and neither OCS route, for the
+          # reason ask_page writes out: the two providers have no filter and no
+          # sort mode. A scenario that narrows the page therefore has to narrow it
+          # by something that takes nothing away, or the comparison it asks for is
+          # not the comparison it means.
           #
           # Three answers and not two since phase 9, and the third one is the
           # result page: success criterion 4 of that phase asks this job to cover
@@ -2984,7 +3017,7 @@ jobs:
           compare() {
             ask 'providers/files/search' "$2" "$3" "$4" "native-$1.json"
             ask 'providers/findling/search' "$2" "$3" "$4" "findling-$1.json"
-            ask_page "$2" "$4" "page-$1.html"
+            ask_page "$2" "$4" "page-$1.html" "${6:-}"
             if ! python3 findling-src/scripts/ci/parity_diff.py \
                 --scenario "$1" \
                 --native "native-$1.json" \
@@ -3719,7 +3752,144 @@ jobs:
           # so "the other one finds nothing" is a statement about membership and
           # not about a search that stopped answering.
           compare group-join-control "${MEMBER_USER}" "${MEMBER_PASS}" "${MARKER_TEAM}" 3
-          echo "scenario 10 of ten: a membership change reaches the prefilter in both directions, [${before_users}] to [${after_users}] to [${final_users}]"
+          echo "scenario 10 of thirteen: a membership change reaches the prefilter in both directions, [${before_users}] to [${after_users}] to [${final_users}]"
+
+      # Scenario 11, and the two that follow it, are the ones FILT-05 asks for:
+      # the parity comparison has to cover the new address parameters. They come
+      # after every scenario above because they change no membership, no share
+      # and no file, so they can only be disturbed and never disturb.
+      #
+      # The type filter first, and it is chosen so that it takes nothing away.
+      # Every marker file of this job is a .txt, and the group text of
+      # TYPE_GROUPS in backend/src/findling/query/rewrite.py carries txt, so the
+      # narrowed page has to answer the same set as the unnarrowed dialog. Both
+      # directions stay sharp and --expect-min stays at the value of the
+      # unnarrowed scenario, which is the whole point of picking a filter that
+      # removes nothing: a scenario that had to lower its expectation would be
+      # one nobody could read as a statement any more.
+      #
+      # What it proves: the filter loses no hit the user is allowed to see, and
+      # the narrowed page shows no hit the search dialog does not show him.
+      # What it does not prove: that a filter takes anything away at all. That
+      # is scenario 13, and it is a scenario of its own because the symmetric
+      # comparison cannot carry it.
+      - name: Scenario 11, the type filter that takes nothing away
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+          compare filter-type-neutral "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_OWN}" 3 'types=text'
+          echo "scenario 11 of thirteen: a type filter over the group of the fixture keeps every permitted hit and adds none"
+
+      # Scenario 12, the sort order, and it is not the scenario above with
+      # another parameter. Under a sort mode a different branch of the container
+      # runs: candidates() in backend/src/findling/index/search.py leaves the
+      # fusion window unentered and answers out of _sorted_round, which walks
+      # the engine in date order and calls the permission prefilter _permit() in
+      # a loop of its own. Two branches, two calls of the prefilter, and only a
+      # question under a sort mode reaches the second one.
+      #
+      # The set does not move, only the order inside it does, so both directions
+      # stay sharp and --expect-min stays where it was.
+      #
+      # What it proves: the sorted branch hands the same set through the
+      # permission chain as the relevance branch, over the dialog and over the
+      # page. What it does not prove: any order. Parity is a statement about
+      # sets of fileids, and the order of a sorted answer is the business of the
+      # backend tests and of FILT-02.
+      - name: Scenario 12, the sort order that takes nothing away
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+          compare sort-newest "${OWNER_USER}" "${OWNER_PASS}" "${MARKER_OWN}" 3 'sort=newest'
+          echo "scenario 12 of thirteen: the sorted branch answers the same set through the same permission chain"
+
+      # Scenario 13, the filter that really takes something away, and the one
+      # scenario of this phase the symmetric comparison cannot carry. The shape
+      # below reads like a workaround and is the opposite of one, so the reason
+      # is written out here rather than left to be rediscovered.
+      #
+      # compare() asks three questions and the filter reaches only the third of
+      # them. Under types=images the page therefore answers with nothing while
+      # the search dialog still answers with three files, and parity_diff
+      # reports that as page-missing. That verdict is right and the tool is
+      # right to give it: the two ways into the same search really did answer
+      # two different sets, and a tool that learned an exception for the case
+      # where somebody meant it would lose exactly the rigour it is kept for. So
+      # the removal is measured directly here, in the shape scenario 8 already
+      # uses for the questions its comparison cannot carry, and
+      # scripts/ci/parity_diff.py is not touched.
+      #
+      # Three statements, and not one of them is a statement on its own:
+      #
+      # 1. the removing filter really removes. The page of the owner carries
+      #    three hit rows without it and none with it, and the empty answer is
+      #    the empty state of the page and not its error block, so the page
+      #    answered and its answer is nothing. Without this half the two
+      #    comparisons below would be green on a build whose filter does nothing
+      #    at all.
+      # 2. the extra direction under the removing filter. A user who may see
+      #    none of these files is asked the same narrowed question, and what his
+      #    page shows has to be what the native search shows him, which is
+      #    nothing. --expect-min 0 is the same exception scenario 3 and scenario
+      #    9 already make, and for the same reason: "this user finds nothing" is
+      #    the correct answer here and not a fixture that failed to arrive.
+      # 3. the line that keeps the nought of 2 honest. The same account in the
+      #    same minute, a narrowed question over files he really may see, three
+      #    hits on both sides. Under types=text and not under types=images,
+      #    because a removing filter would make his page disagree with his
+      #    dialog for the very reason spelled out above.
+      - name: Scenario 13, the filter that really takes something away
+        run: |
+          . "${{ runner.temp }}/parity.sh"
+
+          # $1 the page answer. Stops the step when the answer is not the result
+          # page at all, with the two sentences parity_diff draws the same line
+          # with: an empty hit list beside the empty state is a legal empty
+          # answer, an answer carrying the error block is a page that could not
+          # ask, and an answer with neither is not the result page.
+          #
+          # A function of its own and not two lines inside the counter below,
+          # because the counter is read in a command substitution and an exit
+          # inside one leaves the subshell and not the step.
+          page_answered() {
+            if grep -q 'findling-banner--error' "$1"; then
+              echo "::error::$1 carries the error block, so it is a page that could not ask and not an empty result"
+              exit 1
+            fi
+            if ! grep -q 'findling-hits' "$1" && ! grep -q 'findling-empty' "$1"; then
+              echo "::error::$1 carries neither the hit list nor the empty state, so it is not the result page"
+              exit 1
+            fi
+          }
+
+          # $1 the page answer, and it prints how many hit rows it carries. The
+          # same row id parity_diff reads, counted here instead of compared.
+          page_rows() {
+            grep -o 'id="findling-hit-[0-9]*"' "$1" | wc -l
+          }
+
+          ask_page "${OWNER_USER}" "${MARKER_OWN}" page-filter-removes-before.html ''
+          page_answered page-filter-removes-before.html
+          before=$(page_rows page-filter-removes-before.html)
+
+          ask_page "${OWNER_USER}" "${MARKER_OWN}" page-filter-removes.html 'types=images'
+          page_answered page-filter-removes.html
+          after=$(page_rows page-filter-removes.html)
+
+          echo "the page of the owner carries ${before} hit rows unnarrowed and ${after} under types=images"
+          if [ "${before}" -ne 3 ]; then
+            echo "::error::the unnarrowed page carries ${before} hit rows and not three, so the removal below would be measured against nothing"
+            exit 1
+          fi
+          if [ "${after}" -ne 0 ]; then
+            echo "::error::the page carries ${after} hit rows under types=images although every marker file of this job is a text file"
+            exit 1
+          fi
+
+          # The extra direction under the removing filter, and the line that
+          # keeps its nought honest, in this order so that a failure of the
+          # second one explains the first.
+          compare filter-removes-denied "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_OWN}" 0 'types=images'
+          compare filter-removes-control "${COLLEAGUE_USER}" "${COLLEAGUE_PASS}" "${MARKER_SHARED}" 3 'types=text'
+          echo "scenario 13 of thirteen: a removing filter empties the page and hands nobody a file the native search does not hand him"
 
       # The falsification of everything above, and the reason the comparisons are
       # worth anything at all: a gate that has never been seen failing is not
