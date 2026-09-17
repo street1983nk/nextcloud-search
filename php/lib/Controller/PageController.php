@@ -14,6 +14,8 @@ use OCA\Findling\Text\PlainText;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\Files\IMimeTypeDetector;
+use OCP\IDateTimeFormatter;
+use OCP\IDateTimeZone;
 use OCP\IRequest;
 use OCP\IURLGenerator;
 use OCP\IUserSession;
@@ -162,12 +164,28 @@ final class PageController extends Controller {
 	 */
 	public const QUICK_RANGES = ['today', 'week', 'month', 'year'];
 
+	/**
+	 * Two of these seven are new with the filter row, and only one of them is
+	 * used by this class today.
+	 *
+	 * The zone is what turns a quick range into a number of seconds, and the
+	 * formatter is what turns the modification date of a hit into the line
+	 * under its path (plan 13-08). The second one arrives here one plan early
+	 * on purpose: both are constructor arguments of the same class, and pulling
+	 * them in one at a time would make every test of this page grow its double
+	 * list twice for one feature.
+	 *
+	 * Both interfaces are marked in the server as available since version 8.0,
+	 * so both exist in every one of the three releases this app declares.
+	 */
 	public function __construct(
 		IRequest $request,
 		private SearchService $searchService,
 		private IUserSession $userSession,
 		private IMimeTypeDetector $mimeTypes,
 		private IURLGenerator $urlGenerator,
+		private IDateTimeZone $dateTimeZone,
+		private IDateTimeFormatter $dateTimeFormatter,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -391,6 +409,83 @@ final class PageController extends Controller {
 	}
 
 	/**
+	 * The lower bound of one quick range, in seconds of the Unix epoch, or none
+	 * for a name that is not one of the four.
+	 *
+	 * Every line of this method hangs off the zone of the signed in user, and
+	 * that is the whole point of it. A modification date is an epoch value and
+	 * therefore free of any zone, but "today" is not an epoch value: it is a
+	 * statement about a calendar day, and a calendar day begins in the zone of
+	 * the person who says the word. Computed without a zone, the value would be
+	 * the one of the default zone of the server, frequently UTC, and for a user
+	 * in central Europe it would sit one or two hours beside the day he means.
+	 * At night that is not a rounding difference but a missing result: "today"
+	 * would leave out the files of the last few hours, and the page would look
+	 * correct while being wrong.
+	 *
+	 * The four windows are calendar windows and not rolling ones. "Today" and
+	 * "this year" are calendar terms to begin with, and two models side by side
+	 * on one row of chips is something nobody can explain to the person reading
+	 * it: seven days that end at midnight next to seven days that end now would
+	 * be two different promises in the same typeface.
+	 *
+	 * All four set a lower bound and none of them sets an upper one, so every
+	 * one of them means "since", never "between".
+	 */
+	private function quickRangeStart(string $range): ?int {
+		$now = new \DateTimeImmutable('now', $this->dateTimeZone->getTimeZone());
+		$midnight = $now->setTime(0, 0);
+
+		return match ($range) {
+			'today' => $midnight->getTimestamp(),
+			'week' => $midnight->sub(new \DateInterval('P6D'))->getTimestamp(),
+			'month' => $midnight->sub(new \DateInterval('P29D'))->getTimestamp(),
+			'year' => $midnight->setDate((int)$now->format('Y'), 1, 1)->getTimestamp(),
+			default => null,
+		};
+	}
+
+	/**
+	 * The narrowing of this address as one named value, written out in full
+	 * after the manner of caps().
+	 *
+	 * The quick range and a hand written lower bound are two ways to the same
+	 * field, and when both are set the narrower one wins: the effective lower
+	 * bound is the larger of the two, because both of them narrow and neither
+	 * of them widens. Taking the smaller one would let an address somebody
+	 * pasted together widen the range the visible chip promises, which is the
+	 * one outcome where the page would show less than it searches. The upper
+	 * bound has no quick range behind it and is therefore the raw value or
+	 * nothing.
+	 *
+	 * What this plan deliberately does not do is hand the computed state to the
+	 * template. The active groups, the sort mode, the active quick range and
+	 * the two effective bounds are all known here, and the chips, the sort
+	 * links and the reset link that display them are built in plan 13-08. Until
+	 * then the values travel into the search and nowhere else, which is the
+	 * order the phase chose: first the address narrows the search, then the
+	 * page shows what it narrowed.
+	 */
+	private function filters(): SearchFilters {
+		$range = $this->quickRange();
+		$quickSince = $range === null ? null : $this->quickRangeStart($range);
+		$since = $this->epochParam('since');
+
+		if ($quickSince !== null && $since !== null) {
+			$since = max($quickSince, $since);
+		} elseif ($quickSince !== null) {
+			$since = $quickSince;
+		}
+
+		return new SearchFilters(
+			$this->typeGroups(),
+			$this->sortMode(),
+			$since,
+			$this->epochParam('until'),
+		);
+	}
+
+	/**
 	 * The container offset at which every display page so far began.
 	 *
 	 * The last element is where the displayed page starts, the ones in front of
@@ -454,12 +549,7 @@ final class PageController extends Controller {
 			return new SearchOutcome([], [], $startCursor, false, false, SearchOutcome::FAILURE_NO_HOME_FOLDER);
 		}
 
-		// An intermediate step of plan 13-05 and nothing more. The page does not
-		// read its filters out of the address yet, so it hands down the one
-		// value that means "nothing is narrowed" and the request stays exactly
-		// the request it was. Plan 13-07 builds a SearchFilters out of the query
-		// string of this address, with a silent fallback, and passes it here.
-		return $this->searchService->run($user, $query, $titleOnly, $startCursor, $this->caps(), SearchFilters::none());
+		return $this->searchService->run($user, $query, $titleOnly, $startCursor, $this->caps(), $this->filters());
 	}
 
 	/**
