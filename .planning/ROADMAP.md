@@ -99,7 +99,7 @@ Plans:
   4. Filter und Sortierung stehen in der URL, sind sichtbar und einzeln entfernbar; jede Aenderung landet auf Seite 1, ein fremder Cursorpfad wird abgewiesen
   5. Der Paritaetstest deckt die neuen Parameter ab: kein gefilterter oder sortierter Treffer umgeht den ACL-Vorfilter oder den finalen PHP-Recheck
 
-**Plans:** 5/13 plans executed
+**Plans:** 7/13 plans executed
 
 Plans:
 **Welle 1**
@@ -124,8 +124,8 @@ Plans:
 
 **Welle 6** *(wartet auf Welle 5)*
 
-- [ ] 13-06-PLAN.md: Datumsfilter des Unified-Search-Dialogs (getSupportedFilters)
-- [ ] 13-07-PLAN.md: Geschlossene Adresswerte, Schnellbereiche in der Nutzer-Zeitzone, Filterobjekt der Seite
+- [x] 13-06-PLAN.md: Datumsfilter des Unified-Search-Dialogs (getSupportedFilters)
+- [x] 13-07-PLAN.md: Geschlossene Adresswerte, Schnellbereiche in der Nutzer-Zeitzone, Filterobjekt der Seite
 
 **Welle 7** *(wartet auf Welle 6)*
 
@@ -209,7 +209,7 @@ Plans:
 | 10. Vergleichsmessung auf der AWS-Box | v1.1 | 7/7 | Complete | 2026-09-10 |
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
-| 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 5/13 | In Progress|  |
+| 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 7/13 | In Progress|  |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 0/? | Not started | - |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |

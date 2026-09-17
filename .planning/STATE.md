@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 13-05-PLAN.md
-last_updated: "2026-09-16T21:35:00.000Z"
-last_activity: 2026-09-16 -- Plan 13-05 abgeschlossen (run nimmt die Filter, das Datum kommt aus dem bestätigten Knoten)
+stopped_at: Completed 13-07-PLAN.md
+last_updated: "2026-09-17T12:20:00.000Z"
+last_activity: 2026-09-17 -- Welle 6 abgeschlossen (13-06 Datumsfilter des Dialogs, 13-07 Adresswerte und Kalenderfenster), beide Worktrees gemergt
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 13
-  percent: 28
+  completed_plans: 15
+  percent: 33
 ---
 
 # Project State
@@ -26,16 +26,30 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 6 of 13 (13-01 bis 13-05 abgeschlossen)
+Plan: 8 of 13 (13-01 bis 13-07 abgeschlossen)
 Status: Executing Phase 13
-Progress: [███░░░░░░░] 28%
-Last activity: 2026-09-16 -- Plan 13-05 abgeschlossen (run nimmt die Filter, das Datum kommt aus dem bestätigten Knoten)
+Progress: [███░░░░░░░] 33%
+Last activity: 2026-09-17 -- Welle 6 abgeschlossen (13-06 und 13-07), Baumhash-Konflikt beider Plaene am Merge aufgeloest
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 13-06/13-07 (Merge): Beide Plaene zogen auf ihrem eigenen Branch den Baumhash der
+  PHP-Haelfte nach, jeder gegen einen Baum mit nur seiner eigenen Aenderung. Der Hash
+  laeuft ueber die ganze Haelfte, also ist der gemergte Baum ein dritter Baum mit einem
+  dritten Hash; er wurde nach dem Merge mit demselben Rezept neu gelesen
+  (6166e963..., weiterhin 64 Dateien). Beide Begruendungsabsaetze bleiben stehen.
+- 13-06: `getSupportedFilters()` meldet vier Namen. Ein nicht deklarierter exklusiver
+  Filter kostet die ganze Ergebnisgruppe, entweder weil die Oberflaeche den Provider
+  gar nicht erst fragt oder weil seine Gruppe in einem 400 endet; fuer den Nutzer sah
+  beides gleich aus, Findling war weg, sobald ein Datum gesetzt war (FILT-03).
+- 13-07: Die vier Schnellbereiche sind Kalenderfenster in der Zeitzone des Nutzers,
+  nicht in der des Servers. Die Tagesarithmetik laeuft ueber `DateInterval`, und die
+  zwei Faelle zur engeren Grenze meiden das Paar "dieses Jahr"/"gestern", das am
+  1. Januar rot waere.
 
 - 13-05: `SearchService::run` nimmt die Filter als sechsten Parameter, hinter
   `SearchCaps` und ohne Vorgabewert, und reicht dasselbe Objekt an beide
