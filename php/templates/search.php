@@ -483,26 +483,57 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 		         the heading of this block is the h1 above, which is what keeps
 		         the page at exactly one first level heading.
 
-		         With a term the heading is true in both variants and therefore
-		         does not move; only the line under it does. The second variant
-		         belongs to $allRejected and is the whole of DI-07-03: this run
-		         was handed candidates and kept none of them, so the old line
-		         would send the user off to rewrite a term that was never the
-		         problem.
+		         With a term and without a filter the heading is true in both
+		         variants and therefore does not move; only the line under it
+		         does. The second of those two belongs to $allRejected and is
+		         the whole of DI-07-03: this run was handed candidates and kept
+		         none of them, so the old line would send the user off to
+		         rewrite a term that was never the problem.
 
-		         Neither variant names a file, a path or a number. A count of
-		         the dropped candidates would let anybody measure a stranger's
-		         folder one term at a time (T-11-50); the sentence says only
-		         what every user of a shared instance knows anyway, and it says
-		         nothing at all about which files those are. */ ?>
+		         The third variant with a term belongs to an active filter, and
+		         it is a BRANCH IN HERE and never a block beside it. Beside it,
+		         "no results with the active filters" would stand over a banner
+		         that says the search is not answering at all, which is the very
+		         contradiction $showEmpty exists to prevent. The filter row above
+		         stays on the screen in this state, so the way back out of the
+		         filter is visible while this block speaks.
+
+		         And it wins over the $allRejected variant while a filter is in
+		         force. Both sentences are true in that state, but only one of
+		         them names a lever the visitor holds: "other files contain this
+		         word, but none that you may open" has no next step, "remove a
+		         filter" has one, and it is one click away and reversible.
+		         Without an active filter the $allRejected variant is unchanged
+		         the one from V-1a.
+
+		         No variant names a file, a path or a number. A count of the
+		         dropped candidates would let anybody measure a stranger's
+		         folder one term at a time (T-11-50), and the filter variant
+		         never says how many hits another filter would have had, for
+		         exactly the same reason. Neither of them says a word about
+		         permissions. */ ?>
 		<div class="findling-empty">
 			<?php if ($hasQuery) { ?>
 				<svg class="findling-empty__icon" viewBox="0 0 24 24" width="64" height="64" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($fileSearchIcon); ?>"/></svg>
-				<h2 class="findling-empty__heading"><?php p($l->t('No file contains "%s"', [$query])); ?></h2>
-				<?php if ($allRejected) { ?>
-					<p class="findling-empty__text"><?php p($l->t('Other files contain this word, but none that you may open.')); ?></p>
+				<?php if ($filtersActive) { ?>
+					<h2 class="findling-empty__heading"><?php p($l->t('No results with the active filters')); ?></h2>
+					<p class="findling-empty__text"><?php p($l->t('Remove a filter or widen the time range.')); ?></p>
+					<?php /* One decision of the controller, read twice: the reset
+					         link exists exactly when a filter is in force, so this
+					         second question can only be answered yes here. It is
+					         asked anyway because the sentence above promises a next
+					         step, and a promise without the link would be the one
+					         empty state on this page with no way out of itself. */ ?>
+					<?php if ($resetUrl !== null) { ?>
+						<p><a class="findling-empty__reset" href="<?php p($resetUrl); ?>"><?php p($l->t('Reset filters')); ?></a></p>
+					<?php } ?>
 				<?php } else { ?>
-					<p class="findling-empty__text"><?php p($l->t('Try another word, a part of a compound word, or check the spelling.')); ?></p>
+					<h2 class="findling-empty__heading"><?php p($l->t('No file contains "%s"', [$query])); ?></h2>
+					<?php if ($allRejected) { ?>
+						<p class="findling-empty__text"><?php p($l->t('Other files contain this word, but none that you may open.')); ?></p>
+					<?php } else { ?>
+						<p class="findling-empty__text"><?php p($l->t('Try another word, a part of a compound word, or check the spelling.')); ?></p>
+					<?php } ?>
 				<?php } ?>
 			<?php } else { ?>
 				<svg class="findling-empty__icon" viewBox="0 0 24 24" width="64" height="64" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($magnifyIcon); ?>"/></svg>
