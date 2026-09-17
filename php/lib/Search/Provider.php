@@ -127,11 +127,25 @@ final class Provider implements IFilteringProvider {
 	 * no error, no entry, no hint. The built in title-only filter is our
 	 * "file name instead of content", and term is the search term itself.
 	 *
+	 * The two date bounds are the sentence this list was missing until plan
+	 * 13-06. Whoever set a date in the dialog watched Findling disappear out of
+	 * it, and there were two ways for that to happen: the surface reads the
+	 * filter list of every provider and simply stopped asking this one, or the
+	 * group ended in the HTTP 400 that an undeclared exclusive filter is
+	 * answered with. Both looked the same to the user, a search without us in
+	 * it, which is why the repair is one line here and its effect two screens
+	 * below.
+	 *
 	 * @return list<string>
 	 */
 	#[\Override]
 	public function getSupportedFilters(): array {
-		return [IFilter::BUILTIN_TERM, IFilter::BUILTIN_TITLE_ONLY];
+		return [
+			IFilter::BUILTIN_TERM,
+			IFilter::BUILTIN_TITLE_ONLY,
+			IFilter::BUILTIN_SINCE,
+			IFilter::BUILTIN_UNTIL,
+		];
 	}
 
 	/**
@@ -147,6 +161,15 @@ final class Provider implements IFilteringProvider {
 	}
 
 	/**
+	 * No filter of our own, and the list stays empty on purpose in v1.2.
+	 *
+	 * A custom filter has to be registered together with a FilterDefinition,
+	 * and a name without one turns the whole provider list of the dialog into
+	 * an error, which costs every provider and not only this one. File type and
+	 * sort mode therefore live on the own result page and nowhere else in this
+	 * version: the dialog understands the term, the file name switch and the
+	 * two built in dates, and that is the complete contract (D-05).
+	 *
 	 * @return list<\OCP\Search\FilterDefinition>
 	 */
 	#[\Override]
@@ -166,19 +189,30 @@ final class Provider implements IFilteringProvider {
 
 		$titleOnly = $this->titleOnly($query);
 
+		// What this dialog is able to narrow, and it is exactly two things. The
+		// type groups stay empty and the sort mode stays the default, and
+		// neither of the two is an unfinished corner: a chip of our own would
+		// need a FilterDefinition, a name without one breaks the provider list
+		// of the whole dialog, so file type and sort mode are offered on the
+		// own result page instead (D-05).
+		//
+		// Both bounds are clamped before they leave this method, so that an
+		// absurd date from over there cannot become a range query across an
+		// absurd span.
+		$filters = new SearchFilters(
+			[],
+			SearchFilters::SORT_DEFAULT,
+			$this->epochWithin($this->epochOf($query, IFilter::BUILTIN_SINCE)),
+			$this->epochWithin($this->epochOf($query, IFilter::BUILTIN_UNTIL)),
+		);
+
 		$outcome = $this->searchService->run(
 			$user,
 			$term,
 			$titleOnly,
 			$this->startOffset($query),
 			$this->caps(max(1, $query->getLimit())),
-			// An intermediate step of plan 13-05 and nothing more. The dialog
-			// offers no chips of its own, so nothing is narrowed here yet. Plan
-			// 13-06 reads the two date filters the dialog does have and builds
-			// them into this value; type groups and sort mode stay on the own
-			// result page, because a filter without a FilterDefinition breaks
-			// the provider list of the whole dialog.
-			SearchFilters::none(),
+			$filters,
 		);
 
 		if ($outcome->hits === []) {
@@ -265,6 +299,45 @@ final class Provider implements IFilteringProvider {
 	}
 
 	/**
+	 * One of the two built in date bounds as a Unix epoch, or nothing at all.
+	 *
+	 * The same defensive shape as titleOnly() above, and for the same reason.
+	 * The value of a date filter is a \DateTimeImmutable over there, so
+	 * anything else is a defect on that side, and a defect on that side counts
+	 * as "not set" over here rather than as an exception: somebody who picked a
+	 * date is owed an answer about the term, not an empty result group and not
+	 * a stack trace.
+	 *
+	 * getTimestamp() carries no time zone and is therefore comparable against
+	 * mtime without a conversion, which is why this path needs no time zone at
+	 * all. The quick ranges of the own result page do need one, because a
+	 * calendar word has to be told which midnight it meant.
+	 */
+	private function epochOf(ISearchQuery $query, string $name): ?int {
+		$filter = $query->getFilter($name);
+		if ($filter === null) {
+			return null;
+		}
+
+		$value = $filter->get();
+
+		return $value instanceof \DateTimeImmutable ? $value->getTimestamp() : null;
+	}
+
+	/**
+	 * One time bound inside the range both halves of this app agree on.
+	 *
+	 * Clamped and never refused, the same way ExAppService does it for the
+	 * values of the own result page, and against the same ceiling. A bound
+	 * above SEARCH_MTIME_MAX is answered by the container with a 422, and a 422
+	 * arrives here as an empty result group that reads like "nothing found";
+	 * the honest answer to an absurd date is the search it was meant to narrow.
+	 */
+	private function epochWithin(?int $epoch): ?int {
+		return $epoch === null ? null : max(0, min(SearchFilters::EPOCH_MAX, $epoch));
+	}
+
+	/**
 	 * Where the next page starts. The dialog hands back the cursor of the
 	 * previous answer, which is the offset the container asked us to continue
 	 * from. Anything that is not a plain number starts over at the top.
@@ -330,6 +403,13 @@ final class Provider implements IFilteringProvider {
 	 * nothing else: no page and no cursor path, because the way in is always page
 	 * one. Parameters that are not a placeholder of the route are appended as a
 	 * query string by the url generator, which is what the page reads.
+	 *
+	 * The two date bounds of the dialog are knowingly left out of that address.
+	 * The door leads to page one of a search nobody narrowed, and that is a
+	 * decision rather than a forgotten parameter: the page owns its own filter
+	 * row, and handing it a bound it does not show as a chip would leave a user
+	 * in front of fewer hits than the dialog promised, with nothing on the page
+	 * saying why.
 	 */
 	private function entryPoint(string $term, bool $titleOnly): SearchResultEntry {
 		$entry = new SearchResultEntry(
