@@ -7,10 +7,13 @@ namespace OCA\Findling\Tests\Unit;
 use OCA\Findling\Controller\PageController;
 use OCA\Findling\Service\ApprovedHit;
 use OCA\Findling\Service\SearchCaps;
+use OCA\Findling\Service\SearchFilters;
 use OCA\Findling\Service\SearchOutcome;
 use OCA\Findling\Service\SearchService;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\Files\IMimeTypeDetector;
+use OCP\IDateTimeFormatter;
+use OCP\IDateTimeZone;
 use OCP\IRequest;
 use OCP\IURLGenerator;
 use OCP\IUser;
@@ -29,11 +32,12 @@ use Psr\Log\LoggerInterface;
  * a second suite that made statements about it here would be the second opinion
  * on a question this page is explicitly not allowed to have (UI-03).
  *
- * What is left for this file is the address bar. Four values arrive from
+ * What is left for this file is the address bar. Nine values arrive from
  * outside, every one of them editable by hand, and each has a rule and a silent
- * fallback. One case per line of the URL contract of the 09-UI-SPEC, plus the
- * two directions of the paging contract and the states of the state inventory
- * that the controller itself produces.
+ * fallback. One case per line of the URL contract of the 09-UI-SPEC and of its
+ * continuation in the 13-UI-SPEC, plus the two directions of the paging
+ * contract and the states of the state inventory that the controller itself
+ * produces.
  *
  * The numbers of the page are read out of the class with reflection and never
  * written down here. A copy in this file would keep asserting the old page size
@@ -42,10 +46,24 @@ use Psr\Log\LoggerInterface;
  */
 #[CoversClass(PageController::class)]
 final class PageControllerTest extends TestCase {
+	/**
+	 * The zone of the staged user, and it is on purpose not UTC.
+	 *
+	 * The quick range cases below assert a midnight, and a midnight is the one
+	 * thing that proves nothing when the test zone and the default zone of the
+	 * machine agree: a controller that had forgotten the zone of the user
+	 * entirely would pass every one of them on a runner set to UTC. Central
+	 * European time is one or two hours off UTC depending on the season, so
+	 * either way the two midnights are different numbers.
+	 */
+	private const TEST_ZONE = 'Europe/Berlin';
+
 	private SearchService&MockObject $searchService;
 	private IUserSession&MockObject $userSession;
 	private IMimeTypeDetector&MockObject $mimeTypes;
 	private IURLGenerator&MockObject $urlGenerator;
+	private IDateTimeZone&MockObject $dateTimeZone;
+	private IDateTimeFormatter&MockObject $dateTimeFormatter;
 	private LoggerInterface&MockObject $logger;
 
 	protected function setUp(): void {
@@ -55,7 +73,11 @@ final class PageControllerTest extends TestCase {
 		$this->userSession = $this->createMock(IUserSession::class);
 		$this->mimeTypes = $this->createMock(IMimeTypeDetector::class);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
+		$this->dateTimeZone = $this->createMock(IDateTimeZone::class);
+		$this->dateTimeFormatter = $this->createMock(IDateTimeFormatter::class);
 		$this->logger = $this->createMock(LoggerInterface::class);
+
+		$this->dateTimeZone->method('getTimeZone')->willReturn(new \DateTimeZone(self::TEST_ZONE));
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('testuser');
@@ -92,6 +114,8 @@ final class PageControllerTest extends TestCase {
 			$this->userSession,
 			$this->mimeTypes,
 			$this->urlGenerator,
+			$this->dateTimeZone,
+			$this->dateTimeFormatter,
 			$this->logger,
 		);
 	}
@@ -153,6 +177,78 @@ final class PageControllerTest extends TestCase {
 		$this->controller($params)->index();
 
 		return $startCursor;
+	}
+
+	/**
+	 * The filter object the page handed down for one address.
+	 *
+	 * The counterpart of startCursorOf, and built the same way: a fresh double
+	 * that catches one argument of the one call. Every case of the section
+	 * below asserts against the object that really reached the service and not
+	 * against a value the controller returned to its template, because the
+	 * template side of these five values is built one plan later and a case
+	 * that waited for it would assert nothing today.
+	 *
+	 * @param array<string,mixed> $params
+	 */
+	private function filtersOf(array $params): SearchFilters {
+		$filters = null;
+		$searchService = $this->createMock(SearchService::class);
+		$searchService->method('run')->willReturnCallback(
+			function (
+				IUser $user,
+				string $term,
+				bool $titleOnly,
+				int $startCursor,
+				SearchCaps $caps,
+				SearchFilters $handed,
+			) use (&$filters): SearchOutcome {
+				$filters = $handed;
+
+				return $this->outcome();
+			},
+		);
+		$this->searchService = $searchService;
+
+		$this->controller($params + ['query' => 'akte'])->index();
+
+		self::assertInstanceOf(SearchFilters::class, $filters);
+
+		return $filters;
+	}
+
+	/**
+	 * The calendar day a quick range begins on, as a date in the test zone.
+	 *
+	 * Deliberately not built the way the controller builds it: the controller
+	 * takes midnight first and subtracts an interval, this one reads the day
+	 * off the current moment and formats it. A counter check that repeats the
+	 * pattern of the thing it checks agrees with it even when both are wrong.
+	 */
+	private function dayOf(string $range): string {
+		$now = new \DateTimeImmutable('now', new \DateTimeZone(self::TEST_ZONE));
+
+		return match ($range) {
+			'today' => $now->format('Y-m-d'),
+			'week' => $now->modify('-6 days')->format('Y-m-d'),
+			'month' => $now->modify('-29 days')->format('Y-m-d'),
+			'year' => $now->format('Y') . '-01-01',
+			default => '',
+		};
+	}
+
+	/**
+	 * That a lower bound is midnight of an expected calendar day in the zone of
+	 * the user, read back out of the epoch value rather than compared as a bare
+	 * number: a number that is off by an hour is hard to read, while a time of
+	 * 23:00:00 on the day before says what went wrong.
+	 */
+	private function assertMidnightOf(string $day, ?int $since): void {
+		self::assertIsInt($since, "there is no lower bound at all, expected midnight of {$day}");
+
+		$read = (new \DateTimeImmutable('@' . $since))->setTimezone(new \DateTimeZone(self::TEST_ZONE));
+
+		self::assertSame("{$day} 00:00:00", $read->format('Y-m-d H:i:s'));
 	}
 
 	/**
@@ -218,6 +314,160 @@ final class PageControllerTest extends TestCase {
 		}
 
 		self::assertFalse($this->paramsOf(['query' => 'akte'])['titleOnly']);
+	}
+
+	// -- the five values of the filter row -----------------------------------
+
+	public function testTheTypeGroupsOfTheAddressReachTheSearch(): void {
+		$filters = $this->filtersOf(['types' => 'pdf,images']);
+
+		self::assertSame(['pdf', 'images'], $filters->types);
+	}
+
+	public function testTheTwoSortModesOfTheAddressReachTheSearch(): void {
+		self::assertSame('newest', $this->filtersOf(['sort' => 'newest'])->sort);
+		self::assertSame('oldest', $this->filtersOf(['sort' => 'oldest'])->sort);
+	}
+
+	public function testTheTwoTimeBoundsOfTheAddressReachTheSearchAsNumbers(): void {
+		// Two different numbers on purpose: one number in both fields would
+		// pass even if the page read the same parameter twice.
+		$filters = $this->filtersOf(['since' => '1757980800', 'until' => '1758585600']);
+
+		self::assertSame(1757980800, $filters->since);
+		self::assertSame(1758585600, $filters->until);
+	}
+
+	public function testTheFourQuickRangesAreCalendarWindowsInTheZoneOfTheUser(): void {
+		// The four windows of the chip row, each read back into the zone of the
+		// staged user. All four set a lower bound and none of them sets an
+		// upper one, so every one of them means "since" and never "between".
+		$ranges = $this->constantOf('QUICK_RANGES');
+		self::assertSame(['today', 'week', 'month', 'year'], $ranges);
+
+		foreach ($ranges as $range) {
+			$filters = $this->filtersOf(['range' => $range]);
+
+			$this->assertMidnightOf($this->dayOf($range), $filters->since);
+			self::assertNull($filters->until, "{$range} must not set an upper bound");
+		}
+	}
+
+	public function testTheTypeListIsLowercasedAndTrimmed(): void {
+		// Capitals out of a hand written address and a space out of a link
+		// somebody encoded by hand, and neither of the two costs a group.
+		$filters = $this->filtersOf(['types' => 'PDF, images']);
+
+		self::assertSame(['pdf', 'images'], $filters->types);
+	}
+
+	public function testAnUnknownGroupIsLeftOutAndARepeatedOneIsKeptOnce(): void {
+		$filters = $this->filtersOf(['types' => 'pdf,xyz,pdf']);
+
+		self::assertSame(['pdf'], $filters->types);
+	}
+
+	public function testTheTypeListIsCanonicalisedIntoTheOrderOfTheSurface(): void {
+		// The same two groups in the other order are the same filter and have
+		// to arrive as the same list: one plan further on the cursor path is
+		// bound to a fingerprint of this state, and two orders would be two
+		// fingerprints for one selection.
+		self::assertSame(
+			$this->filtersOf(['types' => 'pdf,images'])->types,
+			$this->filtersOf(['types' => 'images,pdf'])->types,
+		);
+	}
+
+	public function testAListLongerThanTheClosedOneStaysWithinIt(): void {
+		// Twice the closed list, so twelve entries of which six are names, and
+		// the answer is the closed list itself and not a list of twelve.
+		$types = SearchFilters::TYPES;
+
+		$filters = $this->filtersOf(['types' => implode(',', [...$types, ...$types])]);
+
+		self::assertSame($types, $filters->types);
+	}
+
+	public function testASortModeTheAddressDoesNotKnowIsRelevance(): void {
+		foreach (['quatsch', 'NEWEST', 'date', '', '1'] as $other) {
+			self::assertSame(
+				SearchFilters::SORT_DEFAULT,
+				$this->filtersOf(['sort' => $other])->sort,
+				"sort={$other} must fall back to the default mode",
+			);
+		}
+	}
+
+	public function testAQuickRangeTheAddressDoesNotKnowSetsNoBoundAtAll(): void {
+		foreach (['quatsch', 'TODAY', 'week,month', ''] as $other) {
+			$filters = $this->filtersOf(['range' => $other]);
+
+			self::assertNull($filters->since, "range={$other} must set no lower bound");
+			self::assertNull($filters->until, "range={$other} must set no upper bound");
+		}
+	}
+
+	public function testATimeBoundThatIsNotOneIsNotSet(): void {
+		// A word, a negative number, a number above the ceiling both halves of
+		// this app carry, a fraction and a leading space. All five mean the
+		// same thing here: there is no such bound, and the search runs on.
+		$ceiling = SearchFilters::EPOCH_MAX;
+
+		foreach (['quatsch', '-5', (string)($ceiling + 1), '1.5', ' 17'] as $bad) {
+			$filters = $this->filtersOf(['since' => $bad, 'until' => $bad]);
+
+			self::assertNull($filters->since, "since={$bad} must not be a bound");
+			self::assertNull($filters->until, "until={$bad} must not be a bound");
+		}
+	}
+
+	public function testTheNarrowerOfTheTwoLowerBoundsWins(): void {
+		// Both ways to a lower bound narrow and neither of them widens, so the
+		// later of the two is the one that counts. Both cases below hold on
+		// every day of the year, which the obvious pair of "this year" and
+		// "yesterday" would not: on the first of January yesterday is earlier
+		// than the first of January.
+		$now = new \DateTimeImmutable('now', new \DateTimeZone(self::TEST_ZONE));
+
+		// A bound inside the running year is never earlier than the first of
+		// January, so here the raw value of the address is the narrower one.
+		$inThisYear = $now->getTimestamp();
+		self::assertSame(
+			$inThisYear,
+			$this->filtersOf(['range' => 'year', 'since' => (string)$inThisYear])->since,
+		);
+
+		// And a bound a whole year back is never later than midnight of today,
+		// so there the boundary of the chip is the narrower one.
+		$this->assertMidnightOf(
+			$this->dayOf('today'),
+			$this->filtersOf([
+				'range' => 'today',
+				'since' => (string)$now->modify('-1 year')->getTimestamp(),
+			])->since,
+		);
+	}
+
+	public function testNotOneBrokenValueOfTheFilterRowProducesAMessage(): void {
+		// Every wrong value of the row in one address, and the page answers
+		// with a search rather than with a statement about its own address bar
+		// (T-09-09, T-13-34): no error state, no log line, no exception, and
+		// the term the user typed is still the term of the page.
+		$this->logger->expects(self::never())->method('warning');
+		$this->answering($this->outcome());
+
+		$params = $this->paramsOf([
+			'query' => 'akte',
+			'types' => 'xyz,,%%%',
+			'sort' => 'quatsch',
+			'range' => 'gestern',
+			'since' => '-5',
+			'until' => 'morgen',
+		]);
+
+		self::assertNull($params['failure']);
+		self::assertSame([], $params['hits']);
+		self::assertSame('akte', $params['query']);
 	}
 
 	// -- the page number -----------------------------------------------------

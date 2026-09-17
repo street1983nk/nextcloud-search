@@ -241,8 +241,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # ProviderTest.php follows with the cases for the four declared names, the two
 # bounds as epochs, the value of the wrong kind that counts as not set, and the
 # two clamps.
+# Moved on 2026-09-17 again, by plan 13-07, and the count stays at 64 a third
+# time because no file was added or removed. Two further files changed their
+# bytes: PageController.php reads the five filter values out of its address and
+# computes the calendar windows in the zone of the user, and PageControllerTest
+# .php follows it with the two new doubles of the constructor.
+# The figure below is neither of the two the plans wrote on their own branches.
+# Both were measured against a tree that held only that plan's own change, and
+# the hash is over the whole half, so the merge of the two is a third tree with
+# a third hash. It was read off the merged tree with the same recipe.
 PHP_FILES_TODAY = 64
-PHP_TREE_HASH_TODAY = "b7a029ccc76f71b0f2dfc563d09ebcd442aa2f61fc2c5a210cd204d57c43d953"
+PHP_TREE_HASH_TODAY = "6166e963fee0ff2389cd06da66c0a652f3ceebd4a40cce267dfa9c787bd4e9a2"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
