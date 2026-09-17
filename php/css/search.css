@@ -183,6 +183,146 @@
 	text-decoration: underline;
 }
 
+/* -- block two b, the filter row ------------------------------------------- */
+
+/* Three rows, one under the other, and the distance to the hit list is the same
+   twenty four the banner keeps above it, so the row sits in the rhythm of the
+   page rather than in one of its own. */
+.findling-filters {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--default-grid-baseline) * 2);
+	margin-block: 0 calc(var(--default-grid-baseline) * 6);
+}
+
+.findling-filters__row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--default-grid-baseline) * 4);
+}
+
+.findling-filters__label {
+	font-size: var(--font-size-small);
+	font-weight: 400;
+	line-height: var(--default-line-height);
+	color: var(--color-text-maxcontrast);
+}
+
+/* The chips of a group wrap and never scroll sideways; the rule at the mobile
+   breakpoint says why, and it says it there because that is where the choice
+   would be made. */
+.findling-filters__group {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--default-grid-baseline) * 2);
+}
+
+.findling-sort {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--default-grid-baseline) * 4);
+}
+
+/* The chip of the administration page is a label; this one is a link. It keeps
+   the shape from there and takes the behaviour of a pager step: the full
+   clickable height, no underline, and the ground of the page rather than the
+   hover surface, which is spent on the state below. */
+.findling-chip-link {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--default-grid-baseline);
+	min-height: var(--default-clickable-area);
+	padding-inline: calc(var(--default-grid-baseline) * 2);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-small);
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: var(--font-size-small);
+	font-weight: 400;
+	line-height: var(--default-line-height);
+	text-decoration: none;
+}
+
+.findling-chip-link svg {
+	flex: 0 0 auto;
+}
+
+/* The fourth and last thing the accent of this page is spent on, and it is the
+   light pair and not the strong accent on purpose: an active chip is a STATE
+   and not a call to action. The strong colour stays with the one button that
+   moves the page forward, because a page with four equally loud surfaces leaves
+   the eye without an anchor. The light pair is what the server ships as its
+   selection colour, contrast checked, in light, dark and high contrast alike,
+   so nothing about it is decided here either.
+
+   The colour is never the only carrier of the state: the close symbol and
+   aria-current stand right beside it. Somebody who cannot tell the two surfaces
+   apart still reads the state off the mark, and a screen reader hears it. */
+.findling-chip-link--active {
+	border-color: var(--color-primary-element);
+	background-color: var(--color-primary-element-light);
+	color: var(--color-primary-element-light-text);
+}
+
+/* One surface for every control of this row under the pointer and under the
+   focus, the same one the hit rows take. The active chip loses its accent
+   ground while it is hovered and keeps its border and its close symbol, so the
+   state is still on the screen; and nothing here removes an outline, so the
+   focus ring of the core is exactly as it was. */
+.findling-chip-link:hover,
+.findling-chip-link:focus,
+.findling-sort__link:hover,
+.findling-sort__link:focus,
+.findling-filters__reset:hover,
+.findling-filters__reset:focus {
+	background-color: var(--color-background-hover);
+}
+
+/* The shape of a chip without the chip: no border and no surface of its own,
+   because three words side by side are read as one set and ten outlines in two
+   rows above them are enough boxes for one page. */
+.findling-sort__link {
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--default-clickable-area);
+	padding-inline: calc(var(--default-grid-baseline) * 2);
+	border-radius: var(--border-radius-small);
+	color: var(--color-main-text);
+	font-size: var(--font-size-small);
+	font-weight: 400;
+	line-height: var(--default-line-height);
+	text-decoration: none;
+}
+
+/* Everything of the link above and one thing more. The weight is a carrier of
+   state here and not a fourth typographic role: seven hundred is the weight the
+   file name and every heading already use, so nothing new is invented for the
+   occasion. It stands where a chip has its close symbol, because this row has
+   no symbol at all, and aria-current says the same thing to somebody who sees
+   neither. */
+.findling-sort__link--active {
+	font-weight: 700;
+}
+
+/* The last element of the time row, pushed to the far end of it from six
+   hundred and forty upwards, so that the one control which undoes everything
+   does not sit between the controls it undoes. Underlined rather than boxed:
+   it is a sentence and not an eleventh chip. */
+.findling-filters__reset {
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--default-clickable-area);
+	margin-inline-start: auto;
+	padding-inline: calc(var(--default-grid-baseline) * 2);
+	border-radius: var(--border-radius-small);
+	color: var(--color-main-text);
+	font-size: var(--font-size-small);
+	font-weight: 400;
+	line-height: var(--default-line-height);
+	text-decoration: underline;
+}
+
 /* -- block three, the hit list --------------------------------------------- */
 
 .findling-hits {
@@ -259,6 +399,19 @@
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* The date line, and it exists only under a date ordering. One line rather than
+   an addition to the path above it: the path is one line with an ellipsis, so
+   an addition would be the first thing cut away. It never wraps, because a date
+   broken over two lines reads as two dates. */
+.findling-hit__modified {
+	margin-block-start: var(--default-grid-baseline);
+	font-size: var(--font-size-small);
+	font-weight: 400;
+	line-height: var(--default-line-height);
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
 }
 
 /* Two lines and then it stops. The full path is in the accessible name of the
@@ -406,9 +559,9 @@
 }
 
 /* Below six hundred and forty the form is one column with a full width button,
-   the icon and the file name of a hit share the first line and the path and the
-   excerpt run the full width underneath, and the two paging links take half the
-   strip each. */
+   every row of the filter bar puts its label above its chips, the icon and the
+   file name of a hit share the first line and the path and the excerpt run the
+   full width underneath, and the two paging links take half the strip each. */
 @media (max-width: 639px) {
 	.findling-search__form {
 		flex-direction: column;
@@ -417,6 +570,22 @@
 
 	.findling-search__submit {
 		width: 100%;
+	}
+
+	/* The row label goes above its group instead of beside it and the chips wrap
+	   underneath, which puts the reset link on a line of its own at the left
+	   edge. Deliberately no sideways scrolling row and no carousel: a row out of
+	   which part of the choice has been pushed hides controls behind a gesture,
+	   and on a keyboard it cannot be found at all. Ten short words wrap
+	   instead. */
+	.findling-filters__row {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: calc(var(--default-grid-baseline) * 2);
+	}
+
+	.findling-filters__reset {
+		margin-inline-start: 0;
 	}
 
 	/* The three text lines become items of the row itself, so that the grid can
@@ -456,9 +625,16 @@
 }
 
 /* A finger is not a mouse pointer. Thirty four pixels is enough for a cursor
-   and not for a thumb, so the two things a thumb aims at grow. Forty four is a
+   and not for a thumb, so everything a thumb aims at grows: the fourteen
+   controls of the filter bar, a hit row and a paging link. Forty four is a
    multiple of four and therefore still on the grid. */
 @media (pointer: coarse) {
+	.findling-chip-link,
+	.findling-sort__link,
+	.findling-filters__reset {
+		min-height: 44px;
+	}
+
 	.findling-hit__link {
 		min-height: 44px;
 	}
