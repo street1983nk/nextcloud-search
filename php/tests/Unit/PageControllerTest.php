@@ -79,6 +79,14 @@ final class PageControllerTest extends TestCase {
 
 		$this->dateTimeZone->method('getTimeZone')->willReturn(new \DateTimeZone(self::TEST_ZONE));
 
+		// A readable recipe instead of a real date. What the cases below decide
+		// is which timestamp reached the formatter and under which format, and
+		// a real month name would put the language settings of a test runner
+		// into an assertion that is not about them.
+		$this->dateTimeFormatter->method('formatDate')->willReturnCallback(
+			static fn (int $timestamp, string $format = 'long'): string => "formatted:{$timestamp}:{$format}",
+		);
+
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('testuser');
 		$this->userSession->method('getUser')->willReturn($user);
@@ -257,6 +265,103 @@ final class PageControllerTest extends TestCase {
 	 */
 	private function constantOf(string $name): mixed {
 		return (new \ReflectionClass(PageController::class))->getConstant($name);
+	}
+
+	/**
+	 * The fingerprint the page computes for one address, read off a link the
+	 * page built rather than computed a second time over here.
+	 *
+	 * The same road dayOf() takes and for the same reason: a counter check that
+	 * repeats the recipe of the thing it checks agrees with it even when both
+	 * are wrong. Here it is also the only road at all, because the value is
+	 * never returned and never displayed; it exists in two places, in the link
+	 * the page hands out and in the comparison on the way back in, and one of
+	 * those two is readable from outside.
+	 *
+	 * The next link is the one that carries it, so the double staged here
+	 * reports more hits. The position of the address is stripped before the
+	 * question is asked, because a position never goes into the fingerprint and
+	 * an address with a broken one would produce no next link to read.
+	 *
+	 * @param array<string,mixed> $params
+	 */
+	private function fingerprintOf(array $params): string {
+		$standing = $this->searchService;
+
+		$searchService = $this->createMock(SearchService::class);
+		$searchService->method('run')->willReturn($this->outcome(nextCursor: 40, hasMore: true));
+		$this->searchService = $searchService;
+
+		$address = $params;
+		unset($address['page'], $address['cursors'], $address['fp']);
+		$next = $this->controller($address + ['query' => 'akte'])->index()->getParams()['nextUrl'];
+
+		$this->searchService = $standing;
+
+		self::assertIsString($next, 'there is no next link to read a fingerprint off');
+		self::assertSame(1, preg_match('/[?&]fp=([0-9a-f]{8})(?:&|$)/', $next, $found));
+
+		return $found[1];
+	}
+
+	/**
+	 * The same address with the fingerprint that belongs to it.
+	 *
+	 * Every case that hands the page a cursor path needs one since this plan.
+	 * The page looks at a path only once the fingerprint of the address matches
+	 * its own request state, so a path without one is a path out of nowhere and
+	 * lands on page one by design, which would make every paging case below
+	 * pass for the wrong reason or fail for the wrong one.
+	 *
+	 * @param array<string,mixed> $params
+	 * @return array<string,mixed>
+	 */
+	private function bound(array $params): array {
+		return $params + ['fp' => $this->fingerprintOf($params)];
+	}
+
+	/**
+	 * Every link of the filter row of one address as one flat list: six type
+	 * chips, four range chips, three sort links and, when it exists, the reset
+	 * link. Keyed by what each one is, so a failure names the link.
+	 *
+	 * @param array<string,mixed> $params
+	 * @return array<string,string>
+	 */
+	private function controlLinksOf(array $params): array {
+		$page = $this->paramsOf($params + ['query' => 'akte']);
+
+		$links = [];
+		foreach ($page['typeChips'] as $chip) {
+			$links["type:{$chip['key']}"] = $chip['url'];
+		}
+		foreach ($page['rangeChips'] as $chip) {
+			$links["range:{$chip['key']}"] = $chip['url'];
+		}
+		foreach ($page['sortLinks'] as $link) {
+			$links["sort:{$link['key']}"] = $link['url'];
+		}
+		if ($page['resetUrl'] !== null) {
+			$links['reset'] = $page['resetUrl'];
+		}
+
+		return $links;
+	}
+
+	/**
+	 * One row of the filter bar of one address, keyed by the wire name of its
+	 * parts.
+	 *
+	 * @param array<string,mixed> $params
+	 * @return array<string,array{key:string,active:bool,url:string}>
+	 */
+	private function partsOf(array $params, string $row): array {
+		$parts = [];
+		foreach ($this->paramsOf($params + ['query' => 'akte'])[$row] as $part) {
+			$parts[$part['key']] = $part;
+		}
+
+		return $parts;
 	}
 
 	// -- the search term -----------------------------------------------------
@@ -501,23 +606,32 @@ final class PageControllerTest extends TestCase {
 			'an entry that is not a number' => ['page' => '2', 'cursors' => '0.x'],
 		];
 
+		// Every one of the four carries the fingerprint that belongs to its
+		// address, so the shape is the only thing left that can be wrong here.
+		// The origin of a path has a case of its own further down.
 		foreach ($broken as $why => $address) {
-			self::assertSame(0, $this->startCursorOf(['query' => 'akte'] + $address), $why);
+			self::assertSame(0, $this->startCursorOf($this->bound(['query' => 'akte'] + $address)), $why);
 		}
 
 		$this->answering($this->outcome());
 		foreach ($broken as $why => $address) {
-			self::assertSame(1, $this->paramsOf(['query' => 'akte'] + $address)['page'], $why);
+			self::assertSame(1, $this->paramsOf($this->bound(['query' => 'akte'] + $address))['page'], $why);
 		}
 	}
 
 	public function testAValidCursorPathHandsItsLastElementDown(): void {
 		// The last entry is where the displayed page begins. The ones in front
 		// of it are the way back and are never handed to the service.
-		self::assertSame(
-			95,
-			$this->startCursorOf(['query' => 'akte', 'page' => '3', 'cursors' => '0.40.95']),
-		);
+		//
+		// This is also the case for a fingerprint that fits: a path whose shape
+		// checks out and whose origin checks out is used as it stands, and the
+		// page number of the address stays where the visitor left it.
+		$address = $this->bound(['query' => 'akte', 'page' => '3', 'cursors' => '0.40.95']);
+
+		self::assertSame(95, $this->startCursorOf($address));
+
+		$this->answering($this->outcome());
+		self::assertSame(3, $this->paramsOf($address)['page']);
 	}
 
 	// -- the two neighbouring addresses --------------------------------------
@@ -533,7 +647,7 @@ final class PageControllerTest extends TestCase {
 		// asked for, so the way back costs no run and no guess.
 		$this->answering($this->outcome());
 
-		$previous = $this->paramsOf(['query' => 'akte', 'page' => '3', 'cursors' => '0.40.95'])['previousUrl'];
+		$previous = $this->paramsOf($this->bound(['query' => 'akte', 'page' => '3', 'cursors' => '0.40.95']))['previousUrl'];
 
 		self::assertIsString($previous);
 		self::assertStringContainsString('page=2', $previous);
@@ -555,7 +669,11 @@ final class PageControllerTest extends TestCase {
 		self::assertIsInt($maxPage);
 
 		$cursors = implode('.', range(0, $maxPage - 1));
-		$params = $this->paramsOf(['query' => 'akte', 'page' => (string)$maxPage, 'cursors' => $cursors]);
+		$params = $this->paramsOf($this->bound([
+			'query' => 'akte',
+			'page' => (string)$maxPage,
+			'cursors' => $cursors,
+		]));
 
 		self::assertSame($maxPage, $params['page']);
 		self::assertNull($params['nextUrl']);
@@ -571,7 +689,11 @@ final class PageControllerTest extends TestCase {
 			failure: SearchOutcome::FAILURE_OFFSET_CEILING,
 		));
 
-		self::assertNull($this->paramsOf(['query' => 'akte', 'page' => '2', 'cursors' => '0.40'])['nextUrl']);
+		self::assertNull($this->paramsOf($this->bound([
+			'query' => 'akte',
+			'page' => '2',
+			'cursors' => '0.40',
+		]))['nextUrl']);
 	}
 
 	public function testTheRunThatKeptNoCandidateStillOffersItsNextAddress(): void {
@@ -586,7 +708,11 @@ final class PageControllerTest extends TestCase {
 			failure: SearchOutcome::FAILURE_ALL_CANDIDATES_REJECTED,
 		));
 
-		$next = $this->paramsOf(['query' => 'akte', 'page' => '2', 'cursors' => '0.40'])['nextUrl'];
+		$next = $this->paramsOf($this->bound([
+			'query' => 'akte',
+			'page' => '2',
+			'cursors' => '0.40',
+		]))['nextUrl'];
 
 		self::assertIsString($next);
 		self::assertStringContainsString('page=3', $next);
@@ -598,7 +724,11 @@ final class PageControllerTest extends TestCase {
 		// exactly the cursor the run reported.
 		$this->answering($this->outcome(nextCursor: 95, hasMore: true));
 
-		$next = $this->paramsOf(['query' => 'akte', 'page' => '2', 'cursors' => '0.40'])['nextUrl'];
+		$next = $this->paramsOf($this->bound([
+			'query' => 'akte',
+			'page' => '2',
+			'cursors' => '0.40',
+		]))['nextUrl'];
 
 		self::assertIsString($next);
 		self::assertStringContainsString('page=3', $next);
@@ -611,7 +741,331 @@ final class PageControllerTest extends TestCase {
 		// on page one. No link at all is the honest answer.
 		$this->answering($this->outcome(nextCursor: 40, hasMore: true));
 
-		self::assertNull($this->paramsOf(['query' => 'akte', 'page' => '2', 'cursors' => '0.40'])['nextUrl']);
+		self::assertNull($this->paramsOf($this->bound([
+			'query' => 'akte',
+			'page' => '2',
+			'cursors' => '0.40',
+		]))['nextUrl']);
+	}
+
+	// -- the links of the filter row -----------------------------------------
+
+	public function testNotOneLinkOfTheFilterRowCanCarryAPosition(): void {
+		// All fourteen and not one example: six type chips, four range chips,
+		// three sort links and the reset link. A link of this row that took the
+		// position along would land a click on the seventh screen of one result
+		// on the seventh screen of another one, which shows some hits twice and
+		// skips others without a word (T-13-37, pitfall D).
+		$this->answering($this->outcome(nextCursor: 95, hasMore: true));
+
+		$links = $this->controlLinksOf($this->bound([
+			'query' => 'akte',
+			'types' => 'pdf',
+			'page' => '3',
+			'cursors' => '0.40.95',
+		]));
+
+		self::assertCount(14, $links);
+
+		foreach ($links as $what => $url) {
+			self::assertStringNotContainsString('page=', $url, "{$what} carries a page number");
+			self::assertStringNotContainsString('cursors=', $url, "{$what} carries a cursor path");
+			self::assertStringNotContainsString('fp=', $url, "{$what} carries a fingerprint");
+		}
+	}
+
+	public function testATypeChipSwitchesItsOwnGroupAndLeavesTheOthersAlone(): void {
+		// Every chip of the row is a switch of its own (D-01): the inactive one
+		// leads to the same search with its group added, the active one to the
+		// same search with its group taken away, and both keep the term and the
+		// order of the page.
+		$this->answering($this->outcome());
+
+		$chips = $this->partsOf(['query' => 'akte', 'types' => 'pdf', 'sort' => 'newest'], 'typeChips');
+
+		self::assertCount(count(SearchFilters::TYPES), $chips);
+		self::assertTrue($chips['pdf']['active']);
+		self::assertFalse($chips['images']['active']);
+
+		// Added in the order of the closed list and not in the order of the
+		// click, because that list is what the fingerprint is computed over.
+		self::assertStringContainsString('types=' . urlencode('pdf,images'), $chips['images']['url']);
+		self::assertStringContainsString('query=akte', $chips['images']['url']);
+		self::assertStringContainsString('sort=newest', $chips['images']['url']);
+
+		// And the active one leads to a search with no type at all, because it
+		// was the only one.
+		self::assertStringNotContainsString('types=', $chips['pdf']['url']);
+		self::assertStringContainsString('sort=newest', $chips['pdf']['url']);
+
+		// With two groups active, switching one off leaves the other standing.
+		$both = $this->partsOf(['query' => 'akte', 'types' => 'pdf,images'], 'typeChips');
+
+		self::assertStringContainsString('types=images', $both['pdf']['url']);
+		self::assertStringContainsString('types=pdf&', $both['images']['url'] . '&');
+	}
+
+	public function testATimeRangeChipReplacesTheOneBeforeItAndTheActiveOneRemovesIt(): void {
+		// The one row where at most one part can be active. Two ranges at once
+		// give either the wider of the two or an empty set, and neither can be
+		// explained to the person looking at the page.
+		$this->answering($this->outcome());
+
+		$ranges = $this->constantOf('QUICK_RANGES');
+		self::assertIsArray($ranges);
+
+		$chips = $this->partsOf(['query' => 'akte', 'range' => 'week'], 'rangeChips');
+
+		self::assertCount(count($ranges), $chips);
+		self::assertTrue($chips['week']['active']);
+
+		foreach (['today', 'month', 'year'] as $other) {
+			self::assertFalse($chips[$other]['active'], $other);
+			self::assertStringContainsString("range={$other}", $chips[$other]['url'], $other);
+			self::assertStringNotContainsString('range=week', $chips[$other]['url'], $other);
+			self::assertStringNotContainsString('until=', $chips[$other]['url'], $other);
+		}
+
+		// And the active one takes the range away rather than replacing it.
+		self::assertStringNotContainsString('range=', $chips['week']['url']);
+	}
+
+	public function testTheDefaultSortModeIsNeverWrittenIntoAnAddress(): void {
+		// Relevance is the mode of a search nobody sorted, and the address of
+		// such a search looks exactly as it did before this phase. The link of
+		// the default mode exists all the same: it is the way back out of a
+		// sorted view.
+		$this->answering($this->outcome(nextCursor: 95, hasMore: true));
+		$default = 'sort=' . SearchFilters::SORT_DEFAULT;
+
+		$addresses = [
+			'an ordinary search' => [],
+			'a sorted search' => ['sort' => 'oldest'],
+			'a narrowed and sorted search' => ['types' => 'pdf', 'range' => 'today', 'sort' => 'newest'],
+		];
+
+		foreach ($addresses as $why => $address) {
+			$links = $this->controlLinksOf($address);
+			self::assertArrayHasKey('sort:' . SearchFilters::SORT_DEFAULT, $links, $why);
+
+			foreach ($links as $what => $url) {
+				self::assertStringNotContainsString($default, $url, "{$why}: {$what}");
+			}
+		}
+	}
+
+	public function testThereIsNoResetLinkWhileNothingIsNarrowed(): void {
+		// A sort mode takes nothing away, so it does not bring the link out
+		// either: resetting removes what is hiding results, and an order hides
+		// none of them (D-06).
+		$this->answering($this->outcome());
+
+		foreach ([[], ['sort' => 'newest']] as $address) {
+			$params = $this->paramsOf($address + ['query' => 'akte']);
+
+			self::assertNull($params['resetUrl']);
+			self::assertFalse($params['filtersActive']);
+		}
+	}
+
+	public function testTheResetLinkDropsEveryFilterAndKeepsTheOrder(): void {
+		$this->answering($this->outcome());
+
+		$params = $this->paramsOf([
+			'query' => 'akte',
+			'types' => 'pdf,images',
+			'range' => 'week',
+			'since' => '1757980800',
+			'until' => '1758585600',
+			'sort' => 'oldest',
+		]);
+
+		self::assertTrue($params['filtersActive']);
+
+		$reset = $params['resetUrl'];
+		self::assertIsString($reset);
+		self::assertStringContainsString('query=akte', $reset);
+		self::assertStringContainsString('sort=oldest', $reset);
+
+		foreach (['types=', 'range=', 'since=', 'until='] as $gone) {
+			self::assertStringNotContainsString($gone, $reset, "the reset link still carries {$gone}");
+		}
+
+		// A bound out of the search dialog highlights no chip at all, and it
+		// still brings the link out: there is no state in which the page shows
+		// less than it searches (FILT-04).
+		self::assertIsString($this->paramsOf(['query' => 'akte', 'since' => '1757980800'])['resetUrl']);
+	}
+
+	// -- the fingerprint of the request state --------------------------------
+
+	public function testACursorPathOutOfAnotherSearchIsPageOne(): void {
+		// The path of an unfiltered search, pasted by hand into a filtered
+		// address. Its shape checks out perfectly, and that is the whole point
+		// of this case: only its origin gives it away, and until this plan
+		// nobody asked about the origin (13-UI-SPEC, sample 6).
+		$foreign = $this->fingerprintOf(['query' => 'akte']);
+		self::assertNotSame($foreign, $this->fingerprintOf(['query' => 'akte', 'types' => 'pdf']));
+
+		$address = [
+			'query' => 'akte',
+			'types' => 'pdf',
+			'page' => '3',
+			'cursors' => '0.40.95',
+			'fp' => $foreign,
+		];
+
+		self::assertSame(0, $this->startCursorOf($address));
+
+		// Silently, and that is a statement of its own: no message, no log line
+		// and no exception, because the address bar is not something this page
+		// makes statements about (T-09-09).
+		$this->logger->expects(self::never())->method('warning');
+		$this->answering($this->outcome());
+
+		$params = $this->paramsOf($address);
+
+		self::assertSame(1, $params['page']);
+		self::assertNull($params['failure']);
+	}
+
+	public function testTheSameSelectionInAnotherOrderHasTheSameFingerprint(): void {
+		// The guard on the canonicalisation, and the reason it stands before
+		// the hashing: two type groups picked in the other order are the same
+		// search, and a visitor who reordered nothing would otherwise be thrown
+		// back to page one for a reason nobody could see.
+		self::assertSame(
+			$this->fingerprintOf(['types' => 'pdf,images']),
+			$this->fingerprintOf(['types' => 'images,pdf']),
+		);
+	}
+
+	public function testEveryValueOfTheSearchGoesIntoTheFingerprint(): void {
+		// The counterpart of the case above, and the one that keeps it honest:
+		// a fingerprint that always returned the same eight characters would
+		// pass that one and would bind nothing at all.
+		$plain = $this->fingerprintOf([]);
+
+		$others = [
+			'another term' => ['query' => 'belehrung'],
+			'the title only filter' => ['names' => '1'],
+			'a type group' => ['types' => 'pdf'],
+			'a sort mode' => ['sort' => 'newest'],
+			'a quick range' => ['range' => 'today'],
+			'a lower bound' => ['since' => '1757980800'],
+			'an upper bound' => ['until' => '1758585600'],
+		];
+
+		foreach ($others as $why => $address) {
+			self::assertNotSame($plain, $this->fingerprintOf($address), $why);
+		}
+	}
+
+	public function testAFingerprintThatIsNotOneIsPageOne(): void {
+		// The shape is read before the comparison, exactly as every other value
+		// of this address is. Five ways of not being eight hexadecimal
+		// characters, one verdict, and never an exception.
+		$right = $this->fingerprintOf(['query' => 'akte']);
+
+		$broken = [
+			'none at all' => null,
+			'seven characters' => substr($right, 0, 7),
+			'nine characters' => $right . '0',
+			'a character that is not hexadecimal' => substr($right, 0, 7) . 'z',
+			'hexadecimal in capitals' => 'ABCDEF12',
+		];
+
+		foreach ($broken as $why => $claim) {
+			$address = ['query' => 'akte', 'page' => '3', 'cursors' => '0.40.95'];
+			if ($claim !== null) {
+				$address['fp'] = $claim;
+			}
+
+			self::assertSame(0, $this->startCursorOf($address), $why);
+		}
+	}
+
+	public function testThePagingLinksCarryTheFingerprintAndTheActiveFilters(): void {
+		// The two links that may hand a position on are the two that have to
+		// prove where it came from. They carry the filters with it, because a
+		// next page of another selection would be a next page into a different
+		// result than the one on the screen.
+		$this->answering($this->outcome(nextCursor: 95, hasMore: true));
+
+		$address = [
+			'query' => 'akte',
+			'types' => 'pdf',
+			'sort' => 'oldest',
+			'page' => '2',
+			'cursors' => '0.40',
+		];
+		$params = $this->paramsOf($this->bound($address));
+
+		foreach (['previousUrl', 'nextUrl'] as $which) {
+			$url = $params[$which];
+
+			self::assertIsString($url, $which);
+			self::assertStringContainsString('fp=' . $this->fingerprintOf($address), $url, $which);
+			self::assertStringContainsString('types=pdf', $url, $which);
+			self::assertStringContainsString('sort=oldest', $url, $which);
+		}
+
+		self::assertStringContainsString('cursors=0.40.95', $params['nextUrl']);
+		self::assertStringContainsString('page=1', $params['previousUrl']);
+	}
+
+	// -- the date of a row ---------------------------------------------------
+
+	public function testUnderDateSortingEveryRowCarriesItsModifiedDate(): void {
+		// Two different timestamps on purpose: one date in both rows would pass
+		// even if the page formatted the same hit twice. The format is the long
+		// one and the formatter takes zone and language out of the settings of
+		// the signed in user, which is why no date format appears here.
+		$this->answering($this->outcome(hits: [
+			new ApprovedHit(7, 'akte.pdf', 'Recht/akte.pdf', 'application/pdf', 1757980800),
+			new ApprovedHit(8, 'notiz.txt', 'Recht/notiz.txt', 'text/plain', 1758585600),
+		]));
+
+		foreach (['newest', 'oldest'] as $mode) {
+			$params = $this->paramsOf(['query' => 'akte', 'sort' => $mode]);
+
+			self::assertTrue($params['showModified'], $mode);
+			self::assertSame($mode, $params['sortMode']);
+			self::assertSame('formatted:1757980800:long', $params['hits'][0]['modified'], $mode);
+			self::assertSame('formatted:1758585600:long', $params['hits'][1]['modified'], $mode);
+		}
+	}
+
+	public function testUnderRelevanceNotOneRowCarriesADate(): void {
+		// D-04 without a loophole: not shown, not hidden, not there. A date
+		// under relevance would be the one number on this page that a reader
+		// could take for a measure of how well a hit fits, and the page shows
+		// no score at all (T-13-40).
+		$this->answering($this->outcome(hits: [
+			new ApprovedHit(7, 'akte.pdf', 'Recht/akte.pdf', 'application/pdf', 1757980800),
+			new ApprovedHit(8, 'notiz.txt', 'Recht/notiz.txt', 'text/plain', 1758585600),
+		]));
+
+		$params = $this->paramsOf(['query' => 'akte']);
+
+		self::assertFalse($params['showModified']);
+		self::assertSame(SearchFilters::SORT_DEFAULT, $params['sortMode']);
+
+		foreach ($params['hits'] as $index => $row) {
+			self::assertSame('', $row['modified'], "row {$index} carries a date under relevance");
+		}
+	}
+
+	public function testAHitWithoutAModificationDateShowsNoneUnderSortingEither(): void {
+		// The canary of the walking skeleton carries the file id zero and has
+		// no node behind it, so there is nothing to ask for a date. It stays
+		// empty rather than becoming the first of January 1970.
+		$this->answering($this->outcome(hits: [new ApprovedHit(0, 'findling', 'findling', '', 0)]));
+
+		$params = $this->paramsOf(['query' => 'akte', 'sort' => 'newest']);
+
+		self::assertTrue($params['showModified']);
+		self::assertSame('', $params['hits'][0]['modified']);
 	}
 
 	// -- the states ----------------------------------------------------------
