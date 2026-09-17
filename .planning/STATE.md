@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 13-11-PLAN.md
-last_updated: "2026-09-17T15:40:00.000Z"
-last_activity: 2026-09-17 -- Welle 10 abgeschlossen (13-11 Kataloge, harte Schluesselzahl 174 auf 197)
+stopped_at: Completed 13-12-PLAN.md
+last_updated: "2026-09-17T17:10:00.000Z"
+last_activity: 2026-09-17 -- Welle 11 abgeschlossen (13-12 Paritaetsszenarien); alle autonomen Plaene der Phase sind durch, es fehlt nur der Owner-Checkpoint 13-13
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 21
-  completed_plans: 19
-  percent: 52
+  completed_plans: 20
+  percent: 57
 ---
 
 # Project State
@@ -26,16 +26,26 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 12 of 13 (13-01 bis 13-11 abgeschlossen)
+Plan: 13 of 13 (13-01 bis 13-12 abgeschlossen, 13-13 ist der Owner-Checkpoint)
 Status: Executing Phase 13
-Progress: [█████░░░░░] 52%
-Last activity: 2026-09-17 -- Welle 10 abgeschlossen (13-11), Baumhash weiter abe36dc6 (keine .php angefasst)
+Progress: [██████░░░░] 57%
+Last activity: 2026-09-17 -- Welle 11 abgeschlossen (13-12), naechster Schritt ist 13-13 mit autonomous:false
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 13-12 (gehoert in den Checkpoint 13-13): Das dritte Paritaetsszenario ist in
+  der geplanten Form nicht ausdrueckbar. `ask()` fragt die beiden OCS-Provider,
+  und keiner von beiden kennt `types` oder `sort`; nur `ask_page` traegt die
+  Parameter. Unter einem wegnehmenden Filter meldet `compare_page` daher zu
+  Recht `page-missing`. Statt dem Vergleichswerkzeug eine Ausnahme beizubringen
+  (das haette seine Schaerfe gekostet) wird die Wegnahme daneben gemessen. Teils
+  staerker als geplant, weil sie belegt statt erwartet wird; teils schwaecher,
+  weil die extra-Richtung unter dem Filter ueber leeren Mengen steht. Wer das
+  schaerfer will, braucht ein Fixture mit einer Bilddatei.
 
 - 13-11: Die franzoesischen Wortlaute der 23 neuen Schluessel sind NICHT
   muttersprachlich geprueft. docs/l10n-french.md war am 11.09. vom Owner
