@@ -168,6 +168,11 @@ _HEX_COLOUR = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9
 _FUNCTION_COLOUR = re.compile(r"\b(?:rgb|rgba|hsl|hsla)\s*\(")
 _REMOVED_OUTLINE = re.compile(r"outline\s*:\s*none")
 
+# A style attribute on an element, in either spelling of the quotes. The look
+# ahead behind excludes a name that merely ends in the word, so neither
+# ``data-style="x"`` nor an attribute called ``font-style`` is mistaken for one.
+_STYLE_ATTRIBUTE = re.compile(r"""(?<![0-9a-zA-Z_-])style\s*=\s*["']""")
+
 # Anything in the pictographic, emoticon, transport, dingbat or symbol blocks,
 # plus the variation selector that turns a plain character into one. Icons on
 # this page are inline SVG and nothing else.
@@ -212,6 +217,16 @@ def scan_template(name: str, source: str) -> list[str]:
     # security hole, it produces a page whose script silently never runs.
     if "<script" in source:
         violations.append(f"{name}: carries an inline script, which the Nextcloud CSP blocks")
+
+    # The same decision one attribute further on, added in plan 13-10. A style
+    # attribute is the CSS counterpart of an inline script: a declaration that
+    # no stylesheet of this app can be read out of, that no theme variable
+    # reaches and that the next dark mode forgets. Both pages carry their look
+    # in a stylesheet, so the attribute is never the answer here. Held by this
+    # scanner rather than by a second gate for the result page alone, because
+    # the rule is the same one for both templates.
+    if _STYLE_ATTRIBUTE.search(source) is not None:
+        violations.append(f"{name}: carries a style attribute, which no stylesheet and no theme variable can reach")
 
     return violations + _deprecated(name, source)
 
@@ -539,6 +554,191 @@ def scan_page_template_for_an_unguarded_empty_state(name: str, source: str) -> l
     return findings
 
 
+# -- the prohibitions of phase 13 that text can judge ----------------------
+#
+# 13-UI-SPEC marks six points of its prohibition list with [G], which means
+# "this one can be read off a file". A prohibition without a gate is an
+# intention: it holds until the next rebuild, and nothing says a word on the day
+# it stops holding. The ones below are the ones the contract itself declared
+# checkable, and they are held in the shape the rest of this file has: a scanner
+# that reads a source and names every finding, an anti vacuity clause that
+# proves the scanner read something, and a self test that proves the scanner can
+# still go red. Two of the six are not here: the literal colour and the removed
+# focus ring are already ``scan_stylesheet``, the inline script and the style
+# attribute are already ``scan_template``, and the dash and the emoji in the new
+# catalogue values are ``scan_prose`` and arrive with plan 13-11.
+
+# The class names of the filter row, all of them. The script of the result page
+# must not know a single one: every one of the fourteen controls is a link that
+# carries a finished address out of the controller, so the row works with script
+# switched off, a middle click opens any of them in a tab, and the back button
+# means what it always meant (13-CONTEXT D-02, D-03 and D-05). ``aria-current``
+# travels with them because it is the attribute a script would reach for if it
+# ever started to move the state around in the browser instead of asking the
+# server for the next page.
+FILTER_ROW_MARKERS = (
+    "findling-filters",
+    "findling-chip-link",
+    "findling-sort",
+    "aria-current",
+)
+
+
+def scan_page_script_for_the_filter_row(name: str, source: str) -> list[str]:
+    """Findings of the result page script: any sign that it knows the filter row."""
+    return [
+        f"{name}: names {marker}, and the filter row is served by the server and not by a script"
+        for marker in FILTER_ROW_MARKERS
+        if marker in source
+    ]
+
+
+# The two elements that would turn the type choice into a form, and the count of
+# the one form this page has. A select is the obvious way to offer ten choices
+# and the wrong one here: it needs a submit or a listener, it hides the whole
+# set of choices behind a closed control, and it cannot show which of them are
+# in force, which is the one thing FILT-04 asks of this row (D-02).
+_SELECT_ELEMENT = re.compile(r"<\s*(select|option)\b", re.IGNORECASE)
+_FORM_ELEMENT = re.compile(r"<\s*form\b", re.IGNORECASE)
+
+
+def scan_page_template_for_a_second_control_channel(name: str, source: str) -> list[str]:
+    """Findings of the result page template: a select, an option, or a second form."""
+    findings = [
+        f"{name}: carries a <{element}> element, and the choices of this page are links"
+        for element in sorted({found.lower() for found in _SELECT_ELEMENT.findall(source)})
+    ]
+
+    forms = len(_FORM_ELEMENT.findall(source))
+    if forms != 1:
+        findings.append(f"{name}: carries {forms} form elements, and this page has exactly one, the search field")
+
+    return findings
+
+
+# The state marker of a button, on a page whose every control is a link.
+# ``aria-pressed`` belongs to ``role="button"``; an ``a`` element with an href
+# is a link, and a pressed link is nothing. What the chips and the sort links
+# announce instead is ``aria-current="true"``, the marker for "this one of the
+# group is the one in force" (13-RESEARCH finding 11).
+PRESSED_STATE = "aria-pressed"
+
+APP_TEMPLATE_ROOT = REPO_ROOT / "php" / "templates"
+
+
+def scan_template_for_a_pressed_link(name: str, source: str) -> list[str]:
+    """Findings of one template of the app: the pressed marker of a button."""
+    if PRESSED_STATE in source:
+        return [f"{name}: carries {PRESSED_STATE}, which belongs to a button role, and a pressed link is nothing"]
+    return []
+
+
+def _app_templates() -> list[tuple[str, str]]:
+    """Every template of the companion app, as (name, source)."""
+    return [(path.name, path.read_text(encoding="utf-8")) for path in sorted(APP_TEMPLATE_ROOT.glob("*.php"))]
+
+
+# The two markers that cut the filter row out of the template, and both of them
+# are the comment opener of a block rather than a class name. Cutting on the
+# opener is what lets the comments inside the region be stripped: the region
+# then begins with a ``/*`` of its own, and the expression below closes it on
+# the first ``*/``.
+FILTER_ROW_START = "<?php /* Block 2b:"
+FILTER_ROW_END = "<?php /* Block 3:"
+
+_PHP_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+
+# Every shape a count beside a chip could take, and the reason they are one
+# prohibition and not four: a number, a dot, a greyed out chip and a plural
+# sentence are the same piece of information, namely how many files of that kind
+# this user would see. It would be worked out in front of the permission
+# recheck, which is the one place that knows what the user may open, so it would
+# be an answer about other people's files (T-02-93, T-13-47). The plural call is
+# in the list because a counted sentence cannot be built without it, and
+# ``disabled`` because greying a chip out says "nothing behind this one" as
+# loudly as a nought would.
+COUNT_ORACLE_MARKERS = ("count", "total", "badge", "disabled", "$l->n(")
+
+
+def filter_row_of(source: str) -> str:
+    """The region of the template between the two block markers, or the empty string."""
+    start = source.find(FILTER_ROW_START)
+    end = source.find(FILTER_ROW_END)
+    if start == -1 or end == -1 or end <= start:
+        return ""
+    return source[start:end]
+
+
+def scan_filter_row_for_a_counting_oracle(name: str, source: str) -> list[str]:
+    """Findings of the filter row: any shape of an answer about what is behind a chip."""
+    region = filter_row_of(source)
+    if region == "":
+        return [f"{name}: the filter row is no longer between {FILTER_ROW_START!r} and {FILTER_ROW_END!r}"]
+
+    # The comments of the region are stripped first, and that is the whole
+    # reason the region is cut on a comment opener. The block comment of the row
+    # explains why there is no count, no dot and no greyed out chip, so a scan
+    # over the raw text would go red on the very sentence that promises what
+    # this gate holds.
+    code = _PHP_BLOCK_COMMENT.sub("", region).lower()
+
+    return [
+        f"{name}: the filter row carries {marker!r}, which answers what is behind a chip before it is clicked"
+        for marker in COUNT_ORACLE_MARKERS
+        if marker in code
+    ]
+
+
+# The three controls of the row that a thumb aims at, and the three containers
+# that wrap instead of scrolling sideways. Two halves of one promise: every
+# control of the row is reachable, with a mouse, with a thumb and with a
+# keyboard. A row out of which part of the choice has been pushed hides controls
+# behind a gesture, and on a keyboard it cannot be found at all (T-13-51).
+TOUCH_CONTROLS = (".findling-chip-link", ".findling-sort__link", ".findling-filters__reset")
+WRAPPING_ROWS = (".findling-filters__row", ".findling-filters__group", ".findling-sort")
+
+COARSE_QUERY = "@media (pointer: coarse)"
+
+
+def block_body_of(source: str, opener: str) -> str:
+    """The body of the rule or the query that begins at column zero with ``opener``."""
+    match = re.search(rf"(?m)^{re.escape(opener)} \{{\n(?P<body>.*?)^\}}", source, re.DOTALL)
+    return "" if match is None else match.group("body")
+
+
+def scan_page_stylesheet_for_a_reachable_row(name: str, source: str) -> list[str]:
+    """Findings of the result page stylesheet: a control too small or a row that scrolls."""
+    findings: list[str] = []
+
+    for selector in TOUCH_CONTROLS:
+        body = block_body_of(source, selector)
+        if body == "":
+            findings.append(f"{name}: has no rule for {selector}")
+        elif "min-height: var(--default-clickable-area)" not in body:
+            findings.append(f"{name}: {selector} is not as tall as a clickable area of the theme")
+
+    coarse = block_body_of(source, COARSE_QUERY)
+    if coarse == "":
+        findings.append(f"{name}: has no {COARSE_QUERY} query, so nothing on this page grows for a thumb")
+    else:
+        findings.extend(
+            f"{name}: {selector} does not grow to 44px under a coarse pointer"
+            for selector in TOUCH_CONTROLS
+            if re.search(rf"{re.escape(selector)}[,\s][^}}]*min-height: 44px", coarse, re.DOTALL) is None
+        )
+
+    findings.extend(
+        f"{name}: {selector} does not wrap, so the row would have to be scrolled sideways"
+        for selector in WRAPPING_ROWS
+        if "flex-wrap: wrap" not in block_body_of(source, selector)
+    )
+
+    if "overflow-x" in source:
+        findings.append(f"{name}: carries overflow-x, and ten short words wrap rather than scroll out of sight")
+
+    return findings
+
+
 Scanner = Callable[[str, str], list[str]]
 
 
@@ -729,6 +929,170 @@ def test_the_empty_state_of_the_page_does_not_speak_over_a_banner() -> None:
     ]
 
 
+def test_the_page_script_knows_nothing_about_the_filter_row() -> None:
+    """The first [G] prohibition of phase 13: no script for filter or sort.
+
+    The promise of D-02, D-03 and D-05 in one sentence: the filter row is served
+    by the server. Every chip, every sort link and the reset link is an ordinary
+    link on a finished address, so the whole row works with script switched off,
+    a middle click opens any of them in a tab, and the back button means what it
+    always meant. The one purpose of this file stays the return mark.
+
+    **What this gate does not prove.** It reads names and not behaviour. A
+    listener bound to a bare ``a`` element would carry none of these strings and
+    would still take the row away from the browser; what keeps that out is
+    ``test_the_page_script_does_not_intercept_a_click`` above, which forbids the
+    one call that would be needed to make such a listener matter.
+    """
+    findings = scan_page_script_for_the_filter_row(PAGE_SCRIPT.name, PAGE_SCRIPT.read_text(encoding="utf-8"))
+
+    assert findings == []
+    # The anti vacuity clause: the file was read and it is not empty, so a clean
+    # answer is an answer about a script and not about nothing.
+    assert PAGE_SCRIPT.read_text(encoding="utf-8").strip() != ""
+    # And it can go red, in the shape it would really arrive in: somebody wires
+    # the chips up client side to save a page load.
+    dirty = "document.querySelectorAll('.findling-chip-link').forEach(function (chip) {})\n"
+    assert len(scan_page_script_for_the_filter_row("sample.js", dirty)) == 1
+
+
+def test_the_filter_row_is_not_a_form_and_carries_no_select() -> None:
+    """The second [G] prohibition: no select, no option and no second form.
+
+    A select is the obvious way to offer ten choices and the wrong one on this
+    page. It needs a submit button or a listener, it hides the whole set of
+    choices behind a closed control, and it cannot show which of them are in
+    force. The page answers with links instead, and it keeps exactly one form:
+    the search field, which carries the active filters as hidden fields so that
+    a sharpened term does not lose the narrowing.
+
+    **What this gate does not prove.** It counts elements and does not read what
+    the one form sends. Which fields travel with it is decided in
+    ``PageController::formFilters()`` and asserted on the PHP side.
+    """
+    findings = scan_page_template_for_a_second_control_channel(
+        PAGE_TEMPLATE.name, PAGE_TEMPLATE.read_text(encoding="utf-8")
+    )
+
+    assert findings == []
+    # The anti vacuity clause, and it is the count itself: a template that lost
+    # its form is reported, so a clean answer means one form was found.
+    assert "<form" in PAGE_TEMPLATE.read_text(encoding="utf-8")
+    # And it can go red on both halves, the element and the count.
+    dirty = '<form action="/"><select name="types"><option value="pdf">PDF</option></select></form>\n<form></form>\n'
+    assert len(scan_page_template_for_a_second_control_channel("sample.php", dirty)) == 3
+
+
+def test_no_template_of_the_app_presses_a_link() -> None:
+    """The third [G] prohibition: no aria-pressed on an a element.
+
+    ``aria-pressed`` belongs to ``role="button"``. An ``a`` element with an href
+    is a link, and a pressed link is nothing: a screen reader either says
+    something meaningless or says nothing at all, and the state of the chip is
+    then carried by its colour alone. The row uses ``aria-current="true"``,
+    which is announced as "current".
+
+    **What this gate does not prove.** It forbids the string in every template
+    and does not ask which element carried it. That is deliberate: neither page
+    has a control that would legitimately be pressed, so there is no case to
+    make an exception for, and a scan that paired the attribute with its element
+    would be a small HTML parser nobody wants to maintain here.
+    """
+    findings = [
+        message for name, source in _app_templates() for message in scan_template_for_a_pressed_link(name, source)
+    ]
+
+    assert findings == []
+    # The anti vacuity clause of the scan: a glob that stopped matching, or a
+    # directory that moved, would report nothing over nothing.
+    assert sorted(name for name, _ in _app_templates()) == ["admin.php", "search.php"]
+    # And it can go red.
+    dirty = '<a class="findling-chip-link" aria-pressed="true" href="/">PDF</a>\n'
+    assert len(scan_template_for_a_pressed_link("sample.php", dirty)) == 1
+
+
+def test_no_chip_of_the_filter_row_says_what_is_behind_it() -> None:
+    """The prohibition of the counting oracle, over the region of the row itself.
+
+    A number beside a chip, a dot, a greyed out chip and a plural sentence are
+    the same piece of information: how many files of that kind this user would
+    see. It would be worked out before the permission recheck, which is the one
+    place that knows what the user may open, so it would be an answer about
+    other people's files (T-02-93, and T-13-47 of this phase). All ten chips
+    therefore look alike, including the ones behind which there is nothing, and
+    a chip over an empty group leads to the empty state.
+
+    The comments of the region are stripped before the scan, and that is why the
+    region is cut on a comment opener rather than on a class name: the block
+    comment of the row explains why there is no count and no greyed out chip, so
+    a scan over the raw text would go red on the sentence that promises exactly
+    what this gate holds.
+
+    **What this gate does not prove.** It reads the template and not the
+    controller. A count worked out in PHP and handed over under a harmless name
+    would pass here and would have to be caught where the chips are built, in
+    ``PageControllerTest``. What this gate holds is the rendering: no word of
+    counting reaches the row.
+    """
+    findings = scan_filter_row_for_a_counting_oracle(PAGE_TEMPLATE.name, PAGE_TEMPLATE.read_text(encoding="utf-8"))
+
+    assert findings == []
+    # The anti vacuity clause: the region was found and it really is the row.
+    region = filter_row_of(PAGE_TEMPLATE.read_text(encoding="utf-8"))
+    assert region.count("findling-chip-link") >= 4
+    # And it can go red, in three of the shapes the contract names at once, and
+    # on the fourth failure this scan has: a region it can no longer find.
+    dirty = (
+        f"{FILTER_ROW_START} the filter row */ ?>\n"
+        '<a class="findling-chip-link findling-chip-link--disabled">PDF'
+        '<span class="findling-chip__count">$l->n(</span><span>$totalHits</span></a>\n'
+        f"{FILTER_ROW_END}"
+    )
+    assert len(scan_filter_row_for_a_counting_oracle("sample.php", dirty)) == 4
+    assert len(scan_filter_row_for_a_counting_oracle("sample.php", "<?php // no row here")) == 1
+
+
+def test_every_control_of_the_filter_row_can_be_reached() -> None:
+    """The last [G] prohibition, and the responsive promise behind it.
+
+    Two halves of one sentence. Every chip, every sort link and the reset link
+    is at least as tall as a clickable area of the theme and grows to 44px under
+    a coarse pointer, because thirty four pixels is enough for a cursor and not
+    for a thumb. And the three containers of the row wrap rather than scroll: a
+    row out of which part of the choice has been pushed hides controls behind a
+    gesture, and on a keyboard it cannot be found at all, so ten short words
+    wrap instead (13-UI-SPEC, Responsive).
+
+    **What this gate does not prove.** It reads declarations and cannot lay a
+    page out. A rule that is present and overridden further down, or a container
+    that wraps while its parent clips it, would pass here; the sight check on a
+    narrow screen is acceptance probe 16 and stays a human one.
+    """
+    findings = scan_page_stylesheet_for_a_reachable_row(
+        PAGE_STYLESHEET.name, PAGE_STYLESHEET.read_text(encoding="utf-8")
+    )
+
+    assert findings == []
+    # The anti vacuity clause: the reader really found the blocks it judges, so
+    # a clean answer is not an answer about two empty strings.
+    stylesheet = PAGE_STYLESHEET.read_text(encoding="utf-8")
+    assert block_body_of(stylesheet, ".findling-chip-link") != ""
+    assert block_body_of(stylesheet, COARSE_QUERY) != ""
+    # And it can go red on every half: a chip at the height of a label, a coarse
+    # query that forgot it, and a row that scrolls instead of wrapping.
+    dirty = (
+        ".findling-chip-link {\n\tfont-size: 13px;\n}\n"
+        ".findling-sort__link {\n\tmin-height: var(--default-clickable-area);\n}\n"
+        ".findling-filters__reset {\n\tmin-height: var(--default-clickable-area);\n}\n"
+        ".findling-filters__row {\n\toverflow-x: auto;\n}\n"
+        ".findling-filters__group {\n\tflex-wrap: wrap;\n}\n"
+        ".findling-sort {\n\tflex-wrap: wrap;\n}\n"
+        "@media (pointer: coarse) {\n\t.findling-sort__link,\n\t.findling-filters__reset {\n"
+        "\t\tmin-height: 44px;\n\t}\n}\n"
+    )
+    assert len(scan_page_stylesheet_for_a_reachable_row("sample.css", dirty)) == 4
+
+
 # -- self tests: the gate has to report every shape it judges --------------
 
 _CLEAN_SCRIPT = """'use strict'
@@ -823,6 +1187,29 @@ def test_an_inline_script_in_the_template_is_reported() -> None:
 
     assert len(violations) == 1
     assert "inline script" in violations[0]
+
+
+def test_a_style_attribute_in_the_template_is_reported() -> None:
+    """The fourth [G] prohibition, held by the scanner the inline script already uses.
+
+    A style attribute is the CSS counterpart of an inline script: a declaration
+    no stylesheet of this app can be read out of, that no theme variable reaches
+    and that the next dark mode forgets. It was added to ``scan_template`` in
+    plan 13-10 rather than written as a gate of its own for the result page,
+    because the rule is the same one for both templates and a second gate would
+    be a second place to keep right.
+
+    **What this gate does not prove.** It reads the attribute and nothing about
+    a stylesheet. The literal colours and the removed focus ring are the
+    business of ``scan_stylesheet``, which runs over both stylesheets.
+    """
+    styled = scan_template("sample.php", _CLEAN_TEMPLATE + '<span style="color: #1a1a1a"></span>\n')
+
+    assert len(styled) == 1
+    assert "style attribute" in styled[0]
+    # And the near miss stays clean: an attribute whose name merely ends in the
+    # word is not a style attribute.
+    assert scan_template("sample.php", _CLEAN_TEMPLATE + '<span data-style="x"></span>\n') == []
 
 
 def test_a_literal_colour_in_the_stylesheet_is_reported() -> None:
