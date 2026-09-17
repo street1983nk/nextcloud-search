@@ -3,9 +3,10 @@
 declare(strict_types=1);
 
 /**
- * The result page of Findling: head, banner, hit list, empty state, pagination.
+ * The result page of Findling: head, banner, filter row, hit list, empty state,
+ * pagination.
  *
- * Every one of the five blocks below is rendered server side with the real
+ * Every one of the six blocks below is rendered server side with the real
  * values of this request. That is a requirement and not a style: with
  * JavaScript switched off the page has to stay complete, so there is no
  * skeleton, no spinner and no loading state anywhere, and searching, paging,
@@ -27,7 +28,7 @@ declare(strict_types=1);
  * changes under the reader, so an assertive region would announce a sentence
  * that was already in the document order the moment it was read.
  *
- * @var array<string,mixed> $_ the eleven parameters of PageController::index(), verbatim
+ * @var array<string,mixed> $_ the eighteen parameters of PageController::index(), verbatim
  * @var \OCP\IL10N $l
  */
 
@@ -38,17 +39,24 @@ declare(strict_types=1);
 \OCP\Util::addScript('findling', 'search');
 \OCP\Util::addStyle('findling', 'search');
 
-// The six path data of the page, taken word for word from the pinned upstream
+// The seven path data of the page, taken word for word from the pinned upstream
 // commit of Material Design Icons that THIRD-PARTY.md names. Curve data and
 // nothing else: no package, no runtime, no code.
+//
+// The seventh is close, and it is the only one this phase needed. It is not a
+// new glyph in this repository either: the administration page has rendered the
+// same curve on the button that removes a folder exclusion since phase 4, so
+// THIRD-PARTY.md gains no row and the check loop gains no name, only the count
+// in its sentence about this file moves.
 $chevronLeftIcon = 'M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z';
 $chevronRightIcon = 'M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z';
 $fileSearchIcon = 'M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H13C12.59,21.75 12.2,21.44 11.86,21.1C11.53,20.77 11.25,20.4 11,20H6V4H13V9H18V10.18C18.71,10.34 19.39,10.61 20,11V8L14,2M20.31,18.9C21.64,16.79 21,14 18.91,12.68C16.8,11.35 14,12 12.69,14.08C11.35,16.19 12,18.97 14.09,20.3C15.55,21.23 17.41,21.23 18.88,20.32L22,23.39L23.39,22L20.31,18.9M16.5,19A2.5,2.5 0 0,1 14,16.5A2.5,2.5 0 0,1 16.5,14A2.5,2.5 0 0,1 19,16.5A2.5,2.5 0 0,1 16.5,19Z';
 $magnifyIcon = 'M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z';
 $alertIcon = 'M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z';
 $infoIcon = 'M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z';
+$closeIcon = 'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z';
 
-// The parameter set, read defensively. The controller hands over eleven keys
+// The parameter set, read defensively. The controller hands over eighteen keys
 // with checked types; reading them this way costs nothing and keeps a template
 // that is opened with a half filled array from turning a missing key into a
 // warning in the middle of the markup.
@@ -64,7 +72,48 @@ $previousUrl = is_string($_['previousUrl'] ?? null) ? $_['previousUrl'] : null;
 $nextUrl = is_string($_['nextUrl'] ?? null) ? $_['nextUrl'] : null;
 $formAction = is_string($_['formAction'] ?? null) ? $_['formAction'] : '';
 
+// The parts of the filter row, and every one of them arrives finished. Which
+// chip is active, where it leads and whether there is a reset link at all are
+// decisions of the controller; this file puts the words to them and decides
+// none of them a second time.
+$typeChips = is_array($_['typeChips'] ?? null) ? $_['typeChips'] : [];
+$rangeChips = is_array($_['rangeChips'] ?? null) ? $_['rangeChips'] : [];
+$sortLinks = is_array($_['sortLinks'] ?? null) ? $_['sortLinks'] : [];
+$resetUrl = is_string($_['resetUrl'] ?? null) ? $_['resetUrl'] : null;
+$filtersActive = ($_['filtersActive'] ?? false) === true;
+$showModified = ($_['showModified'] ?? false) === true;
+
 $hasQuery = $query !== '';
+
+// The words of the ten chips and the three sort links, as a map from the wire
+// name to its label.
+//
+// The map stands in the template and not in the controller because the
+// extraction of the catalogues reads literal strings at the call site: a
+// $l->t() over a variable is a key no extractor ever sees, and the sentence
+// would then ship in English in every language. So the page knows six group
+// names, four range names and three order names, and it knows not one file
+// extension: those live in the backend, in one place, and a second type
+// vocabulary in PHP is exactly what the research of this phase forbids.
+$typeLabels = [
+	'pdf' => $l->t('PDF'),
+	'documents' => $l->t('Documents'),
+	'spreadsheets' => $l->t('Spreadsheets'),
+	'presentations' => $l->t('Presentations'),
+	'images' => $l->t('Images'),
+	'text' => $l->t('Text'),
+];
+$rangeLabels = [
+	'today' => $l->t('Today'),
+	'week' => $l->t('Last 7 days'),
+	'month' => $l->t('Last 30 days'),
+	'year' => $l->t('This year'),
+];
+$sortLabels = [
+	'relevance' => $l->t('Relevance'),
+	'newest' => $l->t('Last modified'),
+	'oldest' => $l->t('Oldest first'),
+];
 
 // Which of the two banner kinds this request gets, decided once and here.
 // Never both: the error block wins over the hint, because a page that says at
@@ -202,6 +251,130 @@ $showPager = $previousUrl !== null || $nextUrl !== null || ($page >= $maxPage &&
 				<?php } ?>
 			</span>
 		</p>
+	<?php } ?>
+
+	<?php /* Block 2b: the filter row, and it is the sixth block of this page.
+	         Fourteen controls, and every single one of them is an ordinary link
+	         carrying a finished address out of the controller, so the whole row
+	         works with script switched off and a middle click opens any of them
+	         in a tab. There is no select, no second form and no listener on this
+	         page: a click on a chip is a navigation like every other one here.
+
+	         Only with a term, and that is the whole condition. Without one there
+	         is no set that could be narrowed, so ten chips over an invitation
+	         would be ten switches with nothing behind them. With a term the row
+	         stands even when the search returned nothing and even under a
+	         banner, because that is exactly where the way back out of a filter
+	         is needed.
+
+	         All ten chips are always here, including the ones behind which there
+	         is not a single hit. No count, no dot and no greyed out chip: all
+	         three would be the same piece of information, and it would be a
+	         counting oracle in front of the permission decision (T-13-42). A
+	         chip over an empty group looks like every other chip and leads to
+	         the empty state. */ ?>
+	<?php if ($hasQuery) { ?>
+		<div class="findling-filters">
+			<?php /* Three rows, three visible labels, three groups. The label is
+			         a span and never a heading, because this page has exactly one
+			         first level heading and the row is not a section of it; it is
+			         the accessible name of its group at the same time, so what is
+			         read out is what is on the screen and there is no second,
+			         invisible truth. The group is a div with role group and not a
+			         list, because the chips are a set of switches and not an
+			         enumeration, and not a nav either, because three navigation
+			         landmarks on one page make the landmark list useless. */ ?>
+			<div class="findling-filters__row">
+				<span class="findling-filters__label" id="findling-filter-types"><?php p($l->t('File type')); ?></span>
+				<div class="findling-filters__group" role="group" aria-labelledby="findling-filter-types">
+					<?php /* The active chip is ONE stop of the keyboard and not two.
+					         It carries the meaning "remove this filter" itself instead
+					         of nesting a button of its own, which would be invalid
+					         markup and a second tab stop for every active filter. Its
+					         accessible name contains its visible text, so somebody who
+					         says "PDF" into a voice control hits this chip (WCAG 2.5.3).
+
+					         Why the state is written as aria-current and not as the
+					         pressed marker of a button: that marker belongs to a
+					         button role, an a element with an href is a link, and a
+					         pressed link is nothing. What is announced here is "this
+					         one of the group is the one in force", and that is what
+					         aria-current means. The state never rests on colour alone:
+					         area, close symbol and the announcement are three carriers
+					         for one fact. */ ?>
+					<?php foreach ($typeChips as $chip) {
+						$chipKey = is_string($chip['key'] ?? null) ? $chip['key'] : '';
+						$chipUrl = is_string($chip['url'] ?? null) ? $chip['url'] : '';
+						$chipActive = ($chip['active'] ?? false) === true;
+						$chipLabel = is_string($typeLabels[$chipKey] ?? null) ? $typeLabels[$chipKey] : $chipKey;
+						?>
+						<?php if ($chipActive) { ?>
+							<a class="findling-chip-link findling-chip-link--active" aria-current="true"
+								aria-label="<?php p($l->t('Remove filter %s', [$chipLabel])); ?>" href="<?php p($chipUrl); ?>">
+								<span><?php p($chipLabel); ?></span>
+								<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($closeIcon); ?>"/></svg>
+							</a>
+						<?php } else { ?>
+							<a class="findling-chip-link" href="<?php p($chipUrl); ?>"><span><?php p($chipLabel); ?></span></a>
+						<?php } ?>
+					<?php } ?>
+				</div>
+			</div>
+
+			<div class="findling-filters__row">
+				<span class="findling-filters__label" id="findling-filter-range"><?php p($l->t('Time range')); ?></span>
+				<div class="findling-filters__group" role="group" aria-labelledby="findling-filter-range">
+					<?php foreach ($rangeChips as $chip) {
+						$chipKey = is_string($chip['key'] ?? null) ? $chip['key'] : '';
+						$chipUrl = is_string($chip['url'] ?? null) ? $chip['url'] : '';
+						$chipActive = ($chip['active'] ?? false) === true;
+						$chipLabel = is_string($rangeLabels[$chipKey] ?? null) ? $rangeLabels[$chipKey] : $chipKey;
+						?>
+						<?php if ($chipActive) { ?>
+							<a class="findling-chip-link findling-chip-link--active" aria-current="true"
+								aria-label="<?php p($l->t('Remove filter %s', [$chipLabel])); ?>" href="<?php p($chipUrl); ?>">
+								<span><?php p($chipLabel); ?></span>
+								<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="<?php p($closeIcon); ?>"/></svg>
+							</a>
+						<?php } else { ?>
+							<a class="findling-chip-link" href="<?php p($chipUrl); ?>"><span><?php p($chipLabel); ?></span></a>
+						<?php } ?>
+					<?php } ?>
+				</div>
+
+				<?php /* The last element of the time row, and it is there only when
+				         something is actually narrowed. A bound that came out of the
+				         search dialog highlights no chip at all and still brings this
+				         link out, so there is no state in which the page shows less
+				         than it searches (FILT-04). */ ?>
+				<?php if ($resetUrl !== null) { ?>
+					<a class="findling-filters__reset" href="<?php p($resetUrl); ?>"><?php p($l->t('Reset all filters')); ?></a>
+				<?php } ?>
+			</div>
+
+			<div class="findling-filters__row">
+				<span class="findling-filters__label" id="findling-filter-sort"><?php p($l->t('Sort by')); ?></span>
+				<?php /* Three links, always all three, always exactly one of them in
+				         force. The link of the active one points at the view that is
+				         already on the screen, and that is not a dead link but the
+				         ordinary state of a segmented switch: the whole set of
+				         choices can be read off the row instead of being remembered. */ ?>
+				<div class="findling-sort" role="group" aria-labelledby="findling-filter-sort">
+					<?php foreach ($sortLinks as $link) {
+						$sortKey = is_string($link['key'] ?? null) ? $link['key'] : '';
+						$sortUrl = is_string($link['url'] ?? null) ? $link['url'] : '';
+						$sortActive = ($link['active'] ?? false) === true;
+						$sortLabel = is_string($sortLabels[$sortKey] ?? null) ? $sortLabels[$sortKey] : $sortKey;
+						?>
+						<?php if ($sortActive) { ?>
+							<a class="findling-sort__link findling-sort__link--active" aria-current="true" href="<?php p($sortUrl); ?>"><?php p($sortLabel); ?></a>
+						<?php } else { ?>
+							<a class="findling-sort__link" href="<?php p($sortUrl); ?>"><?php p($sortLabel); ?></a>
+						<?php } ?>
+					<?php } ?>
+				</div>
+			</div>
+		</div>
 	<?php } ?>
 
 	<?php /* Block 3: the hit list. One list entry per hit, and the whole row is
