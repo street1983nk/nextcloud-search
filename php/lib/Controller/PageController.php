@@ -260,13 +260,26 @@ final class PageController extends Controller {
 				'titleOnly' => $address['titleOnly'],
 				'page' => $page,
 				'maxPage' => self::MAX_PAGE,
-				'hits' => $this->rows($outcome),
+				'hits' => $this->rows($outcome, $address['sort']),
 				'hasMore' => $outcome->hasMore,
 				'degraded' => $outcome->degraded,
 				'failure' => $outcome->failure,
 				'previousUrl' => $this->previousUrl($address, $page, $cursors, $fingerprint),
 				'nextUrl' => $this->nextUrl($address, $page, $cursors, $fingerprint, $outcome),
 				'formAction' => $this->urlGenerator->linkToRoute('findling.page.index'),
+				// The filter row, finished down to the last address. The
+				// template puts the labels to these values and asks nothing:
+				// which chip is active, where it leads and whether the reset
+				// link exists at all are decisions of this class, and a
+				// template that decided any of them would be the second place
+				// where the state of the address is interpreted.
+				'typeChips' => $this->typeChips($address),
+				'rangeChips' => $this->rangeChips($address),
+				'sortLinks' => $this->sortLinks($address),
+				'resetUrl' => $this->resetUrl($address, $filters),
+				'sortMode' => $address['sort'],
+				'filtersActive' => $filters->hasAny(),
+				'showModified' => $this->showsModified($address['sort']),
 			],
 			TemplateResponse::RENDER_AS_USER,
 		);
@@ -623,8 +636,8 @@ final class PageController extends Controller {
 	}
 
 	/**
-	 * The hits of this page as the template wants them: six finished values per
-	 * row and no object the template would have to ask questions of.
+	 * The hits of this page as the template wants them: seven finished values
+	 * per row and no object the template would have to ask questions of.
 	 *
 	 * The excerpt becomes a list of text pieces and never a string with markup
 	 * in it, which is the whole construction of the highlighting on this page
@@ -632,9 +645,24 @@ final class PageController extends Controller {
 	 * the template puts the path in that place: a hit without an excerpt is
 	 * better than no hit.
 	 *
-	 * @return list<array{fileId:int,title:string,path:string,iconUrl:string,url:string,segments:list<array{text:string,mark:bool}>}>
+	 * The date is the seventh value and it is empty outside a date order. Not
+	 * hidden and not rendered as an empty line: the value is not there, because
+	 * a modification date shown under relevance would be the one number on this
+	 * page that a reader could mistake for a measure of how well a hit fits
+	 * (D-04, T-13-40). The page shows no score at all, and this is the reason
+	 * it can say so.
+	 *
+	 * The formatter takes the time zone and the language out of the settings of
+	 * the signed in user, which is why there is no date format here and no
+	 * format string in the catalogue: the catalogue carries the label and the
+	 * label alone. A date of zero is the canary of the walking skeleton, which
+	 * has no node behind it and therefore no date to ask for, and it stays
+	 * empty as well rather than becoming the first of January 1970.
+	 *
+	 * @return list<array{fileId:int,title:string,path:string,iconUrl:string,url:string,modified:string,segments:list<array{text:string,mark:bool}>}>
 	 */
-	private function rows(SearchOutcome $outcome): array {
+	private function rows(SearchOutcome $outcome, string $sort): array {
+		$showModified = $this->showsModified($sort);
 		$rows = [];
 
 		foreach ($outcome->hits as $hit) {
@@ -645,6 +673,9 @@ final class PageController extends Controller {
 				'path' => $hit->path,
 				'iconUrl' => $this->mimeTypes->mimeTypeIcon($hit->mimeType),
 				'url' => $this->fileUrl($hit->fileId),
+				'modified' => $showModified && $hit->mtime > 0
+					? $this->dateTimeFormatter->formatDate($hit->mtime, 'long')
+					: '',
 				'segments' => $excerpt === null ? [] : Highlighter::segments($excerpt['text'], $excerpt['highlights']),
 			];
 		}
@@ -857,6 +888,155 @@ final class PageController extends Controller {
 		}
 
 		return $arguments;
+	}
+
+	/**
+	 * The six chips of the type row, finished, and all six of them every time.
+	 *
+	 * Each one carries the address of the search WITHOUT itself when it is
+	 * active and the address WITH itself when it is not, so one chip switches
+	 * one group and leaves the other five where they are (D-01). The row is a
+	 * set of switches and not a choice of one.
+	 *
+	 * All six are always in the list, including the ones behind which there is
+	 * not a single hit, and that is a decision rather than a simplification. A
+	 * chip that was greyed out or left out would tell the visitor that this
+	 * group holds nothing, and that is the same piece of information a counter
+	 * on the chip would give. It would be a counting oracle in front of the
+	 * permission decision, because what the page can see before the recheck is
+	 * the candidates of the index and not the files of this user (T-13-39). So
+	 * a chip over an empty group looks like every other chip and leads to the
+	 * empty state.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 * @return list<array{key:string,active:bool,url:string}>
+	 */
+	private function typeChips(array $address): array {
+		$chips = [];
+
+		foreach (SearchFilters::TYPES as $group) {
+			// The selection of the other address, built by walking the closed
+			// list rather than by adding to or removing from the current one:
+			// the outcome is then canonical because of how it was made, and a
+			// canonical list is what the fingerprint of that address is
+			// computed over on the way back in.
+			$toggled = [];
+			foreach (SearchFilters::TYPES as $name) {
+				$keep = in_array($name, $address['types'], true);
+				if ($name === $group) {
+					$keep = !$keep;
+				}
+				if ($keep) {
+					$toggled[] = $name;
+				}
+			}
+
+			$chips[] = [
+				'key' => $group,
+				'active' => in_array($group, $address['types'], true),
+				'url' => $this->filterUrl(['types' => $toggled] + $address),
+			];
+		}
+
+		return $chips;
+	}
+
+	/**
+	 * The four chips of the time row, finished, and at most one of them active.
+	 *
+	 * The one place where this row behaves differently from the one above it. A
+	 * click on another range REPLACES the one before it and a click on the
+	 * active one removes it, because two ranges at once give either the wider
+	 * of the two, and then the narrower one did nothing, or an empty set, and
+	 * then nobody can explain the page to the person looking at it.
+	 *
+	 * Not one of the four ever writes an upper bound. All four mean "since" and
+	 * never "between", so a visitor who picks a range can only ever see more of
+	 * the recent past and never lose the present out of the result.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 * @return list<array{key:string,active:bool,url:string}>
+	 */
+	private function rangeChips(array $address): array {
+		$chips = [];
+
+		foreach (self::QUICK_RANGES as $name) {
+			$active = $address['range'] === $name;
+
+			$chips[] = [
+				'key' => $name,
+				'active' => $active,
+				'url' => $this->filterUrl(['range' => $active ? null : $name] + $address),
+			];
+		}
+
+		return $chips;
+	}
+
+	/**
+	 * The three sort links, finished, and exactly one of them active.
+	 *
+	 * Three and never two: the default mode is a link like the other two, and
+	 * its address is the way back out of a sorted view. The link of the active
+	 * mode points at the view the visitor is already looking at, and that is
+	 * not a dead link but the ordinary state of a segmented switch: all three
+	 * segments stay operable so that the set of choices can be read off the row
+	 * itself instead of being remembered.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 * @return list<array{key:string,active:bool,url:string}>
+	 */
+	private function sortLinks(array $address): array {
+		$links = [];
+
+		foreach (SearchFilters::SORTS as $mode) {
+			$links[] = [
+				'key' => $mode,
+				'active' => $address['sort'] === $mode,
+				'url' => $this->filterUrl(['sort' => $mode] + $address),
+			];
+		}
+
+		return $links;
+	}
+
+	/**
+	 * The way out of every filter at once, or none when there is nothing to
+	 * come out of.
+	 *
+	 * The sort mode survives this link, and that is the whole difference
+	 * between the two halves of the row. Resetting takes away what is HIDING
+	 * results; an order hides nothing, it puts the same hits in another
+	 * sequence. D-06 says filters in as many words, and hasAny() is where that
+	 * distinction is already written down, so this method asks it rather than
+	 * deciding a second time.
+	 *
+	 * @param array{query:string,titleOnly:bool,types:list<string>,sort:string,range:?string,since:?int,until:?int} $address
+	 */
+	private function resetUrl(array $address, SearchFilters $filters): ?string {
+		if (!$filters->hasAny()) {
+			return null;
+		}
+
+		return $this->filterUrl([
+			'types' => [],
+			'range' => null,
+			'since' => null,
+			'until' => null,
+		] + $address);
+	}
+
+	/**
+	 * Whether the rows of this page carry their modification date.
+	 *
+	 * Everything that is not the default mode is a date order, and the sentence
+	 * is written that way round on purpose: the three names live in
+	 * SearchFilters and are read from there rather than repeated over here, the
+	 * same rule the type groups follow. An unknown mode never reaches this
+	 * method, because the address falls back to the default before it.
+	 */
+	private function showsModified(string $sort): bool {
+		return $sort !== SearchFilters::SORT_DEFAULT;
 	}
 
 	/**
