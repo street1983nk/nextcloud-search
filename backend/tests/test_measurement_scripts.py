@@ -231,8 +231,13 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # .php and Provider.php hand the unnarrowed filter down until 13-06 and 13-07
 # fill it, and SearchServiceTest.php, ProviderTest.php and PageControllerTest
 # .php follow the two changed signatures.
+# Moved on 2026-09-17 by plan 13-07, and the count stays at 64 again because no
+# file was added or removed. Two files changed their bytes: PageController.php
+# reads the five filter values out of its address and computes the calendar
+# windows in the zone of the user, and PageControllerTest.php follows it with
+# the two new doubles of the constructor.
 PHP_FILES_TODAY = 64
-PHP_TREE_HASH_TODAY = "da750308c56f5c5c1e11ed96e85d6a37470ef3078280b35c571dbad636d7a2c4"
+PHP_TREE_HASH_TODAY = "b5571160921b498431f64ea45e52a1bf3a2f1ea414bb7a9eaab31ead2ac96908"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
