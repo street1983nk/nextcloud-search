@@ -250,8 +250,17 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # Both were measured against a tree that held only that plan's own change, and
 # the hash is over the whole half, so the merge of the two is a third tree with
 # a third hash. It was read off the merged tree with the same recipe.
+# Moved on 2026-09-17 a third time, by plan 13-08, and the count stays at 64 for
+# the fourth time running because no file was added or removed. The same two
+# files changed their bytes as the day before: PageController.php builds the
+# addresses of the filter row out of a second builder that cannot write a
+# position, binds the cursor path to a fingerprint of the request state and
+# hands the chips, the sort links, the reset link and the modification date to
+# the template, and PageControllerTest.php follows it with the cases for all of
+# them. This plan ran alone in its wave, so the figure was measured against the
+# merged tree of the wave before it and needs no second correction.
 PHP_FILES_TODAY = 64
-PHP_TREE_HASH_TODAY = "6166e963fee0ff2389cd06da66c0a652f3ceebd4a40cce267dfa9c787bd4e9a2"
+PHP_TREE_HASH_TODAY = "104ba40f1381a12e16b78dcd32ea85f8024ad53ae2e95a0b0fb1715cebd4c745"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
