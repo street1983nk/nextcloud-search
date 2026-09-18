@@ -269,6 +269,38 @@ installiert kein Paket (T-13-SC), und ein Paketwechsel auf Zuruf einer
 Warnung waere genau das Warnsignal, das 13-RESEARCH beschreibt. Beobachten,
 nicht handeln.
 
+**5. [behoben] Die sortierte Runde wiederholte und übersprang Dokumente an
+Seitengrenzen.** Fundweg: Sichtprobe 8 an der laufenden Instanz (Port 8090),
+zweimal deterministisch identisch gemessen. Messung: Suche "Genehmigung" mit
+sort=newest über alle 12 Seiten (25 je Seite, 300 Zeilen) lieferte nur 273
+eindeutige file_ids, 27 Dubletten und 27 fehlende Dokumente gegenüber
+sort=oldest (das umgekehrt 11 Dubletten und 11 Lücken hatte); die Dubletten
+saßen an angrenzenden Seitengrenzen und begannen exakt beim Übergang von
+Seite 5 auf 6. Ursache: `_sorted_round` in
+`backend/src/findling/index/search.py` wählte die Portionsgröße als
+`max(needed, _SCAN_CHUNK_MIN)`, und needed wächst mit der Seitentiefe. Die
+Gleichstands-Nachsortierung nach (mtime, file_id) läuft je Portion; bis
+Seite 5 (needed <= 128) lagen die Portionsgrenzen aller Anfragen gleich, ab
+Seite 6 (needed = 151) verschoben sie sich. Damit zerfiel die große
+Zeitstempel-Gleichstandsgruppe des Massenuploads je Anfrage anders, und die
+Offset-Slices benachbarter Seiten überlappten beziehungsweise ließen aus. Der
+Kommentar an der Stelle behauptete Stabilität, war aber mit konstanten
+Portionsgrenzen gemessen worden. Fix: feste Portionsschrittweite
+(`chunk_limit = min(_SCAN_CHUNK_MIN, scan_cap - raw_cursor)`), damit
+reproduziert jede Anfrage dieselbe deterministische Gesamtfolge;
+`SEARCH_SCAN_MAX` bleibt die Decke, keine neue Konfiguration, die
+Relevanz-Rangfolge ist unberührt. Regressionstest
+`test_pages_of_unequal_depth_repeat_and_lose_nothing_across_a_portion_boundary`
+(160 Dokumente gleichen Zeitstempels über der 128er-Grenze, parametrisiert
+für newest und oldest), Gegenprobe vor dem Fix rot mit 160 Zeilen bei nur 141
+eindeutigen Dokumenten. Kommentar wahrheitsgemäß nachgezogen. Commits
+`264ffb8` (Fix + Test) und `6e22c48` (Baumhash des Pakets nachgezogen); die
+Suite wächst von 2128 auf 2130. Der lexikalische Zweig mit derselben
+`max(needed, ...)`-Konstruktion (Zeile ~602) bleibt unverändert: dort gibt es
+keine Nachsortierung je Portion, die Engine-Reihenfolge bei Score-Gleichstand
+hängt von der Dokumentadresse und nicht vom angefragten Limit ab, ein roter
+Test war nicht konstruierbar.
+
 ## Deviations from Plan
 
 ### Auto-fixed Issues
