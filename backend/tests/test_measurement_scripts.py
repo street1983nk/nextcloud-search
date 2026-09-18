@@ -298,7 +298,12 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # query fields without a sort, and api/diagnose.py the same three as query
 # parameters. No file came and none went, so PACKAGE_FILES stays at 54 and only
 # the hash is a different statement than it was an hour ago.
-PACKAGE_TREE_HASH_TODAY = "ae8f1684fb0603cf061777ee170a0ea476800a9a0a0530b064d8a8c881cfb4f1"
+# Moved on 2026-09-18 by the follow up fix of 13-13: exactly one of the 54 files
+# changed its bytes, index/search.py, whose sorted round now scans with a fixed
+# portion stride instead of one that grew with the requested depth, because the
+# moving portion boundaries repeated and skipped documents at page transitions
+# over a tie group. No file came and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "266461bede6d4d09108d7dd398fb281922680d59e7a9a8840c7c51fa38824a19"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
