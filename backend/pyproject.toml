@@ -12,7 +12,7 @@ dependencies = [
     "httpx==0.28.1",
     "tantivy==0.26.0",
     "pypdfium2==5.13.0",
-    "pypdf==6.16.2",
+    "pypdf==6.18.1",
     "python-docx==1.2.0",
     "python-pptx==1.0.2",
     "openpyxl==3.1.5",
@@ -41,7 +41,7 @@ dependencies = [
     # carries a cp313 manylinux_2_28_aarch64 wheel, which the ARM box needs.
     # fastembed excludes 1.24.0 and 1.24.1 for Python 3.13 explicitly, so the
     # window this pin sits in is >1.21.0 with those two cut out.
-    "onnxruntime==1.29.0",
+    "onnxruntime==1.30.0",
     # The vector store: a loadable SQLite extension, brute force KNN, no second
     # process. There is deliberately no >= here. Everything after 0.1.9
     # (2026-03-31) is a prerelease, and no commit has landed in the upstream
@@ -60,8 +60,8 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff==0.16.6",
-    "pyright==1.1.411",
+    "ruff==0.16.7",
+    "pyright==1.1.414",
     "vulture==2.16",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
