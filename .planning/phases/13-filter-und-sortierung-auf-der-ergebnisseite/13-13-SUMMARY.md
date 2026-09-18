@@ -342,18 +342,136 @@ Test war nicht konstruierbar.
    belegt; wer es schaerfer will, braucht ein Fixture mit zwei Dateitypen
    (Erweiterung, kein Nachtrag). Der Owner nimmt diese Bauform mit ab.
 
-## Die 17 Sichtproben: OFFEN (Task 2, Owner)
+## Die 17 Sichtproben: VORBEREITET am 18.09. abends, Abnahme durch den Owner OFFEN
 
-Die 17 Abnahme-Sichtproben aus 13-UI-SPEC (Abschnitt "Abnahme-Sichtproben")
-plus die Dialog-Probe zu FILT-03 sind NICHT gelaufen: sie brauchen die laufende
-Instanz nach `docs/dev-setup.md` (Port 8090, `testuser` und `kollegin`,
-Testkorpus), und auf dieser Maschine ist die Docker-Engine aus. Jede
-Sichtprobe wird bei der Abnahme hier mit ihrem Ergebnis nachgetragen, ebenso
-das namentliche Abhaken der sieben Entscheidungen D-01, D-02, D-03, D-04,
-D-05, D-06 und D-07 an der laufenden Seite. Bis dahin gilt: maschinell ist
-alles gruen, was maschinell pruefbar ist; was nur an der Seite faellt
-(Tastatur, Screenreader, dunkles Theme, hoher Kontrast, Handybreite,
-Mitternacht, drei Sprachen), steht aus.
+Die Docker-Engine wurde am 18.09. abends gestartet, die Instanz nach
+`docs/dev-setup.md` hochgefahren (Port 8090, DB-Upgrade auf 34.0.3 nachgezogen,
+Backend als Host-Prozess neu registriert) und die Proben wurden per Browser
+(Playwright) und im DOM gemessen. Das Embedding-Modell fehlte dem Host-Prozess;
+es wurde aus dem Shipping-Image 1.1.0 extrahiert und ueber
+FINDLING_EMBED_MODEL_DIR eingebunden. Der Altbestand traegt KEINE Vektoren
+(indexiert, als das Modell fehlte; Reconcile traegt Vektoren bewusst nicht
+nach), darum lief die Paraphrasen-Probe gegen eine frisch hochgeladene Datei.
+
+Ergebnisse, in der Reihenfolge der UI-SPEC. "gemessen" heisst: im DOM oder
+ueber die ausgelieferten Seiten automatisiert belegt; was nur ein Mensch
+abnehmen kann, steht ausdruecklich beim Owner.
+
+1. BESTANDEN (gemessen): zehn Chips (6 Dateityp + 4 Zeitraum) und drei
+   Sortierlinks ueber der Liste, alle Chips ohne aria-current, "Relevanz"
+   traegt aria-current=true und die active-Klasse, kein Zuruecksetzen-Link
+   im Findling-Bereich (der einzige Regex-Treffer war ein versteckter
+   Nextcloud-Profilhinweis).
+2. BESTANDEN (gemessen): types=pdf liefert 25/25 PDF-Treffer, Chip mit
+   aria-current=true und aria-label "Filter PDF entfernen", Link "Alle Filter
+   zuruecksetzen" erscheint, Anzeige "Seite 1", Adresse ohne page/cursors.
+3. BESTANDEN (gemessen): types=pdf,images zeigt beide Chips aktiv, Treffer
+   beider Gruppen (pdf und tif); der aktive PDF-Chip verlinkt auf
+   types=images, entfernt also nur sich selbst.
+4. TEILWEISE BESTANDEN (gemessen, mit Einschraenkung): die CI-Paraphrase
+   ("Wann darf ich meinen Job aufgeben und wie lange muss ich vorher warten",
+   kein Wort im Zieldokument) findet die frisch indexierte Datei
+   kuendigungsfrist-probe.txt OHNE Filter und UNTER types=text gleichermassen;
+   die Semantik bleibt unter Filter also aktiv. NICHT pruefbar an dieser
+   Instanz: "Seite voll besetzt statt halbleer", weil nur eine Datei Vektoren
+   traegt. Der volle Fall gehoert an eine Instanz aus dem Container-Image
+   (Modell und Vektoren ab Werk) oder in die CI (index-search-e2e deckt den
+   Mechanismus).
+5. BESTANDEN (gemessen): auf Seite 3 geblaettert, Chip-Link von dort traegt
+   weder page noch cursors (Seite 1 der neuen Auswahl); die komplette
+   types=pdf-Blaetterei (8 Seiten, 195 Treffer) ist dublettenfrei und
+   lueckenlos.
+6. BESTANDEN (gemessen): cursors samt fp aus der ungefilterten Suche in eine
+   types=pdf-Adresse kopiert: 200, "Seite 1", 25 Treffer, kein Fehlerblock,
+   keine Ausnahme im Backend-Log.
+7. BESTANDEN (gemessen): unter sort=newest traegt jede der 25 Zeilen
+   "Geaendert am ...", die Folge faellt monoton, nirgends ein Relevanzwert;
+   unter Relevanz ist die Datumszeile weg (0 Treffer im DOM). Der
+   Accessible Name der Trefferzeile traegt das Datum mit ("..., geaendert am
+   9. September 2026"), das deckt die Screenreader-Haelfte von Probe 14.
+8. BESTANDEN NACH BEFUND 5 (gemessen): die Erstmessung ueber alle 12 Seiten
+   fand 27 Dubletten/27 Luecken (newest) bzw. 11/11 (oldest), deterministisch
+   reproduzierbar; Ursache und Fix stehen als Befund 5 oben (264ffb8).
+   Nachmessung nach Fix und Backend-Neustart: newest und oldest je 300
+   Zeilen, 0 Dubletten, 0 Luecken, identische Mengen in beiden Richtungen.
+9. BESTANDEN (gemessen, Mitternachtsfall offen): range=year dann range=today,
+   jeweils genau EIN Zeitraum-Chip aktiv; range=today enthaelt die Datei der
+   letzten Stunde (kuendigungsfrist-probe.txt, hochgeladen 18.09. abends).
+   Die Probe UM MITTERNACHT Ortszeit steht aus (heute 18-19 Uhr gemessen).
+10. BESTANDEN (gemessen): Leerzustand "Keine Treffer mit den aktiven Filtern"
+    mit Satz und Link "Filter zuruecksetzen" auf dieselbe Suche ohne Filter,
+    die wieder Treffer liefert.
+11. BESTANDEN (gemessen): Backend-Prozess gestoppt, gefilterte Seite geladen:
+    Fehlerblock "Die Suche antwortet gerade nicht ... Ihre Dateien sind
+    unveraendert" steht, der Filter-Leerzustand schweigt, alle zehn Chips
+    bleiben als Links bedienbar. Backend danach wieder gestartet.
+12. STRUKTURELL BESTANDEN (gemessen): das Suchformular ist ein GET-Formular
+    auf /apps/findling/ (Feld query), alle 14 Bedienelemente (10 Chips, 3
+    Sortierlinks, Zuruecksetzen) sind reine a-href-Links, ebenso das
+    Blaettern. Ein Lauf mit tatsaechlich abgeschaltetem JavaScript bleibt dem
+    Owner (konstruktiv kann nichts an JavaScript haengen).
+13. STRUKTURELL BESTANDEN (gemessen): Chips vor Sortierlinks in
+    Dokumentreihenfolge, je Chip genau EIN Fokus-Stopp (keine geschachtelten
+    Fokusziele), :hover/:focus-Regeln vorhanden, fokussierter Chip zeigt
+    einen Umriss. Der echte Nur-Tastatur-Durchgang bleibt dem Owner.
+14. STRUKTURELL BESTANDEN (gemessen): role=group mit Namen "Dateityp",
+    "Zeitraum", "Sortieren nach" (Accessibility-Baum), aktiver Chip traegt
+    aria-current=true plus aria-label "Filter PDF entfernen", Trefferzeile
+    nennt unter Sortierung das Datum im Accessible Name. Der echte
+    Screenreader-Durchgang bleibt dem Owner.
+15. BESTANDEN (gemessen, hoher Kontrast offen): dunkles Theme per occ
+    aktiviert; Kontraste: Chip 15.04:1, aktiver Chip 8.47:1, aktiver
+    Sortierlink 15.04:1, Trefferzeile 15.04:1, Datumszeile 6.29:1, alles
+    ueber 4.5:1. Aktiver Chip ist ohne Farbe erkennbar: x-Icon (svg) plus
+    anderer Rahmen. Der Modus "hoher Kontrast" wurde nicht emuliert, bleibt
+    dem Owner.
+16. BESTANDEN MIT ERKLAERUNG (gemessen): bei 390px brechen die Chips in drei
+    Zeilen um, kein waagerechtes Scrollen (scrollWidth 390 = Viewport). Die
+    44px-Mindesthoehe haengt an "@media (pointer: coarse)", nicht an der
+    Breite: am Desktop-Browser messen die Chips 34px, auf Touch-Geraeten
+    greift die 44px-Regel. Das weicht vom Wortlaut der Probe ab (Breite),
+    trifft aber ihren Zweck (Touch-Ziele); Einordnung als "erklaert", der
+    Owner nimmt die Bauform mit ab.
+17. BESTANDEN MIT NEBENBEFUND (gemessen): DE, EN (alle 10 Chips, 3
+    Sortierlinks, Zuruecksetzen, Leerzustand uebersetzt, null deutsche Reste
+    im EN-Lauf) und FR komplett; "Feuilles de calcul" (134px breit) bricht
+    die Leiste bei 390px nicht, kein Text abgeschnitten. NEBENBEFUND: der
+    Gruppenname der Unified Search, "File contents" aus
+    php/lib/Search/Provider.php:108, fehlt als einziger t()-Schluessel in
+    allen drei Katalogen (Gegenprobe ueber alle 146 t()-Strings des
+    PHP-Teils gegen de.json: genau 1 Treffer). Die Gruppe erscheint deshalb
+    in jedem nicht-englischen UI englisch. Kein Phase-13-Schluessel
+    (Bestand vor der Phase), Behebung als kleiner Folge-Commit moeglich;
+    franzoesischer Wortlaut faellt unter den bekannten Checkpoint-Punkt 1.
+
+Dialog-Probe zu FILT-03: BESTANDEN (gemessen): im Unified-Search-Dialog
+"Genehmigung" gesucht, Datumsfilter "Dieses Jahr" gesetzt: die
+Findling-Gruppe bleibt mit Treffern stehen statt zu verschwinden.
+
+Die sieben Entscheidungen an der laufenden Seite:
+
+- D-01 WIEDERGEFUNDEN: types=pdf,images kombiniert zwei Gruppen, das
+  Backend-Feld ist eine Liste (Adresse traegt die Aufzaehlung).
+- D-02 WIEDERGEFUNDEN: Chip-Leiste ueber der Trefferliste, alle sechs
+  Typ-Chips auch im gefilterten Zustand sichtbar, alles serverseitige Links.
+- D-03 WIEDERGEFUNDEN: drei Sortierlinks als Segmentschalter, aktiver per
+  aria-current und active-Klasse hervorgehoben, ein Klick wechselt sofort.
+- D-04 WIEDERGEFUNDEN: Datumszeile je Treffer NUR unter Datums-Sortierung,
+  nirgends ein Relevanzwert.
+- D-05 WIEDERGEFUNDEN: vier Schnellbereiche als Link-Chips, keine freien
+  Datumsfelder; der Dialog-Datumsfilter wirkt (FILT-03-Probe).
+- D-06 WIEDERGEFUNDEN: aktive Chips hervorgehoben mit x (svg + aria-label
+  "Filter ... entfernen"), Zuruecksetzen-Link nur bei mindestens einem
+  aktiven Filter.
+- D-07 WIEDERGEFUNDEN: eigener Leerzustand bei 0 Treffern unter aktivem
+  Filter, mit Link auf dieselbe Suche ungefiltert, die wieder liefert.
+
+OFFEN FUER DIE ABNAHME durch den Owner (Resume-Signal "abgenommen"):
+der echte Nur-Tastatur- und Screenreader-Durchgang (13, 14), hoher Kontrast
+(15), ein echtes Touch-Geraet oder die Bewertung der pointer-coarse-Bauform
+(16), ein Lauf mit abgeschaltetem JavaScript (12), die Mitternachtsprobe (9),
+der volle Paraphrasen-Fall auf einer Instanz mit Vektorbestand (4), dazu die
+zwei bekannten Checkpoint-Punkte oben und der Nebenbefund "File contents".
 
 ## Issues Encountered
 
