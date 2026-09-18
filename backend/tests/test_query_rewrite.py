@@ -34,6 +34,7 @@ from findling.query.rewrite import (
     FIELD,
     FILETYPE,
     PHRASE,
+    TYPE_GROUPS,
     RewrittenQuery,
     build_query,
     carried_operators,
@@ -516,6 +517,28 @@ def test_a_period_that_lies_in_the_future_is_empty_and_not_an_error(index: Index
     assert rewritten.query is not None
     assert rewritten.errors == []
     assert _found(index, rewritten) == []
+
+
+def test_a_lower_bound_above_the_upper_bound_is_empty_and_not_an_error(index: Index) -> None:
+    # A hand edited address may carry since above until: each edge passes the
+    # wire bounds on its own, so the inverted window reaches the engine. The
+    # range over the fast column answers it with an empty list, and the page
+    # reads that as its filter empty state instead of an error block.
+    rewritten = build_query(index, "frist", since=MTIME_TXT, until=MTIME_PDF)
+
+    assert rewritten.query is not None
+    assert rewritten.errors == []
+    assert _found(index, rewritten) == []
+
+
+def test_all_six_type_groups_together_are_no_narrowing(index: Index) -> None:
+    # An address may switch every chip on at once, which is exactly
+    # SEARCH_TYPE_GROUPS_MAX names. Switching everything on means nothing is
+    # switched off, so the union has to answer what the unfiltered search
+    # answers, and the whole vocabulary is read from the one table it lives in.
+    rewritten = build_query(index, "frist", groups=list(TYPE_GROUPS))
+
+    assert _found(index, rewritten) == _found(index, build_query(index, "frist"))
 
 
 def test_without_a_group_and_without_a_bound_there_is_no_filter_clause(index: Index) -> None:
