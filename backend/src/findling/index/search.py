@@ -60,9 +60,13 @@ LOGGER = logging.getLogger("findling.index.search")
 # to it is the bounded repeat on the PHP side, never a larger first request: a
 # larger request pays the full ranking cost for hits nobody is allowed to see.
 
-# The smallest raw chunk the scan below asks the engine for. Small pages of a
-# sparsely visible corpus would otherwise crawl through the ranking a handful of
-# hits at a time, and every chunk pays the fixed cost of a search.
+# The smallest raw chunk the relevance scan below asks the engine for. Small
+# pages of a sparsely visible corpus would otherwise crawl through the ranking a
+# handful of hits at a time, and every chunk pays the fixed cost of a search.
+# The sorted round uses it as its FIXED stride rather than a minimum, because
+# there the portion boundaries decide where a tie group is cut for the re-sort,
+# and boundaries that move with the request produce duplicates and gaps at page
+# transitions (finding of 18.09.2026 in _sorted_round).
 _SCAN_CHUNK_MIN: Final = 128
 
 # How many merged documents are handed to the permission prefilter at a time.
@@ -427,7 +431,16 @@ def _sorted_round(
     raw_cursor = 0
     reverse = order is Order.Desc
     while len(permitted) < needed and raw_cursor < scan_cap:
-        chunk_limit = min(max(needed, _SCAN_CHUNK_MIN), scan_cap - raw_cursor)
+        # The portion size is a constant and never a function of the request.
+        # Its predecessor, ``max(needed, _SCAN_CHUNK_MIN)``, shifted the portion
+        # boundaries with the requested depth, and together with the re-sort
+        # below that decomposed one sequence differently per page: measured on
+        # 18.09.2026 at the running instance, 300 rows over twelve pages held
+        # only 273 distinct documents, the duplicates starting exactly where
+        # ``needed`` first exceeded the minimum. A deep page now pays a handful
+        # of engine calls instead of one, bounded by ``scan_cap``; that is the
+        # price of every request reproducing the same overall sequence.
+        chunk_limit = min(_SCAN_CHUNK_MIN, scan_cap - raw_cursor)
         hits = searcher.search(query, chunk_limit, order_by_field=FIELD_MTIME, order=order, offset=raw_cursor).hits
         if not hits:
             break
@@ -440,10 +453,11 @@ def _sorted_round(
         # document address order, not by file id (insertion order 7, 3, 9, 1 came
         # back as 7, 3, 9, 1). The honest limit of doing it per portion: a group
         # of equal timestamps that falls apart exactly at a portion boundary is
-        # ordered within each portion and not across both. That produces neither
-        # duplicates nor gaps, because offset together with the engine order is
-        # stable across pages (measured over 20.000 documents in four segments,
-        # sixteen pages, sequence identical to one deep read).
+        # ordered within each portion and not across both. With the fixed stride
+        # above every request cuts the sequence at the same multiples of
+        # ``_SCAN_CHUNK_MIN``, so the offset slices of neighbouring pages carry
+        # neither duplicates nor gaps; with a request-dependent stride they did
+        # (finding of 18.09.2026, see the loop head).
         portion.sort(key=lambda candidate: (candidate.mtime, candidate.file_id), reverse=reverse)
         permitted.extend(_permit(store, uid, portion))
         raw_cursor += len(hits)

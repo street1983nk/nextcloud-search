@@ -52,6 +52,16 @@ CAROL = "carol"
 TIED_MTIME = 1_800_000_000
 TIED_IDS = (7, 3, 9, 1)
 
+# One tie group that spans the 128-hit portion boundary of the sorted scan.
+# Written evens first and odds second, so the engine's tie order (document
+# address) matches neither direction of the file id and every portion re-sort
+# actually moves documents. This is the shape of the finding of 18.09.2026:
+# a mass upload with identical timestamps, paged past page five.
+MASS_DOCUMENTS = 160
+MASS_MTIME = 1_800_000_100
+MASS_WRITE_ORDER = tuple(range(2, MASS_DOCUMENTS + 1, 2)) + tuple(range(1, MASS_DOCUMENTS + 1, 2))
+MASS_PAGE = 25
+
 
 def _body(file_id: int) -> str:
     """Bodies of different length, so that the ranking is not a coin toss."""
@@ -106,6 +116,44 @@ def tied_index(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Index]:
     built.reload()
     yield built
     writer.wait_merging_threads()
+
+
+@pytest.fixture(scope="module")
+def mass_index(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Index]:
+    """One hundred and sixty documents that share one timestamp.
+
+    The tie group is larger than one scan portion on purpose: only then does the
+    per-portion second key of FILT-02 have a boundary to fall apart at, and only
+    then can two requests with different depths decompose the sequence
+    differently.
+    """
+    directory = tmp_path_factory.mktemp("mass-index")
+    built = open_index(directory, CONSTITUENTS)
+    writer = built.writer(heap_size=15_000_000, num_threads=1)
+    for file_id in MASS_WRITE_ORDER:
+        document = Document()
+        document.add_unsigned(FIELD_FILE_ID, file_id)
+        document.add_unsigned(FIELD_STORAGE_ID, 1)
+        document.add_text(FIELD_NAME, f"Akte-{file_id}.pdf")
+        document.add_text(FIELD_TITLE, f"Akte {file_id}")
+        document.add_text(FIELD_PATH, f"/Akten/Akte-{file_id}.pdf")
+        document.add_text(FIELD_EXT, "pdf")
+        document.add_text(FIELD_BODY_DE, _body(file_id))
+        document.add_integer(FIELD_MTIME, MASS_MTIME)
+        writer.add_document(document)
+    writer.commit()
+    built.reload()
+    yield built
+    writer.wait_merging_threads()
+
+
+@pytest.fixture
+def mass_store(tmp_path: Path) -> Iterator[Store]:
+    opened = open_store(tmp_path / "state.db")
+    for file_id in range(1, MASS_DOCUMENTS + 1):
+        opened.replace_acl(file_id, [BOB])
+    yield opened
+    opened.close()
 
 
 @pytest.fixture
@@ -340,6 +388,33 @@ def test_two_sorted_pages_are_the_one_deep_page(index: Index, store: Store) -> N
 
     assert first.has_more is True
     assert first.candidates + second.candidates == deep.candidates[:10]
+
+
+@pytest.mark.parametrize("sort", ["newest", "oldest"])
+def test_pages_of_unequal_depth_repeat_and_lose_nothing_across_a_portion_boundary(
+    mass_index: Index, mass_store: Store, sort: str
+) -> None:
+    # The finding of 18.09.2026 at the running instance: 300 rows over twelve
+    # pages held only 273 distinct documents, and the duplicates began exactly
+    # where ``needed`` first exceeded the minimum portion size. A portion
+    # boundary that depends on the requested depth decomposes one tie group
+    # differently per request, so the offset slices of neighbouring pages
+    # overlap and skip. Every page, whatever its depth, must reproduce the one
+    # sequence the deep read answers.
+    deep = candidates(mass_index, mass_store, BOB, _query(mass_index), limit=MASS_DOCUMENTS, sort=sort)
+    assert len(deep.candidates) == MASS_DOCUMENTS
+
+    paged: list[int] = []
+    offset = 0
+    for _ in range(MASS_DOCUMENTS // MASS_PAGE + 2):
+        page = candidates(mass_index, mass_store, BOB, _query(mass_index), limit=MASS_PAGE, offset=offset, sort=sort)
+        paged.extend(_ids(page))
+        if not page.has_more:
+            break
+        offset = page.next_offset
+
+    assert len(paged) == len(set(paged)), "a page transition repeated a document"
+    assert paged == _ids(deep)
 
 
 def test_an_unknown_sort_name_answers_the_relevance_order(index: Index, store: Store) -> None:
