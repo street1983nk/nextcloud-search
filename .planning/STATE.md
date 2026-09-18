@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 13-12-PLAN.md
-last_updated: "2026-09-17T17:10:00.000Z"
-last_activity: 2026-09-17 -- Welle 11 abgeschlossen (13-12 Paritaetsszenarien); alle autonomen Plaene der Phase sind durch, es fehlt nur der Owner-Checkpoint 13-13
+stopped_at: 13-13 Task 1 abgeschlossen, Task 2 (Owner-Checkpoint) offen
+last_updated: "2026-09-18T16:30:00.000Z"
+last_activity: 2026-09-18 -- 13-13 Task 1: Gate-Kette in einem Zug gruen (2128 passed), Audit-Durchgang gefahren, SUMMARY angelegt; offen ist nur Task 2 (17 Sichtproben, Owner, Resume-Signal "abgenommen")
 progress:
   total_phases: 5
   completed_phases: 1
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 13 of 13 (13-01 bis 13-12 abgeschlossen, 13-13 ist der Owner-Checkpoint)
+Plan: 13 of 13 (13-13 Task 1 abgeschlossen; Task 2 ist der Owner-Checkpoint mit den 17 Sichtproben)
 Status: Executing Phase 13
 Progress: [██████░░░░] 57%
-Last activity: 2026-09-17 -- Welle 11 abgeschlossen (13-12), naechster Schritt ist 13-13 mit autonomous:false
+Last activity: 2026-09-18 -- 13-13 Task 1 abgeschlossen (Gates gruen, Audit gefahren, 2 neue Tests); es wartet der Owner-Checkpoint
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
