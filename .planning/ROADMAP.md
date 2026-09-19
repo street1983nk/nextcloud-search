@@ -207,7 +207,7 @@ Plans:
 ### Phase 15: Messphase, eine Box-Anfahrt
 
 **Goal**: Die eine bezahlte Anfahrt liefert alle offenen Messbelege des Milestones und vollzieht dabei das Runbook zum ersten Mal
-**Depends on**: Phase 12 (Werkzeug und Runbook fest), Phase 14 (Schalter fuer den A/B-Beleg); Phase 13 sollte stehen, damit die Sortierung auf grossem Bestand mitgeprueft wird
+**Depends on**: Phase 12 (Werkzeug und Runbook fest), Phase 14 (Schalter fuer den A/B-Beleg); Phase 13 steht, und die Sortierung bekommt nach dem Owner-Entscheid vom 19.09.2026 einen eigenen Messblock (D-01)
 **Requirements**: MESS-05
 **Success Criteria** (was wahr sein muss):
 
@@ -217,7 +217,35 @@ Plans:
   4. Die Sprachfall-Messung laeuft ohne den 52.111er-Fremdbestand und liefert Zahlen ueber der bisherigen Deckelung (DI-10-02/DI-11-01, neue Messgroesse)
   5. Die Wiederaufwaerm-Kosten der Entladung sind gemessen und ausgewiesen (warm/kalt, mit/ohne Seitencache, A/B ueber den MEM-01-Schalter); die Box ist danach wieder abgebaut
 
-**Plans**: TBD
+**Plans**: 16 Plaene in 15 Wellen
+
+**Welle A, ohne Box-Zeit** *(Welle 1 bis 6)*
+
+- [ ] 15-01-PLAN.md: Elf Werkzeuge byteweise uebernehmen, Kopie-Waechter
+- [ ] 15-02-PLAN.md: Runbook: Deckel neu gerechnet (46 h / 5,40 USD), Block 13b Abbildwechsel, drop_caches, Schritte 6b und 8b
+- [ ] 15-03-PLAN.md: 95b-wiederaufwaermen.sh, vier Auspraegungen, Abbrueche 29 bis 31
+- [ ] 15-04-PLAN.md: 94b-grundlast-rueckkehr.sh, der MEM-02-Block
+- [ ] 15-05-PLAN.md: 99c-filter-sortierung.sh, der Owner-Messblock D-01
+- [ ] 15-06-PLAN.md: 92b-wechsel.sh, Abbildwechsel per Digest mit Baumhash-Beweis
+- [ ] 15-07-PLAN.md: 00-ablauf.md auf zehn Schritte, Erwartungen E8 bis E14, neun Vorbedingungen
+
+**Welle B, der Owner-Checkpoint** *(Welle 7)*
+
+- [ ] 15-08-PLAN.md: Deckelfreigabe mit Datum (blockierend; ohne sie startet nichts)
+
+**Welle C, die begleitete Anfahrt** *(Welle 8 bis 13)*
+
+- [ ] 15-09-PLAN.md: Aufbau Bloecke 1 bis 13 plus Abbildwechsel
+- [ ] 15-10-PLAN.md: Zustandspruefung, Abbruchtor, Nullstandsbeleg, Bestandssonde
+- [ ] 15-11-PLAN.md: Volllauf detached mit beiden Cron-Zweigen
+- [ ] 15-12-PLAN.md: Laststufen mit je einem Verdikt, Filter- und Sortierblock, Sprachfaelle
+- [ ] 15-13-PLAN.md: Wiederaufwaerm-A/B, MEM-02-Block, Entscheid zum Vorschlagswert 900 s
+- [ ] 15-14-PLAN.md: Endmessungen, Kostenzeilen, Abbau mit Tag-Sweep
+
+**Welle D, nach dem Abbau** *(Welle 14 bis 15)*
+
+- [ ] 15-15-PLAN.md: Bericht, Runbook-Nachtraege, sechs Pruefsummen-Waechter
+- [ ] 15-16-PLAN.md: performance.md, Audit der Phase, MESS-05 und MEM-02, Abnahme
 
 ### Phase 16: Haertung und Store-Einreichung v1.2.0
 
