@@ -38,6 +38,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy
@@ -823,6 +824,141 @@ def test_the_unload_counter_can_never_be_set_back() -> None:
             touches.append(ast.unparse(node))
 
     assert sorted(touches) == ["_UNLOAD_COUNT += 1", "_UNLOAD_COUNT = 0"]
+
+
+# ---------------------------------------------------------------------------
+# The two steps of the return, and the libc that may not offer the second
+# ---------------------------------------------------------------------------
+
+
+def test_a_libc_that_cannot_be_opened_does_not_stop_a_release(
+    model_dir: Path, stand_in: StandIn, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Pitfall 2, first shape: ``ctypes.CDLL`` throws ``OSError``.
+
+    On musl or any other foreign base the library is simply not there. Without
+    the guard the release task dies on the first tick and, depending on the
+    shape of the caller, takes the search with it. A test that only runs on the
+    base image would never enter this branch: the shipped image is glibc and
+    answers every time, so the failure would first appear on somebody else's
+    container.
+
+    Two holders and two releases, because the warning is said once per process
+    and not once per holder.
+    """
+    monkeypatch.setattr(model_module, "_TRIM_UNAVAILABLE_WARNED", False)
+
+    def refusing(_name: str) -> Any:
+        raise OSError("libc.so.6: cannot open shared object file")
+
+    monkeypatch.setattr(model_module, "ctypes", SimpleNamespace(CDLL=refusing))
+
+    first = _model(model_dir)
+    first.embed_passages(["ein Abschnitt"])
+    second = _model(model_dir)
+    second.embed_passages(["ein Abschnitt"])
+
+    with caplog.at_level(logging.DEBUG, logger="findling.embed.model"):
+        assert first.release() is True
+        assert second.release() is True
+
+    assert first.loaded is False
+    assert second.loaded is False
+
+    said = [record for record in caplog.records if "malloc_trim" in record.getMessage()]
+
+    assert len(said) == 1, "once per process, not once per holder and not once per tick"
+    assert said[0].levelno == logging.WARNING
+    assert "OSError" in said[0].getMessage(), "the class name and nothing else of what went wrong"
+
+
+def test_a_libc_without_malloc_trim_does_not_stop_a_release(
+    model_dir: Path, stand_in: StandIn, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Pitfall 2, second shape: the library opens and has no such symbol.
+
+    The other half of the narrow catch, and it is a different exception from a
+    different line. Four fifths of the return fall away here and the container
+    keeps running, which is the same stance ``extract/ocr.py`` takes towards a
+    machine without tesseract.
+    """
+    monkeypatch.setattr(model_module, "_TRIM_UNAVAILABLE_WARNED", False)
+    monkeypatch.setattr(model_module, "ctypes", SimpleNamespace(CDLL=lambda _name: SimpleNamespace()))
+
+    engine = _model(model_dir)
+    engine.embed_passages(["ein Abschnitt"])
+    before = unload_count()
+
+    with caplog.at_level(logging.DEBUG, logger="findling.embed.model"):
+        assert engine.release() is True
+        engine.embed_passages(["noch ein Abschnitt"])
+        assert engine.release() is True
+
+    assert engine.loaded is False
+    assert unload_count() - before == 2, "a libc without the symbol does not make a release a non event"
+
+    said = [record for record in caplog.records if "malloc_trim" in record.getMessage()]
+
+    assert len(said) == 1
+    assert "AttributeError" in said[0].getMessage()
+
+
+def test_the_collect_runs_before_the_trim(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pitfall 1: a trim before the collect finds the blocks still referenced.
+
+    The order is the whole recipe. Reversed, the trim walks an arena whose
+    blocks are all still in use, hands back nothing, and the collect afterwards
+    frees them into an arena nobody trims any more. The warning sign in a
+    measurement is a saving under 100 MB, and the pre-check of 2026-09-19 says
+    what is at stake: the collect alone is worth 15 to 19 percent of a load, the
+    trim the remaining 80 to 85.
+
+    Recorded at run time and read in the source, because a recording proves what
+    happened once and the source proves what will happen next time.
+    """
+    calls: list[str] = []
+
+    class _Libc:
+        def malloc_trim(self, pad: int) -> int:
+            calls.append(f"malloc_trim({pad})")
+            return 1
+
+    monkeypatch.setattr(model_module, "gc", SimpleNamespace(collect=lambda: calls.append("collect")))
+    monkeypatch.setattr(model_module, "ctypes", SimpleNamespace(CDLL=lambda _name: _Libc()))
+
+    model_module._return_free_pages_to_the_system()
+
+    assert calls == ["collect", "malloc_trim(0)"]
+
+    body = inspect.getsource(model_module._return_free_pages_to_the_system).split('"""')[2]
+
+    assert body.index("gc.collect()") < body.index("malloc_trim")
+
+
+def test_a_release_lets_go_of_the_engine_and_writes_nothing_else() -> None:
+    """The three remembered facts, as a property of the source rather than of three runs.
+
+    The three cases above each hold one of them, and each one holds it in the
+    only situation that can be built: a holder with an absent directory never
+    has an engine, and a load that threw leaves none either, so those two can
+    only be asked across a release that answers False. This reading closes that
+    gap from the other side. The method writes one attribute, and the name of it
+    is ``_engine``.
+    """
+    tree = ast.parse(_model_source())
+    bodies = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "release"]
+
+    assert len(bodies) == 1, "one release and not two spellings of it"
+
+    assigned = [
+        target.attr
+        for node in ast.walk(bodies[0])
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Attribute)
+    ]
+
+    assert assigned == ["_engine"]
 
 
 # ---------------------------------------------------------------------------
