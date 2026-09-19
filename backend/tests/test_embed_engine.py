@@ -55,6 +55,7 @@ from findling.embed.engine import (
     ENGINE_STATES,
     engine_state,
     note_cutter_failure,
+    query_may_load,
     reset,
     shared_model,
 )
@@ -815,3 +816,58 @@ def test_every_answer_of_the_state_comes_out_of_the_closed_set(
     shared_model().embed_query("bauantrag")
 
     assert engine_state() in ENGINE_STATES
+
+
+# ---------------------------------------------------------------------------
+# The rule that says whether a search may pay for the weights (plan 14-06).
+#
+# One place and not three. The three callers that build a SemanticSide would be
+# the same condition written three times over, and three places are the place
+# where the fourth one is forgotten.
+# ---------------------------------------------------------------------------
+
+
+def test_a_container_that_never_unloads_lets_a_search_load_the_way_it_always_did(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The factory state, and the reason the rule is a function and not a
+    # constant: with the release switched off nothing about the first search of
+    # a container changes, and that is shipped behaviour this phase must not
+    # touch outside its own switch.
+    assert model_home.is_dir()
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "0")
+    settings.cache_clear()
+
+    assert query_may_load() is True
+
+
+def test_a_container_that_unloads_does_not_let_a_search_load(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The incident of 2026-09-10 in one line: 1838.4 ms against a ceiling of
+    # 1500, because the first search after a cold start paid for the weights
+    # itself. With the release switched on that moment would come back after
+    # every idle span instead of once per container.
+    assert model_home.is_dir()
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "900")
+    settings.cache_clear()
+
+    assert query_may_load() is False
+
+
+def test_asking_whether_a_search_may_load_builds_nothing_and_loads_nothing(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The promise engine_state makes, made again for the same reason one file
+    # over: this question sits on the path of every single search, so a question
+    # that loaded the engine on the way would be the loading trigger it exists
+    # to prevent.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "900")
+    settings.cache_clear()
+    before = load_count()
+
+    for _ in range(5):
+        assert query_may_load() is False
+
+    assert _held_for(model_home) is None, "the question must not build the instance it asks about"
+    assert load_count() == before
