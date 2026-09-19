@@ -208,6 +208,14 @@ def _origin_of(
         # use it. The gate of plan 06.1-20 does travel in, through _sides, and
         # that is a different matter: it decides what "near" means, and the two
         # answers would otherwise describe two different holdings.
+        #
+        # **This line deliberately gets no ``may_load``.** ``ranked_sides`` is
+        # the tool the third party stock precheck has been measured with since
+        # phase 12 (MESS-04), it carries no 1.5 second ceiling and it is no
+        # user route. A measuring tool has to be able to measure. The other
+        # side of that decision belongs in the runbook: a diagnosis call warms
+        # the container up and must therefore not be made before a cold
+        # measurement.
         semantic = None
         if side.vectors is not None and settings().embed_enabled:
             semantic = SemanticSide(vectors=side.vectors, model=resources.query_model(), text=text)

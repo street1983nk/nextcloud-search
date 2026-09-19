@@ -53,6 +53,7 @@ from findling.config import (
     SEARCH_TYPE_GROUPS_MAX,
     settings,
 )
+from findling.embed.engine import query_may_load
 from findling.index.search import SemanticSide
 from findling.index.search import candidates as candidate_round
 from findling.nc.client import AsyncNextcloudApp, anc_app, current_user_id
@@ -279,10 +280,27 @@ def one_round(
         # value that would appear on the page if it were not dropped. The engine
         # side is deliberately indifferent to the bundle as well (plan 13-02);
         # this line is the promise and that indifference is its second half.
+        #
+        # What the round lets the model spend rides on that same line, and the
+        # answer is asked for rather than worked out here.
+        # ``ExAppService::REQUEST_TIMEOUT_SECONDS`` is 1.5, and on 2026-09-10
+        # the first semantic search of a cold container took 1838.4 ms against
+        # it: cURL error 28 in the Nextcloud log, HTTP 200 out of here, an
+        # answer group without the container half and nought hits, with the
+        # unified search asking again at every keystroke. So with the release
+        # switched on this round answers out of the lexical list and the
+        # weights are fetched back in the background instead of while somebody
+        # waits. The rule itself lives in ``embed/engine.py::query_may_load``
+        # and is not repeated here.
         semantic = None
         lexical_only = bool(rewritten.operators) or rewritten.one_term or title_only or sort != "relevance"
         if not lexical_only and side.vectors is not None and settings().embed_enabled:
-            semantic = SemanticSide(vectors=side.vectors, model=resources.query_model(), text=text)
+            semantic = SemanticSide(
+                vectors=side.vectors,
+                model=resources.query_model(),
+                text=text,
+                may_load=query_may_load(),
+            )
         page = candidate_round(
             side.index,
             side.store,

@@ -354,7 +354,13 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # keyword may_load on the QueryEmbedder protocol, the fourth field may_load
 # on SemanticSide and the same keyword on both of its embed_query calls. No
 # file came and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "19b98f33fea6c8f124dbbd58a5e9b1abd45db675a9a377575f8d49d35221c38d"
+# Moved on 2026-09-19 an eleventh time, by the second task of plan 14-08:
+# three of the 54 files changed their bytes, api/search.py and
+# api/snippets.py, which now ask query_may_load at the line that builds
+# their SemanticSide, and api/diagnose.py, which got the comment saying
+# why its own line deliberately does not. No file came and none went, so
+# PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "decefcaa56c36ffbb4bbc02006a86f3962b037a0175e8ca745f9471579f9794a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

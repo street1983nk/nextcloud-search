@@ -52,6 +52,7 @@ from findling.config import (
     SEARCH_TYPE_GROUPS_MAX,
     settings,
 )
+from findling.embed.engine import query_may_load
 from findling.index import search as index_search
 from findling.nc.client import AsyncNextcloudApp, anc_app, current_user_id
 from findling.query.rewrite import build_query
@@ -199,9 +200,26 @@ def excerpts(
         # half back would take a confirmed hit its excerpt away and hand back
         # nothing in return. The rules decide who gets into the list; this
         # decides what the entry reads like.
+        #
+        # What the cut lets the model spend is asked for and not worked out
+        # here. This route has a ceiling of its own,
+        # ``ExAppService::PAGE_REQUEST_TIMEOUT_SECONDS = 1.5``, and it is the
+        # route the result page calls for every group of hits it shows. The
+        # incident of 2026-09-10 was measured on its neighbour, 1838.4 ms
+        # against 1500 ms, cURL error 28 and an answer group without the
+        # container half, and a fetch of 118 MB costs exactly the same here.
+        # With the release switched on the cut therefore takes the first
+        # excerpt path, which is what every document took before the second one
+        # existed, and the weights come back in the background. The rule lives
+        # in ``embed/engine.py::query_may_load`` and is not repeated here.
         semantic = None
         if side.vectors is not None and settings().embed_enabled:
-            semantic = index_search.SemanticSide(vectors=side.vectors, model=resources.query_model(), text=text)
+            semantic = index_search.SemanticSide(
+                vectors=side.vectors,
+                model=resources.query_model(),
+                text=text,
+                may_load=query_may_load(),
+            )
         # The permission prefilter is the first action inside this call, and it
         # is not redundant here; see the module docstring for why. Both excerpt
         # paths lie behind it.

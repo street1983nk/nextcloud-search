@@ -868,9 +868,9 @@ def _watch_the_semantic_side(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     seen: list[str] = []
     original = api_search.SemanticSide
 
-    def record(*, vectors: VectorStore, model: Any, text: str) -> SemanticSide:
+    def record(*, vectors: VectorStore, model: Any, text: str, may_load: bool = True) -> SemanticSide:
         seen.append(text)
-        return original(vectors=vectors, model=model, text=text)
+        return original(vectors=vectors, model=model, text=text, may_load=may_load)
 
     monkeypatch.setattr(api_search, "SemanticSide", record)
     return seen
