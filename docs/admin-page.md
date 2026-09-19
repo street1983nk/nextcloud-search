@@ -123,7 +123,7 @@ jede Volltextzahl derselben Antwort bleibt gültig.
 
 Unter der zweiten Zahl steht ein Satz, und er ist bewusst kein zweiter
 Fortschrittsbalken: die Deckung ist eine Zahl, der Zustand der Engine ist eine
-Lage. Der Container meldet ihn als `engineState`, als eines von fünf Wörtern,
+Lage. Der Container meldet ihn als `engineState`, als eines von sechs Wörtern,
 und die Seite macht daraus einen Satz, der sagt, was zu tun ist.
 
 Die Zeile hängt nicht am Nenner. Sobald der Container ein Wort meldet, steht sie
@@ -135,6 +135,7 @@ Anteil bleibt dagegen am Nenner, denn ohne Nenner gibt es nichts auszurechnen.
 |---|---|---|
 | `loaded` | Das Modell liegt im Speicher, die semantische Suche antwortet. | nichts |
 | `cold` | Das Modell wird beim ersten Bedarf geladen. Das ist der Normalfall. | nichts, warten |
+| `unloaded` | Das Modell wurde zum Sparen freigegeben. Die nächste Suche antwortet mit Volltexttreffern und lädt es im Hintergrund nach. | nichts, das ist der eingeschaltete Sparbetrieb; wer die Nachladekosten nicht will, setzt `FINDLING_EMBED_IDLE_RELEASE_SECONDS` auf 0 |
 | `disabled` | Die semantische Hälfte ist in den Einstellungen des Containers abgeschaltet. | `FINDLING_EMBED_ENABLED` setzen, wenn das nicht gewollt war |
 | `missing` | In diesem Abbild liegt kein Modell. | ein Abbild mit Modell einsetzen |
 | `waiting_for_retry` | Das Laden ist einmal gescheitert und wird in Kürze erneut versucht. | fünf Minuten warten, danach das Protokoll lesen |
@@ -146,13 +147,28 @@ Aufteiler, den die zweite Spur bei der ersten Zeile bezahlt. Der Halter der
 Engine sieht nur das erste davon, denn der zweite Fehlschlag passiert, bevor
 überhaupt nach einer Engine gefragt wird; deshalb meldet die Spur ihren
 Zeitstempel an `embed/engine.py`. Für einen Admin sind beide derselbe Satz,
-nämlich warten und noch einmal nachsehen, also gibt es dafür kein sechstes Wort.
+nämlich warten und noch einmal nachsehen, also bekommen diese beiden Quellen
+kein eigenes Wort nebeneinander. Seit dem 19.09.2026 gibt es ein sechstes Wort,
+`unloaded`, aber es gehört zu einer anderen Lage: nicht zu einem Fehlschlag,
+sondern zur Freigabe im Leerlauf, und die verlangt vom Admin nichts.
 
-Die sechste Zeile ist der Container, der älter ist als diese App. Sie ist aus
+Die siebte Zeile ist der Container, der älter ist als diese App. Sie ist aus
 demselben Grund eine eigene Lage wie `embedded` auf der PHP-Seite `null` ist und
 nicht 0: "hat nichts gesagt" ist etwas anderes als "ist kalt". Eine
 Aktualisierung in der falschen Reihenfolge darf auf der Seite keinen Zustand
 behaupten, den niemand gemeldet hat.
+
+### Die beiden Hälften reisen als Paar
+
+Dieselbe siebte Zeile erscheint in einem zweiten Fall, und der sieht aus wie ein
+kaputtes Backend, ohne eines zu sein: ein Container, der `unloaded` meldet, und
+eine PHP-App, die dieses Wort noch nicht kennt. Die PHP-Seite verwirft jedes Wort,
+das nicht in ihrer Liste steht, und zeigt dann "Dieser Container meldet den Zustand
+des Modells noch nicht", obwohl der Container gerade sehr genau gemeldet hat, in
+welchem Zustand er ist. Der Grund ist eine Aktualisierung in der falschen
+Reihenfolge und sonst nichts. Beide Hälften tragen dieselbe Haupt- und
+Nebenversion und gehören zusammen aktualisiert (REL-02); wer sie einzeln
+aktualisiert, sieht diese Zeile so lange, bis die zweite Hälfte nachgezogen ist.
 
 ### Warum "0 Prozent" allein keine Auskunft über die Engine ist
 
@@ -176,10 +192,10 @@ festgehalten. Die Seite fragt im Sekundentakt, solange sie offen ist, und eine
 Statusantwort, die dabei das Modell lädt, würde die 118 MB melden, die sie
 gerade selbst verursacht hat.
 
-Die fünf Wörter sind eine geschlossene Menge und nennen nie einen Pfad und nie
+Die sechs Wörter sind eine geschlossene Menge und nennen nie einen Pfad und nie
 einen Dateinamen, wie jede andere Notiz dieser Antwort auch. Ein Wort, das nicht
 in der Menge steht, wird auf der PHP-Seite verworfen und nicht umgewandelt; die
-Seite zeigt dann die sechste Zeile.
+Seite zeigt dann die siebte Zeile.
 
 ## Was nicht im Nenner steht, und warum
 

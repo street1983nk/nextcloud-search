@@ -143,6 +143,7 @@ deutschen Übersetzung.
 | `The semantic half is switched off in the settings of the container.` | Die semantische Hälfte ist in den Einstellungen des Containers abgeschaltet. | La moitié sémantique est désactivée dans les paramètres du conteneur. |
 | `There is no model in this image. The search keeps answering with full text hits, the semantic half stays empty.` | In diesem Abbild liegt kein Modell. Die Suche liefert weiterhin Volltexttreffer, die semantische Hälfte bleibt leer. | Cette image ne contient aucun modèle. La recherche continue de répondre avec des résultats en texte intégral, la moitié sémantique reste vide. |
 | `Reading the model failed once and is tried again shortly. Until then the search answers with full text hits.` | Das Laden des Modells ist einmal gescheitert und wird in Kürze erneut versucht. Bis dahin liefert die Suche Volltexttreffer. | Le chargement du modèle a échoué une fois et sera retenté sous peu. D'ici là, la recherche répond avec des résultats en texte intégral. |
+| `The model was released to save memory. The next search answers with full text hits and loads it again in the background.` | Das Modell wurde zum Sparen freigegeben. Die nächste Suche antwortet mit Volltexttreffern und lädt es im Hintergrund nach. | Le modèle a été libéré pour économiser de la mémoire. La prochaine recherche répond avec des résultats en texte intégral et le recharge en arrière-plan. |
 | `This container does not report the state of the model yet.` | Dieser Container meldet den Zustand des Modells noch nicht. | Ce conteneur ne communique pas encore l'état du modèle. |
 | `The full text search covers every indexed document. The semantic search covers the beginning of each document, and this second figure fills up after the first index has finished.` | Die Volltextsuche deckt jedes indexierte Dokument ab. Die semantische Suche deckt den Anfang jedes Dokuments ab, und diese zweite Zahl füllt sich nach dem Erstindex nach. | La recherche en texte intégral couvre chaque document indexé. La recherche sémantique couvre le début de chaque document, et ce second chiffre se complète après la fin de la première indexation. |
 | `Up to date, last checked %s` | Aktuell, letzte Prüfung %s | À jour, dernière vérification %s |
@@ -406,6 +407,24 @@ Mit abgenommen ist der am selben Tag ergänzte Schlüssel `File contents` ->
 Die Prüfung war eine Tabellendurchsicht in der Abnahme-Session, kein Durchgang im
 laufenden französischen UI; der maschinelle Prüfstand aus dem Abschnitt "Maschinelle
 Prüfungen" bleibt unverändert gültig.
+
+**Nachtrag 19.09.2026 (Phase 14, Plan 14-09).** Nach der Abnahme desselben Tages ist eine
+weitere Zeile dazugekommen, der Satz des sechsten Engine-Zustands: englisch `The model was
+released to save memory. The next search answers with full text hits and loads it again in
+the background.`, französisch `Le modèle a été libéré pour économiser de la mémoire. La
+prochaine recherche répond avec des résultats en texte intégral et le recharge en
+arrière-plan.` Sie steht oben in der Tabelle, ist maschinell geprüft und **vom Owner noch
+nicht gelesen**; sie gehört zur Abnahme der Phase 14 am Phasen-Checkpoint (Plan 14-12) und
+nicht zu einer der beiden Abnahmen davor. Das steht hier aus demselben Grund wie der
+Nachtrag darüber: eine abgenommene Datei darf keine ungelesene Zeile stillschweigend
+mittragen.
+
+Mit dieser Zeile stehen 199 Schlüssel in `de.json`. Die Zählung im Abschnitt "Die
+Schlüsselmenge, aus der Datei gezählt" oben nennt noch 197: sie ist der Stand vor dem
+19.09.2026 und zählt weder `File contents` aus der Sichtprobe 17 der Phase-13-Abnahme noch
+diese Zeile mit. Die harte Zahl im Gate
+`test_the_german_catalogue_covers_both_german_language_codes` ist die maßgebliche und
+steht auf 199.
 
 ## Warum die Tabelle der Ergebnisseite 24 Zeilen hat
 
