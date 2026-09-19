@@ -31,6 +31,7 @@ real code path.
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import os
@@ -415,6 +416,206 @@ def test_the_int8_form_is_the_width_the_vector_column_declares(model_dir: Path, 
     # model: e5 answers normalised vectors, so the range is fixed.
     assert len(raw) == DIMENSIONS
     assert isinstance(raw, bytes)
+
+
+# ---------------------------------------------------------------------------
+# The idle clock, the activity counter and may_load
+# ---------------------------------------------------------------------------
+
+
+class _TickingClock:
+    """A monotonic clock that steps one second per reading.
+
+    ``time.monotonic`` can answer twice with the same float on a fast machine,
+    and a test that asserts the clock moved would then fail for a reason that
+    has nothing to do with this module. Standing in for the whole module is
+    safe here because ``monotonic`` is the only member ``embed/model.py`` calls.
+    """
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def monotonic(self) -> float:
+        self.now += 1.0
+        return self.now
+
+
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> _TickingClock:
+    ticking = _TickingClock()
+    monkeypatch.setattr(model_module, "time", ticking)
+    return ticking
+
+
+def test_a_query_moves_the_idle_clock_forward(model_dir: Path, stand_in: StandIn, clock: _TickingClock) -> None:
+    """The clock the release policy of plan 14-06 reads, seen from a search.
+
+    A method and not a bare field, because reading a private field from outside
+    is how a second spelling of one truth begins.
+    """
+    engine = _model(model_dir)
+
+    assert engine.last_use() is None, "nothing has been embedded yet, and that is not an idle span"
+
+    engine.embed_query("Wie lange dauert die Kuendigung?")
+
+    marked = engine.last_use()
+    assert marked is not None
+    assert marked > clock.now - 2.0
+
+
+def test_a_passage_batch_moves_the_same_clock(model_dir: Path, stand_in: StandIn, clock: _TickingClock) -> None:
+    """One line in ``_embed`` covers the search and the index track at once.
+
+    Both public entries come through ``_embed``, so the clock sits there and not
+    in the two of them. Were it in ``embed_query`` alone, a container in the
+    middle of an index pass would look idle to the release policy and drop the
+    weights the next row needs.
+    """
+    engine = _model(model_dir)
+
+    engine.embed_query("eine Anfrage")
+    after_the_query = engine.last_use()
+    engine.embed_passages(["ein Abschnitt"])
+    after_the_passages = engine.last_use()
+
+    assert after_the_query is not None
+    assert after_the_passages is not None
+    assert after_the_passages > after_the_query
+
+
+def test_an_empty_batch_does_not_end_an_idle_span(model_dir: Path, stand_in: StandIn, clock: _TickingClock) -> None:
+    """An empty batch is the normal answer for a document without text.
+
+    It must not move the clock: a pass over a directory of images would
+    otherwise hold the weights warm with documents that produced no text at all.
+    And it must not load, which is the line the empty check already held.
+    """
+    engine = _model(model_dir)
+
+    outcome = engine.embed_passages([])
+
+    assert outcome.available
+    assert engine.last_use() is None
+    assert engine.loaded is False
+
+    engine.embed_passages(["ein Abschnitt"])
+    marked = engine.last_use()
+    engine.embed_passages([])
+
+    assert engine.last_use() == marked
+
+
+def test_a_query_that_may_not_load_answers_the_verdict_instead_of_loading(model_dir: Path, stand_in: StandIn) -> None:
+    """The lower half of MEM-03: a search may be told not to fetch the weights.
+
+    The answer is the same ``embedding_unavailable`` a missing model gives,
+    which is the tested path of D-19 into a purely lexical result. Whether the
+    switch should ever be false is not decided here; that is plan 14-06.
+    """
+    engine = _model(model_dir)
+    before = load_count()
+
+    outcome = engine.embed_query("eine Anfrage", may_load=False)
+
+    assert outcome.verdict == EMBEDDING_UNAVAILABLE
+    assert outcome.available is False
+    assert load_count() == before
+    assert engine.loaded is False
+    assert stand_in.tokenizer.seen == []
+
+
+def test_a_query_that_may_not_load_answers_normally_on_a_loaded_holder(model_dir: Path, stand_in: StandIn) -> None:
+    """The switch forbids the load and nothing else.
+
+    On a warm holder the same call is an ordinary search and has to stay one:
+    the degradation of 14-06 is about the 1.5 second ceiling over a cold load,
+    not about answering worse while the weights are right there.
+    """
+    engine = _model(model_dir)
+    engine.embed_passages(["ein Abschnitt"])
+    before = load_count()
+
+    outcome = engine.embed_query("eine Anfrage", may_load=False)
+
+    assert outcome.available
+    assert len(outcome.vectors) == 1
+    assert len(outcome.vectors[0]) == DIMENSIONS
+    assert load_count() == before
+
+
+def test_the_index_track_has_no_switch_and_always_loads(model_dir: Path, stand_in: StandIn) -> None:
+    """``embed_passages`` does not carry ``may_load``, and that is a decision.
+
+    There is no 1.5 second ceiling over an index pass, and after a release the
+    next row of that pass is exactly the right moment to fetch the weights back.
+    The default ``True`` on the other two keeps every existing call byte for
+    byte what it was.
+    """
+    assert "may_load" not in inspect.signature(EmbeddingModel.embed_passages).parameters
+
+    query = inspect.signature(EmbeddingModel.embed_query).parameters["may_load"]
+    assert query.default is True
+    assert query.kind is inspect.Parameter.KEYWORD_ONLY
+
+    shared = inspect.signature(EmbeddingModel._embed).parameters["may_load"]
+    assert shared.default is True
+    assert shared.kind is inspect.Parameter.KEYWORD_ONLY
+
+    engine = _model(model_dir)
+    before = load_count()
+
+    engine.embed_passages(["ein Abschnitt"])
+
+    assert load_count() - before == 1
+
+
+def test_the_activity_counter_stands_above_zero_while_a_batch_runs(
+    model_dir: Path, stand_in: StandIn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The one new invariant of this phase, read from inside a running batch.
+
+    The existing RLock deliberately does not cover the graph run, and a release
+    does more than let go: it calls ``gc.collect()`` and ``malloc_trim``, and
+    those two walk the heap this batch is allocating in (14-RESEARCH.md 4.3,
+    point 4).
+    """
+    engine = _model(model_dir)
+    seen: list[int] = []
+    real_run = stand_in.session.run
+
+    def watching(outputs: list[str], feed: dict[str, Any]) -> list[Any]:
+        seen.append(engine._in_flight)
+        return real_run(outputs, feed)
+
+    monkeypatch.setattr(stand_in.session, "run", watching)
+
+    assert engine._in_flight == 0
+
+    engine.embed_passages(["eins", "zwei", "drei"])
+
+    assert seen == [1, 1], "one reading per batch, and this holder cuts three texts into two"
+    assert engine._in_flight == 0
+
+
+def test_the_activity_counter_falls_back_to_zero_after_a_batch_that_threw(
+    model_dir: Path, stand_in: StandIn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A thrown batch leaves no standing count behind.
+
+    A counter that a thrown batch leaves at one blocks every later release for
+    the life of the process, and the log would say nothing at all: the holder
+    would simply never let go again.
+    """
+    engine = _model(model_dir)
+
+    def throwing(_outputs: list[str], _feed: dict[str, Any]) -> list[Any]:
+        raise RuntimeError("the batch could not be run")
+
+    monkeypatch.setattr(stand_in.session, "run", throwing)
+
+    assert engine.embed_passages(["eins"]).verdict == EMBEDDING_UNAVAILABLE
+    assert engine._in_flight == 0
 
 
 # ---------------------------------------------------------------------------
