@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, Welle A ohne Box**
-Plan: 7 von 16 abgeschlossen (15-01 bis 15-07)
+Plan: 8 of 16 (15-08 Deckelfreigabe erteilt: 46 h / 5,40 USD am 20.09.2026; A-Record setzt der Owner, Korpus-Snapshot bleibt, TTL 120 s)
 Status: Phase 14 ist abgenommen. Phase 15 laeuft; 15-01 hat das Laufverzeichnis
 der Anfahrt bestueckt, 15-02 hat das Runbook auf den Stand dieser Anfahrt
 gebracht (Deckel 46 h / 5,40 USD netto, Block 13b Abbildwechsel, ein Befehl
@@ -53,7 +53,7 @@ rohdaten/02-vorbedingungen.txt protokolliert. **Damit ist Welle A ohne Box
 vollstaendig.** Naechster Plan ist 15-08, der Owner-Checkpoint Deckelfreigabe;
 alles danach ist durch ihn gesperrt.
 Progress: [████████░░] 82% der 49 geplanten Plaene (40 von 49; Phase 16 ist noch nicht geplant)
-Last activity: 2026-09-19 -- 15-07, die Erwartung und die Vorbedingungen vor der Box.
+Last activity: 2026-09-20 -- Owner-Tor 15-08 passiert (Deckel 46 h / 5,40 USD, Fragen A/B/C beantwortet); Welle C wartet auf die begleitete Sitzung
 
 **Was der Owner in 15-08 zu entscheiden hat, in zwei Zeilen:** die Freigabe des
 Deckels mit Datum (Vorbedingung 9, Platzhalter steht in der Rohdatei) und den
