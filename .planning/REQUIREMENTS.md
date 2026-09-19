@@ -20,7 +20,7 @@
 - [ ] **MEM-02**: Die Entladung gibt BEIDE Speicherhalter frei (EmbeddingModel-Engine UND Poller-Cutter/Tokenizer); die Beleg-Messgröße ist "Rückkehr zur Grundlast nach einem Indexlauf", nicht "Grundlast minus X"
 - [x] **MEM-03**: Die erste Suche nach einer Entladung antwortet innerhalb der 1,5-Sekunden-Decke lexikalisch (bestehender Degradationspfad `EmbedOutcome.unavailable()`/D-19); das Modell wärmt im Hintergrund nach. Der cURL-error-28-Fall vom 10.09.2026 darf nicht zum Regelfall werden
 - [x] **MEM-04**: Ein Vorprüflauf belegt die tatsächliche RSS-Rückgabe (gc.collect + malloc_trim) auf Zielhardware, BEVOR die Funktion fertig gebaut wird; ein negativer Ausgang ist legitim und wird dokumentiert ("gemessen, Ergebnis negativ") statt ausgeliefert
-- [ ] **MEM-05**: Die one_load-Zusage (`tools/one_load.py` + Gate) wird neu formuliert: nie zwei Engines gleichzeitig, genau ein Laden je warmem Fenster; die Admin-Seite zeigt den Zustand. Die engineState-Wortwahl (fünftes Wort `cold` wiederverwenden vs sechstes Wort `unloaded`, Kostenfolge sechs Stellen + vier Katalog-Gates) ist ein benannter Owner-Checkpoint in der Phase, keine Vorentscheidung
+- [x] **MEM-05**: Die one_load-Zusage (`tools/one_load.py` + Gate) wird neu formuliert: nie zwei Engines gleichzeitig, genau ein Laden je warmem Fenster; die Admin-Seite zeigt den Zustand. Die engineState-Wortwahl (fünftes Wort `cold` wiederverwenden vs sechstes Wort `unloaded`, Kostenfolge sechs Stellen + vier Katalog-Gates) ist ein benannter Owner-Checkpoint in der Phase, keine Vorentscheidung
 
 ### Messphase (MESS, Fortsetzung der v1.1-Nummerierung)
 
@@ -65,7 +65,7 @@
 | MEM-02 | Phase 14 | Pending |
 | MEM-03 | Phase 14 | Complete (14-08) |
 | MEM-04 | Phase 14 | Complete (14-02) |
-| MEM-05 | Phase 14 | In Progress (14-09: die Admin-Seite zeigt den Zustand; offen die one_load-Zusage in 14-10) |
+| MEM-05 | Phase 14 | Complete (14-09 die Admin-Seite, 14-10 die Zusage und ihr Gate; Wortwahl vom Owner am 19.09.2026 entschieden) |
 | MESS-04 | Phase 12 | Complete |
 | MESS-05 | Phase 15 | Pending |
 | MESS-06 | Phase 12 | Complete |

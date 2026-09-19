@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-09-PLAN.md
-last_updated: "2026-09-19T17:35:00.000Z"
+stopped_at: Completed 14-10-PLAN.md
+last_updated: "2026-09-19T21:10:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 30
-  percent: 91
+  completed_plans: 31
+  percent: 94
 ---
 
 # Project State
@@ -26,25 +26,52 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 9 von 12 abgeschlossen (14-09: das sechste Wort `unloaded`)
+Plan: 10 von 12 abgeschlossen (14-10: die neue one_load-Zusage und ihr Gate)
 Status: executing, das Tor der Phase ist offen und der Bau laeuft.
-Welle 6 laeuft; 14-10 folgt als Geschwister dieser Welle.
-Progress: [█████████░] 91%
-Last activity: 2026-09-19 -- 14-09: der Owner-Entscheid vom selben Tag ist
-vollzogen. `ENGINE_STATES` hat sechs Woerter, `engine_state()` antwortet
-`unloaded` hinter `loaded` und vor `cold` und liest dafuer den monotonen
-Entladezaehler, beide Haelften der Admin-Seite bilden das Wort auf denselben
-Satz ab, sechs Katalogdateien tragen ihn in drei Sprachen (199 Schluessel), und
-`docs/admin-page.md` sagt nicht mehr, es gebe kein sechstes Wort. Volle Suite
-2254 gruen. **Die Admin-Haelfte von MEM-05 ist damit erfuellt**; die zweite
-Haelfte (die one_load-Zusage) traegt 14-10, und die Sichtprobe an der laufenden
-Instanz braucht wie bei 14-08 einen Containerneubau und gehoert nach 14-12.
+Welle 6 ist abgeschlossen; Welle 7 (14-11, die Dokumentation) folgt.
+Progress: [█████████░] 94%
+Last activity: 2026-09-19 -- 14-10: die Zusage des Gates ist neu formuliert und
+steht an drei Stellen gleichlautend (Modulkopf, `findings`, Workflow-Text):
+nie zwei Engines gleichzeitig, genau ein Laden je warmem Fenster. Das Werkzeug
+hat eine vierte Phase, die ueber `shared_model().release()` freigibt und ueber
+eine zweite echte Suchrunde nachlaedt; der Bericht traegt neun Zahlen statt
+sieben, `findings` zwei Zweige mehr, und `unloads == 0` ist dort ein Befund und
+kein stilles Gruen. Fuenf Mutationsfaelle statt drei, die zwei neuen belegen
+Exit 1 und den Wortlaut des Befunds. Volle Suite 2258 gruen.
+**MEM-05 ist damit vollstaendig** (14-09 die Admin-Seite, 14-10 die Zusage).
+Offen bleibt die Sichtprobe an der laufenden Instanz, die einen Containerneubau
+braucht und nach 14-12 gehoert.
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-10 (MEM-05, die Zusage): Die Freigabe der vierten Phase laeuft ueber
+  `shared_model().release()` und nicht ueber `release_if_idle`. Die Politikstelle
+  traegt die Uhr, und ihre Frist kommt aus `embed_idle_release_seconds`, wo null
+  das Wort fuer aus ist: in der Werksstellung antwortet sie sofort False und
+  wuerde nichts messen, eingeschaltet wuerde das Werkzeug eine Admin-Einstellung
+  aussitzen. Gemessen wird die Mechanik der Zusage, nie die Frist.
+
+- 14-10: Nachgeladen wird ueber `drive_the_search_side()` und nicht ueber
+  `engine.warm()`. Das Werkzeug misst seit seiner ersten Fassung durch den
+  echten Aufrufweg; ein Aufrufer, der aufhoert, ueber den Halter zu gehen, soll
+  auffallen statt gemessen zu werden.
+
+- 14-10: Die Mutation "Warmfenster laedt zweimal" haengt am Entladezaehler und
+  gilt deshalb erst ab der vierten Phase. Ein von Anfang an gebrochenes
+  Single-Flight haette auch den zweiten Track ein zweites Mal laden lassen, das
+  Werkzeug waere am alten Zaehler rot geworden, und der Fall haette den falschen
+  Befund belegt.
+
+- 14-10: Die Fehlerausgabe des Schritts in `resilience.yml` wird mitgezogen,
+  obwohl das Abnahmekriterium des Plans nur Kommentarzeilen vorsah. Der Plan
+  verlangt in seinen must_haves ausdruecklich, dass der Erklaertext IM
+  FEHLERPFAD die alte Zusage nicht mehr sagt, und genau dort stehen die
+  echo-Zeilen. Aufruf, Exit-Behandlung und Artefakt des Schritts sind
+  unveraendert.
 
 - 14-09 (MEM-05, das sechste Wort): Der Zustand wird aus dem monotonen
   Entladezaehler abgeleitet und nicht aus einem neuen Feld. Ein Feld haette
