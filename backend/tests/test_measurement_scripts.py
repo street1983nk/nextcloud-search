@@ -314,7 +314,11 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # busy, the honest answer to "is a pass at work" that the release of MEM-02
 # needs and that the log marker _idle_announced cannot give. No file came and
 # none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "acbe7c05f9adbeffd13d78849eb52dad48830191acfd6298336783e359fa432d"
+# Moved on 2026-09-19 a third time, by the second half of plan 14-04:
+# worker/poller.py again, this time with release_cutter, which drops the pair
+# _chunker and _model together and leaves the two markers of the build
+# standing. No file came and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "78231d267521e10dcbfafc63e0971e516b4fed864fb71b4b753c89dee4a1df20"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

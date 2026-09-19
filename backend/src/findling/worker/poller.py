@@ -1685,6 +1685,58 @@ class Poller:
         note_cutter_failure(None)
         return True
 
+    # What this method deliberately does NOT touch: ``_cutter_absent``, which is
+    # a property of the installation, and ``_cutter_failed_at``, the running
+    # cooldown. Resetting either would be anti pattern 7 of ARCHITECTURE.md
+    # (pitfall 8 of the phase research): a container without a model would start
+    # stating every row again, twelve times an hour instead of once per process,
+    # and a waiting time after a build that threw would end silently.
+    def release_cutter(self) -> bool:
+        """Let go of the tokenizer and the splitter, both halves or neither.
+
+        The counterpart of :meth:`_build_the_cutter` and the larger of the two
+        memory holders of MEM-02: 542,8 MB on the target box, against which the
+        engine of the read side is the smaller post. A container that has
+        indexed once and only searches from then on carries them for nothing,
+        which is the whole reason this door exists.
+
+        Three answers, in this order. A pass that is holding rows keeps its
+        pair, because releasing in the middle of an indexing run means loading
+        the weights again seconds later (pitfall 3). A container that never
+        built the pair has nothing to let go of. Everything else drops both
+        fields and says so, and the caller in plan 14-07 counts that ``True``.
+
+        The rebuild needs no new code: the head of :meth:`_build_the_cutter`
+        returns when both fields are set and builds otherwise, and the row path
+        already calls it conditionally.
+
+        **No collection round and no allocator trim here.** Handing the pages
+        back to the system happens exactly once per tick, after both holders
+        have let go, and it lives in ``embed/model.py`` (plan 14-05). A second
+        place would be two trims per tick and a second truth about when memory
+        was released.
+
+        Synchronous, and the caller runs it through ``asyncio.to_thread``: the
+        house rule of this module is that nothing blocking sits on the event
+        loop that answers searches.
+        """
+        if self.busy:
+            # Pitfall 3 of the phase research. The weights fall and the next row
+            # loads them again seconds later; over a full run the release turns
+            # into a cost instead of a saving, and the run time grows without
+            # anything going red. The second condition, the idle clock, is the
+            # caller's in plan 14-07.
+            return False
+        if self._chunker is None and self._model is None:
+            return False
+        # Both together and never one of them. The closure ``cut`` falls and
+        # with it the tokenizer and the splitter it holds; :attr:`_embed_ready`
+        # and the head of :meth:`_build_the_cutter` read the pair, so a half
+        # released cutter would answer "built" to both of them.
+        self._chunker = None
+        self._model = None
+        return True
+
     @property
     def _cutter_cooling_down(self) -> bool:
         """True while a build that threw is still inside its cooldown.
