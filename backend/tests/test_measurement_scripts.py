@@ -309,7 +309,12 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # which lets a zero through ahead of the range because zero is the word off
 # here, and the settings field the release policy of 14-06 and 14-07 will read.
 # No file came and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "9a8c8354ceeb1c2f88e06cca954de794de0576b23d97bec8f5ef8b4f328c6c20"
+# Moved on 2026-09-19 a second time, by plan 14-04: exactly one of the 54
+# files changed its bytes, worker/poller.py, which got the public property
+# busy, the honest answer to "is a pass at work" that the release of MEM-02
+# needs and that the log marker _idle_announced cannot give. No file came and
+# none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "acbe7c05f9adbeffd13d78849eb52dad48830191acfd6298336783e359fa432d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

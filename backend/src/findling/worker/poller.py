@@ -476,6 +476,32 @@ class Poller:
         return self._armed.is_set()
 
     @property
+    def busy(self) -> bool:
+        """True while this pass is holding rows of the work stock.
+
+        The held queue ids are the one figure on this poller that means "a pass
+        is in the middle of its work": they are set in :meth:`run_once` right
+        after the claim and cleared again at the acknowledgement and in
+        :meth:`unlock_held`. Everything else that looks like an answer is one of
+        three other questions. ``_idle_announced`` is a **log marker**: it is
+        reset in :meth:`arm` and says whether a line has been written, not
+        whether work is being done, so a releaser reading it would release
+        wrongly once after every arming (14-CONTEXT.md, guard rail 3).
+        :attr:`armed` is the opposite question, because an armed poller with an
+        empty work stock is exactly the container the release is built for.
+        :attr:`cooldown` is a waiting time and not work.
+
+        Read by the third lifespan task of plan 14-07 through
+        ``main.active_poller()``, which is what keeps ``embed/`` out of
+        ``worker/``: the dependency runs one way, and this property is the door
+        on this side of it.
+
+        Reading has no side effect and takes no lock. ``_held`` is a set the
+        pass keeps in its own thread.
+        """
+        return bool(self._held)
+
+    @property
     def cooldown(self) -> float:
         """Seconds the loop waits before the next pass."""
         return self._cooldown
