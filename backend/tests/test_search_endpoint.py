@@ -17,12 +17,17 @@ are the reason this file exists rather than a single happy path test:
   the user the whole search.
 """
 
-from collections.abc import Callable
+import ast
+import threading
+import time
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from socket import gethostname
 from typing import Any
 
+import numpy
 import pytest
 from fastapi.testclient import TestClient
 
@@ -31,7 +36,9 @@ from findling.api import resources
 from findling.api import search as api_search
 from findling.api.search import CANARY_TITLE, Candidate, SearchRequest, build_canary_hits
 from findling.config import SEARCH_MTIME_MAX, SEARCH_TYPE_GROUPS_MAX, settings
-from findling.embed.model import EmbedOutcome
+from findling.embed import engine as engine_module
+from findling.embed import model as model_module
+from findling.embed.model import DIMENSIONS, EmbedOutcome, load_count
 from findling.store.repo import open_store
 
 pytestmark = pytest.mark.usefixtures("appapi_environment")
@@ -579,3 +586,262 @@ def test_a_round_under_the_release_answers_the_way_a_container_without_a_model_d
     assert [hit.fileId for hit in shipped.candidates] != []
     assert [hit.fileId for hit in released.candidates] == [hit.fileId for hit in shipped.candidates]
     assert released.degraded is False
+
+
+# ---------------------------------------------------------------------------
+# The warm run out of the route handler (MEM-03, upper half)
+# ---------------------------------------------------------------------------
+
+SEARCH_SOURCE = Path(str(api_search.__file__))
+
+# Long enough that a handler which waited for the run would be caught by the
+# budget below, short enough that a case which ends early costs nothing.
+BLOCKED_WARM_SECONDS = 5.0
+
+# What the answer of a handler that does not wait has to fit into. Well under
+# the block above, so the case says something even on a slow machine.
+ANSWER_BUDGET_SECONDS = 1.0
+
+
+# The stand in, in the shape test_embed_model established and test_embed_engine
+# reuses: only the two functions that touch the artifacts are replaced, so
+# everything above them is the real code path of the holder.
+
+
+@dataclass
+class _FakeEncoding:
+    ids: list[int]
+    attention_mask: list[int]
+
+
+class _FakeEncoder:
+    """One token per text, which is everything the pooling needs."""
+
+    def encode_batch(self, texts: list[str]) -> list[_FakeEncoding]:
+        return [_FakeEncoding(ids=[1], attention_mask=[1]) for _ in texts]
+
+
+@dataclass
+class _FakeInput:
+    name: str
+
+
+class _FakeSession:
+    """A graph that answers a constant hidden state of the declared width."""
+
+    def get_inputs(self) -> list[_FakeInput]:
+        return [_FakeInput("input_ids"), _FakeInput("attention_mask")]
+
+    def get_outputs(self) -> list[_FakeInput]:
+        return [_FakeInput("last_hidden_state")]
+
+    def run(self, _outputs: list[str], feed: dict[str, Any]) -> list[Any]:
+        ids = feed["input_ids"]
+        return [numpy.ones((ids.shape[0], ids.shape[1], DIMENSIONS), dtype=numpy.float32)]
+
+
+@pytest.fixture
+def warm_ground(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+    """A model directory with the two file names, a fresh holder, no stale marker.
+
+    The stand-ins replace the two functions that read the artifacts, so a warm
+    run walks the real path of the holder and pays none of the 118 MB. The
+    marker is a module global and a fact about this process, so it is cleared
+    on both sides: a marker that outlives its case makes the order the suite
+    happens to run in readable off an answer.
+    """
+    home = tmp_path / "model"
+    home.mkdir(parents=True)
+    (home / "model.onnx").write_bytes(b"not a real graph")
+    (home / "tokenizer.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("FINDLING_EMBED_MODEL_DIR", str(home))
+    settings.cache_clear()
+
+    monkeypatch.setattr(model_module, "_open_encoder", lambda _directory, *, sequence_len: _FakeEncoder())
+    monkeypatch.setattr(model_module, "_open_session", lambda _path, *, threads: _FakeSession())
+
+    engine_module.reset()
+    engine_module._WARM_WANTED = False
+    yield home
+    engine_module._WARM_WANTED = False
+    engine_module.reset()
+    settings.cache_clear()
+
+
+def _release(monkeypatch: pytest.MonkeyPatch, seconds: str) -> None:
+    """The switch of MEM-01, in the position the case is about."""
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", seconds)
+    settings.cache_clear()
+
+
+def _count_the_warm_runs(monkeypatch: pytest.MonkeyPatch) -> tuple[list[int], threading.Event]:
+    """Replace the run itself, count it, and say when it happened."""
+    runs: list[int] = []
+    ran = threading.Event()
+
+    def fake_warm() -> bool:
+        runs.append(1)
+        ran.set()
+        return True
+
+    monkeypatch.setattr(api_search, "warm", fake_warm)
+    return runs, ran
+
+
+def test_with_the_release_off_the_handler_starts_nothing(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    warm_ground: Path,
+) -> None:
+    # The shipped behaviour, and there is no background run in it. Counted in
+    # runs and in pending tasks, never in errors (pitfall 4).
+    assert warm_ground.is_dir()
+    _release(monkeypatch, "0")
+    runs, ran = _count_the_warm_runs(monkeypatch)
+
+    answer = _search(client, sign(indexed_volume.bob), query=TWO_WORD_TERM)
+
+    assert answer["candidates"] != []
+    assert ran.wait(0.25) is False
+    assert runs == []
+    assert not api_search._WARM_TASKS
+
+
+def test_with_the_release_on_a_cold_engine_gets_exactly_one_run(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    warm_ground: Path,
+) -> None:
+    # The round was meant semantically, answered without the weights, and says
+    # so at the place where that fact arises. The handler on the loop then
+    # orders the run and goes on building the answer.
+    assert warm_ground.is_dir()
+    _release(monkeypatch, "900")
+    runs, ran = _count_the_warm_runs(monkeypatch)
+
+    answer = _search(client, sign(indexed_volume.bob), query=TWO_WORD_TERM)
+
+    assert answer["candidates"] != []
+    assert ran.wait(BLOCKED_WARM_SECONDS) is True
+    assert runs == [1]
+
+
+def test_with_the_release_on_a_loaded_engine_is_not_warmed_again(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    warm_ground: Path,
+) -> None:
+    # may_load=False answers out of the engine that is held, so a container
+    # with its weights in hand searches semantically and owes nothing.
+    assert warm_ground.is_dir()
+    _release(monkeypatch, "900")
+    engine_module.shared_model().embed_query("bauantrag")
+    runs, ran = _count_the_warm_runs(monkeypatch)
+
+    answer = _search(client, sign(indexed_volume.bob), query=TWO_WORD_TERM)
+
+    assert answer["candidates"] != []
+    assert ran.wait(0.25) is False
+    assert runs == []
+
+
+def test_the_answer_does_not_wait_for_the_warm_run(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    warm_ground: Path,
+) -> None:
+    # The run blocks for five seconds, the answer has one. A handler that
+    # awaited the task would spend the whole block inside the request, which is
+    # the one thing this seam exists to prevent.
+    assert warm_ground.is_dir()
+    _release(monkeypatch, "900")
+    gate = threading.Event()
+
+    def blocked_warm() -> bool:
+        gate.wait(BLOCKED_WARM_SECONDS)
+        return True
+
+    monkeypatch.setattr(api_search, "warm", blocked_warm)
+
+    started = time.monotonic()
+    answer = _search(client, sign(indexed_volume.bob), query=TWO_WORD_TERM)
+    spent = time.monotonic() - started
+    gate.set()
+
+    assert answer["candidates"] != []
+    assert spent < ANSWER_BUDGET_SECONDS
+
+
+def test_ten_searches_in_a_row_do_not_pay_for_ten_loads(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    warm_ground: Path,
+) -> None:
+    # T-14-28 in a counter: a search load that started a run per request would
+    # turn every keystroke of the unified search into 118 MB of work. Measured
+    # as a difference of the load counter, never as a byte and never as a
+    # failure count.
+    assert warm_ground.is_dir()
+    _release(monkeypatch, "900")
+    before = load_count()
+
+    for _ in range(10):
+        answer = _search(client, sign(indexed_volume.bob), query=TWO_WORD_TERM)
+        assert answer["candidates"] != []
+
+    deadline = time.monotonic() + BLOCKED_WARM_SECONDS
+    while api_search._WARM_TASKS and time.monotonic() < deadline:
+        time.sleep(0.05)
+
+    assert load_count() - before <= 1, "ten searches are one load at most and never ten"
+
+
+def test_the_handler_holds_its_task_and_never_waits_for_it() -> None:
+    """The gate at the syntax tree, beside the cases that watch the behaviour.
+
+    Three things a behavioural case cannot see the next time somebody rewrites
+    this handler: that the task is created exactly once, that nothing awaits
+    its result, and that a reference is kept while it runs. Without the last
+    one the garbage collector may take a running task away, which is a
+    documented trap of ``asyncio.create_task`` and a failure nobody ever sees
+    in a log (T-14-30).
+    """
+    source = SEARCH_SOURCE.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    handler = next(node for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef) and node.name == "search")
+
+    created = [
+        node
+        for node in ast.walk(handler)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "create_task"
+    ]
+    awaited = [
+        node
+        for node in ast.walk(handler)
+        if isinstance(node, ast.Await)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Attribute)
+        and node.value.func.attr == "create_task"
+    ]
+    assigned = {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.AnnAssign | ast.Assign)
+        for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+        if isinstance(target, ast.Name)
+    }
+
+    assert len(created) == 1, "one task and no more"
+    assert awaited == [], "the answer never waits for the run"
+    assert "_WARM_TASKS" in assigned, "the reference lives in a module set"
+    assert "add_done_callback" in source, "and it is handed back when the run ends"
