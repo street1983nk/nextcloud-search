@@ -344,7 +344,12 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # two flags _WARM_WANTED and _WARMING beside the holder and the fixed line
 # WARM_TEXT that a warm run embeds. No file came and none went, so
 # PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "c340cc629f3f4c2af433b86bce327aa44cd28777df6a2a97ef945ef7f4770424"
+# Moved on 2026-09-19 a ninth time, by plan 14-07: exactly one of the 54 files
+# changed its bytes, main.py, which got the third long lived task of the
+# lifespan, _release_when_idle, with its tick RELEASE_TICK_SECONDS, its stop
+# budget RELEASE_STOP_SECONDS and the fourth stop event beside the two that
+# were already there. No file came and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "059379c29a82542dbf6642e36fa8a39208d4921e5980b14c1827b7530dbb6836"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

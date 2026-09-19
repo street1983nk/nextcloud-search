@@ -34,7 +34,7 @@ import logging
 import os
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Final
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -48,9 +48,10 @@ from findling.api.search import ROUTER as SEARCH_ROUTER
 from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
 from findling.api.status import ROUTER as STATUS_ROUTER
 from findling.config import settings
+from findling.embed.engine import release_if_idle, warm, warm_wanted
 from findling.instance import claim_the_volume, volume_is_shared
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp, run_app, set_handlers
-from findling.worker.poller import POLLER_STOP_SECONDS, Poller, default_poller
+from findling.worker.poller import POLLER_STOP_SECONDS, Poller, _pause, default_poller
 from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_reconcile
 
 LOGGER = logging.getLogger("findling")
@@ -65,6 +66,17 @@ _POLLER: Poller | None = None
 # arm and silence it. It is None while the comparison is switched off, which is
 # the difference between a task that does nothing and no task at all.
 _RECONCILE: Reconcile | None = None
+
+# How finely the container notices that the idle span has run out. It is the
+# resolution of the idle clock and not the span itself: the smallest span an
+# admin may configure is 60 s, so an unload lands within less than half of the
+# shortest permitted span of the moment it falls due, and a tick with nothing to
+# do costs one reading of a clock.
+RELEASE_TICK_SECONDS: Final = 30.0
+
+# How long the shutdown waits for the release task before it stops waiting. A
+# tick holds one to_thread call at most, and the longest of those is a warm run.
+RELEASE_STOP_SECONDS: Final = 5.0
 
 KNOWN_LOG_LEVELS = frozenset({"debug", "info", "warning", "error"})
 
@@ -239,6 +251,80 @@ async def _guarded_reconcile(reconcile: Reconcile, stop_event: asyncio.Event) ->
         LOGGER.error("the reconcile task ended in an unexpected %s; search and indexing continue", kind_of_failure)
 
 
+async def _release_when_idle(stop_event: asyncio.Event) -> None:
+    """Let go of both memory holders once nothing has embedded for the span.
+
+    The third long lived task of the lifespan, built like the two beside it and
+    created only where ``embed_idle_release_seconds`` is switched on.
+
+    **Not in the idle branch of the poller.** A silenced poller waits in
+    ``run()`` on its armed event and never enters ``run_once`` again
+    (``poller.py:543-545``), and the container that does not index and is
+    searched now and then is exactly the one the unload is built for.
+
+    **Every blocking call goes through** ``asyncio.to_thread``. ``gc.collect()``
+    and ``malloc_trim(0)`` block, a load blocks, and a blocked loop is a
+    container that stops answering ``/heartbeat`` while its own log looks
+    perfectly healthy. That is the house rule written out at the head of
+    ``worker/poller.py`` and in ``run_once`` (T-14-23).
+
+    **Warming and unloading never share a tick.** The ``continue`` behind the
+    warm run is the whole guard: without it the tick that has just paid for the
+    load pair would throw it away two lines later.
+
+    **The cutter is let go only behind a release that really happened.** Both
+    holders fall together (MEM-02) and the order of the two is not free:
+    :func:`~findling.embed.engine.release_if_idle` carries the clock and the
+    identity check, :meth:`~findling.worker.poller.Poller.release_cutter`
+    carries no span of its own. A ``release_cutter`` without a release in front
+    of it would throw the cutter away after every quiet stretch, including the
+    ones in which the search side embedded a moment ago.
+
+    ``_pause`` is imported out of ``worker/poller.py`` although it is private,
+    and that is the smaller of the two prices. A second copy of those three
+    lines would be a second truth about the stop behaviour of this container,
+    and the alternative of making it public is a change to a module this plan
+    does not otherwise touch.
+    """
+    while not stop_event.is_set():
+        await _pause(RELEASE_TICK_SECONDS, stop_event)
+        if stop_event.is_set():
+            # The pause returns at once when the stop arrives, and nothing below
+            # is worth doing during a shutdown. A warm run started here would be
+            # a load nobody gets to use, and the worker thread carrying it would
+            # hold the exit of the process for seconds (T-14-26).
+            break
+        try:
+            ttl_seconds = settings().embed_idle_release_seconds
+            if warm_wanted():
+                await asyncio.to_thread(warm)
+                continue
+            poller = active_poller()
+            if poller is not None and poller.busy:
+                # Pitfall 3. Letting go between two batches means paying for the
+                # weights again seconds later, the unload turns from a saving
+                # into a cost over a full pass, and nothing anywhere turns red.
+                continue
+            # No poller at all means no pass can be running, so the absence
+            # answers the same question the property does.
+            if await asyncio.to_thread(release_if_idle, ttl_seconds) and poller is not None:
+                await asyncio.to_thread(poller.release_cutter)
+        except asyncio.CancelledError:
+            # Ahead of the general branch, exactly like _guarded_reconcile: a
+            # task that was cancelled must not read as an unexpected failure.
+            raise
+        except Exception as error:
+            # The tick failed, the task did not. Only the type name, by the rule
+            # of this module, and the wording says which of the two ended so
+            # that nobody goes looking for a task that is still running.
+            kind_of_failure = type(error).__name__
+            LOGGER.error(
+                "a tick of the release task ended in an unexpected %s; the next tick runs, "
+                "search and indexing continue",
+                kind_of_failure,
+            )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Register the AppAPI routes once, start the one poller, stop it in order."""
@@ -320,6 +406,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         LOGGER.info("findling reconcile is switched off, the index follows events only")
 
+    # The third task, and only where the unload is switched on. There is no else
+    # branch with a log line here, and that is a decision rather than an
+    # oversight: the factory setting of the span is off, and a line at every
+    # start about a feature nobody switched on is noise. Nobody should add one
+    # later for symmetry with the reconcile block above. The reconcile is on by
+    # default, which is what makes its switched off line worth its space.
+    stop_release = asyncio.Event()
+    releasing: asyncio.Task[None] | None = None
+    if settings().embed_idle_release_seconds > 0:
+        releasing = asyncio.create_task(_release_when_idle(stop_release))
+        LOGGER.info("findling releases the embedding engine after an idle span")
+
     # The mark from the last enable, read after both tasks exist so that one
     # decision arms both of them, exactly like the AppAPI handler does.
     #
@@ -372,6 +470,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         stop_indexing.set()
         stop_reconcile.set()
+        stop_release.set()
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(asyncio.shield(indexing), timeout=POLLER_STOP_SECONDS)
         if not indexing.done():
@@ -399,6 +498,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if _RECONCILE is not None:
             await _RECONCILE.aclose()
             _RECONCILE = None
+
+        if releasing is not None:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(asyncio.shield(releasing), timeout=RELEASE_STOP_SECONDS)
+            if not releasing.done():
+                # Over the budget. What is still running is a collect, a trim or
+                # a load inside a worker thread, and none of the three is worth
+                # holding the shutdown for.
+                releasing.cancel()
+                await asyncio.gather(releasing, return_exceptions=True)
 
 
 APP = FastAPI(lifespan=lifespan)
