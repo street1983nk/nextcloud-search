@@ -1020,7 +1020,15 @@ Die Phase hat eine kleine, aber nicht leere Angriffsfläche. `security_enforceme
 
 ---
 
-## 19. Open Questions
+## 19. Open Questions (RESOLVED)
+
+> Aufloesung 19.09.2026, alle fuenf Fragen sind in den Plaenen beantwortet:
+> Frage 1 (may_load nur am Schalter): 14-06 Task 1. Frage 2 (Diagnose-Route
+> darf laden): 14-06 Task 1, Kehrseite als Aufwaermregel im Runbook (14-11).
+> Frage 3 (busy statt _idle_announced): 14-04 Task 1. Frage 4
+> (Freigabezaehler): gegenstandslos mit dem Owner-Entscheid Zweig B
+> "unloaded" (14-CONTEXT.md), kein Zaehler auf der Seite. Frage 5
+> (Schwelle vor dem Lauf): 14-01 Task 1, Erwartungen E1 bis E4.
 
 1. **Gilt `may_load=False` nur bei eingeschaltetem Schalter oder immer?**
    - Bekannt: Der Vorfall vom 10.09.2026 war die allererste Suche eines Containers, der
