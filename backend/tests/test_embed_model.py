@@ -31,6 +31,7 @@ real code path.
 
 from __future__ import annotations
 
+import ast
 import inspect
 import json
 import logging
@@ -51,6 +52,7 @@ from findling.embed.model import (
     EmbeddingModel,
     load_count,
     to_int8,
+    unload_count,
 )
 
 SEMANTIK = Path(__file__).resolve().parents[2] / "testdata" / "semantik" / "de.jsonl"
@@ -616,6 +618,211 @@ def test_the_activity_counter_falls_back_to_zero_after_a_batch_that_threw(
 
     assert engine.embed_passages(["eins"]).verdict == EMBEDDING_UNAVAILABLE
     assert engine._in_flight == 0
+
+
+# ---------------------------------------------------------------------------
+# Letting go: release, the unload counter and the facts that stay
+# ---------------------------------------------------------------------------
+
+
+def _model_source() -> str:
+    """The text of ``embed/model.py``, for the gates that read it as source."""
+    return inspect.getsource(model_module)
+
+
+@pytest.fixture
+def quiet_pages(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Count the calls to the page return without paying gc and the trim.
+
+    The two steps themselves have their own cases further down, one for each
+    way a libc can refuse them and one for their order. Everything that is
+    about letting go rather than about the pages is faster and quieter with a
+    stand in, and it stays independent of the C library under the test machine.
+    """
+    calls: list[str] = []
+    monkeypatch.setattr(model_module, "_return_free_pages_to_the_system", lambda: calls.append("pages"))
+    return calls
+
+
+def test_a_release_on_a_loaded_holder_lets_go_and_counts_it(
+    model_dir: Path, stand_in: StandIn, quiet_pages: list[str]
+) -> None:
+    """The plain case, and the counter beside the load counter.
+
+    Two numbers rather than one, because a load count of three says nothing on
+    its own: on a container that never released it is a bug, on one that
+    released twice it is the expected number.
+    """
+    engine = _model(model_dir)
+    engine.embed_passages(["ein Abschnitt"])
+    before = unload_count()
+
+    assert engine.release() is True
+    assert engine.loaded is False
+    assert unload_count() - before == 1
+    assert quiet_pages == ["pages"]
+
+
+def test_a_release_on_a_holder_that_never_loaded_says_so(
+    model_dir: Path, stand_in: StandIn, quiet_pages: list[str]
+) -> None:
+    """False means there was nothing to let go of, and nothing was done.
+
+    The caller of plan 14-07 runs on a tick and will meet this case far more
+    often than the other one. It may not cost a heap walk every time, and it
+    may not raise the counter that the A/B measurement of phase 15 reads.
+    """
+    engine = _model(model_dir)
+    before = unload_count()
+
+    assert engine.release() is False
+    assert unload_count() == before
+    assert quiet_pages == []
+
+
+def test_a_release_during_a_batch_leaves_the_engine_standing(
+    model_dir: Path, stand_in: StandIn, monkeypatch: pytest.MonkeyPatch, quiet_pages: list[str]
+) -> None:
+    """T-14-15, asked from inside the running batch rather than from beside it.
+
+    The local reference in ``_embed`` holds the engine alive whatever this
+    answers, so nothing would segfault. What would happen is that gc.collect()
+    and malloc_trim walk the heap this batch is allocating in. The next tick
+    tries again, and one skipped release is cheaper than that.
+    """
+    engine = _model(model_dir)
+    answers: list[bool] = []
+    real_run = stand_in.session.run
+
+    def releasing(outputs: list[str], feed: dict[str, Any]) -> list[Any]:
+        answers.append(engine.release())
+        return real_run(outputs, feed)
+
+    monkeypatch.setattr(stand_in.session, "run", releasing)
+
+    outcome = engine.embed_passages(["ein Abschnitt"])
+
+    assert answers == [False]
+    assert outcome.available, "and the batch it refused to interrupt finished normally"
+    assert engine.loaded is True
+    assert quiet_pages == []
+
+
+def test_the_next_batch_after_a_release_reads_the_artifacts_again(
+    model_dir: Path, stand_in: StandIn, quiet_pages: list[str]
+) -> None:
+    """A release is not a switch off: the next row loads, and the counter says so."""
+    engine = _model(model_dir)
+    engine.embed_passages(["eins"])
+    before = load_count()
+
+    assert engine.release() is True
+    assert engine.loaded is False
+
+    outcome = engine.embed_passages(["zwei"])
+
+    assert outcome.available
+    assert engine.loaded is True
+    assert load_count() - before == 1
+
+
+def test_an_absent_model_directory_survives_a_release(tmp_path: Path, quiet_pages: list[str]) -> None:
+    """Pitfall 8, first of the three facts: a property of the installation.
+
+    A directory without the two artifacts stays without them while this process
+    runs, and looking again would be a pair of stat calls per document over tens
+    of thousands of them. A release that cleared the flag would bring that pair
+    back for ever, and nothing would fail anywhere.
+    """
+    engine = _model(tmp_path)
+    engine.embed_passages(["ein Abschnitt"])
+
+    assert engine.artifacts_absent is True
+    assert engine.release() is False, "there was never an engine to let go of"
+    assert engine.artifacts_absent is True
+
+
+def test_a_load_that_threw_keeps_its_cooldown_across_a_release(
+    model_dir: Path, monkeypatch: pytest.MonkeyPatch, quiet_pages: list[str]
+) -> None:
+    """Pitfall 8, second fact: the cooldown is a moment that is still running.
+
+    An open that threw is remembered with a timestamp and tried again after
+    LOAD_RETRY_SECONDS. A release that cleared the stamp would end that waiting
+    silently, and a broken graph would be opened once per document again instead
+    of twelve times an hour.
+    """
+
+    def throwing(_directory: Path, *, sequence_len: int) -> Any:
+        raise RuntimeError("no air for 118 MB of weights")
+
+    monkeypatch.setattr(model_module, "_open_encoder", throwing)
+    engine = _model(model_dir)
+    engine.embed_passages(["ein Abschnitt"])
+    stamp = engine._load_failed_at
+
+    assert stamp is not None
+    assert engine.load_cooling_down is True
+    assert engine.release() is False
+
+    assert engine._load_failed_at == stamp, "the moment that failed is not this operation's business"
+    assert engine.load_cooling_down is True
+
+
+def test_the_warning_flag_of_a_thrown_batch_survives_a_release(
+    model_dir: Path,
+    stand_in: StandIn,
+    monkeypatch: pytest.MonkeyPatch,
+    quiet_pages: list[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Pitfall 8, third fact, and this one is visible in the log.
+
+    The flag says that the one warning about a thrown batch has been said. The
+    second track walks tens of thousands of documents, so a release that cleared
+    it would hand the log a fresh warning after every idle span, which is the
+    flood the flag exists to prevent.
+    """
+    engine = _model(model_dir)
+
+    def throwing(_outputs: list[str], _feed: dict[str, Any]) -> list[Any]:
+        raise RuntimeError("the batch could not be run")
+
+    monkeypatch.setattr(stand_in.session, "run", throwing)
+
+    with caplog.at_level(logging.DEBUG, logger="findling.embed.model"):
+        engine.embed_passages(["eins"])
+        assert engine.release() is True
+        engine.embed_passages(["zwei"])
+
+    said = [record for record in caplog.records if "failed and the search stays lexical" in record.getMessage()]
+
+    assert len(said) == 1, "the second thrown batch speaks at debug level, before and after a release alike"
+    assert said[0].levelno == logging.WARNING
+
+
+def test_the_unload_counter_can_never_be_set_back() -> None:
+    """T-14-17, as a property of the source rather than of one run.
+
+    A counter that can be zeroed is a counter a gate could zero itself green
+    with, and the A/B measurement of phase 15 reads exactly this number.
+    ``engine.reset()`` does not touch it either, which is what this reading
+    proves: the module holds one initialisation and one increment and nothing
+    else that writes the name.
+    """
+    tree = ast.parse(_model_source())
+    touches: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            written = [target for target in node.targets if isinstance(target, ast.Name)]
+        elif isinstance(node, ast.AugAssign):
+            written = [node.target] if isinstance(node.target, ast.Name) else []
+        else:
+            continue
+        if any(name.id == "_UNLOAD_COUNT" for name in written):
+            touches.append(ast.unparse(node))
+
+    assert sorted(touches) == ["_UNLOAD_COUNT += 1", "_UNLOAD_COUNT = 0"]
 
 
 # ---------------------------------------------------------------------------
