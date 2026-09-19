@@ -1,0 +1,217 @@
+die neun vorbedingungen ohne box-zeit, abschnitt 3 des runbooks, plan 15-07
+abgearbeitet 2026-09-19 auf der entwicklungsmaschine, region eu-central-1
+werkzeuge: gh 2.92.0, aws cli v2 2.36.39, scripts/ops/aws_box.sh
+
+neun zeilen, keine davon braucht eine laufende box. wer eine von ihnen auf
+spaeter verschiebt, verschiebt sie in die bezahlte zeit. kein befehl ist
+uebersprungen worden, weil sein ergebnis bekannt schien, und die erste zeile
+zeigt, warum das keine formalie ist: die laufnummer stand seit dem morgen
+desselben tages in der phasenrecherche und war am abend eine andere.
+
+geheimnisregel dieser datei, verbindlich: sie liegt im oeffentlichen
+repositorium. keine ip-adresse, keine lebende instanz- oder volumekennung, kein
+passwortinhalt, keine kontokennung. ausgenommen ist allein die snapshotkennung
+snap-03f1d1d9ad9262704, die bereits in committeten dateien dieses
+repositoriums steht. wo ein wert gebraucht wird, steht ein platzhalter mit
+einem satz, woher er kommt.
+
+-- 1 CI_LAUF, die laufnummer eines gruenen integration.yml-laufs --
+kommando:
+  gh run list --workflow=integration.yml --status success --limit 1
+
+antwort:
+  completed  success  35469147833  main  push  2026-09-19T21:01:20Z
+  titel: docs(15-04): complete MEM-02-Messwerkzeug plan
+
+urteil: erfuellt. CI_LAUF=35469147833.
+
+die zahl ersetzt die 35462611738 aus der phasenrecherche vom selben tag
+(14-12-lauf, 18:53:12Z). genau dafuer steht dieser befehl in der liste: eine
+laufnummer, die nicht zum gemessenen stand passt, belegt den ci-beleg des
+sprachfall-laufs gegen einen anderen baum.
+
+befund, und er gehoert an den checkpoint und nicht in einen abbruch: der
+gruene lauf gehoert zum commit des plans 15-04 und damit nicht zum kopf des
+zweiges. der lauf darueber, 35470079862 zum commit des plans 15-05, ist
+fehlgeschlagen, und zwar im schritt "Log every account in and keep its
+session" des auftrags search-parity (stable34, 8.2), mit der meldung
+"the login of minimal was refused". der lauf zum heutigen kopf,
+35471225104, war zum zeitpunkt dieser ablesung noch nicht fertig.
+zwei folgen:
+  1. die laufnummer wird unmittelbar vor schritt 7 der anfahrt ein zweites mal
+     geholt, so wie 00-ablauf.md es in seiner schrittzeile verlangt. was hier
+     steht, ist der stand des tages und nicht der stand der anfahrt.
+  2. der fehlgeschlagene schritt liegt in der suchparitaet und beruehrt kein
+     werkzeug dieses laufverzeichnisses. er ist als offener punkt vermerkt und
+     nicht teil dieses plans.
+
+-- 2 die sicherung der systemplatte --
+kommando:
+  ls -l "${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/systemplatte-2026-09/home-ubuntu-work.tar.gz"
+  sha256sum darauf
+
+antwort:
+  vorhanden
+  groesse  3971065 byte
+  sha256   fad3e7ce6c7f73cc85a108ce6511941326435934e87cce0c6df5f2d0a6a3584a
+
+gehalten gegen docs/measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt
+abschnitt 4: dort stehen 435 eintraege, 3.971.065 byte und derselbe sha256.
+beide zahlen und der hash sind identisch.
+
+urteil: erfuellt. der pfad steht oben als platzhalter und nicht als pfad dieser
+maschine; der wert, der zaehlt, ist der hash. diese datei traegt die
+passwortdateien der konten admin und lasttest, gehoert in kein repositorium und
+ist im snapshot nicht enthalten.
+
+-- 3 die aws-anmeldung --
+geprueft wurde ausschliesslich, ob die beiden namen gesetzt sind:
+  AWS_ACCESS_KEY_ID      gesetzt
+  AWS_SECRET_ACCESS_KEY  gesetzt
+
+die werte stammen aus einer datei ausserhalb des arbeitsbaums, sind in die
+umgebung gelesen worden und erscheinen in keinem argument, in keinem protokoll
+und nicht in dieser datei. kein teil eines werts, keine kontokennung.
+
+urteil: erfuellt.
+
+-- 4 die lesende snapshot-probe --
+kommando:
+  aws ec2 describe-snapshots --region eu-central-1 \
+      --snapshot-ids snap-03f1d1d9ad9262704
+
+antwort, die felder in der reihenfolge, in der der bericht sie zitiert:
+  SnapshotId              snap-03f1d1d9ad9262704
+  State                   completed
+  Progress                100%
+  VolumeSize              60
+  StartTime               2026-09-11T07:47:07.582000+00:00
+  CompletionTime          2026-09-11T08:36:36.061000+00:00
+  FullSnapshotSizeInBytes 55415668736
+  Encrypted               false
+  StorageTier             standard
+  Description             findling corpus and index, v1.1 comparison run
+                          2026-09-10, 52111 documents
+
+erwartung aus 01-aws-lesende-proben.txt abschnitt 1: State completed,
+Progress 100%, VolumeSize 60. alle drei stimmen, und auch die uebrigen felder
+sind unveraendert gegen die probe vom 14.09.2026.
+
+das feld VolumeId ist hier absichtlich fortgelassen. es nennt das datenvolume,
+das am 11.09.2026 mit der box abgebaut wurde; es lebt nicht mehr, aber die
+geheimnisregel dieser datei kennt keine ausnahme fuer tote kennungen.
+
+urteil: erfuellt. annahme a3 bleibt bestaetigt.
+
+-- 5 das tag des snapshots --
+kommando:
+  aws ec2 describe-tags --region eu-central-1 \
+      --filters "Name=resource-id,Values=snap-03f1d1d9ad9262704"
+
+antwort:
+  snapshot  snap-03f1d1d9ad9262704  Name     findling-corpus-2026-09
+  snapshot  snap-03f1d1d9ad9262704  purpose  findling-corpus-keep
+
+urteil: erfuellt. purpose=findling-corpus-keep und ausdruecklich nicht
+purpose=findling-phase5. ein volume aus diesem snapshot erbt genau diesen tag
+und entginge damit dem tag-sweep des abbaus; aws_box.sh restore taggt deshalb
+pflichtmaessig um und liest die tags danach zurueck.
+
+-- 6 die werkzeuge der entwicklungsmaschine --
+kommandos und antworten:
+  aws --version   aws-cli/2.36.39 Python/3.14.6 Windows/11 exe/AMD64
+  gh --version    gh version 2.92.0 (2026-04-28)
+  python3 -V      Python 3.13.1
+  uv --version    uv 0.11.7 (9d177269e 2026-04-15 x86_64-pc-windows-msvc)
+  jq --version    jq-1.8.1
+  ssh -V          OpenSSH_10.3p1, OpenSSL 3.5.6 7 Apr 2026
+
+fehlstand, protokolliert statt uebergangen:
+  dig             nicht vorhanden
+  rueckfall 1     nslookup, vorhanden unter /c/WINDOWS/system32
+  rueckfall 2     curl --resolve, so wie block 10 des runbooks ihn fuehrt
+
+urteil: erfuellt mit einem benannten fehlstand. aws_box.sh braucht dig nicht;
+gebraucht wird es allein fuer die rueckleseprobe des a-records in block 10, und
+dafuer stehen zwei rueckfaelle.
+
+nebenbefund zur aufrufform: scripts/ops/aws_box.sh steht mit der rechtemaske
+100644 im index, wie vierzehn der achtzehn werkzeuge des laufverzeichnisses.
+der preisabgleich unten ist deshalb als "sh scripts/ops/aws_box.sh prices"
+gefahren worden. 00-ablauf.md abschnitt 2.1 loest das fuer die box mit einer
+zeile chmod vor schritt 0 auf, damit dort ueberall dieselbe form gilt.
+
+-- 7 jq auf der box --
+nicht pruefbar. es gibt die box nicht.
+
+urteil: offen. die pruefung ist vorbedingung des ersten box-blocks und lautet
+dort "ssh ... 'jq --version'". ohne jq endet der sprachfall-lauf mit
+rueckgabewert 18, und zwar mitten in der bezahlten zeit; die nachinstallation
+ueber apt-get install jq kostet sekunden. diese zeile ist offen benannt und
+nicht vergessen.
+
+-- 8 der zugang zur dns-verwaltung fuer loadtest.infranode.dev --
+nicht pruefbar auf dieser maschine. der zugang liegt beim owner.
+
+urteil: offen. die zeile wird im checkpoint 15-08 vorgelegt. der a-record zeigt
+seit dem 11.09.2026 ins leere; wer ihn erst waehrend der anfahrt sucht, bezahlt
+die suche. die rueckfaelle des runbooks sind der /etc/hosts-pin und
+curl --resolve, und beide sind kein ersatz fuer den record, sondern ein weg, die
+messung trotzdem zu fahren.
+
+-- 9 das deckel-rechenblatt --
+neu gerechnet in plan 15-02, docs/runbook-messbox.md abschnitt 2:
+  untergrenze              31 h / 3,59 USD netto
+  vorgaengerstand 16.09.   42 h / 4,90 USD netto
+  empfehlung 19.09.        46 h / 5,40 USD netto
+
+die freigabezeile bleibt an dieser stelle leer und traegt nur ihren platzhalter:
+
+  Anfahrt freigegeben: <Datum>, Deckel <h> h / <USD> USD
+
+gefuellt wird sie in plan 15-08 und nirgends sonst. eine freigabe, die sich der
+ausfuehrende selbst erteilt, ist keine.
+
+urteil: offen, und zwar planmaessig. gerechnet ist die zahl; freigegeben wird
+sie vom owner, mit datum, vor der ersten minute.
+
+-- preisabgleich, weil er nichts kostet und der deckel daran haengt --
+kommando:
+  sh scripts/ops/aws_box.sh prices
+
+gedruckt wurden drei saetze, die uebrigen drei des rechenblatts folgen aus
+ihnen. der einzige api-aufruf dieses unterbefehls ist describe-instance-types
+und ist kostenlos.
+
+  satz                     rechenblatt 2.3      heute gelesen oder gerechnet
+  box m7g.large            0,097800 USD/h       0.0978 USD per hour, gedruckt
+  gp3 je GB und monat      quelle der zeile     0.0952 USD per GB month,
+                           darunter             gedruckt
+  oeffentliche ipv4        0,005000 USD/h       0.0050 USD per hour, gedruckt
+  speicher gp3 100 GB      0,013041 USD/h       100 * 0,0952 / 730 = 0,013041
+  laufend gesamt           0,115841 USD/h       0,0978 + 0,013041 + 0,005
+                                                = 0,115841
+  angehalten               0,3130 USD/tag       9,52 / 30,42 = 0,3130
+  snapshot, dauerhaft      2,79 bis 2,99 USD    laeuft weiter, ob eine anfahrt
+                           je monat             stattfindet oder nicht
+
+ausserdem gedruckt und unveraendert: type m7g.large, 2 vCPU arm64,
+8192 MiB auf dem typ und 4096 MiB durch den kern gedeckelt, 40 GB gp3 root und
+60 GB gp3 datenvolume.
+
+abgleich: kein satz weicht ab. es entsteht also keine zeile fuer den
+checkpoint. die saetze selbst sind seit dem 04.09.2026 im skript gepinnt; die
+zweite lesung am anfahrtstag, die abschnitt 2.3 des runbooks verlangt, ist
+davon unberuehrt und faellt weiterhin an.
+
+-- bilanz --
+  erfuellt        sechs zeilen: 1, 2, 3, 4, 5, 6
+  offen, benannt  zwei zeilen: 7 (jq auf der box), 8 (dns-zugang beim owner)
+  platzhalter     zeile 9, die freigabe selbst
+  abbruch         keiner
+
+acht der neun zeilen sind abgearbeitet und protokolliert. keine von ihnen ist
+verschoben: die sechs erfuellten tragen ihre ausgabe, 7 ist ohne box nicht
+pruefbar und haengt am ersten box-block, 8 liegt beim owner und wird im
+checkpoint 15-08 vorgelegt. die neunte zeile ist dieser checkpoint selbst, und
+sie bleibt bis dahin ein platzhalter.
