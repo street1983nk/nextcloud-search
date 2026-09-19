@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-08-PLAN.md
-last_updated: "2026-09-19T17:00:00.000Z"
+stopped_at: Completed 14-09-PLAN.md
+last_updated: "2026-09-19T17:35:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 29
-  percent: 88
+  completed_plans: 30
+  percent: 91
 ---
 
 # Project State
@@ -26,24 +26,43 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 8 von 12 abgeschlossen (14-08: die Degradationsnaht der Suchwege)
+Plan: 9 von 12 abgeschlossen (14-09: das sechste Wort `unloaded`)
 Status: executing, das Tor der Phase ist offen und der Bau laeuft.
-Welle 5 ist abgeschlossen; als naechstes 14-09 (das sechste Wort `unloaded`).
-Progress: [█████████░] 88%
-Last activity: 2026-09-19 -- 14-08: `may_load` reist von der Route bis an den
-Halter. Die zwei Nutzerrouten mit der 1,5-Sekunden-Decke fragen
-`query_may_load()`, die Diagnose bekommt nur den Satz, warum sie es nicht tut,
-und `one_round` bestellt bei einer Runde ohne Gewichte den Warmlauf, den der
-Handler als `asyncio.create_task(asyncio.to_thread(warm))` auf den Loop legt.
-23 neue Testfaelle, volle Suite 2244 gruen. **MEM-03 ist damit erfuellt**; was
-noch fehlt, ist allein der Lauf an der laufenden Instanz, der einen Neubau des
-Containers braucht und deshalb in 14-12 gehoert.
+Welle 6 laeuft; 14-10 folgt als Geschwister dieser Welle.
+Progress: [█████████░] 91%
+Last activity: 2026-09-19 -- 14-09: der Owner-Entscheid vom selben Tag ist
+vollzogen. `ENGINE_STATES` hat sechs Woerter, `engine_state()` antwortet
+`unloaded` hinter `loaded` und vor `cold` und liest dafuer den monotonen
+Entladezaehler, beide Haelften der Admin-Seite bilden das Wort auf denselben
+Satz ab, sechs Katalogdateien tragen ihn in drei Sprachen (199 Schluessel), und
+`docs/admin-page.md` sagt nicht mehr, es gebe kein sechstes Wort. Volle Suite
+2254 gruen. **Die Admin-Haelfte von MEM-05 ist damit erfuellt**; die zweite
+Haelfte (die one_load-Zusage) traegt 14-10, und die Sichtprobe an der laufenden
+Instanz braucht wie bei 14-08 einen Containerneubau und gehoert nach 14-12.
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-09 (MEM-05, das sechste Wort): Der Zustand wird aus dem monotonen
+  Entladezaehler abgeleitet und nicht aus einem neuen Feld. Ein Feld haette
+  gesetzt werden muessen, ein Zaehler ist schon da, und er hat eine Eigenschaft,
+  die hier zaehlt: ein Prozess, der nie entladen hat, steht auf null und kann
+  das Wort gar nicht melden. Der Zweig steht hinter `loaded`, weil ein Container,
+  der nach einer Freigabe wieder geladen hat, geladen ist.
+
+- 14-09: Die sechs Katalogeintraege reisen im selben Commit wie die zwei
+  Seitenhaelften und die zwei Gate-Literale. Das Satz-Gate sucht die neuen Saetze
+  im deutschen Katalog, also waere jede andere Reihenfolge ein roter Commit
+  gewesen. Die Dokumentationshaelfte ist ein eigener Commit geblieben.
+
+- 14-09: Der Entladezaehler wird je Testfall in `conftest.py` auf null gesetzt
+  (`forget_the_release_count`, nach dem Muster von `forget_the_cutter_notice`).
+  Ohne das entscheidet eine Freigabe in `test_embed_model.py`, was
+  `test_status_endpoint.py` drei Dateien spaeter als Zustand liest. Im Container
+  wird nichts zurueckgesetzt, T-14-17 bleibt unberuehrt.
 
 - 14-08 (MEM-03, die Naht): `request_warm()` steht in `one_round` an der Zeile,
   an der die `SemanticSide` ohne Ladeerlaubnis gebaut wird, und nicht im
@@ -683,6 +702,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T17:00:00.000Z
-Stopped at: Completed 14-08-PLAN.md, die erste Suche nach einer Entladung antwortet lexikalisch und bestellt nach
+Last session: 2026-09-19T17:35:00.000Z
+Stopped at: Completed 14-09-PLAN.md, das sechste Wort `unloaded` steht im Container, auf beiden Seitenhaelften und in drei Sprachen
 Resume file: None

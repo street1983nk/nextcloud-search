@@ -65,7 +65,7 @@
 | MEM-02 | Phase 14 | Pending |
 | MEM-03 | Phase 14 | Complete (14-08) |
 | MEM-04 | Phase 14 | Complete (14-02) |
-| MEM-05 | Phase 14 | Pending |
+| MEM-05 | Phase 14 | In Progress (14-09: die Admin-Seite zeigt den Zustand; offen die one_load-Zusage in 14-10) |
 | MESS-04 | Phase 12 | Complete |
 | MESS-05 | Phase 15 | Pending |
 | MESS-06 | Phase 12 | Complete |
