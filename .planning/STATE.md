@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-05-PLAN.md
-last_updated: "2026-09-19T14:10:00.000Z"
+stopped_at: Completed 14-06-PLAN.md
+last_updated: "2026-09-19T14:32:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 26
-  percent: 79
+  completed_plans: 27
+  percent: 82
 ---
 
 # Project State
@@ -26,21 +26,69 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 5 von 12 abgeschlossen (14-05: die Suchseite kann loslassen)
+Plan: 6 von 12 abgeschlossen (14-06: der Halter hat die Politik)
 Status: executing, das Tor der Phase ist offen und der Bau laeuft.
-Welle 3 ist damit vollstaendig. Naechster Plan ist 14-06.
-Progress: [████████░░] 79%
-Last activity: 2026-09-19 -- 14-05: release(), unload_count(), last_use() und
-may_load stehen an embed/model.py, 20 neue Testfaelle ohne neuen Skip, volle
-Suite 2179 gruen. Beide Halter koennen jetzt loslassen, gerufen wird noch
-keiner; MEM-02 bleibt offen bis 14-07 (Aufrufer), MEM-03 bis 14-06/14-08
-(Nachwaermen).
+Welle 4 ist damit vollstaendig. Naechster Plan ist 14-07.
+Progress: [████████░░] 82%
+Last activity: 2026-09-19 -- 14-06: query_may_load, release_if_idle,
+released_count, request_warm, warm_wanted und warm stehen an embed/engine.py,
+25 neue Testfaelle ohne neuen Skip, volle Suite 2204 gruen. Die Regel steht an
+genau einer Stelle und haengt am Schalter, die Freigabe kann das Rennen gegen
+einen Warmlauf nicht mehr verlieren. Gerufen wird weiterhin nichts: MEM-02
+bleibt offen bis 14-07 (Takt), MEM-03 bis 14-08 (die Suchroute).
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-06 (MEM-03, obere Haelfte): `query_may_load()` ist die eine Stelle, an der
+  steht, ob eine Suche laden darf, und sie antwortet
+  `settings().embed_idle_release_seconds == 0`. Die Degradation haengt damit am
+  Schalter und gilt nicht generell: der Vorfall vom 10.09.2026 war die
+  allererste Suche eines Containers, der nie entladen hatte, und eine Naht ohne
+  Schalter wuerde ihn generell abstellen, waere aber eine Verhaltensaenderung
+  ausserhalb des Schalters, und die eine Box-Anfahrt der Phase 15 wuerde zwei
+  Aenderungen auf einmal messen. Der Generalfall ist Backlog. `api/diagnose.py`
+  ruft die Funktion bewusst nicht und laedt weiter (ein Messwerkzeug muss messen
+  koennen); die Kehrseite, dass ein Diagnoseaufruf den Container aufwaermt,
+  gehoert ins Runbook 14-11.
+
+- 14-06: `release_if_idle(ttl)` prueft die Identitaet des Halters unter `_LOCK`
+  mit `is` und gibt erst danach frei, weil das Nachwaermen aus MEM-03 neben der
+  Entlade-Aufgabe laeuft und eine Kollision sonst das gerade bezahlte Ladepaar
+  wegwerfen wuerde (T-14-20). Der Auftrag aus 14-05 ist damit erledigt, und er
+  ist in `engine.py` gelandet und nicht in `release()`: die Mechanik bleibt
+  unten, die Politik steht oben. `release()` wird ausserhalb von `_LOCK`
+  gerufen, weil Sammeln und Trimmen blockieren (T-14-16); drei Gates am
+  Syntaxbaum halten Lage, `_held`-statt-`shared_model` und `is`-statt-Wert fest.
+
+- 14-06: `ttl <= 0` und `last_use() is None` antworten beide `False`, ohne den
+  Halter zu fragen. Null ist das Wort fuer aus und keine Frist von null
+  Sekunden; `None` ist ein Halter, der geladen hat und nie eingebettet hat, und
+  das ist kein Leerlauf, sondern nichts zum Loslassen (Uebergabe aus 14-05).
+
+- 14-06: Die Zusage "genau ein Laden je warmem Fenster" ist strukturell erfuellt
+  und nicht durch das Flag: `_load()` laeuft unter dem Lock des Halters und
+  kehrt am Kopf zurueck. `_WARMING` spart die neun wartenden Threadpool-Threads
+  und ist im Docstring ausdruecklich als Effizienz und nicht als Zusage
+  benannt, damit niemand es spaeter fuer die Zusage haelt. Der Zehn-Threads-Fall
+  misst den Zuwachs von `load_count()` und nie ein Byte.
+
+- 14-06: `warm()` laedt ueber `shared_model().embed_query(WARM_TEXT)` und setzt
+  damit die Leerlauf-Uhr mit. Das ist die Bedingung und kein Nebeneffekt: ohne
+  die Uhr entlaedt der naechste Takt sofort wieder. `WARM_TEXT` ist eine feste
+  Modulkonstante ohne Nutzerinhalt und ohne Dateinamen (T-14-22).
+
+- 14-06 (Lehre, dritte Auflage): Der Baumhash musste erneut in jedem
+  Produktcode-Commit nachgezogen werden, weil der Plan
+  `tests/test_measurement_scripts.py` wieder nicht in `files_modified` fuehrt.
+  Das ist jetzt der vierte Plan in Folge. Zusaetzlich neu: die beiden
+  `<verify>`-Befehle des Plans (`pytest -k "may_load"` und
+  `-k "release_if_idle"`) waehlten mit den urspruenglichen Testnamen keinen
+  oder nur einen Fall aus; die Namen wurden nachgezogen. Ein Pruefbefehl, der
+  nichts auswaehlt, ist ein gruenes Nichts.
 
 - 14-05 (Suchseite): `release()` gibt unter `self._lock` los und zaehlt, ruft
   `gc.collect()` und `malloc_trim(0)` aber AUSSERHALB davon: beide blockieren,
