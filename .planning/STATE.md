@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 15-05-PLAN.md
-last_updated: "2026-09-19T23:20:00.000Z"
+stopped_at: Completed 15-06-PLAN.md
+last_updated: "2026-09-20T00:00:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 49
-  completed_plans: 38
-  percent: 78
+  completed_plans: 39
+  percent: 80
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, Welle A ohne Box**
-Plan: 5 von 16 abgeschlossen (15-01 bis 15-05)
+Plan: 6 von 16 abgeschlossen (15-01 bis 15-06)
 Status: Phase 14 ist abgenommen. Phase 15 laeuft; 15-01 hat das Laufverzeichnis
 der Anfahrt bestueckt, 15-02 hat das Runbook auf den Stand dieser Anfahrt
 gebracht (Deckel 46 h / 5,40 USD netto, Block 13b Abbildwechsel, ein Befehl
@@ -37,10 +37,15 @@ Marken in einem Zug, Rueckgabewerte 2, 29, 31, 32 und 33), und 15-05 hat den
 vom Owner bestellten Filter- und Sortierblock gebaut:
 99c-filter-sortierung.sh, drei Sortiermodi plus Blaettern unter Filter,
 Rueckgabewerte 2, 29, 34 und 35, sieben boxlose Faelle samt zwei Driftgates
-(Sortiernamen gegen SORT_MODES, Weiter-Link gezogen statt gebaut).
-Naechster Plan ist 15-06 (92b-wechsel.sh, der Abbildwechsel-Block 13b).
-Progress: [████████░░] 78% der 49 geplanten Plaene (38 von 49; Phase 16 ist noch nicht geplant)
-Last activity: 2026-09-19 -- 15-05, das Werkzeug des Owner-Entscheids D-01.
+(Sortiernamen gegen SORT_MODES, Weiter-Link gezogen statt gebaut), und 15-06
+hat den Abbildwechsel gebaut: 92b-wechsel.sh zieht per ABBILD_DIGEST statt
+ueber den wandernden Zeiger :dev, laesst 40b-baumhash.sh entscheiden,
+erzwingt die Kette PHP-Haelfte, Registrierung, harte Grenze aus der cgroup,
+Rueckgabewerte 2, 36, 37, 38 und 39, sieben boxlose Faelle samt einem Gate,
+das die Zaehlung der Nextcloud-Instanzen unmittelbar ueber jedem --rm-data
+erzwingt. Naechster Plan ist 15-07 (00-ablauf.md auf zehn Schritte).
+Progress: [████████░░] 80% der 49 geplanten Plaene (39 von 49; Phase 16 ist noch nicht geplant)
+Last activity: 2026-09-19 -- 15-06, der Abbildwechsel-Block 13b.
 
 **Die Deckelzahl, die der Owner in 15-08 vorfindet:** 46 Stunden und 5,40 USD
 netto, aus zehn Posten mit 39 h 22 min Planwert und 15 Prozent Zuschlag. Der
@@ -81,6 +86,28 @@ Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 15-06: Das Abbild des Wechsels wird aus ABBILD_REPO und ABBILD_DIGEST
+  zusammengesetzt; IMAGE ist keine zweite Stellschraube mehr. Zwei getrennte
+  Angaben sind genau der Fall T-10-13, in dem der Baumhash ein Abbild prueft,
+  waehrend die Registrierung darunter ein anderes faehrt. ABBILD_DIGEST hat
+  keinen Vorgabewert und wird vor dem ersten mkdir geprueft.
+- 15-06: Der Rueckgabewert 36 traegt zwei Faelle, wie 32/33 in 15-04 und 34/35
+  in 15-05. Der zweite faellt nach der Registrierung: AppAPI setzt
+  registry/image:tag zusammen und kennt keinen Digest, also wird die
+  Abbildkennung aus dem Container gelesen und gegen die des per Digest
+  gezogenen Abbilds gehalten. Das gezogene Abbild wird vorher lokal auf den
+  Tag der info.xml gelegt; das ist die Vorkehrung, der Beweis bleibt die
+  Kennung aus dem Container.
+- 15-06: Die Zaehlung der Nextcloud-Instanzen steht zweimal in der Datei, und
+  das Gate misst den ABSTAND und nicht das Vorhandensein. Ein Gate auf blosses
+  Vorhandensein bliebe gruen fuer ein zweites --rm-data, das jemand unten
+  anhaengt, weil die Zaehlung der Phase A weit darueber steht. Eine unlesbare
+  Zaehlung gilt als ungleich eins.
+- 15-06: Der Runbook-Aufruf in Block 13b ist auf ABBILD_DIGEST umgestellt
+  worden (Abweichung Rule 3). Der bisherige IMAGE-Aufruf haette auf der
+  bezahlten Box mit 2 geendet, und der Operator haette den Grund in einem
+  Runbook gesucht, das ihn nicht nennt.
 
 - 15-05: Der Filter- und Sortierblock misst ausschliesslich ueber die
   Seitenroute, und `scripts/ops/search_load.py` wird weder angefasst noch
