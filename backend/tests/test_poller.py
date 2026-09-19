@@ -3032,3 +3032,25 @@ def test_the_release_never_leaves_half_a_cutter_behind() -> None:
     ]
 
     assert sorted(assigned) == ["_chunker", "_model"]
+
+
+def test_after_a_cutter_release_no_half_pair_promises_the_track() -> None:
+    """The half that would be invisible, asked through the property that reads the pair.
+
+    ``_embed_ready`` says yes for two different reasons: the pair is built, or it
+    can still be built. This poller has the permanent no about the artifacts, so
+    only the first reason is left, and after the release the answer has to be no.
+    Had the release cleared exactly one of the two fields, the answer would still
+    be yes here, rows would be handed to a spur that cannot run, and nothing
+    would raise anywhere.
+    """
+    worker = Poller()
+    worker._vectors = cast("Any", object())
+    worker._chunker = cast("Any", lambda _text: [])
+    worker._model = cast("Any", object())
+
+    assert worker._cutter_absent is True, "no artifacts, so a built pair is the only yes left"
+    assert worker._embed_ready is True
+
+    assert worker.release_cutter() is True
+    assert worker._embed_ready is False, "the pair is gone whole, so nothing promises the track"
