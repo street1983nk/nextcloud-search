@@ -36,11 +36,12 @@ splits on as well: the artifact does not exist on a development machine, and a
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import logging
 import math
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -61,7 +62,15 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
-from findling.index.search import Candidate, CandidatePage, SemanticSide, candidates, ranked_sides
+from findling.index.search import (
+    Candidate,
+    CandidatePage,
+    QueryEmbedder,
+    SemanticSide,
+    candidates,
+    ranked_sides,
+    snippets_for,
+)
 from findling.query.rewrite import build_query
 from findling.store.repo import Store, open_store
 from findling.store.vectors import Chunk, VectorStore, open_vectors
@@ -1004,3 +1013,144 @@ def test_an_operator_query_answers_what_a_container_without_a_vector_stock_answe
     assert [hit.fileId for hit in with_rule.candidates] == [hit.fileId for hit in without_vectors.candidates]
     assert with_rule.has_more == without_vectors.has_more
     assert with_rule.next_offset == without_vectors.next_offset
+
+
+# ---------------------------------------------------------------------------
+# The switch travels: may_load from the round down to the holder (MEM-03)
+# ---------------------------------------------------------------------------
+
+
+class SwitchedEmbedder:
+    """A model that answers only when it is allowed to fetch the weights.
+
+    ``may_load=False`` is the state of a container that has let go of its
+    engine. The real wrapper then gives the ``embedding_unavailable`` verdict
+    instead of paying for the load, and this stand-in does exactly that. Every
+    call is recorded, because the claim of this block is about what reaches the
+    model and not about what comes back.
+    """
+
+    def __init__(self, vector: tuple[float, ...]) -> None:
+        self._vector = vector
+        self.seen: list[bool] = []
+
+    def embed_query(self, text: str, *, may_load: bool = True) -> EmbedOutcome:
+        self.seen.append(may_load)
+        if not may_load:
+            return EmbedOutcome.unavailable()
+        return EmbedOutcome.ready([self._vector])
+
+
+class OldEmbedder:
+    """A model from before this plan, which does not know the keyword.
+
+    Not a theoretical shape: every stand-in in this suite had it until today,
+    and so would any wrapper somebody writes against an older reading of the
+    protocol. Handed in through :func:`typing.cast`, because the point of the
+    case is that it does **not** satisfy the protocol and the type checker is
+    right to say so.
+    """
+
+    def embed_query(self, text: str) -> EmbedOutcome:
+        return EmbedOutcome.ready([unit_vector(0)])
+
+
+def test_the_protocol_carries_the_keyword_and_defaults_to_loading() -> None:
+    # The static half of the claim. A caller that hands the keyword to a model
+    # which has not got it fails at the call, and the protocol is the one place
+    # where that is said once for every implementation.
+    parameter = inspect.signature(QueryEmbedder.embed_query).parameters["may_load"]
+
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default is True
+
+
+def test_a_semantic_side_may_load_unless_the_round_says_otherwise(vectors: VectorStore) -> None:
+    # The default is the behaviour of every round built before this phase.
+    side = SemanticSide(vectors=vectors, model=Embedder({}), text=TERM)
+
+    assert side.may_load is True
+
+
+def test_the_search_path_hands_the_switch_down_to_the_model(
+    index: Index,
+    store: Store,
+    vectors: VectorStore,
+) -> None:
+    model = SwitchedEmbedder(unit_vector(0))
+    side = SemanticSide(vectors=vectors, model=model, text=PARAPHRASE, may_load=False)
+
+    candidates(index, store, BOB, _query(index), limit=DOCUMENTS, semantic=side)
+
+    assert model.seen == [False]
+
+
+def test_the_excerpt_path_hands_the_switch_down_to_the_model(
+    index: Index,
+    store: Store,
+    vectors: VectorStore,
+) -> None:
+    # The second of the two call sites, and it has to travel there as well:
+    # the excerpt cut runs on the very same user route and under the very same
+    # 1.5 second ceiling as the round above it.
+    model = SwitchedEmbedder(unit_vector(0))
+    side = SemanticSide(vectors=vectors, model=model, text=PARAPHRASE, may_load=False)
+
+    texts = snippets_for(index, store, BOB, _query(index), [SEMANTIC_FILE], semantic=side)
+
+    assert model.seen == [False]
+    assert [text.file_id for text in texts] == [SEMANTIC_FILE]
+
+
+def test_a_round_that_may_not_load_answers_out_of_the_lexical_list(
+    index: Index,
+    store: Store,
+    vectors: VectorStore,
+) -> None:
+    # D-19, entered from the new side. The unavailable verdict empties the
+    # vector list, RRF becomes the identity on the lexical one, and the user
+    # gets full text hits instead of a search that waited for 118 MB.
+    expected = _ids(candidates(index, store, BOB, _query(index), limit=DOCUMENTS))
+
+    side = SemanticSide(vectors=vectors, model=SwitchedEmbedder(unit_vector(0)), text=PARAPHRASE, may_load=False)
+    page = candidates(index, store, BOB, _query(index), limit=DOCUMENTS, semantic=side)
+
+    assert expected != []
+    assert _ids(page) == expected
+
+
+def test_the_same_round_that_may_load_brings_the_vector_half_in(
+    index: Index,
+    store: Store,
+    vectors: VectorStore,
+) -> None:
+    # The other half of the case above, with one letter of difference between
+    # them: the same model, the same stock, the same query, and the semantic
+    # document leads the page.
+    model = SwitchedEmbedder(unit_vector(0))
+    side = SemanticSide(vectors=vectors, model=model, text=PARAPHRASE)
+
+    page = candidates(index, store, BOB, _query(index), limit=DOCUMENTS, semantic=side)
+
+    assert model.seen == [True]
+    assert _ids(page)[0] == SEMANTIC_FILE
+
+
+def test_a_model_without_the_keyword_is_named_in_the_log_and_costs_only_the_vector_half(
+    index: Index,
+    store: Store,
+    vectors: VectorStore,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The runtime half of the first claim in this block. The narrow net of the
+    # vector branch catches the TypeError, so the round still answers, and the
+    # warning names the type and nothing else (T-06-27).
+    expected = _ids(candidates(index, store, BOB, _query(index), limit=DOCUMENTS))
+
+    side = SemanticSide(vectors=vectors, model=cast(QueryEmbedder, OldEmbedder()), text=PARAPHRASE)
+    with caplog.at_level(logging.WARNING, logger="findling.index.search"):
+        page = candidates(index, store, BOB, _query(index), limit=DOCUMENTS, semantic=side)
+
+    assert "TypeError" in caplog.text
+    assert PARAPHRASE not in caplog.text
+    assert _ids(page) == expected
