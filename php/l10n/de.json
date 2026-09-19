@@ -16,6 +16,7 @@
         "The semantic half is switched off in the settings of the container.": "Die semantische Hälfte ist in den Einstellungen des Containers abgeschaltet.",
         "There is no model in this image. The search keeps answering with full text hits, the semantic half stays empty.": "In diesem Abbild liegt kein Modell. Die Suche liefert weiterhin Volltexttreffer, die semantische Hälfte bleibt leer.",
         "Reading the model failed once and is tried again shortly. Until then the search answers with full text hits.": "Das Laden des Modells ist einmal gescheitert und wird in Kürze erneut versucht. Bis dahin liefert die Suche Volltexttreffer.",
+        "The model was released to save memory. The next search answers with full text hits and loads it again in the background.": "Das Modell wurde zum Sparen freigegeben. Die nächste Suche antwortet mit Volltexttreffern und lädt es im Hintergrund nach.",
         "This container does not report the state of the model yet.": "Dieser Container meldet den Zustand des Modells noch nicht.",
         "The full text search covers every indexed document. The semantic search covers the beginning of each document, and this second figure fills up after the first index has finished.": "Die Volltextsuche deckt jedes indexierte Dokument ab. Die semantische Suche deckt den Anfang jedes Dokuments ab, und diese zweite Zahl füllt sich nach dem Erstindex nach.",
         "Up to date, last checked %s": "Aktuell, letzte Prüfung %s",

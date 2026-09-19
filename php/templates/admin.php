@@ -52,23 +52,32 @@ $percent = is_int($coverage['percent'] ?? null) ? $coverage['percent'] : null;
 // semantic half nobody could ask (D-16).
 $embedded = $whole($coverage['embedded'] ?? 0);
 $embeddedPercent = is_int($coverage['embeddedPercent'] ?? null) ? $coverage['embeddedPercent'] : null;
-// The state of the engine behind that figure, as one of five words, and the
-// sentence the page shows for it. Six sentences for five words, because a
+// The state of the engine behind that figure, as one of six words, and the
+// sentence the page shows for it. Seven sentences for six words, because a
 // container older than this app reports no state at all and AdminViewService
 // hands that over as null: "the container has not said" is not "the model
 // arrives on first demand" (T-07-03).
 //
-// Word for word the six sentences of js/admin.js, which rewrites this line on
+// Word for word the seven sentences of js/admin.js, which rewrites this line on
 // every poll, and a gate in backend/tests/test_admin_ui_contract.py holds the
 // pair together. Which sentence belongs to which word is decided here and in
 // the script and nowhere else: the container reports a state, never a text an
 // admin reads, so nothing it sends can become the wording of this page.
+//
+// The sixth word arrived on 19.09.2026, and it is the one an update in the
+// wrong order shows up at: a container that reports 'unloaded' to a companion
+// app that does not know the word yet falls through to the last sentence, which
+// says that the container does not report the state at all. That reads like a
+// broken backend and is nothing but two halves at different versions. They
+// travel as a pair (REL-02), and docs/admin-page.md says so for the admin who
+// updated them one at a time.
 $engineSentences = [
 	'loaded' => $l->t('The model is in memory, the semantic search is answering.'),
 	'cold' => $l->t('The model is read when it is first needed. That is the normal state.'),
 	'disabled' => $l->t('The semantic half is switched off in the settings of the container.'),
 	'missing' => $l->t('There is no model in this image. The search keeps answering with full text hits, the semantic half stays empty.'),
 	'waiting_for_retry' => $l->t('Reading the model failed once and is tried again shortly. Until then the search answers with full text hits.'),
+	'unloaded' => $l->t('The model was released to save memory. The next search answers with full text hits and loads it again in the background.'),
 ];
 $engineState = is_string($backend['engineState'] ?? null) ? $backend['engineState'] : '';
 $engineSentence = $engineSentences[$engineState] ?? $l->t('This container does not report the state of the model yet.');

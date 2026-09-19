@@ -17,6 +17,7 @@ OC.L10N.register(
     "The semantic half is switched off in the settings of the container.": "La moitié sémantique est désactivée dans les paramètres du conteneur.",
     "There is no model in this image. The search keeps answering with full text hits, the semantic half stays empty.": "Cette image ne contient aucun modèle. La recherche continue de répondre avec des résultats en texte intégral, la moitié sémantique reste vide.",
     "Reading the model failed once and is tried again shortly. Until then the search answers with full text hits.": "Le chargement du modèle a échoué une fois et sera retenté sous peu. D'ici là, la recherche répond avec des résultats en texte intégral.",
+    "The model was released to save memory. The next search answers with full text hits and loads it again in the background.": "Le modèle a été libéré pour économiser de la mémoire. La prochaine recherche répond avec des résultats en texte intégral et le recharge en arrière-plan.",
     "This container does not report the state of the model yet.": "Ce conteneur ne communique pas encore l'état du modèle.",
     "The full text search covers every indexed document. The semantic search covers the beginning of each document, and this second figure fills up after the first index has finished.": "La recherche en texte intégral couvre chaque document indexé. La recherche sémantique couvre le début de chaque document, et ce second chiffre se complète après la fin de la première indexation.",
     "Up to date, last checked %s": "À jour, dernière vérification %s",

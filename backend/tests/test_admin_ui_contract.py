@@ -1402,19 +1402,25 @@ def test_both_halves_of_the_page_map_the_same_state_to_the_same_sentence() -> No
     assert set(template) == set(ENGINE_STATES)
 
 
-def test_the_six_sentences_of_the_engine_line_are_in_the_german_catalogue() -> None:
+def test_the_seven_sentences_of_the_engine_line_are_in_the_german_catalogue() -> None:
     """IN-02 for the new line: a sentence in one catalogue only is half German.
 
-    The sixth is the one for a container that reports no state at all. It is
+    The seventh is the one for a container that reports no state at all. It is
     reached through the default of both halves, so no mapping carries it and
     nothing but this line would notice its absence.
+
+    Seven since 19.09.2026, and the one that came is the sentence for
+    ``unloaded``: the container gave the weights back in an idle span, the next
+    search answers with full text hits and pays the load again in the
+    background. The number word is in the name of this test on purpose, so that
+    a raised figure and a name still saying six cannot stand side by side.
     """
     template = TEMPLATE.read_text(encoding="utf-8")
     script = SCRIPT.read_text(encoding="utf-8")
     catalogue = json.loads(L10N_JSON.read_text(encoding="utf-8"))["translations"]
     sentences = set(engine_sentences_of_the_template(template).values()) | {ENGINE_UNKNOWN_SENTENCE}
 
-    assert len(sentences) == 6
+    assert len(sentences) == 7
 
     missing = [f"de.json: {sentence}" for sentence in sorted(sentences) if sentence not in catalogue]
     if ENGINE_UNKNOWN_SENTENCE not in template:
@@ -1496,6 +1502,20 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     non-English user read that one group name in English. The French wording
     falls under the acceptance point that no French wording of this app has
     been checked by a native speaker yet.
+
+    It stands at 199 since 19.09.2026 as well, later the same day, and the rise
+    of one is the sentence of the sixth engine state: the model was released to
+    save memory, and the next search answers with full text hits while it is
+    read again in the background. The word ``unloaded`` is the owner decision of
+    19.09.2026 for branch B of plan 14-09
+    (.planning/phases/14-modell-entladung-im-leerlauf/14-CONTEXT.md), taken with
+    this very cost written out: two spellings of the closed set, two sentence
+    tables, six catalogue files and this figure. The French wording is new and
+    unchecked; it lies before the owner at the phase checkpoint, and
+    docs/l10n-french.md carries the dated note that says so.
+
+    This paragraph carries the same duty as the three above it. Whoever raises
+    the figure next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -1520,7 +1540,7 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     }
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
-    assert len(keys_of["de.json"]) == 198
+    assert len(keys_of["de.json"]) == 199
 
 
 def test_all_six_catalogues_carry_the_same_keys() -> None:

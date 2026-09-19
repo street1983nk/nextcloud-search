@@ -193,10 +193,10 @@ final class AdminViewServiceTest extends TestCase {
 		self::assertSame(100, AdminViewService::coverageShare(300, 200, true));
 	}
 
-	// -- the state of the engine: five words, and null for everything else ----
+	// -- the state of the engine: six words, and null for everything else -----
 
 	/**
-	 * The five words the container may send, each of them passed through.
+	 * The six words the container may send, each of them passed through.
 	 *
 	 * They are the protocol and they are decided in the container, in
 	 * backend/src/findling/embed/engine.py. This side does not translate them
@@ -212,6 +212,7 @@ final class AdminViewServiceTest extends TestCase {
 			'the semantic half is switched off' => ['disabled'],
 			'there is no model in the image' => ['missing'],
 			'a load threw and the cooldown is running' => ['waiting_for_retry'],
+			'the weights were given back in an idle span' => ['unloaded'],
 		];
 	}
 
@@ -231,7 +232,7 @@ final class AdminViewServiceTest extends TestCase {
 	}
 
 	/**
-	 * Everything that is not one of the five words, and none of it is cast.
+	 * Everything that is not one of the six words, and none of it is cast.
 	 *
 	 * The last three rows are the ones a cast would ruin quietly: (string)3 is
 	 * "3", (string)true is "1", and both would look like a value this side

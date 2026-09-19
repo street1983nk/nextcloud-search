@@ -167,14 +167,17 @@ final class AdminViewService {
 	private const MAX_TEXT_LENGTH = 500;
 
 	/**
-	 * The five states of the engine the container may report, as a closed list.
+	 * The six states of the engine the container may report, as a closed list.
 	 *
 	 * The words are the protocol and they are decided one repository half over,
 	 * in backend/src/findling/embed/engine.py. This side only judges whether the
 	 * value is one of them; which sentence an admin reads for which of them is
 	 * decided in the template and in the script, in the language of the admin.
+	 *
+	 * Six since 19.09.2026: 'unloaded' says that the container gave the weights
+	 * back in an idle span, which is not the same as never having read them.
 	 */
-	private const ENGINE_STATES = ['loaded', 'cold', 'disabled', 'missing', 'waiting_for_retry'];
+	private const ENGINE_STATES = ['loaded', 'cold', 'disabled', 'missing', 'waiting_for_retry', 'unloaded'];
 
 	/**
 	 * What a reason code may look like before it is passed on. The taxonomy of

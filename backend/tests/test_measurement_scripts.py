@@ -268,8 +268,16 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # PageControllerTest.php follows with the two cases for it. This plan ran alone
 # in its wave as well, so the figure was measured against the merged tree of the
 # wave before it and needs no second correction.
+# Moved on 2026-09-19 by plan 14-09, and the count stays at 64 for the sixth
+# time running because no file was added or removed. Three of the 64 changed
+# their bytes, all three for the sixth engine state: AdminViewService.php took
+# 'unloaded' into its mirrored closed list, templates/admin.php got the seventh
+# sentence for the sixth word, and AdminViewServiceTest.php follows with the
+# sixth row of its data provider. The plan touches js/admin.js and the six
+# catalogue files as well; the recipe globs **/*.php, so none of them is in
+# this tree and none of them moves this figure.
 PHP_FILES_TODAY = 64
-PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959cb4fe8a6"
+PHP_TREE_HASH_TODAY = "8fdcd9dfc863c1c97cfd86211133c1532cebb661ada9fac50ce25983486d9771"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS

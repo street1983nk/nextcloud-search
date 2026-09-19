@@ -426,14 +426,14 @@
   }
 
   /**
-   * The six sentences about the state of the engine, one of them always right.
+   * The seven sentences about the state of the engine, one of them always right.
    *
-   * Word for word the six of the template, which renders this line server side
+   * Word for word the seven of the template, which renders this line server side
    * on the first paint. The two halves have to agree or the sentence changes
    * three seconds after the page opened with nothing having happened, and a
    * gate in backend/tests/test_admin_ui_contract.py holds them together.
    *
-   * The container sends one of five words and never a sentence, so nothing an
+   * The container sends one of six words and never a sentence, so nothing an
    * admin reads here comes from across the boundary: the mapping from a word to
    * a sentence lives on this side, in the language of the admin.
    */
@@ -449,11 +449,15 @@
         return t('findling', 'There is no model in this image. The search keeps answering with full text hits, the semantic half stays empty.')
       case 'waiting_for_retry':
         return t('findling', 'Reading the model failed once and is tried again shortly. Until then the search answers with full text hits.')
+      case 'unloaded':
+        return t('findling', 'The model was released to save memory. The next search answers with full text hits and loads it again in the background.')
       default:
-        // Everything that is not one of the five, which is what a container
+        // Everything that is not one of the six, which is what a container
         // older than this app looks like: it sends no state at all and
-        // AdminViewService turns that into null. Saying "cold" here would
-        // promise a load that nobody announced (T-07-03).
+        // AdminViewService turns that into null. A companion app older than
+        // the container lands here too, on the word it does not know yet.
+        // Saying "cold" here would promise a load that nobody announced
+        // (T-07-03).
         return t('findling', 'This container does not report the state of the model yet.')
     }
   }
