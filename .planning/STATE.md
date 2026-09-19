@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-02-PLAN.md
-last_updated: "2026-09-19T13:25:00.000Z"
+stopped_at: Completed 14-03-PLAN.md
+last_updated: "2026-09-19T13:36:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 23
-  percent: 70
+  completed_plans: 24
+  percent: 73
 ---
 
 # Project State
@@ -26,20 +26,62 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 2 von 12 abgeschlossen (14-02: Vorprueflauf gefahren, Bericht steht)
-Status: executing, das Tor der Phase ist offen. Der Owner hat am 19.09.2026
-woertlich "freigegeben" geantwortet; die Plaene 14-03 bis 14-12 sind ohne
-Auflage frei, naechster Plan ist 14-03.
-Progress: [███████░░░] 70%
-Last activity: 2026-09-19 -- 14-02: Lauf 35443822228 auf ubuntu-24.04-arm, Median der
-Rueckgabe 100,0 Prozent, E1 bis E4 alle gehalten, Bericht in
-docs/measurements/2026-09-entladung-vorpruefung/README.md. MEM-04 ist erfuellt.
+Plan: 3 von 12 abgeschlossen (14-03: der Schalter steht, Name festgelegt)
+Status: executing, das Tor der Phase ist offen und der Bau hat begonnen.
+Naechster Plan ist 14-04.
+Progress: [███████░░░] 73%
+Last activity: 2026-09-19 -- 14-03: FINDLING_EMBED_IDLE_RELEASE_SECONDS ist gebaut,
+ab Werk 0 (aus), eigener Leser _seconds_or_off_from_environment, 14 Testfaelle,
+sechzehnte Variable in der info.xml. MEM-01 ist erfuellt.
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-03 (MEM-01, Namensentscheid): Die Variable heisst
+  **`FINDLING_EMBED_IDLE_RELEASE_SECONDS`** und nicht
+  `FINDLING_EMBED_IDLE_SECONDS`. Begruendung aus dem eigenen Bestand: die 15
+  bereits ausgelieferten Variablen der info.xml nennen alle Wirkung und nicht
+  nur Bedingung, und eine einmal ausgelieferte Variable ist nicht mehr
+  umbenennbar. Der Name steht in `config.py` und `appinfo/info.xml` byteweise
+  gleich. Der Bereich heisst `EMBED_IDLE_RELEASE_SECONDS_RANGE` nach der
+  Hausform der Datei; der Plantext nannte `EMBED_IDLE_RELEASE_RANGE` und
+  widersprach damit seinem eigenen Acceptance-Kriterium.
+
+- 14-03: Die Null bekommt einen eigenen Leser
+  `_seconds_or_off_from_environment`, den dritten dieser Bauart nach
+  `_hour_from_environment` und `_overlap_from_environment`.
+  `_bounded_int_from_environment` waere aus beiden Richtungen falsch: mit
+  `(0, 86400)` waere eine TTL von drei Sekunden gueltig, mit `(60, 86400)`
+  fiele die Null auf den Default zurueck und ein Admin, der abschalten will,
+  bekaeme die Funktion, ohne Fehlermeldung. Die Null wird deshalb VOR der
+  Bereichspruefung beantwortet, und der Bereich behaelt seine Untergrenze 60.
+
+- 14-03: Der Unterschied zwischen "aus" und "Tippfehler" ist durch eine
+  Mutationsprobe abgenommen und nicht nur durch einen Docstring behauptet: der
+  Aufruf wurde probeweise gegen `_bounded_int_from_environment` getauscht, genau
+  ein Fall wurde rot, und es war der Null-Fall. Danach zurueckgenommen, alle 14
+  Faelle wieder gruen.
+
+- 14-03: Ab Werk 0, also aus, und der Kommentar nennt beide Gruende mitsamt
+  ihrem Ablaufdatum: die eine bezahlte Box-Anfahrt der Phase 15 muss das Merkmal
+  gegen seine eigene Abwesenheit wiegen und braucht beide Stellungen, und ein
+  Merkmal mit ungemessenen Wiederaufwaerm-Kosten darf sich unter einer laufenden
+  Installation nicht selbst einschalten. 900 s ist der Vorschlagswert der
+  info.xml und bis zur Messung geraten.
+
+- 14-03: `FINDLING_EMBED_ENABLED` wurde NICHT in die info.xml aufgenommen. Es ist
+  ein Haertungskandidat und kein Requirement dieser Phase, und eine ausgelieferte
+  Variable mehr in einem Release, das sie nicht braucht, ist Umfang ohne Anlass.
+  Der Befund steht als Kommentar in der Datei, damit Phase 16 ihn findet.
+
+- 14-03 (Lehre): Jede Aenderung an `backend/src/findling/` zieht
+  `PACKAGE_TREE_HASH_TODAY` in `tests/test_measurement_scripts.py` nach. Der
+  Plan kannte die Datei nicht; sie gehoert ab jetzt in die Dateiliste jedes
+  Plans, der das Python-Paket anfasst. Die historische Zahl `PACKAGE_TREE_HASH`
+  aus den Rohdaten bleibt dabei unberuehrt.
 
 - 14-02 (OWNER-ENTSCHEID 19.09.2026): Der Owner hat den Ausgang des
   Vorprueflaufs im Wortlaut mit "freigegeben" genannt, ohne Auflage. Damit sind
@@ -472,6 +514,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T13:25:00.000Z
-Stopped at: Completed 14-02-PLAN.md, Owner-Entscheid "freigegeben" eingetragen
+Last session: 2026-09-19T13:36:00.000Z
+Stopped at: Completed 14-03-PLAN.md, der Schalter aus MEM-01 steht
 Resume file: None

@@ -16,7 +16,7 @@
 
 ### Modell-Entladung (MEM)
 
-- [ ] **MEM-01**: Admin kann die Leerlauf-Entladung per Umgebungsvariable aktivieren (TTL in Sekunden, 0 = aus); ab Werk AUS (Voraussetzung für den A/B-Beleg in der einen Box-Anfahrt). Variablenname wird vor dem Bau festgelegt (STACK vs ARCHITECTURE nennen unterschiedliche Namen)
+- [x] **MEM-01**: Admin kann die Leerlauf-Entladung per Umgebungsvariable aktivieren (TTL in Sekunden, 0 = aus); ab Werk AUS (Voraussetzung für den A/B-Beleg in der einen Box-Anfahrt). Variablenname wird vor dem Bau festgelegt (STACK vs ARCHITECTURE nennen unterschiedliche Namen)
 - [ ] **MEM-02**: Die Entladung gibt BEIDE Speicherhalter frei (EmbeddingModel-Engine UND Poller-Cutter/Tokenizer); die Beleg-Messgröße ist "Rückkehr zur Grundlast nach einem Indexlauf", nicht "Grundlast minus X"
 - [ ] **MEM-03**: Die erste Suche nach einer Entladung antwortet innerhalb der 1,5-Sekunden-Decke lexikalisch (bestehender Degradationspfad `EmbedOutcome.unavailable()`/D-19); das Modell wärmt im Hintergrund nach. Der cURL-error-28-Fall vom 10.09.2026 darf nicht zum Regelfall werden
 - [x] **MEM-04**: Ein Vorprüflauf belegt die tatsächliche RSS-Rückgabe (gc.collect + malloc_trim) auf Zielhardware, BEVOR die Funktion fertig gebaut wird; ein negativer Ausgang ist legitim und wird dokumentiert ("gemessen, Ergebnis negativ") statt ausgeliefert
@@ -61,7 +61,7 @@
 | FILT-03 | Phase 13 | Complete |
 | FILT-04 | Phase 13 | Complete |
 | FILT-05 | Phase 13 | Complete |
-| MEM-01 | Phase 14 | Pending |
+| MEM-01 | Phase 14 | Complete |
 | MEM-02 | Phase 14 | Pending |
 | MEM-03 | Phase 14 | Pending |
 | MEM-04 | Phase 14 | Complete (14-02) |
