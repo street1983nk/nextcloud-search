@@ -196,13 +196,14 @@ COPIED_TOOLS = (
 # copies above plus the files the run directory of v1.2 was written with.
 # Written down rather than globbed, because the statement is that a tool the
 # order names and the directory lacks is found on a rented box at the price of
-# box time. The tool that comes with plan 15-06 is deliberately not in this
-# list; it joins it with its own plan, the way the rewarm tool of plan 15-03,
-# the baseload return tool of plan 15-04 and the filter and sort tool of plan
-# 15-05 join it here, in the commit that creates the file.
+# box time. Every entry joins this list in the commit that creates the file it
+# names, which is why the rewarm tool of plan 15-03, the baseload return tool
+# of plan 15-04, the filter and sort tool of plan 15-05 and the image switch of
+# plan 15-06 arrived one by one rather than all at once.
 TOOLS_THE_MEASUREMENT_ORDER_NAMES = (
     *COPIED_TOOLS,
     "73-bestand-sonde.py",
+    "92b-wechsel.sh",
     "94b-grundlast-rueckkehr.sh",
     "95b-wiederaufwaermen.sh",
     "97-cron-vorpruefung.sh",
@@ -1981,15 +1982,15 @@ def test_the_run_directory_of_the_trip_carries_every_tool_the_measurement_order_
 
     Section 7 of docs/runbook-messbox.md names a tool for every one of its ten
     blocks, and the run directory of v1.2 held three of them before plan 15-01.
-    The tool of plan 15-06 is absent from the list on purpose: it joins it with
-    its own plan, and a list that named it today would be red for a reason that
-    is not a finding. The rewarm tool of step 8 is in it since plan 15-03, the
-    baseload return tool of step 8b since plan 15-04 and the filter and sort
-    tool of step 6b since plan 15-05, because the files they name exist since
-    those plans.
+    A name enters this list in the commit that creates the file, never before
+    it: a list that named a file which does not exist yet would be red for a
+    reason that is not a finding. The rewarm tool of step 8 is in it since plan
+    15-03, the baseload return tool of step 8b since plan 15-04, the filter and
+    sort tool of step 6b since plan 15-05, and the image switch of block 13b
+    since plan 15-06, because the files they name exist since those plans.
     """
     assert len(COPIED_TOOLS) == 11
     assert len(set(COPIED_TOOLS)) == len(COPIED_TOOLS)
-    assert len(TOOLS_THE_MEASUREMENT_ORDER_NAMES) == 17
+    assert len(TOOLS_THE_MEASUREMENT_ORDER_NAMES) == 18
     missing = [name for name in TOOLS_THE_MEASUREMENT_ORDER_NAMES if not (V12_RUN_DIR / name).is_file()]
     assert missing == [], missing
