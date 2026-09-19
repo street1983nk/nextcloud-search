@@ -16,7 +16,9 @@ for the thing it names, and that reasoning is already written down in the head
 of ``tools/one_load.py``.
 """
 
+import ast
 import asyncio
+import inspect
 import logging
 
 import pytest
@@ -120,6 +122,27 @@ def _ticks(monkeypatch: pytest.MonkeyPatch, count: int) -> list[float]:
 async def _run_the_task() -> None:
     """Run the task to its end, and fail loudly instead of hanging the suite."""
     await asyncio.wait_for(_release_when_idle(asyncio.Event()), timeout=5.0)
+
+
+# The three calls that block. Two of them collect and trim, the third one loads,
+# and every one of them has to reach a worker thread (T-14-23).
+BLOCKING_CALLS = frozenset({"warm", "release_if_idle", "release_cutter"})
+
+
+def _the_tick_as_a_tree() -> ast.AsyncFunctionDef:
+    """The task read as source, so a gate can hold what the next edit may do."""
+    parsed = ast.parse(inspect.getsource(_release_when_idle)).body[0]
+    assert isinstance(parsed, ast.AsyncFunctionDef)
+    return parsed
+
+
+def _name_behind(node: ast.expr) -> str:
+    """The bare name of a call target or of a function passed as an argument."""
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    if isinstance(node, ast.Name):
+        return node.id
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -283,3 +306,119 @@ async def test_the_stop_event_ends_the_task_within_one_tick(monkeypatch: pytest.
     await _run_the_task()
 
     assert spy.order == []
+
+
+# ---------------------------------------------------------------------------
+# The order of the two releases, and the two gates that read the source instead
+# of a run: a behaviour case says what happened once, the tree says what happens
+# the next time somebody edits the tick.
+# ---------------------------------------------------------------------------
+
+
+async def test_the_cutter_is_let_go_only_behind_a_release_that_happened(monkeypatch: pytest.MonkeyPatch) -> None:
+    # release_if_idle carries the clock and the identity check, release_cutter
+    # carries no span of its own. A cutter release in front of, or without, a
+    # real release would throw the pair away after every quiet stretch.
+    spy = _EngineSpy(releases=False).install(monkeypatch)
+    poller = _FakePoller(busy=False, journal=spy.order)
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    _ticks(monkeypatch, 1)
+
+    await _run_the_task()
+
+    assert len(spy.ttls) == 1
+    assert poller.cutter_releases == 0
+    assert spy.order == ["warm_wanted", "release_if_idle"]
+
+
+async def test_the_tick_reads_the_span_from_the_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    spy = _EngineSpy().install(monkeypatch)
+    monkeypatch.setattr("findling.main._POLLER", None)
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "120")
+    settings.cache_clear()
+    _ticks(monkeypatch, 1)
+
+    try:
+        await _run_the_task()
+    finally:
+        settings.cache_clear()
+
+    assert spy.ttls == [120]
+
+
+def test_every_blocking_call_of_the_tick_runs_in_a_worker_thread() -> None:
+    tick = _the_tick_as_a_tree()
+    calls = [node for node in ast.walk(tick) if isinstance(node, ast.Call)]
+
+    assert [call for call in calls if _name_behind(call.func) in BLOCKING_CALLS] == []
+    handed_over = [call for call in calls if _name_behind(call.func) == "to_thread"]
+    assert len(handed_over) == 3
+    assert {_name_behind(call.args[0]) for call in handed_over} == BLOCKING_CALLS
+
+
+def test_the_cancelled_error_is_caught_ahead_of_the_general_failure() -> None:
+    tick = _the_tick_as_a_tree()
+    handlers = [handler for node in ast.walk(tick) if isinstance(node, ast.Try) for handler in node.handlers]
+
+    assert [_name_behind(handler.type) for handler in handlers if handler.type is not None] == [
+        "CancelledError",
+        "Exception",
+    ]
+    assert isinstance(handlers[0].body[0], ast.Raise)
+
+
+async def test_a_cancelled_tick_is_not_logged_as_an_unexpected_failure(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def cancelled() -> bool:
+        raise asyncio.CancelledError
+
+    _EngineSpy().install(monkeypatch)
+    monkeypatch.setattr("findling.main.warm_wanted", cancelled)
+    monkeypatch.setattr("findling.main._POLLER", None)
+    _ticks(monkeypatch, 2)
+    caplog.set_level(logging.ERROR, logger="findling")
+
+    with pytest.raises(asyncio.CancelledError):
+        await _release_when_idle(asyncio.Event())
+
+    assert [record for record in caplog.records if record.levelno >= logging.ERROR] == []
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_release_task_ends_with_the_lifespan(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The third task ends the way its two siblings do: the stop event is set in
+    # the finally, and the shutdown waits for it before it gives up on it.
+    fake = _FakeReleaseTask()
+    monkeypatch.setattr("findling.main._release_when_idle", fake.run)
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "60")
+    settings.cache_clear()
+
+    with TestClient(APP):
+        pass
+
+    assert fake.starts == 1
+    assert fake.stops == 1
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_container_answers_the_heartbeat_with_the_real_task_running(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Step 3 of the verification of the plan, without a container.
+
+    Nothing is patched here, so the task under test is the real one with its
+    real tick: the switch is on, the lifespan creates it, and the server has to
+    keep answering while it runs. A blocked loop would show up here and nowhere
+    else in this file, because every other case drives the tick by hand.
+
+    The shutdown costs nothing either, although the tick is 30 s: the pause
+    returns the moment the stop event arrives, which is the one property the
+    private import of ``_pause`` exists for.
+    """
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "60")
+    settings.cache_clear()
+
+    with TestClient(APP) as client:
+        answer = client.get("/heartbeat")
+
+    assert answer.status_code == 200
+    assert answer.json() == {"status": "ok"}
