@@ -165,12 +165,12 @@ Plans:
 
 **Owner-Checkpoint**: engineState-Wortwahl (MEM-05) ist am 19.09.2026 entschieden (Zweig B, sechstes Wort `unloaded`, siehe 14-CONTEXT.md) und wird in Plan 14-09 vollzogen. Zwei weitere Checkpoints in der Phase: das Tor des Vorprueflaufs (14-02) und die Abnahme (14-12).
 
-**Plans:** 12 plans
+**Plans:** 1/12 plans executed
 
 Plans:
 **Welle 1**
 
-- [ ] 14-01-PLAN.md: Vorprueflauf-Werkzeug, Erwartung vor dem Lauf, Messschritt E in measure.yml
+- [x] 14-01-PLAN.md: Vorprueflauf-Werkzeug, Erwartung vor dem Lauf, Messschritt E in measure.yml
 
 **Welle 2** *(wartet auf Welle 1; DAS TOR DER PHASE)*
 
@@ -248,7 +248,7 @@ Plans:
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
-| 14. Modell-Entladung im Leerlauf | v1.2 | 0/12 | Planned | - |
+| 14. Modell-Entladung im Leerlauf | v1.2 | 1/12 | In Progress|  |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |
 

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: 13-13 Task 1 abgeschlossen, Task 2 (Owner-Checkpoint) offen
-last_updated: "2026-09-18T16:30:00.000Z"
-last_activity: 2026-09-18 -- 13-13 Task 1: Gate-Kette in einem Zug gruen (2128 passed), Audit-Durchgang gefahren, SUMMARY angelegt; offen ist nur Task 2 (17 Sichtproben, Owner, Resume-Signal "abgenommen")
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-09-19T12:44:22.140Z"
+last_activity: 2026-09-19
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 21
-  completed_plans: 20
-  percent: 57
+  completed_phases: 2
+  total_plans: 33
+  completed_plans: 22
+  percent: 67
 ---
 
 # Project State
@@ -21,21 +21,42 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-11)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 13: filter-und-sortierung-auf-der-ergebnisseite
+**Current focus:** Phase 14: modell-entladung-im-leerlauf
 
 ## Current Position
 
-Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): COMPLETE
-Plan: 13 of 13 (alle abgeschlossen; Owner-Abnahme 19.09. erteilt)
-Status: Phase 13 complete, naechste Phase 14 (Modell-Entladung im Leerlauf) ungeplant
-Progress: [██████░░░░] 57%
-Last activity: 2026-09-19 -- Owner-Abnahme 13-13 komplett (Probe 14 per A11y-Baum-Beleg, 23 frz. Wortlaute wie vorgelegt, Wegnahme-Bauform); FILT-01..05 Complete
-HART-03 erfuellt)
+Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
+Plan: 1 von 12 abgeschlossen (14-01: Werkzeug und Erwartung des Vorprueflaufs)
+Status: executing, naechster Plan ist 14-02 (Vorprueflauf fahren, Owner-Tor)
+Progress: [███████░░░] 67%
+Last activity: 2026-09-19 -- 14-01 fertig: Messverzeichnis 2026-09-entladung-vorpruefung,
+Erwartung E1 bis E4 vor dem Lauf, Messskript 01-rss-rueckgabe.py und Schritt E in measure.yml.
+Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-01: Die Schwelle des Vorprueflaufs steht VOR dem Lauf: E1 verlangt einen
+  Median der Rueckgabe von mindestens 60 Prozent auf dem `role: target`-Ast,
+  hergeleitet aus 97,2 Prozent nativ x86_64 und 71,4 Prozent unter qemu. Dazu
+  E2 (`trim_rc` in vier von fuenf Zyklen 1), E3 (`after_gc` deutlich ueber
+  `after_trim`) und E4 (Zyklus 5 hoechstens 10 Punkte unter Zyklus 1). Drei
+  Ausgaenge sind benannt, darunter "gemessen, Ergebnis negativ".
+
+- 14-01: Der Vorprueflauf ist ein eingehaengtes Messskript und KEIN vierter
+  Modus von `findling.embed.bench`. Ein neuer Bench-Modus stuende erst nach
+  einem Push auf main und einem gruenen docker.yml im ausgelieferten Abbild;
+  der Vorprueflauf muss aber gegen das ausgelieferte Abbild laufen, bevor
+  Produktcode entsteht. Der neue Workflow-Schritt heisst E, weil D die
+  Grundlast ist und unter diesem Buchstaben bereits zitiert wird.
+
+- 14-01 (Lehre, Regel 1): Der Zustandsbefehl hat MEM-04 abgehakt, weil die
+  Frontmatter des Plans die Anforderung nennt. MEM-04 verlangt aber den Beleg
+  auf Zielhardware, und dieser Plan erhebt keine Zahl. Der Haken ist
+  zurueckgenommen; MEM-04 faellt in 14-02. Eine Anforderung gehoert an den
+  Plan, der sie belegt, nicht an den, der ihr Werkzeug baut.
 
 - 13-12 (gehoert in den Checkpoint 13-13): Das dritte Paritaetsszenario ist in
   der geplanten Form nicht ausdrueckbar. `ask()` fragt die beiden OCS-Provider,
@@ -52,6 +73,7 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
   abgenommen; ein datierter Nachtrag im Abschnitt Abnahme sagt jetzt ausdruecklich,
   dass die neuen Zeilen ungeprueft sind, damit eine abgenommene Datei keine
   ungelesenen Zeilen stillschweigend mittraegt. OFFEN fuer den Owner.
+
 - 13-11 (Lehre): Der erste Einfuegelauf schrieb die Katalogeintraege ohne
   Trennkommas. Klammerbilanz und Diff-Durchsicht haetten das nicht gefunden, der
   JSON-Parser meldete es sofort. Die Parser-Pruefung bleibt Pflichtschritt.
@@ -60,10 +82,12 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
   == 2`, die Datei traegt aber seit Phase 9 vier Media Queries; der Plan hatte die zwei
   aus seinem eigenen interfaces-Abschnitt gezaehlt. Die pruefbare Absicht "keine neue
   Media Query" ist eingehalten, die Zahl steht vor und nach dem Plan bei 4.
+
 - 13-10: Das Gate gegen ein Zaehl-Orakel sucht die Woerter des Zaehlens (`count`,
   `total`, `badge`, `disabled`, `$l->n(`) statt einer Ziffernausgabe, weil "Last 7 days"
   und "Last 30 days" selbst Ziffern tragen und ein Ziffern-Gate am ersten Tag rot
   gewesen waere.
+
 - 13-10: Die Region der Leiste wird am Kommentar-Oeffner geschnitten und Blockkommentare
   werden vor dem Scan entfernt, sonst waere das Gate an genau dem Kommentar rot
   geworden, der erklaert, warum es keinen Zaehler gibt. Dieselbe Falle wie bei
@@ -76,6 +100,7 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
   `names` entfernt; sie erbt damit drei Eigenschaften, statt sie einzeln zuzusichern.
   Die Alternative, aus den aktiven Chips zurueckzurechnen, waere genau die zweite
   Auslegung des Adresszustands gewesen, die diese Phase verbietet.
+
 - 13-09: Der Kommentar zur Begruendung von `aria-current` nennt die verbotene
   Alternativauszeichnung nicht beim Namen, weil der Pruefblock und das kommende Gate
   aus 13-10 die Datei genau auf diese Zeichenkette absuchen; ein woertlicher
@@ -85,6 +110,7 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
   und `since`, nicht ueber die daraus errechnete wirksame Untergrenze. Mit der
   wirksamen Grenze wechselte er um Mitternacht und wuerfe jeden Blaetternden ohne
   sichtbaren Grund auf Seite 1.
+
 - 13-08: Die acht Cursorfaelle der Tests binden ihre Adresse ueber einen Helfer
   `bound()` an den von der Seite selbst berechneten Fingerabdruck. Der Plan wollte
   sie unveraendert gruen, was mit der Bindung unvereinbar war: `filterUrl()` schreibt
@@ -96,13 +122,16 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
   laeuft ueber die ganze Haelfte, also ist der gemergte Baum ein dritter Baum mit einem
   dritten Hash; er wurde nach dem Merge mit demselben Rezept neu gelesen
   (6166e963..., weiterhin 64 Dateien). Beide Begruendungsabsaetze bleiben stehen.
+
 - 13-06: `getSupportedFilters()` meldet vier Namen. Ein nicht deklarierter exklusiver
   Filter kostet die ganze Ergebnisgruppe, entweder weil die Oberflaeche den Provider
   gar nicht erst fragt oder weil seine Gruppe in einem 400 endet; fuer den Nutzer sah
   beides gleich aus, Findling war weg, sobald ein Datum gesetzt war (FILT-03).
+
 - 13-07: Die vier Schnellbereiche sind Kalenderfenster in der Zeitzone des Nutzers,
   nicht in der des Servers. Die Tagesarithmetik laeuft ueber `DateInterval`, und die
   zwei Faelle zur engeren Grenze meiden das Paar "dieses Jahr"/"gestern", das am
+
   1. Januar rot waere.
 
 - 13-05: `SearchService::run` nimmt die Filter als sechsten Parameter, hinter
@@ -110,15 +139,18 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
   Containeraufrufe weiter. Der Filter wird auf der PHP-Seite kein zweites Mal
   angewendet: das würde aus jeder Seite eine Stichprobe machen und eine zweite
   Stelle an der Rechtegrenze eröffnen (T-13-23).
+
 - 13-05: Das Änderungsdatum eines Treffers kommt aus `$node->getMTime()` am
   bereits bestätigten Knoten, gelesen hinter der Typprüfung und hinter der
   Leseprüfung. Der Kandidat des Containers trägt zwar ein eigenes `mtime`,
   `filterCandidates()` verwirft es weiterhin, und ein Testfall mit zwei
   absichtlich verschiedenen Zahlen belegt, welcher Wert gewinnt (T-13-22).
+
 - 13-05: `ApprovedHit` trägt fünf Felder; für den Kanarienvogel (`fileId` 0)
   bleibt `mtime` bei 0, weil es dort keinen Knoten gibt. Das Feld ist ein
   Pflichtargument geblieben, damit ein vergessener Aufrufer nicht wie einer
   ohne Datum aussieht.
+
 - 13-05: Die Rechtegrenze ist in Zahl, Reihenfolge und Ort unverändert;
   `test_php_acl_boundary.py` und `test_php_trust_boundary.py` sind grün.
 
@@ -128,25 +160,31 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
   `none()`, weil "nichts eingegrenzt" ein benannter Zustand des Produkts ist und
   keine Zahl, ueber die niemand mehr nachdenkt. Die Begruendung steht im
   Klassen-Docstring.
+
 - 13-04: Das neue Argument steht VOR den beiden Uhrwerten und nicht am Ende der
   Parameterliste, wie der Plantext es vorsah. Beide Uhrwerte tragen einen
   Vorgabewert, und ein Pflichtargument hinter einem optionalen ist seit PHP 8.0
   abgekuendigt. Ohne Vorgabewert bleibt es trotzdem: ein vergessener Aufrufer
   soll nicht aussehen wie einer ohne Filter.
+
 - 13-04: `typeGroupsWithin` laeuft ueber die geschlossene Sechser-Menge und
   nicht ueber die Eingabe. Unbekannter Name, Dublette, Ueberlaenge und
   Reihenfolge sind damit baulich erledigt (T-13-17, T-13-18) statt in vier
   Pruefungen, die einzeln vergessen werden koennen.
+
 - 13-04: Ein Wert in seiner Vorgabe wird nicht in den Rumpf geschrieben. Eine
   ungefilterte Suche schickt damit byteweise die Anfrage von vor dieser Phase,
   und ein echter Wert geht nicht zwischen vier Konstanten unter.
+
 - 13-04: Der `/snippets`-Rumpf traegt `types`, `since` und `until` und an keiner
   Stelle den Sortiermodus (FILT-02). Die Reihenfolge dieser Treffer steht fest,
   bevor der Aufruf gestellt wird.
+
 - 13-04: `filterCandidates()` bleibt unangetastet und laesst weiterhin nur
   `fileId` durch; der Docstring sagt jetzt ausdruecklich, dass das
   Aenderungsdatum aus dem bestaetigten Knoten kommt (13-05) und nie aus der
   Container-Antwort (T-13-20).
+
 - 13-04: `php -l` ist auf dieser Maschine doch moeglich, ueber das offizielle
   Docker-Image `php:8.2-cli` (dieselbe Version wie der Lint-Job in CI). PHPUnit
   bleibt CI-only, weil die Suite eine Auscheckung von nextcloud/server braucht.
@@ -156,27 +194,34 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
   die drei Sortiernamen, `since` und `until` sind `int` mit `ge=0` und
   `le=SEARCH_MTIME_MAX`. Kein Freitext: die Routen tragen `access_level USER`,
   und ein freier String waere ein zweiter Weg in den Abfragebau.
+
 - 13-03: `SEARCH_TYPE_GROUPS_MAX = 6` und `SEARCH_MTIME_MAX = 4_102_444_800`
   (01.01.2100) stehen in `config.py`, je mit Begruendungsabsatz nach dem Muster
   von `SEARCH_OFFSET_MAX`.
+
 - 13-03: Der Sortierterm haengt an derselben `lexical_only`-Zeile und nicht an
   einer zweiten Weiche: `... or sort != "relevance"`. Unter Sortierung gibt es
   keine Fusion, in die eine Vektorliste eingehen koennte.
+
 - 13-03: `sort` steht NICHT in `SnippetsRequest`, und ein `sort` im
   Ausschnitts-Rumpf ist ein 422. Die Ausnahme ist im Gate
   `backend/tests/test_search_fields_lockstep.py` benannt, nicht gezaehlt.
+
 - 13-03: `FIELDS_THAT_MAY_DIFFER` traegt vier Eintraege statt des einen aus dem
   Plantext, weil `limit`, `offset` und `fileIds` schon vor der Phase einseitig
   waren. Jeder Eintrag traegt seine Begruendung; eine Liste und keine Schwelle.
+
 - 13-03: Der Ausschnittsaufruf SCHNEIDET NICHT. `snippets_for` laeuft ueber die
   bestaetigten Kennungen und waehlt keine Dokumente aus; die Filterklausel nennt
   `ext` und `mtime` und markiert im Textfeld nichts. Die drei Felder stehen am
   Modell, damit ein Rumpf beide Modelle passiert (`extra="forbid"` -> 422 -> auf
   der PHP-Seite `null` -> Fehlerblock statt Ausschnitten).
+
 - 13-03: Die Diagnoseroute bekommt die drei Filter als Query-Parameter, aber
   keine Trefferzahl je Typ und keinen Gesamtwert. Ihre Grenze steht im
   Docstring: `ranked_sides` geht nicht durch `_mtimes_of`, sie sieht den Schnitt
   der semantischen Haelfte also nicht.
+
 - 13-03: Der Container lehnt einen unbekannten Gruppen- oder Sortiernamen mit
   422 ab, weil ihn nur die eigene Oberflaeche ruft. Der stille Rueckfall bei
   einer von Hand editierten Adresse ist Aufgabe der PHP-Seite.
@@ -186,22 +231,27 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
   jeder Treffer traegt `score = 0.0`. Unter `order_by_field` liefert tantivy im
   ersten Tupelglied den Feldwert statt des Scores; ein uebernommener Feldwert
   waere ein Zeitstempel als Relevanz.
+
 - 13-02: Der Zweitschluessel `file_id` ist Handarbeit und wird portionsweise
   hergestellt. Gemessen und in diesem Plan nachgestellt: bei gleichem
   Zeitstempel und Einfuegereihenfolge 7, 3, 9, 1 antwortet tantivy 7, 3, 9, 1.
   Eine Gleichstandsgruppe, die an einer Portionsgrenze zerfaellt, ist
   portionsweise sortiert; Duplikate oder Luecken entstehen dabei nicht.
+
 - 13-02: Ein unbekannter Wert in `sort` faellt still auf `relevance` zurueck
   (`SORT_MODES.get`). Die Route prueft bereits am Wire-Modell; eine zweite
   Ausnahme wuerde aus einem Tippfehler in einer Adresse einen HTTP 500 machen.
+
 - 13-02: Dieselbe Filterklausel wirkt jetzt an beiden Stellen. `_mtimes_of`
   nimmt sie als `Occur.Must` ueber die `file_id`-Klauseln; was dort
   herausfaellt, fehlt in `known` und verschwindet aus `merged`. Ohne diese
   zweite Stelle stehen unter dem Chip "PDF" docx-Treffer der semantischen
   Haelfte.
+
 - 13-02: `VECTOR_SCAN_MAX` wird nicht angehoben. Die semantische Haelfte
   schrumpft unter einem engen Filter sichtbar, weil die Chunks VOR dem
   Typschnitt gezogen werden; das ist eine Eigenschaft und kein Defekt.
+
 - 13-02: `semantic` ist im Sortierzweig wirkungslos statt verboten. Die
   Abschaltung durch den Aufrufer folgt in 13-03; die Wirkungslosigkeit hier ist
   die zweite, defensive Haelfte derselben Zusage.
@@ -211,16 +261,20 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
   wurde an dieselbe Tabelle angeschlossen: `type:images` bedeutet ab jetzt
   dasselbe wie der Chip. Ein Wort, das die Tabelle nicht kennt, bleibt wie
   bisher eine rohe Endung.
+
 - 13-01: Textendungen und Gruppenendungen werden vereinigt und nicht
   geschnitten. `type:pdf` plus Chip "Bilder" wäre als Schnittmenge garantiert
   leer, und die Seite könnte das niemandem erklären.
+
 - 13-01: Der strukturierte Gruppenparameter setzt die Operator-Marke
   `FILETYPE` nie; sie hängt ausschließlich am Text `type:`. Genau daran hängt
   FILT-01, und ein eigener Testfall hält es fest.
+
 - 13-01: Die Bereichsabfrage auf `mtime` läuft über die Fast-Spalte,
   `use_inverted_index` bleibt beim Vorgabewert `False`. Mit `True` antwortet
   tantivy 0.26.0 mit einer leeren Trefferliste statt mit einem Fehler, was auf
   der Seite wie "in diesem Zeitraum gibt es nichts" aussieht.
+
 - 13-01: Die Filterklausel liegt zusätzlich als `RewrittenQuery.filter_query`
   bereit, damit Plan 13-02 dieselbe Klausel auf die semantische Hälfte legen
   kann (`index/search.py::_mtimes_of`); ein Filter nur in `query` ließe
@@ -385,6 +439,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-16T21:35:00.000Z
-Stopped at: Completed 13-05-PLAN.md
+Last session: 2026-09-19T12:44:22.125Z
+Stopped at: Completed 14-01-PLAN.md
 Resume file: None
