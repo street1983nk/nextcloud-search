@@ -878,7 +878,14 @@ Vorschlag, nicht bindend; der Planer schneidet nach `granularity: coarse`.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Aufloesung 19.09.2026, alle fuenf Fragen sind entschieden: Q1 (Abbild)
+> per Vorentscheid D-04 in 15-CONTEXT.md, umgesetzt in 15-06. Q2
+> (900-s-Beleg) als Erwartung E14 in 15-07, Checkpoint in 15-13. Q3
+> (Filter/Sortier-Block) per Owner-Entscheid D-01, umgesetzt in 15-05.
+> Q4 (Ausfuehrungsform) als begleitete Sitzung 15-09 bis 15-14. Q5
+> (Snapshot) bewusst eskaliert als Frage B des Checkpoints 15-08.
 
 1. **Welches Abbild misst die Box?**
    - Was wir wissen: Der Snapshot traegt die lokale Registry mit dem Abbild vom 10.09.; der
