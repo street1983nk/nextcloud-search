@@ -115,18 +115,38 @@ Planwerte.
 |---|---|---|---|
 | Handaufbau der Maschine (Security Group, Schlüssel, Instanz, `mem=4G`, Neustart) | **2 h 30 min, Schätzung** | nirgends gemessen, Annahme A8 der Phasenrecherche, ausdrücklich als Schätzung geführt | |
 | Wiederaufbau aus dem Snapshot und Rüstzeit (Volume, Mount, Docker, Rückspielung, A-Record, Bewaffnung) | 1 h 30 min | Anfahrt und Vormessungen v1.1 waren 38 min bei bestehender Box; der Aufschlag ist der Wiederaufbau und ist geschätzt | |
+| **NEU: Abbildwechsel auf den v1.2-Stand** (Pull per Digest, PHP-Hälfte, Registrierung, harte Grenze, Baumhash) | **1 h 00 min** | Muster `92-wechsel.sh`, geschätzt; Annahme A2 der Phasenrecherche. Im Rechenblatt des Standes vom 16.09.2026 fehlte dieser Posten vollständig | |
 | Volllauf beide Spuren bis zum letzten Vektor | **26 h 37 min** | v1.1, Abschnitt 7 des Berichts, gemessen | |
+| **NEU: MEM-02-Block** (Grundlast vor und nach dem Indexlauf, Freigabe abwarten, `rss_sampler`) | **0 h 45 min** | MEM-02 ist in keiner Zeile des bisherigen Rechenblatts enthalten, Annahme A3 der Phasenrecherche | |
 | Untersuchung der vier regressiven Laststufen, je ein Entscheid | 1 h 30 min | neu in v1.2, geschätzt | |
+| **NEU: Filter- und Sortierblock** (Sortierung auf grossem Bestand, Blättern unter Filter) | **1 h 30 min** | Owner-Entscheid vom 19.09.2026 (D-01, `15-CONTEXT.md`), der 1 bis 2 h nennt; als Planwert gilt die Mitte | |
 | Wiederaufwärm-Messung der Entladung in vier Ausprägungen (warm und kalt, je mit und ohne Seitencache) | 2 h 00 min | neu in v1.2, geschätzt | |
 | Sprachfall-Messung mit der neuen Messgrösse, inklusive Erstvollzug des Skripts | 1 h 00 min | neu in v1.2, geschätzt | |
 | Abbau und Endmessungen (Gegenproben vor dem Abbau, Snapshot, `destroy`, Tag-Sweep) | 1 h 00 min | v1.1 Abschnitt 17 und der Abbaulauf vom 11.09.2026 | |
-| **Summe der Planwerte** | **36 h 07 min** | Addition der Zeilen darüber | |
+| **Summe der Planwerte** | **39 h 22 min** | Addition der zehn Zeilen darüber: 2:30 + 1:30 + 1:00 + 26:37 + 0:45 + 1:30 + 1:30 + 2:00 + 1:00 + 1:00 = 2.362 Minuten | |
 
 **Der Planwert des Volllaufs nimmt keine Verbesserung vorweg.** Ob der
 Top-up-Fix den Lauf verkürzt, ist genau die Frage, die dieser Lauf beantworten
 soll. Als Planwert gilt deshalb 26 h 37 min und nicht ein erhoffter kleinerer
 Wert. Genau dieser Fehler hat den Deckel des v1.1-Laufs gerissen: geplant waren
 rund 19 Stunden, gebraucht wurden 26 h 37 min.
+
+**Die verkürzte Ruhezeit kürzt den Deckel nicht.** Der Owner hat am 19.09.2026
+entschieden, dass die Entlade-Messungen des Schrittes 8 die Frist klein stellen,
+also 60 bis 120 Sekunden statt der 900 Sekunden des Vorschlagswerts (D-02,
+`15-CONTEXT.md`). Der Planwert der Wiederaufwärm-Messung bleibt trotzdem bei
+2 h 00 min. Ein Planwert, der eine Verbesserung vorwegnimmt, ist genau der
+Fehler, der den v1.1-Deckel gerissen hat; die gesparte Wartezeit ist deshalb
+ausgewiesene Reserve und kein gekürzter Posten.
+
+**Die Verkürzung ist eine begründungspflichtige Abweichung und keine stille
+Praxis.** Sie wird im Protokoll mit ihrem Grund genannt, und der Grund ist
+derselbe Mechanismus bei einem Bruchteil der Box-Zeit: gemessen wird, was nach
+Ablauf der Frist geschieht, und nicht, wie lang die Frist ist. Der
+Vorschlagswert 900 s selbst bleibt anderswo eine gekennzeichnete Schätzung
+(Owner-Entscheid aus 14-12). Dieser Lauf belegt ihn nicht und widerlegt ihn
+nicht, und ein Protokoll, das die Abweichung ohne ihren Grund führt, macht aus
+einem Entscheid eine Gewohnheit.
 
 ### 2.2 Posten, die guenstiger werden
 
@@ -155,6 +175,15 @@ tippt, ist eine Falle. Die Sätze sind in `scripts/ops/aws_box.sh` gepinnt, der
 Befehl, der sie reproduziert, steht in `cmd_prices`, und die Abfrage stammt vom
 2026-09-04.
 
+**Die Sätze sind vom 04.09.2026 und werden am Anfahrtstag ein zweites Mal
+gelesen**, wieder über `scripts/ops/aws_box.sh prices`. Das kostet keine
+Box-Minute und keinen Cent: der einzige API-Aufruf dieses Unterbefehls ist
+`describe-instance-types`, und der ist kostenlos (Annahme A1 der
+Phasenrecherche). Die gepinnten Werte selbst bleiben bis dahin unverändert.
+Weicht die zweite Lesung ab, geht die Abweichung in die Rohdatei des Laufs, und
+der Deckel wird vor der ersten Kommandozeile neu gerechnet statt nachträglich
+erklärt.
+
 Die Snapshotkosten laufen weiter, ob eine Anfahrt stattfindet oder nicht. Sie
 gehören daher **nicht** in den Stundendeckel einer Anfahrt, sondern in die
 Monatsrechnung; sie stehen hier, damit niemand sie für den Deckel hält.
@@ -181,14 +210,27 @@ Mit den Planwerten dieser Fassung, Zuschlag 15 Prozent für Erstvollzug und
 Unvorhergesehenes:
 
 ```
-36,12 h x 1,15 = 41,54 h, aufgerundet 42 h
-42 h x 0,115841 USD/h = 4,8653 USD, aufgerundet 4,90 USD
+39,37 h x 1,15 = 45,27 h, aufgerundet 46 h
+46 h x 0,115841 USD/h = 5,3287 USD, aufgerundet 5,40 USD
 ```
 
-**Empfehlung für Phase 15: 42 Stunden und 4,90 USD netto.** Die Untergrenze ist
-31 h und 3,59 USD, weil genau so viel der v1.1-Lauf mit weniger Arbeitsumfang
-verbraucht hat; ein Vorschlag darunter ist rechnerisch schon gerissen, bevor er
-ausgesprochen ist.
+**Empfehlung für Phase 15: 46 Stunden und 5,40 USD netto.** Die Untergrenze ist
+unverändert 31 h und 3,59 USD, weil genau so viel der v1.1-Lauf mit weniger
+Arbeitsumfang verbraucht hat; ein Vorschlag darunter ist rechnerisch schon
+gerissen, bevor er ausgesprochen ist.
+
+| Stand | Stunden | USD netto | Was darin steckt |
+|---|---:|---:|---|
+| Untergrenze | 31 h | 3,59 USD | der Verbrauch des v1.1-Laufs bei kleinerem Arbeitsumfang |
+| Vorgängerstand (16.09.2026) | 42 h | 4,90 USD | ohne Abbildwechsel, ohne MEM-02-Block, ohne Filter- und Sortierblock |
+| **Empfehlung (19.09.2026)** | **46 h** | **5,40 USD** | mit allen drei Nachtragsposten aus 2.1 |
+
+**Der Vorgängerstand bleibt stehen.** Eine Zahl, die über Nacht von 42 auf 46
+wächst und deren Vorgänger gelöscht ist, sieht aus wie ein Aufschlag. Die
+Differenz von vier Stunden ist keiner: sie ist die Summe dreier Posten, die die
+Anfahrt ohnehin fährt und die im alten Rechenblatt schlicht fehlten. Wer die
+Zahl prüft, liest die drei Zeilen mit der Marke **NEU** in 2.1 und rechnet die
+Summe nach.
 
 ### 2.6 Wohin die Schlusszahlen VOR dem Abbau geschrieben werden
 
