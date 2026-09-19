@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-09-19T12:44:22.140Z"
+stopped_at: 14-02 an Task 3, Owner-Tor des Vorprueflaufs
+last_updated: "2026-09-19T13:10:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 22
-  percent: 67
+  completed_plans: 23
+  percent: 70
 ---
 
 # Project State
@@ -26,17 +26,46 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 1 von 12 abgeschlossen (14-01: Werkzeug und Erwartung des Vorprueflaufs)
-Status: executing, naechster Plan ist 14-02 (Vorprueflauf fahren, Owner-Tor)
-Progress: [███████░░░] 67%
-Last activity: 2026-09-19 -- 14-01 fertig: Messverzeichnis 2026-09-entladung-vorpruefung,
-Erwartung E1 bis E4 vor dem Lauf, Messskript 01-rss-rueckgabe.py und Schritt E in measure.yml.
+Plan: 2 von 12 abgeschlossen (14-02: Vorprueflauf gefahren, Bericht steht)
+Status: WARTET AUF DEN OWNER am Tor der Phase (14-02 Task 3, checkpoint:human-verify).
+Der Vorprueflauf ist gefahren und dokumentiert; die Plaene 14-03 bis 14-12 sind
+NICHT freigegeben, solange der Owner den Ausgang nicht genannt hat.
+Progress: [███████░░░] 70%
+Last activity: 2026-09-19 -- 14-02: Lauf 35443822228 auf ubuntu-24.04-arm, Median der
+Rueckgabe 100,0 Prozent, E1 bis E4 alle gehalten, Bericht in
+docs/measurements/2026-09-entladung-vorpruefung/README.md. MEM-04 ist erfuellt.
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-02: Der Vorprueflauf ist gefahren und das Tor der Phase steht offen, aber
+  ungeoeffnet: der Owner hat den Ausgang noch nicht genannt. Gemessen wurde am
+  19.09.2026 im Lauf 35443822228 auf `ubuntu-24.04-arm` (role target, aarch64,
+  Neoverse-N2, vier Kerne) gegen das ausgelieferte Abbild
+  `sha256:31c905b212d815d9ba5deea29a44b90bd8564baa3c4a5bd48ea13876ef31e538`.
+  Ergebnis: Median der Rueckgabe **100,0 Prozent** (schlechtester Einzelzyklus
+  98,4), `trim_rc` in fuenf von fuenf Zyklen 1, `after_gc` mindestens 856,9 MB
+  ueber `after_trim`, Zyklus 5 gegen Zyklus 1 minus 1,5 Punkte. E1, E2, E3 und
+  E4 sind alle gehalten; der Ausgang des Ablaufdokuments heisst "Gehalten".
+  Der Satz "gemessen, Ergebnis negativ" trifft auf diesen Lauf NICHT zu.
+
+- 14-02: MEM-04 ist erfuellt und abgehakt. Anders als in 14-01, wo der Haken
+  zurueckgenommen wurde, liegt die Zahl jetzt vor: auf Zielarchitektur, nativ,
+  gegen das ausgelieferte Abbild, mit der Maschine daneben.
+
+- 14-02: Ein Bodensatz bleibt und gehoert in den Store-Text. Die Entladung
+  fuehrt auf die Grundlast plus rund 16 MB (Zielast 17,1 MB ueber fuenf Zyklen,
+  davon 15,9 MB im ersten), weil die Modulimporte von onnxruntime und numpy
+  geladen bleiben. Eine Zusage "gibt den Modellspeicher vollstaendig zurueck"
+  waere falsch.
+
+- 14-02: Der Vergleichsast x86_64 liefert dieselbe Quote (Median 100,0, gleicher
+  Zyklus-1-gegen-5-Abstand). Uebertragbar ist die Rueckgabequote, die Zeit nicht:
+  dieser Lauf hat keine Zeit gemessen, und beide Runner sind Vier-Kern-Maschinen
+  derselben Flotte und keine m7g.large.
 
 - 14-01: Die Schwelle des Vorprueflaufs steht VOR dem Lauf: E1 verlangt einen
   Median der Rueckgabe von mindestens 60 Prozent auf dem `role: target`-Ast,
@@ -439,6 +468,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T12:44:22.125Z
-Stopped at: Completed 14-01-PLAN.md
-Resume file: None
+Last session: 2026-09-19T13:10:00.000Z
+Stopped at: 14-02 Task 3, Owner-Tor des Vorprueflaufs (checkpoint:human-verify)
+Resume file: .planning/phases/14-modell-entladung-im-leerlauf/14-02-PLAN.md
