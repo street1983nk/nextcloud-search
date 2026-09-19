@@ -1,6 +1,7 @@
 {
     "translations": {
         "Findling": "Findling",
+        "File contents": "Contenu des fichiers",
         "Search coverage": "Couverture de la recherche",
         "%1$s of %2$s indexable files are searchable": "%1$s des %2$s fichiers indexables peuvent être trouvés par la recherche",
         "The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.": "La part ne peut pas être calculée pour le moment, car le service ne répond pas. %s fichiers de cette instance sont indexables.",

@@ -2,6 +2,7 @@ OC.L10N.register(
     "findling",
     {
     "Findling": "Findling",
+    "File contents": "Dateiinhalte",
     "Search coverage": "Deckungsgrad der Suche",
     "%1$s of %2$s indexable files are searchable": "%1$s von %2$s indexierbaren Dateien sind durchsuchbar",
     "The share cannot be worked out right now because the backend does not answer. %s files of this instance are indexable.": "Der Anteil ist im Moment nicht berechenbar, weil das Backend nicht antwortet. %s Dateien dieser Instanz sind indexierbar.",

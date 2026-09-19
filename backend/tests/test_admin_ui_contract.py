@@ -1487,6 +1487,15 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     This paragraph carries the same duty as the one above it: without it the
     next reader takes the raised number for sloppiness and lowers it again.
     Whoever raises it next writes the next paragraph.
+
+    It stands at 198 since 19.09.2026, and the rise of one is "File contents",
+    the group name Findling reports to the Unified Search
+    (php/lib/Search/Provider.php, getName). The key predates phase 13 and was
+    the single t() call of the PHP side without a catalogue entry, found by
+    sight check 17 of the phase 13 acceptance (13-13-SUMMARY.md): every
+    non-English user read that one group name in English. The French wording
+    falls under the acceptance point that no French wording of this app has
+    been checked by a native speaker yet.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -1511,7 +1520,7 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     }
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
-    assert len(keys_of["de.json"]) == 197
+    assert len(keys_of["de.json"]) == 198
 
 
 def test_all_six_catalogues_carry_the_same_keys() -> None:
