@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-07-PLAN.md
-last_updated: "2026-09-19T14:53:00.000Z"
+stopped_at: Completed 14-08-PLAN.md
+last_updated: "2026-09-19T17:00:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 28
-  percent: 85
+  completed_plans: 29
+  percent: 88
 ---
 
 # Project State
@@ -26,23 +26,44 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 7 von 12 abgeschlossen (14-07: die dritte Aufgabe der Lifespan)
+Plan: 8 von 12 abgeschlossen (14-08: die Degradationsnaht der Suchwege)
 Status: executing, das Tor der Phase ist offen und der Bau laeuft.
-Welle 5 laeuft, 14-07 steht, offen ist dort nur noch 14-08.
-Progress: [████████░░] 85%
-Last activity: 2026-09-19 -- 14-07: `_release_when_idle` taktet alle 30 s,
-waermt oder entlaedt (nie beides im selben Takt) und gibt beide Halter
-zusammen frei; alle drei blockierenden Aufrufe laufen ueber
-`asyncio.to_thread`, gehalten von einem Gate am Syntaxbaum. Viertes
-Stopp-Event samt Aufraeumblock, 17 neue Testfaelle (langsamster 0,02 s), volle
-Suite 2221 gruen. Damit ist MEM-02 code-seitig vollstaendig; es fehlt nur noch
-die benannte Beleg-Messung (14-12 und Phase 15). MEM-03 bleibt offen bis 14-08.
+Welle 5 ist abgeschlossen; als naechstes 14-09 (das sechste Wort `unloaded`).
+Progress: [█████████░] 88%
+Last activity: 2026-09-19 -- 14-08: `may_load` reist von der Route bis an den
+Halter. Die zwei Nutzerrouten mit der 1,5-Sekunden-Decke fragen
+`query_may_load()`, die Diagnose bekommt nur den Satz, warum sie es nicht tut,
+und `one_round` bestellt bei einer Runde ohne Gewichte den Warmlauf, den der
+Handler als `asyncio.create_task(asyncio.to_thread(warm))` auf den Loop legt.
+23 neue Testfaelle, volle Suite 2244 gruen. **MEM-03 ist damit erfuellt**; was
+noch fehlt, ist allein der Lauf an der laufenden Instanz, der einen Neubau des
+Containers braucht und deshalb in 14-12 gehoert.
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-08 (MEM-03, die Naht): `request_warm()` steht in `one_round` an der Zeile,
+  an der die `SemanticSide` ohne Ladeerlaubnis gebaut wird, und nicht im
+  Handler. Nur dort sind beide Haelften des Satzes bekannt: dass die Runde
+  hybrid gemeint war und dass sie ohne Gewichte antwortet. `one_round` reicht
+  Kandidaten zurueck und nicht den Grund, warum keine Vektoren dabei sind; der
+  Handler fragt deshalb nur noch `warm_wanted()`.
+
+- 14-08: Der Fall zur Antwortzeit laeuft bewusst **ohne** `TestClient`. Dessen
+  Portal wird je Anfrage geoeffnet und beim Schliessen wartet es auf jede
+  Aufgabe, die drinnen gestartet wurde; eine Messung um `client.post` herum
+  meldet also die Laenge des Hintergrundlaufs, egal was der Handler tut. Unter
+  uvicorn ueberlebt der Loop die Anfrage. Der Fall ruft den Handler deshalb
+  direkt auf dem Loop des Testfalls.
+
+- 14-08: `api/diagnose.py` bekommt nur einen Kommentar und keinen Schalter. Ein
+  Messwerkzeug muss messen koennen, die Route traegt keine 1,5-Sekunden-Decke
+  und ist keine Nutzerroute. Die Kehrseite (ein Diagnoseaufruf waermt den
+  Container auf und darf vor einer Kaltmessung nicht gemacht werden) gehoert
+  ins Runbook 14-11.
 
 - 14-07 (MEM-02, der Aufrufer): Die Entladung bekommt einen eigenen Takt in der
   Lifespan und sitzt NICHT im Leerlaufzweig des Pollers. Ein stummgeschalteter
@@ -662,6 +683,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T14:53:00.000Z
-Stopped at: Completed 14-07-PLAN.md, der Takt ruft beide Freigaben ueber asyncio.to_thread
+Last session: 2026-09-19T17:00:00.000Z
+Stopped at: Completed 14-08-PLAN.md, die erste Suche nach einer Entladung antwortet lexikalisch und bestellt nach
 Resume file: None
