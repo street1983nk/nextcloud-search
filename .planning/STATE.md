@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-11-PLAN.md
-last_updated: "2026-09-19T21:55:00.000Z"
+stopped_at: 14-12 Task 1 fertig, Owner-Checkpoint Task 2 offen
+last_updated: "2026-09-19T22:55:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
@@ -26,26 +26,32 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 11 von 12 abgeschlossen (14-11: drei Dokumente ziehen nach)
-Status: executing, das Tor der Phase ist offen und der Bau ist fertig.
-Welle 7 ist abgeschlossen; offen ist nur noch Welle 8 (14-12, die Abnahme).
+Plan: 11 von 12 abgeschlossen; 14-12 ist angefangen und haengt am Owner
+Status: executing, WARTET AUF DEN OWNER-CHECKPOINT (14-12 Task 2, die Abnahme).
 Progress: [█████████░] 97%
-Last activity: 2026-09-19 -- 14-11: die Dokumentation ist nachgezogen.
-`docs/embeddings.md` hat einen Abschnitt 10, der den Schalter aus Admin-Sicht
-erklaert, mit den drei Zahlen aus `config.py` und `info.xml`, der gemessenen
-Rueckgabequote samt Maschine und den zwei Lagen, in denen er aus bleibt.
-`docs/performance.md` schreibt die Messgroesse fest: sie heisst "Rueckkehr zur
-Grundlast nach einem Indexlauf" und nie "Grundlast minus X", mit dem
-Aktivierungsspeicher als quantitativer Begruendung und dem Bodensatz von rund
-16 MB auf aarch64, der nie zurueckkommt; die Ladezeit nach einer Entladung
-bleibt ausdruecklich ohne Zahl und zeigt auf Phase 15. Das Runbook der
-Box-Anfahrt fuehrt die Stellung des Schalters als sechste protokollpflichtige
-Groesse (6.4) und traegt in 7.2 den A/B-Messschritt mit vier Auspraegungen,
-Exit-Codes 29 bis 31 und der Aufwaermregel: ein Aufruf der Diagnose-Route
-(`ranked_sides`) LAEDT das Modell und darf vor einer Kaltmessung nicht kommen.
-Keine Zeile Python oder PHP angefasst, 282 Faelle der beiden Dokumenttests gruen.
-**Der Bau der Phase 14 ist damit inhaltlich fertig**, es fehlt nur die Abnahme
-14-12 mit ihrem Owner-Checkpoint.
+Last activity: 2026-09-19 -- 14-12 Task 1 ist durch: der Gesamtlauf aller sechs
+Gate-Stufen in einem Zug gruen (2262 bestanden, 15 uebersprungen, Skipzahl
+unveraendert gegen 13-13), der Auditbericht
+`docs/audits/2026-09-phase-14/README.md` steht mit Gate-Protokoll, ASVS
+V5/V7/V12, dem geprueften V4-Vorbehalt, sechs Bug-Pfaden und dem
+Performance-Durchgang samt Gegenprobe zu Annahme A9. Ein Befund (L-01, der
+fehlende V4-Paritaetsfall) ist in diesem Lauf behoben, zwei sind weitergereicht.
+Die fuenf Erfolgskriterien sind an der laufenden Instanz nachgesehen: der
+Schalter meldet sich in allen drei Stellungen richtig, der Container gibt nach
+75 s 376,3 MB zurueck und meldet `unloaded`, die erste Suche danach antwortet in
+1,43 s mit Volltexttreffern (warm 0,41 bis 0,48 s, also eine duenne Marge unter
+der Decke von 1,5 s), kein neuer `cURL error 28`, und die Admin-Seite traegt den
+Satz des sechsten Zustands in beiden Haelften gleichlautend.
+
+**Offen und nur vom Owner zu beantworten:** die Abnahme der Phase, der
+franzoesische Wortlaut des sechsten Satzes und der Vorschlagswert 900 s. Erst
+danach werden MEM-01 bis MEM-05 nachgezogen (MEM-02 bleibt offen, seine
+Messgroesse entsteht auf der Box der Phase 15) und der Abnahmesatz mit Datum
+hier eingetragen.
+
+**Die Entwicklungsinstanz laeuft fuer die Sichtproben weiter:** Nextcloud auf
+8090, Backend als Host-Prozess auf 10035 mit
+`FINDLING_EMBED_IDLE_RELEASE_SECONDS=60`.
 
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
@@ -53,6 +59,18 @@ Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-12 (Abnahme): Der fehlende V4-Paritaetsfall wird angelegt und nicht nur
+  protokolliert. Die Lehre aus 13-13 gilt: ein Audit-Pfad ohne Gate bekommt ein
+  Gate. Vier Faelle in `test_semantic_search.py` halten, dass die entladene
+  Runde hinter dem ACL-Vorfilter bleibt und dass `may_load` in keiner PHP-Quelle
+  steht.
+- 14-12 (Abnahme): Die Sichtprobe zur ersten Suche nach einer Entladung wird
+  mit ihrem Abstand zur Decke berichtet und nicht als blosses Unterschreiten.
+  1,37 bis 1,44 s kalt gegen 0,41 bis 0,48 s warm ist eine duenne Marge, und die
+  Zahl gehoert dem Owner vor die Abnahme; die Ursache liegt im Nachwaermlauf und
+  nicht in der Degradation (die einwortige Zeile ohne Vektoranteil misst
+  dasselbe).
 
 - 14-11 (Dokumentation): Der alte Abschnitt "Modell-Entladung nach Leerlauf:
   nein, mit drei Zahlen" in `docs/performance.md` wird nicht geloescht, sondern
