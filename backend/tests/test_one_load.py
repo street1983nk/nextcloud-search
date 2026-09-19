@@ -2,27 +2,39 @@
 
 ``findling.tools.one_load`` is the watchman of two savings that are invisible
 from the outside: one embedding engine per process (plan 06.1-02) and one read
-of the constituent list per process (plan 06.1-04). It drives both halves of the
-container in one process and counts, and ``resilience.yml`` runs it on every
-push, so the return of either regression colours a CI run rather than waiting
-for the next hand measurement on the arm64 box.
+of the constituent list per process (plan 06.1-04). Since phase 14 it watches
+the promise those savings became: **never two engines at once, exactly one load
+per warm window**. It drives both halves of the container in one process and
+counts, and ``resilience.yml`` runs it on every push, so the return of either
+regression colours a CI run rather than waiting for the next hand measurement
+on the arm64 box.
 
 **A watchman that cannot go red is worse than none**, which is the whole reason
-this file exists. Three of the four cases below bring a regression back by hand,
-each one at the seam the real defect would sit at, and every one of them has to
-make the tool fail:
+this file exists. Five cases below bring a regression back by hand, each one at
+the seam the real defect would sit at, and every one of them has to make the
+tool fail:
 
 * the search side builds its own engine again, which is the shape the code had
   before the holder in ``embed/engine.py``,
 * the cache in front of ``build_artifact`` stops keying, which is the shape
-  ``wordlist.py`` had before this plan,
+  ``wordlist.py`` had before plan 06.1-04,
 * the search never reaches the model at all, which is the vacuous green the
   planned RSS ceiling would have shipped: a gate that watches a load path the
-  measurement does not enter.
+  measurement does not enter,
+* a release gives up the counter and not the pages, so the container reports a
+  warm window that cost nothing while the weights lie in the heap the whole
+  time,
+* the warm window loads twice, which is success criterion 5 of this phase read
+  backwards: two sessions for one window is 276 MB twice.
 
-None of the three touches shipped code. They are monkeypatches at module level,
-so what is proven is that the counters really are the thing the gate stands on,
-without a line of sabotage travelling into the image.
+The last two arrived with plan 14-10, with the fourth phase of the tool they
+test. Each of them is held against the green run in
+``test_the_fourth_phase_releases_the_weights_and_fetches_them_back``, so neither
+of them can be passing against a tree that was red to begin with.
+
+None of the five touches shipped code. They are monkeypatches at module and
+class level, so what is proven is that the counters really are the thing the
+gate stands on, without a line of sabotage travelling into the image.
 """
 
 from __future__ import annotations
@@ -282,6 +294,83 @@ def test_it_goes_red_when_the_search_never_reaches_the_model(prepared: Path, mon
     assert report.engine_loads_after_search == 0
     assert report.engine_loads_after_worker == 1, "the track alone still loads once, which is the trap"
     assert any("green for nothing" in finding for finding in one_load.findings(report))
+
+
+def test_it_goes_red_when_a_release_leaves_two_engines_behind(
+    prepared: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A release that gives up the counter and not the pages.
+
+    What this would be in the world is the 276 MB of plan 06.1-02, now inside
+    the unload cycle: the admin page says ``unloaded``, the A/B measurement of
+    phase 15 counts a warm window that cost nothing, and the weights are lying
+    in the heap the whole time. The next real load would then put a second
+    session beside them, which is exactly the state the holder of
+    ``embed/engine.py`` exists to make impossible.
+
+    Mutated at the seam the defect would sit at:
+    :meth:`~findling.embed.model.EmbeddingModel.release` is the one function
+    that raises the unload counter, and the one that has to let go of the
+    engine in the same breath. Here it does the first and not the second, and
+    the tool has to see it in the difference and not in a byte.
+    """
+
+    def a_release_that_only_counts(self: EmbeddingModel) -> bool:
+        assert self is not None
+        model_module._UNLOAD_COUNT += 1
+        return True
+
+    monkeypatch.setattr(EmbeddingModel, "release", a_release_that_only_counts)
+
+    code = one_load.main(["--volume", str(prepared), "--source", str(FIXTURE_LIST)])
+
+    printed = capsys.readouterr().out
+    assert code == 1
+    assert "engine-unloads-after-release=1" in printed
+    assert "engine-loads-after-rewarm=1" in printed, "the round behind the release took a cache hit"
+    assert "the warm window after the release came to 0 loads" in printed
+    assert "let go of a counter instead of an engine" in printed
+
+
+def test_it_goes_red_when_the_warm_up_loads_twice(
+    prepared: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Success criterion 5 in its own words: exactly one load per warm window.
+
+    ``EmbeddingModel._load`` returns at its head when the engine is already
+    bound, and that early return is the whole of the promise: ten concurrent
+    warm runs raise the load counter once whatever the ``_WARMING`` flag of
+    ``embed/engine.py`` does, which is why that flag is written down as
+    efficiency and never as the promise (14-RESEARCH.md 5.3). Take the early
+    return away inside the warm window and two sessions arrive for one window,
+    which is 276 MB twice on a box with 210 MB of headroom.
+
+    The mutation is keyed on the unload counter so that it bites in the fourth
+    phase alone. A single flight broken from the first phase on would make the
+    second track load a second time too, the tool would go red at the old
+    counter, and this case would be proving the wrong finding.
+    """
+    original_load = EmbeddingModel._load
+    unloads_at_start = model_module.unload_count()
+
+    def load_without_the_single_flight(self: EmbeddingModel) -> Any:
+        engine = original_load(self)
+        if engine is not None and model_module.unload_count() > unloads_at_start:
+            self._engine = None
+            engine = original_load(self)
+        return engine
+
+    monkeypatch.setattr(EmbeddingModel, "_load", load_without_the_single_flight)
+
+    code = one_load.main(["--volume", str(prepared), "--source", str(FIXTURE_LIST)])
+
+    printed = capsys.readouterr().out
+    assert code == 1
+    assert "engine-loads-after-worker=1" in printed, "the three phases in front of the window stay untouched"
+    assert "engine-unloads-after-release=1" in printed
+    assert "engine-loads-after-rewarm=3" in printed
+    assert "the warm window after the release came to 2 loads" in printed
+    assert "two sessions were built for one window" in printed
 
 
 # ---------------------------------------------------------------------------
