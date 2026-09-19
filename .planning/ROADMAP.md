@@ -32,7 +32,7 @@ Details im Archiv: .planning/milestones/v1.1-ROADMAP.md
 
 - [x] **Phase 12: Messwerkzeug, Runbook und Terminentscheid** - Werkzeug und Runbook stehen fest, bevor die bezahlte Box laeuft; stable35-Entscheid faellt fristgerecht (completed 2026-09-16)
 - [x] **Phase 13: Filter und Sortierung auf der Ergebnisseite** - Nutzer grenzt Treffer nach Typ und Zeitraum ein und sortiert nach Datum, ohne die Semantik oder die Rechtegrenze zu verlieren
-- [ ] **Phase 14: Modell-Entladung im Leerlauf** - Container gibt beide Speicherhalter nach Leerlauf frei, hinter einem ab Werk ausgeschalteten Schalter
+- [x] **Phase 14: Modell-Entladung im Leerlauf** - Container gibt beide Speicherhalter nach Leerlauf frei, hinter einem ab Werk ausgeschalteten Schalter (completed 2026-09-19)
 - [ ] **Phase 15: Messphase, eine Box-Anfahrt** - Wirkungsbeleg, Laststufen, Sprachfaelle und Wiederaufwaerm-Kosten in einer einzigen bezahlten Anfahrt
 - [ ] **Phase 16: Haertung und Store-Einreichung v1.2.0** - Haertungen, Store-Texte, Upgrade-Beweis und Einreichung 1.2.0
 
@@ -163,9 +163,9 @@ Plans:
   4. Die erste Suche nach einer Entladung liefert innerhalb der 1,5-Sekunden-Decke lexikalische Treffer und waermt das Modell im Hintergrund nach; kein cURL-error-28-Fall wie am 10.09.2026
   5. Die Admin-Seite zeigt den Engine-Zustand nach der neu formulierten one_load-Zusage (nie zwei Engines gleichzeitig, genau ein Laden je warmem Fenster), und das Gate prueft genau diese Zusage
 
-**Owner-Checkpoint**: engineState-Wortwahl (MEM-05) ist am 19.09.2026 entschieden (Zweig B, sechstes Wort `unloaded`, siehe 14-CONTEXT.md) und wird in Plan 14-09 vollzogen. Zwei weitere Checkpoints in der Phase: das Tor des Vorprueflaufs (14-02) und die Abnahme (14-12).
+**Owner-Checkpoint**: engineState-Wortwahl (MEM-05) ist am 19.09.2026 entschieden (Zweig B, sechstes Wort `unloaded`, siehe 14-CONTEXT.md) und in Plan 14-09 vollzogen. Die zwei weiteren Checkpoints sind beide gefallen: das Tor des Vorprueflaufs (14-02, freigegeben) und die Abnahme (14-12, "abgenommen" am 19.09.2026, einschliesslich des franzoesischen Wortlauts und des Vorschlagswerts 900 s). MEM-02 bleibt ausdruecklich offen: sein Beleg entsteht auf der Box der Phase 15.
 
-**Plans:** 11/12 plans executed
+**Plans:** 12/12 plans executed
 
 Plans:
 **Welle 1**
@@ -202,7 +202,7 @@ Plans:
 
 **Welle 8** *(wartet auf Welle 7)*
 
-- [ ] 14-12-PLAN.md: Abnahme: Gesamtlauf, Audit-Durchgang, sieben Sichtproben (Owner-Checkpoint)
+- [x] 14-12-PLAN.md: Abnahme: Gesamtlauf, Audit-Durchgang, sieben Sichtproben (Owner-Checkpoint, abgenommen 19.09.2026)
 
 ### Phase 15: Messphase, eine Box-Anfahrt
 
@@ -248,7 +248,7 @@ Plans:
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
-| 14. Modell-Entladung im Leerlauf | v1.2 | 11/12 | In Progress|  |
+| 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |
 

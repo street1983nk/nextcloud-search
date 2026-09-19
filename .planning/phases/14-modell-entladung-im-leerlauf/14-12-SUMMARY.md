@@ -40,10 +40,10 @@ patterns-established:
   - "Der Gesamtlauf laeuft zweimal: einmal als Grundstand gegen den Baum vor dem Audit und einmal als Protokolllauf gegen den Baum mit dem Befundfix"
   - "Die drei Stellungen einer neuen Umgebungsvariablen werden an der laufenden Instanz einzeln gefahren: ohne, gueltig, ungueltig"
 
-requirements-completed: []
+requirements-completed: [MEM-01, MEM-03, MEM-04, MEM-05]
 
 # Metrics
-duration: 165min
+duration: 195min
 completed: 2026-09-19
 ---
 
@@ -53,11 +53,11 @@ completed: 2026-09-19
 
 ## Performance
 
-- **Duration:** 165 min
+- **Duration:** 195 min
 - **Started:** 2026-09-19T20:05:00Z
-- **Completed:** 2026-09-19T22:50:00Z
-- **Tasks:** 1 von 2 (Task 2 ist der Owner-Checkpoint und steht offen)
-- **Files modified:** 2 (eine Testdatei, ein neuer Auditbericht)
+- **Completed:** 2026-09-19T23:20:00Z
+- **Tasks:** 2 von 2
+- **Files modified:** 7 (eine Testdatei, ein neuer Auditbericht, zwei Dokumente nach dem Owner-Entscheid, drei Planungsdateien)
 
 ## Accomplishments
 
@@ -214,26 +214,66 @@ Die Browser-Haelfte zieht denselben Satz aus demselben Katalogschluessel
 nach dem ersten Poll des Skripts steht dem Owner zu und ist Punkt 5 des
 Checkpoints.
 
-**Sichtprobe 6, franzoesischer Wortlaut.** Vorbereitet, nicht entschieden. Der
-Satz steht in `php/l10n/fr.json` und `fr.js` und traegt in `docs/l10n-french.md`
-den datierten Nachtrag vom 19.09.2026, der ihn ausdruecklich als **vom Owner
-noch nicht gelesen** ausweist. Der Owner ist Muttersprachler; die Abnahme oder
-die Korrektur ist seine.
+**Sichtprobe 6, franzoesischer Wortlaut. Abgenommen wie vorgelegt.** Der Owner
+hat den Satz
+`Le modele a ete libere pour economiser de la memoire. La prochaine recherche repond avec des resultats en texte integral et le recharge en arriere-plan.`
+(im Katalog mit Akzenten) am Checkpoint gelesen und **ohne Aenderung**
+abgenommen. Keine der beiden franzoesischen Katalogdateien ist dafuer angefasst
+worden; `docs/l10n-french.md` traegt jetzt den Abnahmevermerk vom 19.09.2026
+anstelle des Hinweises, der den Satz als ungelesen auswies.
 
-**Sichtprobe 7, der Sparvorschlag 900 s.** Vorbereitet, nicht entschieden. Der
-Wert steht in `backend/appinfo/info.xml` ("A quarter of an hour, so 900, is a
-reasonable value to start with"), als Kommentar in `config.py` und seit 14-11 in
-`docs/embeddings.md`. `config.py` sagt ausdruecklich, dass es eine Schaetzung
-ist, `docs/embeddings.md` sagt es weniger deutlich; das ist Befund L-03 des
-Berichts und Punkt 7 des Checkpoints.
+**Sichtprobe 7, der Sparvorschlag 900 s. Bleibt stehen, deutlicher
+gekennzeichnet.** Der Owner hat entschieden, dass der Wert als Vorschlag stehen
+bleibt und als Schaetzung klar erkennbar sein muss. `docs/embeddings.md` sagt
+jetzt mit denselben Worten wie `config.py`, dass die Zahl geraten ist und bis
+zur Messung der Phase 15 eine Schaetzung bleibt. `backend/appinfo/info.xml` ist
+unveraendert, weil die Store-Beschreibung mit dem Release reist und der
+Vorschlag dort richtig steht. **Befund L-03 ist damit geschlossen**, der Bericht
+fuehrt ihn als behoben.
+
+## Owner-Abnahme (Task 2, Checkpoint)
+
+Vorgelegt wurden die sieben Punkte mit ihren gemessenen Ergebnissen. Die Antwort
+des Owners vom **19.09.2026**, im Wortlaut:
+
+> 1) Phase 14 gesamt: "abgenommen".
+> 2) Der franzoesische Wortlaut des neuen Satzes: abgenommen wie vorgelegt;
+>    datiere den Nachtrag in docs/l10n-french.md entsprechend (Owner-Abnahme
+>    19.09.2026, Satz unveraendert).
+> 3) Der Sparvorschlag 900 s bleibt stehen als klar gekennzeichnete Schaetzung;
+>    ziehe dabei docs/embeddings.md auf die deutlichere Formulierung von
+>    config.py (Befund L-03 schliessen).
+
+Dazu die Auflage, MEM-02 ausdruecklich offen zu lassen, bis die Messung der
+Phase 15 vorliegt.
+
+**Was daraufhin geschehen ist**, alles im Commit `220b7e0`:
+
+| Auflage | Umsetzung |
+|---|---|
+| Franzoesischer Wortlaut abgenommen | `docs/l10n-french.md` traegt den Abschnitt "Abnahme 19.09.2026 (Phase-Checkpoint 14-12)"; der Satz selbst ist unveraendert, beide fr-Kataloge sind nicht angefasst |
+| 900 s als Schaetzung kennzeichnen | `docs/embeddings.md` sagt jetzt "Diese Zahl ist geraten und keine Messung" und zeigt auf die Phase 15, wie `config.py` es tut |
+| Befund L-03 schliessen | `docs/audits/2026-09-phase-14/README.md`: L-03 steht als behoben, die Bilanz nennt zwei behobene und einen weitergereichten Befund |
+| Der Docstring des Katalog-Gates | `test_admin_ui_contract.py` sagte "The French wording is new and unchecked"; das war ab der Abnahme falsch und ist nachgezogen |
+| MEM-01, MEM-03, MEM-04, MEM-05 | in `.planning/REQUIREMENTS.md` abgehakt, die Nachweiszeile nennt die Abnahme |
+| MEM-02 | bleibt ungehakt; die Zeile sagt jetzt ausdruecklich, dass die Abnahme dieses Requirement NICHT einschliesst |
+| Abnahmesatz mit Datum | `.planning/STATE.md` |
+| Phase 14 auf 12/12 | `.planning/ROADMAP.md`, Fortschrittstabelle, Planliste und Meilensteinzeile |
+
+Nach der Abnahme ist `uv run pytest tests/test_admin_ui_contract.py -q` gruen
+(das Kriterium des Plans fuer den Fall einer Korrektur am franzoesischen
+Wortlaut; es gab keine Korrektur, das Gate ist trotzdem gefahren), und die volle
+Suite ist ein zweites Mal gruen gelaufen.
 
 ## Task Commits
 
 1. **Task 1a, der V4-Paritaetsfall** - `b044ae4` (test)
 2. **Task 1b, der Audit-Durchgang** - `a41227a` (docs)
 
-Task 2 ist der Owner-Checkpoint und hat keinen Commit: er traegt einen
-Entscheid, keine Aenderung.
+3. **Task 2, die Auflagen der Abnahme** - `220b7e0` (docs)
+
+Task 2 ist der Owner-Checkpoint. Sein Entscheid selbst ist keine Aenderung; die
+drei Auflagen, die er mitgibt, sind es.
 
 ## Tests
 
@@ -297,7 +337,7 @@ Keine.
 | 2. `docs/audits/2026-09-phase-14/README.md` existiert und traegt die vier Abschnitte | ja, plus Befundliste und Geltungsabschnitt |
 | 3. Die fuenf Erfolgskriterien sind je mit einem Beleg verknuepft | ja, Abschnitt 5 des Berichts |
 | 4. Kein U+2014 und kein U+2013 im Bericht | ja, beide Zaehlungen 0 |
-| 5. Der Owner hat geantwortet | **offen**, Task 2 ist der Checkpoint |
+| 5. Der Owner hat geantwortet | ja, 19.09.2026, "abgenommen"; die Antwort steht im Wortlaut oben |
 
 ## Issues Encountered
 
@@ -332,20 +372,21 @@ Die fuenf Dispositionen des Plans:
 
 ## Requirements
 
-`requirements: [MEM-01, MEM-02, MEM-03, MEM-04, MEM-05]`, und in diesem Plan
-wird **keines** abgehakt.
+`requirements: [MEM-01, MEM-02, MEM-03, MEM-04, MEM-05]`, und nach der Abnahme
+sind **vier von fuenf** abgehakt.
 
-- MEM-01, MEM-03, MEM-04 und MEM-05 stehen seit ihren Bauplaenen abgehakt in
-  `.planning/REQUIREMENTS.md`; dieser Plan belegt sie an der laufenden Instanz
-  nach, hat aber nichts zu haken.
+- MEM-01, MEM-03, MEM-04 und MEM-05 standen seit ihren Bauplaenen abgehakt in
+  `.planning/REQUIREMENTS.md`; dieser Plan hat sie an der laufenden Instanz
+  nachgewiesen, und die Nachweiszeile der Rueckverfolgungstabelle nennt jetzt
+  die Abnahme vom 19.09.2026.
 - **MEM-02 bleibt offen.** Seine Beleg-Messgroesse steht ausdruecklich im Text
   des Requirements ("Rueckkehr zur Grundlast nach einem Indexlauf") und entsteht
   auf der Box der Phase 15. Die heutige Sichtprobe mit 376,3 MB auf einer
   Maschine ohne `malloc_trim` ist ein Hinweis und kein Beleg an dieser
   Messgroesse.
 
-Der Eintrag in `REQUIREMENTS.md` und der Abnahmesatz in `STATE.md` folgen dem
-Owner-Entscheid und nicht diesem Plan.
+Der Owner hat das Offenbleiben von MEM-02 mit der Abnahme ausdruecklich
+bestaetigt.
 
 ## User Setup Required
 
@@ -355,24 +396,47 @@ Entwicklungsinstanz weiter: Nextcloud auf 8090, Backend auf 10035 mit
 
 ## Next Phase Readiness
 
-Die Phase ist technisch durch. Was fehlt, ist der Owner-Entscheid an Task 2:
+**Die Phase ist abgenommen und abgeschlossen**, 12 von 12 Plaenen.
 
-1. Die Abnahme der Phase im Wortlaut, danach MEM-01 bis MEM-05 in
-   `REQUIREMENTS.md` nachziehen (MEM-02 ausgenommen, siehe oben) und der
-   Abnahmesatz mit Datum in `STATE.md`.
-2. Der franzoesische Wortlaut des sechsten Satzes (Punkt 6).
-3. Der Vorschlagswert 900 s (Punkt 7, Befund L-03).
+Phase 15 ist die eine Box-Anfahrt. Sie erbt aus dieser Phase drei Auftraege:
 
-Danach ist Phase 15 die eine Box-Anfahrt, die den A/B-Beleg ueber den Schalter
-dieser Phase misst und dabei MEM-02 schliesst.
+1. **MEM-02 schliessen** an der Messgroesse "Rueckkehr zur Grundlast nach einem
+   Indexlauf", im A/B ueber den Schalter dieser Phase.
+2. **Die Wiederaufwaerm-Kosten messen.** Die Sichtprobe 4 zeigt auf der
+   Entwicklungsmaschine 1,37 bis 1,44 s gegen eine Decke von 1,5 s; ob diese
+   Marge auf der Box haelt, ist offen und gehoert in den A/B-Schritt 7.2 des
+   Runbooks.
+3. **Den Vorschlagswert 900 s belegen oder korrigieren.** Er ist heute eine
+   gekennzeichnete Schaetzung an zwei Stellen.
+
+## Gates nach der Abnahme
+
+Die drei Auflagen beruehren zwei Dokumente und einen Docstring, also ist die
+Kette ein zweites Mal gefahren:
+
+| Gate | Ergebnis |
+|---|---|
+| `uv run ruff check .` | gruen |
+| `uv run ruff format --check .` | gruen, 123 Dateien |
+| `uv run pyright` | 0 errors, 0 warnings, 0 informations |
+| `uv run vulture src tests --min-confidence 80` | gruen |
+| `uv run pytest tests/test_admin_ui_contract.py -q` | 45 bestanden |
+| `uv run pytest -q` (VOLLE Suite) | **2262 bestanden, 15 uebersprungen**, 210,11 s |
+
+Kein Produktivcode angefasst, also keine Bewegung an
+`PACKAGE_TREE_HASH_TODAY` und `PHP_TREE_HASH_TODAY`. Keine der beiden
+franzoesischen Katalogdateien ist angefasst worden, weil der Wortlaut
+unveraendert abgenommen wurde.
 
 ## Self-Check: PASSED
 
-- `docs/audits/2026-09-phase-14/README.md`: vorhanden, 383 Zeilen, traegt
-  "Gate-Protokoll" und zweimal "Erfolgskriterium".
+- `docs/audits/2026-09-phase-14/README.md`: vorhanden, traegt "Gate-Protokoll",
+  zweimal "Erfolgskriterium" und L-03 als behoben.
 - `backend/tests/test_semantic_search.py`: vorhanden, traegt die vier neuen
   Faelle.
-- Beide Commits (`b044ae4`, `a41227a`) stehen in der Historie.
+- `docs/l10n-french.md`: traegt den Abnahmevermerk vom 19.09.2026.
+- `docs/embeddings.md`: traegt "Diese Zahl ist geraten und keine Messung".
+- Alle drei Commits (`b044ae4`, `a41227a`, `220b7e0`) stehen in der Historie.
 - Keine Em-Dashes in dieser Zusammenfassung.
 
 ---

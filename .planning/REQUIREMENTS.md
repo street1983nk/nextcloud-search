@@ -61,11 +61,11 @@
 | FILT-03 | Phase 13 | Complete |
 | FILT-04 | Phase 13 | Complete |
 | FILT-05 | Phase 13 | Complete |
-| MEM-01 | Phase 14 | Complete |
-| MEM-02 | Phase 14 | Pending (gebaut in 14-04 bis 14-07, Messgroesse in 14-11 festgeschrieben; der Beleg an der Messgroesse entsteht auf der Box der Phase 15) |
-| MEM-03 | Phase 14 | Complete (14-08) |
-| MEM-04 | Phase 14 | Complete (14-02) |
-| MEM-05 | Phase 14 | Complete (14-09 die Admin-Seite, 14-10 die Zusage und ihr Gate; Wortwahl vom Owner am 19.09.2026 entschieden) |
+| MEM-01 | Phase 14 | Complete (14-03; an der laufenden Instanz nachgesehen und vom Owner abgenommen 19.09.2026, 14-12) |
+| MEM-02 | Phase 14 | Pending (gebaut in 14-04 bis 14-07, Messgroesse in 14-11 festgeschrieben; der Beleg an der Messgroesse entsteht auf der Box der Phase 15. Die Abnahme der Phase am 19.09.2026 schliesst dieses Requirement ausdruecklich NICHT ein; die Sichtprobe in 14-12 zeigte 376,3 MB Rueckgabe auf einer Maschine ohne malloc_trim, das ist ein Hinweis und kein Beleg an der Messgroesse) |
+| MEM-03 | Phase 14 | Complete (14-08; an der laufenden Instanz nachgesehen und vom Owner abgenommen 19.09.2026, 14-12) |
+| MEM-04 | Phase 14 | Complete (14-02; vom Owner abgenommen 19.09.2026, 14-12) |
+| MEM-05 | Phase 14 | Complete (14-09 die Admin-Seite, 14-10 die Zusage und ihr Gate; Wortwahl vom Owner am 19.09.2026 entschieden, franzoesischer Wortlaut am selben Tag in 14-12 unveraendert abgenommen) |
 | MESS-04 | Phase 12 | Complete |
 | MESS-05 | Phase 15 | Pending |
 | MESS-06 | Phase 12 | Complete |

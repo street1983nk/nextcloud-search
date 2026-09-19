@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: 14-12 Task 1 fertig, Owner-Checkpoint Task 2 offen
-last_updated: "2026-09-19T22:55:00.000Z"
+stopped_at: Completed 14-12-PLAN.md
+last_updated: "2026-09-19T23:20:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 33
-  completed_plans: 32
-  percent: 97
+  completed_plans: 33
+  percent: 100
 ---
 
 # Project State
@@ -25,33 +25,39 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 ## Current Position
 
-Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 11 von 12 abgeschlossen; 14-12 ist angefangen und haengt am Owner
-Status: executing, WARTET AUF DEN OWNER-CHECKPOINT (14-12 Task 2, die Abnahme).
-Progress: [█████████░] 97%
-Last activity: 2026-09-19 -- 14-12 Task 1 ist durch: der Gesamtlauf aller sechs
-Gate-Stufen in einem Zug gruen (2262 bestanden, 15 uebersprungen, Skipzahl
-unveraendert gegen 13-13), der Auditbericht
-`docs/audits/2026-09-phase-14/README.md` steht mit Gate-Protokoll, ASVS
-V5/V7/V12, dem geprueften V4-Vorbehalt, sechs Bug-Pfaden und dem
-Performance-Durchgang samt Gegenprobe zu Annahme A9. Ein Befund (L-01, der
-fehlende V4-Paritaetsfall) ist in diesem Lauf behoben, zwei sind weitergereicht.
+Phase: 14 (modell-entladung-im-leerlauf): **ABGESCHLOSSEN UND ABGENOMMEN**
+Plan: 12 von 12 abgeschlossen
+Status: Phase 14 ist fertig. Naechster Schritt ist die Planung der Phase 15.
+Progress: [██████████] 100% der 33 geplanten Plaene (Phase 15 und 16 sind noch nicht geplant)
+Last activity: 2026-09-19 -- 14-12, die Abnahme.
+
+**Abnahmesatz.** Der Owner hat die Phase 14 am 19.09.2026 mit dem Wort
+"abgenommen" freigegeben, einschliesslich des franzoesischen Wortlauts des
+sechsten Engine-Satzes (unveraendert wie vorgelegt) und des Vorschlagswerts
+900 s (bleibt stehen, als Schaetzung deutlich gekennzeichnet). MEM-02 ist von
+der Abnahme ausdruecklich ausgenommen und bleibt offen, bis die Box-Anfahrt der
+Phase 15 an der Messgroesse "Rueckkehr zur Grundlast nach einem Indexlauf"
+gemessen hat.
+
+Was 14-12 belegt hat: der Gesamtlauf aller sechs Gate-Stufen in einem Zug gruen
+(2262 bestanden, 15 uebersprungen, Skipzahl unveraendert gegen 13-13), der
+Auditbericht `docs/audits/2026-09-phase-14/README.md` mit Gate-Protokoll, ASVS
+V5/V7/V12, dem geprueften V4-Vorbehalt, sechs Bug-Pfaden, dem
+Performance-Durchgang und der Gegenprobe zu Annahme A9. Drei LOW-Befunde, zwei
+behoben (L-01 der fehlende V4-Paritaetsfall, L-03 die Kennzeichnung des
+Vorschlagswerts), einer als benannte Asymmetrie weitergereicht (L-02).
+
 Die fuenf Erfolgskriterien sind an der laufenden Instanz nachgesehen: der
-Schalter meldet sich in allen drei Stellungen richtig, der Container gibt nach
-75 s 376,3 MB zurueck und meldet `unloaded`, die erste Suche danach antwortet in
-1,43 s mit Volltexttreffern (warm 0,41 bis 0,48 s, also eine duenne Marge unter
-der Decke von 1,5 s), kein neuer `cURL error 28`, und die Admin-Seite traegt den
-Satz des sechsten Zustands in beiden Haelften gleichlautend.
+Schalter meldet sich in allen drei Stellungen richtig (ohne, `=60`, `=3`), der
+Container gibt nach 75 s 376,3 MB zurueck und meldet `unloaded`, die erste Suche
+danach antwortet in 1,43 s mit Volltexttreffern (warm 0,41 bis 0,48 s), kein
+neuer `cURL error 28`, und die Admin-Seite traegt den Satz des sechsten Zustands
+in beiden Haelften gleichlautend.
 
-**Offen und nur vom Owner zu beantworten:** die Abnahme der Phase, der
-franzoesische Wortlaut des sechsten Satzes und der Vorschlagswert 900 s. Erst
-danach werden MEM-01 bis MEM-05 nachgezogen (MEM-02 bleibt offen, seine
-Messgroesse entsteht auf der Box der Phase 15) und der Abnahmesatz mit Datum
-hier eingetragen.
-
-**Die Entwicklungsinstanz laeuft fuer die Sichtproben weiter:** Nextcloud auf
-8090, Backend als Host-Prozess auf 10035 mit
-`FINDLING_EMBED_IDLE_RELEASE_SECONDS=60`.
+**Offener Messauftrag an Phase 15** (kein Blocker der Phase 14): die Marge der
+ersten Suche nach einer Entladung ist auf der Entwicklungsmaschine duenn, 60 bis
+130 ms unter der Decke von 1,5 s. Die Ursache liegt im Nachwaermlauf und nicht
+in der Degradation; auf einer langsameren Box koennte sie aufgezehrt werden.
 
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
