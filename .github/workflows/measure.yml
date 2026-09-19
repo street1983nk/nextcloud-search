@@ -349,6 +349,60 @@ jobs:
             /skripte/01-grundlast-fein.py \
             | tee "${OUT}/01-grundlast-fein-${{ matrix.arch }}.txt"
 
+      # Measurement E, and the letter is deliberate: D is the base load taken
+      # apart step by step, it is quoted under that letter in a report already,
+      # and a second question about the same memory gets a letter of its own
+      # rather than a suffix on somebody else's.
+      #
+      # What it measures is whether the memory a load costs comes back when the
+      # holders are let go. Four marks per cycle, read as VmRSS out of
+      # /proc/self/status: baseline after the module imports and before the
+      # first load, loaded after the tokenizer, the splitter, the encoder, the
+      # session and one run, after_gc once the references are gone and
+      # gc.collect() has run, and after_trim once malloc_trim(0) has handed
+      # whole free pages back. The return value of malloc_trim travels with the
+      # line, because a fine percentage next to a trim that returned nothing is
+      # a number that came from somewhere else. The expectation these figures
+      # are held against is written down before this run in
+      # docs/measurements/2026-09-entladung-vorpruefung/skripte/00-ablauf.md.
+      #
+      # Five cycles and not one. glibc raises M_MMAP_THRESHOLD dynamically while
+      # large blocks are freed, so a later load can be served out of the arena
+      # instead of by mmap and malloc_trim then gives less back. Cycle 5 is
+      # therefore not cycle 1, and a single cycle would say nothing about a
+      # container that runs for weeks.
+      #
+      # The script is mounted and not built into the image, for the reason the
+      # step above gives and one more of its own. It is a measuring tool and not
+      # part of the product; and this run has to happen against the SHIPPED
+      # image before any product code of the phase exists, which a new mode
+      # inside findling.embed.bench could not do. Such a mode reaches ghcr.io
+      # only after a push to main that touches backend/** and a green docker.yml
+      # run, which is exactly the order this measurement is supposed to precede.
+      #
+      # --cpuset-cpus 0,1 for the reason step B gives for it: the figure is
+      # supposed to stand against the two shared cores of the target assumption
+      # and not against the whole runner. No --privileged and no --user 0: this
+      # step drops no cache, so the justification those two flags carry at step C
+      # does not carry here, and a flag without its reason is one nobody removes.
+      #
+      # --network none, and the output carries numbers and header lines only: no
+      # file name, no path of a machine, no search text and nothing of the blind
+      # text the script cuts (T-06-06).
+      - name: E, RSS returned by a release
+        env:
+          TARGET: ${{ steps.image.outputs.target }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          docker run --rm --network none --cpuset-cpus 0,1 \
+            -e FINDLING_MEASURE_DIGEST="${DIGEST}" \
+            -e FINDLING_MEASURE_IMAGE="${TARGET}" \
+            -e FINDLING_MEASURE_ROLE="${{ matrix.role }}" \
+            -v "${GITHUB_WORKSPACE}/docs/measurements/2026-09-entladung-vorpruefung/skripte:/skripte:ro" \
+            --entrypoint /app/.venv/bin/python "${TARGET}" \
+            /skripte/01-rss-rueckgabe.py --cycles 5 \
+            | tee "${OUT}/rss-rueckgabe-${{ matrix.arch }}.txt"
+
       - name: Hand the raw output over
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
