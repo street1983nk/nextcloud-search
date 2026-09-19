@@ -217,14 +217,14 @@ Plans:
   4. Die Sprachfall-Messung laeuft ohne den 52.111er-Fremdbestand und liefert Zahlen ueber der bisherigen Deckelung (DI-10-02/DI-11-01, neue Messgroesse)
   5. Die Wiederaufwaerm-Kosten der Entladung sind gemessen und ausgewiesen (warm/kalt, mit/ohne Seitencache, A/B ueber den MEM-01-Schalter); die Box ist danach wieder abgebaut
 
-**Plans:** 3/16 plans complete
+**Plans:** 4/16 plans complete
 
 **Welle A, ohne Box-Zeit** *(Welle 1 bis 6)*
 
 - [x] 15-01-PLAN.md: Elf Werkzeuge byteweise uebernehmen, Kopie-Waechter
 - [x] 15-02-PLAN.md: Runbook: Deckel neu gerechnet (46 h / 5,40 USD), Block 13b Abbildwechsel, drop_caches, Schritte 6b und 8b
 - [x] 15-03-PLAN.md: 95b-wiederaufwaermen.sh, vier Auspraegungen, Abbrueche 29 bis 31
-- [ ] 15-04-PLAN.md: 94b-grundlast-rueckkehr.sh, der MEM-02-Block
+- [x] 15-04-PLAN.md: 94b-grundlast-rueckkehr.sh, der MEM-02-Block
 - [ ] 15-05-PLAN.md: 99c-filter-sortierung.sh, der Owner-Messblock D-01
 - [ ] 15-06-PLAN.md: 92b-wechsel.sh, Abbildwechsel per Digest mit Baumhash-Beweis
 - [ ] 15-07-PLAN.md: 00-ablauf.md auf zehn Schritte, Erwartungen E8 bis E14, neun Vorbedingungen
@@ -277,7 +277,7 @@ Plans:
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
-| 15. Messphase, eine Box-Anfahrt | v1.2 | 2/16 | In progress | - |
+| 15. Messphase, eine Box-Anfahrt | v1.2 | 4/16 | In progress | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |
 
 ## Nach v1.2 (Wiedervorlage)

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 15-03-PLAN.md
-last_updated: "2026-09-19T21:50:00.000Z"
+stopped_at: Completed 15-04-PLAN.md
+last_updated: "2026-09-19T22:35:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 49
-  completed_plans: 36
-  percent: 73
+  completed_plans: 37
+  percent: 76
 ---
 
 # Project State
@@ -26,16 +26,18 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, Welle A ohne Box**
-Plan: 3 von 16 abgeschlossen (15-01, 15-02, 15-03)
+Plan: 4 von 16 abgeschlossen (15-01, 15-02, 15-03, 15-04)
 Status: Phase 14 ist abgenommen. Phase 15 laeuft; 15-01 hat das Laufverzeichnis
 der Anfahrt bestueckt, 15-02 hat das Runbook auf den Stand dieser Anfahrt
 gebracht (Deckel 46 h / 5,40 USD netto, Block 13b Abbildwechsel, ein Befehl
-fuer "kalt", die Messschritte 6b und 8b), und 15-03 hat das einzige fehlende
-Werkzeug gebaut: 95b-wiederaufwaermen.sh, vier Auspraegungen, Rueckgabewerte
-2, 29, 30 und 31, neun boxlose Verweigerungsfaelle.
-Naechster Plan ist 15-04 (94b-grundlast-rueckkehr.sh, der MEM-02-Block).
-Progress: [███████░░░] 73% der 49 geplanten Plaene (36 von 49; Phase 16 ist noch nicht geplant)
-Last activity: 2026-09-19 -- 15-03, das Wiederaufwaerm-Werkzeug fuer Messschritt 8.
+fuer "kalt", die Messschritte 6b und 8b), 15-03 hat das Wiederaufwaerm-Werkzeug
+gebaut (95b-wiederaufwaermen.sh, vier Auspraegungen, Rueckgabewerte 2, 29, 30
+und 31), und 15-04 hat den MEM-02-Block bekommen: 94b-grundlast-rueckkehr.sh,
+drei Marken in einem Zug, Rueckgabewerte 2, 29, 31, 32 und 33, sieben boxlose
+Faelle samt Gate gegen die falsche Messgroesse.
+Naechster Plan ist 15-05 (99c-filter-sortierung.sh, der Owner-Messblock D-01).
+Progress: [████████░░] 76% der 49 geplanten Plaene (37 von 49; Phase 16 ist noch nicht geplant)
+Last activity: 2026-09-19 -- 15-04, das Werkzeug der Messgroesse von MEM-02.
 
 **Die Deckelzahl, die der Owner in 15-08 vorfindet:** 46 Stunden und 5,40 USD
 netto, aus zehn Posten mit 39 h 22 min Planwert und 15 Prozent Zuschlag. Der
@@ -77,6 +79,39 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
 
+- 15-04: Der Indexlauf wird ueber den Weg eines Nutzers angestossen und nicht
+  ueber `occ findling:index --restart`. Der Befehl kennt nur --status und
+  --restart, und --restart stellt rund 52.000 Dokumente neu in die Schlange:
+  der Container fiele dann in dieser Messung nie in den Leerlauf und entluede
+  nie. Angestossen wird deshalb mit einem Dutzend kleiner Textdateien ueber
+  WebDAV plus `files:scan`; der Korpus wird nach der letzten Marke wieder
+  entfernt, damit der Bestand der Box derselbe bleibt, gegen den Schritt 9
+  misst.
+- 15-04: Der Indexlauf wird an der Zahl der eingebetteten Dokumente der
+  Admin-Seite belegt (Feld `embedded` unter `backend`) und nicht an der Ausgabe
+  von `occ findling:index`. Deren Zaehler `indexed` ist auf der Nextcloud-Seite
+  strukturell null und sagt das selbst; die occ-Ausgabe liefert den
+  Arbeitsvorrat und steht als zweite Bedingung daneben. Nachtrag ins Runbook in
+  15-15.
+- 15-04: Gerechnet wird ueber `anon` aus `memory.stat` und nicht ueber
+  `memory.current`. `memory.current` zaehlt den Seitencache derselben cgroup
+  mit, und der Tantivy-Index ist ein mmap auf der Platte; eine Differenz
+  darueber maesse zu einem guten Teil, wie viele Indexbloecke zwischen den
+  Marken gelesen wurden. `memory.current` wird in jeder Marke mitgeschrieben,
+  weil der docker-Client genau diese Zahl zeigt.
+- 15-04: Marke A verlangt einen Containerneustart VOR der Messung. Nach den
+  Schritten 4, 6 und 8 ist der Container aufgewaermt; ohne Neustart maesse
+  Marke A einen Container mit Tokenizer, Splitter und Sitzung darin und waere
+  keine Grundlast vor dem Indexlauf.
+- 15-04: Die Rueckgabewerte 32 und 33 tragen je zwei Faelle. Das Runbook hat
+  ihnen in 15-02 den fehlenden Bezugswert (32) und den neu gebauten Container
+  (33) gegeben, der Plan 15-04 die fehlende Zahl aus der Abtastreihe (32) und
+  den ausgebliebenen Indexlauf (33). Keine Bedeutung ist weggefallen; eine
+  einmal vergebene Zahl wird nicht umgehaengt. Nachtrag in 15-15.
+- 15-04: Der MEM-02-Block verlangt einen Entladeschalter groesser null, und
+  eine 0 endet mit 29 wie eine fehlende Stellung. Bei 0 gibt es keine Freigabe,
+  die Ruhezeit verginge ohne Wirkung, und die Zahl am Ende waere die Groesse
+  eines Containers, der einfach nichts getan hat.
 - 15-03: `engineState` wird an der Admin-Seite SELBST gelesen und nicht ueber
   `96d-statusbeobachter.py`. Dessen Aufzeichnung ist auf sechs Zaehler,
   `runState`, `backendReachable` und das genestete Paar projiziert; das Feld ist
@@ -843,6 +878,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T21:50:00.000Z
-Stopped at: Completed 15-03-PLAN.md, 95b-wiederaufwaermen.sh mit vier Auspraegungen und den Rueckgabewerten 2, 29, 30 und 31, dazu neun boxlose Verweigerungsfaelle
+Last session: 2026-09-19T22:35:00.000Z
+Stopped at: Completed 15-04-PLAN.md, 94b-grundlast-rueckkehr.sh mit drei Marken in einem Zug, den Rueckgabewerten 2, 29, 31, 32 und 33 und sieben boxlosen Faellen samt Gate gegen die falsche Messgroesse
 Resume file: None
