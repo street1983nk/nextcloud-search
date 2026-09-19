@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 15-01-PLAN.md
-last_updated: "2026-09-19T20:05:00.000Z"
+stopped_at: Completed 15-02-PLAN.md
+last_updated: "2026-09-19T20:45:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 49
-  completed_plans: 34
-  percent: 69
+  completed_plans: 35
+  percent: 71
 ---
 
 # Project State
@@ -26,12 +26,19 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, Welle A ohne Box**
-Plan: 1 von 16 abgeschlossen (15-01)
+Plan: 2 von 16 abgeschlossen (15-01, 15-02)
 Status: Phase 14 ist abgenommen. Phase 15 laeuft; 15-01 hat das Laufverzeichnis
-der Anfahrt mit elf byteweise uebernommenen Werkzeugen bestueckt und den
-Kopie-Waechter gesetzt. Naechster Plan ist 15-02 (Runbook, Deckel, Block 13b).
-Progress: [███████░░░] 69% der 49 geplanten Plaene (34 von 49; Phase 16 ist noch nicht geplant)
-Last activity: 2026-09-19 -- 15-01, die elf Kopien und ihr Waechter.
+der Anfahrt bestueckt, 15-02 hat das Runbook auf den Stand dieser Anfahrt
+gebracht: Deckel neu gerechnet auf 46 h / 5,40 USD netto, Block 13b
+Abbildwechsel, ein Befehl fuer "kalt" und die Messschritte 6b und 8b.
+Naechster Plan ist 15-03 (95b-wiederaufwaermen.sh).
+Progress: [███████░░░] 71% der 49 geplanten Plaene (35 von 49; Phase 16 ist noch nicht geplant)
+Last activity: 2026-09-19 -- 15-02, das Runbook der Anfahrt.
+
+**Die Deckelzahl, die der Owner in 15-08 vorfindet:** 46 Stunden und 5,40 USD
+netto, aus zehn Posten mit 39 h 22 min Planwert und 15 Prozent Zuschlag. Der
+Vorgaengerstand 42 h / 4,90 USD (16.09.) bleibt im Runbook daneben stehen, die
+Untergrenze 31 h / 3,59 USD unveraendert.
 
 **Abnahmesatz.** Der Owner hat die Phase 14 am 19.09.2026 mit dem Wort
 "abgenommen" freigegeben, einschliesslich des franzoesischen Wortlauts des
@@ -68,6 +75,25 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
 
+- 15-02: Die verkuerzte Ruhezeit (D-02) kuerzt den Deckel NICHT. Der Planwert
+  der Wiederaufwaerm-Messung bleibt bei 2 h 00 min; ein Planwert, der eine
+  Verbesserung vorwegnimmt, ist genau der Fehler, der den v1.1-Deckel gerissen
+  hat. Die Ersparnis ist ausgewiesene Reserve, und die Abweichung vom
+  Vorschlagswert 900 s ist begruendungspflichtig im Protokoll.
+- 15-02: Der Vorgaengerstand des Deckels (42 h / 4,90 USD, 16.09.) wird nicht
+  geloescht, sondern neben der neuen Empfehlung gefuehrt. Eine Zahl, die ueber
+  Nacht waechst und deren Vorgaenger fehlt, sieht aus wie ein Aufschlag; die
+  Differenz von vier Stunden ist die Summe dreier Posten, die vorher schlicht
+  nicht im Rechenblatt standen.
+- 15-02: Der Abbildwechsel und `baumhash-gleich` widersprechen sich nicht.
+  Gewechselt wird einmal, in Block 13b, vor der ersten Messung, und genau dieser
+  Vorgang stellt `baumhash-gleich ja` erst her. Ab der ersten Messung gilt die
+  Haltebedingung wieder; ein Wechsel waehrend der Messreihe waere ein zweiter
+  Messgegenstand unter dem Namen des ersten.
+- 15-02: Die Nummern der Rueckgabewerte folgen dem Katalog und nicht der
+  Messreihenfolge. Schritt 6b bricht mit 34 und 35 ab, Schritt 8b mit 31 bis 33,
+  obwohl 6b zuerst laeuft. Eine einmal vergebene Zahl wird nicht umgehaengt,
+  damit Rohdaten frueherer Laeufe lesbar bleiben.
 - 15-01: Eine Kopie traegt den Dateimodus ihres Originals mit. Die vier im
   Original ausfuehrbar abgelegten Werkzeuge liegen auch in der Kopie mit 100755
   im Index, die uebrigen sieben mit 100644; damit stimmen Blobkennung UND Modus
@@ -794,6 +820,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T20:05:00.000Z
-Stopped at: Completed 15-01-PLAN.md, elf byteweise uebernommene Messwerkzeuge im Laufverzeichnis der Anfahrt, Kopie-Waechter gruen
+Last session: 2026-09-19T20:45:00.000Z
+Stopped at: Completed 15-02-PLAN.md, Runbook mit neu gerechnetem Deckel (46 h / 5,40 USD), Block 13b Abbildwechsel, drop_caches als Befehl fuer "kalt" und den Messschritten 6b und 8b
 Resume file: None

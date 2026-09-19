@@ -222,7 +222,7 @@ Plans:
 **Welle A, ohne Box-Zeit** *(Welle 1 bis 6)*
 
 - [x] 15-01-PLAN.md: Elf Werkzeuge byteweise uebernehmen, Kopie-Waechter
-- [ ] 15-02-PLAN.md: Runbook: Deckel neu gerechnet (46 h / 5,40 USD), Block 13b Abbildwechsel, drop_caches, Schritte 6b und 8b
+- [x] 15-02-PLAN.md: Runbook: Deckel neu gerechnet (46 h / 5,40 USD), Block 13b Abbildwechsel, drop_caches, Schritte 6b und 8b
 - [ ] 15-03-PLAN.md: 95b-wiederaufwaermen.sh, vier Auspraegungen, Abbrueche 29 bis 31
 - [ ] 15-04-PLAN.md: 94b-grundlast-rueckkehr.sh, der MEM-02-Block
 - [ ] 15-05-PLAN.md: 99c-filter-sortierung.sh, der Owner-Messblock D-01
@@ -277,7 +277,7 @@ Plans:
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
-| 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
+| 15. Messphase, eine Box-Anfahrt | v1.2 | 2/16 | In progress | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |
 
 ## Nach v1.2 (Wiedervorlage)
