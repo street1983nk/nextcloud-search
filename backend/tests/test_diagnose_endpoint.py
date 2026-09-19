@@ -37,6 +37,7 @@ from fastapi.testclient import TestClient
 from conftest import Corpus
 from findling.api import resources
 from findling.api.diagnose import NO_ORIGIN, NOT_JUDGED
+from findling.config import settings
 from findling.embed.model import DIMENSIONS, EmbedOutcome
 from findling.index.fusion import BOTH, LEXICAL, SEMANTIC
 from findling.main import APP
@@ -657,3 +658,47 @@ def test_a_row_of_a_newer_container_is_answered_without_the_extra_column(
     assert set(answer) == FIELDS
     for value in _strings(answer):
         assert PRIVATE_TITLE not in value
+
+
+# ---------------------------------------------------------------------------
+# The route without a ceiling goes on loading, on purpose (MEM-03)
+# ---------------------------------------------------------------------------
+
+
+class _RecordingModel:
+    """The stand-in of this file, plus a record of what it was allowed to spend."""
+
+    def __init__(self) -> None:
+        self.seen: list[bool] = []
+
+    def embed_query(self, text: str, *, may_load: bool = True) -> EmbedOutcome:
+        self.seen.append(may_load)
+        return EmbedOutcome.ready([tuple(1.0 if index == 1 else 0.0 for index in range(DIMENSIONS))])
+
+
+@pytest.mark.parametrize("seconds", ["0", "900"], ids=["release-off", "release-on"])
+def test_the_diagnosis_may_load_in_both_positions_of_the_switch(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    seconds: str,
+) -> None:
+    """A measuring tool has to be able to measure.
+
+    ``ranked_sides`` is what the third party stock precheck has been measured
+    with since phase 12 (MESS-04). It carries no 1.5 second ceiling and it is
+    no user route, so it asks ``query_may_load`` nothing and goes on loading.
+    The other side of that decision belongs in the runbook: a diagnosis call
+    warms the container up and must not be made before a cold measurement.
+    """
+    _stock_chunks(indexed_volume.root, STOCKED_FILE, 1)
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", seconds)
+    settings.cache_clear()
+    model = _RecordingModel()
+    monkeypatch.setattr(resources, "query_model", lambda: model)
+
+    answer = _diagnose(client, sign("admin"), STOCKED_FILE, query=PARAPHRASE)
+
+    assert model.seen == [True]
+    assert answer[ORIGIN] == SEMANTIC

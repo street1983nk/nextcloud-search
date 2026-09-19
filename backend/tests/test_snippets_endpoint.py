@@ -24,6 +24,8 @@ from fastapi.testclient import TestClient
 
 from conftest import Corpus, body_of
 from findling.api import resources
+from findling.api import snippets as api_snippets
+from findling.config import settings
 from findling.embed.model import DIMENSIONS, EmbedOutcome
 from findling.store.vectors import Chunk, open_vectors
 
@@ -386,3 +388,70 @@ def test_a_range_that_ends_before_it_starts_is_no_error_either(
     answer = _snippets(client, sign(indexed_volume.alice), since=1_700_000_010, until=1_700_000_002)
 
     assert set(answer) == {str(ALICE_FILE)}
+
+
+# ---------------------------------------------------------------------------
+# The release switch on the second route with a ceiling (MEM-03)
+# ---------------------------------------------------------------------------
+
+
+class _LoadSwitchModel:
+    """A stand-in that records what the excerpt cut let it spend.
+
+    It gives the ``embedding_unavailable`` verdict whatever it is told, which
+    is the state of a container that has let go of its engine: every document
+    then takes the first excerpt path and the answer is the one this route
+    gave before the second path existed (D-13, D-19).
+    """
+
+    def __init__(self) -> None:
+        self.seen: list[bool] = []
+
+    def embed_query(self, text: str, *, may_load: bool = True) -> EmbedOutcome:
+        self.seen.append(may_load)
+        return EmbedOutcome.unavailable()
+
+
+def _watch_the_load_switch(monkeypatch: pytest.MonkeyPatch, seconds: str) -> _LoadSwitchModel:
+    """Set the release span, forget the cached settings, and watch the model."""
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", seconds)
+    settings.cache_clear()
+    model = _LoadSwitchModel()
+    monkeypatch.setattr(resources, "query_model", lambda: model)
+    return model
+
+
+@pytest.mark.parametrize(
+    ("seconds", "expected"),
+    [("0", True), ("900", False)],
+    ids=["release-off", "release-on"],
+)
+def test_the_excerpt_route_hands_the_model_what_the_release_switch_says(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    seconds: str,
+    expected: bool,
+) -> None:
+    # The same ceiling as the search route, in its own constant:
+    # ExAppService::PAGE_REQUEST_TIMEOUT_SECONDS is 1.5 as well, and the
+    # unified search asks this route for every page of hits it shows.
+    _stock_one_chunk(indexed_volume.root)
+    model = _watch_the_load_switch(monkeypatch, seconds)
+
+    api_snippets.excerpts(indexed_volume.alice, PARAPHRASE, [ALICE_FILE], False)
+
+    assert model.seen == [expected]
+
+
+def test_the_excerpt_under_the_release_is_the_one_a_container_without_a_model_cuts(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Counted in excerpts and never in errors (pitfall 4). A refused load
+    # costs the semantic passage and never the answer.
+    _stock_one_chunk(indexed_volume.root)
+    _watch_the_load_switch(monkeypatch, "900")
+
+    cut = api_snippets.excerpts(indexed_volume.alice, TERM, [ALICE_FILE], False)
+
+    assert [text.file_id for text in cut] == [ALICE_FILE]

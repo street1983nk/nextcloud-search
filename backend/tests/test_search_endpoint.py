@@ -27,8 +27,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import Corpus
+from findling.api import resources
+from findling.api import search as api_search
 from findling.api.search import CANARY_TITLE, Candidate, SearchRequest, build_canary_hits
-from findling.config import SEARCH_MTIME_MAX, SEARCH_TYPE_GROUPS_MAX
+from findling.config import SEARCH_MTIME_MAX, SEARCH_TYPE_GROUPS_MAX, settings
+from findling.embed.model import EmbedOutcome
 from findling.store.repo import open_store
 
 pytestmark = pytest.mark.usefixtures("appapi_environment")
@@ -41,6 +44,15 @@ Sign = Callable[[str], dict[str, str]]
 CANARY = "findling-canary"
 
 TERM = "Kündigungsfrist"
+
+# Two words without an operator, which is the one shape of line that still
+# builds a vector half: one word is answered by the word index alone and an
+# operator asks for a precision the model cannot honour.
+TWO_WORD_TERM = "Kündigungsfrist Vertrag"
+
+# A line with an exclusion, so the operator rule holds the vector half back
+# before any switch of this phase is ever read.
+OPERATOR_TERM = "bescheid -frist"
 
 
 def _search(client: TestClient, headers: dict[str, str], **body: object) -> dict[str, Any]:
@@ -480,3 +492,90 @@ def test_a_range_that_ends_before_it_starts_answers_empty_and_not_with_an_error(
 
     assert answer["candidates"] == []
     assert answer["hasMore"] is False
+
+
+# ---------------------------------------------------------------------------
+# The release switch on the route with the ceiling (MEM-03)
+# ---------------------------------------------------------------------------
+
+
+class _LoadSwitchModel:
+    """A stand-in that records what the round let it spend.
+
+    It answers the ``embedding_unavailable`` verdict whatever it is told,
+    because the claim of this block is about what reaches the model and not
+    about what comes back: the merge becomes the identity on the lexical list
+    either way, so the page of these cases is the page of a container without
+    a model (D-19).
+    """
+
+    def __init__(self) -> None:
+        self.seen: list[bool] = []
+
+    def embed_query(self, text: str, *, may_load: bool = True) -> EmbedOutcome:
+        self.seen.append(may_load)
+        return EmbedOutcome.unavailable()
+
+
+def _watch_the_load_switch(monkeypatch: pytest.MonkeyPatch, seconds: str) -> _LoadSwitchModel:
+    """Set the release span, forget the cached settings, and watch the model."""
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", seconds)
+    settings.cache_clear()
+    model = _LoadSwitchModel()
+    monkeypatch.setattr(resources, "query_model", lambda: model)
+    return model
+
+
+@pytest.mark.parametrize(
+    ("seconds", "expected"),
+    [("0", True), ("900", False)],
+    ids=["release-off", "release-on"],
+)
+def test_the_search_route_hands_the_model_what_the_release_switch_says(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    seconds: str,
+    expected: bool,
+) -> None:
+    # Off is the shipped behaviour and has to stay byte for byte what it was.
+    # On is the answer to 2026-09-10: 1838.4 ms against a ceiling of 1500 ms,
+    # and this route is the one that carries it.
+    model = _watch_the_load_switch(monkeypatch, seconds)
+
+    api_search.one_round(indexed_volume.bob, TWO_WORD_TERM, 20, 0, False)
+
+    assert model.seen == [expected]
+
+
+@pytest.mark.parametrize("seconds", ["0", "900"], ids=["release-off", "release-on"])
+def test_a_line_that_asks_for_precision_asks_the_model_nothing_either_way(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+    seconds: str,
+) -> None:
+    # The operator rule sits above the switch and is untouched by it: no
+    # vector half is built at all, so there is nothing to hand a switch to.
+    model = _watch_the_load_switch(monkeypatch, seconds)
+
+    api_search.one_round(indexed_volume.bob, OPERATOR_TERM, 20, 0, False)
+
+    assert model.seen == []
+
+
+def test_a_round_under_the_release_answers_the_way_a_container_without_a_model_does(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Counted in hits and never in errors (pitfall 4): the route answers HTTP
+    # 200 whatever happens, so a case that watched a failure count would be
+    # green over an aborted call.
+    off = _watch_the_load_switch(monkeypatch, "0")
+    shipped = api_search.one_round(indexed_volume.bob, TWO_WORD_TERM, 20, 0, False)
+
+    _watch_the_load_switch(monkeypatch, "900")
+    released = api_search.one_round(indexed_volume.bob, TWO_WORD_TERM, 20, 0, False)
+
+    assert off.seen == [True]
+    assert [hit.fileId for hit in shipped.candidates] != []
+    assert [hit.fileId for hit in released.candidates] == [hit.fileId for hit in shipped.candidates]
+    assert released.degraded is False
