@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 15-06-PLAN.md
-last_updated: "2026-09-20T00:00:00.000Z"
+stopped_at: Completed 15-07-PLAN.md
+last_updated: "2026-09-19T22:00:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 49
-  completed_plans: 39
-  percent: 80
+  completed_plans: 40
+  percent: 82
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, Welle A ohne Box**
-Plan: 6 von 16 abgeschlossen (15-01 bis 15-06)
+Plan: 7 von 16 abgeschlossen (15-01 bis 15-07)
 Status: Phase 14 ist abgenommen. Phase 15 laeuft; 15-01 hat das Laufverzeichnis
 der Anfahrt bestueckt, 15-02 hat das Runbook auf den Stand dieser Anfahrt
 gebracht (Deckel 46 h / 5,40 USD netto, Block 13b Abbildwechsel, ein Befehl
@@ -43,9 +43,29 @@ ueber den wandernden Zeiger :dev, laesst 40b-baumhash.sh entscheiden,
 erzwingt die Kette PHP-Haelfte, Registrierung, harte Grenze aus der cgroup,
 Rueckgabewerte 2, 36, 37, 38 und 39, sieben boxlose Faelle samt einem Gate,
 das die Zaehlung der Nextcloud-Instanzen unmittelbar ueber jedem --rm-data
-erzwingt. Naechster Plan ist 15-07 (00-ablauf.md auf zehn Schritte).
-Progress: [████████░░] 80% der 49 geplanten Plaene (39 von 49; Phase 16 ist noch nicht geplant)
-Last activity: 2026-09-19 -- 15-06, der Abbildwechsel-Block 13b.
+erzwingt. Und 15-07 hat die Erwartung dieses Laufs festgeschrieben, BEVOR es
+die Box gibt: 00-ablauf.md traegt zwoelf Schrittzeilen im Gleichschritt mit
+Abschnitt 7 des Runbooks, die Erwartungen E8 bis E14 mit Zahlen, den Absatz
+"Kalt wird hergestellt, nicht bewahrt" samt drop_caches und mmap-Nebenwirkung,
+die elf Abbruchwerte 29 bis 39 und eine einheitliche Aufrufform fuer alle
+achtzehn Werkzeuge; dazu sind die neun Vorbedingungen gefahren und in
+rohdaten/02-vorbedingungen.txt protokolliert. **Damit ist Welle A ohne Box
+vollstaendig.** Naechster Plan ist 15-08, der Owner-Checkpoint Deckelfreigabe;
+alles danach ist durch ihn gesperrt.
+Progress: [████████░░] 82% der 49 geplanten Plaene (40 von 49; Phase 16 ist noch nicht geplant)
+Last activity: 2026-09-19 -- 15-07, die Erwartung und die Vorbedingungen vor der Box.
+
+**Was der Owner in 15-08 zu entscheiden hat, in zwei Zeilen:** die Freigabe des
+Deckels mit Datum (Vorbedingung 9, Platzhalter steht in der Rohdatei) und den
+Zugang zur DNS-Verwaltung fuer `loadtest.infranode.dev` (Vorbedingung 8). Alle
+uebrigen sieben Vorbedingungen sind abgearbeitet; die siebte (`jq` auf der Box)
+ist ohne Box nicht pruefbar und haengt am ersten Box-Block.
+
+**Das Belegkriterium des 900-s-Vorschlagswerts steht seit 15-07 fest** (E14 in
+`00-ablauf.md`): belegt werden die FOLGEN einer Frist und nie die Frist selbst.
+Der Vorschlagswert bleibt bei 900 s, wenn die Rueckkehr zur Grundlast ueber
+300 MB liegt UND die erste Suche nach einer Entladung unter 1,5 s bleibt. Fuer
+jedes einzelne Reissen steht vorher da, was folgt.
 
 **Die Deckelzahl, die der Owner in 15-08 vorfindet:** 46 Stunden und 5,40 USD
 netto, aus zehn Posten mit 39 h 22 min Planwert und 15 Prozent Zuschlag. Der
@@ -905,7 +925,7 @@ Harte Abhaengigkeiten: 12 vor 15, Backend vor PHP innerhalb 13, 14 vor 15, 16 zu
   (Plan 12-01); am Stichtag vollzieht Plan 12-02 nur noch nach der dortigen
   siebenschrittigen Checkliste. HART-03 ist erst nach diesem Vollzug erfuellt.
 
-- **Vor der Box-Anfahrt**: neu gerechneter Zeit-/Kostendeckel vom Owner freigegeben (MESS-05, Phase 15); das Rechenblatt steht seit 14.09. in `docs/runbook-messbox.md` Abschnitt 2 und kommt auf **42 h / 4,90 USD netto**, Untergrenze 31 h / rund 3,59 USD. Der 26-h-Vorschlag reisst rechnerisch
+- **Vor der Box-Anfahrt**: neu gerechneter Zeit-/Kostendeckel vom Owner freigegeben (MESS-05, Phase 15); das Rechenblatt steht seit 19.09. (Plan 15-02) in `docs/runbook-messbox.md` Abschnitt 2 und kommt auf **46 h / 5,40 USD netto**, Vorgaengerstand 42 h / 4,90 USD (16.09.), Untergrenze 31 h / rund 3,59 USD. Der 26-h-Vorschlag reisst rechnerisch. Der Preisabgleich vom 19.09. (15-07) hat keine Abweichung der sechs gepinnten Saetze ergeben
 - **Vor dem Bau des Zustandsteils**: engineState-Wortwahl `cold` vs sechstes Wort `unloaded` (MEM-05, Phase 14)
 - **Vor dem Bau der Entladung**: Vorprueflauf zur tatsaechlichen RSS-Rueckgabe auf Zielhardware (MEM-04, Phase 14) , ERLEDIGT 19.09.2026, Median 100,0 Prozent auf aarch64, Owner-Entscheid "freigegeben"
 
@@ -938,6 +958,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T23:20:00.000Z
-Stopped at: Completed 15-05-PLAN.md, 99c-filter-sortierung.sh mit drei Sortiermodi und dem Blaettern unter Filter, den Rueckgabewerten 2, 29, 34 und 35 und sieben boxlosen Faellen samt zwei Driftgates
+Last session: 2026-09-19T22:00:00.000Z
+Stopped at: Completed 15-07-PLAN.md, die Ablaufdatei auf zwoelf Schritte mit den Erwartungen E8 bis E14 und den Abbruchwerten 29 bis 39, dazu die neun Vorbedingungen abgearbeitet und protokolliert; Welle A ohne Box ist damit vollstaendig, als naechstes der Owner-Checkpoint 15-08
 Resume file: None
