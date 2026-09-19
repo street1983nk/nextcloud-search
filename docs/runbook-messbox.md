@@ -616,7 +616,7 @@ bereits 1.653 Dateien im Index lagen.
 
 ## 6. Vergleichbarkeitsbedingungen, protokollpflichtig
 
-Jede der fünf Grössen dieses Abschnitts wird vor dem Lauf **abgelesen** und
+Jede der sechs Grössen dieses Abschnitts wird vor dem Lauf **abgelesen** und
 nicht erinnert. Ein Lauf, dem eine davon fehlt, gilt als unvollständig: die
 Zahlen daneben sind dann nicht falsch, sie sind unbelegt, und für einen
 Vergleich ist das dasselbe.
@@ -628,6 +628,7 @@ Vergleich ist das dasselbe.
 | Instanztyp und harte Containergrenze | Typ aus `aws_box.sh status`, Grenze aus der cgroup: `memory.max` und `memory.swap.max`, siehe Block 12 | Ein anderer Instanztyp misst eine andere Maschine. Die Speichergrenze geht bei jeder Registrierung verloren, weil sie den Container neu baut; ohne sie läuft die Messung auf einer Maschine, die v1.1 nie hatte | **m7g.large** (D-06) und **2147483648** in beiden cgroup-Feldern |
 | Zeit seit dem letzten Containerstart | `docker inspect --format '{{.State.StartedAt}}' nc_app_findling_backend`, dazu der Abstand zur ersten Messung | Der Seitencache des Wirts hat die Kaltstart-Reproduktion vom 10.09.2026 vollständig erklärt: 1.838 ms gegen 1.598 ms, weil der letzte Start einmal 29 h und einmal Minuten zurücklag. Ohne diese Zeile ist eine Kaltstartzahl nicht einzuordnen | kein Sollwert. Abgelesen und protokolliert werden der Zeitstempel und der Abstand in Stunden |
 | Werkzeugstand als Baumhash | `40b-baumhash.sh`, es vergleicht das Abbild gegen den Arbeitsbaum und schreibt `rohdaten/40b-baumhash.txt` | Ein korrigiertes Lastwerkzeug macht die v1.1-Stufenzahlen unvergleichbar. Der Baumhash ist der Beweis, der aufgelöste Abbild-Digest nur die Notiz daneben (Befund L-05 der Phase 11) | kein Sollwert. Abgelesen wird `baumhash-gleich` mit dem Hash selbst; steht dort `nein`, hält der Lauf an |
+| Stellung des Entladeschalters `FINDLING_EMBED_IDLE_RELEASE_SECONDS` | aus der Umgebung des Containers: `docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' nc_app_findling_backend`, gefiltert auf den Variablennamen, je Messschritt neu abgelesen | Die A/B-Messung der Wiederaufwärm-Kosten aus Schritt 8 ist genau der Vergleich zweier Stellungen dieser Variablen. Eine Zahl ohne ihre Stellung ist keine Hälfte des Vergleichs, weil sie nicht sagt, zu welchem Ast sie gehört. Die Stellung geht ausserdem bei jeder Registrierung verloren, wie die harte Speichergrenze | kein Sollwert. Abgelesen wird der Wert je Messschritt; die Schritte 1 bis 7 und 9 laufen auf **0**, Schritt 8 fährt beide Stellungen |
 
 ### 6.1 Das Cron-Intervall ist Pflichtfeld
 
@@ -685,6 +686,39 @@ seit dem 10.09.2026 gefixt und geeicht. Jede weitere Änderung daran macht die
 Stufenzahlen dieser Anfahrt gegen die von v1.1 unvergleichbar, und dann misst
 die Anfahrt das Werkzeug statt des Erzeugnisses.
 
+### 6.4 Die Stellung des Entladeschalters ist Pflichtfeld
+
+**Eine Zeile je Messschritt**, mit dem Namen der Variablen und ihrem Wert, nach
+dem Muster der Pflichtzeile `cron-intervall-ist` aus 6.1:
+`entladeschalter-ist=<sekunden>`. Fehlt sie für einen Messschritt, gilt der Lauf
+als unvollständig, und zwar nach derselben Regel wie ein Lauf ohne
+Cron-Intervall: die Zahlen daneben sind dann nicht falsch, sie sind unbelegt.
+
+**Warum das eine Pflichtzeile ist und keine Bemerkung.** Seit MEM-01 entscheidet
+diese eine Variable, ob der Container die Gewichte im Leerlauf freigibt. Die
+A/B-Messung der Wiederaufwärm-Kosten aus Schritt 8 ist genau der Vergleich
+zweier Stellungen dieser Variablen. Zwei Zahlen mit ihren Stellungen sind ein
+Vergleich; zwei Zahlen ohne sie sind zwei Zahlen, und keine davon ist die Hälfte
+des Vergleichs, weil keine sagt, zu welchem Ast sie gehört.
+
+**Der Fehler wäre auch nicht sichtbar.** Ein Container mit eingeschaltetem
+Schalter antwortet auf jede Suche mit HTTP 200. Er antwortet nach einer
+Ruhephase nur ohne semantische Seite, und das steht in den Trefferzahlen und
+nicht in der Fehlerspalte. Eine falsch erinnerte Stellung fällt in keiner
+Fehlerzeile auf, sondern erst beim Auswerten, wenn die Box abgebaut ist.
+
+**Die Stellung geht bei jeder Registrierung verloren.** Sie reist als
+Umgebungsvariable der ExApp, und jede Registrierung baut den Container neu,
+genau wie bei der harten Speichergrenze aus Block 12. Nach jeder Registrierung
+wird sie deshalb neu abgelesen und nicht erinnert.
+
+**Der Messcontainer des `one_load`-Gates hat den Schalter auf `0`.** Das
+Werkzeug `findling.tools.one_load` gibt in seiner vierten Phase selbst frei und
+lädt über eine zweite echte Suchrunde nach. Steht der Schalter in diesem
+Container auf einem Wert ungleich `0`, weist `query_may_load()` die zweite Runde
+zurück, das warme Fenster zeigt null Ladevorgänge, und das Werkzeug meldet einen
+Befund, den es nicht gibt. Für diesen einen Lauf gilt `0` und nichts sonst.
+
 ---
 
 ## 7. Messreihenfolge mit Abbruchpfaden
@@ -703,7 +737,7 @@ Schrittnummern stehen unten in Klammern.
 | 5 | Cron-Wirkungszweig, mit dem Volllauf gestartet und neben ihm laufend (00-ablauf Schritt 5) | `./97-cron-vorpruefung.sh waehrend` | `rohdaten/97-cron-vorpruefung-waehrend.txt` | **27** weniger als zwei Scheiben oder keine Zahl, **28** Scheibenabstand über 420 Sekunden |
 | 6 | Laststufen 1, 4, 8, 12 und 16, mit je einem Entscheid zu den vier regressiven Stufen (Befund L-04 der Phase 11) | Muster `95-spitze.sh` und `97-nebenlaeufigkeit.sh` über `scripts/ops/search_load.py`, unverändert | `rohdaten/95-*.json`, `rohdaten/95-*.csv` | kein Rückgabewert. Eine Stufe ohne Antwortzahlen wird als solche protokolliert und nicht geschätzt; abgebrochene Aufrufe zählen nicht als beantwortet (DI-10-01) |
 | 7 | Sprachfall-Lauf mit Abschnitt 3b (00-ablauf Schritt 4) | `CI_LAUF=<laufnummer> ./98c-sprachfaelle.sh`, mit der zweiten Sondenfahrt nach Upload und Indexierung | `rohdaten/05-sprachfaelle.txt` | **15**, **16**, **17**, **18**, **22**, **23** und **24**, siehe die Tabelle darunter |
-| 8 | Wiederaufwärm-Messung der Entladung in vier Ausprägungen, A/B über den MEM-01-Schalter | Muster `95b-kaltstart-reproduktion`, der Schalter selbst entsteht in Phase 14 | `rohdaten/95b-wiederaufwaermen-*.txt` | kein Rückgabewert. Vorbedingung ist die protokollierte Zeit seit dem letzten Containerstart aus Abschnitt 6; ohne sie ist der Vergleich warm gegen kalt unbelegt |
+| 8 | Wiederaufwärm-Kosten, A/B über den MEM-01-Schalter, in vier Ausprägungen (Abschnitt 7.2) | Muster `95b-kaltstart-reproduktion`, der Schalter steht seit Phase 14 | `rohdaten/95b-wiederaufwaermen-*.txt` | **29**, **30** und **31**, siehe Abschnitt 7.2. Vorbedingung bleibt die protokollierte Zeit seit dem letzten Containerstart aus Abschnitt 6; ohne sie ist der Vergleich warm gegen kalt unbelegt |
 | 9 | Endmessungen und Gegenproben, vor jedem zerstörenden Schritt | Muster `90-bestand.sh` und `96-vektorbestand`, dazu die Kostenzeilen aus `box.env` | `rohdaten/90-bestand.txt`, `rohdaten/96-vektorbestand.txt`, `rohdaten/93-kosten-und-verbleib.txt` | kein Rückgabewert. Dieser Schritt ist die Vorbedingung von Abschnitt 8: was hier nicht erhoben ist, ist nach dem Abbau nicht mehr erhebbar |
 
 **Zur Zählung:** `00-ablauf.md` nummeriert die fünf Schritte, die die zwei
@@ -739,6 +773,66 @@ einer Rohdatei, die niemand liest.
 das während seines eigenen Laufs nachgebessert wird, macht jede Zahl daneben
 unbelegt. Fällt ein Werkzeug auf, wird der Befund notiert und der Lauf zu Ende
 gefahren oder abgebrochen; die Korrektur gehört in die Zeit nach dem Abbau.
+
+### 7.2 Der Messschritt Wiederaufwaerm-Kosten, A/B
+
+Der Schritt 8 dieser Tabelle misst, was die Entladung aus MEM-01 an
+Nachladezeit kostet, und er misst es als Vergleich zweier Stellungen des
+Schalters. Vier Ausprägungen, und die Reihenfolge ist bindend, weil jede
+Messung den Seitencache des Wirts wärmt und eine einmal gewärmte Kaltmessung
+nicht wiederholbar ist, ohne den Cache erneut zu leeren:
+
+| Nr | `FINDLING_EMBED_IDLE_RELEASE_SECONDS` | Seitencache | Was gemessen wird |
+|---|---|---|---|
+| 1 | Vorschlagswert | kalt, Cache des Wirts vorher geleert | die Ruhezeit wird abgewartet, dann eine Suche: die Antwortzeit der degradierten Suche und die Dauer des Nachwärmens daneben |
+| 2 | Vorschlagswert | warm | dieselbe Messung, die Ruhezeit erneut abgewartet, ohne Leeren des Caches |
+| 3 | `0` | kalt, Cache des Wirts vorher geleert | der Bezugswert ohne Entladung, nach dem Muster `95b-kaltstart-reproduktion` |
+| 4 | `0` | warm | derselbe Bezugswert ohne Leeren des Caches |
+
+Der Vorschlagswert kommt aus der Beschreibung der Variablen in
+`backend/appinfo/info.xml` und wird im Protokoll mit seinem Wert genannt, nicht
+mit dem Wort. Jeder Wechsel der Stellung baut den Container neu: danach werden
+die harte Speichergrenze aus Block 12 und die Pflichtzeile aus 6.4 neu
+abgelesen, beide, und nicht erinnert.
+
+**Ein Aufruf der Diagnose-Route (`ranked_sides`) LAEDT das Modell. Vor einer
+Kaltmessung darf sie deshalb nicht aufgerufen werden.**
+
+Das ist kein Fehler dieser Route, sondern ihr Entwurf: sie ist seit Phase 12 das
+Werkzeug der Fremdbestands-Vorprüfung (MESS-04, Schritt 3 dieser Tabelle), sie
+trägt keine 1,5-Sekunden-Decke und sie ist keine Nutzerroute, also fragt sie
+nicht, ob sie laden darf, und lädt. Die Zeile und ihre Begründung stehen in
+`backend/src/findling/api/diagnose.py` unmittelbar über dem Aufruf von
+`ranked_sides`. Wer die Fremdbestands-Vorprüfung fahren will, fährt sie **nach**
+den Kaltmessungen 1 und 3 oder nimmt den Aufwärmeffekt ins Protokoll. Der
+Abbruch dafür ist Rückgabewert **30**, und er ist einer: eine aufgewärmte
+Kaltmessung wird nicht geschätzt und nicht herausgerechnet, sie wird nach einer
+erneuten Ruhephase wiederholt.
+
+**Die zweite Hälfte derselben Falle.** Nach einer Entladung meldet die
+Diagnose-Route eine vollständige semantische Seite, weil sie lädt; die
+Nutzerrouten melden im selben Moment eine leere, weil sie unter dem Schalter
+nicht laden dürfen. Wer die zwei verwechselt, misst zwei verschiedene Dinge und
+nennt sie eine Zahl. Die Regel daraus: ob die semantische Seite steht, wird an
+der Nutzerroute abgelesen und nie an der Diagnose-Route. Die Diagnose-Route
+beantwortet, ob der Bestand zu einer Zeile etwas hergibt, und nicht, was ein
+Nutzer in diesem Moment bekommen würde.
+
+**Der Ast mit eingeschaltetem Schalter braucht den Beleg, dass entladen wurde.**
+Abgelesen wird das am Zustand `unloaded` der Statusseite und am Entladezähler
+des Containers. Bleiben beide aus, misst der Ast das Nachwärmen von etwas, das
+nie losgelassen wurde; der Abbruch dafür ist Rückgabewert **31**.
+
+Die drei neuen Abbrüche setzen den Katalog dieses Laufverzeichnisses bei **29**
+fort, und sie stehen wie die vier aus 6.1 und 6.2 **unterhalb** der
+`tee`-Pipeline ihres Skripts, aus demselben Grund: der Rückgabewert einer
+Pipeline gehört zu `tee`.
+
+| Bedingung | Wo sie greift | Folge |
+|---|---|---|
+| Die Stellung des Entladeschalters war fuer einen Messschritt nicht ablesbar | Schritt 8, und vor jedem anderen Messblock | Rückgabewert **29** für die fehlende Pflichtzeile. Ein Lauf ohne protokollierte Stellung gilt als unvollständig, wie einer ohne Cron-Intervall (Abschnitt 6.4) |
+| Vor einer Kaltmessung wurde die Diagnose-Route gerufen | Schritt 8, vor Ausprägung 1 oder 3 | Rückgabewert **30** für den aufgewärmten Container. Die Messung wird wiederholt oder mit dem Aufwärmeffekt im Protokoll gefahren, nie herausgerechnet |
+| Der Ast mit eingeschaltetem Schalter hat keine Entladung erlebt | Schritt 8, Ausprägung 1 und 2 | Rückgabewert **31** für die ausgebliebene Freigabe. Kein `unloaded`, kein Entladezähler über null, also keine Wiederaufwärmzahl |
 
 ---
 
