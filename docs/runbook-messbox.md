@@ -599,6 +599,78 @@ Maschine, solange gemessen wird.
 `Erwartete Ausgabe`: die Zählung liefert genau `1`. Liefert sie mehr, wird
 nichts weiter getan, bis geklärt ist, welche Instanz die Messinstanz ist.
 
+### Block 13b: Abbildwechsel auf den v1.2-Stand
+
+**Warum dieser Block existiert.** Der Snapshot trägt die lokale Registry der Box
+mit dem Abbild vom 10.09.2026. Ein Volllauf gegen dieses Abbild misst einen
+Container **ohne Top-up-Route, ohne die Filter aus Phase 13 und ohne den
+Entladeschalter aus Phase 14**. Erfolgskriterium 2 dieser Phase wäre damit
+unerfüllbar, weil das alte Abbild genau den Fix nicht kennt, dessen Wirkung
+belegt werden soll, und Erfolgskriterium 5 ebenso, weil es den MEM-01-Schalter
+misst, den nur der neue Stand trägt. Block 8 prüft heute allein, dass die
+Registry aus dem Snapshot antwortet, und nicht, welchen Stand sie führt. Dieser
+Block schliesst die Lücke, und er schliesst sie **vor** der Zustandsprüfung aus
+Abschnitt 5.
+
+**Was gewechselt wird** (D-04, `15-CONTEXT.md`): das aktuelle
+Multi-arch-Release-Abbild des Phase-14-Abschlusses, **per Digest gezogen und
+nicht über den Zeiger `:dev`**. `:dev` wandert, jeder grüne Lauf der
+Abbildstrecke schiebt ihn weiter, und ein Bericht, der ihn nennt, nennt keinen
+Stand. Der aufgelöste Digest wird im Protokoll genannt; der Beweis der
+Identität bleibt der Baumhash aus Abschnitt 6 und nicht der Digest.
+
+```sh
+# auf der Box, im Laufverzeichnis der Anfahrt
+cd <checkout>/docs/measurements/2026-09-v12-messung/skripte
+IMAGE="ghcr.io/street1983nk/findling_backend@<digest>" ./92b-wechsel.sh
+```
+
+`<digest>` ist der Digest des Release-Abbilds des Phase-14-Abschlusses; er wird
+vor der Anfahrt aus der Abbildstrecke abgelesen und steht als Zeile in der
+Rohdatei, nicht in dieser Datei. `<checkout>` ist der Arbeitsbaum auf der Box
+aus Block 9.
+
+**Die Abhängigkeitskette ist nicht frei wählbar**, und sie steht wörtlich im
+Kopf von `92-wechsel.sh`:
+
+1. **Zuerst die PHP-Hälfte.** Ihr Verzeichnis unter `custom_apps` **muss**
+   `findling` heissen. Unter jedem anderen Namen findet der Klassenlader nichts,
+   der Suchanbieter bleibt unsichtbar, und es gibt **nirgends** eine
+   Fehlermeldung, die das sagt.
+2. **Danach die Registrierung** der ExApp. Sie baut den Container neu.
+3. **Danach die harte Grenze**, weil die Registrierung sie wegwirft. Sie wird
+   **aus der cgroup** zurückgelesen und nicht aus der Antwort von `docker update`
+   oder aus `docker inspect`, mit **2147483648** in beiden Feldern
+   (`memory.max` und `memory.swap.max`), wie in Block 12.
+4. **Daneben die Stellung des Entladeschalters**, die aus demselben Grund
+   verloren geht: `FINDLING_EMBED_IDLE_RELEASE_SECONDS` reist als
+   Umgebungsvariable der ExApp und wird nach der Registrierung neu abgelesen,
+   nach der Pflichtzeile aus Abschnitt 6.4. Für den Wirkungsbeleg steht sie auf
+   `0`.
+
+**`unregister --rm-data` läuft vor dem Indexaufbau und nie danach**, und nie
+ohne die Zählung der laufenden Nextcloud-Instanzen unmittelbar davor (Block 13).
+Der Volumenname einer ExApp folgt allein aus ihrer App-Kennung: am 07.09.2026
+hat eine zweite Nextcloud am selben Docker-Dienst mit diesem Schalter das
+Messvolumen der ersten gelöscht. Nach dem Indexaufbau ist derselbe Schalter der
+Verlust des Messgegenstands.
+
+**Das Werkzeug** ist `92b-wechsel.sh` im Laufverzeichnis
+`docs/measurements/2026-09-v12-messung/skripte/`, seine Rohdatei ist
+`rohdaten/92b-wechsel.txt`, und es bricht mit vier eigenen Rückgabewerten ab:
+
+| Wert | Bedingung |
+|---|---|
+| **36** | der Baumhash fehlt, ist nicht dreifach verankert oder meldet `baumhash-gleich nein` |
+| **37** | mehr als eine Nextcloud läuft an diesem Docker-Dienst |
+| **38** | der Arbeitsbaum ist nicht sauber |
+| **39** | die harte Grenze hat nicht gegriffen, die cgroup meldet nicht 2147483648 |
+
+`Erwartete Ausgabe`: der aufgelöste Digest steht in der Rohdatei, das
+PHP-Verzeichnis heisst `findling` und ist eingeschaltet, beide cgroup-Felder
+melden `2147483648`, und `40b-baumhash.sh` meldet `baumhash-gleich ja`. Marke:
+`in Phase 15 erstmals vollzogen`.
+
 ---
 
 ## 5. Zustandspruefung mit Abbruchbedingung
@@ -669,8 +741,19 @@ Vergleich ist das dasselbe.
 | Cron-Intervall der Instanz | `./97-cron-vorpruefung.sh vorher`, Pflichtzeile `cron-intervall-ist` | Der Takt stand in v1.1 nominal auf fünf Minuten und lieferte effektiv rund alle zwölf. Das hat 5,85 h von 26,6 h ohne Arbeitsvorrat erzeugt, gegen eine Baseline von 0,10 h | **300** Sekunden, Toleranz zehn Prozent, also 270 bis 330 s |
 | Instanztyp und harte Containergrenze | Typ aus `aws_box.sh status`, Grenze aus der cgroup: `memory.max` und `memory.swap.max`, siehe Block 12 | Ein anderer Instanztyp misst eine andere Maschine. Die Speichergrenze geht bei jeder Registrierung verloren, weil sie den Container neu baut; ohne sie läuft die Messung auf einer Maschine, die v1.1 nie hatte | **m7g.large** (D-06) und **2147483648** in beiden cgroup-Feldern |
 | Zeit seit dem letzten Containerstart | `docker inspect --format '{{.State.StartedAt}}' nc_app_findling_backend`, dazu der Abstand zur ersten Messung | Der Seitencache des Wirts hat die Kaltstart-Reproduktion vom 10.09.2026 vollständig erklärt: 1.838 ms gegen 1.598 ms, weil der letzte Start einmal 29 h und einmal Minuten zurücklag. Ohne diese Zeile ist eine Kaltstartzahl nicht einzuordnen | kein Sollwert. Abgelesen und protokolliert werden der Zeitstempel und der Abstand in Stunden |
-| Werkzeugstand als Baumhash | `40b-baumhash.sh`, es vergleicht das Abbild gegen den Arbeitsbaum und schreibt `rohdaten/40b-baumhash.txt` | Ein korrigiertes Lastwerkzeug macht die v1.1-Stufenzahlen unvergleichbar. Der Baumhash ist der Beweis, der aufgelöste Abbild-Digest nur die Notiz daneben (Befund L-05 der Phase 11) | kein Sollwert. Abgelesen wird `baumhash-gleich` mit dem Hash selbst; steht dort `nein`, hält der Lauf an |
+| Werkzeugstand als Baumhash | `40b-baumhash.sh`, es vergleicht das Abbild gegen den Arbeitsbaum und schreibt `rohdaten/40b-baumhash.txt` | Ein korrigiertes Lastwerkzeug macht die v1.1-Stufenzahlen unvergleichbar. Der Baumhash ist der Beweis, der aufgelöste Abbild-Digest nur die Notiz daneben (Befund L-05 der Phase 11). Das gilt auch für den Digest des Abbildwechsels aus Block 13b: er wird protokolliert, aber er belegt nichts, weil der Pfadfilter der Abbildstrecke bis in `backend/**` reicht und schon ein neuer Testdatei-Commit den Digest bewegt, ohne eine Zeile des Abbilds zu ändern | kein Sollwert. Abgelesen wird `baumhash-gleich` mit dem Hash selbst; steht dort `nein`, hält der Lauf an |
 | Stellung des Entladeschalters `FINDLING_EMBED_IDLE_RELEASE_SECONDS` | aus der Umgebung des Containers: `docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' nc_app_findling_backend`, gefiltert auf den Variablennamen, je Messschritt neu abgelesen | Die A/B-Messung der Wiederaufwärm-Kosten aus Schritt 8 ist genau der Vergleich zweier Stellungen dieser Variablen. Eine Zahl ohne ihre Stellung ist keine Hälfte des Vergleichs, weil sie nicht sagt, zu welchem Ast sie gehört. Die Stellung geht ausserdem bei jeder Registrierung verloren, wie die harte Speichergrenze | kein Sollwert. Abgelesen wird der Wert je Messschritt; die Schritte 1 bis 7 und 9 laufen auf **0**, Schritt 8 fährt beide Stellungen |
+
+**Der Abbildwechsel und `baumhash-gleich` widersprechen sich nicht.** Gewechselt
+wird **einmal**, in Block 13b, vor der ersten Messung, und dieser eine Vorgang
+ist genau der, der `baumhash-gleich ja` überhaupt erst herstellt: er bringt das
+Abbild der Box auf den Stand des Arbeitsbaums. Ab der ersten Messung gilt die
+Bedingung dieser Tabelle wieder unverändert. Steht dort später `nein`, hält der
+Lauf an. Die Reihenfolge lautet also: **wechseln, Baumhash lesen, messen**, und
+nur in dieser Richtung. Ein Abbildwechsel während der laufenden Messreihe ist
+kein Nachtrag, sondern ein zweiter Messgegenstand unter dem Namen des ersten;
+die Zahlen davor und danach gehören dann in zwei Berichte und nicht in eine
+Spalte.
 
 ### 6.1 Das Cron-Intervall ist Pflichtfeld
 
