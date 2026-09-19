@@ -40,7 +40,7 @@ key-decisions:
   - "Der Gesamtausgang ist Gehalten, der Satz gemessen, Ergebnis negativ trifft auf diesen Lauf nicht zu"
   - "MEM-04 ist erfuellt: die Zahl liegt auf Zielarchitektur, nativ, gegen das ausgelieferte Abbild"
   - "Der Bodensatz von rund 16 MB gehoert in den Store-Text und wird nicht verschwiegen"
-  - "Die Freigabe der Plaene 14-03 bis 14-12 liegt beim Owner und nicht in diesem Bericht"
+  - "Der Owner hat am 19.09.2026 woertlich freigegeben gesagt; 14-03 bis 14-12 sind ohne Auflage frei"
 
 requirements-completed: [MEM-04]
 
@@ -53,24 +53,24 @@ completed: 2026-09-19
 
 **Der Lauf ist auf `ubuntu-24.04-arm` gegen das ausgelieferte Abbild gefahren und gibt mit einem Median von 100,0 Prozent praktisch den gesamten Modellspeicher an das Betriebssystem zurueck; E1 bis E4 sind alle gehalten, der Ausgang heisst "Gehalten", und das Tor der Phase liegt jetzt beim Owner.**
 
-## Status: CHECKPOINT OFFEN
+## Status: TOR OFFEN, PHASE FREIGEGEBEN
 
-Task 3 dieses Plans ist ein `checkpoint:human-verify` und ist **nicht
-entschieden**. Die Tasks 1 und 2 sind ausgefuehrt und committet, der Bericht
-steht, aber der Ausgang des Tors gehoert dem Owner. Solange die Antwort fehlt,
-gilt:
+Task 3 dieses Plans ist ein `checkpoint:human-verify` und ist **entschieden**:
+der Owner hat am 19.09.2026 nach Vorlage der Messtabelle und der vier Urteile
+woertlich **"freigegeben"** geantwortet. Alle drei Tasks sind damit
+abgeschlossen. Der Wortlaut und die Folge stehen im Abschnitt
+"Owner-Entscheid".
 
-- Es ist **kein Produktcode** entstanden und es darf keiner entstehen.
-- Die Plaene **14-03 bis 14-12 sind nicht freigegeben**.
-- Der Abschnitt "Owner-Entscheid" dieser Zusammenfassung traegt die Antwort im
-  Wortlaut nach, sobald sie vorliegt.
+- Die Plaene **14-03 bis 14-12 sind freigegeben** und werden ausgefuehrt.
+- In diesem Plan ist weiterhin **kein Produktcode** entstanden; er ist das Tor
+  und nicht der Bau.
 
 ## Performance
 
 - **Duration:** 26 min
 - **Started:** 2026-09-19T12:45:00Z
 - **Completed (Tasks 1 und 2):** 2026-09-19T13:11:00Z
-- **Tasks:** 2 von 3 (Task 3 ist der offene Owner-Checkpoint)
+- **Tasks:** 3 von 3 (Task 3 ist der Owner-Checkpoint, entschieden mit "freigegeben")
 - **Files created/modified:** 5 neu, 3 Zustandsdateien
 
 ## Accomplishments
@@ -116,7 +116,7 @@ gilt:
 
 1. **Task 1: Den Lauf fahren und die Rohdaten holen** - `64257e0` (docs)
 2. **Task 2: Der Bericht und das Urteil gegen die Erwartung** - `0cb44ca` (docs)
-3. **Task 3: Owner-Tor** - offen, siehe Abschnitt "Owner-Entscheid"
+3. **Task 3: Owner-Tor** - entschieden ("freigegeben"), eingetragen im Abschluss-Commit dieses Plans (docs)
 
 ## Files Created/Modified
 
@@ -207,10 +207,27 @@ genau die Artefakte der Frontmatter.
 
 ## Owner-Entscheid
 
-**OFFEN.** Der Checkpoint (Task 3) ist nicht entschieden. Hier wird die Antwort
-des Owners im Wortlaut eingetragen, sobald sie vorliegt, dazu bei "teilweise"
-jede Auflage einzeln und bei "freigegeben" die Nennung der freigegebenen
-Plaene 14-03 bis 14-12.
+**Antwort des Owners, im Wortlaut:**
+
+> freigegeben
+
+Gegeben am 19.09.2026 in der Session, nach Vorlage der Messtabelle des
+Zielastes und der vier Urteile E1 bis E4. Der Owner hat den Bericht und die
+Gegenprobe zur Commitreihenfolge gesehen.
+
+**Folge, Plan fuer Plan benannt:** freigegeben sind **14-03, 14-04, 14-05,
+14-06, 14-07, 14-08, 14-09, 14-10, 14-11 und 14-12**, also die Wellen 3 bis 8
+der Phase. Der Bau der Entladefunktion darf beginnen.
+
+**Auflagen:** keine. Der Owner hat den Ausgang ohne Vorbehalt genannt; die
+Variante "teilweise" wurde nicht gewaehlt und es ist keine Bedingung
+ausgesprochen worden.
+
+Zwei Punkte aus diesem Lauf reisen als Sachverhalt und nicht als Auflage in die
+folgenden Plaene mit: der Bodensatz von rund 16 MB gehoert in jede Zusage,
+also auch in die Store-Texte der Phase 16, und die drei Fragen aus Abschnitt 5
+des Berichts (Ladezeit, kalter Seitencache, A/B ueber den Schalter) bleiben bei
+Phase 15.
 
 ## Issues Encountered
 
@@ -251,9 +268,9 @@ und werden im Bericht zitiert. T-14-SC: kein Paket installiert.
 
 ## Next Phase Readiness
 
-- **Das Tor ist der Owner-Checkpoint.** Erst nach der Antwort steht fest, ob
-  Wave 3 (14-03 und folgende) laeuft. Bis dahin entsteht kein Produktcode.
-- Bei Freigabe: die Zahlen dieses Laufs sind die Grundlage des Bauens, und der
+- **Das Tor ist offen.** Der Owner hat "freigegeben" gesagt, Wave 3 (14-03 und
+  folgende) laeuft. Der Bau der Entladefunktion darf beginnen.
+- Die Zahlen dieses Laufs sind die Grundlage des Bauens, und der
   Bodensatz von rund 16 MB gehoert von Anfang an in jede Zusage, auch in die
   Store-Texte der Phase 16.
 - Phase 15 bleibt zustaendig fuer die drei Fragen, die dieser Lauf nicht
@@ -262,7 +279,7 @@ und werden im Bericht zitiert. T-14-SC: kein Paket installiert.
 
 ---
 *Phase: 14-modell-entladung-im-leerlauf*
-*Completed: 2026-09-19 (Tasks 1 und 2; Task 3 offen)*
+*Completed: 2026-09-19 (alle drei Tasks; Owner-Entscheid "freigegeben")*
 
 ## Self-Check: PASSED
 

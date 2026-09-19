@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: 14-02 an Task 3, Owner-Tor des Vorprueflaufs
-last_updated: "2026-09-19T13:10:00.000Z"
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-09-19T13:25:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
 Plan: 2 von 12 abgeschlossen (14-02: Vorprueflauf gefahren, Bericht steht)
-Status: WARTET AUF DEN OWNER am Tor der Phase (14-02 Task 3, checkpoint:human-verify).
-Der Vorprueflauf ist gefahren und dokumentiert; die Plaene 14-03 bis 14-12 sind
-NICHT freigegeben, solange der Owner den Ausgang nicht genannt hat.
+Status: executing, das Tor der Phase ist offen. Der Owner hat am 19.09.2026
+woertlich "freigegeben" geantwortet; die Plaene 14-03 bis 14-12 sind ohne
+Auflage frei, naechster Plan ist 14-03.
 Progress: [███████░░░] 70%
 Last activity: 2026-09-19 -- 14-02: Lauf 35443822228 auf ubuntu-24.04-arm, Median der
 Rueckgabe 100,0 Prozent, E1 bis E4 alle gehalten, Bericht in
@@ -41,8 +41,13 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
 
-- 14-02: Der Vorprueflauf ist gefahren und das Tor der Phase steht offen, aber
-  ungeoeffnet: der Owner hat den Ausgang noch nicht genannt. Gemessen wurde am
+- 14-02 (OWNER-ENTSCHEID 19.09.2026): Der Owner hat den Ausgang des
+  Vorprueflaufs im Wortlaut mit "freigegeben" genannt, ohne Auflage. Damit sind
+  14-03 bis 14-12 frei und der Bau der Entladefunktion darf beginnen. Der Satz
+  "gemessen, Ergebnis negativ" ist nicht eingetreten.
+
+- 14-02: Der Vorprueflauf ist gefahren und das Tor der Phase ist offen.
+  Gemessen wurde am
   19.09.2026 im Lauf 35443822228 auf `ubuntu-24.04-arm` (role target, aarch64,
   Neoverse-N2, vier Kerne) gegen das ausgelieferte Abbild
   `sha256:31c905b212d815d9ba5deea29a44b90bd8564baa3c4a5bd48ea13876ef31e538`.
@@ -50,7 +55,6 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
   98,4), `trim_rc` in fuenf von fuenf Zyklen 1, `after_gc` mindestens 856,9 MB
   ueber `after_trim`, Zyklus 5 gegen Zyklus 1 minus 1,5 Punkte. E1, E2, E3 und
   E4 sind alle gehalten; der Ausgang des Ablaufdokuments heisst "Gehalten".
-  Der Satz "gemessen, Ergebnis negativ" trifft auf diesen Lauf NICHT zu.
 
 - 14-02: MEM-04 ist erfuellt und abgehakt. Anders als in 14-01, wo der Haken
   zurueckgenommen wurde, liegt die Zahl jetzt vor: auf Zielarchitektur, nativ,
@@ -437,7 +441,7 @@ Harte Abhaengigkeiten: 12 vor 15, Backend vor PHP innerhalb 13, 14 vor 15, 16 zu
 
 - **Vor der Box-Anfahrt**: neu gerechneter Zeit-/Kostendeckel vom Owner freigegeben (MESS-05, Phase 15); das Rechenblatt steht seit 14.09. in `docs/runbook-messbox.md` Abschnitt 2 und kommt auf **42 h / 4,90 USD netto**, Untergrenze 31 h / rund 3,59 USD. Der 26-h-Vorschlag reisst rechnerisch
 - **Vor dem Bau des Zustandsteils**: engineState-Wortwahl `cold` vs sechstes Wort `unloaded` (MEM-05, Phase 14)
-- **Vor dem Bau der Entladung**: Vorprueflauf zur tatsaechlichen RSS-Rueckgabe auf Zielhardware (MEM-04, Phase 14); negatives Ergebnis ist ein legitimer Ausgang
+- **Vor dem Bau der Entladung**: Vorprueflauf zur tatsaechlichen RSS-Rueckgabe auf Zielhardware (MEM-04, Phase 14) , ERLEDIGT 19.09.2026, Median 100,0 Prozent auf aarch64, Owner-Entscheid "freigegeben"
 
 ## Nach v1.2 (Wiedervorlage)
 
@@ -468,6 +472,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T13:10:00.000Z
-Stopped at: 14-02 Task 3, Owner-Tor des Vorprueflaufs (checkpoint:human-verify)
-Resume file: .planning/phases/14-modell-entladung-im-leerlauf/14-02-PLAN.md
+Last session: 2026-09-19T13:25:00.000Z
+Stopped at: Completed 14-02-PLAN.md, Owner-Entscheid "freigegeben" eingetragen
+Resume file: None
