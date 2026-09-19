@@ -152,9 +152,34 @@ def test_one_process_pays_for_one_engine_and_one_word_list(prepared: Path) -> No
     assert report.wordlist_reads_after_search == 1, "the search side takes the cache hit"
     assert report.engine_loads_after_search == 1, "the search side really reached the model"
     assert report.engine_loads_after_worker == 1, "the track shares what the search side loaded"
+    assert report.engine_unloads_after_release == 1, "the fourth phase really let go of something"
+    assert report.engine_loads_after_rewarm - report.engine_unloads_after_release == 1, (
+        "one warm window, exactly one load"
+    )
     assert report.candidates == 1, "the seeded document has to be findable, or nothing above was measured"
     assert report.passage_vectors == 1
     assert report.cold_search_ms > 0.0, "the round that loaded the engine took measurable time"
+
+
+def test_the_fourth_phase_releases_the_weights_and_fetches_them_back(
+    prepared: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Success criterion 5, driven through the real call path and printed.
+
+    The three phases before this one are all green in a container that can
+    never let go of anything, which is the container this product was until
+    this phase. So the fourth one releases the weights and drives one more real
+    search round, and both of its numbers travel in the report: the release has
+    to have freed exactly one engine, and the round after it has to have
+    fetched back exactly one.
+    """
+    code = one_load.main(["--volume", str(prepared), "--source", str(FIXTURE_LIST)])
+
+    printed = capsys.readouterr().out
+    assert code == 0
+    assert "engine-unloads-after-release=1" in printed
+    assert "engine-loads-after-rewarm=2" in printed
+    assert "verdict=ok" in printed
 
 
 def test_the_cold_start_duration_is_a_line_of_its_own(prepared: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -270,12 +295,41 @@ def test_every_counter_that_is_not_one_is_named() -> None:
         wordlist_reads_after_search=3,
         engine_loads_after_search=0,
         engine_loads_after_worker=2,
+        engine_unloads_after_release=0,
+        engine_loads_after_rewarm=0,
         candidates=0,
         passage_vectors=0,
         cold_search_ms=12.5,
     )
 
-    assert len(one_load.findings(report)) == 6
+    assert len(one_load.findings(report)) == 8
+
+
+def test_a_release_that_freed_nothing_is_a_finding() -> None:
+    """The anti-vacuity clause of the fourth phase, in the shape of the other three.
+
+    A release that let go of nothing makes every number behind it meaningless:
+    the engine never left, so the round that follows takes a cache hit and
+    reports a warm window that cost no load at all. Both halves of that have to
+    be named, because an admin who reads one of them without the other would
+    raise the wrong number.
+    """
+    report = one_load.Report(
+        wordlist_reads_after_index=1,
+        wordlist_reads_after_search=1,
+        engine_loads_after_search=1,
+        engine_loads_after_worker=1,
+        engine_unloads_after_release=0,
+        engine_loads_after_rewarm=1,
+        candidates=1,
+        passage_vectors=1,
+        cold_search_ms=12.5,
+    )
+
+    trouble = one_load.findings(report)
+
+    assert any("released nothing" in finding for finding in trouble)
+    assert any("warm window" in finding for finding in trouble)
 
 
 def test_a_clean_report_names_nothing() -> None:
@@ -284,6 +338,8 @@ def test_a_clean_report_names_nothing() -> None:
         wordlist_reads_after_search=1,
         engine_loads_after_search=1,
         engine_loads_after_worker=1,
+        engine_unloads_after_release=1,
+        engine_loads_after_rewarm=2,
         candidates=1,
         passage_vectors=1,
         cold_search_ms=12.5,
@@ -303,6 +359,8 @@ def test_the_duration_is_reported_and_never_judged() -> None:
         wordlist_reads_after_search=1,
         engine_loads_after_search=1,
         engine_loads_after_worker=1,
+        engine_unloads_after_release=1,
+        engine_loads_after_rewarm=2,
         candidates=1,
         passage_vectors=1,
         cold_search_ms=900_000.0,
