@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-12-PLAN.md
-last_updated: "2026-09-19T23:20:00.000Z"
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-09-19T20:05:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 33
-  completed_plans: 33
-  percent: 100
+  total_plans: 49
+  completed_plans: 34
+  percent: 69
 ---
 
 # Project State
@@ -21,15 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-11)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 14: modell-entladung-im-leerlauf
+**Current focus:** Phase 15: messphase-eine-box-anfahrt
 
 ## Current Position
 
-Phase: 14 (modell-entladung-im-leerlauf): **ABGESCHLOSSEN UND ABGENOMMEN**
-Plan: 12 von 12 abgeschlossen
-Status: Phase 14 ist fertig. Naechster Schritt ist die Planung der Phase 15.
-Progress: [██████████] 100% der 33 geplanten Plaene (Phase 15 und 16 sind noch nicht geplant)
-Last activity: 2026-09-19 -- 14-12, die Abnahme.
+Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, Welle A ohne Box**
+Plan: 1 von 16 abgeschlossen (15-01)
+Status: Phase 14 ist abgenommen. Phase 15 laeuft; 15-01 hat das Laufverzeichnis
+der Anfahrt mit elf byteweise uebernommenen Werkzeugen bestueckt und den
+Kopie-Waechter gesetzt. Naechster Plan ist 15-02 (Runbook, Deckel, Block 13b).
+Progress: [███████░░░] 69% der 49 geplanten Plaene (34 von 49; Phase 16 ist noch nicht geplant)
+Last activity: 2026-09-19 -- 15-01, die elf Kopien und ihr Waechter.
 
 **Abnahmesatz.** Der Owner hat die Phase 14 am 19.09.2026 mit dem Wort
 "abgenommen" freigegeben, einschliesslich des franzoesischen Wortlauts des
@@ -65,6 +67,22 @@ Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 15-01: Eine Kopie traegt den Dateimodus ihres Originals mit. Die vier im
+  Original ausfuehrbar abgelegten Werkzeuge liegen auch in der Kopie mit 100755
+  im Index, die uebrigen sieben mit 100644; damit stimmen Blobkennung UND Modus
+  ueberein, und die Gleichheit ist an `git ls-files -s` ablesbar und nicht nur
+  an einer Pruefsumme.
+- 15-01: Der Kopie-Waechter vergleicht Kopie gegen Original statt gegen eine
+  aufgeschriebene Pruefsumme. Bei den gefahrenen Fassungen steht die Zahl in der
+  Datei, weil das Original selbst wandern koennte; hier ist genau die Gleichheit
+  der beiden Dateien die Zusage, und eine dritte aufgeschriebene Zahl waere eine
+  weitere Stelle, die driften kann.
+- 15-01: Neben dem Pruefsummenfall haelt ein zweiter Fall die vollstaendige
+  Werkzeugliste der Messreihenfolge (vierzehn Namen, elf Kopien plus die drei
+  bereits vorhandenen). Die Werkzeuge aus 15-03 bis 15-06 stehen bewusst NICHT
+  darin: eine Liste, die kuenftige Dateien nennt, waere heute rot aus einem
+  Grund, der kein Befund ist.
 
 - 14-12 (Abnahme): Der fehlende V4-Paritaetsfall wird angelegt und nicht nur
   protokolliert. Die Lehre aus 13-13 gilt: ein Audit-Pfad ohne Gate bekommt ein
@@ -776,6 +794,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T17:35:00.000Z
-Stopped at: Completed 14-09-PLAN.md, das sechste Wort `unloaded` steht im Container, auf beiden Seitenhaelften und in drei Sprachen
+Last session: 2026-09-19T20:05:00.000Z
+Stopped at: Completed 15-01-PLAN.md, elf byteweise uebernommene Messwerkzeuge im Laufverzeichnis der Anfahrt, Kopie-Waechter gruen
 Resume file: None
