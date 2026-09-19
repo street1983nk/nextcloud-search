@@ -1154,3 +1154,115 @@ def test_a_model_without_the_keyword_is_named_in_the_log_and_costs_only_the_vect
     assert "TypeError" in caplog.text
     assert PARAPHRASE not in caplog.text
     assert _ids(page) == expected
+
+
+# ---------------------------------------------------------------------------
+# V4 of the phase 14 audit: the degraded round stays behind the prefilter
+# ---------------------------------------------------------------------------
+#
+# The security review of this phase parks V4 under a reservation rather than
+# under a plain "not touched": the ACL prefilter and the final PHP recheck are
+# unchanged, but the round that may not load takes a second path through the
+# merge, and a path nobody has walked is a path nobody may call covered
+# (14-RESEARCH.md section 17, threat T-14-45).
+#
+# The four cases below walk it. Three of them run a real round under
+# ``may_load=False`` and ask the permission questions criterion 2 asks of the
+# ordinary round; the fourth says why the PHP half needs no case of its own.
+
+
+def _permitted(store: Store, uid: str) -> set[int]:
+    return store.prefilter_visible(uid, list(range(1, DOCUMENTS + 1)))
+
+
+def _degraded_side(vectors: VectorStore, text: str) -> SemanticSide:
+    """A round that is not allowed to fetch the weights, as the unload leaves it."""
+    return SemanticSide(vectors=vectors, model=SwitchedEmbedder(unit_vector(0)), text=text, may_load=False)
+
+
+def test_a_degraded_round_gives_a_user_without_a_permission_row_nothing(
+    index: Index,
+    store: Store,
+    vectors: VectorStore,
+) -> None:
+    # carol has no row at all. The empty vector list must not turn the merge
+    # into a shortcut past the one prefilter call above it.
+    page = candidates(
+        index,
+        store,
+        CAROL,
+        _query(index),
+        limit=DOCUMENTS,
+        semantic=_degraded_side(vectors, PARAPHRASE),
+    )
+
+    assert _permitted(store, BOB) != set()
+    assert page.candidates == []
+    assert page.has_more is False
+
+
+def test_a_degraded_round_hands_out_exactly_the_permitted_documents(
+    index: Index,
+    store: Store,
+    vectors: VectorStore,
+) -> None:
+    # alice sees the odd file ids. TERM matches every document of the fixture,
+    # so a round that walked past the prefilter would be visible here as an even
+    # id and in no other way.
+    page = candidates(
+        index,
+        store,
+        ALICE,
+        _query(index),
+        limit=DOCUMENTS,
+        semantic=_degraded_side(vectors, PARAPHRASE),
+    )
+
+    assert set(_ids(page)) == _permitted(store, ALICE)
+    assert [file_id for file_id in _ids(page) if file_id % 2 == 0] == []
+
+
+def test_the_degraded_round_asks_the_prefilter_as_often_as_the_ordinary_one(
+    index: Index,
+    store: Store,
+    vectors: VectorStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The structural half. Equal answers could also come from a second, private
+    # filter somewhere below, so the call itself is counted: one question per
+    # round in both states, with the same user, and the degraded round never
+    # carries a candidate to it that the ordinary round did not carry. The two
+    # lists are not equal, and that is the vector branch doing its job: it adds
+    # to the candidates of the merge, it does not reorder the question.
+    asked: list[tuple[str, tuple[int, ...]]] = []
+    original = store.prefilter_visible
+
+    def watched(uid: str, file_ids: list[int]) -> set[int]:
+        asked.append((uid, tuple(file_ids)))
+        return original(uid, file_ids)
+
+    monkeypatch.setattr(store, "prefilter_visible", watched)
+
+    candidates(index, store, ALICE, _query(index), limit=DOCUMENTS, semantic=_side(vectors, PARAPHRASE))
+    ordinary = list(asked)
+    asked.clear()
+    candidates(index, store, ALICE, _query(index), limit=DOCUMENTS, semantic=_degraded_side(vectors, PARAPHRASE))
+
+    assert len(ordinary) == 1
+    assert len(asked) == 1
+    assert asked[0][0] == ordinary[0][0] == ALICE
+    assert set(asked[0][1]) <= set(ordinary[0][1])
+
+
+def test_the_php_recheck_knows_nothing_about_the_switch(index: Index) -> None:
+    # Why the final authority needs no case of its own: it cannot branch on a
+    # state it has never heard of. ``may_load`` lives in the container and no
+    # byte of it reaches the companion app, so the recheck of
+    # ``Service/SearchService.php`` runs over a degraded answer exactly as it
+    # runs over a full one. That it is asked at all, and at exactly one place,
+    # is what ``test_php_acl_boundary.py`` holds.
+    php = Path(__file__).resolve().parents[2] / "php"
+    sources = [path for path in php.rglob("*.php") if "/vendor/" not in path.as_posix()]
+
+    assert sources != []
+    assert [path.name for path in sources if "may_load" in path.read_text(encoding="utf-8")] == []
