@@ -163,8 +163,46 @@ Plans:
   4. Die erste Suche nach einer Entladung liefert innerhalb der 1,5-Sekunden-Decke lexikalische Treffer und waermt das Modell im Hintergrund nach; kein cURL-error-28-Fall wie am 10.09.2026
   5. Die Admin-Seite zeigt den Engine-Zustand nach der neu formulierten one_load-Zusage (nie zwei Engines gleichzeitig, genau ein Laden je warmem Fenster), und das Gate prueft genau diese Zusage
 
-**Owner-Checkpoint**: engineState-Wortwahl (MEM-05) wird in dieser Phase entschieden, nicht vorweggenommen
-**Plans**: TBD
+**Owner-Checkpoint**: engineState-Wortwahl (MEM-05) ist am 19.09.2026 entschieden (Zweig B, sechstes Wort `unloaded`, siehe 14-CONTEXT.md) und wird in Plan 14-09 vollzogen. Zwei weitere Checkpoints in der Phase: das Tor des Vorprueflaufs (14-02) und die Abnahme (14-12).
+
+**Plans:** 12 plans
+
+Plans:
+**Welle 1**
+
+- [ ] 14-01-PLAN.md: Vorprueflauf-Werkzeug, Erwartung vor dem Lauf, Messschritt E in measure.yml
+
+**Welle 2** *(wartet auf Welle 1; DAS TOR DER PHASE)*
+
+- [ ] 14-02-PLAN.md: Vorprueflauf fahren, Bericht, Owner-Tor (negativ beendet die Phase)
+
+**Welle 3** *(wartet auf das Tor)*
+
+- [ ] 14-03-PLAN.md: FINDLING_EMBED_IDLE_RELEASE_SECONDS, eigener Leser, sechzehnte Variable
+- [ ] 14-04-PLAN.md: Poller: busy-Property und release_cutter (der groessere Halter)
+- [ ] 14-05-PLAN.md: embed/model.py: Uhr, Aktivitaetszaehler, release, malloc_trim, may_load
+
+**Welle 4** *(wartet auf Welle 3)*
+
+- [ ] 14-06-PLAN.md: embed/engine.py: query_may_load, release_if_idle, warm und das Single-Flight
+
+**Welle 5** *(wartet auf Welle 4)*
+
+- [ ] 14-07-PLAN.md: Die dritte Lifespan-Aufgabe, beide Halter je Takt
+- [ ] 14-08-PLAN.md: Degradationsnaht auf den zwei Nutzerrouten und das Nachwaermen
+
+**Welle 6** *(wartet auf Welle 5)*
+
+- [ ] 14-09-PLAN.md: Das sechste Wort `unloaded`: Container, PHP, sechs Kataloge, admin-page.md
+- [ ] 14-10-PLAN.md: one_load-Zusage neu, vierte Phase, zwei Mutationsfaelle, resilience.yml
+
+**Welle 7** *(wartet auf Welle 6)*
+
+- [ ] 14-11-PLAN.md: embeddings.md, performance.md und das Runbook der Box-Anfahrt
+
+**Welle 8** *(wartet auf Welle 7)*
+
+- [ ] 14-12-PLAN.md: Abnahme: Gesamtlauf, Audit-Durchgang, sieben Sichtproben (Owner-Checkpoint)
 
 ### Phase 15: Messphase, eine Box-Anfahrt
 
@@ -210,7 +248,7 @@ Plans:
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
-| 14. Modell-Entladung im Leerlauf | v1.2 | 0/? | Not started | - |
+| 14. Modell-Entladung im Leerlauf | v1.2 | 0/12 | Planned | - |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |
 
