@@ -217,13 +217,13 @@ Plans:
   4. Die Sprachfall-Messung laeuft ohne den 52.111er-Fremdbestand und liefert Zahlen ueber der bisherigen Deckelung (DI-10-02/DI-11-01, neue Messgroesse)
   5. Die Wiederaufwaerm-Kosten der Entladung sind gemessen und ausgewiesen (warm/kalt, mit/ohne Seitencache, A/B ueber den MEM-01-Schalter); die Box ist danach wieder abgebaut
 
-**Plans:** 1/16 plans complete
+**Plans:** 3/16 plans complete
 
 **Welle A, ohne Box-Zeit** *(Welle 1 bis 6)*
 
 - [x] 15-01-PLAN.md: Elf Werkzeuge byteweise uebernehmen, Kopie-Waechter
 - [x] 15-02-PLAN.md: Runbook: Deckel neu gerechnet (46 h / 5,40 USD), Block 13b Abbildwechsel, drop_caches, Schritte 6b und 8b
-- [ ] 15-03-PLAN.md: 95b-wiederaufwaermen.sh, vier Auspraegungen, Abbrueche 29 bis 31
+- [x] 15-03-PLAN.md: 95b-wiederaufwaermen.sh, vier Auspraegungen, Abbrueche 29 bis 31
 - [ ] 15-04-PLAN.md: 94b-grundlast-rueckkehr.sh, der MEM-02-Block
 - [ ] 15-05-PLAN.md: 99c-filter-sortierung.sh, der Owner-Messblock D-01
 - [ ] 15-06-PLAN.md: 92b-wechsel.sh, Abbildwechsel per Digest mit Baumhash-Beweis

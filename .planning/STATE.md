@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-09-19T20:45:00.000Z"
+stopped_at: Completed 15-03-PLAN.md
+last_updated: "2026-09-19T21:50:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 49
-  completed_plans: 35
-  percent: 71
+  completed_plans: 36
+  percent: 73
 ---
 
 # Project State
@@ -26,14 +26,16 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, Welle A ohne Box**
-Plan: 2 von 16 abgeschlossen (15-01, 15-02)
+Plan: 3 von 16 abgeschlossen (15-01, 15-02, 15-03)
 Status: Phase 14 ist abgenommen. Phase 15 laeuft; 15-01 hat das Laufverzeichnis
 der Anfahrt bestueckt, 15-02 hat das Runbook auf den Stand dieser Anfahrt
-gebracht: Deckel neu gerechnet auf 46 h / 5,40 USD netto, Block 13b
-Abbildwechsel, ein Befehl fuer "kalt" und die Messschritte 6b und 8b.
-Naechster Plan ist 15-03 (95b-wiederaufwaermen.sh).
-Progress: [███████░░░] 71% der 49 geplanten Plaene (35 von 49; Phase 16 ist noch nicht geplant)
-Last activity: 2026-09-19 -- 15-02, das Runbook der Anfahrt.
+gebracht (Deckel 46 h / 5,40 USD netto, Block 13b Abbildwechsel, ein Befehl
+fuer "kalt", die Messschritte 6b und 8b), und 15-03 hat das einzige fehlende
+Werkzeug gebaut: 95b-wiederaufwaermen.sh, vier Auspraegungen, Rueckgabewerte
+2, 29, 30 und 31, neun boxlose Verweigerungsfaelle.
+Naechster Plan ist 15-04 (94b-grundlast-rueckkehr.sh, der MEM-02-Block).
+Progress: [███████░░░] 73% der 49 geplanten Plaene (36 von 49; Phase 16 ist noch nicht geplant)
+Last activity: 2026-09-19 -- 15-03, das Wiederaufwaerm-Werkzeug fuer Messschritt 8.
 
 **Die Deckelzahl, die der Owner in 15-08 vorfindet:** 46 Stunden und 5,40 USD
 netto, aus zehn Posten mit 39 h 22 min Planwert und 15 Prozent Zuschlag. Der
@@ -75,6 +77,27 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
 
+- 15-03: `engineState` wird an der Admin-Seite SELBST gelesen und nicht ueber
+  `96d-statusbeobachter.py`. Dessen Aufzeichnung ist auf sechs Zaehler,
+  `runState`, `backendReachable` und das genestete Paar projiziert; das Feld ist
+  dort nicht darunter, weil das Werkzeug aus dem v1.1-Lauf stammt. Eine
+  gefahrene Fassung wird nicht geaendert, also geht das neue Skript dieselbe
+  Anmeldung und liest ein Feld. Nachtrag ins Runbook in 15-15.
+- 15-03: Der Entladezaehler ist ueber eine Prozessgrenze nicht lesbar (keine
+  Route, eigener Zaehler je Prozess). Beleg der Entladung sind deshalb
+  `engineState unloaded` UND die cgroup-Groesse `memory.current` vor und nach
+  der Ruhezeit als zweiter, unabhaengiger Anhaltspunkt. Nachtrag in 15-15.
+- 15-03: Die semantische Seite wird an der Trefferzahl der Nutzerroute gegen
+  eine Referenzzahl aus demselben Lauf abgelesen (Waermsuche in 1 und 2, zweite
+  Suche in 3 und 4). Die Route traegt kein Feld dafuer, und `degraded` meint den
+  unvollstaendigen Index und nicht die fehlenden Gewichte.
+- 15-03: Die Bereitschaft nach dem Containerneustart wird an der Admin-Seite
+  gefragt und NIE mit einer Suche: eine Suche als Bereitschaftsprobe waere in
+  den Auspraegungen 3 und 4 die erste Suche ueberhaupt, also genau die
+  Messgroesse.
+- 15-03: `exit 2` steht oberhalb der Pipeline, nur 29, 30 und 31 darunter. Ein
+  Aufruf ohne Auspraegung darf keine Rohdatei schreiben, und die Pipeline
+  schreibt sie.
 - 15-02: Die verkuerzte Ruhezeit (D-02) kuerzt den Deckel NICHT. Der Planwert
   der Wiederaufwaerm-Messung bleibt bei 2 h 00 min; ein Planwert, der eine
   Verbesserung vorwegnimmt, ist genau der Fehler, der den v1.1-Deckel gerissen
@@ -820,6 +843,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T20:45:00.000Z
-Stopped at: Completed 15-02-PLAN.md, Runbook mit neu gerechnetem Deckel (46 h / 5,40 USD), Block 13b Abbildwechsel, drop_caches als Befehl fuer "kalt" und den Messschritten 6b und 8b
+Last session: 2026-09-19T21:50:00.000Z
+Stopped at: Completed 15-03-PLAN.md, 95b-wiederaufwaermen.sh mit vier Auspraegungen und den Rueckgabewerten 2, 29, 30 und 31, dazu neun boxlose Verweigerungsfaelle
 Resume file: None
