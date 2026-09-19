@@ -126,6 +126,36 @@ RSS_DIGEST = REPO_ROOT / "scripts" / "ops" / "rss_digest.py"
 RSS_SAMPLER_SHA256 = "c10a7074a0e7900111a255753fff5f67f5f7169b99a629467cc1c50e3e1d9976"
 RSS_DIGEST_SHA256 = "f845da16dff0cf6905f38d2618b757eddd32040491b2c2dd9f97d5373f774dd5"
 
+# The filter and sort tool of step 6b, the block the owner ordered on
+# 19.09.2026 (D-01), and the four names its two silent failures hang on.
+#
+# SORT_MODES_NAME is the table of the product, not a list repeated here: the
+# gate below reads the three sort names out of the source of the package and
+# holds them against the one place the tool writes them down. A fourth name in
+# the tool would be a heading over figures that are relevance all along,
+# because an unknown name falls back to relevance without saying so.
+#
+# NEXT_LINK_MARK is the markup the next link carries. Pulling it out of the
+# answer is the whole difference between measuring the paging and measuring the
+# silent fall back to page 1: a hand built address without the fingerprint gets
+# thrown back, and the page answers 200 and fast while it does (13-08).
+#
+# LOAD_TOOL is the calibrated load tool of step 6. It asks the OCS route, and
+# the OCS providers know neither types nor sort (13-12), so a call from this
+# block would measure unfiltered and say so nowhere.
+V12_FILTER_SORT = V12_RUN_DIR / "99c-filter-sortierung.sh"
+SEARCH_MODULE = REPO_ROOT / "backend" / "src" / "findling" / "index" / "search.py"
+SORT_MODES_NAME = "SORT_MODES"
+SORT_MODES_IN_THE_TOOL = re.compile(r'SORTIERMODI="\$\{SORTIERMODI:-([^}]*)\}"')
+NEXT_LINK_MARK = "findling-pager__step--next"
+# The parameter that says WHERE inside a result somebody stands. Page 1 carries
+# no position at all, so the tool may build its address; every later page has
+# to come out of the answer, cursor and fingerprint included. This shape in the
+# code of the tool is therefore a self built position and the gate is red.
+BUILT_POSITION = "page="
+LOAD_TOOL = "search_load.py"
+FILTER_SORT_ABORTS = ("exit 29", "exit 34", "exit 35")
+
 # The user route the rewarm measurement reads its figures at, and the route it
 # must never read them at. The second one is the trap of step 8: after a
 # release the diagnosis route reports a full semantic side because it loads,
@@ -1742,6 +1772,162 @@ def test_the_baseload_return_tool_calls_the_two_ops_helpers_unchanged() -> None:
     assert RSS_DIGEST.name in text
     assert hashlib.sha256(lf_bytes_of(RSS_SAMPLER)).hexdigest() == RSS_SAMPLER_SHA256, DRIVEN_FASSUNG_RULE
     assert hashlib.sha256(lf_bytes_of(RSS_DIGEST)).hexdigest() == RSS_DIGEST_SHA256, DRIVEN_FASSUNG_RULE
+
+
+# The refusal paths and the two drift gates of the filter and sort block of
+# step 6b. Plan 15-05.
+#
+# The block exists because the owner ordered it on 19.09.2026 (D-01): sorting
+# on a large stock and paging under a filter, measured rather than estimated.
+# Phase 13 built both and checked them on a development instance; the full
+# stock of 52.111 documents lives on this one box and only for the length of
+# this trip, so the tool has to be right before the first paid minute runs.
+#
+# Two of its failures produce a figure instead of an error, and those are the
+# two the gates below defend. A measurement over the OCS route would answer the
+# question unfiltered and look like a filter measurement while doing it, and a
+# hand built page address without the fingerprint would measure the silent fall
+# back to page 1 at 200 and fast.
+
+
+def sort_mode_names_of_the_package() -> tuple[str, ...]:
+    """The keys of SORT_MODES, read out of the source of the package.
+
+    Read and not repeated: a list of three words written down in this file
+    would agree with itself on the day somebody adds a fourth name to the
+    product, and the measuring tool would carry a heading over figures that are
+    relevance all along.
+    """
+    tree = ast.parse(SEARCH_MODULE.read_text(encoding="utf-8"))
+    tables = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == SORT_MODES_NAME
+    ]
+    assert len(tables) == 1, SORT_MODES_NAME
+    table = tables[0].value
+    assert isinstance(table, ast.Dict), SORT_MODES_NAME
+    names: list[str] = []
+    for key in table.keys:
+        assert isinstance(key, ast.Constant), SORT_MODES_NAME
+        assert isinstance(key.value, str), SORT_MODES_NAME
+        names.append(key.value)
+    return tuple(names)
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("argument", ["pdf", "--help", "1"])
+def test_the_filter_sort_tool_refuses_any_argument(tmp_path: Path, argument: str) -> None:
+    """No argument at all, and the three that look most plausible least of all.
+
+    A type group, a help switch and a block number are the three shapes a hand
+    on the box would reach for, and all three are refused by name. The two
+    blocks measure the same stock in the same warm up; a cut into two runs
+    would put the figures of two stocks under one heading. The refusal falls
+    before the first sudo, the first docker and the first curl, and before a
+    raw file exists, which is what makes it checkable without a box.
+    """
+    answer = a_boxless_run(V12_FILTER_SORT, tmp_path, [argument])
+    assert answer.returncode == 2, answer
+    assert "Benutzung: 99c-filter-sortierung.sh" in answer.stderr
+    assert "Ohne Argument" in answer.stderr
+    assert answer.stdout == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_the_filter_sort_tool_knows_the_three_sort_names_and_no_fourth() -> None:
+    """The tool cannot drift against the sort names of the product.
+
+    The three names are read out of backend/src/findling/index/search.py and
+    held against the one line the tool writes them down in. A fourth name in
+    the tool is red, and so is a missing one: an unknown name falls back to
+    relevance inside the product without saying so, so a row called after it
+    would be relevance under a false heading, and a missing name would be a
+    mode nobody measured on the one box that has the stock.
+    """
+    names = sort_mode_names_of_the_package()
+    assert names == ("relevance", "newest", "oldest"), names
+
+    text = V12_FILTER_SORT.read_text(encoding="utf-8")
+    match = SORT_MODES_IN_THE_TOOL.search(text)
+    assert match is not None, "the tool does not carry the one line its sort names live in"
+    in_the_tool = tuple(match.group(1).split())
+    assert in_the_tool == names, (in_the_tool, names)
+
+
+def test_the_filter_sort_tool_pulls_the_next_link_instead_of_building_it() -> None:
+    """A built address measures the fall back, not the paging.
+
+    The result page hangs a cursor and a fingerprint on every paging step, and
+    the fingerprint runs over the raw values of the address. A hand built
+    address without it throws the visitor back to page 1 SILENTLY: the page
+    answers 200, it is fast, and a pretty figure for a thing that never
+    happened would end up in the protocol (13-08). So the tool names the markup
+    of the next link and builds no address of its own beyond page 1, which is
+    the only one that carries no position at all.
+
+    Comment lines go before this gate looks, because the head of the file
+    explains the rule and would otherwise be red at exactly the paragraph that
+    exists to keep it green.
+    """
+    text = V12_FILTER_SORT.read_text(encoding="utf-8")
+    assert NEXT_LINK_MARK in text
+    code = "\n".join(the_two_halves_of(text))
+    built = [line for line in code.splitlines() if BUILT_POSITION in line]
+    assert built == [], built
+
+    # The staged probe, because a gate whose only assertion is that today is
+    # fine stays green when it dies.
+    staged = 'adresse="$ADRESSE/apps/findling/?query=$BEGRIFF&' + BUILT_POSITION + '2"\n'
+    staged_code = "\n".join(the_two_halves_of(staged))
+    assert [line for line in staged_code.splitlines() if BUILT_POSITION in line]
+
+
+def test_the_filter_sort_tool_keeps_its_abort_paths_below_the_pipeline() -> None:
+    """Where an abort stands decides whether it is an abort at all.
+
+    The same rule as for the two tools of plans 15-03 and 15-04, and the same
+    reason: the return code of a pipeline that ends in tee belongs to tee, so
+    an exit inside the block would leave the subshell only and the run would
+    look green with its refusal printed in the raw file.
+
+    exit 2 stands ABOVE the cut on purpose. A call with an argument disputes
+    the cut of the whole tool, and a dispute must not write a raw file; the
+    pipeline writes one.
+    """
+    text = V12_FILTER_SORT.read_text(encoding="utf-8")
+    above, below = the_two_halves_of(text)
+    assert below, "the file does not carry the tee pipeline this gate cuts at"
+    for abort in FILTER_SORT_ABORTS:
+        assert abort in below, abort
+        assert abort not in above, abort
+    assert "exit 2" in above
+
+    # The staged probe, for the same reason as in the two gates above it.
+    staged = f'    echo "es ging schief"\n    exit 34\n{PIPELINE_CUT}\nexit 35\n'
+    staged_above, staged_below = the_two_halves_of(staged)
+    assert "exit 34" in staged_above
+    assert "exit 34" not in staged_below
+
+
+def test_the_filter_sort_tool_never_calls_the_load_tool() -> None:
+    """The load tool is calibrated and it asks a route that has no filters.
+
+    scripts/ops/search_load.py drives the levels of step 6 and is the
+    comparison key against the runs of v1.1, so it is neither changed nor
+    pointed at a new question. It asks the OCS route, and the two OCS providers
+    know neither types nor sort (13-12): a call from this block would measure
+    unfiltered and say so nowhere, which is the one failure of step 6b that
+    produces a plausible figure instead of an error (T-15-13).
+
+    Its name may stand in the head of the tool, because a reader who wonders
+    why the obvious tool is missing deserves the answer in the file. It may not
+    stand anywhere a shell would read it.
+    """
+    text = V12_FILTER_SORT.read_text(encoding="utf-8")
+    carrying = [line for line in text.splitlines() if LOAD_TOOL in line]
+    assert carrying, LOAD_TOOL
+    assert all(line.lstrip().startswith("#") for line in carrying), carrying
 
 
 # The watchman over the eleven tools the trip took over. Plan 15-01.
