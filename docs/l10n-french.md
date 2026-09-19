@@ -413,11 +413,16 @@ weitere Zeile dazugekommen, der Satz des sechsten Engine-Zustands: englisch `The
 released to save memory. The next search answers with full text hits and loads it again in
 the background.`, französisch `Le modèle a été libéré pour économiser de la mémoire. La
 prochaine recherche répond avec des résultats en texte intégral et le recharge en
-arrière-plan.` Sie steht oben in der Tabelle, ist maschinell geprüft und **vom Owner noch
-nicht gelesen**; sie gehört zur Abnahme der Phase 14 am Phasen-Checkpoint (Plan 14-12) und
-nicht zu einer der beiden Abnahmen davor. Das steht hier aus demselben Grund wie der
-Nachtrag darüber: eine abgenommene Datei darf keine ungelesene Zeile stillschweigend
-mittragen.
+arrière-plan.` Sie steht oben in der Tabelle und ist maschinell geprüft. Sie gehörte zur
+Abnahme der Phase 14 am Phasen-Checkpoint (Plan 14-12) und nicht zu einer der beiden
+Abnahmen davor. Das steht hier aus demselben Grund wie der Nachtrag darüber: eine
+abgenommene Datei darf keine ungelesene Zeile stillschweigend mittragen.
+
+**Abnahme 19.09.2026 (Phase-Checkpoint 14-12).** Der Owner hat den französischen Wortlaut
+dieses einen Satzes am Phasen-Checkpoint gelesen und **wie vorgelegt abgenommen, ohne
+Änderung**. Der Satz oben in der Tabelle ist damit derselbe wie vor der Abnahme, und keine
+der beiden französischen Katalogdateien ist dafür angefasst worden. Damit trägt diese Datei
+seit dem 19.09.2026 keine ungelesene Zeile mehr.
 
 Mit dieser Zeile stehen 199 Schlüssel in `de.json`. Die Zählung im Abschnitt "Die
 Schlüsselmenge, aus der Datei gezählt" oben nennt noch 197: sie ist der Stand vor dem

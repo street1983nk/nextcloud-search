@@ -9,8 +9,8 @@ findings:
   low: 3
   total: 3
 status: issues_found
-fixed: [L-01]
-still_open: [L-02, L-03]
+fixed: [L-01, L-03]
+still_open: [L-02]
 ---
 
 # Phase 14: Security-, Bug- und Performance-Audit
@@ -24,8 +24,9 @@ Die Ueberschriften stehen ohne Umlaute, weil Pruefungen und Verweise auf sie
 zeigen; der Fließtext benutzt echte Umlaute.
 
 **Bilanz vorweg:** kein CRITICAL, kein HIGH, kein MEDIUM. Drei LOW-Befunde,
-einer davon in diesem Lauf behoben (der fehlende V4-Paritaetsfall), zwei mit
-Zieladresse weitergereicht. Die technische Hälfte der Phase ist durch; was
+zwei davon behoben (der fehlende V4-Paritaetsfall im Lauf selbst, die
+Kennzeichnung des Vorschlagswerts nach dem Owner-Entscheid vom 19.09.2026),
+einer mit Zieladresse weitergereicht. Die technische Hälfte der Phase ist durch; was
 offen bleibt, ist der Owner-Entscheid am Checkpoint 14-12.
 
 ---
@@ -335,9 +336,12 @@ Die Stellen, aus dem Baum gezählt und nicht aus der Annahme übernommen:
 | `php/l10n/de.json`, `de.js`, `de_DE.json`, `de_DE.js`, `fr.json`, `fr.js` | je ein Wert mehr, sechs Dateien |
 | `docs/admin-page.md`, `docs/embeddings.md`, `docs/runbook-messbox.md` | die drei Dokumente, die das Wort erklären |
 
-**Befund L-03 (weitergereicht):** `docs/embeddings.md` nennt den Vorschlagswert
-900 s weniger nachdrücklich als Schätzung, als `config.py` es tut. Das ist eine
-Frage an den Owner (Punkt 7 des Checkpoints) und keine Codeänderung.
+**Befund L-03 (behoben am 19.09.2026):** `docs/embeddings.md` nannte den
+Vorschlagswert 900 s weniger nachdrücklich als Schätzung, als `config.py` es
+tut. Der Owner hat am Phasen-Checkpoint entschieden, dass der Wert als
+Vorschlag stehen bleibt und als Schätzung deutlich gekennzeichnet wird; der
+Absatz sagt jetzt mit denselben Worten wie `config.py`, dass die Zahl geraten
+ist und bis zur Messung der Phase 15 eine Schätzung bleibt.
 
 ---
 
@@ -366,7 +370,7 @@ seit 14-11.
 |---|---|---|---|
 | L-01 | LOW | Kein Paritätsfall, der eine Suche unter `may_load=False` gegen den ACL-Vorfilter stellt | **behoben**, vier Fälle in `test_semantic_search.py`, Commit `b044ae4` |
 | L-02 | LOW | Die Gegenrichtung des halb aktualisierten App-Paars ist nirgends benannt | weitergereicht, Abschnitt 3.6; kein Handlungsbedarf, nur eine Asymmetrie |
-| L-03 | LOW | `docs/embeddings.md` nennt 900 s weniger deutlich als Schätzung, als `config.py` es tut | weitergereicht an den Owner-Checkpoint 14-12, Punkt 7 |
+| L-03 | LOW | `docs/embeddings.md` nennt 900 s weniger deutlich als Schätzung, als `config.py` es tut | **behoben** nach dem Owner-Entscheid vom 19.09.2026: der Wert bleibt Vorschlag und ist als Schätzung gekennzeichnet |
 
 Kein CRITICAL, kein HIGH, kein MEDIUM.
 
@@ -375,8 +379,10 @@ Kein CRITICAL, kein HIGH, kein MEDIUM.
 ## 7. Was dieser Bericht nicht sagt
 
 Er sagt nichts über das Verhalten an der laufenden Instanz. Die sieben
-Sichtproben des Checkpoints 14-12 sind die andere Hälfte der Abnahme, und die
-Freigabe der Phase liegt beim Owner und nicht in diesem Bericht.
+Sichtproben des Checkpoints 14-12 sind die andere Hälfte der Abnahme; ihr
+Protokoll steht in `.planning/phases/14-modell-entladung-im-leerlauf/14-12-SUMMARY.md`.
+Die Freigabe der Phase liegt beim Owner und nicht in diesem Bericht; sie ist am
+19.09.2026 erteilt worden.
 
 Er nennt keine Bestandsgröße, keinen Pfad einer Instanz und keinen Dateinamen
 aus einem Bestand (T-14-46). `docs/` ist öffentlich, und dieser Bericht ist vor

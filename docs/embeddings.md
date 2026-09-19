@@ -781,7 +781,11 @@ liegt weiter im Abbild, und der nächste Bedarf liest sie neu ein.
 **900**, also eine Viertelstunde, ist der Wert, den die Beschreibung der
 Variablen einem Admin vorschlägt: lang genug, dass ein Arbeitsnachmittag die
 Wartezeit nicht einmal je Suche bezahlt, kurz genug, dass eine Box, die über
-Mittag allein bleibt, ihren Speicher zurückbekommt. Ein Wert ausserhalb des
+Mittag allein bleibt, ihren Speicher zurückbekommt. **Diese Zahl ist geraten und
+keine Messung.** Sie bleibt eine Schätzung, bis die Box-Anfahrt der Phase 15 die
+Wiederaufwärm-Kosten misst; `backend/src/findling/config.py` sagt an der Stelle,
+an der sie steht, dasselbe mit denselben Worten. Wer heute einschaltet, wählt
+also einen begründeten Startwert und keinen belegten. Ein Wert ausserhalb des
 Fensters ist kein Startfehler: der Container schreibt eine Warnzeile, die den
 Variablennamen nennt, nimmt den Werksstand und startet trotzdem. Ein Tippfehler
 in dieser Zeile legt also keine Instanz still.

@@ -1510,9 +1510,10 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     19.09.2026 for branch B of plan 14-09
     (.planning/phases/14-modell-entladung-im-leerlauf/14-CONTEXT.md), taken with
     this very cost written out: two spellings of the closed set, two sentence
-    tables, six catalogue files and this figure. The French wording is new and
-    unchecked; it lies before the owner at the phase checkpoint, and
-    docs/l10n-french.md carries the dated note that says so.
+    tables, six catalogue files and this figure. The French wording of that
+    sentence was read and accepted unchanged by the owner at the phase
+    checkpoint on 19.09.2026, and docs/l10n-french.md carries the dated note
+    that says so.
 
     This paragraph carries the same duty as the three above it. Whoever raises
     the figure next writes the next paragraph.
