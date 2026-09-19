@@ -174,12 +174,12 @@ Plans:
 
 **Welle 2** *(wartet auf Welle 1; DAS TOR DER PHASE)*
 
-- [ ] 14-02-PLAN.md: Vorprueflauf fahren, Bericht, Owner-Tor (negativ beendet die Phase)
+- [x] 14-02-PLAN.md: Vorprueflauf fahren, Bericht, Owner-Tor (negativ beendet die Phase)
 
 **Welle 3** *(wartet auf das Tor)*
 
-- [ ] 14-03-PLAN.md: FINDLING_EMBED_IDLE_RELEASE_SECONDS, eigener Leser, sechzehnte Variable
-- [ ] 14-04-PLAN.md: Poller: busy-Property und release_cutter (der groessere Halter)
+- [x] 14-03-PLAN.md: FINDLING_EMBED_IDLE_RELEASE_SECONDS, eigener Leser, sechzehnte Variable
+- [x] 14-04-PLAN.md: Poller: busy-Property und release_cutter (der groessere Halter)
 - [ ] 14-05-PLAN.md: embed/model.py: Uhr, Aktivitaetszaehler, release, malloc_trim, may_load
 
 **Welle 4** *(wartet auf Welle 3)*
@@ -248,7 +248,7 @@ Plans:
 | 11. Haertung und Store-Einreichung v1.1 | v1.1 | 13/13 | Complete | 2026-09-11 |
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
-| 14. Modell-Entladung im Leerlauf | v1.2 | 3/12 | In Progress|  |
+| 14. Modell-Entladung im Leerlauf | v1.2 | 4/12 | In Progress|  |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 0/? | Not started | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |
 

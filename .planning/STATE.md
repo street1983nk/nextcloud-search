@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-03-PLAN.md
-last_updated: "2026-09-19T13:36:00.000Z"
+stopped_at: Completed 14-04-PLAN.md
+last_updated: "2026-09-19T13:50:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 24
-  percent: 73
+  completed_plans: 25
+  percent: 76
 ---
 
 # Project State
@@ -26,19 +26,62 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 3 von 12 abgeschlossen (14-03: der Schalter steht, Name festgelegt)
-Status: executing, das Tor der Phase ist offen und der Bau hat begonnen.
-Naechster Plan ist 14-04.
-Progress: [███████░░░] 73%
-Last activity: 2026-09-19 -- 14-03: FINDLING_EMBED_IDLE_RELEASE_SECONDS ist gebaut,
-ab Werk 0 (aus), eigener Leser _seconds_or_off_from_environment, 14 Testfaelle,
-sechzehnte Variable in der info.xml. MEM-01 ist erfuellt.
+Plan: 4 von 12 abgeschlossen (14-04: die Indexseite kann loslassen)
+Status: executing, das Tor der Phase ist offen und der Bau laeuft.
+Naechster Plan ist 14-05.
+Progress: [████████░░] 76%
+Last activity: 2026-09-19 -- 14-04: Poller.busy und Poller.release_cutter stehen,
+13 neue Testfaelle, die zwei Merker der Indexseite ueberleben die Freigabe.
+Aufgerufen wird noch nichts; MEM-02 bleibt offen bis 14-05 (Suchseite) und
+14-07 (Aufrufer).
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-04 (MEM-02, Indexseite): Der Poller bekommt ein oeffentliches Property
+  `busy`, das `bool(self._held)` antwortet. Gehaltene Warteschlangenzeilen sind
+  die einzige Groesse am Poller, die einen laufenden Durchgang bedeutet; sie
+  werden auf allen Wegen geleert, auch im Abbruch und in `unlock_held`.
+  `_idle_announced` ist dagegen ein Log-Merker, der in `arm()` zurueckgesetzt
+  wird: ein Entlader, der ihn liest, entlaedt nach jedem Armieren einmal falsch
+  (Leitplanke 3 der 14-CONTEXT.md). `armed` ist das Gegenteil der Frage,
+  `cooldown` ist Warten und keine Arbeit. Alle drei stehen mit Begruendung im
+  Docstring.
+
+- 14-04: `release_cutter()` hat drei Antworten in dieser Reihenfolge: bei `busy`
+  falsch und nichts angefasst (Pitfall 3, die Gewichte waeren Sekunden spaeter
+  wieder da), bei leerem Paar falsch (es gab nichts loszulassen, der Zaehler des
+  Aufrufers bleibt ehrlich), sonst beide Felder auf None und wahr. Die
+  Arbeitsfrage steht vor der Bestandsfrage, weil ein falsches Ja fuer einen
+  arbeitenden Container der Fehler ist, der nirgends rot wird.
+
+- 14-04: Die Halbheit wird am Syntaxbaum ausgeschlossen, nicht an einem Lauf.
+  `test_the_release_never_leaves_half_a_cutter_behind` liest `release_cutter`
+  ueber `ast.walk` und verlangt, dass die Methode genau `_chunker` und `_model`
+  zuweist. Damit ist zugleich das Gate gegen ein Zuruecksetzen von
+  `_cutter_absent` und `_cutter_failed_at` gebaut (Pitfall 8), und es haelt auch
+  gegen ein drittes Feld, an das heute niemand denkt.
+
+- 14-04: `release_cutter` ruft keine Sammelrunde und keinen Trim, auch nicht im
+  Kommentar: der Docstring umschreibt beide Begriffe, weil das
+  Acceptance-Gate die Datei auf genau diese Zeichenketten absucht und sonst an
+  der eigenen Erklaerung rot wuerde. Die Seitenrueckgabe liegt einmal je Takt in
+  `embed/model.py` (14-05).
+
+- 14-04: MEM-02 wird NICHT abgehakt, obwohl die Frontmatter des Plans sie nennt.
+  Die Anforderung verlangt beide Speicherhalter und die Messgroesse "Rueckkehr
+  zur Grundlast"; dieser Plan baut eine Haelfte und ruft sie nirgends auf. Das
+  ist dieselbe Lage wie bei MEM-04 in 14-01, wo der Haken zurueckgenommen werden
+  musste. MEM-02 faellt fruehestens mit 14-07.
+
+- 14-04 (Lehre, zweite Auflage): Die Lehre aus 14-03 hat sich sofort wiederholt.
+  Der Plan nannte `tests/test_measurement_scripts.py` erneut nicht und verbot
+  ihre Aenderung sogar ausdruecklich (Verifikationspunkt 5). Der Baumhash wurde
+  in beiden Produktcode-Commits nachgezogen. Die Plaene 14-05 bis 14-11 sollten
+  die Datei in ihrer Dateiliste fuehren, statt sie zur Abweichung zu machen.
 
 - 14-03 (MEM-01, Namensentscheid): Die Variable heisst
   **`FINDLING_EMBED_IDLE_RELEASE_SECONDS`** und nicht
@@ -514,6 +557,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T13:36:00.000Z
-Stopped at: Completed 14-03-PLAN.md, der Schalter aus MEM-01 steht
+Last session: 2026-09-19T13:50:00.000Z
+Stopped at: Completed 14-04-PLAN.md, busy und release_cutter stehen am Poller
 Resume file: None
