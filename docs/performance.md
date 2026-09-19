@@ -3363,6 +3363,19 @@ und ohne Zahlen. Die Nachmessung liefert die Zahlen nach:
 **Die Modell-Entladung bleibt damit in "Future Requirements" und wird in diesem
 Milestone nicht mehr geplant.**
 
+**Nachtrag vom 19.09.2026: gebaut, aber als Schalter mit Werksstand aus.** Im
+Milestone v1.2 ist die Entladung geplant und gebaut worden (MEM-01 bis MEM-05,
+Phase 14). Die drei Zahlen dieses Abschnitts sind dadurch nicht widerlegt,
+sondern eingeordnet: Punkt 1 und Punkt 2 stehen unverändert, die Entladung senkt
+weder die Spitze eines Indexlaufs noch die Grundlast eines Containers, der nie
+eingebettet hat. Punkt 3 ist entschärft, aber nicht aufgehoben: die erste Suche
+nach einer Freigabe wartet seit der Degradationsnaht aus Plan 14-08 nicht mehr
+auf die Gewichte, sondern antwortet mit Volltexttreffern und bestellt das
+Nachwärmen im Hintergrund, und der Preis dafür ist eine Suche ohne semantische
+Seite statt einer gerissenen 1,5-Sekunden-Decke. Worauf die Entladung zielt und
+welche Messgröße für sie gilt, steht weiter unten im Abschnitt "Die Entladung im
+Leerlauf: die Zahl, die man nicht erfinden darf".
+
 ### Die amd64-Zahl: derselbe Vorgang auf der anderen Architektur
 
 Die 1.332,1 ms oben sind auf arm64 gemessen. Erfolgskriterium 4 dieser Phase
@@ -3582,6 +3595,81 @@ diese 0,6 MB sind der Vektorbestand, der wegen des Löschpfads absichtlich eifri
 bleibt. Die Ersparnis eines Containers, der nur noch sucht, ist damit gemessene
 **575,0 MB**. Ein Container, dessen zweite Spur läuft, kommt auf dieselbe Zahl
 wie vorher, nur später: der faule Bau verschiebt und senkt nicht.
+
+## Die Entladung im Leerlauf: die Zahl, die man nicht erfinden darf
+
+Der Abschnitt "Modell-Entladung nach Leerlauf: nein, mit drei Zahlen" weiter
+oben hat die Idee im Milestone v1.1 abgelehnt, und seine drei Zahlen stehen
+unverändert. Im Milestone v1.2 ist sie trotzdem gebaut worden, als Schalter mit
+Werksstand aus: `FINDLING_EMBED_IDLE_RELEASE_SECONDS`, aus Admin-Sicht
+beschrieben in `docs/embeddings.md` Abschnitt 10. Dieser Abschnitt hält fest,
+welche Messgröße für ihn gilt, warum ausgerechnet diese, und was von der
+Freigabe nie zurückkommt.
+
+### Die Messgröße heißt `Rueckkehr zur Grundlast nach einem Indexlauf`
+
+Sie heißt ausdrücklich **nicht** "Grundlast minus X", und das ist keine
+Wortklauberei, sondern der Unterschied zwischen einer gemessenen und einer
+erfundenen Zahl. Die Grundlast von **103,2 MB** (v1.1 auf m7g.large, Tabelle im
+Abschnitt "Die Vergleichsmessung v1.1 gegen v1.0") ist seit dem faulen Bau von
+Plan 07-03 bereits **ohne** Modell und **ohne** Cutter gemessen: in einem
+Container, der noch nichts eingebettet hat, liegt von beiden nichts im Speicher.
+Eine Differenz zu dieser Zahl zöge etwas ab, das in ihr gar nicht steckt, und
+wäre damit nach oben erfunden.
+
+**Das Warnzeichen, an dem dieser Fehler auffällt:** eine genannte Ersparnis, die
+höher ist als die gemessene Differenz zwischen "vor der Entladung" und "nach der
+Entladung". Wer eine Ersparnis nennt, nennt diese Differenz und sonst nichts.
+
+### Der Aktivierungsspeicher: warum die Messgröße so heißt und nicht anders
+
+Der erste `run` einer Inferenzsitzung legt einen großen Posten an. Die
+Vorrecherche zu Phase 14 hat dafür auf x86_64 nativ **+293,8 MB** gemessen, und
+über zwanzig weitere Läufe kamen **+0,0 MB** dazu; die Reihe steht in
+`.planning/phases/14-modell-entladung-im-leerlauf/14-RESEARCH.md` Abschnitt 3.2.
+Dieser Posten verschwindet nicht von selbst, obwohl `enable_cpu_mem_arena=False`
+gesetzt ist, und er kommt erst mit der Entladung zurück.
+
+Das ist die quantitative Begründung für den Namen: **nach einem Indexlauf** steht
+genau dieser Posten im Container, zusammen mit Tokenizer, Splitter und Sitzung,
+und genau darauf zielt die Freigabe. Vor dem ersten Einbetten zielt sie ins
+Leere, weil dort nichts von alledem liegt.
+
+### Der Bodensatz, der nie zurückkommt
+
+Die Freigabe führt nicht auf den Stand vor dem Laden zurück, sondern auf diesen
+plus einen Rest. Die Modulimporte von `onnxruntime` und `numpy` bleiben geladen,
+egal wie oft entladen wird, und was sie belegen, kommt nie wieder.
+
+Der Vorprüflauf vom 19.09.2026 hat diesen Rest auf der Zielarchitektur gemessen:
+**rund 16 MB auf aarch64**, davon 15,9 MB im ersten Zyklus, über fünf Zyklen
+zusammen 17,1 MB. Der x86_64-Vergleichsast desselben Laufs liegt bei 16,6 MB,
+die Vorrecherche auf nativem x86_64 hatte 12,1 MB gemessen. Bericht mit
+Rohdaten, Maschine und Abbild-Digest:
+[`docs/measurements/2026-09-entladung-vorpruefung/`](measurements/2026-09-entladung-vorpruefung/README.md),
+Abschnitt 6.
+
+**Der Satz, der daraus folgt und der in keinem Produkttext fehlen darf:** der
+Container kehrt nicht auf die Grundlast eines Containers zurück, der nie
+eingebettet hat, sondern auf diese plus rund 16 MB.
+
+### Was hier bewusst nicht steht: die Ladezeit nach einer Entladung
+
+Wie lange das Nachladen nach einer Freigabe dauert, mit warmem und mit kaltem
+Seitencache, ist **nicht gemessen** und hat deshalb in diesem Dokument keine
+Zahl. Die fünf Zyklen des Vorprüflaufs liefen hintereinander im selben
+Container, also mit warmem Seitencache, und sie haben überhaupt keine Zeit
+genommen. Die Messung gehört auf die Box der Phase 15, als A/B über den
+Schalter; der Messschritt, seine Reihenfolge und seine Abbruchpfade stehen in
+`docs/runbook-messbox.md` Abschnitt 7.
+
+Die Kaltstartzahlen weiter oben in diesem Dokument (1.332,1 ms auf der Box,
+1.299 und 1.392 ms in CI) messen etwas anderes: den ersten Ladevorgang nach
+einem **Containerstart**, ohne Schalter und ohne vorangegangene Entladung. Sie
+dürfen nicht als Wiederaufwärmzahl gelesen werden, schon deshalb nicht, weil das
+Nachwärmen nach einer Freigabe gar nicht in der Antwort einer Suche steht: die
+erste Suche danach antwortet lexikalisch und bestellt die Gewichte im
+Hintergrund.
 
 ## Was der Test gekostet hat
 
