@@ -328,7 +328,12 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # _UNLOAD_COUNT with unload_count(), and _return_free_pages_to_the_system,
 # which collects and then trims and stays quiet where the libc has no way to.
 # No file came and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "d339fb07db1e8b6d7b23460308a8effcab3ff1bd4c0e99838e75efb23f90ff81"
+# Moved on 2026-09-19 a sixth time, by the first task of plan 14-06: exactly
+# one of the 54 files changed its bytes, embed/engine.py, which got
+# query_may_load, the one place that says whether a search may pay for the
+# weights, so that the three callers building a SemanticSide ask instead of
+# repeating. No file came and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "f12f0766c01e2b521fa98a6aa53b0440c727847ae457a4e6d4e5b7386a323b0b"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -827,7 +827,7 @@ def test_every_answer_of_the_state_comes_out_of_the_closed_set(
 # ---------------------------------------------------------------------------
 
 
-def test_a_container_that_never_unloads_lets_a_search_load_the_way_it_always_did(
+def test_query_may_load_stays_true_while_the_release_is_switched_off(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The factory state, and the reason the rule is a function and not a
@@ -841,7 +841,9 @@ def test_a_container_that_never_unloads_lets_a_search_load_the_way_it_always_did
     assert query_may_load() is True
 
 
-def test_a_container_that_unloads_does_not_let_a_search_load(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_query_may_load_turns_false_once_the_release_is_switched_on(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # The incident of 2026-09-10 in one line: 1838.4 ms against a ceiling of
     # 1500, because the first search after a cold start paid for the weights
     # itself. With the release switched on that moment would come back after

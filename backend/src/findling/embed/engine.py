@@ -304,3 +304,45 @@ def engine_state() -> str:
     # What is left when nothing else is true: the artifacts are there, nothing
     # threw, and nothing has been read yet.
     return ENGINE_COLD
+
+
+def query_may_load() -> bool:
+    """Whether a search is allowed to pay for the weights, asked in one place.
+
+    False is not a refusal to answer. ``embed_query(may_load=False)`` answers
+    out of the engine that is held or gives the ``embedding_unavailable``
+    verdict, ``_rank_chunks`` returns an empty list, RRF becomes the identity on
+    the lexical list, and the user gets full text hits. That path exists, is
+    tested, and is what every container without a model has been doing all
+    along (D-19).
+
+    **The rule hangs on the switch and does not hold in general.** The incident
+    of 2026-09-10 was the very first search of a container that had never
+    unloaded anything: 1838.4 ms against the 1500 ms ceiling of
+    ``ExAppService``, cURL error 28 in the Nextcloud log, an answer group
+    without the container half, nought hits, and all of it invisible from the
+    outside because the route answers HTTP 200
+    (``docs/measurements/2026-09-vergleichsmessung-m7g/``, sections 9.2 and
+    19.4). A seam without the switch would stop that incident in general. It
+    would also be a change to shipped behaviour at the first search of every
+    container, outside the switch, and the one paid trip to the box of phase 15
+    would then measure two changes at once. The general case is carried as a
+    backlog item and is not forgotten.
+
+    **Why the rule is here and not at the three places that build a
+    ``SemanticSide``** (``api/search.py``, ``api/snippets.py``,
+    ``api/diagnose.py``): three places are the place where the fourth one is
+    forgotten. Every caller asks this function instead of repeating it.
+
+    Nothing is built and nothing is loaded here, for the reason
+    :func:`engine_state` gives for itself: this question sits on the path of
+    every single search. One setting is read, and that is the whole body.
+    """
+    # ``api/diagnose.py::ranked_sides`` is the one caller that does **not** ask
+    # this question and goes on loading (14-RESEARCH.md, open question 2). A
+    # measuring tool has to be able to measure, and that route carries no 1.5
+    # second ceiling and no user. The other side of that decision is that a
+    # diagnosis call warms the container up, so it must not be made before a
+    # cold measurement. That consequence belongs in the runbook of plan 14-11
+    # and is only named here.
+    return settings().embed_idle_release_seconds == 0
