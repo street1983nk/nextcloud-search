@@ -630,16 +630,24 @@ Identität bleibt der Baumhash aus Abschnitt 6 und nicht der Digest.
 ```sh
 # auf der Box, im Laufverzeichnis der Anfahrt
 cd <checkout>/docs/measurements/2026-09-v12-messung/skripte
-IMAGE="ghcr.io/street1983nk/findling_backend@<digest>" ./92b-wechsel.sh
+ABBILD_DIGEST="sha256:<digest>" ./92b-wechsel.sh
 ```
 
-`<digest>` ist der Digest des Release-Abbilds des Phase-14-Abschlusses; er wird
-vor der Anfahrt aus der Abbildstrecke abgelesen und steht als Zeile in der
-Rohdatei, nicht in dieser Datei. `<checkout>` ist der Arbeitsbaum auf der Box
-aus Block 9.
+`<digest>` sind die 64 Hexziffern des Release-Abbilds des Phase-14-Abschlusses;
+sie werden vor der Anfahrt aus der Abbildstrecke abgelesen und stehen als Zeile
+in der Rohdatei, nicht in dieser Datei. `<checkout>` ist der Arbeitsbaum auf der
+Box aus Block 9.
+
+`ABBILD_DIGEST` ist die **einzige Pflichtangabe** und hat mit Absicht keinen
+Vorgabewert: fehlt sie oder ist sie leer, endet das Werkzeug mit **2** und der
+Benutzung auf stderr, bevor eine Rohdatei entsteht. Das Abbild selbst wird
+daraus zusammengesetzt (`ABBILD_REPO@ABBILD_DIGEST`) und ist deshalb keine
+zweite Stellschraube: ein eigenes `IMAGE` neben einem eigenen Digest wäre genau
+der Fall, in dem der Baumhash ein anderes Abbild prüft als die Registrierung
+darunter fährt.
 
 **Die Abhängigkeitskette ist nicht frei wählbar**, und sie steht wörtlich im
-Kopf von `92-wechsel.sh`:
+Kopf von `92b-wechsel.sh`:
 
 1. **Zuerst die PHP-Hälfte.** Ihr Verzeichnis unter `custom_apps` **muss**
    `findling` heissen. Unter jedem anderen Namen findet der Klassenlader nichts,
@@ -665,14 +673,23 @@ Verlust des Messgegenstands.
 
 **Das Werkzeug** ist `92b-wechsel.sh` im Laufverzeichnis
 `docs/measurements/2026-09-v12-messung/skripte/`, seine Rohdatei ist
-`rohdaten/92b-wechsel.txt`, und es bricht mit vier eigenen Rückgabewerten ab:
+`rohdaten/92b-wechsel.txt`, und es bricht mit fünf eigenen Rückgabewerten ab:
 
 | Wert | Bedingung |
 |---|---|
-| **36** | der Baumhash fehlt, ist nicht dreifach verankert oder meldet `baumhash-gleich nein` |
-| **37** | mehr als eine Nextcloud läuft an diesem Docker-Dienst |
+| **2** | `ABBILD_DIGEST` fehlt, ist leer oder trägt nicht die Gestalt `sha256:<hex>`, oder das Werkzeug wurde mit einem Argument gerufen |
+| **36** | der Baumhash fehlt, ist nicht dreifach verankert oder meldet `baumhash-gleich nein`; **oder** der Container läuft nach der Registrierung auf einer anderen Abbildkennung als der geprüften |
+| **37** | mehr als eine Nextcloud läuft an diesem Docker-Dienst, oder die Zählung war nicht lesbar |
 | **38** | der Arbeitsbaum ist nicht sauber |
 | **39** | die harte Grenze hat nicht gegriffen, die cgroup meldet nicht 2147483648 |
+
+Der zweite Fall von **36** ist der Preis dafür, dass AppAPI
+`registry/image:tag` zusammensetzt und keinen Digest kennt: registriert wird
+über einen Tag, und ein Tag ist wieder ein wandernder Zeiger. Das Werkzeug legt
+das per Digest gezogene Abbild vorher lokal auf genau diesen Tag und liest nach
+der Registrierung die Abbildkennung **aus dem Container** zurück. Weichen die
+beiden ab, misst der Lauf einen anderen Stand als den geprüften, und das ist
+derselbe unbelegte Stand wie ein fehlender Baumhash.
 
 `Erwartete Ausgabe`: der aufgelöste Digest steht in der Rohdatei, das
 PHP-Verzeichnis heisst `findling` und ist eingeschaltet, beide cgroup-Felder
@@ -920,7 +937,7 @@ Lauf soll auch später noch lesbar bleiben.
 | Der Container wurde zwischen den beiden Abtastungen neu gebaut | Schritt 8b, zwischen den Abtastungen | Rückgabewert **33** für die unterbrochene Reihe. Ein neu gebauter Container startet auf seiner Grundlast, und die Differenz beider Abtastungen wäre dann ein Neustart und keine Freigabe |
 | Die Sortierung lief gegen einen Bestand, der noch wuchs | Schritt 6b, vor der ersten Stufe | Rückgabewert **34** für den unfertigen Bestand. Die Endzahl des Volllaufs muss stehen, sonst misst die Sortierung zwei verschiedene Bestände unter einer Zahl |
 | Eine Filter- oder Sortierstufe lieferte keine Antwortzahlen, oder zwei aufeinander folgende Seiten trugen dieselbe Datei-Kennung | Schritt 6b | Rückgabewert **35** für die unbrauchbare Stufe. Ein Blättern, das eine Kennung zweimal ausliefert, ist ein Befund über die Seitenroute und keine Sortierzahl |
-| Der Baumhash fehlt, ist nicht dreifach verankert oder meldet `baumhash-gleich nein` | Block 13b, vor der ersten Messung | Rückgabewert **36** für den unbelegten Stand. Jede Zahl danach gehörte zu einem Zustand, den niemand benennen kann |
+| Der Baumhash fehlt, ist nicht dreifach verankert oder meldet `baumhash-gleich nein`, oder der Container läuft nach der Registrierung auf einer anderen Abbildkennung als der geprüften | Block 13b, vor der ersten Messung und noch einmal unmittelbar danach | Rückgabewert **36** für den unbelegten Stand. Jede Zahl danach gehörte zu einem Zustand, den niemand benennen kann |
 | Mehr als eine Nextcloud läuft an diesem Docker-Dienst | Block 13b, vor `unregister --rm-data` | Rückgabewert **37** für die zweite Instanz. Der Volumenname folgt allein aus der App-Kennung; am 07.09.2026 hat genau das ein Messvolumen gekostet |
 | Der Arbeitsbaum auf der Box ist nicht sauber | Block 13b, vor dem Pull | Rückgabewert **38** für den veränderten Baum. Ein Baumhash gegen einen veränderten Arbeitsbaum belegt nichts |
 | Die harte Grenze hat die Registrierung nicht überlebt | Block 13b, nach der Registrierung | Rückgabewert **39** für die verfehlte Grenze. Gelesen wird aus der cgroup, erwartet werden 2147483648 in beiden Feldern; jede andere Zahl misst eine andere Maschine als v1.1 |
