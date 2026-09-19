@@ -1,0 +1,24 @@
+rss-rueckgabe-aarch64 2026-09-19T12:52:13Z
+lauf=35443822228, https://github.com/street1983nk/nextcloud-search/actions/runs/35443822228, commit=2bc232b4da5e6552a5dad91ffa5fde2656e7b9af
+runner=ubuntu-24.04-arm, uname -m=aarch64, nativ, --network none, --cpuset-cpus 0,1
+rolle=target, die Datei, an der Phase 14 entschieden wird; die Maschine vollstaendig in machine.txt
+
+date=2026-09-19T12:52:13Z
+arch=aarch64
+python=3.13.15
+image_digest=ghcr.io/street1983nk/findling_backend@sha256:31c905b212d815d9ba5deea29a44b90bd8564baa3c4a5bd48ea13876ef31e538
+image_ref=ghcr.io/street1983nk/findling_backend:dev
+runner_role=target
+tokenizers_version=0.23.2
+onnxruntime_version=1.30.0
+cycles=5 batch=8 threads=2 sequence_len=512 chunk_tokens=510 overlap=0
+
+-- zyklen --
+zyklus=1 baseline_kb=57356 loaded_kb=1078980 after_gc_kb=893268 after_trim_kb=73648 trim_rc=1 rueckgabe_prozent=98.4
+zyklus=2 baseline_kb=73648 loaded_kb=1129704 after_gc_kb=970272 after_trim_kb=73944 trim_rc=1 rueckgabe_prozent=100.0
+zyklus=3 baseline_kb=73948 loaded_kb=1132192 after_gc_kb=953228 after_trim_kb=74172 trim_rc=1 rueckgabe_prozent=100.0
+zyklus=4 baseline_kb=74176 loaded_kb=1132660 after_gc_kb=953808 after_trim_kb=74264 trim_rc=1 rueckgabe_prozent=100.0
+zyklus=5 baseline_kb=74264 loaded_kb=1132080 after_gc_kb=952424 after_trim_kb=74908 trim_rc=1 rueckgabe_prozent=99.9
+
+median_rueckgabe_prozent=100.0
+zyklus1_minus_zyklus5_punkte=-1.5
