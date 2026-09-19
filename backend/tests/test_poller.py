@@ -2828,3 +2828,71 @@ async def test_a_pass_that_cannot_write_the_marks_still_ends(
         assert result.state == ROUND_EMPTY
     finally:
         store.close()
+
+
+# The two doors plan 14-07 knocks on: "are you working" and "let go". Both are
+# read and called from a lifespan task on the event loop, and neither of them is
+# called anywhere in the product yet. That is deliberate: the release itself is
+# one plan, the clock that triggers it is another.
+
+
+def test_a_freshly_built_poller_is_not_busy() -> None:
+    # The shape a container is in for most of its life, and the shape the idle
+    # release of MEM-02 is built for: nothing claimed, nothing held.
+    assert Poller().busy is False
+
+
+def test_a_poller_that_holds_queue_rows_says_it_is_busy() -> None:
+    worker = Poller()
+    worker._held = {91, 92}
+
+    assert worker.busy is True
+
+
+async def test_a_pass_that_gave_its_rows_back_is_not_busy_any_more(
+    store: Store, writer: IndexBatchWriter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Both halves of the answer against a real pass rather than against an
+    # assignment: busy while the pass is between the claim and the
+    # acknowledgement, not busy once the rows are gone.
+    queue = _FakeQueue(ClaimResult(jobs=(_job(),)))
+    poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=queue)
+    seen: list[bool] = []
+    real_record = store.record
+
+    def record(*args: Any, **kwargs: Any) -> None:
+        seen.append(poller.busy)
+        real_record(*args, **kwargs)
+
+    monkeypatch.setattr(store, "record", record)
+
+    assert poller.busy is False
+
+    await poller.run_once()
+
+    assert seen == [True], "a pass between the claim and the acknowledgement is at work"
+    assert poller.busy is False, "and the pass that acknowledged its rows is not"
+
+
+def test_a_silenced_poller_with_an_empty_work_stock_is_not_busy() -> None:
+    # The distinction the lifespan task lives on: armed is not the question, and
+    # a container that was switched off is not at work either.
+    worker = Poller()
+    worker.arm()
+    worker.silence()
+
+    assert worker.armed is False
+    assert worker.busy is False
+
+
+def test_reading_busy_twice_gives_the_same_answer_and_moves_nothing() -> None:
+    # A property the release asks before it does anything must not be the reason
+    # the release happens. Reading it is reading, and the held set is untouched.
+    worker = Poller()
+    worker._held = {91}
+
+    first, second = worker.busy, worker.busy
+
+    assert first is True
+    assert second is True
+    assert worker._held == {91}
