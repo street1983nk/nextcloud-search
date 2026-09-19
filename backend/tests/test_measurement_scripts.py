@@ -156,6 +156,55 @@ BUILT_POSITION = "page="
 LOAD_TOOL = "search_load.py"
 FILTER_SORT_ABORTS = ("exit 29", "exit 34", "exit 35")
 
+# The image switch of block 13b, plan 15-06, and the four names its refusals
+# hang on.
+#
+# REQUIRED_DIGEST is the one input this tool has no default for. The pointer
+# :dev moves with every green run of the image pipeline, and the path filter of
+# docker.yml reaches into backend/**, so a new test file moves it without
+# changing a line of the image. A default here would be a default for the
+# measured object.
+#
+# THE_COUNT_BEFORE_RM_DATA is the call, not the definition of the function: a
+# gate that accepted the definition would be green for a file that defines the
+# count and never runs it. THE_DANGEROUS_SWITCH is the line of 07.09.2026, when
+# a second Nextcloud on the same docker daemon removed the measuring volume of
+# the first one, because the volume name of an ExApp follows from its app id
+# alone.
+#
+# THE_TREE_HASH_PROOF is called as a script and never rebuilt inside the switch:
+# a proof that brings its own arithmetic proves itself only.
+V12_IMAGE_SWITCH = V12_RUN_DIR / "92b-wechsel.sh"
+REQUIRED_DIGEST = "ABBILD_DIGEST"
+THE_COUNT_BEFORE_RM_DATA = 'nextclouds_zaehlen >"$WORK/'
+THE_DANGEROUS_SWITCH = "--rm-data"
+# How far above the switch the count may stand, counted in code lines with the
+# comments already removed. The runbook says "unmittelbar davor" and a gate that
+# only asked for a count SOMEWHERE above would be green for a second --rm-data
+# appended at the end of the file, which is the very shape this gate exists to
+# catch. Ten lines is the section the switch lives in and not a round number: the
+# two calls of the driven order stand four and five lines under their count.
+THE_COUNT_IS_IMMEDIATE = 10
+THE_TREE_HASH_PROOF = "40b-baumhash.sh"
+THE_CGROUP = "/sys/fs/cgroup"
+THE_HARD_LIMIT_IN_BYTES = "2147483648"
+THE_LIMIT_OUT_OF_THE_CLIENT = ("HostConfig.Memory", ".Config.Memory")
+IMAGE_SWITCH_ABORTS = ("exit 36", "exit 37", "exit 38", "exit 39")
+# The cut of the first of the two pipelines this tool carries. Phase A judges
+# without touching anything and ends here; the three refusals that have to fall
+# before the first destructive command stand between this cut and the one of
+# PIPELINE_CUT below.
+VORLAUF_CUT = '} 2>&1 | tee "$WORK/vorlauf.txt"'
+
+# The driven fassung of the image switch, the predecessor 92b-wechsel.sh was
+# written after. It ran on 10.09.2026 and its raw data lie beside it, so it is
+# evidence and not source: it is neither edited nor copied. Both figures are
+# written down rather than recomputed from the file under test, for the reason
+# the two language case watchmen give at their own definition.
+DRIVEN_IMAGE_SWITCH = RUN_DIR / "92-wechsel.sh"
+DRIVEN_IMAGE_SWITCH_SHA256 = "805d49fcfca8a3ee9f5ca5ae4cbdb26ec5da1c1b9d8fd5101669fd8b83837584"
+DRIVEN_IMAGE_SWITCH_BYTES = 15705
+
 # The user route the rewarm measurement reads its figures at, and the route it
 # must never read them at. The second one is the trap of step 8: after a
 # release the diagnosis route reports a full semantic side because it loads,
@@ -1484,7 +1533,11 @@ def test_the_successor_stops_when_the_foreign_stock_cannot_be_asked(tmp_path: Pa
 
 
 def a_boxless_run(
-    script: Path, out: Path, arguments: list[str], ci_lauf: str | None = None
+    script: Path,
+    out: Path,
+    arguments: list[str],
+    ci_lauf: str | None = None,
+    umgebung: dict[str, str | None] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """A v1.2 script as a program, without a box, a container or a network.
 
@@ -1500,6 +1553,14 @@ def a_boxless_run(
     environment.pop("CI_LAUF", None)
     if ci_lauf is not None:
         environment["CI_LAUF"] = ci_lauf
+    # A name whose value is None is REMOVED rather than set to an empty string.
+    # The two are different inputs: the image switch refuses both, and a helper
+    # that could only produce one of them would test one of them.
+    for name, wert in (umgebung or {}).items():
+        if wert is None:
+            environment.pop(name, None)
+        else:
+            environment[name] = wert
     return subprocess.run(  # noqa: S603 - an argument list, never a shell
         [shell, script.as_posix(), *arguments],
         stdin=subprocess.DEVNULL,
@@ -1929,6 +1990,234 @@ def test_the_filter_sort_tool_never_calls_the_load_tool() -> None:
     carrying = [line for line in text.splitlines() if LOAD_TOOL in line]
     assert carrying, LOAD_TOOL
     assert all(line.lstrip().startswith("#") for line in carrying), carrying
+
+
+# The refusal paths and the gates of the image switch of block 13b. Plan 15-06.
+#
+# This is the one tool of the trip that destroys something: it runs
+# unregister --rm-data, and on 07.09.2026 that switch removed the measuring
+# volume of the wrong Nextcloud. Everything about it that can be held without a
+# box is held here, before the box stands, because section 7.1 of the runbook
+# says no tool is changed during the paid trip.
+
+
+def the_three_parts_of(text: str) -> tuple[str, str, str]:
+    """The code above the first pipeline, between the two, and below the second.
+
+    The image switch carries two pipelines rather than one: phase A judges
+    without touching anything and ends in a work file, phase B changes the box
+    and ends in the raw file. Where an abort stands decides whether it is an
+    abort at all AND whether it falls before or after the first destructive
+    command, so this tool needs three parts where the others need two.
+
+    Comment lines go first, for the reason the two part cutter above gives: the
+    head of the file names every exit code while explaining it, so a gate that
+    read the comments would be red at exactly the paragraph that exists to keep
+    it green.
+    """
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    vorlauf, erster, rest = code.partition(VORLAUF_CUT)
+    if not erster:
+        return code, "", ""
+    mitte, zweiter, unten = rest.partition(PIPELINE_CUT)
+    return vorlauf, mitte, unten if zweiter else ""
+
+
+def lines_carrying(code: str, needle: str) -> list[int]:
+    """The indexes of the code lines that carry a string, in the order they run."""
+    return [index for index, line in enumerate(code.splitlines()) if needle in line]
+
+
+def switches_that_run(code: str) -> list[int]:
+    """The indexes of the code lines that really RUN unregister --rm-data.
+
+    A line that only prints the name of the switch is not the switch. Both
+    refusals of this tool quote it on stderr, because a diagnosis that does not
+    name the command it refused is half a diagnosis, and counting those as
+    occurrences would force a count in front of every error message.
+    """
+    return [
+        index
+        for index, line in enumerate(code.splitlines())
+        if THE_DANGEROUS_SWITCH in line and not line.strip().startswith(("echo", "printf"))
+    ]
+
+
+def switches_without_their_count(code: str) -> list[int]:
+    """Every run of the switch that has no count of the instances right above it."""
+    counts = lines_carrying(code, THE_COUNT_BEFORE_RM_DATA)
+    found: list[int] = []
+    for switch in switches_that_run(code):
+        above = [count for count in counts if count < switch]
+        if not above or switch - max(above) > THE_COUNT_IS_IMMEDIATE:
+            found.append(switch)
+    return found
+
+
+def aborts_of(part: str) -> set[str]:
+    """Every exit of a part of the code, read line by line.
+
+    Line by line rather than by substring: exit 2 is a substring of exit 29 and
+    of exit 22, and a gate that read it as one would be green for a file that
+    carries neither.
+    """
+    return {line.strip() for line in part.splitlines() if line.strip().startswith("exit ")}
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("digest", [None, ""])
+def test_the_image_switch_refuses_a_run_without_a_digest(tmp_path: Path, digest: str | None) -> None:
+    """No digest, no run, no raw file, and no foreign call before that.
+
+    The two shapes of nothing are the absent variable and the empty one, and
+    both have to end the same way or the required input would be required in
+    name only.
+
+    The reason there is no default at all is the moving pointer. :dev moves
+    with every green run of the image pipeline, and the path filter of
+    docker.yml reaches into backend/**, so a new test file in this very
+    directory moves the digest without changing a line of the image. A report
+    that names :dev names no state, and a default in this variable would
+    quietly decide what the trip measures.
+    """
+    answer = a_boxless_run(V12_IMAGE_SWITCH, tmp_path, [], umgebung={REQUIRED_DIGEST: digest})
+    assert answer.returncode == 2, answer
+    assert REQUIRED_DIGEST in answer.stderr
+    assert "Benutzung:" in answer.stderr
+    assert answer.stdout == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_the_image_switch_counts_the_nextclouds_before_every_rm_data() -> None:
+    """The most dangerous line of the whole trip cannot stand without its count.
+
+    On 07.09.2026 a second, hand rolled Nextcloud on the same docker daemon ran
+    unregister --rm-data and took the volume of the FIRST one with it, because
+    the volume name of an ExApp follows from its app id alone. The count exists
+    to stop exactly that, and this gate holds its POSITION: every line that
+    carries the switch has a CALL of the count above it, in the order the file
+    runs. A second --rm-data added later without a count of its own turns this
+    red, which is the case the gate is written for.
+
+    The call and not the definition, because a file that defines the count and
+    never runs it would otherwise pass. The pattern of the count is asserted
+    against the driven fassung as well: the default was corrected at the box on
+    09.09.2026 after it had counted 0 servers with exactly one running, and a
+    successor that quietly carried a different pattern would count the hand
+    rolled shape of 07.09. as absent.
+    """
+    text = V12_IMAGE_SWITCH.read_text(encoding="utf-8")
+    code = "\n".join(the_three_parts_of(text))
+    assert switches_that_run(code), THE_DANGEROUS_SWITCH
+    assert lines_carrying(code, THE_COUNT_BEFORE_RM_DATA), THE_COUNT_BEFORE_RM_DATA
+    assert switches_without_their_count(code) == []
+
+    assert server_image_pattern(V12_IMAGE_SWITCH) == server_image_pattern(DRIVEN_IMAGE_SWITCH)
+
+    # The staged probe, and it is the real file with the real mistake in it
+    # rather than an invented sample: a second switch appended below everything
+    # has a count somewhere above it and none immediately above it, which is
+    # exactly the shape that would pass a gate asking only for presence.
+    staged = code + '\nocc app_api:app:unregister "$APP_ID" --rm-data\n'
+    assert switches_without_their_count(staged) != []
+
+
+def test_the_image_switch_reads_the_hard_limit_out_of_the_cgroup() -> None:
+    """A run that measures against 4 GB while it means 2 GiB measures nothing.
+
+    A register throws the limit away, so it is set again afterwards, and it is
+    read back OUT OF THE CGROUP and never out of the docker client. The client
+    answers with what it was asked to do; the cgroup answers with what
+    happened. Both fields are named, memory.max and memory.swap.max, because a
+    limit without the swap field is no limit on a box that has swap.
+    """
+    text = V12_IMAGE_SWITCH.read_text(encoding="utf-8")
+    code = "\n".join(the_three_parts_of(text))
+    for name in (THE_CGROUP, "memory.max", "memory.swap.max", THE_HARD_LIMIT_IN_BYTES):
+        assert name in code, name
+    for forbidden in THE_LIMIT_OUT_OF_THE_CLIENT:
+        assert forbidden not in code, forbidden
+
+
+def test_the_image_switch_calls_the_tree_hash_as_a_script() -> None:
+    """The proof is called and not rebuilt, or it proves only itself.
+
+    40b-baumhash.sh produced the comparison figures of the predecessor runs. A
+    switch that rebuilt its arithmetic as a heredoc would compute something
+    that looks the same and hold it against a number it did not produce, and a
+    difference between the two would read as a difference in the image.
+
+    The second half of the gate is the absence of an own computation over the
+    working tree. The sha256sum that stays is the one INSIDE the image, over
+    the int8 model file, and that is a reading of the image content rather than
+    a tree hash of the checkout.
+    """
+    text = V12_IMAGE_SWITCH.read_text(encoding="utf-8")
+    code = "\n".join(the_three_parts_of(text))
+    assert THE_TREE_HASH_PROOF in code
+    assert 'sh "$SKRIPTE/' + THE_TREE_HASH_PROOF + '"' in code
+    for line in code.splitlines():
+        if "sha256sum" not in line:
+            continue
+        for tree in ("$REPO", "backend/src", "/php"):
+            assert tree not in line, line
+
+    # The staged probe, for the same reason as in the gate above it.
+    staged = 'find "$REPO/backend/src" -name "*.py" -exec sha256sum {} +'
+    assert "sha256sum" in staged
+    assert "$REPO" in staged
+
+
+def test_the_image_switch_keeps_its_abort_paths_below_its_pipelines() -> None:
+    """Where an abort stands decides whether it is an abort at all.
+
+    The return code of a pipeline that ends in tee belongs to tee, so an exit
+    inside a block would leave the subshell only, tee would end with nought,
+    and the run would look green with its refusal printed in the raw file.
+
+    This tool has two blocks and therefore three positions. The three refusals
+    of phase A stand between the two cuts, which is after their readings and
+    BEFORE the first command that changes anything on the box. The two of phase
+    B stand below the second cut. exit 2 stands above both on purpose: a call
+    without a digest disputes the measured object itself, and a dispute must
+    not write a raw file, while a pipeline writes one.
+    """
+    text = V12_IMAGE_SWITCH.read_text(encoding="utf-8")
+    vorlauf, mitte, unten = the_three_parts_of(text)
+    assert mitte, "the file does not carry the first pipeline this gate cuts at"
+    assert unten, "the file does not carry the second pipeline this gate cuts at"
+
+    assert aborts_of(vorlauf) == {"exit 2"}
+    assert aborts_of(mitte) == {"exit 36", "exit 37", "exit 38"}
+    assert aborts_of(unten) == {"exit 36", "exit 37", "exit 39"}
+    assert set(IMAGE_SWITCH_ABORTS) <= aborts_of(mitte) | aborts_of(unten)
+
+    # The staged probe, because a gate whose only assertion is that today is
+    # fine stays green when it dies.
+    staged = "    exit 37\n" + VORLAUF_CUT + "\n    exit 38\n" + PIPELINE_CUT + "\nexit 39\n"
+    staged_vorlauf, staged_mitte, staged_unten = the_three_parts_of(staged)
+    assert aborts_of(staged_vorlauf) == {"exit 37"}
+    assert aborts_of(staged_mitte) == {"exit 38"}
+    assert aborts_of(staged_unten) == {"exit 39"}
+
+
+def test_the_driven_image_switch_of_the_predecessor_stays_byte_identical() -> None:
+    """A fassung that ran is part of the evidence, so it does not move.
+
+    92-wechsel.sh drove the image switch of the follow up measurement and its
+    raw data lie beside it. The successor of plan 15-06 is a new file in the
+    run directory of v1.2 for exactly that reason, and this watchman is what
+    turns that rule from an intention into a gate.
+    """
+    raw = DRIVEN_IMAGE_SWITCH.read_bytes()
+    assert len(raw) == DRIVEN_IMAGE_SWITCH_BYTES, DRIVEN_FASSUNG_RULE
+    assert hashlib.sha256(raw).hexdigest() == DRIVEN_IMAGE_SWITCH_SHA256, DRIVEN_FASSUNG_RULE
+
+    # The mutation probe, after the pattern of the two watchmen above: what is
+    # shown here is that THIS comparison separates THIS file from a file that
+    # has drifted by a single character.
+    assert hashlib.sha256(raw + b" ").hexdigest() != DRIVEN_IMAGE_SWITCH_SHA256
+    assert hashlib.sha256(raw.replace(b"set -eu", b"set -e", 1)).hexdigest() != DRIVEN_IMAGE_SWITCH_SHA256
 
 
 # The watchman over the eleven tools the trip took over. Plan 15-01.
