@@ -31,6 +31,7 @@ from fastapi.testclient import TestClient
 from tantivy import Document
 
 from findling.config import settings
+from findling.embed import model as model_module
 from findling.embed.engine import note_cutter_failure
 from findling.index.open import expected_versions, open_index
 from findling.index.schema import (
@@ -212,6 +213,27 @@ def forget_the_cutter_notice() -> Iterator[None]:
     note_cutter_failure(None)
     yield
     note_cutter_failure(None)
+
+
+@pytest.fixture(autouse=True)
+def forget_the_release_count() -> Iterator[None]:
+    """No case inherits the releases of the case before it.
+
+    The counter of ``embed/model.py`` is a module global and monotonic by
+    design: it describes how often this process has let go of the weights, no
+    reader of it needs it zeroed, and :func:`~findling.embed.engine.reset` does
+    not zero it either (T-14-17). Since plan 14-09 :func:`engine_state` reads it
+    to tell "never read" from "released to save memory", and in a suite that one
+    process runs every case, so a release in one file would decide what the
+    admin page reports in another one three files later.
+
+    Zeroed here and nowhere in the container, for the same reason the cutter
+    notice above is cleared here: the order the suite happens to run in must not
+    be readable off an answer. Cleared on both sides.
+    """
+    model_module._UNLOAD_COUNT = 0
+    yield
+    model_module._UNLOAD_COUNT = 0
 
 
 @pytest.fixture

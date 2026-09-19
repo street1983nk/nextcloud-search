@@ -55,6 +55,7 @@ from findling.embed.engine import (
     ENGINE_MISSING,
     ENGINE_RETRY_PENDING,
     ENGINE_STATES,
+    ENGINE_UNLOADED,
     WARM_TEXT,
     engine_state,
     note_cutter_failure,
@@ -1366,3 +1367,161 @@ def test_the_warm_text_carries_nothing_of_a_user_and_nothing_of_the_disk() -> No
     assert "\\" not in WARM_TEXT
     assert MODEL_FILE not in WARM_TEXT
     assert TOKENIZER_FILE not in WARM_TEXT
+
+
+# ---------------------------------------------------------------------------
+# The sixth word (plan 14-09, owner decision of 19.09.2026, branch B).
+#
+# "Never read" and "released to save memory" show the same coverage figure and
+# the same empty holder, and they ask different things of an admin: the first
+# one costs the load of a container that has not started working yet, the second
+# one is the switch doing what it was turned on for and costs the reload of the
+# next search. The counter is the one source of the answer, because it is
+# monotonic, because reset() does not zero it, and because a process that never
+# let go of anything cannot report the word at all.
+# ---------------------------------------------------------------------------
+
+
+def test_the_closed_set_of_states_carries_the_sixth_word() -> None:
+    # The set is imported by the PHP contract gate and mirrored one repository
+    # half over, so the word has to be in it before either side can hold it.
+    assert ENGINE_UNLOADED == "unloaded"
+    assert ENGINE_UNLOADED in ENGINE_STATES
+    assert len(ENGINE_STATES) == 6
+
+
+def test_a_fresh_process_never_reports_unloaded(model_home: Path) -> None:
+    # The anti vacuity half of the word: the counter of a process that has not
+    # let go of anything stands at nought, so cold stays cold. Without this the
+    # new branch could be true for every container that never searched.
+    _pretend_a_model(model_home)
+
+    assert unload_count() == 0
+    assert engine_state() == ENGINE_COLD
+
+
+def test_a_container_with_the_release_switched_off_stays_cold(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The switch off is the shipped default, and nothing about the sixth word
+    # may change what a container without it reports.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "0")
+    settings.cache_clear()
+
+    assert engine_state() == ENGINE_COLD
+
+
+def test_a_container_with_the_release_switched_on_but_nothing_read_is_cold(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The switch alone is not a release. A container that was started with the
+    # idle span set and has not answered a single search yet is at its first
+    # load and not past one.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    _release_is_on(monkeypatch)
+
+    assert engine_state() == ENGINE_COLD
+
+
+def test_a_container_that_let_go_to_save_memory_says_unloaded_and_not_cold(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # MEM-05, the half this plan adds. Cold reads as "the model arrives on first
+    # demand, which is the normal state" and would hide the very cost the switch
+    # trades away: the next search answers with full text hits and pays the load
+    # again in the background.
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+
+    assert release_if_idle(900) is True
+    assert engine.loaded is False
+    assert released_count() == 1
+    assert engine_state() == ENGINE_UNLOADED
+
+
+def test_a_container_that_loaded_again_after_a_release_is_loaded(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The counter is monotonic, so it can only ever say that a release has
+    # happened, never that the container is empty right now. The holder is what
+    # says that, and it outranks the counter: a container that has warmed up
+    # again is loaded and not unloaded.
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+    assert release_if_idle(900) is True
+
+    engine.embed_query("bauantrag")
+
+    assert released_count() == 1
+    assert engine_state() == ENGINE_LOADED
+
+
+def test_the_switched_off_semantic_half_outranks_a_release(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The order of the answers is unchanged above the new branch. A container
+    # whose semantic half was switched off after a release would otherwise be
+    # reported as waiting for a reload that nobody is ever going to ask for.
+    clock = {"now": 1000.0}
+    _an_idle_engine(model_home, monkeypatch, clock)
+    assert release_if_idle(900) is True
+
+    monkeypatch.setenv("FINDLING_EMBED_ENABLED", "false")
+    settings.cache_clear()
+
+    assert engine_state() == ENGINE_DISABLED
+
+
+def test_a_missing_model_outranks_a_release(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The one state that does not resolve itself keeps its precedence. The
+    # holder is dropped and the artifacts are taken out of the directory, which
+    # is the shape of a model removed from a running container; the counter
+    # still stands at one, because reset() does not zero it.
+    clock = {"now": 1000.0}
+    _an_idle_engine(model_home, monkeypatch, clock)
+    assert release_if_idle(900) is True
+
+    reset()
+    (model_home / MODEL_FILE).unlink()
+    (model_home / TOKENIZER_FILE).unlink()
+
+    assert released_count() == 1
+    assert engine_state() == ENGINE_MISSING
+
+
+def test_a_cooldown_outranks_a_release(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Waiting outranks the release for the same reason it outranks cold: a
+    # container inside a cooldown asks an admin to wait five minutes, and
+    # "released to save memory" promises a reload that the cooldown is holding
+    # back.
+    clock = {"now": 1000.0}
+    _an_idle_engine(model_home, monkeypatch, clock)
+    assert release_if_idle(900) is True
+
+    note_cutter_failure(clock["now"])
+
+    assert engine_state() == ENGINE_RETRY_PENDING
+
+    note_cutter_failure(None)
+
+    assert engine_state() == ENGINE_UNLOADED
+
+
+def test_asking_the_state_after_a_release_builds_nothing_and_loads_nothing(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T-07-04 at the new branch. The page polls every few seconds while it is
+    # open, and the container it polls has just given its weights back: a
+    # question that loaded them would undo the saving it is reporting.
+    clock = {"now": 1000.0}
+    _an_idle_engine(model_home, monkeypatch, clock)
+    assert release_if_idle(900) is True
+    reset()
+    before = load_count()
+
+    for _ in range(5):
+        assert engine_state() == ENGINE_UNLOADED
+
+    assert _held_for(model_home) is None, "the question must not build the instance it asks about"
+    assert load_count() == before
