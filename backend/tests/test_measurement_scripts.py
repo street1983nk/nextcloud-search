@@ -118,14 +118,16 @@ COPIED_TOOLS = (
 )
 
 # Every tool the measurement order of section 7 of the runbook names: the eleven
-# copies above plus the three files the run directory of v1.2 already held.
+# copies above plus the files the run directory of v1.2 was written with.
 # Written down rather than globbed, because the statement is that a tool the
 # order names and the directory lacks is found on a rented box at the price of
-# box time. The tools that come with plans 15-03 to 15-06 are deliberately not
-# in this list; they join it with their own plans.
+# box time. The tools that come with plans 15-04 to 15-06 are deliberately not
+# in this list; they join it with their own plans, the way the rewarm tool of
+# plan 15-03 joins it here, in the commit that creates the file.
 TOOLS_THE_MEASUREMENT_ORDER_NAMES = (
     *COPIED_TOOLS,
     "73-bestand-sonde.py",
+    "95b-wiederaufwaermen.sh",
     "97-cron-vorpruefung.sh",
     "98c-sprachfaelle.sh",
 )
@@ -1520,14 +1522,15 @@ def test_the_copy_watchman_fires_on_a_single_added_character() -> None:
 def test_the_run_directory_of_the_trip_carries_every_tool_the_measurement_order_names() -> None:
     """A tool the order names and the directory lacks is paid for in box time.
 
-    Section 7 of docs/runbook-messbox.md names a tool for every one of its nine
-    blocks, and the run directory of v1.2 held three of them before this plan.
-    The tools of plans 15-03 to 15-06 are absent from the list on purpose: they
+    Section 7 of docs/runbook-messbox.md names a tool for every one of its ten
+    blocks, and the run directory of v1.2 held three of them before plan 15-01.
+    The tools of plans 15-04 to 15-06 are absent from the list on purpose: they
     join it with their own plans, and a list that named them today would be red
-    for a reason that is not a finding.
+    for a reason that is not a finding. The rewarm tool of step 8 is in it since
+    plan 15-03, because the file it names exists since that plan.
     """
     assert len(COPIED_TOOLS) == 11
     assert len(set(COPIED_TOOLS)) == len(COPIED_TOOLS)
-    assert len(TOOLS_THE_MEASUREMENT_ORDER_NAMES) == 14
+    assert len(TOOLS_THE_MEASUREMENT_ORDER_NAMES) == 15
     missing = [name for name in TOOLS_THE_MEASUREMENT_ORDER_NAMES if not (V12_RUN_DIR / name).is_file()]
     assert missing == [], missing
