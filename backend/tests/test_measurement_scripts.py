@@ -166,10 +166,10 @@ COPIED_TOOLS = (
 # copies above plus the files the run directory of v1.2 was written with.
 # Written down rather than globbed, because the statement is that a tool the
 # order names and the directory lacks is found on a rented box at the price of
-# box time. The tools that come with plans 15-05 and 15-06 are deliberately not
-# in this list; they join it with their own plans, the way the rewarm tool of
-# plan 15-03 and the baseload return tool of plan 15-04 join it here, in the
-# commit that creates the file.
+# box time. The tool that comes with plan 15-06 is deliberately not in this
+# list; it joins it with its own plan, the way the rewarm tool of plan 15-03,
+# the baseload return tool of plan 15-04 and the filter and sort tool of plan
+# 15-05 join it here, in the commit that creates the file.
 TOOLS_THE_MEASUREMENT_ORDER_NAMES = (
     *COPIED_TOOLS,
     "73-bestand-sonde.py",
@@ -177,6 +177,7 @@ TOOLS_THE_MEASUREMENT_ORDER_NAMES = (
     "95b-wiederaufwaermen.sh",
     "97-cron-vorpruefung.sh",
     "98c-sprachfaelle.sh",
+    "99c-filter-sortierung.sh",
 )
 
 # The state of the driven fassung, measured on 2026-09-10 out of the file
@@ -1794,14 +1795,15 @@ def test_the_run_directory_of_the_trip_carries_every_tool_the_measurement_order_
 
     Section 7 of docs/runbook-messbox.md names a tool for every one of its ten
     blocks, and the run directory of v1.2 held three of them before plan 15-01.
-    The tools of plans 15-05 and 15-06 are absent from the list on purpose: they
-    join it with their own plans, and a list that named them today would be red
-    for a reason that is not a finding. The rewarm tool of step 8 is in it since
-    plan 15-03 and the baseload return tool of step 8b since plan 15-04, because
-    the files they name exist since those plans.
+    The tool of plan 15-06 is absent from the list on purpose: it joins it with
+    its own plan, and a list that named it today would be red for a reason that
+    is not a finding. The rewarm tool of step 8 is in it since plan 15-03, the
+    baseload return tool of step 8b since plan 15-04 and the filter and sort
+    tool of step 6b since plan 15-05, because the files they name exist since
+    those plans.
     """
     assert len(COPIED_TOOLS) == 11
     assert len(set(COPIED_TOOLS)) == len(COPIED_TOOLS)
-    assert len(TOOLS_THE_MEASUREMENT_ORDER_NAMES) == 16
+    assert len(TOOLS_THE_MEASUREMENT_ORDER_NAMES) == 17
     missing = [name for name in TOOLS_THE_MEASUREMENT_ORDER_NAMES if not (V12_RUN_DIR / name).is_file()]
     assert missing == [], missing
