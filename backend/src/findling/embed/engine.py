@@ -92,6 +92,26 @@ _CUTTER_FAILED_AT: float | None = None
 # are paid on the state that resolves itself.
 _ABSENT: Path | None = None
 
+# Whether a search has been refused a load since the last warm run, and
+# whether a warm run is in flight right now. Two plain module flags beside
+# the holder, because both describe this process the way the holder does,
+# and both are written under :data:`_LOCK`.
+#
+# The second one is efficiency and not correctness. _load() already returns
+# at its head when the engine is bound, so ten concurrent warm runs pay for
+# one load whatever this flag says; what it saves is the nine threadpool
+# threads that would otherwise queue at the lock of the holder
+# (14-RESEARCH.md 5.3).
+_WARM_WANTED = False
+_WARMING = False
+
+# The line a warm run embeds. A fixed constant and never anything a user
+# typed or anything read off the disk: it travels the path a search line
+# travels, through the tokenizer and the graph, so a user line here would be
+# a user line in whatever that path ever comes to log (T-14-22). Short,
+# because the cost of the run is the load and not the sentence.
+WARM_TEXT: Final = "aufwaermen"
+
 # The closed set of answers :func:`engine_state` gives, as named constants in
 # the shape of the notes of ``api/status.py``: every one of them names a state
 # of this container and none of them names a place on disk (T-07-01). The words
@@ -425,3 +445,102 @@ def released_count() -> int:
     could zero itself green with (T-14-17).
     """
     return unload_count()
+
+
+def request_warm() -> None:
+    """A search says that it answered without the weights.
+
+    The one way in. ``api/search.py`` calls it in plan 14-08, on the path of a
+    search that :func:`query_may_load` refused a load to, and nothing else in
+    the container ever sets the marker. The call is cheap on purpose: it takes
+    :data:`_LOCK` for one assignment and never touches the holder, because it
+    runs inside a request that has already spent its budget.
+
+    Whether the warm run then really happens is not decided here.
+    :func:`warm_wanted` asks the four questions, and the caller that runs it
+    asks that one.
+    """
+    global _WARM_WANTED
+
+    with _LOCK:
+        _WARM_WANTED = True
+
+
+def warm_wanted() -> bool:
+    """Whether a warm run is owed, would help, and could work.
+
+    Four conditions and all of them have to hold. Somebody was refused a load
+    (:func:`request_warm`), the release is switched on at all, there is a holder
+    with a cold engine, and the artifacts are not remembered as absent. A
+    container without a model would otherwise be warmed once per refused search,
+    for ever, and every one of those runs would read a directory that has
+    nothing in it.
+
+    **Nothing is built and nothing is loaded here** (T-14-21). The holder is
+    read through :func:`_held`, the same way :func:`release_if_idle` reads it
+    and for the same reason: this question sits on a tick, and a question that
+    filled the holder would be the loading trigger of a container nobody is
+    searching on.
+    """
+    with _LOCK:
+        wanted = _WARM_WANTED
+    if not wanted:
+        return False
+    if query_may_load():
+        # The switch is off, so no search was ever refused a load and there is
+        # nothing to make good. Warming here would be the behaviour change
+        # outside the switch that query_may_load exists to refuse.
+        return False
+
+    held = _held(settings().embed_model_dir)
+    if held is None:
+        return False
+    return not held.loaded and not held.artifacts_absent
+
+
+def warm() -> bool:
+    """Fetch the weights back in the calling thread, once per warm window.
+
+    True when this call did the run and the engine answered. False when another
+    warm run was already in flight, or when there is no model to load, which is
+    a verdict and never an exception: the same stance the search side takes
+    towards a missing model.
+
+    **The promise of success criterion 5, and its two levels.**
+    :meth:`~findling.embed.model.EmbeddingModel._load` runs under the lock of
+    the holder and returns at its head when the engine is already bound, so ten
+    concurrent warm runs raise
+    :func:`~findling.embed.model.load_count` **once**. That is structural and
+    holds whatever this function does. The :data:`_WARMING` flag below saves the
+    nine threadpool threads that would otherwise queue at that lock. It is
+    efficiency and not correctness, and it is said here plainly so that nobody
+    reads the flag as the promise (14-RESEARCH.md 5.3).
+
+    **Setting the idle clock is the condition and not a side effect.** The run
+    goes through :meth:`~findling.embed.model.EmbeddingModel.embed_query` and
+    therefore through ``_embed``, which writes ``_last_use``. Without that the
+    next tick of the unload task would find a holder whose last use is older
+    than the span and would eat the load pair that had just been paid for.
+
+    The text is :data:`WARM_TEXT`, a fixed module constant. It travels the path
+    a search line travels, so it must not be a search line: no user content and
+    no file name reaches a log, a vector or a report through here (T-14-22).
+
+    Blocking, like every load. The caller runs it through ``asyncio.to_thread``.
+    """
+    global _WARM_WANTED, _WARMING
+
+    with _LOCK:
+        if _WARMING:
+            return False
+        _WARMING = True
+        # Cleared here and not at the end, because the request has been taken
+        # on. A marker still standing after the run would make every later tick
+        # read a warm run that has already happened.
+        _WARM_WANTED = False
+
+    try:
+        return shared_model().embed_query(WARM_TEXT, may_load=True).available
+    finally:
+        with _LOCK:
+            _WARMING = False

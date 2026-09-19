@@ -339,7 +339,12 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # of the instance under _LOCK and calls the release outside it, and with
 # released_count beside it. No file came and none went, so PACKAGE_FILES
 # stays at 54.
-PACKAGE_TREE_HASH_TODAY = "33ec126633fb86de2b358ac311dbab6b1fbca9095982cb9a64217ce0bc64716a"
+# Moved on 2026-09-19 an eighth time, by the third task of plan 14-06:
+# embed/engine.py a third time, with request_warm, warm_wanted and warm, the
+# two flags _WARM_WANTED and _WARMING beside the holder and the fixed line
+# WARM_TEXT that a warm run embeds. No file came and none went, so
+# PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "c340cc629f3f4c2af433b86bce327aa44cd28777df6a2a97ef945ef7f4770424"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
