@@ -753,3 +753,85 @@ Für diese Phase ist die Aussage davon nicht betroffen: der reale Lauf liegt mit
 volles Embedding aufdreht, landet in der Nähe einer Million Chunks und reisst das
 Kriterium auch warm; der Ausweg dafür ist Abschnitt 5 und nicht diese Zeile im
 Protokoll.
+
+## 10. Entladung im Leerlauf
+
+Seit v1.2 kann ein Container, der eine Weile nichts einbettet, die Gewichte
+wieder loslassen. Der Schalter dafür steht ab Werk auf aus. Dieser Abschnitt
+sagt, was er tut, wie er eingeschaltet und wieder ausgeschaltet wird, was er
+kostet, was er bringt und wann er besser stehen bleibt.
+
+**Was passiert.** Ist das Modell länger als die eingestellte Ruhezeit nicht
+benutzt worden, gibt der Container den Tokenizer, den Splitter und die
+Inferenzsitzung frei und reicht die frei gewordenen Seiten an das Betriebssystem
+zurück. Freigegeben wird ausschliesslich im echten Leerlauf: läuft gerade ein
+Indexarbeiter, verschiebt die Prüfung die Freigabe auf den nächsten Takt. Das
+Modell ist danach nicht gelöscht, sondern nur nicht mehr im Speicher. Die Datei
+liegt weiter im Abbild, und der nächste Bedarf liest sie neu ein.
+
+**Wie eingeschaltet wird.** Über die Umgebungsvariable
+`FINDLING_EMBED_IDLE_RELEASE_SECONDS`, in ganzen Sekunden:
+
+| Wert | Bedeutung |
+|---|---|
+| `0` | aus, und das ist der Werksstand |
+| `60` bis `86400` | eingeschaltet, mit dieser Ruhezeit |
+| alles andere | fällt auf den Werksstand zurück |
+
+**900**, also eine Viertelstunde, ist der Wert, den die Beschreibung der
+Variablen einem Admin vorschlägt: lang genug, dass ein Arbeitsnachmittag die
+Wartezeit nicht einmal je Suche bezahlt, kurz genug, dass eine Box, die über
+Mittag allein bleibt, ihren Speicher zurückbekommt. Ein Wert ausserhalb des
+Fensters ist kein Startfehler: der Container schreibt eine Warnzeile, die den
+Variablennamen nennt, nimmt den Werksstand und startet trotzdem. Ein Tippfehler
+in dieser Zeile legt also keine Instanz still.
+
+**Ausgeschaltet wird**, indem die Variable auf `0` gesetzt oder ganz entfernt
+wird; wirksam wird beides beim nächsten Start des Containers.
+
+Die drei Zahlen stehen an genau zwei Stellen im Quelltext, und diese Seite
+erfindet keine dritte: `EMBED_IDLE_RELEASE_SECONDS` und
+`EMBED_IDLE_RELEASE_SECONDS_RANGE` in `backend/src/findling/config.py`, dazu die
+Beschreibung der Variablen in `backend/appinfo/info.xml`.
+
+**Was es kostet.** Die erste Suche nach einer Ruhephase antwortet mit
+Volltexttreffern statt mit semantischen. Sie wartet bewusst nicht auf die
+Gewichte: ein einzelner Containeraufruf ist nach 1,5 Sekunden gedeckelt
+(`php/lib/Service/ExAppService.php`), und ein Ladevorgang reisst diese Decke.
+Stattdessen bestellt die Suche das Nachwärmen im Hintergrund und antwortet
+sofort. Die zweite Suche ist wieder vollständig. Bezahlt wird das je warmem
+Fenster genau einmal: zehn gleichzeitige Suchen lösen einen Ladevorgang aus und
+nicht zehn.
+
+**Was es bringt.** Der Vorprüflauf vom 19.09.2026 hat auf aarch64 gemessen, dass
+**100,0 Prozent** des beim Laden belegten Speichers wieder beim Betriebssystem
+landen. Das ist der Median über fünf Zyklen, gemessen gegen das ausgelieferte
+Abbild auf einem Vier-Kern-Läufer mit ARM Neoverse-N2 (`ubuntu-24.04-arm`),
+Python 3.13.15, onnxruntime 1.30.0. Der vollständige Bericht mit Rohdaten,
+Maschine und Abbild-Digest steht in
+[`docs/measurements/2026-09-entladung-vorpruefung/`](measurements/2026-09-entladung-vorpruefung/README.md).
+
+Zwei Einschränkungen gehören neben diese Zahl, beide ausführlicher in
+`docs/performance.md`: die Freigabe führt nicht auf die Grundlast eines
+Containers zurück, der nie eingebettet hat, sondern auf diese plus rund 16 MB
+Bodensatz aus den Modulimporten, und wie lange das Nachladen auf der
+Zielhardware dauert, ist noch nicht gemessen.
+
+**Was ein Admin auf der Seite sieht.** Solange das Modell freigegeben ist,
+meldet die Statusseite den Zustand `unloaded` mit dem Satz "Das Modell wurde zum
+Sparen freigegeben. Die nächste Suche antwortet mit Volltexttreffern und lädt es
+im Hintergrund nach." Das ist kein Fehlschlag und verlangt keinen Handgriff; es
+ist der eingeschaltete Sparbetrieb, der sich meldet. Die vollständige
+Zustandstabelle mit allen sechs Wörtern steht in
+[`docs/admin-page.md`](admin-page.md).
+
+**Wann man es nicht einschaltet.** Zwei Lagen, in denen der Schalter auf `0`
+bleibt:
+
+1. **Eine Box, die dauerhaft indexiert.** Dort gibt es keinen Leerlauf, der
+   freigegeben werden könnte. Die Prüfung liefe jeden Takt ins Leere, und die
+   Spitze eines solchen Laufs gehört ohnehin der OCR-Spur und nicht dem Modell.
+2. **Eine Instanz, auf der die Suche der Hauptweg ist.** Wenn über den Tag
+   verteilt einzeln gesucht wird, ist fast jede Suche die erste nach einer
+   Pause. Sie bekommt dann Volltexttreffer, und das wird als "die Suche ist
+   schlechter geworden" erlebt und nicht als Sparbetrieb.
