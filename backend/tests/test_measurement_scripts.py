@@ -98,6 +98,34 @@ V12_LANGUAGE_CASES = V12_RUN_DIR / "98c-sprachfaelle.sh"
 V12_CRON_PRECHECK = V12_RUN_DIR / "97-cron-vorpruefung.sh"
 V12_REWARM = V12_RUN_DIR / "95b-wiederaufwaermen.sh"
 
+# The MEM-02 tool of step 8b, and the two figures its whole verdict hangs on.
+# The measure is written down word for word, and so is the formulation it must
+# never carry: the difference between the two is the difference between a
+# measured saving and an invented one. docs/performance.md says so in the
+# section that names the measure, and the tool repeats it rather than referring
+# to it, because a raw file is read on its own.
+V12_BASELOAD_RETURN = V12_RUN_DIR / "94b-grundlast-rueckkehr.sh"
+MEASURE_OF_MEM_02 = "Rueckkehr zur Grundlast nach einem Indexlauf"
+FORBIDDEN_MEASURE = "Grundlast minus"
+BASELOAD_RETURN_ABORTS = ("exit 29", "exit 31", "exit 32", "exit 33")
+
+# The two helpers of scripts/ops the MEM-02 tool calls, and the state they are
+# in. Written down and not recomputed from the files under test, for the reason
+# the two fassung watchmen above give: a gate that asks the file for its own
+# expectation agrees with it whatever it comes to say.
+#
+# The digests are taken over the bytes with carriage returns folded away, which
+# the two watchmen above do not need to do. rss_digest.py was checked out on
+# this machine before scripts/ops/*.py got its eol=lf rule, so the working copy
+# carries CRLF while the blob and every runner carry LF. A digest over the raw
+# bytes would therefore be red on one of the two machines no matter which one
+# it was measured on, and a gate that is red on a green tree is a gate somebody
+# switches off.
+RSS_SAMPLER = REPO_ROOT / "scripts" / "ops" / "rss_sampler.sh"
+RSS_DIGEST = REPO_ROOT / "scripts" / "ops" / "rss_digest.py"
+RSS_SAMPLER_SHA256 = "c10a7074a0e7900111a255753fff5f67f5f7169b99a629467cc1c50e3e1d9976"
+RSS_DIGEST_SHA256 = "f845da16dff0cf6905f38d2618b757eddd32040491b2c2dd9f97d5373f774dd5"
+
 # The user route the rewarm measurement reads its figures at, and the route it
 # must never read them at. The second one is the trap of step 8: after a
 # release the diagnosis route reports a full semantic side because it loads,
@@ -1598,6 +1626,121 @@ def test_the_rewarm_tool_writes_the_mandatory_switch_line() -> None:
     assert "entladeschalter-ist" in text
     assert "ruhezeit-ist" in text
     assert "ruhezeit-abweichung-grund" in text
+
+
+# The refusal paths and the measure gate of the MEM-02 block of step 8b.
+# Plan 15-04.
+#
+# MEM-02 is the one requirement the acceptance of phase 14 left open, and it
+# falls on this box or not at all. What can be held without a box is the shape
+# of its tool: that it takes no argument, that it names its measure and never
+# the formulation that would turn a measured saving into an invented one, that
+# its four aborts stand where an abort is one, and that the two helpers it
+# leans on are the same files the predecessor runs leaned on.
+
+
+def lf_bytes_of(path: Path) -> bytes:
+    """The bytes of a file with carriage returns folded away.
+
+    See the comment over RSS_SAMPLER_SHA256: one of the two files under this
+    gate sits in the working copy with CRLF and in the blob with LF, so a
+    digest over the raw bytes would depend on the machine that took it.
+    """
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("argument", ["vorher", "nachher", "--help", "1"])
+def test_the_baseload_return_tool_refuses_any_argument(tmp_path: Path, argument: str) -> None:
+    """No argument at all, and the two that look most plausible least of all.
+
+    A second branch would be the obvious cut of this tool, and it is the wrong
+    one: the difference between the two marks is a statement only inside ONE
+    life of the container. Spread over two runs it would span two of them, and
+    a container that was rebuilt in between starts on its base load rather than
+    where the first run left off, so the figure would be a restart and not a
+    release. vorher and nachher are therefore refused by name, and so is
+    anything else: the refusal falls before the first sudo, the first docker and
+    the first curl, and before a raw file exists.
+    """
+    answer = a_boxless_run(V12_BASELOAD_RETURN, tmp_path, [argument])
+    assert answer.returncode == 2, answer
+    assert "Benutzung: 94b-grundlast-rueckkehr.sh" in answer.stderr
+    assert "Ohne Argument" in answer.stderr
+    assert answer.stdout == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_the_baseload_return_tool_names_the_measure_and_never_its_opposite() -> None:
+    """The measure is the tool, and the other formulation is a different figure.
+
+    The base load of a container that has never embedded anything is already
+    measured WITHOUT the model and WITHOUT the cutter, because the lazy build of
+    plan 07-03 puts neither of them into the process until the first chunker
+    run. A difference against that figure would subtract something that is not
+    in it. So the tool has to carry the name of its measure word for word, and
+    the other formulation nowhere.
+
+    Comment lines are deliberately NOT taken out before this gate looks, which
+    is the opposite of what the_two_halves_of does for the gate below. The
+    forbidden formulation must not stand in an explanation either: the next
+    reader quotes an explanation as a definition, and a raw file is read on its
+    own, away from the document that would have put the sentence right. The
+    staged probe below shows that difference instead of asserting it.
+    """
+    text = V12_BASELOAD_RETURN.read_text(encoding="utf-8")
+    assert MEASURE_OF_MEM_02 in text
+    assert FORBIDDEN_MEASURE not in text
+
+    staged = f"# Die Gegenrichtung, also {FORBIDDEN_MEASURE} X, ist hier verboten.\n"
+    assert FORBIDDEN_MEASURE in staged
+    assert FORBIDDEN_MEASURE not in "".join(the_two_halves_of(staged))
+
+
+def test_the_baseload_return_tool_keeps_its_four_abort_paths_below_the_pipeline() -> None:
+    """Where an abort stands decides whether it is an abort at all.
+
+    The same rule as for the rewarm tool of plan 15-03, and the same reason: the
+    return code of a pipeline that ends in tee belongs to tee, so an exit inside
+    the block would leave the subshell only and the run would look green with
+    its refusal printed in the raw file.
+
+    exit 2 is the one that stands ABOVE the cut, and that is not an oversight. A
+    call with an argument disputes the cut of the whole tool, and a dispute must
+    not write a raw file; the pipeline writes one. The same split drives
+    95b-wiederaufwaermen.sh since plan 15-03.
+    """
+    text = V12_BASELOAD_RETURN.read_text(encoding="utf-8")
+    above, below = the_two_halves_of(text)
+    assert below, "the file does not carry the tee pipeline this gate cuts at"
+    for abort in BASELOAD_RETURN_ABORTS:
+        assert abort in below, abort
+        assert abort not in above, abort
+    assert "exit 2" in above
+    assert "exit 2\n" not in f"{below}\n"
+
+    # The staged probe, because a gate whose only assertion is that today is
+    # fine stays green when it dies: an abort inside the block is found above
+    # the cut, which is what would make the assertions above red.
+    staged = f'    echo "es ging schief"\n    exit 31\n{PIPELINE_CUT}\nexit 32\n'
+    staged_above, staged_below = the_two_halves_of(staged)
+    assert "exit 31" in staged_above
+    assert "exit 31" not in staged_below
+
+
+def test_the_baseload_return_tool_calls_the_two_ops_helpers_unchanged() -> None:
+    """A changed sampler makes this figure incomparable with the predecessors.
+
+    The series of rss_sampler.sh and the headings of rss_digest.py are the
+    comparison keys against the runs of v1.1 and v1.0. An adjusted helper would
+    be a second object of measurement under the name of the first (T-15-11), so
+    the tool names both and neither file has moved.
+    """
+    text = V12_BASELOAD_RETURN.read_text(encoding="utf-8")
+    assert RSS_SAMPLER.name in text
+    assert RSS_DIGEST.name in text
+    assert hashlib.sha256(lf_bytes_of(RSS_SAMPLER)).hexdigest() == RSS_SAMPLER_SHA256, DRIVEN_FASSUNG_RULE
+    assert hashlib.sha256(lf_bytes_of(RSS_DIGEST)).hexdigest() == RSS_DIGEST_SHA256, DRIVEN_FASSUNG_RULE
 
 
 # The watchman over the eleven tools the trip took over. Plan 15-01.
