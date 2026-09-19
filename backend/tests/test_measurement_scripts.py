@@ -360,7 +360,13 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # their SemanticSide, and api/diagnose.py, which got the comment saying
 # why its own line deliberately does not. No file came and none went, so
 # PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "decefcaa56c36ffbb4bbc02006a86f3962b037a0175e8ca745f9471579f9794a"
+# Moved on 2026-09-19 a twelfth time, by the third task of plan 14-08:
+# exactly one of the 54 files changed its bytes, api/search.py, which now
+# asks request_warm where the round is built without the weights and
+# orders the warm run from the handler through asyncio.create_task, with
+# the module set _WARM_TASKS holding the task while it runs. No file came
+# and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "e8ae84b8b4faac0d3d7643048948387ebaa6bfcdd2d68d05748b55b1855ae934"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

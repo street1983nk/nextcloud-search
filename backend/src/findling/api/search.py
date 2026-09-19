@@ -39,7 +39,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import partial
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -53,7 +53,7 @@ from findling.config import (
     SEARCH_TYPE_GROUPS_MAX,
     settings,
 )
-from findling.embed.engine import query_may_load
+from findling.embed.engine import query_may_load, request_warm, warm, warm_wanted
 from findling.index.search import SemanticSide
 from findling.index.search import candidates as candidate_round
 from findling.nc.client import AsyncNextcloudApp, anc_app, current_user_id
@@ -62,6 +62,14 @@ from findling.query.rewrite import build_query
 LOGGER = logging.getLogger("findling.api.search")
 
 ROUTER = APIRouter()
+
+# The warm runs this process has in flight, and the only reason this set
+# exists is that ``asyncio.create_task`` keeps no reference of its own: a
+# task nobody holds may be collected while it runs, which is a documented
+# trap of the function and a failure that leaves no line in any log
+# (T-14-30). The entry is handed back by ``add_done_callback`` the moment
+# the run ends, so the set is empty on an idle container.
+_WARM_TASKS: set[asyncio.Task[Any]] = set()
 
 # The exact title the PHP companion accepts for a hit without a file behind it.
 # Every hit above file id 0 is resolved through the user's own folder over there
@@ -292,6 +300,7 @@ def one_round(
         # weights are fetched back in the background instead of while somebody
         # waits. The rule itself lives in ``embed/engine.py::query_may_load``
         # and is not repeated here.
+        may_load = query_may_load()
         semantic = None
         lexical_only = bool(rewritten.operators) or rewritten.one_term or title_only or sort != "relevance"
         if not lexical_only and side.vectors is not None and settings().embed_enabled:
@@ -299,8 +308,20 @@ def one_round(
                 vectors=side.vectors,
                 model=resources.query_model(),
                 text=text,
-                may_load=query_may_load(),
+                may_load=may_load,
             )
+            if not may_load:
+                # This round was meant to be hybrid and is about to answer
+                # without the weights, and this is the one place in the
+                # container that knows both halves of that sentence. The
+                # handler above cannot: ``one_round`` hands back candidates and
+                # not the reason there are no vectors among them. So the
+                # request is made where the occasion arises, and the handler,
+                # which is the half that owns an event loop, only has to ask
+                # ``warm_wanted()``. Nothing is loaded and nothing is built by
+                # this call: it takes one lock for one assignment, inside a
+                # request that has already spent its budget.
+                request_warm()
         page = candidate_round(
             side.index,
             side.store,
@@ -352,6 +373,21 @@ async def search(
             sort=body.sort,
         )
     )
+
+    if warm_wanted():
+        # The weights come back on the event loop this handler is already
+        # running on, and the answer below does not wait for them. The four
+        # alternatives were weighed in 14-RESEARCH.md 5.3 and all of them cost
+        # more: the unload task alone ticks every 30 seconds, so the user's
+        # second search would still be cold; a ``threading.Thread`` would be a
+        # second lifecycle beside the lifespan with no stop event of its own;
+        # and ``BackgroundTasks`` runs only after the response has gone out.
+        # ``create_task`` on the loop that is already here adds no coupling at
+        # all. The run itself blocks, like every load, so it goes through
+        # ``asyncio.to_thread`` (T-14-23).
+        task = asyncio.create_task(asyncio.to_thread(warm))
+        _WARM_TASKS.add(task)
+        task.add_done_callback(_WARM_TASKS.discard)
 
     hits: list[CanaryCandidate | Candidate] = []
     if text == CANARY_TERM:

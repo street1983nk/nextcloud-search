@@ -18,6 +18,7 @@ are the reason this file exists rather than a single happy path test:
 """
 
 import ast
+import asyncio
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -25,7 +26,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from socket import gethostname
-from typing import Any
+from typing import Any, cast
 
 import numpy
 import pytest
@@ -751,17 +752,25 @@ def test_with_the_release_on_a_loaded_engine_is_not_warmed_again(
     assert runs == []
 
 
-def test_the_answer_does_not_wait_for_the_warm_run(
-    client: TestClient,
-    sign: Sign,
+async def test_the_answer_does_not_wait_for_the_warm_run(
     indexed_volume: Corpus,
     monkeypatch: pytest.MonkeyPatch,
     warm_ground: Path,
 ) -> None:
-    # The run blocks for five seconds, the answer has one. A handler that
-    # awaited the task would spend the whole block inside the request, which is
-    # the one thing this seam exists to prevent.
-    assert warm_ground.is_dir()
+    """The run blocks for five seconds and the answer has one.
+
+    **The one case in this block that does not go through the test client**,
+    and the reason is a property of the client rather than of the handler.
+    ``TestClient`` opens a blocking portal per request and closes it again when
+    the request is over, and closing waits for every task that was started
+    inside it. So a measurement taken around ``client.post`` reports the length
+    of the background run whatever the handler does, which would make this case
+    fail against correct code and pass against nothing. Under uvicorn the loop
+    outlives the request, which is the situation reproduced here: the handler
+    is awaited on the loop of this case, and the task is still in flight when
+    the answer is in hand.
+    """
+    assert str(warm_ground).endswith("model")
     _release(monkeypatch, "900")
     gate = threading.Event()
 
@@ -769,15 +778,22 @@ def test_the_answer_does_not_wait_for_the_warm_run(
         gate.wait(BLOCKED_WARM_SECONDS)
         return True
 
+    async def signed_in(_nc: Any) -> str:
+        return indexed_volume.bob
+
     monkeypatch.setattr(api_search, "warm", blocked_warm)
+    monkeypatch.setattr(api_search, "current_user_id", signed_in)
 
     started = time.monotonic()
-    answer = _search(client, sign(indexed_volume.bob), query=TWO_WORD_TERM)
+    answer = await api_search.search(SearchRequest(query=TWO_WORD_TERM), cast(Any, None))
     spent = time.monotonic() - started
-    gate.set()
 
-    assert answer["candidates"] != []
+    assert answer.candidates != []
     assert spent < ANSWER_BUDGET_SECONDS
+    assert len(api_search._WARM_TASKS) == 1, "the answer is out while the run is still going"
+
+    gate.set()
+    await asyncio.wait_for(next(iter(api_search._WARM_TASKS)), BLOCKED_WARM_SECONDS)
 
 
 def test_ten_searches_in_a_row_do_not_pay_for_ten_loads(
@@ -804,6 +820,7 @@ def test_ten_searches_in_a_row_do_not_pay_for_ten_loads(
         time.sleep(0.05)
 
     assert load_count() - before <= 1, "ten searches are one load at most and never ten"
+    assert engine_module.shared_model().loaded is True, "and it is one and not nought: a run really happened"
 
 
 def test_the_handler_holds_its_task_and_never_waits_for_it() -> None:
