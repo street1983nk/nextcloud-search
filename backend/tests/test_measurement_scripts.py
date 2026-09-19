@@ -303,7 +303,13 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # portion stride instead of one that grew with the requested depth, because the
 # moving portion boundaries repeated and skipped documents at page transitions
 # over a tie group. No file came and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "266461bede6d4d09108d7dd398fb281922680d59e7a9a8840c7c51fa38824a19"
+# Moved on 2026-09-19 by plan 14-03: exactly one of the 54 files changed its
+# bytes, config.py, which learned the switch of MEM-01, namely the constant
+# EMBED_IDLE_RELEASE_SECONDS with its range, the third reader of the module,
+# which lets a zero through ahead of the range because zero is the word off
+# here, and the settings field the release policy of 14-06 and 14-07 will read.
+# No file came and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "9a8c8354ceeb1c2f88e06cca954de794de0576b23d97bec8f5ef8b4f328c6c20"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

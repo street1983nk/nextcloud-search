@@ -25,6 +25,8 @@ from findling.config import (
     EMBED_CHUNK_TOKENS,
     EMBED_CLAIM_BATCH,
     EMBED_CONTEXT_TOKENS,
+    EMBED_IDLE_RELEASE_SECONDS,
+    EMBED_IDLE_RELEASE_SECONDS_RANGE,
     EMBED_LOCK_TIMEOUT_SECONDS,
     EMBED_MODEL_DIR,
     EMBED_SPECIAL_TOKENS,
@@ -64,6 +66,7 @@ ENVIRONMENT = (
     "FINDLING_EMBED_BATCH_SIZE",
     "FINDLING_EMBED_SEQUENCE_LEN",
     "FINDLING_EMBED_MODEL_DIR",
+    "FINDLING_EMBED_IDLE_RELEASE_SECONDS",
     "FINDLING_SEARCH_RRF_K",
     "FINDLING_SEARCH_RRF_WINDOW",
     "FINDLING_SEARCH_LEXICAL_WEIGHT",
@@ -692,6 +695,117 @@ def test_an_embedding_cap_cannot_drift_at_runtime_either() -> None:
 
     with pytest.raises((AttributeError, TypeError)):
         current.embed_token_cap = 1  # pyright: ignore[reportAttributeAccessIssue]
+
+
+# ---------------------------------------------------------------------------
+# The idle release, phase 14 and MEM-01. One switch, in seconds, where zero is
+# not a small number but the word off, and where off is the factory position.
+#
+# The cases below are the four of the reader plus the two that hold it apart
+# from its neighbours, and the second pair is the point of the whole block: the
+# difference between "switched off" and "mistyped" cannot be seen in the value
+# an admin reads back anywhere, so it has to be held by a test.
+# ---------------------------------------------------------------------------
+
+
+def test_the_idle_release_is_off_in_the_factory_position() -> None:
+    # Criterion 2 of the phase. The one paid box run weighs the feature against
+    # its own absence and therefore needs both positions, and a feature whose
+    # re-warming price is not measured yet may not switch itself on underneath a
+    # running installation.
+    assert settings().embed_idle_release_seconds == 0
+    assert EMBED_IDLE_RELEASE_SECONDS == 0
+
+
+def test_zero_is_the_off_position_of_the_idle_release_and_not_a_typo(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Hold the case a move to ``_bounded_int_from_environment`` would break.
+
+    That reader reads a range and nothing else. With bounds of ``(60, 86400)``
+    zero falls outside them, warns and degrades to the default, and the default
+    of a build where somebody later turned the feature on is the feature: the
+    admin who typed the one value that means off would be handed it back. He
+    would not see an error either, because degrading to a default is the normal
+    and quiet behaviour of this module, so the report reads "I switched it off
+    and it still runs" and points at nothing.
+
+    Zero is therefore answered ahead of the range check, and this case asserts
+    both halves of that: the value survives, and not a single warning line
+    carries the name of the variable.
+    """
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "0")
+    settings.cache_clear()
+
+    with caplog.at_level("WARNING", logger="findling.config"):
+        current = settings()
+
+    assert current.embed_idle_release_seconds == 0
+    assert not [message for message in caplog.messages if "FINDLING_EMBED_IDLE_RELEASE_SECONDS" in message]
+
+
+def test_a_usable_idle_release_span_is_taken(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "900")
+    settings.cache_clear()
+
+    # 900 is the value backend/appinfo/info.xml suggests to an admin who turns
+    # this on, so it is the one span that has to be taken verbatim.
+    assert settings().embed_idle_release_seconds == 900
+
+
+def test_the_idle_release_tolerates_the_blanks_of_a_settings_form(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "  900  ")
+    settings.cache_clear()
+
+    # The same strip() every other reader of this module does, and for the same
+    # reason: the value comes out of a form somebody filled in by hand.
+    assert settings().embed_idle_release_seconds == 900
+
+
+@pytest.mark.parametrize("bound", EMBED_IDLE_RELEASE_SECONDS_RANGE)
+def test_the_documented_bounds_of_the_idle_release_are_themselves_accepted(
+    monkeypatch: pytest.MonkeyPatch, bound: int
+) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", str(bound))
+    settings.cache_clear()
+
+    assert settings().embed_idle_release_seconds == bound
+
+
+def test_a_three_second_idle_release_is_refused_and_the_warning_names_the_variable(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "3")
+    settings.cache_clear()
+
+    with caplog.at_level("WARNING", logger="findling.config"):
+        current = settings()
+
+    # The other half of the pair above. Three seconds is not a careful setting,
+    # it is a container that loads and releases without pause and gets worse
+    # over the cycles because glibc raises M_MMAP_THRESHOLD as it goes. So the
+    # floor of 60 holds, and unlike zero this one has to say so out loud.
+    assert current.embed_idle_release_seconds == 0
+    assert "FINDLING_EMBED_IDLE_RELEASE_SECONDS" in caplog.text
+
+
+@pytest.mark.parametrize("value", ["3", "59", "86401", "99999999", "-5", "neun", "900.0"])
+def test_an_idle_release_outside_the_measured_range_falls_back_without_naming_its_value(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, value: str
+) -> None:
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", value)
+    settings.cache_clear()
+
+    with caplog.at_level("WARNING", logger="findling.config"):
+        current = settings()
+
+    assert current.embed_idle_release_seconds == EMBED_IDLE_RELEASE_SECONDS
+    assert "FINDLING_EMBED_IDLE_RELEASE_SECONDS" in caplog.text
+    # Read on the messages and not on caplog.text, the same trap the chunk size
+    # case above documents: caplog.text carries the source line number of the
+    # warning, so a short value matches a line number and the case fails the day
+    # an unrelated screw is added above it.
+    assert not [message for message in caplog.messages if value in message]
 
 
 # ---------------------------------------------------------------------------
