@@ -95,6 +95,41 @@ STOCK_PROBE = V12_RUN_DIR / "73-bestand-sonde.py"
 V12_LANGUAGE_CASES = V12_RUN_DIR / "98c-sprachfaelle.sh"
 V12_CRON_PRECHECK = V12_RUN_DIR / "97-cron-vorpruefung.sh"
 
+# The eleven tools the trip of phase 15 took over from the run directory of
+# v1.1. A copy is not a fork. It carries the figures of v1.1 with it, and the
+# levels it drives stay comparable with the levels of the predecessor only for
+# as long as it is the same file. A copy somebody adjusted quietly on the way
+# would be a second object of measurement under the name of the first, and both
+# sets of figures would end up in one report as though one tool had produced
+# them. The order below is the order of their numbers, which is the order the
+# measurement order of docs/runbook-messbox.md calls them in.
+COPIED_TOOLS = (
+    "40b-baumhash.py",
+    "40b-baumhash.sh",
+    "90-bestand.sh",
+    "91-korpus.sh",
+    "93-nullstand.sh",
+    "95-spitze.sh",
+    "96-volllauf.sh",
+    "96b-waechter.sh",
+    "96c-lesen.py",
+    "96d-statusbeobachter.py",
+    "97-nebenlaeufigkeit.sh",
+)
+
+# Every tool the measurement order of section 7 of the runbook names: the eleven
+# copies above plus the three files the run directory of v1.2 already held.
+# Written down rather than globbed, because the statement is that a tool the
+# order names and the directory lacks is found on a rented box at the price of
+# box time. The tools that come with plans 15-03 to 15-06 are deliberately not
+# in this list; they join it with their own plans.
+TOOLS_THE_MEASUREMENT_ORDER_NAMES = (
+    *COPIED_TOOLS,
+    "73-bestand-sonde.py",
+    "97-cron-vorpruefung.sh",
+    "98c-sprachfaelle.sh",
+)
+
 # The state of the driven fassung, measured on 2026-09-10 out of the file
 # itself. Both figures are written down and neither is recomputed from the file
 # under test, because a watchman that asks the file for its own expectation
@@ -1434,3 +1469,65 @@ def test_the_cron_precheck_refuses_a_run_without_a_known_branch(tmp_path: Path, 
     assert "waehrend" in answer.stderr
     assert answer.stdout == ""
     assert list(tmp_path.iterdir()) == []
+
+
+# The watchman over the eleven tools the trip took over. Plan 15-01.
+#
+# The three watchmen above hold a fassung that ran against its own past. This
+# one holds a copy against its original, which is the same rule read from the
+# other end: the copies drive the levels of this trip, and their figures are
+# only comparable with the figures of v1.1 for as long as the two files are one
+# file. There is no raw data beside them yet, and that is the point of putting
+# the gate in before the box stands rather than after.
+
+
+@pytest.mark.parametrize("name", COPIED_TOOLS, ids=COPIED_TOOLS)
+def test_the_copied_tools_of_the_v12_run_are_byte_identical_to_their_original(name: str) -> None:
+    """A copy carries the figures of its original with it, so it stays the same file.
+
+    Both sides are asserted to exist before they are compared. A digest taken
+    from a missing original would raise rather than judge, and a deleted
+    original must not be able to make this gate quiet.
+    """
+    original = RUN_DIR / name
+    copy = V12_RUN_DIR / name
+    assert original.is_file(), original
+    assert copy.is_file(), copy
+    original_digest = hashlib.sha256(original.read_bytes()).hexdigest()
+    copy_digest = hashlib.sha256(copy.read_bytes()).hexdigest()
+    # DRIVEN_FASSUNG_RULE is the reason and it is handed over as the diagnosis:
+    # a fassung that runs is part of the evidence, so a change belongs in a new
+    # file in a new run directory and never inside this one.
+    assert copy_digest == original_digest, DRIVEN_FASSUNG_RULE
+
+
+def test_the_copy_watchman_fires_on_a_single_added_character() -> None:
+    """A watchman whose only assertion is that today is fine stays green when it dies.
+
+    Staged against the real bytes of the full run script rather than against an
+    invented sample, for the same reason as the mutation probe of the driven
+    fassung: what is shown here is that THIS comparison separates THIS pair of
+    files from a pair that has drifted apart by a single character.
+    """
+    original = (RUN_DIR / "96-volllauf.sh").read_bytes()
+    copy = (V12_RUN_DIR / "96-volllauf.sh").read_bytes()
+    original_digest = hashlib.sha256(original).hexdigest()
+    assert hashlib.sha256(copy).hexdigest() == original_digest
+    assert hashlib.sha256(copy + b" ").hexdigest() != original_digest
+    assert hashlib.sha256(copy.replace(b"set -eu", b"set -e", 1)).hexdigest() != original_digest
+
+
+def test_the_run_directory_of_the_trip_carries_every_tool_the_measurement_order_names() -> None:
+    """A tool the order names and the directory lacks is paid for in box time.
+
+    Section 7 of docs/runbook-messbox.md names a tool for every one of its nine
+    blocks, and the run directory of v1.2 held three of them before this plan.
+    The tools of plans 15-03 to 15-06 are absent from the list on purpose: they
+    join it with their own plans, and a list that named them today would be red
+    for a reason that is not a finding.
+    """
+    assert len(COPIED_TOOLS) == 11
+    assert len(set(COPIED_TOOLS)) == len(COPIED_TOOLS)
+    assert len(TOOLS_THE_MEASUREMENT_ORDER_NAMES) == 14
+    missing = [name for name in TOOLS_THE_MEASUREMENT_ORDER_NAMES if not (V12_RUN_DIR / name).is_file()]
+    assert missing == [], missing
