@@ -34,7 +34,7 @@ key-decisions:
 
 patterns-established: []
 
-requirements-completed: []  # FILT-01 bis FILT-05 werden erst nach der Owner-Freigabe (Task 2) markiert
+requirements-completed: [FILT-01, FILT-02, FILT-03, FILT-04, FILT-05]  # Owner-Abnahme 19.09.2026
 
 duration: 25min
 completed: 2026-09-18
@@ -48,8 +48,8 @@ completed: 2026-09-18
 
 - **Duration:** 25 min (Task 1)
 - **Started:** 2026-09-18T16:05:12Z
-- **Completed:** 2026-09-18T16:30:00Z (Task 1; Task 2 offen)
-- **Tasks:** 1 von 2 (Task 2 ist der Owner-Checkpoint)
+- **Completed:** 2026-09-19 (Task 1 am 18.09., Task 2 mit Owner-Abnahme am 19.09.)
+- **Tasks:** 2 von 2
 - **Files modified:** 1
 
 ## Status der beiden Tasks
@@ -57,7 +57,7 @@ completed: 2026-09-18
 | Task | Stand |
 |---|---|
 | Task 1: Gesamtlauf aller Gates und Audit-Durchgang | ABGESCHLOSSEN |
-| Task 2: Die 17 Sichtproben an der laufenden Instanz | OFFEN, wartet auf den Owner (checkpoint:human-verify, Resume-Signal "abgenommen") |
+| Task 2: Die 17 Sichtproben an der laufenden Instanz | BESTANDEN, Owner-Abnahme 19.09. (siehe Nachtrag 19.09. Mittag) |
 
 ## Task Commits
 
@@ -546,6 +546,26 @@ Damit liegen beim Owner nur noch die zwei Bewertungen: Screenreader-Probe 14
 Narrator-Lauf: Win+Strg+Enter, ueber die Filterleiste) und die zwei bekannten
 Punkte (23 franzoesische Wortlaute ungeprueft, Wegnahme-Bauform des dritten
 Paritaetsszenarios). Danach fehlt nur das Wort "abgenommen".
+
+## Nachtrag 19.09. Mittag: Owner-Abnahme erteilt, Phase 13 geschlossen
+
+Der Owner hat in der Abnahme-Session vom 19.09. die drei letzten offenen
+Bewertungen entschieden:
+
+- Probe 14 (Screenreader): der protokollierte A11y-Baum reicht als Beleg,
+  ein eigener Narrator-Durchgang ist nicht verlangt.
+- Die 23 franzoesischen Wortlaute der Leiste plus "Contenu des fichiers"
+  (Nebenbefund-Fix vom Vormittag): abgenommen wie vorgelegt, gegen die
+  EN/DE/FR-Tabelle des Copywriting-Contracts; Nachtrag in
+  docs/l10n-french.md.
+- Wegnahme-Bauform des dritten Paritaetsszenarios: abgenommen; das
+  Zwei-Dateitypen-Fixture bleibt als moegliche spaetere Erweiterung
+  notiert, kein Nachtrag der Phase.
+
+Damit sind alle 17 Sichtproben, die FILT-03-Dialogprobe und D-01 bis D-07
+bestanden oder abgenommen, Task 2 ist erfuellt, FILT-01 bis FILT-05 stehen
+auf Complete und die Phase ist geschlossen (STATE, ROADMAP, REQUIREMENTS
+in diesem Commit).
 
 ## Issues Encountered
 

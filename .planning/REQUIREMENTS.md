@@ -8,11 +8,11 @@
 
 ### Filter und Sortierung (FILT)
 
-- [ ] **FILT-01**: Nutzer kann Treffer auf der Ergebnisseite nach Dateityp-Gruppen filtern (geschlossene Liste: PDF, Dokumente, Tabellen, Präsentationen, Bilder, Text); die semantische Hälfte bleibt dabei aktiv (strukturiertes Request-Feld in SearchRequest/SnippetsRequest, nie `type:`-Text, `carried_operators` bleibt unberührt)
-- [ ] **FILT-02**: Nutzer kann nach "Zuletzt geändert" und "Älteste zuerst" sortieren; Relevanz bleibt Standard. Zweitschlüssel `file_id` gegen Zeitstempel-Gleichstand; Sortierung ist ein eigener, rein lexikalischer Modus (Score unter Sortierung 0.0, RRF aus; tantivy liefert unter `order_by_field` den Feldwert statt des Scores, `_ranked` braucht den eigenen Zweig)
-- [ ] **FILT-03**: Nutzer kann Treffer per Zeitraumfilter since/until eingrenzen; der Datumsfilter des Unified-Search-Dialogs wird in `getSupportedFilters()` deklariert und beachtet, damit Findling dort nicht mehr stumm verschwindet
-- [ ] **FILT-04**: Filter und Sortierung reisen in der URL, sind sichtbar und entfernbar; jede Filter- oder Sortieränderung setzt auf Seite 1 zurück (Cursorpfad wird invalidiert, ein fremder Cursorpfad wird nicht akzeptiert)
-- [ ] **FILT-05**: Rechtegrenze unverändert: jeder gefilterte/sortierte Treffer durchläuft denselben ACL-Vorfilter + finalen PHP-Recheck; der Paritätstest deckt die neuen Parameter ab
+- [x] **FILT-01**: Nutzer kann Treffer auf der Ergebnisseite nach Dateityp-Gruppen filtern (geschlossene Liste: PDF, Dokumente, Tabellen, Präsentationen, Bilder, Text); die semantische Hälfte bleibt dabei aktiv (strukturiertes Request-Feld in SearchRequest/SnippetsRequest, nie `type:`-Text, `carried_operators` bleibt unberührt)
+- [x] **FILT-02**: Nutzer kann nach "Zuletzt geändert" und "Älteste zuerst" sortieren; Relevanz bleibt Standard. Zweitschlüssel `file_id` gegen Zeitstempel-Gleichstand; Sortierung ist ein eigener, rein lexikalischer Modus (Score unter Sortierung 0.0, RRF aus; tantivy liefert unter `order_by_field` den Feldwert statt des Scores, `_ranked` braucht den eigenen Zweig)
+- [x] **FILT-03**: Nutzer kann Treffer per Zeitraumfilter since/until eingrenzen; der Datumsfilter des Unified-Search-Dialogs wird in `getSupportedFilters()` deklariert und beachtet, damit Findling dort nicht mehr stumm verschwindet
+- [x] **FILT-04**: Filter und Sortierung reisen in der URL, sind sichtbar und entfernbar; jede Filter- oder Sortieränderung setzt auf Seite 1 zurück (Cursorpfad wird invalidiert, ein fremder Cursorpfad wird nicht akzeptiert)
+- [x] **FILT-05**: Rechtegrenze unverändert: jeder gefilterte/sortierte Treffer durchläuft denselben ACL-Vorfilter + finalen PHP-Recheck; der Paritätstest deckt die neuen Parameter ab
 
 ### Modell-Entladung (MEM)
 
@@ -56,11 +56,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FILT-01 | Phase 13 | Pending |
-| FILT-02 | Phase 13 | Pending |
-| FILT-03 | Phase 13 | Pending |
-| FILT-04 | Phase 13 | Pending |
-| FILT-05 | Phase 13 | Pending |
+| FILT-01 | Phase 13 | Complete |
+| FILT-02 | Phase 13 | Complete |
+| FILT-03 | Phase 13 | Complete |
+| FILT-04 | Phase 13 | Complete |
+| FILT-05 | Phase 13 | Complete |
 | MEM-01 | Phase 14 | Pending |
 | MEM-02 | Phase 14 | Pending |
 | MEM-03 | Phase 14 | Pending |

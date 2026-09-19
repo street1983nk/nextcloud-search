@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 ## Current Position
 
-Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): EXECUTING
-Plan: 13 of 13 (13-13 Task 1 abgeschlossen; Task 2 ist der Owner-Checkpoint mit den 17 Sichtproben)
-Status: Executing Phase 13
+Phase: 13 (filter-und-sortierung-auf-der-ergebnisseite): COMPLETE
+Plan: 13 of 13 (alle abgeschlossen; Owner-Abnahme 19.09. erteilt)
+Status: Phase 13 complete, naechste Phase 14 (Modell-Entladung im Leerlauf) ungeplant
 Progress: [██████░░░░] 57%
-Last activity: 2026-09-18 -- 13-13 Task 1 abgeschlossen (Gates gruen, Audit gefahren, 2 neue Tests); es wartet der Owner-Checkpoint
+Last activity: 2026-09-19 -- Owner-Abnahme 13-13 komplett (Probe 14 per A11y-Baum-Beleg, 23 frz. Wortlaute wie vorgelegt, Wegnahme-Bauform); FILT-01..05 Complete
 HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag

@@ -398,6 +398,15 @@ danach hinzugekommen; sie stehen unten in der Tabelle, sind maschinell geprüft 
 zu der vom 11.09.2026. Das steht hier, damit eine abgenommene Datei nicht stillschweigend
 Zeilen mitträgt, die niemand abgenommen hat.
 
+**Nachtrag 19.09.2026 (Abnahme Phase 13).** Der Owner hat die 23 Zeilen der Filter-
+und Sortierleiste am 19.09.2026 abgenommen, wie vorgelegt und ohne Änderung, anhand
+der EN/DE/FR-Tabelle des Copywriting-Contracts (13-UI-SPEC, wörtlich Kataloginhalt).
+Mit abgenommen ist der am selben Tag ergänzte Schlüssel `File contents` ->
+`Contenu des fichiers` (Gruppenname der Unified Search, Nebenbefund aus Sichtprobe 17).
+Die Prüfung war eine Tabellendurchsicht in der Abnahme-Session, kein Durchgang im
+laufenden französischen UI; der maschinelle Prüfstand aus dem Abschnitt "Maschinelle
+Prüfungen" bleibt unverändert gültig.
+
 ## Warum die Tabelle der Ergebnisseite 24 Zeilen hat
 
 Geschichte, Stand Phase 9, unverändert erhalten. Die Wortlaute selbst stehen heute in
