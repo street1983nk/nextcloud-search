@@ -31,6 +31,7 @@ shared runner is a random number generator with an assertion attached.
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import threading
 import time
@@ -56,6 +57,8 @@ from findling.embed.engine import (
     engine_state,
     note_cutter_failure,
     query_may_load,
+    release_if_idle,
+    released_count,
     reset,
     shared_model,
 )
@@ -66,6 +69,7 @@ from findling.embed.model import (
     TOKENIZER_FILE,
     EmbeddingModel,
     load_count,
+    unload_count,
 )
 from findling.index.analyzer import build_count, cached_german_analyzer
 from findling.worker import poller as poller_module
@@ -873,3 +877,265 @@ def test_asking_whether_a_search_may_load_builds_nothing_and_loads_nothing(
 
     assert _held_for(model_home) is None, "the question must not build the instance it asks about"
     assert load_count() == before
+
+
+# ---------------------------------------------------------------------------
+# The release in the idle span, and the race it must not lose (plan 14-06).
+#
+# The mechanics live in embed/model.py since plan 14-05: release() lets go,
+# collects, trims and counts. What is decided here is when it is called at all,
+# and the identity check is the half that has no counterpart over there: the
+# warm run of MEM-03 runs beside the unload task, and a release that collides
+# with a concurrent load would throw away the load pair that was just paid for.
+# ---------------------------------------------------------------------------
+
+
+def _an_idle_engine(model_home: Path, monkeypatch: pytest.MonkeyPatch, clock: dict[str, float]) -> EmbeddingModel:
+    """A held engine that has embedded something and then sat still for ages."""
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    monkeypatch.setattr(model_module.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(engine_module.time, "monotonic", lambda: clock["now"])
+
+    engine = shared_model()
+    engine.embed_query("bauantrag")
+    clock["now"] += 10_000.0
+    return engine
+
+
+def test_an_empty_holder_is_not_released_and_is_not_filled_on_the_way(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The case the caller of plan 14-07 meets far more often than the release
+    # itself, because it runs on a tick. It must not cost a heap walk and it
+    # must not build the instance it asks about: an unloader that builds while
+    # asking is the loading trigger of a container nobody is searching on, which
+    # is the same argument engine_state makes for itself.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    before = load_count()
+
+    assert release_if_idle(900) is False
+    assert _held_for(model_home) is None, "the question must not build the instance it asks about"
+    assert load_count() == before
+
+
+def test_a_holder_whose_engine_was_never_loaded_is_not_released(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Building the wrapper reads nothing, so an instance in the holder is not a
+    # loaded engine. There is nothing to let go of and nothing to hand back.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    built = shared_model()
+    before = unload_count()
+
+    assert built.loaded is False
+    assert release_if_idle(900) is False
+    assert unload_count() == before
+
+
+def test_an_engine_that_worked_ten_seconds_ago_is_not_released(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The whole point of an idle span: a container in the middle of a working
+    # day keeps its weights. Releasing here would pay the 118 MB back over and
+    # over and would be the incident of 2026-09-10 on a tick.
+    clock = {"now": 1000.0}
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    monkeypatch.setattr(model_module.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(engine_module.time, "monotonic", lambda: clock["now"])
+    engine = shared_model()
+    engine.embed_query("bauantrag")
+    clock["now"] += 10.0
+    before = unload_count()
+
+    assert release_if_idle(900) is False
+    assert engine.loaded is True
+    assert unload_count() == before
+
+
+def test_an_engine_that_has_been_still_for_longer_than_the_span_is_released(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The one case in which anything happens at all, and it is measured with the
+    # counter of plan 14-05 and never with a byte: a peak difference is not the
+    # sum of the loads that produced it.
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+    before = unload_count()
+
+    assert release_if_idle(900) is True
+    assert engine.loaded is False
+    assert unload_count() - before == 1
+
+
+def test_a_release_span_of_nought_never_reaches_the_release_at_all(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Nought is the word off, and the switch being off is not a span of nought
+    # seconds. A function that answered an unbounded release here would be a
+    # function with two truths, so the spy has to stay untouched even though the
+    # engine is as idle as it will ever be.
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+    calls: list[int] = []
+
+    def spy() -> bool:
+        calls.append(1)
+        return True
+
+    monkeypatch.setattr(engine, "release", spy)
+
+    assert release_if_idle(0) is False
+    assert calls == [], "the switch is off, so nothing is asked of the holder"
+    assert engine.loaded is True
+
+
+def test_a_holder_swapped_under_the_release_keeps_the_engine_that_was_just_loaded(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The race that really counts (14-RESEARCH.md 5.3). The warm run of MEM-03
+    # runs beside the unload task, so between reading the clock and letting go
+    # the holder can carry a different instance, and that one has just paid 118
+    # MB. Driven here by letting the clock question itself do the swap, which is
+    # the one moment ordering alone cannot guard against.
+    clock = {"now": 1000.0}
+    stale = _an_idle_engine(model_home, monkeypatch, clock)
+
+    fresh = EmbeddingModel(model_home, batch_size=2, sequence_len=512)
+    fresh.embed_query("bauantrag")
+    assert fresh.loaded is True
+
+    real_last_use = stale.last_use
+
+    def swapping_last_use() -> float | None:
+        engine_module._ENGINE = (model_home, fresh)
+        return real_last_use()
+
+    monkeypatch.setattr(stale, "last_use", swapping_last_use)
+    before = unload_count()
+
+    assert release_if_idle(900) is False
+    assert fresh.loaded is True, "the engine that was just paid for stays"
+    assert unload_count() == before
+
+
+def test_a_holder_that_has_never_embedded_anything_is_not_idle(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # last_use() answers None for a holder that never worked, and None is not an
+    # idle span of infinite length: there is nothing to let go of. The handover
+    # note of plan 14-05 asks for this case by name.
+    clock = {"now": 1000.0}
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    monkeypatch.setattr(model_module.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(engine_module.time, "monotonic", lambda: clock["now"])
+
+    engine = shared_model()
+    # The real load path and not a planted field: _load reads the artifacts and
+    # binds the engine, and the clock is set one layer further in, by _embed. A
+    # holder that loaded and was never asked for a vector is exactly this.
+    with engine._lock:
+        engine._load()
+    clock["now"] += 10_000.0
+
+    assert engine.loaded is True
+    assert engine.last_use() is None
+    assert release_if_idle(900) is False
+
+
+def test_the_released_count_is_the_counter_of_the_model_without_importing_it(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The pass through exists so that a caller can read the figure without
+    # reaching into embed/model.py, and it has to be the same figure and not a
+    # second one kept beside it.
+    clock = {"now": 1000.0}
+    _an_idle_engine(model_home, monkeypatch, clock)
+    before = released_count()
+
+    assert before == unload_count()
+    assert release_if_idle(900) is True
+    assert released_count() - before == 1
+    assert released_count() == unload_count()
+
+
+def test_the_release_counter_survives_a_reset_of_the_holder(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The same property the load counter has and for the same reason (T-14-17):
+    # every reader takes a difference against a baseline of its own, nothing
+    # needs it zeroed, and a counter that can be zeroed is one a gate could zero
+    # itself green with.
+    clock = {"now": 1000.0}
+    _an_idle_engine(model_home, monkeypatch, clock)
+
+    assert release_if_idle(900) is True
+    after = released_count()
+
+    reset()
+
+    assert released_count() == after
+
+
+def _function_of_the_engine_module(name: str) -> ast.FunctionDef:
+    """One function of embed/engine.py, read as source and never imported.
+
+    The same stance the syntax tree gate of test_embed_model.py takes: a
+    behaviour test says what happened once, a reading of the tree says what
+    happens the next time somebody edits the file.
+    """
+    tree = ast.parse(Path(engine_module.__file__).read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"embed/engine.py has no function {name}")
+
+
+def _calls_named(node: ast.AST, attribute: str) -> list[ast.Call]:
+    """Every call of the shape ``something.attribute(...)`` below that node."""
+    return [
+        inner
+        for inner in ast.walk(node)
+        if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute) and inner.func.attr == attribute
+    ]
+
+
+def test_the_release_is_called_outside_the_holder_lock() -> None:
+    # T-14-16 one layer up. release() takes its own lock and then runs the
+    # blocking trim, and a held _LOCK would block every concurrent shared_model
+    # question with it. Read out of the tree, because a behaviour test cannot
+    # see where a call sits.
+    function = _function_of_the_engine_module("release_if_idle")
+
+    assert len(_calls_named(function, "release")) == 1, "one release and no second spelling of it"
+
+    inside = [
+        call for block in ast.walk(function) if isinstance(block, ast.With) for call in _calls_named(block, "release")
+    ]
+
+    assert inside == [], "the release blocks, so it must not be called under _LOCK"
+
+
+def test_the_release_reads_the_holder_and_never_fills_it() -> None:
+    # T-14-21. _held answers an empty holder with None; shared_model fills it.
+    # An unloader that asked through shared_model would build an instance on a
+    # container nobody is searching on, every tick, for ever.
+    function = _function_of_the_engine_module("release_if_idle")
+    names = {node.id for node in ast.walk(function) if isinstance(node, ast.Name)}
+
+    assert "_held" in names
+    assert "shared_model" not in names
+
+
+def test_the_identity_check_compares_objects_and_not_values() -> None:
+    # T-14-20. Two EmbeddingModel instances for the same directory carry the
+    # same fields, so a value comparison would be the wrong question: what is
+    # asked is whether this is still the very object whose clock was read.
+    function = _function_of_the_engine_module("release_if_idle")
+    operators = [
+        type(operator) for node in ast.walk(function) if isinstance(node, ast.Compare) for operator in node.ops
+    ]
+
+    assert ast.IsNot in operators or ast.Is in operators, "the identity check is an identity check"
