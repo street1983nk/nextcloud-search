@@ -514,6 +514,39 @@ Paraphrasen-Restfalls (4, Vektorbestand), die zwei bekannten Punkte
 (franzoesische Wortlaute, drittes Paritaetsszenario) und der Nebenbefund
 "File contents".
 
+## Nachtrag 19.09. Vormittag: Mitternachtsprobe gefahren, Restfall eingeordnet, Nebenbefund gefixt
+
+Owner-Ansage vom 19.09.: die fuenf offenen Abnahmepunkte direkt abarbeiten.
+Stand danach:
+
+- Probe 9 (Mitternachtsfall): BESTANDEN (gemessen). Der Tageswechsel
+  18. auf 19.09. war zum Messzeitpunkt (~10:00 Ortszeit) vollzogen, die
+  Probe prueft genau die Tagesgrenze und braucht dafuer nicht die Uhrzeit
+  00:00. Beide Richtungen belegt: (a) mitternacht-probe-19-09.txt per
+  WebDAV hochgeladen (201), nach der Indexierung erscheint sie unter
+  range=today; (b) kuendigungsfrist-probe.txt vom 18.09. erscheint unter
+  range=today NICHT mehr (0 Treffer im HTML), waehrend range=year sie
+  weiter fuehrt (3 Treffer, die Datei ist also da und indexiert, nur eben
+  nicht mehr "heute").
+- Probe 4 (Paraphrasen-Restfall): per Owner-Ansage vom 19.09. als
+  ausreichend belegt angenommen: der CI-Beweis (index-search-e2e) plus der
+  Ein-Datei-Beweis unter Filter an dieser Instanz stehen, der volle Fall
+  ("Seite voll besetzt") laeuft auf der Phase-15-Box mit Vektorbestand
+  ab Werk mit.
+- Nebenbefund "File contents": GEFIXT als Folge-Commit. Der Schluessel
+  steht jetzt in allen sechs Katalogen (de/de_DE/fr, je .json und .js),
+  DE "Dateiinhalte", FR "Contenu des fichiers"; das Katalog-Zahlengate in
+  backend/tests/test_admin_ui_contract.py ist auf 198 angehoben und traegt
+  den verlangten Herkunftsabsatz. Der franzoesische Wortlaut faellt
+  weiterhin unter den Checkpoint-Punkt der ungeprueften franzoesischen
+  Wortlaute.
+
+Damit liegen beim Owner nur noch die zwei Bewertungen: Screenreader-Probe 14
+(A11y-Baum als maschineller Beleg protokolliert; wahlweise eigener
+Narrator-Lauf: Win+Strg+Enter, ueber die Filterleiste) und die zwei bekannten
+Punkte (23 franzoesische Wortlaute ungeprueft, Wegnahme-Bauform des dritten
+Paritaetsszenarios). Danach fehlt nur das Wort "abgenommen".
+
 ## Issues Encountered
 
 Keine ueber die Befunde hinaus.
