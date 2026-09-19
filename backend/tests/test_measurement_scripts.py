@@ -89,11 +89,28 @@ SUCCESSOR_LANGUAGE_CASES = FIX_RUN_DIR / "98b-sprachfaelle.sh"
 # container instead of over the capped OCS route (DI-10-02, DI-11-01).
 STOCK_PROBE = V12_RUN_DIR / "73-bestand-sonde.py"
 
-# The two refusal contracts of the v1.2 run that hold without a box: the
+# The three refusal contracts of the v1.2 run that hold without a box: the
 # language case fassung checks CI_LAUF before the first sudo, docker or curl
-# call, and the cron precheck decides its branch before everything else.
+# call, the cron precheck decides its branch before everything else, and the
+# rewarm tool of step 8 decides its auspraegung before it so much as creates a
+# raw file.
 V12_LANGUAGE_CASES = V12_RUN_DIR / "98c-sprachfaelle.sh"
 V12_CRON_PRECHECK = V12_RUN_DIR / "97-cron-vorpruefung.sh"
+V12_REWARM = V12_RUN_DIR / "95b-wiederaufwaermen.sh"
+
+# The user route the rewarm measurement reads its figures at, and the route it
+# must never read them at. The second one is the trap of step 8: after a
+# release the diagnosis route reports a full semantic side because it loads,
+# while the user routes report an empty one because they are not allowed to.
+USER_SEARCH_ROUTE = "/ocs/v2.php/search/providers/findling/search"
+DIAGNOSIS_ROUTE = "/diagnose"
+
+# The line the block of the rewarm tool ends on, and the three aborts that have
+# to stand below it. The cut is written down rather than searched for loosely,
+# because a gate that cut at the word "tee" would also cut at the sudo tee of
+# drop_caches, which stands inside the block and is not an end of anything.
+PIPELINE_CUT = '} 2>&1 | tee "$ZIEL"'
+REWARM_ABORTS = ("exit 29", "exit 30", "exit 31")
 
 # The eleven tools the trip of phase 15 took over from the run directory of
 # v1.1. A copy is not a fork. It carries the figures of v1.1 with it, and the
@@ -1471,6 +1488,114 @@ def test_the_cron_precheck_refuses_a_run_without_a_known_branch(tmp_path: Path, 
     assert "waehrend" in answer.stderr
     assert answer.stdout == ""
     assert list(tmp_path.iterdir()) == []
+
+
+# The refusal paths of the rewarm measurement of step 8. Plan 15-03.
+#
+# Section 7.1 of the runbook says no tool is changed during the paid trip, so
+# the three aborts of this one have to be shown before the box stands. Two of
+# the three need a container to fire; what holds without one is where they
+# stand, and that is the half that was wrong in v1.1: an abort inside the block
+# leaves the subshell only, and the refusal becomes a line in a raw file nobody
+# reads.
+
+
+def the_two_halves_of(text: str) -> tuple[str, str]:
+    """The code above and below the tee pipeline, comments removed.
+
+    The comments have to go before anything is counted. The head of the file
+    explains the rule this gate defends and names the exit codes while doing
+    it, so a gate that read them would be red at exactly the paragraph that
+    exists to keep it green. That is the trap aria-current fell into in plan
+    13-09, and it is cheaper to remember it here than to debug it again.
+    """
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    above, marker, below = code.partition(PIPELINE_CUT)
+    return above, below if marker else ""
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize("auspraegung", [None, "", "   ", "0", "5", "eins"])
+def test_the_rewarm_tool_refuses_a_run_without_a_known_auspraegung(tmp_path: Path, auspraegung: str | None) -> None:
+    """No auspraegung, no run, no raw file, and no foreign call before that.
+
+    The six shapes of nothing are the ones the two refusals above pin, and the
+    promise is the same one: the decision is taken before the first sudo, the
+    first docker and the first curl, so this runs on a machine with no box
+    behind it. It matters more here than in the other two, because one run of
+    this tool is one branch of an A/B comparison: a run that started on the
+    wrong number would produce a raw file whose figures belong to neither half.
+    """
+    arguments = [] if auspraegung is None else [auspraegung]
+    answer = a_boxless_run(V12_REWARM, tmp_path, arguments)
+    assert answer.returncode == 2, answer
+    assert "Benutzung: 95b-wiederaufwaermen.sh" in answer.stderr
+    for erlaubt in ("1", "2", "3", "4"):
+        assert erlaubt in answer.stderr
+    assert answer.stdout == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_the_rewarm_tool_names_its_three_abort_paths_below_the_pipeline() -> None:
+    """Where an abort stands decides whether it is an abort at all.
+
+    The return code of a pipeline that ends in tee belongs to tee. An exit
+    inside the block would leave the subshell, tee would end with nought, and
+    the run would look green with its refusal printed in the raw file. So the
+    three aborts are read out of work files below the cut, and this gate holds
+    the position rather than the presence.
+    """
+    text = V12_REWARM.read_text(encoding="utf-8")
+    above, below = the_two_halves_of(text)
+    assert below, "the file does not carry the tee pipeline this gate cuts at"
+    for abort in REWARM_ABORTS:
+        assert abort in below, abort
+        assert abort not in above, abort
+
+    # The staged probe, because a gate whose only assertion is that today is
+    # fine stays green when it dies: an abort inside the block is found above
+    # the cut, which is what would make the three assertions above red.
+    staged = f'    echo "es ging schief"\n    exit 29\n{PIPELINE_CUT}\nexit 30\n'
+    staged_above, staged_below = the_two_halves_of(staged)
+    assert "exit 29" in staged_above
+    assert "exit 29" not in staged_below
+    # And the comment that explains the rule does not count as an abort.
+    commented_above, commented_below = the_two_halves_of(f"#   exit 29 die fehlende Pflichtzeile\n{PIPELINE_CUT}\n")
+    assert "exit 29" not in commented_above
+    assert "exit 29" not in commented_below
+
+
+def test_the_rewarm_tool_reads_the_semantic_side_at_the_user_route() -> None:
+    """The one trap of step 8 that produces a figure instead of an error.
+
+    After a release the diagnosis route reports a full semantic side because it
+    loads, and the user routes report an empty one at the same moment because
+    they are not allowed to load. Whoever mixes the two measures two different
+    things and calls them one figure. So the tool asks the OCS route, and the
+    diagnosis route appears in it as a search pattern over docker logs only,
+    which is the watchman of return code 30 and not a source of figures.
+    """
+    text = V12_REWARM.read_text(encoding="utf-8")
+    assert USER_SEARCH_ROUTE in text
+    diagnosis_lines = [line for line in text.splitlines() if DIAGNOSIS_ROUTE in line]
+    assert diagnosis_lines, DIAGNOSIS_ROUTE
+    assert all("docker logs" in line for line in diagnosis_lines), diagnosis_lines
+
+
+def test_the_rewarm_tool_writes_the_mandatory_switch_line() -> None:
+    """A run without the position of the switch is incomplete, not wrong.
+
+    Section 6.4 of the runbook makes entladeschalter-ist a mandatory line for
+    every measuring block, and step 8 is the one that compares two positions of
+    that very switch: two figures with their positions are a comparison, two
+    figures without them are two figures. The rest period joins it, because the
+    trip drives 120 s instead of the 900 s of the proposed value (D-02) and an
+    unexplained deviation would make the two halves incomparable as well.
+    """
+    text = V12_REWARM.read_text(encoding="utf-8")
+    assert "entladeschalter-ist" in text
+    assert "ruhezeit-ist" in text
+    assert "ruhezeit-abweichung-grund" in text
 
 
 # The watchman over the eleven tools the trip took over. Plan 15-01.
