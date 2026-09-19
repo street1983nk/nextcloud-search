@@ -542,6 +542,14 @@ neu, und ein alter Pin hat den Poller schon einmal 300 Sekunden ins Backoff
 laufen lassen. Rückfall 2 kommt ohne jede Datei aus und ist der Weg, wenn der
 Namensdienst noch nicht durchgereicht ist.
 
+**Nachtrag: `dig` liegt auf der Entwicklungsmaschine nicht vor.** Die erste Zeile
+dieses Blocks läuft dort ins Leere, und zwar mit "command not found" statt mit
+einer leeren Antwort, was zwei sehr verschiedene Dinge sind. Die Rückfälle sind
+`nslookup loadtest.infranode.dev` und `curl --resolve` aus dem Block oben; beide
+sind vorhanden. Auf der Box selbst wird geprüft, was dort auch liegt. Der Befund
+gehört in Abschnitt 3 und nicht in die bezahlte Zeit: ein fehlendes Werkzeug,
+das erst auf der Box auffällt, kostet Box-Minuten für eine Installation.
+
 `Erwartete Ausgabe`: `dig +short` liefert genau eine Adresse, und zwar die der
 neuen Instanz; `curl` gegen `status.php` antwortet mit HTTP 200 und einem JSON,
 das `"installed":true` enthält. Marke: `in Phase 15 erstmals vollzogen`.
@@ -861,8 +869,10 @@ Schrittnummern stehen unten in Klammern.
 | 4 | Anstoss des Volllaufs gegen den Vollkorpus | Muster `96-volllauf.sh` mit dem Beobachter `96b-waechter.sh` | `rohdaten/96-volllauf.csv`, `rohdaten/96b-waechter.txt` | kein eigener Rückgabewert. Der Abbruch dieses Schritts liegt vor ihm, im Nullstandsbeleg von Schritt 1, und neben ihm, im Wirkungszweig von Schritt 5 |
 | 5 | Cron-Wirkungszweig, mit dem Volllauf gestartet und neben ihm laufend (00-ablauf Schritt 5) | `./97-cron-vorpruefung.sh waehrend` | `rohdaten/97-cron-vorpruefung-waehrend.txt` | **27** weniger als zwei Scheiben oder keine Zahl, **28** Scheibenabstand über 420 Sekunden |
 | 6 | Laststufen 1, 4, 8, 12 und 16, mit je einem Entscheid zu den vier regressiven Stufen (Befund L-04 der Phase 11) | Muster `95-spitze.sh` und `97-nebenlaeufigkeit.sh` über `scripts/ops/search_load.py`, unverändert | `rohdaten/95-*.json`, `rohdaten/95-*.csv` | kein Rückgabewert. Eine Stufe ohne Antwortzahlen wird als solche protokolliert und nicht geschätzt; abgebrochene Aufrufe zählen nicht als beantwortet (DI-10-01) |
+| 6b | Filter- und Sortierblock: Sortierung auf grossem Bestand, Blättern unter Filter (D-01, Owner-Entscheid vom 19.09.2026) | `99c-filter-sortierung.sh` | `rohdaten/99c-filter-sortierung.txt` | **34** und **35**, siehe die Tabelle in 7.1 |
 | 7 | Sprachfall-Lauf mit Abschnitt 3b (00-ablauf Schritt 4) | `CI_LAUF=<laufnummer> ./98c-sprachfaelle.sh`, mit der zweiten Sondenfahrt nach Upload und Indexierung | `rohdaten/05-sprachfaelle.txt` | **15**, **16**, **17**, **18**, **22**, **23** und **24**, siehe die Tabelle darunter |
-| 8 | Wiederaufwärm-Kosten, A/B über den MEM-01-Schalter, in vier Ausprägungen (Abschnitt 7.2) | Muster `95b-kaltstart-reproduktion`, der Schalter steht seit Phase 14 | `rohdaten/95b-wiederaufwaermen-*.txt` | **29**, **30** und **31**, siehe Abschnitt 7.2. Vorbedingung bleibt die protokollierte Zeit seit dem letzten Containerstart aus Abschnitt 6; ohne sie ist der Vergleich warm gegen kalt unbelegt |
+| 8 | Wiederaufwärm-Kosten, A/B über den MEM-01-Schalter, in vier Ausprägungen (Abschnitt 7.2) | `95b-wiederaufwaermen.sh`; der Schalter steht seit Phase 14, und `95b-kaltstart-reproduktion` ist die Herkunft des Musters, eine Rohdatei von Hand und kein Werkzeug | `rohdaten/95b-wiederaufwaermen-*.txt` | **29**, **30** und **31**, siehe Abschnitt 7.2. Vorbedingung bleibt die protokollierte Zeit seit dem letzten Containerstart aus Abschnitt 6; ohne sie ist der Vergleich warm gegen kalt unbelegt |
+| 8b | MEM-02: Rückkehr zur Grundlast nach einem Indexlauf, Grundlast vor und nach dem Lauf, Freigabe abgewartet | `94b-grundlast-rueckkehr.sh` über `scripts/ops/rss_sampler.sh` und `scripts/ops/rss_digest.py` | `rohdaten/94b-grundlast-rueckkehr.txt` | **31**, **32** und **33**, siehe die Tabelle in 7.1 |
 | 9 | Endmessungen und Gegenproben, vor jedem zerstörenden Schritt | Muster `90-bestand.sh` und `96-vektorbestand`, dazu die Kostenzeilen aus `box.env` | `rohdaten/90-bestand.txt`, `rohdaten/96-vektorbestand.txt`, `rohdaten/93-kosten-und-verbleib.txt` | kein Rückgabewert. Dieser Schritt ist die Vorbedingung von Abschnitt 8: was hier nicht erhoben ist, ist nach dem Abbau nicht mehr erhebbar |
 
 **Zur Zählung:** `00-ablauf.md` nummeriert die fünf Schritte, die die zwei
@@ -871,6 +881,24 @@ Anfahrt als Ganzes und ordnet nach dem Zeitpunkt des Starts. Deshalb steht der
 Wirkungszweig hier vor dem Sprachfall-Lauf: beide laufen neben dem Volllauf,
 aber der Wirkungszweig wird mit ihm gestartet. Werkzeuge, Rohdateien und
 Rückgabewerte sind in beiden Dateien dieselben.
+
+**Warum 6b dort steht, wo es steht.** Der Filter- und Sortierblock misst gegen
+den vollen Bestand, genau wie die Laststufen, und er findet den Container von
+ihnen bereits aufgewärmt vor. Vor Schritt 6 gefahren, kostete er eine zweite
+Aufwärmung und mässe einen anderen Bestand als die Stufen daneben.
+
+**Warum 8b hinter 8 steht.** Der MEM-02-Block wartet auf eine Freigabe. Schritt
+8 stellt die Frist ohnehin klein und fährt beide Stellungen des Schalters; 8b
+setzt darauf auf, statt eine zweite Ruhephase zu bezahlen. Seine Messgrösse ist
+`Rückkehr zur Grundlast nach einem Indexlauf` und ausdrücklich nicht "Grundlast
+minus X": gefragt ist, ob beide Speicherhalter nach Ablauf der Frist wieder frei
+sind, und nicht, um wie viel eine Zahl gefallen ist.
+
+**Die Nummern der Rückgabewerte folgen dem Katalog und nicht der Reihenfolge.**
+6b bricht mit 34 und 35 ab, 8b mit 31 bis 33, obwohl 6b zuerst läuft. Die Werte
+sind in der Reihenfolge vergeben, in der die Werkzeuge entstanden sind, und eine
+einmal vergebene Zahl wird nicht umgehängt: eine Rohdatei aus einem früheren
+Lauf soll auch später noch lesbar bleiben.
 
 ### 7.1 Die Rueckgabewerte, vollstaendig
 
@@ -888,6 +916,14 @@ Rückgabewerte sind in beiden Dateien dieselben.
 | Das gelesene Intervall weicht vom Soll ab | Schritt 2, unterhalb der Pipeline | Rückgabewert 26 für die verfehlte Messbedingung. Sie ist dann nicht hergestellt, und der Laufzeitvergleich wäre unbelegt |
 | Der Wirkungszweig wurde nicht gefahren oder nicht protokolliert | Schritt 5, unterhalb der Pipeline | Rückgabewert 27 für den Zweig ohne Zahl. Weniger als zwei erkannte Scheiben ergeben keinen Abstand, und ein Wirkungszweig ohne Zahl ist kein Protokoll |
 | Der gemessene Scheibenabstand liegt ueber dem Deckel | Schritt 5, unterhalb der Pipeline | Rückgabewert 28 für den gerissenen Deckel von 420 Sekunden. Das ist ein Befund und keine Störung: die Anfahrt hält hier, statt eine unvergleichbare Laufzeit zu erzeugen |
+| Die Grundlast vor dem Indexlauf wurde nicht abgetastet | Schritt 8b, vor dem Anstoss | Rückgabewert **32** für den fehlenden Bezugswert. Eine Rückkehr ohne den Wert, zu dem zurückgekehrt wird, ist keine Messgrösse, sondern eine Zahl |
+| Der Container wurde zwischen den beiden Abtastungen neu gebaut | Schritt 8b, zwischen den Abtastungen | Rückgabewert **33** für die unterbrochene Reihe. Ein neu gebauter Container startet auf seiner Grundlast, und die Differenz beider Abtastungen wäre dann ein Neustart und keine Freigabe |
+| Die Sortierung lief gegen einen Bestand, der noch wuchs | Schritt 6b, vor der ersten Stufe | Rückgabewert **34** für den unfertigen Bestand. Die Endzahl des Volllaufs muss stehen, sonst misst die Sortierung zwei verschiedene Bestände unter einer Zahl |
+| Eine Filter- oder Sortierstufe lieferte keine Antwortzahlen, oder zwei aufeinander folgende Seiten trugen dieselbe Datei-Kennung | Schritt 6b | Rückgabewert **35** für die unbrauchbare Stufe. Ein Blättern, das eine Kennung zweimal ausliefert, ist ein Befund über die Seitenroute und keine Sortierzahl |
+| Der Baumhash fehlt, ist nicht dreifach verankert oder meldet `baumhash-gleich nein` | Block 13b, vor der ersten Messung | Rückgabewert **36** für den unbelegten Stand. Jede Zahl danach gehörte zu einem Zustand, den niemand benennen kann |
+| Mehr als eine Nextcloud läuft an diesem Docker-Dienst | Block 13b, vor `unregister --rm-data` | Rückgabewert **37** für die zweite Instanz. Der Volumenname folgt allein aus der App-Kennung; am 07.09.2026 hat genau das ein Messvolumen gekostet |
+| Der Arbeitsbaum auf der Box ist nicht sauber | Block 13b, vor dem Pull | Rückgabewert **38** für den veränderten Baum. Ein Baumhash gegen einen veränderten Arbeitsbaum belegt nichts |
+| Die harte Grenze hat die Registrierung nicht überlebt | Block 13b, nach der Registrierung | Rückgabewert **39** für die verfehlte Grenze. Gelesen wird aus der cgroup, erwartet werden 2147483648 in beiden Feldern; jede andere Zahl misst eine andere Maschine als v1.1 |
 
 Alle vier neuen Abbrüche stehen **unterhalb** der `tee`-Pipeline ihres Skripts:
 der Rückgabewert einer Pipeline gehört zu `tee`, und ein Abbruch innerhalb des
@@ -919,6 +955,53 @@ Der Vorschlagswert kommt aus der Beschreibung der Variablen in
 mit dem Wort. Jeder Wechsel der Stellung baut den Container neu: danach werden
 die harte Speichergrenze aus Block 12 und die Pflichtzeile aus 6.4 neu
 abgelesen, beide, und nicht erinnert.
+
+**Die Frist dieser Messung ist verkürzt** (D-02, Owner-Entscheid vom
+19.09.2026): die Ausprägungen 1 und 2 stellen
+`FINDLING_EMBED_IDLE_RELEASE_SECONDS` auf 60 bis 120 Sekunden statt auf den
+Vorschlagswert 900 s. Gemessen wird, was nach Ablauf der Frist geschieht, und
+nicht, wie lang die Frist ist; der Mechanismus ist derselbe, und die Ersparnis
+sind Stunden Box-Zeit. Die Abweichung vom Vorschlagswert wird im Protokoll **mit
+ihrem Grund** genannt, und der Vorschlagswert 900 s bleibt anderswo eine
+gekennzeichnete Schätzung. Der Wert, der tatsächlich stand, steht in der
+Pflichtzeile aus 6.4.
+
+**Was "kalt" heisst, als Befehl.** Zwei der vier Ausprägungen verlangen einen
+geleerten Seitencache des Wirts. Gemeint ist genau das hier, **auf dem Wirt und
+nicht im Container**:
+
+```sh
+sync
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+free -h
+```
+
+`sync` schreibt die schmutzigen Seiten zurück, damit nichts Ungeschriebenes
+verworfen wird; der Wert `3` verwirft Seitencache, Dentries und Inodes; `free -h`
+ist die Rückleseprobe, und ihre Ausgabe gehört in die Rohdatei. Im Container
+gefahren tut derselbe Befehl entweder nichts oder etwas anderes: `/proc/sys` ist
+dort nicht beschreibbar, und der Cache, um den es geht, gehört ohnehin dem Wirt.
+
+**Die Nebenwirkung, im Klartext.** Das Leeren verwirft auch den mmap-Cache des
+Tantivy-Index. Die kalte Suche misst damit **beide Hälften kalt**, die Semantik
+und den Volltext, und nicht allein das Nachladen der Gewichte. Das ist die
+gewollte schlechtere Hälfte der Wahrheit: sie ist der Fall, den ein Nutzer nach
+einem Neustart der Box wirklich bekommt. Sie muss im Bericht dastehen, sonst
+liest sich eine Zahl als Wiederaufwärmkosten, die zum Teil Indexkosten sind.
+
+**Die Warnschwelle.** Unterscheiden sich zwei Kaltmessungen um mehr als fünf
+Prozent, ist die Bedingung nicht hergestellt. Dann wird nicht gemittelt und nicht
+weitergefahren, sondern der Cache erneut geleert und die Messung wiederholt. Das
+Rauschband dieser Box liegt unter fünf Prozent; alles darüber ist ein Zustand
+und kein Rauschen.
+
+**Kalt wird hergestellt und nicht bewahrt.** Die Bestandssonde (Schritt 3) fährt
+über die Diagnose-Route und wärmt den Container, und die Laststufen (Schritt 6)
+laden das Modell absichtlich vor der Reihe. Beide liegen vor Schritt 8, und
+beide sind nicht verschiebbar. Die Kaltmessungen des Schrittes 8 laufen deshalb
+**nach Schritt 6 und 7**, und jede von ihnen beginnt mit einem
+**Containerneustart und dem geleerten Wirtscache**. Die Reihenfolge innerhalb des
+Schrittes bleibt unverändert bindend: erst 1 und 3 kalt, danach 2 und 4 warm.
 
 **Ein Aufruf der Diagnose-Route (`ranked_sides`) LAEDT das Modell. Vor einer
 Kaltmessung darf sie deshalb nicht aufgerufen werden.**
