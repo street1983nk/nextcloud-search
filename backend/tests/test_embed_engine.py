@@ -32,6 +32,7 @@ shared runner is a random number generator with an assertion attached.
 from __future__ import annotations
 
 import ast
+import concurrent.futures
 import contextlib
 import threading
 import time
@@ -54,13 +55,17 @@ from findling.embed.engine import (
     ENGINE_MISSING,
     ENGINE_RETRY_PENDING,
     ENGINE_STATES,
+    WARM_TEXT,
     engine_state,
     note_cutter_failure,
     query_may_load,
     release_if_idle,
     released_count,
+    request_warm,
     reset,
     shared_model,
+    warm,
+    warm_wanted,
 )
 from findling.embed.model import (
     DIMENSIONS,
@@ -1148,3 +1153,214 @@ def test_the_identity_check_compares_objects_and_not_values() -> None:
     assert [type(operator) for operator in checks[0].ops] in ([ast.Is], [ast.IsNot]), (
         "identity and never a value comparison"
     )
+
+
+# ---------------------------------------------------------------------------
+# The warm run after a release, and the promise of one load per warm window
+# (plan 14-06, success criterion 5 of the phase).
+#
+# Two levels hold that promise and only the first of them is correctness:
+# _load() runs under the lock of the holder and returns at its head when the
+# engine is already there, so ten concurrent warm runs raise the load counter
+# once whatever the flag does. The flag saves the nine threadpool threads that
+# would otherwise wait at that lock. What is measured below is the counter.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def no_warm_request() -> Iterator[None]:
+    """No case inherits the warm request of the case before it.
+
+    The marker is a module global, because a warm run is a fact about this
+    process the way the holder is. In a container that is one fact; in a suite
+    it outlives the case that set it, and the order the suite happens to run in
+    would then be readable off an answer. Cleared on both sides, like the notice
+    of the cutter build in conftest.
+    """
+    engine_module._WARM_WANTED = False
+    yield
+    engine_module._WARM_WANTED = False
+
+
+def _release_is_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The switch of MEM-01 on, which is the only state a warm run happens in."""
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "900")
+    settings.cache_clear()
+
+
+@pytest.mark.usefixtures("no_warm_request")
+def test_no_warm_run_is_wanted_while_the_release_is_switched_off(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # With the switch off no search was ever refused a load, so nothing is owed
+    # a warm run. Asking for one anyway must not start one: that would be the
+    # behaviour change outside the switch that query_may_load refuses to make.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    monkeypatch.setenv("FINDLING_EMBED_IDLE_RELEASE_SECONDS", "0")
+    settings.cache_clear()
+    shared_model()
+
+    request_warm()
+
+    assert warm_wanted() is False
+
+
+@pytest.mark.usefixtures("no_warm_request")
+def test_no_warm_run_is_wanted_while_the_engine_is_loaded(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The window is already warm. A second load would be the doubled load of
+    # plan 06.1-02 with a new name.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    _release_is_on(monkeypatch)
+    shared_model().embed_query("bauantrag")
+
+    request_warm()
+
+    assert warm_wanted() is False
+
+
+@pytest.mark.usefixtures("no_warm_request")
+def test_no_warm_run_is_wanted_on_a_container_without_a_model(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A container built without the model stage answers lexically for its whole
+    # life, and that is not a cold window waiting to be warmed. Warming it would
+    # read a directory that has nothing in it, once per refused search.
+    assert model_home.is_dir()
+    _release_is_on(monkeypatch)
+    held = shared_model()
+    held.embed_query("bauantrag")
+
+    request_warm()
+
+    assert held.artifacts_absent is True
+    assert warm_wanted() is False
+
+
+@pytest.mark.usefixtures("no_warm_request")
+def test_a_warm_run_is_wanted_after_a_release_when_somebody_has_searched(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The one state that answers True, and the anti vacuity clause of the three
+    # cases above: a marker that could only ever say no would keep every promise
+    # of this block while the warm run never happened.
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+    _release_is_on(monkeypatch)
+
+    assert release_if_idle(900) is True
+    assert engine.loaded is False
+    assert warm_wanted() is False, "nobody has been refused a load yet"
+
+    request_warm()
+
+    assert warm_wanted() is True
+
+
+@pytest.mark.usefixtures("no_warm_request")
+def test_ten_warm_runs_at_once_pay_for_exactly_one_load(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Success criterion 5 of the phase in a counter: one load per warm window.
+    # Measured as a difference and never as a byte, for the reason the holder
+    # above is measured that way.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    _release_is_on(monkeypatch)
+    before = load_count()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+        answers = list(pool.map(lambda _index: warm(), range(10)))
+
+    assert any(answers), "one of the ten has to have done the warm run"
+    assert load_count() - before == 1, "ten warm runs at once are one session and not ten"
+    assert shared_model().loaded is True
+
+
+@pytest.mark.usefixtures("no_warm_request")
+def test_a_warm_run_sets_the_idle_clock_so_the_next_tick_does_not_undo_it(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Not a side effect but the condition. Without the clock the next tick of
+    # the unload task would find a holder whose last use is older than the span
+    # and would eat the load pair that was just paid for.
+    clock = {"now": 1000.0}
+    engine = _an_idle_engine(model_home, monkeypatch, clock)
+    _release_is_on(monkeypatch)
+
+    assert release_if_idle(900) is True
+    stale = engine.last_use()
+    assert stale is not None
+    clock["now"] += 5_000.0
+
+    assert warm() is True
+
+    fresh = shared_model().last_use()
+
+    assert fresh is not None
+    assert fresh > stale
+    assert release_if_idle(900) is False, "the window is warm again and the next tick leaves it alone"
+
+
+@pytest.mark.usefixtures("no_warm_request")
+def test_a_warm_run_on_a_container_without_a_model_does_not_throw(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The same stance the search side takes towards a missing model: a verdict
+    # and never an exception. The remembered refusal has to stay standing, or
+    # the next warm run would read the empty directory again.
+    assert model_home.is_dir()
+    _release_is_on(monkeypatch)
+    held = shared_model()
+    held.embed_query("bauantrag")
+    assert held.artifacts_absent is True
+    request_warm()
+
+    assert warm() is False
+    assert held.artifacts_absent is True
+    assert held.loaded is False
+
+
+@pytest.mark.usefixtures("no_warm_request")
+def test_a_warm_run_clears_the_request_it_answers(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Otherwise the marker would stay set for the life of the container and
+    # every later tick would read a warm run that has already happened.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    _release_is_on(monkeypatch)
+    request_warm()
+
+    assert warm() is True
+    assert warm_wanted() is False
+
+
+@pytest.mark.usefixtures("no_warm_request")
+def test_asking_whether_a_warm_run_is_wanted_builds_nothing_and_loads_nothing(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T-14-21 again, at the second question of this module that a tick asks: an
+    # empty holder is answered and never filled.
+    _pretend_a_model(model_home)
+    _stand_in(monkeypatch)
+    _release_is_on(monkeypatch)
+    request_warm()
+    before = load_count()
+
+    for _ in range(5):
+        assert warm_wanted() is False
+
+    assert _held_for(model_home) is None, "the question must not build the instance it asks about"
+    assert load_count() == before
+
+
+def test_the_warm_text_carries_nothing_of_a_user_and_nothing_of_the_disk() -> None:
+    # T-14-22. The text goes through the very same path a search line goes
+    # through, so it must not be a search line: a fixed module constant carries
+    # no user content into a log, into a vector or into a report.
+    assert isinstance(WARM_TEXT, str)
+    assert WARM_TEXT
+    assert WARM_TEXT.strip() == WARM_TEXT
+    assert len(WARM_TEXT) <= 32
+    assert "/" not in WARM_TEXT
+    assert "\\" not in WARM_TEXT
+    assert MODEL_FILE not in WARM_TEXT
+    assert TOKENIZER_FILE not in WARM_TEXT
