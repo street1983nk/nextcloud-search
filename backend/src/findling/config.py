@@ -506,6 +506,38 @@ EMBED_SEQUENCE_LEN_RANGE = (16, EMBED_CONTEXT_TOKENS)
 # here would move that verdict into the boot path of the container.
 EMBED_MODEL_DIR = "/usr/local/share/findling/model"
 
+# How long the model may sit idle before the container hands its memory back to
+# the operating system, in seconds. Zero means off, and off is the factory
+# position of this build.
+#
+# It is off for two reasons, and both of them expire rather than hold forever.
+# The one paid box run of phase 15 has to weigh this feature against its own
+# absence, so it needs both positions of the switch and cannot have one of them
+# baked in. And the cost of the other position, the wait of the first search
+# after a release while the session is built again, is not measured yet: a
+# feature whose re-warming price is unknown may not switch itself on underneath
+# an installation that is already running and already tuned.
+#
+# 900 is the value the description in backend/appinfo/info.xml suggests to an
+# admin who does switch it on, and it is a guess until phase 15 measures it. It
+# is a quarter of an hour, which is long enough that a working afternoon does
+# not pay the wait once per search and short enough that a box left alone over
+# lunch gets its memory back.
+EMBED_IDLE_RELEASE_SECONDS = 0
+
+# The window a value other than zero has to fall into.
+#
+# The floor is 60 seconds and it is the interesting end. A time to live of three
+# seconds is not a careful setting, it is a container that loads and releases
+# without pause, and it gets worse over the cycles rather than better: glibc
+# raises M_MMAP_THRESHOLD dynamically as freed blocks are seen, so each round of
+# such a cycle hands back a little less than the one before it. A number below
+# the floor therefore warns and does not count, the same way an absurd dpi does.
+#
+# The ceiling is one day. Past it the setting stops being a release policy and
+# becomes a way of saying off, and off already has a value of its own.
+EMBED_IDLE_RELEASE_SECONDS_RANGE = (60, 86400)
+
 # The two PHP-side numbers of the embedding track, mirrored here because a PHP
 # constant cannot be imported: QueueMapper::LOCK_TIMEOUTS[embed] and
 # QueueService::KIND_BATCH[embed]. A parity test in tests/test_config.py reads
@@ -749,6 +781,7 @@ class Settings:
     embed_batch_size: int
     embed_sequence_len: int
     embed_model_dir: Path
+    embed_idle_release_seconds: int
 
 
 def _int_from_environment(name: str, default: int) -> int:
@@ -863,6 +896,41 @@ def _overlap_from_environment(name: str, default: int, bounds: tuple[int, int]) 
     except ValueError:
         LOGGER.warning("%s is not a whole number, falling back to the built in default", name)
         return default
+    low, high = bounds
+    if low <= value <= high:
+        return value
+    LOGGER.warning("%s is outside the range this build was measured for, falling back to the default", name)
+    return default
+
+
+def _seconds_or_off_from_environment(name: str, default: int, bounds: tuple[int, int]) -> int:
+    """Read a span in seconds where zero is not a number but the word off.
+
+    The third reader of this shape, and the one place where the split earns its
+    keep twice over rather than once. ``_bounded_int_from_environment`` cannot
+    serve this variable from either side: handed ``(0, 86400)`` it would accept
+    a time to live of three seconds, which is a container that loads and
+    releases without pause, and handed ``(60, 86400)`` it would reject zero and
+    fall back to the default, so an admin who typed the one value that means
+    "switch this off" would be handed the feature instead.
+
+    Zero is therefore let through ahead of the range check and is the only value
+    outside it that counts. Everything else follows the house contract of this
+    module: an unreadable or out of range value warns with the name of the
+    variable, never with the value, and never stops the container.
+    """
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        LOGGER.warning("%s is not a whole number, falling back to the built in default", name)
+        return default
+    if value == 0:
+        # The explicit off position, and the reason this function exists. It is
+        # answered before the range so that the range may keep its floor.
+        return 0
     low, high = bounds
     if low <= value <= high:
         return value
@@ -1108,4 +1176,7 @@ def settings() -> Settings:
         ),
         embed_sequence_len=embed_sequence_len,
         embed_model_dir=_embed_model_dir(),
+        embed_idle_release_seconds=_seconds_or_off_from_environment(
+            "FINDLING_EMBED_IDLE_RELEASE_SECONDS", EMBED_IDLE_RELEASE_SECONDS, EMBED_IDLE_RELEASE_SECONDS_RANGE
+        ),
     )
