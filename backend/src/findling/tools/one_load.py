@@ -8,6 +8,23 @@ into the process once instead of twice. Both savings are invisible from the
 outside a week later, and the return of either one would be a silent 276 MB and
 21.9 MB on a box with 210 MB of headroom.
 
+**The promise this gate stands on, in the words it has since phase 14.** Not
+"exactly one load per process" any more. The switch of MEM-01 hands the weights
+back in an idle span, so a container that has been up for a day may have read
+them four times and be working exactly as designed; a gate that still asserted
+one load per process would go red for the feature it was asked to watch. The
+promise is **never two engines at once, exactly one load per warm window**, and
+it is written in the two counters of ``embed/model.py`` and in no byte:
+
+* Never two engines: ``loads - unloads`` is never above one and never below
+  nought, at any moment of the run.
+* One load per warm window: ``loads - unloads`` stands at one after a warm run
+  and still at one after the next one.
+* No greening by zeroing: both counters are monotonic, nothing sets either of
+  them back, and ``engine.reset()`` deliberately does not either, because a
+  counter that can be zeroed is a counter a gate could zero itself green with
+  (T-14-17).
+
 **Why this exists instead of a memory ceiling in CI.** The measurement step of
 ``resilience.yml`` starts the container on an empty ``APP_PERSISTENT_STORAGE``,
 so ``read_side()`` answers None, the search turns back before it reaches the
@@ -20,7 +37,7 @@ a byte, which is the pattern that carried plan 06.1-02: ``load_count()`` next to
 ``read_count()``, and both of them tell a cache hit from a cheap second load,
 which no resident memory reading on a shared runner can do.
 
-**The order of the three phases is the anti-vacuity clause.** A gate that
+**The order of the four phases is the anti-vacuity clause.** A gate that
 asserts "one load" is green for nothing when the load path is never entered. So
 the search side runs BEFORE the second track, and its own number is asserted:
 
@@ -29,18 +46,29 @@ the search side runs BEFORE the second track, and its own number is asserted:
    exactly one, so a measurement that never reached the model reports a zero and
    fails instead of passing,
 3. the second track wires itself the way a pass does and embeds one document,
-   and the engine loads have to still be one, which is the sharing itself.
+   and the engine loads have to still be one, which is the sharing itself,
+4. the weights are released and one more real round fetches them back, which is
+   the warm window itself: the unloads have to come to exactly one, and the
+   loads of the window with them.
+
+**The fourth phase carries its own anti-vacuity condition, and it is the
+sharper of the two.** A release that freed nothing leaves the engine exactly
+where it was, so the round behind it takes a cache hit, reports a window that
+cost no load at all, and every number after it says nothing. ``unloads == 0`` is
+therefore a finding here and never a quiet green. It is the trap the memory
+ceiling would have shipped, one phase further on: a gate that watches a release
+path the measurement never enters.
 
 Every number is measured through the real call: ``api/search.py::one_round`` for
-the search side and ``Poller._wire_the_second_track`` for the track, so a caller
-that stops going through the holder is caught rather than a caller this tool
-wrote itself.
+the search side and for the warm window, and ``Poller._wire_the_second_track``
+for the track, so a caller that stops going through the holder is caught rather
+than a caller this tool wrote itself.
 
 **It builds its own volume.** A fresh directory per run, seeded with one
 document, one permission row and an empty vector stock. That is exactly what the
 measurement container lacks, and it costs one tantivy commit and one query.
 
-**The seventh number is a duration, and it is reported and never judged.** The
+**The ninth number is a duration, and it is reported and never judged.** The
 one search round this tool drives is the round that brings the engine loads from
 zero to one, so the wall clock around it is a cold start duration and it costs
 one line. A millisecond ceiling over that line would be the mirror image of the
@@ -61,8 +89,8 @@ Run it with::
 
     uv run python -m findling.tools.one_load
 
-The exit code is the gate: 0 when every counter is one, 1 with a named finding
-for every counter that is not.
+The exit code is the gate: 0 when every number is what the promise above says
+it has to be, 1 with a named finding for every number that is not.
 """
 
 from __future__ import annotations
@@ -82,7 +110,8 @@ from tantivy import Document
 from findling.api.search import one_round
 from findling.config import settings
 from findling.embed.engine import reset as forget_the_engine
-from findling.embed.model import load_count
+from findling.embed.engine import shared_model
+from findling.embed.model import load_count, unload_count
 from findling.index.open import expected_versions, open_index
 from findling.index.schema import (
     FIELD_BODY_DE,
@@ -135,15 +164,21 @@ EXPECTED: Final = 1
 
 @dataclass(frozen=True, slots=True)
 class Report:
-    """The six counters one run of the measurement comes to, and one duration.
+    """The eight counters one run of the measurement comes to, and one duration.
 
     Two counters per side rather than one at the end, because the difference
     between them is the statement: the constituent list may only be read by the
     side that seeded the volume, and the engine has to be loaded by the search
     side and then not again by the track.
 
-    The seventh field is the odd one out: it is an observation and not a gate.
-    ``findings()`` reads the six counters and never the duration, because a
+    The last two are the warm window of phase four, and they are a pair for the
+    same reason: neither of them says anything alone. A release without a load
+    behind it is a container that gave its semantics away, a load without a
+    release in front of it is a second engine, and it is the difference between
+    them that carries the promise.
+
+    The ninth field is the odd one out: it is an observation and not a gate.
+    ``findings()`` reads the eight counters and never the duration, because a
     millisecond ceiling on a shared runner would go red for runner load instead
     of for the load path it names, which is the same argument the comment before
     the ratchet step of ``resilience.yml`` makes for the resident memory series.
@@ -153,6 +188,8 @@ class Report:
     wordlist_reads_after_search: int
     engine_loads_after_search: int
     engine_loads_after_worker: int
+    engine_unloads_after_release: int
+    engine_loads_after_rewarm: int
     candidates: int
     passage_vectors: int
     cold_search_ms: float
@@ -164,6 +201,8 @@ class Report:
             f"wordlist-reads-after-search={self.wordlist_reads_after_search}",
             f"engine-loads-after-search={self.engine_loads_after_search}",
             f"engine-loads-after-worker={self.engine_loads_after_worker}",
+            f"engine-unloads-after-release={self.engine_unloads_after_release}",
+            f"engine-loads-after-rewarm={self.engine_loads_after_rewarm}",
             f"candidates={self.candidates}",
             f"passage-vectors={self.passage_vectors}",
             f"cold-search-ms={round(self.cold_search_ms, 1)}",
@@ -307,6 +346,7 @@ def measure(root: Path, *, source: Path = SYSTEM_WORDLIST) -> Report:
 
     reads_at_start = read_count()
     loads_at_start = load_count()
+    unloads_at_start = unload_count()
 
     seed_volume(source)
     reads_after_index = read_count() - reads_at_start
@@ -322,12 +362,41 @@ def measure(root: Path, *, source: Path = SYSTEM_WORDLIST) -> Report:
     loads_after_search = load_count() - loads_at_start
 
     passages = drive_the_second_track()
+    loads_after_worker = load_count() - loads_at_start
+
+    # Phase four, the warm window. The three phases above are all green on a
+    # container that is physically unable to let go of anything, which is the
+    # container this product was until phase 14, so none of them can see the
+    # promise this gate has carried since.
+    #
+    # **The release is taken here rather than through ``release_if_idle``, and
+    # that is this tool reaching under the policy on purpose.** That function
+    # carries the clock, and the span it reads comes out of
+    # ``settings().embed_idle_release_seconds``, where nought is the word for
+    # off: with the switch in its factory position it answers False at once and
+    # would measure nothing, and with the switch on the tool would sit out an
+    # admin setting. What this gate is about is the mechanics of the promise
+    # and never the deadline, and a deadline has no business inside a
+    # measurement run. So the holder is asked to let go, and then the counter
+    # is read.
+    shared_model().release()
+    unloads_after_release = unload_count() - unloads_at_start
+
+    # And back again through the real call path, the same one phase two used,
+    # and not through ``engine.warm()``. This tool has measured through the way
+    # a caller really goes since it was written, for the reason
+    # ``drive_the_search_side`` gives: a caller that stops going through the
+    # holder has to be caught here and not measured around.
+    drive_the_search_side()
+    loads_after_rewarm = load_count() - loads_at_start
 
     return Report(
         wordlist_reads_after_index=reads_after_index,
         wordlist_reads_after_search=reads_after_search,
         engine_loads_after_search=loads_after_search,
-        engine_loads_after_worker=load_count() - loads_at_start,
+        engine_loads_after_worker=loads_after_worker,
+        engine_unloads_after_release=unloads_after_release,
+        engine_loads_after_rewarm=loads_after_rewarm,
         candidates=candidates,
         passage_vectors=passages,
         cold_search_ms=cold_search_ms,
@@ -343,6 +412,12 @@ def findings(report: Report) -> list[str]:
 
     ``cold_search_ms`` is deliberately absent from every branch below. It is
     reported and not judged, for the reason the module docstring gives.
+
+    The last two branches are the warm window, and the first of the two is the
+    anti-vacuity clause of phase four: a release that freed nothing makes the
+    load count behind it a cache hit, so it is named before the window itself
+    is judged rather than left to show up as a nought somebody has to
+    interpret.
     """
     found: list[str] = []
     if report.wordlist_reads_after_index != EXPECTED:
@@ -367,7 +442,22 @@ def findings(report: Report) -> list[str]:
         found.append(
             f"the engine stands at {report.engine_loads_after_worker} loads after the second track wired itself, "
             f"expected {EXPECTED}: the two halves no longer share the holder in embed/engine.py, which is the "
-            "276 MB of plan 06.1-02 coming back"
+            "276 MB of plan 06.1-02 coming back. This is the window BEFORE the release; the one behind it is the "
+            "two numbers below"
+        )
+    if report.engine_unloads_after_release != EXPECTED:
+        found.append(
+            f"the release freed {report.engine_unloads_after_release} engines, expected {EXPECTED}: the fourth "
+            "phase released nothing, so it measured nothing, and the load count behind it is a cache hit and not "
+            "a warm window; either the holder was already empty or release() found a batch in flight"
+        )
+    window = report.engine_loads_after_rewarm - report.engine_unloads_after_release
+    if window != EXPECTED:
+        found.append(
+            f"the warm window after the release came to {window} loads, expected {EXPECTED}: a nought means the "
+            "weights were never fetched back and the release let go of a counter instead of an engine, and "
+            "anything above one means two sessions were built for one window, which is the 276 MB of plan "
+            "06.1-02 coming back inside the unload cycle"
         )
     if report.candidates < 1:
         found.append(
