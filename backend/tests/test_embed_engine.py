@@ -908,7 +908,7 @@ def _an_idle_engine(model_home: Path, monkeypatch: pytest.MonkeyPatch, clock: di
     return engine
 
 
-def test_an_empty_holder_is_not_released_and_is_not_filled_on_the_way(
+def test_release_if_idle_leaves_an_empty_holder_alone_and_does_not_fill_it(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The case the caller of plan 14-07 meets far more often than the release
@@ -925,7 +925,7 @@ def test_an_empty_holder_is_not_released_and_is_not_filled_on_the_way(
     assert load_count() == before
 
 
-def test_a_holder_whose_engine_was_never_loaded_is_not_released(
+def test_release_if_idle_does_nothing_for_an_engine_that_never_loaded(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Building the wrapper reads nothing, so an instance in the holder is not a
@@ -940,7 +940,7 @@ def test_a_holder_whose_engine_was_never_loaded_is_not_released(
     assert unload_count() == before
 
 
-def test_an_engine_that_worked_ten_seconds_ago_is_not_released(
+def test_release_if_idle_keeps_an_engine_that_worked_ten_seconds_ago(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The whole point of an idle span: a container in the middle of a working
@@ -961,7 +961,7 @@ def test_an_engine_that_worked_ten_seconds_ago_is_not_released(
     assert unload_count() == before
 
 
-def test_an_engine_that_has_been_still_for_longer_than_the_span_is_released(
+def test_release_if_idle_lets_go_of_an_engine_that_has_been_still_for_longer(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The one case in which anything happens at all, and it is measured with the
@@ -976,7 +976,7 @@ def test_an_engine_that_has_been_still_for_longer_than_the_span_is_released(
     assert unload_count() - before == 1
 
 
-def test_a_release_span_of_nought_never_reaches_the_release_at_all(
+def test_release_if_idle_with_a_span_of_nought_never_reaches_the_release(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Nought is the word off, and the switch being off is not a span of nought
@@ -998,7 +998,7 @@ def test_a_release_span_of_nought_never_reaches_the_release_at_all(
     assert engine.loaded is True
 
 
-def test_a_holder_swapped_under_the_release_keeps_the_engine_that_was_just_loaded(
+def test_release_if_idle_keeps_the_engine_a_warm_run_swapped_in(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The race that really counts (14-RESEARCH.md 5.3). The warm run of MEM-03
@@ -1027,7 +1027,7 @@ def test_a_holder_swapped_under_the_release_keeps_the_engine_that_was_just_loade
     assert unload_count() == before
 
 
-def test_a_holder_that_has_never_embedded_anything_is_not_idle(
+def test_release_if_idle_treats_a_holder_that_never_embedded_as_not_idle(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # last_use() answers None for a holder that never worked, and None is not an
@@ -1052,7 +1052,7 @@ def test_a_holder_that_has_never_embedded_anything_is_not_idle(
     assert release_if_idle(900) is False
 
 
-def test_the_released_count_is_the_counter_of_the_model_without_importing_it(
+def test_release_if_idle_raises_the_counter_that_released_count_passes_through(
     model_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The pass through exists so that a caller can read the figure without
@@ -1068,7 +1068,9 @@ def test_the_released_count_is_the_counter_of_the_model_without_importing_it(
     assert released_count() == unload_count()
 
 
-def test_the_release_counter_survives_a_reset_of_the_holder(model_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_counter_of_release_if_idle_survives_a_reset_of_the_holder(
+    model_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # The same property the load counter has and for the same reason (T-14-17):
     # every reader takes a difference against a baseline of its own, nothing
     # needs it zeroed, and a counter that can be zeroed is one a gate could zero
@@ -1107,7 +1109,7 @@ def _calls_named(node: ast.AST, attribute: str) -> list[ast.Call]:
     ]
 
 
-def test_the_release_is_called_outside_the_holder_lock() -> None:
+def test_release_if_idle_calls_the_release_outside_the_holder_lock() -> None:
     # T-14-16 one layer up. release() takes its own lock and then runs the
     # blocking trim, and a held _LOCK would block every concurrent shared_model
     # question with it. Read out of the tree, because a behaviour test cannot
@@ -1123,7 +1125,7 @@ def test_the_release_is_called_outside_the_holder_lock() -> None:
     assert inside == [], "the release blocks, so it must not be called under _LOCK"
 
 
-def test_the_release_reads_the_holder_and_never_fills_it() -> None:
+def test_release_if_idle_reads_the_holder_and_never_fills_it() -> None:
     # T-14-21. _held answers an empty holder with None; shared_model fills it.
     # An unloader that asked through shared_model would build an instance on a
     # container nobody is searching on, every tick, for ever.
@@ -1134,7 +1136,7 @@ def test_the_release_reads_the_holder_and_never_fills_it() -> None:
     assert "shared_model" not in names
 
 
-def test_the_identity_check_compares_objects_and_not_values() -> None:
+def test_release_if_idle_checks_identity_and_never_compares_values() -> None:
     # T-14-20. Two EmbeddingModel instances for the same directory carry the
     # same fields, so a value comparison would be the wrong question: what is
     # asked is whether this is still the very object whose clock was read.
