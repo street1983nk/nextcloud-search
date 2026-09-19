@@ -122,10 +122,23 @@ ENGINE_COLD: Final = "cold"
 ENGINE_DISABLED: Final = "disabled"
 ENGINE_MISSING: Final = "missing"
 ENGINE_RETRY_PENDING: Final = "waiting_for_retry"
+ENGINE_UNLOADED: Final = "unloaded"
 
 # The set as a whole, so that the other half can be held against it and so that
-# a sixth answer cannot arrive without this line seeing it.
-ENGINE_STATES: Final = frozenset({ENGINE_LOADED, ENGINE_COLD, ENGINE_DISABLED, ENGINE_MISSING, ENGINE_RETRY_PENDING})
+# a seventh answer cannot arrive without this line seeing it.
+#
+# The sixth one arrived on 2026-09-19, by the owner's decision for branch B of
+# plan 14-09, and it is the one word this line was written to make expensive.
+# The price was paid on purpose: the switch of MEM-01 gives the weights back in
+# an idle span, and without a word of its own that saving is invisible, because
+# a released container shows the same coverage figure and the same empty holder
+# as one that has never read anything. Two things needed it. The A/B measurement
+# of phase 15 reads the state trail cold -> loaded -> unloaded -> loaded to show
+# that a warm window costs exactly one load, and the support case "the first
+# search is slow" is answered by the page instead of by a log.
+ENGINE_STATES: Final = frozenset(
+    {ENGINE_LOADED, ENGINE_COLD, ENGINE_DISABLED, ENGINE_MISSING, ENGINE_RETRY_PENDING, ENGINE_UNLOADED}
+)
 
 
 def shared_model() -> EmbeddingModel:
@@ -269,7 +282,7 @@ def _held(model_dir: Path) -> EmbeddingModel | None:
 
 
 def engine_state() -> str:
-    """Which of five states the embedding engine of this process is in.
+    """Which of six states the embedding engine of this process is in.
 
     For the admin page, which shows how many documents carry a vector and can
     say nothing else about the semantic half. Nought documents is the same
@@ -277,6 +290,12 @@ def engine_state() -> str:
     still inside its cooldown, and for a track that has not got there yet, and
     the three ask completely different things of an admin: rebuild the image,
     wait five minutes, or do nothing at all.
+
+    ``unloaded`` is the sixth and answers the question the switch of MEM-01
+    raised: it tells "never read" from "released to save memory, and the next
+    search pays the reload". The two look identical on the coverage figure and
+    on the holder, and the milestone asks for the cost of warming up again to be
+    shown rather than left in a log.
 
     **Nothing is built and nothing is loaded here.** An empty holder is
     answered with a state and not with an instance, and no path below reads an
@@ -289,8 +308,23 @@ def engine_state() -> str:
     they come from.** Switched off outranks everything, because a container
     whose semantic half is off would otherwise be reported cold and look like
     one that is about to begin. Then the missing model, the one state that does
-    not resolve itself. Then the cooldown, then the loaded engine, and cold
-    last, as the state that is left when nothing else is true.
+    not resolve itself. Then the cooldown, then the loaded engine, then the
+    released one, and cold last, as the state that is left when nothing else is
+    true.
+
+    ``unloaded`` sits behind ``loaded`` because a container that has warmed up
+    again after a release is loaded and not released: the counter is monotonic
+    and can only say that a release has happened, never that the holder is empty
+    right now, and the holder is what answers that. It sits in front of ``cold``
+    because cold is the state that is left when nothing else is true, and after
+    a release something else is true.
+
+    **The counter is the source, and not a field of its own.** A released engine
+    leaves an empty holder behind, which is exactly the holder a container that
+    has never read anything has, so the answer cannot be read off the holder.
+    :func:`released_count` is monotonic, :func:`reset` does not zero it, and a
+    process that has never let go of anything therefore cannot report this word
+    at all (T-14-17).
 
     **The cooldown has two sources and one answer** (bug audit MEDIUM-2 of plan
     07-05). A load of the weights that threw is one of them and the holder knows
@@ -322,6 +356,8 @@ def engine_state() -> str:
         return ENGINE_RETRY_PENDING
     if held is not None and held.loaded:
         return ENGINE_LOADED
+    if unload_count() > 0:
+        return ENGINE_UNLOADED
 
     # What is left when nothing else is true: the artifacts are there, nothing
     # threw, and nothing has been read yet.

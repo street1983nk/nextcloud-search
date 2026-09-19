@@ -797,9 +797,11 @@ def test_a_cutter_build_that_worked_forgets_the_remembered_absence(
 
 def test_no_state_of_the_closed_set_names_a_place_on_disk() -> None:
     # T-07-01, and the rule of api/status.py one module over: every note of that
-    # answer names a state of this container and never a location. These five
-    # words travel in the same answer and are held to the same rule.
-    assert len(ENGINE_STATES) == 5
+    # answer names a state of this container and never a location. These six
+    # words travel in the same answer and are held to the same rule. Six since
+    # plan 14-09, where unloaded joined them; the figure is asserted rather than
+    # counted so that a word added without a thought is a red test.
+    assert len(ENGINE_STATES) == 6
 
     for state in ENGINE_STATES:
         assert state == state.strip()

@@ -366,7 +366,12 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # orders the warm run from the handler through asyncio.create_task, with
 # the module set _WARM_TASKS holding the task while it runs. No file came
 # and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "e8ae84b8b4faac0d3d7643048948387ebaa6bfcdd2d68d05748b55b1855ae934"
+# Moved on 2026-09-19 a thirteenth time, by the first task of plan 14-09:
+# exactly one of the 54 files changed its bytes, embed/engine.py, which got
+# the sixth word of ENGINE_STATES, ENGINE_UNLOADED, and the branch in
+# engine_state that answers it behind loaded and in front of cold. No file
+# came and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "083bef5e78dba538eee52db8c56a0c73bc18c37dfaedba9c14b77ab0d4959626"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
