@@ -331,6 +331,15 @@ class EmbeddingModel:
         # thousands of documents, so a warning per row would be the log flood
         # the load path avoids with the flag above.
         self._run_failure_warned = False
+        # When this holder last turned text into vectors, on the monotonic
+        # clock. None means nothing has been embedded in this process yet, which
+        # is not an idle span: a holder that never worked has nothing to let go
+        # of. Set in _embed and read from outside through last_use().
+        self._last_use: float | None = None
+        # How many calls are inside the batch loop right now. The one new
+        # invariant of this phase, and the reason it is needed stands beside the
+        # counter in _embed.
+        self._in_flight = 0
         # One lock, around the load and around the tokenizer, and around
         # nothing else.
         #
@@ -395,15 +404,44 @@ class EmbeddingModel:
         stamp = self._load_failed_at
         return stamp is not None and time.monotonic() - stamp < LOAD_RETRY_SECONDS
 
+    def last_use(self) -> float | None:
+        """When this holder last embedded something, on the monotonic clock.
+
+        A method and not a bare field, because the release policy of plan 14-06
+        has to read it from outside, and reading a private field from outside is
+        how a second spelling of one truth begins.
+
+        None means nothing has been embedded in this process yet. That is not an
+        idle span the caller has to act on: a holder that never worked holds
+        nothing, and :meth:`release` answers that case with False.
+        """
+        return self._last_use
+
     def embed_passages(self, texts: Sequence[str]) -> EmbedOutcome:
-        """One vector per document chunk, each one prefixed as a passage."""
+        """One vector per document chunk, each one prefixed as a passage.
+
+        No ``may_load`` here, and that is a decision rather than an omission.
+        The index track has to be allowed to load: there is no 1.5 second
+        ceiling over it the way there is over a search, and after a release the
+        next row of an index pass is exactly the right moment to fetch the
+        weights back.
+        """
         return self._embed(texts, prefix=PASSAGE_PREFIX)
 
-    def embed_query(self, text: str) -> EmbedOutcome:
-        """One vector for a search line, prefixed as a query."""
-        return self._embed([text], prefix=QUERY_PREFIX)
+    def embed_query(self, text: str, *, may_load: bool = True) -> EmbedOutcome:
+        """One vector for a search line, prefixed as a query.
 
-    def _embed(self, texts: Sequence[str], *, prefix: str) -> EmbedOutcome:
+        ``may_load=False`` answers out of the held engine if there is one and
+        with :meth:`EmbedOutcome.unavailable` if there is none, without ever
+        reaching for the artifacts. That verdict is the tested path of D-19 into
+        a purely lexical result, so the search still answers.
+
+        Whether the switch should ever be false is not decided here. This is the
+        switch; the rule that throws it lives in plan 14-06.
+        """
+        return self._embed([text], prefix=QUERY_PREFIX, may_load=may_load)
+
+    def _embed(self, texts: Sequence[str], *, prefix: str, may_load: bool = True) -> EmbedOutcome:
         """The one path both public calls take, so the caps are applied once.
 
         The prefix is an argument rather than a branch because the ranking test
@@ -419,9 +457,27 @@ class EmbeddingModel:
 
         # The load under the lock, for the reason stated beside it in __init__.
         with self._lock:
-            engine = self._load()
-        if engine is None:
-            return EmbedOutcome.unavailable()
+            engine = self._load() if may_load else self._engine
+            # The idle clock, one line, and it sits here rather than in the two
+            # public entries because both of them come through here: one line
+            # covers the search and the index track at once. It is deliberately
+            # below the empty check above, so an empty batch does not end an
+            # idle span.
+            self._last_use = time.monotonic()
+            if engine is None:
+                return EmbedOutcome.unavailable()
+            # The activity counter, raised while the engine is still bound under
+            # the lock and lowered in the finally below.
+            #
+            # The lock around the load does not cover the graph run, on purpose
+            # and since the audit of plan 06.1-17, so a release that only let go
+            # would be safe on the reference count alone: the local name above
+            # keeps the object alive until this call returns. A release does
+            # more than let go though. It calls gc.collect() and malloc_trim,
+            # and those two walk the heap this batch is allocating in
+            # (14-RESEARCH.md 4.3, point 4). That is the one new invariant of
+            # this phase, and this counter is all of it.
+            self._in_flight += 1
 
         try:
             vectors: list[list[float]] = []
@@ -440,6 +496,12 @@ class EmbeddingModel:
             # a single bad batch outlive the batch.
             self._warn_run(error)
             return EmbedOutcome.unavailable()
+        finally:
+            # Also on the thrown path. A counter that a thrown batch leaves
+            # standing blocks every later release for the life of the process,
+            # and nothing in the log would say so.
+            with self._lock:
+                self._in_flight -= 1
         return EmbedOutcome.ready(vectors)
 
     def _warn_run(self, error: BaseException) -> None:

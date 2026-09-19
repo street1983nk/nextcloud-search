@@ -318,7 +318,12 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # worker/poller.py again, this time with release_cutter, which drops the pair
 # _chunker and _model together and leaves the two markers of the build
 # standing. No file came and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "78231d267521e10dcbfafc63e0971e516b4fed864fb71b4b753c89dee4a1df20"
+# Moved on 2026-09-19 a fourth time, by the first half of plan 14-05: exactly
+# one of the 54 files changed its bytes, embed/model.py, which got the idle
+# clock last_use(), the activity counter _in_flight and the switch may_load on
+# embed_query and _embed. No file came and none went, so PACKAGE_FILES stays
+# at 54.
+PACKAGE_TREE_HASH_TODAY = "99e4899cf7be43711169f180ae0fab6c5b0df50ada46a8d8daf475ef866e1938"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
