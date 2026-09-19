@@ -333,7 +333,13 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # query_may_load, the one place that says whether a search may pay for the
 # weights, so that the three callers building a SemanticSide ask instead of
 # repeating. No file came and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "f12f0766c01e2b521fa98a6aa53b0440c727847ae457a4e6d4e5b7386a323b0b"
+# Moved on 2026-09-19 a seventh time, by the second task of plan 14-06:
+# embed/engine.py again, this time with release_if_idle, which reads the
+# holder through _held, holds the clock against the span, checks the identity
+# of the instance under _LOCK and calls the release outside it, and with
+# released_count beside it. No file came and none went, so PACKAGE_FILES
+# stays at 54.
+PACKAGE_TREE_HASH_TODAY = "33ec126633fb86de2b358ac311dbab6b1fbca9095982cb9a64217ce0bc64716a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

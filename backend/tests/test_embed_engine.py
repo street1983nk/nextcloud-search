@@ -1134,8 +1134,17 @@ def test_the_identity_check_compares_objects_and_not_values() -> None:
     # same fields, so a value comparison would be the wrong question: what is
     # asked is whether this is still the very object whose clock was read.
     function = _function_of_the_engine_module("release_if_idle")
-    operators = [
-        type(operator) for node in ast.walk(function) if isinstance(node, ast.Compare) for operator in node.ops
+    checks = [
+        node
+        for node in ast.walk(function)
+        if isinstance(node, ast.Compare)
+        and any(
+            isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name) and inner.func.id == "_held"
+            for inner in ast.walk(node.left)
+        )
     ]
 
-    assert ast.IsNot in operators or ast.Is in operators, "the identity check is an identity check"
+    assert len(checks) == 1, "the holder is read a second time exactly once, and that reading is the check"
+    assert [type(operator) for operator in checks[0].ops] in ([ast.Is], [ast.IsNot]), (
+        "identity and never a value comparison"
+    )

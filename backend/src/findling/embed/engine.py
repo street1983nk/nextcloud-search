@@ -60,7 +60,7 @@ import time
 from typing import TYPE_CHECKING, Final
 
 from findling.config import settings
-from findling.embed.model import LOAD_RETRY_SECONDS, EmbeddingModel, artifacts_present
+from findling.embed.model import LOAD_RETRY_SECONDS, EmbeddingModel, artifacts_present, unload_count
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -198,7 +198,9 @@ def reset() -> None:
     :func:`~findling.embed.model.load_count` reads it as a difference against a
     baseline it took itself, so nothing needs it zeroed, and a counter that can
     be zeroed is one a gate could zero itself green with. The evidence of "one
-    load per process" stays monotonic for the life of the process.
+    load per process" stays monotonic for the life of the process. The unload
+    counter behind :func:`released_count` is not zeroed either, for the same
+    reason and by the same argument: the two are read as one difference.
     """
     global _ENGINE
 
@@ -346,3 +348,80 @@ def query_may_load() -> bool:
     # cold measurement. That consequence belongs in the runbook of plan 14-11
     # and is only named here.
     return settings().embed_idle_release_seconds == 0
+
+
+def release_if_idle(ttl_seconds: int) -> bool:
+    """Let go of the weights when nothing has used them for that long.
+
+    True means this call really released: the engine is gone, the pages have
+    been handed back and :func:`released_count` has risen by one. False is every
+    other answer, and on a container that is being worked on it is almost all of
+    them, because the caller of plan 14-07 runs on a tick and the idle span is
+    the exception.
+
+    **Nothing is built on the way.** The holder is read through :func:`_held`
+    and never through :func:`shared_model`, which is the argument
+    :func:`engine_state` makes for itself one function up: an unloader that
+    filled the holder while asking would be the loading trigger of a container
+    nobody is searching on, once per tick, for the life of the process
+    (T-14-21).
+
+    **The identity check is not theory** (T-14-20). The warm run of MEM-03 runs
+    beside the unload task, so between reading the clock above and letting go
+    below the holder can come to carry a different instance, and that one has
+    just paid for 118 MB of weights. Throwing away the load pair that was bought
+    a millisecond ago is exactly the cost this phase exists to avoid, so the
+    holder is read a second time under :data:`_LOCK` and the release only
+    happens when it is still the same object.
+
+    **The release itself is outside the lock.**
+    :meth:`~findling.embed.model.EmbeddingModel.release` takes its own lock,
+    lets go under it and then runs ``gc.collect()`` and ``malloc_trim(0)``
+    outside it, and both of those block. Holding :data:`_LOCK` across that would
+    block every concurrent :func:`shared_model` question with them (T-14-16).
+    The caller puts the whole of this function through ``asyncio.to_thread``, so
+    the blocking never reaches the event loop either.
+
+    A span of nought or less is answered False without asking the holder
+    anything. Nought is the word for off in
+    ``settings().embed_idle_release_seconds``, the caller should not be here at
+    all with it, and a function that treated it as an unbounded release would be
+    a function with two truths.
+    """
+    if ttl_seconds <= 0:
+        return False
+
+    model_dir = settings().embed_model_dir
+    held = _held(model_dir)
+    if held is None or not held.loaded:
+        return False
+
+    stamp = held.last_use()
+    if stamp is None or time.monotonic() - stamp < ttl_seconds:
+        # None is a holder that has loaded and never embedded anything. That is
+        # not an idle span of infinite length: the clock of ``_embed`` has not
+        # started, nobody has worked, and the next row or search is as likely as
+        # not to be a moment away.
+        return False
+
+    with _LOCK:
+        if _held(model_dir) is not held:
+            return False
+
+    return held.release()
+
+
+def released_count() -> int:
+    """How often this process has let go of tokenizer and weights.
+
+    A pass through of :func:`~findling.embed.model.unload_count`, so that a
+    caller can read the counter beside :func:`~findling.embed.model.load_count`
+    without importing ``embed/model.py`` for one number. It is the same figure
+    and never a second one kept here.
+
+    Monotonic, and :func:`reset` does not zero it, for the reason written at the
+    counter itself: every reader takes a difference against a baseline of its
+    own, nothing needs it zeroed, and a counter that can be zeroed is one a gate
+    could zero itself green with (T-14-17).
+    """
+    return unload_count()
