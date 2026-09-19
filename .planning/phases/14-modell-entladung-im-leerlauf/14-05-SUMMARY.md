@@ -323,3 +323,8 @@ Identitaetspruefung in `release()` wird gebraucht, sobald das Nachwaermen neben
 der Entlade-Aufgabe laeuft, und `last_use()` antwortet `None` fuer einen Halter,
 der noch nie gearbeitet hat, was kein Leerlauf ist und in der Regel eigens
 behandelt gehoert.
+
+## Self-Check: PASSED
+
+Alle drei genannten Quelldateien und die Zusammenfassung liegen auf der Platte,
+alle sechs Commit-Hashes stehen in der Historie.

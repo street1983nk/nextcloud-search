@@ -165,7 +165,7 @@ Plans:
 
 **Owner-Checkpoint**: engineState-Wortwahl (MEM-05) ist am 19.09.2026 entschieden (Zweig B, sechstes Wort `unloaded`, siehe 14-CONTEXT.md) und wird in Plan 14-09 vollzogen. Zwei weitere Checkpoints in der Phase: das Tor des Vorprueflaufs (14-02) und die Abnahme (14-12).
 
-**Plans:** 1/12 plans executed
+**Plans:** 5/12 plans executed
 
 Plans:
 **Welle 1**
@@ -180,7 +180,7 @@ Plans:
 
 - [x] 14-03-PLAN.md: FINDLING_EMBED_IDLE_RELEASE_SECONDS, eigener Leser, sechzehnte Variable
 - [x] 14-04-PLAN.md: Poller: busy-Property und release_cutter (der groessere Halter)
-- [ ] 14-05-PLAN.md: embed/model.py: Uhr, Aktivitaetszaehler, release, malloc_trim, may_load
+- [x] 14-05-PLAN.md: embed/model.py: Uhr, Aktivitaetszaehler, release, malloc_trim, may_load
 
 **Welle 4** *(wartet auf Welle 3)*
 

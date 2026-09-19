@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-04-PLAN.md
-last_updated: "2026-09-19T13:50:00.000Z"
+stopped_at: Completed 14-05-PLAN.md
+last_updated: "2026-09-19T14:10:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 25
-  percent: 76
+  completed_plans: 26
+  percent: 79
 ---
 
 # Project State
@@ -26,20 +26,48 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 4 von 12 abgeschlossen (14-04: die Indexseite kann loslassen)
+Plan: 5 von 12 abgeschlossen (14-05: die Suchseite kann loslassen)
 Status: executing, das Tor der Phase ist offen und der Bau laeuft.
-Naechster Plan ist 14-05.
-Progress: [████████░░] 76%
-Last activity: 2026-09-19 -- 14-04: Poller.busy und Poller.release_cutter stehen,
-13 neue Testfaelle, die zwei Merker der Indexseite ueberleben die Freigabe.
-Aufgerufen wird noch nichts; MEM-02 bleibt offen bis 14-05 (Suchseite) und
-14-07 (Aufrufer).
+Welle 3 ist damit vollstaendig. Naechster Plan ist 14-06.
+Progress: [████████░░] 79%
+Last activity: 2026-09-19 -- 14-05: release(), unload_count(), last_use() und
+may_load stehen an embed/model.py, 20 neue Testfaelle ohne neuen Skip, volle
+Suite 2179 gruen. Beide Halter koennen jetzt loslassen, gerufen wird noch
+keiner; MEM-02 bleibt offen bis 14-07 (Aufrufer), MEM-03 bis 14-06/14-08
+(Nachwaermen).
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-05 (Suchseite): `release()` gibt unter `self._lock` los und zaehlt, ruft
+  `gc.collect()` und `malloc_trim(0)` aber AUSSERHALB davon: beide blockieren,
+  und ein gehaltenes Lock wuerde jede gleichzeitige Suche mitblockieren
+  (T-14-16). Die Reihenfolge sammeln, dann trimmen ist nicht umkehrbar und wird
+  zur Laufzeit und im Quelltext geprueft. Der Vorprueflauf hat die Aufteilung
+  gemessen: `gc.collect()` allein 15,1 bis 18,2 Prozent, der Trim die uebrigen
+  80,2 bis 84,9. Die Zahlen des Research-Beispiels (20 und 5 Prozent) stammen
+  aus der Vorrecherche und sind durch den Lauf ueberholt.
+
+- 14-05: Der Aktivitaetszaehler `_in_flight` steht im SELBEN Lock-Block, in dem
+  die Engine gebunden wird, und nicht dahinter. Dazwischen laege ein Fenster,
+  in dem eine Freigabe aus einem anderen Thread den Heap eines startenden
+  Batches sammeln und trimmen duerfte. Das ist die einzige neue Invariante
+  dieser Phase (T-14-15).
+
+- 14-05: `may_load` sitzt an `embed_query` und `_embed` mit Vorgabe `True`,
+  `embed_passages` bekommt den Schalter bewusst nicht: ueber einem Indexlauf
+  steht keine 1,5-Sekunden-Decke, und nach einer Entladung ist die naechste
+  Zeile des Laufs der richtige Moment zum Wiederladen. Die Regel, wann der
+  Schalter falsch ist, liegt in 14-06; `model.py` liest keine Einstellung.
+
+- 14-05: Keine Identitaetspruefung in `release()`. Sie wird gebraucht, sobald
+  das Nachwaermen aus MEM-03 neben der Entlade-Aufgabe laeuft, also in 14-06
+  oder 14-07. Heute kann kein Weg eine Engine laden, ohne im selben Lock-Block
+  den Aktivitaetszaehler zu erhoehen. Als Auftrag an den naechsten Planer
+  festgehalten, nicht als stillschweigende Auslassung.
 
 - 14-04 (MEM-02, Indexseite): Der Poller bekommt ein oeffentliches Property
   `busy`, das `bool(self._held)` antwortet. Gehaltene Warteschlangenzeilen sind
@@ -557,6 +585,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T13:50:00.000Z
-Stopped at: Completed 14-04-PLAN.md, busy und release_cutter stehen am Poller
+Last session: 2026-09-19T14:10:00.000Z
+Stopped at: Completed 14-05-PLAN.md, release und may_load stehen an embed/model.py
 Resume file: None
