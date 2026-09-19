@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 15-04-PLAN.md
-last_updated: "2026-09-19T22:35:00.000Z"
+stopped_at: Completed 15-05-PLAN.md
+last_updated: "2026-09-19T23:20:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 49
-  completed_plans: 37
-  percent: 76
+  completed_plans: 38
+  percent: 78
 ---
 
 # Project State
@@ -26,18 +26,21 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, Welle A ohne Box**
-Plan: 4 von 16 abgeschlossen (15-01, 15-02, 15-03, 15-04)
+Plan: 5 von 16 abgeschlossen (15-01 bis 15-05)
 Status: Phase 14 ist abgenommen. Phase 15 laeuft; 15-01 hat das Laufverzeichnis
 der Anfahrt bestueckt, 15-02 hat das Runbook auf den Stand dieser Anfahrt
 gebracht (Deckel 46 h / 5,40 USD netto, Block 13b Abbildwechsel, ein Befehl
 fuer "kalt", die Messschritte 6b und 8b), 15-03 hat das Wiederaufwaerm-Werkzeug
 gebaut (95b-wiederaufwaermen.sh, vier Auspraegungen, Rueckgabewerte 2, 29, 30
-und 31), und 15-04 hat den MEM-02-Block bekommen: 94b-grundlast-rueckkehr.sh,
-drei Marken in einem Zug, Rueckgabewerte 2, 29, 31, 32 und 33, sieben boxlose
-Faelle samt Gate gegen die falsche Messgroesse.
-Naechster Plan ist 15-05 (99c-filter-sortierung.sh, der Owner-Messblock D-01).
-Progress: [████████░░] 76% der 49 geplanten Plaene (37 von 49; Phase 16 ist noch nicht geplant)
-Last activity: 2026-09-19 -- 15-04, das Werkzeug der Messgroesse von MEM-02.
+und 31), 15-04 hat den MEM-02-Block bekommen (94b-grundlast-rueckkehr.sh, drei
+Marken in einem Zug, Rueckgabewerte 2, 29, 31, 32 und 33), und 15-05 hat den
+vom Owner bestellten Filter- und Sortierblock gebaut:
+99c-filter-sortierung.sh, drei Sortiermodi plus Blaettern unter Filter,
+Rueckgabewerte 2, 29, 34 und 35, sieben boxlose Faelle samt zwei Driftgates
+(Sortiernamen gegen SORT_MODES, Weiter-Link gezogen statt gebaut).
+Naechster Plan ist 15-06 (92b-wechsel.sh, der Abbildwechsel-Block 13b).
+Progress: [████████░░] 78% der 49 geplanten Plaene (38 von 49; Phase 16 ist noch nicht geplant)
+Last activity: 2026-09-19 -- 15-05, das Werkzeug des Owner-Entscheids D-01.
 
 **Die Deckelzahl, die der Owner in 15-08 vorfindet:** 46 Stunden und 5,40 USD
 netto, aus zehn Posten mit 39 h 22 min Planwert und 15 Prozent Zuschlag. Der
@@ -79,6 +82,36 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
 
+- 15-05: Der Filter- und Sortierblock misst ausschliesslich ueber die
+  Seitenroute, und `scripts/ops/search_load.py` wird weder angefasst noch
+  gerufen. Die beiden OCS-Provider kennen `types` und `sort` nicht (Befund
+  13-12); ein Aufruf des Lastwerkzeugs maesse ungefiltert und saehe dabei aus
+  wie eine Filtermessung. Ein Gate haelt fest, dass sein Name in der Datei nur
+  in Kommentarzeilen vorkommt.
+- 15-05: Die drei Sortiernamen werden im Test aus `SORT_MODES` des Pakets
+  gelesen und gegen die eine Zeile gehalten, in der das Werkzeug sie fuehrt
+  (`SORTIERMODI`). Eine im Test wiederholte Liste waere sich selbst einig an
+  dem Tag, an dem das Erzeugnis einen vierten Namen bekommt, und ein
+  unbekannter Name faellt dort still auf `relevance` zurueck.
+- 15-05: Ausser Seite 1 baut das Werkzeug keine Adresse. Der Weiter-Link wird
+  mit seiner Auszeichnung `findling-pager__step--next` aus der Antwort gezogen,
+  weil der Fingerabdruck ueber die rohen Adresswerte laeuft und eine gebaute
+  Adresse ohne `fp` den stillen Rueckfall auf Seite 1 misst (13-08). Ein Gate
+  verbietet die Positionsangabe im Code des Werkzeugs.
+- 15-05: Die Rueckgabewerte 34 und 35 tragen je zwei Faelle. Abschnitt 7.1 des
+  Runbooks hat ihnen den wachsenden Bestand (34) und die Stufe ohne
+  Antwortzahlen samt doppelter Datei-Kennung (35) gegeben, der Plan 15-05 den
+  Sortierlauf ohne Trefferzahl (34) und den fehlenden Weiter-Link samt
+  verworfenem Cursor (35). Beide Lesarten sind umgesetzt, wie schon bei 32 und
+  33 in 15-04.
+- 15-05: Die gemeldete Seitenzahl wird aus der Marke des Blaetterns gelesen und
+  nicht aus einem Adressparameter. Die Uebersetzung dreht das Wort davor um,
+  die Zahl bleibt eine Zahl, und genau diese Ablesung faengt den stillen
+  Rueckfall.
+- 15-05: Ein Entladeschalter ungleich 0 bricht diesen Block NICHT ab. Er ist
+  ein protokollierter Befund neben den Zahlen; abgebrochen wird nur bei
+  unlesbarer Stellung (29), weil Abschnitt 6.4 die Zeile und nicht die Stellung
+  verlangt.
 - 15-04: Der Indexlauf wird ueber den Weg eines Nutzers angestossen und nicht
   ueber `occ findling:index --restart`. Der Befehl kennt nur --status und
   --restart, und --restart stellt rund 52.000 Dokumente neu in die Schlange:
@@ -878,6 +911,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T22:35:00.000Z
-Stopped at: Completed 15-04-PLAN.md, 94b-grundlast-rueckkehr.sh mit drei Marken in einem Zug, den Rueckgabewerten 2, 29, 31, 32 und 33 und sieben boxlosen Faellen samt Gate gegen die falsche Messgroesse
+Last session: 2026-09-19T23:20:00.000Z
+Stopped at: Completed 15-05-PLAN.md, 99c-filter-sortierung.sh mit drei Sortiermodi und dem Blaettern unter Filter, den Rueckgabewerten 2, 29, 34 und 35 und sieben boxlosen Faellen samt zwei Driftgates
 Resume file: None
