@@ -448,6 +448,27 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 				<description>A whole number between 1 and 2000. The file list is read in pages of this size, with a short breather between them, which is what keeps the check bearable outside the quiet hours. Larger pages are faster and heavier on the Nextcloud database; the server side caps this at 2000 in any case. Anything outside the range falls back to 500.</description>
 				<default>500</default>
 			</variable>
+			<!--
+				The idle release of the embedding model. This is the first
+				FINDLING_EMBED_ variable in this file, and it is deliberately
+				the only one: FINDLING_EMBED_ENABLED exists in the code and is
+				documented in docs/admin-page.md, but it is a hardening
+				candidate and not a requirement of this release, and a shipped
+				variable can never be taken back. The finding is written down
+				here so that the hardening phase finds it rather than
+				rediscovers it.
+
+				Nothing below has to be touched. The release is off as it
+				ships, because the run that weighs it against its own absence
+				still has to happen and because the price of the first search
+				after a release is not measured yet.
+			-->
+			<variable>
+				<name>FINDLING_EMBED_IDLE_RELEASE_SECONDS</name>
+				<display-name>Release the model after idle seconds</display-name>
+				<description>A whole number of seconds, and 0 is the default and means off. Any other value has to lie between 60 and 86400; anything outside that range falls back to the default. When the model has been idle for this long, the container gives up the tokenizer, the splitter and the inference session, and the memory they hold goes back to the machine. The first search afterwards answers from the full text side while the model is warmed up again in the background, so nobody waits for it. A quarter of an hour, so 900, is a reasonable value to start with.</description>
+				<default>0</default>
+			</variable>
 		</environment-variables>
 	</external-app>
 </info>
