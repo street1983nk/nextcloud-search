@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-10-PLAN.md
-last_updated: "2026-09-19T21:10:00.000Z"
+stopped_at: Completed 14-11-PLAN.md
+last_updated: "2026-09-19T21:55:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 31
-  percent: 94
+  completed_plans: 32
+  percent: 97
 ---
 
 # Project State
@@ -26,27 +26,50 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 10 von 12 abgeschlossen (14-10: die neue one_load-Zusage und ihr Gate)
-Status: executing, das Tor der Phase ist offen und der Bau laeuft.
-Welle 6 ist abgeschlossen; Welle 7 (14-11, die Dokumentation) folgt.
-Progress: [█████████░] 94%
-Last activity: 2026-09-19 -- 14-10: die Zusage des Gates ist neu formuliert und
-steht an drei Stellen gleichlautend (Modulkopf, `findings`, Workflow-Text):
-nie zwei Engines gleichzeitig, genau ein Laden je warmem Fenster. Das Werkzeug
-hat eine vierte Phase, die ueber `shared_model().release()` freigibt und ueber
-eine zweite echte Suchrunde nachlaedt; der Bericht traegt neun Zahlen statt
-sieben, `findings` zwei Zweige mehr, und `unloads == 0` ist dort ein Befund und
-kein stilles Gruen. Fuenf Mutationsfaelle statt drei, die zwei neuen belegen
-Exit 1 und den Wortlaut des Befunds. Volle Suite 2258 gruen.
-**MEM-05 ist damit vollstaendig** (14-09 die Admin-Seite, 14-10 die Zusage).
-Offen bleibt die Sichtprobe an der laufenden Instanz, die einen Containerneubau
-braucht und nach 14-12 gehoert.
+Plan: 11 von 12 abgeschlossen (14-11: drei Dokumente ziehen nach)
+Status: executing, das Tor der Phase ist offen und der Bau ist fertig.
+Welle 7 ist abgeschlossen; offen ist nur noch Welle 8 (14-12, die Abnahme).
+Progress: [█████████░] 97%
+Last activity: 2026-09-19 -- 14-11: die Dokumentation ist nachgezogen.
+`docs/embeddings.md` hat einen Abschnitt 10, der den Schalter aus Admin-Sicht
+erklaert, mit den drei Zahlen aus `config.py` und `info.xml`, der gemessenen
+Rueckgabequote samt Maschine und den zwei Lagen, in denen er aus bleibt.
+`docs/performance.md` schreibt die Messgroesse fest: sie heisst "Rueckkehr zur
+Grundlast nach einem Indexlauf" und nie "Grundlast minus X", mit dem
+Aktivierungsspeicher als quantitativer Begruendung und dem Bodensatz von rund
+16 MB auf aarch64, der nie zurueckkommt; die Ladezeit nach einer Entladung
+bleibt ausdruecklich ohne Zahl und zeigt auf Phase 15. Das Runbook der
+Box-Anfahrt fuehrt die Stellung des Schalters als sechste protokollpflichtige
+Groesse (6.4) und traegt in 7.2 den A/B-Messschritt mit vier Auspraegungen,
+Exit-Codes 29 bis 31 und der Aufwaermregel: ein Aufruf der Diagnose-Route
+(`ranked_sides`) LAEDT das Modell und darf vor einer Kaltmessung nicht kommen.
+Keine Zeile Python oder PHP angefasst, 282 Faelle der beiden Dokumenttests gruen.
+**Der Bau der Phase 14 ist damit inhaltlich fertig**, es fehlt nur die Abnahme
+14-12 mit ihrem Owner-Checkpoint.
+
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-11 (Dokumentation): Der alte Abschnitt "Modell-Entladung nach Leerlauf:
+  nein, mit drei Zahlen" in `docs/performance.md` wird nicht geloescht, sondern
+  bekommt einen datierten Nachtrag. Seine drei Zahlen gelten weiter (die
+  Entladung senkt weder die Spitze eines Indexlaufs noch die Grundlast eines
+  Containers, der nie eingebettet hat); ueberholt ist nur sein Schluss, und
+  Punkt 3 ist durch die Degradationsnaht aus 14-08 entschaerft.
+
+- 14-11: Die Messgroesse steht als ASCII-Bezeichner
+  `Rueckkehr zur Grundlast nach einem Indexlauf` in Backticks, obwohl
+  `docs/performance.md` sonst Umlaute in Ueberschriften traegt. Sie ist ein
+  Name, gegen den spaeter gegriffen wird, und ein Name traegt keine Umlaute.
+
+- 14-11: Der A/B-Messschritt des Runbooks beginnt mit den Kaltmessungen. Jede
+  Messung waermt den Seitencache des Wirts, und eine einmal gewaermte
+  Kaltmessung ist ohne erneutes Leeren nicht wiederholbar. Die Reihenfolge ist
+  deshalb bindend und keine Empfehlung.
 
 - 14-10 (MEM-05, die Zusage): Die Freigabe der vierten Phase laeuft ueber
   `shared_model().release()` und nicht ueber `release_if_idle`. Die Politikstelle
