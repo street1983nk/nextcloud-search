@@ -101,7 +101,7 @@ class _Model:
     ``embedding_unavailable`` verdict and the vector branch would never run.
     """
 
-    def embed_query(self, text: str) -> EmbedOutcome:
+    def embed_query(self, text: str, *, may_load: bool = True) -> EmbedOutcome:
         return EmbedOutcome.ready([tuple(1.0 if index == 1 else 0.0 for index in range(DIMENSIONS))])
 
 

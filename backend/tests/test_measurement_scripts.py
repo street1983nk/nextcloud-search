@@ -349,7 +349,12 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # lifespan, _release_when_idle, with its tick RELEASE_TICK_SECONDS, its stop
 # budget RELEASE_STOP_SECONDS and the fourth stop event beside the two that
 # were already there. No file came and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "059379c29a82542dbf6642e36fa8a39208d4921e5980b14c1827b7530dbb6836"
+# Moved on 2026-09-19 a tenth time, by the first task of plan 14-08: exactly
+# one of the 54 files changed its bytes, index/search.py, which got the
+# keyword may_load on the QueryEmbedder protocol, the fourth field may_load
+# on SemanticSide and the same keyword on both of its embed_query calls. No
+# file came and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "19b98f33fea6c8f124dbbd58a5e9b1abd45db675a9a377575f8d49d35221c38d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

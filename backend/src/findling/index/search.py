@@ -133,9 +133,14 @@ class QueryEmbedder(Protocol):
     itself for the same reason :class:`ByteRange` below is one: the loop can then
     be exercised without 118 MB of weights on the machine that runs the suite,
     and the wrapper is free to change shape without this module noticing.
+
+    ``may_load`` travels with the call because the reason not to load lies with
+    the caller and never with the model: a round that runs under the 1.5 second
+    ceiling of a user route says so here, and one that has all the time in the
+    world says nothing and gets the behaviour of every round before this phase.
     """
 
-    def embed_query(self, text: str) -> EmbedOutcome: ...
+    def embed_query(self, text: str, *, may_load: bool = True) -> EmbedOutcome: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,11 +155,22 @@ class SemanticSide:
     about what went wrong, and the two failure branches below are exactly where
     a library message would drag the search somebody typed into the log
     (T-06-27). Both of them print a type name and nothing else.
+
+    ``may_load`` is what this round lets the model spend. False means: answer
+    out of the engine you are holding or give the ``embedding_unavailable``
+    verdict, but do not go and fetch 118 MB of weights while somebody is
+    waiting. **Its default is True on purpose.** A round that says nothing
+    about the matter behaves exactly as it did before this phase, which keeps
+    every caller that does not know about the release, the diagnosis route
+    among them, on the path it has always taken. Who sets it to False, and on
+    what grounds, is decided in ``embed/engine.py::query_may_load`` and never
+    here: this module reads no setting.
     """
 
     vectors: VectorStore
     model: QueryEmbedder
     text: str
+    may_load: bool = True
 
 
 def _ranked(
@@ -248,7 +264,13 @@ def _semantic_documents(
     if semantic is None:
         return []
     try:
-        outcome = semantic.model.embed_query(semantic.text)
+        # The switch of the round, handed on and never decided here. Is the
+        # answer ``EmbedOutcome.unavailable()``, this function returns an empty
+        # list, the merge becomes the identity on the lexical ranking and the
+        # user gets full text hits. That is D-19, the path exists, it is tested,
+        # and a container without a model walks it every day. A release
+        # therefore enters no new branch, it enters an old one.
+        outcome = semantic.model.embed_query(semantic.text, may_load=semantic.may_load)
         if not outcome.available or not outcome.vectors:
             # The honest verdict of the wrapper rather than an exception, and it
             # is the ordinary state of a container built without the model. Same
@@ -764,7 +786,7 @@ def _rank_chunks(semantic: SemanticSide | None, file_ids: Sequence[int]) -> dict
     if semantic is None:
         return {}
     try:
-        outcome = semantic.model.embed_query(semantic.text)
+        outcome = semantic.model.embed_query(semantic.text, may_load=semantic.may_load)
         if not outcome.available or not outcome.vectors:
             # The honest verdict of the wrapper rather than an exception, and
             # the ordinary state of a container built without the model. Same

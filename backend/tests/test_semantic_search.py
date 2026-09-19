@@ -173,7 +173,7 @@ class Embedder:
     def __init__(self, answers: dict[str, tuple[float, ...]]) -> None:
         self._answers = answers
 
-    def embed_query(self, text: str) -> EmbedOutcome:
+    def embed_query(self, text: str, *, may_load: bool = True) -> EmbedOutcome:
         vector = self._answers.get(text)
         if vector is None:
             return EmbedOutcome.unavailable()
@@ -187,7 +187,7 @@ class BrokenEmbedder:
     worth something if there is something to leak.
     """
 
-    def embed_query(self, text: str) -> EmbedOutcome:
+    def embed_query(self, text: str, *, may_load: bool = True) -> EmbedOutcome:
         raise RuntimeError(f"the engine choked while reading {text}")
 
 
