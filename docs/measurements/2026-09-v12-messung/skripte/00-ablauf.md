@@ -26,6 +26,28 @@ Zwei Sätze vorweg, weil sie den Rest tragen:
   mit Datum und Deckel trägt der Owner am Phase-15-Checkpoint ein, bevor die
   erste Minute läuft.
 
+**Nachtrag vom 19.09.2026, zur Geltung dieser Datei.** Die beiden Sätze oben
+sind vor der Phase 15 geschrieben worden und bleiben stehen, weil sie den
+ursprünglichen Zuschnitt dieses Laufs benennen. Seit der Planung der Phase 15
+ist dieser Lauf **die Anfahrt selbst**: er beweist zusätzlich die vier offenen
+Messaufträge des Milestones, also die Wirkung der Top-up-Route auf die Laufzeit,
+die Wiederaufwärm-Kosten der Entladung (MEM-01), die Rückkehr zur Grundlast nach
+einem Indexlauf (MEM-02) und den Filter- und Sortierblock auf dem Vollbestand
+(D-01). Der alte Satz wird dadurch nicht falsch, sondern eng: er beschreibt den
+Lauf, wie er am 14.09.2026 geplant war, und nicht den, der gefahren wird. Was er
+weiterhin richtig sagt, ist die Trennung selbst: eine Aussage über die Werkzeuge
+ist keine über das Erzeugnis, und keine der beiden wird der anderen
+zugeschlagen.
+
+**Der Deckel ist seit dem 19.09.2026 neu gerechnet.** Die Zahl oben, 42 h und
+4,90 USD netto, ist der Vorgängerstand vom 16.09.2026. Das Rechenblatt in
+`docs/runbook-messbox.md`, Abschnitt 2, steht seit Plan 15-02 auf **46 h und
+5,40 USD netto**, weil drei Posten dazugekommen sind, die im alten Blatt
+vollständig fehlten: der Abbildwechsel, der MEM-02-Block und der Filter- und
+Sortierblock. Der Vorgängerstand bleibt sichtbar, damit die Differenz ablesbar
+ist und nicht nur die Steigerung. Freigegeben wird die Zahl weiterhin vom Owner,
+mit Datum, am Checkpoint der Phase 15 und vor der ersten Minute.
+
 ---
 
 ## 1. Was dieser Lauf misst
@@ -82,6 +104,92 @@ dem Hochladen der 39 Dateien. Nur **24** selbst fällt erst nach Upload und
 Indexierung, weil ein Rang vorher nicht existiert; genau deshalb gehört die
 Sondenfrage vor die Anfahrt.
 
+### 2.1 Nachtrag vom 19.09.2026: die Schrittfolge der Anfahrt, zwoelf Zeilen
+
+Die fünf Schritte oben bleiben im Wortlaut stehen. Sie sind die Fassung, die den
+Beweis der zwei Messwerkzeuge und der einen Messbedingung trägt, und ihre
+Unverändertheit ist Teil ihres Werts. Bindend für die Anfahrt ist die Tabelle
+darunter: sie nummeriert nach `docs/runbook-messbox.md`, Abschnitt 7, damit
+beide Dateien im Gleichschritt stehen, mit denselben Schrittnummern, denselben
+Werkzeugen und denselben Rückgabewerten.
+
+**Von den fünf alten Nummern wandert genau eine.**
+
+| Alte Nummer | Neue Nummer | Schritt |
+|---|---|---|
+| 1 | 1 | Zustandsprüfung und Nullstandsbeleg |
+| 2 | 2 | Cron-Konfigurationszweig |
+| 3 | 3 | Bestandsvorlauf der Sonde |
+| 4 | **7** | Sprachfall-Lauf mit Abschnitt 3b |
+| 5 | 5 | Cron-Wirkungszweig |
+
+Wo oben "Schritt 4" steht, ist also der Sprachfall-Lauf gemeint und nicht der
+Volllauf; die beiden Vorbedingungen, die der Absatz darüber nennt, gehören
+unverändert zu ihm. Die neue Nummer 4 ist der Volllauf, den die alte Tabelle
+nicht als eigenen Schritt führte, weil er dort nur der Träger des
+Wirkungszweiges war.
+
+| Nr | Schritt | Werkzeug | Rohdatei | Die Aussage, an der der Schritt haengt |
+|---|---|---|---|---|
+| 0 | **Abbildwechsel auf den v1.2-Stand**, vor der Zustandsprüfung und genau einmal | `ABBILD_DIGEST="sha256:<hex>" ./92b-wechsel.sh` | `92b-wechsel.txt`, `40b-baumhash.txt` | Der gemessene Stand ist benannt: `baumhash-gleich ja`, der zurückgelesene Digest im Protokoll, beide cgroup-Felder auf 2147483648. Ohne diese Zeilen gehört jede Zahl danach zu einem Zustand, den niemand benennen kann |
+| 1 | Zustandsprüfung und Nullstandsbeleg | `./93-nullstand.sh`, `occ findling:index --restart -n` | `04-bestand-vor-der-messung.txt`, `93-nullstand.txt` | 52.111 indexiert, 37 übersprungen, 0 fehlgeschlagen, 3.9Gi, 2 Kerne, aarch64, und nach dem Zurücksetzen ein abgelesener Nullstand. Stimmt eines davon nicht, endet die Anfahrt hier |
+| 2 | Cron-Konfigurationszweig, vor jedem Messblock | `./97-cron-vorpruefung.sh vorher` | `97-cron-vorpruefung-vorher.txt` | Modus und Takt der Instanz stehen als Block im Protokoll, mit der Pflichtzeile `cron-intervall-ist` und ihrer Quelle |
+| 3 | Bestandsvorlauf der Sonde | Abschnitt 0 von `./98c-sprachfaelle.sh`, das `73-bestand-sonde.py` in den Container trägt | Abschnitt 0 in `05-sprachfaelle.txt` | Je Begriff der ungedeckelte Bestand und die Belegung beider Ranglisten, im Prozess gemessen. Die Zahl 26 darf hier nicht mehr auftauchen |
+| 4 | **Volllauf beider Spuren**, detached gestartet | `./96-volllauf.sh`, daneben `./96b-waechter.sh` | `96-volllauf.csv`, `96b-waechter.txt` | Die Laufzeit bis zum letzten Vektor, gegen die 26 h 37 min des v1.1-Laufs. Das ist der Wirkungsbeleg der Top-up-Route und die längste Einzelzeile des Deckels |
+| 5 | Cron-Wirkungszweig, mit dem Volllauf gestartet und neben ihm laufend | `./97-cron-vorpruefung.sh waehrend` | `97-cron-vorpruefung-waehrend.txt` | Der Beweis der Messbedingung: Scheibenabstand, die Zahl der Lesungen ohne Vorrat und die Ablesereihe mit ihrem Intervall |
+| 6 | Laststufen 1, 4, 8, 12 und 16, je mit einem Entscheid zu den regressiven Stufen | `./95-spitze.sh`, `./97-nebenlaeufigkeit.sh` über `scripts/ops/search_load.py` | `95-*.json`, `95-*.csv`, `97-nebenlaeufigkeit.txt` | Die p95-Reihe gegen das Gruppenbudget von 2.500 ms. Eine Stufe ohne Antwortzahlen wird als solche protokolliert und nicht geschätzt |
+| 6b | **Filter- und Sortierblock:** Sortierung auf grossem Bestand, Blättern unter Filter | `./99c-filter-sortierung.sh` | `99c-filter-sortierung.txt` | Erstmessung ohne Vergleichszeile: was `newest` und `oldest` auf dem Vollbestand kosten, und ob der Cursor über drei Seiten hält |
+| 7 | **Sprachfall-Lauf mit Abschnitt 3b** | `CI_LAUF=<laufnummer> ./98c-sprachfaelle.sh` | `05-sprachfaelle.txt` | Der Beweis von DI-10-02 und DI-11-01: je Fall ein dreiwertiges Urteil am Rang gegen die Schwelle 64, eine Bilanzzeile mit zwei Zahlen und ein `ci-beleg` mit einer Laufnummer |
+| 8 | **Wiederaufwärm-A/B**, vier Ausprägungen, je Lauf genau eine | `./95b-wiederaufwaermen.sh 1` bis `./95b-wiederaufwaermen.sh 4` | `95b-wiederaufwaermen-1.txt` bis `95b-wiederaufwaermen-4.txt` | Was die Entladung aus MEM-01 an Nachladezeit kostet, gemessen als Kreuz aus zwei Schalterstellungen und zwei Zuständen des Seitencaches |
+| 8b | **MEM-02:** Rückkehr zur Grundlast nach einem Indexlauf | `./94b-grundlast-rueckkehr.sh` | `94b-grundlast-rueckkehr.txt` | Ob beide Speicherhalter nach Ablauf der Frist wieder frei sind, und ausdrücklich nicht, um wie viel eine Zahl gefallen ist |
+| 9 | Endmessungen und Gegenproben, vor jedem zerstörenden Schritt | `./90-bestand.sh`, der Vektorbestand, die Kostenzeilen aus `box.env` | `90-bestand.txt`, `96-vektorbestand.txt`, `93-kosten-und-verbleib.txt` | Was hier nicht erhoben ist, ist nach dem Abbau nicht mehr erhebbar. Dieser Schritt ist die Vorbedingung der Abbau-Checkliste |
+
+**Zur Aufrufform, einheitlich fuer alle Werkzeuge.** Vierzehn der achtzehn
+Werkzeuge dieses Verzeichnisses stehen mit der Rechtemaske `100644` im Index,
+nur `96-volllauf.sh`, `96b-waechter.sh`, `96c-lesen.py` und
+`96d-statusbeobachter.py` mit `100755`. Ein Auscheck auf der Box erbt genau
+diese Masken, und der erste Aufruf `./97-cron-vorpruefung.sh vorher` endete dort
+mit **126** und "Permission denied", in der bezahlten Zeit und mit einer
+Meldung, die in keinem der beiden Dokumente erklärt ist. Die Auflösung ist eine
+Zeile, einmal im Laufverzeichnis der Box, **vor Schritt 0**, und ihre
+Rückleseprobe gehört in die Rohdatei des Abbildwechsels:
+
+```sh
+cd <checkout>/docs/measurements/2026-09-v12-messung/skripte
+chmod +x *.sh *.py
+ls -l | awk '{ print $1, $NF }'
+```
+
+Danach gilt in dieser Datei und im Runbook **eine** Form: `./werkzeug.sh`, mit
+den Umgebungsvariablen davor und den Argumenten dahinter. Die Form
+`sh werkzeug.sh` bleibt der Weg, auf dem ein Werkzeug ein anderes ruft, so wie
+`92b-wechsel.sh` den Baumhashbeweis `40b-baumhash.sh` ruft; sie braucht keine
+Rechtemaske und ist dort die richtige. Für den Operator ist sie es nicht, weil
+zwei Formen nebeneinander die eine Frage offenlassen, welche von beiden gilt.
+
+### 2.2 Kalt wird hergestellt, nicht bewahrt
+
+Schritt 3 fährt über die Diagnose-Route und wärmt damit den Container, und
+Schritt 6 lädt das Modell absichtlich vor der Reihe. Beide liegen vor Schritt 8,
+und beide sind nicht verschiebbar. Die Kaltmessungen des Schrittes 8 laufen
+deshalb **nach Schritt 6 und 7**, und jede von ihnen beginnt mit einem
+Containerneustart, einer gefahrenen Ruhezeit und danach dem geleerten
+Wirtscache. Gemeint ist damit ein Befehl und kein Wort, **auf dem Wirt und nicht
+im Container**: `sync`, dann der Wert `3` nach `/proc/sys/vm/drop_caches`, dann
+`free -h` als Rückleseprobe, deren Ausgabe in die Rohdatei gehört.
+
+**Die Nebenwirkung steht daneben und nicht im Bericht danach.** Das Leeren
+verwirft auch den mmap-Cache des Tantivy-Index. Die kalte Suche misst damit
+**beide Hälften kalt**, die Semantik und den Volltext, und nicht allein das
+Nachladen der Gewichte. Das ist die gewollte schlechtere Hälfte der Wahrheit:
+sie ist der Fall, den ein Nutzer nach einem Neustart der Box wirklich bekommt,
+und sie muss im Bericht dastehen, sonst liest sich eine Zahl als
+Wiederaufwärmkosten, die zum Teil Indexkosten sind.
+
+Diese Zeile steht hier, **bevor** die Box steht, weil sie die Messung definiert
+und nicht erklärt. Eine Reihenfolge, die nach der Messung begründet wird, ist
+keine Reihenfolge, sondern eine Auswahl.
+
 ---
 
 ## 3. Die Erwartung, vorher aufgeschrieben
@@ -104,6 +212,77 @@ Anfahrt.** Das gilt besonders für E3 und E5. Wenn der Scheibenabstand diesmal
 unter dem Deckel bleibt, ist der v1.1-Befund dadurch weder widerlegt noch
 erklärt: die Instanz ist aus einem Snapshot neu aufgebaut, und die Top-up-Route
 ist seit v1.1 dazugekommen. Genau dieser Satz gehört dann in den Bericht.
+
+### 3.1 Nachtrag vom 19.09.2026: die Erwartungen E8 bis E14
+
+Sieben weitere Erwartungen, je mit ihrer Zahl und ihrer Herkunft, und aus
+demselben Grund wie die sieben oben: sie stehen vor dem Lauf, und der Commit
+dieser Datei ist ihr Zeitstempel. Der Satz "eine verfehlte Erwartung ist ein
+Ergebnis" gilt für sie unverändert mit.
+
+- **E8, Abbildwechsel.** Nach dem Wechsel meldet `40b-baumhash.sh`
+  `baumhash-gleich ja`, und der aufgelöste Digest steht als protokollierte Zeile
+  daneben. Herkunft: Befund L-05 der Phase 11 und der Abschnitt 6 des Runbooks.
+  Der Digest ist die Notiz und der Baumhash der Beweis; ein Lauf gegen ein
+  Abbild, dessen Stand niemand benennen kann, misst nichts Nennbares.
+
+- **E9, Volllauf.** Die Laufzeit beider Spuren liegt **unter 26 h 37 min**.
+  Herkunft: der v1.1-Lauf brauchte genau so lange und war davon 5,85 h ohne
+  Arbeitsvorrat, und die Top-up-Route ist genau dagegen gebaut. Dies ist
+  ausdrücklich eine Erwartung und **kein Planwert**: der Deckel rechnet weiter
+  mit 26 h 37 min, weil ein Planwert, der eine Verbesserung vorwegnimmt, genau
+  der Fehler ist, der den v1.1-Deckel gerissen hat.
+
+- **E10, Laststufen.** Die Stufen 1 und 4 halten das Gruppenbudget von
+  2.500 ms, die Stufe 8 hält es mit **kleinerer Reserve als 374,5 ms**, und die
+  Stufen 12 und 16 reissen es weiterhin. Herkunft: die Reihe aus
+  `docs/audits/2026-09-phase-11/` mit 464,3 ms, 1.068,0 ms, 2.125,5 ms,
+  3.453,4 ms und 4.446,2 ms. **Die neuen Zahlen dürfen schlechter aussehen**,
+  und das wäre kein Befund über die Suche: seit dem 10.09.2026 zählt der Zähler
+  abgebrochene Aufrufe nicht mehr als beantwortet (DI-10-01), also misst er
+  denselben Zustand strenger.
+
+- **E11, Filter und Sortierung.** `newest` und `oldest` antworten auf dem
+  Vollbestand nicht um mehr als den **Faktor zwei** langsamer als `relevance`,
+  und drei geblätterte Seiten melden die Seitenzahlen **1, 2, 3** ohne eine
+  Datei-Kennung zweimal. Herkunft: der Sortierzweig ist rein lexikalisch und
+  trägt keine Vektorhälfte (13-02), und der Cursor-Fingerabdruck hält oder er
+  hält nicht (13-08). Dies ist eine **Erstmessung ohne Vergleichszeile**: es
+  gibt keinen v1.1-Wert, neben den diese Zahlen im Bericht geraten dürften.
+
+- **E12, Wiederaufwärmen.** Die erste Suche nach einer Entladung bleibt **unter
+  1,5 s**. Herkunft: auf der Entwicklungsmaschine 1,37 bis 1,44 s gegen warm
+  0,41 bis 0,48 s, und die Box ist langsamer als sie. **Ein Reissen ist hier ein
+  Ergebnis und keine Störung:** die Marge war schon bei der Abnahme der Phase 14
+  ausdrücklich als dünn benannt, und die Zahl der Box ist genau die, wegen der
+  sie benannt wurde.
+
+- **E13, MEM-02.** Die Rückkehr zur Grundlast nach einem Indexlauf liegt **über
+  300 MB**, und der Bodensatz, der nicht zurückkommt, liegt bei **rund 16 MB**.
+  Herkunft: 376,3 MB Rückgabe in der Sichtprobe aus 14-12 auf einer Maschine
+  ohne `malloc_trim`, und 17,1 MB Zielast über fünf Zyklen im Vorprüflauf auf
+  aarch64, davon 15,9 MB allein im ersten Zyklus.
+
+- **E14, das Belegkriterium fuer den Vorschlagswert 900 s.** Belegt werden die
+  **Folgen** einer Frist und nie die Frist selbst. Der Vorschlagswert bleibt bei
+  900 s, wenn **beide** Bedingungen halten: die Rückkehr zur Grundlast liegt
+  über 300 MB (E13) **und** die erste Suche nach einer Entladung bleibt unter
+  1,5 s (E12).
+  - **Reisst E12**, wird der Vorschlagswert nicht korrigiert. Seine Empfehlung
+    bekommt die gemessene Zahl der Box daneben und den Satz, für welche
+    Instanzen er nicht taugt. Eine Frist, die Speicher freigibt und dafür die
+    erste Suche über die Decke hebt, ist ein Tausch und keine Einstellung.
+  - **Reisst E13**, ist die Frist die falsche Stellschraube, und der Befund
+    gehört an die Entladung selbst und nicht an ihren Zeitpunkt. Ein Schalter,
+    nach dessen Ablauf nichts zurückkommt, wird nicht anders terminiert, sondern
+    in Frage gestellt.
+  - **Die verkürzte Ruhezeit ändert daran nichts.** Die Messung stellt die Frist
+    auf 60 bis 120 s statt auf 900 s (D-02, Owner-Entscheid vom 19.09.2026) und
+    misst damit **denselben Mechanismus** bei einem Bruchteil der Box-Zeit. Das
+    ist die Begründung, die im Protokoll steht, und die einzige Einschränkung
+    ist, dass diese Messung über die **Häufigkeit** von Entladungen im Alltag
+    nichts sagt. Der Vorschlagswert 900 s selbst bleibt eine gekennzeichnete
+    Schätzung (Owner-Entscheid aus 14-12).
 
 ---
 
@@ -134,6 +313,45 @@ Skripts: der Rückgabewert einer Pipeline gehört zu `tee`, und ein Abbruch
 innerhalb des Blocks verließe nur die Subshell. Die Verweigerung wäre dann eine
 Zeile in einer Rohdatei, die niemand liest.
 
+### 4.1 Nachtrag vom 19.09.2026: die Abbruchwerte 29 bis 39
+
+Elf weitere Bedingungen, in derselben Form und mit denselben Nummern wie in
+`docs/runbook-messbox.md`, Abschnitt 7.1. Auch sie setzen den Katalog fort,
+statt ihn zu verschieben: eine einmal vergebene Zahl wird nicht umgehängt, damit
+eine Rohdatei aus einem früheren Lauf lesbar bleibt. Deshalb steht 6b bei 34 und
+35, obwohl es vor 8b läuft, das bei 31 bis 33 steht.
+
+| Bedingung | Wo sie greift | Folge |
+|---|---|---|
+| Die Stellung des Entladeschalters war für einen Messschritt nicht ablesbar | Schritt 8, und vor jedem anderen Messblock | Rückgabewert **29**. Ein Lauf ohne protokollierte Stellung gilt als unvollständig, wie einer ohne Cron-Intervall (Abschnitt 6.4 des Runbooks) |
+| Vor einer Kaltmessung wurde die Diagnose-Route gerufen | Schritt 8, vor Ausprägung 1 oder 3 | Rückgabewert **30**. Die Route lädt das Modell, weil sie keine Nutzerroute ist. Die Messung wird wiederholt oder mit dem Aufwärmeffekt im Protokoll gefahren, nie herausgerechnet |
+| Der Ast mit eingeschaltetem Schalter hat keine Entladung erlebt | Schritt 8, Ausprägung 1 und 2 | Rückgabewert **31**. Kein `unloaded` und kein Entladezähler über null heisst: gemessen würde das Nachwärmen von etwas, das nie losgelassen wurde |
+| Die Grundlast vor dem Indexlauf wurde nicht abgetastet | Schritt 8b, vor dem Anstoss | Rückgabewert **32**. Eine Rückkehr ohne den Wert, zu dem zurückgekehrt wird, ist keine Messgrösse, sondern eine Zahl |
+| Der Container wurde zwischen den beiden Abtastungen neu gebaut | Schritt 8b, zwischen den Abtastungen | Rückgabewert **33**. Ein neu gebauter Container startet auf seiner Grundlast, und die Differenz wäre dann ein Neustart und keine Freigabe |
+| Die Sortierung lief gegen einen Bestand, der noch wuchs | Schritt 6b, vor der ersten Stufe | Rückgabewert **34**. Die Endzahl des Volllaufs muss stehen, sonst misst die Sortierung zwei verschiedene Bestände unter einer Zahl |
+| Eine Filter- oder Sortierstufe lieferte keine Antwortzahlen, oder zwei aufeinander folgende Seiten trugen dieselbe Datei-Kennung | Schritt 6b | Rückgabewert **35**. Ein Blättern, das eine Kennung zweimal ausliefert, ist ein Befund über die Seitenroute und keine Sortierzahl |
+| Der Baumhash fehlt, ist nicht dreifach verankert oder meldet `baumhash-gleich nein`, oder der Container läuft nach der Registrierung auf einer anderen Abbildkennung als der geprüften | Schritt 0, vor der ersten Messung und noch einmal unmittelbar danach | Rückgabewert **36**. Jede Zahl danach gehörte zu einem Zustand, den niemand benennen kann |
+| Mehr als eine Nextcloud läuft an diesem Docker-Dienst, oder die Zählung war nicht lesbar | Schritt 0, unmittelbar vor jedem `unregister --rm-data` | Rückgabewert **37**. Der Volumenname folgt allein aus der App-Kennung; am 07.09.2026 hat genau das ein Messvolumen gekostet. Eine unlesbare Zählung gilt als ungleich eins |
+| Der Arbeitsbaum auf der Box ist nicht sauber | Schritt 0, vor dem Pull | Rückgabewert **38**. Ein Baumhash gegen einen veränderten Arbeitsbaum belegt nichts |
+| Die harte Grenze hat die Registrierung nicht überlebt | Schritt 0, nach der Registrierung | Rückgabewert **39**. Gelesen wird aus der cgroup, erwartet werden 2147483648 in beiden Feldern; jede andere Zahl misst eine andere Maschine als v1.1 |
+
+**Der Schlussabsatz oben gilt unverändert weiter, und die elf neuen Werte stehen
+ebenfalls unterhalb der `tee`-Pipeline ihres Skripts.** Der Rückgabewert einer
+Pipeline gehört zu `tee`; ein Abbruch innerhalb des Blocks verliesse nur die
+Subshell, und die Verweigerung wäre eine Zeile in einer Rohdatei statt ein
+Abbruch.
+
+**Die eine Ausnahme ist die Verweigerung vor der ersten Zeile.** Fünf Werkzeuge
+prüfen ihre Pflichtangabe, bevor eine Rohdatei entsteht, und enden mit **2** und
+der Benutzung auf stderr: `92b-wechsel.sh` ohne `ABBILD_DIGEST`,
+`95b-wiederaufwaermen.sh` ohne Ausprägung, `97-cron-vorpruefung.sh` ohne Zweig
+und `94b-grundlast-rueckkehr.sh` wie `99c-filter-sortierung.sh` mit einem
+Argument, das sie nicht kennen. Dieser Abbruch steht mit Absicht **oberhalb**
+der Pipeline: ein Lauf, der vor seiner ersten Messung endet, soll keine Rohdatei
+hinterlassen. `98c-sprachfaelle.sh` bleibt die Ausnahme davon mit **22** für die
+fehlende Laufnummer, weil diese Zahl aus der gefahrenen Vorgängerfassung stammt
+und nicht umgehängt wird.
+
 ---
 
 ## 5. Nach dem Lauf
@@ -152,3 +370,22 @@ des Belegs und wird danach nicht mehr angefasst.
 
 Vor dem Fertigmelden läuft das Vokabular-Gate lokal über die Dateien dieses
 Verzeichnisses, wie über jede nach außen sichtbare Datei dieses Projekts.
+
+**Nachtrag vom 19.09.2026: fuer welche Werkzeuge ein Waechter nachgezogen
+wird.** Der Absatz oben nennt zwei Skripte, weil es damals zwei waren. Gefahren
+werden auf dieser Anfahrt sechs neue oder fortgeschriebene Fassungen, und für
+jede von ihnen gehört nach dem Lauf eine Prüfsumme in
+`backend/tests/test_measurement_scripts.py`, wie sie die älteren Fassungen
+tragen:
+
+- `98c-sprachfaelle.sh`
+- `97-cron-vorpruefung.sh`
+- `95b-wiederaufwaermen.sh`
+- `94b-grundlast-rueckkehr.sh`
+- `99c-filter-sortierung.sh`
+- `92b-wechsel.sh`
+
+Der Grund ist derselbe wie bei den beiden Vorgängerinnen und er ist keine
+Formalie: eine gefahrene Messfassung ist Teil des Belegs und wird danach nicht
+mehr angefasst. Ein Wächter, der erst nach der ersten Nachbesserung entsteht,
+schützt die falsche Fassung.
