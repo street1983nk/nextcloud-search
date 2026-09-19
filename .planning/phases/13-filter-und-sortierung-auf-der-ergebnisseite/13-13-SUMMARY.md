@@ -473,6 +473,47 @@ der echte Nur-Tastatur- und Screenreader-Durchgang (13, 14), hoher Kontrast
 der volle Paraphrasen-Fall auf einer Instanz mit Vektorbestand (4), dazu die
 zwei bekannten Checkpoint-Punkte oben und der Nebenbefund "File contents".
 
+## Nachtrag 19.09.: Abnahme-Session, vier Proben per Browser-Automation nachgezogen
+
+Auf Wunsch des Owners wurden die vier automatisierbaren Restproben per
+Playwright an der laufenden Instanz gefahren (Port 8090, testuser). Damit
+steigen die Proben 12, 13, 15 und 16 von "strukturell bestanden" auf
+"gemessen bestanden":
+
+- Probe 13 (Tastatur): BESTANDEN. Reiner Tab-Durchgang protokolliert:
+  Reihenfolge Suchfeld-Bereich, dann PDF, Dokumente, Tabellen,
+  Praesentationen, Bilder, Text, Heute, Letzte 7 Tage, Letzte 30 Tage,
+  Dieses Jahr, Relevanz, Zuletzt geaendert, Aelteste zuerst, erste
+  Trefferzeile. Genau ein Stopp je Chip, sichtbarer Fokus-Umriss auf jedem
+  der 14 Bedienelemente und der Trefferzeile, Enter aktiviert den
+  fokussierten Chip (Adresse traegt danach types=pdf).
+- Probe 15 (hoher Kontrast): BESTANDEN, jetzt inklusive forced-colors.
+  Unter emuliertem forced-colors: active ist der aktive Chip ohne Farbe
+  erkennbar (x-Icon sichtbar, Rahmen), Text in Systemfarben lesbar. Das
+  dunkle Theme war bereits am 18.09. gemessen (alle Kontraste ueber 4.5:1).
+- Probe 12 (ohne JavaScript): BESTANDEN. Mit per CDP abgeschalteter
+  Script-Ausfuehrung wurden alle fuenf Bedienwege real gefahren: Chip
+  (types=pdf), Sortierlink (sort=newest, 25 Datumszeilen), Blaettern
+  (page=2 mit cursors und fp), Alle Filter zuruecksetzen, und das
+  GET-Formular (query=Beendigung, 2 Treffer). EINORDNUNG: Nextclouds
+  eigener noscript-Hinweis ("Diese Anwendung benoetigt JavaScript zum
+  ordnungsgemaessen Betrieb...") legt sich als Overlay ueber die Seite und
+  faengt Mausklicks ab; per Tastatur ist alles voll bedienbar. Das ist
+  Verhalten der Nextcloud-Shell, nicht der App; die Findling-Seite selbst
+  braucht nachweislich kein JavaScript.
+- Probe 16 (Touch): VOLL BESTANDEN, der Erklaer-Punkt vom 18.09. entfaellt.
+  In einem echten Mobil-Kontext (isMobile plus hasTouch, 390px, pointer:
+  coarse greift) messen alle zehn Chips exakt 44px Mindesthoehe, brechen in
+  drei Zeilen um, kein waagerechtes Scrollen.
+
+Damit verbleiben fuer die Abnahme durch den Owner nur noch: der echte
+Screenreader-Durchgang (Probe 14; der Accessibility-Baum mit Gruppennamen,
+aria-current und "Filter PDF entfernen" ist als maschineller Beleg
+protokolliert), die Mitternachtsprobe (9), die Bewertung des
+Paraphrasen-Restfalls (4, Vektorbestand), die zwei bekannten Punkte
+(franzoesische Wortlaute, drittes Paritaetsszenario) und der Nebenbefund
+"File contents".
+
 ## Issues Encountered
 
 Keine ueber die Befunde hinaus.
