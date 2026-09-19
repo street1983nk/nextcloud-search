@@ -1401,22 +1401,45 @@ jobs:
           # 276 MB of report 06-11 were measured on the arm64 box, and a ceiling
           # taken from another machine measures the wrong machine.
 
-      # The ratchet, and it is a counter rather than a byte. Two savings have to
-      # hold for the life of this product: one embedding engine per process
-      # (plan 06.1-02, 276 MB) and one read of the constituent list per process
-      # (plan 06.1-04, 21.9 MB). Both are invisible from the outside and both
-      # would come back through an ordinary refactoring, so they get a gate that
-      # runs on every push instead of a memory number somebody remembers.
+      # The ratchet, and it is a counter rather than a byte. The promise it
+      # holds this product to, in the words it has carried since phase 14:
+      # never two engines at once, exactly one load per warm window.
+      #
+      # Written in the two counters of findling/embed/model.py, and in no byte:
+      #
+      #   * never two engines: loads - unloads is never above one and never
+      #     below nought, at any moment of the run,
+      #   * one load per warm window: loads - unloads stands at one after a
+      #     warm run and still at one after the next one,
+      #   * no greening by zeroing: both counters are monotonic, nothing sets
+      #     either of them back, and engine.reset() deliberately does not
+      #     either, because a counter that can be zeroed is a counter a gate
+      #     could zero itself green with.
+      #
+      # The occasion is unchanged and it is 276 MB. Plan 06.1-02 took a second
+      # tokenizer and a second onnxruntime session out of one container, on a
+      # box with 210 MB of headroom against a hard 2 GB limit, and plan 06.1-04
+      # took the second read of the constituent list (21.9 MB) with it. Since
+      # phase 14 the weights are also handed back in an idle span, so the
+      # figure now has to hold inside the unload cycle as well: a warm window
+      # that pays twice is those 276 MB twice, and a release that only counts
+      # is those 276 MB still resident while the container reports them gone.
+      # The older wording, "one engine per process", would today go red for the
+      # feature it was asked to watch.
       #
       # findling.tools.one_load builds its own volume, indexes one document,
-      # runs one real search round and then wires the second track, in that
-      # order. The order is the anti-vacuity clause: the search side has to
-      # bring the engine loads to one on its own, so a run that never reaches
-      # the model reports a zero and fails rather than passing quietly, which is
-      # exactly the shape the ceiling above would have shipped. The tool exits
-      # non zero with a named finding for every counter that is not one, and its
-      # ability to go red is proven in backend/tests/test_one_load.py by three
-      # cases that bring the two regressions back through monkeypatch.
+      # runs one real search round, wires the second track, and then releases
+      # the weights and drives one more real round, in that order. The order is
+      # the anti-vacuity clause: the search side has to bring the engine loads
+      # to one on its own, so a run that never reaches the model reports a zero
+      # and fails rather than passing quietly, which is exactly the shape the
+      # ceiling above would have shipped. The fourth phase carries the same
+      # clause one step further on: a release that freed nothing leaves the
+      # engine where it was, so unloads == 0 is a finding here and never a
+      # quiet green. The tool exits non zero with a named finding for every
+      # number that is not what the promise says, and its ability to go red is
+      # proven in backend/tests/test_one_load.py by five cases that bring the
+      # regressions back through monkeypatch.
       - name: One engine and one constituent list per process
         run: |
           status=0
@@ -1424,10 +1447,13 @@ jobs:
             -m findling.tools.one_load > one-load.txt 2>&1 || status=$?
           sed "s/^/${MEASURE_PREFIX} one-load /" one-load.txt
           if [ "${status}" -ne 0 ]; then
-            echo "a counter above is not one, and that is a finding and not a threshold to raise:"
-            echo "either the search side and the second track stopped sharing the engine of"
-            echo "findling.embed.engine, or the cache in findling.index.wordlist.build_artifact"
-            echo "stopped holding, or this measurement never reached the model at all."
+            echo "a number above is not what the promise says, and that is a finding and not a"
+            echo "threshold to raise. The promise is: never two engines at once, exactly one load"
+            echo "per warm window. So either the search side and the second track stopped sharing"
+            echo "the engine of findling.embed.engine, or the cache in"
+            echo "findling.index.wordlist.build_artifact stopped holding, or this measurement never"
+            echo "reached the model at all, or the release of the fourth phase freed nothing, or"
+            echo "the warm window behind it paid for two loads instead of one."
             exit 1
           fi
 
