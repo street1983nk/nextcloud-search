@@ -28,6 +28,7 @@ verdicts, the reasons and the character cap stay the real ones.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import hashlib
 import re
@@ -2896,3 +2897,138 @@ def test_reading_busy_twice_gives_the_same_answer_and_moves_nothing() -> None:
     assert first is True
     assert second is True
     assert worker._held == {91}
+
+
+def _with_a_built_cutter() -> Poller:
+    """A poller whose cutter is in place, without reading a single artifact.
+
+    The pair is what the release is about, and the two objects behind it are
+    never called here: 544,3 MB of tokenizer and splitter would be the one thing
+    this suite must not pay to ask whether a field is None.
+    """
+    worker = Poller()
+    worker._cutter_absent = False
+    worker._chunker = cast("Any", lambda _text: [])
+    worker._model = cast("Any", object())
+    return worker
+
+
+def test_a_poller_with_a_built_cutter_lets_go_of_both_halves() -> None:
+    worker = _with_a_built_cutter()
+
+    assert worker.release_cutter() is True
+    assert worker._chunker is None
+    assert worker._model is None
+
+
+def test_a_poller_without_a_built_cutter_has_nothing_to_release() -> None:
+    # The state the lifespan task finds on most of its rounds: the release runs
+    # every tick, and a container that never indexed anything has never built
+    # the pair. False is the answer that keeps the counter of 14-07 honest.
+    worker = Poller()
+
+    assert worker.release_cutter() is False
+    assert worker._chunker is None
+    assert worker._model is None
+
+
+def test_a_cutter_release_while_the_pass_holds_rows_does_nothing() -> None:
+    """Pitfall 3 of the phase research, held as a behaviour.
+
+    The weights fall and the next row loads them again six seconds later. Over a
+    full run the release turns into a cost instead of a saving, and the run time
+    grows without anything going red anywhere. The warning sign is named in the
+    research: ``unload_count`` rising more than once during a full run.
+    """
+    worker = _with_a_built_cutter()
+    worker._held = {91, 92}
+
+    assert worker.busy is True
+    assert worker.release_cutter() is False
+    assert worker._chunker is not None, "the pair stays while the pass is at work"
+    assert worker._model is not None
+
+
+def test_the_first_cutter_build_after_a_release_puts_the_pair_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The rebuild needs no new code: the top of _build_the_cutter returns when
+    # both fields are set and builds otherwise, and poller.py:1130 already calls
+    # it conditionally for every row that needs a cutter.
+    monkeypatch.setattr("findling.worker.poller.open_tokenizer", lambda _directory: object())
+    monkeypatch.setattr("findling.worker.poller.make_splitter", lambda *args, **kwargs: object())
+    monkeypatch.setattr("findling.worker.poller.shared_model", lambda: cast("Any", object()))
+    worker = Poller()
+    worker._cutter_absent = False
+
+    assert worker._build_the_cutter() is True
+    assert worker.release_cutter() is True
+    assert worker._chunker is None
+    assert worker._model is None
+
+    assert worker._build_the_cutter() is True
+    assert worker._chunker is not None, "the next row that needs a cutter gets one"
+    assert worker._model is not None
+
+
+def test_a_release_leaves_the_permanent_no_about_the_cutter_alone() -> None:
+    """Pitfall 8, first half: ``_cutter_absent`` is a property of the installation.
+
+    A container without a model that forgets this marker starts stating every
+    row again, twelve times an hour instead of once per process. Resetting it
+    would be anti pattern 7 of ARCHITECTURE.md: a fact that was established once
+    is thrown away by an unrelated operation.
+    """
+    absent = Poller()
+    absent._chunker = cast("Any", lambda _text: [])
+    absent._model = cast("Any", object())
+
+    assert absent._cutter_absent is True
+
+    assert absent.release_cutter() is True
+    assert absent._cutter_absent is True, "the installation did not change because memory was handed back"
+
+    present = _with_a_built_cutter()
+
+    assert present.release_cutter() is True
+    assert present._cutter_absent is False, "and the other answer survives just as unchanged"
+
+
+def test_a_cutter_release_does_not_cut_a_running_cooldown_short() -> None:
+    """Pitfall 8, second half: ``_cutter_failed_at`` is the running cooldown.
+
+    A build that threw is remembered with a timestamp and tried again after
+    LOAD_RETRY_SECONDS. A release that clears the stamp ends that waiting time
+    silently, and the broken graph is opened once per document again instead of
+    twelve times an hour.
+    """
+    worker = _with_a_built_cutter()
+    stamp = time.monotonic()
+    worker._cutter_failed_at = stamp
+
+    assert worker.release_cutter() is True
+    assert worker._cutter_failed_at == stamp, "the moment that failed is not this operation's business"
+    assert worker._cutter_cooling_down is True, "and the waiting time keeps running"
+
+
+def test_the_release_never_leaves_half_a_cutter_behind() -> None:
+    """Never half, as a property of the source rather than of one run.
+
+    ``_embed_ready`` and the top of ``_build_the_cutter`` both read the pair, so
+    a cutter with exactly one field at None would answer "built" to both of them
+    and hand rows to a spur that cannot run. The method is read here for every
+    attribute it assigns: the pair and nothing else, which is the same statement
+    as the two marker tests above make one behaviour at a time.
+    """
+    tree = ast.parse(POLLER_SOURCE.read_text(encoding="utf-8"))
+    bodies = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "release_cutter"]
+
+    assert len(bodies) == 1, "one release and not two spellings of it"
+
+    assigned = [
+        target.attr
+        for node in ast.walk(bodies[0])
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Attribute)
+    ]
+
+    assert sorted(assigned) == ["_chunker", "_model"]
