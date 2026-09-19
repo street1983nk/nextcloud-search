@@ -165,7 +165,7 @@ Plans:
 
 **Owner-Checkpoint**: engineState-Wortwahl (MEM-05) ist am 19.09.2026 entschieden (Zweig B, sechstes Wort `unloaded`, siehe 14-CONTEXT.md) und wird in Plan 14-09 vollzogen. Zwei weitere Checkpoints in der Phase: das Tor des Vorprueflaufs (14-02) und die Abnahme (14-12).
 
-**Plans:** 5/12 plans executed
+**Plans:** 7/12 plans executed
 
 Plans:
 **Welle 1**
@@ -184,11 +184,11 @@ Plans:
 
 **Welle 4** *(wartet auf Welle 3)*
 
-- [ ] 14-06-PLAN.md: embed/engine.py: query_may_load, release_if_idle, warm und das Single-Flight
+- [x] 14-06-PLAN.md: embed/engine.py: query_may_load, release_if_idle, warm und das Single-Flight
 
 **Welle 5** *(wartet auf Welle 4)*
 
-- [ ] 14-07-PLAN.md: Die dritte Lifespan-Aufgabe, beide Halter je Takt
+- [x] 14-07-PLAN.md: Die dritte Lifespan-Aufgabe, beide Halter je Takt
 - [ ] 14-08-PLAN.md: Degradationsnaht auf den zwei Nutzerrouten und das Nachwaermen
 
 **Welle 6** *(wartet auf Welle 5)*

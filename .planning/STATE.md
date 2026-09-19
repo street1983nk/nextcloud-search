@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: Completed 14-06-PLAN.md
-last_updated: "2026-09-19T14:32:00.000Z"
+stopped_at: Completed 14-07-PLAN.md
+last_updated: "2026-09-19T14:53:00.000Z"
 last_activity: 2026-09-19
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 33
-  completed_plans: 27
-  percent: 82
+  completed_plans: 28
+  percent: 85
 ---
 
 # Project State
@@ -26,22 +26,51 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 14 (modell-entladung-im-leerlauf): IN PROGRESS
-Plan: 6 von 12 abgeschlossen (14-06: der Halter hat die Politik)
+Plan: 7 von 12 abgeschlossen (14-07: die dritte Aufgabe der Lifespan)
 Status: executing, das Tor der Phase ist offen und der Bau laeuft.
-Welle 4 ist damit vollstaendig. Naechster Plan ist 14-07.
-Progress: [████████░░] 82%
-Last activity: 2026-09-19 -- 14-06: query_may_load, release_if_idle,
-released_count, request_warm, warm_wanted und warm stehen an embed/engine.py,
-25 neue Testfaelle ohne neuen Skip, volle Suite 2204 gruen. Die Regel steht an
-genau einer Stelle und haengt am Schalter, die Freigabe kann das Rennen gegen
-einen Warmlauf nicht mehr verlieren. Gerufen wird weiterhin nichts: MEM-02
-bleibt offen bis 14-07 (Takt), MEM-03 bis 14-08 (die Suchroute).
+Welle 5 laeuft, 14-07 steht, offen ist dort nur noch 14-08.
+Progress: [████████░░] 85%
+Last activity: 2026-09-19 -- 14-07: `_release_when_idle` taktet alle 30 s,
+waermt oder entlaedt (nie beides im selben Takt) und gibt beide Halter
+zusammen frei; alle drei blockierenden Aufrufe laufen ueber
+`asyncio.to_thread`, gehalten von einem Gate am Syntaxbaum. Viertes
+Stopp-Event samt Aufraeumblock, 17 neue Testfaelle (langsamster 0,02 s), volle
+Suite 2221 gruen. Damit ist MEM-02 code-seitig vollstaendig; es fehlt nur noch
+die benannte Beleg-Messung (14-12 und Phase 15). MEM-03 bleibt offen bis 14-08.
 Phase 13 ist vollstaendig (Owner-Abnahme 19.09. erteilt, FILT-01..05 und HART-03 erfuellt)
 
 Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 14-07 (MEM-02, der Aufrufer): Die Entladung bekommt einen eigenen Takt in der
+  Lifespan und sitzt NICHT im Leerlaufzweig des Pollers. Ein stummgeschalteter
+  Poller wartet in `run()` auf sein Armiert-Ereignis und betritt `run_once` nie
+  wieder (`poller.py:543-545`), und genau dieser Container, der nicht indexiert
+  und nur gelegentlich durchsucht wird, ist der Fall, fuer den die Entladung
+  gebaut ist.
+
+- 14-07: `release_cutter()` steht HINTER einer Freigabe, die `True` geliefert
+  hat, und nicht daneben. `release_if_idle` traegt die Uhr und die
+  Identitaetspruefung, `release_cutter` traegt keine eigene Frist; ein
+  `release_cutter` ohne vorangegangene Freigabe wuerde den Cutter nach jeder
+  Ruhephase wegwerfen, auch wenn die Suchseite gerade eingebettet hat.
+
+- 14-07: Bei ausgeschaltetem Schalter gibt es keine Logzeile. Der Werksstand ist
+  aus, und eine Zeile bei jedem Start ueber eine Funktion, die niemand
+  eingeschaltet hat, ist Rauschen. Der Behavior-Block des Plans verlangte das
+  Gegenteil, der begruendete Action-Block hat Vorrang bekommen; der Kommentar im
+  Quelltext sagt, warum hier auch spaeter kein `else`-Zweig "zur Symmetrie" mit
+  dem Reconcile-Block hingehoert (der Abgleich ist ab Werk AN, deshalb ist seine
+  Aus-Zeile ihren Platz wert).
+
+- 14-07: Direkt hinter `_pause` wird das Stopp-Event ein zweites Mal gelesen und
+  der Takt abgebrochen. Ohne diesen Blick liefe im Herunterfahren noch ein
+  vollstaendiger Takt, und ein dort gestarteter Warmlauf haelt den Prozessausgang
+  sekundenlang in einem Threadpool-Thread fest (T-14-26). Das ist eine Zeile
+  mehr, als der Plan vorsah, und sie ist es, die das Budget von 5,0 s haltbar
+  macht.
 
 - 14-06 (MEM-03, obere Haelfte): `query_may_load()` ist die eine Stelle, an der
   steht, ob eine Suche laden darf, und sie antwortet
@@ -633,6 +662,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T14:10:00.000Z
-Stopped at: Completed 14-05-PLAN.md, release und may_load stehen an embed/model.py
+Last session: 2026-09-19T14:53:00.000Z
+Stopped at: Completed 14-07-PLAN.md, der Takt ruft beide Freigaben ueber asyncio.to_thread
 Resume file: None
