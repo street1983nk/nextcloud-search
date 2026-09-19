@@ -51,6 +51,8 @@ prefixes we have to set ourselves anyway.
 
 from __future__ import annotations
 
+import ctypes
+import gc
 import logging
 import threading
 import time
@@ -143,6 +145,71 @@ _LOAD_COUNT = 0
 def load_count() -> int:
     """Return how often this process has read tokenizer and weights."""
     return _LOAD_COUNT
+
+
+# How often they were let go of again, and it is the number beside the one
+# above for the reason that one exists: from the outside a load count of three
+# says nothing on its own. On a container that never released it is a bug, on
+# one that released twice it is the expected number, and the A/B measurement of
+# phase 15 needs to tell those apart without timing anything.
+#
+# Monotonic, and that is a property and not an accident. Nothing in this module
+# sets it back, not even the reset of ``embed/engine.py``, because a counter
+# that can be zeroed is a counter a gate could zero itself green with
+# (T-14-17). There is a test that reads this module as source and holds it to
+# one initialisation and one increment.
+_UNLOAD_COUNT = 0
+
+
+def unload_count() -> int:
+    """Return how often this process has let go of tokenizer and weights."""
+    return _UNLOAD_COUNT
+
+
+# Whether the one warning about a libc without ``malloc_trim`` has been said. A
+# module flag rather than a field, because the answer is a property of the C
+# library under this process and not of one holder: the two holders of this
+# container would otherwise say the same sentence twice.
+_TRIM_UNAVAILABLE_WARNED = False
+
+
+def _return_free_pages_to_the_system() -> None:
+    """Hand whole free pages back to the operating system, in this order.
+
+    Two steps, and the second one is the one that works. The pre-check of
+    2026-09-19 measured both marks on both architectures against the shipped
+    image (``docs/measurements/2026-09-entladung-vorpruefung/``, section 3): of
+    everything a load takes, ``gc.collect()`` alone gives back between 15 and 19
+    percent and ``malloc_trim(0)`` gives back the remaining 80 to 85. glibc
+    keeps freed blocks in its arena, and the Rust side of the tokenizer
+    allocates through exactly that arena, so without the trim the log says
+    "released" while the resident set barely moves.
+
+    **The order is not reversible.** A trim before the collect finds the blocks
+    still referenced and hands back nothing (14-RESEARCH.md, pitfall 1). The
+    warning sign of the reversed order is a saving under 100 MB.
+
+    A libc without ``malloc_trim`` is a supported container and not a failure.
+    That is the stance ``extract/ocr.py`` takes towards a missing tesseract, and
+    it is the same one here: musl or any other foreign base loses four fifths of
+    the return and keeps running. The catch is narrow on purpose, ``OSError``
+    and ``AttributeError`` and never ``Exception``, and the library name is a
+    literal that never comes from the environment or from a setting (T-14-14).
+    The warning names the class of what went wrong and nothing else, no path and
+    no figure of memory (T-14-18).
+    """
+    global _TRIM_UNAVAILABLE_WARNED
+
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError) as error:
+        if not _TRIM_UNAVAILABLE_WARNED:
+            _TRIM_UNAVAILABLE_WARNED = True
+            LOGGER.warning(
+                "this libc offers no malloc_trim, so a release keeps the freed blocks in the arena (%s)",
+                type(error).__name__,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -563,6 +630,49 @@ class EmbeddingModel:
         _LOAD_COUNT += 1
         self._engine = _Engine(encoder=encoder, session=session, accepted=accepted, outputs=outputs)
         return self._engine
+
+    def release(self) -> bool:
+        """Let go of weights and tokenizer, and say whether there was anything to let go of.
+
+        False means nothing was done: either this holder never loaded, or a
+        batch is running right now. The caller of plan 14-07 runs on a tick and
+        will meet the first of those far more often than the release itself, so
+        neither of them may cost a heap walk.
+
+        **Three remembered facts stay, and none of them is what a release is
+        about** (14-RESEARCH.md, pitfall 8). A model directory without the two
+        artifacts is a property of this installation and stays true while the
+        process runs; clearing it would bring back a pair of stat calls per
+        document over tens of thousands of them. An open that threw is a moment
+        inside a running cooldown, and clearing its timestamp would end the
+        waiting silently and open a broken graph once per document again. The
+        warning flag of a thrown batch is what keeps the second track from
+        writing one warning per row. A release is about the weights.
+
+        The pages come back outside the lock, and that is the point of the two
+        halves below: ``gc.collect()`` and the trim block, and a held lock would
+        block every concurrent search with them. The caller runs the whole
+        method through ``asyncio.to_thread``, so the blocking never reaches the
+        event loop either (T-14-16).
+        """
+        global _UNLOAD_COUNT
+
+        with self._lock:
+            if self._engine is None:
+                return False
+            if self._in_flight:
+                # A batch is running. Its local reference in _embed holds the
+                # engine alive whatever this answers, so nothing would break
+                # there; what would be broken is the promise of gc.collect()
+                # and malloc_trim, which walk the heap that batch is allocating
+                # in. The next tick tries again, and one skipped release is
+                # cheaper than a release in the middle of a pass (T-14-15).
+                return False
+            self._engine = None
+            _UNLOAD_COUNT += 1
+
+        _return_free_pages_to_the_system()
+        return True
 
 
 def _warn(error: BaseException) -> None:

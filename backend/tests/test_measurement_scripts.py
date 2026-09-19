@@ -323,7 +323,12 @@ PHP_TREE_HASH_TODAY = "abe36dc6ce302bc0a48d2259c9dbd4d15af34f14f6e70e934c468959c
 # clock last_use(), the activity counter _in_flight and the switch may_load on
 # embed_query and _embed. No file came and none went, so PACKAGE_FILES stays
 # at 54.
-PACKAGE_TREE_HASH_TODAY = "99e4899cf7be43711169f180ae0fab6c5b0df50ada46a8d8daf475ef866e1938"
+# Moved on 2026-09-19 a fifth time, by the second half of plan 14-05:
+# embed/model.py again, this time with release(), the monotonic counter
+# _UNLOAD_COUNT with unload_count(), and _return_free_pages_to_the_system,
+# which collects and then trims and stays quiet where the libc has no way to.
+# No file came and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "d339fb07db1e8b6d7b23460308a8effcab3ff1bd4c0e99838e75efb23f90ff81"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
