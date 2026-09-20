@@ -1,0 +1,160 @@
+der aufbau der messbox, bloecke 1 bis 13b des runbooks, plan 15-09
+gefahren 2026-09-20 (~01:30 bis 02:10 utc), begleitete sitzung, erstvollzug
+region eu-central-1, zone eu-central-1c
+
+geheimnisregel dieser datei, wie in 02-vorbedingungen.txt: keine ip-adresse,
+keine lebende instanz- oder volumekennung, kein passwortinhalt, keine
+kontokennung, keine uuid des datentraegers. ausgenommen allein
+snap-03f1d1d9ad9262704. wo ein wert gebraucht wird, steht ein platzhalter.
+
+-- block 1: security group --
+kommando: create-security-group findling-loadtest im default-vpc, danach
+authorize-security-group-ingress mit vier regeln.
+antwort:
+  GroupId geliefert (ab hier <sg>)
+  Return: true
+  vier SecurityGroupRules-eintraege:
+    tcp 22-22    <eigene-adresse>/32, beschreibung owner
+    tcp 80-80    <ganzes-netz>
+    tcp 443-443  <ganzes-netz>
+    udp 443-443  <ganzes-netz>
+die eigene adresse kam aus https://api.ipify.org und wurde vor der verwendung
+als ipv4 geparst, wie cmd_start es tut.
+urteil: wie erwartet, einschliesslich der udp-regel aus DI-05-35.
+
+-- block 2: schluesselpaar --
+abweichung 1, in phase 15 erstmals vollzogen: create-key-pair endete mit
+InvalidKeyPair.Duplicate. das schluesselpaar findling-loadtest existierte noch
+in aws; der abbau vom 11.09. loescht instanz, volume und security group, aber
+kein schluesselpaar. cmd_destroy kennt keinen delete-key-pair-aufruf.
+nachtrag fuer 15-15: entweder loescht der abbau das paar mit, oder block 2
+beginnt mit delete-key-pair.
+vollzug: delete-key-pair, dann create-key-pair neu. datei ~/.ssh/findling-loadtest
+beginnt mit -----BEGIN RSA PRIVATE KEY-----, rechte -rw-------, 2048 bit rsa.
+
+abweichung 2, in phase 15 erstmals vollzogen: der erste ssh-versuch endete mit
+Permission denied (publickey). ursache: neben dem privaten teil lag noch
+~/.ssh/findling-loadtest.pub vom 04.09. (ed25519, altes paar); openssh liest
+bei vorhandener .pub-datei DIESE und bot den alten oeffentlichen teil an.
+vollzug: alte .pub beiseite gelegt, neue mit ssh-keygen -y aus dem privaten
+teil abgeleitet. danach ssh-ok.
+nachtrag fuer 15-15: block 2 erzeugt die .pub-datei ausdruecklich mit, oder
+loescht eine liegengebliebene.
+
+-- block 3: instanz --
+kommando: run-instances ami-0e79e661e73ddfac9 m7g.large, subnetz in
+eu-central-1c aus describe-subnets des default-vpc, 40 gb gp3 root mit
+DeleteOnTermination=true, tags Name=findling-loadtest purpose=findling-phase5.
+antwort:
+  InstanceId geliefert (ab hier <instanz>)
+  Placement.AvailabilityZone  eu-central-1c
+  InstanceType                m7g.large
+  wait instance-running kehrte ohne ausgabe zurueck
+urteil: wie erwartet.
+
+-- block 4: box.env --
+BOX_INSTANCE_ID und BOX_SECURITY_GROUP von hand in
+${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/box.env geschrieben,
+umask 077, anhaengend.
+rueckleseprobe: scripts/ops/aws_box.sh status meldet
+  instance <instanz> m7g.large running in eu-central-1c
+  address  <adresse>
+  volume   <systemvolume> 40 G gp3 3000 IOPS 125 MB/s
+  running  0.0 hours since 2026-09-20T01:38:51+00:00
+  rate     0.097800 USD/h box, 0.005216 40-gb-platte, 0.005000 adresse
+urteil: wie erwartet, kein "no state file".
+
+-- block 5: harte speichergrenze mem=4G --
+drop-in /etc/default/grub.d/99-mem4g.cfg erweitert die bestehende zeile,
+update-grub lief, neustart.
+rueckleseprobe nach dem neustart:
+  free -h   3.9Gi gesamt
+  nproc     2
+  uname -m  aarch64
+  /proc/cmdline enthaelt mem=4G
+urteil: wie erwartet, alle drei zahlen wie in den drei frueheren laeufen.
+
+-- block 6: volume aus dem snapshot --
+kommando: scripts/ops/aws_box.sh restore (ohne argument, default-snapshot).
+antwort, woertlich bis auf platzhalter:
+  aws_box: no snapshot was handed in, using snap-03f1d1d9ad9262704
+  SnapshotId  snap-03f1d1d9ad9262704
+  State       completed
+  Progress    100%
+  VolumeSize  60
+  Description findling corpus and index, v1.1 comparison run 2026-09-10,
+              52111 documents
+  aws_box: creating a 60 GB gp3 volume in eu-central-1c from snap-03f1d1d9ad9262704
+  aws_box: tags of <volume> after the retagging: Name=findling-corpus
+           purpose=findling-phase5
+  aws_box: waiting for volume <volume> to become available
+  aws_box: attaching <volume> to <instanz> as /dev/sdf
+  aws_box: this subcommand ends at the attach
+urteil: wie erwartet. der geerbte keep-tag haengt nicht mehr am volume, die
+tags sind zurueckgelesen (Name=findling-corpus, purpose=findling-phase5).
+
+-- block 7: datentraeger mounten --
+lsblk -b: genau ein datentraeger mit 64424509440 byte (rund 60 gb) neben der
+40-gb-systemplatte, als nvme-geraet in anhaengereihenfolge sichtbar. uuid mit
+blkid gelesen (steht hier nicht), fstab-zeile
+UUID=<uuid> /mnt/findling ext4 defaults,nofail 0 2, danach mount -a.
+rueckleseprobe:
+  df -h /mnt/findling: 59G gesamt, 35G belegt, 62%
+  ls /mnt/findling: containerd corpus docker drillkorpus lost+found ncdata
+abweichung 3: die erwartete ausgabe des runbooks nennt nur docker und ncdata;
+tatsaechlich liegen auch containerd, corpus und drillkorpus dort. containerd
+ist fuer block 8 wesentlich, siehe dort. nachtrag fuer 15-15.
+urteil: erfuellt, mit einer unvollstaendigen erwartung im runbook.
+
+-- block 8: docker-data-root, BEVOR der daemon startet --
+abweichung 4, die grosse dieses aufbaus, in phase 15 erstmals vollzogen:
+auf der frischen maschine ist ueberhaupt kein docker installiert. das runbook
+setzt einen daemon voraus (systemctl stop docker), und cmd_create dokumentiert
+die docker-installation der urspruenglichen box nicht. vollzug in dieser
+reihenfolge, damit der erste daemon-start die wurzel schon kennt:
+  1. /etc/docker/daemon.json mit { "data-root": "/mnt/findling/docker" }
+     geschrieben, VOR der installation
+  2. apt-get install docker.io jq aus der distributionsquelle
+     (docker 29.1.3, jq-1.7; jq schliesst vorbedingung 7)
+  3. docker info: Docker Root Dir /mnt/findling/docker
+
+abweichung 5, ebenso wesentlich: mit der data-root allein zeigte docker ps -a
+container OHNE namen und docker images NICHTS. das abbild-lager der box vom
+10.09. ist der containerd-image-store (storage driver overlayfs,
+driver-type io.containerd.snapshotter.v1); die inhalte liegen unter
+/mnt/findling/containerd, und der frische containerd sah auf sein default
+/var/lib/containerd. vollzug:
+  1. docker, docker.socket, containerd gestoppt
+  2. /etc/containerd/config.toml: version = 2,
+     root = "/mnt/findling/containerd"
+  3. containerd und docker gestartet
+danach: 15 abbilder mit namen (aio-flotte, nextcloud:34.0.3-apache,
+ghcr.io/street1983nk/findling_backend:dev, localhost:5000/findling_backend
+mit drei tags), und ALLE container der messbox starteten von selbst
+(findling-registry, nc_app_findling_backend, nextcloud-aio-apache, -database,
+-harp, -mastercontainer, -nextcloud, -notify-push, -redis).
+nachtrag fuer 15-15: block 8 braucht drei schritte (docker installieren,
+data-root UND containerd-root), sonst misst niemand irgendetwas.
+
+rueckleseprobe: curl -s localhost:5000/v2/_catalog antwortet
+  {"repositories":["findling_backend"]}
+urteil: erfuellt, mit zwei wesentlichen runbook-luecken.
+
+-- block 9: systemplatte zurueckspielen --
+scp der sicherung, tar xzf nach /home/ubuntu, kopie in /tmp geloescht.
+gegenprobe der sicherung selbst: 435 eintraege im archiv, sha256
+fad3e7ce6c7f73cc85a108ce6511941326435934e87cce0c6df5f2d0a6a3584a, identisch
+mit 02-vorbedingungen.txt abschnitt 2.
+rueckleseprobe auf der box:
+  find /home/ubuntu/work -type f | wc -l  385
+  du -sh /home/ubuntu/work                13M
+abweichung 6: die erwartung des runbooks nennt rund 91 mb. die 91 mb waren der
+lebende stand der alten box einschliesslich laufzeitartefakten (venvs u.ae.);
+die sicherung traegt 385 dateien und 50 verzeichnisse = 435 eintraege und
+packt auf 13M aus. die sicherung selbst ist byte-identisch belegt; die
+erwartungszeile im runbook misst das falsche. nachtrag fuer 15-15.
+urteil: erfuellt.
+
+-- zwischenstand nach block 9 --
+maschine steht, korpus des 10.09. gemountet, alle container laufen, registry
+antwortet. naechster block: 10, der a-record, beim owner.
