@@ -122,7 +122,8 @@
 #   php-verzeichnis-ist, php-app-ist
 #   speichergrenze-ist, grenze-erwartet, grenze-gesetzt
 #   entladeschalter-ist
-#   abbild-im-container-ist, abbild-im-container-gleich, containerstart-ist
+#   abbild-im-container-ist, baumhash-im-laufenden-container,
+#   abbild-im-container-gleich, containerstart-ist
 set -eu
 
 benutzung() {
@@ -500,12 +501,26 @@ fi
         echo "=== 15. Laeuft der Container auf der geprueften Abbildkennung? ==="
         # Der zweite Fall des Rueckgabewerts 36. Die info.xml traegt einen Tag, und
         # ein Tag ist wieder ein wandernder Zeiger; geprueft worden ist ein Digest.
-        # Verglichen werden deshalb die Kennungen, und zwar die des laufenden
-        # Containers gegen die des gezogenen Abbilds.
+        # Die Kennungen selbst sind seit Docker 29 mit containerd-Store kein
+        # Vergleichspaar mehr: inspect eines repo@digest liefert den Index-Digest,
+        # .Image des Containers den aufgeloesten Plattform- beziehungsweise
+        # Config-Digest, und der Deploy des Daemons zieht den Tag frisch. Zwei
+        # verschiedene Kennungsarten desselben Inhalts lasen sich am 20.09.2026
+        # als fremdes Abbild (Befund der Anfahrt, Fix mit Owner-Wort). Verglichen
+        # wird deshalb der Beweis selbst und nicht die Notiz: der Baumhash des
+        # Pakets IM LAUFENDEN Container gegen den abbild-baumhash aus 40b. Das
+        # ist woertlich die Rangordnung aus dem Kopf dieser Datei.
         im_container=$(sudo docker inspect --format '{{.Image}}' "$CONTAINER" 2>/dev/null || true)
         [ -n "${im_container:-}" ] || im_container=unlesbar
         printf 'abbild-im-container-ist %s\n' "$im_container"
-        if [ "$im_container" = "$(cat "$WORK/abbild-id")" ]; then
+        abbild_hash=$(sed -n 's/^abbild-baumhash: //p' "$BAUMHASH" | head -n 1)
+        sudo docker cp "$SKRIPTE/40b-baumhash.py" "$CONTAINER:/tmp/40b-baumhash.py" 2>/dev/null || true
+        lauf_hash=$(sudo docker exec "$CONTAINER" /app/.venv/bin/python /tmp/40b-baumhash.py \
+            /app/.venv/lib/python3.13/site-packages/findling '**/*.py' 2>/dev/null \
+            | sed -n 's/^baumhash: //p' | head -n 1)
+        [ -n "${lauf_hash:-}" ] || lauf_hash=unlesbar
+        printf 'baumhash-im-laufenden-container %s\n' "$lauf_hash"
+        if [ -n "${abbild_hash:-}" ] && [ "$lauf_hash" = "$abbild_hash" ]; then
             echo "abbild-im-container-gleich ja"
         else
             echo "abbild-im-container-gleich nein"
