@@ -189,19 +189,30 @@ protokoll() {
 # "720". Dazu die Einheit: dasselbe cron.sh schreibt "sleep 5m", und ein
 # einheitenblinder Leser haette aus fuenf Minuten fuenf Sekunden gemacht.
 # s, m und h werden in Sekunden uebersetzt, eine nackte Zahl ist Sekunden.
+# Feldbasiert statt ueber match(): das mawk der Box berechnet RLENGTH fuer ein
+# optionales [smh]? am Musterende anders als gawk und verlor das m von "5m"
+# (zweiter Befund an derselben Stelle, 20.09.2026). Genommen wird das erste
+# Wort hinter sleep; ihm werden Einheit und Zahl getrennt entnommen, damit
+# "5m", "720;" und "300" gleichermassen tragen. Der Anker ist die AUFRUFZEILE
+# php -f ... cron.php und nicht das blosse Wort cron.php: der Trap-Handler
+# desselben Skripts prueft per pgrep auf cron.php und schlaeft selbst 5 s,
+# und genau diese Zeile hat die dritte Lesart wieder gegriffen (dritter
+# Befund an derselben Stelle, 20.09.2026, diesmal auf der Box verifiziert).
 quelle_aio_cron() {
     sudo docker exec "$CRON_CONTAINER" sh -c "cat $CRON_SKRIPT" 2>/dev/null |
-        awk '/cron\.php/ {scharf = 1}
-             scharf && match($0, /sleep[ \t]+[0-9]+(\.[0-9]+)?[smh]?/) {
-                  gefunden = substr($0, RSTART, RLENGTH)
-                  sub(/^sleep[ \t]+/, "", gefunden)
-                  einheit = gefunden
+        awk '/php[ 	]+-f[ 	].*cron\.php/ {scharf = 1}
+             scharf && /sleep[ \t]+[0-9]/ {
+                  zeile = $0
+                  sub(/.*sleep[ \t]+/, "", zeile)
+                  split(zeile, teile, /[ \t;&]/)
+                  wert = teile[1]
+                  einheit = wert
                   gsub(/[^smh]/, "", einheit)
-                  gsub(/[^0-9.]/, "", gefunden)
+                  gsub(/[^0-9.]/, "", wert)
                   faktor = 1
                   if (einheit == "m") faktor = 60
                   if (einheit == "h") faktor = 3600
-                  printf "%d\n", gefunden * faktor
+                  printf "%d\n", wert * faktor
                   exit
               }'
 }
