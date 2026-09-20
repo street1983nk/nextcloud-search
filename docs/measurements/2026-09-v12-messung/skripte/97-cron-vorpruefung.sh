@@ -178,19 +178,32 @@ protokoll() {
 # dessen Skript cron.php ruft und zwischen zwei Runden schlaeft. Die Schlafdauer
 # in diesem Skript IST der Takt, und sie ist eine Konfiguration und keine
 # Messung.
-# Gelesen wird die erste sleep-Anweisung des Skripts, und zwar ueber einen
-# Ausdruck statt ueber Felder: in einer Schleife, die auf einer Zeile steht,
-# heisst das Feld hinter sleep "720;" und nicht "720". Eine Feldpruefung auf
-# reine Ziffern haette diese Quelle stumm uebersprungen und die langsamste
-# Quelle die Frist kosten lassen.
+# Gelesen wird die sleep-Anweisung der SCHLEIFE, die cron.php ruft, und nicht
+# die erste des Skripts: das cron.sh des AIO-Abbilds traegt VOR der Schleife
+# einen Trap-Handler mit einem eigenen sleep 5, und genau den hat die erste
+# Fassung dieses Lesers gegriffen und als Takt 5 s gemeldet (Befund der
+# Anfahrt vom 20.09.2026, rc=26 gegen eine korrekte Maschine; Fix mit
+# Owner-Wort in der Sitzung). Gelesen wird deshalb das erste sleep AB der
+# cron.php-Zeile, ueber einen Ausdruck statt ueber Felder: in einer Schleife,
+# die auf einer Zeile steht, heisst das Feld hinter sleep "720;" und nicht
+# "720". Dazu die Einheit: dasselbe cron.sh schreibt "sleep 5m", und ein
+# einheitenblinder Leser haette aus fuenf Minuten fuenf Sekunden gemacht.
+# s, m und h werden in Sekunden uebersetzt, eine nackte Zahl ist Sekunden.
 quelle_aio_cron() {
     sudo docker exec "$CRON_CONTAINER" sh -c "cat $CRON_SKRIPT" 2>/dev/null |
-        awk '{if (match($0, /sleep[ \t]+[0-9]+/)) {
+        awk '/cron\.php/ {scharf = 1}
+             scharf && match($0, /sleep[ \t]+[0-9]+(\.[0-9]+)?[smh]?/) {
                   gefunden = substr($0, RSTART, RLENGTH)
-                  gsub(/[^0-9]/, "", gefunden)
-                  print gefunden
+                  sub(/^sleep[ \t]+/, "", gefunden)
+                  einheit = gefunden
+                  gsub(/[^smh]/, "", einheit)
+                  gsub(/[^0-9.]/, "", gefunden)
+                  faktor = 1
+                  if (einheit == "m") faktor = 60
+                  if (einheit == "h") faktor = 3600
+                  printf "%d\n", gefunden * faktor
                   exit
-              }}'
+              }'
 }
 
 # Quelle 3. Die Wette: die Instanz haengt an der crontab des Wirts, wie jede
