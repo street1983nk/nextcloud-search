@@ -158,3 +158,104 @@ urteil: erfuellt.
 -- zwischenstand nach block 9 --
 maschine steht, korpus des 10.09. gemountet, alle container laufen, registry
 antwortet. naechster block: 10, der a-record, beim owner.
+
+-- block 10: a-record --
+namensaufloesung-ist=a-record
+der owner hat das setzen in der sitzung an den ausfuehrenden delegiert
+("erledige du das"). gesetzt ueber die api des zonenverwalters mit dem
+vorhandenen zugang aus dem failover-werkzeugkasten des betreibers (der token
+traegt dns-rechte; er steht ausserhalb des arbeitsbaums und nicht hier).
+ttl 120, nicht proxied. ein alter a-record gleichen namens wurde ueberschrieben.
+rueckleseprobe: nslookup loest den namen auf genau eine adresse auf, und sie
+stimmt mit der instanzadresse ueberein (worauf, steht hier nicht);
+https://loadtest.infranode.dev/status.php antwortet 200 mit "installed":true.
+vorprobe vor dem record, ohne namensdienst: curl --resolve gegen status.php
+antwortete ebenfalls 200 "installed":true, version 33.0.8.
+urteil: erfuellt, weg 1 von 3 (a-record).
+
+-- block 11: bewaffnung nach DI-05-36 --
+occ app_api:app:disable findling_backend: successfully disabled
+occ app_api:app:enable findling_backend: successfully enabled
+gezaehlter pollerdurchgang (docker logs --since 5m, grep -c poll): 3
+urteil: erfuellt, zaehlung groesser null.
+
+-- block 12: harte speichergrenze des containers --
+docker update --memory=2g --memory-swap=2g, danach aus der cgroup:
+  memory.max       2147483648
+  memory.swap.max  0
+abweichung 7, und sie hat einen werkzeug-fix ausgeloest: die erwartete ausgabe
+des runbooks nennt 2147483648 in BEIDEN feldern. das ist falsch. docker
+--memory-swap nennt die summe, der swap-anteil der cgroup ist 0, und die
+v1.1-box hat genau das protokolliert
+(2026-09-vergleichsmessung-m7g/rohdaten/90-bestand.txt: memory.swap.max=0
+neben memory.max=2147483648; die box hat ueberdies gar keinen swap,
+SwapTotal 0 kB). 92b-wechsel.sh erwartete die grenze in beiden feldern und
+haette jede korrekte maschine mit 39 abgewiesen. fix mit owner-wort in der
+sitzung (ERWARTETER_SWAP, vorgabe 0; commit d6fb185, boxlose tests
+nachgezogen, 349 gruen). nachtrag fuer 15-15: runbook block 12 richtigstellen.
+urteil: erfuellt, maschine identisch zur v1.1-box.
+
+-- block 13: genau eine nextcloud am docker-dienst --
+docker ps zaehlt nextcloud-aio-nextcloud: 1
+docker volume ls | grep findling: nc_app_findling_backend_data
+urteil: erfuellt.
+
+-- block 13b: abbildwechsel auf den v1.2-stand --
+abweichung 8: block 9 liefert KEINEN arbeitsbaum auf der box; die sicherung
+traegt nur /home/ubuntu/work (flache skriptablage der alten box). das runbook
+nennt <checkout> als "arbeitsbaum aus block 9". vollzug: git clone des
+oeffentlichen repositoriums nach /home/ubuntu/nextcloud-search, checkout auf
+den commit des tages, git config core.fileMode false (die rechtemaske 100644
+der werkzeuge kollidiert sonst mit dem chmod vor dem lauf). nachtrag 15-15.
+
+der digest, aus der abbildstrecke abgelesen (lauf 35471225102 auf f650c10,
+merge-job, imagetools inspect):
+  ABBILD_DIGEST sha256:80710fbba1a4acf6d60671ff60b0aeb85d902228338771e69fb62fe2a14bf706
+
+lauf 1, gescheitert, und das werkzeug hat es nicht gemerkt: die nextcloud
+stand nach dem einspielen der neuen php-haelfte auf "requires upgrade"
+(findling 1.0.3 im bestand, 1.1.0 im baum), der namespace app_api:app war
+im eingeschraenkten modus nicht vorhanden, die registrierung ist nie
+gefahren. das werkzeug endete trotzdem mit 92B-WECHSEL-FERTIG und rc=0:
+die phase-B-pipeline verschluckt occ-fehler. werkzeug-befund, fix gehoert
+in die zeit nach dem abbau (15-15); der unregister --rm-data davor war
+planmaessig (vor dem indexaufbau, zaehlung 1).
+reparatur: occ upgrade (maintenance an/aus, "Updated <findling> to 1.1.0",
+code integrity check bestanden). nebenwirkung, protokolliert: der upgrade-lauf
+hat die store-apps contacts und notes mitaktualisiert.
+
+lauf 2, rc=36 zweiter fall: abbild-im-container-gleich nein, obwohl der
+inhalt stimmt. docker 29 mit containerd-store liefert fuer repo@digest den
+index-digest und fuer .Image des containers den aufgeloesten digest; zwei
+kennungsarten desselben inhalts. unabhaengiger beweis von hand: der
+paket-baumhash IM LAUFENDEN container ist f3f1fb13... und identisch mit
+abbild- und arbeitsbaum-baumhash. fix mit owner-wort: abschnitt 15 vergleicht
+jetzt den baumhash im laufenden container gegen den abbild-baumhash aus 40b
+(commit ff8e054), die notiz abbild-im-container-ist bleibt daneben stehen.
+
+lauf 3, rc=0, alle zeilen gruen (rohdatei 92b-wechsel.txt ist der stand
+dieses laufs; die rohdateien der laeufe 1 und 2 sind von den folgelaeufen
+ueberschrieben worden, ihre befunde stehen hier):
+  nextcloud-instanzen 1, nextcloud-instanzen-vor-rm-data 1
+  arbeitsbaum-unberuehrt ja
+  abbild-digest-ist = abbild-digest-gefordert, abbild-digest-gleich ja
+  baumhash-zeilen 3, baumhash-gleich ja, baumhash-beweis ja
+  speichergrenze-ist 2147483648/0, grenze-erwartet 2147483648/0,
+  grenze-gesetzt ja
+  entladeschalter-ist 0
+  baumhash-im-laufenden-container f3f1fb13..., abbild-im-container-gleich ja
+  poller: "indexing is armed and the work stock is empty"
+  git status --porcelain backend/appinfo/info.xml: leer (0 zeilen)
+das wort unloaded kennt der laufende stand (embed/engine.py im container),
+das abbild vom 10.09. kannte es nicht: es ist der richtige messgegenstand.
+
+zur geheimnisregel der rohdatei 92b-wechsel.txt: der suchbefehl findet dort
+zwei treffer, den bind-all des uvicorn im containerprotokoll (vier nullen)
+und die adresse der docker-bruecke des aio-netzes (rfc-1918, auf jeder
+aio-installation gleich). beides sind keine adressen der box und keine
+kennungen; die zeilen sind werkzeugausgabe und bleiben woertlich stehen (D-10).
+
+-- zwischenstand nach block 13b --
+die box misst den v1.2-stand, belegt durch den baumhash im laufenden
+container und nicht durch eine erinnerung. naechster schritt: zustands-
+pruefung mit abbruchbedingung (abschnitt 5 des runbooks, plan 15-10).
