@@ -1,0 +1,79 @@
+zustandspruefung und die sechs vergleichbarkeitsgroessen, plan 15-10 task 1
+gefahren 2026-09-20 (~02:45 utc), begleitete sitzung
+region eu-central-1, zone eu-central-1c
+
+geheimnisregel wie in den uebrigen rohdaten dieses laufs: keine ip-adresse,
+keine lebende instanz- oder volumekennung, kein passwortinhalt.
+
+-- der befund, der an das abbruchtor gehoert --
+das abbruchtor des runbooks (abschnitt 5) erwartet aus occ findling:index
+52.111 indexiert, 37 uebersprungen, 0 fehlgeschlagen als beleg, dass die box
+die des phase-10-laufs ist. dieser beleg IST NICHT MEHR ABLESBAR, und zwar
+planmaessig: block 13b (abbildwechsel, in 15-09) faehrt unregister --rm-data
+vor dem indexaufbau, und der schalter leert das backend-datenvolume mit dem
+fertigen index. genau das ist der zweck des nullstands (5.1): der volllauf
+soll aus null bauen und nicht ueber einen fertigen index resumen. der
+runbook-abschnitt 5 stammt aus dem aelteren ablauf OHNE abbildwechsel und
+erwartet den index noch intakt; mit dem neuen block 13b widersprechen sich
+die beiden. befund fuer 15-15: abschnitt 5 muss den korpus pruefen und nicht
+den index, oder das tor gehoert VOR block 13b.
+
+der ersatzbeleg, dass es die richtige box ist, ist der KORPUS selbst, und der
+ist unberuehrt:
+
+-- 1. der korpus (der eigentliche messeingang) --
+dokumentdateien unter home::lasttest (oc_filecache, ohne verzeichnisse): 52114
+alle dateien unter files/ (mit verzeichnissen): 52123
+datentraeger ncdata belegt: 20G
+urteil: konsistent mit dem phase-10-korpus. die snapshot-beschreibung nennt
+52111 dokumente; die abweichung von drei ist die uebliche differenz zwischen
+der zaehlung ueber occ (dokumente) und ueber den filecache. der eingang der
+messung ist derselbe.
+
+-- 2. die zustandstabelle jetzt (nach 13b und dem beginnenden nachlauf) --
+occ findling:index (nextcloud-seite): indexed 0 (strukturell, der backend-
+container zaehlt), skipped 44, failed 6, scheduled 394.
+oc_findling_file_state: 50 zeilen gesamt (44 skipped, 6 failed).
+der backend-poller laeuft seit dem abbildwechsel (02:42) und baut bereits:
+state.db-wal waechst, das index-verzeichnis traegt eintraege von 03:23.
+das ist KEIN nullstand; task 3 stellt ihn mit --restart -n her, bevor der
+volllauf angestossen wird.
+die 44/6 gegen die 37/0 aus phase 10 sind ein in-arbeit-stand des neuen
+abbilds und keine endzahl; die endgueltigen skipped/failed misst der volllauf
+frisch.
+
+-- 3. maschine und speicher --
+free -h gesamt   3.9Gi
+nproc            2
+uname -m         aarch64
+instanztyp (aws_box.sh status)  m7g.large
+urteil: wie erwartet, identisch zur v1.1-box.
+
+-- 4. harte containergrenze aus der cgroup --
+memory.max       2147483648
+memory.swap.max  0
+urteil: erfuellt. der swap-anteil ist 0 und nicht die grenze (docker-summen-
+semantik, belegt durch 90-bestand.txt der v1.1-box). die runbook-erwartung
+"2147483648 in beiden feldern" ist falsch, siehe fix d6fb185 und abweichung 7
+in 03-aufbau.txt.
+
+-- 5. zeit seit dem letzten containerstart --
+StartedAt        2026-09-20T02:42:05Z
+abgelesen        2026-09-20T02:45:53Z
+abstand          rund 4 minuten
+kein sollwert; die zahl ordnet eine spaetere kaltstartmessung ein.
+
+-- 6. werkzeugstand als baumhash --
+baumhash-gleich ja (aus 40b-baumhash.txt, dreifach verankert, plus der
+baumhash im laufenden container aus 92b-wechsel.txt, alle f3f1fb13...).
+
+-- entladeschalter --
+entladeschalter-ist 0 (FINDLING_EMBED_IDLE_RELEASE_SECONDS, aus der
+container-umgebung). gilt fuer diesen und jeden weiteren schritt ausser 8.
+
+-- cron-intervall (aus 97-cron-vorpruefung-vorher.txt) --
+cron-modus-ist cron
+cron-intervall-quelle aio-cron-container
+cron-intervall-ist 300
+(rc 0 nach dem fix des cron-lesers, commit 6f42c69; die 5-s-fehllesung war
+der trap-handler des aio-cron.sh, siehe 15-10-summary.)
