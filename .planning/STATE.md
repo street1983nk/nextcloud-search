@@ -53,7 +53,7 @@ rohdaten/02-vorbedingungen.txt protokolliert. **Damit ist Welle A ohne Box
 vollstaendig.** Naechster Plan ist 15-08, der Owner-Checkpoint Deckelfreigabe;
 alles danach ist durch ihn gesperrt.
 Progress: [████████░░] 82% der 49 geplanten Plaene (40 von 49; Phase 16 ist noch nicht geplant)
-Last activity: 2026-09-20 -- Owner-Tor 15-08 passiert (Deckel 46 h / 5,40 USD, Fragen A/B/C beantwortet); Welle C wartet auf die begleitete Sitzung
+Last activity: 2026-09-20 -- Owner-Tor 15-08 passiert (Deckel 46 h / 5,40 USD, Fragen A/B/C beantwortet); offene Vorbedingung aus 15-07 erledigt: CI_LAUF-Kandidat auf 35471225104 (f650c10) nachgezogen, Fehlschlag 35470079862 als Einzelfall belegt (Nachtraege in rohdaten/02-vorbedingungen.txt und deferred-items.md); die begleitete Sitzung 15-09 bis 15-14 wartet auf die Eroeffnung durch den Owner
 
 **Was der Owner in 15-08 zu entscheiden hat, in zwei Zeilen:** die Freigabe des
 Deckels mit Datum (Vorbedingung 9, Platzhalter steht in der Rohdatei) und den

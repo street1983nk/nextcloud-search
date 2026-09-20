@@ -45,6 +45,23 @@ zwei folgen:
      werkzeug dieses laufverzeichnisses. er ist als offener punkt vermerkt und
      nicht teil dieses plans.
 
+nachtrag 2026-09-20 (bestaetigung aus dem 15-08-bericht, vor der anfahrt):
+kommando:
+  gh run list --workflow=integration.yml --status success --limit 1
+antwort:
+  completed  success  35471225104  main  push  2026-09-19T21:42:45Z
+  commit f650c10, docs(15-06)
+der lauf, der bei der ablesung am 19.09. noch nicht fertig war, ist gruen
+geworden. CI_LAUF-kandidat ist damit 35471225104 und nicht mehr 35469147833.
+ueber f650c10 liegen nur noch vier doku-commits (15-07 und 15-08), die keinen
+integration-lauf ausloesen; der kandidat gehoert damit zum kopf des zweiges,
+soweit einer belegbar ist. der fehlgeschlagene lauf 35470079862 ist beidseitig
+von gruenen laeufen eingerahmt, und zwischen den beiden gruenen staenden liegen
+nur mess-skripte, deren tests und doku (backend/tests/test_measurement_scripts.py,
+docs/runbook-messbox.md, docs/measurements/, .planning/), nichts an anmeldung
+oder suchparitaet: das spricht fuer einen einzelfall. massgeblich bleibt die
+zweite holung unmittelbar vor schritt 7 der anfahrt.
+
 -- 2 die sicherung der systemplatte --
 kommando:
   ls -l "${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}/systemplatte-2026-09/home-ubuntu-work.tar.gz"

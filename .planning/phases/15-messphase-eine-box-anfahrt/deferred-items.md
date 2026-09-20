@@ -36,3 +36,11 @@ ein Plan nicht die Fehler eines anderen Bereichs mitnimmt.
   damals antwortete die Ergebnisseite mit 404, heute wird die Anmeldung selbst
   verweigert. Wer den Punkt aufnimmt, liest beide nebeneinander, bevor er einen
   fuer sporadisch erklaert.
+- **Nachtrag 2026-09-20:** Der Lauf zum Commit des Plans 15-06 (f650c10,
+  35471225104) ist gruen geworden, derselbe Auftrag `search-parity
+  (stable34, 8.2)` samt Login-Schritt bestanden. Zwischen 15-04 (gruen) und
+  15-06 (gruen) liegen nur Mess-Skripte, deren Tests und Doku, nichts an
+  Anmeldung oder Suchparitaet; der Fehlschlag 35470079862 ist damit beidseitig
+  eingerahmt und als Einzelfall einzuordnen. CI_LAUF-Kandidat ist jetzt
+  35471225104 (Nachtrag in rohdaten/02-vorbedingungen.txt); die zweite Holung
+  unmittelbar vor Schritt 7 bleibt Pflicht.
