@@ -58,7 +58,9 @@
 #    Registrierung, die den Container neu baut. Dann die harte Grenze, weil die
 #    Registrierung sie wegwirft; gelesen wird sie AUS DER CGROUP und nicht aus
 #    der Antwort von docker update oder aus docker inspect, mit 2147483648 in
-#    memory.max und in memory.swap.max. Greift sie nicht: **39**. Ein Lauf, der
+#    memory.max und 0 in memory.swap.max (docker-Semantik: --memory-swap ist
+#    die Summe, der Swap-Anteil dieser Maschine ist 0, wie auf der v1.1-Box,
+#    siehe 90-bestand.txt). Greift sie nicht: **39**. Ein Lauf, der
 #    gegen 4 GB misst, waehrend 2 GiB gemeint sind, misst eine andere Maschine
 #    als v1.1. Unmittelbar daneben wird die Stellung von
 #    FINDLING_EMBED_IDLE_RELEASE_SECONDS neu abgelesen und als
@@ -136,7 +138,8 @@ Ein Vorgabewert waere hier eine Vorgabe fuer den Messgegenstand.
 
 Der Digest wird vor der Anfahrt aus der Abbildstrecke abgelesen. Die uebrigen
 Stellschrauben stehen als Umgebungsvariablen im Kopf der Datei, darunter
-ABBILD_REPO, IMAGE_TAG, CONTAINER, NEXTCLOUD, DAEMON und ERWARTETE_GRENZE.
+ABBILD_REPO, IMAGE_TAG, CONTAINER, NEXTCLOUD, DAEMON, ERWARTETE_GRENZE und
+ERWARTETER_SWAP (Vorgabe 0, der Swap-Anteil der cgroup, nicht die Grenze).
 HINWEIS
 }
 
@@ -201,6 +204,15 @@ VERSION="${VERSION:-1.1.0}"
 IMAGE_TAG="${IMAGE_TAG:-dev}"
 # Die harte Grenze in Byte, so wie die cgroup sie meldet.
 ERWARTETE_GRENZE="${ERWARTETE_GRENZE:-2147483648}"
+# Der erwartete Swap-Anteil AUS DER CGROUP, und er ist 0 und nicht die Grenze.
+# docker update --memory=2g --memory-swap=2g bedeutet Summe = 2 GiB, also
+# Swap-Anteil 0, und genau so stand es auf der v1.1-Box:
+# docs/measurements/2026-09-vergleichsmessung-m7g/rohdaten/90-bestand.txt
+# traegt memory.swap.max=0 neben memory.max=2147483648. Die urspruengliche
+# Fassung dieses Werkzeugs erwartete die Grenze in BEIDEN Feldern und haette
+# jede korrekte Maschine mit 39 abgewiesen; Befund der Anfahrt vom 20.09.2026,
+# Fix mit Owner-Wort in der begleiteten Sitzung.
+ERWARTETER_SWAP="${ERWARTETER_SWAP:-0}"
 # Der Name des Entladeschalters aus Phase 14. Er reist als Umgebungsvariable der
 # ExApp und wird nach der Registrierung neu abgelesen.
 ENTLADESCHALTER="${ENTLADESCHALTER:-FINDLING_EMBED_IDLE_RELEASE_SECONDS}"
@@ -450,8 +462,8 @@ fi
         gemessene_grenze=$(cgroup_wert memory.max)
         gemessener_swap=$(cgroup_wert memory.swap.max)
         printf 'speichergrenze-ist %s/%s\n' "$gemessene_grenze" "$gemessener_swap"
-        printf 'grenze-erwartet %s\n' "$ERWARTETE_GRENZE"
-        if [ "$gemessene_grenze" = "$ERWARTETE_GRENZE" ] && [ "$gemessener_swap" = "$ERWARTETE_GRENZE" ]; then
+        printf 'grenze-erwartet %s/%s\n' "$ERWARTETE_GRENZE" "$ERWARTETER_SWAP"
+        if [ "$gemessene_grenze" = "$ERWARTETE_GRENZE" ] && [ "$gemessener_swap" = "$ERWARTETER_SWAP" ]; then
             echo "grenze-gesetzt ja"
         else
             echo "grenze-gesetzt nein"
@@ -523,7 +535,7 @@ if [ -f "$WORK/zweite-instanz-b" ]; then
     exit 37
 fi
 if [ -f "$WORK/grenze-fehlt" ]; then
-    echo "92b-wechsel: die cgroup meldet nicht $ERWARTETE_GRENZE in beiden Feldern" >&2
+    echo "92b-wechsel: die cgroup meldet nicht $ERWARTETE_GRENZE/$ERWARTETER_SWAP in memory.max/memory.swap.max" >&2
     echo "92b-wechsel: ein Lauf, der gegen 4 GB misst, waehrend 2 GiB gemeint sind," >&2
     echo "92b-wechsel: misst eine andere Maschine als v1.1 und keine Abweichung" >&2
     exit 39

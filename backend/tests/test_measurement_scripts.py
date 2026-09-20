@@ -2139,6 +2139,26 @@ def test_the_image_switch_reads_the_hard_limit_out_of_the_cgroup() -> None:
         assert forbidden not in code, forbidden
 
 
+def test_the_image_switch_expects_zero_swap_out_of_the_cgroup() -> None:
+    """The swap field of a 2g/2g update reads 0, and 0 is the correct machine.
+
+    docker update --memory=2g --memory-swap=2g names a SUM, so the swap share
+    of the cgroup is 0, and the v1.1 box recorded exactly that
+    (2026-09-vergleichsmessung-m7g/rohdaten/90-bestand.txt: memory.swap.max=0
+    next to memory.max=2147483648). The first version of this tool expected
+    the hard limit in BOTH fields and would have refused every correct
+    machine with 39; found on the paid box on 2026-09-20, fixed with the
+    owner's word. This test pins the repaired semantics: an own expectation
+    for the swap share, defaulting to 0, and no comparison of the swap
+    reading against the hard limit.
+    """
+    text = V12_IMAGE_SWITCH.read_text(encoding="utf-8")
+    code = "\n".join(the_three_parts_of(text))
+    assert 'ERWARTETER_SWAP="${ERWARTETER_SWAP:-0}"' in code
+    assert '"$gemessener_swap" = "$ERWARTETER_SWAP"' in code
+    assert '"$gemessener_swap" = "$ERWARTETE_GRENZE"' not in code
+
+
 def test_the_image_switch_calls_the_tree_hash_as_a_script() -> None:
     """The proof is called and not rebuilt, or it proves only itself.
 
