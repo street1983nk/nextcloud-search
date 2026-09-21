@@ -111,19 +111,38 @@ Die Spalte "Ist (Phase 15)" bleibt leer. Sie wird während der Anfahrt gefüllt,
 und der nächste Lauf rechnet gegen die gefüllte Spalte statt gegen die
 Planwerte.
 
+**Nachtrag vom 21.09.2026: die Spalte ist gefüllt.** Der Satz darüber bleibt in
+seiner Zeitform stehen, weil er die Lage vor der Anfahrt beschreibt. Die Werte
+stammen aus den Zeitstempeln der Rohdateien und aus `BOX_LAST_UPTIME_HOURS`;
+wo kein eigener Zeitstempel entstanden ist, steht das statt einer Zahl.
+
 | Posten | Planwert | Quelle | Ist (Phase 15) |
 |---|---|---|---|
-| Handaufbau der Maschine (Security Group, Schlüssel, Instanz, `mem=4G`, Neustart) | **2 h 30 min, Schätzung** | nirgends gemessen, Annahme A8 der Phasenrecherche, ausdrücklich als Schätzung geführt | |
-| Wiederaufbau aus dem Snapshot und Rüstzeit (Volume, Mount, Docker, Rückspielung, A-Record, Bewaffnung) | 1 h 30 min | Anfahrt und Vormessungen v1.1 waren 38 min bei bestehender Box; der Aufschlag ist der Wiederaufbau und ist geschätzt | |
-| **NEU: Abbildwechsel auf den v1.2-Stand** (Pull per Digest, PHP-Hälfte, Registrierung, harte Grenze, Baumhash) | **1 h 00 min** | Muster `92-wechsel.sh`, geschätzt; Annahme A2 der Phasenrecherche. Im Rechenblatt des Standes vom 16.09.2026 fehlte dieser Posten vollständig | |
-| Volllauf beide Spuren bis zum letzten Vektor | **26 h 37 min** | v1.1, Abschnitt 7 des Berichts, gemessen | |
-| **NEU: MEM-02-Block** (Grundlast vor und nach dem Indexlauf, Freigabe abwarten, `rss_sampler`) | **0 h 45 min** | MEM-02 ist in keiner Zeile des bisherigen Rechenblatts enthalten, Annahme A3 der Phasenrecherche | |
-| Untersuchung der vier regressiven Laststufen, je ein Entscheid | 1 h 30 min | neu in v1.2, geschätzt | |
-| **NEU: Filter- und Sortierblock** (Sortierung auf grossem Bestand, Blättern unter Filter) | **1 h 30 min** | Owner-Entscheid vom 19.09.2026 (D-01, `15-CONTEXT.md`), der 1 bis 2 h nennt; als Planwert gilt die Mitte | |
-| Wiederaufwärm-Messung der Entladung in vier Ausprägungen (warm und kalt, je mit und ohne Seitencache) | 2 h 00 min | neu in v1.2, geschätzt | |
-| Sprachfall-Messung mit der neuen Messgrösse, inklusive Erstvollzug des Skripts | 1 h 00 min | neu in v1.2, geschätzt | |
-| Abbau und Endmessungen (Gegenproben vor dem Abbau, Snapshot, `destroy`, Tag-Sweep) | 1 h 00 min | v1.1 Abschnitt 17 und der Abbaulauf vom 11.09.2026 | |
-| **Summe der Planwerte** | **39 h 22 min** | Addition der zehn Zeilen darüber: 2:30 + 1:30 + 1:00 + 26:37 + 0:45 + 1:30 + 1:30 + 2:00 + 1:00 + 1:00 = 2.362 Minuten | |
+| Handaufbau der Maschine (Security Group, Schlüssel, Instanz, `mem=4G`, Neustart) | **2 h 30 min, Schätzung** | nirgends gemessen, Annahme A8 der Phasenrecherche, ausdrücklich als Schätzung geführt | **rund 0 h 40 min**, gemeinsam mit der Zeile darunter: die Blöcke 1 bis 9 sind am 20.09.2026 zwischen ~01:30Z und ~02:10Z gefahren worden und nicht je Block gestempelt (`03-aufbau.txt`, Kopf; Instanz erzeugt 01:38:51Z) |
+| Wiederaufbau aus dem Snapshot und Rüstzeit (Volume, Mount, Docker, Rückspielung, A-Record, Bewaffnung) | 1 h 30 min | Anfahrt und Vormessungen v1.1 waren 38 min bei bestehender Box; der Aufschlag ist der Wiederaufbau und ist geschätzt | **in der Zeile darüber enthalten**, nicht getrennt gestempelt. Darin stecken die Abweichungen 4 und 5 (Docker war nicht installiert, die containerd-Wurzel musste umgestellt werden), also der teuerste Teil dieses Postens |
+| **NEU: Abbildwechsel auf den v1.2-Stand** (Pull per Digest, PHP-Hälfte, Registrierung, harte Grenze, Baumhash) | **1 h 00 min** | Muster `92-wechsel.sh`, geschätzt; Annahme A2 der Phasenrecherche. Im Rechenblatt des Standes vom 16.09.2026 fehlte dieser Posten vollständig | **rund 0 h 32 min** (20.09., ~02:10Z bis 02:42:00Z, `40b-baumhash.txt`), in **drei** Läufen: Lauf 1 scheiterte am fehlenden `occ upgrade`, Lauf 2 an einem Kennungsvergleich, Lauf 3 war grün |
+| Volllauf beide Spuren bis zum letzten Vektor | **26 h 37 min** | v1.1, Abschnitt 7 des Berichts, gemessen | **19 h 20 min** (20.09., Trigger 03:49:32Z, Ende 23:09:58Z), als Untergrenze gekennzeichnet: beim Anstoss lagen 4.696 Dateien im Index |
+| **NEU: MEM-02-Block** (Grundlast vor und nach dem Indexlauf, Freigabe abwarten, `rss_sampler`) | **0 h 45 min** | MEM-02 ist in keiner Zeile des bisherigen Rechenblatts enthalten, Annahme A3 der Phasenrecherche | **0 h 03 min** (21.09., 03:06:32Z bis 03:09:46Z). Der Planwert rechnete mit der vollen Frist; gefahren wurde mit 120 s Ruhezeit (D-02) |
+| Untersuchung der vier regressiven Laststufen, je ein Entscheid | 1 h 30 min | neu in v1.2, geschätzt | **0 h 06 min** reine Messzeit auf der Box (21.09., 02:08:46Z bis 02:13:52Z, Kaltstart eingeschlossen). Die vier Verdikte und die Gegenrechnung aus dem Nextcloud-Protokoll sind ohne Box entstanden |
+| **NEU: Filter- und Sortierblock** (Sortierung auf grossem Bestand, Blättern unter Filter) | **1 h 30 min** | Owner-Entscheid vom 19.09.2026 (D-01, `15-CONTEXT.md`), der 1 bis 2 h nennt; als Planwert gilt die Mitte | **0 h 00 min 11 s** reine Messzeit (21.09., 02:17:56Z bis 02:18:07Z). Die Rüstzeit davor (Sitzung, `FINDLING_LOAD_PASSWORD`) ist nicht getrennt gestempelt |
+| Wiederaufwärm-Messung der Entladung in vier Ausprägungen (warm und kalt, je mit und ohne Seitencache) | 2 h 00 min | neu in v1.2, geschätzt | **0 h 07 min** (21.09., 02:47:32Z bis 02:54:34Z), vier Ausprägungen mit je 120 s Ruhezeit statt 900 s (D-02). Der Planwert bleibt bei 2 h 00 min, siehe den Absatz unter der Tabelle |
+| Sprachfall-Messung mit der neuen Messgrösse, inklusive Erstvollzug des Skripts | 1 h 00 min | neu in v1.2, geschätzt | **0 h 07 min** (21.09., 02:18:54Z bis 02:25:23Z), Abschnitt 0 mit der Bestandssonde eingeschlossen |
+| Abbau und Endmessungen (Gegenproben vor dem Abbau, Snapshot, `destroy`, Tag-Sweep) | 1 h 00 min | v1.1 Abschnitt 17 und der Abbaulauf vom 11.09.2026 | **0 h 05 min** Box-Zeit bis zum Anhalten (21.09., Endmessung 03:23:32Z, `stop` 03:23:57Z). Der Abbau selbst lief an der angehaltenen Maschine und hat keine Box-Stunde mehr gekostet; ein Ende-Snapshot ist nicht gezogen worden |
+| **Summe der Planwerte** | **39 h 22 min** | Addition der zehn Zeilen darüber: 2:30 + 1:30 + 1:00 + 26:37 + 0:45 + 1:30 + 1:30 + 2:00 + 1:00 + 1:00 = 2.362 Minuten | **25,75 h Box-Laufzeit gesamt** (`BOX_LAST_UPTIME_HOURS`, 20.09. 01:38Z bis 21.09. 03:23:57Z), davon 19 h 20 min Volllauf. Die Summe der gestempelten Posten ist deutlich kleiner: dazwischen liegt Sitzungs-, Warte- und Auswertungszeit, die keine Rohdatei stempelt |
+
+**Wie diese Spalte zu lesen ist, und wie nicht.** Sie nennt **gestempelte
+Messzeit** und nicht Kosten. Zwischen den Blöcken lag eine begleitete Sitzung
+mit Rückfragen, Werkzeugbefunden und drei Fixes; die Differenz zwischen der
+Summe der Posten und den 25,75 h Box-Laufzeit ist genau diese Zeit und keine
+Reserve. Wer den nächsten Deckel rechnet, nimmt die Ist-Werte als **Untergrenze
+je Posten** und schlägt die Sitzungszeit gesondert auf.
+
+**Was der Erstvollzug an dieser Tabelle selbst gelernt hat.** Kein Block hat
+eine eigene Zeitmarke geschrieben, und deshalb stehen die ersten beiden Posten
+heute in einer gemeinsamen Zeile. Für die nächste Anfahrt gilt: **jeder Block
+schreibt beim Betreten und beim Verlassen eine Zeile mit UTC-Zeitstempel in
+seine Rohdatei.** Das kostet nichts und ist der Unterschied zwischen einer
+gefüllten Spalte und einer belegten.
 
 **Der Planwert des Volllaufs nimmt keine Verbesserung vorweg.** Ob der
 Top-up-Fix den Lauf verkürzt, ist genau die Frage, die dieser Lauf beantworten
@@ -195,9 +214,19 @@ Monatsrechnung; sie stehen hier, damit niemand sie für den Deckel hält.
 | Owner am 09.09.2026 | 30 h / 3,50 USD | der ursprüngliche Deckel |
 | 2026-09-10 um 15:20Z | gerissen | angehoben auf 34 h / 4,00 USD, vor den Nachmessungen |
 | Ende des Laufs | verbraucht **31,05 h / 3,5969 USD** | gegen den angehobenen Deckel nicht gerissen |
+| Owner am 20.09.2026 | 46 h / 5,40 USD | die Freigabe der v1.2-Anfahrt, Checkpoint 15-08, mit Datum |
+| Ende der v1.2-Anfahrt, 21.09.2026 | verbraucht **25,75 h / 2,9831 USD** | **Deckel gehalten**, Differenz 20,25 h / 2,42 USD darunter; auch die Untergrenze 31 h / 3,59 USD ist unterschritten |
 
 **Der Deckel ist schon einmal gerissen.** Das ist der Grund, warum dieses
 Rechenblatt existiert und warum es vor der ersten Kommandozeile steht.
+
+**Nachtrag vom 21.09.2026: er ist auch schon einmal gehalten worden.** Die
+v1.2-Anfahrt blieb mit 25,75 h um 20,25 h unter ihrem Deckel, und der
+Hauptgrund ist ein Posten, der kleiner war als sein Planwert: der Volllauf
+brauchte 19 h 20 min statt der eingeplanten 26 h 37 min. Die Zeile bleibt
+trotzdem als Warnung lesbar und nicht als Erfolgsmeldung: der Planwert hat die
+Verbesserung bewusst nicht vorweggenommen, und genau deshalb ist er nicht
+gerissen.
 
 ### 2.5 Der Rechenweg
 
@@ -267,9 +296,32 @@ ist.
 | 7 | **`jq` auf der Box**, sobald sie steht | `ssh ... 'jq --version'` | Ohne `jq` endet der Sprachfall-Lauf mit Rückgabewert 18, und zwar mitten in der bezahlten Zeit |
 | 8 | **Der Zugang zur DNS-Verwaltung** für den A-Record `loadtest.infranode.dev` liegt vor | Anmeldung am Verwalter der Zone geprüft | Der Record zeigt seit dem 11.09.2026 ins Leere. Wer ihn erst während der Anfahrt sucht, bezahlt die Suche |
 | 9 | **Das Deckel-Rechenblatt aus Abschnitt 2 ist neu gerechnet** und vom Owner mit Datum freigegeben | eine Zeile `Anfahrt freigegeben: <Datum>, Deckel <h> h / <USD> USD` im Bericht des Laufs, geschrieben **vor** der ersten Minute | Eine Anfahrt ohne Deckel ist eine offene Rechnung. Der Abbau der Box ist ein eigener Entscheid und nicht Teil dieser Freigabe |
+| 10 | **Das Schlüsselpaar `findling-loadtest` existiert noch aus dem letzten Abbau** | `aws ec2 describe-key-pairs --region eu-central-1 --key-names findling-loadtest` | *In Phase 15 erstmals vollzogen, 20.09.2026.* Block 2 endete mit `InvalidKeyPair.Duplicate`, weil `cmd_destroy` das Paar nicht löscht. Der Handgriff ist ein `delete-key-pair` und kostet Sekunden, aber er fiel in die bezahlte Zeit |
+| 11 | **Es liegt keine alte `~/.ssh/findling-loadtest.pub` herum** | `ls -l ~/.ssh/findling-loadtest*`, und wenn eine `.pub` da ist, gehört sie zum aktuellen privaten Teil | *In Phase 15 erstmals vollzogen, 20.09.2026.* Der erste SSH-Versuch endete mit `Permission denied (publickey)`: openssh liest bei vorhandener `.pub` DIESE und bot den öffentlichen Teil eines Paares vom 04.09. an. Auflösung: alte `.pub` beiseite legen, neue mit `ssh-keygen -y` aus dem privaten Teil ableiten |
+| 12 | **Die Herkunft des Arbeitsbaums auf der Box ist festgelegt** (Klon-Adresse und Zielcommit), und `git config core.fileMode false` gehört dazu | die beiden Werte stehen notiert, bevor die Maschine läuft | *In Phase 15 erstmals vollzogen, 20.09.2026.* Block 9 liefert **keinen** Arbeitsbaum: die Sicherung trägt nur die flache Skriptablage der alten Box. Ohne diese Zeile sucht der Operator den Arbeitsbaum in der bezahlten Zeit |
+| 13 | **Die beiden Konfigurationsdateien für Docker und containerd liegen als Text bereit** (`/etc/docker/daemon.json` mit der `data-root`, `/etc/containerd/config.toml` mit `root = "/mnt/findling/containerd"`) | beide Textblöcke sind notiert, bevor die Maschine läuft | *In Phase 15 erstmals vollzogen, 20.09.2026.* Auf der frischen Maschine ist **kein** Docker installiert, und beide Wurzeln müssen vor dem ersten Daemon-Start stehen. Siehe Block 8 |
+| 14 | **Das Passwort des Lastkontos steht als `FINDLING_LOAD_PASSWORD` in der Umgebung** | `[ -n "$FINDLING_LOAD_PASSWORD" ]`, ohne den Wert zu drucken | *In Phase 15 erstmals vollzogen, 21.09.2026.* `99c-filter-sortierung.sh` liest **keine** Passwortdatei; ohne die Variable endet der Block mit 401 und Rückgabewert 34, mitten in der bezahlten Zeit |
+| 15 | **Die eigene öffentliche Adresse kann zwischen zwei Sitzungen wechseln** | `aws_box.sh start` zieht die SSH-Regel nach; bei einer Sitzung ohne Maschinenstart wird sie von Hand nachgezogen | *In Phase 15 erstmals vollzogen, 21.09.2026.* Der Anbieter hat die Adresse über Nacht neu vergeben, die Regel zeigte auf die alte. Die Box war nie unerreichbar (HTTPS durchgehend 200), nur SSH war zu |
 
 **Keine dieser neun Zeilen braucht eine laufende Box.** Wer eine von ihnen auf
 später verschiebt, verschiebt sie in die bezahlte Zeit.
+
+**Nachtrag vom 21.09.2026: aus neun sind fünfzehn geworden.** Der Satz darüber
+bleibt im Wortlaut stehen und gilt für alle fünfzehn. Die sechs neuen Zeilen
+sind keine Vorsichtsmassnahmen, sondern Rechnungen: jede von ihnen ist in der
+bezahlten Zeit der v1.2-Anfahrt aufgefallen.
+
+**Zwei der alten neun Zeilen bekommen einen Vermerk, statt gestrichen zu
+werden:**
+
+- **Zeile 2 (Sicherung der Systemplatte).** Sie ist richtig und war nötig, aber
+  ihre Erwartung im Runbook stimmte nicht: die Sicherung trägt 435 Einträge und
+  packt auf 13 MB aus, nicht auf die rund 91 MB, die Block 9 nennt. Und sie
+  trägt **keinen** Arbeitsbaum, siehe die neue Zeile 12.
+- **Zeile 7 (`jq` auf der Box).** Sie hat sich am 20.09.2026 von selbst
+  erledigt, weil `jq` im selben `apt-get install` mitkam, mit dem Docker
+  installiert werden musste (Block 8). Die Zeile bleibt stehen: sie erledigt
+  sich nur so lange von selbst, wie Block 8 ohnehin Pakete installiert.
 
 ---
 
@@ -308,6 +360,8 @@ offen und nennt sich selbst.
 | Die harte Speichergrenze ist nach jeder Registrierung weg | `docker update --memory=2g --memory-swap=2g`, danach `memory.max` und `memory.swap.max` AUS DER CGROUP zurücklesen | Die Registrierung baut den Container neu und verliert die Grenze. Ohne sie misst der Lauf eine andere Maschine als v1.1 |
 | Nur EINE Nextcloud auf dem Docker-Dienst | `docker ps` zählt, und zwar VOR dem ersten `--rm-data` | Der Volumenname einer ExApp folgt allein aus ihrer App-Kennung. Am 07.09.2026 hat eine zweite, frische Nextcloud mit `app_api:app:unregister --rm-data` das Messvolumen der ERSTEN gelöscht |
 | Git für Windows schreibt Pfadargumente um | in jedem neuen Skript, das von dieser Maschine gegen die Box oder gegen die AWS-API läuft, die Pfadumschreibung für den eigenen Prozess abschalten, so wie `aws_box.sh` es tut | Aus `/dev/sdf` wurde ein Windows-Pfad unterhalb des Git-Installationsverzeichnisses. Der Aufruf lief durch und meinte etwas anderes, als er sagte |
+| *In Phase 15 erstmals vollzogen, 20.09.2026:* das Ausführungsbit der Werkzeuge im Laufverzeichnis | einmal, **vor** Block 13b: `cd <checkout>/docs/measurements/2026-09-v12-messung/skripte && chmod +x *.sh *.py`, danach `ls -l` als Rückleseprobe | Vierzehn der achtzehn Werkzeuge stehen mit `100644` im Index, und ein Auscheck auf der Box erbt genau diese Maske. Der erste Aufruf `./97-cron-vorpruefung.sh vorher` endete mit **126** und "Permission denied", in der bezahlten Zeit und mit einer Meldung, die keines der beiden Dokumente erklärte |
+| *In Phase 15 erstmals vollzogen, 21.09.2026:* die SSH-Regel nach einem Adresswechsel | `revoke-security-group-ingress` auf die alte Adresse, `authorize-security-group-ingress` auf die neue, nach dem Muster von `cmd_start` | Die eigene öffentliche Adresse kann über Nacht neu vergeben werden. Die Box ist dann über HTTPS weiter erreichbar und über SSH nicht, und das sieht wie ein Ausfall der Box aus. Siehe Abschnitt 3, Zeile 15 |
 
 ---
 
@@ -339,6 +393,13 @@ hier `<sg>` ist; `authorize-security-group-ingress` liefert `"Return": true`
 und vier `SecurityGroupRules`-Einträge, davon einer mit `"IpProtocol": "udp"`.
 Marke: `in Phase 15 erstmals vollzogen`.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): `GroupId` geliefert, `Return: true`, vier
+`SecurityGroupRules`-Einträge (tcp 22 auf `<eigene-adresse>/32`, tcp 80, tcp
+443 und udp 443 auf `<ganzes-netz>`). Die eigene Adresse kam aus dem
+Adressdienst und wurde vor der Verwendung als IPv4 geparst, wie `cmd_start` es
+tut. Keine Abweichung.
+
 ### Block 2: Schluesselpaar anlegen
 
 ```sh
@@ -356,6 +417,27 @@ keinen Kommandozeilenparameter.
 `-----BEGIN RSA PRIVATE KEY-----` beziehungsweise
 `-----BEGIN OPENSSH PRIVATE KEY-----` und ist grösser als null Byte; `ls -l`
 zeigt Rechte `-rw-------`. Marke: `in Phase 15 erstmals vollzogen`.
+
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): nach dem Vollzug der beiden Abweichungen unten beginnt die
+Datei mit `-----BEGIN RSA PRIVATE KEY-----`, Rechte `-rw-------`, 2048 Bit RSA.
+
+**Abweichung:** `create-key-pair` endete zuerst mit `InvalidKeyPair.Duplicate`.
+Das Schlüsselpaar `findling-loadtest` existierte noch in AWS, weil der Abbau vom
+11.09.2026 Instanz, Datenträger und Security Group löscht, aber kein
+Schlüsselpaar; `cmd_destroy` kennt keinen `delete-key-pair`-Aufruf. Was
+tatsächlich nötig war: erst `delete-key-pair`, dann `create-key-pair` neu. Die
+Vorprüfung dazu steht jetzt in Abschnitt 3, Zeile 10, und der Nachtrag am Abbau
+in Abschnitt 8, Schritt 6.
+
+**Abweichung:** der erste SSH-Versuch endete mit
+`Permission denied (publickey)`. Neben dem privaten Teil lag noch eine
+`~/.ssh/findling-loadtest.pub` vom 04.09.2026, die zu einem älteren Paar
+gehörte; openssh liest bei vorhandener `.pub`-Datei DIESE und bietet den darin
+stehenden öffentlichen Teil an. Was tatsächlich nötig war: die alte `.pub`
+beiseite legen und die neue mit `ssh-keygen -y` aus dem privaten Teil ableiten.
+Dieser Block erzeugt die `.pub`-Datei ab jetzt ausdrücklich mit; die Vorprüfung
+steht in Abschnitt 3, Zeile 11.
 
 ### Block 3: Instanz erzeugen
 
@@ -382,6 +464,13 @@ bewusst flüchtig, weil nichts Dauerhaftes auf ihr liegen darf.
 `Erwartete Ausgabe`: `Instances[0].InstanceId` und `Instances[0].Placement.AvailabilityZone`
 mit dem Wert `eu-central-1c`; `aws ec2 wait instance-running` kehrt ohne
 Ausgabe zurück. Marke: `in Phase 15 erstmals vollzogen`.
+
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): `InstanceId` geliefert,
+`Placement.AvailabilityZone eu-central-1c`, `InstanceType m7g.large`,
+`wait instance-running` kehrte ohne Ausgabe zurück. Die Instanz entstand um
+01:38:51Z, und das ist der Beginn der bezahlten Zeit dieser Anfahrt. Keine
+Abweichung.
 
 ### Block 4: box.env NEU schreiben
 
@@ -413,6 +502,12 @@ Felder schreibt `aws_box.sh` selbst und immer anhängend, nie überschreibend:
 Instanz aus der API statt "no state file at ...". Marke:
 `in Phase 15 erstmals vollzogen`.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): `status` meldete Instanz, Typ `m7g.large`, Zustand
+`running` in `eu-central-1c`, die Adresse, den 40-GB-Systemdatenträger,
+`running 0.0 hours since 2026-09-20T01:38:51+00:00` und die drei Kostensätze.
+Kein "no state file". Keine Abweichung.
+
 ### Block 5: Harte Speichergrenze mem=4G
 
 ```sh
@@ -431,6 +526,13 @@ Netzparameter, die beim nächsten Start gebraucht werden.
 `2`, `uname -m` sagt `aarch64`, und `/proc/cmdline` enthält `mem=4G`. Diese drei
 Zahlen sind aus dem Rezept in `cmd_create` übernommen und in drei früheren
 Läufen so gemessen worden.
+
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): `free -h` 3.9Gi, `nproc` 2, `uname -m` aarch64,
+`/proc/cmdline` mit `mem=4G`. Alle drei Zahlen wie in den drei früheren Läufen,
+und am Ende der Anfahrt noch einmal aus `90-bestand.txt` bestätigt. Keine
+Abweichung. Der Drop-in hat die bestehende Kernzeile erweitert und nicht
+ersetzt, wie der Absatz darüber es verlangt.
 
 ### Block 6: Volume aus dem Snapshot
 
@@ -457,6 +559,15 @@ folgen die Zeilen `tags of ... after the retagging: ... purpose=findling-phase5`
 gefahren worden; der erzeugende Teil trägt die Marke
 `in Phase 15 erstmals vollzogen`.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): `no snapshot was handed in, using snap-03f1d1d9ad9262704`,
+`State completed`, `Progress 100%`, `VolumeSize 60`, die Beschreibung mit den
+52111 Dokumenten, danach `creating a 60 GB gp3 volume in eu-central-1c`, die
+zurückgelesenen Tags `Name=findling-corpus purpose=findling-phase5`, das Warten
+auf `available`, das Anhängen als `/dev/sdf` und
+`this subcommand ends at the attach`. Der geerbte Keep-Tag hing nach dem
+Umtaggen nicht mehr am Datenträger. Keine Abweichung.
+
 ### Block 7: Datentraeger mounten
 
 ```sh
@@ -482,6 +593,18 @@ rund 35G belegt, und `ls /mnt/findling` zeigt `docker` und `ncdata`. Die Zahlen
 stammen aus `docs/measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt`,
 Abschnitt 4. Marke: `in Phase 15 erstmals vollzogen`.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): `lsblk -b` zeigte genau einen Datenträger mit
+64.424.509.440 Byte neben der Systemplatte, die UUID kam aus `blkid`, die
+fstab-Zeile stand mit `nofail`, und `df -h /mnt/findling` meldete 59G gesamt,
+35G belegt, 62 Prozent.
+
+**Abweichung:** `ls /mnt/findling` zeigte nicht nur `docker` und `ncdata`,
+sondern `containerd corpus docker drillkorpus lost+found ncdata`. Die erwartete
+Ausgabe des Runbooks war unvollständig. Das ist keine Kleinigkeit:
+**`containerd` ist der Grund, warum Block 8 drei Schritte braucht und nicht
+einen**, siehe dort.
+
 ### Block 8: Docker-data-root, BEVOR der Daemon startet
 
 ```sh
@@ -503,6 +626,38 @@ und `curl -s localhost:5000/v2/_catalog` antwortet
 `{"repositories":["findling_backend"]}`, also die lokale Registry aus dem
 Snapshot. Marke: `in Phase 15 erstmals vollzogen`.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): nach dem Vollzug der beiden Abweichungen unten meldete
+`docker info` die `Docker Root Dir /mnt/findling/docker`,
+`curl -s localhost:5000/v2/_catalog` antwortete
+`{"repositories":["findling_backend"]}`, und **alle** Container der Messbox
+starteten von selbst (Registry, Backend, Apache, Datenbank, HaRP,
+Mastercontainer, Nextcloud, Notify-Push, Redis).
+
+**Abweichung, die grosse dieses Aufbaus:** auf der frischen Maschine ist
+überhaupt **kein Docker installiert**. Der Kommandoblock oben setzt einen
+laufenden Daemon voraus (`systemctl stop docker`), und `cmd_create`
+dokumentiert die Docker-Installation der ursprünglichen Box nicht. Was
+tatsächlich nötig war, in dieser Reihenfolge, damit der erste Daemon-Start die
+Wurzel schon kennt: erst `/etc/docker/daemon.json` schreiben, dann
+`apt-get install docker.io jq` (docker 29.1.3, jq 1.7; damit erledigt sich
+nebenbei Vorbedingung 7), dann `docker info` lesen.
+
+**Abweichung, ebenso wesentlich:** mit der `data-root` allein zeigte `docker ps -a`
+Container **ohne Namen** und `docker images` **nichts**. Das Abbild-Lager der
+Box vom 10.09.2026 ist der containerd-Image-Store (Storage Driver `overlayfs`,
+Driver-Typ `io.containerd.snapshotter.v1`); seine Inhalte liegen unter
+`/mnt/findling/containerd`, und der frische containerd sah auf sein Standardziel
+`/var/lib/containerd`. Was tatsächlich nötig war: `docker`, `docker.socket` und
+`containerd` stoppen, in `/etc/containerd/config.toml` `version = 2` und
+`root = "/mnt/findling/containerd"` setzen, beide Dienste starten. Danach
+standen 15 Abbilder mit Namen da.
+
+**Dieser Block braucht also drei Schritte und nicht einen: Docker
+installieren, die `data-root` setzen, die containerd-Wurzel setzen.** Fehlt der
+dritte, misst niemand irgendetwas, und die Fehlermeldung dazu lautet
+"keine Abbilder".
+
 ### Block 9: Systemplatte zurueckspielen
 
 ```sh
@@ -522,6 +677,27 @@ gelöscht, damit sie nicht in einer späteren Aufnahme landet.
 sha256 wie in `07-snapshot-und-abbau.txt`, Abschnitt 4 vermerkt; nach dem
 Auspacken zeigt `/home/ubuntu/work` rund 91 MB. Marke:
 `in Phase 15 erstmals vollzogen`.
+
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): 435 Einträge in der Sicherung, sha256 identisch mit dem in
+`02-vorbedingungen.txt`, Abschnitt 2 vermerkten Wert. Nach dem Auspacken:
+`find /home/ubuntu/work -type f | wc -l` **385**, `du -sh /home/ubuntu/work`
+**13M**.
+
+**Abweichung:** die Erwartung "rund 91 MB" misst das Falsche. Die 91 MB waren
+der **lebende** Stand der alten Box einschliesslich Laufzeitartefakten
+(virtuelle Umgebungen und dergleichen); die Sicherung trägt 385 Dateien und 50
+Verzeichnisse, zusammen 435 Einträge, und packt auf 13 MB aus. Die Sicherung
+selbst ist byteweise belegt, die Erwartungszeile war es nicht.
+
+**Abweichung:** dieser Block liefert **keinen Arbeitsbaum**. Block 13b nennt
+`<checkout>` "den Arbeitsbaum aus Block 9"; die Sicherung trägt aber nur die
+flache Skriptablage `/home/ubuntu/work` der alten Box. Was tatsächlich nötig
+war: ein `git clone` des öffentlichen Repositoriums nach
+`/home/ubuntu/nextcloud-search`, ein Auscheck auf den Commit des Tages und
+`git config core.fileMode false` (sonst kollidiert die Rechtemaske `100644` der
+Werkzeuge mit dem `chmod +x` vor dem Lauf). Die Vorprüfung dazu steht in
+Abschnitt 3, Zeile 12.
 
 ### Block 10: A-Record setzen
 
@@ -554,6 +730,20 @@ das erst auf der Box auffällt, kostet Box-Minuten für eine Installation.
 neuen Instanz; `curl` gegen `status.php` antwortet mit HTTP 200 und einem JSON,
 das `"installed":true` enthält. Marke: `in Phase 15 erstmals vollzogen`.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): `namensaufloesung-ist=a-record`, Weg 1 von 3. `nslookup`
+löste den Namen auf genau eine Adresse auf, und sie stimmte mit der der Instanz
+überein; `https://loadtest.infranode.dev/status.php` antwortete 200 mit
+`"installed":true`. Die Vorprobe vor dem Record, ohne Namensdienst, lief über
+`curl --resolve` und antwortete ebenfalls 200. TTL 120, nicht über einen Proxy.
+
+**Abweichung:** der Owner hat das Setzen des Records in der Sitzung an den
+Ausführenden delegiert ("erledige du das"), obwohl Abschnitt 3, Zeile 8 den
+Zugang beim Owner verortet. Gesetzt wurde er über den vorhandenen DNS-Zugang
+des Betreiber-Werkzeugkastens. Ein alter Record gleichen Namens wurde dabei
+überschrieben. Der Record ist nach dem Abbau wieder entfernt worden, siehe
+Abschnitt 8, Schritt 6.
+
 ### Block 11: Bewaffnung nach DI-05-36
 
 ```sh
@@ -573,6 +763,10 @@ ein GEZÄHLTER Poller-Durchgang im Protokoll. Ein abgelesener Zustand wie
 `app_api:app:list` zählt hier ausdrücklich nicht als Beweis; er war schon einmal
 grün, während nichts lief. Marke: `in Phase 15 erstmals vollzogen`.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): `successfully disabled`, `successfully enabled`, gezählter
+Poller-Durchgang **3**. Keine Abweichung.
+
 ### Block 12: Harte Speichergrenze des Containers
 
 ```sh
@@ -590,6 +784,24 @@ nicht davor.
 meldet ebenfalls `2147483648`. Jede andere Zahl bedeutet, dass die Messung auf
 einer anderen Maschine läuft als v1.1.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): `memory.max` **2147483648**, `memory.swap.max` **0**.
+
+**Abweichung, und sie hat einen Werkzeug-Fix ausgelöst: die erwartete Ausgabe
+oben ist falsch.** `docker --memory-swap` nennt die **Summe** aus Speicher und
+Swap; der Swap-Anteil der cgroup ist dann 0, nicht 2147483648. Die v1.1-Box hat
+genau das protokolliert
+(`2026-09-vergleichsmessung-m7g/rohdaten/90-bestand.txt`:
+`memory.swap.max=0` neben `memory.max=2147483648`), und sie hat überdies gar
+keinen Swap (`SwapTotal 0 kB`). Der richtige Sollwert lautet also
+**`memory.max` 2147483648 und `memory.swap.max` 0**. Die falsche Zeile bleibt
+oben stehen, damit nachvollziehbar ist, woran das Werkzeug gescheitert ist:
+`92b-wechsel.sh` erwartete die Grenze in beiden Feldern und hätte **jede
+korrekte Maschine** mit Rückgabewert 39 abgewiesen. Fix mit Owner-Wort während
+der Sitzung (`ERWARTETER_SWAP`, Vorgabe 0; Commit d6fb185, boxlose Tests
+nachgezogen). Dieselbe Richtigstellung gilt für Abschnitt 6, Zeile "Instanztyp
+und harte Containergrenze", und für Block 13b, Schritt 3.
+
 ### Block 13: Nur EINE Nextcloud auf dem Docker-Dienst
 
 ```sh
@@ -606,6 +818,13 @@ Maschine, solange gemessen wird.
 
 `Erwartete Ausgabe`: die Zählung liefert genau `1`. Liefert sie mehr, wird
 nichts weiter getan, bis geklärt ist, welche Instanz die Messinstanz ist.
+
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`): die Zählung lieferte **1**, und
+`docker volume ls | grep findling` lieferte genau
+`nc_app_findling_backend_data`. Die Zählung ist im Lauf von `92b-wechsel.sh`
+ein zweites Mal gefallen, unmittelbar über dem `--rm-data`
+(`nextcloud-instanzen-vor-rm-data 1`). Keine Abweichung.
 
 ### Block 13b: Abbildwechsel auf den v1.2-Stand
 
@@ -696,6 +915,65 @@ PHP-Verzeichnis heisst `findling` und ist eingeschaltet, beide cgroup-Felder
 melden `2147483648`, und `40b-baumhash.sh` meldet `baumhash-gleich ja`. Marke:
 `in Phase 15 erstmals vollzogen`.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`03-aufbau.txt`, `92b-wechsel.txt`, `40b-baumhash.txt`), im **dritten** Lauf
+mit Rückgabewert 0:
+
+```
+ABBILD_DIGEST sha256:80710fbba1a4acf6d60671ff60b0aeb85d902228338771e69fb62fe2a14bf706
+nextcloud-instanzen 1, nextcloud-instanzen-vor-rm-data 1
+arbeitsbaum-unberuehrt ja
+abbild-digest-ist = abbild-digest-gefordert, abbild-digest-gleich ja
+baumhash-zeilen 3, baumhash-gleich ja, baumhash-beweis ja
+speichergrenze-ist 2147483648/0, grenze-erwartet 2147483648/0, grenze-gesetzt ja
+entladeschalter-ist 0
+baumhash-im-laufenden-container f3f1fb13..., abbild-im-container-gleich ja
+poller: "indexing is armed and the work stock is empty"
+```
+
+**Abweichung, Schritt 3 der Kette:** die harte Grenze meldet
+`2147483648/0` und nicht `2147483648` in beiden Feldern. Der Wortlaut des
+Schrittes 3 oben ist damit falsch; die Begründung steht bei Block 12.
+
+**Abweichung, der Standwechsel verlangt ein `occ upgrade`, das dieses Runbook
+nicht kennt.** Lauf 1 scheiterte daran: nach dem Einspielen der neuen
+PHP-Hälfte stand die Nextcloud auf "requires upgrade" (1.0.3 im Bestand, 1.1.0
+im Baum), der Namensraum `app_api:app` war im eingeschränkten Modus nicht
+vorhanden, und die Registrierung ist nie gefahren. Was tatsächlich nötig war:
+`occ upgrade` (Wartungsmodus an und aus, "Updated ... to 1.1.0",
+Integritätsprüfung bestanden). Nebenwirkung, protokolliert: der Upgrade-Lauf
+hat zwei Store-Apps mitaktualisiert. **Die Kette in diesem Block bekommt
+deshalb einen Schritt 1b: nach der PHP-Hälfte und vor der Registrierung steht
+`occ upgrade`, und sein Rückgabewert wird gelesen.**
+
+**Abweichung, ein Werkzeug-Befund ohne Fix in der Anfahrt:** Lauf 1 endete
+trotz der gescheiterten Registrierung mit `92B-WECHSEL-FERTIG` und
+Rückgabewert 0. Die Phase-B-Pipeline von `92b-wechsel.sh` verschluckt Fehler
+des `occ`-Aufrufs. Der Fix gehört in die Zeit nach dem Abbau und ist hier nur
+benannt; bis dahin wird die Registrierung nach dem Lauf von Hand nachgesehen.
+
+**Abweichung, Rückgabewert 36 im zweiten Fall, obwohl der Inhalt stimmte:**
+Lauf 2 meldete `abbild-im-container-gleich nein`. Docker 29 mit
+containerd-Store liefert für `repo@digest` den Index-Digest und für `.Image`
+des Containers den aufgelösten Digest, also zwei Kennungsarten desselben
+Inhalts. Der unabhängige Beweis von Hand: der Paket-Baumhash **im laufenden
+Container** war `f3f1fb13...` und identisch mit Abbild- und
+Arbeitsbaum-Baumhash. Fix mit Owner-Wort: Abschnitt 15 des Werkzeugs
+vergleicht jetzt den Baumhash im laufenden Container gegen den Abbild-Baumhash
+aus `40b-baumhash.sh` (Commit ff8e054); die Kennung bleibt als Notiz daneben.
+Der Satz aus Abschnitt 6 gilt damit auch hier wörtlich: **der Digest ist die
+Notiz, der Baumhash ist der Beweis.**
+
+**Abweichung, `<checkout>` existiert nach Block 9 nicht.** Siehe den Nachtrag
+dort: der Arbeitsbaum entsteht per `git clone` und nicht aus der Sicherung.
+
+**Abweichung, das Ausführungsbit.** Der erste Aufruf eines Werkzeugs im
+Laufverzeichnis endete mit **126** und "Permission denied", weil vierzehn der
+achtzehn Werkzeuge mit `100644` im Index stehen. Was tatsächlich nötig war:
+einmal `chmod +x *.sh *.py` im Laufverzeichnis, **vor** diesem Block, mit
+`ls -l` als Rückleseprobe. Der Handgriff steht jetzt in der Tabelle der
+wiederkehrenden Handgriffe in Abschnitt 4.
+
 ---
 
 ## 5. Zustandspruefung mit Abbruchbedingung
@@ -732,6 +1010,33 @@ Ist-Stand in die Rohdatei des Laufs, die Anfahrt endet, und der Owner
 entscheidet neu. Unter einem Deckel dieser Grössenordnung wird kein Index neu
 aufgebaut.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`04-bestand-vor-der-messung.txt`): Gesamtspeicher 3.9Gi, Kerne 2,
+Rechnerarchitektur aarch64, cgroup 2147483648/0, Cron-Intervall 300 s,
+Entladeschalter 0, `baumhash-gleich ja`. Die **ersten drei** Zeilen, also
+indexiert, übersprungen und fehlgeschlagen, waren **nicht ablesbar**.
+
+**Abweichung, und sie ist ein Widerspruch im Runbook selbst:** dieses Tor
+verlangt den Beleg `52.111 indexiert`, und Block 13b leert unmittelbar davor
+mit `unregister --rm-data` planmässig das Datenvolume des Backends samt
+fertigem Index. Das Tor kann also nicht bestehen, sobald ein Abbildwechsel
+davor steht; Abschnitt 5 und 6 stammen aus dem Ablauf **ohne** Abbildwechsel.
+Was tatsächlich vorgelegt wurde: der **Korpus** als Beleg der Box, nämlich
+52.114 Dokumente unter dem Lastkonto und 20G Nutzdaten, konsistent mit den
+52.111 der Snapshot-Beschreibung. **Owner-Entscheid am 20.09.2026: "Weiter,
+Korpus als Beleg."**
+
+**Was daraus für die nächste Anfahrt folgt.** Das Tor bekommt zwei Fassungen,
+und welche gilt, entscheidet der Abbildwechsel:
+
+| Lage | Ablesestelle | Sollwert |
+|---|---|---|
+| ohne Abbildwechsel davor | `occ findling:index` | 52.111 / 37 / 0 |
+| **mit** Abbildwechsel davor (Block 13b hat `--rm-data` gefahren) | die Zahl der Korpusdateien unter dem Lastkonto und die Grösse der Nutzdaten | rund 52.111 Dokumente, rund 20G |
+
+Die drei Maschinenzeilen (3.9Gi, 2 Kerne, aarch64) gelten in beiden Fassungen
+unverändert und sind in Phase 15 alle drei gestimmt.
+
 ### 5.1 Die Resume-Falle, und warum sie ein Abbruchpfad ist
 
 **Der Snapshot trägt den FERTIGEN Index.** Wer ihn einspielt und danach einen
@@ -750,6 +1055,30 @@ Zurücksetzen keinen Nullstand, wird nicht angestossen. Das Warnzeichen während
 des Laufs ist ein Durchsatz, der in den ersten Minuten unplausibel hoch liegt;
 er ist beim v1.1-Lauf auch deshalb eine Untergrenze geblieben, weil beim Anstoss
 bereits 1.653 Dateien im Index lagen.
+
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`93-nullstand.txt`, 03:26:11Z bis 03:32:13Z): vor `--restart` war der Index
+**nicht** null. Der Poller hatte seit dem Abbildwechsel um 02:42Z gebaut
+(Zustandsdatenbank 528K, Vektordatenbank 1.8M, 40 Indexdateien mit 23M). Das
+steht ehrlich als solches in der Rohdatei. Nach `findling:index --restart -n`
+und der 360-s-Frist: Arbeitsvorrat 500 und steigend, `arbeitsvorrat-da ja`,
+Rückgabewert 0.
+
+**Abweichung, ein Wortlaut, der mehr verspricht als er hält:** `--restart`
+**truncatet den Index nicht**. Es hebt laut `IndexCommand.php` die Generation,
+sodass alle Dokumente neu gelesen und verarbeitet werden; die Marken werden
+erst am Ende des Neubaus gestempelt. Was gemessen wird, ist also der
+vollständige Neubau, und das ist die gewollte Grösse. Was **nicht** gemessen
+wird, ist ein physisch leerer Datenträger. Der Ausdruck "Nullstand" meint in
+diesem Runbook ab jetzt genau das: **eine gehobene Generation und einen
+gefüllten Arbeitsvorrat**, nicht eine leere Platte.
+
+**Abweichung, die Untergrenze war grösser als in v1.1:** beim Anstoss lagen
+**4.696** Dateien im Index gegen 1.653 in v1.1, weil zwischen Abbildwechsel und
+Anstoss rund eine Stunde Pollerbetrieb lag. Was daraus folgt: **zwischen Block
+13b und dem Anstoss des Volllaufs wird der Poller stillgelegt oder die Zeit
+kurz gehalten.** Ohne das wächst die Untergrenze mit jeder Minute, die die
+Zustandsprüfung braucht.
 
 ---
 
@@ -780,6 +1109,24 @@ kein Nachtrag, sondern ein zweiter Messgegenstand unter dem Namen des ersten;
 die Zahlen davor und danach gehören dann in zwei Berichte und nicht in eine
 Spalte.
 
+**Nachtrag vom 21.09.2026, aus dem Erstvollzug: die sechs Grössen, wie sie
+tatsächlich abgelesen worden sind.**
+
+| Groesse | Abgelesener Wert | Rohdatei |
+|---|---|---|
+| Zeilenstände der Zustandstabelle | nicht ablesbar, ersetzt durch den Korpusbeleg 52.114 Dokumente und 20G (Owner-Entscheid, siehe Abschnitt 5). Endstand des Laufs: 52.137 / 44 / 6 | `04-bestand-vor-der-messung.txt`, `90-bestand.txt` |
+| Cron-Intervall | 300 s, Quelle `aio-cron-container`, Modus `cron` | `97-cron-vorpruefung-vorher.txt` |
+| Instanztyp und harte Containergrenze | m7g.large, `memory.max` 2147483648, **`memory.swap.max` 0** | `03-aufbau.txt`, `92b-wechsel.txt` |
+| Zeit seit dem letzten Containerstart | Containerstart 2026-09-20T02:42:05Z, Abstand zum Trigger 1 h 07 min; je Messblock eine eigene Zeile | `96b-waechter.txt` und die Rohdateien der Blöcke |
+| Baumhash | `baumhash-gleich ja`, `f3f1fb13...` über 54 Paketdateien, dreifach verankert und zusätzlich im laufenden Container gelesen | `40b-baumhash.txt` |
+| Stellung des Entladeschalters | 0 in allen Blöcken ausser Schritt 8 (Ausprägungen 1 und 2: 120) und Schritt 8b (120) | je Rohdatei eine Pflichtzeile |
+
+**Abweichung: der Sollwert der dritten Zeile war falsch.** Die Spalte
+"Sollwert" verlangt **2147483648 in beiden cgroup-Feldern**. Richtig ist
+`memory.max` 2147483648 und `memory.swap.max` **0**, weil `docker --memory-swap`
+die Summe nennt. Die vollständige Begründung steht bei Block 12; der alte
+Wortlaut bleibt dort und hier stehen, weil an ihm ein Werkzeug gescheitert ist.
+
 ### 6.1 Das Cron-Intervall ist Pflichtfeld
 
 **Drei Zeilen des Konfigurationszweiges gehören in jedes Messprotokoll**, und
@@ -795,6 +1142,31 @@ Ausgabe, also hat niemand bemerkt, dass es nicht stimmte, bis der Lauf vorbei
 war. Deshalb ist die Bedingung im Skript durchgesetzt und nicht in diesem
 Runbook (D-07, D-08). Dieses Runbook sagt nur, dass sie im Protokoll stehen
 muss.
+
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 20.09.2026**
+(`97-cron-vorpruefung-vorher.txt`, 03:21:01Z):
+
+```
+cron-modus-ist cron
+cron-intervall-quelle aio-cron-container
+cron-intervall-ist 300
+cron-soll-ruecklesung 300
+```
+
+**In Phase 15 erstmals vollzogen ist auch das Setzen des Solls.** Bis dahin war
+Schritt 4 des Skripts gelesen und nicht gefahren. Die Schlafdauer der
+Cron-Schleife im Container wurde auf 300 gesetzt und zurückgelesen.
+
+**Abweichung, und sie hat einen Werkzeug-Fix in der bezahlten Zeit
+ausgelöst:** `97-cron-vorpruefung.sh` las das Intervall zuerst als **5 s**
+statt 300 s. Zwei Ursachen, beide auf der Box verifiziert: der `match()`-Ausdruck
+verlor unter `mawk` das `m` von `sleep 5m`, und der Anker `cron.php` traf auch
+die Prozesssuchzeile des Abbruchbehandlers (`sleep 5`). Was tatsächlich nötig
+war: eine feldbasierte Lesung, verankert an der Aufrufzeile
+`php -f ... cron.php`, mit Übersetzung der Einheiten s, m und h (Commit
+6f42c69, mit Owner-Wort, boxlose Tests nachgezogen). **Ein Vorprüfschritt, der
+die falsche Zahl liest, ist schlimmer als keiner: er hätte die Anfahrt mit
+Rückgabewert 26 beendet, obwohl die Instanz richtig getaktet war.**
 
 ### 6.2 Konfiguration reicht nicht, die Wirkung gehoert dazu
 
@@ -819,6 +1191,34 @@ welcher Beobachter zugrunde liegt, ist plausibel, aber nicht belegt (Annahme
 A1). Die Zeile `ablesereihe-intervall` steht genau deshalb neben der Zahl: eine
 Prozentzahl ohne ihre Reihe ist Scheingenauigkeit.
 
+**Abweichung, in Phase 15 erstmals vollzogen am 20.09.2026, und es ist die
+unangenehmste dieser Anfahrt: der Wirkungszweig ist nie gelaufen.**
+`./97-cron-vorpruefung.sh waehrend` ist beim Anstoss des Volllaufs schlicht
+nicht gestartet worden, und es ist erst nach dem Ende des Laufs aufgefallen.
+Was tatsächlich in der Rohdatei steht, ist eine **nachträgliche Auswertung**
+aus der aufgezeichneten Statusreihe `96-statusseite.jsonl` (eine Aufnahme alle
+120 s), und sie sagt das in ihrer ersten Zeile selbst:
+
+```
+lauffenster 2026-09-20T03:49:32Z bis 2026-09-20T23:09:58Z (19 h 20 min)
+ablesereihe-intervall 120
+lesungen 578, vorrat-null-lesungen 15, vorrat-null-anteil 2,6 prozent
+scheiben 23, scheibenabstand-min 120, -median 301, -max 361
+wirkungsdeckel 420, ueberschreitungen 0
+```
+
+Der Live-Zweig hätte mit seinem eigenen Intervall anders gezählt, und
+ausgerechnet Annahme A1 ist damit ein zweites Mal die Stelle, an der zwei
+Reihen dieselbe Frage verschieden beantworten. Die Zahlen sind brauchbar, weil
+die Reihe neben jeder von ihnen steht, aber sie sind nicht die Zahlen, die
+dieser Abschnitt bestellt hat.
+
+**Was daraus folgt, als Handgriff und nicht als Vorsatz:** der Wirkungszweig
+wird **im selben Befehl** gestartet wie der Volllauf, nicht daneben und nicht
+danach, und sein Prozess wird unmittelbar nach dem Anstoss einmal gezählt. Ein
+Schritt, der neben einem 19-Stunden-Lauf vergessen wird, wird nicht durch
+Aufmerksamkeit gerettet, sondern durch die Zeile darüber.
+
 ### 6.3 Der Korpus und das Lastwerkzeug
 
 **Der Volllauf läuft gegen den Vollkorpus mit 52.111 Dokumenten** (D-04). Er ist
@@ -835,6 +1235,12 @@ weiterhin nicht beschaffbar.
 seit dem 10.09.2026 gefixt und geeicht. Jede weitere Änderung daran macht die
 Stufenzahlen dieser Anfahrt gegen die von v1.1 unvergleichbar, und dann misst
 die Anfahrt das Werkzeug statt des Erzeugnisses.
+
+**Nachtrag vom 21.09.2026: eingehalten, und der Beleg steht in der Rohdatei.**
+`git status --porcelain` war während des Laststufenblocks leer, und die Zeile
+steht in `97-nebenlaeufigkeit.txt`. Der Filter- und Sortierblock hat das
+Lastwerkzeug ausserdem gar nicht gerufen, weil die beiden OCS-Provider `types`
+und `sort` nicht kennen (Befund 13-12); er misst über die Seitenroute.
 
 ### 6.4 Die Stellung des Entladeschalters ist Pflichtfeld
 
@@ -917,6 +1323,62 @@ sind in der Reihenfolge vergeben, in der die Werkzeuge entstanden sind, und eine
 einmal vergebene Zahl wird nicht umgehängt: eine Rohdatei aus einem früheren
 Lauf soll auch später noch lesbar bleiben.
 
+**Nachtrag vom 21.09.2026: was der Erstvollzug an dieser Reihenfolge geändert
+hat.** Die Tabelle oben bleibt im Wortlaut stehen. Vier Zeilen bekommen einen
+Nachtrag, und einer davon verschiebt einen Schritt.
+
+- **Schritt 3, Bestandsvorlauf der Sonde: verschoben, hinter den Volllauf.**
+  *In Phase 15 erstmals vollzogen, 20.09.2026.* Die Sonde misst den Bestand je
+  Begriff **im Index**, und Block 13b hatte den Index unmittelbar davor
+  geleert. Auf einem Index mitten im Neubau misst sie Teilzahlen. Sie ist
+  deshalb als Abschnitt 0 des Sprachfall-Laufs gefahren worden, also innerhalb
+  von Schritt 7 und hinter Schritt 4. **Abweichung:** die Reihenfolge der
+  Tabelle stammt wie das Tor in Abschnitt 5 aus dem Ablauf ohne Abbildwechsel.
+  Mit Abbildwechsel gilt: **Schritt 3 läuft hinter Schritt 4 und nicht davor.**
+- **Schritt 5, Cron-Wirkungszweig: nicht gefahren.** *In Phase 15 erstmals
+  vollzogen, 20.09.2026, und genau daran gescheitert.* Siehe den Nachtrag in
+  Abschnitt 6.2. Die Zahlen sind nachträglich aus der Statusreihe des
+  Beobachters berechnet und in der Rohdatei so gekennzeichnet.
+- **Schritt 6, Laststufen: gefahren, mit einem nicht ablesbaren Nebenwert.**
+  *In Phase 15 erstmals vollzogen, 21.09.2026.* Die fünf Stufen und die vier
+  Verdikte stehen. **Abweichung:** der Einzelrequest der Kaltstartmessung traf
+  einen Begriff ohne Treffer (`EmptyResultGroup`), und damit ist die
+  Kaltstartlatenz für DI-07-02 aus diesem Lauf **nicht** sauber ablesbar. Die
+  Spitze (526,4 MB anon) und die rund 2 s Wandzeit stehen. Was tatsächlich
+  nötig wäre: ein Begriff mit garantierten Treffern für diese eine Messung.
+- **Schritt 6b, Filter und Sortierung: gefahren, nach einem Abbruch 34.** *In
+  Phase 15 erstmals vollzogen, 21.09.2026.* **Abweichung:**
+  `99c-filter-sortierung.sh` liest das Passwort **nicht** aus einer
+  Passwortdatei, sondern erwartet `FINDLING_LOAD_PASSWORD` in der Umgebung.
+  Ohne sie antwortet die Route mit 401 und der Block endet mit 34. Was
+  tatsächlich nötig war: die Variable setzen. Die Vorprüfung steht jetzt in
+  Abschnitt 3, Zeile 14.
+- **Schritt 8b, MEM-02: gefahren, nach einem Abbruch 32.** *In Phase 15
+  erstmals vollzogen, 21.09.2026.* **Abweichung:**
+  `94b-grundlast-rueckkehr.sh` ruft den Abtaster als `sudo "$SAMPLER"`, die
+  Datei steht aber mit `100644` im Index; der Aufruf endete mit
+  "command not found" und der Block mit 32. Was tatsächlich nötig war: ein
+  `chmod +x` auf der Box. Der saubere Weg ist `sudo sh "$SAMPLER"` wie in den
+  Werkzeugen 96 und 97, oder das Ausführungsbit im Repositorium; beides gehört
+  in die Zeit nach dem Abbau.
+
+**Nachtrag zu Schritt 8b, aus Plan 15-04: woran ein Indexlauf belegt wird.**
+Der Zähler `indexed` in der Ausgabe von `occ findling:index` ist auf der
+Nextcloud-Seite **strukturell null** und sagt das selbst; er taugt nicht als
+Beleg dafür, dass ein Indexlauf stattgefunden hat. Belegt wird das an der Zahl
+der eingebetteten Dokumente der Admin-Seite (Feld `embedded` unter `backend`),
+und die occ-Ausgabe liefert daneben den Arbeitsvorrat als zweite Bedingung. In
+Phase 15 gemessen: 52.137 vorher, 52.149 nachher, Arbeitsvorrat je null.
+
+**Nachtrag zu Schritt 8b: der Indexlauf wird über den Weg eines Nutzers
+angestossen und nicht über `findling:index --restart`.** Der Befehl stellt rund
+52.000 Dokumente neu in die Schlange; der Container fiele dann in dieser
+Messung nie in den Leerlauf und entlüde nie. Angestossen wird mit einem Dutzend
+kleiner Textdateien über WebDAV plus `files:scan`, und der Korpus wird nach der
+letzten Marke wieder entfernt, damit der Bestand der Box derselbe bleibt, gegen
+den Schritt 9 misst. In Phase 15 so gefahren und in der Rohdatei belegt
+(`indexlauf-korpus-entfernt`).
+
 ### 7.1 Die Rueckgabewerte, vollstaendig
 
 | Bedingung | Wo sie greift | Folge |
@@ -947,10 +1409,41 @@ der Rückgabewert einer Pipeline gehört zu `tee`, und ein Abbruch innerhalb des
 Blocks verliesse nur die Subshell. Die Verweigerung wäre dann eine Zeile in
 einer Rohdatei, die niemand liest.
 
+**Nachtrag vom 21.09.2026: die Rückgabewerte 32 und 33 tragen je zwei Fälle.**
+Dieser Abschnitt nennt für 32 den fehlenden Bezugswert und für 33 den neu
+gebauten Container; `94b-grundlast-rueckkehr.sh` gibt derselben 32 zusätzlich
+die fehlende Zahl aus der Abtastreihe und derselben 33 den ausgebliebenen
+Indexlauf. Keine Bedeutung ist weggefallen, und keine Zahl ist umgehängt
+worden. Dasselbe gilt für 34 und 35 in Schritt 6b, wo dieser Abschnitt den
+wachsenden Bestand (34) und die Stufe ohne Antwortzahlen (35) führt, während
+das Werkzeug zusätzlich den Sortierlauf ohne Trefferzahl (34) und den
+fehlenden Weiter-Link (35) kennt. Wer eine Rohdatei liest, findet den Fall in
+der Zeile daneben; wer nur die Zahl liest, findet zwei mögliche Fälle, und das
+ist der Preis dafür, dass eine einmal vergebene Zahl nicht umgehängt wird.
+
 **Während der bezahlten Anfahrt wird kein Werkzeug mehr geändert.** Ein Skript,
 das während seines eigenen Laufs nachgebessert wird, macht jede Zahl daneben
 unbelegt. Fällt ein Werkzeug auf, wird der Befund notiert und der Lauf zu Ende
 gefahren oder abgebrochen; die Korrektur gehört in die Zeit nach dem Abbau.
+
+**Abweichung vom Satz darüber, dreimal, in Phase 15 am 20.09.2026.** Der Satz
+ist nicht eingehalten worden. Drei Werkzeuge sind während der bezahlten Zeit
+geändert worden, **je mit ausdrücklichem Owner-Wort in der Sitzung und je mit
+boxlosen Tests nachgezogen**:
+
+| Commit | Werkzeug | Was falsch war |
+|---|---|---|
+| d6fb185 | `92b-wechsel.sh` | erwartete die harte Grenze in beiden cgroup-Feldern und hätte jede korrekte Maschine mit 39 abgewiesen (Block 12) |
+| ff8e054 | `92b-wechsel.sh` | verglich zwei Kennungsarten desselben Inhalts und las den richtigen Stand als fremd (36) |
+| 6f42c69 | `97-cron-vorpruefung.sh` | las das Cron-Intervall als 5 s statt 300 s und hätte die Anfahrt mit 26 beendet (Abschnitt 6.1) |
+
+Alle drei sind Fälle derselben Art: **das Werkzeug hätte eine korrekte Maschine
+abgewiesen.** Der Satz oben bleibt trotzdem stehen, und er bekommt seine
+Ausnahme ausbuchstabiert statt aufgeweicht: geändert wird nur, wenn das
+Werkzeug einen Abbruch auf einem korrekten Zustand erzeugt, nur mit
+ausdrücklichem Owner-Wort, und die Messzahlen daneben stammen dann aus dem Lauf
+**nach** dem Fix und nie aus dem davor. Jede Änderung, die eine Messzahl
+verändern könnte statt einen falschen Abbruch zu beseitigen, bleibt verboten.
 
 ### 7.2 Der Messschritt Wiederaufwaerm-Kosten, A/B
 
@@ -1048,6 +1541,39 @@ Abgelesen wird das am Zustand `unloaded` der Statusseite und am Entladezähler
 des Containers. Bleiben beide aus, misst der Ast das Nachwärmen von etwas, das
 nie losgelassen wurde; der Abbruch dafür ist Rückgabewert **31**.
 
+**Abweichung, aus Plan 15-03: den Entladezähler gibt es über eine Prozessgrenze
+nicht.** Der Satz darüber nennt ihn und bleibt stehen, weil er den gemeinten
+Beleg richtig beschreibt; abgelesen werden kann er von aussen aber nicht. Es
+gibt keine Route, die ihn ausliefert, und der Zähler ist ohnehin je Prozess
+eigen. **Was tatsächlich gelesen wird, sind zwei unabhängige Anhaltspunkte:**
+
+1. **`engineState unloaded`** an der Admin-Seite, und zwar an der Seite
+   **selbst**. Nicht über `96d-statusbeobachter.py`: dessen Aufzeichnung ist auf
+   sechs Zähler, `runState`, `backendReachable` und das genestete Paar
+   projiziert, und `engineState` ist dort nicht darunter, weil das Werkzeug aus
+   dem v1.1-Lauf stammt und eine gefahrene Fassung nicht geändert wird.
+2. **Die cgroup-Grösse vor und nach der Ruhezeit**, also `memory.current`
+   beziehungsweise `anon` aus `memory.stat`, als zweiter, von der Statusseite
+   unabhängiger Anhaltspunkt.
+
+Rückgabewert 31 fällt ab jetzt, wenn **einer von diesen beiden** ausbleibt, und
+nicht, wenn ein Zähler fehlt, den es nicht gibt.
+
+**Abweichung, in Phase 15 erstmals vollzogen am 21.09.2026: die Bereitschaft
+nach dem Containerneustart wird an der Admin-Seite gefragt und nie mit einer
+Suche.** Eine Suche als Bereitschaftsprobe wäre in den Ausprägungen 3 und 4 die
+erste Suche überhaupt, also genau die Messgrösse. Das Werkzeug tut es so; hier
+steht es, damit es auch jemand tut, der ohne das Werkzeug misst.
+
+**Abweichung, in Phase 15 erstmals vollzogen am 21.09.2026: das Konto.**
+`95b-wiederaufwaermen.sh` und `94b-grundlast-rueckkehr.sh` gehen per Vorgabe
+über `BENUTZER=admin`, der Korpus der Box gehört aber dem Lastkonto. Die Suche
+lieferte damit null Treffer, und die semantische Seite war nicht ablesbar. Was
+tatsächlich nötig war: das Lastkonto kurzzeitig in die Gruppe der Verwaltung
+aufnehmen und danach wieder entfernen. Der saubere Weg ist, den Eigentümer des
+Korpus als Vorgabe zu führen oder die Lesung der Übersichtsseite von der Suche
+zu trennen; beides gehört in die Zeit nach dem Abbau.
+
 Die drei neuen Abbrüche setzen den Katalog dieses Laufverzeichnisses bei **29**
 fort, und sie stehen wie die vier aus 6.1 und 6.2 **unterhalb** der
 `tee`-Pipeline ihres Skripts, aus demselben Grund: der Rückgabewert einer
@@ -1058,6 +1584,32 @@ Pipeline gehört zu `tee`.
 | Die Stellung des Entladeschalters war fuer einen Messschritt nicht ablesbar | Schritt 8, und vor jedem anderen Messblock | Rückgabewert **29** für die fehlende Pflichtzeile. Ein Lauf ohne protokollierte Stellung gilt als unvollständig, wie einer ohne Cron-Intervall (Abschnitt 6.4) |
 | Vor einer Kaltmessung wurde die Diagnose-Route gerufen | Schritt 8, vor Ausprägung 1 oder 3 | Rückgabewert **30** für den aufgewärmten Container. Die Messung wird wiederholt oder mit dem Aufwärmeffekt im Protokoll gefahren, nie herausgerechnet |
 | Der Ast mit eingeschaltetem Schalter hat keine Entladung erlebt | Schritt 8, Ausprägung 1 und 2 | Rückgabewert **31** für die ausgebliebene Freigabe. Kein `unloaded`, kein Entladezähler über null, also keine Wiederaufwärmzahl |
+
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 21.09.2026**
+(`95b-wiederaufwaermen-1..4.txt`, `95b-gegenueberstellung.txt`, 02:47:32Z bis
+02:54:34Z), Reihenfolge der Ausführung 1, 3, 2, 4:
+
+| Nr | Schalter | Seitencache | erste Suche | Treffer | zweite Suche |
+|---|---|---|---|---|---|
+| 1 | 120 s | kalt | 1.996 ms | 26 | 1.038 ms |
+| 2 | 120 s | warm | 1.418 ms | 26 | 745 ms |
+| 3 | 0 | kalt | 2.051 ms | transient 0 | 776 ms |
+| 4 | 0 | warm | 1.613 ms | 26 | 743 ms |
+
+Die Ausprägungen 1 und 2 melden `unloaded`, die Frist stand auf 120 s, und der
+Grund der Verkürzung steht als Zeile `ruhezeit-abweichung-grund` in den
+Rohdateien. Die Warnschwelle von fünf Prozent zwischen zwei Kaltmessungen ist
+nicht gerissen, und die Reihenfolge kalt vor warm ist an den
+Containerstart-Zeitstempeln belegt.
+
+**Abweichung, ohne Folge für die Zahlen:** die erste Suche der Ausprägung 3
+lieferte null Treffer, ein vorübergehender Leertreffer unmittelbar nach dem
+Containerneustart, weil der mmap des Index noch kalt war. Die zweite Suche
+derselben Ausprägung lieferte regulär. Die Latenz 2.051 ms bleibt als
+Kaltstart-Bezugswert gültig, weil der Lade- und mmap-Weg unabhängig von der
+Trefferzahl durchlaufen wird. **Für die nächste Anfahrt gilt trotzdem: ein
+Begriff mit garantierten Treffern**, sonst hängt ein Bezugswert an einer
+Begründung statt an einer Zahl.
 
 ---
 
@@ -1092,6 +1644,21 @@ Gelegenheit, und eine nachgereichte Zahl wäre eine Schätzung.
 `Erwartete Ausgabe`: die Schlussstände stehen in den Rohdateien des
 Messverzeichnisses und sind committet. Marke: `in Phase 15 erstmals vollzogen`.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 21.09.2026**
+(`90-bestand.txt` 03:23:32Z, `96-vektorbestand.txt`): Endstand des Index
+**52.137 indexiert, 44 übersprungen, 6 fehlgeschlagen**, Korpus 19G, die Marken
+der Zustandsdatenbank vollständig, 146.197 Abschnitte auf 52.137 Dokumente mit
+vollständigem Vektorbestand, genau eine Nextcloud am Docker-Dienst, `mem=4G`
+zurückgelesen, `OOMKilled=false`, `RestartCount=0`. Keine Abweichung im Ablauf.
+
+**Abweichung in der Zahl, und sie ist ein Befund ohne Untersuchung:** die
+Endstände 44 übersprungen und 6 fehlgeschlagen stehen gegen die 37 und 0 der
+Phase 10. Das ist eine Erstmessung gegen das v1.2-Abbild und kein
+Vergleichswert; welche sechs Dateien gescheitert sind, hat dieser Lauf nicht
+aufgelöst. Für die nächste Anfahrt: **die gescheiterten Dateien werden in
+Schritt 1 einzeln benannt**, solange die Maschine noch steht. Danach ist die
+Frage nicht mehr beantwortbar.
+
 ### Schritt 2: Die Kosten- und Schadenshistorie fortschreiben
 
 ```sh
@@ -1113,6 +1680,30 @@ ersetzt, wie es die Geheimnisregel im Kopf dieser Datei verlangt.
 Zustandsdatei und den Schlusssatz mit verbrauchten Stunden, verbrauchten USD,
 freigegebenem Deckel und Differenz. Marke: `in Phase 15 erstmals vollzogen`.
 
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 21.09.2026**
+(`93-kosten-und-verbleib.txt`, committet auf `origin` **vor** dem Abbau, Commit
+df1d11c belegt die Reihenfolge):
+
+```
+BOX_STOPPED_ISO=2026-09-21T03:23:57Z
+BOX_LAST_UPTIME_HOURS=25.75
+BOX_LAST_UPTIME_COST_USD=2.9831
+BOX_PARKED_COST_USD_PER_DAY=0.3130
+freigegebener Deckel: 46 h / 5,40 USD netto
+verbraucht:           25,75 h / 2,9831 USD netto
+Differenz:            20,25 h / 2,42 USD unter dem Deckel
+Deckel gehalten:      JA
+```
+
+**Abweichung, und sie ist eine Verschärfung:** die Rohdatei enthält **nicht**
+alle `BOX_`- und `VOLUME_`-Zeilen der Zustandsdatei, sondern nur die, die für
+Kosten und Verbleib gebraucht werden. Die Geheimnisregel im Kopf dieser Datei
+verlangt Platzhalter für Adressen und Kennungen; ein vollständiges Übernehmen
+der Zustandsdatei wäre die einfachste Art, genau dagegen zu verstossen. Der
+Wortlaut der erwarteten Ausgabe oben ist deshalb zu weit gefasst und wird so
+gelesen: **alle Zeilen, die Kosten, Laufzeiten und den Verbleib tragen, und
+keine, die eine Kennung trägt.**
+
 ### Schritt 3: Box anhalten und den Snapshot ziehen
 
 ```sh
@@ -1132,6 +1723,19 @@ und hängt sie an `box.env` an; `snapshot` meldet eine Snapshotkennung und das
 Tag `purpose=findling-corpus-keep`. Beleg des Laufs vom 11.09.2026:
 `docs/measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt`,
 Abschnitte 0 und 1.
+
+**Tatsächliche Ausgabe, in Phase 15 am 21.09.2026:** `stop` meldete 25,75 h und
+2,9831 USD und hängte beides an die Zustandsdatei an, um 03:23:57Z.
+
+**Abweichung: `snapshot` ist nicht gefahren worden, und das war eine
+Entscheidung.** Der Owner hat am Checkpoint 15-14 bestätigt, was er als Frage B
+in 15-08 schon entschieden hatte: **"Abbauen, Korpus-Snapshot behalten."** Der
+bleibende Korpus-Snapshot snap-03f1d1d9ad9262704 trägt den Korpus dieses Laufes
+bereits; ein Ende-Snapshot wäre eine zweite Lagerung derselben Daten und eine
+zweite monatliche Zeile. **Damit entfällt auch Schritt 4 dieser Checkliste für
+diese Anfahrt.** Wer einen Ende-Snapshot zieht, fährt Schritt 4; wer keinen
+zieht, überspringt ihn und schreibt den Grund in die Rohdatei. Beides ist
+zulässig, das stillschweigende Auslassen ist es nicht.
 
 ### Schritt 4: Snapshot unabhaengig nachlesen, nicht dem Waiter glauben
 
@@ -1192,6 +1796,34 @@ sich nicht lesen lässt, zählt als noch vorhanden.
 Rückgabewert 0. Bleibt etwas übrig, bleibt auch die Zustandsdatei stehen, damit
 ein zweiter Lauf sie benutzen kann. Belegt am 11.09.2026 mit vier
 Nichtexistenz-Nachweisen, den beiden Datenträgern eingeschlossen.
+
+**Tatsächliche Ausgabe, in Phase 15 erstmals vollzogen am 21.09.2026**
+(`07-snapshot-und-abbau.txt`): Instanz terminiert und "is gone, verified
+against the api", Datenträger gelöscht und verifiziert weg, Security Group
+gelöscht und verifiziert weg, Tag-Sweep "nothing that carries
+purpose=findling-phase5 exists any more", Zustandsdatei entfernt (Sicherung
+ausserhalb des Repositoriums). Rückgabewert 0.
+
+**Abweichung: `cmd_destroy` löscht das Schlüsselpaar nicht.** Das ist dieselbe
+Lücke, an der Block 2 am Anfang der Anfahrt hängengeblieben ist
+(`InvalidKeyPair.Duplicate`). Was tatsächlich nötig war, von Hand nach dem
+`destroy`:
+
+```sh
+aws ec2 delete-key-pair --region eu-central-1 --key-name findling-loadtest
+aws ec2 describe-key-pairs --region eu-central-1 --key-names findling-loadtest
+```
+
+Der zweite Aufruf muss `InvalidKeyPair.NotFound` antworten; so ist es am
+21.09.2026 verifiziert worden. **Entweder nimmt `cmd_destroy` das Schlüsselpaar
+auf, oder diese beiden Zeilen bleiben hier stehen.** Ein liegengebliebenes
+Schlüsselpaar kostet nichts und ist deshalb doppelt leicht zu übersehen; es
+kostet die **nächste** Anfahrt eine Minute in der bezahlten Zeit.
+
+**Abweichung: der A-Record bleibt sonst auf eine Maschine zeigen, die es nicht
+mehr gibt.** Der Record `loadtest.infranode.dev` ist nach dem Abbau über die
+API des Zonenverwalters entfernt worden. Das gehört als eigene Zeile hierher,
+weil Block 10 ihn setzt und keine Zeile ihn wieder abräumt.
 
 ### Schritt 7: Tag-Sweep ueber die Regionen, ueber BEIDE Tagwerte
 
@@ -1257,6 +1889,21 @@ Speicherklasse legen. Solange darüber nicht entschieden ist, läuft dieser Post
 weiter, ob eine Anfahrt stattfindet oder nicht, und gehört deshalb in die
 Monatsrechnung und nicht in den Deckel einer Anfahrt.
 
+**Nachtrag vom 21.09.2026: die Wiedervorlage ist jetzt fällig und noch nicht
+entschieden.** Die v1.2-Anfahrt ist gefahren und abgebaut, der Snapshot steht
+weiter, und der Owner hat ihn zweimal ausdrücklich behalten (Frage B des
+Checkpoints 15-08 am 20.09., bestätigt am Checkpoint 15-14 am 21.09.). Der
+Grund ist unverändert richtig: ohne ihn kostet der Wiederaufbau des Korpus
+wieder mehrere Stunden Box-Zeit, also ein Mehrfaches der 2,79 bis 2,99 USD je
+Monat. Diese Zeile ist die Wiedervorlage und ersetzt keine Entscheidung; sie
+steht auch im Bericht der Anfahrt unter den offen gebliebenen Punkten.
+
+**Was der Abbau nach `destroy` ausserdem noch stehen lässt**, in Phase 15
+gelernt und beides von Hand abgeräumt: das **Schlüsselpaar** (siehe Schritt 6)
+und der **A-Record** auf eine Maschine, die es nicht mehr gibt. Das
+Schlüsselpaar kostet nichts, der Record auch nicht; beide kosten die nächste
+Anfahrt Zeit, wenn sie stehen bleiben.
+
 ---
 
 ## 9. Kostenfuehrung
@@ -1311,6 +1958,45 @@ stammt aus einer Erinnerung. Zum Rückfluss gehört auch die ehrliche Zeile, wen
 der Deckel gerissen ist, mit der Differenz und dem Grund; die Deckel-Geschichte
 in Abschnitt 2.4 führt genau solche Zeilen.
 
+**Nachtrag vom 21.09.2026: der Rückfluss der v1.2-Anfahrt, vollzogen.** Die
+Spalte "Ist (Phase 15)" in Abschnitt 2.1 ist gefüllt, die Deckel-Geschichte in
+Abschnitt 2.4 hat zwei Zeilen dazubekommen. Die Schlusszahlen dieser Anfahrt:
+
+| Groesse | Wert |
+|---|---|
+| Laufzeit der Box | **25,75 h** (20.09.2026 01:38Z bis 21.09.2026 03:23:57Z) |
+| Kosten | **2,9831 USD netto** |
+| Freigegebener Deckel (Owner, 20.09.2026) | **46 h / 5,40 USD netto** |
+| Differenz | **20,25 h / 2,42 USD unter dem Deckel** |
+| Längster Einzelposten | Volllauf, **19 h 20 min** statt der eingeplanten 26 h 37 min |
+
+**Welche Annahme ihren Schätzcharakter verloren hat: A8, der Handaufbau.** Sie
+war die erste Zeile des Rechenblatts, die nirgends gemessen war, und sie stand
+mit 2 h 30 min. Gemessen sind jetzt **rund 0 h 40 min** für die Blöcke 1 bis 9
+zusammen, also für den Handaufbau **und** den Wiederaufbau aus dem Snapshot
+gemeinsam. Die Schätzung war damit deutlich zu hoch, und das obwohl in diesen
+40 Minuten die beiden teuersten Abweichungen dieser Anfahrt stecken (Docker war
+nicht installiert, die containerd-Wurzel musste umgestellt werden).
+
+**Zwei Einschränkungen, ohne die diese Zahl falsch benutzt wird.** Erstens ist
+sie **nicht** je Block gestempelt, weil kein Block eine Zeitmarke geschrieben
+hat; A8 und die Zeile darunter sind deshalb nicht getrennt. Zweitens ist sie
+eine **Untergrenze**: die Sitzungszeit zwischen den Blöcken, die Rückfragen und
+die drei Werkzeug-Fixe stecken nicht darin, und die Differenz zwischen der
+Summe aller gestempelten Posten und den 25,75 h Box-Laufzeit ist genau diese
+Zeit. Wer den nächsten Deckel rechnet, nimmt die Ist-Werte als Untergrenze je
+Posten und schlägt die Sitzungszeit gesondert auf.
+
+**Was sonst noch seinen Schätzcharakter verloren hat:** der Abbildwechsel (A2,
+geschätzt 1 h 00 min, gemessen rund 0 h 32 min in drei Läufen), der
+MEM-02-Block (A3, geschätzt 0 h 45 min, gemessen 0 h 03 min bei 120 s
+Ruhezeit) und die vier neu geschätzten Messblöcke, die alle deutlich unter
+ihren Planwerten lagen. **Der einzige Posten, der seinen Planwert behält, ist
+die Wiederaufwärm-Messung:** ihre 0 h 07 min sind mit 120 s Ruhezeit gemessen,
+und der Planwert von 2 h 00 min rechnet weiter mit der vollen Frist, weil ein
+Planwert, der eine Verkürzung vorwegnimmt, genau der Fehler ist, der den
+v1.1-Deckel gerissen hat.
+
 ### 9.4 Was dieses Runbook nicht leisten kann
 
 **Der Snapshot-Pfad ist bis zum Erstvollzug in Phase 15 ungefahren.** Die
@@ -1325,3 +2011,31 @@ Ausgaben durch die tatsächlichen ersetzt, und wo die tatsächliche Ausgabe von 
 erwarteten abweicht, bleibt die Abweichung als eigene Zeile stehen, statt
 stillschweigend überschrieben zu werden. Ein Runbook, das seine eigenen Irrtümer
 löscht, lehrt beim zweiten Mal dasselbe wie beim ersten.
+
+**Nachtrag vom 21.09.2026: der Erstvollzug hat stattgefunden.** Der Absatz
+darüber bleibt in seiner Zeitform stehen, weil er die Regel beschreibt, nach
+der dieser Nachtrag entstanden ist. Die Kette ist am 20. und 21.09.2026 als
+Ganzes durchlaufen worden, vom Anlegen der Security Group bis zum Tag-Sweep
+nach dem Abbau. Die erwarteten Ausgaben sind **nicht ersetzt**, sondern haben
+ihre tatsächliche Ausgabe daneben bekommen; wo beide auseinandergingen, steht
+eine Zeile `Abweichung:` darunter. Das ist die strengere Lesart desselben
+Satzes: eine ersetzte Erwartung liesse nicht mehr erkennen, woran ein Werkzeug
+gescheitert ist.
+
+**Die Bilanz des Erstvollzugs, in Zahlen.** Vierzehn Blöcke und Schritte tragen
+seit heute ihre tatsächliche Ausgabe. Vier erwartete Ausgaben waren **falsch**
+und bleiben mit ihrer Richtigstellung stehen: die harte Containergrenze in
+beiden cgroup-Feldern (Block 12 und Abschnitt 6), die 91 MB der
+Systemplatten-Sicherung (Block 9), `docker` und `ncdata` als vollständiger
+Inhalt des Datenträgers (Block 7) und der Arbeitsbaum aus Block 9, den es nicht
+gibt (Block 13b). Zwei Schritte des Runbooks waren in der geschriebenen
+Reihenfolge nicht fahrbar: das Abbruchtor in Abschnitt 5 und der
+Bestandsvorlauf als Schritt 3. Einer ist schlicht vergessen worden, der
+Cron-Wirkungszweig. Sechs neue Vorbedingungen sind in Abschnitt 3 dazugekommen,
+und jede von ihnen ist in der bezahlten Zeit aufgefallen.
+
+**Was dieses Runbook auch nach dem Erstvollzug nicht leisten kann.** Es sagt
+nicht, wie lange eine begleitete Sitzung dauert. Die Ist-Spalte in Abschnitt
+2.1 misst Blöcke, nicht Rückfragen, und die Differenz zwischen der Summe der
+Posten und den 25,75 h Box-Laufzeit ist genau das, was zwischen den Blöcken
+liegt. Wer diese Zeit für Reserve hält, plant den nächsten Deckel zu knapp.
