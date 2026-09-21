@@ -2,24 +2,24 @@
 
 ## What This Is
 
-Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Container mit OCR, klassischer Volltextsuche und semantischer Suche, per Klick aus dem Nextcloud App Store installierbar, ohne Elasticsearch-Gebastel. Ergebnisse erscheinen in der normalen Unified Search (via schlanker PHP-Companion-App) und seit v1.1 zusaetzlich auf einer eigenen Ergebnisseite mit Paginierung. Dreisprachig (EN/DE/FR). Zielgruppe: Selfhoster und kleine Organisationen auf typischer Hardware (4-8 GB RAM, oft ARM), für die das offizielle fulltextsearch-Framework (jahrelang verwaist, weiterhin Elasticsearch-gekoppelt) keine Option ist.
+Findling ist eine Nextcloud-ExApp, die die kaputte Suche repariert: ein Container mit OCR, klassischer Volltextsuche und semantischer Suche, per Klick aus dem Nextcloud App Store installierbar, ohne Elasticsearch-Gebastel. Ergebnisse erscheinen in der normalen Unified Search (via schlanker PHP-Companion-App) und seit v1.1 zusaetzlich auf einer eigenen Ergebnisseite mit Paginierung, seit v1.2 dort mit Dateityp-Filter, Zeitraumfilter und Datums-Sortierung. Optional gibt der Container sein Modell im Leerlauf frei (Schalter ab Werk aus). Dreisprachig (EN/DE/FR). Zielgruppe: Selfhoster und kleine Organisationen auf typischer Hardware (4-8 GB RAM, oft ARM), für die das offizielle fulltextsearch-Framework (jahrelang verwaist, weiterhin Elasticsearch-gekoppelt) keine Option ist.
 
 ## Core Value
 
 Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
 
-## Current State (nach v1.1, 2026-09-11)
+## Current State (nach v1.2, 2026-09-21)
 
-**Shipped:** Findling 1.1.0 im Nextcloud App Store (beide Apps signiert, Einreichung 11.09.2026, je HTTP 201).
+**Shipped:** Findling 1.2.0 im Nextcloud App Store (beide Apps signiert, Submission 21.09.2026, Lauf 35618848300, je HTTP 201).
 
-- Grundlast im Leerlauf 103,2 MB (v1.0: 691,8 MB), belegt im Messbericht `docs/measurements/2026-09-vergleichsmessung-m7g/`
-- 52.111 Dokumente auf 4-GB-arm64-Box ohne OOM indexiert; Laufzeit +40,9 Prozent gegen v1.0 (benannt, Analyse an v1.2 uebergeben)
-- Deutsche Komposita ueber `split_compound` + wngerman-Wortliste (GPL-2+), CI-Sprachfall-Set das ohne Splitter rot wird
-- Eigene Ergebnisseite hinter derselben Berechtigungsgrenze (ACL-Vorfilter + finaler PHP-Recheck, Paritaetstest deckt die Route)
-- Vollstaendiger FR-Katalog (174 Schluessel, Owner-Muttersprachler-Abnahme), vier Katalog-Gates in CI
-- Upgrade 1.0.3 auf 1.1.0 Ende zu Ende in CI bewiesen; Merker: jeder Minor-Sprung braucht eine Migration (Muster Version001100Date20260911000000), sonst stumme Suche
-- AWS-Messbox abgebaut; Korpus als EBS-Snapshot `snap-03f1d1d9ad9262704` (51,6 GiB, ~2,9 USD/Monat, Wiedervorlage nach v1.2)
-- Enterprise-Flag im Store gesetzt, Kontakt admin@infranode.dev in den Store-Texten
+- Filter (sechs Typgruppen, Zeitraum) und Datums-Sortierung auf der Ergebnisseite; Filter reisen in der URL, Rechtegrenze unveraendert (Paritaetstest deckt die neuen Parameter)
+- Modell-Entladung im Leerlauf hinter TTL-Schalter (ab Werk aus): beide Speicherhalter zusammen, Rueckkehr zur Grundlast 377,5 MB an der Messgroesse belegt (docs/measurements/2026-09-v12-messung/), erste Suche danach antwortet lexikalisch unter der 1,5-s-Decke
+- Alle offenen Messbelege des Milestones aus EINER Box-Anfahrt (Deckel 46 h / 5,40 USD, verbraucht 25,75 h / 2,98 USD); Ergebnisse in docs/performance.md; bekannter Bodensatz 628,0 MB nach Indexlauf mit entladenem Modell
+- 6 OCR-Sprachen (deu, eng, fra + ita, nld, spa als Positivliste von neun), stable35-Fenster vollzogen (NC 33-35, stable35-Ast muss-gruen)
+- Upgrade-Beweis 1.1.0 auf 1.2.0 Ende zu Ende in CI, Migration Version001200Date20260921000000 (Pflicht je Minor-Sprung)
+- Volle Suite 2.491 Python-Tests bestanden / 15 uebersprungen; Tag v1.2.0 auf f827145 mit 7/7 gruenen Tag-Laeufen
+- Korpus-Snapshot snap-03f1d1d9ad9262704 bewusst behalten (Owner 21.09., ~2,9 USD/Monat, einzige laufende Box-Kostenstelle)
+- Downloads Stand 21.09.: Findling 623 Release-Downloads
 
 ## Requirements
 
@@ -39,10 +39,14 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 - ✓ Komposita-Zerlegung über lizenzkonforme Wortliste (QUAL-01..03), v1.1
 - ✓ Eigene Ergebnisseite mit Paginierung und Rückkehr ohne Listenverlust (UI-01..03), v1.1
 - ✓ Vergleichsmessung gegen v1.0-Baseline auf Zielhardware (MESS-01..03), v1.1
+- ✓ Dateityp-Filter, Zeitraumfilter und Datums-Sortierung auf der Ergebnisseite, Rechtegrenze unveraendert (FILT-01..05), v1.2
+- ✓ Modell-Entladung im Leerlauf, beide Speicherhalter, ab Werk aus, one_load-Zusage neu gefasst (MEM-01..05), v1.2
+- ✓ Messwerkzeug + Runbook vor der Anfahrt, eine bezahlte Box-Anfahrt mit allen Messbelegen, Cron-Intervall als erzwungene Messbedingung (MESS-04..06), v1.2
+- ✓ Haertungen DI-11-02/03/05/06, BL-F01-Schlusssatz dreisprachig, stable35-Entscheid, Store-Einreichung 1.2.0 mit Upgrade-Beweis (HART-01..03, REL-02), v1.2
 
 ### Active
 
-(Milestone v1.2 gestartet 14.09.2026; Requirements werden in REQUIREMENTS.md definiert: Messbeleg-Paket, Dateityp-Filter/Sortierung, Modell-Entladung im Leerlauf, Härtungen + Release v1.2.0. Weiter Future: Index-Verschlüsselung, External Storage.)
+(Kein aktiver Milestone. v1.2 geliefert und archiviert am 21.09.2026; der naechste Zyklus startet mit /gsd:new-milestone. Kandidaten aus der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimetype-Gruppen aus files.mime, geplantes Vorwaermen, Pro-Schiene (Index-Verschluesselung, External Storage).)
 
 ### Out of Scope
 
@@ -87,22 +91,28 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 | Gemeinsame Embedding-Engine statt Modell-Entladung (v1.1) | Entladung wäre Bedarfsfall gewesen | ✓ Good, minus 588,6 MB Grundlast, Entladung nicht mehr nötig |
 | v1.1 index-kompatibel, kein Reindex (D-04) | Bestandsinstallationen nicht strafen | ✓ Good, Upgrade-Beweis in CI, Indexmarken unverändert |
 | Messbox einmal anfahren, danach Snapshot + Abbau (D-01/D-03) | Kosten, Vergleichbarkeit zur Baseline | ✓ Good, 2 Läufe unter Deckel, laufende Kosten auf ~2,9 USD/Monat |
-| Kill-Kriterium: NC kündigt ES-freie Volltextsuche mit OCR an -> Neubewertung | fulltextsearch am 12.08. reaktiviert |, Pending (NC Conference September beobachten) |
+| Kill-Kriterium: NC kündigt ES-freie Volltextsuche mit OCR an -> Neubewertung | fulltextsearch am 12.08. reaktiviert | ✓ Geprüft 21.09.: NICHT ausgelöst (nur ES-Stack-Modernisierung); weiter quartalsweise beobachten |
 | Keine Index-Verschlüsselung at rest, transparent dokumentiert | Schutzniveau identisch zum Host |, Pending (Future Requirement) |
 | Team Folders default AN, External Storage default AUS | Mount-Crawl billig, External Storage unkalkulierbar | ✓ Good, keine Beschwerden, External Storage bleibt Future |
 | Ziel Reputation/Portfolio; Pro-Schiene offen ab v2 | Store hat kein Bezahlmodell |, Pending (Enterprise-Flag + Fake-Door seit 11.09. live, ISV-Spur läuft separat) |
+| Eine bezahlte Box-Anfahrt für alle v1.2-Messbelege, Deckel vor dem Start vom Owner freigegeben | Kosten, Runbook-Erstvollzug als Nebenertrag | ✓ Good, 25,75 h / 2,98 USD unter Deckel 46 h / 5,40 USD, alle vier Messaufträge mit Zahl |
+| Modell-Entladung hinter TTL-Schalter, ab Werk AUS | Zero-Config-Versprechen, A/B-Beleg brauchte beide Zustände | ✓ Good, 377,5 MB Rückkehr belegt, erste Suche danach lexikalisch statt langsam |
+| Sortierung als rein lexikalischer Modus (Score 0.0, RRF aus) | tantivy liefert unter order_by_field den Feldwert statt des Scores | ✓ Good, kein Pseudo-Ranking ausgeliefert |
+| 6 OCR-Sprachen (Owner-Entscheid "Mitfahren") | Sprachpakete sind arch-neutral und billig, Positivliste deckelt | ✓ Good, sechs eigene Bau-Prüfungen, Standard bleibt deu+eng+fra |
+| stable35-Entscheid als eigener fristgebundener Plan in der ERSTEN Phase | Frist 16.09. lag zwei Tage nach Milestone-Start | ✓ Good, am Stichtag vollzogen, Beweislauf 4/4 grün |
 
-## Current Milestone: v1.2 Messbeleg und Ausbau
+## Current Milestone
 
-**Goal:** Die v1.1-Verbesserungen werden auf der Zielhardware belegt (Wirkungsbeleg, Laststufen, Sprachfälle) und die Suche baut sichtbar aus: Dateityp-Filter und Sortierung auf der Ergebnisseite plus Modell-Entladung im Leerlauf, abgeschlossen mit gehärteter Store-Einreichung v1.2.0.
+Kein aktiver Milestone. v1.2 wurde am 21.09.2026 abgeschlossen und archiviert; der naechste Zyklus startet mit /gsd:new-milestone.
 
-**Target features:**
-- Messphase in EINER Box-Anfahrt (Owner-Entscheid 11.09., Deckel-Vorschlag 26 h / 3,50 USD): DI-10-04-Wirkungsbeleg-Volllauf gegen den Korpus-Snapshot, Untersuchung der vier regressiven Laststufen, Sprachfall-Messung ohne 52.111er-Fremdbestand (DI-10-02/DI-11-01), zugleich Erstvollzug des Wiederaufbau-Runbooks
-- Ergebnisseite-Ausbau: Dateityp-Filter und Sortierung
-- Modell-Entladung im Leerlauf (Grundlast weiter senken; Wiederaufwärm-Kosten messen und ausweisen)
-- Härtungen DI-11-02/03/05/06, BL-F01-Schlusssatz in den Store-Texten beider Hälften, stable35-Fenster-Entscheid (RE-CHECK 16.09.), Store-Einreichung v1.2.0
+<details>
+<summary>Archiv: Milestone-Beschreibung v1.2 (abgeschlossen 2026-09-21)</summary>
 
-**Key context:** Index-Kompatibilität bzw. Migrations-Merker bei Minor-Sprung (Muster Version001100...); Snapshot-Entscheid snap-03f1d1d9ad9262704 fällt NACH v1.2; Kill-Kriterium Nextcloud Conference September bleibt aktiv.
+**Goal:** Die v1.1-Verbesserungen werden auf der Zielhardware belegt (Wirkungsbeleg, Laststufen, Sprachfaelle) und die Suche baut sichtbar aus: Dateityp-Filter und Sortierung auf der Ergebnisseite plus Modell-Entladung im Leerlauf, abgeschlossen mit gehaerteter Store-Einreichung v1.2.0.
+
+**Ergebnis:** Alles geliefert, v1.2.0 am 21.09.2026 eingereicht (2x HTTP 201, Lauf 35618848300). Benannte Vorbehalte: die Sprachfall-Messung ohne Fremdbestand lief nicht auf der Box (der Korpus-Snapshot IST der Fremdbestand), sondern wurde als Auflage A4 in Phase 16 ueber den gruenen arm64-CI-Ast nacherfuellt (10/10 Sprachfaelle, Owner-Zweig a); A1/A3 ohne Zielhardware-Nachmessung. Details: .planning/milestones/v1.2-ROADMAP.md und MILESTONES.md.
+
+</details>
 
 <details>
 <summary>Archiv: Milestone-Beschreibung v1.1 (abgeschlossen 2026-09-11)</summary>
@@ -133,4 +143,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-14 at v1.2 milestone start*
+*Last updated: 2026-09-21 after v1.2 milestone*

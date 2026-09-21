@@ -1,8 +1,8 @@
 ---
-status: investigating
+status: resolved
 trigger: "Resilience job kill-resume (stable34, 8.2), step DI-05-36, run 34056709826 on 96d798b: RED exit 1"
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-21
 ---
 
 ## Current Focus
@@ -109,3 +109,5 @@ files_changed:
   - backend/tests/test_poller.py
   - .github/workflows/resilience.yml
   - .github/actions/setup-test-nc/action.yml
+
+ci_confirmation: "Offener CI-Nachweis erbracht: alle 7 Workflow-Laeufe auf Tag v1.2.0 (f827145) gruen, Belegkette docs/audits/2026-09-phase-16/README.md Abschnitt 9. Status am 21.09.2026 beim Milestone-Abschluss v1.2 auf resolved gesetzt."

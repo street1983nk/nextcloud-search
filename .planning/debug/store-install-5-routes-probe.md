@@ -1,8 +1,8 @@
 ---
-status: verifying
+status: resolved
 trigger: "CI red: HaRP deploy run 34059434556, step 'Store install 5, an archive without its routes block finds nothing' fails with a 200 and the canary hit"
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-21
 ---
 
 ## Current Focus
@@ -61,3 +61,5 @@ root_cause: "The probe assumed the routes block gates the search. It does not. T
 fix: "Store install 5 rebuilt onto oc_ex_apps_routes, Store install 6 counts the same table with the block in place, comments corrected."
 verification: "local: sed strip 5 routes to 0, jq branch fail closed against real, empty and broken bodies, HaRP route loop replayed with the pinned agent code, bash -n and YAML parse clean. Open: the next CI run."
 files_changed: [".github/workflows/deploy-harp.yml"]
+
+ci_confirmation: "Offener CI-Nachweis erbracht: alle 7 Workflow-Laeufe auf Tag v1.2.0 (f827145) gruen, Belegkette docs/audits/2026-09-phase-16/README.md Abschnitt 9. Status am 21.09.2026 beim Milestone-Abschluss v1.2 auf resolved gesetzt."

@@ -1,8 +1,8 @@
 ---
-status: verifying
+status: resolved
 trigger: "CI red: Integration run 34310167720, job search-parity (stable34, 8.2), step 'Log every account in and keep its session': GET /apps/findling/?query=parityloginprobe answers 404 for owner, while the same route answers 200 on the local NC 34.0.3 instance"
 created: 2026-09-09
-updated: 2026-09-09
+updated: 2026-09-21
 ---
 
 ## Current Focus
@@ -76,3 +76,5 @@ root_cause: "The two new curl calls of plan 09-07 ask for http://localhost:8080/
 fix: "Both call sites in integration.yml ask for /index.php/apps/findling/ instead, which is the address IURLGenerator hands out on an instance without a rewrite and the form deploy-harp.yml already uses for the admin route of the same app. The reason is written down at ask_page and referenced from the login probe. No product code changed."
 verification: "Local repro in docker php:8.2-cli with the real php/ tree in apps/findling: the bare form 404s, the new form answers 200 and reaches the front controller with PATH_INFO=/apps/findling/. The workflow parses as YAML and both touched run blocks pass bash -n. That the page then renders under a session is what the next CI run shows; it was verified against the Apache dev instance during 09-05 and 09-07."
 files_changed: [".github/workflows/integration.yml"]
+
+ci_confirmation: "Offener CI-Nachweis erbracht: alle 7 Workflow-Laeufe auf Tag v1.2.0 (f827145) gruen, Belegkette docs/audits/2026-09-phase-16/README.md Abschnitt 9. Status am 21.09.2026 beim Milestone-Abschluss v1.2 auf resolved gesetzt."
