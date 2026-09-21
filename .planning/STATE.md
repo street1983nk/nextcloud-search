@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-11 abgeschlossen und damit **Welle 5 vollstaendig**. Die Texte der Fassung 1.2.0 sind vom Owner **im vorgelegten Wortlaut abgenommen**; Q-6 im Wortlaut: **"Bilder bleiben"** (kein Bilder-Plan, nur die Groessentabelle in `store/media/README.md` zieht 16-12 nach); die Enterprise-Zeile steht auf Owner-Entscheid jetzt in den sechs Texten der Vorlage. Die Messzahl **731,9 MB resident nach einem Indexlauf** ersetzt 103,2 MB im Leerlauf (Entscheid E1), der 85,1-Prozent-Vergleich faellt ersatzlos weg. **AUSGELIEFERT IST NICHTS**: beide `info.xml` und die drei READMEs tragen weiter 103,2 MB. NAECHSTES ist 16-12 (Welle 6, woertliche Textuebernahme, Messzahl-Gate und Connector-Gate, Medien); kein Tag, kein Release
-last_updated: "2026-09-22T03:40:00.000Z"
+stopped_at: 16-12 abgeschlossen und damit **Welle 6 vollstaendig**. Die abgenommenen Texte der Fassung 1.2.0 sind **ausgeliefert**: beide `info.xml` und die drei READMEs tragen die Messzahl **731,9 MB resident nach einem Indexlauf** an neun Stellen, die Sprachangabe ist an elf Stellen nachgezogen, die 103,2 kommt nirgends mehr vor. Beide Zusagen haengen jetzt an einem Gate: die Messzahl an drei Stellen im Gleichschritt (Erfolgskriterium 4, mit Mutationsfall je Stelle) und der Connector-Satz dreisprachig in beiden Haelften mit Anzahlpruefung (HART-02). Die Live-Bestaetigung der drei Bildadressen ist wiederholt, die Wiedervorlage vom 07.09.2026 ist geschlossen. Volle Suite 2.487 bestanden / 15 uebersprungen. NAECHSTES ist 16-13 (Welle 7, Launch-Haertung, Phasenaudit, Owner-Abnahme); kein Push, kein Tag, kein Release
+last_updated: "2026-09-22T04:30:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 60
-  percent: 95
+  completed_plans: 61
+  percent: 96
 ---
 
 # Project State
@@ -26,10 +26,55 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 11 von 14 abgeschlossen (16-01 bis 16-11). **Welle 1 bis Welle 5 sind
-vollstaendig.** NAECHSTES: **16-12** (Welle 6), die woertliche Textuebernahme in
-beide `info.xml` und die drei READMEs, dazu das Messzahl-Gate, das
-Connector-Gate und die Groessentabelle der Medien.
+Plan: 12 von 14 abgeschlossen (16-01 bis 16-12). **Welle 1 bis Welle 6 sind
+vollstaendig.** NAECHSTES: **16-13** (Welle 7), die Launch-Haertung, das
+Phasenaudit und die Owner-Abnahme vor der Abgabe.
+
+16-12: **Die Texte sind uebernommen, und beide Zusagen haengen jetzt an einem
+Gate.** Drei Commits. `3422979`: die abgenommenen Wortlaute stehen woertlich in
+beiden `info.xml` und den drei READMEs, und sie sind **maschinell aus
+`docs/store-listing.md` gelesen und eingesetzt** worden, nicht abgetippt; ein
+zweiter Lauf hat 17 Stellen Zeichen fuer Zeichen gegen die Quelle gehalten, je
+Stelle genau ein Treffer. Die Messzahl **731,9 MB resident nach einem
+Indexlauf** steht an neun Stellen (3x `php/appinfo/info.xml`, 3x
+`backend/appinfo/info.xml`, je 1x in den drei READMEs), die 103,2 kommt in
+keiner der fuenf Dateien mehr vor, und der 85,1-Prozent-Vergleich der READMEs
+ist ersatzlos weg. Die Sprachangabe ist an elf Stellen nachgezogen, darunter
+die zwei englischen in `backend/appinfo/info.xml` (Kommentar ueber dem
+OCR-Block und Beschreibung von `FINDLING_OCR_LANGUAGES`, jetzt neun Codes).
+Unberuehrt: Spitzen-Satz und seine drei Konstanten, Datenschutzabsatz,
+Connector-Satz, Enterprise-Zeile, Versionsangaben, Versionsfenster,
+Bildadressen. `8ce701a`: **zwei Gates, die es bisher nicht gab.** Gate 1 haelt
+die Messzahl, einmal als Konstante `RESIDENT_FIGURE` mit Messgroesse, Datum,
+Maschine, Rohdatei und E1 im Kommentar, drei Schreibweisen abgeleitet, drei
+Faelle gegen `README.en.md` und beide `info.xml` (bei den `info.xml` je Sprache,
+also sieben geprueft Texte), je Stelle ein Mutationsfall mit 741,9 statt 731,9;
+dazu die Kurztext-Regel als Maschine, genau eine Messzahl je Beschreibung,
+gemessen an der Masseinheit, weil 4 GB und die harte 2-GB-Grenze Anforderungen
+und keine Messungen sind. Gate 2 haelt den Connector-Satz dreisprachig in
+beiden Haelften und prueft die **ANZAHL** (genau eins), mit Selbsttest fuer null
+und fuer zwei; der Satz steht seit `1c737e6` (Release 1.0.3) ausgeliefert und
+war im Tag `v1.1.0` dabei, gehalten hat ihn bis heute nichts. Die Datei waechst
+von 52 auf **67 Faelle**. `aa58fdc`: die **Live-Bestaetigung der drei
+Bildadressen ist je Datei wiederholt** worden, gegen `main` bei Stand
+`1f6f85c`, 3x 200 und `image/png`, Groesse laut Antwort gleich der Groesse der
+Datei, PNG-Signatur und `IHDR`-Masse geprueft, und die drei Pruefsummen sind
+die der heutigen Dateien; damit ist die Wiedervorlage vom 07.09.2026 nach
+vierzehn Tagen geschlossen, der alte Vermerk bleibt datiert stehen. **Befund:**
+die Groessentabelle oben war bereits richtig (ein Gate haelt sie), falsch war
+die Bestaetigungstabelle darunter, die kein Gate haelt. BL-F01 ist
+fortgeschrieben (erledigt seit 1.0.3, seit diesem Plan mit Gate), BL-F02
+brauchte nichts (16-10 endete mit "Mitfahren" und nicht mit "Folgerelease").
+**Erfolgskriterium 4 ist damit erfuellt und maschinell gehalten**, und
+Erfolgskriterium 2 ist es, soweit es den Connector-Satz betrifft. Alle Gates
+lokal gruen, volle Suite **2.487 bestanden / 15 uebersprungen** (2.472 plus die
+15 neuen Faelle, Skipzahl unveraendert), pyright mit
+`PYRIGHT_PYTHON_FORCE_VERSION=latest`. **Die Tree-Hashes sind nachgesehen und
+NICHT nachzuziehen:** das Rezept globt `**/*.php` und `**/*.py`, eine
+`appinfo/info.xml` liegt in keinem der beiden Baeume. **KEIN Push, KEIN Tag,
+KEIN Release.** Der naechste Push startet `php.yml` (auf dieser Maschine nicht
+fahrbar, kein PHP und kein Composer) und `python.yml`; `docker.yml` bleibt
+unberuehrt, weil keine Abbildquelle und keine Versionsstelle angefasst ist.
 
 16-11: **Der Textentwurf der Fassung 1.2.0, vom Owner abgenommen.** Drei
 Commits, und sie fassen genau zwei Dateien an. `253abb5`: die RAM-Zeile der
@@ -1449,6 +1494,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-22T02:10:00.000Z
-Stopped at: 16-10 abgeschlossen und damit **Welle 4 vollstaendig**. Zwei Commits (a9ee779, 01dffa1): Owner-Entscheid "Mitfahren" am Tor, sechs Sprachpakete mit Pin und sechs eigenen Bau-Pruefungen, Positivliste auf neun bei unveraendertem Standard deu+eng+fra, THIRD-PARTY-Tabelle samt der bis dahin fehlenden fra-Zeile, neues Gate `test_ocr_languages.py` mit gestagtem rotem Zustand, `PACKAGE_TREE_HASH_TODAY` im selben Commit wie `config.py`. Alle Python-Gates lokal gruen, volle Suite 2.472 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Multi-Arch-Bau ist gefahren und gruen (docker.yml 35597353780).** An 16-11 uebergeben: elf Textstellen nennen noch drei Sprachen, die Liste steht in 16-10-SUMMARY.md. KEIN Tag, KEIN Release. Davor: 16-09 abgeschlossen (Welle 4, erster Plan). Vier Commits (12fec7d, 0f112c3, 607f8d0, 1c61216): Q-5 nachgesehen und als Kommentar im Workflow festgehalten, `UPGRADE_FROM_TAG` auf v1.1.0, die vier Stellen umgestellt, Zusicherung 6 auf `searchFilters.dates`, die Ratsche auf `GOLD_V1_0_AND_V1_1`. Zusicherungen 1 bis 5 maschinell als zeichengleich nachgewiesen. Alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Auftrag `deploy-harp` ist NICHT gefahren** (kein Push im Auftrag); Erfolgskriterium 3 von REL-02 wartet auf die Laufnummer, der Pruefweg steht in 16-09-SUMMARY.md und der Punkt in `deferred-items.md`. KEIN Tag, KEIN Release. Davor: 16-07 abgeschlossen (Welle 3, erster Plan). Migration, ihr Test und der Nachzug von PHP_FILES_TODAY 66 plus Baumhash in einem Commit (12e8663, der Nachzug MUSS im selben Commit liegen), die drei Versionsstellen auf 1.2.0 in einem zweiten (734a1b2); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist wieder nicht gelaufen, aus demselben Grund wie in 16-06. KEIN Tag, KEIN Release. Davor: 16-06 abgeschlossen und damit Welle 2 vollstaendig. Die Messung des inneren Aufrufs samt PHP-Faellen und Baumhash-Nachzug in einem Commit (f604805, der Nachzug MUSS im selben Commit liegen), das Python-Textgate in einem zweiten (e3fb6c5); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist nicht gelaufen: kein PHP auf dieser Maschine und kein Push im Auftrag, `php.yml` startet mit dem Push von selbst. Davor: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
-Resume file: keine; NAECHSTES ist 16-11 (Welle 5, Textentwurf der sechs Store-Texte; die Antwort aus 16-10 lautet NEUN Sprachen)
+Last session: 2026-09-22T04:30:00.000Z
+Stopped at: 16-12 abgeschlossen und damit **Welle 6 vollstaendig**. Drei Commits (3422979, 8ce701a, aa58fdc): die abgenommenen Wortlaute maschinell aus `docs/store-listing.md` in beide `info.xml` und die drei READMEs uebernommen und mit 17 Zeichenvergleichen belegt, die Messzahl an neun Stellen und die Sprachangabe an elf; zwei neue Gates (Messzahl im Gleichschritt mit Mutationsfall je Stelle und Kurztext-Regel, Connector-Satz mit Anzahlpruefung in drei Sprachen und beiden Haelften), 52 Faelle werden 67; die Live-Bestaetigung der drei Bildadressen je Datei wiederholt (3x 200, Groesse und Pruefsumme gleich der Datei) und BL-F01 fortgeschrieben. Alle Gates lokal gruen, volle Suite 2.487 bestanden / 15 uebersprungen, Skipzahl unveraendert, pyright mit erzwungener CI-Fassung. Tree-Hashes nachgesehen und nicht nachzuziehen (das Rezept globt `**/*.php` und `**/*.py`). KEIN Push, KEIN Tag, KEIN Release. Davor: 16-10 abgeschlossen und damit **Welle 4 vollstaendig**. Zwei Commits (a9ee779, 01dffa1): Owner-Entscheid "Mitfahren" am Tor, sechs Sprachpakete mit Pin und sechs eigenen Bau-Pruefungen, Positivliste auf neun bei unveraendertem Standard deu+eng+fra, THIRD-PARTY-Tabelle samt der bis dahin fehlenden fra-Zeile, neues Gate `test_ocr_languages.py` mit gestagtem rotem Zustand, `PACKAGE_TREE_HASH_TODAY` im selben Commit wie `config.py`. Alle Python-Gates lokal gruen, volle Suite 2.472 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Multi-Arch-Bau ist gefahren und gruen (docker.yml 35597353780).** An 16-11 uebergeben: elf Textstellen nennen noch drei Sprachen, die Liste steht in 16-10-SUMMARY.md. KEIN Tag, KEIN Release. Davor: 16-09 abgeschlossen (Welle 4, erster Plan). Vier Commits (12fec7d, 0f112c3, 607f8d0, 1c61216): Q-5 nachgesehen und als Kommentar im Workflow festgehalten, `UPGRADE_FROM_TAG` auf v1.1.0, die vier Stellen umgestellt, Zusicherung 6 auf `searchFilters.dates`, die Ratsche auf `GOLD_V1_0_AND_V1_1`. Zusicherungen 1 bis 5 maschinell als zeichengleich nachgewiesen. Alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Auftrag `deploy-harp` ist NICHT gefahren** (kein Push im Auftrag); Erfolgskriterium 3 von REL-02 wartet auf die Laufnummer, der Pruefweg steht in 16-09-SUMMARY.md und der Punkt in `deferred-items.md`. KEIN Tag, KEIN Release. Davor: 16-07 abgeschlossen (Welle 3, erster Plan). Migration, ihr Test und der Nachzug von PHP_FILES_TODAY 66 plus Baumhash in einem Commit (12e8663, der Nachzug MUSS im selben Commit liegen), die drei Versionsstellen auf 1.2.0 in einem zweiten (734a1b2); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist wieder nicht gelaufen, aus demselben Grund wie in 16-06. KEIN Tag, KEIN Release. Davor: 16-06 abgeschlossen und damit Welle 2 vollstaendig. Die Messung des inneren Aufrufs samt PHP-Faellen und Baumhash-Nachzug in einem Commit (f604805, der Nachzug MUSS im selben Commit liegen), das Python-Textgate in einem zweiten (e3fb6c5); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist nicht gelaufen: kein PHP auf dieser Maschine und kein Push im Auftrag, `php.yml` startet mit dem Push von selbst. Davor: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
+Resume file: keine; NAECHSTES ist 16-13 (Welle 7, Launch-Haertung, Phasenaudit und Owner-Abnahme vor der Abgabe)
