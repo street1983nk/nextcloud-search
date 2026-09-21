@@ -147,6 +147,24 @@ class ExAppService {
 	private const MIN_CALL_SECONDS = 0.3;
 
 	/**
+	 * Above this many milliseconds one inner call writes one line, below it
+	 * none, and the number is a logging threshold and not a second ceiling.
+	 *
+	 * Three things decided it. First, why a threshold at all and not a line per
+	 * call: the unified search asks once per keystroke, so a line per call is a
+	 * line per key pressed on every instance that installed this app, and that
+	 * is noise and not a measurement. Second, why it sits below the ceilings
+	 * above instead of on them: finding M-01 of the phase 15 audit describes
+	 * calls NEAR the ceiling, three of four runs between 1.4 s and 2.1 s of
+	 * total request time and a status of 200 in all four, so a threshold on the
+	 * ceiling itself would see none of them. Third, what it is not: nothing is
+	 * cut short here. What ends a call is the transport timeout of
+	 * min(ceiling, remaining budget); this number only decides whether the
+	 * duration that was measured gets written down.
+	 */
+	public const SLOW_CALL_LOG_MILLISECONDS = 1000.0;
+
+	/**
 	 * The one title that is allowed to arrive without a file behind it. It is
 	 * the diagnostic path of phase 1 and it stays: a hit whose text is composed
 	 * inside the container out of host name, timestamp and the user id from the
@@ -729,7 +747,27 @@ class ExAppService {
 			return null;
 		}
 
+		// The measurement of A3, and it sits on this side rather than in the
+		// container because the ceiling belongs to this call and not to the
+		// handler over there: proxy, HaRP, container and the way back are all
+		// inside it, and a measurement taken inside the container would leave out
+		// exactly the part that makes a call miss its ceiling without the
+		// container noticing anything at all. Nothing but the call itself stands
+		// between the two readings.
+		$startedAt = hrtime(true);
 		$response = $this->proxyRequest($path, $userId, 'POST', $body, $timeout);
+		$innerMs = round((hrtime(true) - $startedAt) / 1000000, 1);
+
+		// The log of a Nextcloud is not a private place: this line carries the
+		// route, the two numbers and nothing a user typed, named or owns.
+		if ($innerMs >= self::SLOW_CALL_LOG_MILLISECONDS) {
+			$this->logger->info('Findling: slow backend call', [
+				'path' => $path,
+				'innerMs' => $innerMs,
+				'ceilingMs' => round($timeout * 1000, 1),
+			]);
+		}
+
 		if ($response === null) {
 			// Unknown user, app_api switched off, or AppAPI not resolvable. All
 			// three cost this user a result group and never the whole search.
@@ -755,6 +793,7 @@ class ExAppService {
 			$this->logger->warning('Findling: backend unreachable', [
 				'path' => $path,
 				'error' => $response['error'] ?? 'unknown',
+				'innerMs' => $innerMs,
 			]);
 			return null;
 		}
@@ -766,6 +805,7 @@ class ExAppService {
 			$this->logger->warning('Findling: backend returned an error', [
 				'path' => $path,
 				'status' => $response->getStatusCode(),
+				'innerMs' => $innerMs,
 			]);
 			return null;
 		}
@@ -779,6 +819,7 @@ class ExAppService {
 			$this->logger->warning('Findling: backend answer is not a bounded string body', [
 				'path' => $path,
 				'bytes' => is_string($responseBody) ? strlen($responseBody) : -1,
+				'innerMs' => $innerMs,
 			]);
 			return null;
 		}
@@ -786,7 +827,7 @@ class ExAppService {
 		// Case 4.
 		$decoded = json_decode($responseBody, true);
 		if (!is_array($decoded)) {
-			$this->logger->warning('Findling: malformed backend response', ['path' => $path]);
+			$this->logger->warning('Findling: malformed backend response', ['path' => $path, 'innerMs' => $innerMs]);
 			return null;
 		}
 

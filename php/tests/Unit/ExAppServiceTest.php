@@ -480,6 +480,34 @@ final class ExAppServiceTest extends TestCase {
 		];
 	}
 
+	/**
+	 * The warnings with the measured duration replaced by its own name.
+	 *
+	 * innerMs is a reading of the wall clock around the transport and therefore
+	 * a different number on every run, so two outcomes can never be compared
+	 * field by field while it is in there. Replacing it keeps the statement of
+	 * the case below intact and holds on to the key itself, which is what plan
+	 * 16-06 added to all four failure paths: a failure path without the waiting
+	 * time is the gap finding M-01 looks into, and an unreachable backend that
+	 * appears in the log with its name but not with its two seconds says half of
+	 * what happened.
+	 *
+	 * @param list<array{0:string,1:array<mixed>}> $warnings
+	 * @return list<array{0:string,1:array<mixed>}>
+	 */
+	private function withoutTheMeasuredDuration(array $warnings): array {
+		$normalised = [];
+
+		foreach ($warnings as [$message, $context]) {
+			self::assertArrayHasKey('innerMs', $context, $message . ' left no measured duration behind');
+			self::assertIsFloat($context['innerMs'], 'the measured duration is no longer a number');
+			$context['innerMs'] = 'the measured duration';
+			$normalised[] = [$message, $context];
+		}
+
+		return $normalised;
+	}
+
 	public function testAnAnswerAtTheBodyCapIsStillParsed(): void {
 		$outcome = $this->outcomeFor($this->jsonBodyOfExactly($this->constantInt('MAX_BODY_BYTES')));
 
@@ -502,7 +530,10 @@ final class ExAppServiceTest extends TestCase {
 		// them is JSON. Had either of them reached json_decode, the one that is
 		// not JSON would have taken the other exit and left the other line
 		// behind. Identical outcomes mean the length was judged first.
-		self::assertSame($wellFormed['warnings'], $garbage['warnings']);
+		self::assertSame(
+			$this->withoutTheMeasuredDuration($wellFormed['warnings']),
+			$this->withoutTheMeasuredDuration($garbage['warnings']),
+		);
 		self::assertCount(1, $garbage['warnings']);
 	}
 
@@ -832,5 +863,67 @@ final class ExAppServiceTest extends TestCase {
 		$body = $this->snippetBodyFor(SearchFilters::none());
 
 		self::assertSame(['query', 'fileIds', 'titleOnly'], array_keys($body));
+	}
+
+	// -- A3: the inner call measures itself and reports only when it was slow -
+
+	/**
+	 * Every info line one search left behind, message and context.
+	 *
+	 * The double really waits instead of pretending to: what the class writes
+	 * down is a reading of hrtime around the transport, so a case that wants to
+	 * see a slow call has to be a slow call. A second of wall clock is the price
+	 * of measuring the thing rather than a stand in for it.
+	 *
+	 * @return list<array{0:string,1:array<mixed>}>
+	 */
+	private function infoLinesOfACallTaking(int $microseconds): array {
+		$lines = [];
+		$logger = $this->createMock(LoggerInterface::class);
+		$logger->method('info')->willReturnCallback(
+			function (string|\Stringable $message, array $context = []) use (&$lines): void {
+				$lines[] = [(string)$message, $context];
+			},
+		);
+
+		$service = $this->service($logger);
+		$service->method('proxyRequest')->willReturnCallback(
+			function () use ($microseconds): IResponse {
+				if ($microseconds > 0) {
+					usleep($microseconds);
+				}
+
+				return $this->answer('{"candidates":[],"hasMore":false,"nextOffset":0}');
+			},
+		);
+
+		$service->searchCandidates('alice', 'quarterly report', 20, 0, false, SearchFilters::none());
+
+		return $lines;
+	}
+
+	public function testACallSlowerThanTheThresholdIsWrittenDownWithThreeFieldsAndNothingElse(): void {
+		$threshold = $this->constantFloat('SLOW_CALL_LOG_MILLISECONDS');
+		$lines = $this->infoLinesOfACallTaking((int)($threshold * 1000) + 50000);
+
+		self::assertCount(1, $lines, 'a call above the threshold leaves exactly one line');
+		self::assertSame(['path', 'innerMs', 'ceilingMs'], array_keys($lines[0][1]));
+		self::assertGreaterThanOrEqual($threshold, $lines[0][1]['innerMs']);
+
+		// T-16-21 at this end. The three fields are the whole line, so the term
+		// that was searched for and the user who searched cannot be inside it, and
+		// this is what keeps a fourth field from arriving quietly.
+		$written = $lines[0][0] . var_export($lines[0][1], true);
+		self::assertStringNotContainsString('quarterly', $written);
+		self::assertStringNotContainsString('alice', $written);
+	}
+
+	public function testACallBelowTheThresholdLeavesNoLineAtAll(): void {
+		// The load bearing half of the pair, and the reason there is a threshold
+		// at all: the unified search asks once per keystroke, so a line per call
+		// is a line per key pressed on every instance that installed this app. A
+		// gate on the loud case alone would stay green for a class that wrote a
+		// line for every single call.
+		self::assertSame([], $this->infoLinesOfACallTaking(0));
 	}
 }

@@ -507,8 +507,19 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # sixth row of its data provider. The plan touches js/admin.js and the six
 # catalogue files as well; the recipe globs **/*.php, so none of them is in
 # this tree and none of them moves this figure.
+# Moved on 2026-09-21 by plan 16-06, and the count stays at 64 for the seventh
+# time running because this plan changes bytes and adds no file. Two of the 64
+# changed. ExAppService.php got the measurement of A3: hrtime around the one
+# proxyRequest call the 1.5 s ceiling belongs to, a log line above the new
+# SLOW_CALL_LOG_MILLISECONDS and the measured duration in the failure paths of
+# call(). ExAppServiceTest.php follows with the case for the line above the
+# threshold, the case for the silence below it, and the normalisation that keeps
+# a measured number out of a comparison of two failure paths. A3 is the open
+# half of finding M-01: the raw files of the phase 15 trip carry the duration of
+# the whole request on the user route and never the duration of the inner call,
+# so the question MEM-03 asks could not be decided from them.
 PHP_FILES_TODAY = 64
-PHP_TREE_HASH_TODAY = "8fdcd9dfc863c1c97cfd86211133c1532cebb661ada9fac50ce25983486d9771"
+PHP_TREE_HASH_TODAY = "29dc890ba8e5ab853439c1e7c2ec65b4651ebe8cf3923286703f98b876603c16"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
