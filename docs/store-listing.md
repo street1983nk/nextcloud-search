@@ -87,6 +87,34 @@ dem 11.09.2026 in `README.en.md`, `README.md` und `README.fr.md`, und
 Die Gleichläufigkeit der drei READMEs ist damit eine Maschine und keine Regel
 mehr.
 
+## Nachtrag vom 21.09.2026: die Messzahl der Fassung 1.2.0 (Entscheid E1)
+
+Entscheid E1 der Phase 16 ist gesperrt: **731,9 MB nach Nutzung ersetzt die
+103,2 MB an allen neun Stellen**, also in den sechs Store-Texten und in den
+drei READMEs. Die Messgröße ist dabei eine andere geworden, und das ist der
+ganze Punkt dieses Nachtrags: 103,2 MB war die Grundlast im Leerlauf mit nie
+geladenem Modell, 731,9 MB ist der residente Stand des Containers, nachdem
+einmal eingebettet und wieder entladen wurde. Herkunft: Marke C der Messung
+vom 21.09.2026, Rohdatei
+`docs/measurements/2026-09-v12-messung/rohdaten/94b-grundlast-rueckkehr.txt`,
+gefahren auf einer AWS `m7g.large` mit nativem arm64 gegen das ausgelieferte
+v1.2-Abbild, gerechnet über `anon` aus `memory.stat`. Die Begründung des
+Owners: das ist die Zahl, die ein Selfhoster auf seiner 4-GB-Box wirklich
+sieht, und sie verschweigt den Bodensatz nicht.
+
+Die Kurztext-Regel bleibt gewahrt, weil es bei genau einer Messzahl je Text
+bleibt. Die 4 GB und die harte 2-GB-Grenze sind Anforderungen und keine
+Messzahlen; die 103,2 kommt in keinem der sechs Texte mehr vor, statt neben
+der neuen Zahl zu stehen.
+
+**Stand dieser Datei:** Die sechs Texte unten sind seit dem 21.09.2026 der
+Entwurf für 1.2.0 und noch nicht ausgeliefert. Beide `info.xml` und die drei
+READMEs tragen bis zur Abnahme weiter die Fassung mit 103,2 MB; die wörtliche
+Übernahme ist Plan 16-12 und findet erst nach der Owner-Abnahme statt. Wer in
+diesem Fenster einen Unterschied zwischen dieser Datei und einer `info.xml`
+findet, hat den erwarteten Zwischenstand vor sich und keine Drift. Der Entwurf
+mit allen Gegenüberstellungen steht unten im Abschnitt "Entwurf v1.2.0".
+
 ---
 
 # App 1: `findling` (PHP-Begleit-App, Store-Bereich "Apps")
@@ -117,7 +145,7 @@ steht in `docs/store-identity.md` und wird hier nicht neu erfunden.
 
 What Findling does:
 - Full text search in the normal Nextcloud search bar
-- OCR for scanned PDFs and images: German, English, French
+- OCR for scanned PDFs and images: nine languages available, German, English and French are the default
 - Semantic search: finds documents through paraphrases
 - Every result is permission-checked by Nextcloud
 - No configuration: the first index run starts on its own
@@ -132,14 +160,14 @@ Supported file types:
 
 Requirements:
 - Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB is enough, 103.2 MB idle, under a hard 2 GB limit (measured)
+- RAM: 4 GB is enough, 731.9 MB resident after an index run, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
 ## `<description lang="de">`
 
 Was Findling kann:
 - Volltextsuche über die normale Nextcloud-Suchleiste
-- Texterkennung für gescannte PDFs und Bilder: Deutsch, Englisch, Französisch
+- Texterkennung für gescannte PDFs und Bilder: neun Sprachen verfügbar, voreingestellt sind Deutsch, Englisch und Französisch
 - Semantische Suche: findet Dokumente auch über Umschreibungen
 - Jeder Treffer wird von Nextcloud rechtegeprüft
 - Keine Konfiguration: der erste Indexlauf startet von selbst
@@ -154,14 +182,14 @@ Unterstützte Dateitypen:
 
 Anforderungen:
 - Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB genügen, 103,2 MB im Leerlauf, unter einer harten 2-GB-Grenze (gemessen)
+- RAM: 4 GB genügen, 731,9 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
 ## `<description lang="fr">`
 
 Ce que Findling sait faire :
 - Recherche plein texte dans la barre de recherche normale de Nextcloud
-- Reconnaissance optique pour les PDF numérisés et les images : allemand, anglais, français
+- Reconnaissance optique pour les PDF numérisés et les images : neuf langues disponibles, allemand, anglais et français par défaut
 - Recherche sémantique : trouve les documents par des périphrases
 - Chaque résultat est vérifié par Nextcloud selon vos droits
 - Aucune configuration : la première indexation démarre d'elle-même
@@ -176,7 +204,7 @@ Types de fichiers pris en charge :
 
 Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
-- RAM : 4 Go suffisent, 103,2 Mo au repos, sous une limite stricte de 2 Go (mesuré)
+- RAM : 4 Go suffisent, 731,9 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
 
 ---
@@ -220,7 +248,7 @@ Supported file types:
 
 Requirements:
 - Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB is enough, 103.2 MB idle, under a hard 2 GB limit (measured)
+- RAM: 4 GB is enough, 731.9 MB resident after an index run, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
 ## `<description lang="de">`
@@ -240,7 +268,7 @@ Unterstützte Dateitypen:
 
 Anforderungen:
 - Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB genügen, 103,2 MB im Leerlauf, unter einer harten 2-GB-Grenze (gemessen)
+- RAM: 4 GB genügen, 731,9 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
 ## `<description lang="fr">`
@@ -260,7 +288,7 @@ Types de fichiers pris en charge :
 
 Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
-- RAM : 4 Go suffisent, 103,2 Mo au repos, sous une limite stricte de 2 Go (mesuré)
+- RAM : 4 Go suffisent, 731,9 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
 
 ---
@@ -556,3 +584,213 @@ Wortlaut gesehen und ohne Änderung abgenommen. Damit ist auch der
 französische Teil dieses Nachtrags abgenommen, in derselben Disziplin wie
 das FR-Gate vom selben Tag: keine französische Zeile geht ungesehen nach
 außen.
+
+---
+
+# Entwurf v1.2.0, Plan 16-11, dem Owner vorgelegt am 21.09.2026
+
+Dieser Abschnitt ist der Textentwurf, den der Owner vor der Einreichung von
+1.2.0 sieht. Er steht hier und nicht in einer Planungsdatei, weil der
+Store-Text mit dem Release reist und danach nicht mehr editierbar ist: die
+Fassungen, die zur Wahl standen, gehören neben den Text, der gewonnen hat.
+Geändert wird an vier Stellen, und jede hat ihre eigene Regel.
+
+## Teil 1: die RAM-Zeile der sechs Store-Texte
+
+Eine Zeile, sechsmal, dreisprachig. Alles andere der sechs Texte bleibt Wort
+für Wort, wie es oben steht.
+
+Alt (1.1.0, abgenommen am 11.09.2026):
+
+> Englisch: RAM: 4 GB is enough, 103.2 MB idle, under a hard 2 GB limit (measured)
+>
+> Deutsch: RAM: 4 GB genügen, 103,2 MB im Leerlauf, unter einer harten 2-GB-Grenze (gemessen)
+>
+> Französisch: RAM : 4 Go suffisent, 103,2 Mo au repos, sous une limite stricte de 2 Go (mesuré)
+
+Neu (Entwurf 1.2.0, oben schon eingesetzt):
+
+> Englisch: RAM: 4 GB is enough, 731.9 MB resident after an index run, under a hard 2 GB limit (measured)
+>
+> Deutsch: RAM: 4 GB genügen, 731,9 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
+>
+> Französisch: RAM : 4 Go suffisent, 731,9 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
+
+Das Wort "im Leerlauf" ist bewusst verschwunden und durch die Messgröße
+ersetzt: "resident nach einem Indexlauf" sind vier Wörter, und sie sagen
+genau, wann die Zahl gilt. Ein Selfhoster liest daran ab, dass dies nicht die
+Zahl direkt nach dem Start ist, sondern die des Containers, der einmal
+gearbeitet hat. Die Spitze während des Laufs ist eine dritte Größe und steht
+nicht im Store-Text, sondern im Messsatz der READMEs.
+
+## Teil 2: die Sprachzeile der drei Texte der ersten Hälfte
+
+Das Abbild trägt seit Plan 16-10 neun OCR-Sprachen statt drei, und der
+Standard bleibt bei dreien. Ein Text, der neun Sprachen so nennt, als wären
+sie alle eingeschaltet, wäre falsch; einer, der weiter drei nennt, verschweigt
+sechs. Der Entwurf nennt beides in einer Zeile.
+
+Alt:
+
+> Englisch: OCR for scanned PDFs and images: German, English, French
+>
+> Deutsch: Texterkennung für gescannte PDFs und Bilder: Deutsch, Englisch, Französisch
+>
+> Französisch: Reconnaissance optique pour les PDF numérisés et les images : allemand, anglais, français
+
+Neu (Entwurf 1.2.0, oben schon eingesetzt):
+
+> Englisch: OCR for scanned PDFs and images: nine languages available, German, English and French are the default
+>
+> Deutsch: Texterkennung für gescannte PDFs und Bilder: neun Sprachen verfügbar, voreingestellt sind Deutsch, Englisch und Französisch
+>
+> Französisch: Reconnaissance optique pour les PDF numérisés et les images : neuf langues disponibles, allemand, anglais et français par défaut
+
+Die neun Namen stehen absichtlich nicht im Store-Text: neun Sprachnamen in
+einer Zeile sind länger als der Block, in dem sie stehen, und die Owner-Regel
+vom 07.09.2026 will eine Faktenliste. Die Zahl neun ist keine Messzahl,
+sondern ein Bestand, und bricht die Ein-Zahl-Regel deshalb nicht. Wer die
+Namen sucht, findet sie in den READMEs und in der Beschreibung der Einstellung
+`FINDLING_OCR_LANGUAGES`, beide unten im Wortlaut.
+
+## Teil 3: die Grundlast-Zeile der drei READMEs
+
+Heute steht dort ein Vergleich: 691,8 MB in v1.0 auf 103,2 MB in v1.1, minus
+85,1 Prozent. **Dieser Vergleich trägt die neue Zahl nicht.** 103,2 MB war die
+Grundlast im Leerlauf, 731,9 MB ist der residente Stand nach einem Indexlauf
+mit entladenem Modell. Eine Prozentzahl zwischen zwei verschiedenen
+Messgrößen wäre falsch, und zwar in die günstige Richtung falsch: sie
+verspräche einen Rückgang, der so nie gemessen wurde. Die Zeile wird deshalb
+nicht nachgerechnet, sondern ersetzt.
+
+Alt:
+
+> Englisch: Idle base load fell from 691.8 MB in v1.0 to 103.2 MB in v1.1, minus 85.1 per cent (measured 2026-09-10, method and raw data in docs/performance.md).
+>
+> Deutsch: Die Grundlast im Leerlauf ist von 691,8 MB in v1.0 auf 103,2 MB in v1.1 gefallen, minus 85,1 Prozent (gemessen am 10.09.2026, Methode und Rohdaten in docs/performance.md).
+>
+> Französisch: La charge de base au repos est passée de 691,8 Mo en v1.0 à 103,2 Mo en v1.1, moins 85,1 pour cent (mesuré le 10.09.2026, méthode et données brutes dans docs/performance.md).
+
+Neu (Entwurf 1.2.0, Übernahme in Plan 16-12):
+
+> Englisch: After an index run, with the model unloaded, the container sits at 731.9 MB of resident memory (measured 2026-09-21 on an m7g.large arm64 box against the shipped v1.2 image, method and raw data in docs/performance.md).
+>
+> Deutsch: Nach einem Indexlauf steht der Container mit entladenem Modell bei 731,9 MB residentem Speicher (gemessen am 21.09.2026 auf einer m7g.large mit arm64 gegen das ausgelieferte v1.2-Abbild, Methode und Rohdaten in docs/performance.md).
+>
+> Französisch: Après une indexation, le modèle déchargé, le conteneur reste à 731,9 Mo de mémoire résidente (mesuré le 21.09.2026 sur une machine m7g.large arm64 avec l'image v1.2 livrée, méthode et données brutes dans docs/performance.md).
+
+Jede Sprache schreibt ihre Zahlen so, wie sie Zahlen schreibt: 731.9 MB
+englisch, 731,9 MB deutsch, 731,9 Mo französisch. Der alte Vergleich
+verschwindet nicht aus der Welt: er bleibt in `docs/performance.md` gültig für
+die Bedingungen, unter denen er entstand (Messung vom 10.09.2026, Grundlast im
+Leerlauf, Modell nie geladen), und er steht unten im Änderungsprotokoll mit
+Datum.
+
+## Teil 4: der Spitzen-Satz bleibt unverändert
+
+Der Messsatz der drei READMEs nennt 52.111 Dokumente und 1.764 MB aus der
+v1.1-Anfahrt. Er wird **nicht** angefasst, und das ist eine Entscheidung und
+kein Vergessen: der v1.2-Lauf hat die Spitze eines Volllaufs nicht neu
+gemessen. Wer die Dokumentzahl auf die 52.137 der v1.2-Box nachzöge, ohne die
+Spitze mitzunehmen, mischte zwei Läufe in einem Satz, und der Satz behauptete
+danach eine Messung, die es nicht gibt. Der nächste Leser, der an dieser
+Stelle ansetzt, findet hier den Grund, warum die Zahl aussieht, als sei sie
+stehen geblieben. `MEASURED_SENTENCE`, `MEASURED_SENTENCE_DE` und
+`MEASURED_SENTENCE_FR` in `backend/tests/test_store_metadata.py` bleiben damit
+ebenfalls unberührt.
+
+## Teil 5: die Fundstellen, Stelle für Stelle
+
+Zwei Listen, weil zwei verschiedene Angaben wandern. Maßgeblich ist der
+Wortlaut und nicht die Stelle.
+
+**Die Messzahl 731,9 MB, neun Stellen (Entscheid E1):**
+
+| Datei | Sprache | Was dort steht |
+|---|---|---|
+| `php/appinfo/info.xml` | EN | die RAM-Zeile des Blocks Requirements |
+| `php/appinfo/info.xml` | DE | die RAM-Zeile des Blocks Anforderungen |
+| `php/appinfo/info.xml` | FR | die RAM-Zeile des Blocks Prérequis |
+| `backend/appinfo/info.xml` | EN | dieselbe Zeile, zweite Hälfte |
+| `backend/appinfo/info.xml` | DE | dieselbe Zeile, zweite Hälfte |
+| `backend/appinfo/info.xml` | FR | dieselbe Zeile, zweite Hälfte |
+| `README.en.md` | EN | die Grundlast-Zeile im Block Requirements |
+| `README.md` | DE | die Grundlast-Zeile im Block Anforderungen |
+| `README.fr.md` | FR | die Grundlast-Zeile im Block Prérequis |
+
+**Die Sprachangabe, elf Stellen (aus Plan 16-10):** die drei Sprachzeilen aus
+Teil 2 in `php/appinfo/info.xml`, dieselben drei in dieser Datei, die drei
+Zeilen der READMEs und zwei Stellen in `backend/appinfo/info.xml`, nämlich der
+Kommentar über dem OCR-Block und die Beschreibung von
+`FINDLING_OCR_LANGUAGES`. Die Store-Texte der zweiten Hälfte zählen die
+Sprachen nicht auf und bleiben unberührt.
+
+Der Wortlaut der READMEs, dort dürfen die Namen stehen:
+
+> Englisch: OCR for scanned PDFs and images: nine languages available (German, English, French, Spanish, Italian, Dutch, Portuguese, Danish, Estonian), German, English and French switched on by default
+>
+> Deutsch: Texterkennung für gescannte PDFs und Bilder: neun Sprachen verfügbar (Deutsch, Englisch, Französisch, Spanisch, Italienisch, Niederländisch, Portugiesisch, Dänisch, Estnisch), voreingestellt sind Deutsch, Englisch und Französisch
+>
+> Französisch: Reconnaissance optique pour les PDF numérisés et les images : neuf langues disponibles (allemand, anglais, français, espagnol, italien, néerlandais, portugais, danois, estonien), allemand, anglais et français activés par défaut
+
+Der Wortlaut der zwei Stellen in `backend/appinfo/info.xml`, englisch, weil
+die Datei dort englisch ist:
+
+> Kommentar über dem OCR-Block: the engine and nine language models are inside the image, and German, English and French are switched on.
+>
+> Beschreibung von `FINDLING_OCR_LANGUAGES`, der eine Satz mit der Aufzählung: Only the languages this image carries are accepted, which today are deu (German), eng (English), fra (French), spa (Spanish), ita (Italian), nld (Dutch), por (Portuguese), dan (Danish) and est (Estonian); anything else is ignored with a warning in the log and never reaches the engine.
+
+Der Rest beider Beschreibungen bleibt unverändert, besonders der Satz, dass
+die Reihenfolge zählt und die erste Sprache am schwersten wiegt.
+
+## Teil 6: die Store-Bilder, offene Frage Q-6 der Recherche
+
+Kein Textentscheid, aber derselbe Termin. Die drei Bilder in `store/media/`
+stammen vom 07.09.2026, also aus der 1.0.0-Zeit. Seitdem hat das Produkt drei
+sichtbare Änderungen bekommen: die eigene Ergebnisseite mit Navigationseintrag
+(Phase 9), die Filter- und Sortierzeile (Phase 13) und den sechsten
+Engine-Zustand auf der Verwaltungsseite (Phase 14). `screenshot-admin.png`
+zeigt die Verwaltungsseite in ihrem damaligen Stand.
+
+- **a) Bilder bleiben.** Kein Aufwand, aber die Verwaltungsseite im Store
+  zeigt einen Stand, den 1.2 so nicht mehr hat.
+- **b) Bilder werden erneuert.** Eigener Plan in Welle 6, vor der Abgabe:
+  Wegwerf-Aufbau, eigens erzeugter Bestand, Playwright, Sichtprobe.
+
+Unabhängig von der Wahl wird die Größentabelle in `store/media/README.md`
+nachgezogen: sie nennt bis heute die Größen der abgelösten Dateien, und diese
+Wiedervorlage steht seit dem 07.09.2026 offen.
+
+## Die Abnahme
+
+Textabnahme 1.2.0: offen, Stand 21.09.2026. Die Übernahme in beide `info.xml`
+und die drei READMEs (Plan 16-12) beginnt erst danach.
+
+---
+
+# Änderungsprotokoll der Messzahl in den Store-Texten
+
+Eine ersetzte Zahl ohne Nachtrag lässt später nicht mehr erkennen, was früher
+gemessen wurde und unter welchen Bedingungen es galt. Deshalb steht jede
+Ablösung hier mit Datum, Plan und Messgröße, und nicht nur der jeweils letzte
+Stand.
+
+| Datum | Plan | Was sich ändert | Abgelöste Zahl und ihre Messgröße | Neue Zahl und ihre Messgröße | Grundlage |
+|---|---|---|---|---|---|
+| 11.09.2026 | 11-09 | die RAM-Zeile der sechs Store-Texte bekommt erstmals eine Kernzahl | keine Zahl im Text | 103,2 MB, Grundlast im Leerlauf mit nie geladenem Modell, gemessen am 10.09.2026 auf m7g.large, Rohdatei `2026-09-vergleichsmessung-m7g/rohdaten/94-grundlast.txt` | Owner-Entscheid vom 11.09.2026, Fassung B |
+| 21.09.2026 | 16-11 | die RAM-Zeile der sechs Store-Texte und die Grundlast-Zeile der drei READMEs | 103,2 MB, Grundlast im Leerlauf mit nie geladenem Modell; bleibt für genau diese Bedingungen gültig und steht weiter in `docs/performance.md` | 731,9 MB, residenter Stand nach einem Indexlauf mit entladenem Modell, gemessen am 21.09.2026 auf m7g.large mit arm64 gegen das ausgelieferte v1.2-Abbild, Rohdatei `2026-09-v12-messung/rohdaten/94b-grundlast-rueckkehr.txt` (Marke C) | Entscheid E1 der Phase 16, gesperrt am 21.09.2026 |
+
+Drei Sätze, die zu diesem zweiten Eintrag gehören und ohne die er falsch
+gelesen werden kann:
+
+1. **Es ist kein Anstieg von 103,2 auf 731,9.** Die beiden Zahlen messen nicht
+   dasselbe. Ein Container, der noch nie eingebettet hat, steht am 21.09.2026
+   auf 103,9 MB (Marke A derselben Messung) und bestätigt die alte Zahl damit
+   fast genau. Was der Store-Text ab 1.2.0 zeigt, ist der Zustand danach.
+2. **Der Alt-Neu-Vergleich der READMEs fällt ersatzlos weg**, samt der 85,1
+   Prozent. Eine Prozentzahl zwischen zwei Messgrößen wäre eine Verbesserung,
+   die nie gemessen wurde. Der alte Vergleich bleibt in `docs/performance.md`
+   an seinem Datum stehen.
+3. **Die Spitze eines Volllaufs ist unberührt.** 52.111 Dokumente und 1.764 MB
+   stammen aus der v1.1-Anfahrt, und der v1.2-Lauf hat sie nicht neu gemessen.
+   Wer den Messsatz anfasst, misst vorher.
