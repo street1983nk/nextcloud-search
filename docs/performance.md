@@ -156,6 +156,11 @@ zwei Reihen auf zwei Architekturen mehr sagen als eine.
 | Verbleib der ARM-Box nach der Vergleichsmessung | **angehalten seit 16:22:50Z, kein Abbau** (Betreiberentscheid 10.09.); Abschlusszahlen 31,05 h und 3,5969 USD netto, unter dem angehobenen Deckel von 34 h und 4,00 USD; der Abbau bekommt einen eigenen Plan in Phase 11 | 2026-09-10 |
 | **Verbleib der ARM-Box, endgültig: abgebaut** | **Korpus im Snapshot `snap-03f1d1d9ad9262704` (completed, 100 %, 51,6 GiB geschriebene Blöcke), Instanz, beide Datenträger und die Security Group nachweislich gelöscht** (Betreiberentscheid 11.09.); laufende Kosten von 9,39 auf 2,79 bis 2,99 USD je Monat | 2026-09-11 |
 | **Ursache der Mehrlaufzeit des Vergleichslaufs (DI-10-04): geklärt und behoben** | **aus den Rohdaten beider Läufe gerechnet, nicht neu gemessen**: der Lauf war 5,85 h von 26,6 h ohne Arbeitsvorrat (194 von 812 Lesungen, Baseline: 0,10 h), weil der Zulauf am 5-Minuten-Systemcron hing, der auf der Box nur alle rund 12 Minuten eine Scheibe von etwa 870 Zeilen lieferte, während die Baseline bis zu 49.601 Zeilen Vorlauf hielt; ohne den Leerlauf liegen die Läufe bei 20,8 h gegen 18,9 h, der Rest ist der dokumentierte Untergrenzen-Vorbehalt. Behoben durch die Top-up-Route: ein Container, dessen Claim leer ausgeht, während der Crawl unfertig ist, führt die nächste Crawl-Scheibe selbst aus (`POST /queues/documents/topup`, Budget 20 s, Scheiben-Lock gegen den Cron) und bleibt bei der kurzen Pause statt der 120-s-Leiter. Der Beleg der Wirkung braucht einen neuen Volllauf und steht aus | 2026-09-11 |
+| **Nachtrag: DI-10-04-Wirkungsbeleg, v1.2-Anfahrt, ARM m7g.large** | **gefahren, Volllauf beider Spuren 19 h 20 min gegen 26 h 37 min (v1.1) und 18 h 56 min (v1.0), Leerlaufanteil 2,6 Prozent gegen 22,0 Prozent, 52.137 Dokumente und Vektoren, kein Speichertod; die WIRKUNG der Top-up-Route bleibt nicht entschieden, weil Instanz und Abbild zugleich gewechselt haben** | 2026-09-21 |
+| **Nachtrag: Laststufen, v1.2-Anfahrt, ARM m7g.large** | **gemessen, alle vier in v1.1 regressiven Stufen unterschreiten ihre v1.1-Zahl bei gehaltener oder besserer Trefferdichte; die Reserve auf Stufe 8 wächst von 374,5 auf 508,0 ms; die Stufen 12 und 16 reißen das Budget wie in v1.0 und v1.1** | 2026-09-21 |
+| **Nachtrag: MEM-02 an seiner Messgröße, ARM m7g.large** | **gemessen, `rueckkehr-zur-grundlast-mb` = 377,5 (Marke B 1.109,4 MB minus Marke C 731,9 MB), über der Schwelle 300 MB; Bodensatz 628,0 MB als eigene Zahl; die Sichtprobe aus 14-12 (376,3 MB ohne `malloc_trim`) bleibt ein Hinweis** | 2026-09-21 |
+| **Nachtrag: Wiederaufwärm-Kosten der Entladung, ARM m7g.large** | **gemessen, vier Ausprägungen; erste Suche kalt 1.996 ms (minus 496 ms gegen die Decke von 1,5 s) und warm 1.418 ms (plus 82 ms), Nachwärmdauer 0 s; der Vorschlagswert 900 s bleibt mit Vorbehalt (Betreiberentscheid 21.09.2026)** | 2026-09-21 |
+| **Nachtrag: Filter und Sortierung, ARM m7g.large, Erstmessung** | **gemessen, relevance 341,3 ms Median gegen newest 175,2 ms und oldest 174,7 ms (Faktor 1,95), drei Seiten unter Filter geblättert ohne doppelte Kennung; ohne Vergleichszeile, weil beides erst in Phase 13 entstanden ist** | 2026-09-21 |
 
 Was fehlt, ist hier ausdrücklich als fehlend benannt und nicht ausgelassen.
 
@@ -3653,6 +3658,14 @@ Abschnitt 6.
 Container kehrt nicht auf die Grundlast eines Containers zurück, der nie
 eingebettet hat, sondern auf diese plus rund 16 MB.
 
+**Nachtrag vom 21.09.2026, gemessen auf der Box:** die rund 16 MB sind ein
+Zuwachs JE ZYKLUS aus der Zielast des Vorprüflaufs und nicht der absolute
+Rückstand nach einem Zyklus. Der absolute Rückstand auf ARM m7g.large beträgt
+**628,0 MB**, und der Container steht nach einem Indexlauf mit entladenem Modell
+auf **731,9 MB** residentem Speicher. Beide Zahlen stehen im Abschnitt
+"Nachtrag vom 21.09.2026: MEM-02 an seiner Messgroesse" weiter unten; der Satz
+oben bleibt gültig für die Messgröße, aus der er stammt.
+
 ### Was hier bewusst nicht steht: die Ladezeit nach einer Entladung
 
 Wie lange das Nachladen nach einer Freigabe dauert, mit warmem und mit kaltem
@@ -3670,6 +3683,13 @@ dürfen nicht als Wiederaufwärmzahl gelesen werden, schon deshalb nicht, weil d
 Nachwärmen nach einer Freigabe gar nicht in der Antwort einer Suche steht: die
 erste Suche danach antwortet lexikalisch und bestellt die Gewichte im
 Hintergrund.
+
+**Nachtrag vom 21.09.2026: jetzt gemessen.** Die vier Ausprägungen der
+v1.2-Anfahrt stehen im Abschnitt "Nachtrag vom 21.09.2026: die
+Wiederaufwärm-Kosten der Entladung" weiter unten, mit warmem und mit kaltem
+Seitencache und mit ihrem Abstand zur Decke von 1,5 s. Der Satz oben bleibt
+stehen: er beschreibt den Stand vor dieser Messung, und die Kaltstartzahlen
+weiter oben dürfen weiterhin nicht als Wiederaufwärmzahl gelesen werden.
 
 ## Was der Test gekostet hat
 
@@ -4133,6 +4153,256 @@ genau 30. Auf Stufe 8 und in der Gegenprobe auf Stufe 1 rechnet dieselbe Summe
 ebenso auf, bei null Abbrüchen. **Die p95-Zahlen oben bleiben, wie sie sind:**
 sie stammen aus dem Lauf vom 10.09. mittags, und die Nachmessung hat das
 Werkzeug geprüft und nicht die Zusage neu gemessen.
+
+## Die v1.2-Anfahrt vom 20. und 21.09.2026
+
+Die fünf Abschnitte dieses Kapitels sind **Nachträge** und keine Ersetzungen.
+Keine ältere Zahl dieses Dokuments wird durch sie ungültig: eine alte Zahl
+bleibt gültig für die Bedingungen, unter denen sie entstanden ist, und genau
+deshalb steht sie weiter oben unverändert.
+
+**Die Maschine, für alle Zahlen dieses Kapitels:** ARM m7g.large in
+eu-central-1c, aarch64, 3,9 GiB Gesamtspeicher, 2 Kerne, `mem=4G` in der
+Kommandozeile des Kerns zurückgelesen, harte Containergrenze `memory.max`
+2.147.483.648 Byte bei `memory.swap.max` 0, Korpus-Volume aus
+`snap-03f1d1d9ad9262704`. Abbild per Digest gezogen,
+`sha256:80710fbba1a4acf6d60671ff60b0aeb85d902228338771e69fb62fe2a14bf706`,
+Werkzeugstand `baumhash-gleich ja`, im laufenden Container nachgelesen.
+
+**Die Quelle jeder Zahl** ist
+[`docs/measurements/2026-09-v12-messung/`](measurements/2026-09-v12-messung/README.md);
+der Bericht dort nennt zu jeder Zahl ihre Rohdatei. Die Box ist am 21.09.2026
+abgebaut worden, nachgelesen je Ressourcenart gegen die API.
+
+### Nachtrag vom 21.09.2026: der DI-10-04-Wirkungsbeleg
+
+Die Zeile "Ursache der Mehrlaufzeit des Vergleichslaufs (DI-10-04)" in "Stand
+dieses Berichts" endet mit dem Satz, der Beleg der Wirkung brauche einen neuen
+Volllauf und stehe aus. Der Volllauf ist gefahren. Der alte Befund zum
+Systemcron bleibt stehen, wie er ist; dies ist sein Nachtrag.
+
+| Größe | v1.0, 06-11 | v1.1, 10.09.2026 | **v1.2, 20.09.2026** |
+|---|---:|---:|---:|
+| Laufzeit beider Spuren | 18 h 56 min | 26 h 37 min | **19 h 20 min** |
+| Dokumente | 51.961 | 52.111 | **52.137** |
+| Zeit ohne Arbeitsvorrat | 0,10 h | 5,85 h von 26,6 h, 22,0 Prozent | **0,50 h von 19,3 h, 2,6 Prozent** |
+
+Das Lauffenster war 2026-09-20T03:49:32Z bis 2026-09-20T23:09:58Z, das Ergebnis
+52.137 Dokumente und 52.137 Vektoren. Der Lauf endete mit leerem Arbeitsvorrat
+und `runState idle`, ohne Speichertod: `memory.peak` 2.044.096.512 Byte unter
+der Grenze von 2.147.483.648, `OOMKilled=false`, `RestartCount=0`.
+
+**Die Laufzeit ist eine Untergrenze**, weil beim Anstoß schon 4.696 Dateien im
+Index lagen; der Poller hatte seit dem Abbildwechsel um 02:42Z gebaut. Der
+v1.1-Lauf startete aus demselben Grund mit 1.653 Dateien und ist ebenfalls eine
+Untergrenze. Die beiden Zahlen sind gleichartig verzerrt und nicht gleich stark.
+
+**Der Leerlaufanteil, mit seiner Ablesereihe.** Die Reihe ist
+`docs/measurements/2026-09-v12-messung/rohdaten/96-statusseite.jsonl`, eine Aufnahme alle **120 Sekunden**, **578**
+Aufnahmen im Lauffenster, davon **15** mit leerem Arbeitsvorrat. Das sind
+2,6 Prozent und hochgerechnet 0,50 h. Es gibt für diesen Sachverhalt in der
+v1.2-Messung genau eine Prozentzahl und keine zweite; das ist die Lehre aus
+v1.1, wo 194 von 812 Lesungen gegen 62 von 325 Lesungen standen.
+
+Das protokollierte Cron-Intervall der Instanz war **300 s**, Quelle
+`aio-cron-container`, und der gemessene Scheibenabstand lag bei Median 301 s und
+Maximum 361 s gegen einen Wirkungsdeckel von 420 s, bei null Überschreitungen
+über 23 Scheiben.
+
+**Hat die Top-up-Route gewirkt? Die Zahlen entscheiden es nicht.** Der Lauf ist
+7 h 17 min kürzer und sein Leerlaufanteil von 22,0 auf 2,6 Prozent gefallen.
+Die Instanz ist aber aus einem Snapshot neu aufgebaut, das Abbild ist
+gewechselt, und seit v1.1 ist nicht nur die Top-up-Route dazugekommen, sondern
+alles übrige der Phasen 13 und 14. Beide Erklärungen bleiben möglich: die
+Route wirkt, oder die neu aufgebaute Instanz taktet ihren Zulauf anders. Der
+Satz stand vor dem Lauf in `skripte/00-ablauf.md` und wird nach dem Lauf nicht
+umgeschrieben. Rechnerisch trennen lassen sich die 5,35 h weniger Leerlauf, die
+rund drei Viertel des Zeitgewinns erklären; das restliche Viertel wird **nicht**
+zugeordnet, weil das eine Schätzung wäre.
+
+**Ein Vorbehalt, der zu diesen Zahlen gehört:** der Wirkungszweig der
+Cron-Vorprüfung ist während des Laufs nie gestartet worden. Seine Zahlen sind
+nachträglich aus der aufgezeichneten 120-s-Statusreihe gerechnet und in
+`docs/measurements/2026-09-v12-messung/rohdaten/97-cron-vorpruefung-waehrend.txt` ausdrücklich so gekennzeichnet. Ein
+live mitlaufender Zweig hätte mit seinem eigenen Intervall anders gezählt.
+
+### Nachtrag vom 21.09.2026: die Laststufenreihe
+
+Gemessen am 21.09.2026 zwischen 02:10:22Z und 02:13:52Z, fünf Stufen, zehn
+Runden je Stufe, 20 s Pause, auf ARM m7g.large. `scripts/ops/search_load.py` ist
+nicht angefasst worden, weil jede Änderung daran die Stufenzahlen gegen v1.1
+unvergleichbar machte.
+
+| Nebenläufigkeit | p95 v1.0, 06-11 | p95 v1.1 | **p95 v1.2** | Trefferdichte v1.2 (v1.1) | Verdikt |
+|---:|---:|---:|---:|---|---|
+| 1 | 481,6 ms | 464,3 ms | **480,5 ms** | 5,40 (5,40) | nicht regressiv |
+| 4 | 1.009,4 ms | 1.068,0 ms | **1.006,8 ms** | 5,40 (5,40) | **behoben** |
+| 8 | 1.915,0 ms | 2.125,5 ms | **1.992,0 ms** | 5,25 (rund 5,0) | **behoben** |
+| 12 | 3.045,4 ms | 3.453,4 ms | **2.950,6 ms** | 5,40 (keine v1.1-Zahl) | **behoben** |
+| 16 | 3.782,7 ms | 4.446,2 ms | **4.091,1 ms** | 5,21 (4,16) | **behoben** |
+
+Die vier Verdikte sind wortgleich mit denen in
+`docs/measurements/2026-09-v12-messung/rohdaten/97-nebenlaeufigkeit.txt` und beziehen sich je auf die v1.1-Zahl, gegen
+die diese Phase misst. Die v1.0-Spalte steht als zweite Referenz daneben und
+nicht als Alternative. Wo das Werkzeug einen Hinweis "plus 4,0 Prozent"
+(Stufe 8) oder "plus 8,2 Prozent" (Stufe 16) notiert, bezieht er sich auf v1.0.
+
+**Die Zusage steht weiter auf Stufe 8, und ihre Reserve wächst.** 1.992,0 ms
+gegen ein Gruppenbudget von 2.500 ms sind **508,0 ms Reserve**, gegen 374,5 ms
+in v1.1 und 585,0 ms in 06-11. Die Stufen 12 und 16 überschreiten das Budget je
+Einzelanfrage weiterhin, wie in v1.0 und v1.1 auch; das ist eine Eigenschaft
+hoher Nebenläufigkeit auf zwei Kernen und kein Regressionsbefund.
+
+**Die Trefferdichte der Stufe 12 ist eine Erstmessung**, weil für v1.1 an
+dieser Stufe keine Dichte ausgewiesen ist; sie darf nicht als Vergleichszeile
+gelesen werden. Die v1.1-Dichte der Stufe 8 steht nur gerundet vor ("rund 5,0")
+und trägt deshalb ihre Klammer.
+
+**Die unabhängige Gegenrechnung.** Gezählt wurde `cURL error 28` im Protokoll
+der Nextcloud, also außerhalb des Lastwerkzeugs: im Lastfenster 02:10 bis 02:13
+**null** Treffer. Damit ist die Ausfallzählung des Werkzeugs bestätigt, und
+alle gemeldeten Ausfälle sind echte Leertreffer und keine verschluckten
+Zeitüberschreitungen. In v1.1 war genau das anders.
+
+**Die Vergleichbarkeit, ehrlich.** Diese Reihe läuft gegen einen anderen
+Vektorbestand und ein anderes Abbild als v1.1, und der Zähler des Werkzeugs
+zählt seit dem 10.09.2026 abgebrochene Aufrufe nicht mehr als beantwortet,
+misst denselben Zustand also strenger.
+
+### Nachtrag vom 21.09.2026: MEM-02 an seiner Messgroesse
+
+Die Messgröße heißt `Rueckkehr zur Grundlast nach einem Indexlauf`, und
+weiter oben in diesem Dokument steht seit dem 19.09.2026, warum sie so heißt.
+Hier steht ihre Zahl. Gemessen am 21.09.2026 von 03:06:32Z bis 03:09:46Z, auf
+ARM m7g.large, gegen das ausgelieferte v1.2-Abbild, Schalter
+`FINDLING_EMBED_IDLE_RELEASE_SECONDS` auf 120 s, gerechnet über `anon` aus
+`memory.stat` und nicht über `memory.current`. Rohdatei:
+`docs/measurements/2026-09-v12-messung/rohdaten/94b-grundlast-rueckkehr.txt`.
+
+| Marke | Was sie ist | Wert |
+|---|---|---:|
+| A | Grundlast vor dem Indexlauf, nach Containerneustart, Zustand `cold` | 103,9 MB |
+| B | unmittelbar nach dem Indexlauf, Zustand `loaded` | 1.109,4 MB |
+| C | nach der Ruhezeit, Zustand `unloaded` | 731,9 MB |
+
+**`rueckkehr-zur-grundlast-mb = 377,5`**, gerechnet als Marke B minus Marke C.
+Bezugszahl ist ausdrücklich Marke B und nicht Marke A: gefragt ist, ob die
+Speicherhalter nach Ablauf der Frist wieder frei sind, und nicht, um wie viel
+eine Zahl gefallen ist. Belegt ist der Indexlauf an den eingebetteten Dokumenten
+der Statusseite: 52.137 vorher, 52.149 nachher, Arbeitsvorrat je null.
+Angestoßen wurde er über den Weg eines Nutzers, zwölf kleine Textdateien
+über WebDAV plus `files:scan`, und nicht über `findling:index --restart`, das
+rund 52.000 Dokumente neu in die Schlange gestellt hätte.
+
+**Der Bodensatz daneben, als eigene Zahl.** `bodensatz-mb = 628,0`, gerechnet
+als Marke C minus Marke A. Die Zahl, die ein Betreiber kennen muss, ist deshalb
+diese: **ein Container, der einmal eingebettet hat und danach entladen ist,
+steht auf 731,9 MB residentem Speicher.** Auf einer 4-GB-Box ist das eine Zahl,
+die man kennt.
+
+**Die Sichtprobe aus 14-12 bleibt stehen und ist ein Hinweis, kein Beleg.** Am
+19.09.2026 gab ein Container auf der Entwicklungsmaschine, einer
+Windows-Maschine **ohne** `malloc_trim`, nach 75 s **376,3 MB** frei und meldete
+`unloaded`. Die Zahl liegt nahe an den 377,5 MB der Box, und genau das macht sie
+verführerisch: sie ist auf anderer Hardware, ohne `malloc_trim` und **nicht** an
+der Messgröße `Rueckkehr zur Grundlast nach einem Indexlauf` entstanden. Sie
+belegt MEM-02 nicht. Belegt ist MEM-02 durch die 377,5 MB dieser Box.
+
+### Nachtrag vom 21.09.2026: die Wiederaufwaerm-Kosten der Entladung
+
+Gemessen am 21.09.2026 von 02:47:32Z bis 02:54:34Z auf ARM m7g.large, in der
+Reihenfolge 1, 3, 2, 4, also kalt vor warm, belegt durch die
+Containerstart-Zeitstempel der vier Rohdateien. Jede Kaltmessung beginnt mit
+einem Containerneustart und einem geleerten Seitencache des Wirts. Rohdateien:
+`docs/measurements/2026-09-v12-messung/rohdaten/95b-wiederaufwaermen-1.txt` bis `-4.txt`.
+
+| Ausprägung | Schalter | Seitencache | erste Suche | **Abstand zur Decke von 1,5 s** | Treffer | zweite Suche |
+|---|---|---|---:|---:|---|---:|
+| 1 | 120 s | kalt | 1.996 ms | **minus 496 ms, gerissen** | 26 | 1.038 ms |
+| 2 | 120 s | warm | 1.418 ms | **plus 82 ms** | 26 | 745 ms |
+| 3 | 0 | kalt | 2.051 ms | **minus 551 ms, gerissen** | transient 0 | 776 ms |
+| 4 | 0 | warm | 1.613 ms | **minus 113 ms, gerissen** | 26 | 743 ms |
+
+Die Spalte nennt den **Abstand** und nicht ein bloßes Unterschreiten, nach dem
+Entscheid aus 14-12: eine Decke, die mit 82 ms gehalten wird, ist etwas anderes
+als eine Decke, die mit 500 ms gehalten wird, und wer nur "gehalten" schreibt,
+verschweigt den Unterschied.
+
+**Was diese vier Zahlen sind, und was sie nicht sind.** Gemessen ist je die
+Dauer der ganzen Anfrage auf der Nutzerroute und nicht die des inneren
+Containeraufrufs; die Methodik-Korrektur weiter oben in diesem Dokument gilt
+hier genauso. Alle vier Antworten kamen mit `erste-suche-code=200`, und außer
+der transienten Null der Ausprägung 3 je mit 26 Treffern: **ein Abbruch ist in
+keiner der vier Ausprägungen eingetreten.** Die Spalte "Abstand zur Decke"
+misst deshalb gegen die Decke, wie die Erwartung E12 der Anfahrt sie formuliert
+hat, und nicht gegen die 1.501 ms des inneren Aufrufs, die diese Rohdateien
+nicht ausweisen. Wer die innere Dauer braucht, braucht ein Messwerkzeug, das
+sie mit ausweist; das steht noch aus.
+
+**Die Nachwärmdauer ist 0 s** (`nachwaermdauer-s=0`): die erste Suche der
+Nutzerroute trägt die Volltextseite, während die Gewichte im Hintergrund
+nachladen. Die Zeit der ersten Suche ist damit nicht die Ladezeit des Modells.
+
+**Die Entladung kostet nicht mehr als ein normaler Kaltstart.** Im selben
+Cachezustand liegt die Ausprägung mit Entladung je unter der ohne: 1.996 gegen
+2.051 ms kalt, 1.418 gegen 1.613 ms warm.
+
+**Was die kalten Zahlen mit enthalten.** Das Leeren des Wirtscaches verwirft
+auch den mmap-Cache des Tantivy-Index. Die kalten Zahlen messen damit beide
+Hälften kalt, die Semantik und den Volltext, und nicht allein das Nachladen der
+Gewichte. Das ist die gewollte schlechtere Hälfte der Wahrheit: der Fall, den
+ein Nutzer nach einem Neustart der Box wirklich bekommt. Die null Treffer der
+Ausprägung 3 sind ein vorübergehender Leertreffer unmittelbar nach dem
+Containerneustart; die zweite Suche derselben Ausprägung liefert regulär, und
+die 2.051 ms bleiben als Kaltstart-Bezugswert gültig, weil der Lade- und
+mmap-Weg unabhängig von der Trefferzahl durchlaufen wird.
+
+**Der Vorschlagswert 900 s bleibt, mit Vorbehalt.** Der Betreiber hat am
+21.09.2026 entschieden: "900 s bleibt + Vorbehalt (E14-Regel)." Der Wert bleibt
+eine gekennzeichnete Schätzung, seine Beschreibung in `docs/embeddings.md`
+bekommt die Box-Zahlen daneben, und der Satz dazu lautet: die 1,5-s-Decke reißt
+im kalten Eckfall nach einem Neustart der Box und hält im laufenden Betrieb.
+Eine Frist lässt sich nicht belegen, nur ihre Folgen.
+
+### Nachtrag vom 21.09.2026: Filter und Sortierung, eine Erstmessung
+
+**Dies ist eine Erstmessung.** Es gibt keinen v1.1-Wert für Sortierung oder
+Blättern unter Filter, weil beide erst in Phase 13 entstanden sind. Keine Zahl
+dieses Abschnitts darf neben eine Vergleichszeile geraten.
+
+Gemessen am 21.09.2026 von 02:17:56Z bis 02:18:07Z auf ARM m7g.large gegen den
+Vollbestand von 52.137 Vektoren, über die Seitenroute, Anmeldung über Sitzung,
+Begriff "Bescheid Antrag", Filter-Typgruppe `pdf`, fünf Runden je Zeile.
+Rohdatei: `docs/measurements/2026-09-v12-messung/rohdaten/99c-filter-sortierung.txt`.
+
+| Modus | Median | p95 | Treffer |
+|---|---:|---:|---:|
+| relevance | 341,3 ms | 449,0 ms | 25 |
+| newest | 175,2 ms | 220,3 ms | 25 |
+| oldest | 174,7 ms | 235,6 ms | 25 |
+
+Der Faktor relevance zu newest und oldest liegt bei **1,95**. Der Grund steht in
+der Rohdatei: unter `newest` und `oldest` gibt es keine Fusion, der Zweig ist
+rein lexikalisch, jeder Treffer trägt `score = 0.0`. Die drei Zahlen sind
+untereinander vergleichbar; gegen `relevance` nur bedingt, weil `relevance` die
+Fusion beider Listen einschließt.
+
+| Seite | Antwortzeit | Treffer | Gemeldete Seitenzahl | Doppelte Kennungen |
+|---|---:|---:|---:|---|
+| 1 | 332,7 ms | 25 | 1 | keine |
+| 2 | 332,1 ms | 25 | 2 | keine |
+| 3 | 333,2 ms | 25 | 3 | keine |
+
+Seite 1 wird gebaut, jede weitere aus dem Weiter-Link gezogen, weil eine
+selbstgebaute Adresse ohne Fingerabdruck den stillen Rückfall auf Seite 1
+messen würde. Der Cursor hält über drei Seiten, und die Antwortzeit ist über
+alle drei Seiten flach.
+
+**Die zweite Hälfte ist bewusst nicht gefahren.** Der Anmeldeweg Basic Auth
+wurde ausgelassen, um Box-Zeit zu sparen; er kostet auf der Vergleichsinstanz
+0,318 s je Anfrage, die kein angemeldeter Nutzer zahlt, und zwei Berichte sind
+nur über denselben Anmeldeweg vergleichbar. Die Auslassung steht als
+Protokollzeile in der Rohdatei.
 
 ## Reproduzieren
 
