@@ -1,0 +1,40 @@
+kosten- und schadenshistorie der box, plan 15-14 task 1
+geschrieben 2026-09-21 VOR dem abbau, damit sie ihn ueberlebt (aws_box.sh
+destroy loescht box.env; abschnitt 2.6 des runbooks).
+
+geheimnisregel: keine ip-adresse, keine lebende instanz- oder volumekennung.
+
+-- die schlusszahlen aus box.env (aws_box.sh stop) --
+BOX_STOPPED_ISO=2026-09-21T03:23:57Z
+BOX_LAST_UPTIME_HOURS=25.75
+BOX_LAST_UPTIME_COST_USD=2.9831
+BOX_PARKED_COST_USD_PER_DAY=0.3130
+
+-- der deckel und die differenz --
+freigegebener deckel (15-08, owner 20.09.): 46 h / 5,40 USD netto
+verbraucht:                                 25,75 h / 2,9831 USD netto
+differenz unter dem deckel:                 20,25 h / 2,42 USD
+
+deckel gehalten: JA. der lauf lag mit 25,75 h deutlich unter den 46 h und mit
+2,98 USD unter den 5,40 USD. zum vergleich die untergrenze des rechenblatts
+(31 h / 3,59 USD, der v1.1-verbrauch bei kleinerem umfang): auch die ist
+unterschritten, weil der volllauf mit 19 h 20 min schneller war als die 26 h 37
+min der v1.1 und die messbloecke danach zuegig liefen.
+
+-- auffaelligkeiten des laufs, die sonst nur in box.env stuenden --
+- die eigene oeffentliche adresse hat ueber nacht gewechselt (carrier-lease),
+  die ssh-regel zeigte auf die alte; revoke+authorize nach dem muster von
+  cmd_start, die box selbst war nie unerreichbar (https durchgehend 200).
+- drei werkzeug-fixe mit owner-wort waehrend der bezahlten zeit (92b swap,
+  92b baumhash-vergleich, 97 cron-leser), je mit boxlosen tests nachgezogen.
+- endstand des index: 52.137 indexiert, 44 uebersprungen, 6 fehlgeschlagen
+  (gegen phase 10: 52.111 / 37 / 0; erstmessung gegen das v1.2-abbild, kein
+  vergleichswert).
+
+-- der verbleib der ressourcen (owner-entscheid frage B, 15-08) --
+korpus-snapshot snap-03f1d1d9ad9262704: BLEIBT (2,79 bis 2,99 USD je monat),
+damit eine weitere anfahrt ohne mehrstuendigen neuaufbau startet.
+ende-snapshot dieser anfahrt: faellt (kein neuer ende-snapshot erzeugt; der
+korpus des laufes liegt bereits im bleibenden korpus-snapshot).
+instanz, datentraeger, security group, schluesselpaar: werden in task 3
+abgebaut.
