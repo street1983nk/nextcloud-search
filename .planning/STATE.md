@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-10 abgeschlossen und damit **Welle 4 vollstaendig** (Owner-Entscheid am Tor lautet "Mitfahren"; sechs weitere OCR-Sprachen im Abbild, Standard bleibt deu+eng+fra, Gate und Baumhash nachgezogen, Multi-Arch-Bau gruen in Lauf 35597353780); **Erfolgskriterium 3 von REL-02 ist mit Lauf 35594647362 belegt**; NAECHSTES ist 16-11 (Welle 5, Textentwurf der sechs Store-Texte, und die Antwort aus 16-10 lautet NEUN Sprachen); kein Tag, kein Release
-last_updated: "2026-09-22T02:10:00.000Z"
+stopped_at: 16-11 **Entwurf fertig, Owner-Checkpoint offen**: `docs/store-listing.md` traegt die sechs Store-Texte mit der neuen Messzahl **731,9 MB resident nach einem Indexlauf** (ersetzt 103,2 MB im Leerlauf, Entscheid E1), die Sprachzeile mit **neun verfuegbaren Sprachen bei drei voreingestellten**, die neue Grundlast-Zeile der drei READMEs, die Fundstellenliste und das Aenderungsprotokoll (Commit `253abb5`). **Nichts ist ausgeliefert**: beide `info.xml` und die drei READMEs tragen weiter 103,2 MB, die woertliche Uebernahme ist 16-12 NACH der Abnahme. Owner muss entscheiden: Textabnahme im Wortlaut plus Q-6 (Store-Bilder "bleiben" oder "neu"); kein Tag, kein Release
+last_updated: "2026-09-22T03:05:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
@@ -27,8 +27,32 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
 Plan: 10 von 14 abgeschlossen (16-01 bis 16-10). **Welle 1 bis Welle 4 sind
-vollstaendig.** NAECHSTES: **16-11** (Welle 5), der Textentwurf der sechs
-Store-Texte, und er erfaehrt aus 16-10 die Antwort **NEUN Sprachen**.
+vollstaendig.** **16-11 laeuft und steht an seinem Owner-Checkpoint**: der
+Textentwurf ist geschrieben und committet, die Abnahme fehlt.
+
+16-11 (LAEUFT, Checkpoint offen): **Der Textentwurf der Fassung 1.2.0.** Ein
+Commit, `253abb5`, und er fasst genau eine Datei an: `docs/store-listing.md`.
+Die RAM-Zeile der sechs Store-Texte nennt dreisprachig **731,9 MB resident nach
+einem Indexlauf** statt 103,2 MB im Leerlauf; das Wort "im Leerlauf" ist durch
+die Messgroesse ersetzt, weil die neue Zahl eine ANDERE Messgroesse ist (Marke C
+vom 21.09.2026, Rohdatei `94b-grundlast-rueckkehr.txt`). Je Text bleibt es bei
+genau einer Messzahl, die 103,2 kommt in keinem der sechs Texte mehr vor. Die
+Sprachzeile der ersten Haelfte nennt **neun verfuegbare Sprachen bei drei
+voreingestellten** (die neun Namen stehen in den READMEs und in der Beschreibung
+von `FINDLING_OCR_LANGUAGES`, nicht im Store-Text). Die Grundlast-Zeile der drei
+READMEs **verliert den Alt-Neu-Vergleich samt der 85,1 Prozent**: eine
+Prozentzahl zwischen zwei Messgroessen waere eine Verbesserung, die nie gemessen
+wurde; der alte Vergleich bleibt in `docs/performance.md` fuer seine Bedingungen
+gueltig. Der Spitzen-Satz (52.111 Dokumente, 1.764 MB) bleibt zeichengleich
+stehen, weil der v1.2-Lauf die Spitze nicht neu gemessen hat. Dazu die
+Fundstellenliste (neun Stellen fuer die Zahl, elf fuer die Sprachangabe) und ein
+Aenderungsprotokoll mit beiden Eintraegen. Volle Suite 2.472 bestanden / 15
+uebersprungen, `test_store_metadata.py` 52 bestanden, ruff/vulture gruen.
+**AUSGELIEFERT IST NICHTS**: beide `info.xml` und die drei READMEs tragen
+unveraendert 103,2 MB, und die woertliche Uebernahme ist Plan 16-12 nach der
+Abnahme. **Der Owner entscheidet zweierlei:** die Textabnahme im Wortlaut und
+Q-6, die Store-Bilder vom 07.09.2026 (a: bleiben, b: eigener Plan in Welle 6).
+Keine SUMMARY, ROADMAP unveraendert, solange der Checkpoint offen ist.
 
 16-10: **Sechs weitere OCR-Sprachen, der Standard bleibt bei drei.** Der
 Owner-Entscheid am Tor lautet im Wortlaut **"Mitfahren"**, der Abbruchpfad ist
