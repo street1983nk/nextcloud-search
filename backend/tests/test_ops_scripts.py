@@ -437,6 +437,37 @@ def test_the_aws_destroy_reads_every_tag_hit_back_before_it_calls_it_a_leftover(
     assert body.index("for hit in $remaining; do") < body.index("something still carries the tag")
 
 
+def test_the_aws_destroy_takes_the_key_pair_with_it_and_reads_it_back() -> None:
+    """L-07: the teardown left the key pair behind, and 15-14 closed it by hand.
+
+    Two promises and not one, because a fassung that only calls delete would
+    pass a test for the call alone while leaving the same finding open. The
+    account answers the delete before it has forgotten anything, so the proof in
+    this script is the read back, exactly as it is for the instance, the volume
+    and the security group.
+
+    The order is asserted as well. The pair goes after the instance and after
+    the volume: an abort between the calls would otherwise leave a running box
+    whose key is gone, which is a worse state than the leftover this closes.
+    """
+    text = AWS_BOX.read_text(encoding="utf-8")
+    body = text.split("cmd_destroy() {", 1)[1]
+    # A failure is an answer here, the same as for the two other deletions, so
+    # that a pair which is already gone does not end the teardown.
+    assert "ec2_soft delete-key-pair" in body
+    assert 'resource_gone "$(ec2_soft describe-key-pairs' in body
+    # After instance and volume, and the read back after the deletion.
+    assert body.index("terminate-instances") < body.index("delete-key-pair")
+    assert body.index("delete-volume") < body.index("delete-key-pair")
+    assert body.index("delete-key-pair") < body.index("describe-key-pairs")
+    # A read back whose result goes nowhere is not a proof either.
+    assert "key pair $SSH_KEY_NAME is gone, verified against the api" in body
+    assert body.index("describe-key-pairs") < body.index('rm -f "$STATE_FILE"')
+    # The finding stands in the file, so the next reader of this block knows
+    # which hand grip it replaces.
+    assert "L-07" in text
+
+
 def test_the_aws_destroy_refuses_to_remove_the_state_file_without_a_backup() -> None:
     """box.env is the whole cost and damage history of this box, and destroy deletes it.
 

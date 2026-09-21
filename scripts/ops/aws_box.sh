@@ -1092,6 +1092,25 @@ cmd_destroy() {
         esac
     fi
 
+    # The key pair, and it goes after the instance and after the data volume
+    # rather than before them: an abort between the calls would otherwise leave a
+    # running box whose key is gone, and a box nobody can log into is a box
+    # nobody can shut down from the inside either. Only the public half lives in
+    # the account and only that half is deleted here; the private half is on the
+    # machine that made it and is not this tool's to remove.
+    #
+    # Befund L-07 of the phase 15 audit. Until 15-14 this subcommand left the
+    # pair behind, so the teardown of that plan had to delete it by hand and read
+    # it back against the api afterwards, where the account answered
+    # InvalidKeyPair.NotFound for it. That hand grip is what this block replaces.
+    echo "aws_box: deleting key pair $SSH_KEY_NAME"
+    response=$(ec2_soft delete-key-pair --key-name "$SSH_KEY_NAME")
+    case "$response" in
+    *error*)
+        echo "aws_box: the key pair was not deleted yet: $response" >&2
+        ;;
+    esac
+
     failed=0
     instance_state=$(instance_gone "$instance_id")
     if [ "$instance_state" = 'gone' ]; then
@@ -1120,6 +1139,21 @@ cmd_destroy() {
         echo "aws_box: security group ${group_id:-none} is gone, verified against the api"
     else
         echo "aws_box: security group $group_id is still there" >&2
+        failed=1
+    fi
+
+    # The read back probe of the key pair, in the shape the three resource kinds
+    # above have. A delete call without one is no proof in this script: the call
+    # answers before the account has forgotten anything, and L-07 is exactly the
+    # sort of leftover a missing read back leaves unnoticed. A pair that was
+    # already absent answers InvalidKeyPair.NotFound and therefore ends in the
+    # same line and not in a failure, which is the no-op reading the volume and
+    # the security group get one block up.
+    key_state=$(resource_gone "$(ec2_soft describe-key-pairs --key-names "$SSH_KEY_NAME")")
+    if [ "$key_state" = 'gone' ]; then
+        echo "aws_box: key pair $SSH_KEY_NAME is gone, verified against the api"
+    else
+        echo "aws_box: key pair $SSH_KEY_NAME is still there" >&2
         failed=1
     fi
 
