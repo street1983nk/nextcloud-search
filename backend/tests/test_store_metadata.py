@@ -72,6 +72,22 @@ in the same spirit and with the same modesty: it has to stand in all three
 languages of both descriptions, and whether the three say the same thing is a
 reading and not a comparison this file can make.
 
+Two promises joined that list on 21.09.2026, with plan 16-12, and both of them
+had been shipped for a while before anything held them:
+
+* **the measured figure of decision E1**, 731.9 MB resident after an index run.
+  It stands at nine places, six store texts and three READMEs, and until this
+  plan no check compared a README number with an info.xml number at all. Three
+  cases hold it against ``README.en.md`` and both ``info.xml``, one mutation
+  case per place proves that they can go red, and a fourth case holds the short
+  text rule of the owner: exactly one measured figure per description, which is
+  counted by its unit so that the 4 GB and the hard 2 GB limit stay out of it.
+* **the cross reference to the MCP Connector** (HART-02). It has been in the
+  store since release 1.0.3 and travelled inside the tag v1.1.0, and nothing
+  ever read it. What is checked is the COUNT and not the presence, because the
+  rule of ``docs/store-listing.md`` says exactly one such sentence, and a
+  second one breaks it as surely as a missing one does.
+
 **What this gate does not claim.** It says nothing about whether a translation
 is good, whether it says the same thing as the other two, or whether the German
 text is idiomatic. Those are a reading, and the reading happens against
@@ -311,6 +327,83 @@ MEASURED_SENTENCE_FR = (
     "conteneur a atteint un pic de 1 764 Mo de mémoire anonyme résidente, sous une limite stricte de "
     "2 Go imposée par le noyau."
 )
+
+
+# The one measured figure of version 1.2.0, written down once so that three
+# files cannot part company. The measure belongs to the constant and is not a
+# remark beside it: this is the RESIDENT state of the container AFTER one index
+# run, with the model unloaded again, and not the idle base load of a container
+# that has never embedded anything. It is mark C of the measurement of
+# 21.09.2026, taken on an AWS m7g.large with native arm64 against the shipped
+# v1.2 image and computed over anon of memory.stat; the raw file is
+# docs/measurements/2026-09-v12-messung/rohdaten/94b-grundlast-rueckkehr.txt.
+#
+# Decision E1 of phase 16, locked on 21.09.2026: this figure replaces the
+# 103.2 MB of the idle base load at all nine places, six store texts and three
+# READMEs. Until plan 16-12 NO gate held that number anywhere, in either
+# spelling, which is how a figure that nine public texts repeat could have
+# drifted apart unnoticed. The three cases below are the three places the
+# success criterion names.
+RESIDENT_FIGURE = "731.9"
+
+# The same figure with the decimal comma, derived and not typed a second time.
+# Two spellings written down twice are two figures, and telling them apart later
+# is exactly the work this constant exists to make unnecessary.
+RESIDENT_FIGURE_COMMA = RESIDENT_FIGURE.replace(".", ",")
+
+# How each language writes that one figure, unit included: MB in English and in
+# German, Mo in French, which is the wording decision of docs/l10n-french.md.
+RESIDENT_SPELLING = {
+    DEFAULT_LANGUAGE: RESIDENT_FIGURE + " MB",
+    "de": RESIDENT_FIGURE_COMMA + " MB",
+    "fr": RESIDENT_FIGURE_COMMA + " Mo",
+}
+
+# Every figure with a memory unit that a store description carries. The short
+# text rule of the owner of 07.09.2026 allows exactly ONE measured figure per
+# description, and this is how that one is counted.
+#
+# Why 4 GB and 2 GB do not count: they are REQUIREMENTS and not measurements.
+# "4 GB is enough" says what an instance has to bring, and "a hard 2 GB limit"
+# is the ceiling the kernel enforces; neither is a reading taken off a running
+# container, and neither moves when a measurement is repeated. The pattern
+# therefore matches MB and Mo and deliberately not GB and Go, which is that
+# distinction written as a mechanism rather than as a sentence in a document.
+MEASURED_FIGURE = re.compile(r"\d+(?:[.,]\d+)?\s(?:MB|Mo)\b")
+
+# The one sentence of HART-02, quoted and not paraphrased, in the three
+# languages of both halves. The wordings are the ones of docs/store-listing.md
+# and are identical in the two info.xml.
+#
+# Why this needs a gate at all. The sentence has been SHIPPED since commit
+# 1c737e6 (release 1.0.3), it was inside the tag v1.1.0, and until plan 16-12 no
+# check of this repository held it anywhere: the privacy paragraph of D-12 had
+# one and the cross reference did not. A promise in a text without a gate is the
+# kind of promise that disappears in the next round of text work, and in a store
+# entry it disappears where nobody working here would ever read it.
+#
+# The count is the point and not the presence. The rule table of
+# docs/store-listing.md says EXACTLY ONE cross reference to the MCP Connector,
+# so a second sentence breaks the rule just as a missing one does, and a gate
+# that only asked whether the sentence is there would be blind to half of it.
+CONNECTOR_SENTENCES = {
+    DEFAULT_LANGUAGE: (
+        "Together with the [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling "
+        "forms the retrieval layer for your own RAG: AI assistants search your document contents with exactly "
+        "the rights of the asking user, and no content leaves your server."
+    ),
+    "de": (
+        "Zusammen mit dem [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector) ergibt "
+        "Findling die Retrieval-Schicht für Ihr eigenes RAG: KI-Assistenten durchsuchen Ihre Dokumentinhalte "
+        "mit genau den Rechten des fragenden Nutzers, und kein Inhalt verlässt Ihren Server."
+    ),
+    "fr": (
+        "Avec le [Nextcloud MCP Connector](https://apps.nextcloud.com/apps/mcp_connector), Findling forme la "
+        "couche de récupération de votre propre RAG : les assistants IA cherchent dans le contenu de vos "
+        "documents avec exactement les droits de l'utilisateur qui demande, et aucun contenu ne quitte votre "
+        "serveur."
+    ),
+}
 
 
 def _named(language: str) -> str:
@@ -689,6 +782,114 @@ def scan_measured_sentence(name: str, source: str, sentence: str = MEASURED_SENT
     return [] if sentence in collapse(source) else [f"{name}: does not carry the measured sentence of the v1.1 run"]
 
 
+def scan_resident_figure(name: str, source: str, spelling: str = RESIDENT_SPELLING[DEFAULT_LANGUAGE]) -> list[str]:
+    """The one measured figure of decision E1, held against one text.
+
+    The spelling is an argument for the same reason the wording of the measured
+    sentence is one: English writes 731.9 MB, German writes 731,9 MB and French
+    writes 731,9 Mo, and a gate that knew only one of the three would be green
+    over a file that quietly carries another language's number.
+
+    Whitespace is collapsed first, because a README wraps its lines where an
+    info.xml does not and a line break between the figure and its unit says
+    nothing about what the text claims.
+    """
+    if spelling in collapse(source):
+        return []
+
+    return [f"{name}: does not carry the measured figure {spelling} of decision E1"]
+
+
+def scan_resident_figure_of_an_info(name: str, source: str) -> list[str]:
+    """The same figure in every description of one info.xml, language by language.
+
+    This is the half of the rule that did not exist before plan 16-12: nothing
+    compared a number in a README with the number in an info.xml, so the two
+    could have said different things about the same measurement for as long as
+    it took somebody to read both files in one sitting.
+    """
+    try:
+        info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
+    except ElementTree.ParseError as broken:
+        return [f"{name}: is not well formed XML ({broken})"]
+
+    return [
+        message
+        for element in info.findall("description")
+        for language in [element.get("lang", DEFAULT_LANGUAGE)]
+        if language in RESIDENT_SPELLING
+        for message in scan_resident_figure(
+            f"{name}, the description for {_named(language)}",
+            element.text or "",
+            RESIDENT_SPELLING[language],
+        )
+    ]
+
+
+def scan_one_measured_figure(name: str, source: str) -> list[str]:
+    """The short text rule: exactly one measured figure per store description.
+
+    The owner decided on 07.09.2026 that a store description is a short fact
+    list and carries at most one number. The rule is about MEASURED numbers: the
+    4 GB of the hardware line and the hard 2 GB limit stay, because they are
+    requirements rather than readings, and the pattern says so by matching MB
+    and Mo and not GB and Go.
+
+    A description with no measured figure at all is reported as well. Without
+    that clause a text that lost the figure entirely would pass a rule whose
+    whole subject is that figure.
+    """
+    try:
+        info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
+    except ElementTree.ParseError as broken:
+        return [f"{name}: is not well formed XML ({broken})"]
+
+    violations: list[str] = []
+    for element in info.findall("description"):
+        language = element.get("lang", DEFAULT_LANGUAGE)
+        figures = MEASURED_FIGURE.findall(element.text or "")
+        if len(figures) != 1:
+            violations.append(
+                f"{name}: the description for {_named(language)} carries {len(figures)} measured figures "
+                f"({', '.join(figures) or 'none at all'}) and the short text rule of 07.09.2026 allows exactly one"
+            )
+
+    return violations
+
+
+def scan_connector_sentence(name: str, source: str) -> list[str]:
+    """The one cross reference to the MCP Connector, counted and not merely looked for.
+
+    HART-02 asks for the sentence in three languages and in both halves, and the
+    rule table of docs/store-listing.md asks for exactly one of it. Both halves
+    of that are one question here: how often does the sentence stand in this
+    description, and the answer has to be one.
+
+    The sentence has been shipped since commit 1c737e6 (release 1.0.3) and
+    travelled inside the tag v1.1.0. Until plan 16-12 nothing held it, which is
+    why this exists in the phase that submits 1.2.0 and not in the one that
+    wrote the sentence.
+    """
+    try:
+        info = ElementTree.fromstring(strip_xml_comments(source))  # noqa: S314
+    except ElementTree.ParseError as broken:
+        return [f"{name}: is not well formed XML ({broken})"]
+
+    violations: list[str] = []
+    for element in info.findall("description"):
+        language = element.get("lang", DEFAULT_LANGUAGE)
+        if language not in CONNECTOR_SENTENCES:
+            continue
+        found = collapse(element.text or "").count(CONNECTOR_SENTENCES[language])
+        if found != 1:
+            violations.append(
+                f"{name}: the description for {_named(language)} carries the cross reference to the MCP "
+                f"Connector {found} times, and the rule of docs/store-listing.md is exactly one (HART-02)"
+            )
+
+    return violations
+
+
 def _sources() -> list[tuple[str, str]]:
     """The three files this gate reads, as (name, source)."""
     return [(path.name, path.read_text(encoding="utf-8")) for path in (PHP_INFO, BACKEND_INFO, README)]
@@ -756,6 +957,57 @@ def test_the_measured_sentence_stands_in_the_french_readme() -> None:
     source = README_FR.read_text(encoding="utf-8")
 
     assert scan_measured_sentence("README.fr.md", source, MEASURED_SENTENCE_FR) == []
+
+
+def test_the_measured_figure_stands_in_the_english_readme() -> None:
+    # The first of the three places of the success criterion. README.en.md is
+    # the file the store entry points at with its website element, so a figure
+    # that stands in the store text and not here is a contradiction a reader
+    # finds in one click.
+    assert scan_resident_figure("README.en.md", README.read_text(encoding="utf-8")) == []
+
+
+def test_the_measured_figure_stands_in_every_language_of_the_companion_half() -> None:
+    # The second place, and it is three texts rather than one: the figure has to
+    # stand in the English, the German and the French description, each in the
+    # spelling of its language.
+    violations = scan_resident_figure_of_an_info("php/appinfo/info.xml", PHP_INFO.read_text(encoding="utf-8"))
+
+    assert violations == []
+
+
+def test_the_measured_figure_stands_in_every_language_of_the_backend_half() -> None:
+    # The third place. Both halves carry the same hardware block, and a half
+    # that was edited alone is the failure this comparison exists for.
+    violations = scan_resident_figure_of_an_info("backend/appinfo/info.xml", BACKEND_INFO.read_text(encoding="utf-8"))
+
+    assert violations == []
+
+
+def test_every_store_description_carries_exactly_one_measured_figure() -> None:
+    # The short text rule of 07.09.2026 over all six descriptions at once.
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_one_measured_figure(
+            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert violations == []
+
+
+def test_the_connector_sentence_stands_once_in_all_three_languages_of_both_halves() -> None:
+    # HART-02. Shipped since release 1.0.3 and held by nothing until this plan.
+    violations = [
+        message
+        for path in (PHP_INFO, BACKEND_INFO)
+        for message in scan_connector_sentence(
+            f"{path.parent.parent.name}/appinfo/info.xml", path.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert violations == []
 
 
 # -- self tests: the gate has to report every shape it judges --------------
@@ -955,6 +1207,116 @@ def test_a_mutated_peak_is_reported_in_each_of_the_three_languages() -> None:
         # And the wordings do not stand in for one another: the German gate
         # over the French file has to report, or a swap would pass unseen.
         assert scan_measured_sentence("sample.md", MEASURED_SENTENCE, MEASURED_SENTENCE_DE) != []
+
+
+def _with_another_figure(source: str) -> str:
+    """The same text with a different measurement in it, in both spellings.
+
+    A staged source rather than a written out sample, because the point of a
+    mutation case is that the real file would be reported if its number moved,
+    and a sample of my own making could only prove that the scanner reads
+    samples of my own making.
+    """
+    return source.replace(RESIDENT_FIGURE, "741.9").replace(RESIDENT_FIGURE_COMMA, "741,9")
+
+
+def test_a_mutated_figure_in_the_readme_is_reported() -> None:
+    assert scan_resident_figure("README.en.md", _with_another_figure(README.read_text(encoding="utf-8"))) != []
+
+
+def test_a_mutated_figure_in_the_companion_half_is_reported_in_all_three_languages() -> None:
+    violations = scan_resident_figure_of_an_info(
+        "php/appinfo/info.xml", _with_another_figure(PHP_INFO.read_text(encoding="utf-8"))
+    )
+
+    assert len(violations) == len(RESIDENT_SPELLING)
+
+
+def test_a_mutated_figure_in_the_backend_half_is_reported_in_all_three_languages() -> None:
+    violations = scan_resident_figure_of_an_info(
+        "backend/appinfo/info.xml", _with_another_figure(BACKEND_INFO.read_text(encoding="utf-8"))
+    )
+
+    assert len(violations) == len(RESIDENT_SPELLING)
+
+
+def test_the_spellings_of_the_figure_do_not_stand_in_for_one_another() -> None:
+    # The decimal point and the decimal comma are one measurement and two
+    # texts. A gate that accepted either spelling everywhere would be green
+    # over a German text that had picked up the English number.
+    assert scan_resident_figure("sample.md", "731,9 MB", RESIDENT_SPELLING[DEFAULT_LANGUAGE]) != []
+    assert scan_resident_figure("sample.md", "731.9 MB", RESIDENT_SPELLING["de"]) != []
+    assert scan_resident_figure("sample.md", "731,9 MB", RESIDENT_SPELLING["fr"]) != []
+
+
+def test_the_hardware_requirements_are_not_counted_as_measured_figures() -> None:
+    """4 GB and 2 GB are requirements, and the pattern says so by its units.
+
+    This is the case that keeps the short text rule readable. Without it the
+    rule would look like "one number per description", which is false: the
+    hardware line names three, and two of them are what an instance has to
+    bring rather than what a container was seen to use.
+    """
+    english = "- RAM: 4 GB is enough, 731.9 MB resident after an index run, under a hard 2 GB limit (measured)"
+    french = "- RAM : 4 Go suffisent, 731,9 Mo residents apres une indexation, sous une limite stricte de 2 Go"
+
+    assert MEASURED_FIGURE.findall(english) == ["731.9 MB"]
+    assert MEASURED_FIGURE.findall(french) == ["731,9 Mo"]
+
+
+def test_a_second_measured_figure_in_a_description_is_reported() -> None:
+    doubled = PHP_INFO.read_text(encoding="utf-8").replace(
+        "731.9 MB resident after an index run", "731.9 MB resident after an index run, 103.2 MB idle", 1
+    )
+
+    violations = scan_one_measured_figure("php/appinfo/info.xml", doubled)
+
+    assert len(violations) == 1
+    assert "carries 2 measured figures" in violations[0]
+
+
+def test_a_description_that_lost_its_measured_figure_is_reported_by_the_short_text_rule() -> None:
+    emptied = PHP_INFO.read_text(encoding="utf-8").replace(", 731.9 MB resident after an index run", "", 1)
+
+    violations = scan_one_measured_figure("php/appinfo/info.xml", emptied)
+
+    assert len(violations) == 1
+    assert "none at all" in violations[0]
+
+
+def test_a_description_that_lost_the_connector_sentence_is_reported_by_language() -> None:
+    lost = PHP_INFO.read_text(encoding="utf-8").replace(CONNECTOR_SENTENCES["de"], "", 1)
+
+    violations = scan_connector_sentence("php/appinfo/info.xml", lost)
+
+    assert len(violations) == 1
+    assert "lang=de" in violations[0]
+    assert "0 times" in violations[0]
+
+
+def test_a_second_connector_sentence_is_reported_because_the_rule_says_exactly_one() -> None:
+    # The half of the rule a presence check cannot see. Somebody who adds a
+    # second cross reference breaks the rule of docs/store-listing.md as surely
+    # as somebody who deletes the first one.
+    sentence = CONNECTOR_SENTENCES[DEFAULT_LANGUAGE]
+    doubled = BACKEND_INFO.read_text(encoding="utf-8").replace(sentence, f"{sentence} {sentence}", 1)
+
+    violations = scan_connector_sentence("backend/appinfo/info.xml", doubled)
+
+    assert len(violations) == 1
+    assert "the English default" in violations[0]
+    assert "2 times" in violations[0]
+
+
+def test_the_two_new_scans_report_a_broken_document_instead_of_raising() -> None:
+    # The shape every scanner of this file keeps: a document that is not well
+    # formed is a finding and not a stack trace, so that one broken edit does
+    # not hide every other finding behind an error.
+    broken = PHP_INFO.read_text(encoding="utf-8").replace("</info>", "")
+
+    assert len(scan_resident_figure_of_an_info("sample.xml", broken)) == 1
+    assert len(scan_one_measured_figure("sample.xml", broken)) == 1
+    assert len(scan_connector_sentence("sample.xml", broken)) == 1
 
 
 # -- the store rules that no schema of ours states: images and the two lists --
