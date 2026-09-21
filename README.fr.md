@@ -16,8 +16,10 @@ Le modèle, c'est vous qui l'apportez, et aucun contenu ne quitte votre serveur.
 
 - Recherche plein texte avec traitement des mots allemands : mots composés,
   flexion, trémas, phrases, exclusions, filtre par type de fichier
-- Reconnaissance optique pour les PDF numérisés et les images : allemand,
-  anglais, français
+- Reconnaissance optique pour les PDF numérisés et les images : neuf langues
+  disponibles (allemand, anglais, français, espagnol, italien, néerlandais,
+  portugais, danois, estonien), allemand, anglais et français activés par
+  défaut
 - Recherche sémantique : trouve les documents par des périphrases
 - Chaque résultat est vérifié par Nextcloud selon vos droits
 - Aucune configuration : la première indexation démarre d'elle-même
@@ -36,8 +38,9 @@ reconnaissance optique.
   indexés et la recherche sémantique active, le conteneur a atteint un pic de
   1 764 Mo de mémoire anonyme résidente, sous une limite stricte de 2 Go imposée
   par le noyau.
-- La charge de base au repos est passée de 691,8 Mo en v1.0 à 103,2 Mo en v1.1,
-  moins 85,1 pour cent (mesuré le 10.09.2026, méthode et données brutes dans
+- Après une indexation, le modèle déchargé, le conteneur reste à 731,9 Mo de
+  mémoire résidente (mesuré le 21.09.2026 sur une machine m7g.large arm64 avec
+  l'image v1.2 livrée, méthode et données brutes dans
   [docs/performance.md](docs/performance.md)).
 - CPU : 2 cœurs suffisent, amd64 et arm64, pas de GPU
 

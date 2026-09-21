@@ -15,7 +15,9 @@ You bring the model, and no content leaves your server.
 
 - Full text search with German word handling: compounds, inflection, umlauts,
   phrases, exclusions, a file type filter
-- OCR for scanned PDFs and images: German, English, French
+- OCR for scanned PDFs and images: nine languages available (German, English,
+  French, Spanish, Italian, Dutch, Portuguese, Danish, Estonian), German,
+  English and French switched on by default
 - Semantic search: finds documents through paraphrases
 - Every result is permission-checked by Nextcloud
 - No configuration: the first index run starts on its own
@@ -31,8 +33,9 @@ CSV, and images (JPEG, PNG, TIFF, WebP) through OCR.
 - RAM: 4 GB is enough. On a 4-GB ARM64 box with 52,111 indexed documents and
   the semantic search active, the container peaked at 1,764 MB of resident
   anonymous memory, under a hard 2 GB limit enforced by the kernel.
-- Idle base load fell from 691.8 MB in v1.0 to 103.2 MB in v1.1, minus 85.1 per
-  cent (measured 2026-09-10, method and raw data in
+- After an index run, with the model unloaded, the container sits at 731.9 MB
+  of resident memory (measured 2026-09-21 on an m7g.large arm64 box against the
+  shipped v1.2 image, method and raw data in
   [docs/performance.md](docs/performance.md)).
 - CPU: 2 cores are enough, amd64 and arm64, no GPU
 

@@ -15,7 +15,10 @@ Das Modell bringen Sie mit, kein Inhalt verlässt Ihren Server.
 
 - Volltextsuche mit deutscher Wortbehandlung: Komposita, Flexion, Umlaute,
   Phrasen, Ausschlüsse, Dateityp-Filter
-- Texterkennung für gescannte PDFs und Bilder: Deutsch, Englisch, Französisch
+- Texterkennung für gescannte PDFs und Bilder: neun Sprachen verfügbar
+  (Deutsch, Englisch, Französisch, Spanisch, Italienisch, Niederländisch,
+  Portugiesisch, Dänisch, Estnisch), voreingestellt sind Deutsch, Englisch und
+  Französisch
 - Semantische Suche: findet Dokumente auch über Umschreibungen
 - Jeder Treffer wird von Nextcloud rechtegeprüft
 - Keine Konfiguration: der erste Indexlauf startet von selbst
@@ -32,8 +35,9 @@ Markdown, CSV sowie Bilder (JPEG, PNG, TIFF, WebP) per Texterkennung.
   Dokumenten und aktiver semantischer Suche lag die Spitze des Containers bei
   1.764 MB residentem anonymem Speicher, unter einer harten 2-GB-Grenze, die der
   Kernel durchsetzt.
-- Die Grundlast im Leerlauf ist von 691,8 MB in v1.0 auf 103,2 MB in v1.1
-  gefallen, minus 85,1 Prozent (gemessen am 10.09.2026, Methode und Rohdaten in
+- Nach einem Indexlauf steht der Container mit entladenem Modell bei 731,9 MB
+  residentem Speicher (gemessen am 21.09.2026 auf einer m7g.large mit arm64
+  gegen das ausgelieferte v1.2-Abbild, Methode und Rohdaten in
   [docs/performance.md](docs/performance.md)).
 - CPU: 2 Kerne genügen, amd64 und arm64, keine GPU
 

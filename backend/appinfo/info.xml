@@ -97,7 +97,7 @@ Supported file types:
 
 Requirements:
 - Nextcloud 33 to 35, apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB is enough, 103.2 MB idle, under a hard 2 GB limit (measured)
+- RAM: 4 GB is enough, 731.9 MB resident after an index run, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
 Enterprise support and paid add-ons: request a quote at admin@infranode.dev]]></description>
@@ -116,7 +116,7 @@ Unterstützte Dateitypen:
 
 Anforderungen:
 - Nextcloud 33 bis 35, Apps: AppAPI, Findling Backend (External Apps), Findling
-- RAM: 4 GB genügen, 103,2 MB im Leerlauf, unter einer harten 2-GB-Grenze (gemessen)
+- RAM: 4 GB genügen, 731,9 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
 Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev]]></description>
@@ -135,7 +135,7 @@ Types de fichiers pris en charge :
 
 Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
-- RAM : 4 Go suffisent, 103,2 Mo au repos, sous une limite stricte de 2 Go (mesuré)
+- RAM : 4 Go suffisent, 731,9 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
 
 Support entreprise et modules payants : demande de devis à admin@infranode.dev]]></description>
@@ -361,11 +361,11 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 			</variable>
 			<!--
 				The OCR settings. Nothing here has to be touched to get OCR:
-				the engine and the German, English and French models are
-				inside the image and switched on. These exist for the two
-				cases where the defaults are wrong for an instance: a box too
-				slow to afford OCR at all, and a document stock that needs
-				different limits.
+				the engine and nine language models are inside the image, and
+				German, English and French are switched on. These exist for
+				the two cases where the defaults are wrong for an instance: a
+				box too slow to afford OCR at all, and a document stock that
+				needs different limits.
 
 				Every default below is a measured number, and the measurement
 				that produced it, with its command line, is in docs/ocr.md.
@@ -379,7 +379,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 			<variable>
 				<name>FINDLING_OCR_LANGUAGES</name>
 				<display-name>OCR languages</display-name>
-				<description>Joined with a plus sign, in the order of importance, for example deu+eng+fra or deu. Only the languages this image carries are accepted, which today are deu (German), eng (English) and fra (French); anything else is ignored with a warning in the log and never reaches the engine. The leading language weighs most, so an instance whose scans are mostly French is served by putting fra first. Note that this is not the same setting as the index languages above: this one decides how a scan is read, that one decides how any text is broken into words, and the index side is tuned for German and English only.</description>
+				<description>Joined with a plus sign, in the order of importance, for example deu+eng+fra or deu. Only the languages this image carries are accepted, which today are deu (German), eng (English), fra (French), spa (Spanish), ita (Italian), nld (Dutch), por (Portuguese), dan (Danish) and est (Estonian); anything else is ignored with a warning in the log and never reaches the engine. The leading language weighs most, so an instance whose scans are mostly French is served by putting fra first. Note that this is not the same setting as the index languages above: this one decides how a scan is read, that one decides how any text is broken into words, and the index side is tuned for German and English only.</description>
 				<default>deu+eng+fra</default>
 			</variable>
 			<variable>
