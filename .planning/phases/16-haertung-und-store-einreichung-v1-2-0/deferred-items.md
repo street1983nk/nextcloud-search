@@ -230,3 +230,30 @@ Verweis auf die Pruefsummen der Staende davor, und die stehen in
 
 **Zieladresse.** Keine. Der Punkt ist entschieden und bleibt als Eigenschaft der
 Anfahrt stehen, damit ein spaeterer Leser ihn findet, bevor er sich wundert.
+
+---
+
+## Nachtrag vom 21.09.2026: der Upgrade-Beweis 1.1.0 auf 1.2.0 ist gebaut, aber nicht gefahren
+
+**Befund.** Plan 16-09 hat den Auftrag `deploy-harp` auf den Sprung 1.1.0 auf
+1.2.0 umgestellt (`UPGRADE_FROM_TAG: v1.1.0`, umgedrehte Vorbedingung in "Store
+upgrade 1", getauschte Vorbedingung des Vorher-Zustands, neue Zusicherung 6 auf
+den zwei Datumsgrenzen des Anbieters). **Task 3, Teil 2 des Plans, das
+Auslesen eines echten Laufs, konnte in dieser Ausfuehrung nicht stattfinden:**
+der Ausfuehrungsauftrag verbietet das Pushen ausdruecklich, und der Auftrag
+laeuft ausschliesslich auf einem Runner. Die Datei ist lokal geprueft (YAML
+parst, `sh -n` auf dem ausgeloesten Sondenskript, beide jq-Zweige gegen selbst
+gebaute Abbilder, die umgedrehte `<navigations>`-Pruefung gegen `git show
+v1.0.3:` und `git show v1.1.0:`), aber lokal gruen ist hier kein Beweis.
+
+**Verdikt: offen, mit benannter Zieladresse und Pruefweg. Kein Fix noetig.**
+
+**Begruendung.** Erfolgskriterium 3 von REL-02 verlangt einen Lauf und keine
+Datei. Der Punkt bleibt deshalb bis zur Laufnummer offen und wird nicht als
+erledigt gefuehrt, auch wenn der Code steht. Die Lehre aus 11-11 gilt
+unveraendert: der erste Lauf eines Beweises, der zum ersten Mal wirklich
+greift, findet Fehler, und diese Fehler gehoeren gesucht und nicht weggewartet.
+
+**Zieladresse.** Der Orchestrator der Phase 16, mit dem Push der Commits von
+16-09. Der Pruefweg im Einzelnen steht in `16-09-SUMMARY.md`, Abschnitt "Was
+der Orchestrator in CI nachsehen muss".
