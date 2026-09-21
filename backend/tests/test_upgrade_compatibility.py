@@ -1,6 +1,10 @@
 """The ratchet under decision D-04, so the promise outlives the phase that gave it.
 
-D-04 of 2026-09-10 says an upgrade from 1.0.x to 1.1.0 leaves the index alone.
+D-04 of 2026-09-10 says an upgrade from 1.0.x to 1.1.0 leaves the index alone,
+and since 2026-09-21 the same five values also carry the jump from 1.1.x to
+1.2.0: the filter and sort work of phase 13 and the engine work of phase 14
+moved none of them. The promise is therefore held over two minor jumps and no
+longer over one.
 Five marks decide whether that holds, they live in
 :func:`findling.index.open.expected_versions`, and
 :meth:`findling.store.repo.Store.version_mismatch` compares them against what an
@@ -35,11 +39,17 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILE = BACKEND_ROOT / "Dockerfile"
 PYPROJECT = BACKEND_ROOT / "pyproject.toml"
 
-# The four stable marks of the v1.0.3 release, which is the state every user of
-# an existing installation upgrades from. The fifth mark, wordlist_hash, is not
-# in here on purpose: it is a digest of the German word list and is held below
-# through the pin it grows out of.
-GOLD_V1_0_3 = {
+# The four stable marks of the 1.0.x and the 1.1.x releases, which is the state
+# every user of an existing installation upgrades from. The fifth mark,
+# wordlist_hash, is not in here on purpose: it is a digest of the German word
+# list and is held below through the pin it grows out of.
+#
+# The values did not move when 1.1.0 was published and they did not move for
+# 1.2.0 either, and that is what makes them worth more than they were: a value
+# that has stood over two minor jumps is a stronger statement than one that has
+# stood over a single one. Whoever moves one now breaks the index of every
+# installation of two release lines and not of one.
+GOLD_V1_0_AND_V1_1 = {
     "schema_version": "1",
     "index_version": "1",
     "analyzer_version": "1",
@@ -79,13 +89,13 @@ def drift_findings(marks: Mapping[str, str]) -> list[str]:
     becomes a finding, because that is exactly how the store reads it too.
     """
     findings: list[str] = []
-    for mark, gold in GOLD_V1_0_3.items():
+    for mark, gold in GOLD_V1_0_AND_V1_1.items():
         value = marks.get(mark, "")
         held = gold in value if mark == TANTIVY_MARK else value == gold
         if not held:
             findings.append(
                 f"{mark} ist {value!r} statt {gold!r}; "
-                f"ein Upgrade von 1.0.x wuerde jetzt einen Reindex ausloesen (D-04)"
+                f"ein Upgrade von 1.0.x oder 1.1.x wuerde jetzt einen Reindex ausloesen (D-04)"
             )
     return findings
 
@@ -117,8 +127,8 @@ def test_the_drift_reader_fires_on_a_staged_sample() -> None:
     assert "analyzer_version" in lost[0]
 
 
-def test_an_upgrade_from_1_0_x_would_not_trigger_a_reindex() -> None:
-    """D-04 of 2026-09-10: v1.1 keeps the index of 1.0.x usable.
+def test_an_upgrade_from_1_0_x_or_1_1_x_would_not_trigger_a_reindex() -> None:
+    """D-04 of 2026-09-10: v1.1 keeps the index of 1.0.x usable, and v1.2 that of 1.1.x.
 
     The digest handed in is arbitrary, because the word list is held through its
     Debian pin in the test below rather than through a literal here.
