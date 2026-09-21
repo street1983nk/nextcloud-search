@@ -950,11 +950,21 @@ jobs:
   # and the splitter matches leftmost-longest. Neither is a defect and neither
   # should be turned into one by a future assertion.
   index-search-e2e:
-    name: index-search-e2e (${{ matrix.database }})
-    runs-on: ubuntu-24.04
+    name: index-search-e2e (${{ matrix.database }}, ${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
     # Two installations of a whole Nextcloud plus an OCR pass over the corpus,
     # twice. The deadline is the guard against a hung engine holding a runner for
     # the default six hours (T-03-1303).
+    #
+    # Checked again when the arm64 entry was added and deliberately left at 45
+    # (T-16-29). The three amd64 entries of the most recent run finished in three
+    # minutes and thirty eight to three minutes and fifty four seconds (run
+    # 35582071147, read on 21.09.2026), so the ceiling is roughly eleven times
+    # what this job costs today. An arm64 entry that needed twice the wall clock
+    # of an amd64 one would still sit at a quarter of the deadline. Raising it
+    # without a number to point at would be a change that says nothing; if the
+    # first arm64 runs show otherwise, the number moves with their run ids next
+    # to it.
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -983,6 +993,42 @@ jobs:
         database: ['sqlite', 'mysql', 'pgsql']
         server-version: ['stable34']
         php-version: ['8.2']
+        # The architecture axis, and it carries exactly one value here so that
+        # the three combinations above run on the machine they always ran on.
+        # Everything that is not the default enters through include below.
+        runner: ['ubuntu-24.04']
+        include:
+          # The arm64 entry, and why it exists: owner requirement A4 of the
+          # phase 15 acceptance and success criterion 4 of that phase, finding
+          # L-09 of its audit. Five of the ten German language cases were called
+          # not measurable there, because the instance carried the corpus
+          # snapshot, and that snapshot is roughly 52.000 foreign documents with
+          # the same words in them. This job installs a Nextcloud that holds
+          # nothing but the corpus, so the ten cases below are answered on an
+          # instance without foreign holdings.
+          #
+          # What this entry proves: the ten cases on arm64, against a fresh
+          # instance without foreign holdings, repeatable and permanent, at no
+          # cost and with a gate that catches the next regression instead of a
+          # measurement that has to be bought again.
+          #
+          # What it does NOT prove, and this belongs next to it rather than in a
+          # report nobody opens: it is not a real Nextcloud with AppAPI and HaRP
+          # on an m7g.large, and it is no statement about memory or about time.
+          # The backend runs as a host process here, and the runner is a four
+          # core machine of the GitHub fleet, which is the reservation phase 14
+          # wrote down in 14-02 when it ran the same runner as role target. For a
+          # statement about search quality, and the language cases are exactly
+          # that, the machine type is beside the point; for a statement about a
+          # memory ceiling it would decide everything.
+          #
+          # One entry and sqlite, on purpose: the question this branch answers is
+          # one about search quality on ARM and not one about database dialects,
+          # and those are already answered three times on amd64 above.
+          - database: sqlite
+            server-version: stable34
+            php-version: '8.2'
+            runner: ubuntu-24.04-arm
 
     # Service containers cannot be made conditional on a matrix entry, so both
     # database servers start for every run and two of the three ignore one of
