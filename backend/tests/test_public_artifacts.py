@@ -412,6 +412,11 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
         "The report of the wave zero comparison quotes a type annotation of the code it measured, "
         "and a type is no value."
     ),
+    ("measurements/2026-09-nachfolgefassungen/skripte/99d-filter-sortierung.sh", "schluesselwort-mit-wert"): (
+        "The successor fassung of auflage A1 that measures filters and sorting. The word the family looks "
+        "for stands inside a shell default expansion of the request token of the login form, so no value "
+        "follows it and none ever can."
+    ),
     ("measurements/2026-09-v12-messung/skripte/94b-grundlast-rueckkehr.sh", "schluesselwort-mit-wert"): (
         "The driven successor that measures the return to the base load, which reads its password out of a "
         "file and is frozen under DRIVEN_V12_FASSUNGEN."

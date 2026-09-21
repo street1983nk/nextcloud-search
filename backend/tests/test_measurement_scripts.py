@@ -64,6 +64,9 @@ MEASUREMENTS_DIR = REPO_ROOT / "docs" / "measurements"
 RUN_DIR = MEASUREMENTS_DIR / "2026-09-vergleichsmessung-m7g" / "skripte"
 FIX_RUN_DIR = MEASUREMENTS_DIR / "2026-09-werkzeugfixe" / "skripte"
 V12_RUN_DIR = MEASUREMENTS_DIR / "2026-09-v12-messung" / "skripte"
+# The run directory of the two successor fassungen of A1, the acceptance of
+# 21.09.2026. It holds no raw data and never will: neither of its files ran.
+SUCCESSOR_RUN_DIR = MEASUREMENTS_DIR / "2026-09-nachfolgefassungen" / "skripte"
 TREE_HASH = RUN_DIR / "40b-baumhash.py"
 TREE_HASH_PROOF = RUN_DIR / "40b-baumhash.sh"
 OPS_GATE = Path(__file__).resolve().parent / "test_ops_scripts.py"
@@ -78,12 +81,44 @@ OPS_GATE = Path(__file__).resolve().parent / "test_ops_scripts.py"
 # scratch under these rules, so every one of the three promises below can reach
 # it. Its first file is the stock probe, which measures inside the container
 # and therefore carries neither a route nor a password to begin with.
-NARROW_SCOPE_DIRS = (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR)
+#
+# Four since plan 16-03, and the fourth is the same kind of decision. The run
+# directory of the successor fassungen of A1 holds 92c-wechsel.sh and
+# 99d-filter-sortierung.sh, and the reason it belongs inside the narrow scope
+# is 99d itself: its whole subject is where a password comes from, so the
+# promise that no password stands on a command line has to reach it. The other
+# two promises, no machine shape outside a comment and no carriage return,
+# reach it for the same reason they reach the other three.
+NARROW_SCOPE_DIRS = (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR, SUCCESSOR_RUN_DIR)
 
 # The driven fassung of the language cases and its successor. The first one is
 # evidence and must not move, the second one is the fix of DI-10-02.
 DRIVEN_LANGUAGE_CASES = RUN_DIR / "98-sprachfaelle.sh"
 SUCCESSOR_LANGUAGE_CASES = FIX_RUN_DIR / "98b-sprachfaelle.sh"
+
+# The two successor fassungen of auflage A1 of the acceptance of 21.09.2026.
+# 92c follows 92b for finding L-03, 99d follows 99c for finding L-04, and
+# neither of them ran: the box was taken down on 21.09.2026, so their
+# acceptance criterion was form, digest and static analysis. That sentence
+# stands in the head of each file and is asserted below, because a fassung
+# somebody later mistakes for a measured one is the finding these two would
+# otherwise create.
+SUCCESSOR_IMAGE_SWITCH = SUCCESSOR_RUN_DIR / "92c-wechsel.sh"
+SUCCESSOR_FILTER_SORT = SUCCESSOR_RUN_DIR / "99d-filter-sortierung.sh"
+NOT_DRIVEN = "DIESE FASSUNG IST NICHT GEFAHREN"
+
+# The name of the path variable of the password file. It is the one
+# 98c-sprachfaelle.sh of the same trip carries, which is why the gate holds
+# both files against it: a successor that invented a third name would read the
+# same file and be unreachable for the run plan that hands the old one over.
+PWFILE_DEFAULT = 'PWFILE="${PWFILE:-'
+
+# The line of 99d that asks the environment, written down so that the order of
+# the two sources can be asserted rather than described. The environment stays
+# the permitted shape of V14 and comes first; the file is the second way, the
+# one the rest of the tools of that run directory go.
+ENVIRONMENT_FIRST = r'''eval "printf '%s' \"\${$PASSWORT_ENV:-}\"" >"$PWFELD"'''
+PWFILE_READ = 'sudo cat "$PWFILE"'
 
 # The probe of the v1.2 run: the foreign stock, counted in the process of the
 # container instead of over the capped OCS route (DI-10-02, DI-11-01).
@@ -1155,11 +1190,15 @@ def measurement_scripts() -> list[Path]:
 def scripts_of_this_run() -> list[Path]:
     """Every script of the run directories written under these rules.
 
-    Three directories since plan 12-04. The successor fassung of the language
+    Four directories since plan 16-03. The successor fassung of the language
     cases lives in one of its own since plan 11-03, and the three promises below
     have to reach it: it creates an account, it reads a password and it is
     copied onto the same box as the rest. The run directory of v1.2 came third,
-    for the probe that counts the foreign stock inside the container.
+    for the probe that counts the foreign stock inside the container. The run
+    directory of the successor fassungen of A1 came fourth, and the reason is
+    99d-filter-sortierung.sh: the whole subject of that file is where its
+    password comes from, so the promise that none of them stands on a command
+    line is the one that has to reach it.
     """
     return sorted(
         path for directory in NARROW_SCOPE_DIRS for path in directory.glob("*") if path.suffix in SCRIPT_SUFFIXES
@@ -1360,7 +1399,7 @@ def test_the_password_gate_fires_on_a_staged_sample() -> None:
 # would have left that line standing next to a script that never produced it.
 
 
-def test_the_narrow_scope_covers_the_three_run_directories_written_under_these_rules() -> None:
+def test_the_narrow_scope_covers_the_four_run_directories_written_under_these_rules() -> None:
     """Widening the narrow scope is a decision, so it is pinned here.
 
     The semantic run of 05.09. stays outside on purpose (45-suchlast.py reaches
@@ -1368,13 +1407,17 @@ def test_the_narrow_scope_covers_the_three_run_directories_written_under_these_r
     tool fixes joined in plan 11-03 because its script is new and can keep all
     three promises. The run directory of v1.2 joined in plan 12-04 for the same
     reason, and its probe is named here so that the widening is checked against
-    a file rather than against a directory that may still be empty.
+    a file rather than against a directory that may still be empty. The run
+    directory of the successor fassungen joined in plan 16-03, and both of its
+    files are named here for that same reason.
     """
-    assert NARROW_SCOPE_DIRS == (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR)
+    assert NARROW_SCOPE_DIRS == (RUN_DIR, FIX_RUN_DIR, V12_RUN_DIR, SUCCESSOR_RUN_DIR)
     found = scripts_of_this_run()
     assert SUCCESSOR_LANGUAGE_CASES in found
     assert DRIVEN_LANGUAGE_CASES in found
     assert STOCK_PROBE in found
+    assert SUCCESSOR_IMAGE_SWITCH in found
+    assert SUCCESSOR_FILTER_SORT in found
     assert not [path for path in found if path.parent.parent.name == "2026-09-05-semantiklauf-m7g"]
 
 
@@ -2397,3 +2440,89 @@ def test_the_six_driven_v12_fassungen_are_the_ones_the_run_order_names() -> None
     # copy nor one of the six: it ran inside the container as section 0 of the
     # language case fassung and carries no raw file of its own.
     assert STOCK_PROBE.name not in DRIVEN_V12_FASSUNGEN
+
+
+# The watchmen over the two successor fassungen of auflage A1, plan 16-03.
+#
+# The six watchmen above keep the driven fassungen of the trip byte identical.
+# These four keep the other half of the same rule: a fix of a driven fassung
+# exists, it carries a new number in a new run directory, it names the file it
+# follows and the finding it answers, and it holds the property that finding is
+# about. Without the second pair a successor could point at its original and
+# carry none of the fix.
+#
+# DRIVEN_V12_FASSUNGEN deliberately does NOT grow by these two files. Those six
+# digests are the evidence of a paid trip; a seventh entry would freeze a
+# fassung that never ran and put it on the same shelf as the ones that did.
+
+
+def test_the_successor_of_the_image_switch_points_at_the_driven_fassung_and_lives_beside_it() -> None:
+    """92c names 92b with its full path, names L-03, and says that it never ran."""
+    text = SUCCESSOR_IMAGE_SWITCH.read_text(encoding="utf-8")
+    assert "docs/measurements/2026-09-v12-messung/skripte/92b-wechsel.sh" in text
+    assert "L-03" in text
+    assert SUCCESSOR_IMAGE_SWITCH.parent != V12_IMAGE_SWITCH.parent
+    # The sentence of pitfall 7, in the file itself and not only in a summary:
+    # a raw file is read on its own, and so is a script.
+    assert NOT_DRIVEN in text
+
+
+def test_the_successor_of_the_image_switch_checks_the_occ_return_before_the_filter() -> None:
+    """The fix of L-03 is an order of steps, so the order is what is asserted.
+
+    Run 1 of the trip ended with nought without having registered anything: the
+    call stood in the block whose output runs through tee, the return value of a
+    pipeline belongs to its last command, and sh knows no pipefail. So the call
+    writes into a file of its own, the return value is checked immediately after
+    it, and only then does the output run into the raw file.
+    """
+    text = SUCCESSOR_IMAGE_SWITCH.read_text(encoding="utf-8")
+    aufruf = text.index('occ app_api:app:register "$APP_ID" "$DAEMON"')
+    geprueft = text.index("register_status=$?")
+    gefiltert = text.index('cat "$registerlog"')
+    gemerkt = text.index(': >"$WORK/registrierung-fehlt"')
+    verweigert = text.index('if [ -f "$WORK/registrierung-fehlt" ]; then')
+    assert aufruf < geprueft < gefiltert < gemerkt < verweigert
+    # The call itself carries no pipe: it redirects into the file instead.
+    zeilen = [line for line in text.splitlines() if "occ app_api:app:register" in line]
+    assert len(zeilen) == 1, zeilen
+    assert "|" not in zeilen[0], zeilen[0]
+    assert '--wait-finish >"$registerlog" 2>&1' in text
+    # The refusal below the pipeline carries the abort code of that spot, which
+    # is the one 92b already gave a container on a foreign image identity: what
+    # would be measured is a state the tree hash never covered.
+    block = text[verweigert : text.index("\nfi\n", verweigert)]
+    assert "exit 36" in block
+
+
+def test_the_successor_of_the_filter_sort_tool_points_at_the_driven_fassung_and_lives_beside_it() -> None:
+    """99d names 99c with its full path, names L-04, and says that it never ran."""
+    text = SUCCESSOR_FILTER_SORT.read_text(encoding="utf-8")
+    assert "docs/measurements/2026-09-v12-messung/skripte/99c-filter-sortierung.sh" in text
+    assert "L-04" in text
+    assert SUCCESSOR_FILTER_SORT.parent != V12_FILTER_SORT.parent
+    assert NOT_DRIVEN in text
+
+
+def test_the_successor_of_the_filter_sort_tool_reads_the_password_out_of_the_password_file() -> None:
+    """The environment stays the first source, and it is no longer the only one.
+
+    L-04 is a break of uniformity and not a security defect: the environment is
+    the permitted shape of V14. What 99c lacked was the second way the rest of
+    the tools of that run directory go, so a run that had deposited the file and
+    left the variable unset logged in as nobody and measured the login page.
+    """
+    text = SUCCESSOR_FILTER_SORT.read_text(encoding="utf-8")
+    # The path variable is the one 98c-sprachfaelle.sh of the same trip carries.
+    assert PWFILE_DEFAULT in text
+    assert PWFILE_DEFAULT in V12_LANGUAGE_CASES.read_text(encoding="utf-8")
+    # The driven fassung knows neither the variable nor the file, which is the
+    # finding, and this assertion is what keeps the two files apart.
+    assert PWFILE_DEFAULT not in V12_FILTER_SORT.read_text(encoding="utf-8")
+    umgebung = text.index(ENVIRONMENT_FIRST)
+    datei = text.index(PWFILE_READ)
+    assert umgebung < datei
+    # An empty field after both sources is a refusal and not a run: the field is
+    # asked twice, once to reach the file and once to decide.
+    assert text.count('if [ ! -s "$PWFELD" ]; then') == 2
+    assert "exit 2" in text[datei:]
