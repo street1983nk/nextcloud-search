@@ -34,7 +34,7 @@ Details im Archiv: .planning/milestones/v1.1-ROADMAP.md
 - [x] **Phase 13: Filter und Sortierung auf der Ergebnisseite** - Nutzer grenzt Treffer nach Typ und Zeitraum ein und sortiert nach Datum, ohne die Semantik oder die Rechtegrenze zu verlieren
 - [x] **Phase 14: Modell-Entladung im Leerlauf** - Container gibt beide Speicherhalter nach Leerlauf frei, hinter einem ab Werk ausgeschalteten Schalter (completed 2026-09-19)
 - [x] **Phase 15: Messphase, eine Box-Anfahrt** - Wirkungsbeleg, Laststufen, Sprachfaelle und Wiederaufwaerm-Kosten in einer einzigen bezahlten Anfahrt (abgenommen 21.09.2026, Auflagen A1 bis A4 an Phase 16)
-- [ ] **Phase 16: Haertung und Store-Einreichung v1.2.0** - Haertungen, Store-Texte, Upgrade-Beweis und Einreichung 1.2.0
+- [x] **Phase 16: Haertung und Store-Einreichung v1.2.0** - Haertungen, Store-Texte, Upgrade-Beweis und Einreichung 1.2.0 (completed 2026-09-21; v1.2.0 als signiertes App-Paar eingereicht, zweimal HTTP 201, Belegkette in `docs/audits/2026-09-phase-16/README.md` Abschnitt 9)
 
 **Bauordnung (harte Abhaengigkeiten, aus der Recherche uebernommen):** 12 vor 15 (ein waehrend der Anfahrt korrigiertes Skript entwertet seine eigene Messung), Backend vor PHP innerhalb von Phase 13 (`extra="forbid"` macht einen unbekannten Parameter zu HTTP 400 und damit zur stummen leeren Suche), 14 vor 15 (die eine Anfahrt muss die Entladung per Schalter A/B mitmessen), 16 zuletzt (fuehrt die Ergebnisse aus 13 bis 15 in Store-Texte und Upgrade-Beweis).
 
@@ -254,15 +254,15 @@ Plans:
 **Requirements**: HART-01, HART-02, REL-02
 **Success Criteria** (was wahr sein muss):
 
-  1. DI-11-02/03/05/06 sind abgearbeitet oder dokumentiert entschieden, inklusive des flatternden pgsql-Asts (HTTP 423: bei rot erst wiederholen)
-  2. Der BL-F01-Schlusssatz zur Connector-Synergie steht in EN/DE/FR in den Store-Texten beider Haelften, alle vier Katalog-Gates gruen, keine Em-Dashes, keine Backticks oder Tabellen
-  3. Das Upgrade 1.1.0 auf 1.2.0 ist Ende zu Ende in CI bewiesen, mit Migration `Version001200Date...`, und die Suche ist nach dem Sprung nicht stumm
-  4. Die neue Messzahl steht im Gleichschritt an drei Stellen (README.en.md und beide info.xml)
-  5. v1.2.0 ist als signiertes App-Paar eingereicht, zweimal HTTP 201
+  1. DI-11-02/03/05/06 sind abgearbeitet oder dokumentiert entschieden, inklusive des flatternden pgsql-Asts (HTTP 423: bei rot erst wiederholen) -- **ERFUELLT** (16-01 und 16-04; vier Verdikte, Flake-Register mit Merker, Vorlaufsonde)
+  2. Der BL-F01-Schlusssatz zur Connector-Synergie steht in EN/DE/FR in den Store-Texten beider Haelften, alle vier Katalog-Gates gruen, keine Em-Dashes, keine Backticks oder Tabellen -- **ERFUELLT** (16-12; 67 Faelle mit Anzahlpruefung, Lauf 35603906800 und Tag-Lauf 35612546138)
+  3. Das Upgrade 1.1.0 auf 1.2.0 ist Ende zu Ende in CI bewiesen, mit Migration `Version001200Date...`, und die Suche ist nach dem Sprung nicht stumm -- **ERFUELLT** (16-07 und 16-09; Laeufe 35594647362, 35603906848 und Tag-Lauf 35612546034, je `all six assurances hold`)
+  4. Die neue Messzahl steht im Gleichschritt an drei Stellen (README.en.md und beide info.xml) -- **ERFUELLT** (16-12; je Stelle ein Mutationsfall)
+  5. v1.2.0 ist als signiertes App-Paar eingereicht, zweimal HTTP 201 -- **ERFUELLT** (16-14; Tag v1.2.0 auf f827145, Release-Lauf 35612545646 mit vier Anhaengen, Submission 35618848300 mit zweimal HTTP 201, Gegenprobe je App-Seite; der erste Dispatch 35617988639 endete mit HTTP 401 und ist als L-16-05 gefuehrt)
 
 **Backlog-Kandidat (beim Planen pruefen, kein Requirement):** BL-F02 Baustein 1, OCR-Pakete spa/ita/nld/por. Nur NACH der Phase-15-Messanfahrt einbauen (Werkzeugstand ist Vergleichbarkeitsbedingung) und nur ohne Terminrisiko fuer die Einreichung; sonst Folgerelease. **Entschieden am 21.09.2026 am Tor des Plans 16-10, Owner-Antwort im Wortlaut 'Mitfahren': Baustein 1 faehrt in v1.2.0 mit, um zwei Sprachen erweitert (dan und est aus den EU-Outreach-Zusagen), also sechs Pakete. Bausteine 2 und 3 bleiben nach v1.3.**
 
-**Plans:** 13/14 plans complete
+**Plans:** 14/14 plans complete
 
 Plans:
 **Welle 1**
@@ -299,9 +299,9 @@ Plans:
 
 - [x] 16-13-PLAN.md: Launch-Haertung, Phasenaudit, Owner-Abnahme (completed 2026-09-21; Haertungsmatrix mit acht belegten Zeilen, Phasenaudit ohne CRITICAL und ohne HIGH, zwei MEDIUM gefunden und beide behoben (M-16-01: der Flake-Fix aus 16-01 hatte nicht getragen, vier rote CI-Laeufe; M-16-02: das Geheimnis-Gate kannte nur einen von zwei Anbietern), drei LOW weitergereicht, Owner-Abnahme im Wortlaut "Abgenommen", ohne Auflagen)
 
-**Welle 8** *(naechste)*
+**Welle 8** *(fertig)*
 
-- [ ] 16-14-PLAN.md: Token-Rotation, Tag, Einreichung 2x HTTP 201, Zustandspflege
+- [x] 16-14-PLAN.md: Token-Rotation, Tag, Einreichung 2x HTTP 201, Zustandspflege (completed 2026-09-21; Tag `v1.2.0` annotiert auf `f827145`, sieben gleichzeitig gruene Tag-Laeufe, vier signierte Anhaenge, Manifestindex mit beiden Architekturen vor der Einreichung geprueft, Owner-Go im Wortlaut "Go, einreichen", Submission 35618848300 mit zweimal HTTP 201; der erste Dispatch scheiterte an einer ueberholten Zugangsmarke (L-16-05))
 
 ## Progress
 
@@ -317,7 +317,7 @@ Plans:
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 16/16 | Complete | 2026-09-21 |
-| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 13/14 | In Progress | - |
+| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 14/14 | Complete | 2026-09-21 |
 
 ## Nach v1.2 (Wiedervorlage)
 

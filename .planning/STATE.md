@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
-status: in_progress
-stopped_at: 16-13 abgeschlossen und damit **Welle 7 vollstaendig**. Die Launch-Haertung ist vom Owner **abgenommen**, im Wortlaut "Abgenommen", **ohne Auflagen** (21.09.2026). Das Phasenaudit liegt vor dem Tag in `docs/audits/2026-09-phase-16/README.md`: **kein CRITICAL, kein HIGH**, zwei MEDIUM gefunden und **beide behoben**, drei LOW mit Adresse. M-16-01: der Flake-Fix aus 16-01 hat NICHT getragen (vier rote python.yml-Laeufe am 21.09., Ursache war ein Wettlauf mit dem Tor des Testclients und nie die Frist); M-16-02: das Geheimnis-Gate kannte die Namensform nur eines von zwei Anbietern. Volle Suite **2491 bestanden / 15 uebersprungen**, Skipzahl unveraendert. HART-01 ist abgehakt. NAECHSTES ist **16-14** (Welle 8): Rotation der Store-Zugangsmarke durch den Owner, Push, Tag, Einreichung mit zweimal HTTP 201. Vier Commits dieses Plans sind **nicht gepusht**, kein Tag, kein Release
-last_updated: "2026-09-22T04:30:00.000Z"
+status: phase_complete
+stopped_at: 16-14 abgeschlossen und damit **Welle 8 und die ganze Phase 16**. **v1.2.0 IST IM NEXTCLOUD APP STORE, beide Haelften, je HTTP 201** (Submission-Lauf 35618848300). Tag `v1.2.0` annotiert auf `f827145`, sieben gleichzeitig gruene Tag-Laeufe, vier signierte Anhaenge (findling.tar.gz 309.484 B, findling_backend.tar.gz 29.817 B, je eine .sig mit 684 B), Manifestindex mit beiden Architekturen VOR der Einreichung anonym geprueft, Gegenprobe je App-Seite: beide nennen 1.2.0. Owner-Go im Wortlaut "Go, einreichen". **Ein Befund:** der erste Dispatch (35617988639) endete mit HTTP 401, weil die erneuerte Zugangsmarke beim Setzen schon ueberholt war; der Lauf brach korrekt ab, die Marke wurde danach VOR dem Setzen gegen die Schnittstelle geprueft (L-16-05). Dazu L-16-04: die Annahme, GitHub wende den paths-Filter auf Tag-Pushes an, ist widerlegt. HART-02 und REL-02 sind abgehakt, damit **alle 17 Requirements des Milestones**. Belegkette in `docs/audits/2026-09-phase-16/README.md` Abschnitt 9, acht Zeilen je mit Zahl. Volle Suite **2491 bestanden / 15 uebersprungen**. NAECHSTES ist der **Milestone-Abschluss v1.2** (ROADMAP-Milestonezeile, Ablage der Phasen, Rueckblick); die Commits dieses Plans sind **nicht gepusht**
+last_updated: "2026-09-22T06:10:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 63
-  completed_plans: 62
-  percent: 98
+  completed_plans: 63
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,41 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 ## Current Position
 
-Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 13 von 14 abgeschlossen (16-01 bis 16-13). **Welle 1 bis Welle 7 sind
-vollstaendig.** NAECHSTES: **16-14** (Welle 8), der letzte Plan des Milestones:
-Rotation der Store-Zugangsmarke, Push, Tag, Einreichung mit zweimal HTTP 201.
+Phase: 16 (haertung-und-store-einreichung-v1-2-0): **ABGESCHLOSSEN (21.09.2026)**
+Plan: 14 von 14 abgeschlossen (16-01 bis 16-14). **Alle acht Wellen sind
+vollstaendig**, und damit sind alle 63 Plaene des Milestones v1.2 ausgefuehrt und
+alle 17 Requirements abgehakt. NAECHSTES ist kein Plan mehr, sondern der
+**Milestone-Abschluss v1.2**: Milestonezeile der ROADMAP, Ablage der Phasen und
+Rueckblick. Die drei Commits dieses Plans sind **nicht gepusht**.
+
+16-14, die Abgabe: **v1.2.0 steht im Nextcloud App Store, beide Haelften, je mit
+HTTP 201 belegt** (Submission-Lauf **35618848300**). Der Tag `v1.2.0` ist
+annotiert und sitzt auf `f827145`, dem Stand, der die zwei Befunde des
+Phasenaudits, den Bericht und die Abnahme der Haertung schon enthaelt, und nicht
+auf dem Bump-Commit. Die **sieben Tag-Laeufe sind gleichzeitig gruen**: Release
+35612545646, PHP 35612546138, Multi-arch 35612545993, HaRP 35612546034, Python
+35612545258, Integration 35612545589, Resilience 35612545272. Damit traegt auch
+der zweite Fix des Flake-Stammes `single-flight-zeit` in CI, was nach M-16-01 die
+offene Frage war. Vier Anhaenge liegen am Release, je mit Bytezahl in der
+Belegkette, beide Signaturen sind im Lauf gegen das Zertifikat verifiziert
+worden, und der Manifestindex traegt `linux/amd64` und `linux/arm64`, anonym
+abgefragt **vor** der Einreichung. Die Gegenprobe ist je App-Seite einzeln
+gefahren; beide nennen 1.2.0, die grosse Katalogdatei ist nicht als Beleg
+benutzt worden. Owner-Go im Wortlaut: **"Go, einreichen"**.
+
+**Der Befund der Abgabe (L-16-05).** Der erste Dispatch, Lauf **35617988639**,
+endete mit `release findling v1.2.0: HTTP 401`. Die Erneuerung der Zugangsmarke
+hat doppelt ausgeloest beziehungsweise die Seite zeigte nach dem ersten Klick den
+aelteren der beiden Werte, und eine zweite Erneuerung macht die erste ungueltig.
+Der Lauf hat korrekt abgebrochen und ist nicht wiederholt worden, bis er
+zufaellig gruen war. Danach ist die Marke frisch gelesen und **vor** dem Setzen
+gegen die Schnittstelle geprueft worden (leerer Aufruf der Release-Route: HTTP
+400 mit Feldfehler heisst gueltig, HTTP 401 heisst ueberholt, beide Faelle
+gefahren), um 15:24Z gesetzt, und der zweite Dispatch antwortete zweimal 201.
+Kein Wert einer Zugangsmarke steht in einer Datei, einem Protokoll oder einer
+SUMMARY. Der zweite Befund, **L-16-04**, ist harmlos und trotzdem notiert: die
+Annahme zweier Workflow-Kommentare, GitHub wende den `paths`-Filter auch auf
+Tag-Pushes an, ist mit zwei Laufnummern widerlegt.
 
 **Die Launch-Haertung ist abgenommen.** Owner-Wort vom 21.09.2026, per
 strukturierter Rueckfrage bestaetigt: **"Abgenommen"**, **ohne Auflagen**. Damit
@@ -41,8 +72,9 @@ was NICHT belegt ist, und die Vorbedingungen des Plans 16-14. Keine Kostenzeile:
 in dieser Phase ist keine Box gelaufen.
 
 **HART-01 ist abgehakt.** Alle vier DI-11-Punkte haben ihr Verdikt, und das
-Phasenaudit weist Erfolgskriterium 1 als erfuellt aus. HART-02 und REL-02
-bleiben bei 16-14.
+Phasenaudit weist Erfolgskriterium 1 als erfuellt aus. **HART-02 und REL-02 sind
+in 16-14 dazugekommen**, je mit Beleg und mit dem Vorbehalt, der mit dem Haken
+nicht verschwindet.
 
 16-13: **das Phasenaudit liegt vor dem Tag, und es hat zwei
 MEDIUM gefunden, die beide in derselben Ausfuehrung behoben sind.** Zwei
@@ -463,6 +495,29 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
 
+- 16-14 (21.09.2026): **Der Tag sitzt auf `f827145` und nicht auf dem
+  Bump-Commit.** Zwischen dem Bump aus 16-07 und der Abgabe sind die zwei
+  Befunde des Phasenaudits behoben worden; ein Tag auf dem Bump haette eine
+  Fassung ausgeliefert, deren Fehler in der Belegkette daneben stehen. Derselbe
+  Entscheid wie bei v1.1.0, wo er vom Owner kam.
+- 16-14 (21.09.2026): **Vor dem Tag ist nichts mehr committet worden.** Die
+  Vorbereitung hat nur geprueft (drei Versionsstellen, Gates, Staging beider
+  Haelften) und nichts geaendert. Ein Vorbereitungscommit haette `main` ueber
+  den gepushten, fuenffach gruenen Stand hinausgeschoben und vor dem Tag eine
+  weitere CI-Runde erzwungen, ohne dass sich an den Paketdateien etwas aendert.
+- 16-14 (21.09.2026): **Der widerlegte Workflow-Kommentar wird NACH dem Tag
+  korrigiert, nicht davor** (L-16-04). Eine Aenderung an `docker.yml` haette den
+  Baum unter dem Tag von dem Baum getrennt, den das Phasenaudit geprueft hat,
+  und das fuer einen Kommentar.
+- 16-14 (21.09.2026): **Eine neu geholte Zugangsmarke wird vor dem Setzen gegen
+  die Schnittstelle geprueft** (L-16-05). Der Beleg ist ein Aufruf, der nichts
+  veraendert: leerer Rumpf auf die Release-Route, HTTP 400 mit Feldfehler heisst
+  gueltig, HTTP 401 heisst ueberholt. Die Gegenprobe mit dem alten Wert gehoert
+  dazu, sonst belegt der 400er nur die Erreichbarkeit der Route.
+- 16-14 (21.09.2026): **Der Fehlschlag des ersten Dispatch steht in der
+  Belegkette**, als eigene Zeile neben den sieben gruenen. Eine Belegkette, die
+  nur den gelungenen zweiten Anlauf nennt, beantwortet die Frage, die niemand
+  stellt, und genau diese Sorte Luecke hat die Phase bei M-16-01 selbst gefunden.
 - 16-10 (21.09.2026): **Baustein 1 von BL-F02 faehrt in v1.2.0 mit.**
   Owner-Antwort am Tor im Wortlaut: "Mitfahren", bestaetigt per strukturierter
   Rueckfrage, nachdem Stand der Phase, Umfang, Pruefung der Annahme A7 und
@@ -1552,6 +1607,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-22T04:30:00.000Z
-Stopped at: 16-12 abgeschlossen und damit **Welle 6 vollstaendig**. Drei Commits (3422979, 8ce701a, aa58fdc): die abgenommenen Wortlaute maschinell aus `docs/store-listing.md` in beide `info.xml` und die drei READMEs uebernommen und mit 17 Zeichenvergleichen belegt, die Messzahl an neun Stellen und die Sprachangabe an elf; zwei neue Gates (Messzahl im Gleichschritt mit Mutationsfall je Stelle und Kurztext-Regel, Connector-Satz mit Anzahlpruefung in drei Sprachen und beiden Haelften), 52 Faelle werden 67; die Live-Bestaetigung der drei Bildadressen je Datei wiederholt (3x 200, Groesse und Pruefsumme gleich der Datei) und BL-F01 fortgeschrieben. Alle Gates lokal gruen, volle Suite 2.487 bestanden / 15 uebersprungen, Skipzahl unveraendert, pyright mit erzwungener CI-Fassung. Tree-Hashes nachgesehen und nicht nachzuziehen (das Rezept globt `**/*.php` und `**/*.py`). KEIN Push, KEIN Tag, KEIN Release. Davor: 16-10 abgeschlossen und damit **Welle 4 vollstaendig**. Zwei Commits (a9ee779, 01dffa1): Owner-Entscheid "Mitfahren" am Tor, sechs Sprachpakete mit Pin und sechs eigenen Bau-Pruefungen, Positivliste auf neun bei unveraendertem Standard deu+eng+fra, THIRD-PARTY-Tabelle samt der bis dahin fehlenden fra-Zeile, neues Gate `test_ocr_languages.py` mit gestagtem rotem Zustand, `PACKAGE_TREE_HASH_TODAY` im selben Commit wie `config.py`. Alle Python-Gates lokal gruen, volle Suite 2.472 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Multi-Arch-Bau ist gefahren und gruen (docker.yml 35597353780).** An 16-11 uebergeben: elf Textstellen nennen noch drei Sprachen, die Liste steht in 16-10-SUMMARY.md. KEIN Tag, KEIN Release. Davor: 16-09 abgeschlossen (Welle 4, erster Plan). Vier Commits (12fec7d, 0f112c3, 607f8d0, 1c61216): Q-5 nachgesehen und als Kommentar im Workflow festgehalten, `UPGRADE_FROM_TAG` auf v1.1.0, die vier Stellen umgestellt, Zusicherung 6 auf `searchFilters.dates`, die Ratsche auf `GOLD_V1_0_AND_V1_1`. Zusicherungen 1 bis 5 maschinell als zeichengleich nachgewiesen. Alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Auftrag `deploy-harp` ist NICHT gefahren** (kein Push im Auftrag); Erfolgskriterium 3 von REL-02 wartet auf die Laufnummer, der Pruefweg steht in 16-09-SUMMARY.md und der Punkt in `deferred-items.md`. KEIN Tag, KEIN Release. Davor: 16-07 abgeschlossen (Welle 3, erster Plan). Migration, ihr Test und der Nachzug von PHP_FILES_TODAY 66 plus Baumhash in einem Commit (12e8663, der Nachzug MUSS im selben Commit liegen), die drei Versionsstellen auf 1.2.0 in einem zweiten (734a1b2); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist wieder nicht gelaufen, aus demselben Grund wie in 16-06. KEIN Tag, KEIN Release. Davor: 16-06 abgeschlossen und damit Welle 2 vollstaendig. Die Messung des inneren Aufrufs samt PHP-Faellen und Baumhash-Nachzug in einem Commit (f604805, der Nachzug MUSS im selben Commit liegen), das Python-Textgate in einem zweiten (e3fb6c5); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist nicht gelaufen: kein PHP auf dieser Maschine und kein Push im Auftrag, `php.yml` startet mit dem Push von selbst. Davor: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
-Resume file: keine; NAECHSTES ist 16-13 (Welle 7, Launch-Haertung, Phasenaudit und Owner-Abnahme vor der Abgabe)
+Last session: 2026-09-22T06:10:00.000Z
+Stopped at: 16-14 abgeschlossen und damit **Welle 8 und die Phase 16**. Drei Commits (10d74c1, f8bc9f7, plus der Zustandscommit): die Belegkette der Abgabe im Auditbericht (Abschnitt 9, acht Zeilen je mit Zahl), die zwei Verdikte L-16-04 und L-16-05 in `deferred-items.md`, und die Zustandspflege samt SUMMARY (REQUIREMENTS mit HART-02 und REL-02 abgehakt, ROADMAP mit fuenf Urteilen und 14/14, STATE). **v1.2.0 ist eingereicht, zweimal HTTP 201** (Lauf 35618848300), nach einem ersten Dispatch, der an einer ueberholten Zugangsmarke mit HTTP 401 scheiterte (35617988639, L-16-05). Tag `v1.2.0` auf `f827145`, sieben gruene Tag-Laeufe, vier signierte Anhaenge, Manifestindex mit beiden Architekturen vor der Einreichung geprueft, Gegenprobe je App-Seite gruen. Alle Gates lokal gruen, volle Suite 2491 bestanden / 15 uebersprungen, Skipzahl unveraendert. KEIN Push. Davor: 16-12 abgeschlossen und damit **Welle 6 vollstaendig**. Drei Commits (3422979, 8ce701a, aa58fdc): die abgenommenen Wortlaute maschinell aus `docs/store-listing.md` in beide `info.xml` und die drei READMEs uebernommen und mit 17 Zeichenvergleichen belegt, die Messzahl an neun Stellen und die Sprachangabe an elf; zwei neue Gates (Messzahl im Gleichschritt mit Mutationsfall je Stelle und Kurztext-Regel, Connector-Satz mit Anzahlpruefung in drei Sprachen und beiden Haelften), 52 Faelle werden 67; die Live-Bestaetigung der drei Bildadressen je Datei wiederholt (3x 200, Groesse und Pruefsumme gleich der Datei) und BL-F01 fortgeschrieben. Alle Gates lokal gruen, volle Suite 2.487 bestanden / 15 uebersprungen, Skipzahl unveraendert, pyright mit erzwungener CI-Fassung. Tree-Hashes nachgesehen und nicht nachzuziehen (das Rezept globt `**/*.php` und `**/*.py`). KEIN Push, KEIN Tag, KEIN Release. Davor: 16-10 abgeschlossen und damit **Welle 4 vollstaendig**. Zwei Commits (a9ee779, 01dffa1): Owner-Entscheid "Mitfahren" am Tor, sechs Sprachpakete mit Pin und sechs eigenen Bau-Pruefungen, Positivliste auf neun bei unveraendertem Standard deu+eng+fra, THIRD-PARTY-Tabelle samt der bis dahin fehlenden fra-Zeile, neues Gate `test_ocr_languages.py` mit gestagtem rotem Zustand, `PACKAGE_TREE_HASH_TODAY` im selben Commit wie `config.py`. Alle Python-Gates lokal gruen, volle Suite 2.472 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Multi-Arch-Bau ist gefahren und gruen (docker.yml 35597353780).** An 16-11 uebergeben: elf Textstellen nennen noch drei Sprachen, die Liste steht in 16-10-SUMMARY.md. KEIN Tag, KEIN Release. Davor: 16-09 abgeschlossen (Welle 4, erster Plan). Vier Commits (12fec7d, 0f112c3, 607f8d0, 1c61216): Q-5 nachgesehen und als Kommentar im Workflow festgehalten, `UPGRADE_FROM_TAG` auf v1.1.0, die vier Stellen umgestellt, Zusicherung 6 auf `searchFilters.dates`, die Ratsche auf `GOLD_V1_0_AND_V1_1`. Zusicherungen 1 bis 5 maschinell als zeichengleich nachgewiesen. Alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Auftrag `deploy-harp` ist NICHT gefahren** (kein Push im Auftrag); Erfolgskriterium 3 von REL-02 wartet auf die Laufnummer, der Pruefweg steht in 16-09-SUMMARY.md und der Punkt in `deferred-items.md`. KEIN Tag, KEIN Release. Davor: 16-07 abgeschlossen (Welle 3, erster Plan). Migration, ihr Test und der Nachzug von PHP_FILES_TODAY 66 plus Baumhash in einem Commit (12e8663, der Nachzug MUSS im selben Commit liegen), die drei Versionsstellen auf 1.2.0 in einem zweiten (734a1b2); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist wieder nicht gelaufen, aus demselben Grund wie in 16-06. KEIN Tag, KEIN Release. Davor: 16-06 abgeschlossen und damit Welle 2 vollstaendig. Die Messung des inneren Aufrufs samt PHP-Faellen und Baumhash-Nachzug in einem Commit (f604805, der Nachzug MUSS im selben Commit liegen), das Python-Textgate in einem zweiten (e3fb6c5); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist nicht gelaufen: kein PHP auf dieser Maschine und kein Push im Auftrag, `php.yml` startet mit dem Push von selbst. Davor: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
+Resume file: keine; NAECHSTES ist der Milestone-Abschluss v1.2 (kein Plan mehr offen)
