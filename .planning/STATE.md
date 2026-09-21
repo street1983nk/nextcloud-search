@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-05 abgeschlossen (Altfunde durch Platzhalter ersetzt, gesperrtes Wort aus den vier Anleitungen, Ausnahmeliste von 50 auf 46); A2 VOLLSTAENDIG; NAECHSTES: 16-06, Welle 2
-last_updated: "2026-09-21T19:30:00.000Z"
+stopped_at: 16-06 abgeschlossen (innerer Aufruf misst sich selbst, Protokollzeile oberhalb 1.000 ms ohne Nutzerinhalt, Baumhash nachgezogen); A3 auf der Entwicklungsmaschine gebaut, Zahl auf Zielhardware offen; WELLE 2 VOLLSTAENDIG; NAECHSTES: 16-07, Welle 3
+last_updated: "2026-09-21T21:15:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 54
-  percent: 86
+  completed_plans: 55
+  percent: 87
 ---
 
 # Project State
@@ -26,8 +26,28 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 5 von 14 abgeschlossen (16-01 bis 16-05). **Welle 1 ist vollstaendig,
-Welle 2 laeuft.**
+Plan: 6 von 14 abgeschlossen (16-01 bis 16-06). **Welle 1 und Welle 2 sind
+vollstaendig, Welle 3 ist an der Reihe.**
+
+16-06: Auflage A3 ist gebaut. **Der innere Aufruf misst sich selbst** (f604805):
+`hrtime` umschliesst in `ExAppService::call` genau den einen
+`proxyRequest`-Aufruf, die Dauer geht in Millisekunden auf eine Nachkommastelle,
+und oberhalb der neuen Schwelle `SLOW_CALL_LOG_MILLISECONDS = 1000.0` entsteht
+eine `info`-Zeile mit genau drei Feldern (`path`, `innerMs`, `ceilingMs`). Kein
+Suchbegriff, kein Dateiname, keine Kennung, kein Rumpf. `ceilingMs` traegt die
+Decke, die fuer DIESEN Aufruf galt, also `min(Decke, Restbudget)`. **Alle vier**
+Fehlerpfade von `call()` tragen dieselbe Zahl (der Plan nannte drei; der vierte
+steht einzeilig und war beim Zaehlen untergegangen). Zwei PHPUnit-Faelle halten
+die Zeile oberhalb und das Schweigen unterhalb der Schwelle; ein neues Textgate
+`backend/tests/test_exapp_call_instrumentation.py` (e3fb6c5) haelt Sitz der
+Messung ueber die Zeilenfolge, Schwellenbedingung, Nutzerinhaltsfreiheit mit
+Selbsttest und den Schwellenwert unter der kleinsten Zeitdecke.
+`PHP_TREE_HASH_TODAY` ist im SELBEN Commit auf `29dc890b...` nachgezogen,
+`PHP_FILES_TODAY` bleibt bei 64. Volle Suite 2.469 bestanden / 15
+uebersprungen, Skipzahl unveraendert. **Offen:** `php.yml` ist fuer diese beiden
+Commits noch nicht gelaufen (kein PHP auf dieser Maschine, kein Push im
+Auftrag), und die Zahl auf Zielhardware liefert erst die naechste Box, so wie
+die Auflage es selbst sagt.
 
 16-05: Auflage A2 ist vollstaendig. **Die Altfunde sind bereinigt** (fe3cf8c):
 `docs/performance.md` und `docs/install-check.md` tragen Instanz-, Volume- und
@@ -188,6 +208,23 @@ Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 16-06 (21.09.2026): **Der innere Aufruf wird auf der PHP-Seite gemessen, nicht
+  im Container.** Die Decke gehoert dem Aufruf von PHP nach Container, und nur
+  PHP kennt seine volle Dauer: Proxy, HaRP, Container und Rueckweg. Eine Messung
+  im Container liesse den Proxyweg weg, also genau den Teil, der die Decke
+  reissen laesst, ohne dass der Container etwas davon merkt.
+- 16-06 (21.09.2026): **Die Schwelle liegt bei 1.000 ms und damit UNTER der
+  kleinsten Zeitdecke.** M-01 beschreibt Aufrufe nahe der Decke; eine Schwelle
+  auf der Decke saehe genau die nicht. Sie ist eine Protokollschwelle und keine
+  Abbruchgrenze: was einen Aufruf beendet, bleibt `min(Decke, Restbudget)`.
+- 16-06 (21.09.2026): **`ceilingMs` traegt die Decke dieses Aufrufs, nicht die
+  Konstante.** Geschrieben wird `min(Decke, Restbudget)`, weil ein Aufruf mit
+  kleinerem Restbudget sonst gegen eine Grenze ausgewiesen wuerde, die fuer ihn
+  nie galt; genau diese Verwechslung ist der Kern von M-01.
+- 16-06 (21.09.2026): **Alle vier Fehlerpfade von `call()` tragen die gemessene
+  Dauer**, nicht die drei, die der Plan zaehlt. Ein Fehlerpfad ohne Wartezeit
+  waere eine Luecke genau dort, wohin M-01 sieht.
 
 - 16-04 (21.09.2026): **Die Vorlaufsonde fragt nur die lexikalische Haelfte.**
   Eine semantische Seite wuerde das Abfragemodell laden und genau den
@@ -1203,6 +1240,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-21T19:30:00.000Z
-Stopped at: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
-Resume file: keine; NAECHSTES ist 16-06 (Welle 2, Instrumentierung des inneren Aufrufs in ExAppService, A3/M-01)
+Last session: 2026-09-21T21:15:00.000Z
+Stopped at: 16-06 abgeschlossen und damit Welle 2 vollstaendig. Die Messung des inneren Aufrufs samt PHP-Faellen und Baumhash-Nachzug in einem Commit (f604805, der Nachzug MUSS im selben Commit liegen), das Python-Textgate in einem zweiten (e3fb6c5); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist nicht gelaufen: kein PHP auf dieser Maschine und kein Push im Auftrag, `php.yml` startet mit dem Push von selbst. Davor: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
+Resume file: keine; NAECHSTES ist 16-07 (Welle 3, Versionsbump 1.2.0 und Migration Version001200Date...)
