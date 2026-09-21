@@ -246,7 +246,19 @@ parst, `sh -n` auf dem ausgeloesten Sondenskript, beide jq-Zweige gegen selbst
 gebaute Abbilder, die umgedrehte `<navigations>`-Pruefung gegen `git show
 v1.0.3:` und `git show v1.1.0:`), aber lokal gruen ist hier kein Beweis.
 
-**Verdikt: offen, mit benannter Zieladresse und Pruefweg. Kein Fix noetig.**
+**Verdikt: GESCHLOSSEN am 21.09.2026.** Der Push von 73cbca1 hat den Lauf
+35594647362 gestartet (HaRP deploy, deploy-harp stable34/ubuntu-24.04,
+success). Alle vier Pruefzeilen stehen als echte Ausgaben im Protokoll:
+"the companion of v1.1.0 declares the navigation entry" (Store upgrade 1),
+"three terms, one file each; no date bounds on the provider" (Store upgrade 3),
+"the instance performed the app update: 1.1.0 to 1.2.0" (Store upgrade 4,
+erster Zweig, kein notice-Ausweich), "the two date bounds were not declared
+before the upgrade and are declared after it" und "all six assurances hold"
+(Store upgrade 5). Erfolgskriterium 3 von REL-02 ist damit mit einer
+Laufnummer belegt; das Abhaken von REL-02 selbst bleibt bei Plan 16-14.
+
+Urspruengliches Verdikt vor dem Lauf: offen, mit benannter Zieladresse und
+Pruefweg, kein Fix noetig.
 
 **Begruendung.** Erfolgskriterium 3 von REL-02 verlangt einen Lauf und keine
 Datei. Der Punkt bleibt deshalb bis zur Laufnummer offen und wird nicht als
