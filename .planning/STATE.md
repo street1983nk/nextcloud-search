@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: 15-11 Volllauf detached gestartet, laeuft
-last_updated: "2026-09-20T04:00:00.000Z"
-last_activity: 2026-09-20
+stopped_at: 15-14 abgeschlossen (Box abgebaut); offen 15-15 (autonom) + 15-16 (Owner)
+last_updated: "2026-09-21T03:35:00.000Z"
+last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 49
-  completed_plans: 42
-  percent: 86
+  completed_plans: 46
+  percent: 94
 ---
 
 # Project State
