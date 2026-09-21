@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-04 abgeschlossen (Vorlaufsonde des Lastwerkzeugs, Schluesselpaar im Abbau, sieben dokumentierte Entscheide); WELLE 1 VOLLSTAENDIG; NAECHSTES: 16-05, Welle 2
-last_updated: "2026-09-21T18:15:00.000Z"
+stopped_at: 16-05 abgeschlossen (Altfunde durch Platzhalter ersetzt, gesperrtes Wort aus den vier Anleitungen, Ausnahmeliste von 50 auf 46); A2 VOLLSTAENDIG; NAECHSTES: 16-06, Welle 2
+last_updated: "2026-09-21T19:30:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 53
-  percent: 84
+  completed_plans: 54
+  percent: 86
 ---
 
 # Project State
@@ -26,7 +26,26 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 4 von 14 abgeschlossen (16-01 bis 16-04). **Welle 1 ist vollstaendig.**
+Plan: 5 von 14 abgeschlossen (16-01 bis 16-05). **Welle 1 ist vollstaendig,
+Welle 2 laeuft.**
+
+16-05: Auflage A2 ist vollstaendig. **Die Altfunde sind bereinigt** (fe3cf8c):
+`docs/performance.md` und `docs/install-check.md` tragen Instanz-, Volume- und
+Security-Group-Kennung sowie die oeffentlichen Adressen der Boxen nur noch als
+Platzhalter, der die ART des Wertes benennt (`<instanzkennung>`,
+`<volumekennung>`, `<sicherheitsgruppe>`, `<adresse-der-box>`); die Legende
+steht als `PLATZHALTER` im Gate und wird von einem neuen Fall in BEIDE
+Richtungen gegen `docs/` gehalten. **Das gesperrte Wort ist weg** (f1c15a1):
+52 deutsche Formen in vier Anleitungen ersetzt (Paketdatei, Ablage, ZIP-Datei,
+kalte Ablagestufe); es bleiben drei Vorkommen, zweimal der Skriptname und
+einmal eine woertlich zitierte englische CI-Ausgabe (E-H2). Die Ausnahmeliste
+schrumpft von 50 auf 46 Eintraege, sechs weitere Gruende sind auf den
+verbliebenen Bestand nachgezogen. **Was begruendet bleibt:** Rohdaten und
+Skripte gefahrener Anfahrten, die oeffentliche Abbildkennung I-01 und die
+Korpus-Snapshotkennung (Entscheid E2, Betreiberentscheid vom 11.09.2026).
+**Die Historie ist unberuehrt**, zwei neue Commits obendrauf, kein rebase, kein
+amend, kein Push; alle alten Commit-Kennungen gelten weiter. Volle Suite 2.464
+bestanden / 15 uebersprungen, Skipzahl unveraendert.
 
 16-04: Die vier aufgeschobenen Punkte aus DI-11 haben ihr Verdikt.
 **DI-11-03 gebaut** (daa4661): `scripts/ops/search_load.py` fragt vor der
@@ -1184,6 +1203,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-21T18:15:00.000Z
-Stopped at: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
-Resume file: keine; NAECHSTES ist 16-05 (Welle 2, Bereinigung der Altfunde und des gesperrten Worts)
+Last session: 2026-09-21T19:30:00.000Z
+Stopped at: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
+Resume file: keine; NAECHSTES ist 16-06 (Welle 2, Instrumentierung des inneren Aufrufs in ExAppService, A3/M-01)
