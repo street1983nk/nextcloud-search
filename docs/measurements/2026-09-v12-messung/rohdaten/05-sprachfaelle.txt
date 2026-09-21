@@ -1,0 +1,203 @@
+sprachfaelle-start 2026-09-21T02:18:54Z
+konto: sprachfall (ausdruecklich nicht lasttest, siehe Kopf)
+korpus: /home/ubuntu/nextcloud-search/testdata/corpus
+ci-beleg: integration.yml Lauf 35471225104
+=== Abschnitt 0: der Bestand im Index, im Prozess gemessen (DI-10-02) ===
+-- hier wird weder eine Route noch ein Konto gefragt: eine Trefferzahl ueber
+   die Prozessgrenze waere das Zaehl-Orakel aus T-02-93. Die alte Fassung hat
+   ueber die OCS-Route fuer jeden Begriff und jede Tiefe 26 gemessen, also den
+   Deckel der Antwort und nicht den Bestand dahinter --
+fremdbestand-konto:    lasttest (gemessen wird sein Bestand, nicht seine Antwort)
+rang-schwelle:         64 (MAX_RECHECKS_ABSOLUTE, siehe Kopf)
+bestandssonde, im prozess des containers gemessen
+schwelle der messbarkeit: 64 (MAX_RECHECKS_ABSOLUTE)
+deckel beider ranglisten: 100 (SEARCH_RRF_WINDOW)
+eigene datei-kennungen uebergeben: 0 von 10
+
+bestand begriff='Genehmigung'          index=51965   fenster_lex=100   fenster_sem=100   rang_lex=keine-kennung rang_sem=keine-kennung
+bestand begriff='Frist'                index=51956   fenster_lex=100   fenster_sem=100   rang_lex=keine-kennung rang_sem=keine-kennung
+bestand begriff='Mueller'              index=1       fenster_lex=1     fenster_sem=100   rang_lex=keine-kennung rang_sem=keine-kennung
+bestand begriff='Vertrag'              index=51111   fenster_lex=100   fenster_sem=100   rang_lex=keine-kennung rang_sem=keine-kennung
+bestand begriff='"drei Monate"'        index=1       fenster_lex=1     fenster_sem=100   rang_lex=keine-kennung rang_sem=keine-kennung
+bestand begriff='bescheid'             index=51167   fenster_lex=100   fenster_sem=100   rang_lex=keine-kennung rang_sem=keine-kennung
+bestand begriff='type:pdf bescheid'    index=33226   fenster_lex=100   fenster_sem=100   rang_lex=keine-kennung rang_sem=keine-kennung
+bestand begriff='Belehrung'            index=1       fenster_lex=1     fenster_sem=100   rang_lex=keine-kennung rang_sem=keine-kennung
+bestand begriff='Auszug'               index=1       fenster_lex=1     fenster_sem=100   rang_lex=keine-kennung rang_sem=keine-kennung
+bestand begriff='Erinnerung'           index=1       fenster_lex=1     fenster_sem=100   rang_lex=keine-kennung rang_sem=keine-kennung
+
+-- was daraus folgt --
+Ein Fall ist NICHT MESSBAR, wenn die eigene Datei in BEIDEN Listen
+fehlt oder in beiden Listen einen Rang groesser als 64 hat.
+Die Begruendung liegt in der Fusion: RRF ordnet nach der Summe der
+Kehrwerte der Raenge, und jedes Dokument, das in BEIDEN Listen vor
+der eigenen Datei liegt, liegt mit beiden Summanden vor ihr und
+damit auch in der fusionierten Liste. Ein Rang schlechter als 64 in
+beiden Listen kann deshalb durch keine Fusion in die Reichweite der
+64 Rechecks kommen, und ein Fall, dessen Aussage darin ertrinkt, ist
+nicht rot, sondern nicht messbar.
+bestand und fensterbelegung stehen als erklaerende Zahlen daneben:
+die erste sagt, wie viele Dokumente des Index den Begriff tragen,
+die beiden anderen, wie voll das Fenster ist, das der Recheck
+abschreitet. Keine der drei ist das Urteil. Die Frage von DI-10-02
+beantwortet allein der Rang.
+vorpruefung-gefahren ja
+=== Abschnitt 1: das Konto, dessen Heimat nichts als den Korpus halten soll ===
+skeletondirectory vorher: (leer oder nicht gesetzt)
+System config value skeletondirectory set to empty string
+das Konto existiert schon, es wird nicht neu angelegt
+-- Achtung: seine Heimat muss NUR den Korpus enthalten, sonst sind die
+   Faelle rot aus dem falschen Grund. Dieser Block ist abbrechbar (A7). --
+Successfully reset password for sprachfall
+  - user_id: sprachfall
+  - display_name: sprachfall
+  - email: 
+  - cloud_id: sprachfall@loadtest.infranode.dev
+  - enabled: true
+  - groups:
+=== Abschnitt 2: der Korpus ueber WebDAV, der Weg eines Nutzers ===
+upload-vor 2026-09-21T02:19:00Z
+upload-nach 2026-09-21T02:19:17Z
+     39 204
+dateien-hochgeladen 39
+dateien-erwartet    39
+datei-kennungen     39 (aus dem Antwortkopf OC-FileId)
+upload-vollstaendig ja
+Starting scan for user 1 out of 1 (sprachfall)
++---------+-------+-----+---------+---------+--------+--------------+
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 1       | 39    | 0   | 0       | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
+=== Abschnitt 3: die Indexierung, gegen die langsamste Uhr ===
+-- zuerst 360 s, weil der Poller-Backoff bis zu 300 s laeuft und der
+   Fuenf-Minuten-Systemcron zwei Runden braucht, bevor der erste Auftrag der
+   Anwendung ueberhaupt in der Schlange steht (Pitfall 11) --
+indexierung runde=1 vorrat=0 2026-09-21T02:25:17Z
+arbeitsvorrat-leer ja
+-- und erst JETZT die Verdikte, weil skipped:no_text_layer ein vorlaeufiges
+   Verdikt ist und ein frueheres Lesen die Scan-Spur als Fehlschlag meldete --
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-20 05:42:59 (1242 minutes ago)
+=== Abschnitt 3b: der Rang der eigenen Datei, im Prozess gemessen ===
+fall 1: 09-bescheid.pdf traegt die Kennung 52287
+fall 2: 10-kuendigung.docx traegt die Kennung 52288
+fall 3: 12-aktenvermerk.txt traegt die Kennung 52290
+fall 4: 11-uebersicht.odt traegt die Kennung 52289
+fall 5: 10-kuendigung.docx traegt die Kennung 52288
+fall 6: 09-bescheid.pdf traegt die Kennung 52287
+fall 7: 09-bescheid.pdf traegt die Kennung 52287
+fall 8: 15-schweiz-baubewilligung.pdf traegt die Kennung 52293
+fall 9: 16-oesterreich-mitteilung.pdf traegt die Kennung 52294
+fall 10: 30-nur-ein-bild.pdf traegt die Kennung 52308
+bestandssonde, im prozess des containers gemessen
+schwelle der messbarkeit: 64 (MAX_RECHECKS_ABSOLUTE)
+deckel beider ranglisten: 100 (SEARCH_RRF_WINDOW)
+eigene datei-kennungen uebergeben: 10 von 10
+
+bestand begriff='Genehmigung'          index=51965   fenster_lex=100   fenster_sem=100   rang_lex=ausserhalb    rang_sem=ausserhalb
+bestand begriff='Frist'                index=51956   fenster_lex=100   fenster_sem=100   rang_lex=ausserhalb    rang_sem=ausserhalb
+bestand begriff='Mueller'              index=1       fenster_lex=1     fenster_sem=100   rang_lex=1             rang_sem=5
+bestand begriff='Vertrag'              index=51111   fenster_lex=100   fenster_sem=100   rang_lex=ausserhalb    rang_sem=ausserhalb
+bestand begriff='"drei Monate"'        index=1       fenster_lex=1     fenster_sem=100   rang_lex=1             rang_sem=ausserhalb
+bestand begriff='bescheid'             index=51167   fenster_lex=100   fenster_sem=100   rang_lex=ausserhalb    rang_sem=ausserhalb
+bestand begriff='type:pdf bescheid'    index=33226   fenster_lex=100   fenster_sem=100   rang_lex=ausserhalb    rang_sem=ausserhalb
+bestand begriff='Belehrung'            index=1       fenster_lex=1     fenster_sem=100   rang_lex=1             rang_sem=ausserhalb
+bestand begriff='Auszug'               index=1       fenster_lex=1     fenster_sem=100   rang_lex=1             rang_sem=ausserhalb
+bestand begriff='Erinnerung'           index=1       fenster_lex=1     fenster_sem=100   rang_lex=1             rang_sem=ausserhalb
+
+-- was daraus folgt --
+Ein Fall ist NICHT MESSBAR, wenn die eigene Datei in BEIDEN Listen
+fehlt oder in beiden Listen einen Rang groesser als 64 hat.
+Die Begruendung liegt in der Fusion: RRF ordnet nach der Summe der
+Kehrwerte der Raenge, und jedes Dokument, das in BEIDEN Listen vor
+der eigenen Datei liegt, liegt mit beiden Summanden vor ihr und
+damit auch in der fusionierten Liste. Ein Rang schlechter als 64 in
+beiden Listen kann deshalb durch keine Fusion in die Reichweite der
+64 Rechecks kommen, und ein Fall, dessen Aussage darin ertrinkt, ist
+nicht rot, sondern nicht messbar.
+bestand und fensterbelegung stehen als erklaerende Zahlen daneben:
+die erste sagt, wie viele Dokumente des Index den Begriff tragen,
+die beiden anderen, wie voll das Fenster ist, das der Recheck
+abschreitet. Keine der drei ist das Urteil. Die Frage von DI-10-02
+beantwortet allein der Rang.
+rang-erhoben ja
+-- je Fall der kleinere der beiden Raenge, und genau diese Zahl liest das
+   erste der beiden Urteile --
+rang fall 1 begriff Genehmigung: ausserhalb (Schwelle 64), datei 09-bescheid.pdf
+rang fall 2 begriff Frist: ausserhalb (Schwelle 64), datei 10-kuendigung.docx
+rang fall 3 begriff Mueller: 1 (Schwelle 64), datei 12-aktenvermerk.txt
+rang fall 4 begriff Vertrag: ausserhalb (Schwelle 64), datei 11-uebersicht.odt
+rang fall 5 begriff "drei Monate": 1 (Schwelle 64), datei 10-kuendigung.docx
+rang fall 6 begriff bescheid: ausserhalb (Schwelle 64), datei 09-bescheid.pdf
+rang fall 7 begriff type:pdf bescheid: ausserhalb (Schwelle 64), datei 09-bescheid.pdf
+rang fall 8 begriff Belehrung: 1 (Schwelle 64), datei 15-schweiz-baubewilligung.pdf
+rang fall 9 begriff Auszug: 1 (Schwelle 64), datei 16-oesterreich-mitteilung.pdf
+rang fall 10 begriff Erinnerung: 1 (Schwelle 64), datei 30-nur-ein-bild.pdf
+=== Abschnitt 4: die zehn Faelle, dreiwertig beurteilt ===
+sprachfall 1 NICHT MESSBAR (eigene Datei in keiner der beiden Listen: ausserhalb)
+sprachfall 2 NICHT MESSBAR (eigene Datei in keiner der beiden Listen: ausserhalb)
+sprachfall 3 GRUEN (Rang der eigenen Datei 1)
+sprachfall 4 NICHT MESSBAR (eigene Datei in keiner der beiden Listen: ausserhalb)
+sprachfall 5 GRUEN (Rang der eigenen Datei 1)
+sprachfall 6 NICHT MESSBAR (eigene Datei in keiner der beiden Listen: ausserhalb)
+sprachfall 7 NICHT MESSBAR (eigene Datei in keiner der beiden Listen: ausserhalb)
+sprachfall 8 GRUEN (Rang der eigenen Datei 1)
+sprachfall 9 GRUEN (Rang der eigenen Datei 1)
+sprachfall 10 GRUEN (Rang der eigenen Datei 1)
+=== Die Bilanz der zehn Faelle, mit beiden Zahlen in einer Zeile ===
+sprachfaelle bestanden 5 von 10, davon 5 nicht messbar
+rote faelle 0, nicht messbare faelle 5, rote zusicherungen 0
+-- die nicht messbaren Faelle. Sie sind KEIN Sprachbefund: die eigene Datei
+   steht in beiden Ranglisten ausserhalb der 64 Rechecks oder gar
+   nicht darin, und keine Fusion bringt sie von dort in Reichweite (DI-10-02) --
+fall 1
+fall 2
+fall 4
+fall 6
+fall 7
+=== Abschnitt 5: die Einordnung dieser Zahlen ===
+Fuer diese zehn Faelle gibt es KEINE v1.0-Entsprechung auf dieser Box:
+weder der Semantiklauf vom 05.09. noch die Nachmessung vom 07.09. hat sie
+gefahren. Die Zahl dieses Schrittes ist damit eine ERSTMESSUNG neben einem
+CI-Beleg und keine Vergleichszeile.
+ci-beleg: integration.yml Lauf 35471225104
+Genau dieser Lauf faehrt dieselben zehn Faelle auf einer FRISCHEN Instanz OHNE
+Fremdbestand, auf amd64, gegen den PHP-Entwicklungsserver (Job
+index-search-e2e). Er ist die Messung mit eigenem Index, nach der DI-10-02
+verlangt, und deshalb ist seine Laufnummer hier Pflicht und keine Notiz.
+Dieser Schritt misst dieselbe Aussage auf arm64 gegen eine All-in-One-Instanz
+mit vollem Vektorbestand und 52.111 Fremddokumenten. Gleich ist die Aussage,
+nicht die Umgebung, und wo die eigene Datei ausserhalb beider Ranglisten
+steht, steht NICHT MESSBAR und kein Urteil.
+=== Die Skeletteinstellung, zurueckgeschrieben wie sie war ===
+System config value skeletondirectory deleted
+(nicht gesetzt, wie vorher)
+sprachfaelle-ende 2026-09-21T02:25:23Z
+
+=== Pflichtzeile Plan 15-12 Task 3 (21.09.2026) ===
+entladeschalter-ist=0 (FINDLING_EMBED_IDLE_RELEASE_SECONDS, aus der
+Container-Umgebung; galt fuer den gesamten Sprachfall-Block, wie fuer alle
+Messbloecke ausser Schritt 8).
+
+Einordnung: 5 von 10 Faellen GRUEN (Rang 1 der eigenen Datei, seltene Begriffe
+mit index=1), 0 rote Faelle, 5 nicht messbar (haeufige Begriffe Genehmigung/
+Frist/Vertrag/bescheid/type:pdf bescheid, index 33k-52k: die eigene Datei
+steht im 52.111er-Fremdbestand ausserhalb von Rang 64, das ist KEIN
+Sprachbefund, sondern die Verduennung durch den Fremdbestand). E3 erfuellt:
+mehr als einer der zuvor roten Faelle ist messbar (drei Monate, Belehrung),
+und keiner ist rot. Der Fremdbestand trennt die BERECHTIGUNG, nicht den Index:
+der Vorfilter rankt ueber den ganzen Bestand, ein eigenes Konto aendert daran
+nichts (ci-beleg 35471225104 faehrt dieselbe Aussage ohne Fremdbestand).
+Abschnitt 0 (Bestandssonde, aus 15-10 hierher verschoben, weil sie den fertigen
+Index braucht): kein Begriff traegt den Deckel 26, die haeufigen liegen bei
+33.226 bis 51.965 (E1 erfuellt).
