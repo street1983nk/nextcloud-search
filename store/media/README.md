@@ -24,7 +24,7 @@ Wer ein Bild austauscht und die Zahl stehen lässt, bekommt ein rotes Gate mit
 der heutigen Größe in der Meldung. Eine Zahl, die beim Tippen stimmte, ist
 schlechter als gar keine.
 
-## Die Live-Bestätigung der Adressen, 07.09.2026
+## Die Live-Bestätigung der Adressen, 21.09.2026
 
 Der Store speichert keine Bilder, sondern Adressen. Eine Adresse, hinter der
 nichts liegt, besteht jede Schemaprüfung und ergibt auf der Store-Seite einen
@@ -41,37 +41,54 @@ wurde je Datei, denn zwei gleiche Adressen sind eine Abfrage.
 
 | Bild | Status | Inhaltstyp | Größe laut Antwort | Größe laut Tabelle oben | Maße |
 |---|---|---|---|---|---|
-| `header.png` | 200 | `image/png` | 168515 Bytes (abgeloeste Datei) | 327635 Bytes | 1440 x 810 |
-| `screenshot-admin.png` | 200 | `image/png` | 157081 Bytes | siehe Vermerk unten | 1440 x 1100 |
-| `screenshot-search.png` | 200 | `image/png` | 113724 Bytes | siehe Vermerk unten | 1440 x 700 |
+| `header.png` | 200 | `image/png` | 327635 Bytes | 327635 Bytes | 1440 x 810 |
+| `screenshot-admin.png` | 200 | `image/png` | 159786 Bytes | 159786 Bytes | 1440 x 1100 |
+| `screenshot-search.png` | 200 | `image/png` | 277061 Bytes | 277061 Bytes | 1440 x 700 |
 
-Abgerufen am 07.09.2026 um 11:19 UTC über `curl` gegen den Zweig `main` bei
-Stand `94420f7`, also gegen genau die Adressen, die in beiden `info.xml` stehen.
+Abgerufen am 21.09.2026 um 12:56 UTC über `curl` gegen den Zweig `main` bei
+Stand `1f6f85c`, also gegen genau die Adressen, die in beiden `info.xml`
+stehen.
 
-**Vermerk vom 07.09.2026, Plan 06-12:** Die beiden Screenshots wurden am selben
-Tag nach dieser Bestätigung neu erzeugt (Semantik im Bild, zweite Deckungszahl,
-siehe die Abschnitte unten). Die Maße sind unverändert, die Größen laut Antwort
-oben sind die der abgelösten Dateien. Die Adressen zeigen auf `main`; sobald der
-Stand mit den neuen Bildern dort liegt, ist die Abfrage je Datei zu wiederholen
-und diese Tabelle nachzuziehen. `header.png` wurde am 07.09.2026 abends auf
-Owner-Anweisung ebenfalls ersetzt (visuell statt textlastig, Abnahme im Chat);
-die Wiederholung der Abfrage gilt damit für alle drei Dateien.
+Damit ist die Wiedervorlage geschlossen, die seit dem 07.09.2026 offen stand,
+also vierzehn Tage lang: die Größe laut Antwort und die Größe laut Tabelle oben
+sind für alle drei Dateien dieselbe Zahl, und die Spalte "siehe Vermerk unten"
+ist damit erledigt. Der Vermerk selbst steht weiter unten und ist nicht
+gelöscht, weil an ihm ablesbar bleibt, wie lange die Frage offen war.
 
-Über den Statuscode hinaus ist noch zweierlei geprüft, weil ein Statuscode allein
-nur sagt, dass etwas geantwortet hat:
+Über den Statuscode hinaus ist wieder zweierlei geprüft, weil ein Statuscode
+allein nur sagt, dass etwas geantwortet hat:
 
 1. **Es ist wirklich ein Bild.** Jede der drei Antworten beginnt mit der
    PNG-Signatur, und die Maße aus dem `IHDR`-Block stimmen mit den Maßen
    überein, die weiter unten je Bild stehen.
-2. **Es ist wirklich dieses Bild.** Die heruntergeladenen Bytes haben dieselbe
-   SHA-256-Summe wie die Dateien, die zum Zeitpunkt der Abfrage in diesem
-   Verzeichnis lagen: `511f7bb3...` für das abgelöste Titelbild,
-   `c1c3f9aa...` für das abgelöste Verwaltungsbild, `c644294c...` für das
-   abgelöste Suchbild. Die heutigen Dateien tragen `22cc597d...`
-   (`header.png`), `1258e50a...`
-   (`screenshot-admin.png`) und `568b0748...` (`screenshot-search.png`); gegen
-   diese Summen läuft die Wiederholung der Abfrage nach dem nächsten Stand auf
-   `main`.
+2. **Es ist wirklich dieses Bild.** Die heruntergeladenen Bytes sind byteweise
+   dieselben wie die Dateien, die heute in diesem Verzeichnis liegen, und ihre
+   SHA-256-Summen sind die der heutigen Dateien und nicht mehr die der
+   abgelösten: `22cc597d...` (`header.png`), `1258e50a...`
+   (`screenshot-admin.png`) und `568b0748...` (`screenshot-search.png`). Das
+   sind genau die drei Summen, gegen die der Vermerk vom 07.09.2026 die
+   Wiederholung angekündigt hat.
+
+**Vermerk vom 07.09.2026, Plan 06-12, überholt am 21.09.2026 durch Plan
+16-12:** Die beiden Screenshots wurden am selben Tag nach der damaligen
+Bestätigung neu erzeugt (Semantik im Bild, zweite Deckungszahl, siehe die
+Abschnitte unten). Die Maße sind unverändert, die Größen laut Antwort waren
+damals die der abgelösten Dateien: 168515 Bytes für `header.png`, 157081 Bytes
+für `screenshot-admin.png` und 113724 Bytes für `screenshot-search.png`, und
+die Prüfsummen `511f7bb3...`, `c1c3f9aa...` und `c644294c...` gehörten
+ebenfalls den abgelösten Dateien. Die Adressen zeigen auf `main`; sobald der
+Stand mit den neuen Bildern dort liege, sei die Abfrage je Datei zu wiederholen
+und die Tabelle nachzuziehen. `header.png` wurde am 07.09.2026 abends auf
+Owner-Anweisung ebenfalls ersetzt (visuell statt textlastig, Abnahme im Chat);
+die Wiederholung der Abfrage galt damit für alle drei Dateien. Sie ist am
+21.09.2026 gefahren worden, und ihr Ergebnis steht oben.
+
+**Owner-Entscheid vom 21.09.2026 zu Q-6, im Wortlaut: "Bilder bleiben."** Die
+drei Bilder vom 07.09.2026 reisen mit 1.2.0 mit, und es gibt keinen Plan für
+neue Store-Bilder in dieser Phase. Was damit bewusst in Kauf genommen ist:
+`screenshot-admin.png` zeigt die Verwaltungsseite im Stand vom 07.09.2026 und
+damit ohne den sechsten Engine-Zustand aus Phase 14. Wer die Bilder später
+erneuert, zieht diese Tabelle danach ein zweites Mal nach.
 
 Was diese Bestätigung nicht ist: ein Dauerzustand. Die Adressen zeigen auf den
 Zweig `main` und nicht auf einen Tag, und das ist Absicht (die Begründung steht

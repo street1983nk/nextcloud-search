@@ -20,11 +20,30 @@ lexikalischen Index mit OCR.
 (`nextcloud-mcp-connector/.planning/BACKLOG.md`). Dort steht der Wortlaut ausführlich
 begründet; dieser Eintrag ist die Findling-Seite derselben Sache.
 
-**STAND 07.09.2026:** Alle drei Blocker sind gefallen (BL-02 gemergt und in CI
-gemessen, BL-15 im Connector-PR #3, D-12 damit erfuellt). Die README-Haelfte ist
-umgesetzt (Branch feat/bl-f01-connector-banner, Banner in allen drei READMEs mit
-Link auf den Fidelity-Test). OFFEN NUR NOCH: der eine Schluss-Satz in den
-Store-Texten beider Haelften, der faehrt mit dem naechsten regulaeren Release mit
+**STAND 21.09.2026: ERLEDIGT, und die Zusage hat seit Plan 16-12 ein Gate.**
+Der eine Schluss-Satz, der am 07.09.2026 noch offen war, steht seit Commit
+`1c737e6` ("feat: the retrieval layer sentence on both store pages, 1.0.3") in
+den Store-Texten beider Hälften, dreisprachig, also an sechs Stellen; dazu die
+drei Fassungen in `docs/store-listing.md`, zusammen neun. Ausgeliefert ist er
+mit Release 1.0.3, und im Tag `v1.1.0` war er dabei (`git show
+v1.1.0:php/appinfo/info.xml` führt ihn). Wer hier ansetzt, arbeitet an einer
+Aufgabe, die seit 1.0.3 fertig ist.
+
+Was bis zum 21.09.2026 gefehlt hat, war nicht der Satz, sondern seine
+Prüfung: `test_store_metadata.py` hielt den Datenschutzabsatz aus D-12 fest und
+den Querverweis nicht, also hätte eine Textpflege ihn stumm entfernen können.
+Plan 16-12 baut das Gate. Es prüft die ANZAHL und nicht die Anwesenheit, weil
+die Regeltabelle in `docs/store-listing.md` genau EINEN Querverweis erlaubt und
+ein zweiter Satz die Regel ebenso verletzt wie ein fehlender; Selbsttests für
+null und für zwei stehen daneben. Requirement HART-02 ist damit materiell und
+maschinell erfüllt.
+
+**STAND 07.09.2026 (überholt am 21.09.2026, siehe oben):** Alle drei Blocker
+sind gefallen (BL-02 gemergt und in CI gemessen, BL-15 im Connector-PR #3, D-12
+damit erfuellt). Die README-Haelfte ist umgesetzt (Branch
+feat/bl-f01-connector-banner, Banner in allen drei READMEs mit Link auf den
+Fidelity-Test). OFFEN NUR NOCH: der eine Schluss-Satz in den Store-Texten
+beider Haelften, der faehrt mit dem naechsten regulaeren Release mit
 (Store-Text reist mit dem Release; kein Release nur fuer einen Satz).
 
 **Blockiert durch drei Dinge:**
