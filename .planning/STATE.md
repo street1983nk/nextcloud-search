@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-03 abgeschlossen (Nachfolgefassungen 92c und 99d plus vier Waechter, Auflage A1 statisch abgenommen); NAECHSTES: 16-04, der Rest der Welle 1
-last_updated: "2026-09-21T17:35:00.000Z"
+stopped_at: 16-04 abgeschlossen (Vorlaufsonde des Lastwerkzeugs, Schluesselpaar im Abbau, sieben dokumentierte Entscheide); WELLE 1 VOLLSTAENDIG; NAECHSTES: 16-05, Welle 2
+last_updated: "2026-09-21T18:15:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 52
-  percent: 83
+  completed_plans: 53
+  percent: 84
 ---
 
 # Project State
@@ -26,7 +26,32 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 3 von 14 abgeschlossen (16-01, 16-02 und 16-03, Welle 1).
+Plan: 4 von 14 abgeschlossen (16-01 bis 16-04). **Welle 1 ist vollstaendig.**
+
+16-04: Die vier aufgeschobenen Punkte aus DI-11 haben ihr Verdikt.
+**DI-11-03 gebaut** (daa4661): `scripts/ops/search_load.py` fragt vor der
+ersten Laststufe je Begriff den ungedeckelten Bestand im Prozess des
+Containers ueber `ranked_sides` (Weg: `docker exec` mit dem Interpreter des
+Abbildes, wie 98c). Die Zeilen der Sonde stehen als erster Schluessel im Kopf
+der Rohdatei, die Antworten unter `--min-hits` werden als `ohne-treffer` und
+`fehlschlag` getrennt gezaehlt, die Gesamtzahl und `EmptyResultGroup` bleiben
+daneben. Faellt die Sonde aus, traegt die Rohdatei `vorlaufsonde: nicht
+verfuegbar` und die Trennung unterbleibt namentlich (T-16-13).
+**L-07 gebaut** (681097a): `cmd_destroy` loescht das Schluesselpaar nach
+Instanz und Datentraeger und liest es zurueck; ein bereits fehlendes Paar ist
+eine Zeile und kein Fehler. **Sieben Verdikte** in
+`.planning/phases/16-haertung-und-store-einreichung-v1-2-0/deferred-items.md`
+(4917463): DI-11-02 zu (vier Laststufen behoben, null `cURL error 28` im
+Lastfenster), DI-11-03 und DI-11-05 abgearbeitet, DI-11-06 weitergereicht nach
+v1.2 mit dem Satz zum Migrationszwang, L-05 und L-06 an die naechste Anfahrt,
+L-08 als benannte Asymmetrie; die Kopfzeile adressiert L-03, L-04, L-07, L-09,
+L-10, L-11, M-01 und M-02 auf ihre Plaene. Fuenf neue Faelle in
+`test_ops_scripts.py`, volle Suite 2.463 bestanden / 15 uebersprungen,
+Skipzahl unveraendert.
+**WICHTIG: beide Werkzeugaenderungen sind nur statisch geprueft**, weder die
+Sonde noch der Abbau ist gegen einen echten Container oder ein echtes Konto
+gefahren; die naechste Anfahrt misst sie. **HART-01 bleibt offen** und wird
+erst in 16-13/16-14 abgehakt.
 
 16-03: Auflage A1 ist gebaut und STATISCH abgenommen. Das neue
 Laufverzeichnis `docs/measurements/2026-09-nachfolgefassungen/skripte/`
@@ -144,6 +169,26 @@ Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 16-04 (21.09.2026): **Die Vorlaufsonde fragt nur die lexikalische Haelfte.**
+  Eine semantische Seite wuerde das Abfragemodell laden und genau den
+  Container aufwaermen, dessen Speicher unmittelbar danach gelesen wird; die
+  Diagnose-Route traegt denselben Satz. Die Kehrseite steht im Kommentar des
+  Werkzeugs: ein Begriff ohne lexikalischen Bestand kann von der Vektorhaelfte
+  beantwortet werden, und eine leere Antwort auf ihn faellt auch dann unter
+  `ohne-treffer`, wenn der Aufruf abgebrochen ist.
+- 16-04 (21.09.2026): **`EmptyResultGroup` behaelt Name und Gesamtzahl.** Die
+  Trennung kommt als eigener Schluessel daneben, nicht an seine Stelle, damit
+  eine Rohdatei gegen eine von vor dem 21.09.2026 lesbar bleibt. Das ist die
+  Haelfte von DI-10-01, die beim Schliessen von DI-11-03 nicht verloren gehen
+  darf.
+- 16-04 (21.09.2026): **Eine Teilantwort der Sonde gilt als Ausfall.** Eine
+  Trennung auf einem Teil der Begriffe schriebe zwei Lesarten in dieselbe
+  Rohdatei; die leere Menge waere die Behauptung, jeder Begriff habe Bestand.
+- 16-04 (21.09.2026): **Das Schluesselpaar wird nach Instanz und Datentraeger
+  geloescht**, nie davor: ein Abbruch dazwischen liesse eine laufende Instanz
+  zurueck, die niemand mehr betreten und damit von innen nicht mehr anhalten
+  kann. Geloescht wird nur die oeffentliche Haelfte.
 
 - 16-02 (21.09.2026): **Zwei Fehlalarm-Mechanismen des Auditberichts sind als
   benannte Regeln in das Gate verengt worden, statt als Ausnahmeeintraege
@@ -1139,6 +1184,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-21T15:40:00.000Z
-Stopped at: 16-02 abgeschlossen. Task 1 (neun Geheimnisfamilien, Untergrenze, Selbsttests, Ausnahmeliste, 38ebd9d) und Task 2 (Vokabularregel ueber docs/, L-10 und E-H2, 1f25a74) je einzeln committet; alle Gates lokal gruen, volle Suite 2.444 bestanden / 15 uebersprungen, Skipzahl unveraendert.
-Resume file: keine; NAECHSTES ist 16-03 (Rest der Welle 1)
+Last session: 2026-09-21T18:15:00.000Z
+Stopped at: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
+Resume file: keine; NAECHSTES ist 16-05 (Welle 2, Bereinigung der Altfunde und des gesperrten Worts)
