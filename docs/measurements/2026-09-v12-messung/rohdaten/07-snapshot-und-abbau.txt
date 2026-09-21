@@ -1,0 +1,44 @@
+snapshot-verbleib und abbau der box, plan 15-14 task 2 und 3
+gefahren 2026-09-21 nach den endmessungen und dem committeten kostenbericht.
+
+geheimnisregel: keine ip-adresse, keine lebende instanz- oder volumekennung.
+ausnahme: snap-03f1d1d9ad9262704, die bereits committet im repositorium steht.
+
+-- task 2: der verbleib des korpus-snapshots (owner-entscheid 15-08 frage B,
+   bestaetigt am checkpoint 15-14 am 21.09.) --
+korpus-snapshot snap-03f1d1d9ad9262704: BLEIBT.
+  tag: purpose=findling-corpus-keep
+  groesse: 60 GB volume, FullSnapshotSize rund 55,4 GB (aus 01-aws-lesende-proben)
+  grund: eine weitere anfahrt startet ohne mehrstuendigen korpus-neuaufbau,
+  laufende kosten 2,79 bis 2,99 USD je monat.
+ende-snapshot dieser anfahrt: es wurde KEINER erzeugt. der korpus des laufes
+liegt im bleibenden korpus-snapshot; ein zweiter waere doppelte lagerung.
+
+-- task 3: der abbau, mit rueckleseprobe je ressourcenart --
+kommando: FINDLING_STATE_BACKUP=<box.env-sicherung> aws_box.sh destroy
+(der unterbefehl verlangt seit 11-12 eine sicherung von box.env, weil sein
+letzter schritt box.env loescht; die sicherung liegt ausserhalb des repos.)
+
+ablauf und rueckleseprobe, je gegen die api verifiziert:
+  instanz          terminiert, danach "is gone, verified against the api"
+  datentraeger     geloescht (traegt purpose=findling-phase5), "is gone,
+                   verified against the api"
+  security group   geloescht, "is gone, verified against the api"
+  tag-sweep        "nothing that carries purpose=findling-phase5 exists any more"
+  box.env          entfernt (sicherung liegt ausserhalb des repos)
+
+nachtrag, aus einem befund vom 15-09 (abweichung 1): aws_box.sh destroy loescht
+das SCHLUESSELPAAR nicht mit. es ist nach dem destroy von hand entfernt worden:
+  aws ec2 delete-key-pair --key-name findling-loadtest -> Return true
+  describe-key-pairs -> InvalidKeyPair.NotFound (verifiziert weg)
+fuer 15-15: entweder nimmt cmd_destroy das schluesselpaar auf, oder block 2 des
+runbooks beginnt mit einem delete-key-pair.
+
+der A-record loadtest.infranode.dev ist nach dem abbau entfernt worden
+(cloudflare-api, success true), weil die instanz, auf die er zeigte, nicht mehr
+existiert.
+
+-- was bleibt --
+korpus-snapshot snap-03f1d1d9ad9262704 (gewollt), die committeten rohdaten
+dieses laufverzeichnisses, die box.env-sicherung ausserhalb des repos, die
+kontopasswoerter ausserhalb des repos. sonst nichts.
