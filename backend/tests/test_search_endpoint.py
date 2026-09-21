@@ -720,24 +720,54 @@ def test_with_the_release_off_the_handler_starts_nothing(
     assert not api_search._WARM_TASKS
 
 
-def test_with_the_release_on_a_cold_engine_gets_exactly_one_run(
-    client: TestClient,
-    sign: Sign,
+async def test_with_the_release_on_a_cold_engine_gets_exactly_one_run(
     indexed_volume: Corpus,
     monkeypatch: pytest.MonkeyPatch,
     warm_ground: Path,
 ) -> None:
-    # The round was meant semantically, answered without the weights, and says
-    # so at the place where that fact arises. The handler on the loop then
-    # orders the run and goes on building the answer.
-    assert warm_ground.is_dir()
+    """One round, one background run, and the run is waited for rather than hoped for.
+
+    The round was meant semantically, answered without the weights, and says so
+    at the place where that fact arises. The handler on the loop then orders the
+    run and goes on building the answer.
+
+    **The second case of this block that does not go through the test client,
+    and finding M-16-01 of the phase 16 audit is why.** ``TestClient`` opens a
+    blocking portal per request and closes it again when the request is over,
+    and a task the handler created with ``create_task`` is a loose task on that
+    loop rather than a child of the portal: whether it gets its first slot
+    before the portal goes down is a race, and a race is exactly what this case
+    used to lose. It lost it four times in CI on 21.09.2026 (runs 35586354661,
+    35594647359, 35596116820 and 35597353833), WITH the thirty second deadline
+    of plan 16-01 already in place, which is the proof that the deadline was
+    never the reason: a run that was cancelled before it started does not
+    arrive after thirty seconds either. Under uvicorn the loop outlives the
+    request, and that is the situation reproduced here, exactly as the
+    neighbouring case above does it.
+
+    Nothing is softened by the move. The case says more than before, not less:
+    it waits for the task instead of for an event, so a run that never happens
+    fails here rather than somewhere else, and ``runs == [1]`` is now read after
+    the run is finished rather than in the middle of it.
+    """
+    # Read as a name and not as a directory, like the neighbouring case: an
+    # async function that asks the file system is what ASYNC240 keeps out.
+    assert str(warm_ground).endswith("model")
     _release(monkeypatch, "900")
     runs, ran = _count_the_warm_runs(monkeypatch)
 
-    answer = _search(client, sign(indexed_volume.bob), query=TWO_WORD_TERM)
+    async def signed_in(_nc: Any) -> str:
+        return indexed_volume.bob
 
-    assert answer["candidates"] != []
-    assert ran.wait(ARRIVAL_SECONDS) is True
+    monkeypatch.setattr(api_search, "current_user_id", signed_in)
+
+    answer = await api_search.search(SearchRequest(query=TWO_WORD_TERM), cast(Any, None))
+
+    assert answer.candidates != []
+    ordered = set(api_search._WARM_TASKS)
+    assert ordered, "the handler ordered no run at all"
+    await asyncio.wait_for(asyncio.gather(*ordered), ARRIVAL_SECONDS)
+    assert ran.is_set() is True
     assert runs == [1]
 
 

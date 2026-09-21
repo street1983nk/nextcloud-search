@@ -243,9 +243,9 @@ der Generalprobe: nach dem ersten `docker pull` wuchs die Systemplatte um
 ```
 Storage Driver: overlayfs
  driver-type: io.containerd.snapshotter.v1
-Docker Root Dir: /mnt/HC_Volume_106785477/docker
+Docker Root Dir: /mnt/HC_Volume_<id>/docker
 373M   /var/lib/containerd
-216K   /mnt/HC_Volume_106785477/docker
+216K   /mnt/HC_Volume_<id>/docker
 ```
 
 Die Abhilfe ist eine Zeile in `/etc/containerd/config.toml`:
@@ -2418,7 +2418,7 @@ Vorrats ab, 21.797.539.840 Byte sind frei, `indexed` steht auf 50.102.
 also 500 MB. Verknappt wird mit einer einzigen großen Datei außerhalb der App:
 
 ```sh
-fallocate -l 21378109440 /mnt/HC_Volume_106785477/BALLAST
+fallocate -l 21378109440 /mnt/HC_Volume_<id>/BALLAST
 ```
 
 Das Ziel sind bewusst rund 400 MB Rest und nicht null. Der Schwellwert der App

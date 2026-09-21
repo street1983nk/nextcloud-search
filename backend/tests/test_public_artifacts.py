@@ -235,7 +235,17 @@ def address_names_a_machine(groups: tuple[str | None, ...]) -> bool:
     return not (first == 100 and 64 <= second <= 127)
 
 
-# 10. The vocabulary rule of the owner, which is finding L-10 and the second
+# 10. The disc name of the other provider. The four families above know the
+#     naming of one provider, and this project rented boxes from two: the
+#     approaches of September rode on the second one, whose mount point carries
+#     the identifier of the disc in its own name. Recognised by that name and a
+#     run of digits behind it, which is the form the mount point takes, and the
+#     finding of the phase 16 counter check (M-16-02) is what put it here: the
+#     redaction of plan 16-05 could not see this shape, because no family of
+#     this gate knew a second provider.
+FOREIGN_VOLUME_NAME = re.compile(r"\bHC_Volume_[0-9]{6,}\b")
+
+# 11. The vocabulary rule of the owner, which is finding L-10 and the second
 #     rule of this project that had no gate over this directory. The blocked
 #     term as a stem and out of two halves, like in test_store_metadata.py and
 #     for the same reason.
@@ -277,6 +287,7 @@ SECRET_FAMILIES = (
     "ipv6-adresse",
     "base64-block-ab-40",
     "muster-der-umsetzung",
+    "fremdanbieter-datentraegername",
 )
 VOCABULARY_FAMILY = "vokabular"
 FAMILIES = (*SECRET_FAMILIES, VOCABULARY_FAMILY)
@@ -301,6 +312,7 @@ CLEAN_SAMPLES: dict[str, str] = {
     "ipv6-adresse": "ab" + ":cd:ef are three groups, one under the floor of four",
     "base64-block-ab-40": "0123456789abcdef" * 4,
     "muster-der-umsetzung": "i-" + "0a1b2c3 is too short, and " + "10.0.0.1" + " names no machine",
+    "fremdanbieter-datentraegername": "HC_" + "Volume_ is the word of the mount point, and no run of digits follows it",
     VOCABULARY_FAMILY: "a sentence about the kept data of a run that does not need the word at all",
 }
 
@@ -323,6 +335,10 @@ MUTATED_SAMPLES: dict[str, str] = {
     "base64-block-ab-40": "Findling" + "Z" * 32 + "+g==",
     # mutated: the instance identifier with a hex tail over the floor
     "muster-der-umsetzung": "i-" + "0a1b2c3d4e5f60718",
+    # mutated: the word of the mount point with a run of digits behind it. The
+    # digits are invented, like every sample here: a sample that carried the
+    # real one would make this gate the file that carries what it keeps out.
+    "fremdanbieter-datentraegername": "/mnt/" + "HC_" + "Volume_" + "123456789",
     # mutated: the German form of the blocked term, which is the stem without
     # the English ending behind it
     VOCABULARY_FAMILY: "das " + "Arch" + "iv der Anfahrt",
@@ -561,7 +577,20 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
         "What the performance document still carries of this family are server version numbers of four "
         "groups; the addresses of its boxes stand there as placeholders since plan 16-05."
     ),
-    # -- family 10, the German forms of the blocked term
+    # -- family 10, the disc name of the other provider
+    ("measurements/2026-09-04-volllauf-cpx22/01-korpus.log", "fremdanbieter-datentraegername"): (
+        "The corpus log of the driven full run of 04.09.2026 holds the mount point the disc counter "
+        "printed, and a raw file of a driven run is not edited afterwards."
+    ),
+    ("measurements/2026-09-04-volllauf-cpx22/07-oom-beweis.txt", "fremdanbieter-datentraegername"): (
+        "The out of memory record of that same run holds the mount point of the disc the container worked "
+        "on, and it is the evidence of that hour rather than a document."
+    ),
+    ("measurements/2026-09-04-volllauf-cpx22/10-drill3.txt", "fremdanbieter-datentraegername"): (
+        "The third drill record of that same run fills the disc on purpose and prints its mount point four "
+        "times while doing so, which is what the drill measures."
+    ),
+    # -- family 11, the German forms of the blocked term
     ("measurements/2026-09-v12-messung/rohdaten/03-aufbau.txt", "vokabular"): (
         "The build record of the driven v1.2 approach uses the German form for the packed backup it counted "
         "entries in, and a raw file of a driven run is not edited afterwards."
@@ -636,6 +665,8 @@ def matches_of(family: str, text: str) -> int:
             for found in IMPLEMENTATION_PATTERN.finditer(text)
             if found.group(1) is None or address_names_a_machine(found.groups())
         )
+    if family == "fremdanbieter-datentraegername":
+        return len(FOREIGN_VOLUME_NAME.findall(text))
     if family == VOCABULARY_FAMILY:
         return len(GERMAN_FORM_OF_THE_BLOCKED_TERM.findall(text))
     return 0
