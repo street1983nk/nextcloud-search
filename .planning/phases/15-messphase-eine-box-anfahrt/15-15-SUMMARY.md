@@ -203,6 +203,13 @@ Der `verify`-Block des Plans ruft `uv run pyright` ohne die Variable. Die
 Owner-Regel vom 19.09. verlangt sie, weil der CI-pyright neuer ist als der
 lokale Cache. Ergebnis mit der neueren Fassung: 0 errors, 0 warnings.
 
+**4. MESS-05 ist NICHT abgehakt worden, obwohl die Frontmatter dieses Plans
+sie nennt.** `15-16-PLAN.md` fuehrt MESS-05 und MEM-02 in seiner Frontmatter und
+sagt in seinen must_haves ausdruecklich: "MESS-05 und MEM-02 sind an dem Plan
+abgehakt, der sie belegt, und nicht an dem, der ihr Werkzeug baut". Dieselbe
+Lehre steht seit 14-01 und 14-04 in der Zustandsdatei. `REQUIREMENTS.md` ist
+deshalb unberuehrt geblieben; der Haken faellt am Owner-Checkpoint.
+
 **3. Kein Baumhash nachzuziehen.** Dieser Plan fasst `backend/src/findling/`
 und `php/` nicht an; geaendert sind nur `backend/tests/` und zwei Dateien unter
 `docs/`. `PACKAGE_TREE_HASH_TODAY` und `PHP_TREE_HASH_TODAY` bleiben
@@ -223,3 +230,10 @@ unberuehrt, und die volle Suite bestaetigt es.
 ## Naechster Schritt
 
 15-16, der Owner-Checkpoint der Phase.
+
+## Self-Check: PASSED
+
+Vier Dateien am Ort, vier Commits in der Historie (3f504a4, 940e77b, cdd391f,
+376a3f4). `00-ablauf.md` traegt weiterhin den Commit 190d5c7 aus Plan 15-07,
+ist in dieser Phase also unberuehrt, und damit ist der Wortlaut der vierzehn
+Erwartungen der Wortlaut von vor dem Lauf.

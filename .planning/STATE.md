@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: 15-14 abgeschlossen (Box abgebaut); offen 15-15 (autonom) + 15-16 (Owner)
-last_updated: "2026-09-21T03:35:00.000Z"
+stopped_at: 15-15 abgeschlossen (Bericht, Runbook-Nachtraege, sechs Waechter); offen nur noch 15-16 (Owner-Checkpoint)
+last_updated: "2026-09-21T07:40:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 49
-  completed_plans: 46
-  percent: 94
+  completed_plans: 47
+  percent: 96
 ---
 
 # Project State
@@ -25,41 +25,33 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 ## Current Position
 
-Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, Welle A ohne Box**
-Plan: 8 of 16 (15-08 Deckelfreigabe erteilt: 46 h / 5,40 USD am 20.09.2026; A-Record setzt der Owner, Korpus-Snapshot bleibt, TTL 120 s)
-Status: Phase 14 ist abgenommen. Phase 15 laeuft; 15-01 hat das Laufverzeichnis
-der Anfahrt bestueckt, 15-02 hat das Runbook auf den Stand dieser Anfahrt
-gebracht (Deckel 46 h / 5,40 USD netto, Block 13b Abbildwechsel, ein Befehl
-fuer "kalt", die Messschritte 6b und 8b), 15-03 hat das Wiederaufwaerm-Werkzeug
-gebaut (95b-wiederaufwaermen.sh, vier Auspraegungen, Rueckgabewerte 2, 29, 30
-und 31), 15-04 hat den MEM-02-Block bekommen (94b-grundlast-rueckkehr.sh, drei
-Marken in einem Zug, Rueckgabewerte 2, 29, 31, 32 und 33), und 15-05 hat den
-vom Owner bestellten Filter- und Sortierblock gebaut:
-99c-filter-sortierung.sh, drei Sortiermodi plus Blaettern unter Filter,
-Rueckgabewerte 2, 29, 34 und 35, sieben boxlose Faelle samt zwei Driftgates
-(Sortiernamen gegen SORT_MODES, Weiter-Link gezogen statt gebaut), und 15-06
-hat den Abbildwechsel gebaut: 92b-wechsel.sh zieht per ABBILD_DIGEST statt
-ueber den wandernden Zeiger :dev, laesst 40b-baumhash.sh entscheiden,
-erzwingt die Kette PHP-Haelfte, Registrierung, harte Grenze aus der cgroup,
-Rueckgabewerte 2, 36, 37, 38 und 39, sieben boxlose Faelle samt einem Gate,
-das die Zaehlung der Nextcloud-Instanzen unmittelbar ueber jedem --rm-data
-erzwingt. Und 15-07 hat die Erwartung dieses Laufs festgeschrieben, BEVOR es
-die Box gibt: 00-ablauf.md traegt zwoelf Schrittzeilen im Gleichschritt mit
-Abschnitt 7 des Runbooks, die Erwartungen E8 bis E14 mit Zahlen, den Absatz
-"Kalt wird hergestellt, nicht bewahrt" samt drop_caches und mmap-Nebenwirkung,
-die elf Abbruchwerte 29 bis 39 und eine einheitliche Aufrufform fuer alle
-achtzehn Werkzeuge; dazu sind die neun Vorbedingungen gefahren und in
-rohdaten/02-vorbedingungen.txt protokolliert. **Damit ist Welle A ohne Box
-vollstaendig.** Naechster Plan ist 15-08, der Owner-Checkpoint Deckelfreigabe;
-alles danach ist durch ihn gesperrt.
-Progress: [████████░░] 82% der 49 geplanten Plaene (40 von 49; Phase 16 ist noch nicht geplant)
-Last activity: 2026-09-20 -- Owner-Tor 15-08 passiert (Deckel 46 h / 5,40 USD, Fragen A/B/C beantwortet); offene Vorbedingung aus 15-07 erledigt: CI_LAUF-Kandidat auf 35471225104 (f650c10) nachgezogen, Fehlschlag 35470079862 als Einzelfall belegt (Nachtraege in rohdaten/02-vorbedingungen.txt und deferred-items.md); die begleitete Sitzung 15-09 bis 15-14 wartet auf die Eroeffnung durch den Owner
+Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, nur noch der Owner-Checkpoint offen**
+Plan: 15 of 16 (15-15 abgeschlossen: Bericht, Runbook-Nachtraege, sechs Pruefsummen-Waechter)
+Status: Die Anfahrt ist gefahren, die Box ist abgebaut, und der Beleg steht.
+Welle A (15-01 bis 15-07) hat das Laufverzeichnis, das Runbook, die vier neuen
+Werkzeuge und die vorher aufgeschriebene Erwartung gebaut; Welle B (15-08) hat
+die Deckelfreigabe erteilt; Welle C (15-09 bis 15-14) hat die Box aufgebaut,
+gemessen und wieder abgebaut. **15-15 hat aus den Zahlen einen Beleg gemacht:**
+`docs/measurements/2026-09-v12-messung/README.md` traegt ein Urteil je
+Erwartung (elf gehalten, drei verfehlt, keines nicht entschieden), die
+Bedingungen, den DI-10-04-Wirkungsbeleg, die vier Laststufen-Verdikte, die
+Sprachfaelle, die Erstmessung zu Filter und Sortierung, MEM-02 samt
+Bodensatz-Trennung, die Kostenzeile und einen Pflichtabschnitt "Was dieser Lauf
+nicht besser gemacht hat" mit elf Punkten. `docs/runbook-messbox.md` ist um
+seinen Erstvollzug klueger: die Ist-Spalte des Rechenblatts ist in allen zehn
+Posten gefuellt, 39 Stellen tragen die Marke des Erstvollzugs, 31 Abweichungen
+stehen als eigene Zeile unter ihrer Erwartung, und kein Satz ist ersetzt
+worden. `backend/tests/test_measurement_scripts.py` friert die sechs
+gefahrenen Messfassungen mit sha256 und Byteanzahl ein.
+Progress: [██████████] 96% der 49 geplanten Plaene (47 von 49; Phase 16 ist noch nicht geplant)
+Last activity: 2026-09-21 -- 15-15 autonom abgeschlossen (Commits 3f504a4, 940e77b, cdd391f, 376a3f4); volle Suite 2.394 bestanden / 15 uebersprungen, Skipzahl unveraendert; naechster und letzter Plan der Phase ist 15-16, der Owner-Checkpoint
 
-**Was der Owner in 15-08 zu entscheiden hat, in zwei Zeilen:** die Freigabe des
-Deckels mit Datum (Vorbedingung 9, Platzhalter steht in der Rohdatei) und den
-Zugang zur DNS-Verwaltung fuer `loadtest.infranode.dev` (Vorbedingung 8). Alle
-uebrigen sieben Vorbedingungen sind abgearbeitet; die siebte (`jq` auf der Box)
-ist ohne Box nicht pruefbar und haengt am ersten Box-Block.
+**Was der Owner in 15-16 zu entscheiden hat, in drei Zeilen:** die Abnahme der
+Phase, das Abhaken von MESS-05 und MEM-02 (beide haben ihre Zahl an ihrer
+Messgroesse), und die Kenntnisnahme der Bodensatz-Zahl: 731,9 MB residenter
+Stand nach einem Indexlauf mit entladenem Modell, auf einer 4-GB-Box. Offen
+bleibt daneben die Wiedervorlage des Korpus-Snapshots (Q5 der Recherche, im
+Bericht und im Runbook Abschnitt 8 Schritt 9 benannt).
 
 **Das Belegkriterium des 900-s-Vorschlagswerts steht seit 15-07 fest** (E14 in
 `00-ablauf.md`): belegt werden die FOLGEN einer Frist und nie die Frist selbst.
@@ -106,6 +98,68 @@ Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 15-15: Die drei verfehlten Erwartungen bekommen das Wort "verfehlt" und
+  keinen Zusatz, der es weichspuelt, auch E10 nicht, die in die GUENSTIGE
+  Richtung verfehlt ist (Stufe 8 haelt das Budget mit 508,0 ms Reserve statt
+  mit weniger als 374,5 ms). Eine Erwartung, die nach dem Lauf zu ihrem
+  Ergebnis umgebogen wird, ist keine Erwartung mehr, und das gilt in beide
+  Richtungen. `00-ablauf.md` ist in dieser Phase unberuehrt geblieben (letzter
+  Commit 190d5c7 aus 15-07), also ist der Wortlaut der vierzehn der Wortlaut
+  von vor dem Lauf.
+- 15-15: E13 ist "verfehlt" und nicht "nicht entschieden", obwohl ihre erste
+  Haelfte haelt. Der Riss liegt in der Erwartung selbst: sie vergleicht die
+  16 MB Zuwachs JE ZYKLUS aus dem Vorprueflauf mit dem absoluten Rueckstand
+  nach EINEM Zyklus. Getrennt wird deshalb die Berichterstattung und nicht die
+  Erwartung; die Zahl, die zaehlt, ist 731,9 MB residenter Stand, und sie geht
+  als eigene Zahl an den Owner.
+- 15-15: E14 ist "gehalten". Die Regel hat entschieden, nur nicht in ihrer
+  Hauptzeile, sondern in der E12-Verzweigung, und der Owner ist ihr gefolgt
+  ("900 s bleibt + Vorbehalt"). Ein Belegkriterium, das seinen eigenen
+  Riss-Fall vorher benannt hat, ist genau dann gehalten, wenn dieser Fall
+  eintritt und trotzdem niemand nachverhandelt.
+- 15-15: Die Wirkung der Top-up-Route wird im Bericht als NICHT ENTSCHIEDEN
+  ausgewiesen, obwohl der Lauf 7 h 17 min kuerzer war. Die Instanz ist aus
+  einem Snapshot neu aufgebaut und das Abbild gewechselt; beide Erklaerungen
+  bleiben moeglich, und genau dieser Satz stand vor dem Lauf in 00-ablauf.md.
+  Die 5,35 h weniger Leerlauf erklaeren rund drei Viertel des Zeitgewinns; das
+  restliche Viertel wird NICHT zugeordnet, weil das eine Schaetzung waere.
+- 15-15: Die falschen erwarteten Ausgaben des Runbooks werden NICHT ersetzt,
+  sondern bekommen ihre Richtigstellung daneben. Vier sind es (harte Grenze in
+  beiden cgroup-Feldern, 91 MB der Systemplatten-Sicherung, docker+ncdata als
+  vollstaendiger Inhalt, Arbeitsbaum aus Block 9). Eine ersetzte Erwartung
+  liesse nicht mehr erkennen, woran ein Werkzeug gescheitert ist, und an der
+  ersten von ihnen ist 92b-wechsel.sh gescheitert.
+- 15-15: Das Abbruchtor in Abschnitt 5 des Runbooks bekommt ZWEI Fassungen
+  statt einer Korrektur, und welche gilt, entscheidet der Abbildwechsel. Mit
+  Block 13b davor ist der Indexbeleg 52.111 strukturell nicht mehr ablesbar,
+  weil --rm-data das Datenvolume leert; der Korpus tritt an seine Stelle. Der
+  Owner hat den Ersatz am 20.09. mit "Weiter, Korpus als Beleg" freigegeben.
+- 15-15: Der Entladezaehler bleibt in Abschnitt 7.2 stehen und bekommt den
+  Nachtrag, dass es ihn ueber eine Prozessgrenze nicht gibt. Rueckgabewert 31
+  faellt ab jetzt am Ausbleiben von `engineState unloaded` ODER der
+  cgroup-Differenz, und `engineState` wird an der Admin-Seite SELBST gelesen,
+  weil 96d-statusbeobachter.py als gefahrene Fassung nicht geaendert wird.
+- 15-15: Die Ist-Spalte des Rechenblatts misst gestempelte MESSZEIT und nicht
+  Kosten. Die Differenz zwischen der Summe der Posten und den 25,75 h
+  Box-Laufzeit ist Sitzungszeit und ausdruecklich KEINE Reserve; wer den
+  naechsten Deckel rechnet, nimmt die Ist-Werte als Untergrenze je Posten.
+  Annahme A8 (Handaufbau, geschaetzt 2 h 30 min) hat ihren Schaetzcharakter
+  verloren: rund 0 h 40 min fuer die Bloecke 1 bis 9 zusammen, weil kein Block
+  eine eigene Zeitmarke geschrieben hat. Der Nachtrag daraus ist ein Handgriff:
+  jeder Block stempelt kuenftig Eintritt und Austritt.
+- 15-15: Der Pruefsummen-Waechter friert den Stand NACH der Anfahrt ein, auch
+  fuer die zwei Fassungen, die waehrend der bezahlten Zeit geaendert wurden
+  (92b-wechsel.sh, 97-cron-vorpruefung.sh). Das ist kein Nachgeben: genau
+  dieser Stand hat die zitierten Rohdaten geschrieben. Die Annahme des Plans,
+  keines der sechs sei geaendert worden, ist als Befund in der SUMMARY
+  festgehalten, mitsamt den Pruefsummen der Staende davor.
+- 15-15: Der Satz "waehrend der bezahlten Anfahrt wird kein Werkzeug mehr
+  geaendert" bleibt im Runbook stehen und bekommt seine Ausnahme
+  ausbuchstabiert statt aufgeweicht: geaendert wird nur, wenn ein Werkzeug
+  einen Abbruch auf einem KORREKTEN Zustand erzeugt, nur mit Owner-Wort, und
+  die Messzahlen stammen dann aus dem Lauf nach dem Fix. Alle drei Fixe dieser
+  Anfahrt (d6fb185, ff8e054, 6f42c69) waren von dieser Art.
 
 - 15-06: Das Abbild des Wechsels wird aus ABBILD_REPO und ABBILD_DIGEST
   zusammengesetzt; IMAGE ist keine zweite Stellschraube mehr. Zwei getrennte

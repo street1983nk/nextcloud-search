@@ -231,20 +231,20 @@ Plans:
 
 **Welle B, der Owner-Checkpoint** *(Welle 7)*
 
-- [ ] 15-08-PLAN.md: Deckelfreigabe mit Datum (blockierend; ohne sie startet nichts)
+- [x] 15-08-PLAN.md: Deckelfreigabe mit Datum (blockierend; ohne sie startet nichts)
 
 **Welle C, die begleitete Anfahrt** *(Welle 8 bis 13)*
 
-- [ ] 15-09-PLAN.md: Aufbau Bloecke 1 bis 13 plus Abbildwechsel
-- [ ] 15-10-PLAN.md: Zustandspruefung, Abbruchtor, Nullstandsbeleg, Bestandssonde
-- [ ] 15-11-PLAN.md: Volllauf detached mit beiden Cron-Zweigen
-- [ ] 15-12-PLAN.md: Laststufen mit je einem Verdikt, Filter- und Sortierblock, Sprachfaelle
-- [ ] 15-13-PLAN.md: Wiederaufwaerm-A/B, MEM-02-Block, Entscheid zum Vorschlagswert 900 s
-- [ ] 15-14-PLAN.md: Endmessungen, Kostenzeilen, Abbau mit Tag-Sweep
+- [x] 15-09-PLAN.md: Aufbau Bloecke 1 bis 13 plus Abbildwechsel
+- [x] 15-10-PLAN.md: Zustandspruefung, Abbruchtor, Nullstandsbeleg, Bestandssonde
+- [x] 15-11-PLAN.md: Volllauf detached mit beiden Cron-Zweigen
+- [x] 15-12-PLAN.md: Laststufen mit je einem Verdikt, Filter- und Sortierblock, Sprachfaelle
+- [x] 15-13-PLAN.md: Wiederaufwaerm-A/B, MEM-02-Block, Entscheid zum Vorschlagswert 900 s
+- [x] 15-14-PLAN.md: Endmessungen, Kostenzeilen, Abbau mit Tag-Sweep
 
 **Welle D, nach dem Abbau** *(Welle 14 bis 15)*
 
-- [ ] 15-15-PLAN.md: Bericht, Runbook-Nachtraege, sechs Pruefsummen-Waechter
+- [x] 15-15-PLAN.md: Bericht, Runbook-Nachtraege, sechs Pruefsummen-Waechter
 - [ ] 15-16-PLAN.md: performance.md, Audit der Phase, MESS-05 und MEM-02, Abnahme
 
 ### Phase 16: Haertung und Store-Einreichung v1.2.0
@@ -277,7 +277,7 @@ Plans:
 | 12. Messwerkzeug, Runbook und Terminentscheid | v1.2 | 8/8 | Complete    | 2026-09-16 |
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
-| 15. Messphase, eine Box-Anfahrt | v1.2 | 8/16 | In progress | - |
+| 15. Messphase, eine Box-Anfahrt | v1.2 | 15/16 | In progress | - |
 | 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |
 
 ## Nach v1.2 (Wiedervorlage)
