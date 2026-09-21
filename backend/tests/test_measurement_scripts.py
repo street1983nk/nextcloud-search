@@ -518,8 +518,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # half of finding M-01: the raw files of the phase 15 trip carry the duration of
 # the whole request on the user route and never the duration of the inner call,
 # so the question MEM-03 asks could not be decided from them.
-PHP_FILES_TODAY = 64
-PHP_TREE_HASH_TODAY = "29dc890ba8e5ab853439c1e7c2ec65b4651ebe8cf3923286703f98b876603c16"
+# Moved on 2026-09-21 a second time, by plan 16-07, and the count moves for the
+# first time since 11.09.2026: 64 becomes 66, because two files arrived that did
+# not exist before. Version001200Date20260921000000.php is the migration of the
+# minor step from 1.1.0 to 1.2.0, which drops the recorded backend version for
+# the reason its predecessor of 11.09.2026 states and deliberately writes no
+# version in its place, and Version001200Date20260921000000Test.php is its unit
+# test, the four cases of the predecessor plus the second run and the check that
+# the constructor was handed nothing that could reach the container. No other
+# file of the half changed its bytes: the bump of the three version places of
+# the same plan lands in appinfo/info.xml, and the recipe globs **/*.php.
+PHP_FILES_TODAY = 66
+PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e59f9ec41"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
