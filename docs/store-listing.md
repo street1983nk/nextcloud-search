@@ -163,6 +163,8 @@ Requirements:
 - RAM: 4 GB is enough, 731.9 MB resident after an index run, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
+Enterprise support and paid add-ons: request a quote at admin@infranode.dev
+
 ## `<description lang="de">`
 
 Was Findling kann:
@@ -185,6 +187,8 @@ Anforderungen:
 - RAM: 4 GB genügen, 731,9 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
+Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
+
 ## `<description lang="fr">`
 
 Ce que Findling sait faire :
@@ -206,6 +210,8 @@ Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
 - RAM : 4 Go suffisent, 731,9 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
+
+Support entreprise et modules payants : demande de devis à admin@infranode.dev
 
 ---
 
@@ -251,6 +257,8 @@ Requirements:
 - RAM: 4 GB is enough, 731.9 MB resident after an index run, under a hard 2 GB limit (measured)
 - CPU: 2 cores are enough, amd64 and arm64
 
+Enterprise support and paid add-ons: request a quote at admin@infranode.dev
+
 ## `<description lang="de">`
 
 Was Findling Backend ist:
@@ -271,6 +279,8 @@ Anforderungen:
 - RAM: 4 GB genügen, 731,9 MB resident nach einem Indexlauf, unter einer harten 2-GB-Grenze (gemessen)
 - CPU: 2 Kerne genügen, amd64 und arm64
 
+Enterprise-Support und bezahlte Add-ons: Angebot anfordern unter admin@infranode.dev
+
 ## `<description lang="fr">`
 
 Ce qu'est Findling Backend :
@@ -290,6 +300,8 @@ Prérequis :
 - Nextcloud 33 à 35, applications : AppAPI, Findling Backend (External Apps), Findling
 - RAM : 4 Go suffisent, 731,9 Mo résidents après une indexation, sous une limite stricte de 2 Go (mesuré)
 - CPU : 2 cœurs suffisent, amd64 et arm64
+
+Support entreprise et modules payants : demande de devis à admin@infranode.dev
 
 ---
 
@@ -576,6 +588,15 @@ Nicht im Repository zu erledigen und deshalb hier nur benannt: das Flag
 "Enterprise support" im Store-Konto, für beide Findling-Apps, nach der
 Einreichung zu setzen, nach dem Muster des Connectors vom 24.08.2026.
 
+**Nachgetragen am 21.09.2026, Plan 16-11:** Diese drei Zeilen standen seit dem
+11.09.2026 in beiden `info.xml`, aber nicht in den sechs Texten oben, sondern
+nur hier. Die Vorlage war damit an einer Stelle kürzer als das, was
+ausgeliefert ist, und wer die sechs Texte wörtlich übernommen hätte, hätte die
+Zeile gelöscht. Auf Owner-Entscheid vom 21.09.2026 steht sie jetzt als eigener
+Absatz am Ende aller sechs Texte oben, im Wortlaut dieses Nachtrags und ohne
+eine Silbe Änderung. Der Text der Apps ändert sich dadurch nicht, die Vorlage
+wird nur deckungsgleich mit dem, was seit 1.1.0 im Store steht.
+
 Abnahme des Nachtrags: 2026-09-11, Wortlaute EN, DE und FR wie eingebaut,
 Commit fb371a0 (D-07)
 
@@ -763,8 +784,23 @@ Wiedervorlage steht seit dem 07.09.2026 offen.
 
 ## Die Abnahme
 
-Textabnahme 1.2.0: offen, Stand 21.09.2026. Die Übernahme in beide `info.xml`
-und die drei READMEs (Plan 16-12) beginnt erst danach.
+Textabnahme 1.2.0: **2026-09-21, abgenommen im vorgelegten Wortlaut.** Der
+Owner hat die sechs Texte und die drei README-Zeilen in allen drei Sprachen
+gesehen und ohne Änderung abgenommen, einschliesslich der neuen Messzahl, der
+weggefallenen Prozentzahl und der Sprachzeile "neun verfügbar, drei
+voreingestellt".
+
+Zu Q-6, im Wortlaut: **"Bilder bleiben."** Es gibt keinen Plan für neue
+Store-Bilder in dieser Phase. Die Größentabelle in `store/media/README.md` wird
+unabhängig davon in Plan 16-12 nachgezogen, weil sie die Größen der abgelösten
+Dateien nennt.
+
+Zur Enterprise-Zeile, im Wortlaut: **in die sechs Texte aufnehmen**, damit die
+Vorlage deckungsgleich mit beiden `info.xml` ist. Eingearbeitet am 21.09.2026,
+Wortlaut unverändert, siehe den Nachtrag weiter unten.
+
+Die Übernahme in beide `info.xml` und die drei READMEs ist Plan 16-12 und
+findet nach dieser Abnahme statt.
 
 ---
 
