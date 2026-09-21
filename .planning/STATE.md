@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
-status: phase_complete
-stopped_at: Phase 16 GEPLANT (21.09.2026, 14 Plaene / 8 Wellen, Checker 0 Blocker + Befunde behoben, Owner-Vorentscheide E1-E4 in 16-CONTEXT.md); NAECHSTES: /gsd:execute-phase 16
-last_updated: "2026-09-21T11:30:00.000Z"
+status: in_progress
+stopped_at: 16-01 abgeschlossen (Flake-Haertung DI-11-05 und L-11, Flake-Register, tantivy-Ignoranweisung); NAECHSTES: 16-02 bis 16-04 der Welle 1
+last_updated: "2026-09-21T14:10:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 49
-  completed_plans: 49
-  percent: 100
+  total_plans: 63
+  completed_plans: 50
+  percent: 79
 ---
 
 # Project State
@@ -25,7 +25,21 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 ## Current Position
 
-Phase: 15 (messphase-eine-box-anfahrt): **ABGESCHLOSSEN UND ABGENOMMEN (21.09.2026)**
+Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
+Plan: 1 von 14 abgeschlossen (16-01, Welle 1). Die drei Flake-Staemme sind
+behandelt oder benannt: `write_revision` mit enger 423-Wiederholung in
+`integration.yml` (DI-11-05, Commit a856563), `ARRIVAL_SECONDS = 30.0` getrennt
+von `BLOCKED_WARM_SECONDS = 5.0` in `test_search_endpoint.py` (L-11, a27ec2c),
+`docs/audits/2026-09-phase-16/flake-register.md` plus `ignore` fuer tantivy in
+`.github/dependabot.yml` (9b24613). Volle Suite 2.394 bestanden / 15
+uebersprungen, Skipzahl unveraendert. HART-01 ist NOCH NICHT abgehakt: erledigt
+ist nur DI-11-05, DI-11-02/03/06 liegen bei Plan 16-04. `parity-login` bleibt
+beobachtet und ungefixt. Dependabot-PR #11 liegt weiterhin beim Owner.
+NAECHSTES: 16-02, 16-03 und 16-04 (Rest der Welle 1).
+
+### Vorgeschichte, Phase 15
+
+Phase 15 (messphase-eine-box-anfahrt): **ABGESCHLOSSEN UND ABGENOMMEN (21.09.2026)**
 Plan: 16 of 16 abgeschlossen. Task 1 (performance.md, fuenf datierte Nachtraege,
 fb2f1ab), Task 2 (Audit der Phase, REQUIREMENTS, STATE, 6ed748d), Task 3
 (Owner-Checkpoint): **Abnahme erteilt am 21.09.2026, Antwort im Wortlaut "ziel
@@ -38,10 +52,10 @@ plus 58 Altfunde, A3 M-01-Instrumentierung (innerer Aufruf getrennt von der
 Gesamtdauer), A4 kleine Sprachfaelle-Anfahrt (Rechenblatt + Deckel zur
 Owner-Freigabe VOR dem Start). Bewusst nicht beauftragt: Top-up-A/B-Attribution
 (keine Nutzerwirkung), bleibt notierter Messauftrag.
-Status: Milestone v1.2, alle 49 Plaene der Phasen 12 bis 15 abgeschlossen.
-Phase 16 (Haertung + Store 1.2.0) ist NOCH NICHT geplant.
-Progress: [██████████] 100% der 49 geplanten Plaene (49 von 49; Phase 16 ist noch nicht geplant)
-Last activity: 2026-09-21 -- 15-16 Task 1 und Task 2 gefahren und je einzeln committet: `docs/performance.md` traegt die fuenf datierten Nachtraege der Anfahrt (259 Zeilen dazu, keine geloescht), `docs/audits/2026-09-phase-15/README.md` traegt das Phasenaudit (ein MEDIUM, elf LOW, zwei davon geschlossen), MESS-05 und MEM-02 sind in `.planning/REQUIREMENTS.md` je mit Zahl und Rohdateiverweis abgehakt. Volle Suite 2.394 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Offen ist Task 3, die Abnahme der Phase durch den Owner**; danach erst die SUMMARY zu 15-16
+Status: Milestone v1.2, die 49 Plaene der Phasen 12 bis 15 sind abgeschlossen,
+Phase 16 laeuft mit 1 von 14 Plaenen.
+Progress: [████████░░] 79% der 63 geplanten Plaene (50 von 63)
+Last activity: 2026-09-21 -- 16-01 in drei Commits gefahren (a856563, a27ec2c, 9b24613): enge 423-Wiederholung, zweite Zeitkonstante, Flake-Register und tantivy-Ignoranweisung. Davor: 15-16 Task 1 und Task 2 gefahren und je einzeln committet: `docs/performance.md` traegt die fuenf datierten Nachtraege der Anfahrt (259 Zeilen dazu, keine geloescht), `docs/audits/2026-09-phase-15/README.md` traegt das Phasenaudit (ein MEDIUM, elf LOW, zwei davon geschlossen), MESS-05 und MEM-02 sind in `.planning/REQUIREMENTS.md` je mit Zahl und Rohdateiverweis abgehakt. Volle Suite 2.394 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Offen ist Task 3, die Abnahme der Phase durch den Owner**; danach erst die SUMMARY zu 15-16
 
 **Was der Owner in 15-16 zu entscheiden hat, in drei Zeilen:** die Abnahme der
 Phase, das Abhaken von MESS-05 und MEM-02 (beide haben ihre Zahl an ihrer
