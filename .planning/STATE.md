@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-13 Aufgabe 1 und 2 sind gefahren, **Aufgabe 3 ist der blockierende Owner-Checkpoint und steht offen**. Das Phasenaudit liegt in `docs/audits/2026-09-phase-16/README.md`: kein CRITICAL, kein HIGH, **zwei MEDIUM, beide behoben**, drei LOW mit Adresse. Zwei Commits (`8f0d7f8` Fixe, `cfa5eae` Bericht und deferred-items). M-16-01: der Flake-Fix aus 16-01 hat NICHT getragen, vier rote python.yml-Laeufe am 21.09.2026 mit der neuen Frist, Ursache ist ein Wettlauf mit dem Tor des Testclients und nicht die Frist; behoben, zwoelf von zwoelf Wiederholungen gruen. M-16-02: der Datentraegername des zweiten Anbieters stand noch in `docs/performance.md`, das Gate kannte nur die Namensform eines Anbieters; behoben, zehnte Familie plus drei Ausnahmeeintraege plus Redaktion. Volle Suite **2491 bestanden / 15 uebersprungen** (Skipzahl unveraendert). Sechs Werkbaenke gleichzeitig gruen auf 67661e5. KEINE SUMMARY, ROADMAP nicht auf Complete, kein Push, kein Tag. Vorheriger Stand: 16-12 abgeschlossen und damit **Welle 6 vollstaendig**. Die abgenommenen Texte der Fassung 1.2.0 sind **ausgeliefert**: beide `info.xml` und die drei READMEs tragen die Messzahl **731,9 MB resident nach einem Indexlauf** an neun Stellen, die Sprachangabe ist an elf Stellen nachgezogen, die 103,2 kommt nirgends mehr vor. Beide Zusagen haengen jetzt an einem Gate: die Messzahl an drei Stellen im Gleichschritt (Erfolgskriterium 4, mit Mutationsfall je Stelle) und der Connector-Satz dreisprachig in beiden Haelften mit Anzahlpruefung (HART-02). Die Live-Bestaetigung der drei Bildadressen ist wiederholt, die Wiedervorlage vom 07.09.2026 ist geschlossen. Volle Suite 2.487 bestanden / 15 uebersprungen. NAECHSTES ist 16-13 (Welle 7, Launch-Haertung, Phasenaudit, Owner-Abnahme); kein Push, kein Tag, kein Release
+stopped_at: 16-13 abgeschlossen und damit **Welle 7 vollstaendig**. Die Launch-Haertung ist vom Owner **abgenommen**, im Wortlaut "Abgenommen", **ohne Auflagen** (21.09.2026). Das Phasenaudit liegt vor dem Tag in `docs/audits/2026-09-phase-16/README.md`: **kein CRITICAL, kein HIGH**, zwei MEDIUM gefunden und **beide behoben**, drei LOW mit Adresse. M-16-01: der Flake-Fix aus 16-01 hat NICHT getragen (vier rote python.yml-Laeufe am 21.09., Ursache war ein Wettlauf mit dem Tor des Testclients und nie die Frist); M-16-02: das Geheimnis-Gate kannte die Namensform nur eines von zwei Anbietern. Volle Suite **2491 bestanden / 15 uebersprungen**, Skipzahl unveraendert. HART-01 ist abgehakt. NAECHSTES ist **16-14** (Welle 8): Rotation der Store-Zugangsmarke durch den Owner, Push, Tag, Einreichung mit zweimal HTTP 201. Vier Commits dieses Plans sind **nicht gepusht**, kein Tag, kein Release
 last_updated: "2026-09-22T04:30:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 61
-  percent: 96
+  completed_plans: 62
+  percent: 98
 ---
 
 # Project State
@@ -26,15 +26,27 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 12 von 14 abgeschlossen (16-01 bis 16-12). **16-13 ist zur Haelfte
-gefahren: Aufgabe 1 (Haertungsmatrix und Phasenaudit) und Aufgabe 2 (Befunde ab
-MEDIUM behoben, LOW adressiert) sind committet, Aufgabe 3 ist der blockierende
-Owner-Checkpoint und steht offen.** NAECHSTES: die Abnahme der Launch-Haertung
-durch den Owner; ohne sie beginnt 16-14 nicht (Owner-Regel vom 06.09.2026).
+Plan: 13 von 14 abgeschlossen (16-01 bis 16-13). **Welle 1 bis Welle 7 sind
+vollstaendig.** NAECHSTES: **16-14** (Welle 8), der letzte Plan des Milestones:
+Rotation der Store-Zugangsmarke, Push, Tag, Einreichung mit zweimal HTTP 201.
 
-16-13 (Aufgabe 1 und 2): **das Phasenaudit liegt vor dem Tag, und es hat zwei
+**Die Launch-Haertung ist abgenommen.** Owner-Wort vom 21.09.2026, per
+strukturierter Rueckfrage bestaetigt: **"Abgenommen"**, **ohne Auflagen**. Damit
+ist die Bedingung der Owner-Regel vom 06.09.2026 erfuellt und die Abgabe darf
+beginnen. Vorgelegt waren die Haertungsmatrix mit dem Ergebnis je Zeile, die
+Befundliste, der Stand der elf aus Phase 15 weitergereichten Befunde, die fuenf
+Erfolgskriterien je mit Urteil (vier erfuellt, das fuenfte planmaessig offen bis
+16-14, keines umgedeutet), der Stand der vier Auflagen einschliesslich dessen,
+was NICHT belegt ist, und die Vorbedingungen des Plans 16-14. Keine Kostenzeile:
+in dieser Phase ist keine Box gelaufen.
+
+**HART-01 ist abgehakt.** Alle vier DI-11-Punkte haben ihr Verdikt, und das
+Phasenaudit weist Erfolgskriterium 1 als erfuellt aus. HART-02 und REL-02
+bleiben bei 16-14.
+
+16-13: **das Phasenaudit liegt vor dem Tag, und es hat zwei
 MEDIUM gefunden, die beide in derselben Ausfuehrung behoben sind.** Zwei
-Commits. `8f0d7f8`: die zwei Fixe. **M-16-01, der unangenehme:** der Fix des
+Sachcommits, dazu zwei Zustandscommits. `8f0d7f8`: die zwei Fixe. **M-16-01, der unangenehme:** der Fix des
 Flake-Stammes `single-flight-zeit` aus Plan 16-01 hat nicht getragen. Der Fall
 `test_with_the_release_on_a_cold_engine_gets_exactly_one_run` ist am 21.09.2026
 **viermal** in CI rot gegangen (35586354661, 35594647359, 35596116820,
@@ -63,8 +75,18 @@ nicht fuehrt, plus einer Entropiemessung**, dem Stand der vier Auflagen je mit
 dem, was NICHT belegt ist, den fuenf Erfolgskriterien und dem Pflichtabschnitt
 "Was dieser Bericht nicht sagt"; dazu `deferred-items.md`, in der die
 Phase-15-Liste zu Ende gefuehrt ist (M-01 ausdruecklich als **teilerfuellt**).
-**Sechs Werkbaenke sind gleichzeitig gruen** auf Commit 67661e5. **KEINE
-SUMMARY, ROADMAP nicht auf Complete, kein Push, kein Tag, kein Release.**
+**Sechs Werkbaenke sind gleichzeitig gruen** auf Commit 67661e5; die
+siebte der sieben Tag-Laeufe ist die Release-Werkbank und laeuft erst auf dem
+Tag. Vier Commits (`8f0d7f8`, `cfa5eae`, `baff223`, plus der Abschluss). **KEIN
+Push, KEIN Tag, KEIN Release.**
+
+**Was 16-14 als Vorbedingungen braucht:** (1) die Abnahme, erteilt; (2) die
+**Rotation der Store-Zugangsmarke**, ein Owner-Klick, weil die alte in einem
+Box-Snapshot lag; (3) den Push dieser vier Commits, der zugleich der Beweis ist,
+dass der zweite Fix von M-16-01 traegt, und dabei gilt die neue Regel aus
+L-16-02: die ganze Laufliste des Pushes lesen, nicht nur den erwarteten Lauf;
+(4) die Abbildmarke 1.2.0 liegt noch nicht in der Registratur und wird mit dem
+Tag veroeffentlicht.
 
 16-12: **Die Texte sind uebernommen, und beide Zusagen haengen jetzt an einem
 Gate.** Drei Commits. `3422979`: die abgenommenen Wortlaute stehen woertlich in

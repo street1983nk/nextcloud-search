@@ -262,7 +262,7 @@ Plans:
 
 **Backlog-Kandidat (beim Planen pruefen, kein Requirement):** BL-F02 Baustein 1, OCR-Pakete spa/ita/nld/por. Nur NACH der Phase-15-Messanfahrt einbauen (Werkzeugstand ist Vergleichbarkeitsbedingung) und nur ohne Terminrisiko fuer die Einreichung; sonst Folgerelease. **Entschieden am 21.09.2026 am Tor des Plans 16-10, Owner-Antwort im Wortlaut 'Mitfahren': Baustein 1 faehrt in v1.2.0 mit, um zwei Sprachen erweitert (dan und est aus den EU-Outreach-Zusagen), also sechs Pakete. Bausteine 2 und 3 bleiben nach v1.3.**
 
-**Plans:** 12/14 plans complete
+**Plans:** 13/14 plans complete
 
 Plans:
 **Welle 1**
@@ -295,11 +295,11 @@ Plans:
 
 - [x] 16-12-PLAN.md: Textuebernahme, Messzahl-Gate und Connector-Gate, Medien (completed 2026-09-21; die Texte sind ausgeliefert, die Messzahl steht an neun Stellen und wird an dreien von einem Gate gehalten (Erfolgskriterium 4), der Connector-Satz haengt an einem Gate mit Anzahlpruefung, Live-Bestaetigung der Bildadressen wiederholt)
 
-**Welle 7** *(naechste)*
+**Welle 7** *(fertig)*
 
-- [ ] 16-13-PLAN.md: Launch-Haertung, Phasenaudit, Owner-Abnahme
+- [x] 16-13-PLAN.md: Launch-Haertung, Phasenaudit, Owner-Abnahme (completed 2026-09-21; Haertungsmatrix mit acht belegten Zeilen, Phasenaudit ohne CRITICAL und ohne HIGH, zwei MEDIUM gefunden und beide behoben (M-16-01: der Flake-Fix aus 16-01 hatte nicht getragen, vier rote CI-Laeufe; M-16-02: das Geheimnis-Gate kannte nur einen von zwei Anbietern), drei LOW weitergereicht, Owner-Abnahme im Wortlaut "Abgenommen", ohne Auflagen)
 
-**Welle 8** *(wartet auf Welle 7)*
+**Welle 8** *(naechste)*
 
 - [ ] 16-14-PLAN.md: Token-Rotation, Tag, Einreichung 2x HTTP 201, Zustandspflege
 
@@ -317,7 +317,7 @@ Plans:
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 16/16 | Complete | 2026-09-21 |
-| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 12/14 | In Progress | - |
+| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 13/14 | In Progress | - |
 
 ## Nach v1.2 (Wiedervorlage)
 
