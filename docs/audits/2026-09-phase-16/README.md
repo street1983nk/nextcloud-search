@@ -7,11 +7,12 @@ findings:
   critical: 0
   high: 0
   medium: 2
-  low: 3
-  total: 5
+  low: 5
+  total: 7
 status: issues_found
 fixed: [M-16-01, M-16-02]
-still_open: [L-16-01, L-16-02, L-16-03]
+still_open: [L-16-01, L-16-02, L-16-03, L-16-04, L-16-05]
+nachtrag: "Abschnitt 9 und die zwei Zeilen L-16-04 und L-16-05 sind am 21.09.2026 aus Plan 16-14 dazugekommen, nach der Abgabe. Die Zahlen oben zaehlen sie mit."
 ---
 
 # Phase 16: Launch-Haertung und Security-, Bug- und Performance-Audit
@@ -459,6 +460,8 @@ hängen.
 | L-16-01 | LOW | Derselbe Wettlauf wie M-16-01 steckt im Nachbarfall `test_ten_searches_in_a_row_do_not_pay_for_ten_loads`: er fährt zehn Anfragen durch den Testclient und liest danach, ob wirklich ein Lauf stattgefunden hat. Er ist nie rot gewesen, weil zehn Anfragen zehn Chancen sind und eine reicht | weitergereicht mit Adresse in `deferred-items.md`; kein Fix in dieser Phase, weil der Fall seine Aussage genau über die zehn Anfragen durch die Route macht und ein Umbau sie ersetzen statt härten würde |
 | L-16-02 | LOW | Die vier roten Läufe aus M-16-01 sind entstanden, ohne dass eine SUMMARY dieser Phase sie nennt. Die SUMMARY von Plan 16-10 nennt den grünen Abbildbau desselben Pushes und nicht den roten Gate-Lauf daneben. Ein Plan liest den Lauf, den er erwartet, und nicht die Laufliste des Pushes | weitergereicht als Verfahrensregel in `deferred-items.md`: nach einem Push wird `gh run list` für diesen Push gelesen und jeder nicht-grüne Lauf benannt, bevor die SUMMARY geschrieben wird |
 | L-16-03 | LOW | Der dritte Flake-Stamm `parity-login` ist unverändert offen. Er ist in dieser Phase **nicht** wieder aufgetreten; der Paritätsauftrag war in allen Läufen dieser Phase grün | beobachtet, kein Fix, wie in Plan 16-01 entschieden. Der Merker gilt: bei rot erst wiederholen, dann suchen, und den älteren Befund daneben lesen |
+| L-16-04 | LOW | *Nachtrag vom 21.09.2026 aus Plan 16-14.* Die Kommentare in `.github/workflows/docker.yml` und `.github/workflows/release.yml` behaupten, GitHub wende den `paths`-Filter auch auf Tag-Pushes an, ein Tag auf einem Commit ohne `backend/**` überspringe den Abbildbau also. Das ist widerlegt: Tag `v1.0.0` sitzt auf `160a289`, das nur `store/media/**` berührt, und trotzdem sind alle sieben Läufe als `push` gestartet und haben echte Jobs gefahren (Lauf 34140924599 baute beide Architekturen und mergte das Manifest, Lauf 34140924650 fuhr php -l, info.xml-Validierung und PHPUnit). Gleiches Bild bei `v1.0.1` | weitergereicht in `deferred-items.md`. Der Kommentar ist vor dem Tag ausdrücklich **nicht** angefasst worden, damit der Baum unter dem Tag der ist, den dieser Bericht geprüft hat. Die Behauptung hat nichts kaputtgemacht, sie hätte nur den Sitz des Tags unnötig eingeschränkt |
+| L-16-05 | LOW | *Nachtrag vom 21.09.2026 aus Plan 16-14.* Der erste Einreichungslauf (35617988639) endete mit `release findling v1.2.0: HTTP 401`. Der frisch geholte Wert der Zugangsmarke war beim Setzen bereits überholt: die Regeneration hat doppelt ausgelöst beziehungsweise die Seite zeigte nach dem ersten Klick den älteren der zwei Werte. Ein zweiter Wert macht den ersten ungültig, und beides sah auf der Seite gleich aus | **behoben** im zweiten Anlauf, und die Lehre ist eine Verfahrensregel in `deferred-items.md`: eine neu geholte Zugangsmarke wird **vor** dem Setzen gegen die Schnittstelle geprüft, mit einem leeren Aufruf der Release-Route (HTTP 400 mit Feldfehler heißt gültig, HTTP 401 heißt überholt). Der Lauf hat korrekt abgebrochen statt zu wiederholen |
 
 **Kein CRITICAL, kein HIGH.**
 
@@ -531,3 +534,84 @@ Gate, das er selbst um eine Familie erweitert hat.
 **Die Freigabe der Phase liegt beim Owner und nicht in diesem Bericht.** Sie ist
 am Tag dieses Berichts noch nicht erteilt; der Checkpoint ist Task 3 des Plans
 16-13, und ohne ihn beginnt die Abgabe nicht (Owner-Regel vom 06.09.2026).
+
+---
+
+## 9. Die Belegkette der Abgabe v1.2.0
+
+**Nachtrag vom 21.09.2026, geschrieben nach der Abgabe, aus Plan 16-14.** Das
+Audit oben steht auf dem Baum von `67661e5`; dieser Abschnitt steht auf dem Tag
+`v1.2.0` und ist die Belegkette, die der Plan der Abgabe verlangt. Er beantwortet
+zwei der Sätze aus Abschnitt 8: die sieben gleichzeitig grünen Tag-Läufe gibt es
+jetzt, und die Freigabe des Owners liegt vor.
+
+Jede Zeile trägt eine Zahl, eine Laufnummer oder einen Wortlaut. Keine ist
+geschätzt und keine ist aus einem früheren Release übernommen.
+
+| Nr. | Was | Beleg |
+|---|---|---|
+| 1 | **Tag** | `v1.2.0`, annotiert, auf `f827145574500e4a3e608e96a93c3a8ae48c4f23`, gelesen mit `git rev-list -n 1 v1.2.0` |
+| 2 | **Release** | Lauf **35612545646**, genau vier Anhänge. Im Protokoll: `appinfo/signature.json was written and is not empty`, zweimal `the release signature is 684 base64 characters` und zweimal `Verified OK` aus der Gegenprobe der Signatur gegen das Zertifikat |
+| 3 | **Anhaenge** | `findling.tar.gz` **309.484 B**, `findling.tar.gz.sig` **684 B**, `findling_backend.tar.gz` **29.817 B**, `findling_backend.tar.gz.sig` **684 B**. Die Grenze des Stores liegt bei 20.971.520 B; die größere Hälfte liegt bei 1,5 Prozent davon und ist gegenüber v1.1.0 (282.432 B) um 27.052 B gewachsen, was zu den sechs Sprachlizenzen und den Texten dieser Phase passt |
+| 4 | **Container-Abbild** | `application/vnd.oci.image.index.v1+json` für `1.2.0`, mit `linux/amd64` und `linux/arm64`, dazu die zwei Herkunftsbelege als `unknown/unknown`. Anonym abgefragt und **vor** der Einreichung, nicht danach und nicht angenommen |
+| 5 | **Submission** | Lauf **35618848300**, success. Davor der Fehlschlag **35617988639**, siehe Zeile 8 |
+| 6 | **HTTP-Codes** | `release findling v1.2.0: HTTP 201` und `release findling_backend v1.2.0: HTTP 201`, je im Wortlaut der Laufausgabe |
+| 7 | **Gegenprobe** | Beide App-Seiten am 21.09.2026 nach der Einreichung **einzeln** abgefragt, `apps/findling` und `apps/findling_backend`: beide nennen **1.2.0**. Die große Katalogdatei ist ausdrücklich **nicht** benutzt worden, sie hängt im Cache hinterher und ist kein Gegenbeweis |
+| 8 | **Der Fehlschlag davor** | Der erste Dispatch, Lauf **35617988639**, endete mit `release findling v1.2.0: HTTP 401`, und der Lauf hat an dieser Stelle abgebrochen. Er ist **nicht** wiederholt worden, bis er zufällig grün war (Befund L-16-05) |
+
+### Die sieben Tag-Laeufe, alle success
+
+Release **35612545646**, PHP and store metadata gates **35612546138**, Multi-arch
+image **35612545993**, HaRP deploy **35612546034**, Python gates **35612545258**,
+Integration **35612545589**, Resilience **35612545272**.
+
+Damit ist auch der letzte offene Satz aus Abschnitt 8 beantwortet: **der zweite
+Fix des Stammes `single-flight-zeit` trägt in CI.** Der Fall ist im Tag-Lauf der
+Python-Werkbank grün, nachdem er am selben Tag viermal rot gewesen war.
+
+### Der Sitz des Tags
+
+Der Tag sitzt auf `f827145`, der Spitze von `main`, und nicht auf dem
+Bump-Commit `734a1b2` aus Plan 16-07. Der Grund ist derselbe wie bei v1.1.0, wo
+er ein Owner-Entscheid war: zwischen dem Bump und der Abgabe sind die zwei
+Befunde dieses Berichts behoben worden (`8f0d7f8`), und ein Tag auf dem Bump
+hätte eine Fassung ausgeliefert, deren Fehler in der Belegkette daneben stehen.
+`f827145` enthält beide Fixe, diesen Bericht und die Abnahme der Haertung.
+
+Die Sorge, ein Tag auf einem Commit ohne `backend/**` könne den Abbildbau
+überspringen, ist vor dem Tag geprüft und widerlegt worden; das ist Befund
+L-16-04. Alle sieben Läufe sind gestartet.
+
+### Zeile 8 im Einzelnen: der Fehlschlag des ersten Dispatch
+
+Die Reihenfolge des Plans ist eingehalten: die Zugangsmarke des Stores ist
+**nach** dem Tag und dem grünen Release-Lauf erneuert worden und **vor** dem
+Dispatch, und zwischen Erneuerung und Dispatch liegt keine andere Handlung am
+Repositorium.
+
+Der erste Dispatch scheiterte trotzdem mit HTTP 401. Die Ursache liegt an der
+Seite, die die Marke ausgibt: die Erneuerung hat doppelt ausgelöst
+beziehungsweise die Seite zeigte nach dem ersten Klick den älteren der beiden
+Werte. Eine zweite Erneuerung macht die erste ungültig, und auf der Seite sehen
+beide gleich aus. Gesetzt wurde damit ein Wert, der in dem Moment schon überholt
+war.
+
+Was daraus geworden ist, und das ist der Teil, der bleibt: die Marke wird seither
+**vor** dem Setzen gegen die Schnittstelle geprüft, mit einem leeren Aufruf der
+Release-Route. Antwortet er mit HTTP 400 und einem Feldfehler, ist die Marke
+gültig und nur der Rumpf leer; antwortet er mit HTTP 401, ist sie überholt. Beide
+Fälle sind am 21.09.2026 gefahren worden, der 400er mit dem neuen Wert und der
+401er als Gegenprobe mit dem alten. Danach ist das Geheimnis um 15:24Z gesetzt
+worden, und der zweite Dispatch antwortete zweimal 201.
+
+**Kein Wert einer Zugangsmarke steht in einer Datei, einer Laufausgabe, einer
+SUMMARY oder in diesem Bericht.** Die Belege sind Antwortcodes und Uhrzeiten.
+
+### Was dieser Nachtrag nicht sagt
+
+Er sagt **nichts darüber, ob jemand 1.2.0 installiert hat**. Die Gegenprobe
+liest, was die zwei App-Seiten als Fassung nennen, und das ist der Beleg der
+Einreichung und keine Aussage über fremde Instanzen.
+
+Er sagt **nichts über das Verhalten auf Zielhardware**. M-01 bleibt
+teilerfüllt, unverändert zu Abschnitt 8.
