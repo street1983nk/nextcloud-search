@@ -1,0 +1,160 @@
+nebenlaeufigkeit-start 2026-09-21T02:10:22Z
+stufen: 1 4 8 12 16, runden je stufe: 10, pause: 20 s
+=== memory.events, read BEFORE this series ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+-- and the two figures next to it, as the zero point of the series --
+anon 552968192
+file 165519360
+slab 2085168
+memory.current=722923520 memory.peak=793546752 memory.max=2147483648
+=== The sampler beside it ===
+sampler-pid 1164550
+rss_sampler: container=nc_app_findling_backend cgroup=/sys/fs/cgroup/system.slice/docker-a670a3d2cb40515c1d6d0b493d1018f5a89750f863f59d3027e9b34fcff17dbb.scope interval=2s
+=== Concurrency 1 over 10 rounds ===
+stufe-1-vor 2026-09-21T02:10:27Z
+stufe-1-nach 2026-09-21T02:10:31Z
+anon 552939520
+file 165519360
+slab 2070688
+memory.current=722853888 memory.peak=793546752
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 4 over 10 rounds ===
+stufe-4-vor 2026-09-21T02:10:51Z
+stufe-4-nach 2026-09-21T02:11:00Z
+anon 557395968
+file 165519360
+slab 2094480
+memory.current=727687168 memory.peak=793546752
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 8 over 10 rounds ===
+stufe-8-vor 2026-09-21T02:11:20Z
+stufe-8-nach 2026-09-21T02:11:40Z
+anon 558477312
+file 165519360
+slab 2133960
+memory.current=728530944 memory.peak=793546752
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 12 over 10 rounds ===
+stufe-12-vor 2026-09-21T02:12:00Z
+stufe-12-nach 2026-09-21T02:12:29Z
+anon 561106944
+file 165539840
+slab 2146776
+memory.current=731365376 memory.peak=793546752
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== Concurrency 16 over 10 rounds ===
+stufe-16-vor 2026-09-21T02:12:49Z
+stufe-16-nach 2026-09-21T02:13:29Z
+anon 562204672
+file 141942784
+slab 2137864
+memory.current=708943872 memory.peak=793546752
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+=== The sampler down ===
+findling-rss 1789956826,562208768,141942784,2092328,708919296,793546752
+findling-rss 1789956828,562208768,141942784,2092328,708919296,793546752
+findling-rss summary samples=103 max_anon=562286592 peak=793546752 events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=0] oom_killed=false
+=== The table this promise is read off, and the regressions by name ===
+ conc   req  fail        p50        p95        max  budget   anon MB  current MB   p95 06.1
+    1    10     1      440,9      480,5      480,5    True     527,3       689,6      481,6
+    4    40     4      931,8    1.006,8    1.064,8    True     531,6       694,0    1.009,4
+    8    80    10    1.884,1    1.992,0    2.006,5    True     532,5       695,3    1.915,0
+   12   120    12    2.802,1    2.950,6    2.993,0   False     535,1       697,7    3.045,4
+   16   160    21    3.745,0    4.091,1    4.119,6   False     536,2       676,1    3.782,7
+
+regression stufe 8: 1.915,0 auf 1.992,0 ms (4.0 Prozent, innerhalb des rauschbands)
+regression stufe 16: 3.782,7 auf 4.091,1 ms (8.2 Prozent, ueber dem rauschband)
+=== memory.events, all counters, at the end of the series ===
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+OOMKilled=false RestartCount=0
+nebenlaeufigkeit-ende 2026-09-21T02:13:52Z
+
+=== Auswertung Plan 15-12 Task 1 (21.09.2026): Verdikte, Trefferdichte, Gegenrechnung ===
+entladeschalter-ist=0 (fuer den gesamten Messblock)
+
+VERGLEICHBARKEIT, ehrlich: diese Reihe laeuft gegen einen ANDEREN Vektorbestand
+und ein ANDERES Abbild als v1.1. Die p95-Zahlen sind gegen v1.1 als
+Vergleichszeile gefuehrt (die Phase misst gegen v1.1), die 06.1/v1.0-Spalte des
+Werkzeugs steht als zweite Referenz daneben. Das Lastwerkzeug
+scripts/ops/search_load.py wurde NICHT angefasst (git status --porcelain leer).
+
+Stufe | p95 v1.2 | p95 v1.1 | p95 v1.0 | hits/req v1.2 (v1.1) | Verdikt
+  1   |   480,5  |   464,3  |   481,6  | 5,40 (5,40)          | (nicht regressiv)
+  4   | 1.006,8  | 1.068,0  | 1.009,4  | 5,40 (5,40)          | behoben
+  8   | 1.992,0  | 2.125,5  | 1.915,0  | 5,25 (~5,0)          | behoben
+ 12   | 2.950,6  | 3.453,4  | 3.045,4  | 5,40                 | behoben
+ 16   | 4.091,1  | 4.446,2  | 3.782,7  | 5,21 (4,16)          | behoben
+
+Die vier Verdikte (Stufen 4, 8, 12, 16), je mit Satz:
+- Stufe 4  behoben: p95 1.006,8 ms unterschreitet die v1.1-Zahl 1.068,0 ms, die
+  Trefferdichte 5,40 ist gehalten.
+- Stufe 8  behoben: p95 1.992,0 ms unterschreitet v1.1 (2.125,5 ms); die
+  +4,0 Prozent des Werkzeug-Hinweises beziehen sich auf v1.0 (1.915,0 ms) und
+  liegen im Rauschband. Trefferdichte 5,25 gehalten.
+- Stufe 12 behoben: p95 2.950,6 ms unterschreitet sowohl v1.1 (3.453,4 ms) als
+  auch v1.0 (3.045,4 ms). Trefferdichte 5,40.
+- Stufe 16 behoben: p95 4.091,1 ms unterschreitet v1.1 (4.446,2 ms); die
+  +8,2 Prozent des Werkzeug-Hinweises sind gegen v1.0 (3.782,7 ms). Die
+  Trefferdichte 5,21 liegt UEBER der v1.1-Dichte 4,16, ist also nicht gefallen.
+
+Alle Ausfaelle sind EmptyResultGroup (Anfragen mit Begriffen ohne Treffer,
+min_hits=1 nicht erreicht), keine Timeouts:
+  Stufe 1: 1/10, Stufe 4: 4/40, Stufe 8: 10/80, Stufe 12: 12/120, Stufe 16: 21/160.
+
+GEGENRECHNUNG gegen eine unabhaengige Quelle (Nextcloud-Protokoll,
+/var/www/html/data/nextcloud.log, gezaehlt auf cURL error 28):
+- im Lastfenster 2026-09-21T02:10 bis 02:13: NULL cURL error 28.
+- am selben Tag 02:0x: 2 Stueck, aber aus dem Kaltstart-Restart von 95-spitze
+  nachher (02:09), nicht aus den Laststufen.
+- die uebrigen 72 im Log stammen aus dem Snapshot (09-05 bis 09-10, alte Box)
+  und gehoeren nicht zu dieser Anfahrt.
+Damit ist die failures-Zaehlung des Werkzeugs durch die unabhaengige Quelle
+BESTAETIGT: die als failures gemeldeten Faelle sind echte Leertreffer, nicht
+verschluckte Timeouts. Das ist der Unterschied zu v1.1, wo das Protokoll
+17 Timeouts fuehrte, waehrend das Werkzeug failures:0 meldete.
+
+Budget: Stufen 12 und 16 ueberschreiten das 2.500-ms-Budget je Einzelanfrage,
+wie in v1.0 und v1.1 auch; das ist eine Eigenschaft der hohen Nebenlaeufigkeit
+auf zwei Kernen und kein Regressionsbefund.
