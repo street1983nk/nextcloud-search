@@ -1974,6 +1974,50 @@ jobs:
             } > "$3"
           }
 
+          # The only place in this workflow that writes a revision over WebDAV,
+          # and the narrow answer to DI-11-05: on 11.09.2026 the pgsql branch went
+          # red with "curl: (22) The requested URL returned error: 423" after
+          # "revision 8 written", and 423 is the WebDAV lock of Nextcloud. Only
+          # that single code waits and repeats, at most MUTATION_LOCK_RETRIES
+          # times, because a repeat over every code would swallow the very failure
+          # this case exists to find: that the container follows a file changing
+          # underneath it.
+          #
+          # curl runs with -w and without -f on purpose, so the code is readable
+          # instead of disappearing into an exit status of 22.
+          #
+          # $1 the revision on disk, $2 a word for the log.
+          MUTATION_LOCK_RETRIES=3
+          MUTATION_LOCK_HITS=0
+          write_revision() {
+            attempt=0
+            while :; do
+              code=$(curl -sS -u "${OWNER_USER}:${OWNER_PASS}" \
+                -o /dev/null -w '%{http_code}' \
+                -T "$1" \
+                "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MUTATION_FILE}")
+              case "${code}" in
+                2??)
+                  return 0
+                  ;;
+                423)
+                  attempt=$(( attempt + 1 ))
+                  MUTATION_LOCK_HITS=$(( MUTATION_LOCK_HITS + 1 ))
+                  if [ "${attempt}" -gt "${MUTATION_LOCK_RETRIES}" ]; then
+                    echo "::error::the write of revision $2 still answers HTTP ${code} after ${MUTATION_LOCK_RETRIES} repeats, so this is not the rare lock of DI-11-05 any more"
+                    exit 1
+                  fi
+                  echo "revision $2 answers HTTP ${code}, which is the WebDAV lock; repeat ${attempt} of ${MUTATION_LOCK_RETRIES} after a wait"
+                  sleep 2
+                  ;;
+                *)
+                  echo "::error::the write of revision $2 answers HTTP ${code}, and only 423 is ever waited out"
+                  exit 1
+                  ;;
+              esac
+            done
+          }
+
           # One search as the owner, and the number of hits as the answer.
           # $1 term, $2 output file.
           hits_for() {
@@ -2011,9 +2055,7 @@ jobs:
           # raises the node events the container listens to, and the events are
           # what makes the rest of this case work without a second crawl.
           revision "${MUTATION_TERM_BEFORE}" 0 "${{ runner.temp }}/mutating-0.txt"
-          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" \
-            -T "${{ runner.temp }}/mutating-0.txt" \
-            "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MUTATION_FILE}"
+          write_revision "${{ runner.temp }}/mutating-0.txt" 0
 
           # The control of the whole case, and it is asked in both directions
           # here as well: the first content is findable and the second one, which
@@ -2035,19 +2077,20 @@ jobs:
           . "${{ runner.temp }}/mutation.sh"
           for round in $(seq 1 "${MUTATION_ROUNDS}"); do
             revision "${MUTATION_TERM_BEFORE}" "${round}" "${{ runner.temp }}/mutating-${round}.txt"
-            curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" \
-              -T "${{ runner.temp }}/mutating-${round}.txt" \
-              "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MUTATION_FILE}"
+            write_revision "${{ runner.temp }}/mutating-${round}.txt" "${round}"
             echo "revision ${round} written"
           done
           # The last write is the only one that carries the second token, so the
           # state the run has to end in is unambiguous no matter which of the
           # revisions above the container managed to fetch.
           revision "${MUTATION_TERM_AFTER}" final "${{ runner.temp }}/mutating-final.txt"
-          curl -sfS -u "${OWNER_USER}:${OWNER_PASS}" \
-            -T "${{ runner.temp }}/mutating-final.txt" \
-            "http://localhost:8080/remote.php/dav/files/${OWNER_USER}/${MUTATION_FILE}"
+          write_revision "${{ runner.temp }}/mutating-final.txt" final
           echo "the final revision is written, and it is the only one that carries ${MUTATION_TERM_AFTER}"
+
+          # Zero is the expected number. A number above zero says the lock of
+          # DI-11-05 was there and was waited out, which is the difference
+          # between a red run and a few seconds.
+          echo "the lock was hit ${MUTATION_LOCK_HITS} time(s)"
 
       - name: The moved file is found by its last content and carries no failed verdict
         run: |
