@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: phase_complete
-stopped_at: Phase 15 abgeschlossen und vom Owner abgenommen (21.09.2026); NAECHSTES: Phase 16 planen (Haertung + Store 1.2.0, Auflagen A1 bis A4)
+stopped_at: Phase 16 GEPLANT (21.09.2026, 14 Plaene / 8 Wellen, Checker 0 Blocker + Befunde behoben, Owner-Vorentscheide E1-E4 in 16-CONTEXT.md); NAECHSTES: /gsd:execute-phase 16
 last_updated: "2026-09-21T11:30:00.000Z"
 last_activity: 2026-09-21
 progress:
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-11)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 16 planen (Haertung und Store-Einreichung v1.2.0)
+**Current focus:** Phase 16 ausfuehren (14 Plaene, 8 Wellen; Checkpoints in 16-08/16-10/16-11/16-13/16-14)
 
 ## Current Position
 

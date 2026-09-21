@@ -262,7 +262,46 @@ Plans:
 
 **Backlog-Kandidat (beim Planen pruefen, kein Requirement):** BL-F02 Baustein 1, OCR-Pakete spa/ita/nld/por. Nur NACH der Phase-15-Messanfahrt einbauen (Werkzeugstand ist Vergleichbarkeitsbedingung) und nur ohne Terminrisiko fuer die Einreichung; sonst Folgerelease.
 
-**Plans**: TBD
+**Plans:** 14 plans
+
+Plans:
+**Welle 1**
+
+- [ ] 16-01-PLAN.md: Flake-Haertung (DI-11-05, L-11), Flake-Register, tantivy-Ignoranweisung
+- [ ] 16-02-PLAN.md: Das Geheimnis- und Vokabular-Gate ueber docs/ (A2, Teil 1)
+- [ ] 16-03-PLAN.md: Nachfolgefassungen 92c und 99d plus Waechter (A1)
+- [ ] 16-04-PLAN.md: DI-11-02/03/06 entschieden, L-07 behoben, deferred-items
+
+**Welle 2** *(wartet auf Welle 1)*
+
+- [ ] 16-05-PLAN.md: Bereinigung der 58 Altfunde und des gesperrten Worts, Restliste (A2, Teil 2)
+- [ ] 16-06-PLAN.md: Instrumentierung des inneren Aufrufs in ExAppService (A3, M-01)
+
+**Welle 3** *(wartet auf Welle 2)*
+
+- [ ] 16-07-PLAN.md: Versionsbump 1.2.0 und Migration Version001200Date...
+- [ ] 16-08-PLAN.md: A4 ueber den arm64-CI-Ast, Beleg und Owner-Checkpoint
+
+**Welle 4** *(wartet auf Welle 3)*
+
+- [ ] 16-09-PLAN.md: Upgrade-Beweis 1.1.0 auf 1.2.0, neue sechste Zusicherung
+- [ ] 16-10-PLAN.md: BL-F02 Baustein 1, sechs OCR-Sprachen, mit Abbruchpfad (Owner-Tor)
+
+**Welle 5** *(wartet auf Welle 4)*
+
+- [ ] 16-11-PLAN.md: Textentwurf der sechs Store-Texte, Owner-Checkpoint (Messzahl, Bilder)
+
+**Welle 6** *(wartet auf Welle 5)*
+
+- [ ] 16-12-PLAN.md: Textuebernahme, Messzahl-Gate und Connector-Gate, Medien
+
+**Welle 7** *(wartet auf Welle 6)*
+
+- [ ] 16-13-PLAN.md: Launch-Haertung, Phasenaudit, Owner-Abnahme
+
+**Welle 8** *(wartet auf Welle 7)*
+
+- [ ] 16-14-PLAN.md: Token-Rotation, Tag, Einreichung 2x HTTP 201, Zustandspflege
 
 ## Progress
 
@@ -278,7 +317,7 @@ Plans:
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 16/16 | Complete | 2026-09-21 |
-| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/? | Not started | - |
+| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 0/14 | Planned | - |
 
 ## Nach v1.2 (Wiedervorlage)
 

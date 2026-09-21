@@ -790,7 +790,13 @@ Die Berechtigungskette. Der ACL-Vorfilter im Container und der abschliessende Re
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED, 21.09.2026)
+
+Alle sechs Fragen sind aufgeloest: Q-1 bis Q-4 durch die LOCKED
+Owner-Entscheide E1 bis E4 in 16-CONTEXT.md (getragen von den Plaenen
+16-11/16-12, 16-02/16-05, 16-08 und 16-10), Q-5 durch die eigene
+Nachseh-Task in 16-09 Task 1, Q-6 durch den Owner-Checkpoint in
+16-11 Task 2.
 
 **Q-1: Welche Messzahl geht in die Store-Texte?**
 - Was bekannt ist: vier Kandidaten mit Zahl und Rohdateiverweis, und die Kurztext-Regel laesst hoechstens eine Zahl zu.
