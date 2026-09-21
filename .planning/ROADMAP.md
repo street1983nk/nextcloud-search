@@ -287,11 +287,11 @@ Plans:
 - [x] 16-09-PLAN.md: Upgrade-Beweis 1.1.0 auf 1.2.0, neue sechste Zusicherung (completed 2026-09-21; Erfolgskriterium 3 mit deploy-harp-Lauf 35594647362 belegt)
 - [x] 16-10-PLAN.md: BL-F02 Baustein 1, sechs OCR-Sprachen, mit Abbruchpfad (Owner-Tor) (completed 2026-09-21; Owner-Entscheid 'Mitfahren', neun Sprachen im Abbild bei Standard deu+eng+fra, Multi-Arch-Bau 35597353780 gruen)
 
-**Welle 5** *(naechste)*
+**Welle 5** *(fertig)*
 
-- [ ] 16-11-PLAN.md: Textentwurf der sechs Store-Texte, Owner-Checkpoint (Messzahl, Bilder)
+- [x] 16-11-PLAN.md: Textentwurf der sechs Store-Texte, Owner-Checkpoint (Messzahl, Bilder) (completed 2026-09-21; Texte im vorgelegten Wortlaut abgenommen, 731,9 MB resident nach einem Indexlauf ersetzt 103,2 MB im Leerlauf, Q-6 entschieden mit 'Bilder bleiben')
 
-**Welle 6** *(wartet auf Welle 5)*
+**Welle 6** *(naechste)*
 
 - [ ] 16-12-PLAN.md: Textuebernahme, Messzahl-Gate und Connector-Gate, Medien
 
@@ -317,7 +317,7 @@ Plans:
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 16/16 | Complete | 2026-09-21 |
-| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 10/14 | In Progress | - |
+| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 11/14 | In Progress | - |
 
 ## Nach v1.2 (Wiedervorlage)
 

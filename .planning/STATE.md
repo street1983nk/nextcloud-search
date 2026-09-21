@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-11 **Entwurf fertig, Owner-Checkpoint offen**: `docs/store-listing.md` traegt die sechs Store-Texte mit der neuen Messzahl **731,9 MB resident nach einem Indexlauf** (ersetzt 103,2 MB im Leerlauf, Entscheid E1), die Sprachzeile mit **neun verfuegbaren Sprachen bei drei voreingestellten**, die neue Grundlast-Zeile der drei READMEs, die Fundstellenliste und das Aenderungsprotokoll (Commit `253abb5`). **Nichts ist ausgeliefert**: beide `info.xml` und die drei READMEs tragen weiter 103,2 MB, die woertliche Uebernahme ist 16-12 NACH der Abnahme. Owner muss entscheiden: Textabnahme im Wortlaut plus Q-6 (Store-Bilder "bleiben" oder "neu"); kein Tag, kein Release
-last_updated: "2026-09-22T03:05:00.000Z"
+stopped_at: 16-11 abgeschlossen und damit **Welle 5 vollstaendig**. Die Texte der Fassung 1.2.0 sind vom Owner **im vorgelegten Wortlaut abgenommen**; Q-6 im Wortlaut: **"Bilder bleiben"** (kein Bilder-Plan, nur die Groessentabelle in `store/media/README.md` zieht 16-12 nach); die Enterprise-Zeile steht auf Owner-Entscheid jetzt in den sechs Texten der Vorlage. Die Messzahl **731,9 MB resident nach einem Indexlauf** ersetzt 103,2 MB im Leerlauf (Entscheid E1), der 85,1-Prozent-Vergleich faellt ersatzlos weg. **AUSGELIEFERT IST NICHTS**: beide `info.xml` und die drei READMEs tragen weiter 103,2 MB. NAECHSTES ist 16-12 (Welle 6, woertliche Textuebernahme, Messzahl-Gate und Connector-Gate, Medien); kein Tag, kein Release
+last_updated: "2026-09-22T03:40:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 59
-  percent: 94
+  completed_plans: 60
+  percent: 95
 ---
 
 # Project State
@@ -26,33 +26,42 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 10 von 14 abgeschlossen (16-01 bis 16-10). **Welle 1 bis Welle 4 sind
-vollstaendig.** **16-11 laeuft und steht an seinem Owner-Checkpoint**: der
-Textentwurf ist geschrieben und committet, die Abnahme fehlt.
+Plan: 11 von 14 abgeschlossen (16-01 bis 16-11). **Welle 1 bis Welle 5 sind
+vollstaendig.** NAECHSTES: **16-12** (Welle 6), die woertliche Textuebernahme in
+beide `info.xml` und die drei READMEs, dazu das Messzahl-Gate, das
+Connector-Gate und die Groessentabelle der Medien.
 
-16-11 (LAEUFT, Checkpoint offen): **Der Textentwurf der Fassung 1.2.0.** Ein
-Commit, `253abb5`, und er fasst genau eine Datei an: `docs/store-listing.md`.
-Die RAM-Zeile der sechs Store-Texte nennt dreisprachig **731,9 MB resident nach
-einem Indexlauf** statt 103,2 MB im Leerlauf; das Wort "im Leerlauf" ist durch
-die Messgroesse ersetzt, weil die neue Zahl eine ANDERE Messgroesse ist (Marke C
-vom 21.09.2026, Rohdatei `94b-grundlast-rueckkehr.txt`). Je Text bleibt es bei
-genau einer Messzahl, die 103,2 kommt in keinem der sechs Texte mehr vor. Die
-Sprachzeile der ersten Haelfte nennt **neun verfuegbare Sprachen bei drei
-voreingestellten** (die neun Namen stehen in den READMEs und in der Beschreibung
-von `FINDLING_OCR_LANGUAGES`, nicht im Store-Text). Die Grundlast-Zeile der drei
-READMEs **verliert den Alt-Neu-Vergleich samt der 85,1 Prozent**: eine
-Prozentzahl zwischen zwei Messgroessen waere eine Verbesserung, die nie gemessen
-wurde; der alte Vergleich bleibt in `docs/performance.md` fuer seine Bedingungen
-gueltig. Der Spitzen-Satz (52.111 Dokumente, 1.764 MB) bleibt zeichengleich
-stehen, weil der v1.2-Lauf die Spitze nicht neu gemessen hat. Dazu die
-Fundstellenliste (neun Stellen fuer die Zahl, elf fuer die Sprachangabe) und ein
-Aenderungsprotokoll mit beiden Eintraegen. Volle Suite 2.472 bestanden / 15
-uebersprungen, `test_store_metadata.py` 52 bestanden, ruff/vulture gruen.
-**AUSGELIEFERT IST NICHTS**: beide `info.xml` und die drei READMEs tragen
-unveraendert 103,2 MB, und die woertliche Uebernahme ist Plan 16-12 nach der
-Abnahme. **Der Owner entscheidet zweierlei:** die Textabnahme im Wortlaut und
-Q-6, die Store-Bilder vom 07.09.2026 (a: bleiben, b: eigener Plan in Welle 6).
-Keine SUMMARY, ROADMAP unveraendert, solange der Checkpoint offen ist.
+16-11: **Der Textentwurf der Fassung 1.2.0, vom Owner abgenommen.** Drei
+Commits, und sie fassen genau zwei Dateien an. `253abb5`: die RAM-Zeile der
+sechs Store-Texte nennt dreisprachig **731,9 MB resident nach einem Indexlauf**
+statt 103,2 MB im Leerlauf, also die Messgroesse statt des Wortes "idle"
+(Marke C vom 21.09.2026, Rohdatei `94b-grundlast-rueckkehr.txt`, m7g.large mit
+arm64 gegen das ausgelieferte v1.2-Abbild); je Text bleibt es bei genau einer
+Messzahl, die 103,2 kommt in keinem der sechs Texte mehr vor. Die Sprachzeile
+der ersten Haelfte nennt **neun verfuegbare Sprachen bei drei voreingestellten**
+(die neun Namen stehen in den READMEs und in der Beschreibung von
+`FINDLING_OCR_LANGUAGES`, nicht im Store-Text; die Zahl neun ist ein Bestand und
+keine Messzahl). Die Grundlast-Zeile der drei READMEs **verliert den
+Alt-Neu-Vergleich samt der 85,1 Prozent**, weil 731,9 eine andere Messgroesse
+ist als 103,2 und eine Prozentzahl zwischen zwei Messgroessen eine nie gemessene
+Verbesserung behauptet haette (T-16-40); der alte Vergleich bleibt in
+`docs/performance.md` fuer seine Bedingungen gueltig. Der Spitzen-Satz (52.111
+Dokumente, 1.764 MB) bleibt zeichengleich, weil der v1.2-Lauf die Spitze nicht
+neu gemessen hat. Dazu die Fundstellenliste (neun Stellen fuer die Zahl, elf
+fuer die Sprachangabe, beide Wortlaute ausgeschrieben) und ein
+Aenderungsprotokoll mit beiden Eintraegen. `5ff398d`: die **Enterprise-Zeile**
+steht jetzt als eigener Absatz am Ende aller sechs Texte der Vorlage, im
+Wortlaut vom 11.09.2026. **Der Befund dahinter:** die Vorlage fuehrte drei
+Zeilen weniger als beide `info.xml`, und eine woertliche Uebernahme in 16-12
+haette sie stumm aus dem Store-Text geloescht; der Befund ist nicht eigenmaechtig
+behoben, sondern dem Owner vorgelegt worden. **Die drei Owner-Entscheide vom
+21.09.2026 im Wortlaut:** "Texte ABGENOMMEN im vorgelegten Wortlaut", "Bilder
+bleiben" (Q-6, kein Bilder-Plan; nur die Groessentabelle in
+`store/media/README.md` zieht 16-12 nach) und "Enterprise-Zeile IN DIE SECHS
+TEXTE AUFNEHMEN". Volle Suite 2.472 bestanden / 15 uebersprungen, Referenz
+gehalten; ruff, ruff format und vulture gruen. **AUSGELIEFERT IST NICHTS:** beide
+`info.xml` und die drei READMEs tragen unveraendert 103,2 MB, die woertliche
+Uebernahme ist Plan 16-12.
 
 16-10: **Sechs weitere OCR-Sprachen, der Standard bleibt bei drei.** Der
 Owner-Entscheid am Tor lautet im Wortlaut **"Mitfahren"**, der Abbruchpfad ist
