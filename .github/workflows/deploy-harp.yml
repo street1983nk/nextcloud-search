@@ -2680,6 +2680,74 @@ jobs:
             jq -r '.backend.reindexRequired' "${out}"
           }
 
+          # Q-5 of the phase 16 research, answered by looking and not by
+          # guessing, and the answer is the filter list of the provider.
+          #
+          # The question: which visible difference does v1.2 make against
+          # v1.1 that a state of this installation can be read for? Assurance
+          # 6 needs one, because the navigation entry it used to measure has
+          # been in the released half since v1.1.0 and is therefore no
+          # difference any more. Two candidates stood, and the first one does
+          # not carry.
+          #
+          # The sixth engine state ('unloaded', plan 14-09) fails for two
+          # reasons, both looked up rather than assumed. One, the field is
+          # not new: git show v1.1.0:php/lib/Service/AdminViewService.php
+          # already builds 'engineState' into the overview answer (line 1813
+          # there, line 1816 in this checkout), so its presence says nothing
+          # and only its value could. Two, that value cannot be reached here:
+          # engine_state() in backend/src/findling/embed/engine.py answers
+          # 'unloaded' only while unload_count() is above nought (the branch
+          # at line 358), which needs an idle span in which the container
+          # really gave the weights back. This block registers a container
+          # and reads it minutes later, so both halves would report the same
+          # word, and an assertion on a word that hangs on a timer is a flake
+          # and not a proof.
+          #
+          # The declared filters do carry, and they are cheaper than the
+          # research expected. php/lib/Search/Provider.php answered
+          # getSupportedFilters() with term and title-only in the released
+          # half (git show v1.1.0:php/lib/Search/Provider.php, line 133) and
+          # answers with term, title-only, since and until since plan 13-06.
+          # No page has to be rendered for that: the route below carries the
+          # list per provider. And the difference is one that has to arrive
+          # on an existing installation rather than only on a fresh one,
+          # because an undeclared filter is what made this provider drop out
+          # of a dated search without a word.
+          #
+          # The filters the companion declares for its provider, as the unified
+          # search dialog reads them before it asks that provider anything.
+          # /ocs/v2.php/search/providers answers a filter map per provider, and
+          # integration.yml reads the same route for the same question in "The
+          # reported filters name term and title-only".
+          #
+          # Fail closed in both directions, the same way navigation_ids() does
+          # it: a status other than 200 and an answer without a findling entry
+          # are findings, never an empty filter list. An empty list would be the
+          # one shape that makes the assertion after the upgrade meaningless,
+          # because it reads like "this version declares nothing" instead of
+          # "this call did not work".
+          declared_filters() {
+            body="${RUNNER_TEMP}/upgrade-providers.json"
+            code=$(curl -s -o "${body}" -w '%{http_code}' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              'http://localhost:8080/ocs/v2.php/search/providers')
+            if [ "${code}" != "200" ]; then
+              echo "the provider list answered HTTP ${code}" >&2
+              cat "${body}" >&2
+              return 1
+            fi
+            names=$(jq -r '[.ocs.data[] | select(.id == "findling") | .filters | keys[]] | sort | join(" ")' "${body}" 2> /dev/null || true)
+            if [ -z "${names}" ]; then
+              echo "the provider list names no findling provider with a filter at all, which is a broken call and not an absent filter" >&2
+              cat "${body}" >&2
+              return 1
+            fi
+            printf '%s\n' "${names}"
+          }
+
           # Everything one state of this installation consists of, in one file.
           snapshot() {
             out="$1"
@@ -2713,6 +2781,7 @@ jobs:
             erinnerung=$(term_hits Erinnerung)
             ids=$(navigation_ids)
             banner=$(reindex_banner)
+            filters=$(declared_filters)
 
             jq -n \
               --arg label "${label}" \
@@ -2726,6 +2795,7 @@ jobs:
               --argjson ncfailed "${nc_failed}" \
               --arg ids "${ids}" \
               --arg banner "${banner}" \
+              --arg filters "${filters}" \
               '{
                  label: $label,
                  terms: {
@@ -2755,6 +2825,11 @@ jobs:
                  navigation: {
                    ids: $ids,
                    findling: ($ids | split(" ") | index("findling") != null)
+                 },
+                 searchFilters: {
+                   declared: $filters,
+                   dates: (($filters | split(" ") | index("since") != null)
+                           and ($filters | split(" ") | index("until") != null))
                  },
                  reindexBanner: ($banner == "true")
                }' > "${out}"
@@ -3255,7 +3330,7 @@ jobs:
             integrity-clean.txt integrity-tampered.txt integrity-restored.txt \
             upgrade-before.json upgrade-after.json upgrade-before-status.txt \
             upgrade-after-status.txt upgrade-occ.txt upgrade-overview.json \
-            upgrade-exapp.log; do
+            upgrade-providers.json upgrade-exapp.log; do
             if [ -f "${RUNNER_TEMP}/${evidence}" ]; then
               cp "${RUNNER_TEMP}/${evidence}" "${RUNNER_TEMP}/harp-logs/${evidence}"
             fi
