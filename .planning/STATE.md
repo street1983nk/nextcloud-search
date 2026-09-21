@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-06 abgeschlossen (innerer Aufruf misst sich selbst, Protokollzeile oberhalb 1.000 ms ohne Nutzerinhalt, Baumhash nachgezogen); A3 auf der Entwicklungsmaschine gebaut, Zahl auf Zielhardware offen; WELLE 2 VOLLSTAENDIG; NAECHSTES: 16-07, Welle 3
-last_updated: "2026-09-21T21:15:00.000Z"
+stopped_at: 16-07 abgeschlossen (drei Versionsstellen auf 1.2.0, Migration Version001200Date20260921000000 samt Test, PHP_FILES_TODAY 66 und Baumhash nachgezogen); kein Tag, kein Release; NAECHSTES: 16-08, Welle 3
+last_updated: "2026-09-21T21:45:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 55
-  percent: 87
+  completed_plans: 56
+  percent: 89
 ---
 
 # Project State
@@ -26,8 +26,28 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 6 von 14 abgeschlossen (16-01 bis 16-06). **Welle 1 und Welle 2 sind
-vollstaendig, Welle 3 ist an der Reihe.**
+Plan: 7 von 14 abgeschlossen (16-01 bis 16-07). **Welle 1 und Welle 2 sind
+vollstaendig, Welle 3 laeuft.**
+
+16-07: **Der Baum sagt 1.2.0.** Die drei Versionsstellen (`php/appinfo/info.xml`
+`<version>`, `backend/appinfo/info.xml` `<version>` und das `<image-tag>`
+daneben) stehen in einem Commit auf `1.2.0` (734a1b2); `min-version 33` und
+`max-version 35` sind unberuehrt, keine Matrix hat sich bewegt, und
+`test_lockstep_versions.py` musste dafuer nicht angefasst werden, weil es
+bewusst keine Zahl nennt. Der Minor-Sprung hat seine Migration (12e8663):
+`php/lib/Migration/Version001200Date20260921000000.php` verwirft in
+`postSchemaChange` die veraltete Versionsmarke des Containers, schreibt bewusst
+keine an ihre Stelle, ist bei fehlendem Schluessel ein no-op mit Meldung und
+fragt den Container nicht; ihr Test traegt sechs Faelle, zwei mehr als die
+Vorlage (zweiter Lauf wirft nicht, der Konstruktor bekam nur `IAppConfig`).
+`PHP_FILES_TODAY` geht im SELBEN Commit von 64 auf **66** und
+`PHP_TREE_HASH_TODAY` auf `7942f09f...`. Der Datumsteil des Namens ist
+**20260921** und nicht der Arbeitsname 20260922 aus der Dateiliste des Plans.
+Volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert.
+**Offen:** `php.yml` ist fuer diese Commits noch nicht gelaufen (kein PHP auf
+dieser Maschine, kein Push im Auftrag), **es ist kein Tag gesetzt und kein
+Release gebaut** (das ist 16-14), und die Erzaehlung der Spruenge in den
+Kommentaren beider `info.xml` endet weiterhin bei 1.1.0 (gehoert zu 16-11).
 
 16-06: Auflage A3 ist gebaut. **Der innere Aufruf misst sich selbst** (f604805):
 `hrtime` umschliesst in `ExAppService::call` genau den einen
@@ -208,6 +228,21 @@ Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 16-07 (21.09.2026): **Die Migration verwirft die Versionsmarke und schreibt
+  keine an ihre Stelle.** Die Zeichenkette `ownVersion` kommt in der Datei nicht
+  vor, und das ist maschinell geprueft: eine Instanz, deren Container wirklich
+  eine Minor zurueckliegt, bekaeme mit einer geschriebenen Version Einigkeit
+  bescheinigt, und das ist die eine Aenderung, die die Zusage leert.
+- 16-07 (21.09.2026): **Der Nachweis, dass der Container nicht gefragt wird,
+  sitzt auf dem Konstruktor.** Eine Migration erreicht den Container nur ueber
+  einen Mitarbeiter, den sie hereingereicht bekommt; ein Konstruktor mit genau
+  einem Parameter vom Typ `IAppConfig` ist die Aussage selbst und nicht ihr
+  Schatten.
+- 16-07 (21.09.2026): **Der Bump steht vor dem Upgrade-Beweis und nicht erst im
+  Plan der Abgabe**, begruendete Abweichung vom Ablauf der Phase 11: der Beweis
+  springt von `v1.1.0` auf den Baum und liefe ohne die neue Zahl wieder in
+  `ERROR_UP_TO_DATE`. Tag und Abgabe bleiben hinter dem Phasenaudit.
 
 - 16-06 (21.09.2026): **Der innere Aufruf wird auf der PHP-Seite gemessen, nicht
   im Container.** Die Decke gehoert dem Aufruf von PHP nach Container, und nur
@@ -1240,6 +1275,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-21T21:15:00.000Z
-Stopped at: 16-06 abgeschlossen und damit Welle 2 vollstaendig. Die Messung des inneren Aufrufs samt PHP-Faellen und Baumhash-Nachzug in einem Commit (f604805, der Nachzug MUSS im selben Commit liegen), das Python-Textgate in einem zweiten (e3fb6c5); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist nicht gelaufen: kein PHP auf dieser Maschine und kein Push im Auftrag, `php.yml` startet mit dem Push von selbst. Davor: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
-Resume file: keine; NAECHSTES ist 16-07 (Welle 3, Versionsbump 1.2.0 und Migration Version001200Date...)
+Last session: 2026-09-21T21:45:00.000Z
+Stopped at: 16-07 abgeschlossen (Welle 3, erster Plan). Migration, ihr Test und der Nachzug von PHP_FILES_TODAY 66 plus Baumhash in einem Commit (12e8663, der Nachzug MUSS im selben Commit liegen), die drei Versionsstellen auf 1.2.0 in einem zweiten (734a1b2); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist wieder nicht gelaufen, aus demselben Grund wie in 16-06. KEIN Tag, KEIN Release. Davor: 16-06 abgeschlossen und damit Welle 2 vollstaendig. Die Messung des inneren Aufrufs samt PHP-Faellen und Baumhash-Nachzug in einem Commit (f604805, der Nachzug MUSS im selben Commit liegen), das Python-Textgate in einem zweiten (e3fb6c5); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist nicht gelaufen: kein PHP auf dieser Maschine und kein Push im Auftrag, `php.yml` startet mit dem Push von selbst. Davor: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
+Resume file: keine; NAECHSTES ist 16-08 (Welle 3)

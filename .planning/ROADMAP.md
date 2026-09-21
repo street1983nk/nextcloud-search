@@ -262,7 +262,7 @@ Plans:
 
 **Backlog-Kandidat (beim Planen pruefen, kein Requirement):** BL-F02 Baustein 1, OCR-Pakete spa/ita/nld/por. Nur NACH der Phase-15-Messanfahrt einbauen (Werkzeugstand ist Vergleichbarkeitsbedingung) und nur ohne Terminrisiko fuer die Einreichung; sonst Folgerelease.
 
-**Plans:** 6/14 plans complete
+**Plans:** 7/14 plans complete
 
 Plans:
 **Welle 1**
@@ -277,9 +277,9 @@ Plans:
 - [x] 16-05-PLAN.md: Bereinigung der 58 Altfunde und des gesperrten Worts, Restliste (A2, Teil 2) (completed 2026-09-21)
 - [x] 16-06-PLAN.md: Instrumentierung des inneren Aufrufs in ExAppService (A3, M-01) (completed 2026-09-21)
 
-**Welle 3** *(wartet auf Welle 2, Welle 2 ist vollstaendig)*
+**Welle 3** *(laeuft)*
 
-- [ ] 16-07-PLAN.md: Versionsbump 1.2.0 und Migration Version001200Date...
+- [x] 16-07-PLAN.md: Versionsbump 1.2.0 und Migration Version001200Date... (completed 2026-09-21)
 - [ ] 16-08-PLAN.md: A4 ueber den arm64-CI-Ast, Beleg und Owner-Checkpoint
 
 **Welle 4** *(wartet auf Welle 3)*
