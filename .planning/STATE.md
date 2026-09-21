@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-09 abgeschlossen (deploy-harp springt von v1.1.0 auf den Baum, Zusicherung 6 misst die zwei Datumsgrenzen des Anbieters, Ratsche auf beide Minor-Reihen benannt); Welle 4 laeuft noch, offen ist 16-10; **Erfolgskriterium 3 von REL-02 wartet auf die Laufnummer von deploy-harp, der Pruefweg steht in 16-09-SUMMARY.md**; kein Tag, kein Release
-last_updated: "2026-09-22T00:40:00.000Z"
+stopped_at: 16-10 abgeschlossen und damit **Welle 4 vollstaendig** (Owner-Entscheid am Tor lautet "Mitfahren"; sechs weitere OCR-Sprachen im Abbild, Standard bleibt deu+eng+fra, Gate und Baumhash nachgezogen, Multi-Arch-Bau gruen in Lauf 35597353780); **Erfolgskriterium 3 von REL-02 ist mit Lauf 35594647362 belegt**; NAECHSTES ist 16-11 (Welle 5, Textentwurf der sechs Store-Texte, und die Antwort aus 16-10 lautet NEUN Sprachen); kein Tag, kein Release
+last_updated: "2026-09-22T02:10:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 58
-  percent: 92
+  completed_plans: 59
+  percent: 94
 ---
 
 # Project State
@@ -26,9 +26,36 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 9 von 14 abgeschlossen (16-01 bis 16-09). **Welle 1, Welle 2 und Welle 3
-sind vollstaendig, Welle 4 ist zur Haelfte gefahren.** NAECHSTES: **16-10**,
-das Owner-Tor fuer BL-F02 Baustein 1.
+Plan: 10 von 14 abgeschlossen (16-01 bis 16-10). **Welle 1 bis Welle 4 sind
+vollstaendig.** NAECHSTES: **16-11** (Welle 5), der Textentwurf der sechs
+Store-Texte, und er erfaehrt aus 16-10 die Antwort **NEUN Sprachen**.
+
+16-10: **Sechs weitere OCR-Sprachen, der Standard bleibt bei drei.** Der
+Owner-Entscheid am Tor lautet im Wortlaut **"Mitfahren"**, der Abbruchpfad ist
+nicht gezogen worden, und sein Grund ist auch nicht eingetreten. Zwei Commits.
+`a9ee779`: sechs apt-Zeilen (`spa`, `ita`, `nld`, `por`, `dan`, `est`), je mit
+dem harten Pin `=1:4.1.0-2` aus derselben `tesseract-lang`-Quelle wie `deu`,
+`eng` und `fra`, dazu sechs eigene `--list-langs`-Pruefungen nach der
+Installation; `OCR_LANGUAGE_ALLOWLIST` waechst von drei auf neun Eintraege,
+**`OCR_DEFAULT_LANGUAGES` bleibt `deu+eng+fra`** (verfuegbar ist nicht
+eingeschaltet: neun Sprachen als Standard wuerden jede OCR-Seite jeder
+bestehenden Installation langsamer machen); `THIRD-PARTY.md` bekommt eine eigene
+Tabelle fuer die sieben spaeter zugekommenen Packs, und dabei ist die Luecke
+geschlossen, dass `tesseract-ocr-fra` seit dem 06.09.2026 dort fehlte;
+`PACKAGE_TREE_HASH_TODAY` ist im SELBEN Commit auf `7d0e5857...` nachgezogen,
+`PACKAGE_FILES` bleibt 54. `01dffa1`: `backend/tests/test_ocr_languages.py`,
+drei Faelle, die Liste aus `config.py` gelesen und nicht abgeschrieben, roter
+Zustand gestagt und einmal echt gegengeprobt (eine zehnte Sprache `ces` macht
+Fall 1 und Fall 2 rot). **Annahme A7 war VOR dem Bau gegen die Paketquelle
+nachgesehen** (api.ftp-master.debian.org, Suite stable): alle sechs
+`1:4.1.0-2`, main, `Architecture: all`, Quellpaket `tesseract-lang`, zusammen
+19,7 MB installiert. **Der Multi-Arch-Bau ist gefahren und gruen: `docker.yml`
+Lauf 35597353780** (Push von `01dffa1`), die sechs Pakete und ihre Pruefungen
+haben also auf amd64 und arm64 real gebaut. Volle Suite 2.472 bestanden / 15
+uebersprungen, Skipzahl unveraendert. **Offen und an 16-11 uebergeben:** elf
+Textstellen in fuenf Dateien nennen noch "German, English, French" (beide
+`info.xml`, `docs/store-listing.md`, die drei READMEs); die Liste mit
+Zeilennummern steht in `16-10-SUMMARY.md`.
 
 16-09: **Der Upgrade-Beweis springt jetzt von v1.1.0.** Vier Commits.
 `12fec7d`: Q-5 ist **nachgesehen und nicht geraten**. Der sechste
@@ -53,9 +80,14 @@ die zwei Zweige des Versionsschritts aus 11-11 bleiben beide stehen.
 unveraendert, 6 Faelle wie vorher. `1c61216`: der ungefahrene Lauf bekommt eine
 Adresse in `deferred-items.md`.
 
-**Offen und wichtig:** Task 3 Teil 2 des Plans (einen echten `deploy-harp`-Lauf
-auslesen) konnte nicht stattfinden, weil der Auftrag das Pushen verbietet.
-**Erfolgskriterium 3 von REL-02 ist damit noch nicht belegt.** Der Pruefweg
+**Nachgetragen am 21.09.2026: erledigt.** Der Push von `73cbca1` hat den Lauf
+**35594647362** gestartet (deploy-harp, stable34/ubuntu-24.04, success), alle
+sechs Zusicherungen halten, alle vier Pruefzeilen stehen als echte Ausgaben im
+Protokoll. **Erfolgskriterium 3 von REL-02 ist damit belegt**; das Abhaken von
+REL-02 selbst bleibt bei Plan 16-14. Der urspruengliche Eintrag, zur
+Nachvollziehbarkeit: Task 3 Teil 2 des Plans (einen echten `deploy-harp`-Lauf
+auslesen) konnte in der Sitzung nicht stattfinden, weil der Auftrag das Pushen
+verbot. Der Pruefweg
 (Werkbank, Bein, sechs Pruefzeilen, Belegdateien, Wiederholungsregel bei rot)
 steht vollstaendig in `16-09-SUMMARY.md`, Abschnitt "Was der Orchestrator in CI
 nachsehen muss". Lokal geprueft ist alles, was ohne Runner pruefbar war: YAML
@@ -238,9 +270,9 @@ Gesamtdauer), A4 kleine Sprachfaelle-Anfahrt (Rechenblatt + Deckel zur
 Owner-Freigabe VOR dem Start). Bewusst nicht beauftragt: Top-up-A/B-Attribution
 (keine Nutzerwirkung), bleibt notierter Messauftrag.
 Status: Milestone v1.2, die 49 Plaene der Phasen 12 bis 15 sind abgeschlossen,
-Phase 16 laeuft mit 9 von 14 Plaenen.
-Progress: [█████████░] 92% der 63 geplanten Plaene (58 von 63)
-Last activity: 2026-09-21 -- 16-09 in vier Commits gefahren (12fec7d, 0f112c3, 607f8d0, 1c61216): Q-5 nachgesehen, der Beweis springt von v1.1.0, Zusicherung 6 misst die zwei Datumsgrenzen, die Ratsche nennt beide Minor-Reihen. Nach `uv sync` (pypdf 6.18.1 auf 6.19.0, ruff 0.16.7 auf 0.16.8) waren alle Gates schon vor der ersten Aenderung gruen, der neue ruff brachte keine neue Regel zum Tragen; volle Suite 2.469 bestanden / 15 uebersprungen, vorher wie nachher. Davor: 16-01 in drei Commits gefahren (a856563, a27ec2c, 9b24613): enge 423-Wiederholung, zweite Zeitkonstante, Flake-Register und tantivy-Ignoranweisung. Davor: 15-16 Task 1 und Task 2 gefahren und je einzeln committet: `docs/performance.md` traegt die fuenf datierten Nachtraege der Anfahrt (259 Zeilen dazu, keine geloescht), `docs/audits/2026-09-phase-15/README.md` traegt das Phasenaudit (ein MEDIUM, elf LOW, zwei davon geschlossen), MESS-05 und MEM-02 sind in `.planning/REQUIREMENTS.md` je mit Zahl und Rohdateiverweis abgehakt. Volle Suite 2.394 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Offen ist Task 3, die Abnahme der Phase durch den Owner**; danach erst die SUMMARY zu 15-16
+Phase 16 laeuft mit 10 von 14 Plaenen.
+Progress: [█████████░] 94% der 63 geplanten Plaene (59 von 63)
+Last activity: 2026-09-21 -- 16-10 in zwei Commits gefahren (a9ee779, 01dffa1): Owner-Entscheid "Mitfahren" am Tor, sechs weitere OCR-Sprachpakete mit Pin und je eigener Bau-Pruefung, Positivliste auf neun bei unveraendertem Standard, THIRD-PARTY-Tabelle, neues Gate, Baumhash im selben Commit; Multi-Arch-Bau gruen (35597353780), volle Suite 2.472 bestanden / 15 uebersprungen. Davor: 16-09 in vier Commits gefahren (12fec7d, 0f112c3, 607f8d0, 1c61216): Q-5 nachgesehen, der Beweis springt von v1.1.0, Zusicherung 6 misst die zwei Datumsgrenzen, die Ratsche nennt beide Minor-Reihen. Nach `uv sync` (pypdf 6.18.1 auf 6.19.0, ruff 0.16.7 auf 0.16.8) waren alle Gates schon vor der ersten Aenderung gruen, der neue ruff brachte keine neue Regel zum Tragen; volle Suite 2.469 bestanden / 15 uebersprungen, vorher wie nachher. Davor: 16-01 in drei Commits gefahren (a856563, a27ec2c, 9b24613): enge 423-Wiederholung, zweite Zeitkonstante, Flake-Register und tantivy-Ignoranweisung. Davor: 15-16 Task 1 und Task 2 gefahren und je einzeln committet: `docs/performance.md` traegt die fuenf datierten Nachtraege der Anfahrt (259 Zeilen dazu, keine geloescht), `docs/audits/2026-09-phase-15/README.md` traegt das Phasenaudit (ein MEDIUM, elf LOW, zwei davon geschlossen), MESS-05 und MEM-02 sind in `.planning/REQUIREMENTS.md` je mit Zahl und Rohdateiverweis abgehakt. Volle Suite 2.394 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Offen ist Task 3, die Abnahme der Phase durch den Owner**; danach erst die SUMMARY zu 15-16
 
 **Was der Owner in 15-16 zu entscheiden hat, in drei Zeilen:** die Abnahme der
 Phase, das Abhaken von MESS-05 und MEM-02 (beide haben ihre Zahl an ihrer
@@ -295,6 +327,22 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
 
+- 16-10 (21.09.2026): **Baustein 1 von BL-F02 faehrt in v1.2.0 mit.**
+  Owner-Antwort am Tor im Wortlaut: "Mitfahren", bestaetigt per strukturierter
+  Rueckfrage, nachdem Stand der Phase, Umfang, Pruefung der Annahme A7 und
+  Abbruchpfad vorlagen. Der Abbruchpfad ist nicht gezogen worden.
+- 16-10 (21.09.2026): **Der OCR-Standard bleibt bei drei Sprachen, obwohl neun
+  verfuegbar sind.** Ein Standard mit neun Sprachen laedt sechs weitere
+  traineddata auf jeder Seite jeder bestehenden Installation und waere eine
+  Verhaltensaenderung, die niemand bestellt hat. Verfuegbar ist nicht
+  eingeschaltet; wer Spanisch will, setzt `FINDLING_OCR_LANGUAGES`.
+- 16-10 (21.09.2026): **Die Existenz der sechs Pakete wird vor dem Bau gegen die
+  Paketquelle nachgesehen und nicht aus dem Backlog uebernommen.** Ein anderer
+  Befund waere allein schon ein Grund fuer den Abbruchpfad gewesen.
+- 16-10 (21.09.2026): **Die Store-Texte bleiben in diesem Plan unberuehrt.**
+  Neun Sprachen heisst neun Sprachen im Text, dreisprachig und geschlossen in
+  Plan 16-11; ein halber Textstand ueber zwei Plaene waere genau die Drift, die
+  dieser Plan an anderer Stelle schliesst.
 - 16-09 (21.09.2026): **Q-5 ist zugunsten der deklarierten Filter entschieden
   und gegen den sechsten Engine-Zustand.** Der Zustand faellt zweifach: das Feld
   `engineState` steht schon in v1.1.0 in der Admin-Antwort, und der Wert
@@ -1368,6 +1416,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-22T00:40:00.000Z
-Stopped at: 16-09 abgeschlossen (Welle 4, erster Plan). Vier Commits (12fec7d, 0f112c3, 607f8d0, 1c61216): Q-5 nachgesehen und als Kommentar im Workflow festgehalten, `UPGRADE_FROM_TAG` auf v1.1.0, die vier Stellen umgestellt, Zusicherung 6 auf `searchFilters.dates`, die Ratsche auf `GOLD_V1_0_AND_V1_1`. Zusicherungen 1 bis 5 maschinell als zeichengleich nachgewiesen. Alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Auftrag `deploy-harp` ist NICHT gefahren** (kein Push im Auftrag); Erfolgskriterium 3 von REL-02 wartet auf die Laufnummer, der Pruefweg steht in 16-09-SUMMARY.md und der Punkt in `deferred-items.md`. KEIN Tag, KEIN Release. Davor: 16-07 abgeschlossen (Welle 3, erster Plan). Migration, ihr Test und der Nachzug von PHP_FILES_TODAY 66 plus Baumhash in einem Commit (12e8663, der Nachzug MUSS im selben Commit liegen), die drei Versionsstellen auf 1.2.0 in einem zweiten (734a1b2); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist wieder nicht gelaufen, aus demselben Grund wie in 16-06. KEIN Tag, KEIN Release. Davor: 16-06 abgeschlossen und damit Welle 2 vollstaendig. Die Messung des inneren Aufrufs samt PHP-Faellen und Baumhash-Nachzug in einem Commit (f604805, der Nachzug MUSS im selben Commit liegen), das Python-Textgate in einem zweiten (e3fb6c5); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist nicht gelaufen: kein PHP auf dieser Maschine und kein Push im Auftrag, `php.yml` startet mit dem Push von selbst. Davor: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
-Resume file: keine; NAECHSTES ist 16-10 (Rest der Welle 4, Owner-Tor fuer BL-F02 Baustein 1)
+Last session: 2026-09-22T02:10:00.000Z
+Stopped at: 16-10 abgeschlossen und damit **Welle 4 vollstaendig**. Zwei Commits (a9ee779, 01dffa1): Owner-Entscheid "Mitfahren" am Tor, sechs Sprachpakete mit Pin und sechs eigenen Bau-Pruefungen, Positivliste auf neun bei unveraendertem Standard deu+eng+fra, THIRD-PARTY-Tabelle samt der bis dahin fehlenden fra-Zeile, neues Gate `test_ocr_languages.py` mit gestagtem rotem Zustand, `PACKAGE_TREE_HASH_TODAY` im selben Commit wie `config.py`. Alle Python-Gates lokal gruen, volle Suite 2.472 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Multi-Arch-Bau ist gefahren und gruen (docker.yml 35597353780).** An 16-11 uebergeben: elf Textstellen nennen noch drei Sprachen, die Liste steht in 16-10-SUMMARY.md. KEIN Tag, KEIN Release. Davor: 16-09 abgeschlossen (Welle 4, erster Plan). Vier Commits (12fec7d, 0f112c3, 607f8d0, 1c61216): Q-5 nachgesehen und als Kommentar im Workflow festgehalten, `UPGRADE_FROM_TAG` auf v1.1.0, die vier Stellen umgestellt, Zusicherung 6 auf `searchFilters.dates`, die Ratsche auf `GOLD_V1_0_AND_V1_1`. Zusicherungen 1 bis 5 maschinell als zeichengleich nachgewiesen. Alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Auftrag `deploy-harp` ist NICHT gefahren** (kein Push im Auftrag); Erfolgskriterium 3 von REL-02 wartet auf die Laufnummer, der Pruefweg steht in 16-09-SUMMARY.md und der Punkt in `deferred-items.md`. KEIN Tag, KEIN Release. Davor: 16-07 abgeschlossen (Welle 3, erster Plan). Migration, ihr Test und der Nachzug von PHP_FILES_TODAY 66 plus Baumhash in einem Commit (12e8663, der Nachzug MUSS im selben Commit liegen), die drei Versionsstellen auf 1.2.0 in einem zweiten (734a1b2); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist wieder nicht gelaufen, aus demselben Grund wie in 16-06. KEIN Tag, KEIN Release. Davor: 16-06 abgeschlossen und damit Welle 2 vollstaendig. Die Messung des inneren Aufrufs samt PHP-Faellen und Baumhash-Nachzug in einem Commit (f604805, der Nachzug MUSS im selben Commit liegen), das Python-Textgate in einem zweiten (e3fb6c5); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist nicht gelaufen: kein PHP auf dieser Maschine und kein Push im Auftrag, `php.yml` startet mit dem Push von selbst. Davor: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
+Resume file: keine; NAECHSTES ist 16-11 (Welle 5, Textentwurf der sechs Store-Texte; die Antwort aus 16-10 lautet NEUN Sprachen)

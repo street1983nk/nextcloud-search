@@ -128,6 +128,20 @@ mehrere Nutzer wuenschen sich diese vier Sprachen. Ein Nutzer hat Hilfe
 angeboten und wurde vom Owner auf direkten Kontakt verwiesen; wenn es so weit
 ist, als Tester fuer echte Korpora in diesen Sprachen einplanen.
 
+**STAND 21.09.2026: Baustein 1 ist geliefert und faehrt in v1.2.0 mit.**
+Owner-Entscheid am Tor des Plans 16-10 (strukturierte Rueckfrage, Antwort im
+Wortlaut "Mitfahren"). Das Abbild installiert seitdem `tesseract-ocr-spa`,
+`-ita`, `-nld`, `-por`, `-dan` und `-est`, alle `1:4.1.0-2`, alle
+`Architecture: all` aus `tesseract-lang`, jede mit einer eigenen
+`--list-langs`-Pruefung beim Bau; `OCR_LANGUAGE_ALLOWLIST` hat neun Eintraege,
+`OCR_DEFAULT_LANGUAGES` bleibt bei `deu+eng+fra`. Der Multi-Arch-Bau ist
+gefahren und gruen (`docker.yml` Lauf 35597353780, amd64 und arm64). Die
+Zusage aus dem EU-Outreach an OS2ai, GovChat-NL und Buerokratt ist damit
+eingeloest, sobald v1.2.0 veroeffentlicht ist. **Offen bleiben Bausteine 2
+(lexikalische Sprachfelder mit Migration) und 3 (UI-Kataloge)**; beide gehen
+wie vorgesehen nach v1.3 und sind unten unveraendert beschrieben. Belege:
+`.planning/phases/16-haertung-und-store-einreichung-v1-2-0/16-10-SUMMARY.md`.
+
 **Ehrlicher Ist-Stand:** Die semantische Seite kann die vier Sprachen HEUTE
 schon, multilingual-e5-small ist mehrsprachig. Es fehlen drei Bausteine, und
 sie sind sehr unterschiedlich teuer:

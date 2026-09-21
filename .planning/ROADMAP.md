@@ -260,9 +260,9 @@ Plans:
   4. Die neue Messzahl steht im Gleichschritt an drei Stellen (README.en.md und beide info.xml)
   5. v1.2.0 ist als signiertes App-Paar eingereicht, zweimal HTTP 201
 
-**Backlog-Kandidat (beim Planen pruefen, kein Requirement):** BL-F02 Baustein 1, OCR-Pakete spa/ita/nld/por. Nur NACH der Phase-15-Messanfahrt einbauen (Werkzeugstand ist Vergleichbarkeitsbedingung) und nur ohne Terminrisiko fuer die Einreichung; sonst Folgerelease.
+**Backlog-Kandidat (beim Planen pruefen, kein Requirement):** BL-F02 Baustein 1, OCR-Pakete spa/ita/nld/por. Nur NACH der Phase-15-Messanfahrt einbauen (Werkzeugstand ist Vergleichbarkeitsbedingung) und nur ohne Terminrisiko fuer die Einreichung; sonst Folgerelease. **Entschieden am 21.09.2026 am Tor des Plans 16-10, Owner-Antwort im Wortlaut 'Mitfahren': Baustein 1 faehrt in v1.2.0 mit, um zwei Sprachen erweitert (dan und est aus den EU-Outreach-Zusagen), also sechs Pakete. Bausteine 2 und 3 bleiben nach v1.3.**
 
-**Plans:** 9/14 plans complete
+**Plans:** 10/14 plans complete
 
 Plans:
 **Welle 1**
@@ -282,12 +282,12 @@ Plans:
 - [x] 16-07-PLAN.md: Versionsbump 1.2.0 und Migration Version001200Date... (completed 2026-09-21)
 - [x] 16-08-PLAN.md: A4 ueber den arm64-CI-Ast, Beleg und Owner-Checkpoint (completed 2026-09-21)
 
-**Welle 4** *(laeuft)*
+**Welle 4** *(fertig)*
 
-- [x] 16-09-PLAN.md: Upgrade-Beweis 1.1.0 auf 1.2.0, neue sechste Zusicherung (completed 2026-09-21; Erfolgskriterium 3 wartet auf die Laufnummer, Pruefweg in 16-09-SUMMARY.md)
-- [ ] 16-10-PLAN.md: BL-F02 Baustein 1, sechs OCR-Sprachen, mit Abbruchpfad (Owner-Tor)
+- [x] 16-09-PLAN.md: Upgrade-Beweis 1.1.0 auf 1.2.0, neue sechste Zusicherung (completed 2026-09-21; Erfolgskriterium 3 mit deploy-harp-Lauf 35594647362 belegt)
+- [x] 16-10-PLAN.md: BL-F02 Baustein 1, sechs OCR-Sprachen, mit Abbruchpfad (Owner-Tor) (completed 2026-09-21; Owner-Entscheid 'Mitfahren', neun Sprachen im Abbild bei Standard deu+eng+fra, Multi-Arch-Bau 35597353780 gruen)
 
-**Welle 5** *(wartet auf Welle 4)*
+**Welle 5** *(naechste)*
 
 - [ ] 16-11-PLAN.md: Textentwurf der sechs Store-Texte, Owner-Checkpoint (Messzahl, Bilder)
 
@@ -317,7 +317,7 @@ Plans:
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 16/16 | Complete | 2026-09-21 |
-| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 9/14 | In Progress | - |
+| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 10/14 | In Progress | - |
 
 ## Nach v1.2 (Wiedervorlage)
 
