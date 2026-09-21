@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: executing
-stopped_at: 15-15 abgeschlossen (Bericht, Runbook-Nachtraege, sechs Waechter); offen nur noch 15-16 (Owner-Checkpoint)
-last_updated: "2026-09-21T07:40:00.000Z"
+stopped_at: 15-16 Task 1 und Task 2 abgeschlossen (performance.md fortgeschrieben, Audit der Phase, MESS-05 und MEM-02 abgehakt); OFFEN: Task 3, die Abnahme der Phase durch den Owner
+last_updated: "2026-09-21T09:30:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
@@ -25,8 +25,12 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 ## Current Position
 
-Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, nur noch der Owner-Checkpoint offen**
-Plan: 15 of 16 (15-15 abgeschlossen: Bericht, Runbook-Nachtraege, sechs Pruefsummen-Waechter)
+Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, die Abnahme der Phase steht aus**
+Plan: 16 of 16, **NICHT abgeschlossen**: Task 1 (performance.md, fuenf datierte
+Nachtraege, Commit fb2f1ab) und Task 2 (Audit der Phase, REQUIREMENTS, STATE) sind
+gefahren, **Task 3 ist der Owner-Checkpoint und offen**. Die SUMMARY zu 15-16 wird
+erst geschrieben, wenn die Antwort des Owners im Wortlaut vorliegt; bis dahin ist
+weder der Plan noch die Phase abgeschlossen.
 Status: Die Anfahrt ist gefahren, die Box ist abgebaut, und der Beleg steht.
 Welle A (15-01 bis 15-07) hat das Laufverzeichnis, das Runbook, die vier neuen
 Werkzeuge und die vorher aufgeschriebene Erwartung gebaut; Welle B (15-08) hat
@@ -44,7 +48,7 @@ stehen als eigene Zeile unter ihrer Erwartung, und kein Satz ist ersetzt
 worden. `backend/tests/test_measurement_scripts.py` friert die sechs
 gefahrenen Messfassungen mit sha256 und Byteanzahl ein.
 Progress: [██████████] 96% der 49 geplanten Plaene (47 von 49; Phase 16 ist noch nicht geplant)
-Last activity: 2026-09-21 -- 15-15 autonom abgeschlossen (Commits 3f504a4, 940e77b, cdd391f, 376a3f4); volle Suite 2.394 bestanden / 15 uebersprungen, Skipzahl unveraendert; naechster und letzter Plan der Phase ist 15-16, der Owner-Checkpoint
+Last activity: 2026-09-21 -- 15-16 Task 1 und Task 2 gefahren und je einzeln committet: `docs/performance.md` traegt die fuenf datierten Nachtraege der Anfahrt (259 Zeilen dazu, keine geloescht), `docs/audits/2026-09-phase-15/README.md` traegt das Phasenaudit (ein MEDIUM, elf LOW, zwei davon geschlossen), MESS-05 und MEM-02 sind in `.planning/REQUIREMENTS.md` je mit Zahl und Rohdateiverweis abgehakt. Volle Suite 2.394 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Offen ist Task 3, die Abnahme der Phase durch den Owner**; danach erst die SUMMARY zu 15-16
 
 **Was der Owner in 15-16 zu entscheiden hat, in drei Zeilen:** die Abnahme der
 Phase, das Abhaken von MESS-05 und MEM-02 (beide haben ihre Zahl an ihrer
@@ -98,6 +102,42 @@ Phase 12 ist vollstaendig: 12-02 hat den stable35-Entscheid am Stichtag
 vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
+
+- 15-16 (21.09.2026): **MESS-05 ist abgehakt, mit einem Vorbehalt, der mit dem
+  Haken nicht verschwindet.** Alle vier Messauftraege haben Zahlen mit
+  Rohdateiverweis, und der Deckel war vor dem Start freigegeben; das ist die
+  Abhakregel des Plans. Der Vorbehalt steht in derselben Statuszeile: die
+  Sprachfall-Messung ist auf der Box MIT dem Fremdbestand gefahren, weil der
+  Korpus-Snapshot der Fremdbestand ist. Deshalb wird Erfolgskriterium 4 der
+  ROADMAP dem Owner als NICHT erfuellt vorgelegt und nicht umgedeutet.
+- 15-16 (21.09.2026): **MEM-02 ist abgehakt, und der Haken haengt an einer Zahl
+  und nicht an einer Frontmatter.** `rueckkehr-zur-grundlast-mb = 377,5` an der
+  Messgroesse "Rueckkehr zur Grundlast nach einem Indexlauf", Rohdatei
+  `docs/measurements/2026-09-v12-messung/rohdaten/94b-grundlast-rueckkehr.txt`.
+  Die Sichtprobe aus 14-12 (376,3 MB auf einer Maschine ohne malloc_trim) bleibt
+  ausdruecklich ein Hinweis; die Naehe der beiden Zahlen ist Zufall und kein
+  Beleg. Das ist die zweimal bezahlte Lehre aus 14-01 und 14-04.
+- 15-16 (21.09.2026): **Die Zahlen der Anfahrt wandern nach `docs/performance.md`
+  als datierte Nachtraege und ersetzen nichts.** Fuenf Nachtraege, je mit Datum,
+  Maschine und Verweis auf das Messverzeichnis, dazu fuenf Zeilen in "Stand
+  dieses Berichts". Der alte Cron-Befund zu DI-10-04 bleibt stehen, wie er ist,
+  einschliesslich des Satzes, der Beleg stehe aus; darunter steht jetzt, dass er
+  gefahren ist. Eine alte Zahl bleibt gueltig fuer die Bedingungen, unter denen
+  sie entstand (Muster 14-11).
+- 15-16 (21.09.2026): **Die Marge der ersten Suche steht mit ihrem ABSTAND zur
+  Decke da und nicht als blosses Unterschreiten** (Entscheid aus 14-12). Damit
+  wird sichtbar, was der Bericht in seiner Gegenueberstellung nicht betont: drei
+  der vier Auspraegungen liegen ueber 1,5 s, und eine davon (Schalter 0, warmer
+  Cache, 1.613 ms) hat mit der Entladung nichts zu tun. Gefuehrt als Befund M-01
+  des Phasenaudits, weitergereicht an Phase 16.
+- 15-16 (21.09.2026): **Die Geheimnis-Gegenprobe des Audits benutzt ein anderes
+  Verfahren als die Gates der Umsetzung.** Die Plaene 15-09 bis 15-14 suchten
+  Formen von Kennungen (`i-`, `vol-`, IPv4). Die Gegenprobe sucht acht andere
+  Familien (PEM-Kopf, SSH-Material, AWS-Zugangskennungen, uebrige
+  Ressourcenkennungen, Rechnernamen, Schluesselwort-mit-Wert, IPv6,
+  base64-Bloecke ab 40 Zeichen) und laeuft ueber ALLE 80 committeten Dateien der
+  Phase statt nur ueber die Rohdaten. Ergebnis: kein Geheimnis, vier erklaerte
+  Treffer.
 
 - 15-15: Die drei verfehlten Erwartungen bekommen das Wort "verfehlt" und
   keinen Zusatz, der es weichspuelt, auch E10 nicht, die in die GUENSTIGE
@@ -980,12 +1020,29 @@ Harte Abhaengigkeiten: 12 vor 15, Backend vor PHP innerhalb 13, 14 vor 15, 16 zu
   siebenschrittigen Checkliste. HART-03 ist erst nach diesem Vollzug erfuellt.
 
 - **Vor der Box-Anfahrt**: neu gerechneter Zeit-/Kostendeckel vom Owner freigegeben (MESS-05, Phase 15); das Rechenblatt steht seit 19.09. (Plan 15-02) in `docs/runbook-messbox.md` Abschnitt 2 und kommt auf **46 h / 5,40 USD netto**, Vorgaengerstand 42 h / 4,90 USD (16.09.), Untergrenze 31 h / rund 3,59 USD. Der 26-h-Vorschlag reisst rechnerisch. Der Preisabgleich vom 19.09. (15-07) hat keine Abweichung der sechs gepinnten Saetze ergeben
+- **OFFEN, Task 3 des Plans 15-16**: die **Abnahme der Phase 15** durch den
+  Owner. Vorzulegen sind die fuenf Erfolgskriterien der ROADMAP je mit Artefakt
+  und je mit einem Wort, die Kostenzeile (Deckel 46 h / 5,40 USD, verbraucht
+  25,75 h / 2,9831 USD, Differenz 20,25 h / 2,42 USD darunter), die Befunde des
+  Audits und die offenen Punkte aus dem Abschnitt "Was dieser Lauf nicht besser
+  gemacht hat". Erfolgskriterium 4 wird als NICHT erfuellt vorgelegt. Auflagen
+  des Owners werden als Auftraege an Phase 16 notiert, im Wortlaut und nicht als
+  erledigt gefuehrt.
 - **Vor dem Bau des Zustandsteils**: engineState-Wortwahl `cold` vs sechstes Wort `unloaded` (MEM-05, Phase 14)
 - **Vor dem Bau der Entladung**: Vorprueflauf zur tatsaechlichen RSS-Rueckgabe auf Zielhardware (MEM-04, Phase 14) , ERLEDIGT 19.09.2026, Median 100,0 Prozent auf aarch64, Owner-Entscheid "freigegeben"
 
 ## Nach v1.2 (Wiedervorlage)
 
-- Snapshot-Wiedervorlage snap-03f1d1d9ad9262704 (loeschen oder Archive-Tier, rund 2,9 USD/Monat)
+- Snapshot-Wiedervorlage snap-03f1d1d9ad9262704 (loeschen oder guenstigere
+  Speicherklasse, 2,79 bis 2,99 USD je Monat). **Stand 21.09.2026, nach dem
+  Entscheid aus 15-14: die Wiedervorlage bleibt OFFEN und wird nicht
+  geschlossen.** Der Owner hat den Snapshot am 21.09. zum zweiten Mal bewusst
+  behalten ("Abbauen, Korpus-Snapshot behalten", konsistent mit Frage B aus
+  15-08), damit eine weitere Anfahrt ohne mehrstuendigen Neuaufbau startet;
+  ~55,4 GB, Marke `purpose=findling-corpus-keep`. Er ist damit die einzige
+  laufende Box-Kostenstelle. Faellig nach v1.2, benannt als Q5 der
+  Phasenrecherche, im Bericht Abschnitt 10 Punkt 10 und im Runbook Abschnitt 8
+  Schritt 9.
 - Aufraeumbefunde aus der Recherche: fastembed gepinnt aber nicht importiert, numpy als indirekte Abhaengigkeit
 - Systemplatten-Skripte Phasen 5-6.1: Repo-Aufnahme erst nach Geheimnis-Durchsicht
 
@@ -1012,6 +1069,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-19T22:00:00.000Z
-Stopped at: Completed 15-07-PLAN.md, die Ablaufdatei auf zwoelf Schritte mit den Erwartungen E8 bis E14 und den Abbruchwerten 29 bis 39, dazu die neun Vorbedingungen abgearbeitet und protokolliert; Welle A ohne Box ist damit vollstaendig, als naechstes der Owner-Checkpoint 15-08
-Resume file: None
+Last session: 2026-09-21T09:30:00.000Z
+Stopped at: 15-16 Task 1 (docs/performance.md, fuenf datierte Nachtraege) und Task 2 (docs/audits/2026-09-phase-15/README.md, REQUIREMENTS.md, STATE.md) gefahren und je einzeln committet; volle Suite 2394 bestanden / 15 uebersprungen, Skipzahl unveraendert. ANGEHALTEN VOR Task 3, dem Owner-Checkpoint: die Abnahme der Phase 15 liegt noch nicht vor, und die SUMMARY zu 15-16 wird erst mit ihrem Wortlaut geschrieben.
+Resume file: .planning/phases/15-messphase-eine-box-anfahrt/15-16-PLAN.md (Task 3)
