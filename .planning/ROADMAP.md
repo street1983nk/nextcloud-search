@@ -33,7 +33,7 @@ Details im Archiv: .planning/milestones/v1.1-ROADMAP.md
 - [x] **Phase 12: Messwerkzeug, Runbook und Terminentscheid** - Werkzeug und Runbook stehen fest, bevor die bezahlte Box laeuft; stable35-Entscheid faellt fristgerecht (completed 2026-09-16)
 - [x] **Phase 13: Filter und Sortierung auf der Ergebnisseite** - Nutzer grenzt Treffer nach Typ und Zeitraum ein und sortiert nach Datum, ohne die Semantik oder die Rechtegrenze zu verlieren
 - [x] **Phase 14: Modell-Entladung im Leerlauf** - Container gibt beide Speicherhalter nach Leerlauf frei, hinter einem ab Werk ausgeschalteten Schalter (completed 2026-09-19)
-- [ ] **Phase 15: Messphase, eine Box-Anfahrt** - Wirkungsbeleg, Laststufen, Sprachfaelle und Wiederaufwaerm-Kosten in einer einzigen bezahlten Anfahrt
+- [x] **Phase 15: Messphase, eine Box-Anfahrt** - Wirkungsbeleg, Laststufen, Sprachfaelle und Wiederaufwaerm-Kosten in einer einzigen bezahlten Anfahrt (abgenommen 21.09.2026, Auflagen A1 bis A4 an Phase 16)
 - [ ] **Phase 16: Haertung und Store-Einreichung v1.2.0** - Haertungen, Store-Texte, Upgrade-Beweis und Einreichung 1.2.0
 
 **Bauordnung (harte Abhaengigkeiten, aus der Recherche uebernommen):** 12 vor 15 (ein waehrend der Anfahrt korrigiertes Skript entwertet seine eigene Messung), Backend vor PHP innerhalb von Phase 13 (`extra="forbid"` macht einen unbekannten Parameter zu HTTP 400 und damit zur stummen leeren Suche), 14 vor 15 (die eine Anfahrt muss die Entladung per Schalter A/B mitmessen), 16 zuletzt (fuehrt die Ergebnisse aus 13 bis 15 in Store-Texte und Upgrade-Beweis).
@@ -217,7 +217,7 @@ Plans:
   4. Die Sprachfall-Messung laeuft ohne den 52.111er-Fremdbestand und liefert Zahlen ueber der bisherigen Deckelung (DI-10-02/DI-11-01, neue Messgroesse)
   5. Die Wiederaufwaerm-Kosten der Entladung sind gemessen und ausgewiesen (warm/kalt, mit/ohne Seitencache, A/B ueber den MEM-01-Schalter); die Box ist danach wieder abgebaut
 
-**Plans:** 7/16 plans complete
+**Plans:** 16/16 plans complete
 
 **Welle A, ohne Box-Zeit** *(Welle 1 bis 6)*
 
@@ -245,7 +245,7 @@ Plans:
 **Welle D, nach dem Abbau** *(Welle 14 bis 15)*
 
 - [x] 15-15-PLAN.md: Bericht, Runbook-Nachtraege, sechs Pruefsummen-Waechter
-- [ ] 15-16-PLAN.md: performance.md, Audit der Phase, MESS-05 und MEM-02, Abnahme
+- [x] 15-16-PLAN.md: performance.md, Audit der Phase, MESS-05 und MEM-02, Abnahme (Owner-Checkpoint, abgenommen 21.09.2026 mit Auflagen; Kriterium 4 nicht erfuellt, Nacherfuellung = Auflage A4)
 
 ### Phase 16: Haertung und Store-Einreichung v1.2.0
 

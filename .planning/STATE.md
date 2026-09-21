@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
-status: executing
-stopped_at: 15-16 Task 1 und Task 2 abgeschlossen (performance.md fortgeschrieben, Audit der Phase, MESS-05 und MEM-02 abgehakt); OFFEN: Task 3, die Abnahme der Phase durch den Owner
-last_updated: "2026-09-21T09:30:00.000Z"
+status: phase_complete
+stopped_at: Phase 15 abgeschlossen und vom Owner abgenommen (21.09.2026); NAECHSTES: Phase 16 planen (Haertung + Store 1.2.0, Auflagen A1 bis A4)
+last_updated: "2026-09-21T11:30:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 49
-  completed_plans: 47
-  percent: 96
+  completed_plans: 49
+  percent: 100
 ---
 
 # Project State
@@ -21,33 +21,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-11)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 15: messphase-eine-box-anfahrt
+**Current focus:** Phase 16 planen (Haertung und Store-Einreichung v1.2.0)
 
 ## Current Position
 
-Phase: 15 (messphase-eine-box-anfahrt): **IN AUSFUEHRUNG, die Abnahme der Phase steht aus**
-Plan: 16 of 16, **NICHT abgeschlossen**: Task 1 (performance.md, fuenf datierte
-Nachtraege, Commit fb2f1ab) und Task 2 (Audit der Phase, REQUIREMENTS, STATE) sind
-gefahren, **Task 3 ist der Owner-Checkpoint und offen**. Die SUMMARY zu 15-16 wird
-erst geschrieben, wenn die Antwort des Owners im Wortlaut vorliegt; bis dahin ist
-weder der Plan noch die Phase abgeschlossen.
-Status: Die Anfahrt ist gefahren, die Box ist abgebaut, und der Beleg steht.
-Welle A (15-01 bis 15-07) hat das Laufverzeichnis, das Runbook, die vier neuen
-Werkzeuge und die vorher aufgeschriebene Erwartung gebaut; Welle B (15-08) hat
-die Deckelfreigabe erteilt; Welle C (15-09 bis 15-14) hat die Box aufgebaut,
-gemessen und wieder abgebaut. **15-15 hat aus den Zahlen einen Beleg gemacht:**
-`docs/measurements/2026-09-v12-messung/README.md` traegt ein Urteil je
-Erwartung (elf gehalten, drei verfehlt, keines nicht entschieden), die
-Bedingungen, den DI-10-04-Wirkungsbeleg, die vier Laststufen-Verdikte, die
-Sprachfaelle, die Erstmessung zu Filter und Sortierung, MEM-02 samt
-Bodensatz-Trennung, die Kostenzeile und einen Pflichtabschnitt "Was dieser Lauf
-nicht besser gemacht hat" mit elf Punkten. `docs/runbook-messbox.md` ist um
-seinen Erstvollzug klueger: die Ist-Spalte des Rechenblatts ist in allen zehn
-Posten gefuellt, 39 Stellen tragen die Marke des Erstvollzugs, 31 Abweichungen
-stehen als eigene Zeile unter ihrer Erwartung, und kein Satz ist ersetzt
-worden. `backend/tests/test_measurement_scripts.py` friert die sechs
-gefahrenen Messfassungen mit sha256 und Byteanzahl ein.
-Progress: [██████████] 96% der 49 geplanten Plaene (47 von 49; Phase 16 ist noch nicht geplant)
+Phase: 15 (messphase-eine-box-anfahrt): **ABGESCHLOSSEN UND ABGENOMMEN (21.09.2026)**
+Plan: 16 of 16 abgeschlossen. Task 1 (performance.md, fuenf datierte Nachtraege,
+fb2f1ab), Task 2 (Audit der Phase, REQUIREMENTS, STATE, 6ed748d), Task 3
+(Owner-Checkpoint): **Abnahme erteilt am 21.09.2026, Antwort im Wortlaut "ziel
+ist das wir den usern das best mögliche liefern"**, per Rueckfrage bestaetigt
+als Abnahme mit Auflagen. Erfolgskriterium 4 (Sprachfaelle ohne Fremdbestand)
+ist als NICHT erfuellt vorgelegt und nicht umgedeutet worden; seine
+Nacherfuellung ist Auflage A4. Die Auflagen an Phase 16, im Einzelnen in
+15-16-SUMMARY.md: A1 Nachfolgefassungen 92c/99d, A2 Geheimnisregel als CI-Gate
+plus 58 Altfunde, A3 M-01-Instrumentierung (innerer Aufruf getrennt von der
+Gesamtdauer), A4 kleine Sprachfaelle-Anfahrt (Rechenblatt + Deckel zur
+Owner-Freigabe VOR dem Start). Bewusst nicht beauftragt: Top-up-A/B-Attribution
+(keine Nutzerwirkung), bleibt notierter Messauftrag.
+Status: Milestone v1.2, alle 49 Plaene der Phasen 12 bis 15 abgeschlossen.
+Phase 16 (Haertung + Store 1.2.0) ist NOCH NICHT geplant.
+Progress: [██████████] 100% der 49 geplanten Plaene (49 von 49; Phase 16 ist noch nicht geplant)
 Last activity: 2026-09-21 -- 15-16 Task 1 und Task 2 gefahren und je einzeln committet: `docs/performance.md` traegt die fuenf datierten Nachtraege der Anfahrt (259 Zeilen dazu, keine geloescht), `docs/audits/2026-09-phase-15/README.md` traegt das Phasenaudit (ein MEDIUM, elf LOW, zwei davon geschlossen), MESS-05 und MEM-02 sind in `.planning/REQUIREMENTS.md` je mit Zahl und Rohdateiverweis abgehakt. Volle Suite 2.394 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Offen ist Task 3, die Abnahme der Phase durch den Owner**; danach erst die SUMMARY zu 15-16
 
 **Was der Owner in 15-16 zu entscheiden hat, in drei Zeilen:** die Abnahme der
@@ -103,6 +96,14 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
 
+- 15-16 Task 3 (21.09.2026): **Phase 15 vom Owner abgenommen, im Wortlaut
+  "ziel ist das wir den usern das best mögliche liefern", als Abnahme mit
+  Auflagen bestaetigt.** Auflagen A1 bis A4 an Phase 16 (92c/99d,
+  Geheimnis-Gate + Altfunde, M-01-Instrumentierung, kleine
+  Sprachfaelle-Anfahrt mit Deckel-Freigabe vor Start); Top-up-A/B-Attribution
+  bewusst nicht beauftragt. Dependabot-PR #10 (tantivy 0.26.2) wird
+  geschlossen, tantivy per Ignore-Anweisung ausgenommen; der Pin bewegt sich
+  nur noch bewusst, mit Reindex-Plan.
 - 15-16 (21.09.2026): **MESS-05 ist abgehakt, mit einem Vorbehalt, der mit dem
   Haken nicht verschwindet.** Alle vier Messauftraege haben Zahlen mit
   Rohdateiverweis, und der Deckel war vor dem Start freigegeben; das ist die
