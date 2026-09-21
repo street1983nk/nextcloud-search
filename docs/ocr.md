@@ -61,6 +61,28 @@ Zwei Abgrenzungen, damit diese Seite nicht mehr behauptet, als gemessen wurde:
    und nur die erste Hälfte ist heute dreisprachig. Ein französisches Dokument
    wird gelesen und über seine Wörter gefunden, nicht über seine Stammformen.
 
+## Nachtrag 21.09.2026: sechs Sprachen kommen dazu, der Standard bleibt bei drei
+
+Das Abbild installiert seit dem 21.09.2026 (Plan 16-10, Backlog-Eintrag BL-F02)
+sechs weitere Sprachpakete: `spa`, `ita`, `nld`, `por`, `dan` und `est`, alle
+aus derselben Quelle `tesseract-lang` und alle in derselben harten Fassung
+`1:4.1.0-2` wie `deu`, `eng` und `fra`. Jede der sechs wird beim Bau mit
+`tesseract --list-langs` geprüft, und `OCR_LANGUAGE_ALLOWLIST` in
+`backend/src/findling/config.py` hat deshalb neun Einträge statt drei.
+
+Der Standard bleibt `deu+eng+fra`, und das ist der Kern dieses Nachtrags:
+verfügbar ist nicht dasselbe wie eingeschaltet. Jede zusätzliche Sprache lädt
+eine weitere `traineddata` und macht jede OCR-Seite langsamer und
+speicherhungriger, auf jeder bestehenden Installation, ohne dass es jemand
+bestellt hätte. Eine Instanz mit spanischen Scans setzt `FINDLING_OCR_LANGUAGES`
+und zahlt genau das, was sie nutzt.
+
+Alle Zahlen dieser Seite bleiben unverändert stehen, aus demselben Grund wie im
+Nachtrag vom 06.09.2026: sie sind mit `-l deu+eng` entstanden. An den Deckeln,
+an der Auflösung und am Zeitlimit je Seite hat dieser Nachtrag nichts geändert,
+und der Index hat keine sechs Sprachen gelernt. Die Analysekette von Tantivy
+bleibt Deutsch und Englisch.
+
 ## Die Deckel-Kaskade
 
 Vier Zeitdeckel und ein Speicherdeckel greifen ineinander, und die Reihenfolge

@@ -81,6 +81,36 @@ Two licence files cover five packages, and that is measured, not assumed: on
 identical (`md5 cd5e791f…`), and so were the three of `tesseract-ocr-deu`,
 `-eng` and `-osd` (`md5 63a049f5…`).
 
+Seven more language packs joined the image after that measurement, and they are
+listed here separately because the table above states what was measured on
+2026-09-01 and this one states what was read out of the Debian package index:
+
+| Item | Value |
+|---|---|
+| Debian packages | `tesseract-ocr-fra` (added 2026-09-06), `tesseract-ocr-spa`, `tesseract-ocr-ita`, `tesseract-ocr-nld`, `tesseract-ocr-por`, `tesseract-ocr-dan`, `tesseract-ocr-est` (the six added 2026-09-21), all version `1:4.1.0-2`, all `Architecture: all`, all component `main` |
+| Source package | `tesseract-lang`, the same one the three above come from, upstream `github.com/tesseract-ocr/tessdata_fast` |
+| Files in the image | `/usr/share/tesseract-ocr/5/tessdata/` plus `fra`, `spa`, `ita`, `nld`, `por`, `dan` and `est` `.traineddata` |
+| Licence | **Apache-2.0**, the same `debian/copyright` of the same source package (`Upstream-Name: tessdata_fast`) |
+| Licence text in the image | `/usr/local/share/findling/COPYING.tesseract-langdata`, the file already copied for `tesseract-ocr-deu` |
+| Version pin | `1:4.1.0-2`, hard, like the three above |
+| Installed size | `fra` 1119.0 kB, `spa` 2256.0 kB, `ita` 2654.0 kB, `nld` 5924.0 kB, `por` 1952.0 kB, `dan` 2535.0 kB, `est` 4369.0 kB, together 20.8 MB |
+| Verified | 2026-09-21 against `api.ftp-master.debian.org` (suite `stable`) and `packages.debian.org/trixie`: version, component, architecture, source package and both sizes per package |
+
+The licence statement of these seven is an argument about the source package and
+not a second byte comparison: `tesseract-lang` carries one `debian/copyright`,
+every binary package it builds carries that one, and the copy the image already
+makes for `tesseract-ocr-deu` is therefore the licence text of all ten language
+packs. A byte comparison inside the image would need a build, and the build is
+in CI, not in this repository. `tesseract-ocr-fra` was missing from this file
+between 2026-09-06 and 2026-09-21; the line above closes that gap rather than
+hiding it.
+
+Why the six of 2026-09-21 are in the image although the default reads only three
+languages: they are offered, not switched on. `OCR_DEFAULT_LANGUAGES` in
+`backend/src/findling/config.py` stays `deu+eng+fra`, and an instance that wants
+one of the six says so through `FINDLING_OCR_LANGUAGES`. The image pays 20.8 MB
+once, a page of OCR pays nothing it was not already paying.
+
 The optional Fraktur model `tesseract-ocr-frk` `1:4.1.0-2` is **not** installed
 today. It carries the same licence and would be listed here the moment the line
 in the Dockerfile is uncommented.

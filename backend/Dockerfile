@@ -224,7 +224,7 @@ RUN apt-get update \
 # engine is the digest of the base image at the top of this file, which is the
 # same anchor the rest of the runtime stage already relies on.
 #
-# The four language packages are the opposite case: they are Architecture: all,
+# The ten language packages are the opposite case: they are Architecture: all,
 # they come from the tesseract-lang source package and they have not moved since
 # bookworm. They are pinned hard, because the traineddata decides what the OCR
 # reads, and a silent change of it is a silent change of the text of every
@@ -237,6 +237,27 @@ RUN apt-get update \
 # the binary is tesseract-ocr-fra_4.1.0-2_all.deb, so arm64 and amd64 get the
 # identical fra.traineddata. This is the OCR half only. The analyzer chain of the
 # index stays German and English, and nothing outside this file may claim more.
+#
+# Six more joined them on 2026-09-21 (plan 16-10, backlog item BL-F02, first
+# building block): spa, ita, nld, por, dan and est. The first four answer the
+# reader feedback of 14.09.2026, the last two answer a promise made in writing
+# to readers in Denmark and in Estonia, and all six are the cheap half of that
+# promise, because the OCR half of a language needs no index migration.
+# Verified on 2026-09-21 against the Debian package index
+# (api.ftp-master.debian.org, suite stable): every one of the six is version
+# 1:4.1.0-2, component main, Architecture: all, out of the same tesseract-lang
+# source package that already delivers deu, eng, fra and osd, so the amd64 and
+# the arm64 build again read byte identical traineddata. Their price is 19.7 MB
+# of installed size (2256 + 2654 + 5924 + 1952 + 2535 + 4369 kB, read from the
+# same index on the same day).
+#
+# What this does NOT do, and the distinction is the whole point: it makes the
+# six languages available, it does not switch them on. OCR_DEFAULT_LANGUAGES in
+# backend/src/findling/config.py stays at deu, eng and fra, because every extra
+# language loads another traineddata and costs time and memory on every single
+# page of every scan. An instance that wants Spanish says so through
+# FINDLING_OCR_LANGUAGES, and only that instance pays for it. The analyzer
+# chain of the index is untouched by all of this and stays German and English.
 #
 # osd is in the list although the call form uses --psm 3, not --psm 1: the
 # orientation and script model is what makes a rotated scan recoverable at all,
@@ -260,9 +281,16 @@ RUN apt-get update \
 # Fraktur has been measured.
 #
 # Apache-2.0 obligation: the licence text has to travel with the image, not only
-# with the repository, because the image is what is distributed. Measured, the
-# engine and libtesseract5 share one copyright file and the four language packs
-# share a second one (tessdata_fast), so two copies cover all six packages.
+# with the repository, because the image is what is distributed. Measured on
+# 2026-09-01, the engine and libtesseract5 share one copyright file and the
+# language packs of that day, deu, eng and osd, share a second one
+# (tessdata_fast), so two copies covered all five packages. The seven packs
+# that joined later, fra on 2026-09-06 and the six of 2026-09-21, are built
+# from the very same source package tesseract-lang and therefore carry the very
+# same debian/copyright. That is a statement about the source package and
+# deliberately not a second byte comparison inside the image, which this
+# repository cannot make without a build; the two copied files carry the
+# obligation either way.
 # Both tests below are the fail closed half: an image without the language data
 # or without the licence texts must not be built at all. THIRD-PARTY.md carries
 # the same statement for readers of the repository.
@@ -272,11 +300,23 @@ RUN apt-get update \
         tesseract-ocr-deu=1:4.1.0-2 \
         tesseract-ocr-eng=1:4.1.0-2 \
         tesseract-ocr-fra=1:4.1.0-2 \
+        tesseract-ocr-spa=1:4.1.0-2 \
+        tesseract-ocr-ita=1:4.1.0-2 \
+        tesseract-ocr-nld=1:4.1.0-2 \
+        tesseract-ocr-por=1:4.1.0-2 \
+        tesseract-ocr-dan=1:4.1.0-2 \
+        tesseract-ocr-est=1:4.1.0-2 \
         tesseract-ocr-osd=1:4.1.0-2 \
     && rm -rf /var/lib/apt/lists/* \
     && tesseract --list-langs 2>&1 | grep -qx deu \
     && tesseract --list-langs 2>&1 | grep -qx eng \
     && tesseract --list-langs 2>&1 | grep -qx fra \
+    && tesseract --list-langs 2>&1 | grep -qx spa \
+    && tesseract --list-langs 2>&1 | grep -qx ita \
+    && tesseract --list-langs 2>&1 | grep -qx nld \
+    && tesseract --list-langs 2>&1 | grep -qx por \
+    && tesseract --list-langs 2>&1 | grep -qx dan \
+    && tesseract --list-langs 2>&1 | grep -qx est \
     && test -s /usr/share/doc/tesseract-ocr/copyright \
     && test -s /usr/share/doc/tesseract-ocr-deu/copyright \
     && install -D -m 0444 /usr/share/doc/tesseract-ocr/copyright \

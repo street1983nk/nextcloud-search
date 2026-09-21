@@ -273,13 +273,23 @@ OCR_DEFAULT_LANGUAGES = ("deu", "eng", "fra")
 # fra joined them with the apt line added on 2026-09-06; osd is an orientation
 # model, not a text language, so it is not offered here.
 #
+# Six more on 2026-09-21 (plan 16-10, backlog item BL-F02): spa, ita, nld, por,
+# dan and est, each with an apt line of its own and each proven at build time
+# by its own `tesseract --list-langs` check. They are offered and they are not
+# the default, and that split is the whole decision: OCR_DEFAULT_LANGUAGES
+# above stays at three, because every additional language loads another
+# traineddata and makes every single OCR page slower and larger, on every
+# existing installation, without anybody having asked for it. An instance with
+# Spanish scans sets FINDLING_OCR_LANGUAGES and pays for exactly what it uses.
+#
 # This set is maintained together with the apt block in backend/Dockerfile, and
-# backend/tests/test_ocr_french.py compares the two in both directions, so the
-# pair cannot drift apart silently any more.
+# backend/tests/test_ocr_languages.py compares the two in both directions (as
+# backend/tests/test_ocr_french.py does for the French half), so the pair
+# cannot drift apart silently any more.
 # Switching on the Fraktur option means uncommenting tesseract-ocr-frk there and
 # adding "frk" here, in the same change. Adding it here alone would produce a
 # call that tesseract rejects on every page.
-OCR_LANGUAGE_ALLOWLIST = frozenset({"deu", "eng", "fra"})
+OCR_LANGUAGE_ALLOWLIST = frozenset({"deu", "eng", "fra", "spa", "ita", "nld", "por", "dan", "est"})
 
 # Pages per document before the OCR loop stops and the state becomes truncated.
 # 30, not the 100 that STACK.md names, and the deviation is deliberate: an OCR

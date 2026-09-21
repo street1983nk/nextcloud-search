@@ -631,7 +631,12 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # the sixth word of ENGINE_STATES, ENGINE_UNLOADED, and the branch in
 # engine_state that answers it behind loaded and in front of cold. No file
 # came and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "f3f1fb13873da142b9e37fe1e17495fa78e530fc043309d8b4a7e39ad507e92d"
+# Moved on 2026-09-21 a fourteenth time, by plan 16-10: exactly one of the 54
+# files changed its bytes, config.py, whose OCR_LANGUAGE_ALLOWLIST grew from
+# three entries to nine (spa, ita, nld, por, dan and est joined deu, eng and
+# fra) while OCR_DEFAULT_LANGUAGES deliberately stayed at three. No file came
+# and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "7d0e585775cc2276feb0dd7db62364c12a1560df1d503c0fec523d935ed22d02"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

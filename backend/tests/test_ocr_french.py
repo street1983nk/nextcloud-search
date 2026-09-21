@@ -73,7 +73,13 @@ def test_french_is_the_third_default_and_the_order_is_the_argument_order() -> No
 
 def test_french_is_allowed_to_reach_the_command_line() -> None:
     assert "fra" in OCR_LANGUAGE_ALLOWLIST
-    assert set(OCR_LANGUAGE_ALLOWLIST) == {"deu", "eng", "fra"}
+
+    # The three of this plan are still all three in the list. The list itself
+    # grew to nine on 2026-09-21 (plan 16-10), so this file asserts its own
+    # subject and not the size of the set: the whole set against the apt block
+    # is the subject of backend/tests/test_ocr_languages.py, and two files
+    # writing down the same set would disagree the day a tenth arrives.
+    assert {"deu", "eng", "fra"} <= set(OCR_LANGUAGE_ALLOWLIST)
 
     # The default has to be a subset of the allowlist, or the fallback path of
     # _ocr_languages would hand the engine a language it just refused.
@@ -92,9 +98,12 @@ def test_an_unset_environment_reads_a_scan_in_all_three_languages(monkeypatch: p
 def test_french_survives_the_allowlist_while_an_uninstalled_language_is_dropped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # spa is a real tesseract code whose package is not in this image, so it may
+    # frk is a real tesseract code whose package is not in this image, so it may
     # not reach the argument list, and it may not take fra down with it either.
-    monkeypatch.setenv("FINDLING_OCR_LANGUAGES", "fra+spa")
+    # This case named spa until 2026-09-21, when spa became a language the image
+    # does carry (plan 16-10). frk is the example that is still true, and it is
+    # the same one backend/tests/test_config.py uses.
+    monkeypatch.setenv("FINDLING_OCR_LANGUAGES", "fra+frk")
     settings.cache_clear()
 
     assert settings().ocr_languages == ("fra",)
