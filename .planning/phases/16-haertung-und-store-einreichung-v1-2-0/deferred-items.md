@@ -362,3 +362,62 @@ Release-Tag eine Vermutung im Erzeugnis.
 Flake-Registers: geht der Auftrag in der Abgabewoche rot, wird zuerst
 wiederholt und dann gesucht, und der aeltere Befund `parity-login-probe-404`
 wird daneben gelesen.
+
+---
+
+## L-16-04: eine Annahme ueber den paths-Filter bei Tag-Pushes, die nicht stimmt
+
+**Befund.** Die Kommentare in `.github/workflows/docker.yml` und
+`.github/workflows/release.yml` sagen, GitHub wende den `paths`-Filter auf jedes
+Push-Ereignis an, Tag-Pushes eingeschlossen, ein Release-Tag auf einem Commit
+ohne `backend/**` ueberspringe den Abbildbau also. `release.yml` begruendet damit
+sogar, warum es selbst keinen Filter traegt.
+
+**Das Gegenteil ist belegt.** Tag `v1.0.0` sitzt auf `160a289`, und dieser Commit
+beruehrt nur `store/media/**`, also keinen einzigen Pfad aus den Filtern der
+sechs anderen Werkbaenke. Trotzdem sind am Tag-Push alle sieben Laeufe als
+`push` gestartet, und zwar mit echten Jobs statt uebersprungenen: Lauf
+**34140924599** baute beide Architekturen und mergte das Manifest, Lauf
+**34140924650** fuhr php -l, die info.xml-Validierung und PHPUnit. Bei `v1.0.1`
+dasselbe Bild. Geprueft am 21.09.2026 vor dem Tag der Phase 16.
+
+**Verdikt: weitergereicht, kein Fix vor dem Tag.**
+
+**Begruendung.** Der Kommentar haette vor dem Tag geaendert werden koennen, und
+genau das waere falsch gewesen: eine Aenderung an `docker.yml` haette den Baum
+unter dem Tag von dem Baum getrennt, den das Phasenaudit geprueft hat, und den
+Sitz des Tags fuer einen Kommentar bewegt. Die Annahme hat nichts kaputt
+gemacht; sie haette nur die Wahl des Tag-Commits unnoetig eingeschraenkt.
+
+**Zieladresse.** Der erste Plan der naechsten Phase, der ohnehin einen Workflow
+anfasst. Zu aendern sind zwei Kommentarbloecke, keine Zeile Verhalten. Wer es
+aufnimmt, haengt die zwei Laufnummern als Beleg daneben, sonst steht die naechste
+Behauptung so unbelegt da wie die jetzige.
+
+---
+
+## L-16-05: eine Zugangsmarke, die beim Setzen schon ueberholt war
+
+**Befund.** Der erste Einreichungslauf (**35617988639**) endete mit
+`release findling v1.2.0: HTTP 401`. Die Marke war Minuten vorher frisch geholt
+und gesetzt worden. Die Erneuerung hat doppelt ausgeloest beziehungsweise die
+Seite zeigte nach dem ersten Klick den aelteren der beiden Werte; eine zweite
+Erneuerung macht die erste ungueltig, und auf der Seite sehen beide gleich aus.
+
+**Verdikt: behoben im zweiten Anlauf, die Lehre bleibt als Verfahrensregel.**
+
+**Die Regel, im Wortlaut fuer den naechsten Plan, der eine Marke setzt.** Eine
+neu geholte Zugangsmarke wird **vor** dem Setzen gegen die Schnittstelle
+geprueft, und zwar mit einem Aufruf, der nichts veraendert: ein leerer Rumpf auf
+die Release-Route. Antwortet sie mit HTTP 400 und einem Feldfehler, ist die Marke
+gueltig und nur der Rumpf leer. Antwortet sie mit HTTP 401, ist die Marke
+ueberholt, und das Setzen unterbleibt. Die Gegenprobe mit dem alten Wert gehoert
+dazu, sonst belegt der 400er nur, dass die Route erreichbar ist.
+
+**Was richtig gelaufen ist und so bleiben soll.** Der Lauf hat an der 401
+abgebrochen und ist nicht wiederholt worden, bis er zufaellig gruen war. Genau
+das verlangt der Plan der Abgabe fuer jeden Code, der nicht 201 ist.
+
+**Zieladresse.** Der Planer des naechsten Releases. Die Regel gehoert in den
+Checkpoint-Text der Rotation, nicht in eine SUMMARY, weil sie zwischen zwei
+Handgriffen des Owners steht.
