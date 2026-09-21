@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-08 abgeschlossen (arm64-Ast des Auftrags index-search-e2e, Beleg der zehn Sprachfaelle ohne Fremdbestand aus Lauf 35586213137, Owner-Entscheid "Zweig a, zustimmen", L-09 geschlossen); Welle 3 ist fertig; NAECHSTES: 16-09, Welle 4; kein Tag, kein Release
-last_updated: "2026-09-21T23:10:00.000Z"
+stopped_at: 16-09 abgeschlossen (deploy-harp springt von v1.1.0 auf den Baum, Zusicherung 6 misst die zwei Datumsgrenzen des Anbieters, Ratsche auf beide Minor-Reihen benannt); Welle 4 laeuft noch, offen ist 16-10; **Erfolgskriterium 3 von REL-02 wartet auf die Laufnummer von deploy-harp, der Pruefweg steht in 16-09-SUMMARY.md**; kein Tag, kein Release
+last_updated: "2026-09-22T00:40:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 57
-  percent: 90
+  completed_plans: 58
+  percent: 92
 ---
 
 # Project State
@@ -26,9 +26,46 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 8 von 14 abgeschlossen (16-01 bis 16-08). **Welle 1, Welle 2 und Welle 3
-sind vollstaendig.** NAECHSTES: **16-09** (Upgrade-Beweis 1.1.0 auf 1.2.0),
-Beginn der Welle 4; 16-10 daneben ist das Owner-Tor fuer BL-F02 Baustein 1.
+Plan: 9 von 14 abgeschlossen (16-01 bis 16-09). **Welle 1, Welle 2 und Welle 3
+sind vollstaendig, Welle 4 ist zur Haelfte gefahren.** NAECHSTES: **16-10**,
+das Owner-Tor fuer BL-F02 Baustein 1.
+
+16-09: **Der Upgrade-Beweis springt jetzt von v1.1.0.** Vier Commits.
+`12fec7d`: Q-5 ist **nachgesehen und nicht geraten**. Der sechste
+Engine-Zustand `unloaded` traegt NICHT, aus zwei belegten Gruenden: das Feld
+`engineState` steht schon in v1.1.0 in der Admin-Antwort
+(`git show v1.1.0:php/lib/Service/AdminViewService.php`, Zeile 1813), und der
+Wert haengt an `unload_count() > 0`, also an einer Leerlaufspanne, die dieser
+Auftrag nicht faehrt. Gewaehlt ist stattdessen die **Filterliste des
+Suchanbieters**, und sie ist billiger als die Recherche annahm: keine
+gerenderte Seite noetig, weil `/ocs/v2.php/search/providers` die Filterkarte je
+Anbieter traegt (`integration.yml` liest dieselbe Route seit Phase 1).
+`snapshot()` schreibt seitdem `searchFilters.declared` und
+`searchFilters.dates`. `0f112c3`: die vier Stellen in einem Commit,
+`UPGRADE_FROM_TAG: v1.1.0`, die Vorbedingung in "Store upgrade 1" **umgedreht**
+(der `<navigations>`-Block MUSS jetzt da sein, das ist die billigste
+Zusicherung, dass die Marke auf die 1.1.x-Reihe zeigt), die zweite Vorbedingung
+des Vorher-Zustands auf die Abwesenheit der Datumsgrenzen getauscht, und
+Zusicherung 6 misst `searchFilters.dates` und nennt Plan 13-06. Die
+**Zusicherungen 1 bis 5 sind zeichengleich** (48 Zeilen, maschinell verglichen),
+die zwei Zweige des Versionsschritts aus 11-11 bleiben beide stehen.
+`607f8d0`: die Ratsche heisst `GOLD_V1_0_AND_V1_1`, die fuenf Werte sind
+unveraendert, 6 Faelle wie vorher. `1c61216`: der ungefahrene Lauf bekommt eine
+Adresse in `deferred-items.md`.
+
+**Offen und wichtig:** Task 3 Teil 2 des Plans (einen echten `deploy-harp`-Lauf
+auslesen) konnte nicht stattfinden, weil der Auftrag das Pushen verbietet.
+**Erfolgskriterium 3 von REL-02 ist damit noch nicht belegt.** Der Pruefweg
+(Werkbank, Bein, sechs Pruefzeilen, Belegdateien, Wiederholungsregel bei rot)
+steht vollstaendig in `16-09-SUMMARY.md`, Abschnitt "Was der Orchestrator in CI
+nachsehen muss". Lokal geprueft ist alles, was ohne Runner pruefbar war: YAML
+parst (48 Schritte), `sh -n` auf dem ausgeloesten Sondenskript (250 Zeilen),
+beide jq-Zweige gegen selbst gebaute Abbilder im erwarteten Fall und im
+Fehlerfall, die umgedrehte `<navigations>`-Pruefung gegen `git show v1.0.3:`
+und `git show v1.1.0:`, die Release-Anhaenge von v1.1.0 und die Abbildmarke
+`:1.1.0` als Index mit amd64 und arm64. `:1.2.0` liegt erwartungsgemaess noch
+nicht in der Registratur (das ist 16-14), weshalb weiterhin `info-citest.xml`
+registriert wird.
 
 16-08: **Auflage A4 ist ohne Box erfuellt.** Aufgabe 1
 ist verbucht (d34c392): der Auftrag `index-search-e2e` liest seinen Runner jetzt
@@ -201,9 +238,9 @@ Gesamtdauer), A4 kleine Sprachfaelle-Anfahrt (Rechenblatt + Deckel zur
 Owner-Freigabe VOR dem Start). Bewusst nicht beauftragt: Top-up-A/B-Attribution
 (keine Nutzerwirkung), bleibt notierter Messauftrag.
 Status: Milestone v1.2, die 49 Plaene der Phasen 12 bis 15 sind abgeschlossen,
-Phase 16 laeuft mit 1 von 14 Plaenen.
-Progress: [████████░░] 79% der 63 geplanten Plaene (50 von 63)
-Last activity: 2026-09-21 -- 16-01 in drei Commits gefahren (a856563, a27ec2c, 9b24613): enge 423-Wiederholung, zweite Zeitkonstante, Flake-Register und tantivy-Ignoranweisung. Davor: 15-16 Task 1 und Task 2 gefahren und je einzeln committet: `docs/performance.md` traegt die fuenf datierten Nachtraege der Anfahrt (259 Zeilen dazu, keine geloescht), `docs/audits/2026-09-phase-15/README.md` traegt das Phasenaudit (ein MEDIUM, elf LOW, zwei davon geschlossen), MESS-05 und MEM-02 sind in `.planning/REQUIREMENTS.md` je mit Zahl und Rohdateiverweis abgehakt. Volle Suite 2.394 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Offen ist Task 3, die Abnahme der Phase durch den Owner**; danach erst die SUMMARY zu 15-16
+Phase 16 laeuft mit 9 von 14 Plaenen.
+Progress: [█████████░] 92% der 63 geplanten Plaene (58 von 63)
+Last activity: 2026-09-21 -- 16-09 in vier Commits gefahren (12fec7d, 0f112c3, 607f8d0, 1c61216): Q-5 nachgesehen, der Beweis springt von v1.1.0, Zusicherung 6 misst die zwei Datumsgrenzen, die Ratsche nennt beide Minor-Reihen. Nach `uv sync` (pypdf 6.18.1 auf 6.19.0, ruff 0.16.7 auf 0.16.8) waren alle Gates schon vor der ersten Aenderung gruen, der neue ruff brachte keine neue Regel zum Tragen; volle Suite 2.469 bestanden / 15 uebersprungen, vorher wie nachher. Davor: 16-01 in drei Commits gefahren (a856563, a27ec2c, 9b24613): enge 423-Wiederholung, zweite Zeitkonstante, Flake-Register und tantivy-Ignoranweisung. Davor: 15-16 Task 1 und Task 2 gefahren und je einzeln committet: `docs/performance.md` traegt die fuenf datierten Nachtraege der Anfahrt (259 Zeilen dazu, keine geloescht), `docs/audits/2026-09-phase-15/README.md` traegt das Phasenaudit (ein MEDIUM, elf LOW, zwei davon geschlossen), MESS-05 und MEM-02 sind in `.planning/REQUIREMENTS.md` je mit Zahl und Rohdateiverweis abgehakt. Volle Suite 2.394 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Offen ist Task 3, die Abnahme der Phase durch den Owner**; danach erst die SUMMARY zu 15-16
 
 **Was der Owner in 15-16 zu entscheiden hat, in drei Zeilen:** die Abnahme der
 Phase, das Abhaken von MESS-05 und MEM-02 (beide haben ihre Zahl an ihrer
@@ -258,6 +295,33 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
 
+- 16-09 (21.09.2026): **Q-5 ist zugunsten der deklarierten Filter entschieden
+  und gegen den sechsten Engine-Zustand.** Der Zustand faellt zweifach: das Feld
+  `engineState` steht schon in v1.1.0 in der Admin-Antwort, und der Wert
+  `unloaded` haengt an `unload_count() > 0`, also an einer Leerlaufspanne, die
+  der Auftrag nicht faehrt. Eine Zusicherung auf einem Wert, der an einer
+  Zeitschaltung haengt, waere ein Flattern und kein Beweis.
+- 16-09 (21.09.2026): **Der zweite Kandidat wird billiger gelesen, als die
+  Recherche annahm.** Die Filterarbeit der Phase 13 braucht kein gerendertes
+  Formular: `/ocs/v2.php/search/providers` traegt die Filterkarte je Anbieter,
+  und `integration.yml` liest dieselbe Route seit Phase 1 fuer dieselbe Frage.
+- 16-09 (21.09.2026): **Die Vorbedingung in "Store upgrade 1" wird umgedreht
+  und nicht geloescht.** Sie verlangt jetzt die ANWESENHEIT des
+  `<navigations>`-Blocks und ist damit die billigste Zusicherung der Datei, dass
+  `UPGRADE_FROM_TAG` wirklich auf die 1.1.x-Reihe zeigt; eine Marke der
+  1.0.x-Reihe antwortete ohne den Block.
+- 16-09 (21.09.2026): **Die zwei Zweige des Versionsschritts bleiben beide
+  stehen**, obwohl heute nur der erste laeuft. Jeder Release-Zyklus geht einmal
+  durch den zweiten: zwischen dem Bump eines Baumes und der Veroeffentlichung
+  der passenden Marke sind beide Seiten wieder gleich, und ein geloeschter Zweig
+  waere ein roter Lauf, den niemand geplant hat.
+- 16-09 (21.09.2026): **`navigation` bleibt im Zustandsabbild, ohne noch
+  geprueft zu werden.** Es ist das App-Menue der Instanz zu Protokoll; der Leser
+  eines roten Laufs soll es nicht raten muessen.
+- 16-09 (21.09.2026): **Ein ueberholter Begruendungsabsatz wird datiert unter
+  den neuen gestellt statt geloescht.** Der v1.0.3-Absatz von `UPGRADE_FROM_TAG`
+  und der alte Wortlaut der umgedrehten Vorbedingung stehen als Vorgaenger da,
+  damit ein Leser sieht, warum die alte Fassung in ihrer Zeit richtig war.
 - 16-07 (21.09.2026): **Die Migration verwirft die Versionsmarke und schreibt
   keine an ihre Stelle.** Die Zeichenkette `ownVersion` kommt in der Datei nicht
   vor, und das ist maschinell geprueft: eine Instanz, deren Container wirklich
@@ -1304,6 +1368,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-21T21:45:00.000Z
-Stopped at: 16-07 abgeschlossen (Welle 3, erster Plan). Migration, ihr Test und der Nachzug von PHP_FILES_TODAY 66 plus Baumhash in einem Commit (12e8663, der Nachzug MUSS im selben Commit liegen), die drei Versionsstellen auf 1.2.0 in einem zweiten (734a1b2); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist wieder nicht gelaufen, aus demselben Grund wie in 16-06. KEIN Tag, KEIN Release. Davor: 16-06 abgeschlossen und damit Welle 2 vollstaendig. Die Messung des inneren Aufrufs samt PHP-Faellen und Baumhash-Nachzug in einem Commit (f604805, der Nachzug MUSS im selben Commit liegen), das Python-Textgate in einem zweiten (e3fb6c5); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist nicht gelaufen: kein PHP auf dieser Maschine und kein Push im Auftrag, `php.yml` startet mit dem Push von selbst. Davor: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
-Resume file: keine; NAECHSTES ist 16-08 (Welle 3)
+Last session: 2026-09-22T00:40:00.000Z
+Stopped at: 16-09 abgeschlossen (Welle 4, erster Plan). Vier Commits (12fec7d, 0f112c3, 607f8d0, 1c61216): Q-5 nachgesehen und als Kommentar im Workflow festgehalten, `UPGRADE_FROM_TAG` auf v1.1.0, die vier Stellen umgestellt, Zusicherung 6 auf `searchFilters.dates`, die Ratsche auf `GOLD_V1_0_AND_V1_1`. Zusicherungen 1 bis 5 maschinell als zeichengleich nachgewiesen. Alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. **Der Auftrag `deploy-harp` ist NICHT gefahren** (kein Push im Auftrag); Erfolgskriterium 3 von REL-02 wartet auf die Laufnummer, der Pruefweg steht in 16-09-SUMMARY.md und der Punkt in `deferred-items.md`. KEIN Tag, KEIN Release. Davor: 16-07 abgeschlossen (Welle 3, erster Plan). Migration, ihr Test und der Nachzug von PHP_FILES_TODAY 66 plus Baumhash in einem Commit (12e8663, der Nachzug MUSS im selben Commit liegen), die drei Versionsstellen auf 1.2.0 in einem zweiten (734a1b2); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist wieder nicht gelaufen, aus demselben Grund wie in 16-06. KEIN Tag, KEIN Release. Davor: 16-06 abgeschlossen und damit Welle 2 vollstaendig. Die Messung des inneren Aufrufs samt PHP-Faellen und Baumhash-Nachzug in einem Commit (f604805, der Nachzug MUSS im selben Commit liegen), das Python-Textgate in einem zweiten (e3fb6c5); alle Python-Gates lokal gruen, volle Suite 2.469 bestanden / 15 uebersprungen, Skipzahl unveraendert. Der PHP-Teil (php -l, PHPUnit) ist nicht gelaufen: kein PHP auf dieser Maschine und kein Push im Auftrag, `php.yml` startet mit dem Push von selbst. Davor: 16-05 abgeschlossen (Welle 2, erster Plan). Task 1 (Platzhalter fuer Kennungen und Adressen, fe3cf8c) und Task 2 (gesperrtes Wort aus den vier Anleitungen, f1c15a1) je einzeln committet; alle Gates lokal gruen, volle Suite 2.464 bestanden / 15 uebersprungen, Skipzahl unveraendert. Davor: 16-04 abgeschlossen und damit Welle 1 vollstaendig. Task 1 (Vorlaufsonde, DI-11-03, daa4661), Task 2 (Schluesselpaar im Abbau, L-07, 681097a) und Task 3 (sieben dokumentierte Entscheide, 4917463) je einzeln committet; alle Gates lokal gruen, volle Suite 2.463 bestanden / 15 uebersprungen, Skipzahl unveraendert.
+Resume file: keine; NAECHSTES ist 16-10 (Rest der Welle 4, Owner-Tor fuer BL-F02 Baustein 1)

@@ -262,7 +262,7 @@ Plans:
 
 **Backlog-Kandidat (beim Planen pruefen, kein Requirement):** BL-F02 Baustein 1, OCR-Pakete spa/ita/nld/por. Nur NACH der Phase-15-Messanfahrt einbauen (Werkzeugstand ist Vergleichbarkeitsbedingung) und nur ohne Terminrisiko fuer die Einreichung; sonst Folgerelease.
 
-**Plans:** 7/14 plans complete
+**Plans:** 9/14 plans complete
 
 Plans:
 **Welle 1**
@@ -284,7 +284,7 @@ Plans:
 
 **Welle 4** *(laeuft)*
 
-- [ ] 16-09-PLAN.md: Upgrade-Beweis 1.1.0 auf 1.2.0, neue sechste Zusicherung
+- [x] 16-09-PLAN.md: Upgrade-Beweis 1.1.0 auf 1.2.0, neue sechste Zusicherung (completed 2026-09-21; Erfolgskriterium 3 wartet auf die Laufnummer, Pruefweg in 16-09-SUMMARY.md)
 - [ ] 16-10-PLAN.md: BL-F02 Baustein 1, sechs OCR-Sprachen, mit Abbruchpfad (Owner-Tor)
 
 **Welle 5** *(wartet auf Welle 4)*
@@ -317,7 +317,7 @@ Plans:
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 16/16 | Complete | 2026-09-21 |
-| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 8/14 | In Progress | - |
+| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 9/14 | In Progress | - |
 
 ## Nach v1.2 (Wiedervorlage)
 
