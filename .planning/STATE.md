@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-12 abgeschlossen und damit **Welle 6 vollstaendig**. Die abgenommenen Texte der Fassung 1.2.0 sind **ausgeliefert**: beide `info.xml` und die drei READMEs tragen die Messzahl **731,9 MB resident nach einem Indexlauf** an neun Stellen, die Sprachangabe ist an elf Stellen nachgezogen, die 103,2 kommt nirgends mehr vor. Beide Zusagen haengen jetzt an einem Gate: die Messzahl an drei Stellen im Gleichschritt (Erfolgskriterium 4, mit Mutationsfall je Stelle) und der Connector-Satz dreisprachig in beiden Haelften mit Anzahlpruefung (HART-02). Die Live-Bestaetigung der drei Bildadressen ist wiederholt, die Wiedervorlage vom 07.09.2026 ist geschlossen. Volle Suite 2.487 bestanden / 15 uebersprungen. NAECHSTES ist 16-13 (Welle 7, Launch-Haertung, Phasenaudit, Owner-Abnahme); kein Push, kein Tag, kein Release
+stopped_at: 16-13 Aufgabe 1 und 2 sind gefahren, **Aufgabe 3 ist der blockierende Owner-Checkpoint und steht offen**. Das Phasenaudit liegt in `docs/audits/2026-09-phase-16/README.md`: kein CRITICAL, kein HIGH, **zwei MEDIUM, beide behoben**, drei LOW mit Adresse. Zwei Commits (`8f0d7f8` Fixe, `cfa5eae` Bericht und deferred-items). M-16-01: der Flake-Fix aus 16-01 hat NICHT getragen, vier rote python.yml-Laeufe am 21.09.2026 mit der neuen Frist, Ursache ist ein Wettlauf mit dem Tor des Testclients und nicht die Frist; behoben, zwoelf von zwoelf Wiederholungen gruen. M-16-02: der Datentraegername des zweiten Anbieters stand noch in `docs/performance.md`, das Gate kannte nur die Namensform eines Anbieters; behoben, zehnte Familie plus drei Ausnahmeeintraege plus Redaktion. Volle Suite **2491 bestanden / 15 uebersprungen** (Skipzahl unveraendert). Sechs Werkbaenke gleichzeitig gruen auf 67661e5. KEINE SUMMARY, ROADMAP nicht auf Complete, kein Push, kein Tag. Vorheriger Stand: 16-12 abgeschlossen und damit **Welle 6 vollstaendig**. Die abgenommenen Texte der Fassung 1.2.0 sind **ausgeliefert**: beide `info.xml` und die drei READMEs tragen die Messzahl **731,9 MB resident nach einem Indexlauf** an neun Stellen, die Sprachangabe ist an elf Stellen nachgezogen, die 103,2 kommt nirgends mehr vor. Beide Zusagen haengen jetzt an einem Gate: die Messzahl an drei Stellen im Gleichschritt (Erfolgskriterium 4, mit Mutationsfall je Stelle) und der Connector-Satz dreisprachig in beiden Haelften mit Anzahlpruefung (HART-02). Die Live-Bestaetigung der drei Bildadressen ist wiederholt, die Wiedervorlage vom 07.09.2026 ist geschlossen. Volle Suite 2.487 bestanden / 15 uebersprungen. NAECHSTES ist 16-13 (Welle 7, Launch-Haertung, Phasenaudit, Owner-Abnahme); kein Push, kein Tag, kein Release
 last_updated: "2026-09-22T04:30:00.000Z"
 last_activity: 2026-09-21
 progress:
@@ -26,9 +26,45 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 12 von 14 abgeschlossen (16-01 bis 16-12). **Welle 1 bis Welle 6 sind
-vollstaendig.** NAECHSTES: **16-13** (Welle 7), die Launch-Haertung, das
-Phasenaudit und die Owner-Abnahme vor der Abgabe.
+Plan: 12 von 14 abgeschlossen (16-01 bis 16-12). **16-13 ist zur Haelfte
+gefahren: Aufgabe 1 (Haertungsmatrix und Phasenaudit) und Aufgabe 2 (Befunde ab
+MEDIUM behoben, LOW adressiert) sind committet, Aufgabe 3 ist der blockierende
+Owner-Checkpoint und steht offen.** NAECHSTES: die Abnahme der Launch-Haertung
+durch den Owner; ohne sie beginnt 16-14 nicht (Owner-Regel vom 06.09.2026).
+
+16-13 (Aufgabe 1 und 2): **das Phasenaudit liegt vor dem Tag, und es hat zwei
+MEDIUM gefunden, die beide in derselben Ausfuehrung behoben sind.** Zwei
+Commits. `8f0d7f8`: die zwei Fixe. **M-16-01, der unangenehme:** der Fix des
+Flake-Stammes `single-flight-zeit` aus Plan 16-01 hat nicht getragen. Der Fall
+`test_with_the_release_on_a_cold_engine_gets_exactly_one_run` ist am 21.09.2026
+**viermal** in CI rot gegangen (35586354661, 35594647359, 35596116820,
+35597353833), jedes Mal MIT der neuen Frist von dreissig Sekunden, und **keine
+SUMMARY dieser Phase nennt einen dieser Laeufe**. Die Deutung
+"lastempfindlich" war falsch: der Testclient oeffnet je Anfrage ein eigenes Tor
+und schliesst es wieder, und die Aufgabe, die der Handler mit `create_task`
+bestellt, ist eine lose Aufgabe auf dieser Schleife; ob sie ihren ersten
+Zeitschlitz bekommt, bevor das Tor zugeht, ist ein Wettlauf, den eine laengere
+Frist nicht entscheidet. Der Fall laeuft jetzt auf der Schleife des Falls und
+wartet die Aufgabe ab, genau wie sein Nachbar, der denselben Grund seit Phase 14
+im Docstring traegt; zwoelf von zwoelf Wiederholungen gruen. **M-16-02:** die
+vier Familien des Geheimnis-Gates, die eine Ressource an ihrem Namen erkennen,
+kannten die Namensform genau eines Anbieters, und dieses Projekt hat bei zweien
+gemietet; der Datentraegername des zweiten stand nach der Bereinigung aus 16-05
+weiter an drei Stellen in `docs/performance.md`. Gefunden hat ihn nicht das
+Gate, sondern die unabhaengige Gegenprobe des Audits. Behoben: Redaktion,
+zehnte Familie im Gate mit sauberer und mutierter Probe, drei
+Ausnahmeeintraege fuer die Rohdateien der Anfahrt vom 04.09.2026, und die
+Mutationsprobe ist gefahren. `cfa5eae`: der Bericht
+`docs/audits/2026-09-phase-16/README.md` mit der achtzeiligen Haertungsmatrix,
+dem Gate-Protokoll (Skipzahl **15 unveraendert** gegen den Stand vor der Phase,
+2491 statt 2394 bestandene Faelle), dem ASVS-Durchgang ueber V2/V4/V6/V7/V12/V14
+mit Schwerpunkt V7, der Geheimnis-Gegenprobe mit **sechs Familien, die das Gate
+nicht fuehrt, plus einer Entropiemessung**, dem Stand der vier Auflagen je mit
+dem, was NICHT belegt ist, den fuenf Erfolgskriterien und dem Pflichtabschnitt
+"Was dieser Bericht nicht sagt"; dazu `deferred-items.md`, in der die
+Phase-15-Liste zu Ende gefuehrt ist (M-01 ausdruecklich als **teilerfuellt**).
+**Sechs Werkbaenke sind gleichzeitig gruen** auf Commit 67661e5. **KEINE
+SUMMARY, ROADMAP nicht auf Complete, kein Push, kein Tag, kein Release.**
 
 16-12: **Die Texte sind uebernommen, und beide Zusagen haengen jetzt an einem
 Gate.** Drei Commits. `3422979`: die abgenommenen Wortlaute stehen woertlich in
