@@ -595,9 +595,19 @@ def test_a_round_under_the_release_answers_the_way_a_container_without_a_model_d
 
 SEARCH_SOURCE = Path(str(api_search.__file__))
 
-# Long enough that a handler which waited for the run would be caught by the
-# budget below, short enough that a case which ends early costs nothing.
+# How long the stand in run blocks, and nothing else any more. It is the upper
+# half of the statement the budget below makes: a handler that waited for the
+# run would land outside that budget. L-11 took the second job away from this
+# constant, because a deadline that is an assertion must not also be the patience
+# of a case that only asks whether something happened.
 BLOCKED_WARM_SECONDS = 5.0
+
+# The patience of the cases that wait for a background run to ARRIVE. A long
+# deadline is free here, because it is only ever spent when the case fails
+# anyway; the same case with a short one goes red under load without any defect
+# behind it. Where a case claims an UPPER BOUND instead, the short deadline is
+# the statement itself and stays at BLOCKED_WARM_SECONDS.
+ARRIVAL_SECONDS = 30.0
 
 # What the answer of a handler that does not wait has to fit into. Well under
 # the block above, so the case says something even on a slow machine.
@@ -727,7 +737,7 @@ def test_with_the_release_on_a_cold_engine_gets_exactly_one_run(
     answer = _search(client, sign(indexed_volume.bob), query=TWO_WORD_TERM)
 
     assert answer["candidates"] != []
-    assert ran.wait(BLOCKED_WARM_SECONDS) is True
+    assert ran.wait(ARRIVAL_SECONDS) is True
     assert runs == [1]
 
 
@@ -793,7 +803,7 @@ async def test_the_answer_does_not_wait_for_the_warm_run(
     assert len(api_search._WARM_TASKS) == 1, "the answer is out while the run is still going"
 
     gate.set()
-    await asyncio.wait_for(next(iter(api_search._WARM_TASKS)), BLOCKED_WARM_SECONDS)
+    await asyncio.wait_for(next(iter(api_search._WARM_TASKS)), ARRIVAL_SECONDS)
 
 
 def test_ten_searches_in_a_row_do_not_pay_for_ten_loads(
@@ -815,7 +825,7 @@ def test_ten_searches_in_a_row_do_not_pay_for_ten_loads(
         answer = _search(client, sign(indexed_volume.bob), query=TWO_WORD_TERM)
         assert answer["candidates"] != []
 
-    deadline = time.monotonic() + BLOCKED_WARM_SECONDS
+    deadline = time.monotonic() + ARRIVAL_SECONDS
     while api_search._WARM_TASKS and time.monotonic() < deadline:
         time.sleep(0.05)
 
