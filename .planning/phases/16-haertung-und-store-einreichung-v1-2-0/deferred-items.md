@@ -269,3 +269,96 @@ greift, findet Fehler, und diese Fehler gehoeren gesucht und nicht weggewartet.
 **Zieladresse.** Der Orchestrator der Phase 16, mit dem Push der Commits von
 16-09. Der Pruefweg im Einzelnen steht in `16-09-SUMMARY.md`, Abschnitt "Was
 der Orchestrator in CI nachsehen muss".
+
+---
+
+## Nachtrag vom 21.09.2026 (Plan 16-13): der Abschluss der Phase-15-Liste
+
+Die Befundliste des Phasenaudits 15 hat elf weitergereichte Punkte. Hier steht
+je Punkt, wo er heute steht, damit die Liste an einer Stelle zu Ende gefuehrt
+ist und niemand sie aus sieben SUMMARY-Dateien zusammensuchen muss. Der volle
+Beleg je Zeile steht in `docs/audits/2026-09-phase-16/README.md`, Abschnitt 7.
+
+| Befund | Stand am 21.09.2026 | Wo |
+|---|---|---|
+| M-01 | **teilerfuellt**, und das ist die ehrliche Zeile: die Instrumentierung des inneren Aufrufs steht, die Zahl auf Zielhardware steht aus. Sie entsteht auf einer Box und nirgends sonst, und diese Phase hat keine gefahren | Plan 16-06 |
+| M-02 | **geschlossen** in drei Schritten: Gate ueber `docs/`, Bereinigung mit Restliste, und die zehnte Familie aus Plan 16-13, die die Luecke schliesst, die beide gelassen hatten (Befund M-16-02) | Plaene 16-02, 16-05, 16-13 |
+| L-03 | **behoben** als Nachfolgefassung `92c-wechsel.sh`; Wirkung nicht nachgemessen | Plan 16-03 |
+| L-04 | **behoben** als Nachfolgefassung `99d-filter-sortierung.sh`; Wirkung nicht nachgemessen | Plan 16-03 |
+| L-05 | weitergereicht, Adresse: erster Plan der naechsten bezahlten Anfahrt | dieser Datei, eigener Abschnitt oben |
+| L-06 | weitergereicht, Adresse: erster Plan der naechsten bezahlten Anfahrt | dieser Datei, eigener Abschnitt oben |
+| L-07 | **behoben**: `cmd_destroy` nimmt das Schluesselpaar mit und liest es zurueck; nur statisch geprueft | Plan 16-04 |
+| L-08 | benannte Asymmetrie, kein Fix, entschieden und begruendet | dieser Datei, eigener Abschnitt oben |
+| L-09 | **geschlossen** mit Lauf 35586213137 und dem Owner-Wort "Zweig a, zustimmen" | Plan 16-08, Nachtrag oben |
+| L-10 | **behoben**: Vokabularregel im Gate und 52 Ersetzungen in vier Dokumenten; drei Vorkommen bleiben mit je eigenem Grund | Plaene 16-02, 16-05 |
+| L-11 | **hat nicht getragen.** Der Fix aus Plan 16-01 ist danach viermal in CI gescheitert; der Punkt lebt als M-16-01 weiter und ist dort zum zweiten Mal behandelt worden | Plaene 16-01 und 16-13 |
+
+---
+
+## L-16-01: derselbe Wettlauf im Nachbarfall der zehn Suchen
+
+**Befund.** `test_ten_searches_in_a_row_do_not_pay_for_ten_loads` faehrt zehn
+Anfragen durch den Testclient und liest danach, ob wirklich ein Hintergrundlauf
+stattgefunden hat. Er haengt damit an derselben Wurzel wie M-16-01: der
+Testclient oeffnet je Anfrage ein eigenes Tor und schliesst es wieder, und eine
+Aufgabe, die der Handler mit `create_task` bestellt, ist eine lose Aufgabe auf
+dieser Schleife.
+
+**Verdikt: dokumentiert weitergereicht, kein Fix in dieser Phase.**
+
+**Begruendung.** Der Fall ist nie rot gewesen, und der Grund ist zaehlbar: zehn
+Anfragen sind zehn Wettlaeufe, und es reicht, wenn einer davon gewonnen wird.
+Seine Aussage macht er genau ueber die zehn Anfragen DURCH DIE ROUTE, und ein
+Umbau auf die Schleife des Falls, wie ihn M-16-01 bekommen hat, wuerde diese
+Aussage ersetzen statt sie zu haerten. Ein Fall, der eine andere Frage
+beantwortet, ist kein gehaerteter Fall.
+
+**Zieladresse.** Der naechste Plan, der die Warmlauf-Faelle anfasst. Wer ihn
+aufnimmt, liest M-16-01 im Phasenaudit 16 daneben, bevor er eine Frist
+verlaengert: eine Frist war dort nie die Ursache.
+
+---
+
+## L-16-02: ein roter Lauf, den kein Plan gelesen hat
+
+**Befund.** Die vier roten Laeufe der Werkbank `python.yml` vom 21.09.2026
+(35586354661, 35594647359, 35596116820, 35597353833) sind entstanden, ohne dass
+eine SUMMARY dieser Phase sie nennt. Die SUMMARY von Plan 16-10 nennt fuer
+denselben Push den gruenen Abbildbau und nicht den roten Gate-Lauf daneben. Ein
+Plan liest den Lauf, den er erwartet, und nicht die Laufliste des Pushes.
+
+**Verdikt: dokumentiert weitergereicht als Verfahrensregel.**
+
+**Begruendung.** Das ist kein Fehler eines einzelnen Plans, sondern eine Luecke
+in der Form: die Plaene nennen in ihrem `verify` die Laufnummer, die sie
+brauchen, und ein Lauf, den kein Plan braucht, hat niemanden, der ihn ansieht.
+Genau so ist der Fix aus 16-01 vier Laeufe lang unbemerkt durchgefallen. Die
+Gegenmassnahme kostet einen Befehl und keine Werkbank.
+
+**Die Regel, im Wortlaut fuer den naechsten Plan.** Nach einem Push wird
+`gh run list` fuer diesen Push gelesen, nicht nur der Lauf, den der Plan
+erwartet. Jeder nicht-gruene Lauf wird in der SUMMARY benannt, mit Laufnummer
+und Ausgang, bevor sie geschrieben ist. Ein roter Lauf, der nicht benannt ist,
+ist ein roter Lauf, der zaehlt.
+
+**Zieladresse.** Plan 16-14 fuer den Tag-Push dieser Phase, und danach der
+Planer der naechsten Phase, der die Regel in die `verify`-Bloecke aufnimmt.
+
+---
+
+## L-16-03: der dritte Flake-Stamm bleibt offen
+
+**Befund.** Der Stamm `parity-login` des Flake-Registers ist unveraendert offen.
+
+**Verdikt: beobachtet, kein Fix, wie in Plan 16-01 entschieden.**
+
+**Begruendung.** Er ist in dieser Phase **nicht** wieder aufgetreten; der
+Paritaetsauftrag war in jedem Lauf dieser Phase gruen. Die Deutung des Stammes
+ist weiterhin offen (zwei Fehlschlaege desselben Schritts an zwei verschiedenen
+Aesten derselben Funktion), und ein Fix ohne Deutung waere unmittelbar vor einem
+Release-Tag eine Vermutung im Erzeugnis.
+
+**Zieladresse.** Keine neue. Es gilt der Merker der Kopfzeile des
+Flake-Registers: geht der Auftrag in der Abgabewoche rot, wird zuerst
+wiederholt und dann gesucht, und der aeltere Befund `parity-login-probe-404`
+wird daneben gelesen.
