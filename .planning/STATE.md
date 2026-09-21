@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-07 abgeschlossen (drei Versionsstellen auf 1.2.0, Migration Version001200Date20260921000000 samt Test, PHP_FILES_TODAY 66 und Baumhash nachgezogen); kein Tag, kein Release; NAECHSTES: 16-08, Welle 3
-last_updated: "2026-09-21T21:45:00.000Z"
+stopped_at: 16-08 Aufgabe 1 fertig und verbucht (arm64-Ast des Auftrags index-search-e2e, d34c392); Aufgabe 2 wartet auf den ersten Lauf nach dem Push, der Owner-Checkpoint (Aufgabe 3, zwei Zweige) ist offen; kein Tag, kein Release
+last_updated: "2026-09-21T22:30:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
@@ -27,7 +27,25 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
 Plan: 7 von 14 abgeschlossen (16-01 bis 16-07). **Welle 1 und Welle 2 sind
-vollstaendig, Welle 3 laeuft.**
+vollstaendig, Welle 3 laeuft.** 16-08 ist angefangen und **nicht
+abgeschlossen**: es gibt keine 16-08-SUMMARY, und die ROADMAP fuehrt den Plan
+weiterhin als offen.
+
+16-08 (laufend, Auflage A4): **Der Ast steht, der Beleg fehlt noch.** Aufgabe 1
+ist verbucht (d34c392): der Auftrag `index-search-e2e` liest seinen Runner jetzt
+aus der Matrix, die Achse `runner` traegt `ubuntu-24.04` fuer die drei
+bestehenden Kombinationen, und genau ein `include`-Eintrag ergaenzt
+`sqlite`/`stable34`/PHP 8.2 auf `ubuntu-24.04-arm`. Lokal nachgerechnet: vier
+Kombinationen, drei auf amd64, eine auf arm64. Der Zeitdeckel bleibt bei 45
+Minuten, begruendet mit den drei amd64-Laufzeiten von 3:38 bis 3:54 aus Lauf
+35582071147. Keine erforderliche Pruefung haengt an den alten Auftragsnamen (das
+Regelwerk `protect-main` kennt nur `deletion` und `non_fast_forward`), der
+geaenderte `name:` bricht also nichts. **Aufgabe 2 ist blockiert, bis der Lauf
+gefahren ist:** der Bericht
+`docs/measurements/2026-09-a4-sprachfaelle-ci/README.md` darf seine Zahlen nur
+aus der Laufausgabe nehmen, und ohne Push gibt es keinen Lauf. **Aufgabe 3 ist
+der Owner-Checkpoint** mit den zwei Zweigen (CI traegt / CI traegt nicht samt
+Rechenblatt 7 h und 0,90 USD).
 
 16-07: **Der Baum sagt 1.2.0.** Die drei Versionsstellen (`php/appinfo/info.xml`
 `<version>`, `backend/appinfo/info.xml` `<version>` und das `<image-tag>`
