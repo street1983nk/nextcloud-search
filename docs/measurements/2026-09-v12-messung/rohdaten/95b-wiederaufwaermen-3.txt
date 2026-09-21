@@ -1,0 +1,71 @@
+wiederaufwaermen-start 2026-09-21T02:50:33Z
+auspraegung 3 von 4, ruhezeit 0 s, karenz 45 s, nachwaerm-deckel 180 s
+begriff Bescheid Antrag, deckel der antwortliste 100, trefferzaehlung-quelle jq
+beobachter-vorgabe /home/ubuntu/nextcloud-search/docs/measurements/2026-09-v12-messung/skripte/96d-statusbeobachter.py, nicht gerufen (Abweichung 2 im Kopf)
+nachbar-container nextcloud-aio-nextcloud, arbeitskopie /home/ubuntu/nextcloud-search
+=== 1. Die Pflichtzeilen, VOR der Messung ===
+-- Ohne sie sind die Zahlen daneben nicht falsch, sie sind unbelegt (Abschnitt 6.4) --
+entladeschalter-ist=0
+entladeschalter-passt-zum-ast=ja, Bezugsast ohne Entladung
+containerstart-ist=2026-09-21T02:50:30.657421822Z
+abstand-zum-start-stunden=0.0
+speichergrenze-ist=2147483648/0
+ruhezeit-ist=0
+ruhezeit-abweichung-grund=D-02 Owner-Entscheid 19.09.2026, derselbe Mechanismus und Stunden gesparte Box-Zeit
+=== 2. Der Ablauf dieser Auspraegung ===
+-- Containerneustart, weil kalt HERGESTELLT und nicht bewahrt wird --
+containerstart-nach-neustart=2026-09-21T02:50:34.050472125Z
+anmeldung ok
+bereit-nach-s 1 zustand cold
+rss-vor-ruhezeit=entfaellt-ohne-entladung
+rss-nach-ruhezeit=entfaellt-ohne-entladung
+-- Kein Warten, keine Entladung, kein unloaded: dieser Ast ist der Bezugswert,
+   und seine Messsuche ist die erste Suche ueberhaupt. --
+=== 3. Der Seitencache des Wirts, geleert ===
+-- Auf dem WIRT und nicht im Container. Das Leeren verwirft auch den
+   mmap-Cache des Tantivy-Index: die Messung danach ist in BEIDEN Haelften
+   kalt, und genau das bekommt ein Nutzer nach einem Neustart der Box. --
+3
+               total        used        free      shared  buff/cache   available
+Mem:           3.9Gi       1.6Gi       2.1Gi       341Mi       719Mi       2.3Gi
+Swap:             0B          0B          0B
+engine-zustand-vor-messung cold erwartet cold
+=== 4. Die Messsuche gegen die Nutzerroute ===
+erste-suche-ms=2051
+erste-suche-code=200
+treffer-erste-suche=0
+=== 5. Die Nachwaermdauer, im Sekundentakt an der Admin-Seite ===
+nachwaermdauer-s=0
+=== 6. Die zweite Suche, mit den Gewichten wieder drin ===
+zweite-suche-ms=776
+zweite-suche-code=200
+treffer-zweite-suche=26
+=== 7. Die semantische Seite, abgelesen an der Nutzerroute ===
+-- Referenz ist die zweite Suche: dieser Ast hat keine Waermsuche, weil seine
+   Messsuche die erste Suche ueberhaupt sein muss --
+referenz-treffer=26
+semantische-seite-erste-suche=nein
+semantische-seite-zweite-suche=ja
+=== Der Protokollblock, als Block zitierbar ===
+entladeschalter-ist=0
+entladeschalter-passt-zum-ast=ja, Bezugsast ohne Entladung
+containerstart-ist=2026-09-21T02:50:30.657421822Z
+abstand-zum-start-stunden=0.0
+speichergrenze-ist=2147483648/0
+ruhezeit-ist=0
+ruhezeit-abweichung-grund=D-02 Owner-Entscheid 19.09.2026, derselbe Mechanismus und Stunden gesparte Box-Zeit
+containerstart-nach-neustart=2026-09-21T02:50:34.050472125Z
+rss-vor-ruhezeit=entfaellt-ohne-entladung
+rss-nach-ruhezeit=entfaellt-ohne-entladung
+engine-zustand-vor-messung cold erwartet cold
+erste-suche-ms=2051
+erste-suche-code=200
+treffer-erste-suche=0
+nachwaermdauer-s=0
+zweite-suche-ms=776
+zweite-suche-code=200
+treffer-zweite-suche=26
+referenz-treffer=26
+semantische-seite-erste-suche=nein
+semantische-seite-zweite-suche=ja
+wiederaufwaermen-ende 2026-09-21T02:50:40Z

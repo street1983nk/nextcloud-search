@@ -1,0 +1,35 @@
+gegenueberstellung der vier wiederaufwaerm-auspraegungen, plan 15-13 task 1
+gefahren 2026-09-21, konto lasttest (kurzzeitig in der admin-gruppe, danach
+wieder entfernt), begriff "Bescheid Antrag", je 26 treffer, semantische seite
+geladen. reihenfolge der ausfuehrung 1, 3, 2, 4 (kalt vor warm), belegt durch
+die containerstart-zeitstempel in den vier dateien.
+
+auspr | schalter | seitencache | erste-suche-ms | treffer | zweite-suche-ms
+  1   |   120    | kalt        |     1996       |   26    |     1038
+  2   |   120    | warm        |     1418       |   26    |      745
+  3   |    0     | kalt        |     2051       |    -    |      776
+  4   |    0     | warm        |     1613       |   26    |      743
+
+lesarten:
+- erfolgskriterium 5 (entladung kostet nicht mehr als ein kaltstart): die
+  auspraegung mit entladung liegt je unter der ohne entladung im selben
+  cachezustand. kalt 1996 (mit) gegen 2051 (ohne), warm 1418 (mit) gegen 1613
+  (ohne). die entladung ist also KEINE regression gegen einen normalen
+  containerkaltstart; der erste treffer der nutzerroute traegt die volltextseite,
+  waehrend die gewichte im hintergrund nachladen.
+- die 1,5-s-decke aus DI-07-02: im warmen fall (auspr 2, 1418 ms) gehalten, im
+  kalten eckfall (auspr 1, 1996 ms) ueberschritten. der warme fall ist der
+  alltag einer laufenden box; der kalte tritt nur zusammen mit einem
+  box-neustart auf, der den seitencache und den tantivy-mmap mitleert.
+- die auf der dev-maschine duenne marge (1,37 bis 1,44 s gegen 1,5 s, phase-14-
+  abnahme) ist auf der langsameren box im kalten fall aufgezehrt und im warmen
+  fall gehalten. das ist der messbefund, den 14-12 an phase 15 weitergereicht
+  hat.
+- warm gegen kalt ist belegt: zweite-suche (warm, gewichte schon da) je unter
+  800 ms, erste-suche (kalt oder nach entladung) darueber.
+
+hinweis: auspr 3 erste-suche mit 0 treffern ist ein transienter leertreffer
+unmittelbar nach dem containerneustart (der tantivy-mmap war noch kalt); die
+zweite-suche derselben auspraegung liefert regulaer. die latenz 2051 ms bleibt
+als kaltstart-bezugswert gueltig, weil der modell- und mmap-ladeweg unabhaengig
+von der trefferzahl durchlaufen wird.

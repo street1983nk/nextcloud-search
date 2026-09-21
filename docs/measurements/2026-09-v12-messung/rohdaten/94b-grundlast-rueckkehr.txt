@@ -1,0 +1,120 @@
+grundlast-rueckkehr-start 2026-09-21T03:06:32Z
+messgroesse=Rueckkehr zur Grundlast nach einem Indexlauf
+ruhezeit 120 s, karenz 45 s, abtastintervall 5 s, indexlauf-deckel 900 s
+abtaster /home/ubuntu/nextcloud-search/scripts/ops/rss_sampler.sh, digest /home/ubuntu/nextcloud-search/scripts/ops/rss_digest.py, beide unveraendert gerufen
+nachbar-container nextcloud-aio-nextcloud, arbeitskopie /home/ubuntu/nextcloud-search, laufkennung 20260921T030632Z
+=== 1. Die Pflichtzeilen, VOR der Messung ===
+-- Ohne sie sind die Zahlen daneben nicht falsch, sie sind unbelegt (Abschnitt 6.4) --
+entladeschalter-ist=120
+entladeschalter-passt-zum-block=ja, Freigabe eingeschaltet
+containerstart-ist=2026-09-21T03:06:29.662268958Z
+speichergrenze-ist=2147483648/0
+ruhezeit-ist=120
+ruhezeit-abweichung-grund=D-02 Owner-Entscheid 19.09.2026, derselbe Mechanismus und Stunden gesparte Box-Zeit
+=== 2. Marke A: die Grundlast vor dem Indexlauf ===
+-- Containerneustart zuerst, denn Marke A ist die Groesse eines Containers,
+   der in DIESEM Leben noch nichts eingebettet hat. Nach den Schritten 4, 6
+   und 8 ist der Container aufgewaermt, und ohne Neustart maesse Marke A
+   einen Container mit Tokenizer, Splitter und Sitzung darin. --
+containerstart-nach-neustart=2026-09-21T03:06:32.908714782Z
+anmeldung ok
+bereit-nach-s 1 zustand cold
+marke-a-grundlast-vor-indexlauf=103.9 MB (anon 108949504 byte)
+marke-a-memory-current=110493696
+-- Marke A ist die Bezugszahl NICHT. Sie steht erklaerend daneben und sagt, wie
+   weit die Freigabe zurueckfuehrt. Gerechnet wird gegen Marke B. --
+engine-zustand-bei-marke-a=cold
+indexlauf-vorher=52137 eingebettete Dokumente, arbeitsvorrat 0
+=== 3. Der Indexlauf, angestossen auf dem Weg eines Nutzers ===
+-- Eine Handvoll kleiner Textdateien ueber WebDAV, danach files:scan. Nicht
+   findling:index --restart: das stellte rund 52.000 Dokumente neu in die
+   Schlange, und der Container fiele in dieser Messung nie in den Leerlauf. --
+indexlauf-korpus-hochgeladen=12 von 12 nach mem02-indexlauf/20260921T030632Z
+| Folders | Files | New | Updated | Removed | Errors | Elapsed time |
++---------+-------+-----+---------+---------+--------+--------------+
+| 1       | 12    | 0   | 0       | 0       | 0      | 00:00:00     |
++---------+-------+-----+---------+---------+--------+--------------+
+-- Gewartet wird auf ZWEI Bedingungen: die Zahl der eingebetteten Dokumente hat
+   sich bewegt, und der Arbeitsvorrat ist leer. Die zweite ist noetig, weil die
+   Ruhezeit sonst an einem Container liefe, der noch zu tun hat. --
+indexlauf-start 2026-09-21T03:06:44Z
+indexlauf-zwischenstand s=15 eingebettet=52149 arbeitsvorrat=0
+indexlauf-ende 2026-09-21T03:07:00Z
+indexlauf-nachher=52149 eingebettete Dokumente, arbeitsvorrat 0
+indexlauf-dauer-s=15 von hoechstens 900
+indexlauf-stattgefunden=ja
+=== 4. Marke B: die Groesse unmittelbar nach dem Indexlauf ===
+-- Das ist die Zahl, gegen die gerechnet wird. Hier stehen Tokenizer, Splitter,
+   Sitzung und der Aktivierungsspeicher im Container. --
+marke-b-vor-der-entladung=1109.4 MB (anon 1163333632 byte)
+marke-b-memory-current=1169252352
+engine-zustand-bei-marke-b=loaded
+=== 5. Die Ruhezeit, abgetastet mit rss_sampler.sh ===
+-- 120 s Ruhezeit plus 45 s Karenz. Die Freigabe faellt in einem
+   Aufraeumlauf und nicht auf die Sekunde genau. --
+-- die Meldungen des Abtasters --
+  rss_sampler: container=nc_app_findling_backend cgroup=/sys/fs/cgroup/system.slice/docker-56cb7f81dafcd4da523e81e60f44a11aa4760c0aa97f04770ba9725ebaa7c873.scope interval=5s
+engine-zustand-nach-ruhezeit=unloaded
+=== 6. Marke C: die Groesse nach der Entladung, und der Digest ===
+marke-c-nach-der-entladung=731.9 MB (anon 767479808 byte)
+marke-c-memory-current=773165056
+containerstart-bei-marke-c=2026-09-21T03:06:32.908714782Z
+-- rss_digest.py ueber die Abtastreihe der Ruhezeit, unveraendert gerufen --
+| container | samples | mean anon | highest |
+|---|---|---|---|
+| nc_app_findling_backend | 33 | 1020 MB | 1114 MB |
+
+shared samples:   33
+window:           2026-09-21T03:07:00Z to 2026-09-21T03:09:40Z
+duration:         2.7 min
+total, mean:      1020 MB
+total, peak:      1114 MB, at 2026-09-21T03:08:40Z
+upper bound:      1114 MB (sum of the maxima, for orientation only)
+abtastreihe-spitze-mb=11142026092103
+abtastreihe-zeilen=35
+=== 7. Das Ergebnis ===
+rueckkehr-zur-grundlast-mb=377.5
+bodensatz-mb=628.0
+-- Der Bodensatz kommt nie zurueck: die Modulimporte von onnxruntime und numpy
+   bleiben geladen, egal wie oft entladen wird. Auf aarch64 sind dafuer rund
+   16 MB gemessen (2026-09-entladung-vorpruefung, Abschnitt 6). Er wird
+   ausgewiesen und nicht weggerechnet: der Container kehrt nicht auf die
+   Grundlast eines Containers zurueck, der nie eingebettet hat, sondern auf
+   diese plus diesen Rest. --
+messgroesse=Rueckkehr zur Grundlast nach einem Indexlauf
+bezugszahl=marke-b-vor-der-entladung, nicht marke-a-grundlast-vor-indexlauf
+=== 8. Der Korpus des Indexlaufs, wieder entfernt ===
+-- Der Bestand der Box ist der, gegen den Schritt 9 misst. Die Entfernung steht
+   hinter der letzten Marke und kann keine Zahl mehr beruehren. --
+indexlauf-korpus-entfernt=204 (mem02-indexlauf/20260921T030632Z)
+=== Der Protokollblock, als Block zitierbar ===
+entladeschalter-ist=120
+entladeschalter-passt-zum-block=ja, Freigabe eingeschaltet
+containerstart-ist=2026-09-21T03:06:29.662268958Z
+speichergrenze-ist=2147483648/0
+ruhezeit-ist=120
+ruhezeit-abweichung-grund=D-02 Owner-Entscheid 19.09.2026, derselbe Mechanismus und Stunden gesparte Box-Zeit
+containerstart-nach-neustart=2026-09-21T03:06:32.908714782Z
+marke-a-grundlast-vor-indexlauf=103.9 MB (anon 108949504 byte)
+marke-a-memory-current=110493696
+engine-zustand-bei-marke-a=cold
+indexlauf-vorher=52137 eingebettete Dokumente, arbeitsvorrat 0
+indexlauf-korpus-hochgeladen=12 von 12 nach mem02-indexlauf/20260921T030632Z
+indexlauf-nachher=52149 eingebettete Dokumente, arbeitsvorrat 0
+indexlauf-dauer-s=15 von hoechstens 900
+indexlauf-stattgefunden=ja
+marke-b-vor-der-entladung=1109.4 MB (anon 1163333632 byte)
+marke-b-memory-current=1169252352
+engine-zustand-bei-marke-b=loaded
+engine-zustand-nach-ruhezeit=unloaded
+marke-c-nach-der-entladung=731.9 MB (anon 767479808 byte)
+marke-c-memory-current=773165056
+containerstart-bei-marke-c=2026-09-21T03:06:32.908714782Z
+abtastreihe-spitze-mb=11142026092103
+abtastreihe-zeilen=35
+rueckkehr-zur-grundlast-mb=377.5
+bodensatz-mb=628.0
+messgroesse=Rueckkehr zur Grundlast nach einem Indexlauf
+bezugszahl=marke-b-vor-der-entladung, nicht marke-a-grundlast-vor-indexlauf
+indexlauf-korpus-entfernt=204 (mem02-indexlauf/20260921T030632Z)
+grundlast-rueckkehr-ende 2026-09-21T03:09:46Z
