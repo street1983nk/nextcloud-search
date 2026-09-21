@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-01 abgeschlossen (Flake-Haertung DI-11-05 und L-11, Flake-Register, tantivy-Ignoranweisung); NAECHSTES: 16-02 bis 16-04 der Welle 1
-last_updated: "2026-09-21T14:10:00.000Z"
+stopped_at: 16-02 abgeschlossen (Geheimnis- und Vokabular-Gate ueber docs/, Auflage A2 zur Haelfte); NAECHSTES: 16-03 und 16-04 der Welle 1
+last_updated: "2026-09-21T15:40:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 50
-  percent: 79
+  completed_plans: 51
+  percent: 81
 ---
 
 # Project State
@@ -26,16 +26,34 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 1 von 14 abgeschlossen (16-01, Welle 1). Die drei Flake-Staemme sind
-behandelt oder benannt: `write_revision` mit enger 423-Wiederholung in
-`integration.yml` (DI-11-05, Commit a856563), `ARRIVAL_SECONDS = 30.0` getrennt
-von `BLOCKED_WARM_SECONDS = 5.0` in `test_search_endpoint.py` (L-11, a27ec2c),
+Plan: 2 von 14 abgeschlossen (16-01 und 16-02, Welle 1).
+
+16-02: Die Geheimnisregel hat zum ersten Mal ein Gate.
+`backend/tests/test_public_artifacts.py` (38ebd9d, 1f25a74) laeuft rekursiv
+ueber ALLE Dateien unter `docs/` (heute 389), prueft neun Musterfamilien plus
+die Vokabularregel L-10, haelt eine Untergrenze der Dateizahl
+(`DOCS_FILES_FLOOR = 380`, Zaehldatum im Kommentar) und einen sauberen plus
+einen mutierten Selbsttest je Familie. `AUSNAHMEN` traegt 49 Eintraege nach
+(Pfad, Familie), je mit eigenem Grund und ohne einen einzigen Wert; ein Fall
+verbietet den veralteten Eintrag, damit Plan 16-05 die Liste mitschrumpfen
+muss. Heutiger Bestand: 2 Dateien pem, 10 aws-ressourcenkennung, 10
+schluesselwort-mit-wert, 2 base64, 19 muster-der-umsetzung, 6 vokabular; null
+bei ssh, aws-zugangskennung, rechnername-der-box und ipv6. Volle Suite 2.444
+bestanden / 15 uebersprungen, Skipzahl unveraendert (2.394 + 50 neue Faelle).
+**A2 ist zur Haelfte erfuellt**: das Gate steht, die Bereinigung der
+redigierbaren Dateien ist Plan 16-05.
+
+16-01: Die drei Flake-Staemme sind behandelt oder benannt: `write_revision` mit
+enger 423-Wiederholung in `integration.yml` (DI-11-05, Commit a856563),
+`ARRIVAL_SECONDS = 30.0` getrennt von `BLOCKED_WARM_SECONDS = 5.0` in
+`test_search_endpoint.py` (L-11, a27ec2c),
 `docs/audits/2026-09-phase-16/flake-register.md` plus `ignore` fuer tantivy in
-`.github/dependabot.yml` (9b24613). Volle Suite 2.394 bestanden / 15
-uebersprungen, Skipzahl unveraendert. HART-01 ist NOCH NICHT abgehakt: erledigt
-ist nur DI-11-05, DI-11-02/03/06 liegen bei Plan 16-04. `parity-login` bleibt
-beobachtet und ungefixt. Dependabot-PR #11 liegt weiterhin beim Owner.
-NAECHSTES: 16-02, 16-03 und 16-04 (Rest der Welle 1).
+`.github/dependabot.yml` (9b24613).
+
+HART-01 ist NOCH NICHT abgehakt: erledigt ist nur DI-11-05, DI-11-02/03/06
+liegen bei Plan 16-04. `parity-login` bleibt beobachtet und ungefixt.
+Dependabot-PR #11 liegt weiterhin beim Owner.
+NAECHSTES: 16-03 und 16-04 (Rest der Welle 1).
 
 ### Vorgeschichte, Phase 15
 
@@ -110,6 +128,26 @@ vollzogen (Zweig a, Beweislauf 35095805558 gruen, deploy-harp-Flag gefallen).
 
 ## Entscheide aus der Ausfuehrung
 
+- 16-02 (21.09.2026): **Zwei Fehlalarm-Mechanismen des Auditberichts sind als
+  benannte Regeln in das Gate verengt worden, statt als Ausnahmeeintraege
+  gelistet zu werden.** Ein reiner Hexlauf ist eine Pruefsumme, ein Lauf, den
+  Schraegstriche in lauter Stuecke unter 40 Zeichen zerlegen, ist ein Pfad, und
+  bei der IPv4-Form sind Oktette ueber 255 oder mit fuehrender Null gruppierte
+  Zahlen, waehrend die reservierten Bereiche keine Maschine dieses Kontos
+  nennen. Beides steht woertlich in der Erklaerung der Treffer des Audits. Ohne
+  die Verengung traegt die Ausnahmeliste allein fuer die base64-Familie 30
+  Dateien und fuer das Muster der Umsetzung 58 statt 19, und eine Liste dieser
+  Groesse ist die Vorstufe der stillen Abschaltung.
+- 16-02 (21.09.2026): **Die Ausnahmeliste hat eine Ratsche in beide
+  Richtungen.** Ein unbegruendeter Fund macht das Gate rot, und ein Eintrag,
+  dessen Fund verschwunden ist, ebenfalls. Ohne die zweite Richtung waere die
+  Liste ueber die Phasen nur gewachsen, und Plan 16-05 haette bereinigen
+  koennen, ohne die Zeilen mitzunehmen.
+- 16-02 (21.09.2026): **Die Vokabularregel liest die englische Endung und nicht
+  den Stamm.** Getroffen ist jede Form, der kein e folgt; das ist Entscheid E-H2
+  mechanisch gemacht. Der Preis ist bekannt und benannt: der deutsche Plural
+  faellt mit der englischen Form zusammen und bleibt ungesehen. Der dritte
+  Selbsttest der Familie sagt genau das aus.
 - 15-16 Task 3 (21.09.2026): **Phase 15 vom Owner abgenommen, im Wortlaut
   "ziel ist das wir den usern das best mögliche liefern", als Abnahme mit
   Auflagen bestaetigt.** Auflagen A1 bis A4 an Phase 16 (92c/99d,
@@ -1084,6 +1122,6 @@ gruen durch). Nur der Session-Status wurde nie auf resolved gesetzt.
 
 ## Session Continuity
 
-Last session: 2026-09-21T09:30:00.000Z
-Stopped at: 15-16 Task 1 (docs/performance.md, fuenf datierte Nachtraege) und Task 2 (docs/audits/2026-09-phase-15/README.md, REQUIREMENTS.md, STATE.md) gefahren und je einzeln committet; volle Suite 2394 bestanden / 15 uebersprungen, Skipzahl unveraendert. ANGEHALTEN VOR Task 3, dem Owner-Checkpoint: die Abnahme der Phase 15 liegt noch nicht vor, und die SUMMARY zu 15-16 wird erst mit ihrem Wortlaut geschrieben.
-Resume file: .planning/phases/15-messphase-eine-box-anfahrt/15-16-PLAN.md (Task 3)
+Last session: 2026-09-21T15:40:00.000Z
+Stopped at: 16-02 abgeschlossen. Task 1 (neun Geheimnisfamilien, Untergrenze, Selbsttests, Ausnahmeliste, 38ebd9d) und Task 2 (Vokabularregel ueber docs/, L-10 und E-H2, 1f25a74) je einzeln committet; alle Gates lokal gruen, volle Suite 2.444 bestanden / 15 uebersprungen, Skipzahl unveraendert.
+Resume file: keine; NAECHSTES ist 16-03 (Rest der Welle 1)
