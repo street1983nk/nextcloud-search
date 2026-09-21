@@ -81,6 +81,22 @@ standard library is imported. A third load test tool would be a foreign body for
 one loop, with an installation of its own in an environment that is supposed to
 work offline.
 
+**What a term without stock is called since 21.09.2026 (DI-11-03).**
+EmptyResultGroup counted an aborted container call and a search that found
+nothing under one name, and the tool cannot tell the two apart from where it
+stands: the OCS route answers both with HTTP 200 and a result group without a
+container part, and the difference is in the Nextcloud log on the other side. A
+second failure name taken off that answer would be a name without a
+distinguishing mark. So the question is asked before the run instead of after
+it. A pre-run probe asks the index in the process of the container, over
+ranked_sides, how much stock each of the ten terms has, and a term the index
+holds nothing for is called ohne-treffer rather than fehlschlag for the rest of
+the run. The probe writes one line per term into the head of the raw file,
+before the measured figures. If it does not answer, the run goes ahead and the
+raw file says vorlaufsonde: nicht verfuegbar, and the separation stays undone
+where a reader sees it: a silent return to the old counting is the finding of
+DI-11-03 itself.
+
 Usage:
 
     export FINDLING_LOAD_PASSWORD='...'
@@ -154,6 +170,64 @@ TERMS: Final = (
 # of this tool is to see a slow answer and to time it, not to cut it off and
 # count it as a failure.
 REQUEST_TIMEOUT_SECONDS: Final = 30.0
+
+# The name of the failure that carries both causes, as a constant rather than as
+# a literal in two places: since the probe exists the report splits it, and a
+# name spelled out twice is a name that gets renamed once.
+EMPTY_RESULT_GROUP: Final = "EmptyResultGroup"
+
+# Where the interpreter of the shipped image sits. backend/Dockerfile puts the
+# environment under /app/.venv, and 98c-sprachfaelle.sh of the v1.2 run reaches
+# the in-container probe by the same path. Overridable, so that this is a
+# default and not a fixed assumption about an image.
+PROBE_PYTHON_ENV: Final = "FINDLING_PROBE_PYTHON"
+DEFAULT_PROBE_PYTHON: Final = "/app/.venv/bin/python"
+
+# Ceiling for the whole probe. It reads an index that may be large, and it must
+# not be able to hold up the run it stands in front of.
+PROBE_TIMEOUT_SECONDS: Final = 120.0
+
+# The line the raw file carries when the probe did not answer. Fail closed in
+# the open: the run continues, and the two counters stay unsplit in writing.
+PROBE_UNAVAILABLE: Final = "vorlaufsonde: nicht verfuegbar"
+
+# The pre-run probe of DI-11-03, as a program for the interpreter of the
+# container. It asks ranked_sides, the function a search of this container builds
+# its two lists with, which is the same question 73-bestand-sonde.py of the v1.2
+# run asks in the same place. Asked from out here the question has no answer, and
+# that is the whole of DI-11-03; asked in the process before the load, it has one.
+#
+# Two limits, named here rather than discovered later. The probe asks the lexical
+# half only and hands ranked_sides no semantic side, because a semantic side
+# would load the query model and warm the very container whose memory is about to
+# be read; the diagnosis route carries the same sentence one file over. A term
+# without lexical stock can therefore still be answered by the vector half, and an
+# empty answer for such a term is filed under ohne-treffer even where the call was
+# aborted. And the figure leaves the container over the docker channel of the
+# operator, the one 98c-sprachfaelle.sh uses, and never over a route a user can
+# reach: a hit count on a user route would be the counting oracle of T-02-93.
+PROBE_PROGRAM: Final = """
+import sys
+
+from findling.api.resources import read_side
+from findling.index.search import ranked_sides
+from findling.query.rewrite import build_query
+
+side = read_side()
+if side is None:
+    raise SystemExit(2)
+for term in sys.argv[1:]:
+    rewritten = build_query(side.index, term, title_only=False)
+    if rewritten.query is None:
+        print("stock=0 window=0 term=%s" % term)
+        continue
+    # count is absent from the type stub of tantivy 0.26.0 and present at
+    # runtime, the gap 73-bestand-sonde.py names. Neither ruff nor pyright reads
+    # this string, so it is without consequence here as well.
+    stock = side.index.searcher().search(rewritten.query, 1, count=True).count
+    sides = ranked_sides(side.index, rewritten.query)
+    print("stock=%d window=%d term=%s" % (stock, len(sides.lexical), term))
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,7 +316,7 @@ def _one_search(url: str, authorization: str, min_hits: int) -> tuple[float, int
         # result group without a container part, so this is where the loss of a
         # whole answer becomes visible at all: on 10.09.2026 the Nextcloud log
         # held 17 aborted calls of level 16 next to "failures": 0 in the report.
-        return (elapsed_ms, len(entries), "EmptyResultGroup")
+        return (elapsed_ms, len(entries), EMPTY_RESULT_GROUP)
     return (elapsed_ms, len(entries), None)
 
 
@@ -309,6 +383,80 @@ def _memory(cgroup: Path | None) -> dict[str, object]:
         except (OSError, ValueError):
             values[name] = "na"
     return values
+
+
+def _probe_lines(reason: str) -> list[str]:
+    """The head of a raw file whose probe did not answer, and why it did not.
+
+    The reason names a state of this tool and never the message of a library. A
+    message can carry the address or the path it came from, which is the rule the
+    failure names of Sample follow one dataclass up.
+    """
+    return [
+        PROBE_UNAVAILABLE,
+        f"grund: {reason}, {_now()}",
+        "die trennung ohne-treffer gegen fehlschlag unterbleibt in diesem lauf",
+    ]
+
+
+def _probe(container: str | None) -> tuple[frozenset[str] | None, list[str]]:
+    """The stock of every term of this run, read in the container before the load.
+
+    Two things come back: the terms the index holds nothing for, and the lines
+    that go into the head of the raw file. None instead of a set is the answer of
+    a probe that did not run, and it is deliberately not the empty set: the empty
+    set says every term has stock, which is a claim, and None says nobody asked.
+
+    Nothing here ends the run. A load run without the probe is the run this tool
+    made before 21.09.2026, and it is still a measurement; what it may not be is
+    a measurement that looks like one with the probe (T-16-13).
+    """
+    if container is None:
+        return (None, _probe_lines("no container was named, so the probe had nowhere to run"))
+
+    interpreter = os.environ.get(PROBE_PYTHON_ENV, DEFAULT_PROBE_PYTHON)
+    try:
+        finished = subprocess.run(  # noqa: S603 - a fixed argument list, and nothing here goes through a shell
+            ["docker", "exec", container, interpreter, "-c", PROBE_PROGRAM, *TERMS],  # noqa: S607 - docker comes off the path by design
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=PROBE_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        return (None, _probe_lines(f"the probe could not be run, {type(error).__name__}"))
+    if finished.returncode != 0:
+        # The return code and never the error output of the container: that
+        # stream carries paths of the machine and, on a bad day, a line of a
+        # configuration. The code says enough to go and look, which is its job.
+        return (None, _probe_lines(f"the probe in the container ended with return code {finished.returncode}"))
+
+    measured: dict[str, tuple[int, int]] = {}
+    for line in finished.stdout.splitlines():
+        head, _, term = line.partition(" term=")
+        if not term or not head.startswith("stock="):
+            continue
+        fields: dict[str, str] = {}
+        for piece in head.split(" "):
+            name, _, raw = piece.partition("=")
+            fields[name] = raw
+        try:
+            measured[term] = (int(fields["stock"]), int(fields["window"]))
+        except (KeyError, ValueError):
+            return (None, _probe_lines("a line of the probe could not be read"))
+    if set(measured) != set(TERMS):
+        # A partial answer is no answer. Splitting the counters on some of the
+        # terms would put two readings into one raw file.
+        return (None, _probe_lines(f"the probe answered for {len(measured)} of {len(TERMS)} terms"))
+
+    without = sorted(term for term, (stock, window) in measured.items() if stock == 0 and window == 0)
+    lines = [f"vorlaufsonde {_now()}, {len(TERMS)} begriffe im container gefragt"]
+    if without:
+        lines += [f"ohne treffer: {term}" for term in without]
+    else:
+        lines.append("ohne treffer: keiner der begriffe")
+    lines += [f"bestand={stock} fenster={window} begriff={term}" for term, (stock, window) in measured.items()]
+    return (frozenset(without), lines)
 
 
 def _percentile(values: list[float], share: float) -> float:
@@ -393,7 +541,10 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--container",
         default=None,
-        help="Name or id of the backend container, for the memory readings. Without it they are left out.",
+        help=(
+            "Name or id of the backend container, for the memory readings and for the pre-run probe "
+            "of DI-11-03. Without it both are left out and the raw file says so."
+        ),
     )
     parser.add_argument(
         "--json",
@@ -407,6 +558,11 @@ def main(argv: list[str] | None = None) -> int:
     arguments = _parse(argv)
     authorization = _authorization(arguments.user, arguments.password_env)
     cgroup = _cgroup_of(arguments.container) if arguments.container else None
+
+    # Before the first memory reading and before the first level, in that order.
+    # The probe touches the lexical index itself, and a reading taken after it
+    # would count that touch as a cost of the load (DI-11-03).
+    stockless, probe_lines = _probe(arguments.container)
 
     before = _memory(cgroup)
     during: list[dict[str, object]] = []
@@ -449,7 +605,26 @@ def main(argv: list[str] | None = None) -> int:
     # quotient is the fingerprint of an answer that arrived empty (DI-10-01).
     hits_total = sum(sample.hits for sample in samples)
 
+    # DI-11-03: the answers below --min-hits, split by what the probe found. A
+    # term the index holds nothing for was answered and not lost, and the two
+    # were never the same event. The total stands beside the split, so a raw file
+    # of this tool can still be read against one from before 21.09.2026, and the
+    # split is absent by name where the probe did not answer.
+    empty_total = failures.get(EMPTY_RESULT_GROUP, 0)
+    empty_groups: dict[str, object] = {"gesamt": empty_total}
+    if stockless is None:
+        empty_groups["getrennt"] = "nein, " + PROBE_UNAVAILABLE
+    else:
+        without_stock = sum(
+            1 for sample in samples if sample.failure == EMPTY_RESULT_GROUP and sample.term in stockless
+        )
+        empty_groups["ohne-treffer"] = without_stock
+        empty_groups["fehlschlag"] = empty_total - without_stock
+
     report: dict[str, object] = {
+        # First key, so the terms without stock stand in the head of the raw file
+        # and in front of the measured figures.
+        "vorlaufsonde": probe_lines,
         "started": before.get("at"),
         "target": arguments.base_url,
         "user": arguments.user,
@@ -461,6 +636,7 @@ def main(argv: list[str] | None = None) -> int:
         "answered": len(times),
         "failures": sum(failures.values()),
         "failure_kinds": failures,
+        "empty_result_groups": empty_groups,
         "hits_total": hits_total,
         "hits_per_request": round(hits_total / len(samples), 2) if samples else 0.0,
         "budget_ms": BUDGET_MS,

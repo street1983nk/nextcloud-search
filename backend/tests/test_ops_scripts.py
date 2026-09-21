@@ -34,13 +34,14 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Mapping
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -1101,6 +1102,164 @@ def test_a_run_of_nothing_but_empty_result_groups_ends_with_an_exit_code(
     assert report["failure_kinds"] == {"EmptyResultGroup": 2}
 
 
+# DI-11-03, the pre-run probe. The block below asks the tool what it decides,
+# in the same shape as the block above it, because the finding of DI-11-03 is a
+# decision and not a line: a term without stock and an aborted call arrive at
+# this tool as the same answer, and only something asked before the run can tell
+# them apart.
+
+
+def stage_probe(monkeypatch: pytest.MonkeyPatch, module: ModuleType, returncode: int, stdout: str) -> None:
+    """Put a staged answer of the container in front of the probe.
+
+    The name subprocess is rebound in the module under test rather than the run
+    of the real subprocess module, so that nothing outside this test sees a
+    different subprocess while it runs. SubprocessError travels along because the
+    probe catches it by that name.
+    """
+
+    def answer(*_unused: object, **_unused_keywords: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(
+        module,
+        "subprocess",
+        SimpleNamespace(run=answer, SubprocessError=subprocess.SubprocessError),
+    )
+
+
+def test_the_probe_names_the_terms_the_index_holds_nothing_for(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One line per term, and the terms without stock named in the head of it.
+
+    The stock figure comes out of the process of the container over ranked_sides,
+    which is the same question 73-bestand-sonde.py asks, because from outside
+    there is no answer at all: the OCS route answers an aborted call and a search
+    that found nothing with the same 200 and the same result group without a
+    container part.
+    """
+    module = search_load_module()
+    stock = dict.fromkeys(module.TERMS, 7)
+    stock[module.TERMS[5]] = 0
+    stage_probe(
+        monkeypatch,
+        module,
+        0,
+        "".join(f"stock={number} window={min(number, 100)} term={term}\n" for term, number in stock.items()),
+    )
+
+    stockless, lines = module._probe("nc_app_findling_backend")
+
+    assert stockless == frozenset({module.TERMS[5]})
+    assert lines[0].startswith("vorlaufsonde ")
+    assert f"ohne treffer: {module.TERMS[5]}" in lines
+    # One line per term, so a reader sees the stock and not only the verdict.
+    for term in module.TERMS:
+        assert any(line.startswith("bestand=") and line.endswith(f"begriff={term}") for line in lines), term
+
+
+def test_the_probe_that_does_not_answer_says_so_instead_of_guessing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """T-16-13: a silent return to the old counting is the finding itself.
+
+    Three ways of not answering are asked, because they arrive on three different
+    paths and all three have to end in the same line: no container was named, the
+    program in the container failed, and the program answered for some of the
+    terms. None of them may hand back the empty set, which would say every term
+    has stock.
+    """
+    module = search_load_module()
+
+    stockless, lines = module._probe(None)
+    assert stockless is None
+    assert lines[0] == "vorlaufsonde: nicht verfuegbar"
+
+    stage_probe(monkeypatch, module, 2, "")
+    stockless, lines = module._probe("nc_app_findling_backend")
+    assert stockless is None
+    assert lines[0] == "vorlaufsonde: nicht verfuegbar"
+
+    stage_probe(monkeypatch, module, 0, f"stock=0 window=0 term={module.TERMS[0]}\n")
+    stockless, lines = module._probe("nc_app_findling_backend")
+    assert stockless is None
+    assert lines[0] == "vorlaufsonde: nicht verfuegbar"
+
+
+def test_the_report_splits_the_empty_groups_by_what_the_probe_found(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """ohne-treffer and fehlschlag apart, and the total still beside them.
+
+    Two answers below the switch, one of them for a term the probe reported as
+    stockless. The total stays where it was so that a raw file of this tool can
+    be read against one from before 21.09.2026, which is the half of DI-10-01
+    that must not be lost while DI-11-03 is closed.
+    """
+    module = search_load_module()
+    monkeypatch.setenv("FINDLING_LOAD_PASSWORD", "gestellt")
+    terms = module.TERMS
+    stage_hits_per_term(monkeypatch, {terms[0]: 0, terms[1]: 0, terms[2]: 5})
+    monkeypatch.setattr(module, "_probe", lambda _container: (frozenset({terms[0]}), ["vorlaufsonde gestellt"]))
+    report_file = tmp_path / "report.json"
+
+    code = module.main(
+        [
+            "--base-url",
+            "http://localhost:8080",
+            "--user",
+            "lasttest",
+            "--concurrency",
+            "3",
+            "--rounds",
+            "1",
+            "--json",
+            str(report_file),
+        ]
+    )
+
+    report = json.loads(report_file.read_text(encoding="utf-8"))
+    assert code == 0
+    assert report["vorlaufsonde"] == ["vorlaufsonde gestellt"]
+    assert report["failures"] == 2
+    assert report["failure_kinds"] == {"EmptyResultGroup": 2}
+    assert report["empty_result_groups"] == {"gesamt": 2, "ohne-treffer": 1, "fehlschlag": 1}
+
+
+def test_a_report_without_a_probe_carries_the_line_and_no_split(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The raw file of a run without the probe says which reading it was written under.
+
+    No container is named here, which is the ordinary way to run this tool
+    against an instance whose container is out of reach, and the split then has
+    to be absent by name rather than quietly identical to the old counting.
+    """
+    module = search_load_module()
+    monkeypatch.setenv("FINDLING_LOAD_PASSWORD", "gestellt")
+    stage_one_answer(monkeypatch, staged_group(0))
+    report_file = tmp_path / "report.json"
+
+    module.main(
+        [
+            "--base-url",
+            "http://localhost:8080",
+            "--user",
+            "lasttest",
+            "--concurrency",
+            "2",
+            "--rounds",
+            "1",
+            "--json",
+            str(report_file),
+        ]
+    )
+
+    raw = report_file.read_text(encoding="utf-8")
+    report = json.loads(raw)
+    assert report["vorlaufsonde"][0] == "vorlaufsonde: nicht verfuegbar"
+    assert "vorlaufsonde: nicht verfuegbar" in raw
+    assert "ohne-treffer" not in report["empty_result_groups"]
+    assert report["empty_result_groups"]["gesamt"] == 2
+
+
 def report_keys(text: str) -> list[str]:
     """The keys of the report dictionary of main, in the order they are written.
 
@@ -1147,3 +1306,8 @@ def test_the_report_puts_the_hits_per_request_next_to_the_hits_total() -> None:
     assert "hits_total" in keys, keys
     assert keys.index("hits_per_request") == keys.index("hits_total") + 1, keys
     assert "min_hits" in keys, keys
+    # DI-11-03: the probe belongs in the head of the file, in front of every
+    # measured figure, because its list is what the figures below have to be read
+    # with. A list at the end would be a footnote to a number nobody re-reads.
+    assert keys.index("vorlaufsonde") == 0, keys
+    assert keys.index("empty_result_groups") == keys.index("failure_kinds") + 1, keys
