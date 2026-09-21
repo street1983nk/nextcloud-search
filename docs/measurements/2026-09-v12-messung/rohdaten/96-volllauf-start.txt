@@ -1,0 +1,81 @@
+volllauf-vorbereitung 2026-09-20T03:43:10Z
+basis: https://loadtest.infranode.dev
+aufnahmen: /home/ubuntu/nextcloud-search/docs/measurements/2026-09-v12-messung/skripte/../rohdaten/96-statusseite.jsonl
+frist der gegenprobe: 360 s
+=== The state before the app is switched on, reading 8 of the list ===
+Image=ghcr.io/street1983nk/findling_backend:dev Memory=2147483648 MemorySwap=2147483648
+cgroup: /sys/fs/cgroup/system.slice/docker-a670a3d2cb40515c1d6d0b493d1018f5a89750f863f59d3027e9b34fcff17dbb.scope
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+anon 1331576832
+file 180305920
+slab 14114272
+memory.current=1530015744 memory.peak=1656229888 memory.max=2147483648
+/dev/nvme1n1     59G   34G   22G  61% /mnt/findling
+  - findling: 1.1.0
+=== The observers, started BEFORE the app is switched on ===
+  5 /home/ubuntu/nextcloud-search/docs/measurements/2026-09-v12-messung/skripte/../rohdaten/96-volllauf.csv
+  1 /home/ubuntu/nextcloud-search/docs/measurements/2026-09-v12-messung/skripte/../rohdaten/96-statusseite.jsonl
+  6 total
+=== The dry run of the reader, against a real recording (pitfall 8) ===
+leser: /home/ubuntu/nextcloud-search/docs/measurements/2026-09-v12-messung/skripte/96c-lesen.py
+letzte-aufnahme-gelesen: 6520 4696 1548
+-- the three words are vorrat, indexed and embedded, in that order --
+-- unklar three times here means the observer has no session yet: fix that
+   BEFORE the trigger, because the watchman reads this very row --
+startpunkt-indexed 4696
+startpunkt-bewertung schon indexierte Dateien vorhanden, die Laufzeit ist eine Untergrenze
+=== The trigger: only now is the app switched on ===
+volllauf-start 2026-09-20T03:43:30Z
+findling already enabled
+Work stock
+  scheduled            6488
+  handed to the worker 32
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-20 03:42:59 (0 minutes ago)
+=== The counter check after 360 seconds: is something really working ===
+gegenprobe 2026-09-20T03:49:31Z
+Work stock
+  scheduled            8487
+  handed to the worker 32
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-20 03:48:00 (1 minutes ago)
+-- DI-05-36, the second half of the proof: COUNTED passes of the poller --
+494
+INFO:findling.index.writer:committed 29 documents
+INFO:findling.worker.poller:pass finished, claimed=32 indexed=29 skipped=3 failed=0 unchanged=0 requeued=32 embedded=0 committed=29
+INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/7986?userId=lasttest "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/7987?userId=lasttest "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/7988?userId=lasttest "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/7989?userId=lasttest "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/7990?userId=lasttest "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://loadtest.infranode.dev/ocs/v2.php/apps/findling/files/7991?userId=lasttest "HTTP/1.1 200 OK"
+=== The verdict, out of the row of the observer ===
+gegenprobe-gelesen: 8519 6474 1548
+arbeitsvorrat-da ja
+-- Nachtrag, unter dem Urteil und nicht an seiner Stelle --
+   Ein Vorrat von 0 nach 360 s ist Annahme A2 der Recherche: der Befehl
+   findling:index --restart stand am 05.09. eingestellt, die Notiz war zwei
+   Tage alt und die Box war seither aus. Dann wird findling:index --restart -n
+   erneut abgesetzt und die Frist laeuft von vorn. Erst wenn der Vorrat nach
+   einer zweiten Frist auf null bleibt, ist das ein Befund ueber die Box.
+volllauf-vorbereitung-ende 2026-09-20T03:49:32Z

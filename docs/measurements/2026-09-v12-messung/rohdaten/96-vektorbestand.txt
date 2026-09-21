@@ -1,0 +1,47 @@
+vektorbestand 2026-09-20T23:09:58Z
+-- the files of the data store, with their sizes --
+total 87236
+drwxr-xr-x 5 findling findling     4096 Sep 20 02:42 .
+drwxr-xr-x 1 root     root         4096 Sep 20 02:42 ..
+-rw-r--r-- 1 findling findling        0 Sep 20 02:42 armed.marker
+drwxr-xr-x 2 findling findling     4096 Sep 20 02:42 dict
+drwxr-xr-x 2 findling findling     4096 Sep 20 21:55 index
+-rw-r--r-- 1 findling findling       80 Sep 20 02:42 instance.json
+-rw-r--r-- 1 findling findling 16408576 Sep 20 22:39 state.db
+-rw-r--r-- 1 findling findling    32768 Sep 20 22:44 state.db-shm
+-rw-r--r-- 1 findling findling  4165352 Sep 20 22:44 state.db-wal
+drwxr-xr-x 2 findling findling     4096 Sep 20 21:55 tmp
+-rw-r--r-- 1 findling findling 64122880 Sep 20 22:39 vectors.db
+-rw-r--r-- 1 findling findling    32768 Sep 20 22:40 vectors.db-shm
+-rw-r--r-- 1 findling findling  4527912 Sep 20 22:40 vectors.db-wal
+0	/nc_app_findling_backend_data/armed.marker
+3284251	/nc_app_findling_backend_data/dict
+785511533	/nc_app_findling_backend_data/index
+80	/nc_app_findling_backend_data/instance.json
+16408576	/nc_app_findling_backend_data/state.db
+32768	/nc_app_findling_backend_data/state.db-shm
+4165352	/nc_app_findling_backend_data/state.db-wal
+0	/nc_app_findling_backend_data/tmp
+64122880	/nc_app_findling_backend_data/vectors.db
+32768	/nc_app_findling_backend_data/vectors.db-shm
+4527912	/nc_app_findling_backend_data/vectors.db-wal
+-- chunks, documents and bytes per document, over 42d-bestand.py --
+{
+ "vectors_db_pfad": "/nc_app_findling_backend_data/vectors.db",
+ "vectors_db_byte": 64122880,
+ "vectors_db_wal_byte": 4560680,
+ "chunks": 146197,
+ "dokumente_mit_vektor": 52137,
+ "byte_je_dokument": 1317.4,
+ "chunks_je_dokument": 2.804,
+ "state_db_byte": 16408576,
+ "verdikte": {
+  "failed": 6,
+  "indexed": 52137,
+  "skipped": 44
+ },
+ "zeichen_gesamt": 1397880498,
+ "tantivy_pfad": "/nc_app_findling_backend_data/index",
+ "tantivy_byte": 785511533,
+ "vektor_anteil_am_tantivy_prozent": 8.74
+}

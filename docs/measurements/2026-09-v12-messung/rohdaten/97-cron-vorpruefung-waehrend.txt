@@ -1,0 +1,40 @@
+der wirkungszweig des laufs, plan 15-11, NACHTRAEGLICHE AUSWERTUNG
+geschrieben 2026-09-21 nach dem ende des laufs
+
+BEFUND, zuerst und deutlich: der live-zweig `97-cron-vorpruefung.sh waehrend`
+ist beim anstoss des volllaufs NICHT gestartet worden (versaeumnis der
+ausfuehrung in task 1, aufgefallen nach dem ende des laufs). die zahlen dieses
+protokolls stammen deshalb nicht aus dem live-poller (ein occ-aufruf je runde),
+sondern sind NACHTRAEGLICH aus der aufgezeichneten statusreihe des beobachters
+berechnet: 96-statusseite.jsonl, eine aufnahme je 120 s ueber den ganzen lauf,
+vorrat = scheduled + running je aufnahme. annahme A1 der recherche gilt hier
+woertlich: zwei reihen erzeugen zwei prozentzahlen fuer denselben sachverhalt,
+also steht die reihe neben jeder zahl. nachtrag fuer 15-15: der bericht wiegt
+diese herkunft; 00-ablauf.md bekommt den start des waehrend-zweigs als eigene
+zeile neben dem 96-volllauf-aufruf.
+
+cron-modus-ist cron (aus 97-cron-vorpruefung-vorher.txt)
+cron-intervall-quelle aio-cron-container (vorher-zweig)
+cron-intervall-ist 300
+
+lauffenster 2026-09-20T03:49:32Z bis 2026-09-20T23:09:58Z (19 h 20 min)
+ablesereihe-intervall 120
+lesungen 578
+vorrat-null-lesungen 15
+vorrat-null-anteil 2,6 prozent
+hochgerechnet 0,50 h ohne arbeitsvorrat
+v1.1-vergleichswert 5,85 h von 26,6 h (22,0 prozent), quelle abschnitt 6 des
+runbooks
+
+scheiben 23 (lesungen, in denen der vorrat gegen die vorige stieg)
+scheibenabstand-min 120
+scheibenabstand-median 301
+scheibenabstand-max 361
+wirkungsdeckel 420, ueberschreitungen 0
+
+einordnung der scheibenzahl, damit niemand 230 erwartet: die zaehlung sieht
+nur aufnahmen, in denen der vorrat GEGEN die vorige aufnahme stieg. waehrend
+der crawl-phase steigt er fast durchgehend (wenige, lange scheiben), im
+abtrag faellt er monoton; die 23 scheiben mit median 301 s sind die
+nachschub-scheiben des top-up-fensters. der live-zweig haette mit seinem
+eigenen intervall anders gezaehlt, siehe befund oben.

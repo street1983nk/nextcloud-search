@@ -1,0 +1,434 @@
+waechter-start 2026-09-20T03:49:32Z
+aufnahmen: /home/ubuntu/nextcloud-search/docs/measurements/2026-09-v12-messung/skripte/../rohdaten/96-statusseite.jsonl
+leser: /home/ubuntu/nextcloud-search/docs/measurements/2026-09-v12-messung/skripte/96c-lesen.py
+lastwerkzeug: /home/ubuntu/nextcloud-search/scripts/ops/search_load.py
+deckel: 340 runden a 300 s
+vergleichswerte der Suchlast: 1.129,0 ms p95 im Nachlauf, 524,0 ms p95 bei vollem Bestand
+=== The transition from the first to the second track, reading 9 of the list ===
+-- cgroup-lesung am-uebergang-der-spuren --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+anon 1331924992
+file 215502848
+slab 17488112
+memory.current=1569046528 memory.peak=1688920064 memory.max=2147483648
+suchlast-nachlauf-start 2026-09-20T03:49:32Z
+suchlast-nachlauf-ende 2026-09-20T03:49:36Z
+-- cgroup-lesung nach-der-suchlast-im-nachlauf --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 0
+anon 1333637120
+file 216408064
+slab 17513056
+memory.current=1571774464 memory.peak=1688920064 memory.max=2147483648
+waechter runde=1 vorrat=8519 indexed=6474 embedded=1548 gesehen=1 still=0 leer=0 2026-09-20T03:49:36Z
+waechter runde=2 vorrat=10518 indexed=7729 embedded=1548 gesehen=1 still=1 leer=0 2026-09-20T03:54:36Z
+waechter runde=3 vorrat=12516 indexed=9598 embedded=1548 gesehen=1 still=2 leer=0 2026-09-20T03:59:36Z
+waechter runde=4 vorrat=14515 indexed=10866 embedded=1548 gesehen=1 still=3 leer=0 2026-09-20T04:04:36Z
+waechter runde=5 vorrat=16515 indexed=12869 embedded=1548 gesehen=1 still=4 leer=0 2026-09-20T04:09:37Z
+waechter runde=6 vorrat=18514 indexed=14320 embedded=1548 gesehen=1 still=5 leer=0 2026-09-20T04:14:37Z
+waechter runde=7 vorrat=20514 indexed=16475 embedded=1548 gesehen=1 still=6 leer=0 2026-09-20T04:19:37Z
+waechter runde=8 vorrat=22497 indexed=17870 embedded=1564 gesehen=1 still=0 leer=0 2026-09-20T04:24:37Z
+waechter runde=9 vorrat=24442 indexed=20038 embedded=1612 gesehen=1 still=0 leer=0 2026-09-20T04:29:37Z
+waechter runde=10 vorrat=26384 indexed=21174 embedded=1676 gesehen=1 still=0 leer=0 2026-09-20T04:34:37Z
+waechter runde=11 vorrat=28326 indexed=23245 embedded=1732 gesehen=1 still=0 leer=0 2026-09-20T04:39:37Z
+waechter runde=12 vorrat=30261 indexed=24426 embedded=1796 gesehen=1 still=0 leer=0 2026-09-20T04:44:37Z
+waechter runde=13 vorrat=32189 indexed=26513 embedded=1868 gesehen=1 still=0 leer=0 2026-09-20T04:49:37Z
+waechter runde=14 vorrat=34123 indexed=27731 embedded=1932 gesehen=1 still=0 leer=0 2026-09-20T04:54:37Z
+waechter runde=15 vorrat=36041 indexed=29846 embedded=2012 gesehen=1 still=0 leer=0 2026-09-20T04:59:37Z
+waechter runde=16 vorrat=37927 indexed=30975 embedded=2124 gesehen=1 still=0 leer=0 2026-09-20T05:04:37Z
+waechter runde=17 vorrat=39847 indexed=33078 embedded=2204 gesehen=1 still=0 leer=0 2026-09-20T05:09:37Z
+waechter runde=18 vorrat=41766 indexed=34213 embedded=2284 gesehen=1 still=0 leer=0 2026-09-20T05:14:37Z
+waechter runde=19 vorrat=43685 indexed=36430 embedded=2364 gesehen=1 still=0 leer=0 2026-09-20T05:19:37Z
+waechter runde=20 vorrat=45596 indexed=37483 embedded=2452 gesehen=1 still=0 leer=0 2026-09-20T05:24:37Z
+waechter runde=21 vorrat=47507 indexed=39609 embedded=2540 gesehen=1 still=0 leer=0 2026-09-20T05:29:37Z
+waechter runde=22 vorrat=49434 indexed=40530 embedded=2612 gesehen=1 still=0 leer=0 2026-09-20T05:34:37Z
+waechter runde=23 vorrat=49461 indexed=41744 embedded=2684 gesehen=1 still=0 leer=0 2026-09-20T05:39:37Z
+waechter runde=24 vorrat=49285 indexed=41788 embedded=2860 gesehen=1 still=0 leer=0 2026-09-20T05:44:37Z
+waechter runde=25 vorrat=49013 indexed=41856 embedded=3132 gesehen=1 still=0 leer=0 2026-09-20T05:49:37Z
+waechter runde=26 vorrat=48837 indexed=41900 embedded=3314 gesehen=1 still=0 leer=0 2026-09-20T05:54:37Z
+waechter runde=27 vorrat=48573 indexed=41966 embedded=3572 gesehen=1 still=0 leer=0 2026-09-20T05:59:37Z
+waechter runde=28 vorrat=48389 indexed=42012 embedded=3756 gesehen=1 still=0 leer=0 2026-09-20T06:04:37Z
+waechter runde=29 vorrat=48213 indexed=42056 embedded=3932 gesehen=1 still=0 leer=0 2026-09-20T06:09:37Z
+waechter runde=30 vorrat=47949 indexed=42122 embedded=4196 gesehen=1 still=0 leer=0 2026-09-20T06:14:37Z
+waechter runde=31 vorrat=47805 indexed=42158 embedded=4340 gesehen=1 still=0 leer=0 2026-09-20T06:19:37Z
+waechter runde=32 vorrat=47565 indexed=42218 embedded=4580 gesehen=1 still=0 leer=0 2026-09-20T06:24:37Z
+waechter runde=33 vorrat=47429 indexed=42252 embedded=4716 gesehen=1 still=0 leer=0 2026-09-20T06:29:37Z
+waechter runde=34 vorrat=47165 indexed=42318 embedded=4985 gesehen=1 still=0 leer=0 2026-09-20T06:34:38Z
+waechter runde=35 vorrat=46981 indexed=42364 embedded=5164 gesehen=1 still=0 leer=0 2026-09-20T06:39:38Z
+waechter runde=36 vorrat=46717 indexed=42430 embedded=5431 gesehen=1 still=0 leer=0 2026-09-20T06:44:38Z
+waechter runde=37 vorrat=46589 indexed=42462 embedded=5556 gesehen=1 still=0 leer=0 2026-09-20T06:49:38Z
+waechter runde=38 vorrat=46325 indexed=42528 embedded=5822 gesehen=1 still=0 leer=0 2026-09-20T06:54:38Z
+waechter runde=39 vorrat=46149 indexed=42572 embedded=5996 gesehen=1 still=0 leer=0 2026-09-20T06:59:38Z
+waechter runde=40 vorrat=45917 indexed=42630 embedded=6228 gesehen=1 still=0 leer=0 2026-09-20T07:04:38Z
+waechter runde=41 vorrat=45733 indexed=42676 embedded=6412 gesehen=1 still=0 leer=0 2026-09-20T07:09:38Z
+waechter runde=42 vorrat=45461 indexed=42744 embedded=6684 gesehen=1 still=0 leer=0 2026-09-20T07:14:38Z
+waechter runde=43 vorrat=45293 indexed=42786 embedded=6852 gesehen=1 still=0 leer=0 2026-09-20T07:19:38Z
+waechter runde=44 vorrat=45029 indexed=42852 embedded=7119 gesehen=1 still=0 leer=0 2026-09-20T07:24:38Z
+waechter runde=45 vorrat=44885 indexed=42888 embedded=7260 gesehen=1 still=0 leer=0 2026-09-20T07:29:38Z
+waechter runde=46 vorrat=44613 indexed=42956 embedded=7532 gesehen=1 still=0 leer=0 2026-09-20T07:34:38Z
+waechter runde=47 vorrat=44437 indexed=43000 embedded=7708 gesehen=1 still=0 leer=0 2026-09-20T07:39:38Z
+waechter runde=48 vorrat=44173 indexed=43066 embedded=7972 gesehen=1 still=0 leer=0 2026-09-20T07:44:38Z
+waechter runde=49 vorrat=43997 indexed=43110 embedded=8148 gesehen=1 still=0 leer=0 2026-09-20T07:49:38Z
+waechter runde=50 vorrat=43741 indexed=43174 embedded=8404 gesehen=1 still=0 leer=0 2026-09-20T07:54:38Z
+waechter runde=51 vorrat=43597 indexed=43210 embedded=8549 gesehen=1 still=0 leer=0 2026-09-20T07:59:38Z
+waechter runde=52 vorrat=43325 indexed=43278 embedded=8820 gesehen=1 still=0 leer=0 2026-09-20T08:04:38Z
+waechter runde=53 vorrat=43173 indexed=43316 embedded=8972 gesehen=1 still=0 leer=0 2026-09-20T08:09:38Z
+waechter runde=54 vorrat=42965 indexed=43370 embedded=9188 gesehen=1 still=0 leer=0 2026-09-20T08:14:38Z
+waechter runde=55 vorrat=42861 indexed=43396 embedded=9292 gesehen=1 still=0 leer=0 2026-09-20T08:19:38Z
+waechter runde=56 vorrat=42605 indexed=43458 embedded=9547 gesehen=1 still=0 leer=0 2026-09-20T08:24:38Z
+waechter runde=57 vorrat=42421 indexed=43504 embedded=9724 gesehen=1 still=0 leer=0 2026-09-20T08:29:38Z
+waechter runde=58 vorrat=42149 indexed=43572 embedded=9996 gesehen=1 still=0 leer=0 2026-09-20T08:34:38Z
+waechter runde=59 vorrat=41965 indexed=43618 embedded=10180 gesehen=1 still=0 leer=0 2026-09-20T08:39:38Z
+waechter runde=60 vorrat=41725 indexed=43676 embedded=10420 gesehen=1 still=0 leer=0 2026-09-20T08:44:38Z
+waechter runde=61 vorrat=41589 indexed=43708 embedded=10556 gesehen=1 still=0 leer=0 2026-09-20T08:49:38Z
+waechter runde=62 vorrat=41325 indexed=43774 embedded=10820 gesehen=1 still=0 leer=0 2026-09-20T08:54:38Z
+waechter runde=63 vorrat=41141 indexed=43820 embedded=11004 gesehen=1 still=0 leer=0 2026-09-20T08:59:38Z
+waechter runde=64 vorrat=40909 indexed=43878 embedded=11236 gesehen=1 still=0 leer=0 2026-09-20T09:04:38Z
+waechter runde=65 vorrat=40733 indexed=43922 embedded=11412 gesehen=1 still=0 leer=0 2026-09-20T09:09:39Z
+waechter runde=66 vorrat=40461 indexed=43990 embedded=11684 gesehen=1 still=0 leer=0 2026-09-20T09:14:39Z
+waechter runde=67 vorrat=40293 indexed=44032 embedded=11852 gesehen=1 still=0 leer=0 2026-09-20T09:19:39Z
+waechter runde=68 vorrat=40021 indexed=44100 embedded=12124 gesehen=1 still=0 leer=0 2026-09-20T09:24:39Z
+waechter runde=69 vorrat=39845 indexed=44144 embedded=12304 gesehen=1 still=0 leer=0 2026-09-20T09:29:39Z
+waechter runde=70 vorrat=39573 indexed=44212 embedded=12576 gesehen=1 still=0 leer=0 2026-09-20T09:34:39Z
+waechter runde=71 vorrat=39397 indexed=44256 embedded=12751 gesehen=1 still=0 leer=0 2026-09-20T09:39:39Z
+waechter runde=72 vorrat=39125 indexed=44324 embedded=13020 gesehen=1 still=0 leer=0 2026-09-20T09:44:39Z
+waechter runde=73 vorrat=38973 indexed=44362 embedded=13172 gesehen=1 still=0 leer=0 2026-09-20T09:49:39Z
+waechter runde=74 vorrat=38749 indexed=44418 embedded=13396 gesehen=1 still=0 leer=0 2026-09-20T09:54:39Z
+waechter runde=75 vorrat=38573 indexed=44462 embedded=13572 gesehen=1 still=0 leer=0 2026-09-20T09:59:39Z
+waechter runde=76 vorrat=38349 indexed=44518 embedded=13796 gesehen=1 still=0 leer=0 2026-09-20T10:04:39Z
+waechter runde=77 vorrat=38173 indexed=44562 embedded=13972 gesehen=1 still=0 leer=0 2026-09-20T10:09:39Z
+waechter runde=78 vorrat=37901 indexed=44630 embedded=14244 gesehen=1 still=0 leer=0 2026-09-20T10:14:39Z
+waechter runde=79 vorrat=37725 indexed=44674 embedded=14420 gesehen=1 still=0 leer=0 2026-09-20T10:19:39Z
+waechter runde=80 vorrat=37461 indexed=44740 embedded=14684 gesehen=1 still=0 leer=0 2026-09-20T10:24:39Z
+waechter runde=81 vorrat=37333 indexed=44772 embedded=14814 gesehen=1 still=0 leer=0 2026-09-20T10:29:39Z
+waechter runde=82 vorrat=37085 indexed=44834 embedded=15060 gesehen=1 still=0 leer=0 2026-09-20T10:34:39Z
+waechter runde=83 vorrat=36901 indexed=44880 embedded=15244 gesehen=1 still=0 leer=0 2026-09-20T10:39:39Z
+waechter runde=84 vorrat=36637 indexed=44946 embedded=15512 gesehen=1 still=0 leer=0 2026-09-20T10:44:39Z
+waechter runde=85 vorrat=36453 indexed=44992 embedded=15692 gesehen=1 still=0 leer=0 2026-09-20T10:49:39Z
+waechter runde=86 vorrat=36181 indexed=45060 embedded=15964 gesehen=1 still=0 leer=0 2026-09-20T10:54:39Z
+waechter runde=87 vorrat=36013 indexed=45102 embedded=16132 gesehen=1 still=0 leer=0 2026-09-20T10:59:39Z
+waechter runde=88 vorrat=35765 indexed=45164 embedded=16386 gesehen=1 still=0 leer=0 2026-09-20T11:04:39Z
+waechter runde=89 vorrat=35581 indexed=45210 embedded=16564 gesehen=1 still=0 leer=0 2026-09-20T11:09:40Z
+waechter runde=90 vorrat=35317 indexed=45276 embedded=16828 gesehen=1 still=0 leer=0 2026-09-20T11:14:40Z
+waechter runde=91 vorrat=35141 indexed=45320 embedded=17010 gesehen=1 still=0 leer=0 2026-09-20T11:19:40Z
+waechter runde=92 vorrat=34869 indexed=45388 embedded=17276 gesehen=1 still=0 leer=0 2026-09-20T11:24:40Z
+waechter runde=93 vorrat=34685 indexed=45434 embedded=17460 gesehen=1 still=0 leer=0 2026-09-20T11:29:40Z
+waechter runde=94 vorrat=34421 indexed=45500 embedded=17724 gesehen=1 still=0 leer=0 2026-09-20T11:34:40Z
+waechter runde=95 vorrat=34245 indexed=45544 embedded=17906 gesehen=1 still=0 leer=0 2026-09-20T11:39:40Z
+waechter runde=96 vorrat=34005 indexed=45604 embedded=18140 gesehen=1 still=0 leer=0 2026-09-20T11:44:40Z
+waechter runde=97 vorrat=33829 indexed=45648 embedded=18316 gesehen=1 still=0 leer=0 2026-09-20T11:49:40Z
+waechter runde=98 vorrat=33581 indexed=45710 embedded=18564 gesehen=1 still=0 leer=0 2026-09-20T11:54:40Z
+waechter runde=99 vorrat=33405 indexed=45754 embedded=18740 gesehen=1 still=0 leer=0 2026-09-20T11:59:40Z
+waechter runde=100 vorrat=33237 indexed=45796 embedded=18910 gesehen=1 still=0 leer=0 2026-09-20T12:04:40Z
+waechter runde=101 vorrat=32965 indexed=45864 embedded=19180 gesehen=1 still=0 leer=0 2026-09-20T12:09:40Z
+waechter runde=102 vorrat=32813 indexed=45902 embedded=19332 gesehen=1 still=0 leer=0 2026-09-20T12:14:40Z
+waechter runde=103 vorrat=32541 indexed=45970 embedded=19604 gesehen=1 still=0 leer=0 2026-09-20T12:19:40Z
+waechter runde=104 vorrat=32365 indexed=46014 embedded=19783 gesehen=1 still=0 leer=0 2026-09-20T12:24:40Z
+waechter runde=105 vorrat=32093 indexed=46082 embedded=20053 gesehen=1 still=0 leer=0 2026-09-20T12:29:40Z
+waechter runde=106 vorrat=31989 indexed=46108 embedded=20156 gesehen=1 still=0 leer=0 2026-09-20T12:34:40Z
+waechter runde=107 vorrat=31717 indexed=46176 embedded=20428 gesehen=1 still=0 leer=0 2026-09-20T12:39:40Z
+waechter runde=108 vorrat=31533 indexed=46222 embedded=20612 gesehen=1 still=0 leer=0 2026-09-20T12:44:40Z
+waechter runde=109 vorrat=31261 indexed=46290 embedded=20884 gesehen=1 still=0 leer=0 2026-09-20T12:49:40Z
+waechter runde=110 vorrat=31117 indexed=46326 embedded=21030 gesehen=1 still=0 leer=0 2026-09-20T12:54:40Z
+waechter runde=111 vorrat=30845 indexed=46394 embedded=21300 gesehen=1 still=0 leer=0 2026-09-20T12:59:40Z
+waechter runde=112 vorrat=30661 indexed=46440 embedded=21484 gesehen=1 still=0 leer=0 2026-09-20T13:04:40Z
+waechter runde=113 vorrat=30397 indexed=46506 embedded=21753 gesehen=1 still=0 leer=0 2026-09-20T13:09:40Z
+waechter runde=114 vorrat=30213 indexed=46552 embedded=21932 gesehen=1 still=0 leer=0 2026-09-20T13:14:40Z
+waechter runde=115 vorrat=29941 indexed=46620 embedded=22204 gesehen=1 still=0 leer=0 2026-09-20T13:19:40Z
+waechter runde=116 vorrat=29765 indexed=46664 embedded=22380 gesehen=1 still=0 leer=0 2026-09-20T13:24:40Z
+waechter runde=117 vorrat=29501 indexed=46730 embedded=22644 gesehen=1 still=0 leer=0 2026-09-20T13:29:41Z
+waechter runde=118 vorrat=29325 indexed=46774 embedded=22821 gesehen=1 still=0 leer=0 2026-09-20T13:34:41Z
+waechter runde=119 vorrat=29069 indexed=46838 embedded=23077 gesehen=1 still=0 leer=0 2026-09-20T13:39:41Z
+waechter runde=120 vorrat=28885 indexed=46884 embedded=23260 gesehen=1 still=0 leer=0 2026-09-20T13:44:41Z
+waechter runde=121 vorrat=28621 indexed=46950 embedded=23528 gesehen=1 still=0 leer=0 2026-09-20T13:49:41Z
+waechter runde=122 vorrat=28437 indexed=46996 embedded=23708 gesehen=1 still=0 leer=0 2026-09-20T13:54:41Z
+waechter runde=123 vorrat=28165 indexed=47064 embedded=23980 gesehen=1 still=0 leer=0 2026-09-20T13:59:41Z
+waechter runde=124 vorrat=27997 indexed=47106 embedded=24152 gesehen=1 still=0 leer=0 2026-09-20T14:04:41Z
+waechter runde=125 vorrat=27765 indexed=47164 embedded=24380 gesehen=1 still=0 leer=0 2026-09-20T14:09:41Z
+waechter runde=126 vorrat=27637 indexed=47196 embedded=24508 gesehen=1 still=0 leer=0 2026-09-20T14:14:41Z
+waechter runde=127 vorrat=27365 indexed=47264 embedded=24780 gesehen=1 still=0 leer=0 2026-09-20T14:19:41Z
+waechter runde=128 vorrat=27189 indexed=47308 embedded=24956 gesehen=1 still=0 leer=0 2026-09-20T14:24:41Z
+waechter runde=129 vorrat=26917 indexed=47376 embedded=25228 gesehen=1 still=0 leer=0 2026-09-20T14:29:41Z
+waechter runde=130 vorrat=26741 indexed=47420 embedded=25409 gesehen=1 still=0 leer=0 2026-09-20T14:34:41Z
+waechter runde=131 vorrat=26469 indexed=47488 embedded=25676 gesehen=1 still=0 leer=0 2026-09-20T14:39:41Z
+waechter runde=132 vorrat=26293 indexed=47532 embedded=25852 gesehen=1 still=0 leer=0 2026-09-20T14:44:41Z
+waechter runde=133 vorrat=26061 indexed=47590 embedded=26084 gesehen=1 still=0 leer=0 2026-09-20T14:49:41Z
+waechter runde=134 vorrat=25885 indexed=47634 embedded=26260 gesehen=1 still=0 leer=0 2026-09-20T14:54:41Z
+waechter runde=135 vorrat=25613 indexed=47702 embedded=26532 gesehen=1 still=0 leer=0 2026-09-20T14:59:41Z
+waechter runde=136 vorrat=25445 indexed=47744 embedded=26700 gesehen=1 still=0 leer=0 2026-09-20T15:04:41Z
+waechter runde=137 vorrat=25197 indexed=47806 embedded=26954 gesehen=1 still=0 leer=0 2026-09-20T15:09:41Z
+waechter runde=138 vorrat=25013 indexed=47852 embedded=27132 gesehen=1 still=0 leer=0 2026-09-20T15:14:41Z
+waechter runde=139 vorrat=24749 indexed=47918 embedded=27396 gesehen=1 still=0 leer=0 2026-09-20T15:19:41Z
+waechter runde=140 vorrat=24565 indexed=47964 embedded=27580 gesehen=1 still=0 leer=0 2026-09-20T15:24:41Z
+waechter runde=141 vorrat=24293 indexed=48032 embedded=27852 gesehen=1 still=0 leer=0 2026-09-20T15:29:41Z
+waechter runde=142 vorrat=24117 indexed=48076 embedded=28028 gesehen=1 still=0 leer=0 2026-09-20T15:34:41Z
+waechter runde=143 vorrat=23893 indexed=48132 embedded=28252 gesehen=1 still=0 leer=0 2026-09-20T15:39:41Z
+waechter runde=144 vorrat=23717 indexed=48176 embedded=28430 gesehen=1 still=0 leer=0 2026-09-20T15:44:41Z
+waechter runde=145 vorrat=23509 indexed=48228 embedded=28636 gesehen=1 still=0 leer=0 2026-09-20T15:49:41Z
+waechter runde=146 vorrat=23325 indexed=48274 embedded=28820 gesehen=1 still=0 leer=0 2026-09-20T15:54:41Z
+waechter runde=147 vorrat=23125 indexed=48324 embedded=29020 gesehen=1 still=0 leer=0 2026-09-20T15:59:42Z
+waechter runde=148 vorrat=22949 indexed=48368 embedded=29200 gesehen=1 still=0 leer=0 2026-09-20T16:04:42Z
+waechter runde=149 vorrat=22677 indexed=48436 embedded=29468 gesehen=1 still=0 leer=0 2026-09-20T16:09:42Z
+waechter runde=150 vorrat=22493 indexed=48482 embedded=29652 gesehen=1 still=0 leer=0 2026-09-20T16:14:42Z
+waechter runde=151 vorrat=22261 indexed=48540 embedded=29884 gesehen=1 still=0 leer=0 2026-09-20T16:19:42Z
+waechter runde=152 vorrat=22077 indexed=48586 embedded=30068 gesehen=1 still=0 leer=0 2026-09-20T16:24:42Z
+waechter runde=153 vorrat=21837 indexed=48646 embedded=30308 gesehen=1 still=0 leer=0 2026-09-20T16:29:42Z
+waechter runde=154 vorrat=21693 indexed=48682 embedded=30452 gesehen=1 still=0 leer=0 2026-09-20T16:34:42Z
+waechter runde=155 vorrat=21421 indexed=48750 embedded=30724 gesehen=1 still=0 leer=0 2026-09-20T16:39:42Z
+waechter runde=156 vorrat=21253 indexed=48792 embedded=30892 gesehen=1 still=0 leer=0 2026-09-20T16:44:42Z
+waechter runde=157 vorrat=21021 indexed=48850 embedded=31124 gesehen=1 still=0 leer=0 2026-09-20T16:49:42Z
+waechter runde=158 vorrat=20845 indexed=48894 embedded=31300 gesehen=1 still=0 leer=0 2026-09-20T16:54:42Z
+waechter runde=159 vorrat=20573 indexed=48962 embedded=31572 gesehen=1 still=0 leer=0 2026-09-20T16:59:42Z
+waechter runde=160 vorrat=20397 indexed=49006 embedded=31748 gesehen=1 still=0 leer=0 2026-09-20T17:04:42Z
+waechter runde=161 vorrat=20165 indexed=49064 embedded=31980 gesehen=1 still=0 leer=0 2026-09-20T17:09:42Z
+waechter runde=162 vorrat=19981 indexed=49110 embedded=32164 gesehen=1 still=0 leer=0 2026-09-20T17:14:42Z
+waechter runde=163 vorrat=19717 indexed=49176 embedded=32428 gesehen=1 still=0 leer=0 2026-09-20T17:19:42Z
+waechter runde=164 vorrat=19533 indexed=49222 embedded=32612 gesehen=1 still=0 leer=0 2026-09-20T17:24:42Z
+waechter runde=165 vorrat=19277 indexed=49286 embedded=32868 gesehen=1 still=0 leer=0 2026-09-20T17:29:42Z
+waechter runde=166 vorrat=19093 indexed=49332 embedded=33052 gesehen=1 still=0 leer=0 2026-09-20T17:34:42Z
+waechter runde=167 vorrat=18917 indexed=49376 embedded=33228 gesehen=1 still=0 leer=0 2026-09-20T17:39:42Z
+waechter runde=168 vorrat=18653 indexed=49442 embedded=33492 gesehen=1 still=0 leer=0 2026-09-20T17:44:42Z
+waechter runde=169 vorrat=18477 indexed=49486 embedded=33668 gesehen=1 still=0 leer=0 2026-09-20T17:49:42Z
+waechter runde=170 vorrat=18213 indexed=49552 embedded=33932 gesehen=1 still=0 leer=0 2026-09-20T17:54:42Z
+waechter runde=171 vorrat=18029 indexed=49598 embedded=34116 gesehen=1 still=0 leer=0 2026-09-20T17:59:42Z
+waechter runde=172 vorrat=17765 indexed=49664 embedded=34380 gesehen=1 still=0 leer=0 2026-09-20T18:04:42Z
+waechter runde=173 vorrat=17597 indexed=49706 embedded=34548 gesehen=1 still=0 leer=0 2026-09-20T18:09:42Z
+waechter runde=174 vorrat=17325 indexed=49774 embedded=34820 gesehen=1 still=0 leer=0 2026-09-20T18:14:43Z
+waechter runde=175 vorrat=17149 indexed=49818 embedded=34996 gesehen=1 still=0 leer=0 2026-09-20T18:19:43Z
+waechter runde=176 vorrat=16877 indexed=49886 embedded=35268 gesehen=1 still=0 leer=0 2026-09-20T18:24:43Z
+waechter runde=177 vorrat=16709 indexed=49928 embedded=35436 gesehen=1 still=0 leer=0 2026-09-20T18:29:43Z
+waechter runde=178 vorrat=16461 indexed=49990 embedded=35684 gesehen=1 still=0 leer=0 2026-09-20T18:34:43Z
+waechter runde=179 vorrat=16277 indexed=50036 embedded=35868 gesehen=1 still=0 leer=0 2026-09-20T18:39:43Z
+waechter runde=180 vorrat=16029 indexed=50098 embedded=36116 gesehen=1 still=0 leer=0 2026-09-20T18:44:43Z
+waechter runde=181 vorrat=15861 indexed=50140 embedded=36285 gesehen=1 still=0 leer=0 2026-09-20T18:49:43Z
+waechter runde=182 vorrat=15605 indexed=50204 embedded=36540 gesehen=1 still=0 leer=0 2026-09-20T18:54:43Z
+waechter runde=183 vorrat=15429 indexed=50248 embedded=36716 gesehen=1 still=0 leer=0 2026-09-20T18:59:43Z
+waechter runde=184 vorrat=15157 indexed=50316 embedded=36988 gesehen=1 still=0 leer=0 2026-09-20T19:04:43Z
+waechter runde=185 vorrat=14981 indexed=50360 embedded=37167 gesehen=1 still=0 leer=0 2026-09-20T19:09:43Z
+waechter runde=186 vorrat=14749 indexed=50418 embedded=37396 gesehen=1 still=0 leer=0 2026-09-20T19:14:43Z
+waechter runde=187 vorrat=14573 indexed=50462 embedded=37572 gesehen=1 still=0 leer=0 2026-09-20T19:19:43Z
+waechter runde=188 vorrat=14301 indexed=50530 embedded=37844 gesehen=1 still=0 leer=0 2026-09-20T19:24:43Z
+waechter runde=189 vorrat=14125 indexed=50574 embedded=38023 gesehen=1 still=0 leer=0 2026-09-20T19:29:43Z
+waechter runde=190 vorrat=13861 indexed=50640 embedded=38284 gesehen=1 still=0 leer=0 2026-09-20T19:34:43Z
+waechter runde=191 vorrat=13685 indexed=50684 embedded=38460 gesehen=1 still=0 leer=0 2026-09-20T19:39:43Z
+waechter runde=192 vorrat=13469 indexed=50738 embedded=38676 gesehen=1 still=0 leer=0 2026-09-20T19:44:43Z
+waechter runde=193 vorrat=13333 indexed=50772 embedded=38816 gesehen=1 still=0 leer=0 2026-09-20T19:49:43Z
+waechter runde=194 vorrat=13061 indexed=50840 embedded=39084 gesehen=1 still=0 leer=0 2026-09-20T19:54:43Z
+waechter runde=195 vorrat=12909 indexed=50878 embedded=39236 gesehen=1 still=0 leer=0 2026-09-20T19:59:43Z
+waechter runde=196 vorrat=12637 indexed=50946 embedded=39508 gesehen=1 still=0 leer=0 2026-09-20T20:04:43Z
+waechter runde=197 vorrat=12493 indexed=50982 embedded=39652 gesehen=1 still=0 leer=0 2026-09-20T20:09:43Z
+waechter runde=198 vorrat=12253 indexed=51042 embedded=39892 gesehen=1 still=0 leer=0 2026-09-20T20:14:43Z
+waechter runde=199 vorrat=12069 indexed=51088 embedded=40076 gesehen=1 still=0 leer=0 2026-09-20T20:19:43Z
+waechter runde=200 vorrat=11837 indexed=51146 embedded=40308 gesehen=1 still=0 leer=0 2026-09-20T20:24:43Z
+waechter runde=201 vorrat=11661 indexed=51190 embedded=40484 gesehen=1 still=0 leer=0 2026-09-20T20:29:43Z
+waechter runde=202 vorrat=11389 indexed=51258 embedded=40756 gesehen=1 still=0 leer=0 2026-09-20T20:34:43Z
+waechter runde=203 vorrat=11181 indexed=51300 embedded=40962 gesehen=1 still=0 leer=0 2026-09-20T20:39:43Z
+waechter runde=204 vorrat=10909 indexed=51368 embedded=41228 gesehen=1 still=0 leer=0 2026-09-20T20:44:43Z
+waechter runde=205 vorrat=10725 indexed=51414 embedded=41412 gesehen=1 still=0 leer=0 2026-09-20T20:49:43Z
+waechter runde=206 vorrat=10453 indexed=51482 embedded=41684 gesehen=1 still=0 leer=0 2026-09-20T20:54:44Z
+waechter runde=207 vorrat=10277 indexed=51526 embedded=41860 gesehen=1 still=0 leer=0 2026-09-20T20:59:44Z
+waechter runde=208 vorrat=10053 indexed=51582 embedded=42084 gesehen=1 still=0 leer=0 2026-09-20T21:04:44Z
+waechter runde=209 vorrat=9941 indexed=51610 embedded=42196 gesehen=1 still=0 leer=0 2026-09-20T21:09:44Z
+waechter runde=210 vorrat=9677 indexed=51676 embedded=42464 gesehen=1 still=0 leer=0 2026-09-20T21:14:44Z
+waechter runde=211 vorrat=9493 indexed=51722 embedded=42644 gesehen=1 still=0 leer=0 2026-09-20T21:19:44Z
+waechter runde=212 vorrat=9221 indexed=51790 embedded=42916 gesehen=1 still=0 leer=0 2026-09-20T21:24:44Z
+waechter runde=213 vorrat=9045 indexed=51834 embedded=43092 gesehen=1 still=0 leer=0 2026-09-20T21:29:44Z
+waechter runde=214 vorrat=8773 indexed=51902 embedded=43364 gesehen=1 still=0 leer=0 2026-09-20T21:34:44Z
+waechter runde=215 vorrat=8597 indexed=51946 embedded=43544 gesehen=1 still=0 leer=0 2026-09-20T21:39:44Z
+waechter runde=216 vorrat=8325 indexed=52014 embedded=43812 gesehen=1 still=0 leer=0 2026-09-20T21:44:44Z
+waechter runde=217 vorrat=8141 indexed=52060 embedded=43996 gesehen=1 still=0 leer=0 2026-09-20T21:49:44Z
+waechter runde=218 vorrat=7869 indexed=52128 embedded=44268 gesehen=1 still=0 leer=0 2026-09-20T21:54:44Z
+waechter runde=219 vorrat=7285 indexed=52137 embedded=44855 gesehen=1 still=0 leer=0 2026-09-20T21:59:44Z
+waechter runde=220 vorrat=6245 indexed=52137 embedded=45893 gesehen=1 still=0 leer=0 2026-09-20T22:04:44Z
+waechter runde=221 vorrat=5557 indexed=52137 embedded=46587 gesehen=1 still=0 leer=0 2026-09-20T22:09:44Z
+waechter runde=222 vorrat=4517 indexed=52137 embedded=47627 gesehen=1 still=0 leer=0 2026-09-20T22:14:44Z
+waechter runde=223 vorrat=3829 indexed=52137 embedded=48314 gesehen=1 still=0 leer=0 2026-09-20T22:19:44Z
+waechter runde=224 vorrat=2781 indexed=52137 embedded=49356 gesehen=1 still=0 leer=0 2026-09-20T22:24:44Z
+waechter runde=225 vorrat=2085 indexed=52137 embedded=50052 gesehen=1 still=0 leer=0 2026-09-20T22:29:44Z
+waechter runde=226 vorrat=1013 indexed=52137 embedded=51129 gesehen=1 still=0 leer=0 2026-09-20T22:34:44Z
+waechter runde=227 vorrat=301 indexed=52137 embedded=51843 gesehen=1 still=0 leer=0 2026-09-20T22:39:44Z
+waechter runde=228 vorrat=0 indexed=52137 embedded=52137 gesehen=1 still=0 leer=0 2026-09-20T22:44:44Z
+waechter runde=229 vorrat=0 indexed=52137 embedded=52137 gesehen=1 still=1 leer=0 2026-09-20T22:49:44Z
+waechter runde=230 vorrat=0 indexed=52137 embedded=52137 gesehen=1 still=2 leer=0 2026-09-20T22:54:44Z
+waechter runde=231 vorrat=0 indexed=52137 embedded=52137 gesehen=1 still=3 leer=1 2026-09-20T22:59:44Z
+waechter runde=232 vorrat=0 indexed=52137 embedded=52137 gesehen=1 still=4 leer=2 2026-09-20T23:04:44Z
+waechter runde=233 vorrat=0 indexed=52137 embedded=52137 gesehen=1 still=5 leer=3 2026-09-20T23:09:44Z
+lauf-ende-erkannt 2026-09-20T23:09:44Z
+ende-erkannt ja
+lesungen 233
+=== The OOM proof, reading 10 of the list, BEFORE any intervention ===
+oom-beweis ende-beider-spuren-vor-jedem-eingriff 2026-09-20T23:09:44Z
+-- 1. memory.events of the cgroup --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 2558
+-- 2. memory.events.local --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 2558
+-- 3. memory.max, memory.peak, memory.current --
+2147483648
+2044096512
+1923313664
+-- 4. OOMKilled and the restart count of the container --
+OOMKilled=false RestartCount=0 Status=running StartedAt=2026-09-20T02:42:05.107744517Z
+=== The work stock as the PHP half reports it ===
+Work stock
+  scheduled            0
+  handed to the worker 0
+
+End states as Nextcloud recorded them
+  indexed              0
+  skipped              44
+  failed               6
+  indexed is counted by the backend container and never written here, so it stays 0.
+  The admin settings page of Findling shows the counters of both halves side by side.
+
+Last background job of this app: 2026-09-20 05:42:59 (1046 minutes ago)
+=== Search load AFTER the run, on the full vector stock ===
+suchlast-danach-start 2026-09-20T23:09:45Z
+suchlast-danach-ende 2026-09-20T23:09:50Z
+-- cgroup-lesung nach-der-suchlast-bei-vollem-bestand --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 2558
+anon 1406504960
+file 540651520
+slab 15093720
+memory.current=1967435776 memory.peak=2044096512 memory.max=2147483648
+=== The observers down, so their closing lines are written ===
+pkill: killing pid 99071 failed: Operation not permitted
+findling-rss summary samples=13970 max_anon=1617612800 peak=2044096512 events=[low=0 high=0 max=0 oom=0 oom_kill=0 oom_group_kill=0 sock_throttled=2558] oom_killed=false
+  13972 /home/ubuntu/nextcloud-search/docs/measurements/2026-09-v12-messung/skripte/../rohdaten/96-volllauf.csv
+    582 /home/ubuntu/nextcloud-search/docs/measurements/2026-09-v12-messung/skripte/../rohdaten/96-statusseite.jsonl
+  14554 total
+=== The vector stock: chunks, documents and bytes per document ===
+vektorbestand 2026-09-20T23:09:58Z
+-- the files of the data store, with their sizes --
+total 87236
+drwxr-xr-x 5 findling findling     4096 Sep 20 02:42 .
+drwxr-xr-x 1 root     root         4096 Sep 20 02:42 ..
+-rw-r--r-- 1 findling findling        0 Sep 20 02:42 armed.marker
+drwxr-xr-x 2 findling findling     4096 Sep 20 02:42 dict
+drwxr-xr-x 2 findling findling     4096 Sep 20 21:55 index
+-rw-r--r-- 1 findling findling       80 Sep 20 02:42 instance.json
+-rw-r--r-- 1 findling findling 16408576 Sep 20 22:39 state.db
+-rw-r--r-- 1 findling findling    32768 Sep 20 22:44 state.db-shm
+-rw-r--r-- 1 findling findling  4165352 Sep 20 22:44 state.db-wal
+drwxr-xr-x 2 findling findling     4096 Sep 20 21:55 tmp
+-rw-r--r-- 1 findling findling 64122880 Sep 20 22:39 vectors.db
+-rw-r--r-- 1 findling findling    32768 Sep 20 22:40 vectors.db-shm
+-rw-r--r-- 1 findling findling  4527912 Sep 20 22:40 vectors.db-wal
+0	/nc_app_findling_backend_data/armed.marker
+3284251	/nc_app_findling_backend_data/dict
+785511533	/nc_app_findling_backend_data/index
+80	/nc_app_findling_backend_data/instance.json
+16408576	/nc_app_findling_backend_data/state.db
+32768	/nc_app_findling_backend_data/state.db-shm
+4165352	/nc_app_findling_backend_data/state.db-wal
+0	/nc_app_findling_backend_data/tmp
+64122880	/nc_app_findling_backend_data/vectors.db
+32768	/nc_app_findling_backend_data/vectors.db-shm
+4527912	/nc_app_findling_backend_data/vectors.db-wal
+-- chunks, documents and bytes per document, over 42d-bestand.py --
+{
+ "vectors_db_pfad": "/nc_app_findling_backend_data/vectors.db",
+ "vectors_db_byte": 64122880,
+ "vectors_db_wal_byte": 4560680,
+ "chunks": 146197,
+ "dokumente_mit_vektor": 52137,
+ "byte_je_dokument": 1317.4,
+ "chunks_je_dokument": 2.804,
+ "state_db_byte": 16408576,
+ "verdikte": {
+  "failed": 6,
+  "indexed": 52137,
+  "skipped": 44
+ },
+ "zeichen_gesamt": 1397880498,
+ "tantivy_pfad": "/nc_app_findling_backend_data/index",
+ "tantivy_byte": 785511533,
+ "vektor_anteil_am_tantivy_prozent": 8.74
+}
+=== The same counters once more, at the end of the watchman ===
+oom-beweis ende-des-waechters-nach-den-nachlaufschritten 2026-09-20T23:09:58Z
+-- 1. memory.events of the cgroup --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 2558
+-- 2. memory.events.local --
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+sock_throttled 2558
+-- 3. memory.max, memory.peak, memory.current --
+2147483648
+2044096512
+1969008640
+-- 4. OOMKilled and the restart count of the container --
+OOMKilled=false RestartCount=0 Status=running StartedAt=2026-09-20T02:42:05.107744517Z
+waechter-ende 2026-09-20T23:09:58Z
+
+=== Die Auswertung nach dem Ende, Plan 15-11 Task 3 (20./21.09.2026) ===
+quelle: 96-statusseite.jsonl (578 aufnahmen im lauffenster, intervall 120 s),
+volllauf-start 2026-09-20T03:49:32Z aus 96-volllauf-start.txt, ende
+2026-09-20T23:09:58Z aus 00-FERTIG. die auswertung urteilt nicht; das urteil
+gegen erwartung E9 faellt der bericht in 15-15.
+
+laufzeit-ist 19 h 20 min (planwert v1.1: 26 h 37 min; v1.0: 18 h 56 min)
+laufzeit-charakter untergrenze: startpunkt-indexed 4696 (poller-vorlauf seit
+dem abbildwechsel, protokolliert in 96-volllauf-start.txt; v1.1 startete
+vergleichbar mit 1.653 dateien im index)
+dokumente-ist 52137
+vektoren-ist 52137
+arbeitsvorrat-am-ende 0, runState idle
+oom keiner (memory.peak 2044096512 unter der grenze 2147483648,
+OOMKilled=false, RestartCount=0, siehe 96-oom-beweis.txt)
+
+vorrat-null-anteil 2,6 prozent (15 von 578 lesungen)
+ablesereihe-intervall 120 s, quelle 96-statusseite.jsonl (NACHTRAEGLICH aus
+der aufgezeichneten reihe berechnet, siehe 97-cron-vorpruefung-waehrend.txt)
+hochgerechnet 0,50 h der 19 h 20 min ohne arbeitsvorrat
+v1.1-vergleichswert: 5,85 h von 26,6 h ohne arbeitsvorrat (22,0 prozent)
+scheiben 23, scheibenabstand min 120 s, median 301 s, max 361 s
+(alle unter dem wirkungsdeckel 420 s)
+
+die sechs vergleichbarkeitsgroessen am ende des laufs:
+  zustandstabelle: dokumente-ist/vektoren-ist 52137/52137, korpusbeleg
+    52.114 dokumente (04-bestand-vor-der-messung.txt, owner-tor 15-10)
+  cron-intervall 300 s (97-cron-vorpruefung-vorher.txt), scheibenabstand-
+    median 301 s im lauf
+  instanztyp m7g.large, cgroup 2147483648/0 (memory.max/memory.swap.max)
+  containerstart 2026-09-20T02:42:05Z, abstand zum trigger 1 h 07 min
+  baumhash-gleich ja (40b-baumhash.txt, 92b-wechsel.txt, f3f1fb13...)
+  entladeschalter-ist 0 fuer den gesamten lauf
