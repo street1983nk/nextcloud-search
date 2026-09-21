@@ -93,3 +93,18 @@ updates:
         update-types:
           - minor
           - patch
+    # tantivy carries index format v7 from 0.26.2 on, which means a reindex on
+    # every installation that already runs. The pin therefore only ever moves on
+    # purpose and together with a reindex plan (owner decision of 2026-09-21).
+    #
+    # The service already answered the comment command on pull request #10 with
+    # "I won't notify you about tantivy again", but that state lives inside a
+    # foreign service and not in this repository, and dependabot said so itself:
+    # closing a grouped pull request ignores nothing. So the rule stands here, in
+    # a file, where a reader of the tree can find it.
+    ignore:
+      - dependency-name: "tantivy"
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
