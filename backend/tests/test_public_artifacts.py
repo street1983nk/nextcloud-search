@@ -334,6 +334,29 @@ MUTATED_SAMPLES: dict[str, str] = {
 ENGLISH_FORM_SAMPLE = "the " + "arch" + "ive of a driven run stays where it is"
 
 
+# -- the placeholder form ------------------------------------------------------
+
+# The form plan 16-05 settled on, once and for every redacted document: a token
+# in angle brackets that names the KIND of the value and never the value. The
+# legend stands here rather than in a summary, because a form that is written
+# down where nobody runs it drifts with the next document.
+PLATZHALTER: dict[str, str] = {
+    "<instanzkennung>": "the identifier of the machine an approach was driven on",
+    "<volumekennung>": "the identifier of one of the discs of that machine",
+    "<sicherheitsgruppe>": "the identifier of the firewall group of that machine",
+    "<adresse-der-box>": "a public address the provider handed that machine out under",
+    "<snapshotkennung>": (
+        "the identifier of a snapshot handed to the tool, which the runbook wrote this way "
+        "before plan 16-05 and which the plan took over rather than invented"
+    ),
+}
+
+# The shape of a placeholder, narrow on purpose. Under docs/ there are angle
+# brackets everywhere, as XML elements and as route names, and a wide shape
+# would read those as placeholders and make the case below a lottery.
+PLATZHALTER_FORM = re.compile(r"<(?:[a-z]+kennung|sicherheitsgruppe|adresse-[a-z-]+)>")
+
+
 # -- the exception list --------------------------------------------------------
 
 # Every finding this gate sees today, by path and family, with its own reason in
@@ -341,13 +364,21 @@ ENGLISH_FORM_SAMPLE = "the " + "arch" + "ive of a driven run stays where it is"
 # keeps out would be the nineteenth file that carries them, and the audit
 # refused to be the nineteenth for the same reason.
 #
-# **This list shrinks in plan 16-05.** What leaves it are the documents that can
-# still be edited: the audit reports, the guides, the READMEs of the
-# measurements and the performance document. What stays are two kinds of entry.
-# The raw data and the scripts of driven approaches stay, because a raw file
-# that is edited after the run stops being evidence of that run. And the one
-# publicly published image identifier I-01 stays, because it is meant to be
-# public: it names the image a reader can start for themselves.
+# **This list shrank in plan 16-05.** The four documents that can still be
+# edited carry placeholders now where they carried values, and they took their
+# entries of the vocabulary family and every reason that named a machine with
+# them. What is left of those documents here says what is still in them: a
+# version number of four groups, which no expression tells a public address
+# apart from, and the identifier of the corpus snapshot.
+#
+# What stays, in three kinds, and every entry with its own sentence. The raw
+# data and the scripts of driven approaches stay, because a raw file that is
+# edited after the run stops being evidence of that run. The publicly published
+# image identifier I-01 stays, because it is meant to be public: it names the
+# image a reader can start for themselves. And the identifier of the corpus
+# snapshot stays, because it is the one resource the owner decided on
+# 11.09.2026 to keep, and an instruction that renames what it restores from
+# cannot be followed.
 AUSNAHMEN: dict[tuple[str, str], str] = {
     # -- family 1, the header line of a private key
     ("runbook-messbox.md", "pem-privatschluessel"): (
@@ -361,11 +392,11 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
     # -- family 4, the resource identifiers the pattern of the implementation does not know
     ("audits/2026-09-phase-15/README.md", "aws-ressourcenkennung"): (
         "The audit report names the publicly published image identifier I-01, which is meant to be readable "
-        "because it lets a reader start the same image."
+        "because it lets a reader start the same image, and the corpus snapshot that stays."
     ),
     ("measurements/2026-09-v12-messung/README.md", "aws-ressourcenkennung"): (
-        "The report of the driven v1.2 approach names the snapshot it left behind, "
-        "and the resource behind it was read back as torn down on 21.09.2026."
+        "The report of the driven v1.2 approach names the corpus snapshot it restored its disc from, "
+        "which is the one resource that stays, and a report of a driven run is not edited afterwards."
     ),
     ("measurements/2026-09-v12-messung/rohdaten/01-aws-lesende-proben.txt", "aws-ressourcenkennung"): (
         "A raw file of reading probes of the driven v1.2 approach, which is evidence of what the account "
@@ -392,12 +423,12 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
         "and it is not edited afterwards."
     ),
     ("performance.md", "aws-ressourcenkennung"): (
-        "The performance document names the snapshot of the corpus in its provenance notes, "
-        "and it is a document that plan 16-05 can still edit."
+        "The performance document names the corpus snapshot that stays by the decision of 11.09.2026, "
+        "and nothing else of this kind: machine, discs and firewall group stand there as placeholders."
     ),
     ("runbook-messbox.md", "aws-ressourcenkennung"): (
-        "The runbook names the resources of an approach in its instructions, "
-        "and it is a document that plan 16-05 can still edit."
+        "The runbook names the publicly published image identifier I-01, which every account of that "
+        "region can start, and the corpus snapshot that stays by the decision of 11.09.2026."
     ),
     # -- family 6, a key word in front of a value
     ("audits/2026-09-phase-10/README.md", "schluesselwort-mit-wert"): (
@@ -456,8 +487,8 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
     ),
     # -- family 9, the pattern of the implementation
     ("install-check.md", "muster-der-umsetzung"): (
-        "The installation guide names version numbers of four groups, which the form of an address cannot "
-        "be told apart from, and it is a document that plan 16-05 can still edit."
+        "The installation guide names a kernel and a server version of four groups, which the form of an "
+        "address cannot be told apart from; the machine it ran on stands there as a placeholder."
     ),
     ("measurements/2026-09-03-trockenlauf-cpx22/README.md", "muster-der-umsetzung"): (
         "The dry run report names a kernel version of four groups, which the form of an address cannot be "
@@ -525,8 +556,8 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
         "and is not edited afterwards."
     ),
     ("performance.md", "muster-der-umsetzung"): (
-        "The performance document names public addresses of earlier boxes in its provenance notes, "
-        "and it is a document that plan 16-05 can still edit."
+        "What the performance document still carries of this family are server version numbers of four "
+        "groups; the addresses of its boxes stand there as placeholders since plan 16-05."
     ),
     # -- family 10, the German forms of the blocked term
     ("admin-page.md", "vokabular"): (
@@ -671,6 +702,16 @@ def test_every_exception_of_a_family_is_still_earning_its_place(family: str) -> 
     stale = sorted(name for (name, entry_family) in AUSNAHMEN if entry_family == family and name not in found)
 
     assert stale == []
+
+
+def test_every_placeholder_of_the_legend_stands_in_the_tree_and_the_other_way_round() -> None:
+    # Both directions in one case, because a legend is only worth its lines when
+    # it matches the tree: an entry nobody ever wrote into a document is
+    # decoration, and a placeholder that stands in a document without a line
+    # here is a typo that nobody would ever see.
+    written = sorted({found for path in docs_files() for found in PLATZHALTER_FORM.findall(text_of(path))})
+
+    assert written == sorted(PLATZHALTER)
 
 
 def test_every_exception_names_a_file_that_exists() -> None:

@@ -3011,7 +3011,7 @@ Stelle. Der Semantiklauf bleibt unverändert oben stehen, mit allen seinen Zahle
 denn ersetzt wird die Aussage und nicht die Geschichte.
 
 Messreihe: [`docs/measurements/2026-09-nachmessung-m7g/`](measurements/2026-09-nachmessung-m7g/).
-Dieselbe Instanz `i-06b1d913f5c6f669b`, derselbe Datenträger, derselbe Bestand
+Dieselbe Instanz `<instanzkennung>`, derselbe Datenträger, derselbe Bestand
 aus 51.961 Dokumenten, dieselbe harte Grenze von 2,0 GiB aus der cgroup gelesen.
 Gemessenes Abbild: `ghcr.io/street1983nk/findling_backend:dev`, Digest
 `sha256:00111fd090f437a00678f6fc0a562807a5ad0b35082db235ea52ee86c63454c9`,
@@ -3829,7 +3829,7 @@ Die Gegenprobe, unabhängig vom Skript, unmittelbar danach:
 | `/firewalls?label_selector=purpose=findling-phase5` | 0 Treffer |
 | `/floating_ips?label_selector=purpose=findling-phase5` | 0 Treffer |
 | `/primary_ips?label_selector=purpose=findling-phase5` | 0 Treffer |
-| `ssh root@62.238.114.125` | `Connection timed out` |
+| `ssh root@<adresse-der-box>` | `Connection timed out` |
 | Zustandsdatei des Werkzeugs | entfernt |
 
 Damit ist der Auftrag aus D-01 erfüllt: keine Ressource dieses Kontos trägt das
@@ -3878,8 +3878,8 @@ Instanz und das offene Netz, und er erhält die zwölfeinhalb Stunden Rechenzeit
 die im Index stecken.
 
 Was beim Anhalten zu wissen ist, damit es nicht später überrascht: eine
-angehaltene Instanz gibt ihre öffentliche Adresse zurück, `3.65.24.222` ist
-danach nicht mehr diese Box, und der Eintrag `loadtest.infranode.dev` zeigt
+angehaltene Instanz gibt ihre öffentliche Adresse zurück, die bis dahin
+gültige gehört danach nicht mehr dieser Box, und der Eintrag `loadtest.infranode.dev` zeigt
 dann auf eine fremde Adresse. Er gehört also mit dem Anhalten entfernt und beim
 nächsten Start neu gesetzt, zusammen mit `BOX_IP` in der Zustandsdatei.
 
@@ -3897,8 +3897,8 @@ Betreiber hat stattdessen der Empfehlung des Berichts gefolgt, weil am selben
 Tag eine Launch-Härtungsphase vor der Store-Abgabe beschlossen wurde und die
 Box mit Korpus (20 GB), beiden Indizes und den drei Abbildern dafür die
 schnellste Zielhardware ist. Angehalten kostet sie rund 0,31 USD je Tag. Beim
-nächsten Start wechselt die Adresse (`3.77.150.91` ist dann nicht mehr diese
-Box), `BOX_IP`, die SSH-Regel der Security Group auf die Betreiber-IP und der
+nächsten Start wechselt die Adresse (die bisherige gehört dann nicht mehr
+dieser Box), `BOX_IP`, die SSH-Regel der Security Group auf die Betreiber-IP und der
 Eintrag `loadtest.infranode.dev` sind nachzuziehen, und der Container muss über
 AppAPI neu bewaffnet werden (DI-05-36), sonst indexiert er nicht.
 
@@ -3914,9 +3914,9 @@ zurückgenommen wurde.
 
 | Punkt | Stand |
 |---|---|
-| Instanz | `i-06b1d913f5c6f669b`, **gestoppt** seit 07.09.2026, 06:56:42Z, per API geprüft |
-| Datenträger | `vol-04c5b59fe9417babd`, bleibt, mit Korpus, beiden Indizes und den Abbildern |
-| Security Group | `sg-0e782f5233d73a847`, bleibt |
+| Instanz | `<instanzkennung>`, **gestoppt** seit 07.09.2026, 06:56:42Z, per API geprüft |
+| Datenträger | `<volumekennung>`, bleibt, mit Korpus, beiden Indizes und den Abbildern |
+| Security Group | `<sicherheitsgruppe>`, bleibt |
 | Parkkosten | rund **0,3130 USD je Tag**, nur die Datenträger; die Recheneinheit kostet gestoppt nichts |
 | Zustandsdatei | `~/.findling-loadtest/box.env`, unverändert weitergeführt; `aws_box.sh` entfernt sie erst beim Abbau |
 
@@ -3968,10 +3968,10 @@ kostet nach diesem Lauf nicht mehr 19, sondern gemessene **26 h 37 min**
 
 | Punkt | Stand |
 |---|---|
-| Instanz | `i-06b1d913f5c6f669b`, angefahren 2026-09-09T09:19:50Z, **gestoppt seit 2026-09-10T16:22:50Z**, per API geprüft um 16:23:15Z |
+| Instanz | `<instanzkennung>`, angefahren 2026-09-09T09:19:50Z, **gestoppt seit 2026-09-10T16:22:50Z**, per API geprüft um 16:23:15Z |
 | Laufzeit und Kosten dieses Laufs | **31,05 Stunden und 3,5969 USD netto**, aus `box.env` nach `aws_box.sh stop` |
 | Kostendeckel | ursprünglich 30 h und 3,50 USD (Freigabe 09.09., gerissen am 10.09. um 15:20Z), angehoben auf **34 h und 4,00 USD**, greift 2026-09-10T19:20Z |
-| Datenträger | `vol-0f3bea6ca1dab68ab` 40 G und `vol-04c5b59fe9417babd` 60 G, bleiben beide |
+| Datenträger | `<volumekennung>` 40 G und `<volumekennung>` 60 G, bleiben beide |
 | Parkkosten | rund **0,3130 USD je Tag** |
 
 ### Der fünfte Verbleib: abgebaut, der Korpus liegt im Snapshot
@@ -3986,9 +3986,9 @@ Verbleibe. Die Box hat vom 04.09. bis zum 11.09.2026 bestanden.
 | Größe | **55.415.668.736 Byte, also 51,6 GiB geschriebene Blöcke** auf einem 60-GB-Datenträger. Die Schätzung der Phasenrecherche (25 bis 40 GB) ist damit ersetzt und nicht bestätigt: ein EBS-Snapshot bezahlt jeden Block, der je geschrieben wurde, auch den eines gelöschten Index |
 | Kosten des Snapshots | **2,79 bis 2,99 USD je Monat**, Satz 0,054 USD je GB-Monat aus der öffentlichen Bulk-Preisliste (`EUC1-EBS:SnapshotUsage`, gültig ab 2026-09-01), nicht geschätzt |
 | Ersparnis | gegen 0,3130 USD je Tag geparkt, also 9,39 USD je Monat: **6,40 bis 6,60 USD je Monat** |
-| Instanz | `i-06b1d913f5c6f669b`, `state=terminated`, gegen die API gelesen |
-| Datenträger | `vol-04c5b59fe9417babd` (60 GB Korpus) und `vol-0f3bea6ca1dab68ab` (40 GB System, ging mit der Instanz), beide `InvalidVolume.NotFound` |
-| Security Group | `sg-0e782f5233d73a847`, `InvalidGroup.NotFound` |
+| Instanz | `<instanzkennung>`, `state=terminated`, gegen die API gelesen |
+| Datenträger | `<volumekennung>` (60 GB Korpus) und `<volumekennung>` (40 GB System, ging mit der Instanz), beide `InvalidVolume.NotFound` |
+| Security Group | `<sicherheitsgruppe>`, `InvalidGroup.NotFound` |
 | Zustandsdatei | `~/.findling-loadtest/box.env` ist gelöscht; ihr vollständiger Inhalt steht in `docs/measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt`, Abschnitt 5 |
 | Kostenüberblick nach dem Abbau | über alle 17 freigeschalteten Regionen: keine Instanz, kein Datenträger, keine Elastic IP, keine eigene AMI, keine weitere Netzwerkschnittstelle. **Genau ein Snapshot, und das ist der Korpus** |
 

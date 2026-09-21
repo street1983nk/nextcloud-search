@@ -367,7 +367,7 @@ gegeneinander gehalten werden können statt nur nebeneinander zu stehen.
 
 | Was | Wert |
 |---|---|
-| Wirt | AWS m7g.large, 2 vCPU Graviton3, `aarch64`, Ubuntu 24.04, auf 4 GB begrenzt, Instanz `i-06b1d913f5c6f669b` |
+| Wirt | AWS m7g.large, 2 vCPU Graviton3, `aarch64`, Ubuntu 24.04, auf 4 GB begrenzt, Instanz `<instanzkennung>` |
 | Nextcloud | 34.0.3.2, Abbild `nextcloud:34.0.3-apache`, SQLite |
 | Weg | docker, drei Dienste: Nextcloud, HaRP, ein nginx-Frontproxy |
 | Architektur | **arm64**, jeder Pull mit `--platform linux/arm64`, zurückgelesen: `nextcloud arch=arm64`, `harp arch=arm64` |
