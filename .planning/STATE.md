@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-08 Aufgabe 1 fertig und verbucht (arm64-Ast des Auftrags index-search-e2e, d34c392); Aufgabe 2 wartet auf den ersten Lauf nach dem Push, der Owner-Checkpoint (Aufgabe 3, zwei Zweige) ist offen; kein Tag, kein Release
+stopped_at: 16-08 Aufgabe 1 und 2 fertig und verbucht (arm64-Ast d34c392, Beleg b5da459 aus Lauf 35586213137, zehn von zehn Sprachfaellen gruen, Urteil traegt); offen ist nur noch der Owner-Checkpoint (Aufgabe 3, Zweig a); kein Tag, kein Release
 last_updated: "2026-09-21T22:30:00.000Z"
 last_activity: 2026-09-21
 progress:
@@ -40,12 +40,20 @@ Kombinationen, drei auf amd64, eine auf arm64. Der Zeitdeckel bleibt bei 45
 Minuten, begruendet mit den drei amd64-Laufzeiten von 3:38 bis 3:54 aus Lauf
 35582071147. Keine erforderliche Pruefung haengt an den alten Auftragsnamen (das
 Regelwerk `protect-main` kennt nur `deletion` und `non_fast_forward`), der
-geaenderte `name:` bricht also nichts. **Aufgabe 2 ist blockiert, bis der Lauf
-gefahren ist:** der Bericht
-`docs/measurements/2026-09-a4-sprachfaelle-ci/README.md` darf seine Zahlen nur
-aus der Laufausgabe nehmen, und ohne Push gibt es keinen Lauf. **Aufgabe 3 ist
-der Owner-Checkpoint** mit den zwei Zweigen (CI traegt / CI traegt nicht samt
-Rechenblatt 7 h und 0,90 USD).
+geaenderte `name:` bricht also nichts. **Aufgabe 2 ist gefahren und verbucht**
+(b5da459): Lauf **35586213137** vom 21.09.2026, Auftrag `index-search-e2e
+(sqlite, ubuntu-24.04-arm)`, 3 min 43 s, success beim ersten Anlauf, keine
+Wiederholung noetig. Die Instanz meldet `files on the instance before the
+corpus: 0`, danach `corpus entries: 39` und
+`indexed=26 skipped=7 failed=6`, also dieselben Verdikte wie auf amd64. **Zehn
+von zehn Sprachfaellen gruen, null rot, null ohne Aussage**; alle fuenf in
+Phase 15 nicht messbaren Faelle (Genehmigung, Frist, Vertrag, bescheid,
+type:pdf bescheid) tragen jetzt eine Aussage. Der Beleg steht in
+`docs/measurements/2026-09-a4-sprachfaelle-ci/README.md`, sein Urteil zum Weg
+lautet **traegt**. **Aufgabe 3 ist der Owner-Checkpoint**, und nach diesem
+Ergebnis wird **Zweig a** vorgelegt: A4 ueber den CI-Weg erfuellt, keine Box,
+kein Deckel abgerufen. Erst die Antwort des Owners schliesst L-09 in
+`deferred-items.md` und traegt die SUMMARY.
 
 16-07: **Der Baum sagt 1.2.0.** Die drei Versionsstellen (`php/appinfo/info.xml`
 `<version>`, `backend/appinfo/info.xml` `<version>` und das `<image-tag>`
