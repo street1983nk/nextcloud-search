@@ -245,9 +245,10 @@ def address_names_a_machine(groups: tuple[str | None, ...]) -> bool:
 #
 #     * **Caught are the German forms.** They are looked for as the stem without
 #       the English ending, so every form that is not the English one. Counted
-#       on 21.09.2026: 45 German forms in six files, out of 116 occurrences of
-#       the stem in seventeen files, and the difference between the two numbers
-#       is what the ending does.
+#       on 21.09.2026 after plan 16-05 redacted the four documents that can be
+#       edited: 4 German forms in two files, both of them raw data, out of 77
+#       occurrences of the stem in fourteen files, and the difference between
+#       the two numbers is what the ending does.
 #     * **Not caught is the English technical term** in English technical prose,
 #       which is E-H2 itself. A file that carries it stands on the list below
 #       with that reason and no other.
@@ -256,10 +257,11 @@ def address_names_a_machine(groups: tuple[str | None, ...]) -> bool:
 #       editing it would stop it being evidence of that run.
 #
 #     The gate holds the German forms against the same exception list as the
-#     nine families above, under the family name vokabular. Everything that
-#     would be red today stands on it, so the gate comes into the world green
-#     and says the truth about the stock rather than hiding it; the documents
-#     that can still be edited leave the list in plan 16-05.
+#     nine families above, under the family name vokabular. It came into the
+#     world green with every red file of that day on the list, because a gate
+#     that says the truth about the stock is worth more than one that hides it;
+#     the four documents that can be edited left the list in plan 16-05, and
+#     what remains under this family is raw data of driven runs.
 BLOCKED_TERM = "arch" + "iv"
 GERMAN_FORM_OF_THE_BLOCKED_TERM = re.compile(BLOCKED_TERM + "(?!e)", re.IGNORECASE)
 
@@ -560,22 +562,6 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
         "groups; the addresses of its boxes stand there as placeholders since plan 16-05."
     ),
     # -- family 10, the German forms of the blocked term
-    ("admin-page.md", "vokabular"): (
-        "The administration guide uses the German form as the example name of an excluded folder, "
-        "and it is a document that plan 16-05 can still edit."
-    ),
-    ("install-check.md", "vokabular"): (
-        "The installation guide uses the German form for the packed release file of each half, "
-        "and it is a document that plan 16-05 can still edit."
-    ),
-    ("dev-setup.md", "vokabular"): (
-        "The development setup uses the German form for the packed release file the route list is read out "
-        "of, and it is a document that plan 16-05 can still edit."
-    ),
-    ("performance.md", "vokabular"): (
-        "The performance document uses the German form for the cold storage tier of the provider, "
-        "and it is a document that plan 16-05 can still edit."
-    ),
     ("measurements/2026-09-v12-messung/rohdaten/03-aufbau.txt", "vokabular"): (
         "The build record of the driven v1.2 approach uses the German form for the packed backup it counted "
         "entries in, and a raw file of a driven run is not edited afterwards."

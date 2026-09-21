@@ -30,8 +30,8 @@ erspart.
 | AppAPI | 34.0.0, mit dem Server ausgeliefert |
 | HaRP | `ghcr.io/nextcloud/nextcloud-appapi-harp`, festgenagelt auf `sha256:603fdf5c...`, dieselbe Zeichenkette wie in `deploy-harp.yml` |
 | Deploy-Daemon | `harp_proxy_compose`, `docker-install`, HaRP an `harp:8780`, `nextcloud_url` auf den Frontproxy |
-| Companion-Archiv | `findling.tar.gz`, Fassung 1.0.0, SHA-256 `50bfa1fcd2290223912ace81c9e33b91db86eac7a66a5f2c7ed6c27b98f61ef6` |
-| Backend-Archiv | `findling_backend.tar.gz`, Fassung 1.0.0, SHA-256 `eb96ebed6a7a68d828bc4be761553b9b2a115ccff49e6ea36566f4f303d5f359` |
+| Companion-Paketdatei | `findling.tar.gz`, Fassung 1.0.0, SHA-256 `50bfa1fcd2290223912ace81c9e33b91db86eac7a66a5f2c7ed6c27b98f61ef6` |
+| Backend-Paketdatei | `findling_backend.tar.gz`, Fassung 1.0.0, SHA-256 `eb96ebed6a7a68d828bc4be761553b9b2a115ccff49e6ea36566f4f303d5f359` |
 | Abbild | `ghcr.io/street1983nk/findling_backend:dev`, Digest `sha256:239a98193b6c556025ff891a08448b1a1ccf2abdfbcad16b544fbef82557698e` |
 | Nutzer | `admin` für die Verwaltungsseite, `testuser` ohne Rechte für Hochladen und Suche |
 
@@ -119,7 +119,7 @@ gegen den stillen Durchlauf: die Ausgabe darf das Wort `skipping` nicht
 enthalten, denn eine App ohne `appinfo/signature.json` wird übersprungen und
 antwortet trotzdem mit 0.
 
-Die Routenliste kam ebenfalls aus dem Archiv: die `info.xml`, mit der
+Die Routenliste kam ebenfalls aus der Paketdatei: die `info.xml`, mit der
 registriert wurde, trägt fünf `route`-Elemente, und AppAPI liest sie zur
 Installationszeit von dort.
 
@@ -143,25 +143,25 @@ kein Fehler: der Uninstall-Schritt zählt seinen eigenen Aufruf mit, wie es
 dazu.
 
 Feststellung 5 hat auf dieser Instanz eine Aussage mehr als in der CI: die
-entfernte Companion-App ist die, die das Archiv geliefert hat, samt ihrer
-`appinfo/signature.json`. Ein Rückstand des Archivs wäre genau hier sichtbar
+entfernte Companion-App ist die, die die Paketdatei geliefert hat, samt ihrer
+`appinfo/signature.json`. Ein Rückstand der Paketdatei wäre genau hier sichtbar
 geworden, und es gab keinen.
 
 ## 2. Die Befunde: wo dieser Lauf vom Weg der CI abweicht
 
 ### Befund 1: Der Tag `1.0.0` existiert noch nicht
 
-Das Archiv nennt `ghcr.io/street1983nk/findling_backend:1.0.0`, und die
+Die Paketdatei nennt `ghcr.io/street1983nk/findling_backend:1.0.0`, und die
 Registry antwortet darauf mit 404: `docker.yml` veröffentlicht die
 Versionsfassung erst auf einem `v`-Tag und sonst nur `dev` und die Commit-SHA.
 Der Lauf ist deshalb gegen `dev` gefahren, mit **genau einer** ersetzten Zeile
 in der `info.xml`, geprüft als Zwei-Zeilen-Unterschied; Registry, Abbildname und
-der Routenblock kamen unverändert aus dem Archiv.
+der Routenblock kamen unverändert aus der Paketdatei.
 
 Das ist dieselbe Regel, die `deploy-harp.yml` auf einem Zweig anwendet, und es
 ist eine Aussage über den Zeitpunkt und nicht über den Weg: **erst der Lauf nach
 dem Release-Tag fährt den Weg vollständig.** Bis dahin ist der Teil "der Tag,
-den das Archiv nennt, existiert" ungeprüft.
+den die Paketdatei nennt, existiert" ungeprüft.
 
 ### Befund 2: Die Code-Signatur trägt eine Ersatzidentität
 
@@ -170,7 +170,7 @@ den das Archiv nennt, existiert" ungeprüft.
 in der CI wurde deshalb eine Wegwerf-CA mit einem Blattzertifikat `CN=findling`
 erzeugt und die CA an `resources/codesigning/root.crt` der Instanz angehängt.
 
-Was das belegt: dass das Archiv eine Signatur über genau die Dateiliste trägt,
+Was das belegt: dass die Paketdatei eine Signatur über genau die Dateiliste trägt,
 die es ausliefert, dass die Instanz jede Datei neu hasht, und dass ein einziges
 verändertes Byte das Urteil kippt. Was es nicht belegt: die Herkunft des
 Zertifikats. Diese Hälfte gehört `release.yml`.
@@ -235,20 +235,20 @@ compose-Einrichtung ohne diesen Frontproxy und trägt `http://harp:8780` als
 Registrierung. Nachgezogen ist die Anleitung in dieser Phase **nicht**; das ist
 als Befund benannt und nicht behoben.
 
-### Befund 5: Ein Archiv aus einem Windows-Arbeitsbaum ist nicht dasselbe Archiv
+### Befund 5: Eine Paketdatei aus einem Windows-Arbeitsbaum ist nicht dieselbe Paketdatei
 
-Die beiden Archive dieses Laufs wurden nach den Regeln von
+Die beiden Paketdateien dieses Laufs wurden nach den Regeln von
 `scripts/release/store-archive.sh` gebaut, aber auf einem Wirt, dessen
-Arbeitsbaum wegen `core.autocrlf=true` CRLF-Zeilenenden trägt. Das Archiv trägt
+Arbeitsbaum wegen `core.autocrlf=true` CRLF-Zeilenenden trägt. Die Paketdatei trägt
 sie damit ebenfalls, während dieselben Dateien im Repository und in der CI LF
-tragen. Für die Auslieferung heisst das: **die Release-Archive entstehen in
-`release.yml` und nirgendwo sonst.** Ein von Hand auf einem Windows-Rechner
-gebautes Archiv ist byteweise ein anderes Paket, und jede Datei in seiner
+tragen. Für die Auslieferung heisst das: **die Release-Paketdateien entstehen in
+`release.yml` und nirgendwo sonst.** Eine von Hand auf einem Windows-Rechner
+gebaute Paketdatei ist byteweise ein anderes Paket, und jede Datei in ihrer
 Signatur hat einen anderen Hash.
 
 Inhaltlich hat dieser Unterschied den Lauf nicht gestört: die Signatur ist in
 sich stimmig, AppAPI liest die XML-Datei mit beiden Zeilenenden, und der
-Inhaltsnachweis von `store-archive.sh` lief für beide Archive durch.
+Inhaltsnachweis von `store-archive.sh` lief für beide Paketdateien durch.
 
 ### Befund 6: Das Abbild lag schon auf dem Wirt
 
@@ -346,7 +346,7 @@ dauert hier fast eine Stunde; dort hat das Sicherheitsaudit aus Plan 06.1-17
 die Passwörter gefunden (DI-06.1-18).
 
 Was der Lauf voraussetzt und selbst nicht herstellt: eine frische Instanz, einen
-Deploy-Daemon, die beiden Archive und die Vertrauenskette für ihre Signatur. Er
+Deploy-Daemon, die beiden Paketdateien und die Vertrauenskette für ihre Signatur. Er
 baut nichts und er holt nichts aus einem Arbeitsbaum, und genau das ist der
 Grund, warum sein Ergebnis über eine Store-Installation etwas aussagt.
 
@@ -375,8 +375,8 @@ gegeneinander gehalten werden können statt nur nebeneinander zu stehen.
 | AppAPI | 34.0.0, mit dem Server ausgeliefert |
 | HaRP | `ghcr.io/nextcloud/nextcloud-appapi-harp:release`, arm64 |
 | Deploy-Daemon | `harp_arm64`, `docker-install`, HaRP an `findling-arm64-harp:8780`, `nextcloud_url` auf den Frontproxy |
-| Companion-Archiv | `findling.tar.gz`, Fassung 1.0.0, SHA-256 `09963ad6bcc1d12cdc66ac76a4a1939583ff88a40d9f3f22a9e2cfec4039c65d` |
-| Backend-Archiv | `findling_backend.tar.gz`, Fassung 1.0.0, SHA-256 `b22d38e1f2462c7f0c19dfbe4b62a3f220644246f8c7c479092ca680b53ac5f3` |
+| Companion-Paketdatei | `findling.tar.gz`, Fassung 1.0.0, SHA-256 `09963ad6bcc1d12cdc66ac76a4a1939583ff88a40d9f3f22a9e2cfec4039c65d` |
+| Backend-Paketdatei | `findling_backend.tar.gz`, Fassung 1.0.0, SHA-256 `b22d38e1f2462c7f0c19dfbe4b62a3f220644246f8c7c479092ca680b53ac5f3` |
 | Abbild | `ghcr.io/street1983nk/findling_backend:dev`, Digest `sha256:00111fd090f437a00678f6fc0a562807a5ad0b35082db235ea52ee86c63454c9` |
 | Nutzer | `admin` für alles; ein zweiter Nutzer war für diesen Lauf nicht vorgesehen |
 | Hintergrundjobs | `unset`, was Nextcloud als `ajax` liest, deshalb `--cron-driver script` mit 300 s Takt |
@@ -417,7 +417,7 @@ bewusst, und hier sind ihre drei Gründe:
    Plan 05-21 all-in-one auf arm64, und die Messreihen dieser Phase und der
    vorigen sind darauf entstanden. Was **nicht** belegt war, ist der
    Installationsweg aus dem Store auf arm64, und der hängt an Nextcloud, AppAPI,
-   HaRP und den beiden Archiven, nicht am Abbild-Tag von all-in-one.
+   HaRP und den beiden Paketdateien, nicht am Abbild-Tag von all-in-one.
 
 **Was damit nicht abgedeckt ist, ausdrücklich:** das all-in-one-Abbild
 `latest-arm64` als Installationsweg, also die Weboberfläche der
@@ -529,7 +529,7 @@ Einstellungen, und danach war alles auf null.
 |---|---|---|
 | Anonymer Pull (A6) | bestätigt | bestätigt, derselbe Weg, anderer Digest |
 | Integritätsurteil und Gegenprobe | leer, kippt, wieder leer | leer, kippt, wieder leer |
-| Routen aus dem Archiv | 5 | 5 |
+| Routen aus der Paketdatei | 5 | 5 |
 | occ-Aufrufe bis zur fertigen Installation | 10 | 10 |
 | occ-Aufrufe zwischen Installation und Treffer | 0 | 0 |
 | Erster Inhaltstreffer | nach 2 Cron-Runden | nach 1 Cron-Runde |
@@ -547,7 +547,7 @@ Läufe oben sind Fahrpläne, die eine Maschine abgeht. Dieser Schritt stellt die
 Frage, die kein Gate stellt: sieht das aus wie etwas, das man installieren will,
 und tut es, was es verspricht.
 
-### Die Archive: aus dem Probelauf, nicht aus dem Arbeitsbaum
+### Die Paketdateien: aus dem Probelauf, nicht aus dem Arbeitsbaum
 
 Das ist der Kern von D-H5, deshalb steht es zuerst.
 
@@ -555,8 +555,8 @@ Das ist der Kern von D-H5, deshalb steht es zuerst.
 |---|---|
 | Probelauf | `release.yml` über `workflow_dispatch`, Lauf `34116531030`, Zweig `main` bei Stand `94420f7`, gestartet am 07.09.2026 um 11:35 UTC |
 | Erzeugtes Release | **keines**. `create_release` stand auf seiner Vorgabe `false`, und der Release-Schritt verlangt zusätzlich einen `v`-Tag (T-05-77) |
-| Companion-Archiv | `findling.tar.gz`, 234090 Bytes, SHA-256 `5f83ea92c15ce0ab5657d97c8c9aa2e86ea810c79dd4e446f8482c7ac7ba2bc3` |
-| Backend-Archiv | `findling_backend.tar.gz`, 29112 Bytes, SHA-256 `8ea9a88f3bc57d956694627c6fac84b241c8e2d5aa22386d08e5bc61ac1303cc` |
+| Companion-Paketdatei | `findling.tar.gz`, 234090 Bytes, SHA-256 `5f83ea92c15ce0ab5657d97c8c9aa2e86ea810c79dd4e446f8482c7ac7ba2bc3` |
+| Backend-Paketdatei | `findling_backend.tar.gz`, 29112 Bytes, SHA-256 `8ea9a88f3bc57d956694627c6fac84b241c8e2d5aa22386d08e5bc61ac1303cc` |
 | Signaturdateien | `findling.tar.gz.sig` und `findling_backend.tar.gz.sig`, je 684 Bytes |
 
 **Was dieser Lauf gegenüber dem 06.09. neu belegt, und es ist die eine Hälfte,
@@ -603,8 +603,8 @@ Es sind zwei Instanzen nacheinander entstanden, jede aus einem leeren
 Docker-Zustand (`compose down -v`, danach `compose up`).
 
 1. **Die Fahrplan-Instanz.** Auf ihr lief `scripts/dev/aio_install_check.sh`
-   vollständig: Vorprüfung, anonymer Pull, Companion aus dem Archiv samt
-   Fälschungsprobe, ExApp aus dem Archiv, Zero-Config-Nachweis und **alle sechs
+   vollständig: Vorprüfung, anonymer Pull, Companion aus der Paketdatei samt
+   Fälschungsprobe, ExApp aus der Paketdatei, Zero-Config-Nachweis und **alle sechs
    Deinstallations-Zusagen**. Ergebnis: `SUMMARY: all six uninstall promises hold
    on this instance`. Protokoll: `.dev/sichtprobe/install-check-sichtprobe.log`.
 2. **Die Instanz des Owners.** Auf ihr laufen nur die Schritte 2 und 3 desselben
@@ -755,13 +755,13 @@ Die Liste in Abschnitt 3 gilt unverändert weiter. Dazu kommen zwei Punkte, die
 nur diesen Lauf betreffen:
 
 1. **Der Tag `1.0.0` existiert noch nicht.** Wie im amd64-Lauf ist gegen `dev`
-   installiert worden, mit genau einer ersetzten Zeile in der `info.xml` des
-   Archivs. Befund 1 gilt fort: erst der Lauf nach dem Release-Tag geht den Weg
+   installiert worden, mit genau einer ersetzten Zeile in der `info.xml` der
+   Paketdatei. Befund 1 gilt fort: erst der Lauf nach dem Release-Tag geht den Weg
    vollständig.
-2. **Die beiden `info.xml`-Änderungen dieses Plans sind in diesen Archiven nicht
+2. **Die beiden `info.xml`-Änderungen dieses Plans sind in diesen Paketdateien nicht
    enthalten.** Der Probelauf lief auf `main` bei `94420f7`, also vor der
    Umstellung der Lizenz auf `AGPL-3.0-or-later` und vor der verankerten
-   Routenform `^/<name>$`. Die Archive tragen nachweislich noch
+   Routenform `^/<name>$`. Die Paketdateien tragen nachweislich noch
    `<licence>agpl</licence>` und die nackten Routennamen. Beide Änderungen
    berühren nichts auf dem Weg, den der Owner besieht: die Lizenz ist
    Store-Metadatum, und der Routenblock regiert allein den unsignierten
@@ -820,11 +820,11 @@ ist das Protokoll dieser zweiten Runde.
 |---|---|---|
 | Merge | offen | `main` bei `569f0a6`, konfliktfrei |
 | Laufzeit-Abbild | `sha256:f32af191...`, ohne den Fix | neu gebaut von `docker.yml`, gezogen als `sha256:025ced73...` |
-| Companion-Archiv | `findling.tar.gz` 234090 B, SHA-256 `5f83ea92...` | 234349 B, SHA-256 `1540dce4232e5313ca8d4c774246af3ea6e493c879783fc1f64f1b300e1fdaed` |
-| Backend-Archiv | 29112 B, SHA-256 `8ea9a88f...` | 29604 B, SHA-256 `52c4bcff9f480e6e6417242b1e2e4512c1fd299cb954f7bd033c2e01920a0dbe` |
+| Companion-Paketdatei | `findling.tar.gz` 234090 B, SHA-256 `5f83ea92...` | 234349 B, SHA-256 `1540dce4232e5313ca8d4c774246af3ea6e493c879783fc1f64f1b300e1fdaed` |
+| Backend-Paketdatei | 29112 B, SHA-256 `8ea9a88f...` | 29604 B, SHA-256 `52c4bcff9f480e6e6417242b1e2e4512c1fd299cb954f7bd033c2e01920a0dbe` |
 | Probelauf | `34116531030` auf `94420f7` | `34127041571` auf `569f0a6`, ebenfalls ohne Release |
-| Lizenz im Archiv | `agpl` | **`AGPL-3.0-or-later`** |
-| Routen im Archiv | nackte Namen | **`^/search$` bis `^/diagnose$`** |
+| Lizenz in der Paketdatei | `agpl` | **`AGPL-3.0-or-later`** |
+| Routen in der Paketdatei | nackte Namen | **`^/search$` bis `^/diagnose$`** |
 
 Damit ist die zweite Nichtabdeckung aus Abschnitt 6 erledigt: die Instanz trägt
 jetzt genau die beiden `info.xml`-Änderungen dieses Plans, und die Sichtprobe
@@ -837,7 +837,7 @@ Fix ist im laufenden Container nachgezählt: `_pin_native_thread_pools` kommt in
 `sandbox.py` des Containers zweimal vor, als Funktion und als Aufruf.
 
 Beide Hälften sind ersetzt, nicht nur der Container. Die Companion-Hälfte ist
-abgeschaltet, das Verzeichnis entfernt, aus dem neuen Archiv entpackt und wieder
+abgeschaltet, das Verzeichnis entfernt, aus der neuen Paketdatei entpackt und wieder
 eingeschaltet; `occ integrity:check-app findling` antwortet danach wieder leer,
 also sauber. Bewusst kein `occ app:remove`: das räumt Tabellen und Einstellungen
 (Deinstallations-Zusage 5), und hier ging es um einen neuen Bau auf einer
@@ -951,7 +951,7 @@ oc_ex_apps_routes after the archive registration:
   ^/diagnose$:GET:2 ^/rates$:GET:2 ^/search$:POST:1 ^/snippets$:POST:1 ^/status$:GET:2
 ```
 
-Das ist die verankerte Form, aus dem Archiv gelesen und von AppAPI in die Tabelle
+Das ist die verankerte Form, aus der Paketdatei gelesen und von AppAPI in die Tabelle
 geschrieben, also **die Bestätigung, dass die Umstellung ankommt**. Rot war der
 Schritt, weil die erwartete Zeichenkette daneben noch die nackten Namen trug: sie
 steht als Literal im Workflow, und dieser Plan hat sie beim Umstellen der Routen
@@ -961,15 +961,15 @@ Der Fix ist mehr als das Nachziehen des Literals, weil ein einzelnes Literal
 genau diese Verwechslung nicht auffangen kann. Der Schritt stellt jetzt zwei
 Fragen:
 
-1. Stimmt die Tabelle mit dem überein, was das Archiv erklärt? Die Erwartung wird
-   dafür aus dem eben installierten Archiv gelesen. Das ist die Frage, für die der
+1. Stimmt die Tabelle mit dem überein, was die Paketdatei erklärt? Die Erwartung wird
+   dafür aus der eben installierten Paketdatei gelesen. Das ist die Frage, für die der
    Schritt gebaut wurde.
-2. Erklärt das Archiv genau die fünf geprüften Routen? Das bleibt ein Literal,
+2. Erklärt die Paketdatei genau die fünf geprüften Routen? Das bleibt ein Literal,
    damit eine sechste Route oder eine gelockerte Zugriffsstufe eine Entscheidung
    bleibt, die auch hier getroffen werden muss.
 
-Beide Richtungen sind vor dem Commit an echten Archiven durchgespielt: das Archiv
-des gemergten `main` trifft, das ältere mit den nackten Namen fällt durch.
+Beide Richtungen sind vor dem Commit an echten Paketdateien durchgespielt: die
+Paketdatei des gemergten `main` trifft, die ältere mit den nackten Namen fällt durch.
 
 **Was noch offen ist:** die Bestätigung, dass der Schritt danach grün läuft. Sie
 kann nur aus dem nächsten `deploy-harp`-Lauf kommen, also nach dem Merge dieser
@@ -1011,7 +1011,7 @@ zusammengefasst:
 > ok abgenommen weiter der rest wie deine empfehlung
 
 Damit ist **D-H5 erfuellt**: der Owner hat auf einer frisch installierten
-Nextcloud, die beide Haelften ueber den Store-Weg aus den Release-Archiven
+Nextcloud, die beide Haelften ueber den Store-Weg aus den Release-Paketdateien
 bekommen hat, selbst gesucht und gefunden. Er hat die Treffer der fuenf Suchwoerter
 einschliesslich der beiden Office-Dokumente und die Verwaltungsseite im Browser
 gesehen, in der zweiten Runde und damit auf dem Abbild, das den Fix des Befundes 8

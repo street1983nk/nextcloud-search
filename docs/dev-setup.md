@@ -289,7 +289,7 @@ Alles oben beschreibt den Alltagsstack: das Backend läuft als gewöhnlicher
 Prozess auf dem Rechner und wird über einen `manual-install`-Daemon angemeldet.
 Dieser Weg belegt die HTTP-Schnittstelle und die Signaturköpfe, und er belegt
 nichts über eine Installation. Es wird kein Image geholt, kein Container
-erzeugt, kein Datenvolume angelegt, und die Routenliste wird nie aus dem Archiv
+erzeugt, kein Datenvolume angelegt, und die Routenliste wird nie aus der Paketdatei
 gelesen. Genau diese vier Dinge macht eine Installation aus dem App Store aus.
 
 `scripts/dev/compose-harp.yaml` ist der zweite Stack und geht diesen Weg: ein
@@ -345,9 +345,9 @@ sed -e 's|<registry>ghcr.io</registry>|<registry>localhost:5000</registry>|' \
     backend/appinfo/info.xml > .dev/harp/info-local.xml
 ```
 
-Die temporäre Datei ist ausschliesslich für die Anmeldung. Das Release-Archiv
+Die temporäre Datei ist ausschliesslich für die Anmeldung. Die Release-Paketdatei
 trägt `backend/appinfo/info.xml` unverändert, weil AppAPI die Routenliste beim
-Installieren aus dem Archiv liest: ein Tarball mit ersetzten Werten wäre eine App
+Installieren aus der Paketdatei liest: ein Tarball mit ersetzten Werten wäre eine App
 ohne Suchroute, und zwar ohne Fehlermeldung.
 
 ### Eine Adresse vor Nextcloud und HaRP

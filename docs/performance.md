@@ -3995,7 +3995,7 @@ Verbleibe. Die Box hat vom 04.09. bis zum 11.09.2026 bestanden.
 **Die erste Auflage des Betreibers: der Snapshot bleibt dauerhaft.** Die
 v1.2-Messung braucht ihn, weil sie sonst zwei Maschinen statt zweier Fassungen
 vergleicht. Wiedervorlage nach der v1.2-Messung: löschen oder in die
-Archivstufe legen (0,0135 USD je GB-Monat, also rund 0,70 USD je Monat, dafür 90
+kalte Ablagestufe legen (0,0135 USD je GB-Monat, also rund 0,70 USD je Monat, dafür 90
 Tage Mindestlaufzeit, rund 1,67 USD je Abruf und Stunden bis Tage Wartezeit).
 
 **Die zweite Auflage: außer dem Snapshot entstehen keine Kosten.** Der

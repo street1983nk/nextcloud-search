@@ -206,7 +206,7 @@ Dateien und der Papierkorb.
 
 Der Grund ist für alle derselbe: sonst erreicht die Zahl nie 100 Prozent und sagt
 damit nichts mehr. Ein Deckungsgrad, der bei 60 Prozent stehen bleibt, weil
-40 Prozent des Bestands Videos und ZIP-Archive sind, misst nicht die Suche,
+40 Prozent des Bestands Videos und ZIP-Dateien sind, misst nicht die Suche,
 sondern die Dateitypverteilung der Instanz. Was absichtlich draußen geblieben
 ist, wird deshalb nicht versteckt, sondern getrennt gezählt und als "absichtlich
 ausgelassen" ausgewiesen: `overCap` plus `excluded` plus die als
@@ -385,15 +385,15 @@ er wird relativ zur Wurzel des Mounts verglichen, auf dem eine Datei liegt.
 In einem User-Home ist diese Wurzel der `files`-Ordner des Benutzers. Drei
 Beispiele:
 
-- `Archiv` schließt `Archiv/` und alles darunter aus.
+- `Ablage` schließt `Ablage/` und alles darunter aus.
 - `Backups` ebenso, in jedem Home gleichzeitig.
 - `.stversions` schließt die Versionsordner aus, die manche Clients anlegen.
 
 Zwei Präzisierungen, ohne die ein Präfix falsch gesetzt wird:
 
 Erstens: die Präfixe wirken in **allen** Homes auf einmal, nicht in einem
-bestimmten. `Archiv` heißt "der Archiv-Ordner jedes Benutzers" und nicht "der
-Archiv-Ordner von Alice". Einen Ausschluss für eine einzelne Person gibt es
+bestimmten. `Ablage` heißt "der Ablage-Ordner jedes Benutzers" und nicht "der
+Ablage-Ordner von Alice". Einen Ausschluss für eine einzelne Person gibt es
 bewusst nicht.
 
 Zweitens: die früher notierte Lesart, Präfixe gelten **nur in User-Homes**, ist
@@ -410,7 +410,7 @@ will, dafür keinen Präfix braucht.
 Eine ausgeschlossene Datei verschwindet nicht stumm. Sie erscheint in der
 Diagnose mit dem Grund `excluded`, also "Durch Regel ausgeschlossen" samt
 Abhilfe, aus derselben geschlossenen Tabelle wie jeder andere Grund. Eine Zeile
-je ausgeschlossener Datei wird bewusst nicht geschrieben: bei einem Archivordner
+je ausgeschlossener Datei wird bewusst nicht geschrieben: bei einem Ablageordner
 mit zweihunderttausend Dateien wären das zweihunderttausend Zeilen für eine
 Antwort, die aus vier Vergleichen folgt, und jede davon wäre in dem Moment
 falsch, in dem die Regel zurückgenommen wird.
