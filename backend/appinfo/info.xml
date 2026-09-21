@@ -139,7 +139,7 @@ Prérequis :
 - CPU : 2 cœurs suffisent, amd64 et arm64
 
 Support entreprise et modules payants : demande de devis à admin@infranode.dev]]></description>
-	<version>1.1.0</version>
+	<version>1.2.0</version>
 	<!--
 		The SPDX spelling and not the short one. info.xsd accepts both, but it
 		lists agpl, mit, mpl and apache under the heading Deprecated, and the
@@ -233,7 +233,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 				so this exact tag has to exist in the registry before a release
 				is published, not after.
 			-->
-			<image-tag>1.1.0</image-tag>
+			<image-tag>1.2.0</image-tag>
 		</docker-install>
 		<routes>
 			<!--
