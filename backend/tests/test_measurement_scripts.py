@@ -283,6 +283,37 @@ DRIVEN_FASSUNG_RULE = (
     "eine gefahrene Messfassung ist Teil des Belegs, und ein Fix entsteht als neue Datei in einem neuen Laufverzeichnis"
 )
 
+# The six fassungen the paid trip of phase 15 actually drove, with the sha256
+# and the byte count of each. Plan 15-15, after the box was taken down.
+#
+# A driven measurement fassung is part of the evidence and is not touched
+# afterwards. Whoever wants to change one of these six writes a successor with
+# a new number in a new run directory, exactly as 98b followed 98 and 98c
+# followed 98b. The reason is not tidiness: the raw files in
+# docs/measurements/2026-09-v12-messung/rohdaten/ carry the figures of the trip,
+# and every one of them is a statement about the script that produced it. A
+# correction inside one of these files would turn each of those figures into a
+# claim about a script that no longer exists, and the box that could settle the
+# question does not exist any more either.
+#
+# Both figures are written down rather than recomputed from the file under
+# test, for the reason the older watchmen give at their own definition: a gate
+# that asks the file for its own expectation agrees with it no matter what it
+# comes to say. The bytes are the same on Windows and on a runner, because
+# .gitattributes checks every .sh out with LF endings.
+#
+# The order is the order of the numbers, which is the order the measurement
+# order of docs/runbook-messbox.md calls them in, and not the order in which
+# they ran.
+DRIVEN_V12_FASSUNGEN: dict[str, tuple[str, int]] = {
+    "92b-wechsel.sh": ("8d1f51997a1642eb0d4a1247975db73cdaa0000acf6bf70e9c74f34f165780fd", 30400),
+    "94b-grundlast-rueckkehr.sh": ("a88a906201898e806f0361395b6f64b169086e78d6593ee171b7fed7f563b350", 36011),
+    "95b-wiederaufwaermen.sh": ("791640fd01f0d56c5da344d12efe62198bc62f379e2721978a69489dbe952791", 30529),
+    "97-cron-vorpruefung.sh": ("0c84c4ff1b47e23435428c5a58b0f28ab7397ba7e90c3912ab50392ba41eae72", 26252),
+    "98c-sprachfaelle.sh": ("18ed06b498ad836fa9bb01b4f05a9fe99004eaaaae6743f73a6bfd44b1d87694", 44073),
+    "99c-filter-sortierung.sh": ("dda76234d8ee7d8e54ebb73289c705509681cbd23d5646db3c60b1da36425d97", 29065),
+}
+
 # The two files of the full run that can be held to a promise without a box: the
 # reader the watchman decides on, and the observer whose recordings are checked
 # into this repository.
@@ -2303,3 +2334,66 @@ def test_the_run_directory_of_the_trip_carries_every_tool_the_measurement_order_
     assert len(TOOLS_THE_MEASUREMENT_ORDER_NAMES) == 18
     missing = [name for name in TOOLS_THE_MEASUREMENT_ORDER_NAMES if not (V12_RUN_DIR / name).is_file()]
     assert missing == [], missing
+
+
+# The watchmen over the six fassungen the paid trip of phase 15 drove. Plan 15-15.
+#
+# The three watchmen further up hold a fassung of an earlier trip against its
+# own past, and the copy watchman holds a copy against its original. These six
+# are the same rule applied to the run directory of v1.2 itself: the raw files
+# of the trip lie beside these scripts, the box they ran on is gone, and from
+# today a change inside one of them is a red test rather than a matter of good
+# intentions.
+
+
+@pytest.mark.parametrize("name", sorted(DRIVEN_V12_FASSUNGEN), ids=sorted(DRIVEN_V12_FASSUNGEN))
+def test_the_driven_v12_fassung_stays_byte_identical(name: str) -> None:
+    """A fassung that ran on the paid box is evidence, and evidence does not get edited.
+
+    Every one of these six wrote a raw file in
+    docs/measurements/2026-09-v12-messung/rohdaten/ between 20.09. and
+    21.09.2026, and the report reads its figures out of those raw files. The
+    box was taken down on 21.09.2026, so a figure that turns out to be a claim
+    about a changed script cannot be measured again.
+    """
+    digest, size = DRIVEN_V12_FASSUNGEN[name]
+    path = V12_RUN_DIR / name
+    assert path.is_file(), path
+    raw = path.read_bytes()
+    # DRIVEN_FASSUNG_RULE is the reason and it is handed over as the diagnosis:
+    # a fix belongs in a successor with a new number in a new run directory.
+    assert len(raw) == size, DRIVEN_FASSUNG_RULE
+    assert hashlib.sha256(raw).hexdigest() == digest, DRIVEN_FASSUNG_RULE
+
+
+def test_the_watchman_of_the_driven_v12_fassungen_fires_on_a_single_added_byte() -> None:
+    """A watchman whose only assertion is that today is fine stays green when it dies.
+
+    Staged against the real bytes of all six rather than against an invented
+    sample, after the pattern of the mutation probes above: what is shown here
+    is that THESE digests separate THESE files from files that have drifted by
+    a single character.
+    """
+    assert len(DRIVEN_V12_FASSUNGEN) == 6
+    for name, (digest, size) in DRIVEN_V12_FASSUNGEN.items():
+        raw = (V12_RUN_DIR / name).read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == digest
+        assert len(raw + b" ") != size
+        assert hashlib.sha256(raw + b" ").hexdigest() != digest
+        assert hashlib.sha256(raw.replace(b"set -eu", b"set -e", 1)).hexdigest() != digest
+
+
+def test_the_six_driven_v12_fassungen_are_the_ones_the_run_order_names() -> None:
+    """The six are named by section 5 of 00-ablauf.md, and they are not the copies.
+
+    The copy watchman of plan 15-01 holds eleven files that came over from the
+    run directory of v1.1 unchanged; these six were written for this trip and
+    have no original to be held against. The two sets must stay disjoint, or a
+    file would be judged twice under two different rules.
+    """
+    assert set(DRIVEN_V12_FASSUNGEN).isdisjoint(COPIED_TOOLS)
+    assert set(DRIVEN_V12_FASSUNGEN) <= set(TOOLS_THE_MEASUREMENT_ORDER_NAMES)
+    # The stock probe is the only tool of the run directory that is neither a
+    # copy nor one of the six: it ran inside the container as section 0 of the
+    # language case fassung and carries no raw file of its own.
+    assert STOCK_PROBE.name not in DRIVEN_V12_FASSUNGEN
