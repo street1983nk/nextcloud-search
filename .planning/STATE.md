@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-02 abgeschlossen (Geheimnis- und Vokabular-Gate ueber docs/, Auflage A2 zur Haelfte); NAECHSTES: 16-03 und 16-04 der Welle 1
-last_updated: "2026-09-21T15:40:00.000Z"
+stopped_at: 16-03 abgeschlossen (Nachfolgefassungen 92c und 99d plus vier Waechter, Auflage A1 statisch abgenommen); NAECHSTES: 16-04, der Rest der Welle 1
+last_updated: "2026-09-21T17:35:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 51
-  percent: 81
+  completed_plans: 52
+  percent: 83
 ---
 
 # Project State
@@ -26,7 +26,24 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 2 von 14 abgeschlossen (16-01 und 16-02, Welle 1).
+Plan: 3 von 14 abgeschlossen (16-01, 16-02 und 16-03, Welle 1).
+
+16-03: Auflage A1 ist gebaut und STATISCH abgenommen. Das neue
+Laufverzeichnis `docs/measurements/2026-09-nachfolgefassungen/skripte/`
+traegt `92c-wechsel.sh` (bd10eeb) und `99d-filter-sortierung.sh` (3bc7925),
+beide als Kopie ihrer Vorgaengerin mit genau einer Sachaenderung: 92c prueft
+den Rueckgabewert des occ-Aufrufs der Registrierung und verweigert unterhalb
+der Pipeline mit 36 (L-03), 99d liest das Passwort auch aus PWFILE und endet
+sonst mit 2 (L-04). Vier neue Waechter in `test_measurement_scripts.py`
+(fc8afba), je Fassung einer fuer die Herkunft und einer fuer die behobene
+Eigenschaft; das neue Verzeichnis ist der vierte Eintrag in
+`NARROW_SCOPE_DIRS`. `DRIVEN_V12_FASSUNGEN` bleibt bei sechs unveraenderten
+Pruefsummen, `git diff --stat` nennt weder 92b noch 99c. Volle Suite 2.458
+bestanden / 15 uebersprungen, Skipzahl unveraendert.
+**WICHTIG: keine der beiden Fassungen ist auf einer Box nachgemessen.** Der
+Nicht-gefahren-Satz steht in Versalien im Kopf jeder Datei, wird von einem
+Fall gehalten und steht in 16-03-SUMMARY.md. Ihre Wirkung misst erst die
+naechste Anfahrt; das ist die dokumentierte Grenze von A1.
 
 16-02: Die Geheimnisregel hat zum ersten Mal ein Gate.
 `backend/tests/test_public_artifacts.py` (38ebd9d, 1f25a74) laeuft rekursiv
@@ -53,7 +70,7 @@ enger 423-Wiederholung in `integration.yml` (DI-11-05, Commit a856563),
 HART-01 ist NOCH NICHT abgehakt: erledigt ist nur DI-11-05, DI-11-02/03/06
 liegen bei Plan 16-04. `parity-login` bleibt beobachtet und ungefixt.
 Dependabot-PR #11 liegt weiterhin beim Owner.
-NAECHSTES: 16-03 und 16-04 (Rest der Welle 1).
+NAECHSTES: 16-04 (Rest der Welle 1).
 
 ### Vorgeschichte, Phase 15
 

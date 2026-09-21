@@ -262,14 +262,14 @@ Plans:
 
 **Backlog-Kandidat (beim Planen pruefen, kein Requirement):** BL-F02 Baustein 1, OCR-Pakete spa/ita/nld/por. Nur NACH der Phase-15-Messanfahrt einbauen (Werkzeugstand ist Vergleichbarkeitsbedingung) und nur ohne Terminrisiko fuer die Einreichung; sonst Folgerelease.
 
-**Plans:** 2/14 plans complete
+**Plans:** 3/14 plans complete
 
 Plans:
 **Welle 1**
 
 - [x] 16-01-PLAN.md: Flake-Haertung (DI-11-05, L-11), Flake-Register, tantivy-Ignoranweisung (completed 2026-09-21)
 - [x] 16-02-PLAN.md: Das Geheimnis- und Vokabular-Gate ueber docs/ (A2, Teil 1) (completed 2026-09-21)
-- [ ] 16-03-PLAN.md: Nachfolgefassungen 92c und 99d plus Waechter (A1)
+- [x] 16-03-PLAN.md: Nachfolgefassungen 92c und 99d plus Waechter (A1) (completed 2026-09-21)
 - [ ] 16-04-PLAN.md: DI-11-02/03/06 entschieden, L-07 behoben, deferred-items
 
 **Welle 2** *(wartet auf Welle 1)*
@@ -317,7 +317,7 @@ Plans:
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 16/16 | Complete | 2026-09-21 |
-| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 1/14 | In Progress | - |
+| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 3/14 | In Progress | - |
 
 ## Nach v1.2 (Wiedervorlage)
 
