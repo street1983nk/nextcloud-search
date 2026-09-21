@@ -1,4 +1,4 @@
-"""Every file under docs/, held against the secret rule of this project.
+"""Every file under docs/, held against the secret rule and the vocabulary rule.
 
 The occasion is finding M-02 of the phase 15 audit, and it is worth quoting
 because it is the whole reason this module exists: **the secret rule is nowhere
@@ -15,16 +15,17 @@ tomorrow is checked on the day it arrives without anybody adding it here.
 
 **What it looks for.** Eight families out of section 3 of the audit, which
 recognise a secret by its context or by a shape rather than by one form, plus
-the pattern that the plans 15-09 to 15-14 ran as their own check. Every family
-is a named constant with a comment that says what it looks for and what it
-recognises it by.
+the pattern that the plans 15-09 to 15-14 ran as their own check, plus the
+vocabulary rule of the owner, which is finding L-10 of the same audit and had no
+gate over this directory either. Every family is a named constant with a comment
+that says what it looks for and what it recognises it by.
 
 **Why the samples are assembled from halves.** A gate that carries the thing it
-keeps out is the next finding. The prefixes of the access keys and the key words
-of the sixth family are therefore put together out of pieces, exactly as
-``test_store_metadata.py`` does it with its blocked term and its dashes. The
-trial run is made here rather than described: one case below runs this gate over
-this file, and it comes back empty.
+keeps out is the next finding. The prefixes of the access keys, the key words of
+the sixth family and the blocked term of the vocabulary rule are therefore put
+together out of pieces, exactly as ``test_store_metadata.py`` does it with its
+blocked term and its dashes. The trial run is made here rather than described:
+one case below runs this gate over this file, and it comes back empty.
 
 **Why there are self tests.** Without them a gate whose body was deleted can
 report zero findings over zero files and look healthy, and a gate over a
@@ -81,7 +82,7 @@ BINARY_SUFFIXES = frozenset(
 SKIPPED_DIRECTORY_NAMES = frozenset({"__pycache__"})
 
 
-# -- the nine shapes of a secret -----------------------------------------------
+# -- the nine shapes of a secret, and the tenth rule ---------------------------
 
 # 1. A private key of the PEM form. Recognised by its header line, which names
 #    the kind of key between BEGIN and PRIVATE KEY. The body is not required:
@@ -234,6 +235,34 @@ def address_names_a_machine(groups: tuple[str | None, ...]) -> bool:
     return not (first == 100 and 64 <= second <= 127)
 
 
+# 10. The vocabulary rule of the owner, which is finding L-10 and the second
+#     rule of this project that had no gate over this directory. The blocked
+#     term as a stem and out of two halves, like in test_store_metadata.py and
+#     for the same reason.
+#
+#     The reach over docs/ is decision E-H2, and it is spelled out here because
+#     it falls differently over this directory than over the store texts:
+#
+#     * **Caught are the German forms.** They are looked for as the stem without
+#       the English ending, so every form that is not the English one. Counted
+#       on 21.09.2026: 45 German forms in six files, out of 116 occurrences of
+#       the stem in seventeen files, and the difference between the two numbers
+#       is what the ending does.
+#     * **Not caught is the English technical term** in English technical prose,
+#       which is E-H2 itself. A file that carries it stands on the list below
+#       with that reason and no other.
+#     * **Not caught are the raw data and the scripts of driven approaches**
+#       under docs/measurements. A raw file is not edited after the run, because
+#       editing it would stop it being evidence of that run.
+#
+#     The gate holds the German forms against the same exception list as the
+#     nine families above, under the family name vokabular. Everything that
+#     would be red today stands on it, so the gate comes into the world green
+#     and says the truth about the stock rather than hiding it; the documents
+#     that can still be edited leave the list in plan 16-05.
+BLOCKED_TERM = "arch" + "iv"
+GERMAN_FORM_OF_THE_BLOCKED_TERM = re.compile(BLOCKED_TERM + "(?!e)", re.IGNORECASE)
+
 # The names of the families, in the order above. A finding names one of these,
 # and so does every key of the exception list.
 SECRET_FAMILIES = (
@@ -247,7 +276,8 @@ SECRET_FAMILIES = (
     "base64-block-ab-40",
     "muster-der-umsetzung",
 )
-FAMILIES = SECRET_FAMILIES
+VOCABULARY_FAMILY = "vokabular"
+FAMILIES = (*SECRET_FAMILIES, VOCABULARY_FAMILY)
 
 
 # -- the staged samples of the self tests --------------------------------------
@@ -269,6 +299,7 @@ CLEAN_SAMPLES: dict[str, str] = {
     "ipv6-adresse": "ab" + ":cd:ef are three groups, one under the floor of four",
     "base64-block-ab-40": "0123456789abcdef" * 4,
     "muster-der-umsetzung": "i-" + "0a1b2c3 is too short, and " + "10.0.0.1" + " names no machine",
+    VOCABULARY_FAMILY: "a sentence about the kept data of a run that does not need the word at all",
 }
 
 MUTATED_SAMPLES: dict[str, str] = {
@@ -290,7 +321,17 @@ MUTATED_SAMPLES: dict[str, str] = {
     "base64-block-ab-40": "Findling" + "Z" * 32 + "+g==",
     # mutated: the instance identifier with a hex tail over the floor
     "muster-der-umsetzung": "i-" + "0a1b2c3d4e5f60718",
+    # mutated: the German form of the blocked term, which is the stem without
+    # the English ending behind it
+    VOCABULARY_FAMILY: "das " + "Arch" + "iv der Anfahrt",
 }
+
+# The third sample of the vocabulary rule, which the other nine families have no
+# use for: the English technical term. It carries the stem and is exempt under
+# E-H2, so it is the one sample that proves the rule reads the ending rather
+# than the stem. Split at the same place as the two above, so that this file
+# carries neither of the two forms whole.
+ENGLISH_FORM_SAMPLE = "the " + "arch" + "ive of a driven run stays where it is"
 
 
 # -- the exception list --------------------------------------------------------
@@ -482,6 +523,31 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
         "The performance document names public addresses of earlier boxes in its provenance notes, "
         "and it is a document that plan 16-05 can still edit."
     ),
+    # -- family 10, the German forms of the blocked term
+    ("admin-page.md", "vokabular"): (
+        "The administration guide uses the German form as the example name of an excluded folder, "
+        "and it is a document that plan 16-05 can still edit."
+    ),
+    ("install-check.md", "vokabular"): (
+        "The installation guide uses the German form for the packed release file of each half, "
+        "and it is a document that plan 16-05 can still edit."
+    ),
+    ("dev-setup.md", "vokabular"): (
+        "The development setup uses the German form for the packed release file the route list is read out "
+        "of, and it is a document that plan 16-05 can still edit."
+    ),
+    ("performance.md", "vokabular"): (
+        "The performance document uses the German form for the cold storage tier of the provider, "
+        "and it is a document that plan 16-05 can still edit."
+    ),
+    ("measurements/2026-09-v12-messung/rohdaten/03-aufbau.txt", "vokabular"): (
+        "The build record of the driven v1.2 approach uses the German form for the packed backup it counted "
+        "entries in, and a raw file of a driven run is not edited afterwards."
+    ),
+    ("measurements/2026-09-werkzeugfixe/rohdaten/07-snapshot-und-abbau.txt", "vokabular"): (
+        "The teardown record of the tool fix approach uses the German form for the cold storage tier it "
+        "priced, and it is not edited afterwards."
+    ),
 }
 
 # The shortest reason that can still be a reason. A sentence under this length
@@ -548,6 +614,8 @@ def matches_of(family: str, text: str) -> int:
             for found in IMPLEMENTATION_PATTERN.finditer(text)
             if found.group(1) is None or address_names_a_machine(found.groups())
         )
+    if family == VOCABULARY_FAMILY:
+        return len(GERMAN_FORM_OF_THE_BLOCKED_TERM.findall(text))
     return 0
 
 
@@ -685,3 +753,24 @@ def test_an_address_that_names_no_machine_is_no_finding() -> None:
 
     assert matches_of("muster-der-umsetzung", quiet) == 0
     assert matches_of("muster-der-umsetzung", loud) == 1
+
+
+def test_the_english_term_is_no_finding_and_a_german_form_is_exactly_one() -> None:
+    # Decision E-H2 as a case rather than as a sentence in a summary. Three
+    # samples, because two of them would not tell the two rules apart: a rule
+    # that read the stem would be green against the first and red against the
+    # second, and only the third says which of the two this gate runs.
+    assert matches_of(VOCABULARY_FAMILY, CLEAN_SAMPLES[VOCABULARY_FAMILY]) == 0
+    assert matches_of(VOCABULARY_FAMILY, ENGLISH_FORM_SAMPLE) == 0
+    assert matches_of(VOCABULARY_FAMILY, MUTATED_SAMPLES[VOCABULARY_FAMILY]) == 1
+
+
+def test_the_blocked_term_stands_in_this_module_only_as_an_assembled_stem() -> None:
+    # The same device as in test_store_metadata.py: a gate against a word must
+    # not be the file that carries it. Read out of the source rather than out of
+    # the constant, because the constant is assembled at import time and would
+    # answer the wrong question.
+    source = text_of(Path(__file__))
+
+    assert BLOCKED_TERM not in source.lower()
+    assert matches_of(VOCABULARY_FAMILY, source) == 0
