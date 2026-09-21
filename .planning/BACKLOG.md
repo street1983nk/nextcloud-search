@@ -201,3 +201,38 @@ nach Versand der Mails.
 **Warum nicht mehr in v1.2:** Milestone ist mit 17 Requirements geschnitten
 und approved, stable35-Frist haengt drin, und eine Schema-Aenderung vor der
 Phase-15-Messung zerstoert den v1.1-Vergleich (D-04-Linie).
+
+## BL-F03: Messanfahrt-Buendel, die fuenf offenen Boxzahlen
+
+**Auslöser:** Owner-Entscheid 21.09.2026 beim v1.2-Abschluss: das Buendel wird
+als Messphase in den NAECHSTEN Milestone aufgenommen, keine eigenstaendige
+Anfahrt vorher. Der Korpus-Snapshot `snap-03f1d1d9ad9262704` bleibt dafuer
+bewusst im Standard-Tier stehen (dritter bewusster Behalten-Entscheid,
+~2,85 USD/Monat).
+
+Die fuenf Punkte, alle nur auf einer Box messbar, alle mit Herkunftsbeleg:
+
+1. **M-01-Zahl:** die Dauer des inneren Aufrufs auf Zielhardware. Die
+   Instrumentierung steht seit Plan 16-06 (`SLOW_CALL_LOG_MILLISECONDS`),
+   die Zahl fehlt. Quelle: `docs/audits/2026-09-phase-16/README.md`
+   Abschnitt 5.5, Verdikt "teilerfuellt".
+2. **Wirkungsnachmessung 92c/99d:** die Nachfolgefassungen
+   `92c-wechsel.sh` (occ-Rueckgabewert) und `99d-filter-sortierung.sh`
+   (Passwort aus Datei) sind boxlos gruen, auf einer Box nie gelaufen
+   (L-03/L-04, Auflage A1).
+3. **Bodensatz-Zyklus 2:** senkt eine zweite Entladung den Bodensatz von
+   628,0 MB? Messbericht v1.2 Abschnitt 10 Punkt 7: gefahren wurde genau
+   ein Zyklus.
+4. **Die 6 Fehlschlaege und 44 uebersprungenen Dateien** der Endzahl
+   52.137/44/6 einzeln benennen (Messbericht Abschnitt 10 Punkt 4);
+   vermutlich reicht Volume mounten + DB/Log lesen, kein Reindex.
+5. **Kaltstartlatenz sauber:** der Messrequest von DI-07-02 traf einen
+   Leerbegriff (`EmptyResultGroup`); anon-Spitze und Wandzeit stehen, die
+   Latenzaussage nicht (Messbericht Abschnitt 10 Punkt 6).
+
+**Aufwandsschaetzung (grob, VOR der Phase durch ein Rechenblatt zu ersetzen):**
+6-10 Boxstunden auf m7g.large aus dem Snapshot, ca. 1,0-1,5 USD; kein
+Volllauf noetig. Runbook-Disziplin gilt: Rechenblatt + Deckel VOR dem Start
+zur Owner-Freigabe, Cron-Intervall-Gate, Digest-Wechsel, Rohdaten committen.
+Dazu aus dem Messbericht Punkt 11: kein Werkzeug-Fix der v1.2-Anfahrt ist in
+seiner Wirkung nachgemessen; diese Anfahrt ist genau dafuer da.

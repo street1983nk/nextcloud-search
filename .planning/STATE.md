@@ -42,15 +42,28 @@ Git-Historie dieser Datei (letzter Vollstand: Commit 966ec64).
   Outlook-Entwurf an Denny (admin@infranode.dev/Drafts) senden; InfraNode
   ntfy-401-Entscheid.
 
-## Nach v1.2 (Wiedervorlage, jetzt faellig)
+## Wiedervorlagen (Stand nach den Owner-Entscheiden vom 21.09.2026 abends)
 
-- Q5 Korpus-Snapshot snap-03f1d1d9ad9262704: loeschen oder guenstigere
-  Speicherklasse (2,79 bis 2,99 USD je Monat). Owner hat ihn am 21.09. zum
-  zweiten Mal bewusst behalten; einzige laufende Box-Kostenstelle,
-  ~55,4 GB, Marke purpose=findling-corpus-keep.
-- Naechste Messanfahrt-Buendel: M-01-Zahl, 92c/99d-Nachfolgefassungen,
-  Bodensatz-Zyklus 2, 6 Fehlschlaege, Kaltstart.
-- Findling-Pro-Entscheid (ISV-Monetarisierung, erst Fake-Door-Auswertung).
+- Q5 Korpus-Snapshot: ENTSCHIEDEN 21.09. (drittes bewusstes Behalten), bleibt
+  im Standard-Tier (~2,85 USD/Monat, einzige laufende Box-Kostenstelle,
+  Marke purpose=findling-corpus-keep). Neu vorlegen erst, wenn die naechste
+  Anfahrt mehr als ~3 Monate entfernt liegt (dann Archive-Tier rechnen) oder
+  beim naechsten Milestone-Close.
+- Messanfahrt-Buendel: ENTSCHIEDEN 21.09., kommt als Messphase in den
+  NAECHSTEN Milestone; vollstaendig beschrieben als BL-F03 in BACKLOG.md
+  (M-01-Zahl, 92c/99d-Wirkung, Bodensatz-Zyklus 2, 6 Fehlschlaege + 44
+  Uebersprungene, Kaltstartlatenz; grob 6-10 Boxstunden, Rechenblatt vor
+  Start).
+- Findling-Pro-Entscheid: VERTAGT auf 03.11.2026 (8 Wochen nach v1.0-Launch,
+  Go-Kriterium >=10 Grenzen-Anfragen oder 1 Pilotkunde >250 Nutzer).
+  Stand 21.09.: NULL Signale (650 Mails admin-Postfach geprueft, keine
+  GitHub-Issues). Fake-Door wird verstaerkt: Issue-Entwurf liegt in
+  Desktop/fake-door/connector-enterprise-issue-ENTWURF.md, POSTEN ERST NACH
+  OWNER-FREIGABE.
+- ISV-Nachfass Fabrice Mous: Owner-Entscheid 21.09. "noch warten";
+  Wiedervorlage 25.09.2026, dann Nachfass-Entwurf anbieten.
+- Connector Issue #8 (piAreSquare, 21.09., "Added file upload and download
+  ability"): Community-Beitrag zur geparkten Connector-Spur, zeitnah sichten.
 - L-16-04-Kommentarfix beim naechsten Workflow-Plan (paths-Filter gilt nicht
   fuer Tag-Pushes, zwei Workflow-Kommentare berichtigen).
 - Aufraeumbefunde aus der Recherche: fastembed gepinnt aber nicht importiert,
