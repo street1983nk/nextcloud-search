@@ -20,7 +20,7 @@ niemand einen Punkt hier sucht, der woanders steht:
 |---|---|---|
 | L-03, L-04 | Plan 16-03 | gebaut, Nachfolgefassungen 92c und 99d |
 | L-07 | Plan 16-04, Task 2 | gebaut, `cmd_destroy` nimmt das Schluesselpaar mit |
-| L-09 | Plan 16-08 | Erfolgskriterium 4, neu gemessen statt neu behauptet |
+| L-09 | Plan 16-08, **geschlossen am 21.09.2026** | Erfolgskriterium 4, neu gemessen statt neu behauptet; siehe den Nachtrag unter der Tabelle |
 | L-10 | Plaene 16-02 und 16-05 | Gate ueber `docs/`, danach die Bereinigung |
 | L-11 | Plan 16-01 | gebaut, zweite Zeitkonstante, dazu das Flake-Register |
 | M-01 | Plan 16-06 | die 1,5-Sekunden-Decke und was die Rohdateien ausweisen |
@@ -28,6 +28,35 @@ niemand einen Punkt hier sucht, der woanders steht:
 
 Die sieben Eintraege unten sind der Rest: vier aus DI-11 und drei Werkzeug- und
 Verfahrensbefunde der Phase 15.
+
+### Nachtrag vom 21.09.2026: L-09 ist geschlossen
+
+**Befund.** Erfolgskriterium 4 der Phase 15 war nicht erfuellt: fuenf der zehn
+deutschen Sprachfaelle hiessen "nicht messbar", weil die Messinstanz den
+Korpus-Snapshot trug und die eigene Datei in rund 52.000 Fremddokumenten mit
+denselben Woertern ausserhalb der 64 Rechecks lag.
+
+**Verdikt: geschlossen, gemessen statt behauptet.**
+
+**Der Beleg.** Lauf **35586213137** vom 21.09.2026, Auftrag `index-search-e2e
+(sqlite, ubuntu-24.04-arm)` der Werkbank `integration.yml`, 3 min 43 s, success
+beim ersten Anlauf. Die Instanz meldet vor dem Korpus `files on the instance
+before the corpus: 0` und danach `corpus entries: 39`. **Zehn von zehn
+Sprachfaellen gruen, null rot, null ohne Aussage**; alle fuenf zuvor nicht
+messbaren Faelle (`Genehmigung`, `Frist`, `Vertrag`, `bescheid`,
+`type:pdf bescheid`) tragen jetzt eine Aussage. Der ausfuehrliche Bericht mit
+Bedingungen, Gegenueberstellung zur Phase 15 und dem Pflichtabschnitt "Was
+dieser Lauf nicht beweist" steht in
+`docs/measurements/2026-09-a4-sprachfaelle-ci/README.md`; sein Urteil zum Weg
+lautet **traegt**.
+
+**Die Freigabe.** Owner-Entscheid am Checkpoint des Plans 16-08 vom 21.09.2026
+im Wortlaut: "Zweig a, zustimmen". Auflage A4 ist damit ueber den kostenlosen
+CI-Weg des Entscheids E3 erfuellt, **keine Box, kein Deckel-Abruf**.
+
+**Zieladresse.** Keine. Der Ast bleibt als dauerhaftes Gate stehen und faengt
+den naechsten Rueckschritt in einem der zehn Faelle auf arm64 genauso wie auf
+amd64.
 
 ---
 

@@ -277,12 +277,12 @@ Plans:
 - [x] 16-05-PLAN.md: Bereinigung der 58 Altfunde und des gesperrten Worts, Restliste (A2, Teil 2) (completed 2026-09-21)
 - [x] 16-06-PLAN.md: Instrumentierung des inneren Aufrufs in ExAppService (A3, M-01) (completed 2026-09-21)
 
-**Welle 3** *(laeuft)*
+**Welle 3** *(fertig)*
 
 - [x] 16-07-PLAN.md: Versionsbump 1.2.0 und Migration Version001200Date... (completed 2026-09-21)
-- [ ] 16-08-PLAN.md: A4 ueber den arm64-CI-Ast, Beleg und Owner-Checkpoint
+- [x] 16-08-PLAN.md: A4 ueber den arm64-CI-Ast, Beleg und Owner-Checkpoint (completed 2026-09-21)
 
-**Welle 4** *(wartet auf Welle 3)*
+**Welle 4** *(laeuft)*
 
 - [ ] 16-09-PLAN.md: Upgrade-Beweis 1.1.0 auf 1.2.0, neue sechste Zusicherung
 - [ ] 16-10-PLAN.md: BL-F02 Baustein 1, sechs OCR-Sprachen, mit Abbruchpfad (Owner-Tor)
@@ -317,7 +317,7 @@ Plans:
 | 13. Filter und Sortierung auf der Ergebnisseite | v1.2 | 13/13 | Complete | 2026-09-19 |
 | 14. Modell-Entladung im Leerlauf | v1.2 | 12/12 | Complete | 2026-09-19 |
 | 15. Messphase, eine Box-Anfahrt | v1.2 | 16/16 | Complete | 2026-09-21 |
-| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 3/14 | In Progress | - |
+| 16. Haertung und Store-Einreichung v1.2.0 | v1.2 | 8/14 | In Progress | - |
 
 ## Nach v1.2 (Wiedervorlage)
 

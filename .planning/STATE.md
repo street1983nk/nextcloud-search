@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Messbeleg und Ausbau
 status: in_progress
-stopped_at: 16-08 Aufgabe 1 und 2 fertig und verbucht (arm64-Ast d34c392, Beleg b5da459 aus Lauf 35586213137, zehn von zehn Sprachfaellen gruen, Urteil traegt); offen ist nur noch der Owner-Checkpoint (Aufgabe 3, Zweig a); kein Tag, kein Release
-last_updated: "2026-09-21T22:30:00.000Z"
+stopped_at: 16-08 abgeschlossen (arm64-Ast des Auftrags index-search-e2e, Beleg der zehn Sprachfaelle ohne Fremdbestand aus Lauf 35586213137, Owner-Entscheid "Zweig a, zustimmen", L-09 geschlossen); Welle 3 ist fertig; NAECHSTES: 16-09, Welle 4; kein Tag, kein Release
+last_updated: "2026-09-21T23:10:00.000Z"
 last_activity: 2026-09-21
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 63
-  completed_plans: 56
-  percent: 89
+  completed_plans: 57
+  percent: 90
 ---
 
 # Project State
@@ -26,12 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-11)
 ## Current Position
 
 Phase: 16 (haertung-und-store-einreichung-v1-2-0): **IN ARBEIT**
-Plan: 7 von 14 abgeschlossen (16-01 bis 16-07). **Welle 1 und Welle 2 sind
-vollstaendig, Welle 3 laeuft.** 16-08 ist angefangen und **nicht
-abgeschlossen**: es gibt keine 16-08-SUMMARY, und die ROADMAP fuehrt den Plan
-weiterhin als offen.
+Plan: 8 von 14 abgeschlossen (16-01 bis 16-08). **Welle 1, Welle 2 und Welle 3
+sind vollstaendig.** NAECHSTES: **16-09** (Upgrade-Beweis 1.1.0 auf 1.2.0),
+Beginn der Welle 4; 16-10 daneben ist das Owner-Tor fuer BL-F02 Baustein 1.
 
-16-08 (laufend, Auflage A4): **Der Ast steht, der Beleg fehlt noch.** Aufgabe 1
+16-08: **Auflage A4 ist ohne Box erfuellt.** Aufgabe 1
 ist verbucht (d34c392): der Auftrag `index-search-e2e` liest seinen Runner jetzt
 aus der Matrix, die Achse `runner` traegt `ubuntu-24.04` fuer die drei
 bestehenden Kombinationen, und genau ein `include`-Eintrag ergaenzt
@@ -50,10 +49,14 @@ von zehn Sprachfaellen gruen, null rot, null ohne Aussage**; alle fuenf in
 Phase 15 nicht messbaren Faelle (Genehmigung, Frist, Vertrag, bescheid,
 type:pdf bescheid) tragen jetzt eine Aussage. Der Beleg steht in
 `docs/measurements/2026-09-a4-sprachfaelle-ci/README.md`, sein Urteil zum Weg
-lautet **traegt**. **Aufgabe 3 ist der Owner-Checkpoint**, und nach diesem
-Ergebnis wird **Zweig a** vorgelegt: A4 ueber den CI-Weg erfuellt, keine Box,
-kein Deckel abgerufen. Erst die Antwort des Owners schliesst L-09 in
-`deferred-items.md` und traegt die SUMMARY.
+lautet **traegt**. **Aufgabe 3, der Owner-Checkpoint, ist beantwortet:** dem
+Owner lag genau ein Zweig vor (Zweig a), seine Antwort im Wortlaut lautet
+**"Zweig a, zustimmen"**. Erfolgskriterium 4 der Phase 15 (**L-09**) wird damit
+mit Lauf 35586213137 und dem Beleg als erfuellt gefuehrt, **keine Box, kein
+Deckel-Abruf**; L-09 steht in `deferred-items.md` als geschlossen. Offene
+Merker aus diesem Plan: der `name:` der vier Kombinationen ist neu (keine
+erforderliche Pruefung zeigt darauf), der ARM-Ast faehrt nur sqlite, und die
+OCR-Fassung der Maschine ist 5.3.4 statt der 5.5.0 des Auslieferungsabbilds.
 
 16-07: **Der Baum sagt 1.2.0.** Die drei Versionsstellen (`php/appinfo/info.xml`
 `<version>`, `backend/appinfo/info.xml` `<version>` und das `<image-tag>`
