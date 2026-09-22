@@ -198,7 +198,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 		store/media/README.md says what each image shows, how it was taken, and
 		why it comes from the development instance rather than from CI.
 	-->
-	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/header.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/header-backend.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/street1983nk/nextcloud-search/main/store/media/screenshot-admin.png</screenshot>
 	<!--
 		The same donation link as the sister project of this author. The

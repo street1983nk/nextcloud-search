@@ -1,6 +1,6 @@
 # Die Bilder des Store-Eintrags
 
-Drei Bilder, die im Store-Eintrag beider Hälften stehen. Der Store speichert
+Vier Bilder, die im Store-Eintrag beider Hälften stehen. Der Store speichert
 keine Bilder, sondern nur Adressen, deshalb liegen sie hier im öffentlichen
 Repository und werden über `raw.githubusercontent.com` verlinkt. Welches Element
 auf welches Bild zeigt, steht in beiden `appinfo/info.xml` mit der Begründung
@@ -14,7 +14,8 @@ und nicht als Faustregel darunter.
 
 | Bild | Größe | Grenze |
 |---|---|---|
-| `header.png` | 327635 Bytes (320 KiB) | 2 MiB je Bild |
+| `header.png` | 447925 Bytes (438 KiB) | 2 MiB je Bild |
+| `header-backend.png` | 451825 Bytes (442 KiB) | 2 MiB je Bild |
 | `screenshot-admin.png` | 159786 Bytes (156 KiB) | 2 MiB je Bild |
 | `screenshot-search.png` | 277061 Bytes (271 KiB) | 2 MiB je Bild |
 
@@ -35,9 +36,13 @@ ein Gate, das eine fremde Seite braucht, färbt den Bau rot, wenn jemand anderes
 sie umbaut. Die Bestätigung, dass die Adresse auch von aussen antwortet, ist
 deshalb einmalig und von Hand, und hier steht ihr Ergebnis.
 
-Fünf Adressen, drei Dateien: die Companion-Hälfte nennt Kopfbild, Suchbild und
-Verwaltungsbild, die Backend-Hälfte nennt Kopfbild und Verwaltungsbild. Geprüft
-wurde je Datei, denn zwei gleiche Adressen sind eine Abfrage.
+Fünf Adressen, seit 22.09.2026 vier Dateien: die Companion-Hälfte nennt
+Kopfbild, Suchbild und Verwaltungsbild, die Backend-Hälfte nennt ihr eigenes
+Kopfbild `header-backend.png` und das Verwaltungsbild. Achtung Release-Stand:
+die im Store liegende 1.2.0 traegt noch die info.xml, in der BEIDE Haelften auf
+`header.png` zeigen; die Backend-Adresse `header-backend.png` reist erst mit dem
+naechsten Release. Bis dahin zeigt die Backend-Store-Seite das Companion-Kopfbild.
+Geprüft wurde je Datei, denn zwei gleiche Adressen sind eine Abfrage.
 
 | Bild | Status | Inhaltstyp | Größe laut Antwort | Größe laut Tabelle oben | Maße |
 |---|---|---|---|---|---|
@@ -82,6 +87,16 @@ und die Tabelle nachzuziehen. `header.png` wurde am 07.09.2026 abends auf
 Owner-Anweisung ebenfalls ersetzt (visuell statt textlastig, Abnahme im Chat);
 die Wiederholung der Abfrage galt damit für alle drei Dateien. Sie ist am
 21.09.2026 gefahren worden, und ihr Ergebnis steht oben.
+
+**Vermerk vom 22.09.2026: Kopfbilder ersetzt auf Owner-Anweisung.**
+`header.png` ist seit dem 22.09.2026 das neue Findling-Kopfbild (Motiv unten),
+`header-backend.png` kommt als viertes Bild dazu. Die Tabelle der
+Live-Bestätigung oben beschreibt damit fuer `header.png` einen abgeloesten
+Stand (327635 Bytes, 1440 x 810, Pruefsumme `22cc597d...`); die Wiederholung
+der Abfrage je Datei ist nach dem Push des 22.09. faellig und ihr Ergebnis
+wird hier nachgetragen. Der Owner-Entscheid Q-6 vom 21.09.2026 ("Bilder
+bleiben") ist damit fuer das Kopfbild ueberholt; Such- und Verwaltungsbild
+bleiben unveraendert.
 
 **Owner-Entscheid vom 21.09.2026 zu Q-6, im Wortlaut: "Bilder bleiben."** Die
 drei Bilder vom 07.09.2026 reisen mit 1.2.0 mit, und es gibt keinen Plan für
@@ -160,41 +175,42 @@ Deckungszahlen im Bild sind damit 87 Prozent und nicht 100, und das ist die
 Absicht; dass die zweite Zahl der ersten gleicht, sagt dem Betrachter genau
 das Richtige, nämlich dass jedes indexierte Dokument auch einen Vektor trägt.
 
-### `header.png` (1440 x 810)
+### `header.png` (1376 x 768)
 
-**Wofür:** das erste Bild der Store-Seite.
+**Wofür:** das erste Bild der Store-Seite der Companion-Hälfte.
 
-**Wie es entstand:** eine HTML-Seite, die in Chromium aufgenommen wurde,
-ebenfalls über Playwright. Kein erzeugtes Bild und keine Bildbearbeitung: jedes
-Element ist Text oder ein Vektor.
+**Wie es entstand (Fassung vom 22.09.2026, Owner-Anweisung im Chat):** mit
+einem Bildmodell erzeugt (Nano Banana in gemini.google.com, Prompt-Datei
+`Desktop/app-bilder/prompt-findling.txt`, eingefügt vom Owner), danach der
+Schriftzug `Findling` unten zentriert per Pillow gesetzt (Segoe UI Bold,
+Farbe `#0A1728`, dieselbe wie die Modell-Headline). Kein weiterer Eingriff,
+nichts aus dem Modellbild entfernt.
 
-**Was es zeigt (Fassung vom 07.09.2026, Owner-Abnahme im Chat):** der Name
-gross in der Mitte mit dem Lupen-Symbol, darunter ein einziger Satz ("Finds
-what is in your documents. Scans included.") und eine Schloss-Plakette
-"100% local". Links eine gescannte Seite, ueber die ein blauer Lesebalken
-laeuft (verwaschene Zeilen darueber, erkannte darunter, Plakette "OCR");
-rechts der Fund-Moment, die Lupe ueber einer gelb markierten Zeile mit
-gruenem Haken. Kein weiterer Text: die Bedeutung haengt an den Bildelementen,
-nicht an Beschriftung.
+**Was es zeigt:** links ein Dokumentstapel mit einem verschwommenen Scan und
+der Plakette `OCR`; in der Mitte ein blauer Scan-Balken, über dem die Zeilen
+unscharf und unter dem dieselben Zeilen scharf sind (Texterkennung als Bild);
+rechts eine Lupe über einer gelb markierten Fundzeile mit grünem Haken, darüber
+die Headline `Semantic Search`. Unten der Schriftzug `Findling`. Aller Text im
+Bild ist Zeichen für Zeichen geprüft (Regel vom 08.09.2026). Kein fremdes
+Markenzeichen im Bild.
 
-**Die Regeln, nach denen es gebaut ist** (Bildpost-Linie des Owners):
-visuell zuerst, wenig Text, Space Grotesk als Schrift, echte SVG-Formen,
-keine Emojis, ruhiger Hintergrund.
+### `header-backend.png` (1376 x 768)
 
-**Das Zeichen darin** ist das Symbol dieser App aus `php/img/app-dark.svg`, also
-Material Design Icons "magnify" von Pictogrammers unter Apache-2.0, mit dem
-Pfad wortgleich und in `THIRD-PARTY.md` verzeichnet. Es ist ausdrücklich kein
-fremdes Markenzeichen. Die Schrift ist Space Grotesk unter der SIL Open Font
-License 1.1; die Datei liegt nicht im Repository, sondern wird beim Bauen
-geholt.
+**Wofür:** das erste Bild der Store-Seite der Backend-Hälfte, sobald die
+Adresse mit dem nächsten Release reist (siehe Vermerk oben).
 
-## Die Regeln, die für alle drei gelten
+**Wie es entstand:** identisches Modellbild wie `header.png`, unten zentriert
+der Schriftzug `Findling Backend` statt `Findling`, gesetzt mit demselben
+Pillow-Schritt (Segoe UI Bold, `#0A1728`). Beide Hälften bleiben damit visuell
+ein Paar und sind trotzdem unterscheidbar.
+
+## Die Regeln, die für alle vier gelten
 
 | Regel | Warum |
 |---|---|
 | PNG, verlustfrei | Text in einem JPEG wird unscharf, und diese Bilder sind fast nur Text |
 | je unter 2 MiB | Grenze des Stores je Bild, geprüft von `backend/tests/test_store_metadata.py`; die Zahlen stehen oben |
-| Breite 1440 | auf einer Store-Seite noch lesbar, ohne dass die Datei groß wird |
+| Breite um 1400 (Bestand: 1440 und 1376) | auf einer Store-Seite noch lesbar, ohne dass die Datei groß wird |
 | Adresse über `https`, höchstens 256 Zeichen | `secure-url` der Store-XSD, geprüft von `backend/tests/test_store_metadata.py` |
 | kein Personenname, keine Adresse, kein fremder Dateiname | ein Store-Bild ist ein öffentliches Artefakt, und ein Bestand aus einer echten Instanz gehört nicht hinein |
 | kein Emoji, kein Gedankenstrich | gilt für jedes öffentliche Artefakt dieses Projekts |
