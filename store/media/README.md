@@ -92,9 +92,13 @@ die Wiederholung der Abfrage galt damit für alle drei Dateien. Sie ist am
 `header.png` ist seit dem 22.09.2026 das neue Findling-Kopfbild (Motiv unten),
 `header-backend.png` kommt als viertes Bild dazu. Die Tabelle der
 Live-Bestätigung oben beschreibt damit fuer `header.png` einen abgeloesten
-Stand (327635 Bytes, 1440 x 810, Pruefsumme `22cc597d...`); die Wiederholung
-der Abfrage je Datei ist nach dem Push des 22.09. faellig und ihr Ergebnis
-wird hier nachgetragen. Der Owner-Entscheid Q-6 vom 21.09.2026 ("Bilder
+Stand (327635 Bytes, 1440 x 810, Pruefsumme `22cc597d...`); Die Wiederholung
+der Abfrage ist am 22.09.2026 nach dem Push gefahren (curl gegen main bei
+Stand `8335ca1`): `header.png` HTTP 200, `image/png`, 447925 Bytes, 1376 x 768,
+PNG-Signatur, byteweise identisch mit der Datei hier, SHA-256 `5c29107f...`;
+`header-backend.png` HTTP 200, `image/png`, 451825 Bytes, 1376 x 768,
+PNG-Signatur, byteidentisch, SHA-256 `5719bf6c...`. Such- und Verwaltungsbild
+sind unveraendert und behalten die Bestaetigung vom 21.09.2026 oben. Der Owner-Entscheid Q-6 vom 21.09.2026 ("Bilder
 bleiben") ist damit fuer das Kopfbild ueberholt; Such- und Verwaltungsbild
 bleiben unveraendert.
 
