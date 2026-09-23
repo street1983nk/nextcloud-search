@@ -785,6 +785,12 @@ Gefuellt von Plan 17-04 am Vorlagetag.
   wurde die Option "a" gewaehlt. Messgrundlage der Vorlage:
   `docs/measurements/2026-09-analyseketten/` (Lauf vom 23.09.2026,
   65 Formfamilien, 573 Paare, A+ 467 gegen C+ 463, null Leaks).
+- **CI-Beleg nach dem Merge:** deploy-harp-Lauf 35909161812 (23.09.2026, alle
+  vier Matrix-Aeste success: stable33/34/35, amd64 und arm64) mit
+  `tantivy==0.26.2` und der gelockerten Vergleichsregel. Der unmittelbare
+  Push-Lauf 35907934480 wurde von der Concurrency-Gruppe abgebrochen, weil
+  der Dependabot-Merge #13 (onnx 1.23.0) direkt danach auf main kam; der
+  Ersatzlauf baut auf demselben Stand plus #13 auf und traegt den Beweis.
 - **Vollzogen am / durch Plan:**
   - `backend/src/findling/store/repo.py`: Plan 17-07
   - `backend/tests/test_upgrade_compatibility.py`: Plan 17-07
@@ -804,13 +810,17 @@ Gefuellt von Plan 17-04 am Vorlagetag.
    greifender Zweig je Entscheid mit Begruendung, Beleg, Plannummer,
    erledigt am 23.09.2026.
 4. Erst danach `backend/src/findling/store/repo.py` und
-   `backend/tests/test_upgrade_compatibility.py` anfassen (Plan 17-07).
+   `backend/tests/test_upgrade_compatibility.py` anfassen (Plan 17-07),
+   erledigt am 23.09.2026.
 5. Danach `uv lock --upgrade-package tantivy` und `uv sync` aus `backend/`
-   fahren, nie eine Handkante an `backend/uv.lock` (Plan 17-08).
+   fahren, nie eine Handkante an `backend/uv.lock` (Plan 17-08),
+   erledigt am 23.09.2026.
 6. Volle Suite und alle Gates fahren (`uv run python -m pytest -q`,
    `uv run ruff check`, `uv run ruff format --check`, `uv run pyright`,
    `uv run vulture`); ein roter Lauf ist ein Befund und wird gelesen, bevor
-   irgendetwas geaendert wird.
+   irgendetwas geaendert wird, erledigt am 23.09.2026 (2542 passed / 15
+   skipped auf dem Endstand).
 7. CI-Zusicherung in `.github/workflows/deploy-harp.yml`, den
    Begruendungskommentar in `.github/dependabot.yml` und `THIRD-PARTY.md`
-   nachziehen, jeweils mit dem Messbeleg vom 2026-09-23 im Kommentar.
+   nachziehen, jeweils mit dem Messbeleg vom 2026-09-23 im Kommentar,
+   erledigt am 23.09.2026 (Plan 17-08; gruener Beleg-Lauf 35909161812).
