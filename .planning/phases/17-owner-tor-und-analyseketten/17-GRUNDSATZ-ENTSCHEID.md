@@ -149,7 +149,297 @@ Daraus folgt, was vor dem Tor laufen darf:
 
 ## Die acht Entscheide
 
-Wird in Task 2 dieses Plans gefuellt.
+**E-17-7 wird als erste Frage der Vorlage gestellt**, weil alle Plaene mit
+tantivy-Bezug daran haengen: 17-07 und 17-08 laufen ueberhaupt nur in einem der
+beiden Zweige, und die Formulierung von LEX-07 haengt am selben Entscheid. Die
+uebrigen sieben werden danach in der Reihenfolge E-17-1 bis E-17-6 und E-17-8
+gelesen.
+
+### E-17-1: Wandert ein Bestandsindex per Re-Analyse aus den gespeicherten Feldern in das neue Schema, oder per Vollreindex ueber Nextcloud?
+
+**Empfehlung:** Option a, Re-Analyse aus den gespeicherten Feldern.
+
+**Beleg:** Der Vollreindex ist gemessen 19 h 20 min fuer 52.137 Dokumente; die
+Re-Analyse ist auf 1 bis 3 h geschaetzt, weil sie weder herunterlaedt noch OCR
+noch Einbettung wiederholt, und wird in MESS-08 nachgemessen. Bei der Re-Analyse
+bleiben `vectors.db` und `state.db` unberuehrt. ARCHITECTURE.md, PITFALLS Nr. 2
+und alle vier Recherchen sind hier einig.
+
+#### Option a: Re-Analyse aus den gespeicherten Feldern
+
+- **Greift, wenn** der Owner den Umbauweg ueber die gespeicherten Felder waehlt.
+- **Beweisgrundlage:** die gemessenen 19 h 20 min der Gegenoption, die
+  unberuehrten `vectors.db` und `state.db`, und die Nachmessung in MESS-08.
+- **Vollzug:** Phase 18 baut `index/rebuild.py`; die umgedrehte Beweisstrecke
+  (`UPGRADE_FROM_TAG=v1.2.0`) in `deploy-harp.yml` zeigt den vollstaendigen Lauf.
+  In Phase 17 faellt dazu keine Zeile Code an.
+
+#### Option b: Vollreindex ueber Nextcloud
+
+- **Greift, wenn** der Owner den einfacheren Weg dem kuerzeren vorzieht und die
+  Ausfallzeit auf Bestandsinstallationen in Kauf nimmt.
+- **Beweisgrundlage:** der Pfad existiert bereits (`start_rebuild_on_drift`
+  plus Reindex-Banner plus `occ findling:index --restart`), es waere kein neuer
+  Code, sondern nur ein bewusst ausgeloester bekannter Vorgang.
+- **Vollzug:** Phase 18 entfaellt bis auf Schema und Marken; die Zusage
+  "kein Reindex" faellt, und die Store-Beschreibung von 1.3.0 muss den Umbau
+  ankuendigen.
+
+### E-17-2: Traegt das Schema alle sechs Koerperfelder immer, und entscheidet `FINDLING_LANGUAGES` nur die Befuellung?
+
+**Empfehlung:** Option a, Modell A, sechs Koerperfelder immer im Schema.
+
+**Beleg:** Leere Felder kosten gemessen null Byte auf der Platte. Die
+Alternativen (ein Index je Sprache, ein multilinguales Sammelfeld) sind in
+STACK-Messung, FEATURES und ARCHITECTURE einstimmig abgelehnt.
+
+#### Option a: Sechs Felder immer im Schema, Befuellung nach `FINDLING_LANGUAGES`
+
+- **Greift, wenn** der Owner Modell A bestaetigt.
+- **Beweisgrundlage:** null Byte fuer leere Felder, ein einziges
+  Indexverzeichnis, ein einziges `schema_version`, und das Zuschalten einer
+  Sprache bleibt eine Befuellungsfrage statt einer Schemafrage.
+- **Vollzug:** Phase 18 legt die vier neuen Felder an und hebt `schema_version`
+  um genau eine Stufe; Phase 19 oeffnet die Query-Feldliste.
+
+#### Option b: Ein Index je Sprache
+
+- **Greift, wenn** der Owner leere Schemafelder grundsaetzlich ablehnt.
+- **Beweisgrundlage:** keine leeren Felder, aber n Indexverzeichnisse, n
+  Writer-Heaps und eine Trefferzusammenfuehrung ueber Indexgrenzen hinweg, die
+  es heute nicht gibt.
+- **Vollzug:** Phase 18 und Phase 19 werden neu geplant; die RRF-Zusammen-
+  fuehrung und das RAM-Budget der 4-GB-Box muessen neu gerechnet werden.
+
+### E-17-3: Darf `FINDLING_LANGUAGES` Deutsch und Englisch abschalten?
+
+**Empfehlung:** Option a, ja, erlauben.
+
+**Beleg:** `backend/src/findling/config.py:1002-1015` (`_languages()`) erlaubt
+heute schon `FINDLING_LANGUAGES=de`, filtert gegen `DEFAULT_LANGUAGES` und faellt
+nur bei leerem Ergebnis zurueck. `DEFAULT_LANGUAGES = ("de", "en")`
+(`config.py:80`) bleibt die Werkseinstellung. Eine spanische Behoerde soll nicht
+zwei unbenutzte Felder befuellen; das Abschalten ist ohnehin derselbe Vorgang
+wie das Zuschalten, weil sich in beiden Faellen der Sprachmerker bewegt.
+
+#### Option a: Abschalten erlauben, Werkseinstellung bleibt `de,en`
+
+- **Greift, wenn** der Owner die freie Sprachwahl bestaetigt.
+- **Beweisgrundlage:** das heutige Verhalten von `_languages()`, das den Fall
+  bereits zulaesst, und die Tatsache, dass Bestandsinstallationen ohne gesetzte
+  Variable unveraendert `de,en` bekommen.
+- **Vollzug:** Phase 18 haengt die Kettenfabrik und die Befuellung an die
+  gelesene Sprachmenge; der Diagnosepfad zeigt aktive und befuellte Sprachen.
+
+#### Option b: `de` und `en` als erzwungener Boden
+
+- **Greift, wenn** der Owner einen erklaerbaren Mindestzustand ueber die
+  Platzersparnis stellt.
+- **Beweisgrundlage:** einfacher zu erklaeren und zu unterstuetzen; kostet
+  Bestandsinstallationen nichts, weil sie ohnehin `de,en` fuehren, und kostet
+  neuen Installationen Platz fuer zwei nie befuellte Felder.
+- **Vollzug:** Phase 18 ergaenzt `_languages()` um den Boden und einen Test, der
+  ihn festhaelt; sonst aendert sich an der Planung nichts.
+
+### E-17-4: Wird die Sprachmenge ein sechster Versionsmerker in `expected_versions()`?
+
+**Empfehlung:** Option a, ja, als nach Schemafeldreihenfolge normalisierte
+Zeichenkette.
+
+**Beleg:** `backend/src/findling/index/open.py:123-141` fuehrt heute fuenf
+Marken. Ohne sechste Marke bemerkt keine Bestandsinstallation, dass sich die
+Sprachmenge geaendert hat, und der Umbau unterbleibt genau dann, wenn er noetig
+waere. Die Normalisierung ist Pflicht, weil `"es,de"` und `"de,es"` dieselbe
+Menge sind; `config.py:1002-1015` normalisiert heute schon auf die
+Schemafeldreihenfolge.
+
+#### Option a: Sechster Merker, normalisiert, mit Auflage
+
+- **Greift, wenn** der Owner den Merker will.
+- **Beweisgrundlage:** die fuenf vorhandenen Marken und ihr Vergleichsmuster in
+  `Store.version_mismatch`; die Normalisierung verhindert, dass eine umsortierte
+  Umgebungsvariable einen Umbau ausloest.
+- **Vollzug:** Phase 18 ergaenzt `expected_versions()`, den Lockstep-Test und die
+  Saat; Phase 17 fasst `expected_versions()` nicht an.
+
+**Auflage, ohne die diese Option ihr eigenes Ziel verfehlt:** Eine Marke, die auf
+keiner Bestandsinstallation existiert, liest `Store.version_mismatch`
+(`backend/src/findling/store/repo.py:637`) als Abweichung, denn dort steht
+woertlich "A mark that was never written counts as diverging". Der neue Merker
+wuerde also auf jeder Bestandsinstallation genau den Reindex ausloesen, den er
+verhindern soll. Er muss deshalb entweder beim Oeffnen gesaet werden (Muster
+`_DEFAULT_META` in `open_store()`) oder sein Fehlen muss als `"de,en"` gelesen
+werden. Die Umsetzung samt Test gehoert in Phase 18.
+
+#### Option b: Kein sechster Merker
+
+- **Greift, wenn** der Owner die fuenf Marken nicht erweitern will.
+- **Beweisgrundlage:** kein neues Saatproblem, kein sechster Eintrag im
+  Lockstep-Muster; dafuer muss der Umbau an einer anderen Stelle erkannt werden,
+  und das waere ein zweites, unabhaengiges Gedaechtnis neben den Marken.
+- **Vollzug:** Phase 18 erkennt die geaenderte Sprachmenge ueber einen eigenen
+  Zustand in `state.db` statt ueber `expected_versions()`; der Lockstep-Test
+  bleibt bei fuenf Marken.
+
+### E-17-5: Reicht fuer die neuen Kataloge maschinelle Uebersetzung plus Community-Review mit datiertem Vorbehalt, ohne Muttersprachler-Gate?
+
+**Empfehlung:** Option a, ja, nach dem FR-Muster.
+
+**Beleg:** `docs/l10n-french.md` traegt genau dieses Muster: maschinell erzeugt,
+Wortwahl-Entscheide dokumentiert, datierter Review-Vorbehalt im Katalog, und die
+Auslieferung wartet nicht auf einen Muttersprachler. KAT-02 fordert den
+Vorbehalt, nicht das Gate.
+
+#### Option a: Maschinell plus Community-Review mit datiertem Vorbehalt
+
+- **Greift, wenn** der Owner das FR-Muster fuer es, it, nl, pt_PT und pt_BR
+  uebernimmt.
+- **Beweisgrundlage:** das ausgelieferte franzoesische Katalogpaar und sein
+  Vorbehalt; die Schluesselzahl-Gates fangen Luecken, nicht Wortwahl.
+- **Vollzug:** Phase 20 (Parallelpfad) erzeugt zehn Katalogdateien und traegt je
+  Katalog den datierten Vorbehalt ein.
+
+#### Option b: Muttersprachler-Gate vor der Auslieferung
+
+- **Greift, wenn** der Owner keine unbegutachtete Sprache ausliefern will.
+- **Beweisgrundlage:** hoehere Textqualitaet; Preis ist eine Abhaengigkeit von
+  Freiwilligen, die den Termin von 1.3.0 nicht kennt.
+- **Vollzug:** Phase 20 liefert die Kataloge, aber Phase 23 (Store-Einreichung)
+  bekommt ein zusaetzliches blockierendes Tor je Sprache.
+
+### E-17-6: Bleiben die niederlaendischen Komposita im Scope des Milestones?
+
+**Empfehlung:** Option a, im Scope behalten, endgueltiges Tor in Phase 21.
+
+**Beleg:** KOMP-01 und ROADMAP Phase 21. Phase 21 haengt an Phase 19 und ist
+als Ganzes streichbar; das Sturzkriterium ist der Termin, nicht die Machbarkeit.
+
+#### Option a: Im Scope behalten, Tor in Phase 21
+
+- **Greift, wenn** der Owner die Entscheidung an den Terminstand von Phase 21
+  binden will.
+- **Beweisgrundlage:** Phase 21 steht hinter Phase 19 und beruehrt keinen
+  anderen Strang; ein spaeter Sturz kostet nichts ausser der Planung.
+- **Vollzug:** Phase 21 wird geplant und faellt bei Terminnot **als Ganzes**,
+  nicht halb: eine halb eingebaute Kompositazerlegung waere eine Kette ohne
+  Messabnahme und damit schlechter als keine.
+
+#### Option b: Jetzt streichen
+
+- **Greift, wenn** der Owner den Termin von 1.3.0 hoeher gewichtet als die
+  niederlaendische Trefferqualitaet.
+- **Beweisgrundlage:** Phase 21 entfaellt vollstaendig, der Milestone wird
+  kuerzer und die niederlaendische Kette bleibt beim reinen Stemmer, der laut
+  Messung ohnehin selbst faltet.
+- **Vollzug:** ROADMAP verliert Phase 21, KOMP-01 wandert in den Backlog nach
+  v1.3.
+
+### E-17-7: Darf die Vergleichsregel fuer `tantivy_version` gelockert werden, sodass nur noch die `index_format`-Haelfte entscheidet?
+
+**Empfehlung:** Option a, lockern.
+
+**Beleg:** Die vier Messungen vom 2026-09-23 (siehe "Was festgestellt ist") und
+die vorhandene Praezedenz: `index_version` ist in
+`backend/src/findling/store/repo.py:665-667` schon heute eine Untergrenze statt
+einer Gleichheit, und zwar an genau derselben Stelle im Code.
+
+#### Option a: Lockern, Banner speichern, Format vergleichen
+
+- **Greift, wenn** der Owner die gelockerte Vergleichsregel freigibt.
+- **Beweisgrundlage:** vier eigene Messungen vom 2026-09-23. Erstens: der Banner
+  lautet in beiden Fassungen auf `index_format v7`. Zweitens: ein mit 0.26.0
+  geschriebener Index laesst sich mit 0.26.2 oeffnen und durchsuchen, und der
+  Kreuzlesetest laeuft auch rueckwaerts, was den Rueckweg eines missglueckten
+  Upgrades offenhaelt. Drittens: die Tokenisierung von sieben Ketten ueber 32
+  Woerter, 224 Zeilen Ausgabe, ist zwischen beiden Fassungen `diff`-gleich.
+  Viertens: die Raedermatrix auf PyPI fuehrt fuer 0.26.2 weiterhin cp313
+  manylinux_2_17 fuer aarch64 UND x86_64, der ARM-Zielpfad bleibt also bedient
+  (weggefallen sind nur die free-threaded cp313t-Raeder).
+- **Was dabei aufgegeben wird:** die Absicherung "tantivy koennte die
+  Tokenisierung aendern, ohne das Format zu aendern". Sie wird ersetzt durch die
+  Tabellen- und Waechtertests, die diese Phase ohnehin baut: die Kettenfabrik mit
+  AST-Waechter aus Plan 17-03, die Sonde und die Rohdaten aus Plan 17-05 und die
+  Formfamilien-Gates aus Plan 17-06. Eine geaenderte Tokenisierung wird damit
+  sofort rot, und zwar an der Stelle, die sie beschreibt, statt als
+  Versionsmarke, die nur sagt, dass sich irgendetwas bewegt hat.
+- **Was ausdruecklich NICHT geht:** den Pin bewegen und die Marke unveraendert
+  behaupten. Wer die Gold-Werte "anpasst", ohne die Vergleichsregel zu aendern,
+  behauptet gegenueber jeder Bestandsinstallation etwas, das der laufende Code
+  nicht einhaelt.
+- **Vollzug:** Plan 17-07 aendert `Store.version_mismatch` und die Gold-Werte
+  samt vierter Selbstprobe; Plan 17-08 bewegt den Pin, die CI-Zusicherung, den
+  dependabot-Kommentar und `THIRD-PARTY.md`. Beide Plaene laufen erst nach dem
+  Vollzugseintrag unten.
+
+#### Option b: Pin bleibt auf 0.26.0
+
+- **Greift, wenn** der Owner die Marke unangetastet lassen will.
+- **Beweisgrundlage:** Die Panic-Frage traegt den Sprung allein nicht: die
+  Positivliste `LANGUAGE_ALLOWLIST` (Plan 17-02) schliesst die fuenf Sprachen
+  `arabic, greek, romanian, tamil, turkish` vollstaendig aus, und auf dem
+  heutigen Pfad ist die Panic ohnehin unerreichbar, weil `_languages()` keinen
+  fremden Namen durchreicht. Der Sprung waere damit eine Bequemlichkeit, kein
+  Muss.
+- **Preis:** LEX-07 muss umformuliert werden, weil es heute `tantivy` auf 0.26.2
+  festschreibt; Erfolgskriterium 3 der Phase verliert seine zweite Haelfte.
+  `Index.is_compatible()` aus 0.26.2 steht Phase 18 dann nicht zur Verfuegung
+  (was kein Verlust ist, weil es das Schema gar nicht prueft).
+- **Vollzug:** Plan 17-07 und Plan 17-08 entfallen ersatzlos; stattdessen wird
+  LEX-07 in `REQUIREMENTS.md` umformuliert und der falsche Begruendungstext in
+  `.github/dependabot.yml` trotzdem berichtigt.
+
+### E-17-8: Bekommen alle vier neuen Sprachen dieselbe Kettenreihenfolge `fold frueh`? (Kenntnisnahme mit Widerspruchsmoeglichkeit)
+
+Dieser Punkt wird **als Kenntnisnahme vorgelegt, nicht als offene Frage**: LEX-01
+macht die Messung zum entscheidenden Instrument, und die Messung liegt vor. Der
+Owner kann widersprechen; ohne Widerspruch gilt Option a.
+
+**Empfehlung:** Option a, einheitlich `fold frueh` (Kette A+,
+`low, fold, stop, CSTOP, long, stem`).
+
+**Beleg:** 65 Formfamilien, 573 geordnete Paare. `fold frueh` trifft 467,
+`fold spaet` trifft 463. Aufgeschluesselt: Spanisch allein spricht mit 4 von 208
+Paaren fuer `fold spaet`, Italienisch mit 2 von 56 und Portugiesisch mit 6 von
+228 fuer `fold frueh`, Niederlaendisch ist unentschieden, weil der
+niederlaendische Stemmer selbst faltet.
+
+#### Option a: Einheitlich `fold frueh` fuer es, it, nl und pt
+
+- **Greift, wenn** der Owner nicht widerspricht.
+- **Beweisgrundlage:** vier Begruendungen. Erstens: der Abstand liegt in beiden
+  Richtungen unter drei Prozentpunkten und beruht in Spanisch auf genau einer
+  Wortklasse (`aleman`/`alemanes`). Zweitens: `fold frueh` ist die Form der schon
+  ausgelieferten englischen Kette, und `Filter.custom_stopword([])` ist gemessen
+  ein No-op (13 Testwoerter, identische Tokens mit und ohne), also bedient eine
+  einzige Fabrik `en`, `es`, `it`, `nl` und `pt`, ohne die englische
+  Tokenisierung um ein Byte zu verschieben. Drittens: das Produkt liest OCR, und
+  ein Scan, dem der Akzent verlorengeht, bleibt bei `fold frueh` unter der
+  korrekten Schreibweise auffindbar, bei `fold spaet` nicht. Viertens:
+  `fold spaet` erzeugt in it und nl zusaetzlich Terme, die keine Anfrage je
+  erreichen kann.
+- **Der Preis, den der Owner mit unterschreibt:** Zwei dokumentierte Verluste.
+  Spanisch findet `informacion` nicht ueber `informaciones` und umgekehrt (die
+  ganze Klasse auf `-cion`), und Portugiesisch trennt `informacao` von
+  `informacoes`, und zwar in jeder Kette. Beide gehen nach HART-05 in
+  `docs/language-analyzers.md`.
+- **Vollzug:** Plan 17-03 baut eine Fabrik fuer alle fuenf Ketten; Plan 17-06
+  macht die Formfamilien-Zahlen zu Gates und schreibt das Verdikt datiert in die
+  Doku.
+
+#### Option b: Widerspruch, Spanisch auf `fold spaet`
+
+- **Greift, wenn** der Owner der Messzahl fuer Spanisch den Vorrang vor der
+  Einheitlichkeit gibt.
+- **Beweisgrundlage:** Spanisch gewinnt isoliert 4 von 208 Paaren (1,9 Punkte),
+  in der zweiten, unabhaengigen Stichprobe 4 von 137 (2,9 Punkte). Der Waisenplatz
+  wandert dabei nur: bei `fold spaet` faellt die flach getippte Singularform aus,
+  bei `fold frueh` die korrekt geschriebene Pluralform.
+- **Preis:** zwei Kettenformen im Modul, zwei Regeln statt einer, und die
+  spanische Kette laesst sich nicht mehr aus derselben Fabrik wie die englische
+  bedienen.
+- **Vollzug:** Plan 17-03 baut zwei Fabriken; Plan 17-06 fuehrt je Sprache
+  getrennte Sollwerte, und `docs/language-analyzers.md` erklaert, warum eine
+  Sprache aus der Reihe faellt.
 
 ---
 
