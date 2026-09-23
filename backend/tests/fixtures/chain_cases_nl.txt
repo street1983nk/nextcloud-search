@@ -1,0 +1,37 @@
+# Formfamilien Niederlaendisch fuer die Messung der Analysekette.
+#
+# Woher die Woerter stammen: aus der Messung vom 23.09.2026 zur Position von
+# ascii_fold in den vier neuen Ketten, Phase 17. Der zugehoerige Bericht liegt
+# in docs/measurements/2026-09-analyseketten/.
+#
+# Was eine Zeile bedeutet: eine Formfamilie, also alle Schreibweisen eines
+# Lemmas, die ein Mensch tippt oder ein Dokument traegt. Akzentuiert und flach,
+# Singular und Plural, durch Leerzeichen getrennt. Gemessen werden die
+# geordneten Paare (getippte Form, Form im Dokument), die sich treffen.
+#
+# Ein Wort, ueber das ein Test eine Behauptung aufstellt, muss hier stehen.
+# Die Akzente sind hier Daten in einer Textdatei, genau wie die Umlaute in
+# compound_cases_de.txt, und keine Verletzung der Code-Regel.
+#
+# Erwartet: 13 Familien, 81 geordnete Paare, unter der ausgelieferten Kette
+# A+ 57 Treffer. Niederlaendisch ist die Sprache, in der alle sieben Ketten
+# dieselbe Zahl liefern: der Stemmer faltet selbst.
+
+# Trema und Akzent. Die Kette haelt diese Paare in jeder Reihenfolge zusammen.
+coördinatie coordinatie
+financiën financien
+beïnvloeden beinvloeden beïnvloed beinvloed
+privé prive privés prives
+
+# Starke Pluralbildung, in jeder Kette ein dokumentierter Verlust.
+huis huizen
+bedrijf bedrijven
+gemeente gemeentes
+kind kinderen
+stad steden
+
+# Schwache Pluralbildung und Verkleinerung.
+boek boeken
+dorp dorpen
+café cafés
+woning woningen woningetje

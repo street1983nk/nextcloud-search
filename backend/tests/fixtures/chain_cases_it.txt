@@ -1,0 +1,36 @@
+# Formfamilien Italienisch fuer die Messung der Analysekette.
+#
+# Woher die Woerter stammen: aus der Messung vom 23.09.2026 zur Position von
+# ascii_fold in den vier neuen Ketten, Phase 17. Der zugehoerige Bericht liegt
+# in docs/measurements/2026-09-analyseketten/.
+#
+# Was eine Zeile bedeutet: eine Formfamilie, also alle Schreibweisen eines
+# Lemmas, die ein Mensch tippt oder ein Dokument traegt. Akzentuiert und flach,
+# Singular und Plural, durch Leerzeichen getrennt. Gemessen werden die
+# geordneten Paare (getippte Form, Form im Dokument), die sich treffen.
+#
+# Ein Wort, ueber das ein Test eine Behauptung aufstellt, muss hier stehen.
+# Die Akzente sind hier Daten in einer Textdatei, genau wie die Umlaute in
+# compound_cases_de.txt, und keine Verletzung der Code-Regel.
+#
+# Erwartet: 14 Familien, 56 geordnete Paare, unter der ausgelieferten Kette
+# A+ 56 Treffer, also fehlerfrei.
+
+# Der einzige italienische Fehlschlag ueberhaupt, und er faellt nur bei spaeter
+# Faltung an: qualità gegen qualita.
+qualità qualita
+
+# Die uebrigen Akzentpaare der Klassen auf -tà, -ù, -ì und -è.
+città citta
+società societa
+università universita
+attività attivita
+comunità comunita
+identità identita
+possibilità possibilita
+realtà realta
+libertà liberta
+velocità velocita
+virtù virtu
+lunedì lunedi
+caffè caffe

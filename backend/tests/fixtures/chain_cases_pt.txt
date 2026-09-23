@@ -1,0 +1,44 @@
+# Formfamilien Portugiesisch fuer die Messung der Analysekette.
+#
+# Woher die Woerter stammen: aus der Messung vom 23.09.2026 zur Position von
+# ascii_fold in den vier neuen Ketten, Phase 17. Der zugehoerige Bericht liegt
+# in docs/measurements/2026-09-analyseketten/.
+#
+# Was eine Zeile bedeutet: eine Formfamilie, also alle Schreibweisen eines
+# Lemmas, die ein Mensch tippt oder ein Dokument traegt. Akzentuiert und flach,
+# Singular und Plural, durch Leerzeichen getrennt. Gemessen werden die
+# geordneten Paare (getippte Form, Form im Dokument), die sich treffen.
+#
+# Ein Wort, ueber das ein Test eine Behauptung aufstellt, muss hier stehen.
+# Die Akzente sind hier Daten in einer Textdatei, genau wie die Umlaute in
+# compound_cases_de.txt, und keine Verletzung der Code-Regel.
+#
+# Erwartet: 18 Familien, 228 geordnete Paare, unter der ausgelieferten Kette
+# A+ 180 Treffer.
+
+# Die Klasse -ção gegen -ções. Der Numerus faellt in jeder Kette auseinander,
+# die Akzentpaare haelt nur die fruehe Faltung zusammen.
+informação informacao informações informacoes
+administração administracao administrações administracoes
+café cafés
+
+# Dieselbe Endung, hier mit gleichem Ergebnis in beiden Faltpositionen.
+coração coracao corações coracoes
+decisão decisao decisões decisoes
+questão questao questões questoes
+situação situacao situações situacoes
+
+# Akzentpaare, die die Kette zusammenhaelt.
+país pais países paises
+número numero números numeros
+código codigo códigos codigos
+página pagina páginas paginas
+área area áreas areas
+história historia histórias historias
+família familia famílias familias
+
+# Flexionspaare ohne Akzent, als Kontrolle.
+documento documentos
+três tres
+cidade cidades
+exame exames

@@ -1,0 +1,46 @@
+# Formfamilien Spanisch fuer die Messung der Analysekette.
+#
+# Woher die Woerter stammen: aus der Messung vom 23.09.2026 zur Position von
+# ascii_fold in den vier neuen Ketten, Phase 17. Der zugehoerige Bericht liegt
+# in docs/measurements/2026-09-analyseketten/.
+#
+# Was eine Zeile bedeutet: eine Formfamilie, also alle Schreibweisen eines
+# Lemmas, die ein Mensch tippt oder ein Dokument traegt. Akzentuiert und flach,
+# Singular und Plural, durch Leerzeichen getrennt. Gemessen werden die
+# geordneten Paare (getippte Form, Form im Dokument), die sich treffen.
+#
+# Ein Wort, ueber das ein Test eine Behauptung aufstellt, muss hier stehen.
+# Die Akzente sind hier Daten in einer Textdatei, genau wie die Umlaute in
+# compound_cases_de.txt, und keine Verletzung der Code-Regel.
+#
+# Erwartet: 20 Familien, 208 geordnete Paare, unter der ausgelieferten Kette
+# A+ 174 Treffer.
+
+# Die Klasse mit dem Akzent in der Snowball-Endung. Hier bleibt unter jeder
+# Kette eine Form uebrig, nur der Waisenplatz wandert.
+información informacion informaciones
+administración administracion
+alemán aleman alemanes alemana alemanas
+capitán capitanes
+
+# Der bewusst gekaufte Recall: hier traegt der Akzent die Bedeutung.
+año ano años anos
+
+# Formpaare, die in jeder Kette auseinanderfallen.
+ciudad ciudades
+joven jóvenes
+imagen imágenes
+examen exámenes
+
+# Akzentpaare, die die Kette zusammenhaelt.
+página pagina páginas paginas
+número numero números numeros
+código codigo códigos codigos
+teléfono telefono teléfonos telefonos
+artículo articulo artículos articulos
+razón razon razones
+dirección direccion direcciones
+estación estacion estaciones
+región region regiones
+sección seccion secciones
+versión version versiones
