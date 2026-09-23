@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
-status: planning
+status: executing
 stopped_at: Roadmap v1.3 geschrieben (ROADMAP.md, STATE.md, Traceability in REQUIREMENTS.md)
-last_updated: "2026-09-23T12:13:05.511Z"
-last_activity: 2026-09-23 , Roadmap v1.3 erstellt (Phasen 17 bis 23, 17/17 Requirements abgedeckt)
+last_updated: "2026-09-23T17:14:47.419Z"
+last_activity: 2026-09-23 -- Phase 17 execution started
 progress:
   total_phases: 7
   completed_phases: 0
-  total_plans: 0
+  total_plans: 8
   completed_plans: 0
   percent: 0
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** v1.3 Sprachausbau, Phase 17 (Owner-Tor und Analyseketten).
+**Current focus:** Phase 17 — owner-tor-und-analyseketten
 
 ## Current Position
 
-Phase: 17 von 23 (Owner-Tor und Analyseketten), erste von 7 v1.3-Phasen
-Plan: noch keiner
-Status: Phase 17 geplant (8 Plaene, 4 Wellen, Checker PASSED), ready to execute
-Last activity: 2026-09-23 , Phase 17 geplant: Research 6663f4c, Plaene 5076c0f, Checker PASSED, Warnungen geschlossen 9b8f50d
+Phase: 17 (owner-tor-und-analyseketten) — EXECUTING
+Plan: 1 of 8
+Status: Executing Phase 17
+Last activity: 2026-09-23 -- Phase 17 execution started
 
 Progress: [..........] 0%
 
