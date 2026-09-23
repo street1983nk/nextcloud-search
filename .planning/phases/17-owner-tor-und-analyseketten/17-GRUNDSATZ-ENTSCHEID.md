@@ -445,14 +445,359 @@ niederlaendische Stemmer selbst faltet.
 
 ## Die fertigen Ersatztexte
 
-Wird in Task 3 dieses Plans gefuellt.
+Alle sechs Bloecke sind wortwoertlich einsetzbar. Die Plaene 17-07 und 17-08
+kopieren den Text und ersetzen darin nur den Platzhalter `<VORLAGETAG>` durch
+das Datum des Vollzugs. Die Sprache der Kommentare im Code, im YAML und in
+`THIRD-PARTY.md` bleibt Englisch, wie der jeweilige Bestand.
+
+Alle sechs Stellen gelten fuer **E-17-7 Option a**. Unter **Option b** gilt je
+Stelle "keine Aenderung", mit einer Ausnahme, die unten bei
+`.github/dependabot.yml` steht; dazu kommt in beiden Faellen der Satz, dass unter
+Option b **LEX-07 umformuliert werden muss**, weil es heute `tantivy` auf 0.26.2
+festschreibt.
+
+### backend/pyproject.toml
+
+**Heute** (Zeile 13, im `dependencies`-Block):
+
+```toml
+    "tantivy==0.26.0",
+```
+
+**Ersatztext unter E-17-7 Option a:**
+
+```toml
+    "tantivy==0.26.2",
+```
+
+Die Zeile wird von Hand geaendert, `backend/uv.lock` NICHT: der Lock bewegt sich
+ausschliesslich ueber `uv lock --upgrade-package tantivy` aus `backend/`.
+
+**Unter Option b:** keine Aenderung. LEX-07 muss umformuliert werden.
+
+### backend/tests/test_upgrade_compatibility.py
+
+**Heute** (Zeilen 42 bis 77, gekuerzt auf die drei Stellen, die sich bewegen):
+
+```python
+GOLD_V1_0_AND_V1_1 = {
+    "schema_version": "1",
+    "index_version": "1",
+    "analyzer_version": "1",
+    "tantivy_version": "0.26.0",
+}
+
+TANTIVY_MARK = "tantivy_version"
+
+# The index format of tantivy 0.26.0. It is the half of the banner that decides
+# whether the files on disk can still be opened at all.
+GOLD_INDEX_FORMAT = "index_format v7"
+
+TANTIVY_PIN = "tantivy==0.26.0"
+```
+
+**Ersatztext unter E-17-7 Option a.** `GOLD_INDEX_FORMAT` wandert dabei VOR das
+Woerterbuch, weil das Woerterbuch es nun liest:
+
+```python
+# The index format both pinned tantivy releases report. It is the half of the
+# banner that decides whether the files on disk can still be opened at all, and
+# since the owner decision E-17-7 option a of <VORLAGETAG> it is also the half
+# the store compares. Measured on 2026-09-23: 0.26.0 and 0.26.2 both report
+# "index_format v7", an index written by one opens and answers under the other
+# in both directions, and the tokenisation of seven chains over 224 lines is
+# identical between them.
+GOLD_INDEX_FORMAT = "index_format v7"
+
+GOLD_V1_0_AND_V1_1 = {
+    "schema_version": "1",
+    "index_version": "1",
+    "analyzer_version": "1",
+    "tantivy_version": GOLD_INDEX_FORMAT,
+}
+
+TANTIVY_MARK = "tantivy_version"
+
+# The pin the banner above grows out of. Named here because a moved pin and a
+# moved mark are the same event seen from two sides. The patch number may move
+# with a decision behind it; the format half above may not.
+TANTIVY_PIN = "tantivy==0.26.2"
+```
+
+**Die vierte Selbstprobe**, die zu `test_the_drift_reader_fires_on_a_staged_sample`
+dazukommt, unmittelbar hinter der Probe `holding`:
+
+```python
+    same_format_other_patch = drift_findings(
+        {**holding, "tantivy_version": "tantivy v0.26.2, index_format v7"}
+    )
+    assert same_format_other_patch == [], same_format_other_patch
+```
+
+**Was stehen bleibt:** Der Modulkopfsatz "**A red test here is not a repair, it
+is a question for the owner.**" bleibt woertlich unveraendert, samt dem Absatz,
+der ihn traegt. Er wird durch diesen Entscheid nicht widerlegt, sondern eingeloest:
+die Frage ist gestellt und beantwortet worden, statt den Test gruen zu
+reparieren. Ebenfalls unveraendert bleiben `WNGERMAN_PIN`, `ALL_MARKS`, die
+Funktion `drift_findings` und die drei vorhandenen Selbstproben.
+
+**Unter Option b:** keine Aenderung. LEX-07 muss umformuliert werden.
+
+### backend/src/findling/store/repo.py
+
+**Heute** (Zeilen 660 bis 669, die Vergleichsschleife in
+`Store.version_mismatch`):
+
+```python
+        stored = self.read_meta()
+        diverging = []
+        for key, value in expected.items():
+            current = stored.get(key)
+            if current == value:
+                continue
+            if key == "index_version" and _generation_at_least(current, value):
+                continue
+            diverging.append(key)
+        return diverging
+```
+
+**Ersatztext unter E-17-7 Option a**, die dritte `if`-Zeile nach dem Vorbild der
+`index_version`-Ausnahme:
+
+```python
+        stored = self.read_meta()
+        diverging = []
+        for key, value in expected.items():
+            current = stored.get(key)
+            if current == value:
+                continue
+            if key == "index_version" and _generation_at_least(current, value):
+                continue
+            if key == "tantivy_version" and _index_format_matches(current, value):
+                continue
+            diverging.append(key)
+        return diverging
+```
+
+**Der Hilfsvergleicher**, gebaut nach dem Muster von `_generation_at_least`
+(`backend/src/findling/store/repo.py:1299`) und unmittelbar daneben abgelegt:
+
+```python
+def _index_format_matches(stored: str | None, expected: str) -> bool:
+    """True when both banners name the same index format.
+
+    The banner reads "tantivy v0.26.0, index_format v7", and only its second half
+    decides whether the files on disk can still be opened. A banner without that
+    half is a divergence, never a pass: a mark that cannot be read cannot be shown
+    to match the current code.
+    """
+    marker = "index_format "
+    if stored is None:
+        return False
+    here = stored.find(marker)
+    there = expected.find(marker)
+    if here < 0 or there < 0:
+        return False
+    return stored[here:] == expected[there:]
+```
+
+**Der neue Docstring-Absatz** in `Store.version_mismatch`, im Ton des
+vorhandenen `index_version`-Absatzes und direkt hinter ihm:
+
+```
+    ``tantivy_version`` is the other mark that is not an equality. It stores the
+    full banner, because that is what a diagnosis needs, but only its
+    ``index_format`` half decides whether the files on disk can still be opened.
+    Measured on 2026-09-23: tantivy 0.26.0 and 0.26.2 both report
+    ``index_format v7``, an index written by one opens and answers under the
+    other in both directions, and the tokenisation of seven chains over 224 lines
+    is identical. A patch release that keeps the format is therefore not a drift.
+    The assurance this gives up, a changed tokenisation behind an unchanged
+    format, is held by the chain tables of phase 17 instead (owner decision
+    E-17-7 option a of <VORLAGETAG>).
+```
+
+**Unter Option b:** keine Aenderung. LEX-07 muss umformuliert werden.
+
+### .github/workflows/deploy-harp.yml
+
+**Heute** (Job "Store upgrade 5, the six assurances after the upgrade",
+Zusicherung 2, Zeilen 3288 bis 3291):
+
+```bash
+          echo "--- 2, the same five marks (D-04) ---"
+          for mark in schemaVersion indexVersion analyzerVersion wordlistHash tantivyVersion; do
+            unchanged ".marks.${mark}" "a version mark moved, and a moved mark is a full reindex on every installation in the field (D-04)"
+          done
+```
+
+**Ersatztext unter E-17-7 Option a.** `tantivyVersion` verlaesst die Schleife der
+unveraenderten Marken und bekommt daneben eine eigene Pruefung nach dem Muster
+von Zusicherung 6 ("diese Marke DARF sich bewegen, und zwar genau von X nach Y"):
+
+```bash
+          echo "--- 2, the same four marks, and the fifth one may move (D-04) ---"
+          for mark in schemaVersion indexVersion analyzerVersion wordlistHash; do
+            unchanged ".marks.${mark}" "a version mark moved, and a moved mark is a full reindex on every installation in the field (D-04)"
+          done
+
+          # tantivyVersion is the one mark that MAY move, and only in its patch
+          # number. The store compares the index format half since the owner
+          # decision E-17-7 option a of <VORLAGETAG>, so that is what this asserts:
+          # a moved format half is still a full reindex in the field, a moved
+          # patch number behind an unchanged format half is the upgrade working.
+          was=$(jq -r '.marks.tantivyVersion' "${before}")
+          now=$(jq -r '.marks.tantivyVersion' "${after}")
+          if [ "${was#*index_format }" != "${now#*index_format }" ]; then
+            echo "::error::the index format half of tantivyVersion went from ${was} to ${now}, and that is a full reindex on every installation in the field (D-04)"
+            fail=1
+          elif [ "${was}" = "${now}" ]; then
+            echo "unchanged  .marks.tantivyVersion = ${was}   (the engine banner did not move at all)"
+          else
+            echo "moved on purpose  .marks.tantivyVersion ${was} to ${now}, same index format half (E-17-7 option a)"
+          fi
+```
+
+**Der Zusammenfassungsblock** (Zeile 3356) wird mitgeaendert:
+
+```bash
+            echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, four of the five index marks and the index format half of the fifth, the document counts, the work stock"
+```
+
+**Was woertlich stehen bleibt und gruen bleiben MUSS:** Zusicherung 4 (kein
+Reindex-Banner, `.reindexBanner` falsch) und Zusicherung 5 (keine Zeile "built by
+different code" im Containerlog). Diese beiden sind der eigentliche Beweis, dass
+die Lockerung wirkt: sie sagen, dass auf einer echten Instanz nach dem Upgrade
+kein Umbau begann. Wer sie anfasst, hat den Beweis abgeschafft statt ihn gefuehrt.
+
+**Unter Option b:** keine Aenderung. LEX-07 muss umformuliert werden.
+
+### .github/dependabot.yml
+
+**Der `ignore`-Block wird NICHT neu angelegt.** Er steht bereits am Dateiende im
+Block `package-ecosystem: uv`, mit allen drei `update-types`, und bleibt
+unveraendert. Geaendert wird ausschliesslich der Begruendungskommentar darueber.
+
+**Heute:**
+
+```yaml
+    # tantivy carries index format v7 from 0.26.2 on, which means a reindex on
+    # every installation that already runs. The pin therefore only ever moves on
+    # purpose and together with a reindex plan (owner decision of 2026-09-21).
+```
+
+**Ersatztext unter E-17-7 Option a:**
+
+```yaml
+    # tantivy stays pinned, and the pin only ever moves on purpose. The reason
+    # written here on 2026-09-21 said "index format v7 from 0.26.2 on, which
+    # means a reindex", and that reading is wrong: measured on 2026-09-23, 0.26.0
+    # and 0.26.2 both report "index_format v7", an index written by one opens and
+    # answers under the other in both directions, and the tokenisation of seven
+    # chains over 224 lines is identical. What a bump really moves is the version
+    # mark, and since <VORLAGETAG> only the index format half of that mark is
+    # compared (owner decision E-17-7 option a, which supersedes the owner
+    # decision of 2026-09-21 rather than deleting it). The rule therefore stands
+    # for a better reason than the one it was written with: a grouped weekly pull
+    # request is the wrong place to move the engine of the search.
+```
+
+Die beiden folgenden Absaetze des heutigen Kommentars (der Hinweis auf die
+Kommandoantwort in Pull Request #10 und darauf, dass diese Regel deshalb hier in
+einer Datei steht) bleiben woertlich stehen.
+
+**Unter Option b:** Der Begruendungskommentar wird **trotzdem** berichtigt, denn
+die Formatbehauptung ist unabhaengig vom Pin falsch. Der Ersatztext lautet dann
+gleich, ohne den Satz zur gelockerten Vergleichsregel und mit dem Zusatz, dass
+der Pin auf 0.26.0 bleibt. LEX-07 muss umformuliert werden.
+
+### THIRD-PARTY.md
+
+**Heute**, Tabellenzeile 138 im Abschnitt "Python packages of the extraction and
+index path":
+
+```markdown
+| `tantivy` | 0.26.0 | MIT | github.com/quickwit-oss/tantivy-py | `/app/.venv/lib/python3.13/site-packages/tantivy` |
+```
+
+und der Begruendungsabsatz darunter (Zeilen 151 bis 156), der den Tag `0.26.0`
+zweimal nennt.
+
+**Ersatztext unter E-17-7 Option a**, Tabellenzeile:
+
+```markdown
+| `tantivy` | 0.26.2 | MIT | github.com/quickwit-oss/tantivy-py | `/app/.venv/lib/python3.13/site-packages/tantivy` |
+```
+
+Begruendungsabsatz, mit auf `0.26.2` gezogenem Tag und dem neuen Satz zu den
+Stoppwortlisten:
+
+```markdown
+`tantivy` is the one entry whose licence is **not** readable from its PyPI
+metadata: the 0.26.2 release carries neither a `license` field nor a licence
+classifier. The MIT text is in `LICENSE` of the tagged upstream repository
+(`quickwit-oss/tantivy-py`, tag `0.26.2`), and the Rust crate the bindings wrap
+is MIT as well. It is written down here so the next reader does not have to
+repeat the search.
+
+The Snowball stop word lists the analyzers of this app use for German, English,
+Spanish, Italian, Dutch and Portuguese are BSD-3-Clause, they are compiled into
+the same extension module and are not a separate dependency, and the folded
+supplementary list shipped in this repository is derived from them.
+```
+
+**Unter Option b:** keine Aenderung an der Versionsangabe. Der Satz zu den
+Snowball-Stoppwortlisten wird trotzdem ergaenzt, weil die Ketten dieser Phase sie
+unabhaengig vom Pin benutzen. LEX-07 muss umformuliert werden.
 
 ---
 
 ## Vollzug am <Datum>
 
-Wird in Task 3 dieses Plans leer angelegt und von Plan 17-04 gefuellt.
+Leer angelegt von Plan 17-01 (Task 3). Gefuellt von Plan 17-04 am Vorlagetag.
+Bis dahin bleiben alle Felder auf `,`.
+
+- **Datum:** ,
+- **Gelesener Stand:** ,
+
+  | Gelesen | Stand am Vorlagetag |
+  |---|---|
+  | `backend/pyproject.toml`, tantivy-Pin | , |
+  | `backend/tests/test_upgrade_compatibility.py`, `GOLD_V1_0_AND_V1_1["tantivy_version"]` | , |
+  | `.github/dependabot.yml`, `ignore`-Block fuer tantivy | , |
+  | Volle Suite aus `backend/` | , |
+
+- **Greifender Zweig je Entscheid:** ,
+
+  | Entscheid | Option | Begruendung des Owners |
+  |---|---|---|
+  | E-17-1 Umbauweg | , | , |
+  | E-17-2 Feldmodell | , | , |
+  | E-17-3 Abschaltbarkeit von de und en | , | , |
+  | E-17-4 Sprachmenge als sechster Merker | , | , |
+  | E-17-5 Katalogprozess | , | , |
+  | E-17-6 Niederlaendische Komposita | , | , |
+  | E-17-7 Vergleichsregel `tantivy_version` | , | , |
+  | E-17-8 Einheitliche Kettenreihenfolge | , | , |
+
+- **Beleg:** ,
+- **Vollzogen am / durch Plan:** ,
 
 ### Vollzugs-Checkliste
 
-Wird in Task 3 dieses Plans gefuellt.
+1. Entscheiddokument vorlegen (Plan 17-04), mit E-17-7 als erster Frage.
+2. Freigabe eintragen oder die benannten Aenderungen einarbeiten und erneut
+   vorlegen; ohne Freigabe wird kein Requirement als erfuellt gemeldet.
+3. Den Vollzugsabschnitt oben datiert fuellen: Datum, gelesener Stand,
+   greifender Zweig je Entscheid mit Begruendung, Beleg, Plannummer.
+4. Erst danach `backend/src/findling/store/repo.py` und
+   `backend/tests/test_upgrade_compatibility.py` anfassen (Plan 17-07).
+5. Danach `uv lock --upgrade-package tantivy` und `uv sync` aus `backend/`
+   fahren, nie eine Handkante an `backend/uv.lock` (Plan 17-08).
+6. Volle Suite und alle Gates fahren (`uv run python -m pytest -q`,
+   `uv run ruff check`, `uv run ruff format --check`, `uv run pyright`,
+   `uv run vulture`); ein roter Lauf ist ein Befund und wird gelesen, bevor
+   irgendetwas geaendert wird.
+7. CI-Zusicherung in `.github/workflows/deploy-harp.yml`, den
+   Begruendungskommentar in `.github/dependabot.yml` und `THIRD-PARTY.md`
+   nachziehen, jeweils mit dem Messbeleg vom 2026-09-23 im Kommentar.
