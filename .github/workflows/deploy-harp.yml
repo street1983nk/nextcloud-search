@@ -3299,8 +3299,25 @@ jobs:
           # "index_format v7", an index written by one opens and answers under
           # the other in both directions, and the tokenisation of seven chains
           # over 224 lines of output is identical between them.
+          #
+          # The presence of the format half is demanded before the two halves
+          # are compared, and that is not a formality: "${was#*index_format }"
+          # hands the string back unchanged when the pattern is not in it, so
+          # two absent marks (jq -r prints "null" twice) used to compare equal
+          # and land in the "the engine banner did not move at all" branch. The
+          # runtime rule in backend/src/findling/store/repo.py:1327 calls exactly
+          # that state "never a pass" and sends every installation in the field
+          # into the reindex this gate exists to prevent, so a gate that goes
+          # green on it says the opposite of the rule it guards. Audit finding
+          # M-17-05 of 2026-09-23.
           was=$(jq -r '.marks.tantivyVersion' "${before}")
           now=$(jq -r '.marks.tantivyVersion' "${after}")
+          for banner in "${was}" "${now}"; do
+            case "${banner}" in
+              *"index_format "*) ;;
+              *) echo "::error::tantivyVersion carries no index_format half, so nothing here can be compared: ${banner}"; fail=1;;
+            esac
+          done
           if [ "${was#*index_format }" != "${now#*index_format }" ]; then
             echo "::error::the index format half of tantivyVersion went from ${was} to ${now}, and that is a full reindex on every installation in the field (D-04)"
             fail=1
