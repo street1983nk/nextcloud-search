@@ -636,7 +636,17 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # three entries to nine (spa, ita, nld, por, dan and est joined deu, eng and
 # fra) while OCR_DEFAULT_LANGUAGES deliberately stayed at three. No file came
 # and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "7d0e585775cc2276feb0dd7db62364c12a1560df1d503c0fec523d935ed22d02"
+# Moved on 2026-09-23 by plan 17-03, and the count of the python half moves for
+# the first time since 09.09.2026: 54 becomes 55, because one file arrived that
+# did not exist before. index/stopwords.py carries FOLDED_STOPWORDS, the 117
+# folded Snowball stop words the new chain needs because it folds in front of
+# the built in list, plus folded_stopwords_hash. index/analyzer.py changed its
+# bytes as well, with the factory snowball_analyzer and the second chain table
+# in its module header. The figure of the run, PACKAGE_FILES, stays at 54 for
+# the reason the PHP pair states: a reported measurement figure is not rewritten
+# when the code moves on.
+PACKAGE_FILES_TODAY = 55
+PACKAGE_TREE_HASH_TODAY = "e05f01fd41f95bb8a91920e6f3f90fa406644f8d57cf05f0091e0d19e9398e6f"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
@@ -794,11 +804,12 @@ def test_the_recipe_reproduces_the_tree_hash_of_the_python_package() -> None:
     it was read out of.
     """
     count, hexdigest = reading(run_the_recipe(REPO_ROOT / "backend" / "src" / "findling", "**/*.py"))
-    assert count == PACKAGE_FILES
+    assert count == PACKAGE_FILES_TODAY
     assert hexdigest == PACKAGE_TREE_HASH_TODAY
 
     raw = BAUMHASH_RAW.read_text(encoding="utf-8")
     assert f"baumhash: {PACKAGE_TREE_HASH}" in raw
+    assert f"dateien: {PACKAGE_FILES}" in raw
     assert PACKAGE_TREE_HASH != PACKAGE_TREE_HASH_TODAY, (
         "the two figures are the same again, so the second one has lost its reason to exist"
     )
