@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: planning
-last_updated: "2026-09-23T08:18:23.445Z"
+last_updated: "2026-09-23T09:10:00.000Z"
 last_activity: 2026-09-23
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,92 +17,84 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-21 after v1.2)
+See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Kein aktiver Milestone. v1.2 ist geliefert und archiviert; als naechstes Marketing-Termine, Wiedervorlagen, dann /gsd:new-milestone.
+**Current focus:** v1.3 Sprachausbau, Phase 17 (Owner-Tor und Analyseketten).
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-09-23 — Milestone v1.3 started
+Phase: 17 von 23 (Owner-Tor und Analyseketten), erste von 7 v1.3-Phasen
+Plan: noch keiner
+Status: Ready to plan
+Last activity: 2026-09-23 , Roadmap v1.3 erstellt (Phasen 17 bis 23, 17/17 Requirements abgedeckt)
 
-## Termine und Owner-Checkpoints
+Progress: [..........] 0%
 
-- **22.09.2026 09:00: LinkedIn-Post** Findling 1.2.0 + Connector 0.2.1. Text
-  freigegeben (Moin + Duzen, ohne "meine"), Bilder in Desktop/release-post/.
-  Posten per Playwright, Muster in reference_linkedin_feed_posting.
+## Naechster Schritt
 
-- **Forum-Post** haengt in der Discourse-Moderation (Konto street1983nk);
-  Plan B bei Ablehnung: Antwort im Bestandsthread t/249031.
+`/gsd:plan-phase 17 --research-phase 17` , die Kettenreihenfolge (`ascii_fold`-Position) ist
+zwischen den vier Recherchen uneinheitlich und muss messend entschieden werden. Erster
+Arbeitsschritt der Phase ist aber das Owner-Tor: ohne den schriftlichen Entscheid zu
+Umbauweg, Feldmodell, Sprachmarke, Katalogprozess und KOMP-Go/No-Go wird kein Code
+geschrieben, der D-04 beruehrt.
+
+## Performance Metrics
+
+**Velocity:** v1.2 lieferte 63 Plaene in 5 Phasen (8 Tage). Fuer v1.3 noch keine Messwerte.
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+## Accumulated Context
+
+### Entscheidungen, die v1.3 tragen
+
+- D-04-Linie (v1.1): index-kompatibel ueber Minor-Spruenge. v1.3 verletzt sie bewusst und
+  nur fuer Instanzen, die eine neue Sprache einschalten; der Bruch braucht den Owner-Entscheid
+  in Phase 17.
+- Riskantester Pfad des Milestones: Schema erreicht den Bestandsindex nie, Suche antwortet
+  danach dauerhaft leer (`parse_query_lenient`-ValueError zu leerer degraded-Antwort).
+  Gegenmassnahme ist die Phasentrennung 18 (Schema und Umbau) gegen 19 (Frageseite).
+- Re-Analyse-Umbau statt Vollreindex: geschaetzt 1 bis 3 h gegen gemessene 19 h 20 min.
+- Keine Spracherkennung, weder dokument- noch anfrageseitig (Anti-Feature, einstimmig).
+- Katalogzahl beim Planstart aus `php/l10n/de.json` ZAEHLEN (Stand Research 199, nicht 174).
+
+### Termine und Owner-Checkpoints
 
 - **Beim Owner offen:** Store-Token-Rotation (apps.nextcloud.com/account/token);
-  Outlook-Entwurf an Denny (admin@infranode.dev/Drafts) senden; InfraNode
-  ntfy-401-Entscheid.
+  Outlook-Entwurf an Denny senden; InfraNode ntfy-401-Entscheid.
+- **Forum-Post** haengt in der Discourse-Moderation (Konto street1983nk);
+  Plan B bei Ablehnung: Antwort im Bestandsthread t/249031.
+- **ISV-Nachfass Fabrice Mous:** Wiedervorlage 25.09.2026, dann Nachfass-Entwurf anbieten.
+- **Findling-Pro-Entscheid:** vertagt auf 03.11.2026 (Go-Kriterium >=10 Grenzen-Anfragen
+  oder 1 Pilotkunde >250 Nutzer; Stand 21.09.: null Signale).
+- **Connector Issue #8** (piAreSquare): Community-Beitrag zur geparkten Connector-Spur,
+  zeitnah sichten.
+- **Korpus-Snapshot** snap-03f1d1d9ad9262704 bleibt im Standard-Tier (~2,85 USD/Monat) und
+  wird fuer die Messphase 22 gebraucht; Wiedervorlage beim v1.3-Close.
 
-## Wiedervorlagen (Stand nach den Owner-Entscheiden vom 21.09.2026 abends)
+### Offene Blocker
 
-- Q5 Korpus-Snapshot: ENTSCHIEDEN 21.09. (drittes bewusstes Behalten), bleibt
-  im Standard-Tier (~2,85 USD/Monat, einzige laufende Box-Kostenstelle,
-  Marke purpose=findling-corpus-keep). Neu vorlegen erst, wenn die naechste
-  Anfahrt mehr als ~3 Monate entfernt liegt (dann Archive-Tier rechnen) oder
-  beim naechsten Milestone-Close.
+- Kill-Kriterium: kuendigt Nextcloud eine Elasticsearch-freie Volltextsuche mit OCR an,
+  wird das Projekt neu bewertet. Geprueft 21.09.2026: NICHT ausgeloest. Ende September
+  einmalig die Conference-Nachberichte ansehen, danach quartalsweise.
 
-- Messanfahrt-Buendel: ENTSCHIEDEN 21.09., kommt als Messphase in den
-  NAECHSTEN Milestone; vollstaendig beschrieben als BL-F03 in BACKLOG.md
-  (M-01-Zahl, 92c/99d-Wirkung, Bodensatz-Zyklus 2, 6 Fehlschlaege + 44
-  Uebersprungene, Kaltstartlatenz; grob 6-10 Boxstunden, Rechenblatt vor
-  Start).
+### Mitzunehmende Kleinigkeiten
 
-- Findling-Pro-Entscheid: VERTAGT auf 03.11.2026 (8 Wochen nach v1.0-Launch,
-  Go-Kriterium >=10 Grenzen-Anfragen oder 1 Pilotkunde >250 Nutzer).
-  Stand 21.09.: NULL Signale (650 Mails admin-Postfach geprueft, keine
-  GitHub-Issues). Fake-Door wird verstaerkt: Issue-Entwurf liegt in
-  Desktop/fake-door/connector-enterprise-issue-ENTWURF.md, POSTEN ERST NACH
-  OWNER-FREIGABE.
-
-- ISV-Nachfass Fabrice Mous: Owner-Entscheid 21.09. "noch warten";
-  Wiedervorlage 25.09.2026, dann Nachfass-Entwurf anbieten.
-
-- Connector Issue #8 (piAreSquare, 21.09., "Added file upload and download
-  ability"): Community-Beitrag zur geparkten Connector-Spur, zeitnah sichten.
-
-- L-16-04-Kommentarfix beim naechsten Workflow-Plan (paths-Filter gilt nicht
-  fuer Tag-Pushes, zwei Workflow-Kommentare berichtigen).
-
-- Aufraeumbefunde aus der Recherche: fastembed gepinnt aber nicht importiert,
-  numpy als indirekte Abhaengigkeit.
-
-- Systemplatten-Skripte Phasen 5-6.1: Repo-Aufnahme erst nach
-  Geheimnis-Durchsicht.
-
-## Offene Blocker
-
-- Kill-Kriterium: kuendigt Nextcloud eine Elasticsearch-freie Volltextsuche
-  mit OCR an, wird das Projekt neu bewertet. **Geprueft 21.09.2026: NICHT
-  ausgeloest** (NC GmbH modernisiert nur den ES-Stack, kein neues Backend,
-  kein OCR). Weiter quartalsweise searchvox und
-  files_fulltextsearch_tesseract beobachten; Ende September einmalig die
-  Conference-Nachberichte.
+- L-16-04-Kommentarfix beim naechsten Workflow-Plan (paths-Filter gilt nicht fuer
+  Tag-Pushes, zwei Workflow-Kommentare berichtigen).
+- Systemplatten-Skripte Phasen 5-6.1: Repo-Aufnahme erst nach Geheimnis-Durchsicht.
+- Estnischer Stemmer nicht verfuegbar: aktiv an die Buerokratt/OS2ai-Spur kommunizieren.
 
 ## Deferred Items
 
-Die drei bei v1.1-Close deferred gefuehrten Debug-Sessions
-(kill-resume-di-05-36-red, parity-login-probe-404,
-store-install-5-routes-probe) sind am 21.09.2026 formal auf resolved
-gesetzt; die Fixes waren laengst gemerged und die Tag-Laeufe auf v1.2.0
-bestaetigen sie (7/7 gruen). Keine offenen Deferred Items.
+Keine offenen Deferred Items (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal
+auf resolved gesetzt).
 
 ## Session Continuity
 
-Last session: 2026-09-21
-Stopped at: Milestone-Abschluss v1.2 (Archivierung, PROJECT-Review,
-ROADMAP-Reorganisation, Retrospektive)
+Last session: 2026-09-23
+Stopped at: Roadmap v1.3 geschrieben (ROADMAP.md, STATE.md, Traceability in REQUIREMENTS.md)
 Resume file: keine
-
-## Operator Next Steps
-
-- 22.09. 09:00: LinkedIn-Post (siehe Termine)
-- Danach: /gsd:new-milestone fuer den naechsten Zyklus

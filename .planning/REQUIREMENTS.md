@@ -57,7 +57,33 @@
 
 ## Traceability
 
-(Wird von der Roadmap gefüllt.)
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| LEX-01 | Phase 17 (Owner-Tor und Analyseketten) | Pending |
+| LEX-07 | Phase 17 (Owner-Tor und Analyseketten) | Pending |
+| LEX-02 | Phase 18 (Schema, Marken und Umbauweg) | Pending |
+| LEX-03 | Phase 18 (Schema, Marken und Umbauweg) | Pending |
+| LEX-04 | Phase 18 (Schema, Marken und Umbauweg) | Pending |
+| LEX-06 | Phase 18 (Schema, Marken und Umbauweg) | Pending |
+| LEX-08 | Phase 18 (Schema, Marken und Umbauweg) | Pending |
+| LEX-05 | Phase 19 (Frageseite freischalten) | Pending |
+| KAT-01 | Phase 20 (UI-Kataloge es/it/nl/pt) | Pending |
+| KAT-02 | Phase 20 (UI-Kataloge es/it/nl/pt) | Pending |
+| KOMP-01 | Phase 21 (Niederländische Komposita) | Pending |
+| MESS-07 | Phase 22 (Messanfahrt BL-F03) | Pending |
+| MESS-08 | Phase 22 (Messanfahrt BL-F03) | Pending |
+| MESS-09 | Phase 22 (Messanfahrt BL-F03) | Pending |
+| HART-04 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Pending |
+| HART-05 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Pending |
+| REL-03 | Phase 23 (Härtung und Store-Einreichung 1.3.0) | Pending |
+
+**Abdeckung:** 17 von 17 v1.3-Requirements einer Phase zugeordnet, keine Waise, keine Doppelung.
+
+**Anmerkung zu LEX-08:** Die umgedrehte Upgrade-Beweisstrecke und die Sprachfälle je Sprache
+gehören zur Phase 18, weil sie den Umbauweg beweisen. Auf Feldebene sind sie dort grün; die
+Hebung derselben Sprachfälle auf den normalen Suchweg (Unified Search und Ergebnisseite) ist
+Erfolgskriterium 1 von Phase 19, weil die Frageseite vorher bewusst geschlossen bleibt.
 
 ---
 *Erstellt: 2026-09-23 aus Research (Commit 035c5df) und Owner-Scope-Entscheid.*
+*Traceability ergänzt: 2026-09-23 durch die Roadmap v1.3 (Phasen 17 bis 23).*
