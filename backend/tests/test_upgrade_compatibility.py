@@ -39,6 +39,13 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILE = BACKEND_ROOT / "Dockerfile"
 PYPROJECT = BACKEND_ROOT / "pyproject.toml"
 
+# The measurement script that names the engine of a run in its own output. It is
+# the second place in the tree that spells the pin out, and until the audit of
+# 2026-09-23 (M-17-06) it was the only one no test looked at: plan 17-08 moved
+# the pin and left this line on 0.26.0, so the script kept printing the wrong
+# engine as the provenance of every chain measurement.
+MEASURE_CHAINS = BACKEND_ROOT.parent / "scripts" / "dev" / "measure_chains.sh"
+
 # The index format both pinned tantivy releases report. It is the half of the
 # banner that decides whether the files on disk can still be opened at all, and
 # since the owner decision E-17-7 option a of 2026-09-23 it is also the half the
@@ -243,3 +250,19 @@ def test_the_engine_is_held_through_its_exact_pin() -> None:
     that would be a rebuild on every installation in the field.
     """
     assert TANTIVY_PIN in PYPROJECT.read_text(encoding="utf-8"), TANTIVY_PIN
+
+
+def test_the_measurement_script_names_the_pinned_engine() -> None:
+    """The provenance line of a chain measurement names the engine that ran it.
+
+    scripts/dev/measure_chains.sh prints its TANTIVY line as the provenance of
+    the run, and the provenance of the measurements is what the whole chain
+    argument of phase 17 rests on. A pin that moves in pyproject.toml and not
+    here leaves the reports naming an engine nobody measured with.
+    """
+    script = MEASURE_CHAINS.read_text(encoding="utf-8")
+
+    assert TANTIVY_PIN in script, (
+        f"{MEASURE_CHAINS.name} does not name {TANTIVY_PIN}; the pin moved in pyproject.toml and the "
+        "provenance line of every chain measurement stayed behind"
+    )

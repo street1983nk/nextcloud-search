@@ -32,7 +32,15 @@ set -eu
 # so that a grep for the pin finds the line that really names it. It follows the
 # pin in backend/pyproject.toml; this script installs nothing, it only reports
 # which tantivy the measuring environment is expected to carry.
-TANTIVY="tantivy==0.26.0"
+#
+# The line is not only claimed to follow that pin, it is held to it: plan 17-08
+# moved the pin from 0.26.0 to 0.26.2 and this line stayed behind, and the
+# script prints it as the provenance of a measurement run, where a wrong engine
+# name is a wrong measurement report. Since the audit of 2026-09-23 (M-17-06)
+# test_the_measurement_script_names_the_pinned_engine in
+# backend/tests/test_upgrade_compatibility.py greps this file for TANTIVY_PIN,
+# so the next move of the pin cannot happen by halves again.
+TANTIVY="tantivy==0.26.2"
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/../.." && pwd)
