@@ -752,44 +752,57 @@ unabhaengig vom Pin benutzen. LEX-07 muss umformuliert werden.
 
 ---
 
-## Vollzug am <Datum>
+## Vollzug am 23.09.2026
 
-Leer angelegt von Plan 17-01 (Task 3). Gefuellt von Plan 17-04 am Vorlagetag.
-Bis dahin bleiben alle Felder auf `,`.
+Gefuellt von Plan 17-04 am Vorlagetag.
 
-- **Datum:** ,
-- **Gelesener Stand:** ,
+- **Datum:** 23.09.2026
+- **Gelesener Stand:**
 
   | Gelesen | Stand am Vorlagetag |
   |---|---|
-  | `backend/pyproject.toml`, tantivy-Pin | , |
-  | `backend/tests/test_upgrade_compatibility.py`, `GOLD_V1_0_AND_V1_1["tantivy_version"]` | , |
-  | `.github/dependabot.yml`, `ignore`-Block fuer tantivy | , |
-  | Volle Suite aus `backend/` | , |
+  | `backend/pyproject.toml`, tantivy-Pin | `tantivy==0.26.0` (Zeile 13) |
+  | `backend/tests/test_upgrade_compatibility.py`, `GOLD_V1_0_AND_V1_1["tantivy_version"]` | `"tantivy v0.26.0, index_format v7"` (Zeile 114; Kurzform `"0.26.0"` Zeile 56) |
+  | `.github/dependabot.yml`, `ignore`-Block fuer tantivy | vorhanden (ab Zeile 96), Begruendungskommentar traegt die widerlegte Aussage "index format v7 from 0.26.2 on" |
+  | Volle Suite aus `backend/` | 2507 passed, 15 skipped (Merge-Stand der Welle 1, Lauf vom 23.09.2026) |
+  | Stand der Plaene 17-02 und 17-03 | beide komplett und in main gemergt (Positivliste + Paritaetsgate; Kettenfabrik + Ergaenzungsliste + Waechter); D-04 unberuehrt, keine Marke bewegt |
 
-- **Greifender Zweig je Entscheid:** ,
+- **Greifender Zweig je Entscheid:**
 
-  | Entscheid | Option | Begruendung des Owners |
+  | Kennung | Option | Begruendung des Owners |
   |---|---|---|
-  | E-17-1 Umbauweg | , | , |
-  | E-17-2 Feldmodell | , | , |
-  | E-17-3 Abschaltbarkeit von de und en | , | , |
-  | E-17-4 Sprachmenge als sechster Merker | , | , |
-  | E-17-5 Katalogprozess | , | , |
-  | E-17-6 Niederlaendische Komposita | , | , |
-  | E-17-7 Vergleichsregel `tantivy_version` | , | , |
-  | E-17-8 Einheitliche Kettenreihenfolge | , | , |
+  | E-17-1 | a | Empfehlung uebernommen (Antwort woertlich: "a") |
+  | E-17-2 | a | Empfehlung uebernommen (Antwort woertlich: "a") |
+  | E-17-3 | a | Empfehlung uebernommen (Antwort woertlich: "a") |
+  | E-17-4 | a | Empfehlung uebernommen (Antwort woertlich: "a") |
+  | E-17-5 | a | Empfehlung uebernommen (Antwort woertlich: "a") |
+  | E-17-6 | a | Empfehlung uebernommen (Antwort woertlich: "a") |
+  | E-17-7 | a | Empfehlung uebernommen (Antwort woertlich: "a") |
+  | E-17-8 | a | Empfehlung uebernommen (Antwort woertlich: "a", Kenntnisnahme ohne Widerspruch) |
 
-- **Beleg:** ,
-- **Vollzogen am / durch Plan:** ,
+- **Beleg:** Owner-Antworten vom 23.09.2026 in der Arbeitssitzung, strukturierte
+  Einzelabfrage aller acht Entscheide mit E-17-7 als erster Frage; je Entscheid
+  wurde die Option "a" gewaehlt. Messgrundlage der Vorlage:
+  `docs/measurements/2026-09-analyseketten/` (Lauf vom 23.09.2026,
+  65 Formfamilien, 573 Paare, A+ 467 gegen C+ 463, null Leaks).
+- **Vollzogen am / durch Plan:**
+  - `backend/src/findling/store/repo.py`: Plan 17-07
+  - `backend/tests/test_upgrade_compatibility.py`: Plan 17-07
+  - `backend/pyproject.toml`: Plan 17-08
+  - `backend/uv.lock`: Plan 17-08
+  - `.github/workflows/deploy-harp.yml`: Plan 17-08
+  - `.github/dependabot.yml`: Plan 17-08
+  - `THIRD-PARTY.md`: Plan 17-08
 
 ### Vollzugs-Checkliste
 
-1. Entscheiddokument vorlegen (Plan 17-04), mit E-17-7 als erster Frage.
+1. Entscheiddokument vorlegen (Plan 17-04), mit E-17-7 als erster Frage, erledigt am 23.09.2026.
 2. Freigabe eintragen oder die benannten Aenderungen einarbeiten und erneut
-   vorlegen; ohne Freigabe wird kein Requirement als erfuellt gemeldet.
+   vorlegen; ohne Freigabe wird kein Requirement als erfuellt gemeldet,
+   erledigt am 23.09.2026 (Freigabe liegt vor, alle acht auf Option a).
 3. Den Vollzugsabschnitt oben datiert fuellen: Datum, gelesener Stand,
-   greifender Zweig je Entscheid mit Begruendung, Beleg, Plannummer.
+   greifender Zweig je Entscheid mit Begruendung, Beleg, Plannummer,
+   erledigt am 23.09.2026.
 4. Erst danach `backend/src/findling/store/repo.py` und
    `backend/tests/test_upgrade_compatibility.py` anfassen (Plan 17-07).
 5. Danach `uv lock --upgrade-package tantivy` und `uv sync` aus `backend/`
