@@ -75,9 +75,10 @@ dev = [
 # `uv sync` of the gates job installs it; the model stage of backend/Dockerfile
 # asks for it by name with --group quantize.
 #
-# 1.22.0 is the current release (2026-06-15), Apache-2.0, github.com/onnx/onnx,
+# 1.23.0 is the current release (2026-09-18), Apache-2.0, github.com/onnx/onnx,
 # and its cp312-abi3 wheels cover Python 3.13 on manylinux_2_28_aarch64, which
-# is what the arm64 half of the multi-arch build needs.
+# is what the arm64 half of the multi-arch build needs (wheel list verified on
+# PyPI for 1.23.0).
 quantize = ["onnx==1.23.0"]
 
 [build-system]
