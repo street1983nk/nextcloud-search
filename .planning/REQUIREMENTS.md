@@ -14,7 +14,7 @@
 - [ ] **LEX-04**: Schema-Erweiterung und Query-Freischaltung liegen in getrennten Phasen mit bewiesenem Umbauweg dazwischen: Die Suche funktioniert auf Bestandsinstallationen in JEDEM Zwischenzustand (der heutige Totalausfall-Pfad `parse_query_lenient`-ValueError -> dauerhaft leere degraded-Antwort darf nie erreichbar sein). Migration `Version001300Date...` wie bei jedem Minor-Sprung
 - [ ] **LEX-05**: Die Anfrage durchsucht genau die aktiven Sprachfelder mit Feld-Boosts unterhalb `body_en`; KEINE Spracherkennung, weder dokument- noch anfrageseitig (Anti-Feature, einstimmig)
 - [ ] **LEX-06**: Admin sieht in der Diagnose, welche Sprachen aktiv und befüllt sind; beim Start warnt Findling, wenn `FINDLING_LANGUAGES` eine Sprache führt, die die OCR-Sprachen nicht abdecken (Buchstabensalat-Falle)
-- [ ] **LEX-07**: `tantivy` auf 0.26.2 gepinnt (stopword-Panic wird ValueError, Union-Scorer-Fix, index_format v7 unverändert); Sprachnamen laufen über eine Positivliste analog `OCR_LANGUAGE_ALLOWLIST`
+- [ ] **LEX-07**: `tantivy` auf 0.26.2 gepinnt (stopword-Panic wird ValueError, index_format v7 unverändert; der zunächst behauptete Union-Scorer-Fix ist laut Phase-17-Research nicht belegbar und gestrichen); Sprachnamen laufen über eine Positivliste analog `OCR_LANGUAGE_ALLOWLIST`
 - [ ] **LEX-08**: CI beweist beides: Sprachfälle je neuer Sprache ohne Fremdbestand (Muster A4/2026-09) UND eine umgedrehte Upgrade-Beweisstrecke in `deploy-harp.yml` (Umbau findet statt, Suche liefert danach in alter und neuer Sprache; die bestehende "kein Reindex"-Strecke wird um die Gegenrichtung ergänzt, nicht entschärft; `UPGRADE_FROM_TAG` auf v1.2.0)
 
 ### Niederländische Komposita (KOMP, eigene Phase mit eigenem Tor)

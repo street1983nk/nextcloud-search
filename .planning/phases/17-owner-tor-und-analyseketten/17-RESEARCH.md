@@ -826,7 +826,7 @@ Die Phase ändert eine Eingabevalidierung, also ist der Abschnitt nicht leer, ab
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED, siehe Plaene 17-01/17-04/17-05: Q1 -> Owner-Tor E-17-7, Q2 -> nicht bauen, Q3 -> Leitplanke in 17-01, Q4 -> ungerichtete Metrik in 17-05)
 
 1. **Fällt E-17-7 auf "lockern" oder auf "Pin stehen lassen"?**
    Bekannt: beide Wege sind gangbar und beide sind belegt. Unklar: die Risikoneigung des Owners gegenüber einer gelockerten Marke. Empfehlung: als erste Frage der Vorlage stellen, weil alle Pläne mit tantivy-Bezug daran hängen.
