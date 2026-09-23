@@ -142,6 +142,11 @@ die rechtekorrekte.
 
 ## BL-F02: Sprachausbau Spanisch, Italienisch, Niederlaendisch, Portugiesisch
 
+**STAND 23.09.2026: Bausteine 2 und 3 IN MILESTONE v1.3 AUFGENOMMEN** (Owner-Entscheid
+23.09., REQ LEX-01..08 / KAT-01..02 / KOMP-01, Phasen 17 bis 21). Korrektur aus der
+v1.3-Research: die Kataloge haben 199 Schluessel (nicht 174), Nextcloud kennt kein
+'pt', nur pt_BR/pt_PT. Dieser Eintrag bleibt nur als Herkunftsbeleg stehen.
+
 **Anlass:** Reddit-Rueckmeldungen nach dem Findling-Post (14./15.09.2026),
 mehrere Nutzer wuenschen sich diese vier Sprachen. Ein Nutzer hat Hilfe
 angeboten und wurde vom Owner auf direkten Kontakt verwiesen; wenn es so weit
@@ -203,6 +208,10 @@ und approved, stable35-Frist haengt drin, und eine Schema-Aenderung vor der
 Phase-15-Messung zerstoert den v1.1-Vergleich (D-04-Linie).
 
 ## BL-F03: Messanfahrt-Buendel, die fuenf offenen Boxzahlen
+
+**STAND 23.09.2026: IN MILESTONE v1.3 AUFGENOMMEN** (Phase 22, REQ MESS-07..09,
+plus zwei neue Messauftraege: Indexgroesse bei sechs Sprachfeldern, Wandzeit des
+Re-Analyse-Umbaus). Dieser Eintrag bleibt nur als Herkunftsbeleg stehen.
 
 **Auslöser:** Owner-Entscheid 21.09.2026 beim v1.2-Abschluss: das Buendel wird
 als Messphase in den NAECHSTEN Milestone aufgenommen, keine eigenstaendige
