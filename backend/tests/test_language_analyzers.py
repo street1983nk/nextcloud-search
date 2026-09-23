@@ -91,8 +91,20 @@ EXPECTED_SNOWBALL_CHAIN = [
 # already written.
 #
 # When this test goes red: run scripts/dev/stopword_supplement.py again, write
-# the difference into the measurement report, and only then pull this value
-# after it. Never the other way round.
+# the difference into the measurement report, THEN ANSWER THE MARK QUESTION
+# BELOW, and only then pull this value after it. Never the other way round.
+#
+# The mark question, and it is the step the procedure was missing until the
+# audit of 2026-09-23 (M-17-04): does the difference touch a supplement that a
+# REGISTERED chain reads. Today exactly one does, the English one through
+# english_analyzer(), and it is empty, which is why nothing here is a version
+# mark. A tag that gives the English list one accented entry moves the
+# tokenisation of every index in the field while this digest is the only thing
+# that changes, so pulling the constant without raising ANALYZER_VERSION ships a
+# drifted chain onto a stock installation with no mark and no reindex. Phase 18
+# registers es, it, nl and pt, and from then on the question covers their
+# supplements too. The answer is enforced one assertion further down, in
+# test_a_non_empty_english_supplement_would_move_the_shipped_chain.
 FOLDED_SUPPLEMENT_SHA256 = "d056d4597f989c7e03113c529c92cef980254f72c4d4e5deace4588ea033311a"
 
 # The measured sizes per language, from the same run.
@@ -338,7 +350,27 @@ def test_the_supplement_has_the_measured_sizes_and_digest() -> None:
     assert len(flat) == sum(EXPECTED_SUPPLEMENT_SIZES.values())
     assert folded_stopwords_hash(flat) == FOLDED_SUPPLEMENT_SHA256, (
         "the supplement drifted away from the measured run; rerun "
-        "scripts/dev/stopword_supplement.py, record the difference, then pull this constant after it"
+        "scripts/dev/stopword_supplement.py, record the difference, ASK WHETHER THE DIFFERENCE TOUCHES A "
+        "REGISTERED CHAIN AND THEREFORE ANALYZER_VERSION (see the comment at FOLDED_SUPPLEMENT_SHA256), "
+        "and only then pull this constant after it"
+    )
+
+
+def test_a_non_empty_english_supplement_would_move_the_shipped_chain() -> None:
+    # The one supplement a registered tokenizer reads today, and the reason the
+    # nachzieh procedure above has to ask about ANALYZER_VERSION at all.
+    # english_analyzer() is registered in index/open.py as the tokenizer "en", so
+    # its chain writes the terms of every index in the field. An empty custom
+    # stop word filter is a measured no-op, which is what keeps ANALYZER_VERSION
+    # at 1 today; one accented entry in this tuple ends the no-op and moves the
+    # tokenisation of every existing index, while the only constant that changes
+    # is the digest above, which is deliberately not a version mark.
+    #
+    # When this goes red, the supplement is not simply pulled after: either the
+    # entry is refused, or ANALYZER_VERSION rises by one with it.
+    assert FOLDED_STOPWORDS["english"] == (), (
+        "english_analyzer() is registered as the tokenizer 'en': a non empty English supplement moves the "
+        "tokenisation of every index in the field and needs ANALYZER_VERSION + 1, not a pulled digest"
     )
 
 
