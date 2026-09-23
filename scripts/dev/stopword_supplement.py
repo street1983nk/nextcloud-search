@@ -35,8 +35,17 @@ OUTPUT receives the ready made Python literal block for FOLDED_STOPWORDS.
 --source names a local copy of stopwords.rs and expects mod.rs next to it, which
 is how the tool runs without a network. Without --source both files are fetched
 from the pinned tag of quickwit-oss/tantivy.
+
+TAG has to read like 0.26.2 and is checked against that form before it reaches
+the URL. Without the check a value carrying path segments walks out of the
+pinned repository, because httpx normalises the segments away before the request
+leaves and the output still reports the string the caller wrote. The tag is not
+the anchor of the loaded bytes either way: a git tag can be moved, and what
+holds the result is the digest of the DERIVED list,
+``FOLDED_SUPPLEMENT_SHA256`` in backend/tests/test_language_analyzers.py.
 """
 
+import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -51,6 +60,12 @@ ENCODING = "utf-8"
 # The tag the product measured against. It is a whole argument value and not a
 # bare number so that a grep for the pin finds the line that really uses it.
 DEFAULT_TAG = "0.26.2"
+
+# The only shape a tag may have before it is formatted into RAW_URL. Three
+# number groups and nothing else: no slash, no dot segment, no query. tantivy
+# tags read exactly like this, so the form costs nothing, and it is the one
+# thing between --tag and a download out of a foreign repository.
+TAG_FORM = re.compile(r"\A[0-9]+\.[0-9]+\.[0-9]+\Z")
 
 RAW_URL = "https://raw.githubusercontent.com/quickwit-oss/tantivy/{tag}/src/tokenizer/stop_word_filter/{name}"
 
@@ -219,7 +234,12 @@ def _numbers(tag: str, builtin: dict[str, list[str]], supplement: dict[str, list
 
 
 def _split_arguments(argv: Sequence[str]) -> tuple[str, Path | None, Path] | None:
-    """Return the tag, the optional local source and the output path."""
+    """Return the tag, the optional local source and the output path.
+
+    The tag is held against TAG_FORM here and not at the download, because here
+    is the only place it enters the program: a value that never becomes a tag
+    can never become a path segment of RAW_URL either.
+    """
     rest = list(argv)
     tag = DEFAULT_TAG
     source: Path | None = None
@@ -227,6 +247,12 @@ def _split_arguments(argv: Sequence[str]) -> tuple[str, Path | None, Path] | Non
         if len(rest) < 2:
             return None
         if rest[0] == TAG:
+            if not TAG_FORM.fullmatch(rest[1]):
+                print(
+                    f"stopword_supplement: {rest[1]} is no tag form like {DEFAULT_TAG}",
+                    file=sys.stderr,
+                )
+                return None
             tag = rest[1]
         else:
             source = Path(rest[1])
