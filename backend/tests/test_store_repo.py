@@ -41,6 +41,7 @@ from findling.store.repo import (
     VECTOR_ONLY_MARKS,
     FileMeta,
     Store,
+    _index_format_matches,
     enable_wal,
     index_bytes,
     open_read_only,
@@ -245,6 +246,51 @@ def test_an_unreadable_generation_is_a_drift(store: Store) -> None:
     store.write_meta("index_version", "unknown")
 
     assert store.version_mismatch({"index_version": "1"}) == ["index_version"]
+
+
+BANNER_0_26_0 = "tantivy v0.26.0, index_format v7"
+BANNER_0_26_2 = "tantivy v0.26.2, index_format v7"
+BANNER_NEXT_FORMAT = "tantivy v0.27.0, index_format v8"
+
+
+def test_a_tantivy_patch_bump_with_the_same_index_format_is_no_drift(store: Store) -> None:
+    # E-17-7 option a: the banner is stored in full, only its index_format half
+    # is compared, so a patch release that keeps the format costs no reindex.
+    store.write_meta("tantivy_version", BANNER_0_26_0)
+
+    assert store.version_mismatch({"tantivy_version": BANNER_0_26_2}) == []
+
+
+def test_a_changed_index_format_is_still_a_drift(store: Store) -> None:
+    store.write_meta("tantivy_version", BANNER_0_26_0)
+
+    assert store.version_mismatch({"tantivy_version": BANNER_NEXT_FORMAT}) == ["tantivy_version"]
+
+
+def test_a_tantivy_banner_without_a_format_half_is_a_drift(store: Store) -> None:
+    # The seeded default is "unknown", which carries no format half at all, and
+    # an unreadable mark is an unknown state rather than a proven match.
+    assert store.read_meta()["tantivy_version"] == UNKNOWN_VERSION
+
+    assert store.version_mismatch({"tantivy_version": BANNER_0_26_2}) == ["tantivy_version"]
+
+
+def test_the_index_format_comparison_falls_closed() -> None:
+    """The five cases the loosened rule stands or falls on."""
+    assert _index_format_matches(BANNER_0_26_0, BANNER_0_26_2) is True
+    assert _index_format_matches(BANNER_0_26_2, BANNER_0_26_0) is True
+    assert _index_format_matches(BANNER_NEXT_FORMAT, BANNER_0_26_2) is False
+    assert _index_format_matches(None, BANNER_0_26_2) is False
+    assert _index_format_matches("", BANNER_0_26_2) is False
+    assert _index_format_matches("0.26.2", BANNER_0_26_2) is False
+
+
+def test_the_other_marks_are_untouched_by_the_tantivy_exception(store: Store) -> None:
+    store.write_meta("analyzer_version", "1")
+    store.write_meta("wordlist_hash", "index_format v7")
+
+    assert store.version_mismatch({"analyzer_version": "2"}) == ["analyzer_version"]
+    assert store.version_mismatch({"wordlist_hash": "index_format v7 too"}) == ["wordlist_hash"]
 
 
 def test_record_writes_state_and_reason_and_stamps_the_verdict(store: Store) -> None:

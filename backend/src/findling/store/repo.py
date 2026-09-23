@@ -648,6 +648,20 @@ class Store:
         Only a stored generation BELOW the expected one means the index predates
         the current code.
 
+        ``tantivy_version`` is the other mark that is not an equality. It stores
+        the full banner, because that is what a diagnosis needs, and only the
+        comparison is loosened; what decides is its ``index_format`` half alone,
+        because that half says whether the files on disk can still be opened at
+        all. Measured on 2026-09-23: tantivy 0.26.0 and 0.26.2 both report
+        ``index_format v7``, an index written by one opens and answers under the
+        other in both directions, and the tokenisation of seven chains over 224
+        lines is identical between them. A patch release that keeps the format is
+        therefore not a drift. The assurance this gives up, a changed
+        tokenisation behind an unchanged format, is held by the chain tables and
+        guard tests of phase 17 instead, in ``backend/tests/test_analyzer.py``
+        and ``backend/tests/test_language_analyzers.py`` (owner decision E-17-7
+        option a of 2026-09-23).
+
         Since phase 6 the answer can also contain a mark that says nothing about
         the tantivy index at all. ``embedding_version`` diverging means the
         stored vectors were computed by another model, another quantisation or
@@ -664,6 +678,8 @@ class Store:
             if current == value:
                 continue
             if key == "index_version" and _generation_at_least(current, value):
+                continue
+            if key == "tantivy_version" and _index_format_matches(current, value):
                 continue
             diverging.append(key)
         return diverging
@@ -1306,6 +1322,24 @@ def _generation_at_least(stored: str | None, expected: str) -> bool:
         return stored is not None and int(stored) >= int(expected)
     except ValueError:
         return False
+
+
+def _index_format_matches(stored: str | None, expected: str) -> bool:
+    """True when both banners name the same index format.
+
+    The banner reads "tantivy v0.26.0, index_format v7", and only its second half
+    decides whether the files on disk can still be opened. A banner without that
+    half is a divergence, never a pass: a mark that cannot be read cannot be shown
+    to match the current code, and an unknown state is a difference.
+    """
+    marker = "index_format "
+    if not stored:
+        return False
+    here = stored.find(marker)
+    there = expected.find(marker)
+    if here < 0 or there < 0:
+        return False
+    return stored[here:] == expected[there:]
 
 
 def open_store(path: Path | str, *, meta: Mapping[str, str] | None = None) -> Store:

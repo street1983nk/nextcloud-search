@@ -651,8 +651,14 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # without the other plan's bytes. The figure of the run, PACKAGE_FILES, stays
 # at 54 for the reason the PHP pair states: a reported measurement figure is
 # not rewritten when the code moves on.
+# Moved on 2026-09-23 a seventeenth time, by plan 17-07: exactly one of the 55
+# files changed its bytes, store/repo.py, which gained _index_format_matches
+# beside _generation_at_least and the second exception in
+# Store.version_mismatch, so that only the index_format half of the tantivy
+# banner decides (owner decision E-17-7 option a of 2026-09-23). No file came
+# and none went, so PACKAGE_FILES_TODAY stays at 55.
 PACKAGE_FILES_TODAY = 55
-PACKAGE_TREE_HASH_TODAY = "f0f8febd3c102fb444a60d5b9eb51a49be3970648e05fd1d37f40df06e301785"
+PACKAGE_TREE_HASH_TODAY = "1a1eaf410435e501f704c7c6e4f9033939afe5ed297fa36ffdffeaa12b12d013"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
