@@ -30,6 +30,16 @@ The fixture reader and the metric are not rebuilt here. Both are loaded out of
 ``scripts/dev/chain_probe.py``, the tool that produced the report, because a
 second reader is a second format and a second metric is a second number.
 
+The same plan closed the one hole plan 17-03 had to leave open. The density gate
+runs all 891 built in Snowball entries of the four languages through the shipped
+chain, each of them twice, accented and folded, and demands the empty token list
+every time. Not a sample: a stop word in the index is a silent quality loss with
+no error message anywhere, so the claim has to cover the whole list.
+
+The merged case table underneath it is the acceptance of LEX-01, twelve rows out
+of the fifteen of the report; rows 10 to 12 are "all accented stop words of es,
+pt and it" and the density gate is exactly that claim, only larger.
+
 Accents appear only inside string literals. They are data here, the words the
 product has to handle; the identifiers stay ASCII as the project rules require.
 """
@@ -39,6 +49,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 from types import ModuleType
+from typing import NamedTuple
 
 import pytest
 from tantivy import Filter, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
@@ -460,18 +471,242 @@ def test_the_losses_are_exactly_the_measured_ones(
     )
 
 
+# ---------------------------------------------------------------------------
+# The stop word density gate, run offline against the built in lists of the
+# pinned tantivy tag, and the merged test case table of the report. Plan 17-06.
+# ---------------------------------------------------------------------------
+
+# The built in Snowball lists as they stand in
+# quickwit-oss/tantivy tag 0.26.2, src/tokenizer/stop_word_filter/stopwords.rs,
+# generated into a fixture so that this gate needs no Rust checkout and no
+# network. Lines are "language<TAB>word".
+BUILTIN_STOPWORDS = FIXTURES / "snowball_stopwords_0_26_2.txt"
+
+# The word counts of that tag, from the head comment of the fixture. They are a
+# tag mark and not a taste: a fixture with other counts belongs to another
+# tantivy than the one this build pins, and a density gate run against the wrong
+# list is a gate that measures nothing.
+EXPECTED_BUILTIN_SIZES = {"spanish": 308, "italian": 279, "portuguese": 203, "dutch": 101}
+EXPECTED_BUILTIN_TOTAL = 891
+
+# The three verdicts a row of the merged table can carry.
+SAME = "same"
+BOTH_EMPTY = "both_empty"
+APART = "apart"
+
+
+class MergedCase(NamedTuple):
+    """One row of the merged test case table.
+
+    ``groups`` holds the spellings that have to behave alike; a row can carry
+    more than one group, because rows 14 and 15 of the report name three and two
+    word pairs in one line. ``terms`` is filled for ``apart`` rows only and
+    holds the measured token list of each form, in the order of the group.
+    """
+
+    number: int
+    code: str
+    expectation: str
+    groups: tuple[tuple[str, ...], ...]
+    terms: tuple[tuple[str, ...], ...] = ()
+
+
+# Section 5 of docs/measurements/2026-09-analyseketten/README.md, run of
+# 2026-09-23, with the source of each row as a comment. Twelve rows and not
+# fifteen: rows 10, 11 and 12 of the report are "the accented stop words of es,
+# pt and it, all of them", and all of them is exactly what the density gate
+# above runs over the 891 entries of the four built in lists. Repeating three of
+# them here as hand picked words would be a smaller claim wearing the same name.
+MERGED_CASES = (
+    # 1, STACK and LEX-01. The case the fold position exists for.
+    MergedCase(1, "es", SAME, (("información", "informacion"),)),
+    # 2, PITFALLS and LEX-01. Documented loss, see the apart test below.
+    MergedCase(2, "es", APART, (("información", "informaciones"),), (("informacion",), ("inform",))),
+    # 3, STACK and LEX-01.
+    MergedCase(3, "pt", SAME, (("informação", "informacao"),)),
+    # 4, PITFALLS and LEX-01. Documented loss, and it falls in every chain.
+    MergedCase(4, "pt", APART, (("informação", "informações"),), (("informaca",), ("informaco",))),
+    # 5, STACK.
+    MergedCase(5, "pt", SAME, (("informações", "informacoes"),)),
+    # 6, PITFALLS and LEX-01. The deliberately bought recall: the accent carries
+    # the meaning here and the fold spends it, see docs/language-analyzers.md.
+    MergedCase(6, "es", SAME, (("año", "ano"),)),
+    # 7, FEATURES, PITFALLS and LEX-01. Built in entry accented, supplement flat.
+    MergedCase(7, "it", BOTH_EMPTY, (("perché", "perche"),)),
+    # 8, PITFALLS. Same shape as row 7 and the word the researches argued over.
+    MergedCase(8, "it", BOTH_EMPTY, (("più", "piu"),)),
+    # 9, FEATURES and LEX-01. The stress accent that folds onto a built in entry;
+    # the point of the row is that nothing rubbish is left behind either.
+    MergedCase(9, "nl", BOTH_EMPTY, (("één", "een"),)),
+    # 13, new from this measurement. The report measured "qual" for both, the
+    # phase research had guessed "qualit"; the measured value is the one here.
+    MergedCase(13, "it", SAME, (("qualità", "qualita"),)),
+    # 14, STACK. Three pairs in one row of the report.
+    MergedCase(14, "it", SAME, (("città", "citta"), ("società", "societa"), ("università", "universita"))),
+    # 15, FEATURES. Two pairs in one row of the report.
+    MergedCase(15, "nl", SAME, (("coördinatie", "coordinatie"), ("financiën", "financien"))),
+)
+
+EXPECTED_CASE_NUMBERS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 14, 15)
+
+
+def _rows(expectation: str) -> list[MergedCase]:
+    """The rows of the merged table that carry one verdict."""
+    return [case for case in MERGED_CASES if case.expectation == expectation]
+
+
+def _row_ids(cases: list[MergedCase]) -> list[str]:
+    """Readable test ids: the row number of the report and its language."""
+    return [f"row{case.number}-{case.code}" for case in cases]
+
+
+@pytest.fixture(scope="module")
+def builtin_stopwords(probe: ModuleType) -> dict[str, list[str]]:
+    """The built in Snowball lists of the pinned tag, read once.
+
+    Read through the probe for the same reason the families are: the fixture
+    format has one reader in this tree, and that reader produced the report.
+    """
+    return probe.read_builtin(BUILTIN_STOPWORDS)
+
+
+@pytest.fixture(scope="module")
+def folder() -> TextAnalyzer:
+    """One folder for the whole module, built from tantivy's own filter.
+
+    The fold of this gate runs through ``Filter.ascii_fold()`` and never through
+    a hand written normalisation. A rebuilt fold would check a different chain
+    than the one the product ships, which is precisely the failure the gate
+    exists to catch.
+    """
+    return _folder()
+
+
+def test_the_built_in_lists_are_the_ones_of_the_pinned_tag(builtin_stopwords: dict[str, list[str]]) -> None:
+    sizes = {language: len(words) for language, words in builtin_stopwords.items()}
+
+    assert sizes == EXPECTED_BUILTIN_SIZES, (
+        f"{BUILTIN_STOPWORDS.name} carries {sizes} instead of {EXPECTED_BUILTIN_SIZES}, so it no longer belongs "
+        "to tantivy tag 0.26.2; regenerate it from that tag rather than editing it, because a density gate over "
+        "the wrong list proves nothing about the list the chains really filter against"
+    )
+    assert sum(sizes.values()) == EXPECTED_BUILTIN_TOTAL
+
+
+@pytest.mark.parametrize("code", CODES)
+def test_no_built_in_stop_word_reaches_the_index_in_either_spelling(
+    code: str,
+    chains: dict[str, TextAnalyzer],
+    builtin_stopwords: dict[str, list[str]],
+    folder: TextAnalyzer,
+) -> None:
+    # The promise plan 17-03 could not keep yet, kept here: not a sample but all
+    # 891 built in entries of the four languages, each one twice. Both spellings,
+    # because a chain can be tight in one and open in the other: folding in front
+    # of the built in list lets the accented entry through, folding behind it
+    # lets the flat one through, and only the shipped order closes both.
+    language = SNOWBALL_NAME[code]
+    chain = chains[code]
+    leaks: list[str] = []
+
+    for word in builtin_stopwords[language]:
+        tokens = chain.analyze(word)
+        if tokens:
+            leaks.append(f"{language}: {word} accented produces {tokens}")
+        folded = folder.analyze(word)
+        flat = folded[0] if folded else ""
+        if flat and flat != word:
+            tokens = chain.analyze(flat)
+            if tokens:
+                leaks.append(f"{language}: {flat} flat, folded from {word}, produces {tokens}")
+
+    assert leaks == [], (
+        f"{len(leaks)} stop words of {language} land in the index as ordinary terms: {'; '.join(leaks)}. "
+        f"Run {MEASURE_CHAINS} and check the supplement with scripts/dev/stopword_supplement.py"
+    )
+
+
+def test_the_merged_table_carries_the_rows_of_the_report() -> None:
+    # Twelve rows, and the numbers are the ones the report prints, so that a row
+    # cannot quietly go missing while the count still looks right.
+    assert len(MERGED_CASES) == len(EXPECTED_CASE_NUMBERS)
+    assert tuple(case.number for case in MERGED_CASES) == EXPECTED_CASE_NUMBERS
+
+
+@pytest.mark.parametrize("case", _rows(SAME), ids=_row_ids(_rows(SAME)))
+def test_the_spellings_of_a_row_land_on_one_term(case: MergedCase, chains: dict[str, TextAnalyzer]) -> None:
+    chain = chains[case.code]
+
+    for group in case.groups:
+        tokens = [chain.analyze(form) for form in group]
+        assert tokens[0] != [], f"row {case.number}: {group[0]} produces no term at all"
+        for form, produced in zip(group, tokens, strict=True):
+            assert produced == tokens[0], (
+                f"row {case.number} of the merged table: {form} produces {produced}, {group[0]} produces "
+                f"{tokens[0]}, so the two spellings no longer meet"
+            )
+
+
+@pytest.mark.parametrize("case", _rows(BOTH_EMPTY), ids=_row_ids(_rows(BOTH_EMPTY)))
+def test_a_stop_word_row_leaves_no_token_in_either_spelling(case: MergedCase, chains: dict[str, TextAnalyzer]) -> None:
+    chain = chains[case.code]
+
+    for group in case.groups:
+        for form in group:
+            tokens = chain.analyze(form)
+            assert tokens == [], (
+                f"row {case.number} of the merged table: {form} produces {tokens} instead of nothing. A term "
+                "no question can reach is worse than a missing one, because it only grows the index"
+            )
+
+
+@pytest.mark.parametrize("case", _rows(APART), ids=_row_ids(_rows(APART)))
+def test_a_documented_loss_produces_exactly_the_measured_terms(
+    case: MergedCase, chains: dict[str, TextAnalyzer]
+) -> None:
+    # The two rows of the table that are red, asserted rather than skipped.
+    #
+    # They are not repairable without making another row red. The Spanish
+    # Snowball algorithm carries the accented ending in its suffix list and the
+    # plural ending without the accent, so the fold that puts "información" and
+    # "informacion" on one term is the same fold that takes "informaciones"
+    # away from both; Portuguese splits "informação" from "informações" in every
+    # one of the seven measured chains. Both stand as known limits in
+    # docs/language-analyzers.md and as lines in the loss fixtures.
+    #
+    # Deliberately not marked as an expected failure. Such a marker stays green
+    # when the result changes, and a changed result here means the chain moved,
+    # which is the one event this file exists to report. The word itself is kept
+    # out of this module so that a search for the marker finds none.
+    chain = chains[case.code]
+    left, right = case.groups[0]
+    left_terms, right_terms = case.terms
+
+    assert chain.analyze(left) == list(left_terms)
+    assert chain.analyze(right) == list(right_terms)
+    assert set(left_terms) & set(right_terms) == set(), (
+        f"row {case.number} of the merged table stopped being a loss: {left} and {right} now share a term. "
+        f"That is a finding, not a fix waiting to be pocketed. Run {MEASURE_CHAINS} first"
+    )
+
+
 def _asserted_forms(known_losses: dict[str, set[tuple[str, str]]]) -> dict[str, set[str]]:
     """Every surface form this module makes a form family claim about.
 
     Deliberately not every word of the module. The English no-op vocabulary
-    proves that an empty custom stop word filter changes nothing, it belongs to
-    a chain with no form family fixture, and the words of the hand written cases
-    at the top are rows of the merged table and arrive through it.
+    proves that an empty custom stop word filter changes nothing and belongs to
+    a chain with no form family fixture, and the stop word rows of the merged
+    table are covered by the provenance gate below instead, against the built in
+    lists they are entries of. The hand written cases at the top of the file are
+    rows 1, 7 and 9 and arrive through the table.
     """
     asserted: dict[str, set[str]] = {code: set() for code in CODES}
     for code, pairs in known_losses.items():
         for left, right in pairs:
             asserted[code].update((left, right))
+    for case in MERGED_CASES:
+        if case.expectation != BOTH_EMPTY:
+            asserted[case.code].update(form for group in case.groups for form in group)
     return asserted
 
 
@@ -491,3 +726,26 @@ def test_every_asserted_form_stands_in_the_measured_case_list(
         )
 
     assert missing == [], f"{'; '.join(missing)}. Add the form to its fixture and rerun {MEASURE_CHAINS}"
+
+
+def test_every_stop_word_row_names_a_word_of_a_built_in_list(
+    builtin_stopwords: dict[str, list[str]], folder: TextAnalyzer
+) -> None:
+    # The other half of the gate over the gate. A stop word row has no form
+    # family to stand in, so its provenance is the built in list of its language
+    # or the supplement derived from it, in one of the two spellings. Without
+    # this a row could name a word that is in no list at all, pass because the
+    # chain drops it for some other reason, and claim a stop word is handled.
+    stray: list[str] = []
+    for case in MERGED_CASES:
+        if case.expectation != BOTH_EMPTY:
+            continue
+        language = SNOWBALL_NAME[case.code]
+        known = set(builtin_stopwords[language]) | set(FOLDED_STOPWORDS[language])
+        for form in (word for group in case.groups for word in group):
+            folded = folder.analyze(form)
+            flat = folded[0] if folded else ""
+            if form not in known and flat not in known:
+                stray.append(f"row {case.number}: {form} stands in no built in {language} list and in no supplement")
+
+    assert stray == [], f"{'; '.join(stray)}. A stop word row without a list entry behind it proves nothing"
