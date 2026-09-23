@@ -86,11 +86,16 @@ WNGERMAN_PIN = "wngerman=20161207-15"
 
 # The pin the banner above grows out of. Named here because a moved pin and a
 # moved mark are the same event seen from two sides. The patch number may move
-# with a decision behind it; the format half above may not. It is still 0.26.0
-# on purpose: this plan (17-07) moves the comparison rule and no version at all,
-# and the pin walks to 0.26.2 in plan 17-08. Keeping the two apart is what makes
-# the loosening provable on its own.
-TANTIVY_PIN = "tantivy==0.26.0"
+# with a decision behind it; the format half above may not.
+#
+# It walked from 0.26.0 to 0.26.2 on 2026-09-23 in plan 17-08, under the owner
+# decision E-17-7 option a of the same day, and it walked only after plan 17-07
+# had loosened the comparison rule, so that the loosening stayed provable on its
+# own. GOLD_V1_0_AND_V1_1["tantivy_version"] did not walk with it and must not:
+# it is GOLD_INDEX_FORMAT, that is "index_format v7", and v7 is what both
+# releases report. A pin that moves while the format half holds is the one shape
+# of this change that costs no installation in the field a rebuild.
+TANTIVY_PIN = "tantivy==0.26.2"
 
 # The five marks an index carries. A mark that disappears counts as a difference
 # in Store.version_mismatch, so a set that shrank would trigger a rebuild just as
