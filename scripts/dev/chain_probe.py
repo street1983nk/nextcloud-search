@@ -247,9 +247,16 @@ def verify_against_product(language: str, families: Sequence[Sequence[str]], sup
     because they exist nowhere else, but the one the report recommends is held
     against ``snowball_analyzer`` from the package, form by form. An empty list
     means the measured chain and the shipped chain are the same chain.
+
+    ``supplement`` still reaches the candidate and no longer the product: since
+    the factory became one armed it looks its own supplement up in
+    FOLDED_STOPWORDS. That sharpens the comparison rather than weakening it,
+    because the candidate is now fed from the caller and the product from its
+    own mapping, so a supplement that drifted between the two shows up here as a
+    differing form instead of cancelling itself out on both sides.
     """
     candidate = chain(language, WINNER, supplement)
-    product = snowball_analyzer(language, supplement)
+    product = snowball_analyzer(language)
     differing: list[str] = []
     for forms in families:
         differing.extend(form for form in forms if candidate.analyze(form) != product.analyze(form))

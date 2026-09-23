@@ -657,8 +657,17 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # Store.version_mismatch, so that only the index_format half of the tantivy
 # banner decides (owner decision E-17-7 option a of 2026-09-23). No file came
 # and none went, so PACKAGE_FILES_TODAY stays at 55.
+# Moved on 2026-09-23 an eighteenth time, by the fix of the audit finding
+# M-17-03: exactly one of the 55 files changed its bytes, index/analyzer.py,
+# whose snowball_analyzer became one armed. It takes the language alone, lowers
+# it once, refuses a name outside LANGUAGE_ALLOWLIST and a name without a
+# measured supplement with a ValueError that says which, and looks the
+# supplement up in FOLDED_STOPWORDS instead of taking it as a second parameter.
+# The tokenisation of the one registered chain does not move by a byte, so
+# ANALYZER_VERSION stays at 1. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 55.
 PACKAGE_FILES_TODAY = 55
-PACKAGE_TREE_HASH_TODAY = "1a1eaf410435e501f704c7c6e4f9033939afe5ed297fa36ffdffeaa12b12d013"
+PACKAGE_TREE_HASH_TODAY = "7824c5270a10d205a63a6c41e619fe22ca55d9b248f44cc3249cd8b59327df24"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

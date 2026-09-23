@@ -54,7 +54,7 @@ from typing import NamedTuple
 import pytest
 from tantivy import Filter, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
-from findling.config import SNOWBALL_NAME
+from findling.config import LANGUAGE_ALLOWLIST, SNOWBALL_NAME
 from findling.index.analyzer import ANALYZER_VERSION, MAX_TOKEN_CHARS, english_analyzer, snowball_analyzer
 from findling.index.stopwords import FOLDED_STOPWORDS, folded_stopwords_hash
 from test_analyzer import ANALYZER_SOURCE, filter_chain
@@ -136,7 +136,7 @@ def _builtin_only(language: str):
 def test_the_spanish_chain_puts_both_spellings_on_one_term() -> None:
     # The case the whole fold position exists for: a user who does not type
     # accents and a scan that lost them have to reach the same document.
-    chain = snowball_analyzer("spanish", FOLDED_STOPWORDS["spanish"])
+    chain = snowball_analyzer("spanish")
 
     assert chain.analyze("información") == chain.analyze("informacion")
     assert chain.analyze("informacion") != []
@@ -145,7 +145,7 @@ def test_the_spanish_chain_puts_both_spellings_on_one_term() -> None:
 def test_an_italian_stop_word_is_dropped_in_both_spellings() -> None:
     # "perche" is in the built in list with its accent only. Without the
     # supplement the flat spelling survives the fold and lands in the index.
-    chain = snowball_analyzer("italian", FOLDED_STOPWORDS["italian"])
+    chain = snowball_analyzer("italian")
 
     assert chain.analyze("perché") == []
     assert chain.analyze("perche") == []
@@ -154,10 +154,63 @@ def test_an_italian_stop_word_is_dropped_in_both_spellings() -> None:
 def test_the_dutch_accent_case_leaves_no_rubbish_token() -> None:
     # Dutch has no accented entry in its built in list, so its supplement is
     # empty, and the built in entry "een" has to catch the folded form on its own.
-    chain = snowball_analyzer("dutch", FOLDED_STOPWORDS["dutch"])
+    chain = snowball_analyzer("dutch")
 
     assert chain.analyze("één") == []
     assert chain.analyze("een") == []
+
+
+def test_the_factory_refuses_a_language_outside_the_allowlist() -> None:
+    # The refusal names the language, because a chain factory that answers a
+    # typo in an environment variable with a bare KeyError or with a panic out
+    # of the Rust side leaves the reader with nothing to act on.
+    with pytest.raises(ValueError, match="klingon"):
+        snowball_analyzer("klingon")
+
+
+def test_the_factory_refuses_an_allowlisted_language_without_a_supplement() -> None:
+    # French is the loud case of the silent one: allowlisted, accented, and
+    # without a measured supplement. Built with an empty supplement it puts the
+    # accented stop words of French into the index as ordinary terms and nothing
+    # goes red anywhere, so the missing supplement has to be the refusal.
+    assert "french" in LANGUAGE_ALLOWLIST
+    assert "french" not in FOLDED_STOPWORDS
+
+    with pytest.raises(ValueError, match="french"):
+        snowball_analyzer("french")
+
+
+def test_the_factory_reads_the_language_name_regardless_of_its_spelling() -> None:
+    # tantivy takes the name in any case, the mapping and the allowlist compare
+    # exactly and are lowercase. Before the factory lowered the name itself, the
+    # capitalised spelling built a working chain that let all 77 Spanish
+    # supplement entries through, and no test saw it because every test wrote
+    # lowercase.
+    upper = snowball_analyzer("Spanish")
+    lower = snowball_analyzer("spanish")
+
+    for word in ("estáis", "estais", "información", "informacion", "documento"):
+        assert upper.analyze(word) == lower.analyze(word), word
+    assert upper.analyze("estais") == []
+
+
+def test_every_language_a_field_code_maps_to_carries_a_supplement() -> None:
+    # The mapping SNOWBALL_NAME is what phase 18 turns a field code into. A name
+    # in it without a supplement is a ValueError at the moment a chain is asked
+    # for, so the gate has to stand here and not at the first index that opens.
+    #
+    # German is out of it and only German: it has a factory of its own, with the
+    # compound splitter and without a fold, so it never reaches this one.
+    reachable = set(SNOWBALL_NAME.values()) - {"german"}
+
+    assert reachable == set(FOLDED_STOPWORDS), "the factory serves exactly the languages a field code maps to"
+
+    missing = sorted(name for name in reachable if name not in FOLDED_STOPWORDS)
+
+    assert missing == [], (
+        f"{missing} can be reached through SNOWBALL_NAME and has no folded supplement; "
+        "derive one with scripts/dev/stopword_supplement.py before phase 18 asks for the chain"
+    )
 
 
 def test_the_english_chain_did_not_move_when_it_joined_the_factory() -> None:
@@ -207,14 +260,14 @@ def test_the_guard_sees_the_fold_pushed_behind_the_stemmer() -> None:
     # "the accented spelling suddenly has its own term" and leave the reader to
     # work out why; the guard reports the filter that moved.
     source = (
-        "def snowball_analyzer(language, folded_stopwords):\n"
+        "def snowball_analyzer(language):\n"
         "    return (\n"
         "        TextAnalyzerBuilder(Tokenizer.simple())\n"
         "        .filter(Filter.lowercase())\n"
-        "        .filter(Filter.stopword(language))\n"
-        "        .filter(Filter.custom_stopword(list(folded_stopwords)))\n"
+        "        .filter(Filter.stopword(name))\n"
+        "        .filter(Filter.custom_stopword(list(folded)))\n"
         "        .filter(Filter.remove_long(MAX_TOKEN_CHARS))\n"
-        "        .filter(Filter.stemmer(language))\n"
+        "        .filter(Filter.stemmer(name))\n"
         "        .filter(Filter.ascii_fold())\n"
         "        .build()\n"
         "    )\n"
@@ -228,7 +281,7 @@ def test_the_guard_sees_the_fold_pushed_behind_the_stemmer() -> None:
 
 def test_a_comment_that_names_a_filter_does_not_enter_the_chain() -> None:
     source = (
-        "def snowball_analyzer(language, folded_stopwords):\n"
+        "def snowball_analyzer(language):\n"
         "    # ascii_fold used to stand here, see Filter.ascii_fold below.\n"
         '    """And Filter.custom_stopword was once documented in this line."""\n'
         "    return (\n"
@@ -423,7 +476,7 @@ def known_losses(probe: ModuleType) -> dict[str, set[tuple[str, str]]]:
 @pytest.fixture(scope="module")
 def chains() -> dict[str, TextAnalyzer]:
     """One shipped analyser per language, built once for the whole module."""
-    return {code: snowball_analyzer(SNOWBALL_NAME[code], FOLDED_STOPWORDS[SNOWBALL_NAME[code]]) for code in CODES}
+    return {code: snowball_analyzer(SNOWBALL_NAME[code]) for code in CODES}
 
 
 @pytest.mark.parametrize("code", CODES)

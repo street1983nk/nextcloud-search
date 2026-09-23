@@ -96,7 +96,7 @@ from pathlib import Path
 
 from tantivy import Filter, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
-from findling.config import DEFAULT_COMPOUND_DICT, settings
+from findling.config import DEFAULT_COMPOUND_DICT, LANGUAGE_ALLOWLIST, settings
 from findling.index.stopwords import FOLDED_STOPWORDS
 from findling.index.wordlist import FUGEN, SYSTEM_WORDLIST, load_constituents, rss_bytes, wordlist_hash
 
@@ -226,10 +226,10 @@ def english_analyzer() -> TextAnalyzer:
 
     The signature stays as it was so that index/open.py keeps its line.
     """
-    return snowball_analyzer("english", FOLDED_STOPWORDS["english"])
+    return snowball_analyzer("english")
 
 
-def snowball_analyzer(language: str, folded_stopwords: Sequence[str]) -> TextAnalyzer:
+def snowball_analyzer(language: str) -> TextAnalyzer:
     """Build the chain for one Snowball language other than German.
 
     The fold stands in front of the stop word filter and therefore in front of
@@ -240,13 +240,40 @@ def snowball_analyzer(language: str, folded_stopwords: Sequence[str]) -> TextAna
     docs/language-analyzers.md: the class of words whose Snowball suffix carries
     an accent loses its number pair.
 
-    ``folded_stopwords`` is the supplement the fold tears into the built in
-    list. The built in lists compare exactly and carry real accents, so once the
-    fold has run in front of them they no longer match. The supplement is
-    derived from the same lists by scripts/dev/stopword_supplement.py, so it
-    cannot drift away from them. For English and Dutch it is empty, and an empty
-    custom stop word filter is measured to be a no-op, which is why English can
-    use this factory without its tokenisation moving by one byte.
+    One arm and not two. The supplement is no parameter of this factory but a
+    property of the language, and it is looked up here rather than handed in,
+    because the two parameters it used to take belonged together and nothing
+    held them together. Three cases were measured on 2026-09-23 and all three
+    are closed by this shape:
+
+    *A language outside the allowlist.* Eight of the thirteen allowlisted
+    languages carry no supplement at all (danish, finnish, french, german,
+    hungarian, norwegian, russian, swedish), so the caller pattern
+    ``snowball_analyzer(name, FOLDED_STOPWORDS[name])`` raised a bare
+    ``KeyError`` out of the mapping for them. A name tantivy does not carry at
+    all reached ``Filter.stopword`` and cost a panic in tantivy 0.26.0 and a
+    ``ValueError`` in 0.26.2. Both now end as one ``ValueError`` that names the
+    language and the list it is missing from.
+
+    *A language in the allowlist without a supplement.* French is the loud
+    example: it is allowlisted, it carries accents and it has no supplement, so
+    a chain built with an empty one turned both accented and flat spellings of
+    its accented stop words into ordinary index terms without anything going
+    red. That is a refusal now and not a silent leak.
+
+    *A name in another spelling.* tantivy takes the language name regardless of
+    case, the mapping and the allowlist are lowercase and compare exactly, so
+    ``snowball_analyzer("Spanish")`` used to build a working chain that let all
+    77 Spanish supplement entries through. The name is lowered once here and
+    every filter below sees the lowered form.
+
+    The supplement is what the fold tears into the built in list. The built in
+    lists compare exactly and carry real accents, so once the fold has run in
+    front of them they no longer match. It is derived from the same lists by
+    scripts/dev/stopword_supplement.py, so it cannot drift away from them. For
+    English and Dutch it is empty, and an empty custom stop word filter is
+    measured to be a no-op, which is why English can use this factory without
+    its tokenisation moving by one byte.
 
     Deliberately not a cached singleton, unlike the German factory above. The
     German automaton costs 0.44 s and roughly 23 MB that never come back,
@@ -254,14 +281,23 @@ def snowball_analyzer(language: str, folded_stopwords: Sequence[str]) -> TextAna
     compiled into tantivy and carry nothing. A cache for them would be ballast,
     and vulture would be right to flag it.
     """
+    name = language.lower()
+    if name not in LANGUAGE_ALLOWLIST:
+        raise ValueError(f"{language} is not in LANGUAGE_ALLOWLIST, so no chain is built for it")
+    if name not in FOLDED_STOPWORDS:
+        raise ValueError(
+            f"{language} has no measured folded supplement; derive one with scripts/dev/stopword_supplement.py "
+            "before a chain for it is built"
+        )
+    folded = FOLDED_STOPWORDS[name]
     return (
         TextAnalyzerBuilder(Tokenizer.simple())
         .filter(Filter.lowercase())
         .filter(Filter.ascii_fold())
-        .filter(Filter.stopword(language))
-        .filter(Filter.custom_stopword(list(folded_stopwords)))
+        .filter(Filter.stopword(name))
+        .filter(Filter.custom_stopword(list(folded)))
         .filter(Filter.remove_long(MAX_TOKEN_CHARS))
-        .filter(Filter.stemmer(language))
+        .filter(Filter.stemmer(name))
         .build()
     )
 
