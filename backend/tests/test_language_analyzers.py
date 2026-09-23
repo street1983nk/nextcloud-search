@@ -18,18 +18,32 @@ second reader would be a second gate, and a gate written on the day of the
 change agrees with that change by construction, which is the one thing a guard
 must not do.
 
-What this file does NOT prove: that the built in stop word lists are airtight
-under the fold. That measurement runs over all 891 built in entries of the four
-languages, needs stopwords.rs, and is the promise of plans 17-05 and 17-06. What
-stands here is the necessity of every supplement entry, which is the other
-direction and cheap enough to run offline.
+Since plan 17-06 the measurement itself is the acceptance. The lower half of
+this file holds the form family score of every language against the number the
+run of 2026-09-23 wrote into
+``docs/measurements/2026-09-analyseketten/rohdaten/kennzahlen.txt``, and it holds
+the measured losses in both directions: a pair that starts to fall apart is red,
+and a pair that stops falling apart is just as red, because it means the chain
+moved and a moved chain moves every term of every index written with it.
+
+The fixture reader and the metric are not rebuilt here. Both are loaded out of
+``scripts/dev/chain_probe.py``, the tool that produced the report, because a
+second reader is a second format and a second metric is a second number.
 
 Accents appear only inside string literals. They are data here, the words the
 product has to handle; the identifiers stay ASCII as the project rules require.
 """
 
-from tantivy import Filter, TextAnalyzerBuilder, Tokenizer
+import importlib.util
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+from types import ModuleType
 
+import pytest
+from tantivy import Filter, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
+
+from findling.config import SNOWBALL_NAME
 from findling.index.analyzer import ANALYZER_VERSION, MAX_TOKEN_CHARS, english_analyzer, snowball_analyzer
 from findling.index.stopwords import FOLDED_STOPWORDS, folded_stopwords_hash
 from test_analyzer import ANALYZER_SOURCE, filter_chain
@@ -281,3 +295,199 @@ def test_every_supplement_entry_is_needed_and_is_its_own_folded_form() -> None:
                 f"{entry} is not its own folded form, so the {language} chain can never reach it"
             )
         assert len(set(entries)) == len(entries), f"the {language} supplement carries a duplicate"
+
+
+# ---------------------------------------------------------------------------
+# The measured acceptance. Everything below turns the run of 2026-09-23 into a
+# gate: the form family score per language, and the known losses in both
+# directions. Plan 17-06.
+# ---------------------------------------------------------------------------
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+# The two letter codes the fixtures and the phase documents speak. The Snowball
+# names they belong to are deliberately NOT spelled out here; they come from
+# findling.config.SNOWBALL_NAME, the one place in the tree where a field code
+# turns into a tantivy language name. A second mapping inside a test would be a
+# second truth, and on the day somebody corrects one of the two this gate would
+# still be green while the product speaks a different language than the test.
+CODES = ("es", "it", "nl", "pt")
+
+CASES = {code: FIXTURES / f"chain_cases_{code}.txt" for code in CODES}
+LOSSES = {code: FIXTURES / f"chain_known_losses_{code}.txt" for code in CODES}
+
+# The measurement probe. It is a script and not a package, so it is loaded by
+# path, the same way conftest.py loads scripts/dev/build_corpus.py.
+CHAIN_PROBE = Path(__file__).resolve().parents[2] / "scripts" / "dev" / "chain_probe.py"
+CHAIN_PROBE_MODULE = "chain_probe_under_test"
+
+# The command that produced every number below, named in every failure message
+# so that nobody has to look for it while a gate is red.
+MEASURE_CHAINS = "scripts/dev/measure_chains.sh"
+
+# Hits and possible ordered pairs per language, read out of
+# docs/measurements/2026-09-analyseketten/rohdaten/kennzahlen.txt, run of
+# 2026-09-23 against tantivy tag 0.26.2: es_Aplus_hits 174 of es_pairs 208,
+# it 56 of 56, nl 57 of 81, pt 180 of 228, together 467 of 573.
+#
+# Equality and not "at least". A chain that suddenly scores higher has moved
+# exactly as far as one that scores lower, and a moved chain moves every term of
+# every index written with it. When one of these numbers falls, run
+# scripts/dev/measure_chains.sh first, write the finding into the measurement
+# report, and only then pull the constant here after it. Never the other way
+# round: a number corrected in this file first is a gate agreeing with the
+# change it was built to catch.
+EXPECTED_FAMILY_SCORES = {"es": (174, 208), "it": (56, 56), "nl": (57, 81), "pt": (180, 228)}
+
+
+def _load_chain_probe() -> ModuleType:
+    """Return ``scripts/dev/chain_probe.py`` as a module, loaded by path.
+
+    The fixture format has exactly one reader in this tree and it lives in the
+    probe, so this gate loads :func:`read_families` from there instead of
+    rebuilding it. A second reader would be a second format: measurement and
+    acceptance would then agree only for as long as nobody edits one of the two,
+    and the first divergence would show up as a green gate over a moved chain.
+    The metric comes from the same place and for the same reason.
+
+    The direction is the only one available. ``scripts/`` is no package
+    (docs/testing.md), so a test may load this file and the product may never
+    load it.
+    """
+    specification = importlib.util.spec_from_file_location(CHAIN_PROBE_MODULE, CHAIN_PROBE)
+    if specification is None or specification.loader is None:  # pragma: no cover
+        raise RuntimeError(f"the measurement probe is not at {CHAIN_PROBE}, so nothing below measures anything")
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[specification.name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+def _pairs_apart(terms: dict[str, list[str]], forms: Sequence[str]) -> list[tuple[str, str]]:
+    """Return the unordered pairs of one family that share no term.
+
+    ``terms`` is the third return value of the probe's ``family_score``, so the
+    tokens counted by the score and the tokens named here are the same tokens.
+    Unordered, because sharing a term is symmetric and a loss printed twice is
+    still one loss; the order inside a pair is the order of the fixture line,
+    which is how ``chain_known_losses_<code>.txt`` spells it.
+    """
+    apart: list[tuple[str, str]] = []
+    for index, left in enumerate(forms):
+        for right in forms[index + 1 :]:
+            if not (terms[left] and terms[right] and set(terms[left]) & set(terms[right])):
+                apart.append((left, right))
+    return apart
+
+
+@pytest.fixture(scope="module")
+def probe() -> ModuleType:
+    """The measurement probe, loaded once for the whole module."""
+    return _load_chain_probe()
+
+
+@pytest.fixture(scope="module")
+def families(probe: ModuleType) -> dict[str, list[list[str]]]:
+    """The form families of all four fixtures, read once through the probe."""
+    return {code: probe.read_families(CASES[code]) for code in CODES}
+
+
+@pytest.fixture(scope="module")
+def known_losses(probe: ModuleType) -> dict[str, set[tuple[str, str]]]:
+    """The measured losses per language, read with the same reader.
+
+    A loss file is a family file whose lines happen to carry exactly two forms,
+    so it needs no reader of its own; the shape is asserted rather than assumed.
+    """
+    out: dict[str, set[tuple[str, str]]] = {}
+    for code in CODES:
+        pairs: set[tuple[str, str]] = set()
+        for forms in probe.read_families(LOSSES[code]):
+            assert len(forms) == 2, f"{LOSSES[code].name} carries a line that is not a form pair: {forms}"
+            pairs.add((forms[0], forms[1]))
+        out[code] = pairs
+    return out
+
+
+@pytest.fixture(scope="module")
+def chains() -> dict[str, TextAnalyzer]:
+    """One shipped analyser per language, built once for the whole module."""
+    return {code: snowball_analyzer(SNOWBALL_NAME[code], FOLDED_STOPWORDS[SNOWBALL_NAME[code]]) for code in CODES}
+
+
+@pytest.mark.parametrize("code", CODES)
+def test_the_shipped_chain_reaches_the_measured_family_score(
+    code: str, families: dict[str, list[list[str]]], chains: dict[str, TextAnalyzer], probe: ModuleType
+) -> None:
+    hits = 0
+    total = 0
+    for forms in families[code]:
+        family_hits, family_total, _ = probe.family_score(chains[code], forms)
+        hits += family_hits
+        total += family_total
+
+    assert (hits, total) == EXPECTED_FAMILY_SCORES[code], (
+        f"{code} scores {hits} of {total} ordered pairs, measured was {EXPECTED_FAMILY_SCORES[code]}; "
+        f"a higher number is as much a finding as a lower one, so run {MEASURE_CHAINS}, record the "
+        "difference in docs/measurements/2026-09-analyseketten/ and pull this constant after it"
+    )
+
+
+@pytest.mark.parametrize("code", CODES)
+def test_the_losses_are_exactly_the_measured_ones(
+    code: str,
+    families: dict[str, list[list[str]]],
+    chains: dict[str, TextAnalyzer],
+    known_losses: dict[str, set[tuple[str, str]]],
+    probe: ModuleType,
+) -> None:
+    measured: set[tuple[str, str]] = set()
+    for forms in families[code]:
+        _, _, terms = probe.family_score(chains[code], forms)
+        measured.update(_pairs_apart(terms, forms))
+
+    known = known_losses[code]
+    appeared = sorted(f"{left} and {right}" for left, right in measured - known)
+    vanished = sorted(f"{left} and {right}" for left, right in known - measured)
+
+    assert appeared == [], (
+        f"new losses that nobody measured: {'; '.join(appeared)}. Run {MEASURE_CHAINS}, write the finding "
+        f"into the measurement report, then carry it into {LOSSES[code].name}"
+    )
+    assert vanished == [], (
+        f"losses that disappeared, which means the chain moved: {'; '.join(vanished)}. A chain that moved "
+        f"moves every term of every index, so run {MEASURE_CHAINS} before touching {LOSSES[code].name}"
+    )
+
+
+def _asserted_forms(known_losses: dict[str, set[tuple[str, str]]]) -> dict[str, set[str]]:
+    """Every surface form this module makes a form family claim about.
+
+    Deliberately not every word of the module. The English no-op vocabulary
+    proves that an empty custom stop word filter changes nothing, it belongs to
+    a chain with no form family fixture, and the words of the hand written cases
+    at the top are rows of the merged table and arrive through it.
+    """
+    asserted: dict[str, set[str]] = {code: set() for code in CODES}
+    for code, pairs in known_losses.items():
+        for left, right in pairs:
+            asserted[code].update((left, right))
+    return asserted
+
+
+def test_every_asserted_form_stands_in_the_measured_case_list(
+    known_losses: dict[str, set[tuple[str, str]]], families: dict[str, list[list[str]]]
+) -> None:
+    # The gate over the gate. A claim about a form the probe never ran is a
+    # claim about nothing, and it would look exactly like the measured ones.
+    asserted = _asserted_forms(known_losses)
+
+    missing: list[str] = []
+    for code in CODES:
+        measured = {form for forms in families[code] for form in forms}
+        missing.extend(
+            f"{code}: {form} is asserted here but stands in no family of {CASES[code].name}"
+            for form in sorted(asserted[code] - measured)
+        )
+
+    assert missing == [], f"{'; '.join(missing)}. Add the form to its fixture and rerun {MEASURE_CHAINS}"
