@@ -11,8 +11,8 @@ findings:
   low: 11
   total: 18
 status: issues_found
-fixed: []
-still_open: [M-17-01, M-17-02, M-17-03, M-17-04, M-17-05, M-17-06, M-17-07, L-17-01, L-17-02, L-17-03, L-17-04, L-17-05, L-17-06, L-17-07, L-17-08, L-17-09, L-17-10, L-17-11]
+fixed: [M-17-01, M-17-02, M-17-03, M-17-04, M-17-05, M-17-06, M-17-07]
+still_open: [L-17-01, L-17-02, L-17-03, L-17-04, L-17-05, L-17-06, L-17-07, L-17-08, L-17-09, L-17-10, L-17-11]
 ---
 
 # Phase 17: Security-, Bug- und Performance-Audit
@@ -44,6 +44,13 @@ Außerdem: **die gelockerte `tantivy_version`-Regel öffnet keinen Weg für
 einen fremden Index** (Abschnitt 2.3, geprüft und entkräftet), und **das
 `except BaseException` in `builds()` kann nichts verschlucken, was zu einem
 falschen Grün führt** (Abschnitt 2.1, geprüft, nur LOW).
+
+**Nachtrag vom 23.09.2026: alle sieben MEDIUM sind behoben**, je ein Befund ein
+Commit, die Hashes stehen bei den Befunden in Abschnitt 5. Die volle Suite nach
+dem letzten Fix: 2548 grün, 15 übersprungen. Die elf LOW stehen weiter offen.
+Der Text darüber und darunter ist der Befundstand vom Vormittag und bleibt so
+stehen, weil ein Bericht, der seine eigenen Befunde wegschreibt, nicht mehr
+nachlesbar ist.
 
 ---
 
@@ -301,6 +308,11 @@ Zeichenkettenvergleich.
 
 ### M-17-01: Das Tag-Argument kann den Download auf ein fremdes Repository umlenken
 
+**Status: BEHOBEN am 23.09.2026, Commit `36ea1b5`.** `TAG_FORM` prüft das Tag
+gegen die Form 0.26.2, bevor es in `RAW_URL` geht; ein abweichender Wert endet
+mit Rückgabewert 2. Der Docstring nennt jetzt den Digest der abgeleiteten Liste
+als Anker und nicht das Tag.
+
 **Fundstelle:** `scripts/dev/stopword_supplement.py:55` und `:221-236`
 (`_split_arguments` nimmt `rest[1]` ungeprüft), verwendet in `:164`.
 
@@ -328,6 +340,12 @@ Bytes der Digest der abgeleiteten Liste ist und nicht der Tag.
 
 ### M-17-02: Beide Rust-Parser laufen bei fehlendem Doppelpunkt endlos
 
+**Status: BEHOBEN am 23.09.2026, Commit `28e5478`.** Beide Parser laufen bei
+`name_end < 0` vom Marker aus weiter statt vom Doppelpunkt. Gegengeprobt:
+`parse_stopwords('pub const SPANISH_X = &["a"];')` liefert `{}`, statt nicht
+mehr zurückzukehren; die beiden Docstrings verweisen jetzt aufeinander
+(L-17-06).
+
 **Fundstelle:** `scripts/dev/stopword_supplement.py:135` und
 `scripts/dev/chain_probe.py:139`, jeweils `pos = name_end + 1`.
 
@@ -350,6 +368,18 @@ weiterlaufen und den Fall benennen:
 ```
 
 ### M-17-03: Die Kettenfabrik setzt weder Positivliste noch Ergaenzung durch
+
+**Status: BEHOBEN am 23.09.2026, Commit `3f0e4a6`.** `snowball_analyzer(language)`
+ist einarmig: der Name wird einmal kleingeschrieben, ein Name außerhalb von
+`LANGUAGE_ALLOWLIST` und ein Name ohne gemessene Ergänzung enden je in einem
+`ValueError`, der die Sprache nennt, und die Ergänzung kommt aus
+`FOLDED_STOPWORDS` statt aus einem zweiten Parameter. Vier neue Fälle halten
+das: unbekannte Sprache, französisch, `"Spanish"` gleich `"spanish"`, und eine
+Ergänzung für jede über `SNOWBALL_NAME` erreichbare Sprache außer Deutsch. Die
+registrierte englische Kette ist Token für Token unverändert, `ANALYZER_VERSION`
+bleibt 1, und die Baumhash-Ratsche wurde auf
+`7824c5270a10d205a63a6c41e619fe22ca55d9b248f44cc3249cd8b59327df24` nachgezogen
+(`PACKAGE_FILES_TODAY` bleibt 55, keine Datei kam und keine ging).
 
 **Fundstelle:** `backend/src/findling/index/analyzer.py:232-264`, Aufrufmuster in
 `:229` und `backend/tests/test_language_analyzers.py:426`.
@@ -384,6 +414,12 @@ Ergänzung als optionales Schlüsselwort mit Vorgabe aus der Abbildung.
 
 ### M-17-04: Das Nachziehverfahren der Ergaenzung fragt nicht nach ANALYZER_VERSION
 
+**Status: BEHOBEN am 23.09.2026, Commit `021b123`.** Der Nachziehsatz an
+`FOLDED_SUPPLEMENT_SHA256` und die Fehlermeldung des Digest-Tests verlangen die
+Markenfrage jetzt ausdrücklich vor dem Nachziehen, und
+`test_a_non_empty_english_supplement_would_move_the_shipped_chain` hält die
+englische Ergänzung leer, mit `ANALYZER_VERSION + 1` als benannter Bedingung.
+
 **Fundstelle:** `backend/tests/test_language_analyzers.py:86-96` (der
 Nachziehsatz) und `:286-290` (die Fehlermeldung), zusammen mit
 `backend/src/findling/index/analyzer.py:229`.
@@ -406,6 +442,12 @@ def test_a_non_empty_english_supplement_would_move_the_shipped_chain() -> None:
 
 ### M-17-05: Der neue tantivyVersion-Zweig des Upgrade-Gates kann leer gruen sein
 
+**Status: BEHOBEN am 23.09.2026, Commit `69fa03e`.** Eine `case`-Schleife
+verlangt die Formathälfte auf beiden Seiten, bevor verglichen wird. Fünf
+Fallpaare durchgespielt: zwei fehlende Marken sind jetzt rot statt grün, eine
+fehlende Marke ist rot, eine bewegte Formathälfte ist rot, eine bewegte
+Patchnummer und ein unbewegter Banner bleiben grün.
+
 **Fundstelle:** `.github/workflows/deploy-harp.yml:3302-3311`.
 
 **Befund:** fehlt das Muster `index_format ` auf beiden Seiten, vergleicht der
@@ -426,6 +468,12 @@ pass".
 ```
 
 ### M-17-06: measure_chains.sh nennt den alten Pin
+
+**Status: BEHOBEN am 23.09.2026, Commit `1711fd0`.** Die Zeile steht auf
+`tantivy==0.26.2`, und `test_the_measurement_script_names_the_pinned_engine` in
+`backend/tests/test_upgrade_compatibility.py` liest das Skript gegen
+`TANTIVY_PIN`, damit die nächste Bewegung des Pins nicht wieder halb
+stattfindet.
 
 **Fundstelle:** `scripts/dev/measure_chains.sh:35`, `TANTIVY="tantivy==0.26.0"`,
 gegen `backend/pyproject.toml:13`, `tantivy==0.26.2`.
@@ -448,6 +496,13 @@ def test_the_measurement_script_names_the_pinned_engine() -> None:
 ```
 
 ### M-17-07: THIRD-PARTY.md nennt die englische Liste als Snowball unter BSD-3-Clause
+
+**Status: BEHOBEN am 23.09.2026, Commit `2d9f9e8`.** Der Absatz trennt die
+beiden Herkünfte: Snowball unter BSD-3-Clause für Deutsch, Spanisch,
+Italienisch, Niederländisch und Portugiesisch, Apache Lucene unter Apache-2.0
+für die englische Liste aus `mod.rs`. Das Datum des Nachlesens (Tag 0.26.2,
+23.09.2026) und die Auflage, es vor der nächsten Abgabe zu wiederholen, stehen
+dabei.
 
 **Fundstelle:** `THIRD-PARTY.md:162-166`, gegen
 `scripts/dev/stopword_supplement.py:66-68`.
