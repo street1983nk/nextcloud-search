@@ -79,6 +79,72 @@ INDEX_WORKERS = 1
 # Field order of the schema, not the order somebody types into the environment.
 DEFAULT_LANGUAGES = ("de", "en")
 
+# The closed set of language names that may ever reach Filter.stopword and
+# Filter.stemmer, and therefore the only thing the chain factory of phase 18 is
+# allowed to trust. It is the intersection of the two sets tantivy serves:
+# 18 languages have a Snowball stemmer, 13 have a builtin stop word list, and
+# the five in the difference are arabic, greek, romanian, tamil and turkish.
+# Measured on 2026-09-23 against the tantivy this build pins, both halves built
+# to the end.
+#
+# Those five are not a cosmetic gap. In tantivy 0.26.0 they bring the Rust side
+# down with a panic (called `Option::unwrap()` on a `None` value, tokenizer.rs),
+# and 0.26.2 turned the same case into a ValueError. A crashed container and a
+# refused start are both unacceptable answers to a typo in an environment
+# variable, so neither is ever reached: nothing outside this set is offered.
+#
+# The counterpart of this list is the running tantivy and not a second list,
+# because a list that agrees with a copy of itself says nothing on the day
+# somebody adds a fourteenth language. backend/tests/test_language_allowlist.py
+# compares the two in both directions: a name offered here that tantivy cannot
+# carry is a false promise, and a name reachable through SNOWBALL_NAME that is
+# missing here is a panic waiting for phase 18. Adding a language here alone,
+# without asking the running engine first, is how both of those start.
+LANGUAGE_ALLOWLIST = frozenset(
+    {
+        "danish",
+        "dutch",
+        "english",
+        "finnish",
+        "french",
+        "german",
+        "hungarian",
+        "italian",
+        "norwegian",
+        "portuguese",
+        "russian",
+        "spanish",
+        "swedish",
+    }
+)
+
+# Not to be confused with DEFAULT_LANGUAGES above: that one is the factory
+# setting an instance gets when nobody says otherwise, this one is the set this
+# build could carry a body field for at all. The order is schema field order,
+# not the order somebody types into the environment, because from phase 18 on
+# the language set feeds a version marker and "es,de" has to produce the same
+# marker as "de,es", or a resorted environment variable would trigger a rebuild
+# of every index that never needed one.
+#
+# No production path reads this constant in phase 17, and that is deliberate:
+# the chain factory is built in phase 18 and hangs on it then. _languages()
+# below keeps filtering against DEFAULT_LANGUAGES until it does, so an existing
+# installation sees nothing of this.
+SUPPORTED_LANGUAGES = ("de", "en", "es", "it", "nl", "pt")
+
+# The only place where a schema field code turns into a tantivy language name.
+# Every value here has to stand in LANGUAGE_ALLOWLIST above: an entry without
+# one is a panic waiting for the day the factory hands it to Filter.stopword,
+# and the parity test goes red on it before that day arrives.
+SNOWBALL_NAME = {
+    "de": "german",
+    "en": "english",
+    "es": "spanish",
+    "it": "italian",
+    "nl": "dutch",
+    "pt": "portuguese",
+}
+
 # The two measured recipes of the constituent dictionary. full is recipe A
 # (276496 entries, 14 of 16 test compounds), nouns is recipe C (86345 entries,
 # 12 of 16) for boxes where the roughly 23 MB of the automaton hurt.

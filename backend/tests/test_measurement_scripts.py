@@ -636,7 +636,12 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # three entries to nine (spa, ita, nld, por, dan and est joined deu, eng and
 # fra) while OCR_DEFAULT_LANGUAGES deliberately stayed at three. No file came
 # and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "7d0e585775cc2276feb0dd7db62364c12a1560df1d503c0fec523d935ed22d02"
+# Moved on 2026-09-23 a fifteenth time, by plan 17-02: exactly one of the 54
+# files changed its bytes, config.py, which gained LANGUAGE_ALLOWLIST (the 13
+# name intersection of the two language sets tantivy serves), SUPPORTED_LANGUAGES
+# and SNOWBALL_NAME beside DEFAULT_LANGUAGES, none of them read by a production
+# path yet. No file came and none went, so PACKAGE_FILES stays at 54.
+PACKAGE_TREE_HASH_TODAY = "8df3aeee4432ba48e6bad00fd5f185ba34b27af8ffd514955f118c52b717b7fe"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
