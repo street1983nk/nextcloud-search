@@ -136,7 +136,7 @@ All ten are installed from PyPI into `/app/.venv` and are pinned exactly in
 
 | Package | Version | Licence | Source repository | Place in the image |
 |---|---|---|---|---|
-| `tantivy` | 0.26.0 | MIT | github.com/quickwit-oss/tantivy-py | `/app/.venv/lib/python3.13/site-packages/tantivy` |
+| `tantivy` | 0.26.2 | MIT | github.com/quickwit-oss/tantivy-py | `/app/.venv/lib/python3.13/site-packages/tantivy` |
 | `pypdfium2` | 5.13.0 | Apache-2.0 or BSD-3-Clause (wrapper), BSD-3-Clause (bundled PDFium) | github.com/pypdfium2-team/pypdfium2 | `/app/.venv/lib/python3.13/site-packages/pypdfium2` |
 | `pypdf` | 6.16.1 | BSD-3-Clause | github.com/py-pdf/pypdf | `/app/.venv/lib/python3.13/site-packages/pypdf` |
 | `python-docx` | 1.2.0 | MIT | github.com/python-openxml/python-docx | `/app/.venv/lib/python3.13/site-packages/docx` |
@@ -147,12 +147,23 @@ All ten are installed from PyPI into `/app/.venv` and are pinned exactly in
 | `lxml` | 6.1.1 | BSD-3-Clause (bundled libxml2 and libxslt: MIT) | github.com/lxml/lxml | `/app/.venv/lib/python3.13/site-packages/lxml` |
 | `pillow` | 12.3.0 | MIT-CMU | github.com/python-pillow/Pillow | `/app/.venv/lib/python3.13/site-packages/PIL` |
 
-`tantivy` is the one entry whose licence is **not** readable from its PyPI
-metadata: the 0.26.0 release carries neither a `license` field nor a licence
-classifier. The MIT text is in `LICENSE` of the tagged upstream repository
-(`quickwit-oss/tantivy-py`, tag `0.26.0`), and the Rust crate the bindings wrap
-is MIT as well. It is written down here so the next reader does not have to
-repeat the search.
+`tantivy` was the one entry whose licence was **not** readable from its PyPI
+metadata: the 0.26.0 release carried neither a `license` field nor a licence
+classifier, so the MIT text had to be read out of `LICENSE` of the tagged
+upstream repository. The 0.26.2 release closes that gap and was read on
+2026-09-23: its wheel metadata carries `License-Expression: MIT` and ships the
+MIT text as `licenses/LICENSE` in the `dist-info`, while licence classifiers are
+still absent. The same text is in `LICENSE` of the tagged upstream repository
+(`quickwit-oss/tantivy-py`, tag `0.26.2`), and the Rust crate the bindings wrap
+is MIT as well. The history is written down here so the next reader does not
+repeat the search, and so a reader of an older image knows why the entry once
+needed one.
+
+The Snowball stop word lists the analyzers of this app use for German, English,
+Spanish, Italian, Dutch and Portuguese are BSD-3-Clause, they are compiled into
+the same extension module and are not a separate dependency, and the folded
+supplementary list shipped in this repository
+(`backend/src/findling/index/stopwords.py`) is derived from them.
 
 ## Python packages of the semantic path, and the model they run
 

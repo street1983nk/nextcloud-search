@@ -93,9 +93,18 @@ updates:
         update-types:
           - minor
           - patch
-    # tantivy carries index format v7 from 0.26.2 on, which means a reindex on
-    # every installation that already runs. The pin therefore only ever moves on
-    # purpose and together with a reindex plan (owner decision of 2026-09-21).
+    # tantivy stays pinned, and the pin only ever moves on purpose. The reason
+    # written here on 2026-09-21 claimed that the on disk format changes to v7
+    # with the 0.26.2 release and that a bump therefore rebuilds every index in
+    # the field, and that reading is wrong: measured on 2026-09-23, 0.26.0 and
+    # 0.26.2 both report "index_format v7", an index written by one opens and
+    # answers under the other in both directions, and the tokenisation of seven
+    # chains over 224 lines is identical. What a bump really moves is the version
+    # mark, and since 2026-09-23 only the index format half of that mark is
+    # compared (owner decision E-17-7 option a, which supersedes the owner
+    # decision of 2026-09-21 rather than deleting it). The rule therefore stands
+    # for a better reason than the one it was written with: a grouped weekly pull
+    # request is the wrong place to move the engine of the search.
     #
     # The service already answered the comment command on pull request #10 with
     # "I won't notify you about tantivy again", but that state lives inside a
