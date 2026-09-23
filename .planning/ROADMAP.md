@@ -70,11 +70,11 @@ Details im Archiv: .planning/milestones/v1.2-ROADMAP.md
 **Plans**: 8 Pläne in 4 Wellen
 
 Plans:
-- [ ] 17-01-PLAN.md: Owner-Tor als Entscheiddokument: acht Entscheide E-17-1 bis E-17-8 mit fertigen Ersatztexten
-- [ ] 17-02-PLAN.md: Sprach-Positivliste in config.py plus Doppelrichtungs-Paritätsgate gegen das laufende tantivy
-- [ ] 17-03-PLAN.md: Kettenfabrik snowball_analyzer(), gefaltete Ergänzungs-Stoppwortliste, AST-Wächter
-- [ ] 17-04-PLAN.md: Owner-Tor vorlegen (Checkpoint, blockiert 17-07/17-08), Vollzug datiert eintragen
-- [ ] 17-05-PLAN.md: Kettenmessung als wiederholbares Werkzeug: Sonde, Fixtures, Rohdaten, Messbericht
+- [x] 17-01-PLAN.md: Owner-Tor als Entscheiddokument: acht Entscheide E-17-1 bis E-17-8 mit fertigen Ersatztexten
+- [x] 17-02-PLAN.md: Sprach-Positivliste in config.py plus Doppelrichtungs-Paritätsgate gegen das laufende tantivy
+- [x] 17-03-PLAN.md: Kettenfabrik snowball_analyzer(), gefaltete Ergänzungs-Stoppwortliste, AST-Wächter
+- [x] 17-04-PLAN.md: Owner-Tor vorlegen (Checkpoint, blockiert 17-07/17-08), Vollzug datiert eintragen
+- [x] 17-05-PLAN.md: Kettenmessung als wiederholbares Werkzeug: Sonde, Fixtures, Rohdaten, Messbericht
 - [ ] 17-06-PLAN.md: Messung wird Abnahme: Formfamilien-Gates, Stoppwort-Dichtheit, docs/language-analyzers.md
 - [ ] 17-07-PLAN.md: Vergleichsregel tantivy_version lockern (index_format-Hälfte), Gold-Werte mit Selbstproben
 - [ ] 17-08-PLAN.md: Pin auf tantivy==0.26.2, CI-Zusicherung, dependabot-Kommentar, THIRD-PARTY.md
@@ -161,7 +161,7 @@ Plans:
 | 1-6 + 06.1 (Archiv) | v1.0 | 103/103 | Complete | 2026-09-07 |
 | 7-11 (Archiv) | v1.1 | 37/37 | Complete | 2026-09-11 |
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
-| 17. Owner-Tor und Analyseketten | v1.3 | 0/TBD | Not started | - |
+| 17. Owner-Tor und Analyseketten | v1.3 | 5/8 | In Progress|  |
 | 18. Schema, Marken und Umbauweg | v1.3 | 0/TBD | Not started | - |
 | 19. Frageseite freischalten | v1.3 | 0/TBD | Not started | - |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 0/TBD | Not started | - |
