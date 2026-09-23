@@ -133,6 +133,14 @@ def parse_stopwords(text: str) -> dict[str, list[str]]:
     Takes the source text and not a path, because the same parser serves the
     downloaded copy and the one named with --source, and a tool that writes a
     download to disk only to read it back has invented a cache.
+
+    A ``pub const`` with no colon anywhere behind it is skipped and not stumbled
+    over. Walking on from ``name_end`` alone would set the cursor to 0 on a miss and
+    the next round would find the same place again: measured on
+    ``pub const SPANISH_X = &["a"];`` the call never returned. The input is a
+    downloaded foreign source in the normal case, so a hanging tool without a
+    message is the wrong answer to it. The twin of this parser is ``_parse_rust``
+    in scripts/dev/chain_probe.py and carries the same guard.
     """
     out: dict[str, list[str]] = {}
     marker = "pub const "
@@ -142,6 +150,9 @@ def parse_stopwords(text: str) -> dict[str, list[str]]:
         if start < 0:
             return out
         name_end = text.find(":", start)
+        if name_end < 0:
+            pos = start + len(marker)
+            continue
         name = text[start + len(marker) : name_end].strip()
         # From the assignment on, not from the colon: between the two stands the
         # type &[&str], which is a slice the reader must not mistake for a value.

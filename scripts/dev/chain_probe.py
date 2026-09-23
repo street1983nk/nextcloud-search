@@ -125,7 +125,15 @@ def read_builtin(path: Path) -> dict[str, list[str]]:
 
 
 def _parse_rust(text: str) -> dict[str, list[str]]:
-    """Return the const stop word slices of tantivy's stopwords.rs."""
+    """Return the const stop word slices of tantivy's stopwords.rs.
+
+    A ``pub const`` with no colon anywhere behind it is skipped and not stumbled
+    over. Walking on from ``name_end`` alone would set the cursor to 0 on a miss and
+    the next round would find the same place again: measured on
+    ``pub const SPANISH_X = &["a"];`` the call never returned. The twin of this
+    parser is ``parse_stopwords`` in scripts/dev/stopword_supplement.py and
+    carries the same guard.
+    """
     out: dict[str, list[str]] = {}
     marker = "pub const "
     pos = 0
@@ -134,6 +142,9 @@ def _parse_rust(text: str) -> dict[str, list[str]]:
         if start < 0:
             return out
         name_end = text.find(":", start)
+        if name_end < 0:
+            pos = start + len(marker)
+            continue
         name = text[start + len(marker) : name_end].strip()
         out[name.lower()] = _slice_after(text, text.find("=", name_end))
         pos = name_end + 1
