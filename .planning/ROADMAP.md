@@ -46,7 +46,8 @@ Details im Archiv: .planning/milestones/v1.2-ROADMAP.md
 
 **Milestone-Ziel:** Die lexikalische Suche beherrscht Spanisch, Italienisch, Niederlaendisch und Portugiesisch (Tantivy-Sprachfelder mit sauberer Migration und bewiesenem Umbauweg), die UI spricht diese Sprachen, und die fuenf offenen Boxzahlen aus v1.2 werden nachgemessen. Abschluss: Store-Release 1.3.0.
 
-- [ ] **Phase 17: Owner-Tor und Analyseketten** - Grundsatzentscheide schriftlich, dann vier messend abgenommene Analyseketten es/it/nl/pt
+- [x] **Phase 17: Owner-Tor und Analyseketten** - Grundsatzentscheide schriftlich, dann vier messend abgenommene Analyseketten es/it/nl/pt
+ (completed 2026-09-23)
 - [ ] **Phase 18: Schema, Marken und Umbauweg** - Sechs Koerperfelder, Re-Analyse-Umbau aus dem Bestandsindex, Beweisstrecke umgedreht
 - [ ] **Phase 19: Frageseite freischalten** - Die Anfrage erreicht die neuen Felder, erst nachdem der Umbau bewiesen ist
 - [ ] **Phase 20: UI-Kataloge es/it/nl/pt** - Zehn neue Katalogdateien im Gleichstand mit EN/DE/FR (Parallelpfad)
@@ -75,9 +76,9 @@ Plans:
 - [x] 17-03-PLAN.md: Kettenfabrik snowball_analyzer(), gefaltete Ergänzungs-Stoppwortliste, AST-Wächter
 - [x] 17-04-PLAN.md: Owner-Tor vorlegen (Checkpoint, blockiert 17-07/17-08), Vollzug datiert eintragen
 - [x] 17-05-PLAN.md: Kettenmessung als wiederholbares Werkzeug: Sonde, Fixtures, Rohdaten, Messbericht
-- [ ] 17-06-PLAN.md: Messung wird Abnahme: Formfamilien-Gates, Stoppwort-Dichtheit, docs/language-analyzers.md
-- [ ] 17-07-PLAN.md: Vergleichsregel tantivy_version lockern (index_format-Hälfte), Gold-Werte mit Selbstproben
-- [ ] 17-08-PLAN.md: Pin auf tantivy==0.26.2, CI-Zusicherung, dependabot-Kommentar, THIRD-PARTY.md
+- [x] 17-06-PLAN.md: Messung wird Abnahme: Formfamilien-Gates, Stoppwort-Dichtheit, docs/language-analyzers.md
+- [x] 17-07-PLAN.md: Vergleichsregel tantivy_version lockern (index_format-Hälfte), Gold-Werte mit Selbstproben
+- [x] 17-08-PLAN.md: Pin auf tantivy==0.26.2, CI-Zusicherung, dependabot-Kommentar, THIRD-PARTY.md
 **Research-Flag**: ja (`--research-phase 17`, die Kettenreihenfolge ist zwischen den vier Recherchen uneinheitlich)
 
 ### Phase 18: Schema, Marken und Umbauweg
@@ -161,7 +162,7 @@ Plans:
 | 1-6 + 06.1 (Archiv) | v1.0 | 103/103 | Complete | 2026-09-07 |
 | 7-11 (Archiv) | v1.1 | 37/37 | Complete | 2026-09-11 |
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
-| 17. Owner-Tor und Analyseketten | v1.3 | 5/8 | In Progress|  |
+| 17. Owner-Tor und Analyseketten | v1.3 | 8/8 | Complete   | 2026-09-23 |
 | 18. Schema, Marken und Umbauweg | v1.3 | 0/TBD | Not started | - |
 | 19. Frageseite freischalten | v1.3 | 0/TBD | Not started | - |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 0/TBD | Not started | - |
