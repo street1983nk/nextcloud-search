@@ -67,7 +67,17 @@ Details im Archiv: .planning/milestones/v1.2-ROADMAP.md
   2. Eine zusammengefuehrte Testfall-Tabelle aus STACK/FEATURES/PITFALLS ist je Sprache gruen: informacion/informaciones, informacao/informacoes (je akzentuiert und unakzentuiert), ano akzentuiert/unakzentuiert, italienisches "warum" als Stoppwort, niederlaendisches een/een mit Betonungsakzent, akzentuierte Stoppwoerter es/pt. Die Position von `ascii_fold` ist damit gemessen entschieden, nicht aus einer Quelle uebernommen, und das Verdikt je Sprache steht datiert in der Doku.
   3. Ein unbekannter oder nicht unterstuetzter Sprachname bringt den Container nicht per Rust-Panic zu Fall, sondern wird von einer geschlossenen Positivliste (Muster `OCR_LANGUAGE_ALLOWLIST`) beim Start abgewiesen; `tantivy` steht auf 0.26.2, `index_format v7` unveraendert.
   4. Eine Bestandsinstallation verhaelt sich nach dieser Phase unveraendert: kein neues Feld, keine bewegte Versionsmarke, volle Suite gruen.
-**Plans**: TBD
+**Plans**: 8 Pläne in 4 Wellen
+
+Plans:
+- [ ] 17-01-PLAN.md: Owner-Tor als Entscheiddokument: acht Entscheide E-17-1 bis E-17-8 mit fertigen Ersatztexten
+- [ ] 17-02-PLAN.md: Sprach-Positivliste in config.py plus Doppelrichtungs-Paritätsgate gegen das laufende tantivy
+- [ ] 17-03-PLAN.md: Kettenfabrik snowball_analyzer(), gefaltete Ergänzungs-Stoppwortliste, AST-Wächter
+- [ ] 17-04-PLAN.md: Owner-Tor vorlegen (Checkpoint, blockiert 17-07/17-08), Vollzug datiert eintragen
+- [ ] 17-05-PLAN.md: Kettenmessung als wiederholbares Werkzeug: Sonde, Fixtures, Rohdaten, Messbericht
+- [ ] 17-06-PLAN.md: Messung wird Abnahme: Formfamilien-Gates, Stoppwort-Dichtheit, docs/language-analyzers.md
+- [ ] 17-07-PLAN.md: Vergleichsregel tantivy_version lockern (index_format-Hälfte), Gold-Werte mit Selbstproben
+- [ ] 17-08-PLAN.md: Pin auf tantivy==0.26.2, CI-Zusicherung, dependabot-Kommentar, THIRD-PARTY.md
 **Research-Flag**: ja (`--research-phase 17`, die Kettenreihenfolge ist zwischen den vier Recherchen uneinheitlich)
 
 ### Phase 18: Schema, Marken und Umbauweg
