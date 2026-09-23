@@ -127,6 +127,44 @@ def test_the_drift_reader_fires_on_a_staged_sample() -> None:
     assert "analyzer_version" in lost[0]
 
 
+def test_a_patch_bump_with_the_same_index_format_is_no_drift() -> None:
+    """The fourth staged set: another patch number, the same format half.
+
+    This is the whole point of owner decision E-17-7 option a. A tantivy patch
+    release that keeps index_format v7 must read as no drift at all, or every
+    installation in the field pays a full crawl for a number nobody looked at.
+    """
+    holding = {
+        "schema_version": "1",
+        "index_version": "1",
+        "analyzer_version": "1",
+        "tantivy_version": "tantivy v0.26.2, index_format v7",
+    }
+
+    findings = drift_findings(holding)
+
+    assert findings == [], findings
+
+
+def test_a_changed_index_format_is_still_drift() -> None:
+    """The fifth staged set: the red state the loosening keeps.
+
+    A release that moves the format moves the files on disk, and that is the one
+    tantivy change this gate must still see.
+    """
+    changed = {
+        "schema_version": "1",
+        "index_version": "1",
+        "analyzer_version": "1",
+        "tantivy_version": "tantivy v0.27.0, index_format v8",
+    }
+
+    findings = drift_findings(changed)
+
+    assert len(findings) == 1, findings
+    assert TANTIVY_MARK in findings[0]
+
+
 def test_an_upgrade_from_1_0_x_or_1_1_x_would_not_trigger_a_reindex() -> None:
     """D-04 of 2026-09-10: v1.1 keeps the index of 1.0.x usable, and v1.2 that of 1.1.x.
 
