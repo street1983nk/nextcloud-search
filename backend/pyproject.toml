@@ -78,7 +78,7 @@ dev = [
 # 1.22.0 is the current release (2026-06-15), Apache-2.0, github.com/onnx/onnx,
 # and its cp312-abi3 wheels cover Python 3.13 on manylinux_2_28_aarch64, which
 # is what the arm64 half of the multi-arch build needs.
-quantize = ["onnx==1.22.0"]
+quantize = ["onnx==1.23.0"]
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13"]
