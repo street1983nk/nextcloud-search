@@ -46,7 +46,15 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 ### Active
 
-(Kein aktiver Milestone. v1.2 geliefert und archiviert am 21.09.2026; der naechste Zyklus startet mit /gsd:new-milestone. Kandidaten aus der Wiedervorlage: Sortierung nach Name/Groesse (Schema-Sprung), Mimetype-Gruppen aus files.mime, geplantes Vorwaermen, Pro-Schiene (Index-Verschluesselung, External Storage).)
+(v1.3 Sprachausbau, Owner-Entscheid 23.09.2026; REQ-IDs entstehen in REQUIREMENTS.md.)
+
+- Lexikalische Suche fuer es/it/nl/pt: Tantivy-Sprachfelder, Migration, Reindex-Frage
+- UI-Kataloge es/it/nl/pt
+- Messanfahrt-Buendel BL-F03 (fuenf offene Boxzahlen)
+- Aufraeumbefunde fastembed/numpy
+- Store-Einreichung 1.3.0
+
+Weiter in der Wiedervorlage (NICHT in v1.3): Sortierung nach Name/Groesse (Schema-Sprung), Mimetype-Gruppen aus files.mime, geplantes Vorwaermen, Pro-Schiene (Index-Verschluesselung, External Storage, ISV-Entscheid 03.11.).
 
 ### Out of Scope
 
@@ -101,9 +109,18 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 | 6 OCR-Sprachen (Owner-Entscheid "Mitfahren") | Sprachpakete sind arch-neutral und billig, Positivliste deckelt | ✓ Good, sechs eigene Bau-Prüfungen, Standard bleibt deu+eng+fra |
 | stable35-Entscheid als eigener fristgebundener Plan in der ERSTEN Phase | Frist 16.09. lag zwei Tage nach Milestone-Start | ✓ Good, am Stichtag vollzogen, Beweislauf 4/4 grün |
 
-## Current Milestone
+## Current Milestone: v1.3 Sprachausbau
 
-Kein aktiver Milestone. v1.2 wurde am 21.09.2026 abgeschlossen und archiviert; der naechste Zyklus startet mit /gsd:new-milestone.
+**Goal:** Die lexikalische Suche beherrscht Spanisch, Italienisch, Niederlaendisch und Portugiesisch (Tantivy-Sprachfelder mit sauberer Migration), und die fuenf offenen Boxzahlen aus v1.2 werden nachgemessen.
+
+**Target features:**
+- BL-F02 Baustein 2: Tantivy-Sprachfelder es/it/nl/pt, Schema-Migration (Pflicht je Minor-Sprung), Reindex-Frage geklaert
+- BL-F02 Baustein 3: UI-Kataloge es/it/nl/pt (je 174 Schluessel, maschinell plus Community-Review statt Muttersprachler-Gate)
+- BL-F03: Messanfahrt-Buendel als eigene Messphase (M-01-Zahl, 92c/99d-Wirkung, Bodensatz-Zyklus 2, die 44+6 Dateien, Kaltstartlatenz); Rechenblatt + Deckel VOR Boxstart zur Owner-Freigabe
+- Aufraeumbefunde: fastembed-Pin unbenutzt, numpy undeklariert
+- Store-Release 1.3.0 (Haertung + Einreichung wie gehabt)
+
+**Key context:** Reddit-Nachfrage + EU-Outreach-Zusagen (OS2ai, GovChat-NL, Buerokratt); OCR-Baustein 1 faehrt schon in v1.2.0 mit. Kill-Kriterium 21.09. geprueft: nicht ausgeloest. Snapshot snap-03f1d1d9ad9262704 steht fuer die Messphase bereit. Owner-Entscheid 23.09.2026.
 
 <details>
 <summary>Archiv: Milestone-Beschreibung v1.2 (abgeschlossen 2026-09-21)</summary>
@@ -143,4 +160,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-21 after v1.2 milestone*
+*Last updated: 2026-09-23, Start Milestone v1.3 Sprachausbau*
