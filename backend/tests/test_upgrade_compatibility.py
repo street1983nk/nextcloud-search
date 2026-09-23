@@ -39,6 +39,22 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILE = BACKEND_ROOT / "Dockerfile"
 PYPROJECT = BACKEND_ROOT / "pyproject.toml"
 
+# The index format both pinned tantivy releases report. It is the half of the
+# banner that decides whether the files on disk can still be opened at all, and
+# since the owner decision E-17-7 option a of 2026-09-23 it is also the half the
+# store compares. Measured on 2026-09-23, four ways: 0.26.0 and 0.26.2 both
+# report "index_format v7"; an index written by one opens and answers under the
+# other, and the same test runs backwards, which keeps the way back out of a
+# failed upgrade open; the tokenisation of seven chains over 32 words, 224 lines
+# of output, is diff equal between them; and cp313 wheels exist for aarch64 and
+# for x86_64.
+#
+# What the assurance still claims: the files on disk stay readable. What it no
+# longer claims: the same release. The part given up, a changed tokenisation
+# behind an unchanged format, is held by backend/tests/test_analyzer.py and
+# backend/tests/test_language_analyzers.py instead.
+GOLD_INDEX_FORMAT = "index_format v7"
+
 # The four stable marks of the 1.0.x and the 1.1.x releases, which is the state
 # every user of an existing installation upgrades from. The fifth mark,
 # wordlist_hash, is not in here on purpose: it is a digest of the German word
@@ -53,7 +69,7 @@ GOLD_V1_0_AND_V1_1 = {
     "schema_version": "1",
     "index_version": "1",
     "analyzer_version": "1",
-    "tantivy_version": "0.26.0",
+    "tantivy_version": GOLD_INDEX_FORMAT,
 }
 
 # The one mark whose value is a banner rather than a number. tantivy reports
@@ -63,17 +79,17 @@ GOLD_V1_0_AND_V1_1 = {
 # against it, and the format half gets an assertion of its own below.
 TANTIVY_MARK = "tantivy_version"
 
-# The index format of tantivy 0.26.0. It is the half of the banner that decides
-# whether the files on disk can still be opened at all.
-GOLD_INDEX_FORMAT = "index_format v7"
-
 # The Debian package the German word list comes out of. wordlist_hash is a digest
 # of that list, so the pin is the thing that has to hold; a version literal for
 # the digest would be a number nobody could check against anything.
 WNGERMAN_PIN = "wngerman=20161207-15"
 
 # The pin the banner above grows out of. Named here because a moved pin and a
-# moved mark are the same event seen from two sides.
+# moved mark are the same event seen from two sides. The patch number may move
+# with a decision behind it; the format half above may not. It is still 0.26.0
+# on purpose: this plan (17-07) moves the comparison rule and no version at all,
+# and the pin walks to 0.26.2 in plan 17-08. Keeping the two apart is what makes
+# the loosening provable on its own.
 TANTIVY_PIN = "tantivy==0.26.0"
 
 # The five marks an index carries. A mark that disappears counts as a difference
@@ -91,6 +107,10 @@ def drift_findings(marks: Mapping[str, str]) -> list[str]:
     findings: list[str] = []
     for mark, gold in GOLD_V1_0_AND_V1_1.items():
         value = marks.get(mark, "")
+        # Do not "unify" this line. The tantivy gold value is the index_format
+        # half, and asking for it as a substring of the banner is exactly what
+        # Store.version_mismatch does since E-17-7 option a; an equality here
+        # would put the patch number back into the gate.
         held = gold in value if mark == TANTIVY_MARK else value == gold
         if not held:
             findings.append(
