@@ -640,8 +640,19 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # files changed its bytes, config.py, which gained LANGUAGE_ALLOWLIST (the 13
 # name intersection of the two language sets tantivy serves), SUPPORTED_LANGUAGES
 # and SNOWBALL_NAME beside DEFAULT_LANGUAGES, none of them read by a production
-# path yet. No file came and none went, so PACKAGE_FILES stays at 54.
-PACKAGE_TREE_HASH_TODAY = "8df3aeee4432ba48e6bad00fd5f185ba34b27af8ffd514955f118c52b717b7fe"
+# path yet. No file came and none went, so PACKAGE_FILES stayed at 54.
+# Moved on 2026-09-23 a sixteenth time, by the wave merge of plans 17-02 and
+# 17-03: index/stopwords.py arrived (FOLDED_STOPWORDS, the 117 folded Snowball
+# stop words the new chain needs, plus folded_stopwords_hash), so 54 becomes 55,
+# and index/analyzer.py changed its bytes (factory snowball_analyzer and the
+# second chain table in its module header). The hash below is the one figure
+# over the merged tree that carries both plans at once; the per-plan figures
+# from the two worktrees could not survive the merge because each was measured
+# without the other plan's bytes. The figure of the run, PACKAGE_FILES, stays
+# at 54 for the reason the PHP pair states: a reported measurement figure is
+# not rewritten when the code moves on.
+PACKAGE_FILES_TODAY = 55
+PACKAGE_TREE_HASH_TODAY = "f0f8febd3c102fb444a60d5b9eb51a49be3970648e05fd1d37f40df06e301785"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
@@ -799,11 +810,12 @@ def test_the_recipe_reproduces_the_tree_hash_of_the_python_package() -> None:
     it was read out of.
     """
     count, hexdigest = reading(run_the_recipe(REPO_ROOT / "backend" / "src" / "findling", "**/*.py"))
-    assert count == PACKAGE_FILES
+    assert count == PACKAGE_FILES_TODAY
     assert hexdigest == PACKAGE_TREE_HASH_TODAY
 
     raw = BAUMHASH_RAW.read_text(encoding="utf-8")
     assert f"baumhash: {PACKAGE_TREE_HASH}" in raw
+    assert f"dateien: {PACKAGE_FILES}" in raw
     assert PACKAGE_TREE_HASH != PACKAGE_TREE_HASH_TODAY, (
         "the two figures are the same again, so the second one has lost its reason to exist"
     )

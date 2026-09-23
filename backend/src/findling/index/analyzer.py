@@ -1,4 +1,4 @@
-"""The three analysis chains. The order of the filters is the design decision.
+"""The analysis chains. The order of the filters is the design decision.
 
 German chain, and every position was measured rather than reasoned about:
 
@@ -20,6 +20,32 @@ German chain, and every position was measured rather than reasoned about:
     | 5 | remove_long(48)         | AFTER the splitter, see below               |
     | 6 | stemmer("german")       | Last. A stemmed compound matches no          |
     |   |                         | dictionary entry any more                   |
+
+The Snowball chain of every other language, built by one factory, and every
+position of it was measured on 2026-09-23 against tantivy tag 0.26.2:
+
+    | # | Filter                  | Why exactly here                            |
+    |---|-------------------------|---------------------------------------------|
+    | 0 | Tokenizer.simple        | Splits on non alphanumeric, keeps digits    |
+    | 1 | lowercase               | Everything after this compares strings      |
+    |   |                         | exactly, including both stop word filters   |
+    | 2 | ascii_fold              | In front of the stop word list and thereby  |
+    |   |                         | in front of the stemmer. The only position  |
+    |   |                         | that keeps the accented and the flat        |
+    |   |                         | spelling of a word on one term: measured    |
+    |   |                         | 467 of 573 ordered surface form pairs,      |
+    |   |                         | against 463 with a late fold                |
+    | 3 | stopword(lang)          | The built in Snowball list of the language  |
+    | 4 | custom_stopword(folded) | Directly behind it, because the built in    |
+    |   |                         | list compares exactly and carries real      |
+    |   |                         | accents, so the fold has just made it miss. |
+    |   |                         | Without this filter 77 Spanish, 10 Italian  |
+    |   |                         | and 30 Portuguese stop words reach the      |
+    |   |                         | index as terms, in both spellings           |
+    | 5 | remove_long(48)         | Same limit as the German chain. Nothing     |
+    |   |                         | splits here, so there is no splitter to     |
+    |   |                         | stand behind                                |
+    | 6 | stemmer(lang)           | Last, as in every other chain                |
 
 Two positions carry the whole file.
 
@@ -51,6 +77,14 @@ module at all: it would pay the megabytes for every file it looks at.
 Any change to a chain below has to raise ANALYZER_VERSION. Tokenisation is part
 of the data: an index written with one chain and queried with another disagrees
 with itself, and the only correct answer to that is a visible reindex.
+
+The other half of that sentence, and it is just as load bearing: a chain that is
+added here but registered nowhere changes no tokenisation, so it does not move
+the mark either. index/open.py registers four tokenizer names and the factory
+below is reached by exactly one of them, the English one, token identically.
+Raising the mark out of caution would order a reindex on every installation in
+the field for a change no index can see. The mark rises in phase 18, together
+with the schema that first names the new languages.
 """
 
 import gc
@@ -63,6 +97,7 @@ from pathlib import Path
 from tantivy import Filter, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
 from findling.config import DEFAULT_COMPOUND_DICT, settings
+from findling.index.stopwords import FOLDED_STOPWORDS
 from findling.index.wordlist import FUGEN, SYSTEM_WORDLIST, load_constituents, rss_bytes, wordlist_hash
 
 LOGGER = logging.getLogger("findling.index.analyzer")
@@ -180,14 +215,53 @@ def german_analyzer(constituents: Sequence[str]) -> TextAnalyzer:
 
 
 def english_analyzer() -> TextAnalyzer:
-    """Build the English chain: fold, drop stopwords, stem with Porter."""
+    """Build the English chain: fold, drop stopwords, stem with Porter.
+
+    One line, because the chain it used to spell out by hand is exactly the
+    chain :func:`snowball_analyzer` builds: the English supplement is empty and
+    an empty custom stop word filter is measured to be a no-op. The move is
+    therefore token identical, and backend/tests/test_language_analyzers.py
+    proves that rather than asserting it, by running the words of this chain
+    through a hand built copy of its old shape.
+
+    The signature stays as it was so that index/open.py keeps its line.
+    """
+    return snowball_analyzer("english", FOLDED_STOPWORDS["english"])
+
+
+def snowball_analyzer(language: str, folded_stopwords: Sequence[str]) -> TextAnalyzer:
+    """Build the chain for one Snowball language other than German.
+
+    The fold stands in front of the stop word filter and therefore in front of
+    the stemmer, and that position was measured rather than reasoned about: it
+    is the only position that keeps the accented and the flat spelling of a word
+    on one term, which is what a user who does not type accents and a scan that
+    lost them both need. The price is measured too and it is documented in
+    docs/language-analyzers.md: the class of words whose Snowball suffix carries
+    an accent loses its number pair.
+
+    ``folded_stopwords`` is the supplement the fold tears into the built in
+    list. The built in lists compare exactly and carry real accents, so once the
+    fold has run in front of them they no longer match. The supplement is
+    derived from the same lists by scripts/dev/stopword_supplement.py, so it
+    cannot drift away from them. For English and Dutch it is empty, and an empty
+    custom stop word filter is measured to be a no-op, which is why English can
+    use this factory without its tokenisation moving by one byte.
+
+    Deliberately not a cached singleton, unlike the German factory above. The
+    German automaton costs 0.44 s and roughly 23 MB that never come back,
+    because it carries a 276496 entry word list; the four Snowball chains are
+    compiled into tantivy and carry nothing. A cache for them would be ballast,
+    and vulture would be right to flag it.
+    """
     return (
         TextAnalyzerBuilder(Tokenizer.simple())
         .filter(Filter.lowercase())
         .filter(Filter.ascii_fold())
-        .filter(Filter.stopword("english"))
+        .filter(Filter.stopword(language))
+        .filter(Filter.custom_stopword(list(folded_stopwords)))
         .filter(Filter.remove_long(MAX_TOKEN_CHARS))
-        .filter(Filter.stemmer("english"))
+        .filter(Filter.stemmer(language))
         .build()
     )
 
