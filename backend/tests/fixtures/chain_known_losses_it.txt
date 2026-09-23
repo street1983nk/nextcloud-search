@@ -1,0 +1,15 @@
+# Bekannte Verluste Italienisch, gemessen am 23.09.2026 unter der ausgelieferten
+# Kette A+ (lowercase, ascii_fold, stopword, custom_stopword, remove_long,
+# stemmer).
+#
+# Woher der Inhalt stammt: aus
+# docs/measurements/2026-09-analyseketten/rohdaten/verluste.tsv, also aus dem
+# Messlauf und nicht aus der Recherche. Eine Zeile ist ein Formpaar, das
+# einander nicht findet, Formen durch ein Leerzeichen getrennt.
+#
+# Diese Liste ist eine Behauptung in beide Richtungen. Der zugehoerige Test
+# wird rot, sobald ein Verlust dazukommt ODER verschwindet. Ein verschwundener
+# Verlust ist genauso ein Befund wie ein neuer, weil er bedeutet, dass sich die
+# Kette bewegt hat, und eine bewegte Kette bewegt jeden Term des Index.
+#
+# Diese Sprache hat unter A+ keinen Verlust: alle Paare finden zueinander.
