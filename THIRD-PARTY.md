@@ -159,11 +159,23 @@ is MIT as well. The history is written down here so the next reader does not
 repeat the search, and so a reader of an older image knows why the entry once
 needed one.
 
-The Snowball stop word lists the analyzers of this app use for German, English,
-Spanish, Italian, Dutch and Portuguese are BSD-3-Clause, they are compiled into
-the same extension module and are not a separate dependency, and the folded
-supplementary list shipped in this repository
-(`backend/src/findling/index/stopwords.py`) is derived from them.
+The stop word lists the analyzers of this app use come from two origins, and the
+sentence that named all six of them as Snowball was wrong until it was corrected
+on 2026-09-23. The lists for German, Spanish, Italian, Dutch and Portuguese are
+the Snowball lists, BSD-3-Clause; they stand as `pub const` slices in
+`src/tokenizer/stop_word_filter/stopwords.rs` of tantivy. The English list is
+not a Snowball list: it stands inline in the match arm of
+`src/tokenizer/stop_word_filter/mod.rs` of the same tag and was copied there
+from Apache Lucene, which is Apache-2.0. The tool of this repository that reads
+both files says so at the line that reads the English one
+(`scripts/dev/stopword_supplement.py`, `ENGLISH_MARKER`).
+
+All six are compiled into the same extension module and are not a separate
+dependency, and the folded supplementary list shipped in this repository
+(`backend/src/findling/index/stopwords.py`) is derived from them. Both origins
+were read at tantivy tag 0.26.2 on 2026-09-23; before the next store submission
+they are read again at whatever tag is pinned then, and the date here is moved
+with them.
 
 ## Python packages of the semantic path, and the model they run
 
