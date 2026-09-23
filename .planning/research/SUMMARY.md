@@ -1,186 +1,225 @@
 # Project Research Summary
 
-**Project:** Findling (Nextcloud-Such-ExApp)
-**Domain:** Ausbau einer ausgelieferten Nextcloud-ExApp (1.1.0 im Store) um Dateityp-Filter/Sortierung auf der eigenen Ergebnisseite, Modell-Entladung im Leerlauf und eine begleitende Messkampagne auf Zielhardware (ARM, 4 GB RAM)
-**Researched:** 2026-09-14
-**Confidence:** HIGH für Code-Integration und Versionsstände, MEDIUM für Freigabeketten-Theorie (Allokator/onnxruntime), LOW für alles, was nur eine Messung auf der Zielbox beantworten kann
+**Projekt:** Findling (Nextcloud Zero-Config-Suche)
+**Domain:** Milestone v1.3 "Sprachausbau" - lexikalische Suche es/it/nl/pt via Tantivy-Sprachfelder, Schema-/Migrations-Umbau, UI-Kataloge, Messphase BL-F03
+**Researched:** 2026-09-23
+**Confidence:** HIGH fuer Tantivy-Verhalten, Schema-Mechanik und die meisten Pitfalls (alles gegen die installierte `tantivy==0.26.0`/`0.26.2` und den Quellcode dieses Repos gemessen). MEDIUM fuer einzelne Nextcloud-Katalogfragen (aus dem Serverquellbaum gelesen, nicht gegen eine laufende Instanz geprueft). Ein zentraler Punkt (Filterreihenfolge `ascii_fold`) ist zwischen den vier Forschern **nicht** einheitlich und wird unten als offener Entscheid behandelt, nicht geglaettet.
 
 ## Executive Summary
 
-Milestone v1.2 "Messbeleg und Ausbau" ist in allen vier Recherchen dasselbe Bild: drei Erweiterungen entlang bestehender Nahtstellen, keine neue Komponente, kein Reindex, keine neue Laufzeit-Abhängigkeit. Der Dateityp-Filter und die Datumssortierung sitzen auf Feldern, die seit v1.0 im Tantivy-Schema stehen (`ext` als Term, `mtime` als Fast-Field, `index/schema.py:105/114`); die Modell-Entladung ist `del`, `gc.collect()`, ein `ctypes`-`malloc_trim(0)` und eine dritte `asyncio`-Task im bestehenden Lifespan; die Messphase ist zu grossen Teilen Wiederverwendung von Werkzeug, das die letzte Anfahrt am 10.09.2026 bereits gefahren und geeicht hat. Wer hier ein Paket ergänzt, hat mit hoher Wahrscheinlichkeit das falsche Problem gelöst.
+v1.3 ist kein Feature im herkoemmlichen Sinn, sondern ein **Schema-Sprung auf einem produktiven Bestandsindex**, und genau darin liegt die ganze Schwierigkeit des Milestones. Tantivy selbst bringt fuer Spanisch, Italienisch, Niederlaendisch und Portugiesisch bereits alles mit, was gebraucht wird (Snowball-Stemmer und -Stoppwortlisten, BSD-3-Clause, AGPL-vertraeglich): es muss kein einziges neues Paket installiert werden, nur ein Patch-Upgrade von `tantivy` 0.26.0 auf 0.26.2 (behebt einen Rust-Panic bei unbekannten Sprachnamen und einen Union-Scorer-Bug). Die eigentliche Arbeit ist Code in diesem Repo: vier neue Analyseketten, vier neue Schemafelder, ein Umbauweg fuer Bestandsindizes und zehn neue Katalogdateien.
 
-Der rote Faden durch alle vier Dokumente ist zugleich die grösste Falle: naheliegende, schnell gebaute Lösungen brechen still eine v1.0/v1.1-Zusage, ohne dass ein Fehler sichtbar würde. Ein UI-Filter, der `type:pdf` in die Suchzeile schreibt, schaltet über `carried_operators`/`FILETYPE` die semantische Suchhälfte für jede gefilterte Anfrage ab (STACK.md A.4/A.5, FEATURES.md Anti-Features, ARCHITECTURE.md A.2, PITFALLS.md Pitfall 2) – die einzig saubere Lösung ist ein eigenes, strukturiertes Request-Feld, das denselben `Occur.Must`-Mechanismus nutzt, den `_mtimes_of()` für die semantische Hälfte ohnehin schon abfragt (STACK.md nennt das "den wichtigsten Integrationsbefund dieses Teils"). Sortierung nach Datum ist ohne Reindex möglich, weil `mtime` bereits `fast=True` ist; Sortierung nach Name oder Grösse ist es nicht und wird von allen vier Dokumenten übereinstimmend aus v1.2 herausgehalten. Die Modell-Entladung hat zwei Speicherhalter statt einem, und ihr grösstes Risiko ist nicht Speicher, sondern die 1,5-Sekunden-Aufrufdecke, an der bereits einmal (10.09.2026, 14:05:17Z) eine echte Suche mit null Treffern gescheitert ist.
+Der empfohlene Ansatz in einem Satz: **Sechs Schemafelder immer im Schema, befuellt nur nach `FINDLING_LANGUAGES` (Modell A, derselbe Text in jedes aktive Feld, keine Spracherkennung), und der Indexumbau laeuft als Re-Analyse aus dem alten, gespeicherten `body_de` heraus statt als Vollreindex ueber Nextcloud.** Das verwandelt einen geschaetzten 19-Stunden-Vollreindex in einen Ein-bis-drei-Stunden-Umbau, ohne Download, ohne erneutes OCR, ohne Neuberechnung der Vektoren. Alle drei Feature-Researcher und der Architektur-Researcher kommen unabhaengig zu demselben Feldmodell und lehnen Spracherkennung uebereinstimmend als Anti-Feature ab (kurze Dateinamen, OCR-Rauschen, gemischtsprachige Dokumente, und vor allem: eine falsch erkannte Sprache ist ein stiller, durch nichts angezeigter Totalausfall fuer dieses Dokument).
 
-Das grösste ungelöste Spannungsfeld ist die Messphase selbst: der vorgeschlagene Zeit-/Kostendeckel für die eine bezahlte Box-Anfahrt ist kleiner als der zuletzt gemessene Volllauf allein, und ein unentdecktes Cron-Intervall hat in v1.1 rund 40 Prozent Laufzeit verschluckt, ohne dass eine der drei anderen Recherchen dieses Risiko im gleichen Detailgrad wie PITFALLS.md aufgreift. Der Plan muss diesen Deckel vor der Anfahrt neu rechnen, die Entladung hinter einen ab Werk ausgeschalteten Schalter legen (sonst lässt sich in einer Anfahrt kein A/B-Beleg führen) und die Bauordnung strikt einhalten: Werkzeug/Runbook, dann Backend-Filter/Sortierung, dann PHP-Oberfläche, dann Entladung hinter dem Schalter, erst dann die eine Box-Anfahrt, zuletzt die Härtung.
+Das groesste Risiko ist ein **Totalausfall-Pfad, der heute schon im Code angelegt ist und durch drei unabhaengige Messungen bestaetigt wurde**: Ein tantivy-Index oeffnet auf einer Bestandsinstallation immer sein altes, persistiertes Schema; ein neues Feld im Code erreicht dieses Verzeichnis nie von selbst. Schreibseitig verschwindet der Wert dann lautlos (`Document.from_dict` verwirft unbekannte Felder ohne Fehler), leseseitig wirft `parse_query_lenient` bei einem unbekannten Feldnamen einen `ValueError`, den der Suchpfad abfaengt und als leere, degradierte Antwort zurueckgibt - auf jeder Bestandsinstallation wuerde **jede** Suche, nicht nur die neuen Sprachen, dauerhaft leer laufen, mit nur einer WARNING-Zeile im Log. Die Gegenmassnahme ist architektonisch klar: Schema-Erweiterung und Freischaltung der neuen Suchfelder muessen in getrennten Phasen liegen, mit einem funktionierenden, geprueften Umbauweg dazwischen, und die bestehende Upgrade-Beweisstrecke in CI muss umgedreht (nicht entschaerft) werden, weil sie heute exakt das Gegenteil dessen behauptet, was v1.3 tut.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Keine neuen Pakete, weder Backend noch PHP (STACK.md, "Installation": "Backend: nichts... PHP: nichts"). Die Sortierung nutzt `Searcher.search(..., order_by_field="mtime", order=Order.Desc, offset=...)` aus der bereits installierten `tantivy` 0.26.0 (Signatur verifiziert gegen `tantivy/tantivy.pyi`). Die Modell-Entladung braucht nur Stdlib: `gc.collect()` gefolgt von `ctypes.CDLL("libc.so.6").malloc_trim(0)`, mit Schutzschalter gegen fremde libc (`try/except (OSError, AttributeError)`). `onnxruntime` bleibt bewusst bei 1.29.0 statt 1.30.0 (10.09.2026 erschienen), weil ein Runtime-Sprung die Modellqualitäts-Gates und die ARM-Wheel-Prüfung erneut auslösen würde und im Feature-Fenster nichts beiträgt, das nicht auch über die Freigabekette lösbar wäre.
+Kein neues PyPI- oder Systempaket. Einzige Aenderung: `tantivy` 0.26.0 -> 0.26.2 (Patch-Sprung, `index_format v7` unveraendert, kein zusaetzlicher Reindex-Ausloeser). Snowball-Stemmer und -Stoppwortlisten fuer alle vier Sprachen sind in tantivy einkompiliert (BSD-3-Clause, AGPL-vertraeglich). Eine eigene, aus `stopwords.rs` erzeugte Ergaenzungsliste gefalteter Stoppwoerter (77 es / 10 it / 30 pt / 0 nl, insgesamt 117 Woerter) schliesst die Luecke, die die Faltung sonst in den Stoppwortlisten reisst. Sprach-Erkennung (lingua, fasttext, py3langid, langdetect, pycld3) wurde geprueft und einstimmig abgelehnt: zu gross fuers RAM-Budget, Lizenzfragen (fasttext-Modell CC BY-SA 3.0), fehlende ARM-Wheels, oder eine ungeklaerte numpy-Abhaengigkeit.
 
-**Kerntechnologien:**
-- `tantivy` 0.26.0 (unverändert) – liefert `order_by_field` und den Fast-Field-Mechanismus, den Sortierung und Filter brauchen, ohne Schema-Änderung
-- Stdlib `gc` + `ctypes` – die gesamte Freigabekette der Modell-Entladung, keine neue Abhängigkeit
-- `onnxruntime` 1.29.0 (gehalten) – `enable_cpu_mem_arena=False` ist bereits gesetzt und ist die Voraussetzung dafür, dass eine Freigabe dem Betriebssystem überhaupt etwas zurückgibt
-- `python:3.13-slim-trixie` (Basis-Image, unverändert) – glibc mit `malloc_trim`, das ist Pflicht für die Freigabekette
-
-Zwei Aufräumbefunde nebenbei, ausdrücklich nicht Teil des Milestones: `fastembed==0.8.0` ist gepinnt, wird aber nirgends importiert (Kandidat zur Entfernung); `numpy` ist eine indirekte, nicht deklarierte Abhängigkeit.
+**Core technologies:**
+- `tantivy` 0.26.2 - Suchmaschine, Analysekette, Stemmer, Stoppwoerter - bringt alles Noetige mit, Upgrade behebt Panic-Risiko und einen Union-Scorer-Bugfix
+- Snowball-Stemmer/-Stoppwortlisten (in tantivy) - Stammformbildung und Stoppwortentfernung es/it/nl/pt - kein Modell, kein RAM-Zuwachs, BSD-3-Clause
+- Eigene gefaltete Ergaenzungs-Stoppwortliste (117 Woerter) - schliesst die Luecke zwischen Akzentfaltung und Stoppwortvergleich - maschinell aus `stopwords.rs` erzeugt und per Hash-Test gehalten
 
 ### Expected Features
 
-**Must have (Launch v1.2):**
-- Typfilter mit geschlossener Gruppenliste (PDF, Dokumente, Tabellen, Präsentationen, Bilder, Text), ohne Trefferzähler, serverseitig ohne JavaScript
-- Ein Filtervokabular für UI-Gruppen und die bestehende `type:`-Textsyntax, nicht zwei
-- Sortierung Relevanz (Standard) und "Zuletzt geändert", mit Zweitschlüssel `file_id` gegen Zeitstempel-Gleichstand
-- Filter und Sortierung in der URL, defensiv gelesen, Cursorpfad wird bei jeder Änderung auf Seite 1 zurückgesetzt
-- Modell-Entladung nach Leerlauf, TTL als Umgebungsvariable, `0` schaltet ab, ab Werk aus für die Messphase
-- Erste Suche nach Entladung antwortet innerhalb der 1,5-Sekunden-Decke lexikalisch, Nachladen im Hintergrund
-- Wiederaufwärm-Kosten gemessen und ausgewiesen, nicht geschätzt
-- Migration für 1.2.0 (Pflicht, obwohl der Index kompatibel bleibt)
+**Must have (table stakes):**
+- Vier Analyseketten es/it/nl/pt mit Snowball-Stemmer und eingebauter Stoppwortliste
+- Sechs Koerperfelder im Schema, **immer alle**, befuellt nur nach `FINDLING_LANGUAGES` (Werkseinstellung bleibt `de,en`)
+- Schema-Migration, die das Indexverzeichnis wirklich neu anlegt (nicht nur eine Versionsmarke setzt)
+- Reindex/Umbau nur bei tatsaechlich eingeschalteter neuer Sprache, Bestandsinstallationen mit `de,en` bleiben unberuehrt
+- Feld-Boosts fuer die vier neuen Felder unter `body_en` (z. B. 0,6-0,8), sonst summieren sich Treffer ueber sechs Felder falsch auf
+- Sprachfaelle je Sprache in CI, ohne Fremdbestand (Muster `2026-09-a4-sprachfaelle-ci`)
+- UI-Kataloge es/it/nl/pt, **199 Schluessel** (nicht 174 - die Zahl ist zwischen Phase 11 und heute viermal gestiegen, im Plan aus der Datei zaehlen, nicht uebernehmen)
+- Warnung beim Start, wenn `FINDLING_LANGUAGES` eine Sprache fuehrt, die `FINDLING_OCR_LANGUAGES` nicht abdeckt
+- Dokumentierte Grenzen (ano/ano fallen zusammen, pt-Rechtschreibreform wird nicht vereinheitlicht, Komposita nur de/nl)
 
-**Should have (v1.x, nach Validierung):**
-- Zeitraumfilter `since`/`until` – repariert eine heute stumme Lücke (Unified-Search-Dialog verwirft Findling kommentarlos, sobald jemand dort einen Datumsfilter setzt, den `getSupportedFilters()` nicht anbietet)
-- "Älteste zuerst" als dritte Sortierung
-- Mimetype-Gruppen aus `files.mime` statt `ext`, falls Genauigkeit wichtiger wird als der bestehende Kommentar "no join against files"
+**Should have (differenzierend):**
+- Niederlaendische Komposita-Zerlegung (`split_compound`, lizenzkonform via Debian `wdutch`/OpenTaal, BSD-3-Clause + CC-BY-3.0) - kein Konkurrenzprodukt im Selfhost-Segment kann das fuer Niederlaendisch, aber es ist so gross wie der Rest des Milestones zusammen (zweite Wortliste, zweiter 23-MB-Automat, eigene Digest-Marke) -> **eigene Phase mit eigenem Tor**, nicht in die Sprachfelder-Phase hineinschieben
+- `disjunction_max_query` statt Score-Summierung - erst nach einer Messung der Rangverschiebung auf echten Daten
 
-**Defer (v2+):**
-- Sortierung nach Name oder Grösse – kostet ein neues Fast-Field, `SCHEMA_VERSION`-Sprung, Vollreindex auf jeder Bestandsinstallation
-- Facettenzähler je Dateityp – wäre ein Zähl-Orakel vor dem Rechtefilter (T-02-93), von allen vier Dokumenten übereinstimmend ausgeschlossen
-- Personenfilter, Ordner-Einschränkung, geplantes Vorwärmen nach Zeitplan
+**Defer (v1.4+):**
+- Franzoesisches Koerperfeld (FR hat OCR+Katalog, aber keine lexikalische Kette - auffaellige Luecke, aber ausserhalb des Ziels dieses Milestones)
+- Getrennte pt_BR/pt_PT-Wortlaute fuer die Suche selbst
+- Niederlaendische Betonungsakzente als eigene `custom_stopword`-Liste
+
+**Anti-Features (explizit ablehnen):**
+- Automatische Spracherkennung, Dokument- oder Anfrageseite (stiller Totalausfall bei Fehlerkennung, RAM-/Lizenzkosten, Anfragen haben im Schnitt 2,4 Terme - zu kurz fuer Erkennung)
+- Sprachumschalter/Sprach-Chip in der UI (widerspricht Zero-Config)
+- Alle sechs Sprachen ab Werk an (68-90 % mehr Indexplatz fuer jede Bestandsinstallation ohne Nachfrage)
+- Ein gemeinsames multilinguales Feld statt Feld je Sprache (unter-/uebersteemt in allen gemischten Faellen)
+- Index je Sprache statt Feld je Sprache (mehrere Writer-Locks, mehrere Merges, Ergebnis-Fusion von Hand)
+- Komposita-Zerlegung fuer es/it/pt (romanische Sprachen komponieren nicht wie de/nl, ein Zerleger faende dort nichts oder trennt falsch)
+- Muttersprachler-Abnahme als Pflicht-Gate fuer alle vier Kataloge (kein Muttersprachler verfuegbar; stattdessen maschinell + Community-Review mit datiertem Vorbehalt, wie beim FR-Katalog)
 
 ### Architecture Approach
 
-Alle drei Vorhaben hängen sich an bestehende Nahtstellen: der Filter/Sortier-Ausbau bleibt vollständig im Backend-Kandidatenpfad (`index/search.py::candidates`) und wird über zwei neue, optionale Felder in `SearchRequest`/`SnippetsRequest` transportiert; die PHP-Seite bleibt serverseitig gerendert, ohne Vue, ohne JSON-Route, ohne Build-Schritt. Die Modell-Entladung bekommt einen neuen, dritten Halter-Zustand in `embed/model.py`/`embed/engine.py` plus eine neue Freigabefunktion im Poller (`worker/poller.py`), ausgelöst von einer dritten Lifespan-Aufgabe in `main.py` (nicht vom Poller selbst, weil ein stummgeschalteter Poller `run_once` nie wieder betritt). Die Messphase ist überwiegend Wiederverwendung geeichter Skripte, mit genau einer inhaltlichen Werkzeugänderung (Fremdbestands-Messgrösse) und einem neuen Wiederaufwärm-Messwerkzeug.
+Die Kernerkenntnis ist strukturell: `DEFAULT_LANGUAGES` hat im Code praktisch nur **einen** Verbraucher (`writer.py:166`), waehrend die echte Sprachbindung an sechs fest verdrahteten Stellen haengt (Analyzer-Namen, Schema-Feldliste, Tokenizer-Registrierung, Suchfeldliste/-boosts, Snippet-Feld, Benchmark). Wer nur die Konstante erweitert, aendert nichts. Ein Tantivy-Index persistiert sein Schema bei der Erzeugung und oeffnet ein Bestandsverzeichnis **immer** mit dessen altem Schema - das ist die Wurzel des Totalausfall-Risikos. Der Ausweg ist eine Re-Analyse-Migration: Weil `body_de` (und implizit `body_en`) als einzige gespeicherte Textkopie im Schema stehen (`stored=True`), laesst sich ein komplett neuer Index mit den sechs Feldern **aus dem alten Index heraus** neu schreiben, ohne Nextcloud, OCR oder Einbettung erneut anzufassen. Der Vektorbestand (`vectors.db`, `sqlite-vec`) bleibt davon unberuehrt, weil er sprachneutral ist und ueber Zeichenoffsets in `body_de` indiziert, die sich durch den Umbau nicht verschieben.
 
-**Hauptkomponenten:**
-1. `query/rewrite.py::build_query(extensions=...)` – vereinigt Text-Operator und UI-Filter zu einer Query, ohne `carried_operators` zu berühren
-2. `index/search.py::candidates` – trägt sowohl den Sortierzweig (Fusionsfenster nach `mtime` statt RRF) als auch die Filterklausel; bleibt die einzige Stelle, an der Reihenfolge und Sichtbarkeit entstehen
-3. `embed/engine.py::release_if_idle()` + `worker/poller.py::release_the_cutter()` – zwei getrennte Freigabefunktionen für zwei getrennte Speicherhalter, orchestriert von einer neuen Lifespan-Aufgabe in `main.py`
-4. `php/lib/Controller/PageController.php` – erweitert um zwei defensiv gelesene, geschlossene Werte (`types`, `sort`), keine neue Route, kein neuer JSON-Kanal
+**Major components:**
+1. `index/analyzer.py` - vier neue Analyseketten (Fabrik statt vier Funktionen), `ANALYZER_VERSION`-Sprung
+2. `index/schema.py` / `index/open.py` - Schema waechst auf 13 Felder, immer vollstaendig gebaut, `SCHEMA_VERSION`-Sprung, vier neue Tokenizer-Registrierungen
+3. **`index/rebuild.py` (neu)** - die zentrale neue Komponente: Re-Analyse-Umbau aus dem alten Verzeichnis, Platzpruefung, Wiederaufnahmefaehigkeit, Rueckfall auf Vollreindex
+4. `query/rewrite.py` - Feldliste/Boosts werden vom Merker `schema_version` abhaengig gemacht, nicht mehr Konstante (verhindert, dass neue Felder in Anfragen auftauchen, bevor der Umbau fertig ist)
+5. `php/lib/Migration/Version001300Date...` - Pflicht-Lockstep-Migration (Kopie des v1.2-Musters), **nicht** der Ort des eigentlichen Indexumbaus (der laeuft im Container als Lifespan-Aufgabe, nicht in `occ upgrade`)
+6. `php/l10n/` - zehn neue Katalogdateien (es, it, nl, pt_PT, pt_BR je `.json`/`.js`, da Nextcloud kein `pt` kennt)
+
+Bauordnungs-Prinzip (aus der Architekturrecherche): Schema-Erweiterung und Freischaltung der Query-Feldliste duerfen **nicht im selben Schritt** passieren - dazwischen muss der Umbau fertig und bewiesen sein.
 
 ### Critical Pitfalls
 
-1. **Filter wirkt hinter der Fusion statt in der Anfrage** – auf grossem Bestand (52.111 Dokumente) liefert das systematisch halbleere Seiten, weil das 100er-Fusionsfenster nur die relevantesten Dokumente aller Typen füllt. Vermeidung: Filter als `Occur.Must`-Klausel vor dem ersten `searcher.search`, exakt der Pfad, den `_mtimes_of()` schon für die semantische Hälfte anbietet.
-2. **UI-Filter als `type:`-Text geschickt** – schaltet über `carried_operators`/`FILETYPE` die Semantik für jede gefilterte Suche ab, unsichtbar. Vermeidung: eigenes Request-Feld, das die Operator-Marke nicht setzt.
-3. **Sortierung wird der Fusion als Argument untergeschoben** – tantivy liefert unter `order_by_field` den Feldwert statt des BM25-Scores im ersten Tupelglied; empirisch gemessen gegen die installierte 0.26.0 (500/300/200/100 statt 0,1363/0,1220). `Candidate.score` würde sonst einen Zeitstempel als Relevanz ausliefern. Vermeidung: Sortierung ist ein eigener, rein lexikalischer Modus wie `lexical_only` heute schon, Score wird unter Sortierung auf 0.0 gesetzt.
-4. **Nur ein Speicherhalter wird entladen** – der grössere Posten ist nicht die ONNX-Sitzung (250 bis 400 MB), sondern der Cutter-Tokenizer im Poller (542,8 bis 544,3 MB Spitze). Vermeidung: beide Halter, eine gemeinsame Leerlauf-Uhr.
-5. **Nachladen im Anfragepfad reisst die 1,5-Sekunden-Decke** – bereits einmal produktiv passiert (10.09.2026, `cURL error 28`, null Treffer). Vermeidung: kaltes Modell beantwortet die Suche sofort lexikalisch, Laden läuft im Hintergrund.
+1. **Schema erreicht den Bestandsindex nie, Suche antwortet danach dauerhaft leer** - gemessen in zwei Varianten (stiller Datenverlust beim Schreiben, `ValueError` beim Lesen, vom Suchpfad zu leerer Antwort verschluckt). Vermeidung: dritter Zweig in `open_index()`, der bei Feldabweichung den Neubau ausloest statt zu oeffnen; Test gegen ein **wirklich vorhandenes** Alt-Schema-Verzeichnis, nicht gegen ein frisches.
+2. **Reindex als volle Neuextraktion statt Re-Analyse** - 19h20 Vollreindex vs. geschaetzt 1-3h Umbau aus dem gespeicherten Text. Vermeidung: Re-Analyse-Pfad, wiederaufnehmbar, mit eigener Platzpruefung (zwei Indexverzeichnisse gleichzeitig, `MIN_FREE_BYTES` reicht nicht).
+3. **Die bestehende Upgrade-Beweisstrecke in CI wird entschaerft statt umgedreht** - sie behauptet heute woertlich "kein Merker bewegt sich", was v1.3 absichtlich verletzt. Vermeidung: neuer, zusaetzlicher Pruefschritt mit umgekehrten Behauptungen (Schema bewegt sich um genau eine Stufe, Banner erscheint und verschwindet, alte Trefferzahlen bleiben nach dem Umbau gleich, ein neu gefundenes spanisches Dokument beweist den echten Zugewinn); der alte Schritt bleibt fuer index-kompatible Minors erhalten.
+4. **`ascii_fold`-Position in der Kette** - siehe eigener Abschnitt unten, offener Entscheid zwischen den Forschern.
+5. **Unvalidierter Sprachname bringt den Container per Rust-Panic zu Fall** - `Filter.stopword("romanian")` o.ae. wirft in 0.26.0 einen `PanicException`, keine handhabbare Exception. Vermeidung: geschlossene Positivliste (Muster `OCR_LANGUAGE_ALLOWLIST`), Upgrade auf 0.26.2 macht daraus wenigstens einen `ValueError`.
+6. **Sprachauswahl fehlt in den Versionsmarken** - ein Admin, der nachtraeglich `nl` einschaltet, bekommt ohne eigene Marke keinen Rebuild-Hinweis; nur neu angefasste Dateien bekommen niederlaendische Terme, der Bestand bleibt dauerhaft lueckenhaft, ohne dass irgendwo ein Hinweis erscheint. Vermeidung: `languages` als sechster Merker in `expected_versions()`.
+7. **Suche ist waehrend des Umbaus leer, ohne Ankuendigung** - Vermeidung: alter Index bedient Anfragen weiter, bis der neue fertig ist (Grund fuer den Zwei-Verzeichnisse-Ansatz statt Ueberschreiben); Banner mit Fortschritt statt des heutigen Reindex-Banners (das faelschlich zu `occ findling:index --restart` aufruft, was 19h Vollcrawl statt des billigen Umbaus ausloesen wuerde).
+
+## Der offene Entscheid: Position von `ascii_fold` in der Kette
+
+Die vier Recherchen widersprechen sich hier, und der Widerspruch wird bewusst **nicht geglaettet**, weil alle drei Positionen mit eigenen Messungen belegt sind, die jeweils unterschiedliche Wortpaare pruefen.
+
+**Position 1 - STACK.md: `lowercase -> ascii_fold -> stopword -> custom_stopword(gefaltet) -> remove_long -> stemmer`.**
+Beleg: Akzentierte und ASCII-Eingabe liefern in dieser Kette immer denselben Term (`informacion` mit Akzent / `informacion` ohne -> beide `informacion`), aber akzentuierte Stoppwoerter (`estan`, `mas`, `tambem`, `nao`, jeweils mit Akzent im Original) ueberleben die Stoppwortliste, weil die Liste exakt vergleicht und nach dem Falten nicht mehr trifft. Die vorgeschlagene Loesung ist eine zusaetzliche, bereits gefaltete Ergaenzungsliste (`Filter.custom_stopword`, 77/10/30/0 Woerter aus `stopwords.rs` erzeugt), die genau diese Luecke schliesst.
+
+**Position 2 - PITFALLS.md (Pitfall 4): `ascii_fold` gehoert **hinter** den Stemmer: `lowercase -> stopword -> remove_long -> stemmer -> ascii_fold`.**
+Beleg: Bei Faltung **vor** dem Stemmer bleibt die akzentuierte Singularform (mit Akzent auf dem o) als unveraendertes Wort ohne Stammform stehen, waehrend die zugehoerige Pluralform korrekt gestemmt wird - zwei Formen desselben Lemmas landen auf verschiedenen Termen, weil die romanischen Snowball-Algorithmen die akzentuierte Endung fuer ihre Suffixregeln brauchen. Faltung **nach** dem Stemmer liefert in derselben Messung beide Formen korrekt auf denselben Stamm. Zusaetzlich: Faltung vor dem Stoppwortfilter laesst das italienische Wort fuer "warum" (mit Akzent) als Muellterm durch, weil die Stoppwortliste exakt vergleicht.
+
+**Position 3 - FEATURES.md (M2): Faltung gehoert **hinter** die Stoppwortliste**, mit derselben Begruendung wie Pitfall 4 (Stoppwortlisten vergleichen akzentuiert und exakt; fruehes Falten laesst mehrere Reststoppwoerter durch, gemessen 3 Lecks fuer pt, 2 fuer es, 1 fuer it). FEATURES.md nennt ausserdem einen Gegenfall: Niederlaendische Betonungsakzente sind unakzentuiert selbst Stoppwoerter und werden nur entfernt, wenn zuerst gefaltet wird - FEATURES empfiehlt trotzdem die einheitliche Reihenfolge Stoppwortfilter-dann-Faltung und raet, den niederlaendischen Sonderfall ueber eine kleine `custom_stopword`-Liste zu loesen, falls er je auffaellt.
+
+**Wo sich die drei tatsaechlich unterscheiden:** Einigkeit besteht, dass Faltung **hinter** dem rohen Stoppwortfilter erfolgen sollte (Position 2 und 3 sind sich hier einig, Position 1 widerspricht mit einer Ergaenzungsliste als Reparatur). Der eigentliche Streitpunkt ist die Position **relativ zum Stemmer**: STACK.md hat in einer eigenen Messung (Reihenfolge Stoppwortfilter, Laengenfilter, Stemmer, dann Faltung) einen Fall gefunden, in dem Falten nach dem Stemmer portugiesische Formen **auseinanderreisst** (die akzentuierte und die unakzentuierte Schreibung desselben Wortes ergeben nach dieser Kette zwei verschiedene Stammformen), waehrend PITFALLS.md exakt an derselben Stelle in der Kette einen Fall gefunden hat, in dem Falten nach dem Stemmer spanische/portugiesische Singular- und Pluralformen **zusammenfuehrt**. Beide Messungen koennen gleichzeitig wahr sein (unterschiedliche Wortpaare, unterschiedliche Flexionsformen desselben Lemmas reagieren unterschiedlich auf den Snowball-Algorithmus), was bedeutet: **keine der drei Ketten ist ueber alle relevanten Wortpaare hinweg fehlerfrei**, ohne dass es bislang eine Messung gibt, die alle drei Faelle gleichzeitig gegen dieselbe Kette prueft.
+
+**Empfehlung fuer den Plan:** Die erste Bau-Phase des Milestones (Analyseketten/Sprachtabelle) entscheidet die Kettenreihenfolge je Sprache **messend**, nicht durch Auswahl einer der drei Quellen. Dafuer werden die Testfaelle aus allen drei Dokumenten zu einer einzigen Tabellentest-Suite zusammengefuehrt, mindestens:
+- spanisches Wortpaar Singular/Plural fuer "Information" (Stemming-Konsistenz)
+- dasselbe spanische Wort in akzentuierter und unakzentuierter Schreibung (Akzent-Konvergenz)
+- portugiesisches Wortpaar Singular/Plural fuer "Information" (Stemming-Konsistenz)
+- dasselbe portugiesische Wort in akzentuierter und unakzentuierter Schreibung (Akzent-Konvergenz)
+- spanisches "Jahr" akzentuiert/unakzentuiert (Akzent-Konvergenz bei kurzem Wort)
+- italienisches "warum" akzentuiert/unakzentuiert und als Stoppwort
+- niederlaendisches "een/één" (Betonungsakzent vs. Stoppwort)
+- akzentuierte Stoppwoerter es/pt gegen die jeweilige Stoppwortliste
+
+Erst wenn eine Kette (ggf. mit einer Ergaenzungsliste wie in STACK.md) alle diese Paare gleichzeitig korrekt behandelt, gilt die Reihenfolge als abgenommen. Das ist die Stelle, an der `ANALYZER_VERSION` erhoeht wird, und die Messtabelle wird der Abnahmetest fuer Pitfall 4.
+
+## Weitere Konsenspunkte (fraktionsuebergreifend bestaetigt)
+
+- **Upgrade-Pfad ist heute ein Totalausfall-Risiko:** `parse_query_lenient` wirft `ValueError` bei einem unbekannten Feldnamen, der Suchpfad faengt das ab und liefert eine leere, degradierte Antwort - auf jeder Bestandsinstallation wuerde jede Suche leer laufen, nicht nur die neuen Sprachen. Alle vier Recherchen benennen das als das groesste Einzelrisiko.
+- **Re-Analyse-Umbau statt Vollreindex:** Weil `body_de`/`body_en` gespeichert sind, kann der neue Index direkt aus dem alten Index gelesen und neu geschrieben werden. Geschaetzt 1-3 Stunden statt der gemessenen 19h20 fuer einen Vollreindex ueber 52.137 Dokumente.
+- **Schema traegt immer alle Sprachfelder**, Befuellung wird ausschliesslich ueber `FINDLING_LANGUAGES` gesteuert. Werkseinstellung bleibt `de,en`. Ein leeres Schemafeld kostet nachweislich (gemessen) null Byte und null Millisekunden.
+- **Katalogzahl ist 199 Schluessel, nicht 174** (bzw. 197 als Zwischenstand aus Phase 13) - die Zahl beim Planstart aus `php/l10n/de.json` zaehlen, nicht aus der Milestone-Beschreibung uebernehmen.
+- **Nextcloud kennt kein `pt`**, nur `pt_BR` und `pt_PT` - zehn statt acht neue Katalogdateien (je zwei Dateien fuer Portugiesisch, `.json` + `.js`).
+- **`nplurals=3` fuer es/it/pt** (Standard-gettext-Form, abweichend von der franzoesischen Zwei-Formen-Regel, die im Repo als `FRENCH_PLURAL_FORM` verdrahtet ist), `nl` bleibt bei `nplurals=2; plural=(n != 1);`. Pluralregeln muessen aus den `core/l10n/<lang>.json`-Kerndateien der Ziel-Nextcloud gelesen werden, nicht aus dem Gedaechtnis kopiert.
+- **Niederlaendische Komposita** brauchen `Filter.split_compound` mit einer eigenen Wortliste (Debian `wdutch`/OpenTaal, BSD-3-Clause + CC-BY-3.0, lizenzrechtlich guenstiger als die deutsche `wngerman`-Liste). Das ist ein bewusster, eigenstaendiger Entscheid, der den Schnitt des Milestones sprengen kann, und wird deshalb als eigene Phase mit eigenem Tor behandelt, nicht stillschweigend mitgezogen.
+- **tantivy-Pin 0.26.0 -> 0.26.2:** `Filter.stopword()` mit einer Sprache ohne eingebaute Liste ist in 0.26.0 ein Rust-Panic (`PanicException`), in 0.26.2 ein sauberer `ValueError`. Zusaetzlich ein Union-Scorer-Bugfix, relevant weil die Suche jetzt breitere `Should`-Gruppen baut.
+- **Estnischer Stemmer wird von tantivy nicht unterstuetzt** (`ValueError: Unsupported language: estonian`) - muss aktiv an die Buerokratt/OS2ai-Outreach-Spur kommuniziert werden, bevor dort falsche Erwartungen entstehen.
+- **Keine Spracherkennung, weder fuer Dokumente noch fuer Suchanfragen** - als Anti-Feature einstimmig bestaetigt (kurze Texte, OCR-Rauschen, gemischtsprachige Dokumente, stiller Fehler bei Falscherkennung, RAM-/Lizenzkosten fuer Modelle).
+- **`deploy-harp.yml`-Upgrade-Strecke braucht eine zweite, umgedrehte Pruefstrecke**, nicht entschaerfte Zusicherungen. Die heutige Strecke beweist "nichts hat sich bewegt" - v1.3 verletzt das absichtlich und muss stattdessen beweisen "der Umbau lief vollstaendig und ohne Datenverlust ab".
 
 ## Implications for Roadmap
 
-Alle vier Dokumente konvergieren, mit unterschiedlicher Betonung, auf dieselbe Bauordnung. ARCHITECTURE.md liefert dafür bereits einen benannten Phasenvorschlag (M1 bis M6), PITFALLS.md liefert unabhängig davon dieselbe Reihenfolge über die Pitfall-Tabelle ("Filterphase und Entladephase vor der Messphase, Härtungsphase zuletzt"). Diese Übereinstimmung ist selbst ein Befund: keines der vier Dokumente schlägt eine andere Grobreihenfolge vor.
+Basierend auf der kombinierten Recherche ist die vorgeschlagene Phasenstruktur eine **Abhaengigkeitskette mit einem Owner-Tor am Anfang und zwei parallelisierbaren Straengen in der Mitte**, keine freie Reihenfolge:
 
-### Phase 1: Werkzeug und Runbook (ohne Box)
+### Phase 1: Owner-Tor - Reindex-Weg, Feldmodell, Sprachmarke
+**Rationale:** `test_upgrade_compatibility.py` verbietet ausdruecklich, den bestehenden Test gruen zu "reparieren"; ein roter Test hier ist laut Kommentar im Code "keine Reparatur, sondern eine Frage an den Owner". Ohne diese Entscheidung darf kein Code geschrieben werden, der D-04 (Index-Kompatibilitaet ueber Minor-Spruenge) verletzt.
+**Delivers:** schriftlicher Entscheid zu: Umbauweg (Re-Analyse empfohlen), Feldmodell A/B/C (A empfohlen), ob `FINDLING_LANGUAGES` Deutsch/Englisch abschalten darf, ob Sprachmenge sechster Versionsmerker wird, Katalogprozess (maschinell + Community-Review, kein Muttersprachler-Pflichtgate).
+**Addresses:** Grundsatzfragen aus FEATURES.md Teil 2, ARCHITECTURE.md Teil C.
+**Avoids:** Pitfall "Schema erhoehen und den Rebuild spaeter bauen" (Nie-Fall der Technical-Debt-Tabelle).
 
-**Rationale:** Der Messbericht vom 10.09.2026 hält explizit fest: "ein Messskript, das während seines eigenen Laufs nachgebessert wird, macht jede Zahl daneben unbelegt" (PITFALLS.md Pitfall 15/18, ARCHITECTURE.md C.2/C.3). Das Werkzeug muss vor der bezahlten Anfahrt fertig sein.
-**Delivers:** Vorprüfung der Fremdbestands-Messgrösse auf die Diagnose-Route umgestellt (statt der gedeckelten OCS-Route, die nie über 26 Treffer hinauskommt), `aws_box.sh` um "Volume aus Snapshot" ergänzt, `docs/runbook-messbox.md` als Erstfassung aus drei bisherigen Berichten.
-**Addresses:** keine Feature-Zeile direkt, aber Voraussetzung für den Wirkungsbeleg (FEATURES.md, Differentiator "Wiederaufwärm-Zahl wird ausgewiesen statt versprochen").
-**Avoids:** Pitfall 15 (Messdeckel kleiner als der Lauf), Pitfall 16 (Vergleichbarkeit bricht an fünf Stellen), Pitfall 18 (Werkzeug zählt Ausfälle als Erfolge).
+### Phase 2: Analyseketten und Sprachtabelle
+**Rationale:** Muss vor dem Schema stehen, weil `ANALYZER_VERSION` und die Feldliste von den fertigen Ketten abhaengen; darf aber die Query-Seite noch nicht oeffnen.
+**Delivers:** vier Analyseketten es/it/nl/pt, **die Kettenreihenfolge messend entschieden** (siehe offener Entscheid oben, zusammengefuehrte Testfaelle aus allen drei Recherchedokumenten als Abnahmekriterium), geschlossene Sprachnamen-Positivliste gegen den Rust-Panic, Owner-Entscheid zu niederlaendischen Komposita schriftlich festgehalten.
+**Uses:** tantivy 0.26.2, Snowball-Stemmer/-Stoppwoerter, ggf. gefaltete Ergaenzungsliste.
+**Implements:** `index/analyzer.py`-Erweiterung.
 
-### Phase 2: Backend – Filter und Sortierung
+### Phase 3: Schema, Marken und Umbauweg
+**Rationale:** Die riskanteste und architektonisch wichtigste Phase. Muss den vollstaendigen Re-Analyse-Umbau liefern, bevor irgendein Query-Code die neuen Felder anspricht.
+**Delivers:** Schema waechst auf 13 Felder (immer vollstaendig gebaut), `SCHEMA_VERSION`-Sprung, neues Modul `index/rebuild.py` (Durchlauf aus altem Index, Platzpruefung, Wiederaufnahmefaehigkeit, Rueckfall auf Vollreindex), `languages` als sechster Versionsmerker, PHP-Migration `Version001300Date...` (Lockstep-Muster, nicht der Ort des eigentlichen Umbaus).
+**Addresses:** Pitfalls 1, 2, 6, 7.
+**Avoids:** stille Datenverlust-/Totalausfall-Pfade.
 
-**Rationale:** "Die Seite kann keinen Parameter senden, den der Container nicht kennt" (ARCHITECTURE.md, harte Abhängigkeit 1). `extra="forbid"` in `SearchRequest` liefert sonst HTTP 400, was auf der PHP-Seite als stumme, leere Suche ankommt.
-**Delivers:** `SearchRequest.types`/`sort`, `SnippetsRequest` im Gleichschritt, `build_query(extensions=...)`, Sortierzweig in `candidates` (Fusionsfenster nach `mtime` bei aktiver Sortierung, `Occur.Must`-Filterklausel bereits im Fenster), Konstanten in `config.py`.
-**Uses:** `tantivy` `order_by_field`/`Order`, bestehendes `FIELD_EXT`/`FIELD_MTIME`.
-**Implements:** `index/search.py::candidates`, `query/rewrite.py::build_query`.
+### Phase 4: Frageseite aufdrehen
+**Rationale:** Erst nachdem Phase 3 bewiesen ist, duerfen `DEFAULT_FIELDS`/`FIELD_BOOSTS` von Konstanten zu einer vom `schema_version`-Merker abhaengigen Funktion werden - das ist die Sicherheitsbedingung, kein Optimierungsdetail.
+**Delivers:** schema-abhaengige Feldliste, Feld-Boosts fuer die vier neuen Felder (unter `body_en`).
+**Implements:** `query/rewrite.py`-Umbau.
 
-### Phase 3: PHP – Ergebnisseite
+### Phase 5a: Beweisstrecke drehen (CI) / Phase 5b: UI-Kataloge es/it/nl/pt (parallel)
+**Rationale:** Beide haengen an nichts aus dem Indexstrang und koennen parallel zu Phase 1-4 laufen, wenn der Indexstrang am Owner-Tor wartet - der einzige echte Parallelpfad des Milestones.
+**Delivers (5a):** zweiter, umgedrehter Pruefschritt in `deploy-harp.yml` neben dem bestehenden (nicht als Ersatz), `UPGRADE_FROM_TAG` auf `v1.2.0`. **Delivers (5b):** zehn neue Katalogdateien (es, it, nl, pt_PT, pt_BR mal json/js), 199-Schluessel-Gate generalisiert, Pluralregeln aus den Nextcloud-Kerndateien gelesen.
+**Addresses:** Pitfall 3, Katalogfallen.
 
-**Rationale:** Kann erst beginnen, wenn Backend 1.2 die Felder kennt (harte Abhängigkeit M2 vor M3). Der Versions-Lockstep (`ExAppService`) verhindert ohnehin, dass ein PHP 1.2 gegen ein Backend 1.1 läuft.
-**Delivers:** Filterleiste und Sortierwahl im bestehenden GET-Formular, `PageController::pageUrl()` mit `types`/`sort`, Cursorpfad-Invalidierung bei jeder Änderung, sechs l10n-Dateien in EN/DE/FR im Gleichstand.
-**Addresses:** FEATURES.md Table Stakes (Typgruppen im Nextcloud-Vokabular, aktive Filter sichtbar/entfernbar, Filterwechsel setzt auf Seite 1 zurück).
-**Avoids:** Pitfall 6 (Cursorpfad überlebt Filterwechsel), Pitfall 7 (zweite Tür an der Berechtigungsgrenze), Pitfall 8 (MIME gegen Endung).
+### Phase 6: Messanfahrt BL-F03
+**Rationale:** Alle synthetischen Zahlen (Indexgroesse, Umbaudauer) sind ausdruecklich als Schaetzung markiert und gehoeren auf den echten Korpus-Snapshot, bevor der Owner final freigibt.
+**Delivers:** echte Indexgroesse mit sechs befuellten Feldern, echte Umbaudauer ueber 52.137 Dokumente, beide Zahlen in `docs/performance.md`.
 
-### Phase 4: Modell-Entladung (hinter Schalter, ab Werk aus)
+### Phase 7: Haertung und Store-Einreichung 1.3.0
+**Rationale:** Standardabschluss nach dem Muster vorheriger Milestones.
+**Delivers:** Fremdinstallations- und Upgrade-Strecke gruen, Store-Text (Faktenliste, Owner-Abnahme), `min-version`/`max-version` geprueft.
 
-**Rationale:** Unabhängig von M2/M3, muss aber vor der Messphase stehen, sonst misst die eine bezahlte Anfahrt die Entladung gar nicht mit (harte Abhängigkeit M4 vor M5, Owner-Entscheid "eine Anfahrt"). Der Schalter ist zwingend, weil eine einzige Anfahrt sonst keine A/B-Zurechenbarkeit zwischen DI-10-04-Fix und Entladung herstellen kann (PITFALLS.md Pitfall 19).
-**Delivers:** `EmbeddingModel.release()`, `EmbeddingModel._last_use`, `embed/engine.py::release_if_idle()`, `worker/poller.py::release_the_cutter()`, dritte Lifespan-Aufgabe in `main.py`, Idle-Umgebungsvariable mit `0` als Abschaltwert (Namensfrage zwischen den Dokumenten, siehe Gaps), `tools/one_load.py` und dessen Gate neu formuliert.
-**Uses:** Stdlib `gc`/`ctypes`, bestehendes `RLock` in `EmbeddingModel`.
-**Implements:** die beiden Freigabeketten aus ARCHITECTURE.md Teil B.
-
-### Phase 5: Messphase – eine Box-Anfahrt
-
-**Rationale:** Wiederverwendung von Werkzeug aus M1, Auswertung von M2 bis M4 unter Realbedingungen (ARM, 4 GB). Muss nach M4 liegen, sonst bleibt die Entladung im Store unbelegt.
-**Delivers:** DI-10-04-Wirkungsbeleg-Volllauf, vier regressive Laststufen, Sprachfall-Messung mit der neuen Messgrösse, Wiederaufwärm-Kosten der Entladung (warm und kalt, mit und ohne Seitencache), Kosten- und Abbauentscheid.
-**Addresses:** FEATURES.md Differentiator "Die Wiederaufwärm-Zahl wird ausgewiesen statt versprochen".
-**Avoids:** Pitfall 9 (Datumssortierung auf grossem Fremdbestand liefert leere Seiten), Pitfall 10 (RSS kommt nicht zurück), Pitfall 12 (Kaltstart-Klippe), Pitfall 17 (Aufwärmphase statt Erzeugnis gemessen).
-
-### Phase 6: Härtung und Store-Einreichung v1.2.0
-
-**Rationale:** Muss zuletzt liegen, weil sie die Ergebnisse aus M2 bis M5 in Store-Texte, Kataloge und die Upgrade-Beweiskette überführt.
-**Delivers:** Migration `Version001200Date...` (Pflicht, auch ohne Schemaänderung – Merker aus v1.1, dort erst in der Härtungsphase gefunden), Ende-zu-Ende-Upgrade-Beweis 1.1.0 auf 1.2.0, Messzahl an drei Stellen im Gleichschritt (README.en.md, beide info.xml), ggf. sechstes `engineState`-Wort mit vier Katalog-Gates.
-**Addresses:** alle offenen Store-Zusagen.
-**Avoids:** Pitfall 13 (sechster Engine-Zustand bricht Vokabular), Pitfall 20 (Minor-Sprung ohne Migration).
+### Optionale Phase (nach Bestaetigung): Niederlaendische Komposita-Zerlegung
+Eigenes Tor, eigener Umfang (zweite Wortlistenquelle, zweiter ca. 23-MB-Automat, eigene Digest-Marke, eigene Rezeptmessung) - faellt bei Terminnot als Ganzes, nicht halb.
 
 ### Phase Ordering Rationale
 
-- M2 vor M3: `extra="forbid"` macht einen Mischstand zum HTTP-400-Fehler, der auf der PHP-Seite als stumme Suche ankommt.
-- M1 vor M5: belegt am Bericht vom 10.09.2026, ein während der Anfahrt korrigiertes Skript entwertet seine eigene Messung.
-- M4 vor M5: Owner-Entscheid "eine Anfahrt" verlangt, dass die Entladung in derselben Anfahrt mitgemessen wird, was einen Schalter voraussetzt.
-- M2/M3 und M4 sind gegeneinander vertauschbar; die vorgeschlagene Reihenfolge (Filter zuerst) liefert früher den sichtbaren Teil des Milestones und lässt die Entladung notfalls per Schalter ausgeliefert, ohne den Milestone zu gefährden.
+- Die Reihenfolge Phase 2 -> 3 -> 4 ist eine Sicherheitsbedingung, keine Aufwandsgruppierung: zwischen "Schema erweitert" und "Umbau fertig" liegt auf jeder Bestandsinstallation ein Zeitfenster, in dem eine geoeffnete Query-Feldliste zum Totalausfall fuehrt.
+- Phase 1 (Owner-Tor) steht bewusst vor jeder Codearbeit, weil mehrere nachgelagerte Entscheidungen (Feldmodell, Umbauweg, Sprachmarke) sonst implizit durch die erste geschriebene Zeile getroffen wuerden.
+- Phase 5a/5b sind der einzige Parallelpfad und sollten im Plan als solcher markiert werden, damit Wartezeit am Owner-Tor nicht zu Leerlauf wird.
+- Die niederlaendische Komposita-Zerlegung ist bewusst aus dem Kernpfad herausgeschnitten, weil sie laut FEATURES.md etwa so gross ist wie der Rest des Milestones zusammen.
 
 ### Research Flags
 
-Phasen, die während der Planung vertiefte Recherche brauchen:
-- **Phase 2 (Backend Filter/Sortierung):** die Trefferform von `tantivy.Searcher.search` unter `order_by_field` ist zwar bereits empirisch geprüft (PITFALLS.md, eigene Probe gegen die installierte 0.26.0), die Stabilität von `offset` zusammen mit `order_by_field` bei 52.111 Dokumenten ist es nicht (ARCHITECTURE.md, "Offene Punkte"). Ein Test gegen den realen Index vor dem Bau ist Pflicht.
-- **Phase 4 (Entladung):** wie viel RSS die Freigabekette (`gc.collect()` + `malloc_trim(0)`) auf der Zielhardware tatsächlich zurückgibt, ist in keinem der vier Dokumente mehr als eine begründete Vermutung; STACK.md nennt es ausdrücklich "nicht recherchierbar, ... messbar". Der Vorprüflauf muss vor dem Rest der Phase feststehen.
-- **Phase 5 (Messphase):** der Zeit-/Kostendeckel braucht eine eigene Rechnung mit dem Owner, weil der vorgeschlagene Deckel (26 h) kleiner ist als der zuletzt gemessene Volllauf allein (26 h 37 min, PITFALLS.md Pitfall 15).
+Phasen, die vermutlich `/gsd:plan-phase --research-phase <N>` brauchen:
+- **Phase 2 (Analyseketten):** die Kettenreihenfolge ist zwischen den vier Rechercheuren uneinheitlich (siehe offener Entscheid); die Phase selbst muss die messende Abnahme liefern, bevor sie als "Standardmuster" gelten kann.
+- **Phase 3 (Schema/Umbauweg):** neue Architekturkomponente ohne Vorbild im Repo (`index/rebuild.py`); Wiederaufnahmefaehigkeit und Platzpruefung unter Abbruchbedingungen sind nicht triviale Fragen.
+- **Niederlaendische Komposita (optionale Phase):** eigene Rezeptmessung wie beim deutschen Kompositasplitter noetig, RAM-Kosten und Lizenzlage muessen vor dem Bau geklaert sein.
 
-Phasen mit etablierten Mustern (keine gesonderte Phasenrecherche nötig):
-- **Phase 3 (PHP-Oberfläche):** folgt exakt dem Formular-/Katalog-Muster, das v1.0/v1.1 bereits etabliert und mit Gates abgesichert haben.
-- **Phase 6 (Härtung):** Migrationsmuster, Upgrade-Beweis und Katalog-Gates sind aus v1.1 unverändert übertragbar.
-
-## Wo die vier Dokumente uneinig sind, statt gemittelt
-
-**(1) Der Dateityp-Filter muss ein Request-Feld sein, nicht `type:` im Text.** Kein Dissens, aber der zentralste Einzelbefund über alle vier Dokumente: STACK.md nennt es "den wichtigsten Integrationsbefund dieses Teils" (A.4), FEATURES.md führt es als V1/Anti-Feature, ARCHITECTURE.md als harte Abhängigkeit D1/D3, PITFALLS.md als Pitfall 2 mit der Warnung, dass eine Paraphrasensuche unter Filter ein vorhandenes Dokument nicht mehr findet. Grund: `carried_operators()` markiert jedes `type:`-Token als `FILETYPE`, `one_round()` setzt daraufhin `lexical_only = True` und schaltet die Vektorhälfte für die ganze Anfrage ab. Die Lösung ist ebenso einhellig: ein eigenes, optionales Feld in `SearchRequest`/`SnippetsRequest`, das dieselbe `Occur.Must`-Klausel erzeugt wie `_extension_query()`, aber `carried_operators` nicht berührt.
-
-**(2) Sortierung: Datum ja ohne Reindex, Name/Grösse nein – und der Score-wird-Sortierschlüssel-Fallstrick ist konkret gemessen.** `mtime` ist seit v1.0 `fast=True` (`index/schema.py:114`, Kommentar dort: "Display today, sorting and since/until later"), also kostet Datumssortierung keinen `SCHEMA_VERSION`-Sprung. Name (`FIELD_NAME`, Textfeld ohne Fast-Spalte) und Grösse (gar kein Feld im Schema) würden dagegen einen Vollreindex über 52.111 Dokumente erzwingen und sind von allen vier Dokumenten übereinstimmend aus v1.2 ausgeschlossen. Der Fallstrick, den nur PITFALLS.md und ARCHITECTURE.md mit einer eigenen Messung belegen: unter `order_by_field` liefert tantivy 0.26.0 im ersten Tupelglied nicht mehr den BM25-Score, sondern den Feldwert selbst – empirisch gegen die installierte Version geprüft, mit konkreten Zahlen (500/300/200/100 statt 0,1363/0,1220). `index/search.py::_ranked` liest dieses Element heute ungeprüft als `score`. STACK.md beschreibt denselben Mechanismus theoretisch ("das erste Tupelglied ist ... nicht mehr der Score"), ohne die Messung; die Empfehlung aller vier ist trotzdem gleich: Sortierung ist ein eigener, rein lexikalischer Modus, Score wird unter Sortierung auf 0.0 gesetzt, RRF wird nicht angewendet.
-
-**(3) Die Entladung hat zwei Speicherhalter, und das grösste Risiko ist die 1,5-Sekunden-Decke, nicht der Speicher selbst.** `EmbeddingModel._engine` (STACK.md, ARCHITECTURE.md B.1: Gewichte 118 MB, Aktivierungsspitze 250 bis 400 MB) ist der kleinere Posten. Der grössere ist `Poller._chunker` (ARCHITECTURE.md nennt 544,3 MB Spitze, STACK.md nennt aus demselben Messbericht 542,8 MB für "fünf Posten zusammen" – die beiden Zahlen stammen aus unterschiedlichen Messläufen/Plattformen desselben Berichts und sind keine echte Widersprüchlichkeit, aber die Dokumente runden sie leicht unterschiedlich). PITFALLS.md Pitfall 11 warnt zusätzlich vor einem doppelten Besitzer-Zustand: wird nur `embed/engine.py::reset()` (ursprünglich ein Test-/Werkzeug-Helfer) als Entladefunktion zweckentfremdet, bleibt der Poller mit einer eigenen Referenz zurück, und der Container trägt nach einem Nachladen zwei Sitzungen gleichzeitig – exakt die 276 MB Regression, die Plan 06.1-02 einmal beseitigt hat. Das grössere Risiko ist aber unabhängig vom Speicher: `ExAppService::REQUEST_TIMEOUT_SECONDS = 1,5 s` gilt für jeden Aufruf, ein Kaltstart hat bereits einmal produktiv (10.09.2026, 14:05:17Z, `cURL error 28`) eine Suche mit null Treffern erzeugt, ohne Fehlermeldung für den Nutzer. Alle vier Dokumente empfehlen unabhängig voneinander dieselbe Lösung: die erste Suche nach Entladung wird nicht auf das Nachladen warten gelassen, sondern sofort über den bestehenden Degradationspfad (`EmbedOutcome.unavailable()`, D-19) rein lexikalisch beantwortet, das Modell wärmt im Hintergrund. Zusätzliche, nur in ARCHITECTURE.md ausgesprochene Nuance: die gemessene Grundlast von 103,2 MB ist nach der seit Plan 07-03 faulen Bauweise vermutlich bereits *ohne* Modell und Cutter gemessen worden; die eigentlich interessante Grösse ist deshalb nicht "Grundlast minus 415 MB", sondern "Rückkehr zur Grundlast nach einem Indexlauf" – eine Unterscheidung, die STACK.md und FEATURES.md in ihrer Zahlentabelle nicht explizit machen und die vor der Store-Formulierung geklärt werden muss.
-
-**(4) Der Box-Budget-Konflikt ist nur in PITFALLS.md explizit durchgerechnet.** ARCHITECTURE.md nennt den Owner-Vorschlag "26 h / 3,50 USD" beiläufig als Runbook-Bestandteil, ohne ihn gegen die zuletzt gemessene Laufzeit zu prüfen. PITFALLS.md (Pitfall 15) rechnet explizit gegen: der letzte Volllauf allein hat bereits 26 Stunden 37 Minuten gedauert, dazu kommen aus v1.1 gemessene 38 Minuten Anfahrt plus rund 2 Stunden 50 Minuten Nachmessungen (zusammen gut 3,5 Stunden neben dem Lauf). Der vorgeschlagene 26-Stunden-Deckel reisst also rechnerisch am ersten Tag, genau wie der 30-Stunden-Deckel aus v1.1 bereits einmal gerissen ist (auf 34 Stunden angehoben). Empfehlung aus PITFALLS.md: Deckel auf mindestens 31 Stunden setzen (rund 3,59 USD bei 0,1158 USD/h) oder den Wirkungsbeleg bewusst auf einen Teilkorpus verkleinern, aber als Owner-Entscheidung vor der Anfahrt, nicht als stillschweigende Annahme im Plan. Eng verwandt und ebenfalls nur in PITFALLS.md (Pitfall 16) benannt: ein unentdecktes Cron-Intervall (12 statt 5 Minuten `StorageCrawlJob`) hat in v1.1 rund 5,85 Stunden Leerlauf erzeugt und einen Teil des gemessenen 40,6-Prozent-Laufzeitzuwachses verursacht, der eigentlich dem DI-10-04-Fix zugeschrieben wurde. Für v1.2 folgt daraus: das Cron-Intervall der Zielinstanz gehört vor jedem Lauf ins Runbook-Protokoll, sonst ist eine gemessene Verbesserung möglicherweise die Box und nicht der Fix.
-
-**(5) Das `one_load`-Gate und die `engineState`-Wortwahl sind ein echter, ungelöster Dissens zwischen den Dokumenten.** Alle vier sind sich einig, dass `tools/one_load.py`/`_LOAD_COUNT` inhaltlich umformuliert werden muss: die alte Zusage "ein Prozess lädt genau einmal" wird mit der Entladung wörtlich falsch, PITFALLS.md (Pitfall 14) verlangt eine neue Invariante ("zu keinem Zeitpunkt existieren zwei Engines, und innerhalb eines warmen Fensters wird genau einmal geladen") vor dem Bau. Uneinig sind sich die Dokumente aber bei der Frage, ob ein sechstes `engineState`-Wort ("unloaded"/"idle") eingeführt wird. STACK.md ist dagegen ("Kein sechster Engine-Zustand ... Nicht tun") und will stattdessen, dass `engine_state()` nach der Entladung wieder `cold` liefert. PITFALLS.md (Pitfall 13) empfiehlt ebenfalls ausdrücklich, `cold` wiederzuverwenden und die Information "war schon geladen" höchstens als separate Zahl auf der Admin-Seite zu führen. FEATURES.md dagegen listet ein "Sechstes `engineState`-Wort" als Teil des MVP-Umfangs (Launch-With-Checkliste), und ARCHITECTURE.md nennt "ein sechstes Wort `unloaded`" seine eigene Empfehlung ("Empfohlen"), mit dem expliziten Gegenargument, dass der Milestone verlangt, die Wiederaufwärm-Kosten "auszuweisen", und `cold` allein den Unterschied zwischen "nie gelesen" und "zum Sparen freigegeben" verwischt. Das ist keine Nuance, sondern eine Empfehlung, die zwischen den vier Dokumenten in zwei Richtungen zeigt, mit Kostenfolgen: ein sechstes Wort berührt sechs Stellen im Gleichstand (`engine.py`, `AdminViewService.php`, `admin.php`, `admin.js`, drei Katalogpaare) und vier Katalog-Gates. Dieser Punkt gehört als benannter Owner-Checkpoint in Phase 4, nicht als vorentschiedene Annahme in den Plan.
+Phasen mit etabliertem Muster (Research-Phase vermutlich verzichtbar):
+- **Phase 4 (Frageseite):** reiner Umbau einer Konstante zu einer merker-abhaengigen Funktion, Muster bereits im Code vorgezeichnet.
+- **Phase 5a (CI-Beweisstrecke):** Struktur des bestehenden `deploy-harp.yml`-Schritts ist das Vorbild, nur die Behauptungsrichtung dreht sich.
+- **Phase 5b (Kataloge):** das FR-Katalogmuster (`docs/l10n-french.md`, vier bestehende Gates) ist direkt uebertragbar.
+- **Phase 6 (Messanfahrt):** BL-F03 ist ein bestehendes, dokumentiertes Messverfahren.
 
 ## Confidence Assessment
 
-| Bereich | Konfidenz | Anmerkung |
+| Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Alle Versionsstände (`tantivy` 0.26.0, `onnxruntime` 1.29.0, Basis-Image) gegen PyPI/Tag geprüft; die Freigabekette selbst ist MEDIUM (glibc-Mechanik dokumentiert, aber die tatsächliche Rückgabe auf der Zielbox ist LOW, siehe Gaps) |
-| Features | HIGH für alles aus eigenem Code/eigenen Messberichten, MEDIUM für die UX-Erwartungen, die aus Fremdprodukten (Files-App, Paperless-ngx, Immich, Ollama, LM Studio) abgeleitet und nicht am eigenen Nutzerverhalten gemessen sind | Quellenqualität ist im Dokument selbst so benannt |
-| Architektur | HIGH für alle Integrationspunkte (direkt am Quellcode mit Datei:Zeile belegt), MEDIUM für zwei Punkte, die vor dem Bau am laufenden System verifiziert werden müssen (tantivy-Trefferform unter `order_by_field`, tatsächlicher RAM-Gewinn) | beide MEDIUM-Punkte sind im Dokument selbst als VERIFIZIEREN markiert |
-| Pitfalls | HIGH für alles am eigenen Baum/den eigenen Rohdaten nachgelesene oder empirisch gemessene (inkl. eigener Tantivy-Sortierprobe gegen die installierte 0.26.0), MEDIUM für Allokator-/onnxruntime-Aussagen zur RSS-Rückgabe (Fremdquellen, ein offener Upstream-Bug), explizit LOW für nichts | Dokument benennt seine eigene Konfidenz differenziert je Aussage |
+| Stack | HIGH | Gegen die installierte `tantivy`-Bibliothek selbst gemessen (Sprachmatrix, Panic vs. ValueError, Index-Format), PyPI-Metadaten fuer alle geprueften Alternativen abgefragt. MEDIUM nur fuer Uebersetzungswerkzeuge (kein Laufzeitpfad, geringes Risiko). |
+| Features | HIGH fuer eigene Messungen und Quellcode, MEDIUM fuer Nutzererwartung aus Fremdprodukten (Paperless-ngx, Elastic, Meilisearch - aus Doku/Foren abgeleitet, nicht erhoben). |
+| Architecture | HIGH fuer alle Integrationspunkte (Datei und Zeile benannt) und die drei kritischen Verhaltensmessungen. MEDIUM fuer zwei Punkte: Nextcloud-Sprachcodes fuer Portugiesisch und die tatsaechliche Umbaudauer auf der Zielhardware (beide als VERIFIZIEREN markiert, gehoeren in Phase 6/BL-F03). |
+| Pitfalls | HIGH fuer alles "gemessen" (gegen `tantivy 0.26.0` und den Quelltext dieses Repos), MEDIUM fuer die Nextcloud-Katalogpunkte (aus `nextcloud/server` master gelesen, nicht gegen laufende Instanz geprueft). |
 
-**Overall confidence:** HIGH für die Code-Integration und den Funktionsumfang, MEDIUM bis LOW für alles, was nur eine Messung auf der Zielhardware beantworten kann (RSS-Rückgabe, Kaltstartdauer, Vergleichbarkeit über mehrere Lade-/Entladezyklen).
+**Overall confidence:** HIGH fuer die technische Machbarkeit und die Risikolage, MEDIUM fuer einzelne Detailentscheidungen, die absichtlich als offene Punkte an die Planung bzw. den Owner weitergereicht werden (siehe unten).
 
 ### Gaps to Address
 
-- **Wie viel RSS die Entladung auf der Zielbox tatsächlich zurückgibt** – keines der vier Dokumente kann das recherchieren, nur messen. Ein Vorprüflauf muss am Anfang der Entladephase stehen und darüber entscheiden, ob die Funktion überhaupt gebaut wird oder als "gemessen, Ergebnis negativ" dokumentiert im Bericht landet (STACK.md B.7, PITFALLS.md Pitfall 10 nennen das ausdrücklich einen legitimen Ausgang).
-- **Wie teuer ein kaltes Laden auf der konkreten Zielhardware (m7g.large-Nachfolger) ist**, in Millisekunden gegen die 1,5-Sekunden-Decke, mit und ohne Seitencache – entscheidet den Standardwert der Leerlaufschwelle, der aktuell nur ein Vorschlag (900 s) ist.
-- **Namensinkonsistenz der Umgebungsvariable** zwischen STACK.md (`FINDLING_EMBED_IDLE_SECONDS`) und ARCHITECTURE.md (`EMBED_IDLE_RELEASE_SECONDS`/`FINDLING_EMBED_IDLE_RELEASE_SECONDS`) – vor dem Bau auf einen Namen festlegen.
-- **Sechstes `engineState`-Wort ja oder nein** (siehe Disagreement 5 oben) – als Owner-Checkpoint vor Phase 4 klären, nicht während des Baus entscheiden.
-- **Filterort ext-im-Index vs. mime-in-SQLite** (FEATURES.md D2/D3 führt das noch als offene Frage, obwohl STACK.md/ARCHITECTURE.md bereits eine konkrete, kostengünstigere Umsetzung ohne Join spezifizieren) – die Planung sollte die STACK/ARCHITECTURE-Lösung als Standard übernehmen und die SQLite-Variante nur bei nachgewiesenem Genauigkeitsbedarf (Pitfall 8: `.jpg` vs `.jpeg`, Dateien ohne Endung) nachziehen.
-- **Zeit-/Kostendeckel der Box-Anfahrt** – muss vor der Anfahrt neu gerechnet und vom Owner freigegeben werden (siehe Disagreement 4).
+- **Die Position von `ascii_fold` relativ zum Stemmer ist zwischen den Recherchen uneinheitlich** (siehe eigener Abschnitt oben) - muss in Phase 2 durch eine zusammengefuehrte Testtabelle messend entschieden werden, nicht durch Auswahl einer Quelle.
+- **`pt` vs. `pt_BR`/`pt_PT` fuer den Dateiladepfad der App-Kataloge** ist MEDIUM-Konfidenz (aus dem Quellbaum gelesen) - vor der Uebersetzungsarbeit an einer Test-Nextcloud mit `ls core/l10n/` verifizieren.
+- **Absolute Indexgroesse und Umbaudauer bei sechs befuellten Feldern** sind nur an synthetischem/Belletristik-Korpus gemessen (relative Faktoren HIGH, absolute Megabyte/Stunden MEDIUM) - gehoeren in die Messphase BL-F03 am echten Korpus-Snapshot.
+- **Ob `FINDLING_LANGUAGES` Deutsch/Englisch abschalten darf** ist ein Produktentscheid, kein technischer - gehoert ins Owner-Tor (Phase 1).
+- **Niederlaendische Komposita-Zerlegung** ist bewusst ausgeklammert und braucht eine eigene Go/No-Go-Entscheidung, sonst wird die bewusste Nicht-Entscheidung spaeter als Versehen gelesen.
+- **Estnischer Stemmer nicht verfuegbar** - muss in der Kommunikation mit der Buerokratt/OS2ai-Outreach-Spur beruecksichtigt werden (Fakt steht, nur die Kommunikation ist offen).
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Eigener Quellcode, Stand 2026-09-14: `backend/src/findling/index/schema.py`, `index/search.py`, `index/fusion.py`, `query/rewrite.py`, `api/search.py`, `api/snippets.py`, `api/status.py`, `embed/model.py`, `embed/engine.py`, `worker/poller.py`, `main.py`, `config.py`, `extract/dispatch.py`
-- `php/lib/Controller/PageController.php`, `lib/Service/{SearchService,ExAppService,AdminViewService,SearchCaps}.php`, `lib/Search/Provider.php`, `templates/{search,admin}.php`, `js/{search,admin}.js`
-- `docs/measurements/2026-09-vergleichsmessung-m7g/README.md` (Abschnitte 5, 5.2, 5.3, 6, 9) und Rohdaten, `docs/measurements/2026-09-werkzeugfixe/README.md`
-- `quickwit-oss/tantivy-py`, Tag `0.26.0`, `tantivy/tantivy.pyi`; eigene Probe gegen die installierte Version am 14.09.2026 (Score-wird-Feldwert, Fast-Field-Fehlermeldungen)
-- PyPI JSON-API für tantivy, onnxruntime, tokenizers, sqlite-vec, semantic-text-splitter, fastembed, Stand 14.09.2026
+- `quickwit-oss/tantivy-py` und `quickwit-oss/tantivy`, Tag 0.26.2: `src/tokenizer.rs`, `src/tokenizer/stop_word_filter/stopwords.rs`, `CHANGELOG.md` - Sprachmatrix, Stoppwortzahlen, Lizenztext, Bugfixes
+- Eigene Ausfuehrung gegen `tantivy==0.26.0` (Backend-venv) und `tantivy==0.26.2` (Wegwerf-Umgebung), 23.09.2026 - Filterreihenfolge, Panic vs. ValueError, Index-Format, Schema-Mismatch-Verhalten, Re-Analyse-Machbarkeit
+- Repo selbst: `backend/src/findling/config.py`, `index/*.py`, `query/rewrite.py`, `api/*.py`, `store/repo.py`, `worker/poller.py`, `php/lib/Migration/Version001200Date20260921000000.php`, diverse `backend/tests/*.py`, `.github/workflows/deploy-harp.yml`, `backend/appinfo/info.xml`
+- `docs/performance.md`, `docs/l10n-french.md`, `.planning/BACKLOG.md` (BL-F02/BL-F03)
+- Nextcloud Developer Manual (Translations, `translationtool.phar`)
+- Debian trixie Paketmetadaten (`wdutch`, `dutch` 1:2.20.19+1-3, Lizenz)
 
 ### Secondary (MEDIUM confidence)
-- microsoft/onnxruntime Issue #14590 (Maintainer-Aussage zu `del`/`gc.collect()`) und #26831 (offen, RSS wächst trotz `ReleaseSession`/`ReleaseEnv`)
-- man7.org `malloc_trim(3)`, `mallopt(3)` (glibc-Mechanik, HIGH für die Dokumentation selbst, MEDIUM für die Übertragung auf dieses Produkt)
-- Nextcloud Developer Manual (Search-Filter), `nextcloud/server` Quellcode (`UnifiedSearchModal.vue`, `FileListFilterType.vue`, `mimetypealiases.dist.json`)
-- Immich (`MACHINE_LEARNING_MODEL_TTL`), Ollama (`OLLAMA_KEEP_ALIVE`), LM Studio (Idle TTL), Paperless-ngx als UX-Erwartungsmassstab
+- `nextcloud/server` master, `core/l10n/` - Sprachcodes und Pluralregeln, aus dem Quellbaum gelesen, nicht gegen laufende Instanz geprueft
+- Paperless-ngx-Doku und Diskussion #8293 - Vergleichsprodukt, eine Stemmer-Sprache pro Index
+- Elastic-Blog und Meilisearch-Doku zu Multi-Language-Strategien - Per-Field-Muster, ausdruecklich Warnung vor Anfrage-Spracherkennung
 
 ### Tertiary (LOW confidence)
-- Keine tatsächliche RSS-Rückgabe-Zahl auf Zielhardware, keine Kaltstart-Zahl auf der konkreten v1.2-Zielinstanz – beides ausdrücklich als "nur messbar, nicht recherchierbar" markiert
+- Solr Reference Guide / Lucene-SnowballFilter-Doku - als Gegenbeispiel fuer die verbreitete, aber fuer romanische Snowball-Algorithmen widerlegte Regel "Normalisierung vor Stemming"
 
 ---
-*Research completed: 2026-09-14*
-*Ready for roadmap: yes*
+*Research completed: 2026-09-23*
+*Ready for roadmap: yes, mit einem offenen messenden Entscheid (ascii_fold-Position) als erster Arbeitsschritt in Phase 2*

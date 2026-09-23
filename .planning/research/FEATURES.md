@@ -1,261 +1,340 @@
 # Feature Research
 
-**Domain:** Dateityp-Filter und Sortierung auf einer eigenen Suchergebnisseite in Nextcloud, plus Modell-Entladung im Leerlauf einer ExApp auf kleiner Hardware
-**Researched:** 2026-09-14 (Milestone v1.2)
-**Confidence:** HIGH für alles, was aus dem eigenen Quellcode, den eigenen Messberichten, dem Nextcloud-Serverquellcode und dem Developer Manual stammt. MEDIUM für die UX-Erwartungen aus Fremdprodukten (Files-App, Paperless-ngx, Immich, Ollama, LM Studio), weil das Nutzerverhalten daraus abgeleitet und nicht gemessen ist.
+**Domain:** Mehrsprachige lexikalische Suche in einer selbstgehosteten Dokumentensuche, Ausbau um Spanisch, Italienisch, Niederlaendisch und Portugiesisch
+**Researched:** 2026-09-23 (Milestone v1.3 Sprachausbau)
+**Confidence:** HIGH fuer alles, was ich in der ausgelieferten tantivy-Fassung selbst gemessen habe, fuer den eigenen Quellcode und fuer die offizielle Doku der Vergleichsprodukte. MEDIUM fuer die Nutzererwartung aus Fremdprodukten, weil sie aus Konfigurationsoberflaechen und Foren abgeleitet und nicht erhoben ist.
 
-Nur die zwei neuen Funktionen sind hier untersucht. Volltext, Semantik, OCR, Zero-Config, Berechtigungs-Durchgriff, Ergebnisseite mit Paginierung, Admin-Sicht und EN/DE/FR gelten als gebaut.
+Untersucht ist nur das Neue: die vier zusaetzlichen Sprachen der LEXIKALISCHEN Suche und die UI-Kataloge. Volltext de/en, deutsche Komposita, Semantik (kann die vier Sprachen bereits), OCR in neun Sprachen (Positivliste seit 1.2.0), Ergebnisseite mit Filtern und Sortierung, Berechtigungs-Durchgriff und EN/DE/FR gelten als gebaut.
 
 ---
 
-## Vorbefunde, die die Feature-Frage neu stellen
+## Teil 0: Eigene Messungen, die diese Recherche tragen
 
-Vier Befunde entscheiden mehr als jede Geschmacksfrage. Sie stehen vor der Landschaft, weil sie mehrere Zeilen der Tabellen erklären.
+Fuenf Befunde stammen nicht aus Fremdquellen, sondern aus Laeufen gegen `tantivy 0.26.0` in `backend/.venv` dieses Repos, also gegen genau die Fassung, die ausgeliefert wird. Sie stehen vorn, weil sie mehrere Zeilen der Tabellen weiter unten erklaeren und weil sie mehrere Entwuerfe ausschliessen.
 
-### V1. Der Unified-Search-Dialog kann weder Typfilter noch Sortierung tragen (HIGH)
+### M1. tantivy traegt alle vier Sprachen, Stemmer und Stoppwortliste (HIGH)
 
-Der Dialog von Nextcloud bietet exakt drei Filterkategorien an: Orte/Provider, Datum, Person. Es gibt keinen Dateityp-Filter und keine Sortiersteuerung. Nachgelesen im Serverquellcode, `core/src/components/UnifiedSearch/UnifiedSearchModal.vue` (`data-cy-unified-search-filter="places" | "date" | "people"`, `dateFilterActive`, `personFilterActive`).
+`Filter.stemmer` nimmt 18 Sprachen, `Filter.stopword` 13, und es/it/nl/pt sind in beiden Mengen. Es braucht also keine Fremdbibliothek, keine eigene Stoppwortliste und keinen eigenen Stemmer. Quelle: `quickwit-oss/tantivy-py`, `src/tokenizer.rs` und die API-Doku, dazu der eigene Lauf.
 
-**Folge:** Beide v1.2-Funktionen leben vollständig auf der eigenen Ergebnisseite (`php/lib/Controller/PageController.php`, `php/templates/search.php`) und im `/search`-Vertrag des Containers. `php/lib/Search/Provider.php` bleibt unberührt. Das ist eine gute Nachricht für den Umfang: der Dialogpfad muss nicht zweimal gedacht werden.
+### M2. ascii_fold muss HINTER die Stoppwortliste, nicht davor (HIGH, gemessen)
 
-### V2. Findling verschwindet heute stumm, sobald jemand im Dialog einen Datums- oder Personenfilter setzt (HIGH)
+Die eingebauten Stoppwortlisten tragen echte Akzente und vergleichen exakt. Wer vorher faltet, laesst Stoppwoerter durch. Gemessen an einem Satz je Sprache:
 
-`Provider::getSupportedFilters()` meldet genau `BUILTIN_TERM` und `BUILTIN_TITLE_ONLY`. Das Developer Manual sagt wörtlich: "If filters send by client are not supported, the provider will not receive the request." Der Dialog bietet den Datumsfilter jedem Nutzer an. Wer ihn setzt, bekommt keine Findling-Gruppe, ohne Fehler, ohne Hinweis. Genau diese Falle steht bereits als Kommentar in `Provider.php` ("a skipped provider looks exactly like a broken backend").
-
-**Folge:** Ein `since`/`until`-Filter ist kein Luxus, sondern das Schließen einer stillen Lücke. Er ist technisch billig (siehe V3) und gehört in die Priorisierung, auch wenn er nicht im Milestone-Ziel steht.
-
-### V3. Die Bausteine für Filter und Sortierung liegen bereits im Index und in der SQLite (HIGH, kein Reindex nötig)
-
-| Baustein | Wo | Eignung |
+| Sprache | Reihenfolge `fold` dann `stop` | Reihenfolge `stop` dann `fold` |
 |---|---|---|
-| `ext`, kleingeschriebene Endung ohne Punkt, `raw`-Tokenizer, `basic` | `backend/src/findling/index/schema.py`, gefüllt über `extension_of()` | exakter Termfilter, bereits von der `type:`-Syntax benutzt |
-| `mtime`, Integer, `fast=True`, `indexed=False` | dieselbe Datei | `order_by_field` und `range_query` laufen über Fast Fields |
-| `files.mime`, `files.size`, `files.mtime` je `file_id` | `backend/src/findling/store/schema.sql` | Mimetype-Gruppen und Größen ohne Indexänderung, dieselbe Datenbank, die schon den ACL-Vorfilter beantwortet |
-| `Searcher.search(..., order_by_field=..., order=Order.Desc)` und `Query.range_query(..., use_inverted_index=False)` | tantivy-Stub im Projekt-venv, `tantivy/tantivy.pyi` Zeilen 347 bis 401 | Sortierung und Zeitraumfilter ohne neue Abhängigkeit |
+| Portugiesisch | `nao, ha, contrat, enta, tamb, aqu` | `contrat, enta, aqu` |
+| Spanisch | `mas, aun, contrat, aqui, si, funcion` | `aun, contrat, aqui, funcion` |
+| Italienisch | `perc, contratt, gia, uffic` | `contratt, gia, uffic` |
 
-**Folge:** Typfilter, Datumssortierung und Zeitraumfilter kosten **keinen** `SCHEMA_VERSION`-Sprung und **keinen** Reindex. Das hält D-04 aus v1.1 ("Bestandsinstallationen nicht strafen") durch. Sortierung nach **Name** oder **Größe** fällt genau deshalb heraus: Name ist ein Textfeld ohne Fast-Spalte, Größe steht überhaupt nicht im Index. Siehe Anti-Features.
+Portugiesisch leckt drei Stoppwoerter, Spanisch zwei, Italienisch eines. Das ist genau die Begruendung, die im Kopf von `backend/src/findling/index/analyzer.py` fuer die deutsche Kette schon steht. **Die vorhandene englische Kette faltet vor der Stoppwortliste** (`lowercase, ascii_fold, stopword("english"), remove_long, stemmer`). Fuer Englisch ist das folgenlos, weil die englische Liste keine Akzente traegt. Wer diese Kette fuer die vier neuen Sprachen kopiert, baut den Fehler ein. Das ist die wahrscheinlichste Einzelfalle dieses Milestones.
 
-### V4. Die Wiederaufwärm-Kosten der Entladung sind bereits gemessen, und sie waren einmal ein echter Nulltreffer (HIGH)
+Gegenrichtung, ehrlich benannt: Niederlaendisch ist der einzige Fall, in dem `fold` vor `stop` besser waere. Die Betonungsakzente des Niederlaendischen (`hét`, `zó`, `vóór`) sind unakzentuiert Stoppwoerter und ueberleben die Liste sonst. Gemessen: `hét` wird bei `fold` dann `stop` entfernt, bei `stop` dann `fold` bleibt `het` stehen. Ein Streutoken gegen drei geleckte Stoppwoerter: die Reihenfolge bleibt einheitlich `stop` dann `fold`, und die niederlaendischen Betonungsformen gehoeren in eine kleine `custom_stopword`-Liste, wenn sie jemals stoert.
 
-Aus `docs/measurements/2026-09-vergleichsmessung-m7g/README.md`:
+### M3. ascii_fold ist fuer es und pt zwingend, fuer it und nl gleichgueltig (HIGH, gemessen)
 
-| Größe | Wert |
-|---|---|
-| Grundlast im Leerlauf, Modell kalt | 103,2 MB |
-| Erste Suche mit semantischem Anteil, `anon` danach | 518,2 MB, also **plus 415,0 MB dauerhaft** |
-| Einzelposten "Gewichte geladen" | plus 398,7 MB |
-| Kaltstart über OCS, leerer Bestand | 1.550,4 ms |
-| Kaltstart über OCS, voller Bestand | 1.838,4 ms |
-| Drei Reproduktionen | 1.598 / 1.805 / 2.468 ms, warm danach 553 bis 674 ms |
-| Decke eines einzelnen Containeraufrufs | 1.501 ms (`ExAppService::REQUEST_TIMEOUT_SECONDS` und `PAGE_REQUEST_TIMEOUT_SECONDS`, je 1,5 s) |
-| Belegter Abbruch am 10.09.2026, 14:05:17Z | `cURL error 28 ... after 1501 milliseconds`, `backend unreachable`, **null Treffer** für den Nutzer, bei kaltem Seitencache des Wirts |
+Ohne Faltung erzeugen die akzentuierte und die unakzentuierte Schreibweise desselben Wortes verschiedene Terme, und zwar nicht nur bei Sonderzeichen:
 
-**Folge, und sie ist die wichtigste Zeile dieses Dokuments:** Die 415 MB sind der Gewinn, den die Entladung holt. Der Preis ist genau der Kaltstart, der bereits einmal eine Suche gekostet hat. Eine Entladung, die den Nutzer das Nachladen **synchron** bezahlen lässt, baut diesen Nulltreffer als wiederkehrendes Verhalten ein. Die Architektur kann das bereits sauber: `_semantic_documents()` in `backend/src/findling/index/search.py` fängt jeden Fehler der Vektorhälfte ab und liefert eine leere Liste, worauf die Suche rein lexikalisch antwortet (D-19). Entladung muss auf genau diesen Pfad aufsetzen.
+| Wort | mit `ascii_fold` | ohne |
+|---|---|---|
+| `información` / `informacion` | `informacion` / `informacion` | `inform` / `informacion` |
+| `faturação` / `faturacao` | `faturaca` / `faturaca` | `fatur` / `faturaca` |
+| `ação` / `acao` | `aca` / `aca` | `açã` / `aca` |
+| `città` / `citta` | `citt` / `citt` | `citt` / `citt` |
+| `coördinatie` / `coordinatie` | `coordinatie` / `coordinatie` | `coordinatie` / `coordinatie` |
 
----
+Der spanische und der portugiesische Snowball-Stemmer entfernen Akzente nur dort, wo sie auf einer abgetrennten Endung sitzen. Der niederlaendische entfernt sie selbst, der italienische hat hier nichts zu tun. Also: `ascii_fold` in allen vier Ketten, hinter der Stoppwortliste.
 
-## Feature Landscape
+Der Preis, damit er dokumentiert und nicht entdeckt wird: `año` und `ano` werden derselbe Term (`ano`), `niña` und `nina` ebenfalls (`nin`). Das ist die uebliche und ueberall akzeptierte Abwaegung in einer Dokumentensuche: mehr Recall, ein paar Wortpaare weniger Praezision. Die Faltung gilt auf beiden Seiten, Index und Anfrage, also bleibt die Suche in sich schluessig.
 
-### Table Stakes (Users Expect These)
+### M4. Italienische Elision funktioniert ohne eigenen Filter (HIGH, gemessen)
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Typgruppen im Nextcloud-Vokabular statt Endungsliste: Dokumente, Tabellen, Präsentationen, PDF, Bilder, Text | Die Files-App filtert seit NC 30 genau so (`apps/files/src/components/FileListFilter/FileListFilterType.vue`: Documents, Spreadsheets, Presentations, PDFs, Folders, Audio, Images, Videos, über Mime-Aliase `x-office/document` usw.). Wer diese Wörter in der Dateiliste gelernt hat, sucht sie auf der Ergebnisseite wieder | MEDIUM | Gruppen auf die indexierbaren Typen kürzen (`ALLOWED_MIMETYPES` in `backend/src/findling/extract/dispatch.py`): PDF, docx/odt/rtf, xlsx/ods, pptx/odp, txt/md/csv/html, jpeg/png/tiff/webp. Audio, Video, Ordner gibt es hier nie, also dürfen sie auch nicht angeboten werden |
-| Genau ein Filter-Vokabular, nicht zwei | Es gibt bereits `type:pdf` in der Suchzeile (`backend/src/findling/query/rewrite.py`). Ein UI-Filter, der etwas anderes bedeutet als die Syntax, produziert zwei Wahrheiten | MEDIUM | Entweder der UI-Filter übersetzt in dieselbe `ext`-Menge, oder die Syntax wird auf Gruppen erweitert. Eine Entscheidung, nicht zwei Implementierungen |
-| Aktive Filter sichtbar und mit einem Klick entfernbar, plus "Filter zurücksetzen" | Standardmuster in Files-App (Chips), Paperless-ngx und jeder Facettensuche; NN/g nennt die einklickbare Entfernung als Pflicht | LOW | Serverseitig als Formular, kein JS nötig. `php/js/search.js` sagt im Kopf bereits zu, dass "filtering" ohne Script funktioniert |
-| Filter- oder Sortierwechsel setzt auf Seite 1 zurück | Sonst zeigt Seite 5 Treffer aus einer anderen Ergebnismenge | LOW, aber korrektheitskritisch | Der Cursorpfad (`PageController::cursorPath`) gilt nur für ein Tupel aus Begriff, `names`, Filter und Sortierung. Ändert sich eines davon, muss `cursors` verworfen werden. Bereits vorhandene Regel: jeder Pfaddefekt landet auf Seite 1 |
-| Filter und Sortierung stehen in der URL und überleben Teilen, Lesezeichen und Zurücknavigation | Die Seite ist bewusst ein Dokument; Zurückkehren ohne Listenverlust ist ein geliefertes v1.1-Versprechen (UI-03) | LOW | `PageController::pageUrl()` erweitern, dieselbe defensive Leseart wie `names` und `page`: unbekannter Wert bedeutet "nicht gesetzt", nie eine Fehlermeldung |
-| Sortierung: Relevanz als Vorgabe, "Zuletzt geändert" als zweite Option | Paperless-ngx sortiert Volltexttreffer per Vorgabe nach Score; Drive, Dropbox und SharePoint bieten Relevanz plus Datum. Relevanz muss die Vorgabe bleiben, sonst verliert die Hybridsuche ihren Sinn | MEDIUM | `order_by_field=mtime`, `Order.Desc`. Zweitschlüssel `file_id` gegen gleiche Zeitstempel, sonst wackelt die Paginierung |
-| Leerer Ergebniszustand nennt den aktiven Filter | "Keine Treffer" nach einem unbemerkt gesetzten Filter ist die klassische Sackgasse | LOW | Ein Satz plus der Entfernen-Link, in allen drei Katalogen |
-| Entladung kostet den Nutzer nie eine gescheiterte Suche | Belegt in V4: ein Kaltstart hat bereits einmal 0 Treffer erzeugt | HIGH | Erste Suche nach Entladung antwortet sofort lexikalisch, das Modell wärmt im Hintergrund nach, ab der zweiten Suche ist die Semantik zurück. Nutzt den bestehenden Degradationspfad |
-| Der Zustand ist auf der Admin-Seite ablesbar | Die Seite nennt heute fünf Modellzustände mit je einem Satz (`php/templates/admin.php`, `docs/admin-page.md`) | LOW bis MEDIUM | Sechstes Wort nötig, etwa `unloaded`. `AdminViewService::ENGINE_STATES` ist eine geschlossene Liste; ein unbekanntes Wort fällt heute auf "meldet den Zustand noch nicht" zurück, und ein Test sichert genau das ab (`AdminViewServiceTest`: 'a word from a later release' => ['unloading']). Neuer Container plus alte Hälfte bleibt also unfallfrei, zeigt aber den Ersatzsatz |
-| Abschaltbar | Immich (`MACHINE_LEARNING_MODEL_TTL=0`), Ollama (`OLLAMA_KEEP_ALIVE=-1`) und LM Studio (TTL je Modell) machen die Entladung alle abschaltbar. Wer RAM hat, will Tempo | LOW | Eine Umgebungsvariable im Muster von `backend/src/findling/config.py`, `0` bedeutet nie entladen. Kein Admin-UI-Schalter, siehe Anti-Features |
+Elasticsearch braucht dafuer einen `elision`-Filter, tantivy hat keinen, und er wird hier nicht gebraucht: `Tokenizer.simple()` trennt am Apostroph, und die Snowball-Stoppwortliste fuehrt die elidierten Formen ausdruecklich als eigene Eintraege (`dell | di + l'`, `nell | in + l'`, `sull | su + l'`, `agl | a + gl'`). Gemessen:
 
-### Differentiators (Competitive Advantage)
+- `dell'anno la fatturazione elettronica dei contratti` gibt `anno, fattur, elettron, contratt`
+- `l'ufficio nell'edificio` gibt `uffic, edific`
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Filter und Sortierung ohne Reindex | Das offizielle fulltextsearch-Umfeld erkauft Filter mit einem Suchserver. Findling holt sie aus Feldern, die seit v1.0 im Index stehen. Bestandsinstallationen aktualisieren und haben die Funktion sofort | LOW (Entscheidung, nicht Code) | Hält D-04 durch. Gehört in den Store-Text: "neue Filter, kein Reindex" |
-| Typfilter, der nur anbietet, was es geben kann | Die Files-App zeigt "Videos" auch dort, wo nie ein Video liegt. Ein Filter, der nie leer läuft, wirkt gebaut statt generiert | LOW | Ergibt sich aus der Kürzung auf `ALLOWED_MIMETYPES` |
-| Mimetype-Gruppen aus der SQLite statt Endungsraten | `files.mime` ist der von Nextcloud bestimmte Typ, also derselbe Wert, nach dem die Files-App filtert. Eine `.docx`, die jemand `.doc` genannt hat, landet in derselben Gruppe wie im Dateimanager | MEDIUM | Alternative zum `ext`-Term im Index. Preis: der Vorfilter bekäme einen Join gegen `files`, und `prefilter_visible()` trägt heute den ausdrücklichen Kommentar "no ORDER BY and no join against files on this path". Bewusste Entscheidung nötig, siehe Abhängigkeiten |
-| Zeitraumfilter `since`/`until`, im Dialog **und** auf der Seite | Schließt V2: Findling verschwindet heute stumm, sobald jemand im Dialog nach Datum filtert. Mit `range_query` über das Fast Field ist es fast geschenkt | MEDIUM | Zwei Zeilen in `getSupportedFilters()`, ein Range-Query im Rewriter, eine Übersetzung in `Provider::search()`. Der größere Teil ist der Beweis, dass die Paginierung damit stabil bleibt |
-| "Älteste zuerst" als dritte Sortierung | Kostet nach der Datumssortierung nur `Order.Asc`. Für Aktenrecherche ("der erste Schriftwechsel") der eigentlich gesuchte Fall | LOW | Erst bauen, wenn Desc steht |
-| Die Wiederaufwärm-Zahl wird ausgewiesen statt versprochen | Die Beleg-Kultur des Projekts ist sein Verkaufsargument. "Nach X Minuten Leerlauf gibt der Container 415 MB zurück, die nächste Suche antwortet in Y ms lexikalisch und ab der übernächsten wieder semantisch" ist eine Aussage, die ein Admin prüfen kann | MEDIUM | Gehört in die Messphase der Box-Anfahrt, nicht in eine Schätzung. Eine Messzahl steht an drei Stellen (README.en.md, beide info.xml) |
-| Vorwärmen im Hintergrund statt synchronem Nachladen | Ollama, Immich und LM Studio lassen alle die nächste Anfrage warten. Wer stattdessen sofort lexikalisch antwortet und im Hintergrund nachlädt, ist in dieser Klasse ungewöhnlich und passt exakt zur 1,5-Sekunden-Decke | MEDIUM | Ein Thread, der genau eine Ladung anstößt, mit dem bestehenden `LOAD_RETRY_SECONDS`-Muster gegen Dauerversuche |
+Kein Artikelrest im Index. Italienisch ist damit die billigste der vier Sprachen.
 
-### Anti-Features (Commonly Requested, Often Problematic)
+### M5. Niederlaendische Komposita bleiben ganz, und `split_compound` loest das (HIGH, gemessen)
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Facettenzähler am Filter, "PDF (42)" | Jede Shop-Suche hat sie, sie wirken professionell | Der Zähler müsste vor dem Berechtigungsfilter gezogen werden und zählt damit Dokumente anderer Leute. Genau dieses Leck ist im Projekt bereits benannt und geschlossen (T-02-93, "counting oracle"), `CandidatePage` trägt deshalb bis heute **kein** Total | Filter ohne Zahlen. Wenn eine Gruppe leer ist, sagt das der leere Zustand nach dem Klick, nicht vorher |
-| Filter ohne Suchbegriff, "zeig mir alle PDFs" | Die Files-App kann genau das | `build_query()` liefert bei einer Zeile aus nur einem Filter bewusst `None`: "No term, no engine". Ohne Begriff gibt es keine Rangfolge, und der ACL-Vorfilter müsste über den ganzen Bestand laufen statt über eine Trefferliste. Das ist die Umkehrung der Frage, die der Vorfilter beantwortet, und sein dokumentiertes Anti-Pattern | Der leere Zustand nennt den Grund in einem Satz und verweist auf den Typfilter der Dateiliste. Suche bleibt Suche, kein Dateibrowser |
-| Sortierung nach Name oder Größe | Die Dateiliste sortiert so, die Erwartung wird mitgebracht | Name ist ein Textfeld ohne Fast-Spalte, Größe steht gar nicht im Index. Beides heißt: neues Schemafeld, `SCHEMA_VERSION`-Sprung, Vollreindex auf jeder Installation. Dazu die Sortierreihenfolge für Umlaute (DIN 5007) als eigenes Fass | Relevanz und Datum. Wenn später ohnehin ein Reindex ansteht, können `name_sort` und `size` mitgenommen werden. Bis dahin: nicht anbieten statt schlecht anbieten |
-| Sortierung nur innerhalb der angezeigten 25 Zeilen, per JS | Schnell gebaut, sieht aus wie Sortierung | Sortiert die Seite, nicht das Ergebnis. Auf Seite 3 steht dann ein älterer Treffer als auf Seite 1. Das ist eine Lüge im UI und zerstört das Versprechen der Ergebnisseite | Serverseitige Sortierung über die ganze Trefferstrecke oder gar keine |
-| Den UI-Filter einfach als `type:pdf` in die Suchzeile schreiben | Ein Dreizeiler, die Syntax existiert schon | `carried_operators()` markiert `type:` als `FILETYPE`, und `one_round()` schaltet daraufhin die Vektorhälfte ab. Jede gefilterte Suche wäre damit stumm rein lexikalisch, also schlechter als die ungefilterte. Der Nutzer sieht nur "mit Filter finde ich weniger" | Strukturiertes Feld in `SearchRequest` (etwa `types: list[str]`), das die Operator-Regel **nicht** auslöst, plus bewusste Entscheidung, wie die Vektorhälfte gefiltert wird (siehe Abhängigkeit D3) |
-| Freitextfeld für beliebige Endungen im UI | "Ich will nach .eml filtern" | Endungen, die nie indexiert werden, erzeugen garantiert leere Ergebnisse und wirken wie ein Defekt. Außerdem zweites Vokabular neben den Gruppen | Geschlossene Gruppenliste im UI, `type:`-Syntax bleibt für Fortgeschrittene erhalten und ist dokumentiert |
-| Entladung auch während der Indexierung | "TTL ist TTL" | `worker/poller.py` holt sich dasselbe Modell über `shared_model()` aus `embed/engine.py`. Eine TTL, die zwischen zwei Einbettungsbändern feuert, lädt 398,7 MB immer wieder neu und verlängert genau den Lauf, dessen Laufzeit in v1.1 schon um 40,9 Prozent gestiegen ist | TTL zählt ab der letzten Nutzung durch **irgendeinen** Aufrufer, und die zweite Spur hält das Modell, solange sie arbeitet. Gemessen, nicht angenommen |
-| Aggressive TTL, etwa 60 Sekunden | Maximaler RAM-Gewinn | Auf einer Instanz mit ein paar Suchen pro Stunde zahlt praktisch jede Suche den Kaltstart. Der Gewinn ist Speicher, den niemand braucht, der Preis ist Latenz, die jeder merkt | Vorgabe im Bereich der Präzedenzfälle (Immich 300 s, Ollama 300 s, LM Studio 60 min) und am eigenen Messwert kalibriert. Konservativ starten, Zahl begründen |
-| Admin-Schalter im Nextcloud-UI für die TTL | Wirkt bedienbarer als eine Umgebungsvariable | Der Container liest Umgebungsvariablen; der Weg von PHP in den Container ist die Schreib-Allowlist mit drei Einträgen und einem Test, der sie zählt. Ein Schalter für eine Speicheroptimierung ist kein Grund, ein Sicherheitstor zu erweitern | Umgebungsvariable plus Zeile in `docs/admin-page.md` und `docs/embeddings.md`. Die Admin-Seite **zeigt** den Zustand, sie **stellt** ihn nicht |
-| Entladung als "Sparmodus" verkaufen | Klingt nach Feature | Wer gar keine Semantik will, hat `FINDLING_EMBED_ENABLED` bereits. Zwei Schalter für dieselbe Wirkung verwirren | Klar trennen: Entladung ist eine Leerlaufoptimierung, kein Abschalter |
+Niederlaendisch ist wie Deutsch eine zusammenschreibende Sprache, und der Snowball-Stemmer zerlegt nichts. Ohne Zerleger findet niemand `belasting` in `gemeentebelastingen`. Mit einer Miniatur-Konstituentenliste und den niederlaendischen Fugen (`s`, `en`, `e`) im selben Kettenbau wie beim Deutschen:
+
+| Wort | ohne Zerleger | mit Zerleger |
+|---|---|---|
+| `verzekeringsmaatschappij` | `verzekeringsmaatschappij` | `verzeker, maatschappij` |
+| `gemeentebelastingen` | `gemeentebelast` | `gemeent, belast` |
+| `woningbouwvereniging` | `woningbouwveren` | `woning, bouw, veren` |
+| `arbeidsovereenkomst` | `arbeidsovereenkomst` | `arbeid, overeenkomst` |
+| `jaarrekening` | `jaarreken` | `jar, reken` |
+| `huurcontract` | `huurcontract` | `hur, contract` |
+
+Sechs von sechs Verwaltungskomposita kommen auseinander. Die Mechanik traegt also unveraendert. Dazu die Lizenzlage, und sie ist besser als im deutschen Fall: Debian trixie fuehrt `wdutch` aus dem Quellpaket `dutch` 1:2.20.19+1-3, es installiert `/usr/share/dict/dutch` und `/usr/share/dict/nederlands`, stammt von OpenTaal und traegt **BSD-3-Clause und CC-BY-3.0** (geprueft im Debian-`copyright`). Beide sind permissiv und damit ohne die GPL-Kaskade vertraeglich, die beim deutschen `wngerman` noetig war.
+
+### M6. Der Index waechst um rund zwei Drittel, aber nur bei eingeschalteten Sprachen (HIGH, aus dem eigenen Kopf von `schema.py`)
+
+Gemessen ist dort: der Index waechst auf das 0,374-fache des extrahierten Textes mit Dokumentspeicher und auf das 0,076-fache ohne ihn. Heute liegt der Index also bei etwa 0,45 (ein gespeichertes `body_de` plus ein ungespeichertes `body_en`). Vier weitere ungespeicherte Koerperfelder kosten 4 mal 0,076, also 0,304. Das ergibt rund 0,754, ein Zuwachs von etwa 68 Prozent.
+
+Das ist eine Plattenzahl, keine RAM-Zahl (tantivy liest per mmap), und sie faellt nur an, wo ein Feld auch befuellt wird. Ein leeres Schemafeld kostet fast nichts. Genau daraus folgt die Bauform in Teil 2.
 
 ---
 
-## Feature Dependencies
+## Teil 1: Wie vergleichbare Produkte es machen, und was Nutzer davon erwarten
 
-```
-[Typfilter UI auf der Ergebnisseite]
-    └──requires──> [strukturiertes Filterfeld im /search-Vertrag]
-                       └──requires──> [Entscheidung: ext-Term im Index ODER mime aus files-Tabelle]
-                                          └──requires──> [Regel, wie die Vektorhaelfte gefiltert wird]
-
-[Sortierung nach Datum]
-    └──requires──> [order_by_field ueber mtime + Zweitschluessel file_id]
-                       └──conflicts──> [RRF-Fusion aus index/fusion.py]
-
-[Typfilter UI] ──requires──> [Cursorpfad-Invalidierung bei Filter- oder Sortwechsel]
-[Sortierung]   ──requires──> [Cursorpfad-Invalidierung bei Filter- oder Sortwechsel]
-
-[Zeitraumfilter since/until] ──enhances──> [Sortierung nach Datum]   (dieselbe mtime-Spalte)
-[Zeitraumfilter since/until] ──repariert──> [stilles Verschwinden im Dialog, V2]
-
-[Modell-Entladung im Leerlauf]
-    └──requires──> [Halter in embed/engine.py kann freigeben]
-    └──requires──> [nicht blockierender Erstzugriff: lexikalisch antworten, im Hintergrund waermen]
-    └──requires──> [sechstes engineState-Wort + AdminViewService::ENGINE_STATES + drei Kataloge]
-    └──conflicts──> [Einbettungsspur in worker/poller.py, shared_model()]
-
-[Jede neue sichtbare Zeichenkette] ──requires──> [EN/DE/FR im Gleichstand, vier CI-Gates]
-[Minor-Sprung auf 1.2.0]           ──requires──> [Migration im Muster Version001200Date...]
-```
-
-### Dependency Notes
-
-- **D1, Typfilter braucht ein strukturiertes Feld, keinen Text.** `SearchRequest` in `backend/src/findling/api/search.py` hat `extra="forbid"`; ein neues Feld ist eine bewusste Vertragsänderung auf beiden Seiten. Der Umweg über die `type:`-Syntax ist ausdrücklich verboten (Anti-Feature), weil er die Semantik abschaltet.
-- **D2, der Filterort entscheidet über Kosten und Genauigkeit.** Im Tantivy-Query (`FIELD_EXT`, `_extension_query()` existiert bereits) ist der Filter billig, weil die Engine gar nichts anderes liefert; er trifft aber nur die lexikalische Hälfte und arbeitet auf Endungen. In der SQLite (`files.mime`) ist er genauer und trifft beide Hälften, kostet aber einen Join im heißen Pfad, der heute ausdrücklich keinen hat.
-- **D3, die Vektorhälfte kennt keinen Dateityp.** `store/vectors.py` liefert Nachbarn als `file_id`. Wird nur der Tantivy-Teil gefiltert, kommen über die semantische Hälfte Treffer der falschen Gruppe durch, und der Filter wirkt kaputt. Drei Auswege: Filter in der SQLite für beide Hälften (sauber), Nachfiltern der fusionierten Liste über eine Typabfrage (mittel), oder die gefilterte Suche bleibt lexikalisch (billig, aber dann muss die Seite das sagen).
-- **D4, Sortierung schließt Fusion aus.** Rang entsteht relativ zu einer Liste; eine nach Datum sortierte Liste hat keine Ränge, die RRF verrechnen könnte, und die Vektorhälfte kann nichts nach Datum ordnen. Die saubere Regel ist die, die das Projekt schon kennt: wie `lexical_only` bei Operatoren fällt bei Datumssortierung die semantische Hälfte weg. Das ist kein Defekt, es ist die Definition. Es gehört aber in einen sichtbaren Satz auf der Seite oder in die Dokumentation.
-- **D5, Paginierung hängt an der Ordnungsstabilität.** Der Cursorpfad zählt erlaubte Kandidaten, nicht Rohtreffer (`candidates()` in `index/search.py`). Das funktioniert für jede deterministische Ordnung. Gleiche `mtime`-Werte ohne Zweitschlüssel machen die Ordnung aber zwischen zwei Aufrufen instabil, und dann verdoppeln oder verschlucken sich Treffer beim Blättern.
-- **D6, `_ranked()` liest heute Score-Tupel.** Mit `order_by_field` liefert tantivy den Fast-Field-Wert an der Stelle des Scores. Der Umbau ist klein, aber er trifft eine Funktion, die auf beiden Suchpfaden liegt.
-- **D7, Entladung und Indexierung teilen einen Halter.** `worker/poller.py` importiert `shared_model` und `note_cutter_failure` aus `embed/engine.py`. Die TTL darf nicht nur den Suchpfad kennen.
-- **D8, jeder neue Modellzustand ist ein Protokollwort.** `engine_state()` (Python) speist `status.py::engineState`, das `AdminViewService::ENGINE_STATES` gegen eine geschlossene Liste prüft, das `admin.php` in einen Satz übersetzt, der in EN/DE/FR stehen muss und in `docs/admin-page.md` als Tabellenzeile. Fünf Stellen für ein Wort.
-- **D9, der Minor-Sprung braucht eine Migration.** Merker aus v1.1: jeder Minor-Sprung ohne Migration im Muster `Version001100Date20260911000000` endet in stummer Suche. Für 1.2.0 gilt das unverändert und unabhängig davon, dass der Index kompatibel bleibt.
-
----
-
-## MVP Definition
-
-### Launch With (v1.2)
-
-- [ ] **Typfilter mit geschlossener Gruppenliste auf der Ergebnisseite**, Gruppen nur aus indexierbaren Typen, ohne Zähler, serverseitig, ohne JS bedienbar
-- [ ] **Ein Filtervokabular**, das UI-Gruppen und `type:`-Syntax zur Deckung bringt
-- [ ] **Sortierung Relevanz (Vorgabe) und Zuletzt geändert**, mit Zweitschlüssel gegen Zeitstempel-Gleichstand
-- [ ] **Filter und Sortierung in der URL**, defensive Leseart, unbekannte Werte still auf die Vorgabe
-- [ ] **Cursorpfad wird bei jedem Filter- oder Sortwechsel verworfen**, Rückfall auf Seite 1
-- [ ] **Leerer Zustand nennt den aktiven Filter und bietet das Entfernen an**
-- [ ] **Eine ehrliche Zeile zur Semantik**, wenn nach Datum sortiert wird und die Hybridhälfte deshalb entfällt
-- [ ] **Modell-Entladung nach Leerlauf**, TTL als Umgebungsvariable, `0` schaltet ab
-- [ ] **Erste Suche nach Entladung antwortet lexikalisch innerhalb der 1,5-Sekunden-Decke**, Nachladen im Hintergrund
-- [ ] **TTL feuert nie gegen die laufende Einbettungsspur**
-- [ ] **Sechstes `engineState`-Wort**, Satz auf der Admin-Seite in EN/DE/FR, Zeile in `docs/admin-page.md`
-- [ ] **Wiederaufwärm-Kosten gemessen und ausgewiesen**, in derselben Box-Anfahrt wie der Wirkungsbeleg
-- [ ] **Migration für 1.2.0**, sonst stumme Suche nach dem Upgrade
-
-### Add After Validation (v1.x)
-
-- [ ] **Zeitraumfilter `since`/`until`**, samt Erweiterung von `getSupportedFilters()`. Auslöser: sobald die Datumssortierung steht, ist die Range-Abfrage fast fertig, und sie repariert das stille Verschwinden im Dialog
-- [ ] **"Älteste zuerst"**. Auslöser: erste Rückmeldung, die nach dem ältesten Schriftstück fragt
-- [ ] **Mehrfachauswahl von Gruppen**. Auslöser: `_extension_query()` kann ODER bereits; das UI wird nur dann mehrfachfähig, wenn jemand danach fragt
-- [ ] **Ordner-Einschränkung ("nur in diesem Ordner")**. Auslöser: Nachfrage; Vorarbeit liegt mit `storage_id` im Schema, aber `path` ist bewusst nicht indexiert
-
-### Future Consideration (v2+)
-
-- [ ] **Sortierung nach Name und Größe**. Verschoben, weil sie ein Schemafeld und damit einen Vollreindex kostet. Nur zusammen mit einem ohnehin fälligen Reindex, und dann mit sauberer Umlautsortierung
-- [ ] **Facetten mit Zählern**. Verschoben, bis es eine Zählung gibt, die den Berechtigungsfilter nicht umgeht. Heute wäre sie ein Zählorakel
-- [ ] **Personenfilter**. Verschoben: Findling indexiert Inhalte, nicht Urheberschaft; die Zuordnung käme aus Nextcloud und wäre eine zweite Berechtigungsgrenze
-- [ ] **Modell-Vorwärmen nach Zeitplan**, etwa morgens vor Arbeitsbeginn. Verschoben: erst messen, ob die TTL überhaupt stört
-
----
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Typfilter mit Nextcloud-Gruppen | HIGH | MEDIUM | P1 |
-| Cursor-Invalidierung bei Filter- oder Sortwechsel | HIGH (Korrektheit) | LOW | P1 |
-| Sortierung Relevanz und Zuletzt geändert | HIGH | MEDIUM | P1 |
-| Filter und Sortierung in der URL, ohne JS bedienbar | MEDIUM | LOW | P1 |
-| Leerer Zustand nennt den Filter | MEDIUM | LOW | P1 |
-| Entladung mit nicht blockierendem Erstzugriff | HIGH (415 MB auf 4-GB-Boxen) | HIGH | P1 |
-| TTL abschaltbar per Umgebungsvariable | MEDIUM | LOW | P1 |
-| Sechstes `engineState`-Wort plus Kataloge | MEDIUM | LOW | P1 |
-| Wiederaufwärm-Messung im Bericht | HIGH (Beleg-Kultur) | MEDIUM | P1 |
-| Zeitraumfilter `since`/`until` | MEDIUM bis HIGH (repariert stille Lücke) | MEDIUM | P2 |
-| Mimetype-Gruppen aus `files.mime` statt `ext` | MEDIUM (Genauigkeit) | MEDIUM | P2 |
-| "Älteste zuerst" | LOW bis MEDIUM | LOW | P2 |
-| Mehrfachauswahl von Gruppen | LOW | LOW | P3 |
-| Ordner-Einschränkung | MEDIUM | HIGH | P3 |
-| Sortierung Name und Größe | MEDIUM | HIGH (Reindex) | P3 |
-| Facetten mit Zählern | LOW | HIGH (Sicherheitsproblem) | P3, eher nie |
-
----
-
-## Competitor Feature Analysis
-
-### Filter und Sortierung
-
-| Feature | Nextcloud Files-App (NC 30+) | Nextcloud Unified Search | Paperless-ngx | Unser Ansatz |
-|---------|------------------------------|--------------------------|---------------|--------------|
-| Typfilter | Chips: Documents, Spreadsheets, Presentations, PDFs, Folders, Audio, Images, Videos, über Mime-Aliase | gibt es nicht | Dokumenttyp, Korrespondent, Tags | Dieselben Wörter, gekürzt auf indexierbare Typen, ohne Ordner, Audio und Video |
-| Zähler an den Filtern | nein | entfällt | teils | nein, und begründet (Zählorakel) |
-| Sortierung | Name, Größe, Geändert über Spaltenköpfe, clientseitig über die geladene Liste | keine | Score als Vorgabe bei Volltext, dazu Sortierfelder | Relevanz als Vorgabe, Zuletzt geändert serverseitig; Name und Größe bewusst nicht |
-| Filter ohne Suchbegriff | ja, filtert die Ordneransicht | entfällt | ja, filtert die Dokumentliste | nein, mit Verweis auf die Dateiliste |
-| Filterwirkung auf die Paginierung | keine Paginierung, die Liste ist geladen | Gruppe mit "mehr" | serverseitige Seiten | Cursorpfad wird verworfen, Rückfall auf Seite 1 |
-| Verfügbare Filter im Dialog | entfällt | Orte/Provider, Datum, Person; ein Provider ohne passende Deklaration wird stumm übersprungen | entfällt | Dialog bleibt bei `term` und `title-only`; der Typfilter lebt auf der eigenen Seite |
-
-### Modell-Entladung im Leerlauf
-
-| Aspekt | Immich (Machine Learning) | Ollama | LM Studio | Unser Ansatz |
+| Produkt | Modell | Spracherkennung | Query-Zeit | Konfidenz |
 |---|---|---|---|---|
-| Vorgabe-TTL | 300 s | 300 s (5 min) | 60 min für per API geladene Modelle | am eigenen Messwert kalibrieren, konservativ, Zahl begründen |
-| Abschalten | `MACHINE_LEARNING_MODEL_TTL=0` | `OLLAMA_KEEP_ALIVE=-1` oder `24h` | TTL je Anfrage oder App-Vorgabe | Umgebungsvariable, `0` bedeutet nie entladen |
-| Kosten der nächsten Anfrage | Nutzer wartet auf das Nachladen | Nutzer wartet, je nach Modell Sekunden bis zehner Sekunden | Nutzer wartet | **Nutzer wartet nicht**: sofort lexikalische Treffer, Semantik ab der nächsten Suche |
-| Sichtbarkeit | Logzeile | `ollama ps` | UI | Admin-Seite nennt den Zustand als eigenes Wort mit eigenem Satz |
-| Konflikt mit Hintergrundarbeit | kaum thematisiert | kaum thematisiert | Auto-Evict beim Modellwechsel | ausdrückliche Regel: die TTL feuert nie gegen die laufende Einbettungsspur |
+| **Paperless-ngx** (dieselbe Engine, dieselbe Zielgruppe) | **EINE** Stemmer-Sprache fuer den ganzen Index | keine; `PAPERLESS_SEARCH_LANGUAGE`, sonst abgeleitet aus `PAPERLESS_OCR_LANGUAGE` | eine Kette, keine Wahl; Wechsel der Einstellung baut den Index beim naechsten Start neu | HIGH (offizielle Doku) |
+| **Elasticsearch / OpenSearch** | Feld je Sprache (multi-field) oder Index je Sprache | Sprachidentifikation in der Ingest-Pipeline moeglich, `lang_ident_model_1` | `multi_match` ueber alle Sprachfelder, mit Feld-Boosts; Anfrage wird ausdruecklich NICHT sprach-erkannt | HIGH (Elastic-Blog + Referenz) |
+| **Meilisearch** | ein Index, Erkennung je Feld ueber `whatlang` | automatisch je Dokument, einschraenkbar ueber `localizedAttributes` | `locales` je Anfrage, sonst Erkennung | HIGH (offizielle Doku) |
+| **Nextcloud fulltextsearch_elasticsearch** | Analyzer nicht konfigurierbar, nur der Tokenizer | keine | keine | MEDIUM (PR #57, Forenpraxis) |
+| **Findling heute** | zwei Sprachfelder, **derselbe Text in beide**, kein Dokument wird zugeordnet | keine | OR ueber `body_de`, `body_en`, `name`, `title`, mit Boosts 1,0 / 0,8 / 3,0 / 2,0 | HIGH (eigener Code) |
+
+### Was daraus folgt, in vier Saetzen
+
+**Findling liegt bereits ueber dem direkten Wettbewerber.** Paperless-ngx, der Marktfuehrer im selbstgehosteten Dokumentenmanagement und die naechste Vergleichsgroesse, kann genau eine Stemmer-Sprache. Findling kann zwei und behandelt beide gleichzeitig. Die Nutzererwartung in diesem Segment ist also eher niedrig, und der Ausbau auf sechs ist Vorsprung, nicht Nachholen.
+
+**Das Muster, das Findling schon faehrt, ist das, das Elastic empfiehlt.** "Ein Feld je Sprache, denselben Text ueberall hinein, zur Anfragezeit ueber alle Felder" ist die Per-Field-Strategie, und ihr ausdruecklicher Vorteil ist der Umgang mit gemischtsprachigen Dokumenten. Der Ausbau ist damit eine Fortsetzung und keine Kehrtwende. Das ist die wichtigste Nachricht dieser Recherche fuer den Zuschnitt.
+
+**Ein gemeinsames multilinguales Feld ist ueberall verworfen.** Ein Analyzer ueber gemischten Text unter-stemmt die einen Sprachen und ueber-stemmt die anderen, und der Recall sinkt in allen. Das steht so in mehreren unabhaengigen Elastic-Leitfaeden.
+
+**Die Anfrage wird nirgends sprach-erkannt, und das ist der wichtigste Einzelbefund.** Elastic schreibt es aus: Suchanfragen haben im Mittel 2,4 Terme, Sprachidentifikation braucht mehr als 50 Zeichen. Meilisearch sagt es in der eigenen Doku ueber die eigene Automatik ("short or partial inputs are harder to identify correctly"). Wer die Suchzeile erkennen laesst, baut eine Suche, die bei kurzen Woertern wuerfelt.
+
+### Was Nutzer bei gemischtsprachigen Bestaenden erwarten
+
+Der Bestand einer typischen Nextcloud ist gemischt, und zwar innerhalb einzelner Dateien: ein Angebot mit niederlaendischem Anschreiben und englischen Positionen, ein Lebenslauf, ein Vertrag mit spanischem Rumpf und englischen Anlagen. Die Diskussion #8293 bei Paperless-ngx zeigt, wie Nutzer damit heute umgehen, wenn die Suche es nicht kann: sie weichen auf Tags und Metadaten aus und legen sich eine Ablagesprache zurecht. Das ist ein Umgehungsverhalten, kein Wunsch.
+
+Die Erwartung selbst ist einfach und unausgesprochen: **ich tippe ein Wort und die Datei kommt, egal in welcher Sprache sie geschrieben ist, und ich sage vorher nichts.** Genau das liefert die Per-Field-Strategie ohne Erkennung. Jede Bauform, die vom Nutzer oder vom Admin eine Zuordnung verlangt, bricht diese Erwartung an der Stelle, an der sie am haeufigsten zutrifft.
 
 ---
 
-## Offene Fragen für die Planung
+## Teil 2: Die drei Entwurfsfragen, beantwortet
 
-1. **Filterort:** `ext` im Tantivy-Query oder `mime` in der SQLite? Entscheidet über Genauigkeit, über die Wirkung auf die Vektorhälfte und darüber, ob `prefilter_visible()` seinen Kommentar "no join against files" verliert (Abhängigkeiten D2, D3).
-2. **Semantik bei Datumssortierung:** Der Wegfall ist technisch zwingend (D4). Offen ist nur, ob die Seite das sagt oder ob es in der Dokumentation steht.
-3. **TTL-Vorgabewert:** erst nach der Wiederaufwärm-Messung festlegen. Die Präzedenzfälle spannen 300 s bis 60 min auf, und der eigene Kaltstart liegt gefährlich nah an der 1.501-ms-Decke.
-4. **Wortwahl des sechsten Zustands** (`unloaded`, `idle`, `released`) samt Satz in drei Katalogen. Die alte Companion-Hälfte zeigt in jedem Fall den Ersatzsatz, das ist geprüft und harmlos.
-5. **Zeitraumfilter mitnehmen oder vertagen?** Er repariert eine stille Lücke, teilt sich die ganze mtime-Mechanik mit der Sortierung und wäre nach v1.2 deutlich teurer, weil die Mechanik dann wieder aufgemacht werden müsste.
+### Frage 1: Sprachfelder je Dokument oder ein multilinguales Feld?
+
+**Sprachfelder, sechs Stueck, und das Schema traegt sie immer.**
+
+Die zweite Haelfte ist die eigentliche Empfehlung und sie faellt aus dem eigenen Code: `FINDLING_LANGUAGES` steuert heute nicht das Schema, sondern nur, ob `body_en` **befuellt** wird (`IndexBatchWriter._index_english`). Das Schema hat immer beide Felder. Dieses Muster traegt unveraendert auf sechs:
+
+- Das Schema hat in jeder Installation dieselben sechs Koerperfelder. Es gibt nur eine Schemafassung, also nur eine Migration und keine instanzabhaengigen Schemata.
+- Befuellt werden nur die Felder, die die Instanz eingeschaltet hat. Der Zuwachs aus M6 zahlt nur, wer ihn bestellt.
+- Ein leeres Feld kostet keine Posting-Liste und faellt zur Anfragezeit sofort durch.
+
+### Frage 2: Spracherkennung je Dokument?
+
+**Nein. Weder automatisch noch aus Dateimetadaten.** Ausfuehrlich als Anti-Feature unten. Die Kurzfassung: derselbe Text geht in alle eingeschalteten Felder, wie heute. Das ist genau die Eigenschaft, die gemischtsprachige Dokumente ueberhaupt erst findbar macht, und sie kostet nichts ausser Plattenplatz, den M6 beziffert.
+
+Dateimetadaten sind zusaetzlich keine Quelle: Nextcloud fuehrt kein Sprachfeld an einer Datei, ein `dc:language` in einem PDF ist in der Praxis fast immer die Oberflaechensprache des schreibenden Programms, und ein Ordnername wie `/NL/` ist eine Konvention, keine Aussage.
+
+### Frage 3: In welchen Sprachfeldern wird zur Anfragezeit gesucht?
+
+**In allen befuellten, nie in der Nutzersprache.** Drei Gruende, der dritte ist der wichtigste:
+
+1. Die Nutzersprache der Oberflaeche sagt nichts ueber die Sprache der gesuchten Datei. Ein niederlaendischer Admin mit englischer Nextcloud-Oberflaeche ist der Normalfall, nicht die Ausnahme.
+2. Die Anfrage laesst sich nicht erkennen (Teil 1).
+3. Findling faehrt es heute schon so, und der Berechtigungs-, Offset- und Paritaetsbau darunter kennt genau einen Suchpfad. Eine zweite, sprachabhaengige Feldmenge waere eine zweite Variante, durch die jede Sicherheitszusage erneut gefuehrt werden muesste.
+
+**Aber es gibt einen gemessenen Haken, und er ist neu bei sechs Feldern.** Der Parser baut aus einem blossen Wort ein ODER ueber alle Standardfelder, und tantivy **summiert** die Scores der passenden Teilanfragen. Das ist Elasticsearch-`most_fields`-Verhalten. Gemessen, wie viele der sechs Ketten fuer dieselbe Frage zugleich treffen:
+
+| Dokument enthaelt | Anfrage | passende Teilanfragen |
+|---|---|---|
+| `contratos` | `contrato` | 3 von 6 (en, es, pt) |
+| `facturas` | `factura` | 3 von 6 (en, es, pt) |
+| `rekeningen` | `rekening` | 3 von 6 (de, es, nl) |
+| `documentos` | `documento` | 3 von 6 (en, es, pt) |
+| `informatie` | `informatie` | **6 von 6** |
+
+Ein Dokument, dessen Wort alle Ketten unveraendert durchlaesst, bekommt bis zum Sechsfachen des Beitrags eines Dokuments, das nur in der richtigen Sprachkette trifft. Das ist die falsche Richtung: der sprachrichtige Treffer soll gewinnen. Bei zwei Feldern war das ein Rauschen, bei sechs ist es eine messbare Rangverschiebung.
+
+Zwei Hebel, beide vorhanden:
+- **Feld-Boosts senken.** `FIELD_BOOSTS` fuehrt `body_en` schon auf 0,8. Die vier neuen gehoeren darunter, etwa 0,6, mit der ausdruecklichen Begruendung, dass sie Zusatzsprachen und nicht Leitsprachen sind.
+- **`Query.disjunction_max_query`.** tantivy-py hat sie (geprueft in der installierten Fassung). Sie ist das `best_fields` der Elastic-Welt und summiert nicht. Der Preis ist, dass die Anfrage dann je Feld gebaut statt vom Parser erzeugt wird, also ein Eingriff in `query/rewrite.py` mitsamt Filter-Praefixen, Umlautvarianten und Tiefenbegrenzung. Kein Pflichtstueck fuer v1.3, aber der richtige naechste Schritt, wenn eine Messung die Verschiebung zeigt.
+
+---
+
+## Teil 3: Feature Landscape
+
+### Table Stakes (ohne diese fuehlt sich der Sprachausbau unfertig an)
+
+| Feature | Warum erwartet | Komplexitaet | Notes |
+|---|---|---|---|
+| Vier Analysatorketten es/it/nl/pt, Snowball-Stemmer plus eingebaute Stoppwortliste | Ohne Stemming findet `contratos` das Wort `contrato` nicht. Das ist der ganze Grund, warum die Sprache im Schema steht | NIEDRIG | M1: tantivy bringt alles mit. Vier Funktionen nach dem Muster von `english_analyzer()` |
+| Reihenfolge `lowercase, stopword, ascii_fold, remove_long, stemmer` | M2 und M3. Falsche Reihenfolge leckt Stoppwoerter oder trennt Akzentschreibweisen | NIEDRIG | Weicht bewusst von der vorhandenen englischen Kette ab. Braucht einen Test je Sprache mit genau den Saetzen aus M2 |
+| Sechs Koerperfelder im Schema, immer alle, befuellt nur nach `FINDLING_LANGUAGES` | Ein Schema je Installation, sonst gibt es so viele Indexformen wie Konfigurationen | NIEDRIG | Muster existiert (`_index_english`). Nur verallgemeinern |
+| `FINDLING_LANGUAGES` bleibt bei `de,en` ab Werk | Bestandsinstallationen duerfen durch ein Minor-Upgrade nicht langsamer oder groesser werden. Linie D-04 | NIEDRIG | Deckt sich mit dem OCR-Entscheid vom 21.09.: neun angeboten, drei ab Werk |
+| Schema-Migration, die das Indexverzeichnis wirklich neu anlegt | `open_index` oeffnet ein vorhandenes Verzeichnis mit dessen ALTEM Schema. Vier neue Felder erreichen eine Bestandsinstallation sonst nie, und die Suche im neuen Feld ist stumm | **HOCH** | Der einzige echte Risikoposten. Details unten bei den Abhaengigkeiten |
+| Reindex nur, wenn eine neue Sprache wirklich eingeschaltet wird | Ein Zwangs-Reindex fuer jede Bestandsinstallation, nur damit vier leere Felder entstehen, waere ein Tagewerk Rechenzeit fuer null Nutzen | MITTEL | `start_rebuild_on_drift` traegt das bereits, aber die Driftmarken muessen sprachabhaengig werden |
+| Sprachfaelle je Sprache in CI, ohne Fremdbestand | Der einzige Beweis, dass eine Sprache wirklich geht. Das Muster steht in `docs/measurements/2026-09-a4-sprachfaelle-ci/` | MITTEL | Braucht Korpusdateien je Sprache. Der Reddit-Nutzer, der Hilfe angeboten hat (BL-F02), ist genau dafuer einzuplanen |
+| UI-Kataloge es/it/nl/pt | Wer die Suche in seiner Sprache bekommt, erwartet die Oberflaeche dazu | MITTEL | **197 Schluessel, nicht 174.** BL-F02 nennt die alte Zahl; `docs/l10n-french.md` zaehlt 197 aus `de.json`, davon 37 mit printf-Direktiven und 5 mit Pluralformen |
+| Dokumentierte Grenzen je Sprache | Eine Suche, die eine Grenze verschweigt, erzeugt einen Fehlerbericht statt einer Erwartung | NIEDRIG | Drei Saetze: `año`/`ano` fallen zusammen, portugiesische Schreibung vor 1990 wird nicht vereinheitlicht, Komposita nur fuer de und nl |
+
+### Differenzierer (nicht erwartet, aber wertvoll)
+
+| Feature | Wertversprechen | Komplexitaet | Notes |
+|---|---|---|---|
+| **Niederlaendische Komposita-Zerlegung** | Der eine Hebel, der Niederlaendisch von "stemmt" auf "findet" hebt. M5: sechs von sechs Verwaltungskomposita. Kein Produkt im Selfhost-Segment kann das fuer Niederlaendisch, und die NL-Outreach-Spur (GovChat-NL) ist offen | **HOCH** | Braucht eine eigene Rezeptmessung wie fuer Deutsch (Fenstergrenzen, Fugen, Fehltrennungen), eine zweite Wortlistenquelle im Abbild, einen zweiten Automaten (RAM!) und eine eigene Digest-Marke. Nicht in den 5 bis 10 PT enthalten, die BL-F02 fuer Baustein 2 schaetzt |
+| Permissive Lizenz der niederlaendischen Liste | BSD-3-Clause und CC-BY-3.0 statt der GPL-Kaskade des deutschen Falls. Weniger Lizenztext, weniger Erklaerungsbedarf | NIEDRIG | Nebenertrag von M5, gehoert in THIRD-PARTY.md |
+| `disjunction_max_query` statt Score-Summe | Der sprachrichtige Treffer gewinnt gegen den Zufallstreffer in vier Ketten. Wird erst bei sechs Feldern sichtbar | MITTEL bis HOCH | Eingriff in `query/rewrite.py`. Erst nach einer Messung, siehe Frage 3 |
+| Warnung, wenn `FINDLING_LANGUAGES` und `FINDLING_OCR_LANGUAGES` auseinanderlaufen | Wer `body_es` einschaltet, aber `deu+eng+fra` OCR fahren laesst, indexiert aus spanischen Scans Rauschen und sucht darin sauber. Das ist ein stiller Totalausfall | NIEDRIG | Paperless-ngx leitet die Suchsprache aus der OCR-Sprache ab. Ableiten waere hier zu viel (siehe offene Fragen), warnen ist billig und richtig |
+| Ein `pt`-Katalog statt zweier | Nextcloud kuerzt `pt_BR` und `pt_PT` auf `pt`, wenn kein exakter Treffer da ist (`LanguageIterator`, Fall 3). Ein Katalog bedient beide | NIEDRIG | MEDIUM-Konfidenz fuer den Dateiladepfad, siehe offene Fragen. Ein Test auf der Test-Nextcloud klaert es in Minuten |
+
+### Anti-Features (klingen richtig, sind es nicht)
+
+| Feature | Warum gewuenscht | Warum problematisch | Stattdessen |
+|---|---|---|---|
+| **Automatische Spracherkennung je Dokument** | "Dann kostet der Index nicht das Sechsfache" | Gemischtsprachige Dokumente sind in einer Nextcloud der Normalfall, und eine Zuordnung macht sie in der zweiten Sprache unauffindbar. Eine Falscherkennung ist stumm: die Datei ist da, sie taucht nur nie auf. Dazu eine Bibliothek plus Modell im RAM-Budget einer 4-GB-Box, und jede Verbesserung der Erkennung erzwingt einen Reindex | Derselbe Text in alle eingeschalteten Felder, Menge ueber `FINDLING_LANGUAGES` deckeln. Der Plattenzuwachs aus M6 ist der Preis, und er ist der guenstigere |
+| **Spracherkennung der Suchanfrage** | "Dann suchen wir nur im richtigen Feld und sparen Rechenzeit" | 2,4 Terme im Mittel gegen mehr als 50 Zeichen Bedarf. Elastic raet ausdruecklich ab, Meilisearch dokumentiert die eigene Schwaeche. Eine Suche, die bei kurzen Woertern wuerfelt, ist schlimmer als eine, die immer alles absucht | Immer alle befuellten Felder, Rangordnung ueber Feld-Boosts |
+| **Sprachumschalter oder Sprach-Chip in der Suchoberflaeche** | "Der Nutzer weiss doch, was er sucht" | Er weiss es nicht: die Sprache der Datei ist nicht die Sprache des Suchenden. Der Umschalter waere eine Pflichteinstellung in einem Produkt, dessen Kernversprechen "niemand muss etwas einstellen" lautet. Dazu 4 bis 6 neue Katalogschluessel mal sechs Sprachen und ein Parameter, der durch die Berechtigungsgrenze reisen muesste | Kein Schalter. Wenn eine Sprache stoert, schaltet der Admin sie im Container aus |
+| **Alle sechs Sprachen ab Werk an** | "Zero-Config heisst doch: geht sofort" | 68 Prozent mehr Indexplatz und die Score-Aufsummierung aus Frage 3 fuer jede Instanz, die fuenf der sechs Sprachen nie sieht. Und ein Zwangs-Reindex fuer jede Bestandsinstallation | Angeboten und nicht Standard, genau wie die neun OCR-Sprachen seit 1.2.0. Derselbe Entscheid, dieselbe Begruendung |
+| **Ein gemeinsames multilinguales Koerperfeld** | "Ein Feld ist billiger als sechs" | Ein Analyzer ueber gemischten Text unter-stemmt die einen und ueber-stemmt die anderen. Verworfen in allen gefundenen Leitfaeden | Feld je Sprache |
+| **Index je Sprache** | Das andere Elastic-Muster | Sechs tantivy-Verzeichnisse, sechs Writer-Locks, sechs Mergevorgaenge und eine Zusammenfuehrung der Rangordnungen von Hand, auf einer 4-GB-Box. Und gemischtsprachige Dokumente muessten in mehrere Indexe | Ein Index, sechs Felder |
+| **Komposita-Zerlegung fuer es, it, pt** | "Was fuer Deutsch gut ist, ist fuer alle gut" | Romanische Sprachen bilden Zusammensetzungen getrennt oder mit Praeposition (`contrato de arrendamiento`). Ein Zerleger findet dort nichts zu trennen und produziert nur Fehltrennungen. Rezept B des deutschen Falls zeigt, wohin das fuehrt | Nur de und nl. Ausdruecklich in die Doku, damit die Frage nicht wiederkommt |
+| **Muttersprachler-Abnahme als Gate fuer alle vier Kataloge** | Das war das FR-Gate | Vier Muttersprachler gibt es nicht, und das Gate haette den Milestone auf unbestimmte Zeit geblockt. BL-F02 sieht das schon so | Maschinell erzeugt, gegen dieselben vier Katalog-Gates gepruegt wie FR, dazu ein sichtbarer Hinweis "Uebersetzung ohne Muttersprachlerabnahme, Korrekturen willkommen" mit Link auf das Repo. Der Reddit-Faden ist die Rezension |
+| **Nutzung der Nextcloud-Oberflaechensprache als Suchsprache** | "Die Information ist doch da" | Sie ist da und sie ist falsch. Siehe Frage 3 | Ignorieren |
+
+---
+
+## Teil 4: Feature Dependencies
+
+```
+[Vier Analysatorketten es/it/nl/pt]
+    |
+    +--requires--> [Reihenfolge stopword vor ascii_fold]        (M2/M3, sonst leckende Stoppwoerter)
+    |
+    +--requires--> [Vier neue Koerperfelder im Schema]
+                        |
+                        +--requires--> [SCHEMA_VERSION-Sprung]
+                        |                   |
+                        |                   +--requires--> [Migration, die das INDEXVERZEICHNIS neu anlegt]
+                        |                                        |
+                        |                                        +--requires--> [Version00XX00Date...-Migration
+                        |                                                        der PHP-Haelfte, Pflicht je Minor]
+                        |
+                        +--requires--> [ANALYZER_VERSION-Sprung]
+                        |
+                        +--enhances--> [Feld-Boosts fuer die vier neuen Felder]
+                                            |
+                                            +--enhances--> [disjunction_max_query]   (optional, nach Messung)
+
+[Niederlaendische Komposita-Zerlegung]
+    |
+    +--requires--> [wdutch im Abbild]                (Dockerfile, THIRD-PARTY.md, Lizenztext)
+    +--requires--> [Rezeptmessung wie 2026-09-komposita-rezept-a]
+    +--requires--> [Zweiter Automat + eigener Fugen-Satz {s, en, e}]
+    +--requires--> [EIGENE Digest-Marke, getrennt von wordlist_hash]
+    +--conflicts--> [RAM-Budget der 4-GB-Box]        (23 MB je Automat, dauerhaft)
+
+[Sprachfaelle je Sprache in CI]
+    +--requires--> [Korpusdateien je Sprache in testdata/corpus]
+    +--requires--> [Vier Analysatorketten]
+
+[UI-Kataloge es/it/nl/pt]
+    +--independent--  (kein technischer Zwang zur Suchseite, kann parallel laufen)
+    +--requires--> [Entscheid pt vs pt_BR vs pt_PT]
+
+[OCR es/it/nl/pt]  ---- ist seit 1.2.0 da, aber NICHT Standard ----> [Warnung bei Divergenz]
+```
+
+### Abhaengigkeiten im Klartext
+
+**Die Migration ist der eine harte Posten, und sie ist gefaehrlicher als sie aussieht.** `open_index` macht `Index.open(path) if Index.exists(path) else Index(build_schema(), path)`. Eine Bestandsinstallation oeffnet also ihr altes Zwei-Feld-Schema und behaelt es fuer immer. Vier neue Felder in `build_schema()` erreichen sie nicht. Und dann passiert genau das, was dieses Projekt schon einmal getroffen hat: die Suche im neuen Feld ist **stumm**, nicht kaputt. Die Migration muss das Verzeichnis loeschen und neu anlegen, nicht nur die Generation erhoehen. `start_rebuild_on_drift` erhoeht die Generation und macht jedes Verdikt veraltet, aber es baut kein Verzeichnis neu; das ist der Unterschied zwischen "die Dokumente werden noch einmal gelesen" und "sie werden in ein Schema geschrieben, das die Felder hat".
+
+**Eine Falle in der Driftmarke.** `expected_versions()` fuehrt `wordlist_hash` als Marke. Kommt eine niederlaendische Liste dazu und geht ihr Digest in dieselbe Marke ein, loest sie einen Rebuild bei **jeder** Installation aus, auch bei denen, die nie Niederlaendisch einschalten. Die niederlaendische Liste braucht eine eigene Marke, und diese Marke darf nur gesetzt sein, wenn `nl` befuellt wird.
+
+**Die OCR-Haelfte ist da, aber nicht scharf.** Seit 1.2.0 traegt das Abbild `tesseract-ocr-spa/-ita/-nld/-por`, Standard bleibt `deu+eng+fra`. Wer `body_es` einschaltet und die OCR nicht mitzieht, indexiert aus spanischen Scans Buchstabensalat. Das ist kein Fehler, den jemand meldet, weil es wie "der Scan war halt schlecht" aussieht.
+
+---
+
+## Teil 5: MVP fuer v1.3
+
+### Liefern (v1.3)
+
+- [ ] Vier Analysatorketten es/it/nl/pt in der gemessenen Filterreihenfolge, mit je einem Test aus den Saetzen von M2 und M3 - ohne sie gibt es das Feature nicht
+- [ ] Sechs Koerperfelder im Schema, befuellt nach `FINDLING_LANGUAGES`, Werkseinstellung bleibt `de,en` - die Bauform, die den Zuwachs aus M6 nur den Bestellern berechnet
+- [ ] `SCHEMA_VERSION`- und `ANALYZER_VERSION`-Sprung plus Migration, die das Indexverzeichnis neu anlegt, plus `Version00XX00Date...` der PHP-Haelfte - Pflicht je Minor-Sprung, und der stumme Ausfall waere sonst genau hier
+- [ ] Reindex nur bei tatsaechlich eingeschalteter neuer Sprache, Bestandsinstallationen mit `de,en` bleiben unberuehrt - Linie D-04
+- [ ] Feld-Boosts fuer die vier neuen Felder unter `body_en`, mit begruendendem Kommentar - der billige Teil der Antwort auf die Score-Aufsummierung
+- [ ] Sprachfaelle je Sprache in CI, Muster `2026-09-a4-sprachfaelle-ci`, ohne Fremdbestand - der einzige Beweis, dass eine Sprache geht
+- [ ] Warnung beim Start, wenn `FINDLING_LANGUAGES` eine Sprache fuehrt, die `FINDLING_OCR_LANGUAGES` nicht hat - eine Zeile gegen einen stillen Totalausfall
+- [ ] UI-Kataloge es/it/nl/pt, 197 Schluessel, gegen die vier vorhandenen Katalog-Gates - Baustein 3 aus BL-F02
+- [ ] Grenzenabschnitt in der Doku, dreisprachig im Store-Text nur als Verweis - Kurztext-Regel des Owners
+
+### Nach Bestaetigung (v1.3, wenn der Zuschnitt traegt)
+
+- [ ] **Niederlaendische Komposita-Zerlegung** samt Rezeptmessung - Ausloeser: der Milestone haelt Termin und die NL-Spur (GovChat-NL) bleibt warm. **Empfehlung: als eigene Phase mit eigenem Tor schneiden, nicht in die Sprachfelder-Phase hineinschieben.** Es ist eine zweite Wortlistenquelle, ein zweiter Automat im RAM-Budget und eine eigene Messreihe, also ungefaehr so gross wie alles andere zusammen. Wenn es nicht passt, faellt es als Ganzes und nicht halb
+
+### Spaeter (v1.4+)
+
+- [ ] `disjunction_max_query` - erst wenn eine Messung die Rangverschiebung aus Frage 3 auf echten Daten zeigt. Vorher ist es ein Eingriff in `query/rewrite.py` ohne Beleg
+- [ ] Franzoesisches Koerperfeld - auffaellige Luecke: FR hat OCR und Katalog, aber keine lexikalische Kette. Sobald sechs Felder stehen, ist das siebte fast umsonst, aber es gehoert nicht in einen Milestone, der es nicht im Ziel fuehrt
+- [ ] Niederlaendische Betonungsakzente als `custom_stopword` - nur wenn jemand es meldet
+- [ ] Getrennte Wortlaute fuer pt_BR und pt_PT - erst wenn ein Nutzer aus einem der beiden Raeume sich meldet
+
+---
+
+## Teil 6: Priorisierung
+
+| Feature | Nutzwert | Aufwand | Prioritaet |
+|---|---|---|---|
+| Vier Analysatorketten, richtige Filterreihenfolge | HOCH | NIEDRIG | P1 |
+| Sechs Felder im Schema, Befuellung nach Einstellung | HOCH | NIEDRIG | P1 |
+| Migration mit echtem Verzeichnisneubau | HOCH (sonst stumm) | HOCH | P1 |
+| Reindex nur bei eingeschalteter Sprache | HOCH | MITTEL | P1 |
+| Sprachfaelle je Sprache in CI | HOCH (Beweis) | MITTEL | P1 |
+| Feld-Boosts der neuen Felder | MITTEL | NIEDRIG | P1 |
+| Warnung bei Sprach-/OCR-Divergenz | MITTEL | NIEDRIG | P1 |
+| UI-Kataloge es/it/nl/pt | MITTEL | MITTEL | P1 |
+| Grenzen dokumentiert | MITTEL | NIEDRIG | P1 |
+| Niederlaendische Komposita | HOCH (fuer NL) | HOCH | P2 |
+| `disjunction_max_query` | MITTEL | MITTEL bis HOCH | P3 |
+| Franzoesisches Koerperfeld | MITTEL | NIEDRIG | P3 |
+| Getrennte pt_BR/pt_PT-Wortlaute | NIEDRIG | MITTEL | P3 |
+
+---
+
+## Teil 7: Offene Fragen fuer die Planung
+
+1. **Wird der Reindex bei eingeschalteter Sprache erzwungen oder angeboten?** Ein Volllauf ueber 52.000 Dateien ist auf der Zielhardware ein Tagewerk. Vorschlag: erzwingen, aber mit dem vorhandenen Banner und dem Generationsmechanismus, also sichtbar und fortsetzbar, und die Suche bleibt waehrenddessen auf dem alten Index benutzbar. Muss gegen `start_rebuild_on_drift` geprueft werden, das heute in dieselbe Richtung arbeitet.
+2. **Wird `FINDLING_LANGUAGES` aus `FINDLING_OCR_LANGUAGES` abgeleitet, wie Paperless-ngx es tut?** Zero-Config spraeche dafuer. Dagegen spricht, dass eine bestehende Instanz mit `FINDLING_OCR_LANGUAGES=spa+deu` dann bei einem Minor-Upgrade unangekuendigt einen Reindex ausloest. Empfehlung: **nicht ableiten, nur warnen.** Owner-Entscheid.
+3. **`pt`, `pt_BR` oder `pt_PT` fuer den Katalog?** `LanguageIterator` kuerzt auf `pt`, ein Katalog wuerde also beide bedienen. Das ist fuer den Sprachiterator HIGH und fuer den Dateiladepfad der App-Kataloge MEDIUM. Auf der Test-Nextcloud in Minuten zu klaeren, und das gehoert vor die Uebersetzungsarbeit, nicht danach.
+4. **Traegt das RAM-Budget einen zweiten Komposita-Automaten?** Der deutsche kostet dauerhaft rund 23 MB. Ein niederlaendischer kommt obendrauf, aber nur auf Instanzen mit `nl`. Die RAM-Tabelle in CLAUDE.md braucht eine Zeile, und die Messphase BL-F03 koennte sie mitnehmen.
+5. **Wie gross wird der Index wirklich?** M6 rechnet mit 0,076 je Feld aus einem deutschen Korpus. Ob ein spanisches Koerperfeld ueber deutschem Text denselben Faktor hat, ist nicht gemessen. Wenn die Messphase BL-F03 ohnehin faehrt, ist die Indexgroesse bei sechs eingeschalteten Sprachen eine billige sechste Zahl.
 
 ---
 
 ## Sources
 
-**Eigener Quellcode und eigene Messberichte (HIGH):**
-- `backend/src/findling/index/schema.py`, `index/search.py`, `index/fusion.py`, `query/rewrite.py`, `api/search.py`, `api/status.py`, `embed/engine.py`, `extract/dispatch.py`, `store/schema.sql`, `store/repo.py`, `worker/poller.py`
-- `php/lib/Search/Provider.php`, `php/lib/Controller/PageController.php`, `php/lib/Service/ExAppService.php`, `php/lib/Service/AdminViewService.php`, `php/lib/Service/SettingsService.php`, `php/templates/search.php`, `php/templates/admin.php`, `php/js/search.js`, `php/tests/Unit/AdminViewServiceTest.php`
-- `docs/measurements/2026-09-vergleichsmessung-m7g/README.md` (Abschnitte 5.3, 6, 9), `docs/measurements/2026-09-05-semantiklauf-m7g/README.md`, `docs/admin-page.md`
-- tantivy-Python-Stub im Projekt-venv, `tantivy/tantivy.pyi` (`order_by_field`, `Order`, `range_query(use_inverted_index=False)`)
+**Eigene Messungen, 2026-09-23** (HIGH, gegen `tantivy 0.26.0` in `backend/.venv`)
+- M2 bis M5: Filterreihenfolge, Akzentfaltung, italienische Elision, niederlaendische Kompositazerlegung, Ueberlappung der Ketten. Skripte sind Einzeiler ueber `TextAnalyzerBuilder`, jederzeit wiederholbar
 
-**Nextcloud, offiziell (HIGH):**
-- Developer Manual, Search: https://docs.nextcloud.com/server/stable/developer_manual/digging_deeper/search.html (Filternamen `term`, `since`, `until`, `person`, `min-size`, `max-size`, `mime`, `type`; "If filters send by client are not supported, the provider will not receive the request.")
-- `nextcloud/server`, `core/src/components/UnifiedSearch/UnifiedSearchModal.vue` (nur Orte, Datum, Person)
-- `nextcloud/server`, `apps/files/src/filters/TypeFilter.ts` und `apps/files/src/components/FileListFilter/FileListFilterType.vue` (die acht Typ-Presets)
-- `nextcloud/server`, `resources/config/mimetypealiases.dist.json` (Mime-Aliase auf `x-office/document`, `x-office/spreadsheet`, `x-office/presentation`)
-- PR nextcloud/server#45708, Dateilisten-Filter
+**Eigener Quellcode und eigene Messberichte** (HIGH)
+- `backend/src/findling/index/analyzer.py`, `index/schema.py`, `index/open.py`, `index/writer.py`, `query/rewrite.py`, `config.py`
+- `docs/measurements/2026-09-a4-sprachfaelle-ci/README.md`, `docs/l10n-french.md`, `docs/german-analyzer.md`
+- `.planning/BACKLOG.md` BL-F02 und BL-F03
 
-**Fremdprodukte als Erwartungsmaßstab (MEDIUM):**
-- Immich, `MACHINE_LEARNING_MODEL_TTL`, Vorgabe 300 s, `0` schaltet ab
-- Ollama FAQ, `OLLAMA_KEEP_ALIVE`, Vorgabe 5 Minuten, https://docs.ollama.com/faq
-- LM Studio, Idle TTL und Auto-Evict, Vorgabe 60 Minuten für per JIT geladene Modelle, https://lmstudio.ai/docs/developer/core/ttl-and-auto-evict
-- Paperless-ngx, Volltexttreffer nach Score sortiert, Filter nach Dokumenttyp, https://docs.paperless-ngx.com/
-- Nielsen Norman Group, Filter- und Sortier-Leitlinien (einklickbares Entfernen, Sortiervorgaben am Nutzermodell), https://www.nngroup.com/
+**tantivy** (HIGH)
+- `quickwit-oss/tantivy-py`, `src/tokenizer.rs` und `docs/api/tantivy/tantivy.md`: 18 Stemmer-Sprachen, 13 Stoppwortlisten, acht Filter, `Query.disjunction_max_query`
+- snowballstem.org, italienische Stoppwortliste: elidierte Formen als eigene Eintraege
+- snowballstem.org, portugiesischer Algorithmus: vereinheitlicht die Schreibungen vor und nach 1990 nicht
+
+**Paperless-ngx** (HIGH, offizielle Doku)
+- docs.paperless-ngx.com/configuration: `PAPERLESS_SEARCH_LANGUAGE` (eine Stemmer-Sprache, abgeleitet aus `PAPERLESS_OCR_LANGUAGE`, Wechsel baut den Index neu), `PAPERLESS_ADVANCED_FUZZY_SEARCH_THRESHOLD`
+- Diskussion #8293: wie Nutzer heute mit gemischtsprachigen Bestaenden umgehen (MEDIUM)
+
+**Elastic** (HIGH fuer die Strategie, MEDIUM fuer Sekundaerartikel)
+- elastic.co/blog/multilingual-search-using-language-identification-in-elasticsearch: per-field gegen per-index, ausdrueckliche Warnung vor Sprachidentifikation der Anfrage (2,4 Terme, mehr als 50 Zeichen noetig)
+- elastic.co/search-labs/blog/compound-word-search
+- pulse.support und neverblink.ai Wissensbasen zu multi_match, `most_fields` gegen `best_fields`, Indexgroesse bei N Sprachfeldern (MEDIUM, Sekundaerquellen)
+
+**Meilisearch** (HIGH, offizielle Doku)
+- meilisearch.com/docs/capabilities/indexing/how_to/handle_multilingual_data: `localizedAttributes`, `locales`, dokumentierte Schwaeche der Automatik bei kurzen Texten
+
+**Nextcloud** (HIGH)
+- `nextcloud/server` stable34, `apps/files/l10n/`: Sprachcodes, es und it und nl vorhanden, Portugiesisch nur als `pt_BR` und `pt_PT`
+- `nextcloud/server`, `lib/private/L10N/LanguageIterator.php`: Kuerzung von `pt_BR` auf `pt` als Rueckfallstufe
+- `nextcloud/fulltextsearch_elasticsearch` PR #57: nur Tokenizer konfigurierbar, kein Analyzer (MEDIUM)
+
+**Debian** (HIGH)
+- packages.debian.org/trixie/wdutch und sources.debian.org `dutch` 1:2.20.19+1-3 `debian/copyright`: OpenTaal, BSD-3-Clause und CC-BY-3.0, installiert `/usr/share/dict/dutch` und `/usr/share/dict/nederlands`
 
 ---
-*Feature research for: Dateityp-Filter, Sortierung und Modell-Entladung im Leerlauf (Findling v1.2)*
-*Researched: 2026-09-14*
+*Feature research fuer: mehrsprachige lexikalische Suche, Milestone v1.3 Sprachausbau*
+*Researched: 2026-09-23*
