@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Phase 19, Plan 19-03 fertig (Feldplan aus den zwei Marken), naechster Plan 19-04
-last_updated: "2026-09-25T00:20:00.000Z"
-last_activity: 2026-09-24 -- 19-03 ausgefuehrt (Feldplan aus schema_version und languages)
+stopped_at: Phase 19, Plan 19-04 fertig (Rangprobe der Feld-Boosts), naechster Plan 19-05
+last_updated: "2026-09-25T01:45:00.000Z"
+last_activity: 2026-09-24 -- 19-04 ausgefuehrt (Rangprobe, Gegenprobe, Kippgrenze 0,81)
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 38
-  completed_plans: 23
+  completed_plans: 24
   percent: 32
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 ## Current Position
 
-Phase: 19 (frageseite-freischalten), EXECUTING, Plan 3 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
+Phase: 19 (frageseite-freischalten), EXECUTING, Plan 4 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
 Status: Ausfuehrung Phase 19 laeuft (9 Plaene in 6 Wellen). 19-01 fertig (82bf2b1): die drei
 Modulkonstanten DEFAULT_FIELDS/TITLE_ONLY_FIELDS/FIELD_BOOSTS sind ein Wert (FieldPlan,
 LEGACY_PLAN), build_query nimmt plan keyword-only mit dem Bestandsplan als Vorgabewert, der
@@ -37,19 +37,27 @@ it ist von FOLDED nach SEPARATED gewandert. 19-03 fertig (354ef27): SCHEMA_MARK 
 LANGUAGES_MARK, field_plan_for(marks, index) rechnet den Feldplan aus den zwei gespeicherten
 Marken des Verzeichnisses (Tor faellt geschlossen, doc_freq-Sonde als Gegenprobe, wirft nie),
 ReadSide traegt field_plan und reset_read_side verwirft ihn mit den Handles, die drei
-Aufrufstellen reichen plan=side.field_plan durch. Volle Suite 2776 bestanden / 15 uebersprungen.
+Aufrufstellen reichen plan=side.field_plan durch. 19-04 fertig (459fc20, c4d7cbc): die
+Rangprobe zu Erfolgskriterium 3 steht in backend/tests/test_field_plan_ranking.py, acht
+Faelle auf einem echten Index mit drei Dokumenten und sechs befuellten Koerperfeldern.
+Der bessere englische Treffer steht bei den ausgelieferten Gewichten vorn, die Gegenprobe
+mit allen vier Zusatzgewichten auf 1,0 kippt den Rang, und die gemessene Kippgrenze ist
+TIPPING_BOOST = 0,81 (Sweep ueber 101 Werte, 24.09.2026, tantivy 0.26.2). BODY_BOOST bleibt
+bei 0,6, der Abstand zur Grenze betraegt 0,21; also keine Datei unter backend/src/findling
+angefasst und die Ratsche unberuehrt. Volle Suite 2784 bestanden / 15 uebersprungen.
 Planung 24.09.: Research b2ef69f,
 Pattern-Karte, Plaene 51525d5, Checker PASS, Warnungen behoben 3c35186. Phase 20 geplant
 (a8d40fd, Checker PASS, f32bdec). Phase 18 davor KOMPLETT (12/12, CI-Beweis 36026836087).
-Last activity: 2026-09-24 -- 19-03 ausgefuehrt (Feldplan aus schema_version und languages)
+Last activity: 2026-09-24 -- 19-04 ausgefuehrt (Rangprobe, Gegenprobe, Kippgrenze 0,81)
 
 Progress: [███.......] 32% (2 von 7 Phasen)
 
 ## Naechster Schritt
 
-Weiter in Phase 19 mit 19-04 (Rangprobe: Boosts unterhalb body_en mit Gegenprobe und
-gemessener Grenze; 19-05 und 19-06 haengen nicht daran und koennen parallel laufen, 19-05
-bewacht die Signatur von field_plan_for ueber den Syntaxbaum). Danach oder parallel:
+Weiter in Phase 19 mit 19-05 (Anti-Feature-Waechter, keine Spracherkennung, vier Aussagen
+mit Gegenproben; bewacht die Signatur von field_plan_for ueber den Syntaxbaum) und 19-06
+(die vier Sprachfaelle auf dem normalen Suchweg). Beide haengen nicht aneinander und
+koennen parallel laufen. Danach oder parallel:
 `/gsd:execute-phase 20` (UI-Kataloge; Wellen 1 und 9 sind Checkpoints, 20-01 Pluralfix
 der sechs Bestandskataloge braucht die Owner-Sichtprobe). Phase-20-Planung 24.09.:
 9 Plaene in 9 Wellen (a8d40fd), Checker PASS, Fussabdruck strikt getrennt von Phase 19
@@ -87,6 +95,12 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
   dort bereits, und ein dritter Cache neben `_DEGRADED` und `_FILLED` waere die dritte
   Generationsfalle. Quelle des Plans sind ausschliesslich die zwei gespeicherten Marken
   `schema_version` und `languages`, nie `settings().languages` (T-18-05-01).
+
+- Erfolgskriterium 3 ist belegt, aber nicht weiter als es traegt (19-04): tantivy summiert die
+  Feldbeitraege, Boosts daempfen die Summe und beseitigen sie nicht. Gemessen auf der Rangprobe
+  kippt der Rang bei einem Zusatzgewicht von 0,81; die ausgelieferten 0,6 liegen 0,21 darunter.
+  Diese Zahl ist der Startpunkt fuer den disjunction_max-Entscheid in Phase 22 (MESS-09) und
+  gehoert per 19-09 nach docs/language-analyzers.md.
 
 - D-04-Linie (v1.1): index-kompatibel ueber Minor-Spruenge. v1.3 verletzt sie bewusst und
   nur fuer Instanzen, die eine neue Sprache einschalten; der Bruch braucht den Owner-Entscheid

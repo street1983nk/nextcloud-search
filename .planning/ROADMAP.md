@@ -124,7 +124,7 @@ Plans:
 - [x] 19-01-PLAN.md: FieldPlan als Wert, plan-Parameter, AST-Waechter der Phasengrenze ersetzt
 - [x] 19-02-PLAN.md: it-Fixture waechst, Messung neu gefahren, Zaehlgate und Klassifizierung nachgezogen
 - [x] 19-03-PLAN.md: Feldplan aus den zwei Marken, ReadSide.field_plan, drei Aufrufstellen
-- [ ] 19-04-PLAN.md: Rangprobe, Boosts unterhalb body_en mit Gegenprobe und gemessener Grenze
+- [x] 19-04-PLAN.md: Rangprobe, Boosts unterhalb body_en mit Gegenprobe und gemessener Grenze
 - [ ] 19-05-PLAN.md: Anti-Feature-Waechter, keine Spracherkennung, vier Aussagen mit Gegenproben
 - [ ] 19-06-PLAN.md: Die vier Sprachfaelle auf dem normalen Suchweg, dritter Ketten-Ausschluss
 - [ ] 19-07-PLAN.md: Ungegateter CI-Sprachbeweis auf allen vier Aesten, plus Ergebnisseite
