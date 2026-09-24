@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Phase 19, Plan 19-04 fertig (Rangprobe der Feld-Boosts), naechster Plan 19-05
-last_updated: "2026-09-25T01:45:00.000Z"
-last_activity: 2026-09-24 -- 19-04 ausgefuehrt (Rangprobe, Gegenprobe, Kippgrenze 0,81)
+stopped_at: Phase 19, Plan 19-05 fertig (Anti-Feature-Waechter), naechster Plan 19-06
+last_updated: "2026-09-25T02:55:00.000Z"
+last_activity: 2026-09-24 -- 19-05 ausgefuehrt (Anti-Feature-Waechter, vier Aussagen, vier Gegenproben)
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 38
-  completed_plans: 24
+  completed_plans: 25
   percent: 32
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 ## Current Position
 
-Phase: 19 (frageseite-freischalten), EXECUTING, Plan 4 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
+Phase: 19 (frageseite-freischalten), EXECUTING, Plan 5 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
 Status: Ausfuehrung Phase 19 laeuft (9 Plaene in 6 Wellen). 19-01 fertig (82bf2b1): die drei
 Modulkonstanten DEFAULT_FIELDS/TITLE_ONLY_FIELDS/FIELD_BOOSTS sind ein Wert (FieldPlan,
 LEGACY_PLAN), build_query nimmt plan keyword-only mit dem Bestandsplan als Vorgabewert, der
@@ -44,20 +44,28 @@ Der bessere englische Treffer steht bei den ausgelieferten Gewichten vorn, die G
 mit allen vier Zusatzgewichten auf 1,0 kippt den Rang, und die gemessene Kippgrenze ist
 TIPPING_BOOST = 0,81 (Sweep ueber 101 Werte, 24.09.2026, tantivy 0.26.2). BODY_BOOST bleibt
 bei 0,6, der Abstand zur Grenze betraegt 0,21; also keine Datei unter backend/src/findling
-angefasst und die Ratsche unberuehrt. Volle Suite 2784 bestanden / 15 uebersprungen.
+angefasst und die Ratsche unberuehrt. 19-05 fertig (0b59fca): der Anti-Feature-Waechter
+backend/tests/test_no_language_detection.py haelt die vier Aussagen aus RESEARCH Pattern 5
+fest (field_plan_for nimmt keinen Anfragetext, build_query liest den Plan nur aus seinem
+Parameter, weder pyproject.toml noch uv.lock fuehrt ein Erkennungspaket, das Wireformat-Gate
+wird genannt statt wiederholt), zehn Faelle, jede Aussage mit Gegenprobe, jeder Leser faellt
+geschlossen. Erfolgskriterium 4 der Roadmap ist damit belegt. Volle Suite 2794 bestanden /
+15 uebersprungen.
 Planung 24.09.: Research b2ef69f,
 Pattern-Karte, Plaene 51525d5, Checker PASS, Warnungen behoben 3c35186. Phase 20 geplant
 (a8d40fd, Checker PASS, f32bdec). Phase 18 davor KOMPLETT (12/12, CI-Beweis 36026836087).
-Last activity: 2026-09-24 -- 19-04 ausgefuehrt (Rangprobe, Gegenprobe, Kippgrenze 0,81)
+Last activity: 2026-09-24 -- 19-05 ausgefuehrt (Anti-Feature-Waechter, vier Aussagen, vier Gegenproben)
 
 Progress: [███.......] 32% (2 von 7 Phasen)
 
 ## Naechster Schritt
 
-Weiter in Phase 19 mit 19-05 (Anti-Feature-Waechter, keine Spracherkennung, vier Aussagen
-mit Gegenproben; bewacht die Signatur von field_plan_for ueber den Syntaxbaum) und 19-06
-(die vier Sprachfaelle auf dem normalen Suchweg). Beide haengen nicht aneinander und
-koennen parallel laufen. Danach oder parallel:
+Weiter in Phase 19 mit 19-06 (die vier Sprachfaelle auf dem normalen Suchweg, dritter
+Ketten-Ausschluss), danach 19-07 (ungegateter CI-Sprachbeweis), 19-08 (spanischer
+Vorher-Nachher-Beweis) und 19-09 (Doku). Der REQUIREMENTS-Haken fuer LEX-05 ist NICHT
+gesetzt: 19-05 liefert das letzte Stueck von Erfolgskriterium 4, der Haken gehoert der
+Phase-Verifikation, weil die erste Haelfte des LEX-05-Satzes erst mit 19-06 und 19-07 auf
+dem echten Suchweg und im CI steht. Danach oder parallel:
 `/gsd:execute-phase 20` (UI-Kataloge; Wellen 1 und 9 sind Checkpoints, 20-01 Pluralfix
 der sechs Bestandskataloge braucht die Owner-Sichtprobe). Phase-20-Planung 24.09.:
 9 Plaene in 9 Wellen (a8d40fd), Checker PASS, Fussabdruck strikt getrennt von Phase 19
@@ -112,6 +120,10 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
 
 - Re-Analyse-Umbau statt Vollreindex: geschaetzt 1 bis 3 h gegen gemessene 19 h 20 min.
 - Keine Spracherkennung, weder dokument- noch anfrageseitig (Anti-Feature, einstimmig).
+  Seit 19-05 strukturell festgehalten statt nur beschlossen: die Funktion, die den Feldplan
+  baut, nimmt keinen Parameter entgegen, der ein Anfragetext ist oder einer sein kann, also
+  ist eine Erkennung der Anfrage nicht verboten, sondern nicht anschliessbar
+  (backend/tests/test_no_language_detection.py, 0b59fca).
 - Katalogzahl beim Planstart aus `php/l10n/de.json` ZAEHLEN (Stand Research 199, nicht 174).
 
 ### Termine und Owner-Checkpoints
