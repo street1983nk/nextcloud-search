@@ -267,3 +267,8 @@ None - no external service configuration required.
 ---
 *Phase: 19-frageseite-freischalten*
 *Completed: 2026-09-24*
+
+## Self-Check: PASSED
+
+Alle acht beruehrten Dateien und die SUMMARY liegen auf der Platte, beide Commits (`10917a0`,
+`783bfb9`) stehen in der Historie, das Arbeitsverzeichnis ist sauber.
