@@ -11,6 +11,33 @@ Everything below was measured rather than reasoned about. The run is
 this page can be traced to a line of
 `docs/measurements/2026-09-analyseketten/rohdaten/kennzahlen.txt`.
 
+## Switching a language on, and when it takes effect
+
+`FINDLING_LANGUAGES` takes a comma separated list out of `de`, `en`, `es`, `it`,
+`nl` and `pt`, and the factory setting is `de,en`. Since plan 18-02 the value is
+filtered against the set this build has a body field and a chain for, so all six
+codes are real choices and none of them falls out in silence. The order you type
+does not matter: the resolved set is always in schema field order, so `es,de` and
+`de,es` are the same setting and neither of them rebuilds an index the other one
+would have left alone. An empty or unknown value keeps `de,en` and logs a warning
+that names the variable and never its value.
+
+Two things are worth knowing before the variable is touched.
+
+**The change takes effect when the container restarts, not when the value is
+saved.** `findling.config.settings()` is resolved once per process and cached,
+and the drift check that starts the rebuild sits in the start path of the poller.
+A running container therefore keeps working on the set it started with. This is
+the same behaviour every other `FINDLING_` variable has, it is not a defect, and
+it is written here so that an admin who edits the value and watches nothing
+happen knows that the restart is the missing step and not a broken setting.
+
+**`body_de` is stored whatever the set says.** It is the only stored copy of the
+extracted text in the whole system and the snippet generator cuts out of it, so
+an instance running on `es` alone still writes it. Being stored and being
+analysed by the German chain are two properties of that one field, and only the
+second one follows the language set.
+
 ## The supplement list
 
 The built in Snowball stop word lists compare strings exactly and they carry

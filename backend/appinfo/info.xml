@@ -344,7 +344,7 @@ Support entreprise et modules payants : demande de devis à admin@infranode.dev]
 			<variable>
 				<name>FINDLING_LANGUAGES</name>
 				<display-name>Index languages</display-name>
-				<description>Comma separated, currently de and en. Changing this changes how text is broken into words, so the index has to be built again afterwards: until it is, older documents answer differently from newer ones, which looks like "my hits are gone". An empty or unknown value keeps de,en.</description>
+				<description>Comma separated, out of de, en, es, it, nl and pt. Every language costs index space, so name the ones your files are actually in. Changing this changes how text is broken into words, and Findling rebuilds the index for the new set by itself: the search keeps answering out of the old index while it runs, and no occ findling:index --restart is needed for it. The change is picked up when the container restarts. An empty or unknown value keeps de,en.</description>
 				<default>de,en</default>
 			</variable>
 			<variable>

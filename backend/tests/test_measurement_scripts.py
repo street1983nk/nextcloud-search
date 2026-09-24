@@ -678,8 +678,18 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # makes every add_document raise. config.py raised SCHEMA_VERSION from 1 to 2
 # for the four new fields, under the owner decisions E-17-1 to E-17-4 of
 # 2026-09-23. No file came and none went, so PACKAGE_FILES_TODAY stays at 55.
+# Moved on 2026-09-24 a twentieth time, by plan 18-02: two of the 55 files
+# changed their bytes. config.py filters _languages() against
+# SUPPORTED_LANGUAGES instead of against DEFAULT_LANGUAGES, which is the one
+# line between "six body fields exist" and "six languages are selectable";
+# DEFAULT_LANGUAGES itself stays ("de", "en"), it is the factory setting and not
+# the capability list. index/writer.py replaced the single English flag of its
+# constructor with the language set: add() now loops over the active set and
+# takes every field name out of BODY_FIELD, while body_de is written
+# unconditionally because it is the one stored copy of the text. No file came
+# and none went, so PACKAGE_FILES_TODAY stays at 55.
 PACKAGE_FILES_TODAY = 55
-PACKAGE_TREE_HASH_TODAY = "a1c7e518ccea7879db7cc869fc24f6ff85cc62ea1d3414a8f41fc844f0fd8c0e"
+PACKAGE_TREE_HASH_TODAY = "9ee107fbb1bda734022c5ee3a9c967e2d6aa11181078ba1062120603611a24e1"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
