@@ -8,21 +8,22 @@ updated: 2026-09-24
 ## Current Focus
 
 reasoning_checkpoint:
-  hypothesis: "HaRP legt die drei Tunnelzertifikate erst nach dem Erzeugen des Containers per docker exec in dessen Schreibschicht (/certs/frp). docker rm -f loescht sie, docker run stellt sie nicht wieder her, harp_connect.sh konfiguriert den Tunnel deshalb ohne Clientzertifikat und der frp-Server weist jeden Login mit EOF ab. Die App und der Umbau sind in Ordnung, nur der Weg von Nextcloud zum Backend ist tot."
+  hypothesis: "Der zweite Befund (Lauf 36001341420, Zusicherung 3 und 5 rot) hat NICHTS mit einem Cache zu tun und alles mit der Groesse des Umbaufensters: rebuildRunning kommt ungecacht aus dem Prozess, das Fenster ist aber nur so lang, wie das Tragen der Dokumente dauert, und das dauert bei dem 29-Dokumente-Korpus dieser Strecke Bruchteile einer Sekunde. Das Fenster ist damit kuerzer als eine Leserunde, egal wie fein die Schleife taktet."
   confirming_evidence:
-    - "Containerlog des NEUEN Containers enthaelt 'the index rebuild ended: the rebuilt directory is in place and the two marks are current again' - der Umbau lief und war nach rund zwei Sekunden durch"
-    - "Alle 133 Runden lesen backendReachable false und einen leeren backend-Block; languagesActive bleibt leer, deshalb greift die Abbruchbedingung nie"
-    - "backend/Dockerfile 410-431 beschreibt genau diese Kette (HaRP schreibt die drei Dateien per docker exec, sonst 'the frp server then refuses every login with EOF') und legt /certs/frp im Image nur leer an"
-    - "Die Mountliste des Neubaus nennt genau ein Volume und keinen /certs-Mount, die Zertifikate koennen also nur in der Schreibschicht gelegen haben"
-    - "docs/dev-setup.md 490-497 und docs/install-check.md arm64-3 halten dieselbe Kette zweimal unabhaengig fest"
-  falsification_test: "Wenn der neu erzeugte Container nach dem Einspielen der drei Zertifikate weiterhin 'connect to server error: EOF' meldet und backendReachable false bleibt, ist die Hypothese falsch"
-  fix_rationale: "Die Rekonstruktion traegt Image, Netz, Environment, Mounts und Labels und uebersieht genau das, was nicht in docker inspect steht. Der Fix ergaenzt die fehlende Zutat an der Wurzel: die drei Dateien werden vor dem docker rm -f aus dem alten Container geholt und vor dem ERSTEN Start des neuen wieder hineingelegt (docker create, docker cp, docker start), denn frpc liest sie einmal beim Start. Keine Zusicherung wird entschaerft, das Budget bleibt bei 300 s."
-  blind_spots: "Ob das Umbaufenster von rund zwei Sekunden gross genug ist, damit die Schleife rebuildRunning true UEBERHAUPT sieht, sobald der Tunnel wieder steht (Zusicherung 3 Mittelmessung und Zusicherung 5 Kanarienvogel) - das ist erst nach einem gruenen Tunnel messbar; ob HaRP die Zertifikate bei Ablauf rotiert und der Neubau dann eine veraltete Kopie einsetzt"
+    - "backend/src/findling/api/status.py 295-301: rebuildRunning/Done/Total kommen aus rebuild_progress(), also aus dem Modulglobal _PROGRESS von index/rebuild.py; hinter FILLED_TTL_SECONDS=30 sitzt ausschliesslich languagesFilled, hinter _DEGRADED (5 s) die Entartungsprobe. Kein TTL beruehrt rebuildRunning."
+    - "php/lib/Service/AdminViewService.php 453-497: overview() ruft exAppService->adminGet('/status') bei JEDEM Aufruf; weder AdminViewService noch ExAppService halten eine ICache- oder statische Schicht."
+    - "index/rebuild.py 482-527: running=true wird beim Eintritt in die Bandschleife gesetzt und im finally auf _AT_REST zurueckgenommen. Das beobachtbare Fenster IST die Tragezeit, nicht die ganze Umbaufolge (Oeffnen, Retire, Swap, Marken sind unsichtbar)."
+    - "Eigene Messung 24.09. mit der echten transfer_documents auf diesem Rechner (tantivy 0.26.2, drei Sprachen de,en,es, synthetische 300k-Kompositaliste): die Tragezeit haengt an der TEXTMENGE, nicht an der Dokumentzahl. 0,29 bis 0,59 s je MB Koerpertext; 400 winzige Dokumente tragen in 0,21 s. Deckungsgleich mit dem Modulkopf von rebuild.py (3000 Dokumente zu je 2,5 kB, vier Ketten, 4,39 s = 0,585 s/MB)."
+    - "testdata/corpus sind 497 kB DATEIEN (PDFs, Scans, Bilder), der daraus extrahierte Koerpertext ist ein Bruchteil davon: das Fenster dieser Strecke liegt bei ~0,1 bis 0,3 s."
+    - "Lauf 36001341420, Zeitstempel: docker start 13:02:26.345, Schleifenende 13:02:28.678 nach 2 Runden. Eine Overview-Leserunde bei gesundem Backend kostet dagegen nur ~50 ms (13:02:25.934 App-Passwort, 13:02:25.986 Leserprobe bestanden), die Runden waren also nicht der Engpass, sondern das Hochlaufen des Containers gegen ein Fenster, das dabei schon vorbei war."
+  falsification_test: "Wenn der aufgestockte Korpus (29 + 64 Dokumente zu je 500 000 Zeichen = rund 32 MB Koerpertext) das Fenster NICHT auf mehrere Sekunden verlaengert, also die Schleife weiterhin kein rebuildRunning true liest, ist die Mengenrechnung falsch und der Engpass liegt woanders."
+  fix_rationale: "Das Fenster wird an der Wurzel vergroessert: der Umbau traegt Text, also bekommt er Text. 64 Fuelldokumente zu je 500 000 Zeichen kosten beim Umbau rund 8 s (gemessen: 29 kleine + 64 grosse = 7,81 s), beim Indexieren aber fast nichts, weil EMBED_TOKEN_CAP=1024 die Einbettung JE DOKUMENT deckelt (drei Chunks pro Dokument, egal wie lang es ist) und MAX_TEXT_CHARS=524288 den Koerper je Dokument begrenzt. Genau diese Asymmetrie ist der Hebel: Fensterlaenge waechst mit der Textmenge, Indexierkosten wachsen mit der Dokumentzahl. Keine Zusicherung wird entschaerft, REBUILD_BUDGET_SECONDS bleibt bei 300."
+  blind_spots: "Ob die semantische Haelfte der Suche die Fuelldokumente in das Band um den besten Treffer (VECTOR_DISTANCE_BAND=14,0) zieht und die drei Begriffe dann mehr als eine Datei zurueckgeben; deshalb steht direkt hinter dem Entladen eine eigene Pruefung der drei Begriffe, die den Fuellkorpus beim Namen nennt. Ob der Laeufer schneller traegt als dieser Rechner (dann kuerzeres Fenster, bei 2x immer noch ~4 s und damit ~15 Leserunden)."
 
-hypothesis: "H1 bestaetigt und praezisiert: HaRP legt die drei Tunnelzertifikate (/certs/frp/client.crt, client.key, ca.crt) NACH dem Erzeugen des Containers per docker exec in dessen SCHREIBSCHICHT. docker rm -f nimmt diese Schicht mit, das Image bringt /certs/frp nur leer mit. Der neu erzeugte Container findet kein lesbares Clientzertifikat, harp_connect.sh konfiguriert den Tunnel ohne mTLS, der frp-Server weist jeden Login mit EOF ab. Die App laeuft, der Umbau laeuft und ist nach rund zwei Sekunden durch, aber Nextcloud sieht backendReachable false und die Beobachtungsschleife liest 300 s lang einen leeren backend-Block."
-test: "Log der 133 Runden gegen den Containerlog stellen; Dockerfile und harp_connect.sh auf die Herkunft von /certs/frp pruefen"
-expecting: "Wenn die Hypothese stimmt: der Containerlog nennt den Umbau als abgeschlossen, die Ueberwachung nennt backendReachable false, und Repo-Dokumentation beschreibt genau diese Zertifikatsuebergabe"
-next_action: "Owner-Bestaetigung durch einen deploy-harp-Lauf auf diesem Stand: Block 'Store upgrade 6' muss den Tunnel wiederbekommen (backendReachable true in den ersten Runden) und die neun Zusicherungen durchlaufen"
+hypothesis: "Das Umbaufenster ist die Tragezeit der Dokumente und skaliert mit der Koerpertextmenge (0,3 bis 0,6 s je MB). Mit dem heutigen Korpus ist es kuerzer als eine Leserunde. Ein Cache ist NICHT im Spiel."
+test: "Korpus vor dem Sprachwechsel um 64 Textdokumente zu je 500 000 Zeichen aufstocken (32 MB Koerpertext), ueber denselben Weg wie der Referenzkorpus (cp nach data/testuser/files, occ files:scan, occ findling:index --restart, dieselbe Entladeschleife)"
+expecting: "Das Fenster liegt dann bei rund 4 bis 8 s, die Schleife sieht in 15 bis 30 Runden rebuildRunning true, Zusicherung 3 und 5 halten; die Zusicherungen 4, 6 und 9 vergleichen weiterhin exakt, weil beide Momentaufnahmen NACH dem Aufstocken gezogen werden"
+next_action: "Owner-Bestaetigung durch einen deploy-harp-Lauf auf diesem Stand: 'Store upgrade 2' muss den Fuellkorpus im Budget entladen und die drei Begriffe weiterhin mit je einer Datei beantworten, 'Store upgrade 6' muss alle neun Zusicherungen halten und die Zahl der Runden mit rebuildRunning true ausweisen"
 
 ## Symptoms
 
@@ -147,60 +148,138 @@ started: mit Plan 18-12, dem Schritt "Store upgrade 6" selbst; der Containerneub
     Der Schritt hat die richtige Beobachtung gemacht und die falsche Ueberschrift darueber
     gesetzt. Das ist ein zweiter, eigener Mangel der Strecke.
 
+- timestamp: 2026-09-24
+  checked: "Die Cachefrage zuerst: woher kommt rebuildRunning in der Overview-Antwort? backend/src/findling/api/status.py 288-309, backend/src/findling/index/rebuild.py 298-312 und 482-527, backend/src/findling/api/resources.py 96 und 486-505, php/lib/Service/AdminViewService.php 453-497 und 1805-1845, php/lib/Service/ExAppService.php"
+  found: |
+    rebuildRunning, rebuildDone und rebuildTotal kommen aus rebuild_progress(), und das ist
+    eine Leseoperation auf dem Modulglobal _PROGRESS, das die Bandschleife zwischen zwei
+    Baendern setzt. Kein TTL, kein Schluessel, keine Uhr.
+    FILLED_TTL_SECONDS = 30.0 gehoert zu resources.filled_languages() und damit AUSSCHLIESSLICH
+    zu languagesFilled; _DEGRADED mit 5 s gehoert zur Entartungsprobe. Beide fassen die vier
+    Umbauwerte nicht an.
+    Die PHP-Seite haelt ebenfalls nichts fest: overview() ruft adminGet('/status') bei jedem
+    Aufruf, backend() dekodiert nur, und weder AdminViewService noch ExAppService kennen
+    ICacheFactory oder ein statisches Feld.
+  implication: |
+    Der TTL-Verdacht ist widerlegt. Die Schleife wuerde rebuildRunning true sehen, wenn es
+    true WAERE, waehrend sie liest. Der Gegner ist nicht der Cache, sondern die Laenge des
+    Fensters.
+
+- timestamp: 2026-09-24
+  checked: "Wie lang ist das Fenster? index/rebuild.py 482-527 (wo running true gesetzt und zurueckgenommen wird) plus eine eigene Messung mit der echten transfer_documents auf diesem Rechner (backend/.venv, tantivy 0.26.2, Sprachen de,en,es, synthetische Kompositaliste mit 300000 Eintraegen)"
+  found: |
+    running=true steht genau um die Bandschleife: davor das Oeffnen beider Verzeichnisse,
+    danach wait_merging_threads, Retire, Swap und die Marken. Das beobachtbare Fenster ist
+    also die reine Tragezeit.
+    Gemessen (Tragezeit, drei Sprachen):
+      400 Dokumente zu je   3 kB (1,2 MB)   0,21 s   -> die Dokumentzahl kostet fast nichts
+      200 Dokumente zu je  20 kB (4,0 MB)   1,15 s
+      100 Dokumente zu je 100 kB (10 MB)    1,81 s
+      29 kleine + 32 grosse (16,1 MB)       3,32 s
+      29 kleine + 64 grosse (32,1 MB)       7,81 s
+    Das sind 0,25 bis 0,6 s je MB Koerpertext; der Modulkopf von rebuild.py nennt fuer 3000
+    Dokumente zu je 2,5 kB und vier Ketten 4,39 s, also 0,585 s/MB: dieselbe Groessenordnung
+    aus zwei unabhaengigen Messungen.
+  implication: |
+    Das Fenster haengt an der TEXTMENGE und nicht an der Dokumentzahl. Der heutige Korpus sind
+    497 kB Dateien (PDFs, Scans, Bilder) und damit deutlich weniger Koerpertext: das Fenster
+    liegt bei ein bis drei Zehntelsekunden. Mehr kleine Dokumente einzuspielen wuerde daran
+    nichts aendern, 400 winzige Dokumente bringen 0,21 s.
+
+- timestamp: 2026-09-24
+  checked: "Was kostet mehr Text auf der Indexierseite? backend/src/findling/config.py 241 (MAX_TEXT_CHARS), 583 (EMBED_TOKEN_CAP), backend/src/findling/embed/chunker.py 27-33 und 81-121, docs/measurements/2026-09-vergleichsmessung-m7g/00-kernaussage.md 180-190"
+  found: |
+    MAX_TEXT_CHARS = 524288 begrenzt den Koerper JE DOKUMENT, EMBED_TOKEN_CAP = 1024 begrenzt
+    die Einbettung JE DOKUMENT, und der Deckel greift laut Chunker-Kopf VOR dem Schnitt: ein
+    Dokument wird auf seine ersten 1024 Token gekuerzt und daraus werden zwei bis drei Chunks,
+    unabhaengig von seiner Laenge. Die gemessenen Durchsaetze der Vergleichsmessung sind
+    31,6 bis 45,7 Dokumente je Minute mit OCR und rund 170 je Minute fuer die Einbettung allein.
+  implication: |
+    Die Kosten der beiden Seiten stehen quer zueinander: die Fensterlaenge waechst mit der
+    TEXTMENGE, die Indexierkosten wachsen mit der DOKUMENTZAHL. Grosse Textdateien sind damit
+    der billige Weg zu einem langen Fenster: 64 Dokumente zu je 500000 Zeichen kosten beim
+    Indexieren 64 Dokumente (drei Chunks je Stueck) und beim Umbau rund 8 s.
+
+- timestamp: 2026-09-24
+  checked: "Kann die Leseschleife nicht einfach dichter takten? Schrittlog Lauf 36001341420, Zeitstempel 13:02:24.75 bis 13:02:31.75, und .github/workflows/deploy-harp.yml 3899-3971"
+  found: |
+    Eine Overview-Leserunde kostet bei gesundem Backend rund 50 ms (13:02:25.9348 App-Passwort,
+    13:02:25.9865 die bestandene Leserprobe dahinter), eine Momentaufnahme mit drei Suchen und
+    einem docker exec 0,23 s. Die Schleife pausiert bereits nur 0,2 s und laeuft damit mit
+    rund vier Runden je Sekunde. Die zwei Runden des Laufs sind kein Taktproblem: die erste
+    lief gegen einen Container, der noch hochfuhr (nicht-200 kostet sleep 1), und als die
+    zweite antwortete, war der Umbau von zwei Zehntelsekunden laengst vorbei.
+  implication: |
+    Ein feinerer Leser ist nicht der Hebel, und ein Hammer auf HaRP waere er erst recht nicht.
+    Selbst mit 50 ms Takt bleibt die Zusicherung 5 unmoeglich, weil der Kanarienvogel eine
+    Suche UND eine zweite Leserunde INNERHALB des Fensters braucht. Das Fenster muss groesser
+    werden, nicht der Leser schneller.
+
 ## Resolution
 
 root_cause: |
-  Der Containerneubau in "Store upgrade 6" rekonstruiert den ExApp-Container aus seinem eigenen
-  docker inspect. docker inspect beschreibt Image, Netz, Environment, Mounts und Labels, aber
-  nicht die Schreibschicht. HaRP legt die drei Tunnelzertifikate (/certs/frp/client.crt,
-  client.key, ca.crt) jedoch erst NACH dem Erzeugen des Containers per docker exec genau dort ab.
-  docker rm -f loescht sie mit der Schreibschicht, docker run erzeugt aus dem Image einen
-  Container mit leerem /certs/frp, harp_connect.sh konfiguriert den Tunnel deshalb ohne
-  Clientzertifikat, und der frp-Server weist jeden Login mit EOF ab.
-  Folge: die App startet, der Umbau laeuft und endet nach rund zwei Sekunden korrekt, aber der
-  Weg von Nextcloud zum Backend ist tot. Die Beobachtungsschleife liest den Fortschritt ueber
-  die Uebersichtsroute der PHP-App, also ueber HaRP, sieht 133 Runden lang backendReachable false
-  und faellt nach 300 s in den Timeout-Zweig, der den Befund als "der Umbau ist nicht fertig
-  geworden" ueberschreibt.
-  Kein Produktfehler: der Container, die App und der Umbau verhalten sich korrekt. Fehlerhaft ist
-  allein die Rekonstruktion in der CI-Strecke.
+  ZWEI Ursachen hintereinander, beide in der CI-Strecke und keine im Produkt.
+
+  1. (Lauf 35997241359, behoben mit bce9908 und 7fa4c21) Der Containerneubau rekonstruiert den
+     ExApp-Container aus seinem eigenen docker inspect. docker inspect beschreibt Image, Netz,
+     Environment, Mounts und Labels, aber nicht die Schreibschicht. HaRP legt die drei
+     Tunnelzertifikate (/certs/frp/client.crt, client.key, ca.crt) jedoch erst NACH dem Erzeugen
+     des Containers per docker exec genau dort ab. docker rm -f loescht sie mit, der neue
+     Container findet kein lesbares Clientzertifikat, harp_connect.sh konfiguriert den Tunnel
+     ohne mTLS, der frp-Server weist jeden Login mit EOF ab. Die Beobachtungsschleife las
+     300 s lang backendReachable false.
+
+  2. (Lauf 36001341420, der Rest) Der Tunnel steht wieder, die Strecke laeuft bis zu den
+     Zusicherungen, und jetzt zeigt sich, was Punkt 1 verdeckt hatte: das Umbaufenster ist
+     kuerzer als eine Leserunde. rebuildRunning ist nur waehrend der Bandschleife von
+     transfer_documents true, und die Tragezeit haengt an der Koerpertextmenge, nicht an der
+     Dokumentzahl (0,25 bis 0,6 s je MB, zweifach gemessen). Der Referenzkorpus sind 39 Dateien
+     mit wenig extrahiertem Text, also rund zwei Zehntelsekunden Fenster. Zusicherung 3
+     (Banner gesehen) und Zusicherung 5 (Kanarienvogel im Fenster) hatten nichts zu messen.
+     KEIN Cache: rebuildRunning kommt ungecacht aus dem Prozess, FILLED_TTL_SECONDS=30 deckt
+     nur languagesFilled.
 fix: |
-  1. .github/workflows/deploy-harp.yml, Block "Store upgrade 6", Containerneubau (Commit bce9908):
-     Vor dem docker rm -f wird geprueft, dass der alte Container /certs/frp/client.crt,
-     client.key und ca.crt lesbar traegt (docker exec laeuft als Image-Nutzer, also dieselbe
-     Frage, die harp_connect.sh stellt); fehlt eine der drei, endet der Schritt mit eigener
-     Meldung statt zu raten, nach der Form aller anderen Pruefungen dieser Rekonstruktion.
-     Danach docker cp "${container}:/certs/frp" - in eine tar-Datei.
-     Aus docker run wird docker create + docker cp - "${container}:/certs" + docker start, in
-     genau dieser Reihenfolge, weil frpc /certs/frp einmal beim Hochlaufen liest. --detach faellt
-     aus run_args weg (bei docker create ungueltig), rebuild_start wird jetzt unmittelbar vor
-     docker start genommen.
-  2. .github/workflows/deploy-harp.yml, Beobachtungsschleife und Timeout-Zweig (Commit 7fa4c21):
-     backendReachable wird getrennt vom Fortschritt gelesen und in reachable gemerkt. War es nie
-     true, nennt der Fehler den Tunnel des erzeugten Containers statt den Umbau und druckt die
-     harp_connect-Zeilen aus dem KOPF des Containerlogs, die aus dem bestehenden tail -n 80
-     herausfielen. Der Umbau-Spruch samt Budget-Satz bleibt fuer seinen Fall unveraendert.
-  Kein Produktcode angefasst, keine Zusicherung entfernt oder entschaerft,
-  REBUILD_BUDGET_SECONDS bleibt bei 300.
+  1. Commit bce9908: die Zertifikate werden vor dem docker rm -f aus dem alten Container geholt
+     und vor dem ERSTEN Start des neuen wieder hineingelegt (docker create, docker cp,
+     docker start).
+  2. Commit 7fa4c21: backendReachable wird getrennt vom Fortschritt gelesen; war es nie true,
+     nennt der Fehler den Tunnel statt den Umbau.
+  3. Commit dieser Runde, fix(18-12): "Store upgrade 2" legt neben den Referenzkorpus einen
+     Fuellkorpus aus 64 Textdateien zu je 500019 Zeichen (rund 32 MB Koerpertext), ueber genau
+     denselben Weg wie der Referenzkorpus (cp nach data/testuser/files, occ files:scan,
+     occ findling:index --restart, dieselbe Entladeschleife, deren expected sich aus
+     find ... | wc -l selbst nachzieht). Damit liegt das Umbaufenster bei rund 4 bis 8 s und
+     die Schleife bekommt 15 bis 30 Leserunden hinein.
+     Direkt hinter dem Entladen pruefen die drei Begriffe Belehrung, Auszug und Erinnerung
+     erneut auf genau eine Datei, damit ein semantisches Durchschlagen des Fuellkorpus dort
+     auffaellt, wo es verursacht wird.
+     Die Leseschleife zaehlt zusaetzlich die Runden mit rebuildRunning true und weist sie im
+     Log, in der Fehlermeldung von Zusicherung 3 und in der Zusammenfassung aus, damit die
+     naechste Dimensionierung eine Zahl hat und keinen Eindruck.
+     Kein Produktcode angefasst, keine Zusicherung entfernt oder entschaerft, beide Budgets
+     unveraendert (REBUILD_BUDGET_SECONDS 300, UPGRADE_DRAIN_BUDGET_SECONDS 900).
 verification: |
-  - Unabhaengige Gegenprobe des mechanischen Teils, ausserhalb der Strecke und mit einem anderen
-    Muster als der Umsetzung: ein Wegwerf-Image (alpine, uid/gid 1000, /certs und /certs/frp auf
-    0700 und dem Nutzer gehoerend) bildet die Form des Findling-Images nach, die drei Dateien
-    werden wie von HaRP per docker exec als Image-Nutzer hineingeschrieben.
-    Ergebnis: docker cp c:/certs/frp - liefert ein tar mit der Wurzel frp/ (frp/, frp/ca.crt,
-    frp/client.crt, frp/client.key); docker cp - c:/certs gegen einen mit docker create
-    erzeugten, NICHT gestarteten Container legt sie nach /certs/frp; nach docker start meldet der
-    Container uid=1000(findling) und alle drei Dateien als lesbar, Eigentuemer 1000:1000 und
-    Modus erhalten (client.key bleibt 0600). Genau die Bedingung, die harp_connect.sh Zeile 81
-    abfragt.
+  - Cachefrage am Code geklaert (status.py, rebuild.py, resources.py, AdminViewService.php,
+    ExAppService.php): rebuildRunning ist ungecacht, nur languagesFilled sitzt hinter dem TTL.
+  - Dimensionierung gemessen, nicht geschaetzt: die echte transfer_documents mit tantivy 0.26.2,
+    drei Sprachen und einer 300000-Eintraege-Kompositaliste traegt 29 kleine plus 64 grosse
+    Dokumente (32,1 MB) in 7,81 s und 29 plus 32 (16,1 MB) in 3,32 s; 400 winzige Dokumente in
+    0,21 s. Gegenprobe aus fremder Quelle: der Modulkopf von rebuild.py nennt 0,585 s je MB.
+  - Budgetfrage am echten Lauf belegt statt geraten: "Store upgrade 2" brauchte in Lauf
+    36001341420 34 s von 900 s (13:01:09Z bis 13:01:43Z), der ganze Job 14 min 46 s von 45.
+    Die Aufstockung kostet nach Rechnung 60 bis 120 s, also bleibt beides unveraendert.
+  - Der Generator des Fuellkorpus lokal ausgefuehrt: 500019 Byte je Datei, unter
+    MAX_TEXT_CHARS=524288, kein Treffer auf belehr, auszug, erinner, florpel oder findling.
   - YAML: yaml.safe_load der ganzen Datei laeuft durch.
-  - Kappen-Check: der run-Block von "Store upgrade 6" ist 26704 Zeichen lang und enthaelt kein
-    ${{ , GitHub wertet ihn also nicht als Template und die 21000-Zeichen-Grenze greift nicht.
-    Kein anderer run-Block der Datei ueberschreitet die Grenze mit einem Ausdruck darin.
-  - bash -n auf dem extrahierten run-Block: fehlerfrei, vor jedem der beiden Commits.
+  - Kappen-Check: die beiden run-Bloecke ueber 15000 Zeichen ("Store upgrade 3" 18417,
+    "Store upgrade 6" 27945) enthalten kein ${{ , GitHub wertet sie also nicht als Template
+    und die 21000-Zeichen-Grenze greift nicht. "Store upgrade 2" liegt bei 8061 Zeichen.
+  - bash -n auf den extrahierten run-Bloecken von "Store upgrade 2" und "Store upgrade 6":
+    fehlerfrei.
   - Kein Python beruehrt, also keine Python-Gates faellig.
-  OFFEN und nur auf dem Laeufer messbar: ob der Umbau (rund zwei Sekunden) noch laeuft, wenn der
-  Tunnel wieder steht, also ob die Schleife rebuildRunning true ueberhaupt zu sehen bekommt
-  (Zusicherung 3 Mittelmessung, Zusicherung 5 Kanarienvogel).
+  OFFEN und nur auf dem Laeufer messbar: ob die semantische Haelfte die Fuelldokumente in das
+  Band um den besten Treffer zieht (die neue Pruefung hinter dem Entladen sagt es), und wie
+  viele Leserunden das Fenster auf dem Laeufer wirklich hergibt (die neue Zeile "the banner was
+  up in N of those rounds" sagt es).
 files_changed:
   - .github/workflows/deploy-harp.yml
