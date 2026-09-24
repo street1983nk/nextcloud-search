@@ -82,22 +82,35 @@ env:
   # variable rather than as a literal inside a URL, so that a later release is
   # one line here and not a search through a step.
   #
-  # v1.1.0 and not something newer, because on 2026-09-21 it IS the newest
-  # release of this repository: the tag list ends at v1.1.0, and 1.2.0 lives in
-  # this tree alone since plan 16-07. So these are the bytes every existing
-  # installation really holds, they are the assets store-submit.yml handed the
-  # store on 2026-09-11, and the jump this proof drives is the one a user of
-  # v1.1.0 will really perform. A tag invented for the test would prove an
+  # v1.2.0 and not something newer, because on 2026-09-24 it IS the newest
+  # release of this repository: the tag list ends at v1.2.0, and 1.3.0 lives in
+  # this tree alone since phase 18. So these are the bytes every existing
+  # installation really holds, and the jump this proof drives is the one a user
+  # of v1.2.0 will really perform. A tag invented for the test would prove an
   # upgrade nobody performs.
   #
+  # Why the tag moved on 2026-09-24, and it is the sharpest statement of phase
+  # 18 rather than housekeeping (plan 18-12, success criterion 1). The milestone
+  # that carries the schema step is the one milestone in which the upgrade path
+  # is really dangerous, so this is the last moment at which the guard may be
+  # allowed to go stale. Driven from v1.2.0, the block below asserts that an
+  # upgrade 1.2.0 to 1.3.0 under the factory setting de,en moves NONE of the
+  # five marks: schema_version is stamped only after a rebuild, and the rebuild
+  # does not start at all without a language change. "Store upgrade 6" then
+  # drives the other half, the rebuild itself, and it stands beside this block
+  # rather than inside it.
+  #
   # The predecessor, kept rather than overwritten, because the reason was right
-  # in its own time. Until 2026-09-21 the value was v1.0.3: on 2026-09-11 the
-  # tag list ended there, both info.xml said 1.0.3, and "Store install 1 from
-  # the release" had loaded those assets in run 34526436580. Plan 11-11
-  # published v1.1.0 and turned that paragraph into an instruction for a
-  # release of the day before yesterday, which is what plan 16-09 came to
-  # correct.
-  UPGRADE_FROM_TAG: v1.1.0
+  # in its own time. Until 2026-09-24 the value was v1.1.0, and until 2026-09-21
+  # it was v1.0.3: on 2026-09-11 the tag list ended at 1.0.3, both info.xml said
+  # 1.0.3, and "Store install 1 from the release" had loaded those assets in run
+  # 34526436580. Plan 11-11 published v1.1.0, plan 16-09 followed the tag there,
+  # and the release of phase 16 published v1.2.0, which is what this line
+  # follows now. The lesson the three moves share: this value is an instruction
+  # about the newest published release, so it goes stale with every release and
+  # the assurances hanging off it have to be read again each time, never
+  # softened.
+  UPGRADE_FROM_TAG: v1.2.0
 
 jobs:
   deploy-harp:
@@ -2476,11 +2489,20 @@ jobs:
           #
           # What is measured here now is the presence of the block, and it is
           # not a formality: it is the cheapest assertion in this file that
-          # UPGRADE_FROM_TAG really points at a release of the 1.1.x line. A tag
-          # out of the 1.0.x line would answer without the block, and the whole
-          # block below would then measure a jump nobody claimed.
+          # UPGRADE_FROM_TAG really points at a release this proof understands.
+          # A tag out of the 1.0.x line would answer without the block, and the
+          # whole block below would then measure a jump nobody claimed.
+          #
+          # The reasoning moved with the tag on 2026-09-24 (plan 18-12) and the
+          # assertion did not, which is why the two are written apart here. Until
+          # that day this paragraph said "a release of the 1.1.x line", because
+          # UPGRADE_FROM_TAG was v1.1.0 and 1.1.0 was the first release with the
+          # block. v1.2.0 carries it as well, so the assertion stays true without
+          # a byte of its own changing; what it rules out is now everything below
+          # v1.1.0 rather than everything outside 1.1.x, and that is still the
+          # cheap floor this step is here to put in.
           if ! grep -q '<navigations>' apps/findling/appinfo/info.xml; then
-            echo "the companion of ${UPGRADE_FROM_TAG} declares no navigation entry, so this is not the 1.1.x release this proof starts from"
+            echo "the companion of ${UPGRADE_FROM_TAG} declares no navigation entry, so this is older than v1.1.0 and not a release this proof starts from"
             exit 1
           fi
           echo "the companion of ${UPGRADE_FROM_TAG} declares the navigation entry, as every release since v1.1.0 does"
@@ -2489,11 +2511,15 @@ jobs:
           # The container half, out of the info.xml of the released archive and
           # out of nothing else: registry, image and image-tag are what a user
           # of the previous version really runs.
-          # ghcr.io/street1983nk/findling_backend:1.1.0 exists as an index with
-          # linux/amd64 and linux/arm64 (checked on 2026-09-21 against the
-          # manifest list of the registry, the same way :1.0.3 was checked on
-          # 2026-09-10), and a missing tag would end this step rather than fall
-          # back to anything.
+          # ghcr.io/street1983nk/findling_backend:1.2.0 is the image the release
+          # of phase 16 pushed, as an index with linux/amd64 and linux/arm64, and
+          # a missing tag would end this step rather than fall back to anything.
+          # The two predecessors were checked the same way and are named so that
+          # the habit is visible rather than only its result: :1.1.0 against the
+          # manifest list on 2026-09-21, :1.0.3 on 2026-09-10. Whoever moves
+          # UPGRADE_FROM_TAG again does this check again, because a tag without
+          # an image turns the registration below into a red step with a
+          # confusing message.
           tar -xzf "${from}/dist/findling_backend.tar.gz" -C "${from}/extract"
           old_info="${from}/extract/findling_backend/appinfo/info.xml"
           test -f "${old_info}"
@@ -2613,12 +2639,56 @@ jobs:
             docker ps --filter 'name=findling_backend' --format '{{.Names}}' | head -n 1
           }
 
-          # The five marks and the counters, read out of the volume by the
+          # The marks and the counters, read out of the volume by the
           # container itself. Not over the /status route: that one sits behind
           # the signed AppAPI header, and findling.tools.index_status exists for
           # exactly this question. python and the package are on the PATH of the
           # image, and the layout under APP_PERSISTENT_STORAGE is state.db with
           # the index directory next to it.
+          #
+          # Five marks until 2026-09-24 and six since, which is the successor to
+          # the assurance that died with the tag, so the candidate check belongs
+          # here and is written the way declared_filters() below writes its own
+          # (plan 18-12).
+          #
+          # The question, asked for the third time in this file: which visible
+          # difference does the new version make against the released one that a
+          # state of this installation can be read for? With UPGRADE_FROM_TAG on
+          # v1.2.0 the two candidates this file used before are both spent. The
+          # navigation entry of plan 09-06 has been in the released half since
+          # v1.1.0. The two date bounds of the provider have been in it since
+          # v1.2.0, which is exactly what plan 13-06 put there, so the assertion
+          # that made them appear would now read true before and true after: it
+          # would pass while measuring nothing, which is worse than no assertion
+          # at all.
+          #
+          # Three candidates were looked at for the replacement, and two do not
+          # carry:
+          #
+          # One, the two rebuild banners of plan 18-10. They are the most visible
+          # difference there is, and they are the wrong thing to hang an
+          # assurance on here: both are false on an idle installation, so they
+          # say nothing outside a running rebuild. "Store upgrade 6" reads them
+          # where they do say something, in the middle of the run, and that is a
+          # statement about the rebuild rather than about the exchange of the
+          # files.
+          #
+          # Two, schemaVersion itself. It is the mark the whole phase is about,
+          # and it is unusable for THIS assurance for the reason that makes the
+          # block above worth keeping: it is stamped after a rebuild, the rebuild
+          # does not start without a language change, and an upgrade under the
+          # factory setting therefore leaves it exactly where it was. An
+          # assertion that it moved would be red on the very run this block is
+          # built to prove green.
+          #
+          # Three, the languages mark, and it carries. It is a row in the meta
+          # table that 1.2.0 never wrote and that this version writes, it travels
+          # through the very helper the probe already has, it costs no page and
+          # no render, and the report of 1.2.0 answers without the key rather
+          # than with an empty value, which is the difference a jq comparison can
+          # see. Read as: absent before the upgrade, present after it, and after
+          # the rebuild of "Store upgrade 6" it names the set that rebuild was
+          # run for.
           index_report() {
             container=$(findling_container)
             if [ -z "${container}" ]; then
@@ -2700,6 +2770,36 @@ jobs:
               return 1
             fi
             jq -r '.backend.reindexRequired' "${out}"
+          }
+
+          # Whether a rebuild directory is lying on the volume, read at the
+          # volume and never on the admin page (plan 18-12). Two words and no
+          # numbers: idle when APP_PERSISTENT_STORAGE holds no index.rebuild,
+          # rebuilding when it does.
+          #
+          # Why this and not backend.rebuildRunning, which says the same thing in
+          # the overview. The two answer different questions and only one of them
+          # belongs in a before and after snapshot. rebuildRunning is a value of
+          # the running process and is false the moment that process is gone, so
+          # a container that died in the middle of a run reports idle while half
+          # a rebuilt directory sits on the disk. The directory is the state of
+          # the volume, which is what a snapshot of this installation is about,
+          # and its presence before or after an upgrade is a finding either way:
+          # nothing in this proof rebuilds anything, so both snapshots have to
+          # say idle. "Store upgrade 6" reads rebuildRunning out of the overview
+          # for the other question, whether the banner rose while a run was on.
+          #
+          # docker exec and not a path on the runner: the volume belongs to the
+          # container, and its layout under APP_PERSISTENT_STORAGE is the one
+          # index_report() already relies on.
+          rebuild_state() {
+            container=$(findling_container)
+            if [ -z "${container}" ]; then
+              echo "no running findling_backend container, so there is nothing to read the rebuild state from" >&2
+              return 1
+            fi
+            docker exec "${container}" sh -c \
+              'if [ -d "${APP_PERSISTENT_STORAGE}/index.rebuild" ]; then echo rebuilding; else echo idle; fi'
           }
 
           # Q-5 of the phase 16 research, answered by looking and not by
@@ -2804,6 +2904,20 @@ jobs:
             ids=$(navigation_ids)
             banner=$(reindex_banner)
             filters=$(declared_filters)
+            # The eighth value of a snapshot, since 2026-09-24. Its own line and
+            # its own emptiness check, in the shape the four occ numbers above
+            # are checked in: a value goes into a shell variable first, an empty
+            # one ends the snapshot with the raw answer on record, and only then
+            # does one jq -n build the object (T-18-12-03). Without the check an
+            # exec that did not run would arrive as the empty string and compare
+            # equal to the empty string of the other side, which is the one shape
+            # that makes a before and after proof pass by saying nothing.
+            rebuild=$(rebuild_state) || return 1
+            if [ -z "${rebuild}" ]; then
+              echo "the container answered nothing about a rebuild directory, so this snapshot would carry an empty value" >&2
+              docker ps -a >&2
+              return 1
+            fi
 
             jq -n \
               --arg label "${label}" \
@@ -2818,6 +2932,7 @@ jobs:
               --arg ids "${ids}" \
               --arg banner "${banner}" \
               --arg filters "${filters}" \
+              --arg rebuild "${rebuild}" \
               '{
                  label: $label,
                  terms: {
@@ -2829,14 +2944,16 @@ jobs:
                    docs: $report.docs,
                    indexed: $report.indexed,
                    skipped: $report.skipped,
-                   failed: $report.failed
+                   failed: $report.failed,
+                   rebuildState: $rebuild
                  },
                  marks: {
                    schemaVersion: $report.schemaVersion,
                    indexVersion: $report.indexVersion,
                    analyzerVersion: $report.analyzerVersion,
                    wordlistHash: $report.wordlistHash,
-                   tantivyVersion: $report.tantivyVersion
+                   tantivyVersion: $report.tantivyVersion,
+                   languages: $report.languages
                  },
                  nextcloud: {
                    scheduled: $scheduled,
@@ -2882,30 +2999,36 @@ jobs:
             jq '.terms' "${RUNNER_TEMP}/upgrade-before.json"
             exit 1
           fi
-          # The second condition, and what it asks changed on 2026-09-21.
-          # Overhauled wording, kept on record: until that day it demanded that
-          # .navigation.findling be absent, which was the counterpart of
-          # assurance 6 while that assurance measured the navigation entry.
-          # v1.1.0 carries the entry, so the condition would now be red on a
-          # healthy installation.
+          # The second condition, and what it asks changed twice, on 2026-09-21
+          # and again on 2026-09-24. Overhauled wording, kept on record: until
+          # the first date it demanded that .navigation.findling be absent, which
+          # was the counterpart of assurance 6 while that assurance measured the
+          # navigation entry; until the second it demanded that the two date
+          # bounds of plan 13-06 be absent, which was its counterpart while
+          # assurance 6 measured those. v1.1.0 carries the entry and v1.2.0
+          # carries the bounds, so both conditions would now be red on a healthy
+          # installation.
           #
-          # In its place the absence of the field assurance 6 measures today:
-          # the two date bounds the provider declares since plan 13-06. The two
-          # belong together and always will, whatever the field is: without this
-          # condition assurance 6 could be green because the value was already
-          # there before the upgrade, which is the one shape a before and after
-          # proof cannot survive.
+          # In its place the absence of the field assurance 6 measures today: the
+          # languages mark, which 1.2.0 never wrote. The two belong together and
+          # always will, whatever the field is: without this condition assurance
+          # 6 could be green because the value was already there before the
+          # upgrade, which is the one shape a before and after proof cannot
+          # survive. Absent is null here and not the empty string, because the
+          # report of the released half has no such key at all and jq answers
+          # null for a key that is not there.
           #
-          # .navigation stays in the snapshot. It is no longer asserted, but it
-          # is the app menu of the instance on record, and a reader of a red run
-          # should not have to guess it.
-          if jq -e '.searchFilters.dates' "${RUNNER_TEMP}/upgrade-before.json" > /dev/null; then
-            echo "::error::the provider of the ${UPGRADE_FROM_TAG} installation already declares the two date bounds"
-            echo "Their presence after the upgrade would then be no change at all."
-            jq '.searchFilters' "${RUNNER_TEMP}/upgrade-before.json"
+          # .navigation and .searchFilters stay in the snapshot. Neither is
+          # asserted any more, but they are the app menu and the declared filters
+          # of the instance on record, and a reader of a red run should not have
+          # to guess them.
+          if ! jq -e '.marks.languages == null' "${RUNNER_TEMP}/upgrade-before.json" > /dev/null; then
+            echo "::error::the ${UPGRADE_FROM_TAG} installation already reports a languages mark"
+            echo "Its presence after the upgrade would then be no change at all."
+            jq '.marks' "${RUNNER_TEMP}/upgrade-before.json"
             exit 1
           fi
-          echo "three terms, one file each; no date bounds on the provider; the state is on record in upgrade-before.json"
+          echo "three terms, one file each; no languages mark in the report; the state is on record in upgrade-before.json"
 
       - name: Store upgrade 3b, the always enabled apps this checkout does not carry
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
@@ -3227,18 +3350,29 @@ jobs:
       # Five assurances about something that did NOT move and one about
       # something that did, and the comment keeps them apart because the two
       # kinds fail for opposite reasons. The five are the promise of D-04: an
-      # upgrade from 1.0.x or 1.1.x leaves the index alone, and a user pays
-      # nothing for an update they did not ask for. The sixth is the change of
-      # plan 13-06 arriving on an existing installation, which is the counter
-      # sample: an upgrade that changed nothing at all would pass five
-      # assertions and mean that the new files never took effect.
+      # upgrade from 1.0.x, 1.1.x or 1.2.x leaves the index alone, and a user
+      # pays nothing for an update they did not ask for. The sixth is the new
+      # code arriving on an existing installation, which is the counter sample:
+      # an upgrade that changed nothing at all would pass five assertions and
+      # mean that the new files never took effect.
       #
-      # The sixth had a different subject until 2026-09-21. It measured the
-      # navigation entry of plan 09-06, which was the one visible difference
-      # between 1.0.3 and 1.1.0; v1.1.0 carries the entry, so that difference is
-      # spent. Plan 16-09 put the two date bounds the provider declares in its
-      # place, and the reason it is those and not the sixth engine state stands
-      # at the helper declared_filters() above (Q-5).
+      # The five are sharper since the tag moved to v1.2.0 on 2026-09-24, and
+      # that is the whole reason the tag moved rather than the block being
+      # softened (plan 18-12). 1.3.0 carries a schema step, so this is the one
+      # milestone in which "no mark moves" is a statement with teeth: it holds
+      # only because schema_version is stamped after a rebuild and the rebuild
+      # does not start under the factory setting de,en. "Store upgrade 6" below
+      # drives the other case, where the set does change, and it stands beside
+      # this block rather than taking a line out of it.
+      #
+      # The sixth had two different subjects before. Until 2026-09-21 it measured
+      # the navigation entry of plan 09-06, the one visible difference between
+      # 1.0.3 and 1.1.0; until 2026-09-24 it measured the two date bounds of plan
+      # 13-06, the one between 1.1.0 and 1.2.0. v1.1.0 carries the entry and
+      # v1.2.0 carries the bounds, so both differences are spent. In their place
+      # stands the languages mark, and the candidate check that chose it is
+      # written at the helper index_report() above, in the shape the one at
+      # declared_filters() (Q-5) set.
       #
       # The branch this test does NOT drive, named rather than left out. D-05
       # asks that a reindex which IS needed starts visibly, and the mechanism for
@@ -3336,6 +3470,7 @@ jobs:
           unchanged '.nextcloud.failed' "Nextcloud recorded a different number of failed files after the upgrade"
           unchanged '.nextcloud.scheduled' "the work stock is not empty after the upgrade, so something requeued work nobody asked for"
           unchanged '.nextcloud.running' "a worker holds queue rows after the upgrade, so something requeued work nobody asked for"
+          unchanged '.container.rebuildState' "a rebuild directory appeared or went away across the upgrade, and no step of this block rebuilds anything"
 
           echo "--- 4, no reindex banner ---"
           if jq -e '.reindexBanner' "${after}" > /dev/null; then
@@ -3365,16 +3500,25 @@ jobs:
             fi
           fi
 
-          echo "--- 6, the two date bounds of the provider, and this one HAS to have changed ---"
-          was=$(jq -r '.searchFilters.dates' "${before}")
-          now=$(jq -r '.searchFilters.dates' "${after}")
-          if [ "${was}" != "false" ] || [ "${now}" != "true" ]; then
-            echo "::error::the provider declared the two date bounds as ${was} before the upgrade and as ${now} after it, and the change plan 13-06 made has to arrive on an existing installation"
+          echo "--- 6, the languages mark of the report, and this one HAS to have changed ---"
+          # Two halves in one assertion and not two assertions, because the
+          # second half is what makes the first one worth making. Absent before
+          # the upgrade is the counter sample: a mark that was already there
+          # would make this green without anything having been exchanged. And
+          # de,en after it, exactly, because this leg sets no FINDLING_LANGUAGES:
+          # any other value would mean a language set arrived from somewhere
+          # nobody named, and the rebuild that follows a changed set is what the
+          # five assertions above have just denied happened.
+          was=$(jq -r '.marks.languages' "${before}")
+          now=$(jq -r '.marks.languages' "${after}")
+          if [ "${was}" != "null" ] || [ "${now}" != "de,en" ]; then
+            echo "::error::the report named the languages mark as '${was}' before the upgrade and as '${now}' after it, and the sixth mark of plan 18-03 has to arrive on an existing installation as the factory setting de,en"
+            jq -r '.marks' "${before}" "${after}"
             jq -r '.searchFilters.declared' "${before}" "${after}"
             jq -r '.navigation.ids' "${before}" "${after}"
             fail=1
           else
-            echo "the two date bounds were not declared before the upgrade and are declared after it"
+            echo "the report carried no languages mark before the upgrade and names the factory setting ${now} after it"
           fi
 
           if [ "${fail}" -ne 0 ]; then
@@ -3392,7 +3536,7 @@ jobs:
             echo "- the container was unregistered without the data removing flag and registered again on the volume \`${UPGRADE_VOLUME}\`"
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, four of the five index marks and the index format half of the fifth, the document counts, the work stock"
             echo "- no reindex banner, no \`start_rebuild_on_drift\` line in the container log"
-            echo "- the two date bounds of plan 13-06 were undeclared before and are declared after"
+            echo "- the languages mark was absent before and names the factory setting \`de,en\` after"
             echo ""
             echo "The reindex branch of D-05 is deliberately not driven here; its absence is what this run asserts."
           } >> "${GITHUB_STEP_SUMMARY}"
