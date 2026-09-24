@@ -24,9 +24,10 @@ from tantivy import Document, Index, Query
 
 from conftest import Corpus
 from findling.api import resources
-from findling.config import settings
-from findling.index.open import open_index, open_reader
+from findling.config import SCHEMA_VERSION, settings
+from findling.index.open import LANGUAGES_MARK, REBUILD_MARK, expected_versions, open_index, open_reader
 from findling.index.rebuild import (
+    _SCHEMA_MARK,
     NOT_ENOUGH_ROOM,
     ROOM_ENOUGH,
     RebuildRun,
@@ -36,6 +37,7 @@ from findling.index.rebuild import (
     discard_directory,
     may_rebuild,
     retire_directory,
+    stamp_after_swap,
     swap_in,
     transfer_documents,
 )
@@ -410,23 +412,42 @@ def test_the_band_walks_the_documents_and_never_pages_with_an_offset() -> None:
     assert "range_query" in source
 
 
+# What the rebuild may take out of the store package, and it is two names.
+# index_bytes reads bytes and writes nothing; Store is the type of the handle the
+# caller hands in for the stamp. Widened from one name to two by plan 18-07,
+# because the stamp writes three marks and a module that could not name the type
+# would have to take an untyped handle, which is the same access with the review
+# removed. What stays out is the opening: a module that opened a database of its
+# own could keep a progress record beside the index, and a second record is
+# exactly the state that can disagree with the first one.
+STORE_NAMES_THE_REBUILD_MAY_TAKE = {"index_bytes", "Store"}
+
+
 def test_the_rebuild_keeps_no_progress_of_its_own_in_the_state_database() -> None:
     """Static half of the resume: the module cannot write a second progress record.
 
-    The one thing it may take out of the store module is the size sum, which
-    reads bytes and writes nothing. A second progress record beside the index is
-    exactly the state that can disagree with the index; the index cannot
-    disagree with itself.
+    The marks the stamp writes are not a progress record and never travel with a
+    half finished pass: they are written once, after the final probe and after
+    the swap, and they say what the directory on disk was built with. Progress
+    would be a number that the index can contradict, which is why the opening of
+    a database stays out of this module altogether.
     """
     tree = ast.parse(REBUILD_SOURCE.read_text(encoding="utf-8"))
-    imported = [
-        (node.module, alias.name)
+    imported = {
+        alias.name
         for node in ast.walk(tree)
         if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("findling.store")
         for alias in node.names
-    ]
+    }
+    modules = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("findling.store")
+    }
 
-    assert imported == [("findling.store.repo", "index_bytes")]
+    assert imported <= STORE_NAMES_THE_REBUILD_MAY_TAKE
+    assert modules == {"findling.store.repo"}
+    assert "open_store" not in REBUILD_SOURCE.read_text(encoding="utf-8")
 
 
 # -- the swap, and the reason its order is its whole content -------------------
@@ -598,3 +619,149 @@ def test_no_case_in_this_file_is_taken_out_of_the_run_by_a_mark() -> None:
     ]
 
     assert marked == []
+
+
+# -- the stamp, which stands behind the final probe and behind the swap --------
+
+
+def test_the_schema_mark_of_the_stamp_is_the_one_the_expectation_carries() -> None:
+    """The two spellings of the key held together, because there is no constant.
+
+    A stamp that wrote schemaVersion or index_schema would be green in every
+    case that reads it back and would leave the mark the comparison asks for
+    untouched, which is a rebuild that runs again on every start.
+    """
+    expected = expected_versions("a-digest", "de,en")
+
+    assert _SCHEMA_MARK in expected
+    assert expected[_SCHEMA_MARK] == str(SCHEMA_VERSION) == "2"
+
+
+def test_a_finished_rebuild_stamps_the_schema_the_languages_and_clears_the_mark(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The whole order in one case: probe, swap, stamp, and nothing before its turn."""
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es")
+    settings.cache_clear()
+    live = tmp_path / "index"
+    target = tmp_path / "index.rebuild"
+    source = open_index(live, CONSTITUENTS)
+    _stage(source, [_document(file_id) for file_id in range(1, 6)])
+    store = open_store(tmp_path / "state.db")
+    store.write_meta(_SCHEMA_MARK, "1")
+    store.write_meta(REBUILD_MARK, "3f1d1d9ad9262704")
+
+    run = transfer_documents(live, target, CONSTITUENTS)
+    assert run.complete is True
+    del source
+    gc.collect()
+    swap_in(target, live)
+    stamp_after_swap(store, ",".join(settings().languages))
+
+    marks = store.read_meta()
+    store.close()
+
+    assert marks[_SCHEMA_MARK] == str(SCHEMA_VERSION)
+    assert marks[LANGUAGES_MARK] == "de,en,es"
+    assert marks[REBUILD_MARK] == ""
+    assert _documents_in(live) == 5
+
+
+def test_a_rebuild_does_not_move_the_generation(tmp_path: Path) -> None:
+    """The crawl is what a raised generation is for, and this pass reads no file.
+
+    A generation raised here would make every stored verdict stale and order the
+    full reindex that the rebuild was built to avoid.
+    """
+    live = tmp_path / "index"
+    target = tmp_path / "index.rebuild"
+    source = open_index(live, CONSTITUENTS)
+    _stage(source, [_document(file_id) for file_id in range(1, 6)])
+    store = open_store(tmp_path / "state.db")
+    store.write_meta("index_version", "7")
+    before = store.index_version
+
+    transfer_documents(live, target, CONSTITUENTS, ("de", "en"))
+    del source
+    gc.collect()
+    swap_in(target, live)
+    stamp_after_swap(store, "de,en")
+
+    after = store.index_version
+    store.close()
+
+    assert before == 7
+    assert after == before
+
+
+def test_a_run_whose_final_probe_fails_neither_swaps_nor_stamps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The gate in front of both, written out the way the caller of plan 18-09 runs it.
+
+    The break is staged in the middle of the third band, so the target really
+    does hold fewer documents than the source rather than being told it does.
+    """
+    live = tmp_path / "index"
+    target = tmp_path / "index.rebuild"
+    source = open_index(live, CONSTITUENTS)
+    _stage(source, [_document(file_id) for file_id in range(1, 10)])
+    store = open_store(tmp_path / "state.db")
+    before = dict(store.read_meta())
+
+    honest = _document_from
+    seen = 0
+
+    def breaks_in_the_third_band(stored: Mapping[str, list[object]], languages: Sequence[str]) -> Document:
+        nonlocal seen
+        seen += 1
+        if seen > 4:
+            message = "staged break in the middle of the third band"
+            raise RuntimeError(message)
+        return honest(stored, languages)
+
+    monkeypatch.setattr("findling.index.rebuild._document_from", breaks_in_the_third_band)
+    with pytest.raises(RuntimeError):
+        transfer_documents(live, target, CONSTITUENTS, ("de", "en"), band_documents=2)
+    monkeypatch.undo()
+
+    rebuilt = open_index(target, CONSTITUENTS)
+    complete = counts_match(source, rebuilt)
+    del source, rebuilt
+    gc.collect()
+    # The gate, and it is the only thing standing between a half carried run and
+    # an index that calls itself current.
+    if complete:
+        swap_in(target, live)
+        stamp_after_swap(store, "de,en")
+
+    after = dict(store.read_meta())
+    store.close()
+
+    assert complete is False
+    assert _documents_in(live) == 9, "nothing was swapped, so the old directory still answers"
+    assert target.is_dir(), "the half written directory is still there for the next pass"
+    assert after == before
+
+
+def test_the_rebuild_never_calls_the_function_that_raises_the_generation() -> None:
+    """Static, because the mistake would be invisible until the next full reindex.
+
+    start_rebuild_on_drift sits one import away and reads like the obvious way
+    to finish a rebuild. It raises the generation so that a crawl reads every
+    file again, and this pass reads no file at all, so calling it would order
+    hours of work right after the pass that made them unnecessary.
+    """
+    tree = ast.parse(REBUILD_SOURCE.read_text(encoding="utf-8"))
+    names = {
+        node.id if isinstance(node, ast.Name) else node.attr
+        for call in ast.walk(tree)
+        if isinstance(call, ast.Call)
+        for node in [call.func]
+        if isinstance(node, ast.Name | ast.Attribute)
+    }
+
+    assert "start_rebuild_on_drift" not in names
+    assert "stamp_after_rebuild" not in names

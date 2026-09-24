@@ -41,7 +41,8 @@ container that answers out of a directory nobody can point at any more:
    that are about to disappear.
 2. let the source index go. The poller's writer is already closed at this point,
    because silencing it is the first thing the caller of plan 18-09 does.
-3. drop the reading side with :func:`findling.api.resources.reset_read_side`.
+3. drop the reading side with an explicit ``reset_read_side()``, over in
+   :mod:`findling.api.resources`.
    That cache is keyed on ``index_dir``, the swap does not move ``index_dir``,
    and the invalidation branch inside ``read_side()`` therefore never fires on
    its own.
@@ -78,8 +79,8 @@ from typing import Final
 
 from tantivy import Document, FieldType, Index, Order, Query
 
-from findling.config import settings
-from findling.index.open import open_index, open_reader
+from findling.config import SCHEMA_VERSION, settings
+from findling.index.open import LANGUAGES_MARK, REBUILD_MARK, open_index, open_reader
 from findling.index.schema import (
     BODY_FIELD,
     FIELD_BODY_DE,
@@ -91,7 +92,7 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
-from findling.store.repo import index_bytes
+from findling.store.repo import Store, index_bytes
 
 LOGGER = logging.getLogger("findling.index.rebuild")
 
@@ -127,6 +128,14 @@ _HIGHEST_FILE_ID: Final = 2**64 - 1
 # sibling of the one it came from and never a path anybody handed in
 # (T-18-07-04).
 RETIRED_SUFFIX: Final = ".retired"
+
+# The name of the schema mark, spelled once here because there is no constant for
+# it anywhere else: findling.index.open writes it as a literal inside
+# expected_versions, and findling.store.repo seeds it as a literal as well. A
+# second spelling that drifted from the first would be a stamp that writes a mark
+# nothing ever compares, so a case in the suite holds the two together by asking
+# the expectation for this very key.
+_SCHEMA_MARK: Final = "schema_version"
 
 
 @dataclass(frozen=True, slots=True)
@@ -409,11 +418,14 @@ def swap_in(target: Path, live: Path) -> None:
     **Why swap_in and retire rather than move and delete.** Gate A of
     ``backend/tests/test_readonly_gate.py`` forbids the identifiers ``move``,
     ``delete``, ``copy`` and ``trash`` in every module of this package, because
-    they are the writing entry points of ``nc_py_api.files`` and a gate that
-    waved them through in one module would hide a real write to a user file in
-    the next one. The names here are not a paraphrase of a forbidden word, they
-    are more accurate than it: nothing is moved anywhere a caller chose, and
-    what is removed is a directory this module named itself.
+    those are the writing entry points of the Nextcloud file client and a gate
+    that waved them through in one module would hide a real write to a user file
+    in the next one. The name of that client is not spelled here either: a
+    second gate asserts that it appears in ``nc/client.py`` and nowhere else,
+    and it reads the text of a module rather than its imports. The names here
+    are not a paraphrase of a forbidden word, they are more accurate than it:
+    nothing is moved anywhere a caller chose, and what is removed is a directory
+    this module named itself.
     """
     try:
         retired = retire_directory(live)
@@ -425,3 +437,50 @@ def swap_in(target: Path, live: Path) -> None:
         LOGGER.warning("the index directories could not be swapped, an %s", type(error).__name__)
         raise
     discard_directory(retired)
+
+
+def stamp_after_swap(store: Store, languages: str) -> None:
+    """Declare the rebuild through, once the swap has really happened.
+
+    Three writes: the schema the new directory was built under, the language set
+    it was filled with, and the rebuild mark emptied, which is what takes the
+    banner down. ``index_version`` is deliberately not among them, for the same
+    reason the other stamp leaves it alone: the stored generation stands above
+    the baseline of the code after a rebuild, and writing the baseline back would
+    make every verdict of the run that just finished look stale.
+
+    **Why this is a second stamp and not a call into the first one.** The stamp
+    in :mod:`findling.index.open` opens on
+    ``Store.verdicts_older_than(generation) == 0``, which asks whether every
+    living file has been read again under the current generation. That question
+    is the right one for a drift that a crawl repairs, and it is the wrong one
+    here twice over: this rebuild reads no file at all, so the count it asks
+    about never moves, and whether the gate stands open or shut therefore depends
+    on what the holdings happened to look like before the rebuild started rather
+    than on anything the rebuild did. A gate that answers by accident is worse
+    than no gate. Two stampers under one name is the classic way a half finished
+    index declares itself complete (T-18-07-03), which is why these are two
+    functions with two gates and two call sites.
+
+    **The gate of this one is its call site and nothing else.** It is called
+    after :func:`counts_match` said the new directory holds as many documents as
+    the old one, and after :func:`swap_in` returned without raising. Called any
+    earlier it would write a mark that describes a directory nobody is reading
+    from, which is precisely the state the version marks exist to make visible.
+
+    ``languages`` arrives as ``",".join(settings().languages)`` from the caller,
+    exactly as it does at the four call sites of
+    :func:`findling.index.open.expected_versions`, because the stored mark and
+    the expected one have to be the same string or the comparison reports a
+    drift on the next start.
+
+    The function that raises the generation on a drift, over in
+    :mod:`findling.index.open`, is deliberately not called from this module at
+    all: it exists so that a crawl reads the files again, and this rebuild reads
+    no file. Raising the generation here would make every stored verdict stale
+    and order a full reindex right after the pass that made it unnecessary.
+    """
+    store.write_meta(_SCHEMA_MARK, str(SCHEMA_VERSION))
+    store.write_meta(LANGUAGES_MARK, languages)
+    store.write_meta(REBUILD_MARK, "")
+    LOGGER.info("the rebuilt index directory is in place; the schema and language marks are current again")

@@ -715,8 +715,21 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # FINDLING_REBUILD_FALLBACK with its two positions and the rebuild_fallback
 # field of Settings beside compound_dict. One file came and none went, so
 # PACKAGE_FILES_TODAY moves to 56.
+# Moved on 2026-09-24 a twenty third time, by plan 18-07: two of the 56 files
+# changed their bytes and the count stays at 56. index/rebuild.py got the swap,
+# which is two renames with nothing between them (swap_in over retire_directory
+# and discard_directory, the retired name derived from the live one with
+# with_name so that the path removed is never handed in), the six numbered steps
+# of the order in its module header, and stamp_after_swap, a second and
+# deliberately narrow stamper that writes the schema mark and the language mark
+# and empties the rebuild mark once the swap is really through. api/resources.py
+# got reset_read_side, which drops the handle, the version marks and the
+# degraded verdict under the one lock and checks no path, because the swap puts
+# the rebuilt directory under the very name the live one had and the
+# invalidation branch of read_side therefore never fires. No file came and none
+# went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "68474cd9715062ed734b88b9a72b8bfc95a1773a83f4e6b96f7a1e3406c1fee4"
+PACKAGE_TREE_HASH_TODAY = "aceb306c30c151b10e2ca598a525328374dfc0faebc2c13461dcb2072827702a"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
