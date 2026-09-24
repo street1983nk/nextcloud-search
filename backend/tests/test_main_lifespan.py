@@ -20,12 +20,27 @@ import ast
 import asyncio
 import inspect
 import logging
+import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from findling.api import resources
 from findling.config import settings
-from findling.main import APP, RELEASE_TICK_SECONDS, _release_when_idle
+from findling.index.rebuild import REBUILD_THROUGH
+from findling.main import (
+    APP,
+    REBUILD_STOP_SECONDS,
+    RELEASE_TICK_SECONDS,
+    _arm_the_poller,
+    _rebuild_the_index_directory,
+    _release_when_idle,
+    _run_the_rebuild,
+    _silence_the_poller,
+)
+from findling.store.repo import Store, open_store
+from findling.worker.poller import Poller, default_poller
 
 
 class _FakeReleaseTask:
@@ -422,3 +437,319 @@ def test_the_container_answers_the_heartbeat_with_the_real_task_running(monkeypa
 
     assert answer.status_code == 200
     assert answer.json() == {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# The fourth long lived task: the rebuild of the index directory. Same shape as
+# the third one above, same questions asked of it: does it exist only when it
+# should, does it end with the lifespan, and does the blocking work reach a
+# worker thread. Two questions come on top, and both of them are about wiring
+# rather than about behaviour: the clean up path has to run before anything else
+# opens the volume, and the callbacks the run is led by have to be the methods of
+# the real poller rather than something that merely looks like them.
+# ---------------------------------------------------------------------------
+
+MAIN_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "main.py"
+
+
+class _FakeIndexingTask:
+    """A poller or a reconcile, as far as the lifespan is concerned."""
+
+    def __init__(self) -> None:
+        self.armed = False
+        self.closed = False
+
+    def arm(self) -> None:
+        self.armed = True
+
+    def silence(self) -> None:
+        self.armed = False
+
+    async def run(self, stop_event: asyncio.Event) -> None:
+        await stop_event.wait()
+
+    async def unlock_held(self) -> int:
+        return 0
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+class _FakeRebuildTask:
+    """A stand in for the fourth task, which records the task object it runs as.
+
+    ``current_task`` is how the shutdown case gets at the very object the
+    lifespan created: the task is a local of the context manager, and asserting
+    that it is done afterwards is the whole claim of that case.
+    """
+
+    def __init__(self) -> None:
+        self.starts = 0
+        self.stops = 0
+        self.task: asyncio.Task[None] | None = None
+
+    async def run(self, stop_event: asyncio.Event) -> None:
+        self.starts += 1
+        self.task = asyncio.current_task()
+        await stop_event.wait()
+        self.stops += 1
+
+
+def _install_the_three_tasks(monkeypatch: pytest.MonkeyPatch, rebuild: _FakeRebuildTask) -> _FakeIndexingTask:
+    """Keep the real poller and reconcile out, and put the recording rebuild in.
+
+    The real poller would open the index and the state database the moment it is
+    armed, and every case below arms it: the mark on the volume is what lets the
+    fourth task start at all.
+    """
+    poller = _FakeIndexingTask()
+    monkeypatch.setattr("findling.main.default_poller", lambda: poller)
+    monkeypatch.setattr("findling.main.default_reconcile", lambda: _FakeIndexingTask())
+    monkeypatch.setattr("findling.main._rebuild_the_index_directory", rebuild.run)
+    return poller
+
+
+def _mark_the_index_as_built_by_older_code(volume: Path) -> None:
+    """Move the schema mark back, which is the drift a rebuild answers."""
+    store = open_store(volume / "state.db")
+    store.write_meta("schema_version", "1")
+    store.close()
+
+
+def test_the_rebuild_task_is_not_created_when_the_marks_agree(
+    indexed_volume: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ordinary start, which is every start of every installation that is current.
+
+    A rebuild costs the size of the index a second time and a pass over every
+    document in it, so the evidence has to be there before the task exists at
+    all. A task that started and then found nothing to do would open the state
+    database on every single start for an answer this question already has.
+    """
+    del indexed_volume
+    fake = _FakeRebuildTask()
+    _install_the_three_tasks(monkeypatch, fake)
+    settings().armed_marker.write_text("", encoding="utf-8")
+
+    with TestClient(APP):
+        pass
+
+    assert fake.starts == 0
+
+
+def test_the_rebuild_task_is_created_when_the_marks_ask_for_it(
+    indexed_volume: object, volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other half: a stored schema mark of the release before this one."""
+    del indexed_volume
+    fake = _FakeRebuildTask()
+    _install_the_three_tasks(monkeypatch, fake)
+    _mark_the_index_as_built_by_older_code(volume)
+    settings().armed_marker.write_text("", encoding="utf-8")
+
+    with TestClient(APP):
+        pass
+
+    assert fake.starts == 1
+
+
+def test_the_rebuild_task_stays_away_from_a_container_that_was_never_enabled(
+    indexed_volume: object, volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Deployed and not switched on: no lock, no volume, and least of all a rebuild.
+
+    The drift is there and it stays unanswered, which is right. Nothing reads out
+    of this container yet, so nothing is degraded by the old directory, and the
+    largest write this app can make is the last one to happen without an enable.
+    """
+    del indexed_volume
+    fake = _FakeRebuildTask()
+    _install_the_three_tasks(monkeypatch, fake)
+    _mark_the_index_as_built_by_older_code(volume)
+
+    with TestClient(APP):
+        pass
+
+    assert fake.starts == 0
+
+
+def test_the_rebuild_task_ends_with_the_lifespan_and_inside_its_budget(
+    indexed_volume: object, volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The fourth task dies the way the three beside it do, and it dies in time.
+
+    The budget is asserted against the clock and not only against ``done()``,
+    because the failure this guards is a shutdown that hangs: an orchestrator
+    that waits for a rebuild of hours kills the container, and then the three
+    other tasks lose their ordered shutdown as well (T-18-09-03).
+    """
+    del indexed_volume
+    fake = _FakeRebuildTask()
+    _install_the_three_tasks(monkeypatch, fake)
+    _mark_the_index_as_built_by_older_code(volume)
+    settings().armed_marker.write_text("", encoding="utf-8")
+
+    started = time.monotonic()
+    with TestClient(APP):
+        pass
+    took = time.monotonic() - started
+
+    assert fake.starts == 1
+    assert fake.stops == 1
+    assert fake.task is not None
+    assert fake.task.done() is True
+    assert took < REBUILD_STOP_SECONDS
+
+
+def test_the_clean_up_path_runs_before_the_indexing_task_is_created(
+    indexed_volume: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Order, and it is the whole content of this case.
+
+    A poller armed onto a volume that a hard abort left halfway through a
+    directory swap does not find the fault, it adds to it: it opens whatever
+    directory is there, writes into it and commits. So the five states of the
+    volume are read and decided before the first task exists.
+    """
+    del indexed_volume
+    journal: list[str] = []
+    fake = _FakeRebuildTask()
+    monkeypatch.setattr("findling.main._rebuild_the_index_directory", fake.run)
+    monkeypatch.setattr("findling.main.default_reconcile", lambda: _FakeIndexingTask())
+
+    def note_the_clean_up() -> str:
+        journal.append("clean up")
+        return "nothing"
+
+    def note_the_poller() -> _FakeIndexingTask:
+        journal.append("poller")
+        return _FakeIndexingTask()
+
+    monkeypatch.setattr("findling.main.recover_the_index_directories", note_the_clean_up)
+    monkeypatch.setattr("findling.main.default_poller", note_the_poller)
+
+    with TestClient(APP):
+        pass
+
+    assert journal == ["clean up", "poller"]
+
+
+def test_the_rebuild_hands_the_real_silence_and_arm_of_the_poller_into_the_run(
+    indexed_volume: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The wiring, asked of the real poller and not of a stand in.
+
+    The run of plan 18-09 takes its two callbacks from whoever leads it, and a
+    pair that went nowhere would look exactly like a pair that works: the rebuild
+    would carry every document over, the counts would match, the swap would
+    succeed, and the only difference would be the documents the poller wrote into
+    the source directory in the meantime, which are gone after the swap and which
+    nothing counts (T-18-09-01). No case inside the rebuild suite can see that,
+    because every one of them hands its own recorders in. So this one builds the
+    real poller, drives the real entry point of ``main`` and reads the armed flag
+    of that object: only ``Poller.silence`` clears it and only ``Poller.arm``
+    sets it, so the two readings are the proof that the two methods were reached.
+    """
+    del indexed_volume
+    poller = default_poller()
+    # Said out loud, because the whole worth of this case is the object: a stand
+    # in here would prove that two recorders can be called, which is what the
+    # rebuild suite already proves.
+    assert isinstance(poller, Poller)
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    settings().armed_marker.write_text("", encoding="utf-8")
+    poller.arm()
+    readings: list[tuple[str, bool]] = []
+    handed_over: dict[str, object] = {}
+
+    def probe(
+        store: Store,
+        *,
+        silence: object,
+        arm: object,
+        drop_read_side: object,
+        should_stop: object,
+    ) -> str:
+        del store, should_stop
+        handed_over["silence"] = silence
+        handed_over["arm"] = arm
+        handed_over["drop_read_side"] = drop_read_side
+        readings.append(("before", poller.armed))
+        silence()  # pyright: ignore[reportCallIssue]
+        readings.append(("silenced", poller.armed))
+        arm()  # pyright: ignore[reportCallIssue]
+        readings.append(("armed again", poller.armed))
+        return REBUILD_THROUGH
+
+    monkeypatch.setattr("findling.main.rebuild_the_index", probe)
+
+    verdict = _run_the_rebuild(lambda: False)
+
+    assert verdict == REBUILD_THROUGH
+    assert readings == [("before", True), ("silenced", False), ("armed again", True)]
+    # And the callables really are the ones main defines, so that a later edit
+    # cannot quietly hand in something that swallows the call.
+    assert handed_over["silence"] is _silence_the_poller
+    assert handed_over["arm"] is _arm_the_poller
+    assert handed_over["drop_read_side"] is resources.reset_read_side
+
+
+def test_the_poller_is_not_armed_again_when_the_app_was_switched_off_meanwhile(
+    indexed_volume: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A rebuild runs for hours, and an admin may switch the app off inside them.
+
+    The mark on the volume is what the disable removes, so it is what the arming
+    asks. Without this the container would come out of a rebuild indexing while
+    Nextcloud has the app switched off, which is the failure the mark exists for
+    with the two sides swapped.
+    """
+    del indexed_volume
+    poller = default_poller()
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    poller.arm()
+
+    _silence_the_poller()
+    assert poller.armed is False
+
+    # No mark on the volume: this container is disabled as far as Nextcloud is
+    # concerned, whatever it was doing when the rebuild started.
+    _arm_the_poller()
+
+    assert poller.armed is False
+
+
+def test_the_blocking_rebuild_never_runs_on_the_event_loop() -> None:
+    """Static, because the symptom is a container that looks healthy and is not.
+
+    The run opens two index directories, writes the whole index a second time and
+    renames directories, for minutes to hours. On the loop that is a container
+    that stops answering ``/heartbeat`` while its own log says nothing at all,
+    and AppAPI takes it for dead long before the pass is through (T-14-23, and
+    the house rule at the head of ``worker/poller.py``).
+    """
+    parsed = ast.parse(inspect.getsource(_rebuild_the_index_directory)).body[0]
+    assert isinstance(parsed, ast.AsyncFunctionDef)
+    calls = [node for node in ast.walk(parsed) if isinstance(node, ast.Call)]
+
+    assert [call for call in calls if _name_behind(call.func) == "_run_the_rebuild"] == []
+    handed_over = [call for call in calls if _name_behind(call.func) == "to_thread"]
+    assert [_name_behind(call.args[0]) for call in handed_over] == ["_run_the_rebuild"]
+
+    handlers = [handler for node in ast.walk(parsed) if isinstance(node, ast.Try) for handler in node.handlers]
+    assert [_name_behind(handler.type) for handler in handlers if handler.type is not None] == [
+        "CancelledError",
+        "Exception",
+    ]
+    assert isinstance(handlers[0].body[0], ast.Raise)
+
+
+def test_the_stop_budget_of_the_rebuild_is_defined_and_used() -> None:
+    """Two mentions outside the comments: the definition and the wait that spends it.
+
+    A budget that is only defined is a number nobody honours, and a shutdown that
+    waited without one would wait for a run of hours.
+    """
+    code = [line for line in MAIN_SOURCE.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
+
+    assert sum(line.count("REBUILD_STOP_SECONDS") for line in code) >= 2

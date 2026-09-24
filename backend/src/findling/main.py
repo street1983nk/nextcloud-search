@@ -32,7 +32,7 @@ import asyncio
 import contextlib
 import logging
 import os
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from typing import Any, Final
 
@@ -49,8 +49,10 @@ from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
 from findling.api.status import ROUTER as STATUS_ROUTER
 from findling.config import settings
 from findling.embed.engine import release_if_idle, warm, warm_wanted
+from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS, rebuild_the_index, recover_the_index_directories
 from findling.instance import claim_the_volume, volume_is_shared
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp, run_app, set_handlers
+from findling.store.repo import open_read_only, open_store
 from findling.worker.poller import POLLER_STOP_SECONDS, Poller, _pause, default_poller
 from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_reconcile
 
@@ -77,6 +79,19 @@ RELEASE_TICK_SECONDS: Final = 30.0
 # How long the shutdown waits for the release task before it stops waiting. A
 # tick holds one to_thread call at most, and the longest of those is a warm run.
 RELEASE_STOP_SECONDS: Final = 5.0
+
+# How long the shutdown waits for the rebuild task, and the figure is a band and
+# not a run. A whole rebuild is hours on the box this project targets, and a
+# container that made its orchestrator wait for one is a container the
+# orchestrator kills, which costs the ordered shutdown of the three other tasks
+# as well (T-18-09-03). A band is 500 documents, it ends in a commit, and what is
+# committed is what the next start resumes in, so the budget only has to cover
+# the band that is running plus a reserve for a slow volume. 30 s is the figure
+# the indexing pass gets for one claim, measured against the 683 documents per
+# second of 2026-09-24, and the band run is asked to stop between two bands
+# anyway: this timeout is the answer to a band that hangs and not the ordinary
+# way out of a run.
+REBUILD_STOP_SECONDS: Final = 30.0
 
 KNOWN_LOG_LEVELS = frozenset({"debug", "info", "warning", "error"})
 
@@ -325,6 +340,132 @@ async def _release_when_idle(stop_event: asyncio.Event) -> None:
             )
 
 
+def _silence_the_poller() -> None:
+    """Stop the indexing task from writing into the index the rebuild reads.
+
+    Handed to :func:`findling.index.rebuild.rebuild_the_index` as a callback, so
+    that the index package never has to import the worker package: the poller is
+    already the caller of everything ``findling.index`` hands out, and an import
+    in the other direction would close that circle.
+
+    A container without a poller is not a fault here. The task only exists inside
+    the lifespan, and a rebuild that outlived it has nothing left to silence.
+    """
+    poller = active_poller()
+    if poller is not None:
+        poller.silence()
+
+
+def _arm_the_poller() -> None:
+    """Let the indexing task collect work again, unless the app was switched off.
+
+    The condition is the whole reason this is not simply ``poller.arm`` handed
+    over as it stands. A rebuild runs for hours, an admin can disable the app
+    while it does, and the disable removes the mark on the volume. Arming
+    afterwards would leave an installation with a backend that is off in
+    Nextcloud and indexing in the container, which is the failure the mark exists
+    against with the two sides swapped.
+    """
+    poller = active_poller()
+    if poller is not None and _was_enabled_before_this_start():
+        poller.arm()
+
+
+def _rebuild_is_due() -> bool:
+    """True when the marks of the existing index ask for a directory rebuild.
+
+    Only the two marks a rebuild can do anything about count
+    (:data:`findling.index.rebuild.MARKS_A_REBUILD_ANSWERS`). A moved word list
+    or a moved tantivy banner is a real drift with a different remedy, the crawl
+    that reads the files again, and a band run started for one of those would
+    carry the old text over and leave the drift exactly where it was.
+
+    Everything here is a read, and a missing database is a container that has
+    never indexed: there is nothing to carry over, and the first pass writes the
+    current schema anyway.
+    """
+    resolved = settings()
+    if not resolved.state_db.is_file():
+        return False
+    try:
+        store = open_read_only(resolved.state_db)
+    except OSError as error:
+        LOGGER.warning("the state database could not be read for the rebuild question, an %s", type(error).__name__)
+        return False
+    try:
+        return bool(MARKS_A_REBUILD_ANSWERS.intersection(resources.version_drift(store)))
+    finally:
+        store.close()
+
+
+def _run_the_rebuild(should_stop: Callable[[], bool]) -> str:
+    """Open the one writing handle the rebuild needs, run it, hand the handle back.
+
+    The store is opened here and not inside the rebuild, because a module that
+    opened a database of its own could keep a progress record beside the index,
+    and a second record is the one that can disagree with the first. The file is
+    never created by this call: :func:`_rebuild_is_due` has already answered
+    False for a volume without one, so the poller stays the only seeder of the
+    version marks.
+
+    Blocking from the first line to the last, which is why nothing calls it
+    outside :func:`asyncio.to_thread`.
+    """
+    store = open_store(settings().state_db)
+    try:
+        return rebuild_the_index(
+            store,
+            silence=_silence_the_poller,
+            arm=_arm_the_poller,
+            drop_read_side=resources.reset_read_side,
+            should_stop=should_stop,
+        )
+    finally:
+        store.close()
+
+
+async def _rebuild_the_index_directory(stop_event: asyncio.Event) -> None:
+    """The fourth long lived task: one rebuild, led from here and run in a thread.
+
+    Built like the three beside it, down to the error handling, and created only
+    where the marks ask for it.
+
+    **Not a loop.** The other three tick; this one runs once and ends, because a
+    rebuild is a one off answer to a drift and the marks it writes are what keeps
+    the next start from doing it again. A task that ended is a task whose
+    ``done()`` is True, which is exactly what the shutdown waits for.
+
+    **Every blocking call goes through** ``asyncio.to_thread``. The run opens two
+    index directories, writes the whole index a second time and renames
+    directories, for minutes to hours. On the event loop that is a container that
+    stops answering ``/heartbeat`` while its own log looks perfectly healthy, and
+    AppAPI takes it for dead long before the pass is through (T-14-23).
+
+    **The stop event travels in as a predicate** rather than as something to
+    await. The worker thread cannot await, and the band run is only ever
+    interrupted between two bands, so the one question it has to be able to ask
+    is whether the container is going down.
+
+    ``except asyncio.CancelledError: raise`` stands ahead of the general branch,
+    exactly as in the two tasks above, and the general branch logs the type name
+    only: a rebuild that failed must not take the process with it, because the
+    old directory is still in place and search and indexing both go on working
+    out of it (T-18-09-02).
+    """
+    try:
+        verdict = await asyncio.to_thread(_run_the_rebuild, stop_event.is_set)
+        LOGGER.info("the index rebuild ended: %s", verdict)
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        kind_of_failure = type(error).__name__
+        LOGGER.error(
+            "the index rebuild ended in an unexpected %s; the old index directory is still in place, "
+            "search and indexing continue",
+            kind_of_failure,
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Register the AppAPI routes once, start the one poller, stop it in order."""
@@ -370,6 +511,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             shared_volume.own,
         )
     else:
+        # What a hard abort left behind, read and put in order before anything
+        # opens it (T-18-08-01). Between the two renames of the directory swap
+        # the volume holds no directory called ``index`` at all, and a container
+        # that started into that state would open an empty one, answer every
+        # search with nothing and report success while doing it.
+        #
+        # Before the tasks are created, and that order is the point. A poller
+        # armed onto half a volume does not find the fault, it adds to it: it
+        # opens whatever directory is there, writes into it and commits, and the
+        # clean up path would afterwards be deciding about a state that two
+        # writers had already touched.
+        #
+        # In a worker thread because it stats directories and may rename or
+        # remove one, and skipped on a shared volume for the reason the drift
+        # report is skipped: those directories belong to another instance.
+        await asyncio.to_thread(recover_the_index_directories)
+
         # Stated once at startup, and decided nowhere. An existing index whose
         # version marks differ from the ones this build produces answers queries
         # with a different tokenisation than it was written with, so hits
@@ -465,12 +623,52 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 task.arm()
         LOGGER.info("findling backend was enabled before this start, indexing continues without a switch")
 
+    # The fourth task, and the three conditions in front of it are the whole
+    # decision about when a container rebuilds its index directory.
+    #
+    # The marks have to ask for it. A rebuild costs the size of the index a
+    # second time and a pass over every document in it, so it runs on evidence
+    # and never on a suspicion; the question is asked in a worker thread because
+    # it opens the state database.
+    #
+    # Nothing is rebuilt on a shared volume, and that is the same decision as the
+    # one about the indexing two blocks up: the marks in that state describe the
+    # index of another instance, so a rebuild here would carry another
+    # installation's documents into a directory of its own making.
+    #
+    # And nothing is rebuilt while nothing is armed. A container that was
+    # deployed and never enabled holds no tantivy lock and touches no volume, and
+    # a rebuild would be the largest possible way of breaking that promise.
+    stop_rebuild = asyncio.Event()
+    rebuilding: asyncio.Task[None] | None = None
+    if was_enabled and not shared_volume.other and await asyncio.to_thread(_rebuild_is_due):
+        rebuilding = asyncio.create_task(_rebuild_the_index_directory(stop_rebuild))
+        LOGGER.info("findling rebuilds the index directory the changed version marks ask for")
+
     try:
         yield
     finally:
         stop_indexing.set()
         stop_reconcile.set()
         stop_release.set()
+        stop_rebuild.set()
+
+        # The rebuild goes first, and it is the only one of the four whose place
+        # in this order matters. It is the task that renames the directories the
+        # other three read and write, and it is the one holding the poller
+        # silenced; waiting for it here means the shutdown below finds a
+        # container in one of the states the clean up path knows rather than in
+        # the middle of a rename. Over the budget the band that is running is
+        # inside a worker thread, and what it loses is that band and never more
+        # than that band, because the commit behind every band is what the next
+        # start resumes in.
+        if rebuilding is not None:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(asyncio.shield(rebuilding), timeout=REBUILD_STOP_SECONDS)
+            if not rebuilding.done():
+                rebuilding.cancel()
+                await asyncio.gather(rebuilding, return_exceptions=True)
+
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(asyncio.shield(indexing), timeout=POLLER_STOP_SECONDS)
         if not indexing.done():
