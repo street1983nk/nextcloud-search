@@ -728,8 +728,22 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # the rebuilt directory under the very name the live one had and the
 # invalidation branch of read_side therefore never fires. No file came and none
 # went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a twenty fourth time, by plan 18-08: exactly one of the 56
+# files changed its bytes, index/rebuild.py, which got the clean up path of the
+# start. recover_the_index_directories reads what the volume holds, derives all
+# three directory names from settings().index_dir with with_name and takes no
+# path from anybody, and answers with one of five names: the ordinary start is
+# left alone, a half filled index.rebuild beside a live index is kept because it
+# is the progress record the next pass resumes in, an index.rebuild without a
+# live index is raised to the live name because the missing live name is the
+# proof that the swap had already begun, an index.retired without a live index is
+# brought back because it is then the only complete holding, and an index.retired
+# beside a live one is discarded as waste. Four of the five branches warn and
+# name the state and never a path; the ordinary start says nothing, because a
+# warning that appears on every start is not a warning. No file came and none
+# went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "aceb306c30c151b10e2ca598a525328374dfc0faebc2c13461dcb2072827702a"
+PACKAGE_TREE_HASH_TODAY = "4fe79081564ce5d69f2e45a4dcca5fd53e1d693004a5f4b477caf84df51b2b9d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

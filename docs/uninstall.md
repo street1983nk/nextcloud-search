@@ -188,6 +188,38 @@ vor ungemessen. Dass `--rm-data` das Volume wirklich mitnimmt und dass es
 ohne das Kennzeichen wirklich liegen bleibt, stellt der Job aus Abschnitt 5 auf
 jeder der vier Serverversionen fest.
 
+### Drei Verzeichnisnamen im Volume, und keiner davon muss von Hand weg
+
+Im Volume liegt im Normalfall genau ein Indexverzeichnis. Während eines
+Schemaumbaus, also nach einem Upgrade, das die Suchfelder ändert, können zwei
+weitere Namen daneben auftauchen:
+
+| Name | Was er bedeutet |
+|------|-----------------|
+| `index` | Der Suchindex, aus dem der Container antwortet |
+| `index.rebuild` | Das neue Verzeichnis eines laufenden Umbaus, Dokument für Dokument gefüllt |
+| `index.retired` | Der alte Index, den der Tausch stillgelegt hat und der danach verschwindet |
+
+Der Tausch selbst ist kurz: zwei Umbenennungen und dann das Löschen, dazwischen
+liegen Millisekunden. Wird der Container genau in diesem Fenster hart beendet,
+etwa durch ein `docker kill` oder einen Stromausfall, bleibt einer der beiden
+Zusatznamen liegen, unter Umständen ohne ein `index` daneben.
+
+**Von Hand ist dann nichts zu tun.** Der Container liest den Zustand des Volumes
+bei jedem Start und bringt ihn selbst in Ordnung. Ein vollständiges Verzeichnis
+wird an die Stelle von `index` gehoben, ein übrig gebliebenes `index.retired`
+neben einem vorhandenen `index` wird verworfen, und ein halb gefülltes
+`index.rebuild` neben einem vorhandenen `index` bleibt ausdrücklich liegen, weil
+der nächste Umbaulauf dort weitermacht, wo der abgebrochene aufgehört hat. Jeder
+dieser Fälle schreibt eine Zeile ins Protokoll des Containers, die den Fall
+benennt; im laufenden Betrieb erscheint keine dieser Zeilen.
+
+Wer trotzdem im Volume aufräumen will, ohne den Container zu starten: ein
+`index.rebuild` darf weg, das kostet den Fortschritt eines Umbaulaufs und sonst
+nichts. Ein `index.retired` darf nur weg, wenn ein `index` daneben liegt. Fehlt
+das `index`, ist das stillgelegte Verzeichnis der einzige vollständige Bestand,
+und wer es löscht, wirft den Suchindex weg.
+
 ### Zwei Instanzen an einem Docker-Dienst teilen das Volume
 
 **Eine Warnung, und sie ist mit Schaden belegt.** Der Name des Volumes leitet
