@@ -1043,7 +1043,7 @@ die Box und sind ausdrücklich nach Phase 22 vertagt.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED durch die Plaene: Q-Aufraeumpfad -> 18-08, Rueckfall-Ausloeser -> Umgebungsvariable in 18-06, Katalogzahl -> Zaehl-Auftrag in 18-10)
 
 1. **Wer löst den Umbau aus, wenn der Admin die Variable setzt, ohne neu zu starten?**
    - Was feststeht: `settings()` ist `lru_cache`-gecacht, der Drift wird im
