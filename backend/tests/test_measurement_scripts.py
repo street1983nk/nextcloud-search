@@ -702,8 +702,21 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # tools/index_status.py reports the mark as the sixth entry of _VERSION_KEYS,
 # which is the visible difference between 1.2.0 and 1.3.0 the upgrade leg of the
 # CI run reads. No file came and none went, so PACKAGE_FILES_TODAY stays at 55.
-PACKAGE_FILES_TODAY = 55
-PACKAGE_TREE_HASH_TODAY = "7b14950daf877e9ba0ae03d02fae24c68c6afd5cda5dce67f47240d8dfca9d70"
+# Moved on 2026-09-24 a twenty second time, by plan 18-06, and this time the
+# count moves with the hash: index/rebuild.py arrived, so 55 becomes 56. It
+# carries the precheck of the volume (RebuildVerdict and may_rebuild, with the
+# factor 0.40 for every newly filled chain on top of the unchanged
+# MIN_FREE_BYTES floor), the band run over file_id with range_query and one
+# commit per band of 500, the document rebuild _document_from over the eight
+# stored fields with body_en fed out of body_de, the stateless resume
+# _resume_cursor that reads the highest carried over file_id out of the half
+# written target directory, and counts_match as the final probe the swap of
+# plan 18-07 will hang on. config.py changed its bytes as the second file, for
+# FINDLING_REBUILD_FALLBACK with its two positions and the rebuild_fallback
+# field of Settings beside compound_dict. One file came and none went, so
+# PACKAGE_FILES_TODAY moves to 56.
+PACKAGE_FILES_TODAY = 56
+PACKAGE_TREE_HASH_TODAY = "68474cd9715062ed734b88b9a72b8bfc95a1773a83f4e6b96f7a1e3406c1fee4"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
