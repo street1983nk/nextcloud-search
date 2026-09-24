@@ -17,6 +17,7 @@ from typing import Any, cast
 import pytest
 from tantivy import Document, Index, Query
 
+from conftest import FIXTURE_DOCUMENTS
 from findling.index.open import open_index
 from findling.index.schema import (
     FIELD_BODY_DE,
@@ -555,3 +556,91 @@ def test_the_filter_clause_carries_the_expected_set_on_its_own(index: Index) -> 
     assert _filtered(index, build_query(index, "frist", groups=["pdf"])) == [1]
     assert _filtered(index, build_query(index, "frist", since=MTIME_TXT)) == [3]
     assert _filtered(index, build_query(index, "frist", groups=["documents"], since=MTIME_DOCX)) == [2]
+
+
+# -- the same holdings under both schema generations -------------------------
+#
+# Phase 18 raises the schema from nine fields to thirteen, and between the day
+# that ships and the day a given instance has rebuilt, the query builder in this
+# module runs against indexes of both generations. The failure it has to survive
+# is not a wrong ranking, it is an exception: measured on tantivy 0.26.2,
+# ``parse_query_lenient`` answers a field name the schema does not know with
+# ``ValueError``, that exception leaves ``build_query``, and the route answers
+# without a lexical half for as long as the old index is on disk.
+#
+# The index these two cases run against is built by ``conftest.build_schema_1``
+# and not by a ``SchemaBuilder`` written out here, and the difference matters
+# more than it looks. A schema assembled in this file would be a schema the test
+# author believes was shipped; it would drift from the real one on any field
+# whose stored or indexed flag was remembered wrong, and the proof would then be
+# about an index that never existed on any installation. The fixture copies the
+# nine field builder from the last commit before plan 18-01 and freezes it, which
+# is the only version of it anybody can still be running.
+#
+# The set inclusions that say the same thing about names rather than about an
+# index live in ``tests/test_schema_generations.py``, together with the syntax
+# tree guard that keeps the field list inside both generations.
+
+
+def _hits_of(index: Index, text: str) -> list[int]:
+    """Run the whole query builder against ``index`` and return the ids it found.
+
+    The assertions inside are the ones that would otherwise need a
+    ``pytest.raises`` around the call and a second case for the degraded answer.
+    An exception fails the test where it happens, an empty ``errors`` list says
+    the parser did not quietly swallow the field name, and a query that is not
+    None says the builder did not take the "nothing to search for" exit.
+    """
+    rewritten = build_query(index, text)
+
+    assert rewritten.errors == []
+    assert rewritten.query is not None
+
+    searcher = index.searcher()
+    found: list[int] = []
+    for _, address in searcher.search(rewritten.query, FIXTURE_DOCUMENTS * 2).hits:
+        value = searcher.doc(address).get_first(FIELD_FILE_ID)
+        assert value is not None
+        found.append(int(value))
+    return sorted(found)
+
+
+ALL_DOCUMENTS = list(range(1, FIXTURE_DOCUMENTS + 1))
+
+# Seven search lines and the ids each of them has to find, whichever schema the
+# index was built with. Written out rather than compared between the two runs
+# alone: two empty lists are equal, and four of these lines find every document
+# there is, so an expected list is what keeps the comparison from being true for
+# a reason that has nothing to do with the schema.
+#
+# The lines take different routes into the engine on purpose. "vertrag" is a
+# plain body word, "kuendigungsfrist" arrives as an umlaut variant and as a
+# compound, "akte" stands in the file name and in the title rather than in the
+# body, the phrase goes past the token rewriting untouched and needs positions
+# in the posting list, "absaetze" separates the documents by their tail, the
+# bare number reaches exactly one of them, and the last line adds the extension
+# filter, which is a clause over a separate field rather than a term.
+SEARCHES = (
+    ("vertrag", ALL_DOCUMENTS),
+    ("kuendigungsfrist", ALL_DOCUMENTS),
+    ("akte", ALL_DOCUMENTS),
+    ('"drei Monate"', ALL_DOCUMENTS),
+    ("absaetze", [file_id for file_id in ALL_DOCUMENTS if file_id % 3]),
+    ("7", [7]),
+    ("type:pdf vertrag", [file_id for file_id in ALL_DOCUMENTS if file_id % 2]),
+)
+
+
+def test_the_query_builder_answers_an_index_of_the_old_schema(schema_1_index: Index) -> None:
+    # The case the whole section exists for. No pytest.raises anywhere: an
+    # exception out of build_query is a failure of this test, not its subject,
+    # and a degraded answer is caught by the empty errors list inside _hits_of.
+    for text, expected in SEARCHES:
+        assert _hits_of(schema_1_index, text) == expected, text
+
+
+def test_both_schema_generations_answer_the_same_search_the_same(schema_1_index: Index, schema_2_index: Index) -> None:
+    # Success criterion 1 of the phase on the level of a test: the same holdings
+    # answer the same under both schemas, hit for hit and not merely in number.
+    for text, expected in SEARCHES:
+        assert _hits_of(schema_1_index, text) == expected == _hits_of(schema_2_index, text), text
