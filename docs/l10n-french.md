@@ -163,6 +163,9 @@ deutschen Übersetzung.
 | `Excluded files are not part of the coverage figure. They are files you told Findling to leave alone.` | Ausgeschlossene Dateien zählen nicht in den Deckungsgrad. Es sind die Dateien, die Findling auf Anweisung nicht anfasst. | Les fichiers exclus ne comptent pas dans la couverture. Ce sont les fichiers auxquels Findling ne touche pas, sur instruction. |
 | `Little disk space left. Indexing is paused so the index stays intact. Search keeps working.` | Wenig Speicherplatz frei. Die Indexierung pausiert, damit der Index unbeschädigt bleibt. Die Suche funktioniert weiter. | Peu d'espace disque disponible. L'indexation est en pause afin que l'index reste intact. La recherche continue de fonctionner. |
 | `The index was built with an older text analysis. Run "occ findling:index --restart" to rebuild it, otherwise some hits stay missing.` | Der Index wurde mit einer älteren Textanalyse gebaut. Mit "occ findling:index --restart" neu aufbauen, sonst fehlen weiter Treffer. | L'index a été construit avec une analyse de texte plus ancienne. Le reconstruire avec "occ findling:index --restart", sinon des résultats continueront de manquer. |
+| `Findling is rebuilding its index so that the newly switched on languages can be searched. %1$s of %2$s documents have been carried over. Search keeps answering while this runs, and there is nothing to start or to restart.` | Findling baut seinen Index neu auf, damit die neu eingeschalteten Sprachen durchsucht werden können. %1$s von %2$s Dokumenten sind übertragen. Die Suche antwortet währenddessen weiter, und es gibt nichts zu starten oder neu zu starten. | Findling reconstruit son index afin que les langues nouvellement activées puissent être recherchées. %1$s documents sur %2$s ont été repris. La recherche continue de répondre pendant ce temps, et il n'y a rien à démarrer ni à redémarrer. |
+| `Findling wants to rebuild its index for the newly switched on languages and there is not enough room: %s more are needed next to what the index already uses. Free that much, or set the environment variable FINDLING_REBUILD_FALLBACK=fullreindex to have the backend read the files again instead.` | Findling möchte seinen Index für die neu eingeschalteten Sprachen neu aufbauen, und es ist nicht genug Platz: %s fehlen zusätzlich zu dem, was der Index bereits belegt. Geben Sie so viel frei, oder setzen Sie die Umgebungsvariable FINDLING_REBUILD_FALLBACK=fullreindex, damit das Backend die Dateien stattdessen neu liest. | Findling souhaite reconstruire son index pour les langues nouvellement activées et l'espace est insuffisant : il manque %s en plus de ce que l'index occupe déjà. Libérez cet espace, ou définissez la variable d'environnement FINDLING_REBUILD_FALLBACK=fullreindex pour que le service relise les fichiers à la place. |
+| `Languages of the index: %1$s switched on, %2$s with text in the index.` | Sprachen des Index: %1$s eingeschaltet, %2$s mit Text im Index. | Langues de l'index : %1$s activées, %2$s avec du texte dans l'index. |
 | `No numbers yet` | Noch keine Zahlen | Pas encore de chiffres |
 | `The first indexing pass has not finished. Findling started on its own, there is nothing to configure.` | Der erste Indexlauf ist noch nicht durch. Findling ist von selbst gestartet, es ist nichts einzustellen. | La première indexation n'est pas encore terminée. Findling a démarré de lui-même, il n'y a rien à configurer. |
 | `The two halves of Findling report different versions: this app is %1$s, the backend is %2$s. While they disagree the search answers with no results, because a wrong answer without a word would be worse. Bring both halves to the same version.` | Die beiden Hälften von Findling melden unterschiedliche Versionen: diese App ist %1$s, das Backend ist %2$s. Solange sie nicht zusammenpassen, antwortet die Suche ohne Ergebnisse, weil eine falsche Antwort ohne Hinweis schlimmer wäre. Beide Hälften auf dieselbe Version bringen. | Les deux moitiés de Findling annoncent des versions différentes : cette application est en %1$s, le service est en %2$s. Tant qu'elles ne concordent pas, la recherche répond sans résultats, car une réponse fausse et muette serait pire. Mettre les deux moitiés dans la même version. |
@@ -430,6 +433,24 @@ Schlüsselmenge, aus der Datei gezählt" oben nennt noch 197: sie ist der Stand 
 diese Zeile mit. Die harte Zahl im Gate
 `test_the_german_catalogue_covers_both_german_language_codes` ist die maßgebliche und
 steht auf 199.
+
+**Nachtrag 24.09.2026 (Phase 18, Plan 18-10).** Drei weitere Zeilen sind dazugekommen: der
+Fortschrittssatz des Umbaubanners, die Platzwarnung desselben Laufs mit der fehlenden
+Bytezahl und die Zeile der Sprachdiagnose, die eingeschaltete gegen befüllte Sprachen
+stellt. Alle drei stehen oben in der Tabelle und sind maschinell geprüft (Schlüsselmenge,
+Platzhalter-Parität, echte Akzente). **Vom Owner noch nicht gelesen**, also gehören sie zur
+Abnahme der Phase 18 und zu keiner der drei Abnahmen davor. Das steht hier aus demselben
+Grund wie die Nachträge darüber: eine abgenommene Datei darf keine ungelesene Zeile
+stillschweigend mittragen.
+
+Der Wortlaut des Umbausatzes nennt bewusst **keinen** Befehl, weder auf Deutsch noch auf
+Französisch. Das Reindex-Banner daneben nennt `occ findling:index --restart` und behält
+ihn; würde der Umbausatz ihn ebenfalls tragen, könnte der Leser einen Lauf, der die
+Dokumente nur von einem Verzeichnis in ein anderes trägt, durch einen Vollreindex
+ersetzen, der auf der Zielhardware neunzehn Stunden kostet.
+
+Mit diesen drei Zeilen stehen 202 Schlüssel in `de.json`, und die harte Zahl im Gate steht
+auf 202.
 
 ## Warum die Tabelle der Ergebnisseite 24 Zeilen hat
 

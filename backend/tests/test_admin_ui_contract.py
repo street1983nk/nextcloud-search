@@ -1633,7 +1633,20 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     checkpoint on 19.09.2026, and docs/l10n-french.md carries the dated note
     that says so.
 
-    This paragraph carries the same duty as the three above it. Whoever raises
+    It stands at 202 since 24.09.2026, and the rise of three is plan 18-10 of
+    phase 18: the two sentences of the rebuild banners and the one line of the
+    language diagnosis. The first names the progress of a run that carries the
+    documents of the index from one directory into another and deliberately
+    names no command, because the command of the reindex banner next to it
+    would cost the reader nineteen hours for nothing; the second names the
+    bytes that were missing when that run refused itself, together with
+    FINDLING_REBUILD_FALLBACK as the way out that needs no space; the third puts
+    the switched on languages next to the ones whose chain really carries text,
+    which is criterion 4 of the phase. The French wording of all three is cast
+    from the table in docs/l10n-french.md and carries the dated reservation of
+    24.09.2026 there: it is machine checked and the owner has not read it yet.
+
+    This paragraph carries the same duty as the four above it. Whoever raises
     the figure next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
@@ -1659,7 +1672,7 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     }
 
     assert len(set(map(frozenset, keys_of.values()))) == 1, f"the four catalogues disagree: {sorted(keys_of)}"
-    assert len(keys_of["de.json"]) == 199
+    assert len(keys_of["de.json"]) == 202
 
 
 def test_all_six_catalogues_carry_the_same_keys() -> None:

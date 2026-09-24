@@ -528,8 +528,21 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # the constructor was handed nothing that could reach the container. No other
 # file of the half changed its bytes: the bump of the three version places of
 # the same plan lands in appinfo/info.xml, and the recipe globs **/*.php.
+# Moved on 2026-09-24 by plan 18-10, and the count stays at 66 for the first
+# time since 21.09.2026 because this plan changes bytes and adds no file. Two of
+# the 66 changed. AdminViewService.php got one line per new status key in
+# backend(), six in all, and the paragraph that says why none of them goes
+# through optionalCounter(): each has a resting value a container reports while
+# nothing is happening, so null would buy a distinction with no consequence
+# anywhere. templates/admin.php got the sixth and the seventh banner next to the
+# reindex banner and never in its place, the line of the language diagnosis, and
+# the size formatter moved up next to the count formatter because the banner
+# list of block one now needs it and is built before the variables of block two
+# exist. The plan touches js/admin.js and the six catalogue files as well; the
+# recipe globs **/*.php, so none of them is in this tree and none of them moves
+# this figure.
 PHP_FILES_TODAY = 66
-PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e59f9ec41"
+PHP_TREE_HASH_TODAY = "65c1441674f431fab1936139ed583d232cc0c2e22c9563f3b5b29d1036c81357"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
@@ -758,8 +771,21 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # to tesseract name that the warning reads, and a name for the second position of
 # the rebuild fallback switch. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a twenty sixth time, by plan 18-10: three of the 56 files
+# changed their bytes and the count stays at 56. api/status.py got the five new
+# fields of the answer, languagesActive and languagesFilled next to the four
+# readings of the rebuild, each with its default and its paragraph, and the two
+# lines in _volume() and _of() that carry them. api/resources.py got
+# filled_languages(), the probe that asks the term dictionary of the six body
+# chains whether anything is in them, behind a TTL cache of its own next to
+# _DEGRADED and cleared by reset_read_side with it; the same file lost the call
+# of Index.exists on a path that may not exist, which raises rather than
+# answering False and therefore escaped a function whose contract is that it
+# never raises. index/rebuild.py got rebuild_blocked_bytes(), the shortfall the
+# precheck refused on, published the way the progress is. No file came and none
+# went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "f133d6f5c3bfe451fbf62fb1bbd57a887f3ec3647318b4a3a20a11974b5ddc5b"
+PACKAGE_TREE_HASH_TODAY = "657ab15620295e9716a7998efe213907fb1431ded81caf04e8fa8763b2519cce"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
