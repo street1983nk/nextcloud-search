@@ -304,6 +304,42 @@ jobs:
       # about the indexing pass and not an invitation to raise the number.
       UPGRADE_DRAIN_BUDGET_SECONDS: '900'
 
+      # The budget "Store upgrade 6" gives the rebuild of the index directory,
+      # counted from the restart that orders it, and a named variable for the
+      # same reason the two above are named.
+      #
+      # 300 and not the 900 of the pass above, and the difference is the whole
+      # difference between the two runs. The indexing pass reads 39 files,
+      # rasterises the scanned ones and puts them through tesseract; the rebuild
+      # carries documents the index already holds from one directory into the
+      # next and reads no file at all. The module header of
+      # backend/src/findling/index/rebuild.py measures 683 documents per second
+      # over 3000 documents on 2026-09-24, so 39 documents are a fraction of a
+      # second of carrying, and what the budget really pays for is the container
+      # coming up plus the six analysis chains being built, of which the German
+      # one carries a 276496 entry automaton.
+      #
+      # Why there is a budget at all rather than a loop that waits: an unbounded
+      # wait in CI is a hanging run, a hanging run costs the job its whole
+      # timeout, and a guard that hangs is a guard somebody switches off. An
+      # overrun here is a finding about the rebuild and not an invitation to
+      # raise the number.
+      REBUILD_BUDGET_SECONDS: '300'
+
+      # The language set "Store upgrade 6" orders the rebuild with, and it is
+      # deliberately not in schema field order. config.py::_languages iterates
+      # over SUPPORTED_LANGUAGES and never over the admin's input, so the mark
+      # the rebuild stamps has to read de,en,es whatever order it was asked in.
+      # A set that was already sorted would let a normalisation that does not
+      # happen pass unnoticed, and the mark is what the next start compares
+      # against: an unnormalised one would order a rebuild at every boot.
+      #
+      # es and not it, nl or pt for one reason only: Spanish is the language the
+      # owner decision E-17-3 is written about, and docs/language-analyzers.md
+      # carries its example with both variables.
+      REBUILD_LANGUAGES: 'es,de,en'
+      REBUILD_LANGUAGES_NORMALISED: 'de,en,es'
+
     steps:
       # Actions are pinned to commit SHAs, never to tags: a moved tag would be
       # arbitrary code execution inside a job that holds a Nextcloud instance and
@@ -3541,6 +3577,515 @@ jobs:
             echo "The reindex branch of D-05 is deliberately not driven here; its absence is what this run asserts."
           } >> "${GITHUB_STEP_SUMMARY}"
 
+      # =====================================================================
+      # The other half of the upgrade proof, and it stands BESIDE the block
+      # above rather than inside it (plan 18-12, success criterion 5).
+      #
+      # What the block above proves is that an upgrade 1.2.0 to 1.3.0 under the
+      # factory setting moves nothing. That is the promise of D-04 and it is
+      # worth exactly as much as the counter case is: a version that cannot
+      # rebuild at all would pass every one of those six assurances. So this
+      # step drives the case the block above denies, on the very installation
+      # the block above left behind, and asserts nine things about it.
+      #
+      # Why it is a step of its own and not a matrix leg or a second pass.
+      # UPGRADE_FROM_TAG is an env of the workflow and the matrix is already
+      # spoken for by server-version and runner; a third dimension would double
+      # the number of legs and make the paragraph "Why exactly one leg" above
+      # untrue. A step that continues where the last one stopped costs one
+      # restart and no second registration.
+      #
+      # Why the rebuild is ordered by a restart and not by a registration. The
+      # instance is already at 1.3.0 here, the volume already holds the index of
+      # the reference corpus, and the one thing missing is a language set the
+      # index was not built with. AppAPI hands its environment to the container
+      # at registration time, so the set is changed where it really lives, in
+      # the environment of the container, and the container is created again
+      # from its own inspect output with everything else of it unchanged. An
+      # app_api:app:register would deploy a second time and prove the store
+      # install path a third time, which is the subject of a different block.
+      #
+      # What this step must never do is make itself easy. Every one of the nine
+      # is a sentence about an installation in the field: the search answers
+      # while the rebuild runs, no document is lost, nothing is read from
+      # Nextcloud again, no page is put through tesseract again, and not one
+      # byte of the vector stock is written again.
+      - name: Store upgrade 6, the rebuild a changed language set orders
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        run: |
+          . "${RUNNER_TEMP}/upgrade-probe.sh"
+
+          # The digest of the vector stock, in the container that holds it. It
+          # lives here and not in the shared probe because this is the only step
+          # that asks the question, and it answers the word absent rather than
+          # failing on a missing file: whether there is a stock at all is a
+          # precondition below and not a detail of the reader.
+          vectors_digest() {
+            container=$(findling_container)
+            if [ -z "${container}" ]; then
+              echo "no running findling_backend container, so there is no vector stock to read" >&2
+              return 1
+            fi
+            docker exec "${container}" sh -c \
+              'if [ -f "${APP_PERSISTENT_STORAGE}/vectors.db" ]; then sha256sum "${APP_PERSISTENT_STORAGE}/vectors.db" | cut -d" " -f1; else echo absent; fi'
+          }
+
+          # ---------------------------------------------------------------
+          # The state the rebuild starts from, and the four conditions that
+          # make the nine assurances below mean anything.
+          # ---------------------------------------------------------------
+          snapshot "${RUNNER_TEMP}/rebuild-before.json" rebuild-before
+          before="${RUNNER_TEMP}/rebuild-before.json"
+          echo "the state before the rebuild:"
+          jq . "${before}"
+
+          vectors_before=$(vectors_digest)
+          echo "the vector stock before the rebuild: ${vectors_before}"
+
+          if ! jq -e '.marks.languages == "de,en"' "${before}" > /dev/null; then
+            echo "::error::the installation reports the languages mark $(jq -r '.marks.languages' "${before}") and not de,en, so setting ${REBUILD_LANGUAGES} would order something other than the jump this step measures"
+            exit 1
+          fi
+          if ! jq -e '.container.rebuildState == "idle"' "${before}" > /dev/null; then
+            echo "::error::a rebuild directory is already lying on the volume, so this step would measure the end of somebody else's run"
+            exit 1
+          fi
+          if ! jq -e '[.terms[]] | all(. == 1)' "${before}" > /dev/null; then
+            echo "::error::not every one of the three terms brings back exactly one file before the rebuild"
+            echo "An unchanged count after the rebuild would then be the unchanged absence of a hit."
+            jq '.terms' "${before}"
+            exit 1
+          fi
+          if [ "${vectors_before}" = "absent" ]; then
+            echo "::error::this installation holds no vectors.db, so assurance 9 would compare two absences and prove nothing about a re-embedding"
+            echo "The vector stock is opened on the first indexing pass, so its absence here is a finding about that pass."
+            exit 1
+          fi
+          echo "languages mark de,en, no rebuild directory, three terms with one file each, a vector stock to compare"
+
+          # The app password, taken once and used for every overview call of the
+          # loop below. overview.sh takes a fresh one on every call, which costs
+          # a second or more, and a second is a long time against a rebuild of
+          # 39 documents: the banner has to be read WHILE the run is on, so the
+          # reader has to be cheap. The two ways are the ones overview.sh uses,
+          # in the same order and for the same reason, and the value itself is
+          # never printed.
+          apppw=""
+          if NC_PASS=password "${RUNNER_TEMP}/nc-occ.sh" user:add-app-password admin \
+            --password-from-env > "${RUNNER_TEMP}/rebuild-apppw.txt" 2>&1; then
+            apppw=$(grep -oE '[A-Za-z0-9+/=._-]{40,}' "${RUNNER_TEMP}/rebuild-apppw.txt" | tail -1)
+          fi
+          if [ -z "${apppw}" ]; then
+            apppw=$(curl -s -u admin:password -H 'OCS-APIRequest: true' \
+              'http://localhost:8080/ocs/v2.php/core/getapppassword?format=json' \
+              | grep -o '"apppassword":"[^"]*"' | cut -d'"' -f4 || true)
+          fi
+          if [ -z "${apppw}" ]; then
+            echo "::error::no app password could be taken, so the rebuild banner could not be read while the run is on"
+            exit 1
+          fi
+          echo "app password: obtained (length ${#apppw})"
+
+          # One overview call and nothing else, the status code on stdout and
+          # the body in the file the caller names.
+          fast_overview() {
+            curl -s -o "$1" -w '%{http_code}' \
+              -u "admin:${apppw}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              http://localhost:8080/index.php/apps/findling/admin/overview
+          }
+
+          # The counter sample for the reader itself: it has to work BEFORE the
+          # restart, or a loop that sees no banner would be a loop that cannot
+          # see one. The value asserted here is the idle one, which is also the
+          # third snapshot of assurance 3 read from the other side.
+          code=$(fast_overview "${RUNNER_TEMP}/rebuild-overview-before.json")
+          if [ "${code}" != "200" ] \
+            || ! jq -e '.backend.rebuildRunning == false and .backend.languagesActive == "de,en"' \
+                 "${RUNNER_TEMP}/rebuild-overview-before.json" > /dev/null; then
+            echo "::error::the cheap overview reader answered HTTP ${code} without the idle state it has to see before the restart"
+            head -c 600 "${RUNNER_TEMP}/rebuild-overview-before.json"
+            exit 1
+          fi
+          echo "the overview reader works and reports rebuildRunning false at languagesActive de,en"
+
+          # ---------------------------------------------------------------
+          # The restart with the new set. The container is created again out of
+          # its own inspect output, with one environment entry changed and
+          # everything else carried over, and every shape this reconstruction
+          # does not understand ends the step instead of being guessed at.
+          # ---------------------------------------------------------------
+          container=$(findling_container)
+          if [ -z "${container}" ]; then
+            echo "::error::no running findling_backend container to restart"
+            docker ps -a
+            exit 1
+          fi
+          spec="${RUNNER_TEMP}/rebuild-container.json"
+          docker inspect "${container}" > "${spec}"
+
+          image=$(jq -r '.[0].Config.Image' "${spec}")
+          netmode=$(jq -r '.[0].HostConfig.NetworkMode' "${spec}")
+          policy=$(jq -r '.[0].HostConfig.RestartPolicy.Name // ""' "${spec}")
+          if [ -z "${image}" ] || [ "${image}" = "null" ]; then
+            echo "::error::docker inspect names no image for ${container}"
+            exit 1
+          fi
+          # --net host is what app_api:daemon:register set for harp_proxy_host
+          # further up in this file, and it is the reason this reconstruction is
+          # short: no ports, no networks and no aliases to carry. A container in
+          # any other mode is one this step does not understand.
+          if [ "${netmode}" != "host" ]; then
+            echo "::error::${container} runs in network mode ${netmode} and not host, which is not the shape harp_proxy_host creates"
+            exit 1
+          fi
+          # An entrypoint or a command the container overrides would be lost by
+          # a plain docker run, and losing it silently would start a container
+          # that does something else. Compared against the image rather than
+          # carried, because carrying an override is how this reconstruction
+          # would grow into a second deployment path.
+          docker image inspect "${image}" > "${RUNNER_TEMP}/rebuild-image.json"
+          for field in Entrypoint Cmd; do
+            mine=$(jq -c ".[0].Config.${field}" "${spec}")
+            theirs=$(jq -c ".[0].Config.${field}" "${RUNNER_TEMP}/rebuild-image.json")
+            if [ "${mine}" != "${theirs}" ]; then
+              echo "::error::the container overrides ${field} (${mine} against ${theirs} of the image), and this restart carries no overrides"
+              exit 1
+            fi
+          done
+
+          envfile="${RUNNER_TEMP}/rebuild-env.list"
+          jq -r '.[0].Config.Env[]' "${spec}" > "${RUNNER_TEMP}/rebuild-env-all.list"
+          grep -v '^FINDLING_LANGUAGES=' "${RUNNER_TEMP}/rebuild-env-all.list" > "${envfile}" || true
+          if [ ! -s "${envfile}" ]; then
+            echo "::error::the container carries no environment left after the filter, which is not a container this restart understands"
+            exit 1
+          fi
+          printf 'FINDLING_LANGUAGES=%s\n' "${REBUILD_LANGUAGES}" >> "${envfile}"
+          # The names only. The environment of this container carries APP_SECRET
+          # among other things, and a step log is not the place for it.
+          echo "the environment of the restarted container, by name:"
+          cut -d= -f1 "${envfile}" | sort | tr '\n' ' '
+          echo
+
+          mounts="${RUNNER_TEMP}/rebuild-mounts.list"
+          jq -r '.[0].Mounts[]
+                 | if .Type == "volume" then "type=volume,source=" + .Name + ",target=" + .Destination + (if .RW then "" else ",readonly" end)
+                   elif .Type == "bind" then "type=bind,source=" + .Source + ",target=" + .Destination + (if .RW then "" else ",readonly" end)
+                   else "UNSUPPORTED " + .Type end' "${spec}" > "${mounts}"
+          if grep -q '^UNSUPPORTED' "${mounts}"; then
+            echo "::error::the container has a mount this restart does not understand:"
+            cat "${mounts}"
+            exit 1
+          fi
+          if ! grep -q "source=${UPGRADE_VOLUME}," "${mounts}"; then
+            echo "::error::the container does not mount ${UPGRADE_VOLUME}, so the restart would not be about the index this proof built"
+            cat "${mounts}"
+            exit 1
+          fi
+          echo "the mounts carried over:"
+          cat "${mounts}"
+
+          labels="${RUNNER_TEMP}/rebuild-labels.list"
+          jq -r '.[0].Config.Labels // {} | to_entries[] | .key + "=" + .value' "${spec}" > "${labels}"
+
+          run_args=(--detach --name "${container}" --network host --env-file "${envfile}")
+          if [ -n "${policy}" ] && [ "${policy}" != "no" ]; then
+            run_args+=(--restart "${policy}")
+          fi
+          while IFS= read -r mount; do
+            if [ -n "${mount}" ]; then run_args+=(--mount "${mount}"); fi
+          done < "${mounts}"
+          while IFS= read -r label; do
+            if [ -n "${label}" ]; then run_args+=(--label "${label}"); fi
+          done < "${labels}"
+
+          rebuild_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          docker rm -f "${container}" > /dev/null
+          docker run "${run_args[@]}" "${image}" > /dev/null
+          docker ps --filter "name=${container}" --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
+          echo "the container was created again at ${rebuild_start} with FINDLING_LANGUAGES=${REBUILD_LANGUAGES}"
+
+          # ---------------------------------------------------------------
+          # The run, watched. The loop leaves the moment the rebuild is through
+          # and never sleeps a fixed pause while the window is still open: the
+          # middle snapshot of assurance 3 and the canary of assurance 5 are
+          # both inside a window that lasts seconds, and a reader that paused
+          # would be a reader that missed it. That is the same lesson of plan
+          # 06-11 the waiting loops above are built on, applied to a window
+          # rather than to a hit.
+          # ---------------------------------------------------------------
+          during="${RUNNER_TEMP}/rebuild-during.json"
+          probe_a="${RUNNER_TEMP}/rebuild-during-a.json"
+          probe_b="${RUNNER_TEMP}/rebuild-during-b.json"
+          caught=""
+          finished=""
+          rounds=0
+          deadline=$(( $(date +%s) + REBUILD_BUDGET_SECONDS ))
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            rounds=$(( rounds + 1 ))
+            code=$(fast_overview "${probe_a}") || code="000"
+            if [ "${code}" != "200" ]; then
+              sleep 1
+              continue
+            fi
+            running=$(jq -r '.backend.rebuildRunning' "${probe_a}" 2> /dev/null || echo "")
+            active=$(jq -r '.backend.languagesActive' "${probe_a}" 2> /dev/null || echo "")
+
+            # The middle snapshot, and the canary inside it. The search is asked
+            # BETWEEN two progress readings and the snapshot carries both, which
+            # is what makes "during" a measurement rather than a claim: a canary
+            # with a progress reading on either side of it cannot have run
+            # before or after the rebuild.
+            if [ -z "${caught}" ] && [ "${running}" = "true" ]; then
+              # The status of the search itself, taken from the call and not
+              # from a substitution with a fallback in it: term_hits fails
+              # closed on a status other than 200 and on an unreadable body, and
+              # an || inside the assignment would swallow exactly that verdict
+              # and leave an empty count that reads like nought hits.
+              if hits=$(term_hits Belehrung); then
+                status=0
+              else
+                status=1
+                hits=""
+              fi
+              code_b=$(fast_overview "${probe_b}") || code_b="000"
+              if [ "${code_b}" = "200" ] && jq -e '.backend.rebuildRunning == true' "${probe_b}" > /dev/null; then
+                jq -n \
+                  --argjson a "$(jq -c '.backend' "${probe_a}")" \
+                  --argjson b "$(jq -c '.backend' "${probe_b}")" \
+                  --arg hits "${hits}" \
+                  --arg searchFailed "${status}" \
+                  '{
+                     before: { rebuildRunning: $a.rebuildRunning, rebuildDone: $a.rebuildDone, rebuildTotal: $a.rebuildTotal, languagesActive: $a.languagesActive },
+                     after: { rebuildRunning: $b.rebuildRunning, rebuildDone: $b.rebuildDone, rebuildTotal: $b.rebuildTotal, languagesActive: $b.languagesActive },
+                     canaryHits: $hits,
+                     canaryFailed: ($searchFailed != "0")
+                   }' > "${during}"
+                caught="yes"
+                echo "the rebuild was caught in the act in round ${rounds}:"
+                jq -c . "${during}"
+              fi
+            fi
+
+            if [ "${running}" = "false" ] && [ "${active}" = "${REBUILD_LANGUAGES_NORMALISED}" ]; then
+              finished="yes"
+              break
+            fi
+            # A fifth of a second while the window may still be open, two
+            # seconds once it has been caught. The short pause is the whole
+            # reason this loop can see a window at all: the run carries 39
+            # documents and the reader has to be finer grained than the run is
+            # long. It is not zero either, because a loop without a pause is a
+            # busy wait against an instance that is doing the work being watched.
+            if [ -n "${caught}" ]; then
+              sleep 2
+            else
+              sleep 0.2
+            fi
+          done
+
+          rebuild_end=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [ -z "${finished}" ]; then
+            echo "::error::the rebuild did not finish within REBUILD_BUDGET_SECONDS=${REBUILD_BUDGET_SECONDS} after ${rounds} rounds"
+            echo "This is a finding about the rebuild and not a reason to raise the budget."
+            head -c 1000 "${probe_a}" || true
+            echo
+            docker logs "${container}" 2>&1 | tail -n 80 || true
+            exit 1
+          fi
+          echo "the rebuild is through after ${rounds} rounds, languagesActive is ${REBUILD_LANGUAGES_NORMALISED}"
+
+          # The log of the window, and the log of the whole life of this
+          # container, as two files. The window is what assurance 7 is about,
+          # because an indexing pass AFTER the rebuild is ordinary work and not
+          # a violation; the whole log is what assurance 8 is about, because the
+          # drift line is written once per drift and the question is how often.
+          window_log="${RUNNER_TEMP}/rebuild-window.log"
+          whole_log="${RUNNER_TEMP}/rebuild-exapp.log"
+          docker logs --until "${rebuild_end}" "${container}" > "${window_log}" 2>&1
+          docker logs "${container}" > "${whole_log}" 2>&1
+
+          snapshot "${RUNNER_TEMP}/rebuild-after.json" rebuild-after
+          after="${RUNNER_TEMP}/rebuild-after.json"
+          echo "the state after the rebuild:"
+          jq . "${after}"
+          vectors_after=$(vectors_digest)
+          echo "the vector stock after the rebuild: ${vectors_after}"
+
+          # ---------------------------------------------------------------
+          # The nine assurances. One comparison, one sentence saying what it
+          # means, and every one of them runs: fail=1 and never exit 1, for the
+          # reason "Store upgrade 5" states, because a step that stopped at the
+          # first difference would hide which of the nine the rebuild broke.
+          # ---------------------------------------------------------------
+          fail=0
+          unchanged() {
+            path="$1"
+            meaning="$2"
+            was=$(jq -r "${path}" "${before}")
+            now=$(jq -r "${path}" "${after}")
+            if [ "${was}" != "${now}" ]; then
+              echo "::error::${meaning}: ${path} was ${was} before the rebuild and is ${now} after it"
+              fail=1
+            else
+              echo "unchanged  ${path} = ${was}   (${meaning})"
+            fi
+          }
+
+          echo "--- 1, the schema mark moved by exactly one step ---"
+          # Three branches, after the shape of the tantivyVersion block in
+          # "Store upgrade 5": a value that cannot be compared, a value that did
+          # not move, and a value that moved further than one step. One step is
+          # the only right answer, because SCHEMA_VERSION is a counter and a
+          # rebuild answers the drift of the running code and no other.
+          was=$(jq -r '.marks.schemaVersion' "${before}")
+          now=$(jq -r '.marks.schemaVersion' "${after}")
+          case "${was}:${now}" in
+            *[!0-9:]*|:*|*:)
+              echo "::error::schemaVersion is not a pair of numbers (${was} before, ${now} after), so nothing here can be compared"
+              fail=1
+              ;;
+            *)
+              if [ "$(( now - was ))" = "1" ]; then
+                echo "the schema mark went from ${was} to ${now}, which is exactly one step"
+              elif [ "${was}" = "${now}" ]; then
+                echo "::error::the schema mark is still ${was} after the rebuild, so nothing was stamped and the rebuild did not go through"
+                fail=1
+              else
+                echo "::error::the schema mark went from ${was} to ${now}, which is not the one step a rebuild answers"
+                fail=1
+              fi
+              ;;
+          esac
+
+          echo "--- 2, the languages mark names the set, in schema field order ---"
+          now=$(jq -r '.marks.languages' "${after}")
+          if [ "${now}" != "${REBUILD_LANGUAGES_NORMALISED}" ]; then
+            echo "::error::the languages mark reads ${now} after a rebuild ordered with ${REBUILD_LANGUAGES}, and it has to read ${REBUILD_LANGUAGES_NORMALISED}"
+            echo "An unnormalised mark is a rebuild at every start, because the next comparison never matches."
+            fail=1
+          else
+            echo "the mark reads ${now} for a set given as ${REBUILD_LANGUAGES}, so the order is the schema's and not the admin's"
+          fi
+
+          echo "--- 3, the rebuild banner rose and is down again ---"
+          # Three readings and the middle one is the one that was missing until
+          # today: before the restart (asserted above, rebuildRunning false),
+          # inside the run, and after it.
+          if [ -z "${caught}" ]; then
+            echo "::error::the rebuild was never seen running, so the banner of plan 18-10 was never observed up"
+            echo "The loop read the overview ${rounds} times without one of them answering rebuildRunning true."
+            fail=1
+          else
+            echo "the banner was up while the run was on:"
+            jq -c '{before: .before.rebuildRunning, after: .after.rebuildRunning}' "${during}"
+          fi
+          code=$(fast_overview "${RUNNER_TEMP}/rebuild-overview-after.json") || code="000"
+          if [ "${code}" != "200" ] \
+            || ! jq -e '.backend.rebuildRunning == false' "${RUNNER_TEMP}/rebuild-overview-after.json" > /dev/null; then
+            echo "::error::the overview answered HTTP ${code} and does not report rebuildRunning false after the run, so the banner stayed up"
+            head -c 600 "${RUNNER_TEMP}/rebuild-overview-after.json"
+            fail=1
+          else
+            echo "the banner is down again after the run"
+          fi
+
+          echo "--- 4, the same hits for the three terms of the corpus ---"
+          for term in Belehrung Auszug Erinnerung; do
+            unchanged ".terms.${term}" "the search for ${term} answers differently after the rebuild, so the rebuild changed what the index finds"
+          done
+
+          echo "--- 5, a search in the middle of the run answered with hits ---"
+          if [ -z "${caught}" ]; then
+            echo "::error::no canary was taken inside the run, so nothing says the search kept answering while the index was being rebuilt"
+            fail=1
+          elif ! jq -e '.canaryFailed == false and (.canaryHits | tonumber) >= 1' "${during}" > /dev/null 2>&1; then
+            echo "::error::the canary search inside the run did not answer with at least one hit, which is the promise that a rebuild is invisible to a user"
+            jq -c . "${during}"
+            fail=1
+          else
+            echo "the search for Belehrung answered $(jq -r '.canaryHits' "${during}") hit(s) at $(jq -r '.before.rebuildDone' "${during}") of $(jq -r '.before.rebuildTotal' "${during}") documents carried"
+          fi
+
+          echo "--- 6, the same document count ---"
+          unchanged '.container.docs' "the number of documents in the index changed, so the rebuild added or lost documents"
+          unchanged '.container.indexed' "the container counts a different number of indexed files after the rebuild"
+
+          echo "--- 7, Nextcloud was not asked and nothing was extracted again ---"
+          unchanged '.nextcloud.scheduled' "the work stock is not empty after the rebuild, so something requeued work nobody asked for"
+          unchanged '.nextcloud.running' "a worker holds queue rows after the rebuild, so something requeued work nobody asked for"
+          # The line every indexing pass with claimed rows writes, and its
+          # absence is the absence of every such pass: no pass, no extraction,
+          # no tesseract. Read out of the window log and not out of the whole
+          # one, because a pass after the rebuild is ordinary work.
+          if [ ! -s "${window_log}" ]; then
+            echo "::error::the container wrote no log at all during the rebuild, so the absence of an indexing pass says nothing"
+            fail=1
+          else
+            passes=$(grep -c 'pass finished, claimed=' "${window_log}" || true)
+            if [ "${passes}" != "0" ]; then
+              echo "::error::the container log carries ${passes} indexing pass(es) during the rebuild, so files were read and put through the extraction path again"
+              grep -n 'pass finished, claimed=' "${window_log}"
+              fail=1
+            else
+              echo "no indexing pass in $(wc -l < "${window_log}") lines of container log during the rebuild"
+            fi
+          fi
+
+          echo "--- 8, exactly one drift line, not none and not two ---"
+          # The sentence start_rebuild_on_drift writes when it raises the
+          # generation, counted over the whole life of this container. One is
+          # the right answer: the poller opens the state database at its start,
+          # finds the language mark of the old set and says so once. Two would
+          # mean the fingerprint next to the generation did not hold, so a
+          # restart in the middle of a rebuild would start the rebuild again,
+          # which is the REBUILD_MARK promise of findling.index.open. None would
+          # mean the drift was never noticed at all, and then the rebuild that
+          # did run was ordered by something this proof did not see.
+          drift=$(grep -c 'built by different code' "${whole_log}" || true)
+          if [ "${drift}" != "1" ]; then
+            echo "::error::the container log carries ${drift} line(s) of start_rebuild_on_drift and exactly one is the right number"
+            grep -n 'built by different code' "${whole_log}" || true
+            fail=1
+          else
+            echo "exactly one start_rebuild_on_drift line in $(wc -l < "${whole_log}") lines of container log"
+          fi
+
+          echo "--- 9, the vector stock is byte for byte the same file ---"
+          # The cheapest proof of "nothing was embedded again" there is, and it
+          # is made at the artefact rather than at an absent log line: a digest
+          # that did not move cannot have had a vector written into it. The
+          # rebuild carries documents from one index directory into the next and
+          # never touches this file, which is why it lives beside the index
+          # directory rather than inside it.
+          if [ "${vectors_before}" != "${vectors_after}" ]; then
+            echo "::error::vectors.db went from ${vectors_before} to ${vectors_after}, so the rebuild wrote into the vector stock and something was embedded again"
+            fail=1
+          else
+            echo "vectors.db is unchanged at ${vectors_after}"
+          fi
+
+          if [ "${fail}" -ne 0 ]; then
+            echo "the two states side by side:"
+            diff -u "${before}" "${after}" || true
+            exit 1
+          fi
+
+          echo "all nine assurances hold"
+          {
+            echo ""
+            echo "### Rebuild on the upgraded installation (${{ matrix.server-version }}, ${{ matrix.runner }})"
+            echo ""
+            echo "- \`FINDLING_LANGUAGES=${REBUILD_LANGUAGES}\` was set on the container of the upgraded instance and the container was created again on the volume \`${UPGRADE_VOLUME}\`, without a second registration"
+            echo "- the schema mark moved by exactly one step, the languages mark reads \`${REBUILD_LANGUAGES_NORMALISED}\`"
+            echo "- the rebuild banner was observed up while the run was on and down after it"
+            echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, the document counts, the work stock"
+            echo "- a search inside the run answered with hits, no indexing pass ran during it, exactly one \`built by different code\` line"
+            echo "- \`vectors.db\` is byte for byte the same file"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Collect the logs and tear the deployment down
         if: always()
         run: |
@@ -3554,24 +4099,37 @@ jobs:
           # The evidence of the store install pass, saved rather than left in the
           # step log where it scrolls away: the recorded occ calls, the registry
           # manifests and the three integrity verdicts.
-          # The last seven belong to the upgrade proof of plan 11-07 and are
-          # the whole point of it: two states of one installation, the verdict
-          # of occ upgrade between them, and the log of the container that came
-          # up on the volume of the old one. They exist on the one leg that runs
-          # that block, and the copy is guarded by the test below anyway.
+          # The eight after the integrity verdicts belong to the upgrade proof
+          # of plan 11-07 and are the whole point of it: two states of one
+          # installation, the verdict of occ upgrade between them, and the log
+          # of the container that came up on the volume of the old one. The
+          # seven after those belong to "Store upgrade 6" and are the same kind
+          # of evidence for the rebuild, the middle snapshot included, which is
+          # the one a reader cannot reconstruct afterwards because the state it
+          # describes lasted seconds. All of them exist on the one leg that runs
+          # those blocks, and the copy is guarded by the test below anyway.
+          #
+          # rebuild-env.list is deliberately NOT in this list. It is the whole
+          # environment of the ExApp container and it carries APP_SECRET; the
+          # step that writes it prints the names of its entries and never their
+          # values, and an artefact would undo that.
           for evidence in occ-calls.txt manifest-released.txt manifest-dev.txt \
             integrity-clean.txt integrity-tampered.txt integrity-restored.txt \
             upgrade-before.json upgrade-after.json upgrade-before-status.txt \
             upgrade-after-status.txt upgrade-occ.txt upgrade-overview.json \
-            upgrade-providers.json upgrade-exapp.log; do
+            upgrade-providers.json upgrade-exapp.log \
+            rebuild-before.json rebuild-after.json rebuild-during.json \
+            upgrade-rebuild-before-status.txt upgrade-rebuild-after-status.txt \
+            rebuild-window.log rebuild-exapp.log rebuild-mounts.list; do
             if [ -f "${RUNNER_TEMP}/${evidence}" ]; then
               cp "${RUNNER_TEMP}/${evidence}" "${RUNNER_TEMP}/harp-logs/${evidence}"
             fi
           done
           docker rm -f appapi-harp registry exapps-proxy 2>/dev/null || true
-          # The ExApp container outlives the assertions since assertion 6 keeps
-          # it alive on purpose, so the teardown takes it along. Its log is
-          # already saved above, which is the reason this line comes after it.
+          # The ExApp container outlives the assertions, because the last of
+          # them read it while it was running, so the teardown takes it along.
+          # Its log is already saved above, which is the reason this line comes
+          # after it.
           if [ -n "${container}" ]; then
             docker rm -f "${container}" 2>/dev/null || true
           fi
