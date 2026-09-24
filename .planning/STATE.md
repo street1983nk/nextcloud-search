@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Roadmap v1.3 geschrieben (ROADMAP.md, STATE.md, Traceability in REQUIREMENTS.md)
-last_updated: "2026-09-24T04:52:49.910Z"
-last_activity: 2026-09-24 -- Phase 18 execution started
+stopped_at: Phase 19 geplant (9 Plaene in 6 Wellen, Checker PASS, Warnungen behoben)
+last_updated: "2026-09-24T19:30:00.000Z"
+last_activity: 2026-09-24 -- Phase 19 geplant (Research + Patterns + 9 Plaene + Checker)
 progress:
   total_phases: 7
-  completed_phases: 1
-  total_plans: 20
-  completed_plans: 8
-  percent: 14
+  completed_phases: 2
+  total_plans: 29
+  completed_plans: 20
+  percent: 29
 ---
 
 # Project State
@@ -21,24 +21,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 18 — schema-marken-und-umbauweg
+**Current focus:** Phase 19 (frageseite-freischalten), geplant, bereit zur Ausfuehrung
 
 ## Current Position
 
-Phase: 18 (schema-marken-und-umbauweg) — EXECUTING
-Plan: 1 of 12
-Status: Phase 18 KOMPLETT (12/12 Plaene, Verifikation 5/5, Audit 1C/4H/8M behoben/12L dokumentiert, CI-Beweis 36026836087 gruen auf 4/4 Aesten); naechste: Phase 19 (Frageseite) + 20 (Kataloge, parallel moeglich)
-Last activity: 2026-09-24 -- Phase 18 execution started
+Phase: 19 (frageseite-freischalten) — PLANNED
+Plan: 0 of 9
+Status: Phase 19 GEPLANT am 24.09.2026: Research (b2ef69f, gemessene Befunde: field_boosts-ValueError,
+Boost-Summierung, fragment()-Grenze, arm64-Gates), Pattern-Karte (19 Dateien, 17 Analoga),
+9 Plaene in 6 Wellen (51525d5), Plan-Checker PASS ohne Blocker, beide Warnungen behoben (3c35186:
+Ergebnisseiten-Probe je Sprache statt nur Spanisch, Open Questions als RESOLVED markiert).
+Phase 18 davor KOMPLETT (12/12, Verifikation 5/5, CI-Beweis 36026836087 gruen auf 4/4 Aesten).
+Last activity: 2026-09-24 -- Phase 19 geplant
 
-Progress: [..........] 0%
+Progress: [██........] 29% (2 von 7 Phasen)
 
 ## Naechster Schritt
 
-`/gsd:plan-phase 17 --research-phase 17` , die Kettenreihenfolge (`ascii_fold`-Position) ist
-zwischen den vier Recherchen uneinheitlich und muss messend entschieden werden. Erster
-Arbeitsschritt der Phase ist aber das Owner-Tor: ohne den schriftlichen Entscheid zu
-Umbauweg, Feldmodell, Sprachmarke, Katalogprozess und KOMP-Go/No-Go wird kein Code
-geschrieben, der D-04 beruehrt.
+`/gsd:execute-phase 19` (frisches Kontextfenster davor). Parallel planbar, weil vom
+Indexstrang unabhaengig: `/gsd:plan-phase 20` (UI-Kataloge es/it/nl/pt).
+Entscheide der Planung, die die Ausfuehrung tragen: it-Beweis ueber neue Flexionsfamilie
+(19-02), "befuellt" = languages-Marke (19-03), EIN ungegateter CI-Schritt mit vier
+Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
 
 ## Performance Metrics
 
