@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Phase 19, Plan 19-06 fertig (Sprachfaelle auf dem Suchweg), naechster Plan 19-07
-last_updated: "2026-09-25T00:30:00.000Z"
-last_activity: 2026-09-25 -- 19-06 ausgefuehrt (vier Sprachfaelle auf dem Suchweg, dritter Ketten-Ausschluss)
+stopped_at: Phase 19, Plan 19-07 fertig (ungegateter CI-Sprachbeweis), naechster Plan 19-08
+last_updated: "2026-09-25T09:00:00.000Z"
+last_activity: 2026-09-25 -- 19-07 ausgefuehrt (ungegateter CI-Sprachbeweis auf allen vier Aesten, Ergebnisseite zum ersten Mal in der CI)
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 38
-  completed_plans: 26
+  completed_plans: 27
   percent: 32
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 ## Current Position
 
-Phase: 19 (frageseite-freischalten), EXECUTING, Plan 6 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
+Phase: 19 (frageseite-freischalten), EXECUTING, Plan 7 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
 Status: Ausfuehrung Phase 19 laeuft (9 Plaene in 6 Wellen). 19-01 fertig (82bf2b1): die drei
 Modulkonstanten DEFAULT_FIELDS/TITLE_ONLY_FIELDS/FIELD_BOOSTS sind ein Wert (FieldPlan,
 LEGACY_PLAN), build_query nimmt plan keyword-only mit dem Bestandsplan als Vorgabewert, der
@@ -57,23 +57,38 @@ build_query mit einem Feldplan, der Fallindex traegt den Bestand einer echten In
 Formenpaar von der eigenen Kette zusammengefuehrt und von der englischen UND der deutschen
 getrennt werden. Je Sprache zwei Gegenproben: ein Plan ohne body_<code> verliert die andere
 Form, und dieselbe state.db mit schema_version auf 1 ergibt LEGACY_PLAN und verliert sie
-auch. Volle Suite 2831 bestanden / 15 uebersprungen.
+auch. Volle Suite 2831 bestanden / 15 uebersprungen. 19-07 fertig (e7fcd0b, 251c86c,
+368ecf5): die Entwicklerstrecke von deploy-harp.yml installiert mit de,en,es,it,nl,pt
+(vierter sed-Ausdruck in der temporaeren info.xml, mit Einmaligkeitspruefung; die
+Quelldatei und der Store-Durchgang unberuehrt), und zwischen "Search over the ordinary
+OCS route" und der Driftprobe steht ein Schritt OHNE if-Zeile, der auf allen vier
+Matrixaesten laeuft: Vorbedingung auf languagesActive, vier Dokumente ueber WebDAV, vier
+Formenpaare, die nur die eigene Kette zusammenfuehrt, Pollschleife mit eigenem Budget
+LANGUAGE_PROOF_BUDGET_SECONDS, Zusicherung auf entries | length und nie auf den
+Textauszug, danach vier Abrufe der Ergebnisseite, die bis dahin kein CI-Schritt dieses
+Repos beruehrt hatte. backend/tests/test_language_proof_steps.py haelt das fest (19
+Faelle, Textgate ohne YAML, die zwei gegateten Store-upgrade-Schritte als Gegenbeispiel).
+Volle Suite 2850 bestanden / 15 uebersprungen.
 Planung 24.09.: Research b2ef69f,
 Pattern-Karte, Plaene 51525d5, Checker PASS, Warnungen behoben 3c35186. Phase 20 geplant
 (a8d40fd, Checker PASS, f32bdec). Phase 18 davor KOMPLETT (12/12, CI-Beweis 36026836087).
-Last activity: 2026-09-25 -- 19-06 ausgefuehrt (vier Sprachfaelle auf dem Suchweg, dritter Ketten-Ausschluss)
+Last activity: 2026-09-25 -- 19-07 ausgefuehrt (ungegateter CI-Sprachbeweis auf allen vier Aesten, Ergebnisseite zum ersten Mal in der CI)
 
 Progress: [███.......] 32% (2 von 7 Phasen)
 
 ## Naechster Schritt
 
-Weiter in Phase 19 mit 19-07 (ungegateter CI-Sprachbeweis auf allen vier Aesten, plus
-Ergebnisseite), danach 19-08 (spanischer Vorher-Nachher-Beweis) und 19-09 (Doku). Der
-REQUIREMENTS-Haken fuer LEX-05 ist NICHT gesetzt: 19-06 hat die Testebene der ersten
-Haelfte des Satzes geliefert, die CI-Haelfte liefert 19-07, und der Haken gehoert der
-Phase-Verifikation. Warnung fuer 19-07 aus RESEARCH Pitfall 3 und 4: der neue CI-Schritt
-darf nicht unter einer if-Zeile stehen, die arm64 ausschliesst, und die Probe behauptet den
-Treffer und nie den Textauszug. Danach oder parallel:
+Weiter in Phase 19 mit 19-08 (spanischer Vorher-Nachher-Beweis in der Upgrade-Strecke,
+eigener Snapshotschluessel, weil sein Term vorher 0 Treffer haben SOLL), danach 19-09
+(Doku, CI-Lauf einholen, Laufzeit eintragen). Der REQUIREMENTS-Haken fuer LEX-05 ist
+weiterhin NICHT gesetzt: 19-06 hat die Testebene und 19-07 den CI-Schritt geliefert, aber
+den gruenen Lauf holt erst 19-09 ein, und der Haken gehoert der Phase-Verifikation.
+Drei Nachtraege aus 19-07 fuer 19-09: die gemessene Laufzeit des neuen Schritts gehoert
+als Zahl in den RE-MEASURE-Absatz ueber LANGUAGE_PROOF_BUDGET_SECONDS; der Parameter der
+Ergebnisseite heisst query und nicht term (PageController::term() liest getParam('query'),
+Zeile 340; PLAN und RESEARCH Pattern 7c sagen beide term und sind zu berichtigen); und der
+leere Textauszug bei einem reinen Sprachfeld-Treffer gehoert als Grenze nach
+docs/language-analyzers.md. Danach oder parallel:
 `/gsd:execute-phase 20` (UI-Kataloge; Wellen 1 und 9 sind Checkpoints, 20-01 Pluralfix
 der sechs Bestandskataloge braucht die Owner-Sichtprobe). Phase-20-Planung 24.09.:
 9 Plaene in 9 Wellen (a8d40fd), Checker PASS, Fussabdruck strikt getrennt von Phase 19
@@ -125,6 +140,16 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
   Ein Index, der nur das Sprachfeld befuellt, macht den Ausschluss folgenlos und den Fall
   wertlos. Wer eine fuenfte Sprache aufnimmt, braucht zuerst eine Flexionsfamilie in der
   Fixture, dann die Messung, dann das Zaehlgate (Weg von 19-02).
+
+- Ein CI-Beweis ueber alle vier Matrixaeste steht in einem Schritt OHNE if-Zeile, und ein
+  Textgate haelt das fest (19-07). "Store upgrade 5" und "Store upgrade 6" tragen beide
+  matrix.runner == 'ubuntu-24.04' und laufen auf drei von vier Aesten gar nicht; ein
+  Beweis dort waere gruen und wuerde ueber arm64 nichts sagen. Das Gate liest die zwei
+  gegateten Schritte als Gegenbeispiel mit: verlieren sie ihre if-Zeile, ist das Gate
+  kaputt und nicht der Workflow heil. Dazu zwei Regeln, die dieser Schritt vormacht: die
+  Vorbedingung (languagesActive) steht VOR der ersten Behauptung, und was ein Beweis in
+  die Nutzerablage legt, nimmt er wieder heraus, damit spaetere Zusicherungen ihren
+  gemessenen Bestand behalten.
 
 - D-04-Linie (v1.1): index-kompatibel ueber Minor-Spruenge. v1.3 verletzt sie bewusst und
   nur fuer Instanzen, die eine neue Sprache einschalten; der Bruch braucht den Owner-Entscheid
@@ -193,5 +218,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 19-06 abgeschlossen und committet (6c20b11), SUMMARY geschrieben
-Resume file: .planning/phases/19-frageseite-freischalten/19-07-PLAN.md
+Stopped at: 19-07 abgeschlossen und committet (e7fcd0b, 251c86c, 368ecf5), SUMMARY geschrieben
+Resume file: .planning/phases/19-frageseite-freischalten/19-08-PLAN.md
