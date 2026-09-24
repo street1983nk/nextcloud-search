@@ -348,6 +348,29 @@ jobs:
       # raise the number.
       REBUILD_BUDGET_SECONDS: '300'
 
+      # The budget the language proof of phase 19 gives its four documents to
+      # become searchable, counted from the upload, and a named variable for the
+      # same reason the three above are named: raising it is a decision and
+      # needs a reason next to it.
+      #
+      # 600, the same figure as ZERO_CONFIG_BUDGET_SECONDS, because it is the
+      # same clock and not the same amount of work. The promise is made against
+      # a system cron that runs every five minutes and whose first pass queues
+      # the crawl rather than finishing it, so two rounds are ten minutes. What
+      # this step actually indexes is four text files of one sentence each, so
+      # its own wall clock is a small fraction of that; the budget is
+      # dimensioned against the cadence the promise is made to, exactly as the
+      # zero config one is.
+      #
+      # RE-MEASURE: the wall clock the step really takes is written in here as a
+      # number after the first green run of it, the way the three budgets above
+      # carry their measured figures. Until that run this paragraph is the
+      # placeholder and says so, rather than carrying a number nobody measured.
+      #
+      # An overrun is a finding about the indexing pass and not an invitation to
+      # raise the number (T-06.1-52).
+      LANGUAGE_PROOF_BUDGET_SECONDS: '600'
+
       # The language set "Store upgrade 6" orders the rebuild with, and it is
       # deliberately not in schema field order. config.py::_languages iterates
       # over SUPPORTED_LANGUAGES and never over the admin's input, so the mark
@@ -753,6 +776,309 @@ jobs:
           jq -e '.ocs.data.entries[0].title == "findling-canary"' out.json
           jq -e '.ocs.data.entries[0].subline | startswith("produced inside container ")' out.json
           jq -e '.ocs.data.entries[0].subline | endswith("for user testuser")' out.json
+
+      # =====================================================================
+      # Success criterion 1 of phase 19, on a real Nextcloud and on every leg
+      # of the matrix.
+      #
+      # THIS STEP CARRIES NO "if:" AND MUST NOT BE GIVEN ONE. That is not a
+      # preference, it is the statement. "Store upgrade 5" and "Store upgrade 6"
+      # both carry "matrix.server-version == 'stable34' && matrix.runner ==
+      # 'ubuntu-24.04' && env.RELEASE_TAG == ''", so a language proof put next
+      # to the rebuild would run on one leg out of four and would say nothing
+      # about the native arm64 one, which is the leg the criterion names word
+      # for word. backend/tests/test_language_proof_steps.py holds the absence
+      # of the condition as an assertion and reads those two gated steps as its
+      # counter sample.
+      #
+      # The shape is the shape of "Store install 7" further down: upload over
+      # WebDAV, poll the ordinary OCS route with cron.php inside the loop, leave
+      # the moment the hit is there. What is new is the second half of it. Until
+      # this step no CI step of this repository had ever called the result page
+      # at all; everything was asked over the unified search route or over the
+      # admin overview. Criterion 1 says "per language" about both, so both are
+      # here.
+      #
+      # One instance, four documents and four searches rather than four steps,
+      # which is the recommendation of open question 3 of the research: the four
+      # chains are built at the same container start whatever this step asks, so
+      # four instances would buy four times the setup and the same statement.
+      #
+      # Expected in the container log of this instance and not a failure: the
+      # start warning that FINDLING_OCR_LANGUAGES (deu+eng+fra) does not cover
+      # the six index languages. That warning is success criterion 4 of phase 18
+      # doing its work. Nothing below reads the log for a verdict, and the four
+      # documents are plain text that never reaches the OCR path.
+      # =====================================================================
+      - name: Language proof, the four new chains answer on the ordinary search route
+        run: |
+          # -- the precondition, and it deliberately stands first ------------
+          # Without this read the whole proof could run against an instance with
+          # de,en and still look green: four Romance documents in a German index
+          # would answer some of these questions out of body_de, and a green run
+          # would mean the opposite of what it says. The admin overview is the
+          # only place that reports what the container really built, and the
+          # value has to be the six codes in schema field order, because
+          # config.py::_languages iterates over SUPPORTED_LANGUAGES and
+          # normalises to exactly that order whatever it was asked in.
+          #
+          # The two ways to a credential are the two ways overview.sh uses
+          # further down, in the same order and for the same reason: the occ
+          # subcommand does not exist on every server of this matrix (stable33
+          # answers "not available"), and the OCS endpoint does. The value is
+          # never printed.
+          apppw=""
+          if NC_PASS=password timeout 60 ./occ user:add-app-password admin \
+            --password-from-env > "${RUNNER_TEMP}/language-apppw.txt" 2>&1; then
+            apppw=$(grep -oE '[A-Za-z0-9+/=._-]{40,}' "${RUNNER_TEMP}/language-apppw.txt" | tail -1)
+          fi
+          if [ -z "${apppw}" ]; then
+            apppw=$(curl -s -u admin:password -H 'OCS-APIRequest: true' \
+              'http://localhost:8080/ocs/v2.php/core/getapppassword?format=json' \
+              | grep -o '"apppassword":"[^"]*"' | cut -d'"' -f4 || true)
+          fi
+          if [ -z "${apppw}" ]; then
+            echo "::error::no app password could be taken, so the language set of this instance could not be read at all"
+            exit 1
+          fi
+          echo "app password: obtained (length ${#apppw})"
+
+          overview="${RUNNER_TEMP}/language-overview.json"
+          status=$(curl -s -o "${overview}" -w '%{http_code}' \
+            -u "admin:${apppw}" \
+            -H 'OCS-APIRequest: true' \
+            -H 'Accept: application/json' \
+            http://localhost:8080/index.php/apps/findling/admin/overview)
+          if [ "${status}" != "200" ] \
+            || ! jq -e '.backend.languagesActive == "de,en,es,it,nl,pt"' "${overview}" > /dev/null; then
+            echo "::error::the overview answered HTTP ${status} with languagesActive '$(jq -r '.backend.languagesActive' "${overview}" 2> /dev/null || echo "unreadable")' instead of de,en,es,it,nl,pt, so every hit below would belong to another chain"
+            head -c 600 "${overview}" || true
+            exit 1
+          fi
+          echo "the instance reports languagesActive de,en,es,it,nl,pt"
+
+          # -- the four documents -------------------------------------------
+          # One pair per language, and every pair is one that ONLY its own chain
+          # merges. Measured on 2026-09-24 over the shipped fixtures against
+          # english_analyzer(), cached_german_analyzer(...) and
+          # snowball_analyzer(SNOWBALL_NAME[code]), 19-RESEARCH M-5 and M-6:
+          #
+          #   es   document alemana        question alemanes      both reach aleman
+          #   it   document informazione   question informazioni  both reach inform
+          #   nl   document beinvloed      question beinvloeden   both reach beinvloed
+          #   pt   document paises         question pais          both reach pais
+          #
+          # All four QUESTIONS are plain ASCII and need no url encoding. Two of
+          # the four DOCUMENT words carry an accent, and those two are written
+          # as octal escapes rather than as literal bytes: this workflow file is
+          # pure ASCII today and a language proof is no reason to make it the
+          # first one that is not. \303\257 is a small i with a trema and
+          # \303\255 a small i with an acute, both in UTF-8, so the accents end
+          # up where they belong, which is inside the file the container reads.
+          #
+          # The remaining words follow the rule the comment above the botanical
+          # fill corpus states: not one of them is a term another proof of this
+          # workflow counts, and not one of them is split by the German chain
+          # into such a term. They also do not overlap each other, which is what
+          # lets each of the four searches below name the single file it has to
+          # bring back.
+          printf 'Esta es una carta de la empresa alemana sobre el contrato de arrendamiento.\n' \
+            > "${RUNNER_TEMP}/language-proof-es.txt"
+          printf 'Questa informazione riguarda la riunione con il fornitore.\n' \
+            > "${RUNNER_TEMP}/language-proof-it.txt"
+          printf 'Deze brief heeft de planning van het kantoor be\303\257nvloed.\n' \
+            > "${RUNNER_TEMP}/language-proof-nl.txt"
+          printf 'Os nossos clientes vivem em outros pa\303\255ses da Europa.\n' \
+            > "${RUNNER_TEMP}/language-proof-pt.txt"
+
+          for lang in es it nl pt; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' \
+              -T "${RUNNER_TEMP}/language-proof-${lang}.txt" \
+              -u "testuser:${TESTUSER_PASS}" \
+              "http://localhost:8080/remote.php/dav/files/testuser/language-proof-${lang}.txt")
+            case "${status}" in
+              201|204) echo "language-proof-${lang}.txt uploaded over WebDAV, HTTP ${status}" ;;
+              *)
+                echo "::error::the upload of language-proof-${lang}.txt answered HTTP ${status}, so there is no document to find"
+                exit 1
+                ;;
+            esac
+          done
+
+          # --restart and not a wait for the first crawl, and the reason is the
+          # one the same call carries in "Store upgrade 2": the zero config
+          # chain runs when the app is enabled and may have walked this user's
+          # mount long before these four files were in it. --no-interaction
+          # because occ treats this shell as interactive and would otherwise
+          # default the confirmation to No and leave the queue empty.
+          timeout 300 ./occ findling:index --restart --no-interaction
+
+          # -- the poll loop --------------------------------------------------
+          # It leaves the moment all four languages have their hit and it never
+          # sleeps a fixed pause before asking. That is the 52 second lesson of
+          # plan 06-11 turned into code: a probe that waits a guessed time
+          # measures its own guess, and that guess was wrong by 52 seconds in
+          # the direction that declares a healthy run dead (T-06.1-52).
+          deadline=$(( $(date +%s) + LANGUAGE_PROOF_BUDGET_SECONDS ))
+          rounds=0
+          missing="es it nl pt"
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            rounds=$(( rounds + 1 ))
+            timeout 300 php -f cron.php > "${RUNNER_TEMP}/language-cron-${rounds}.log" 2>&1 || true
+            still=""
+            for lang in ${missing}; do
+              case "${lang}" in
+                es) term=alemanes ;;
+                it) term=informazioni ;;
+                nl) term=beinvloeden ;;
+                pt) term=pais ;;
+                *) echo "::error::unknown language code ${lang}"; exit 1 ;;
+              esac
+              # entries | length, and never the subline of the first entry. The
+              # gate in backend/tests/test_language_proof_steps.py reads this
+              # step for that second name and goes red on it, which is why this
+              # paragraph describes it instead of spelling it.
+              #
+              # A hit that was
+              # found through a new language field alone comes back WITHOUT an
+              # excerpt, measured on 2026-09-24 (19-RESEARCH M-4): the snippet
+              # is cut out of body_de (index/search.py:875), because that is the
+              # only stored copy of the text, and a question that meets the
+              # document term only through the Spanish chain has no term to mark
+              # in the German one. The empty subline is the documented state and
+              # not a fault, so a probe that asserted on it would go red on a
+              # working search. A hit without an excerpt is still a hit.
+              status=$(curl -s -o "${RUNNER_TEMP}/language-hit-${lang}.json" -w '%{http_code}' \
+                -u "testuser:${TESTUSER_PASS}" \
+                -H 'OCS-APIRequest: true' \
+                -H 'Accept: application/json' \
+                "http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=${term}")
+              if [ "${status}" != "200" ] \
+                || ! jq -e '.ocs.data.entries | length >= 1' \
+                     "${RUNNER_TEMP}/language-hit-${lang}.json" > /dev/null 2>&1; then
+                still="${still} ${lang}"
+              fi
+            done
+            missing=$(echo "${still}" | sed -e 's/^ *//' -e 's/ *$//')
+            if [ -z "${missing}" ]; then
+              break
+            fi
+            echo "round ${rounds}: still waiting for [${missing}], $(( deadline - $(date +%s) ))s of the budget left"
+            sleep 10
+          done
+
+          if [ -n "${missing}" ]; then
+            echo "::error::no hit for [${missing}] within LANGUAGE_PROOF_BUDGET_SECONDS=${LANGUAGE_PROOF_BUDGET_SECONDS} after ${rounds} cron rounds"
+            echo "This is a finding and not a reason to raise the budget (T-06.1-52)."
+            for lang in ${missing}; do
+              echo "--- the last answer for ${lang} ---"
+              cat "${RUNNER_TEMP}/language-hit-${lang}.json" || true
+              echo
+            done
+            echo "--- the last cron round ---"
+            tail -n 40 "${RUNNER_TEMP}/language-cron-${rounds}.log" || true
+            echo "--- the container ---"
+            docker logs "${EXAPP_CONTAINER}" 2>&1 | tail -n 60 || true
+            exit 1
+          fi
+
+          # The hit is a hit of the right file, asserted rather than assumed.
+          # Each of the four questions is answered by exactly one of the four
+          # documents, which is why the first entry can be named at all.
+          for lang in es it nl pt; do
+            if ! jq -e --arg file "language-proof-${lang}.txt" \
+                 '.ocs.data.entries[0].title == $file' \
+                 "${RUNNER_TEMP}/language-hit-${lang}.json" > /dev/null; then
+              echo "::error::the first hit of the ${lang} search is '$(jq -r '.ocs.data.entries[0].title' "${RUNNER_TEMP}/language-hit-${lang}.json" 2> /dev/null || echo "unreadable")' and not language-proof-${lang}.txt"
+              jq -r '.ocs.data.entries[]?.title' "${RUNNER_TEMP}/language-hit-${lang}.json" || true
+              exit 1
+            fi
+            echo "${lang}: the ordinary search route brings back language-proof-${lang}.txt"
+          done
+
+          # -- the result page, four calls and one per language ---------------
+          # The second half of criterion 1, and the half no step of this
+          # workflow had ever touched. PageController::index carries
+          # NoAdminRequired, NoCSRFRequired and FrontpageRoute
+          # (php/lib/Controller/PageController.php:215-217), so basic auth as
+          # the ordinary user is enough and the answer is server rendered HTML
+          # with the file name of every hit in it
+          # (php/templates/search.php, the findling-hit__title span).
+          #
+          # The parameter is "query" and not "term". PageController::term()
+          # reads getParam('query') at line 340, and nothing on that route ever
+          # looks at a parameter called term: a call with ?term= answers 200
+          # with the empty landing page, which is the shape of a green step that
+          # proves nothing. The assertion below is what makes that impossible,
+          # because an empty page carries no file name.
+          #
+          # Four literal calls and no loop, so that the text gate of
+          # backend/tests/test_language_proof_steps.py can count them and see
+          # one per language rather than one call it cannot attribute.
+          curl -s -o "${RUNNER_TEMP}/language-page-es.html" -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            'http://localhost:8080/index.php/apps/findling/?query=alemanes' \
+            > "${RUNNER_TEMP}/language-page-es.code"
+          curl -s -o "${RUNNER_TEMP}/language-page-it.html" -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            'http://localhost:8080/index.php/apps/findling/?query=informazioni' \
+            > "${RUNNER_TEMP}/language-page-it.code"
+          curl -s -o "${RUNNER_TEMP}/language-page-nl.html" -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            'http://localhost:8080/index.php/apps/findling/?query=beinvloeden' \
+            > "${RUNNER_TEMP}/language-page-nl.code"
+          curl -s -o "${RUNNER_TEMP}/language-page-pt.html" -w '%{http_code}' \
+            -u "testuser:${TESTUSER_PASS}" \
+            'http://localhost:8080/index.php/apps/findling/?query=pais' \
+            > "${RUNNER_TEMP}/language-page-pt.code"
+
+          for lang in es it nl pt; do
+            status=$(cat "${RUNNER_TEMP}/language-page-${lang}.code")
+            if [ "${status}" != "200" ]; then
+              echo "::error::the result page of the ${lang} question answered HTTP ${status}"
+              head -c 400 "${RUNNER_TEMP}/language-page-${lang}.html" || true
+              exit 1
+            fi
+            # The file name and never the excerpt, for the reason the OCS
+            # assertion above states at length.
+            if ! grep -qF "language-proof-${lang}.txt" "${RUNNER_TEMP}/language-page-${lang}.html"; then
+              echo "::error::the result page of the ${lang} question answered 200 without language-proof-${lang}.txt in its html, so the page found nothing the search route found"
+              exit 1
+            fi
+            echo "${lang}: the result page carries language-proof-${lang}.txt"
+          done
+
+          {
+            echo ""
+            echo "### Language proof on ${{ matrix.server-version }} / ${{ matrix.runner }}"
+            echo ""
+            echo "- es, it, nl and pt each answered on the ordinary search route after ${rounds} cron rounds"
+            echo "- the result page answered with the same four files, one call per language"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          # -- and the four documents go again --------------------------------
+          # The proof is complete at the line above, and the files are taken out
+          # so that the stock of this user is the stock every later step of this
+          # job was measured against. One of those steps is the reason: "Store
+          # upgrade 2" asserts that Belehrung, Auszug and Erinnerung bring back
+          # exactly ONE file each, the search behind that assertion is hybrid,
+          # and whether a foreign document lands inside the semantic band of
+          # 14.0 around the best neighbour is a measurement and not a deduction
+          # (the comment above the fill corpus says exactly that about its own
+          # words). Leaving four foreign language documents in the home would
+          # put that question to a proof that never asked it.
+          for lang in es it nl pt; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+              -u "testuser:${TESTUSER_PASS}" \
+              "http://localhost:8080/remote.php/dav/files/testuser/language-proof-${lang}.txt")
+            case "${status}" in
+              200|204) echo "language-proof-${lang}.txt removed again, HTTP ${status}" ;;
+              *)
+                echo "::error::the removal of language-proof-${lang}.txt answered HTTP ${status}, so the stock of the later steps is not the one they were measured against"
+                exit 1
+                ;;
+            esac
+          done
 
       # The four steps below are the runtime half of the lockstep promise of
       # D-11, and they sit here rather than anywhere else on purpose: the step
