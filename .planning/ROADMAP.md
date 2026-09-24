@@ -91,7 +91,21 @@ Plans:
   3. Reicht der Plattenplatz fuer zwei Indexverzeichnisse nicht, bricht der Umbau VOR dem Start mit klarer Meldung ab statt mitten im Lauf; der Rueckfall auf einen Vollreindex ist benannt und ausloesbar.
   4. Der Admin sieht in der Diagnose, welche Sprachen aktiv und welche befuellt sind, und bekommt beim Start eine Warnung, wenn `FINDLING_LANGUAGES` eine Sprache fuehrt, die die OCR-Sprachen nicht abdecken; die Sprachmenge ist sechster Merker in `expected_versions()`.
   5. CI beweist den Umbau: die bestehende "kein Reindex"-Strecke bleibt unveraendert bestehen, daneben steht eine zweite, umgedrehte Strecke in `deploy-harp.yml` (`UPGRADE_FROM_TAG=v1.2.0`), die zeigt, dass der Umbau vollstaendig lief, das Schema sich um genau eine Stufe bewegt hat, das Banner erschien und verschwand und keine alten Treffer verloren gingen. Die Sprachfaelle je neuer Sprache laufen in dieser Phase auf Feldebene ohne Fremdbestand (Muster A4/2026-09); ihre Hebung auf den normalen Suchweg ist Zusage von Phase 19.
-**Plans**: TBD
+**Plans**: 12 Plaene in 9 Wellen
+
+Plans:
+- [ ] 18-01-PLAN.md: Dreizehn Felder, acht Ketten unbedingt registriert, SCHEMA_VERSION 2, Sperrklinke umgedreht
+- [ ] 18-02-PLAN.md: Befuellung nach FINDLING_LANGUAGES, _languages() filtert gegen SUPPORTED_LANGUAGES
+- [ ] 18-03-PLAN.md: Zwischenzustands-Beweis, Mengeninklusion plus AST-Waechter plus Schema-1-Fixture
+- [ ] 18-04-PLAN.md: Sprachfaelle es/it/nl/pt auf Feldebene, ohne Fremdbestand
+- [ ] 18-05-PLAN.md: Sechster Merker languages, Teilmengenregel, vier Aufrufstellen
+- [ ] 18-06-PLAN.md: index/rebuild.py, Vorpruefung, Bandlauf, zustandslose Wiederaufnahme
+- [ ] 18-07-PLAN.md: Verzeichnistausch, reset_read_side, eigene Stempelfunktion
+- [ ] 18-08-PLAN.md: Aufraeumpfad beim Start, vier Faelle plus Abfallfall
+- [ ] 18-09-PLAN.md: Lifespan-Aufgabe, Poller ruhigstellen, OCR-Startwarnung
+- [ ] 18-10-PLAN.md: Sprachstatus und Umbau-Banner auf der Adminseite, sechs Kataloge im Gleichstand
+- [ ] 18-11-PLAN.md: Lockstep-Migration Version001300Date... plus Unittest
+- [ ] 18-12-PLAN.md: UPGRADE_FROM_TAG auf v1.2.0, Store upgrade 6 mit neun Zusicherungen
 **Research-Flag**: ja (`--research-phase 18`, `index/rebuild.py` ist eine neue Komponente ohne Vorbild im Repo; Wiederaufnahme und Platzpruefung unter Abbruchbedingungen sind nicht trivial)
 
 ### Phase 19: Frageseite freischalten
@@ -163,7 +177,7 @@ Plans:
 | 7-11 (Archiv) | v1.1 | 37/37 | Complete | 2026-09-11 |
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17. Owner-Tor und Analyseketten | v1.3 | 8/8 | Complete   | 2026-09-23 |
-| 18. Schema, Marken und Umbauweg | v1.3 | 0/TBD | Not started | - |
+| 18. Schema, Marken und Umbauweg | v1.3 | 0/12 | Planned | - |
 | 19. Frageseite freischalten | v1.3 | 0/TBD | Not started | - |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 0/TBD | Not started | - |
 | 21. Niederlaendische Komposita | v1.3 | 0/TBD | Not started | - |
