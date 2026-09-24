@@ -319,7 +319,7 @@ def _open_state() -> Store:
     written by :func:`findling.index.open.stamp_after_rebuild` and only after
     the last file has been judged by this code.
     """
-    expected = expected_versions(build_artifact().digest)
+    expected = expected_versions(build_artifact().digest, ",".join(settings().languages))
     store = open_store(settings().state_db, meta=expected)
     start_rebuild_on_drift(store, expected)
     return store
@@ -1830,7 +1830,8 @@ class Poller:
         documents are durable, and the next idle poll asks again.
         """
         try:
-            return stamp_after_rebuild(self._store_or_die(), expected_versions(build_artifact().digest))
+            marks = expected_versions(build_artifact().digest, ",".join(settings().languages))
+            return stamp_after_rebuild(self._store_or_die(), marks)
         except Exception as error:
             LOGGER.warning("could not refresh the version marks, %s", type(error).__name__)
             return False

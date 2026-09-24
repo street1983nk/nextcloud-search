@@ -2401,7 +2401,7 @@ def test_a_state_database_created_by_the_poller_carries_the_version_marks(volume
 
     opened = _open_state()
     try:
-        assert opened.version_mismatch(expected_versions(digest)) == []
+        assert opened.version_mismatch(expected_versions(digest, ",".join(settings().languages))) == []
     finally:
         opened.close()
 
@@ -2685,7 +2685,7 @@ def _aged_state(volume: Path) -> None:
     One indexed file and marks that do not match this code, which is what a
     container update leaves behind on a volume that has been indexing for weeks.
     """
-    aged = open_store(settings().state_db, meta=expected_versions("older-digest"))
+    aged = open_store(settings().state_db, meta=expected_versions("older-digest", ",".join(settings().languages)))
     aged.record(
         4711,
         FileMeta(
@@ -2716,7 +2716,7 @@ async def test_the_restart_rebuilds_and_the_banner_goes_by_itself(
     the marks are written and the drift is gone. Nobody stamped anything.
     """
     digest = write_wordlist(volume)
-    expected = expected_versions(digest)
+    expected = expected_versions(digest, ",".join(settings().languages))
     _aged_state(volume)
 
     store = _open_state()
@@ -2751,7 +2751,7 @@ async def test_an_unfinished_rebuild_keeps_the_banner_up(
     # here would call an index of the old analysis current and take away the one
     # line telling the admin why hits are missing.
     digest = write_wordlist(volume)
-    expected = expected_versions(digest)
+    expected = expected_versions(digest, ",".join(settings().languages))
     _aged_state(volume)
 
     store = _open_state()
@@ -2772,7 +2772,7 @@ async def test_an_index_that_never_drifted_is_left_alone(
     # The ordinary instance, which is every instance most of the time. Nothing
     # is raised, nothing is written, and the generation stays where it was.
     digest = write_wordlist(volume)
-    expected = expected_versions(digest)
+    expected = expected_versions(digest, ",".join(settings().languages))
 
     store = _open_state()
     try:

@@ -59,6 +59,22 @@ REBUILD_MARK: Final = "rebuild_for"
 # that the exception is visible next to the function that has to make it.
 _LOCAL_GENERATION: Final = "index_version"
 
+# The sixth mark, and the one that is easiest to read as the opposite of what it
+# is. It names the language set the index on disk was BUILT with, and never the
+# set the running container currently wishes for. The wish arrives as the second
+# parameter of expected_versions below and stays on the expectation side of the
+# comparison; the stored side is written once, by stamp_after_rebuild, after the
+# work that makes it true is through.
+#
+# Two consequences follow from that and both are load bearing. The seed in
+# findling.store.repo skips this key by name, because a seed that filled it in
+# would write the wish as if it were a fact and silence the one mark built to
+# speak up (threat T-18-05-01). And a missing value is read as legacy rather
+# than as a difference, because up to 1.2.0 no released build could write a body
+# field outside ("de", "en"); that exception lives next to the comparison, in
+# findling.store.repo._languages_are_legacy, and nowhere else.
+LANGUAGES_MARK: Final = "languages"
+
 # Any token of one byte or more is dropped, which is every token there is. See
 # stored_only_analyzer below for why that is the wanted behaviour.
 _DROP_EVERY_TOKEN: Final = 1
@@ -144,7 +160,7 @@ def open_reader(index: Index) -> Searcher:
     return index.searcher()
 
 
-def expected_versions(digest: str) -> dict[str, str]:
+def expected_versions(digest: str, languages: str) -> dict[str, str]:
     """Return the version marks an index built by this code must carry.
 
     The comparison itself lives in :meth:`findling.store.repo.Store.version_mismatch`:
@@ -155,6 +171,17 @@ def expected_versions(digest: str) -> dict[str, str]:
 
     ``tantivy_version`` carries the full banner, including the index format, since
     tantivy makes no promise that its on disk format survives its own releases.
+
+    Both arguments are handed in rather than read out of :func:`findling.config.settings`
+    here, and that is the same decision twice. A module that read them itself
+    would have no call site to look at, and these two are exactly the marks whose
+    value depends on the environment of the caller: the digest belongs to the
+    word list of one volume, the language set to the wish of one container. Every
+    caller builds the second one as ``",".join(settings().languages)`` and none of
+    them assembles the string any other way; ``_languages()`` iterates over
+    SUPPORTED_LANGUAGES and not over the admin's input, so "es,de" and "de,es"
+    arrive here as the same string and an index that never needed a rebuild is
+    left alone (owner decision E-17-4 option a of 2026-09-23).
     """
     return {
         "schema_version": str(SCHEMA_VERSION),
@@ -162,6 +189,7 @@ def expected_versions(digest: str) -> dict[str, str]:
         "analyzer_version": str(ANALYZER_VERSION),
         "wordlist_hash": digest,
         "tantivy_version": TANTIVY_VERSION,
+        LANGUAGES_MARK: languages,
     }
 
 

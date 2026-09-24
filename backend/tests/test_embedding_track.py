@@ -1152,7 +1152,7 @@ async def test_a_drift_of_the_vector_mark_leaves_the_full_text_index_alone(
     store.write_meta(EMBEDDING_MARK, ANOTHER_MARK)
     _judged(store, 4711)
     _fill(vectors, 4711)
-    expected = expected_versions("a-digest")
+    expected = expected_versions("a-digest", "de,en")
     generation = store.index_version
     before = store.version_mismatch(expected)
     poller = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue(), vectors=vectors)
@@ -1312,7 +1312,7 @@ def test_the_embedding_mark_is_not_a_mark_of_the_full_text_index() -> None:
     rebuild that costs hours, and look exactly like a working drift answer.
     """
     assert EMBEDDING_MARK in VECTOR_ONLY_MARKS
-    assert EMBEDDING_MARK not in expected_versions("a-digest")
+    assert EMBEDDING_MARK not in expected_versions("a-digest", "de,en")
 
 
 # -- the lazy half of the second track --------------------------------------

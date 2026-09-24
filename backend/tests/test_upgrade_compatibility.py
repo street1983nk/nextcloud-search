@@ -5,7 +5,7 @@ and since 2026-09-21 the same five values also carry the jump from 1.1.x to
 1.2.0: the filter and sort work of phase 13 and the engine work of phase 14
 moved none of them. The promise is therefore held over two minor jumps and no
 longer over one.
-Five marks decide whether that holds, they live in
+Six marks decide whether that holds since 2026-09-24, they live in
 :func:`findling.index.open.expected_versions`, and
 :meth:`findling.store.repo.Store.version_mismatch` compares them against what an
 existing index was really built with. One of them moving is enough:
@@ -33,7 +33,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-from findling.index.open import expected_versions
+from findling.index.open import LANGUAGES_MARK, expected_versions
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILE = BACKEND_ROOT / "Dockerfile"
@@ -86,6 +86,13 @@ GOLD_V1_0_AND_V1_1 = {
 # against it, and the format half gets an assertion of its own below.
 TANTIVY_MARK = "tantivy_version"
 
+# The factory setting, and what the sixth mark reads on an installation that
+# never touched FINDLING_LANGUAGES. It is a literal and not an import of
+# DEFAULT_LANGUAGES on purpose: this file holds what a release produces against a
+# value written down by hand, and a gold value that follows the code it guards
+# guards nothing.
+GOLD_LANGUAGES = "de,en"
+
 # The Debian package the German word list comes out of. wordlist_hash is a digest
 # of that list, so the pin is the thing that has to hold; a version literal for
 # the digest would be a number nobody could check against anything.
@@ -130,12 +137,31 @@ GOLD_V1_3 = {
     "index_version": "1",
     "analyzer_version": "1",
     "tantivy_version": GOLD_INDEX_FORMAT,
+    LANGUAGES_MARK: GOLD_LANGUAGES,
 }
 
-# The five marks an index carries. A mark that disappears counts as a difference
+# The six marks an index carries. A mark that disappears counts as a difference
 # in Store.version_mismatch, so a set that shrank would trigger a rebuild just as
 # surely as a value that changed.
-ALL_MARKS = ("schema_version", "index_version", "analyzer_version", "wordlist_hash", TANTIVY_MARK)
+#
+# The sixth one joined on 2026-09-24, under owner decision E-17-4 option a of
+# 2026-09-23: the language set becomes a version mark, normalised into schema
+# field order, so that switching a language on is a state the code can see.
+#
+# It is the one mark that is deliberately NOT seeded. findling.store.repo skips
+# it in _seed_meta and reads its absence as legacy rather than as a difference,
+# because no release up to 1.2.0 could write a body field outside ("de", "en").
+# A sixth mark would otherwise be a rebuild for every installation in the field,
+# which is exactly what the ratchet above exists to prevent; here it is a rebuild
+# for the installations that switch a language on, and for no others.
+ALL_MARKS = (
+    "schema_version",
+    "index_version",
+    "analyzer_version",
+    "wordlist_hash",
+    TANTIVY_MARK,
+    LANGUAGES_MARK,
+)
 
 
 def drift_findings(marks: Mapping[str, str], gold_marks: Mapping[str, str] = GOLD_V1_0_AND_V1_1) -> list[str]:
@@ -250,7 +276,7 @@ def test_an_upgrade_from_1_0_x_to_1_2_x_now_moves_exactly_one_mark() -> None:
     The digest handed in is arbitrary, because the word list is held through its
     Debian pin in the test below rather than through a literal here.
     """
-    findings = drift_findings(expected_versions("digest-egal"))
+    findings = drift_findings(expected_versions("digest-egal", GOLD_LANGUAGES))
 
     assert len(findings) == 1, findings
     assert "schema_version" in findings[0], findings
@@ -264,7 +290,7 @@ def test_an_index_built_by_this_code_carries_the_marks_of_v1_3() -> None:
     Without it the release would have a moved mark and no table to hold the moved
     state against, which is a ratchet that was opened and never closed again.
     """
-    findings = drift_findings(expected_versions("digest-egal"), GOLD_V1_3)
+    findings = drift_findings(expected_versions("digest-egal", GOLD_LANGUAGES), GOLD_V1_3)
 
     assert findings == [], findings
 
@@ -296,22 +322,27 @@ def test_the_index_format_of_the_banner_holds_as_well() -> None:
     pass the comparison above and break every index in the field, so the format
     is asked for by name.
     """
-    banner = expected_versions("digest-egal")[TANTIVY_MARK]
+    banner = expected_versions("digest-egal", GOLD_LANGUAGES)[TANTIVY_MARK]
     assert GOLD_INDEX_FORMAT in banner, banner
 
 
 def test_no_mark_appeared_and_none_went_missing() -> None:
-    """Five marks, the same five, and the digest travels through untouched.
+    """Six marks, the same six, and the digest travels through untouched.
 
-    A sixth mark is a rebuild for everyone just as much as a changed value is,
+    A seventh mark is a rebuild for everyone just as much as a changed value is,
     and a mark that vanished is one the store counts as a difference. The digest
-    is asserted as passed through so that the fifth mark stays what it claims to
+    is asserted as passed through so that the fourth mark stays what it claims to
     be: a statement about the word list and about nothing else.
+
+    The sixth arrived on 2026-09-24 and is the one exception this file records
+    rather than forbids: it costs no installation in the field a rebuild, because
+    its absence is read as legacy instead of as a difference. The proof of that
+    lives where the reading happens, in backend/tests/test_store_metadata.py.
     """
-    marks = expected_versions("ein-digest")
+    marks = expected_versions("ein-digest", GOLD_LANGUAGES)
     assert tuple(marks) == ALL_MARKS, marks
     assert marks["wordlist_hash"] == "ein-digest"
-    assert expected_versions("ein-anderer")["wordlist_hash"] == "ein-anderer"
+    assert expected_versions("ein-anderer", GOLD_LANGUAGES)["wordlist_hash"] == "ein-anderer"
 
 
 def test_the_word_list_is_held_through_its_debian_pin() -> None:

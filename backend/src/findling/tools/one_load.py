@@ -262,7 +262,7 @@ def seed_volume(source: Path = SYSTEM_WORDLIST) -> None:
     resolved = settings()
     _write_index(resolved.index_dir, artifact.entries)
 
-    store = open_store(resolved.state_db, meta=expected_versions(artifact.digest))
+    store = open_store(resolved.state_db, meta=expected_versions(artifact.digest, ",".join(resolved.languages)))
     try:
         store.replace_acl(FILE_ID, [MEASURE_USER])
         store.record(FILE_ID, _meta(), "indexed")

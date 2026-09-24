@@ -136,7 +136,7 @@ def expected_marks() -> dict[str, str] | None:
         if _MARKS is not None and _MARKS[0] == dictionary:
             return dict(_MARKS[1])
         try:
-            marks = expected_versions(build_artifact().digest)
+            marks = expected_versions(build_artifact().digest, ",".join(settings().languages))
         except OSError:
             LOGGER.warning("the constituent list is unavailable, version marks cannot be compared")
             return None

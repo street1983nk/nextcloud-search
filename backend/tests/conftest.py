@@ -266,7 +266,7 @@ def write_schema_1_index(root: Path, documents: int) -> Index:
 
 def write_state(root: Path, corpus: Corpus) -> None:
     """Write the verdicts and the permission rows that belong to the index."""
-    store = open_store(root / "state.db", meta=expected_versions(corpus.digest))
+    store = open_store(root / "state.db", meta=expected_versions(corpus.digest, ",".join(settings().languages)))
     for file_id in range(1, corpus.documents + 1):
         store.replace_acl(file_id, [corpus.alice, corpus.bob] if file_id % 2 else [corpus.bob])
         store.record(file_id, _meta_of(file_id), "indexed")

@@ -87,6 +87,10 @@ CONSTITUENTS = FIXTURE.read_text(encoding="utf-8").split()
 # has to travel from the caller into the expectation unchanged.
 DIGEST = "0" * 64
 
+# The language set of the factory setting, handed to expected_versions the way
+# every production call site hands it: as one normalised string.
+LANGUAGES = "de,en"
+
 
 def _write(
     index: Index,
@@ -458,7 +462,7 @@ def test_open_reader_sees_a_commit_that_happened_after_it(index_dir: Path) -> No
 
 
 def test_expected_versions_names_every_mark_the_store_compares() -> None:
-    expected = expected_versions(DIGEST)
+    expected = expected_versions(DIGEST, LANGUAGES)
 
     assert expected == {
         "schema_version": str(SCHEMA_VERSION),
@@ -466,6 +470,7 @@ def test_expected_versions_names_every_mark_the_store_compares() -> None:
         "analyzer_version": str(ANALYZER_VERSION),
         "wordlist_hash": DIGEST,
         "tantivy_version": TANTIVY_VERSION,
+        "languages": LANGUAGES,
     }
     assert all(isinstance(value, str) for value in expected.values())
 
@@ -731,7 +736,7 @@ def _drifted_store(tmp_path: Path) -> Store:
     marks that do not match the running code any more, which is what a container
     update leaves behind.
     """
-    store = open_store(tmp_path / "state.db", meta=expected_versions("older-digest"))
+    store = open_store(tmp_path / "state.db", meta=expected_versions("older-digest", LANGUAGES))
     store.record(
         4711,
         FileMeta(storage_id=3, root_id=2, path="a/b.txt", title="b.txt", mime="text/plain", size=7, mtime=1, etag="e"),
@@ -745,7 +750,7 @@ def _drifted_store(tmp_path: Path) -> Store:
 def test_a_fresh_database_has_nothing_to_rebuild(tmp_path: Path) -> None:
     # The seed wrote the marks of the running code, so there is no drift, no
     # generation is raised and the first index is an ordinary first index.
-    expected = expected_versions(DIGEST)
+    expected = expected_versions(DIGEST, LANGUAGES)
     store = open_store(tmp_path / "state.db", meta=expected)
 
     assert start_rebuild_on_drift(store, expected) is None
@@ -760,7 +765,7 @@ def test_a_drift_raises_the_generation_so_the_restart_really_rebuilds(tmp_path: 
     # of them without reading a byte, and the index keeps the tokenisation
     # nobody can query it with any more.
     store = _drifted_store(tmp_path)
-    expected = expected_versions(DIGEST)
+    expected = expected_versions(DIGEST, LANGUAGES)
     before = store.index_version
 
     generation = start_rebuild_on_drift(store, expected)
@@ -776,7 +781,7 @@ def test_the_marks_stay_old_until_the_rebuild_is_through(tmp_path: Path) -> None
     # banner has to stay up while the work is being done, because it is the only
     # thing telling the admin that hits are still missing.
     store = _drifted_store(tmp_path)
-    expected = expected_versions(DIGEST)
+    expected = expected_versions(DIGEST, LANGUAGES)
 
     start_rebuild_on_drift(store, expected)
 
@@ -789,7 +794,7 @@ def test_a_rebuild_that_is_not_through_does_not_stamp(tmp_path: Path) -> None:
     # is worse than the banner it would remove: the admin stops looking for the
     # cause of the missing hits.
     store = _drifted_store(tmp_path)
-    expected = expected_versions(DIGEST)
+    expected = expected_versions(DIGEST, LANGUAGES)
     start_rebuild_on_drift(store, expected)
 
     assert stamp_after_rebuild(store, expected) is False
@@ -801,7 +806,7 @@ def test_a_finished_rebuild_stamps_and_the_banner_goes(tmp_path: Path) -> None:
     # The whole chain in one test: drift, raised generation, every file judged
     # again by the running code, marks written, no drift left.
     store = _drifted_store(tmp_path)
-    expected = expected_versions(DIGEST)
+    expected = expected_versions(DIGEST, LANGUAGES)
     generation = start_rebuild_on_drift(store, expected)
     assert generation is not None
 
@@ -824,7 +829,7 @@ def test_the_stamp_leaves_the_local_generation_alone(tmp_path: Path) -> None:
     # code precisely because a rebuild happened. Writing the baseline back would
     # make every row of the finished rebuild look stale and start it over.
     store = _drifted_store(tmp_path)
-    expected = expected_versions(DIGEST)
+    expected = expected_versions(DIGEST, LANGUAGES)
     generation = start_rebuild_on_drift(store, expected)
     store.record(
         4711,
@@ -847,7 +852,7 @@ def test_a_restart_in_the_middle_does_not_start_the_rebuild_over(tmp_path: Path)
     # before it stale again. The mark of what is being rebuilt towards is what
     # makes the raise happen once per drift and not once per start.
     store = _drifted_store(tmp_path)
-    expected = expected_versions(DIGEST)
+    expected = expected_versions(DIGEST, LANGUAGES)
     first = start_rebuild_on_drift(store, expected)
 
     assert start_rebuild_on_drift(store, expected) is None
@@ -860,9 +865,9 @@ def test_a_second_drift_during_a_rebuild_starts_a_new_one(tmp_path: Path) -> Non
     # rebuild that is under way was aimed at the code of yesterday, so it is not
     # the rebuild this code needs.
     store = _drifted_store(tmp_path)
-    first = start_rebuild_on_drift(store, expected_versions(DIGEST))
+    first = start_rebuild_on_drift(store, expected_versions(DIGEST, LANGUAGES))
 
-    second = start_rebuild_on_drift(store, expected_versions("another-digest"))
+    second = start_rebuild_on_drift(store, expected_versions("another-digest", LANGUAGES))
 
     assert first is not None
     assert second == first + 1
@@ -873,7 +878,7 @@ def test_a_tombstoned_row_does_not_hold_the_rebuild_open(tmp_path: Path) -> None
     # A file that was deleted while the rebuild ran will never be judged again,
     # so its old row must not be the reason the marks are never written.
     store = _drifted_store(tmp_path)
-    expected = expected_versions(DIGEST)
+    expected = expected_versions(DIGEST, LANGUAGES)
     start_rebuild_on_drift(store, expected)
     store.tombstone(4711)
 
@@ -888,10 +893,10 @@ def test_seeding_still_never_overwrites_a_mark_that_is_there(tmp_path: Path) -> 
     # belongs at the end of a rebuild, which is why it is a function of its own
     # and not a flag on the seed.
     path = tmp_path / "state.db"
-    first = open_store(path, meta=expected_versions("older-digest"))
+    first = open_store(path, meta=expected_versions("older-digest", LANGUAGES))
     first.close()
 
-    second = open_store(path, meta=expected_versions(DIGEST))
+    second = open_store(path, meta=expected_versions(DIGEST, LANGUAGES))
 
     assert second.read_meta()["wordlist_hash"] == "older-digest"
     second.close()

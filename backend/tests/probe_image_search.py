@@ -196,7 +196,7 @@ def write_volume(root: Path, passages: Sequence[Passage]) -> None:
     writer.wait_merging_threads()
     index.reload()
 
-    store = open_store(root / "state.db", meta=expected_versions(digest))
+    store = open_store(root / "state.db", meta=expected_versions(digest, ",".join(settings().languages)))
     for passage in passages:
         store.replace_acl(passage.file_id, [UID])
     store.close()
