@@ -256,6 +256,18 @@ testen). Zweiter Nachfrage-Beleg dieser Art nach den Sprachwuenschen (BL-F02).
 Owner-Steuerung 24.09.: viele Nutzer haben heute groessere Boxen als 4 GB,
 das beruecksichtigen und mehr Geschwindigkeit ermoeglichen.
 
+**OWNER-ZIELBILD 24.09.2026 (Wortlaut sinngemaess):** Findling laeuft ab
+4-GB-Boxen wie heute; wer mehr Leistung hat, stellt in den Settings MEHR
+WORKER ein, sodass die Geschwindigkeit sich der Hardware anpasst. Das heisst:
+der Default bleibt das 4-GB-Versprechen, die Skalierung ist Opt-in ueber die
+Worker-Zahl (plus die daran haengenden Deckel). TECHNISCHER MERKER: heute ist
+INDEX_WORKERS=1 eine nicht verhandelbare Betriebsregel (OCR und Embedding
+strikt seriell); Mehr-Worker-Betrieb braucht eine eigene Nebenlaeufigkeits-
+Haertung (Backpressure, RAM-Deckel je Worker, tantivy-Writer-Threads) und
+eine RAM-Messung je Stufe, BEVOR die Settings-UI ihn anbietet. Die
+8-GB-Schablone in CLAUDE.md (INDEX_WORKERS=2, heap 128M, threads 2) ist der
+gemessene Startpunkt.
+
 **OWNER-ENTSCHEID 24.09.2026: GESETZT als naechstes Vorhaben nach v1.3**
 ("im anschluss machen wir den punkt mit den grossen boxen"). Damit ist
 BL-F04 der Kern des naechsten Milestones (v1.4), kein blosser Kandidat mehr.
