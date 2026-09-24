@@ -302,6 +302,21 @@ jobs:
       # here does the same work on the same files, so the same figure is used
       # and named rather than a second one invented. An overrun is a finding
       # about the indexing pass and not an invitation to raise the number.
+      #
+      # It stays at 900 although "Store upgrade 2" now writes a fill corpus of
+      # 64 text documents next to that reference corpus, and the reason is a
+      # measurement on both sides. The step took 34 s of the 900 in run
+      # 36001341420 (13:01:09Z to 13:01:43Z, the whole corpus including OCR),
+      # and what the fill corpus adds is small next to the 866 s left over:
+      # the embedding is capped per document (EMBED_TOKEN_CAP 1024, applied
+      # before the split), so it is 64 documents and not 32 MB of them, and at
+      # the 170 documents per minute measured in
+      # docs/measurements/2026-09-vergleichsmessung-m7g that is 23 s;
+      # writing 32 MB of body text into the index
+      # measured 3.9 s against the real writer with three chains on 2026-09-24;
+      # the cron loop needs two or three more rounds of its five second pause.
+      # Sixty to a hundred and twenty seconds against 866 spare is why this
+      # number is not touched.
       UPGRADE_DRAIN_BUDGET_SECONDS: '900'
 
       # The budget "Store upgrade 6" gives the rebuild of the index directory,
@@ -309,15 +324,22 @@ jobs:
       # same reason the two above are named.
       #
       # 300 and not the 900 of the pass above, and the difference is the whole
-      # difference between the two runs. The indexing pass reads 39 files,
+      # difference between the two runs. The indexing pass reads 103 files,
       # rasterises the scanned ones and puts them through tesseract; the rebuild
       # carries documents the index already holds from one directory into the
-      # next and reads no file at all. The module header of
-      # backend/src/findling/index/rebuild.py measures 683 documents per second
-      # over 3000 documents on 2026-09-24, so 39 documents are a fraction of a
-      # second of carrying, and what the budget really pays for is the container
-      # coming up plus the six analysis chains being built, of which the German
-      # one carries a 276496 entry automaton.
+      # next and reads no file at all.
+      #
+      # What the rebuild costs is text and not documents. Measured against the
+      # real transfer_documents on 2026-09-24 with three chains: 0.25 to 0.6 s
+      # per MB of body text, and the module header of
+      # backend/src/findling/index/rebuild.py says 4.39 s for 3000 documents of
+      # 2.5 kB over four chains, which is the same 0.585 s per MB. The corpus of
+      # this proof carries the reference corpus plus the fill corpus of "Store
+      # upgrade 2", so about 32 MB, and the carrying measured 7.81 s for exactly
+      # that shape. Add the container coming up and the six analysis chains
+      # being built, of which the German one carries a 276496 entry automaton,
+      # and the whole run is well inside half a minute. 300 stands untouched and
+      # is now roughly a tenfold margin rather than a hundredfold one.
       #
       # Why there is a budget at all rather than a loop that waits: an unbounded
       # wait in CI is a hanging run, a hanging run costs the job its whole
@@ -2592,6 +2614,58 @@ jobs:
           # documents nobody chose would make the counts arbitrary.
           mkdir -p data/testuser/files
           cp -r findling-src/testdata/corpus data/testuser/files/corpus
+
+          # The fill corpus, and it exists for one measured reason: it is what
+          # makes the rebuild of "Store upgrade 6" long enough to be watched.
+          #
+          # The finding of run 36001341420. The rebuild of that run carried the
+          # 29 documents of the reference corpus and was over before the loop
+          # that watches it had read the overview twice, so assurance 3 (the
+          # banner was seen up) and assurance 5 (a search answered inside the
+          # run) had nothing to measure. The window a watcher can see is exactly
+          # the band run of index/rebuild.py, because that is where
+          # rebuildRunning is true, and it was two tenths of a second long.
+          #
+          # Measured on 2026-09-24 against the real transfer_documents, tantivy
+          # 0.26.2, three chains and a 300000 entry compound list: the carrying
+          # costs 0.25 to 0.6 s per MB of body text and almost nothing per
+          # document (400 tiny documents carry in 0.21 s, 29 small plus 64 of
+          # 500000 characters carry in 7.81 s). The module header of
+          # index/rebuild.py says the same from the other side: 3000 documents
+          # of 2.5 kB over four chains in 4.39 s, which is 0.585 s per MB. So a
+          # longer window is bought with TEXT and never with more files.
+          #
+          # And text is the cheap half here, which is the whole reason this
+          # works: EMBED_TOKEN_CAP is 1024 and the chunker applies it BEFORE the
+          # split, so every one of these documents costs two or three chunks
+          # whatever its length, and MAX_TEXT_CHARS is 524288, so 500019
+          # characters are carried whole and nothing lands in the truncated
+          # state. 64 documents are therefore 64 documents of indexing work and
+          # 32 MB of carrying work, and the expected window is 4 to 8 s, which
+          # is 15 to 30 rounds of the reader that watches it.
+          #
+          # The words are deliberately botanical. None of them carries Belehrung,
+          # Auszug, Erinnerung, florpel or findling-canary, and none of them
+          # splits into a constituent that does: the three term assertions of
+          # this proof have to keep answering with exactly one file each, and
+          # the check right after the drain below says so rather than assumes it.
+          fill_dir=data/testuser/files/fuellung
+          mkdir -p "${fill_dir}"
+          block="${RUNNER_TEMP}/fill-block.txt"
+          printf '%s\n' "Ahornblatt Birkenrinde Farnwedel Kieselstein Moosteppich Nadelholz Quellwasser Sandbank Tannenzapfen Uferweide Wolkenband Gletschereis Heidekraut Lavendelfeld Muschelschale Nebelschwaden Regenbogen Salzwiese Windstille Bergahorn" > "${block}"
+          while [ "$(wc -c < "${block}")" -lt 500000 ]; do
+            cat "${block}" "${block}" > "${block}.grown"
+            mv "${block}.grown" "${block}"
+          done
+          head -c 500000 "${block}" > "${block}.capped"
+          for number in $(seq 1 64); do
+            {
+              printf 'Fuelltext Nummer %s\n' "${number}"
+              cat "${block}.capped"
+            } > "${fill_dir}/fuelltext-${number}.txt"
+          done
+          echo "the fill corpus: $(find "${fill_dir}" -type f | wc -l) files of $(wc -c < "${fill_dir}/fuelltext-1.txt") characters each"
+
           "${RUNNER_TEMP}/nc-occ.sh" files:scan --all
           echo "corpus entries: $(find data/testuser/files/corpus -type f | wc -l)"
 
@@ -2658,6 +2732,33 @@ jobs:
             exit 1
           fi
           echo "the work stock is empty and every file has a verdict, after ${rounds} cron rounds"
+
+          # The three terms of the reference corpus, asked once now that the fill
+          # corpus is in the same index, and asked HERE because here is where a
+          # change to them would be caused. Every later assertion of this proof
+          # rests on each of them bringing back exactly one file, and the search
+          # is hybrid: the lexical half cannot match these documents, because no
+          # word of them and no constituent of any word of them is one of the
+          # three, but the semantic half answers with a band of 14.0 around its
+          # best neighbour (docs/measurements/2026-09-06-vektordistanzen), and
+          # whether a filler lands inside that band is a measurement and not a
+          # deduction. If one does, all 64 do, and this line names the fill
+          # corpus as the cause instead of leaving four later steps to fail with
+          # a count nobody can explain.
+          for term in Belehrung Auszug Erinnerung; do
+            body="${RUNNER_TEMP}/fill-term-${term}.json"
+            code=$(curl -s -o "${body}" -w '%{http_code}' \
+              -u "testuser:${TESTUSER_PASS}" \
+              -H 'OCS-APIRequest: true' \
+              -H 'Accept: application/json' \
+              "http://localhost:8080/ocs/v2.php/search/providers/findling/search?term=${term}")
+            if [ "${code}" != "200" ] || ! jq -e '.ocs.data.entries | length == 1' "${body}" > /dev/null; then
+              echo "::error::the search for ${term} answered HTTP ${code} with $(jq -r '.ocs.data.entries | length' "${body}" 2> /dev/null || echo "an unreadable list") entries instead of the one file of the reference corpus, so the fill corpus is answering searches it was chosen not to answer"
+              jq -r '.ocs.data.entries[]?.title' "${body}" || true
+              exit 1
+            fi
+          done
+          echo "the three terms of the reference corpus still bring back exactly one file each, with the fill corpus in the index"
 
       - name: Store upgrade 3, the state of the released installation, before anything moves
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
@@ -3702,7 +3803,7 @@ jobs:
           # The app password, taken once and used for every overview call of the
           # loop below. overview.sh takes a fresh one on every call, which costs
           # a second or more, and a second is a long time against a rebuild of
-          # 39 documents: the banner has to be read WHILE the run is on, so the
+          # a few seconds: the banner has to be read WHILE the run is on, so the
           # reader has to be cheap. The two ways are the ones overview.sh uses,
           # in the same order and for the same reason, and the value itself is
           # never printed.
@@ -3895,6 +3996,13 @@ jobs:
           finished=""
           reachable=""
           rounds=0
+          # How many of those rounds read the banner up, which is the length of
+          # the window in the only unit this loop can measure it in. It is
+          # printed whatever happens, because the next person to size the fill
+          # corpus of "Store upgrade 2" needs a number and not an impression:
+          # one round is a window that was nearly missed, nought is the finding
+          # of run 36001341420, and the fill corpus is dimensioned for 15 to 30.
+          running_rounds=0
           deadline=$(( $(date +%s) + REBUILD_BUDGET_SECONDS ))
           while [ "$(date +%s)" -lt "${deadline}" ]; do
             rounds=$(( rounds + 1 ))
@@ -3917,6 +4025,9 @@ jobs:
             # very run says the rebuild ended after two seconds.
             if [ "$(jq -r '.backendReachable' "${probe_a}" 2> /dev/null || echo "")" = "true" ]; then
               reachable="yes"
+            fi
+            if [ "${running}" = "true" ]; then
+              running_rounds=$(( running_rounds + 1 ))
             fi
 
             # The middle snapshot, and the canary inside it. The search is asked
@@ -3960,11 +4071,12 @@ jobs:
               break
             fi
             # A fifth of a second while the window may still be open, two
-            # seconds once it has been caught. The short pause is the whole
-            # reason this loop can see a window at all: the run carries 39
-            # documents and the reader has to be finer grained than the run is
-            # long. It is not zero either, because a loop without a pause is a
-            # busy wait against an instance that is doing the work being watched.
+            # seconds once it has been caught. The short pause and the cheap
+            # reader together sample about four times a second, which is what
+            # makes 15 to 30 readings out of the window the fill corpus of
+            # "Store upgrade 2" buys. It is not zero either, because a loop
+            # without a pause is a busy wait against an instance that is doing
+            # the work being watched, and the path it walks goes through HaRP.
             if [ -n "${caught}" ]; then
               sleep 2
             else
@@ -3988,6 +4100,7 @@ jobs:
             exit 1
           fi
           echo "the rebuild is through after ${rounds} rounds, languagesActive is ${REBUILD_LANGUAGES_NORMALISED}"
+          echo "the banner was up in ${running_rounds} of those rounds, which is the window this reader saw"
 
           # The log of the window, and the log of the whole life of this
           # container, as two files. The window is what assurance 7 is about,
@@ -4068,7 +4181,15 @@ jobs:
           # inside the run, and after it.
           if [ -z "${caught}" ]; then
             echo "::error::the rebuild was never seen running, so the banner of plan 18-10 was never observed up"
-            echo "The loop read the overview ${rounds} times without one of them answering rebuildRunning true."
+            echo "The loop read the overview ${rounds} times and ${running_rounds} of them answered rebuildRunning true."
+            # The remedy is the window and not the reader, and the reason is
+            # measured: the carrying costs 0.25 to 0.6 s per MB of body text and
+            # almost nothing per document, so a reader cannot be made fine
+            # grained enough for a corpus that carries in tenths of a second,
+            # and the canary of assurance 5 needs a search AND a second reading
+            # inside the same window. The fill corpus of "Store upgrade 2" is
+            # the knob: it is 64 documents of 500019 characters today and it
+            # buys about 8 s of carrying.
             fail=1
           else
             echo "the banner was up while the run was on:"
@@ -4172,7 +4293,7 @@ jobs:
             echo ""
             echo "- \`FINDLING_LANGUAGES=${REBUILD_LANGUAGES}\` was set on the container of the upgraded instance and the container was created again on the volume \`${UPGRADE_VOLUME}\`, without a second registration"
             echo "- the schema mark moved by exactly one step, the languages mark reads \`${REBUILD_LANGUAGES_NORMALISED}\`"
-            echo "- the rebuild banner was observed up while the run was on and down after it"
+            echo "- the rebuild banner was observed up while the run was on and down after it, in ${running_rounds} of ${rounds} readings"
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, the document counts, the work stock"
             echo "- a search inside the run answered with hits, no indexing pass ran during it, exactly one \`built by different code\` line"
             echo "- \`vectors.db\` is byte for byte the same file"
