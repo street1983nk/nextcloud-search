@@ -513,3 +513,11 @@ Vollständig oder gar nicht, und vor der Store-Abgabe. Im Einzelnen:
 
 Wo das wieder auftaucht: `.planning/ROADMAP.md`, Phase 11, als Vorbedingung der Abgabe
 mit einem Zeiger auf diese Datei.
+
+## Owner-Abnahme 24.09.2026
+
+Die drei Wortlaute der Phase 18 (Umbau-Banner, Platz-Banner, Sprachzeile)
+wurden dem Owner am 24.09.2026 einzeln vorgelegt und abgenommen
+(Antwort: "Abgenommen"). Die Banner-Sichtprobe gilt per Owner-Entscheid
+durch den CI-Beleg als erbracht (Lauf 36026836087, Zusicherung 3:
+Banner erschien und verschwand, maschinell beobachtet).
