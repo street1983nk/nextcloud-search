@@ -58,6 +58,14 @@ the poller is armed again. This module does not import
 :mod:`findling.api.resources`: the reading half of the container may draw from
 the index, never the other way round, and an import here would close that circle.
 
+*A volume is read before it is used, because a crash leaves states behind.* The
+three directory names above are the three a container can find at its start, and
+their five combinations are the five decisions of
+:func:`recover_the_index_directories`. Three of the five put something in order
+and two of them deliberately leave the volume as it is, and the difference
+between the two groups is not how bad the state looks but whether the container
+can still answer a search out of what stands there.
+
 *An index whose chains are not registered raises on the first write.* Measured on
 2026-09-24 as well: a schema that carries a text field whose tokenizer is not
 registered answers every ``add_document`` with "Schema error: 'Error getting
@@ -128,6 +136,25 @@ _HIGHEST_FILE_ID: Final = 2**64 - 1
 # sibling of the one it came from and never a path anybody handed in
 # (T-18-07-04).
 RETIRED_SUFFIX: Final = ".retired"
+
+# What the new directory is called while it is being filled. Same construction as
+# the suffix above and for the same reason: the three directories of a rebuild
+# are siblings of one another, every one of their names is derived from the one
+# path findling.config hands out, and none of them is ever assembled out of
+# something a caller chose (T-18-08-03).
+REBUILD_SUFFIX: Final = ".rebuild"
+
+# The five answers of the clean up path, as text rather than as an enum, for the
+# reason the two answers of the precheck give: they travel on into an operating
+# report, where a short closed list of readable names is worth more than a type.
+# Each of them names one of the five states a container can find in the volume,
+# and there is deliberately no sixth: a state this list does not name would be a
+# state nobody decided about.
+NOTHING_TO_PUT_IN_ORDER: Final = "the volume needs nothing put in order"
+HALF_FILLED_TARGET_KEPT: Final = "a half filled target directory is kept for the run that resumes it"
+TARGET_RAISED_TO_THE_LIVE_NAME: Final = "the rebuilt directory was raised to the live name"
+RETIRED_BROUGHT_BACK: Final = "the retired directory was brought back to the live name"
+RETIRED_DISCARDED: Final = "a retired directory beside a live one was discarded"
 
 # The name of the schema mark, spelled once here because there is no constant for
 # it anywhere else: findling.index.open writes it as a literal inside
@@ -401,8 +428,9 @@ def swap_in(target: Path, live: Path) -> None:
     Two renames and then the removal, with nothing in between. Between the first
     and the second rename the volume holds no directory under the live name at
     all, which is the one window a crash can be caught in, so the window is kept
-    as short as two system calls (T-18-07-02). The clean up of a directory left
-    behind that way is the start path of plan 18-08.
+    as short as two system calls (T-18-07-02). A container killed inside that
+    window finds the state again at its next start, and
+    :func:`recover_the_index_directories` is what decides about it there.
 
     **Every handle on both directories has to be gone before the first rename.**
     Measured on Windows on 2026-09-24: a rename with a live searcher on the
@@ -437,6 +465,116 @@ def swap_in(target: Path, live: Path) -> None:
         LOGGER.warning("the index directories could not be swapped, an %s", type(error).__name__)
         raise
     discard_directory(retired)
+
+
+def recover_the_index_directories() -> str:
+    """Read what the volume holds at the start and put it in order. Five states.
+
+    Between the two renames of :func:`swap_in` the volume holds no directory
+    called ``index`` at all. The window is two system calls wide, and two system
+    calls is exactly the width a ``kill -9`` fits into. A container that started
+    into that state without this function would open an empty index directory,
+    answer every search with nothing and report success while doing it, which is
+    the worst of the shapes an integrity fault can take (T-18-08-01). So the
+    start reads the volume first, and every state it can find has a decision
+    with a reason.
+
+    **The three names come from one path.** ``settings().index_dir`` and twice
+    :meth:`pathlib.Path.with_name`. Nothing is handed in, and that is the whole
+    protection of the ``rmtree`` further down: the only directory this function
+    can remove is one it named itself, beside a live directory that
+    :mod:`findling.config` pointed at, on the volume of this container
+    (T-18-08-03).
+
+    **The five states.**
+
+    1. Only ``index``: the ordinary start. Nothing is touched, and the function
+       says so. Ordinary means every start of every container that never rebuilt
+       anything, which is why this is the one branch without a warning.
+    2. ``index`` beside ``index.rebuild``: a rebuild was running and did not
+       finish. The half filled target stays where it is. The tempting handling
+       is the other one, to remove it and start clean, and it would be wrong: the
+       half filled directory IS the progress record of that run.
+       :func:`_resume_cursor` reads the highest carried over ``file_id`` out of
+       it and the next pass carries on there, so removing it would throw away
+       every band the broken run had already committed and buy nothing for it.
+       This start also does not swap it in, because this start cannot know
+       whether the run was through; the only thing that knows is
+       :func:`counts_match`, and it is asked by the run and not here.
+    3. Only ``index.rebuild``, no ``index``: the swap broke off between its two
+       renames. The rebuilt directory is raised to the live name, which is the
+       second rename of the swap, and a retired directory found beside it is
+       removed, which is the step behind it.
+
+       The reasoning under this branch is the one place in this phase where an
+       absence serves as proof, so it is written out. ``index.rebuild`` is NOT
+       complete in general: state 2 is the same directory in the middle of being
+       filled. What makes it complete here is that ``index`` is gone, because
+       only :func:`swap_in` ever removes that name, and :func:`swap_in` is only
+       ever called after :func:`counts_match` answered True. The missing live
+       directory is therefore the evidence that the final probe had already been
+       passed.
+    4. Only ``index.retired``, no ``index``: the first rename ran, the second did
+       not, and there is no ``index.rebuild`` any more. The retired directory is
+       the complete old index, so it comes back under the live name. The
+       installation loses the rebuild and keeps its search, which is the right
+       way round: a rebuild costs one pass and an index costs the hours of OCR
+       that filled it (T-18-08-01).
+    5. ``index.retired`` beside an ``index``: the swap itself was through and the
+       removal behind it was not, so the retired directory is waste. It is
+       removed, because it counts against the free space the next precheck
+       measures and because a leftover that nobody explains is the state the next
+       start would have to reason about all over again.
+
+    **Why the warning, and why no path.** Four of the five lines below are
+    supposed to be unreachable in normal operation, and a line that only ever
+    appears after a hard abort is the one line whoever reads that log needs. It
+    names the state and never a directory, like every line of this module
+    (T-18-08-04).
+    """
+    live = settings().index_dir
+    target = live.with_name(live.name + REBUILD_SUFFIX)
+    retired = live.with_name(live.name + RETIRED_SUFFIX)
+    if not live.is_dir():
+        if target.is_dir():
+            LOGGER.warning(
+                "no live index directory and a rebuilt one beside it: the swap broke off between its two renames, "
+                "raising the rebuilt directory to the live name"
+            )
+            target.rename(live)
+            if retired.is_dir():
+                # The step behind the second rename, and it belongs to this
+                # branch rather than to a later pass: the retired directory is
+                # the old index that the swap had already stood down.
+                discard_directory(retired)
+            return TARGET_RAISED_TO_THE_LIVE_NAME
+        if retired.is_dir():
+            LOGGER.warning(
+                "no live index directory and a retired one beside it: the swap stood the old index down and never "
+                "put the new one in place, bringing the retired directory back"
+            )
+            retired.rename(live)
+            return RETIRED_BROUGHT_BACK
+        # No directory at all is the first start of a fresh volume, and
+        # findling.index.open creates the live one a moment later. Nothing is
+        # missing here, so nothing is said about it.
+        LOGGER.debug("the volume holds no index directory yet, which is what a first start looks like")
+        return NOTHING_TO_PUT_IN_ORDER
+    if retired.is_dir():
+        LOGGER.warning(
+            "a retired index directory stands beside the live one: the swap was through and its clean up was not, "
+            "discarding the retired directory"
+        )
+        discard_directory(retired)
+        return RETIRED_DISCARDED
+    if target.is_dir():
+        LOGGER.warning(
+            "a rebuilt index directory stands beside the live one: a rebuild did not finish, keeping the half "
+            "filled directory so that the next pass resumes in it"
+        )
+        return HALF_FILLED_TARGET_KEPT
+    LOGGER.debug("the volume holds one index directory and nothing beside it")
+    return NOTHING_TO_PUT_IN_ORDER
 
 
 def stamp_after_swap(store: Store, languages: str) -> None:
