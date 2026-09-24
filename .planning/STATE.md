@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Phase 19 in Ausfuehrung (Phasen 19+20 geplant, beide Checker PASS)
-last_updated: "2026-09-24T20:21:03.268Z"
-last_activity: 2026-09-24 -- Phase 19 Ausfuehrung gestartet
+stopped_at: Phase 19, Plan 19-01 fertig (FieldPlan), naechster Plan 19-02
+last_updated: "2026-09-24T21:40:00.000Z"
+last_activity: 2026-09-24 -- 19-01 ausgefuehrt (FieldPlan, AST-Waechter ersetzt)
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 38
-  completed_plans: 20
-  percent: 29
+  completed_plans: 21
+  percent: 30
 ---
 
 # Project State
@@ -25,17 +25,22 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 ## Current Position
 
-Phase: 19 (frageseite-freischalten), EXECUTING, Plan 0 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
-Status: Ausfuehrung Phase 19 laeuft (9 Plaene in 6 Wellen). Planung 24.09.: Research b2ef69f,
+Phase: 19 (frageseite-freischalten), EXECUTING, Plan 1 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
+Status: Ausfuehrung Phase 19 laeuft (9 Plaene in 6 Wellen). 19-01 fertig (82bf2b1): die drei
+Modulkonstanten DEFAULT_FIELDS/TITLE_ONLY_FIELDS/FIELD_BOOSTS sind ein Wert (FieldPlan,
+LEGACY_PLAN), build_query nimmt plan keyword-only mit dem Bestandsplan als Vorgabewert, der
+AST-Waechter aus test_schema_generations.py ist weg und test_query_fields_plan.py steht an
+seiner Stelle. Volle Suite 2749 bestanden / 15 uebersprungen. Planung 24.09.: Research b2ef69f,
 Pattern-Karte, Plaene 51525d5, Checker PASS, Warnungen behoben 3c35186. Phase 20 geplant
 (a8d40fd, Checker PASS, f32bdec). Phase 18 davor KOMPLETT (12/12, CI-Beweis 36026836087).
-Last activity: 2026-09-24 -- Phase 19 Ausfuehrung gestartet
+Last activity: 2026-09-24 -- 19-01 ausgefuehrt (FieldPlan, AST-Waechter ersetzt)
 
-Progress: [██........] 29% (2 von 7 Phasen)
+Progress: [███.......] 30% (2 von 7 Phasen)
 
 ## Naechster Schritt
 
-`/gsd:execute-phase 19` (frisches Kontextfenster davor). Danach oder parallel:
+Weiter in Phase 19 mit 19-02 (it-Fixture waechst, Messung neu gefahren, Zaehlgate und
+Klassifizierung nachgezogen). Danach oder parallel:
 `/gsd:execute-phase 20` (UI-Kataloge; Wellen 1 und 9 sind Checkpoints, 20-01 Pluralfix
 der sechs Bestandskataloge braucht die Owner-Sichtprobe). Phase-20-Planung 24.09.:
 9 Plaene in 9 Wellen (a8d40fd), Checker PASS, Fussabdruck strikt getrennt von Phase 19
@@ -57,6 +62,16 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
 ## Accumulated Context
 
 ### Entscheidungen, die v1.3 tragen
+
+- Feldliste und Boost-Abbildung einer Anfrage sind EIN Wert (`FieldPlan`), nie zwei
+  Konstanten: `parse_query_lenient` wirft die ValueError gemessen auch fuer `field_boosts`
+  (19-RESEARCH M-1). Der Vorgabewert von `build_query(plan=...)` ist der eingefrorene
+  Bestandsplan und niemals etwas aus `settings()`.
+
+- 19-01 wurde als EIN Commit gefahren statt als drei: die Ratschenregel (Aenderung unter
+  backend/src/findling zieht PACKAGE_TREE_HASH_TODAY im selben Commit nach) und die
+  Uebergabebedingung aus 18-03 (Waechter faellt und sein Ersatz wird im selben Commit
+  genannt) lassen keinen gruenen Zwischenstand zu.
 
 - D-04-Linie (v1.1): index-kompatibel ueber Minor-Spruenge. v1.3 verletzt sie bewusst und
   nur fuer Instanzen, die eine neue Sprache einschalten; der Bruch braucht den Owner-Entscheid
@@ -102,6 +117,11 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
 - Systemplatten-Skripte Phasen 5-6.1: Repo-Aufnahme erst nach Geheimnis-Durchsicht.
 - Estnischer Stemmer nicht verfuegbar: aktiv an die Buerokratt/OS2ai-Spur kommunizieren.
 
+- Drei Prosastellen nennen noch den gefallenen Namen `DEFAULT_FIELDS`:
+  `store/repo.py:128` und `:1448` sowie `tests/test_language_cases_field_level.py:7` und `:221`.
+  Keine davon steht im Fussabdruck von 19-01; beim naechsten Plan, der diese Dateien ohnehin
+  anfasst (19-02 fasst test_language_cases_field_level.py an), mitnehmen.
+
 ## Deferred Items
 
 Keine offenen Deferred Items (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal
@@ -109,6 +129,6 @@ auf resolved gesetzt).
 
 ## Session Continuity
 
-Last session: 2026-09-23
-Stopped at: Roadmap v1.3 geschrieben (ROADMAP.md, STATE.md, Traceability in REQUIREMENTS.md)
-Resume file: keine
+Last session: 2026-09-24
+Stopped at: 19-01 abgeschlossen und committet (82bf2b1), SUMMARY geschrieben
+Resume file: .planning/phases/19-frageseite-freischalten/19-02-PLAN.md
