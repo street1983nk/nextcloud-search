@@ -3826,7 +3826,35 @@ jobs:
           labels="${RUNNER_TEMP}/rebuild-labels.list"
           jq -r '.[0].Config.Labels // {} | to_entries[] | .key + "=" + .value' "${spec}" > "${labels}"
 
-          run_args=(--detach --name "${container}" --network host --env-file "${envfile}")
+          # The one thing docker inspect does not describe, and the finding of
+          # run 35997241359. HaRP writes the client certificate of the tunnel,
+          # its key and the CA into /certs/frp of the container AFTER it created
+          # it, through docker exec; the image brings that directory along empty
+          # and owned by the app user for exactly that purpose (the comment at
+          # the chown line of backend/Dockerfile). The three files therefore live
+          # in the writable layer of the container, which docker rm takes with
+          # it, and a container created again out of the image alone finds no
+          # readable certificate: harp_connect.sh configures the tunnel without a
+          # client certificate, the frp server refuses every login with EOF, and
+          # the installation is left with a container that is up, an app that
+          # answers on its socket and a Nextcloud that reports backendReachable
+          # false. The rebuild ran and finished in two seconds in that run, and
+          # the loop below spent its whole budget reading an empty backend block.
+          #
+          # docker exec runs as the image user, the same uid harp_connect.sh
+          # reads them with, so this test asks the very question the tunnel asks.
+          certs="${RUNNER_TEMP}/rebuild-certs.tar"
+          if ! docker exec "${container}" sh -c \
+            'test -r /certs/frp/client.crt && test -r /certs/frp/client.key && test -r /certs/frp/ca.crt'; then
+            echo "::error::${container} carries no readable /certs/frp/client.crt, client.key and ca.crt, so this restart has no tunnel to hand to the container it creates"
+            echo "HaRP places those three through docker exec after it created the container, and this step cannot invent them."
+            docker exec "${container}" ls -la /certs/frp || true
+            docker logs "${container}" 2>&1 | grep -i 'harp_connect' || true
+            exit 1
+          fi
+          docker cp "${container}:/certs/frp" - > "${certs}"
+
+          run_args=(--name "${container}" --network host --env-file "${envfile}")
           if [ -n "${policy}" ] && [ "${policy}" != "no" ]; then
             run_args+=(--restart "${policy}")
           fi
@@ -3837,11 +3865,19 @@ jobs:
             if [ -n "${label}" ]; then run_args+=(--label "${label}"); fi
           done < "${labels}"
 
-          rebuild_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # Created, then filled, then started, and in that order. frpc reads
+          # /certs/frp once while it comes up, so a container that is started
+          # first and handed its certificates afterwards spends the rest of its
+          # life in the reconnect loop that this three step dance exists to
+          # avoid. docker cp works against a created container, which is what
+          # makes the window between the two commands the right place for it.
           docker rm -f "${container}" > /dev/null
-          docker run "${run_args[@]}" "${image}" > /dev/null
+          docker create "${run_args[@]}" "${image}" > /dev/null
+          docker cp - "${container}:/certs" < "${certs}"
+          rebuild_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          docker start "${container}" > /dev/null
           docker ps --filter "name=${container}" --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
-          echo "the container was created again at ${rebuild_start} with FINDLING_LANGUAGES=${REBUILD_LANGUAGES}"
+          echo "the container was created again at ${rebuild_start} with FINDLING_LANGUAGES=${REBUILD_LANGUAGES} and the tunnel certificates of its predecessor"
 
           # ---------------------------------------------------------------
           # The run, watched. The loop leaves the moment the rebuild is through
