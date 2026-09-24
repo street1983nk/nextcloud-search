@@ -10,9 +10,9 @@ findings:
   medium: 8
   low: 12
   total: 25
-status: issues_found
-fixed: []
-still_open: [C-18-01, H-18-01, H-18-02, H-18-03, H-18-04, M-18-01, M-18-02, M-18-03, M-18-04, M-18-05, M-18-06, M-18-07, M-18-08, L-18-01, L-18-02, L-18-03, L-18-04, L-18-05, L-18-06, L-18-07, L-18-08, L-18-09, L-18-10, L-18-11, L-18-12]
+status: medium_and_above_fixed
+fixed: [C-18-01, H-18-01, H-18-02, H-18-03, H-18-04, M-18-01, M-18-02, M-18-03, M-18-04, M-18-05, M-18-06, M-18-07, M-18-08]
+still_open: [L-18-01, L-18-02, L-18-03, L-18-04, L-18-05, L-18-06, L-18-07, L-18-08, L-18-09, L-18-10, L-18-11, L-18-12]
 ---
 
 # Phase 18: Security-, Bug- und Performance-Audit
@@ -26,6 +26,13 @@ den Baum von Commit `32366e1`. Der Bericht liegt nach der Owner-Regel vom
 Die Ueberschriften stehen ohne Umlaute, weil Pruefungen und Verweise auf sie
 zeigen; der Fliesstext benutzt echte Umlaute. Dieser Bericht nennt Dateinamen,
 Zeilennummern und Zahlen und sonst nichts.
+
+**Stand 24.09.2026: alle dreizehn Befunde ab MEDIUM sind behoben.** Jeder von
+ihnen traegt unter seiner Ueberschrift die Zeile mit dem Commit, der ihn
+geschlossen hat. Die zwoelf LOW stehen unveraendert offen; sie sind bewusst
+nicht angefasst worden, weil der Owner-Auftrag dieser Runde die Befunde ab
+MEDIUM umfasst. Die volle Suite war vor jedem der neun Commits gruen, und die
+Ratschen ueber den Baumhash des Pakets und der PHP-Haelfte sind mitgezogen.
 
 **Bilanz vorweg: ein CRITICAL, vier HIGH, acht MEDIUM, zwoelf LOW.** Das ist
 der erste Bericht dieser Reihe mit einem CRITICAL, und der Grund ist nicht ein
@@ -449,6 +456,8 @@ Zielvolume, waehrend `index.rebuild` auf dem Elternvolume angelegt wird
 
 ### C-18-01: Der Tausch loescht ein Verzeichnis, auf dem der Poller einen offenen IndexWriter haelt
 
+**BEHOBEN am 24.09.2026, Commit 45e3456.**
+
 **Datei:** `backend/src/findling/index/rebuild.py:548`, `:561`, `:564-606`;
 `backend/src/findling/worker/poller.py:519-526`, `:1510-1511`;
 `backend/src/findling/index/writer.py:174`; `backend/src/findling/main.py:343-355`
@@ -501,6 +510,8 @@ sobald `self._queue` None ist. Ergaenzend: `discard_directory` gehoert in den
 
 ### H-18-01: silence() wartet nicht auf den laufenden Indexlauf
 
+**BEHOBEN am 24.09.2026, Commit 45e3456.**
+
 **Datei:** `backend/src/findling/main.py:343-355`;
 `backend/src/findling/worker/poller.py:519-526`;
 `backend/src/findling/index/rebuild.py:448-454`, `:888-893`
@@ -523,6 +534,8 @@ und bei Abweichung ohne Tausch abbrechen, statt sich auf den Vergleich mit dem
 Ziel zu verlassen.
 
 ### H-18-02: Die Wiederaufnahme prueft Schema und Sprachsatz des Zielverzeichnisses nicht
+
+**BEHOBEN am 24.09.2026, Commit 67cf2b3.**
 
 **Datei:** `backend/src/findling/index/rebuild.py:472-483`, `:760-762`;
 `backend/src/findling/index/open.py:118`; `backend/src/findling/index/schema.py:92-95`
@@ -563,6 +576,8 @@ gegen den aktuellen Fingerabdruck halten. Der Fingerabdruck existiert bereits
 
 ### H-18-03: recover_the_index_directories laeuft ungefangen im Lifespan
 
+**BEHOBEN am 24.09.2026, Commit c12c266.**
+
 **Datei:** `backend/src/findling/main.py:565`;
 `backend/src/findling/index/rebuild.py:552-561`, `:702-708`
 
@@ -598,6 +613,8 @@ Zusaetzlich in `recover_the_index_directories` die beiden `discard_directory`
 darf die **Umbenennung** daneben nicht verhindern.
 
 ### H-18-04: Ein einziges verlorenes Dokument setzt den Umbau dauerhaft fest
+
+**BEHOBEN am 24.09.2026, Commit 67cf2b3.**
 
 **Datei:** `backend/src/findling/index/rebuild.py:359-374`, `:377-397`,
 `:495-510`, `:906-918`; `backend/src/findling/main.py:692`
@@ -639,6 +656,8 @@ Verzeichnis nicht weg.
 
 ### M-18-01: filled_languages verwirft alle sechs Messungen, wenn eine wirft
 
+**BEHOBEN am 24.09.2026, Commit 7b78e77.**
+
 **Datei:** `backend/src/findling/api/resources.py:506-518`
 
 Der Generatorausdruck ueber `BODY_FIELD.items()` steht in **einem** `try`. Auf
@@ -662,6 +681,8 @@ for code, field in BODY_FIELD.items():
 
 ### M-18-02: filled_languages fuellt den gerade geleerten Cache wieder mit alten Werten
 
+**BEHOBEN am 24.09.2026, Commit 01df0b6.**
+
 **Datei:** `backend/src/findling/api/resources.py:497`, `:503`, `:519`
 
 `read_side()` wird ausserhalb der Sperre gelesen, `_FILLED` innerhalb
@@ -676,6 +697,8 @@ erhoeht, und beim Schreiben verwerfen, wenn sie sich geaendert hat. Alternativ
 `side` innerhalb derselben Sperre holen.
 
 ### M-18-03: Zwischen drop_read_side und swap_in ist die Lesekappe nicht gesperrt
+
+**BEHOBEN am 24.09.2026, Commit 01df0b6.**
 
 **Datei:** `backend/src/findling/index/rebuild.py:922-923`;
 `backend/src/findling/api/resources.py:301`, `:376-421`
@@ -694,6 +717,8 @@ antworten, gesetzt von `drop_read_side()` und geloescht vom Aufrufer nach
 der dokumentierte Zustand dieses Fensters ist.
 
 ### M-18-04: Ein symbolisch verlinktes Indexverzeichnis bricht Vorpruefung und Aufraeumen
+
+**BEHOBEN am 24.09.2026, Commit bbd7c1d.**
 
 **Datei:** `backend/src/findling/index/rebuild.py:249-265`, `:547-561`, `:674-676`
 
@@ -715,6 +740,8 @@ mit einem Satz in `docs/`.
 
 ### M-18-05: Das Platzbanner nennt den Neustart nicht, obwohl er noetig ist
 
+**BEHOBEN am 24.09.2026, Commit 3fc7aa1.**
+
 **Datei:** `backend/src/findling/index/rebuild.py:315-341`;
 `php/templates/admin.php:328-336`; `backend/src/findling/main.py:692`
 
@@ -730,6 +757,8 @@ Alternativweg braucht ihn ebenfalls, denn eine geaenderte Umgebungsvariable wird
 ohne Neustart nicht gelesen.
 
 ### M-18-06: _rebuild_is_due faengt nur OSError und stirbt an einer kaputten state.db
+
+**BEHOBEN am 24.09.2026, Commit 91a9c47.**
 
 **Datei:** `backend/src/findling/main.py:386-397`
 
@@ -754,6 +783,8 @@ den `try` nehmen. Bei dieser Gelegenheit dasselbe in `report_version_drift`.
 
 ### M-18-07: REBUILD_STOP_SECONDS begrenzt nichts
 
+**BEHOBEN am 24.09.2026, Commit 3e698e7.**
+
 **Datei:** `backend/src/findling/main.py:83-94`, `:705-719`
 
 `rebuilding.cancel()` bricht die wartende Aufgabe ab, nicht den Arbeitsfaden in
@@ -774,6 +805,8 @@ ersten Umbenennung prueft. Der Kommentar muss in beiden Faellen die
 tatsaechliche Semantik nennen.
 
 ### M-18-08: Die Fuellstandssonde laeuft ueber alle sechs Woerterbuecher
+
+**BEHOBEN am 24.09.2026, Commit 7b78e77.**
 
 **Datei:** `backend/src/findling/api/resources.py:83-95`, `:509`
 
