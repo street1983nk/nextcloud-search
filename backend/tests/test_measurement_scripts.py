@@ -823,8 +823,20 @@ PHP_TREE_HASH_TODAY = "15e00b2b37e003ff98b0cc3ca87affdea215eb160c1671153f9e616bf
 # a worker thread and the stand down is a coroutine, and got
 # STAND_DOWN_GRACE_SECONDS beside the three stop budgets. No file came and none
 # went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a twenty ninth time, by the fix of the audit findings
+# H-18-02 and H-18-04: two of the 56 files changed their bytes and the count
+# stays at 56. index/open.py made _fingerprint public as fingerprint, because
+# the rebuild is now its second caller. index/rebuild.py got TARGET_MARK_FILE
+# and the pair _make_the_target_fit_this_code and _mark_in, which write the
+# fingerprint of the expected marks into the half filled target and discard a
+# target that carries another one or will not open at all; counts_match became
+# "at least as many" with a line for the source that shrank under a delete job;
+# and a pass that carried nothing over while the count is still short discards
+# its target under the new verdict RUN_INCOMPLETE_TARGET_DISCARDED, which is the
+# way out of the dead end the cursor and the equality used to build together. No
+# file came and none went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "32da5d52619e98f66a79e411a013af7fd3503925c2e25bab3e5f0715034792ad"
+PACKAGE_TREE_HASH_TODAY = "09e5fe11de76d97ad2ff5071e39f72cbfaaf3fd99b923da8e7022d746ac190ff"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

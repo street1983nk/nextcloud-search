@@ -193,12 +193,20 @@ def expected_versions(digest: str, languages: str) -> dict[str, str]:
     }
 
 
-def _fingerprint(expected: Mapping[str, str]) -> str:
+def fingerprint(expected: Mapping[str, str]) -> str:
     """One short name for a whole set of expected marks.
 
     Only equality is ever asked of it, so any stable function of the values will
     do; a hash is used rather than the values themselves so that the mark stays
     one short row whatever a future mark carries.
+
+    Two callers and two stores for the same short string. The one below writes
+    it into ``state.db`` next to the raised generation, so that a container
+    which restarts in the middle of a rebuild can tell "the same code is still
+    at it" from "the code changed again". The rebuild of plan 18-09 writes it
+    into the half filled target directory, so that a resume can tell "this
+    directory is mine" from "this directory was filled by other code", which is
+    the question the audit found nobody asking (H-18-02).
     """
     material = "\n".join(f"{key}={expected[key]}" for key in sorted(expected))
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
@@ -233,7 +241,7 @@ def start_rebuild_on_drift(store: Store, expected: Mapping[str, str]) -> int | N
     if not store.version_mismatch(expected):
         return None
 
-    wanted = _fingerprint(expected)
+    wanted = fingerprint(expected)
     if store.read_meta().get(REBUILD_MARK) == wanted:
         return None
 

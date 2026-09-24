@@ -91,6 +91,7 @@ does, so both directories of a rebuild go through
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import shutil
 from collections.abc import Callable, Mapping, Sequence
@@ -105,6 +106,7 @@ from findling.index.open import (
     LANGUAGES_MARK,
     REBUILD_MARK,
     expected_versions,
+    fingerprint,
     open_index,
     open_reader,
     start_rebuild_on_drift,
@@ -165,6 +167,32 @@ RETIRED_SUFFIX: Final = ".retired"
 # something a caller chose (T-18-08-03).
 REBUILD_SUFFIX: Final = ".rebuild"
 
+# The one file this module writes into the target directory, and what it holds
+# is the fingerprint of the marks the run is aimed at
+# (:func:`findling.index.open.fingerprint`).
+#
+# It exists because a half filled target survives a code change. The clean up
+# path keeps it on purpose, because it is the progress record the next pass
+# resumes in, and ``Index.open`` then opens it with the schema it was CREATED
+# under rather than with the one this build produces. A field the persisted
+# schema does not know is dropped by ``add_document`` without a word, so the run
+# carries the whole index into an outdated shape, the count is satisfied because
+# it counts documents, and the stamp behind the swap writes the CURRENT schema
+# and the CURRENT language set over it. The result is the one state this whole
+# phase is built against: an index that says it is current and is not (H-18-02).
+# The same thing happens without any code change at all if an admin moves
+# FINDLING_LANGUAGES while a half filled target is lying there.
+#
+# A file beside the index rather than a comparison of two Schema objects,
+# because equality of a tantivy Schema is not part of its promise, and because
+# the language set is not in the schema at all: the six body fields exist in
+# every build, and which of them a run FILLS is a decision of the settings. The
+# fingerprint covers both, since the language set is one of its six marks.
+#
+# The leading dot keeps it out of the way of tantivy, which names its own files
+# by segment id and reads meta.json.
+TARGET_MARK_FILE: Final = ".rebuild-for"
+
 # The five answers of the clean up path, as text rather than as an enum, for the
 # reason the two answers of the precheck give: they travel on into an operating
 # report, where a short closed list of readable names is worth more than a type.
@@ -212,6 +240,9 @@ NO_LIVE_DIRECTORY: Final = "there is no live index directory to carry documents 
 FALLBACK_TO_FULL_REINDEX: Final = "the generation was raised instead, the reindex banner names the way"
 RUN_STOPPED_EARLY: Final = "the run stopped between two bands and keeps its half filled directory"
 RUN_INCOMPLETE: Final = "the final probe counted fewer documents than the old directory holds, nothing was swapped"
+RUN_INCOMPLETE_TARGET_DISCARDED: Final = (
+    "the pass carried nothing over and the count still disagrees, so the half filled directory was discarded"
+)
 REBUILD_THROUGH: Final = "the rebuilt directory is in place and the two marks are current again"
 POLLER_STILL_WRITING: Final = "the indexing task did not stand down, so nothing was carried over and swapped"
 
@@ -368,13 +399,26 @@ class RebuildRun:
 
 
 def counts_match(source: Index, target: Index) -> bool:
-    """True while the new directory holds as many documents as the old one.
+    """True while the new directory holds at least as many documents as the old one.
 
     The last question before the swap of plan 18-07, and a function of its own
     because it is the one answer that may never be inferred from "the loop ran
     through". A pass that ended on an exception between two bands also reaches
-    the end of its function; what it does not reach is this equality. A caller
+    the end of its function; what it does not reach is this comparison. A caller
     that gets False here does not swap, it runs again.
+
+    **Why it is "at least" and not "exactly", since the audit of this phase.**
+    It used to be an equality, and the equality failed in both directions. Short
+    of the source is a real fault and still answers False; above the source is
+    not. A delete job that reaches the container while the band run is going
+    shrinks the SOURCE, so the target legitimately ends up holding one document
+    more than the directory it was copied from, and an equality then refused a
+    swap that was correct and sent the run round again for ever (H-18-04). The
+    document too many is a file that is gone in Nextcloud, the delete job for it
+    is still in the work stock, and the poller removes it from the new directory
+    on its first pass after the swap. The other direction, the one this function
+    exists for, is untouched: a target below the source is a document that was
+    never carried over, and that may never become a swap.
 
     Both indexes are reloaded first. A searcher is a snapshot, and a snapshot
     taken before the last commit would report the count of the band before the
@@ -382,7 +426,19 @@ def counts_match(source: Index, target: Index) -> bool:
     """
     source.reload()
     target.reload()
-    return target.searcher().num_docs == source.searcher().num_docs
+    carried = target.searcher().num_docs
+    holding = source.searcher().num_docs
+    if carried > holding:
+        # Worth a line, because it is the one shape of "not equal" that is
+        # allowed to pass, and a reader of the log otherwise has to guess why a
+        # swap happened at two different numbers.
+        LOGGER.info(
+            "the new index directory holds %d documents against %d in the old one, which is a source that shrank "
+            "while the run was going; the swap goes ahead",
+            carried,
+            holding,
+        )
+    return carried >= holding
 
 
 def _resume_cursor(target: Index) -> int:
@@ -790,6 +846,84 @@ def stamp_after_swap(store: Store, languages: str) -> None:
     LOGGER.info("the rebuilt index directory is in place; the schema and language marks are current again")
 
 
+def _discard_the_target(target: Path, why: str) -> None:
+    """Throw the half filled target away and say which of the reasons it was.
+
+    The one place that removes a target directory, so that the log line and the
+    removal cannot part company. It is a warning and not an info: everything
+    that lands here costs a whole pass over the holdings, and an admin who sees
+    two of these lines in a row is looking at a volume that needs a human.
+    """
+    LOGGER.warning("the half filled index directory is discarded and the next run starts again: %s", why)
+    discard_directory(target)
+
+
+def _make_the_target_fit_this_code(target: Path, constituents: Sequence[str], wanted: str) -> None:
+    """Leave a usable target of this code standing, and remove anything else.
+
+    Three states and three answers, and the two that remove something are the
+    two the audit of this phase found nobody deciding about.
+
+    **A target of other code** (H-18-02). The mark file carries the fingerprint
+    of the expected versions the run that created the directory was aimed at. A
+    fingerprint that differs, or a mark file that is not there at all, says the
+    directory was filled under another schema or another language set. It cannot
+    be carried on with, because ``Index.open`` reads the persisted schema back
+    and drops every field that schema does not know without a word, so the run
+    would finish into an outdated shape and the stamp behind the swap would
+    declare it current. A target without a mark is treated the same way: every
+    directory this code creates gets one in the very next line, so the absence
+    is either a directory from before this fix or a directory somebody else
+    made, and neither may be filled up.
+
+    **A target that will not open** (the third change of H-18-04). A ``kill -9``
+    between two writes of ``meta.json`` leaves a directory that ``Index.open``
+    raises on, the clean up path of the start keeps it on purpose, and until
+    this line there was no path in the whole system that ever threw one away:
+    the rebuild failed at the same line at every start, for ever.
+
+    **A target of this code that opens** is left exactly as it is, because it is
+    the progress record the next pass resumes in.
+
+    The mark is written last and on every path, so that a directory which is
+    created here carries it from the start. The directory itself is created by
+    :func:`findling.index.open.open_index` and never by a ``mkdir`` of this
+    module: that is the one place in the package which is allowed to make one,
+    it holds the single reviewed exception of the read only gate for the line
+    that does it, and a second spelling here would have to be waved through
+    separately.
+    """
+    if target.is_dir() and _mark_in(target) != wanted:
+        _discard_the_target(target, "it was built for other version marks than the ones this code produces")
+    try:
+        # Opens what is there and creates what is not, which is why this one
+        # call serves the resume and the fresh start alike. The handle is
+        # dropped with the expression, because a directory that is still held
+        # cannot be removed on Windows and must not be removed on Linux.
+        open_index(target, constituents)
+    # Deliberately every exception. What tantivy raises over a half written
+    # meta.json is its business, and the answer is the same for all of them:
+    # there is no path anywhere else in this system that ever throws a broken
+    # target away, so the rebuild used to fail at this very line at every start.
+    except Exception as error:
+        _discard_the_target(target, f"it could not be opened, an {type(error).__name__}")
+        open_index(target, constituents)
+    (target / TARGET_MARK_FILE).write_text(wanted, encoding="utf-8")
+
+
+def _mark_in(target: Path) -> str:
+    """The fingerprint the target directory carries, and the empty string for none.
+
+    Not there, not readable and a directory under that name are one answer and
+    not three: every one of them says "this is not a target this code made", and
+    the caller does the same thing with all of them.
+    """
+    try:
+        return (target / TARGET_MARK_FILE).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 def _new_language_count(store: Store, active: Sequence[str]) -> int:
     """How many body chains this rebuild fills that the old directory does not have.
 
@@ -830,10 +964,18 @@ def rebuild_the_index(
     2. is there room for two index directories, or is the named way out switched
        on,
     3. stand the indexing task down, and stop here if it will not go,
-    4. carry the documents over, band by band,
-    5. ask the final probe,
-    6. drop the reading side and swap the directories,
-    7. stamp the two marks and let the indexing task go again.
+    4. make the target directory fit this code, or remove it,
+    5. carry the documents over, band by band,
+    6. ask the final probe,
+    7. drop the reading side and swap the directories,
+    8. stamp the two marks and let the indexing task go again.
+
+    **Step 4 is the one the audit of this phase added**, and it is there because
+    a half filled target survives a code change and a language change while the
+    clean up path of the start deliberately keeps it. What it can remove is a
+    target of other marks (H-18-02) and a target that will not open at all
+    (H-18-04); what it never removes is a target of this code that opens, since
+    that one is the progress record the next pass resumes in.
 
     **Step 3 waits, and the waiting is the whole point of it.** Until the audit
     of this phase it was a ``silence`` that cleared a flag and returned at once,
@@ -934,6 +1076,11 @@ def rebuild_the_index(
                 "the indexing task did not stand down, so no document is carried over and no directory is swapped"
             )
             return POLLER_STILL_WRITING
+        # Behind the stand down and in front of the first band, because it may
+        # remove the directory the band run is about to open and because it
+        # writes into it. Anything the volume holds under this name that was not
+        # made by this code and for these marks goes here (H-18-02, H-18-04).
+        _make_the_target_fit_this_code(target, artifact.entries, fingerprint(expected))
         # The band size is named here rather than left to the default of the
         # function, because this is the call site that runs in a container: the
         # figure is the memory of one step and the crash granularity of the whole
@@ -958,12 +1105,34 @@ def rebuild_the_index(
                 run.target_documents,
                 run.source_documents,
             )
+            if run.documents_written == 0:
+                # The way out of the dead end the audit measured (H-18-04). The
+                # cursor is read out of the highest file_id the target holds and
+                # the band starts above it, so a target that is short of one
+                # document below that cursor gets no hit at all on the next
+                # pass: it writes nothing, the count disagrees again, and the
+                # container repeats the whole thing at every start for ever.
+                # A pass that carried something over is resumable and is left
+                # alone; a pass that carried nothing over and is still short has
+                # nothing left to try, so the directory goes and the next start
+                # begins at an empty one.
+                _discard_the_target(target, "a whole pass carried nothing over and the count is still short")
+                return RUN_INCOMPLETE_TARGET_DISCARDED
             return RUN_INCOMPLETE
         # Step 3, immediately in front of the first rename and nowhere else. The
         # swap puts the rebuilt directory under the very name the live one had,
         # so the invalidation branch of the reading side never fires on its own.
         drop_read_side()
         swap_in(target, live)
+        # The mark travelled with the directory and has done its work: it says
+        # "this half filled target belongs to this code", and there is nothing
+        # half filled here any more. Removed after the swap and not before it,
+        # so that a rename which fails leaves a target the next start still
+        # recognises as its own. A removal that fails costs sixteen bytes in the
+        # live directory and nothing else, which is why it is suppressed rather
+        # than reported.
+        with contextlib.suppress(OSError):
+            (live / TARGET_MARK_FILE).unlink(missing_ok=True)
         stamp_after_swap(store, languages)
         return REBUILD_THROUGH
     finally:

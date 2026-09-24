@@ -28,7 +28,14 @@ from tantivy import Document, Index, Query
 from conftest import Corpus, write_wordlist
 from findling.api import resources
 from findling.config import SCHEMA_VERSION, settings
-from findling.index.open import LANGUAGES_MARK, REBUILD_MARK, expected_versions, open_index, open_reader
+from findling.index.open import (
+    LANGUAGES_MARK,
+    REBUILD_MARK,
+    expected_versions,
+    fingerprint,
+    open_index,
+    open_reader,
+)
 from findling.index.rebuild import (
     _CARRIED_WITHOUT_A_MARK,
     _SCHEMA_MARK,
@@ -41,7 +48,10 @@ from findling.index.rebuild import (
     RETIRED_BROUGHT_BACK,
     RETIRED_DISCARDED,
     ROOM_ENOUGH,
+    RUN_INCOMPLETE,
+    RUN_INCOMPLETE_TARGET_DISCARDED,
     RUN_STOPPED_EARLY,
+    TARGET_MARK_FILE,
     TARGET_RAISED_TO_THE_LIVE_NAME,
     RebuildRun,
     _document_from,
@@ -1374,6 +1384,228 @@ def test_a_stop_between_two_bands_keeps_the_half_filled_directory(
     assert _documents_in(volume / "index.rebuild") == 2
     assert _documents_in(volume / "index") == 6, "the live directory still answers with everything"
     assert marks[_SCHEMA_MARK] == "1", "and nothing was stamped"
+
+
+def _the_fingerprint_of_this_code(volume: Path) -> str:
+    """The short name of the marks a run on this volume is aimed at."""
+    digest = expected_versions(write_wordlist(volume), ",".join(settings().languages))
+    return fingerprint(digest)
+
+
+def test_a_finished_run_leaves_no_mark_file_in_the_live_directory(volume: Path) -> None:
+    """The mark says "this half filled target is mine", and nothing is half filled after a swap.
+
+    It travels into the live directory with the second rename, so it is removed
+    behind the swap rather than in front of it: a rename that fails has to leave
+    a target the next start still recognises as its own.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume)
+    hands = _Hands()
+
+    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    store.close()
+
+    assert verdict == REBUILD_THROUGH
+    assert not (volume / "index" / TARGET_MARK_FILE).exists()
+
+
+def test_a_half_filled_target_of_other_marks_is_discarded_instead_of_filled_up(
+    volume: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """H-18-02: a resume into a directory somebody else built is the worst outcome of all.
+
+    ``Index.open`` reads the PERSISTED schema back, and a field that schema does
+    not know is dropped by ``add_document`` without a word. So a run that
+    resumed into a directory of an older build carried the whole index into an
+    outdated shape, ``counts_match`` was satisfied because it counts documents,
+    and the stamp behind the swap wrote the current schema and the current
+    language set over it: an index that says it is current and is not, with no
+    banner and no second attempt.
+
+    The same thing happens without a code change at all when an admin moves
+    ``FINDLING_LANGUAGES`` while a half filled target is lying there, which is
+    what this case stages, because it is the shape an installation really meets.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume, documents=4)
+    target = volume / "index.rebuild"
+    stale = open_index(target, CONSTITUENTS)
+    _stage(stale, [_document(file_id) for file_id in range(1, 3)])
+    del stale
+    gc.collect()
+    (target / TARGET_MARK_FILE).write_text("a fingerprint of another language set", encoding="utf-8")
+    hands = _Hands()
+
+    with caplog.at_level(logging.WARNING, logger="findling.index.rebuild"):
+        verdict = rebuild_the_index(
+            store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side
+        )
+    marks = store.read_meta()
+    store.close()
+
+    assert verdict == REBUILD_THROUGH
+    assert _documents_in(volume / "index") == 4, "every document was carried over, and none twice"
+    assert marks[_SCHEMA_MARK] == str(SCHEMA_VERSION)
+    assert any("other version marks" in record.getMessage() for record in caplog.records)
+    assert not any(volume.name in record.getMessage() for record in caplog.records)
+
+
+def test_a_half_filled_target_of_this_code_is_resumed_and_not_discarded(volume: Path) -> None:
+    """The other side of the same question, and the one that must not move.
+
+    The half filled directory IS the progress record. A fix that threw every
+    target away would buy the schema check with a rebuild that starts from
+    scratch after every restart, which on the box this project targets is hours.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume, documents=4)
+    target = volume / "index.rebuild"
+    half = open_index(target, CONSTITUENTS)
+    _stage(half, [_document(file_id) for file_id in (1, 2)])
+    del half
+    gc.collect()
+    (target / TARGET_MARK_FILE).write_text(_the_fingerprint_of_this_code(volume), encoding="utf-8")
+    hands = _Hands()
+    carried: list[int] = []
+    honest = _document_from
+
+    def note(stored: Mapping[str, list[object]], languages: Sequence[str]) -> Document:
+        carried.append(int(stored[FIELD_FILE_ID][0]))  # pyright: ignore[reportArgumentType]
+        return honest(stored, languages)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr("findling.index.rebuild._document_from", note)
+        verdict = rebuild_the_index(
+            store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side
+        )
+    store.close()
+
+    assert verdict == REBUILD_THROUGH
+    assert carried == [3, 4], "the two documents already in the target were not carried a second time"
+    assert _documents_in(volume / "index") == 4
+
+
+def test_a_target_that_cannot_be_opened_is_discarded_instead_of_failing_every_start(
+    volume: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The third change of H-18-04: nothing in the system ever threw a broken target away.
+
+    A hard abort between two writes of ``meta.json`` leaves a directory that
+    ``Index.open`` raises on. The clean up path of the start keeps it on purpose
+    because it cannot tell it from a good one, and the rebuild then failed at
+    the same line at every start, for ever, with a log line that named only the
+    type.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume, documents=3)
+    target = volume / "index.rebuild"
+    target.mkdir()
+    (target / "meta.json").write_text("{ this is half of a json file", encoding="utf-8")
+    (target / TARGET_MARK_FILE).write_text(_the_fingerprint_of_this_code(volume), encoding="utf-8")
+    hands = _Hands()
+
+    with caplog.at_level(logging.WARNING, logger="findling.index.rebuild"):
+        verdict = rebuild_the_index(
+            store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side
+        )
+    store.close()
+
+    assert verdict == REBUILD_THROUGH
+    assert _documents_in(volume / "index") == 3
+    assert any("could not be opened" in record.getMessage() for record in caplog.records)
+
+
+def test_a_pass_that_carries_nothing_and_stays_short_discards_the_target(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """H-18-04: the dead end, and the one way out of it.
+
+    The cursor is read out of the highest ``file_id`` the target holds and the
+    band starts above it, so a target that is short of a document BELOW that
+    cursor gets no hit at all on the next pass. It writes nothing, the count
+    disagrees again, and the container repeated the whole thing at every start
+    for ever: the new languages never worked, the extra directory stayed on the
+    volume, and ``FINDLING_REBUILD_FALLBACK`` did not reach it because it is
+    read in the branch above.
+
+    Staged the way it really happens: a target that already holds the highest
+    file id and is missing one below it. A pass that carries something over is
+    resumable and is left alone, which the case above this one covers; this one
+    is the pass that has nothing left to try.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume, documents=4)
+    target = volume / "index.rebuild"
+    short = open_index(target, CONSTITUENTS)
+    # Three of the four, and the one that is missing is not the highest: the
+    # cursor therefore stands at the top and the next band is empty.
+    _stage(short, [_document(file_id) for file_id in (1, 2, 4)])
+    del short
+    gc.collect()
+    (target / TARGET_MARK_FILE).write_text(_the_fingerprint_of_this_code(volume), encoding="utf-8")
+    hands = _Hands()
+    monkeypatch.setattr("findling.index.rebuild.BAND_DOCUMENTS", 2)
+
+    with caplog.at_level(logging.WARNING, logger="findling.index.rebuild"):
+        verdict = rebuild_the_index(
+            store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side
+        )
+    marks = store.read_meta()
+    store.close()
+
+    assert verdict == RUN_INCOMPLETE_TARGET_DISCARDED
+    assert not target.exists(), "the next start begins at an empty target instead of repeating this one"
+    assert _documents_in(volume / "index") == 4, "and the live directory is untouched"
+    assert marks[_SCHEMA_MARK] == "1", "nothing was stamped"
+    assert any("carried nothing over" in record.getMessage() for record in caplog.records)
+
+
+def test_a_pass_that_carried_something_over_keeps_its_target(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The line between the two answers, and it is progress and not the count.
+
+    A run that is short but wrote documents is resumable, so it keeps what it
+    has. Throwing that one away would turn the fix for the dead end into a
+    rebuild that starts from scratch whenever a band is interrupted.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume, documents=4)
+    hands = _Hands()
+    honest = counts_match
+
+    def short_of_one(source: Index, target: Index) -> bool:
+        del source, target
+        return False
+
+    monkeypatch.setattr("findling.index.rebuild.counts_match", short_of_one)
+    assert honest is not short_of_one
+
+    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    store.close()
+
+    assert verdict == RUN_INCOMPLETE
+    assert _documents_in(volume / "index.rebuild") == 4, "the pass that wrote something keeps it"
+
+
+def test_a_source_that_shrank_during_the_run_is_not_a_fault(tmp_path: Path) -> None:
+    """The other direction of the equality the audit found (H-18-04).
+
+    A delete job that reaches the container while the band run is going shrinks
+    the source, so the target legitimately holds one document more than the
+    directory it was copied from. The equality refused that swap and sent the
+    run round again for ever; the document too many is a file that is gone in
+    Nextcloud, and the poller removes it on its first pass after the swap.
+    """
+    source = open_index(tmp_path / "index", CONSTITUENTS)
+    target = open_index(tmp_path / "index.rebuild", CONSTITUENTS)
+    _stage(source, [_document(file_id) for file_id in (1, 2)])
+    _stage(target, [_document(file_id) for file_id in (1, 2, 3)])
+
+    assert counts_match(source, target) is True
+
+
+def test_a_target_short_of_the_source_is_still_a_refusal(tmp_path: Path) -> None:
+    """The direction the final probe exists for, and it did not move."""
+    source = open_index(tmp_path / "index", CONSTITUENTS)
+    target = open_index(tmp_path / "index.rebuild", CONSTITUENTS)
+    _stage(source, [_document(file_id) for file_id in (1, 2, 3)])
+    _stage(target, [_document(file_id) for file_id in (1, 2)])
+
+    assert counts_match(source, target) is False
 
 
 def test_the_pair_this_module_assumes_for_a_missing_mark_is_the_one_the_comparison_reads() -> None:
