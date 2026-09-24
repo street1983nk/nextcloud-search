@@ -633,8 +633,13 @@ def discard_directory(retired: Path) -> None:
     shutil.rmtree(retired, ignore_errors=False)
 
 
-def swap_in(target: Path, live: Path) -> None:
+def swap_in(target: Path, live: Path, should_stop: Callable[[], bool] | None = None) -> bool:
     """Put the rebuilt directory in the place of the live one. Order is content.
+
+    Answers True when the swap happened and False when ``should_stop`` was
+    already set and it therefore did not. False is not a failure: the target
+    stays exactly where it is, the live directory is untouched, and the next
+    start resumes in a directory whose count already matched.
 
     Two renames and then the removal, with nothing in between. Between the first
     and the second rename the volume holds no directory under the live name at
@@ -674,7 +679,23 @@ def swap_in(target: Path, live: Path) -> None:
     not let go of is a state the clean up path of the next start knows by name
     (RETIRED_DISCARDED). Letting it raise here cost the stamp, and an unstamped
     swap is a whole rebuild again at every start (C-18-01).
+
+    **Why the shutdown mark is asked here and not only by the caller**
+    (audit finding M-18-07). ``rebuilding.cancel()`` in the lifespan ends the
+    awaiting task and not the worker thread this runs in, and
+    ``asyncio.run`` joins that thread at the end of the shutdown anyway. So a
+    run whose budget expired is not stopped; it goes on, and until this line it
+    was free to perform both renames and the removal while the rest of the
+    lifespan was already taking the poller and the reconcile apart. The mark is
+    therefore read immediately in front of the first rename, which is the last
+    moment at which stopping still costs nothing at all, and once more in front
+    of the removal. What is left is the width of two system calls between the
+    read and the rename, and a container killed inside that window is the state
+    recover_the_index_directories was written for.
     """
+    if should_stop is not None and should_stop():
+        LOGGER.info("the container is going down, so the directories are not swapped; the next start resumes")
+        return False
     try:
         retired = retire_directory(live)
         target.rename(live)
@@ -684,6 +705,14 @@ def swap_in(target: Path, live: Path) -> None:
         # operating log of this container never carries (T-18-07-05).
         LOGGER.warning("the index directories could not be swapped, an %s", type(error).__name__)
         raise
+    if should_stop is not None and should_stop():
+        # The swap is through, so the container answers out of the new directory
+        # whatever happens next; what is left is waste, and the clean up path of
+        # the next start knows it by name (RETIRED_DISCARDED). An rmtree over a
+        # whole index directory while the lifespan is already shutting the other
+        # tasks down is the one part of this function worth skipping.
+        LOGGER.info("the container is going down, so the retired directory is left for the next start")
+        return True
     try:
         discard_directory(retired)
     except OSError as error:
@@ -692,6 +721,7 @@ def swap_in(target: Path, live: Path) -> None:
             "start removes what is left",
             type(error).__name__,
         )
+    return True
 
 
 def _discard_what_is_left(retired: Path) -> None:
@@ -1195,11 +1225,20 @@ def rebuild_the_index(
         # whatever the clean up path of the next start makes of the volume, and
         # a bar nobody lowered would leave one that answers nothing until it is
         # restarted (audit finding M-18-03).
+        if should_stop is not None and should_stop():
+            # Between the final probe and the swap, and the last place where
+            # stopping is free. The target is complete, the clean up path of the
+            # next start keeps it, and the pass that resumes writes nothing,
+            # finds the count matching and swaps it in then (M-18-07).
+            LOGGER.info("the container is going down between the final probe and the swap; the next start swaps")
+            return RUN_STOPPED_EARLY
         drop_read_side()
         try:
-            swap_in(target, live)
+            swapped = swap_in(target, live, should_stop)
         finally:
             let_read_side_open()
+        if not swapped:
+            return RUN_STOPPED_EARLY
         # The mark travelled with the directory and has done its work: it says
         # "this half filled target belongs to this code", and there is nothing
         # half filled here any more. Removed after the swap and not before it,

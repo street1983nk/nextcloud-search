@@ -659,6 +659,59 @@ def test_a_leftover_the_volume_will_not_release_does_not_cost_the_swap(
     assert not any(tmp_path.name in record.getMessage() for record in caplog.records)
 
 
+def test_a_swap_asked_to_stop_renames_nothing_and_says_so(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """M-18-07: the shutdown mark is read at the last moment where stopping is free.
+
+    ``rebuilding.cancel()`` ends the awaiting task and not the worker thread the
+    run is in, and ``asyncio.run`` joins that thread at the end of the shutdown
+    anyway. So a run whose budget expired is not stopped, and until this line it
+    was free to perform both renames and the removal while the lifespan was
+    already taking the poller and the reconcile apart.
+
+    Nothing is renamed, both directories stay where they are, and the next start
+    resumes in a target whose count already matched.
+    """
+    live = tmp_path / "index"
+    target = tmp_path / "index.rebuild"
+    live.mkdir()
+    (live / "meta.json").write_text("{}", encoding="utf-8")
+    target.mkdir()
+
+    with caplog.at_level(logging.INFO, logger="findling.index.rebuild"):
+        assert swap_in(target, live, lambda: True) is False
+
+    assert (live / "meta.json").is_file(), "the live directory is untouched"
+    assert target.is_dir(), "and so is the target"
+    assert not (tmp_path / "index.retired").exists()
+    assert any("going down" in record.getMessage() for record in caplog.records)
+
+
+def test_a_swap_asked_to_stop_after_the_renames_leaves_the_removal_to_the_next_start(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The second reading, and it is in front of the rmtree for a reason.
+
+    Removing a whole index directory while the lifespan is already shutting the
+    other tasks down is the one part of this function worth skipping: the swap
+    is through, the container answers out of the new directory whatever happens
+    next, and what is left is waste the clean up path of the next start knows by
+    name.
+    """
+    live = tmp_path / "index"
+    target = tmp_path / "index.rebuild"
+    live.mkdir()
+    target.mkdir()
+    (target / "meta.json").write_text("{}", encoding="utf-8")
+    readings = iter([False, True])
+
+    with caplog.at_level(logging.INFO, logger="findling.index.rebuild"):
+        assert swap_in(target, live, lambda: next(readings)) is True
+
+    assert (live / "meta.json").is_file(), "the swap itself is through"
+    assert (tmp_path / "index.retired").is_dir(), "and the waste is left for the next start"
+    assert any("left for the next start" in record.getMessage() for record in caplog.records)
+
+
 # The three marks that would take a case out of the run on the machine it is
 # supposed to fail on. Assembled from halves so that this file does not carry the
 # names it forbids and report itself, the same construction test_ops_scripts.py
@@ -1734,6 +1787,45 @@ def test_a_target_short_of_the_source_is_still_a_refusal(tmp_path: Path) -> None
     _stage(target, [_document(file_id) for file_id in (1, 2)])
 
     assert counts_match(source, target) is False
+
+
+def test_a_run_asked_to_stop_after_the_final_probe_keeps_its_complete_target(
+    volume: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """M-18-07 at the conductor: the last free moment is in front of the swap.
+
+    The band run is through, the count matches, and the container is going down.
+    Swapping now would put the one window a crash can be caught in exactly where
+    the crash is, and the run is in a worker thread the shutdown cannot cancel,
+    so it would do it while the poller is already being closed.
+
+    Nothing is lost by waiting: the complete target is what the clean up path of
+    the next start keeps, and the pass that resumes writes nothing, finds the
+    count matching and swaps it in then.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume, documents=4)
+    hands = _Hands()
+    bands = 0
+
+    def going_down_after_the_run() -> bool:
+        # False between the two bands of the run, True from the reading in front
+        # of the swap on. Counted rather than scripted, because the number of
+        # readings inside transfer_documents is not this case's business.
+        nonlocal bands
+        bands += 1
+        return bands > 2
+
+    with caplog.at_level(logging.INFO, logger="findling.index.rebuild"):
+        verdict = _led_by(store, hands, should_stop=going_down_after_the_run)
+    marks = store.read_meta()
+    store.close()
+
+    assert verdict == RUN_STOPPED_EARLY
+    assert _documents_in(volume / "index") == 4, "the live directory still answers with everything"
+    assert _documents_in(volume / "index.rebuild") == 4, "and the complete target waits for the next start"
+    assert not (volume / "index.retired").exists(), "nothing was renamed"
+    assert marks[_SCHEMA_MARK] == "1", "and nothing was stamped"
+    assert "drop_read_side" not in hands.journal, "the reading side was never barred"
 
 
 def test_the_pair_this_module_assumes_for_a_missing_mark_is_the_one_the_comparison_reads() -> None:

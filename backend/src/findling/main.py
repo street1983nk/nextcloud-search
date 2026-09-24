@@ -93,6 +93,25 @@ RELEASE_STOP_SECONDS: Final = 5.0
 # second of 2026-09-24, and the band run is asked to stop between two bands
 # anyway: this timeout is the answer to a band that hangs and not the ordinary
 # way out of a run.
+#
+# **What this budget really bounds, and what it does not** (audit finding
+# M-18-07). It bounds how long the SHUTDOWN waits, and nothing else. The
+# ``rebuilding.cancel()`` below ends the awaiting task and not the worker thread
+# of ``asyncio.to_thread``; that thread goes on, and ``asyncio.run`` joins it
+# over ``shutdown_default_executor`` at the end of the shutdown in any case. So
+# the process does not really come down faster than the band that is running,
+# and the comment above used to read as if it did.
+#
+# What the budget does buy is the ordered part of the shutdown: the three other
+# tasks are taken apart on time instead of behind a run of hours. And since this
+# finding the detached thread is no longer free to do as it likes while that
+# happens. ``stop_rebuild`` is set before any of the waiting starts, and
+# ``rebuild_the_index`` reads it between two bands, again in front of the swap
+# and once more in front of the removal behind it, so a run that is over its
+# budget stops at the next of those points instead of renaming directories while
+# the poller is being closed. The window that is left is the width of two system
+# calls between the last read and the first rename, and a container killed
+# inside it is exactly the state ``recover_the_index_directories`` exists for.
 REBUILD_STOP_SECONDS: Final = 30.0
 
 # What the blocking wait on the stand down future is allowed on top of the

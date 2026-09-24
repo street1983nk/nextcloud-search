@@ -900,8 +900,20 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # byte state.db from a hard kill opens cleanly and raises OperationalError on
 # the first query. Either one used to be a container that does not start. No
 # file came and none went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a thirty fifth time, by the fix of the audit finding
+# M-18-07: two of the 56 files changed their bytes and the count stays at 56.
+# index/rebuild.py takes the shutdown mark into swap_in, which now answers
+# whether it swapped and reads that mark in front of the first rename and once
+# more in front of the removal behind it, and rebuild_the_index reads it a third
+# time between the final probe and the swap. main.py says what
+# REBUILD_STOP_SECONDS really bounds: rebuilding.cancel() ends the awaiting task
+# and not the worker thread, asyncio.run joins that thread at the end of the
+# shutdown anyway, so the budget buys the ordered part of the shutdown and not a
+# faster one, and what it now also buys is a detached thread that stops at the
+# next cooperative point instead of renaming directories while the poller is
+# being closed. No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "332013585d63e2f302ecb9534ea8c41bfd412195ec44be367d9c5af0e2bceb3b"
+PACKAGE_TREE_HASH_TODAY = "193449595cfb677a64bb82fa250a89c53fe90f5ee3053832950ca3d5275f94b2"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
