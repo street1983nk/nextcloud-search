@@ -38,10 +38,12 @@ from types import ModuleType
 from typing import Final, NamedTuple
 
 import pytest
-from tantivy import TextAnalyzer
+from tantivy import Document, Index, Searcher, TextAnalyzer
 
 from findling.config import SNOWBALL_NAME
 from findling.index.analyzer import english_analyzer, snowball_analyzer
+from findling.index.open import open_index, open_reader
+from findling.index.schema import BODY_FIELD, FIELD_BODY_EN, FIELD_FILE_ID, FIELD_MTIME, FIELD_STORAGE_ID
 from test_language_analyzers import CASES as CASE_FIXTURES
 from test_language_analyzers import CODES, _load_chain_probe
 
@@ -77,6 +79,20 @@ FOLDED: Final = ("it",)
 # it. Words and not substrings: "region" stands in the Spanish fixture and in
 # ordinary English prose, so a substring gate would be a trap rather than a rule.
 SOURCE_WORDS: Final = frozenset(re.findall(r"[^\W\d_]+", Path(__file__).read_text(encoding="utf-8").lower()))
+
+# The same constituent list the rest of the suite opens indexes with, so the one
+# expensive chain of the process, the German automaton, is built once for the
+# whole session and this module pays nothing for it.
+CONSTITUENTS: Final = (
+    (Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt").read_text(encoding="utf-8").split()
+)
+
+# The two documents of a case index the question has to reach, by file id. The
+# third one carries a word of the same language that the chain puts on another
+# term: without it a query that matched everything would look exactly like a
+# query that matched the case.
+TYPED_DOCUMENT: Final = 1
+WRITTEN_DOCUMENT: Final = 2
 
 
 class Pair(NamedTuple):
@@ -154,6 +170,73 @@ def _case_pair(code: str, chain: TextAnalyzer, english: TextAnalyzer, families: 
     return distinguished[0]
 
 
+def _distractor(chain: TextAnalyzer, families: Sequence[Sequence[str]], pair: Pair) -> str:
+    """The first form of the fixture this chain does not put on the case term.
+
+    Out of the fixture for the same reason the pair is, and chosen by a rule
+    rather than by hand, so that the third document of a case index is a word of
+    the right language and demonstrably not a second spelling of the case.
+    """
+    shared = _terms(chain, pair.typed) & _terms(chain, pair.written)
+    for forms in families:
+        for form in forms:
+            if not _terms(chain, form) & shared:
+                return form
+    raise AssertionError("every form of this fixture lands on the term of the case, so nothing can be told apart")
+
+
+def _write_case_index(root: Path, code: str, texts: Sequence[str]) -> Index:
+    """Build the index of one case: these texts, this body field, nothing else.
+
+    Through ``open_index`` and never through the tantivy constructor, because
+    opening is registering and the guard of ``test_index_open.py`` runs over the
+    whole package for exactly that reason; a test module holds the same line.
+
+    Field by field and never through keyword arguments: measured, a keyword built
+    document puts an I64 into the U64 column of ``file_id`` and the indexing
+    thread of tantivy panics after the Python call has already returned.
+    """
+    index = open_index(root, CONSTITUENTS)
+    writer = index.writer(heap_size=15_000_000, num_threads=1)
+    for file_id, text in enumerate(texts, start=TYPED_DOCUMENT):
+        document = Document()
+        document.add_unsigned(FIELD_FILE_ID, file_id)
+        document.add_unsigned(FIELD_STORAGE_ID, 1)
+        # The one body field of the language under test. No second body field is
+        # written anywhere in this module: that is what "no foreign stock" means
+        # here, and test_the_case_index_carries_no_foreign_stock asserts it.
+        document.add_text(BODY_FIELD[code], text)
+        document.add_integer(FIELD_MTIME, 1_700_000_000 + file_id)
+        writer.add_document(document)
+    writer.commit()
+    writer.wait_merging_threads()
+    index.reload()
+    return index
+
+
+def _found(index: Index, searcher: Searcher, field: str, text: str) -> list[int]:
+    """Ask ``text`` against one field and return the file ids that answer, sorted.
+
+    ``default_field_names`` carries that one field and nothing else. This is the
+    field level the plan asks for: ``build_query`` and its ``DEFAULT_FIELDS`` open
+    in phase 19, and a case that went through them would measure the question
+    side of the next phase instead of the chain of this one.
+    """
+    parsed, errors = index.parse_query_lenient(text, default_field_names=[field])
+    assert errors == [], f"the parser could not read the question against {field}: {errors}"
+    answers: list[int] = []
+    for _, address in searcher.search(parsed, 10).hits:
+        value = searcher.doc(address).get_first(FIELD_FILE_ID)
+        assert value is not None
+        answers.append(int(value))
+    return sorted(answers)
+
+
+def _field_terms(searcher: Searcher, field: str) -> set[str]:
+    """Every term the index carries in one field, without their frequencies."""
+    return {term for term, _ in searcher.terms_with_prefix(field, "")}
+
+
 @pytest.fixture(scope="module")
 def probe() -> ModuleType:
     """The measurement probe, for its fixture reader and for nothing else."""
@@ -184,6 +267,34 @@ def pairs(
 ) -> dict[str, Pair]:
     """The pair every case of this module runs on, one per language."""
     return {code: _case_pair(code, chains[code], english, families[code]) for code in CODES}
+
+
+@pytest.fixture(scope="module")
+def distractors(
+    families: dict[str, list[list[str]]], chains: dict[str, TextAnalyzer], pairs: dict[str, Pair]
+) -> dict[str, str]:
+    """The third document of every case index, one word per language."""
+    return {code: _distractor(chains[code], families[code], pairs[code]) for code in CODES}
+
+
+@pytest.fixture(scope="module")
+def texts(pairs: dict[str, Pair], distractors: dict[str, str]) -> dict[str, tuple[str, ...]]:
+    """The three documents of a case index, in file id order."""
+    return {code: (pairs[code].typed, pairs[code].written, distractors[code]) for code in CODES}
+
+
+@pytest.fixture(scope="module")
+def indexes(tmp_path_factory: pytest.TempPathFactory, texts: dict[str, tuple[str, ...]]) -> dict[str, Index]:
+    """One index per language, built once, each of them holding one language."""
+    return {
+        code: _write_case_index(tmp_path_factory.mktemp(f"case_{code}") / "index", code, texts[code]) for code in CODES
+    }
+
+
+@pytest.fixture(scope="module")
+def searchers(indexes: dict[str, Index]) -> dict[str, Searcher]:
+    """One searcher per case index, configured once and not once per question."""
+    return {code: open_reader(indexes[code]) for code in CODES}
 
 
 def test_every_language_of_the_build_out_is_classified_exactly_once() -> None:
@@ -259,11 +370,87 @@ def test_the_english_chain_writes_other_terms_than_the_chain_of_the_case(
 
 
 @pytest.mark.parametrize("code", CODES)
-def test_no_form_of_the_case_stands_in_this_file(code: str, pairs: dict[str, Pair]) -> None:
+def test_the_question_in_one_form_finds_the_document_that_carries_the_other(
+    code: str, indexes: dict[str, Index], searchers: dict[str, Searcher], pairs: dict[str, Pair]
+) -> None:
+    # The case itself, and it runs in both directions, because a chain that
+    # brings two forms together brings them together whichever of them was
+    # typed. Equality and not "contains": the third document is a word of the
+    # same language, so a query that returned everything would look exactly like
+    # a query that worked.
+    index, searcher, pair = indexes[code], searchers[code], pairs[code]
+    field = BODY_FIELD[code]
+
+    assert _found(index, searcher, field, pair.typed) == [TYPED_DOCUMENT, WRITTEN_DOCUMENT]
+    assert _found(index, searcher, field, pair.written) == [TYPED_DOCUMENT, WRITTEN_DOCUMENT]
+
+
+@pytest.mark.parametrize("code", CODES)
+def test_the_same_question_against_the_english_field_finds_nothing(
+    code: str, indexes: dict[str, Index], searchers: dict[str, Searcher], pairs: dict[str, Pair]
+) -> None:
+    # The counter proof. body_en of this index was never written, so an answer
+    # here would mean the hit above came from somewhere other than the field the
+    # case is about.
+    index, searcher, pair = indexes[code], searchers[code], pairs[code]
+
+    assert _field_terms(searcher, FIELD_BODY_EN) == set(), (
+        f"body_en of the {code} case index carries terms, so it is not the empty field this counter proof needs"
+    )
+    for form in pair:
+        assert _found(index, searcher, FIELD_BODY_EN, form) == [], (
+            f"the question {form!r} is answered against body_en although nothing was ever written into it, "
+            f"so the hit of the {code} case does not prove anything about {BODY_FIELD[code]}"
+        )
+
+
+@pytest.mark.parametrize("code", CODES)
+def test_the_case_index_carries_no_foreign_stock(
+    code: str, searchers: dict[str, Searcher], texts: dict[str, tuple[str, ...]]
+) -> None:
+    # Lehre A4 of milestone v1.1, as an assertion: three documents of one
+    # language and nothing else. With foreign documents carrying the same tokens
+    # the case above would be a statement about the corpus and not about a chain.
+    searcher = searchers[code]
+
+    assert searcher.num_docs == len(texts[code])
+    for other, field in BODY_FIELD.items():
+        if other == code:
+            continue
+        assert _field_terms(searcher, field) == set(), f"the {code} case index carries {other} stock in {field}"
+
+
+@pytest.mark.parametrize("code", CODES)
+def test_the_field_carries_the_terms_of_its_own_chain(
+    code: str,
+    searchers: dict[str, Searcher],
+    texts: dict[str, tuple[str, ...]],
+    chains: dict[str, TextAnalyzer],
+    english: TextAnalyzer,
+) -> None:
+    # T-18-04-01, at the index and not at the analyser. The three documents went
+    # in as text and came out as terms; this holds those terms against the chain
+    # of the language and against the English one. It is the assertion that
+    # carries the folded language, where the merge alone says nothing: a field
+    # wired to the wrong chain writes other terms even when it answers the same
+    # question.
+    written = texts[code]
+    ours = {term for text in written for term in chains[code].analyze(text)}
+    theirs = {term for text in written for term in english.analyze(text)}
+
+    assert _field_terms(searchers[code], BODY_FIELD[code]) == ours
+    assert ours != theirs, f"the English chain writes the same terms for the {code} case, so the terms name no chain"
+
+
+@pytest.mark.parametrize("code", CODES)
+def test_no_form_of_the_case_stands_in_this_file(
+    code: str, pairs: dict[str, Pair], distractors: dict[str, str]
+) -> None:
     # T-18-04-02. A form copied in here would survive a rebuild of the chains
     # that moves the fixture, and the case would then measure a word the
     # measurement has dropped.
-    standing = sorted(form for form in pairs[code] if form.lower() in SOURCE_WORDS)
+    forms = (*pairs[code], distractors[code])
+    standing = sorted(form for form in forms if form.lower() in SOURCE_WORDS)
 
     assert standing == [], (
         f"{standing} stands in this file as a word; the forms of a case come from "
