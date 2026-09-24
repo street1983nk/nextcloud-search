@@ -183,7 +183,14 @@ DEFAULT_COMPOUND_DICT = "full"
 # environment the same way as every other setting of this app, and no new
 # authenticated surface is created for a switch that is thrown once
 # (18-RESEARCH.md assumption A7).
-REBUILD_FALLBACK_POSITIONS = ("", "fullreindex")
+#
+# The second position has a name of its own since plan 18-09, because it is read
+# in a second module now: findling.index.rebuild asks for it before it decides
+# between the band run and the way out, and a literal there would be the second
+# spelling of a switch position. A misspelled second spelling never matches, so
+# the way out would be unreachable and nothing would say so.
+FULL_REINDEX_FALLBACK = "fullreindex"
+REBUILD_FALLBACK_POSITIONS = ("", FULL_REINDEX_FALLBACK)
 DEFAULT_REBUILD_FALLBACK = ""
 
 # ---------------------------------------------------------------------------

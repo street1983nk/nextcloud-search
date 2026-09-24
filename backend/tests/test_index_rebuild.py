@@ -17,6 +17,7 @@ import ast
 import gc
 import hashlib
 import inspect
+import logging
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -24,18 +25,23 @@ from pathlib import Path
 import pytest
 from tantivy import Document, Index, Query
 
-from conftest import Corpus
+from conftest import Corpus, write_wordlist
 from findling.api import resources
 from findling.config import SCHEMA_VERSION, settings
 from findling.index.open import LANGUAGES_MARK, REBUILD_MARK, expected_versions, open_index, open_reader
 from findling.index.rebuild import (
+    _CARRIED_WITHOUT_A_MARK,
     _SCHEMA_MARK,
+    FALLBACK_TO_FULL_REINDEX,
     HALF_FILLED_TARGET_KEPT,
     NOT_ENOUGH_ROOM,
     NOTHING_TO_PUT_IN_ORDER,
+    NOTHING_TO_REBUILD,
+    REBUILD_THROUGH,
     RETIRED_BROUGHT_BACK,
     RETIRED_DISCARDED,
     ROOM_ENOUGH,
+    RUN_STOPPED_EARLY,
     TARGET_RAISED_TO_THE_LIVE_NAME,
     RebuildRun,
     _document_from,
@@ -43,6 +49,8 @@ from findling.index.rebuild import (
     counts_match,
     discard_directory,
     may_rebuild,
+    rebuild_progress,
+    rebuild_the_index,
     recover_the_index_directories,
     retire_directory,
     stamp_after_swap,
@@ -59,7 +67,7 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
-from findling.store.repo import open_store
+from findling.store.repo import LEGACY_LANGUAGES, Store, open_store
 
 REBUILD_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "index" / "rebuild.py"
 
@@ -754,25 +762,46 @@ def test_a_run_whose_final_probe_fails_neither_swaps_nor_stamps(
     assert after == before
 
 
-def test_the_rebuild_never_calls_the_function_that_raises_the_generation() -> None:
-    """Static, because the mistake would be invisible until the next full reindex.
-
-    start_rebuild_on_drift sits one import away and reads like the obvious way
-    to finish a rebuild. It raises the generation so that a crawl reads every
-    file again, and this pass reads no file at all, so calling it would order
-    hours of work right after the pass that made them unnecessary.
-    """
-    tree = ast.parse(REBUILD_SOURCE.read_text(encoding="utf-8"))
-    names = {
+def _called_names(tree: ast.AST) -> list[str]:
+    """Every name that is called anywhere under a node, one entry per call."""
+    return [
         node.id if isinstance(node, ast.Name) else node.attr
         for call in ast.walk(tree)
         if isinstance(call, ast.Call)
         for node in [call.func]
         if isinstance(node, ast.Name | ast.Attribute)
-    }
+    ]
 
-    assert "start_rebuild_on_drift" not in names
-    assert "stamp_after_rebuild" not in names
+
+def test_the_generation_is_raised_in_the_fallback_branch_and_nowhere_else() -> None:
+    """Static, because the mistake would be invisible until the next full reindex.
+
+    **Turned on 2026-09-24 by plan 18-09, and deliberately not made green.** Up
+    to that plan this case said that ``start_rebuild_on_drift`` appears in no
+    call of this module at all, and the reasoning behind that sentence has not
+    moved by a word: the function raises the generation so that a crawl reads
+    every file again, this pass reads no file at all, and a call behind the band
+    run would order hours of extraction right after the pass that made them
+    unnecessary.
+
+    What changed is that the module gained a second path. With
+    ``FINDLING_REBUILD_FALLBACK=fullreindex`` the box says it has no room for two
+    index directories, so the band run deliberately does not start and the
+    existing reindex way is taken instead, and that way IS the generation raise.
+    It is one call, it stands inside :func:`rebuild_the_index` and in front of
+    everything the band run does, and this case holds exactly that shape now.
+    ``stamp_after_rebuild`` stays out altogether, because the stamp of this module
+    is the narrow one that opens on the swap rather than on a count of stale
+    verdicts (T-18-07-03).
+    """
+    tree = ast.parse(REBUILD_SOURCE.read_text(encoding="utf-8"))
+    conductor = next(
+        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "rebuild_the_index"
+    )
+
+    assert _called_names(tree).count("start_rebuild_on_drift") == 1
+    assert _called_names(conductor).count("start_rebuild_on_drift") == 1
+    assert "stamp_after_rebuild" not in _called_names(tree)
 
 
 # -- the clean up path at the start, five states of one volume -----------------
@@ -1043,3 +1072,253 @@ def test_the_clean_up_path_takes_no_path_and_derives_all_three_names(volume: Pat
     assert recover_the_index_directories() == RETIRED_DISCARDED
     assert decoy.is_dir(), "the sibling of the volume itself was never the business of this function"
     assert (decoy / "keep.txt").is_file()
+
+
+# -- the one entry point, and the order it leads -------------------------------
+#
+# Every case below runs the real thing against a real volume: a real index, a
+# real state database with a real drift in it, and the callbacks as the only
+# stand ins. They are stand ins for a reason and not for convenience: what the
+# order has to be proven against is the sequence of calls, and a poller built
+# into these cases would answer the same question through three more objects.
+# That the callbacks the container hands in are the methods of the real poller
+# is asserted where that decision is taken, in backend/tests/test_main_lifespan.py.
+
+
+class _Hands:
+    """The three callbacks the run is led by, recording instead of doing."""
+
+    def __init__(self) -> None:
+        self.journal: list[str] = []
+
+    def silence(self) -> None:
+        self.journal.append("silence")
+
+    def arm(self) -> None:
+        self.journal.append("arm")
+
+    def drop_read_side(self) -> None:
+        self.journal.append("drop_read_side")
+
+
+def _a_volume_that_asks_for_a_rebuild(volume: Path, documents: int = 5) -> Store:
+    """A live index, a word list and a state database whose schema mark is the old one.
+
+    The mark is written after the seed rather than into it, because the seed only
+    fills what is missing: an installation that asks for a rebuild is one whose
+    database already carries a value, and it is the wrong one.
+    """
+    digest = write_wordlist(volume)
+    source = open_index(volume / "index", CONSTITUENTS)
+    _stage(source, [_document(file_id) for file_id in range(1, documents + 1)])
+    del source
+    gc.collect()
+    store = open_store(volume / "state.db", meta=expected_versions(digest, ",".join(settings().languages)))
+    store.write_meta(_SCHEMA_MARK, "1")
+    return store
+
+
+def test_the_run_silences_before_the_first_document_and_arms_behind_the_stamp(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole order in one journal, and the two ends of it are the claim.
+
+    Silence has to stand in front of the first written document, because a
+    document the poller writes into the source below the cursor after the band
+    that would have taken it is a document the swap loses, and the count would
+    not say so (T-18-09-01, pitfall 4 of the phase research). Arm has to stand
+    behind the stamp, because the marks are what the next start reads: a poller
+    let go one line earlier would index into a directory whose marks still
+    describe the one before it.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume)
+    hands = _Hands()
+    honest_document = _document_from
+    honest_stamp = stamp_after_swap
+
+    def note_the_first_document(stored: Mapping[str, list[object]], languages: Sequence[str]) -> Document:
+        if "document" not in hands.journal:
+            hands.journal.append("document")
+        return honest_document(stored, languages)
+
+    def note_the_stamp(handle: Store, languages: str) -> None:
+        hands.journal.append("stamp")
+        honest_stamp(handle, languages)
+
+    monkeypatch.setattr("findling.index.rebuild._document_from", note_the_first_document)
+    monkeypatch.setattr("findling.index.rebuild.stamp_after_swap", note_the_stamp)
+
+    verdict = rebuild_the_index(store, silence=hands.silence, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    marks = store.read_meta()
+    store.close()
+
+    assert verdict == REBUILD_THROUGH
+    assert hands.journal == ["silence", "document", "drop_read_side", "stamp", "arm"]
+    assert marks[_SCHEMA_MARK] == str(SCHEMA_VERSION)
+    assert _documents_in(volume / "index") == 5
+    assert not (volume / "index.rebuild").exists()
+    assert not (volume / "index.retired").exists()
+
+
+def test_a_volume_without_room_refuses_before_it_creates_anything_and_arms_again(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The early exit, and the three things that make it clean.
+
+    Nothing was created, so the next start finds the volume it would have found
+    without the attempt; the refusal names the figures it was decided on; and the
+    indexing task is let go again, because a container that cannot rebuild has to
+    go on indexing into the directory it has.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume)
+    hands = _Hands()
+    monkeypatch.setenv("FINDLING_MIN_FREE_BYTES", IMPOSSIBLE_FLOOR)
+    settings.cache_clear()
+
+    with caplog.at_level(logging.WARNING, logger="findling.index.rebuild"):
+        verdict = rebuild_the_index(store, silence=hands.silence, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    store.close()
+
+    assert verdict == NOT_ENOUGH_ROOM
+    assert not (volume / "index.rebuild").exists(), "a refused run leaves no third directory behind"
+    assert hands.journal == ["arm"], "nothing was silenced, and the poller is let go all the same"
+    message = caplog.records[0].getMessage()
+    assert "byte" in message
+    assert any(word.isdigit() for word in message.split())
+
+
+def test_the_fallback_raises_the_generation_and_never_starts_a_band_run(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The named way out for a box with room for one directory and not for two.
+
+    It is the existing path and not a new one: the generation goes up, every
+    stored verdict goes stale, and the reindex banner that has named the restart
+    command since phase 4 is what the admin follows. The proof that no band run
+    starts is the absent directory, because the band run creates it in its first
+    line.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume)
+    before = store.index_version
+    hands = _Hands()
+    monkeypatch.setenv("FINDLING_REBUILD_FALLBACK", "fullreindex")
+    settings.cache_clear()
+
+    verdict = rebuild_the_index(store, silence=hands.silence, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    after = store.index_version
+    marks = store.read_meta()
+    store.close()
+
+    assert verdict == FALLBACK_TO_FULL_REINDEX
+    assert after == before + 1
+    assert not (volume / "index.rebuild").exists()
+    assert hands.journal == ["arm"]
+    # And it declares nothing current: the banner stays up until the crawl is
+    # through, which is what the drifted mark is still saying here.
+    assert marks[_SCHEMA_MARK] == "1"
+
+
+def test_marks_that_agree_are_answered_without_touching_anything(volume: Path) -> None:
+    """The ordinary start of an installation that never drifted.
+
+    The fourth lifespan task does not even get created in that state, so this is
+    the second half of the same guard: a caller that starts the run anyway has to
+    find it doing nothing rather than carrying a whole index into a second
+    directory for no reason at all.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume)
+    store.write_meta(_SCHEMA_MARK, str(SCHEMA_VERSION))
+    store.write_meta(LANGUAGES_MARK, ",".join(settings().languages))
+    hands = _Hands()
+
+    verdict = rebuild_the_index(store, silence=hands.silence, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    store.close()
+
+    assert verdict == NOTHING_TO_REBUILD
+    assert hands.journal == []
+    assert not (volume / "index.rebuild").exists()
+
+
+def test_the_progress_rests_before_the_run_and_carries_two_numbers_during_it(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A reading of the moment and no second record of it anywhere.
+
+    Sampled from inside the band run, because that is the only place where a run
+    is in progress at all: after it the answer is the resting one again, and a
+    case that only looked before and after would be green for a function that
+    never moves.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume, documents=6)
+    hands = _Hands()
+    at_rest = rebuild_progress()
+    honest = _document_from
+    samples: list[tuple[bool, int, int]] = []
+
+    def sample(stored: Mapping[str, list[object]], languages: Sequence[str]) -> Document:
+        reading = rebuild_progress()
+        samples.append((reading.running, reading.documents_carried, reading.documents_total))
+        return honest(stored, languages)
+
+    monkeypatch.setattr("findling.index.rebuild._document_from", sample)
+    monkeypatch.setattr("findling.index.rebuild.BAND_DOCUMENTS", 2)
+
+    verdict = rebuild_the_index(store, silence=hands.silence, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    store.close()
+
+    assert verdict == REBUILD_THROUGH
+    assert (at_rest.running, at_rest.documents_carried, at_rest.documents_total) == (False, 0, 0)
+    # The first band has nothing behind it, the later ones have what the bands
+    # before them committed, and the total never moves.
+    assert samples[0] == (True, 0, 6)
+    assert samples[-1] == (True, 4, 6)
+    assert {total for _running, _carried, total in samples} == {6}
+    assert rebuild_progress() == at_rest, "a finished run leaves no banner behind"
+
+
+def test_a_stop_between_two_bands_keeps_the_half_filled_directory(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shutdown, and why it costs nothing: the band is the crash granularity.
+
+    What the container is spared is the wait for a run that takes hours on the
+    box this project targets. What the run keeps is every band it committed, and
+    the next start resumes in exactly that directory, which is the state the
+    clean up path of plan 18-08 names HALF_FILLED_TARGET_KEPT and leaves alone.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume, documents=6)
+    hands = _Hands()
+    monkeypatch.setattr("findling.index.rebuild.BAND_DOCUMENTS", 2)
+    bands = 0
+
+    def after_the_first_band() -> bool:
+        nonlocal bands
+        bands += 1
+        return bands > 1
+
+    verdict = rebuild_the_index(
+        store,
+        silence=hands.silence,
+        arm=hands.arm,
+        drop_read_side=hands.drop_read_side,
+        should_stop=after_the_first_band,
+    )
+    marks = store.read_meta()
+    store.close()
+
+    assert verdict == RUN_STOPPED_EARLY
+    assert hands.journal == ["silence", "arm"], "nothing was swapped, so the read side was never dropped"
+    assert _documents_in(volume / "index.rebuild") == 2
+    assert _documents_in(volume / "index") == 6, "the live directory still answers with everything"
+    assert marks[_SCHEMA_MARK] == "1", "and nothing was stamped"
+
+
+def test_the_pair_this_module_assumes_for_a_missing_mark_is_the_one_the_comparison_reads() -> None:
+    """Two spellings of one piece of history, held together like the schema mark.
+
+    An index without a language mark was built by a release that could not write
+    a body field outside this pair. If the two spellings drifted, the precheck
+    would charge a rebuild for chains that are already in the directory and
+    refuse runs that fit.
+    """
+    assert _CARRIED_WITHOUT_A_MARK == LEGACY_LANGUAGES

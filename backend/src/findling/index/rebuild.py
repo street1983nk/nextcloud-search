@@ -53,10 +53,13 @@ container that answers out of a directory nobody can point at any more:
 Steps 4 and 5 are :func:`swap_in`, and there is deliberately nothing between
 them: between the two renames the volume holds no directory called ``index`` at
 all, and that window is the one state a crash can leave behind (T-18-07-02).
-Steps 1 to 3 belong to the caller, because the same caller has to decide when
-the poller is armed again. This module does not import
-:mod:`findling.api.resources`: the reading half of the container may draw from
-the index, never the other way round, and an import here would close that circle.
+Steps 1 to 3 are led by :func:`rebuild_the_index`, and the two of them that
+reach outside this module arrive as callbacks rather than as imports. This
+module does not import :mod:`findling.api.resources` and it does not import
+:mod:`findling.worker.poller`: the reading half of the container may draw from
+the index, never the other way round, and the poller is already the caller of
+``expected_versions``, so an import in this direction would close a circle in
+both cases.
 
 *A volume is read before it is used, because a crash leaves states behind.* The
 three directory names above are the three a container can find at its start, and
@@ -80,15 +83,22 @@ from __future__ import annotations
 
 import logging
 import shutil
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 from tantivy import Document, FieldType, Index, Order, Query
 
-from findling.config import SCHEMA_VERSION, settings
-from findling.index.open import LANGUAGES_MARK, REBUILD_MARK, open_index, open_reader
+from findling.config import FULL_REINDEX_FALLBACK, SCHEMA_VERSION, settings
+from findling.index.open import (
+    LANGUAGES_MARK,
+    REBUILD_MARK,
+    expected_versions,
+    open_index,
+    open_reader,
+    start_rebuild_on_drift,
+)
 from findling.index.schema import (
     BODY_FIELD,
     FIELD_BODY_DE,
@@ -100,6 +110,7 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
+from findling.index.wordlist import build_artifact
 from findling.store.repo import Store, index_bytes
 
 LOGGER = logging.getLogger("findling.index.rebuild")
@@ -164,6 +175,35 @@ RETIRED_DISCARDED: Final = "a retired directory beside a live one was discarded"
 # the expectation for this very key.
 _SCHEMA_MARK: Final = "schema_version"
 
+# The two marks this rebuild can do anything about, and the reason the set is
+# closed. A rebuilt directory is written under the current schema and filled with
+# the current language set, so those two marks become true by the pass itself. A
+# moved wordlist hash, a moved analyzer version and a moved tantivy banner are
+# real differences with a different remedy: they need the documents read again,
+# which is the crawl the generation raise orders, and carrying the old text over
+# would leave the very drift the mark reports (18-RESEARCH.md, pitfall 1).
+MARKS_A_REBUILD_ANSWERS: Final = frozenset({_SCHEMA_MARK, LANGUAGES_MARK})
+
+# What an index without a language mark was built with. Not a guess and not a
+# default: no release up to 1.2.0 could write a body field outside this pair, so
+# the absence of the mark is evidence rather than a gap. The same tuple stands in
+# findling.store.repo as LEGACY_LANGUAGES, which is where the comparison reads it,
+# and a case in the suite holds the two spellings together. It is not imported
+# from there because the rebuild takes two names out of the store package and no
+# more, and widening that list for a two element tuple would be the wrong trade.
+_CARRIED_WITHOUT_A_MARK: Final = ("de", "en")
+
+# The verdicts of the whole run, as text and for the reason the five names of the
+# clean up path give: they travel into an operating report and onto the admin
+# page, where a short closed list of readable names is worth more than a type.
+# NOT_ENOUGH_ROOM above is the sixth of them, handed straight out of the precheck.
+NOTHING_TO_REBUILD: Final = "the version marks a rebuild answers agree, so nothing runs"
+NO_LIVE_DIRECTORY: Final = "there is no live index directory to carry documents out of"
+FALLBACK_TO_FULL_REINDEX: Final = "the generation was raised instead, the reindex banner names the way"
+RUN_STOPPED_EARLY: Final = "the run stopped between two bands and keeps its half filled directory"
+RUN_INCOMPLETE: Final = "the final probe counted fewer documents than the old directory holds, nothing was swapped"
+REBUILD_THROUGH: Final = "the rebuilt directory is in place and the two marks are current again"
+
 
 @dataclass(frozen=True, slots=True)
 class RebuildVerdict:
@@ -223,6 +263,53 @@ def may_rebuild(index_dir: Path, new_language_count: int) -> RebuildVerdict:
         )
         return RebuildVerdict(False, NOT_ENOUGH_ROOM, needed, free)
     return RebuildVerdict(True, ROOM_ENOUGH, needed, free)
+
+
+@dataclass(frozen=True, slots=True)
+class RebuildProgress:
+    """How far the band run has got: a state and the two numbers behind it.
+
+    ``documents_carried`` counts the directory and not the pass, unlike
+    :attr:`RebuildRun.documents_written`: a run that resumed after a break shows
+    what stands in the new directory, because that is the number a progress
+    display is asked about.
+    """
+
+    running: bool
+    documents_carried: int
+    documents_total: int
+
+
+# The resting state, and the one the process starts in. A container that never
+# rebuilt anything answers with this, and so does one whose run is through: the
+# reading of a finished run would otherwise keep a banner up that has nothing
+# behind it any more.
+_AT_REST: Final = RebuildProgress(running=False, documents_carried=0, documents_total=0)
+
+# The progress of this process, held at module level and nowhere else, after the
+# build of engine_state in findling.embed.engine: a function answers the current
+# state and there is no second record of it on the volume. A counter in state.db
+# would be a number that can disagree with the directory it describes, which is
+# the same argument _resume_cursor makes about the cursor, and it would outlive
+# the process that wrote it.
+_PROGRESS: RebuildProgress = _AT_REST
+
+
+def rebuild_progress() -> RebuildProgress:
+    """What the band run of this process is doing right now.
+
+    Read by the status route of plan 18-10 and by nothing that decides anything.
+    Nothing is opened and nothing is measured here: the question is asked while a
+    page polls, so an answer that read the directory would put a stat call of the
+    volume behind every poll of every open admin page.
+    """
+    return _PROGRESS
+
+
+def _note_progress(progress: RebuildProgress) -> None:
+    """Publish the reading of the moment. One assignment, called between bands."""
+    global _PROGRESS
+    _PROGRESS = progress
 
 
 @dataclass(frozen=True, slots=True)
@@ -325,6 +412,7 @@ def transfer_documents(
     constituents: Sequence[str],
     languages: Sequence[str] | None = None,
     band_documents: int = BAND_DOCUMENTS,
+    should_stop: Callable[[], bool] | None = None,
 ) -> RebuildRun:
     """Carry every document of the old index into the new directory, band by band.
 
@@ -344,16 +432,31 @@ def transfer_documents(
     The pass is resumable and repeatable: it starts at the highest file_id the
     target already holds, and a pass with nothing left to do writes nothing and
     says so.
+
+    ``should_stop`` is asked between two bands and never inside one, which is the
+    same granularity the commit has. A shutdown that interrupted a band would
+    throw away the documents of that band and gain nothing for it, because the
+    commit behind it is what the next run finds; a shutdown that waits for the
+    whole pass is a container the orchestrator kills. So the answer is read at
+    the one point where stopping costs nothing at all.
     """
     active = tuple(settings().languages if languages is None else languages)
     source = open_index(source_dir, constituents)
     target = open_index(target_dir, constituents)
     reader = open_reader(source)
     cursor = _resume_cursor(target)
+    # Read after the resume, because the reload it does is what makes the count
+    # of a half filled directory the count of what is really committed in it.
+    carried = target.searcher().num_docs
+    total = reader.num_docs
     written = 0
+    _note_progress(RebuildProgress(running=True, documents_carried=carried, documents_total=total))
     writer = target.writer(heap_size=settings().writer_heap_bytes, num_threads=1)
     try:
         while True:
+            if should_stop is not None and should_stop():
+                LOGGER.info("the band run stops between two bands; the half filled directory keeps what it has")
+                break
             # A band over the key column and never a growing offset: measured on
             # 2026-09-24, a search over all documents with a limit of 1000 and an
             # offset of 51000 makes tantivy collect 52000 hits to hand out 1000,
@@ -380,12 +483,19 @@ def transfer_documents(
             # granularity: what is committed is what the next run finds.
             writer.commit()
             written += len(hits)
+            carried += len(hits)
+            _note_progress(RebuildProgress(running=True, documents_carried=carried, documents_total=total))
     finally:
         # Whatever ended this loop, the merging threads are waited for and the
         # lock goes back. The swap of plan 18-07 cannot rename a directory a
         # writer still holds, and on Windows it refuses with WinError 5 rather
         # than succeeding quietly.
         writer.wait_merging_threads()
+        # The reading goes back to rest here and not after the swap, because the
+        # carrying is what this number is about: the two renames behind it are
+        # two system calls, and a progress display that stayed at 100 percent
+        # through them would report a directory that is already in place.
+        _note_progress(_AT_REST)
     LOGGER.info("carried %d documents over into the new index directory", written)
     target.reload()
     return RebuildRun(
@@ -622,3 +732,156 @@ def stamp_after_swap(store: Store, languages: str) -> None:
     store.write_meta(LANGUAGES_MARK, languages)
     store.write_meta(REBUILD_MARK, "")
     LOGGER.info("the rebuilt index directory is in place; the schema and language marks are current again")
+
+
+def _new_language_count(store: Store, active: Sequence[str]) -> int:
+    """How many body chains this rebuild fills that the old directory does not have.
+
+    The figure the precheck charges 0.40 of the current directory for, so it is
+    read out of the index and never out of a wish: the stored language mark says
+    what the directory was filled with, the active set says what it will be
+    filled with, and the difference is what grows.
+
+    A missing mark is answered with the legacy pair rather than with nothing at
+    all. An installation coming from 1.2.0 carries no mark, and reading that as
+    "no chain is filled" would charge the rebuild for two chains that are already
+    there and refuse runs that fit comfortably.
+    """
+    stored = store.read_meta().get(LANGUAGES_MARK, "")
+    carried = {code for code in stored.split(",") if code} or set(_CARRIED_WITHOUT_A_MARK)
+    return len([code for code in active if code not in carried])
+
+
+def rebuild_the_index(
+    store: Store,
+    *,
+    silence: Callable[[], None],
+    arm: Callable[[], None],
+    drop_read_side: Callable[[], None],
+    should_stop: Callable[[], bool] | None = None,
+) -> str:
+    """Lead one whole rebuild, in the order of the seven steps and in no other.
+
+    Answers with one of the seven names above, which is what the caller logs and
+    what the operating report carries. It raises nothing of its own; what a
+    tantivy call or a rename raises travels up to the fourth lifespan task, which
+    logs the type name and lets search and indexing carry on.
+
+    **The order is the content of this function**, exactly as it is for
+    :func:`swap_in` one level down:
+
+    1. is there a drift this rebuild can do anything about,
+    2. is there room for two index directories, or is the named way out switched
+       on,
+    3. silence the indexing task,
+    4. carry the documents over, band by band,
+    5. ask the final probe,
+    6. drop the reading side and swap the directories,
+    7. stamp the two marks and let the indexing task go again.
+
+    **Why the poller arrives as a pair of callbacks.** An index module that
+    imported the poller would be a circle: the poller is already the caller of
+    ``expected_versions`` and of everything else this package hands out. The pair
+    is also the smaller interface. This module has to stop the writing and start
+    it again; it has no business knowing what else a poller can do, and a test
+    can hand in two recorders where it would otherwise have to build a container.
+
+    **Why ``arm`` sits in a ``finally`` that also covers the refusals.** Every way
+    out of this function is a way out of a silenced container, and a rebuild that
+    refused itself over a full volume must not be the reason an installation
+    stops indexing until somebody restarts it. Arming a poller that was never
+    silenced costs nothing, arming one that was is the difference between a
+    container that carries on and a container that looks healthy and has stopped
+    working, and between those two the cheap mistake is the one to make. The
+    callback the caller hands in is the one that knows whether arming is allowed
+    at all: a container that was switched off while the rebuild ran must stay
+    off, and that question belongs to whoever owns the enable.
+
+    **The early exits touch nothing.** Neither the drift branch nor the fallback
+    branch nor the refusal of the precheck creates a directory, and that is not
+    tidiness: a volume that has no room for two directories must not be given a
+    third name to reason about at its next start, and the clean up path of
+    :func:`recover_the_index_directories` would then find a state that never had
+    a run behind it.
+    """
+    resolved = settings()
+    artifact = build_artifact()
+    languages = ",".join(resolved.languages)
+    expected = expected_versions(artifact.digest, languages)
+    drifted = MARKS_A_REBUILD_ANSWERS.intersection(store.version_mismatch(expected))
+    if not drifted:
+        return NOTHING_TO_REBUILD
+
+    try:
+        if resolved.rebuild_fallback == FULL_REINDEX_FALLBACK:
+            # The one call of start_rebuild_on_drift in this whole phase, and the
+            # one place where it is right. It raises the generation so that every
+            # stored verdict goes stale and the crawl the existing banner names
+            # actually reads the documents again. Everywhere else in the phase it
+            # would be wrong for the same reason, turned around: the band run
+            # carries the text over instead of reading it again, so a raised
+            # generation would order hours of extraction right behind the pass
+            # that made them unnecessary, which is exactly what stamp_after_swap
+            # is written to avoid.
+            start_rebuild_on_drift(store, expected)
+            LOGGER.warning(
+                "the rebuild fallback is switched on, so the index is built from the files instead of from itself; "
+                "the reindex banner names the command"
+            )
+            return FALLBACK_TO_FULL_REINDEX
+
+        live = resolved.index_dir
+        if not live.is_dir():
+            # Nothing to carry over. A container in this state gets its index
+            # from the first indexing pass, under the current schema and with
+            # every chain of the current set, so there is no drift left to
+            # answer either.
+            return NO_LIVE_DIRECTORY
+
+        verdict = may_rebuild(live, _new_language_count(store, resolved.languages))
+        if not verdict.may_start:
+            # may_rebuild has already logged the two figures the refusal rests on.
+            return verdict.reason
+
+        target = live.with_name(live.name + REBUILD_SUFFIX)
+        # Step 2 of the order in the module header, and the condition
+        # transfer_documents states it cannot check for itself: a document
+        # written into the source below the cursor after the band that would have
+        # taken it is a document the swap loses. The in flight pass is allowed to
+        # run out, which costs one claim of the queue, and the work of the claims
+        # behind it waits in Nextcloud rather than being lost (T-18-09-01).
+        silence()
+        # The band size is named here rather than left to the default of the
+        # function, because this is the call site that runs in a container: the
+        # figure is the memory of one step and the crash granularity of the whole
+        # run at the same time, and both of those are decisions of the conductor.
+        run = transfer_documents(
+            live,
+            target,
+            artifact.entries,
+            resolved.languages,
+            band_documents=BAND_DOCUMENTS,
+            should_stop=should_stop,
+        )
+        if should_stop is not None and should_stop():
+            # A shutdown, not a fault. The half filled directory is the progress
+            # record the next start resumes in, and swapping a directory in while
+            # the container is going down would put the one window a crash can be
+            # caught in exactly where the crash is.
+            return RUN_STOPPED_EARLY
+        if not run.complete:
+            LOGGER.warning(
+                "the new index directory holds %d of %d documents, so nothing is swapped and the next pass resumes",
+                run.target_documents,
+                run.source_documents,
+            )
+            return RUN_INCOMPLETE
+        # Step 3, immediately in front of the first rename and nowhere else. The
+        # swap puts the rebuilt directory under the very name the live one had,
+        # so the invalidation branch of the reading side never fires on its own.
+        drop_read_side()
+        swap_in(target, live)
+        stamp_after_swap(store, languages)
+        return REBUILD_THROUGH
+    finally:
+        arm()
