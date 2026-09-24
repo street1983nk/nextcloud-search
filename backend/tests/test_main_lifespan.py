@@ -864,6 +864,40 @@ async def test_the_poller_is_not_armed_again_when_the_app_was_switched_off_meanw
     assert poller.armed is False
 
 
+def test_a_clean_up_path_that_throws_does_not_keep_the_container_from_starting(
+    indexed_volume: Corpus, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """H-18-03: the start reads the volume, and reading it may not be fatal.
+
+    ``recover_the_index_directories`` renames and removes, and every one of
+    those calls can meet a volume that says no: a symlink, a permission, an
+    ``.nfs*`` leftover, a mount that went read only. It ran without a ``try``,
+    so the exception travelled out of the lifespan, the container did not start,
+    and the state repeated itself at the next start. Under AppAPI that is a
+    restart loop with no way out of it from inside the container, and in the
+    worst of the five states the search would have been perfectly able to
+    answer.
+
+    The proof that the start really went through is the server answering, and
+    the proof that the failure was not swallowed is the line beside it.
+    """
+    del indexed_volume
+
+    def a_volume_that_says_no() -> str:
+        raise PermissionError("/a/path/the/log/must/never/carry")
+
+    monkeypatch.setattr("findling.main.recover_the_index_directories", a_volume_that_says_no)
+
+    with caplog.at_level(logging.ERROR, logger="findling"), TestClient(APP) as client:
+        answer = client.get("/heartbeat")
+
+    assert answer.status_code == 200
+    started = [record.getMessage() for record in caplog.records if "could not be put in order" in record.getMessage()]
+    assert started, "the container says what it could not do"
+    assert "PermissionError" in started[0]
+    assert "/a/path" not in started[0], "and it says it without a path"
+
+
 def test_the_blocking_rebuild_never_runs_on_the_event_loop() -> None:
     """Static, because the symptom is a container that looks healthy and is not.
 

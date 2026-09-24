@@ -835,8 +835,19 @@ PHP_TREE_HASH_TODAY = "15e00b2b37e003ff98b0cc3ca87affdea215eb160c1671153f9e616bf
 # its target under the new verdict RUN_INCOMPLETE_TARGET_DISCARDED, which is the
 # way out of the dead end the cursor and the equality used to build together. No
 # file came and none went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a thirtieth time, by the fix of the audit finding H-18-03:
+# two of the 56 files changed their bytes and the count stays at 56.
+# index/rebuild.py got _discard_what_is_left, the catching half of
+# discard_directory, and the two removals of recover_the_index_directories go
+# through it, so a leftover the volume will not release can no longer take the
+# rename beside it with it. main.py wraps the whole clean up call of the
+# lifespan in a try that logs the type name and lets the start carry on: it used
+# to travel out of the lifespan, which under AppAPI is a restart loop with no
+# way out of it from inside the container, and in state 5 the search would have
+# been fully able to answer. No file came and none went, so PACKAGE_FILES_TODAY
+# stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "09e5fe11de76d97ad2ff5071e39f72cbfaaf3fd99b923da8e7022d746ac190ff"
+PACKAGE_TREE_HASH_TODAY = "853edc79d9639763ce5719274db89275e30e23645d94893f0abfd3b91cfec4f7"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

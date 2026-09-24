@@ -1047,6 +1047,66 @@ def test_the_state_of_a_retired_directory_beside_a_live_one_discards_it(volume: 
     assert _documents_in(live) == 5, "the live directory is the one that stayed"
 
 
+def test_a_leftover_that_will_not_go_does_not_stop_the_rename_beside_it(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """H-18-03, the half inside the clean up path: the two steps are not of one weight.
+
+    State 3 raises the rebuilt directory to the live name and removes the
+    retired one behind it. The rename is what makes the container able to answer
+    at all; the removal is housekeeping over a directory the swap had already
+    stood down. Until this fix a removal that failed travelled out of the
+    function and took the rename with it, so a leftover nobody could delete left
+    the volume with no live index directory at all, which is the worst of the
+    states this function exists to prevent.
+    """
+    (volume / "index.rebuild").mkdir()
+    (volume / "index.rebuild" / "meta.json").write_text("{}", encoding="utf-8")
+    (volume / "index.retired").mkdir()
+
+    def a_volume_that_will_not_let_go(retired: Path) -> None:
+        del retired
+        raise PermissionError(str(volume / "index.retired"))
+
+    monkeypatch.setattr("findling.index.rebuild.discard_directory", a_volume_that_will_not_let_go)
+
+    with caplog.at_level(logging.ERROR, logger="findling.index.rebuild"):
+        state = recover_the_index_directories()
+
+    assert state == TARGET_RAISED_TO_THE_LIVE_NAME
+    assert (volume / "index" / "meta.json").is_file(), "the rename ran"
+    assert (volume / "index.retired").is_dir(), "and the leftover is still there, named in the log"
+    assert any("PermissionError" in record.getMessage() for record in caplog.records)
+    assert not any(volume.name in record.getMessage() for record in caplog.records)
+
+
+def test_a_retired_directory_beside_a_live_one_that_will_not_go_leaves_the_search_standing(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The state H-18-03 calls the most unpleasant of the five, and why.
+
+    In state 5 the search is fully able to answer: the live directory is there
+    and complete, and the only thing wrong with the volume is a leftover beside
+    it. An exception out of the removal took the whole container down over that,
+    which is a product that fails because a directory will not go.
+    """
+    (volume / "index").mkdir()
+    (volume / "index.retired").mkdir()
+
+    def a_volume_that_will_not_let_go(retired: Path) -> None:
+        del retired
+        raise PermissionError(str(volume / "index.retired"))
+
+    monkeypatch.setattr("findling.index.rebuild.discard_directory", a_volume_that_will_not_let_go)
+
+    with caplog.at_level(logging.ERROR, logger="findling.index.rebuild"):
+        state = recover_the_index_directories()
+
+    assert state == RETIRED_DISCARDED
+    assert (volume / "index").is_dir(), "the container keeps the index it can answer out of"
+    assert any("PermissionError" in record.getMessage() for record in caplog.records)
+
+
 def test_an_empty_volume_is_a_first_start_and_not_a_finding(volume: Path) -> None:
     """The sixth shape, and the reason the list of five is complete anyway.
 

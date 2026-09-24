@@ -611,7 +611,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # In a worker thread because it stats directories and may rename or
         # remove one, and skipped on a shared volume for the reason the drift
         # report is skipped: those directories belong to another instance.
-        await asyncio.to_thread(recover_the_index_directories)
+        #
+        # Caught, and the catch is the fix of audit finding H-18-03. The
+        # function renames and removes, and every one of those calls can meet a
+        # volume that says no: a symlink, a permission, an .nfs* leftover, a
+        # mount that went read only. Uncaught it took the whole lifespan with
+        # it, so the container did not start, and the state repeated itself at
+        # the next start: a restart loop under AppAPI with no way out of it from
+        # inside. The reason the paragraph above gives is why the clean up runs
+        # BEFORE the tasks, and it was never a reason for a failure in it to be
+        # fatal. What the container does instead is start on what is there, and
+        # what is there is either a working index or the one state this start
+        # could not repair, which every later answer reports as degraded anyway.
+        try:
+            await asyncio.to_thread(recover_the_index_directories)
+        # Deliberately every exception, and the type name only, by the rule of
+        # this module: the message of an OSError carries a path.
+        except Exception as error:
+            LOGGER.error(
+                "the index directories could not be put in order, an %s; the container starts on what is there",
+                type(error).__name__,
+            )
 
         # Stated once at startup, and decided nowhere. An existing index whose
         # version marks differ from the ones this build produces answers queries

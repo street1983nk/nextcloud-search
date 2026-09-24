@@ -689,6 +689,30 @@ def swap_in(target: Path, live: Path) -> None:
         )
 
 
+def _discard_what_is_left(retired: Path) -> None:
+    """Remove a retired directory at the start, and never take the start with it.
+
+    The catching half of :func:`discard_directory`, and the difference between
+    the two is the caller rather than the operation. The swap calls the strict
+    one while it is running, where an exception costs one log line. This one is
+    called from the clean up path of the start, where it used to travel out of
+    the lifespan and stop the container: state 5, a retired directory beside a
+    live one, is the worst place for that, because in it the search is fully
+    able to answer and the product fell over because a leftover would not go
+    (H-18-03).
+
+    The type name and nothing else, as every line of this module.
+    """
+    try:
+        discard_directory(retired)
+    except OSError as error:
+        LOGGER.error(
+            "a leftover index directory could not be discarded, an %s; it stays on the volume, counts against the "
+            "free space the next precheck measures, and the container starts on what is there",
+            type(error).__name__,
+        )
+
+
 def recover_the_index_directories() -> str:
     """Read what the volume holds at the start and put it in order. Five states.
 
@@ -753,6 +777,16 @@ def recover_the_index_directories() -> str:
     appears after a hard abort is the one line whoever reads that log needs. It
     names the state and never a directory, like every line of this module
     (T-18-08-04).
+
+    **Why a removal that fails does not stop the rename beside it** (H-18-03).
+    Both removals go through :func:`_discard_what_is_left`, which catches. The
+    two operations in state 3 are not of the same weight: the rename is what
+    makes the container able to answer at all, and the removal behind it is
+    housekeeping over a directory the swap had already stood down. Letting the
+    second one take the first one with it would turn a leftover nobody can
+    delete into a container that starts into a volume with no live index
+    directory, which is the worst state this function exists to prevent. What a
+    failed removal costs is the space of one index until somebody looks.
     """
     live = settings().index_dir
     target = live.with_name(live.name + REBUILD_SUFFIX)
@@ -768,7 +802,7 @@ def recover_the_index_directories() -> str:
                 # The step behind the second rename, and it belongs to this
                 # branch rather than to a later pass: the retired directory is
                 # the old index that the swap had already stood down.
-                discard_directory(retired)
+                _discard_what_is_left(retired)
             return TARGET_RAISED_TO_THE_LIVE_NAME
         if retired.is_dir():
             LOGGER.warning(
@@ -787,7 +821,7 @@ def recover_the_index_directories() -> str:
             "a retired index directory stands beside the live one: the swap was through and its clean up was not, "
             "discarding the retired directory"
         )
-        discard_directory(retired)
+        _discard_what_is_left(retired)
         return RETIRED_DISCARDED
     if target.is_dir():
         LOGGER.warning(
