@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Phase 19, Plan 19-07 fertig (ungegateter CI-Sprachbeweis), naechster Plan 19-08
-last_updated: "2026-09-25T09:00:00.000Z"
-last_activity: 2026-09-25 -- 19-07 ausgefuehrt (ungegateter CI-Sprachbeweis auf allen vier Aesten, Ergebnisseite zum ersten Mal in der CI)
+stopped_at: Phase 19, Plan 19-08 fertig (spanischer Vorher-Nachher-Beweis), naechster Plan 19-09
+last_updated: "2026-09-25T10:05:00.000Z"
+last_activity: 2026-09-25 -- 19-08 ausgefuehrt (spanischer Vorher-Nachher-Beweis in der Upgrade-Strecke, Kette 0, 0, 1)
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 38
-  completed_plans: 27
+  completed_plans: 28
   percent: 32
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 ## Current Position
 
-Phase: 19 (frageseite-freischalten), EXECUTING, Plan 7 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
+Phase: 19 (frageseite-freischalten), EXECUTING, Plan 8 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
 Status: Ausfuehrung Phase 19 laeuft (9 Plaene in 6 Wellen). 19-01 fertig (82bf2b1): die drei
 Modulkonstanten DEFAULT_FIELDS/TITLE_ONLY_FIELDS/FIELD_BOOSTS sind ein Wert (FieldPlan,
 LEGACY_PLAN), build_query nimmt plan keyword-only mit dem Bestandsplan als Vorgabewert, der
@@ -68,27 +68,42 @@ LANGUAGE_PROOF_BUDGET_SECONDS, Zusicherung auf entries | length und nie auf den
 Textauszug, danach vier Abrufe der Ergebnisseite, die bis dahin kein CI-Schritt dieses
 Repos beruehrt hatte. backend/tests/test_language_proof_steps.py haelt das fest (19
 Faelle, Textgate ohne YAML, die zwei gegateten Store-upgrade-Schritte als Gegenbeispiel).
-Volle Suite 2850 bestanden / 15 uebersprungen.
+Volle Suite 2850 bestanden / 15 uebersprungen. 19-08 fertig (f0ceef6, c5a450c,
+8ac2626): die Upgrade-Strecke traegt den spanischen Vorher-Nachher-Beweis. "Store
+upgrade 2" legt upgrade-carta-es.txt in das Konto von testuser, indexiert unter
+v1.2.0 in ein Schema ohne body_es; snapshot() holt den Trefferstand ueber den
+vorhandenen Zaehler term_hits und legt ihn unter dem EIGENEN Schluessel spanish ab,
+nicht als vierten Eintrag in .terms, weil die Vorbedingung [.terms[]] | all(. == 1)
+zweimal im Workflow steht und an einem Term braeche, der vorher null sein SOLL. Drei
+Zusicherungen bilden die Kette: 0 auf der Bestandsinstallation (Store upgrade 3), 0
+nach dem Upgrade und vor dem Umbau (siebte Zusicherung von Store upgrade 5, die
+CI-Haelfte von Erfolgskriterium 2), 1 nach dem Umbau (zehnte Zusicherung von Store
+upgrade 6). Die Zusicherungszahlen in Schrittnamen und Protokollzeilen sind
+mitgezogen. backend/tests/test_language_proof_steps.py haelt die drei neuen Aussagen
+fest (19 auf 26 Faelle, drei gestellte Muster, je eine Gegenprobe). Volle Suite 2857
+bestanden / 15 uebersprungen.
 Planung 24.09.: Research b2ef69f,
 Pattern-Karte, Plaene 51525d5, Checker PASS, Warnungen behoben 3c35186. Phase 20 geplant
 (a8d40fd, Checker PASS, f32bdec). Phase 18 davor KOMPLETT (12/12, CI-Beweis 36026836087).
-Last activity: 2026-09-25 -- 19-07 ausgefuehrt (ungegateter CI-Sprachbeweis auf allen vier Aesten, Ergebnisseite zum ersten Mal in der CI)
+Last activity: 2026-09-25 -- 19-08 ausgefuehrt (spanischer Vorher-Nachher-Beweis in der Upgrade-Strecke, Kette 0, 0, 1)
 
 Progress: [███.......] 32% (2 von 7 Phasen)
 
 ## Naechster Schritt
 
-Weiter in Phase 19 mit 19-08 (spanischer Vorher-Nachher-Beweis in der Upgrade-Strecke,
-eigener Snapshotschluessel, weil sein Term vorher 0 Treffer haben SOLL), danach 19-09
-(Doku, CI-Lauf einholen, Laufzeit eintragen). Der REQUIREMENTS-Haken fuer LEX-05 ist
-weiterhin NICHT gesetzt: 19-06 hat die Testebene und 19-07 den CI-Schritt geliefert, aber
-den gruenen Lauf holt erst 19-09 ein, und der Haken gehoert der Phase-Verifikation.
-Drei Nachtraege aus 19-07 fuer 19-09: die gemessene Laufzeit des neuen Schritts gehoert
-als Zahl in den RE-MEASURE-Absatz ueber LANGUAGE_PROOF_BUDGET_SECONDS; der Parameter der
-Ergebnisseite heisst query und nicht term (PageController::term() liest getParam('query'),
-Zeile 340; PLAN und RESEARCH Pattern 7c sagen beide term und sind zu berichtigen); und der
-leere Textauszug bei einem reinen Sprachfeld-Treffer gehoert als Grenze nach
-docs/language-analyzers.md. Danach oder parallel:
+Weiter in Phase 19 mit dem letzten Plan 19-09 (Doku der Frageseite und ihrer Grenzen,
+CI-Lauf einholen, Laufzeit eintragen). Der REQUIREMENTS-Haken fuer LEX-05 ist
+weiterhin NICHT gesetzt: 19-06 hat die Testebene, 19-07 den ungegateten CI-Schritt und
+19-08 die Upgrade-Haelfte geliefert, aber den gruenen Lauf holt erst 19-09 ein, und der
+Haken gehoert der Phase-Verifikation.
+VIER Nachtraege fuer 19-09, drei aus 19-07 und einer aus 19-08: die gemessene Laufzeit
+des Sprachbeweisschritts gehoert als Zahl in den RE-MEASURE-Absatz ueber
+LANGUAGE_PROOF_BUDGET_SECONDS; der Parameter der Ergebnisseite heisst query und nicht
+term (PageController::term() liest getParam('query'), Zeile 340; PLAN und RESEARCH
+Pattern 7c sagen beide term und sind zu berichtigen); der leere Textauszug bei einem
+reinen Sprachfeld-Treffer gehoert als Grenze nach docs/language-analyzers.md; und die
+Ein-Wort-Bedingung des spanischen Upgrade-Beweises gehoert neben die Beschreibung der
+Upgrade-Strecke, weil sie heute nur im Workflowkommentar steht. Danach oder parallel:
 `/gsd:execute-phase 20` (UI-Kataloge; Wellen 1 und 9 sind Checkpoints, 20-01 Pluralfix
 der sechs Bestandskataloge braucht die Owner-Sichtprobe). Phase-20-Planung 24.09.:
 9 Plaene in 9 Wellen (a8d40fd), Checker PASS, Fussabdruck strikt getrennt von Phase 19
@@ -151,6 +166,24 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
   die Nutzerablage legt, nimmt er wieder heraus, damit spaetere Zusicherungen ihren
   gemessenen Bestand behalten.
 
+- Ein Term, der vorher NULL antworten soll, bekommt einen eigenen Snapshotschluessel
+  (19-08). Die Vorbedingung [.terms[]] | all(. == 1) steht zweimal in deploy-harp.yml und
+  verlangt genau eine Datei je Term; sie aufzuweichen, damit ein neuer Term hineinpasst,
+  waere der billige Weg und wuerde jede Zusicherung dahinter bedeutungslos machen. Dazu
+  zwei Regeln, die dieser Plan vormacht: ein Treffer am Ende einer Strecke ist ohne
+  Gegenbeweis am Anfang nicht von der unveraenderten Abwesenheit eines Treffers zu
+  unterscheiden, und nennt ein Schrittname eine Zahl von Zusicherungen, wandert die Zahl
+  mit der Zusicherung.
+
+- Eine Null in einer hybriden Suche ist nur unter einer Bedingung eine Aussage ueber
+  Felder (19-08): api/search.py beantwortet eine EINWOERTIGE Zeile allein aus dem
+  Wortindex (lexical_only ... or rewritten.one_term ..., Ein-Term-Regel aus 06.1-20).
+  Waere die Vektorseite im Spiel, laege die spanische Datei als naechster Nachbar von
+  alemanes unter der Obergrenze 86,5 (docs/measurements/2026-09-06-vektordistanzen:
+  einwoertige Proben landen bei 68 bis 77) und die Strecke haette 1, 1, 1 gemessen statt
+  0, 0, 1. Wer eine solche Probe je auf zwei Woerter erweitert, verwandelt sie lautlos in
+  eine Aussage ueber Distanzen.
+
 - D-04-Linie (v1.1): index-kompatibel ueber Minor-Spruenge. v1.3 verletzt sie bewusst und
   nur fuer Instanzen, die eine neue Sprache einschalten; der Bruch braucht den Owner-Entscheid
   in Phase 17.
@@ -205,6 +238,11 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
   Dateien festgelegt und die Verifikation verlangt genau diese acht; `LEGACY_LANGUAGES` wird von
   dort nur importiert. Wartet weiter auf den naechsten Plan, der `store/repo.py` ohnehin oeffnet.
 
+- Der run-Block "Store upgrade 3" in deploy-harp.yml steht bei 20726 Zeichen. GitHub kappt
+  einen run-Block bei 21000 Zeichen, aber NUR wenn er einen ${{ }}-Ausdruck traegt, und
+  dieser traegt keinen. Wer dort je einen Matrixausdruck hineinschreibt, muss den Block
+  vorher kuerzen oder die Werte wie "Store upgrade 6" ueber einen env:-Block hereinreichen.
+
 - Leerer Textauszug bei einem reinen Sprachfeld-Treffer: der `SnippetGenerator` haengt fest an
   `FIELD_BODY_DE` (`index/search.py:875`), gemessen in 19-RESEARCH M-4. Gefuehrt als Annahme A5
   (dokumentieren statt beheben); Doku gehoert zu 19-09, eine Behebung waere ein eigener Plan und
@@ -218,5 +256,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 19-07 abgeschlossen und committet (e7fcd0b, 251c86c, 368ecf5), SUMMARY geschrieben
-Resume file: .planning/phases/19-frageseite-freischalten/19-08-PLAN.md
+Stopped at: 19-08 abgeschlossen und committet (f0ceef6, c5a450c, 8ac2626), SUMMARY geschrieben
+Resume file: .planning/phases/19-frageseite-freischalten/19-09-PLAN.md

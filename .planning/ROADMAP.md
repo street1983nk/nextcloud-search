@@ -128,7 +128,7 @@ Plans:
 - [x] 19-05-PLAN.md: Anti-Feature-Waechter, keine Spracherkennung, vier Aussagen mit Gegenproben
 - [x] 19-06-PLAN.md: Die vier Sprachfaelle auf dem normalen Suchweg, dritter Ketten-Ausschluss
 - [x] 19-07-PLAN.md: Ungegateter CI-Sprachbeweis auf allen vier Aesten, plus Ergebnisseite
-- [ ] 19-08-PLAN.md: Spanischer Vorher-Nachher-Beweis in der Upgrade-Strecke, eigener Snapshotschluessel
+- [x] 19-08-PLAN.md: Spanischer Vorher-Nachher-Beweis in der Upgrade-Strecke, eigener Snapshotschluessel
 - [ ] 19-09-PLAN.md: Doku der Frageseite und ihrer Grenzen, CI-Lauf eingeholt, Laufzeit eingetragen
 
 ### Phase 20: UI-Kataloge es/it/nl/pt
@@ -201,7 +201,7 @@ Plans:
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17. Owner-Tor und Analyseketten | v1.3 | 8/8 | Complete   | 2026-09-23 |
 | 18. Schema, Marken und Umbauweg | v1.3 | 12/12 | Complete   | 2026-09-24 |
-| 19. Frageseite freischalten | v1.3 | 5/9 | Executing | - |
+| 19. Frageseite freischalten | v1.3 | 8/9 | Executing | - |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 0/9 | Planned | - |
 | 21. Niederlaendische Komposita | v1.3 | 0/TBD | Not started | - |
 | 22. Messanfahrt BL-F03 | v1.3 | 0/TBD | Not started | - |
