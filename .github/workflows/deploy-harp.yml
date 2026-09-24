@@ -586,11 +586,53 @@ jobs:
       # carries the old wording and is corrected in its own change.
       - name: Build the temporary info.xml that points at the local registry
         run: |
+          # The fourth expression below is the language set of the developer
+          # path, and three reasons put it here rather than anywhere else.
+          #
+          # One: this path is ungated. Every step of it runs on all four matrix
+          # legs, the arm64 one included, and success criterion 1 of phase 19 is
+          # written about that leg by name. "Store upgrade 5" and "Store upgrade
+          # 6" both carry
+          # "matrix.server-version == 'stable34' && matrix.runner ==
+          # 'ubuntu-24.04' && env.RELEASE_TAG == ''", so a language proof put
+          # there would run on one leg out of four and would say nothing about
+          # the other three.
+          #
+          # Two: this instance builds its index with six body fields from the
+          # first document on, so the proof costs no rebuild time. The rebuild
+          # is a statement of its own and "Store upgrade 6" already makes it;
+          # repeating it here would buy nothing and spend minutes.
+          #
+          # Three: the store path is untouched by this. It registers with
+          # STORE_INFO_XML, which is the file out of the signed archive, so it
+          # keeps installing with the shipped default de,en. The two paths
+          # therefore answer two different questions, which is what they are for.
+          #
+          # And the shipped default itself does not move: the substitution runs
+          # against the copy in RUNNER_TEMP, and the git diff at the end of this
+          # step is where that is checked rather than assumed. A language set in
+          # a store archive would be a silent product change.
+          #
+          # Expected at the start of the run and not hoped for. The string is in
+          # the source file exactly once (checked on 2026-09-24 and again here on
+          # every run); at two occurrences sed would rewrite a line nobody aimed
+          # at, at none it would rewrite nothing and the whole proof below would
+          # run against an instance with de,en and still look green.
+          occurrences=$(grep -cF '<default>de,en</default>' findling-src/backend/appinfo/info.xml || true)
+          if [ "${occurrences}" != "1" ]; then
+            echo "::error::the shipped language default stands ${occurrences} times in findling-src/backend/appinfo/info.xml and not once, so the substitution below would miss or hit the wrong line"
+            grep -n '<default>' findling-src/backend/appinfo/info.xml
+            exit 1
+          fi
           sed -e "s|<registry>ghcr.io</registry>|<registry>${LOCAL_REGISTRY}</registry>|" \
               -e 's|<image>street1983nk/findling_backend</image>|<image>findling_backend</image>|' \
               -e "s|<image-tag>[^<]*</image-tag>|<image-tag>${LOCAL_IMAGE_TAG}</image-tag>|" \
+              -e 's|<default>de,en</default>|<default>de,en,es,it,nl,pt</default>|' \
               findling-src/backend/appinfo/info.xml > "${RUNNER_TEMP}/info-citest.xml"
-          grep -E '<registry>|<image>|<image-tag>' "${RUNNER_TEMP}/info-citest.xml"
+          # The language line is printed with the other three, so the log says
+          # what this instance was installed with instead of leaving a reader to
+          # infer it from a step three hundred lines further down.
+          grep -E '<registry>|<image>|<image-tag>|<default>de,en' "${RUNNER_TEMP}/info-citest.xml"
           # The source file is untouched, and this is where that is checked
           # rather than assumed.
           git -C findling-src diff --quiet -- backend/appinfo/info.xml
