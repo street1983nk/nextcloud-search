@@ -46,6 +46,23 @@ of 1.2.0, where no mark exists at all, so nothing gets worse; it closes itself
 the first time any other mark moves, because the first stamp writes the language
 mark and from then on it is compared like every other one.
 
+**The schema mark of an unchanged installation stays at 1, and that is the
+upgrade working.** The tantivy schema went from nine fields to thirteen with
+1.3.0, so `findling.config.SCHEMA_VERSION` is 2, while the mark in the state
+database of an installation that upgraded still says 1. It says the truth: the
+directory on disk was written under the old layout, the container reads that
+layout back when it opens the index, and the mark is rewritten only once a
+rebuild has really produced a new directory. Every field a search names exists
+in both layouts, so nothing is lost in the meantime, and the four body fields
+the old layout lacks stay empty until a language outside `de,en` is switched on,
+which is a difference of the language mark and starts the rebuild by itself. A
+container that treated the stored 1 as a difference would raise the reindex
+banner on every installation in the field and read every document again for
+nothing; since 2026-09-24 it does not (`findling.store.repo._schema_is_legacy`).
+The mark moves to 2 at the end of the rebuild and at no earlier moment, so an
+admin who sees 1 on the status page after an upgrade is looking at an
+installation that was left alone, not at one that failed to migrate.
+
 **The body languages and the OCR languages are two settings, and they are set
 separately.** `FINDLING_LANGUAGES` decides which analysis chains an index
 carries: `de`, `en`, `es`, `it`, `nl`, `pt`, factory setting `de,en`.
