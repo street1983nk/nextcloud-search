@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 from tantivy import Document, Filter, Index, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
-from findling.config import INDEX_VERSION, SCHEMA_VERSION, settings
+from findling.config import INDEX_VERSION, SCHEMA_VERSION, SNOWBALL_NAME, settings
 from findling.index.analyzer import (
     ANALYZER_VERSION,
     MAX_TOKEN_CHARS,
@@ -41,8 +41,13 @@ from findling.index.open import (
     start_rebuild_on_drift,
 )
 from findling.index.schema import (
+    BODY_FIELD,
     FIELD_BODY_DE,
     FIELD_BODY_EN,
+    FIELD_BODY_ES,
+    FIELD_BODY_IT,
+    FIELD_BODY_NL,
+    FIELD_BODY_PT,
     FIELD_EXT,
     FIELD_FILE_ID,
     FIELD_MTIME,
@@ -162,7 +167,10 @@ def test_reopen_answers_the_same_query(index_dir: Path) -> None:
     assert _hits(reopened, "frist") == 1
 
 
-def test_the_schema_carries_exactly_the_nine_documented_fields() -> None:
+def test_the_schema_carries_exactly_the_thirteen_documented_fields() -> None:
+    # Nine until 2026-09-24, thirteen since: the four body fields of the v1.3
+    # languages sit between body_en and mtime, which is schema field order and
+    # therefore the order of this tuple as well.
     assert FIELDS == (
         FIELD_FILE_ID,
         FIELD_STORAGE_ID,
@@ -172,18 +180,64 @@ def test_the_schema_carries_exactly_the_nine_documented_fields() -> None:
         FIELD_EXT,
         FIELD_BODY_DE,
         FIELD_BODY_EN,
+        FIELD_BODY_ES,
+        FIELD_BODY_IT,
+        FIELD_BODY_NL,
+        FIELD_BODY_PT,
         FIELD_MTIME,
     )
-    assert len(FIELDS) == 9
-    assert len(set(FIELDS)) == 9
+    assert len(FIELDS) == 13
+    assert len(set(FIELDS)) == 13
 
 
-def test_a_document_carrying_all_nine_fields_is_accepted(index_dir: Path) -> None:
+def test_the_body_field_map_and_the_language_names_carry_the_same_codes() -> None:
+    # Two mappings with one job each: BODY_FIELD turns a code into a schema
+    # field, SNOWBALL_NAME turns the same code into a tantivy language. Held
+    # against each other by key and by order, because the order is schema field
+    # order in one and has to be the same in the other: a loop over one of them
+    # that fills or registers through the other must not be able to pair es with
+    # the Italian chain, and a code that exists in one alone is either a field
+    # nobody can fill or a chain for a field that does not exist.
+    assert tuple(BODY_FIELD) == ("de", "en", "es", "it", "nl", "pt")
+    assert tuple(BODY_FIELD) == tuple(SNOWBALL_NAME)
+    assert tuple(BODY_FIELD.values()) == FIELDS[FIELDS.index(FIELD_BODY_DE) : FIELDS.index(FIELD_MTIME)]
+
+
+def test_a_document_that_leaves_the_four_new_bodies_empty_is_accepted(index_dir: Path) -> None:
+    # The everyday case of every installation that did not switch a language on:
+    # nine of the thirteen fields carry a value and four do not. The write has to
+    # go through all the same, and the chains of the empty fields have to be
+    # registered for it, which is what the guards further down hold.
     index = open_index(index_dir, CONSTITUENTS)
 
     _write(index)
 
     assert index.searcher().num_docs == 1
+
+
+def test_a_document_that_fills_all_six_bodies_is_accepted(index_dir: Path) -> None:
+    # The other end: a document written into every body field there is. It says
+    # that the four new fields are real fields and not decoration, and that each
+    # of them answers on its own chain.
+    index = open_index(index_dir, CONSTITUENTS)
+    writer = index.writer(heap_size=15_000_000, num_threads=1)
+    document = Document()
+    document.add_unsigned(FIELD_FILE_ID, 1)
+    document.add_text(FIELD_BODY_DE, "Die Kündigungsfrist beträgt drei Monate.")
+    document.add_text(FIELD_BODY_EN, "The notice period is three months.")
+    document.add_text(FIELD_BODY_ES, "El plazo de preaviso es de tres meses.")
+    document.add_text(FIELD_BODY_IT, "Il preavviso è di tre mesi.")
+    document.add_text(FIELD_BODY_NL, "De opzegtermijn bedraagt drie maanden.")
+    document.add_text(FIELD_BODY_PT, "O prazo de aviso prévio é de três meses.")
+    writer.add_document(document)
+    writer.commit()
+    writer.wait_merging_threads()
+    index.reload()
+
+    assert _hits(index, "preaviso", [FIELD_BODY_ES]) == 1
+    assert _hits(index, "preavviso", [FIELD_BODY_IT]) == 1
+    assert _hits(index, "opzegtermijn", [FIELD_BODY_NL]) == 1
+    assert _hits(index, "previo", [FIELD_BODY_PT]) == 1
 
 
 def test_the_two_identifiers_and_mtime_are_fast_fields(index_dir: Path) -> None:
@@ -369,7 +423,7 @@ def test_the_schema_does_not_change_with_the_language_setting(monkeypatch: pytes
         index = open_index(index_dir, CONSTITUENTS)
         _write(index, body_en="The notice period is three months.")
 
-        assert len(FIELDS) == 9
+        assert len(FIELDS) == 13
         assert _hits(index, "notice", [FIELD_BODY_EN]) == 1
     finally:
         settings.cache_clear()

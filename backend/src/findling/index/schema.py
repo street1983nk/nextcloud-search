@@ -1,11 +1,17 @@
-"""The nine fields of the index, with the reason for every column of the table.
+"""The thirteen fields of the index, with the reason for every column of the table.
 
 A tantivy schema is written once and read for the lifetime of the index: a field
 that is added later means a reindex, and a field that is stored without being
 needed is paid for on every disk of every installation. So this module is a table
-with nine rows and a line of reasoning per row, and nothing else.
+with thirteen rows and a line of reasoning per row, and nothing else.
 
-Two decisions carry real cost and are therefore measured rather than argued.
+Four of the six body fields arrived on 2026-09-24 with the language build out of
+v1.3, under owner decision E-17-2 option a of 2026-09-23: the schema carries all
+six body fields at all times, and FINDLING_LANGUAGES decides which of them a
+document is written into and nothing else. A language that is switched on later
+is therefore a filling question and never a schema question.
+
+Three decisions carry real cost and are therefore measured rather than argued.
 
 *body_de is stored.* The SnippetGenerator reads the text out of the stored
 document, so the index holds one full copy of the extracted text. Measured: the
@@ -17,7 +23,20 @@ snippets, and it belongs in the privacy statement rather than in a comment
 (T-02-67, plan 02-07).
 
 *body_en is not stored.* It carries the same text through the English pipeline,
-so a second store would buy nothing but the 0.374 factor a second time.
+so a second store would buy nothing but the 0.374 factor a second time. The four
+fields below it follow that line and not the German one, for the same reason.
+
+*The four fields of a language nobody switched on cost almost nothing, and not
+nothing.* Measured on 2026-09-24 over 2000 documents and 9.88 MB of extracted
+text: the schema as it stood until that day writes 2277376 byte, the thirteen
+field schema with its four new fields left empty writes 2286432 byte, which is
+9056 byte or 0.40 percent more, roughly 4.5 byte per document of schema and
+segment bookkeeping. Decision E-17-2 says empty fields cost zero byte on disk;
+this measurement corrects that sentence and leaves the decision it carried
+standing, because 0.40 percent decides nothing. Filling all six chains is the
+real price: 5692365 byte, 150 percent above today, that is 0.086 times the
+amount of text per filled chain, which is the 0.076 factor named above for an
+unstored chain plus the segment bookkeeping around it.
 
 The tokenizer names below are names only. The schema persists the name, never the
 analyzer, which is why :mod:`findling.index.open` is the only place that opens an
@@ -28,7 +47,15 @@ from typing import Final
 
 from tantivy import Schema, SchemaBuilder
 
-from findling.index.analyzer import TOKENIZER_DE, TOKENIZER_EN, TOKENIZER_NAME
+from findling.index.analyzer import (
+    TOKENIZER_DE,
+    TOKENIZER_EN,
+    TOKENIZER_ES,
+    TOKENIZER_IT,
+    TOKENIZER_NAME,
+    TOKENIZER_NL,
+    TOKENIZER_PT,
+)
 
 FIELD_FILE_ID: Final = "file_id"
 FIELD_STORAGE_ID: Final = "storage_id"
@@ -38,6 +65,10 @@ FIELD_PATH: Final = "path"
 FIELD_EXT: Final = "ext"
 FIELD_BODY_DE: Final = "body_de"
 FIELD_BODY_EN: Final = "body_en"
+FIELD_BODY_ES: Final = "body_es"
+FIELD_BODY_IT: Final = "body_it"
+FIELD_BODY_NL: Final = "body_nl"
+FIELD_BODY_PT: Final = "body_pt"
 FIELD_MTIME: Final = "mtime"
 
 # In schema order. Callers that build documents read the names from here, because
@@ -53,8 +84,27 @@ FIELDS: Final = (
     FIELD_EXT,
     FIELD_BODY_DE,
     FIELD_BODY_EN,
+    FIELD_BODY_ES,
+    FIELD_BODY_IT,
+    FIELD_BODY_NL,
+    FIELD_BODY_PT,
     FIELD_MTIME,
 )
+
+# The one place where a language code turns into a schema field name, built the
+# way findling.config.SNOWBALL_NAME is built and held against it by a test: a
+# closed mapping, never a composed string. Measured, and that is why it is a
+# mapping: writer.add_document accepts a field name the schema does not know
+# without a word of complaint and drops the value, so "body_" + code would lose
+# a whole language on a typo and nothing anywhere would say so.
+BODY_FIELD: Final = {
+    "de": FIELD_BODY_DE,
+    "en": FIELD_BODY_EN,
+    "es": FIELD_BODY_ES,
+    "it": FIELD_BODY_IT,
+    "nl": FIELD_BODY_NL,
+    "pt": FIELD_BODY_PT,
+}
 
 # Built into tantivy: one token, the whole field, unchanged. The right choice for
 # a value that is compared and never read, such as a file extension.
@@ -109,6 +159,20 @@ def build_schema() -> Schema:
     # The same text through the English pipeline. Not stored: the copy above is
     # the one snippets are cut from, and a second one would double the store.
     builder.add_text_field(FIELD_BODY_EN, stored=False, tokenizer_name=TOKENIZER_EN)
+    # The same text through the Spanish pipeline. Empty on every installation
+    # that does not name es in FINDLING_LANGUAGES, and present all the same: a
+    # field that appears with the language would make switching a language on a
+    # schema change, and a schema change is a reindex for the whole index.
+    builder.add_text_field(FIELD_BODY_ES, stored=False, tokenizer_name=TOKENIZER_ES)
+    # Italian. Not stored, like every body field but the German one, because the
+    # snippet is cut out of body_de and a second copy would buy nothing.
+    builder.add_text_field(FIELD_BODY_IT, stored=False, tokenizer_name=TOKENIZER_IT)
+    # Dutch. Its chain has no compound splitter; the Dutch compounds are their
+    # own question and their own phase, and the field does not wait for it.
+    builder.add_text_field(FIELD_BODY_NL, stored=False, tokenizer_name=TOKENIZER_NL)
+    # Portuguese, the fourth and last of the v1.3 build out. Measured with the
+    # three above: the four empty fields cost 0.40 percent of directory size.
+    builder.add_text_field(FIELD_BODY_PT, stored=False, tokenizer_name=TOKENIZER_PT)
     # Display today, sorting and since/until later. Fast rather than indexed: a
     # range over a column is what a date filter needs, a term is not.
     builder.add_integer_field(FIELD_MTIME, stored=True, indexed=False, fast=True)

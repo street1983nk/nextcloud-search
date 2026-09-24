@@ -113,6 +113,16 @@ ANALYZER_VERSION = 1
 # a broken index and is a missing line of setup. Plan 02-06 reads them from here.
 TOKENIZER_DE = "de"
 TOKENIZER_EN = "en"
+# The four chains of the v1.3 language build out, named after the field codes of
+# findling.config.SNOWBALL_NAME and never after the Snowball language, because
+# the schema field is body_es and the name a schema persists has to be readable
+# next to the field it belongs to. All four are built by snowball_analyzer, which
+# is one armed and looks its own supplement up: there is no second factory here
+# and there must not be one.
+TOKENIZER_ES = "es"
+TOKENIZER_IT = "it"
+TOKENIZER_NL = "nl"
+TOKENIZER_PT = "pt"
 TOKENIZER_NAME = "name"
 
 # Longest token that may reach the index. Generous on purpose: it exists to stop

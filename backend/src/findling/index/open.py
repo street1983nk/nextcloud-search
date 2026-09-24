@@ -24,15 +24,20 @@ from typing import Final
 import tantivy
 from tantivy import Filter, Index, Searcher, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
-from findling.config import INDEX_VERSION, SCHEMA_VERSION
+from findling.config import INDEX_VERSION, SCHEMA_VERSION, SNOWBALL_NAME
 from findling.index.analyzer import (
     ANALYZER_VERSION,
     TOKENIZER_DE,
     TOKENIZER_EN,
+    TOKENIZER_ES,
+    TOKENIZER_IT,
     TOKENIZER_NAME,
+    TOKENIZER_NL,
+    TOKENIZER_PT,
     cached_german_analyzer,
     english_analyzer,
     name_analyzer,
+    snowball_analyzer,
 )
 from findling.index.schema import TOKENIZER_STORED_ONLY, build_schema
 from findling.index.wordlist import wordlist_hash
@@ -82,7 +87,7 @@ def stored_only_analyzer() -> TextAnalyzer:
 
 
 def open_index(path: Path, constituents: Sequence[str]) -> Index:
-    """Create or open the index at ``path`` and register its four analyzers.
+    """Create or open the index at ``path`` and register its eight analyzers.
 
     ``constituents`` is the prepared word list from
     :func:`findling.index.wordlist.load_constituents`; it decides how German text
@@ -97,6 +102,25 @@ def open_index(path: Path, constituents: Sequence[str]) -> Index:
     index = Index.open(str(path)) if Index.exists(str(path)) else Index(build_schema(), path=str(path))
     index.register_tokenizer(TOKENIZER_DE, cached_german_analyzer(wordlist_hash(constituents), constituents))
     index.register_tokenizer(TOKENIZER_EN, english_analyzer())
+    # The four chains of the v1.3 languages, and they are registered whatever
+    # FINDLING_LANGUAGES says. Measured on 2026-09-24 with tantivy 0.26.2: a
+    # schema that carries a text field whose chain is not registered answers
+    # every writer.add_document with "Schema error: 'Error getting tokenizer for
+    # field: body_es'", and it does so even when the document does not carry
+    # that field at all. Hanging these four lines on the active language set
+    # would therefore stop the indexer on every installation that does not run
+    # all six languages. The filling hangs on the language set, the registration
+    # does not.
+    #
+    # It costs nothing. The Snowball chains are compiled into tantivy and bring
+    # no data with them; the one chain that is expensive is the German one, with
+    # its 0.44 s and roughly 23 MB of automaton, and that one is built in any
+    # case. The language names come from SNOWBALL_NAME, the single place where a
+    # field code turns into a tantivy language, and are never repeated here.
+    index.register_tokenizer(TOKENIZER_ES, snowball_analyzer(SNOWBALL_NAME["es"]))
+    index.register_tokenizer(TOKENIZER_IT, snowball_analyzer(SNOWBALL_NAME["it"]))
+    index.register_tokenizer(TOKENIZER_NL, snowball_analyzer(SNOWBALL_NAME["nl"]))
+    index.register_tokenizer(TOKENIZER_PT, snowball_analyzer(SNOWBALL_NAME["pt"]))
     index.register_tokenizer(TOKENIZER_NAME, name_analyzer())
     index.register_tokenizer(TOKENIZER_STORED_ONLY, stored_only_analyzer())
     return index
