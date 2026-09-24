@@ -486,6 +486,18 @@ Weiteres prüfbar: `PageController::index` trägt `NoAdminRequired` **und** `NoC
 HTML, in dem der Dateiname des Treffers stehen muss. Das ist die billigste ehrliche Form der zweiten
 Hälfte von Kriterium 1.
 
+> **BERICHTIGUNG 25.09.2026 (Plan 19-09).** Der Parameter der Ergebnisseite heißt `query` und nicht
+> `term`. `PageController::term()` liest `$this->request->getParam('query', '')`
+> (`php/lib/Controller/PageController.php:340`), und auf dieser Route wird nirgends ein Parameter
+> namens `term` gelesen. Der Aufruf im Absatz darüber hätte mit `?term=alemanes` eine 200 und die
+> leere Startseite geliefert, also die Form eines grünen Schritts, der nichts belegt. Plan 19-07 hat
+> das beim Schreiben des CI-Schritts bemerkt und die vier Abrufe auf `apps/findling/?query=`
+> gesetzt (Deviation 1 in `19-07-SUMMARY.md`); das Textgate in
+> `backend/tests/test_language_proof_steps.py` zählt diese Schreibweise. Der Satz zur
+> OCS-Suchroute weiter oben ist davon NICHT betroffen: dort heißt der Parameter wirklich `term`.
+> Die Berichtigung steht als Vermerk und nicht als stille Änderung, damit nachvollziehbar bleibt,
+> woher der Irrtum in `19-07-PLAN.md` stammt.
+
 ### Anti-Patterns to Avoid
 
 - **Nur `DEFAULT_FIELDS` dynamisch machen.** `FIELD_BOOSTS` wirft dieselbe `ValueError` (gemessen).
