@@ -24,17 +24,37 @@ traineddata, which costs time and memory on every single OCR page (T-16-37).
 Nine languages available is a feature; nine languages switched on for every
 existing installation is a slowdown nobody ordered.
 
-Not asserted here, because it is not true: index languages. The analyzer chain
-of Tantivy is German and English, OCR turns pixels into words, and no text
-outside this file may claim more.
+Since plan 18-09 the file carries a second pair, and it is the same shape of
+question asked one layer up: the body languages against the OCR languages. Six
+body languages are selectable since plan 18-02, three OCR languages are the
+factory setting, and the two are set separately. A body language with no scanner
+behind it is the Buchstabensalat trap of the phase research: the scan is read
+with the wrong model, comes back as plausible looking rubbish, is indexed, is
+found, and nothing anywhere says the document was never readable. One line at
+startup closes it, and it is a line and never a refusal.
+
+Not asserted here, because it is not true: that the analyzer chain and the OCR
+call are the same setting. OCR turns pixels into words, the chain turns words
+into terms, and an instance can legitimately want one without the other.
 """
 
 from __future__ import annotations
 
+import logging
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
-from findling.config import OCR_DEFAULT_LANGUAGES, OCR_LANGUAGE_ALLOWLIST
+import pytest
+
+from findling.config import (
+    OCR_DEFAULT_LANGUAGES,
+    OCR_LANGUAGE_ALLOWLIST,
+    SUPPORTED_LANGUAGES,
+    TESSERACT_NAME,
+    settings,
+)
+from findling.main import warn_on_uncovered_languages
 
 DOCKERFILE = Path(__file__).resolve().parents[1] / "Dockerfile"
 
@@ -137,3 +157,128 @@ def test_the_default_stays_at_three_and_is_a_true_subset_of_the_offer() -> None:
     # Which three they are is the subject of backend/tests/test_ocr_french.py,
     # and one statement belongs in one file.
     assert set(OCR_DEFAULT_LANGUAGES) < set(OCR_LANGUAGE_ALLOWLIST)
+
+
+# -- the body languages against the OCR languages ------------------------------
+
+
+def _uncovered(codes: tuple[str, ...], names: Mapping[str, str]) -> set[str]:
+    """The body language codes that have no tesseract name in the mapping at all."""
+    return set(codes) - set(names)
+
+
+def test_every_body_language_has_a_tesseract_name_and_every_name_is_installed() -> None:
+    """The second parity of this file, and it is asked in both directions.
+
+    Forwards: every code an admin can put into ``FINDLING_LANGUAGES`` has to have
+    a tesseract name, or the startup warning would raise a KeyError on the one
+    language it exists for. Backwards: every name in the mapping has to be a
+    language this image installs, because a name outside the allowlist could
+    never be covered and the warning would then be permanent and unfixable.
+    """
+    assert _uncovered(SUPPORTED_LANGUAGES, TESSERACT_NAME) == set()
+    assert set(TESSERACT_NAME.values()) <= set(OCR_LANGUAGE_ALLOWLIST)
+
+    # The staged probe, because a gate whose red state is never produced is a
+    # gate nobody has tested: a seventh body language added to the list alone.
+    assert _uncovered((*SUPPORTED_LANGUAGES, "fi"), TESSERACT_NAME) == {"fi"}
+
+
+def test_the_factory_setting_needs_no_warning(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """de and en against deu, eng and fra: every body language has its scanner.
+
+    This is the installation nearly every admin runs, so a line here would be a
+    warning on almost every start, which is a warning nobody reads.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en")
+    monkeypatch.delenv("FINDLING_OCR_LANGUAGES", raising=False)
+    settings.cache_clear()
+    try:
+        with caplog.at_level(logging.WARNING, logger="findling"):
+            warn_on_uncovered_languages()
+    finally:
+        settings.cache_clear()
+
+    assert caplog.records == []
+
+
+def test_a_body_language_without_a_scanner_is_named_by_its_count(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Spanish in the index and not in the scanner: exactly one line, and it counts.
+
+    The count and not the codes, which is the house rule of findling.config: a
+    warning names the variable and never its value. The names are the real
+    information for an admin and they travel to the admin page over GET /status,
+    which plan 18-10 builds.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es")
+    monkeypatch.setenv("FINDLING_OCR_LANGUAGES", "deu+eng")
+    settings.cache_clear()
+    try:
+        with caplog.at_level(logging.WARNING, logger="findling"):
+            warn_on_uncovered_languages()
+    finally:
+        settings.cache_clear()
+
+    assert len(caplog.records) == 1
+    message = caplog.records[0].getMessage()
+    assert "FINDLING_LANGUAGES" in message
+    assert " 1 " in message
+
+
+def test_the_warning_line_carries_no_language_at_all(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Three uncovered languages, and not one of them may be readable in the line.
+
+    Checked as a word for the two letter codes, because ``de`` sits inside
+    ``model`` and a substring test would be green for the wrong reason, and as a
+    substring for the three letter tesseract names, which are rare enough to be
+    unambiguous.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "es,it,pt")
+    monkeypatch.setenv("FINDLING_OCR_LANGUAGES", "deu")
+    settings.cache_clear()
+    try:
+        with caplog.at_level(logging.WARNING, logger="findling"):
+            warn_on_uncovered_languages()
+    finally:
+        settings.cache_clear()
+
+    assert len(caplog.records) == 1
+    message = caplog.records[0].getMessage()
+    assert " 3 " in message
+    assert [code for code in SUPPORTED_LANGUAGES if re.search(rf"\b{code}\b", message)] == []
+    assert [name for name in OCR_LANGUAGE_ALLOWLIST if name in message] == []
+
+
+@pytest.mark.usefixtures("volume")
+def test_the_warning_refuses_nothing_and_the_container_comes_up(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The whole point of it being a warning, proven against the running lifespan.
+
+    An instance that holds born digital Spanish files and scans nothing at all is
+    perfectly healthy, so the line is a line: the container starts, the routes
+    answer, and the language set it was asked for is the one it keeps.
+    """
+    from fastapi.testclient import TestClient
+
+    from findling.main import APP
+
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es")
+    monkeypatch.setenv("FINDLING_OCR_LANGUAGES", "deu+eng")
+    settings.cache_clear()
+    try:
+        with caplog.at_level(logging.WARNING, logger="findling"), TestClient(APP) as client:
+            answer = client.get("/heartbeat")
+            active = settings().languages
+    finally:
+        settings.cache_clear()
+
+    assert answer.status_code == 200
+    assert active == ("de", "en", "es")
+    assert [record for record in caplog.records if "FINDLING_LANGUAGES" in record.getMessage()] != []
