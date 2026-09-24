@@ -106,6 +106,30 @@ def test_the_report_carries_every_counter_and_every_version(tmp_path: Path) -> N
     assert report["wordlistHash"] == "abc123"
 
 
+def test_the_empty_report_carries_the_language_mark_as_an_empty_value(tmp_path: Path) -> None:
+    """The sixth version key, in both shapes the report is built in.
+
+    It is the mark that tells 1.2.0 from 1.3.0 in the upgrade leg of the CI run,
+    which only works if the key is always there: a key that appears with the
+    value and stays away without it makes "this release does not have the mark"
+    and "this tool did not look" the same output.
+    """
+    assert index_status.empty_report()["languages"] == ""
+
+    db = tmp_path / "state.db"
+    _state_database(db)
+    # Written rather than seeded, because the seed skips this one mark by name
+    # (T-18-05-01) and a test that handed it to open_store would read an empty
+    # value here and prove the opposite of what it claims.
+    stamped = open_store(db)
+    try:
+        stamped.write_meta("languages", "de,en,es")
+    finally:
+        stamped.close()
+
+    assert index_status.collect(db, tmp_path / "index")["languages"] == "de,en,es"
+
+
 def test_a_state_without_rows_is_a_zero_and_not_a_missing_key(tmp_path: Path) -> None:
     # The whole promise of the status output: "no failures" and "the counter is
     # broken" have to look different from each other.

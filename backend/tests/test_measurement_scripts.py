@@ -688,8 +688,22 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # takes every field name out of BODY_FIELD, while body_de is written
 # unconditionally because it is the one stored copy of the text. No file came
 # and none went, so PACKAGE_FILES_TODAY stays at 55.
+# Moved on 2026-09-24 a twenty first time, by plan 18-05: six of the 55 files
+# changed their bytes, all six for the sixth version mark of owner decision
+# E-17-4 option a. index/open.py got LANGUAGES_MARK and the second parameter of
+# expected_versions, which takes the language set instead of reading it, so that
+# the call sites stay visible. store/repo.py got _languages_are_legacy beside
+# _generation_at_least and _index_format_matches, the third if line in the
+# comparison loop of version_mismatch, LEGACY_LANGUAGES as its own tuple, and a
+# _seed_meta that drops the mark even when a caller hands it in, which is the
+# whole reason the mark can speak at all. api/resources.py, worker/poller.py and
+# tools/one_load.py hand the set in at their four call sites, each of them as
+# ",".join(settings().languages) and none of them assembling it differently.
+# tools/index_status.py reports the mark as the sixth entry of _VERSION_KEYS,
+# which is the visible difference between 1.2.0 and 1.3.0 the upgrade leg of the
+# CI run reads. No file came and none went, so PACKAGE_FILES_TODAY stays at 55.
 PACKAGE_FILES_TODAY = 55
-PACKAGE_TREE_HASH_TODAY = "9ee107fbb1bda734022c5ee3a9c967e2d6aa11181078ba1062120603611a24e1"
+PACKAGE_TREE_HASH_TODAY = "7b14950daf877e9ba0ae03d02fae24c68c6afd5cda5dce67f47240d8dfca9d70"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

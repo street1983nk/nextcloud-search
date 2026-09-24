@@ -63,6 +63,13 @@ _VERSION_KEYS: Final = {
     "analyzerVersion": "analyzer_version",
     "wordlistHash": "wordlist_hash",
     "tantivyVersion": "tantivy_version",
+    # The sixth mark, since 2026-09-24 and owner decision E-17-4 option a. It is
+    # not decoration and not a sixth line for symmetry: it is the one mark that
+    # does not exist in 1.2.0 and does exist in 1.3.0, so it is the visible
+    # difference the upgrade leg of the CI run reads to tell the two releases
+    # apart. An empty value here therefore means 1.2.0 or an index this code has
+    # not stamped yet, never "the tool could not look".
+    "languages": "languages",
 }
 
 # A version mark this tool could not read at all. Deliberately different from

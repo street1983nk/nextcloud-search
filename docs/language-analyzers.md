@@ -32,6 +32,20 @@ the same behaviour every other `FINDLING_` variable has, it is not a defect, and
 it is written here so that an admin who edits the value and watches nothing
 happen knows that the restart is the missing step and not a broken setting.
 
+**The upgrade to 1.3.0 leaves an unchanged installation alone, with one named
+gap.** Since 2026-09-24 the language set is a version mark of its own (owner
+decision E-17-4 option a). An installation coming from 1.2.0 carries no such
+mark yet, and its absence is read as the pair `de,en` rather than as a
+difference, because no release up to 1.2.0 could build a body field outside that
+pair. So an installation on the factory setting and an installation pinned to
+`de` both upgrade without a rebuild, while switching `es`, `it`, `nl` or `pt` on
+is a difference and starts one. The gap this leaves open on purpose: an
+installation running `de` alone that switches `en` on at the same upgrade gets no
+rebuild either, because `de,en` is still inside the pair. That is the behaviour
+of 1.2.0, where no mark exists at all, so nothing gets worse; it closes itself
+the first time any other mark moves, because the first stamp writes the language
+mark and from then on it is compared like every other one.
+
 **`body_de` is stored whatever the set says.** It is the only stored copy of the
 extracted text in the whole system and the snippet generator cuts out of it, so
 an instance running on `es` alone still writes it. Being stored and being
