@@ -195,7 +195,15 @@ def _origin_of(
         side = resources.read_side()
         if side is None:
             return None
-        rewritten = build_query(side.index, text, title_only=False, groups=groups, since=since, until=until)
+        rewritten = build_query(
+            side.index,
+            text,
+            title_only=False,
+            groups=groups,
+            since=since,
+            until=until,
+            plan=side.field_plan,
+        )
         if rewritten.query is None:
             # A line that held only a file type filter, for instance. No search
             # ran, so there is no origin, and nought found is not the answer.

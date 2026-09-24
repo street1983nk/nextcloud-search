@@ -922,8 +922,28 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # under default_field_names, so a field list that had been made movable without
 # its boosts would only have postponed the empty search bar rather than
 # preventing it. No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a thirty seventh time, by plan 19-03: five of the 56 files
+# changed their bytes and the count stays at 56. index/open.py gave the schema
+# key the public name SCHEMA_MARK next to LANGUAGES_MARK, because the field plan
+# became its second reader and a key spelled out at every place that touches it
+# drifts on the day one of them is renamed. api/resources.py got field_plan_for,
+# which answers what a bare word searches on a directory out of the two marks
+# that directory stores, and ReadSide.field_plan, which carries that answer for
+# as long as the handles beside it live: the plan is computed once per open
+# rather than once per keystroke, and it hangs on the handles rather than in a
+# cache of its own because the invalidation a third cache would need is the one
+# reset_read_side() and ReadSide.generation already provide. api/search.py,
+# api/snippets.py and api/diagnose.py hand that plan to build_query and do
+# nothing else with it, so the reading of the marks stays in one place and the
+# permission prefilter keeps the single call site test_semantic_boundary.py
+# counts. The gate falls closed: anything that is not literally the current
+# schema mark, which covers an absent mark and the intermediate 1 of every
+# installation that has not rebuilt yet, is answered with the frozen legacy
+# plan, and a doc_freq probe against the directory itself catches the one state
+# the mark cannot see, a state.db restored beside an older index directory. No
+# file came and none went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "9e76762c6b2976f8830c49b2a9306cfd9dd08ecdf8a19b437cdf2b929e284d1d"
+PACKAGE_TREE_HASH_TODAY = "9718e2236177deec4853504461eda54e6a0aea79e5951e19d1ce10c678242989"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

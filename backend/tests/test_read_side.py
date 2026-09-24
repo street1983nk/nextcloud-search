@@ -32,6 +32,8 @@ from conftest import Corpus, write_index, write_state, write_wordlist
 from findling.api import resources
 from findling.config import settings
 from findling.index.open import LANGUAGES_MARK
+from findling.index.schema import FIELD_BODY_ES
+from findling.query.rewrite import LEGACY_PLAN
 from findling.store.repo import EMBEDDING_MARK, Store, open_store
 
 THREADS = 4
@@ -419,6 +421,41 @@ def test_the_degraded_verdict_is_dropped_with_the_read_side(indexed_volume: Corp
 
     assert fresh is not None
     assert resources.degraded(fresh) is True
+
+
+def test_the_field_plan_is_dropped_with_the_read_side(indexed_volume: Corpus) -> None:
+    # The case that carries the decision not to give the field plan a cache of
+    # its own. What a separate cache would have had to build, an invalidation
+    # that survives a directory swap under an unchanged path, is exactly what
+    # this one already does, so the plan hangs on the handles and is let go with
+    # them.
+    #
+    # The volume is seeded without a language mark, which is what every volume
+    # looks like before a rebuild has stamped one, so the first plan is the
+    # legacy pair. The mark is then written the way rebuild.stamp_after_swap
+    # writes it.
+    first = resources.read_side()
+    assert first is not None
+    assert first.field_plan.fields == LEGACY_PLAN.fields
+
+    writable = open_store(indexed_volume.root / "state.db")
+    writable.write_meta(LANGUAGES_MARK, "de,en,es")
+    writable.close()
+
+    # The reset is deliberately left out here: a plan that moved without one
+    # would mean it is computed per query after all, which is the cost this
+    # whole field exists to avoid.
+    again = resources.read_side()
+    assert again is first
+
+    resources.reset_read_side()
+    second = resources.read_side()
+
+    assert second is not None
+    assert second is not first
+    assert FIELD_BODY_ES in second.field_plan.fields
+    assert FIELD_BODY_ES in second.field_plan.boosts
+    assert second.field_plan.boosts[FIELD_BODY_ES] < second.field_plan.boosts["body_en"]
 
 
 def test_the_version_marks_are_dropped_with_the_read_side(

@@ -31,19 +31,21 @@ import shutil
 import sqlite3
 import threading
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 from tantivy import Index
 
-from findling.config import settings
+from findling.config import SCHEMA_VERSION, settings
 from findling.embed.engine import shared_model
 from findling.embed.model import EmbeddingModel
-from findling.index.open import expected_versions, open_index, open_reader
-from findling.index.schema import BODY_FIELD
+from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions, open_index, open_reader
+from findling.index.schema import BODY_FIELD, FIELD_NAME, FIELD_TITLE
 from findling.index.wordlist import build_artifact
-from findling.store.repo import EMBEDDING_MARK, VECTOR_ONLY_MARKS, Store, open_read_only
+from findling.query.rewrite import BODY_BOOST, LEGACY_PLAN, NAME_BOOST, TITLE_BOOST, FieldPlan
+from findling.store.repo import EMBEDDING_MARK, LEGACY_LANGUAGES, VECTOR_ONLY_MARKS, Store, open_read_only
 from findling.store.vectors import EMBEDDING_MODEL, VectorStore, embedding_mark, open_vectors
 
 LOGGER = logging.getLogger("findling.api.resources")
@@ -130,6 +132,26 @@ class ReadSide:
     # is of an older generation hands its verdict out and keeps it out of the
     # cache.
     generation: int = 0
+    # What a bare word searches on the directory behind these handles, computed
+    # once from its two stored marks by field_plan_for below. It is not the wish
+    # of this container and it is not derived from the settings: an index answers
+    # the fields it was built with, whatever the environment currently asks for.
+    #
+    # It hangs here rather than in a cache of its own, and that is the whole
+    # point of the field. The invalidation a separate cache would have to build
+    # exists here already: reset_read_side() drops the handles in front of the
+    # directory swap, and ReadSide.generation is the guard that audit finding
+    # M-18-02 cost. A third cache beside _DEGRADED and _FILLED would be a third
+    # place to get that race wrong, for a value that changes exactly when these
+    # handles do. The plan needs no generation branch of its own either, because
+    # it is computed inside _LOCK together with the handles it describes rather
+    # than measured outside it afterwards.
+    #
+    # The default is the legacy plan and never a computed one, the same fail
+    # closed line build_query draws for its own parameter: a side assembled
+    # without a plan searches the four fields every release up to 1.2.0 searched,
+    # which every index of both generations answers.
+    field_plan: FieldPlan = LEGACY_PLAN
 
 
 _OPEN: ReadSide | None = None
@@ -313,6 +335,111 @@ def _read_only_vectors(path: Path) -> VectorStore | None:
         return None
 
 
+def field_plan_for(marks: Mapping[str, str], index: Index) -> FieldPlan:
+    """What a bare word searches on this directory, read out of its two marks.
+
+    The fachliche core of phase 19 and at the same time its safety gate. Up to
+    1.2.0 the answer was three module constants; from here it is a function of
+    what the directory on disk says about itself, which is the only source that
+    can be right about it.
+
+    **The two marks and nothing else.** ``schema_version`` says which layout the
+    directory was built under and ``languages`` says which body chains were
+    written into it. Both are written by the rebuild, after the work that makes
+    them true is through. The language set of :func:`findling.config.settings` is deliberately not
+    consulted:
+    that is the wish of the container that happens to be running, the index
+    answers with what it was built with, and confusing the two is threat
+    T-18-05-01 of phase 18, the one that made the seed of
+    :mod:`findling.store.repo` skip the language key by name.
+
+    **The gate falls closed**, in the shape of
+    :func:`findling.store.repo._schema_is_legacy` and for its reason. Anything
+    that is not literally the current mark, which covers an absent mark, the
+    intermediate ``"1"`` of every installation that has not rebuilt yet,
+    ``UNKNOWN_VERSION`` and any generation this code has never seen, is answered
+    with :data:`findling.query.rewrite.LEGACY_PLAN`. A state that cannot be read
+    is no permission: an index whose schema never named itself could be any
+    schema, and naming a field it does not carry is the ``ValueError`` that
+    leaves the search bar of a live installation empty.
+
+    **One reading of the language mark, not a second one.** An absent or empty
+    value means ``LEGACY_LANGUAGES``, which is imported from
+    :mod:`findling.store.repo` rather than spelled again, exactly as
+    ``findling.index.rebuild._new_language_count`` reads it. A code the schema
+    does not know is passed over and the remaining ones stand; if nothing
+    remains, the legacy plan is the answer again.
+
+    **The counter probe at the directory itself.** One ``doc_freq(field, "")``
+    per body field, measured at 0.26 us a call (19-RESEARCH measurement M-2) and
+    paid once per open rather than once per keystroke. It catches the one state
+    the mark cannot see: a ``state.db`` restored from a backup beside an older
+    index directory, where the mark promises thirteen fields and the directory
+    holds nine. One field that raises drops the WHOLE plan back to the legacy
+    one, because a plan is one value and half of it is not a plan, and it is a
+    warning rather than the debug line of :func:`filled_languages` because a
+    probe that fails here means the two halves of a volume do not belong
+    together.
+
+    **Never raises**, deliberately and with every exception caught. This runs
+    inside the try of :func:`read_side`, where an exception would cost the whole
+    reading half of the container and answer every search with nothing at all.
+
+    :func:`filled_languages` is not called and must not be: it walks the entire
+    term dictionary of every chain it asks about and carries a TTL of its own for
+    that reason, which is the shape of a diagnosis and not of a query path
+    (19-RESEARCH open question 2). "Filled" is read here as the stored mark. A
+    chain that is switched on, built and still empty costs a search one lookup in
+    an empty posting list and returns no wrong hit.
+
+    Takes no search text, in any shape. That is the structural half of the
+    anti-feature "no language detection, neither of a document nor of a query":
+    a detector is not forbidden here, it has nothing to attach to.
+    """
+    try:
+        if marks.get(SCHEMA_MARK) != str(SCHEMA_VERSION):
+            return LEGACY_PLAN
+
+        stored = marks.get(LANGUAGES_MARK, "")
+        active = {code for code in stored.split(",") if code} or set(LEGACY_LANGUAGES)
+        # Iterated over BODY_FIELD and never over the mark, because that mapping
+        # IS the schema field order and because a code nobody knows has no field
+        # to contribute. body_de gets no exception of any kind: it is written
+        # unconditionally, but an instance that switched German off did not mean
+        # a question against the German chain (19-RESEARCH pitfall 7).
+        bodies = tuple(BODY_FIELD[code] for code in BODY_FIELD if code in active)
+        if not bodies:
+            return LEGACY_PLAN
+
+        boosts = {BODY_FIELD[code]: BODY_BOOST[code] for code in BODY_FIELD if code in active}
+        boosts[FIELD_NAME] = NAME_BOOST
+        boosts[FIELD_TITLE] = TITLE_BOOST
+
+        searcher = index.searcher()
+        for field in bodies:
+            try:
+                searcher.doc_freq(field, "")
+            # One field, and the whole plan. The log line carries the field name
+            # and the type of the exception, the way the lines of read_side() and
+            # filled_languages() do, and it carries no path and no search term.
+            except Exception as error:
+                LOGGER.warning(
+                    "the field %s is not in the directory the marks describe, an %s, the search keeps the legacy plan",
+                    field,
+                    type(error).__name__,
+                )
+                return LEGACY_PLAN
+
+        return FieldPlan(fields=(*bodies, FIELD_NAME, FIELD_TITLE), boosts=boosts, title_only=(FIELD_NAME,))
+    # Deliberately every exception, for the reason in the docstring above.
+    except Exception as error:
+        LOGGER.warning(
+            "the field plan could not be computed, an %s, the search keeps the legacy plan",
+            type(error).__name__,
+        )
+        return LEGACY_PLAN
+
+
 def query_model() -> EmbeddingModel:
     """The embedding engine of this process, which the read side shares.
 
@@ -404,12 +531,30 @@ def read_side() -> ReadSide | None:
             # After the two that matter, and outside their fate. Whatever this
             # answers, the read side is opened.
             vectors = _read_only_vectors(resolved.vectors_db)
+            # The same place and the same rule as the line above: computed after
+            # the two handles that matter, out of what they carry, and outside
+            # their fate. Once per open and not once per query, which is what
+            # the whole field plan hangs on ReadSide for.
+            #
+            # The meta read has a try of its own rather than riding in the one
+            # around it, so that this line cannot narrow what opens. A state
+            # database that connects and then refuses its first query is a real
+            # shape, a zero byte file left by a hard kill, and until here it was
+            # not a container without a read side; an empty mapping sends
+            # field_plan_for through its own closed gate.
+            try:
+                marks = store.read_meta()
+            # Deliberately every exception, for the reason above.
+            except Exception as error:
+                LOGGER.warning("the marks of the directory could not be read, an %s", type(error).__name__)
+                marks = {}
             _OPEN = ReadSide(
                 index=index,
                 store=store,
                 index_dir=resolved.index_dir,
                 vectors=vectors,
                 generation=_GENERATION,
+                field_plan=field_plan_for(marks, index),
             )
             store = None
             vectors = None

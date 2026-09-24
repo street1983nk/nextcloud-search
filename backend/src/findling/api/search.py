@@ -245,7 +245,15 @@ def one_round(
         if side is None:
             return _Round([], False, offset, True)
         is_degraded = resources.degraded(side)
-        rewritten = build_query(side.index, text, title_only=title_only, groups=groups, since=since, until=until)
+        rewritten = build_query(
+            side.index,
+            text,
+            title_only=title_only,
+            groups=groups,
+            since=since,
+            until=until,
+            plan=side.field_plan,
+        )
         if rewritten.query is None:
             # Nothing left to search for, for instance a line that held only a
             # file type filter. A normal answer, and the engine was never asked.

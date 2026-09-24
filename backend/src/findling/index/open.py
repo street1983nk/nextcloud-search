@@ -75,6 +75,24 @@ _LOCAL_GENERATION: Final = "index_version"
 # findling.store.repo._languages_are_legacy, and nowhere else.
 LANGUAGES_MARK: Final = "languages"
 
+# The mark that names the layout of the schema the directory on disk was built
+# under, and a public name since plan 19-03 because a second reader arrived.
+#
+# It used to be a literal in expected_versions below, which was defensible while
+# exactly one place wrote it and exactly one place compared it. The field plan of
+# findling.api.resources reads the very same key to decide which fields a bare
+# word reaches into, and a key that is spelled out at every place that touches it
+# drifts on the day one of them is renamed and nothing anywhere says so. This
+# repo already answers that risk twice for the language pair, where
+# LEGACY_LANGUAGES stands in findling.store.repo with a comment saying why the
+# second spelling in findling.index.rebuild is held against it by a case; the
+# schema key gets the cheaper version of the same answer, which is one name.
+#
+# findling.store.repo keeps its own _SCHEMA_MARK on purpose and that is not a
+# fourth spelling of this one: that module does not import the index side at all
+# (see its module docstring), and a case of the suite holds the two together.
+SCHEMA_MARK: Final = "schema_version"
+
 # Any token of one byte or more is dropped, which is every token there is. See
 # stored_only_analyzer below for why that is the wanted behaviour.
 _DROP_EVERY_TOKEN: Final = 1
@@ -184,7 +202,7 @@ def expected_versions(digest: str, languages: str) -> dict[str, str]:
     left alone (owner decision E-17-4 option a of 2026-09-23).
     """
     return {
-        "schema_version": str(SCHEMA_VERSION),
+        SCHEMA_MARK: str(SCHEMA_VERSION),
         _LOCAL_GENERATION: str(INDEX_VERSION),
         "analyzer_version": str(ANALYZER_VERSION),
         "wordlist_hash": digest,

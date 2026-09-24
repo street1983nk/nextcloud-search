@@ -184,7 +184,15 @@ def excerpts(
         side = resources.read_side()
         if side is None:
             return []
-        rewritten = build_query(side.index, text, title_only=title_only, groups=groups, since=since, until=until)
+        rewritten = build_query(
+            side.index,
+            text,
+            title_only=title_only,
+            groups=groups,
+            since=since,
+            until=until,
+            plan=side.field_plan,
+        )
         if rewritten.query is None:
             return []
         # The vector half, handed over as the same bundle the candidate round
