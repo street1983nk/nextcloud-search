@@ -21,10 +21,12 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import cast
 
 import pytest
+from tantivy import Index
 
 from conftest import Corpus, write_index, write_state, write_wordlist
 from findling.api import resources
@@ -494,3 +496,124 @@ def test_a_state_database_without_an_index_directory_is_none_and_not_an_error(vo
 
     assert resources.read_side() is None
     assert resources.filled_languages() == ()
+
+
+def test_the_read_side_answers_nothing_while_a_directory_swap_is_between_its_renames(
+    indexed_volume: Corpus,
+) -> None:
+    """M-18-03: the window the reset alone could not close.
+
+    Emptying the caches and renaming the directory are two moments, and a search
+    that arrived between them opened the live directory again and kept the
+    handle. A moment later that directory was renamed and removed, and on Linux
+    both calls succeed, so the cached handle went on answering every search out
+    of a directory that has no name, for as long as the process lived. That is
+    pitfall 3 of the phase research, and it is the very thing the reset was
+    written against.
+
+    The bar answers it: while it is up there is no reading side at all, and the
+    reading half already treats that as "this container has no index yet". It
+    lasts two rename system calls.
+    """
+    del indexed_volume
+    assert resources.read_side() is not None
+
+    resources.hold_the_read_side_shut()
+    try:
+        # In a finally, because the bar is process wide: a case that raised with
+        # it up would leave every later case in this suite without a read side.
+        assert resources.read_side() is None, "no handle is handed out and none is opened"
+        assert resources.read_side() is None, "and asking twice does not open one either"
+    finally:
+        resources.let_the_read_side_open()
+
+    assert resources.read_side() is not None, "and the next search opens the directory that is there now"
+
+
+def test_the_bar_lets_the_side_open_again_even_when_the_swap_threw(indexed_volume: Corpus) -> None:
+    """The pair is a pair, and the second half belongs in a finally.
+
+    A swap that raises leaves a container that can answer out of whatever the
+    clean up path of the next start makes of the volume. A bar nobody lowered
+    would leave one that answers nothing until it is restarted, which would turn
+    a recoverable fault into a dead container.
+    """
+    del indexed_volume
+    resources.hold_the_read_side_shut()
+    try:
+        raise OSError("the rename refused")
+    except OSError:
+        resources.let_the_read_side_open()
+
+    assert resources.read_side() is not None
+
+
+def test_a_verdict_measured_before_a_reset_is_answered_and_not_remembered(
+    indexed_volume: Corpus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M-18-02: the side is taken outside the lock and the cache is written inside it.
+
+    A reset that lands between the two used to leave the later writer filling
+    the cache it had just emptied, with a reading from the directory that was
+    retired a moment ago. The path key cannot catch it, because the swap puts
+    the rebuilt directory under the very name the live one had, so the key
+    matches and the entry looks current: the admin page reported the state from
+    before the rebuild for the whole window, which is exactly the moment those
+    lines were written for.
+
+    Staged where the race really is, by resetting while the measurement is
+    running. The reading is still handed out, because it was true when it was
+    taken and the caller asked about the handles it holds; what may not happen
+    is that it survives in the cache.
+    """
+    stale = resources.read_side()
+    assert stale is not None
+    honest = resources.low_disk
+
+    def reset_while_the_verdict_is_being_measured() -> bool:
+        resources.reset_read_side()
+        return honest()
+
+    monkeypatch.setattr(resources, "low_disk", reset_while_the_verdict_is_being_measured)
+
+    assert resources.degraded(stale) is False
+
+    monkeypatch.setattr(resources, "low_disk", honest)
+    del indexed_volume
+
+    assert resources._DEGRADED is None, "the reading of the retired directory was not written back"
+
+
+def test_a_fill_level_measured_before_a_reset_is_answered_and_not_remembered(
+    indexed_volume: Corpus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same race at the other measurement, and the more expensive one of the two.
+
+    This is the reading a rebuild exists to move. A cache entry filled from the
+    retired directory has the admin page report the old chains for the whole
+    thirty second window, right after the run that filled the new ones.
+    """
+    del indexed_volume
+    real = resources.read_side()
+    assert real is not None
+
+    class _AChainThatResetsWhileItIsAsked:
+        def terms_with_prefix(self, field: str, prefix: str, limit: int | None = None) -> Sequence[object]:
+            resources.reset_read_side()
+            return real.index.searcher().terms_with_prefix(field, prefix, limit=limit)
+
+    class _AnIndexThatMovesUnderTheProbe:
+        def searcher(self) -> _AChainThatResetsWhileItIsAsked:
+            return _AChainThatResetsWhileItIsAsked()
+
+    staged = resources.ReadSide(
+        index=cast("Index", _AnIndexThatMovesUnderTheProbe()),
+        store=real.store,
+        index_dir=real.index_dir,
+        vectors=real.vectors,
+        generation=real.generation,
+    )
+    monkeypatch.setattr(resources, "read_side", lambda: staged)
+
+    assert resources.filled_languages() == ("de",), "the reading is handed out"
+    assert resources._FILLED is None, "and it is not remembered"

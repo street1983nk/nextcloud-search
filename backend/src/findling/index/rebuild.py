@@ -51,11 +51,15 @@ container that answers out of a directory nobody can point at any more:
    no name (C-18-01). The callback now waits for the pass in flight and gives
    the handle back, and a callback that answers False stops the run before
    anything is renamed.
-3. drop the reading side with an explicit ``reset_read_side()``, over in
-   :mod:`findling.api.resources`.
-   That cache is keyed on ``index_dir``, the swap does not move ``index_dir``,
-   and the invalidation branch inside ``read_side()`` therefore never fires on
-   its own.
+3. bar the reading side with an explicit ``hold_the_read_side_shut()``, over
+   in :mod:`findling.api.resources`, and let it open again once the two renames
+   are behind. That cache is keyed on ``index_dir``, the swap does not move
+   ``index_dir``, and the invalidation branch inside ``read_side()`` therefore
+   never fires on its own. Emptying it is not enough either: between the
+   emptying and the first rename a search used to open the live directory again
+   and keep the handle, which is the very thing step 3 exists to prevent, so the
+   bar stands for the width of the two renames and ``read_side()`` answers None
+   while it is up (M-18-03).
 4. rename ``index`` to ``index.retired``.
 5. rename ``index.rebuild`` to ``index``.
 6. remove ``index.retired``.
@@ -982,6 +986,7 @@ def rebuild_the_index(
     stand_down: Callable[[], bool],
     arm: Callable[[], None],
     drop_read_side: Callable[[], None],
+    let_read_side_open: Callable[[], None],
     should_stop: Callable[[], bool] | None = None,
 ) -> str:
     """Lead one whole rebuild, in the order of the seven steps and in no other.
@@ -1001,7 +1006,7 @@ def rebuild_the_index(
     4. make the target directory fit this code, or remove it,
     5. carry the documents over, band by band,
     6. ask the final probe,
-    7. drop the reading side and swap the directories,
+    7. bar the reading side and swap the directories, then let it open again,
     8. stamp the two marks and let the indexing task go again.
 
     **Step 4 is the one the audit of this phase added**, and it is there because
@@ -1156,8 +1161,17 @@ def rebuild_the_index(
         # Step 3, immediately in front of the first rename and nowhere else. The
         # swap puts the rebuilt directory under the very name the live one had,
         # so the invalidation branch of the reading side never fires on its own.
+        # Step 7, immediately in front of the first rename and nowhere else.
+        # The two callbacks are a pair and the second one stands in a finally,
+        # because a swap that raised leaves a container that can answer out of
+        # whatever the clean up path of the next start makes of the volume, and
+        # a bar nobody lowered would leave one that answers nothing until it is
+        # restarted (audit finding M-18-03).
         drop_read_side()
-        swap_in(target, live)
+        try:
+            swap_in(target, live)
+        finally:
+            let_read_side_open()
         # The mark travelled with the directory and has done its work: it says
         # "this half filled target belongs to this code", and there is nothing
         # half filled here any more. Removed after the swap and not before it,

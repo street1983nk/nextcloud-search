@@ -721,12 +721,14 @@ async def test_the_rebuild_hands_the_real_stand_down_and_arm_of_the_poller_into_
         stand_down: object,
         arm: object,
         drop_read_side: object,
+        let_read_side_open: object,
         should_stop: object,
     ) -> str:
         del store, should_stop
         handed_over["stand_down"] = stand_down
         handed_over["arm"] = arm
         handed_over["drop_read_side"] = drop_read_side
+        handed_over["let_read_side_open"] = let_read_side_open
         readings.append(("before", poller.armed))
         assert stand_down() is True  # pyright: ignore[reportCallIssue]
         readings.append(("stood down", poller.armed))
@@ -749,7 +751,11 @@ async def test_the_rebuild_hands_the_real_stand_down_and_arm_of_the_poller_into_
     assert bound.func is _stand_the_poller_down
     assert bound.args == (loop,)
     assert handed_over["arm"] is _arm_the_poller
-    assert handed_over["drop_read_side"] is resources.reset_read_side
+    # The pair around the two renames, and it is the barring one rather than the
+    # plain invalidation since audit finding M-18-03: emptying the caches leaves
+    # the window between the emptying and the first rename open.
+    assert handed_over["drop_read_side"] is resources.hold_the_read_side_shut
+    assert handed_over["let_read_side_open"] is resources.let_the_read_side_open
 
 
 async def test_a_real_poller_with_an_open_writer_loses_no_document_over_the_swap(

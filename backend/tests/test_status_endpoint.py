@@ -982,7 +982,13 @@ def test_a_chain_that_is_switched_off_is_not_probed_at_all(
     real = resources.read_side()
     assert real is not None
     counting = _CountingIndex(real.index)
-    staged = ReadSide(index=cast(Index, counting), store=real.store, index_dir=real.index_dir, vectors=real.vectors)
+    staged = ReadSide(
+        index=cast(Index, counting),
+        store=real.store,
+        index_dir=real.index_dir,
+        vectors=real.vectors,
+        generation=real.generation,
+    )
     monkeypatch.setattr(resources, "read_side", lambda: staged)
 
     assert resources.filled_languages() == ("de",)
@@ -1019,6 +1025,7 @@ def test_one_chain_that_cannot_be_probed_does_not_take_the_other_five_with_it(
         store=real.store,
         index_dir=real.index_dir,
         vectors=real.vectors,
+        generation=real.generation,
     )
     monkeypatch.setattr(resources, "read_side", lambda: staged)
 
@@ -1040,6 +1047,11 @@ def test_the_fill_probe_runs_once_within_its_window_and_again_after_a_swap(
         store=real.store,
         index_dir=real.index_dir,
         vectors=real.vectors,
+        # The generation the real handles were opened under, because a side of
+        # an older one deliberately keeps its reading out of the cache since
+        # audit finding M-18-02, and a case about the cache has to hand in a
+        # side the cache accepts.
+        generation=real.generation,
     )
     monkeypatch.setattr(resources, "read_side", lambda: staged)
 

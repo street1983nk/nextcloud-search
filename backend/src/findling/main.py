@@ -463,7 +463,8 @@ def _run_the_rebuild(should_stop: Callable[[], bool], loop: asyncio.AbstractEven
             store,
             stand_down=partial(_stand_the_poller_down, loop),
             arm=_arm_the_poller,
-            drop_read_side=resources.reset_read_side,
+            drop_read_side=resources.hold_the_read_side_shut,
+            let_read_side_open=resources.let_the_read_side_open,
             should_stop=should_stop,
         )
     finally:

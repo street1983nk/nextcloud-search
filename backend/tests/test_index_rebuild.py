@@ -19,7 +19,7 @@ import hashlib
 import inspect
 import logging
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import pytest
@@ -1195,7 +1195,7 @@ def test_the_clean_up_path_takes_no_path_and_derives_all_three_names(volume: Pat
 
 
 class _Hands:
-    """The three callbacks the run is led by, recording instead of doing.
+    """The four callbacks the run is led by, recording instead of doing.
 
     ``stand_down`` answers True by default, which is what a poller that really
     went quiet does. The case that hands in a False builds its own.
@@ -1213,6 +1213,27 @@ class _Hands:
 
     def drop_read_side(self) -> None:
         self.journal.append("drop_read_side")
+
+    def let_read_side_open(self) -> None:
+        self.journal.append("let_read_side_open")
+
+
+def _led_by(store: Store, hands: _Hands, should_stop: Callable[[], bool] | None = None) -> str:
+    """One run, led by the four callbacks of one recorder and by nothing else.
+
+    In one place rather than at every call site below, so that a fifth callback
+    is one line here instead of one line in every case of this file, and so that
+    no case can quietly hand in a callback of its own where it means to hand in
+    the recorder.
+    """
+    return rebuild_the_index(
+        store,
+        stand_down=hands.stand_down,
+        arm=hands.arm,
+        drop_read_side=hands.drop_read_side,
+        let_read_side_open=hands.let_read_side_open,
+        should_stop=should_stop,
+    )
 
 
 def _a_volume_that_asks_for_a_rebuild(volume: Path, documents: int = 5) -> Store:
@@ -1279,12 +1300,12 @@ def test_the_run_stands_down_before_the_first_document_and_arms_behind_the_stamp
     monkeypatch.setattr("findling.index.rebuild._document_from", note_the_first_document)
     monkeypatch.setattr("findling.index.rebuild.stamp_after_swap", note_the_stamp)
 
-    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    verdict = _led_by(store, hands)
     marks = store.read_meta()
     store.close()
 
     assert verdict == REBUILD_THROUGH
-    assert hands.journal == ["stand_down", "document", "drop_read_side", "stamp", "arm"]
+    assert hands.journal == ["stand_down", "document", "drop_read_side", "let_read_side_open", "stamp", "arm"]
     assert marks[_SCHEMA_MARK] == str(SCHEMA_VERSION)
     assert _documents_in(volume / "index") == 5
     assert not (volume / "index.rebuild").exists()
@@ -1307,9 +1328,7 @@ def test_a_volume_without_room_refuses_before_it_creates_anything_and_arms_again
     settings.cache_clear()
 
     with caplog.at_level(logging.WARNING, logger="findling.index.rebuild"):
-        verdict = rebuild_the_index(
-            store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side
-        )
+        verdict = _led_by(store, hands)
     store.close()
 
     assert verdict == NOT_ENOUGH_ROOM
@@ -1337,7 +1356,7 @@ def test_the_fallback_raises_the_generation_and_never_starts_a_band_run(
     monkeypatch.setenv("FINDLING_REBUILD_FALLBACK", "fullreindex")
     settings.cache_clear()
 
-    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    verdict = _led_by(store, hands)
     after = store.index_version
     marks = store.read_meta()
     store.close()
@@ -1364,7 +1383,7 @@ def test_marks_that_agree_are_answered_without_touching_anything(volume: Path) -
     store.write_meta(LANGUAGES_MARK, ",".join(settings().languages))
     hands = _Hands()
 
-    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    verdict = _led_by(store, hands)
     store.close()
 
     assert verdict == NOTHING_TO_REBUILD
@@ -1396,7 +1415,7 @@ def test_the_progress_rests_before_the_run_and_carries_two_numbers_during_it(
     monkeypatch.setattr("findling.index.rebuild._document_from", sample)
     monkeypatch.setattr("findling.index.rebuild.BAND_DOCUMENTS", 2)
 
-    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    verdict = _led_by(store, hands)
     store.close()
 
     assert verdict == REBUILD_THROUGH
@@ -1429,13 +1448,7 @@ def test_a_stop_between_two_bands_keeps_the_half_filled_directory(
         bands += 1
         return bands > 1
 
-    verdict = rebuild_the_index(
-        store,
-        stand_down=hands.stand_down,
-        arm=hands.arm,
-        drop_read_side=hands.drop_read_side,
-        should_stop=after_the_first_band,
-    )
+    verdict = _led_by(store, hands, should_stop=after_the_first_band)
     marks = store.read_meta()
     store.close()
 
@@ -1462,7 +1475,7 @@ def test_a_finished_run_leaves_no_mark_file_in_the_live_directory(volume: Path) 
     store = _a_volume_that_asks_for_a_rebuild(volume)
     hands = _Hands()
 
-    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    verdict = _led_by(store, hands)
     store.close()
 
     assert verdict == REBUILD_THROUGH
@@ -1496,9 +1509,7 @@ def test_a_half_filled_target_of_other_marks_is_discarded_instead_of_filled_up(
     hands = _Hands()
 
     with caplog.at_level(logging.WARNING, logger="findling.index.rebuild"):
-        verdict = rebuild_the_index(
-            store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side
-        )
+        verdict = _led_by(store, hands)
     marks = store.read_meta()
     store.close()
 
@@ -1533,9 +1544,7 @@ def test_a_half_filled_target_of_this_code_is_resumed_and_not_discarded(volume: 
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr("findling.index.rebuild._document_from", note)
-        verdict = rebuild_the_index(
-            store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side
-        )
+        verdict = _led_by(store, hands)
     store.close()
 
     assert verdict == REBUILD_THROUGH
@@ -1562,9 +1571,7 @@ def test_a_target_that_cannot_be_opened_is_discarded_instead_of_failing_every_st
     hands = _Hands()
 
     with caplog.at_level(logging.WARNING, logger="findling.index.rebuild"):
-        verdict = rebuild_the_index(
-            store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side
-        )
+        verdict = _led_by(store, hands)
     store.close()
 
     assert verdict == REBUILD_THROUGH
@@ -1603,9 +1610,7 @@ def test_a_pass_that_carries_nothing_and_stays_short_discards_the_target(
     monkeypatch.setattr("findling.index.rebuild.BAND_DOCUMENTS", 2)
 
     with caplog.at_level(logging.WARNING, logger="findling.index.rebuild"):
-        verdict = rebuild_the_index(
-            store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side
-        )
+        verdict = _led_by(store, hands)
     marks = store.read_meta()
     store.close()
 
@@ -1634,7 +1639,7 @@ def test_a_pass_that_carried_something_over_keeps_its_target(volume: Path, monke
     monkeypatch.setattr("findling.index.rebuild.counts_match", short_of_one)
     assert honest is not short_of_one
 
-    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    verdict = _led_by(store, hands)
     store.close()
 
     assert verdict == RUN_INCOMPLETE

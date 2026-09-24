@@ -111,12 +111,56 @@ class ReadSide:
     # this to None and writes one log line with a type name, and the search
     # answers the unchanged lexical ranking (D-19, T-06-29).
     vectors: VectorStore | None = None
+    # Which generation of the reading side these handles belong to, and the
+    # whole reason the field exists is audit finding M-18-02.
+    #
+    # The two measurements below, degraded() and filled_languages(), take the
+    # side OUTSIDE the lock and write their cache entry INSIDE it. A
+    # reset_read_side() that lands between the two used to leave the later
+    # writer filling the cache it had just emptied, with a reading taken from
+    # the directory that was retired a moment ago. The path key cannot catch
+    # that, because the swap puts the rebuilt directory under the very name the
+    # live one had, so the key matches and the entry looks current: the admin
+    # page then reported the state from before the rebuild for up to thirty
+    # seconds, which is exactly the moment those two lines were written for.
+    #
+    # A number next to the caches answers it. It moves on every reset, the
+    # handles carry the number they were opened under, and a writer whose side
+    # is of an older generation hands its verdict out and keeps it out of the
+    # cache.
+    generation: int = 0
 
 
 _OPEN: ReadSide | None = None
 _MARKS: tuple[Path, dict[str, str]] | None = None
 _DEGRADED: tuple[Path, float, bool] | None = None
 _FILLED: tuple[Path, float, tuple[str, ...]] | None = None
+
+# How often the reading side has been let go in this process. Read the reasoning
+# at ReadSide.generation; what matters here is only that it never goes backwards
+# and that it moves under the same lock as the caches it guards.
+_GENERATION: int = 0
+
+# Whether a directory swap is happening right now, in which case there is no
+# reading side at all.
+#
+# Audit finding M-18-03. Between drop_read_side() and swap_in() stood two
+# ordinary statements without a common lock, and a search that arrived in that
+# window did the one thing the whole reset exists to prevent: it found the cache
+# empty, opened the live directory and put the handle back. A moment later that
+# directory was renamed and removed, and on Linux both calls succeed, so the
+# cached handle went on answering every search out of a directory that has no
+# name, silently and until the container was restarted. That is pitfall 3 of the
+# phase research, and reset_read_side alone could not close it, because the
+# emptying and the rename are two separate moments.
+#
+# The bar is raised by hold_the_read_side_shut() and lowered by
+# let_the_read_side_open(). While it is up read_side() answers None, which the
+# whole reading half already handles as "this container has no index yet": a
+# search answers empty. That lasts two rename system calls, and answering empty
+# for the length of two system calls is the documented state of that window
+# anyway.
+_SWAPPING: bool = False
 
 # One lock for the four caches above, and it is not a precaution.
 #
@@ -299,6 +343,10 @@ def read_side() -> ReadSide | None:
     global _OPEN
     resolved = settings()
     with _LOCK:
+        if _SWAPPING:
+            # A directory swap is between its two renames, so there is no live
+            # index directory to open and no handle worth keeping. See _SWAPPING.
+            return None
         if _OPEN is not None and _OPEN.index_dir == resolved.index_dir:
             return _OPEN
 
@@ -355,7 +403,13 @@ def read_side() -> ReadSide | None:
             # After the two that matter, and outside their fate. Whatever this
             # answers, the read side is opened.
             vectors = _read_only_vectors(resolved.vectors_db)
-            _OPEN = ReadSide(index=index, store=store, index_dir=resolved.index_dir, vectors=vectors)
+            _OPEN = ReadSide(
+                index=index,
+                store=store,
+                index_dir=resolved.index_dir,
+                vectors=vectors,
+                generation=_GENERATION,
+            )
             store = None
             vectors = None
         # Deliberately every exception, for the reason in the docstring above.
@@ -404,11 +458,19 @@ def reset_read_side() -> None:
     rebuild exists to move, so keeping it would have the admin page report the
     old chains for half a minute after the run that filled the new ones.
 
+    **The generation moves with it**, and that is the second half of the
+    invalidation rather than bookkeeping. The two measurements below take their
+    side outside this lock and write their cache entry inside it, so one of them
+    can be holding a side from before this call while this call is running; the
+    number is what lets it notice. The reasoning stands at
+    :attr:`ReadSide.generation`.
+
     Idempotent. A second call and a call on a container whose first indexing
     pass never finished both find nothing and do nothing.
     """
-    global _OPEN, _MARKS, _DEGRADED, _FILLED
+    global _OPEN, _MARKS, _DEGRADED, _FILLED, _GENERATION
     with _LOCK:
+        _GENERATION += 1
         # Taken into a local before the cache is emptied, exactly as the release
         # branch above does it: a handle that is closed while it is still
         # reachable is a handle a search can be holding halfway through.
@@ -420,6 +482,41 @@ def reset_read_side() -> None:
             previous.store.close()
             if previous.vectors is not None:
                 previous.vectors.close()
+
+
+def hold_the_read_side_shut() -> None:
+    """Raise the bar of the directory swap and let go of everything behind it.
+
+    The first of the pair :func:`findling.index.rebuild.rebuild_the_index` calls
+    around its two renames, and it is one step and not two on purpose: a bar
+    that went up after the caches were emptied would leave the window it exists
+    to close (audit finding M-18-03, and the reasoning at :data:`_SWAPPING`).
+
+    While the bar is up :func:`read_side` answers None, so a search that arrives
+    inside the window answers empty instead of opening the directory that is
+    about to be renamed away under it. The lock is re-entrant, which is what
+    lets the bar and the release stand in one block.
+
+    Always paired with :func:`let_the_read_side_open`, and the caller puts that
+    one in a finally: a swap that raised leaves a container that answers, and a
+    bar nobody lowered would leave one that does not.
+    """
+    global _SWAPPING
+    with _LOCK:
+        _SWAPPING = True
+        reset_read_side()
+
+
+def let_the_read_side_open() -> None:
+    """Lower the bar, so that the next search opens the directory that is there now.
+
+    The other half of :func:`hold_the_read_side_shut`. Nothing is opened here:
+    the first search after it pays the open, exactly as it does after every
+    other invalidation.
+    """
+    global _SWAPPING
+    with _LOCK:
+        _SWAPPING = False
 
 
 def degraded(side: ReadSide | None) -> bool:
@@ -459,7 +556,14 @@ def degraded(side: ReadSide | None) -> bool:
             return cached[2]
         missing_vectors = side.vectors is None and settings().embed_enabled
         verdict = missing_vectors or bool(version_drift(side.store)) or low_disk()
-        _DEGRADED = (side.index_dir, now, verdict)
+        if side.generation == _GENERATION:
+            # And not otherwise. The side was taken outside this lock, so a
+            # reset may have happened in between, and remembering a verdict
+            # measured on the directory that was retired a moment ago is the
+            # race of audit finding M-18-02. The verdict is still handed out:
+            # it was true when it was measured, and the caller asked about the
+            # handles it holds.
+            _DEGRADED = (side.index_dir, now, verdict)
         return verdict
 
 
@@ -546,8 +650,15 @@ def filled_languages() -> tuple[str, ...]:
             # shape of this failure rather than a fault worth a warning.
             except Exception as error:
                 LOGGER.debug("the chain %s could not be probed, an %s", code, type(error).__name__)
-        _FILLED = (side.index_dir, now, tuple(filled))
-        return _FILLED[2]
+        answer = tuple(filled)
+        if side.generation == _GENERATION:
+            # The same guard degraded() carries, and for the same race
+            # (M-18-02). This is the reading a rebuild exists to move, so a
+            # cache entry filled from the retired directory would have the admin
+            # page report the old chains for the whole window right after the
+            # run that filled the new ones.
+            _FILLED = (side.index_dir, now, answer)
+        return answer
 
 
 def _chains_worth_probing() -> tuple[str, ...]:

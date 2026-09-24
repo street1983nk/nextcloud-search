@@ -855,8 +855,23 @@ PHP_TREE_HASH_TODAY = "15e00b2b37e003ff98b0cc3ca87affdea215eb160c1671153f9e616bf
 # active set plus German in schema order, because terms_with_prefix walks the
 # whole term dictionary of every field it is given. No file came and none went,
 # so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a thirty second time, by the fix of the audit findings
+# M-18-02 and M-18-03: three of the 56 files changed their bytes and the count
+# stays at 56. api/resources.py got ReadSide.generation and the module counter
+# _GENERATION beside it, so degraded() and filled_languages(), which take their
+# side outside the lock and write their cache entry inside it, hand a reading of
+# a retired directory out and keep it out of the cache; and it got _SWAPPING
+# with the pair hold_the_read_side_shut() and let_the_read_side_open(), which
+# makes read_side() answer None for the width of the two renames, because
+# emptying the caches leaves the window between the emptying and the first
+# rename open and a handle taken in it answers out of a directory with no name
+# until the container restarts. index/rebuild.py takes the second callback of
+# that pair and puts it in a finally around swap_in, and its module header
+# carries the reasoning at step 3. main.py hands in the two functions instead of
+# reset_read_side. No file came and none went, so PACKAGE_FILES_TODAY stays
+# at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "65c6fe5a912b68ee8a24857b820570c6f31e23e506b3de9f0415e25f8558716e"
+PACKAGE_TREE_HASH_TODAY = "9609ae3da688ea43edf099efc97beea44bdaf73f2ea91590f54e87b3f8c38544"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
