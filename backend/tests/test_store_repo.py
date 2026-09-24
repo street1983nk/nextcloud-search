@@ -388,9 +388,9 @@ def test_the_language_exception_falls_closed(store: Store) -> None:
     assert _languages_are_legacy(None, "de,en,es") is False
     assert _languages_are_legacy("de,en", "de,en,es") is False
     assert _languages_are_legacy("", "de,en") is False
-    assert set(LEGACY_LANGUAGES) == {"de", "en"}
-
-
+    assert set(LEGACY_LANGUAGES) == {"de", "en"}
+
+
 def test_record_writes_state_and_reason_and_stamps_the_verdict(store: Store) -> None:
     store.record(7, a_file(7), "skipped", "too_large")
 

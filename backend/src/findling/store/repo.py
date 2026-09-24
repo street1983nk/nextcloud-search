@@ -78,6 +78,27 @@ STORE_SCHEMA_MARK: Final = "store_schema_version"
 # :func:`findling.store.vectors.embedding_mark`.
 EMBEDDING_MARK: Final = "embedding_version"
 
+# The mark that names the language set the index on disk was built with, spelled
+# here because the seed below has to skip it by name. It is defined in
+# findling.index.open as LANGUAGES_MARK, which is the module that puts it into
+# the set of expected marks; a literal here keeps the store from importing the
+# index side, and the same literal stands in version_mismatch for index_version
+# and tantivy_version for the same reason. The seed test in
+# tests/test_store_repo.py fails the moment the two spellings part company.
+_LANGUAGES_MARK: Final = "languages"
+
+# What a body field in the field can be, and deliberately not what the factory
+# setting is today.
+#
+# Up to and including 1.2.0 config._languages() filtered FINDLING_LANGUAGES
+# against DEFAULT_LANGUAGES, which was ("de", "en") in every release that was
+# ever published, so no installation out there can carry a body field outside
+# this pair. That is a statement about the past and it stays true whatever the
+# factory setting becomes: DEFAULT_LANGUAGES may move with a future release,
+# this tuple may not, and importing the one into the other would quietly widen
+# the exception below on the day somebody changes the default.
+LEGACY_LANGUAGES: Final = ("de", "en")
+
 # Where the redelivery of the vector stock has got to, or an empty value when no
 # redelivery is running.
 #
@@ -116,6 +137,21 @@ UNKNOWN_VERSION: Final = "unknown"
 # divergence on the next comparison. That is the intended answer everywhere
 # else in this file already: an unnamed version is exactly as trustworthy as a
 # wrong one.
+#
+# One expected mark is missing from here on purpose, and the seed below skips it
+# a second time so that a caller cannot hand it in either: the language mark of
+# owner decision E-17-4 option a (2026-09-24). Every other mark is a fact about
+# code that is already on disk, while this one would be the wish of the running
+# container written down as if it were such a fact. A seeded language mark makes
+# version_mismatch agree with itself: the container asks whether the index was
+# built with the languages it wants, the seed has just written that it was, and
+# the one installation the mark exists for, the one switching a language on at
+# the upgrade, never rebuilds and stays empty in the new language (T-18-05-01).
+#
+# The precedent for a mark that is deliberately kept out of a set is in the tree
+# twice: EMBEDDING_MARK is left out of index.open.expected_versions and added by
+# api/resources.py afterwards, and stamp_after_rebuild skips index_version with
+# a paragraph of its own. This is the third of that kind and not a new habit.
 _DEFAULT_META: Final[Mapping[str, str]] = {
     STORE_SCHEMA_MARK: SCHEMA_VERSION,
     "schema_version": UNKNOWN_VERSION,
@@ -680,6 +716,8 @@ class Store:
             if key == "index_version" and _generation_at_least(current, value):
                 continue
             if key == "tantivy_version" and _index_format_matches(current, value):
+                continue
+            if key == _LANGUAGES_MARK and _languages_are_legacy(current, value):
                 continue
             diverging.append(key)
         return diverging
@@ -1342,6 +1380,33 @@ def _index_format_matches(stored: str | None, expected: str) -> bool:
     return stored[here:] == expected[there:]
 
 
+def _languages_are_legacy(stored: str | None, expected: str) -> bool:
+    """True when the mark was never written and the expectation fits what could have been.
+
+    A mark that was never written counts as diverging everywhere else in this
+    file, and rightly so: an unnamed analyzer could be any analyzer. This one
+    mark is the exception, and the reason is provable rather than convenient. Up
+    to and including 1.2.0, config._languages() filtered FINDLING_LANGUAGES
+    against DEFAULT_LANGUAGES, which was ("de", "en") in every release that was
+    published, so no installation in the field can carry a body field outside
+    that pair, because no released build could write one. An absent mark is
+    therefore compatible with any expectation that stays inside the pair, and
+    with nothing else. The first stamp writes the mark, and from then on this
+    branch is never taken again: a stored value is compared, never excused.
+
+    **The one gap this leaves open, named rather than discovered later.** An
+    instance running FINDLING_LANGUAGES=de that switches English on at the
+    upgrade gets no drift, because "de,en" is inside the pair. That is exactly
+    the behaviour of today, where there is no mark at all, so it is no
+    regression, and it closes itself with the first drift of any kind. It is
+    written down here, in docs/language-analyzers.md and in a case of
+    tests/test_store_repo.py, so that nobody reads it as an oversight.
+    """
+    if stored is not None:
+        return False
+    return set(expected.split(",")) <= set(LEGACY_LANGUAGES)
+
+
 def open_store(path: Path | str, *, meta: Mapping[str, str] | None = None) -> Store:
     """Open the state database for writing, creating it when it is absent.
 
@@ -1392,10 +1457,20 @@ def open_store(path: Path | str, *, meta: Mapping[str, str] | None = None) -> St
 
 
 def _seed_meta(store: Store, meta: Mapping[str, str] | None) -> None:
-    """Write the meta keys that are missing, touch none that are present."""
+    """Write the meta keys that are missing, touch none that are present.
+
+    With one named exception, and it is the whole reason the language mark is
+    worth having. The caller hands in the marks of the running code, so seeding
+    that mark would write the language set the container currently wishes for as
+    if it were the set the index on disk was built with. The comment above
+    _DEFAULT_META spells the consequence out; the mark is written in one place
+    only, by findling.index.open.stamp_after_rebuild, and only once the work
+    that makes it true is through.
+    """
     stored = store.read_meta()
     seed = dict(_DEFAULT_META)
     seed.update(meta or {})
+    seed.pop(_LANGUAGES_MARK, None)
     # Provenance, generated rather than defaulted: created_at dates the database
     # in a support case, instance_id tells two copies of the same volume apart.
     seed.setdefault("created_at", str(int(time.time())))
