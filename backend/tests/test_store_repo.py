@@ -29,11 +29,13 @@ from pathlib import Path
 
 import pytest
 
+from findling.index.open import LANGUAGES_MARK, expected_versions
 from findling.store.repo import (
     _ACL_DOCUMENTS_SQL,
     _ACL_ROWS_SQL,
     _DEFAULT_META,
     EMBEDDING_MARK,
+    LEGACY_LANGUAGES,
     SCHEMA_VERSION,
     STATE_REASONS,
     STORE_SCHEMA_MARK,
@@ -42,6 +44,7 @@ from findling.store.repo import (
     FileMeta,
     Store,
     _index_format_matches,
+    _languages_are_legacy,
     enable_wal,
     index_bytes,
     open_read_only,
@@ -293,6 +296,101 @@ def test_the_other_marks_are_untouched_by_the_tantivy_exception(store: Store) ->
     assert store.version_mismatch({"wordlist_hash": "index_format v7 too"}) == ["wordlist_hash"]
 
 
+# -- the sixth mark and its exception ----------------------------------------
+#
+# Owner decision E-17-4 option a of 2026-09-23: the language set becomes a
+# version mark. The four cases below are the ones the research of phase 18
+# calculated through before a line was written, and they are four and not one
+# because the mark is only worth having if it stays quiet for the installations
+# that changed nothing and speaks for the ones that did.
+
+
+def test_case_one_a_1_2_0_installation_on_the_factory_setting_reports_no_drift(store: Store) -> None:
+    # The case that decides whether this phase costs the field a reindex. An
+    # installation that never touched FINDLING_LANGUAGES upgrades, the mark is
+    # not in its database, and the expectation is the factory pair.
+    assert LANGUAGES_MARK not in store.read_meta()
+
+    assert store.version_mismatch({LANGUAGES_MARK: "de,en"}) == []
+
+
+def test_case_two_a_1_2_0_installation_pinned_to_german_reports_no_drift(store: Store) -> None:
+    # The second half of the same promise, and the reason the rule is a subset
+    # rule rather than a comparison against the factory pair: an instance that
+    # runs FINDLING_LANGUAGES=de changed nothing at the upgrade either, and a
+    # rebuild it did not ask for would be measured in hours on its own machine.
+    assert store.version_mismatch({LANGUAGES_MARK: "de"}) == []
+
+
+def test_case_three_a_1_2_0_installation_that_switches_spanish_on_reports_drift(store: Store) -> None:
+    # The case the mark exists for. Spanish is outside what any release up to
+    # 1.2.0 could have written, so the absent mark cannot be read as legacy and
+    # the rebuild starts.
+    diverging = store.version_mismatch({LANGUAGES_MARK: "de,en,es"})
+
+    assert diverging == [LANGUAGES_MARK]
+
+
+def test_case_four_switching_a_language_off_on_1_3_0_reports_drift_as_well(store: Store) -> None:
+    # The counter direction, which the subset rule must not swallow. Once the
+    # mark is written the exception is over: a stored value is never legacy,
+    # whatever it says, so switching Spanish back off is a difference too.
+    store.write_meta(LANGUAGES_MARK, "de,en,es")
+
+    assert store.version_mismatch({LANGUAGES_MARK: "de,en"}) == [LANGUAGES_MARK]
+
+
+def test_the_language_mark_is_never_written_by_the_seed(tmp_path: Path) -> None:
+    """Pitfall 1 of the phase research, held as a case rather than as a warning.
+
+    ``open_store(..., meta=expected)`` writes every expected mark that is missing,
+    which for this one mark would write the wish of the running container as if
+    it were a fact about the index on disk. The drift of case three would then be
+    gone before anybody looked at it, the rebuild would never start, and Spanish
+    would stay empty for the whole stock while every status page said fine
+    (threat T-18-05-01).
+    """
+    expected = expected_versions("ein-digest", "de,en,es")
+    opened = open_store(tmp_path / "state.db", meta=expected)
+    try:
+        assert LANGUAGES_MARK not in opened.read_meta()
+        # And it still speaks: the seed skipped it, so the comparison of case
+        # three is the one that runs on this database.
+        assert opened.version_mismatch(expected) == [LANGUAGES_MARK]
+    finally:
+        opened.close()
+
+
+def test_the_named_gap_of_the_subset_rule_stays_open_on_purpose(store: Store) -> None:
+    """The one case the rule lets through, written down so nobody reads it as a bug.
+
+    An instance running FINDLING_LANGUAGES=de that switches English on at the
+    upgrade gets no drift, because "de,en" is inside the pair any old release
+    could have built. That is exactly today's behaviour, since today there is no
+    mark at all, so it is no regression; and it closes itself with the first
+    drift of any kind, because the stamp writes the mark and this branch is never
+    taken again. The gap is also named in docs/language-analyzers.md, so that it
+    is findable from outside this file.
+    """
+    assert store.version_mismatch({LANGUAGES_MARK: "de,en"}) == []
+
+
+def test_the_language_exception_falls_closed(store: Store) -> None:
+    """The six cases the exception stands or falls on, asked of the rule directly.
+
+    Same shape as the index format case above, and for the same reason: the
+    branch is one line inside a loop, and a loop that was rearranged could keep
+    every case above green while the rule itself stopped meaning anything.
+    """
+    assert _languages_are_legacy(None, "de,en") is True
+    assert _languages_are_legacy(None, "de") is True
+    assert _languages_are_legacy(None, "en") is True
+    assert _languages_are_legacy(None, "de,en,es") is False
+    assert _languages_are_legacy("de,en", "de,en,es") is False
+    assert _languages_are_legacy("", "de,en") is False
+    assert set(LEGACY_LANGUAGES) == {"de", "en"}
+
+
 def test_record_writes_state_and_reason_and_stamps_the_verdict(store: Store) -> None:
     store.record(7, a_file(7), "skipped", "too_large")
 
