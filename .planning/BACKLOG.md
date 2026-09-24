@@ -256,7 +256,12 @@ testen). Zweiter Nachfrage-Beleg dieser Art nach den Sprachwuenschen (BL-F02).
 Owner-Steuerung 24.09.: viele Nutzer haben heute groessere Boxen als 4 GB,
 das beruecksichtigen und mehr Geschwindigkeit ermoeglichen.
 
-**Kern des Vorhabens (v1.4-Kandidat, NICHT v1.3):**
+**OWNER-ENTSCHEID 24.09.2026: GESETZT als naechstes Vorhaben nach v1.3**
+("im anschluss machen wir den punkt mit den grossen boxen"). Damit ist
+BL-F04 der Kern des naechsten Milestones (v1.4), kein blosser Kandidat mehr.
+Beim /gsd:new-milestone nach dem v1.3-Abschluss zuerst diesen Eintrag laden.
+
+**Kern des Vorhabens:**
 
 1. **Leistungsprofile** statt Einzelschrauben: Sparsam (heutiger Default,
    4-GB-Versprechen unveraendert) / Standard / Leistung (8-GB+-Boxen).
