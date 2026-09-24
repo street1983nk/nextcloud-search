@@ -461,6 +461,8 @@ it	lunedì	lunedì	A	luned
 it	lunedì	lunedi	A	luned
 it	caffè	caffè	A	caff
 it	caffè	caffe	A	caff
+it	informazione	informazione	A	inform
+it	informazione	informazioni	A	inform
 it	qualità	qualità	Aplus	qual
 it	qualità	qualita	Aplus	qual
 it	città	città	Aplus	citt
@@ -489,6 +491,8 @@ it	lunedì	lunedì	Aplus	luned
 it	lunedì	lunedi	Aplus	luned
 it	caffè	caffè	Aplus	caff
 it	caffè	caffe	Aplus	caff
+it	informazione	informazione	Aplus	inform
+it	informazione	informazioni	Aplus	inform
 it	qualità	qualità	B	qual
 it	qualità	qualita	B	qual
 it	città	città	B	citt
@@ -517,6 +521,8 @@ it	lunedì	lunedì	B	luned
 it	lunedì	lunedi	B	luned
 it	caffè	caffè	B	caff
 it	caffè	caffe	B	caff
+it	informazione	informazione	B	inform
+it	informazione	informazioni	B	inform
 it	qualità	qualità	Bplus	qual
 it	qualità	qualita	Bplus	qual
 it	città	città	Bplus	citt
@@ -545,6 +551,8 @@ it	lunedì	lunedì	Bplus	luned
 it	lunedì	lunedi	Bplus	luned
 it	caffè	caffè	Bplus	caff
 it	caffè	caffe	Bplus	caff
+it	informazione	informazione	Bplus	inform
+it	informazione	informazioni	Bplus	inform
 it	qualità	qualità	C	qualit
 it	qualità	qualita	C	qual
 it	città	città	C	citt
@@ -573,6 +581,8 @@ it	lunedì	lunedì	C	luned
 it	lunedì	lunedi	C	luned
 it	caffè	caffè	C	caff
 it	caffè	caffe	C	caff
+it	informazione	informazione	C	inform
+it	informazione	informazioni	C	inform
 it	qualità	qualità	Cplus	qualit
 it	qualità	qualita	Cplus	qual
 it	città	città	Cplus	citt
@@ -601,6 +611,8 @@ it	lunedì	lunedì	Cplus	luned
 it	lunedì	lunedi	Cplus	luned
 it	caffè	caffè	Cplus	caff
 it	caffè	caffe	Cplus	caff
+it	informazione	informazione	Cplus	inform
+it	informazione	informazioni	Cplus	inform
 it	qualità	qualità	Dplus	qual
 it	qualità	qualita	Dplus	qual
 it	città	città	Dplus	citt
@@ -629,6 +641,8 @@ it	lunedì	lunedì	Dplus	luned
 it	lunedì	lunedi	Dplus	luned
 it	caffè	caffè	Dplus	caff
 it	caffè	caffe	Dplus	caff
+it	informazione	informazione	Dplus	inform
+it	informazione	informazioni	Dplus	inform
 nl	coördinatie	coördinatie	A	coordinatie
 nl	coördinatie	coordinatie	A	coordinatie
 nl	financiën	financiën	A	financien

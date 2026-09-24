@@ -32,7 +32,7 @@ dieser neue Text folgt der Projektregel und schreibt echte Umlaute.
 
 | Was | Wert |
 |---|---|
-| Datum des Laufs | 2026-09-23 |
+| Datum des Laufs | 2026-09-23, Nachlauf 2026-09-24, siehe Abschnitt 9 |
 | Suchbibliothek dieses Laufs | `tantivy==0.26.0`, Banner `tantivy v0.26.0, index_format v7`, die Fassung aus `backend/uv.lock` |
 | Gegenprobe der Recherche | `tantivy==0.26.2`, Banner `tantivy v0.26.2, index_format v7`, identische Tokenisierung über 224 Zeilen |
 | Python | 3.13.13 |
@@ -42,7 +42,7 @@ dieser neue Text folgt der Projektregel und schreibt echte Umlaute.
 | Wortzahlen der eingebauten Listen | spanish **308**, italian **279**, portuguese **203**, dutch **101** |
 | Gefaltete Ergänzungsliste | 117 Einträge, es 77, it 10, nl 0, pt 30 |
 | Digest der Ergänzungsliste | `d056d4597f989c7e03113c529c92cef980254f72c4d4e5deace4588ea033311a` |
-| Formfamilien | 65, zusammen 573 geordnete Paare |
+| Formfamilien | 66, zusammen 577 geordnete Paare, Stand Nachlauf; am 23.09.2026 waren es 65 und 573 |
 
 Eingabe waren die vier Fixtures `backend/tests/fixtures/chain_cases_es.txt`,
 `chain_cases_it.txt`, `chain_cases_nl.txt` und `chain_cases_pt.txt`, eine
@@ -76,10 +76,10 @@ Hundert Prozent heisst: jede Schreibweise findet jede andere.
 | Sprache | Familien | Paare | A | **A+** | B | B+ | C | **C+** | D+ |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | es | 20 | 208 | 174 | **174** | 174 | 174 | 178 | **178** | 174 |
-| it | 14 | 56 | 56 | **56** | 56 | 56 | 54 | **54** | 56 |
+| it | 15 | 60 | 60 | **60** | 60 | 60 | 58 | **58** | 60 |
 | nl | 13 | 81 | 57 | **57** | 57 | 57 | 57 | **57** | 57 |
 | pt | 18 | 228 | 180 | **180** | 180 | 180 | 174 | **174** | 180 |
-| **Summe** | **65** | **573** | 467 | **467** | 467 | 467 | 463 | **463** | 467 |
+| **Summe** | **66** | **577** | 471 | **471** | 471 | 471 | 467 | **467** | 471 |
 
 Jede Zelle steht als `<code>_<rezept>_hits` in `rohdaten/kennzahlen.txt`.
 
@@ -226,3 +226,66 @@ Zahlen: die Recherche hat gegen `tantivy==0.26.2` gemessen, dieser Lauf gegen
 Aussage der Recherche stützt, dass der Patch-Sprung die Tokenisierung nicht
 bewegt. Der Pin selbst wird in dieser Phase nicht angefasst; er hängt am
 Owner-Tor.
+
+---
+
+## 9. Nachlauf vom 24.09.2026
+
+Der Bericht oben steht ab hier auf den Zahlen dieses Nachlaufs und nicht mehr auf
+denen des 23.09.2026. Das ist Absicht: die Rohdaten in `rohdaten/` gehören zum
+Baum, wie er steht, und ein Bericht, der gegen einen nicht mehr existierenden
+Baum gehalten wird, wird gegen nichts gehalten. Dieser Abschnitt hält fest, was
+sich bewegt hat und was nicht.
+
+**Was sich an der Eingabe geändert hat.** Genau eine Zeile. `chain_cases_it.txt`
+hat eine Flexionsfamilie bekommen, die einzige der Datei; die vierzehn
+italienischen Akzentfamilien stehen unverändert, und an den Fixtures von es, nl
+und pt wurde nichts angefasst. Der Grund steht in Plan 19-02: bis dahin gab es
+kein italienisches Formenpaar, das nur die italienische Kette zusammenführt,
+solange Englisch aktiv ist. Die vierzehn Akzentpaare taugen dafür nicht, weil die
+englische Kette ebenfalls faltet und nach der Faltung beide Schreibweisen
+dieselbe Zeichenkette sind.
+
+**Die Umgebung dieses Laufs.**
+
+| Was | Wert |
+|---|---|
+| Datum des Laufs | 2026-09-24 |
+| Suchbibliothek dieses Laufs | `tantivy==0.26.2`, Banner `tantivy v0.26.2, index_format v7`, der Pin aus `backend/pyproject.toml` seit Plan 17-08 |
+| Python | 3.13.13 |
+| Rechner | Entwicklerrechner, Windows 11, x86_64, kein Container |
+| Rückgabecode | 0, die Gegenprobe der Siegerkette gegen `snowball_analyzer()` meldete wieder null abweichende Formen |
+
+**Welche Zahlen sich bewegt haben, Zeile für Zeile.**
+
+| Zeile in `rohdaten/kennzahlen.txt` | 23.09.2026 | 24.09.2026 |
+|---|---:|---:|
+| `it_families` | 14 | 15 |
+| `it_pairs` | 56 | 60 |
+| `it_A_hits`, `it_Aplus_hits`, `it_B_hits`, `it_Bplus_hits`, `it_Dplus_hits` | 56 | 60 |
+| `it_C_hits`, `it_Cplus_hits` | 54 | 58 |
+| `total_families` | 65 | 66 |
+| `total_pairs` | 573 | 577 |
+| `total_Aplus_hits` | 467 | 471 |
+| `total_Cplus_hits` | 463 | 467 |
+
+Die Familie hat zwei Formen, also vier geordnete Paare, und alle vier sind
+Treffer in jeder der sieben Ketten. Beide Formen sind unakzentuiert, deshalb kann
+die Faltposition sie gar nicht auseinandernehmen: die italienische Kette legt
+beide auf `inform`, die englische lässt `informazion` und `informazioni` stehen,
+die deutsche ebenso.
+
+**Welche Zahlen gleich geblieben sind.** Alle übrigen. Die Kennzahlen von es, nl
+und pt stehen Zeile für Zeile auf dem Wert vom 23.09.2026, ebenso die vier
+Ergänzungslisten (es 77, it 10, nl 0, pt 30), der Digest der Ergänzungsliste
+`d056d4597f989c7e03113c529c92cef980254f72c4d4e5deace4588ea033311a` und alle acht
+Leck-Zahlen. `rohdaten/verluste.tsv` ist Zeile für Zeile unverändert: die neue
+Familie erzeugt keinen italienischen Verlust, und
+`backend/tests/fixtures/chain_known_losses_it.txt` steht deshalb weiter auf null.
+
+**Was dieser Nachlauf ausdrücklich nicht anfasst.** Das Verdikt aus Abschnitt 4.
+Eine Familie ohne Akzent berührt die Position von `ascii_fold` nicht, und der
+Abstand, auf dem das italienische Verdikt beruht, bleibt derselbe: `fold früh`
+(A+) trifft 60 von 60 Paaren, `fold spät` (C+) 58 von 60, vorher 56 von 56 gegen
+54 von 56. Abschnitt 4 und Abschnitt 5 stehen deshalb wörtlich so, wie sie am
+23.09.2026 geschrieben wurden.

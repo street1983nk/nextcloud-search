@@ -6,9 +6,10 @@ token appeared" stays green while the fold has wandered behind the stemmer and
 every user who does not type accents has stopped finding anything.
 
 The fold position is measured and not reasoned about. Measured on 2026-09-23
-against tantivy tag 0.26.2: folding in front of the stop word filter keeps 467
-of 573 ordered surface form pairs on a shared term, folding behind the stemmer
-keeps 463, and only the front position keeps the accented and the flat spelling
+against tantivy tag 0.26.2 and rerun on 2026-09-24 after one Italian inflection
+family entered the fixture: folding in front of the stop word filter keeps 471
+of 577 ordered surface form pairs on a shared term, folding behind the stemmer
+keeps 467, and only the front position keeps the accented and the flat spelling
 of a stop word out of the index in both spellings.
 
 The syntax tree reader comes from the sibling module and is not copied here.
@@ -20,7 +21,7 @@ must not do.
 
 Since plan 17-06 the measurement itself is the acceptance. The lower half of
 this file holds the form family score of every language against the number the
-run of 2026-09-23 wrote into
+run of 2026-09-23, rerun on 2026-09-24, wrote into
 ``docs/measurements/2026-09-analyseketten/rohdaten/kennzahlen.txt``, and it holds
 the measured losses in both directions: a pair that starts to fall apart is red,
 and a pair that stops falling apart is just as red, because it means the chain
@@ -424,7 +425,13 @@ MEASURE_CHAINS = "scripts/dev/measure_chains.sh"
 # Hits and possible ordered pairs per language, read out of
 # docs/measurements/2026-09-analyseketten/rohdaten/kennzahlen.txt, run of
 # 2026-09-23 against tantivy tag 0.26.2: es_Aplus_hits 174 of es_pairs 208,
-# it 56 of 56, nl 57 of 81, pt 180 of 228, together 467 of 573.
+# it 60 of 60, nl 57 of 81, pt 180 of 228, together 471 of 577.
+#
+# The Italian pair is the one the rerun of 2026-09-24 moved, and it is the only
+# one: plan 19-02 took one inflection family into chain_cases_it.txt, so it went
+# from 56 of 56 to 60 of 60 and the totals from 467 of 573 to 471 of 577. The
+# three other pairs stand on the value of 2026-09-23, untouched, because no other
+# fixture was opened. Section 9 of the report holds the same numbers side by side.
 #
 # Equality and not "at least". A chain that suddenly scores higher has moved
 # exactly as far as one that scores lower, and a moved chain moves every term of
@@ -433,7 +440,7 @@ MEASURE_CHAINS = "scripts/dev/measure_chains.sh"
 # report, and only then pull the constant here after it. Never the other way
 # round: a number corrected in this file first is a gate agreeing with the
 # change it was built to catch.
-EXPECTED_FAMILY_SCORES = {"es": (174, 208), "it": (56, 56), "nl": (57, 81), "pt": (180, 228)}
+EXPECTED_FAMILY_SCORES = {"es": (174, 208), "it": (60, 60), "nl": (57, 81), "pt": (180, 228)}
 
 
 def _load_chain_probe() -> ModuleType:
@@ -597,7 +604,14 @@ class MergedCase(NamedTuple):
 
 
 # Section 5 of docs/measurements/2026-09-analyseketten/README.md, run of
-# 2026-09-23, with the source of each row as a comment. Twelve rows and not
+# 2026-09-23. The rerun of 2026-09-24 did not touch that section and did not
+# touch a row of it: the family it added is no case of LEX-01, it produced no
+# loss, and rohdaten/verluste.tsv came back unchanged, so all fifteen rows stand
+# where they stood. FOLDED_SUPPLEMENT_SHA256 was held against the new
+# rohdaten/kennzahlen.txt as well and is the same digest. Only the family score
+# above moved.
+#
+# With the source of each row as a comment. Twelve rows and not
 # fifteen: rows 10, 11 and 12 of the report are "the accented stop words of es,
 # pt and it, all of them", and all of them is exactly what the density gate
 # above runs over the 891 entries of the four built in lists. Repeating three of

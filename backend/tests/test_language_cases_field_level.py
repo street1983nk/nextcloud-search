@@ -4,8 +4,10 @@ LEX-08 asks for one case per language of the v1.3 build out, and it asks for it
 in this phase, so the cases run ON THE FIELD: phase 19 opens the question side,
 which is why every query below goes through
 ``parse_query_lenient(..., default_field_names=[BODY_FIELD[code]])`` against one
-body field and never through ``build_query``, whose ``DEFAULT_FIELDS`` this phase
-does not touch.
+body field and never through ``build_query``, whose field plan this phase does
+not touch. That plan is ``LEGACY_PLAN`` since plan 19-01, where the three module
+constants of the question side became one value, and plan 19-06 is the one that
+puts these cases onto the normal search path.
 
 Two things decide whether such a case proves anything at all.
 
@@ -25,8 +27,8 @@ and that the other five body fields stay empty is asserted rather than intended.
 
 No form of any case stands in this file as a literal, and a test holds that line.
 The words live in ``tests/fixtures/chain_cases_<code>.txt``, the same fixtures the
-measurement of 2026-09-23 ran on, so a later rebuild of a chain moves this file
-in one place instead of two. The fixture reader is not rebuilt here either; it
+measurement of 2026-09-23 and its rerun of 2026-09-24 ran on, so a later rebuild
+of a chain moves this file in one place instead of two. The fixture reader is not rebuilt here either; it
 comes out of ``scripts/dev/chain_probe.py`` through the sibling module that
 already loads it, because a second reader is a second format.
 """
@@ -64,16 +66,22 @@ from test_language_analyzers import CODES, _load_chain_probe
 #     Portuguese puts both on one stem; the English chain folds the accent as
 #     well and then strips the s of the singular, which takes the two forms
 #     apart instead of together.
-# it: the fourteen Italian families of the 2026-09-23 measurement are accent
-#     pairs and nothing else, so NO Italian pair exists that the English chain
-#     keeps apart: both chains fold, and after the fold the two spellings are one
-#     string. The Italian case rests on the term instead of on the merge, and
-#     test_the_fixture_of_a_folded_language_offers_no_such_pair holds that
-#     exception against the fixture: an Italian inflection family added later
-#     turns it red, and then the case gets promoted instead of staying the weak
-#     one by accident.
-SEPARATED: Final = ("es", "nl", "pt")
-FOLDED: Final = ("it",)
+# it: an Italian noun of the office vocabulary, singular against plural. Snowball
+#     Italian puts both on one stem; the English chain strips neither of the two
+#     endings it does not know and writes two terms, and so does the German one.
+#
+# The Italian line is the promotion the earlier version of this file wrote down
+# as a condition. Until 2026-09-24 the fixture of that language held accent pairs
+# and nothing else, so NO Italian pair existed that the English chain keeps
+# apart: both chains fold, and after the fold the two spellings are one string.
+# The case rested on the term instead of on the merge, and
+# test_the_fixture_of_a_folded_language_offers_no_such_pair held that exception
+# against the fixture, with the instruction in its own failure message. Plan
+# 19-02 took one inflection family into chain_cases_it.txt, the case went red as
+# designed, and the language moved here. FOLDED is empty since then, and the
+# replacement of that test says so without parameters.
+SEPARATED: Final = ("es", "it", "nl", "pt")
+FOLDED: Final = ()
 
 # This file, read once, for the gate that keeps every form of every case out of
 # it. Words and not substrings: "region" stands in the Spanish fixture and in
@@ -218,9 +226,10 @@ def _found(index: Index, searcher: Searcher, field: str, text: str) -> list[int]
     """Ask ``text`` against one field and return the file ids that answer, sorted.
 
     ``default_field_names`` carries that one field and nothing else. This is the
-    field level the plan asks for: ``build_query`` and its ``DEFAULT_FIELDS`` open
-    in phase 19, and a case that went through them would measure the question
-    side of the next phase instead of the chain of this one.
+    field level the plan asks for: ``build_query`` and its field plan, called
+    ``LEGACY_PLAN`` since plan 19-01, open in phase 19, and a case that went
+    through them would measure the question side of the next phase instead of the
+    chain of this one.
     """
     parsed, errors = index.parse_query_lenient(text, default_field_names=[field])
     assert errors == [], f"the parser could not read the question against {field}: {errors}"
@@ -314,18 +323,20 @@ def test_the_fixture_offers_a_pair_the_english_chain_keeps_apart(
     )
 
 
-@pytest.mark.parametrize("code", FOLDED)
-def test_the_fixture_of_a_folded_language_offers_no_such_pair(
-    code: str, families: dict[str, list[list[str]]], chains: dict[str, TextAnalyzer], english: TextAnalyzer
-) -> None:
-    # The documented exception, held against the fixture instead of against the
-    # memory of the author. Red here is good news, not a defect.
-    separated = _separated_pairs(chains[code], english, families[code])
+def test_no_language_of_the_build_out_rests_on_the_weaker_criterion() -> None:
+    """What is left of the folded exception since 2026-09-24: nothing.
 
-    assert separated == [], (
-        f"{CASE_FIXTURES[code].name} now holds {len(separated)} pair(s) the English chain keeps apart, the first "
-        f"of them {separated[0] if separated else ()}: move {code} from FOLDED to SEPARATED and let the case run "
-        "on the strong criterion"
+    Unparametrised, and that is the whole point of the rewrite. ``FOLDED`` is
+    empty, so the parametrised predecessor would run zero times and report a
+    skip, and a skip reads exactly like a passed case in a summary line. The
+    claim is therefore made here as a claim: every language of the build out
+    offers a pair only its own chain merges, and none of them falls back on
+    ``_distinguished_pairs``.
+    """
+    assert FOLDED == (), (
+        f"{FOLDED} stands in the folded exception again, so the case of that language rests on the weaker "
+        "criterion; name the fixture that lost its inflection family and bring the family back, or write "
+        "the exception out here by hand instead of letting an empty parametrisation hide it"
     )
 
 

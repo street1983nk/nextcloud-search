@@ -13,8 +13,9 @@
 # Die Akzente sind hier Daten in einer Textdatei, genau wie die Umlaute in
 # compound_cases_de.txt, und keine Verletzung der Code-Regel.
 #
-# Erwartet: 14 Familien, 56 geordnete Paare, unter der ausgelieferten Kette
-# A+ 56 Treffer, also fehlerfrei.
+# Erwartet: 15 Familien, 60 geordnete Paare, unter der ausgelieferten Kette
+# A+ 60 Treffer, also fehlerfrei. Gemessen im Nachlauf vom 24.09.2026, der die
+# Flexionsfamilie am Ende dieser Datei aufgenommen hat.
 
 # Der einzige italienische Fehlschlag ueberhaupt, und er faellt nur bei spaeter
 # Faltung an: qualità gegen qualita.
@@ -34,3 +35,15 @@ velocità velocita
 virtù virtu
 lunedì lunedi
 caffè caffe
+
+# Die einzige Flexionsfamilie dieser Datei, aufgenommen am 24.09.2026 mit
+# dem Nachlauf der Messung (RESEARCH Messung M-6). Was sie von den vierzehn
+# Akzentfamilien darueber unterscheidet: die italienische Kette legt beide
+# Formen auf 'inform', die englische laesst sie als 'informazion' und
+# 'informazioni' stehen, die deutsche ebenso. Damit ist sie das erste
+# italienische Paar, das nur die eigene Kette verbindet, und der Grund,
+# warum Plan 19-06 einen italienischen Fall auf dem normalen Suchweg
+# ueberhaupt schreiben kann. Die vierzehn Akzentpaare taugen dafuer nicht:
+# die englische Kette faltet ebenfalls, und nach der Faltung sind beide
+# Schreibweisen eine Zeichenkette.
+informazione informazioni

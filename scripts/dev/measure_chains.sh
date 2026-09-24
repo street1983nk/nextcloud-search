@@ -13,8 +13,10 @@
 #   kennzahlen.txt   numbers and digests only
 #   verluste.tsv     the form pairs the shipped chain A+ does not bring together
 #
-# Expected from the phase research, measured on 2026-09-23:
-#   total_families=65  total_pairs=573  total_Aplus_hits=467  total_Cplus_hits=463
+# Expected from the phase research, measured on 2026-09-23 and moved by the
+# rerun of 2026-09-24, which took one Italian inflection family into
+# chain_cases_it.txt:
+#   total_families=66  total_pairs=577  total_Aplus_hits=471  total_Cplus_hits=467
 #   es_supplement=77  it_supplement=10  nl_supplement=0  pt_supplement=30
 # A deviation is a finding for the measurement report, not a reason to edit a
 # file by hand.

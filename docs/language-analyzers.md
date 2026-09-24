@@ -7,8 +7,9 @@ factory, English. German is the reasoned exception and has a page of its own in
 and neither of those decisions survives being copied here.
 
 Everything below was measured rather than reasoned about. The run is
-`docs/measurements/2026-09-analyseketten/` of 2026-09-23, and every number on
-this page can be traced to a line of
+`docs/measurements/2026-09-analyseketten/` of 2026-09-23, rerun on 2026-09-24
+after one Italian inflection family entered the fixture (section 9 of that
+report), and every number on this page can be traced to a line of
 `docs/measurements/2026-09-analyseketten/rohdaten/kennzahlen.txt`.
 
 ## Switching a language on, and when it takes effect
@@ -151,8 +152,10 @@ without moving the English tokenisation by a single byte.
 
 ## Measured numbers
 
-Measured on 2026-09-23 with `scripts/dev/measure_chains.sh`, which runs
-`scripts/dev/chain_probe.py`. No container is involved: all four Snowball stop
+Measured on 2026-09-23 and rerun on 2026-09-24 with
+`scripts/dev/measure_chains.sh`, which runs `scripts/dev/chain_probe.py`. The
+Italian row and the totals are the ones of the rerun; every other number is the
+one of 2026-09-23, unmoved. No container is involved: all four Snowball stop
 word lists and all four stemmers are compiled into tantivy, so `uv run` from
 `backend/` is the whole harness. The full report is in
 `docs/measurements/2026-09-analyseketten/`.
@@ -165,10 +168,10 @@ term. One hundred percent means every spelling finds every other one.
 | Language | Families | Ordered pairs | `fold early` (A+) | `fold late` (C+) |
 |---|---:|---:|---:|---:|
 | es | 20 | 208 | **174** | 178 |
-| it | 14 | 56 | **56** | 54 |
+| it | 15 | 60 | **60** | 58 |
 | nl | 13 | 81 | **57** | 57 |
 | pt | 18 | 228 | **180** | 174 |
-| **Together** | **65** | **573** | **467** | **463** |
+| **Together** | **66** | **577** | **471** | **467** |
 
 Stop word leaks, counted as words of the built in list that still produce a term,
 accented spelling and flat spelling separately:
@@ -194,7 +197,7 @@ simple -> lowercase -> ascii_fold -> stopword(lang)
 | Position | Filter | Why exactly here |
 |---|---|---|
 | 1 | `lowercase` | Everything after it compares strings exactly, and both stop word lists are lowercase |
-| 2 | `ascii_fold` | In front of the stop word list and thereby in front of the stemmer. Measured 467 of 573 ordered pairs against 463 for a late fold, and it is the only position that is tight in both spellings |
+| 2 | `ascii_fold` | In front of the stop word list and thereby in front of the stemmer. Measured 471 of 577 ordered pairs against 467 for a late fold, and it is the only position that is tight in both spellings |
 | 3 | `stopword(lang)` | The built in Snowball list of the language, which compares exactly and carries real accents |
 | 4 | `custom_stopword(folded)` | Directly behind it, because the fold has just made the built in list miss its own accented entries. Without it 77 Spanish, 10 Italian and 30 Portuguese stop words reach the index |
 | 5 | `remove_long(48)` | The same limit as every other chain. Nothing splits here, so there is no splitter it would have to stand behind |
