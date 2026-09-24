@@ -870,8 +870,17 @@ PHP_TREE_HASH_TODAY = "15e00b2b37e003ff98b0cc3ca87affdea215eb160c1671153f9e616bf
 # carries the reasoning at step 3. main.py hands in the two functions instead of
 # reset_read_side. No file came and none went, so PACKAGE_FILES_TODAY stays
 # at 56.
+# Moved on 2026-09-24 a thirty third time, by the fix of the audit finding
+# M-18-04: exactly one of the 56 files changed its bytes, index/rebuild.py,
+# which got the verdict LIVE_IS_A_SYMLINK and the branch behind the live
+# directory check that answers it. A linked index directory breaks all three
+# halves of a run and none of them can be repaired from inside it: the precheck
+# measures the file system the link points at while the second directory is
+# created beside the link, the swap renames the link away and puts a real
+# directory in its place, and rmtree refuses a link outright so the marks are
+# never written. No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "9609ae3da688ea43edf099efc97beea44bdaf73f2ea91590f54e87b3f8c38544"
+PACKAGE_TREE_HASH_TODAY = "4a0cc6b6d2751bc2c658b9d5812cf5d3fadd42479cdbdeebf7159e17c0c81484"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

@@ -41,6 +41,7 @@ from findling.index.rebuild import (
     _SCHEMA_MARK,
     FALLBACK_TO_FULL_REINDEX,
     HALF_FILLED_TARGET_KEPT,
+    LIVE_IS_A_SYMLINK,
     NOT_ENOUGH_ROOM,
     NOTHING_TO_PUT_IN_ORDER,
     NOTHING_TO_REBUILD,
@@ -1368,6 +1369,68 @@ def test_the_fallback_raises_the_generation_and_never_starts_a_band_run(
     # And it declares nothing current: the banner stays up until the crawl is
     # through, which is what the drifted mark is still saying here.
     assert marks[_SCHEMA_MARK] == "1"
+
+
+def _stage_a_linked_index_directory(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the live index directory a symbolic link, really where that is allowed.
+
+    Two ways to the same state, and the second one exists because a mark would
+    be worse. Windows refuses to create a symbolic link without a privilege that
+    a developer machine does not have by default, and this file allows no
+    platform mark on any case (see the case below this block): a skip there
+    would leave the claim untested on the machine the project is written on and
+    green on the machine nobody reads the output of.
+
+    So the link is made where the machine allows it, and where it does not, the
+    one question the code asks about that path is answered for that path alone.
+    What is being asserted is the decision of ``rebuild_the_index`` and not the
+    ability of a file system to hold a link.
+    """
+    live = volume / "index"
+    elsewhere = volume / "on-the-big-disk"
+    live.rename(elsewhere)
+    try:
+        live.symlink_to(elsewhere, target_is_directory=True)
+    except OSError:
+        elsewhere.rename(live)
+        honest = Path.is_symlink
+        monkeypatch.setattr(Path, "is_symlink", lambda self: self == live or honest(self))
+
+
+def test_a_linked_index_directory_is_refused_with_a_line_and_nothing_is_touched(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """M-18-04: three halves of the run read the wrong thing on a linked directory.
+
+    Laying the index on a bigger disk by pointing a symbolic link at it is a
+    thing admins do, and none of the three steps of a rebuild survives it. The
+    precheck measures the volume the link points at while the second directory
+    is created beside the link, so it asks the wrong file system. The swap
+    renames the LINK away and puts a real directory in its place, so the index
+    moves onto the parent volume without anybody asking, which is the volume
+    that was too small to begin with. And ``shutil.rmtree`` refuses a symlink,
+    so the marks are never written and the run repeats at every start.
+
+    A refusal is the only honest answer, and it costs the new chains until the
+    link is replaced by ``APP_PERSISTENT_STORAGE``, which is the way
+    ``docs/language-analyzers.md`` names.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume)
+    _stage_a_linked_index_directory(volume, monkeypatch)
+    hands = _Hands()
+
+    with caplog.at_level(logging.WARNING, logger="findling.index.rebuild"):
+        verdict = _led_by(store, hands)
+    marks = store.read_meta()
+    store.close()
+
+    assert verdict == LIVE_IS_A_SYMLINK
+    assert hands.journal == ["arm"], "nothing was stood down, and the poller is let go all the same"
+    assert not (volume / "index.rebuild").exists(), "nothing was created"
+    assert not (volume / "index.retired").exists(), "and nothing was renamed"
+    assert marks[_SCHEMA_MARK] == "1", "and nothing was stamped"
+    assert any("symbolic link" in record.getMessage() for record in caplog.records)
+    assert not any(volume.name in record.getMessage() for record in caplog.records)
 
 
 def test_marks_that_agree_are_answered_without_touching_anything(volume: Path) -> None:

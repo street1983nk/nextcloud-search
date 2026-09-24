@@ -241,6 +241,7 @@ _CARRIED_WITHOUT_A_MARK: Final = ("de", "en")
 # NOT_ENOUGH_ROOM above is the sixth of them, handed straight out of the precheck.
 NOTHING_TO_REBUILD: Final = "the version marks a rebuild answers agree, so nothing runs"
 NO_LIVE_DIRECTORY: Final = "there is no live index directory to carry documents out of"
+LIVE_IS_A_SYMLINK: Final = "the live index directory is a symbolic link, which this rebuild does not move"
 FALLBACK_TO_FULL_REINDEX: Final = "the generation was raised instead, the reindex banner names the way"
 RUN_STOPPED_EARLY: Final = "the run stopped between two bands and keeps its half filled directory"
 RUN_INCOMPLETE: Final = "the final probe counted fewer documents than the old directory holds, nothing was swapped"
@@ -1087,6 +1088,33 @@ def rebuild_the_index(
             # every chain of the current set, so there is no drift left to
             # answer either.
             return NO_LIVE_DIRECTORY
+        if live.is_symlink():
+            # Audit finding M-18-04, and it is a refusal rather than a repair
+            # because all three halves of the run read the wrong thing on a
+            # linked directory and none of them can be made right here.
+            #
+            # The precheck measures shutil.disk_usage(index_dir), which is the
+            # volume the link POINTS AT, while index.rebuild is derived with
+            # with_name and is therefore created on the volume the link LIVES
+            # ON: the room for two directories is asked of the wrong file
+            # system. The swap renames the LINK out of the way and puts a real
+            # directory in its place, so the index would move onto the parent
+            # volume without anybody asking, which on the box this is done for
+            # is the volume that was too small in the first place. And
+            # shutil.rmtree refuses a symlink outright, so the retired link
+            # stays, the stamp is skipped and the whole run starts again at
+            # every container start.
+            #
+            # Laying the index on another volume is a legitimate thing to do,
+            # so the way to do it is named in docs/language-analyzers.md:
+            # APP_PERSISTENT_STORAGE points at the volume, and the link
+            # disappears. Nothing is created and nothing is renamed here.
+            LOGGER.warning(
+                "the live index directory is a symbolic link, so no rebuild runs: the space check would measure "
+                "the wrong file system and the swap would move the index onto the parent volume; point "
+                "APP_PERSISTENT_STORAGE at the volume instead"
+            )
+            return LIVE_IS_A_SYMLINK
 
         verdict = may_rebuild(live, _new_language_count(store, resolved.languages))
         if not verdict.may_start:

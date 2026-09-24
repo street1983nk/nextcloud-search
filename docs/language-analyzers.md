@@ -93,6 +93,22 @@ an instance running on `es` alone still writes it. Being stored and being
 analysed by the German chain are two properties of that one field, and only the
 second one follows the language set.
 
+**The index directory may not be a symbolic link.** Laying the index on a bigger
+volume is a legitimate thing to do, and the way to do it is
+`APP_PERSISTENT_STORAGE`, which points the whole volume of the container at that
+disk. A symbolic link under the name `index` is the other way, and since
+2026-09-24 the rebuild refuses it and says so in one line instead of running.
+Three things go wrong on a linked directory and none of them can be repaired
+from inside the run: the space check measures the file system the link points
+at while the second directory is created next to the link, so it checks the
+wrong disk; the swap renames the link out of the way and puts a real directory
+in its place, so the index moves onto the parent volume without anybody asking;
+and the removal behind the swap refuses a link outright, so the version marks
+are never written and the whole run starts again at every container start. The
+refusal costs the new chains until the link is replaced; nothing is created,
+nothing is renamed and the search goes on answering out of the directory that is
+there.
+
 ## The supplement list
 
 The built in Snowball stop word lists compare strings exactly and they carry
