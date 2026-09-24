@@ -330,7 +330,7 @@ $banners = [
 		'id' => 'findling-banner-rebuild-space',
 		'kind' => 'warning',
 		'icon' => $alertIcon,
-		'text' => $l->t('Findling wants to rebuild its index for the newly switched on languages and there is not enough room: %s more are needed next to what the index already uses. Free that much, or set the environment variable FINDLING_REBUILD_FALLBACK=fullreindex to have the backend read the files again instead.', [$size($rebuildBlockedBytes)]),
+		'text' => $l->t('Findling wants to rebuild its index for the newly switched on languages and there is not enough room: %s more are needed next to what the index already uses. Free that much, or set the environment variable FINDLING_REBUILD_FALLBACK=fullreindex to have the backend read the files again instead. Either way the backend only tries again after a restart of the container.', [$size($rebuildBlockedBytes)]),
 		'shown' => $rebuildBlockedBytes > 0,
 	],
 ];

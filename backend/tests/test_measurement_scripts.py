@@ -551,8 +551,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # its unit test, the same six cases as its predecessor. No other file of the
 # half changed its bytes: the bump of the version places belongs to the release
 # phase and not to this plan, and the recipe globs **/*.php.
+# Moved on 2026-09-24 a third time, by the fix of the audit finding M-18-05, and
+# the count stays at 68 because this fix changes bytes and adds no file. One of
+# the 68 changed. templates/admin.php got one sentence more in the text of the
+# space banner: _BLOCKED_BYTES is reset only at the start of rebuild_the_index
+# and that function runs once per container start, so an admin who frees the
+# space and waits was waiting for nothing. The banner now names the restart, and
+# it does so on both halves of its own advice, because a changed environment
+# variable is not read without one either. The fix touches js/admin.js and the
+# six catalogue files as well; the recipe globs **/*.php, so none of them is in
+# this tree and none of them moves this figure.
 PHP_FILES_TODAY = 68
-PHP_TREE_HASH_TODAY = "15e00b2b37e003ff98b0cc3ca87affdea215eb160c1671153f9e616bf9cf70eb"
+PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab6a8abba"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
