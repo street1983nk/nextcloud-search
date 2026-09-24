@@ -431,8 +431,8 @@ def test_the_rebuild_keeps_no_progress_of_its_own_in_the_state_database() -> Non
 
 # -- the swap, and the reason its order is its whole content -------------------
 #
-# None of the cases below carries a skipif, and that is deliberate. The mistake
-# they are about, a rename with a handle still open, is loud on Windows
+# None of the cases below is skipped on a platform, and that is deliberate. The
+# mistake they are about, a rename with a handle still open, is loud on Windows
 # (PermissionError, WinError 5, measured on 2026-09-24) and silent on Linux,
 # where POSIX renames over inodes and the reading side goes on answering out of
 # a directory that has no name any more. A case that is skipped on the
@@ -509,8 +509,8 @@ def test_a_searcher_that_was_not_let_go_is_the_mistake_this_order_prevents(tmp_p
     Windows refuses and the mistake is a stack trace. Linux accepts and the
     mistake is a container that answers out of a directory without a name, so
     there the case asserts the silence itself. Those are the two halves of one
-    statement, and a skipif would keep whichever half the machine of the day
-    happens to be worse at proving.
+    statement, and a mark that skipped the case would keep whichever half the
+    machine of the day happens to be worse at proving.
     """
     live = tmp_path / "index"
     target = tmp_path / "index.rebuild"
@@ -570,3 +570,31 @@ def test_a_swap_that_fails_names_the_type_and_never_a_path(
     assert caplog.records
     assert any("FileNotFoundError" in record.getMessage() for record in caplog.records)
     assert not any(tmp_path.name in record.getMessage() for record in caplog.records)
+
+
+# The three marks that would take a case out of the run on the machine it is
+# supposed to fail on. Assembled from halves so that this file does not carry the
+# names it forbids and report itself, the same construction test_ops_scripts.py
+# and test_measurement_scripts.py use for the dashes they ban.
+PLATFORM_MARKS = frozenset({"skip" + "if", "skip", "x" + "fail"})
+
+
+def test_no_case_in_this_file_is_taken_out_of_the_run_by_a_mark() -> None:
+    """Static, because the swap case is worth exactly as much as the machines it runs on.
+
+    Windows is the only system on which a rename with a handle still open fails
+    at all, so a mark that took the case out of the run here would leave the
+    mistake to be found on a box in the field, where it is silent. A grep would
+    read the prose of this file as well; the syntax tree reads only the marks.
+    """
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    marked = [
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+        for decorator in node.decorator_list
+        for attribute in ast.walk(decorator)
+        if isinstance(attribute, ast.Attribute) and attribute.attr in PLATFORM_MARKS
+    ]
+
+    assert marked == []

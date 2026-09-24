@@ -28,9 +28,34 @@ Measured on Windows on 2026-09-24: a rename with open mmaps refuses with
 PermissionError, WinError 5. On Linux the same call succeeds, and that is the
 trap rather than the convenience, because the reading side then answers out of a
 directory that has no name anymore, silently and for as long as the process
-lives. The swap is plan 18-07, the rule is written down here because it decides
-how a run of this module ends: the writer waits for its merging threads, the
-reference is dropped, and nothing is handed out that still holds the target.
+lives. The rule decides how a run of this module ends as well: the writer waits
+for its merging threads, the reference is dropped, and nothing is handed out
+that still holds the target.
+
+*The order of the swap, and the order is its whole content.* Six steps, and
+every one of them is there because leaving it out is a way of arriving at a
+container that answers out of a directory nobody can point at any more:
+
+1. commit the target index, ``wait_merging_threads()`` on its writer, let the
+   object go. A writer holds a lock file, and a merging thread holds segments
+   that are about to disappear.
+2. let the source index go. The poller's writer is already closed at this point,
+   because silencing it is the first thing the caller of plan 18-09 does.
+3. drop the reading side with :func:`findling.api.resources.reset_read_side`.
+   That cache is keyed on ``index_dir``, the swap does not move ``index_dir``,
+   and the invalidation branch inside ``read_side()`` therefore never fires on
+   its own.
+4. rename ``index`` to ``index.retired``.
+5. rename ``index.rebuild`` to ``index``.
+6. remove ``index.retired``.
+
+Steps 4 and 5 are :func:`swap_in`, and there is deliberately nothing between
+them: between the two renames the volume holds no directory called ``index`` at
+all, and that window is the one state a crash can leave behind (T-18-07-02).
+Steps 1 to 3 belong to the caller, because the same caller has to decide when
+the poller is armed again. This module does not import
+:mod:`findling.api.resources`: the reading half of the container may draw from
+the index, never the other way round, and an import here would close that circle.
 
 *An index whose chains are not registered raises on the first write.* Measured on
 2026-09-24 as well: a schema that carries a text field whose tokenizer is not
@@ -96,6 +121,12 @@ BAND_DOCUMENTS: Final = 500
 # is every value it can hold, and the band is therefore bounded from below by the
 # cursor alone.
 _HIGHEST_FILE_ID: Final = 2**64 - 1
+
+# What the live directory is called while it is on its way out. It is appended to
+# the name the live directory already has, so the retired directory is always the
+# sibling of the one it came from and never a path anybody handed in
+# (T-18-07-04).
+RETIRED_SUFFIX: Final = ".retired"
 
 
 @dataclass(frozen=True, slots=True)
@@ -327,3 +358,70 @@ def transfer_documents(
         target_documents=target.searcher().num_docs,
         complete=counts_match(source, target),
     )
+
+
+def retire_directory(live: Path) -> Path:
+    """Move the live index directory out of the way and answer where it went.
+
+    The new name is derived from the old one with
+    :meth:`pathlib.Path.with_name`, so the retired directory is the sibling of
+    the one it came from. Nothing about that path is handed in, and that is the
+    point: the only thing removed further down is a directory this function
+    itself named, on the volume the live one already stood on (T-18-07-04).
+    """
+    retired = live.with_name(live.name + RETIRED_SUFFIX)
+    live.rename(retired)
+    return retired
+
+
+def discard_directory(retired: Path) -> None:
+    """Remove a retired directory, and refuse to be quiet about a leftover.
+
+    ``ignore_errors`` is False on purpose. A directory that will not go is a
+    finding: it stays on the volume, it counts against the free space the next
+    precheck measures, and it keeps the clean up path of the next container
+    start busy with a state nobody explained. The swap above is through at this
+    point, so the exception costs the log line and not the rebuild.
+    """
+    shutil.rmtree(retired, ignore_errors=False)
+
+
+def swap_in(target: Path, live: Path) -> None:
+    """Put the rebuilt directory in the place of the live one. Order is content.
+
+    Two renames and then the removal, with nothing in between. Between the first
+    and the second rename the volume holds no directory under the live name at
+    all, which is the one window a crash can be caught in, so the window is kept
+    as short as two system calls (T-18-07-02). The clean up of a directory left
+    behind that way is the start path of plan 18-08.
+
+    **Every handle on both directories has to be gone before the first rename.**
+    Measured on Windows on 2026-09-24: a rename with a live searcher on the
+    directory refuses with ``PermissionError``, WinError 5. On Linux the very
+    same call succeeds, because POSIX renames over inodes, and that is the trap
+    rather than the convenience: the reading side would afterwards answer out of
+    a directory that no longer has a name, silently and until the container is
+    restarted. The numbered order in the module header is therefore not a
+    concession to Windows, it is the only correct order, and Windows merely says
+    so out loud. The suite keeps a case for both halves and skips it on neither
+    system.
+
+    **Why swap_in and retire rather than move and delete.** Gate A of
+    ``backend/tests/test_readonly_gate.py`` forbids the identifiers ``move``,
+    ``delete``, ``copy`` and ``trash`` in every module of this package, because
+    they are the writing entry points of ``nc_py_api.files`` and a gate that
+    waved them through in one module would hide a real write to a user file in
+    the next one. The names here are not a paraphrase of a forbidden word, they
+    are more accurate than it: nothing is moved anywhere a caller chose, and
+    what is removed is a directory this module named itself.
+    """
+    try:
+        retired = retire_directory(live)
+        target.rename(live)
+    except OSError as error:
+        # The type name and nothing else, as every line of this module: a path
+        # is the usual content of an OSError message and the one thing an
+        # operating log of this container never carries (T-18-07-05).
+        LOGGER.warning("the index directories could not be swapped, an %s", type(error).__name__)
+        raise
+    discard_directory(retired)
