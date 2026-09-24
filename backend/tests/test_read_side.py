@@ -29,6 +29,7 @@ import pytest
 from conftest import Corpus, write_index, write_state, write_wordlist
 from findling.api import resources
 from findling.config import settings
+from findling.index.open import LANGUAGES_MARK
 from findling.store.repo import EMBEDDING_MARK, Store, open_store
 
 THREADS = 4
@@ -363,3 +364,112 @@ def test_the_embedding_mark_follows_the_token_cap(volume: Path, monkeypatch: pyt
 
     assert marks is not None
     assert marks[EMBEDDING_MARK] == "multilingual-e5-small/int8/384/2048"
+
+
+# -- the explicit reset, which is what the directory swap of plan 18-07 needs ---
+#
+# The three caches above are keyed on a path, and the swap does not move a path:
+# it puts the rebuilt directory under the very name the live one had. The
+# invalidation branch inside read_side() therefore never fires, and without an
+# explicit reset the container would go on answering out of the directory that
+# was renamed away, silently on Linux and until the next restart (pitfall 3 of
+# the phase research).
+
+
+def test_the_read_side_is_dropped_although_the_path_did_not_move(indexed_volume: Corpus) -> None:
+    # The one case the existing release branch cannot reach. Same index_dir
+    # before and after, and still a different instance, because the directory
+    # behind that name is a different directory now.
+    first = resources.read_side()
+    assert first is not None
+    assert first.vectors is not None
+
+    resources.reset_read_side()
+    second = resources.read_side()
+
+    assert second is not None
+    assert second is not first
+    assert second.index_dir == first.index_dir == indexed_volume.root / "index"
+    with pytest.raises(sqlite3.ProgrammingError):
+        first.store.read_meta()
+    with pytest.raises(sqlite3.ProgrammingError):
+        first.vectors.chunk_count()
+
+
+def test_the_degraded_verdict_is_dropped_with_the_read_side(indexed_volume: Corpus) -> None:
+    # A verdict that stayed would report the state of the retired directory for
+    # up to DEGRADED_TTL_SECONDS after the swap, which is exactly the window in
+    # which an admin looks at the status page.
+    side = resources.read_side()
+    assert side is not None
+    assert resources.degraded(side) is False
+
+    writable = open_store(indexed_volume.root / "state.db")
+    writable.write_meta("analyzer_version", "99")
+    writable.close()
+
+    # The window is deliberately left alone: this case is about the reset and
+    # not about the TTL, so the stale answer below proves the cache was warm.
+    assert resources.degraded(side) is False
+
+    resources.reset_read_side()
+    fresh = resources.read_side()
+
+    assert fresh is not None
+    assert resources.degraded(fresh) is True
+
+
+def test_the_version_marks_are_dropped_with_the_read_side(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The third cache, and the one whose staleness is hardest to see. It is
+    # keyed on the dictionary directory, which a rebuild does not move either,
+    # and the language set is the one mark a rebuild exists to change.
+    before = resources.expected_marks()
+    assert before is not None
+    assert before[LANGUAGES_MARK] == "de,en"
+
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es")
+    settings.cache_clear()
+
+    assert resources.expected_marks() == before, "the mapping is cached under a directory that did not move"
+
+    resources.reset_read_side()
+    after = resources.expected_marks()
+
+    assert after is not None
+    assert after[LANGUAGES_MARK] == "de,en,es"
+
+
+def test_a_reset_on_an_empty_state_does_nothing_and_says_nothing(volume: Path) -> None:
+    # Idempotent, because the caller of the swap runs it in front of the first
+    # rename whatever the process did before, and a container whose first
+    # indexing pass never finished has nothing cached at all.
+    assert not (volume / "index").exists()
+
+    resources.reset_read_side()
+    resources.reset_read_side()
+
+    assert resources.read_side() is None
+
+
+def test_four_threads_may_drop_the_read_side_at_once(indexed_volume: Corpus) -> None:
+    # The reset takes the same lock the three caches are guarded by, so a search
+    # that arrives in the middle of a swap waits instead of reading a handle
+    # that is being closed underneath it.
+    assert resources.read_side() is not None
+    failures: list[Exception] = []
+    lock = threading.Lock()
+
+    def drop() -> None:
+        try:
+            resources.reset_read_side()
+            resources.read_side()
+        except Exception as error:
+            with lock:
+                failures.append(error)
+
+    _in_four_threads(drop)
+
+    assert failures == []
