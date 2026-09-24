@@ -10,10 +10,15 @@ Four parser settings are written out at the call below rather than left to their
 defaults, because three of them differ from the default and the fourth is a
 security control:
 
-* ``default_field_names`` decides what "a word without a field" means, and the
-  answer depends on whether the caller asked for the file name filter.
+* ``default_field_names`` decides what "a word without a field" means. The answer
+  depends on whether the caller asked for the file name filter, and since phase
+  19 it depends on the index directory as well: which body fields a search may
+  name is a question about the schema that lies on disk, never about the line
+  that was typed.
 * ``field_boosts`` puts the file name above the title and the title above the
-  body. A name is a deliberate act, a body word is an accident of prose.
+  body. A name is a deliberate act, a body word is an accident of prose. It hangs
+  on that very same directory for the very same reason, which is why both halves
+  arrive as one :class:`FieldPlan` and never as two constants beside one another.
 * conjunction by default, because a split compound otherwise turns into an OR
   over three everyday parts and buries the document that carries all three.
 * regular expressions stay off. A regex from a public search bar is a denial of
@@ -50,19 +55,84 @@ LOGGER = logging.getLogger("findling.query")
 # transcription rather than the character.
 UMLAUTS: Final = (("ue", "ü"), ("oe", "ö"), ("ae", "ä"), ("ss", "ß"))
 
-# What a bare word searches. In schema order, and the German body first because
-# it is the field that carries the content of the file.
-DEFAULT_FIELDS: Final = [FIELD_BODY_DE, FIELD_BODY_EN, FIELD_NAME, FIELD_TITLE]
 
-# What a bare word searches once the built in Nextcloud filter for "file name
-# instead of content" is set. The PHP side has to name that filter in
+@dataclass(frozen=True, slots=True)
+class FieldPlan:
+    """Which fields one search reaches into, and what each of them weighs.
+
+    Both halves in one value, and that is the whole statement of this class.
+    Measured on tantivy 0.26.2 (19-RESEARCH measurement M-1), ``field_boosts``
+    answers a field name the schema does not know with the same
+    ``ValueError: Field `body_es` is not defined in the schema.`` that
+    ``default_field_names`` answers it with. That exception leaves the query
+    builder, the route loses its lexical half, and the search bar stays empty
+    until somebody rebuilds the index. Two constants beside one another are
+    therefore two ways into that failure while only one of them looks like the
+    subject; held as one value they cannot drift apart.
+
+    ``fields`` is what a bare word searches. It is not the schema and it is not
+    "every field that carries text": a name the index on disk does not have is
+    the failure above, and a field whose analyzer chain nobody meant to ask is a
+    hit nobody can explain.
+
+    ``boosts`` is how the hits of those fields weigh against one another. It is
+    not a filter and not a ranking of its own: tantivy sums the contributions of
+    every field a document matches in (measurement M-3), so a weight moves a
+    document and never removes it. Its keys stay inside ``fields`` for the reason
+    in the paragraph above.
+
+    ``title_only`` is what the same bare word searches once the built in
+    Nextcloud filter for "file name instead of content" is set. It is not a
+    second plan and not a subset by construction: it is the other answer of this
+    one value, so that two answers to one question cannot be taken from two
+    places.
+    """
+
+    fields: tuple[str, ...]
+    boosts: Mapping[str, float]
+    title_only: tuple[str, ...]
+
+
+# The file name above the title and the title above the body. A name is a
+# deliberate act, a body word is an accident of prose.
+NAME_BOOST: Final = 3.0
+TITLE_BOOST: Final = 2.0
+
+# One weight per body language, keyed by the language code the way
+# findling.index.schema.BODY_FIELD is keyed, and a closed mapping for the reason
+# that one is closed: a composed key loses a whole language on a typo and nothing
+# anywhere says so.
+#
+# The four languages of the build out stand at 0.6. That figure comes from
+# .planning/research/FEATURES.md question 3, it is a recommendation and not a
+# measurement, and the ranking probe of plan 19-04 is what supplies the measured
+# number behind it. What is not open is the direction: 0.6 lies below body_en at
+# 0.8, and that is the literal promise of success criterion 3 of the roadmap.
+BODY_BOOST: Final = {"de": 1.0, "en": 0.8, "es": 0.6, "it": 0.6, "nl": 0.6, "pt": 0.6}
+
+# What a bare word searches on an index of every release up to 1.2.0. In schema
+# order, and the German body first because it is the field that carries the
+# content of the file.
+#
+# The file name list is the answer once the built in Nextcloud filter for "file
+# name instead of content" is set. The PHP side has to name that filter in
 # getSupportedFilters(), and a provider that leaves it out is skipped entirely by
 # the client rather than being asked without it: the search then looks like a
 # broken backend while it is a missing declaration. That declaration is plan
 # 02-12; this module only has to answer correctly once the flag arrives.
-TITLE_ONLY_FIELDS: Final = [FIELD_NAME]
-
-FIELD_BOOSTS: Final = {FIELD_NAME: 3.0, FIELD_TITLE: 2.0, FIELD_BODY_DE: 1.0, FIELD_BODY_EN: 0.8}
+#
+# Every weight is read out of the constants above, so that one number has exactly
+# one spelling in this file.
+LEGACY_PLAN: Final = FieldPlan(
+    fields=(FIELD_BODY_DE, FIELD_BODY_EN, FIELD_NAME, FIELD_TITLE),
+    boosts={
+        FIELD_NAME: NAME_BOOST,
+        FIELD_TITLE: TITLE_BOOST,
+        FIELD_BODY_DE: BODY_BOOST["de"],
+        FIELD_BODY_EN: BODY_BOOST["en"],
+    },
+    title_only=(FIELD_NAME,),
+)
 
 # SRCH-03 file type. Nextcloud has no built in filter for it, so it travels
 # inside the search line and is translated into a required term on the extension.
@@ -475,6 +545,7 @@ def build_query(
     groups: Sequence[str] = (),
     since: int | None = None,
     until: int | None = None,
+    plan: FieldPlan = LEGACY_PLAN,
 ) -> RewrittenQuery:
     """Turn a search line into a query, its filters and the parser's complaints.
 
@@ -490,6 +561,14 @@ def build_query(
     into the search line as ``type:``, the same request would set the mark
     FILETYPE and switch the vector half off, which is the failure FILT-01 is
     about.
+
+    ``plan`` carries a default for that same reason and for one more: here the
+    default is a safety measure rather than a convenience. It is
+    :data:`LEGACY_PLAN`, the frozen field plan of every release up to 1.2.0, and
+    it is never anything read out of ``settings()``. A caller who forgets the
+    plan therefore searches exactly the four fields of today and breaks nothing,
+    which is the fail closed line that ``_schema_is_legacy`` and
+    ``_languages_are_legacy`` already walk (19-RESEARCH pitfall 6).
     """
     # Bracket depth is checked before the parser is ever entered (security audit
     # C2): parse_query_lenient descends recursively on parentheses, so a deeply
@@ -539,8 +618,8 @@ def build_query(
 
     parsed, errors = index.parse_query_lenient(
         rewritten,
-        default_field_names=TITLE_ONLY_FIELDS if title_only else DEFAULT_FIELDS,
-        field_boosts=FIELD_BOOSTS,
+        default_field_names=list(plan.title_only) if title_only else list(plan.fields),
+        field_boosts=dict(plan.boosts),
         conjunction_by_default=True,
         allow_regexes=False,
     )

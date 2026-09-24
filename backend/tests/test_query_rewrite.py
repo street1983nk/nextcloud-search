@@ -34,6 +34,7 @@ from findling.query.rewrite import (
     EXCLUSION,
     FIELD,
     FILETYPE,
+    LEGACY_PLAN,
     PHRASE,
     TYPE_GROUPS,
     RewrittenQuery,
@@ -145,6 +146,18 @@ def test_a_written_umlaut_form_finds_the_umlaut_spelling(index: Index) -> None:
     assert _raw(index, "kuendigung") == []
 
     assert _found(index, build_query(index, "kuendigung")) == [1]
+
+
+def test_the_plan_a_caller_leaves_out_is_the_frozen_legacy_plan(index: Index) -> None:
+    # The safe default of 19-RESEARCH pitfall 6, asked instead of assumed. Every
+    # other call in this file hands no plan at all, and what keeps those two
+    # dozen lines searching the four fields of today is this equality and nothing
+    # else. A default read out of the settings or computed from an index would
+    # pass every one of them and still change what a bare word means.
+    without = _found(index, build_query(index, "kuendigung"))
+
+    assert without == _found(index, build_query(index, "kuendigung", plan=LEGACY_PLAN))
+    assert without == [1]
 
 
 def test_a_term_without_a_written_umlaut_form_is_left_untouched(index: Index) -> None:

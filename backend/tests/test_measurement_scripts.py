@@ -912,8 +912,18 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # faster one, and what it now also buys is a detached thread that stops at the
 # next cooperative point instead of renaming directories while the poller is
 # being closed. No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a thirty sixth time, by plan 19-01: exactly one of the 56
+# files changed its bytes, query/rewrite.py. The three module constants
+# DEFAULT_FIELDS, TITLE_ONLY_FIELDS and FIELD_BOOSTS are gone, their values now
+# stand in one frozen value, the class FieldPlan and its instance LEGACY_PLAN,
+# and build_query takes that value as a keyword only parameter whose default is
+# the legacy plan itself. Measured, parse_query_lenient raises the same
+# ValueError for a field name it does not know under field_boosts as it does
+# under default_field_names, so a field list that had been made movable without
+# its boosts would only have postponed the empty search bar rather than
+# preventing it. No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "193449595cfb677a64bb82fa250a89c53fe90f5ee3053832950ca3d5275f94b2"
+PACKAGE_TREE_HASH_TODAY = "9e76762c6b2976f8830c49b2a9306cfd9dd08ecdf8a19b437cdf2b929e284d1d"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
