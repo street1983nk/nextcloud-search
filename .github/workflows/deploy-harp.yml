@@ -3539,22 +3539,44 @@ jobs:
           echo "--- 6, the languages mark of the report, and this one HAS to have changed ---"
           # Two halves in one assertion and not two assertions, because the
           # second half is what makes the first one worth making. Absent before
-          # the upgrade is the counter sample: a mark that was already there
-          # would make this green without anything having been exchanged. And
-          # de,en after it, exactly, because this leg sets no FINDLING_LANGUAGES:
-          # any other value would mean a language set arrived from somewhere
-          # nobody named, and the rebuild that follows a changed set is what the
-          # five assertions above have just denied happened.
+          # the upgrade is the counter sample: a report that already carried the
+          # key would make this green without anything having been exchanged.
+          # And EMPTY after it, exactly, which is the half this step demanded
+          # wrongly until 2026-09-24.
+          #
+          # What the two spellings mean, because the difference between them is
+          # the whole measurement. jq -r prints "null" for a key the report does
+          # not have and the empty string for a key it has without a value.
+          # 1.2.0 has no sixth entry in
+          # findling.tools.index_status._VERSION_KEYS at all, so its report
+          # answers null. 1.3.0 has the entry and fills it out of the meta
+          # table, where the mark is not: the seed is forbidden to write it
+          # (threat T-18-05-01, plan 18-05) and the only writer there is is the
+          # stamp behind a finished rebuild
+          # (findling.index.rebuild.stamp_after_swap). So on a leg that sets no
+          # FINDLING_LANGUAGES and rebuilds nothing, the key exists and is
+          # empty, and that is the visible difference between the two releases
+          # this assurance was given to measure.
+          #
+          # A VALUE here would therefore be the failure and not the success: it
+          # would mean a language set was stamped without a rebuild, which is
+          # precisely what the five assertions above have just denied happened,
+          # or that the seed wrote the wish of the container down as a fact
+          # about the index, which is the trap the mark exists to avoid. The
+          # step asked for de,en until 2026-09-24 and got "" in deploy-harp run
+          # 35989391950; the demand was wrong, the answer was right. The mark
+          # arriving WITH a value is the subject of "Store upgrade 6" below,
+          # where a rebuild really runs, and it is asserted there.
           was=$(jq -r '.marks.languages' "${before}")
           now=$(jq -r '.marks.languages' "${after}")
-          if [ "${was}" != "null" ] || [ "${now}" != "de,en" ]; then
-            echo "::error::the report named the languages mark as '${was}' before the upgrade and as '${now}' after it, and the sixth mark of plan 18-03 has to arrive on an existing installation as the factory setting de,en"
+          if [ "${was}" != "null" ] || [ -n "${now}" ]; then
+            echo "::error::the report named the languages mark as '${was}' before the upgrade and as '${now}' after it, and the sixth mark of plan 18-05 has to be missing from the report of ${UPGRADE_FROM_TAG} and present but empty in the one of this commit, because nothing on this leg rebuilds and only a finished rebuild writes it"
             jq -r '.marks' "${before}" "${after}"
             jq -r '.searchFilters.declared' "${before}" "${after}"
             jq -r '.navigation.ids' "${before}" "${after}"
             fail=1
           else
-            echo "the report carried no languages mark before the upgrade and names the factory setting ${now} after it"
+            echo "the report had no languages mark before the upgrade and carries it empty after, so the mark arrived without anything having been stamped"
           fi
 
           if [ "${fail}" -ne 0 ]; then
@@ -3572,7 +3594,7 @@ jobs:
             echo "- the container was unregistered without the data removing flag and registered again on the volume \`${UPGRADE_VOLUME}\`"
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, four of the five index marks and the index format half of the fifth, the document counts, the work stock"
             echo "- no reindex banner, no \`start_rebuild_on_drift\` line in the container log"
-            echo "- the languages mark was absent before and names the factory setting \`de,en\` after"
+            echo "- the languages mark was missing from the report before and is present and empty after, which is the mark arriving without a rebuild having stamped it"
             echo ""
             echo "The reindex branch of D-05 is deliberately not driven here; its absence is what this run asserts."
           } >> "${GITHUB_STEP_SUMMARY}"
