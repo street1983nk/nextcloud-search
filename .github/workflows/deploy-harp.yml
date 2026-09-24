@@ -3840,8 +3840,38 @@ jobs:
           # at the start, it names the image built from this commit, and where
           # the bytes of a store install come from is the subject of the store
           # install path above and not of this block.
+          #
+          # What it may NOT bring along is its language set. Since plan 19-07
+          # that file carries <default>de,en,es,it,nl,pt</default>, AppAPI hands
+          # the environment of the info.xml to the container at registration
+          # time, and the volume being upgraded here holds an index of v1.2.0
+          # that carries no languages mark at all. Six languages against an
+          # absent mark is a real difference, findling.store.repo
+          # ._languages_are_legacy reads it as one because the set is not inside
+          # de,en, the generation is raised, the reindex banner goes up and
+          # assurances 2, 4 and 5 of the step below go red. That is measured and
+          # not feared: run 36072411846 of 2026-09-24 failed on exactly those
+          # three, with "a reindex is required: languages" in the container log.
+          # The subject of this block is an upgrade under the FACTORY setting,
+          # so the registration below uses it. The language jump is ordered
+          # later and on purpose, by "Store upgrade 6" and through the
+          # environment of the container rather than through this file.
+          if [ "$(grep -cF '<default>de,en,es,it,nl,pt</default>' "${RUNNER_TEMP}/info-citest.xml")" != "1" ]; then
+            echo "::error::info-citest.xml does not carry the six language default exactly once, so the line this step reverts is not the line plan 19-07 wrote"
+            grep -n '<default>' "${RUNNER_TEMP}/info-citest.xml"
+            exit 1
+          fi
+          sed 's|<default>de,en,es,it,nl,pt</default>|<default>de,en</default>|' \
+            "${RUNNER_TEMP}/info-citest.xml" > "${RUNNER_TEMP}/info-upgrade.xml"
+          if [ "$(grep -cF '<default>de,en</default>' "${RUNNER_TEMP}/info-upgrade.xml")" != "1" ]; then
+            echo "::error::the upgrade info.xml does not carry the shipped language default exactly once"
+            grep -n '<default>' "${RUNNER_TEMP}/info-upgrade.xml"
+            exit 1
+          fi
+          echo "registering the upgraded half with the shipped language default:"
+          grep -E '<registry>|<image>|<image-tag>|<default>de,en<' "${RUNNER_TEMP}/info-upgrade.xml"
           "${RUNNER_TEMP}/nc-occ.sh" app_api:app:register findling_backend harp_proxy_host \
-            --info-xml "${RUNNER_TEMP}/info-citest.xml" --wait-finish
+            --info-xml "${RUNNER_TEMP}/info-upgrade.xml" --wait-finish
 
           container=$(docker ps --filter 'name=findling_backend' --format '{{.Names}}')
           if [ -z "${container}" ]; then
