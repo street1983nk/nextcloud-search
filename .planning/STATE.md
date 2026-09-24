@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Phase 19 geplant (9 Plaene in 6 Wellen, Checker PASS, Warnungen behoben)
-last_updated: "2026-09-24T19:30:00.000Z"
-last_activity: 2026-09-24 -- Phase 19 geplant (Research + Patterns + 9 Plaene + Checker)
+stopped_at: Phasen 19 UND 20 geplant (9+9 Plaene, beide Checker PASS, Warnungen behoben)
+last_updated: "2026-09-24T20:30:00.000Z"
+last_activity: 2026-09-24 -- Phasen 19 und 20 geplant (je Research + Patterns + Plaene + Checker PASS)
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 29
+  total_plans: 38
   completed_plans: 20
   percent: 29
 ---
@@ -21,11 +21,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 19 (frageseite-freischalten), geplant, bereit zur Ausfuehrung
+**Current focus:** Phasen 19 + 20 geplant, Ausfuehrung Phase 19 startet
 
 ## Current Position
 
-Phase: 19 (frageseite-freischalten) — PLANNED
+Phase: 19 (frageseite-freischalten) — PLANNED, 0 of 9; Phase 20 (ui-kataloge) — PLANNED, 0 of 9
 Plan: 0 of 9
 Status: Phase 19 GEPLANT am 24.09.2026: Research (b2ef69f, gemessene Befunde: field_boosts-ValueError,
 Boost-Summierung, fragment()-Grenze, arm64-Gates), Pattern-Karte (19 Dateien, 17 Analoga),
@@ -38,8 +38,13 @@ Progress: [██........] 29% (2 von 7 Phasen)
 
 ## Naechster Schritt
 
-`/gsd:execute-phase 19` (frisches Kontextfenster davor). Parallel planbar, weil vom
-Indexstrang unabhaengig: `/gsd:plan-phase 20` (UI-Kataloge es/it/nl/pt).
+`/gsd:execute-phase 19` (frisches Kontextfenster davor). Danach oder parallel:
+`/gsd:execute-phase 20` (UI-Kataloge; Wellen 1 und 9 sind Checkpoints, 20-01 Pluralfix
+der sechs Bestandskataloge braucht die Owner-Sichtprobe). Phase-20-Planung 24.09.:
+9 Plaene in 9 Wellen (a8d40fd), Checker PASS, Fussabdruck strikt getrennt von Phase 19
+(php/l10n/**, test_admin_ui_contract.py, docs/l10n-*.md, python.yml + integration.yml).
+Groesster Research-Fund: Pluralschluessel aller sechs Bestandskataloge im falschen Format
+(de/fr antworten bei n=2 mit "2 days"), Fix ist Welle 1.
 Entscheide der Planung, die die Ausfuehrung tragen: it-Beweis ueber neue Flexionsfamilie
 (19-02), "befuellt" = languages-Marke (19-03), EIN ungegateter CI-Schritt mit vier
 Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).

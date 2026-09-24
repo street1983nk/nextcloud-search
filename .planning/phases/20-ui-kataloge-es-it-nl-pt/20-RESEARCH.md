@@ -822,7 +822,13 @@ Form 1 und Form 2 wortgleich, aus dem in Pattern 2 gemessenen Grund.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Alle fuenf Fragen sind bei der Planung am 24.09.2026 entlang der Empfehlungen entschieden worden:
+> OQ1 -> Pluralfix in Welle 1 als Checkpoint (20-01), OQ2 -> vier Sprachdokus + gemeinsames
+> docs/l10n-catalogues.md (20-04 bis 20-08), OQ3 -> php/l10n/** in beide python.yml-Pfadlisten
+> (20-02), OQ4 -> Sprachbeweis in integration.yml search-parity (20-09), OQ5 -> Wortwahl-Entscheide
+> dokumentiert je Sprache, kein Tor. Zusatzentscheid: kein Generator unter scripts/dev/.
 
 1. **Wird der Pluralschlüssel-Fund in Phase 20 repariert?**
    - Was wir wissen: Der Fund ist gemessen (de und fr antworten bei n != 1 englisch), die

@@ -23,7 +23,7 @@
 
 ### UI-Kataloge (KAT)
 
-- [ ] **KAT-01**: UI-Kataloge für es, it, nl, pt_BR und pt_PT im Gleichstand mit EN/DE/FR (Schlüsselzahl aus `de.json` ZÄHLEN, Stand Research 199, nicht die 174 aus dem Backlog); Nextcloud kennt kein `pt`, also zehn neue Dateien (php + backend); `nplurals=3` für es/it/pt_BR/pt_PT korrekt, Gates parametrisiert statt vier Kopien des FR-Blocks
+- [ ] **KAT-01**: UI-Kataloge für es, it, nl, pt_BR und pt_PT im Gleichstand mit EN/DE/FR (Schlüsselzahl aus `de.json` ZÄHLEN, Stand Research 199, nicht die 174 aus dem Backlog); Nextcloud kennt kein `pt`, also zehn neue Dateien (Messbefund Research Phase 20, 24.09.: ALLE unter php/l10n/, die ExApp laedt keine Kataloge); `nplurals=3` für es/it/pt_BR/pt_PT korrekt, Gates parametrisiert statt vier Kopien des FR-Blocks
 - [ ] **KAT-02**: Übersetzungen maschinell erstellt plus Review mit datiertem Vorbehalt (FR-Muster; Muttersprachler-Gate ausdrücklich NICHT Pflicht); der pt-Sprachcode-Ladepfad der App-Kataloge wird VOR der Übersetzungsarbeit an der laufenden Test-Nextcloud verifiziert
 
 ### Messphase (MESS, Fortsetzung ab MESS-06)

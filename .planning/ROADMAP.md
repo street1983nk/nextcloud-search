@@ -139,7 +139,7 @@ Plans:
   1. Ein Nutzer, dessen Nextcloud auf es, it, nl, pt_BR oder pt_PT steht, sieht Findling vollstaendig in dieser Sprache, inklusive Fehler- und Diagnosetexte; keine englischen Reste.
   2. Jeder neue Katalog fuehrt dieselbe Schluesselzahl wie `de.json` (Zahl beim Planstart AUS DER DATEI gezaehlt, Stand Research 199, nicht die 174 aus dem Backlog); das Gate ist parametrisiert statt viermal kopiert und faellt rot, sobald ein Katalog zurueckbleibt.
   3. Die Pluralformen stimmen gegen die Kerndateien der Ziel-Nextcloud (`nplurals=3` fuer es/it/pt_BR/pt_PT, 2 fuer nl); sie sind gelesen, nicht erinnert.
-  4. Der pt-Ladepfad ist VOR der Uebersetzungsarbeit an der laufenden Test-Nextcloud verifiziert; es liegen zehn Dateien (es, it, nl, pt_PT, pt_BR je json und js) fuer beide Apps am richtigen Ort.
+  4. Der pt-Ladepfad ist VOR der Uebersetzungsarbeit an der laufenden Test-Nextcloud verifiziert; es liegen zehn Dateien (es, it, nl, pt_PT, pt_BR je json und js) am richtigen Ort (Messbefund Research 24.09.: alle unter php/l10n/, die ExApp laedt keine Kataloge; "fuer beide Apps" war eine korrigierte Fehlannahme).
   5. Jeder Katalog traegt einen datierten Review-Vorbehalt nach FR-Muster; kein Muttersprachler-Gate blockiert die Auslieferung.
 **Plans**: 9 Plaene in 9 Wellen
 
