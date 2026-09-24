@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import ast
 import gc
+import hashlib
+import inspect
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -28,14 +30,20 @@ from findling.config import SCHEMA_VERSION, settings
 from findling.index.open import LANGUAGES_MARK, REBUILD_MARK, expected_versions, open_index, open_reader
 from findling.index.rebuild import (
     _SCHEMA_MARK,
+    HALF_FILLED_TARGET_KEPT,
     NOT_ENOUGH_ROOM,
+    NOTHING_TO_PUT_IN_ORDER,
+    RETIRED_BROUGHT_BACK,
+    RETIRED_DISCARDED,
     ROOM_ENOUGH,
+    TARGET_RAISED_TO_THE_LIVE_NAME,
     RebuildRun,
     _document_from,
     _resume_cursor,
     counts_match,
     discard_directory,
     may_rebuild,
+    recover_the_index_directories,
     retire_directory,
     stamp_after_swap,
     swap_in,
@@ -765,3 +773,273 @@ def test_the_rebuild_never_calls_the_function_that_raises_the_generation() -> No
 
     assert "start_rebuild_on_drift" not in names
     assert "stamp_after_rebuild" not in names
+
+
+# -- the clean up path at the start, five states of one volume -----------------
+
+
+def _volume_fingerprint(directory: Path) -> list[tuple[str, int, str]]:
+    """Every file of a directory as path, mtime in nanoseconds and content digest.
+
+    Three readings rather than one, because "unchanged" has to hold against all
+    three ways a directory can move: a file that came or went shows in the list
+    of paths, a file that was written shows in the digest, and a file that was
+    rewritten with the same bytes shows in the mtime.
+    """
+    readings: list[tuple[str, int, str]] = []
+    for path in sorted(directory.rglob("*"), key=lambda candidate: candidate.relative_to(directory).as_posix()):
+        if not path.is_file():
+            continue
+        readings.append(
+            (
+                path.relative_to(directory).as_posix(),
+                path.stat().st_mtime_ns,
+                hashlib.sha256(path.read_bytes()).hexdigest(),
+            )
+        )
+    return readings
+
+
+def _only_the_live_directory_is_left(root: Path) -> bool:
+    """True while the volume holds index and neither of the two extra names."""
+    return (root / "index").is_dir() and not (root / "index.rebuild").exists() and not (root / "index.retired").exists()
+
+
+def test_the_state_of_a_live_directory_alone_is_left_untouched(volume: Path) -> None:
+    """State 1, the ordinary start, and the only one whose proof is that nothing moved.
+
+    A clean up path that reached for the live directory on an ordinary start
+    would touch the one thing on this volume that takes hours to build, once per
+    container start and for no reason at all.
+    """
+    live = volume / "index"
+    index = open_index(live, CONSTITUENTS)
+    _stage(index, [_document(file_id) for file_id in range(1, 6)])
+    del index
+    gc.collect()
+    before = _volume_fingerprint(live)
+    assert before, "the fixture wrote nothing, so the case would pass over an empty directory"
+
+    answer = recover_the_index_directories()
+
+    assert answer == NOTHING_TO_PUT_IN_ORDER
+    assert _volume_fingerprint(live) == before
+    assert _only_the_live_directory_is_left(volume)
+
+
+def test_the_state_of_a_half_filled_target_beside_the_live_one_keeps_it(volume: Path) -> None:
+    """State 2, and the branch whose correct handling is the counter intuitive one.
+
+    Removing the half filled directory is what "clean up" sounds like, and it
+    would throw away every band the broken run had already committed.
+    """
+    live = volume / "index"
+    target = volume / "index.rebuild"
+    source = open_index(live, CONSTITUENTS)
+    _stage(source, [_document(file_id) for file_id in range(1, 7)])
+    half = open_index(target, CONSTITUENTS)
+    _stage(half, [_document(file_id) for file_id in range(1, 3)])
+    del source, half
+    gc.collect()
+
+    answer = recover_the_index_directories()
+
+    assert answer == HALF_FILLED_TARGET_KEPT
+    assert live.is_dir()
+    assert target.is_dir()
+    assert _documents_in(target) == 2
+
+
+def test_the_kept_target_lets_the_band_run_resume_at_the_same_file_id(volume: Path) -> None:
+    """The follow up to state 2: the directory that was kept is the progress record.
+
+    The cursor is read before and after the clean up path, because the claim is
+    not that a directory survived but that the next pass starts in the same place
+    it would have started in without the restart.
+    """
+    live = volume / "index"
+    target = volume / "index.rebuild"
+    source = open_index(live, CONSTITUENTS)
+    _stage(source, [_document(file_id) for file_id in range(1, 7)])
+    half = open_index(target, CONSTITUENTS)
+    _stage(half, [_document(file_id) for file_id in range(1, 3)])
+    before = _resume_cursor(half)
+    del source, half
+    gc.collect()
+
+    assert recover_the_index_directories() == HALF_FILLED_TARGET_KEPT
+
+    resumed = open_index(target, CONSTITUENTS)
+    after = _resume_cursor(resumed)
+    del resumed
+    gc.collect()
+    run = transfer_documents(live, target, CONSTITUENTS, ("de", "en"))
+
+    assert before == 2
+    assert after == before
+    assert run.documents_written == 4, "the two documents of the broken run were not carried a second time"
+    assert run.complete is True
+
+
+def test_the_state_of_a_rebuilt_directory_without_a_live_one_raises_it(volume: Path) -> None:
+    """State 3: the swap broke off between its two renames, and the absence is the proof.
+
+    The rebuilt directory is complete here for one reason only, that ``index`` is
+    gone, and ``index`` only ever goes away inside a swap that the final probe
+    already let through.
+    """
+    live = volume / "index"
+    target = volume / "index.rebuild"
+    rebuilt = open_index(target, CONSTITUENTS)
+    _stage(rebuilt, [_document(file_id) for file_id in range(1, 9)])
+    del rebuilt
+    gc.collect()
+
+    answer = recover_the_index_directories()
+
+    assert answer == TARGET_RAISED_TO_THE_LIVE_NAME
+    assert _only_the_live_directory_is_left(volume)
+    assert _documents_in(live) == 8
+
+
+def test_the_state_of_a_rebuilt_directory_beside_a_retired_one_takes_the_rebuilt_one(volume: Path) -> None:
+    """State 3 with the retired directory still there, which is the exact half swap.
+
+    Both extra directories stand and the live name is free, so the volume was
+    caught between the first rename and the second. The rebuilt one wins, and the
+    retired one is the removal the swap never got to.
+    """
+    live = volume / "index"
+    target = volume / "index.rebuild"
+    retired = volume / "index.retired"
+    rebuilt = open_index(target, CONSTITUENTS)
+    _stage(rebuilt, [_document(file_id) for file_id in range(1, 9)])
+    old = open_index(retired, CONSTITUENTS)
+    _stage(old, [_document(file_id) for file_id in range(1, 4)])
+    del rebuilt, old
+    gc.collect()
+
+    answer = recover_the_index_directories()
+
+    assert answer == TARGET_RAISED_TO_THE_LIVE_NAME
+    assert _only_the_live_directory_is_left(volume)
+    assert _documents_in(live) == 8, "the rebuilt directory took the live name and not the retired one"
+
+
+def test_the_state_of_a_retired_directory_without_a_live_one_brings_it_back(volume: Path) -> None:
+    """State 4: the first rename ran, the second did not, and the target is gone.
+
+    The installation loses the rebuild and keeps its search. That is the right
+    way round: a rebuild costs one pass, an index costs the hours that filled it.
+    """
+    live = volume / "index"
+    retired = volume / "index.retired"
+    old = open_index(retired, CONSTITUENTS)
+    _stage(old, [_document(file_id) for file_id in range(1, 4)])
+    del old
+    gc.collect()
+
+    answer = recover_the_index_directories()
+
+    assert answer == RETIRED_BROUGHT_BACK
+    assert _only_the_live_directory_is_left(volume)
+    assert _documents_in(live) == 3
+
+
+def test_the_state_of_a_retired_directory_beside_a_live_one_discards_it(volume: Path) -> None:
+    """State 5: the swap was through and the removal behind it was not, so this one is waste.
+
+    Waste is not harmless here. It counts against the free space the next
+    precheck measures, and that precheck is what decides whether the next rebuild
+    may start at all.
+    """
+    live = volume / "index"
+    retired = volume / "index.retired"
+    index = open_index(live, CONSTITUENTS)
+    _stage(index, [_document(file_id) for file_id in range(1, 6)])
+    waste = open_index(retired, CONSTITUENTS)
+    _stage(waste, [_document(file_id) for file_id in range(1, 3)])
+    del index, waste
+    gc.collect()
+
+    answer = recover_the_index_directories()
+
+    assert answer == RETIRED_DISCARDED
+    assert _only_the_live_directory_is_left(volume)
+    assert _documents_in(live) == 5, "the live directory is the one that stayed"
+
+
+def test_an_empty_volume_is_a_first_start_and_not_a_finding(volume: Path) -> None:
+    """The sixth shape, and the reason the list of five is complete anyway.
+
+    A volume with no index directory at all is what a container sees before it
+    has ever indexed anything. It gets the same answer as state 1, and it may not
+    be a warning, because a warning that appears on every first start is not a
+    warning.
+    """
+    assert recover_the_index_directories() == NOTHING_TO_PUT_IN_ORDER
+    assert not (volume / "index").exists()
+
+
+def test_no_line_of_the_clean_up_path_names_a_path(
+    volume: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """T-18-08-04: all four speaking branches driven in one case, all four lines read.
+
+    Driven rather than read out of the source, because a format string that
+    carries no path can still be handed one as an argument.
+    """
+    live = volume / "index"
+    target = volume / "index.rebuild"
+    retired = volume / "index.retired"
+    answers: list[str] = []
+
+    with caplog.at_level("WARNING", logger="findling.index.rebuild"):
+        # State 3, then state 4, then state 5, then state 2, each of them staged
+        # as bare directories: this case reads log lines and never documents.
+        target.mkdir()
+        answers.append(recover_the_index_directories())
+        live.rename(retired)
+        answers.append(recover_the_index_directories())
+        retired.mkdir()
+        answers.append(recover_the_index_directories())
+        target.mkdir()
+        answers.append(recover_the_index_directories())
+
+    assert answers == [
+        TARGET_RAISED_TO_THE_LIVE_NAME,
+        RETIRED_BROUGHT_BACK,
+        RETIRED_DISCARDED,
+        HALF_FILLED_TARGET_KEPT,
+    ]
+    assert len(caplog.records) == 4, "one line per speaking branch, and every one of them read below"
+    for record in caplog.records:
+        message = record.getMessage()
+        assert volume.name not in message
+        assert str(volume) not in message
+        assert "/" not in message
+        assert "\\" not in message
+
+
+def test_the_clean_up_path_takes_no_path_and_derives_all_three_names(volume: Path) -> None:
+    """T-18-08-03: the removal of this module can only reach the volume it was pointed at.
+
+    Two halves of one statement. The signature takes nothing, so no caller hands
+    a path in, and the three directories are the three siblings of
+    ``settings().index_dir``, the path findling.config builds. The second half is
+    asked of a volume that has a decoy one level up, because a name assembled by
+    string concatenation instead of with_name is exactly how a clean up path
+    walks out of the directory it belongs to.
+    """
+    assert inspect.signature(recover_the_index_directories).parameters == {}
+
+    decoy = volume.parent / (volume.name + ".retired")
+    decoy.mkdir()
+    (decoy / "keep.txt").write_text("not this one", encoding="utf-8")
+    (volume / "index.retired").mkdir()
+    (volume / "index").mkdir()
+
+    assert recover_the_index_directories() == RETIRED_DISCARDED
+    assert decoy.is_dir(), "the sibling of the volume itself was never the business of this function"
+    assert (decoy / "keep.txt").is_file()
