@@ -123,7 +123,7 @@ Plans:
 Plans:
 - [x] 19-01-PLAN.md: FieldPlan als Wert, plan-Parameter, AST-Waechter der Phasengrenze ersetzt
 - [x] 19-02-PLAN.md: it-Fixture waechst, Messung neu gefahren, Zaehlgate und Klassifizierung nachgezogen
-- [ ] 19-03-PLAN.md: Feldplan aus den zwei Marken, ReadSide.field_plan, drei Aufrufstellen
+- [x] 19-03-PLAN.md: Feldplan aus den zwei Marken, ReadSide.field_plan, drei Aufrufstellen
 - [ ] 19-04-PLAN.md: Rangprobe, Boosts unterhalb body_en mit Gegenprobe und gemessener Grenze
 - [ ] 19-05-PLAN.md: Anti-Feature-Waechter, keine Spracherkennung, vier Aussagen mit Gegenproben
 - [ ] 19-06-PLAN.md: Die vier Sprachfaelle auf dem normalen Suchweg, dritter Ketten-Ausschluss
@@ -201,7 +201,7 @@ Plans:
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17. Owner-Tor und Analyseketten | v1.3 | 8/8 | Complete   | 2026-09-23 |
 | 18. Schema, Marken und Umbauweg | v1.3 | 12/12 | Complete   | 2026-09-24 |
-| 19. Frageseite freischalten | v1.3 | 0/9 | Planned | - |
+| 19. Frageseite freischalten | v1.3 | 3/9 | Executing | - |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 0/9 | Planned | - |
 | 21. Niederlaendische Komposita | v1.3 | 0/TBD | Not started | - |
 | 22. Messanfahrt BL-F03 | v1.3 | 0/TBD | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Phase 19, Plan 19-02 fertig (it-Fixture, Nachlauf, Zaehlgate), naechster Plan 19-03
-last_updated: "2026-09-24T22:40:00.000Z"
-last_activity: 2026-09-24 -- 19-02 ausgefuehrt (it-Flexionsfamilie, Messung neu gefahren)
+stopped_at: Phase 19, Plan 19-03 fertig (Feldplan aus den zwei Marken), naechster Plan 19-04
+last_updated: "2026-09-25T00:20:00.000Z"
+last_activity: 2026-09-24 -- 19-03 ausgefuehrt (Feldplan aus schema_version und languages)
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 38
-  completed_plans: 22
+  completed_plans: 23
   percent: 32
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 ## Current Position
 
-Phase: 19 (frageseite-freischalten), EXECUTING, Plan 2 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
+Phase: 19 (frageseite-freischalten), EXECUTING, Plan 3 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
 Status: Ausfuehrung Phase 19 laeuft (9 Plaene in 6 Wellen). 19-01 fertig (82bf2b1): die drei
 Modulkonstanten DEFAULT_FIELDS/TITLE_ONLY_FIELDS/FIELD_BOOSTS sind ein Wert (FieldPlan,
 LEGACY_PLAN), build_query nimmt plan keyword-only mit dem Bestandsplan als Vorgabewert, der
@@ -33,18 +33,23 @@ AST-Waechter aus test_schema_generations.py ist weg und test_query_fields_plan.p
 seiner Stelle. 19-02 fertig (10917a0): chain_cases_it.txt traegt eine Flexionsfamilie, die Messung
 ist neu gefahren (Rueckgabecode 0, it 14/56 auf 15/60, Summe 65/573 auf 66/577), der Messbericht hat
 einen Abschnitt "Nachlauf vom 24.09.2026", EXPECTED_FAMILY_SCORES steht auf den gemessenen Zahlen und
-it ist von FOLDED nach SEPARATED gewandert. Volle Suite 2751 bestanden / 15 uebersprungen.
+it ist von FOLDED nach SEPARATED gewandert. 19-03 fertig (354ef27): SCHEMA_MARK steht neben
+LANGUAGES_MARK, field_plan_for(marks, index) rechnet den Feldplan aus den zwei gespeicherten
+Marken des Verzeichnisses (Tor faellt geschlossen, doc_freq-Sonde als Gegenprobe, wirft nie),
+ReadSide traegt field_plan und reset_read_side verwirft ihn mit den Handles, die drei
+Aufrufstellen reichen plan=side.field_plan durch. Volle Suite 2776 bestanden / 15 uebersprungen.
 Planung 24.09.: Research b2ef69f,
 Pattern-Karte, Plaene 51525d5, Checker PASS, Warnungen behoben 3c35186. Phase 20 geplant
 (a8d40fd, Checker PASS, f32bdec). Phase 18 davor KOMPLETT (12/12, CI-Beweis 36026836087).
-Last activity: 2026-09-24 -- 19-02 ausgefuehrt (it-Flexionsfamilie, Messung neu gefahren)
+Last activity: 2026-09-24 -- 19-03 ausgefuehrt (Feldplan aus schema_version und languages)
 
 Progress: [███.......] 32% (2 von 7 Phasen)
 
 ## Naechster Schritt
 
-Weiter in Phase 19 mit 19-03 (Feldplan aus den zwei Marken, ReadSide.field_plan, drei
-Aufrufstellen). Danach oder parallel:
+Weiter in Phase 19 mit 19-04 (Rangprobe: Boosts unterhalb body_en mit Gegenprobe und
+gemessener Grenze; 19-05 und 19-06 haengen nicht daran und koennen parallel laufen, 19-05
+bewacht die Signatur von field_plan_for ueber den Syntaxbaum). Danach oder parallel:
 `/gsd:execute-phase 20` (UI-Kataloge; Wellen 1 und 9 sind Checkpoints, 20-01 Pluralfix
 der sechs Bestandskataloge braucht die Owner-Sichtprobe). Phase-20-Planung 24.09.:
 9 Plaene in 9 Wellen (a8d40fd), Checker PASS, Fussabdruck strikt getrennt von Phase 19
@@ -76,6 +81,12 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
   backend/src/findling zieht PACKAGE_TREE_HASH_TODAY im selben Commit nach) und die
   Uebergabebedingung aus 18-03 (Waechter faellt und sein Ersatz wird im selben Commit
   genannt) lassen keinen gruenen Zwischenstand zu.
+
+- Der Feldplan haengt an `ReadSide` und bekommt keinen eigenen Prozesscache (19-03): die
+  Invalidierung durch `reset_read_side()` und der Generationsschutz aus Audit M-18-02 existieren
+  dort bereits, und ein dritter Cache neben `_DEGRADED` und `_FILLED` waere die dritte
+  Generationsfalle. Quelle des Plans sind ausschliesslich die zwei gespeicherten Marken
+  `schema_version` und `languages`, nie `settings().languages` (T-18-05-01).
 
 - D-04-Linie (v1.1): index-kompatibel ueber Minor-Spruenge. v1.3 verletzt sie bewusst und
   nur fuer Instanzen, die eine neue Sprache einschalten; der Bruch braucht den Owner-Entscheid
@@ -123,8 +134,14 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
 
 - Zwei Prosastellen nennen noch den gefallenen Namen `DEFAULT_FIELDS`: `store/repo.py:128`
   und `:1448`. Die beiden Stellen in `tests/test_language_cases_field_level.py` sind am 24.09.
-  mit 19-02 erledigt. Der Rest steht unter `backend/src/findling` und wartet auf den naechsten
-  Plan, der diese Datei ohnehin anfasst (19-03 fasst die Leseseite an, aber nicht repo.py).
+  mit 19-02 erledigt. 19-03 hat `repo.py` bewusst NICHT angefasst: sein Fussabdruck ist auf acht
+  Dateien festgelegt und die Verifikation verlangt genau diese acht; `LEGACY_LANGUAGES` wird von
+  dort nur importiert. Wartet weiter auf den naechsten Plan, der `store/repo.py` ohnehin oeffnet.
+
+- Leerer Textauszug bei einem reinen Sprachfeld-Treffer: der `SnippetGenerator` haengt fest an
+  `FIELD_BODY_DE` (`index/search.py:875`), gemessen in 19-RESEARCH M-4. Gefuehrt als Annahme A5
+  (dokumentieren statt beheben); Doku gehoert zu 19-09, eine Behebung waere ein eigener Plan und
+  braucht den Owner-Entscheid, ob es ein Mangel ist.
 
 ## Deferred Items
 
@@ -134,5 +151,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-24
-Stopped at: 19-02 abgeschlossen und committet (10917a0), SUMMARY geschrieben
-Resume file: .planning/phases/19-frageseite-freischalten/19-03-PLAN.md
+Stopped at: 19-03 abgeschlossen und committet (354ef27), SUMMARY geschrieben
+Resume file: .planning/phases/19-frageseite-freischalten/19-04-PLAN.md
