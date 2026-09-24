@@ -48,7 +48,8 @@ Details im Archiv: .planning/milestones/v1.2-ROADMAP.md
 
 - [x] **Phase 17: Owner-Tor und Analyseketten** - Grundsatzentscheide schriftlich, dann vier messend abgenommene Analyseketten es/it/nl/pt
  (completed 2026-09-23)
-- [ ] **Phase 18: Schema, Marken und Umbauweg** - Sechs Koerperfelder, Re-Analyse-Umbau aus dem Bestandsindex, Beweisstrecke umgedreht
+- [x] **Phase 18: Schema, Marken und Umbauweg** - Sechs Koerperfelder, Re-Analyse-Umbau aus dem Bestandsindex, Beweisstrecke umgedreht
+ (completed 2026-09-24)
 - [ ] **Phase 19: Frageseite freischalten** - Die Anfrage erreicht die neuen Felder, erst nachdem der Umbau bewiesen ist
 - [ ] **Phase 20: UI-Kataloge es/it/nl/pt** - Zehn neue Katalogdateien im Gleichstand mit EN/DE/FR (Parallelpfad)
 - [ ] **Phase 21: Niederlaendische Komposita** - Eigenes Tor, faellt bei Terminnot als Ganzes
@@ -94,18 +95,18 @@ Plans:
 **Plans**: 12 Plaene in 9 Wellen
 
 Plans:
-- [ ] 18-01-PLAN.md: Dreizehn Felder, acht Ketten unbedingt registriert, SCHEMA_VERSION 2, Sperrklinke umgedreht
-- [ ] 18-02-PLAN.md: Befuellung nach FINDLING_LANGUAGES, _languages() filtert gegen SUPPORTED_LANGUAGES
-- [ ] 18-03-PLAN.md: Zwischenzustands-Beweis, Mengeninklusion plus AST-Waechter plus Schema-1-Fixture
-- [ ] 18-04-PLAN.md: Sprachfaelle es/it/nl/pt auf Feldebene, ohne Fremdbestand
-- [ ] 18-05-PLAN.md: Sechster Merker languages, Teilmengenregel, vier Aufrufstellen
-- [ ] 18-06-PLAN.md: index/rebuild.py, Vorpruefung, Bandlauf, zustandslose Wiederaufnahme
-- [ ] 18-07-PLAN.md: Verzeichnistausch, reset_read_side, eigene Stempelfunktion
-- [ ] 18-08-PLAN.md: Aufraeumpfad beim Start, vier Faelle plus Abfallfall
-- [ ] 18-09-PLAN.md: Lifespan-Aufgabe, Poller ruhigstellen, OCR-Startwarnung
-- [ ] 18-10-PLAN.md: Sprachstatus und Umbau-Banner auf der Adminseite, sechs Kataloge im Gleichstand
-- [ ] 18-11-PLAN.md: Lockstep-Migration Version001300Date... plus Unittest
-- [ ] 18-12-PLAN.md: UPGRADE_FROM_TAG auf v1.2.0, Store upgrade 6 mit neun Zusicherungen
+- [x] 18-01-PLAN.md: Dreizehn Felder, acht Ketten unbedingt registriert, SCHEMA_VERSION 2, Sperrklinke umgedreht
+- [x] 18-02-PLAN.md: Befuellung nach FINDLING_LANGUAGES, _languages() filtert gegen SUPPORTED_LANGUAGES
+- [x] 18-03-PLAN.md: Zwischenzustands-Beweis, Mengeninklusion plus AST-Waechter plus Schema-1-Fixture
+- [x] 18-04-PLAN.md: Sprachfaelle es/it/nl/pt auf Feldebene, ohne Fremdbestand
+- [x] 18-05-PLAN.md: Sechster Merker languages, Teilmengenregel, vier Aufrufstellen
+- [x] 18-06-PLAN.md: index/rebuild.py, Vorpruefung, Bandlauf, zustandslose Wiederaufnahme
+- [x] 18-07-PLAN.md: Verzeichnistausch, reset_read_side, eigene Stempelfunktion
+- [x] 18-08-PLAN.md: Aufraeumpfad beim Start, vier Faelle plus Abfallfall
+- [x] 18-09-PLAN.md: Lifespan-Aufgabe, Poller ruhigstellen, OCR-Startwarnung
+- [x] 18-10-PLAN.md: Sprachstatus und Umbau-Banner auf der Adminseite, sechs Kataloge im Gleichstand
+- [x] 18-11-PLAN.md: Lockstep-Migration Version001300Date... plus Unittest
+- [x] 18-12-PLAN.md: UPGRADE_FROM_TAG auf v1.2.0, Store upgrade 6 mit neun Zusicherungen
 **Research-Flag**: ja (`--research-phase 18`, `index/rebuild.py` ist eine neue Komponente ohne Vorbild im Repo; Wiederaufnahme und Platzpruefung unter Abbruchbedingungen sind nicht trivial)
 
 ### Phase 19: Frageseite freischalten
@@ -177,7 +178,7 @@ Plans:
 | 7-11 (Archiv) | v1.1 | 37/37 | Complete | 2026-09-11 |
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17. Owner-Tor und Analyseketten | v1.3 | 8/8 | Complete   | 2026-09-23 |
-| 18. Schema, Marken und Umbauweg | v1.3 | 0/12 | Planned | - |
+| 18. Schema, Marken und Umbauweg | v1.3 | 12/12 | Complete   | 2026-09-24 |
 | 19. Frageseite freischalten | v1.3 | 0/TBD | Not started | - |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 0/TBD | Not started | - |
 | 21. Niederlaendische Komposita | v1.3 | 0/TBD | Not started | - |

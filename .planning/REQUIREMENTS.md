@@ -9,13 +9,13 @@
 ### Lexikalischer Sprachausbau (LEX)
 
 - [x] **LEX-01**: Nutzer findet spanische, italienische, niederländische und portugiesische Dokumente über Stammformen (vier Analyseketten mit Snowball-Stemmer und Stoppwortliste). Die Position von `ascii_fold` in der Kette wird je Sprache MESSEND abgenommen (der Widerspruch zwischen den Research-Dokumenten ist als offener Entscheid dokumentiert; Abnahmekriterium ist die zusammengeführte Testfall-Tabelle aus STACK/FEATURES/PITFALLS, inkl. información/informaciones, informação/informações, perché, één)
-- [ ] **LEX-02**: Das Schema führt IMMER alle sechs Körperfelder; befüllt wird nur nach `FINDLING_LANGUAGES`, Werkseinstellung bleibt `de,en`. Bestandsinstallationen mit `de,en` bleiben unberührt (D-04-Linie); leere Felder kosten gemessen nichts
-- [ ] **LEX-03**: Ein Bestandsindex wandert per Re-Analyse-Umbau aus den gespeicherten Feldern in das neue Schema (neues Modul `index/rebuild.py`): kein Download, kein OCR, keine Neu-Einbettung; `vectors.db`/`state.db` unberührt. Der Umbau ist wiederaufnahmefähig nach Neustart und prüft den Plattenplatz vorab (zwei Indexverzeichnisse gleichzeitig, `MIN_FREE_BYTES` anpassen)
-- [ ] **LEX-04**: Schema-Erweiterung und Query-Freischaltung liegen in getrennten Phasen mit bewiesenem Umbauweg dazwischen: Die Suche funktioniert auf Bestandsinstallationen in JEDEM Zwischenzustand (der heutige Totalausfall-Pfad `parse_query_lenient`-ValueError -> dauerhaft leere degraded-Antwort darf nie erreichbar sein). Migration `Version001300Date...` wie bei jedem Minor-Sprung
+- [x] **LEX-02**: Das Schema führt IMMER alle sechs Körperfelder; befüllt wird nur nach `FINDLING_LANGUAGES`, Werkseinstellung bleibt `de,en`. Bestandsinstallationen mit `de,en` bleiben unberührt (D-04-Linie); leere Felder kosten gemessen nichts
+- [x] **LEX-03**: Ein Bestandsindex wandert per Re-Analyse-Umbau aus den gespeicherten Feldern in das neue Schema (neues Modul `index/rebuild.py`): kein Download, kein OCR, keine Neu-Einbettung; `vectors.db`/`state.db` unberührt. Der Umbau ist wiederaufnahmefähig nach Neustart und prüft den Plattenplatz vorab (zwei Indexverzeichnisse gleichzeitig, `MIN_FREE_BYTES` anpassen)
+- [x] **LEX-04**: Schema-Erweiterung und Query-Freischaltung liegen in getrennten Phasen mit bewiesenem Umbauweg dazwischen: Die Suche funktioniert auf Bestandsinstallationen in JEDEM Zwischenzustand (der heutige Totalausfall-Pfad `parse_query_lenient`-ValueError -> dauerhaft leere degraded-Antwort darf nie erreichbar sein). Migration `Version001300Date...` wie bei jedem Minor-Sprung
 - [ ] **LEX-05**: Die Anfrage durchsucht genau die aktiven Sprachfelder mit Feld-Boosts unterhalb `body_en`; KEINE Spracherkennung, weder dokument- noch anfrageseitig (Anti-Feature, einstimmig)
-- [ ] **LEX-06**: Admin sieht in der Diagnose, welche Sprachen aktiv und befüllt sind; beim Start warnt Findling, wenn `FINDLING_LANGUAGES` eine Sprache führt, die die OCR-Sprachen nicht abdecken (Buchstabensalat-Falle)
+- [x] **LEX-06**: Admin sieht in der Diagnose, welche Sprachen aktiv und befüllt sind; beim Start warnt Findling, wenn `FINDLING_LANGUAGES` eine Sprache führt, die die OCR-Sprachen nicht abdecken (Buchstabensalat-Falle)
 - [x] **LEX-07**: `tantivy` auf 0.26.2 gepinnt (stopword-Panic wird ValueError, index_format v7 unverändert; der zunächst behauptete Union-Scorer-Fix ist laut Phase-17-Research nicht belegbar und gestrichen); Sprachnamen laufen über eine Positivliste analog `OCR_LANGUAGE_ALLOWLIST`
-- [ ] **LEX-08**: CI beweist beides: Sprachfälle je neuer Sprache ohne Fremdbestand (Muster A4/2026-09) UND eine umgedrehte Upgrade-Beweisstrecke in `deploy-harp.yml` (Umbau findet statt, Suche liefert danach in alter und neuer Sprache; die bestehende "kein Reindex"-Strecke wird um die Gegenrichtung ergänzt, nicht entschärft; `UPGRADE_FROM_TAG` auf v1.2.0)
+- [x] **LEX-08**: CI beweist beides: Sprachfälle je neuer Sprache ohne Fremdbestand (Muster A4/2026-09) UND eine umgedrehte Upgrade-Beweisstrecke in `deploy-harp.yml` (Umbau findet statt, Suche liefert danach in alter und neuer Sprache; die bestehende "kein Reindex"-Strecke wird um die Gegenrichtung ergänzt, nicht entschärft; `UPGRADE_FROM_TAG` auf v1.2.0)
 
 ### Niederländische Komposita (KOMP, eigene Phase mit eigenem Tor)
 
@@ -61,11 +61,11 @@
 |-------------|-------|--------|
 | LEX-01 | Phase 17 (Owner-Tor und Analyseketten) | Complete (23.09.2026, Verifikation 4/4) |
 | LEX-07 | Phase 17 (Owner-Tor und Analyseketten) | Complete (23.09.2026, Verifikation 4/4) |
-| LEX-02 | Phase 18 (Schema, Marken und Umbauweg) | Pending |
-| LEX-03 | Phase 18 (Schema, Marken und Umbauweg) | Pending |
-| LEX-04 | Phase 18 (Schema, Marken und Umbauweg) | Pending |
-| LEX-06 | Phase 18 (Schema, Marken und Umbauweg) | Pending |
-| LEX-08 | Phase 18 (Schema, Marken und Umbauweg) | Pending |
+| LEX-02 | Phase 18 (Schema, Marken und Umbauweg) | Complete (24.09.2026, Verifikation 5/5, CI 36026836087) |
+| LEX-03 | Phase 18 (Schema, Marken und Umbauweg) | Complete (24.09.2026, Verifikation 5/5, CI 36026836087) |
+| LEX-04 | Phase 18 (Schema, Marken und Umbauweg) | Complete (24.09.2026, Verifikation 5/5, CI 36026836087) |
+| LEX-06 | Phase 18 (Schema, Marken und Umbauweg) | Complete (24.09.2026, Verifikation 5/5, CI 36026836087) |
+| LEX-08 | Phase 18 (Schema, Marken und Umbauweg) | Complete (24.09.2026, Verifikation 5/5, CI 36026836087) |
 | LEX-05 | Phase 19 (Frageseite freischalten) | Pending |
 | KAT-01 | Phase 20 (UI-Kataloge es/it/nl/pt) | Pending |
 | KAT-02 | Phase 20 (UI-Kataloge es/it/nl/pt) | Pending |
