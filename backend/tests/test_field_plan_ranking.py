@@ -27,8 +27,8 @@ contribution per field, a word only three chains put on the term of the question
 collects three. The probe below is built out of exactly that disagreement,
 because that is the only place the distortion lives.
 
-**What this file proves.** Two things so far, and the rest arrives with the
-ranking probe.
+**What this file proves.** Four things, and the last two are what make the
+second one mean anything.
 
 1. The weights of the four build out languages lie below ``body_en``, and
    ``body_en`` lies below ``body_de``. Not only in the shipped table but in every
@@ -40,13 +40,28 @@ ranking probe.
    Portuguese chains put it on the second. The distractor is asserted to be in
    the index and asserted not to answer the question, because a third document
    that is missing looks exactly like a third document that keeps quiet.
+3. On that index and at the weights that ship, the better English hit stands in
+   front of the document that answers the same question through three build out
+   chains. Read off a real search through ``build_query`` and a real plan out of
+   ``field_plan_for``, not off a score added up by hand.
+4. With the four build out weights raised to 1.0 that order turns over. Without
+   this run the third statement would be just as green on an index where the
+   second document never answers the question at all, which is the one way a
+   ranking assertion is worth nothing.
+
+**The number this file was also written for.** ``TIPPING_BOOST`` below is the
+weight at which statement 3 stops holding on this probe, found by a sweep and
+not by an estimate. Phase 22 has to weigh a different query shape against the
+summation described above, and REQUIREMENTS MESS-09 binds that decision to a
+measurement on real data; this is the figure it starts from, and plan 19-09
+carries it into ``docs/language-analyzers.md`` so that nobody has to look for it.
 
 **What this file does not prove.** Nothing about an installation. Three documents
-are not a corpus. It proves nothing about the analyzer chains themselves, which
-is ``test_language_analyzers.py``, and nothing about which fields a plan names,
-which is ``test_query_fields_plan.py``. It prepares no change of query shape
-either: that decision is bound to a measurement on real data in phase 22
-(REQUIREMENTS MESS-09).
+are not a corpus, and ``TIPPING_BOOST`` is a property of this probe rather than a
+threshold of the product. It proves nothing about the analyzer chains themselves,
+which is ``test_language_analyzers.py``, and nothing about which fields a plan
+names, which is ``test_query_fields_plan.py``. It prepares no change of query
+shape either: that decision belongs to phase 22 and stays there.
 """
 
 from __future__ import annotations
@@ -88,6 +103,31 @@ CURRENT_SCHEMA: Final = str(SCHEMA_VERSION)
 # every release up to 1.2.0 searched; whatever is in the supported set and not in
 # that pair is what this phase added and what these weights are about.
 BUILD_OUT: Final = tuple(code for code in SUPPORTED_LANGUAGES if code not in LEGACY_LANGUAGES)
+
+# MEASURED 2026-09-24 against tantivy 0.26.2, by the sweep in
+# test_the_boost_at_which_the_ranking_turns_over_is_this_one: one search per
+# hundredth between 0.00 and 1.00, the four build out weights moved together and
+# everything else held still. Below this value the better English hit stands in
+# front, at this value and above it the three chain hit does.
+#
+# What it is good for. The shipped 0.6 sits 0.21 below the edge on this probe, so
+# the promise of success criterion 3 holds here with room rather than by a hair,
+# and the counter probe at 1.0 is above the edge, so it really does turn the
+# order over instead of failing to notice that it could not. Phase 22 weighs
+# Query.disjunction_max_query against the summation this file measures, and per
+# REQUIREMENTS MESS-09 that decision is bound to a measurement on real data; this
+# is the figure that measurement is set up against, and nothing in this module
+# prepares the change itself.
+#
+# What it is not. Three documents in a temporary directory. The edge moves with
+# the length of the texts and with how many chains reach each document, so this
+# is the order of magnitude and the direction, not a constant of the product.
+TIPPING_BOOST: Final = 0.81
+
+# The resolution of that sweep. A hundredth is finer than any weight this project
+# ships and coarse enough that the whole series is a handful of searches on a
+# three document index.
+SWEEP_STEPS: Final = 100
 
 # The question, and the two forms the probe documents carry it in. Measured with
 # the shipped chains on 2026-09-24:
@@ -202,6 +242,32 @@ def _shipped_plan(index: Index) -> FieldPlan:
     return _plan_for(index, tuple(SUPPORTED_LANGUAGES))
 
 
+def _plan_at(index: Index, weight: float) -> FieldPlan:
+    """The shipped plan with the four build out weights moved to ``weight``.
+
+    One knob and one only. The field list, the two leading languages and the file
+    name half stay exactly as ``field_plan_for`` computed them, so a run at a
+    different weight differs from the shipped run in the four numbers under test
+    and in nothing else.
+    """
+    shipped = _shipped_plan(index)
+    boosts = dict(shipped.boosts)
+    for code in BUILD_OUT:
+        boosts[BODY_FIELD[code]] = weight
+    return FieldPlan(fields=shipped.fields, boosts=boosts, title_only=shipped.title_only)
+
+
+def _multi_chain_hit_leads(index: Index, weight: float) -> bool:
+    """Has the order turned over at this weight?
+
+    Both documents have to be in the answer for the question to mean anything, so
+    that is asserted here rather than read as a False.
+    """
+    order = _order(index, QUESTION, _plan_at(index, weight))
+    assert {ENGLISH_HIT, MULTI_CHAIN_HIT} <= set(order)
+    return order.index(MULTI_CHAIN_HIT) < order.index(ENGLISH_HIT)
+
+
 def _order(index: Index, text: str, plan: FieldPlan) -> list[int]:
     """The file ids a real search returns, in the order it returns them.
 
@@ -303,3 +369,43 @@ def test_the_distractor_is_in_the_index_and_still_does_not_answer_the_question(p
     # and it would make the two document comparison look cleaner than it is.
     assert _order(probe_index, DISTRACTOR_QUESTION, _shipped_plan(probe_index)) == [DISTRACTOR]
     assert DISTRACTOR not in _order(probe_index, QUESTION, _shipped_plan(probe_index))
+
+
+def test_the_better_english_hit_stands_before_the_three_chain_hit(probe_index: Index) -> None:
+    # Success criterion 3 as a measurement instead of as a sentence, and this is
+    # the case the roadmap is really asking for. The plan is the one an
+    # installation with all six languages gets, the search is the one the three
+    # call sites under api/ run, and the order is the order the searcher hands
+    # back rather than a comparison of two numbers somebody computed.
+    order = _order(probe_index, QUESTION, _shipped_plan(probe_index))
+
+    assert order == [ENGLISH_HIT, MULTI_CHAIN_HIT]
+    assert order.index(ENGLISH_HIT) < order.index(MULTI_CHAIN_HIT)
+
+
+def test_the_same_ranking_turns_over_once_the_four_weights_reach_one(probe_index: Index) -> None:
+    # The counter probe, and without it the case above is decoration: it would be
+    # just as green on an index where the Spanish note never answers the question,
+    # and then the weights would have settled nothing at all. Everything except
+    # the four numbers is held still, so what turns the order over is the weights
+    # and not a second difference that crept in.
+    order = _order(probe_index, QUESTION, _plan_at(probe_index, 1.0))
+
+    assert order == [MULTI_CHAIN_HIT, ENGLISH_HIT]
+    assert order.index(MULTI_CHAIN_HIT) < order.index(ENGLISH_HIT)
+
+
+def test_the_boost_at_which_the_ranking_turns_over_is_this_one(probe_index: Index) -> None:
+    # The sweep that produced TIPPING_BOOST, kept in the suite rather than run
+    # once and written down, so that the number in the module head stays a
+    # measurement of the code that ships instead of a memory of it.
+    turned = [
+        step / SWEEP_STEPS for step in range(SWEEP_STEPS + 1) if _multi_chain_hit_leads(probe_index, step / SWEEP_STEPS)
+    ]
+
+    assert turned, "the order never turns over, so the counter probe above proves nothing"
+    assert turned[0] == pytest.approx(TIPPING_BOOST)
+    # The two distances that make the pair of cases above worth running: the
+    # shipped weight is below the edge, so the promise holds with room, and 1.0
+    # is above it, so the counter probe really is a counter probe.
+    assert BODY_BOOST[BUILD_OUT[0]] < TIPPING_BOOST < 1.0
