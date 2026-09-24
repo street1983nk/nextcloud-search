@@ -763,7 +763,11 @@ LEGACY_PLAN: Final = FieldPlan(
 | A5 | Der leere Textauszug beim reinen Sprachfeld-Treffer ist akzeptabel und wird dokumentiert statt behoben | Pitfall 4 | Wenn der Owner ihn als Mangel wertet, wächst die Phase um einen Auszugspfad je Körperfeld. Der Befund ist gemessen, die Bewertung ist es nicht. |
 | A6 | `EXPECTED_FAMILY_SCORES` und der Messbericht sind die einzigen Stellen, die an den Fixture-Zahlen hängen | Pitfall 5 | Eine übersehene dritte Stelle kostet einen roten Lauf, keinen Fehler im Produkt. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Alle vier Fragen sind bei der Planung am 24.09.2026 entlang der Empfehlungen entschieden worden:
+> OQ1 -> neue it-Flexionsfamilie (19-02), OQ2 -> "befuellt" = languages-Marke (19-03),
+> OQ3 -> EIN ungegateter CI-Schritt (19-07), OQ4 -> AST-Waechter-Ersatz im selben Commit (19-01).
 
 1. **Wie wird der italienische Fall auf dem normalen Suchweg bewiesen?**
    - Was wir wissen: In der vorhandenen it-Fixture gibt es null Paare, die nur die italienische Kette
