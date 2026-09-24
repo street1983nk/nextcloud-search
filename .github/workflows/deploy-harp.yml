@@ -2983,6 +2983,47 @@ jobs:
           mkdir -p data/testuser/files
           cp -r findling-src/testdata/corpus data/testuser/files/corpus
 
+          # The Spanish document of the before and after proof of plan 19-08,
+          # and it belongs to the corpus of the RELEASED installation rather
+          # than to this checkout: it is indexed a few lines below under
+          # ${UPGRADE_FROM_TAG}, into a schema that carries no body_es field at
+          # all, and that is what makes the nought of "Store upgrade 3" a
+          # measurement instead of an accident.
+          #
+          # The word pair is not a choice, it is a measurement (19-RESEARCH
+          # M-5, 2026-09-24). The document carries alemana, the question asks
+          # for alemanes, and of the analysis chains this app ships ONLY the
+          # Spanish one carries the two onto a common term (aleman): neither
+          # the English nor the German one does. A pair such as informacion
+          # against informaciones would be folded by the English chain and
+          # would therefore have been green before phase 19 touched anything,
+          # which is the one shape a before and after proof cannot survive.
+          #
+          # Why the question is ONE word, and it is the reason the nought can
+          # hold at all rather than a matter of taste: api/search.py answers a
+          # single word line out of the word index alone (the one term rule of
+          # plan 06.1-20, derived in
+          # docs/measurements/2026-09-06-vektordistanzen), so the vector half
+          # is not built for this question at all and no semantic neighbour can
+          # put this document into the answer while the field it needs is
+          # missing from the schema. A two word question would be hybrid, and
+          # then the nought would be a statement about distances rather than
+          # about fields.
+          #
+          # The words follow the rule of the fill corpus block below: none of
+          # them carries Belehrung, Auszug, Erinnerung, florpel or
+          # findling-canary, and none of them splits into a constituent that
+          # does. The file name carries no form of aleman either, or the name
+          # field of the schema would answer the question the body field is
+          # there to answer.
+          #
+          # ASCII throughout, like the rest of this file: Spanish writes every
+          # one of these words without an accent.
+          {
+            echo 'Esta es una carta de la oficina alemana sobre el contrato de arrendamiento.'
+            echo 'La empresa confirma la entrega de los documentos del piso en Madrid.'
+          } > data/testuser/files/upgrade-carta-es.txt
+
           # The fill corpus, and it exists for one measured reason: it is what
           # makes the rebuild of "Store upgrade 6" long enough to be watched.
           #
@@ -3424,6 +3465,33 @@ jobs:
               return 1
             fi
 
+            # The ninth value of a snapshot, since 2026-09-25, and it carries a
+            # key of its OWN instead of a fourth entry in .terms. The reason is
+            # the precondition that every entry of that object answers with
+            # exactly one file: it stands twice in this file, once in "Store
+            # upgrade 3" and once in "Store upgrade 6". A term that is SUPPOSED
+            # to answer with nought before the rebuild would break it, and it
+            # is not going to be loosened to make room for one. That
+            # precondition is the reason the assurances behind it mean anything
+            # at all.
+            #
+            # The counter is the one that is already here. term_hits fails
+            # closed on a status other than 200 and on a body jq cannot read,
+            # and a second implementation of "how many hits does this term
+            # have" would compare two measurements instead of two states, which
+            # is the one mistake a before and after proof cannot survive.
+            #
+            # Same shape as the eighth value above (T-18-12-03): into a shell
+            # variable first, an empty one ends the snapshot with the raw
+            # answer on record, and only then does the one jq -n below build
+            # the object.
+            spanish=$(term_hits alemanes) || return 1
+            if [ -z "${spanish}" ]; then
+              echo "the search for alemanes carried no readable count, so this snapshot would carry an empty value" >&2
+              cat "${RUNNER_TEMP}/upgrade-term.json" >&2
+              return 1
+            fi
+
             jq -n \
               --arg label "${label}" \
               --argjson report "${report}" \
@@ -3438,6 +3506,7 @@ jobs:
               --arg banner "${banner}" \
               --arg filters "${filters}" \
               --arg rebuild "${rebuild}" \
+              --argjson spanish "${spanish}" \
               '{
                  label: $label,
                  terms: {
@@ -3445,6 +3514,7 @@ jobs:
                    Auszug: $auszug,
                    Erinnerung: $erinnerung
                  },
+                 spanish: $spanish,
                  container: {
                    docs: $report.docs,
                    indexed: $report.indexed,
