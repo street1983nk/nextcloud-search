@@ -41,6 +41,24 @@ And one statement about the matrix rather than about the step: it still carries
 an entry on ``ubuntu-24.04-arm``. Without that entry "no condition" buys nothing,
 because there would be no arm64 leg for the step to run on.
 
+And three statements about the upgrade path, where the Spanish before and
+after of plan 19-08 lives. They are deliberately NOT in ``CLAIMS``: they say
+nothing about the proof step, so a renamed proof step must not silence them and
+they must not make a renamed proof step cost more findings than it silences.
+
+5. The precondition ``[.terms[]] | all(. == 1)`` stands exactly twice and
+   unchanged. It demands exactly one file for every term of the snapshot, and
+   the Spanish question is SUPPOSED to answer with nought before the rebuild.
+   Making room for it by loosening that expression would leave every assurance
+   behind it standing on nothing, and a gate that watches it is cheaper than a
+   later run that no longer says what it says.
+6. The Spanish count stands in the snapshot under a key of its OWN and never
+   inside the ``terms`` object, which is the other half of the same sentence.
+7. The three assurances exist: twice against nought and once against one.
+   Nought on the released installation, nought after the upgrade and before the
+   rebuild, one after it. Any one of them missing and the other two are a number
+   without a counter proof.
+
 **Why text and not a YAML parser.** The reason ``test_workflow_pins.py`` gives at
 length and ``test_lockstep_versions.py`` repeats: this backend has no yaml
 dependency, and a gate that needed one would be a gate that does not run next to
@@ -96,6 +114,30 @@ PAGE_CALLS_EXPECTED = 4
 # The assertion that has to survive and the one that must not appear.
 COUNT_ASSERTION = "entries | length"
 EXCERPT_ASSERTION = "entries[0].subline"
+
+# The precondition of the upgrade path, word for word. It stands once in "Store
+# upgrade 3" and once in "Store upgrade 6", and the number is part of the claim:
+# one occurrence means a place that used to demand it stopped demanding it.
+PRECONDITION = "[.terms[]] | all(. == 1)"
+PRECONDITION_EXPECTED = 2
+
+# The Spanish count in the snapshot, as the jq call writes it. The key is asked
+# for in full rather than as the bare word "spanish", which stands in half the
+# prose of the two steps around it and would be a check that cannot go red.
+SPANISH_KEY = "spanish: $spanish"
+SPANISH_VALUE = "$spanish"
+
+# The three assurances, as the three jq expressions that carry them.
+SPANISH_ZERO = ".spanish == 0"
+SPANISH_ZERO_EXPECTED = 2
+SPANISH_ONE = ".spanish == 1"
+SPANISH_ONE_EXPECTED = 1
+
+# The terms object of the snapshot, from its opening line to the closing brace
+# at the same indentation. The Spanish count must not be in there, and reading
+# the block is the only way to say so: a count over the whole file would be
+# green for a fourth entry that also left the old key in place.
+_TERMS_OBJECT = re.compile(r"^(?P<indent> *)terms: \{\n(?P<body>.*?)^(?P=indent)\},", re.MULTILINE | re.DOTALL)
 
 # A step opens at six spaces, and its keys sit at eight. The body of a run block
 # is indented by ten, which is why the end pattern can afford to look for a hash
@@ -262,6 +304,82 @@ def scan_matrix(source: str) -> list[str]:
     return []
 
 
+def scan_precondition(source: str) -> list[str]:
+    """The precondition of the upgrade path stands twice and is unchanged.
+
+    Plan 19-08 put the Spanish count beside this object rather than into it for
+    exactly this reason, and the temptation it avoided is the one this scanner
+    watches: a fourth term that answers with nought before the rebuild does not
+    fit, and the cheapest way to make it fit would be to weaken the expression.
+    Every assurance behind it would then be standing on nothing, and no run
+    would report it, because the run would be green.
+    """
+    count = source.count(PRECONDITION)
+    if count != PRECONDITION_EXPECTED:
+        finding = (
+            f"the precondition '{PRECONDITION}' stands {count} times in the workflow "
+            f"and not {PRECONDITION_EXPECTED}. It is what makes the assurances behind it mean "
+            "anything: every term of the snapshot brings back exactly one file, and a term that "
+            "answers with nought belongs beside that object and never inside it."
+        )
+        return [finding]
+    return []
+
+
+def scan_spanish_key(source: str) -> list[str]:
+    """The Spanish count is its own key of the snapshot, not a fourth term.
+
+    Two halves, and the second one is not redundant: moving the value into the
+    terms object is one way to break this, and dropping the key altogether is
+    the other.
+    """
+    findings: list[str] = []
+    found = _TERMS_OBJECT.search(source)
+    if found is None:
+        findings.append(
+            "the scanner found no terms object in the snapshot of the upgrade path, "
+            "so it cannot say whether the Spanish count stands inside it"
+        )
+    elif SPANISH_VALUE in found.group("body"):
+        findings.append(
+            f"the Spanish count stands inside the terms object of the snapshot, so the precondition "
+            f"'{PRECONDITION}' covers a term that is supposed to answer with nought before the rebuild"
+        )
+    count = source.count(SPANISH_KEY)
+    if count != 1:
+        findings.append(
+            f"the snapshot carries '{SPANISH_KEY}' {count} times and not once, "
+            "so the Spanish before and after has no value of its own to compare"
+        )
+    return findings
+
+
+def scan_spanish_assurances(source: str) -> list[str]:
+    """Twice against nought, once against one, and all three are needed.
+
+    The chain is 0, 0, 1: nought on the released installation, nought after the
+    upgrade and before the rebuild, one after it. The first nought is the
+    counter proof of the one, the second is the CI half of success criterion 2
+    of phase 19, and a one without either of them is a hit that might always
+    have been there.
+    """
+    findings: list[str] = []
+    zeros = source.count(SPANISH_ZERO)
+    if zeros != SPANISH_ZERO_EXPECTED:
+        findings.append(
+            f"the workflow asserts '{SPANISH_ZERO}' {zeros} times and not {SPANISH_ZERO_EXPECTED}: "
+            "once on the released installation and once after the upgrade and before the rebuild, "
+            "and without both of them the hit at the far end is a hit that might always have been there"
+        )
+    ones = source.count(SPANISH_ONE)
+    if ones != SPANISH_ONE_EXPECTED:
+        findings.append(
+            f"the workflow asserts '{SPANISH_ONE}' {ones} times and not {SPANISH_ONE_EXPECTED}, "
+            "so nothing says the rebuild and the field plan of a question made the document findable"
+        )
+    return findings
+
+
 def scan(source: str) -> list[str]:
     """Every finding of this gate over one workflow source."""
     steps = collect_steps(source)
@@ -270,7 +388,14 @@ def scan(source: str) -> list[str]:
             "the scanner found no step at all in this source, so its indentation assumption no longer holds",
             *(f"unchecked, because no step was found: {claim}" for claim in CLAIMS),
         ]
-    return [*scan_proof_step(steps), *scan_counter_sample(steps), *scan_matrix(source)]
+    return [
+        *scan_proof_step(steps),
+        *scan_counter_sample(steps),
+        *scan_matrix(source),
+        *scan_precondition(source),
+        *scan_spanish_key(source),
+        *scan_spanish_assurances(source),
+    ]
 
 
 # -- the real tree ---------------------------------------------------------
@@ -339,6 +464,33 @@ def test_the_matrix_still_runs_a_leg_on_arm64() -> None:
     assert scan_matrix(WORKFLOW.read_text(encoding="utf-8")) == []
 
 
+def test_the_precondition_of_the_upgrade_path_stands_twice_unchanged() -> None:
+    # The expression plan 19-08 promised not to touch, watched word for word.
+    source = WORKFLOW.read_text(encoding="utf-8")
+
+    assert source.count(PRECONDITION) == PRECONDITION_EXPECTED
+    assert scan_precondition(source) == []
+
+
+def test_the_spanish_count_is_its_own_key_and_not_a_fourth_term() -> None:
+    source = WORKFLOW.read_text(encoding="utf-8")
+    found = _TERMS_OBJECT.search(source)
+
+    assert found is not None
+    assert SPANISH_VALUE not in found.group("body")
+    assert source.count(SPANISH_KEY) == 1
+    assert scan_spanish_key(source) == []
+
+
+def test_the_three_spanish_assurances_are_all_there() -> None:
+    # Twice against nought, once against one, and the chain reads 0, 0, 1.
+    source = WORKFLOW.read_text(encoding="utf-8")
+
+    assert source.count(SPANISH_ZERO) == SPANISH_ZERO_EXPECTED
+    assert source.count(SPANISH_ONE) == SPANISH_ONE_EXPECTED
+    assert scan_spanish_assurances(source) == []
+
+
 def test_the_real_workflow_produces_no_finding_at_all() -> None:
     assert scan(WORKFLOW.read_text(encoding="utf-8")) == []
 
@@ -384,15 +536,37 @@ jobs:
           curl 'http://localhost:8080/index.php/apps/findling/?query=beinvloeden'
           curl 'http://localhost:8080/index.php/apps/findling/?query=pais'
 
-      - name: Store upgrade 5, the six assurances after the upgrade
+      - name: Store upgrade 3, the state of the released installation, before anything moves
+        if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04'
+        run: |
+          snapshot() {
+            spanish=$(term_hits alemanes) || return 1
+            jq -n --argjson spanish "${spanish}" '{
+                 terms: {
+                   Belehrung: $belehrung,
+                   Auszug: $auszug,
+                   Erinnerung: $erinnerung
+                 },
+                 spanish: $spanish,
+                 label: $label
+               }' > "$1"
+          }
+          snapshot before.json before
+          jq -e '[.terms[]] | all(. == 1)' before.json
+          jq -e '.spanish == 0' before.json
+
+      - name: Store upgrade 5, the seven assurances after the upgrade
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04'
         run: |
           echo the gated one
+          jq -e '.spanish == 0' after.json
 
       - name: Store upgrade 6, the rebuild a changed language set orders
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04'
         run: |
           echo the other gated one
+          jq -e '[.terms[]] | all(. == 1)' rebuild-before.json
+          jq -e '.spanish == 1' rebuild-after.json
 """
 
 
@@ -517,3 +691,67 @@ def test_a_source_without_any_step_falls_closed() -> None:
 
     assert len(findings) == len(CLAIMS) + 1
     assert findings[0].startswith("the scanner found no step at all")
+
+
+# The three staged samples of plan 19-08, one per statement about the upgrade
+# path. Every one of them is a change that leaves a run green and takes the
+# meaning out of it, which is the only kind this module is built to catch.
+#
+#   _FOURTH_TERM the Spanish count moved into the terms object, which is how
+#                the precondition comes to cover a term that answers nought
+#   _LOOSENED    the precondition weakened to make room for such a term
+#   _NO_COUNTER  the nought on the released installation dropped, which leaves
+#                the hit at the far end indistinguishable from one that was
+#                always there
+_FOURTH_TERM = _CLEAN.replace(
+    """                   Erinnerung: $erinnerung
+                 },
+                 spanish: $spanish,
+""",
+    """                   Erinnerung: $erinnerung,
+                   spanish: $spanish
+                 },
+""",
+    1,
+)
+
+_LOOSENED = _CLEAN.replace(
+    "jq -e '[.terms[]] | all(. == 1)' before.json",
+    "jq -e '[.terms[]] | all(. >= 1)' before.json",
+    1,
+)
+
+_NO_COUNTER = _CLEAN.replace("          jq -e '.spanish == 0' before.json\n", "", 1)
+
+
+def test_the_three_upgrade_samples_really_differ_from_the_clean_one() -> None:
+    # Same reason as the line above for the first two samples: a replace that
+    # stopped matching would leave the sample equal to the clean one, and the
+    # tests below would then assert that a clean source is clean.
+    assert _FOURTH_TERM != _CLEAN
+    assert _LOOSENED != _CLEAN
+    assert _NO_COUNTER != _CLEAN
+
+
+def test_a_fourth_term_inside_the_terms_object_is_reported() -> None:
+    # The one the plan of 19-08 names by hand: a Spanish term carried as a
+    # fourth entry of .terms, where the precondition would demand one file of a
+    # question that is supposed to answer with none.
+    findings = scan(_FOURTH_TERM)
+
+    assert len(findings) == 1
+    assert "stands inside the terms object" in findings[0]
+
+
+def test_a_loosened_precondition_is_reported() -> None:
+    findings = scan(_LOOSENED)
+
+    assert len(findings) == 1
+    assert "stands 1 times in the workflow and not 2" in findings[0]
+
+
+def test_a_missing_counter_proof_is_reported() -> None:
+    findings = scan(_NO_COUNTER)
+
+    assert len(findings) == 1
+    assert "asserts '.spanish == 0' 1 times and not 2" in findings[0]
