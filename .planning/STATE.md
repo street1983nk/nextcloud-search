@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Phase 19, Plan 19-05 fertig (Anti-Feature-Waechter), naechster Plan 19-06
-last_updated: "2026-09-25T02:55:00.000Z"
-last_activity: 2026-09-24 -- 19-05 ausgefuehrt (Anti-Feature-Waechter, vier Aussagen, vier Gegenproben)
+stopped_at: Phase 19, Plan 19-06 fertig (Sprachfaelle auf dem Suchweg), naechster Plan 19-07
+last_updated: "2026-09-25T00:30:00.000Z"
+last_activity: 2026-09-25 -- 19-06 ausgefuehrt (vier Sprachfaelle auf dem Suchweg, dritter Ketten-Ausschluss)
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 38
-  completed_plans: 25
+  completed_plans: 26
   percent: 32
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 ## Current Position
 
-Phase: 19 (frageseite-freischalten), EXECUTING, Plan 5 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
+Phase: 19 (frageseite-freischalten), EXECUTING, Plan 6 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
 Status: Ausfuehrung Phase 19 laeuft (9 Plaene in 6 Wellen). 19-01 fertig (82bf2b1): die drei
 Modulkonstanten DEFAULT_FIELDS/TITLE_ONLY_FIELDS/FIELD_BOOSTS sind ein Wert (FieldPlan,
 LEGACY_PLAN), build_query nimmt plan keyword-only mit dem Bestandsplan als Vorgabewert, der
@@ -49,23 +49,31 @@ backend/tests/test_no_language_detection.py haelt die vier Aussagen aus RESEARCH
 fest (field_plan_for nimmt keinen Anfragetext, build_query liest den Plan nur aus seinem
 Parameter, weder pyproject.toml noch uv.lock fuehrt ein Erkennungspaket, das Wireformat-Gate
 wird genannt statt wiederholt), zehn Faelle, jede Aussage mit Gegenprobe, jeder Leser faellt
-geschlossen. Erfolgskriterium 4 der Roadmap ist damit belegt. Volle Suite 2794 bestanden /
-15 uebersprungen.
+geschlossen. Erfolgskriterium 4 der Roadmap ist damit belegt. 19-06 fertig (6c20b11):
+backend/tests/test_language_cases_query_path.py hebt die vier Sprachfaelle von der
+Feldebene auf den normalen Suchweg, 37 Faelle, null uebersprungen. Die Frage laeuft durch
+build_query mit einem Feldplan, der Fallindex traegt den Bestand einer echten Instanz
+(derselbe Text in body_de, body_en und dem Feld der Sprache), und deshalb muss das
+Formenpaar von der eigenen Kette zusammengefuehrt und von der englischen UND der deutschen
+getrennt werden. Je Sprache zwei Gegenproben: ein Plan ohne body_<code> verliert die andere
+Form, und dieselbe state.db mit schema_version auf 1 ergibt LEGACY_PLAN und verliert sie
+auch. Volle Suite 2831 bestanden / 15 uebersprungen.
 Planung 24.09.: Research b2ef69f,
 Pattern-Karte, Plaene 51525d5, Checker PASS, Warnungen behoben 3c35186. Phase 20 geplant
 (a8d40fd, Checker PASS, f32bdec). Phase 18 davor KOMPLETT (12/12, CI-Beweis 36026836087).
-Last activity: 2026-09-24 -- 19-05 ausgefuehrt (Anti-Feature-Waechter, vier Aussagen, vier Gegenproben)
+Last activity: 2026-09-25 -- 19-06 ausgefuehrt (vier Sprachfaelle auf dem Suchweg, dritter Ketten-Ausschluss)
 
 Progress: [███.......] 32% (2 von 7 Phasen)
 
 ## Naechster Schritt
 
-Weiter in Phase 19 mit 19-06 (die vier Sprachfaelle auf dem normalen Suchweg, dritter
-Ketten-Ausschluss), danach 19-07 (ungegateter CI-Sprachbeweis), 19-08 (spanischer
-Vorher-Nachher-Beweis) und 19-09 (Doku). Der REQUIREMENTS-Haken fuer LEX-05 ist NICHT
-gesetzt: 19-05 liefert das letzte Stueck von Erfolgskriterium 4, der Haken gehoert der
-Phase-Verifikation, weil die erste Haelfte des LEX-05-Satzes erst mit 19-06 und 19-07 auf
-dem echten Suchweg und im CI steht. Danach oder parallel:
+Weiter in Phase 19 mit 19-07 (ungegateter CI-Sprachbeweis auf allen vier Aesten, plus
+Ergebnisseite), danach 19-08 (spanischer Vorher-Nachher-Beweis) und 19-09 (Doku). Der
+REQUIREMENTS-Haken fuer LEX-05 ist NICHT gesetzt: 19-06 hat die Testebene der ersten
+Haelfte des Satzes geliefert, die CI-Haelfte liefert 19-07, und der Haken gehoert der
+Phase-Verifikation. Warnung fuer 19-07 aus RESEARCH Pitfall 3 und 4: der neue CI-Schritt
+darf nicht unter einer if-Zeile stehen, die arm64 ausschliesst, und die Probe behauptet den
+Treffer und nie den Textauszug. Danach oder parallel:
 `/gsd:execute-phase 20` (UI-Kataloge; Wellen 1 und 9 sind Checkpoints, 20-01 Pluralfix
 der sechs Bestandskataloge braucht die Owner-Sichtprobe). Phase-20-Planung 24.09.:
 9 Plaene in 9 Wellen (a8d40fd), Checker PASS, Fussabdruck strikt getrennt von Phase 19
@@ -109,6 +117,14 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
   kippt der Rang bei einem Zusatzgewicht von 0,81; die ausgelieferten 0,6 liegen 0,21 darunter.
   Diese Zahl ist der Startpunkt fuer den disjunction_max-Entscheid in Phase 22 (MESS-09) und
   gehoert per 19-09 nach docs/language-analyzers.md.
+
+- Ein Sprachfall auf dem normalen Suchweg braucht drei Ketten (19-06): der Fallindex traegt
+  den Bestand einer echten Instanz (derselbe Text in body_de, body_en und dem Feld der
+  Sprache, so wie index/writer.py schreibt), also beweist ein Formenpaar nur dann etwas,
+  wenn die eigene Kette es zusammenfuehrt und die englische UND die deutsche es trennen.
+  Ein Index, der nur das Sprachfeld befuellt, macht den Ausschluss folgenlos und den Fall
+  wertlos. Wer eine fuenfte Sprache aufnimmt, braucht zuerst eine Flexionsfamilie in der
+  Fixture, dann die Messung, dann das Zaehlgate (Weg von 19-02).
 
 - D-04-Linie (v1.1): index-kompatibel ueber Minor-Spruenge. v1.3 verletzt sie bewusst und
   nur fuer Instanzen, die eine neue Sprache einschalten; der Bruch braucht den Owner-Entscheid
@@ -176,6 +192,6 @@ auf resolved gesetzt).
 
 ## Session Continuity
 
-Last session: 2026-09-24
-Stopped at: 19-03 abgeschlossen und committet (354ef27), SUMMARY geschrieben
-Resume file: .planning/phases/19-frageseite-freischalten/19-04-PLAN.md
+Last session: 2026-09-25
+Stopped at: 19-06 abgeschlossen und committet (6c20b11), SUMMARY geschrieben
+Resume file: .planning/phases/19-frageseite-freischalten/19-07-PLAN.md
