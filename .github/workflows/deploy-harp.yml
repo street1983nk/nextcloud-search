@@ -3671,8 +3671,15 @@ jobs:
           vectors_before=$(vectors_digest)
           echo "the vector stock before the rebuild: ${vectors_before}"
 
-          if ! jq -e '.marks.languages == "de,en"' "${before}" > /dev/null; then
-            echo "::error::the installation reports the languages mark $(jq -r '.marks.languages' "${before}") and not de,en, so setting ${REBUILD_LANGUAGES} would order something other than the jump this step measures"
+          # An existing installation carries no languages mark until its first
+          # rebuild stamps one (the finding of run 35989391950): the report
+          # renders that absence as the empty string. Empty is therefore the
+          # legacy reading of de,en and a valid start; an explicit de,en is
+          # equally valid. Any OTHER value means a rebuild already ran or a
+          # seed wrote a wish as a fact, and then the jump below would not
+          # measure what this step claims.
+          if ! jq -e '.marks.languages == "de,en" or .marks.languages == ""' "${before}" > /dev/null; then
+            echo "::error::the installation reports the languages mark $(jq -r '.marks.languages' "${before}") and neither de,en nor the legacy absence, so setting ${REBUILD_LANGUAGES} would order something other than the jump this step measures"
             exit 1
           fi
           if ! jq -e '.container.rebuildState == "idle"' "${before}" > /dev/null; then
