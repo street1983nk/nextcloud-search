@@ -42,17 +42,23 @@ vector file that is not a database is the same answer for the same reason
 
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
+from tantivy import Document, Index
 
-from conftest import APP_VERSION, Corpus
+from conftest import APP_VERSION, CONSTITUENTS, Corpus
 from findling.api import resources
+from findling.api.resources import ReadSide
 from findling.api.status import NO_VECTORS_YET, STATE_UNREADABLE, VECTORS_UNREADABLE, report
 from findling.config import MAX_FILE_BYTES, settings
 from findling.embed.engine import ENGINE_COLD, ENGINE_DISABLED, ENGINE_MISSING, ENGINE_STATES
 from findling.embed.model import load_count
+from findling.index import rebuild
+from findling.index.open import open_index
+from findling.index.rebuild import RebuildProgress
+from findling.index.schema import BODY_FIELD, FIELD_FILE_ID, FIELD_STORAGE_ID
 from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, artifact_path, wordlist_hash
 from findling.main import APP
 from findling.store.repo import FileMeta, open_store
@@ -84,6 +90,17 @@ FIELDS = {
     "indexBytes",
     "maxFileBytes",
     "engineState",
+    # The five of plan 18-10, and they are one group in two halves. The two
+    # language fields answer "which chain is switched on" against "which chain
+    # really carries terms", which no single figure can say; the three rebuild
+    # fields describe the run that turns the first into the second, and the
+    # fourth of them is the reason it did not start.
+    "languagesActive",
+    "languagesFilled",
+    "rebuildRunning",
+    "rebuildDone",
+    "rebuildTotal",
+    "rebuildBlockedBytes",
     "note",
 }
 
@@ -812,3 +829,194 @@ def test_asking_for_the_status_does_not_load_the_engine(
         assert _status(client, sign("admin"))["engineState"] == ENGINE_COLD
 
     assert load_count() == before
+
+
+# -- plan 18-10: the language status, the rebuild progress and the space verdict --
+#
+# Five fields that describe one situation from four sides, and the reason they
+# are asserted together is that no two of them can be derived from each other.
+# ``languagesActive`` says which chains the directory was built under,
+# ``languagesFilled`` says which of them really carry terms, and the difference
+# between the two is exactly what a rebuild closes. The three rebuild fields say
+# whether that run is on, how far it has got and, when it never started, how
+# many bytes were missing.
+#
+# Every one of them defaults, like every field above: the answer of a container
+# deployed a minute ago has the same shape as the answer of one that has been
+# rebuilding for an hour, and a page that renders both cannot afford a key that
+# comes and goes.
+
+
+def _index_with_a_second_chain(root: Path, code: str) -> None:
+    """Write one document whose body lands in the chain of ``code``, and commit.
+
+    Written into the index the fixture already built rather than into a second
+    directory: the claim is about a directory in which one further chain carries
+    terms while the others stay empty, and a fresh index would test a directory
+    nobody has.
+    """
+    index = open_index(root / "index", CONSTITUENTS)
+    writer = index.writer(heap_size=15_000_000, num_threads=1)
+    document = Document()
+    document.add_unsigned(FIELD_FILE_ID, 9001)
+    document.add_unsigned(FIELD_STORAGE_ID, 1)
+    document.add_text(BODY_FIELD[code], "hola mundo documento")
+    writer.add_document(document)
+    writer.commit()
+    writer.wait_merging_threads()
+    index.reload()
+
+
+class _CountingSearcher:
+    """A searcher that answers like the real one and counts what it was asked.
+
+    The probe behind ``languagesFilled`` walks the whole term dictionary of a
+    field, and the only thing a test can see of that cost is how often it
+    happened. So the count is the assertion: a cache that works asks the field
+    dictionary six times and not twelve.
+    """
+
+    def __init__(self, real: Any) -> None:
+        self.real = real
+        self.calls = 0
+
+    def terms_with_prefix(self, field: str, prefix: str, limit: int | None = None) -> list[Any]:
+        self.calls += 1
+        return self.real.terms_with_prefix(field, prefix, limit=limit)
+
+
+class _CountingIndex:
+    """An index that hands out one counting searcher, always the same one."""
+
+    def __init__(self, real: Index) -> None:
+        self.searcher_of_record = _CountingSearcher(real.searcher())
+
+    def searcher(self) -> _CountingSearcher:
+        return self.searcher_of_record
+
+
+def test_a_container_without_a_rebuild_answers_the_five_new_fields_with_their_defaults(
+    client: TestClient,
+    sign: Sign,
+    volume: Path,
+) -> None:
+    # The shape claim, made on the container that has the least to say: no
+    # index, no state database, no rebuild. Every field is there and every one
+    # of them carries the value that means "nothing of this is happening".
+    assert not (volume / "state.db").exists()
+
+    answer = _status(client, sign("admin"))
+
+    assert set(answer) == FIELDS
+    # Never null, even here: the page prints this value, and a null would reach
+    # it as the word "null" or as an empty line, depending on who renders it.
+    assert answer["languagesActive"] == ",".join(settings().languages)
+    assert answer["languagesFilled"] == ""
+    assert answer["rebuildRunning"] is False
+    assert answer["rebuildDone"] == 0
+    assert answer["rebuildTotal"] == 0
+    assert answer["rebuildBlockedBytes"] == 0
+
+
+def test_the_active_languages_name_the_set_the_index_was_built_under(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The field is the stored mark and expressly not the wish of this container.
+    # During a rebuild the two differ, which is the whole reason the rebuild
+    # runs, and a page that read the wish would report the job as done while it
+    # is still being carried out.
+    store = open_store(indexed_volume.root / "state.db")
+    store.write_meta("languages", "de,en,es")
+    store.close()
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["languagesActive"] == "de,en,es"
+
+
+def test_the_filled_languages_name_the_chains_that_really_carry_terms(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The other half of the diagnosis, and the only one that comes out of the
+    # index itself. The fixture fills body_de, this adds body_es, and the four
+    # remaining chains exist in the schema and hold nothing: a page that read
+    # the mark alone would name six languages over a directory that answers in
+    # two.
+    _index_with_a_second_chain(indexed_volume.root, "es")
+    resources.reset_read_side()
+
+    answer = _status(client, sign("admin"))
+
+    assert answer["languagesFilled"] == "de,es"
+
+
+def test_the_fill_probe_runs_once_within_its_window_and_again_after_a_swap(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The cost guard of this field, measured the only way it can be: the probe
+    # walks the whole term dictionary of six fields and the admin page polls, so
+    # the question is how often one poll after another reaches the dictionary.
+    real = resources.read_side()
+    assert real is not None
+    counting = _CountingIndex(real.index)
+    staged = ReadSide(
+        index=cast(Index, counting),
+        store=real.store,
+        index_dir=real.index_dir,
+        vectors=real.vectors,
+    )
+    monkeypatch.setattr(resources, "read_side", lambda: staged)
+
+    first = resources.filled_languages()
+    second = resources.filled_languages()
+
+    assert first == second == ("de",)
+    assert counting.searcher_of_record.calls == len(BODY_FIELD), "the second poll measured the volume a second time"
+
+    # And the window is not a wall. The swap of a rebuild renames the directory
+    # under the process, so the verdict of the old one has to go with it.
+    resources.reset_read_side()
+
+    assert resources.filled_languages() == ("de",)
+    assert counting.searcher_of_record.calls == 2 * len(BODY_FIELD)
+
+
+def test_the_rebuild_fields_report_the_run_of_this_process(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # The progress travels as a process value, exactly like engineState: there
+    # is no second record of it on the volume that could disagree with the
+    # directory it describes.
+    rebuild._note_progress(RebuildProgress(running=True, documents_carried=40, documents_total=120))
+    try:
+        answer = _status(client, sign("admin"))
+    finally:
+        rebuild._note_progress(RebuildProgress(running=False, documents_carried=0, documents_total=0))
+
+    assert answer["rebuildRunning"] is True
+    assert answer["rebuildDone"] == 40
+    assert answer["rebuildTotal"] == 120
+
+
+def test_a_refused_rebuild_reports_the_bytes_that_were_missing(
+    client: TestClient,
+    sign: Sign,
+    indexed_volume: Corpus,
+) -> None:
+    # Criterion 3 of the phase: a banner that says "not enough space" without a
+    # figure leaves the admin to guess how much to free, and the figure the
+    # precheck refused on is the only honest one there is.
+    rebuild._note_blocked_bytes(3_221_225_472)
+    try:
+        answer = _status(client, sign("admin"))
+    finally:
+        rebuild._note_blocked_bytes(0)
+
+    assert answer["rebuildBlockedBytes"] == 3_221_225_472
