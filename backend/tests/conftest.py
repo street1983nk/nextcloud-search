@@ -25,14 +25,16 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
+from typing import Final
 
 import pytest
 from fastapi.testclient import TestClient
-from tantivy import Document
+from tantivy import Document, Index, Schema, SchemaBuilder
 
 from findling.config import settings
 from findling.embed import model as model_module
 from findling.embed.engine import note_cutter_failure
+from findling.index.analyzer import TOKENIZER_DE, TOKENIZER_EN, TOKENIZER_NAME
 from findling.index.open import expected_versions, open_index
 from findling.index.schema import (
     FIELD_BODY_DE,
@@ -43,6 +45,9 @@ from findling.index.schema import (
     FIELD_PATH,
     FIELD_STORAGE_ID,
     FIELD_TITLE,
+    INDEX_OPTION_TERMS_ONLY,
+    TOKENIZER_RAW,
+    TOKENIZER_STORED_ONLY,
 )
 from findling.index.wordlist import DIGEST_SUFFIX, ENCODING, artifact_path, wordlist_hash
 from findling.main import APP
@@ -58,6 +63,11 @@ APP_CREDENTIAL = "unit-test-credential"
 CONSTITUENTS = (
     (Path(__file__).resolve().parent / "fixtures" / "constituents_de.txt").read_text(encoding=ENCODING).split()
 )
+
+# How many documents a filled fixture volume carries. Named rather than repeated,
+# because the two schema generation fixtures below have to hold the same number
+# as ``Corpus`` for their hit counts to be comparable at all.
+FIXTURE_DOCUMENTS: Final = 12
 
 # The corpus generator, which is a script and not a package, so it has to be
 # loaded by path. Two test modules read FILES, _searchable_text, UNIQUE_TERMS and
@@ -107,7 +117,7 @@ class Corpus:
     alice: str = "alice"
     bob: str = "bob"
     carol: str = "carol"
-    documents: int = 12
+    documents: int = FIXTURE_DOCUMENTS
 
 
 def body_of(file_id: int) -> str:
@@ -141,9 +151,20 @@ def write_wordlist(root: Path) -> str:
     return digest
 
 
-def write_index(root: Path, documents: int) -> None:
-    """Write the documents the endpoint suites search in, and commit them."""
-    index = open_index(root / "index", CONSTITUENTS)
+def fill_index(index: Index, documents: int) -> None:
+    """Write the fixture documents into an already opened index, and commit them.
+
+    Split out of :func:`write_index` so that the schema 1 index below carries the
+    very same documents, written by the very same lines. The claim "the same
+    holdings answer the same under both schema generations" is only worth
+    something when nothing but the schema differs between the two, and a second
+    copy of this loop is exactly how that stops being true.
+
+    Only the seven fields that both generations have are written. That is not a
+    restriction of this helper, it is what a stock installation looks like: the
+    body fields of the other five languages arrived with the schema and are
+    filled by a language set, never by the crawl of an existing index.
+    """
     writer = index.writer(heap_size=15_000_000, num_threads=1)
     for file_id in range(1, documents + 1):
         document = Document()
@@ -162,6 +183,85 @@ def write_index(root: Path, documents: int) -> None:
     writer.commit()
     writer.wait_merging_threads()
     index.reload()
+
+
+def write_index(root: Path, documents: int) -> Index:
+    """Write the documents the endpoint suites search in, and commit them."""
+    index = open_index(root / "index", CONSTITUENTS)
+    fill_index(index, documents)
+    return index
+
+
+# -- the index of a stock installation, which is a schema of nine fields -----
+#
+# What this reproduces is the state of an instance that upgraded and has not
+# rebuilt yet: its directory holds the schema that every release up to 1.2.0
+# wrote, while the code that opens it is the code of this branch. There is no
+# way to reach that state through ``build_schema``, and that is the whole point:
+# ``index/open.py`` reads the persisted schema back out of the directory and
+# calls ``build_schema()`` only when the directory is new, so on a stock
+# installation the thirteen field schema is never built at all.
+#
+# The nine names below are therefore written out rather than read from
+# :mod:`findling.index.schema`. A fixture that took them from the module would
+# move with every change to it and would prove nothing about what was shipped;
+# it would build today's schema and call it yesterday's. The chain names are
+# read from the module on purpose, and for the opposite reason: they are not
+# what this fixture freezes, ``index/open.py`` registers under exactly those
+# constants, and a literal here would only break on a rename that this fixture
+# has no opinion about.
+
+
+def build_schema_1() -> Schema:
+    """Return the nine field schema that shipped in every release up to 1.2.0.
+
+    Copied from ``backend/src/findling/index/schema.py`` as it stood before plan
+    18-01 (commit ca739b1) and frozen here. Field for field, with the stored and
+    indexed flags of the original, because a field whose options differ is a
+    different column on disk and would make every measurement against this
+    fixture a measurement against a schema nobody ever ran.
+    """
+    builder = SchemaBuilder()
+
+    builder.add_unsigned_field("file_id", stored=True, indexed=True, fast=True)
+    builder.add_unsigned_field("storage_id", stored=True, indexed=True, fast=True)
+    builder.add_text_field("name", stored=True, tokenizer_name=TOKENIZER_NAME)
+    builder.add_text_field("title", stored=True, tokenizer_name=TOKENIZER_DE)
+    builder.add_text_field("path", stored=True, tokenizer_name=TOKENIZER_STORED_ONLY)
+    builder.add_text_field("ext", stored=True, tokenizer_name=TOKENIZER_RAW, index_option=INDEX_OPTION_TERMS_ONLY)
+    builder.add_text_field("body_de", stored=True, tokenizer_name=TOKENIZER_DE)
+    builder.add_text_field("body_en", stored=False, tokenizer_name=TOKENIZER_EN)
+    builder.add_integer_field("mtime", stored=True, indexed=False, fast=True)
+
+    return builder.build()
+
+
+def open_schema_1_index(directory: Path) -> Index:
+    """Create a schema 1 directory if it is not there, then open it the real way.
+
+    Two steps and not one, because only the first of them may be hand made. The
+    creation has to go past ``open_index``: that function builds the current
+    schema for a new directory and there is no argument to talk it out of it.
+    The opening must not, and this is the part the fixture exists for. Opening is
+    registering, so an index that is opened through :func:`findling.index.open.open_index`
+    gets all eight chains hung on it even though its schema knows two body fields.
+    That mismatch, eight registered chains over a nine field schema, is exactly
+    the state a stock installation is in after the upgrade, and measured on
+    tantivy 0.26.2 it is a harmless one: a chain that no field names costs
+    nothing, while the reverse, a field whose chain is not registered, stops
+    every single write with a schema error.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    if not Index.exists(str(directory)):
+        Index(build_schema_1(), path=str(directory))
+    return open_index(directory, CONSTITUENTS)
+
+
+def write_schema_1_index(root: Path, documents: int) -> Index:
+    """The fixture documents in an index of the schema that shipped up to 1.2.0."""
+    index = open_schema_1_index(root / "index-schema-1")
+    fill_index(index, documents)
+    return index
 
 
 def write_state(root: Path, corpus: Corpus) -> None:
@@ -290,3 +390,27 @@ def indexed_volume(volume: Path) -> Corpus:
     write_state(volume, corpus)
     write_vectors(volume)
     return corpus
+
+
+@pytest.fixture
+def schema_1_index(tmp_path: Path) -> Index:
+    """A real index of the schema that shipped up to 1.2.0, filled and committed.
+
+    No volume and no settings: this fixture hands out an index and nothing else,
+    because the question it answers is asked of the query builder and never of an
+    endpoint. It is function scoped, since a tantivy directory is cheap and a
+    shared one would let the case that opens a writer decide what the next case
+    reads.
+    """
+    return write_schema_1_index(tmp_path, FIXTURE_DOCUMENTS)
+
+
+@pytest.fixture
+def schema_2_index(tmp_path: Path) -> Index:
+    """The same documents in an index of the current thirteen field schema.
+
+    The counterpart of :func:`schema_1_index`, and it goes through
+    :func:`write_index` rather than through a second builder for the reason
+    named at :func:`fill_index`: only the schema may differ between the two.
+    """
+    return write_index(tmp_path, FIXTURE_DOCUMENTS)
