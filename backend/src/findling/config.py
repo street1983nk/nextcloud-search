@@ -134,10 +134,17 @@ LANGUAGE_ALLOWLIST = frozenset(
 # marker as "de,es", or a resorted environment variable would trigger a rebuild
 # of every index that never needed one.
 #
-# No production path reads this constant in phase 17, and that is deliberate:
-# the chain factory is built in phase 18 and hangs on it then. _languages()
-# below keeps filtering against DEFAULT_LANGUAGES until it does, so an existing
-# installation sees nothing of this.
+# Since plan 18-02 this is the list _languages() below filters against, so a
+# code that stands here is a code an admin can switch on. Adding one is
+# therefore never a one line change: the schema needs a body field for it
+# (findling.index.schema.BODY_FIELD), index/open.py needs its chain registered,
+# and SNOWBALL_NAME needs the tantivy name below, or the write path would drop
+# the text of that language without a word.
+#
+# The order is the normalisation and not a matter of taste. _languages()
+# iterates over this tuple and never over the admin's input, so "es,de" and
+# "de,es" resolve to the same tuple, carry the same language marker and leave an
+# index that never needed a rebuild alone.
 SUPPORTED_LANGUAGES = ("de", "en", "es", "it", "nl", "pt")
 
 # The only place where a schema field code turns into a tantivy language name.
@@ -1076,12 +1083,23 @@ def _storage_root() -> Path:
 def _languages() -> tuple[str, ...]:
     """Return the active language fields, in schema order.
 
-    An empty or unrecognisable list keeps both fields. Dropping to no language at
-    all would produce an index that cannot answer anything, which is a worse
-    outcome than ignoring the variable.
+    Filtered against SUPPORTED_LANGUAGES and not against DEFAULT_LANGUAGES. The
+    first is the set this build has a body field and an analyzer chain for, the
+    second is only the factory setting an instance gets when nobody says
+    otherwise. Filtering against the factory setting is how a language that has
+    a field, a chain and a tantivy name falls out of the set without a word.
+
+    An empty or unrecognisable list keeps the factory setting. Dropping to no
+    language at all would produce an index that cannot answer anything, which is
+    a worse outcome than ignoring the variable. Dropping to one language is not
+    that case and is allowed: an instance whose files are Spanish may run on
+    ``es`` alone and pay for one body field instead of two.
+
+    The iteration runs over the constant and never over the admin's input,
+    because that ordering is the normalisation the language marker hangs on.
     """
     requested = {part.strip().lower() for part in os.environ.get("FINDLING_LANGUAGES", "").split(",")}
-    kept = tuple(language for language in DEFAULT_LANGUAGES if language in requested)
+    kept = tuple(language for language in SUPPORTED_LANGUAGES if language in requested)
     if kept:
         return kept
     if requested - {""}:
