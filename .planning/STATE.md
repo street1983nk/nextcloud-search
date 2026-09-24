@@ -4,14 +4,14 @@ milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
 stopped_at: Roadmap v1.3 geschrieben (ROADMAP.md, STATE.md, Traceability in REQUIREMENTS.md)
-last_updated: "2026-09-23T19:57:23.395Z"
-last_activity: 2026-09-23 -- Phase 17 execution started
+last_updated: "2026-09-24T04:52:49.910Z"
+last_activity: 2026-09-24 -- Phase 18 execution started
 progress:
   total_phases: 7
-  completed_phases: 0
-  total_plans: 8
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 20
+  completed_plans: 8
+  percent: 14
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 17 — owner-tor-und-analyseketten
+**Current focus:** Phase 18 — schema-marken-und-umbauweg
 
 ## Current Position
 
-Phase: 17 (owner-tor-und-analyseketten) — EXECUTING
-Plan: 1 of 8
-Status: Phase 17 KOMPLETT (8/8 Plaene, Verifikation 4/4, Audit 0C/0H/7M behoben/11L), naechste Phase: 18 (Schema, Marken und Umbauweg) oder parallel 20 (UI-Kataloge)
-Last activity: 2026-09-23 -- Phase 17 execution started
+Phase: 18 (schema-marken-und-umbauweg) — EXECUTING
+Plan: 1 of 12
+Status: Executing Phase 18
+Last activity: 2026-09-24 -- Phase 18 execution started
 
 Progress: [..........] 0%
 
