@@ -110,6 +110,65 @@ refusal costs the new chains until the link is replaced; nothing is created,
 nothing is renamed and the search goes on answering out of the directory that is
 there.
 
+## What a question searches
+
+A search line without a field name runs against the body fields of the languages
+the index directory carries in its own stored language mark, and against the file
+name and the title. Which fields those are and what each of them weighs is one
+value, a `FieldPlan`, and `findling.api.resources.field_plan_for` computes it once
+per opening of the reading half out of exactly two marks of that directory.
+
+Four things are worth knowing about that.
+
+**The mark of the directory decides, not the variable of the container.**
+`FINDLING_LANGUAGES` is the wish of the container that happens to be running, the
+`languages` mark is what the directory was really built with, and a question can
+only be answered out of what was written. The two differ for as long as a rebuild
+takes: whoever switches a language on searches in it once the rebuild is through
+and not a moment earlier. That is not a delay somebody forgot to remove. It is
+the only reading that cannot name a field the index does not carry, and naming a
+field the index does not carry is the `ValueError` that leaves the search bar of
+a live installation empty (measurement M-1 of the phase 19 research).
+
+**The field list hangs on `schema_version`, and that gate falls closed.** If the
+schema mark of the directory does not stand on the current generation, a question
+searches exactly the fields every release up to 1.2.0 carried: `body_de`,
+`body_en`, the file name and the title, held as
+`findling.query.rewrite.LEGACY_PLAN`. Anything that is not literally the current
+mark is read that way, which covers an absent mark, the intermediate `1` of every
+installation that has not rebuilt yet, and any generation this code has never
+seen. A state that cannot be read is no permission. Behind the marks the same
+gate stands a second time: one `doc_freq(field, "")` per body field asks the
+directory itself whether the field the mark promises is really in it, and one
+field that raises drops the whole plan back to the legacy one, because half a
+plan is not a plan. A `state.db` restored from a backup next to an older index
+directory is exactly the shape that probe is there for.
+
+**There is no language detection, neither of the document nor of the question.**
+The field plan is the reason none is needed: the question runs through all active
+fields and each of them analyses it with its own chain, so a Spanish word meets
+the Spanish chain without anybody having to decide that it is Spanish. What
+orders the results is the field boost, `body_de` 1.0, `body_en` 0.8 and the four
+languages of this build out 0.6, so the new chains rank below English rather than
+beside it. The absence is structural rather than a matter of discipline:
+`field_plan_for` takes no search text in any shape, so a detector is not
+forbidden here, it has nothing to attach to
+(`backend/tests/test_no_language_detection.py`).
+
+**A question of one word is answered out of the word index alone.** The search is
+hybrid, and `findling.api.search` builds no vector half for a single word at all
+(`lexical_only`, the one term rule of plan 06.1-20). Two things follow. A one
+word question shows the plain field behaviour described above, while a longer one
+shows the fused behaviour of both halves. And the before and after proof of the
+upgrade path rests on exactly that condition: the CI step that asks `alemanes`
+against a Spanish document and demands nothing before the rebuild and one hit
+after it is a statement about body fields only while the question stays one word.
+With two words the vector half joins in, the Spanish document is a near neighbour
+of the question whatever the fields say, measured at 68 to 77 on the int8 L2
+scale against an upper bound of 86.5
+(`docs/measurements/2026-09-06-vektordistanzen`), and the proof would turn into a
+statement about distances without saying so.
+
 ## The supplement list
 
 The built in Snowball stop word lists compare strings exactly and they carry
@@ -186,6 +245,29 @@ accented spelling and flat spelling separately:
 The supplement is therefore not a nicety. Without it, 117 published stop words
 stand in the index as ordinary terms, in both spellings, and that is the one
 result of the measurement that needed no trade-off at all.
+
+Two numbers of phase 19 belong here as well. They come out of runs of their own,
+so each of them carries its own date and its own harness.
+
+**The boost at which the ranking turns over: 0.81.** Measured on 2026-09-24
+against tantivy 0.26.2 by the ranking probe
+`backend/tests/test_field_plan_ranking.py`, a sweep over 101 values on a real
+index of three documents with six filled body fields. Below that value the better
+English hit stays in front of a document that meets the same question through
+three additional chains; from it on the ranking turns over. The shipped weight of
+the four new body fields is 0.6, so it stands 0.21 below the measured edge, which
+is why plan 19-04 moved no weight. The figure is the input for the
+`disjunction_max` decision of phase 22 (MESS-09), and it is worth exactly what it
+says and no more: tantivy adds the field contributions up (measurement M-3 of the
+phase 19 research), so a boost damps a multi field hit and never removes it, and
+an index with more filled body fields moves the edge.
+
+**The cost of the field plan: one `read_meta()` plus one `doc_freq` probe per
+body field, at 0.26 us a call.** Measurement M-2 of the phase 19 research,
+2026-09-24, 20000 runs against tantivy 0.26.2, next to 2.26 us for
+`parse_query_lenient` on the same index. It is paid once per opening of the
+reading half and never once per question, which is the whole reason the field
+plan hangs on `ReadSide` and carries no cache of its own.
 
 ## The filter order
 
@@ -275,6 +357,25 @@ making another row red, and the section below says what each of them costs.
 
 These are measured, documented and deliberately not fixed here. Each one names
 the alternative and why the alternative is more expensive.
+
+**A hit found through a new language field alone comes back without an excerpt.**
+Measured on 2026-09-24 (measurement M-4 of the phase 19 research): an index with
+`body_de`, `body_en` and `body_es`, one document carrying "Esta es una carta de la
+empresa alemana sobre el contrato de arrendamiento." in all three fields, and the
+question `alemanes` over the full field plan. It is one hit, and
+`SnippetGenerator.create(..., FIELD_BODY_DE)` (`index/search.py:875`) answers with
+`fragment() == ''` and no highlight at all, while the control question `contrato`,
+which the German chain meets as a raw token, returns the full fragment. The reason
+is that `body_de` is the only stored copy of the extracted text, so a question that
+meets the document term through the Spanish chain alone has nothing to mark in the
+German one. The hit itself is not lost: "a hit without a snippet is still a hit,
+and the subline falls back to the path on the PHP side", as the docstring of that
+function puts it, and the companion does exactly that. The alternative is an
+excerpt path per body field, which means six stored copies of every text instead
+of one, and the price is the size of the index on the machines this product is
+built for. Because of that price the limit is documented rather than repaired, and
+it is one of the entries phase 23 writes into the documentation and the store text
+(REL-03 criterion 2).
 
 **The number class with an accented suffix, Spanish.** `información` and
 `informacion` share the term `informacion`, and `informaciones` produces
