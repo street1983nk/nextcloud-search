@@ -32,6 +32,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import sqlite3
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from functools import partial
@@ -426,17 +427,34 @@ def _rebuild_is_due() -> bool:
     Everything here is a read, and a missing database is a container that has
     never indexed: there is nothing to carry over, and the first pass writes the
     current schema anyway.
+
+    **``sqlite3.Error`` stands next to ``OSError`` on both the open and the
+    read**, which is the fix of audit finding M-18-06 and the pattern
+    ``api/status.py`` already carries with the same reasoning. Two realistic
+    shapes of a broken state escape an ``except OSError``: a file that is not a
+    SQLite database at all raises ``DatabaseError`` from the ``PRAGMA
+    journal_mode`` that ``open_read_only`` sends right after connecting, and a
+    zero byte ``state.db``, which a hard kill between the connect and the schema
+    script leaves behind, opens cleanly and raises ``OperationalError`` on the
+    first query. Both used to travel out of the lifespan, so the container did
+    not start at all; and the second one was not even inside the try, because
+    the drift read stood in a bare ``finally``. A container that cannot read its
+    state database can still answer searches and can still index, so the answer
+    to both is the one below: no rebuild this start, one line, carry on.
     """
     resolved = settings()
     if not resolved.state_db.is_file():
         return False
     try:
         store = open_read_only(resolved.state_db)
-    except OSError as error:
+    except (OSError, sqlite3.Error) as error:
         LOGGER.warning("the state database could not be read for the rebuild question, an %s", type(error).__name__)
         return False
     try:
         return bool(MARKS_A_REBUILD_ANSWERS.intersection(resources.version_drift(store)))
+    except sqlite3.Error as error:
+        LOGGER.warning("the version marks could not be read for the rebuild question, an %s", type(error).__name__)
+        return False
     finally:
         store.close()
 

@@ -617,3 +617,44 @@ def test_a_fill_level_measured_before_a_reset_is_answered_and_not_remembered(
 
     assert resources.filled_languages() == ("de",), "the reading is handed out"
     assert resources._FILLED is None, "and it is not remembered"
+
+
+def test_the_startup_drift_report_survives_a_state_database_that_is_no_database(
+    volume: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """M-18-06 at the second call site, and it runs in the lifespan too.
+
+    ``open_read_only`` sends a ``PRAGMA journal_mode`` right after connecting,
+    and a file that is not a database answers it with ``sqlite3.DatabaseError``,
+    which an ``except OSError`` does not catch. A startup statement that cannot
+    be made is a line in the log and never a container that will not come up.
+    """
+    (volume / "state.db").write_text("this is not a SQLite database", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="findling.api.resources"):
+        resources.report_version_drift()
+
+    assert any("could not be read at startup" in record.getMessage() for record in caplog.records)
+    assert str(volume) not in caplog.text, "and it says so without a path"
+
+
+def test_the_startup_drift_report_survives_a_zero_byte_state_database(
+    volume: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The other shape, and the one a kill between connect and schema leaves behind.
+
+    It opens cleanly and raises ``OperationalError`` on the first query, so the
+    handler at the open cannot see it: until this fix the read below stood in a
+    bare ``finally`` with nothing catching anything.
+
+    The word list has to be on the volume, or the comparison answers
+    UNPROVEN_WORDLIST before it ever touches the database and the case would be
+    green without reaching the line it is about.
+    """
+    write_wordlist(volume)
+    (volume / "state.db").write_bytes(b"")
+
+    with caplog.at_level(logging.WARNING, logger="findling.api.resources"):
+        resources.report_version_drift()
+
+    assert any("could not be read at startup" in record.getMessage() for record in caplog.records)

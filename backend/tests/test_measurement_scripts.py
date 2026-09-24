@@ -889,8 +889,19 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # created beside the link, the swap renames the link away and puts a real
 # directory in its place, and rmtree refuses a link outright so the marks are
 # never written. No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a thirty fourth time, by the fix of the audit finding
+# M-18-06: two of the 56 files changed their bytes and the count stays at 56.
+# main.py catches (OSError, sqlite3.Error) at the open of _rebuild_is_due and
+# sqlite3.Error at the drift read behind it, which stood in a bare finally;
+# api/resources.py takes the same pair in report_version_drift. Both run in the
+# lifespan, and the two shapes that escaped an except OSError are the two
+# api/status.py already names: a file that is not a SQLite database raises
+# DatabaseError from the PRAGMA journal_mode right after the connect, and a zero
+# byte state.db from a hard kill opens cleanly and raises OperationalError on
+# the first query. Either one used to be a container that does not start. No
+# file came and none went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "4a0cc6b6d2751bc2c658b9d5812cf5d3fadd42479cdbdeebf7159e17c0c81484"
+PACKAGE_TREE_HASH_TODAY = "332013585d63e2f302ecb9534ea8c41bfd412195ec44be367d9c5af0e2bceb3b"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

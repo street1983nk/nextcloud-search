@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from conftest import Corpus
+from conftest import Corpus, write_wordlist
 from findling.api import resources
 from findling.config import settings
 from findling.index.open import LANGUAGES_MARK, open_index
@@ -40,6 +40,7 @@ from findling.main import (
     REBUILD_STOP_SECONDS,
     RELEASE_TICK_SECONDS,
     _arm_the_poller,
+    _rebuild_is_due,
     _rebuild_the_index_directory,
     _release_when_idle,
     _run_the_rebuild,
@@ -868,6 +869,52 @@ async def test_the_poller_is_not_armed_again_when_the_app_was_switched_off_meanw
     _arm_the_poller()
 
     assert poller.armed is False
+
+
+def test_a_state_database_that_is_no_database_is_not_a_container_that_refuses_to_start(
+    volume: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """M-18-06, the first of the two shapes: a file that is not SQLite at all.
+
+    ``open_read_only`` sends a ``PRAGMA journal_mode`` right after connecting,
+    and a file that is not a database answers it with ``sqlite3.DatabaseError``.
+    The rebuild question caught ``OSError`` alone, so that exception travelled
+    out of the lifespan and the container did not start. The same pattern was
+    already written down in ``api/status.py`` for the same two shapes, with its
+    reasoning, and the new start path had not taken it over.
+
+    The heartbeat is the assertion. A container that cannot read its state
+    database can still answer searches and can still index, so the only right
+    answer is one line and a start.
+    """
+    (volume / "state.db").write_text("this is not a SQLite database", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="findling"), TestClient(APP) as client:
+        answer = client.get("/heartbeat")
+
+    assert answer.status_code == 200
+    assert _rebuild_is_due() is False
+    assert any("could not be read for the rebuild question" in record.getMessage() for record in caplog.records)
+
+
+def test_a_zero_byte_state_database_is_not_a_container_that_refuses_to_start(volume: Path) -> None:
+    """M-18-06, the second shape, and the one a hard kill really leaves behind.
+
+    A zero byte ``state.db`` opens perfectly cleanly and raises
+    ``OperationalError`` on the first query, so catching it at the open is not
+    enough: the drift read stood in a bare ``finally`` with no handler at all.
+
+    The word list has to be on the volume, or the comparison answers
+    UNPROVEN_WORDLIST before it ever touches the database and the case would be
+    green without reaching the line it is about.
+    """
+    write_wordlist(volume)
+    (volume / "state.db").write_bytes(b"")
+
+    assert _rebuild_is_due() is False
+
+    with TestClient(APP) as client:
+        assert client.get("/heartbeat").status_code == 200
 
 
 def test_a_clean_up_path_that_throws_does_not_keep_the_container_from_starting(

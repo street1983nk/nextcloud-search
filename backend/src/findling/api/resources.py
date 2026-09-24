@@ -28,6 +28,7 @@ this module reports.
 
 import logging
 import shutil
+import sqlite3
 import threading
 import time
 from dataclasses import dataclass
@@ -680,17 +681,33 @@ def report_version_drift() -> None:
     throwing the whole index away are both defensible and neither is a decision a
     read path gets to make. What is not defensible is a drift nobody ever hears
     about.
+
+    **``sqlite3.Error`` stands next to ``OSError`` on both the open and the
+    read.** This runs in the lifespan, so an exception here is a container that
+    does not start, and two realistic shapes of a broken state escape an
+    ``except OSError``: a file that is not a SQLite database raises
+    ``DatabaseError`` from the ``PRAGMA journal_mode`` that
+    :func:`findling.store.repo.open_read_only` sends right after connecting, and
+    a zero byte ``state.db``, which a hard kill between the connect and the
+    schema script leaves behind, opens cleanly and raises ``OperationalError``
+    on the first query. ``api/status.py`` has carried that pair since review
+    finding WR-01 and this line had not taken the pattern over (audit finding
+    M-18-06). A startup statement that cannot be made is a line in the log and
+    never a container that will not come up.
     """
     resolved = settings()
     if not resolved.state_db.is_file():
         return
     try:
         store = open_read_only(resolved.state_db)
-    except OSError as error:
+    except (OSError, sqlite3.Error) as error:
         LOGGER.warning("the state database could not be read at startup, an %s", type(error).__name__)
         return
     try:
         drift = version_drift(store)
+    except sqlite3.Error as error:
+        LOGGER.warning("the version marks could not be read at startup, an %s", type(error).__name__)
+        return
     finally:
         store.close()
     if drift:
