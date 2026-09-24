@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
@@ -61,8 +62,8 @@ from tantivy import Document, Index, IndexWriter, Query, Schema
 from findling.config import settings
 from findling.index.analyzer import normalize
 from findling.index.schema import (
+    BODY_FIELD,
     FIELD_BODY_DE,
-    FIELD_BODY_EN,
     FIELD_EXT,
     FIELD_FILE_ID,
     FIELD_MTIME,
@@ -146,7 +147,7 @@ class IndexBatchWriter:
         directory: Path,
         heap_bytes: int | None = None,
         min_free_bytes: int | None = None,
-        index_english: bool | None = None,
+        languages: Sequence[str] | None = None,
         vectors: VectorSink | None = None,
     ) -> None:
         resolved = settings()
@@ -163,7 +164,11 @@ class IndexBatchWriter:
         self._index = index
         self._schema: Schema = index.schema
         self._min_free_bytes = resolved.min_free_bytes if min_free_bytes is None else min_free_bytes
-        self._index_english = ("en" in resolved.languages) if index_english is None else index_english
+        # The set of body fields this writer indexes into, resolved from the
+        # settings and overridable by the caller. A tuple rather than the
+        # Sequence it arrives as, so that nobody can change it under a writer
+        # that has already written half a batch with the old set.
+        self._languages: tuple[str, ...] = tuple(resolved.languages if languages is None else languages)
         self._pending = 0
         self._pending_bytes = 0
         heap = resolved.writer_heap_bytes if heap_bytes is None else heap_bytes
@@ -262,13 +267,31 @@ class IndexBatchWriter:
         document.add_text(FIELD_TITLE, title)
         document.add_text(FIELD_PATH, record.path)
         document.add_text(FIELD_EXT, record.ext)
-        # body_de is the only stored copy of the text in the whole system, so it
-        # carries the content whatever the language setting says. The setting
-        # decides about the second, index only pipeline: with FINDLING_LANGUAGES
-        # set to de the English field stays empty and the index shrinks by it.
+        # Two properties live on this one line, and the next reader will take
+        # them for one. "Stored" and "analysed by the German chain" are both
+        # true of body_de and they do not follow each other:
+        #
+        #   stored is why it is written here whatever the language set says. It
+        #   is the only stored copy of the text in the whole system, the snippet
+        #   generator cuts out of it, and an instance running on Spanish alone
+        #   that stopped writing it would answer every search without a preview.
+        #
+        #   analysed by the German chain is what the language set decides. With
+        #   de out of the set the field still carries the text and still gets
+        #   tokenised, but no query is routed at it, and the loop below adds the
+        #   fields that are searched.
+        #
+        # So the write is unconditional and the loop skips de, because writing a
+        # field twice would double its postings for nothing.
         document.add_text(FIELD_BODY_DE, body)
-        if self._index_english:
-            document.add_text(FIELD_BODY_EN, body)
+        for language in self._languages:
+            field = BODY_FIELD[language]
+            if field == FIELD_BODY_DE:
+                continue
+            # From the mapping and never composed from the code: measured, a
+            # field name the schema does not know is dropped by add_document
+            # without a word, and a whole language would go missing in silence.
+            document.add_text(field, body)
         document.add_integer(FIELD_MTIME, record.mtime)
         writer.add_document(document)
 
