@@ -84,6 +84,8 @@ from pydantic import BaseModel, Field
 from findling.api import resources
 from findling.config import settings
 from findling.embed.engine import engine_state
+from findling.index.open import LANGUAGES_MARK
+from findling.index.rebuild import rebuild_blocked_bytes, rebuild_progress
 from findling.instance import volume_is_shared
 from findling.store.repo import Store, index_bytes, open_read_only
 from findling.store.vectors import VectorStoreError, open_vectors
@@ -182,6 +184,35 @@ class StatusResponse(BaseModel):
     # would be a claim this module makes without having asked. Nothing in this
     # container produces it, because _volume() fills the field on every path.
     engineState: str = ""
+    # The set of body chains the index was built under, as the stored mark
+    # spells it, and expressly **not** the set this container currently wishes
+    # for. The two are the same on a settled installation and they differ for
+    # exactly as long as a rebuild is due or running, which is the one moment
+    # this field is asked: whoever reads the wish here reads the job as done
+    # while it is still being carried out. A container whose index carries no
+    # mark answers with the active set, because that is what its next index will
+    # be built under, and the field is a string on every path and never null:
+    # the page prints it.
+    languagesActive: str = ""
+    # Which of those chains really carry terms, measured in the index itself.
+    # The other half of the line above and never a second spelling of it: that
+    # one is an intention, this one is what a search can hit. A chain that was
+    # switched on yesterday and has seen no document is in the first and not in
+    # the second, and so is every chain of a rebuild that is halfway through.
+    languagesFilled: str = ""
+    # The three readings of the band run of this process, out of
+    # findling.index.rebuild. They describe a run and never a queue: a container
+    # that is not rebuilding answers false, nought and nought, which is the
+    # resting state and not a run of length nought.
+    rebuildRunning: bool = False
+    rebuildDone: int = 0
+    rebuildTotal: int = 0
+    # How many bytes the precheck of the rebuild was short of, and nought when
+    # it did not refuse. Not the size of the index and not the free space, both
+    # of which are already in this answer: the difference, because that is the
+    # only figure an admin can act on without doing the arithmetic of this
+    # container a second time.
+    rebuildBlockedBytes: int = 0
     note: str = ""
 
 
@@ -247,12 +278,30 @@ def _volume() -> StatusResponse:
     and there is no index yet to read that out of. It comes out of the process
     and not out of a file, so it is available whether or not anything has been
     counted.
+
+    The four values of the rebuild travel the same way and for the third variant
+    of the same reason: they are readings of this process, they exist before the
+    first document is counted, and a container that has never rebuilt anything
+    answers with the resting state rather than with nothing.
+
+    ``languagesActive`` is set here to the **active** set, and that is the
+    fallback and not the answer: :func:`_of` below overwrites it with the stored
+    mark whenever there is one. A container without a state database has no mark
+    to read, and the set it will build its first index under is the honest thing
+    to say about it.
     """
     resolved = settings()
     free, total = resources.disk_bytes()
+    progress = rebuild_progress()
     return StatusResponse(
         appVersion=_app_version(),
         engineState=engine_state(),
+        languagesActive=",".join(resolved.languages),
+        languagesFilled=",".join(resources.filled_languages()),
+        rebuildRunning=progress.running,
+        rebuildDone=progress.documents_carried,
+        rebuildTotal=progress.documents_total,
+        rebuildBlockedBytes=rebuild_blocked_bytes(),
         lowDisk=resources.low_disk(),
         diskFreeBytes=free,
         diskTotalBytes=total,
@@ -348,6 +397,20 @@ def _of(store: Store, volume: StatusResponse) -> StatusResponse:
         # property of this process and the state database has nothing to say
         # about it, so it is asked once, in the branch that runs either way.
         engineState=volume.engineState,
+        # The set the directory was built under, and the one value of this group
+        # that the state database really owns. A missing mark is an installation
+        # that comes from 1.2.0 and never wrote one, and the active set of the
+        # volume answer is what it falls back to: that is the set its next index
+        # will carry, and it is a truer statement than an empty line.
+        languagesActive=marks.get(LANGUAGES_MARK, "") or volume.languagesActive,
+        # Carried over like the engine state above: the chains that carry terms
+        # are a property of the index directory, and the state database has
+        # nothing to say about them.
+        languagesFilled=volume.languagesFilled,
+        rebuildRunning=volume.rebuildRunning,
+        rebuildDone=volume.rebuildDone,
+        rebuildTotal=volume.rebuildTotal,
+        rebuildBlockedBytes=volume.rebuildBlockedBytes,
         note=volume.note,
         lowDisk=volume.lowDisk,
         diskFreeBytes=volume.diskFreeBytes,

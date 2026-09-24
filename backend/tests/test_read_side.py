@@ -473,3 +473,24 @@ def test_four_threads_may_drop_the_read_side_at_once(indexed_volume: Corpus) -> 
     _in_four_threads(drop)
 
     assert failures == []
+
+
+def test_a_state_database_without_an_index_directory_is_none_and_not_an_error(volume: Path) -> None:
+    """The branch that used to raise out of a function that must not raise.
+
+    Found on 2026-09-24 while plan 18-10 made the status route ask this
+    function: ``Index.exists`` raises ``ValueError("Directory does not exist")``
+    for a path that is not there, it does not answer False, and the short circuit
+    of the condition reaches it as soon as a state database exists. A volume in
+    exactly that state is an ordinary one, a kill between the first state write
+    and the first commit leaves it behind, and the unified search calls every
+    provider in parallel: a provider that raises costs the user the whole
+    search.
+    """
+    write_wordlist(volume)
+    write_state(volume, Corpus(root=volume, digest=""))
+    assert (volume / "state.db").is_file()
+    assert not (volume / "index").exists()
+
+    assert resources.read_side() is None
+    assert resources.filled_languages() == ()

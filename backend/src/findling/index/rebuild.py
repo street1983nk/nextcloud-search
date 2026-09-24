@@ -312,6 +312,35 @@ def _note_progress(progress: RebuildProgress) -> None:
     _PROGRESS = progress
 
 
+# How many bytes the precheck was short of, and nought when it did not refuse.
+#
+# Held next to the progress above and for the same reason: it describes this
+# process, it is read by the status route of plan 18-10 and by nothing that
+# decides anything, and a number on the volume could disagree with the volume it
+# describes. It is deliberately not cleared on a timer. A refusal stands until
+# the next start, because nothing between now and then makes it untrue: the
+# rebuild is attempted once per start, and the banner an admin reads has to be
+# there when they come back to the page rather than having quietly aged out.
+_BLOCKED_BYTES: int = 0
+
+
+def rebuild_blocked_bytes() -> int:
+    """How many bytes were missing when the precheck refused, 0 when it did not.
+
+    The figure behind criterion 3 of the phase. A banner that says the volume is
+    too full without naming a number leaves the admin to guess how much to free,
+    and a page that measured the volume itself would name a figure that was
+    never true at the same moment as the refusal.
+    """
+    return _BLOCKED_BYTES
+
+
+def _note_blocked_bytes(missing: int) -> None:
+    """Publish the shortfall of the precheck. One assignment, two call sites."""
+    global _BLOCKED_BYTES
+    _BLOCKED_BYTES = missing
+
+
 @dataclass(frozen=True, slots=True)
 class RebuildRun:
     """What one pass of the band run did, in the figures the caller decides on.
@@ -805,6 +834,10 @@ def rebuild_the_index(
     a run behind it.
     """
     resolved = settings()
+    # Cleared before anything is asked, so that a second call of this function
+    # in one process cannot report the refusal of the first one. A run that
+    # refuses again writes its own figure four steps down.
+    _note_blocked_bytes(0)
     artifact = build_artifact()
     languages = ",".join(resolved.languages)
     expected = expected_versions(artifact.digest, languages)
@@ -841,6 +874,13 @@ def rebuild_the_index(
         verdict = may_rebuild(live, _new_language_count(store, resolved.languages))
         if not verdict.may_start:
             # may_rebuild has already logged the two figures the refusal rests on.
+            # What is published here is the difference between them, because that
+            # is the sentence the admin page has to be able to write: not how
+            # much the rebuild wants and not how much there is, but how much is
+            # missing. The floor is part of the shortfall and not taken out of
+            # it, for the reason may_rebuild states: freeing exactly the
+            # difference to the need alone would buy a paused indexer.
+            _note_blocked_bytes(max(0, verdict.needed_bytes + settings().min_free_bytes - verdict.free_bytes))
             return verdict.reason
 
         target = live.with_name(live.name + REBUILD_SUFFIX)

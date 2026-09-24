@@ -40,6 +40,7 @@ from findling.config import settings
 from findling.embed.engine import shared_model
 from findling.embed.model import EmbeddingModel
 from findling.index.open import expected_versions, open_index, open_reader
+from findling.index.schema import BODY_FIELD
 from findling.index.wordlist import build_artifact
 from findling.store.repo import EMBEDDING_MARK, VECTOR_ONLY_MARKS, Store, open_read_only
 from findling.store.vectors import EMBEDDING_MODEL, VectorStore, embedding_mark, open_vectors
@@ -79,6 +80,21 @@ UNPROVEN_WORDLIST = "wordlist_hash"
 # signal and become a stale value; below a second it stops saving anything.
 DEGRADED_TTL_SECONDS: Final = 5.0
 
+# How long the fill level of the body chains stays valid before it is measured
+# again.
+#
+# Thirty seconds, and the number is not the five above because the measurement
+# behind it is a different size and the question behind it changes at a
+# different speed. ``terms_with_prefix`` with an empty prefix walks the whole
+# term dictionary of a field by its own documentation, and the limit cuts only
+# afterwards; six chains means six such walks. What it answers is which chains
+# carry terms at all, and that is a property of an index directory: it changes
+# when a rebuild swaps a directory in, which this module is told about through
+# reset_read_side(), and otherwise only while the very first documents of a new
+# chain are being written. So the window is generous on purpose, and the one
+# event that would make it stale invalidates it directly rather than waiting.
+FILLED_TTL_SECONDS: Final = 30.0
+
 
 @dataclass(frozen=True, slots=True)
 class ReadSide:
@@ -100,8 +116,9 @@ class ReadSide:
 _OPEN: ReadSide | None = None
 _MARKS: tuple[Path, dict[str, str]] | None = None
 _DEGRADED: tuple[Path, float, bool] | None = None
+_FILLED: tuple[Path, float, tuple[str, ...]] | None = None
 
-# One lock for the three caches above, and it is not a precaution.
+# One lock for the four caches above, and it is not a precaution.
 #
 # Every search runs its round in asyncio.to_thread and the unified search asks
 # all providers at the same moment, so two requests really do arrive in here at
@@ -297,10 +314,26 @@ def read_side() -> ReadSide | None:
             if previous.vectors is not None:
                 previous.vectors.close()
 
-        if not resolved.state_db.is_file() or not Index.exists(str(resolved.index_dir)):
+        if not resolved.state_db.is_file() or not resolved.index_dir.is_dir():
             # Nothing to open yet, which is an ordinary state: the container is
             # deployed and the first indexing pass has not finished. Asking again
             # on the next request costs two stat calls.
+            #
+            # The directory is asked about before Index.exists and not by it,
+            # and that is a fix of plan 18-10 rather than a tidy up. Measured on
+            # 2026-09-24: ``Index.exists`` raises ValueError("Directory does not
+            # exist") for a path that is not there, it does not answer False,
+            # and this branch is the one a container with a state database and
+            # no index directory takes. Until this line the second half of the
+            # condition therefore raised out of a function whose whole contract
+            # is that it never does, and the try below starts one statement too
+            # late to catch it.
+            return None
+        if not Index.exists(str(resolved.index_dir)):
+            # The directory is there and holds no index, which is what a volume
+            # looks like between the creation of the directory and the first
+            # commit. Kept apart from the branch above only in order to ask the
+            # question of a path that exists.
             return None
 
         # Held in a local until the cache owns it. Between the open and the
@@ -361,17 +394,20 @@ def reset_read_side() -> None:
     lives (pitfall 3 of the phase research). This function therefore checks no
     path; it drops what is there.
 
-    ``_MARKS`` and ``_DEGRADED`` go with it, under the same lock and for the
-    same reason. Both describe the index directory rather than the handle on it,
-    both outlive a rename, and both would afterwards make a statement about a
-    directory that is gone: the marks are exactly the answer a rebuild changes,
-    and a degraded verdict that stayed would report the state of the retired
-    directory for the rest of :data:`DEGRADED_TTL_SECONDS`.
+    ``_MARKS``, ``_DEGRADED`` and ``_FILLED`` go with it, under the same lock
+    and for the same reason. All three describe the index directory rather than
+    the handle on it, all three outlive a rename, and all three would afterwards
+    make a statement about a directory that is gone: the marks are exactly the
+    answer a rebuild changes, a degraded verdict that stayed would report the
+    state of the retired directory for the rest of
+    :data:`DEGRADED_TTL_SECONDS`, and the fill level is the one reading a
+    rebuild exists to move, so keeping it would have the admin page report the
+    old chains for half a minute after the run that filled the new ones.
 
     Idempotent. A second call and a call on a container whose first indexing
     pass never finished both find nothing and do nothing.
     """
-    global _OPEN, _MARKS, _DEGRADED
+    global _OPEN, _MARKS, _DEGRADED, _FILLED
     with _LOCK:
         # Taken into a local before the cache is emptied, exactly as the release
         # branch above does it: a handle that is closed while it is still
@@ -379,6 +415,7 @@ def reset_read_side() -> None:
         previous, _OPEN = _OPEN, None
         _MARKS = None
         _DEGRADED = None
+        _FILLED = None
         if previous is not None:
             previous.store.close()
             if previous.vectors is not None:
@@ -424,6 +461,63 @@ def degraded(side: ReadSide | None) -> bool:
         verdict = missing_vectors or bool(version_drift(side.store)) or low_disk()
         _DEGRADED = (side.index_dir, now, verdict)
         return verdict
+
+
+def filled_languages() -> tuple[str, ...]:
+    """The language codes whose body chain really carries terms, in schema order.
+
+    The other half of the language diagnosis of the admin page, and the only
+    half that comes out of the index itself. The stored ``languages`` mark says
+    which chains the directory was built under, which is a statement about an
+    intention; this says which of them a search can actually hit. The two differ
+    for as long as a rebuild runs and they differ for good when a chain was
+    switched on and no document was written since, and neither of those is
+    visible in a single list.
+
+    Measured with ``terms_with_prefix(field, "", limit=1)``, which answers an
+    empty list for a chain whose term dictionary is empty and one entry
+    otherwise. That is the whole probe: not how many terms there are, only
+    whether there is one.
+
+    **Why the reading is cached, and why the window is its own.** The probe
+    walks the entire term dictionary of a field by tantivy's own documentation
+    and the limit cuts only afterwards, six chains means six such walks, and the
+    administration page polls every few seconds while it is open. So the answer
+    is remembered for :data:`FILLED_TTL_SECONDS` under the directory it was
+    measured in, in the shape :func:`degraded` above uses and under the same
+    lock. The one event that really changes it, the directory swap of a rebuild,
+    clears the cache through :func:`reset_read_side` instead of waiting the
+    window out.
+
+    Answers an empty tuple for a container that has no index yet and for one
+    whose index cannot be read: both are states in which no chain carries
+    anything this container can offer, and neither is a reason to fail an
+    administration page.
+    """
+    side = read_side()
+    if side is None:
+        return ()
+
+    global _FILLED
+    now = time.monotonic()
+    with _LOCK:
+        cached = _FILLED
+        if cached is not None and cached[0] == side.index_dir and now - cached[1] < FILLED_TTL_SECONDS:
+            return cached[2]
+        try:
+            searcher = side.index.searcher()
+            filled = tuple(code for code, field in BODY_FIELD.items() if searcher.terms_with_prefix(field, "", limit=1))
+        # Deliberately every exception, for the reason read_side() states: this
+        # value reaches an administration page, and a page that answers 500
+        # because one of its lines could not be measured tells an admin less
+        # than a page that leaves that line empty. A directory of the old schema
+        # has no chain beyond the first two at all, and asking it for one is the
+        # realistic shape of this failure.
+        except Exception as error:
+            LOGGER.warning("the fill level of the body chains could not be read, an %s", type(error).__name__)
+            return ()
+        _FILLED = (side.index_dir, now, filled)
+        return filled
 
 
 def report_version_drift() -> None:
