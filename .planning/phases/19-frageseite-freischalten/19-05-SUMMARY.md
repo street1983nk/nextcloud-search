@@ -67,7 +67,7 @@ completed: 2026-09-24
 
 ## Accomplishments
 
-- `backend/tests/test_no_language_detection.py` existiert mit 428 Zeilen und **zehn bestandenen
+- `backend/tests/test_no_language_detection.py` existiert mit 451 Zeilen und **zehn bestandenen
   Faellen, null uebersprungen**. Der Modulkopf nennt in dieser Reihenfolge: die Herkunft des
   Anti-Features (einstimmig, in STATE.md unter den Entscheidungen gefuehrt, die den Milestone
   tragen, im Grundsatzpapier von Phase 17 wiederholt, und woertlich als Erfolgskriterium 4 der
@@ -120,7 +120,7 @@ completed: 2026-09-24
   die Hygiene.
 - **Der Waechter loest sich nicht an seiner eigenen Prosa aus, und das ist zugesichert.**
   `test_this_guard_does_not_trip_over_its_own_prose` liest die eigene Datei: naiv gezaehlt stehen
-  die verbotenen Woerter mindestens zwanzigmal darin (gemessen 39), im entkommentierten Code
+  die verbotenen Woerter zwanzigmal darin (gemessen am 24.09.2026), im entkommentierten Code
   null. Das ist nicht kosmetisch: dieses Modul ist der einzige Ort des Repos, der jeden
   verbotenen Namen buchstabieren muss.
 - **Kein Paket installiert, keine Datei unter `backend/src/findling` beruehrt.** Die Ratsche
@@ -134,11 +134,13 @@ Beide Tasks stehen in einem gemeinsamen Commit, siehe Deviation 1:
 1. **Task 1: Die Hygiene und die zwei strukturellen Aussagen** - `0b59fca` (test)
 2. **Task 2: Abhaengigkeitsbaum, Wireformat und die gestellten Gegenproben** - `0b59fca` (test)
 
+Nachgezogen: `367f434` (test), siehe Deviation 3.
+
 **Plan metadata:** siehe docs-Commit unten
 
 ## Files Created/Modified
 
-- `backend/tests/test_no_language_detection.py` (neu, 428 Zeilen) - Modulkopf, elf benannte
+- `backend/tests/test_no_language_detection.py` (neu, 451 Zeilen) - Modulkopf, elf benannte
   Konstanten, acht Leser, fuenf gestellte Muster, zehn Faelle
 
 ## Decisions Made
@@ -213,6 +215,18 @@ Beide Tasks stehen in einem gemeinsamen Commit, siehe Deviation 1:
   liefert genau zwei Befunde, den Namensbefund und den Annotationsbefund.
 - **Committed in:** `0b59fca`
 
+**3. [Rule 1 - Bug] Die Selbstprobe sass genau auf ihrer eigenen Messung**
+- **Found during:** Self-Check nach dem ersten Commit
+- **Issue:** `test_this_guard_does_not_trip_over_its_own_prose` sicherte `naive >= 20` zu, und
+  die naive Zaehlung der verbotenen Woerter in dieser Datei ergibt exakt 20. Eine Schranke, die
+  auf ihrer eigenen Messung sitzt, faellt beim naechsten gekuerzten Absatz des Modulkopfs rot,
+  und zwar aus einem Grund, um den dieser Fall nicht geht. Die vergleichbaren Selbstproben des
+  Repos (`>= 6`, `>= 5`, `>= 3` in `test_semantic_boundary.py`) halten deshalb Abstand.
+- **Fix:** Schranke auf 15 gesenkt, die gemessene 20 mit Datum als Kommentar daneben.
+- **Files modified:** keine zusaetzlichen
+- **Verification:** vier Gates und volle Suite erneut gruen (2794/15), siehe unten.
+- **Committed in:** `367f434`
+
 ### Befunde, die der Plan nicht vorhergesehen hat
 
 **Die Selbstprobe des Plans ("ein leeres Modul muss einen Befund je erwarteter Aussage liefern")
@@ -225,7 +239,8 @@ Leser zusammen wirklich vier Aussagen abdecken.
 
 ---
 
-**Total deviations:** 2 auto-fixed (Rule 3 Commit-Granularitaet, Rule 2 fehlende Haelfte einer Aussage)
+**Total deviations:** 3 auto-fixed (Rule 3 Commit-Granularitaet, Rule 2 fehlende Haelfte einer
+Aussage, Rule 1 Schranke auf der eigenen Messung)
 **Impact on plan:** Kein Scope-Zuwachs, keine zusaetzliche Datei, kein Paket. Deviation 1 aendert
 nur die Commit-Granularitaet, Deviation 2 vervollstaendigt eine Aussage, die der Plan woertlich
 so verlangt.
@@ -295,7 +310,8 @@ None - no external service configuration required.
   uebersprungen** (Akzeptanzkriterium Task 1: mindestens zwei; Task 2: mindestens sechs und
   keinen uebersprungenen).
 - `uv run pytest -q` aus `backend/`: **2794 bestanden, 15 uebersprungen, 0 Fehlschlaege**
-  (vorher 2784/15; genau die zehn neuen Faelle dazu).
+  (vorher 2784/15; genau die zehn neuen Faelle dazu). Zweimal gefahren, vor `0b59fca` und nach
+  der Korrektur `367f434`, beide Male mit demselben Ergebnis.
 - `uv run ruff check .`: All checks passed. `uv run ruff format --check .`: 136 files already
   formatted.
 - `PYRIGHT_PYTHON_FORCE_VERSION=latest uv run pyright`: 0 errors, 0 warnings, 0 informations.
@@ -319,3 +335,10 @@ None - no external service configuration required.
 ---
 *Phase: 19-frageseite-freischalten*
 *Completed: 2026-09-24*
+
+## Self-Check: PASSED
+
+`backend/tests/test_no_language_detection.py` (451 Zeilen) und diese SUMMARY liegen auf der
+Platte; die drei Commits `0b59fca`, `fdd2ad4` und `367f434` stehen in der Historie. Der
+Self-Check hat zwei Zahlenangaben dieser Datei korrigiert (Zeilenzahl 428 auf 451, naive
+Zaehlung 39 auf 20) und dabei Deviation 3 gefunden.
