@@ -340,6 +340,51 @@ def read_side() -> ReadSide | None:
         return _OPEN
 
 
+def reset_read_side() -> None:
+    """Let go of the three process caches, so that the next search opens again.
+
+    **Who calls this, and when.** The rebuild of
+    :mod:`findling.index.rebuild`, once, immediately in front of the first
+    rename of the directory swap. Nothing else. It is not a general purpose
+    cache reset and it is not a recovery step for a damaged index: a container
+    whose index is broken is answered by :func:`read_side` returning None, and
+    calling this in a loop would merely reopen the same broken directory.
+
+    **The one difference to the release branch inside read_side, and the whole
+    reason this function exists.** That branch releases a handle whose
+    ``index_dir`` no longer matches the settings, and it therefore cannot see
+    the swap at all: the rebuilt directory is renamed to the very name the live
+    one had, so the path is the same before and after and the comparison is
+    True. On Linux the rename succeeds with open mmaps as well, because POSIX
+    renames over inodes, and the cached handle would then answer out of a
+    directory that no longer has a name, silently and for as long as the process
+    lives (pitfall 3 of the phase research). This function therefore checks no
+    path; it drops what is there.
+
+    ``_MARKS`` and ``_DEGRADED`` go with it, under the same lock and for the
+    same reason. Both describe the index directory rather than the handle on it,
+    both outlive a rename, and both would afterwards make a statement about a
+    directory that is gone: the marks are exactly the answer a rebuild changes,
+    and a degraded verdict that stayed would report the state of the retired
+    directory for the rest of :data:`DEGRADED_TTL_SECONDS`.
+
+    Idempotent. A second call and a call on a container whose first indexing
+    pass never finished both find nothing and do nothing.
+    """
+    global _OPEN, _MARKS, _DEGRADED
+    with _LOCK:
+        # Taken into a local before the cache is emptied, exactly as the release
+        # branch above does it: a handle that is closed while it is still
+        # reachable is a handle a search can be holding halfway through.
+        previous, _OPEN = _OPEN, None
+        _MARKS = None
+        _DEGRADED = None
+        if previous is not None:
+            previous.store.close()
+            if previous.vectors is not None:
+                previous.vectors.close()
+
+
 def degraded(side: ReadSide | None) -> bool:
     """True when this container is answering, but not from a complete index.
 
