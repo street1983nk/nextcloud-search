@@ -3574,6 +3574,17 @@ jobs:
             jq '.terms' "${RUNNER_TEMP}/upgrade-before.json"
             exit 1
           fi
+
+          # The counter proof of the Spanish before and after: nought here
+          # says the schema of ${UPGRADE_FROM_TAG} carries no field that can
+          # answer this question, and without it a hit that was there all
+          # along would be indistinguishable from one the rebuild made.
+          if ! jq -e '.spanish == 0' "${RUNNER_TEMP}/upgrade-before.json" > /dev/null; then
+            echo "::error::the question alemanes already brings back $(jq -r '.spanish' "${RUNNER_TEMP}/upgrade-before.json") document(s) on the ${UPGRADE_FROM_TAG} installation, and it has to bring back none"
+            echo "Either the Spanish document reached the answer without a body_es field, and then the hit after the rebuild would say nothing, or the word pair folds in a chain other than the Spanish one (19-RESEARCH M-5)."
+            jq '{terms: .terms, spanish: .spanish}' "${RUNNER_TEMP}/upgrade-before.json"
+            exit 1
+          fi
           # The second condition, and what it asks changed twice, on 2026-09-21
           # and again on 2026-09-24. Overhauled wording, kept on record: until
           # the first date it demanded that .navigation.findling be absent, which
@@ -3603,7 +3614,7 @@ jobs:
             jq '.marks' "${RUNNER_TEMP}/upgrade-before.json"
             exit 1
           fi
-          echo "three terms, one file each; no languages mark in the report; the state is on record in upgrade-before.json"
+          echo "three terms, one file each; the Spanish question with no hit at all; no languages mark in the report; the state is on record in upgrade-before.json"
 
       - name: Store upgrade 3b, the always enabled apps this checkout does not carry
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
@@ -3962,7 +3973,7 @@ jobs:
       # that is a statement and not a gap: the day a mark really moves,
       # assertion 2 below turns red before the two absence assertions do, and the
       # question that follows belongs to the owner and not to a test edit.
-      - name: Store upgrade 5, the six assurances after the upgrade
+      - name: Store upgrade 5, the seven assurances after the upgrade
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
         run: |
           . "${RUNNER_TEMP}/upgrade-probe.sh"
@@ -4118,13 +4129,41 @@ jobs:
             echo "the report had no languages mark before the upgrade and carries it empty after, so the mark arrived without anything having been stamped"
           fi
 
+          echo "--- 7, the Spanish question still finds nothing, because the field list hangs on the mark ---"
+          # The CI half of success criterion 2 of phase 19, and the only place
+          # in this file where the window between an upgrade and a rebuild is
+          # measured at all. Every installation in the field walks through that
+          # window: the new code knows a body_es field, this index does not
+          # carry one, and the question has to stay unanswered until a rebuild
+          # has written the stored text through the Spanish chain.
+          #
+          # What makes that true is where the field list of a question comes
+          # from. It is built from the marks of the index directory and never
+          # from the wish of the container (plan 19-03), so an installation
+          # that upgrades and leaves its language set alone sees no difference
+          # whatever. A hit here would mean a question opened a field the index
+          # does not have, which on a real installation is
+          # parse_query_lenient throwing and the search answering empty from
+          # then on: the riskiest path of this whole milestone, measured rather
+          # than asserted.
+          #
+          # fail=1 and not exit 1, for the reason this step gives at the top:
+          # the step ends with exit 1 once anything failed, and stopping at the
+          # first difference would hide which of the seven the upgrade broke.
+          if ! jq -e '.spanish == 0' "${after}" > /dev/null; then
+            echo "::error::the question alemanes brings back $(jq -r '.spanish' "${after}") document(s) after the upgrade and before any rebuild, and it has to bring back none: the field list of a question hangs on the stored schema mark and not on the code, so an index built for de,en must not answer a Spanish question"
+            fail=1
+          else
+            echo "the Spanish question answers $(jq -r '.spanish' "${after}") hits after the upgrade, unchanged against the ${UPGRADE_FROM_TAG} installation, which is the window between upgrade and rebuild measured instead of assumed"
+          fi
+
           if [ "${fail}" -ne 0 ]; then
             echo "the two states side by side:"
             diff -u "${before}" "${after}" || true
             exit 1
           fi
 
-          echo "all six assurances hold"
+          echo "all seven assurances hold"
           {
             echo ""
             echo "### Upgrade from \`${UPGRADE_FROM_TAG}\` on ${{ matrix.server-version }} (${{ matrix.runner }})"
@@ -4134,6 +4173,7 @@ jobs:
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, four of the five index marks and the index format half of the fifth, the document counts, the work stock"
             echo "- no reindex banner, no \`start_rebuild_on_drift\` line in the container log"
             echo "- the languages mark was missing from the report before and is present and empty after, which is the mark arriving without a rebuild having stamped it"
+            echo "- the Spanish question \`alemanes\` still answers with nought hits, because the field list of a question hangs on the stored schema mark and not on the code"
             echo ""
             echo "The reindex branch of D-05 is deliberately not driven here; its absence is what this run asserts."
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -4147,7 +4187,7 @@ jobs:
       # worth exactly as much as the counter case is: a version that cannot
       # rebuild at all would pass every one of those six assurances. So this
       # step drives the case the block above denies, on the very installation
-      # the block above left behind, and asserts nine things about it.
+      # the block above left behind, and asserts ten things about it.
       #
       # Why it is a step of its own and not a matrix leg or a second pass.
       # UPGRADE_FROM_TAG is an env of the workflow and the matrix is already
@@ -4166,7 +4206,7 @@ jobs:
       # app_api:app:register would deploy a second time and prove the store
       # install path a third time, which is the subject of a different block.
       #
-      # What this step must never do is make itself easy. Every one of the nine
+      # What this step must never do is make itself easy. Every one of the ten
       # is a sentence about an installation in the field: the search answers
       # while the rebuild runs, no document is lost, nothing is read from
       # Nextcloud again, no page is put through tesseract again, and not one
@@ -4200,7 +4240,7 @@ jobs:
 
           # ---------------------------------------------------------------
           # The state the rebuild starts from, and the four conditions that
-          # make the nine assurances below mean anything.
+          # make the ten assurances below mean anything.
           # ---------------------------------------------------------------
           snapshot "${RUNNER_TEMP}/rebuild-before.json" rebuild-before
           before="${RUNNER_TEMP}/rebuild-before.json"
@@ -4558,10 +4598,10 @@ jobs:
           echo "the vector stock after the rebuild: ${vectors_after}"
 
           # ---------------------------------------------------------------
-          # The nine assurances. One comparison, one sentence saying what it
+          # The ten assurances. One comparison, one sentence saying what it
           # means, and every one of them runs: fail=1 and never exit 1, for the
           # reason "Store upgrade 5" states, because a step that stopped at the
-          # first difference would hide which of the nine the rebuild broke.
+          # first difference would hide which of the ten the rebuild broke.
           # ---------------------------------------------------------------
           fail=0
           unchanged() {
@@ -4718,13 +4758,40 @@ jobs:
             echo "vectors.db is unchanged at ${vectors_after}"
           fi
 
+          echo "--- 10, the Spanish question finds exactly one document now ---"
+          # The far end of the before and after of plan 19-08, and it is green
+          # only if both halves of this milestone are: the rebuild has to have
+          # carried the stored text through the Spanish chain (phase 18), and
+          # the field list of a question has to have taken body_es in once the
+          # schema mark moved (phase 19). Either half missing and this is
+          # nought.
+          #
+          # A nought here is a finding and never a reason to soften the
+          # assertion. It means the rebuild filled no Spanish field or the
+          # field plan opened none, and that is exactly the failure this whole
+          # path was built to catch.
+          #
+          # The two counter proofs stand elsewhere on purpose, one per state
+          # they are about: "Store upgrade 3" asserts nought on the released
+          # installation and assurance 7 of "Store upgrade 5" asserts nought
+          # after the upgrade and before this rebuild. Without those two this
+          # number would be a hit that might always have been there, and with
+          # them the whole chain reads 0, 0, 1.
+          if ! jq -e '.spanish == 1' "${after}" > /dev/null; then
+            echo "::error::the question alemanes answers $(jq -r '.spanish' "${after}") document(s) after the rebuild and it has to answer exactly one"
+            echo "A nought means the rebuild wrote no body_es field or the field plan of a question did not take it in; more than one means a second document of this account answers a question that was chosen to have exactly one answer."
+            fail=1
+          else
+            echo "the question alemanes went from $(jq -r '.spanish' "${before}") to $(jq -r '.spanish' "${after}") hits across the rebuild, which is the Spanish chain and the field plan working together"
+          fi
+
           if [ "${fail}" -ne 0 ]; then
             echo "the two states side by side:"
             diff -u "${before}" "${after}" || true
             exit 1
           fi
 
-          echo "all nine assurances hold"
+          echo "all ten assurances hold"
           {
             echo ""
             echo "### Rebuild on the upgraded installation (${MATRIX_SERVER_VERSION}, ${MATRIX_RUNNER})"
@@ -4735,6 +4802,7 @@ jobs:
             echo "- unchanged: the hits for Belehrung, Auszug and Erinnerung, the document counts, the work stock"
             echo "- a search inside the run answered with hits, no indexing pass ran during it, exactly one \`built by different code\` line"
             echo "- \`vectors.db\` is byte for byte the same file"
+            echo "- the Spanish question \`alemanes\` went from 0 hits to 1 across the rebuild: nought on the released installation, nought after the upgrade and before this rebuild, one after it"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Collect the logs and tear the deployment down
