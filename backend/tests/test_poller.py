@@ -72,6 +72,7 @@ from findling.worker.poller import (
     ROUND_PAUSED_LOW_DISK,
     ROUND_QUEUE_UNAVAILABLE,
     ROUND_WORKED,
+    STAND_DOWN_TICK_SECONDS,
     Poller,
     _open_state,
     _raise_generation_for_lost_index,
@@ -2884,6 +2885,98 @@ def test_a_silenced_poller_with_an_empty_work_stock_is_not_busy() -> None:
 
     assert worker.armed is False
     assert worker.busy is False
+
+
+async def test_stand_down_waits_for_the_pass_in_flight_before_it_answers() -> None:
+    """H-18-01 in one case: silencing returns at once, standing down does not.
+
+    The condition ``transfer_documents`` names in its own docstring is that the
+    poller may not write into the source index while the band run is going, and
+    until the audit of this phase the caller did not establish it: ``silence()``
+    cleared a flag and came straight back while the pass in flight worked its
+    claim to the end and committed. A document that arrives below the cursor in
+    that window is never carried over, and on the first indexing of a mount the
+    file ids are spread over the whole range, so below the cursor is the
+    ordinary case and not the corner.
+
+    The wait hangs off the pass and not off the held rows, and this case says so
+    by holding a row the whole time: a pass that ended in an exception leaves its
+    rows held until the next pass claims again, and on a poller that has just
+    been silenced there is no next pass.
+    """
+    queue = _FakeQueue()
+    worker = Poller()
+    worker._queue = cast("Any", queue)
+    worker.arm()
+    worker._in_flight = True
+    worker._held = {91}
+
+    standing_down = asyncio.create_task(worker.stand_down())
+    # Several ticks of the wait, and still nothing on the clock worth naming.
+    await asyncio.sleep(STAND_DOWN_TICK_SECONDS * 4)
+
+    assert worker.armed is False, "the flag is cleared at once, whatever the pass is doing"
+    assert standing_down.done() is False, "and the answer waits for the pass"
+
+    worker._in_flight = False
+
+    assert await standing_down is True
+    assert queue.unlocked == [[91]], "the held row went back with the stand down"
+    assert worker.busy is False
+
+
+async def test_stand_down_gives_the_index_handle_back_and_the_next_pass_opens_a_new_one(
+    volume: Path, store: Store, writer: IndexBatchWriter, tmp_path: Path
+) -> None:
+    """C-18-01 at the poller: the writer is the thing that has to go, not a flag.
+
+    It is built once in ``_open()`` and was handed back only in ``aclose()``, so
+    it outlived every pass and held the live directory right through the
+    directory swap; on Linux the swap then succeeded and the poller went on
+    writing into inodes with no name. Standing down closes it and sets it to
+    None, and the next ``_open()`` builds a fresh one.
+
+    The queue, the client and the connection pool stay exactly as they were, and
+    that is asserted rather than assumed: none of them ever pointed at an index
+    directory, so a swap cannot have invalidated them, and dropping them here
+    would pay a Nextcloud bootstrap for nothing.
+    """
+    write_wordlist(volume)
+    worker = _poller(store=store, writer=writer, tmp_path=tmp_path, queue=_FakeQueue(ClaimResult(jobs=())))
+    queue = await asyncio.to_thread(worker._open)
+    assert worker._writer is writer
+
+    assert await worker.stand_down() is True
+
+    assert worker._writer is None, "the handle is gone, so a rename can have the directory"
+    assert worker._queue is queue, "and the companion half is untouched by an index swap"
+
+    again = await asyncio.to_thread(worker._open)
+
+    assert again is queue
+    assert worker._writer is not None
+    assert worker._writer is not writer, "a fresh handle, on whatever directory the settings now name"
+
+
+async def test_stand_down_answers_false_when_the_pass_outlasts_the_budget(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A budget that ran out may not look like a poller that went quiet.
+
+    False is what stops the rebuild in front of the first rename. A stand down
+    that answered True here would hand the swap a live writer on the directory
+    it is about to remove, which is the whole of C-18-01.
+    """
+    worker = Poller()
+    worker.arm()
+    worker._in_flight = True
+
+    with caplog.at_level("WARNING", logger="findling.worker.poller"):
+        answer = await worker.stand_down(budget=0.0)
+
+    assert answer is False
+    assert worker.armed is False, "it is silenced all the same, because that half always works"
+    assert "is not standing down" in caplog.text
 
 
 def test_reading_busy_twice_gives_the_same_answer_and_moves_nothing() -> None:

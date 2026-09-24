@@ -806,8 +806,25 @@ PHP_TREE_HASH_TODAY = "15e00b2b37e003ff98b0cc3ca87affdea215eb160c1671153f9e616bf
 # a rebuild, so calling it a drift raised the generation and the reindex banner
 # on every volume in the field. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a twenty eighth time, by the fix of the audit findings
+# C-18-01 and H-18-01: three of the 56 files changed their bytes and the count
+# stays at 56. worker/poller.py got Poller.stand_down, which clears the armed
+# flag, waits for the pass in flight on the new _in_flight field rather than on
+# the held rows, hands the rows back and closes the IndexWriter, plus
+# STAND_DOWN_SECONDS, STAND_DOWN_TICK_SECONDS, the pass_in_flight property and
+# the branch in _open that builds a fresh writer while keeping the queue.
+# index/rebuild.py replaced the silence callback of rebuild_the_index with a
+# stand_down that answers whether the task really went quiet, got the verdict
+# POLLER_STILL_WRITING for the answer False, caught the removal behind the two
+# renames of swap_in so that a leftover cannot cost the stamp, and corrected the
+# sentence of step 2 in its module header, which had claimed the writer was
+# already closed. main.py replaced _silence_the_poller with
+# _stand_the_poller_down, which takes the event loop because the rebuild runs in
+# a worker thread and the stand down is a coroutine, and got
+# STAND_DOWN_GRACE_SECONDS beside the three stop budgets. No file came and none
+# went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "6063f7ca3a5605cdd26628bf61684ef81139effa3b1e0f70e68512bb20c12549"
+PACKAGE_TREE_HASH_TODAY = "32da5d52619e98f66a79e411a013af7fd3503925c2e25bab3e5f0715034792ad"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

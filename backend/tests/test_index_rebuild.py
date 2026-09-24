@@ -609,6 +609,45 @@ def test_a_swap_that_fails_names_the_type_and_never_a_path(
     assert not any(tmp_path.name in record.getMessage() for record in caplog.records)
 
 
+def test_a_leftover_the_volume_will_not_release_does_not_cost_the_swap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The half of C-18-01 that is about the order of the three steps, not the writer.
+
+    The removal behind the two renames used to be outside every ``try``, so an
+    ``OSError`` from it travelled out of ``swap_in`` and took ``stamp_after_swap``
+    with it. The marks then stayed as they were, and the next start read a drift
+    and rebuilt the whole index again, over and over, while the directory it
+    would have stamped was already in place and answering.
+
+    So the two renames still raise and the removal no longer does. What is left
+    behind is exactly the state the clean up path of the next start knows by
+    name, a retired directory beside a live one, and it says so in one line
+    without a path.
+    """
+    live = tmp_path / "index"
+    target = tmp_path / "index.rebuild"
+    live.mkdir()
+    target.mkdir()
+    (target / "meta.json").write_text("{}", encoding="utf-8")
+
+    def a_volume_that_will_not_let_go(retired: Path) -> None:
+        del retired
+        raise PermissionError(str(tmp_path / "index.retired"))
+
+    monkeypatch.setattr("findling.index.rebuild.discard_directory", a_volume_that_will_not_let_go)
+
+    with caplog.at_level("WARNING", logger="findling.index.rebuild"):
+        swap_in(target, live)
+
+    assert (live / "meta.json").is_file(), "the swap itself is through"
+    assert not target.exists()
+    assert any("PermissionError" in record.getMessage() for record in caplog.records)
+    assert not any(tmp_path.name in record.getMessage() for record in caplog.records)
+
+
 # The three marks that would take a case out of the run on the machine it is
 # supposed to fail on. Assembled from halves so that this file does not carry the
 # names it forbids and report itself, the same construction test_ops_scripts.py
@@ -1086,13 +1125,18 @@ def test_the_clean_up_path_takes_no_path_and_derives_all_three_names(volume: Pat
 
 
 class _Hands:
-    """The three callbacks the run is led by, recording instead of doing."""
+    """The three callbacks the run is led by, recording instead of doing.
+
+    ``stand_down`` answers True by default, which is what a poller that really
+    went quiet does. The case that hands in a False builds its own.
+    """
 
     def __init__(self) -> None:
         self.journal: list[str] = []
 
-    def silence(self) -> None:
-        self.journal.append("silence")
+    def stand_down(self) -> bool:
+        self.journal.append("stand_down")
+        return True
 
     def arm(self) -> None:
         self.journal.append("arm")
@@ -1135,12 +1179,12 @@ def _a_volume_that_asks_for_a_rebuild(volume: Path, documents: int = 5) -> Store
     return store
 
 
-def test_the_run_silences_before_the_first_document_and_arms_behind_the_stamp(
+def test_the_run_stands_down_before_the_first_document_and_arms_behind_the_stamp(
     volume: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The whole order in one journal, and the two ends of it are the claim.
 
-    Silence has to stand in front of the first written document, because a
+    The stand down has to be in front of the first written document, because a
     document the poller writes into the source below the cursor after the band
     that would have taken it is a document the swap loses, and the count would
     not say so (T-18-09-01, pitfall 4 of the phase research). Arm has to stand
@@ -1165,12 +1209,12 @@ def test_the_run_silences_before_the_first_document_and_arms_behind_the_stamp(
     monkeypatch.setattr("findling.index.rebuild._document_from", note_the_first_document)
     monkeypatch.setattr("findling.index.rebuild.stamp_after_swap", note_the_stamp)
 
-    verdict = rebuild_the_index(store, silence=hands.silence, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
     marks = store.read_meta()
     store.close()
 
     assert verdict == REBUILD_THROUGH
-    assert hands.journal == ["silence", "document", "drop_read_side", "stamp", "arm"]
+    assert hands.journal == ["stand_down", "document", "drop_read_side", "stamp", "arm"]
     assert marks[_SCHEMA_MARK] == str(SCHEMA_VERSION)
     assert _documents_in(volume / "index") == 5
     assert not (volume / "index.rebuild").exists()
@@ -1193,12 +1237,14 @@ def test_a_volume_without_room_refuses_before_it_creates_anything_and_arms_again
     settings.cache_clear()
 
     with caplog.at_level(logging.WARNING, logger="findling.index.rebuild"):
-        verdict = rebuild_the_index(store, silence=hands.silence, arm=hands.arm, drop_read_side=hands.drop_read_side)
+        verdict = rebuild_the_index(
+            store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side
+        )
     store.close()
 
     assert verdict == NOT_ENOUGH_ROOM
     assert not (volume / "index.rebuild").exists(), "a refused run leaves no third directory behind"
-    assert hands.journal == ["arm"], "nothing was silenced, and the poller is let go all the same"
+    assert hands.journal == ["arm"], "nothing was stood down, and the poller is let go all the same"
     message = caplog.records[0].getMessage()
     assert "byte" in message
     assert any(word.isdigit() for word in message.split())
@@ -1221,7 +1267,7 @@ def test_the_fallback_raises_the_generation_and_never_starts_a_band_run(
     monkeypatch.setenv("FINDLING_REBUILD_FALLBACK", "fullreindex")
     settings.cache_clear()
 
-    verdict = rebuild_the_index(store, silence=hands.silence, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
     after = store.index_version
     marks = store.read_meta()
     store.close()
@@ -1248,7 +1294,7 @@ def test_marks_that_agree_are_answered_without_touching_anything(volume: Path) -
     store.write_meta(LANGUAGES_MARK, ",".join(settings().languages))
     hands = _Hands()
 
-    verdict = rebuild_the_index(store, silence=hands.silence, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
     store.close()
 
     assert verdict == NOTHING_TO_REBUILD
@@ -1280,7 +1326,7 @@ def test_the_progress_rests_before_the_run_and_carries_two_numbers_during_it(
     monkeypatch.setattr("findling.index.rebuild._document_from", sample)
     monkeypatch.setattr("findling.index.rebuild.BAND_DOCUMENTS", 2)
 
-    verdict = rebuild_the_index(store, silence=hands.silence, arm=hands.arm, drop_read_side=hands.drop_read_side)
+    verdict = rebuild_the_index(store, stand_down=hands.stand_down, arm=hands.arm, drop_read_side=hands.drop_read_side)
     store.close()
 
     assert verdict == REBUILD_THROUGH
@@ -1315,7 +1361,7 @@ def test_a_stop_between_two_bands_keeps_the_half_filled_directory(
 
     verdict = rebuild_the_index(
         store,
-        silence=hands.silence,
+        stand_down=hands.stand_down,
         arm=hands.arm,
         drop_read_side=hands.drop_read_side,
         should_stop=after_the_first_band,
@@ -1324,7 +1370,7 @@ def test_a_stop_between_two_bands_keeps_the_half_filled_directory(
     store.close()
 
     assert verdict == RUN_STOPPED_EARLY
-    assert hands.journal == ["silence", "arm"], "nothing was swapped, so the read side was never dropped"
+    assert hands.journal == ["stand_down", "arm"], "nothing was swapped, so the read side was never dropped"
     assert _documents_in(volume / "index.rebuild") == 2
     assert _documents_in(volume / "index") == 6, "the live directory still answers with everything"
     assert marks[_SCHEMA_MARK] == "1", "and nothing was stamped"

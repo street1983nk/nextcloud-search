@@ -18,18 +18,23 @@ of ``tools/one_load.py``.
 
 import ast
 import asyncio
+import gc
 import inspect
 import logging
 import time
+from functools import partial
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from conftest import Corpus
 from findling.api import resources
 from findling.config import settings
-from findling.index.open import LANGUAGES_MARK
-from findling.index.rebuild import REBUILD_THROUGH
+from findling.index.open import LANGUAGES_MARK, open_index
+from findling.index.rebuild import POLLER_STILL_WRITING, REBUILD_THROUGH
+from findling.index.wordlist import build_artifact
+from findling.index.writer import IndexBatchWriter, IndexLockedError
 from findling.main import (
     APP,
     REBUILD_STOP_SECONDS,
@@ -38,10 +43,41 @@ from findling.main import (
     _rebuild_the_index_directory,
     _release_when_idle,
     _run_the_rebuild,
-    _silence_the_poller,
+    _stand_the_poller_down,
 )
 from findling.store.repo import Store, open_store
 from findling.worker.poller import Poller, default_poller
+
+
+def _a_writer_on_the_live_directory() -> IndexBatchWriter:
+    """The writer the poller builds, built the same way and on the same path."""
+    resolved = settings()
+    return IndexBatchWriter(
+        open_index(resolved.index_dir, build_artifact().entries),
+        directory=resolved.index_dir,
+    )
+
+
+def _documents_in_the_live_directory() -> int:
+    """How many documents the live index directory holds right now."""
+    index = open_index(settings().index_dir, build_artifact().entries)
+    index.reload()
+    return index.searcher().num_docs
+
+
+def _make_the_marks_ask_for_a_rebuild() -> None:
+    """Write the one drifted mark a directory rebuild answers, and nothing else.
+
+    The language mark and not the schema mark, for the reason the fixture of the
+    rebuild suite states: a stored schema generation of 1 is the legitimate
+    state of every installation coming from 1.2.0, and the store stopped calling
+    it a drift for exactly that reason.
+    """
+    store = open_store(settings().state_db)
+    try:
+        store.write_meta(LANGUAGES_MARK, "de,en,es")
+    finally:
+        store.close()
 
 
 class _FakeReleaseTask:
@@ -645,21 +681,27 @@ def test_the_clean_up_path_runs_before_the_indexing_task_is_created(
     assert journal == ["clean up", "poller"]
 
 
-def test_the_rebuild_hands_the_real_silence_and_arm_of_the_poller_into_the_run(
+async def test_the_rebuild_hands_the_real_stand_down_and_arm_of_the_poller_into_the_run(
     indexed_volume: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The wiring, asked of the real poller and not of a stand in.
 
-    The run of plan 18-09 takes its two callbacks from whoever leads it, and a
-    pair that went nowhere would look exactly like a pair that works: the rebuild
+    The run of plan 18-09 takes its callbacks from whoever leads it, and a pair
+    that went nowhere would look exactly like a pair that works: the rebuild
     would carry every document over, the counts would match, the swap would
     succeed, and the only difference would be the documents the poller wrote into
     the source directory in the meantime, which are gone after the swap and which
     nothing counts (T-18-09-01). No case inside the rebuild suite can see that,
     because every one of them hands its own recorders in. So this one builds the
     real poller, drives the real entry point of ``main`` and reads the armed flag
-    of that object: only ``Poller.silence`` clears it and only ``Poller.arm``
-    sets it, so the two readings are the proof that the two methods were reached.
+    of that object: only ``Poller.stand_down`` clears it here and only
+    ``Poller.arm`` sets it, so the two readings are the proof that the two
+    methods were reached.
+
+    The run goes through a worker thread because that is where it really runs,
+    and because the stand down submits a coroutine back to this loop: a case
+    that called it on the loop would wait for a future the loop cannot get to
+    (audit finding C-18-01).
     """
     del indexed_volume
     poller = default_poller()
@@ -676,36 +718,128 @@ def test_the_rebuild_hands_the_real_silence_and_arm_of_the_poller_into_the_run(
     def probe(
         store: Store,
         *,
-        silence: object,
+        stand_down: object,
         arm: object,
         drop_read_side: object,
         should_stop: object,
     ) -> str:
         del store, should_stop
-        handed_over["silence"] = silence
+        handed_over["stand_down"] = stand_down
         handed_over["arm"] = arm
         handed_over["drop_read_side"] = drop_read_side
         readings.append(("before", poller.armed))
-        silence()  # pyright: ignore[reportCallIssue]
-        readings.append(("silenced", poller.armed))
+        assert stand_down() is True  # pyright: ignore[reportCallIssue]
+        readings.append(("stood down", poller.armed))
         arm()  # pyright: ignore[reportCallIssue]
         readings.append(("armed again", poller.armed))
         return REBUILD_THROUGH
 
     monkeypatch.setattr("findling.main.rebuild_the_index", probe)
 
-    verdict = _run_the_rebuild(lambda: False)
+    loop = asyncio.get_running_loop()
+    verdict = await asyncio.to_thread(_run_the_rebuild, lambda: False, loop)
 
     assert verdict == REBUILD_THROUGH
-    assert readings == [("before", True), ("silenced", False), ("armed again", True)]
+    assert readings == [("before", True), ("stood down", False), ("armed again", True)]
     # And the callables really are the ones main defines, so that a later edit
-    # cannot quietly hand in something that swallows the call.
-    assert handed_over["silence"] is _silence_the_poller
+    # cannot quietly hand in something that swallows the call. The stand down
+    # arrives bound to this loop, so it is the partial rather than the function.
+    bound = handed_over["stand_down"]
+    assert isinstance(bound, partial)
+    assert bound.func is _stand_the_poller_down
+    assert bound.args == (loop,)
     assert handed_over["arm"] is _arm_the_poller
     assert handed_over["drop_read_side"] is resources.reset_read_side
 
 
-def test_the_poller_is_not_armed_again_when_the_app_was_switched_off_meanwhile(
+async def test_a_real_poller_with_an_open_writer_loses_no_document_over_the_swap(
+    indexed_volume: Corpus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The timeline of C-18-01, played with a real poller and a real IndexWriter.
+
+    **What was wrong.** The module header of ``index/rebuild.py`` promised that
+    the writer of the poller is closed by the time the swap renames the live
+    directory. It was not: ``silence()`` cleared a flag, the writer was built
+    once per poller and handed back only in ``aclose()``, and the lifespan armed
+    the poller twenty two lines before it created the rebuild task. So
+    ``shutil.rmtree`` removed a directory a live writer was holding, and every
+    document the poller indexed afterwards went into inodes with no name. The
+    whole rebuild suite missed it, because every case there hands its own
+    recorders in and no recorder holds a tantivy lock.
+
+    **Why this case can see it and the others cannot.** It builds the writer the
+    production path builds, on the live directory, and proves it is really open
+    before the run by asking for a second one: tantivy answers a held directory
+    with :class:`findling.index.writer.IndexLockedError` and answers a free one
+    with a writer. The same question after the run is what says the handle came
+    back.
+
+    **The two shapes of the failure, and this case catches both.** On Windows
+    the first rename refuses with a ``PermissionError`` while the lock is held,
+    so the verdict would not be ``REBUILD_THROUGH``. On Linux it succeeds and
+    says nothing, so the count of the documents in the live directory afterwards
+    is what carries the claim there.
+    """
+    poller = Poller(store=open_store(settings().state_db), writer=_a_writer_on_the_live_directory())
+    # Nothing in this frame may hold the directory, or the rename would refuse
+    # for the wrong reason. The writer above is reachable through the poller and
+    # through nothing else, which is exactly the production shape.
+    gc.collect()
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    settings().armed_marker.write_text("", encoding="utf-8")
+    poller.arm()
+    _make_the_marks_ask_for_a_rebuild()
+    before = _documents_in_the_live_directory()
+    assert before == indexed_volume.documents
+    with pytest.raises(IndexLockedError):
+        _a_writer_on_the_live_directory()
+
+    verdict = await asyncio.to_thread(_run_the_rebuild, lambda: False, asyncio.get_running_loop())
+
+    assert verdict == REBUILD_THROUGH
+    assert _documents_in_the_live_directory() == before, "the swap carried every document over"
+    assert not (settings().index_dir.with_name("index.retired")).exists(), "the removal behind the swap ran"
+    assert not (settings().index_dir.with_name("index.rebuild")).exists()
+    # The handle really came back, so the directory the rmtree removed was held
+    # by nobody, and the poller opens a fresh writer on the new directory at its
+    # next pass.
+    assert poller._writer is None
+    _a_writer_on_the_live_directory()
+    assert poller.armed is True, "and the indexing task was let go again"
+
+
+async def test_the_run_stops_before_it_touches_anything_when_the_poller_will_not_stand_down(
+    indexed_volume: Corpus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other half of C-18-01: a stand down that fails may not become a swap.
+
+    A pass that outlasts the budget leaves the writer open on the live
+    directory, which is the state the whole finding is about. The only safe
+    answer is to do nothing at all this start: no third directory on the volume,
+    no rename, no stamp, and the indexing task armed again so that the container
+    goes on doing the work it can do.
+    """
+    del indexed_volume
+    poller = default_poller()
+    monkeypatch.setattr("findling.main._POLLER", poller)
+    settings().armed_marker.write_text("", encoding="utf-8")
+    poller.arm()
+    _make_the_marks_ask_for_a_rebuild()
+    # A pass that never ends, which is what the budget is measured against.
+    poller._in_flight = True
+    # A budget below the tick of the wait, so this case spends no wall clock at
+    # all on a pass that is never going to end.
+    monkeypatch.setattr("findling.main.STAND_DOWN_SECONDS", 0.0)
+
+    verdict = await asyncio.to_thread(_run_the_rebuild, lambda: False, asyncio.get_running_loop())
+
+    assert verdict == POLLER_STILL_WRITING
+    assert not (settings().index_dir.with_name("index.rebuild")).exists(), "nothing was created"
+    assert not (settings().index_dir.with_name("index.retired")).exists(), "and nothing was renamed"
+    assert poller.armed is True, "and the indexing task was let go again"
+
+
+async def test_the_poller_is_not_armed_again_when_the_app_was_switched_off_meanwhile(
     indexed_volume: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A rebuild runs for hours, and an admin may switch the app off inside them.
@@ -720,7 +854,7 @@ def test_the_poller_is_not_armed_again_when_the_app_was_switched_off_meanwhile(
     monkeypatch.setattr("findling.main._POLLER", poller)
     poller.arm()
 
-    _silence_the_poller()
+    assert await asyncio.to_thread(_stand_the_poller_down, asyncio.get_running_loop()) is True
     assert poller.armed is False
 
     # No mark on the volume: this container is disabled as far as Nextcloud is

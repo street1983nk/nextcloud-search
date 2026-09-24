@@ -162,6 +162,25 @@ SCRATCH_SUFFIX: Final = ".part"
 # How long the shutdown waits for a pass to end before it stops waiting.
 POLLER_STOP_SECONDS: Final = 30.0
 
+# How finely :meth:`Poller.stand_down` notices that the pass in flight is over.
+# It is a resolution and not a budget: a pass ends when it ends, and this only
+# decides how long after that the waiter finds out. 50 ms is far below the
+# cheapest pass and far above the cost of one loop iteration.
+STAND_DOWN_TICK_SECONDS: Final = 0.05
+
+# How long :meth:`Poller.stand_down` waits for the pass in flight before it
+# gives up and says so.
+#
+# The figure is a whole pass and not a band, because that is what is being
+# waited for: a batch of BATCH_FILES documents whose slowest member may be an
+# OCR job under the hard deadline of docs/ocr.md. Five minutes covers that with
+# room to spare on the box this project targets, and the answer to an overrun is
+# not a longer wait but a rebuild that does not run this start: the caller reads
+# the False and leaves every directory exactly as it found it. A rebuild that
+# went ahead with a writing poller behind it is the one outcome that costs
+# documents (audit finding C-18-01).
+STAND_DOWN_SECONDS: Final = 300.0
+
 # How many passes in a row have to come back unanswered before the container
 # treats it as a state instead of as a hiccup. One is a lost packet or a request
 # that ran into its timeout, two is a restart of Nextcloud, three is a companion
@@ -467,6 +486,14 @@ class Poller:
         # line per repetition would be exactly the log the idle flag avoids.
         self._starved_announced = False
         self._armed = asyncio.Event()
+        # Whether :meth:`run` is inside a pass right now. It is deliberately not
+        # the same question as :attr:`busy`, and the difference is what makes
+        # :meth:`stand_down` terminate: ``busy`` reads the held rows, and a pass
+        # that ended in an exception leaves them held until the next pass claims
+        # again, which on a poller that has just been silenced never happens. So
+        # the wait hangs off the call and not off the rows, and the rows are
+        # handed back afterwards by unlock_held().
+        self._in_flight = False
 
     # -- lifecycle -------------------------------------------------------
 
@@ -522,8 +549,83 @@ class Poller:
         A disabled backend that keeps polling is the classic of the integration
         list, and it is invisible from the outside: the container looks healthy
         while it drains the queue of an app the admin switched off.
+
+        **This is not enough in front of a directory swap**, and the audit of
+        this phase found the gap (C-18-01, H-18-01). It clears a flag; it does
+        not wait for the pass in flight and it does not give the index handle
+        back. Whoever is about to rename the index directory wants
+        :meth:`stand_down`.
         """
         self._armed.clear()
+
+    @property
+    def pass_in_flight(self) -> bool:
+        """True while :meth:`run` is inside a pass, whatever that pass is doing."""
+        return self._in_flight
+
+    async def stand_down(self, *, budget: float = STAND_DOWN_SECONDS) -> bool:
+        """Silence, wait for the pass in flight, and give the index handle back.
+
+        Answers True when the poller really is standing down, and False when the
+        pass in flight outlasted ``budget``. The parameter is not called
+        ``timeout`` because this method cancels nothing and races nothing: it
+        watches a flag another task owns, and ASYNC109 is right that a real
+        timeout belongs to the caller and to ``asyncio.timeout``. False means
+        nothing was released:
+        the writer is still open, the caller must not rename anything, and the
+        only safe thing left to do is to arm again and try at the next start.
+
+        **Why silencing alone is not enough, measured against the code rather
+        than against a claim.** ``silence()`` clears a flag. The ``IndexWriter``
+        under this poller is built once in ``_open()`` and handed back only in
+        ``aclose()``, so it outlives every pass; and the pass that is already
+        running works its claim to the end and commits into the very directory a
+        rebuild is about to retire. The first of those costs the documents of
+        every pass after the swap, because on Linux a writer whose directory was
+        renamed and removed goes on writing into inodes that have no name
+        (C-18-01). The second costs the documents that arrive below the cursor
+        while the band run is going, which is the ordinary case and not the
+        corner (H-18-01).
+
+        **The three steps, and the order is the content.**
+
+        1. Clear the armed flag, so that no further pass starts.
+        2. Wait for the pass in flight, on :attr:`pass_in_flight` and not on
+           :attr:`busy`, for the reason the field states: held rows outlive a
+           pass that ended in an exception, and waiting for them on a silenced
+           poller would never return.
+        3. Hand the held rows back and close the writer, in that order, so that
+           a shutdown between the two costs the lock timeout and not a document.
+
+        **What the close throws away, and why that is right.** ``close()`` waits
+        for the merging threads and does not commit, exactly as ``aclose()``
+        uses it. Anything still pending belongs to a batch that was never
+        acknowledged, so Nextcloud redelivers it and the upsert makes the repeat
+        harmless; committing it here would write into a directory that is about
+        to be removed anyway.
+
+        The writer is set to None rather than kept, and ``_open()`` builds a
+        fresh one on the next pass. The queue, the client and the connection
+        pool are deliberately untouched: the swap moves an index directory, it
+        does not move the companion half, and dropping the pool here would pay a
+        Nextcloud bootstrap for nothing.
+        """
+        self._armed.clear()
+        deadline = time.monotonic() + budget
+        while self._in_flight:
+            if time.monotonic() >= deadline:
+                LOGGER.warning(
+                    "the indexing pass in flight did not end within %.0f s, so the poller is not standing down",
+                    budget,
+                )
+                return False
+            await asyncio.sleep(STAND_DOWN_TICK_SECONDS)
+        await self.unlock_held()
+        writer, self._writer = self._writer, None
+        if writer is not None:
+            await asyncio.to_thread(writer.close)
+        LOGGER.info("indexing stood down and gave the index handle back")
+        return True
 
     async def unlock_held(self) -> int:
         """Hand back the rows this pass is holding, so a restart is productive.
@@ -571,7 +673,14 @@ class Poller:
                 await _first_of(self._armed.wait(), stop_event.wait())
                 continue
             try:
-                await self.run_once()
+                # Raised and lowered around the call and nowhere else, so that
+                # stand_down() waits for a pass rather than for the rows a
+                # broken pass leaves held (audit finding H-18-01).
+                self._in_flight = True
+                try:
+                    await self.run_once()
+                finally:
+                    self._in_flight = False
             # Deliberately every exception. The search is the part a user sees,
             # and a broken indexer must not take it along.
             except Exception as error:
@@ -1494,6 +1603,16 @@ class Poller:
         its whole loop for the same reason.
         """
         if self._queue is not None:
+            if self._writer is None:
+                # stand_down() gave the index handle back so that a rebuild
+                # could rename the directory under it, and the directory the
+                # settings name is the one to open now. Only the writer is
+                # rebuilt: the client, the pool and the queue never pointed at
+                # an index directory, so a swap cannot have invalidated them and
+                # dropping them here would pay a Nextcloud bootstrap for nothing
+                # (audit finding C-18-01).
+                store = self._store_or_die()
+                self._writer = _open_writer(store, vectors=self._vectors)
             return self._queue
         if self._store is None:
             self._store = _open_state()

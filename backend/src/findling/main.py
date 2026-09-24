@@ -34,6 +34,7 @@ import logging
 import os
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
+from functools import partial
 from typing import Any, Final
 
 from fastapi import FastAPI, Request
@@ -53,7 +54,7 @@ from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS, rebuild_the_index, r
 from findling.instance import claim_the_volume, volume_is_shared
 from findling.nc.client import AppAPIAuthMiddleware, AsyncNextcloudApp, run_app, set_handlers
 from findling.store.repo import open_read_only, open_store
-from findling.worker.poller import POLLER_STOP_SECONDS, Poller, _pause, default_poller
+from findling.worker.poller import POLLER_STOP_SECONDS, STAND_DOWN_SECONDS, Poller, _pause, default_poller
 from findling.worker.reconcile import RECONCILE_STOP_SECONDS, Reconcile, default_reconcile
 
 LOGGER = logging.getLogger("findling")
@@ -92,6 +93,14 @@ RELEASE_STOP_SECONDS: Final = 5.0
 # anyway: this timeout is the answer to a band that hangs and not the ordinary
 # way out of a run.
 REBUILD_STOP_SECONDS: Final = 30.0
+
+# What the blocking wait on the stand down future is allowed on top of the
+# budget the coroutine keeps for itself. It is not a second budget for the pass
+# in flight, it is the answer to a loop that stopped underneath the submission:
+# without it a future that is never scheduled would hold the rebuild thread for
+# the life of the container. Five seconds is far above the cost of one loop
+# iteration and far below anything a human would notice at a start.
+STAND_DOWN_GRACE_SECONDS: Final = 5.0
 
 KNOWN_LOG_LEVELS = frozenset({"debug", "info", "warning", "error"})
 
@@ -340,20 +349,54 @@ async def _release_when_idle(stop_event: asyncio.Event) -> None:
             )
 
 
-def _silence_the_poller() -> None:
-    """Stop the indexing task from writing into the index the rebuild reads.
+def _stand_the_poller_down(loop: asyncio.AbstractEventLoop) -> bool:
+    """Stop the indexing task writing into the index the rebuild reads, and wait.
 
     Handed to :func:`findling.index.rebuild.rebuild_the_index` as a callback, so
     that the index package never has to import the worker package: the poller is
     already the caller of everything ``findling.index`` hands out, and an import
     in the other direction would close that circle.
 
-    A container without a poller is not a fault here. The task only exists inside
-    the lifespan, and a rebuild that outlived it has nothing left to silence.
+    Answers whether the task really stood down. False is not an error and not an
+    exception: it says the pass in flight outlasted the budget, so the writer is
+    still open on the live directory and the run has to end before it renames
+    anything (audit finding C-18-01).
+
+    **Why the loop is handed in rather than looked up.** This runs inside the
+    worker thread of :func:`asyncio.to_thread`, where there is no running loop
+    and where nothing may be awaited, and the thing it has to reach is a
+    coroutine of an object that lives on the event loop. So the loop travels in
+    from :func:`_rebuild_the_index_directory`, which has it, and the coroutine
+    is submitted to it and waited for with an ordinary blocking
+    :meth:`concurrent.futures.Future.result`. The wait cannot deadlock: the loop
+    is free, because the caller of this function is itself off it.
+
+    The budget of the wait belongs to the poller and is spelled there. What is
+    added here is a second, larger one on the future, so that a coroutine which
+    never comes back at all (a loop that stopped underneath it) cannot hold the
+    rebuild thread for the life of the container.
+
+    A container without a poller is not a fault here. The task only exists
+    inside the lifespan, and a rebuild that outlived it has nothing left to
+    stand down, so the answer is True.
     """
     poller = active_poller()
-    if poller is not None:
-        poller.silence()
+    if poller is None:
+        return True
+    # The budget is named here rather than left to the default of the method,
+    # for the reason the band size of the rebuild is named at its call site:
+    # this is the call that runs in a container, and how long a start waits for
+    # a pass is a decision of whoever owns the start.
+    pending = asyncio.run_coroutine_threadsafe(poller.stand_down(budget=STAND_DOWN_SECONDS), loop)
+    try:
+        return pending.result(timeout=STAND_DOWN_SECONDS + STAND_DOWN_GRACE_SECONDS)
+    # Deliberately every exception, and the type name only, as everywhere in
+    # this module: whatever went wrong on the other side of the loop, the answer
+    # the rebuild needs is the same one, namely that it may not rename anything.
+    except Exception as error:
+        pending.cancel()
+        LOGGER.error("the indexing task could not be stood down, an %s; no directory is swapped", type(error).__name__)
+        return False
 
 
 def _arm_the_poller() -> None:
@@ -398,7 +441,7 @@ def _rebuild_is_due() -> bool:
         store.close()
 
 
-def _run_the_rebuild(should_stop: Callable[[], bool]) -> str:
+def _run_the_rebuild(should_stop: Callable[[], bool], loop: asyncio.AbstractEventLoop) -> str:
     """Open the one writing handle the rebuild needs, run it, hand the handle back.
 
     The store is opened here and not inside the rebuild, because a module that
@@ -409,13 +452,16 @@ def _run_the_rebuild(should_stop: Callable[[], bool]) -> str:
     version marks.
 
     Blocking from the first line to the last, which is why nothing calls it
-    outside :func:`asyncio.to_thread`.
+    outside :func:`asyncio.to_thread`. ``loop`` is the loop that hop came from,
+    and it is here for one reason: standing the poller down is a coroutine, and
+    a worker thread can reach one only by submitting it back to the loop it
+    belongs to. See :func:`_stand_the_poller_down`.
     """
     store = open_store(settings().state_db)
     try:
         return rebuild_the_index(
             store,
-            silence=_silence_the_poller,
+            stand_down=partial(_stand_the_poller_down, loop),
             arm=_arm_the_poller,
             drop_read_side=resources.reset_read_side,
             should_stop=should_stop,
@@ -453,7 +499,10 @@ async def _rebuild_the_index_directory(stop_event: asyncio.Event) -> None:
     out of it (T-18-09-02).
     """
     try:
-        verdict = await asyncio.to_thread(_run_the_rebuild, stop_event.is_set)
+        # The loop travels with the call because standing the poller down is a
+        # coroutine and the worker thread has no loop of its own; the reasoning
+        # stands at _stand_the_poller_down.
+        verdict = await asyncio.to_thread(_run_the_rebuild, stop_event.is_set, asyncio.get_running_loop())
         LOGGER.info("the index rebuild ended: %s", verdict)
     except asyncio.CancelledError:
         raise

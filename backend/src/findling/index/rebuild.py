@@ -39,8 +39,18 @@ container that answers out of a directory nobody can point at any more:
 1. commit the target index, ``wait_merging_threads()`` on its writer, let the
    object go. A writer holds a lock file, and a merging thread holds segments
    that are about to disappear.
-2. let the source index go. The poller's writer is already closed at this point,
-   because silencing it is the first thing the caller of plan 18-09 does.
+2. let the source index go. The poller's writer is closed at this point because
+   the first thing :func:`rebuild_the_index` does is to stand the poller down,
+   and standing down is what closes it. Until the audit of this phase that
+   sentence read "silencing it is the first thing the caller does", and it was
+   wrong three times over: ``Poller.silence()`` clears a flag and nothing else,
+   the writer is built once per poller and handed back only in ``aclose()``, and
+   the lifespan arms the poller twenty two lines before it creates the rebuild
+   task. The swap therefore removed a directory a live ``IndexWriter`` was
+   holding, and everything the poller indexed afterwards went into inodes with
+   no name (C-18-01). The callback now waits for the pass in flight and gives
+   the handle back, and a callback that answers False stops the run before
+   anything is renamed.
 3. drop the reading side with an explicit ``reset_read_side()``, over in
    :mod:`findling.api.resources`.
    That cache is keyed on ``index_dir``, the swap does not move ``index_dir``,
@@ -203,6 +213,7 @@ FALLBACK_TO_FULL_REINDEX: Final = "the generation was raised instead, the reinde
 RUN_STOPPED_EARLY: Final = "the run stopped between two bands and keeps its half filled directory"
 RUN_INCOMPLETE: Final = "the final probe counted fewer documents than the old directory holds, nothing was swapped"
 REBUILD_THROUGH: Final = "the rebuilt directory is in place and the two marks are current again"
+POLLER_STILL_WRITING: Final = "the indexing task did not stand down, so nothing was carried over and swapped"
 
 
 @dataclass(frozen=True, slots=True)
@@ -593,6 +604,15 @@ def swap_in(target: Path, live: Path) -> None:
     are not a paraphrase of a forbidden word, they are more accurate than it:
     nothing is moved anywhere a caller chose, and what is removed is a directory
     this module named itself.
+
+    **Why the removal is caught and the two renames are not.** The renames are
+    the swap; a failure in either of them means the directory the container
+    reads from is not the one a stamp would describe, so it has to travel up.
+    The removal behind them is housekeeping: the swap is already through, the
+    new directory already answers every search, and a leftover the volume will
+    not let go of is a state the clean up path of the next start knows by name
+    (RETIRED_DISCARDED). Letting it raise here cost the stamp, and an unstamped
+    swap is a whole rebuild again at every start (C-18-01).
     """
     try:
         retired = retire_directory(live)
@@ -603,7 +623,14 @@ def swap_in(target: Path, live: Path) -> None:
         # operating log of this container never carries (T-18-07-05).
         LOGGER.warning("the index directories could not be swapped, an %s", type(error).__name__)
         raise
-    discard_directory(retired)
+    try:
+        discard_directory(retired)
+    except OSError as error:
+        LOGGER.warning(
+            "the retired index directory could not be discarded, an %s; the swap itself is through and the next "
+            "start removes what is left",
+            type(error).__name__,
+        )
 
 
 def recover_the_index_directories() -> str:
@@ -784,7 +811,7 @@ def _new_language_count(store: Store, active: Sequence[str]) -> int:
 def rebuild_the_index(
     store: Store,
     *,
-    silence: Callable[[], None],
+    stand_down: Callable[[], bool],
     arm: Callable[[], None],
     drop_read_side: Callable[[], None],
     should_stop: Callable[[], bool] | None = None,
@@ -802,11 +829,20 @@ def rebuild_the_index(
     1. is there a drift this rebuild can do anything about,
     2. is there room for two index directories, or is the named way out switched
        on,
-    3. silence the indexing task,
+    3. stand the indexing task down, and stop here if it will not go,
     4. carry the documents over, band by band,
     5. ask the final probe,
     6. drop the reading side and swap the directories,
     7. stamp the two marks and let the indexing task go again.
+
+    **Step 3 waits, and the waiting is the whole point of it.** Until the audit
+    of this phase it was a ``silence`` that cleared a flag and returned at once,
+    which left two things standing that both cost documents: the pass in flight
+    went on committing into the source below the cursor (H-18-01), and the
+    writer of the poller kept holding the very directory the swap removes
+    (C-18-01). The callback now answers whether the task really stood down, and
+    a False ends the run in front of the first written document. Nothing is
+    created in that case, exactly as in the three refusals above it.
 
     **Why the poller arrives as a pair of callbacks.** An index module that
     imported the poller would be a circle: the poller is already the caller of
@@ -887,10 +923,17 @@ def rebuild_the_index(
         # Step 2 of the order in the module header, and the condition
         # transfer_documents states it cannot check for itself: a document
         # written into the source below the cursor after the band that would have
-        # taken it is a document the swap loses. The in flight pass is allowed to
-        # run out, which costs one claim of the queue, and the work of the claims
+        # taken it is a document the swap loses. The in flight pass is waited
+        # out, which costs one claim of the queue, and the work of the claims
         # behind it waits in Nextcloud rather than being lost (T-18-09-01).
-        silence()
+        if not stand_down():
+            # The task is still holding the source index, so there is nothing
+            # safe left to do this start. Nothing was created, the live
+            # directory is untouched, and the finally below arms again.
+            LOGGER.warning(
+                "the indexing task did not stand down, so no document is carried over and no directory is swapped"
+            )
+            return POLLER_STILL_WRITING
         # The band size is named here rather than left to the default of the
         # function, because this is the call site that runs in a container: the
         # figure is the memory of one step and the crash granularity of the whole
