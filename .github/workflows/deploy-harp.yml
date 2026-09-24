@@ -3893,6 +3893,7 @@ jobs:
           probe_b="${RUNNER_TEMP}/rebuild-during-b.json"
           caught=""
           finished=""
+          reachable=""
           rounds=0
           deadline=$(( $(date +%s) + REBUILD_BUDGET_SECONDS ))
           while [ "$(date +%s)" -lt "${deadline}" ]; do
@@ -3904,6 +3905,19 @@ jobs:
             fi
             running=$(jq -r '.backend.rebuildRunning' "${probe_a}" 2> /dev/null || echo "")
             active=$(jq -r '.backend.languagesActive' "${probe_a}" 2> /dev/null || echo "")
+
+            # The overview answers 200 even when Nextcloud cannot reach the
+            # backend at all, and then rebuildRunning false with an empty
+            # languagesActive is the absence of an answer and not an answer.
+            # Read apart from the progress so that the verdict at the end of the
+            # budget can name the tunnel when the tunnel is what broke, instead
+            # of blaming a rebuild that nobody was in a position to watch. Run
+            # 35997241359 spent 133 rounds on an empty backend block and ended
+            # with "the rebuild did not finish", while the container log of that
+            # very run says the rebuild ended after two seconds.
+            if [ "$(jq -r '.backendReachable' "${probe_a}" 2> /dev/null || echo "")" = "true" ]; then
+              reachable="yes"
+            fi
 
             # The middle snapshot, and the canary inside it. The search is asked
             # BETWEEN two progress readings and the snapshot carries both, which
@@ -3960,8 +3974,14 @@ jobs:
 
           rebuild_end=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           if [ -z "${finished}" ]; then
-            echo "::error::the rebuild did not finish within REBUILD_BUDGET_SECONDS=${REBUILD_BUDGET_SECONDS} after ${rounds} rounds"
-            echo "This is a finding about the rebuild and not a reason to raise the budget."
+            if [ -z "${reachable}" ]; then
+              echo "::error::Nextcloud did not reach the backend in a single one of ${rounds} rounds, so nothing about the rebuild was measured here"
+              echo "This is a finding about the container this step created and the tunnel it speaks through, not about the rebuild."
+              docker logs "${container}" 2>&1 | grep -i 'harp_connect\|mutual TLS\|login to server' | head -n 5 || true
+            else
+              echo "::error::the rebuild did not finish within REBUILD_BUDGET_SECONDS=${REBUILD_BUDGET_SECONDS} after ${rounds} rounds"
+              echo "This is a finding about the rebuild and not a reason to raise the budget."
+            fi
             head -c 1000 "${probe_a}" || true
             echo
             docker logs "${container}" 2>&1 | tail -n 80 || true
