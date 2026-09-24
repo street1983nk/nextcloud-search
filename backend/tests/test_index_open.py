@@ -20,6 +20,7 @@ has to handle; identifiers stay ASCII as the project rules require.
 
 import ast
 from pathlib import Path
+from textwrap import dedent
 
 import pytest
 from tantivy import Document, Filter, Index, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
@@ -545,6 +546,171 @@ def test_the_only_index_opened_without_a_word_list_is_never_asked_a_question() -
     assert [entry.rsplit(":", 1)[0] for entry in openers] == [COUNTING_MODULE], (
         "only " + COUNTING_MODULE + " may open an index without a constituent list:\n" + "\n".join(openers)
     )
+
+
+# -- the eight chains, and that none of them hangs on a condition ------------
+#
+# Measured on 2026-09-24 with tantivy 0.26.2: a schema that carries a text field
+# whose chain is not registered answers every writer.add_document with
+# "Schema error: 'Error getting tokenizer for field: body_es'", and it does so
+# even for a document that does not carry the field. So a registration behind
+# "if language in settings().languages" would stop the indexer of every
+# installation that does not run all six languages, and it would do it at the
+# first write rather than at start up, where somebody would see it.
+
+# The file the guard reads. Read as text and parsed, never imported: a module
+# that stopped importing has to be a red gate and not an error in collection.
+OPENING_SOURCE = PACKAGE_ROOT / OPENING_MODULE
+
+# Six body chains, the file name chain, the chain that indexes nothing. Not a
+# tautology, a ratchet: seven means a body field whose chain nobody registered
+# and therefore a writer that raises on every document, nine means a name the
+# schema does not persist and that nothing can ever ask for.
+EXPECTED_REGISTRATIONS = 8
+
+
+def registrations_of_open_index(source: str, filename: str = OPENING_MODULE) -> tuple[list[int], list[int]]:
+    """The register_tokenizer calls inside open_index, split by what stands over them.
+
+    Returns the line numbers of the free calls first and of the conditional ones
+    second. A call counts as conditional when any ``if`` stands anywhere above it
+    inside the function, in its test, its body or its else branch, because all
+    three make the call depend on something that is not the schema.
+
+    Read off the syntax tree and not out of the text: a comment that spells
+    register_tokenizer out is not part of the tree, so it cannot raise the count,
+    and a call that was reformatted over three lines cannot lower it.
+    """
+    free: list[int] = []
+    conditional: list[int] = []
+    for function in ast.walk(ast.parse(source, filename=filename)):
+        if not isinstance(function, ast.FunctionDef) or function.name != "open_index":
+            continue
+        for node, guarded in _walk_with_conditions(function):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr == "register_tokenizer":
+                (conditional if guarded else free).append(node.lineno)
+    return sorted(free), sorted(conditional)
+
+
+def _walk_with_conditions(node: ast.AST, guarded: bool = False) -> list[tuple[ast.AST, bool]]:
+    """Every node below ``node``, each with the answer whether an if stands over it."""
+    found: list[tuple[ast.AST, bool]] = []
+    for child in ast.iter_child_nodes(node):
+        below = guarded or isinstance(node, ast.If)
+        found.append((child, below))
+        found.extend(_walk_with_conditions(child, below))
+    return found
+
+
+def test_the_registration_reader_fires_on_a_staged_sample() -> None:
+    # The self test of the gate below. Without it a reader whose body was
+    # deleted would report zero findings over zero lines and look healthy, and
+    # the gate would be green on the day the registrations disappear.
+    staged = dedent(
+        """
+        def open_index(path, constituents):
+            index = Index(build_schema(), path=str(path))
+            index.register_tokenizer(TOKENIZER_DE, cached_german_analyzer(digest, constituents))
+            if "es" in settings().languages:
+                index.register_tokenizer(TOKENIZER_ES, snowball_analyzer("spanish"))
+            # index.register_tokenizer(TOKENIZER_IT, snowball_analyzer("italian"))
+            return index
+        """
+    )
+    free, conditional = registrations_of_open_index(staged, "staged.py")
+
+    # One free call, one behind the condition, and the one that only stands in a
+    # comment is in neither list, which is what reading the tree buys.
+    assert len(free) == 1, free
+    assert len(conditional) == 1, conditional
+
+    empty = registrations_of_open_index(
+        dedent(
+            """
+            def open_index(path, constituents):
+                return None
+            """
+        ),
+        "staged.py",
+    )
+    assert empty == ([], []), empty
+
+    elsewhere = registrations_of_open_index(
+        dedent(
+            """
+            def open_reader(index):
+                index.register_tokenizer("de", chain())
+                return index
+            """
+        ),
+        "staged.py",
+    )
+    assert elsewhere == ([], []), elsewhere
+
+
+def test_open_index_registers_eight_chains_and_hangs_none_of_them_on_a_condition() -> None:
+    free, conditional = registrations_of_open_index(OPENING_SOURCE.read_text(encoding="utf-8"))
+
+    assert conditional == [], (
+        "a chain that is registered behind a condition makes writer.add_document raise on every "
+        "installation the condition is false on: " + ", ".join(f"{OPENING_MODULE}:{line}" for line in conditional)
+    )
+    assert len(free) == EXPECTED_REGISTRATIONS, free
+    # And the six of them that belong to a body field are exactly the six codes
+    # the schema carries, so the count above cannot be met by registering one
+    # chain twice and leaving a field without one.
+    assert len(BODY_FIELD) + 2 == EXPECTED_REGISTRATIONS
+
+
+def test_a_write_goes_through_when_only_german_is_switched_on(monkeypatch: pytest.MonkeyPatch, index_dir: Path) -> None:
+    # The measured failure of pitfall 2, held as a statement about behaviour and
+    # not about source text: FINDLING_LANGUAGES=de is the narrowest set an
+    # installation can run, the schema still carries all six body fields, and a
+    # document has to go in and come back out all the same.
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de")
+    settings.cache_clear()
+    try:
+        assert settings().languages == ("de",)
+        index = open_index(index_dir, CONSTITUENTS)
+
+        _write(index)
+
+        searcher = index.searcher()
+        assert searcher.num_docs == 1
+        address = searcher.search(index.parse_query("frist", [FIELD_BODY_DE]), 10).hits[0][1]
+        assert searcher.doc(address).get_first(FIELD_BODY_DE) == "Die Kündigungsfrist beträgt drei Monate."
+    finally:
+        settings.cache_clear()
+
+
+def test_the_chain_of_a_language_nobody_switched_on_still_answers(
+    monkeypatch: pytest.MonkeyPatch, index_dir: Path
+) -> None:
+    # The other half of the same promise. Registration does not follow the
+    # language set, so a Spanish document written under FINDLING_LANGUAGES=de
+    # is tokenised by the Spanish chain and not by a default the schema never
+    # named. Whether anything writes that field is the filling question, and the
+    # filling question belongs to the writer and not to this module.
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de")
+    settings.cache_clear()
+    try:
+        index = open_index(index_dir, CONSTITUENTS)
+        writer = index.writer(heap_size=15_000_000, num_threads=1)
+        document = Document()
+        document.add_unsigned(FIELD_FILE_ID, 1)
+        document.add_text(FIELD_BODY_ES, "El plazo de preaviso es de tres meses.")
+        writer.add_document(document)
+        writer.commit()
+        writer.wait_merging_threads()
+        index.reload()
+
+        # "de" is a Spanish stop word and is dropped, the rest is stemmed.
+        assert _hits(index, "preaviso", [FIELD_BODY_ES]) == 1
+        assert _hits(index, "de", [FIELD_BODY_ES]) == 0
+    finally:
+        settings.cache_clear()
 
 
 # -- the marks after a rebuild (DI-04-04) ------------------------------------
