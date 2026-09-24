@@ -14,12 +14,16 @@ That is the only way to get a refusal without a full disk.
 from __future__ import annotations
 
 import ast
+import gc
+import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
 from tantivy import Document, Index, Query
 
+from conftest import Corpus
+from findling.api import resources
 from findling.config import settings
 from findling.index.open import open_index, open_reader
 from findling.index.rebuild import (
@@ -29,7 +33,10 @@ from findling.index.rebuild import (
     _document_from,
     _resume_cursor,
     counts_match,
+    discard_directory,
     may_rebuild,
+    retire_directory,
+    swap_in,
     transfer_documents,
 )
 from findling.index.schema import (
@@ -420,3 +427,146 @@ def test_the_rebuild_keeps_no_progress_of_its_own_in_the_state_database() -> Non
     ]
 
     assert imported == [("findling.store.repo", "index_bytes")]
+
+
+# -- the swap, and the reason its order is its whole content -------------------
+#
+# None of the cases below carries a skipif, and that is deliberate. The mistake
+# they are about, a rename with a handle still open, is loud on Windows
+# (PermissionError, WinError 5, measured on 2026-09-24) and silent on Linux,
+# where POSIX renames over inodes and the reading side goes on answering out of
+# a directory that has no name any more. A case that is skipped on the
+# development machine throws away the only system that makes the mistake fail.
+
+
+def _documents_in(path: Path) -> int:
+    """How many documents the directory at ``path`` answers with, right now."""
+    index = open_index(path, CONSTITUENTS)
+    index.reload()
+    return index.searcher().num_docs
+
+
+def _documents_the_search_sees() -> int:
+    """The same question, asked through the cached read side of the container.
+
+    The handle stays in the module cache of :mod:`findling.api.resources` and
+    deliberately not in a local of the caller: what the swap has to survive is
+    the process cache, and a local reference in a test would be a handle the
+    running container never has.
+    """
+    side = resources.read_side()
+    assert side is not None
+    side.index.reload()
+    return side.index.searcher().num_docs
+
+
+def test_the_swap_puts_the_rebuilt_directory_where_the_live_one_stood(tmp_path: Path) -> None:
+    live = tmp_path / "index"
+    target = tmp_path / "index.rebuild"
+    source = open_index(live, CONSTITUENTS)
+    _stage(source, [_document(file_id) for file_id in range(1, 4)])
+    rebuilt = open_index(target, CONSTITUENTS)
+    _stage(rebuilt, [_document(file_id) for file_id in range(1, 9)])
+    # Every handle on both directories goes first, which is step 1 and step 2 of
+    # the order in the module header.
+    del source, rebuilt
+    gc.collect()
+
+    swap_in(target, live)
+
+    assert live.is_dir()
+    assert not target.exists()
+    assert not (tmp_path / "index.retired").exists()
+    assert _documents_in(live) == 8
+
+
+def test_after_the_swap_the_container_answers_out_of_the_new_directory(indexed_volume: Corpus) -> None:
+    """The truth of this plan, asked of the read side rather than of the disk.
+
+    On Linux the rename alone would leave this assertion at the old figure and
+    nothing would say so; that is what the reset in front of it is for.
+    """
+    live = indexed_volume.root / "index"
+    target = indexed_volume.root / "index.rebuild"
+    before = _documents_the_search_sees()
+    assert before == indexed_volume.documents
+
+    rebuilt = open_index(target, CONSTITUENTS)
+    _stage(rebuilt, [_document(file_id) for file_id in range(1, before + 4)])
+    del rebuilt
+    gc.collect()
+
+    resources.reset_read_side()
+    gc.collect()
+    swap_in(target, live)
+
+    assert _documents_the_search_sees() == before + 3
+
+
+def test_a_searcher_that_was_not_let_go_is_the_mistake_this_order_prevents(tmp_path: Path) -> None:
+    """Defined on both systems, skipped on neither, and different on each.
+
+    Windows refuses and the mistake is a stack trace. Linux accepts and the
+    mistake is a container that answers out of a directory without a name, so
+    there the case asserts the silence itself. Those are the two halves of one
+    statement, and a skipif would keep whichever half the machine of the day
+    happens to be worse at proving.
+    """
+    live = tmp_path / "index"
+    target = tmp_path / "index.rebuild"
+    source = open_index(live, CONSTITUENTS)
+    _stage(source, [_document(file_id) for file_id in range(1, 4)])
+    source.reload()
+    held = source.searcher()
+    assert held.num_docs == 3
+    rebuilt = open_index(target, CONSTITUENTS)
+    _stage(rebuilt, [_document(file_id) for file_id in range(1, 9)])
+    del rebuilt
+    gc.collect()
+
+    if sys.platform == "win32":
+        with pytest.raises(PermissionError):
+            swap_in(target, live)
+        assert live.is_dir(), "nothing moved, so the container still answers out of the directory it knows"
+        assert target.is_dir()
+    else:
+        swap_in(target, live)
+        assert held.num_docs == 3, "the retired directory answers on, and no line anywhere says so"
+        assert _documents_in(live) == 8
+
+
+def test_the_retired_name_is_derived_from_the_live_one_and_stays_beside_it(tmp_path: Path) -> None:
+    """T-18-07-04: the path that gets removed is never handed in from outside."""
+    live = tmp_path / "index"
+    live.mkdir()
+    (live / "meta.json").write_text("{}", encoding="utf-8")
+
+    retired = retire_directory(live)
+
+    assert retired.parent == live.parent
+    assert retired.name == "index.retired"
+    assert not live.exists()
+    assert (retired / "meta.json").is_file()
+
+
+def test_a_retired_directory_that_will_not_go_is_a_finding(tmp_path: Path) -> None:
+    """ignore_errors is False: a leftover keeps the clean up path of the next start busy."""
+    with pytest.raises(FileNotFoundError):
+        discard_directory(tmp_path / "index.retired")
+
+
+def test_a_swap_that_fails_names_the_type_and_never_a_path(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """T-18-07-05: the error branch counts as a line of this module like any other."""
+    live = tmp_path / "index"
+    target = tmp_path / "index.rebuild"
+    target.mkdir()
+
+    with caplog.at_level("WARNING", logger="findling.index.rebuild"), pytest.raises(FileNotFoundError):
+        swap_in(target, live)
+
+    assert caplog.records
+    assert any("FileNotFoundError" in record.getMessage() for record in caplog.records)
+    assert not any(tmp_path.name in record.getMessage() for record in caplog.records)
