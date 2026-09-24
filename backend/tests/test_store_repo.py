@@ -36,6 +36,7 @@ from findling.store.repo import (
     _DEFAULT_META,
     EMBEDDING_MARK,
     LEGACY_LANGUAGES,
+    LEGACY_SCHEMA_STEPS,
     SCHEMA_VERSION,
     STATE_REASONS,
     STORE_SCHEMA_MARK,
@@ -45,6 +46,8 @@ from findling.store.repo import (
     Store,
     _index_format_matches,
     _languages_are_legacy,
+    _schema_is_legacy,
+    _SCHEMA_MARK,
     enable_wal,
     index_bytes,
     open_read_only,
@@ -389,6 +392,105 @@ def test_the_language_exception_falls_closed(store: Store) -> None:
     assert _languages_are_legacy("de,en", "de,en,es") is False
     assert _languages_are_legacy("", "de,en") is False
     assert set(LEGACY_LANGUAGES) == {"de", "en"}
+
+
+# -- the schema mark and its exception ----------------------------------------
+#
+# Plan 18-01 raised findling.config.SCHEMA_VERSION from 1 to 2 because the
+# tantivy schema grew four body fields. The mark in the meta table did not move
+# with it and must not: it names the layout of the directory on disk, and on an
+# installation that upgraded from 1.2.0 that directory still holds nine fields,
+# because Index.open reads the persisted schema back and build_schema() is never
+# called there. The mark becomes a 2 when the rebuild that makes it true has run
+# and the swap has happened (findling.index.rebuild.stamp_after_swap), and at no
+# earlier moment.
+#
+# Without the exception below the comparison calls that legitimate state a
+# drift. Every installation in the field then raises its generation on the first
+# start after the upgrade and re-reads every document it has, which is exactly
+# the reindex D-04 forbids and success criterion 1 of phase 18 denies. Measured
+# in the CI leg "Store upgrade 5" of deploy-harp run 35989391950 on 2026-09-24,
+# where it happened.
+
+
+def test_a_stock_schema_mark_of_one_is_no_drift_under_schema_two(store: Store) -> None:
+    # The case the whole upgrade path rests on. Nine fields on disk, thirteen in
+    # the code, and every field the query names stands in both generations, which
+    # tests/test_schema_generations.py proves as a set inclusion.
+    store.write_meta(_SCHEMA_MARK, "1")
+
+    assert store.version_mismatch({_SCHEMA_MARK: "2"}) == []
+
+
+def test_a_schema_mark_that_was_never_written_is_still_a_drift(store: Store) -> None:
+    # The seeded default is "unknown", and an index whose schema never named
+    # itself could be any schema. The exception covers one named generation and
+    # not the absence of one.
+    assert store.read_meta()[_SCHEMA_MARK] == UNKNOWN_VERSION
+
+    assert store.version_mismatch({_SCHEMA_MARK: "2"}) == [_SCHEMA_MARK]
+
+
+def test_the_schema_exception_falls_closed() -> None:
+    """The cases the exception stands or falls on, asked of the rule directly.
+
+    Same shape as the index format table and the language table above, and for
+    the same reason: the branch is one line inside a loop, and a rearranged loop
+    could keep every case above green while the rule stopped meaning anything.
+
+    The last two lines are the ones that make this a ratchet rather than a
+    licence. The step is a pair and not a comparison of numbers, so a schema 3
+    that drops a field does not inherit the excuse of schema 2: whoever raises
+    the mark again has to write the new pair down here and say in the same
+    commit why an index of the old layout can still answer every query this code
+    builds.
+    """
+    assert _schema_is_legacy("1", "2") is True
+    assert _schema_is_legacy(None, "2") is False
+    assert _schema_is_legacy("", "2") is False
+    assert _schema_is_legacy(UNKNOWN_VERSION, "2") is False
+    assert _schema_is_legacy("2", "1") is False
+    assert _schema_is_legacy("1", "3") is False
+    assert _schema_is_legacy("2", "3") is False
+    assert LEGACY_SCHEMA_STEPS == frozenset({("1", "2")})
+
+
+def test_the_other_marks_are_untouched_by_the_schema_exception(store: Store) -> None:
+    # The exception is bound to one key by name, exactly as the other three are.
+    store.write_meta("analyzer_version", "1")
+    store.write_meta("wordlist_hash", "1")
+
+    assert store.version_mismatch({"analyzer_version": "2"}) == ["analyzer_version"]
+    assert store.version_mismatch({"wordlist_hash": "2"}) == ["wordlist_hash"]
+
+
+def test_a_stock_1_2_0_meta_table_reports_no_drift_at_all(store: Store) -> None:
+    """The five marks and the missing sixth of a real 1.2.0 volume, in one ask.
+
+    The two exceptions this upgrade needs are the schema mark and the absent
+    language mark, and they are asked together here because that is how they
+    arrive. A case per rule can stay green while the combination is red, which
+    is what happened in the CI leg named above.
+    """
+    store.write_meta(_SCHEMA_MARK, "1")
+    store.write_meta("analyzer_version", "4")
+    store.write_meta("wordlist_hash", "ein-digest")
+    store.write_meta("index_version", "1")
+    store.write_meta("tantivy_version", BANNER_0_26_0)
+    assert LANGUAGES_MARK not in store.read_meta()
+
+    diverging = store.version_mismatch(
+        {
+            _SCHEMA_MARK: "2",
+            "index_version": "1",
+            "analyzer_version": "4",
+            "wordlist_hash": "ein-digest",
+            "tantivy_version": BANNER_0_26_2,
+            LANGUAGES_MARK: "de,en",
+        }
+    )
+
+    assert diverging == []
 
 
 def test_record_writes_state_and_reason_and_stamps_the_verdict(store: Store) -> None:

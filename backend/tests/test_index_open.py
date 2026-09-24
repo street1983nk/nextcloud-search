@@ -19,12 +19,14 @@ has to handle; identifiers stay ASCII as the project rules require.
 """
 
 import ast
+import logging
 from pathlib import Path
 from textwrap import dedent
 
 import pytest
 from tantivy import Document, Filter, Index, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
+from conftest import open_schema_1_index
 from findling.config import INDEX_VERSION, SCHEMA_VERSION, SNOWBALL_NAME, settings
 from findling.index.analyzer import (
     ANALYZER_VERSION,
@@ -900,3 +902,121 @@ def test_seeding_still_never_overwrites_a_mark_that_is_there(tmp_path: Path) -> 
 
     assert second.read_meta()["wordlist_hash"] == "older-digest"
     second.close()
+
+
+# -- the whole arrival of a stock installation of 1.2.0 -----------------------
+#
+# The four cases of plan 18-05 ask Store.version_mismatch about one mark at a
+# time. That is the right question for the rule and the wrong one for the
+# upgrade: an installation does not arrive carrying one mark, it arrives
+# carrying a directory of nine fields, a meta table of five marks and no sixth
+# one, and what decides whether the field gets a reindex is what
+# start_rebuild_on_drift makes of all of that at once.
+#
+# The CI leg "Store upgrade 5" asks exactly that of a real volume, and on
+# 2026-09-24 it answered with a raised generation, a reindex banner and the
+# drift line in the container log, while every unit case in this tree stayed
+# green (deploy-harp run 35989391950, leg stable34 on ubuntu-24.04). A promise
+# that only holds in a workflow nobody runs between releases is not held. This
+# block is that leg, small enough to run in the suite.
+
+# The engine banner of 1.2.0: one patch number behind what this build reports
+# and the same index format half, which owner decision E-17-7 option a calls no
+# drift. It stands here rather than the current banner because a stock volume
+# really carries the old one and this case is about the whole arrival, not about
+# one loosened comparison.
+BANNER_1_2_0 = "tantivy v0.26.0, index_format v7"
+
+# The tantivy schema mark that every release up to and including 1.2.0 wrote.
+SCHEMA_MARK_1_2_0 = "1"
+
+
+def _stock_volume_of_1_2_0(tmp_path: Path) -> tuple[Path, Store]:
+    """The volume of an installation that upgraded from 1.2.0 and changed nothing.
+
+    Three facts, each of them read off the CI probe of the failing run rather
+    than invented. The index directory carries the nine field schema, because
+    ``Index.open`` reads the persisted schema back and ``build_schema()`` is
+    never called on a volume that already has one. The meta table carries the
+    five marks of 1.2.0. And the sixth mark is not in it at all, because no
+    release ever wrote it and the seed is forbidden to.
+
+    Only two of the five marks are written out here, and that is deliberate:
+    those are the two the CI probe measured as really different across the
+    upgrade. The analyzer version and the word list digest were measured
+    unchanged, so they arrive through ``expected_versions`` instead of as
+    literals. A literal would make this case red on the day one of them moves,
+    which is a day the upgrade really does drift and a different test's business.
+    """
+    directory = tmp_path / "index"
+    open_schema_1_index(directory)
+
+    store = open_store(tmp_path / "state.db", meta=expected_versions(DIGEST, LANGUAGES))
+    store.write_meta("schema_version", SCHEMA_MARK_1_2_0)
+    store.write_meta("tantivy_version", BANNER_1_2_0)
+    return directory, store
+
+
+def test_a_stock_volume_of_1_2_0_arrives_without_a_rebuild(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Success criterion 1 of phase 18, asserted the way the CI leg asserts it.
+
+    An installation on the factory setting upgrades and nothing happens to it:
+    no mark diverges, no generation is raised, no line goes into the log. The
+    stored schema mark stays at 1 and that is not a defect but the truth about
+    the directory on disk; it becomes a 2 when the rebuild that makes it true
+    has run, and never before (findling.index.rebuild.stamp_after_swap).
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en")
+    settings.cache_clear()
+    try:
+        assert settings().languages == ("de", "en")
+        directory, store = _stock_volume_of_1_2_0(tmp_path)
+        expected = expected_versions(DIGEST, ",".join(settings().languages))
+        before = store.index_version
+
+        with caplog.at_level(logging.WARNING, logger="findling.index.open"):
+            index = open_index(directory, CONSTITUENTS)
+            _write(index)
+            raised = start_rebuild_on_drift(store, expected)
+
+        # The nine field directory takes a write under the eight chains this
+        # code registers and answers a query on it, so the volume this case
+        # talks about is a working one and not a broken one that drifts for a
+        # reason nobody named.
+        assert _hits(index, "frist") == 1
+        assert store.version_mismatch(expected) == []
+        assert raised is None
+        assert store.index_version == before
+        assert "built by different code" not in caplog.text
+        store.close()
+    finally:
+        settings.cache_clear()
+
+
+def test_the_same_volume_still_rebuilds_when_a_language_is_switched_on(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The counter case, on the very volume the case above says is quiet.
+
+    Case three of plan 18-05 through the whole path rather than through one
+    comparison: the same stock volume, the same schema mark of 1, and Spanish
+    switched on. The quiet of the case above is only worth having if this one
+    still speaks, so the two stand next to each other.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es")
+    settings.cache_clear()
+    try:
+        assert settings().languages == ("de", "en", "es")
+        _, store = _stock_volume_of_1_2_0(tmp_path)
+        expected = expected_versions(DIGEST, ",".join(settings().languages))
+        before = store.index_version
+
+        raised = start_rebuild_on_drift(store, expected)
+
+        assert store.version_mismatch(expected) == ["languages"]
+        assert raised == before + 1
+        store.close()
+    finally:
+        settings.cache_clear()
