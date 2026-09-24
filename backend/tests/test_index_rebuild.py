@@ -1102,11 +1102,27 @@ class _Hands:
 
 
 def _a_volume_that_asks_for_a_rebuild(volume: Path, documents: int = 5) -> Store:
-    """A live index, a word list and a state database whose schema mark is the old one.
+    """A live index, a word list and a state database with a drift a rebuild answers.
 
-    The mark is written after the seed rather than into it, because the seed only
-    fills what is missing: an installation that asks for a rebuild is one whose
-    database already carries a value, and it is the wrong one.
+    Two marks are written after the seed rather than into it, because the seed
+    only fills what is missing: an installation that asks for a rebuild is one
+    whose database already carries a value, and it is the wrong one.
+
+    The one that makes this volume ask is the language mark, and since
+    2026-09-24 it has to be, which is worth a sentence because it used to be the
+    schema mark alone. A stored schema generation of 1 against the expected 2 is
+    the state every installation upgrading from 1.2.0 is legitimately in, and
+    :func:`findling.store.repo._schema_is_legacy` stopped calling it a drift for
+    exactly that reason; a fixture that leaned on it would stage a volume no
+    rebuild is owed. The stored set here names Spanish and the container runs
+    the factory pair, which is case four of plan 18-05, the counter direction,
+    and a real reason to carry the documents over. It also leaves the disk
+    precheck where it was: no language is new, so
+    :func:`_new_language_count` answers 0 here as it did before.
+
+    The schema mark stays at 1 all the same. It is the truth about a directory
+    that was built before the four body fields existed, and the cases below read
+    it back to tell a stamped run from an unstamped one.
     """
     digest = write_wordlist(volume)
     source = open_index(volume / "index", CONSTITUENTS)
@@ -1115,6 +1131,7 @@ def _a_volume_that_asks_for_a_rebuild(volume: Path, documents: int = 5) -> Store
     gc.collect()
     store = open_store(volume / "state.db", meta=expected_versions(digest, ",".join(settings().languages)))
     store.write_meta(_SCHEMA_MARK, "1")
+    store.write_meta(LANGUAGES_MARK, "de,en,es")
     return store
 
 

@@ -99,6 +99,42 @@ _LANGUAGES_MARK: Final = "languages"
 # the exception below on the day somebody changes the default.
 LEGACY_LANGUAGES: Final = ("de", "en")
 
+# The mark that names the layout of the tantivy schema the index on disk was
+# built under. It is findling.config.SCHEMA_VERSION on the index side and a
+# literal here for the same reason index_version and tantivy_version are: this
+# module does not import the index side, and it does not import
+# findling.config at all (see the module docstring).
+_SCHEMA_MARK: Final = "schema_version"
+
+# The steps a schema mark may take without the index having to be rebuilt,
+# written as (stored, expected) pairs.
+#
+# Plan 18-01 raised the schema from nine fields to thirteen and the mark from 1
+# to 2. The mark in an existing meta table did not move with it and must not:
+# it names what lies in the directory, and on an installation that upgraded
+# from 1.2.0 that directory still holds nine fields, because Index.open reads
+# the persisted schema back and build_schema() is never called there. The mark
+# becomes a 2 when the rebuild that makes it true has run and the new directory
+# is in place (findling.index.rebuild.stamp_after_swap), and at no earlier
+# moment. So on every stock installation the stored 1 against the expected 2 is
+# the designed intermediate state rather than a divergence, and calling it one
+# sends the whole field into the reindex D-04 forbids. That is not a
+# hypothetical: it happened in the CI leg "Store upgrade 5" of deploy-harp run
+# 35989391950 on 2026-09-24, which is where this constant comes from.
+#
+# What makes the step safe is a set inclusion and not an opinion: every field
+# the query builder names stands in both generations, which
+# backend/tests/test_schema_generations.py holds as
+# set(DEFAULT_FIELDS) <= set(FIELDS_SCHEMA_1). An index of the old layout can
+# therefore answer every query this code builds.
+#
+# Pairs and not a comparison of numbers, and that is the whole ratchet. A
+# schema 3 that drops a field would inherit nothing from this line: whoever
+# raises the mark again has to write the new pair down here and say in the same
+# commit why the older layout still answers. A rule of the shape
+# int(stored) < int(expected) would excuse that raise silently.
+LEGACY_SCHEMA_STEPS: Final = frozenset({("1", "2")})
+
 # Where the redelivery of the vector stock has got to, or an empty value when no
 # redelivery is running.
 #
@@ -698,6 +734,16 @@ class Store:
         and ``backend/tests/test_language_analyzers.py`` (owner decision E-17-7
         option a of 2026-09-23).
 
+        ``schema_version`` and ``languages`` are the two remaining marks that
+        are not equalities, and both of them are exceptions about the past
+        rather than loosened comparisons. A stored schema generation this code
+        can still query is no drift, and neither is a language mark that was
+        never written while the expectation stays inside what any release could
+        have built. The two rules and the reasons they are provable stand at
+        :func:`_schema_is_legacy` and :func:`_languages_are_legacy`; both fall
+        closed, and both stop applying the moment a rebuild has written a real
+        value.
+
         Since phase 6 the answer can also contain a mark that says nothing about
         the tantivy index at all. ``embedding_version`` diverging means the
         stored vectors were computed by another model, another quantisation or
@@ -716,6 +762,8 @@ class Store:
             if key == "index_version" and _generation_at_least(current, value):
                 continue
             if key == "tantivy_version" and _index_format_matches(current, value):
+                continue
+            if key == _SCHEMA_MARK and _schema_is_legacy(current, value):
                 continue
             if key == _LANGUAGES_MARK and _languages_are_legacy(current, value):
                 continue
@@ -1378,6 +1426,40 @@ def _index_format_matches(stored: str | None, expected: str) -> bool:
     if here < 0 or there < 0:
         return False
     return stored[here:] == expected[there:]
+
+
+def _schema_is_legacy(stored: str | None, expected: str) -> bool:
+    """True when the stored schema generation is one this code can still query.
+
+    The third mark that is not an equality, and the one that decides whether an
+    upgrade costs the field a reindex. ``findling.config.SCHEMA_VERSION`` names
+    the layout ``build_schema()`` produces today, while this mark names the
+    layout that lies in the directory, and on an installation that upgraded
+    those two are legitimately different: ``Index.open`` reads the persisted
+    schema back, so a volume that already has an index never sees the new one
+    until a rebuild has written it. Reading that state as a divergence raises
+    the generation on every installation in the field and orders the full crawl
+    that D-04 forbids, which is what the CI leg "Store upgrade 5" of deploy-harp
+    run 35989391950 recorded on 2026-09-24.
+
+    The excuse is provable rather than convenient, exactly as the language one
+    below is. Every field the query builder names stands in both generations, a
+    set inclusion that ``backend/tests/test_schema_generations.py`` holds as
+    ``set(DEFAULT_FIELDS) <= set(FIELDS_SCHEMA_1)``, so an index of the old
+    layout answers every query this code can build. What the old layout does
+    lack are the four body fields of the v1.3 languages, and those are empty
+    until a language outside ``LEGACY_LANGUAGES`` is switched on, which is a
+    drift of the language mark and starts the rebuild on its own.
+
+    It falls closed in both directions that matter. A mark that was never
+    written, or written as ``UNKNOWN_VERSION``, is no generation and gets no
+    excuse: an index whose schema never named itself could be any schema. And
+    the rule is a table of pairs rather than a comparison of numbers, so no
+    future raise inherits it; see :data:`LEGACY_SCHEMA_STEPS`.
+    """
+    if stored is None:
+        return False
+    return (stored, expected) in LEGACY_SCHEMA_STEPS
 
 
 def _languages_are_legacy(stored: str | None, expected: str) -> bool:

@@ -794,8 +794,20 @@ PHP_TREE_HASH_TODAY = "15e00b2b37e003ff98b0cc3ca87affdea215eb160c1671153f9e616bf
 # never raises. index/rebuild.py got rebuild_blocked_bytes(), the shortfall the
 # precheck refused on, published the way the progress is. No file came and none
 # went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a twenty seventh time, by the diagnosis of the CI leg
+# "Store upgrade 5" (deploy-harp run 35989391950): one of the 56 files changed
+# its bytes and the count stays at 56. store/repo.py got _SCHEMA_MARK and
+# LEGACY_SCHEMA_STEPS, the fourth named exception _schema_is_legacy beside
+# _generation_at_least, _index_format_matches and _languages_are_legacy, and the
+# one line in version_mismatch that reads it. What it buys is success criterion
+# 1 of this phase: a stored schema generation of 1 against the expected 2 is the
+# state every installation upgrading from 1.2.0 is legitimately in, because
+# Index.open reads the persisted schema back and the mark is only stamped after
+# a rebuild, so calling it a drift raised the generation and the reindex banner
+# on every volume in the field. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "657ab15620295e9716a7998efe213907fb1431ded81caf04e8fa8763b2519cce"
+PACKAGE_TREE_HASH_TODAY = "6063f7ca3a5605cdd26628bf61684ef81139effa3b1e0f70e68512bb20c12549"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

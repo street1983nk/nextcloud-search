@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 
 from findling.api import resources
 from findling.config import settings
+from findling.index.open import LANGUAGES_MARK
 from findling.index.rebuild import REBUILD_THROUGH
 from findling.main import (
     APP,
@@ -509,10 +510,20 @@ def _install_the_three_tasks(monkeypatch: pytest.MonkeyPatch, rebuild: _FakeRebu
     return poller
 
 
-def _mark_the_index_as_built_by_older_code(volume: Path) -> None:
-    """Move the schema mark back, which is the drift a rebuild answers."""
+def _mark_the_index_as_built_for_another_language_set(volume: Path) -> None:
+    """Store a language set the container does not run, which is the drift a rebuild answers.
+
+    It used to move the schema mark back instead, and that stopped being a drift
+    on 2026-09-24: a stored schema generation of 1 against the expected 2 is the
+    state every installation upgrading from 1.2.0 is in, and calling it a drift
+    sent the whole field into a reindex nobody ordered
+    (:func:`findling.store.repo._schema_is_legacy`, deploy-harp run
+    35989391950). The language mark is the drift this phase is about, and the
+    stored value here names a language the container has switched off, which is
+    case four of plan 18-05.
+    """
     store = open_store(volume / "state.db")
-    store.write_meta("schema_version", "1")
+    store.write_meta(LANGUAGES_MARK, "de,en,es")
     store.close()
 
 
@@ -540,11 +551,11 @@ def test_the_rebuild_task_is_not_created_when_the_marks_agree(
 def test_the_rebuild_task_is_created_when_the_marks_ask_for_it(
     indexed_volume: object, volume: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The other half: a stored schema mark of the release before this one."""
+    """The other half: a stored language set that is not the one this container runs."""
     del indexed_volume
     fake = _FakeRebuildTask()
     _install_the_three_tasks(monkeypatch, fake)
-    _mark_the_index_as_built_by_older_code(volume)
+    _mark_the_index_as_built_for_another_language_set(volume)
     settings().armed_marker.write_text("", encoding="utf-8")
 
     with TestClient(APP):
@@ -565,7 +576,7 @@ def test_the_rebuild_task_stays_away_from_a_container_that_was_never_enabled(
     del indexed_volume
     fake = _FakeRebuildTask()
     _install_the_three_tasks(monkeypatch, fake)
-    _mark_the_index_as_built_by_older_code(volume)
+    _mark_the_index_as_built_for_another_language_set(volume)
 
     with TestClient(APP):
         pass
@@ -586,7 +597,7 @@ def test_the_rebuild_task_ends_with_the_lifespan_and_inside_its_budget(
     del indexed_volume
     fake = _FakeRebuildTask()
     _install_the_three_tasks(monkeypatch, fake)
-    _mark_the_index_as_built_by_older_code(volume)
+    _mark_the_index_as_built_for_another_language_set(volume)
     settings().armed_marker.write_text("", encoding="utf-8")
 
     started = time.monotonic()

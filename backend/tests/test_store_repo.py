@@ -34,6 +34,7 @@ from findling.store.repo import (
     _ACL_DOCUMENTS_SQL,
     _ACL_ROWS_SQL,
     _DEFAULT_META,
+    _SCHEMA_MARK,
     EMBEDDING_MARK,
     LEGACY_LANGUAGES,
     LEGACY_SCHEMA_STEPS,
@@ -47,7 +48,6 @@ from findling.store.repo import (
     _index_format_matches,
     _languages_are_legacy,
     _schema_is_legacy,
-    _SCHEMA_MARK,
     enable_wal,
     index_bytes,
     open_read_only,
@@ -452,7 +452,7 @@ def test_the_schema_exception_falls_closed() -> None:
     assert _schema_is_legacy("2", "1") is False
     assert _schema_is_legacy("1", "3") is False
     assert _schema_is_legacy("2", "3") is False
-    assert LEGACY_SCHEMA_STEPS == frozenset({("1", "2")})
+    assert set(LEGACY_SCHEMA_STEPS) == {("1", "2")}
 
 
 def test_the_other_marks_are_untouched_by_the_schema_exception(store: Store) -> None:
