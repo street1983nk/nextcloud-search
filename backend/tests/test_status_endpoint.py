@@ -872,8 +872,10 @@ class _CountingSearcher:
 
     The probe behind ``languagesFilled`` walks the whole term dictionary of a
     field, and the only thing a test can see of that cost is how often it
-    happened. So the count is the assertion: a cache that works asks the field
-    dictionary six times and not twelve.
+    happened. So the count is the assertion, twice over: a cache that works asks
+    the dictionary once per window and not once per poll, and since audit
+    finding M-18-08 the number of fields in one round is the active set and not
+    all six.
     """
 
     def __init__(self, real: Any) -> None:
@@ -940,18 +942,87 @@ def test_the_filled_languages_name_the_chains_that_really_carry_terms(
     client: TestClient,
     sign: Sign,
     indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # The other half of the diagnosis, and the only one that comes out of the
-    # index itself. The fixture fills body_de, this adds body_es, and the four
-    # remaining chains exist in the schema and hold nothing: a page that read
-    # the mark alone would name six languages over a directory that answers in
-    # two.
+    # index itself. The fixture fills body_de, this adds body_es, and the two
+    # remaining chains of the set exist in the schema and hold nothing: a page
+    # that read the mark alone would name four languages over a directory that
+    # answers in two.
+    #
+    # The set has to name Spanish since audit finding M-18-08, because the probe
+    # asks the chains this container runs and never all six: a chain nobody
+    # switched on is not filled and is not going to be, and asking it cost a
+    # full walk over the term dictionary of the index every thirty seconds.
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es,it")
+    settings.cache_clear()
     _index_with_a_second_chain(indexed_volume.root, "es")
     resources.reset_read_side()
 
     answer = _status(client, sign("admin"))
 
     assert answer["languagesFilled"] == "de,es"
+
+
+def test_a_chain_that_is_switched_off_is_not_probed_at_all(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Audit finding M-18-08. The probe walks the whole term dictionary of every
+    # field it asks, so on the 560 MB directory the projection of this project
+    # gives for 100000 files, six walks every thirty seconds on a 4 GB box is a
+    # cost that grows with the index and buys nothing: the answer for a chain
+    # that is switched off is known without asking.
+    #
+    # German is asked whatever the set says, because body_de is the one stored
+    # copy of the text and therefore the one chain whose emptiness says
+    # something about the directory rather than about the configuration.
+    monkeypatch.setenv("FINDLING_LANGUAGES", "en")
+    settings.cache_clear()
+    real = resources.read_side()
+    assert real is not None
+    counting = _CountingIndex(real.index)
+    staged = ReadSide(index=cast(Index, counting), store=real.store, index_dir=real.index_dir, vectors=real.vectors)
+    monkeypatch.setattr(resources, "read_side", lambda: staged)
+
+    assert resources.filled_languages() == ("de",)
+    assert counting.searcher_of_record.calls == 2, "German and the one switched on chain, and no other"
+
+
+def test_one_chain_that_cannot_be_probed_does_not_take_the_other_five_with_it(
+    indexed_volume: Corpus,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Audit finding M-18-01, and it is the normal state of every installation
+    # coming from 1.2.0 rather than a corner: an index of the old generation has
+    # nine fields, terms_with_prefix raises for body_es, and the whole probe sat
+    # in one try. The answer was then an empty list for all six, so the admin
+    # page wrote that no chain carries text while the German one was full of it,
+    # on exactly the installation this line was written for.
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,es")
+    settings.cache_clear()
+    real = resources.read_side()
+    assert real is not None
+
+    class _AChainThatIsNotInThisDirectory:
+        def terms_with_prefix(self, field: str, prefix: str, limit: int | None = None) -> list[Any]:
+            if field == BODY_FIELD["es"]:
+                raise ValueError("Field does not exist: body_es")
+            return real.index.searcher().terms_with_prefix(field, prefix, limit=limit)
+
+    class _AnIndexOfTheOldGeneration:
+        def searcher(self) -> _AChainThatIsNotInThisDirectory:
+            return _AChainThatIsNotInThisDirectory()
+
+    staged = ReadSide(
+        index=cast(Index, _AnIndexOfTheOldGeneration()),
+        store=real.store,
+        index_dir=real.index_dir,
+        vectors=real.vectors,
+    )
+    monkeypatch.setattr(resources, "read_side", lambda: staged)
+
+    assert resources.filled_languages() == ("de",), "the chain that answered is reported, the one that raised is not"
 
 
 def test_the_fill_probe_runs_once_within_its_window_and_again_after_a_swap(
@@ -972,18 +1043,23 @@ def test_the_fill_probe_runs_once_within_its_window_and_again_after_a_swap(
     )
     monkeypatch.setattr(resources, "read_side", lambda: staged)
 
+    # The chains of one round: the active set plus German, which on the factory
+    # setting is de and en. Read out of the settings rather than written out, so
+    # that the case says what it is about, namely the second round and not the
+    # width of the first one.
+    per_round = len(set(settings().languages) | {"de"})
     first = resources.filled_languages()
     second = resources.filled_languages()
 
     assert first == second == ("de",)
-    assert counting.searcher_of_record.calls == len(BODY_FIELD), "the second poll measured the volume a second time"
+    assert counting.searcher_of_record.calls == per_round, "the second poll measured the volume a second time"
 
     # And the window is not a wall. The swap of a rebuild renames the directory
     # under the process, so the verdict of the old one has to go with it.
     resources.reset_read_side()
 
     assert resources.filled_languages() == ("de",)
-    assert counting.searcher_of_record.calls == 2 * len(BODY_FIELD)
+    assert counting.searcher_of_record.calls == 2 * per_round
 
 
 def test_the_rebuild_fields_report_the_run_of_this_process(

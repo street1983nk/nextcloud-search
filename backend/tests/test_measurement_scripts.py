@@ -846,8 +846,17 @@ PHP_TREE_HASH_TODAY = "15e00b2b37e003ff98b0cc3ca87affdea215eb160c1671153f9e616bf
 # way out of it from inside the container, and in state 5 the search would have
 # been fully able to answer. No file came and none went, so PACKAGE_FILES_TODAY
 # stays at 56.
+# Moved on 2026-09-24 a thirty first time, by the fix of the audit findings
+# M-18-01 and M-18-08: exactly one of the 56 files changed its bytes,
+# api/resources.py. filled_languages() asks one chain at a time in a try of its
+# own, so an index of the old generation that raises for body_es no longer
+# discards the measurement of all six and tells the admin page that no chain
+# carries text; and it asks only the chains of _chains_worth_probing(), the
+# active set plus German in schema order, because terms_with_prefix walks the
+# whole term dictionary of every field it is given. No file came and none went,
+# so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "853edc79d9639763ce5719274db89275e30e23645d94893f0abfd3b91cfec4f7"
+PACKAGE_TREE_HASH_TODAY = "65c6fe5a912b68ee8a24857b820570c6f31e23e506b3de9f0415e25f8558716e"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

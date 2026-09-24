@@ -479,15 +479,38 @@ def filled_languages() -> tuple[str, ...]:
     otherwise. That is the whole probe: not how many terms there are, only
     whether there is one.
 
-    **Why the reading is cached, and why the window is its own.** The probe
-    walks the entire term dictionary of a field by tantivy's own documentation
-    and the limit cuts only afterwards, six chains means six such walks, and the
-    administration page polls every few seconds while it is open. So the answer
-    is remembered for :data:`FILLED_TTL_SECONDS` under the directory it was
-    measured in, in the shape :func:`degraded` above uses and under the same
-    lock. The one event that really changes it, the directory swap of a rebuild,
-    clears the cache through :func:`reset_read_side` instead of waiting the
-    window out.
+    **Which chains are asked, and why not all six** (audit finding M-18-08). The
+    ones the settings switch on, plus German, and nothing else. The probe walks
+    the entire term dictionary of a field by tantivy's own documentation and the
+    limit cuts only afterwards, so every field asked is a full walk over the
+    dictionary of a directory that the projection of this project puts at 560 MB
+    for 100000 files. Six of those every thirty seconds on a 4 GB box, for an
+    instance that runs German alone, is a cost that grows with the index and
+    buys an answer nobody needs: a chain that is switched off is not filled and
+    is not going to be. German is in whatever the settings say, because
+    ``body_de`` is the one stored copy of the text and therefore the one chain
+    whose emptiness says something about the directory rather than about the
+    configuration.
+
+    **Why one try per chain and not one for all of them** (audit finding
+    M-18-01). The whole probe used to sit in a single generator inside a single
+    ``try``, so one field that raised discarded the measurement of all six. That
+    is not a corner: an index of the old generation has nine fields and no
+    ``body_es`` at all, ``terms_with_prefix`` raises on it, and the answer was
+    an empty tuple for every chain, on exactly the installation this line was
+    written for. The administration page then wrote that not a single chain
+    carries text while the German one was full of it. Per chain, a failure costs
+    that chain and nothing else, and it is a debug line rather than a warning
+    because a missing field on an index of the old generation is the expected
+    state and not a fault.
+
+    **Why the reading is cached, and why the window is its own.** The walks
+    above, and an administration page that polls every few seconds while it is
+    open. So the answer is remembered for :data:`FILLED_TTL_SECONDS` under the
+    directory it was measured in, in the shape :func:`degraded` above uses and
+    under the same lock. The one event that really changes it, the directory
+    swap of a rebuild, clears the cache through :func:`reset_read_side` instead
+    of waiting the window out.
 
     Answers an empty tuple for a container that has no index yet and for one
     whose index cannot be read: both are states in which no chain carries
@@ -506,18 +529,37 @@ def filled_languages() -> tuple[str, ...]:
             return cached[2]
         try:
             searcher = side.index.searcher()
-            filled = tuple(code for code, field in BODY_FIELD.items() if searcher.terms_with_prefix(field, "", limit=1))
         # Deliberately every exception, for the reason read_side() states: this
         # value reaches an administration page, and a page that answers 500
         # because one of its lines could not be measured tells an admin less
-        # than a page that leaves that line empty. A directory of the old schema
-        # has no chain beyond the first two at all, and asking it for one is the
-        # realistic shape of this failure.
+        # than a page that leaves that line empty.
         except Exception as error:
             LOGGER.warning("the fill level of the body chains could not be read, an %s", type(error).__name__)
             return ()
-        _FILLED = (side.index_dir, now, filled)
-        return filled
+        filled: list[str] = []
+        for code in _chains_worth_probing():
+            try:
+                if searcher.terms_with_prefix(BODY_FIELD[code], "", limit=1):
+                    filled.append(code)
+            # One chain, one answer. A directory of the old generation has no
+            # field beyond the first two, and asking it for one is the realistic
+            # shape of this failure rather than a fault worth a warning.
+            except Exception as error:
+                LOGGER.debug("the chain %s could not be probed, an %s", code, type(error).__name__)
+        _FILLED = (side.index_dir, now, tuple(filled))
+        return _FILLED[2]
+
+
+def _chains_worth_probing() -> tuple[str, ...]:
+    """The body chains :func:`filled_languages` asks about, in schema order.
+
+    The active set plus German, and the order is the one of ``BODY_FIELD`` and
+    never the one of the settings: the list travels to an administration page
+    beside the active set, which is ordered the same way, and two lists of the
+    same codes in two different orders read like a disagreement.
+    """
+    active = set(settings().languages) | {"de"}
+    return tuple(code for code in BODY_FIELD if code in active)
 
 
 def report_version_drift() -> None:
