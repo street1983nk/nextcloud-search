@@ -444,7 +444,10 @@ def test_this_guard_does_not_trip_over_its_own_prose() -> None:
 
     naive = sum(own.count(name) for name in (*FORBIDDEN_PACKAGES, CONFIGURATION))
 
-    assert naive >= 20, f"this file has to name the forbidden words often enough to be a real test: {naive}"
+    # Measured at 20 on 2026-09-24. The bound stays well under that: a ratchet
+    # sitting exactly on its own measurement turns red the next time somebody
+    # shortens a paragraph, which is not what this case is about.
+    assert naive >= 15, f"this file has to name the forbidden words often enough to be a real test: {naive}"
     assert sum(code_mentions(own, name) for name in (*FORBIDDEN_PACKAGES, CONFIGURATION)) == 0, (
         "the guard spells out what may not exist, and every one of those mentions is prose, a comment or a "
         f"string literal; a naive reader counts {naive} of them"
