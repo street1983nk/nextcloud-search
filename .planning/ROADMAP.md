@@ -118,7 +118,18 @@ Plans:
   2. Auf einer Instanz mit `de,en` aendert sich weder Trefferliste noch Reihenfolge: die Anfrage durchsucht ausschliesslich die aktiven und befuellten Felder, weil die Feldliste am `schema_version`-Merker haengt statt an einer Konstante.
   3. Ein Treffer in mehreren Sprachfeldern draengt sich nicht vor einen besseren englischen Treffer: die Boosts der vier neuen Felder liegen unterhalb `body_en`, belegt an einer Rangprobe.
   4. Es gibt keinen Spracherkennungspfad, weder dokument- noch anfrageseitig; ein Test haelt das Anti-Feature fest.
-**Plans**: TBD
+**Plans**: 9 Plaene in 6 Wellen
+
+Plans:
+- [ ] 19-01-PLAN.md: FieldPlan als Wert, plan-Parameter, AST-Waechter der Phasengrenze ersetzt
+- [ ] 19-02-PLAN.md: it-Fixture waechst, Messung neu gefahren, Zaehlgate und Klassifizierung nachgezogen
+- [ ] 19-03-PLAN.md: Feldplan aus den zwei Marken, ReadSide.field_plan, drei Aufrufstellen
+- [ ] 19-04-PLAN.md: Rangprobe, Boosts unterhalb body_en mit Gegenprobe und gemessener Grenze
+- [ ] 19-05-PLAN.md: Anti-Feature-Waechter, keine Spracherkennung, vier Aussagen mit Gegenproben
+- [ ] 19-06-PLAN.md: Die vier Sprachfaelle auf dem normalen Suchweg, dritter Ketten-Ausschluss
+- [ ] 19-07-PLAN.md: Ungegateter CI-Sprachbeweis auf allen vier Aesten, plus Ergebnisseite
+- [ ] 19-08-PLAN.md: Spanischer Vorher-Nachher-Beweis in der Upgrade-Strecke, eigener Snapshotschluessel
+- [ ] 19-09-PLAN.md: Doku der Frageseite und ihrer Grenzen, CI-Lauf eingeholt, Laufzeit eingetragen
 
 ### Phase 20: UI-Kataloge es/it/nl/pt
 **Goal**: Findling spricht in der Oberflaeche Spanisch, Italienisch, Niederlaendisch und Portugiesisch im Gleichstand mit EN/DE/FR.
@@ -179,7 +190,7 @@ Plans:
 | 12-16 (Archiv) | v1.2 | 63/63 | Complete | 2026-09-21 |
 | 17. Owner-Tor und Analyseketten | v1.3 | 8/8 | Complete   | 2026-09-23 |
 | 18. Schema, Marken und Umbauweg | v1.3 | 12/12 | Complete   | 2026-09-24 |
-| 19. Frageseite freischalten | v1.3 | 0/TBD | Not started | - |
+| 19. Frageseite freischalten | v1.3 | 0/9 | Planned | - |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 0/TBD | Not started | - |
 | 21. Niederlaendische Komposita | v1.3 | 0/TBD | Not started | - |
 | 22. Messanfahrt BL-F03 | v1.3 | 0/TBD | Not started | - |
