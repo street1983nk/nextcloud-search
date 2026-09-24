@@ -3612,6 +3612,13 @@ jobs:
       # byte of the vector stock is written again.
       - name: Store upgrade 6, the rebuild a changed language set orders
         if: matrix.server-version == 'stable34' && matrix.runner == 'ubuntu-24.04' && env.RELEASE_TAG == ''
+        env:
+          # GitHub evaluates a run scalar as one template as soon as it holds a
+          # single expression, and caps that template at 21000 characters. This
+          # block is longer, so the two matrix values arrive as plain
+          # environment variables and the run text stays expression free.
+          MATRIX_SERVER_VERSION: ${{ matrix.server-version }}
+          MATRIX_RUNNER: ${{ matrix.runner }}
         run: |
           . "${RUNNER_TEMP}/upgrade-probe.sh"
 
@@ -4076,7 +4083,7 @@ jobs:
           echo "all nine assurances hold"
           {
             echo ""
-            echo "### Rebuild on the upgraded installation (${{ matrix.server-version }}, ${{ matrix.runner }})"
+            echo "### Rebuild on the upgraded installation (${MATRIX_SERVER_VERSION}, ${MATRIX_RUNNER})"
             echo ""
             echo "- \`FINDLING_LANGUAGES=${REBUILD_LANGUAGES}\` was set on the container of the upgraded instance and the container was created again on the volume \`${UPGRADE_VOLUME}\`, without a second registration"
             echo "- the schema mark moved by exactly one step, the languages mark reads \`${REBUILD_LANGUAGES_NORMALISED}\`"
