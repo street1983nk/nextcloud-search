@@ -245,3 +245,41 @@ Volllauf noetig. Runbook-Disziplin gilt: Rechenblatt + Deckel VOR dem Start
 zur Owner-Freigabe, Cron-Intervall-Gate, Digest-Wechsel, Rohdaten committen.
 Dazu aus dem Messbericht Punkt 11: kein Werkzeug-Fix der v1.2-Anfahrt ist in
 seiner Wirkung nachgemessen; diese Anfahrt ist genau dafuer da.
+
+
+## BL-F04: Leistungsprofile mit Vorab-Pruefung (OCR-Power, Modellwahl, Test vor dem Speichern)
+
+**Ausloeser:** Reddit-Kommentar von ayhamoo am 24.09.2026 unter dem Findling-Post
+(Screenshot beim Owner, sinngemaess: OCR-Einstellungen fuer mehr Leistung, er hat
+Headroom; besseres Embeddings-Modell; die UI soll Aenderungen VOR dem Speichern
+testen). Zweiter Nachfrage-Beleg dieser Art nach den Sprachwuenschen (BL-F02).
+Owner-Steuerung 24.09.: viele Nutzer haben heute groessere Boxen als 4 GB,
+das beruecksichtigen und mehr Geschwindigkeit ermoeglichen.
+
+**Kern des Vorhabens (v1.4-Kandidat, NICHT v1.3):**
+
+1. **Leistungsprofile** statt Einzelschrauben: Sparsam (heutiger Default,
+   4-GB-Versprechen unveraendert) / Standard / Leistung (8-GB+-Boxen).
+   Ein Profil buendelt: INDEX_WORKERS, OCR-Seitendeckel/DPI/Timeout,
+   Tantivy-heap_size/num_threads, Embedding-Batchgroesse und -threads.
+   Vorbild: Abschnitt "Stack Patterns by Variant" in CLAUDE.md, dort steht
+   die 8-GB-Schablone schon.
+2. **Modellwahl** als Teil des Leistungsprofils: e5-small int8 (Default) vs.
+   fp32; groessere Modelle (z.B. jina-v2-base-de) nur nach RAM-Messung und
+   Lizenzpruefung. HARTE FOLGE: Modellwechsel = Vektor-Reindex (Dimension/
+   Quantisierung), Umbau-Mechanik aus Phase 18 (rebuild.py) hilft NICHT,
+   weil vectors.db betroffen ist, nicht der Tantivy-Index.
+3. **Vorab-Pruefung ("Test vor dem Speichern"):** Probelauf vor dem
+   Uebernehmen: Modell laedt, RAM-Schaetzung gegen die Box, eine Probeseite
+   OCR mit den neuen Werten, Verdikt in der UI. Passt zur Messkultur des
+   Projekts und faengt die 4-GB-Boxen ab, bevor sie sich totkonfigurieren.
+4. **Admin-UI**: erste echte Settings-Seite; bisher bewusst nur
+   environment-variables (Zero-Config). Zero-Config bleibt gewahrt, wenn
+   die Profile optional sind und der Default unveraendert bleibt.
+
+**Bewusst offen:** freier Core vs. Pro-Schiene (ISV-Entscheid 03.11.);
+Empfehlung: Profile in den freien Core, das ist die Selfhoster-Zielgruppe.
+
+**Vorbedingungen:** v1.3 geliefert; RAM-Messungen je Profil auf echter
+Hardware (Messphasen-Muster); UI-Phase mit ui-phase-Gate.
+
