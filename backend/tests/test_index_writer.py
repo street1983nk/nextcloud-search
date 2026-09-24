@@ -34,7 +34,16 @@ from tantivy import Document, Index, IndexWriter
 from findling.config import settings
 from findling.index.bench import batch_full
 from findling.index.open import open_index
-from findling.index.schema import FIELD_BODY_DE, FIELD_BODY_EN, FIELD_FILE_ID, FIELD_STORAGE_ID
+from findling.index.schema import (
+    FIELD_BODY_DE,
+    FIELD_BODY_EN,
+    FIELD_BODY_ES,
+    FIELD_BODY_IT,
+    FIELD_BODY_NL,
+    FIELD_BODY_PT,
+    FIELD_FILE_ID,
+    FIELD_STORAGE_ID,
+)
 from findling.index.writer import (
     FLUSH_COMMITTED,
     FLUSH_NOTHING_PENDING,
@@ -51,6 +60,8 @@ CONSTITUENTS = FIXTURE.read_text(encoding="utf-8").split()
 
 GERMAN_BODY = "Die Kündigungsfrist beträgt drei Monate."
 ENGLISH_BODY = "The notice period is three months."
+SPANISH_BODY = "El plazo de preaviso es de tres meses."
+ITALIAN_BODY = "Il termine di preavviso e di tre mesi."
 
 
 def _record(file_id: int = 1, *, body: str = GERMAN_BODY, name: str = "Kündigung.pdf") -> IndexRecord:
@@ -285,6 +296,82 @@ def test_body_en_stays_empty_when_only_german_is_configured(
         assert _hits(index, "notice", [FIELD_BODY_DE]) == 1
     finally:
         settings.cache_clear()
+
+
+def test_a_language_beyond_the_factory_default_is_written(
+    monkeypatch: pytest.MonkeyPatch, index: Index, index_dir: Path
+) -> None:
+    """Three active languages, three filled body fields and three empty ones.
+
+    Asked through the term dictionary rather than through a query, because an
+    empty field and a field whose query happens to miss look the same from a hit
+    count and only one of the two is the failure this guards against.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es")
+    settings.cache_clear()
+    try:
+        writer = IndexBatchWriter(index, directory=index_dir)
+        writer.add(_record(body=SPANISH_BODY))
+        writer.flush()
+        writer.close()
+
+        index.reload()
+        searcher = index.searcher()
+
+        for field in (FIELD_BODY_DE, FIELD_BODY_EN, FIELD_BODY_ES):
+            assert searcher.terms_with_prefix(field, "", limit=1), field
+        for field in (FIELD_BODY_IT, FIELD_BODY_NL, FIELD_BODY_PT):
+            assert searcher.terms_with_prefix(field, "", limit=1) == [], field
+    finally:
+        settings.cache_clear()
+
+
+def test_body_de_carries_the_text_even_when_german_is_switched_off(
+    monkeypatch: pytest.MonkeyPatch, index: Index, index_dir: Path
+) -> None:
+    """The stored copy is not a language, it is the storage of the whole system.
+
+    Snippets are cut out of body_de, so a Spanish only instance that stopped
+    storing it would answer every search without a preview. Storage therefore
+    never hangs on the language set; only the second, index only pipeline does.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "es")
+    settings.cache_clear()
+    try:
+        writer = IndexBatchWriter(index, directory=index_dir)
+        writer.add(_record(body=SPANISH_BODY))
+        writer.flush()
+        writer.close()
+
+        index.reload()
+        searcher = index.searcher()
+        address = searcher.search(index.parse_query("plazo", [FIELD_BODY_ES]), 10).hits[0][1]
+        stored = searcher.doc(address).to_dict()
+
+        assert stored[FIELD_BODY_DE] == [SPANISH_BODY]
+    finally:
+        settings.cache_clear()
+
+
+def test_the_writer_takes_the_language_set_as_a_parameter(index: Index, index_dir: Path) -> None:
+    """Resolved from settings(), overridable by parameter: the shape of the old flag.
+
+    The parameter is what lets one test write one set while the process runs on
+    another, and it is the route a rebuild has to write an index for a language
+    set before the container has been restarted onto it.
+    """
+    writer = IndexBatchWriter(index, directory=index_dir, languages=("it",))
+    try:
+        writer.add(_record(body=ITALIAN_BODY))
+        writer.flush()
+    finally:
+        writer.close()
+
+    index.reload()
+    searcher = index.searcher()
+
+    assert searcher.terms_with_prefix(FIELD_BODY_IT, "", limit=1)
+    assert searcher.terms_with_prefix(FIELD_BODY_EN, "", limit=1) == []
 
 
 def test_flush_without_pending_documents_commits_nothing(batch_writer: IndexBatchWriter) -> None:
