@@ -166,6 +166,26 @@ SNOWBALL_NAME = {
 COMPOUND_DICT_VARIANTS = ("full", "nouns")
 DEFAULT_COMPOUND_DICT = "full"
 
+# The two positions of the rebuild fallback switch, and there are only two. Empty
+# is the built in position: the rebuild of findling.index.rebuild runs, writes its
+# second directory and swaps it in. ``fullreindex`` is the named way out for the
+# box that has no room for two index directories at once: the generation is
+# raised, every stored verdict goes stale, the existing reindex banner names
+# ``occ findling:index --restart``, and the index is built again from the files
+# instead of from itself. It is slower by the whole extraction and it needs room
+# for one directory rather than two, which is the entire point of it.
+#
+# Why this is an environment variable and not an occ subcommand. A subcommand
+# would need a route in the PHP companion, a controller, a permission check and a
+# release of both halves in lockstep, and the decision would then live in the
+# companion while the work lives in the container. The variable keeps the
+# decision where the directories are, an admin sets it in the AppAPI deploy
+# environment the same way as every other setting of this app, and no new
+# authenticated surface is created for a switch that is thrown once
+# (18-RESEARCH.md assumption A7).
+REBUILD_FALLBACK_POSITIONS = ("", "fullreindex")
+DEFAULT_REBUILD_FALLBACK = ""
+
 # ---------------------------------------------------------------------------
 # Caps. Every number comes from the measurement table of the phase research.
 # ---------------------------------------------------------------------------
@@ -825,6 +845,10 @@ class Settings:
 
     languages: tuple[str, ...]
     compound_dict: str
+    # Which way an index that has to be rebuilt is rebuilt. Empty is the band run
+    # of findling.index.rebuild, "fullreindex" is the way out for a volume that
+    # cannot hold two index directories at once.
+    rebuild_fallback: str
 
     max_file_bytes: int
     batch_files: int
@@ -1117,6 +1141,25 @@ def _compound_dict() -> str:
     return DEFAULT_COMPOUND_DICT
 
 
+def _rebuild_fallback() -> str:
+    """Return the rebuild fallback position, empty unless the way out is asked for.
+
+    House rule of this module, and it holds for a switch that decides an hours
+    long operation just as it holds for a cap: an unreadable value is a warning
+    with the name of the variable and never a refusal to start. An admin who
+    types the word wrong gets the built in position, which is the rebuild that
+    was going to happen anyway, plus a line in the log saying which variable was
+    not understood. The value itself stays out of the line for the same reason
+    the language reader keeps it out: it is admin input in a log an admin does
+    not necessarily read alone.
+    """
+    requested = os.environ.get("FINDLING_REBUILD_FALLBACK", "").strip().lower()
+    if requested in REBUILD_FALLBACK_POSITIONS:
+        return requested
+    LOGGER.warning("FINDLING_REBUILD_FALLBACK is not one of the two positions of this switch, falling back to neither")
+    return DEFAULT_REBUILD_FALLBACK
+
+
 def _ocr_languages() -> tuple[str, ...]:
     """Return the OCR languages, filtered down to what this image actually has.
 
@@ -1207,6 +1250,7 @@ def settings() -> Settings:
         instance_marker=root / INSTANCE_MARKER_NAME,
         languages=_languages(),
         compound_dict=_compound_dict(),
+        rebuild_fallback=_rebuild_fallback(),
         max_file_bytes=_int_from_environment("FINDLING_MAX_FILE_BYTES", MAX_FILE_BYTES),
         batch_files=_int_from_environment("FINDLING_BATCH_FILES", BATCH_FILES),
         batch_max_bytes=_int_from_environment("FINDLING_BATCH_MAX_BYTES", BATCH_MAX_BYTES),

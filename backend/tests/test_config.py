@@ -24,6 +24,7 @@ import pytest
 
 from findling.config import (
     DEFAULT_LANGUAGES,
+    DEFAULT_REBUILD_FALLBACK,
     EMBED_CHUNK_TOKENS,
     EMBED_CLAIM_BATCH,
     EMBED_CONTEXT_TOKENS,
@@ -40,6 +41,7 @@ from findling.config import (
     OCR_HARD_DEADLINE_MARGIN_SECONDS,
     OCR_JOB_SECONDS_MAX,
     OCR_LOCK_TIMEOUT_SECONDS,
+    REBUILD_FALLBACK_POSITIONS,
     SEARCH_SCAN_MAX,
     SUPPORTED_LANGUAGES,
     settings,
@@ -54,6 +56,7 @@ ENVIRONMENT = (
     "APP_PERSISTENT_STORAGE",
     "FINDLING_COMPOUND_DICT",
     "FINDLING_LANGUAGES",
+    "FINDLING_REBUILD_FALLBACK",
     "FINDLING_MAX_TEXT_CHARS",
     "FINDLING_INDEX_WORKERS",
     "FINDLING_OCR_ENABLED",
@@ -148,6 +151,49 @@ def test_an_unknown_dictionary_variant_falls_back_to_full(monkeypatch: pytest.Mo
     settings.cache_clear()
 
     assert settings().compound_dict == "full"
+
+
+def test_the_rebuild_fallback_is_off_when_nobody_asks_for_it() -> None:
+    """The built in position is the band run, which is what happens anyway."""
+    assert settings().rebuild_fallback == DEFAULT_REBUILD_FALLBACK
+    assert settings().rebuild_fallback == ""
+
+
+def test_the_named_way_out_is_readable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The one value that turns the rebuild into a reindex from the files.
+
+    Upper case and surrounding blanks are accepted for the reason every other
+    reader of this module accepts them: an admin types into a deploy form, not
+    into a parser.
+    """
+    monkeypatch.setenv("FINDLING_REBUILD_FALLBACK", "  FullReindex ")
+    settings.cache_clear()
+
+    assert settings().rebuild_fallback == "fullreindex"
+
+
+def test_an_unreadable_rebuild_fallback_warns_and_keeps_the_built_in_position(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A switch that decides hours of work is still never a reason not to start.
+
+    The warning names the variable and not the value, which is the house rule of
+    this module for everything an admin types (T-18-02-02).
+    """
+    monkeypatch.setenv("FINDLING_REBUILD_FALLBACK", "vollneuaufbau")
+    settings.cache_clear()
+
+    with caplog.at_level(logging.WARNING, logger="findling.config"):
+        assert settings().rebuild_fallback == ""
+
+    assert any("FINDLING_REBUILD_FALLBACK" in record.message for record in caplog.records)
+    assert not any("vollneuaufbau" in record.message for record in caplog.records)
+
+
+def test_the_switch_has_exactly_two_positions() -> None:
+    """A third position would be a third code path nobody wrote."""
+    assert REBUILD_FALLBACK_POSITIONS == ("", "fullreindex")
 
 
 def test_german_only_leaves_the_english_body_field_empty(monkeypatch: pytest.MonkeyPatch) -> None:
