@@ -742,8 +742,24 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # name the state and never a path; the ordinary start says nothing, because a
 # warning that appears on every start is not a warning. No file came and none
 # went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-24 a twenty fifth time, by plan 18-09: three of the 56 files
+# changed their bytes and the count stays at 56. index/rebuild.py got
+# rebuild_the_index, the one entry point that leads the seven steps of a run in
+# the order of the ablauf diagram (drift, precheck, silence, band run, final
+# probe, swap behind a dropped read side, stamp, arm), the poller reaching it as
+# a callback pair rather than as an import, the named way out over
+# FINDLING_REBUILD_FALLBACK, rebuild_progress as a process reading after the
+# build of engine_state, and a should_stop that is asked between two bands.
+# main.py got the fourth long lived lifespan task with REBUILD_STOP_SECONDS
+# beside the three stop budgets that were there, the clean up path of plan 18-08
+# called before the first task exists, and warn_on_uncovered_languages, the one
+# line at startup that closes the Buchstabensalat trap with a count and never a
+# code. config.py got TESSERACT_NAME, the closed mapping from body language code
+# to tesseract name that the warning reads, and a name for the second position of
+# the rebuild fallback switch. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "4fe79081564ce5d69f2e45a4dcca5fd53e1d693004a5f4b477caf84df51b2b9d"
+PACKAGE_TREE_HASH_TODAY = "f133d6f5c3bfe451fbf62fb1bbd57a887f3ec3647318b4a3a20a11974b5ddc5b"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

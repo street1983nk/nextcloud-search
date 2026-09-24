@@ -46,6 +46,30 @@ of 1.2.0, where no mark exists at all, so nothing gets worse; it closes itself
 the first time any other mark moves, because the first stamp writes the language
 mark and from then on it is compared like every other one.
 
+**The body languages and the OCR languages are two settings, and they are set
+separately.** `FINDLING_LANGUAGES` decides which analysis chains an index
+carries: `de`, `en`, `es`, `it`, `nl`, `pt`, factory setting `de,en`.
+`FINDLING_OCR_LANGUAGES` decides which models tesseract loads when it reads a
+scan: `deu`, `eng`, `fra`, `spa`, `ita`, `nld`, `por`, `dan`, `est`, factory
+setting `deu+eng+fra`. Neither follows the other, and that is deliberate: an
+instance with born digital Spanish documents needs the Spanish chain and no
+Spanish scanner, and an instance that scans French post needs the French scanner
+while French has no chain in this build at all.
+
+The combination that goes wrong quietly is the other one: a body language whose
+scanner is missing. Tesseract does not refuse a page in a language it was not
+asked for, it reads it with the wrong model and returns plausible looking
+rubbish, and that rubbish is extracted, indexed and searchable while nothing
+says the document was never readable. Since 2026-09-24 the container says one
+line about it at startup, it names the count and not the codes, and it refuses
+nothing: an instance without scans is not broken by the combination. The names
+of the uncovered languages are on the admin page.
+
+Switching Spanish on therefore means two variables, not one:
+`FINDLING_LANGUAGES=de,en,es` and `FINDLING_OCR_LANGUAGES=deu+eng+spa`. Every
+additional OCR language loads another traineddata and makes every scanned page
+slower, so the list stays as short as the documents on that instance allow.
+
 **`body_de` is stored whatever the set says.** It is the only stored copy of the
 extracted text in the whole system and the snippet generator cuts out of it, so
 an instance running on `es` alone still writes it. Being stored and being

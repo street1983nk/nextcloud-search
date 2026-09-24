@@ -399,6 +399,35 @@ OCR_DEFAULT_LANGUAGES = ("deu", "eng", "fra")
 # call that tesseract rejects on every page.
 OCR_LANGUAGE_ALLOWLIST = frozenset({"deu", "eng", "fra", "spa", "ita", "nld", "por", "dan", "est"})
 
+# The only place where a body language code turns into a tesseract name, built
+# the way SNOWBALL_NAME above is built and for the same reason: a closed mapping
+# with one entry per code of SUPPORTED_LANGUAGES, never assembled and never
+# guessed. It is the inversion of the two lists it sits between, and it exists so
+# that one question can be asked at startup that nothing in this container could
+# ask before: does every language the index analyses have a scanner behind it.
+#
+# The question matters because the two settings are separate and the failure is
+# silent. FINDLING_LANGUAGES chooses the analysis chains, FINDLING_OCR_LANGUAGES
+# chooses the models tesseract loads, and a scanned page in a language tesseract
+# was not asked for comes back as plausible looking rubbish rather than as an
+# error: it is extracted, indexed and searchable, and nothing says the document
+# was never readable. The answer is a warning at startup and never a refusal, it
+# stands in findling.main beside the drift report, and
+# backend/tests/test_ocr_languages.py holds this mapping against
+# SUPPORTED_LANGUAGES and against OCR_LANGUAGE_ALLOWLIST in both directions.
+#
+# French is in the OCR list and has no entry here on purpose: there is no body
+# field and no chain for French, so it is an OCR language this build cannot
+# analyse, which is the one direction that is harmless.
+TESSERACT_NAME = {
+    "de": "deu",
+    "en": "eng",
+    "es": "spa",
+    "it": "ita",
+    "nl": "nld",
+    "pt": "por",
+}
+
 # Pages per document before the OCR loop stops and the state becomes truncated.
 # 30, not the 100 that STACK.md names, and the deviation is deliberate: an OCR
 # job may run up to OCR_JOB_SECONDS, QueueMapper::LOCK_TIMEOUT is 900 s, and two

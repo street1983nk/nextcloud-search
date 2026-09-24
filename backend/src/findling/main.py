@@ -47,7 +47,7 @@ from findling.api.rates import ROUTER as RATES_ROUTER
 from findling.api.search import ROUTER as SEARCH_ROUTER
 from findling.api.snippets import ROUTER as SNIPPETS_ROUTER
 from findling.api.status import ROUTER as STATUS_ROUTER
-from findling.config import settings
+from findling.config import TESSERACT_NAME, settings
 from findling.embed.engine import release_if_idle, warm, warm_wanted
 from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS, rebuild_the_index, recover_the_index_directories
 from findling.instance import claim_the_volume, volume_is_shared
@@ -466,6 +466,42 @@ async def _rebuild_the_index_directory(stop_event: asyncio.Event) -> None:
         )
 
 
+def warn_on_uncovered_languages() -> None:
+    """One line at startup when a body language has no scanner behind it.
+
+    The trap this closes has a name in the phase research, the Buchstabensalat
+    trap: a scan in a language tesseract was not asked for comes back as
+    plausible looking rubbish rather than as an error, the rubbish is extracted,
+    indexed and found, and nothing anywhere says that the document was never
+    readable. The two settings are separate on purpose, ``FINDLING_LANGUAGES``
+    chooses the analysis chains and ``FINDLING_OCR_LANGUAGES`` chooses the models
+    tesseract loads, and until this line nothing in the container compared them.
+
+    **A warning and never a refusal.** An instance that holds born digital
+    Spanish files and scans nothing at all is perfectly healthy, and a container
+    that refuses to start over an environment variable is the worse answer to a
+    typo. That is the house rule of :mod:`findling.config`, and it is the rule
+    ``report_version_drift`` follows two lines further up: a warning decides
+    nothing.
+
+    **The count and not the names.** The other house rule of that module: a
+    warning names the variable and never its value. The names are the actual
+    information for an admin, and they reach the admin page through ``GET
+    /status``, which plan 18-10 builds. Nobody should later write the values in
+    here for convenience, because the line would then carry a piece of the
+    configuration into every log this container writes.
+    """
+    covered = set(settings().ocr_languages)
+    uncovered = [code for code in settings().languages if TESSERACT_NAME[code] not in covered]
+    if uncovered:
+        LOGGER.warning(
+            "FINDLING_LANGUAGES carries %d language(s) that FINDLING_OCR_LANGUAGES does not cover; "
+            "scanned pages in them are read with the wrong model and land in the index as noise, "
+            "the names are on the admin page",
+            len(uncovered),
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Register the AppAPI routes once, start the one poller, stop it in order."""
@@ -543,6 +579,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # another instance, and a reindex banner about somebody else's index is
         # noise pointing the wrong way.
         await asyncio.to_thread(resources.report_version_drift)
+
+    # The third startup statement, and the only one that is about the
+    # environment rather than about the volume: it is therefore said on a shared
+    # volume as well, because a body language without a scanner behind it is
+    # wrong whoever the index belongs to.
+    #
+    # Through a worker thread like the two above it. This one reads the resolved
+    # settings and nothing else, so it would be defensible on the loop, and it
+    # goes through the thread anyway: three startup statements in a row, one of
+    # them shaped differently, is a question every later reader has to ask and
+    # answer, and that costs more than the hop.
+    await asyncio.to_thread(warn_on_uncovered_languages)
 
     # Exactly one indexing task, started silenced. It opens neither the index nor
     # the state database before it is armed, so a container that is deployed but
