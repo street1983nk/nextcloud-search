@@ -666,8 +666,20 @@ PHP_TREE_HASH_TODAY = "7942f09f3c1f905b3a0a6c7fa4abbdfa90378a037adfc978f7b38c3e5
 # The tokenisation of the one registered chain does not move by a byte, so
 # ANALYZER_VERSION stays at 1. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 55.
+# Moved on 2026-09-24 a nineteenth time, by plan 18-01: four of the 55 files
+# changed their bytes. index/analyzer.py got the four chain names TOKENIZER_ES,
+# TOKENIZER_IT, TOKENIZER_NL and TOKENIZER_PT beside the two that were there.
+# index/schema.py got the four body fields body_es, body_it, body_nl and
+# body_pt between body_en and mtime, all four unstored, the closed mapping
+# BODY_FIELD from language code to field name, and a module header that carries
+# the measurement of 2026-09-24 instead of the nine field count. index/open.py
+# registers the four Snowball chains through snowball_analyzer and the names of
+# SNOWBALL_NAME, unconditionally, because a text field whose chain is missing
+# makes every add_document raise. config.py raised SCHEMA_VERSION from 1 to 2
+# for the four new fields, under the owner decisions E-17-1 to E-17-4 of
+# 2026-09-23. No file came and none went, so PACKAGE_FILES_TODAY stays at 55.
 PACKAGE_FILES_TODAY = 55
-PACKAGE_TREE_HASH_TODAY = "7824c5270a10d205a63a6c41e619fe22ca55d9b248f44cc3249cd8b59327df24"
+PACKAGE_TREE_HASH_TODAY = "a1c7e518ccea7879db7cc869fc24f6ff85cc62ea1d3414a8f41fc844f0fd8c0e"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

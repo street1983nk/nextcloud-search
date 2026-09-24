@@ -38,7 +38,15 @@ LOGGER = logging.getLogger("findling.config")
 
 # Layout of the tantivy schema. Raised when a field is added, removed or retyped;
 # every raise forces a visible reindex rather than a silently mixed index.
-SCHEMA_VERSION = 1
+#
+# It walked from 1 to 2 on 2026-09-24, under the owner decisions E-17-1 to
+# E-17-4 of 2026-09-23, all of them option a: the schema carries all six body
+# fields at all times, so body_es, body_it, body_nl and body_pt joined it and
+# the mark had to follow. One step and exactly one, because a skipped step is a
+# schema that was never shipped and therefore an upgrade path nothing proves.
+# The step is what makes the rebuild visible; backend/tests/test_upgrade_compatibility.py
+# carries the reason beside the gold values it moved.
+SCHEMA_VERSION = 2
 
 # Layout of the on disk index directory, including the tantivy index format.
 # tantivy 0.26.0 reports index_format v7 and does not promise stability across

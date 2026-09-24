@@ -104,20 +104,54 @@ WNGERMAN_PIN = "wngerman=20161207-15"
 # of this change that costs no installation in the field a rebuild.
 TANTIVY_PIN = "tantivy==0.26.2"
 
+# The second gold table, and the reason it stands beside the first one instead of
+# replacing it.
+#
+# On 2026-09-23 the owner answered the four decisions E-17-1, E-17-2, E-17-3 and
+# E-17-4 with option a each. Option a of E-17-2 is the one that costs a mark: the
+# schema carries all six body fields at all times, so body_es, body_it, body_nl
+# and body_pt were added on 2026-09-24 and schema_version walked from 1 to 2.
+#
+# What the mark means has not changed: a value that moved makes
+# Store.version_mismatch report a difference, start_rebuild_on_drift raises the
+# local generation, and the index of the installation is built again. What has
+# changed is that this one is a release with a decision behind it and not an
+# accident. The table above stays where it is as the witness of what an
+# installation of 1.0.x, 1.1.x or 1.2.x carries on disk; this one is what the
+# running code produces, and the gate below holds the distance between the two
+# at exactly one step.
+#
+# The other four marks did not move with it and must not: index_version is the
+# on disk layout, analyzer_version is the tokenisation, the tantivy banner still
+# reports index_format v7, and the word list is untouched. A second mark moving
+# in the same release would make the reason for this one unprovable.
+GOLD_V1_3 = {
+    "schema_version": "2",
+    "index_version": "1",
+    "analyzer_version": "1",
+    "tantivy_version": GOLD_INDEX_FORMAT,
+}
+
 # The five marks an index carries. A mark that disappears counts as a difference
 # in Store.version_mismatch, so a set that shrank would trigger a rebuild just as
 # surely as a value that changed.
 ALL_MARKS = ("schema_version", "index_version", "analyzer_version", "wordlist_hash", TANTIVY_MARK)
 
 
-def drift_findings(marks: Mapping[str, str]) -> list[str]:
+def drift_findings(marks: Mapping[str, str], gold_marks: Mapping[str, str] = GOLD_V1_0_AND_V1_1) -> list[str]:
     """Every gold mark the given set does not carry, as one sentence each.
 
     Fails closed: a mark that is missing altogether reads as the empty value and
     becomes a finding, because that is exactly how the store reads it too.
+
+    The table to read against became a parameter on 2026-09-24, with the default
+    it always had, so that the same reader serves both generations. One reader
+    and not two: a second copy of this loop for GOLD_V1_3 would be a second way
+    of comparing, and the day somebody corrected one of them the other would
+    still be green.
     """
     findings: list[str] = []
-    for mark, gold in GOLD_V1_0_AND_V1_1.items():
+    for mark, gold in gold_marks.items():
         value = marks.get(mark, "")
         # Do not "unify" this line. The tantivy gold value is the index_format
         # half, and asking for it as a substring of the banner is exactly what
@@ -197,14 +231,62 @@ def test_a_changed_index_format_is_still_drift() -> None:
     assert TANTIVY_MARK in findings[0]
 
 
-def test_an_upgrade_from_1_0_x_or_1_1_x_would_not_trigger_a_reindex() -> None:
-    """D-04 of 2026-09-10: v1.1 keeps the index of 1.0.x usable, and v1.2 that of 1.1.x.
+def test_an_upgrade_from_1_0_x_to_1_2_x_now_moves_exactly_one_mark() -> None:
+    """The ratchet turned around on 2026-09-24, and it was turned and not filed off.
+
+    Until v1.2 this test read ``findings == []`` and carried D-04: an upgrade
+    left the index of every installation alone. It cannot read that any more,
+    because v1.3 adds four body fields to the schema and schema_version walked
+    from 1 to 2 for it, under the owner decisions E-17-1 to E-17-4 of
+    2026-09-23, all of them option a.
+
+    So the question the file header demands was asked and answered, and the
+    answer is written down instead of the test being made green: the promise is
+    given up deliberately, for one release, for one mark. The test now holds the
+    price of that decision rather than its absence, and it stays a gate, because
+    a second moving mark would be a second reindex reason nobody decided on and
+    would fail right here.
 
     The digest handed in is arbitrary, because the word list is held through its
     Debian pin in the test below rather than through a literal here.
     """
     findings = drift_findings(expected_versions("digest-egal"))
+
+    assert len(findings) == 1, findings
+    assert "schema_version" in findings[0], findings
+    assert "'2'" in findings[0], findings
+    assert "'1'" in findings[0], findings
+
+
+def test_an_index_built_by_this_code_carries_the_marks_of_v1_3() -> None:
+    """The new floor. What v1.2 held against GOLD_V1_0_AND_V1_1, v1.3 holds against this.
+
+    Without it the release would have a moved mark and no table to hold the moved
+    state against, which is a ratchet that was opened and never closed again.
+    """
+    findings = drift_findings(expected_versions("digest-egal"), GOLD_V1_3)
+
     assert findings == [], findings
+
+
+def test_the_schema_mark_moved_by_exactly_one_step() -> None:
+    """One step, and why two would be a finding rather than a bigger step.
+
+    A skipped step is a schema nobody ever shipped: there is no installation in
+    the field carrying it, so no upgrade path leads out of it and no measurement
+    can be taken over it. The reindex of 1 to 2 is a route somebody can walk and
+    can be walked again in a test; a jump from 1 to 3 would leave the state 2
+    described in this repository and existing nowhere, and every later statement
+    about "the previous schema" would be about a thing that never was.
+
+    The other marks are held at a standstill in the same breath, because the one
+    step is only cheap as long as it is the only one.
+    """
+    step = int(GOLD_V1_3["schema_version"]) - int(GOLD_V1_0_AND_V1_1["schema_version"])
+
+    assert step == 1, step
+    for mark in ("index_version", "analyzer_version", TANTIVY_MARK):
+        assert GOLD_V1_3[mark] == GOLD_V1_0_AND_V1_1[mark], mark
 
 
 def test_the_index_format_of_the_banner_holds_as_well() -> None:
