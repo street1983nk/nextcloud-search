@@ -541,8 +541,18 @@ PHP_TREE_HASH = "4a4c6f62598e2db036c0f75bf4dc6c7040c9fdafe4fb36798a8f09bb7509d9e
 # exist. The plan touches js/admin.js and the six catalogue files as well; the
 # recipe globs **/*.php, so none of them is in this tree and none of them moves
 # this figure.
-PHP_FILES_TODAY = 66
-PHP_TREE_HASH_TODAY = "65c1441674f431fab1936139ed583d232cc0c2e22c9563f3b5b29d1036c81357"
+# Moved on 2026-09-24 a second time, by plan 18-11, and the count moves for the
+# second time since 11.09.2026: 66 becomes 68, because two files arrived that
+# did not exist before and none went. Version001300Date20260924000000.php is the
+# migration of the minor step from 1.2.0 to 1.3.0, a copy of the one of
+# 21.09.2026 whose body is identical line for line and whose class comment
+# gained one paragraph, the one that says the index rebuild of this phase is
+# deliberately not in a migration; Version001300Date20260924000000Test.php is
+# its unit test, the same six cases as its predecessor. No other file of the
+# half changed its bytes: the bump of the version places belongs to the release
+# phase and not to this plan, and the recipe globs **/*.php.
+PHP_FILES_TODAY = 68
+PHP_TREE_HASH_TODAY = "15e00b2b37e003ff98b0cc3ca87affdea215eb160c1671153f9e616bf9cf70eb"
 
 # The python package needed no such split until 2026-09-11: nothing under
 # backend/src/findling had changed since the run, so the figure of the run WAS
