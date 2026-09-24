@@ -283,3 +283,10 @@ verification: |
   up in N of those rounds" sagt es).
 files_changed:
   - .github/workflows/deploy-harp.yml
+
+---
+**VERIFIED 24.09.2026:** deploy-harp-Lauf 36006893151 GRUEN auf allen vier
+Matrix-Aesten. "Store upgrade 5" haelt alle sechs Zusicherungen (Bestand
+unberuehrt, languages-Marke legitim abwesend), "Store upgrade 6" alle neun
+(Umbau beobachtet, Schema genau eine Stufe, Sprachmarke de,en,es,
+Vektorbestand byteidentisch). Beide Wurzelursachen bestaetigt behoben.

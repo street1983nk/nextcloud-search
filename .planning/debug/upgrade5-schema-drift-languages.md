@@ -109,3 +109,10 @@ files_changed:
   - backend/tests/test_measurement_scripts.py
   - .github/workflows/deploy-harp.yml
   - docs/language-analyzers.md
+
+---
+**VERIFIED 24.09.2026:** deploy-harp-Lauf 36006893151 GRUEN auf allen vier
+Matrix-Aesten. "Store upgrade 5" haelt alle sechs Zusicherungen (Bestand
+unberuehrt, languages-Marke legitim abwesend), "Store upgrade 6" alle neun
+(Umbau beobachtet, Schema genau eine Stufe, Sprachmarke de,en,es,
+Vektorbestand byteidentisch). Beide Wurzelursachen bestaetigt behoben.
