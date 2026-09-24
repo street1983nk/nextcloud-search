@@ -1306,6 +1306,40 @@
     shown('findling-banner-lowdisk', backend.lowDisk === true)
     shown('findling-banner-reindex', backend.reindexRequired === true)
 
+    // The rebuild of plan 18-10, and the sentence is written before the banner
+    // is shown, like the version state above: a banner that appears with the
+    // figures of the poll before it shows a progress that moved backwards.
+    // Written into the text span and never into the paragraph, which holds the
+    // icon as well.
+    //
+    // Both numbers pass through whole() first, so what reaches the sentence is
+    // a number and never a value the container put on the wire, and it reaches
+    // it through text(), which is a textContent and never markup.
+    text('findling-banner-rebuild-text',
+      t('findling', 'Findling is rebuilding its index so that the newly switched on languages can be searched. %1$s of %2$s documents have been carried over. Search keeps answering while this runs, and there is nothing to start or to restart.')
+        .replace('%1$s', numbers.format(whole(backend.rebuildDone)))
+        .replace('%2$s', numbers.format(whole(backend.rebuildTotal))))
+    shown('findling-banner-rebuild', backend.rebuildRunning === true)
+
+    // The other outcome of the same run. The figure is the missing amount and
+    // it is formatted with the unit table the template uses, so the sentence
+    // does not change its shape when the first poll arrives.
+    const blockedBytes = whole(backend.rebuildBlockedBytes)
+    text('findling-banner-rebuild-space-text',
+      t('findling', 'Findling wants to rebuild its index for the newly switched on languages and there is not enough room: %s more are needed next to what the index already uses. Free that much, or set the environment variable FINDLING_REBUILD_FALLBACK=fullreindex to have the backend read the files again instead.')
+        .replace('%s', size(blockedBytes)))
+    shown('findling-banner-rebuild-space', blockedBytes > 0)
+
+    // The language diagnosis, two lists in one line. Both are strings from the
+    // container and both go into a text node.
+    const languagesActive = typeof backend.languagesActive === 'string' ? backend.languagesActive : ''
+    const languagesFilled = typeof backend.languagesFilled === 'string' ? backend.languagesFilled : ''
+    text('findling-languages',
+      t('findling', 'Languages of the index: %1$s switched on, %2$s with text in the index.')
+        .replace('%1$s', languagesActive)
+        .replace('%2$s', languagesFilled))
+    shown('findling-languages', languagesActive !== '' || languagesFilled !== '')
+
     // view.rules is deliberately not rendered. Block five is a form somebody may
     // be halfway through filling in, and a poll every five seconds that wrote
     // the stored values back into it would throw away what they just typed. The

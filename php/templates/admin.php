@@ -97,6 +97,23 @@ $reachable = ($_['backendReachable'] ?? false) === true;
 // shows anything: "match" is the normal case and "unknown" is a container that
 // did not say, which the page must not turn into a claim about the pair.
 $lockstep = is_array($_['lockstep'] ?? null) ? $_['lockstep'] : [];
+// The language diagnosis of plan 18-10, as two lists of codes rather than as
+// two counts. In the container log the same statement is a number, on purpose:
+// a warning names the variable and never the value. Here it is the other way
+// round, because the names ARE the information: "three chains are switched on,
+// one of them carries text" tells an admin nothing about which search is going
+// to come up empty, and "de,en,es against de" tells them exactly that.
+$languagesActive = is_string($backend['languagesActive'] ?? null) ? $backend['languagesActive'] : '';
+$languagesFilled = is_string($backend['languagesFilled'] ?? null) ? $backend['languagesFilled'] : '';
+
+// The rebuild of the index, and the two shapes it is visible in. Running is a
+// progress sentence, refused is a figure of missing bytes; they never apply at
+// the same time, and neither of them is the reindex banner further down.
+$rebuildRunning = ($backend['rebuildRunning'] ?? false) === true;
+$rebuildDone = $whole($backend['rebuildDone'] ?? 0);
+$rebuildTotal = $whole($backend['rebuildTotal'] ?? 0);
+$rebuildBlockedBytes = $whole($backend['rebuildBlockedBytes'] ?? 0);
+
 $lockstepState = is_string($lockstep['state'] ?? null) ? $lockstep['state'] : 'unknown';
 // Both numbers have passed the version pattern of ExAppService before they got
 // here, and they are printed with the escaping printer all the same.
@@ -120,6 +137,45 @@ $count = static function (int $value) use ($l): string {
 	$formatted = (new NumberFormatter($l->getLocaleCode(), NumberFormatter::DECIMAL))->format($value);
 
 	return $formatted === false ? (string)$value : $formatted;
+};
+
+/**
+ * A size in the notation of this admin, unit and all.
+ *
+ * Written here rather than taken from Util::humanFileSize, which always puts a
+ * full stop before the decimal no matter what the session language is. The
+ * script formats the same number with Intl.NumberFormat and the same unit
+ * table, so both halves of the page agree on what one and a half gigabytes
+ * looks like. The unit names are not translated, in Nextcloud either: they are
+ * symbols and they read the same in every language this app ships.
+ *
+ * Defined next to $count above since plan 18-10, and no longer among the
+ * variables of block two. The space warning of the rebuild sits in the banner
+ * list of block one, which is built before those variables exist, and a second
+ * closure for the same unit table would be the drift this one was written to
+ * prevent.
+ */
+$size = static function (int $bytes) use ($l): string {
+	$units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+	$value = (float)max(0, $bytes);
+	$unit = 0;
+	while ($value >= 1024 && $unit < count($units) - 1) {
+		$value /= 1024;
+		$unit++;
+	}
+
+	// Whole bytes and whole kilobytes, one decimal from megabytes upwards. A
+	// tenth of a kilobyte is precision this figure does not have.
+	$digits = $unit < 2 ? 0 : 1;
+	if (!class_exists('NumberFormatter')) {
+		return number_format($value, $digits, '.', '') . ' ' . $units[$unit];
+	}
+
+	$formatter = new NumberFormatter($l->getLocaleCode(), NumberFormatter::DECIMAL);
+	$formatter->setAttribute(NumberFormatter::FRACTION_DIGITS, $digits);
+	$formatted = $formatter->format($value);
+
+	return ($formatted === false ? number_format($value, $digits, '.', '') : $formatted) . ' ' . $units[$unit];
 };
 
 /**
@@ -248,6 +304,35 @@ $banners = [
 		'text' => $l->t('The index was built with an older text analysis. Run "occ findling:index --restart" to rebuild it, otherwise some hits stay missing.'),
 		'shown' => ($backend['reindexRequired'] ?? false) === true,
 	],
+	[
+		// The sixth banner, and it stands NEXT TO the reindex banner above and
+		// never in its place. The two look alike from a distance, they are the
+		// opposite advice. The banner above tells the admin to read every file
+		// again, which is nineteen hours on the hardware this app is built for;
+		// this one describes a run that carries the text the index already
+		// holds from one directory into another, and the only right thing to do
+		// about it is to wait. A reader who is handed the restart command here
+		// pays those hours for nothing, so the sentence below deliberately
+		// names no command at all.
+		'id' => 'findling-banner-rebuild',
+		'kind' => 'warning',
+		'icon' => $clockIcon,
+		'text' => $l->t('Findling is rebuilding its index so that the newly switched on languages can be searched. %1$s of %2$s documents have been carried over. Search keeps answering while this runs, and there is nothing to start or to restart.', [$count($rebuildDone), $count($rebuildTotal)]),
+		'shown' => $rebuildRunning,
+	],
+	[
+		// The seventh, and the other outcome of the same run: it did not start,
+		// because two index directories do not fit on this volume at once. The
+		// sentence names the missing amount, because "not enough space" without
+		// a figure leaves the admin to free some and look again, and it names
+		// the way out that needs no space, because the alternative to waiting
+		// has to be visible from here.
+		'id' => 'findling-banner-rebuild-space',
+		'kind' => 'warning',
+		'icon' => $alertIcon,
+		'text' => $l->t('Findling wants to rebuild its index for the newly switched on languages and there is not enough room: %s more are needed next to what the index already uses. Free that much, or set the environment variable FINDLING_REBUILD_FALLBACK=fullreindex to have the backend read the files again instead.', [$size($rebuildBlockedBytes)]),
+		'shown' => $rebuildBlockedBytes > 0,
+	],
 ];
 ?>
 <div id="findling-coverage" class="section">
@@ -298,6 +383,22 @@ $banners = [
 	</p>
 
 	<p class="settings-hint" id="findling-coverage-provisional"<?php if (!$hasDenominator || !$provisional) { ?> hidden<?php } ?>><?php p($l->t('Provisional figure, %1$s of %2$s storages have been counted through.', [$count($mountsFinished), $count($mountsTotal)])); ?></p>
+
+	<?php
+	/*
+	 * The language diagnosis, as two lists side by side and never as two
+	 * counts. Which chains are switched on is a setting; which of them carry
+	 * text is a property of the index, and the gap between the two is what a
+	 * search comes up empty on. The names are the information here, unlike in
+	 * the container log, where the same statement is deliberately a number
+	 * because a log line names the variable and never the value.
+	 *
+	 * Hidden while the container has said nothing at all, and shown with either
+	 * list on its own: an index whose chains are all empty is exactly the state
+	 * this line exists for.
+	 */
+	?>
+	<p class="settings-hint" id="findling-languages"<?php if ($languagesActive === '' && $languagesFilled === '') { ?> hidden<?php } ?>><?php p($l->t('Languages of the index: %1$s switched on, %2$s with text in the index.', [$languagesActive, $languagesFilled])); ?></p>
 
 	<?php
 	/*
@@ -429,39 +530,6 @@ $estimateSpaceWarning = ($estimate['spaceWarning'] ?? false) === true;
 $estimateDone = ($estimate['firstIndexDone'] ?? false) === true;
 $estimateMountsTotal = $whole($estimate['mountsTotal'] ?? 0);
 $estimateMountsFinished = $whole($estimate['mountsFinished'] ?? 0);
-
-/**
- * A size in the notation of this admin, unit and all.
- *
- * Written here rather than taken from Util::humanFileSize, which always puts a
- * full stop before the decimal no matter what the session language is. The
- * script formats the same number with Intl.NumberFormat and the same unit
- * table, so both halves of the page agree on what one and a half gigabytes
- * looks like. The unit names are not translated, in Nextcloud either: they are
- * symbols and they read the same in every language this app ships.
- */
-$size = static function (int $bytes) use ($l): string {
-	$units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-	$value = (float)max(0, $bytes);
-	$unit = 0;
-	while ($value >= 1024 && $unit < count($units) - 1) {
-		$value /= 1024;
-		$unit++;
-	}
-
-	// Whole bytes and whole kilobytes, one decimal from megabytes upwards. A
-	// tenth of a kilobyte is precision this figure does not have.
-	$digits = $unit < 2 ? 0 : 1;
-	if (!class_exists('NumberFormatter')) {
-		return number_format($value, $digits, '.', '') . ' ' . $units[$unit];
-	}
-
-	$formatter = new NumberFormatter($l->getLocaleCode(), NumberFormatter::DECIMAL);
-	$formatter->setAttribute(NumberFormatter::FRACTION_DIGITS, $digits);
-	$formatted = $formatter->format($value);
-
-	return ($formatted === false ? number_format($value, $digits, '.', '') : $formatted) . ' ' . $units[$unit];
-};
 
 // The OCR share: an interval as long as nothing better is known, a single
 // figure once the run has measured one. A single guessed percentage would be a

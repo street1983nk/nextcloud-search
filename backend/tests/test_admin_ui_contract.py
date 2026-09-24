@@ -1431,6 +1431,124 @@ def test_the_seven_sentences_of_the_engine_line_are_in_the_german_catalogue() ->
     assert missing == []
 
 
+# The two banners of plan 18-10 and the one line of the language diagnosis, by
+# the ids the template gives them and the script flips. Held as a table so that
+# a third element of this kind is added in one place and every gate below sees
+# it.
+REBUILD_BANNERS = ("findling-banner-rebuild", "findling-banner-rebuild-space")
+
+# The advice that must not travel into the new banner, spelled once. It is the
+# right advice under the banner it already stands in and the wrong one under a
+# rebuild: that run carries the text the index already holds from one directory
+# into another, and a reader who follows this command instead pays nineteen
+# hours on the hardware this app is built for, for nothing.
+RESTART_ADVICE = "occ findling:index --restart"
+
+
+def scan_rebuild_banners(template: str, script: str) -> list[str]:
+    """Findings of the two rebuild banners: an id one half knows and the other does not.
+
+    The same failure mode the two gates above are written for, one element
+    further on. A banner the template renders and the script never flips stands
+    still for the whole life of the page; a banner the script flips and the
+    template never rendered is a write into nothing. Neither produces an error
+    anywhere.
+    """
+    findings: list[str] = []
+    for banner in REBUILD_BANNERS:
+        if f"'id' => '{banner}'" not in template:
+            findings.append(f"admin.php does not render the banner {banner}")
+        if f"shown('{banner}'" not in script:
+            findings.append(f"admin.js never flips the banner {banner}")
+    # The progress banner carries a figure in its sentence, so it needs the
+    # second half of the pattern as well: the text is written into the span of
+    # the banner and never into the paragraph, which holds the icon.
+    if "text('findling-banner-rebuild-text'," not in script:
+        findings.append("admin.js does not write the sentence of findling-banner-rebuild")
+    return findings
+
+
+def test_both_halves_of_the_page_carry_the_two_rebuild_banners() -> None:
+    """Criterion 2 of phase 18 as a gate over the template and the script."""
+    findings = scan_rebuild_banners(
+        TEMPLATE.read_text(encoding="utf-8"),
+        SCRIPT.read_text(encoding="utf-8"),
+    )
+
+    assert findings == []
+
+
+def test_a_rebuild_banner_only_one_half_knows_about_is_reported() -> None:
+    # The gate has to be able to go red, in both of its directions.
+    assert len(scan_rebuild_banners("", "")) == 5
+    assert len(scan_rebuild_banners("'id' => 'findling-banner-rebuild',", "")) == 4
+
+
+def test_the_new_banner_does_not_advise_the_full_reindex() -> None:
+    """The one sentence of this plan that is about what is NOT written.
+
+    The rebuild banner and the reindex banner look alike from a distance and
+    they are opposite advice. The count is asserted rather than the absence of
+    the string, because the reindex banner is supposed to keep naming the
+    command: a gate that forbade it outright would delete the one place where it
+    is right.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert template.count(RESTART_ADVICE) == 1
+    assert "older text analysis" in template
+    # And the sentence that does carry it is the reindex one and not a new one.
+    line = next(line for line in template.splitlines() if RESTART_ADVICE in line)
+    assert "older text analysis" in line
+    assert "rebuilding its index" not in line
+    # The script writes the sentence of the new banner and never this command.
+    assert RESTART_ADVICE not in script
+
+
+def test_both_halves_of_the_page_carry_the_language_diagnosis() -> None:
+    """Criterion 4 of phase 18: active against filled, and both names visible.
+
+    The names and not the counts, and that is the difference to the startup
+    warning of plan 18-09, which deliberately reports a number: a log line names
+    the variable and never the value, while a page whose reader has to decide
+    whether a search can work at all needs to see which chain is empty.
+    """
+    template = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    assert 'id="findling-languages"' in template
+    assert "text('findling-languages'," in script
+    for key in ("languagesActive", "languagesFilled"):
+        assert f"'{key}' => $this->text($answer, '{key}')," in view, key
+        assert f"${key}" in template, key
+        assert f"backend.{key}" in script, key
+
+
+def test_every_new_status_key_has_exactly_one_line_in_the_service() -> None:
+    """One key, one line, and the line is the whole translation of that key.
+
+    backend() is the only place where a name from the container becomes a name
+    of this page. A key read in two places would be judged twice and the two
+    judgements would part company on the day one of them is corrected.
+    """
+    view = ADMIN_VIEW.read_text(encoding="utf-8")
+
+    for key in (
+        "languagesActive",
+        "languagesFilled",
+        "rebuildRunning",
+        "rebuildDone",
+        "rebuildTotal",
+        "rebuildBlockedBytes",
+    ):
+        assert view.count(f"'{key}' => ") == 1, key
+    assert "'rebuildRunning' => ($answer['rebuildRunning'] ?? false) === true," in view
+    for key in ("rebuildDone", "rebuildTotal", "rebuildBlockedBytes"):
+        assert f"'{key}' => $this->counter($answer, '{key}')," in view, key
+
+
 def test_the_two_translation_files_carry_the_same_keys() -> None:
     """IN-02, and the reason it is a gate rather than a single deletion.
 

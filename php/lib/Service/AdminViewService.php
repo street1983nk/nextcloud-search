@@ -1772,9 +1772,9 @@ final class AdminViewService {
 	}
 
 	/**
-	 * The nineteen status fields of the container, rebuilt one by one.
+	 * The twenty-five status fields of the container, rebuilt one by one.
 	 *
-	 * Called with null as well, and then it returns the same nineteen keys as
+	 * Called with null as well, and then it returns the same twenty-five keys as
 	 * zeros, false, null and empty strings. That is what keeps the caller free
 	 * of a second code path: a page that renders "container silent" out of the
 	 * same shape it renders a healthy container from cannot forget one of the
@@ -1788,6 +1788,16 @@ final class AdminViewService {
 	 * meaning" and "cold" would merge the second into "the model arrives on
 	 * first demand", and both are claims about an instance nobody asked
 	 * (D-16, T-07-03).
+	 *
+	 * The six fields of plan 18-10 are expressly **not** a third exception, and
+	 * the reason is worth one paragraph because the rule above would suggest
+	 * otherwise. Each of them has a resting value that a container reports while
+	 * nothing is happening: no rebuild is running, nought documents were carried
+	 * over, nought bytes were missing, and the two language lines are empty.
+	 * A container too old to know these keys is in exactly that situation from
+	 * the page's point of view, so null would buy a distinction with no
+	 * consequence anywhere, at the price of six null checks in the template and
+	 * six in the script.
 	 *
 	 * @param array<mixed>|null $answer the decoded body, or null when there was none
 	 * @return array<string,mixed>
@@ -1814,6 +1824,23 @@ final class AdminViewService {
 			'indexBytes' => $this->counter($answer, 'indexBytes'),
 			'maxFileBytes' => $this->counter($answer, 'maxFileBytes'),
 			'engineState' => self::engineState($answer['engineState'] ?? null),
+			// The language diagnosis of plan 18-10, and the two lines are not
+			// one line twice. The first is the set the index was built under,
+			// the second is the set whose chains really carry terms, and the
+			// difference between them is exactly what a rebuild closes. Both go
+			// through text(), which cleans and cuts: they are short lists of
+			// two letter codes today and they still arrive from across the trust
+			// boundary.
+			'languagesActive' => $this->text($answer, 'languagesActive'),
+			'languagesFilled' => $this->text($answer, 'languagesFilled'),
+			// The run that closes that difference, and the reason it did not
+			// start. rebuildBlockedBytes is a counter and not a flag on purpose:
+			// a banner that says the volume is too full without a figure leaves
+			// the admin to guess how much to free.
+			'rebuildRunning' => ($answer['rebuildRunning'] ?? false) === true,
+			'rebuildDone' => $this->counter($answer, 'rebuildDone'),
+			'rebuildTotal' => $this->counter($answer, 'rebuildTotal'),
+			'rebuildBlockedBytes' => $this->counter($answer, 'rebuildBlockedBytes'),
 			'note' => $this->text($answer, 'note'),
 		];
 	}
