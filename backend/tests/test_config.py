@@ -14,6 +14,7 @@ accident. The test fails the moment somebody makes it one.
 
 from __future__ import annotations
 
+import logging
 import re
 import tempfile
 from collections.abc import Iterator
@@ -22,6 +23,7 @@ from pathlib import Path
 import pytest
 
 from findling.config import (
+    DEFAULT_LANGUAGES,
     EMBED_CHUNK_TOKENS,
     EMBED_CLAIM_BATCH,
     EMBED_CONTEXT_TOKENS,
@@ -39,6 +41,7 @@ from findling.config import (
     OCR_JOB_SECONDS_MAX,
     OCR_LOCK_TIMEOUT_SECONDS,
     SEARCH_SCAN_MAX,
+    SUPPORTED_LANGUAGES,
     settings,
 )
 
@@ -167,6 +170,83 @@ def test_an_unknown_language_list_falls_back_to_both(monkeypatch: pytest.MonkeyP
     settings.cache_clear()
 
     assert settings().languages == ("de", "en")
+
+
+def test_the_warning_for_an_unknown_language_never_repeats_the_value(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """House rule of this module: the warning names the variable, never the value.
+
+    The value is admin input and travels into a log an admin does not
+    necessarily read alone, so it stays out of it (T-18-02-02).
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "klingon")
+    settings.cache_clear()
+
+    with caplog.at_level(logging.WARNING, logger="findling.config"):
+        assert settings().languages == ("de", "en")
+
+    assert any("FINDLING_LANGUAGES" in record.message for record in caplog.records)
+    assert not any("klingon" in record.message for record in caplog.records)
+
+
+def test_a_language_beyond_the_factory_default_is_selectable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The one line between "six fields exist" and "six languages are possible".
+
+    Until this plan the filter ran against DEFAULT_LANGUAGES, so ``es`` fell out
+    without a word even though the schema has carried ``body_es`` since 18-01.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "es,de")
+    settings.cache_clear()
+
+    # Schema field order, not the order somebody typed: "es,de" and "de,es" have
+    # to produce the same marker, or a resorted variable would rebuild an index
+    # that never needed one.
+    assert settings().languages == ("de", "es")
+
+
+def test_german_and_english_may_both_be_switched_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E-17-3 option a: the factory setting is not a floor.
+
+    An instance whose files are Spanish gets one body field and pays for one.
+    ``body_de`` stays stored either way, but that is the write path and not the
+    language set; see findling.index.writer.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "es")
+    settings.cache_clear()
+
+    assert settings().languages == ("es",)
+
+
+@pytest.mark.parametrize("value", ["", "   ", " , "])
+def test_an_empty_language_list_keeps_the_factory_setting(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    monkeypatch.setenv("FINDLING_LANGUAGES", value)
+    settings.cache_clear()
+
+    assert settings().languages == DEFAULT_LANGUAGES
+
+
+def test_every_supported_language_is_selectable_on_its_own(monkeypatch: pytest.MonkeyPatch) -> None:
+    """All six, one by one, because a mapping gap would only show on one of them."""
+    for language in SUPPORTED_LANGUAGES:
+        monkeypatch.setenv("FINDLING_LANGUAGES", language)
+        settings.cache_clear()
+
+        assert settings().languages == (language,)
+
+
+def test_the_factory_setting_stays_at_two_entries() -> None:
+    """DEFAULT_LANGUAGES is the factory setting, not the capability list.
+
+    Widening it would turn every existing installation into a six field index on
+    the next upgrade, which is the whole reason the two constants are two.
+    """
+    assert DEFAULT_LANGUAGES == ("de", "en")
+    assert set(DEFAULT_LANGUAGES) < set(SUPPORTED_LANGUAGES)
 
 
 def test_index_workers_is_a_constant_and_not_an_environment_variable(monkeypatch: pytest.MonkeyPatch) -> None:
