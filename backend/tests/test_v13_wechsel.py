@@ -785,5 +785,15 @@ def test_the_two_readers_bring_no_third_party_library(script: Path) -> None:
         for node in ast.walk(tree)
         if isinstance(node, ast.ImportFrom) and node.level == 0
     }
-    assert imported <= {"__future__", "argparse", "collections", "datetime", "json", "posixpath", "sqlite3", "sys"}
+    assert imported <= {
+        "__future__",
+        "argparse",
+        "collections",
+        "datetime",
+        "json",
+        "math",
+        "posixpath",
+        "sqlite3",
+        "sys",
+    }
     assert script.read_text(encoding="utf-8").startswith("#!/usr/bin/env python3\n")
