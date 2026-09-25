@@ -1,0 +1,10 @@
+source_lines=413288
+entries=316740
+digest=ee7f3b8380c752835692db8fbf1350786955d4fca13e94506812a23eece107a2
+subset_entries=359
+compounds_total=28
+compounds_found_via_constituent=21
+compounds_found_without_splitter=0
+sentinels_whole=32
+sentinels_total=33
+chain_cases_differing=0

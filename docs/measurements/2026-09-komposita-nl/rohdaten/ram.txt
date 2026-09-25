@@ -1,0 +1,12 @@
+lauf=1
+ram_base_mb=91.96
+ram_nl_released_mb=24.22
+nl_build_seconds=0.753
+lauf=2
+ram_base_mb=90.58
+ram_nl_released_mb=25.25
+nl_build_seconds=0.780
+lauf=3
+ram_base_mb=91.18
+ram_nl_released_mb=25.19
+nl_build_seconds=0.775
