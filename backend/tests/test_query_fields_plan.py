@@ -45,7 +45,7 @@ import pytest
 from tantivy import Index, SchemaBuilder
 
 from findling.api.resources import field_plan_for
-from findling.config import SCHEMA_VERSION
+from findling.config import SCHEMA_VERSION, SUPPORTED_LANGUAGES
 from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions
 from findling.index.schema import (
     BODY_FIELD,
@@ -321,6 +321,52 @@ def test_a_plan_that_could_not_be_computed_at_all_is_an_error_and_not_a_warning(
     assert chr(92) not in lines[0][1]
 
 
+def test_every_body_language_stands_in_all_three_lists() -> None:
+    """Audit finding M-19-02, and the three lists are three modules.
+
+    ``BODY_FIELD`` says which field a language writes into, ``BODY_BOOST`` says
+    what that field weighs, and ``SUPPORTED_LANGUAGES`` says which codes an admin
+    may switch on. All three are closed mappings on purpose, and nothing holds
+    them to one another: the computed plan reads the first two in one expression,
+    ``{BODY_FIELD[code]: BODY_BOOST[code] for code in BODY_FIELD if code in
+    active}``, so a code that is in one and not in the other is a KeyError that
+    the outer catch of ``field_plan_for`` turns into a fallback. The result would
+    be every installation in the field silently searching the legacy pair, with
+    one log line per opening saying "a KeyError" and nothing else.
+
+    That is not a hypothetical shape of a mistake. This phase wrote es, it, nl
+    and pt into three lists in three modules within one plan, and the roadmap
+    names French for after v1.3.
+
+    The existing set case below cannot see it: ``set(plan.boosts) ==
+    set(plan.fields)`` holds for the legacy plan just as well, so the fallback
+    would be green there. This one is the statement, and the line in that case is
+    the counter probe.
+    """
+    assert set(BODY_BOOST) == set(BODY_FIELD) == set(SUPPORTED_LANGUAGES)
+
+
+def test_a_language_without_a_weight_would_cost_every_instance_its_field_list(
+    schema_2_index: Index,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The counter probe of the case above, and it is what makes that one a case:
+    # a set equality nobody can break is green for a reason that has nothing to
+    # do with the gate. One code taken out of the weights, and the instance that
+    # runs six languages searches two, which is the failure M-19-02 describes
+    # written out.
+    thinned = {code: weight for code, weight in BODY_BOOST.items() if code != "es"}
+    monkeypatch.setattr("findling.api.resources.BODY_BOOST", thinned)
+
+    with caplog.at_level(logging.ERROR, logger="findling.api.resources"):
+        plan = field_plan_for({SCHEMA_MARK: CURRENT_SCHEMA, LANGUAGES_MARK: ",".join(BODY_FIELD)}, schema_2_index)
+
+    assert plan == LEGACY_PLAN
+    assert FIELD_BODY_ES not in plan.fields
+    assert [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR] != []
+
+
 def _a_directory_carrying(root: Path, *fields: str) -> Index:
     """A real tantivy directory that carries exactly these field names.
 
@@ -416,6 +462,12 @@ def test_every_language_set_weighs_exactly_the_fields_it_searches(languages: str
     plan = field_plan_for({SCHEMA_MARK: CURRENT_SCHEMA, LANGUAGES_MARK: languages}, schema_2_index)
 
     assert set(plan.boosts) == set(plan.fields)
+    # The line audit finding M-19-02 asked for, and it is what keeps the set
+    # equality above from being green for the wrong reason: that statement holds
+    # for the legacy plan word for word, so a language set that fell back would
+    # pass it while searching neither of the chains it names.
+    if set(languages.split(",")) - set(LEGACY_LANGUAGES):
+        assert plan != LEGACY_PLAN, "the plan fell back instead of opening the field list"
 
     rewritten = build_query(schema_2_index, "vertrag", plan=plan)
 
