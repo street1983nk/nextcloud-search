@@ -599,6 +599,12 @@ AUSNAHMEN: dict[tuple[str, str], str] = {
         "The teardown record of the tool fix approach uses the German form for the cold storage tier it "
         "priced, and it is not edited afterwards."
     ),
+    ("l10n-spanish.md", "vokabular"): (
+        "The Spanish noun for a file begins with the stem of the blocked term and is the most common word "
+        "of that catalogue, so all 61 hits of this document are that noun and none of them is the German "
+        "form the family exists to catch. Rewording is not open here: the column holds the shipped wordings "
+        "of php/l10n/es.json, and a document that spelled them differently would stop being their source."
+    ),
 }
 
 # The shortest reason that can still be a reason. A sentence under this length
