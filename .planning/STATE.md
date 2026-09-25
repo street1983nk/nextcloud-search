@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Plan 22-05 abgeschlossen (00-lauf.sh, 00-abholen.sh, 00-ablauf.md, README, 433c531 3f0807d 5fdb8e5)
-last_updated: "2026-09-26T09:30:00.000Z"
-last_activity: 2026-09-26, Plan 22-05 ausgeführt
+stopped_at: Plan 22-06 Task 1 fertig (Generalprobe, 463fcfe a65c9c5 5d97688 c24f142 399ff7e), wartet am Checkpoint Task 2 auf Push-Freigabe; Task 3 (W4) offen, kein SUMMARY
+last_updated: "2026-09-26T23:45:00.000Z"
+last_activity: 2026-09-26, Plan 22-06 Task 1 (Generalprobe) ausgeführt, Checkpoint Push-Freigabe
 progress:
   total_phases: 7
   completed_phases: 5
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
 Plan: 6 of 12
-Status: Ready to execute 22-06 (Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
+Status: 22-06 am Checkpoint Task 2 (Push-Freigabe offen); Fortsetzung ist Task 3 (Push, W4-Lauf, F4) nach "push freigegeben". Owner-Stopps danach: 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
