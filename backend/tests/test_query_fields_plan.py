@@ -286,6 +286,41 @@ def test_a_state_database_beside_an_older_directory_falls_back_and_says_so(
     assert chr(92) not in lines[0]
 
 
+def test_a_plan_that_could_not_be_computed_at_all_is_an_error_and_not_a_warning(
+    schema_2_index: Index,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Audit finding M-19-04, and the case above it is the other half of it.
+
+    Two sentences used to leave this function as one warning. A volume whose
+    state database and index directory do not belong together is a message to
+    the operator and is said one level down, by name and per field; a build that
+    contradicts itself, which is what a TypeError out of this path is, belongs in
+    a test suite and never in an operating report. An operator who greps warnings
+    could not tell the two apart, and neither could an alert rule.
+    """
+
+    def a_signature_that_moved(marks: object) -> None:
+        raise TypeError("one parameter too few")
+
+    monkeypatch.setattr("findling.api.resources._of_the_marks", a_signature_that_moved)
+
+    with caplog.at_level(logging.WARNING, logger="findling.api.resources"):
+        plan = field_plan_for({SCHEMA_MARK: CURRENT_SCHEMA, LANGUAGES_MARK: "de,en,es"}, schema_2_index)
+
+    assert plan == LEGACY_PLAN
+
+    lines = [(record.levelno, record.getMessage()) for record in caplog.records]
+
+    assert [level for level, _ in lines] == [logging.ERROR]
+    assert "TypeError" in lines[0][1]
+    # The same rule as every other line of this module: the type name and
+    # nothing that came out of a file or out of a search bar.
+    assert "/" not in lines[0][1]
+    assert chr(92) not in lines[0][1]
+
+
 def _a_directory_carrying(root: Path, *fields: str) -> Index:
     """A real tantivy directory that carries exactly these field names.
 

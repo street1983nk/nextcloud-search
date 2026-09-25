@@ -974,8 +974,15 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # that is already there, and index.rebuild.stamp_after_swap behind the swap is
 # the one place where what the two claim is true. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-25 by the fix of audit finding M-19-04: exactly one of the 56
+# files changed its bytes, api/resources.py, whose outer catch in field_plan_for
+# says error instead of warning and says a different sentence. Everything the
+# two halves of a volume can disagree about is caught one level down and named
+# per field, so what reaches the outer catch is this build contradicting itself;
+# the two used to be one line and an operator could not tell them apart. No file
+# came and none went, so PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "43c25a1d404d88978f6c0e15c551c3c75a60963d90ab95bcc632bc5cacde56ec"
+PACKAGE_TREE_HASH_TODAY = "c098479d2b6acb5949174ec9184e4598c7b81b175f1003634fe1cdd8fb33fd37"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

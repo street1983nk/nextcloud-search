@@ -483,6 +483,12 @@ def field_plan_for(marks: Mapping[str, str], index: Index) -> FieldPlan:
     **Never raises**, deliberately and with every exception caught. This runs
     inside the try of :func:`read_side`, where an exception would cost the whole
     reading half of the container and answer every search with nothing at all.
+    The outer catch says so at ``error`` level and not at ``warning`` level, and
+    the reason is M-19-04: a volume whose two halves disagree is answered one
+    level down, by name and per field, so what is left for the outer catch is
+    this build contradicting itself. One of the two is a message to the operator
+    and the other is a bug of ours, and a log an operator ships has to be able to
+    tell them apart.
 
     :func:`filled_languages` is not called and must not be: it walks the entire
     term dictionary of every chain it asks about and carries a TTL of its own for
@@ -507,10 +513,20 @@ def field_plan_for(marks: Mapping[str, str], index: Index) -> FieldPlan:
         # search can reach, and the empty plan says exactly that instead of
         # handing the parser a name it will raise on.
         return _probed(LEGACY_PLAN, index) or EMPTY_PLAN
-    # Deliberately every exception, for the reason in the docstring above.
+    # Deliberately every exception, for the reason in the docstring above, and
+    # deliberately an error line where the lines beside it are warnings
+    # (audit finding M-19-04). Everything the two halves of a volume can disagree
+    # about is caught one level down, per name and with the name in the line: a
+    # field the directory does not carry never reaches this catch. What reaches
+    # it is this build contradicting itself, a KeyError between two closed
+    # mappings that drifted apart, an AttributeError after a rename, a TypeError
+    # after a changed signature. The first is a message to the operator about
+    # their volume and the second is a bug of ours, and until this finding both
+    # were one warning saying "the marks do not fit", which is the wrong sentence
+    # for the second one and unactionable for the first.
     except Exception as error:
-        LOGGER.warning(
-            "the field plan could not be computed, an %s, the search keeps the legacy plan",
+        LOGGER.error(
+            "the field plan could not be computed at all, an %s in this build, the search keeps the legacy plan",
             type(error).__name__,
         )
         return LEGACY_PLAN
