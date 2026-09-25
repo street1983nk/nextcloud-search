@@ -194,6 +194,47 @@ L10N_IT_JS = REPO_ROOT / "php" / "l10n" / "it.js"
 L10N_NL_JSON = REPO_ROOT / "php" / "l10n" / "nl.json"
 L10N_NL_JS = REPO_ROOT / "php" / "l10n" / "nl.js"
 
+# The seventh language, since plan 20-07, and the fourth of the four of
+# milestone v1.3. It is the one language of this tree that brings two codes
+# without being one language written twice, so three things are written out
+# here rather than guessed later.
+#
+# **Why the code is ``pt_PT`` and not ``pt``.** Nextcloud builds the catalogue
+# file name from the language code without any shortening:
+# ``getL10nFilesForApp`` appends ``.json`` to the code, and ``validateLanguage``
+# checks every step again with ``languageExists``. Nowhere is ``pt_PT`` cut back
+# to ``pt``. That is not read out of the source but asked of a running instance,
+# and the answer of 25.09.2026 stands in section 1 of docs/l10n-catalogues.md:
+# with a real ``php/l10n/pt.json`` lying next to it, a user on ``pt_PT`` still
+# resolved to ``en``. And nobody can stand on ``pt`` either, because
+# ``core/l10n/`` of Nextcloud 34 and 35 ships ``pt_PT`` and ``pt_BR`` and no
+# ``pt`` at all. A ``pt.json`` would therefore be a file that passes every gate
+# in here and that no user ever opens, which is why this plan is forbidden from
+# writing one.
+#
+# **Why ``pt_BR`` will not be a copy of this file.** Plan 20-08 adds the second
+# Portuguese code, and it adds its own wordings. This is the explicit opposite
+# of the ``de``/``de_DE`` pair one paragraph further up, whose text equality is
+# argued there and held by a gate: German has two codes for one set of words,
+# Portuguese has two codes for two sets of words. ``ficheiro`` against
+# ``arquivo``, ``utilizador`` against ``usuário``, ``ecrã`` against ``tela``,
+# ``a transferir`` against ``baixando``. So there is deliberately **no** text
+# equality gate for ``pt_PT`` against ``pt_BR`` in this file, and building one
+# later would freeze one of the two varieties in the wrong words. The positive
+# counterpart, a gate over the named differences, belongs to plan 20-08, when
+# the second file exists to compare against.
+#
+# The wordings are cast from the table in docs/l10n-portuguese.md. That document
+# carries a dated reservation and says in so many words that no native speaker
+# has read them: machine translation plus the open community review of the app
+# store, which is the accepted process E-17-5 and not an oversight. Both l10n
+# files of this language are cast from the same table in one pass. Its table
+# carries three columns today and four after plan 20-08; the missing column is
+# announced above it rather than left empty, because an empty cell looks like a
+# forgotten translation.
+L10N_PT_PT_JSON = REPO_ROOT / "php" / "l10n" / "pt_PT.json"
+L10N_PT_PT_JS = REPO_ROOT / "php" / "l10n" / "pt_PT.js"
+
 # All catalogues in the order the gates below name them. Held as one tuple so
 # that the next file is added in one place and every gate sees it.
 L10N_CATALOGUES = (
@@ -209,6 +250,8 @@ L10N_CATALOGUES = (
     L10N_IT_JS,
     L10N_NL_JSON,
     L10N_NL_JS,
+    L10N_PT_PT_JSON,
+    L10N_PT_PT_JS,
 )
 
 # The common proof of every catalogue of milestone v1.3, written by plan 20-02:
@@ -541,6 +584,19 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         "%1$s in %2$s": "two placeholders and the preposition between them, which Dutch spells the same way",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
         "Spreadsheets": "the word the Dutch Nextcloud interface itself uses for this file type chip",
+    },
+    # European Portuguese, read off the file on 25.09.2026 rather than guessed:
+    # the gate was run once with an empty list and reported four findings, two
+    # keys over two files. That is the shortest list of this tree, as short as
+    # the Spanish one, and the reason is a property of the language rather than
+    # a thorough translation round: Portuguese writes the preposition between
+    # the two placeholders as ``em`` and not as ``in``, so the key the German,
+    # Italian and Dutch lists all carry is not an exception here. Both entries
+    # are proper names, and both would be a mistranslation if a difference were
+    # invented for them.
+    "pt_PT": {
+        "Findling": "the name of the app, the same word in every language of this tree",
+        "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
     },
     "fr": {
         "Findling": "the name of the app, the same word in all three languages",
