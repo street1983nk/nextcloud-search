@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Phase 19, Plan 19-08 fertig (spanischer Vorher-Nachher-Beweis), naechster Plan 19-09
-last_updated: "2026-09-25T10:05:00.000Z"
-last_activity: 2026-09-25 -- 19-08 ausgefuehrt (spanischer Vorher-Nachher-Beweis in der Upgrade-Strecke, Kette 0, 0, 1)
+stopped_at: Phase 19, alle neun Plaene fertig (19-09 Doku und gruener CI-Lauf 36074155306), offen: Phasenverifikation und Audit
+last_updated: "2026-09-25T00:40:00.000Z"
+last_activity: 2026-09-25 -- 19-09 ausgefuehrt (Doku der Frageseite, CI-Lauf 36074155306 auf allen vier Aesten gruen, Laufzeit 172 s eingetragen)
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 38
-  completed_plans: 28
+  completed_plans: 29
   percent: 32
 ---
 
@@ -21,11 +21,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 19 (frageseite-freischalten), Ausfuehrung laeuft; Phase 20 geplant
+**Current focus:** Phase 19 (frageseite-freischalten), alle Plaene ausgefuehrt, Verifikation und Audit offen; Phase 20 geplant
 
 ## Current Position
 
-Phase: 19 (frageseite-freischalten), EXECUTING, Plan 8 of 9; Phase 20 (ui-kataloge) geplant, 0 of 9
+Phase: 19 (frageseite-freischalten), EXECUTING, Plan 9 of 9 ausgefuehrt; Phase 20 (ui-kataloge) geplant, 0 of 9
 Status: Ausfuehrung Phase 19 laeuft (9 Plaene in 6 Wellen). 19-01 fertig (82bf2b1): die drei
 Modulkonstanten DEFAULT_FIELDS/TITLE_ONLY_FIELDS/FIELD_BOOSTS sind ein Wert (FieldPlan,
 LEGACY_PLAN), build_query nimmt plan keyword-only mit dem Bestandsplan als Vorgabewert, der
@@ -81,38 +81,63 @@ CI-Haelfte von Erfolgskriterium 2), 1 nach dem Umbau (zehnte Zusicherung von Sto
 upgrade 6). Die Zusicherungszahlen in Schrittnamen und Protokollzeilen sind
 mitgezogen. backend/tests/test_language_proof_steps.py haelt die drei neuen Aussagen
 fest (19 auf 26 Faelle, drei gestellte Muster, je eine Gegenprobe). Volle Suite 2857
-bestanden / 15 uebersprungen.
+bestanden / 15 uebersprungen. 19-09 fertig (d8cd69a, 4ea3f20, 71cf028, da3858e):
+docs/language-analyzers.md traegt den Abschnitt "What a question searches" mit vier
+Absaetzen (die gespeicherte languages-Marke entscheidet und nicht die
+Umgebungsvariable; die Feldliste haengt am Merker schema_version und das Tor faellt
+geschlossen; es gibt keine Spracherkennung, und der Grund, warum keine gebraucht wird,
+steht daneben; eine einwoertige Frage wird allein aus dem Wortindex beantwortet), dazu
+einen Known-limits-Eintrag zum leeren Textauszug (index/search.py:875, gemessen 24.09.)
+und zwei neue Messzahlen (Kippgrenze 0,81 und 0,26 us je doc_freq-Sonde). DER LAUF IST
+EINGEHOLT UND GRUEN: 36074155306, alle vier Matrixaeste erfolgreich, der
+Sprachbeweisschritt viermal gelaufen und viermal erfolgreich, auf dem arm64-Ast vier
+OCS-Treffer und vier Ergebnisseiten-Treffer, und die Kette 0, 0, 1 steht im Protokoll
+von Store upgrade 3, 5 und 6. Die gemessene Laufzeit des Sprachbeweises (172 s auf
+arm64, 73/41/32 s auf den drei amd64-Aesten) steht als Zahl im Budgetkommentar, das
+Budget bleibt unveraendert bei 600. Der erste Lauf (36072411846) war rot und hat einen
+echten Fehler gefunden: Store upgrade 4 registrierte die aufgeruestete Haelfte mit der
+sechssprachigen Entwicklerdatei aus 19-07, der Container lief also mit sechs Sprachen
+gegen ein Volume ohne languages-Marke, die Generation wurde gehoben und drei
+D-04-Zusicherungen rissen; der Fix baut info-upgrade.xml mit der ausgelieferten
+Vorgabe de,en (71cf028).
 Planung 24.09.: Research b2ef69f,
 Pattern-Karte, Plaene 51525d5, Checker PASS, Warnungen behoben 3c35186. Phase 20 geplant
 (a8d40fd, Checker PASS, f32bdec). Phase 18 davor KOMPLETT (12/12, CI-Beweis 36026836087).
-Last activity: 2026-09-25 -- 19-08 ausgefuehrt (spanischer Vorher-Nachher-Beweis in der Upgrade-Strecke, Kette 0, 0, 1)
+Last activity: 2026-09-25 -- 19-09 ausgefuehrt (Doku der Frageseite, CI-Lauf 36074155306 gruen auf 4/4, Laufzeit eingetragen)
 
 Progress: [███.......] 32% (2 von 7 Phasen)
 
 ## Naechster Schritt
 
-Weiter in Phase 19 mit dem letzten Plan 19-09 (Doku der Frageseite und ihrer Grenzen,
-CI-Lauf einholen, Laufzeit eintragen). Der REQUIREMENTS-Haken fuer LEX-05 ist
-weiterhin NICHT gesetzt: 19-06 hat die Testebene, 19-07 den ungegateten CI-Schritt und
-19-08 die Upgrade-Haelfte geliefert, aber den gruenen Lauf holt erst 19-09 ein, und der
-Haken gehoert der Phase-Verifikation.
-VIER Nachtraege fuer 19-09, drei aus 19-07 und einer aus 19-08: die gemessene Laufzeit
-des Sprachbeweisschritts gehoert als Zahl in den RE-MEASURE-Absatz ueber
-LANGUAGE_PROOF_BUDGET_SECONDS; der Parameter der Ergebnisseite heisst query und nicht
-term (PageController::term() liest getParam('query'), Zeile 340; PLAN und RESEARCH
-Pattern 7c sagen beide term und sind zu berichtigen); der leere Textauszug bei einem
-reinen Sprachfeld-Treffer gehoert als Grenze nach docs/language-analyzers.md; und die
-Ein-Wort-Bedingung des spanischen Upgrade-Beweises gehoert neben die Beschreibung der
-Upgrade-Strecke, weil sie heute nur im Workflowkommentar steht. Danach oder parallel:
-`/gsd:execute-phase 20` (UI-Kataloge; Wellen 1 und 9 sind Checkpoints, 20-01 Pluralfix
-der sechs Bestandskataloge braucht die Owner-Sichtprobe). Phase-20-Planung 24.09.:
-9 Plaene in 9 Wellen (a8d40fd), Checker PASS, Fussabdruck strikt getrennt von Phase 19
-(php/l10n/**, test_admin_ui_contract.py, docs/l10n-*.md, python.yml + integration.yml).
-Groesster Research-Fund: Pluralschluessel aller sechs Bestandskataloge im falschen Format
-(de/fr antworten bei n=2 mit "2 days"), Fix ist Welle 1.
-Entscheide der Planung, die die Ausfuehrung tragen: it-Beweis ueber neue Flexionsfamilie
-(19-02), "befuellt" = languages-Marke (19-03), EIN ungegateter CI-Schritt mit vier
-Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
+Phase 19 ist gebaut: alle neun Plaene ausgefuehrt, der Beweis eingeholt. Offen sind
+die zwei Abschlussschritte der Phase, in dieser Reihenfolge: Phasenverifikation
+(`/gsd:verify-phase 19`) und danach der Security-, Bug- und Performance-Audit nach der
+Owner-Regel vom 15.08.2026. Die Verifikation hat alles, was sie braucht: Laufnummer
+36074155306, vier gruene Aeste (stable33/amd64, stable34/amd64, stable34/arm64,
+stable35/amd64), der Sprachbeweis viermal erschienen und viermal erfolgreich, die
+Kette 0, 0, 1 in Store upgrade 3, 5 und 6.
+Der REQUIREMENTS-Haken fuer LEX-05 ist weiterhin NICHT gesetzt, und das ist kein
+Versehen: die Traceability-Tabelle haekt eine Anforderung bei der Phasenverifikation
+mit Laufnummer ab (so stehen LEX-02 bis LEX-08 dort, alle mit CI 36026836087).
+Inhaltlich ist LEX-05 vollstaendig, denn 19-09 hat die letzte offene Bedingung, den
+gruenen Lauf, geliefert.
+Die vier Nachtraege aus 19-07 und 19-08 sind ALLE erledigt: die gemessene Laufzeit
+steht im Budgetkommentar (da3858e); der Parameter query statt term ist in
+19-RESEARCH.md als datierter Vermerk berichtigt (4ea3f20), waehrend 19-07-PLAN.md
+bewusst unberuehrt bleibt, weil ein Plan ein historisches Artefakt ist und der Fund in
+19-07-SUMMARY steht; der leere Textauszug steht unter Known limits; und die
+Ein-Wort-Bedingung steht als vierter Absatz des neuen Abschnitts.
+Danach oder parallel: `/gsd:execute-phase 20` (UI-Kataloge; Wellen 1 und 9 sind
+Checkpoints, 20-01 Pluralfix der sechs Bestandskataloge braucht die Owner-Sichtprobe).
+Phase-20-Planung 24.09.: 9 Plaene in 9 Wellen (a8d40fd), Checker PASS, Fussabdruck
+strikt getrennt von Phase 19 (php/l10n/**, test_admin_ui_contract.py, docs/l10n-*.md,
+python.yml + integration.yml). Groesster Research-Fund: Pluralschluessel aller sechs
+Bestandskataloge im falschen Format (de/fr antworten bei n=2 mit "2 days"), Fix ist
+Welle 1.
+Entscheide der Planung, die die Ausfuehrung getragen haben: it-Beweis ueber neue
+Flexionsfamilie (19-02), "befuellt" = languages-Marke (19-03), EIN ungegateter
+CI-Schritt mit vier Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben
+Commit (19-01).
 
 ## Performance Metrics
 
@@ -184,6 +209,18 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
   0, 0, 1. Wer eine solche Probe je auf zwei Woerter erweitert, verwandelt sie lautlos in
   eine Aussage ueber Distanzen.
 
+- Eine Beweisdatei, die eine Strecke fuer sich baut, wird von einer anderen Strecke
+  mitbenutzt (19-09). Plan 19-07 setzte die Sprachvorgabe in der temporaeren
+  info-citest.xml der Entwicklerstrecke, und "Store upgrade 4" registriert die
+  aufgeruestete Haelfte mit derselben Datei: der aufgeruestete Container lief mit sechs
+  Sprachen gegen ein Volume ohne languages-Marke, die Generation wurde gehoben und drei
+  D-04-Zusicherungen rissen (Lauf 36072411846). Der Container hat sich richtig
+  verhalten, die Beweisstrecke hat die falsche Frage gestellt. Zwei Regeln daraus: wer
+  eine gemeinsam genutzte Datei aendert, sucht ihre Leser (grep -n info-citest.xml)
+  statt sich zu erinnern, und ein Lauf, der auf drei von vier Aesten gruen ist, kann
+  trotzdem eine tragende Zusage reissen, weil die tragenden Zusagen auf genau einem
+  Ast stehen.
+
 - D-04-Linie (v1.1): index-kompatibel ueber Minor-Spruenge. v1.3 verletzt sie bewusst und
   nur fuer Instanzen, die eine neue Sprache einschalten; der Bruch braucht den Owner-Entscheid
   in Phase 17.
@@ -245,8 +282,9 @@ Ergebnisseiten-Abrufen (19-07), AST-Waechter-Ersatz im selben Commit (19-01).
 
 - Leerer Textauszug bei einem reinen Sprachfeld-Treffer: der `SnippetGenerator` haengt fest an
   `FIELD_BODY_DE` (`index/search.py:875`), gemessen in 19-RESEARCH M-4. Gefuehrt als Annahme A5
-  (dokumentieren statt beheben); Doku gehoert zu 19-09, eine Behebung waere ein eigener Plan und
-  braucht den Owner-Entscheid, ob es ein Mangel ist.
+  (dokumentieren statt beheben). Die Doku ist mit 19-09 geschrieben (docs/language-analyzers.md,
+  Known limits); eine Behebung waere ein eigener Plan und braucht den Owner-Entscheid, ob es ein
+  Mangel ist. Phase 23 nimmt den Punkt in die veroeffentlichte Grenzenliste (REL-03 Kriterium 2).
 
 ## Deferred Items
 
@@ -256,5 +294,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 19-08 abgeschlossen und committet (f0ceef6, c5a450c, 8ac2626), SUMMARY geschrieben
-Resume file: .planning/phases/19-frageseite-freischalten/19-09-PLAN.md
+Stopped at: 19-09 abgeschlossen und committet (d8cd69a, 4ea3f20, 71cf028, da3858e), SUMMARY geschrieben, CI-Lauf 36074155306 gruen auf 4/4, alles gepusht
+Resume file: .planning/phases/19-frageseite-freischalten/19-09-SUMMARY.md (naechster Schritt: Verifikation und Audit der Phase 19)
