@@ -155,6 +155,45 @@ L10N_ES_JS = REPO_ROOT / "php" / "l10n" / "es.js"
 L10N_IT_JSON = REPO_ROOT / "php" / "l10n" / "it.json"
 L10N_IT_JS = REPO_ROOT / "php" / "l10n" / "it.js"
 
+# The sixth language, since plan 20-05, and the third of the four of milestone
+# v1.3. Two files and not four, for the reason French, Spanish and Italian give:
+# one language, one code. The core of Nextcloud 34 and 35 ships ``nl.json`` and
+# ``nl.js`` and no regional variant next to them, so ``nl_BE`` is not a decision
+# this file had to take; the directory listing is section 1 of
+# docs/l10n-catalogues.md.
+#
+# Dutch is the one language of this tree where two things are true at once that
+# look like a contradiction, and both of them are written out here rather than
+# discovered later:
+#
+#   * **Dutch carries two plural forms and not three.** ``FORM_COUNT_OF["nl"]``
+#     is 2, next to the 3 of Spanish, Italian and both Portuguese codes. The five
+#     plural values of nl.json therefore carry two forms each, cast from fr.json
+#     and deliberately not from es.json. A third form would be an entry the rule
+#     ``nplurals=2`` never addresses, so the browser would ask for an index the
+#     rule cannot produce.
+#   * **The Dutch rule is character for character the German one.**
+#     ``nplurals=2; plural=(n != 1);`` stands in core/l10n/de.json and in
+#     core/l10n/nl.json alike, measured on both instances of the version window
+#     and written down in section 3 of docs/l10n-catalogues.md. It is taken from
+#     the Dutch core file and not copied out of our German catalogue; that the
+#     two results are equal is a property of the two languages.
+#
+# The second point is the reason ``scan_plural_rule`` judges per language code
+# since plan 20-02 and no longer says "this file carries the German rule" without
+# asking which language the file belongs to. It reports nothing for ``nl`` with
+# this string and two findings for ``es`` with the same string, and that is the
+# intended behaviour and not a hole in the scanner. Whoever reads this paragraph
+# later should not start repairing it.
+#
+# The wordings are cast from the table in docs/l10n-dutch.md. That document
+# carries a dated reservation and says in so many words that no native speaker
+# has read them: machine translation plus the open community review of the app
+# store, which is the accepted process E-17-5 and not an oversight. Both l10n
+# files of this language are cast from the same table in one pass.
+L10N_NL_JSON = REPO_ROOT / "php" / "l10n" / "nl.json"
+L10N_NL_JS = REPO_ROOT / "php" / "l10n" / "nl.js"
+
 # All catalogues in the order the gates below name them. Held as one tuple so
 # that the next file is added in one place and every gate sees it.
 L10N_CATALOGUES = (
@@ -168,6 +207,8 @@ L10N_CATALOGUES = (
     L10N_ES_JS,
     L10N_IT_JSON,
     L10N_IT_JS,
+    L10N_NL_JSON,
+    L10N_NL_JS,
 )
 
 # The common proof of every catalogue of milestone v1.3, written by plan 20-02:
@@ -486,6 +527,20 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         "Findling": "the name of the app, the same word in every language of this tree",
         "%1$s in %2$s": "two placeholders and the preposition between them, which Italian spells the same way",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
+    },
+    # Dutch, read off the file on 25.09.2026 rather than guessed: the gate was
+    # run once with an empty list and reported eight findings, four keys over
+    # two files. That is one more key than Italian and two more than Spanish,
+    # and the reason is a property of the language rather than a forgotten line:
+    # Dutch has taken more English technical words into its own vocabulary than
+    # the Romance languages have. Each of the four is argued here, because a
+    # language that writes a word the English way needs the argument exactly as
+    # much as one that forgot to translate it.
+    "nl": {
+        "Findling": "the name of the app, the same word in every language of this tree",
+        "%1$s in %2$s": "two placeholders and the preposition between them, which Dutch spells the same way",
+        "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
+        "Spreadsheets": "the word the Dutch Nextcloud interface itself uses for this file type chip",
     },
     "fr": {
         "Findling": "the name of the app, the same word in all three languages",
