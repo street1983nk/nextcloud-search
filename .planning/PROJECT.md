@@ -48,8 +48,9 @@ Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inkl
 
 (v1.3 Sprachausbau, Owner-Entscheid 23.09.2026; REQ-IDs entstehen in REQUIREMENTS.md.)
 
-- Lexikalische Suche fuer es/it/nl/pt: Tantivy-Sprachfelder, Migration, Reindex-Frage
-- UI-Kataloge es/it/nl/pt
+- Lexikalische Suche fuer es/it/nl/pt: Tantivy-Sprachfelder, Migration, Reindex-Frage (Phasen 17-19 komplett)
+- UI-Kataloge es/it/nl/pt (Phase 20 komplett)
+- Niederlaendische Komposita ueber ihre Glieder, KOMP-01 (Phase 21 komplett 25.09.2026: wdutch-Rezept B 4-14, siebte Marke wordlist_hash_nl, Band-Umbau statt Vollreindex, CI-Beweis nlc)
 - Messanfahrt-Buendel BL-F03 (fuenf offene Boxzahlen)
 - Aufraeumbefunde fastembed/numpy
 - Store-Einreichung 1.3.0
@@ -160,4 +161,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-23, Start Milestone v1.3 Sprachausbau*
+*Last updated: 2026-09-25, Phase 21 komplett (Milestone v1.3 Sprachausbau)*
