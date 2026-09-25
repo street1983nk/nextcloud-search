@@ -12,7 +12,7 @@
 - [x] **LEX-02**: Das Schema führt IMMER alle sechs Körperfelder; befüllt wird nur nach `FINDLING_LANGUAGES`, Werkseinstellung bleibt `de,en`. Bestandsinstallationen mit `de,en` bleiben unberührt (D-04-Linie); leere Felder kosten gemessen nichts
 - [x] **LEX-03**: Ein Bestandsindex wandert per Re-Analyse-Umbau aus den gespeicherten Feldern in das neue Schema (neues Modul `index/rebuild.py`): kein Download, kein OCR, keine Neu-Einbettung; `vectors.db`/`state.db` unberührt. Der Umbau ist wiederaufnahmefähig nach Neustart und prüft den Plattenplatz vorab (zwei Indexverzeichnisse gleichzeitig, `MIN_FREE_BYTES` anpassen)
 - [x] **LEX-04**: Schema-Erweiterung und Query-Freischaltung liegen in getrennten Phasen mit bewiesenem Umbauweg dazwischen: Die Suche funktioniert auf Bestandsinstallationen in JEDEM Zwischenzustand (der heutige Totalausfall-Pfad `parse_query_lenient`-ValueError -> dauerhaft leere degraded-Antwort darf nie erreichbar sein). Migration `Version001300Date...` wie bei jedem Minor-Sprung
-- [ ] **LEX-05**: Die Anfrage durchsucht genau die aktiven Sprachfelder mit Feld-Boosts unterhalb `body_en`; KEINE Spracherkennung, weder dokument- noch anfrageseitig (Anti-Feature, einstimmig)
+- [x] **LEX-05**: Die Anfrage durchsucht genau die aktiven Sprachfelder mit Feld-Boosts unterhalb `body_en`; KEINE Spracherkennung, weder dokument- noch anfrageseitig (Anti-Feature, einstimmig)
 - [x] **LEX-06**: Admin sieht in der Diagnose, welche Sprachen aktiv und befüllt sind; beim Start warnt Findling, wenn `FINDLING_LANGUAGES` eine Sprache führt, die die OCR-Sprachen nicht abdecken (Buchstabensalat-Falle)
 - [x] **LEX-07**: `tantivy` auf 0.26.2 gepinnt (stopword-Panic wird ValueError, index_format v7 unverändert; der zunächst behauptete Union-Scorer-Fix ist laut Phase-17-Research nicht belegbar und gestrichen); Sprachnamen laufen über eine Positivliste analog `OCR_LANGUAGE_ALLOWLIST`
 - [x] **LEX-08**: CI beweist beides: Sprachfälle je neuer Sprache ohne Fremdbestand (Muster A4/2026-09) UND eine umgedrehte Upgrade-Beweisstrecke in `deploy-harp.yml` (Umbau findet statt, Suche liefert danach in alter und neuer Sprache; die bestehende "kein Reindex"-Strecke wird um die Gegenrichtung ergänzt, nicht entschärft; `UPGRADE_FROM_TAG` auf v1.2.0)
@@ -66,7 +66,7 @@
 | LEX-04 | Phase 18 (Schema, Marken und Umbauweg) | Complete (24.09.2026, Verifikation 5/5, CI 36026836087) |
 | LEX-06 | Phase 18 (Schema, Marken und Umbauweg) | Complete (24.09.2026, Verifikation 5/5, CI 36026836087) |
 | LEX-08 | Phase 18 (Schema, Marken und Umbauweg) | Complete (24.09.2026, Verifikation 5/5, CI 36026836087) |
-| LEX-05 | Phase 19 (Frageseite freischalten) | Pending |
+| LEX-05 | Phase 19 (Frageseite freischalten) | Complete (25.09.2026, Verifikation 4/4, CI 36074155306/36076006854) |
 | KAT-01 | Phase 20 (UI-Kataloge es/it/nl/pt) | Pending |
 | KAT-02 | Phase 20 (UI-Kataloge es/it/nl/pt) | Pending |
 | KOMP-01 | Phase 21 (Niederländische Komposita) | Pending |
