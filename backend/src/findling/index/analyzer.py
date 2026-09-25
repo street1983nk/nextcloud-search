@@ -194,8 +194,9 @@ def build_count() -> int:
 
 
 # The Dutch counterpart of the two above, keyed on the digest of the Dutch list.
-# A second automaton of roughly 17.6 MB, paid only while nl is configured, and
-# never twice for the same list.
+# A second automaton of roughly 24 to 25 MB resident (measured product close,
+# docs/performance.md, addendum of 2026-09-25), paid only while nl is
+# configured, and never twice for the same list.
 _CACHED_DUTCH: dict[str, TextAnalyzer] = {}
 
 # The Dutch half of the pair of locks above. dutch_chain_for holds it across the

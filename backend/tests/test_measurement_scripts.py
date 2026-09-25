@@ -1088,8 +1088,13 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # failed; the answer of version_drift stays UNPROVEN_WORDLIST, because the Dutch
 # mark is one a band run answers. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-25 by the fix of review finding IN-02 of phase 21: two of the
+# 57 files changed their bytes, comments only. index/analyzer.py and
+# index/open.py cite the Dutch automaton as roughly 24 to 25 MB, the product
+# close figure of docs/performance.md, instead of the withdrawn 17.6 MB of the
+# research probe. No file came and none went, so PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "2bdb18eded0d717a043f11fae398b8cd25d6e549756e6ed3f743839d30c09504"
+PACKAGE_TREE_HASH_TODAY = "728461aceae56b8433a27cca6005b73303362733fb5973c9f6da4954dbcceda2"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

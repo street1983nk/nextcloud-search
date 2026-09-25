@@ -185,8 +185,9 @@ def open_index(path: Path, constituents: Sequence[str], *, dutch: str | None = N
     # The Dutch chain follows the language set in its variant and never in its
     # presence, so the line stays free like the three around it. Without nl,
     # body_nl stays empty and field_plan_for in findling.api.resources never asks
-    # it, so the plain Snowball variant is neutral there and saves the 17.6 MB of
-    # the Dutch automaton; with nl the splitting chain answers, with the list
+    # it, so the plain Snowball variant is neutral there and saves the roughly 24
+    # to 25 MB of the Dutch automaton (docs/performance.md, addendum of
+    # 2026-09-25); with nl the splitting chain answers, with the list
     # behind the folding (D-07). dutch_chain_for makes the choice, not this line.
     index.register_tokenizer(TOKENIZER_NL, dutch_chain_for(dutch))
     index.register_tokenizer(TOKENIZER_PT, snowball_analyzer(SNOWBALL_NAME["pt"]))
