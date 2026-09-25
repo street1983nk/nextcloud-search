@@ -25,10 +25,11 @@ from pathlib import Path
 import pytest
 from tantivy import Document, Index, Query
 
-from conftest import Corpus, write_wordlist
+from conftest import Corpus, write_wordlist, write_wordlist_nl
 from findling.api import resources
 from findling.config import SCHEMA_VERSION, settings
 from findling.index.open import (
+    DUTCH_MARK,
     LANGUAGES_MARK,
     REBUILD_MARK,
     expected_versions,
@@ -43,6 +44,7 @@ from findling.index.rebuild import (
     FALLBACK_TO_FULL_REINDEX,
     HALF_FILLED_TARGET_KEPT,
     LIVE_IS_A_SYMLINK,
+    MARKS_A_REBUILD_ANSWERS,
     NOT_ENOUGH_ROOM,
     NOTHING_TO_PUT_IN_ORDER,
     NOTHING_TO_REBUILD,
@@ -79,6 +81,7 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
+from findling.index.wordlist_nl import dutch_mark
 from findling.store.repo import LEGACY_LANGUAGES, FileMeta, Store, open_store
 
 REBUILD_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "index" / "rebuild.py"
@@ -777,7 +780,7 @@ def test_a_finished_rebuild_stamps_the_schema_the_languages_and_clears_the_mark(
     del source
     gc.collect()
     swap_in(target, live)
-    stamp_after_swap(store, ",".join(settings().languages))
+    stamp_after_swap(store, ",".join(settings().languages), dutch_mark="off")
 
     marks = store.read_meta()
     store.close()
@@ -806,7 +809,7 @@ def test_a_rebuild_does_not_move_the_generation(tmp_path: Path) -> None:
     del source
     gc.collect()
     swap_in(target, live)
-    stamp_after_swap(store, "de,en")
+    stamp_after_swap(store, "de,en", dutch_mark="off")
 
     after = store.index_version
     store.close()
@@ -855,7 +858,7 @@ def test_a_run_whose_final_probe_fails_neither_swaps_nor_stamps(
     # an index that calls itself current.
     if complete:
         swap_in(target, live)
-        stamp_after_swap(store, "de,en")
+        stamp_after_swap(store, "de,en", dutch_mark="off")
 
     after = dict(store.read_meta())
     store.close()
@@ -1370,9 +1373,9 @@ def test_the_run_stands_down_before_the_first_document_and_arms_behind_the_stamp
             hands.journal.append("document")
         return honest_document(stored, languages)
 
-    def note_the_stamp(handle: Store, languages: str) -> None:
+    def note_the_stamp(handle: Store, languages: str, *, dutch_mark: str) -> None:
         hands.journal.append("stamp")
-        honest_stamp(handle, languages)
+        honest_stamp(handle, languages, dutch_mark=dutch_mark)
 
     monkeypatch.setattr("findling.index.rebuild._document_from", note_the_first_document)
     monkeypatch.setattr("findling.index.rebuild.stamp_after_swap", note_the_stamp)
@@ -1500,6 +1503,9 @@ def test_the_full_reindex_way_out_leaves_the_marks_of_a_directory_as_they_were(
     language mark does (D-06, no special case).
     """
     store = _a_volume_under_the_factory_pair_asked_for_spanish(volume, monkeypatch)
+    # A Dutch mark of a list this container no longer runs, standing where an
+    # earlier nl build left it. The way out treats it like the language mark.
+    store.write_meta(DUTCH_MARK, "1:an-older-list")
     before = store.index_version
     expected = expected_versions(write_wordlist(volume), ",".join(settings().languages))
 
@@ -1523,6 +1529,8 @@ def test_the_full_reindex_way_out_leaves_the_marks_of_a_directory_as_they_were(
     assert marks[LANGUAGES_MARK] == "de,en"
     assert marks[_SCHEMA_MARK] == "1"
     assert LANGUAGES_MARK in drift
+    assert marks[DUTCH_MARK] == "1:an-older-list", "the way out leaves the Dutch mark as it was"
+    assert DUTCH_MARK in drift
     # The stamp clears the mark of the rebuild under way while the language
     # drift stays, so the next start does not find its own fingerprint any more
     # and raises the generation again for the same drift: under the way out, a
@@ -1639,6 +1647,74 @@ def test_marks_that_agree_are_answered_without_touching_anything(volume: Path) -
     assert verdict == NOTHING_TO_REBUILD
     assert hands.journal == []
     assert not (volume / "index.rebuild").exists()
+
+
+def test_a_finished_rebuild_stamps_the_dutch_mark(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fourth write of the stamp, behind the swap and with the value the expectation carries.
+
+    Under ``de,en,nl`` with the fixture list on the volume, a run through has
+    to leave the Dutch mark on exactly the value every caller of
+    :func:`expected_versions` builds, or the next start reports a drift the
+    rebuild has just answered and runs again (T-21-06-01).
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,nl")
+    settings.cache_clear()
+    digest_nl = write_wordlist_nl(volume)
+    store = _a_volume_that_asks_for_a_rebuild(volume)
+    assert DUTCH_MARK not in store.read_meta(), "nothing wrote the mark before the swap"
+
+    verdict = _led_by(store, _Hands())
+    marks = store.read_meta()
+    dutch = dutch_mark(settings().languages)
+    expected = expected_versions(write_wordlist(volume), ",".join(settings().languages), dutch_mark=dutch)
+    drift = store.version_mismatch(expected)
+    store.close()
+
+    assert verdict == REBUILD_THROUGH
+    assert marks[DUTCH_MARK] == dutch
+    assert dutch.endswith(digest_nl)
+    assert drift == []
+
+
+@pytest.mark.parametrize(
+    ("languages", "stored"),
+    [
+        pytest.param("de,en,nl", "off", id="switched-on"),
+        pytest.param("de,en,nl", "1:an-older-list", id="new-list"),
+        pytest.param("de,en", "1:an-older-list", id="switched-off"),
+    ],
+)
+def test_a_dutch_drift_is_one_the_rebuild_answers(
+    volume: Path, monkeypatch: pytest.MonkeyPatch, languages: str, stored: str
+) -> None:
+    """Every Dutch drift is answered by the band run, and only the Dutch mark drifts here.
+
+    Schema and language marks are put on the current values first, so a run
+    that starts at all starts for the Dutch mark alone. Before plan 21-06 the
+    set of marks a rebuild answers did not name it, and this case came back
+    NOTHING_TO_REBUILD while the drift stood on record for good (T-21-06-02).
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", languages)
+    settings.cache_clear()
+    write_wordlist_nl(volume)
+    store = _a_volume_that_asks_for_a_rebuild(volume)
+    store.write_meta(_SCHEMA_MARK, str(SCHEMA_VERSION))
+    store.write_meta(LANGUAGES_MARK, ",".join(settings().languages))
+    store.write_meta(DUTCH_MARK, stored)
+    dutch = dutch_mark(settings().languages)
+    expected = expected_versions(write_wordlist(volume), ",".join(settings().languages), dutch_mark=dutch)
+    assert store.version_mismatch(expected) == [DUTCH_MARK]
+
+    verdict = _led_by(store, _Hands())
+    marks = store.read_meta()
+    drift = store.version_mismatch(expected)
+    store.close()
+
+    assert DUTCH_MARK in MARKS_A_REBUILD_ANSWERS
+    assert verdict != NOTHING_TO_REBUILD
+    assert verdict == REBUILD_THROUGH
+    assert marks[DUTCH_MARK] == dutch
+    assert drift == []
 
 
 def test_the_progress_rests_before_the_run_and_carries_two_numbers_during_it(

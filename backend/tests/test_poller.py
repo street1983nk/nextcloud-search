@@ -44,13 +44,14 @@ import pytest
 from fastapi.testclient import TestClient
 from tantivy import Index
 
-from conftest import write_wordlist
+from conftest import write_wordlist, write_wordlist_nl
 from findling.config import SCHEMA_VERSION, settings
 from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
 from findling.extract.errors import ExtractionOutcome, Reason
-from findling.index.open import LANGUAGES_MARK, REBUILD_MARK, SCHEMA_MARK, expected_versions, open_index
+from findling.index.open import DUTCH_MARK, LANGUAGES_MARK, REBUILD_MARK, SCHEMA_MARK, expected_versions, open_index
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
+from findling.index.wordlist_nl import dutch_mark
 from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
 from findling.nc.client import AsyncNextcloudApp, NextcloudException
@@ -2547,6 +2548,41 @@ def test_a_drift_of_both_kinds_raises_the_generation(volume: Path, monkeypatch: 
         store.close()
 
     assert after == before + 1
+
+
+def test_a_dutch_drift_does_not_raise_the_generation(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Dutch list that moved is answered by the band run, not by a full reindex (T-21-06-02).
+
+    An index built under de,en,nl carries the mark of a list this container no
+    longer holds. Opening the state database has to leave the generation where
+    it was, because the band run analyses body_nl again out of the stored text,
+    and a raised generation would order the crawl of every file behind it. The
+    drift itself stays on record, since it is what starts the band run.
+    """
+    _switch_dutch_on(monkeypatch)
+    write_wordlist(volume)
+    write_wordlist_nl(volume)
+    built = _open_state()
+    writer = _open_writer(built)
+    writer.close()
+    built.write_meta(DUTCH_MARK, "1:alt")
+    before = built.index_version
+    built.close()
+
+    store = _open_state()
+    try:
+        after = store.index_version
+        marks = store.read_meta()
+        expected = expected_versions(
+            write_wordlist(volume), ",".join(settings().languages), dutch_mark=dutch_mark(settings().languages)
+        )
+        drift = store.version_mismatch(expected)
+    finally:
+        store.close()
+
+    assert after == before
+    assert not marks.get(REBUILD_MARK)
+    assert drift == [DUTCH_MARK]
 
 
 async def test_the_resources_open_off_the_event_loop(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:

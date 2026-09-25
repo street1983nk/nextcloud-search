@@ -459,7 +459,7 @@ def test_the_field_plan_follows_the_stamp_behind_the_bar(indexed_volume: Corpus)
     resources.hold_the_read_side_shut()
     try:
         writable = open_store(indexed_volume.root / "state.db")
-        stamp_after_swap(writable, "de,en,es")
+        stamp_after_swap(writable, "de,en,es", dutch_mark="off")
         writable.close()
     finally:
         resources.let_the_read_side_open()

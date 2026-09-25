@@ -113,6 +113,7 @@ from tantivy import Document, FieldType, Index, Order, Query
 
 from findling.config import FULL_REINDEX_FALLBACK, SCHEMA_VERSION, settings
 from findling.index.open import (
+    DUTCH_MARK,
     LANGUAGES_MARK,
     REBUILD_MARK,
     expected_versions,
@@ -133,6 +134,7 @@ from findling.index.schema import (
     FIELD_TITLE,
 )
 from findling.index.wordlist import build_artifact
+from findling.index.wordlist_nl import dutch_mark
 from findling.store.repo import Store, index_bytes
 
 LOGGER = logging.getLogger("findling.index.rebuild")
@@ -230,7 +232,15 @@ _SCHEMA_MARK: Final = "schema_version"
 # real differences with a different remedy: they need the documents read again,
 # which is the crawl the generation raise orders, and carrying the old text over
 # would leave the very drift the mark reports (18-RESEARCH.md, pitfall 1).
-MARKS_A_REBUILD_ANSWERS: Final = frozenset({_SCHEMA_MARK, LANGUAGES_MARK})
+#
+# The Dutch mark (phase 21) is the third member, and it belongs here rather than
+# with the marks a crawl answers because a new analysis is all it needs: the
+# rebuild writes body_nl out of the stored body_de text through the chain the
+# target registers (_document_from), so a Dutch list switched on, swapped or
+# switched off becomes true by the pass itself, exactly like a moved language
+# set. Carrying the old body_nl tokens over is impossible by construction, the
+# field is analysed again on every write.
+MARKS_A_REBUILD_ANSWERS: Final = frozenset({_SCHEMA_MARK, LANGUAGES_MARK, DUTCH_MARK})
 
 # What an index without a language mark was built with. Not a guess and not a
 # default: no release up to 1.2.0 could write a body field outside this pair, so
@@ -874,12 +884,15 @@ def recover_the_index_directories() -> str:
     return NOTHING_TO_PUT_IN_ORDER
 
 
-def stamp_after_swap(store: Store, languages: str) -> None:
+def stamp_after_swap(store: Store, languages: str, *, dutch_mark: str) -> None:
     """Declare the rebuild through, once the swap has really happened.
 
-    Three writes: the schema the new directory was built under, the language set
-    it was filled with, and the rebuild mark emptied, which is what takes the
-    banner down. ``index_version`` is deliberately not among them, for the same
+    Four writes: the schema the new directory was built under, the language set
+    it was filled with, the Dutch mark of the chain its body_nl field was
+    analysed through, and the rebuild mark emptied, which is what takes the
+    banner down. ``dutch_mark`` is keyword-only and has no default on purpose: a
+    caller that forgot it would stamp ``off`` over a directory analysed with a
+    real list, which is a mark that lies (T-21-06-01). ``index_version`` is deliberately not among them, for the same
     reason the other stamp leaves it alone: the stored generation stands above
     the baseline of the code after a rebuild, and writing the baseline back would
     make every verdict of the run that just finished look stale.
@@ -927,8 +940,9 @@ def stamp_after_swap(store: Store, languages: str) -> None:
     """
     store.write_meta(_SCHEMA_MARK, str(SCHEMA_VERSION))
     store.write_meta(LANGUAGES_MARK, languages)
+    store.write_meta(DUTCH_MARK, dutch_mark)
     store.write_meta(REBUILD_MARK, "")
-    LOGGER.info("the rebuilt index directory is in place; the schema and language marks are current again")
+    LOGGER.info("the rebuilt index directory is in place; the schema, language and Dutch marks are current again")
 
 
 def _discard_the_target(target: Path, why: str) -> None:
@@ -1105,7 +1119,8 @@ def rebuild_the_index(
     _note_blocked_bytes(0)
     artifact = build_artifact()
     languages = ",".join(resolved.languages)
-    expected = expected_versions(artifact.digest, languages)
+    dutch = dutch_mark(resolved.languages)
+    expected = expected_versions(artifact.digest, languages, dutch_mark=dutch)
     drifted = MARKS_A_REBUILD_ANSWERS.intersection(store.version_mismatch(expected))
     if not drifted:
         return NOTHING_TO_REBUILD
@@ -1272,10 +1287,10 @@ def rebuild_the_index(
             # that has just gone, and answers out of that list until the container
             # is restarted: the rebuild is through, the directory carries thirteen
             # fields, the search reaches two of them, and no log line anywhere
-            # says so. Three writes on a table of a dozen rows is what the window
+            # says so. Four writes on a table of a dozen rows is what the window
             # of M-18-03 grows by, and for that width a search answers empty,
             # which is the documented state of this window anyway.
-            stamp_after_swap(store, languages)
+            stamp_after_swap(store, languages, dutch_mark=dutch)
         finally:
             let_read_side_open()
         return REBUILD_THROUGH

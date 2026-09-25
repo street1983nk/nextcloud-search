@@ -1029,8 +1029,13 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # and compares it through _dutch_list_is_legacy, under which only an absent mark
 # against off is no drift. Every caller in src still takes the default. No file
 # came and none went, so PACKAGE_FILES_TODAY stays at 57.
+# Moved on 2026-09-25 by Plan 21-06, task 1: one of the 57 files changed its
+# bytes. index/rebuild.py names DUTCH_MARK in MARKS_A_REBUILD_ANSWERS, so a
+# Dutch drift is answered by the band run, and stamp_after_swap takes a
+# keyword-only dutch_mark without a default and writes it behind the swap. No
+# file came and none went, so PACKAGE_FILES_TODAY stays at 57.
 PACKAGE_FILES_TODAY = 57
-PACKAGE_TREE_HASH_TODAY = "32e5cc31bbd8fd478e19459ad19483bd231502b5b02a574d6bc667d0e7354746"
+PACKAGE_TREE_HASH_TODAY = "e4f38cf7d097df78d71d46c52c64335446fae736ad455235582d439f00c051e2"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.
