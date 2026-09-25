@@ -54,7 +54,7 @@ Details im Archiv: .planning/milestones/v1.2-ROADMAP.md
 
 - [x] **Phase 19: Frageseite freischalten** - Die Anfrage erreicht die neuen Felder, erst nachdem der Umbau bewiesen ist (komplett 25.09.2026, Verifikation 4/4, Audit 1H/5M behoben, CI 36096526219 gruen 4/4)
 - [x] **Phase 20: UI-Kataloge es/it/nl/pt** - Zehn neue Katalogdateien im Gleichstand mit EN/DE/FR (Parallelpfad) (completed 2026-09-25)
-- [ ] **Phase 21: Niederlaendische Komposita** - Eigenes Tor, faellt bei Terminnot als Ganzes
+- [x] **Phase 21: Niederlaendische Komposita** - Eigenes Tor, faellt bei Terminnot als Ganzes (completed 2026-09-25)
 - [ ] **Phase 22: Messanfahrt BL-F03** - Eine Box-Anfahrt fuer fuenf offene und zwei neue Zahlen
 - [ ] **Phase 23: Haertung und Store-Einreichung 1.3.0** - Aufraeumbefunde, dokumentierte Grenzen, signiertes App-Paar im Store
 
@@ -219,7 +219,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 21-09-PLAN.md: Doku, Budget, Schlusspruefung, Owner-Freigabe Push und CI-Beweis
+- [x] 21-09-PLAN.md: Doku, Budget, Schlusspruefung, Owner-Freigabe Push und CI-Beweis
 
 **Research-Flag**: ja (`--research-phase 21`, eigene Rezeptmessung wie beim deutschen Splitter)
 
@@ -266,7 +266,7 @@ Plans:
 | 18. Schema, Marken und Umbauweg | v1.3 | 12/12 | Complete   | 2026-09-24 |
 | 19. Frageseite freischalten | v1.3 | 9/9 | Executing | - |
 | 20. UI-Kataloge es/it/nl/pt | v1.3 | 9/9 | Complete    | 2026-09-25 |
-| 21. Niederlaendische Komposita | v1.3 | 8/9 | In Progress|  |
+| 21. Niederlaendische Komposita | v1.3 | 9/9 | Complete   | 2026-09-25 |
 | 22. Messanfahrt BL-F03 | v1.3 | 0/TBD | Not started | - |
 | 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 0/TBD | Not started | - |
 
