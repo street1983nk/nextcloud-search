@@ -71,8 +71,11 @@ vom Owner abgenommen ("approved", 25.09.2026).**
   übersetzten Titels, Abwesenheit des englischen. Antwort bleibt als `language-probe-<code>.html`.
 - Lokal geprüft: YAML-Parse mit den Planprüfungen, `bash -n` über den run-Block, Erwartungswerte
   der fünf Kataloge per Python gelesen (alle vorhanden, keiner gleich dem Schlüssel).
-- **Erster echter Lauf folgt mit dem Push durch den Orchestrator; der Lauf-Beleg wird hier
-  nachgetragen.** Lokal gibt es weder PHP noch den CI-Runner.
+- **Erster echter Lauf BESTANDEN (Nachtrag 25.09.2026):** Push d52d2e5, Integration-Lauf
+  36126493091er-Serie, Run 36126493024 success; der Schritt "The result page answers in every
+  new language (core lang)" im Job search-parity (stable34, 8.2) ist gruen. Alle sechs
+  Workflows des Pushes gruen (Python gates, PHP/Store gates, Multi-arch, Integration,
+  Resilience, HaRP deploy). Lokal gibt es weder PHP noch den CI-Runner.
 
 ## Task 2: der Schlussabschnitt
 
