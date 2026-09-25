@@ -50,7 +50,7 @@ Details im Archiv: .planning/milestones/v1.2-ROADMAP.md
  (completed 2026-09-23)
 - [x] **Phase 18: Schema, Marken und Umbauweg** - Sechs Koerperfelder, Re-Analyse-Umbau aus dem Bestandsindex, Beweisstrecke umgedreht
  (completed 2026-09-24)
-- [ ] **Phase 19: Frageseite freischalten** - Die Anfrage erreicht die neuen Felder, erst nachdem der Umbau bewiesen ist
+- [x] **Phase 19: Frageseite freischalten** - Die Anfrage erreicht die neuen Felder, erst nachdem der Umbau bewiesen ist (komplett 25.09.2026, Verifikation 4/4, Audit 1H/5M behoben, CI 36096526219 gruen 4/4)
 - [ ] **Phase 20: UI-Kataloge es/it/nl/pt** - Zehn neue Katalogdateien im Gleichstand mit EN/DE/FR (Parallelpfad)
 - [ ] **Phase 21: Niederlaendische Komposita** - Eigenes Tor, faellt bei Terminnot als Ganzes
 - [ ] **Phase 22: Messanfahrt BL-F03** - Eine Box-Anfahrt fuer fuenf offene und zwei neue Zahlen
