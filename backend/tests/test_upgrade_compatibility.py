@@ -33,7 +33,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-from findling.index.open import LANGUAGES_MARK, expected_versions
+from findling.index.open import DUTCH_MARK, LANGUAGES_MARK, TANTIVY_VERSION, expected_versions
+from findling.store.repo import open_store
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILE = BACKEND_ROOT / "Dockerfile"
@@ -147,6 +148,10 @@ GOLD_V1_3 = {
     "analyzer_version": "1",
     "tantivy_version": GOLD_INDEX_FORMAT,
     LANGUAGES_MARK: GOLD_LANGUAGES,
+    # The seventh mark on an installation without Dutch, which is the factory
+    # setting. A literal and not DUTCH_LIST_OFF for the reason GOLD_LANGUAGES
+    # gives: a gold value that follows the code it guards guards nothing.
+    DUTCH_MARK: "off",
 }
 
 # The six marks an index carries. A mark that disappears counts as a difference
@@ -163,6 +168,14 @@ GOLD_V1_3 = {
 # A sixth mark would otherwise be a rebuild for every installation in the field,
 # which is exactly what the ratchet above exists to prevent; here it is a rebuild
 # for the installations that switch a language on, and for no others.
+#
+# The seventh one joined on 2026-09-25, under decision D-06 of phase 21: the
+# Dutch constituent list body_nl is split with, as "off" or "<chain>:<digest>".
+# It is the second mark that is deliberately NOT seeded, and the exception is
+# the same kind: findling.store.repo skips it in _seed_meta and reads its absence
+# as legacy only while the expectation is off (_dutch_list_is_legacy), because
+# no build before phase 21 split body_nl with a list. So it is a rebuild for the
+# installations that switch Dutch on or change the list, and for no others.
 ALL_MARKS = (
     "schema_version",
     "index_version",
@@ -170,6 +183,7 @@ ALL_MARKS = (
     "wordlist_hash",
     TANTIVY_MARK,
     LANGUAGES_MARK,
+    DUTCH_MARK,
 )
 
 
@@ -336,22 +350,59 @@ def test_the_index_format_of_the_banner_holds_as_well() -> None:
 
 
 def test_no_mark_appeared_and_none_went_missing() -> None:
-    """Six marks, the same six, and the digest travels through untouched.
+    """Seven marks, the same seven, and the digest travels through untouched.
 
-    A seventh mark is a rebuild for everyone just as much as a changed value is,
-    and a mark that vanished is one the store counts as a difference. The digest
-    is asserted as passed through so that the fourth mark stays what it claims to
-    be: a statement about the word list and about nothing else.
+    A new mark is a rebuild for everyone just as much as a changed value is,
+    unless its absence is read as legacy by a named rule next to the comparison;
+    and a mark that vanished is one the store counts as a difference. That rule
+    stands, and this tuple is where it is enforced. The digest is asserted as
+    passed through so that the fourth mark stays what it claims to be: a
+    statement about the word list and about nothing else.
 
-    The sixth arrived on 2026-09-24 and is the one exception this file records
-    rather than forbids: it costs no installation in the field a rebuild, because
-    its absence is read as legacy instead of as a difference. The proof of that
-    lives where the reading happens, in backend/tests/test_store_metadata.py.
+    Exactly two exceptions are recorded here rather than forbidden, and neither
+    costs an installation in the field a rebuild. The sixth, the language set,
+    arrived on 2026-09-24; its absence is legacy while the expectation stays
+    inside ("de", "en"). The seventh, the Dutch list, arrived on 2026-09-25; its
+    absence is legacy while the expectation is off. The proof of both lives where
+    the reading happens, in backend/tests/test_store_repo.py, and for the seventh
+    also in test_an_upgrade_without_dutch_moves_no_seventh_mark below. An eighth
+    mark without such a rule would be a rebuild for everyone and fails here.
     """
     marks = expected_versions("ein-digest", GOLD_LANGUAGES)
     assert tuple(marks) == ALL_MARKS, marks
     assert marks["wordlist_hash"] == "ein-digest"
     assert expected_versions("ein-anderer", GOLD_LANGUAGES)["wordlist_hash"] == "ein-anderer"
+
+
+def test_an_upgrade_without_dutch_moves_no_seventh_mark(tmp_path: Path) -> None:
+    """Success criterion 4 of phase 21, asked of the real store.
+
+    A database as a 1.2.x installation leaves it behind: five marks, schema 1,
+    no language mark and no Dutch mark at all. The running code expects schema
+    2, the factory pair and Dutch off. The schema step and the absent language
+    mark are excused by their own rules; this case holds that the seventh mark
+    adds nothing to that, so the upgrade shows no banner and starts no rebuild.
+    The counter case switches Dutch on over the same database and has to speak,
+    or the silence above would prove nothing.
+    """
+    stock_1_2 = {
+        "schema_version": "1",
+        "index_version": "1",
+        "analyzer_version": "1",
+        "wordlist_hash": "ein-digest",
+        TANTIVY_MARK: TANTIVY_VERSION,
+    }
+    store = open_store(tmp_path / "state.db", meta=stock_1_2)
+    try:
+        assert DUTCH_MARK not in store.read_meta()
+
+        without_dutch = store.version_mismatch(expected_versions("ein-digest", GOLD_LANGUAGES, dutch_mark="off"))
+        with_dutch = store.version_mismatch(expected_versions("ein-digest", GOLD_LANGUAGES, dutch_mark="1:d"))
+    finally:
+        store.close()
+
+    assert without_dutch == [], without_dutch
+    assert with_dutch == [DUTCH_MARK], with_dutch
 
 
 def test_the_word_list_is_held_through_its_debian_pin() -> None:

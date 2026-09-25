@@ -1021,7 +1021,7 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # wordlist_hash_nl as the exception to raising ANALYZER_VERSION. No caller in
 # the running app uses it yet. No file came and none went, so
 # PACKAGE_FILES_TODAY stays at 57.
-# Moved on 2026-09-25 by plan 21-05: two of the 57 files changed their bytes.
+# Moved on 2026-09-25 by Plan 21-05: two of the 57 files changed their bytes.
 # index/open.py got the seventh mark DUTCH_MARK ("wordlist_hash_nl"), the
 # keyword-only dutch_mark of expected_versions with the default off, the mark in
 # _MARKS_OF_A_DIRECTORY and its write in stamp_a_new_directory. store/repo.py
