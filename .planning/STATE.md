@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: 20-01 gebaut und committet (51e0ea4, 5389009), BLOCKIERENDER CHECKPOINT: Owner-Sichtprobe des Vorher-Nachher-Belegs steht aus
-last_updated: "2026-09-25T05:45:00.000Z"
-last_activity: 2026-09-25 -- 20-01 ausgefuehrt, Checkpoint offen
+stopped_at: 20-02 gebaut und committet (a283b7c, 1e6881f, 5b78e08), Gates lokal gruen, NICHT gepusht
+last_updated: "2026-09-25T06:30:00.000Z"
+last_activity: 2026-09-25 -- 20-02 ausgefuehrt, Owner-Go zu 20-01 liegt vor
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 38
-  completed_plans: 30
+  completed_plans: 31
   percent: 43
 ---
 
@@ -21,20 +21,31 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 gebaut, wartet auf die Owner-Sichtprobe
+**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 gebaut
 
 ## Current Position
 
-Phase: 20 (ui-kataloge-es-it-nl-pt), 1 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
-Status: 20-01 (Pluralschluessel-Fix der sechs Bestandskataloge) ist gebaut und committet
-(51e0ea4 Scanner, 5389009 Kataloge), aber NICHT abgenommen: der blockierende Checkpoint
-Task 3 wartet auf die Owner-Sichtprobe. Alle fuenf Pluralschluessel stehen in de/de_DE/fr
-(json und js) jetzt als _<singular>_::_<plural>_, die Zahl 202 ist unveraendert, 5 geaenderte
-Zeilen je Datei, kein Baumhash bewegt. Gemessen an der laufenden Instanz: vorher antworteten
-de und fr ab n=2 mit "2 days", jetzt mit "2 Tage" und "2 jours" (Vorher-Haelfte neu erhoben
-aus den HEAD~1-Bytes unter der Wegwerf-App-ID l10nprobe, beides am 25.09. auf derselben
-Nextcloud). Suite 2877 passed / 15 skipped, ruff/pyright/vulture gruen. NICHT gepusht.
-KAT-01 bleibt ungehakt: die Anforderung verlangt zehn neue Dateien, nicht die Bestandsreparatur.
+Phase: 20 (ui-kataloge-es-it-nl-pt), 2 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
+Status: 20-02 (Ladepfad-Beweis, Pluralregeln, sprachbewusstes Gate) ist gebaut und committet
+(a283b7c docs/l10n-catalogues.md, 1e6881f Gate, 5b78e08 python.yml). Der Ladepfad ist erneut
+an der laufenden Instanz gefahren (pt laedt, pt_PT und pt_BR fallen auf en, also zehn Dateien),
+die Pluralregeln sind auf NC 34.0.3 UND NC 35.0.0 gelesen und dort zeichengleich, und die
+Formenwahl ist gemessen: PHP erreicht Form 2 nie, der Browser waehlt sie bei n=2, also werden
+Form 1 und Form 2 wortgleich geschrieben. PLURAL_FORM_OF und FORM_COUNT_OF fuehren acht
+Sprachcodes, scan_french_plural_rule ist weg, das Gate laeuft ueber jede vorhandene
+php/l10n/<code>.json und nimmt die kommenden selbst mit. php/l10n/** steht in beiden
+Pfadlisten von python.yml. Drei Rot-Beweise gefahren und zurueckgenommen. Suite 2877 passed /
+15 skipped, ruff/pyright/vulture gruen. NICHT gepusht.
+KAT-01 und KAT-02 bleiben ungehakt: beide umfassen die zehn Katalogdateien selbst.
+LEHRE: eine PHP-Formenprobe ohne %n misst nichts (L10NString fuellt die Parameterliste nur bei
+%n, ohne Parameter gibt der IdentityTranslator die mit Pipe verbundene Kette unveraendert
+zurueck). Und die Planannahme "n=0 weicht fuer pt_PT und pt_BR ab" war halb falsch: nur pt_PT
+weicht ab, Symfonys pt_BR-Regel behandelt die Null wie den Singular.
+
+Vorheriger Stand: 20-01 (Pluralschluessel-Fix der sechs Bestandskataloge, 51e0ea4 + 5389009)
+ist am 25.09.2026 vom Owner abgenommen worden (Antwort "weiter" auf die vorgelegte Sichtprobe).
+Alle fuenf Pluralschluessel stehen in de/de_DE/fr (json und js) als _<singular>_::_<plural>_,
+die Zahl 202 ist unveraendert, 5 geaenderte Zeilen je Datei, kein Baumhash bewegt.
 LEHRE: das Giessrezept der Research schrieb Listenwerte dreizeilig, der Bestand schreibt sie
 einzeilig; eine Giessform wird zuerst gegen den unveraenderten Bestand byteweise geprueft,
 sonst bewegt der "Fuenf-Zeilen-Fix" 30 Zeilen je Datei.
@@ -47,18 +58,19 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25 -- 20-01 ausgefuehrt, Owner-Checkpoint offen
+Last activity: 2026-09-25 -- 20-02 ausgefuehrt, keine offene Owner-Frage in Phase 20
 
 Progress: [████......] 43% (3 von 7 Phasen)
 
 ## Naechster Schritt
 
-**Dem Owner die Sichtprobe von 20-01 vorlegen** (Abschnitt "CHECKPOINT" in
-.planning/phases/20-ui-kataloge-es-it-nl-pt/20-01-SUMMARY.md): die sechs Zeilen der
-Sondenausgabe und die Frage, ob die Reparatur der bestehenden de/fr-Kataloge gewollt ist.
-Antwort "approved" -> pushen und mit 20-02 weiterfahren. Danach die restlichen sieben Plaene
-der Phase 20, dann Phase 21 (nl-Komposita, eigenes Tor, streichbar) und Phase 22
-(Messanfahrt BL-F03).
+**20-03 planen und ausfuehren** (Scanner parametrisiert statt kopiert, plus Prozent- und
+Pipe-Scanner gegen die zwei stillen Seitenzerstoerer). Danach 20-04 bis 20-09, dann Phase 21
+(nl-Komposita, eigenes Tor, streichbar) und Phase 22 (Messanfahrt BL-F03).
+Mitzunehmen in 20-03: ein Gate, das die Zeichengleichheit zwischen der Regeltabelle in
+docs/l10n-catalogues.md und PLURAL_FORM_OF dauerhaft haelt. 20-02 hat sie maschinell
+nachgewiesen (8 von 8), aber nicht gegated, weil der Plan sie als Abnahmekriterium fuehrt;
+20-03 fasst die Scanner ohnehin an.
 Offene Kleinigkeit aus 19: zwei DEFAULT_FIELDS-Prosastellen in
 backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt sie mit).
 
@@ -153,6 +165,29 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   Zwei Folgeregeln: der Paritaetsscanner muss an der Marke teilen (sonst faellt er falsch
   rot), und die Paare stehen an der Aufrufstelle, nicht im Katalog.
 
+- Eine Regel aus einer fremden Codebasis wird auf JEDER Version des eigenen Versionsfensters
+  gelesen (20-02). Die acht pluralForm-Zeichenketten stehen auf NC 34.0.3 und NC 35.0.0
+  zeichengleich; dass sie gleich sind, ist ein Ergebnis und keine ausgelassene Frage. Zwei
+  Folgeregeln aus demselben Plan: ein Gate leitet seine Erwartung nicht aus der Zeichenkette
+  ab, die es prueft (FORM_COUNT_OF steht als eigene Zahl da und wird nicht aus nplurals=
+  geparst, sonst baut sich eine falsche Regel ihre eigene Erwartung), und ein sprachgebundener
+  Vorwurf wird sprachbewusst, sobald eine zweite Sprache dieselbe Zeichenkette rechtmaessig
+  fuehrt (nl traegt die deutsche Regel zu Recht; ein pauschales "traegt die deutsche Regel"
+  waere fuer nl dauerhaft rot, und ein rotes Gate, das man zu Recht ignoriert, ist schlimmer
+  als kein Gate).
+
+- Ein Pfadfilter, der den Gegenstand eines Gates nicht enthaelt, macht das Gate unfaehig rot zu
+  fallen (20-02). python.yml filterte auf backend/**, scripts/**, sich selbst und
+  docs/measurements/**; die Katalog-Gates liegen in backend/tests/, ihr Gegenstand in
+  php/l10n/. Ein reiner Katalogcommit startete php.yml und integration.yml und kein einziges
+  Katalog-Gate. Der Eintrag wird mit einem YAML-Parser geprueft, nicht mit einer Textsuche.
+
+- fr traegt im Gate die AUSGELIEFERTE Regel und nicht die Kernregel (20-02). NC 34 und 35
+  fuehren Franzoesisch mit nplurals=3, Findling liefert seit 11-08 zwei Formen, korrekt in
+  beiden Haelften und dreimal vom Owner abgenommen. Wer das je angleichen will, aendert
+  Wortlaute ohne Nutzen. Genau diese eine Zeile ist der Grund, warum das Gate ein Mapping je
+  Sprachcode braucht und keine zwei Konstanten.
+
 - D-04-Linie (v1.1): index-kompatibel ueber Minor-Spruenge. v1.3 verletzt sie bewusst und
   nur fuer Instanzen, die eine neue Sprache einschalten; der Bruch braucht den Owner-Entscheid
   in Phase 17.
@@ -171,10 +206,9 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 
 ### Termine und Owner-Checkpoints
 
-- **Beim Owner offen (NEU 25.09., blockiert Phase 20):** Sichtprobe zu Plan 20-01. Der
-  Pluralschluessel-Fix aendert die BESTEHENDEN deutschen und franzoesischen Kataloge und geht
-  damit ueber den Phasenauftrag hinaus; kein Wortlaut ist angefasst, nur der Schluesselname.
-  Vorher-Nachher-Beleg und die drei Pruefpunkte stehen in 20-01-SUMMARY.md.
+- **ERLEDIGT 25.09.:** Sichtprobe zu Plan 20-01 vom Owner abgenommen (Antwort "weiter"). Die
+  Reparatur der bestehenden de/fr-Kataloge ist freigegeben, Phase 20 laeuft ohne offene
+  Owner-Frage weiter. Vermerk in 20-01-SUMMARY.md, Zeile "OWNER-GO 25.09.2026".
 
 - **Beim Owner offen:** Store-Token-Rotation (apps.nextcloud.com/account/token);
   Outlook-Entwurf an Denny senden; InfraNode ntfy-401-Entscheid.
@@ -231,5 +265,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 20-01 ausgefuehrt und committet (51e0ea4, 5389009), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; angehalten am blockierenden Checkpoint Task 3 (Owner-Sichtprobe des Vorher-Nachher-Belegs)
-Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-01-SUMMARY.md (naechster Schritt: Owner-Antwort einholen, dann pushen und 20-02 starten)
+Stopped at: 20-02 ausgefuehrt und committet (a283b7c, 1e6881f, 5b78e08), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
+Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-02-SUMMARY.md (naechster Schritt: 20-03 ausfuehren; der Orchestrator pusht gesammelt)
