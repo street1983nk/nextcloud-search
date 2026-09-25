@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
@@ -75,10 +76,26 @@ def window_bound(text: str) -> datetime:
 
 
 def number(value: object) -> float | None:
-    """A number of the log, or None. A bool is no number here."""
-    if isinstance(value, bool) or not isinstance(value, int | float):
+    """A number of the log, or None. A bool is no number here.
+
+    Nextcloud 34 writes every context value of a log line as a string: the PHP
+    half hands over the float 1171.2, and the line carries "innerMs":"1171.2".
+    Found in the dress rehearsal of 22-06 against the local test Nextcloud,
+    where a reader that took only JSON numbers counted the one slow call of the
+    cold start as a broken line and printed "langsame-aufrufe 0". A string is
+    therefore read as a number when it is one, and only a finite one counts.
+    """
+    if isinstance(value, bool):
         return None
-    return float(value)
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            parsed = float(value.strip())
+        except ValueError:
+            return None
+        return parsed if math.isfinite(parsed) else None
+    return None
 
 
 def context_of(entry: dict[str, object]) -> dict[str, object]:

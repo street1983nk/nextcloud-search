@@ -721,6 +721,28 @@ def test_the_slow_call_reader_reads_the_context_where_this_nextcloud_put_it(
     assert printed[0] == "stufe kalt langsame-aufrufe 2"
 
 
+def test_the_slow_call_reader_reads_the_numbers_nextcloud_34_writes_as_strings(
+    tmp_path: Path, slow_call_reader: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The shape of the dress rehearsal of 22-06: every context value is a string."""
+    log = a_log(
+        tmp_path / "nextcloud.log",
+        [
+            line_with(data={"app": "findling", "path": "/search", "innerMs": "1171.2", "ceilingMs": "1500"}),
+            # a string that is no number, and one that is no finite number
+            line_with(data={"path": "/search", "innerMs": "schnell", "ceilingMs": "1500"}),
+            line_with(data={"path": "/search", "innerMs": "nan", "ceilingMs": "1500"}),
+        ],
+    )
+    printed = read_the_log(slow_call_reader, log, capsys)
+    assert printed == [
+        "stufe kalt langsame-aufrufe 1",
+        "aufruf 2026-09-30T10:15:00Z /search innerMs 1171.2 ceilingMs 1500.0",
+        "maximum innerMs 1171.2 ceilingMs 1500.0",
+        "kaputte-zeilen 2",
+    ]
+
+
 def test_the_slow_call_reader_answers_unklar_for_a_log_it_cannot_read(
     tmp_path: Path, slow_call_reader: ModuleType, capsys: pytest.CaptureFixture[str]
 ) -> None:
