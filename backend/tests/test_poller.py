@@ -49,7 +49,7 @@ from findling.config import SCHEMA_VERSION, settings
 from findling.extract.dispatch import Route
 from findling.extract.dispatch import extract as dispatch_extract
 from findling.extract.errors import ExtractionOutcome, Reason
-from findling.index.open import LANGUAGES_MARK, SCHEMA_MARK, expected_versions, open_index
+from findling.index.open import LANGUAGES_MARK, REBUILD_MARK, SCHEMA_MARK, expected_versions, open_index
 from findling.index.schema import FIELD_BODY_DE, FIELD_FILE_ID, FIELD_NAME
 from findling.index.writer import IndexBatchWriter
 from findling.main import APP, active_poller, enabled_handler
@@ -2453,6 +2453,100 @@ def test_a_fresh_volume_carries_the_two_marks_of_the_directory_it_builds(
     finally:
         writer.close()
         store.close()
+
+
+def _a_volume_built_under_the_factory_pair(volume: Path, monkeypatch: pytest.MonkeyPatch) -> int:
+    """Walk the path of a fresh container under de,en, close it, and name its generation.
+
+    The state database is opened and the writer is opened, because the writer is
+    what creates the directory and stamps its two marks. What the three cases
+    below then change is what an admin or an update changes between two starts.
+    """
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en")
+    settings.cache_clear()
+    write_wordlist(volume)
+    store = _open_state()
+    writer = _open_writer(store)
+    try:
+        assert store.read_meta().get(LANGUAGES_MARK) == "de,en"
+        return store.index_version
+    finally:
+        writer.close()
+        store.close()
+
+
+def _switch_dutch_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,nl")
+    settings.cache_clear()
+
+
+def test_a_drift_the_band_rebuild_answers_does_not_raise_the_generation(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A new language is answered by the band run, not by a full reindex.
+
+    Planning probe of 2026-09-25 and the protocol of CI run 36072411846 ("Store
+    upgrade 5") saw the same thing: a volume built under de,en, a container
+    started under de,en,nl, and the opening of the state database raised the
+    generation from 1 to 2. A raised generation makes every stored verdict stale,
+    so the next crawl read every file again, which is the full reindex of about
+    19 hours that the band run of phase 17 exists to spare. The language drift
+    has to stay on record, because it is what starts the band run.
+    """
+    before = _a_volume_built_under_the_factory_pair(volume, monkeypatch)
+    _switch_dutch_on(monkeypatch)
+
+    store = _open_state()
+    try:
+        after = store.index_version
+        marks = store.read_meta()
+        drift = store.version_mismatch(expected_versions(write_wordlist(volume), ",".join(settings().languages)))
+    finally:
+        store.close()
+
+    assert after == before
+    assert not marks.get(REBUILD_MARK)
+    assert LANGUAGES_MARK in drift
+
+
+def test_a_drift_only_a_crawl_answers_still_raises_the_generation(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The counter direction of the case above (T-21-01-01).
+
+    A moved analyzer version needs the documents read again, and the raised
+    generation is what orders that read. Exempting it along with the language
+    mark would leave an index tokenised by code nobody can query it with.
+    """
+    before = _a_volume_built_under_the_factory_pair(volume, monkeypatch)
+    aged = _open_state()
+    aged.write_meta("analyzer_version", "0")
+    aged.close()
+
+    store = _open_state()
+    try:
+        after = store.index_version
+    finally:
+        store.close()
+
+    assert after == before + 1
+
+
+def test_a_drift_of_both_kinds_raises_the_generation(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A language drift does not shield a crawl drift that arrives with it."""
+    before = _a_volume_built_under_the_factory_pair(volume, monkeypatch)
+    aged = _open_state()
+    aged.write_meta("analyzer_version", "0")
+    aged.close()
+    _switch_dutch_on(monkeypatch)
+
+    store = _open_state()
+    try:
+        after = store.index_version
+    finally:
+        store.close()
+
+    assert after == before + 1
 
 
 async def test_the_resources_open_off_the_event_loop(store: Store, writer: IndexBatchWriter, tmp_path: Path) -> None:

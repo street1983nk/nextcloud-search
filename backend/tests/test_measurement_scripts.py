@@ -1000,8 +1000,15 @@ PHP_TREE_HASH_TODAY = "a1339e70ac425db40dd4cf1163279413046075d27bc63c160240b0fab
 # lenient about a typed field name and not about one in the plan (L-19-04); and
 # the two allocations per query are kept with the reason written beside them
 # (L-19-03). No file came and none went, so PACKAGE_FILES_TODAY stays at 56.
+# Moved on 2026-09-25 by plan 21-01: two of the 56 files changed their bytes.
+# index/open.py gave start_rebuild_on_drift a keyword-only answered_elsewhere,
+# the marks another remedy answers and that therefore raise no generation, and
+# worker/poller.py hands MARKS_A_REBUILD_ANSWERS in from _open_state, so a drift
+# of the schema mark or the language mark alone is left to the band run instead
+# of adding a full reindex behind it. No file came and none went, so
+# PACKAGE_FILES_TODAY stays at 56.
 PACKAGE_FILES_TODAY = 56
-PACKAGE_TREE_HASH_TODAY = "52f0fe82887467d73cc0ab3b20402d8104b8f0e2ed60ed06492f8dc16283166d"
+PACKAGE_TREE_HASH_TODAY = "a67a1aa17a45774c7b6e35b7cac745e125e157263f604624a05e4da854fcc775"
 
 # The raw reading of the run, so that the constant above cannot drift away from
 # the file it was read out of.

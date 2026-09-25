@@ -85,6 +85,7 @@ from findling.index.open import (
     stamp_after_rebuild,
     start_rebuild_on_drift,
 )
+from findling.index.rebuild import MARKS_A_REBUILD_ANSWERS
 from findling.index.wordlist import build_artifact
 from findling.index.writer import FLUSH_PAUSED_LOW_DISK, IndexBatchWriter, IndexRecord
 from findling.nc import client as nc_client
@@ -343,10 +344,14 @@ def _open_state() -> Store:
     generation has moved. Raising it declares nothing current; the marks are
     written by :func:`findling.index.open.stamp_after_rebuild` and only after
     the last file has been judged by this code.
+
+    A drift of the schema mark or the language mark alone is left to the band
+    run and raises nothing here, because a raised generation would add a full
+    reindex behind the re-analysis that makes it unnecessary (plan 21-01).
     """
     expected = expected_versions(build_artifact().digest, ",".join(settings().languages))
     store = open_store(settings().state_db, meta=expected)
-    start_rebuild_on_drift(store, expected)
+    start_rebuild_on_drift(store, expected, answered_elsewhere=MARKS_A_REBUILD_ANSWERS)
     return store
 
 
