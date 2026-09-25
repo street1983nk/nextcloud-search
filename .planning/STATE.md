@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: 20-02 gebaut und committet (a283b7c, 1e6881f, 5b78e08), Gates lokal gruen, NICHT gepusht
-last_updated: "2026-09-25T06:30:00.000Z"
-last_activity: 2026-09-25 -- 20-02 ausgefuehrt, Owner-Go zu 20-01 liegt vor
+stopped_at: 20-03 gebaut und committet (32f6e47, d2ddcb4, 106ce1e), Gates lokal gruen, NICHT gepusht
+last_updated: "2026-09-25T09:10:00.000Z"
+last_activity: 2026-09-25 -- 20-03 ausgefuehrt, Gates sprachunabhaengig
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 38
-  completed_plans: 31
-  percent: 43
+  completed_plans: 32
+  percent: 45
 ---
 
 # Project State
@@ -21,12 +21,32 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 gebaut
+**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 und 20-03 gebaut
 
 ## Current Position
 
-Phase: 20 (ui-kataloge-es-it-nl-pt), 2 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
-Status: 20-02 (Ladepfad-Beweis, Pluralregeln, sprachbewusstes Gate) ist gebaut und committet
+Phase: 20 (ui-kataloge-es-it-nl-pt), 3 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
+Status: 20-03 (sprachunabhaengige Scanner, Prozent- und Pipe-Gate) ist gebaut und committet
+(32f6e47 Ausnahmen je Sprachcode, d2ddcb4 die zwei neuen Scanner, 106ce1e Paritaet ueber alle
+Kataloge plus Doku-Gate). Sechs Scanner laufen jetzt ueber L10N_CATALOGUES: Prosa,
+Schluesselmenge, Vollstaendigkeit, Platzhalterparitaet, Prozentdisziplin, Pipe.
+FRENCH_VALUES_THAT_MAY_EQUAL_THEIR_KEY ist VALUES_THAT_MAY_EQUAL_THEIR_KEY je Sprachcode
+geworden, scan_french_completeness ist scan_completeness(name, catalogue, exceptions),
+language_code_of(path) ist die einzige Zuordnung Datei zu Code, und eine Sprache ohne
+Ausnahmeliste faellt mit Namen. Kein Testname und kein Scannername traegt noch einen
+Sprachnamen oder eine Zahl, die beim naechsten Katalog falsch wird. Zwei Rot-Beweise gefahren
+und zurueckgenommen (Scanner-Rumpf auf return [], fr-Zeile im Doku-Regelblock verfaelscht).
+Suite 2879 passed / 15 skipped, ruff/pyright/vulture gruen. NICHT gepusht.
+MITGENOMMEN: das Gate fuer die Zeichengleichheit docs/l10n-catalogues.md gegen PLURAL_FORM_OF
+steht (test_the_rule_table_of_the_documentation_and_the_constant_are_one_string), der offene
+Punkt aus 20-02 ist damit zu.
+BEFUND: die Planannahme "kein deutscher Wert gleicht seinem englischen Schluessel" ist falsch,
+de/de_DE fuehren vier (Findling, %1$s in %2$s, PDF, Text); sie stehen jetzt begruendet in der
+Ausnahmetabelle. Fuer 20-04 bis 20-08: jede neue Sprache braucht dort einen Eintrag, sonst
+faellt das Vollstaendigkeitsgate mit ihrem Code.
+KAT-01 bleibt ungehakt (umfasst die zehn Katalogdateien selbst).
+
+Vorheriger Stand: 20-02 (Ladepfad-Beweis, Pluralregeln, sprachbewusstes Gate) ist gebaut und committet
 (a283b7c docs/l10n-catalogues.md, 1e6881f Gate, 5b78e08 python.yml). Der Ladepfad ist erneut
 an der laufenden Instanz gefahren (pt laedt, pt_PT und pt_BR fallen auf en, also zehn Dateien),
 die Pluralregeln sind auf NC 34.0.3 UND NC 35.0.0 gelesen und dort zeichengleich, und die
@@ -58,19 +78,20 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25 -- 20-02 ausgefuehrt, keine offene Owner-Frage in Phase 20
+Last activity: 2026-09-25 -- 20-03 ausgefuehrt, keine offene Owner-Frage in Phase 20
 
-Progress: [████......] 43% (3 von 7 Phasen)
+Progress: [████......] 45% (3 von 7 Phasen)
 
 ## Naechster Schritt
 
-**20-03 planen und ausfuehren** (Scanner parametrisiert statt kopiert, plus Prozent- und
-Pipe-Scanner gegen die zwei stillen Seitenzerstoerer). Danach 20-04 bis 20-09, dann Phase 21
-(nl-Komposita, eigenes Tor, streichbar) und Phase 22 (Messanfahrt BL-F03).
-Mitzunehmen in 20-03: ein Gate, das die Zeichengleichheit zwischen der Regeltabelle in
-docs/l10n-catalogues.md und PLURAL_FORM_OF dauerhaft haelt. 20-02 hat sie maschinell
-nachgewiesen (8 von 8), aber nicht gegated, weil der Plan sie als Abnahmekriterium fuehrt;
-20-03 fasst die Scanner ohnehin an.
+**20-04 planen und ausfuehren** (Spanisch: zwei Dateien, Eintrag in L10N_CATALOGUES und in
+VALUES_THAT_MAY_EQUAL_THEIR_KEY, docs/l10n-spanish.md mit datiertem Vorbehalt). Danach 20-05
+bis 20-09, dann Phase 21 (nl-Komposita, eigenes Tor, streichbar) und Phase 22 (Messanfahrt
+BL-F03).
+Mitzunehmen in 20-04: der spanische Katalog braucht einen eigenen Eintrag in
+VALUES_THAT_MAY_EQUAL_THEIR_KEY (mindestens Findling und PDF), sonst faellt das
+Vollstaendigkeitsgate mit dem Sprachcode. Und der Wortlaut "50 % de los archivos" faellt
+jetzt rot, ein literales Prozentzeichen wird %% geschrieben.
 Offene Kleinigkeit aus 19: zwei DEFAULT_FIELDS-Prosastellen in
 backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt sie mit).
 

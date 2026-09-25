@@ -146,7 +146,7 @@ Plans:
 Plans:
 - [x] 20-01-PLAN.md: Pluralschluessel-Fix der sechs Bestandskataloge, Scanner teilt an `_::_`, Vorher-Nachher-Beleg (Checkpoint) -- gebaut 25.09.2026 (51e0ea4, 5389009), Owner-Go 25.09.2026
 - [x] 20-02-PLAN.md: Ladepfad- und Pluralbeweis als docs/l10n-catalogues.md, PLURAL_FORM_OF je Sprachcode, php/l10n/** in python.yml -- gebaut 25.09.2026 (a283b7c, 1e6881f, 5b78e08)
-- [ ] 20-03-PLAN.md: Scanner parametrisiert statt kopiert, plus Prozent- und Pipe-Scanner gegen die zwei stillen Seitenzerstoerer
+- [x] 20-03-PLAN.md: Scanner parametrisiert statt kopiert, plus Prozent- und Pipe-Scanner gegen die zwei stillen Seitenzerstoerer -- gebaut 25.09.2026 (32f6e47, d2ddcb4, 106ce1e)
 - [ ] 20-04-PLAN.md: Spanisch, zwei Dateien, Gate-Eintrag, docs/l10n-spanish.md mit datiertem Vorbehalt
 - [ ] 20-05-PLAN.md: Italienisch, zwei Dateien, Gate-Eintrag, docs/l10n-italian.md mit datiertem Vorbehalt
 - [ ] 20-06-PLAN.md: Niederlaendisch mit zwei Pluralformen und der zeichengleichen deutschen Regel als benanntem Sonderfall
