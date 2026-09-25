@@ -56,7 +56,13 @@ import pytest
 from tantivy import Filter, TextAnalyzer, TextAnalyzerBuilder, Tokenizer
 
 from findling.config import LANGUAGE_ALLOWLIST, SNOWBALL_NAME
-from findling.index.analyzer import ANALYZER_VERSION, MAX_TOKEN_CHARS, english_analyzer, snowball_analyzer
+from findling.index.analyzer import (
+    ANALYZER_VERSION,
+    MAX_TOKEN_CHARS,
+    dutch_analyzer,
+    english_analyzer,
+    snowball_analyzer,
+)
 from findling.index.stopwords import FOLDED_STOPWORDS, folded_stopwords_hash
 from test_analyzer import ANALYZER_SOURCE, filter_chain
 
@@ -561,6 +567,65 @@ def test_the_losses_are_exactly_the_measured_ones(
         f"losses that disappeared, which means the chain moved: {'; '.join(vanished)}. A chain that moved "
         f"moves every term of every index, so run {MEASURE_CHAINS} before touching {LOSSES[code].name}"
     )
+
+
+# ---------------------------------------------------------------------------
+# The second Dutch chain. Phase 21 puts a splitter behind the fold of the Dutch
+# chain for installations with nl active. The tables above measure the Snowball
+# chain and stay on it (pitfall 4 of the phase research); the Dutch families run
+# through the splitter chain as well, and the difference between the two chains
+# is named here instead of one chain silently standing in for the other.
+# ---------------------------------------------------------------------------
+
+# The subset of the real Dutch list the probe of plan 21-04 generated and proved
+# token for token against the full list.
+CONSTITUENTS_NL = FIXTURES / "constituents_nl.txt"
+
+# The words of chain_cases_nl.txt whose tokens differ between the Snowball chain
+# and the splitter chain: the chain_case_differs lines of
+# docs/measurements/2026-09-komposita-nl/rohdaten/kennzahlen.txt, run of
+# 2026-09-25 (chain_cases_differing=0, section 3.4 of the report). An empty set
+# is a valid measurement: no family of phase 17 holds a compound the list
+# splits. When this moves, rerun scripts/dev/measure_compounds_nl.sh first.
+DUTCH_SPLITTER_DIFFERENCES: frozenset[str] = frozenset()
+
+MEASURE_COMPOUNDS_NL = "scripts/dev/measure_compounds_nl.sh"
+
+
+@pytest.fixture(scope="module")
+def dutch_splitter_chain() -> TextAnalyzer:
+    """The shipped Dutch splitter chain over the generated fixture, built once."""
+    entries = [line for line in CONSTITUENTS_NL.read_text(encoding="utf-8").split("\n") if line]
+    return dutch_analyzer(entries)
+
+
+def test_the_dutch_splitter_chain_differs_from_the_snowball_chain_only_where_measured(
+    families: dict[str, list[list[str]]], chains: dict[str, TextAnalyzer], dutch_splitter_chain: TextAnalyzer
+) -> None:
+    words = [form for forms in families["nl"] for form in forms]
+
+    differing = {word for word in words if chains["nl"].analyze(word) != dutch_splitter_chain.analyze(word)}
+
+    assert differing == DUTCH_SPLITTER_DIFFERENCES, (
+        f"the two Dutch chains differ on {sorted(differing)}, measured was {sorted(DUTCH_SPLITTER_DIFFERENCES)}; "
+        f"run {MEASURE_COMPOUNDS_NL} and record the finding in docs/measurements/2026-09-komposita-nl/"
+    )
+
+
+def test_the_dutch_splitter_chain_reaches_the_same_family_score(
+    families: dict[str, list[list[str]]], dutch_splitter_chain: TextAnalyzer, probe: ModuleType
+) -> None:
+    # A consequence of the empty difference above, asserted on its own so that a
+    # moved family score names itself in the failure rather than hiding behind a
+    # word list.
+    hits = 0
+    total = 0
+    for forms in families["nl"]:
+        family_hits, family_total, _ = probe.family_score(dutch_splitter_chain, forms)
+        hits += family_hits
+        total += family_total
+
+    assert (hits, total) == EXPECTED_FAMILY_SCORES["nl"]
 
 
 # ---------------------------------------------------------------------------

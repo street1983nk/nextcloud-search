@@ -5,7 +5,9 @@ that one neighbourship is what separates the measured 21 of 28 from 20 of 28 and
 a flat spelling that silently stays whole. The guard below reads the order out
 of the syntax tree of index/analyzer.py, exactly as the German and the Snowball
 guards do, and the token cases run the shipped factory over miniature lists.
-The measured tables over the real list arrive with the fixture of plan 21-04.
+The measured tables below run the shipped factory over the fixture of plan
+21-04, which the probe generated from the real list and proved token for token
+against it (docs/measurements/2026-09-komposita-nl/).
 
 The chain is not wired into the running app by this plan. A chain registered
 nowhere changes no tokenisation, which is why ANALYZER_VERSION stays at 1 and
@@ -36,6 +38,8 @@ from test_analyzer import ANALYZER_SOURCE, filter_chain
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from tantivy import TextAnalyzer
+
 # The shipped Dutch order. The Snowball chain of phase 17 with the splitter and
 # its linking element filter put in directly behind the fold.
 EXPECTED_DUTCH_CHAIN = [
@@ -58,6 +62,89 @@ EXPECTED_CUSTOM_STOPWORD_ARGUMENTS = [
 # Miniature lists in the folded form the recipe produces.
 GEMEENTE_LIST = sorted(["gemeente", "belasting", "coordinatie", "centrum", *TUSSENKLANKEN])
 WATERSCHAP_LIST = sorted(["waterschap", "belasting", *TUSSENKLANKEN])
+
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+# The case list the probe ran, and the subset of the real list it generated.
+CASES_NL = FIXTURES / "compound_cases_nl.txt"
+CONSTITUENTS_NL = FIXTURES / "constituents_nl.txt"
+
+# The command that produced every token below, named in the failure messages.
+MEASURE_COMPOUNDS_NL = "scripts/dev/measure_compounds_nl.sh"
+
+# The 21 compounds found via their constituent, with the tokens measured on
+# 2026-09-25 (docs/measurements/2026-09-komposita-nl/rohdaten/tokens-rezept-b.tsv).
+# Each row: compound, constituent, tokens of the compound.
+COMPOUNDS_NL = (
+    ("gemeentebelastingen", "belasting", ["gemeent", "belast"]),
+    ("gemeentebelasting", "belasting", ["gemeent", "belast"]),
+    ("inkomstenbelasting", "belasting", ["inkomst", "belast"]),
+    ("waterschapsbelasting", "belasting", ["waterschap", "belast"]),
+    ("belastingaangifte", "aangifte", ["belast", "aangift"]),
+    ("huurovereenkomst", "overeenkomst", ["hur", "overeenkomst"]),
+    ("arbeidsovereenkomst", "overeenkomst", ["arbeid", "overeenkomst"]),
+    ("koopovereenkomst", "overeenkomst", ["kop", "overeenkomst"]),
+    ("bestemmingsplan", "bestemming", ["bestemm", "plan"]),
+    ("omgevingsvergunning", "vergunning", ["omgev", "vergunn"]),
+    ("parkeervergunning", "vergunning", ["parker", "vergunn"]),
+    ("zorgverzekering", "verzekering", ["zorg", "verzeker"]),
+    ("ziektekostenverzekering", "verzekering", ["ziektekost", "verzeker"]),
+    ("kinderopvangtoeslag", "toeslag", ["kinderopvang", "toeslag"]),
+    ("gemeenteraadsvergadering", "vergadering", ["gemeenterad", "vergader"]),
+    ("begrotingswijziging", "wijziging", ["begrot", "wijzig"]),
+    ("afvalstoffenheffing", "heffing", ["afvalstoff", "heffing"]),
+    ("subsidieaanvraag", "aanvraag", ["subsidie", "aanvrag"]),
+    ("vergaderverslag", "verslag", ["vergader", "verslag"]),
+    ("coördinatiecentrum", "centrum", ["coordinatie", "centrum"]),
+    ("coordinatiecentrum", "centrum", ["coordinatie", "centrum"]),
+)
+
+# The seven named limits, with their measured tokens. Six stand in the list
+# themselves and an entry is never split; onroerendezaakbelasting meets the
+# longer entry zaakbelasting, so belast never comes out.
+UNSPLIT_NL = (
+    ("onroerendezaakbelasting", ["onroer", "zaakbelast"]),
+    ("bouwvergunning", ["bouwvergunn"]),
+    ("huurtoeslag", ["huurtoeslag"]),
+    ("verkeersboete", ["verkeersboet"]),
+    ("jaarrekening", ["jaarreken"]),
+    ("factuurnummer", ["factuurnummer"]),
+    ("opzegtermijn", ["opzegtermijn"]),
+)
+
+# The one guard that comes apart, and a real compound: belasting plus plichtig.
+SPLIT_GUARD = "belastingplichtige"
+
+# Measured over the whole case list.
+EXPECTED_FOUND = 21
+EXPECTED_COMPOUNDS = 28
+EXPECTED_GUARDS = 33
+
+# A case line with two words is a compound and its constituent.
+COMPOUND_LINE_WORDS = 2
+
+
+def case_lines() -> list[list[str]]:
+    """Return the data lines of the case list, split into words."""
+    lines = [line.strip() for line in CASES_NL.read_text(encoding="utf-8").split("\n")]
+    return [line.split() for line in lines if line and not line.startswith("#")]
+
+
+def guards() -> list[str]:
+    """Return the guard words: the lines of the case list with one word."""
+    return [words[0] for words in case_lines() if len(words) == 1]
+
+
+def compounds() -> list[tuple[str, str]]:
+    """Return the compounds of the case list with their constituent."""
+    return [(words[0], words[1]) for words in case_lines() if len(words) == COMPOUND_LINE_WORDS]
+
+
+def found_via_constituent(chain: TextAnalyzer, compound: str, constituent: str) -> bool:
+    """Return whether the one token of the constituent stands among the tokens of the compound."""
+    wanted = chain.analyze(constituent)
+    return len(wanted) == 1 and wanted[0] in chain.analyze(compound)
 
 
 def custom_stopword_arguments(source: str, function: str) -> list[str]:
@@ -88,6 +175,13 @@ def storage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     settings.cache_clear()
     yield root
     settings.cache_clear()
+
+
+@pytest.fixture(scope="module")
+def measured_chain() -> TextAnalyzer:
+    """The shipped Dutch chain over the generated fixture, built once."""
+    entries = [line for line in CONSTITUENTS_NL.read_text(encoding="utf-8").split("\n") if line]
+    return dutch_analyzer(entries)
 
 
 def test_the_dutch_chain_stands_in_the_measured_order() -> None:
@@ -183,3 +277,61 @@ def test_the_analyzer_version_stays_where_it_was() -> None:
     assert ANALYZER_VERSION == 1
     assert DUTCH_CHAIN_VERSION == 1
     assert "wordlist_hash_nl" in (analyzer.__doc__ or "")
+
+
+@pytest.mark.parametrize(("compound", "constituent", "tokens"), COMPOUNDS_NL, ids=[row[0] for row in COMPOUNDS_NL])
+def test_the_measured_compounds_produce_the_measured_tokens(
+    measured_chain: TextAnalyzer, compound: str, constituent: str, tokens: list[str]
+) -> None:
+    assert measured_chain.analyze(compound) == tokens
+    assert found_via_constituent(measured_chain, compound, constituent)
+
+
+@pytest.mark.parametrize(("word", "tokens"), UNSPLIT_NL, ids=[row[0] for row in UNSPLIT_NL])
+def test_the_named_limits_stay_as_measured(measured_chain: TextAnalyzer, word: str, tokens: list[str]) -> None:
+    assert measured_chain.analyze(word) == tokens
+
+
+def test_the_sentinels_stay_whole(measured_chain: TextAnalyzer) -> None:
+    words = guards()
+    assert len(words) == EXPECTED_GUARDS
+
+    apart = {word: measured_chain.analyze(word) for word in words if len(measured_chain.analyze(word)) != 1}
+
+    assert apart == {SPLIT_GUARD: ["belast", "plichtig"]}
+
+
+def test_the_measured_hit_count_holds_over_the_whole_case_list(measured_chain: TextAnalyzer) -> None:
+    cases = compounds()
+    found = [compound for compound, part in cases if found_via_constituent(measured_chain, compound, part)]
+
+    assert len(cases) == EXPECTED_COMPOUNDS
+    assert len(found) == EXPECTED_FOUND, (
+        f"{len(found)} of {len(cases)} found, measured was {EXPECTED_FOUND}; rerun {MEASURE_COMPOUNDS_NL}"
+    )
+
+
+def test_every_asserted_word_stands_in_the_measured_case_list() -> None:
+    # The guard over the guard. Every word this module makes a claim about has to
+    # be a word the probe of plan 21-04 really ran against the real Debian list,
+    # otherwise the table could grow a line that was never measured.
+    measured = {word for words in case_lines() for word in words}
+    asserted = [word for row in COMPOUNDS_NL for word in row[:2]] + [row[0] for row in UNSPLIT_NL] + [SPLIT_GUARD]
+
+    missing = sorted(word for word in asserted if word not in measured)
+
+    assert missing == [], (
+        f"asserted here but never measured, add to {CASES_NL.name} and rerun {MEASURE_COMPOUNDS_NL}: {missing}"
+    )
+
+
+def test_without_the_splitter_no_compound_is_found_via_its_constituent() -> None:
+    # The counter proof of the CI case: the chain every installation has had
+    # since phase 17 keeps each compound as one term, so its constituent never
+    # finds it. Measured 0 of 28.
+    plain = snowball_analyzer("dutch")
+
+    found = [compound for compound, part in compounds() if found_via_constituent(plain, compound, part)]
+
+    assert len(compounds()) == EXPECTED_COMPOUNDS
+    assert found == []
