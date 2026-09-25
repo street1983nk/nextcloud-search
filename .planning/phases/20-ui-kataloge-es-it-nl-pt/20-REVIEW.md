@@ -35,7 +35,13 @@ findings:
   warning: 3
   info: 3
   total: 6
-status: issues_found
+status: resolved
+resolved_at: 2026-09-25
+resolution:
+  WR-01: cde0aab
+  WR-02: 245f020
+  WR-03: 69c7186
+  info_open: [IN-01, IN-02, IN-03]
 ---
 
 # Phase 20: Code-Review-Bericht
@@ -43,7 +49,7 @@ status: issues_found
 **Geprueft:** 2026-09-25T11:02:49Z
 **Tiefe:** standard
 **Dateien:** 26
-**Status:** issues_found
+**Status:** resolved (WR-01 bis WR-03 behoben, IN-01 bis IN-03 bleiben dokumentiert)
 
 ## Zusammenfassung
 
@@ -86,6 +92,8 @@ Zustand im Baum; jede davon ist ein Drift, den niemand saehe.
 
 ### WR-01: Kein Gate haelt die Werte-Gleichheit von .json und .js einer Sprache
 
+**Status:** resolved in `cde0aab`: `scan_value_equality` und `test_the_two_halves_of_every_language_carry_the_same_values` über alle Paare aus `L10N_CATALOGUES`, Docstring von `test_the_two_portuguese_catalogues_are_two` zeigt auf das Gate, Gate-Tabelle in docs/l10n-catalogues.md ergänzt. Rotbeweis: dritte Form nur in es.js entfernt, Gate meldet genau `_%n minute_::_%n minutes_`, danach zurückgesetzt.
+
 **Datei:** `backend/tests/test_admin_ui_contract.py:789` (scan_key_sets), `:2349-2352` (irrefuehrender Docstring), `:2585-2594` (Formzahl nur auf der .json)
 **Problem:** `scan_key_sets` vergleicht `frozenset(catalogue_of(path))`, also nur die
 Schluesselmengen. Die Formzahl-Pruefung in
@@ -115,6 +123,8 @@ zeigen lassen.)
 
 ### WR-02: G2 kann seit Plan 20-01 keinen unuebersetzten Pluralwert mehr melden
 
+**Status:** resolved in `245f020`: `scan_completeness` teilt Kompositschlüssel an `_::_` (Form 0 gegen Singular-Hälfte, weitere Formen gegen Plural-Hälfte) und meldet Werte, die in jeder Form englisch sind; französisches `%n minute` / `%n minutes` als benannte Ausnahme, in docs/l10n-french.md nachgetragen. Rotbeweis: englischer `%n minute`-Pluralwert in es.json, Gate rot mit genau einem Befund, danach zurückgesetzt.
+
 **Datei:** `backend/tests/test_admin_ui_contract.py:800-827` (scan_completeness)
 **Problem:** `scan_completeness` meldet Unuebersetztheit ueber `value == key`. Seit Plan 20-01
 heissen die fuenf Pluralschluessel `_<singular>_::_<plural>_`; ihr Wert ist eine Liste und kann
@@ -139,6 +149,8 @@ if isinstance(value, list) and "_::_" in key:
 ```
 
 ### WR-03: python.yml startet die Dokument-Gates nicht, wenn nur ihre Dokumente sich aendern
+
+**Status:** resolved in `69c7186`: `docs/l10n-*.md` in push- und pull_request-Pfade aufgenommen, mit Begründungskommentar im Stil der Nachbarzeilen; YAML geparst, beide Listen führen den Eintrag.
 
 **Datei:** `.github/workflows/python.yml:28-42` (push-Pfade), `:50-55` (pull_request-Pfade)
 **Problem:** `test_the_rule_table_of_the_documentation_and_the_constant_are_one_string`
