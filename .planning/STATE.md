@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: Plan 22-02 abgeschlossen (92d, 92e, 90e, 91m, 9686b1e 0701cca)
-last_updated: "2026-09-25T21:45:00.000Z"
-last_activity: 2026-09-25, Plan 22-02 ausgeführt
+stopped_at: Plan 22-03 abgeschlossen (94c, 95c, 98d, 2afafb4 e32fcb3)
+last_updated: "2026-09-25T22:05:00.000Z"
+last_activity: 2026-09-25, Plan 22-03 ausgeführt
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 59
-  completed_plans: 49
-  percent: 83
+  completed_plans: 50
+  percent: 85
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 ## Current Position
 
 Phase: 22 (messanfahrt-bl-f03), EXECUTING
-Plan: 3 of 12
-Status: Ready to execute 22-03 (Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
+Plan: 4 of 12
+Status: Ready to execute 22-04 (Owner-Stopps: 22-06 Push-Freigabe, 22-07 Rechenblatt vor Boxstart, 22-12 Abnahme)
 
 Aktueller Stand: PHASE 21 KOMPLETT 25.09.2026 (9/9 Plaene, goal-backward verified passed 9/9,
 phase.complete gelaufen, STATE von Hand nachgezogen). Niederlaendische Komposita sind Ende-zu-
@@ -236,13 +236,19 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25, Plan 22-02 ausgeführt
+Last activity: 2026-09-25, Plan 22-03 ausgeführt
 
-Progress: [████████░░] 83% (49 von 59 Plänen, 5 von 7 Phasen)
+Progress: [████████░░] 85% (50 von 59 Plänen, 5 von 7 Phasen)
 
 ## Naechster Schritt
 
-**22-03 ausführen** (94c, 95c, 98d). 22-02 ist fertig: 92d-wechsel.sh (ohne --rm-data, occ
+**22-04 ausführen** (00-wegwerf.sh, 00-typwechsel.sh). 22-03 ist fertig: 94c-bodensatz-zyklen.sh
+(Marke A, Zyklus 1, C1, Zyklus 2, C2 in einem Containerleben; 46 Zyklus offen, 47 Schalter nicht
+120), 95c-kaltstart.sh (Trefferpflicht der ersten kalten Suche, hoechstens 3 Zyklen, sonst 48) und
+98d-dismax-probe.py (summe, dismax_t00/t01, altplan; 49 bei ungleicher Treffermenge) mit
+test_v13_zyklen.py und test_dismax_probe.py (2afafb4, e32fcb3), nur lokal.
+
+Vorher: 22-02 ist fertig: 92d-wechsel.sh (ohne --rm-data, occ
 upgrade mit Rückgabewert 40, Bestandstor 52111/37/0 mit 41), 92e-umgebung.sh (Neubau mit einem
 Schalter, 42/43), 90e-einzelliste.py (Einzelliste und Markentor 0/44/45) und
 91m-langsame-aufrufe.py im Laufverzeichnis 2026-09-v13-messung (9686b1e, 0701cca), nur lokal.
@@ -319,7 +325,7 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 |-------|-------|-------|----------|
 | 20 | 9 | - | - |
 | 21 | 9 | 1 Tag | - |
-| 22 | 2/12 | 12 min (22-01), 30 min (22-02) | - |
+| 22 | 3/12 | 12 min (22-01), 30 min (22-02), 35 min (22-03) | - |
 
 ## Accumulated Context
 
@@ -337,6 +343,12 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   weil die PHP-Hälfte indexed nie schreibt; es verlangt eine Marke für das Bestehen (22-02).
 - Das Markentor 90e folgt den gelockerten Vergleichen des Stores (index_version als
   Untergrenze, tantivy_version nach index_format); 44 gewinnt gegen 45 (22-02).
+- 98d prüft die Treffermengengleichheit Summe gegen per-Wort-dismax über zwei
+  Differenzzählungen (Must a, MustNot b) ohne Tiefendeckel; Mehrwortzeilen mit Operator,
+  Phrase, Klammer, Dateityp oder Umlautvariante sind rueckfall und nur mit der Summe gemessen.
+  Die dismax-Regel steht nicht im Skript, sondern kommt in 00-ablauf.md (22-03).
+- 94c und 95c lesen das Passwort aus der Umgebung, sonst aus PWFILE ($HOME/work/.pw/admin);
+  95c wertet loaded vor der kalten Suche als ungültigen Zyklus (22-03).
 
 - Ein CI-Sprachbeweis liest seinen Erwartungswert aus dem Katalog und traegt die Abwesenheit
   des englischen Quellsatzes als eigentliche Zusicherung (20-09). Ein Satz in der YAML waere
@@ -621,6 +633,6 @@ Sonst keine (die drei Debug-Sessions aus v1.1 sind am 21.09.2026 formal auf reso
 
 ## Session Continuity
 
-Last session: 2026-09-25T21:45:00.000Z
-Stopped at: Plan 22-02 abgeschlossen
-Resume file: .planning/phases/22-messanfahrt-bl-f03/22-03-PLAN.md
+Last session: 2026-09-25T22:05:00.000Z
+Stopped at: Plan 22-03 abgeschlossen
+Resume file: .planning/phases/22-messanfahrt-bl-f03/22-04-PLAN.md
