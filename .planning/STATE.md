@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: 20-03 gebaut und committet (32f6e47, d2ddcb4, 106ce1e), Gates lokal gruen, NICHT gepusht
-last_updated: "2026-09-25T09:10:00.000Z"
-last_activity: 2026-09-25 -- 20-03 ausgefuehrt, Gates sprachunabhaengig
+stopped_at: 20-04 gebaut und committet (7dd61fd, c61955d, 64527aa, aa9f36a), Gates lokal gruen, NICHT gepusht
+last_updated: "2026-09-25T10:05:00.000Z"
+last_activity: 2026-09-25 -- 20-04 ausgefuehrt, Spanisch ausgeliefert
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 38
-  completed_plans: 32
+  completed_plans: 33
   percent: 45
 ---
 
@@ -21,12 +21,31 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 und 20-03 gebaut
+**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 bis 20-04 gebaut
 
 ## Current Position
 
-Phase: 20 (ui-kataloge-es-it-nl-pt), 3 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
-Status: 20-03 (sprachunabhaengige Scanner, Prozent- und Pipe-Gate) ist gebaut und committet
+Phase: 20 (ui-kataloge-es-it-nl-pt), 4 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
+Status: 20-04 (der spanische Katalog) ist gebaut und committet (7dd61fd es.json, c61955d es.js
+plus Gate-Eintrag, 64527aa docs/l10n-spanish.md, aa9f36a Rule-3-Fix am Vokabular-Gate).
+php/l10n/es.json und es.js fuehren dieselben 202 Schluessel wie de.json, fuenf Pluralwerte mit
+drei Formen (Form 1 gleich Form 2), pluralForm mit nplurals=3 zeichengleich aus
+docs/l10n-catalogues.md. L10N_CATALOGUES fuehrt jetzt ACHT Eintraege, alle sechs Scanner nehmen
+Spanisch mit. VALUES_THAT_MAY_EQUAL_THEIR_KEY["es"] fuehrt ZWEI begruendete Eintraege (Findling,
+PDF), gefunden per Lauf mit leerem Mapping und nicht geraten; Page %s, Documents und Images
+haben im Spanischen eigene Wortlaute. docs/l10n-spanish.md (409 Zeilen, neun Abschnitte, 202
+Tabellenzeilen) traegt den datierten Vorbehalt vom 25.09.2026 mit dem Satz "von keinem
+Muttersprachler gelesen". Im Katalog steht KEIN literales Prozentzeichen: der 100-Prozent-Satz
+ist zu "el cien por cien" umformuliert. Suite 2879 passed / 15 skipped, ruff/pyright/vulture
+gruen. NICHT gepusht.
+BEFUND (Rule 3, behoben): das Vokabular-Gate in tests/test_public_artifacts.py haelt eine
+Wortstamm-Sperre ueber docs/ und faellt ueber dem spanischen Wort fuer Datei (61 Treffer, alle
+dasselbe Wort). Geloest ueber den vorgesehenen AUSNAHMEN-Eintrag mit eigenem Grund, nicht ueber
+eine aufgeweichte Regex. MITZUNEHMEN IN 20-05: Italienisch fuehrt dasselbe Wort und braucht
+denselben Eintrag; pt und nl nicht.
+KAT-01 und KAT-02 bleiben ungehakt (beide umfassen zehn Katalogdateien, zwei stehen).
+
+Vorheriger Stand: 20-03 (sprachunabhaengige Scanner, Prozent- und Pipe-Gate) ist gebaut und committet
 (32f6e47 Ausnahmen je Sprachcode, d2ddcb4 die zwei neuen Scanner, 106ce1e Paritaet ueber alle
 Kataloge plus Doku-Gate). Sechs Scanner laufen jetzt ueber L10N_CATALOGUES: Prosa,
 Schluesselmenge, Vollstaendigkeit, Platzhalterparitaet, Prozentdisziplin, Pipe.
@@ -78,20 +97,26 @@ Instanz den Erststempel der Verzeichnismarken; Folge: Feldplan blieb LEGACY, rot
 Fix-Beweis). Endstand-CI 36096526219 GRUEN 4/4 inkl. arm64. Suite 2877 passed / 15 skipped.
 LEHRE: ein Audit-Fix, der einen Schreiber entfernt, braucht die Frage "wer schreibt das
 sonst noch auf JEDEM Pfad" plus einen Frischinstanz-Fall, bevor er reist.
-Last activity: 2026-09-25 -- 20-03 ausgefuehrt, keine offene Owner-Frage in Phase 20
+Last activity: 2026-09-25 -- 20-04 ausgefuehrt, keine offene Owner-Frage in Phase 20
 
 Progress: [████......] 45% (3 von 7 Phasen)
 
 ## Naechster Schritt
 
-**20-04 planen und ausfuehren** (Spanisch: zwei Dateien, Eintrag in L10N_CATALOGUES und in
-VALUES_THAT_MAY_EQUAL_THEIR_KEY, docs/l10n-spanish.md mit datiertem Vorbehalt). Danach 20-05
+**20-05 planen und ausfuehren** (Italienisch: zwei Dateien, Eintrag in L10N_CATALOGUES und in
+VALUES_THAT_MAY_EQUAL_THEIR_KEY, docs/l10n-italian.md mit datiertem Vorbehalt). Danach 20-06
 bis 20-09, dann Phase 21 (nl-Komposita, eigenes Tor, streichbar) und Phase 22 (Messanfahrt
 BL-F03).
-Mitzunehmen in 20-04: der spanische Katalog braucht einen eigenen Eintrag in
-VALUES_THAT_MAY_EQUAL_THEIR_KEY (mindestens Findling und PDF), sonst faellt das
-Vollstaendigkeitsgate mit dem Sprachcode. Und der Wortlaut "50 % de los archivos" faellt
-jetzt rot, ein literales Prozentzeichen wird %% geschrieben.
+Mitzunehmen in 20-05 bis 20-08, aus 20-04 gemessen:
+1. Jede neue Sprache braucht einen eigenen Eintrag in VALUES_THAT_MAY_EQUAL_THEIR_KEY, sonst
+   faellt das Vollstaendigkeitsgate mit dem Sprachcode. Die Liste wird gefunden (Lauf mit
+   leerem Mapping) und nicht geraten; fuer es waren es zwei Schluessel, nicht fuenf wie bei fr.
+2. Italienisch braucht zusaetzlich einen AUSNAHMEN-Eintrag in tests/test_public_artifacts.py,
+   Familie vokabular: das italienische Wort fuer Datei traegt denselben gesperrten Wortstamm
+   wie das spanische. Portugiesisch und Niederlaendisch nicht.
+3. Die Giessform aus 20-01 zuerst gegen den unveraenderten Bestand pruefen (cast(alt) == alt,
+   sechs von sechs), dann erst schreiben. Listenwerte muessen einzeilig gefaltet werden.
+4. Ein literales Prozentzeichen wird %% geschrieben, besser noch umformuliert.
 Offene Kleinigkeit aus 19: zwei DEFAULT_FIELDS-Prosastellen in
 backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt sie mit).
 
@@ -209,6 +234,21 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
   Wortlaute ohne Nutzen. Genau diese eine Zeile ist der Grund, warum das Gate ein Mapping je
   Sprachcode braucht und keine zwei Konstanten.
 
+- Eine Ausnahmeliste wird gefunden und nicht geraten (20-04). Das Vollstaendigkeitsgate laeuft
+  einmal mit leerem Mapping, meldet seine Funde, und jeder gemeldete Schluessel wird einzeln
+  beurteilt: gleicher Wortlaut richtig (Eintrag mit Grund) oder vergessener Wortlaut
+  (uebersetzen). Fuer Spanisch waren es zwei und nicht die fuenf des Franzoesischen, weil
+  Page %s, Documents und Images im Spanischen eigene Woerter haben. Eine Zahl waere hier die
+  falsche Groesse gewesen.
+
+- Ein Wortstamm-Gate auf einer Sprache stolpert ueber die Homographen einer anderen (20-04).
+  Die Sperre des Vokabular-Gates sucht die deutsche Form eines Begriffs, also den Stamm ohne
+  die englische Endung, und das spanische Wort fuer Datei faengt genau damit an; die neue
+  Sprachdoku fiel mit 61 Treffern rot, keiner davon die gesuchte Form. Der Ausweg ist der
+  benannte Eintrag mit eigenem Grund und ausdruecklich nicht die aufgeweichte Regex: die haette
+  auch deutsche Zusammensetzungen verloren, und zwar in allen Dateien. Restrisiko benannt: die
+  Ausnahme gilt je Datei und Familie, feiner kann die Liste heute nicht.
+
 - D-04-Linie (v1.1): index-kompatibel ueber Minor-Spruenge. v1.3 verletzt sie bewusst und
   nur fuer Instanzen, die eine neue Sprache einschalten; der Bruch braucht den Owner-Entscheid
   in Phase 17.
@@ -286,5 +326,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 20-02 ausgefuehrt und committet (a283b7c, 1e6881f, 5b78e08), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
-Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-02-SUMMARY.md (naechster Schritt: 20-03 ausfuehren; der Orchestrator pusht gesammelt)
+Stopped at: 20-04 ausgefuehrt und committet (7dd61fd, c61955d, 64527aa, aa9f36a), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
+Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-04-SUMMARY.md (naechster Schritt: 20-05 ausfuehren; der Orchestrator pusht gesammelt)

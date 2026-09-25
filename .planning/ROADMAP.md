@@ -147,7 +147,7 @@ Plans:
 - [x] 20-01-PLAN.md: Pluralschluessel-Fix der sechs Bestandskataloge, Scanner teilt an `_::_`, Vorher-Nachher-Beleg (Checkpoint) -- gebaut 25.09.2026 (51e0ea4, 5389009), Owner-Go 25.09.2026
 - [x] 20-02-PLAN.md: Ladepfad- und Pluralbeweis als docs/l10n-catalogues.md, PLURAL_FORM_OF je Sprachcode, php/l10n/** in python.yml -- gebaut 25.09.2026 (a283b7c, 1e6881f, 5b78e08)
 - [x] 20-03-PLAN.md: Scanner parametrisiert statt kopiert, plus Prozent- und Pipe-Scanner gegen die zwei stillen Seitenzerstoerer -- gebaut 25.09.2026 (32f6e47, d2ddcb4, 106ce1e)
-- [ ] 20-04-PLAN.md: Spanisch, zwei Dateien, Gate-Eintrag, docs/l10n-spanish.md mit datiertem Vorbehalt
+- [x] 20-04-PLAN.md: Spanisch, zwei Dateien, Gate-Eintrag, docs/l10n-spanish.md mit datiertem Vorbehalt -- gebaut 25.09.2026 (7dd61fd, c61955d, 64527aa, aa9f36a)
 - [ ] 20-05-PLAN.md: Italienisch, zwei Dateien, Gate-Eintrag, docs/l10n-italian.md mit datiertem Vorbehalt
 - [ ] 20-06-PLAN.md: Niederlaendisch mit zwei Pluralformen und der zeichengleichen deutschen Regel als benanntem Sonderfall
 - [ ] 20-07-PLAN.md: pt_PT, keine pt.json, docs/l10n-portuguese.md dreispaltig angelegt
@@ -202,7 +202,7 @@ Plans:
 | 17. Owner-Tor und Analyseketten | v1.3 | 8/8 | Complete   | 2026-09-23 |
 | 18. Schema, Marken und Umbauweg | v1.3 | 12/12 | Complete   | 2026-09-24 |
 | 19. Frageseite freischalten | v1.3 | 9/9 | Executing | - |
-| 20. UI-Kataloge es/it/nl/pt | v1.3 | 0/9 | Planned | - |
+| 20. UI-Kataloge es/it/nl/pt | v1.3 | 4/9 | Executing | - |
 | 21. Niederlaendische Komposita | v1.3 | 0/TBD | Not started | - |
 | 22. Messanfahrt BL-F03 | v1.3 | 0/TBD | Not started | - |
 | 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 0/TBD | Not started | - |
