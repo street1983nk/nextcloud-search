@@ -14,11 +14,17 @@ through NARROW_SCOPE_DIRS; this file holds what is particular to each tool.
 
 from __future__ import annotations
 
+import ast
+import importlib.util
+import json
 import os
+import re
 import shutil
+import sqlite3
 import stat
 import subprocess
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -35,6 +41,8 @@ from test_measurement_scripts import (
 
 IMAGE_SWITCH = V13_RUN_DIR / "92d-wechsel.sh"
 ENVIRONMENT_REBUILD = V13_RUN_DIR / "92e-umgebung.sh"
+SINGLE_LIST = V13_RUN_DIR / "90e-einzelliste.py"
+SLOW_CALL_READER = V13_RUN_DIR / "91m-langsame-aufrufe.py"
 
 # The one refusal line of 92e that may name the OCR languages. The variable is
 # the anti pattern of this trip: the OCR languages are no subject of it.
@@ -434,3 +442,326 @@ def test_the_rebuild_ends_with_42_when_the_limit_does_not_hold(tmp_path: Path) -
     assert answer.returncode == 42, answer
     assert "grenze-gesetzt nein" in answer.stdout
     assert "entladeschalter-ist 120" in answer.stdout
+
+
+# ---------------------------------------------------------------------------
+# 90e and 91m, the two readers. Loaded by path, because a file name that starts
+# with a digit is no module name.
+
+
+def a_script_module(path: Path, name: str) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="module")
+def single_list() -> ModuleType:
+    return a_script_module(SINGLE_LIST, "findling_v13_single_list")
+
+
+@pytest.fixture(scope="module")
+def slow_call_reader() -> ModuleType:
+    return a_script_module(SLOW_CALL_READER, "findling_v13_slow_call_reader")
+
+
+# The marks of a state database as the snapshot is expected to carry them,
+# shortened to what the gate reads. The values are shapes, not the real ones.
+MARKS = {
+    "schema_version": "1",
+    "languages": "de,en",
+    "wordlist_hash_nl": "off",
+    "embedding_version": "multilingual-e5-small/int8/384/512",
+    "index_version": "3",
+    "tantivy_version": "tantivy v0.26.0, index_format v7",
+    "analyzer_version": "7",
+}
+
+# Paths that carry a user name and a folder, so that the test can prove neither
+# reaches the output.
+FILES = (
+    (11, "files/alice/Geheim/Steuer 2025.pdf", 4096, "indexed", None),
+    (12, "files/alice/Geheim/scan.TIFF", 99, "skipped", "too_large"),
+    (13, "files/bob/Privat/kaputt.docx", 7, "failed", "extract_error"),
+    (14, "files/bob/Privat/ohne_endung", 1, "skipped", "unsupported"),
+    (15, "files/bob/Privat/weg.pdf", 5, "failed", "extract_error"),
+)
+
+
+def a_state_database(path: Path, *, marks: dict[str, str] | None = None, file_id: bool = True) -> Path:
+    """A state.db of the shape store/schema.sql creates, with only the tables read here."""
+    connection = sqlite3.connect(path)
+    key = "file_id" if file_id else "fid"
+    connection.execute(
+        f"create table files ({key} integer primary key, path text not null, size integer not null,"
+        " state text not null, reason text, deleted_at integer)"
+    )
+    connection.execute("create table meta (key text primary key, value text not null)")
+    for row in FILES:
+        connection.execute("insert into files values (?, ?, ?, ?, ?, null)", row)
+    # The tombstone of 15: a deleted file is no longer part of the stock.
+    connection.execute("update files set deleted_at = 1 where path like '%weg.pdf'")
+    for name, value in (MARKS if marks is None else marks).items():
+        connection.execute("insert into meta values (?, ?)", (name, value))
+    connection.commit()
+    connection.close()
+    return path
+
+
+def test_the_single_list_opens_the_database_read_only_and_writes_nothing() -> None:
+    """mode=ro through a URI, and no statement of the file writes."""
+    text = SINGLE_LIST.read_text(encoding="utf-8")
+    assert 'f"file:{database}?mode=ro", uri=True' in text
+    tree = ast.parse(text)
+    docstring = ast.get_docstring(tree, clean=False)
+    literals = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value != docstring
+    ]
+    statements = [literal for literal in literals if re.match(r"\s*(select|pragma)\b", literal)]
+    assert statements, "the reader carries no SQL at all"
+    for literal in literals:
+        for word in ("insert", "update", "delete", "drop", "create", "attach", "vacuum"):
+            assert not re.search(rf"\b{word}\b", literal), (word, literal)
+
+
+def test_the_single_list_leaves_a_database_it_read_unchanged(tmp_path: Path, single_list: ModuleType) -> None:
+    """The bytes of the database are the same before and after both subcommands."""
+    database = a_state_database(tmp_path / "state.db")
+    before = database.read_bytes()
+    assert single_list.main(["liste", "--database", str(database)]) == 0
+    assert single_list.main(["marken", "--database", str(database)]) == 0
+    assert database.read_bytes() == before
+
+
+def test_the_single_list_prints_each_skipped_and_failed_file_without_its_path(
+    tmp_path: Path, single_list: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    database = a_state_database(tmp_path / "state.db")
+    assert single_list.main(["liste", "--database", str(database)]) == 0
+    printed = capsys.readouterr().out
+    answer = json.loads(printed)
+    assert answer["zaehlung_je_state"] == {"failed": 1, "indexed": 1, "skipped": 2}
+    assert answer["einzelliste_anzahl"] == 3
+    assert answer["einzelliste"] == [
+        {"file_id": 13, "endung": "docx", "groesse": 7, "state": "failed", "reason": "extract_error"},
+        {"file_id": 12, "endung": "tiff", "groesse": 99, "state": "skipped", "reason": "too_large"},
+        {"file_id": 14, "endung": "", "groesse": 1, "state": "skipped", "reason": "unsupported"},
+    ]
+    for private in ("alice", "bob", "Geheim", "Privat", "kaputt", "scan", "files/", str(tmp_path)):
+        assert private not in printed, private
+
+
+def test_the_single_list_refuses_a_schema_without_file_id(
+    tmp_path: Path, single_list: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    database = a_state_database(tmp_path / "state.db", file_id=False)
+    assert single_list.main(["liste", "--database", str(database)]) == 2
+    assert "file_id" in capsys.readouterr().err
+
+
+def test_the_single_list_refuses_a_database_that_is_not_there(
+    tmp_path: Path, single_list: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Read only never creates, and a missing database is a sentence and a 2."""
+    missing = tmp_path / "nicht-da.db"
+    assert single_list.main(["liste", "--database", str(missing)]) == 2
+    assert "nicht lesbar" in capsys.readouterr().err
+    assert not missing.exists()
+
+
+def expectations_of(marks: dict[str, str]) -> list[str]:
+    return [argument for name, value in marks.items() for argument in ("--erwartung", f"{name}={value}")]
+
+
+def test_the_single_list_passes_the_mark_gate_when_every_mark_is_equal(
+    tmp_path: Path, single_list: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    database = a_state_database(tmp_path / "state.db")
+    assert single_list.main(["marken", "--database", str(database), *expectations_of(MARKS)]) == 0
+    printed = capsys.readouterr().out
+    assert "marke embedding_version multilingual-e5-small/int8/384/512" in printed
+    assert "marken-urteil gleich" in printed
+
+
+def test_the_single_list_excuses_the_three_rebuild_marks(
+    tmp_path: Path, single_list: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """schema_version, languages and wordlist_hash_nl are what MESS-08 measures."""
+    stored = {name: value for name, value in MARKS.items() if name != "wordlist_hash_nl"}
+    database = a_state_database(tmp_path / "state.db", marks=stored)
+    expected = {**MARKS, "schema_version": "2", "languages": "de,en,nl", "wordlist_hash_nl": "abc"}
+    assert single_list.main(["marken", "--database", str(database), *expectations_of(expected)]) == 0
+    printed = capsys.readouterr().out
+    assert "marke-umbau wordlist_hash_nl ist fehlt erwartet abc" in printed
+    assert "legacy-schritt schema_version 1 nach 2" in printed
+    assert "marken-urteil umbau" in printed
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [("analyzer_version", "8"), ("index_version", "4"), ("tantivy_version", "tantivy v0.27.0, index_format v8")],
+)
+def test_the_single_list_ends_with_44_for_a_foreign_index_mark(
+    tmp_path: Path, single_list: ModuleType, name: str, value: str
+) -> None:
+    database = a_state_database(tmp_path / "state.db")
+    assert single_list.main(["marken", "--database", str(database), *expectations_of({**MARKS, name: value})]) == 44
+
+
+def test_the_single_list_ends_with_44_for_a_missing_index_mark(tmp_path: Path, single_list: ModuleType) -> None:
+    stored = {name: value for name, value in MARKS.items() if name != "analyzer_version"}
+    database = a_state_database(tmp_path / "state.db", marks=stored)
+    assert single_list.main(["marken", "--database", str(database), *expectations_of(MARKS)]) == 44
+
+
+def test_the_single_list_follows_the_two_loosened_comparisons_of_the_store(
+    tmp_path: Path, single_list: ModuleType
+) -> None:
+    """index_version is a floor and tantivy_version decides on index_format."""
+    database = a_state_database(tmp_path / "state.db")
+    expected = {**MARKS, "index_version": "2", "tantivy_version": "tantivy v0.26.2, index_format v7"}
+    assert single_list.main(["marken", "--database", str(database), *expectations_of(expected)]) == 0
+
+
+def test_the_single_list_ends_with_45_for_a_foreign_embedding_mark(tmp_path: Path, single_list: ModuleType) -> None:
+    database = a_state_database(tmp_path / "state.db")
+    expected = {**MARKS, "embedding_version": "multilingual-e5-small/int8/384/256"}
+    assert single_list.main(["marken", "--database", str(database), *expectations_of(expected)]) == 45
+    # 44 is the larger finding and wins when both apply.
+    both = {**expected, "analyzer_version": "8"}
+    assert single_list.main(["marken", "--database", str(database), *expectations_of(both)]) == 44
+
+
+def test_the_single_list_refuses_an_expectation_without_a_name(tmp_path: Path, single_list: ModuleType) -> None:
+    database = a_state_database(tmp_path / "state.db")
+    with pytest.raises(SystemExit) as refusal:
+        single_list.main(["marken", "--database", str(database), "--erwartung", "ohne-gleichheitszeichen"])
+    assert refusal.value.code == 2
+
+
+LOG_LINE = {
+    "reqId": "abcDEF123",
+    "level": 1,
+    "time": "2026-09-30T10:15:00+00:00",
+    "remoteAddr": "192.0.2.7",
+    "user": "alice",
+    "app": "findling",
+    "method": "GET",
+    "url": "/ocs/v2.php/search/providers/findling/search?term=Steuerbescheid",
+    "message": "Findling: slow backend call",
+    "userAgent": "Mozilla/5.0",
+    "version": "34.0.3.1",
+    "data": {"app": "findling", "path": "/search", "innerMs": 1834.2, "ceilingMs": 2000.0},
+}
+
+
+def a_log(path: Path, lines: list[str]) -> Path:
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    return path
+
+
+def line_with(**changes: object) -> str:
+    return json.dumps({**LOG_LINE, **changes})
+
+
+def read_the_log(reader: ModuleType, log: Path, capsys: pytest.CaptureFixture[str]) -> list[str]:
+    arguments = ["--log", str(log), "--von", "2026-09-30T10:00:00Z", "--bis", "2026-09-30T11:00:00Z"]
+    assert reader.main([*arguments, "--stufe", "kalt"]) == 0
+    return capsys.readouterr().out.splitlines()
+
+
+def test_the_slow_call_reader_counts_the_m01_lines_of_its_window(
+    tmp_path: Path, slow_call_reader: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = a_log(
+        tmp_path / "nextcloud.log",
+        [
+            line_with(),
+            line_with(
+                time="2026-09-30T10:40:00+00:00", data={"path": "/snippets", "innerMs": 2010.5, "ceilingMs": 2000}
+            ),
+            # outside the window, before and after
+            line_with(time="2026-09-30T09:59:59+00:00"),
+            line_with(time="2026-09-30T11:00:01+00:00"),
+            # another message and another app
+            line_with(message="Findling: something else"),
+            json.dumps({"time": "2026-09-30T10:20:00+00:00", "message": "Login failed", "level": 2}),
+            # a line that is no JSON and one whose number is a bool
+            "{this is not json",
+            line_with(data={"path": "/search", "innerMs": True, "ceilingMs": 2000.0}),
+        ],
+    )
+    printed = read_the_log(slow_call_reader, log, capsys)
+    assert printed == [
+        "stufe kalt langsame-aufrufe 2",
+        "aufruf 2026-09-30T10:15:00Z /search innerMs 1834.2 ceilingMs 2000.0",
+        "aufruf 2026-09-30T10:40:00Z /snippets innerMs 2010.5 ceilingMs 2000.0",
+        "maximum innerMs 2010.5 ceilingMs 2000.0",
+        "kaputte-zeilen 2",
+    ]
+
+
+def test_the_slow_call_reader_reads_the_context_where_this_nextcloud_put_it(
+    tmp_path: Path, slow_call_reader: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    moved = {key: value for key, value in LOG_LINE.items() if key != "data"}
+    log = a_log(
+        tmp_path / "nextcloud.log",
+        [
+            json.dumps({**moved, "context": {"path": "/search", "innerMs": 1200, "ceilingMs": 2000}}),
+            json.dumps({**moved, "path": "/search", "innerMs": 1100.0, "ceilingMs": 2000.0}),
+        ],
+    )
+    printed = read_the_log(slow_call_reader, log, capsys)
+    assert printed[0] == "stufe kalt langsame-aufrufe 2"
+
+
+def test_the_slow_call_reader_answers_unklar_for_a_log_it_cannot_read(
+    tmp_path: Path, slow_call_reader: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    printed = read_the_log(slow_call_reader, tmp_path / "nicht-da.log", capsys)
+    assert printed == ["stufe kalt langsame-aufrufe unklar"]
+
+
+def test_the_slow_call_reader_says_none_and_not_unklar_for_a_quiet_window(
+    tmp_path: Path, slow_call_reader: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = a_log(tmp_path / "nextcloud.log", [line_with(time="2026-09-30T08:00:00+00:00")])
+    printed = read_the_log(slow_call_reader, log, capsys)
+    assert printed == ["stufe kalt langsame-aufrufe 0", "maximum innerMs keins", "kaputte-zeilen 0"]
+
+
+def test_the_slow_call_reader_prints_no_user_data(
+    tmp_path: Path, slow_call_reader: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Only time, path, innerMs and ceilingMs leave the reader (T-22-09)."""
+    log = a_log(tmp_path / "nextcloud.log", [line_with()])
+    printed = "\n".join(read_the_log(slow_call_reader, log, capsys))
+    for private in ("alice", "192.0.2.7", "Steuerbescheid", "abcDEF123", "Mozilla", "/ocs/"):
+        assert private not in printed, private
+
+
+def test_the_slow_call_reader_refuses_a_window_that_is_no_time(tmp_path: Path, slow_call_reader: ModuleType) -> None:
+    with pytest.raises(SystemExit) as refusal:
+        slow_call_reader.main(["--log", str(tmp_path / "x"), "--von", "gestern", "--bis", "heute", "--stufe", "s"])
+    assert refusal.value.code == 2
+
+
+@pytest.mark.parametrize("script", [SINGLE_LIST, SLOW_CALL_READER], ids=lambda path: path.name)
+def test_the_two_readers_bring_no_third_party_library(script: Path) -> None:
+    """The host python of the box runs them, and it has nothing installed."""
+    tree = ast.parse(script.read_text(encoding="utf-8"))
+    imported = {
+        alias.name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names
+    } | {
+        (node.module or "").split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level == 0
+    }
+    assert imported <= {"__future__", "argparse", "collections", "datetime", "json", "posixpath", "sqlite3", "sys"}
+    assert script.read_text(encoding="utf-8").startswith("#!/usr/bin/env python3\n")
