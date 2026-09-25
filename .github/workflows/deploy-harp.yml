@@ -362,10 +362,18 @@ jobs:
       # dimensioned against the cadence the promise is made to, exactly as the
       # zero config one is.
       #
-      # RE-MEASURE: the wall clock the step really takes is written in here as a
-      # number after the first green run of it, the way the three budgets above
-      # carry their measured figures. Until that run this paragraph is the
-      # placeholder and says so, rather than carrying a number nobody measured.
+      # Measured, and the placeholder that stood here is gone: 172 s on the
+      # slowest of the four branches of run 36074155306 of 2026-09-24, which is
+      # the arm64 one (stable34, ubuntu-24.04-arm, 23:45:38Z to 23:48:30Z). The
+      # three amd64 branches of that same run took 73 s (stable34), 41 s
+      # (stable33) and 32 s (stable35), and run 36072411846 an hour earlier
+      # measured 163 s on the same arm64 branch, so the figure is not a single
+      # reading and the slow branch is the one the number has to hold for. 600
+      # stands untouched and leaves that branch a margin of roughly three and a
+      # half times. The gap between 172 s and the cadence argument above is the
+      # argument itself: four text files of one sentence each are indexed inside
+      # the first cron round, while the promise is made against an instance whose
+      # system cron runs every five minutes.
       #
       # An overrun is a finding about the indexing pass and not an invitation to
       # raise the number (T-06.1-52).
