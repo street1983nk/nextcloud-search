@@ -235,6 +235,39 @@ L10N_NL_JS = REPO_ROOT / "php" / "l10n" / "nl.js"
 L10N_PT_PT_JSON = REPO_ROOT / "php" / "l10n" / "pt_PT.json"
 L10N_PT_PT_JS = REPO_ROOT / "php" / "l10n" / "pt_PT.js"
 
+# The eighth language code, since plan 20-08, and the second half of the
+# Portuguese pair. It closes the ten new files of milestone v1.3, so the tuple
+# below carries sixteen entries, eight language codes and one key set.
+#
+# **Written and not copied.** The paragraph above ``L10N_PT_PT_JSON`` says why
+# this file is not a copy of pt_PT.json, and this one says what that costs:
+# pt_BR.json was cast from its own column of docs/l10n-portuguese.md, not from
+# pt_PT.json with a search and replace over it. A copy that is reworked later
+# drags along exactly the words that ought to differ, because nobody notices
+# them while reading. ``arquivo`` where Portugal says ``ficheiro``, ``usuário``
+# where it says ``utilizador``, ``senha``, ``lixeira``, ``planilhas``,
+# ``contêiner``, and the gerund (``está respondendo``) where Portugal writes
+# ``está a responder``. Where the two varieties agree, the values agree too,
+# and that is correct and not a shortcut: 72 of 202 values are equal, measured
+# on 25.09.2026, and none of them was made different to reach a number.
+#
+# **The plural values do not follow the core file.** ``core/l10n/pt_BR.json``
+# puts the million form on index 1, so PHP renders ``2 de resultados`` for the
+# core's own keys. Findling writes form 1 and form 2 as the same ordinary
+# plural, like every other three form language of this tree, for the reason
+# given in section 4 of docs/l10n-catalogues.md: none of the five plural keys
+# (minutes, hours, days, further hits, seconds of a claim) ever counts a
+# million.
+#
+# The gate that holds the difference to pt_PT is
+# ``PORTUGUESE_WORDINGS_THAT_MUST_DIFFER`` further down. The wordings carry a
+# dated reservation of their own in docs/l10n-portuguese.md, separate from the
+# one of pt_PT, because they were made on a different occasion: machine
+# translation plus the open community review of the app store, the accepted
+# process E-17-5, and no native speaker has read them.
+L10N_PT_BR_JSON = REPO_ROOT / "php" / "l10n" / "pt_BR.json"
+L10N_PT_BR_JS = REPO_ROOT / "php" / "l10n" / "pt_BR.js"
+
 # All catalogues in the order the gates below name them. Held as one tuple so
 # that the next file is added in one place and every gate sees it.
 L10N_CATALOGUES = (
@@ -252,6 +285,8 @@ L10N_CATALOGUES = (
     L10N_NL_JS,
     L10N_PT_PT_JSON,
     L10N_PT_PT_JS,
+    L10N_PT_BR_JSON,
+    L10N_PT_BR_JS,
 )
 
 # The common proof of every catalogue of milestone v1.3, written by plan 20-02:
@@ -598,6 +633,17 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
         "Findling": "the name of the app, the same word in every language of this tree",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
     },
+    # Brazilian Portuguese, read off the file on 25.09.2026 rather than guessed
+    # and rather than copied from the pt_PT entry above: the gate was run once
+    # without an entry, which names the code, and once with an empty mapping,
+    # which reported four findings, two keys over two files. They are the same
+    # two keys as for pt_PT, and for the same reason: both are proper names.
+    # That the two lists agree is a finding about two varieties that both write
+    # ``em`` between the placeholders, not a sign that one list was carried over.
+    "pt_BR": {
+        "Findling": "the name of the app, the same word in every language of this tree",
+        "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
+    },
     "fr": {
         "Findling": "the name of the app, the same word in all three languages",
         "Page %s": "Page is the same word in French, and a difference would be a loss",
@@ -666,6 +712,78 @@ def language_code_of(path: Path) -> str:
     second place where a new language is forgotten.
     """
     return path.stem
+
+
+# The keys whose two Portuguese wordings have to differ, since plan 20-08, each
+# with the pair of words that makes the difference and the reason it is real.
+# This is the positive counterpart of the text equality of ``de`` and
+# ``de_DE``: there sameness is the promise, here it is the mistake. A pt_BR.json
+# that started life as a copy of pt_PT.json would pass every other gate of this
+# file, because it carries the right keys, the right placeholders and the right
+# plural rule, and it would still greet a Brazilian user with ``ficheiro``.
+#
+# A list and deliberately not a number, for the reason the exception lists
+# above give. A minimum count of differing values is exactly the threshold this
+# file avoids everywhere else, and it would be met by four accidental
+# differences anywhere in the catalogue while the everyday words stayed
+# European. A list names the words that have to differ and nothing else.
+#
+# Each entry is a real difference of the two varieties and was taken from the
+# two catalogues, not invented to reach a length. Of the four pairs plan 20-07
+# named, three have a key here: ``ficheiro`` against ``arquivo``,
+# ``utilizador`` against ``usuário``, and the screen, where Brazil says
+# ``tela`` for the page of an app and Portugal says ``página`` rather than
+# ``ecrã``. The fourth pair, ``a transferir`` against ``baixando``, has no key in
+# this catalogue, because no sentence of Findling speaks of a download; it is
+# named here so that the first such sentence arrives with an entry. The other
+# entries are the further everyday words both catalogues really carry.
+PORTUGUESE_WORDINGS_THAT_MUST_DIFFER = {
+    "File contents": "ficheiros against arquivos, the most frequent word of both catalogues",
+    "Files": "Ficheiros against Arquivos, the column head of the list of files that were not indexed",
+    "Findling reads the home directories of your users. Team Folders and external storage are settings of their own.": (
+        "utilizadores against usuários, the one sentence of the catalogue that names the users"
+    ),
+    "The numbers could not be refreshed. The figures below are the last ones this page received.": (
+        "página against tela: Brazil calls the page of an app a screen, Portugal does not say ecrã there"
+    ),
+    "Password protected": "palavra-passe against senha",
+    "In the trash bin": "reciclagem against lixeira, the name each variety gives the same place",
+    "The backend could not start Tesseract. Check the log of the External App.": (
+        "registo against registro, and aplicação externa against aplicativo externo"
+    ),
+    "Spreadsheets": "Folhas de cálculo against Planilhas, a file type chip of the filter row",
+    "The model is in memory, the semantic search is answering.": (
+        "está a responder against está respondendo, the continuous form of each variety"
+    ),
+    "The semantic half is switched off in the settings of the container.": (
+        "definições do contentor against configurações do contêiner"
+    ),
+    "Save rules": "Guardar against Salvar, the verb of the save button",
+}
+
+
+def scan_named_difference(
+    name_a: str,
+    catalogue_a: Mapping[str, str | list[str]],
+    name_b: str,
+    catalogue_b: Mapping[str, str | list[str]],
+    expected: Mapping[str, str],
+) -> list[str]:
+    """Findings over two catalogues: a key of the list whose wordings are equal.
+
+    A key of the list that is missing from either catalogue is a finding as
+    well, and it names the catalogue. Otherwise a key renamed in both files
+    would drop out of the comparison without a word, and the list would slowly
+    turn into a list of keys that no longer exist.
+    """
+    violations: list[str] = []
+    for key, reason in expected.items():
+        missing = [name for name, catalogue in ((name_a, catalogue_a), (name_b, catalogue_b)) if key not in catalogue]
+        if missing:
+            violations.append(f"{key!r} is not in {missing}, so its difference ({reason}) cannot be checked")
+        elif catalogue_a[key] == catalogue_b[key]:
+            violations.append(f"{name_a} and {name_b} carry the same wording for {key!r}, which must differ: {reason}")
+    return violations
 
 
 def scan_key_sets(keys_of: Mapping[str, frozenset[str]]) -> list[str]:
@@ -2132,6 +2250,19 @@ def test_the_german_catalogue_covers_both_german_language_codes() -> None:
     This paragraph carries the same duty as the four above it, and it carries it
     for a renamed key as much as for a raised figure. Whoever moves the number,
     or one of the names it counts, writes the next paragraph.
+
+    It still stands at 202 at the end of plan 20-08, on 25.09.2026, and what
+    grew that day was the number of files that carry it: from six catalogues
+    over three language codes to sixteen over eight. Plans 20-04 to 20-08 added
+    es, it, nl, pt_PT and pt_BR, two files each, every one with the same 202 keys
+    and none with a key of its own. Their wordings are machine translations,
+    cast from the tables of docs/l10n-spanish.md, docs/l10n-italian.md,
+    docs/l10n-dutch.md and docs/l10n-portuguese.md, checked by the gates of this
+    file and by nobody who speaks the language: each of those documents carries
+    a dated reservation saying so, under the accepted process E-17-5 of an open
+    community review in the app store. The figure is untouched by all of it, and
+    that is the point of writing it down: sixteen files now move whenever it
+    moves. Whoever moves it next writes the next paragraph.
     """
     for language, twin in ((L10N_JSON, L10N_DE_DE_JSON), (L10N_JS, L10N_DE_DE_JS)):
         assert twin.is_file(), f"{twin.name} is missing, so everybody on de_DE reads this app in English"
@@ -2202,6 +2333,44 @@ def test_every_catalogue_carries_the_same_keys() -> None:
     # six agreeing catalogues over a tree in which one of them lost a sentence.
     drifted = {"a.json": frozenset({"one", "two"}), "b.js": frozenset({"one"})}
     assert len(scan_key_sets(drifted)) == 1
+
+
+def test_the_two_portuguese_catalogues_are_two() -> None:
+    """pt_PT and pt_BR are two sets of words, and this gate keeps them two.
+
+    The explicit opposite of ``test_the_german_catalogue_covers_both_german_language_codes``.
+    There two codes carry one set of words and text equality is the assertion;
+    here two codes carry two sets of words and equality under a key of
+    ``PORTUGUESE_WORDINGS_THAT_MUST_DIFFER`` is the finding. There is
+    deliberately no text equality gate for the pair in either direction, and
+    this one does not ask for any other difference either: where the two
+    varieties agree, the values agree, and that is correct.
+
+    The .json halves are compared and not the .js ones, because the key set gate
+    and the cast of each .js out of its .json already hold the two halves of one
+    language together; a second comparison over the .js would be the same
+    question asked twice.
+    """
+    missing = [path.name for path in (L10N_PT_PT_JSON, L10N_PT_BR_JSON) if not path.is_file()]
+    assert missing == [], f"catalogues are missing: {missing}"
+
+    findings = scan_named_difference(
+        L10N_PT_PT_JSON.name,
+        catalogue_of(L10N_PT_PT_JSON),
+        L10N_PT_BR_JSON.name,
+        catalogue_of(L10N_PT_BR_JSON),
+        PORTUGUESE_WORDINGS_THAT_MUST_DIFFER,
+    )
+
+    assert findings == []
+    # And the scan can go red. Two staged catalogues that carry the same wording
+    # under a key of the list are exactly one finding, which is the shape a copy
+    # of pt_PT.json would take eleven times over.
+    same: dict[str, str | list[str]] = {"Files": "Ficheiros", "Reason": "Motivo"}
+    assert len(scan_named_difference("a.json", same, "b.json", same, {"Files": "ficheiros against arquivos"})) == 1
+    # A key of the list that one catalogue lost is a finding and not a silent
+    # skip, so the list cannot quietly turn into names that no longer exist.
+    assert len(scan_named_difference("a.json", same, "b.json", {}, {"Files": "ficheiros against arquivos"})) == 1
 
 
 def test_every_catalogue_value_carries_a_wording_of_its_language() -> None:
