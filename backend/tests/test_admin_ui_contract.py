@@ -133,6 +133,28 @@ L10N_FR_JS = REPO_ROOT / "php" / "l10n" / "fr.js"
 L10N_ES_JSON = REPO_ROOT / "php" / "l10n" / "es.json"
 L10N_ES_JS = REPO_ROOT / "php" / "l10n" / "es.js"
 
+# The fifth language, since plan 20-05, and the second of the four of milestone
+# v1.3. Two files and not four, for the reason French and Spanish give: one
+# language, one code.
+#
+# ``it`` carries no regional variant, and that is a finding and not an omission.
+# The core of Nextcloud 34 and 35 ships ``es``, ``es_EC`` and ``es_MX`` next to
+# each other and ``pt_PT`` next to ``pt_BR``, but for Italian it ships ``it.json``
+# and ``it.js`` and nothing else; the directory listing is section 1 of
+# docs/l10n-catalogues.md. So there is no variant to decide against here, while
+# Spanish needed the decision written out in section 2 of that document and
+# Portuguese needs two codes in plan 20-07. A catalogue under a code the core
+# does not know is a file Nextcloud never opens.
+#
+# The wordings are cast from the table in docs/l10n-italian.md. That document
+# carries a dated reservation and says in so many words that no native speaker
+# has read them: machine translation plus the open community review of the app
+# store, which is the accepted process E-17-5 and not an oversight. Both l10n
+# files of this language are cast from the same table in one pass, which is why
+# the gate below can compare them as two halves of one object.
+L10N_IT_JSON = REPO_ROOT / "php" / "l10n" / "it.json"
+L10N_IT_JS = REPO_ROOT / "php" / "l10n" / "it.js"
+
 # All catalogues in the order the gates below name them. Held as one tuple so
 # that the next file is added in one place and every gate sees it.
 L10N_CATALOGUES = (
@@ -144,6 +166,8 @@ L10N_CATALOGUES = (
     L10N_FR_JS,
     L10N_ES_JSON,
     L10N_ES_JS,
+    L10N_IT_JSON,
+    L10N_IT_JS,
 )
 
 # The common proof of every catalogue of milestone v1.3, written by plan 20-02:
@@ -446,6 +470,21 @@ VALUES_THAT_MAY_EQUAL_THEIR_KEY = {
     # Spanish wording, which is why this list is shorter than the French one.
     "es": {
         "Findling": "the name of the app, the same word in every language of this tree",
+        "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
+    },
+    # Italian, read off the file on 25.09.2026 rather than guessed: the gate was
+    # run once with an empty list and reported six findings, three keys over two
+    # files. Two of them are proper names, and the third is the preposition
+    # between two placeholders, which Italian writes exactly as English and
+    # German do. It is the same key the German entry above carries, and for the
+    # same reason; that two languages arrive at it independently is what makes it
+    # an exception rather than a forgotten line. Every other value of it.json
+    # carries an Italian wording, so this list is three long and not five like
+    # the French one: Page %s, Documents and Images are Pagina %s, Documenti and
+    # Immagini.
+    "it": {
+        "Findling": "the name of the app, the same word in every language of this tree",
+        "%1$s in %2$s": "two placeholders and the preposition between them, which Italian spells the same way",
         "PDF": "the proper name of a file format, the same abbreviation in every language of this tree",
     },
     "fr": {
