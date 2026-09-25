@@ -87,6 +87,11 @@ FORBIDDEN_IDENTIFIERS = frozenset(
 # access to the Nextcloud storage at all, and invariant 1 keeps nc_py_api out of
 # that module, so the only object a mkdir there can reach is a local one.
 #
+# index/wordlist_nl.py, its Dutch sibling since plan 21-03, creates the same
+# dictionary directory for the Dutch artifact. Same reasoning word for word: the
+# path comes from findling.config and invariant 1 keeps nc_py_api and httpx out
+# of the module.
+#
 # store/repo.py creates the directory of the state database under
 # APP_PERSISTENT_STORAGE. Same reasoning: the module may not import nc_py_api
 # or httpx, so the collision with the writing entry point of nc_py_api.files
@@ -108,6 +113,7 @@ FORBIDDEN_IDENTIFIERS = frozenset(
 INVARIANT_2_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset(
     {
         ("index/wordlist.py", "mkdir"),
+        ("index/wordlist_nl.py", "mkdir"),
         ("store/repo.py", "mkdir"),
         ("index/open.py", "mkdir"),
         ("worker/poller.py", "mkdir"),
@@ -414,6 +420,7 @@ def test_set_user_is_a_violation() -> None:
 def test_the_reviewed_exception_covers_exactly_the_named_modules() -> None:
     # The volume layout of the container is created in these places, and only there.
     assert scan_source("index/wordlist.py", "target.mkdir(parents=True, exist_ok=True)\n") == []
+    assert scan_source("index/wordlist_nl.py", "target.parent.mkdir(parents=True, exist_ok=True)\n") == []
     assert scan_source("store/repo.py", "database.parent.mkdir(parents=True, exist_ok=True)\n") == []
     assert scan_source("index/open.py", "path.mkdir(parents=True, exist_ok=True)\n") == []
     assert scan_source("worker/poller.py", "scratch.mkdir(parents=True, exist_ok=True)\n") == []
