@@ -499,3 +499,327 @@ def test_the_run_script_keeps_the_load_password_out_of_99d() -> None:
     d99 = function_of(code, "block_99d")
     in_order(d99, ["unset FINDLING_LOAD_PASSWORD", "99d-umgebung", '99d-filter-sortierung.sh"'])
     assert 'PWFILE="$PWFILE_LAST" sh "$NACHFOLGE/99d-filter-sortierung.sh"' in d99
+
+
+# ---------------------------------------------------------------------------
+# 00-abholen.sh, the fetch script of the development machine.
+
+STUB_SCP = """#!/bin/sh
+printf '%s\\n' "$*" >>"$STUB/scp"
+runde=$(($(cat "$STUB/runde" 2>/dev/null || echo 0) + 1))
+printf '%s\\n' "$runde" >"$STUB/runde"
+[ "${STUB_SCP_FEHLER:-}" = 1 ] && exit 1
+for a in "$@"; do ziel=$a; done
+mkdir -p "$ziel/rohdaten"
+printf 'x\\n' >"$ziel/rohdaten/00-lauf.txt"
+case "${STUB_FOLGE:-fertig}" in
+fertig) printf 'fertig T epoch 1 weg a b4 nicht-geplant\\n' >"$ziel/rohdaten/00-FERTIG" ;;
+b4)
+    printf 'fertig T epoch 1 weg a b4 vorbereitet\\n' >"$ziel/rohdaten/00-FERTIG"
+    [ "$runde" -ge 2 ] && printf 'b4-fertig T epoch 2 rueckgabe 0\\n' >"$ziel/rohdaten/B4-FERTIG"
+    ;;
+esac
+exit 0
+"""
+STUB_SSH = """#!/bin/sh
+printf '%s\\n' "$*" >>"$STUB/ssh"
+exit 0
+"""
+
+
+def a_stubbed_fetch(
+    tmp_path: Path, umgebung: dict[str, str | None]
+) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path]:
+    """00-abholen.sh against a stub scp and ssh, with its state directory in tmp_path."""
+    stub = tmp_path / "stub"
+    stub.mkdir()
+    scp = tmp_path / "scp"
+    scp.write_text(STUB_SCP, encoding="utf-8", newline="\n")
+    scp.chmod(0o755)
+    ssh = tmp_path / "ssh"
+    ssh.write_text(STUB_SSH, encoding="utf-8", newline="\n")
+    ssh.chmod(0o755)
+    state = tmp_path / "zustand"
+    state.mkdir()
+    (state / "findling-loadtest").write_text("attrappe\n", encoding="utf-8", newline="\n")
+    lokal = tmp_path / "lokal"
+    environment: dict[str, str | None] = {
+        "BOX_ADRESSE": "box.example.invalid",
+        "FINDLING_LOADTEST_DIR": state.as_posix(),
+        "LOKAL": lokal.as_posix(),
+        "SCP": scp.as_posix(),
+        "SSH": ssh.as_posix(),
+        "STUB": stub.as_posix(),
+        "ABHOLTAKT": "0",
+        **umgebung,
+    }
+    answer = a_boxless_run(FETCH_SCRIPT, tmp_path / "out", [], umgebung=environment)
+    return answer, lokal, stub, state
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+@pytest.mark.parametrize(
+    "umgebung",
+    [{"BOX_ADRESSE": None}, {"BOX_ADRESSE": ""}, {"B4_GEPLANT": "vielleicht"}],
+    ids=["no-address", "empty-address", "b4-maybe"],
+)
+def test_the_fetch_script_refuses_without_address_or_known_b4_plan(
+    tmp_path: Path, umgebung: dict[str, str | None]
+) -> None:
+    """No address, no fetch, and no scp before the refusal."""
+    answer, lokal, stub, _ = a_stubbed_fetch(tmp_path, umgebung)
+    assert answer.returncode == 2, answer
+    assert "Benutzung:" in answer.stderr
+    assert not (stub / "scp").exists()
+    assert not lokal.exists()
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_fetch_script_refuses_without_the_key_of_the_state_directory(tmp_path: Path) -> None:
+    """The key comes out of FINDLING_LOADTEST_DIR, outside the repository."""
+    state = tmp_path / "zustand"
+    state.mkdir()
+    answer = a_boxless_run(
+        FETCH_SCRIPT,
+        tmp_path / "out",
+        [],
+        umgebung={
+            "BOX_ADRESSE": "box.example.invalid",
+            "FINDLING_LOADTEST_DIR": state.as_posix(),
+            "LOKAL": (tmp_path / "lokal").as_posix(),
+            "SCP": (tmp_path / "kein-scp").as_posix(),
+        },
+    )
+    assert answer.returncode == 2, answer
+    assert "FINDLING_LOADTEST_DIR" in answer.stderr
+    assert "Benutzung:" in answer.stderr
+    assert not (tmp_path / "lokal").exists()
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_fetch_script_copies_the_raw_data_and_then_sets_the_mark(tmp_path: Path) -> None:
+    """scp -r with key and known_hosts, then ssh writes ~/work/abgeholt; ends on 00-FERTIG."""
+    answer, lokal, stub, state = a_stubbed_fetch(tmp_path, {})
+    assert answer.returncode == 0, answer
+    assert (lokal / "00-FERTIG").is_file()
+    assert (lokal / "00-lauf.txt").is_file()
+    scp_calls = (stub / "scp").read_text(encoding="utf-8").splitlines()
+    assert len(scp_calls) == 1, scp_calls
+    call = scp_calls[0]
+    assert call.startswith("-q -r -i "), call
+    assert f"-i {state.as_posix()}/findling-loadtest" in call
+    assert f"UserKnownHostsFile={state.as_posix()}/known_hosts" in call
+    assert "StrictHostKeyChecking=yes" in call
+    source = (
+        "ubuntu@box.example.invalid:/home/ubuntu/work/nextcloud-search/docs/measurements/2026-09-v13-messung/rohdaten"
+    )
+    assert source in call
+    ssh_calls = (stub / "ssh").read_text(encoding="utf-8").splitlines()
+    assert len(ssh_calls) == 1, ssh_calls
+    assert ssh_calls[0].endswith("ubuntu@box.example.invalid date +%s > ~/work/abgeholt"), ssh_calls
+    log = (state / "v13-abholen.log").read_text(encoding="utf-8")
+    assert re.search(r"^abgeholt \S+ dateien 2 marke gesetzt$", log, flags=re.MULTILINE), log
+    assert "abholen-ende" in log
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_fetch_script_waits_for_b4_when_the_box_prepared_it(tmp_path: Path) -> None:
+    """00-FERTIG with b4 vorbereitet is no end; B4-FERTIG is."""
+    answer, lokal, stub, _ = a_stubbed_fetch(tmp_path, {"STUB_FOLGE": "b4", "B4_GEPLANT": "ja"})
+    assert answer.returncode == 0, answer
+    assert (lokal / "B4-FERTIG").is_file()
+    assert len((stub / "scp").read_text(encoding="utf-8").splitlines()) == 2
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell on this machine")
+def test_the_fetch_script_ends_after_three_failures_in_a_row(tmp_path: Path) -> None:
+    """A stopped box answers nothing; three misses end the fetch with 1 and set no mark."""
+    answer, _, stub, state = a_stubbed_fetch(tmp_path, {"STUB_SCP_FEHLER": "1"})
+    assert answer.returncode == 1, answer
+    assert len((stub / "scp").read_text(encoding="utf-8").splitlines()) == 3
+    assert not (stub / "ssh").exists()
+    log = (state / "v13-abholen.log").read_text(encoding="utf-8")
+    assert log.count("fehlversuch") == 3
+    assert "box-nicht-erreichbar" in log
+
+
+def test_the_fetch_script_never_commits_or_pushes() -> None:
+    """No git call at all in the code; the raw data pass the public artifact gate first (T-22-20)."""
+    code = code_of(FETCH_SCRIPT.read_text(encoding="utf-8"))
+    assert "git " not in code
+    assert "MSYS_NO_PATHCONV=1" in code
+    assert 'STATE_DIR="${FINDLING_LOADTEST_DIR:-$HOME/.findling-loadtest}"' in code
+    assert 'LOG="${LOG:-$STATE_DIR/v13-abholen.log}"' in code
+    assert 'ABHOLTAKT="${ABHOLTAKT:-600}"' in code
+    assert 'FEHLVERSUCHE_MAX="${FEHLVERSUCHE_MAX:-3}"' in code
+
+
+# ---------------------------------------------------------------------------
+# 00-ablauf.md and README.md, the run plan and the frame of the report.
+
+PLAN_HEADINGS = (
+    "## 1. Was dieser Lauf misst",
+    "## 2. Die Schrittfolge",
+    "## 3. Die Erwartung, vorher aufgeschrieben",
+    "## 4. Woran der Lauf abgebrochen wird",
+    "## 5. Nach dem Lauf",
+    "## 6. Owner-Entscheide",
+    "## 7. Streichreihenfolge",
+    "## 8. F4 und die B4-Regel",
+)
+UMLAUTS = "äöüÄÖÜß"
+DASHES = (chr(0x2014), chr(0x2013))
+
+
+def sections_of(text: str) -> dict[str, str]:
+    """The run plan cut at its level two headings, heading to body."""
+    sections: dict[str, str] = {}
+    current = ""
+    for line in text.splitlines():
+        if line.startswith("## "):
+            current = line
+            sections[current] = ""
+        elif current:
+            sections[current] += line + "\n"
+    return sections
+
+
+def plan_sections() -> dict[str, str]:
+    return sections_of(RUN_PLAN.read_text(encoding="utf-8"))
+
+
+def test_the_run_plan_carries_its_eight_sections_without_umlauts_in_the_headings() -> None:
+    """The headings are what checks and references point at, so they stay ASCII."""
+    headings = tuple(plan_sections())
+    assert headings == PLAN_HEADINGS, headings
+    for heading in headings:
+        assert not set(heading) & set(UMLAUTS), heading
+
+
+def test_the_run_plan_names_every_abort_value_from_40_to_58_once() -> None:
+    """One row per value, with script, condition and consequence (pattern 4, numbers continued)."""
+    section = plan_sections()["## 4. Woran der Lauf abgebrochen wird"]
+    rows = re.findall(r"^\| \*\*(\d+)\*\* \|(.*)$", section, flags=re.MULTILINE)
+    assert sorted(int(value) for value, _ in rows) == list(range(40, 59)), rows
+    for value in range(40, 59):
+        assert section.count(f"**{value}**") == 1, value
+    for value, rest in rows:
+        cells = [cell.strip() for cell in rest.strip().strip("|").split("|")]
+        assert len(cells) == 3, (value, cells)
+        assert re.search(r"\.(sh|py)", cells[0]), (value, cells)
+        assert cells[1], value
+        assert cells[2], value
+    assert "15 bis 39" in section
+
+
+def test_the_run_plan_catalogue_matches_the_exits_of_the_run_script() -> None:
+    """54 to 58 are exits of 00-lauf.sh, and 00-lauf.sh carries no other literal value."""
+    section = plan_sections()["## 4. Woran der Lauf abgebrochen wird"]
+    own = {int(value) for value in re.findall(r"^\| \*\*(\d+)\*\* \| `00-lauf\.sh`", section, flags=re.MULTILINE)}
+    assert own == {54, 55, 56, 57, 58}
+    exits = {int(value) for value in re.findall(r"^\s*exit (\d+)$", run_code(), flags=re.MULTILINE)}
+    # 143 is the end by signal (the hard stop itself), and the section says so.
+    assert exits == {0, 2, 54, 55, 56, 57, 58, 143}, exits
+    assert "143" in section
+    assert "00-abbruch-durch-signal" in section
+
+
+def test_the_run_plan_writes_down_e1_to_e14_with_a_number() -> None:
+    """Pattern 5: every expectation stands with its figure before the first box minute."""
+    section = plan_sections()["## 3. Die Erwartung, vorher aufgeschrieben"]
+    names = re.findall(r"^- \*\*(E\d+),", section, flags=re.MULTILINE)
+    assert names == [f"E{n}" for n in range(1, 15)], names
+    blocks = re.split(r"^- \*\*E\d+,", section, flags=re.MULTILINE)[1:]
+    for number, block in enumerate(blocks, start=1):
+        assert re.search(r"\d", block), number
+    for figure in ("52.111", "1.500", "2.051", "628,0", "2,5", "3 h", "19 h 20 min", "1,05", "8 min 36 s"):
+        assert figure in section, figure
+
+
+def test_the_run_plan_e1_holds_the_constants_of_the_code_and_of_the_run_script() -> None:
+    """E1 is read out of the code when written; the gate of 00-lauf.sh hands the same pairs to 90e."""
+    from findling.config import EMBED_TOKEN_CAP, INDEX_VERSION, SCHEMA_VERSION
+    from findling.index.analyzer import ANALYZER_VERSION
+    from findling.index.open import TANTIVY_VERSION
+    from findling.store.vectors import EMBEDDING_MODEL, embedding_mark
+
+    section = plan_sections()["## 3. Die Erwartung, vorher aufgeschrieben"]
+    e1 = section[section.index("- **E1,") : section.index("- **E2,")]
+    from_code = {
+        f"analyzer_version={ANALYZER_VERSION}",
+        f"index_version={INDEX_VERSION}",
+        f"store_schema_version={SCHEMA_VERSION}",
+        f"schema_version={SCHEMA_VERSION}",
+        f"tantivy_version={TANTIVY_VERSION}",
+        f"embedding_version={embedding_mark(EMBEDDING_MODEL, tokens=EMBED_TOKEN_CAP)}",
+        "languages=de,en",
+    }
+    text = RUN_SCRIPT.read_text(encoding="utf-8")
+    in_script = set(re.findall(r'^ERWARTUNG_[A-Z]+="([^"]+)"$', text, flags=re.MULTILINE))
+    assert from_code <= in_script, from_code - in_script
+    wordlist = [pair for pair in in_script if pair.startswith("wordlist_hash=")]
+    assert len(wordlist) == 1
+    assert len(in_script) == len(from_code) + 1
+    flat = " ".join(e1.split())
+    for pair in in_script:
+        assert pair in flat, pair
+    marks = function_of(run_code(), "block_marken")
+    for name in re.findall(r"^(ERWARTUNG_[A-Z]+)=", text, flags=re.MULTILINE):
+        assert f'--erwartung "${name}"' in marks, name
+
+
+def test_the_run_plan_quotes_f4_as_the_w4_job_defines_it() -> None:
+    """Section 8 carries the definition of measure.yml word for word, and D-03 beside it."""
+    workflow = (V13_RUN_DIR.parents[3] / ".github" / "workflows" / "measure.yml").read_text(encoding="utf-8")
+    lines = workflow.splitlines()
+    start = next(index for index, line in enumerate(lines) if line.strip().startswith("#   F4 = "))
+    end = next(index for index in range(start, len(lines)) if "one of w3-slots-1.txt)." in lines[index])
+    definition = " ".join(line.strip().lstrip("#").strip() for line in lines[start : end + 1])
+    section = plan_sections()["## 8. F4 und die B4-Regel"]
+    block = section[section.index("```") + 3 : section.rindex("```")]
+    assert " ".join(block.split()) == " ".join(definition.split())
+    assert "1,5" in section
+    assert "B4_GEPLANT=ja" in section
+    assert "B4_GEPLANT=nein" in section
+
+
+def test_the_run_plan_leaves_the_owner_decisions_open() -> None:
+    """Section 6 is filled at checkpoint 22-07; the research rule stands there as a proposal only."""
+    section = plan_sections()["## 6. Owner-Entscheide"]
+    assert section.count("Antwort: offen (Checkpoint 22-07).") == 3
+    assert "Vorschlag der Research, nicht beschlossen" in section
+    assert "Frage 1" in section
+    assert "Frage 2" in section
+    assert "Frage 3" in section
+
+
+def test_the_run_plan_strike_order_carries_the_constants_of_the_run_script() -> None:
+    """Section 7 names every planning constant with the value 00-lauf.sh computes with."""
+    section = plan_sections()["## 7. Streichreihenfolge"]
+    constants = re.findall(r"^(PLAN_[A-Z0-9]+=\d+)$", RUN_SCRIPT.read_text(encoding="utf-8"), flags=re.MULTILINE)
+    assert len(constants) == 9, constants
+    for constant in constants:
+        assert f"`{constant}`" in section, constant
+    for rank in ("B7", "B5", "B4", "B2 und B3", "B1"):
+        assert rank in section, rank
+
+
+@pytest.mark.parametrize("path", [RUN_PLAN, REPORT], ids=["run-plan", "report"])
+def test_the_run_plan_and_the_report_carry_no_dash_and_no_carriage_return(path: Path) -> None:
+    """The typography rule of this project, for the two documents of the run directory."""
+    raw = path.read_bytes()
+    assert b"\r" not in raw, path.name
+    text = raw.decode("utf-8")
+    assert not [dash for dash in DASHES if dash in text], path.name
+
+
+def test_the_run_plan_report_frame_waits_for_the_release() -> None:
+    """One release line, open until checkpoint 22-07, and the empty frames of the report."""
+    text = REPORT.read_text(encoding="utf-8")
+    assert text.count("Anfahrt freigegeben:") == 1
+    assert "\nAnfahrt freigegeben: offen (Owner-Checkpoint 22-07)\n" in text
+    headings = [line for line in text.splitlines() if line.startswith("## ")]
+    for name in ("Rechenblatt", "W4-Vorabkurve", "Generalprobe", "Laufwerte", "Offene Owner-Fragen", "Bericht"):
+        assert any(name in heading for heading in headings), name
+    for heading in headings:
+        assert not set(heading) & set(UMLAUTS), heading
