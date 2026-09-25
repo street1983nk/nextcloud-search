@@ -35,6 +35,7 @@ from findling.index.open import (
     fingerprint,
     open_index,
     open_reader,
+    stamp_after_rebuild,
 )
 from findling.index.rebuild import (
     _CARRIED_WITHOUT_A_MARK,
@@ -78,7 +79,7 @@ from findling.index.schema import (
     FIELD_STORAGE_ID,
     FIELD_TITLE,
 )
-from findling.store.repo import LEGACY_LANGUAGES, Store, open_store
+from findling.store.repo import LEGACY_LANGUAGES, FileMeta, Store, open_store
 
 REBUILD_SOURCE = Path(__file__).resolve().parents[1] / "src" / "findling" / "index" / "rebuild.py"
 
@@ -1449,6 +1450,112 @@ def test_the_fallback_raises_the_generation_and_never_starts_a_band_run(
     # And it declares nothing current: the banner stays up until the crawl is
     # through, which is what the drifted mark is still saying here.
     assert marks[_SCHEMA_MARK] == "1"
+
+
+# A living file the crawl of the way out judges again, the way the tests of
+# stamp_after_rebuild in test_index_open.py judge theirs: one row, recorded once
+# before the generation moves and once more behind it.
+_JUDGED_AGAIN = FileMeta(
+    storage_id=7, root_id=2, path="Vertraege/1.pdf", title="1.pdf", mime="application/pdf", size=7, mtime=1, etag="e"
+)
+
+
+def _a_volume_under_the_factory_pair_asked_for_spanish(volume: Path, monkeypatch: pytest.MonkeyPatch) -> Store:
+    """A volume built under de,en, a container that now wants de,en,es, the way out on.
+
+    The language mark is written back to the factory pair after the seed, since
+    the fixture above stages the counter direction; this is the forward one, the
+    direction every activation of a new language takes, and the one the nl mark
+    of plan 21-05 will take as well. One verdict is on record so that the stamp
+    has a living file to count.
+    """
+    store = _a_volume_that_asks_for_a_rebuild(volume)
+    store.write_meta(LANGUAGES_MARK, "de,en")
+    store.record(1, _JUDGED_AGAIN, "indexed", None, content_hash="hash-of-1")
+    monkeypatch.setenv("FINDLING_LANGUAGES", "de,en,es")
+    monkeypatch.setenv("FINDLING_REBUILD_FALLBACK", "fullreindex")
+    settings.cache_clear()
+    return store
+
+
+def test_the_full_reindex_way_out_leaves_the_marks_of_a_directory_as_they_were(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D-08: the way out does not stamp the marks of a directory, and that is its limit.
+
+    Observed on 2026-09-25 before the seventh mark existed, and asserted as
+    observed. FINDLING_REBUILD_FALLBACK=fullreindex raises the generation, the
+    crawl judges every living file again, and :func:`stamp_after_rebuild` then
+    writes every mark except the ones in ``_MARKS_OF_A_DIRECTORY``. The schema
+    mark and the language mark are among those, because they describe a
+    directory and only :func:`findling.index.rebuild.stamp_after_swap` may write
+    them (M-19-05). The way out never swaps, so the language drift stays on
+    record after the crawl is through and the banner keeps naming it.
+
+    This is the documented limit of the way out and not a defect to be mended in
+    passing: a container that cannot hold two directories reads every file again
+    under the new chains, but the marks keep describing the directory they were
+    written for. The nl mark ``wordlist_hash_nl`` inherits this limit unchanged
+    from plan 21-05 on, because it joins ``_MARKS_OF_A_DIRECTORY`` like the
+    language mark does (D-06, no special case).
+    """
+    store = _a_volume_under_the_factory_pair_asked_for_spanish(volume, monkeypatch)
+    before = store.index_version
+    expected = expected_versions(write_wordlist(volume), ",".join(settings().languages))
+
+    verdict = _led_by(store, _Hands())
+    raised = store.index_version
+
+    # The crawl of the way out, through: the one living file is judged again
+    # under the raised generation, which is what empties the count the stamp asks.
+    store.record(1, _JUDGED_AGAIN, "indexed", None, content_hash="hash-of-1")
+    through = stamp_after_rebuild(store, expected)
+    marks = store.read_meta()
+    drift = store.version_mismatch(expected)
+    # The next start under the same settings, with the crawl through.
+    again = _led_by(store, _Hands())
+    raised_again = store.index_version
+    store.close()
+
+    assert verdict == FALLBACK_TO_FULL_REINDEX
+    assert raised == before + 1
+    assert through is True
+    assert marks[LANGUAGES_MARK] == "de,en"
+    assert marks[_SCHEMA_MARK] == "1"
+    assert LANGUAGES_MARK in drift
+    # The stamp clears the mark of the rebuild under way while the language
+    # drift stays, so the next start does not find its own fingerprint any more
+    # and raises the generation again for the same drift: under the way out, a
+    # language change is answered by one full crawl per start until the setting
+    # is taken back or the band run is allowed. Observed, not wished for.
+    assert marks.get(REBUILD_MARK, "") == ""
+    assert again == FALLBACK_TO_FULL_REINDEX
+    assert raised_again == raised + 1
+
+
+def test_the_full_reindex_way_out_raises_the_generation_once_per_drift(
+    volume: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A nightly restart under the way out finds its own fingerprint and leaves the generation alone.
+
+    Without this a box that restarts every night while the crawl is still under
+    way would make the work of each day stale the next morning, and the crawl
+    would never end (T-21-01-02).
+    """
+    store = _a_volume_under_the_factory_pair_asked_for_spanish(volume, monkeypatch)
+    before = store.index_version
+
+    first = _led_by(store, _Hands())
+    after_first = store.index_version
+    second = _led_by(store, _Hands())
+    after_second = store.index_version
+    marks = store.read_meta()
+    store.close()
+
+    assert first == second == FALLBACK_TO_FULL_REINDEX
+    assert after_first == before + 1
+    assert after_second == after_first
+    assert marks[REBUILD_MARK] != ""
 
 
 def _stage_a_linked_index_directory(volume: Path, monkeypatch: pytest.MonkeyPatch) -> None:
