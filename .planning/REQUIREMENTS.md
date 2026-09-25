@@ -23,8 +23,8 @@
 
 ### UI-Kataloge (KAT)
 
-- [ ] **KAT-01**: UI-Kataloge für es, it, nl, pt_BR und pt_PT im Gleichstand mit EN/DE/FR (Schlüsselzahl aus `de.json` ZÄHLEN, Stand Research 199, nicht die 174 aus dem Backlog); Nextcloud kennt kein `pt`, also zehn neue Dateien (Messbefund Research Phase 20, 24.09.: ALLE unter php/l10n/, die ExApp laedt keine Kataloge); `nplurals=3` für es/it/pt_BR/pt_PT korrekt, Gates parametrisiert statt vier Kopien des FR-Blocks
-- [ ] **KAT-02**: Übersetzungen maschinell erstellt plus Review mit datiertem Vorbehalt (FR-Muster; Muttersprachler-Gate ausdrücklich NICHT Pflicht); der pt-Sprachcode-Ladepfad der App-Kataloge wird VOR der Übersetzungsarbeit an der laufenden Test-Nextcloud verifiziert
+- [x] **KAT-01**: UI-Kataloge für es, it, nl, pt_BR und pt_PT im Gleichstand mit EN/DE/FR (Schlüsselzahl aus `de.json` ZÄHLEN, Stand Research 199, nicht die 174 aus dem Backlog); Nextcloud kennt kein `pt`, also zehn neue Dateien (Messbefund Research Phase 20, 24.09.: ALLE unter php/l10n/, die ExApp laedt keine Kataloge); `nplurals=3` für es/it/pt_BR/pt_PT korrekt, Gates parametrisiert statt vier Kopien des FR-Blocks
+- [x] **KAT-02**: Übersetzungen maschinell erstellt plus Review mit datiertem Vorbehalt (FR-Muster; Muttersprachler-Gate ausdrücklich NICHT Pflicht); der pt-Sprachcode-Ladepfad der App-Kataloge wird VOR der Übersetzungsarbeit an der laufenden Test-Nextcloud verifiziert
 
 ### Messphase (MESS, Fortsetzung ab MESS-06)
 
@@ -67,8 +67,8 @@
 | LEX-06 | Phase 18 (Schema, Marken und Umbauweg) | Complete (24.09.2026, Verifikation 5/5, CI 36026836087) |
 | LEX-08 | Phase 18 (Schema, Marken und Umbauweg) | Complete (24.09.2026, Verifikation 5/5, CI 36026836087) |
 | LEX-05 | Phase 19 (Frageseite freischalten) | Complete (25.09.2026, Verifikation 4/4, CI 36074155306/36076006854) |
-| KAT-01 | Phase 20 (UI-Kataloge es/it/nl/pt) | Pending |
-| KAT-02 | Phase 20 (UI-Kataloge es/it/nl/pt) | Pending |
+| KAT-01 | Phase 20 (UI-Kataloge es/it/nl/pt) | Complete |
+| KAT-02 | Phase 20 (UI-Kataloge es/it/nl/pt) | Complete |
 | KOMP-01 | Phase 21 (Niederländische Komposita) | Pending |
 | MESS-07 | Phase 22 (Messanfahrt BL-F03) | Pending |
 | MESS-08 | Phase 22 (Messanfahrt BL-F03) | Pending |

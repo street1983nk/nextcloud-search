@@ -151,7 +151,7 @@ Plans:
 - [x] 20-05-PLAN.md: Italienisch, zwei Dateien, Gate-Eintrag, docs/l10n-italian.md mit datiertem Vorbehalt -- gebaut 25.09.2026 (ecf8bd2, fff9aba, e6185c9, 42f6add)
 - [x] 20-06-PLAN.md: Niederlaendisch mit zwei Pluralformen und der zeichengleichen deutschen Regel als benanntem Sonderfall -- gebaut 25.09.2026 (3f76cdc, e7ed056, d40e335)
 - [x] 20-07-PLAN.md: pt_PT, keine pt.json, docs/l10n-portuguese.md dreispaltig angelegt -- gebaut 25.09.2026 (e3fc290, 2824a4b, 7ae78d6)
-- [ ] 20-08-PLAN.md: pt_BR als eigene Varietaet, Unterschieds-Gate statt Textgleichheit, sechzehn Kataloge im Tupel
+- [x] 20-08-PLAN.md: pt_BR als eigene Varietaet, Unterschieds-Gate statt Textgleichheit, sechzehn Kataloge im Tupel -- gebaut 25.09.2026 (592980d, f79254c, cd38e2d)
 - [ ] 20-09-PLAN.md: CI-Sprachbeweis je Code in integration.yml, Sichtprobe in fuenf Sprachen (Checkpoint), Schlussabschnitt
 **UI hint**: nein (reine Katalogdateien zu bestehenden Oberflaechenelementen, kein neues Interface)
 
@@ -202,7 +202,7 @@ Plans:
 | 17. Owner-Tor und Analyseketten | v1.3 | 8/8 | Complete   | 2026-09-23 |
 | 18. Schema, Marken und Umbauweg | v1.3 | 12/12 | Complete   | 2026-09-24 |
 | 19. Frageseite freischalten | v1.3 | 9/9 | Executing | - |
-| 20. UI-Kataloge es/it/nl/pt | v1.3 | 4/9 | Executing | - |
+| 20. UI-Kataloge es/it/nl/pt | v1.3 | 8/9 | In Progress|  |
 | 21. Niederlaendische Komposita | v1.3 | 0/TBD | Not started | - |
 | 22. Messanfahrt BL-F03 | v1.3 | 0/TBD | Not started | - |
 | 23. Haertung und Store-Einreichung 1.3.0 | v1.3 | 0/TBD | Not started | - |

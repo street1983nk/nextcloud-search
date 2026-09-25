@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Sprachausbau
 status: executing
-stopped_at: 20-07 gebaut und committet (e3fc290, 2824a4b, 7ae78d6), Gates lokal gruen, NICHT gepusht
-last_updated: "2026-09-25T13:15:00.000Z"
-last_activity: 2026-09-25 -- 20-07 ausgefuehrt, europaeisches Portugiesisch ausgeliefert
+stopped_at: 20-08 gebaut und committet (592980d, f79254c, cd38e2d), Gates lokal gruen, NICHT gepusht
+last_updated: "2026-09-25T14:10:00.000Z"
+last_activity: 2026-09-25 -- 20-08 ausgefuehrt, brasilianisches Portugiesisch ausgeliefert, KAT-01/KAT-02 abgehakt
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 38
-  completed_plans: 36
+  completed_plans: 37
   percent: 46
 ---
 
@@ -21,12 +21,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-23, Start Milestone v1.3)
 
 **Core value:** Nach der Installation findet die Nextcloud-Suche den Inhalt von Dokumenten (inklusive gescannter PDFs), ohne dass der Admin irgendetwas konfigurieren muss.
-**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 bis 20-07 gebaut
+**Current focus:** Phase 20 (ui-kataloge) laeuft; 20-01 abgenommen, 20-02 bis 20-08 gebaut
 
 ## Current Position
 
-Phase: 20 (ui-kataloge-es-it-nl-pt), 7 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
-Status: 20-07 (der europaeisch-portugiesische Katalog) ist gebaut und committet (e3fc290
+Phase: 20 (ui-kataloge-es-it-nl-pt), 8 of 9 gebaut; Phase 19 COMPLETE 25.09.2026
+Status: 20-08 (der brasilianisch-portugiesische Katalog) ist gebaut und committet (592980d
+pt_BR.json plus pt_BR.js, f79254c Gate, cd38e2d docs/l10n-portuguese.md, ca4f6a9 SUMMARY).
+Eigene Wortlaute statt Kopie: arquivo, usuario, tela, senha, lixeira, planilhas, conteiner,
+Gerundium; run = a execucao, worker = o processo de indexacao (anders als pt_PT). 72 von 202
+Werten gleich pt_PT, keiner kuenstlich verschieden. Pluralwerte drei Formen, Form 1 gleich
+Form 2, NICHT die Millionenform der Kerndatei. L10N_CATALOGUES fuehrt SECHZEHN Eintraege.
+VALUES_THAT_MAY_EQUAL_THEIR_KEY["pt_BR"] gemessen: Findling, PDF. NEU:
+PORTUGUESE_WORDINGS_THAT_MUST_DIFFER (elf Schluessel mit Wortpaar), scan_named_difference,
+test_the_two_portuguese_catalogues_are_two; Gegenprobe mit pt_PT-Kopie = elf Funde. Kein
+Textgleichheits-Gate. Docstring-Absatz zum Sprung von sechs auf sechzehn Katalogen. Doku
+vierspaltig mit zweitem datierten Vorbehalt (20-08), der aus 20-07 unveraendert. Vokabular-Gate
+ueber der Doku gruen (Prognose bestaetigt). Suite 2880 passed / 15 skipped, ruff/pyright/vulture
+gruen. KAT-01 und KAT-02 ABGEHAKT (alle zehn Dateien stehen). NICHT gepusht.
+
+Vorheriger Stand: 20-07 (der europaeisch-portugiesische Katalog) ist gebaut und committet (e3fc290
 pt_PT.json plus pt_PT.js, 2824a4b Gate-Eintrag, 7ae78d6 docs/l10n-portuguese.md). DREI Commits,
 wie bei Niederlaendisch: der Rule-3-Fix am Vokabular-Gate war wieder nicht noetig.
 php/l10n/pt_PT.json und pt_PT.js fuehren dieselben 202 Schluessel wie de.json, fuenf Pluralwerte
@@ -186,7 +200,11 @@ Progress: [████......] 46% (3 von 7 Phasen)
 
 ## Naechster Schritt
 
-**20-08 ausfuehren** (brasilianisches Portugiesisch: pt_BR.json und pt_BR.js als EIGENE
+**20-09 ausfuehren** (CI-Sprachbeweis je Code in integration.yml, Sichtprobe in fuenf Sprachen
+als Checkpoint, Schlussabschnitt). 20-08 ist erledigt; der Block darunter ist der Stand vor 20-08
+und bleibt als Herleitung stehen.
+
+Vorher: **20-08 ausfuehren** (brasilianisches Portugiesisch: pt_BR.json und pt_BR.js als EIGENE
 Wortlaute und ausdruecklich KEINE Kopie von pt_PT, Eintrag in L10N_CATALOGUES und in
 VALUES_THAT_MAY_EQUAL_THEIR_KEY, das UNTERSCHIEDS-Gate ueber die benannten Woerter statt eines
 Textgleichheits-Gates, und die Spalte PT_BR in docs/l10n-portuguese.md, die die Tabelle von drei
@@ -239,6 +257,12 @@ backend/src/findling/store/repo.py Zeilen 128 und 1448 (naechster src-Plan nimmt
 ## Accumulated Context
 
 ### Entscheidungen, die v1.3 tragen
+
+- Zwei Varietaeten werden durch ein POSITIVES Gate zwei gehalten (20-08):
+  PORTUGUESE_WORDINGS_THAT_MUST_DIFFER nennt elf Schluessel mit Wortpaar, statt einer
+  Mindestzahl unterschiedlicher Werte (mit Zufallsabweichungen erfuellbar) und statt eines
+  Textgleichheits-Gates (wuerde eine Varietaet einfrieren). Ein Listenschluessel, der in einem
+  Katalog fehlt, ist selbst ein Fund.
 
 - Feldliste und Boost-Abbildung einer Anfrage sind EIN Wert (`FieldPlan`), nie zwei
   Konstanten: `parse_query_lenient` wirft die ValueError gemessen auch fuer `field_boosts`
@@ -497,5 +521,5 @@ auf resolved gesetzt).
 ## Session Continuity
 
 Last session: 2026-09-25
-Stopped at: 20-07 ausgefuehrt und committet (e3fc290, 2824a4b, 7ae78d6), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
-Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-07-SUMMARY.md (naechster Schritt: 20-08 ausfuehren; der Orchestrator pusht gesammelt)
+Stopped at: 20-08 ausgefuehrt und committet (592980d, f79254c, cd38e2d, ca4f6a9), SUMMARY geschrieben, Gates lokal gruen, NICHT gepusht; kein Checkpoint in diesem Plan
+Resume file: .planning/phases/20-ui-kataloge-es-it-nl-pt/20-08-SUMMARY.md (naechster Schritt: 20-09 ausfuehren; der Orchestrator pusht gesammelt)
