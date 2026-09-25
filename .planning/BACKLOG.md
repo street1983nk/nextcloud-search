@@ -273,6 +273,15 @@ gemessene Startpunkt.
 BL-F04 der Kern des naechsten Milestones (v1.4), kein blosser Kandidat mehr.
 Beim /gsd:new-milestone nach dem v1.3-Abschluss zuerst diesen Eintrag laden.
 
+**OWNER-ENTSCHEID 25.09.2026: KEINE APP-SPALTUNG** ("wir spalten nicht").
+Erwogen war eine zweite Store-App fuer leistungsstarke Boxen; verworfen wegen
+doppelter Wartung (2 Store-Eintraege wuerden 4), Entscheidungslast beim
+Installieren (bricht Zero-Config), Reindex-Zwang beim Wechsel und ~95 %
+identischer Codebasis. Mehr Leistung kommt als Profil-Opt-in in DERSELBEN App
+(dieser Eintrag). Neu pruefen nur, falls eine Leistungsvariante schwere
+Zusatzabhaengigkeiten braeuchte (GPU-Stack/Torch), die das Basis-Image der
+kleinen Boxen aufblaehen.
+
 **Kern des Vorhabens:**
 
 1. **Leistungsprofile** statt Einzelschrauben: Sparsam (heutiger Default,
